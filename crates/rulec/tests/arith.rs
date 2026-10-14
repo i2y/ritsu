@@ -405,7 +405,11 @@ fn a_sum_constraint_puts_an_input_to_use() {
     assert!(codes(&src).is_empty());
     let line = "constraint roll < challenger_strength + holder_strength\n";
     assert!(src.contains(line));
-    assert_eq!(codes(&src.replace(line, "")), ["W111"]);
+    // The claims of `chances` rest on the line as well (§15.224), so they go with it.
+    let at = src.find("\n# The chance of each side").expect("the claims are gone");
+    let to = at + src[at..].find("\n\nexamples").expect("the examples are gone");
+    let without = format!("{}{}", &src[..at], &src[to..]).replace(line, "");
+    assert_eq!(codes(&without), ["W111"]);
 }
 
 /// A contract the inputs are read from (§15.140) has to promise the sum the rule takes for granted

@@ -1,0 +1,76 @@
+rule 注文の取扱手数料(order_handling) v1
+description "店の API が受け取る注文オブジェクトから、取扱手数料を決める。注文の合計と、割れ物の明細でいちばん高い額はオブジェクトから読み、明細はそのまま規則がたどる並びになる。合計・最大・並びを契約から取る例"
+
+# 呼び出し側はもう JSON Schema で注文の形を決めている。合計、割れ物の最高額、明細の並びをそこから読む。
+# 注文を平たくするコードは生成され、どのパスも毎回の check で契約に照らされる。
+shape 注文(order) = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  合計(total)                 : money[USD]  range >=0USD <=100_000USD  from sum 注文.lines of amount_usd  random
+  割れ物の最高額(top_fragile) : money[USD]  range >=0USD <=5_000USD    from max 注文.lines of amount_usd where fragile = true empty 0USD
+
+# 注文の明細一件。注文オブジェクトからそのまま取る
+elements 明細(lines) from 注文.lines
+  数量(quantity) : number      range >=1 <=99          from quantity
+  金額(amount)   : money[USD]  range >=1USD <=5000USD  from amount_usd
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+# 50 個以上の明細と、2000USD 以上の明細は、パレットに載せる
+table パレット(pallet)
+policy unique
+| 数量 | 金額      | -> パレット行(pallet_line) : bool |
+| >=50 | -         | true                              |
+| <50  | >=2000USD | true                              |
+| <50  | <2000USD  | false                             |
+
+count パレット数(pallet_lines) over 明細 where パレット行  range >=0 <=20
+
+# 大きな注文は無料で扱い、高い割れ物は丁寧に梱包する
+table 取扱い(handling)
+policy unique
+| 合計       | 割れ物の最高額 | -> 基本料(base) : money[USD] |
+| >=10000USD | -              | 0USD                         |
+| <10000USD  | >=1000USD      | 25USD                        |
+| <10000USD  | <1000USD       | 5USD                         |
+
+# パレットが二枚以上ならフォークリフトを使う
+table フォークリフト(forklift)
+policy unique
+| パレット数 | -> 荷役料(lift) : money[USD] |
+| >=2        | 10USD                        |
+| <2         | 0USD                         |
+
+define 取扱料(handling_fee) : money[USD] = 基本料 + 荷役料
+
+result 手数料 = 取扱料
+
+examples
+| 合計     | 割れ物の最高額 | 明細         | -> 手数料 |
+| 120USD   | 0USD           | 小さな注文   | 5USD      |
+| 12000USD | 0USD           | 大きな注文   | 10USD     |
+| 2100USD  | 1500USD        | 割れ物の注文 | 25USD     |
+| 900USD   | 0USD           | まとめ買い   | 15USD     |
+
+sequence 小さな注文(small_order)
+| 数量 | 金額  |
+| 2    | 40USD |
+| 1    | 80USD |
+
+sequence 大きな注文(large_order)
+| 数量 | 金額    |
+| 3    | 5000USD |
+| 2    | 5000USD |
+| 1    | 2000USD |
+
+sequence 割れ物の注文(glass_order)
+| 数量 | 金額    |
+| 1    | 1500USD |
+| 4    | 600USD  |
+
+sequence まとめ買い(bulk_order)
+| 数量 | 金額   |
+| 60   | 300USD |
+| 80   | 400USD |
+| 5    | 200USD |

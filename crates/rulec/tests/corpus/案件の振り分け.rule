@@ -1,0 +1,70 @@
+rule 案件の振り分け(case_assignment) v1
+description "新しい案件をどの担当者に回すか。今日出ている担当者は、受けられる量に比例して案件を受ける。出ている担当者の量の合計より小さい数を一つ引き、その数が入る分を持つ担当者が案件を受ける。誰も出ていなければ、案件は待つ（回す先は 0）。書き下ろしの例"
+
+enum 在席(presence) = 不在(away) | 在席中(in_office)
+
+# チームの担当者一人。呼び出し側はチームの全員を、決まった順で渡す
+elements 担当者(reviewers)
+  担当者番号(reviewer_id) : number  range >=1 <=50
+  出勤(present)           : bool
+  受けられる量(capacity)  : number  range >=0 <=100
+
+inputs
+  乱数(roll) : number  range >=0 <=9999  random  # 出ている担当者の量の合計より小さく引く
+
+outputs
+  回す先(reviewer) : number  round down(1)  # 誰も出ていなければ 0
+
+table 今日の出勤(in_today)
+policy unique
+| 出勤  | -> 在席 : 在席 |
+| true  | 在席中         |
+| false | 不在           |
+
+# 出ている担当者は、自分の量を、出ている担当者の量の合計で割った確率で案件を受ける。
+fold 在席 over 担当者
+  不在      -> next
+  在席中    -> take_weighted 担当者番号 by 受けられる量
+  draw      -> 乱数
+  empty     -> 0
+  exhausted -> held
+
+sequence 三人(team_of_three)
+| 担当者番号 | 出勤 | 受けられる量 |
+| 1          | true | 50           |
+| 2          | true | 30           |
+| 3          | true | 20           |
+
+sequence 一人目が不在(first_away)
+| 担当者番号 | 出勤  | 受けられる量 |
+| 1          | false | 50           |
+| 2          | true  | 30           |
+| 3          | true  | 20           |
+
+sequence 誰もいない(nobody_in)
+| 担当者番号 | 出勤  | 受けられる量 |
+| 1          | false | 50           |
+
+sequence 担当者なし(no_reviewers)
+| 担当者番号 | 出勤 | 受けられる量 |
+
+chances
+| 担当者       | -> 回す先 | chance |
+| 三人         | 1         | 1/2    |
+| 三人         | 2         | 3/10   |
+| 三人         | 3         | 1/5    |
+| 一人目が不在 | 1         | 0      |
+| 一人目が不在 | 2         | 3/5    |
+| 誰もいない   | 0         | 1      |
+| 担当者なし   | 0         | 1      |
+
+examples
+| 乱数 | 担当者       | -> 回す先 |
+| 0    | 三人         | 1         |
+| 49   | 三人         | 1         |
+| 50   | 三人         | 2         |
+| 79   | 三人         | 2         |
+| 80   | 三人         | 3         |
+| 0    | 一人目が不在 | 2         |
+| 30   | 一人目が不在 | 3         |
+| 0    | 担当者なし   | 0         |

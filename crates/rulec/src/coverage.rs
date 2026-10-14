@@ -821,8 +821,9 @@ fn later_set(f: &RuleFile, c: &Checked, st: &crate::types::Stages, si: usize) ->
 
 /// The orders of verdicts the fold at `fi` can take, when it runs in a second walk or later: those
 /// some case of one or two elements reaches (`vectors::second_walk_cases`), each read in the walk
-/// the fold runs in (§15.219). A case past a sum's range has no answer, and is left out. `None` for
-/// a fold of a first walk, whose elements land on their verdicts one at a time.
+/// the fold runs in (§15.219). A case past a sum's range has no answer, and is left out, as is one
+/// whose drawn value is past the weights of its pick (§15.226). `None` for a fold of a first walk,
+/// whose elements land on their verdicts one at a time.
 fn later_orders(f: &RuleFile, c: &Checked, st: &crate::types::Stages, fi: usize) -> Option<BTreeSet<Vec<String>>> {
     let crate::types::Stage::Each { seq, walk } = st.at(fi) else { return None };
     if walk < 2 {
@@ -831,7 +832,7 @@ fn later_orders(f: &RuleFile, c: &Checked, st: &crate::types::Stages, fi: usize)
     let mut out = BTreeSet::new();
     for m in vectors::second_walk_cases(f, c, seq) {
         let inputs: HashMap<String, Val> = m.into_iter().collect();
-        if eval::sum_past_range(f, c, inputs.clone()).is_some() {
+        if eval::sum_past_range(f, c, inputs.clone()).is_some() || eval::drawn_past(f, c, inputs.clone()).is_some() {
             continue;
         }
         if let Some(vs) = eval::fold_verdicts(f, c, inputs).get(&fi) {

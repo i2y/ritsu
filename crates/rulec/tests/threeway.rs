@@ -179,6 +179,15 @@ const CORPUS: &[(&str, &str)] = &[
     // §15.223: a total, a largest value and a sequence read out of an order's contract.
     ("tests/corpus/order_handling_fee.rule", "order_handling_fee"),
     ("tests/corpus/注文の取扱手数料.rule", "order_handling"),
+    // Inputs drawn at random, and claims of how likely each answer is (§15.224 to §15.226).
+    ("tests/corpus/invoice_sampling.rule", "invoice_sampling"),
+    ("tests/corpus/伝票の抜き取り.rule", "expense_sampling"),
+    ("tests/corpus/prize_lottery.rule", "prize_lottery"),
+    ("tests/corpus/くじの景品.rule", "lottery_prize"),
+    ("tests/corpus/case_routing.rule", "case_routing"),
+    ("tests/corpus/案件の振り分け.rule", "case_assignment"),
+    ("tests/corpus/reward_box.rule", "reward_box"),
+    ("tests/corpus/抽選の特典.rule", "box_reward"),
 ];
 
 #[test]
@@ -239,6 +248,7 @@ fn 評価器と生成コードが全言語で一致する() {
     let mut total = 0usize;
     let mut total_refused = 0usize;
     let mut total_prereq = 0usize;
+    let mut total_chances = 0usize;
     for (file, alias) in CORPUS {
         let vec_path = dir.join("vectors").join(format!("{alias}.jsonl"));
         let exp = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.expected.jsonl")))
@@ -250,6 +260,10 @@ fn 評価器と生成コードが全言語で一致する() {
         // A rule with a `prerequisites` block has its cases too (§15.222).
         let prereq_path = dir.join("vectors").join(format!("{alias}.prereq.tsv"));
         total_prereq += std::fs::read_to_string(&prereq_path).map(|s| s.lines().count()).unwrap_or(0);
+        // A rule with random inputs has the inputs its function that counts the answers is asked
+        // about (§15.225).
+        let chances_path = dir.join("vectors").join(format!("{alias}.chances.jsonl"));
+        total_chances += std::fs::read_to_string(&chances_path).map(|s| s.lines().count()).unwrap_or(0);
         let pkg = alias.replace('_', "");
 
         // A rule that walks a sequence — folding it or counting it — is not generated for a
@@ -350,10 +364,26 @@ fn 評価器と生成コードが全言語で一致する() {
                 assert!(o.status.success(), "{alias}: {} が前提のつながりで落ちた: {}", b.name, String::from_utf8_lossy(&o.stderr));
                 assert_eq!(String::from_utf8_lossy(&o.stdout), want, "{alias}: 前提のつながりで評価器と生成 {} が食い違う", b.name);
             }
+            // The function that counts the answers over the random inputs (§15.225): the same
+            // runner with `--chances`, in each language that writes it, held to what the reference
+            // evaluator counted.
+            if b.chances && chances_path.exists() {
+                let want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.chances.expected")))
+                    .expect("確率の期待値が無い");
+                let o = Command::new(&plan.cmd)
+                    .current_dir(&cwd)
+                    .args(&plan.args)
+                    .arg("--chances")
+                    .stdin(std::fs::File::open(&chances_path).unwrap())
+                    .output()
+                    .unwrap_or_else(|e| panic!("{}: 起動できない: {e}", b.name));
+                assert!(o.status.success(), "{alias}: {} が確率で落ちた: {}", b.name, String::from_utf8_lossy(&o.stderr));
+                assert_eq!(String::from_utf8_lossy(&o.stdout), want, "{alias}: 確率で評価器と生成 {} が食い違う", b.name);
+            }
         }
     }
     eprintln!(
-        "一致: 規則 {} 本 / ベクタ {total} 件 / 受け付けない入力 {total_refused} 件 / 前提のつながり {total_prereq} 件（{}）",
+        "一致: 規則 {} 本 / ベクタ {total} 件 / 受け付けない入力 {total_refused} 件 / 前提のつながり {total_prereq} 件 / 確率 {total_chances} 件（{}）",
         CORPUS.len(),
         present.iter().map(|b| b.name).collect::<Vec<_>>().join(" / ")
     );

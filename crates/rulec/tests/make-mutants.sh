@@ -422,6 +422,36 @@ awk '{ sub(/ empty 0USD$/, ""); print }'                                        
 # The contract's collection renamed: the sequence is taken from a path the contract does not have
 awk '{ sub(/^elements lines from order\.lines$/, "elements lines from order.items"); print }'         "$h"  > "$M/m_e121seq.rule"
 awk '{ sub(/^elements 明細\(lines\) from 注文\.lines$/, "elements 明細(lines) from 注文.items"); print }' "$hj" > "$M/m_e121seqja.rule"
+# The order's total marked as drawn: what is read out of the caller's object is the caller's value
+# (§15.224), so it cannot be random
+awk '{ sub(/  from sum order\.lines of amount_usd$/, "  from sum order.lines of amount_usd  random"); print }' "$h"  > "$M/m_e070from.rule"
+awk '{ sub(/  from sum 注文\.lines of amount_usd$/, "  from sum 注文.lines of amount_usd  random"); print }'   "$hj" > "$M/m_e070fromja.rule"
+# --- Chances (§15.224–§15.226): a number drawn from no range, a pick by weight that names no drawn
+# value, a chance on the poster that the table does not give, a claim over more cases than its budget,
+# and a drawn number of ten million values. The English rule, and its Japanese version beside it.
+s="$C/invoice_sampling.rule"
+sj="$C/伝票の抜き取り.rule"
+p="$C/prize_lottery.rule"
+pj="$C/くじの景品.rule"
+q="$C/case_routing.rule"
+qj="$C/案件の振り分け.rule"
+v="$C/contested_roll.rule"
+vj="$C/乱数で決める一回.rule"
+# The number drawn for each claim, left with no range to draw it from
+awk '/^  sample_number +: number +range >=0 <=99 +random/ { sub(/range >=0 <=99 +random/, "random") } { print }'           "$s"  > "$M/m_e070.rule"
+awk '/^  引いた数\(sample_number\) +: number +range >=0 <=99 +random/ { sub(/range >=0 <=99 +random/, "random") } { print }' "$sj" > "$M/m_e070ja.rule"
+# The pick by weight with its `draw` line gone
+awk '!/^  draw +-> roll$/'                                                                                    "$q"  > "$M/m_e073.rule"
+awk '!/^  draw +-> 乱数$/'                                                                                    "$qj" > "$M/m_e073ja.rule"
+# The poster says 6% for the third prize out of a campaign, and the table gives 5%
+awk '/^\| false +\| third +\| 5% +\|$/ { sub(/5% /, "6% ") } { print }'                                     "$p"  > "$M/m_e133.rule"
+awk '/^\| false +\| 三等 +\| 5% +\|$/ { sub(/5% /, "6% ") } { print }'                                      "$pj" > "$M/m_e133ja.rule"
+# A claim over every pair of strengths: ten thousand pairs, each drawn over up to 200 rolls
+awk '/^\| >=60 <=70 +\| >=30 <=40 +\| challenger +\| >1\/2 +\|$/ { $0 = "| - | - | challenger | >0 |" } { print }' "$v"  > "$M/m_w129.rule"
+awk '/^\| >=60 <=70 +\| >=30 <=40 +\| 挑む側 +\| >1\/2 +\|$/ { $0 = "| - | - | 挑む側 | >0 |" } { print }'         "$vj" > "$M/m_w129ja.rule"
+# The number drawn for each claim widened to ten million values, the shares of the plan set aside
+awk '/^# The shares of the audit plan/ { skip = 1 } skip && /^examples$/ { skip = 0 } !skip { sub(/range >=0 <=99 +random/, "range >=0 <=9_999_999  random"); print }' "$s"  > "$M/m_w131.rule"
+awk '/^# 監査の計画が決めた割合/ { skip = 1 } skip && /^examples$/ { skip = 0 } !skip { sub(/range >=0 <=99 +random/, "range >=0 <=9_999_999  random"); print }'   "$sj" > "$M/m_w131ja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

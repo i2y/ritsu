@@ -2218,6 +2218,15 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     -- (`Prereq.no_cycle`, `Prereq.reached_holds`, `Prereq.never_held`, `Prereq.order_along`).
     for p in fieldArr cert "prerequisites" do
       r := checkPrerequisites cert p r
+    -- The claims of `chances` over the random inputs (rulec's §15.224): `tools/recheck.py` adds the
+    -- boxes of the random axes up again and holds each claim to them; no theorem here says yet that
+    -- the boxes tile the axes or that the chance follows from the rows, so each claim is named as
+    -- stated rather than proved.
+    if let some ch := field cert "chances" then
+      for c in fieldArr ch "claims" do
+        let t := (fieldNat c "chances").getD 0
+        let row := (fieldNat c "row").getD 0
+        r := r.state s!"chances {t + 1} row {row}: the chance of its outputs over the random inputs"
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"

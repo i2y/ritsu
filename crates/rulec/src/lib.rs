@@ -26,6 +26,8 @@ macro_rules! tr {
 
 pub mod ast;
 pub mod apply;
+/// How likely each answer is when the `random` inputs are drawn (§15.224).
+pub mod chances;
 pub mod backend;
 pub mod cel;
 pub mod cert;
@@ -194,6 +196,10 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
     // The prerequisites (§15.222): a finite graph, walked whole. The order an `ordered by` table
     // gives is read once the tables hold.
     diags.extend(prereq::check_graph(f, &t, path, tables_hold));
+    // The claims about the chances (§15.224): counted once the tables hold, as the machine's are.
+    if tables_hold && !f.chances.is_empty() {
+        diags.extend(chances::check(f, &t, path, budget.max(0) as usize));
+    }
     Report { diags, quiet, shadow, nodes }
 }
 

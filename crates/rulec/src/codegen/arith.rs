@@ -57,6 +57,10 @@ impl Uses {
                         exprs.push(expr);
                         exprs.push(key);
                     }
+                    Arm::TakeWeighted { expr, weight } => {
+                        exprs.push(expr);
+                        exprs.push(weight);
+                    }
                     _ => {}
                 }
             }

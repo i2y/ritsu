@@ -1,0 +1,48 @@
+rule invoice_sampling v1
+description "Which expense claims an audit takes for inspection. A number from 0 to 99 is drawn for each claim, and the table turns it into the share of each kind of claim that the audit plan sets: every entertainment claim, one travel claim in ten, one expense claim in four from 100_000JPY up and one in twenty below, one supplies claim in fifty. An example written for the purpose"
+
+enum category = entertainment | travel | expenses | supplies
+
+inputs
+  sample_number : number  random  # drawn by the claims system, once for each claim
+  category      : category
+  amount        : money[JPY]  range >=0JPY <=10_000_000JPY
+
+outputs
+  inspect : bool
+
+table sample
+policy unique
+| category      | amount       | sample_number | -> inspect |
+| entertainment | -            | -             | true       |
+| travel        | -            | <10           | true       |
+| travel        | -            | >=10          | false      |
+| expenses      | >=100_000JPY | <25           | true       |
+| expenses      | >=100_000JPY | >=25          | false      |
+| expenses      | <100_000JPY  | <5            | true       |
+| expenses      | <100_000JPY  | >=5           | false      |
+| supplies      | -            | <2            | true       |
+| supplies      | -            | >=2           | false      |
+
+# The shares of the audit plan, held to the table: for every claim of the kind a row names, the
+# chance that it is taken for inspection.
+chances
+| category      | amount       | -> inspect | chance |
+| entertainment | -            | true       | 1      |
+| travel        | -            | true       | 1/10   |
+| expenses      | >=100_000JPY | true       | 1/4    |
+| expenses      | <100_000JPY  | true       | 5%     |
+| supplies      | -            | true       | 1/50   |
+| -             | -            | true       | >=1/50 |
+
+examples
+| sample_number | category      | amount     | -> inspect |
+| 99            | entertainment | 5_000JPY   | true       |
+| 9             | travel        | 30_000JPY  | true       |
+| 10            | travel        | 30_000JPY  | false      |
+| 24            | expenses      | 250_000JPY | true       |
+| 25            | expenses      | 250_000JPY | false      |
+| 4             | expenses      | 8_000JPY   | true       |
+| 5             | expenses      | 8_000JPY   | false      |
+| 1             | supplies      | 2_000JPY   | true       |
+| 2             | supplies      | 2_000JPY   | false      |

@@ -85,14 +85,36 @@ pub const SCENARIO: &str = "scenario";
 /// block; a declaration named `prerequisites` under `inputs` is still that declaration, so the word
 /// is not reserved (§15.157).
 pub const PREREQUISITES: &str = "prerequisites";
+/// `chances` — a table of claims about how likely each answer is when the `random` inputs are
+/// drawn uniformly (§15.224): the inputs that are not random, the outputs a claim is about, and
+/// the chance in the last column. A block head where a line starts outside every block, read the
+/// way `prerequisites` is, so the word is not reserved (§15.157).
+pub const CHANCES: &str = "chances";
 
 /// The line-head keywords. `rule` is header-only, so it is not included.
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, MAX, MIN, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
-    SHAPE, MACHINE, SCENARIO, PREREQUISITES,
+    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES,
 ];
+
+// --- Chances (§15.224–§15.226). Each word is read by its place, so none is reserved.
+/// The mark at the end of an input's line: the caller draws the value uniformly from the integers
+/// of its declared range (an enum's values, a truth value's two), independently of the other
+/// inputs, within what the `constraint` lines leave (§15.224). Read in a declaration's tail only,
+/// where no name stands.
+pub const RANDOM: &str = "random";
+/// The heading of the last column of a `chances` table: the claimed chance.
+pub const CHANCE: &str = "chance";
+/// `take_weighted <value> by <weight>` — the fold arm that picks one element with a chance in
+/// proportion to its weight (§15.226): the weights of the elements on such verdicts add up as the
+/// walk goes, and the first element whose running total passes the drawn value is taken.
+pub const TAKE_WEIGHTED: &str = "take_weighted";
+/// `draw -> <random input>` under a fold with `take_weighted`: the drawn value the running totals
+/// are compared with. Read as that line only when what follows `->` is one name; `draw -> next` is
+/// the arm of a verdict called `draw`.
+pub const DRAW: &str = "draw";
 
 // --- The lines under `prerequisites` (§15.222). Each word is read by its place in the line, so
 // none is reserved: a value may be called `start`, and `start requires …` is that value's line.
@@ -144,7 +166,7 @@ pub const BY: &str = "by";
 pub const EMPTY: &str = "empty";
 /// The answer when the walk reached the end without stopping. Declaring it is not optional.
 pub const EXHAUSTED: &str = "exhausted";
-/// Inside `exhausted`, the value `keep_max` or a `take` is holding. Under `machine`, the line
+/// Inside `exhausted`, the value `keep_max`, a `take` or a `take_weighted` is holding. Under `machine`, the line
 /// naming the inputs a case holds from its first call to its last: `held 支払額` (§15.149).
 pub const HELD: &str = "held";
 /// `fold <column> over <sequence>`, and `count <name> over <sequence>`.

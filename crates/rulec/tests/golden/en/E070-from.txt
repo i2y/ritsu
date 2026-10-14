@@ -1,0 +1,8 @@
+error[E070]: Input total cannot be drawn
+  --> tests/mutants/m_e070from.rule:10
+   |
+10 |   total       : money[USD]  range >=0USD <=100_000USD  from sum order.lines of amount_usd  random
+   |                                                                                            ^^^^^^ total is taken out of the caller's object
+   |
+ What `from` reads out of the caller's object is the caller's value, not a draw; a random input is a value the caller draws and passes as it is. Take the `from` off the line if the value is drawn, or the `random` if it is read.
+ What can be drawn is a number with both ends of its range written (an amount, a quantity or a rate too, in whole steps), an enum, or a truth value.

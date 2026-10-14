@@ -1,0 +1,58 @@
+rule reward_box v1
+description "What a member finds in a reward box. One number from 0 to 13 is drawn and picks bonus points, a sample, an accessory, a survey, an upgrade or a catalog; a pick that cannot be had gives 25 points or nothing. An example written for the purpose, in the shape of a table of drawn outcomes"
+
+enum reward = bonus_points | sample | no_sample | accessory | empty_box | survey | upgrade | partner_offer | catalog
+
+inputs
+  pick               : number  range >=0 <=13  random
+  sample_in_stock    : bool  # a sample of the member's product line is in stock
+  accessory_fits     : bool  # an accessory fits a product the member owns
+  surveys_off        : bool  # surveys are turned off this month
+  surveyed_recently  : bool  # the member answered a survey in the last 90 days
+  trial_member       : bool  # the member is on a free trial
+  upgrade_possible   : bool  # the member's plan has a plan above it
+  partner_offer_fits : bool  # a partner's offer is open in the member's area
+
+outputs
+  reward : reward
+  points : number  round down(1)  # the bonus points found; whole numbers only
+
+table open_box
+policy unique
+| pick    | sample_in_stock | accessory_fits | surveys_off | surveyed_recently | trial_member | upgrade_possible | partner_offer_fits | -> reward     | points |
+| 0       | -               | -              | -           | -                 | -            | -                | -                  | bonus_points  | 25     |
+| >=1 <=3 | -               | -              | -           | -                 | -            | -                | -                  | bonus_points  | 50     |
+| 4       | -               | -              | -           | -                 | -            | -                | -                  | bonus_points  | 100    |
+| >=5 <=7 | true            | -              | -           | -                 | -            | -                | -                  | sample        | 0      |
+| >=5 <=7 | false           | -              | -           | -                 | -            | -                | -                  | no_sample     | 0      |
+| 8, 9    | -               | true           | -           | -                 | -            | -                | -                  | accessory     | 0      |
+| 8, 9    | -               | false          | -           | -                 | -            | -                | -                  | bonus_points  | 25     |  # in its place
+| 10      | -               | -              | true        | -                 | -            | -                | -                  | empty_box     | 0      |
+| 10      | -               | -              | false       | true              | -            | -                | -                  | empty_box     | 0      |
+| 10      | -               | -              | false       | false             | true         | -                | -                  | empty_box     | 0      |
+| 10      | -               | -              | false       | false             | false        | -                | -                  | survey        | 0      |
+| 11      | -               | -              | -           | -                 | -            | true             | -                  | upgrade       | 0      |
+| 11      | -               | -              | -           | -                 | -            | false            | true               | partner_offer | 0      |
+| 11      | -               | -              | -           | -                 | -            | false            | false              | bonus_points  | 25     |  # in its place
+| 12, 13  | -               | -              | -           | -                 | -            | -                | -                  | catalog       | 0      |
+
+chances
+| sample_in_stock | accessory_fits | surveys_off | surveyed_recently | trial_member | upgrade_possible | partner_offer_fits | -> reward    | points | chance       |
+| true            | true           | false       | false             | false        | true             | true               | bonus_points | -      | 5/14         |
+| true            | true           | false       | false             | false        | true             | true               | sample       | -      | 3/14         |
+| -               | -              | -           | -                 | -            | -                | -                  | catalog      | -      | 1/7          |
+| -               | false          | -           | -                 | -            | -                | -                  | accessory    | -      | 0            |
+| -               | -              | -           | -                 | -            | -                | -                  | bonus_points | -      | >=5/14 <=4/7 |
+| -               | -              | -           | -                 | -            | -                | -                  | -            | >=50   | 2/7          |
+
+examples
+| pick | sample_in_stock | accessory_fits | surveys_off | surveyed_recently | trial_member | upgrade_possible | partner_offer_fits | -> reward    | points |
+| 0    | true            | true           | false       | false             | false        | true             | true               | bonus_points | 25     |
+| 3    | true            | true           | false       | false             | false        | true             | true               | bonus_points | 50     |
+| 4    | true            | true           | false       | false             | false        | true             | true               | bonus_points | 100    |
+| 6    | false           | true           | false       | false             | false        | true             | true               | no_sample    | 0      |
+| 9    | true            | false          | false       | false             | false        | true             | true               | bonus_points | 25     |
+| 10   | true            | true           | false       | true              | false        | true             | true               | empty_box    | 0      |
+| 10   | true            | true           | false       | false             | false        | true             | true               | survey       | 0      |
+| 11   | true            | true           | false       | false             | false        | false            | false              | bonus_points | 25     |
+| 13   | true            | true           | false       | false             | false        | true             | true               | catalog      | 0      |

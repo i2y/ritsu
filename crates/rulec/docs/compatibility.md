@@ -17,7 +17,9 @@ the same thing, and its generated code is called the same way and answers the sa
    `fold` lines in the order what they read gives them, a fold's answer named with `->`, and
    what a rule reads out of the caller's object — a total, a largest or smallest value of one
    field over a collection (`from sum`, `from max`, `from min`), and a sequence taken from a
-   collection (`elements … from`) — included. New constructs may be added.
+   collection (`elements … from`) — and the inputs drawn at random with what is claimed of the
+   chances of the answers (`random`, `chances`, a pick by weight with `take_weighted` and `draw`)
+   included. New constructs may be added.
 2. **The names you may use.** The reserved words — the 65 words E009 refuses as a name,
    listed in `src/kw.rs` — are fixed at 1.0, and a test holds the list. A later release may
    add words to the language, but never to that list: a new word is read only where no name
@@ -28,8 +30,8 @@ the same thing, and its generated code is called the same way and answers the sa
    reference evaluator: a record replayed under a later 1.x gets the answer it got before.
 4. **How the generated code is called.** The names of modules, functions, types, fields and
    errors, the integers on the wire (§10.2), the record a call writes, the `_traced`,
-   `_record` and `_from` functions — everything [`rulec api`](formats.md#api) describes. New
-   functions may appear beside them.
+   `_record`, `_from` and `_chances` functions — everything [`rulec api`](formats.md#api)
+   describes. New functions may appear beside them.
 5. **The command line.** Commands, flags, their values, and the exit codes: 0 notes only, 1
    findings, 2 bad arguments or a file that cannot be read. New commands and flags may be
    added.

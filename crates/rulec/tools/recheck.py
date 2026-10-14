@@ -3669,7 +3669,233 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED {e}")
             ok = False
+    if cert.get("chances"):
+        try:
+            out.append("  " + check_chances(cert, cert["chances"]))
+        except Bad as e:
+            out.append(f"  FAILED {e}")
+            ok = False
     return out, ok
+
+
+def chance_value(v):
+    """A value of a claim's output as the certificate writes it: a rational, a word, or None."""
+    if v is None:
+        return None
+    try:
+        return Fraction(v)
+    except (ValueError, ZeroDivisionError):
+        return v
+
+
+def cell_passes(cell, v):
+    """Whether one value passes one cell of a claim (rulec's §15.224): the shapes the
+    certificate writes a cell in, numbers in the column's unit."""
+    if "any" in cell:
+        return True
+    if "nothing" in cell:
+        return v is None or v == "none"
+    if v is None:
+        return False
+    if "words" in cell:
+        return str(v) in cell["words"]
+    if "not_words" in cell:
+        return str(v) not in cell["not_words"]
+    if "strs" in cell:
+        return str(v) in cell["strs"]
+    if "prefix" in cell:
+        return any(str(v).startswith(p) for p in cell["prefix"])
+    x = chance_value(v)
+    if not isinstance(x, Fraction):
+        return False
+    if "nums" in cell:
+        return any(x == Fraction(n) for n in cell["nums"])
+    if "not_nums" in cell:
+        return all(x != Fraction(n) for n in cell["not_nums"])
+    if "cmp" in cell:
+        return all({"<=": x <= Fraction(b), "<": x < Fraction(b), ">=": x >= Fraction(b), ">": x > Fraction(b)}[op]
+                   for op, b in cell["cmp"])
+    raise Bad(f"a cell this program cannot read: {cell}")
+
+
+def coord_span(co, step):
+    """The closed span of whole steps a coordinate of an axis holds, or None for a word."""
+    if "point" in co:
+        v = Fraction(co["point"])
+        return (v, v)
+    if "open" in co:
+        lo, hi = co["open"]
+        return (None if lo is None else Fraction(lo) + step, None if hi is None else Fraction(hi) - step)
+    return None
+
+
+def coord_points(co, step):
+    """How many values of the axis's grid a coordinate holds."""
+    if "word" in co or "other" in co:
+        return 1
+    lo, hi = coord_span(co, step)
+    if lo is None or hi is None:
+        raise Bad("a random input's coordinate runs on without an end")
+    a, b = math.ceil(lo / step), math.floor(hi / step)
+    return max(0, b - a + 1)
+
+
+def coord_in_cell(axis, co, cell):
+    """Whether a whole coordinate of an input's axis lies inside a claim's cell. The axis is cut
+    at every value the claims name, so a coordinate is wholly inside or wholly outside."""
+    if "word" in co:
+        return cell_passes(cell, co["word"])
+    if "other" in co:
+        return "any" in cell
+    step = Fraction(axis["step"])
+    lo, hi = coord_span(co, step)
+    ends = [e for e in (lo, hi) if e is not None]
+    if not ends:
+        return "any" in cell
+    inside = [cell_passes(cell, str(e)) for e in ends]
+    if len(set(inside)) != 1:
+        raise Bad(f"{axis['column']}: a coordinate is cut by a claim's cell, and the axes say it is not")
+    return inside[0]
+
+
+def check_chances(cert, ch):
+    """The claims of `chances` (rulec's §15.224), held to their arithmetic. Each random input's
+    number of points is worked out again from its range and step, or its values. Each random axis
+    tiles its input's range. For each class of the inputs that are not random counted box by box,
+    the boxes are every combination of the random axes' coordinates once, each with the product of
+    its coordinates' points; whether a box's answer passes the claim is worked out again from its
+    outputs; and the hits over the points pass the chance claimed. The classes listed for a claim
+    are every combination of the other axes' coordinates its cells take. What a box's points answer,
+    which class holds no input, and the chances of the classes whose points were run one by one are
+    the certificate's word, and are listed as stated."""
+    ranges, scales, enums = cert.get("ranges", {}), cert.get("scales", {}), cert.get("enums", {})
+    types, enum_ranges = cert.get("types", {}), cert.get("enum_ranges", {})
+    for r in ch.get("random", []):
+        name = r["name"]
+        if "values" in r:
+            ty = types.get(name)
+            want = ["false", "true"] if ty == "bool" else enum_ranges.get(name) or enums.get(ty)
+            if want is None or list(r["values"]) != list(want):
+                raise Bad(f"chances: {name} is drawn from {r['values']}, and the rule's type gives {want}")
+            n = len(want)
+        else:
+            lo, hi = ranges.get(name, [None, None])
+            if lo is None or hi is None or [str(x) for x in r["range"]] != [str(lo), str(hi)]:
+                raise Bad(f"chances: {name} is drawn over {r['range']}, and its range is {[lo, hi]}")
+            k = Fraction(scales.get(name, 1))
+            n = math.floor(Fraction(hi) * k) - math.ceil(Fraction(lo) * k) + 1
+        if int(r["points"]) != n:
+            raise Bad(f"chances: {name} has {n} points, and the certificate says {r['points']}")
+    axes = ch.get("axes", [])
+    random_ix = [i for i, a in enumerate(axes) if a.get("random")]
+    fixed_ix = [i for i, a in enumerate(axes) if not a.get("random")]
+    # Each random axis tiles its input: its points add up to the input's.
+    points = {r["name"]: int(r["points"]) for r in ch.get("random", [])}
+    for i in random_ix:
+        a = axes[i]
+        step = Fraction(a["step"])
+        spans = [coord_span(co, step) for co in a["coords"]]
+        if all(sp is not None for sp in spans):
+            spans.sort(key=lambda sp: sp[0])
+            for (lo1, hi1), (lo2, hi2) in zip(spans, spans[1:]):
+                if lo2 != hi1 + step:
+                    raise Bad(f"chances: the coordinates of {a['column']} do not tile its range")
+            lo, hi = ranges.get(a["column"], [None, None])
+            if spans and (spans[0][0] != Fraction(lo) or spans[-1][1] != Fraction(hi)):
+                raise Bad(f"chances: the coordinates of {a['column']} run from {spans[0][0]} to {spans[-1][1]}, not over its range")
+        total = sum(coord_points(co, step) for co in a["coords"])
+        if a["column"] in points and total != points[a["column"]] and not enum_ranges.get(a["column"]):
+            raise Bad(f"chances: the coordinates of {a['column']} hold {total} points, and the input has {points[a['column']]}")
+    full = set(itertools.product(*[range(len(axes[i]["coords"])) for i in random_ix]))
+    counted = run = empty = 0
+    for cl in ch.get("claims", []):
+        where = f"chances {cl['chances'] + 1} row {cl['row']}"
+        test = cl.get("chance") or {}
+        def holds(p):
+            if "is" in test:
+                return p == Fraction(test["is"])
+            return all({"<=": p <= Fraction(b), "<": p < Fraction(b), ">=": p >= Fraction(b), ">": p > Fraction(b)}[op]
+                       for op, b in test.get("cmp", []))
+        if cl.get("verdict") == "undecided":
+            STATED.append(f"{where}: undecided within the budget (W129)")
+            continue
+        # The classes listed are every combination of the other axes' coordinates inside the row.
+        if axes:
+            cells = {c["column"]: c["cell"] for c in cl.get("inputs", [])}
+            inside = set()
+            for at in itertools.product(*[range(len(axes[i]["coords"])) for i in fixed_ix]):
+                ok = True
+                for i, ci in zip(fixed_ix, at):
+                    cell = cells.get(axes[i]["column"])
+                    if cell is not None and "sequence" not in cell and not coord_in_cell(axes[i], axes[i]["coords"][ci], cell):
+                        ok = False
+                        break
+                    if axes[i]["column"] in enum_ranges and "word" in axes[i]["coords"][ci] \
+                            and axes[i]["coords"][ci]["word"] not in enum_ranges[axes[i]["column"]]:
+                        ok = False
+                        break
+                if ok:
+                    inside.add(at)
+            listed = set()
+            for k in cl.get("classes", []):
+                at = tuple(ci for _, ci in k["at"])
+                if [i for i, _ in k["at"]] != fixed_ix:
+                    raise Bad(f"{where}: a class is not one coordinate of each axis that is not random")
+                listed.add(at)
+            if listed != inside:
+                raise Bad(f"{where}: the classes listed are not the ones the row's cells take ({len(listed)} listed, {len(inside)} taken)")
+        for k in cl.get("classes", []):
+            if k.get("empty"):
+                empty += 1
+                continue
+            if "run" in k:
+                run += int(k["run"])
+                # The chance every combination run came to, or the lowest and the highest: a claim is
+                # one value or comparisons with values, so what it lets in is an interval, and the
+                # two ends passing it is every chance between them passing it.
+                p, lo, hi = k.get("chance"), k.get("low"), k.get("high")
+                if (lo is None) != (hi is None) or (p is not None and (lo != p or hi != p)):
+                    raise Bad(f"{where}: a class's chance {p} is not the lowest and the highest it came to")
+                if lo is not None and Fraction(lo) > Fraction(hi):
+                    raise Bad(f"{where}: a class's lowest chance {lo} is above its highest {hi}")
+                for q in (lo, hi):
+                    if q is not None and not holds(Fraction(q)):
+                        raise Bad(f"{where}: a class's chance {q} does not pass {test}")
+                continue
+            boxes = k.get("boxes", [])
+            seen = set()
+            tot = hits = 0
+            outs_cells = cl.get("outputs", [])
+            for b in boxes:
+                at = tuple(ci for _, ci in b["at"])
+                if [i for i, _ in b["at"]] != random_ix or at in seen:
+                    raise Bad(f"{where}: a box is listed twice, or not on the random axes")
+                seen.add(at)
+                n = 1
+                for i, ci in zip(random_ix, at):
+                    n *= coord_points(axes[i]["coords"][ci], Fraction(axes[i]["step"]))
+                if n != int(b["points"]):
+                    raise Bad(f"{where}: a box holds {n} points, and the certificate says {b['points']}")
+                hit = all(cell_passes(c["cell"], b["outputs"].get(c["column"])) for c in outs_cells)
+                if hit != b.get("hit"):
+                    raise Bad(f"{where}: whether a box's answer passes the claim is not what the certificate says")
+                tot += n
+                hits += n if hit else 0
+            if seen != full:
+                raise Bad(f"{where}: the boxes of a class do not tile the random axes ({len(seen)} of {len(full)})")
+            if tot != int(k["points"]) or hits != int(k["hits"]):
+                raise Bad(f"{where}: the boxes add up to {hits} of {tot}, and the certificate says {k['hits']} of {k['points']}")
+            if tot and not holds(Fraction(hits, tot)):
+                raise Bad(f"{where}: the chance {Fraction(hits, tot)} does not pass {test}")
+            counted += 1
+    if counted:
+        STATED.append("what each box of the random axes answers: the tables' rows, as the certificate states them")
+    if empty:
+        STATED.append(f"{empty} classes of `chances` holding no input")
+    if run:
+        STATED.append(f"the chances of the classes whose {run} points were run one by one")
+    n = len(ch.get("claims", []))
+    return f"chances: {n} claims, {counted} classes counted box by box and added up again, {empty} empty, {run} points run one by one"
 
 
 def check_prerequisites(cert, p):

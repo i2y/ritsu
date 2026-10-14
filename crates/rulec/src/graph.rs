@@ -231,6 +231,10 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
                         walk(expr, &mut v);
                         walk(key, &mut v);
                     }
+                    Arm::TakeWeighted { expr, weight } => {
+                        walk(expr, &mut v);
+                        walk(weight, &mut v);
+                    }
                     _ => {}
                 }
             }

@@ -121,6 +121,12 @@ pub struct Backend {
     /// the rule's own inputs, so there is no object to read from. `rulec gen` names the targets
     /// that say no, and `rulec api` lists them under `projection.without`.
     pub projects: bool,
+    /// Whether the module has the function that counts the answers over the points of the random
+    /// inputs, and the runner answers `--chances` (§15.225). SQL would have to walk the points in a
+    /// query, which gives up the one-to-one of its branches and the rule's rows; Wasm has one entry,
+    /// `call`. So `rulec gen` names them as written without, `rulec api` says they lack the function,
+    /// and `rulec test` says it compared none there.
+    pub chances: bool,
     /// The words this language will not let **any** identifier be — its keywords
     /// (§15.103). Every ASCII alias reaches at least one target verbatim: measured, a rule
     /// with an input aliased `type` generated Rust that reads `pub fn sum(type: i64, …)`
@@ -333,6 +339,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: true,
+        chances: true,
         reserved: words::PYTHON.reserved,
         globals: words::PYTHON.globals,
         modules: words::PYTHON.modules,
@@ -385,6 +392,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: false,
+        chances: true,
         reserved: words::NUMPY.reserved,
         globals: words::NUMPY.globals,
         modules: words::NUMPY.modules,
@@ -421,6 +429,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: true,
+        chances: true,
         reserved: words::TYPESCRIPT.reserved,
         globals: words::TYPESCRIPT.globals,
         modules: words::TYPESCRIPT.modules,
@@ -457,6 +466,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: true,
+        chances: true,
         reserved: words::JAVASCRIPT.reserved,
         globals: words::JAVASCRIPT.globals,
         modules: words::JAVASCRIPT.modules,
@@ -510,6 +520,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: false,
+        chances: true,
         reserved: words::RUST.reserved,
         globals: words::RUST.globals,
         modules: words::RUST.modules,
@@ -544,6 +555,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: true,
+        chances: true,
         reserved: words::RUBY.reserved,
         globals: words::RUBY.globals,
         modules: words::RUBY.modules,
@@ -579,6 +591,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: true,
+        chances: true,
         reserved: words::PHP.reserved,
         globals: words::PHP.globals,
         modules: words::PHP.modules,
@@ -613,6 +626,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: false,
+        chances: true,
         reserved: words::GO.reserved,
         globals: words::GO.globals,
         modules: words::GO.modules,
@@ -657,6 +671,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: false,
+        chances: true,
         reserved: words::SWIFT.reserved,
         globals: words::SWIFT.globals,
         modules: words::SWIFT.modules,
@@ -718,6 +733,7 @@ pub const ALL: &[Backend] = &[
         labels: true,
         prereqs: true,
         projects: false,
+        chances: true,
         reserved: words::JAVA.reserved,
         globals: words::JAVA.globals,
         modules: words::JAVA.modules,
@@ -755,6 +771,7 @@ pub const ALL: &[Backend] = &[
         labels: false,
         prereqs: false,
         projects: false,
+        chances: false,
         reserved: words::SQL.reserved,
         globals: words::SQL.globals,
         modules: words::SQL.modules,
@@ -812,6 +829,7 @@ pub const ALL: &[Backend] = &[
         labels: false,
         prereqs: false,
         projects: false,
+        chances: false,
         reserved: words::WASM.reserved,
         globals: words::WASM.globals,
         modules: words::WASM.modules,

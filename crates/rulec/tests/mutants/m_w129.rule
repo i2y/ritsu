@@ -1,0 +1,41 @@
+rule contested_roll v1
+description "One round of a contest decided by a roll. The roll is drawn below the two sides' strengths added together: below the challenger's strength the challenger scores, and otherwise the holder does"
+
+enum scorer = challenger | holder
+
+inputs
+  roll                : number  range >=0 <=199  random
+  challenger_strength : number  range >=1 <=100
+  holder_strength     : number  range >=1 <=100
+
+# What the roll is drawn below. Without this line `holder_strength` would only have its range
+# checked, and the examples and the vectors could hand in a roll the draw never gives.
+constraint roll < challenger_strength + holder_strength
+
+outputs
+  point : scorer
+
+derive margin : number = roll - challenger_strength  range >=-100 <=198
+
+table who_scores
+policy unique
+| margin | -> point : scorer |
+| <0     | challenger        |
+| >=0    | holder            |
+
+# The chance of each side scoring: the challenger scores with the chance of its strength over the
+# two strengths added together.
+chances
+| challenger_strength | holder_strength | -> point   | chance  |
+| 1                   | 1               | challenger | 1/2     |
+| 60                  | 40              | challenger | 3/5     |
+| 60                  | 40              | holder     | 2/5     |
+| 100                 | 1               | challenger | 100/101 |
+| -                   | -               | challenger | >0      |
+
+examples
+| roll | challenger_strength | holder_strength | -> point   |
+| 0    | 1                   | 1               | challenger |
+| 1    | 1                   | 1               | holder     |
+| 59   | 60                  | 40              | challenger |
+| 99   | 60                  | 40              | holder     |

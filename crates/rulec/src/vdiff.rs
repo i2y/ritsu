@@ -1401,6 +1401,13 @@ pub(crate) fn names_constant(f: &RuleFile, c: &Checked, axes: &[Axis], cell: &[u
         .filter(|(i, a)| matches!(a.coords[cell[*i]], Coord::Open(_, _)))
         .map(|(_, a)| a.col.as_str())
         .collect();
+    names_constant_over(f, c, &open, rows, names)
+}
+
+/// [`names_constant`], with the columns that take more than one value over the cell named: what
+/// the chances of a class ask when only some of its columns move (§15.224).
+pub(crate) fn names_constant_over(f: &RuleFile, c: &Checked, open: &BTreeSet<&str>, rows: &[(String, usize)], names: &[String]) -> bool {
+    let open = open.clone();
     let fired: HashMap<&str, usize> = rows.iter().map(|(t, r)| (t.as_str(), *r)).collect();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     fn walk_expr(e: &Expr, f: &RuleFile, c: &Checked, open: &BTreeSet<&str>, fired: &HashMap<&str, usize>, seen: &mut BTreeSet<String>) -> bool {
@@ -2089,6 +2096,7 @@ fn same_arm(a: &Arm, b: &Arm) -> bool {
         },
         (Arm::Take { expr: p, unique: u }, Arm::Take { expr: q, unique: v }) => u == v && same_expr(p, q),
         (Arm::KeepMax { expr: p, key: k1 }, Arm::KeepMax { expr: q, key: k2 }) => same_expr(p, q) && same_expr(k1, k2),
+        (Arm::TakeWeighted { expr: p, weight: w1 }, Arm::TakeWeighted { expr: q, weight: w2 }) => same_expr(p, q) && same_expr(w1, w2),
         _ => false,
     }
 }
@@ -2178,6 +2186,7 @@ fn one_fold_same(x: &FoldDecl, y: &FoldDecl) -> bool {
         && x.arms.iter().zip(&y.arms).all(|((n1, a1, _), (n2, a2, _))| n1.text == n2.text && same_arm(a1, a2))
         && same_answer(&x.empty, &y.empty)
         && same_answer(&x.exhausted, &y.exhausted)
+        && x.draw.as_ref().map(|d| d.text.as_str()) == y.draw.as_ref().map(|d| d.text.as_str())
 }
 
 // ---------------------------------------------------------------------------------------

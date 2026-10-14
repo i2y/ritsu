@@ -821,12 +821,62 @@ fn pool_scalars(
 }
 
 fn pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> Vec<(BTreeMap<String, Val>, String)> {
-    match one_walk(f) {
+    let mut out = match one_walk(f) {
         Some(true) => fold_pool(f, c, cands),
         Some(false) => count_pool(f, c, cands),
         None if f.walks() => walk_pool(f, c, cands),
         None => pool_inner(f, c, cands),
+    };
+    // A pick by weight (§15.226): the drawn values at the edges of each element's share.
+    let more = weighted_cases(f, c, &out);
+    out.extend(more);
+    out
+}
+
+/// What the reason of a case at an edge of the weights of a pick says (§15.226).
+fn weight_edge() -> String {
+    tr!("重みの区切り", "an edge of the weights")
+}
+
+/// The cases a pick by weight is looked at with (§15.226): for each case of the pool whose sequence
+/// has an element weighed, the drawn value at the first and the last value that take each element,
+/// and at the total of the weights, which the door refuses. A drawn value chosen from the range alone
+/// takes the first element at 0 and is refused at the top, so the elements after the first were
+/// never picked by a vector.
+fn weighted_cases(f: &RuleFile, c: &Checked, pool: &[(BTreeMap<String, Val>, String)]) -> Vec<(BTreeMap<String, Val>, String)> {
+    let Some(draw) = f.folds().find(|d| d.weighted()).and_then(|d| d.draw.as_ref()).map(|d| d.text.clone()) else { return Vec::new() };
+    let Some((Some(lo), Some(hi))) = c.ranges.get(&draw).copied() else { return Vec::new() };
+    let mut out = Vec::new();
+    let mut seen: BTreeSet<Vec<(i128, i128)>> = BTreeSet::new();
+    for (a, _) in pool.iter().take(64) {
+        let mut base = a.clone();
+        base.insert(draw.clone(), Val::Num(lo));
+        let Some(cuts) = crate::eval::weighted_cuts(f, c, base.clone().into_iter().collect()) else { continue };
+        if cuts.is_empty() || !seen.insert(cuts.iter().map(|r| (r.num, r.den)).collect()) {
+            continue;
+        }
+        let mut at: BTreeSet<(i128, i128)> = BTreeSet::new();
+        let mut from = Rat::zero();
+        for cut in &cuts {
+            if cut.cmp_to(from) == std::cmp::Ordering::Greater {
+                at.insert((from.num, from.den));
+                let last = cut.sub(Rat::int(1));
+                at.insert((last.num, last.den));
+            }
+            from = *cut;
+        }
+        at.insert((from.num, from.den));
+        for (n, d) in at {
+            let v = Rat { num: n, den: d };
+            if v.cmp_to(lo) == std::cmp::Ordering::Less || v.cmp_to(hi) == std::cmp::Ordering::Greater {
+                continue;
+            }
+            let mut m = a.clone();
+            m.insert(draw.clone(), Val::Num(v));
+            out.push((m, format!("{draw} = {v} ({})", weight_edge())));
+        }
     }
+    out
 }
 
 /// Whether the rule walks the way a rule walked before it could walk more (§15.219): one
@@ -1873,6 +1923,16 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
             }
             continue;
         }
+        // A drawn value not below the total of the weights is refused once the walk is over
+        // (§15.226): one such case holds the generated code to refusing it.
+        if let Some(n) = crate::eval::drawn_past(f, c, a.clone().into_iter().collect()) {
+            let key = format!("draw:{n}");
+            if !past_sums.contains(&key) {
+                past_sums.push(key);
+                refused.push(Vector { input: a, outputs: outs, trace, fired, why });
+            }
+            continue;
+        }
         evaluated.push(Vector { input: a, outputs: outs, trace, fired, why });
     }
 
@@ -1924,6 +1984,11 @@ pub fn suite(f: &RuleFile, c: &Checked) -> Suite {
     let audit = crate::coverage::audit(f, c, "", &evaluated, &refused);
     let mut keep: BTreeSet<usize> = audit.witness.clone();
     keep.extend(forced.iter().copied());
+    // The drawn values at the edges of each element's share of a pick by weight (§15.226) stay: no
+    // criterion of the audit asks which element a pick takes, and without them a pick past the
+    // first element would never be run.
+    let edge = weight_edge();
+    keep.extend(evaluated.iter().enumerate().filter(|(_, v)| v.why.contains(&edge)).map(|(i, _)| i).take(32));
 
     // The pairwise safety net (§9.2): with the criteria satisfied, greedily add the
     // two-column combinations that have not appeared yet.
@@ -2325,6 +2390,13 @@ pub fn in_object(f: &RuleFile, c: &Checked, v: &Vector) -> String {
 /// The JSON object of the outputs, in declaration order (not the name order of a BTreeMap),
 /// so a reader can match it by eye against the `outputs` lines of the rule source.
 fn out_object(c: &Checked, v: &Vector) -> String {
+    observed_json(c, &v.outputs)
+}
+
+/// The outputs of one answer as the `observed` object of a record writes them: each output by its
+/// declared name, in the order declared, its value on the wire (§10.2). What the runners print for
+/// each answer the function that counts the answers gives (§15.225), too.
+pub fn observed_json(c: &Checked, outputs: &[(String, Option<Val>)]) -> String {
     let esc = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
     let one = |name: &str, o: &Option<Val>| match o {
         Some(Val::Enum(e))
@@ -2340,7 +2412,7 @@ fn out_object(c: &Checked, v: &Vector) -> String {
         None => "null".into(),
     };
     let body: Vec<String> =
-        v.outputs.iter().map(|(n, val)| format!("\"{}\":{}", esc(n), one(n, val))).collect();
+        outputs.iter().map(|(n, val)| format!("\"{}\":{}", esc(n), one(n, val))).collect();
     format!("{{{}}}", body.join(","))
 }
 

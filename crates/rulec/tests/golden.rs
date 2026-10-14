@@ -140,6 +140,16 @@ golden!(e137_たどり着けない科目, "E137", "tests/mutants/m_e137ja.rule",
 golden!(e138_年次の食い違い, "E138", "tests/mutants/m_e138ja.rule", "E138");
 golden!(w130_余分な前提, "W130", "tests/mutants/m_w130ja.rule", "W130");
 
+// Chances (§15.224–§15.226): a number drawn from no range, a pick by weight with no `draw` line, a
+// chance on the poster the table does not give, a claim past its budget, and a drawn number of ten
+// million values.
+golden!(e070_範囲の無い乱数, "E070", "tests/mutants/m_e070ja.rule", "E070");
+golden!(e070_取り出した値の乱数, "E070-from", "tests/mutants/m_e070fromja.rule", "E070");
+golden!(e073_引く値の無い重みの選択, "E073", "tests/mutants/m_e073ja.rule", "E073");
+golden!(e133_ポスターの確率, "E133", "tests/mutants/m_e133ja.rule", "E133");
+golden!(w129_予算を越える主張, "W129", "tests/mutants/m_w129ja.rule", "W129");
+golden!(w131_一千万通りの乱数, "W131", "tests/mutants/m_w131ja.rule", "W131");
+
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_値でも名前でもある語, "E075", "tests/mutants/m_e075ja.rule", "E075");
 golden!(e031_要素ごとの値の出力, "E031-walk", "tests/mutants/m_e031walkja.rule", "E031");

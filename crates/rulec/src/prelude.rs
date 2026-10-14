@@ -324,6 +324,10 @@ pub fn normalize(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     n.expr(expr);
                     n.expr(key);
                 }
+                crate::ast::Arm::TakeWeighted { expr, weight } => {
+                    n.expr(expr);
+                    n.expr(weight);
+                }
                 _ => {}
             }
         }

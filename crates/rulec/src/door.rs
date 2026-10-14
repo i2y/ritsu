@@ -75,6 +75,12 @@ pub fn not_a_day(name: &str, file: &str, date: &str) -> String {
     tr!("{name} は {file} の {date} がとる日ではありません", "{name} is not a day {date} of {file} comes to")
 }
 
+/// The drawn value of a pick by weight that is not below the total of the weights (§15.226): a
+/// value the caller was to draw from below the total, and did not.
+pub fn draw_past(name: &str) -> String {
+    tr!("{name} が重みの合計より小さくありません", "{name} is not below the total of the weights")
+}
+
 /// Two elements both taking under `take_unique`: the rule has no answer.
 pub fn fold_contradiction(verdict: &str) -> String {
     tr!("畳み込み {verdict}: take_unique に二件当たりました", "fold {verdict}: two elements matched a take_unique")
@@ -268,6 +274,10 @@ pub fn refusal(f: &RuleFile, c: &Checked, input_obj: &Json) -> Option<Refusal> {
     // over (§15.100): the generated code refuses it there.
     if let Some(n) = crate::eval::sum_past_range(f, c, vals.clone().into_iter().collect()) {
         return Some(input(out_of_range(&n)));
+    }
+    // A drawn value not below the total of the weights of a pick by weight (§15.226).
+    if let Some(n) = crate::eval::drawn_past(f, c, vals.clone().into_iter().collect()) {
+        return Some(input(draw_past(&n)));
     }
     if let Some(i) = crate::eval::contradiction(f, c, vals.into_iter().collect()) {
         if let Some(crate::ast::Item::Fold(fold)) = f.items.get(i) {

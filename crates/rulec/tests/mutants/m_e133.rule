@@ -1,0 +1,40 @@
+rule prize_lottery v1
+description "The prize a ticket of a store's lottery wins. The ticket's number is drawn from 0 to 999, and during a campaign more numbers win the third prize. The chances printed on the poster are the claims below, so the poster and the code come from one source. An example written for the purpose"
+
+enum prize = first | second | third | no_prize
+
+inputs
+  ticket   : number  range >=0 <=999  random
+  campaign : bool
+
+outputs
+  prize : prize
+
+table numbers
+policy unique
+| ticket    | campaign | -> prize |
+| 0         | -        | first    |
+| >=1 <=9   | -        | second   |
+| >=10 <=99 | true     | third    |
+| >=10 <=59 | false    | third    |
+| >=60 <=99 | false    | no_prize |
+| >=100     | -        | no_prize |
+
+# The chances printed on the poster.
+chances
+| campaign | -> prize | chance |
+| -        | first    | 0.1%   |
+| -        | second   | 0.9%   |
+| true     | third    | 9%     |
+| false    | third    | 6%     |
+| true     | no_prize | 90%    |
+| false    | no_prize | 94%    |
+
+examples
+| ticket | campaign | -> prize |
+| 0      | false    | first    |
+| 9      | false    | second   |
+| 59     | false    | third    |
+| 60     | false    | no_prize |
+| 99     | true     | third    |
+| 100    | true     | no_prize |

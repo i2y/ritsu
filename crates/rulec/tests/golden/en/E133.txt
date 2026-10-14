@@ -1,0 +1,8 @@
+error[E133]: A claim of `chances` does not hold (row 4)
+  --> tests/mutants/m_e133.rule:29 chances
+   |
+29 | | false    | third    | 6%     |
+   |                         ^^ 6% is written here
+   |
+ With campaign = false, the chance of prize = third is 1/20 (5.0%).
+ A claim speaks of every combination its cells let in, with the random inputs drawn uniformly. If the table is right, correct the claim; if the claim is the business truth, correct the table's rows.

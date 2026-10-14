@@ -605,6 +605,8 @@ impl<'a> Gen<'a> {
             .opt_raw("labels", self.np_labels())
             // Which values need which before them, by block and value (§15.222).
             .opt_raw("prerequisites", self.np_prereqs())
+            // The random inputs and the values each is drawn from (§15.225).
+            .opt_raw("random", self.np_random())
             .finish()
     }
 
@@ -632,7 +634,8 @@ impl<'a> Gen<'a> {
     pub fn np_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         // What it answers with `--prerequisites`: each block's functions, from the plan (§15.222).
-        let prereqs = self.np_prereq_mode();
+        // And with `--chances`, what the runtime counts over the random inputs (§15.225).
+        let prereqs = self.np_prereq_mode() + &self.np_chances_mode();
         if self.f.machine.is_some() {
             let load = format!("rule = rulec_np.load(\"{alias}.json\")\n");
             return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()).replacen(&load, &format!("{load}{prereqs}"), 1));

@@ -2125,8 +2125,8 @@ pub fn ledger() -> Vec<Entry> {
             "E021",
             tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
             tr!(
-                "`fold <判定の列> over <並びの名前> [-> <名前> [: <型>]]` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` のどれでもないか、畳もうとしている列が列挙でないとき。答えの名前が、入力や要素のフィールドや上で宣言した値と同じとき、出力でない名前に型が無いとき、出力の名前に出力と違う型を書いたとき、畳み込みとほかの項目が同じ名前を決めるときも、これです。畳み込みの値が、その値を決める時点に無い値を読むときもこれです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません（要素の判定がその答えを読むと、答えを出す前に答えが要ります）。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
-                "The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
+                "`fold <判定の列> over <並びの名前> [-> <名前> [: <型>]]` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` `take_weighted <値> by <重み>` のどれでもないか、畳もうとしている列が列挙でないとき。答えの名前が、入力や要素のフィールドや上で宣言した値と同じとき、出力でない名前に型が無いとき、出力の名前に出力と違う型を書いたとき、畳み込みとほかの項目が同じ名前を決めるときも、これです。畳み込みの値が、その値を決める時点に無い値を読むときもこれです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません（要素の判定がその答えを読むと、答えを出す前に答えが要ります）。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
+                "The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
             ),
             tr!(
                 "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです。要素の値を答えにするなら、`take_unique`・`take_first`・`keep_max` で採ってから、`exhausted -> held` で返してください。後ろの項目が答えを読むなら `-> <名前>` で名前を付けます。自分の答えを読む判定は、別の畳み込みにすれば二回目の歩きで読めます。",
@@ -2989,17 +2989,18 @@ pub fn ledger() -> Vec<Entry> {
             "E108",
             tr!("中間値が int64 に収まることを証明できません", "Cannot prove an intermediate value fits in int64"),
             tr!(
-                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。",
-                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value."
+                "宣言した範囲と刻みから計算した「実際に取りうる値」が、int64 を超えるとき。率の刻みが 1% なら格納される整数は 100 倍になります。乱数の入力（`random`）の点を掛け合わせた数が 2^62 を越えるときもこれです。確率は点を数えて出し、数えた通りの数はどの言語でも int64 で持ちます。",
+                "The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64."
             ),
             tr!(
-                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。",
-                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it."
+                "入力の範囲を狭めるか、途中に丸めを一つ入れてください。どこで丸めるかは答えを変える業務の判断なので、rulec は決めません。乱数の入力の点が多すぎるなら、その範囲を狭めてください。",
+                "Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where the random inputs have too many points, narrow their ranges."
             ),
             X_E108,
             &["E112", "E103"],
         )
-        .english(X_E108_EN),
+        .english(X_E108_EN)
+        .also(tr!("乱数の入力の点", "The points of the random inputs"), X_E108_RANDOM, X_E108_RANDOM),
         err(
             "E109",
             tr!("検査の予算を超えたので、完全性を証明できませんでした", "The check exceeded its budget, so completeness could not be proven"),
@@ -3739,6 +3740,76 @@ pub fn ledger() -> Vec<Entry> {
         )
         .with_files(AMOUNTS_DOC)
         .english(X_E074_EN),
+        err(
+            "E070",
+            tr!("乱数の入力か確率の主張の形が違います", "A random input or a claim of `chances` is not shaped right"),
+            tr!(
+                "`random` を付けた入力が引けないとき。引けないのは、範囲の両端の無い数、値の無いことがある入力（`?`）、日付と文字列、`from` で呼ぶ側のオブジェクトから取り出す入力（`from sum` などで取り出す値も、呼ぶ側の値で、引いた値ではありません。`random` を `from` の前に書いても後ろに書いても同じです）、machine が持ち越す入力です。`random` を出力か要素のフィールドに書いたとき。`chances` の形が違うとき：`chances` の行に何かが続く、下に表が無い、見出しに `->` が無い、最後の列が `chance` でない、出力の列が無い、行が無い。乱数でない入力に列の無いものがある、左に乱数の入力や入力でない名前を書いた、右に出力でない名前を書いた、並びをたどる規則で並びの列に `sequence` の名前でないものを書いた、確率のセルが 0 から 1 の有理数・率・その比べとして読めないとき。乱数の入力が無いのに `chances` があるときもこれです。",
+                "An input marked `random` cannot be drawn: a number without both ends of its range, an input that may be absent (`?`), a date or a string, an input read out of the caller's object with `from` (what `from sum` and the like read is the caller's value, not a draw, whether `random` is written before the `from` or after it), or an input a machine carries. Or `random` is written on an output or on a field of an element. Or `chances` is misshapen: something follows `chances` on its line, there is no table under it, the header has no `->`, its last column is not `chance`, it names no output, or there are no rows; an input that is not random has no column, a random input or a name that is not an input is on the left, a name that is not an output is on the right, a sequence's column in a rule that walks holds something other than the name of a `sequence`, or a chance cell cannot be read as a rational, a rate or comparisons with one, between 0 and 1. A `chances` table in a rule with no random input is this too."
+            ),
+            tr!(
+                "引く数には `range >=0 <=13` のように両端のある範囲を書き、数か列挙か真偽を引いてください。`chances` の見出しは、乱数でない入力の全部の列、`->`、主張に要る出力の列、最後に `chance` です。どの値でもよい列には `-` を書き、確率は `5/14`、`35%`、`<=1/100` のように書きます。",
+                "Give a number that is drawn a range with both ends, as in `range >=0 <=13`, and draw a number, an enum or a truth value. The header of `chances` names every input that is not random, then `->`, the outputs the claims are about, and `chance` last. A column that takes any value gets `-`, and a chance is written like `5/14`, `35%` or `<=1/100`."
+            ),
+            X_E070,
+            &["E073", "E133", "E108"],
+        ),
+        err(
+            "E073",
+            tr!("重みで選ぶ畳み込みの形が違います", "A pick by weight is not shaped right"),
+            tr!(
+                "`take_weighted` に `by` が無いとき、`draw` の行が二つあるとき、`take_weighted` の無い畳み込みに `draw` の行があるとき。重みで選ぶ畳み込みが一つの規則に二つあるとき、その腕に `next` と `take_weighted` のほかの腕があるとき、重みが number でないか負になりうるとき、`draw` の行が無いとき、`draw` が指す値が、`random` を付けて範囲が 0 から始まる number の入力でないとき。",
+                "A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative; there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0."
+            ),
+            tr!(
+                "腕 `take_weighted <値> by <重み>` と、行 `draw -> <乱数の入力>` を一行書き、指す入力は `range >=0 <=<上限>` の `random` な number にしてください。重みは 0 以上の整数です。選ぶのが二回要るなら、規則を二つに分けます。",
+                "Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more. Split the rule in two if it needs two picks."
+            ),
+            X_E073,
+            &["E021", "E070"],
+        ),
+        err(
+            "E133",
+            tr!("確率の主張が成り立ちません", "A claim of `chances` does not hold"),
+            tr!(
+                "`chances` の行の確率が、行の入力のセルに当てはまる乱数でない入力のある組み合わせで、乱数の入力を一様に引いたときの確率と違うとき（比べる形なら、それを満たさないとき）。その組み合わせと、そこでの確率が付きます。確率は、乱数の入力の点を数えた正確な有理数です。",
+                "The chance a row of `chances` states is not the chance, with the random inputs drawn uniformly, at some combination of the inputs that are not random its cells let in (or does not pass the comparisons it states). The combination comes with it, and the chance there: an exact rational, from counting the points of the random inputs."
+            ),
+            tr!(
+                "表が正しいなら主張を直してください。主張のほうが業務として正しいなら、表の行を直してください。",
+                "If the table is right, correct the claim; if the claim is the business truth, correct the table's rows."
+            ),
+            X_E133,
+            &["E070", "W129", "E107"],
+        ),
+        warn(
+            "W129",
+            tr!("確率の主張を予算の中で決められませんでした", "A claim of `chances` could not be decided within the budget"),
+            tr!(
+                "答えが乱数の入力の式で区分の中で変わるところや、乱数の入力とほかの入力を一緒に読むところで、点を一つずつ評価する数が、主張一つの予算（`--budget` の 50 分の 1、既定で 100 万点）を越えるとき。並びが読めないとき、規則が矛盾する点があるときも、決めずにこれを出します。決められない主張は、成り立つとも成り立たないとも言いません。",
+                "Where an answer moves inside a box with the random inputs, or the random inputs are read together with the others, the points that have to be run one by one go past the budget of one claim (one 50th of `--budget`'s nodes, a million points by default). A sequence that cannot be read, or a point where the rule contradicts itself, leaves the claim undecided too. A claim that is not decided is said to be neither holding nor broken."
+            ),
+            tr!(
+                "行の乱数でない入力のセルを狭めるか、`--budget` を上げてください。",
+                "Narrow the cells of the inputs that are not random, or raise `--budget`."
+            ),
+            X_W129,
+            &["E133", "E109"],
+        ),
+        warn(
+            "W131",
+            tr!("確率の関数は、呼ぶたびに規則を何度も評価します", "The chances function runs the rule many times on every call"),
+            tr!(
+                "乱数の入力の点を掛け合わせた数が 100 万を越え、生成する確率の関数が、呼ぶたびにその数だけ規則を評価するとき。重みで選ぶ規則で乱数の入力を `draw` の行だけが読むときは、関数が重みから数えるので出ません。",
+                "The points of the random inputs, multiplied together, are more than a million, and the function generated to count the answers runs the rule that many times on every call. A rule that picks by weight, its random input read by the `draw` line alone, is counted from its weights and does not get it."
+            ),
+            tr!(
+                "頻繁に呼ぶなら、乱数の入力の範囲を狭めてください。重みで選ぶ規則なら、乱数の入力を `draw` の行だけが読むようにしてください。",
+                "If it is called often, narrow the ranges of the random inputs; in a rule that picks by weight, let only the `draw` line read the random input."
+            ),
+            X_W131,
+            &["W129", "E108"],
+        ),
     ]
 }
 
@@ -3905,3 +3976,122 @@ pub fn json_all() -> String {
 pub fn text_all() -> String {
     ledger().iter().map(|e| format!("{}\n", render_text(e))).collect::<Vec<_>>().join("")
 }
+
+// ── The reproductions of the codes about chances (§15.224–§15.226) ─────────────
+
+/// E070: a number drawn with no range to draw it from.
+const X_E070: &str = r##"rule t(t) v1
+
+inputs
+  roll(roll) : number  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| roll | -> r(r) : bool |
+| <5   | true           |
+| >=5  | false          |
+"##;
+/// E073: a pick by weight that does not say which value it draws.
+const X_E073: &str = r##"rule t(t) v1
+
+enum v(v) = skip(skip) | pick(pick)
+
+elements os(os)
+  ix(ix) : number  range >=1 <=9
+  ok(ok) : bool
+  w(w)   : number  range >=0 <=10
+
+inputs
+  roll(roll) : number  range >=0 <=99  random
+
+outputs
+  p(p) : number  round down(1)
+
+table j(j)
+policy unique
+| ok    | -> v(v) : v |
+| true  | pick        |
+| false | skip        |
+
+fold v over os
+  skip      -> next
+  pick      -> take_weighted ix by w
+  empty     -> 0
+  exhausted -> held
+"##;
+/// E133: three values of ten answer true, and the claim says one in three.
+const X_E133: &str = r##"rule t(t) v1
+
+inputs
+  roll(roll) : number  range >=0 <=9  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| roll | -> r(r) : bool |
+| <3   | true           |
+| >=3  | false          |
+
+chances
+| -> r | chance |
+| true | 1/3    |
+"##;
+/// W129: the drawn value and another input read together, over more points than one claim's budget.
+const X_W129: &str = r##"rule t(t) v1
+
+inputs
+  roll(roll) : number  range >=0 <=999  random
+  a(a)       : number  range >=0 <=9999
+
+outputs
+  r(r) : bool
+
+derive d(d) : number = roll - a  range >=-9999 <=999
+
+table j(j)
+policy unique
+| d   | -> r(r) : bool |
+| <0  | true           |
+| >=0 | false          |
+
+chances
+| a | -> r | chance |
+| - | true | >=0    |
+"##;
+/// W131: ten million points for the function that counts the answers to run on every call.
+const X_W131: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=999  random
+  b(b) : number  range >=0 <=9999  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a     | b | -> r(r) : bool |
+| <500  | - | true           |
+| >=500 | - | false          |
+"##;
+/// E108, the points of the random inputs: 10^20 of them, past the 2^62 a count can hold.
+const X_E108_RANDOM: &str = r##"rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=9999999999  random
+  b(b) : number  range >=0 <=9999999999  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a   | b | -> r(r) : bool |
+| <5  | - | true           |
+| >=5 | - | false          |
+"##;

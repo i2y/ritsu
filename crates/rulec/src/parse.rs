@@ -9,6 +9,8 @@ use crate::lex::{Kind, Token, lex_line_soft};
 
 /// The `prerequisites` block (§15.222).
 mod prereq;
+/// The `chances` table (§15.224).
+mod chances;
 
 /// The keywords that can start a line. Used to detect E009 (a declaration named like a
 /// reserved word) and to check that the README's keyword table matches this list.
@@ -125,6 +127,41 @@ fn named_like_head(line: &[Token]) -> bool {
         && line.get(1).is_some_and(|t| t.is(&Kind::LParen) || t.is(&Kind::Colon) || t.is(&Kind::Eq) || t.is(&Kind::Arrow))
 }
 
+/// Where the `random` mark is in a declaration's tail (§15.224), when it is written: the word on its
+/// own, not a bound of a range (`range >=random` names a value of an ordered enum).
+fn tail_random(ts: &[Token], k: usize) -> Option<Span> {
+    (k..ts.len()).find_map(|j| {
+        let bound = j > 0 && matches!(ts[j - 1].kind, Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt);
+        (ts[j].ident() == Some(crate::kw::RANDOM) && !bound && !ts[..j].iter().any(|t| t.is(&Kind::At))).then(|| ts[j].span.clone())
+    })
+}
+
+/// The `random` mark written after a `from` (§15.223, §15.224): the last word of the line, where no
+/// word of the `from` can stand — not a field after `.` or `of`, not the field or the value of a
+/// `where`, not the value of `empty`. A random input cannot be read out of the caller's object at
+/// all (E070), and the mark there would otherwise be stepped over with the projection's tail.
+fn trailing_random(ts: &[Token]) -> Option<Span> {
+    let last = ts.last()?;
+    if last.ident() != Some(crate::kw::RANDOM) {
+        return None;
+    }
+    let before = ts.len().checked_sub(2).and_then(|j| ts.get(j))?;
+    let taken = matches!(before.kind, Kind::Dot | Kind::Eq | Kind::Le | Kind::Ge | Kind::Lt | Kind::Gt)
+        || matches!(before.ident(), Some(crate::kw::FROM | crate::kw::OF | crate::kw::WHERE | crate::kw::EMPTY));
+    (!taken).then(|| last.span.clone())
+}
+
+/// The words an arm of a `fold` starts with: after `draw ->`, one of these is the arm of a verdict
+/// called `draw`, not the drawn value (§15.226).
+const ARM_WORDS: &[&str] = &[
+    crate::kw::NEXT,
+    crate::kw::STOP,
+    crate::kw::TAKE_UNIQUE,
+    crate::kw::TAKE_FIRST,
+    crate::kw::KEEP_MAX,
+    crate::kw::TAKE_WEIGHTED,
+];
+
 /// How many declarations the file holds so far. A line that leaves this and the diagnostics
 /// as they were has been read into nothing.
 fn declared(f: &RuleFile) -> usize {
@@ -148,6 +185,7 @@ fn declared(f: &RuleFile) -> usize {
         + f.elements.len()
         + usize::from(f.machine.is_some())
         + f.prerequisites.len()
+        + f.chances.len()
 }
 
 /// How a line that starts with `word` is written, for the note under E058.
@@ -276,6 +314,7 @@ impl P {
             machine: None,
             scenarios: Vec::new(),
             prerequisites: Vec::new(),
+            chances: Vec::new(),
         };
 
         loop {
@@ -549,6 +588,11 @@ impl P {
                 crate::kw::PREREQUISITES => {
                     if let Some(d) = self.prerequisites(&line) {
                         f.prerequisites.push(d);
+                    }
+                }
+                crate::kw::CHANCES => {
+                    if let Some(d) = self.chances(&line) {
+                        f.chances.push(d);
                     }
                 }
                 crate::kw::MACHINE => {
@@ -996,8 +1040,9 @@ impl P {
                 true => self.projection(&line[cut..]),
             };
             let (range, contract_only) = self.tail_range(head, k);
+            let random = tail_random(head, k).or_else(|| trailing_random(&line[cut..]));
             self.tail_junk(head, k);
-            v.push(VarDecl { name, ty, range, contract_only, from, span: span_of(&line) });
+            v.push(VarDecl { name, ty, range, contract_only, from, random, span: span_of(&line) });
         }
         v
     }
@@ -1332,6 +1377,20 @@ impl P {
                         )),
                 );
             }
+            // A drawn value is something the caller passes in (§15.224); an output is the rule's
+            // answer, and the line would otherwise take the mark in silence.
+            if let Some(sp) = tail_random(&line, k) {
+                let at = self.at(sp.line);
+                self.err(
+                    Diag::error("E070", tr!("`random` を書けるのは入力だけです", "Only an input can be `random`"))
+                        .at(at)
+                        .mark(sp, tr!("{} は出力です", "{} is an output", name.text))
+                        .note(tr!(
+                            "`random` は、呼ぶ側が宣言した範囲から一様に引いて渡す入力の印です。出力は規則が決める値なので、引いて渡すものではありません。",
+                            "`random` marks an input the caller draws uniformly from its declared range and passes in. An output is what the rule decides, not something drawn."
+                        )),
+                );
+            }
             self.tail_junk(&line, k);
             v.push(OutDecl { name, ty, rounding, span: span_of(&line) });
         }
@@ -1407,6 +1466,9 @@ impl P {
                     }
                 }
                 Some(crate::kw::CONTRACT_ONLY) => k += 1,
+                // The `random` mark (§15.224). An output's line is told it cannot take one where the
+                // outputs are read; here it is one more word of a declaration's tail.
+                Some(crate::kw::RANDOM) => k += 1,
                 // `round up(10円)` is five tokens. A shorter one is E104's business, not
                 // this check's, so the word alone is stepped over.
                 Some(crate::kw::ROUND) => {
@@ -1422,9 +1484,9 @@ impl P {
                             .at(self.at(sp.line))
                             .mark(sp, tr!("この語は宣言の一部として読まれません", "this is not read as part of the declaration"))
                             .note(tr!(
-                                "宣言の行に置けるのは `{}`、`{}`、`{}` だけです。ほかの語はいままで黙って捨てられていました。",
-                                "A declaration line holds `{}`, `{}` and `{}`, and nothing else. Anything else used to be dropped in silence.",
-                                crate::kw::RANGE, crate::kw::ROUND, crate::kw::CONTRACT_ONLY
+                                "宣言の行に置けるのは `{}`、`{}`、`{}`、`{}` だけです。ほかの語はいままで黙って捨てられていました。",
+                                "A declaration line holds `{}`, `{}`, `{}` and `{}`, and nothing else. Anything else used to be dropped in silence.",
+                                crate::kw::RANGE, crate::kw::ROUND, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM
                             ))
                             .note(tr!(
                                 "範囲は `{} >=<値> <=<値>` の形で、比較の記号と値の対だけが読まれます。単位の綴りが違っていると対として読めなくなり、余った分がここに出ます。",
@@ -1762,9 +1824,30 @@ impl P {
         }
         let mut arms = Vec::new();
         let (mut empty, mut exhausted) = (None, None);
+        let mut draw: Option<Name> = None;
         for l in block {
             let sp = span_of(&l);
             let Some((name, k)) = self.name_at(&l, 0) else { continue };
+            // `draw -> <input>` (§15.226): one name after the arrow, which no arm is. `draw -> next`
+            // and the like stay the arm of a verdict called `draw`.
+            if name.text == crate::kw::DRAW && k == 1 && l.get(1).is_some_and(|t| t.is(&Kind::Arrow)) && l.len() == 3 {
+                if let Some(w) = l[2].ident().filter(|w| !ARM_WORDS.contains(w)) {
+                    if draw.is_some() {
+                        self.err(
+                            Diag::error("E073", tr!("`draw` の行が二つあります", "There are two `draw` lines"))
+                                .at(self.at(sp.line))
+                                .mark(sp.clone(), tr!("二行目です", "this is the second"))
+                                .note(tr!(
+                                    "重みで選ぶ畳み込みが比べる乱数は一つです。`draw -> <乱数の入力>` を一行だけ書いてください。",
+                                    "A fold that picks by weight compares one drawn value. Write one `draw -> <random input>` line."
+                                )),
+                        );
+                    } else {
+                        draw = Some(Name { text: w.to_string(), ascii: None, span: l[2].span.clone() });
+                    }
+                    continue;
+                }
+            }
             // `->` is written as the arrow the cells use.
             let Some(a) = l.iter().position(|t| t.is(&Kind::Arrow)) else {
                 self.err(
@@ -1793,6 +1876,27 @@ impl P {
                         crate::kw::TAKE_UNIQUE | crate::kw::TAKE_FIRST => self
                             .expr_after(&rest[0], &rest[1..])
                             .map(|e| Arm::Take { expr: e, unique: word == crate::kw::TAKE_UNIQUE }),
+                        crate::kw::TAKE_WEIGHTED => {
+                            let by = rest.iter().position(|t| t.ident() == Some(crate::kw::BY));
+                            match by {
+                                Some(b) => match (self.expr_after(&rest[0], &rest[1..b]), self.expr_after(&rest[b], &rest[b + 1..])) {
+                                    (Some(expr), Some(weight)) => Some(Arm::TakeWeighted { expr, weight }),
+                                    _ => None,
+                                },
+                                None => {
+                                    self.err(
+                                        Diag::error("E073", tr!("`take_weighted` に `by` がありません", "A `take_weighted` has no `by`"))
+                                            .at(self.at(sp.line))
+                                            .mark(sp.clone(), tr!("`take_weighted <値> by <重み>` の形です", "the shape is `take_weighted <value> by <weight>`"))
+                                            .note(tr!(
+                                                "選ばれる見込みを決める重みが要ります。要素の重みを足していき、引いた値がその合計を初めて下回った要素を取ります。",
+                                                "The weight is what makes an element likely to be picked: the weights are added up as the walk goes, and the element at which the drawn value is first below the total is taken."
+                                            )),
+                                    );
+                                    None
+                                }
+                            }
+                        }
                         crate::kw::KEEP_MAX => {
                             let by = rest.iter().position(|t| t.ident() == Some(crate::kw::BY));
                             match by {
@@ -1820,8 +1924,8 @@ impl P {
                                     .at(self.at(sp.line))
                                     .mark(sp.clone(), tr!("行き先に書けるのは次のどれかです", "an arm is one of these"))
                                     .note(tr!(
-                                        "`next`（次へ）、`stop`（終わり）、`stop with <値>`、`take_unique <値>`、`take_first <値>`、`keep_max <値> by <鍵>`。",
-                                        "`next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`."
+                                        "`next`（次へ）、`stop`（終わり）、`stop with <値>`、`take_unique <値>`、`take_first <値>`、`keep_max <値> by <鍵>`、`take_weighted <値> by <重み>`。",
+                                        "`next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`."
                                     )),
                             );
                             None
@@ -1833,7 +1937,7 @@ impl P {
                 }
             }
         }
-        Some(FoldDecl { verdict, over, answer, arms, empty, exhausted, span })
+        Some(FoldDecl { verdict, over, answer, arms, empty, exhausted, draw, span })
     }
 
     /// `machine 注文(order) over 遷移` and the lines under it (§15.148).

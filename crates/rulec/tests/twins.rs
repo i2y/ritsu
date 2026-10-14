@@ -281,11 +281,13 @@ fn items<'a>(j: &'a Json, k: &str) -> &'a [Json] {
 /// How many objects of each set of keys a value holds. A claim's keys are words of the
 /// certificate and never names, except in the objects under `values` and under `inputs` (the
 /// numbers a call on a machine's path to a final state is made with, rulec's §15.233), which are
-/// keyed by the names of the inputs they give a value to, so those count their members only.
+/// keyed by the names of the inputs they give a value to, and under `outputs` (what a box of the
+/// random axes answers, §15.224), keyed by the names of the outputs, so those count their members
+/// only.
 fn shape(j: &Json, parent: &str, out: &mut BTreeMap<String, usize>) {
     match j {
         Json::Obj(m) => {
-            let key = if parent == "values" || parent == "inputs" {
+            let key = if parent == "values" || parent == "inputs" || parent == "outputs" {
                 format!("names x {}", m.len())
             } else {
                 let mut ks: Vec<&str> = m.iter().map(|(k, _)| k.as_str()).collect();
@@ -389,6 +391,32 @@ fn table_claims(t: &Json, cert: &Json) -> String {
 }
 
 /// Everything a certificate claims, without a name in it.
+/// What the `chances` section states (rulec's §15.224), with every name left out: how many points each
+/// random input has, and for each claim its chance, its verdict, and how its classes came out — the
+/// hits over the points of each class counted box by box, and the points of each class run one by
+/// one with the lowest and the highest chance they came to — sorted, since the classes follow the
+/// order of the names.
+fn chances_claims(cert: &Json) -> String {
+    let Some(ch) = cert.get("chances") else { return "none".into() };
+    let random: Vec<String> = items(ch, "random").iter().map(|r| json::unparse(field(r, "points"))).collect();
+    let claims: Vec<String> = items(ch, "claims")
+        .iter()
+        .map(|c| {
+            let mut classes: Vec<String> = items(c, "classes")
+                .iter()
+                .map(|k| match (k.get("run"), k.get("empty")) {
+                    (Some(run), _) => format!("run {} {}..{}", json::unparse(run), json::unparse(field(k, "low")), json::unparse(field(k, "high"))),
+                    (None, Some(_)) => "empty".to_string(),
+                    (None, None) => format!("{} of {} in {} boxes", json::unparse(field(k, "hits")), json::unparse(field(k, "points")), items(k, "boxes").len()),
+                })
+                .collect();
+            classes.sort();
+            format!("{} {} {classes:?}", json::unparse(field(c, "chance")), json::unparse(field(c, "verdict")))
+        })
+        .collect();
+    format!("{random:?} {claims:?} {}", shape_of(ch))
+}
+
 fn claims(rel: &str) -> Vec<String> {
     let (c, out) = run(&["certificate", rel]);
     assert_eq!(c, 0, "{rel}");
@@ -418,6 +446,7 @@ fn claims(rel: &str) -> Vec<String> {
         format!("contracts {}", count("contracts")),
         format!("values {} {}", count("values"), shape_of(field(&cert, "values"))),
         format!("machine {}", if matches!(machine, Json::Null) { "none".to_string() } else { shape_of(machine) }),
+        format!("chances {}", chances_claims(&cert)),
     ];
     v.extend(items(&cert, "tables").iter().map(|t| table_claims(t, &cert)));
     v
@@ -435,7 +464,7 @@ fn a_twin_states_the_same_claims_as_its_original() {
         for (i, (a, b)) in cj.iter().zip(&ce).enumerate() {
             assert_eq!(a, b, "{ja} and {en}: claim {i} differs");
         }
-        tables += cj.len() - 8;
+        tables += cj.len() - 9;
     }
     assert!(tables >= 40, "{tables} tables compared");
 }

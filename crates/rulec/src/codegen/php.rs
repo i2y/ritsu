@@ -27,7 +27,7 @@
 
 use super::{
     cell_src, civil_needed, fired_doc, mode_fn, not_bool, out_src, pascal, plain_doc, pub_name,
-    raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang, Phase, WalkStep, Wire,
+    raw_base, record_doc, round_cases, traced_doc, unparen, walked_doc, wire_of, Expr2, Gen, Lang, Phase, WalkStep, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
 use crate::num::{Rat, RoundMode};
@@ -546,6 +546,12 @@ impl<'a> Gen<'a> {
             o.push('\n');
             o.push_str(&self.php_from());
         }
+        // The function that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(self.php_chances().trim_end());
+            o.push('\n');
+        }
         o
     }
 
@@ -742,6 +748,12 @@ impl<'a> Gen<'a> {
             init.push_str(&format!("    {done} = false;\n"));
         }
         init.push_str(&format!("    {taken} = null;\n    {kept} = null;\n    {best} = null;\n"));
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
+        let (total, weight, cuts) = (php_var(&names.total), php_var(&names.weight), php_var(&names.cuts));
+        if weighted {
+            init.push_str(&format!("    {total} = 0;  // {}\n    {cuts} = [];\n", tr!("重みの合計", "the running total of the weights")));
+        }
 
         let mut arms = String::new();
         let v = local(&fold.verdict);
@@ -783,12 +795,27 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {best} = {key};\n"));
                     arms.push_str(&format!("            {kept} = {};\n        }}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight: wx } => {
+                    arms.push_str(&format!("        {weight} = {};\n", php_expr(unparen(&self.expr(wx, local).text))));
+                    arms.push_str(&format!("        {total} += {weight};\n        {cuts}[] = {total};\n"));
+                    arms.push_str(&format!("        if ({taken} === null && {draw} < {total}) {{\n"));
+                    arms.push_str(&format!("            {taken} = {};\n        }}\n", val(expr, local)));
+                }
             }
             arms.push_str("    }\n");
         }
         let step = if alone { arms } else { format!("    if (!{done}) {{  // {}\n{}    }}\n", fold.verdict, Self::indent_block(&arms, "    ")) };
 
-        let mut fin = format!("    if (count({seq}) > 0 && !{stopped}) {{\n");
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("    if ({total} > 0 && {draw} >= {total}) {{\n        throw new RuleInputError({}, {draw});\n    }}\n", php_str(&what)));
+        }
+        fin.push_str(&format!("    if (count({seq}) > 0 && !{stopped}) {{\n"));
         fin.push_str(&format!("        {held} = {taken} ?? {kept} ?? {};\n", text(&fold.empty)));
         fin.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
         fin.push_str(&format!("    {} = {answer};\n", php_var(&self.ident(&out_name))));
@@ -920,6 +947,17 @@ impl<'a> Gen<'a> {
             traced_doc(&self.f.name.text, &self.f.version)
         ));
         o.push_str(&format!("function {traced}({}): array\n{{\n", params.join(", ")));
+        // A rule that picks by weight runs its walk in a function of its own, which gives back the
+        // running totals of the weights too (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("php"), php_var(&self.fold_names(i).cuts)));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("    $r = {w}({});\n    return [$r[0], $r[1]];\n}}\n\n", args.join(", ")));
+            o.push_str(&format!(
+                "/**\n * {}\n *\n * @return array{{0: {ret}, 1: list<Fired>, 2: list<int>}}\n */\nfunction {w}({}): array\n{{\n",
+                walked_doc(),
+                params.join(", ")
+            ));
+        }
 
         // Entry guards (§8.5). The declared types already refuse a value of the wrong kind —
         // a float where an int was asked for, a string outside the enum — so what is left to
@@ -1000,9 +1038,11 @@ impl<'a> Gen<'a> {
             });
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    return [{}, {}];\n", finals[0], php_var(&trace)));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    return [{}, {}{cuts}];\n", finals[0], php_var(&trace)));
         } else {
-            o.push_str(&format!("    return [new Output({}), {}];\n", finals.join(", "), php_var(&trace)));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    return [new Output({}), {}{cuts}];\n", finals.join(", "), php_var(&trace)));
         }
         o.push_str("}\n");
         o
@@ -1268,6 +1308,8 @@ impl<'a> Gen<'a> {
             ));
             args.push(v);
         }
+        // `--chances` reads a line's inputs as the vectors are read (§15.225).
+        let chances_mode = self.php_chances_mode(&d, &seq, &args);
         let a = php_var(&self.temp("args"));
         let (r, trace, line) = (php_var(&self.temp("r")), php_var(&self.temp("trace")), php_var(&self.temp("line")));
         // A machine's traces (§15.148): the carried input is the state this language answered
@@ -1339,7 +1381,7 @@ impl<'a> Gen<'a> {
              }}\n",
             ritsu_emit::header::VERSION,
             PHP_WIRE.replace("@NS@", &ns),
-            self.php_labels_mode() + &self.php_prereq_mode(),
+            self.php_labels_mode() + &self.php_prereq_mode() + &chances_mode,
             args.join(", "),
         )
     }
@@ -1708,3 +1750,156 @@ function _refused(string $kind, string $what): void
 }
 
 "#;
+
+// ── The function that counts the answers (§15.225) ──────────────────────────────
+
+impl<'a> Gen<'a> {
+    /// The `Chances` class and the function, in PHP.
+    pub(super) fn php_chances(&self) -> String {
+        if !self.f.has_random() {
+            return String::new();
+        }
+        let (doc_fn, doc_ty) = self.chances_docs();
+        let outs = &self.f.outputs;
+        let ret = if outs.len() == 1 { self.php_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
+        let fname = self.php_fname();
+        let name = self.chances_name("php");
+        let mut params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .filter(|i| i.random.is_none())
+            .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var(&pub_name(&i.name))))
+            .collect();
+        for el in &self.f.elements {
+            params.push(format!("array {}", php_var(&pub_name(&el.name))));
+        }
+        let call = |draw: Option<(&str, &str)>| -> String {
+            let mut args: Vec<String> = self
+                .f
+                .inputs
+                .iter()
+                .map(|i| match draw {
+                    Some((d, v)) if i.name.text == d => v.to_string(),
+                    _ => php_var(&pub_name(&i.name)),
+                })
+                .collect();
+            for el in &self.f.elements {
+                args.push(php_var(&pub_name(&el.name)));
+            }
+            args.join(", ")
+        };
+        let (total, ways, out, k, last, e) = (
+            php_var(&self.temp("total")),
+            php_var(&self.temp("ways")),
+            php_var(&self.temp("out")),
+            php_var(&self.temp("k")),
+            php_var(&self.temp("last")),
+            php_var(&self.temp("e")),
+        );
+        let add = |ind: &str, n: &str| -> String {
+            format!(
+                "{ind}{k} = 0;\n{ind}while ({k} < count({ways}) && {ways}[{k}][0] != {out}) {{\n{ind}    {k} += 1;\n{ind}}}\n{ind}if ({k} === count({ways})) {{\n{ind}    {ways}[] = [{out}, {n}];\n{ind}}} else {{\n{ind}    {ways}[{k}][1] += {n};\n{ind}}}\n"
+            )
+        };
+        let mut o = format!(
+            "/**\n * {doc_ty}\n */\nfinal class Chances\n{{\n    /**\n     * @param list<array{{0: {ret}, 1: int}}> $ways\n     */\n    public function __construct(\n        public readonly int $total,\n        public readonly array $ways,\n    ) {{\n    }}\n}}\n\n"
+        );
+        o.push_str(&format!("/**\n * {doc_fn}\n */\nfunction {name}({}): Chances\n{{\n", params.join(", ")));
+        o.push_str(&format!("    {total} = 0;\n    {ways} = [];\n"));
+        match self.weighted_draw_pub() {
+            Some((draw, lo, hi)) => {
+                let (cuts, low, cut, n) = (php_var(&self.temp("cuts")), php_var(&self.temp("low")), php_var(&self.temp("cut")), php_var(&self.temp("n")));
+                o.push_str(&format!("    {cuts} = {}({})[2];\n", self.walked_fn("php"), call(Some((&draw, &lo.to_string())))));
+                o.push_str(&format!(
+                    "    if (count({cuts}) === 0 || {cuts}[count({cuts}) - 1] === 0) {{\n        return new Chances({all}, [[{fname}({}), {all}]]);\n    }}\n",
+                    call(Some((&draw, &lo.to_string()))),
+                    all = hi - lo + 1
+                ));
+                o.push_str(&format!("    {low} = {lo};\n    foreach ({cuts} as {cut}) {{\n        if ({cut} > {low} && {low} <= {hi}) {{\n"));
+                o.push_str(&format!("            {n} = min({cut}, {}) - {low};\n", hi + 1));
+                o.push_str(&format!("            {out} = {fname}({});\n", call(Some((&draw, &low)))));
+                o.push_str(&add("            ", &n));
+                o.push_str(&format!("            {total} += {n};\n        }}\n        if ({cut} > {low}) {{\n            {low} = {cut};\n        }}\n    }}\n    return new Chances({total}, {ways});\n}}\n\n"));
+            }
+            None => {
+                o.push_str(&format!("    {last} = null;\n"));
+                let mut ind = "    ".to_string();
+                for (j, d) in self.drawn().iter().enumerate() {
+                    let v = php_var(&d.alias);
+                    match &d.from {
+                        super::chances::From::Range(lo, hi) => {
+                            let ctr = php_var(&self.temp(&format!("_i{j}")));
+                            o.push_str(&format!("{ind}for ({ctr} = {lo}; {ctr} <= {hi}; {ctr}++) {{\n{ind}    {v} = {ctr};\n"));
+                        }
+                        super::chances::From::Values(vs) => {
+                            let members: Vec<String> = vs.iter().map(|x| self.php_value(x, &d.ty)).collect();
+                            o.push_str(&format!("{ind}foreach ([{}] as {v}) {{\n", members.join(", ")));
+                        }
+                        super::chances::From::Bool => o.push_str(&format!("{ind}foreach ([false, true] as {v}) {{\n")),
+                    }
+                    ind.push_str("    ");
+                }
+                o.push_str(&format!(
+                    "{ind}try {{\n{ind}    {out} = {fname}({});\n{ind}}} catch (RuleInputError {e}) {{\n{ind}    {last} = {e};\n{ind}    continue;\n{ind}}}\n{ind}{total} += 1;\n",
+                    call(None)
+                ));
+                o.push_str(&add(&ind, "1"));
+                for _ in self.drawn() {
+                    ind.truncate(ind.len() - 4);
+                    o.push_str(&format!("{ind}}}\n"));
+                }
+                o.push_str(&format!("    if ({total} === 0 && {last} !== null) {{\n        throw {last};\n    }}\n    return new Chances({total}, {ways});\n}}\n\n"));
+            }
+        }
+        o
+    }
+
+    /// What the PHP runner answers with `--chances`: `seq` reads the sequences of a line, `args`
+    /// every input.
+    pub(super) fn php_chances_mode(&self, d: &str, seq: &str, args: &[String]) -> String {
+        if !self.f.has_random() {
+            return String::new();
+        }
+        let ns = self.php_ns();
+        let fname = self.php_fname();
+        let name = self.chances_name("php");
+        let n_in = self.f.inputs.len();
+        let mut pass: Vec<String> = Vec::new();
+        for (k, i) in self.f.inputs.iter().enumerate() {
+            if i.random.is_none() {
+                pass.push(format!("$ca[{k}]"));
+            }
+        }
+        for s in 0..self.f.elements.len() {
+            pass.push(format!("$ca[{}]", n_in + s));
+        }
+        r#"if (in_array('--chances', $argv, true)) {
+    while (($cl = fgets(STDIN)) !== false) {
+        $cl = trim($cl);
+        if ($cl === '') {
+            continue;
+        }
+        @D@ = json_decode($cl, true, 512, JSON_THROW_ON_ERROR)['in'];
+@SEQ@        $ca = [@ARGS@];
+        $c = \@NS@\@NAME@(@PASS@);
+        echo '{"total":' . $c->total . '}', "\n";
+        foreach ($c->ways as [$co, $cn]) {
+            $rec = \@NS@\@FNAME@_record(...[...$ca, $co, []]);
+            $a = strrpos($rec, ',"observed":') + 12;
+            echo $cn, "\t", substr($rec, $a, strrpos($rec, ',"trace":') - $a), "\n";
+        }
+    }
+    exit(0);
+}
+
+"#
+        .replace("@D@", d)
+        .replace("@SEQ@", seq)
+        .replace("@ARGS@", &args.join(", "))
+        .replace("@NS@", &ns)
+        .replace("@NAME@", &name)
+        .replace("@PASS@", &pass.join(", "))
+        .replace("@FNAME@", &fname)
+    }
+}

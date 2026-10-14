@@ -993,6 +993,133 @@ beside its module in each language. `rulec test` asks every runner with `--prere
 compares the answers byte for byte (docs/formats.md), and so does the corpus's agreement suite
 (`tests/threeway.rs`) for the rules with a block.
 
+## How likely each answer is
+
+A rule with `random` inputs ([reference §6.6](reference.md#66-random-and-chances)) generates one
+more function beside the rule's own: it takes the inputs that are not random, runs the rule on
+every point of the random ones, and counts each answer. From `tests/corpus/prize_lottery.rule`, in
+Python:
+
+```python
+class Chances(NamedTuple):
+    """How many draws give each answer (ways), and how many draws there are (total). A chance is ways over total (rulec's §15.225)."""
+    total: int
+    ways: list[tuple[Prize, int]]
+
+
+def prize_lottery_chances(campaign: bool) -> Chances:
+    """The answers of rule prize_lottery when ticket is drawn uniformly: each answer with how many of the draws give it, and how many draws there are. An answer's chance is its count over the total."""
+    total = 0
+    ways: list[tuple[Prize, int]] = []
+    last: RuleInputError | None = None
+    _i0 = -1
+    while _i0 < 999:
+        _i0 += 1
+        ticket = _i0
+        try:
+            out = prize_lottery(ticket, campaign)
+        except RuleInputError as e:
+            last = e
+            continue
+        total += 1
+        k = 0
+        while k < _len(ways) and ways[k][0] != out:
+            k += 1
+        if k == _len(ways):
+            ways.append((out, 1))
+        else:
+            ways[k] = (out, ways[k][1] + 1)
+    if total == 0 and last is not None:
+        raise last
+    return Chances(total, ways)
+```
+
+`prize_lottery_chances(False)` answers `Chances(total=1000, ways=[(<Prize.FIRST: 'first'>, 1),
+(<Prize.SECOND: 'second'>, 9), (<Prize.THIRD: 'third'>, 50), (<Prize.NOPRIZE: 'no_prize'>, 940)])`:
+the chance of the third prize out of a campaign is 50/1000. The counts are
+whole numbers, so the chance is exact, and a caller turns it into a fraction or a percentage as it
+needs. It is the rule's own function that is run, so the counts never disagree with it: a point
+the function refuses — one a `constraint` rules out, a drawn value past the weights — is no point,
+and when no point is left, the function raises the last refusal, as the rule would. The answers
+come in the order they are first met: the first random input outermost, each from its lowest value
+(an enum's values in their order, `false` before `true`).
+
+A rule whose one random input is read by nothing but the `draw` line of its pick by weight is
+counted from the weights instead (§15.226). The walk is run once, in a private function the rule's
+own functions call too, which hands back the running totals of the weights; then the rule is run
+once for each element weighed, at the first drawn value that takes it, and its count is its weight.
+From `tests/corpus/case_routing.rule`:
+
+```python
+def case_routing_chances(reviewers: list[Element]) -> Chances:
+    """The answers of rule case_routing when roll is drawn uniformly: each answer with how many of the draws give it, and how many draws there are. An answer's chance is its count over the total."""
+    total = 0
+    ways: list[tuple[int, int]] = []
+    _, _, cuts = _case_routing_walked(0, reviewers)
+    if _len(cuts) == 0 or cuts[_len(cuts) - 1] == 0:
+        return Chances(10000, [(case_routing(0, reviewers), 10000)])
+    low = 0
+    for cut in cuts:
+        if cut > low and low <= 9999:
+            n = _min(cut, 10000) - low
+            out = case_routing(low, reviewers)
+            k = 0
+            while k < _len(ways) and ways[k][0] != out:
+                k += 1
+            if k == _len(ways):
+                ways.append((out, n))
+            else:
+                ways[k] = (out, ways[k][1] + n)
+            total += n
+        if cut > low:
+            low = cut
+    return Chances(total, ways)
+```
+
+The walk itself adds each weight to the running total as the element lands on the arm, takes the
+first element the drawn value is below, and refuses the call once the walk is over when the drawn
+value is not below the total:
+
+```python
+        if presence is Presence.INOFFICE:  # in_office
+            weight = elem.capacity
+            weights += weight
+            cuts.append(weights)
+            if taken is None and roll < weights:
+                taken = elem.reviewer_id
+    if weights > 0 and roll >= weights:
+        raise RuleInputError("roll is not below the total of the weights", _repr(roll))
+```
+
+The private function is `_case_routing_walked` in Python, Rust (and the Wasm build of it), Ruby and
+PHP, `_caseRoutingWalked` in TypeScript, JavaScript, Swift and Java, `caseRoutingWalked` in Go;
+NumPy and SQL do not walk a sequence at all. The rule's public functions are the ones they always
+were.
+
+| language | the function | what it answers |
+|---|---|---|
+| Python | `prize_lottery_chances(campaign: bool) -> Chances` | `class Chances(NamedTuple)`: `total: int`, `ways: list[tuple[Prize, int]]` — a rule of several outputs counts its `Output` |
+| TypeScript | `prizeLotteryChances(campaign: boolean): Chances` | `interface Chances { readonly total: bigint; readonly ways: [Prize, bigint][] }` |
+| JavaScript | `prizeLotteryChances(campaign)` | `{ total, ways }`, the counts as `bigint` |
+| Rust | `prize_lottery_chances(campaign: bool) -> Result<Chances, RuleError>` | `pub struct Chances { pub total: i64, pub ways: Vec<(Prize, i64)> }` |
+| Ruby | `PrizeLottery.prize_lottery_chances(campaign)` | `Chances = Struct.new(:total, :ways)`, typed in the `.rbs` |
+| PHP | `\PrizeLottery\prize_lottery_chances(bool $campaign): Chances` | `final class Chances { int $total; list<array{0: Prize, 1: int}> $ways }` |
+| Go | `PrizeLotteryChances(in Input) (Chances, error)` | `Chances{Total int64; Ways []Way}`, `Way{Out Prize; Count int64}`. It takes the rule's own `Input`, whose random fields it does not read |
+| Swift | `prizeLotteryChances(campaign: Bool) throws -> Chances` | `struct Chances { total: Int64; ways: [Way] }`, `struct Way { out: Prize; count: Int64 }` |
+| Java | `PrizeLottery.prizeLotteryChances(boolean campaign)` | `record Chances(long total, List<Way> ways)`, `record Way(Prize out, long count)` |
+| NumPy | `rule.chances(**fixed)` | `(total, [(outputs, count), …])`: the random axes as one column of every point, evaluated at once |
+| SQL, Wasm | none | a query that walked the points would give up the one-to-one of its branches and the rule's rows; Wasm has one entry, and no room for a second function. `rulec gen` says so as it writes them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared there |
+
+One call costs as many runs of the rule as there are points of the random inputs, and `rulec api`
+says how many (`chances.runs`); past a million, `rulec check` says so (W131). A pick by weight
+counted from its weights runs the walk once and the rule once per element.
+
+`rulec gen` writes `vectors/<alias>.chances.jsonl` and `.chances.expected` beside the vectors: the
+inputs of a call, one line per combination of the inputs that are not random the vectors meet, and
+what the reference evaluator counted for it (docs/formats.md). Every runner answers `--chances`:
+for each line it calls the function and prints `{"total":N}`, then a line per answer, its count, a
+tab and its outputs as the record writes them; `rulec test` holds that to the second file.
+
 ## A rule whose inputs are projected from the caller's object
 
 A rule whose inputs say `from`

@@ -229,6 +229,11 @@ pub(crate) struct FoldNames {
     pub took: String,
     pub kept_one: String,
     pub best_set: String,
+    /// A pick by weight (§15.226): the running total of the weights, one element's weight, and the
+    /// running totals after each element weighed, which the function that counts the answers reads.
+    pub total: String,
+    pub weight: String,
+    pub cuts: String,
 }
 
 pub struct Gen<'a> {
@@ -284,6 +289,10 @@ mod connect;
 /// The two functions of a `prerequisites` block in each language (§15.222).
 mod prereq;
 pub use prereq::prereq_fn_names;
+/// The function that counts the answers over the points of the random inputs, in each language
+/// (§15.225).
+mod chances;
+pub use chances::chances_fn_name;
 pub use connect::template as connect_template;
 pub use connect::{buf_gen_yaml, buf_lock, buf_yaml, BufDeps, Contracts};
 
@@ -424,6 +433,30 @@ impl<'a> Gen<'a> {
             took: n("tookOne"),
             kept_one: n("keptOne"),
             best_set: n("bestSet"),
+            total: n("weights"),
+            weight: n("weight"),
+            cuts: n("cuts"),
+        }
+    }
+
+    /// The rule's pick by weight (§15.226), with its place among the items: the fold whose running
+    /// totals the function that counts the answers reads. A rule has one at most.
+    pub(crate) fn weighted_fold(&self) -> Option<(usize, &crate::ast::FoldDecl)> {
+        self.f.items.iter().enumerate().find_map(|(i, it)| match it {
+            Item::Fold(d) if d.weighted() => Some((i, d)),
+            _ => None,
+        })
+    }
+
+    /// The name of the function that runs the walk of a rule that picks by weight and gives back the
+    /// running totals of the weights beside the answer and the trace (§15.225): `_pick_walked`, or the
+    /// language's spelling of it. The public functions are the same as any rule's.
+    pub(crate) fn walked_fn(&self, lang: &str) -> String {
+        let base = format!("_{}_walked", snake(&pub_name(&self.f.name)));
+        match lang {
+            "typescript" | "javascript" | "swift" | "java" => format!("_{}", camel(&base[1..])),
+            "go" => camel(&base[1..]),
+            _ => base,
         }
     }
 
@@ -1018,6 +1051,10 @@ impl<'a> Gen<'a> {
                         exprs.push(expr);
                         exprs.push(key);
                     }
+                    Arm::TakeWeighted { expr, weight } => {
+                        exprs.push(expr);
+                        exprs.push(weight);
+                    }
                     _ => {}
                 }
             }
@@ -1244,6 +1281,14 @@ fn traced_doc(name: &str, version: &str) -> String {
     tr!(
         "規則 {name} v{version}。分岐はもとの表の行と 1:1 に対応する。出力と、当てはまった行（表ごとに一つ、順に）を返す。",
         "Rule {name} v{version}. Each branch corresponds 1:1 to a row of the rule source. Returns the outputs and the rows that matched, one per table, in order."
+    )
+}
+
+/// The doc line of the function that runs the walk of a rule that picks by weight (§15.225).
+fn walked_doc() -> String {
+    tr!(
+        "規則の歩きを実行し、出力と当てはまった行に加えて、重みで選ぶ腕が重みを足すたびの合計を返す。確率の関数が読む。",
+        "Runs the rule's walk, and returns, beside the outputs and the rows that matched, the running total of the weights each time the arm that picks by weight adds one. The chances function reads it."
     )
 }
 
@@ -1580,6 +1625,8 @@ impl<'a> Gen<'a> {
         body.push_str(&self.py_fn());
         body.push_str("\n\n");
         body.push_str(&self.py_record());
+        // The function that counts the answers over the points of the random inputs (§15.225).
+        body.push_str(&self.py_chances());
         if self.projects() {
             body.push_str("\n\n");
             body.push_str(&self.py_from());
@@ -2144,8 +2191,10 @@ impl<'a> Gen<'a> {
         let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
         // Only the accumulators an arm uses are declared: one nothing reads is an unused local to
         // a strict type checker.
-        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
+        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. } | Arm::TakeWeighted { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
 
         let mut init = String::new();
         init.push_str(&format!("    {answer}: {acc_ty} = {}  # {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
@@ -2155,6 +2204,10 @@ impl<'a> Gen<'a> {
         }
         if takes {
             init.push_str(&format!("    {taken}: {acc_ty} | None = None\n"));
+        }
+        if weighted {
+            init.push_str(&format!("    {}: int = 0  # {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
+            init.push_str(&format!("    {}: list[int] = []\n", names.cuts));
         }
         if keeps {
             init.push_str(&format!("    {kept}: {acc_ty} | None = None\n"));
@@ -2203,13 +2256,31 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {best} = {key}\n"));
                     arms.push_str(&format!("            {kept} = {}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight } => {
+                    let (w, t) = (&names.weight, &names.total);
+                    arms.push_str(&format!("        {w} = {}\n", unparen(&self.expr(weight, local).text)));
+                    arms.push_str(&format!("        {t} += {w}\n"));
+                    arms.push_str(&format!("        {}.append({t})\n", names.cuts));
+                    arms.push_str(&format!("        if {taken} is None and {draw} < {t}:\n"));
+                    arms.push_str(&format!("            {taken} = {}\n", val(expr, local)));
+                }
             }
         }
         let step = if alone { arms } else { format!("    if not {done}:  # {}\n{}", fold.verdict, Self::indent_block(&arms, "    ")) };
 
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226): the caller was to draw it so, and the door says so once the walk is over.
+        let mut fin = String::new();
+        if weighted {
+            let t = &names.total;
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("    if {t} > 0 and {draw} >= {t}:\n        raise RuleInputError(\"{what}\", _repr({draw}))\n"));
+        }
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        let mut fin = format!("    if _len({seq}) > 0 and not {stopped}:\n");
+        fin.push_str(&format!("    if _len({seq}) > 0 and not {stopped}:\n"));
         let ex = text(&fold.exhausted);
         if ex.contains(held.as_str()) {
             let fallback = match (takes, keeps) {
@@ -2342,6 +2413,15 @@ impl<'a> Gen<'a> {
         o.push_str(&format!("    out, _ = {traced}({})\n    return out\n\n\n", args.join(", ")));
         o.push_str(&format!("def {traced}({}) -> tuple[{ret}, list[Fired]]:\n", params.join(", ")));
         o.push_str(&format!("    \"\"\"{}\"\"\"\n", traced_doc(&self.f.name.text, &self.f.version)));
+        // A rule that picks by weight runs its walk in a function of its own, which gives back the
+        // running totals of the weights too: what the function that counts the answers reads
+        // (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("python"), self.fold_names(i).cuts));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("    out, trace, _ = {w}({})\n    return out, trace\n\n\n", args.join(", ")));
+            o.push_str(&format!("def {w}({}) -> tuple[{ret}, list[Fired], list[int]]:\n", params.join(", ")));
+            o.push_str(&format!("    \"\"\"{}\"\"\"\n", walked_doc()));
+        }
 
         // Entry guards (§8.5). They enforce at runtime what the proof assumes: inputs lie within
         // their declared domains.
@@ -2489,11 +2569,12 @@ impl<'a> Gen<'a> {
                 }
             })
             .collect();
+        let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
         if outs.len() == 1 {
-            o.push_str(&format!("    return {}, {trace}\n", branded[0]));
+            o.push_str(&format!("    return {}, {trace}{cuts}\n", branded[0]));
         } else {
             // Multiple outputs are a NamedTuple (§8.5); each carries its own rounding.
-            o.push_str(&format!("    return Output({}), {trace}\n", branded.join(", ")));
+            o.push_str(&format!("    return Output({}), {trace}{cuts}\n", branded.join(", ")));
         }
         o
     }
@@ -3026,6 +3107,12 @@ impl<'a> Gen<'a> {
         o.push_str(&self.go_fn());
         o.push('\n');
         o.push_str(&self.go_record());
+        // The function that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(self.go_chances().trim_end());
+            o.push('\n');
+        }
         // The record function uses fmt whatever the rule looks like, so the import is
         // unconditional now. `strings` comes in only where a cell tests a prefix
         // (§15.101) — an unused import does not compile in Go.
@@ -3349,12 +3436,14 @@ impl<'a> Gen<'a> {
     /// set" flag.
     fn go_fold(&self, i: usize, fold: &crate::ast::FoldDecl, seq: &str, local: &dyn Fn(&str) -> String, zero: &str) -> (String, String, String) {
         let names = self.fold_names(i);
-        let FoldNames { answer, stopped, done, taken, kept, best, held, key, took, kept_one, best_set } = &names;
+        let FoldNames { answer, stopped, done, taken, kept, best, held, key, took, kept_one, best_set, .. } = &names;
         let alone = self.fold_alone(i);
         let with_held = |n: &str| -> String { if n == crate::kw::HELD { held.clone() } else { local(n) } };
         let (out_name, out_ty) = self.fold_target(fold);
         let acc_ty = if out_ty.is_numeric() { "int64".to_string() } else { self.go_ty(&out_ty) };
         let acc_zero = if out_ty.is_numeric() { "0".to_string() } else { self.go_zero(&out_ty) };
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| go_i64(&local(&d.text))).unwrap_or_default();
         // An answer is read in the type the fold answers with: a value of its enum is that
         // enum's member (§15.208).
         let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
@@ -3365,7 +3454,7 @@ impl<'a> Gen<'a> {
         };
         let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
         // Go refuses to compile a local nothing reads, so only the arms that are written get one.
-        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
+        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. } | Arm::TakeWeighted { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
 
         let mut init = String::new();
@@ -3376,6 +3465,10 @@ impl<'a> Gen<'a> {
         }
         if takes {
             init.push_str(&format!("\tvar {taken} {acc_ty} = {acc_zero}\n\t{took} := false\n"));
+        }
+        if weighted {
+            init.push_str(&format!("\tvar {} int64 = 0{CELL}// {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
+            init.push_str(&format!("\tvar {} []int64\n", names.cuts));
         }
         if keeps {
             init.push_str(&format!("\tvar {kept} {acc_ty} = {acc_zero}\n\t{kept_one} := false\n"));
@@ -3422,14 +3515,31 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("\t\t\t{best} = {key}\n\t\t\t{best_set} = true\n"));
                     arms.push_str(&format!("\t\t\t{kept} = {}\n\t\t\t{kept_one} = true\n\t\t}}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight } => {
+                    let (w, t, c) = (&names.weight, &names.total, &names.cuts);
+                    arms.push_str(&format!("\t\t{w} := int64({})\n", go_expr(&self.expr(weight, local).text)));
+                    arms.push_str(&format!("\t\t{t} += {w}\n\t\t{c} = append({c}, {t})\n"));
+                    arms.push_str(&format!("\t\tif !{took} && {draw} < {t} {{\n"));
+                    arms.push_str(&format!("\t\t\t{taken} = {}\n\t\t\t{took} = true\n\t\t}}\n", val(expr, local)));
+                }
             }
             arms.push_str("\t}\n");
         }
         let step = if alone { arms } else { format!("\tif !{done} {{{CELL}// {}\n{}\t}}\n", fold.verdict, Self::indent_block(&arms, "\t")) };
 
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let t = &names.total;
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("\tif {t} > 0 && {draw} >= {t} {{\n\t\treturn {zero}, nil, &RuleInputError{{What: \"{what}\", Value: {draw}, HasValue: true}}\n\t}}\n"));
+        }
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        let mut fin = format!("\tif len({seq}) > 0 && !{stopped} {{\n");
+        fin.push_str(&format!("\tif len({seq}) > 0 && !{stopped} {{\n"));
         fin.push_str(&format!("\t\tvar {held} {acc_ty} = {}\n", text(&fold.empty)));
         if takes {
             fin.push_str(&format!("\t\tif {took} {{\n\t\t\t{held} = {taken}\n\t\t}}\n"));
@@ -3587,7 +3697,21 @@ impl<'a> Gen<'a> {
             "func {fname}(in Input) ({ret}, error) {{\n\tout, _, err := {traced}(in)\n\treturn out, err\n}}\n\n"
         ));
         o.push_str(&format!("// {traced} {}\n", traced_doc(&self.f.name.text, &self.f.version)));
-        o.push_str(&format!("func {traced}(in Input) ({ret}, []Fired, error) {{\n"));
+        // A rule that picks by weight runs its walk in a function of its own, which gives back the
+        // running totals of the weights too (§15.225). Every early return there has one value more.
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("go"), self.fold_names(i).cuts));
+        let zero = match &walked {
+            Some(_) => format!("{zero}, nil"),
+            None => zero,
+        };
+        match &walked {
+            Some((w, _)) => {
+                o.push_str(&format!("func {traced}(in Input) ({ret}, []Fired, error) {{\n\tout, trace, _, err := {w}(in)\n\treturn out, trace, err\n}}\n\n"));
+                o.push_str(&format!("// {w} {}\n", walked_doc()));
+                o.push_str(&format!("func {w}(in Input) ({ret}, []Fired, []int64, error) {{\n"));
+            }
+            None => o.push_str(&format!("func {traced}(in Input) ({ret}, []Fired, error) {{\n")),
+        }
 
         for i in &self.f.inputs {
             let v = local(&i.name.text);
@@ -3685,8 +3809,9 @@ impl<'a> Gen<'a> {
                 None => format!("int64({})", go_expr(&res.text)),
             });
         }
+        let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
         if outs.len() == 1 {
-            o.push_str(&format!("\treturn {ret}({}), {trace}, nil\n}}\n", finals[0]));
+            o.push_str(&format!("\treturn {ret}({}), {trace}{cuts}, nil\n}}\n", finals[0]));
         } else {
             // Each output gets its own rounding, applied exactly once (§7.2).
             let fields: Vec<String> = outs
@@ -3696,7 +3821,7 @@ impl<'a> Gen<'a> {
                     format!("{}: {}({body})", pascal(&pub_name(&od.name)), self.go_ty(&self.ty_of(&od.name.text)))
                 })
                 .collect();
-            o.push_str(&format!("\treturn Output{{{}}}, {trace}, nil\n}}\n", fields.join(", ")));
+            o.push_str(&format!("\treturn Output{{{}}}, {trace}{cuts}, nil\n}}\n", fields.join(", ")));
         }
         o
     }
@@ -4425,6 +4550,8 @@ impl<'a> Gen<'a> {
             prelude.push_str(&format!("        {rows} = {}\n", self.py_read_elements(s)));
             args.push(rows);
         }
+        // `--chances` reads a line's inputs as the vectors are read (§15.225).
+        let chances = self.py_chances_mode(&args, &prelude);
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is, not read back off the wire.
         let machine = self.machine_consts().zip(self.carried()).zip(self.carried_out_alias());
@@ -4471,7 +4598,7 @@ impl<'a> Gen<'a> {
         // line saying so in the place of the record, and the next line is read (§15.204).
         let (owners, labels) = self.py_labels_mode();
         // And with `--prerequisites`, what each block's functions answer (§15.222).
-        let labels = labels + &self.py_prereq_mode();
+        let labels = labels + &self.py_prereq_mode() + &chances;
         format!(
             "# Code generated by rulec {}. DO NOT EDIT.\n\
              import datetime\n\
@@ -4612,6 +4739,15 @@ impl<'a> Gen<'a> {
             body.push_str(&format!("\t\t\t\tin.{g} = append(in.{g}, el)\n\t\t\t}}\n"));
             fields.push(body);
         }
+        // `--chances` reads every input of a line as the vectors are read (§15.225): the carried
+        // ones too, plainly.
+        let chances_fields: String = self
+            .f
+            .inputs
+            .iter()
+            .map(|i| field(&i.name, &self.ty_of(&i.name.text), "in", "d", "\t\t\t"))
+            .chain(fields[self.f.inputs.len()..].iter().cloned())
+            .collect();
         let (mut head, mut read, mut tail) = (
             String::new(),
             "\t\tvar rec struct {\n\t\t\tIn map[string]any `json:\"in\"`\n\t\t}\n\t\t\
@@ -4690,7 +4826,7 @@ impl<'a> Gen<'a> {
                      }}()\n\t\
                  }}\n}}\n",
             ritsu_emit::header::VERSION,
-            self.go_labels_mode() + &self.go_prereq_mode(),
+            self.go_labels_mode() + &self.go_prereq_mode() + &self.go_chances_mode(&chances_fields),
             fields.join("")
         )
     }
@@ -5184,6 +5320,11 @@ impl<'a> Gen<'a> {
             o.push('\n');
             o.push_str(&self.ts_from());
         }
+        // The function that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(&self.ts_chances());
+        }
         self.ts_imports(o)
     }
 
@@ -5461,6 +5602,8 @@ impl<'a> Gen<'a> {
             }
         };
         let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0n".to_string()) };
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
 
         let mut init = String::new();
         init.push_str(&format!("  let {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
@@ -5471,6 +5614,10 @@ impl<'a> Gen<'a> {
         init.push_str(&format!("  let {taken}: {acc_ty} | null = null;\n"));
         init.push_str(&format!("  let {kept}: {acc_ty} | null = null;\n"));
         init.push_str(&format!("  let {best}: bigint | null = null;\n"));
+        if weighted {
+            init.push_str(&format!("  let {} = 0n; // {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
+            init.push_str(&format!("  const {}: bigint[] = [];\n", names.cuts));
+        }
 
         let mut arms = String::new();
         let v = local(&fold.verdict);
@@ -5509,12 +5656,29 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("      {best} = {key};\n"));
                     arms.push_str(&format!("      {kept} = {};\n    }}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight } => {
+                    let (w, t, c) = (&names.weight, &names.total, &names.cuts);
+                    arms.push_str(&format!("    const {w} = {};\n", ts_expr(unparen(&self.expr(weight, local).text))));
+                    arms.push_str(&format!("    {t} += {w};\n    {c}.push({t});\n"));
+                    arms.push_str(&format!("    if ({taken} === null && {draw} < {t}) {{\n"));
+                    arms.push_str(&format!("      {taken} = {};\n    }}\n", val(expr, local)));
+                }
             }
             arms.push_str("  }\n");
         }
         let step = if alone { arms } else { format!("  if (!{done}) {{ // {}\n{}  }}\n", fold.verdict, Self::indent_block(&arms, "  ")) };
 
-        let mut fin = format!("  if ({seq}.length > 0 && !{stopped}) {{\n");
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let t = &names.total;
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("  if ({t} > 0n && {draw} >= {t}) {{\n    throw new RuleInputError(`{what}`, {draw});\n  }}\n"));
+        }
+        fin.push_str(&format!("  if ({seq}.length > 0 && !{stopped}) {{\n"));
         fin.push_str(&format!("    const {held} = {taken} !== null ? {taken} : ({kept} !== null ? {kept} : {});\n", text(&fold.empty)));
         fin.push_str(&format!("    {answer} = {};\n  }}\n", text(&fold.exhausted)));
         fin.push_str(&format!("  const {} = {answer};\n", self.ident(&out_name)));
@@ -5683,6 +5847,13 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&format!("/** {} */\n", traced_doc(&self.f.name.text, &self.f.version)));
         o.push_str(&format!("export function {traced}({}): [{ret}, Fired[]] {{\n", params.join(", ")));
+        // A rule that picks by weight runs its walk in a function of its own, which gives back the
+        // running totals of the weights too (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("typescript"), self.fold_names(i).cuts));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("  const [out, trace] = {w}({});\n  return [out, trace];\n}}\n\n", args.join(", ")));
+            o.push_str(&format!("/** {} */\nexport function {w}({}): [{ret}, Fired[], bigint[]] {{\n", walked_doc(), params.join(", ")));
+        }
 
         let local = |n: &str| -> String { self.ident(n) };
         for i in &self.f.inputs {
@@ -5800,15 +5971,16 @@ impl<'a> Gen<'a> {
             };
             finals.push(cast(&ty, body));
         }
+        let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
         if outs.len() == 1 {
-            o.push_str(&format!("  return [{}, {trace}];\n}}\n", finals[0]));
+            o.push_str(&format!("  return [{}, {trace}{cuts}];\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
                 .map(|(od, body)| format!("{}: {body}", pub_name(&od.name)))
                 .collect();
-            o.push_str(&format!("  return [{{ {} }}, {trace}];\n}}\n", fields.join(", ")));
+            o.push_str(&format!("  return [{{ {} }}, {trace}{cuts}];\n}}\n", fields.join(", ")));
         }
         o
     }
@@ -5963,6 +6135,8 @@ impl<'a> Gen<'a> {
             ));
             args.push(rows);
         }
+        // `--chances` reads a line's inputs as the vectors are read (§15.225).
+        let read_args = args.clone();
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
         let v = runner_local("v", &alias);
@@ -6016,7 +6190,7 @@ impl<'a> Gen<'a> {
         // And with `--prerequisites`, what each block's functions answer (§15.222): a parser of an
         // `enums` file's enum the labels have not imported already comes from that file's module.
         let mut prereq_owners: Vec<(String, Vec<String>)> = Vec::new();
-        let labels = labels + &self.ts_prereq_mode(&lines, &mut imports, &mut prereq_owners);
+        let labels = labels + &self.ts_prereq_mode(&lines, &mut imports, &mut prereq_owners) + &self.ts_chances_mode(&d, &lines, &read_args, &prelude, &mut imports);
         let more_owners: String = prereq_owners
             .into_iter()
             .filter_map(|(m, ns)| {
@@ -6459,6 +6633,11 @@ impl<'a> Gen<'a> {
         o.push_str(&self.rs_fn());
         o.push('\n');
         o.push_str(&self.rs_record());
+        // The function that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(&self.rs_chances());
+        }
         o
     }
 
@@ -6715,6 +6894,8 @@ impl<'a> Gen<'a> {
             }
         };
         let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
 
         let mut init = String::new();
         init.push_str(&format!("    let mut {answer}: {acc_ty} = {}; // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
@@ -6725,6 +6906,10 @@ impl<'a> Gen<'a> {
         init.push_str(&format!("    let mut {taken}: Option<{acc_ty}> = None;\n"));
         init.push_str(&format!("    let mut {kept}: Option<{acc_ty}> = None;\n"));
         init.push_str(&format!("    let mut {best}: Option<i64> = None;\n"));
+        if weighted {
+            init.push_str(&format!("    let mut {}: i64 = 0; // {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
+            init.push_str(&format!("    let mut {}: Vec<i64> = Vec::new();\n", names.cuts));
+        }
 
         let mut arms = String::new();
         let v = local(&fold.verdict);
@@ -6763,12 +6948,29 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {best} = Some({key});\n"));
                     arms.push_str(&format!("            {kept} = Some({});\n        }}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight } => {
+                    let (w, t, c) = (&names.weight, &names.total, &names.cuts);
+                    arms.push_str(&format!("        let {w}: i64 = {};\n", rs_expr(unparen(&self.expr(weight, local).text))));
+                    arms.push_str(&format!("        {t} += {w};\n        {c}.push({t});\n"));
+                    arms.push_str(&format!("        if {taken}.is_none() && {draw} < {t} {{\n"));
+                    arms.push_str(&format!("            {taken} = Some({});\n        }}\n", val(expr, local)));
+                }
             }
             arms.push_str("    }\n");
         }
         let step = if alone { arms } else { format!("    if !{done} {{ // {}\n{}    }}\n", fold.verdict, Self::indent_block(&arms, "    ")) };
 
-        let mut fin = format!("    if !{seq}.is_empty() && !{stopped} {{\n");
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let t = &names.total;
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("    if {t} > 0 && {draw} >= {t} {{\n        return Err(RuleError::Input {{ what: \"{what}\", value: Some({draw}) }});\n    }}\n"));
+        }
+        fin.push_str(&format!("    if !{seq}.is_empty() && !{stopped} {{\n"));
         fin.push_str(&format!("        let {held} = {taken}.or({kept}).unwrap_or({});\n", text(&fold.empty)));
         fin.push_str(&format!("        {answer} = {};\n    }}\n", text(&fold.exhausted)));
         fin.push_str(&format!("    let {} = {answer};\n", self.ident(&out_name)));
@@ -6876,6 +7078,13 @@ impl<'a> Gen<'a> {
             "pub fn {traced}({}) -> Result<({ret}, Vec<Fired>), RuleError> {{\n",
             params.join(", ")
         ));
+        // A rule that picks by weight runs its walk in a function of its own, which gives back the
+        // running totals of the weights too (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("rust"), self.fold_names(i).cuts));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("    {w}({}).map(|(out, trace, _)| (out, trace))\n}}\n\n", args.join(", ")));
+            o.push_str(&format!("/// {}\nfn {w}({}) -> Result<({ret}, Vec<Fired>, Vec<i64>), RuleError> {{\n", walked_doc(), params.join(", ")));
+        }
 
         // A branded input is an i64 inside; unwrap it once, where it is read.
         let local = |n: &str| -> String {
@@ -6997,14 +7206,16 @@ impl<'a> Gen<'a> {
             finals.push(wrap(&ty, body));
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    Ok(({}, {trace}))\n}}\n", finals[0]));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    Ok(({}, {trace}{cuts}))\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
                 .map(|(od, body)| format!("{}: {body}", pub_name(&od.name)))
                 .collect();
-            o.push_str(&format!("    Ok((Output {{ {} }}, {trace}))\n}}\n", fields.join(", ")));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    Ok((Output {{ {} }}, {trace}{cuts}))\n}}\n", fields.join(", ")));
         }
         o
     }
@@ -7629,7 +7840,7 @@ impl<'a> Gen<'a> {
         let binds = self.rs_binds("&d", "            ", &carried);
         let ok = if next == "()" { "Ok((record, ()))" } else { "Ok((record, next))" };
         let owners = self.rs_owner_mods();
-        let labels = self.rs_labels_mode() + &self.rs_prereq_mode();
+        let labels = self.rs_labels_mode() + &self.rs_prereq_mode() + &self.rs_chances_mode(&self.rs_binds("&d", "                ", &[]));
         format!(
             r#"// Code generated by rulec {ver}. DO NOT EDIT.
 #![allow(non_snake_case, uncommon_codepoints, unused_parens, dead_code)]
@@ -10069,6 +10280,9 @@ impl Gen<'_> {
             // Which values need which before them, and the two functions in each language
             // (§15.222). Written only for a rule that has a block.
             .opt_raw("prerequisites", self.prereq_api())
+            // The random inputs, and the function that counts the answers in each language
+            // (§15.225). Written only for a rule that draws.
+            .opt_raw("chances", self.chances_api())
             .finish()
     }
 }
@@ -10526,6 +10740,12 @@ impl<'a> Gen<'a> {
             o.push('\n');
             o.push_str(&self.rb_from());
         }
+        // The method that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(self.rb_chances().trim_end());
+            o.push('\n');
+        }
         o.push_str("end\n");
         o
     }
@@ -10706,6 +10926,12 @@ impl<'a> Gen<'a> {
         // `keep_max` key is ordered, so it is always an integer.
         let acc = if out_ty == Ty::Unknown { "untyped".to_string() } else { self.rbs_ty(&out_ty) };
         init.push_str(&format!("    {taken} = nil #: {acc}?\n    {kept} = nil #: {acc}?\n    {best} = nil #: Integer?\n"));
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
+        if weighted {
+            init.push_str(&format!("    {} = 0  # {}\n", names.total, tr!("重みの合計", "the running total of the weights")));
+            init.push_str(&format!("    {} = [] #: Array[Integer]\n", names.cuts));
+        }
 
         let mut arms = String::new();
         let v = local(&fold.verdict);
@@ -10741,12 +10967,28 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("        {best} = {key}\n"));
                     arms.push_str(&format!("        {kept} = {}\n      end\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight } => {
+                    let (w, t, c) = (&names.weight, &names.total, &names.cuts);
+                    arms.push_str(&format!("      {w} = {}\n", rb_expr(unparen(&self.expr(weight, local).text))));
+                    arms.push_str(&format!("      {t} += {w}\n      {c} << {t}\n"));
+                    arms.push_str(&format!("      {taken} = {} if {taken}.nil? && {draw} < {t}\n", val(expr, local)));
+                }
             }
             arms.push_str("    end\n");
         }
         let step = if alone { arms } else { format!("    unless {done}  # {}\n{}    end\n", fold.verdict, Self::indent_block(&arms, "  ")) };
 
-        let mut fin = format!("    unless {seq}.empty? || {stopped}\n");
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let t = &names.total;
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("    raise RuleInputError.new(\"{what}\", {draw}) if {t} > 0 && {draw} >= {t}\n"));
+        }
+        fin.push_str(&format!("    unless {seq}.empty? || {stopped}\n"));
         fin.push_str(&format!("      {held} = {taken} || {kept} || {}\n", text(&fold.empty)));
         fin.push_str(&format!("      {answer} = {}\n    end\n", text(&fold.exhausted)));
         fin.push_str(&format!("    {} = {answer}\n", self.ident(&out_name)));
@@ -10855,6 +11097,13 @@ impl<'a> Gen<'a> {
         ));
         o.push_str(&format!("  # {}\n", traced_doc(&self.f.name.text, &self.f.version)));
         o.push_str(&format!("  def self.{traced}({})\n", params.join(", ")));
+        // A rule that picks by weight runs its walk in a method of its own, which gives back the
+        // running totals of the weights too (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("ruby"), self.fold_names(i).cuts));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("    out, trace, _ = {w}({})\n    [out, trace]\n  end\n\n", params.join(", ")));
+            o.push_str(&format!("  # {}\n  def self.{w}({})\n", walked_doc(), params.join(", ")));
+        }
 
         // Entry guards (§8.5).
         let local = |n: &str| -> String { self.ident(n) };
@@ -10960,9 +11209,11 @@ impl<'a> Gen<'a> {
             });
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    [{}, {trace}]\n", finals[0]));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    [{}, {trace}{cuts}]\n", finals[0]));
         } else {
-            o.push_str(&format!("    [Output.new({}), {trace}]\n", finals.join(", ")));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    [Output.new({}), {trace}{cuts}]\n", finals.join(", ")));
         }
         o.push_str("  end\n");
         o
@@ -11078,6 +11329,8 @@ impl<'a> Gen<'a> {
                 fields.join(", ")
             ));
         }
+        // `--chances` reads a line's inputs as the vectors are read (§15.225).
+        let read_args = args.clone();
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
         let (mut head, mut body, mut tail) = (String::new(), "d = JSON.parse(line)[\"in\"]\n  ".to_string(), String::new());
@@ -11140,7 +11393,7 @@ impl<'a> Gen<'a> {
              end\n",
             ritsu_emit::header::VERSION,
             RB_WIRE.replace("@M@", &m),
-            self.rb_labels_mode() + &self.rb_prereq_mode(),
+            self.rb_labels_mode() + &self.rb_prereq_mode() + &self.rb_chances_mode(&read_args),
             args.join(", ")
         )
     }
@@ -11475,6 +11728,9 @@ impl<'a> Gen<'a> {
         };
         o.push_str(&format!("  def self.{}: ({}) -> {ret}\n", pub_name(&self.f.name), params.join(", ")));
         o.push_str(&format!("  def self.{}_traced: ({}) -> [{ret}, Array[Fired]]\n", pub_name(&self.f.name), params.join(", ")));
+        // The walk of a pick by weight, and the method that counts the answers (§15.225).
+        o.push_str(&self.rbs_walked());
+        o.push_str(&self.rbs_chances());
         let (out, trace, tag) = (self.temp("out"), self.temp("trace"), self.temp("tag"));
         o.push_str(&format!(
             "  def self.{}_record: ({}, {ret} {out}, Array[Fired] {trace}, ?String {tag}) -> String\n",
@@ -12024,6 +12280,11 @@ impl<'a> Gen<'a> {
         o.push_str(&self.sw_fn());
         o.push('\n');
         o.push_str(&self.sw_record());
+        // The function that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(&self.sw_chances());
+        }
         o
     }
 
@@ -12212,8 +12473,11 @@ impl<'a> Gen<'a> {
             }
         };
         let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
-        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. }));
+        let takes = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::Take { .. } | Arm::TakeWeighted { .. }));
         let keeps = fold.arms.iter().any(|(_, a, _)| matches!(a, Arm::KeepMax { .. }));
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
+        let (total, weight, cuts) = (sw_name(&names.total), sw_name(&names.weight), sw_name(&names.cuts));
 
         let mut init = String::new();
         init.push_str(&format!("    var {answer}: {acc_ty} = {}  // {}\n", text(&fold.empty), tr!("要素ゼロ件の答え", "the answer for no elements")));
@@ -12223,6 +12487,10 @@ impl<'a> Gen<'a> {
         }
         if takes {
             init.push_str(&format!("    var {taken}: {acc_ty}? = nil\n"));
+        }
+        if weighted {
+            init.push_str(&format!("    var {total}: Int64 = 0  // {}\n", tr!("重みの合計", "the running total of the weights")));
+            init.push_str(&format!("    var {cuts}: [Int64] = []\n"));
         }
         if keeps {
             init.push_str(&format!("    var {kept}: {acc_ty}? = nil\n    var {best}: Int64? = nil\n"));
@@ -12268,14 +12536,29 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("            {best} = {key}\n"));
                     arms.push_str(&format!("            {kept} = {}\n        }}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight: wx } => {
+                    arms.push_str(&format!("        let {weight}: Int64 = {}\n", sw_expr(unparen(&self.expr(wx, local).text))));
+                    arms.push_str(&format!("        {total} += {weight}\n        {cuts}.append({total})\n"));
+                    arms.push_str(&format!("        if {taken} == nil && {draw} < {total} {{\n"));
+                    arms.push_str(&format!("            {taken} = {}\n        }}\n", val(expr, local)));
+                }
             }
             arms.push_str("    }\n");
         }
         let step = if alone { arms } else { format!("    if !{done} {{  // {}\n{}    }}\n", fold.verdict, Self::indent_block(&arms, "    ")) };
 
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!("    if {total} > 0 && {draw} >= {total} {{\n        throw RuleError.input(what: \"{what}\", value: Int64({draw}))\n    }}\n"));
+        }
         // A sequence with nothing in it answers `empty` and never reaches `exhausted`; a walk
         // that ended on `stop with` has its answer already.
-        let mut fin = format!("    if !{seq}.isEmpty && !{stopped} {{\n");
+        fin.push_str(&format!("    if !{seq}.isEmpty && !{stopped} {{\n"));
         let mut fallback = text(&fold.empty);
         if keeps {
             fallback = format!("({kept} ?? {fallback})");
@@ -12413,6 +12696,13 @@ impl<'a> Gen<'a> {
             "public func {traced}({}) throws -> ({ret}, [Fired]) {{\n",
             params.join(", ")
         ));
+        // A rule that picks by weight runs its walk in a function of its own, which gives back the
+        // running totals of the weights too (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("swift"), sw_name(&self.fold_names(i).cuts)));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("    let (out, trace, _) = try {w}({})\n    return (out, trace)\n}}\n\n", args.join(", ")));
+            o.push_str(&format!("/// {}\nfunc {w}({}) throws -> ({ret}, [Fired], [Int64]) {{\n", walked_doc(), params.join(", ")));
+        }
 
         // A branded input is an Int64 inside; unwrap it once, where it is read.
         let local = |n: &str| -> String {
@@ -12533,14 +12823,16 @@ impl<'a> Gen<'a> {
             finals.push(wrap(&ty, body));
         }
         if outs.len() == 1 {
-            o.push_str(&format!("    return ({}, {trace})\n}}\n", finals[0]));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    return ({}, {trace}{cuts})\n}}\n", finals[0]));
         } else {
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
                 .map(|(od, body)| format!("{}: {body}", sw_name(&pub_name(&od.name))))
                 .collect();
-            o.push_str(&format!("    return (Output({}), {trace})\n}}\n", fields.join(", ")));
+            let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
+            o.push_str(&format!("    return (Output({}), {trace}{cuts})\n}}\n", fields.join(", ")));
         }
         o
     }
@@ -12673,11 +12965,14 @@ impl<'a> Gen<'a> {
         };
         let mut args: Vec<String> = Vec::new();
         let mut binds: Vec<String> = Vec::new();
+        // `--chances` reads every input of a line plainly, as the vectors are read (§15.225).
+        let mut plain: Vec<String> = Vec::new();
         for i in &self.f.inputs {
             let ty = self.ty_of(&i.name.text);
             let label = sw_label(&pub_name(&i.name));
             let v = read(&ty, &d, &i.name.text);
             let local = runner_local(&format!("a{}", args.len()), &fname);
+            plain.push(format!("                let {local} = try {v}\n"));
             // A machine's traces (§15.148): the carried input is the state this language
             // answered to the call before, handed over as the value it is — and so is each
             // value carried along with it (§15.217).
@@ -12712,8 +13007,20 @@ impl<'a> Gen<'a> {
                 self.element_type(s),
                 inner.join(", ")
             ));
+            plain.push(binds.last().cloned().unwrap_or_default());
             args.push(format!("{label}: {local}"));
         }
+        // What the function that counts the answers is passed: the inputs that are not random, and
+        // the sequences, by their labels.
+        let chances_args: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .zip(args.iter())
+            .filter(|(i, _)| i.random.is_none())
+            .map(|(_, a)| a.clone())
+            .chain(args[self.f.inputs.len()..].iter().cloned())
+            .collect();
         let args = args.join(", ");
         // The record function's own parameter names, which are the call's labels.
         let (p_out, p_trace) = (sw_name(&self.temp("out")), sw_name(&self.temp("trace")));
@@ -12780,7 +13087,7 @@ enum Runner {{
             ver = ritsu_emit::header::VERSION,
             binds = binds.join(""),
             wire = SWIFT_WIRE,
-            labels = self.sw_labels_mode() + &self.sw_prereq_mode(),
+            labels = self.sw_labels_mode() + &self.sw_prereq_mode() + &self.sw_chances_mode(&d, &plain.join(""), &chances_args.join(", "), &args, &p_out, &p_trace),
         )
     }
 
@@ -14875,6 +15182,10 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
             if !b.projects && g.projects() && !json {
                 let _ = writeln!(out, "{}", proj_skipped(b.name, b.id, &alias));
             }
+            // The same for the function that counts the answers over the random inputs (§15.225).
+            if !b.chances && f.has_random() && !json {
+                let _ = writeln!(out, "{}", chances_skipped(b.name, b.id, &alias));
+            }
             for (rel, body) in (b.files)(&g, &alias, &pkg) {
                 targets.push((format!("{out_dir}/{rel}"), body));
             }
@@ -14924,6 +15235,11 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         if let Some((input, expected)) = g.prereq_input() {
             targets.push((format!("{out_dir}/vectors/{alias}.prereq.tsv"), input));
             targets.push((format!("{out_dir}/vectors/{alias}.prereq.expected"), expected));
+        }
+        // What the function that counts the answers has to give, line by line (§15.225).
+        if let Some((input, expected)) = crate::chances::vector_files(&f, &c, vs) {
+            targets.push((format!("{out_dir}/vectors/{alias}.chances.jsonl"), input));
+            targets.push((format!("{out_dir}/vectors/{alias}.chances.expected"), expected));
         }
         // The cases the reference evaluator refuses: the walks it has no answer for, and an
         // input for every reason the door has (§15.204). They have no expected record —
@@ -15010,6 +15326,28 @@ pub(crate) fn proj_why(id: &str) -> String {
             "it holds the caller's object as a type, which would have to be generated or followed"
         ),
     }
+}
+
+/// Why a target writes no function that counts the answers over the random inputs (§15.225), by
+/// its id: what `rulec gen` says, and what `rulec api` lists under `chances.without`.
+pub(crate) fn chances_why(id: &str) -> String {
+    match id {
+        "sql" => tr!(
+            "点を回す問い合わせにすると、問い合わせの枝と規則の行が 1:1 で対応しなくなります",
+            "a query that walked the points would give up the one-to-one of its branches and the rule's rows"
+        ),
+        "numpy" => tr!("並びをたどる規則は、この言語には生成しません", "a rule that walks a sequence is not generated for this target"),
+        _ => tr!("入口が一つで、二つ目の関数を置く場所がありません", "it has one entry, and no room for a second function"),
+    }
+}
+
+/// What `rulec gen` says of a target that gets no function that counts the answers (§15.225).
+fn chances_skipped(name: &str, id: &str, alias: &str) -> String {
+    let why = chances_why(id);
+    tr!(
+        "{name}: この言語には、答えの確率を数える関数（`{alias}_chances`）を生成しません。{why}",
+        "{name}: the function that counts the chances of the answers (`{alias}_chances`) is not generated for this target: {why}"
+    )
 }
 
 /// What `rulec gen` says of a target that gets no function reading the inputs out of the caller's

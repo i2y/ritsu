@@ -347,6 +347,9 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         // Which values need which before them (§15.222). Written only for a file that has a
         // block, so no other certificate changes.
         .opt_raw("prerequisites", crate::prereq::certificate_json(f, c))
+        // The claims about the chances when the random inputs are drawn, and how each was counted
+        // (§15.224). Written only for a rule that has them, so no other certificate changes.
+        .opt_raw("chances", crate::chances::certificate_json(f, c))
         .finish()
 }
 

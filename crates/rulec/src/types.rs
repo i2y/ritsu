@@ -5,6 +5,10 @@ use crate::diag::{Diag, Span};
 use crate::num::{Rat, RoundMode, RoundTo};
 use std::collections::{HashMap, HashSet};
 
+/// What is drawn (§15.224–§15.226): the `random` inputs, a pick by weight, the `chances` tables.
+mod chances;
+pub use chances::{FUNCTION_POINTS, MOST_POINTS};
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Ty {
     /// A declared or imported enumeration.
@@ -772,8 +776,16 @@ pub fn item_reads(it: &Item) -> Vec<String> {
                         collect_names(expr, &mut out);
                         collect_names(key, &mut out);
                     }
+                    Arm::TakeWeighted { expr, weight } => {
+                        collect_names(expr, &mut out);
+                        collect_names(weight, &mut out);
+                    }
                     _ => {}
                 }
+            }
+            // The drawn value a weighted pick compares its running total with (§15.226).
+            if let Some(dw) = &d.draw {
+                out.push(dw.text.clone());
             }
             out.retain(|n| n != crate::kw::HELD);
         }
@@ -1209,6 +1221,7 @@ pub fn read_words(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 Arm::Stop(Some(x)) => values.push(x),
                 Arm::Take { expr, .. } => values.push(expr),
                 Arm::KeepMax { expr, .. } => values.push(expr),
+                Arm::TakeWeighted { expr, .. } => values.push(expr),
                 _ => {}
             }
         }
@@ -2379,6 +2392,19 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 }
             }
         }
+        // A claim of `chances` names a sequence the way an example does (§15.224).
+        for ch in &f.chances {
+            for (ci, (n, _)) in ch.inputs.iter().enumerate() {
+                if !f.elements.iter().any(|el| el.name.text == *n) {
+                    continue;
+                }
+                for row in &ch.rows {
+                    if let Some(Cell::Lit(Lit::Word(w))) = row.cells.get(ci) {
+                        named.push(w.clone());
+                    }
+                }
+            }
+        }
         for sq in &f.sequences {
             if !named.contains(&sq.name.text) {
                 c.diags.push(
@@ -2558,6 +2584,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
 
     // `machine` and `scenario` (§15.148): do the names fit what they are said to be.
     c.machine_decl(f, path);
+
+    // What is drawn (§15.224): the `random` inputs, and the claims about the chances.
+    c.random_marks(f, path);
+    c.chances_tables(f, path);
 
     // §11 W111: declarations nothing names. `contract_only` silences a range-guard-only input.
     for i in &f.inputs {
@@ -4179,13 +4209,22 @@ impl Checked {
                         collect_names(expr, &mut names);
                         collect_names(key, &mut names);
                     }
+                    Arm::TakeWeighted { expr, weight } => {
+                        collect_names(expr, &mut names);
+                        collect_names(weight, &mut names);
+                    }
                     _ => {}
                 }
+            }
+            if let Some(dw) = &fold.draw {
+                names.push(dw.text.clone());
             }
             for n in names {
                 self.used.insert(n);
             }
         }
+        // A pick by weight (§15.226): its arms, its weights and the value it draws.
+        self.weighted_fold(fold, f, &at_fold, path);
 
         // A literal answer is a value of the output the walk produces. It was never read
         // against that type, so `empty -> 999銭` under a `money[円]` output passed `check`
@@ -4202,6 +4241,7 @@ impl Checked {
                     Arm::Stop(Some(x)) => answers.push((x, sp)),
                     Arm::Take { expr, .. } => answers.push((expr, sp)),
                     Arm::KeepMax { expr, .. } => answers.push((expr, sp)),
+                    Arm::TakeWeighted { expr, .. } => answers.push((expr, sp)),
                     _ => {}
                 }
             }
@@ -4925,6 +4965,11 @@ impl Checked {
                 Arm::KeepMax { expr, key } => {
                     values.push((Place::Arm, expr));
                     values.push((Place::Key, key));
+                }
+                // A weight decides which element is taken, as a key does, and is no answer.
+                Arm::TakeWeighted { expr, weight } => {
+                    values.push((Place::Arm, expr));
+                    values.push((Place::Key, weight));
                 }
                 _ => {}
             }

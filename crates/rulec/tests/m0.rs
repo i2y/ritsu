@@ -202,6 +202,21 @@ fn 変異は決めたコードだけを出す() {
         ("m_e074ja.rule", &[("E074", 1)], "上と同じ規則の日本語の版"),
         ("m_e121seq.rule", &[("E121", 1)], "明細の並びを、契約に無い配列から取った（契約が配列の名前を変えたときの姿）"),
         ("m_e121seqja.rule", &[("E121", 1)], "上と同じ規則の日本語の版"),
+        // §15.224–§15.226: a number drawn from no range, a pick by weight that names no drawn value
+        // (and so its drawn input is read by nothing), a chance on the poster that the table does not
+        // give, a claim over more cases than its budget, and a drawn number of ten million values.
+        ("m_e070.rule", &[("E070", 1)], "伝票ごとに引く数から範囲を外した（引く値の数が決まらない）"),
+        ("m_e070ja.rule", &[("E070", 1)], "上と同じ規則の日本語の版"),
+        ("m_e070from.rule", &[("E070", 1)], "注文の合計を、呼び出し側のオブジェクトから取り出したまま乱数にした"),
+        ("m_e070fromja.rule", &[("E070", 1)], "上と同じ規則の日本語の版"),
+        ("m_e073.rule", &[("E073", 1), ("W111", 1)], "重みで選ぶ畳み込みから `draw` の行を消した"),
+        ("m_e073ja.rule", &[("E073", 1), ("W111", 1)], "上と同じ規則の日本語の版"),
+        ("m_e133.rule", &[("E133", 1)], "ポスターの三等の確率を、表が出す 5% でなく 6% と書いた"),
+        ("m_e133ja.rule", &[("E133", 1)], "上と同じ規則の日本語の版"),
+        ("m_w129.rule", &[("W129", 1)], "強さのどの組でも挑む側が点を取りうる、という主張を全部の組について書いた"),
+        ("m_w129ja.rule", &[("W129", 1)], "上と同じ規則の日本語の版"),
+        ("m_w131.rule", &[("W131", 1)], "伝票ごとに引く数を一千万通りに広げた（主張は外した）"),
+        ("m_w131ja.rule", &[("W131", 1)], "上と同じ規則の日本語の版"),
         // §15.149: a declaration with no type used to be dropped in silence.
         ("m_e057.rule", &[("E057", 1)], "入力の行から型が落ちた（黙って捨てられ、入力が一つ減っていた）"),
         ("m_e014.rule", &[("E014", 1)], "出力のセルに式を書いた"),

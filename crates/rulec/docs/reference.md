@@ -1019,6 +1019,7 @@ The arms:
 | `take_unique <value>` | take this element's value; a second element that also takes is an error at run time |
 | `take_first <value>` | take the first, ignore any later one |
 | `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
+| `take_weighted <value> by <weight>` | pick one element with the chance of its weight, by a drawn value (§6.6) |
 | `empty -> <value>` | the answer when there are no elements. **Required** |
 | `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else the `empty` answer |
 
@@ -1613,6 +1614,158 @@ The vector suite holds every language to the reference evaluator over a handful 
 `or`, the value itself besides, every other value — and the certificate carries the graph with the
 orders that show it has no cycle and that every value is reached (docs/formats.md).
 
+## 6.6 random and chances
+
+Some inputs are not chosen but drawn: the number an audit draws for each claim to decide whether
+it is inspected, the number of a lottery ticket, the roll that decides one round of a contest. Mark
+such an input `random`, and the rule can say — and `rulec check` can prove — how likely each answer
+is:
+
+```rule
+inputs
+  sample_number : number  range >=0 <=99  random
+  category      : category
+  amount        : money[JPY]  range >=0JPY <=10_000_000JPY
+```
+
+`random` at the end of an input's line says that the caller draws the value uniformly from what
+the declaration lets in, independently of the other inputs, and passes it in. The function the
+rule generates does not change: the caller draws, and the same inputs give the same answer. What
+can be drawn is finite and countable:
+
+| type | drawn from |
+|---|---|
+| `number`, `money`, a quantity, `rate` | every value of the range in the steps its type is held in, both ends included — `range >=0 <=13` is 14 values. Both ends are required |
+| an enum | its values, or those its range lets in (§3) |
+| `bool` | `true` and `false` |
+
+Where a `constraint` names a random input, the draw is uniform over the points that meet it:
+with `constraint roll < challenger_strength + holder_strength`, `roll` is drawn from 0 to the
+two strengths added together, less one. Completeness and overlap are proved over the random
+inputs as over any other, and a `machine`'s claims (§6.4) treat a random input as any value it can
+be, since they are about what can happen.
+
+E070 stops what cannot be drawn: a number whose range lacks an end, an input that may be absent
+(`?`), a date, a string, an input read `from` the caller's object (§3.3), one a `machine` carries,
+a field of an element (drawn once per element, so the number of points would turn on the length
+of the sequence), and `random` on an output. The points of the random inputs multiplied together
+are at most 2^62, since every language counts the ways in an int64: past that is E108.
+
+### chances
+
+A `chances` table claims how likely an answer is:
+
+```rule
+chances
+| category      | amount       | -> inspect | chance |
+| entertainment | -            | true       | 1      |
+| travel        | -            | true       | 1/10   |
+| expenses      | >=100_000JPY | true       | 1/4    |
+| expenses      | <100_000JPY  | true       | 5%     |
+| supplies      | -            | true       | 1/50   |
+| -             | -            | true       | >=1/50 |
+```
+
+| column | what it holds |
+|---|---|
+| before `->` | **every** input that is not random, each cell a condition like a table's (`-` for any value). A rule that walks a sequence has a column for it, whose cells name a `sequence` (§6.2), as in `examples`. A random input has no column: it is what is counted |
+| after `->` | the outputs the claim is about, each cell a condition like a table's. An output with no column may be anything |
+| `chance`, last | an exact rational (`5/14`, `0`, `1`), a rate (`35%`, `0.1%`), or comparisons with one (`<=1/100`, `>=1/4 <=1/2`) |
+
+A row says: for **every** combination of the inputs that are not random its cells let in, with the
+random inputs drawn uniformly, the chance that the outputs match its output cells is the value
+written — or passes the comparisons written. A chance is a count of points over a count of points,
+so it is always an exact rational, and `rulec check` compares it exactly.
+
+How `rulec check` counts: the inputs that are not random are cut at the rule's own boundaries into
+classes — the cells `diff` and the `machine` walk (§15.122, §15.148 of DESIGN.md) — and so are the
+axes of the random inputs. Where nothing the rule computes reads a random input together with one
+that is not, and no `constraint` ties the two, each cell of that walk is a class crossed with a box
+of the random axes, the answer is one value over it, and the box holds the product of the lengths
+of its intervals: the claim is counted exactly without looking at a single point, however wide the
+ranges. Where an answer moves inside a box, or the two kinds of input are read together, the points
+are run one by one, up to a million for one claim (one fiftieth of `--budget`'s nodes).
+
+| check | what it finds | code |
+|---|---|---|
+| shape | a column missing or of the wrong kind, a cell that is not a chance, a table where nothing is drawn | E070 |
+| claim | a combination of the inputs that are not random where the chance is not the one written | E133 |
+| budget | a claim whose points to run one by one are past its share of the budget, which is said to be neither holding nor broken | W129 |
+
+A claim that fails names the combination and the chance there:
+
+```console
+error[E133]: A claim of `chances` does not hold (row 4)
+  --> tests/mutants/m_e133.rule:29 chances
+   |
+29 | | false    | third    | 6%     |
+   |                         ^^ 6% is written here
+   |
+ With campaign = false, the chance of prize = third is 1/20 (5.0%).
+ A claim speaks of every combination its cells let in, with the random inputs drawn uniformly. If the table is right, correct the claim; if the claim is the business truth, correct the table's rows.
+```
+
+### Picking by weight: `take_weighted` and `draw`
+
+A fold can pick one element with the chance of its weight — a case for one of the reviewers who are
+in, in proportion to their capacity:
+
+```rule
+inputs
+  roll : number  range >=0 <=9999  random
+
+fold presence over reviewers
+  away      -> next
+  in_office -> take_weighted reviewer_id by capacity
+  draw      -> roll
+  empty     -> 0
+  exhausted -> held
+```
+
+| line | what it says |
+|---|---|
+| `<verdict> -> take_weighted <value> by <weight>` | add the weight of each element that lands on the verdict to a running total, in order, and take the value of the first element at which the drawn value is below that total. An element is taken with the chance of its weight over the total of the weights |
+| `draw -> <input>` | the drawn value: an input marked `random`, a `number` whose range starts at 0 |
+
+The drawn value has to be below the total of the weights: the generated code checks it once the
+walk is over and refuses the call otherwise, as it refuses an input out of its range, and the
+draw is uniform over the values below the total. When the weights add up to 0 the walk answers
+`exhausted`, with `held` the `empty` answer. A rule picks by weight once, the arms of that fold are
+`next` and `take_weighted` alone, and a weight is a `number` that cannot be negative (E073).
+
+### What chances generate
+
+A rule with random inputs generates one more function in every language with modules: it takes the
+inputs that are not random (and the sequences), and answers how many draws give each answer and how
+many draws there are. A chance is the count over the total.
+
+| language | function | result |
+|---|---|---|
+| Python | `prize_lottery_chances(campaign)` | `Chances(NamedTuple)`: `total: int`, `ways: list[tuple[Prize, int]]` |
+| TypeScript, JavaScript | `prizeLotteryChances(campaign)` | `{ total: bigint, ways: [Prize, bigint][] }` |
+| Rust | `prize_lottery_chances(campaign)` | `Result<Chances, RuleError>`, `Chances { total: i64, ways: Vec<(Prize, i64)> }` |
+| Ruby | `PrizeLottery.prize_lottery_chances(campaign)` | `Chances = Struct.new(:total, :ways)` |
+| PHP | `\PrizeLottery\prize_lottery_chances($campaign)` | `final class Chances(int $total, array $ways)` |
+| Go | `PrizeLotteryChances(in Input)` | `(Chances, error)`, `Chances{Total, Ways []Way{Out, Count}}`; the random fields of `in` are not read |
+| Swift | `prizeLotteryChances(campaign:)` | `throws -> Chances`, `Chances{total, ways: [Way]}` |
+| Java | `PrizeLottery.prizeLotteryChances(campaign)` | `record Chances(long total, List<Way> ways)` |
+| NumPy | `rule.chances(**fixed)` | `(total, [(outputs, count), …])` |
+| SQL, Wasm | — | — |
+
+The answers come in the order they are first met — the first random input outermost, each from its
+lowest value. A point the door refuses (a `constraint`,
+a drawn value past the weights) is no point. The function runs the rule's own function on every
+point, so it never disagrees with it; a rule whose one random input only the `draw` line reads is
+counted from the weights instead, one walk for the running totals and one run per element weighed.
+A function that runs the rule over more than a million points on every call is W131. SQL and Wasm
+have one entry and no room for a second function: `rulec gen` says so, `rulec api` names them under
+`without`, and `rulec test` notes that nothing was compared there.
+
+`rulec test` holds the function in every language to the reference evaluator over
+`vectors/<alias>.chances.jsonl` (docs/formats.md), the certificate carries the counts box by box
+(docs/formats.md), and the page for people shows each claim beside what the check counted, and
+counts the chances of the case entered in its panel.
+
 ## 7. Tables
 
 ```rule
@@ -1992,6 +2145,9 @@ on its first line only) and `open` (the mark after an enum's last value, §3) ar
 vocabulary but are told apart by position, so they are not reserved as names. A value may be
 called `open` too: the mark is only the word that follows the last value. So are `prerequisites`
 — a line head outside every block, and a name inside one, as `prerequisites(p) : number` under
-`inputs` — and the words under it, `start`, `requires`, `or`, `nothing` and `ordered` (§6.5).
+`inputs` — and the words under it, `start`, `requires`, `or`, `nothing` and `ordered` (§6.5). So
+are the four words of §6.6: `chances`, a line head; `random`, read only at the end of an input's
+line; `take_weighted`, read only after the `->` of an arm; and `draw`, read only as `draw ->
+<name>` under a `fold` — `draw -> next` stays the arm of a verdict called `draw`.
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

@@ -28,6 +28,9 @@ use std::collections::BTreeMap;
 /// The `prerequisites` blocks on the pages (§15.222).
 mod prereq;
 
+/// The random inputs and the `chances` sections on the pages (§15.224).
+mod chances;
+
 /// Split one source line into its body and its trailing comment. The comment starts at the
 /// first `#` outside a string literal, which is where the parser starts it too, so the two
 /// never disagree about where the body ends.
@@ -414,6 +417,10 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
                 shown.len()
             ));
         }
+        // What a random input is drawn from (§15.224).
+        if let Some(t) = chances::drawn_from(f, c, n) {
+            note.push(t);
+        }
         if let Some(cm) = trailing_comment(&lines, i.name.span.line) {
             note.push(cm);
         }
@@ -748,9 +755,13 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
             crate::kw::EMPTY,
             crate::kw::EXHAUSTED
         ));
+        // A pick by weight, and what `held` is for it (§15.226).
+        o.push_str(&chances::weighted(fold));
         // What `held` is (§15.208): the reference evaluator and every generator agree on it, and the
         // page says it in the words the grammar does, where the walk answers with it.
-        if reads_held(fold) {
+        if let Some(t) = chances::weighted_held(fold, false).filter(|_| reads_held(fold)) {
+            o.push_str(&t);
+        } else if reads_held(fold) {
             o.push_str(&tr!(
                 "`{h}` は、採った値（`take_unique`・`take_first`）、無ければ持ち越した値（`keep_max`）、それも無ければ `{e}` の答えです。\n",
                 "`{h}` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else the `{e}` answer.\n",
@@ -796,6 +807,9 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
 
     // --- Which values need which before them (§15.222)
     o.push_str(&prereq::sections(f, c));
+
+    // --- How likely each answer is, with the random inputs drawn (§15.224)
+    o.push_str(&chances::sections(f, c, &lines));
 
     // --- Examples: each section as the source wrote it, one table after another.
     if !f.examples.is_empty() {
@@ -2370,7 +2384,12 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
     let outs: Vec<String> = f.outputs.iter().map(|od| md_esc(&od.name.text)).collect();
     o.push_str(&tr!("\n## {}の決まり方\n\n", "\n## What decides {}\n\n", outs.join(sep())));
     for i in &f.inputs {
-        o.push_str(&format!("- **{}**: {}\n", md_esc(&i.name.text), md_esc(&customer_input(c, &i.name.text))));
+        let mut words = customer_input(c, &i.name.text);
+        // A random input is drawn by the caller (§15.224).
+        if i.random.is_some() {
+            words.push_str(&tr!("（無作為に選ばれ、どの値も同じ確率）", " (drawn at random, each value as likely)"));
+        }
+        o.push_str(&format!("- **{}**: {}\n", md_esc(&i.name.text), md_esc(&words)));
     }
     for el in &f.elements {
         o.push_str(&tr!(
@@ -2465,7 +2484,10 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
             }
         }
         o.push_str(&fold_where(f, fold));
-        if reads_held(fold) {
+        o.push_str(&chances::weighted(fold));
+        if let Some(t) = chances::weighted_held(fold, true).filter(|_| reads_held(fold)) {
+            o.push_str(&t);
+        } else if reads_held(fold) {
             o.push_str(&tr!(
                 "\n`{h}` は、採った値、無ければ持ち越した値、それも無ければ一件も無いときの答えです。\n",
                 "\n`{h}` is the value taken, else the value kept, else the answer for no elements.\n",
@@ -2523,6 +2545,9 @@ pub fn render_customer(f: &RuleFile, c: &Checked, src: &str, path: &str) -> Stri
 
     // --- What comes before what (§15.222).
     o.push_str(&prereq::customer(f, c));
+
+    // --- How likely each answer is (§15.224).
+    o.push_str(&chances::customer(f, c, &lines));
 
     // --- Either side of every threshold. These are the vectors the boundary-pair criterion
     // built (§9.2): the same input moved one step across a boundary, everything else held.
@@ -3086,7 +3111,9 @@ pub fn render_html_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown
     for (k, g) in crate::prereq::Graph::all(f, c).iter().enumerate() {
         body = body.replace(&format!("<!--PREREQ {k}-->"), &prereq::svg(f, c, g, k));
     }
-    o.push_str(&body.replace("<!--TRY-->", &try_panel()).replace("<!--GRAPH-->\n", "").replace("<!--MACHINE-->", &machine));
+    // A rule with random inputs has a place for the chances of the case entered (§15.225).
+    let panel = if f.has_random() { chances::panel(try_panel()) } else { try_panel() };
+    o.push_str(&body.replace("<!--TRY-->", &panel).replace("<!--GRAPH-->\n", "").replace("<!--MACHINE-->", &machine));
     o.push_str("</main>\n<script type=\"module\">\n");
     // What goes in the element: the module, whose head names the files and the addresses the rule
     // cites, and the rule as JSON. A `</script` in any of it would end the element there, and the
@@ -3094,17 +3121,19 @@ pub fn render_html_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown
     let mut script = String::from(js);
     script.push_str(&format!("\nconst RULE = {};\n", rule_json(f, c)));
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-    script.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record }};\n"));
+    script.push_str(&format!("const FN = {{ run: {alias}_traced, record: {alias}_record{} }};\n", chances::fn_entry(f)));
+    let mut page = PAGE_JS.to_string();
     if f.elements.len() > 1 {
-        let mut js = PAGE_JS.to_string();
         for (one, many) in PAGE_LISTS {
-            debug_assert!(js.contains(one), "the page script no longer has the one-list editor");
-            js = js.replacen(one, many, 1);
+            debug_assert!(page.contains(one), "the page script no longer has the one-list editor");
+            page = page.replacen(one, many, 1);
         }
-        script.push_str(&js);
-    } else {
-        script.push_str(PAGE_JS);
     }
+    // A rule with random inputs shows the chances of the case entered too (§15.225).
+    if f.has_random() {
+        page = chances::page_js(page);
+    }
+    script.push_str(&page);
     // A machine that carries more than its state (§15.217) puts those values back too.
     if f.machine.as_ref().is_some_and(|m| !m.carries.is_empty()) {
         script.push_str(PAGE_MORE_JS);
@@ -3212,7 +3241,18 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         }
         o.finish()
     };
-    let ins: Vec<String> = f.inputs.iter().map(|i| one(&i.name.text, &crate::codegen::pub_name_of(&i.name))).collect();
+    let ins: Vec<String> = f
+        .inputs
+        .iter()
+        .map(|i| {
+            let o = one(&i.name.text, &crate::codegen::pub_name_of(&i.name));
+            // A random input is left out of the call that counts the chances (§15.225).
+            match (i.random.is_some(), o.strip_suffix('}')) {
+                (true, Some(head)) => format!("{head},\"random\":true}}"),
+                _ => o,
+            }
+        })
+        .collect();
     let outs: Vec<String> = f.outputs.iter().map(|o| one(&o.name.text, &crate::codegen::pub_name_of(&o.name))).collect();
     // The examples, as the wire values the script puts into the fields.
     let mut exs: Vec<String> = Vec::new();
@@ -3287,6 +3327,10 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
     }
     if let Some(e) = sequences {
         o = o.raw("sequences", e);
+    }
+    // What the panel says over the chances of the case entered (§15.225).
+    if let Some((caption, chance)) = chances::page_text(f) {
+        o = o.raw("chances", Obj::new().str("caption", &caption).str("chance", &chance).finish());
     }
     // The machine (§15.148): which field the answer's state goes back into.
     if let Some((cin, cout)) = f.machine.as_ref().and_then(|m| m.carried()) {

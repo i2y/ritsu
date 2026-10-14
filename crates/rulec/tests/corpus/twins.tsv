@@ -60,3 +60,7 @@ Claude利用料.rule	claude_api_usage_fee.rule
 最も早い期日.rule	earliest_due.rule
 料率の調整.rule	rate_adjustment.rule
 注文の取扱手数料.rule	order_handling_fee.rule
+伝票の抜き取り.rule	invoice_sampling.rule
+くじの景品.rule	prize_lottery.rule
+案件の振り分け.rule	case_routing.rule
+抽選の特典.rule	reward_box.rule

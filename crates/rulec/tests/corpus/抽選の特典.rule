@@ -1,0 +1,58 @@
+rule 抽選の特典(box_reward) v1
+description "会員が特典の箱を開けたときに見つけるもの。0 から 13 の数を一つ引いて、ボーナスポイント、試供品、付属品、アンケート、上位プラン、カタログのどれかを選ぶ。選んだものが手に入らないときは、25 ポイントか、何も無い。引いた結果の表の形で書き下ろした例"
+
+enum 特典(reward) = ボーナスポイント(bonus_points) | 試供品(sample) | 試供品なし(no_sample) | 付属品(accessory) | 空箱(empty_box) | アンケート(survey) | 上位プラン(upgrade) | 提携先の特典(partner_offer) | カタログ(catalog)
+
+inputs
+  引いた数(pick)                         : number  range >=0 <=13  random
+  試供品の在庫(sample_in_stock)          : bool  # 会員が使っている製品の試供品に在庫がある
+  付属品が合う(accessory_fits)           : bool  # 会員が持っている製品に合う付属品がある
+  アンケート停止中(surveys_off)          : bool  # 今月はアンケートを止めている
+  最近回答済み(surveyed_recently)        : bool  # 会員が 90 日以内にアンケートに答えた
+  無料体験中(trial_member)               : bool  # 会員が無料体験の期間中
+  上のプランがある(upgrade_possible)     : bool  # 会員のプランより上のプランがある
+  提携先の特典がある(partner_offer_fits) : bool  # 会員の地域で提携先の特典を受けられる
+
+outputs
+  特典(reward)     : 特典
+  ポイント(points) : number  round down(1)  # 見つけたボーナスポイント。整数だけ
+
+table 開封(open_box)
+policy unique
+| 引いた数 | 試供品の在庫 | 付属品が合う | アンケート停止中 | 最近回答済み | 無料体験中 | 上のプランがある | 提携先の特典がある | -> 特典          | ポイント |
+| 0        | -            | -            | -                | -            | -          | -                | -                  | ボーナスポイント | 25       |
+| >=1 <=3  | -            | -            | -                | -            | -          | -                | -                  | ボーナスポイント | 50       |
+| 4        | -            | -            | -                | -            | -          | -                | -                  | ボーナスポイント | 100      |
+| >=5 <=7  | true         | -            | -                | -            | -          | -                | -                  | 試供品           | 0        |
+| >=5 <=7  | false        | -            | -                | -            | -          | -                | -                  | 試供品なし       | 0        |
+| 8, 9     | -            | true         | -                | -            | -          | -                | -                  | 付属品           | 0        |
+| 8, 9     | -            | false        | -                | -            | -          | -                | -                  | ボーナスポイント | 25       |  # 代わりに
+| 10       | -            | -            | true             | -            | -          | -                | -                  | 空箱             | 0        |
+| 10       | -            | -            | false            | true         | -          | -                | -                  | 空箱             | 0        |
+| 10       | -            | -            | false            | false        | true       | -                | -                  | 空箱             | 0        |
+| 10       | -            | -            | false            | false        | false      | -                | -                  | アンケート       | 0        |
+| 11       | -            | -            | -                | -            | -          | true             | -                  | 上位プラン       | 0        |
+| 11       | -            | -            | -                | -            | -          | false            | true               | 提携先の特典     | 0        |
+| 11       | -            | -            | -                | -            | -          | false            | false              | ボーナスポイント | 25       |  # 代わりに
+| 12, 13   | -            | -            | -                | -            | -          | -                | -                  | カタログ         | 0        |
+
+chances
+| 試供品の在庫 | 付属品が合う | アンケート停止中 | 最近回答済み | 無料体験中 | 上のプランがある | 提携先の特典がある | -> 特典          | ポイント | chance       |
+| true         | true         | false            | false        | false      | true             | true               | ボーナスポイント | -        | 5/14         |
+| true         | true         | false            | false        | false      | true             | true               | 試供品           | -        | 3/14         |
+| -            | -            | -                | -            | -          | -                | -                  | カタログ         | -        | 1/7          |
+| -            | false        | -                | -            | -          | -                | -                  | 付属品           | -        | 0            |
+| -            | -            | -                | -            | -          | -                | -                  | ボーナスポイント | -        | >=5/14 <=4/7 |
+| -            | -            | -                | -            | -          | -                | -                  | -                | >=50     | 2/7          |
+
+examples
+| 引いた数 | 試供品の在庫 | 付属品が合う | アンケート停止中 | 最近回答済み | 無料体験中 | 上のプランがある | 提携先の特典がある | -> 特典          | ポイント |
+| 0        | true         | true         | false            | false        | false      | true             | true               | ボーナスポイント | 25       |
+| 3        | true         | true         | false            | false        | false      | true             | true               | ボーナスポイント | 50       |
+| 4        | true         | true         | false            | false        | false      | true             | true               | ボーナスポイント | 100      |
+| 6        | false        | true         | false            | false        | false      | true             | true               | 試供品なし       | 0        |
+| 9        | true         | false        | false            | false        | false      | true             | true               | ボーナスポイント | 25       |
+| 10       | true         | true         | false            | true         | false      | true             | true               | 空箱             | 0        |
+| 10       | true         | true         | false            | false        | false      | true             | true               | アンケート       | 0        |
+| 11       | true         | true         | false            | false        | false      | false            | false              | ボーナスポイント | 25       |
+| 13       | true         | true         | false            | false        | false      | true             | true               | カタログ         | 0        |

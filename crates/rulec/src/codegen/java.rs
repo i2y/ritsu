@@ -33,7 +33,7 @@
 
 use super::{
     camel, cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc,
-    pub_name, raw_base, record_doc, round_cases, traced_doc, unparen, wire_of, Expr2, Gen, Lang,
+    pub_name, raw_base, record_doc, round_cases, traced_doc, unparen, walked_doc, wire_of, Expr2, Gen, Lang,
     Phase, WalkStep, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
@@ -683,6 +683,16 @@ impl<'a> Gen<'a> {
             "    /** {} */\n    public record Traced({ret} value, List<Fired> trace) {{\n    }}\n\n",
             tr!("出力と、当てはまった行。", "What came out, and the rows that matched.")
         ));
+        // What the walk of a rule that picks by weight gives back besides (§15.225).
+        if self.weighted_fold().is_some() {
+            o.push_str(&format!(
+                "    /** {} */\n    record Walked({ret} value, List<Fired> trace, List<Long> cuts) {{\n    }}\n\n",
+                tr!(
+                    "出力と、当てはまった行と、重みで選ぶ腕が重みを足すたびの合計。",
+                    "What came out, the rows that matched, and the running total of the weights each time the arm that picks by weight adds one."
+                )
+            ));
+        }
 
         for g in &self.f.groups {
             let gty = self.group_ty(&g.name.text);
@@ -706,6 +716,12 @@ impl<'a> Gen<'a> {
         o.push_str(&self.java_fn());
         o.push('\n');
         o.push_str(&self.java_record());
+        // The method that counts the answers (§15.225).
+        if self.f.has_random() {
+            o.push('\n');
+            o.push_str(self.java_chances().trim_end());
+            o.push('\n');
+        }
         o.push_str("}\n");
         o
     }
@@ -909,6 +925,15 @@ impl<'a> Gen<'a> {
         init.push_str(&format!(
             "        {acc} {taken} = null;\n        {acc} {kept} = null;\n        Long {best} = null;\n"
         ));
+        let weighted = fold.weighted();
+        let draw = fold.draw.as_ref().map(|d| local(&d.text)).unwrap_or_default();
+        let (total, weight, cuts) = (java_name(&names.total), java_name(&names.weight), java_name(&names.cuts));
+        if weighted {
+            init.push_str(&format!(
+                "        long {total} = 0L;  // {}\n        List<Long> {cuts} = new ArrayList<>();\n",
+                tr!("重みの合計", "the running total of the weights")
+            ));
+        }
 
         let mut arms = String::new();
         let v = local(&fold.verdict);
@@ -950,12 +975,30 @@ impl<'a> Gen<'a> {
                     arms.push_str(&format!("                {best} = {key};\n"));
                     arms.push_str(&format!("                {kept} = {};\n            }}\n", val(expr, local)));
                 }
+                // The weight goes on the running total, and the element is taken where the drawn
+                // value is below the total for the first time (§15.226).
+                Arm::TakeWeighted { expr, weight: wx } => {
+                    arms.push_str(&format!("            long {weight} = {};\n", java_expr(unparen(&self.expr(wx, local).text))));
+                    arms.push_str(&format!("            {total} += {weight};\n            {cuts}.add({total});\n"));
+                    arms.push_str(&format!("            if ({taken} == null && {draw} < {total}) {{\n"));
+                    arms.push_str(&format!("                {taken} = {};\n            }}\n", val(expr, local)));
+                }
             }
             arms.push_str("        }\n");
         }
         let step = if alone { arms } else { format!("        if (!{done}) {{  // {}\n{}        }}\n", jc(&fold.verdict), Self::indent_block(&arms, "    ")) };
 
-        let mut fin = format!("        if (!{seq}.isEmpty() && !{stopped}) {{\n");
+        // The drawn value of a pick by weight is below the total of the weights, unless they add up
+        // to 0 (§15.226).
+        let mut fin = String::new();
+        if weighted {
+            let what = fold.draw.as_ref().map(|d| crate::door::draw_past(&d.text)).unwrap_or_default();
+            fin.push_str(&format!(
+                "        if ({total} > 0 && {draw} >= {total}) {{\n            throw new RuleInputError({}, {draw});\n        }}\n",
+                java_str(&what)
+            ));
+        }
+        fin.push_str(&format!("        if (!{seq}.isEmpty() && !{stopped}) {{\n"));
         fin.push_str(&format!(
             "            {out_ty} {held} = {taken} != null ? {taken} : ({kept} != null ? {kept} : {});\n",
             text(&fold.empty)
@@ -1073,6 +1116,13 @@ impl<'a> Gen<'a> {
 
         o.push_str(&format!("    /** {} */\n", jc(&traced_doc(&self.f.name.text, &self.f.version))));
         o.push_str(&format!("    public static Traced {traced}({}) {{\n", params.join(", ")));
+        // A rule that picks by weight runs its walk in a method of its own, which gives back the
+        // running totals of the weights too (§15.225).
+        let walked = self.weighted_fold().map(|(i, _)| (self.walked_fn("java"), java_name(&self.fold_names(i).cuts)));
+        if let Some((w, _)) = &walked {
+            o.push_str(&format!("        Walked w = {w}({});\n        return new Traced(w.value(), w.trace());\n    }}\n\n", args.join(", ")));
+            o.push_str(&format!("    /** {} */\n    static Walked {w}({}) {{\n", jc(&walked_doc()), params.join(", ")));
+        }
 
         // Entry guards (§8.5). The declared types already refuse a value of the wrong kind,
         // so what is left to ask is the range (§15.43).
@@ -1150,11 +1200,15 @@ impl<'a> Gen<'a> {
                 None => java_expr(&res.text),
             });
         }
+        let (made, cuts) = match &walked {
+            Some((_, c)) => ("Walked", format!(", {c}")),
+            None => ("Traced", String::new()),
+        };
         if outs.len() == 1 {
-            o.push_str(&format!("        return new Traced({}, {});\n", finals[0], java_name(&trace)));
+            o.push_str(&format!("        return new {made}({}, {}{cuts});\n", finals[0], java_name(&trace)));
         } else {
             o.push_str(&format!(
-                "        return new Traced(new Output({}), {});\n",
+                "        return new {made}(new Output({}), {}{cuts});\n",
                 finals.join(", "),
                 java_name(&trace)
             ));
@@ -1443,6 +1497,21 @@ impl<'a> Gen<'a> {
             ));
             args.push(v);
         }
+        // `--chances` reads every input of a line plainly, as the vectors are read (§15.225).
+        let chances_mode = {
+            let plain = binds.replace("\n                    ", "\n                ");
+            let plain = plain.strip_prefix("                    ").map(|p| format!("                {p}")).unwrap_or(plain);
+            let pass: Vec<String> = self
+                .f
+                .inputs
+                .iter()
+                .zip(args.iter())
+                .filter(|(i, _)| i.random.is_none())
+                .map(|(_, a)| a.clone())
+                .chain(args[self.f.inputs.len()..].iter().cloned())
+                .collect();
+            (plain, pass.join(", "))
+        };
         let (r, line) = (java_name(&self.temp("r")), java_name(&self.temp("line")));
         // A machine's traces (§15.148): the carried input is the state this language answered
         // to the call before, handed over as the value it is.
@@ -1536,7 +1605,7 @@ impl<'a> Gen<'a> {
              {helpers}{wire}}}\n",
             ritsu_emit::header::VERSION,
             args = args.join(", "),
-            labels = self.java_labels_mode(&line) + &self.java_prereq_mode(&line),
+            labels = self.java_labels_mode(&line) + &self.java_prereq_mode(&line) + &self.java_chances_mode(&line, &d, &chances_mode.0, &chances_mode.1, &args.join(", ")),
             helpers = JAVA_JSON_HELPERS,
             wire = JAVA_WIRE.replace("@CLS@", &cls).replace(
                 "@D_WIRE@",
@@ -1719,3 +1788,147 @@ const JAVA_WIRE: &str = r##"
         return o.append("\"}").toString();
     }
 "##;
+
+// ── The function that counts the answers (§15.225) ──────────────────────────────
+
+impl<'a> Gen<'a> {
+    /// The `Way` and `Chances` records and the method, in Java, inside the rule's class.
+    pub(super) fn java_chances(&self) -> String {
+        if !self.f.has_random() {
+            return String::new();
+        }
+        let (doc_fn, doc_ty) = self.chances_docs();
+        let outs = &self.f.outputs;
+        let ret = if outs.len() == 1 { self.java_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
+        let fname = self.java_fname();
+        let name = self.chances_name("java");
+        let mut params: Vec<String> = self
+            .f
+            .inputs
+            .iter()
+            .filter(|i| i.random.is_none())
+            .map(|i| format!("{} {}", self.java_ty(&self.ty_of(&i.name.text)), java_name(&pub_name(&i.name))))
+            .collect();
+        for (s, el) in self.f.elements.iter().enumerate() {
+            params.push(format!("List<{}> {}", self.element_type(s), java_name(&pub_name(&el.name))));
+        }
+        let call = |draw: Option<(&str, &str)>| -> String {
+            let mut args: Vec<String> = self
+                .f
+                .inputs
+                .iter()
+                .map(|i| match draw {
+                    Some((d, v)) if i.name.text == d => v.to_string(),
+                    _ => java_name(&pub_name(&i.name)),
+                })
+                .collect();
+            for el in &self.f.elements {
+                args.push(java_name(&pub_name(&el.name)));
+            }
+            args.join(", ")
+        };
+        let (total, ways, out, k, last, e) = (
+            java_name(&self.temp("total")),
+            java_name(&self.temp("ways")),
+            java_name(&self.temp("out")),
+            java_name(&self.temp("k")),
+            java_name(&self.temp("last")),
+            java_name(&self.temp("e")),
+        );
+        let add = |ind: &str, n: &str| -> String {
+            format!(
+                "{ind}int {k} = 0;\n{ind}while ({k} < {ways}.size() && !java.util.Objects.equals({ways}.get({k}).out(), {out})) {{\n{ind}    {k} += 1;\n{ind}}}\n{ind}if ({k} == {ways}.size()) {{\n{ind}    {ways}.add(new Way({out}, {n}));\n{ind}}} else {{\n{ind}    {ways}.set({k}, new Way({out}, {ways}.get({k}).count() + {n}));\n{ind}}}\n"
+            )
+        };
+        let mut o = format!(
+            "    /** {} */\n    public record Way({ret} out, long count) {{\n    }}\n\n    /** {} */\n    public record Chances(long total, List<Way> ways) {{\n    }}\n\n",
+            jc(&tr!("答えの一つと、それを出す引き方の数。", "One answer, and how many draws give it.")),
+            jc(&doc_ty)
+        );
+        o.push_str(&format!("    /** {} */\n    public static Chances {name}({}) {{\n", jc(&doc_fn), params.join(", ")));
+        o.push_str(&format!("        long {total} = 0L;\n        List<Way> {ways} = new ArrayList<>();\n"));
+        match self.weighted_draw_pub() {
+            Some((draw, lo, hi)) => {
+                let (cuts, low, cut, n) = (java_name(&self.temp("cuts")), java_name(&self.temp("low")), java_name(&self.temp("cut")), java_name(&self.temp("n")));
+                o.push_str(&format!("        List<Long> {cuts} = {}({}).cuts();\n", self.walked_fn("java"), call(Some((&draw, &format!("{lo}L"))))));
+                o.push_str(&format!(
+                    "        if ({cuts}.isEmpty() || {cuts}.get({cuts}.size() - 1) == 0L) {{\n            return new Chances({all}L, List.of(new Way({fname}({}), {all}L)));\n        }}\n",
+                    call(Some((&draw, &format!("{lo}L")))),
+                    all = hi - lo + 1
+                ));
+                o.push_str(&format!("        long {low} = {lo}L;\n        for (long {cut} : {cuts}) {{\n            if ({cut} > {low} && {low} <= {hi}L) {{\n"));
+                o.push_str(&format!("                long {n} = Math.min({cut}, {}L) - {low};\n", hi + 1));
+                o.push_str(&format!("                {ret} {out} = {fname}({});\n", call(Some((&draw, &low)))));
+                o.push_str(&add("                ", &n));
+                o.push_str(&format!("                {total} += {n};\n            }}\n            if ({cut} > {low}) {{\n                {low} = {cut};\n            }}\n        }}\n        return new Chances({total}, {ways});\n    }}\n\n"));
+            }
+            None => {
+                o.push_str(&format!("        RuleInputError {last} = null;\n"));
+                let mut ind = "        ".to_string();
+                for (j, d) in self.drawn().iter().enumerate() {
+                    let v = java_name(&d.alias);
+                    match &d.from {
+                        super::chances::From::Range(lo, hi) => {
+                            let ctr = java_name(&self.temp(&format!("_i{j}")));
+                            o.push_str(&format!("{ind}for (long {ctr} = {lo}L; {ctr} <= {hi}L; {ctr}++) {{\n{ind}    long {v} = {ctr};\n"));
+                        }
+                        super::chances::From::Values(vs) => {
+                            let t = self.java_ty(&d.ty);
+                            let members: Vec<String> = vs.iter().map(|x| self.java_value(x, &d.ty)).collect();
+                            o.push_str(&format!("{ind}for ({t} {v} : new {t}[] {{{}}}) {{\n", members.join(", ")));
+                        }
+                        super::chances::From::Bool => o.push_str(&format!("{ind}for (boolean {v} : new boolean[] {{false, true}}) {{\n")),
+                    }
+                    ind.push_str("    ");
+                }
+                o.push_str(&format!(
+                    "{ind}{ret} {out};\n{ind}try {{\n{ind}    {out} = {fname}({});\n{ind}}} catch (RuleInputError {e}) {{\n{ind}    {last} = {e};\n{ind}    continue;\n{ind}}}\n{ind}{total} += 1;\n",
+                    call(None)
+                ));
+                o.push_str(&add(&ind, "1L"));
+                for _ in self.drawn() {
+                    ind.truncate(ind.len() - 4);
+                    o.push_str(&format!("{ind}}}\n"));
+                }
+                o.push_str(&format!("        if ({total} == 0L && {last} != null) {{\n            throw {last};\n        }}\n        return new Chances({total}, {ways});\n    }}\n\n"));
+            }
+        }
+        o
+    }
+
+    /// What the Java runner answers with `--chances`: `binds` reads every input of a line into a
+    /// local, `pass` is what the function is called with, `args` what the record function is.
+    pub(super) fn java_chances_mode(&self, line: &str, d: &str, binds: &str, pass: &str, args: &str) -> String {
+        if !self.f.has_random() {
+            return String::new();
+        }
+        let cls = self.java_class();
+        let fname = self.java_fname();
+        let name = self.chances_name("java");
+        r#"        if (args.length > 0 && args[0].equals("--chances")) {
+            while ((@LINE@ = in.readLine()) != null) {
+                @LINE@ = @LINE@.trim();
+                if (@LINE@.isEmpty()) {
+                    continue;
+                }
+                Map<String, String> @D@ = fields(@LINE@);
+@BINDS@                @CLS@.Chances c = @CLS@.@NAME@(@PASS@);
+                out.println("{\"total\":" + c.total() + "}");
+                for (@CLS@.Way w : c.ways()) {
+                    String rec = @CLS@.@FNAME@Record(@ARGS@, w.out(), List.of(), "");
+                    out.println(w.count() + "\t" + rec.substring(rec.lastIndexOf(",\"observed\":") + 12, rec.lastIndexOf(",\"trace\":")));
+                }
+            }
+            return;
+        }
+"#
+        .replace("@LINE@", line)
+        .replace("@D@", d)
+        .replace("@BINDS@", binds)
+        .replace("@CLS@", &cls)
+        .replace("@NAME@", &name)
+        .replace("@PASS@", pass)
+        .replace("@FNAME@", &fname)
+        .replace("@ARGS@", args)
+    }
+}

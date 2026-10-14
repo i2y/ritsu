@@ -192,8 +192,10 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         if let Some(a) = name.strip_suffix(".jsonl") {
             // `<alias>.expected.jsonl` holds the answers and `<alias>.refused.jsonl` the
             // inputs with none; neither is a rule of its own.
-            // `<alias>.traces.jsonl` holds a machine's sequences of calls (§15.148).
-            if !a.ends_with(".expected") && !a.ends_with(".refused") && !a.ends_with(".traces") {
+            // `<alias>.traces.jsonl` holds a machine's sequences of calls (§15.148), and
+            // `<alias>.chances.jsonl` the inputs its function that counts the answers is asked
+            // about (§15.225).
+            if !a.ends_with(".expected") && !a.ends_with(".refused") && !a.ends_with(".traces") && !a.ends_with(".chances") {
                 aliases.push(a.to_string());
             }
         } else if let Some(a) = name.strip_suffix(".prereq.tsv") {
@@ -434,6 +436,28 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
         let labels_in = dir.join("vectors").join(format!("{alias}.labels.tsv"));
         let labels_want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.labels.expected"))).ok();
         let label_count = labels_want.as_ref().map(|w| w.lines().count()).unwrap_or(0);
+        // What the function that counts the answers gives, line by line (§15.225): the runner
+        // built for the vectors, with `--chances`.
+        let chances_in = dir.join("vectors").join(format!("{alias}.chances.jsonl"));
+        let chances_want = std::fs::read_to_string(dir.join("vectors").join(format!("{alias}.chances.expected"))).ok();
+        let chances_count = std::fs::read_to_string(&chances_in).map(|s| s.lines().count()).unwrap_or(0);
+        let chanced = |plan: &crate::backend::Plan| -> Option<Failure> {
+            let want = chances_want.as_ref()?;
+            let plan = crate::backend::Plan { cwd: plan.cwd.clone(), build: None, cmd: plan.cmd.clone(), args: plan.args.iter().cloned().chain(["--chances".to_string()]).collect() };
+            match exec(&plan, Some(&chances_in)) {
+                Err(f) => Some(f),
+                Ok(got) => (got != *want).then(|| first_diff(&got, want)),
+            }
+        };
+        if chances_want.is_some() {
+            for b in present.iter().filter(|b| !b.chances) {
+                out.without.push(tr!(
+                    "{}: {alias} の確率の関数は、この言語には無いので、比べていません",
+                    "{}: {alias}'s chances function is not in this target, so none was compared",
+                    b.name
+                ));
+            }
+        }
         // One plan asked for the display names: the runner built for the vectors, with
         // `--labels`, reading the names and values off the file beside the vectors.
         let labelled = |plan: &crate::backend::Plan| -> Option<Failure> {
@@ -496,6 +520,10 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             if b.prereqs && prereq_want.is_some() && built {
                 let diff = prereqs(&plan, false);
                 out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "prerequisites", vectors: prereq_count, refused: 0, calls: 0, diff });
+            }
+            if b.chances && chances_want.is_some() && built {
+                let diff = chanced(&plan);
+                out.results.push(Outcome { rule: alias.clone(), lang: b.name, via: "chances", vectors: chances_count, refused: 0, calls: 0, diff });
             }
             // The same runner as a WASI module, held to the same records (§15.63).
             if let (Some(w), true) = (b.wasi, wasi_host) {
@@ -1036,6 +1064,8 @@ pub fn render(r: &Run) -> String {
                     tr!("表示名 {} 件", "{} display names", x.vectors)
                 } else if x.via == "prerequisites" {
                     tr!("前提 {} 件", "{} prerequisite cases", x.vectors)
+                } else if x.via == "chances" {
+                    tr!("確率 {} 件", "{} chance cases", x.vectors)
                 } else if x.vectors > 0 {
                     tr!("ベクタ {} 件", "{} vectors", x.vectors)
                 } else {
@@ -1138,6 +1168,7 @@ fn via(x: &Outcome) -> &'static str {
         "function" => ", PostgreSQL",
         "labels" => ", labels",
         "prerequisites" => ", prerequisites",
+        "chances" => ", chances",
         "function-labels" => ", PostgreSQL, labels",
         "proof" => ", proof",
         _ => "",

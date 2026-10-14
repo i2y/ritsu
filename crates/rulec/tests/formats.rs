@@ -651,6 +651,11 @@ fn formatsの例は実物の一部である() {
     let ex = example(&doc, "\"machine\":{\"name\":\"order\",\"over\":\"step\"");
     hold("machine", abridged(&format!("{{{ex}}}")), first_json_line(&out));
 
+    // The function that counts the chances of a rule with random inputs (§15.225).
+    let (_, out) = run(&["api", "tests/corpus/prize_lottery.rule", "--lang", "en"]);
+    let ex = example(&doc, "\"chances\":{\"random\":[{\"name\":\"ticket\"");
+    hold("chances", abridged(&format!("{{{ex}}}")), first_json_line(&out));
+
     let (_, out) = run(&["api", "tests/corpus/nationwide_freight.rule", "--lang", "en"]);
     let real = first_json_line(&out);
     let params = real.get("python").and_then(|p| p.get("params")).expect("python.params");

@@ -1,0 +1,8 @@
+warning[W129]: A claim of `chances` could not be decided within the budget (row 5)
+  --> tests/mutants/m_w129.rule:34 chances
+   |
+34 | | -                   | -               | challenger | >0      |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the 10000 combinations of the inputs that are not random, times the 200 points of the random inputs, go past the budget (1000000 points)
+   |
+ Where an answer moves inside a cell with the random inputs, and where the random inputs are read together with the others, the points are run one by one, up to the budget for one claim (one 50th of `--budget`'s nodes).
+ Narrow the cells of the inputs that are not random, or raise `--budget`. A claim that is not decided is said to be neither holding nor broken.

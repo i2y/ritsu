@@ -162,6 +162,15 @@ const CORPUS: &[&str] = &[
 "tests/corpus/rate_adjustment.rule",
 "tests/corpus/order_handling_fee.rule",
 "tests/corpus/注文の取扱手数料.rule",
+// Inputs drawn at random, and claims of how likely each answer is (§15.224 to §15.226).
+"tests/corpus/invoice_sampling.rule",
+"tests/corpus/伝票の抜き取り.rule",
+"tests/corpus/prize_lottery.rule",
+"tests/corpus/くじの景品.rule",
+"tests/corpus/case_routing.rule",
+"tests/corpus/案件の振り分け.rule",
+"tests/corpus/reward_box.rule",
+"tests/corpus/抽選の特典.rule",
 ];
 
 /// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of

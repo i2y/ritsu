@@ -1,0 +1,40 @@
+rule くじの景品(lottery_prize) v1
+description "店のくじの券が当たる景品。券の番号は 0 から 999 のどれかが引かれ、キャンペーン中は三等に当たる番号が増える。ポスターに刷る確率を下の主張にしているので、ポスターとコードが一つの元から出る。書き下ろしの例"
+
+enum 景品(prize) = 一等(first) | 二等(second) | 三等(third) | はずれ(no_prize)
+
+inputs
+  番号(ticket)             : number  range >=0 <=999  random
+  キャンペーン中(campaign) : bool
+
+outputs
+  景品(prize) : 景品
+
+table 番号表(numbers)
+policy unique
+| 番号      | キャンペーン中 | -> 景品 |
+| 0         | -              | 一等    |
+| >=1 <=9   | -              | 二等    |
+| >=10 <=99 | true           | 三等    |
+| >=10 <=59 | false          | 三等    |
+| >=60 <=99 | false          | はずれ  |
+| >=100     | -              | はずれ  |
+
+# ポスターに刷る確率。
+chances
+| キャンペーン中 | -> 景品 | chance |
+| -              | 一等    | 0.1%   |
+| -              | 二等    | 0.9%   |
+| true           | 三等    | 9%     |
+| false          | 三等    | 5%     |
+| true           | はずれ  | 90%    |
+| false          | はずれ  | 94%    |
+
+examples
+| 番号 | キャンペーン中 | -> 景品 |
+| 0    | false          | 一等    |
+| 9    | false          | 二等    |
+| 59   | false          | 三等    |
+| 60   | false          | はずれ  |
+| 99   | true           | 三等    |
+| 100  | true           | はずれ  |

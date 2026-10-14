@@ -9,7 +9,7 @@
 use rulec::coverage::{self, BOUND, ROW, SHADOW, TIE, VALUE};
 use rulec::vectors::{self, Vector};
 
-const CORPUS: [&str; 114] = [
+const CORPUS: [&str; 122] = [
     "tests/corpus/速達の見積.rule",
     "tests/corpus/出荷の送料.rule",
     "tests/corpus/注文の送料.rule",
@@ -126,6 +126,15 @@ const CORPUS: [&str; 114] = [
     "tests/corpus/order_settlement.rule",
     "tests/corpus/earliest_due.rule",
     "tests/corpus/rate_adjustment.rule",
+    // Inputs drawn at random, and claims of how likely each answer is (§15.224 to §15.226).
+    "tests/corpus/invoice_sampling.rule",
+    "tests/corpus/伝票の抜き取り.rule",
+    "tests/corpus/prize_lottery.rule",
+    "tests/corpus/くじの景品.rule",
+    "tests/corpus/case_routing.rule",
+    "tests/corpus/案件の振り分け.rule",
+    "tests/corpus/reward_box.rule",
+    "tests/corpus/抽選の特典.rule",
 ];
 
 fn load(rel: &str) -> (rulec::ast::RuleFile, rulec::types::Checked, Vec<Vector>) {
@@ -316,6 +325,10 @@ fn 境界の義務は素朴な数え上げと一致する() {
                     n += match row.cells.get(ci) {
                         Some(Cell::Cmp(cs)) => cs.len(), // one comparison operator, one boundary
                         Some(Cell::Lit(_)) => 2,         // a point is a lower and an upper boundary
+                        // A set of numbers is its points, and so is what `not:` leaves out. No rule
+                        // of the corpus had one on a numeric column until the drawn number of
+                        // `reward_box` (`8, 9`, §15.224), so the two counters agreed by never looking.
+                        Some(Cell::Set(ls)) | Some(Cell::Not(ls)) => 2 * ls.len(),
                         _ => 0,
                     };
                 }
@@ -469,6 +482,16 @@ fn 義務の件数を固定する() {
         ("tests/corpus/order_settlement.rule", 2, 2, 0, 0, 0),
         ("tests/corpus/earliest_due.rule", 3, 0, 0, 0, 0),
         ("tests/corpus/rate_adjustment.rule", 8, 14, 0, 1, 0),
+        // Inputs drawn at random (§15.224 to §15.226): the random input is an axis like any other, and a
+        // pick by weight is a fold, with the drawn value past the weights the one refused case.
+        ("tests/corpus/invoice_sampling.rule", 9, 12, 0, 0, 0),
+        ("tests/corpus/伝票の抜き取り.rule", 9, 12, 0, 0, 0),
+        ("tests/corpus/prize_lottery.rule", 6, 10, 0, 0, 0),
+        ("tests/corpus/くじの景品.rule", 6, 10, 0, 0, 0),
+        ("tests/corpus/case_routing.rule", 2, 0, 0, 0, 0),
+        ("tests/corpus/案件の振り分け.rule", 2, 0, 0, 0, 0),
+        ("tests/corpus/reward_box.rule", 15, 34, 0, 0, 0),
+        ("tests/corpus/抽選の特典.rule", 15, 34, 0, 0, 0),
     ];
     // Every rule of the corpus is audited and pinned. `threeway.rs` keeps its own list
     // honest the same way; this one had no such guard, and nine rules had drifted out of it

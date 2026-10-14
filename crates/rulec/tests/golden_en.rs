@@ -189,6 +189,14 @@ golden!(e137_a_course_never_reached, "E137", "tests/mutants/m_e137.rule", "E137"
 golden!(e138_taught_before_what_it_needs, "E138", "tests/mutants/m_e138.rule", "E138");
 golden!(w130_a_prerequisite_already_needed, "W130", "tests/mutants/m_w130.rule", "W130");
 
+// Chances (§15.224–§15.226).
+golden!(e070_a_draw_with_no_range, "E070", "tests/mutants/m_e070.rule", "E070");
+golden!(e070_a_value_read_from_the_object, "E070-from", "tests/mutants/m_e070from.rule", "E070");
+golden!(e073_a_pick_by_weight_with_no_draw, "E073", "tests/mutants/m_e073.rule", "E073");
+golden!(e133_the_chance_on_the_poster, "E133", "tests/mutants/m_e133.rule", "E133");
+golden!(w129_a_claim_past_its_budget, "W129", "tests/mutants/m_w129.rule", "W129");
+golden!(w131_ten_million_draws, "W131", "tests/mutants/m_w131.rule", "W131");
+
 // The walk's stages and the words of a cell (§15.208), and the rows nothing decides (§15.209).
 golden!(e075_value_and_name, "E075", "tests/mutants/m_e075.rule", "E075");
 golden!(e031_output_of_one_element, "E031-walk", "tests/mutants/m_e031walk.rule", "E031");

@@ -132,10 +132,11 @@ fn 台帳の別の形の再現はその形を出す() {
         }
         assert_eq!(printed(&e, a.repro(Lang::En)), printed(&e, a.repro(Lang::Ja)));
     }
-    // the entries that show another form: E102; E031 with an output of one element (§15.208); and
-    // E022 with a `max` that has no `empty` (§15.219)
+    // the entries that show another form: E102; E031 with an output of one element (§15.208);
+    // E022 with a `max` that has no `empty` (§15.219); and E108 with the points of the random
+    // inputs (§15.224)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E022", "E031", "E102"]);
+    assert_eq!(with, ["E022", "E031", "E102", "E108"]);
     // `explain` shows each under a heading of its own, in the language asked for, and the JSON
     // under `also`, a key no other entry has
     let (_, en) = run(&["explain", "E102", "--lang", "en"]);
@@ -214,8 +215,9 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // `出しうるコードは全部台帳にある` covers the first. There are no vacant numbers left.
     // W901 (ritsu's DESIGN 16.3) made it 113, E075 and W128 (§15.208, §15.209) 115, E066 and E069
     // (§15.210, §15.212) 117, E132 and E139 (§15.213, §15.215) 119, E072, E134 and E135
-    // (§15.217) 122, E071, E136, E137, E138 and W130 (§15.222) 127, and E074 (§15.223) 128.
-    assert_eq!(all.len(), 128, "台帳の件数が変わった: {}", all.len());
+    // (§15.217) 122, E071, E136, E137, E138 and W130 (§15.222) 127, E074 (§15.223) 128, and E070,
+    // E073, E133, W129 and W131 (§15.224–§15.226) 133.
+    assert_eq!(all.len(), 133, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

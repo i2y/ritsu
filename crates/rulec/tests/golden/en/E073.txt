@@ -1,0 +1,7 @@
+error[E073]: A fold that picks by weight has no `draw` line
+  --> tests/mutants/m_e073.rule:26 fold
+   |
+26 | fold presence over reviewers
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ there is no `draw -> <random input>`
+   |
+ `take_weighted` adds up the weights as the walk goes, and takes the element at which the drawn value is first below the total. Name the drawn value with `draw -> <random input>`.

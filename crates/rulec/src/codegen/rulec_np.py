@@ -335,6 +335,15 @@ def _val(v, env):
     return _ev(v, env) if isinstance(v, dict) else v
 
 
+def _plain(v):
+    """One value of an output column as it travels: a truth value, an integer, or a word."""
+    if isinstance(v, (bool, np.bool_)):
+        return bool(v)
+    if isinstance(v, (int, np.integer)):
+        return int(v)
+    return str(v)
+
+
 def _unreachable(kind):
     return 0 if kind in ("int", "date") else False if kind == "bool" else ""
 
@@ -387,6 +396,9 @@ class Rule:
         self.sha256 = plan["sha256"]
         self.inputs = [i["name"] for i in plan["inputs"]]
         self.outputs = [o["name"] for o in plan["outputs"]]
+        # The inputs the caller draws uniformly, each with the values it is drawn from
+        # (rulec's §15.224).
+        self.random = [r["name"] for r in plan.get("random", [])]
         # The machine this rule is one step of, when it is one: the carried
         # column, where a case starts, and the states it ends in.
         self.machine = plan.get("machine")
@@ -416,7 +428,44 @@ class Rule:
             return False
         return all(any(p in have for p in g) for g in self.requires(name, value))
 
-    def _columns(self, cols: dict):
+    def chances(self, **fixed):
+        """How many draws give each answer when the random inputs are drawn uniformly
+        (rulec's §15.225): how many draws there are, and each answer, as a dict of the outputs as
+        they travel, with how many draws give it, in the order first met. `fixed` holds one value of
+        every input that is not random. Every point of the random inputs is one row of a column, the
+        first random input outermost, and the rule decides them all in one pass; a point the
+        `constraint` lines rule out is no draw."""
+        spec = self.plan.get("random", [])
+        if not spec:
+            raise ValueError(f"{self.name} has no random input")
+        sizes = [len(r["values"]) for r in spec]
+        n = int(np.prod(sizes))
+        cols = {k: [v] * n for k, v in fixed.items()}
+        for r, g in zip(spec, np.meshgrid(*[np.arange(s) for s in sizes], indexing="ij")):
+            vals = r["values"]
+            cols[r["name"]] = [vals[i] for i in g.ravel()]
+        env, _ = self._columns(cols, constraints=False)
+        ok = np.ones(n, dtype=bool)
+        for k in self.plan.get("constraints", []):
+            a, b = _side(env, k["left"], k["left_times"]), _side(env, k["right"], k["right_times"])
+            op = k["op"]
+            ok &= np.asarray(a <= b if op == "<=" else a < b if op == "<" else a >= b if op == ">=" else a > b, dtype=bool)
+        if not ok.any():
+            # No point is a draw: the door says why of the first.
+            self._columns({k: v[:1] for k, v in cols.items()})
+        keep = np.flatnonzero(ok)
+        out = self(**{k: [v[i] for i in keep] for k, v in cols.items()})
+        ways, index = [], {}
+        for i in range(len(keep)):
+            key = tuple(_plain(out[o][i]) for o in self.outputs)
+            if key in index:
+                ways[index[key]][1] += 1
+            else:
+                index[key] = len(ways)
+                ways.append([dict(zip(self.outputs, key)), 1])
+        return len(keep), [(w, c) for w, c in ways]
+
+    def _columns(self, cols: dict, constraints: bool = True):
         """The entry guard, and the wire turned into integers. Refusing is part of the rule.
 
         It refuses what every other generated door refuses, in the same order and with the
@@ -510,7 +559,7 @@ class Rule:
         n = 0 if n is None else n
         # A combination the caller said does not happen: no row was demanded for it, so it is
         # refused rather than answered. Both sides are brought to the step they share first.
-        for k in self.plan.get("constraints", []):
+        for k in self.plan.get("constraints", []) if constraints else []:
             a, b = _side(env, k["left"], k["left_times"]), _side(env, k["right"], k["right_times"])
             op = k["op"]
             holds = a <= b if op == "<=" else a < b if op == "<" else a >= b if op == ">=" else a > b

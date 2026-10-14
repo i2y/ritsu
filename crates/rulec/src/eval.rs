@@ -460,8 +460,9 @@ enum Acc {
     /// element it let in had no value in the column.
     Extreme { best: Option<Val>, missing: bool },
     /// A fold: what it has taken and kept, by what key, and whether it stopped (with the value
-    /// `stop with` gave, if any).
-    Fold { taken: Option<Val>, held: Option<Val>, best: Option<Val>, stopped: Option<Option<Val>> },
+    /// `stop with` gave, if any). A pick by weight adds its weights up in `weights`, and keeps the
+    /// running total after each element it weighed in `cuts` (§15.226).
+    Fold { taken: Option<Val>, held: Option<Val>, best: Option<Val>, stopped: Option<Option<Val>>, weights: Rat, cuts: Vec<Rat> },
 }
 
 /// Everything one walk left behind: the answers bound to their names, and — for the coverage
@@ -473,6 +474,10 @@ struct Walked {
     /// A `sum` whose total passed the top of the range it declares, by its name: the generated
     /// code refuses the call there (§15.100), and the rule has no answer either.
     past: Option<String>,
+    /// The drawn value of a pick by weight that is not below the total of the weights, by its name
+    /// (§15.226): the generated code refuses the call once the walk is over, and the rule has no
+    /// answer either.
+    drawn: Option<String>,
 }
 
 /// A rule that walks sequences (§15.56, §15.58, §15.219), in the stages its items fall into
@@ -525,6 +530,11 @@ struct Observe {
     broke: Option<usize>,
     /// The `sum` whose total passed the top of the range it declares, by its name.
     past: Option<String>,
+    /// The drawn value a pick by weight found not below the total of its weights, by its name.
+    drawn: Option<String>,
+    /// The running totals of a pick by weight, after each element it weighed (§15.226): where the
+    /// drawn values that take each element start and end.
+    cuts: Option<Vec<Rat>>,
     /// The cases of the elements of the walks after the first.
     found: Vec<ElementCase>,
 }
@@ -561,6 +571,66 @@ pub fn sum_past_range(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -
     let mut o = Observe::default();
     let _ = walk_all(f, c, inputs, &mut o);
     o.past
+}
+
+/// Why the reference evaluator has no answer for an input the checks would otherwise ask about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NoAnswer {
+    /// The door refuses it: a `constraint`, a sum past its range, a drawn value past the weights.
+    Refused,
+    /// The rule contradicts itself on it: two elements took under `take_unique`.
+    Contradiction,
+}
+
+/// Every output on these inputs, or why there is none, in one run (§15.224): what counting the
+/// answers over the points of the random inputs asks of each point. The inputs are taken to be
+/// inside their ranges and of their types; what this looks at is the rest of the door.
+pub fn answer(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Result<Vec<(String, Option<Val>)>, NoAnswer> {
+    if !f.constraints.is_empty() {
+        let a: std::collections::BTreeMap<String, Val> = inputs.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        if !crate::vectors::allowed(f, &a) {
+            return Err(NoAnswer::Refused);
+        }
+    }
+    if !f.walks() {
+        return Ok(run_all_traced(f, c, inputs).0);
+    }
+    let mut o = Observe::default();
+    let (outs, _, _, _) = walk_all(f, c, inputs, &mut o);
+    if o.broke.is_some() {
+        return Err(NoAnswer::Contradiction);
+    }
+    // A sequence past the cap a `count` over it declares has no answer either, and no flag says so.
+    if o.past.is_some() || o.drawn.is_some() || (!outs.is_empty() && outs.iter().all(|(_, v)| v.is_none())) {
+        return Err(NoAnswer::Refused);
+    }
+    Ok(outs)
+}
+
+/// The drawn value of a pick by weight that is not below the total of the weights on these inputs,
+/// by its name (§15.226): the generated code refuses the call once the walk is over, so the reference
+/// evaluator has no answer for it either. `None` when it is below, when the weights add up to 0 (the
+/// pick answers `exhausted`), and for a rule that picks by no weight.
+pub fn drawn_past(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<String> {
+    if !f.folds().any(|d| d.weighted()) {
+        return None;
+    }
+    let mut o = Observe::default();
+    let _ = walk_all(f, c, inputs, &mut o);
+    o.drawn
+}
+
+/// The running totals of the rule's pick by weight on these inputs, one after each element it
+/// weighed, in order (§15.226): a drawn value from the total before an element up to, and not
+/// including, the total after it takes that element. The drawn value itself does not move them.
+/// `None` for a rule that picks by no weight, or one whose walk has no answer before the pick.
+pub fn weighted_cuts(f: &RuleFile, c: &Checked, inputs: HashMap<String, Val>) -> Option<Vec<Rat>> {
+    if !f.folds().any(|d| d.weighted()) {
+        return None;
+    }
+    let mut o = Observe { all: true, ..Observe::default() };
+    let _ = walk_all(f, c, inputs, &mut o);
+    o.cuts
 }
 
 /// The fold two elements both took under `take_unique` in, by its place among the rule's items:
@@ -651,6 +721,12 @@ fn walk_all(
                     return (nothing(), Vec::new(), Vec::new(), HashMap::new());
                 }
             }
+            if let Some(n) = walked.drawn {
+                obs.drawn.get_or_insert(n);
+                if !obs.all {
+                    return (nothing(), Vec::new(), Vec::new(), HashMap::new());
+                }
+            }
             if let Some(i) = walked.broken {
                 broken = true;
                 obs.broke.get_or_insert(i);
@@ -712,7 +788,7 @@ fn walk_one(
         .map(|&i| match &f.items[i] {
             Item::Agg(d) if d.kind.extreme() => Acc::Extreme { best: None, missing: false },
             Item::Agg(_) => Acc::Tally(Some(Rat::zero())),
-            _ => Acc::Fold { taken: None, held: None, best: None, stopped: None },
+            _ => Acc::Fold { taken: None, held: None, best: None, stopped: None, weights: Rat::zero(), cuts: Vec::new() },
         })
         .collect();
     let mut broken: Option<usize> = None;
@@ -787,7 +863,7 @@ fn walk_one(
                         }
                     }
                 }
-                (Item::Fold(fold), Acc::Fold { taken, held, best, stopped }) => {
+                (Item::Fold(fold), Acc::Fold { taken, held, best, stopped, weights, cuts }) => {
                     let v = match eenv.vals.get(&fold.verdict) {
                         Some(Val::Enum(v)) => Some(v.clone()),
                         _ => None,
@@ -837,6 +913,22 @@ fn walk_one(
                                 *held = eenv.expr(expr);
                             }
                         }
+                        // The element's weight goes on the running total, and the element is taken
+                        // when the drawn value is below that total for the first time (§15.226).
+                        Arm::TakeWeighted { expr, weight } => {
+                            if let Some(Val::Num(w)) = eenv.expr(weight) {
+                                *weights = weights.add(w);
+                            }
+                            cuts.push(*weights);
+                            let drawn = fold.draw.as_ref().and_then(|d| before.get(&d.text));
+                            if taken.is_none() {
+                                if let Some(Val::Num(r)) = drawn {
+                                    if r.cmp_to(*weights) == std::cmp::Ordering::Less {
+                                        *taken = eenv.expr(expr);
+                                    }
+                                }
+                            }
+                        }
                     }
                     if alone && stopped.is_some() && !observe {
                         break 'elements;
@@ -847,9 +939,10 @@ fn walk_one(
         }
     }
     if broken.is_some() {
-        return Walked { broken, past: None };
+        return Walked { broken, past: None, drawn: None };
     }
     let mut past: Option<String> = None;
+    let mut drawn: Option<String> = None;
 
     // The walk is over: what each summary answered, under its name.
     for (si, &i) in sums.iter().enumerate() {
@@ -877,7 +970,19 @@ fn walk_one(
                     env.vals.insert(d.name.text.clone(), v);
                 }
             }
-            (Item::Fold(fold), Acc::Fold { taken, held, stopped, .. }) => {
+            (Item::Fold(fold), Acc::Fold { taken, held, stopped, weights, cuts, .. }) => {
+                // A pick by weight has its drawn value below the total of the weights, unless they add
+                // up to 0, when it answers `exhausted` (§15.226); otherwise the call is refused.
+                if fold.weighted() {
+                    if let Some(d) = &fold.draw {
+                        if let Some(Val::Num(r)) = before.get(&d.text) {
+                            if weights.num > 0 && r.cmp_to(weights) != std::cmp::Ordering::Less {
+                                drawn.get_or_insert(d.text.clone());
+                            }
+                        }
+                    }
+                    obs.cuts.get_or_insert(cuts);
+                }
                 let empty_answer = answer_of(&fold.empty, None);
                 let answer = if seq.is_empty() {
                     empty_answer
@@ -894,7 +999,7 @@ fn walk_one(
             _ => {}
         }
     }
-    Walked { broken: None, past }
+    Walked { broken: None, past, drawn }
 }
 
 /// The rule's outputs, read out of an environment that has finished running: the `result`

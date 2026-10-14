@@ -217,6 +217,11 @@ pub struct VarDecl {
     /// the path **from the element** (§15.223): `root` is its first step and `path` the rest, and
     /// the kind is always [`ProjKind::Field`]. [`Projection::steps`] gives the whole of it.
     pub from: Option<Projection>,
+    /// The `random` mark at the end of the line, where it is written (§15.224): the caller draws
+    /// the value uniformly from what the declaration lets in, independently of the other inputs,
+    /// within what the `constraint` lines leave. The generated function is the same; what the mark
+    /// adds is the claims of `chances` and the function that counts the answers.
+    pub random: Option<Span>,
     pub span: Span,
 }
 
@@ -800,6 +805,10 @@ pub enum Arm {
     Take { expr: Expr, unique: bool },
     /// Hold this element's value, replacing what is held when the key is larger.
     KeepMax { expr: Expr, key: Expr },
+    /// `take_weighted <value> by <weight>` (§15.226): add this element's weight to the running
+    /// total, and take its value when the drawn value (`draw -> <input>`) is below that total for
+    /// the first time. Each element is taken with the chance its weight is of the whole.
+    TakeWeighted { expr: Expr, weight: Expr },
 }
 
 /// `-> 最良の補正(best_aura) : rate` after a `fold` heading: the name its answer is bound to, and
@@ -830,6 +839,85 @@ pub struct FoldDecl {
     pub empty: Option<Expr>,
     /// The answer when the walk reached the end. Declaring it is not optional.
     pub exhausted: Option<Expr>,
+    /// `draw -> <random input>` (§15.226): the drawn value a `take_weighted` arm compares the
+    /// running total of the weights with, by its name and where it is written.
+    pub draw: Option<Name>,
+    pub span: Span,
+}
+
+impl FoldDecl {
+    /// Whether an arm picks by weight (§15.226).
+    pub fn weighted(&self) -> bool {
+        self.arms.iter().any(|(_, a, _)| matches!(a, Arm::TakeWeighted { .. }))
+    }
+}
+
+/// A claimed chance (§15.224): an exact rational — written `5/14`, `0`, `1` or `35%` — or
+/// comparisons with such values (`<=1/100`, `>=3/4`, `>=1/4 <=1/2`), all of which the chance has to
+/// pass.
+#[derive(Debug, Clone)]
+pub enum ChanceTest {
+    Is(crate::num::Rat),
+    Cmp(Vec<(CmpOp, crate::num::Rat)>),
+}
+
+impl ChanceTest {
+    /// Whether the chance `p` passes it.
+    pub fn holds(&self, p: crate::num::Rat) -> bool {
+        use std::cmp::Ordering;
+        match self {
+            ChanceTest::Is(v) => p.cmp_to(*v) == Ordering::Equal,
+            ChanceTest::Cmp(cs) => cs.iter().all(|(op, v)| {
+                let o = p.cmp_to(*v);
+                match op {
+                    CmpOp::Lt => o == Ordering::Less,
+                    CmpOp::Le => o != Ordering::Greater,
+                    CmpOp::Gt => o == Ordering::Greater,
+                    CmpOp::Ge => o != Ordering::Less,
+                }
+            }),
+        }
+    }
+
+    /// The values it is written with, in order.
+    pub fn values(&self) -> Vec<crate::num::Rat> {
+        match self {
+            ChanceTest::Is(v) => vec![*v],
+            ChanceTest::Cmp(cs) => cs.iter().map(|(_, v)| *v).collect(),
+        }
+    }
+}
+
+/// One row of a `chances` table (§15.224): the cells of the inputs that are not random (and the
+/// sequences, for a rule that walks), the cells of the outputs the claim is about, and the chance.
+#[derive(Debug, Clone)]
+pub struct ChanceRow {
+    pub cells: Vec<Cell>,
+    pub cell_spans: Vec<Span>,
+    pub outs: Vec<Cell>,
+    pub out_spans: Vec<Span>,
+    /// The claimed chance, as read; `None` when the cell could not be read (an error was said).
+    pub chance: Option<ChanceTest>,
+    /// The chance as it was written, for the page and the messages.
+    pub chance_text: String,
+    pub chance_span: Span,
+    pub span: Span,
+    /// 1-based, as the diagnostics print it.
+    pub index: usize,
+}
+
+/// `chances` and the table under it (§15.224): claims about how likely each answer is when the
+/// `random` inputs are drawn. Every input that is not random has a column; the outputs the claims
+/// are about have one each after `->`; the last column, `chance`, holds the claim. A row says: for
+/// **every** combination of the inputs that are not random its cells let in, drawing the random
+/// inputs uniformly, the chance that the outputs pass the row's output cells is the value written
+/// (or passes the comparisons written).
+#[derive(Debug, Clone)]
+pub struct ChancesDecl {
+    pub inputs: Vec<(String, Span)>,
+    pub outputs: Vec<(String, Span)>,
+    pub rows: Vec<ChanceRow>,
+    /// The `chances` line.
     pub span: Span,
 }
 
@@ -1085,6 +1173,9 @@ pub struct RuleFile {
     pub scenarios: Vec<ScenarioDecl>,
     /// Which values of an enum need which before them (§15.222), in the order written.
     pub prerequisites: Vec<PrereqDecl>,
+    /// The claims about the chances of the answers when the `random` inputs are drawn (§15.224), one
+    /// per `chances` section, in the order written.
+    pub chances: Vec<ChancesDecl>,
 }
 
 impl FoldDecl {
@@ -1109,7 +1200,7 @@ impl FoldDecl {
         for (_, arm, _) in &self.arms {
             match arm {
                 Arm::Stop(Some(x)) => out.push(x),
-                Arm::Take { expr, .. } | Arm::KeepMax { expr, .. } => out.push(expr),
+                Arm::Take { expr, .. } | Arm::KeepMax { expr, .. } | Arm::TakeWeighted { expr, .. } => out.push(expr),
                 _ => {}
             }
         }
@@ -1146,6 +1237,21 @@ impl RuleFile {
     /// The sequence one field belongs to.
     pub fn sequence_of_field(&self, field: &str) -> Option<&ElementsDecl> {
         self.elements.iter().find(|e| e.fields.iter().any(|fd| fd.name.text == field))
+    }
+
+    /// The inputs marked `random` (§15.224), in the order declared.
+    pub fn random_inputs(&self) -> impl Iterator<Item = &VarDecl> {
+        self.inputs.iter().filter(|i| i.random.is_some())
+    }
+
+    /// Whether the rule has an input marked `random`.
+    pub fn has_random(&self) -> bool {
+        self.inputs.iter().any(|i| i.random.is_some())
+    }
+
+    /// Whether `name` is an input marked `random`.
+    pub fn is_random(&self, name: &str) -> bool {
+        self.inputs.iter().any(|i| i.random.is_some() && i.name.text == name)
     }
 }
 

@@ -1,0 +1,8 @@
+error[E070]: Input sample_number cannot be drawn
+  --> tests/mutants/m_e070.rule:7
+  |
+7 |   sample_number : number  random  # drawn by the claims system, once for each claim
+  |                           ^^^^^^ sample_number is number
+  |
+ Without both ends of its range, the number of values to draw from is not known. Write both, as in `range >=0 <=99`.
+ What can be drawn is a number with both ends of its range written (an amount, a quantity or a rate too, in whole steps), an enum, or a truth value.

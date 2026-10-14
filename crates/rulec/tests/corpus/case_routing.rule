@@ -1,0 +1,71 @@
+rule case_routing v1
+description "Which reviewer a new case goes to. Each reviewer who is in today takes cases in proportion to their capacity: one number is drawn below the total of the capacities of those in, and the reviewer whose share it falls in takes the case. With nobody in, the case waits (reviewer 0). An example written for the purpose"
+
+enum presence = away | in_office
+
+# One reviewer of the team. The caller passes the whole team, in a fixed order
+elements reviewers
+  reviewer_id : number  range >=1 <=50
+  present     : bool
+  capacity    : number  range >=0 <=100
+
+inputs
+  roll : number  range >=0 <=9999  random  # drawn below the total of the capacities of those in
+
+outputs
+  reviewer : number  round down(1)  # 0 when nobody is in
+
+table in_today
+policy unique
+| present | -> presence : presence |
+| true    | in_office              |
+| false   | away                   |
+
+# A reviewer who is in takes the case with the chance of their capacity over the total of the
+# capacities of those in.
+fold presence over reviewers
+  away      -> next
+  in_office -> take_weighted reviewer_id by capacity
+  draw      -> roll
+  empty     -> 0
+  exhausted -> held
+
+sequence team_of_three
+| reviewer_id | present | capacity |
+| 1           | true    | 50       |
+| 2           | true    | 30       |
+| 3           | true    | 20       |
+
+sequence first_away
+| reviewer_id | present | capacity |
+| 1           | false   | 50       |
+| 2           | true    | 30       |
+| 3           | true    | 20       |
+
+sequence nobody_in
+| reviewer_id | present | capacity |
+| 1           | false   | 50       |
+
+sequence no_reviewers
+| reviewer_id | present | capacity |
+
+chances
+| reviewers     | -> reviewer | chance |
+| team_of_three | 1           | 1/2    |
+| team_of_three | 2           | 3/10   |
+| team_of_three | 3           | 1/5    |
+| first_away    | 1           | 0      |
+| first_away    | 2           | 3/5    |
+| nobody_in     | 0           | 1      |
+| no_reviewers  | 0           | 1      |
+
+examples
+| roll | reviewers     | -> reviewer |
+| 0    | team_of_three | 1           |
+| 49   | team_of_three | 1           |
+| 50   | team_of_three | 2           |
+| 79   | team_of_three | 2           |
+| 80   | team_of_three | 3           |
+| 0    | first_away    | 2           |
+| 30   | first_away    | 3           |
+| 0    | no_reviewers  | 0           |
