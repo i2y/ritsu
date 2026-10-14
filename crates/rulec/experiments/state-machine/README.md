@@ -173,7 +173,7 @@ rulec の検査が必ず終わるのは、セルが自分の列を定数と比�
 
 入れると決まらなくなるもの：
 
-- **足し算で数を持ち越すこと**（返金の累計、残高など）。カウンタ機械になり、一般には決まらない。持ち越した値を定数や他の値と比べるだけなら検査が終わる、という結果はある（Felli・Montali・Winkler、CAiSE 2022。データつきペトリネットで、ガードが変数どうし・変数と定数の比較だけの場合）。累計はいまと同じく、呼び出し側が持って入力で渡す。
+- **足し算で数を持ち越すこと**（返金の累計、残高など）。カウンタ機械になり、一般には決まらない。持ち越した値を定数や他の値と比べるだけなら検査が終わる、という結果はある（Felli・de Leoni・Montali、Fundamenta Informaticae 2021。データつきペトリネットで、ガードが変数どうし・変数と定数の比較だけの場合。Felli・Montali・Winkler の CAiSE 2022 は、これを引いたうえで算術の条件に広げている）。累計はいまと同じく、呼び出し側が持って入力で渡す。
 - **複数のステートマシンの並行**。メッセージの順序や競合は TLA+ や P の領分で、状態の数も爆発する。
 - **暦の計算**。「14 日以内」なら、経過日数を呼び出し側が渡し、表は定数と比べるだけにする。時計を持たせる形（タイムオートマトン。時計を定数とだけ比べるなら決まる）は、最初には入れない。
 
@@ -279,7 +279,8 @@ machine 注文(order) over 遷移
 - L4：<https://legalese.com/l4/concepts/legal-modeling/regulative-rules>
 - eFLINT：GPCE 2025. <https://ltvanbinsbergen.nl/files/papers/gpce2025-eflint.pdf>
 - ワークフローネットの健全性の計算量：Blondin ら, LICS 2022. <https://arxiv.org/abs/2201.05588>
-- データつきペトリネット：Felli, Montali, Winkler, CAiSE 2022. <https://arxiv.org/abs/2203.14809>
+- データつきペトリネット：Felli, de Leoni, Montali, "Soundness Verification of Data-Aware Process Models with Variable-to-Variable Conditions", Fundamenta Informaticae 182(1), 2021. <https://doi.org/10.3233/FI-2021-2064>
+- データつきペトリネットの算術の条件：Felli, Montali, Winkler, CAiSE 2022. <https://arxiv.org/abs/2203.14809>
 - BPMN + DMN の健全性：Batoulis, Weske, 2017. <https://link.springer.com/chapter/10.1007/978-3-319-69904-2_31>
 - DMN の表の解析：Calvanese ら, BPM 2016. <https://arxiv.org/abs/1603.07466>
 - Quint：<https://github.com/quint-co/quint>
