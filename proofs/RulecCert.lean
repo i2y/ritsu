@@ -11,3 +11,4 @@ import RulecCert.Cells
 import RulecCert.Sha256
 import RulecCert.Machine
 import RulecCert.Carried
+import RulecCert.Prereq

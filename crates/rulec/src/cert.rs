@@ -152,6 +152,27 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
 /// The certificate of one rule, as one JSON object.
 /// The bytes a span names, read back out of the file. A span that is not there gives the
 /// empty string, and the checker sees the cell as one it could not read.
+/// A place in the file and what stands there, as every `source` of the certificate writes it.
+fn span_json(src: &str, sp: &crate::diag::Span) -> String {
+    Obj::new()
+        .int("line", sp.line as i128)
+        .int("col", sp.col as i128)
+        .int("len", sp.len as i128)
+        .str("text", at_span(src, sp.line, sp.col, sp.len))
+        .finish()
+}
+
+/// Where the value of an `initial <carried input> <value>` line stands (§15.217): the word after
+/// the input's name on its line.
+fn initial_value_span(src: &str, name: &crate::diag::Span) -> Option<crate::diag::Span> {
+    let text = src.lines().nth(name.line.checked_sub(1)?)?;
+    let after = name.col + name.len;
+    let rest = text.get(after..)?;
+    let skip = rest.len() - rest.trim_start().len();
+    let word = rest[skip..].split(char::is_whitespace).next()?;
+    (!word.is_empty()).then(|| crate::diag::Span::new(name.line, after + skip, word.len()))
+}
+
 fn at_span(src: &str, line: usize, col: usize, len: usize) -> String {
     let Some(text) = src.lines().nth(line.wrapping_sub(1)) else { return String::new() };
     if col + len > text.len() || !text.is_char_boundary(col) || !text.is_char_boundary(col + len) {
@@ -594,9 +615,25 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         };
         let oty = c.ty_of(&on.output.text).unwrap_or(crate::types::Ty::Unknown);
         let scale = c.wire_scale(&on.output.text);
-        // The test in the wire's own words: an integer interval, or a set of words.
-        let test = match &on.cell {
-            Cell::Cmp(ops) => {
+        // The test in the wire's own words: the words a truth value's or an enum's cell takes —
+        // every one of them, worked out from the cell, so that a set, a `not:` and a comparison on
+        // an ordered enum all say what they take — or an integer interval, with the scale the wire
+        // counts the number at (§15.233). A cell of numbers that is not a comparison has no interval
+        // to say, and the line is not laid on the rows.
+        let words_of: Option<Vec<String>> = match oty.present() {
+            crate::types::Ty::Bool => Some(vec![crate::kw::FALSE.to_string(), crate::kw::TRUE.to_string()]),
+            crate::types::Ty::Enum(en) => c.enums.get(en).cloned(),
+            _ => None,
+        };
+        let test = match (&on.cell, words_of) {
+            (cell, Some(values)) => {
+                let words: Vec<String> = values
+                    .into_iter()
+                    .filter(|w| crate::eval::lit_to_val(&Lit::Word(w.clone()), oty.present()).is_some_and(|v| crate::eval::cell_matches(c, cell, &v, oty.present())))
+                    .collect();
+                Obj::new().raw("words", crate::json::strs(&words)).finish()
+            }
+            (Cell::Cmp(ops), None) => {
                 let (mut lo, mut hi): (Option<i128>, Option<i128>) = (None, None);
                 for (op, l) in ops {
                     let Lit::Num(nm) = l else { continue };
@@ -612,17 +649,19 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
                 Obj::new()
                     .raw("lo", lo.map(|x| x.to_string()).unwrap_or_else(|| "null".into()))
                     .raw("hi", hi.map(|x| x.to_string()).unwrap_or_else(|| "null".into()))
+                    .int("scale", scale)
                     .finish()
             }
-            other => {
-                let words: Vec<String> = match other {
-                    Cell::Lit(Lit::Word(w)) => vec![w.clone()],
-                    Cell::Set(ls) => ls.iter().filter_map(|l| if let Lit::Word(w) = l { Some(w.clone()) } else { None }).collect(),
-                    // the values a comparison on an ordered enum covers (§15.210)
-                    Cell::Ranked { values, .. } => values.clone(),
-                    _ => Vec::new(),
-                };
-                Obj::new().raw("words", crate::json::strs(&words)).finish()
+            (_, None) => {
+                uncertified.push(tr!(
+                    "`once {}` の行（{} 行目。数のセルが比べでないので、数える値を区間で書けない）",
+                    "the `once {}` line (line {}: its cell on a number is not a comparison, so what it counts is no interval)",
+                    on.output.text,
+                    on.span.line
+                ));
+                once_defs.push(Obj::new().str("output", &on.output.text).finish());
+                once_counts.push(None);
+                continue;
             }
         };
         let mut flags: Vec<(usize, bool)> = Vec::new();
@@ -673,7 +712,18 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
     // its carried values too, so the paths of the state alone are not one case's, and the
     // claims over the values are laid in a section of their own below.
     let more_carried = !m.carries.is_empty();
-    if more_carried && !finals.is_empty() {
+    // The values carried besides the state (§15.217), laid on the same rows. Worked out here, so that
+    // the note below is left out where the section lays that a case can still finish (§15.233).
+    let carried_laid = more_carried.then(|| {
+        let state_to: Vec<Option<usize>> = moves.iter().map(|(_, mv, _)| match mv {
+            Move::To(x) => Some(*x),
+            Move::Stay => None,
+        }).collect();
+        let state_on: Vec<Vec<usize>> = moves.iter().map(|(_, _, on)| on.clone()).collect();
+        carried_json(f, c, m, t, &ct, &state_to, &state_on, init, &finals, &never_defs, &once_counts, &fixed_axes, src)
+    });
+    let finish_laid = carried_laid.as_ref().is_some_and(|x| x.2);
+    if more_carried && !finals.is_empty() && !finish_laid {
         uncertified.push(tr!(
             "状態から終わりの状態へ行く呼び出しの並び（持ち越す値があるので、状態の行だけでは一つの案件の並びとして示せない）",
             "the sequences of calls to a final state (the machine carries more than its state, so the state's rows alone do not lay them out as one case's)"
@@ -850,24 +900,19 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         );
     }
     // The values carried besides the state (§15.217), laid on the same rows.
-    let carried = if more_carried {
-        let state_to: Vec<Option<usize>> = moves.iter().map(|(_, mv, _)| match mv {
-            Move::To(x) => Some(*x),
-            Move::Stay => None,
-        }).collect();
-        let state_on: Vec<Vec<usize>> = moves.iter().map(|(_, _, on)| on.clone()).collect();
-        let (json, more_uncertified) = carried_json(f, c, m, t, &ct, &state_to, &state_on, init, &finals, &never_defs, &once_counts, &fixed_axes, src);
+    let carried = carried_laid.map(|(json, more_uncertified, _)| {
         uncertified.extend(more_uncertified);
-        Some(json)
-    } else {
-        None
-    };
+        json
+    });
     Obj::new()
         .str("table", t.name.as_ref().map(|n| n.text.as_str()).unwrap_or(""))
         .raw("carry", Obj::new().str("input", cin).str("output", cout).finish())
         .raw("axis", axis.map(|k| k.to_string()).unwrap_or_else(|| "null".into()))
         .raw("states", crate::json::strs(&states))
         .int("initial", init as i128)
+        // Where the state's `initial` line names it, so that a re-checker reads where a case starts
+        // out of the file rather than off this section's word for it (§15.233).
+        .opt_raw("initial_source", m.initial.as_ref().map(|(v, _)| span_json(src, &v.span)))
         .raw("finals", arr(&finals.iter().map(|x| x.to_string()).collect::<Vec<_>>()))
         .raw("rows", arr(&rows_json))
         // The inputs a case keeps (§15.149), and the ones of them this table reads as a column.
@@ -1029,13 +1074,13 @@ fn carried_json(
     once_counts: &[Option<Vec<(usize, bool)>>],
     fixed_axes: &[usize],
     src: &str,
-) -> (String, Vec<String>) {
+) -> (String, Vec<String>, bool) {
     use crate::ast::{Cell, OutCell};
     use std::cmp::Ordering;
     use std::collections::{HashMap, HashSet, VecDeque};
-    let not_laid = |why: String| -> (String, Vec<String>) {
+    let not_laid = |why: String| -> (String, Vec<String>, bool) {
         let note = tr!("持ち越す値についての主張（{why}）", "the claims about the carried values ({why})");
-        (Obj::new().str("why", &why).finish(), vec![note])
+        (Obj::new().str("why", &why).finish(), vec![note], false)
     };
     if !fixed_axes.is_empty() {
         return not_laid(tr!("遷移を決める表が `held` の入力を列として読んでいる", "the table that decides the transitions reads a `held` input as a column"));
@@ -1161,6 +1206,11 @@ fn carried_json(
         };
         if let Some(g) = round {
             o = o.raw("round", crate::json::quote(&rat(&g)));
+        }
+        // Where the item's `initial` line gives its first value, so that a re-checker reads the start
+        // out of the file (§15.233).
+        if let Some(sp) = m.initials.iter().find(|(n, _, _)| n.text == it.input).and_then(|(n, _, _)| initial_value_span(src, &n.span)) {
+            o = o.raw("initial_source", span_json(src, &sp));
         }
         items.push(o.raw("moves", arr(&moves_json)).finish());
         grids.push(round);
@@ -1515,6 +1565,20 @@ fn carried_json(
         }
         ranges_json.push(Obj::new().int("item", k as i128).bool("holds", holds).finish());
     }
+    // That a case can still finish (§15.233): where every carried number was walked one value at a
+    // time, a place is one configuration, and from each one not in a final state a path of calls that
+    // really happen leads to one — the calls the walk made, each with the row that answered it, the
+    // point, and the numbers it was made with. Laid only where every place has one; otherwise the
+    // claim is left as not certified, as before.
+    let finish = if finals.is_empty() {
+        None
+    } else {
+        let paths = finish_paths(f, c, &a, t, ct, &seen, &coords, &labels, &moves, &grids, finals);
+        paths.ok().map(|ps| {
+            arr(&ps.iter().map(|(p, calls)| Obj::new().raw("place", place_json(p, None)).raw("path", arr(calls)).finish()).collect::<Vec<_>>())
+        })
+    };
+    let laid = finish.is_some();
     let json = Obj::new()
         .raw("items", arr(&items))
         .raw("start", format!("[{}]", start.1.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(",")))
@@ -1524,8 +1588,208 @@ fn carried_json(
         .raw("once", arr(&onces))
         .raw("always", arr(&alwayses))
         .raw("ranges", arr(&ranges_json))
+        .opt_raw("finish", finish)
         .finish();
-    (json, uncertified)
+    (json, uncertified, laid)
+}
+
+/// A place of a machine that carries more than its state, and the calls that take a case from it to a
+/// final state, each as the certificate writes it.
+type FinishPath = ((usize, Vec<usize>), Vec<String>);
+
+/// The paths of calls that really happen from every place of a machine that carries more than its
+/// state to a final state (§15.233), or why there are none to lay. A place is one configuration only
+/// where every carried number was walked one value at a time; each call is one the walk made (the
+/// machine's own analysis keeps them, with every input), and the table it is laid on reads nothing but
+/// inputs and the numbers the rule computes, so the point and the numbers say the whole call.
+#[allow(clippy::too_many_arguments)]
+fn finish_paths(
+    f: &RuleFile,
+    c: &Checked,
+    a: &crate::machine::Analysis,
+    t: &crate::ast::Table,
+    ct: &CertTable,
+    seen: &[(usize, Vec<usize>)],
+    coords: &[Vec<(Rat, Rat)>],
+    labels: &[Option<Vec<String>>],
+    moves: &[Vec<CarriedMove>],
+    grids: &[Option<Rat>],
+    finals: &[usize],
+) -> Result<Vec<FinishPath>, String> {
+    use crate::eval::Val;
+    use std::cmp::Ordering;
+    use std::collections::{HashMap, HashSet};
+    if !a.whole {
+        return Err("the carried numbers were walked in intervals".into());
+    }
+    // Every column the table reads is an input, or a number the rule computes.
+    let computed: HashSet<String> = f
+        .items
+        .iter()
+        .filter_map(|x| match x {
+            Item::Derived(d) => Some(d.name.text.clone()),
+            Item::Define(d) => Some(d.name.text.clone()),
+            _ => None,
+        })
+        .collect();
+    for ax in &ct.axes {
+        let numeric = ax.bounds.iter().any(|b| b.is_some());
+        if !(ax.kind == "input" || (computed.contains(&ax.name) && numeric)) {
+            return Err(format!("the table reads {}, which is neither an input nor a number the rule computes", ax.name));
+        }
+    }
+    let states: Vec<String> = c.enums.get(&a.state_enum).cloned().unwrap_or_default();
+    let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+    let real = &a.real;
+    let key = |s: &str, vals: &[Val]| (s.to_string(), vals.iter().map(crate::vectors::show).collect::<Vec<_>>());
+    let node_of: HashMap<(String, Vec<String>), usize> =
+        real.nodes.iter().enumerate().filter(|(_, n)| n.2.is_empty()).map(|(i, n)| (key(&n.0, &n.1), i)).collect();
+    // Backwards from the final states over the calls that really happen: for each node, the call that
+    // takes it one step nearer to one.
+    let final_names: Vec<&String> = finals.iter().filter_map(|&x| states.get(x)).collect();
+    let mut done: HashSet<usize> = real.nodes.iter().enumerate().filter(|(_, n)| final_names.contains(&&n.0)).map(|(i, _)| i).collect();
+    let mut via: HashMap<usize, usize> = HashMap::new();
+    loop {
+        let before = done.len();
+        for (ci, (from, _, to)) in real.calls.iter().enumerate() {
+            if let Some(t2) = to
+                && done.contains(t2)
+                && !done.contains(from)
+            {
+                done.insert(*from);
+                via.insert(*from, ci);
+            }
+        }
+        if done.len() == before {
+            break;
+        }
+    }
+    let mut out = Vec::new();
+    for p in seen {
+        if finals.contains(&p.0) {
+            continue;
+        }
+        let mut vals: Vec<Val> = Vec::new();
+        for (k, &ci) in p.1.iter().enumerate() {
+            let Some(&(lo, hi)) = coords[k].get(ci) else { return Err("a place is outside a carried value's range".into()) };
+            match &labels[k] {
+                Some(l) => {
+                    let w = l.get(ci).cloned().unwrap_or_default();
+                    vals.push(if a.more[k].ty == crate::types::Ty::Bool { Val::Bool(w == crate::kw::TRUE) } else { Val::Enum(w) });
+                }
+                None => {
+                    if lo.cmp_to(hi) != Ordering::Equal {
+                        return Err("a place stands for more than one value".into());
+                    }
+                    vals.push(Val::Num(lo));
+                }
+            }
+        }
+        let st = states.get(p.0).cloned().unwrap_or_default();
+        let Some(&n0) = node_of.get(&key(&st, &vals)) else {
+            return Err(format!("no call the walk made starts at {st}"));
+        };
+        let mut calls: Vec<String> = Vec::new();
+        let mut at = n0;
+        let mut guard = 0usize;
+        while !final_names.contains(&&real.nodes[at].0) {
+            let Some(&ci) = via.get(&at) else { return Err(format!("no call the walk made leads from {st} to a final state")) };
+            let (_, e, to) = &real.calls[ci];
+            let Some((rt, row)) = &e.row else { return Err("a call is answered by no row".into()) };
+            if *rt != tname {
+                return Err("a call is answered by another table".into());
+            }
+            let binds = crate::eval::run_bindings(f, c, e.inputs.iter().map(|(k, v)| (k.clone(), v.clone())).collect()).2;
+            // Every rounding a computed value makes meets a value already on its grid, and each carried
+            // number moves on to a value on the grid its output rounds to, so that what the call does
+            // does not depend on the modes: a re-checker works it out without them (§15.233).
+            let env = crate::eval::Env::new(c, binds.clone());
+            let exact = f
+                .items
+                .iter()
+                .filter_map(|x| match x {
+                    Item::Derived(d) => Some(&d.expr),
+                    Item::Define(d) => Some(&d.expr),
+                    _ => None,
+                })
+                .chain(f.result.iter().map(|r| &r.expr))
+                .all(|x| rounds_exactly(x, &env));
+            if !exact {
+                return Err("a call on a path rounds a value off its grid".into());
+            }
+            let ri = t.rows.iter().position(|r| r.index == *row).ok_or("a call names no row of the table")?;
+            for (k, it) in a.more.iter().enumerate() {
+                let (Some(g), None) = (grids[k], &labels[k]) else { continue };
+                let written = match &moves[k][ri] {
+                    CarriedMove::Stay => e.inputs.get(&it.input).cloned(),
+                    CarriedMove::Lit(v) => Some(Val::Num(*v)),
+                    CarriedMove::Expr(n) => binds.get(n).cloned(),
+                    CarriedMove::To(_) => None,
+                };
+                match written {
+                    Some(Val::Num(w)) if w.div(g).den == 1 => {}
+                    _ => return Err(format!("a call on a path carries {} on to a value off its grid", it.output)),
+                }
+            }
+            let mut point: Vec<String> = Vec::new();
+            for (ai, ax) in ct.axes.iter().enumerate() {
+                let Some(v) = e.inputs.get(&ax.name).or_else(|| binds.get(&ax.name)) else {
+                    return Err(format!("a call has no value for {}", ax.name));
+                };
+                let x = match v {
+                    Val::Num(r) => (0..ax.coords.len()).find(|&x| {
+                        closed_coord(ax, x).is_some_and(|(lo, hi)| {
+                            lo.is_none_or(|l| l.cmp_to(*r) != Ordering::Greater) && hi.is_none_or(|h| h.cmp_to(*r) != Ordering::Less)
+                        })
+                    }),
+                    other => {
+                        let w = crate::vectors::show(other);
+                        ax.coords.iter().position(|cw| *cw == w)
+                    }
+                };
+                let Some(x) = x else { return Err(format!("a call's value of {} is on no coordinate of axis {ai}", ax.name)) };
+                point.push(x.to_string());
+            }
+            // The numbers the call is made with: each input that is a number, and a date as its day
+            // number, on the scale `ranges` gives dates.
+            let mut ins = Obj::new();
+            for i in &f.inputs {
+                match e.inputs.get(&i.name.text) {
+                    Some(Val::Num(r)) => ins = ins.str(&i.name.text, rat(r)),
+                    Some(Val::Date(y, m, d)) => ins = ins.str(&i.name.text, rat(&crate::types::date_ord(*y, *m, *d))),
+                    _ => {}
+                }
+            }
+            calls.push(Obj::new().int("row", *row as i128).raw("at", arr(&point)).raw("inputs", ins.finish()).finish());
+            at = to.unwrap_or(at);
+            guard += 1;
+            if guard > real.nodes.len() + 1 {
+                return Err("a path of calls goes round".into());
+            }
+        }
+        out.push((p.clone(), calls));
+    }
+    Ok(out)
+}
+
+/// Whether every rounding in an expression meets a value already on its grid, where the names have the
+/// values `env` gives them (§15.233): every mode then leaves the value where it is. A rounding of a
+/// value the call does not have is none in every mode, and so exact too.
+fn rounds_exactly(e: &Expr, env: &crate::eval::Env) -> bool {
+    match e {
+        Expr::Bin(l, _, r, _) => rounds_exactly(l, env) && rounds_exactly(r, env),
+        Expr::Call(name, args, _) => {
+            if crate::num::RoundMode::parse(name).is_some() && args.len() == 2 {
+                match (env.expr(&args[0]), env.expr(&args[1])) {
+                    (None, _) => {}
+                    (Some(crate::eval::Val::Num(x)), Some(crate::eval::Val::Num(g))) if g.num > 0 && x.div(g).den == 1 => {}
+                    _ => return false,
+                }
+            }
+            args.iter().all(|a| rounds_exactly(a, env))
+        }
+        _ => true,
+    }
 }
 
 /// The `held` inputs of a machine whose value the certificate cannot follow through the

@@ -993,7 +993,7 @@ fn 持ち越す値の証明書は再検査を通り_偽れば落ちる() {
     if ready(Need::Python, || Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false), "python3 が無い") {
         let (c, said) = feed(Command::new("python3").args(["tools/recheck.py", "--rule", GRACE]), &cert);
         assert_eq!(c, 0, "{said}");
-        assert!(said.contains("carried values over step: 9 places a case can be, 6 claims laid on the rows"), "{said}");
+        assert!(said.contains("carried values over step: 9 places a case can be, 7 claims laid on the rows"), "{said}");
         for (what, f) in &forged {
             let (c, said) = feed(Command::new("python3").args(["tools/recheck.py"]), f);
             assert_eq!(c, 1, "{what}: 偽った証明書が通った:\n{said}");

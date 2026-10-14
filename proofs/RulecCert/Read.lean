@@ -98,7 +98,10 @@ def cmpOfString (s : String) : Option Cmp :=
   else if s == "=" then some .eq else none
 
 
-partial def exprOfJson (j : Json) : Option Expr :=
+/-- An expression, as the certificate's tree writes it. With `dates`, a date written in the rule is read
+    as its day number, on the scale `ranges` gives dates (rulec's §15.196, §15.233); without, as a
+    leaf with a type and no number, which is what the units and int64 claims read. -/
+partial def exprOfJson (j : Json) (dates : Bool := false) : Option Expr :=
   match field j "name" >>= str with
   | some n => some (.name n)
   | none =>
@@ -109,17 +112,22 @@ partial def exprOfJson (j : Json) : Option Expr :=
         some (.lit v t)
     | none =>
     match field j "lit" with
-    | some _ => some (match field j "type" >>= str >>= tyOfString with
-                      | some t => Expr.typed t
-                      | none => Expr.unread)
+    | some _ =>
+      if dates && fieldStr j "type" == "date" then do
+        let d ← field j "value" >>= optRat
+        some (.lit d (Ty.other "date"))
+      else
+      some (match field j "type" >>= str >>= tyOfString with
+            | some t => Expr.typed t
+            | none => Expr.unread)
     | none =>
       match field j "op" >>= str with
       | some op => do
-          let l ← field j "l" >>= exprOfJson
+          let l ← field j "l" >>= (exprOfJson · dates)
           let r ← field j "r"
-          if op == "+" then some (.add l (← exprOfJson r))
-          else if op == "-" then some (.sub l (← exprOfJson r))
-          else if op == "*" then some (.mul l (← exprOfJson r))
+          if op == "+" then some (.add l (← exprOfJson r dates))
+          else if op == "-" then some (.sub l (← exprOfJson r dates))
+          else if op == "*" then some (.mul l (← exprOfJson r dates))
           else if op == "/" then do
             -- §2.3 (E115): the divisor is a constant, so the checker only knows that form.
             let k ← field r "value" >>= optRat
@@ -127,7 +135,7 @@ partial def exprOfJson (j : Json) : Option Expr :=
             some (.divc l k kt)
           else
             match cmpOfString (if op == "==" then "=" else op) with
-            | some c => some (.compare c l (← exprOfJson r))
+            | some c => some (.compare c l (← exprOfJson r dates))
             | none => none
       | none =>
         match field j "call" >>= str with
@@ -144,14 +152,14 @@ partial def exprOfJson (j : Json) : Option Expr :=
               some (n, d)
             match quot with
             | some (nj, dj) => do
-              let n ← exprOfJson nj
-              let d ← exprOfJson dj
+              let n ← exprOfJson nj dates
+              let d ← exprOfJson dj dates
               let gj ← args[1]?
               let g ← field gj "value" >>= optRat
               let gt := (field gj "type" >>= str >>= tyOfString).getD Ty.number
               some (.divRound n d g gt)
             | none => do
-            let a ← args[0]? >>= exprOfJson
+            let a ← args[0]? >>= (exprOfJson · dates)
             -- A remainder by a positive whole constant, and a whole square root (rulec's §15.214,
             -- §15.215).
             if c == "mod" && args.size == 2 then do
@@ -159,14 +167,14 @@ partial def exprOfJson (j : Json) : Option Expr :=
               guard (k.den == 1 && 0 < k.num)
               some (.modc a k.num.toNat)
             else if c == "isqrt" && args.size == 1 then some (.isqrt a) else
-            if c == "min" && args.size == 2 then some (.minOf a (← args[1]? >>= exprOfJson))
-            else if c == "max" && args.size == 2 then some (.maxOf a (← args[1]? >>= exprOfJson))
+            if c == "min" && args.size == 2 then some (.minOf a (← args[1]? >>= (exprOfJson · dates)))
+            else if c == "max" && args.size == 2 then some (.maxOf a (← args[1]? >>= (exprOfJson · dates)))
             -- A share (§15.102). Its three arguments are names — E117 accepts nothing
             -- else — but nothing here depends on that: what the interval needs is the
             -- guarantee, and that is looked up by name where the two are names.
             else if c == "allocate" && args.size == 3 then do
-              let b ← args[1]? >>= exprOfJson
-              let w ← args[2]? >>= exprOfJson
+              let b ← args[1]? >>= (exprOfJson · dates)
+              let w ← args[2]? >>= (exprOfJson · dates)
               some (.alloc a b w)
             else if args.size == 2 then do
               let g ← args[1]? >>= fun x => field x "value" >>= optRat
@@ -324,6 +332,9 @@ structure ReadRow where
   source : Option (List (Option SrcSpan))
   /-- What the row writes into each column of numbers, in the order the table decides them. -/
   writes : List (Option WriteCell) := []
+  /-- The word the row writes into each column, in the order the table decides them: an enum's
+      value or a truth value; `none` for a number, a name the rule computes, or nothing. -/
+  produces : List (Option String) := []
 
 structure ReadTable where
   name : String
@@ -617,7 +628,7 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
              value := field e "value" >>= optRat, isName := isName })
     some { index := i, origin := fieldStr r "origin", line := (fieldNat r "line").getD 0
            tests := tests, accepts := accepts, source := (field r "source").bind srcOfJson
-           writes := writes })
+           writes := writes, produces := (fieldArr r "produces").toList.map str })
   some {
     name := name
     outputs := (fieldNat j "outputs").getD 0

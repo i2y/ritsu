@@ -386,28 +386,49 @@ fn 証明書は最大と最小と畳み込みの答えの範囲を述べ_再検�
     assert!(!cert.contains("\"extremes\"") && !cert.contains("\"fold_answers\""), "{cert}");
 }
 
-/// The Lean checker reads the two lists and names each range as stated rather than proved
-/// (§15.220): no theorem holds a `max` or a fold's answer to its range yet.
+/// The Lean checker holds the two ranges to what they are worked out from too (§15.220, §15.233):
+/// `extreme_mem_stated` and `foldAnswer_mem_stated` are what a pass settles, so nothing about them is
+/// left stated, and the forgeries `tools/recheck.py` refuses above are refused there as well.
 #[test]
-fn leanの検査器は二つの範囲を述べただけとして挙げる() {
+fn leanの検査器も二つの範囲を確かめる() {
     let bin = root().join("../../proofs/.lake/build/bin/rulec-recheck");
     if !ready(Need::Lean, || bin.exists(), "ritsu's proofs/ is not built (lake build there)") {
         return;
     }
     use std::io::Write;
-    for (rule, want) in [
-        ("tests/corpus/order_settlement.rule", vec!["the range of top_price, the max of price or its `empty` value", "the range of discount, which the fold over lines answers"]),
-        ("tests/corpus/rate_adjustment.rule", vec!["the range of most_up, the max of shift or its `empty` value", "the range of most_down, the min of shift or its `empty` value"]),
-    ] {
-        let (_, cert, _) = run(&["certificate", rule]);
+    let lean = |cert: &str, rule: &str| -> (i32, String) {
         let mut p = Command::new(&bin).current_dir(root()).args(["--rule", rule]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
         p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
         let o = p.wait_with_output().unwrap();
-        let said = String::from_utf8_lossy(&o.stdout).into_owned();
-        assert!(o.status.success(), "{rule}: {said}");
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+    };
+    for (rule, want) in [
+        ("tests/corpus/order_settlement.rule", vec!["extremes: 1 `max` and `min` answers keep to their column's range and their `empty` value", "fold answers: 1 ranges hold every value their fold answers with"]),
+        ("tests/corpus/rate_adjustment.rule", vec!["extremes: 2 `max` and `min` answers keep to their column's range and their `empty` value"]),
+        ("tests/corpus/earliest_due.rule", vec!["extremes: 1 `max` and `min` answers keep to their column's range and their `empty` value"]),
+        ("tests/stages/best_offer.rule", vec!["fold answers: 1 ranges hold every value their fold answers with"]),
+    ] {
+        let (_, cert, _) = run(&["certificate", rule]);
+        let (code, said) = lean(&cert, rule);
+        assert_eq!(code, 0, "{rule}: {said}");
         for w in want {
             assert!(said.contains(w), "{rule}: {said}");
         }
+        assert!(said.contains("OK: every claim this program states was proved"), "{rule}: {said}");
+    }
+    let rule = "tests/corpus/order_settlement.rule";
+    let (_, cert, _) = run(&["certificate", rule]);
+    for (what, forged, says) in [
+        ("the max's range cut short", cert.replace(r#""top_price":["0","500"]"#, r#""top_price":["0","400"]"#), "top_price: a `max` of price answers from 0 to 500 with its `empty` value, and the certificate states the range [0, 400]"),
+        ("the empty value moved", cert.replace(r#""of":"price","empty":"0""#, r#""of":"price","empty":"-5""#), "top_price: a `max` of price answers from -5 to 500"),
+        ("the fold's range cut short", cert.replace(r#""discount":["0","2500"]"#, r#""discount":["0","2000"]"#), "discount: the fold answers with values from 0 to 2500, and the certificate states the range [0, 2000]"),
+        ("an answer the fold cannot read", cert.replace(r#"{"name":"top_off"}"#, r#"{"name":"held"}"#), "discount: one of the values the fold answers with has no interval this program can work out"),
+        ("a `max` no walk leaves behind", cert.replace(r#""walks":["subtotal","top_price","paid"]"#, r#""walks":["subtotal","paid"]"#), "top_price: a `max` is a value a walk leaves behind, and `walks` does not name it"),
+    ] {
+        assert_ne!(forged, cert, "{what}: the certificate's shape changed, and nothing was forged");
+        let (code, said) = lean(&forged, rule);
+        assert_eq!(code, 1, "{what}: a forged certificate passed\n{said}");
+        assert!(said.contains(says), "{what}: {said}");
     }
 }
 

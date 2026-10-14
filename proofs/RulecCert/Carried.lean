@@ -31,7 +31,9 @@
   the safe direction for every one of these claims (the "多めの遷移" of the design). The start place
   holds a configuration whenever the program's start check passes (`Model.start_inhabited`), so the
   claims are about cases that exist. That a case can still finish is the other direction — calls
-  that really do happen — and is not said here.
+  that really do happen — and is said at the end (rulec's §15.233): where every number was walked
+  one value at a time, the certificate hands over a path of such calls from every place, and
+  `Model.reachable_finishes` makes that a statement about every configuration a case can reach.
 -/
 import RulecCert.Machine
 import RulecCert.Values
@@ -260,6 +262,11 @@ structure Model where
   /-- The values the rule computes, with their expressions. -/
   values : List (String × Expr)
   items : List CItem
+  /-- The rule's inputs, by name: what a caller passes (rulec's §15.233). -/
+  inputs : List String := []
+  /-- The `constraint` lines, each side the names it adds up: the door turns away a call that breaks
+      one (rulec's §15.233). -/
+  cons : List (List String × Cmp × List String) := []
 
 namespace Model
 
@@ -1564,6 +1571,591 @@ theorem Model.start_inhabited {K : Model} (hok : K.okB = true) {s : Nat} {cc : L
     | none => rw [h2] at this; exact absurd this (by simp)
     | some ci => rw [h2] at this; simpa using this)
   exact ⟨(s, xs), rfl, hxs⟩
+
+/-! ## A case can still finish (rulec's §15.233)
+
+The places allow more calls than happen, which is the safe direction for every claim above and the
+wrong one for this one: that from every configuration a case can reach, a final state can still be
+reached. That needs calls that really happen. Where every carried number was walked one value at a
+time, a place is one configuration — each coordinate one value (`pointOfItems`) — and the certificate
+hands over, for each place not in a final state, a path of calls from it to one: each call with the
+row that answers it, the point, and the numbers it is made with. The program runs each call
+(`Model.callOk`): the point is one the rule is asked about, in the row's box at the place's state, and
+under `first` no earlier row takes it; every column of the table is an input or a number the rule
+computes, each number inside its coordinate; the inputs keep their ranges and the `constraint` lines;
+every value the rule computes is its expression's, with every rounding meeting a value already on its
+grid, so that it does not depend on the modes (`evalExact`); and each carried value moves on to
+exactly what the row writes, on the grid its output rounds to. Then the call really happens
+(`Model.fires`, which `Model.call` counts: `Model.call_of_fires`), a path whose calls all check ends at
+a final state (`Model.finishes_of_pathOk`), and with the places closed under the calls, every
+configuration a case can reach can still finish (`Model.reachable_finishes`). -/
+
+/-- What a row carries a value on to, where the call is exact: the carried input itself, a value
+    written in the row, or a value the rule computes, each already on the grid the output rounds to,
+    which every mode leaves where it is. A word is carried on as it is. -/
+def CItem.nextExact (it : CItem) (env : String → Option UVal) (r : Nat) (v v' : Rat) : Prop :=
+  match it.kind, it.move r with
+  | .num _ _ _ g, some .stay => v' = v ∧ onGrid g v
+  | .num _ _ _ g, some (.lit x) => v' = x ∧ onGrid g x
+  | .num _ _ _ g, some (.expr n) => (∃ t, env n = some (v', t)) ∧ onGrid g v'
+  | .words _, some .stay => v' = v
+  | .words _, some (.lit x) => v' = x
+  | _, _ => False
+
+/-- Every carried value of an exact call: what the call is made with, and exactly what it carries on. -/
+def CallExact (K : Model) (p : Point) (env : String → Option UVal) (r : Nat) :
+    List CItem → List Rat → List Rat → Prop
+  | [], [], [] => True
+  | it :: its, v :: vs, v' :: vs' =>
+    it.passed K p env v ∧ it.nextExact env r v v' ∧ CallExact K p env r its vs vs'
+  | _, _, _ => False
+
+/-- What the names on one side of a `constraint` add up to. -/
+def sumOf (env : String → Option UVal) : List String → Option Rat
+  | [] => some 0
+  | n :: ns =>
+    match env n, sumOf env ns with
+    | some u, some s => some (u.1 + s)
+    | _, _ => none
+
+/-- A `constraint` line holds of the values: the two sides add up, and are in the order it says. -/
+def consHolds (env : String → Option UVal) (k : List String × Cmp × List String) : Prop :=
+  ∃ x y, sumOf env k.1 = some x ∧ sumOf env k.2.2 = some y ∧ k.2.1.holds x y
+
+namespace Model
+
+/-- **A call that really happens**, from the configuration `c` through the row numbered `r` to `c'`,
+    whatever modes its roundings use: a point of the space at `c`'s state that the rule is asked about
+    and the row's box takes, under `first` no earlier row's box taking it; the values behind it — only
+    the inputs and the values the rule computes have one; every column of the table an input, whose
+    words a caller may pass any of, or a value standing for a number at the point; each numeric
+    coordinate holding its column's value; every input inside the range the rule declares for it and
+    every `constraint` kept, which is what the door lets through; every value the rule computes its
+    expression's value under every rounding `RoundsWell` describes — and the state moved as the row
+    moves it, each carried value made with `c`'s value and carried on to exactly what the row writes. -/
+def fires (K : Model) (c : Nat × List Rat) (r : Nat) (c' : Nat × List Rat) : Prop :=
+  ∃ (row : Row) (p : Point) (env : String → Option UVal) (mv : Move),
+    row ∈ K.m.table.rows ∧ row.index = r ∧
+    inSpace K.m.table.arities p = true ∧ K.m.table.asked p ∧ K.m.atState p c.1 ∧ inBox row.box p = true ∧
+    (K.m.table.policy = Policy.first →
+      ∀ q ∈ K.m.table.rows, q.index < row.index → inBox q.box p = false) ∧
+    K.m.move row.index = some mv ∧ c'.1 = mv.apply c.1 ∧
+    (∀ n u, env n = some u → n ∈ K.inputs ∨ n ∈ K.values.map Prod.fst) ∧
+    (∀ i n ci, K.columns[i]? = some n → p[i]? = some ci → n ∈ K.inputs ∨ (K.coordAt i ci).isSome = true) ∧
+    (∀ i ci x n, p[i]? = some ci → K.coordAt i ci = some x → K.columns[i]? = some n →
+      ∃ w t, env n = some (w, t) ∧ x.holds w) ∧
+    (∀ n I w t, List.lookup n K.ranges = some I → env n = some (w, t) → inSpan I w) ∧
+    (∀ k ∈ K.cons, consHolds env k) ∧
+    (∀ rnd, RoundsWell rnd → ∀ n e, (n, e) ∈ K.values → env n = eval rnd env e) ∧
+    CallExact K p env row.index K.items c.2 c'.2
+
+/-- From a configuration, a final state can be reached by calls that really happen. -/
+inductive Finishes (K : Model) (F : List Nat) : Nat × List Rat → Prop
+  | done {c : Nat × List Rat} : c.1 ∈ F → Finishes K F c
+  | call {c c' : Nat × List Rat} {r : Nat} : K.fires c r c' → Finishes K F c' → Finishes K F c
+
+end Model
+
+/-! ### A call that really happens is one the places count -/
+
+theorem roundsTo_self {g w : Rat} (hg : 0 < g) (h : onGrid g w) : roundsTo g w w :=
+  ⟨h, by rw [floorTo_onGrid hg h]; exact Rat.le_refl, by rw [ceilTo_onGrid hg h]; exact Rat.le_refl⟩
+
+theorem roundsWell_floorTo : RoundsWell (fun g v => floorTo g v) :=
+  fun _ v hg => ⟨Rat.le_refl, Rat.le_trans (floorTo_le hg v) (le_ceilTo hg v)⟩
+
+theorem CItem.next_of_nextExact {it : CItem} {ranges : List (String × Span2)} {rows : List Row}
+    (hok : it.okB ranges rows = true) {env : String → Option UVal} {r : Nat} {v v' : Rat}
+    (h : it.nextExact env r v v') : it.next env r v v' := by
+  unfold CItem.nextExact at h
+  unfold CItem.next
+  rcases hk : it.kind with ⟨lo, hi, st, g⟩ | ws <;> rcases hm : it.move r with _ | (_ | x | n) <;>
+    simp only [hk, hm] at h ⊢
+  · obtain ⟨_, hg, _⟩ := CItem.okB_num hk hok
+    obtain ⟨rfl, hgr⟩ := h
+    exact roundsTo_self hg hgr
+  · obtain ⟨_, hg, _⟩ := CItem.okB_num hk hok
+    obtain ⟨rfl, hgr⟩ := h
+    exact roundsTo_self hg hgr
+  · obtain ⟨_, hg, _⟩ := CItem.okB_num hk hok
+    obtain ⟨⟨t, ht⟩, hgr⟩ := h
+    exact ⟨v', t, ht, roundsTo_self hg hgr⟩
+  · exact h
+  · exact h
+
+theorem callItems_of_exact {K : Model} {p : Point} {env : String → Option UVal} {r : Nat} :
+    ∀ {its : List CItem} {vs vs' : List Rat}, (∀ it ∈ its, it.okB K.ranges K.m.table.rows = true) →
+      CallExact K p env r its vs vs' → CallItems K p env r its vs vs'
+  | [], [], [], _, _ => by simp [CallItems]
+  | [], [], _ :: _, _, h => by simp [CallExact] at h
+  | [], _ :: _, _, _, h => by simp [CallExact] at h
+  | _ :: _, [], _, _, h => by simp [CallExact] at h
+  | _ :: _, _ :: _, [], _, h => by simp [CallExact] at h
+  | it :: its, v :: vs, v' :: vs', hoks, h => by
+    simp only [CallExact] at h
+    simp only [CallItems]
+    exact ⟨h.1, CItem.next_of_nextExact (hoks it (by simp)) h.2.1,
+      callItems_of_exact (fun it' h' => hoks it' (List.mem_cons_of_mem _ h')) h.2.2⟩
+
+/-- **A call that really happens is one `Model.call` counts**: under the rounding down, which
+    `RoundsWell` describes, its values are its expressions', and what it carries on is that rounding of
+    what the row writes. So the places, closed under the counted calls, hold every configuration a case
+    reaches by the calls that really happen. -/
+theorem Model.call_of_fires {K : Model} (hok : K.okB = true) {c c' : Nat × List Rat} {r : Nat}
+    (h : K.fires c r c') : K.call c r c' := by
+  have hoks : ∀ it ∈ K.items, it.okB K.ranges K.m.table.rows = true := List.all_eq_true.1 hok
+  obtain ⟨row, p, env, mv, hrow, hidx, hsp, _, hst, hbox, hfirst, hmv, hc1, _, _, hbehind, hdoor, _,
+    hdef, hitems⟩ := h
+  exact ⟨row, p, env, (fun g v => floorTo g v), mv, hrow, hidx, hsp, hst, hbox, hfirst, hmv, hc1,
+    roundsWell_floorTo, hbehind, hdoor, hdef _ roundsWell_floorTo, callItems_of_exact hoks hitems⟩
+
+/-! ### The check of a path -/
+
+/-- One call of a path, as the certificate hands it over: the row that answers it, the point, and the
+    numbers it is made with — each input that is a number, with its type. -/
+structure FCall where
+  row : Nat
+  point : Point
+  inputs : List (String × UVal)
+
+/-- One pass over the values the rule computes: each one not worked out yet whose expression evaluates
+    exactly from those that are. `none` where one meets a rounding off its grid. -/
+def passExact (values : List (String × Expr)) (acc : List (String × UVal)) :
+    Option (List (String × UVal)) :=
+  values.foldl (fun acc ne =>
+    match acc with
+    | none => none
+    | some acc =>
+      match List.lookup ne.1 acc with
+      | some _ => some acc
+      | none =>
+        match evalExact (fun n => List.lookup n acc) ne.2 with
+        | none => none
+        | some none => some acc
+        | some (some u) => some (acc ++ [(ne.1, u)])) (some acc)
+
+/-- The values behind a call: the numbers it is made with, and every value the rule computes from
+    them, pass after pass. Whatever it gives is held to the expressions afterwards (`Model.valuesOk`). -/
+def envAfter (values : List (String × Expr)) : Nat → List (String × UVal) → Option (List (String × UVal))
+  | 0, acc => some acc
+  | k + 1, acc =>
+    match passExact values acc with
+    | some acc' => envAfter values k acc'
+    | none => none
+
+namespace CItem
+
+/-- `passed`, as a test. -/
+def passedB (it : CItem) (K : Model) (p : Point) (env : String → Option UVal) (v : Rat) : Bool :=
+  (match it.kind with
+   | .num .. =>
+     match env it.input with
+     | some u => decide (u.1 = v)
+     | none => false
+   | .words _ => true) &&
+  (match it.axis with
+   | none => true
+   | some ax =>
+     match p[ax]? with
+     | none => false
+     | some c =>
+       match it.kind with
+       | .num .. =>
+         match K.coordAt ax c with
+         | some x => coordHolds x v
+         | none => false
+       | .words ws =>
+         (List.range ws.length).any (fun i => decide (v = (i : Rat)) &&
+           match ws[i]?, K.labelAt ax c with
+           | some w, some l => w == l
+           | _, _ => false))
+
+theorem passed_of_passedB {it : CItem} {K : Model} {p : Point} {env : String → Option UVal} {v : Rat}
+    (h : it.passedB K p env v = true) : it.passed K p env v := by
+  unfold passedB at h
+  simp only [Bool.and_eq_true] at h
+  obtain ⟨h1, h2⟩ := h
+  refine ⟨?_, ?_⟩
+  · cases hk : it.kind with
+    | words ws => trivial
+    | num lo hi st g =>
+      simp only [hk] at h1 ⊢
+      cases he : env it.input with
+      | none => simp [he] at h1
+      | some u =>
+        simp only [he, decide_eq_true_eq] at h1
+        exact ⟨u.2, by rw [← h1]⟩
+  · cases hax : it.axis with
+    | none => trivial
+    | some ax =>
+      simp only [hax] at h2 ⊢
+      cases hp : p[ax]? with
+      | none => simp [hp] at h2
+      | some c =>
+        simp only [hp] at h2
+        refine ⟨c, rfl, ?_⟩
+        cases hk : it.kind with
+        | num lo hi st g =>
+          simp only [hk] at h2 ⊢
+          cases hx : K.coordAt ax c with
+          | none => simp [hx] at h2
+          | some x =>
+            simp only [hx] at h2
+            exact ⟨x, rfl, holds_of_coordHolds h2⟩
+        | words ws =>
+          simp only [hk] at h2 ⊢
+          obtain ⟨i, _, hi⟩ := List.any_eq_true.1 h2
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at hi
+          obtain ⟨hv, hw⟩ := hi
+          cases hwi : ws[i]? with
+          | none => simp [hwi] at hw
+          | some w =>
+            cases hl : K.labelAt ax c with
+            | none => simp [hwi, hl] at hw
+            | some l =>
+              simp only [hwi, hl, beq_iff_eq] at hw
+              exact ⟨i, w, hv, hwi, by rw [hw]⟩
+
+/-- What a carried value moves on to, exactly: `none` where what the row writes is off the grid its
+    output rounds to. -/
+def nextOf (it : CItem) (env : String → Option UVal) (r : Nat) (v : Rat) : Option Rat :=
+  match it.kind, it.move r with
+  | .num _ _ _ g, some .stay => if gridB g v then some v else none
+  | .num _ _ _ g, some (.lit x) => if gridB g x then some x else none
+  | .num _ _ _ g, some (.expr n) =>
+    match env n with
+    | some u => if gridB g u.1 then some u.1 else none
+    | none => none
+  | .words _, some .stay => some v
+  | .words _, some (.lit x) => some x
+  | _, _ => none
+
+theorem nextExact_of_nextOf {it : CItem} {env : String → Option UVal} {r : Nat} {v v' : Rat}
+    (h : it.nextOf env r v = some v') : it.nextExact env r v v' := by
+  unfold nextOf at h
+  unfold nextExact
+  rcases hk : it.kind with ⟨lo, hi, st, g⟩ | ws <;> rcases hm : it.move r with _ | (_ | x | n) <;>
+    simp only [hk, hm] at h ⊢
+  · exact absurd h (by simp)
+  · split at h
+    · rename_i hg
+      simp only [Option.some.injEq] at h
+      exact ⟨h.symm, onGrid_of_gridB hg⟩
+    · exact absurd h (by simp)
+  · split at h
+    · rename_i hg
+      simp only [Option.some.injEq] at h
+      subst h
+      exact ⟨rfl, onGrid_of_gridB hg⟩
+    · exact absurd h (by simp)
+  · cases he : env n with
+    | none => rw [he] at h; exact absurd h (by simp)
+    | some u =>
+      rw [he] at h
+      simp only at h
+      split at h
+      · rename_i hg
+        simp only [Option.some.injEq] at h
+        subst h
+        exact ⟨⟨u.2, by simp⟩, onGrid_of_gridB hg⟩
+      · exact absurd h (by simp)
+  · exact absurd h (by simp)
+  · simp only [Option.some.injEq] at h
+    exact h.symm
+  · simp only [Option.some.injEq] at h
+    exact h.symm
+  · exact absurd h (by simp)
+
+end CItem
+
+/-- What every carried value moves on to, exactly, where the call is made with the configuration's. -/
+def itemsNext (K : Model) (p : Point) (env : String → Option UVal) (r : Nat) :
+    List CItem → List Rat → Option (List Rat)
+  | [], [] => some []
+  | it :: its, v :: vs =>
+    if it.passedB K p env v then
+      match it.nextOf env r v, itemsNext K p env r its vs with
+      | some v', some vs' => some (v' :: vs')
+      | _, _ => none
+    else none
+  | _, _ => none
+
+theorem callExact_of_itemsNext {K : Model} {p : Point} {env : String → Option UVal} {r : Nat} :
+    ∀ {its : List CItem} {vs vs' : List Rat}, itemsNext K p env r its vs = some vs' →
+      CallExact K p env r its vs vs'
+  | [], [], vs', h => by
+    simp only [itemsNext, Option.some.injEq] at h
+    subst h
+    simp [CallExact]
+  | [], _ :: _, _, h => by simp [itemsNext] at h
+  | _ :: _, [], _, h => by simp [itemsNext] at h
+  | it :: its, v :: vs, vs', h => by
+    simp only [itemsNext] at h
+    split at h
+    · rename_i hp
+      split at h
+      · rename_i v' rest hv hrest
+        simp only [Option.some.injEq] at h
+        subst h
+        exact ⟨CItem.passed_of_passedB hp, CItem.nextExact_of_nextOf hv, callExact_of_itemsNext hrest⟩
+      · exact absurd h (by simp)
+    · exact absurd h (by simp)
+
+namespace Model
+
+/-- Only the inputs and the values the rule computes have a value. -/
+def domainOk (K : Model) (envL : List (String × UVal)) : Bool :=
+  envL.all (fun nu => K.inputs.contains nu.1 || (K.values.map Prod.fst).contains nu.1)
+
+/-- Every column of the table an input, or a value standing for a number at the point; each numeric
+    coordinate holding its column's value. -/
+def columnsOk (K : Model) (p : Point) (env : String → Option UVal) : Bool :=
+  (List.range K.columns.length).all (fun i =>
+    match K.columns[i]?, p[i]? with
+    | some n, some ci =>
+      (K.inputs.contains n || (K.coordAt i ci).isSome) &&
+        (match K.coordAt i ci with
+         | some x =>
+           match env n with
+           | some u => coordHolds x u.1
+           | none => false
+         | none => true)
+    | _, _ => true)
+
+/-- Every input inside the range the rule declares for it. -/
+def rangesOk (K : Model) (env : String → Option UVal) : Bool :=
+  K.ranges.all (fun nI =>
+    match env nI.1 with
+    | some u => decide (nI.2.1 ≤ u.1) && decide (u.1 ≤ nI.2.2)
+    | none => true)
+
+def consHoldsB (env : String → Option UVal) (k : List String × Cmp × List String) : Bool :=
+  match sumOf env k.1, sumOf env k.2.2 with
+  | some x, some y => cmpHolds k.2.1 x y
+  | _, _ => false
+
+/-- Every `constraint` line kept. -/
+def consOk (K : Model) (env : String → Option UVal) : Bool := K.cons.all (consHoldsB env)
+
+/-- Every value the rule computes its expression's, with every rounding exact. -/
+def valuesOk (K : Model) (env : String → Option UVal) : Bool :=
+  K.values.all (fun ne => decide (evalExact env ne.2 = some (env ne.1)))
+
+/-- **One call of a path, checked**, from the configuration `c`: the row, its move, the values behind
+    the call worked out from the numbers it is made with, each test above, and what each carried value
+    moves on to. The configuration it leads to, or `none`. -/
+def callOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (c : Nat × List Rat)
+    (call : FCall) : Option (Nat × List Rat) :=
+  match K.m.table.rows.find? (fun r => r.index == call.row) with
+  | none => none
+  | some row =>
+    match K.m.move row.index with
+    | none => none
+    | some mv =>
+      match envAfter K.values (K.values.length + 1) call.inputs with
+      | none => none
+      | some envL =>
+        if inSpace K.m.table.arities call.point && askedOk call.point (fun n => List.lookup n envL) &&
+            K.m.atStateB call.point c.1 && inBox row.box call.point && K.m.firstOk row call.point &&
+            K.domainOk envL && K.columnsOk call.point (fun n => List.lookup n envL) &&
+            K.rangesOk (fun n => List.lookup n envL) && K.consOk (fun n => List.lookup n envL) &&
+            K.valuesOk (fun n => List.lookup n envL) then
+          match itemsNext K call.point (fun n => List.lookup n envL) row.index K.items c.2 with
+          | some vs' => some (mv.apply c.1, vs')
+          | none => none
+        else none
+
+/-- **A path checks** when each call checks from where the one before led, and it ends in a final
+    state. -/
+def pathOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (F : List Nat) :
+    Nat × List Rat → List FCall → Bool
+  | c, [] => F.contains c.1
+  | c, call :: rest =>
+    match K.callOk askedOk c call with
+    | some c' => K.pathOk askedOk F c' rest
+    | none => false
+
+end Model
+
+theorem lookup_mem {α β : Type} [BEq α] [LawfulBEq α] {l : List (α × β)} {k : α} {b : β}
+    (h : List.lookup k l = some b) : (k, b) ∈ l := by
+  obtain ⟨l₁, l₂, rfl, _⟩ := List.lookup_eq_some_iff.1 h
+  simp
+
+theorem sumOf_holds {env : String → Option UVal} {k : List String × Cmp × List String}
+    (h : Model.consHoldsB env k = true) : consHolds env k := by
+  unfold Model.consHoldsB at h
+  split at h
+  · rename_i x y hx hy
+    exact ⟨x, y, hx, hy, holds_of_cmpHolds h⟩
+  · exact absurd h (by simp)
+
+/-- **A call that checks is a call that really happens.** -/
+theorem Model.fires_of_callOk {K : Model} {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {c c' : Nat × List Rat} {call : FCall}
+    (h : K.callOk askedOk c call = some c') : K.fires c call.row c' := by
+  unfold Model.callOk at h
+  split at h
+  · exact absurd h (by simp)
+  · rename_i row hrow
+    split at h
+    · exact absurd h (by simp)
+    · rename_i mv hmv
+      split at h
+      · exact absurd h (by simp)
+      · rename_i envL _
+        split at h
+        · rename_i hc
+          simp only [Bool.and_eq_true] at hc
+          obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨hsp, hak⟩, hst⟩, hbox⟩, hfirst⟩, hdom⟩, hcols⟩, hran⟩, hcons⟩, hvals⟩ := hc
+          split at h
+          · rename_i vs' hvs
+            simp only [Option.some.injEq] at h
+            subst h
+            have hrm : row ∈ K.m.table.rows := List.mem_of_find?_eq_some hrow
+            have hidx : row.index = call.row := by
+              have := List.find?_some hrow
+              simpa using this
+            refine ⟨row, call.point, (fun n => List.lookup n envL), mv, hrm, hidx, hsp,
+              hask _ _ hak, Machine.atState_of_atStateB hst, hbox, Machine.first_of_firstOk hfirst,
+              hmv, rfl, ?_, ?_, ?_, ?_, ?_, ?_, callExact_of_itemsNext hvs⟩
+            · -- only inputs and computed values have a value
+              intro n u hu
+              have hmem := lookup_mem hu
+              have := List.all_eq_true.1 hdom (n, u) hmem
+              simp only [Bool.or_eq_true, List.contains_iff_mem] at this
+              exact this
+            · -- each column an input, or a number at the point
+              intro i n ci hn hci
+              have hi : i < K.columns.length := lt_of_getElem? hn
+              have := List.all_eq_true.1 hcols i (List.mem_range.2 hi)
+              simp only [hn, hci, Bool.and_eq_true, Bool.or_eq_true, List.contains_iff_mem] at this
+              exact this.1
+            · -- each numeric coordinate holds its column's value
+              intro i ci x n hci hx hn
+              have hi : i < K.columns.length := lt_of_getElem? hn
+              have := List.all_eq_true.1 hcols i (List.mem_range.2 hi)
+              simp only [hn, hci, hx, Bool.and_eq_true] at this
+              obtain ⟨_, h2⟩ := this
+              cases he : List.lookup n envL with
+              | none => rw [he] at h2; exact absurd h2 (by simp)
+              | some u =>
+                rw [he] at h2
+                exact ⟨u.1, u.2, by show List.lookup n envL = _; rw [he], holds_of_coordHolds h2⟩
+            · -- the inputs keep their ranges
+              intro n I w t hI hw
+              have hw' : List.lookup n envL = some (w, t) := hw
+              have hmem := lookup_mem hI
+              have := List.all_eq_true.1 hran (n, I) hmem
+              simp only at this
+              rw [hw'] at this
+              simp only [Bool.and_eq_true, decide_eq_true_eq] at this
+              exact this
+            · -- the constraints hold
+              intro k hk
+              exact sumOf_holds (List.all_eq_true.1 hcons k hk)
+            · -- every value the rule computes is its expression's, under every rounding
+              intro rnd hrnd n e hne
+              have := List.all_eq_true.1 hvals (n, e) hne
+              simp only [decide_eq_true_eq] at this
+              exact (evalExact_sound hrnd e _ this).symm
+          · exact absurd h (by simp)
+        · exact absurd h (by simp)
+
+/-- **A path that checks is one a case can follow to a final state.** -/
+theorem Model.finishes_of_pathOk {K : Model} {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {F : List Nat} :
+    ∀ (calls : List FCall) (c : Nat × List Rat), K.pathOk askedOk F c calls = true → K.Finishes F c
+  | [], c, h => by
+    simp only [Model.pathOk, List.contains_iff_mem] at h
+    exact Model.Finishes.done h
+  | call :: rest, c, h => by
+    simp only [Model.pathOk] at h
+    split at h
+    · rename_i c' hc
+      exact Model.Finishes.call (Model.fires_of_callOk hask hc) (Model.finishes_of_pathOk hask rest c' h)
+    · exact absurd h (by simp)
+
+/-! ### Every configuration a case can reach can still finish -/
+
+/-- The configuration a place stands for, where each of its coordinates is one value. -/
+def pointOfItems : List CItem → List (Option Nat) → Option (List Rat)
+  | [], [] => some []
+  | it :: its, some ci :: cs =>
+    match it.coords[ci]?, pointOfItems its cs with
+    | some (a, b), some rest => if decide (a = b) then some (a :: rest) else none
+    | _, _ => none
+  | _, _ => none
+
+/-- A configuration at a place whose coordinates are one value each is the one it stands for. -/
+theorem placeHolds_point : ∀ {its : List CItem} {cs : List (Option Nat)} {xs ys : List Rat},
+    PlaceHolds its cs xs → pointOfItems its cs = some ys → xs = ys
+  | [], [], [], ys, _, h => by simp only [pointOfItems, Option.some.injEq] at h; exact h
+  | [], [], _ :: _, _, hp, _ => by simp [PlaceHolds] at hp
+  | [], _ :: _, _, _, hp, _ => by simp [PlaceHolds] at hp
+  | _ :: _, [], _, _, hp, _ => by simp [PlaceHolds] at hp
+  | _ :: _, _ :: _, [], _, hp, _ => by simp [PlaceHolds] at hp
+  | it :: its, none :: cs, x :: xs, ys, _, h => by simp [pointOfItems] at h
+  | it :: its, some ci :: cs, x :: xs, ys, hp, h => by
+    simp only [PlaceHolds] at hp
+    simp only [pointOfItems] at h
+    split at h
+    · rename_i a b rest hab hrest
+      split at h
+      · rename_i heq
+        simp only [decide_eq_true_eq] at heq
+        simp only [Option.some.injEq] at h
+        subst h
+        obtain ⟨a', b', hab', ha, hb⟩ := hp.1
+        rw [hab] at hab'
+        simp only [Option.some.injEq, Prod.mk.injEq] at hab'
+        obtain ⟨rfl, rfl⟩ := hab'
+        subst heq
+        have hx : x = a := Rat.le_antisymm hb ha
+        rw [hx, placeHolds_point hp.2 hrest]
+      · exact absurd h (by simp)
+    · exact absurd h (by simp)
+
+namespace Model
+
+/-- **The finish check**: from every place, one in a final state, or a configuration of one value per
+    coordinate with a path that checks. -/
+def finishOk (K : Model) (askedOk : Point → (String → Option UVal) → Bool) (F : List Nat)
+    (P : List (Nat × List (Option Nat))) (paths : Nat × List (Option Nat) → List FCall) : Bool :=
+  P.all (fun pl => F.contains pl.1 ||
+    match pointOfItems K.items pl.2 with
+    | some xs => K.pathOk askedOk F (pl.1, xs) (paths pl)
+    | none => false)
+
+end Model
+
+/-- **Every configuration a case can reach can still finish**: where the places hold where a case
+    starts and are closed under the counted calls, and the finish check passes on them, a final state
+    can be reached by calls that really happen from every configuration a case can reach — by the
+    counted calls, and so by the calls that really happen (`Model.call_of_fires`). -/
+theorem Model.reachable_finishes {K : Model} (hok : K.okB = true)
+    {askedOk : Point → (String → Option UVal) → Bool}
+    (hask : ∀ p env, askedOk p env = true → K.m.table.asked p) {start : Nat × List (Option Nat)}
+    {P : List (Nat × List (Option Nat))} {F : List Nat} {paths : Nat × List (Option Nat) → List FCall}
+    (hr : K.sys.reachOk start P = true) (hf : K.finishOk askedOk F P paths = true) :
+    ∀ {c : Nat × List Rat}, K.sys.Reaches start c → K.Finishes F c := by
+  intro c hc
+  obtain ⟨pl, hpl, hs, hph⟩ := Sys.reaches_mem (Model.simulates hok) hr hc
+  have hph : PlaceHolds K.items pl.2 c.2 := hph
+  have h := List.all_eq_true.1 hf pl hpl
+  simp only [Bool.or_eq_true, List.contains_iff_mem] at h
+  rcases h with hF | h
+  · exact Model.Finishes.done (hs ▸ hF)
+  · split at h
+    · rename_i xs hxs
+      have hx := placeHolds_point hph hxs
+      have hfin := Model.finishes_of_pathOk hask (paths pl) (pl.1, xs) h
+      obtain ⟨c1, c2⟩ := c
+      simp only at hs hx
+      subst hs
+      subst hx
+      exact hfin
+    · exact absurd h (by simp)
 
 end Carried
 end RulecCert

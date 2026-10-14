@@ -511,9 +511,26 @@ partial def columnStep (cert : Json) (seen : List String) (name : String) : Opti
     let e ← field v "expr" >>= exprOfJson
     let g ← exprStep (columnStep cert (name :: seen)) e
     if g == 0 then none else some g
-  match fromExpr with
-  | some g => some g
-  | none => do
+  -- What a walk answers (rulec's §15.219, §15.220): a fold's answer is the value of one of the
+  -- expressions it answers with, and a `max` or a `min` a value of its column or its `empty` value,
+  -- so each sits on the step those share.
+  let fromWalk : Option Rat := do
+    let step := columnStep cert (name :: seen)
+    let g ← match (fieldArr cert "fold_answers").find? (fun fa => fieldStr fa "name" == name) with
+      | some fa => do
+        let es ← (fieldArr fa "answers").toList.mapM exprOfJson
+        let gs ← es.mapM (exprStep step)
+        some (gs.foldl shareStep 0)
+      | none => do
+        let x ← (fieldArr cert "extremes").find? (fun x => fieldStr x "name" == name)
+        let c ← step (fieldStr x "of")
+        let z ← field x "empty" >>= optRat
+        some (shareStep c (ratAbs z))
+    if g == 0 then none else some g
+  match fromExpr, fromWalk with
+  | some g, _ => some g
+  | none, some g => some g
+  | none, none => do
       let s ← field ((field cert "scales").getD Json.null) name >>= nat
       if s == 0 then none else some (1 / (s : Rat))
 
@@ -611,6 +628,9 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
   let mut lineOf : List (String × (Nat × Nat)) := []
   let mut prevLine : List (String × Nat) := []
   let mut seenAxis : Array Bool := Array.replicate t.columns.length false
+  -- A table written in one place, not a set of tables that decide the same column (§15.66): its
+  -- answer cells stand in the order it decides its columns.
+  let single := t.rowsRaw.all (fun x => x.origin == ((t.rowsRaw.head?.map (·.origin)).getD ""))
   for row in t.rowsRaw do
     let o := row.origin
     let has := row.source.isSome
@@ -665,6 +685,17 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
               r := r.fail s!"{t.name}: row {row.index}'s cells are not the cells of the line it is written on"
             else if bars.size != got.size + t.outputs then
               r := r.fail s!"{t.name}: row {row.index} is written with {bars.size} cells, and the certificate accounts for {got.size} of them"
+            else if single then
+              -- What the row writes into a column of words is the cell in the file too (rulec's
+              -- §15.233): the answer cell of that column says the word the certificate reads — what
+              -- a machine moves on, what a `once` line counts, what an `ordered by` table answers,
+              -- and what a table above writes.
+              for (pj, j) in row.produces.zip (List.range row.produces.length) do
+                if let some w := pj then
+                  let txt : Option String := (bars[got.size + j]?).bind (fun ab =>
+                    if ab.2 ≤ line.size then String.fromUTF8? (line.extract ab.1 ab.2) else none)
+                  if txt == some w then read := read + 1
+                  else r := r.fail s!"{t.name}: row {row.index}, answer {j + 1}: the file writes `{txt.getD ""}` there, and the certificate reads it as `{w}`"
           for ai in [0 : t.columns.length] do
             match spans[ai]! with
             | none =>
@@ -1274,6 +1305,9 @@ structure CarriedLaid where
   allNever : Bool := false
   /-- The `once` lines laid on the places, by their place among the machine's `once` lines. -/
   onces : List Nat := []
+  /-- That a case can still finish, laid on the places by paths of calls that really happen
+      (rulec's §15.233). -/
+  finish : Bool := false
 
 /-- **The values a machine carries besides its state, held to the rows** (rulec's §15.217, §15.218).
     The section is read into `Carried.Model`; the places have to hold where a case starts and be
@@ -1293,8 +1327,10 @@ def checkCarried (cert mj tj : Json) (t : ReadTable) (M : Machine) (init : Nat) 
   let rowsJ := (fieldArr tj "rows").toList
   let valuesJ := (fieldArr cert "values").toList
   let valueNames := valuesJ.map (fun v => fieldStr v "name")
+  -- A date written in an expression is its day number here (rulec's §15.233): a call that really
+  -- happens is worked out with the values, and a date input's value is its day number.
   let values : List (String × RulecCert.Expr) := valuesJ.filterMap (fun v => do
-    let e ← field v "expr" >>= exprOfJson
+    let e ← field v "expr" >>= (exprOfJson · true)
     some (fieldStr v "name", e))
   let rangesJ := (field cert "ranges").getD Json.null
   let declared : String → Option (Rat × Rat) := fun n => field rangesJ n >>= ratPair
@@ -1311,8 +1347,15 @@ def checkCarried (cert mj tj : Json) (t : ReadTable) (M : Machine) (init : Nat) 
     | .ok (_, some why) =>
       r := r.state s!"the claims over the values the machine carries besides its state: {why}"
       return (r, {})
+  -- The rule's inputs and its `constraint` lines, which say what the door lets through: what a call
+  -- that really happens is made with (rulec's §15.233).
+  let inputNames := (fieldArr cert "inputs").toList.filterMap str
+  let cons : List (List String × Cmp × List String) := (fieldArr cert "constraints").toList.filterMap (fun k => do
+    let op ← cmpOfString (fieldStr k "op")
+    some (sideNames k "left", op, sideNames k "right"))
   let K : Carried.Model := { m := M, coords := t.spans, labels := t.labels, columns := t.columns,
-                             ranges := ranges, values := values, items := items }
+                             ranges := ranges, values := values, items := items, inputs := inputNames,
+                             cons := cons }
   if !K.okB then return (r.fail "carried values: the section is not one the proofs read", {})
   let some places := (fieldArr cm "places").toList.mapM (fun x => (placeOf x).map (·.1))
     | return (r.fail "carried values: a place cannot be read", {})
@@ -1402,6 +1445,37 @@ def checkCarried (cert mj tj : Json) (t : ReadTable) (M : Machine) (init : Nat) 
       else return (r.fail s!"carried values: {out} is said to stay within its range, and a place leaves it", {})
     else
       r := r.state s!"carried values: that {out} stays within its range is not laid on the rows"
+  -- That a case can still finish (rulec's §15.233): from every place not in a final state, a path of
+  -- calls that really happen, each run here (`Carried.Model.callOk`); `Carried.Model.reachable_finishes`
+  -- is what a pass settles. Where the section lays none, the claim is named as stated (by the caller).
+  if !finals.isEmpty then
+    if let some fj := field cm "finish" >>= arr then
+      let typesJ := (field cert "types").getD Json.null
+      let callOf : Json → Option Carried.FCall := fun x => do
+        let row ← fieldNat x "row"
+        let at_ := (fieldArr x "at").toList.filterMap nat
+        let ins ← (objPairs ((field x "inputs").getD Json.null)).mapM (fun (n, v) => do
+          let q ← optRat v
+          let ty ← tyOfString (fieldStr typesJ n)
+          some (n, ((q, ty) : UVal)))
+        some { row := row, point := at_, inputs := ins }
+      let some paths := fj.toList.mapM (fun x => do
+          let (pl, _) ← (field x "place") >>= placeOf
+          let calls ← (fieldArr x "path").toList.mapM callOf
+          some (pl, calls))
+        | return (r.fail "carried values: a path to a final state cannot be read", {})
+      let pathsOf : Nat × List (Option Nat) → List Carried.FCall := fun pl =>
+        ((paths.find? (fun q => q.1 == pl)).map (·.2)).getD []
+      -- The values behind a point, as the table's sieve reads them: each column's, then the names of
+      -- its linear model's that are not columns (`linear.extra`).
+      let extras := (fieldArr ((field tj "linear").getD Json.null) "extra").toList.filterMap str
+      let valOf : (String → Option UVal) → String → Rat := fun env n => ((env n).map (·.1)).getD 0
+      let askedOk : Point → (String → Option UVal) → Bool := fun p env =>
+        witnessOk t.cert.sieve p (t.columns.map (valOf env) ++ extras.map (valOf env))
+      if K.finishOk askedOk finals places pathsOf then
+        claims := claims.push "every place a case can be can still finish"
+        laid := { laid with finish := true }
+      else return (r.fail "carried values: a place has no path of calls to a final state that checks", {})
   r := r.say s!"  carried values over {tname}: {", ".intercalate claims.toList}"
   return (r, laid)
 
@@ -1540,10 +1614,11 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
         else
           r := r.state "that a case can still finish is not laid on the rows (a held input is read by more than its own column)"
       else if carriesMore then
+        -- Over the carried values, each place's path is checked in `checkCarried` (rulec's §15.233).
         if pathsJ.size > 0 then
           r := r.fail "machine: paths to a final state are given, and the machine carries more than its state"
         else
-          r := r.state "that a case can still finish is not laid on the rows (the machine carries more than its state)"
+          pending := pending.push ("finish", "that a case can still finish is not laid on the rows (the machine carries more than its state)")
       else
         let callOf : Json → Option Machine.Call := fun x => do
           let st ← fieldNat x "state"
@@ -1591,47 +1666,97 @@ def checkMachine (cert : Json) (tables : Array ReadTable) (r : Report) : Report 
   -- A claim the state's own rows could not carry is laid when the places carry it.
   for (tag, msg) in pending do
     let settled := (tag == "final" && laid.final) || (tag == "never" && laid.allNever) ||
-      (laid.onces.any (fun li => tag == s!"once:{li}"))
+      (tag == "finish" && laid.finish) || (laid.onces.any (fun li => tag == s!"once:{li}"))
     if !settled then r := r.state msg
   return r
 
-/-- The machine's moves say the same as the file (§15.148): a row said to leave the state
-    writes the carried input's own name there, and a row said to go to a state writes that
-    state. Returns how many cells were read back. -/
-def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report) : Report × Nat := Id.run do
+/-- The text the file has at a place a `source` names. -/
+def textAt (lines : Array ByteArray) (src : Json) : Option String :=
+  let ln := (fieldNat src "line").getD 0
+  let col := (fieldNat src "col").getD 0
+  let len := (fieldNat src "len").getD 0
+  let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+  if col + len ≤ line.size then String.fromUTF8? (line.extract col (col + len)) else none
+
+/-- Whether a `source` is the answer cell of column `j` (in the order the table decides its columns)
+    of the row numbered `row`: on the row's own line, the cell `j` places after the cells its tests
+    read. A row whose answers are not cells of its own line (a `clause`, whose `then` line holds them)
+    has no such cell, and only what the file says there is held to the certificate. -/
+def isAnswerCell (tj : Json) (lines : Array ByteArray) (row j : Nat) (src : Json) : Bool :=
+  match (fieldArr tj "rows").find? (fun x => fieldNat x "row" == some row) with
+  | none => false
+  | some rj =>
+    let ln := (fieldNat rj "line").getD 0
+    let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+    let bars := fieldsOf line
+    let tests := ((field rj "source").bind srcOfJson).map (fun ss => (ss.filterMap id).length)
+    match tests with
+    | none => false
+    | some n =>
+      if bars.size == 0 then true
+      else
+        let col := (fieldNat src "col").getD 0
+        let len := (fieldNat src "len").getD 0
+        fieldNat src "line" == some ln && bars[n + j]? == some (col, col + len)
+
+/-- Whether an `initial` line stands at a place: the line reads `initial`, then `before` (the carried
+    input's name, for a value carried besides the state), then the value at the place, and nothing
+    after it but a comment. -/
+def initialLineOk (lines : Array ByteArray) (src : Json) (before : List String) : Bool :=
+  let ln := (fieldNat src "line").getD 0
+  let col := (fieldNat src "col").getD 0
+  let len := (fieldNat src "len").getD 0
+  let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+  let head := (String.fromUTF8? (line.extract 0 col)).getD ""
+  let tail := ((String.fromUTF8? (line.extract (col + len) line.size)).getD "").trimAscii.toString
+  let words := (head.splitOn " ").filter (· != "") |>.map (·.trimAscii.toString) |>.filter (· != "")
+  col + len ≤ line.size && words == "initial" :: before && (tail.isEmpty || tail.startsWith "#")
+
+/-- **The machine's section says what the file says** (§15.148, rulec's §15.233). A row said to leave
+    the state writes the carried input's own name there, and a row said to go to a state writes that
+    state — each in the row's answer cell of the carried output. A value carried besides the state is
+    the same: its input's name, a computed value's name, a word. A `once` line's value on each row is
+    the one its answer cell writes: the word, or the number at the scale the wire counts it at (a name
+    the rule computes counts wherever it might). And where a case starts is what the `initial` lines
+    say: the state, and each value carried besides it, inside the coordinate the start gives it.
+    Returns how many cells were read back. -/
+def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report)
+    (curOf : String → Option String := fun _ => none) : Report × Nat := Id.run do
   let mut r := r
   let mut read := 0
   let some mj := field cert "machine" | return (r, 0)
   if mj.isNull || (fieldStr mj "table").isEmpty then return (r, 0)
+  let tname := fieldStr mj "table"
+  let tj := ((fieldArr cert "tables").find? (fun x => fieldStr x "table" == tname)).getD Json.null
+  let decides := (fieldArr tj "decides").toList.filterMap str
+  let colOf : String → Nat := fun o => (decides.idxOf? o).getD decides.length
   let states := (fieldArr mj "states").toList.filterMap str
-  let cin := fieldStr ((field mj "carry").getD Json.null) "input"
+  let carry := (field mj "carry").getD Json.null
+  let cin := fieldStr carry "input"
+  let jout := colOf (fieldStr carry "output")
   for e in fieldArr mj "rows" do
+    let row := (fieldNat e "row").getD 0
     let some src := field e "source"
-      | r := r.fail s!"machine: row {(fieldNat e "row").getD 0}'s move has no place in the file"
-    let ln := (fieldNat src "line").getD 0
-    let col := (fieldNat src "col").getD 0
-    let len := (fieldNat src "len").getD 0
-    let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
-    let got := if col + len ≤ line.size then String.fromUTF8? (line.extract col (col + len)) else none
+      | r := r.fail s!"machine: row {row}'s move has no place in the file"
+    let got := textAt lines src
     let want : Option String := match fieldNat e "to" with
       | some to => states[to]?
       | none => some cin
     if got != want then
-      r := r.fail s!"machine: row {(fieldNat e "row").getD 0}'s move is not what the file has there"
+      r := r.fail s!"machine: row {row}'s move is not what the file has there"
+    else if !isAnswerCell tj lines row jout src then
+      r := r.fail s!"machine: row {row}'s move is not read from the row's own cell of {fieldStr carry "output"}"
     else read := read + 1
   -- The values carried besides the state (§15.217): a row said to keep one writes the carried input's
   -- own name there, a row said to write a computed one writes its name, a word is the word.
   for it in fieldArr ((field mj "carried").getD Json.null) "items" do
     let labels := (fieldArr it "labels").toList.filterMap str
+    let j := colOf (fieldStr it "output")
     for e in fieldArr it "moves" do
       let row := (fieldNat e "row").getD 0
       let some src := field e "source"
         | r := r.fail s!"carried values: row {row}'s move of {fieldStr it "output"} has no place in the file"
-      let ln := (fieldNat src "line").getD 0
-      let col := (fieldNat src "col").getD 0
-      let len := (fieldNat src "len").getD 0
-      let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
-      let got := if col + len ≤ line.size then String.fromUTF8? (line.extract col (col + len)) else none
+      let got := textAt lines src
       let want : Option String :=
         if (field e "stay" >>= boolOf) == some true then some (fieldStr it "input")
         else if let some n := field e "expr" >>= str then some n
@@ -1639,8 +1764,305 @@ def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report) : Rep
         else some (fieldStr src "text")
       if got != want || got != some (fieldStr src "text") then
         r := r.fail s!"carried values: row {row} is said to write `{want.getD ""}` into {fieldStr it "output"}, and the file has `{got.getD ""}` there"
+      else if !isAnswerCell tj lines row j src then
+        r := r.fail s!"carried values: row {row}'s move of {fieldStr it "output"} is not read from the row's own cell of it"
       else read := read + 1
+  -- What a `once` line reads on each row (rulec's §15.233): the value its answer cell writes.
+  for on in fieldArr mj "once" do
+    let some test := field on "test" | continue
+    let out := fieldStr on "output"
+    let j := colOf out
+    let scale : Option Rat := field test "scale" >>= optRat
+    let numeric := (field test "words").isNone
+    for e in fieldArr on "rows" do
+      let row := (fieldNat e "row").getD 0
+      let some src := field e "source"
+        | r := r.fail s!"machine: the value `once {out}` reads on row {row} has no place in the file"
+      let got := textAt lines src
+      if got != some (fieldStr src "text") then
+        r := r.fail s!"machine: the value `once {out}` reads on row {row} is not what the file has there"
+        continue
+      if !isAnswerCell tj lines row j src then
+        r := r.fail s!"machine: the value `once {out}` reads on row {row} is not read from the row's own cell of {out}"
+        continue
+      let v := (field e "value").getD Json.null
+      let text := (got.getD "").trimAscii.toString
+      -- A computed value counts wherever it might: nothing to hold it to.
+      if v.isNull then
+        read := read + 1
+        continue
+      let agrees : Option Bool :=
+        if numeric then do
+          let sc ← scale
+          let w ← (v.getInt?).toOption
+          let x ← (literalValue text (curOf out)).bind id
+          some (x * sc == ((w : Int) : Rat))
+        else
+          match boolOf v with
+          | some b => some (text == (if b then "true" else "false"))
+          | none => some (str v == some text)
+      match agrees with
+      | some true => read := read + 1
+      | some false => r := r.fail s!"machine: row {row} writes `{text}` into {out}, and the certificate reads another value for the `once` line"
+      | none =>
+        if numeric && scale.isNone then
+          r := r.state s!"the values the `once {out}` line reads: the certificate does not say the scale they are counted at"
+        else r := r.fail s!"machine: row {row} writes `{text}` into {out}, which is not the number the certificate reads for the `once` line"
+  -- Where a case starts (rulec's §15.233): the state the `initial` line names, and for each value
+  -- carried besides it, the value its own `initial` line gives, inside the coordinate the start gives
+  -- it. A certificate from before it said where those lines are leaves the start its own word.
+  match field mj "initial_source" with
+  | none => r := r.state "where a case starts: the certificate does not say where the `initial` line is"
+  | some src =>
+    let init := (fieldNat mj "initial").getD 0
+    if textAt lines src != states[init]? || textAt lines src != some (fieldStr src "text") then
+      r := r.fail s!"machine: the `initial` line does not name {(states[init]?).getD "?"} there"
+    else if !initialLineOk lines src [] then
+      r := r.fail "machine: where a case starts is not read from an `initial` line"
+    else read := read + 1
+  let cm := (field mj "carried").getD Json.null
+  let startJ := fieldArr cm "start"
+  let items := fieldArr cm "items"
+  for (it, k) in items.toList.zip (List.range items.size) do
+    let input := fieldStr it "input"
+    match field it "initial_source" with
+    | none => r := r.state s!"where {input} starts: the certificate does not say where its `initial` line is"
+    | some src =>
+      let got := textAt lines src
+      if got != some (fieldStr src "text") then
+        r := r.fail s!"carried values: the `initial` line of {input} is not what the file has there"
+      else if !initialLineOk lines src [input] then
+        r := r.fail s!"carried values: where {input} starts is not read from its `initial` line"
+      else
+        let text := (got.getD "").trimAscii.toString
+        let ci := (startJ[k]? >>= nat)
+        let labels := (fieldArr it "labels").toList.filterMap str
+        let coord : Option (Rat × Rat) := ci.bind (fun c => (fieldArr it "coords")[c]? >>= ratPair)
+        let ok : Bool :=
+          if !labels.isEmpty then (ci.bind (fun c => labels[c]?)) == some text
+          else match (literalValue text (curOf input)).bind id, coord with
+            | some x, some (a, b) => decide (a ≤ x) && decide (x ≤ b)
+            | _, _ => false
+        if ok then read := read + 1
+        else r := r.fail s!"carried values: {input} starts at `{text}` by its `initial` line, and the certificate starts it elsewhere"
   return (r, read)
+
+/-- **What a `max` or a `min` answers, held to its column and its `empty` value** (rulec's §15.220).
+    The answer is a value of the column or the `empty` value, so the range the certificate states for
+    it has to hold the column's interval — worked out here as every name's is (`Worked.rangesOf`) —
+    and the `empty` value: `extremeOk`, and `extreme_mem_stated` is what a pass settles. One of an
+    ordered enum answers one of its values, `empty` among them, and states no range. -/
+def checkExtremes (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
+  let mut r := r
+  let types := (field cert "types").getD Json.null
+  let enums := (field cert "enums").getD Json.null
+  let rangesJ := (field cert "ranges").getD Json.null
+  let walks := (fieldArr cert "walks").toList.filterMap str
+  let mut held := 0
+  for e in fieldArr cert "extremes" do
+    let name := fieldStr e "name"
+    let col := fieldStr e "of"
+    let kind := fieldStr e "kind"
+    if kind != "max" && kind != "min" then
+      r := r.fail s!"{name}: the certificate calls it a `{kind}`, which is neither `max` nor `min`"
+      continue
+    if !walks.contains name then
+      r := r.fail s!"{name}: a `{kind}` is a value a walk leaves behind, and `walks` does not name it"
+      continue
+    let ty := fieldStr types col
+    if ty.isEmpty || fieldStr types name != ty then
+      r := r.fail s!"{name}: a `{kind}` of {col} answers with {col}'s type `{ty}`, and the certificate says `{fieldStr types name}`"
+      continue
+    let base := if ty.endsWith "?" then (ty.dropEnd 1).toString else ty
+    match field enums base >>= arr with
+    | some vs =>
+      if !(vs.toList.filterMap str).contains (fieldStr e "empty") then
+        r := r.fail s!"{name}: its `empty` value {fieldStr e "empty"} is not a value of {base}"
+      else if (field rangesJ name).isSome then
+        r := r.fail s!"{name}: a `{kind}` of an enum answers one of its values, and the certificate states a range for it"
+      else held := held + 1
+    | none =>
+      match field rangesJ name with
+      | none => held := held + 1  -- no range is claimed for the answer, so nothing reads it with one
+      | some sj =>
+        match ratPair sj with
+        | none =>
+          -- An end left open: `ranges` gives this program no interval for the name, so nothing here
+          -- reads the answer with it; that it holds is the certificate's word.
+          r := r.state s!"the range of {name}, the {kind} of {col}: an end of it is open"
+        | some S =>
+          match w.rangesOf col, field e "empty" >>= optRat with
+          | none, _ =>
+            r := r.fail s!"{name}: the certificate states a range for it, and this program cannot work out the range of {col}"
+          | _, none =>
+            r := r.fail s!"{name}: a `{kind}` of numbers or dates states no `empty` value"
+          | some C, some z =>
+            if extremeOk C z S then held := held + 1
+            else
+              let H := hullWith C z
+              r := r.fail s!"{name}: a `{kind}` of {col} answers from {ratText H.1} to {ratText H.2} with its `empty` value, and the certificate states the range [{ratText S.1}, {ratText S.2}]"
+  if held > 0 then
+    r := r.say s!"  extremes: {held} `max` and `min` answers keep to their column's range and their `empty` value"
+  return r
+
+/-- One value a fold answers with, as an expression: a date written in the rule stands for its day
+    number, on the scale `ranges` gives dates (rulec's §15.196), so it is read as that number. -/
+def answerExprOfJson (j : Json) : Option RulecCert.Expr := exprOfJson j (dates := true)
+
+/-- **What a fold answers, held to the values it answers with** (rulec's §15.219). The answer is the
+    value of one of the expressions the certificate lists (`empty`, `exhausted` unless it is `held`, a
+    `stop with`, what an arm takes or keeps), at the call or at one element, so the range the
+    certificate states for it has to hold the interval of every one: `writesWithin`, and
+    `foldAnswer_mem_stated` is what a pass settles. -/
+def checkFoldAnswers (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
+  let mut r := r
+  let rangesJ := (field cert "ranges").getD Json.null
+  let mut held := 0
+  for fa in fieldArr cert "fold_answers" do
+    let name := fieldStr fa "name"
+    let some S := field rangesJ name >>= ratPair
+      | r := r.fail s!"{name}: the certificate lists the values the fold answers it with, and states no range for it"
+        continue
+    let some answers := (fieldArr fa "answers").toList.mapM answerExprOfJson
+      | r := r.fail s!"{name}: a value the fold answers with cannot be read"
+        continue
+    if answers.isEmpty then
+      r := r.fail s!"{name}: the fold answers with no value at all"
+      continue
+    let ws : List Writes := answers.map (fun e => { expr := e })
+    if writesWithin w.rangesOf w.within S ws then held := held + 1
+    else
+      match hullOf w.rangesOf w.within ws with
+      | some H =>
+        r := r.fail s!"{name}: the fold answers with values from {ratText H.1} to {ratText H.2}, and the certificate states the range [{ratText S.1}, {ratText S.2}]"
+      | none =>
+        r := r.fail s!"{name}: one of the values the fold answers with has no interval this program can work out"
+  if held > 0 then
+    r := r.say s!"  fold answers: {held} ranges hold every value their fold answers with"
+  return r
+
+/-- Whether two lists hold the same values, each once. -/
+def sameOnce (a b : List String) : Bool :=
+  a.length == b.length && b.all (fun x => a.count x == 1)
+
+/-- The answer each value of a block's enum gets from the `ordered by` table (rulec's §15.222), read
+    off the table's rows: the first row whose box takes the value's coordinate on the table's one axis
+    — the row that answers it, which the table's own certificate says is the only one under `unique`
+    (`Certified.unique`) — and what it writes: an ordered enum's value by its place in the enum, a
+    number by itself. The numbers a row writes are read back out of the file (`checkSpans`). -/
+def orderedAnswers (cert ob : Json) (values : List String) :
+    Except String (List (String × String) × (String → Option Rat)) := do
+  let tname := fieldStr ob "table"
+  let some t := (fieldArr cert "tables").find? (fun x => fieldStr x "table" == tname)
+    | throw s!"{tname} is no table of the certificate"
+  let axes := fieldArr t "axes"
+  let decides := (fieldArr t "decides").toList.filterMap str
+  unless axes.size == 1 && decides == [fieldStr ob "column"] do
+    throw s!"{tname} is no table of one column of the block's enum that decides {fieldStr ob "column"}"
+  unless ((fieldArr (axes[0]!) "coords").toList.filterMap str) == values do
+    throw s!"the axis of {tname} is not the values of the block's enum"
+  let kind := fieldStr ob "kind"
+  let order : List String :=
+    if kind == "enum" then
+      ((field ((field cert "enums").getD Json.null) (fieldStr ob "enum")) >>= arr).map (·.toList.filterMap str) |>.getD []
+    else []
+  if kind == "enum" then
+    unless !order.isEmpty && ((fieldArr ob "order").toList.filterMap str) == order &&
+        ((fieldArr cert "ordered").toList.filterMap str).contains (fieldStr ob "enum") do
+      throw s!"{fieldStr ob "enum"} is not an ordered enum of the certificate"
+  else unless kind == "number" do
+    throw s!"an order of kind `{kind}` cannot be read"
+  let rows := (fieldArr t "rows").toList
+  let mut shown : List (String × String) := []
+  let mut keys : List (String × Rat) := []
+  for (v, i) in values.zip (List.range values.length) do
+    let takes : Json → Bool := fun row =>
+      (((fieldArr row "accepts")[0]? >>= arr).map (fun a => (a.toList.filterMap nat).contains i)).getD false
+    let some row := rows.find? takes | continue
+    if kind == "enum" then
+      let some w := (fieldArr row "produces")[0]? >>= str | continue
+      let some k := order.idxOf? w
+        | throw s!"{tname} writes {w} for {v}, which is not a value of {fieldStr ob "enum"}"
+      shown := shown ++ [(v, w)]
+      keys := keys ++ [(v, ((k : Nat) : Rat))]
+    else
+      let some e := ((fieldArr row "writes")[0]?).bind (fun w => field w "expr") | continue
+      let some x := (if (field e "num").isSome then field e "value" >>= optRat else none)
+        | throw s!"{tname} writes something other than a number for {v}"
+      shown := shown ++ [(v, ratText x)]
+      keys := keys ++ [(v, x)]
+  let keysF := keys
+  return (shown, fun v => keysF.lookup v)
+
+/-- **A `prerequisites` block, held to what it claims** (rulec's §15.222). Its graph is the
+    certificate's account of the block, as each value's expression is; what is held to it are the
+    claims. Each value of the enum is said once — on `start`, on its own `requires` line, or among
+    those no case can take — and named nowhere else. `topological` puts every value after every value
+    it may need (`Prereq.topoOk`, so `Prereq.no_cycle`); `reached` takes the values one after another
+    from `start` (`Prereq.reachedOk`, so `Prereq.reached_holds`), and it and those no case can take are
+    the values of the enum, each once (so `Prereq.never_held` speaks of every other value). Where an
+    `ordered by` names a table, each value's answer is read off the table's rows here, held to the
+    certificate's `values`, and kept along every edge into a value a case can take (`Prereq.orderOk`,
+    so `Prereq.order_along`). -/
+def checkPrerequisites (cert p : Json) (r : Report) : Report := Id.run do
+  let name := fieldStr p "name"
+  let over := fieldStr p "over"
+  let at_ := s!"prerequisites {name}"
+  let some values := ((field ((field cert "enums").getD Json.null) over) >>= arr).map (·.toList.filterMap str)
+    | return r.fail s!"{at_}: {over} is not an enum of the certificate"
+  let start := (fieldArr p "start").toList.filterMap str
+  let never := (fieldArr p "never").toList.filterMap str
+  let reqJ := (field p "requires").getD Json.null
+  let groupsOf : Json → Option (List (List String)) := fun gj => do
+    let a ← arr gj
+    a.toList.mapM (fun (g : Json) => (arr g).map (fun (xs : Array Json) => xs.toList.filterMap str))
+  let some requires := ((objPairs reqJ).mapM (fun (p : String × Json) => (groupsOf p.2).map (p.1, ·)) :
+      Option (List (String × List (List String))))
+    | return r.fail s!"{at_}: a `requires` line cannot be read"
+  let said := start ++ requires.map (·.1) ++ never
+  if !said.all values.contains then
+    return r.fail s!"{at_}: a value it names is not a value of {over}"
+  if !sameOnce said values then
+    return r.fail s!"{at_}: the values of {over} are not each said once (on start, in requires or in never)"
+  for ((v, gs) : String × List (List String)) in requires do
+    if gs.isEmpty || gs.any List.isEmpty then
+      return r.fail s!"{at_}: {v} has an empty group"
+    if !gs.all (·.all values.contains) then
+      return r.fail s!"{at_}: {v} needs a value that is not a value of {over}"
+  let G : Prereq.Graph := { start := start, requires := requires, never := never }
+  let topo := (fieldArr p "topological").toList.filterMap str
+  if !sameOnce topo values then
+    return r.fail s!"{at_}: `topological` is not the values of {over}, each once"
+  if !Prereq.topoOk G topo then
+    return r.fail s!"{at_}: `topological` puts a value before one it needs"
+  let reached := (fieldArr p "reached").toList.filterMap str
+  if !sameOnce (reached ++ never) values then
+    return r.fail s!"{at_}: `reached` and `never` are not the values of {over}, each once"
+  if !Prereq.reachedOk G reached then
+    return r.fail s!"{at_}: `reached` names a value before a value of each group it needs"
+  let edges := (requires.map (fun (p : String × List (List String)) => (p.2.map List.length).sum)).sum
+  let mut kept := ""
+  let ob := (field p "ordered_by").getD Json.null
+  if !ob.isNull then
+    match orderedAnswers cert ob values with
+    | .error why => return r.fail s!"{at_}: {why}"
+    | .ok (shown, key) =>
+      let stated : List (String × String) :=
+        (objPairs ((field ob "values").getD Json.null)).filterMap (fun (v, j) => (str j).map (v, ·))
+      let same := shown.length == stated.length && shown.all (fun (v, w) =>
+        match stated.lookup v with
+        | some w' => w == w' || (match ratOfString w, ratOfString w' with
+            | some a, some b => a == b
+            | _, _ => false)
+        | none => false)
+      if !same then
+        return r.fail s!"{at_}: the answers of {fieldStr ob "table"} are not the ones its rows write"
+      if !Prereq.orderOk G key then
+        return r.fail s!"{at_}: {fieldStr ob "table"} puts a value before a value it needs"
+      let had := (requires.map (fun (p : String × List (List String)) =>
+        (p.2.map (fun g => (g.filter (fun x => !never.contains x)).length)).sum)).sum
+      kept := s!", and {fieldStr ob "table"} keeps its order along {had} edges"
+  return r.say s!"  prerequisites {name} over {over}: {values.length} values and {edges} edges with no cycle, {reached.length} reached from start and {never.length} no case can take{kept}"
 
 /-- The file a certificate is about, split into lines the way a span counts them. -/
 def readLines (bs : ByteArray) : Array ByteArray := Id.run do
@@ -1755,15 +2177,12 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     let kindsKnown := (field cert "inputs").isSome
     if !kindsKnown then
       r := r.state "the kinds of the columns: the certificate does not say what the rule's inputs are"
-    -- What a `max` or a `min` of numbers or dates answers, and the answer of a fold the items
-    -- below read (rulec's §15.219): their ranges are worked out from the column's range and the
-    -- `empty` value, or from the values the fold answers with, rather than declared. Nothing here
-    -- holds them to those, so they are stated rather than proved. One of an enum states no range.
-    for e in fieldArr cert "extremes" do
-      if (field ((field cert "ranges").getD Json.null) (fieldStr e "name")).isSome then
-        r := r.state s!"the range of {fieldStr e "name"}, the {fieldStr e "kind"} of {fieldStr e "of"} or its `empty` value"
-    for e in fieldArr cert "fold_answers" do
-      r := r.state s!"the range of {fieldStr e "name"}, which the fold over {fieldStr e "over"} answers"
+    -- What a `max` or a `min` answers, and the answer of a fold the items below read (rulec's
+    -- §15.219, §15.220): their ranges are worked out from the column's interval and the `empty`
+    -- value, or from the values the fold answers with, rather than declared, and each is held to
+    -- what it is worked out from here (`extreme_mem_stated`, `foldAnswer_mem_stated`).
+    r := checkExtremes cert worked r
+    r := checkFoldAnswers cert worked r
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
       if kindsKnown then
@@ -1795,12 +2214,10 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     r := checkContracts cert r
     r := checkMachine cert tables r
     -- Which values need which before them (rulec's §15.222): no cycle, every value but those no
-    -- case can take reached from `start`, and an `ordered by` table's order kept along the edges.
-    -- `tools/recheck.py` works these out again; no theorem here says them yet, so they are stated.
+    -- case can take reached from `start`, and an `ordered by` table's order kept along the edges
+    -- (`Prereq.no_cycle`, `Prereq.reached_holds`, `Prereq.never_held`, `Prereq.order_along`).
     for p in fieldArr cert "prerequisites" do
-      let ob := (field p "ordered_by").getD Json.null
-      let order := if ob.isNull then "" else s!", and the order of {fieldStr ob "table"} kept along its edges"
-      r := r.state s!"the prerequisites {fieldStr p "name"} over {fieldStr p "over"} ({(fieldArr p "topological").size} values): no cycle, every value reached from `start` but those no case can take{order}"
+      r := checkPrerequisites cert p r
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"
@@ -1815,7 +2232,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         for t in tables do
           let (r', n, a) := checkSpans t lines r curOf
           r := r'; read := read + n; apart := apart + a
-        let (r', mread) := checkMachineSpans cert lines r
+        let (r', mread) := checkMachineSpans cert lines r curOf
         r := r'; read := read + mread
         let rest := if apart > 0 then s!", {apart} rows written in an applied rule" else ""
         if apart > 0 then

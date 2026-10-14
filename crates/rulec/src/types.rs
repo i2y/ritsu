@@ -2657,7 +2657,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // it is normal that a cell like `not: 沖縄` leaves 45 values unnamed; demanding a mark on
     // each of them would wreck the whole warning channel.
     for e in &f.enums {
-        let unused: Vec<&Name> = e
+        let unnamed: Vec<&Name> = e
             .values
             .iter()
             .enumerate()
@@ -2666,6 +2666,27 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             })
             .map(|(_, v)| v)
             .collect();
+        // A value of an ordered enum that the `range` of every input of the enum keeps out never
+        // arrives: when every name of the enum's type is an input whose range leaves the value out,
+        // no call brings it, and no row has to name it (§15.210, §15.233). One name of the type
+        // without such a range — an input with none, a field of an element, an output, a value the
+        // rule computes — brings every value back.
+        let uses: Vec<&String> = c
+            .syms
+            .iter()
+            .filter(|(_, s)| match &s.ty {
+                Ty::Enum(n) => *n == e.name.text,
+                Ty::Opt(t) => matches!(t.as_ref(), Ty::Enum(n) if *n == e.name.text),
+                _ => false,
+            })
+            .map(|(n, _)| n)
+            .collect();
+        let kept_out = |v: &str| {
+            !uses.is_empty()
+                && uses.iter().all(|n| c.syms[*n].kind == SymKind::Input && c.enum_ranges.get(*n).is_some_and(|vs| !vs.iter().any(|x| x == v)))
+        };
+        let prereq_only = unnamed.len() == e.values.len() && f.prerequisites.iter().any(|p| p.over_name() == e.name.text);
+        let unused: Vec<&Name> = unnamed.into_iter().filter(|v| !kept_out(&v.text)).collect();
         // An enum bound to a `.proto` is reported by the pass that read the file (E033): the
         // question there is not "did you forget a line" but "has anyone read the change the
         // contract shipped", and it is only a fair question once the file resolved (§15.59).
@@ -2674,8 +2695,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         // names the values it decides on, as one names the prefectures it decides on (§15.212).
         // Nor does a file of enums name any: it has no rows (§15.212).
         // An enum no row names, which a `prerequisites` block is over, is that block's: every value
-        // of it is named there (§15.222).
-        let prereq_only = unused.len() == e.values.len() && f.prerequisites.iter().any(|p| p.over_name() == e.name.text);
+        // of it is named there (§15.222). (`prereq_only` is worked out above, before the values
+        // the ranges keep out are taken away.)
         if !unused.is_empty() && !bound && e.from.is_none() && f.kind == FileKind::Rule && !prereq_only {
             let names: Vec<String> = unused.iter().map(|v| v.text.clone()).collect();
             c.diags.push(

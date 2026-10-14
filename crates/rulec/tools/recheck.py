@@ -1848,11 +1848,31 @@ def column_grid(cert, name, seen=()):
     says, which a certificate from before §15.190 does not."""
     if name in seen:
         return None
+    grid_of = lambda n: column_grid(cert, n, seen + (name,))
     v = next((x for x in cert.get("values", []) if x.get("name") == name), None)
     if v is not None and v.get("expr") is not None:
-        g = expr_grid(v["expr"], lambda n: column_grid(cert, n, seen + (name,)))
+        g = expr_grid(v["expr"], grid_of)
         if g is not None and g != 0:
             return g
+    # What a walk answers (§15.219, §15.220): a fold's answer is the value of one of the
+    # expressions it answers with, and a `max` or a `min` a value of its column or its `empty`
+    # value, so each sits on the step those share.
+    fa = next((x for x in cert.get("fold_answers") or [] if x.get("name") == name), None)
+    ex = next((x for x in cert.get("extremes") or [] if x.get("name") == name), None)
+    g = None
+    if fa is not None:
+        gs = [expr_grid(e, grid_of) for e in fa.get("answers", [])]
+        if gs and all(x is not None for x in gs):
+            g = Fraction(0)
+            for x in gs:
+                g = share(g, x)
+    elif ex is not None:
+        # An ordered enum's `empty` is a word, and its column has no step.
+        c = grid_of(ex.get("of"))
+        if c is not None and isinstance(ex.get("empty"), str) and re.fullmatch(r"-?\d+(/\d+)?", ex["empty"]):
+            g = share(c, abs(num(ex["empty"])))
+    if g is not None and g != 0:
+        return g
     s = (cert.get("scales") or {}).get(name)
     return Fraction(1, s) if isinstance(s, int) and s > 0 else None
 
@@ -2452,6 +2472,21 @@ def check_cells(cert, path):
             if bars and len(bars) != len(got) + t.get("outputs", 0):
                 raise Bad(f"{t['table']}: row {r['row']} is written with {len(bars)} cells, "
                           f"and the certificate accounts for {len(got)} of them")
+            # What the row writes into a column of words is the cell in the file too (§15.233): the
+            # answer cell of that column says the word the certificate reads — what a machine moves
+            # on, what a `once` line counts, what an `ordered by` table answers, and what a table
+            # above writes. Only for a table written in one place, whose answer cells stand in the
+            # order it decides its columns (a set of tables that decide one column does not).
+            if bars and here and len({x.get("origin", "") for x in t["rows"]}) == 1:
+                for j, w in enumerate(r.get("produces") or []):
+                    if w is None:
+                        continue
+                    a, b = bars[len(got) + j] if len(got) + j < len(bars) else (0, 0)
+                    said = line[a:b].decode("utf-8", "replace")
+                    if said != w:
+                        raise Bad(f"{t['table']}: row {r['row']}, answer {j + 1}: the file writes `{said}` there, "
+                                  f"and the certificate reads it as `{w}`")
+                    read += 1
             # What the row writes into a column that holds a number is the cell in the file
             # (§15.196): the same line, one of the cells after the ones the tests read, and the
             # literal or the name the certificate says it is.
@@ -2833,6 +2868,61 @@ def check_machine(cert):
             f"{len(claims)} claims laid on the rows")
 
 
+class Inexact(Exception):
+    """A rounding that meets a value off its grid: the value depends on the mode."""
+
+
+def exact_value(e, env):
+    """The value of an expression where every rounding meets a value already on its grid (§15.233),
+    which every mode leaves where it is. None where a name it reads has no value; Inexact where a
+    rounding meets a value off its grid, or a grid that is not positive."""
+    if "name" in e:
+        return env.get(e["name"])
+    if "num" in e:
+        return num(e.get("value"))
+    if "lit" in e:
+        return num(e.get("value")) if e.get("type") == "date" else None
+    op = e.get("op")
+    if op is not None:
+        l = exact_value(e["l"], env)
+        if op == "/" and "num" in e["r"]:
+            k = num(e["r"].get("value"))
+            return None if l is None or k is None or k == 0 else l / k
+        r = exact_value(e["r"], env)
+        if l is None or r is None:
+            return None
+        if op == "+":
+            return l + r
+        if op == "-":
+            return l - r
+        if op == "*":
+            return l * r
+        if op == "/":
+            return None if r == 0 else l / r
+        return Fraction(1 if {"<=": l <= r, "<": l < r, ">=": l >= r, ">": l > r, "==": l == r}[op] else 0)
+    if "call" in e:
+        fn, args = e["call"], e.get("args", [])
+        vals = [exact_value(a, env) for a in args]
+        if fn in ("min", "max") and len(vals) == 2:
+            if None in vals:
+                return None
+            return min(vals) if fn == "min" else max(vals)
+        if fn in ROUNDINGS and len(args) == 2:
+            x, g = vals
+            if x is None:
+                return None
+            if g is None or g <= 0 or (x / g).denominator != 1:
+                raise Inexact(f"{fn}({x}, {g})")
+            return x
+        if fn == "mod" and len(vals) == 2:
+            return None if None in vals else Fraction(math.floor(vals[0]) % int(vals[1]))
+        if fn == "isqrt" and len(vals) == 1:
+            return None if vals[0] is None else Fraction(math.isqrt(max(math.floor(vals[0]), 0)))
+        if fn == "allocate" and len(vals) == 3:
+            return None if None in vals or vals[2] == 0 else Fraction(math.floor(vals[0] * vals[1] / vals[2]))
+    return None
+
+
 def check_carried(cert):
     """Re-check the values a machine carries besides its state (§15.217). Returns a one-line
     summary, or None when the machine carries only its state; raises Bad.
@@ -2850,8 +2940,9 @@ def check_carried(cert):
     it reaches past. The set of
     places must hold where a case starts and be closed under that; each claim is a closure of
     the same kind, as the machine's are. An `always` line speaks of the places within the
-    ranges; a place outside one is the range's claim. Nothing here says a case can still
-    finish.
+    ranges; a place outside one is the range's claim. That a case can still finish needs calls
+    that really happen: where the section gives a path of them from every place, each call is run
+    here (§15.233).
     """
     m = cert["machine"]
     cm = m.get("carried")
@@ -3181,6 +3272,113 @@ def check_carried(cert):
             claims.append(f"range {kk}")
         else:
             STATED.append(f"carried values: that {items[kk]['output']} stays within its range is not laid on the rows")
+    # That a case can still finish (§15.233): from every place not in a final state — one value per
+    # coordinate, where every carried number was walked one value at a time — a path of calls that
+    # really happen. Each call is run here: the row's box takes the point at the place's state, and
+    # under `first` no earlier row does; the point's values pass the sieve; every column is an input,
+    # or a number the rule computes, inside its coordinate; the inputs keep their ranges and the
+    # constraints; the values the rule computes are worked out from the inputs with every rounding
+    # meeting a value on its grid; and each carried value moves on to exactly what the row writes.
+    if finals and cm.get("finish") is not None:
+        cols = [a["column"] for a in axes]
+        inputs = set(cert.get("inputs", []))
+        extras = (t.get("linear") or {}).get("extra", [])
+        paths = {place(x["place"]): x["path"] for x in cm["finish"]}
+
+        def run_call(s, vals, st):
+            row, at = st["row"], st["at"]
+            if row not in rows:
+                raise Bad(f"carried values: a call on a path names row {row}, which is not in {m['table']}")
+            if len(at) != len(axes) or any(not 0 <= c < len(axes[ai]["coords"]) for ai, c in enumerate(at)):
+                raise Bad(f"carried values: the call for row {row} is not a point of the table")
+            if any(c not in rows[row]["accepts"][ai] for ai, c in enumerate(at)):
+                raise Bad(f"carried values: the call for row {row} is not in that row's box")
+            if k is not None and at[k] != s:
+                raise Bad(f"carried values: the call for row {row} is not made from {states[s]}")
+            if first and any(all(c in rows[e]["accepts"][ai] for ai, c in enumerate(at)) for e in order if e < row):
+                raise Bad(f"carried values: the call for row {row} is taken by an earlier row first")
+            env = {}
+            for n, v in (st.get("inputs") or {}).items():
+                if n not in inputs:
+                    raise Bad(f"carried values: the call for row {row} is made with {n}, which is not an input")
+                env[n] = Fraction(v)
+            try:
+                for _ in range(len(vorder) + 1):
+                    for n in vorder:
+                        if n not in env:
+                            v = exact_value(values[n], env)
+                            if v is not None:
+                                env[n] = v
+                for n in vorder:
+                    if exact_value(values[n], env) != env.get(n):
+                        raise Bad(f"carried values: the call for row {row}: {n} is not what its expression comes to")
+            except Inexact as why:
+                raise Bad(f"carried values: the call for row {row} rounds a value off its grid ({why})")
+            for ai, (a, c) in enumerate(zip(axes, at)):
+                b = closed_at(t, ai, c) if (a.get("bounds") or [None] * len(a["coords"]))[c] is not None else None
+                if a["column"] not in inputs and (a["column"] not in values or b is None):
+                    raise Bad(f"carried values: the call for row {row} is laid on a table that reads {a['column']}, "
+                              f"which is neither an input nor a number the rule computes")
+                if b is not None:
+                    v = env.get(a["column"])
+                    if v is None or (b[0] is not None and v < b[0]) or (b[1] is not None and v > b[1]):
+                        raise Bad(f"carried values: the call for row {row}: {a['column']} is not inside its coordinate")
+            for n in inputs:
+                r = cert.get("ranges", {}).get(n)
+                if n in env and r is not None and r[0] is not None and r[1] is not None and not num(r[0]) <= env[n] <= num(r[1]):
+                    raise Bad(f"carried values: the call for row {row} is made with {n} outside its range")
+            for kc in cert.get("constraints", []):
+                ls, rs = side(kc["left"]), side(kc["right"])
+                if any(n not in env for n in ls + rs):
+                    raise Bad(f"carried values: the call for row {row} does not say {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
+                x, y = sum((env[n] for n in ls), Fraction(0)), sum((env[n] for n in rs), Fraction(0))
+                if not {"<=": x <= y, "<": x < y, ">=": x >= y, ">": x > y}[kc["op"]]:
+                    raise Bad(f"carried values: the call for row {row} breaks {side_text(kc['left'])} {kc['op']} {side_text(kc['right'])}")
+            at_values = [None if (a.get("bounds") or [None] * len(a["coords"]))[c] is None else str(env.get(a["column"]))
+                         for a, c in zip(axes, at)]
+            why = sieve_admits(t, at_values, at) or facts_hold(t, cert, at_values, [str(env[n]) if n in env else None for n in extras])
+            if why is not None:
+                raise Bad(f"carried values: the call for row {row} is one no input makes — {why}")
+            nxt = []
+            for kk, it in enumerate(items):
+                v = vals[kk]
+                ax = it.get("axis")
+                if labels[kk] is None:
+                    if env.get(it["input"]) != v:
+                        raise Bad(f"carried values: the call for row {row} is not made with {it['input']} = {v}")
+                    if ax is not None:
+                        lo, hi = closed_at(t, ax, at[ax])
+                        if (lo is not None and v < lo) or (hi is not None and v > hi):
+                            raise Bad(f"carried values: the call for row {row}: {it['input']} is not inside its coordinate")
+                elif ax is not None and axes[ax]["coords"][at[ax]] != labels[kk][int(v)]:
+                    raise Bad(f"carried values: the call for row {row} is not made with {it['input']} = {labels[kk][int(v)]}")
+                g = mv[kk][row]
+                if g[0] == "stay":
+                    w = v
+                elif g[0] == "to":
+                    w = Fraction(g[1])
+                elif g[0] == "lit":
+                    w = g[1]
+                else:
+                    w = env.get(g[1])
+                if w is None or (labels[kk] is None and grids[kk] is not None and (w / grids[kk]).denominator != 1):
+                    raise Bad(f"carried values: the call for row {row} carries {it['output']} on to a value off its grid")
+                nxt.append(w)
+            return (s if moves.get(row) is None else moves[row]), nxt
+
+        for p in sorted(places):
+            if p[0] in finals:
+                continue
+            if any(c == OUT or coords[kk][c][0] != coords[kk][c][1] for kk, c in enumerate(p[1])):
+                raise Bad(f"carried values: a place at {states[p[0]]} stands for more than one value, and a path is given from it")
+            if p not in paths:
+                raise Bad(f"carried values: no path to a final state is given from a place at {states[p[0]]}")
+            s, vals = p[0], [coords[kk][c][0] for kk, c in enumerate(p[1])]
+            for st in paths[p]:
+                s, vals = run_call(s, vals, st)
+            if s not in finals:
+                raise Bad(f"carried values: the path from a place at {states[p[0]]} ends at {states[s]}, which is not final")
+        claims.append("finish")
     # A claim laid here is laid: the closure over the state alone could not carry it (its rows
     # move the carried values too), and it is no longer listed as stated for that.
     laid_once = {m["once"][int(c.split()[1])]["output"] for c in claims if c.startswith("once ")}
@@ -3188,23 +3386,68 @@ def check_carried(cert):
     STATED[:] = [x for x in STATED if not (
         ("final" in claims and x.startswith("machine: that no call leaves a final state"))
         or (all_never and x.startswith("machine: a `never` line"))
+        or ("finish" in claims and x.startswith("machine: that a case") and "carries more than its state" in x)
         or any(x.startswith(f"machine: `once {o}`") for o in laid_once))]
     return f"carried values over {m['table']}: {len(places)} places a case can be, {len(claims)} claims laid on the rows"
 
 
+def literal_number(text, ty):
+    """The number a literal written in the rule stands for, in a column of type `ty`: `%` a
+    hundredth, no unit or the column's currency the number itself. None otherwise."""
+    k = lit_key(text)
+    if k[0] != "n":
+        return None
+    n, unit = k[1], k[2]
+    cur = ty[len("money["):-1].split(",")[0].strip() if isinstance(ty, str) and ty.startswith("money[") else None
+    if unit == "%":
+        return n / 100
+    if unit == "" or (cur is not None and unit == cur):
+        return n
+    return None
+
+
 def check_machine_cells(cert, path):
-    """The moves a machine's section states are the cells the file has (§15.148): a row said
-    to leave the state where it is writes the carried input's own name, a row said to go to a
-    state writes that state, and the value a `once` line counts is read at its place."""
+    """The machine's section says what the file says (§15.148, §15.233): a row said to leave the
+    state where it is writes the carried input's own name, a row said to go to a state writes
+    that state, each in the row's answer cell of the carried output; a value carried besides the
+    state the same way; the value a `once` line reads on each row is the one its answer cell
+    writes; and where a case starts is what the `initial` lines say."""
     with open(path, "rb") as fh:
         lines = fh.read().split(b"\n")
     m = cert["machine"]
+    t = next((x for x in cert["tables"] if x["table"] == m["table"]), {})
+    decides = t.get("decides") or []
+    types = cert.get("types") or {}
 
     def text(src):
         ln = lines[src["line"] - 1] if 0 < src["line"] <= len(lines) else b""
         return ln[src["col"]:src["col"] + src["len"]].decode("utf-8", "replace")
 
+    def answer_cell(row, column, src):
+        """Whether `src` is the row's answer cell of `column`: on the row's own line, the cell the
+        column's place puts after the cells its tests read. A row whose answers are not on its own
+        line (a `clause`) has none, and only what the file says there is held."""
+        r = next((x for x in t.get("rows", []) if x["row"] == row), None)
+        if r is None or column not in decides or r.get("source") is None:
+            return False
+        ln = r.get("line", 0)
+        line = lines[ln - 1] if 0 < ln <= len(lines) else b""
+        bars = fields_of(line)
+        if not bars:
+            return True
+        k = len([sp for sp in r["source"] if sp is not None]) + decides.index(column)
+        return src.get("line") == ln and k < len(bars) and bars[k] == (src["col"], src["col"] + src["len"])
+
+    def initial_line(src, before):
+        """Whether the place is the value of an `initial` line: the line reads `initial`, then
+        `before`, then the value, and nothing after it but a comment."""
+        ln = lines[src["line"] - 1] if 0 < src["line"] <= len(lines) else b""
+        head = ln[:src["col"]].decode("utf-8", "replace").split()
+        tail = ln[src["col"] + src["len"]:].decode("utf-8", "replace").strip()
+        return head == ["initial"] + before and (not tail or tail.startswith("#"))
+
     read = 0
+    out = m["carry"]["output"]
     for r in m["rows"]:
         src = r.get("source")
         if src is None:
@@ -3213,14 +3456,36 @@ def check_machine_cells(cert, path):
         want = m["carry"]["input"] if r.get("stay") else m["states"][r["to"]]
         if got != want or got != src.get("text"):
             raise Bad(f"machine: row {r['row']} is said to write `{want}`, and the file has `{got}` there")
+        if not answer_cell(r["row"], out, src):
+            raise Bad(f"machine: row {r['row']}'s move is not read from the row's own cell of {out}")
         read += 1
     for on in m["once"]:
+        test = on.get("test")
+        if test is None:
+            continue
         for r in on.get("rows", []):
             src = r.get("source")
             if src is None:
-                continue
+                raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']} has no place in the file")
             if text(src) != src.get("text"):
                 raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']} is not what the file has there")
+            if not answer_cell(r["row"], on["output"], src):
+                raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']} is not read from the row's own cell of {on['output']}")
+            v, said = r.get("value"), text(src).strip()
+            # A computed value counts wherever it might: nothing to hold it to.
+            if v is not None:
+                if "words" not in test:
+                    if test.get("scale") is None:
+                        STATED.append(f"the values the `once {on['output']}` line reads: the certificate does not say the scale they are counted at")
+                    else:
+                        x = literal_number(said, types.get(on["output"]))
+                        if x is None or x * test["scale"] != v:
+                            raise Bad(f"machine: row {r['row']} writes `{said}` into {on['output']}, and the certificate reads another value for the `once` line")
+                elif isinstance(v, bool):
+                    if said != ("true" if v else "false"):
+                        raise Bad(f"machine: row {r['row']} writes `{said}` into {on['output']}, and the certificate reads another value for the `once` line")
+                elif said != v:
+                    raise Bad(f"machine: row {r['row']} writes `{said}` into {on['output']}, and the certificate reads another value for the `once` line")
             read += 1
     # The values carried besides the state (§15.217): a row said to keep one writes its own name,
     # a row said to write a truth value or an enum's writes it, a computation is named.
@@ -3241,7 +3506,42 @@ def check_machine_cells(cert, path):
                 want = src.get("text")
             if got != want or got != src.get("text"):
                 raise Bad(f"carried values: row {r['row']} is said to write `{want}` into {it['output']}, and the file has `{got}` there")
+            if not answer_cell(r["row"], it["output"], src):
+                raise Bad(f"carried values: row {r['row']}'s move of {it['output']} is not read from the row's own cell of it")
             read += 1
+    # Where a case starts (§15.233): the state the `initial` line names, and for each value carried
+    # besides it, the value its own `initial` line gives, inside the coordinate the start gives it.
+    src = m.get("initial_source")
+    if src is None:
+        STATED.append("where a case starts: the certificate does not say where the `initial` line is")
+    else:
+        want = m["states"][m["initial"]] if 0 <= m["initial"] < len(m["states"]) else None
+        if text(src) != want or text(src) != src.get("text"):
+            raise Bad(f"machine: the `initial` line does not name {want} there")
+        if not initial_line(src, []):
+            raise Bad("machine: where a case starts is not read from an `initial` line")
+        read += 1
+    for k, it in enumerate(cm.get("items", [])):
+        src = it.get("initial_source")
+        if src is None:
+            STATED.append(f"where {it['input']} starts: the certificate does not say where its `initial` line is")
+            continue
+        got = text(src)
+        if got != src.get("text"):
+            raise Bad(f"carried values: the `initial` line of {it['input']} is not what the file has there")
+        if not initial_line(src, [it["input"]]):
+            raise Bad(f"carried values: where {it['input']} starts is not read from its `initial` line")
+        start = (cm.get("start") or [])[k] if k < len(cm.get("start") or []) else None
+        said = got.strip()
+        if it.get("labels") is not None:
+            ok = start is not None and 0 <= start < len(it["labels"]) and it["labels"][start] == said
+        else:
+            x = literal_number(said, types.get(it["input"]))
+            co = it["coords"][start] if start is not None and 0 <= start < len(it["coords"]) else None
+            ok = x is not None and co is not None and num(co[0]) <= x <= num(co[1])
+        if not ok:
+            raise Bad(f"carried values: {it['input']} starts at `{said}` by its `initial` line, and the certificate starts it elsewhere")
+        read += 1
     return f"the machine's moves say the same as the file: {read} cells read back"
 
 
@@ -3425,28 +3725,47 @@ def check_prerequisites(cert, p):
         coords = t["axes"][0]["coords"]
         if list(coords) != list(values):
             raise Bad(f"prerequisites {name}: the axis of {ob['table']} is not the values of {over}")
+        if ob["kind"] not in ("enum", "number"):
+            raise Bad(f"prerequisites {name}: an order of kind {ob['kind']!r} cannot be read")
         answer = {}
         for i, v in enumerate(coords):
-            # the first row that takes the value — the only one, in a table whose rows are disjoint
+            # the first row that takes the value — the only one, in a table whose rows are disjoint.
+            # An enum's value is what the row produces; a number is what it writes (§15.196), read
+            # back from the file in `check_cells`.
             row = next((r for r in t["rows"] if i in r["accepts"][0]), None)
-            if row is not None and row["produces"] and row["produces"][0] is not None:
-                answer[v] = row["produces"][0]
-        if answer != ob["values"]:
+            if row is None:
+                continue
+            if ob["kind"] == "enum":
+                if row["produces"] and row["produces"][0] is not None:
+                    answer[v] = row["produces"][0]
+            else:
+                w = (row.get("writes") or [None])[0]
+                e = w.get("expr") if isinstance(w, dict) else None
+                if not isinstance(e, dict) or "num" not in e or num(e.get("value")) is None:
+                    raise Bad(f"prerequisites {name}: {ob['table']} writes something other than a number for {v}")
+                answer[v] = num(e["value"])
+        said = ob.get("values") or {}
+        same = set(answer) == set(said) and all(
+            answer[v] == said[v] if ob["kind"] == "enum" else answer[v] == Fraction(said[v]) for v in answer)
+        if not same:
             raise Bad(f"prerequisites {name}: the answers of {ob['table']} are not the ones its rows write")
         if ob["kind"] == "enum":
             order = cert.get("enums", {}).get(ob["enum"])
             if order != ob["order"] or ob["enum"] not in cert.get("ordered", []):
                 raise Bad(f"prerequisites {name}: {ob['enum']} is not an ordered enum of the certificate")
+            if any(a not in order for a in answer.values()):
+                raise Bad(f"prerequisites {name}: {ob['table']} writes a value that is not one of {ob['enum']}")
             key = lambda v: order.index(answer[v])
-        elif ob["kind"] == "number":
-            key = lambda v: Fraction(answer[v])
         else:
-            raise Bad(f"prerequisites {name}: an order of kind {ob['kind']!r} cannot be read")
+            key = lambda v: answer[v]
         edges = 0
         for v in values:
             for x in needs[v]:
-                if x in never or v not in answer or x not in answer:
+                if x in never:
                     continue
+                # A value a case can take, and the one it needs, each have the answer the table gives it.
+                if v not in answer or x not in answer:
+                    raise Bad(f"prerequisites {name}: {ob['table']} gives no answer for {v if v not in answer else x}")
                 edges += 1
                 if key(v) < key(x):
                     raise Bad(f"prerequisites {name}: {ob['table']} puts {v} at {answer[v]}, before its prerequisite {x} at {answer[x]}")

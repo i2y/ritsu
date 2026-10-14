@@ -394,6 +394,18 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.Carried.Model.always_holds",
         "RulecCert.Carried.Model.range_holds",
         "RulecCert.Carried.Model.start_inhabited",
+        "RulecCert.extreme_mem_stated",
+        "RulecCert.foldAnswer_mem_stated",
+        "RulecCert.rounds_onGrid",
+        "RulecCert.evalExact_sound",
+        "RulecCert.Prereq.no_cycle",
+        "RulecCert.Prereq.reached_holds",
+        "RulecCert.Prereq.never_held",
+        "RulecCert.Prereq.order_along",
+        "RulecCert.Carried.Model.call_of_fires",
+        "RulecCert.Carried.Model.fires_of_callOk",
+        "RulecCert.Carried.Model.finishes_of_pathOk",
+        "RulecCert.Carried.Model.reachable_finishes",
     ];
     let tmp = TempDir::new("axioms");
     let dir = tmp.path().to_path_buf();
@@ -1032,4 +1044,206 @@ fn 持ち越す値の主張は証明付きの検査器で証明される() {
     let (code, said) = lean(&bin, &cert.replacen("[1,[1],1]", "[1,[1],0]", 1), Some(rel));
     assert_eq!(code, 1, "数えた呼び出しを数えない once の組が通ってしまった\n{said}");
     assert!(said.contains("the `once trial_granted` set is not closed, or counts two"), "{said}");
+}
+
+/// Feed one certificate to `tools/recheck.py`, with the rule it is about, when python3 is here.
+fn python(cert: &str, rule: &str) -> Option<(i32, String)> {
+    use std::io::Write;
+    use std::process::Stdio;
+    let have = Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    if !ready(Need::Python, || have, "python3 が無いので tools/recheck.py は回していない") {
+        return None;
+    }
+    let mut p = Command::new("python3")
+        .current_dir(root())
+        .args(["tools/recheck.py", "--rule", rule])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("python3 を起動できない");
+    p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+    let o = p.wait_with_output().unwrap();
+    Some((o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr)))
+}
+
+/// Each forgery has to be refused by both re-checkers, the Lean one saying `why`.
+fn both_refuse(bin: &PathBuf, cert: &str, rule: &str, forged: &[(&str, String, &str)]) {
+    for (what, f, why) in forged {
+        assert_ne!(f, cert, "{what}: 証明書の形が変わっていて、偽れていない");
+        let (code, said) = lean(bin, f, Some(rule));
+        assert_eq!(code, 1, "{what}: 偽った証明書が Lean で通ってしまった\n{said}");
+        assert!(said.contains(why), "{what}: {said}");
+        if let Some((code, said)) = python(f, rule) {
+            assert_eq!(code, 1, "{what}: 偽った証明書が tools/recheck.py で通ってしまった\n{said}");
+        }
+    }
+}
+
+/// A block of prerequisites ordered by a table of numbers (rulec's §15.222, §15.233): the answers are
+/// the numbers the rows write (`writes`), not words they produce.
+const TIERS: &str = "rule tech_tiers v1\ndescription \"The tier of each technology, and what a player must have researched before it\"\n\nenum tech = farming | pottery | writing | wheel | math\n\ninputs\n  tech : tech\n\noutputs\n  tier : number  round down(1)\n\ntable tier_of\npolicy unique\n| tech           | -> tier |\n| farming        | 1       |\n| pottery, wheel | 2       |\n| writing        | 3       |\n| math           | 4       |\n\nprerequisites research over tech\n  start   farming\n  pottery requires farming\n  wheel   requires farming\n  writing requires pottery or wheel\n  math    requires writing, wheel\n  ordered by tier_of\n\nexamples\n| tech    | -> tier |\n| farming | 1       |\n| pottery | 2       |\n";
+
+/// Which values need which before them (rulec's §15.222, §15.233): no cycle (`Prereq.no_cycle`),
+/// every value but those no case can take reached from `start` (`Prereq.reached_holds`,
+/// `Prereq.never_held`), and the order of the table the block is `ordered by` kept along its edges
+/// (`Prereq.order_along`) — proved, so nothing about a block is left stated; and each claim broken in
+/// one place is refused by the Lean checker and by `tools/recheck.py` alike.
+#[test]
+fn 前提のつながりは証明付きの検査器で証明される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    for (rel, line) in [
+        ("tests/corpus/course_catalog.rule", "prerequisites enrollment over course: 14 values and 15 edges with no cycle, 13 reached from start and 1 no case can take, and level_of keeps its order along 15 edges"),
+        ("tests/corpus/科目の履修.rule", "prerequisites 履修 over 科目: 14 values and 15 edges with no cycle, 13 reached from start and 1 no case can take, and 年次表 keeps its order along 15 edges"),
+        ("tests/corpus/shared/certifications.rule", "prerequisites exam_path over certification: 7 values and 8 edges with no cycle, 7 reached from start and 0 no case can take"),
+        ("tests/corpus/shared/資格.rule", "prerequisites 受験の前提 over 資格: 7 values"),
+    ] {
+        let (c, cert) = rulec(&["certificate", rel]);
+        assert_eq!(c, 0, "{rel}: {cert}");
+        let (code, said) = lean(&bin, &cert, Some(rel));
+        assert_eq!(code, 0, "{rel}: {said}");
+        assert!(said.contains(line), "{rel}: {said}");
+        assert!(said.contains("OK: every claim this program states was proved"), "{rel}: {said}");
+    }
+    let rel = "tests/corpus/course_catalog.rule";
+    let (_, cert) = rulec(&["certificate", rel]);
+    both_refuse(&bin, &cert, rel, &[
+        ("値を二か所に書く", cert.replacen(r#""start":["intro_programming","discrete_math","calculus"]"#, r#""start":["intro_programming","discrete_math","calculus","statistics"]"#, 1), "the values of course are not each said once"),
+        ("前提より前に来る順", cert.replacen(r#""topological":["intro_programming","#, r#""topological":["statistics","intro_programming","#, 1), "`topological` is not the values of course, each once"),
+        ("前提の輪", cert.replacen(r#""statistics":[["calculus"]]"#, r#""statistics":[["machine_learning"]]"#, 1), "`topological` puts a value before one it needs"),
+        ("前提を持つ前にたどり着く順", cert.replacen(r#""reached":["intro_programming","#, r#""reached":["capstone","intro_programming","#, 1), "`reached` and `never` are not the values of course, each once"),
+        ("たどり着く順を入れ替える", cert.replacen(r#""reached":["intro_programming","discrete_math","calculus","statistics","linear_algebra","data_structures","databases","algorithms""#, r#""reached":["intro_programming","discrete_math","calculus","statistics","linear_algebra","algorithms","databases","data_structures""#, 1), "`reached` names a value before a value of each group it needs"),
+        ("表が書かない答え", cert.replacen(r#""capstone":"fourth""#, r#""capstone":"first""#, 1), "the answers of level_of are not the ones its rows write"),
+        ("表の行が書く語", cert.replacen(r#""accepts":[[0,1,2]],"produces":["first"]"#, r#""accepts":[[0,1,2]],"produces":["second"]"#, 1), "level_of: row 1, answer 1: the file writes `first` there, and the certificate reads it as `second`"),
+    ]);
+    // Ordered by a table of numbers: the answers are what the rows write.
+    let tmp = TempDir::new("lean-tiers");
+    let p = tmp.path().join("tech_tiers.rule");
+    std::fs::write(&p, TIERS).unwrap();
+    let rel = p.to_str().unwrap();
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#""pottery":"2""#), "{cert}");
+    let line = "prerequisites research over tech: 5 values and 6 edges with no cycle, 5 reached from start and 0 no case can take, and tier_of keeps its order along 6 edges";
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains(line), "{said}");
+    if let Some((code, said)) = python(&cert, rel) {
+        assert_eq!(code, 0, "{said}");
+        assert!(said.contains(line), "{said}");
+    }
+    both_refuse(&bin, &cert, rel, &[
+        ("数の答えを動かす", cert.replacen(r#""pottery":"2""#, r#""pottery":"1""#, 1), "the answers of tier_of are not the ones its rows write"),
+        ("表の行が書く数", cert.replacen(r#""value":"4","type":"number"},"source":{"line":18"#, r#""value":"1","type":"number"},"source":{"line":18"#, 1), "tier_of: row 4, -> tier: the file writes `4`, and the certificate reads it as another number"),
+    ]);
+}
+
+/// A loan paid off in instalments, settled once nothing is left: a table under `first` that reads a
+/// number the rule computes (`left`), from an input no column reads (`amount`).
+const LOAN: &str = "rule loan_payoff v1\ndescription \"A loan paid off in instalments of up to three, settled once nothing is left\"\n\nenum status = open | settled\nenum act = pay | wait\n\ninputs\n  status  : status\n  act     : act\n  balance : number  range >=0 <=6\n  amount  : number  range >=1 <=3\n\noutputs\n  next_status  : status\n  next_balance : number  round down(1)\n\ndefine left : number = balance - min(balance, amount)\n\ntable step\npolicy first\n| status  | act  | left | -> next_status | next_balance |\n| open    | pay  | 0    | settled        | 0            |\n| open    | pay  | -    | status         | left         |\n| open    | wait | -    | status         | balance      |\n| settled | -    | -    | status         | balance      |\n\nmachine loan over step\n  carry   status -> next_status\n  carry   balance -> next_balance\n  initial open\n  initial balance 6\n  final   settled\n\nexamples\n| status | act | balance | amount | -> next_status | next_balance |\n| open   | pay | 6       | 3      | open           | 3            |\n| open   | pay | 3       | 3      | settled        | 0            |\n";
+
+/// A stock halved on each tick and rounded down: from 5 the half is 2.5, which the modes round apart,
+/// so no path is laid and the claim stays stated rather than resting on one mode.
+const HALVING: &str = "rule halving v1\ndescription \"A stock halved on each tick, rounded down, until nothing is left\"\n\nenum phase = running | stopped\n\ninputs\n  phase : phase\n  units : number  range >=0 <=10\n\noutputs\n  next_phase : phase\n  next_units : number  round down(1)\n\ndefine half : number = units * 50%\n\ntable step\npolicy unique\n| phase   | units | -> next_phase | next_units |\n| running | >=2   | phase         | half       |\n| running | <=1   | stopped       | 0          |\n| stopped | -     | phase         | units      |\n\nmachine stock over step\n  carry   phase -> next_phase\n  carry   units -> next_units\n  initial running\n  initial units 10\n  final   stopped\n\nexamples\n| phase   | units | -> next_phase | next_units |\n| running | 10    | running       | 5          |\n";
+
+/// That a case can still finish, for a machine that carries more than its state (rulec's §15.217,
+/// §15.233): where every carried number was walked one value at a time, the certificate gives a path
+/// of calls that really happen from every place not in a final state, and the Lean checker runs each
+/// call (`Carried.Model.fires_of_callOk`, `Carried.Model.reachable_finishes`). The four rules of the
+/// corpus that have a final state prove it; the mutant walked in intervals still names it as stated,
+/// as `check` itself leaves it open (W127). A path broken in one place is refused by both checkers.
+#[test]
+fn 持ち越す値のある機械が終われることは証明付きの検査器で証明される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    for rel in ["tests/corpus/grace_period.rule", "tests/corpus/retry_attempts.rule", "tests/corpus/猶予の残り日数.rule", "tests/corpus/再試行の回数.rule"] {
+        let (c, cert) = rulec(&["certificate", rel]);
+        assert_eq!(c, 0, "{rel}: {cert}");
+        assert!(cert.contains(r#""finish":[{"place":"#), "{rel}: 終わりまでの呼び出しの並びが無い");
+        let (code, said) = lean(&bin, &cert, Some(rel));
+        assert_eq!(code, 0, "{rel}: {said}");
+        assert!(said.contains("every place a case can be can still finish"), "{rel}: {said}");
+        assert!(said.contains("OK: every claim this program states was proved"), "{rel}: {said}");
+        if let Some((code, said)) = python(&cert, rel) {
+            assert_eq!(code, 0, "{rel}: {said}");
+            assert!(said.contains("every claim this program states was proved"), "{rel}: {said}");
+        }
+    }
+    let rel = "tests/mutants/m_w127.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(!cert.contains(r#""finish":[{"place":"#), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("that a case can still finish is not laid on the rows (the machine carries more than its state)"), "{said}");
+    // A computed column under `first`, and an input no column reads.
+    let tmp = TempDir::new("lean-finish");
+    let p = tmp.path().join("loan.rule");
+    std::fs::write(&p, LOAN).unwrap();
+    let loan = p.to_str().unwrap().to_string();
+    let (c, cert) = rulec(&["certificate", &loan]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(&loan));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("8 places a case can be, no call leaves a final state, next_balance within its range, every place a case can be can still finish"), "{said}");
+    if let Some((code, said)) = python(&cert, &loan) {
+        assert_eq!(code, 0, "{said}");
+    }
+    both_refuse(&bin, &cert, &loan, &[
+        ("範囲の外の入力", cert.replacen(r#"{"row":1,"at":[0,0,1],"inputs":{"balance":"1","amount":"1"}}"#, r#"{"row":1,"at":[0,0,1],"inputs":{"balance":"1","amount":"4"}}"#, 1), "a place has no path of calls to a final state that checks"),
+        ("前の行が取る点", cert.replacen(r#"{"row":1,"at":[0,0,1],"inputs":{"balance":"1","amount":"1"}}"#, r#"{"row":2,"at":[0,0,1],"inputs":{"balance":"1","amount":"1"}}"#, 1), "a place has no path of calls to a final state that checks"),
+    ]);
+    // A path that would rest on how a mode rounds 2.5 is not laid.
+    let p = tmp.path().join("halving.rule");
+    std::fs::write(&p, HALVING).unwrap();
+    let halving = p.to_str().unwrap().to_string();
+    let (c, cert) = rulec(&["certificate", &halving]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(!cert.contains(r#""finish":[{"place":"#), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(&halving));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("that a case can still finish is not laid on the rows (the machine carries more than its state)"), "{said}");
+    let rel = "tests/corpus/grace_period.rule";
+    let (_, cert) = rulec(&["certificate", rel]);
+    both_refuse(&bin, &cert, rel, &[
+        ("並びの呼び出しの行", cert.replacen(r#"{"row":1,"at":[0,0,0],"inputs":{"days_left":"0"}}"#, r#"{"row":2,"at":[0,0,0],"inputs":{"days_left":"0"}}"#, 1), "a place has no path of calls to a final state that checks"),
+        ("呼び出しの数", cert.replacen(r#"{"place":[1,[7]],"path":[{"row":5,"at":[1,1,4],"inputs":{"days_left":"7"}}"#, r#"{"place":[1,[7]],"path":[{"row":5,"at":[1,1,4],"inputs":{"days_left":"6"}}"#, 1), "a place has no path of calls to a final state that checks"),
+        ("座標の外の値", cert.replacen(r#"{"place":[1,[7]],"path":[{"row":5,"at":[1,1,4],"#, r#"{"place":[1,[7]],"path":[{"row":5,"at":[1,1,3],"#, 1), "a place has no path of calls to a final state that checks"),
+        ("終わりに着かない並び", cert.replacen(r#"{"place":[1,[1]],"path":[{"row":6,"at":[1,1,1],"inputs":{"days_left":"1"}}]}"#, r#"{"place":[1,[1]],"path":[]}"#, 1), "a place has no path of calls to a final state that checks"),
+        ("場所の並びを落とす", cert.replacen(r#",{"place":[1,[1]],"path":[{"row":6,"at":[1,1,1],"inputs":{"days_left":"1"}}]}"#, "", 1), "a place has no path of calls to a final state that checks"),
+    ]);
+}
+
+/// Where a case starts, what a `once` line reads on each row, a move, and the words a row writes are
+/// read back out of the file (rulec's §15.233): each `initial` line, and each answer cell in its own
+/// place on the row's line. Pointed elsewhere — at the same text in another cell, or another value —
+/// each is refused by both checkers.
+#[test]
+fn 始まりとonceの値と行の答えはファイルから読み戻される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let rel = "tests/corpus/one_time_perk.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("OK: every claim this program states was proved"), "{said}");
+    both_refuse(&bin, &cert, rel, &[
+        ("始まりの行", cert.replacen(r#""initial_source":{"line":34,"col":10,"len":5,"text":"guest"}"#, r#""initial_source":{"line":20,"col":2,"len":5,"text":"guest"}"#, 1), "machine: where a case starts is not read from an `initial` line"),
+        ("始まりの状態", cert.replacen(r#""initial":0,"#, r#""initial":1,"#, 1), "machine: the `initial` line does not name member there"),
+        ("onceが読む値", cert.replacen(r#"{"row":4,"value":true,"#, r#"{"row":4,"value":false,"#, 1), "machine: row 4 writes `true` into trial_granted, and the certificate reads another value for the `once` line"),
+        ("持ち越す値の始まり", cert.replacen(r#""initial_source":{"line":35,"col":22,"len":5,"text":"false"}"#, r#""initial_source":{"line":20,"col":76,"len":5,"text":"false"}"#, 1), "carried values: where trial_taken starts is not read from its `initial` line"),
+    ]);
+    let rel = "tests/corpus/order_lifecycle.rule";
+    let (c, cert) = rulec(&["certificate", rel]);
+    assert_eq!(c, 0, "{cert}");
+    both_refuse(&bin, &cert, rel, &[
+        ("onceの値を別の行のセルで読む", cert.replacen(r#"{"row":1,"value":0,"source":{"line":20,"col":50,"len":4,"text":"0JPY"}}"#, r#"{"row":1,"value":0,"source":{"line":21,"col":50,"len":4,"text":"0JPY"}}"#, 1), "machine: the value `once refund` reads on row 1 is not read from the row's own cell of refund"),
+        ("行き先を別の行のセルで読む", cert.replacen(r#"{"row":3,"stay":true,"source":{"line":22,"col":34,"len":5,"text":"state"}}"#, r#"{"row":3,"stay":true,"source":{"line":25,"col":34,"len":5,"text":"state"}}"#, 1), "machine: row 3's move is not read from the row's own cell of next_state"),
+        ("行が書く語", cert.replacen(r#""produces":["paid",null,"true"]"#, r#""produces":["paid",null,"false"]"#, 1), "step: row 1, answer 3: the file writes `true` there, and the certificate reads it as `false`"),
+    ]);
 }

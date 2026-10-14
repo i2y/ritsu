@@ -303,3 +303,45 @@ fn every_language_answers_the_display_names_and_the_keyword_names() {
         eprintln!("{l}");
     }
 }
+
+/// A discount by tier, for the input `member` whose `range` lets in silver and gold, and for an
+/// input `referrer` of the same enum with none, when `with_referrer` puts it in.
+fn ranged_tiers(rows: &str, with_referrer: bool) -> String {
+    let (input, column, dash) = if with_referrer { ("\n  referrer : tier", " referrer |", " -        |") } else { ("", "", "") };
+    let rows: String = rows.lines().map(|l| format!("| {l} |{dash} {} |\n", if l.contains("silver") { "5%         " } else { "10%        " })).collect();
+    format!(
+        "rule member_discount v1\ndescription \"A discount by the member's tier\"\n\nenum tier = basic < silver < gold < platinum\n\n\
+         inputs\n  member : tier  range >=silver <=gold{input}\n\noutputs\n  discount : rate  round down(1%)\n\n\
+         table discount_of\npolicy unique\n| member |{column} -> discount  |\n{rows}"
+    )
+}
+
+/// A value of an ordered enum that the `range` of every input of the enum keeps out never arrives,
+/// so no row has to name it (§15.210, §15.233): W111 leaves it out — but not while another name of
+/// the type can bring it. A row whose cell names only values the range keeps out matches nothing
+/// (E102); a set that names one beside values the range lets in is the set of those, as a set of
+/// numbers past a range is.
+#[test]
+fn a_value_every_range_keeps_out_is_not_said_to_be_unused() {
+    let tmp = TempDir::new("enums-ranged-w111");
+    let d = tmp.path();
+    let cases: [(&str, String, i32, &[&str], &[&str]); 4] = [
+        ("kept_out", ranged_tiers("silver\n>=gold ", false), 0, &[], &["W111"]),
+        ("brought_by_referrer", ranged_tiers("silver\n>=gold ", true), 0, &["warning[W111]: Values of type tier appear in no row", "Values that never appear: basic"], &[]),
+        ("named_alone", ranged_tiers("basic \nsilver\n>=gold ", false), 1, &["error[E102]: Unreachable row: row 1 never matches"], &["W111"]),
+        ("named_in_a_set", ranged_tiers("basic, silver\n>=gold ", false), 0, &[], &["W111", "E102"]),
+    ];
+    for (name, src, code, said, unsaid) in cases {
+        let file = format!("{name}.rule");
+        std::fs::write(d.join(&file), &src).unwrap();
+        let (c, out, err) = run_in(d, &["check", &file]);
+        let all = format!("{out}{err}");
+        assert_eq!(c, code, "{name}:\n{src}\n{all}");
+        for s in said {
+            assert!(all.contains(s), "{name}: `{s}` is not said:\n{all}");
+        }
+        for s in unsaid {
+            assert!(!all.contains(s), "{name}: `{s}` is said:\n{all}");
+        }
+    }
+}

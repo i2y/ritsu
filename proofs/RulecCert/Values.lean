@@ -1378,4 +1378,468 @@ theorem eval_mem_stated {ranges : String → Option Span2} {env : String → Opt
     exact ⟨Rat.le_trans hw'.1 hv1, Rat.le_trans hv2 hw'.2⟩
   case _ => exact absurd hw' (by simp)
 
+/-! ## What a `max`, a `min` and a fold answer (rulec's §15.219, §15.220)
+
+Neither range is declared. rulec works it out, and a table or a value below reads the answer with it,
+so the program holds each range to what it is worked out from.
+
+A `max` answers the largest value of one column among the elements its `where` lets in, and its
+`empty` value when it lets in none; a `min` the smallest. The generated code starts from the `empty`
+value with nothing taken, lets the first element `where` lets in replace it, and after that only one
+that beats the value held. Which way "beats" goes does not matter for the range: the answer is the
+`empty` value or the value of one element. -/
+
+/-- One element of a `max` or a `min` — whether its `where` lets it in, and its value in the column —
+    as the generated code takes it: the first one let in replaces the `empty` value, a later one only
+    where `beats` says its value beats the one held. -/
+def extremeStep (beats : Rat → Rat → Bool) (acc : Rat × Bool) (x : Bool × Rat) : Rat × Bool :=
+  if x.1 && (!acc.2 || beats x.2 acc.1) then (x.2, true) else acc
+
+/-- **What a `max` or a `min` answers** over the elements of one walk, from its `empty` value. -/
+def extremeOf (beats : Rat → Rat → Bool) (empty : Rat) (xs : List (Bool × Rat)) : Rat :=
+  (xs.foldl (extremeStep beats) (empty, false)).1
+
+/-- An interval widened to hold one value more. -/
+def hullWith (C : Span2) (z : Rat) : Span2 := (rmin C.1 z, rmax C.2 z)
+
+theorem mem_hullWith_left {C : Span2} {v : Rat} (z : Rat) (h : inSpan C v) : inSpan (hullWith C z) v :=
+  ⟨Rat.le_trans (rmin_le_left _ _) h.1, Rat.le_trans h.2 (left_le_rmax _ _)⟩
+
+theorem mem_hullWith_right (C : Span2) (z : Rat) : inSpan (hullWith C z) z :=
+  ⟨rmin_le_right _ _, right_le_rmax _ _⟩
+
+theorem foldl_extremeStep_mem {beats : Rat → Rat → Bool} {C H : Span2}
+    (hCH : ∀ v, inSpan C v → inSpan H v) :
+    ∀ (xs : List (Bool × Rat)) (acc : Rat × Bool), inSpan H acc.1 →
+      (∀ x ∈ xs, x.1 = true → inSpan C x.2) → inSpan H (xs.foldl (extremeStep beats) acc).1
+  | [], _, hacc, _ => hacc
+  | x :: xs, acc, hacc, hxs => by
+    simp only [List.foldl_cons]
+    refine foldl_extremeStep_mem hCH xs _ ?_ (fun y hy => hxs y (List.mem_cons_of_mem _ hy))
+    unfold extremeStep
+    split
+    · rename_i h
+      simp only [Bool.and_eq_true] at h
+      exact hCH _ (hxs x (by simp) h.1)
+    · exact hacc
+
+/-- **A `max` or a `min` answers inside the hull of its column and its `empty` value**: where every
+    element its `where` lets in has its value in the column's interval `C`, whatever the walk answers
+    is in `C` or is the `empty` value. -/
+theorem extreme_mem_hull {beats : Rat → Rat → Bool} {C : Span2} {z : Rat} {xs : List (Bool × Rat)}
+    (hxs : ∀ x ∈ xs, x.1 = true → inSpan C x.2) : inSpan (hullWith C z) (extremeOf beats z xs) :=
+  foldl_extremeStep_mem (fun _ h => mem_hullWith_left z h) xs (z, false) (mem_hullWith_right C z) hxs
+
+/-- **The extremes check**: the range the certificate states for a `max` or a `min` holds its column's
+    interval and its `empty` value. -/
+def extremeOk (C : Span2) (z : Rat) (S : Span2) : Bool :=
+  decide (S.1 ≤ rmin C.1 z) && decide (rmax C.2 z ≤ S.2)
+
+/-- **The range stated for a `max` or a `min` holds every value it answers**, where the extremes check
+    passes: what reads the answer with that range reads it soundly. -/
+theorem extreme_mem_stated {beats : Rat → Rat → Bool} {C S : Span2} {z : Rat} {xs : List (Bool × Rat)}
+    (h : extremeOk C z S = true) (hxs : ∀ x ∈ xs, x.1 = true → inSpan C x.2) :
+    inSpan S (extremeOf beats z xs) := by
+  simp only [extremeOk, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨h1, h2⟩ := extreme_mem_hull (beats := beats) (z := z) hxs
+  exact ⟨Rat.le_trans h.1 h1, Rat.le_trans h2 h.2⟩
+
+/-! A fold walks the elements with a verdict for each, and one arm per verdict (rulec's §15.56). What
+an arm does to the answer is one of three things: nothing (`next`, and a `take_first` or a `keep_max`
+that does not take this element); hold the value of an expression at the element (a `take_first`, a
+`take_last` or a `keep_max` that takes it); or end the walk, with the value of an expression or with
+what a walk that runs out answers. A walk that runs out answers what it holds (`held`, which is the
+`empty` value when it holds nothing) or the value of its `exhausted` expression; a walk over no element
+answers the `empty` value. So the answer is the value of one of the expressions the arms, `empty` and
+`exhausted` name — the list the certificate gives as `answers` — at the call or at one element. -/
+
+/-- What one element does to a fold's answer. -/
+inductive FoldStep where
+  | next
+  | hold (e : Expr)
+  | stop (e : Option Expr)
+  deriving Repr, Inhabited
+
+/-- What a walk that ran out, or stopped with no value, answers: the `exhausted` value, or — for
+    `exhausted -> held`, `none` here — what it holds, the `empty` value when it holds nothing. Both are
+    read with the values the call has before the walk (`env0`). -/
+def foldEnd (rnd : Rat → Rat → Rat) (env0 : String → Option UVal) (empty : Expr)
+    (exhausted : Option Expr) (held : Option UVal) : Option UVal :=
+  match exhausted with
+  | some e => eval rnd env0 e
+  | none =>
+    match held with
+    | some v => some v
+    | none => eval rnd env0 empty
+
+/-- The walk over the elements that remain, each with what it does and the values of the names at it. -/
+def foldWalk (rnd : Rat → Rat → Rat) (env0 : String → Option UVal) (empty : Expr)
+    (exhausted : Option Expr) : Option UVal → List (FoldStep × (String → Option UVal)) → Option UVal
+  | held, [] => foldEnd rnd env0 empty exhausted held
+  | held, (.next, _) :: rest => foldWalk rnd env0 empty exhausted held rest
+  | _, (.hold e, env) :: rest => foldWalk rnd env0 empty exhausted (eval rnd env e) rest
+  | held, (.stop none, _) :: _ => foldEnd rnd env0 empty exhausted held
+  | _, (.stop (some e), env) :: _ => eval rnd env e
+
+/-- **What a fold answers**: the `empty` value over no element, and otherwise what the walk ends with. -/
+def foldAnswer (rnd : Rat → Rat → Rat) (env0 : String → Option UVal) (empty : Expr)
+    (exhausted : Option Expr) : List (FoldStep × (String → Option UVal)) → Option UVal
+  | [] => eval rnd env0 empty
+  | steps => foldWalk rnd env0 empty exhausted none steps
+
+/-- The values of the names at the call, or at one element: inside the ranges, and in the order the
+    guarantees say. -/
+def GoodEnv (ranges : String → Option Span2) (within : Expr → Expr → Bool) (rnd : Rat → Rat → Rat)
+    (env : String → Option UVal) : Prop :=
+  (∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w) ∧
+  (∀ a b va vb ta tb, within a b = true →
+    eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb)
+
+/-- The value of one of the expressions a fold answers with is inside the range that holds them all. -/
+theorem eval_mem_answers {ranges : String → Option Span2} {within : Expr → Expr → Bool}
+    {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) {S : Span2} {answers : List Expr}
+    (hS : writesWithin ranges within S (answers.map (fun e => ({ expr := e } : Writes))) = true)
+    {env : String → Option UVal} (hg : GoodEnv ranges within rnd env) {e : Expr} (he : e ∈ answers)
+    {v : Rat} {t : Ty} (hv : eval rnd env e = some (v, t)) : inSpan S v :=
+  eval_mem_stated hrnd hg.1 hg.2 hS { expr := e } (List.mem_map.2 ⟨e, he, rfl⟩) v t hv
+    (fun J hJ => by simp at hJ)
+
+theorem foldEnd_mem {ranges : String → Option Span2} {within : Expr → Expr → Bool}
+    {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) {S : Span2} {answers : List Expr}
+    (hS : writesWithin ranges within S (answers.map (fun e => ({ expr := e } : Writes))) = true)
+    {env0 : String → Option UVal} (hg0 : GoodEnv ranges within rnd env0) {empty : Expr}
+    {exhausted : Option Expr} (hempty : empty ∈ answers) (hexh : ∀ e, exhausted = some e → e ∈ answers)
+    {held : Option UVal} (hheld : ∀ v t, held = some (v, t) → inSpan S v) {v : Rat} {t : Ty}
+    (h : foldEnd rnd env0 empty exhausted held = some (v, t)) : inSpan S v := by
+  unfold foldEnd at h
+  cases hx : exhausted with
+  | some e =>
+    rw [hx] at h
+    exact eval_mem_answers hrnd hS hg0 (hexh e hx) h
+  | none =>
+    rw [hx] at h
+    cases hh : held with
+    | some u =>
+      rw [hh] at h
+      exact hheld v t (by rw [hh]; exact h)
+    | none =>
+      rw [hh] at h
+      exact eval_mem_answers hrnd hS hg0 hempty h
+
+theorem foldWalk_mem {ranges : String → Option Span2} {within : Expr → Expr → Bool}
+    {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) {S : Span2} {answers : List Expr}
+    (hS : writesWithin ranges within S (answers.map (fun e => ({ expr := e } : Writes))) = true)
+    {env0 : String → Option UVal} (hg0 : GoodEnv ranges within rnd env0) {empty : Expr}
+    {exhausted : Option Expr} (hempty : empty ∈ answers) (hexh : ∀ e, exhausted = some e → e ∈ answers) :
+    ∀ (steps : List (FoldStep × (String → Option UVal))) (held : Option UVal),
+      (∀ p ∈ steps, GoodEnv ranges within rnd p.2) →
+      (∀ p ∈ steps, ∀ e, p.1 = .hold e ∨ p.1 = .stop (some e) → e ∈ answers) →
+      (∀ v t, held = some (v, t) → inSpan S v) →
+      ∀ {v : Rat} {t : Ty}, foldWalk rnd env0 empty exhausted held steps = some (v, t) → inSpan S v
+  | [], held, _, _, hheld, v, t, h => by
+    simp only [foldWalk] at h
+    exact foldEnd_mem hrnd hS hg0 hempty hexh hheld h
+  | (st, env) :: rest, held, hgood, hans, hheld, v, t, h => by
+    have hgood' : ∀ p ∈ rest, GoodEnv ranges within rnd p.2 := fun p hp => hgood p (List.mem_cons_of_mem _ hp)
+    have hans' : ∀ p ∈ rest, ∀ e, p.1 = .hold e ∨ p.1 = .stop (some e) → e ∈ answers :=
+      fun p hp => hans p (List.mem_cons_of_mem _ hp)
+    have hg : GoodEnv ranges within rnd env := hgood (st, env) (by simp)
+    cases st with
+    | next =>
+      simp only [foldWalk] at h
+      exact foldWalk_mem hrnd hS hg0 hempty hexh rest held hgood' hans' hheld h
+    | hold e =>
+      simp only [foldWalk] at h
+      have he : e ∈ answers := hans (.hold e, env) (by simp) e (Or.inl rfl)
+      refine foldWalk_mem hrnd hS hg0 hempty hexh rest _ hgood' hans' ?_ h
+      intro u τ hu
+      exact eval_mem_answers hrnd hS hg he hu
+    | stop eo =>
+      cases eo with
+      | none =>
+        simp only [foldWalk] at h
+        exact foldEnd_mem hrnd hS hg0 hempty hexh hheld h
+      | some e =>
+        simp only [foldWalk] at h
+        exact eval_mem_answers hrnd hS hg (hans (.stop (some e), env) (by simp) e (Or.inr rfl)) h
+
+/-- **The range stated for a fold's answer holds every value the fold answers**, where it holds the
+    interval of every expression in `answers` (the check is `writesWithin`): at the call and at every
+    element the names are inside their ranges, and every expression an arm, `empty` and `exhausted`
+    name is in `answers`. -/
+theorem foldAnswer_mem_stated {ranges : String → Option Span2} {within : Expr → Expr → Bool}
+    {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) {S : Span2} {answers : List Expr}
+    (hS : writesWithin ranges within S (answers.map (fun e => ({ expr := e } : Writes))) = true)
+    {env0 : String → Option UVal} (hg0 : GoodEnv ranges within rnd env0) {empty : Expr}
+    {exhausted : Option Expr} (hempty : empty ∈ answers) (hexh : ∀ e, exhausted = some e → e ∈ answers)
+    {steps : List (FoldStep × (String → Option UVal))}
+    (hgood : ∀ p ∈ steps, GoodEnv ranges within rnd p.2)
+    (hans : ∀ p ∈ steps, ∀ e, p.1 = .hold e ∨ p.1 = .stop (some e) → e ∈ answers)
+    {v : Rat} {t : Ty} (h : foldAnswer rnd env0 empty exhausted steps = some (v, t)) : inSpan S v := by
+  cases steps with
+  | nil =>
+    simp only [foldAnswer] at h
+    exact eval_mem_answers hrnd hS hg0 hempty h
+  | cons p rest =>
+    simp only [foldAnswer] at h
+    exact foldWalk_mem hrnd hS hg0 hempty hexh (p :: rest) none hgood hans (fun _ _ hn => by simp at hn) h
+
+/-! ## Evaluating where every rounding is exact (rulec's §15.233)
+
+That a case can still finish is a claim about calls that really happen, so the values behind a call
+have to be the ones the generated code computes, under whatever rounding each mode makes. Where every
+rounding meets a value already on its grid, every mode leaves it where it is (`rounds_onGrid`), and
+the value does not depend on the modes: `evalExact` works it out, and `evalExact_sound` says it is the
+value `eval` gives under every rounding `RoundsWell` describes. Where a rounding meets a value off its
+grid, or a grid that is not positive, `evalExact` gives up (`none`). -/
+
+theorem floorTo_onGrid {g v : Rat} (hg : 0 < g) (h : onGrid g v) : floorTo g v = v := by
+  obtain ⟨k, rfl⟩ := h
+  unfold floorTo rfloor
+  rw [Rat.mul_div_cancel (Ne.symm (Rat.ne_of_lt hg)), Rat.floor_intCast]
+
+theorem ceilTo_onGrid {g v : Rat} (hg : 0 < g) (h : onGrid g v) : ceilTo g v = v := by
+  obtain ⟨k, rfl⟩ := h
+  unfold ceilTo rceil
+  rw [Rat.mul_div_cancel (Ne.symm (Rat.ne_of_lt hg))]
+  have hk : (-(k : Rat)) = ((-k : Int) : Rat) := by simp
+  rw [hk, Rat.floor_intCast]
+  simp
+
+/-- **Every rounding leaves a value on its grid where it is.** -/
+theorem rounds_onGrid {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) {g v : Rat} (hg : 0 < g)
+    (h : onGrid g v) : rnd g v = v := by
+  obtain ⟨h1, h2⟩ := hrnd g v hg
+  rw [floorTo_onGrid hg h] at h1
+  rw [ceilTo_onGrid hg h] at h2
+  exact Rat.le_antisymm h2 h1
+
+/-- The evaluation, where every rounding meets a value on its grid: `some r` with what `eval` gives
+    under every rounding, `none` where a rounding meets a value off its grid. -/
+def evalExact (env : String → Option UVal) : Expr → Option (Option UVal)
+  | .name n => some (env n)
+  | .lit v t => some (some (v, t))
+  | .add a b =>
+    match evalExact env a, evalExact env b with
+    | some x, some y => some (match x, y with
+      | some x, some y => uadd x y
+      | _, _ => none)
+    | _, _ => none
+  | .sub a b =>
+    match evalExact env a, evalExact env b with
+    | some x, some y => some (match x, y with
+      | some x, some y => usub x y
+      | _, _ => none)
+    | _, _ => none
+  | .mul a b =>
+    match evalExact env a, evalExact env b with
+    | some x, some y => some (match x, y with
+      | some x, some y => umul x y
+      | _, _ => none)
+    | _, _ => none
+  | .divc a k kt =>
+    match evalExact env a with
+    | some x => some (match x with
+      | some x => udiv x k kt
+      | none => none)
+    | none => none
+  | .minOf a b =>
+    match evalExact env a, evalExact env b with
+    | some x, some y => some (match x, y with
+      | some x, some y => umin x y
+      | _, _ => none)
+    | _, _ => none
+  | .maxOf a b =>
+    match evalExact env a, evalExact env b with
+    | some x, some y => some (match x, y with
+      | some x, some y => umax x y
+      | _, _ => none)
+    | _, _ => none
+  | .roundTo a g =>
+    match evalExact env a with
+    | some (some x) => if decide (0 < g) && gridB g x.1 then some (some (x.1, x.2)) else none
+    | some none => some none
+    | none => none
+  | .divRound a b g t =>
+    match evalExact env a, evalExact env b with
+    | some (some x), some (some y) =>
+      match quotTy x.2 y.2 t with
+      | some ty => if decide (0 < g) && gridB g (x.1 / y.1) then some (some (x.1 / y.1, ty)) else none
+      | none => some none
+    | some (some _), some none => some none
+    | some none, some _ => some none
+    | _, _ => none
+  | .modc a n =>
+    match evalExact env a with
+    | some x => some (match x with
+      | some x => (numTy x.2).map (fun ty => (modR x.1 n, ty))
+      | none => none)
+    | none => none
+  | .isqrt a =>
+    match evalExact env a with
+    | some x => some (match x with
+      | some x => (numTy x.2).map (fun ty => (isqrtR x.1, ty))
+      | none => none)
+    | none => none
+  | .alloc a b c =>
+    match evalExact env a, evalExact env b, evalExact env c with
+    | some x, some y, some z => some (match x, y, z with
+      | some x, some y, some z => ushare x y z
+      | _, _, _ => none)
+    | _, _, _ => none
+  | .compare op a b =>
+    match evalExact env a, evalExact env b with
+    | some x, some y => some (match x, y with
+      | some x, some y => (unify x.2 y.2).map (fun _ =>
+          ((if cmpHolds op x.1 y.1 then 1 else 0 : Rat), Ty.other "bool"))
+      | _, _ => none)
+    | _, _ => none
+  | .typed t => some (some (0, t))
+  | .unread => some none
+
+/-- **`evalExact` is `eval`, under every rounding**, where it gives an answer. -/
+theorem evalExact_sound {env : String → Option UVal} {rnd : Rat → Rat → Rat} (hrnd : RoundsWell rnd) :
+    ∀ (e : Expr) (r : Option UVal), evalExact env e = some r → eval rnd env e = r := by
+  intro e
+  induction e with
+  | name n => intro r h; simpa [evalExact, eval] using h
+  | lit v t => intro r h; simpa [evalExact, eval] using h
+  | add a b iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy]
+    · exact absurd h (by simp)
+  | sub a b iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy]
+    · exact absurd h (by simp)
+  | mul a b iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy]
+    · exact absurd h (by simp)
+  | divc a k kt iha =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x hx
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx]
+    · exact absurd h (by simp)
+  | minOf a b iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy]
+    · exact absurd h (by simp)
+  | maxOf a b iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy]
+    · exact absurd h (by simp)
+  | roundTo a g iha =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x hx
+      split at h
+      · rename_i hc
+        simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+        simp only [Option.some.injEq] at h
+        subst h
+        simp only [eval, iha (some x) hx, rounds_onGrid hrnd hc.1 (onGrid_of_gridB hc.2)]
+      · exact absurd h (by simp)
+    · rename_i hx
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha none hx]
+    · exact absurd h (by simp)
+  | divRound a b g t iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      split at h
+      · rename_i ty hty
+        split at h
+        · rename_i hc
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+          simp only [Option.some.injEq] at h
+          subst h
+          simp only [eval, iha (some x) hx, ihb (some y) hy, hty, Option.map_some,
+            rounds_onGrid hrnd hc.1 (onGrid_of_gridB hc.2)]
+        · exact absurd h (by simp)
+      · rename_i hty
+        simp only [Option.some.injEq] at h
+        subst h
+        simp only [eval, iha (some x) hx, ihb (some y) hy, hty, Option.map_none]
+    · rename_i x hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha (some x) hx, ihb none hy]
+    · rename_i y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha none hx]
+    · exact absurd h (by simp)
+  | modc a n iha =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x hx
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx]
+    · exact absurd h (by simp)
+  | isqrt a iha =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x hx
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx]
+    · exact absurd h (by simp)
+  | alloc a b c iha ihb ihc =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y z hx hy hz
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy, ihc z hz]
+    · exact absurd h (by simp)
+  | compare op a b iha ihb =>
+    intro r h
+    simp only [evalExact] at h
+    split at h
+    · rename_i x y hx hy
+      simp only [Option.some.injEq] at h
+      subst h
+      simp only [eval, iha x hx, ihb y hy]
+    · exact absurd h (by simp)
+  | typed t => intro r h; simpa [evalExact, eval] using h
+  | unread => intro r h; simpa [evalExact, eval] using h
+
 end RulecCert

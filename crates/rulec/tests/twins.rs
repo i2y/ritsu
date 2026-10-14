@@ -279,12 +279,13 @@ fn items<'a>(j: &'a Json, k: &str) -> &'a [Json] {
 }
 
 /// How many objects of each set of keys a value holds. A claim's keys are words of the
-/// certificate and never names, except in the objects under `values`, which are keyed by the
-/// names of the inputs they give a value to, so those count their members only.
+/// certificate and never names, except in the objects under `values` and under `inputs` (the
+/// numbers a call on a machine's path to a final state is made with, rulec's §15.233), which are
+/// keyed by the names of the inputs they give a value to, so those count their members only.
 fn shape(j: &Json, parent: &str, out: &mut BTreeMap<String, usize>) {
     match j {
         Json::Obj(m) => {
-            let key = if parent == "values" {
+            let key = if parent == "values" || parent == "inputs" {
                 format!("names x {}", m.len())
             } else {
                 let mut ks: Vec<&str> = m.iter().map(|(k, _)| k.as_str()).collect();
