@@ -183,7 +183,22 @@ by one the walk is exact; past it, the numbers are cut into intervals, a sequenc
 claim there is looked for again among calls that really happen, and one that cannot be made
 again is **W127**, never a pass. The certificate lays these claims on the places a case can be,
 and the Lean re-checker proves that places closed under every call the rows allow hold every case,
-whether the walk took the values one by one or cut them into intervals.
+whether the walk took the values one by one or cut them into intervals. Where it took them one by
+one, the certificate also gives a path of calls that really happen from every place to a final
+state, and the Lean re-checker proves from it that every case can still finish.
+
+Some values of an enum can be had only after others — a course after the courses it requires, a
+certification after the one below it. A `prerequisites` block says which, once for every value:
+`start` for the ones that need nothing, one `<value> requires …` line for each of the rest (`,`
+all, `or` any one), `requires nothing "<reason>"` for one no case can take, and
+`ordered by <table>` for a table whose answer — the year a course is taught in — never goes
+below a prerequisite's. The graph is finite, so the check walks it whole: a cycle is **E136**, a
+value that cannot be reached from `start` is **E137**, a value whose year comes before a
+prerequisite's is **E138**, and a prerequisite another one already needs is **W130**. The
+generated code answers what a value needs and whether it can be taken with what is held, in
+every language with a module. The certificate writes the block out as it is, both re-checkers
+check it again, and the Lean one proves the three claims: no cycle, every value but those no
+case can take reached from `start`, and the table's order kept along every edge.
 
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
