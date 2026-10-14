@@ -1,0 +1,12 @@
+error[E131]: The open value stackable can leave the range it declares
+  --> tests/corpus/order_discount.rule:34
+   |
+34 | open stackable : money[USD]  combine sum  range >=0USD <=100USD
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ range: 0USD .. 100USD
+   |
+ An input that takes it out of the range: member = true, via = web, north = true
+ Its terms together come to 0USD .. 103USD.
+   member_off: 0USD .. 5USD (this rule)
+   channel_off: 0USD .. 3USD (this rule)
+   regional_campaign:campaign_off: 0USD .. 95USD (contribution regional_campaign (tests/mutants/m_e131.rule))
+ The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision.

@@ -1,0 +1,52 @@
+rule 注文の値引き(order_savings) v1
+description "注文の値引き。重ねられる値引きは足し合わせ、重ねられない値引きはいちばん大きいものだけを使い、合計は上限と小計を超えない。キャンペーンは、三つの開いた値に別のファイルから足す"
+
+enum 経路(channel) = ウェブ(web) | 店頭(store) default | 電話(phone) default  open
+
+inputs
+  小計(subtotal)       : money[USD]  range >=0USD <=5000USD
+  会員(member)         : bool
+  クーポン(coupon)     : bool
+  注文経路(via)        : 経路
+
+outputs
+  値引き(discount) : money[USD]  round down(1USD)
+
+table 会員の分
+policy unique
+| 会員  | -> 会員値引 : money[USD] |
+| true  | 5USD                     |
+| false | 0USD                     |
+
+table 経路の分
+policy first
+| 注文経路 | -> 経路値引 : money[USD] |
+| ウェブ   | 3USD                     |
+| -        | 0USD                     |
+
+table クーポンの分
+policy unique
+| クーポン | -> クーポン値引 : money[USD] |
+| true     | 10USD                        |
+| false    | 0USD                         |
+
+# 重ねられる値引き: どれも使う。
+open 重ねる値引 : money[USD]  combine sum  range >=0USD <=100USD
+  会員値引
+  経路値引
+
+# 重ねられない値引き: いちばん大きいものだけを使う。
+open 重ねない値引 : money[USD]  combine max  empty 0USD  range >=0USD <=60USD
+  クーポン値引
+
+# 値引き全体の上限: キャンペーンが決めたうちでいちばん低いもの。決めていなければ 50 ドル。
+open 上限 : money[USD]  combine min  empty 50USD  range >=0USD <=50USD
+
+define 値引き : money[USD] = min(min(重ねる値引 + 重ねない値引, 上限), 小計)
+
+examples
+| 小計   | 会員  | クーポン | 注文経路 | -> 値引き |
+| 200USD | true  | true     | ウェブ   | 18USD     |
+| 200USD | false | false    | 店頭     | 0USD      |
+| 12USD  | true  | true     | ウェブ   | 12USD     |
+| 200USD | true  | false    | 電話     | 5USD      |

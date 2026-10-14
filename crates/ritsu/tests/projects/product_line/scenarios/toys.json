@@ -1,0 +1,11 @@
+{
+  "execution": "toys",
+  "now": "2026-04-15T10:00:00Z",
+  "input": {
+    "item": {
+      "kind": "toys",
+      "list_price": 20
+    }
+  },
+  "answers": []
+}

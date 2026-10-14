@@ -1,0 +1,17 @@
+contribution grace_policy(grace_policy) v1
+description "A grace program caps the strict decay at 12 a month"
+to "../standing.rule" signature:b60626e66eba4cb1
+after "strict_policy.rule" signature:5342e23fef2b4ce0
+
+inputs
+  grace(grace) : bool
+
+clause grace_cap -> decay
+  when grace true and strict true and above >0
+  then 12
+  overrides strict_policy:strict_decay
+
+examples
+| score | resting | hostile | strict | grace | -> new_score |
+| 50    | 20      | false   | true   | true  | 38           |
+| 50    | 20      | false   | true   | false | 30           |

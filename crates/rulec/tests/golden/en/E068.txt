@@ -1,0 +1,8 @@
+error[E068]: The open value stackable declares no range
+  --> tests/mutants/m_e068.rule:34
+   |
+34 | open stackable : money[USD]  combine sum
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `range >=… <=…` is missing
+   |
+ The shape is `open <name>(<alias>) : <type> combine sum|product|max|min [empty <value>] range >=… <=…`, with the names of its terms under it, one to a line.
+ The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it — which is why the rule's own check holds whatever the contributions are.

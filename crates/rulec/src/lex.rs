@@ -62,6 +62,12 @@ pub enum Kind {
     /// `sha256:9e4edb5b6a1c0f42` — a pinned digest, one token so that the hex digits are
     /// not read as a number with a unit.
     Hash(String),
+    /// `signature:9c41d0e2a7b35f18` — the pinned shape of the file a contribution adds to or comes
+    /// after (§15.230). One token, as a digest is; only with sixteen hex digits or more, so that an
+    /// input named `signature` written `signature:bool` stays a name and a type.
+    Signature(String),
+    /// `meaning:3f2a9c0d1e4b5a6c` — the pinned meaning of a rule an `apply` reads (§15.230).
+    Meaning(String),
 }
 
 #[derive(Debug, Clone)]
@@ -342,6 +348,19 @@ pub fn lex_line_soft(line_no: usize, text: &str) -> Result<(Vec<Token>, Vec<Diag
             if !hex.is_empty() {
                 let len = n + 1 + hex.len();
                 push(Kind::Hash(hex), len, &mut out);
+                i += len;
+                continue;
+            }
+        }
+        // The two other pins (§15.230): the shape a contribution relies on, and the meaning an
+        // `apply` relies on. Neither word is reserved; the digest after the colon is what makes
+        // the token, and a digest is sixteen hex digits or more, ending where the word would.
+        if (word == "signature" || word == "meaning") && text[i + n..].starts_with(':') {
+            let hex: String = text[i + n + 1..].chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+            let after = text[i + n + 1 + hex.len()..].chars().next();
+            if hex.len() >= 16 && after.is_none_or(is_delim) {
+                let len = n + 1 + hex.len();
+                push(if word == "signature" { Kind::Signature(hex) } else { Kind::Meaning(hex) }, len, &mut out);
                 i += len;
                 continue;
             }

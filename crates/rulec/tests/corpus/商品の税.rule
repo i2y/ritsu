@@ -1,0 +1,22 @@
+rule 商品の税(goods_tax) v1
+description "商品一点の税率。種類ごとに決まる"
+
+import enum 種類 from "shared/商品の種類.rule"
+
+inputs
+  商品の種類(item_kind) : 種類
+
+outputs
+  税率(tax_rate) : rate[step 0.5%]  round down(0.5%)
+
+table 税率表 open
+policy unique
+| 商品の種類 | -> 税率 : rate[step 0.5%] |
+| 本         | 0%                        |
+| 音楽       | 7.5%                      |
+| おもちゃ   | 7.5%                      |
+
+examples
+| 商品の種類 | -> 税率 |
+| 本         | 0%      |
+| 音楽       | 7.5%    |

@@ -295,6 +295,23 @@ fn 変異は決めたコードだけを出す() {
         ("m_e066ja.rule", &[("E066", 1)], "上と同じファイルの日本語の版"),
         ("m_e013enum.rule", &[("E013", 1)], "無い列挙のファイルを指した"),
         ("m_e013enumja.rule", &[("E013", 1)], "上と同じ規則の日本語の版"),
+        // §15.227–§15.230: the merging of files. Written by hand (BY_HAND below), each English file
+        // and its Japanese version beside it; a contribution is checked with the corpus rule it
+        // adds to.
+        ("m_e067.rule", &[("E067", 1)], "キャンペーンの値引きを、開いていない出力に足した"),
+        ("m_e067ja.rule", &[("E067", 1)], "上と同じ寄与の日本語の版"),
+        ("m_e068.rule", &[("E068", 1)], "重ねる値引の `open` の行から範囲を落とした"),
+        ("m_e068ja.rule", &[("E068", 1)], "上と同じ規則の日本語の版"),
+        ("m_e131.rule", &[("E131", 1)], "キャンペーンの 7 ドル引きを 95 ドルと書いた（重ねる値引が範囲を出る）"),
+        ("m_e131ja.rule", &[("E131", 1)], "上と同じ寄与の日本語の版"),
+        ("m_e033add.rule", &[("E033", 1)], "自分の行も `default` も無い経路を足した"),
+        ("m_e033addja.rule", &[("E033", 1)], "上と同じ寄与の日本語の版"),
+        ("m_e040sig.rule", &[("E040", 1)], "足す先の形と違う signature で固定した"),
+        ("m_e040sigja.rule", &[("E040", 1)], "上と同じ寄与の日本語の版"),
+        ("m_e044ring.rule", &[("E044", 1)], "準用する先を、この規則のファイル自身にした"),
+        ("m_e044ringja.rule", &[("E044", 1)], "上と同じ規則の日本語の版"),
+        ("m_w132.rule", &[("W132", 1)], "どの注文にもある上限より高い上限を足した（何も抑えない）"),
+        ("m_w132ja.rule", &[("W132", 1)], "上と同じ寄与の日本語の版"),
     ];
 
     // `m_e102b` used to carry an E101 as well, demanding a row for `可否 = true` — the very
@@ -774,6 +791,22 @@ fn 変異はコーパスから作り直せる() {
         "m_e031walkja.rule",
         "m_w128.rule",
         "m_w128ja.rule",
+        // §15.227–§15.230: a contribution and the rule it adds to are two files, and no corpus rule
+        // is wrong the way these are. In English and in Japanese.
+        "m_e067.rule",
+        "m_e067ja.rule",
+        "m_e068.rule",
+        "m_e068ja.rule",
+        "m_e131.rule",
+        "m_e131ja.rule",
+        "m_e033add.rule",
+        "m_e033addja.rule",
+        "m_e040sig.rule",
+        "m_e040sigja.rule",
+        "m_e044ring.rule",
+        "m_e044ringja.rule",
+        "m_w132.rule",
+        "m_w132ja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

@@ -16,13 +16,14 @@ use crate::types::{Checked, Ty};
 use std::collections::HashMap;
 use std::path::Path;
 
-/// The heading as `rulec source pin` writes it and as the fix offers it.
-pub fn header_line(a: &ApplyDecl, hash: &str) -> String {
+/// The heading as `rulec source pin` writes it and as the fix offers it: pinned at the callee's
+/// meaning (§15.230), which a comment does not move.
+pub fn header_line(a: &ApplyDecl, meaning: &str) -> String {
     let name = match &a.name.ascii {
         Some(al) => format!("{}({al})", a.name.text),
         None => a.name.text.clone(),
     };
-    format!("{} {name} = \"{}\" sha256:{hash}", crate::kw::APPLY, a.path)
+    format!("{} {name} = \"{}\" meaning:{meaning}", crate::kw::APPLY, a.path)
 }
 
 /// What a callee input is replaced by.
@@ -46,11 +47,22 @@ struct Renamer<'a> {
     groups: HashMap<String, Vec<String>>,
     /// Callee input → the enum it has, when it is an enum.
     input_enum: HashMap<String, String>,
+    /// The callee's enums and what they are called here (§15.230).
+    enum_names: Vec<(String, String)>,
 }
 
 impl Renamer<'_> {
     fn text(&self, n: &str) -> String {
         format!("{}:{n}", self.apply)
+    }
+    /// A word the callee writes for a column: a field or an input bound to a name of this rule,
+    /// `held` as it is, any other name of the callee's under this apply.
+    fn word(&self, w: &str) -> String {
+        match self.subs.get(w) {
+            Some(Sub::Name(n)) => n.clone(),
+            _ if w == crate::kw::HELD => w.to_string(),
+            _ => self.text(w),
+        }
     }
     fn sp(&self) -> Span {
         self.at.clone()
@@ -67,7 +79,7 @@ impl Renamer<'_> {
         match self.subs.get(w) {
             Some(Sub::Name(n)) => Expr::Name(n.clone(), self.sp()),
             Some(Sub::Lit(l)) => Expr::Lit(l.clone(), self.sp()),
-            None if w == crate::kw::TRUE || w == crate::kw::FALSE => Expr::Name(w.to_string(), self.sp()),
+            None if w == crate::kw::TRUE || w == crate::kw::FALSE || w == crate::kw::HELD => Expr::Name(w.to_string(), self.sp()),
             None => Expr::Name(self.text(w), self.sp()),
         }
     }
@@ -104,6 +116,13 @@ impl Renamer<'_> {
         }
         out
     }
+    /// A type the callee writes, its enum named as it is here.
+    fn ty(&self, t: &TypeRef) -> TypeRef {
+        match self.enum_names.iter().find(|(c, _)| *c == t.base) {
+            Some((_, mine)) => TypeRef { base: mine.clone(), ..t.clone() },
+            None => t.clone(),
+        }
+    }
     fn cite(&self, c: &Option<Cite>) -> Option<Cite> {
         c.as_ref().map(|c| Cite { source: self.text(&c.source), fragments: c.fragments.clone(), span: self.sp() })
     }
@@ -129,7 +148,55 @@ fn declares(f: &RuleFile, n: &str) -> bool {
         })
 }
 
+thread_local! {
+    /// The rules being expanded on this thread, outermost first: a callee already among them is a
+    /// ring of applies (§15.230).
+    static EXPANDING: std::cell::RefCell<Vec<(std::path::PathBuf, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn canon(p: &Path) -> std::path::PathBuf {
+    ritsu_base::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
+/// A ring of applies below `p`, by its files' `apply` lines alone: `chain` is the way from the
+/// rule entered to `p`, `seen` the rules on it. The ring is the files from where it starts.
+fn ring_below(p: &Path, seen: &mut Vec<std::path::PathBuf>, chain: &mut Vec<String>) -> Option<Vec<String>> {
+    if chain.len() > 32 {
+        return None;
+    }
+    let me = canon(p);
+    if seen.contains(&me) {
+        return Some(chain.clone());
+    }
+    seen.push(me);
+    let src = crate::vfs::read_to_string(p).ok()?;
+    let f = crate::parse::parse(&src, &p.to_string_lossy()).file?;
+    let dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
+    for a in &f.applies {
+        let q = dir.join(&a.path);
+        chain.push(q.to_string_lossy().into_owned());
+        if let Some(r) = ring_below(&q, seen, chain) {
+            return Some(r);
+        }
+        chain.pop();
+    }
+    seen.pop();
+    None
+}
+
 pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
+    if f.applies.is_empty() {
+        return Vec::new();
+    }
+    EXPANDING.with(|e| e.borrow_mut().push((canon(Path::new(path)), path.to_string())));
+    let out = expand_inner(f, path);
+    EXPANDING.with(|e| {
+        e.borrow_mut().pop();
+    });
+    out
+}
+
+fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     let mut out: Vec<Diag> = Vec::new();
     let dir = Path::new(path).parent().unwrap_or(Path::new(".")).to_path_buf();
     let applies = std::mem::take(&mut f.applies);
@@ -160,39 +227,76 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             }
         };
         let h = crate::sha256::short(&bytes);
-        match &a.hash {
-            None => out.push(
-                Diag::error("E040", tr!("元の規則 `{}` のハッシュが固定されていません", "The digest of the callee `{}` is not pinned", a.path))
-                    .at(at(a.span.line))
-                    .mark(a.span.clone(), "")
-                    .note(tr!("いまの元の規則は sha256:{h} です。この内容で承認するなら、見出しを次のとおりにしてください（`rulec source pin` でも書けます）。", "The callee is sha256:{h} now. To pin it as the one approved, make the heading the following (`rulec source pin` writes it too)."))
-                    .fix(crate::diag::FixKind::PinSource, header_line(&a, &h)),
-            ),
-            Some(p) if *p != h => out.push(
-                Diag::error("E040", tr!("元の規則 `{}` が変わっています", "The callee `{}` has changed", a.path))
-                    .at(at(a.span.line))
-                    .mark(a.span.clone(), tr!("固定: sha256:{p}", "pinned: sha256:{p}"))
-                    .note(tr!("いまの元の規則: sha256:{h}", "The callee now: sha256:{h}"))
-                    .note(tr!("`rulec diff` で、この規則の答えが何件、どれだけ動くかを見てから、見出しを次のとおり書き換えてハッシュを固定し直してください。", "See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee."))
-                    .fix(crate::diag::FixKind::PinSource, header_line(&a, &h)),
-            ),
-            _ => {}
-        }
         let src = String::from_utf8_lossy(&bytes).into_owned();
-        let cp = cpath.to_string_lossy().into_owned();
-        a.callee_src = src.clone();
-        a.callee_path = cp.clone();
-        // One level: a callee with an `apply` of its own is refused before anything reads
-        // through it, so a rule that applies itself by way of another cannot recurse here.
-        let parsed = crate::parse::parse(&src, &cp);
-        if parsed.file.as_ref().is_some_and(|cf| !cf.applies.is_empty()) {
+        // A callee that applies another is expanded as its own check expands it (§15.230). A
+        // callee already being expanded on the way here is a ring, said whole, before anything
+        // reads through it — and before its pin, which no file of a ring can hold, since each
+        // one's meaning holds the pins of the next.
+        let ring: Option<Vec<String>> = EXPANDING.with(|e| {
+            let st = e.borrow();
+            let me = canon(&cpath);
+            st.iter().position(|(k, _)| *k == me).map(|i| st[i..].iter().map(|(_, p)| p.clone()).chain(std::iter::once(cpath.to_string_lossy().into_owned())).collect())
+        });
+        // A ring further down, through the callee's own applies, is said here too, where it is
+        // entered: read by the paths alone, before anything is checked.
+        let ring = ring.or_else(|| {
+            let mut seen: Vec<std::path::PathBuf> = EXPANDING.with(|e| e.borrow().iter().map(|(k, _)| k.clone()).collect());
+            let mut chain = vec![path.to_string(), cpath.to_string_lossy().into_owned()];
+            ring_below(&cpath, &mut seen, &mut chain)
+        });
+        if let Some(ring) = ring {
             out.push(e044(
-                tr!("`{}` 自身が `{}` を持っています", "`{}` itself has an `{}`", a.path, crate::kw::APPLY),
-                tr!("準用できるのは一段までです。準用している規則をさらに準用するときは、元の規則の中身を、この規則の中に書いてください。", "An apply goes one level. A provision applied through another is written expanded."),
+                tr!("準用が輪になっています（{}）", "the applies go round ({})", ring.join(" → ")),
+                tr!(
+                    "ある規則を準用する規則を、その規則が（ほかの規則を通して）準用しています。どの規則も、自分を通して自分を読めません。どこか一つの `apply` を外してください。",
+                    "A rule applies a rule that applies it back, directly or through others; no rule can read itself through itself. Take one of the `apply` lines out."
+                ),
             ));
             done.push(a);
             continue;
         }
+        // The pin (§15.230): `meaning:` holds the callee's lines with its comments, description and
+        // citations left out, so a comment does not move it; a `sha256:` written before is read as
+        // it was, the file's bytes.
+        let m = crate::link::pin::meaning(&src);
+        let (pinned, now, word) = match (&a.meaning, &a.hash) {
+            (Some(p), _) => (Some(p.clone()), m.clone(), "meaning"),
+            (None, Some(p)) => (Some(p.clone()), h.clone(), "sha256"),
+            (None, None) => (None, m.clone(), "meaning"),
+        };
+        match &pinned {
+            None => out.push(
+                Diag::error("E040", tr!("元の規則 `{}` の意味が固定されていません", "The meaning of the callee `{}` is not pinned", a.path))
+                    .at(at(a.span.line))
+                    .mark(a.span.clone(), "")
+                    .note(tr!("いまの元の規則は meaning:{m} です。この内容で承認するなら、見出しを次のとおりにしてください（`rulec source pin` でも書けます）。", "The callee is meaning:{m} now. To pin it as the one approved, make the heading the following (`rulec source pin` writes it too)."))
+                    .fix(crate::diag::FixKind::PinSource, header_line(&a, &m)),
+            ),
+            Some(p) if *p != now => {
+                let mut d = Diag::error("E040", tr!("元の規則 `{}` が変わっています", "The callee `{}` has changed", a.path))
+                    .at(at(a.span.line))
+                    .mark(a.span.clone(), tr!("固定: {word}:{p}", "pinned: {word}:{p}"))
+                    .note(tr!("いまの元の規則: {word}:{now}", "The callee now: {word}:{now}"));
+                // What moved since the pin, where the repository has the version it was taken at:
+                // the lines that differ, comments and citations left out.
+                if word == "meaning" {
+                    if let Some(old) = crate::link::pin::meaning_at(&cpath.to_string_lossy(), p) {
+                        let new = crate::link::pin::meaning_pairs(&src);
+                        for n in crate::link::pin::moved_pairs(&old, &new).into_iter().take(12) {
+                            d = d.note(n);
+                        }
+                    }
+                }
+                out.push(
+                    d.note(tr!("`rulec diff` で、この規則の答えが何件、どれだけ動くかを見てから、見出しを次のとおり書き換えて固定し直してください。", "See with `rulec diff` how many answers of this rule move and by how much, then rewrite the heading as follows to pin the new callee."))
+                        .fix(crate::diag::FixKind::PinSource, header_line(&a, &m)),
+                );
+            }
+            _ => {}
+        }
+        let cp = cpath.to_string_lossy().into_owned();
+        a.callee_src = src.clone();
+        a.callee_path = cp.clone();
         // The callee has to pass the whole check — completeness and the rest, not the type
         // check alone — before its definitions are trusted here. It is checked as it is: the
         // ranges `outputs_over` holds this rule's inputs to are not the callee's.
@@ -211,18 +315,77 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 continue;
             }
         };
-        if !cf.elements.is_empty() || cf.walks() {
-            out.push(e044(
-                tr!("`{}` は並びを順に見ていく規則です", "`{}` walks a sequence", a.path),
-                tr!("並びを順に見ていく規則の準用は、まだできません。", "Applying a rule that walks a sequence is not accepted yet."),
-            ));
-            done.push(a);
-            continue;
-        }
         let cal_alias = cf.name.ascii.clone().unwrap_or_else(|| an.clone());
 
         // The bindings: every callee input exactly once, nothing the callee lacks.
         let mut bad = false;
+        // A callee that walks a sequence (§15.230): each of its sequences is read as one of this
+        // rule's, `<callee sequence> = <this rule's sequence>`, its fields by name, or as `with
+        // <this rule's field> -> <callee's field>` says. Its summaries and folds then walk this
+        // rule's sequence.
+        let mut seq_subs: Vec<(String, String)> = Vec::new();
+        let mut field_subs: Vec<(String, String)> = Vec::new();
+        let mut field_pairs: Vec<(String, CalleeInput)> = Vec::new();
+        for el in &cf.elements {
+            let n = el.name.text.as_str();
+            let bs: Vec<&Binding> = a.bindings.iter().filter(|b| b.input == n).collect();
+            let Some(b) = bs.first().filter(|_| bs.len() == 1) else {
+                out.push(
+                    Diag::error("E041", if bs.is_empty() {
+                        tr!("元の規則の並び `{n}` の読み替えがありません", "The callee's sequence `{n}` is not bound")
+                    } else {
+                        tr!("元の規則の並び `{n}` の読み替えが二度あります", "The callee's sequence `{n}` is bound twice")
+                    })
+                    .at(at(a.span.line))
+                    .mark(a.span.clone(), "")
+                    .note(tr!(
+                        "並びをたどる規則を準用するときは、元の規則の並びを、この規則の並びで `{n} = <この規則の並び>` と読み替えてください。要素のフィールドは名前で対応し、違う名前は `with <この規則のフィールド> -> <元の規則のフィールド>` で書きます。",
+                        "To apply a rule that walks a sequence, bind its sequence to one of this rule's: `{n} = <sequence>`. The fields of an element map by name; a field named otherwise is mapped with `with <this rule's field> -> <callee's field>`."
+                    )),
+                );
+                bad = true;
+                continue;
+            };
+            let BindValue::Name(mine) = &b.value else {
+                out.push(
+                    Diag::error("E041", tr!("並び `{n}` は、この規則の並びで読み替えます", "The sequence `{n}` is bound to a sequence of this rule"))
+                        .at(at(b.span.line))
+                        .mark(b.span.clone(), "")
+                        .note(tr!("この規則の並び: {}", "This rule's sequences: {}", f.elements.iter().map(|e| e.name.text.clone()).collect::<Vec<_>>().join(", "))),
+                );
+                bad = true;
+                continue;
+            };
+            let Some(mine_el) = f.elements.iter().find(|e| e.name.text == *mine) else {
+                out.push(
+                    Diag::error("E041", tr!("`{mine}` はこの規則の並びではありません", "`{mine}` is no sequence of this rule"))
+                        .at(at(b.span.line))
+                        .mark(b.span.clone(), "")
+                        .note(tr!("この規則の並び: {}", "This rule's sequences: {}", f.elements.iter().map(|e| e.name.text.clone()).collect::<Vec<_>>().join(", "))),
+                );
+                bad = true;
+                continue;
+            };
+            seq_subs.push((n.to_string(), mine.clone()));
+            for cfd in &el.fields {
+                let ours = b.map.iter().find(|(_, to)| *to == cfd.name.text).map(|(from, _)| from.clone()).unwrap_or_else(|| cfd.name.text.clone());
+                match mine_el.fields.iter().find(|x| x.name.text == ours) {
+                    Some(_) => {
+                        field_subs.push((cfd.name.text.clone(), ours.clone()));
+                        field_pairs.push((ours, CalleeInput { name: cfd.name.text.clone(), ty: cc.ty_of(&cfd.name.text).unwrap_or(Ty::Unknown), range: cfd.range.clone() }));
+                    }
+                    None => {
+                        out.push(
+                            Diag::error("E041", tr!("元の規則の要素のフィールド `{}` にあたるものが、並び `{mine}` にありません", "The callee's field `{}` has nothing in the sequence `{mine}`", cfd.name.text))
+                                .at(at(b.span.line))
+                                .mark(b.span.clone(), "")
+                                .note(tr!("`{mine}` のフィールド: {}。違う名前なら `with <この規則のフィールド> -> {}` で対応づけてください。", "The fields of `{mine}`: {}. A field named otherwise is mapped with `with <this rule's field> -> {}`.", mine_el.fields.iter().map(|x| x.name.text.clone()).collect::<Vec<_>>().join(", "), cfd.name.text)),
+                        );
+                        bad = true;
+                    }
+                }
+            }
+        }
         for cin in &cf.inputs {
             let n = cin.name.text.as_str();
             let k = a.bindings.iter().filter(|b| b.input == n).count();
@@ -241,7 +404,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             }
         }
         for b in &a.bindings {
-            if !cf.inputs.iter().any(|i| i.name.text == b.input) {
+            if !cf.inputs.iter().any(|i| i.name.text == b.input) && !cf.elements.iter().any(|e| e.name.text == b.input) {
                 out.push(
                     Diag::error("E041", tr!("`{}` に `{}` という入力はありません", "`{}` has no input called `{}`", a.path, b.input))
                         .at(at(b.span.line))
@@ -290,28 +453,19 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 }
             }
         }
-        // What the expansion does not carry yet: an enum of the callee's own that reaches an
-        // output column or an output. Its values would have no spelling in this rule.
-        let callee_enum = |ty: &Ty| -> bool {
-            match ty {
-                Ty::Enum(e) => cf.enums.iter().any(|d| d.name.text == *e),
-                Ty::Opt(inner) => matches!(inner.as_ref(), Ty::Enum(e) if cf.enums.iter().any(|d| d.name.text == *e)),
-                _ => false,
-            }
-        };
-        for it in &cf.items {
-            if let Item::Table(t) = it {
-                for oc in &t.outputs {
-                    if cc.ty_of(&oc.name.text).is_some_and(|ty| callee_enum(&ty)) {
-                        // Named, so that each language reads the two in its own order (§15.208).
-                        let table = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
-                        let output = &oc.name.text;
-                        out.push(e044(
-                            tr!("表 {table} の出力 `{output}` は、元の規則が宣言した列挙です", "the output `{output}` of table {table} is an enum the callee declares"),
-                            tr!("元の規則の列挙を出力に持つ表や節は、まだ準用できません。入力の列挙なら `with` で値を対応づけられます。", "Expanding a table or clause that produces one of the callee's enums is not accepted yet. An enum input is mapped with `with`."),
-                        ));
-                        bad = true;
-                    }
+        // The enums the callee declares (§15.230) come in as `<apply>:<enum>`, values spelled as the
+        // callee spells them; one the callee reads from an `enums` file this rule reads too is that
+        // one, with no copy.
+        let mut enum_names: Vec<(String, String)> = Vec::new();
+        for e in &cf.enums {
+            let shared = e.from.as_ref().and_then(|o| {
+                f.enums.iter().find(|m| m.from.as_ref().is_some_and(|mo| mo.path == o.path && mo.name.text == o.name.text)).map(|m| m.name.text.clone())
+            });
+            match shared {
+                Some(mine) => enum_names.push((e.name.text.clone(), mine)),
+                None => {
+                    let copy = format!("{an}:{}", e.name.text);
+                    enum_names.push((e.name.text.clone(), copy));
                 }
             }
         }
@@ -408,14 +562,18 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 }
             }
         }
+        for (callee_field, ours) in &field_subs {
+            subs.insert(callee_field.clone(), Sub::Name(ours.clone()));
+        }
         let rn = Renamer {
             apply: &an,
-            alias: cal_alias,
+            alias: cal_alias.clone(),
             at: a.span.clone(),
             subs,
             maps,
             groups: cc.groups.iter().map(|(g, (_, ms))| (g.clone(), ms.clone())).collect(),
             input_enum,
+            enum_names: enum_names.clone(),
         };
 
         // The inlined items.
@@ -424,7 +582,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             match it {
                 Item::Derived(d) => items.push(Item::Derived(DerivedDecl {
                     name: rn.name(&d.name),
-                    ty: d.ty.clone(),
+                    ty: rn.ty(&d.ty),
                     expr: rn.expr(&d.expr),
                     range: d.range.clone(),
                     span: rn.sp(),
@@ -432,12 +590,57 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 })),
                 Item::Define(d) => items.push(Item::Define(DefineDecl {
                     name: rn.name(&d.name),
-                    ty: d.ty.clone(),
+                    ty: rn.ty(&d.ty),
                     expr: rn.expr(&d.expr),
                     span: rn.sp(),
                     cite: rn.cite(&d.cite),
                 })),
-                Item::Agg(_) | Item::Fold(_) => {}
+                // A summary or a fold of a callee that walks a sequence walks this rule's (§15.230),
+                // under this apply's name.
+                Item::Agg(d) => items.push(Item::Agg(AggDecl {
+                    name: rn.name(&d.name),
+                    over: seq_subs.iter().find(|(c, _)| *c == d.over).map(|(_, m)| m.clone()).unwrap_or_else(|| d.over.clone()),
+                    column: Name { text: rn.word(&d.column.text), span: rn.sp(), ..d.column.clone() },
+                    filter: d.filter.as_ref().map(|(c, v)| (Name { text: rn.word(&c.text), span: rn.sp(), ..c.clone() }, v.clone())),
+                    span: rn.sp(),
+                    ..d.clone()
+                })),
+                Item::Fold(d) => {
+                    // A fold that names no answer answers the callee's first output, which comes in
+                    // as `<apply>:<output>` here.
+                    let answer = match &d.answer {
+                        Some(x) => FoldAnswer { name: rn.name(&x.name), ty: x.ty.clone().or_else(|| cf.outputs.iter().find(|o| o.name.text == x.name.text).map(|o| o.ty.clone())).map(|t| rn.ty(&t)) },
+                        None => {
+                            let o = &cf.outputs[0];
+                            FoldAnswer { name: rn.name(&o.name), ty: Some(rn.ty(&o.ty)) }
+                        }
+                    };
+                    items.push(Item::Fold(FoldDecl {
+                        verdict: rn.word(&d.verdict),
+                        over: seq_subs.iter().find(|(c, _)| *c == d.over).map(|(_, m)| m.clone()).unwrap_or_else(|| d.over.clone()),
+                        answer: Some(answer),
+                        arms: d
+                            .arms
+                            .iter()
+                            .map(|(v, arm, _)| {
+                                let arm = match arm {
+                                    Arm::Stop(Some(x)) => Arm::Stop(Some(rn.expr(x))),
+                                    Arm::Take { expr, unique } => Arm::Take { expr: rn.expr(expr), unique: *unique },
+                                    Arm::KeepMax { expr, key } => Arm::KeepMax { expr: rn.expr(expr), key: rn.expr(key) },
+                                    Arm::TakeWeighted { expr, weight } => Arm::TakeWeighted { expr: rn.expr(expr), weight: rn.expr(weight) },
+                                    other => other.clone(),
+                                };
+                                (Name { span: rn.sp(), ..v.clone() }, arm, rn.sp())
+                            })
+                            .collect(),
+                        empty: d.empty.as_ref().map(|x| rn.expr(x)),
+                        exhausted: d.exhausted.as_ref().map(|x| rn.expr(x)),
+                        // The drawn value of a pick by weight (§15.226) is the callee's input, read
+                        // as this rule binds it.
+                        draw: d.draw.as_ref().map(|n| Name { text: rn.word(&n.text), ascii: None, span: rn.sp() }),
+                        span: rn.sp(),
+                    }));
+                }
                 Item::Table(t) => {
                     let tn = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
                     if dropped_tables.contains(&tn) {
@@ -464,8 +667,19 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         }
         // A derived value or definition of the callee that nothing uses any more — its only
         // reader was a definition an `except` left out — would only draw a W111 pointing at
-        // the `apply` line. It goes.
-        prune(&mut items, &cf.outputs.iter().map(|o| rn.text(&o.name.text)).collect::<Vec<_>>(), cf.result.as_ref().map(|r| rn.expr(&r.expr)));
+        // the `apply` line. It goes, unless this rule reads it as `<apply>:<name>` (§15.230).
+        let mut roots: Vec<String> = cf.outputs.iter().map(|o| rn.text(&o.name.text)).collect();
+        let prefix = format!("{an}:");
+        for it in &f.items {
+            roots.extend(crate::types::item_reads(it).into_iter().filter(|n| n.starts_with(&prefix)));
+        }
+        if let Some(r) = &f.result {
+            roots.extend(expr_names(&r.expr).into_iter().filter(|n| n.starts_with(&prefix)));
+        }
+        for o in &f.opens {
+            roots.extend(o.terms.iter().map(|t| t.name.text.clone()).filter(|n| n.starts_with(&prefix)));
+        }
+        prune(&mut items, &roots, cf.result.as_ref().map(|r| rn.expr(&r.expr)));
         // The callee's outputs: its first one may be a `result` expression, the rest are
         // bindings of their own names; each becomes a definition here, under the name this
         // rule gives it, rounded as the callee declared.
@@ -474,7 +688,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             if let (Some(r), 0) = (&cf.result, oi) {
                 items.push(Item::Define(DefineDecl {
                     name: Name { text: inner.clone(), ascii: Some(format!("{}_{}", rn.alias, od.name.ascii.clone().unwrap_or_else(|| od.name.text.clone()))), span: rn.sp() },
-                    ty: od.ty.clone(),
+                    ty: rn.ty(&od.ty),
                     expr: rn.expr(&r.expr),
                     span: rn.sp(),
                     cite: None,
@@ -506,6 +720,74 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 Some(rd) => Expr::Call(rd.mode.clone(), vec![value, Expr::Lit(Lit::Num(rd.grid.clone()), rn.sp())], rn.sp()),
                 None => value,
             };
+            // An output of an enum the callee declares, read in this rule's values (§15.230): a table
+            // of the callee's values and what each is here, a value spelled the same on both sides
+            // standing for itself.
+            let mapped = enum_names.iter().find(|(c, _)| *c == od.ty.base).map(|(c, _)| c.clone());
+            let ob = a.outputs.iter().find(|ob| ob.output == od.name.text);
+            if let (Some(ce), Some(ob)) = (mapped, ob.filter(|ob| !ob.map.is_empty())) {
+                let callee_vals = cc.enums.get(&ce).cloned().unwrap_or_default();
+                let mut rows_map: Vec<(String, String)> = Vec::new();
+                let mut missing: Vec<String> = Vec::new();
+                for v in &callee_vals {
+                    match ob.map.iter().find(|(from, _)| from == v) {
+                        Some((_, to)) => rows_map.push((v.clone(), to.clone())),
+                        None => missing.push(v.clone()),
+                    }
+                }
+                let targets: Vec<&String> = ob.map.iter().map(|(_, to)| to).collect();
+                let ours = f.enums.iter().find(|e| targets.iter().all(|t| e.values.iter().any(|v| v.text == **t))).map(|e| e.name.clone());
+                for v in missing.clone() {
+                    if ours.as_ref().is_some_and(|o| f.enums.iter().any(|e| e.name.text == o.text && e.values.iter().any(|x| x.text == v))) {
+                        rows_map.push((v.clone(), v.clone()));
+                        missing.retain(|x| *x != v);
+                    }
+                }
+                let bad_from: Vec<&String> = ob.map.iter().map(|(from, _)| from).filter(|from| !callee_vals.contains(from)).collect();
+                if ours.is_none() || !missing.is_empty() || !bad_from.is_empty() {
+                    let why = if ours.is_none() {
+                        tr!("`with` の右の値を全部持つ列挙が、この規則にありません", "no enum of this rule has every value on the right of `with`")
+                    } else if !bad_from.is_empty() {
+                        tr!("{} は元の規則の {ce} の値ではありません", "{} is no value of the callee's {ce}", bad_from.iter().map(|x| x.as_str()).collect::<Vec<_>>().join(", "))
+                    } else {
+                        tr!("元の規則の値 {} にあたる値がありません", "the callee's values {} stand for nothing here", missing.join(", "))
+                    };
+                    out.push(bad_map(&at(ob.span.line), &ob.span, why));
+                    continue;
+                }
+                let ours = ours.expect("checked above");
+                let rows: Vec<Row> = rows_map
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (from, to))| Row {
+                        cells: vec![Cell::Lit(Lit::Word(from.clone()))],
+                        cell_spans: vec![ob.span.clone()],
+                        outs: vec![OutCell::Lit(Lit::Word(to.clone()))],
+                        out_spans: vec![ob.span.clone()],
+                        span: ob.span.clone(),
+                        index: i + 1,
+                        cite: None,
+                        label: None,
+                        origin: None,
+                    })
+                    .collect();
+                a.defines.push(target.text.clone());
+                items.push(Item::Table(Table {
+                    name: Some(Name { text: format!("{an}:{}_as_{}", od.name.text, target.text), ascii: None, span: ob.span.clone() }),
+                    policy: Policy::Unique,
+                    inputs: vec![(inner.clone(), ob.span.clone())],
+                    outputs: vec![OutCol { name: Name { text: target.text.clone(), ascii: target.ascii.clone(), span: ob.span.clone() }, ty: Some(TypeRef { base: ours.text.clone(), args: Vec::new(), optional: false, span: ob.span.clone() }), span: ob.span.clone() }],
+                    rows,
+                    span: ob.span.clone(),
+                    overrides: Vec::new(),
+                    clause: false,
+                    cite: None,
+                    applied: Some(an.clone()),
+                    open: None,
+                    contributed: None,
+                }));
+                continue;
+            }
             // The output's own alias is the name this rule declares it under, if it is an
             // output here; else the alias written on the `->` name, if any; else none, and
             // the name itself is the identifier (§1.3). It used to fall back to the callee's
@@ -517,7 +799,7 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             a.defines.push(target.text.clone());
             items.push(Item::Define(DefineDecl {
                 name: Name { text: target.text.clone(), ascii, span: target.span.clone() },
-                ty: od.ty.clone(),
+                ty: rn.ty(&od.ty),
                 expr,
                 span: a.span.clone(),
                 cite: None,
@@ -543,12 +825,43 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 f.imports.push((p.clone(), sp.clone()));
             }
         }
+        // The callee's enums that what came in names as a type come in as `<apply>:<enum>`; one
+        // only an input of the callee has is this rule's, through the binding.
+        let mut used: Vec<String> = Vec::new();
+        for it in &items {
+            match it {
+                Item::Derived(d) => used.push(d.ty.base.clone()),
+                Item::Define(d) => used.push(d.ty.base.clone()),
+                Item::Table(t) => used.extend(t.outputs.iter().filter_map(|o| o.ty.as_ref().map(|x| x.base.clone()))),
+                Item::Fold(d) => used.extend(d.answer.iter().filter_map(|x| x.ty.as_ref().map(|t| t.base.clone()))),
+                Item::Agg(_) => {}
+            }
+        }
+        for e in &cf.enums {
+            let copy = format!("{an}:{}", e.name.text);
+            if used.contains(&copy) && !f.enums.iter().any(|m| m.name.text == copy) {
+                f.enums.push(EnumDecl {
+                    name: Name { text: copy.clone(), ascii: Some(format!("{cal_alias}_{}", e.name.ascii.clone().unwrap_or_else(|| e.name.text.clone()))), span: a.span.clone() },
+                    from: None,
+                    added: Vec::new(),
+                    span: a.span.clone(),
+                    ..e.clone()
+                });
+            }
+        }
         let n = items.len();
         let at_idx = a.at.min(f.items.len());
         f.items.splice(at_idx..at_idx, items);
+        // An open value written after the apply goes after what it brought in (§15.227).
+        for o in f.opens.iter_mut() {
+            if o.at > at_idx || (o.at == at_idx && o.span.line > a.span.line) {
+                o.at += n;
+            }
+        }
         a.count = n;
         reorder_after_overrides(f, at_idx, n, &an);
         a.callee = Some(Callee {
+            fields: field_pairs.clone(),
             rule: cf.name.clone(),
             inputs: cf
                 .inputs
@@ -572,48 +885,38 @@ pub fn expand(f: &mut RuleFile, path: &str) -> Vec<Diag> {
 /// member. Whatever the callee computed from that output — its own defines, the tables
 /// reading it, the definitions made for its outputs — would read the output too early where
 /// the expansion put it, so those items move to just after the overriding definition.
-fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, an: &str) {
-    let prefix = format!("{an}:");
-    let mut k = at + n;
-    while k < f.items.len() {
-        let Item::Table(t) = &f.items[k] else {
-            k += 1;
-            continue;
-        };
-        // The outputs of the inlined tables this item takes precedence over.
-        let mut outs: Vec<String> = Vec::new();
-        for r in &t.overrides {
-            let joined = match &r.row {
-                Some(l) => format!("{}:{l}", r.table),
-                None => r.table.clone(),
-            };
-            for it in &f.items[at..k] {
-                if let Item::Table(u) = it {
-                    let un = u.name.as_ref().map(|x| x.text.clone()).unwrap_or_default();
-                    if un.starts_with(&prefix) && (un == r.table || un == joined) {
-                        outs.extend(u.outputs.iter().map(|o| o.name.text.clone()));
-                    }
-                }
-            }
-        }
-        if outs.is_empty() {
-            k += 1;
+fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, _an: &str) {
+    // The outputs the inlined tables define, each with the place of the last definition of it in
+    // the whole rule: a clause of this rule that takes precedence over one of them, or over such
+    // a clause in turn, is a member of its set too (§15.230), and the set is decided there.
+    let outs: Vec<String> = f.items[at..(at + n).min(f.items.len())]
+        .iter()
+        .filter_map(|it| if let Item::Table(t) = it { Some(t.outputs.iter().map(|o| o.name.text.clone()).collect::<Vec<_>>()) } else { None })
+        .flatten()
+        .collect();
+    let mut end = (at + n).min(f.items.len());
+    for o in outs {
+        let defines = |it: &Item| matches!(it, Item::Table(t) if t.outputs.iter().any(|x| x.name.text == o));
+        let Some(last) = f.items.iter().rposition(defines) else { continue };
+        if last < end {
             continue;
         }
-        // Everything between the expansion's start and this item that reads one of those
-        // outputs, or reads something that does, in order.
+        // Everything of the expansion that reads the output, or reads something that does, in order.
         let mut moving: Vec<usize> = Vec::new();
-        let mut names: Vec<String> = outs;
-        for j in at..k {
+        let mut names: Vec<String> = vec![o.clone()];
+        for j in at..end {
+            if defines(&f.items[j]) {
+                continue;
+            }
             let reads: Vec<String> = match &f.items[j] {
                 Item::Derived(d) => expr_names(&d.expr),
                 Item::Define(d) => expr_names(&d.expr),
-                Item::Agg(_) | Item::Fold(_) => Vec::new(),
+                Item::Agg(_) | Item::Fold(_) => crate::types::item_reads(&f.items[j]),
                 Item::Table(u) => {
                     let mut v: Vec<String> = u.inputs.iter().map(|(c, _)| c.clone()).collect();
                     for r in &u.rows {
-                        for o in &r.outs {
-                            if let OutCell::Name(w) = o {
+                        for x in &r.outs {
+                            if let OutCell::Name(w) = x {
                                 v.push(w.clone());
                             }
                         }
@@ -621,19 +924,12 @@ fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, an: &str) {
                     v
                 }
             };
-            let is_member = matches!(&f.items[j], Item::Table(u) if u.outputs.iter().any(|o| names.contains(&o.name.text)));
-            if !is_member && reads.iter().any(|r| names.contains(r)) {
+            if reads.iter().any(|r| names.contains(r)) {
                 moving.push(j);
-                match &f.items[j] {
-                    Item::Derived(d) => names.push(d.name.text.clone()),
-                    Item::Define(d) => names.push(d.name.text.clone()),
-                    Item::Table(u) => names.extend(u.outputs.iter().map(|o| o.name.text.clone())),
-                    Item::Agg(_) | Item::Fold(_) => {}
-                }
+                names.extend(crate::types::item_names(&f.items[j]));
             }
         }
         if moving.is_empty() {
-            k += 1;
             continue;
         }
         let mut taken: Vec<Item> = Vec::new();
@@ -641,10 +937,9 @@ fn reorder_after_overrides(f: &mut RuleFile, at: usize, n: usize, an: &str) {
             taken.push(f.items.remove(j));
         }
         taken.reverse();
-        let dest = k - moving.len() + 1;
-        let m = taken.len();
+        let dest = last - moving.len() + 1;
         f.items.splice(dest..dest, taken);
-        k = dest + m;
+        end -= moving.len();
     }
 }
 
@@ -853,7 +1148,7 @@ fn inline_table(rn: &Renamer, cc: &Checked, t: &Table, dropped_rows: &[(String, 
             .iter()
             .map(|o| OutCol {
                 name: rn.name(&o.name),
-                ty: o.ty.clone().or_else(|| callee_outputs.iter().find(|od| od.name.text == o.name.text).map(|od| od.ty.clone())),
+                ty: o.ty.clone().or_else(|| callee_outputs.iter().find(|od| od.name.text == o.name.text).map(|od| od.ty.clone())).map(|t| rn.ty(&t)),
                 span: rn.sp(),
             })
             .collect(),
@@ -867,6 +1162,8 @@ fn inline_table(rn: &Renamer, cc: &Checked, t: &Table, dropped_rows: &[(String, 
         clause: t.clause,
         cite: rn.cite(&t.cite),
         applied: Some(an.to_string()),
+        open: None,
+        contributed: None,
     })
 }
 
@@ -1032,6 +1329,45 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         .note(tr!(
                             "元の規則の完全性は、その範囲の中でだけ証明されています。範囲の外の値には定義がありません。渡す側の範囲を狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。",
                             "The callee's completeness was proved over that range; outside it there is no definition. Narrow the range on this side, or define that region in a clause of this rule. Which is a business decision."
+                        )),
+                );
+            }
+        }
+        // The fields of a callee that walks a sequence (§15.230): the field of this rule's sequence
+        // that stands for each is of its type, and inside the range the callee proved over.
+        for (ours, cin) in &cal.fields {
+            let Some(ty) = c.ty_of(ours) else { continue };
+            let bare = |t: Ty| match t {
+                Ty::Opt(i) => *i,
+                t => t,
+            };
+            let (ty, cty) = (bare(ty), bare(cin.ty.clone()));
+            if !ty.unifies(&cty) && !cty.unifies(&ty) {
+                out.push(bad_map(&at(a.span.line), &a.span, tr!("`{ours}` は {ty} で、元の規則の要素の `{}` は {cty} です", "`{ours}` is {ty}; the callee's field `{}` is {cty}", cin.name)));
+                continue;
+            }
+            let Some(r) = &cin.range else { continue };
+            let Some((clo, chi)) = bounds_of(r, &cty) else { continue };
+            let (lo, hi) = c.ranges.get(ours).copied().unwrap_or((None, None));
+            let below = match (lo, clo) {
+                (Some(l), Some(cl)) => l.cmp_to(cl) == std::cmp::Ordering::Less,
+                (None, Some(_)) => true,
+                _ => false,
+            };
+            let above = match (hi, chi) {
+                (Some(h), Some(ch)) => h.cmp_to(ch) == std::cmp::Ordering::Greater,
+                (None, Some(_)) => true,
+                _ => false,
+            };
+            if below || above {
+                out.push(
+                    Diag::error("E043", tr!("フィールド `{ours}` の値が、元の規則の `{}` の範囲の外に出ます", "The field `{ours}` leaves the range of the callee's `{}`", cin.name))
+                        .at(at(a.span.line))
+                        .mark(a.span.clone(), tr!("`{ours}` の範囲: {}", "the range of `{ours}`: {}", interval_text(lo, hi, &cty)))
+                        .note(tr!("元の規則の `{}` は range {} の中で検査されています。", "The callee's `{}` was checked over range {}.", cin.name, range_text(r)))
+                        .note(tr!(
+                            "この規則のフィールドの範囲を、元の規則の範囲まで狭めてください。",
+                            "Narrow this rule's field to the callee's range."
                         )),
                 );
             }

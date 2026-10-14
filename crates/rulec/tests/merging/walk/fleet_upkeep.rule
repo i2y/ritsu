@@ -1,0 +1,51 @@
+rule fleet_upkeep(fleet_upkeep) v1
+description "What a depot pays a month for the vehicles it keeps: each vehicle's cost by its kind, added up, less the depot's allowance. A program may add to the cost of a vehicle, and to the allowance"
+
+enum vehicle_kind(vehicle_kind) = van(van) | truck(truck) | bike(bike)
+
+inputs
+  depot_size(depot_size) : number  range >=1 <=50
+
+elements vehicles(vehicles)
+  kind(kind) : vehicle_kind
+  age(age)   : number  range >=0 <=30  contract_only
+
+outputs
+  upkeep(upkeep) : money[USD]  round down(1USD)
+
+table base_cost_of
+policy unique
+| kind  | -> base_cost : money[USD] |
+| van   | 120USD                    |
+| truck | 300USD                    |
+| bike  | 20USD                     |
+
+# One vehicle's cost: its kind's, and what programs add to it.
+open vehicle_cost : money[USD]  combine sum  range >=0USD <=1000USD
+  base_cost
+
+sum total(total) over vehicles of vehicle_cost  range >=0USD <=20000USD
+
+table allowance_of
+policy unique
+| depot_size | -> depot_allowance : money[USD] |
+| <=10       | 100USD                          |
+| >10        | 300USD                          |
+
+open allowance : money[USD]  combine sum  range >=0USD <=1000USD
+  depot_allowance
+
+define upkeep : money[USD] = max(0USD, total - allowance)
+
+sequence two_vans
+| kind | age |
+| van  | 3   |
+| van  | 12  |
+
+sequence empty_yard
+| kind | age |
+
+examples
+| depot_size | vehicles   | -> upkeep |
+| 5          | two_vans   | 140USD    |
+| 20         | empty_yard | 0USD      |

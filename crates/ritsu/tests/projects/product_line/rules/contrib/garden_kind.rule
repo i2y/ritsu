@@ -1,0 +1,5 @@
+contribution garden_kind(garden_kind) v1
+description "The garden line: garden supplies, a new kind of product. It ships the way any other kind does, which `default` says"
+to "../shared/product_kinds.rule" signature:3b66d8e9012538cc
+
+extend kind with garden "Garden supplies" default

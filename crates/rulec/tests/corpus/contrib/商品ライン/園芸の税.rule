@@ -1,0 +1,12 @@
+contribution 園芸の税(gardening_tax) v1
+description "園芸用品の税率"
+to "../../商品の税.rule" signature:bd382465e0403053
+after "園芸の種類.rule" signature:a2c6efaa2b1b20ff
+
+clause 園芸の税率 -> 税率
+  when 商品の種類 園芸
+  then 5%
+
+examples
+| 商品の種類 | -> 税率 |
+| 園芸       | 5%      |

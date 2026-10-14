@@ -57,7 +57,7 @@ fn 呼び先の定義は呼び出しの名前の下に展開される() {
     assert!(c.ty_of("退職手当:支給月数").is_some());
     // The apply remembers what it learned.
     let a = &f.applies[0];
-    assert_eq!(a.hash.as_deref(), Some("fb21d081458c197e"));
+    assert_eq!(a.meaning.as_deref(), Some("6812e6cdf8088ad4"));
     // 支給表, 満額, 本則 and the definition of 非常勤手当 (the callee has no `result`, so
     // its output is the clause's column itself).
     assert_eq!(a.count, 4);
@@ -80,31 +80,46 @@ fn 呼び先の行は呼び先のとおりに当たり_trace_は呼び出しの�
     assert_eq!(c.label_of("退職手当:支給表", 1), Some("短期"));
 }
 
+/// The pin of an apply is the callee's meaning (§15.230): a pin that is not the callee's stops at
+/// E040, whose fix is the heading pinned at the meaning; `rulec source pin` writes it, keeping the
+/// comment, from a `sha256:` pin too. A comment added to the callee moves nothing; a row does.
 #[test]
 fn 固定と違う呼び先は_e040_で止まり_pin_が見出しを書き換える() {
     rulec::i18n::set(rulec::i18n::Lang::Ja);
     let tmp = TempDir::new("apply-pin");
     let dir = tmp.path().to_path_buf();
-    std::fs::copy(root().join(CALLEE), dir.join("退職手当.rule")).unwrap();
-    let caller = std::fs::read_to_string(root().join(CALLER)).unwrap().replace("sha256:fb21d081458c197e", "sha256:0000000000000000  # 固定");
+    let callee = std::fs::read_to_string(root().join(CALLEE)).unwrap();
+    std::fs::write(dir.join("退職手当.rule"), &callee).unwrap();
+    let m = rulec::link::pin::meaning(&callee);
+    let caller0 = std::fs::read_to_string(root().join(CALLER)).unwrap();
+    let pinned = caller0.lines().find(|l| l.starts_with("apply ")).and_then(|l| l.split_whitespace().find(|w| w.starts_with("meaning:") || w.starts_with("sha256:"))).unwrap().to_string();
+    let caller = caller0.replace(&pinned, "sha256:0000000000000000  # 固定");
     let path = dir.join("非常勤退職手当.rule");
     std::fs::write(&path, &caller).unwrap();
     let p = path.to_string_lossy().into_owned();
     let ds = rulec::report(&caller, &p).diags;
     let e040: Vec<_> = ds.iter().filter(|d| d.code == "E040").collect();
     assert_eq!(e040.len(), 1, "{ds:?}");
-    assert_eq!(e040[0].fix.text.as_deref(), Some("apply 退職手当(retirement) = \"退職手当.rule\" sha256:fb21d081458c197e"));
+    assert_eq!(e040[0].fix.text.as_deref(), Some(format!("apply 退職手当(retirement) = \"退職手当.rule\" meaning:{m}").as_str()));
     // The check goes on past E040, so the rest of the rule is still judged.
     assert!(ds.iter().all(|d| d.code == "E040" || d.severity != rulec::diag::Severity::Error), "{ds:?}");
     // gen refuses; diff may go on.
     assert!(rulec::prepare(&caller, &p).is_err());
     assert!(rulec::prepare_lenient(&caller, &p).is_ok());
-    // pin rewrites the heading's digest and keeps the comment.
+    // pin rewrites the heading's pin as the meaning and keeps the comment.
     let parsed = rulec::parse::parse(&caller, &p);
     let (text, o) = rulec::sources::pin(parsed.file.as_ref().unwrap(), &p, &caller).unwrap();
     assert!(o.changed);
-    assert!(text.contains("sha256:fb21d081458c197e  # 固定"), "{text}");
+    assert!(text.contains(&format!("meaning:{m}  # 固定")), "{text}");
     assert!(rulec::report(&text, &p).diags.iter().all(|d| d.code != "E040"));
+    // A comment in the callee moves no meaning; a row does.
+    std::fs::write(dir.join("退職手当.rule"), format!("# 改正の前の版\n{callee}")).unwrap();
+    assert!(rulec::report(&text, &p).diags.iter().all(|d| d.code != "E040"), "コメントは意味を動かさない");
+    let row = "長期 | >=25     | 定年, 自己都合 | 40                           |";
+    assert!(callee.contains(row));
+    std::fs::write(dir.join("退職手当.rule"), callee.replace(row, "長期 | >=25     | 定年, 自己都合 | 41                           |")).unwrap();
+    let ds = rulec::report(&text, &p).diags;
+    assert_eq!(ds.iter().filter(|d| d.severity == rulec::diag::Severity::Error).map(|d| d.code).collect::<Vec<_>>(), ["E040"], "行を変えると意味が動く");
 }
 
 #[test]
@@ -115,32 +130,75 @@ fn 呼び先が無ければ_e044_で止まる() {
     assert_eq!(ds.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E044"]);
 }
 
-/// A table of the callee whose output is one of the callee's enums cannot be expanded yet (E044),
-/// and the sentence names the table and the output each in its own place, in English and in
-/// Japanese: the two used to be given in one order for both sentences, so one of them named the
-/// output as the table (§15.208). The English rules, and their Japanese versions.
+/// A callee whose table produces one of its own enums is applied (§15.230): the enum comes in as
+/// `<apply>:<enum>`, a clause of this rule tests a value of it through `<apply>:<name>`, and an
+/// output of it is read in this rule's values with `with`, from the callee's value to this rule's.
+/// The English rules, and their Japanese versions.
 #[test]
-fn 呼び先の列挙を出す表のe044は表と出力をそれぞれの所で言う() {
-    let callee_en = "rule grade v1\n\nenum level = low | high\n\ninputs\n  score : number  range >=0 <=100\n\noutputs\n  passed : bool\n\ntable level_of\npolicy unique\n| score | -> band : level |\n| <50   | low             |\n| >=50  | high            |\n\ntable pass_of\npolicy unique\n| band | -> passed : bool |\n| low  | false            |\n| high | true             |\n";
-    let caller_en = "rule review v1\n\ninputs\n  points : number  range >=0 <=100\n\noutputs\n  ok : bool\n\napply grade = \"grade.rule\" sha256:0000000000000000\n  score = points\n  passed -> ok\n";
-    let callee_ja = "rule 評価(grade) v1\n\nenum 水準(level) = 低い(low) | 高い(high)\n\ninputs\n  点数(score) : number  range >=0 <=100\n\noutputs\n  合格(passed) : bool\n\ntable 水準の表(level_of)\npolicy unique\n| 点数 | -> 段(band) : 水準 |\n| <50  | 低い               |\n| >=50 | 高い               |\n\ntable 合否の表(pass_of)\npolicy unique\n| 段   | -> 合格 : bool |\n| 低い | false          |\n| 高い | true           |\n";
-    let caller_ja = "rule 審査(review) v1\n\ninputs\n  得点(points) : number  range >=0 <=100\n\noutputs\n  可(ok) : bool\n\napply 評価(grade) = \"評価.rule\" sha256:0000000000000000\n  点数 = 得点\n  合格 -> 可\n";
-    let tmp = TempDir::new("apply-e044");
+fn 呼び先の列挙を出す表も準用でき_出力は_with_でこの規則の値に読む() {
+    let callee_en = "rule grade v1\n\nenum level = low | high\n\ninputs\n  score : number  range >=0 <=100\n\noutputs\n  band : level\n\ntable level_of\npolicy unique\n| score | -> band |\n| <50   | low     |\n| >=50  | high    |\n";
+    let caller_en = "rule review v1\n\nenum verdict_kind = needs_work | fine\n\ninputs\n  points : number  range >=0 <=100\n\noutputs\n  verdict : verdict_kind\n  bonus   : number  round down(1)\n\napply grade = \"grade.rule\" meaning:{m}\n  score = points\n  band -> verdict with low -> needs_work, high -> fine\n\nclause high_bonus -> bonus\n  when grade:band high\n  then 10\n\nclause low_bonus -> bonus\n  when grade:band low\n  then 0\n\nexamples\n| points | -> verdict | bonus |\n| 40     | needs_work | 0     |\n| 70     | fine       | 10    |\n";
+    let callee_ja = "rule 評価(grade) v1\n\nenum 水準(level) = 低い(low) | 高い(high)\n\ninputs\n  点数(score) : number  range >=0 <=100\n\noutputs\n  段(band) : 水準\n\ntable 水準の表(level_of)\npolicy unique\n| 点数 | -> 段 |\n| <50  | 低い  |\n| >=50 | 高い  |\n";
+    let caller_ja = "rule 審査(review) v1\n\nenum 判定(verdict_kind) = 要指導(needs_work) | 良(fine)\n\ninputs\n  得点(points) : number  range >=0 <=100\n\noutputs\n  判定結果(verdict) : 判定\n  加点(bonus)       : number  round down(1)\n\napply 評価(grade) = \"評価.rule\" meaning:{m}\n  点数 = 得点\n  段 -> 判定結果 with 低い -> 要指導, 高い -> 良\n\nclause 高い加点(high_bonus) -> 加点\n  when 評価:段 高い\n  then 10\n\nclause 低い加点(low_bonus) -> 加点\n  when 評価:段 低い\n  then 0\n\nexamples\n| 得点 | -> 判定結果 | 加点 |\n| 40   | 要指導      | 0    |\n| 70   | 良          | 10   |\n";
+    let tmp = TempDir::new("apply-enum");
     let dir = tmp.path().to_path_buf();
-    std::fs::write(dir.join("grade.rule"), callee_en).unwrap();
-    std::fs::write(dir.join("評価.rule"), callee_ja).unwrap();
-    for (caller, name, lang, want) in [
-        (caller_en, "review.rule", rulec::i18n::Lang::En, "`grade` cannot be applied: the output `band` of table level_of is an enum the callee declares"),
-        (caller_ja, "審査.rule", rulec::i18n::Lang::Ja, "`評価` を準用できません: 表 水準の表 の出力 `段` は、元の規則が宣言した列挙です"),
+    for (callee, callee_name, caller, name, lang) in [
+        (callee_en, "grade.rule", caller_en, "review.rule", rulec::i18n::Lang::En),
+        (callee_ja, "評価.rule", caller_ja, "審査.rule", rulec::i18n::Lang::Ja),
     ] {
+        std::fs::write(dir.join(callee_name), callee).unwrap();
+        let caller = caller.replace("{m}", &rulec::link::pin::meaning(callee));
         let path = dir.join(name);
-        std::fs::write(&path, caller).unwrap();
-        let ds = rulec::i18n::with(lang, || rulec::report(caller, &path.to_string_lossy()).diags);
-        // the digest is not the callee's (E040), and the check goes on to the expansion
-        let e044: Vec<_> = ds.iter().filter(|d| d.code == "E044").collect();
-        assert_eq!(e044.len(), 1, "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
-        assert_eq!(e044[0].title, want);
+        std::fs::write(&path, &caller).unwrap();
+        let p = path.to_string_lossy().into_owned();
+        let ds = rulec::i18n::with(lang, || rulec::report(&caller, &p).diags);
+        let errors: Vec<_> = ds.iter().filter(|d| d.severity == rulec::diag::Severity::Error).map(|d| (d.code, d.title.clone())).collect();
+        assert!(errors.is_empty(), "{name}: {errors:?}");
+        // The examples ran: a score of 40 is read as this rule's needs_work, and the clause that
+        // tests the callee's low gives no bonus.
+        let (f, c) = rulec::prepare(&caller, &p).unwrap();
+        let points = if lang == rulec::i18n::Lang::En { "points" } else { "得点" };
+        let mut inputs = std::collections::HashMap::new();
+        inputs.insert(points.to_string(), rulec::eval::Val::Num(rulec::num::Rat::int(70)));
+        let (outs, _, _) = rulec::eval::run_all(&f, &c, inputs);
+        let want = if lang == rulec::i18n::Lang::En { "fine" } else { "良" };
+        assert_eq!(outs[0].1, Some(rulec::eval::Val::Enum(want.into())), "{name}");
+        assert_eq!(outs[1].1, Some(rulec::eval::Val::Num(rulec::num::Rat::int(10))), "{name}");
     }
+}
+
+/// A callee may apply a rule in turn (§15.230): it is expanded as its own check expands it, what it
+/// brought in comes in under both names, and the answer is the one each level gives. A rule may also
+/// bind a callee's input to a field of the elements it walks, which applies the callee to each
+/// element.
+#[test]
+fn 準用の準用と_要素のフィールドで読む準用() {
+    rulec::i18n::set(rulec::i18n::Lang::Ja);
+    let tmp = TempDir::new("apply-levels");
+    let dir = tmp.path().to_path_buf();
+    let c = "rule unit v1\n\ninputs\n  x : number  range >=0 <=10\n\noutputs\n  y : number  round down(1)\n\ntable step_of\npolicy unique\n| x  | -> y |\n| <5 | 1    |\n| >=5 | 2   |\n";
+    std::fs::write(dir.join("unit.rule"), c).unwrap();
+    let b = format!("rule tens v1\n\ninputs\n  n : number  range >=0 <=10\n\noutputs\n  z : number  round down(1)\n\napply inner = \"unit.rule\" meaning:{}\n  x = n\n  y -> base\n\ndefine z : number = base * 10\n", rulec::link::pin::meaning(c));
+    std::fs::write(dir.join("tens.rule"), &b).unwrap();
+    let a = format!("rule hundreds v1\n\ninputs\n  k : number  range >=0 <=10\n\noutputs\n  w : number  round down(1)\n\napply outer = \"tens.rule\" meaning:{}\n  n = k\n  z -> w\n\nexamples\n| k | -> w |\n| 3 | 10   |\n| 7 | 20   |\n", rulec::link::pin::meaning(&b));
+    let path = dir.join("hundreds.rule");
+    std::fs::write(&path, &a).unwrap();
+    let p = path.to_string_lossy().into_owned();
+    let ds = rulec::report(&a, &p).diags;
+    assert!(ds.iter().all(|d| d.severity != rulec::diag::Severity::Error), "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
+    let (f, _) = rulec::prepare(&a, &p).unwrap();
+    let tables: Vec<String> = f.items.iter().filter_map(|it| if let Item::Table(t) = it { t.name.as_ref().map(|n| n.text.clone()) } else { None }).collect();
+    assert_eq!(tables, ["outer:inner:step_of"], "the callee's callee comes in under both names");
+    // A field of the elements this rule walks, bound to the callee's input: the callee answers for
+    // each parcel, and the sum adds the answers up.
+    let fee = "rule parcel_fee v1\n\ninputs\n  kg : number  range >=0 <=50\n\noutputs\n  fee : money[USD]  round down(1USD)\n\ntable fee_of\npolicy unique\n| kg   | -> fee : money[USD] |\n| <=10 | 5USD                |\n| >10  | 12USD               |\n";
+    std::fs::write(dir.join("parcel_fee.rule"), fee).unwrap();
+    let order = format!("rule shipment v1\n\nelements parcels\n  weight : number  range >=0 <=50\n\noutputs\n  charge : money[USD]  round down(1USD)\n\napply per = \"parcel_fee.rule\" meaning:{}\n  kg = weight\n  fee -> parcel_fee\n\nsum parcels_total over parcels of parcel_fee  range >=0USD <=1000USD\n\ndefine charge : money[USD] = parcels_total\n\nsequence two\n| weight |\n| 5      |\n| 20     |\n\nexamples\n| parcels | -> charge |\n| two     | 17USD     |\n", rulec::link::pin::meaning(fee));
+    let path = dir.join("shipment.rule");
+    std::fs::write(&path, &order).unwrap();
+    let p = path.to_string_lossy().into_owned();
+    let ds = rulec::report(&order, &p).diags;
+    assert!(ds.iter().all(|d| d.severity != rulec::diag::Severity::Error), "{:?}", ds.iter().map(|d| (d.code, d.title.clone())).collect::<Vec<_>>());
 }
 
 #[test]

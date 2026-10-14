@@ -1,0 +1,24 @@
+contribution green(green) v1
+description "A green program: a depot in it gets 100 dollars more allowance"
+to "../fleet_upkeep.rule" signature:ff1d1d1bf9d3fef5
+
+inputs
+  green_depot(green_depot) : bool
+
+table green_allowance
+policy unique
+| green_depot | -> green_extra : money[USD] |
+| true        | 100USD                      |
+| false       | 0USD                        |
+
+into allowance
+  green_extra
+
+sequence two_vans
+| kind | age |
+| van  | 3   |
+| van  | 12  |
+
+examples
+| depot_size | green_depot | vehicles | -> upkeep |
+| 5          | true        | two_vans | 40USD     |

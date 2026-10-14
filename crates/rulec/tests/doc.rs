@@ -171,15 +171,28 @@ const CORPUS: &[&str] = &[
 "tests/corpus/案件の振り分け.rule",
 "tests/corpus/reward_box.rule",
 "tests/corpus/抽選の特典.rule",
+// §15.227–§15.229: open values, open tables and an open enum. `doc` of the directory renders each
+// merged with the contributions under `tests/corpus/contrib/`, and gives a contribution no page of
+// its own.
+"tests/corpus/order_discount.rule",
+"tests/corpus/注文の値引き.rule",
+"tests/corpus/product_price.rule",
+"tests/corpus/product_tax.rule",
+"tests/corpus/product_shipping.rule",
+"tests/corpus/商品の料金.rule",
+"tests/corpus/商品の税.rule",
+"tests/corpus/商品の配送.rule",
 ];
 
-/// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of
+/// The `enums` files rules above read (§15.212, §15.228). They hold no table, so the checks of
 /// the cells and the headers have nothing in them to read; `doc` of the directory renders them too.
 const ENUMS_FILES: &[(&str, &str)] = &[
     ("tests/corpus/shared/catalog.rule", "catalog.md"),
     ("tests/corpus/shared/品目.rule", "goods_catalog.md"),
     ("tests/corpus/shared/certifications.rule", "certifications.md"),
     ("tests/corpus/shared/資格.rule", "certification_path.md"),
+    ("tests/corpus/shared/product_kinds.rule", "product_kinds.md"),
+    ("tests/corpus/shared/商品の種類.rule", "goods_kinds.md"),
 ];
 
 /// A rule whose groups are broken in one of three ways. Every variant passes `check` (the `-` row

@@ -1,0 +1,24 @@
+contribution team_size(team_size) v1
+description "A team-size bonus: 10% for each teammate after the first, added on top"
+to "../mentor_bonus.rule" signature:0291849fa434a25e
+
+inputs
+  teammates(teammates) : number  range >=0 <=6
+
+table size_value
+policy unique
+| teammates | -> size_rate : rate[step 1%] |
+| <=1       | 0%                           |
+| 2         | 10%                          |
+| 3         | 20%                          |
+| >=4       | 30%                          |
+
+into added
+  size_rate
+
+sequence nobody
+| mentor_grade |
+
+examples
+| grade | teammates | mentors | -> bonus |
+| 1     | 3         | nobody  | 20%      |

@@ -535,6 +535,11 @@ fn enums_section(f: &RuleFile, c: &Checked) -> String {
                         Some(l) => tr!("{}「{}」", "{} \"{}\"", md_esc(&v.text), md_text(l)),
                         None => md_esc(&v.text),
                     };
+                    // A value a contribution added says which (§15.228).
+                    let shown = match e.added.iter().find(|a| a.value == v.text) {
+                        Some(a) => tr!("{shown}（寄与 {} が足した値）", "{shown} (added by contribution {})", md_esc(&a.by)),
+                        None => shown,
+                    };
                     if *e.default_marks.get(i).unwrap_or(&false) {
                         tr!("{}（{}）", "{} ({})", shown, crate::kw::DEFAULT)
                     } else {
@@ -708,13 +713,17 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
     // shown under that apply, from the file it came from.
     o.push_str(&defs_section(f, c, &lines, &|n| inlined(f, n)));
 
-    // --- Tables, and the rules applied among them (§15.69), in the order of the file.
+    // --- The open values and what contributes to them (§15.227).
+    o.push_str(&opens_section(f, c, path));
+
+    // --- Tables, and the rules applied among them (§15.69), in the order of the file. A table a
+    // contribution adds is shown under the contribution, from its file (§15.231).
     for (k, it) in f.items.iter().enumerate() {
         for a in f.applies.iter().filter(|a| a.at == k) {
             o.push_str(&apply_section(f, c, a, &lines, path));
         }
         let Item::Table(t) = it else { continue };
-        if t.applied.is_some() {
+        if t.applied.is_some() || t.contributed.is_some() {
             continue;
         }
         o.push_str(&table_section(f, c, t, &lines, path));
@@ -722,6 +731,7 @@ fn render_rest(f: &RuleFile, c: &Checked, src: &str, path: &str, lines: &[&str])
     for a in f.applies.iter().filter(|a| a.at >= f.items.len()) {
         o.push_str(&apply_section(f, c, a, &lines, path));
     }
+    o.push_str(&contributions_section(f, c, path));
 
     // --- How an output that several tables define is decided (§15.66)
     for set in c.sets.iter().filter(|s| s.merged()) {
@@ -1810,6 +1820,112 @@ fn folded_out_header(f: &RuleFile, c: &Checked, n: &str) -> String {
 /// prefix, or the definition the expansion made for one of the callee's outputs.
 fn inlined(f: &RuleFile, name: &str) -> bool {
     f.applies.iter().any(|a| name.starts_with(&format!("{}:", a.name.text)) || a.defines.iter().any(|d| d == name))
+        // A contribution's own names are shown under it, from its file (§15.231), and an open
+        // value in its own section.
+        || f.contributions.iter().any(|m| name.starts_with(&format!("{}:", m.name.text)))
+        || f.open_value(name).is_some()
+}
+
+/// The open values of a rule (§15.227) and, for each, what decides it: its terms, the rule's and
+/// each contribution's, by the file they are written in. A value the contributions add to is
+/// read on the page where its terms are.
+fn opens_section(f: &RuleFile, c: &Checked, path: &str) -> String {
+    let mut o = String::new();
+    for op in &f.opens {
+        let how = op.combine.as_ref().map(|(k, _)| *k).unwrap_or(Combine::Sum);
+        let (word, said) = match how {
+            Combine::Sum => (tr!("足し合わせた値", "the sum"), tr!("項を全部足します", "its terms are added up")),
+            Combine::Product => (tr!("掛け合わせた値", "the product"), tr!("項を全部掛けます", "its terms are multiplied together")),
+            Combine::Max => (tr!("いちばん大きい値", "the largest"), tr!("項と `empty` の値のうち、いちばん大きいものです", "it is the largest of its terms and its `empty` value")),
+            Combine::Min => (tr!("いちばん小さい値", "the smallest"), tr!("項と `empty` の値のうち、いちばん小さいものです", "it is the smallest of its terms and its `empty` value")),
+        };
+        o.push_str(&tr!("
+## この値を決める寄与: {}
+
+", "
+## What contributes to {}
+
+", md_esc(&op.name.text)));
+        let ty = c.ty_of(&op.name.text).unwrap_or(crate::types::Ty::Unknown);
+        let range = op.range.as_ref().map(crate::link::range_text).unwrap_or_default();
+        o.push_str(&tr!(
+            "{} は {word}です（`combine {}`）。{said}。{}範囲 `{}` は約束で、下の表はこの範囲の全体で検査されています。どの寄与を合わせても値がこの範囲を出ないことは、`rulec check` が確かめています（E131）。
+
+",
+            "{} is {word} (`combine {}`): {said}. {}The range `{}` is a promise: the tables below are checked over the whole of it, and `rulec check` holds every contribution together inside it (E131).
+
+",
+            md_esc(&op.name.text),
+            how.word(),
+            match &op.empty {
+                Some((l, _)) => tr!("始まりの値は `{}` です。", "It starts from `{}`. ", md_esc(&l.src())),
+                None => String::new(),
+            },
+            md_esc(&range)
+        ));
+        let _ = ty;
+        o.push_str(&tr!("| 項 | 書いたところ |
+|---|---|
+", "| Term | Written in |
+|---|---|
+"));
+        for t in &op.terms {
+            let whose = match &t.from {
+                Some((cn, file)) => tr!("寄与 {}（`{}`）", "contribution {} (`{}`)", md_esc(cn), md_esc(&crate::link::relative(path, file))),
+                None => tr!("この規則", "this rule"),
+            };
+            o.push_str(&format!("| {} | {} |
+", md_esc(&t.name.text), whose));
+        }
+        if op.terms.is_empty() {
+            o.push_str(&tr!("| （項なし） | — |
+", "| (no terms) | — |
+"));
+        }
+    }
+    o
+}
+
+/// The contributions merged into the rule (§15.231), each under its own heading: its file, the
+/// inputs it adds, the values it adds to enums, and its tables and clauses as its file writes them.
+fn contributions_section(f: &RuleFile, c: &Checked, path: &str) -> String {
+    let mut o = String::new();
+    for m in &f.contributions {
+        o.push_str(&tr!("
+## 寄与 {}: {}
+
+", "
+## Contribution {}: {}
+
+", md_esc(&m.name.text), md_esc(&crate::link::relative(path, &m.file))));
+        if let Some(d) = &m.description {
+            o.push_str(&format!("{}
+
+", md_text(d)));
+        }
+        o.push_str(&tr!(
+            "`{}` に足す寄与です（signature:{}、ファイルの sha256:{}）。",
+            "It adds to `{}` (signature:{}; the file's sha256:{}).",
+            md_esc(&crate::link::relative(path, &m.to)),
+            m.signature.as_deref().unwrap_or("—"),
+            &m.sha256[..16.min(m.sha256.len())]
+        ));
+        if !m.inputs.is_empty() {
+            o.push_str(&tr!("足す入力: {}。", " Inputs it adds: {}.", m.inputs.iter().map(|i| md_esc(i)).collect::<Vec<_>>().join(sep())));
+        }
+        o.push('\n');
+        let clines: Vec<&str> = m.src.lines().collect();
+        let mine = |n: &str| n.starts_with(&format!("{}:", m.name.text));
+        let mut inner = defs_section(f, c, &clines, &|n| !mine(n));
+        for it in &f.items {
+            let Item::Table(t) = it else { continue };
+            if t.contributed.as_ref().is_some_and(|(cn, _)| *cn == m.name.text) {
+                inner.push_str(&table_section(f, c, t, &clines, &m.file));
+            }
+        }
+        o.push_str(&inner.replace("\n## ", "\n### "));
+    }
+    o
 }
 
 /// The `derive`s and `define`s of a rule, as written. `skip` leaves out the ones shown

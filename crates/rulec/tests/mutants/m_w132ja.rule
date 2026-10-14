@@ -1,0 +1,15 @@
+contribution 大口のキャンペーン(bulk_campaign_ja) v1
+description "大口の注文のキャンペーン。上限を 60 ドルにしたが、どの注文にもある 50 ドルより高いので、何も抑えない（W132）"
+to "../corpus/注文の値引き.rule" signature:7954896efe5908c5
+
+inputs
+  大口(bulk) : bool
+
+table 大口の上限表
+policy unique
+| 大口  | -> 大口上限 : money[USD] |
+| true  | 60USD                    |
+| false | 50USD                    |
+
+into 上限
+  大口上限

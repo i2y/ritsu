@@ -93,6 +93,13 @@ impl Audit {
 /// read as if nothing lay between two whole pounds.
 pub fn quantum(c: &Checked, col: &str, ty: &Ty) -> Rat {
     match ty {
+        // An open value's axis is cut on its declared step (§15.227), finer than its terms' scale
+        // may be once contributions add to it.
+        Ty::Rate if c.opens.contains_key(col) => {
+            let own = c.value_step(col);
+            let stored = Rat::new(1, *c.scales.get(col).unwrap_or(&100));
+            if own.cmp_to(stored) == std::cmp::Ordering::Less { own } else { stored }
+        }
         Ty::Rate => Rat::new(1, *c.scales.get(col).unwrap_or(&100)),
         Ty::Money { .. } | Ty::Qty { .. } | Ty::Number => {
             let own = c.value_step(col);

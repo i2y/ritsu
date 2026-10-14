@@ -303,3 +303,43 @@ fn each_file_as_its_language_says_it_in_english() {
     holds_to_the_languages(t.path(), ".", "en");
     holds_to_the_languages(t.path(), ".", "ja");
 }
+
+/// A project whose rules are added to by contributions (rulec's §15.227–§15.231): `ritsu check`
+/// merges the project's contributions into the rules they reach, which is what rulec says of the
+/// project's rule files given to it in one run, and the flow is checked against the rule merged.
+/// Without the file that gives the new kind of product its markup, the open table of the price has
+/// no row for it, the error says which contribution added the kind, and the flow cannot read the
+/// rule.
+#[test]
+fn a_projects_contributions_are_merged_into_the_rules_they_reach() {
+    let dir = here().join("tests/projects/product_line");
+    let (code, out, err) = ritsu_in(&dir, &["check", "--lang", "en"]);
+    assert_eq!(code, 0, "{out}{err}");
+    let rules = ["rules/contrib/garden_kind.rule", "rules/contrib/garden_price.rule", "rules/product_price.rule", "rules/shared/product_kinds.rule"];
+    let mut args = vec!["rulec", "check"];
+    args.extend(rules);
+    args.extend(["--lang", "en"]);
+    let (_, said, _) = ritsu_in(&dir, &args);
+    assert_eq!(said, "ok rules/contrib/garden_kind.rule (contributes to rules/shared/product_kinds.rule)\nok rules/contrib/garden_price.rule (contributes to rules/product_price.rule)\nok rules/product_price.rule (2 contributions: rules/contrib/garden_price.rule, rules/contrib/garden_kind.rule)\nok rules/shared/product_kinds.rule (1 contribution: rules/contrib/garden_kind.rule)\n");
+    assert_eq!(without_summary(&out), format!("{said}pricing.flow: ok\n"));
+    let t = TempDir::new("product-line");
+    ritsu_testkit::tmp::copy_dir(&dir, t.path());
+    std::fs::remove_file(t.path().join("rules/contrib/garden_price.rule")).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[rulec E101]: Completeness gap: some input matches no row\n  --> rules/product_price.rule:13 table markup_of"), "{out}");
+    assert!(out.contains("garden is a value garden_kind adds (rules/contrib/garden_kind.rule)."), "{out}");
+    assert!(out.contains("error[dandori E005]: pricing.flow:7:10: could not read the rule `rules/product_price.rule`"), "{out}");
+    // A markup written for toys rather than for the new kind: the overlap, the gap and the
+    // contribution's example are said once, for the contribution, and the rule says they were.
+    let t = TempDir::new("product-line-toys");
+    ritsu_testkit::tmp::copy_dir(&dir, t.path());
+    let f = t.path().join("rules/contrib/garden_price.rule");
+    std::fs::write(&f, std::fs::read_to_string(&f).unwrap().replace("  when item_kind garden", "  when item_kind toys")).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    let (_, said, _) = ritsu_in(t.path(), &args);
+    assert!(without_tools(&out).starts_with(&said), "ritsu check says what rulec says of the files in one run:\n{out}\n---\n{said}");
+    assert!(said.contains("note rules/product_price.rule: its errors are said above\n"), "{said}");
+    assert_eq!(said.matches("error[E105]").count(), 1, "{said}");
+}

@@ -98,12 +98,26 @@ pub struct EnumDecl {
     /// (§15.210): a cell may compare against one, and `max`, `min` and the four comparisons
     /// take two of them.
     pub ordered: bool,
-    /// The `open` mark at the end of the line, where it is written. It is syntax only here:
-    /// what it opens the enum to is a later section's (§15.212).
+    /// The `open` mark at the end of the line, where it is written: a contribution may add values
+    /// to the enum with `extend` (§15.228). Without it, `extend` is E067.
     pub open: Option<Span>,
     /// Where the enum is declared, when the rule reads it from an `enums` file with `import
     /// enum … from` (§15.212). `None` for an enum the rule declares itself.
     pub from: Option<EnumOwner>,
+    /// The values a contribution added with `extend`, each with the contribution that added it
+    /// (§15.228). Empty for an enum nothing extended. The values themselves are in `values`, in
+    /// their place in the order.
+    pub added: Vec<Added>,
+    pub span: Span,
+}
+
+/// A value of an enum a contribution added (§15.228): which value, which contribution added it
+/// (its name and its file as the run shows it), and where the `extend` line is.
+#[derive(Debug, Clone)]
+pub struct Added {
+    pub value: String,
+    pub by: String,
+    pub file: String,
     pub span: Span,
 }
 
@@ -155,6 +169,11 @@ pub enum FileKind {
     /// `enums <name> v<N>`: enums and groups that rules read with `import enum … from`, and
     /// no function (§15.212).
     Enums,
+    /// `contribution <name> v<N>`: what one file adds to another rule's open places — terms of
+    /// its open values, values of its open enums, tables and clauses for its open outputs, lines
+    /// of its open prerequisites (§15.227). It has no function of its own: it is merged into the
+    /// rule it names with `to` before anything else reads it.
+    Contribution,
 }
 
 /// Which kind of file an imported enum's values are declared in (§15.59, §15.60).
@@ -543,6 +562,9 @@ pub struct Binding {
 pub struct OutBinding {
     pub output: String,
     pub name: Name,
+    /// `with <callee's value> -> <this rule's value>, …` (§15.230): the values of an enum the callee
+    /// declares, read as this rule's. A value spelled the same on both sides needs no entry.
+    pub map: Vec<(String, String)>,
     pub span: Span,
 }
 
@@ -553,7 +575,11 @@ pub struct OutBinding {
 pub struct ApplyDecl {
     pub name: Name,
     pub path: String,
+    /// `sha256:<16 hex>`: the callee's bytes, as pins were written before `meaning:` (§15.69).
     pub hash: Option<String>,
+    /// `meaning:<16 hex>`: the callee's rows and declarations with its comments, `description`
+    /// and citations left out (§15.230). A comment does not move it; a row does.
+    pub meaning: Option<String>,
     pub bindings: Vec<Binding>,
     pub excepts: Vec<(String, Span)>,
     pub outputs: Vec<OutBinding>,
@@ -579,6 +605,9 @@ pub struct ApplyDecl {
 pub struct Callee {
     pub rule: Name,
     pub inputs: Vec<CalleeInput>,
+    /// The fields of the callee's elements, each with the field of this rule's sequence it reads
+    /// (§15.230): held to the same checks of type and range an input's binding is.
+    pub fields: Vec<(String, CalleeInput)>,
     pub constraints: Vec<Constraint>,
     /// Enum name → its values, for the mapping of a bound enum input.
     pub enums: Vec<(String, Vec<String>)>,
@@ -692,6 +721,12 @@ pub struct Table {
     /// The `apply` this table came in through, when it did. Its rows are alive in the
     /// callee's own file, so the ones this rule never reaches are listed, not E102.
     pub applied: Option<String>,
+    /// The `open` mark after the name on the `table` or `clause` line: a contribution may add
+    /// tables and clauses that define the same output (§15.229).
+    pub open: Option<Span>,
+    /// The contribution this table or clause came in from, when it did (§15.229): its name and
+    /// its file as the run shows it. Its rows are written there.
+    pub contributed: Option<(String, String)>,
 }
 
 #[derive(Debug, Clone)]
@@ -1129,9 +1164,131 @@ pub enum Needs {
     Nothing { reason: String, span: Span },
 }
 
+/// How the terms of an `open` value are put together (§15.227). None of the four depends on the
+/// order of the terms, which is why contributions need no order to load in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Combine {
+    Sum,
+    Product,
+    Max,
+    Min,
+}
+
+impl Combine {
+    pub fn word(self) -> &'static str {
+        match self {
+            Combine::Sum => crate::kw::SUM,
+            Combine::Product => crate::kw::PRODUCT,
+            Combine::Max => crate::kw::MAX,
+            Combine::Min => crate::kw::MIN,
+        }
+    }
+
+    pub fn parse(w: &str) -> Option<Combine> {
+        match w {
+            crate::kw::SUM => Some(Combine::Sum),
+            crate::kw::PRODUCT => Some(Combine::Product),
+            crate::kw::MAX => Some(Combine::Max),
+            crate::kw::MIN => Some(Combine::Min),
+            _ => None,
+        }
+    }
+}
+
+/// One term of an `open` value: a name, and the contribution it came from when it did.
+#[derive(Debug, Clone)]
+pub struct Term {
+    pub name: Name,
+    /// The contribution's name and its file as the run shows it; `None` for a term the rule
+    /// itself writes under the `open` line.
+    pub from: Option<(String, String)>,
+}
+
+/// `open stackable : money[USD] combine sum range >=0USD <=100USD` and the terms under it
+/// (§15.227): a value the rule computes from its terms and the terms contributions add, put
+/// together one way. The declared range is the promise: what every contribution comes to
+/// together stays inside it (E131), and the tables below are checked over the whole of it, so the
+/// rule's own check holds whatever the contributions are.
+#[derive(Debug, Clone)]
+pub struct OpenDecl {
+    pub name: Name,
+    pub ty: TypeRef,
+    /// `combine <how>` and where the word is. `None` when the line has none (E068).
+    pub combine: Option<(Combine, Span)>,
+    /// `empty <value>`: the value the terms start from. `sum` starts at 0 and `product` at 1 when
+    /// none is written; `max` and `min` need one (E068).
+    pub empty: Option<(Lit, Span)>,
+    pub range: Option<Range>,
+    pub terms: Vec<Term>,
+    /// Where in `items` it sits: the index the next item had when the line was read. The value
+    /// is a `define` there once the contributions are in (`link::lower`).
+    pub at: usize,
+    pub span: Span,
+}
+
+/// `to "<file>" signature:<digest>` or `after "<file>" signature:<digest>` in a contribution
+/// (§15.227, §15.230): the file it adds to or comes after, and the pinned shape of it.
+#[derive(Debug, Clone)]
+pub struct Target {
+    pub file: String,
+    pub signature: Option<String>,
+    pub span: Span,
+}
+
+/// `extend <enum> with <value>(<alias>) ["<label>"] [after <value>] [default]` (§15.228).
+#[derive(Debug, Clone)]
+pub struct ExtendDecl {
+    pub enum_name: Name,
+    pub value: Name,
+    pub label: Option<(String, Span)>,
+    /// `after <value>`: where the value goes in an ordered enum.
+    pub after: Option<Name>,
+    /// `default`: the value may fall to the rows that do not name it (§15.228, E033).
+    pub default: bool,
+    pub span: Span,
+}
+
+/// `into <open value>` and the terms under it (§15.227): the names this contribution adds to an
+/// open value of the file it adds to.
+#[derive(Debug, Clone)]
+pub struct IntoDecl {
+    pub target: Name,
+    pub terms: Vec<Name>,
+    pub span: Span,
+}
+
+/// What a `contribution` file says besides its items (§15.227).
+#[derive(Debug, Clone)]
+pub struct ContribHead {
+    pub to: Option<Target>,
+    pub afters: Vec<Target>,
+    pub extends: Vec<ExtendDecl>,
+    pub intos: Vec<IntoDecl>,
+    /// The lines this file adds to an open `prerequisites` block of the file it adds to: the
+    /// block's name and the `requires` lines.
+    pub prereq_lines: Vec<(Name, Vec<RequiresLine>)>,
+}
+
+/// One contribution merged into a rule (§15.231), as the generated header, `rulec api`, the page and
+/// the certificate say it: its name, its file as the run shows it, the SHA-256 of the file, the
+/// shape it pinned of what it adds to, the inputs it added and the file it adds to.
+#[derive(Debug, Clone)]
+pub struct Merged {
+    pub name: Name,
+    pub version: String,
+    pub description: Option<String>,
+    pub file: String,
+    pub sha256: String,
+    pub signature: Option<String>,
+    pub to: String,
+    pub inputs: Vec<String>,
+    /// The source of the file, for what reads its cells back (the certificate, the page).
+    pub src: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct RuleFile {
-    /// `rule` or `enums` (§15.212).
+    /// `rule`, `enums` (§15.212) or `contribution` (§15.227).
     pub kind: FileKind,
     pub name: Name,
     pub version: String,
@@ -1176,6 +1333,14 @@ pub struct RuleFile {
     /// The claims about the chances of the answers when the `random` inputs are drawn (§15.224), one
     /// per `chances` section, in the order written.
     pub chances: Vec<ChancesDecl>,
+    /// The values a contribution may add terms to (§15.227), in the order written. Each is a
+    /// `define` in `items` once `link::lower` has run; this keeps what the `define` came from.
+    pub opens: Vec<OpenDecl>,
+    /// What a `contribution` file says besides its items (§15.227). `None` for a rule or an
+    /// `enums` file.
+    pub contrib: Option<ContribHead>,
+    /// The contributions merged into this rule, in the order they were merged (§15.231).
+    pub contributions: Vec<Merged>,
 }
 
 impl FoldDecl {
@@ -1252,6 +1417,11 @@ impl RuleFile {
     /// Whether `name` is an input marked `random`.
     pub fn is_random(&self, name: &str) -> bool {
         self.inputs.iter().any(|i| i.random.is_some() && i.name.text == name)
+    }
+
+    /// The `open` value of this name (§15.227), when it is one.
+    pub fn open_value(&self, name: &str) -> Option<&OpenDecl> {
+        self.opens.iter().find(|o| o.name.text == name)
     }
 }
 

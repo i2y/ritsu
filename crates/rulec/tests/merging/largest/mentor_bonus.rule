@@ -1,0 +1,54 @@
+rule mentor_bonus(mentor_bonus) v1
+description "The bonus rate of a trainee: of the mentors next to them, only the one most senior to them counts, 25% for each grade above"
+
+enum lead_verdict(lead_verdict) = leads(leads) | does_not_lead(does_not_lead)
+
+inputs
+  grade(grade) : number  range >=0 <=5
+
+elements mentors(mentors)
+  mentor_grade(mentor_grade) : number  range >=0 <=5
+
+outputs
+  bonus(bonus) : rate[step 1%]  round down(1%)
+
+derive gap : number = mentor_grade - grade  range >=-5 <=5
+
+define value : rate = gap * 25%
+
+table qualifies
+policy unique
+| gap | -> verdict : lead_verdict |
+| >=1 | leads                     |
+| <=0 | does_not_lead             |
+
+fold verdict over mentors -> best_mentor : rate[step 1%]
+  leads         -> keep_max value by gap
+  does_not_lead -> next
+  empty         -> 0%
+  exhausted     -> held
+
+open best_value : rate[step 1%]  combine max  empty 0%  range >=0% <=200%
+  best_mentor
+
+open added : rate[step 1%]  combine sum  range >=0% <=200%
+
+define bonus : rate = best_value + added
+
+sequence one_mentor
+| mentor_grade |
+| 2            |
+
+sequence two_mentors
+| mentor_grade |
+| 2            |
+| 3            |
+
+sequence nobody
+| mentor_grade |
+
+examples
+| grade | mentors     | -> bonus |
+| 1     | one_mentor  | 25%      |
+| 1     | two_mentors | 50%      |
+| 1     | nobody      | 0%       |

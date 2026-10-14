@@ -188,6 +188,16 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/案件の振り分け.rule", "case_assignment"),
     ("tests/corpus/reward_box.rule", "reward_box"),
     ("tests/corpus/抽選の特典.rule", "box_reward"),
+    // §15.227–§15.229: open values, open tables and an open enum, each rule generated as it is alone;
+    // tests/contrib.rs generates them merged with their contributions.
+    ("tests/corpus/order_discount.rule", "order_discount"),
+    ("tests/corpus/注文の値引き.rule", "order_savings"),
+    ("tests/corpus/product_price.rule", "product_price"),
+    ("tests/corpus/product_tax.rule", "product_tax"),
+    ("tests/corpus/product_shipping.rule", "product_shipping"),
+    ("tests/corpus/商品の料金.rule", "goods_price"),
+    ("tests/corpus/商品の税.rule", "goods_tax"),
+    ("tests/corpus/商品の配送.rule", "goods_delivery"),
 ];
 
 #[test]

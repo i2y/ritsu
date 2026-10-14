@@ -90,14 +90,40 @@ pub const PREREQUISITES: &str = "prerequisites";
 /// the chance in the last column. A block head where a line starts outside every block, read the
 /// way `prerequisites` is, so the word is not reserved (§15.157).
 pub const CHANCES: &str = "chances";
+/// `open stackable : money[USD] combine sum range …` — a value other files may add terms to, with the
+/// terms under it (§15.227). After the name on a `table` or `clause` line, and after the last value
+/// of an `enum` line, the mark that opens the definition or the enum to contributions. Read where a
+/// line starts outside every block and after those names only, so it is not reserved (§15.157).
+pub const OPEN: &str = "open";
+/// `combine sum|product|max|min` on an `open` line (§15.227). Read there only.
+pub const COMBINE: &str = "combine";
+/// The way of combining that multiplies the terms (§15.227). Read after `combine` only.
+pub const PRODUCT: &str = "product";
+/// `contribution regional_campaign v1` — the heading of a file that adds to another rule's open
+/// places (§15.227). Read on the first line only, where no name stands, as `enums` is.
+pub const CONTRIBUTION: &str = "contribution";
+/// `to "<file>" signature:<digest>` — the file a contribution adds to (§15.227). A line head in a
+/// contribution file only.
+pub const TO: &str = "to";
+/// `into stackable` — the open value the terms under it are added to (§15.227). A line head in a
+/// contribution file only.
+pub const INTO: &str = "into";
+/// `extend kind with garden "Garden supplies"` — a value added to an open enum (§15.228). A line
+/// head in a contribution file only.
+pub const EXTEND: &str = "extend";
 
 /// The line-head keywords. `rule` is header-only, so it is not included.
 /// A test checks that the README's keyword table matches this list.
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, MAX, MIN, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
-    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES,
+    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES, OPEN,
 ];
+
+/// The line heads of a `contribution` file besides those of a rule it may write (§15.227): where it
+/// adds, what it comes after, the terms it adds to an open value, the values it adds to an open
+/// enum. None is reserved.
+pub const CONTRIBUTION_HEAD: &[&str] = &[TO, AFTER, INTO, EXTEND];
 
 // --- Chances (§15.224–§15.226). Each word is read by its place, so none is reserved.
 /// The mark at the end of an input's line: the caller draws the value uniformly from the integers
@@ -141,10 +167,6 @@ pub const CONTRACT_ONLY: &str = "contract_only";
 pub const DEFAULT: &str = "default";
 /// The step inside a type's brackets (`rate[step 1%]`).
 pub const STEP: &str = "step";
-/// The mark after the last value of an `enum` line: an enum whose list may be extended from
-/// outside its file (§15.212). Read there only, after a value, where no name stands, so it is not
-/// reserved; it is kept and changes nothing yet.
-pub const OPEN: &str = "open";
 
 // --- The arms of a `fold` (§15.56). What one verdict does to the walk.
 /// Leave this element and look at the next.

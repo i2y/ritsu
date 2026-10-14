@@ -1,0 +1,23 @@
+rule product_shipping(product_shipping) v1
+description "How one item ships by its kind: toys go as bulky parcels, everything else as standard ones"
+
+import enum kind from "shared/product_kinds.rule"
+
+enum parcel(parcel) = standard(standard) | bulky(bulky)
+
+inputs
+  item_kind(item_kind) : kind
+
+outputs
+  ships_as(ships_as) : parcel
+
+table parcel_of
+policy first
+| item_kind | -> ships_as : parcel |
+| toys      | bulky                |
+| -         | standard             |
+
+examples
+| item_kind | -> ships_as |
+| toys      | bulky       |
+| books     | standard    |

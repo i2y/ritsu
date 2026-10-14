@@ -1,0 +1,4 @@
+enums product_kinds(product_kinds) v1
+description "The kinds of product the shop sells. A product line adds a kind from a file of its own"
+
+enum kind(kind) = books(books) "Books" | music(music) "Music" | toys(toys) "Toys"  open

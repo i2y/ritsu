@@ -1,0 +1,25 @@
+rule 商品の料金(goods_price) v1
+description "商品一点の料金。定価と、種類ごとの上乗せ"
+
+import enum 種類 from "shared/商品の種類.rule"
+
+inputs
+  商品の種類(item_kind) : 種類
+  定価(list_price)      : money[USD]  range >=0USD <=1000USD
+
+outputs
+  料金(price) : money[USD]  round half_up(1USD)
+
+table 上乗せ表 open
+policy unique
+| 商品の種類 | -> 上乗せ : rate[step 1%] |
+| 本         | 0%                        |
+| 音楽       | 10%                       |
+| おもちゃ   | 20%                       |
+
+define 料金 : money[USD] = 定価 + 定価 * 上乗せ
+
+examples
+| 商品の種類 | 定価  | -> 料金 |
+| 本         | 20USD | 20USD   |
+| おもちゃ   | 20USD | 24USD   |

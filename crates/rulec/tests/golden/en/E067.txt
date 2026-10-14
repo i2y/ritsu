@@ -1,0 +1,7 @@
+error[E067]: `into discount` names no value that takes contributions
+  --> tests/mutants/m_e067.rule:14
+   |
+14 | into discount
+   |      ^^^^^^^^ discount is not an open value
+   |
+ `into` names a value the rule it adds to opens with `open <name> : <type> combine …`.

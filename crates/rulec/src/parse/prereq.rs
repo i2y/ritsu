@@ -176,7 +176,7 @@ impl P {
     /// `<value> requires <prerequisite>, …`, the groups split at `,` and the values of one group
     /// at `or`; or `<value> requires nothing "<reason>"`. `nothing` is the word only right after
     /// `requires` and before a string: anywhere else it is a value's name.
-    fn requires_line(&mut self, l: &[Token]) -> Option<RequiresLine> {
+    pub(super) fn requires_line(&mut self, l: &[Token]) -> Option<RequiresLine> {
         let sp = span_of(l);
         let bad = |p: &mut Self, at: Span, what: String| {
             p.err(

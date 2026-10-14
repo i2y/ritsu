@@ -1,0 +1,25 @@
+rule product_price(product_price) v1
+description "The price of one item: its list price and the markup of its kind"
+
+import enum kind from "shared/product_kinds.rule"
+
+inputs
+  item_kind(item_kind) : kind
+  list_price(list_price) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  price(price) : money[USD]  round half_up(1USD)
+
+table markup_of open
+policy unique
+| item_kind | -> markup : rate[step 1%] |
+| books     | 0%                        |
+| music     | 10%                       |
+| toys      | 20%                       |
+
+define price : money[USD] = list_price + list_price * markup
+
+examples
+| item_kind | list_price | -> price |
+| books     | 20USD      | 20USD    |
+| toys      | 20USD      | 24USD    |

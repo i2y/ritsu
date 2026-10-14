@@ -996,6 +996,9 @@ fn 木の規則の証明書はファイルを添えても再検査を通る() {
         if !o.status.success() {
             continue;
         }
+        // The certificate of a contribution is the rule it adds to, merged with it (§15.231): it is
+        // held to that rule's file, and its own rows to its own.
+        let rel = held_to(&base, &rel);
         let mut p = Command::new("python3")
             .current_dir(&base)
             .args([root().join("tools/recheck.py").to_str().unwrap(), "--rule", &rel])
@@ -1013,4 +1016,14 @@ fn 木の規則の証明書はファイルを添えても再検査を通る() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(held >= 190, "証明書の出る規則が減っている: {held}");
+}
+
+/// The file a rule's certificate is held to: the rule itself, or for a contribution the rule it comes
+/// down to, which `rulec certificate` writes the certificate of (§15.231). From `base`.
+fn held_to(base: &std::path::Path, rel: &str) -> String {
+    let abs = base.join(rel).to_string_lossy().into_owned();
+    match rulec::link::target_of(&abs) {
+        Some((_, root)) if rulec::link::is_contribution_file(&abs) => std::path::Path::new(&root).strip_prefix(base).map(|p| p.to_string_lossy().into_owned()).unwrap_or(root),
+        _ => rel.to_string(),
+    }
 }

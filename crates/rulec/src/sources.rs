@@ -1098,6 +1098,29 @@ fn fragments(
     Ok(changed)
 }
 
+/// An `apply` heading pinned at `meaning`: a `sha256:` or `meaning:` digest on it replaced, or the
+/// pin added after the file, the comment kept.
+fn pinned_meaning(line: &str, meaning: &str) -> String {
+    let (code, comment) = match line.find('#') {
+        Some(h) => (&line[..h], Some(&line[h..])),
+        None => (line, None),
+    };
+    let code = code.trim_end();
+    let at = code.find("sha256:").or_else(|| code.find("meaning:"));
+    let code = match at {
+        Some(p) => {
+            let rest = &code[p..];
+            let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+            format!("{}meaning:{meaning}{}", &code[..p], &rest[end..])
+        }
+        None => format!("{code} meaning:{meaning}"),
+    };
+    match comment {
+        Some(c) => format!("{code}  {c}"),
+        None => code,
+    }
+}
+
 /// `rulec source pin`: rewrite the pins from the copies — the fragments cited, in order, each
 /// with its copy's digest — and the digest of every file source. Only those lines move.
 pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome), String> {
@@ -1109,15 +1132,17 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
     let dir = Path::new(rule_path).parent().unwrap_or(Path::new("."));
     // The rules this one applies (§15.69): the heading's digest is rewritten in place, so a
     // comment on the line stays.
+    // A pin is written at the callee's meaning (§15.230), which a comment does not move; a
+    // `sha256:` written before is rewritten as one.
     for a in &f.applies {
         let bytes = std::fs::read(dir.join(&a.path)).map_err(|e| format!("{}: {e}", a.path))?;
-        let h = crate::sha256::short(&bytes);
-        if a.hash.as_deref() != Some(h.as_str()) {
+        let m = crate::link::pin::meaning(&String::from_utf8_lossy(&bytes));
+        if a.meaning.as_deref() != Some(m.as_str()) {
             let line = lines.get(a.span.line - 1).copied().unwrap_or("");
-            edits.push((a.span.line - 1, 1, vec![base::pinned_spaced(line, &h)]));
-            report.push(tr!("{}: 元の規則 `{}` のハッシュを sha256:{h} に固定しました", "{}: pinned the callee `{}` at sha256:{h}", a.name.text, a.path));
+            edits.push((a.span.line - 1, 1, vec![pinned_meaning(line, &m)]));
+            report.push(tr!("{}: 元の規則 `{}` を meaning:{m} に固定しました", "{}: pinned the callee `{}` at meaning:{m}", a.name.text, a.path));
         } else {
-            report.push(tr!("{}: 元の規則 `{}` は sha256:{h} に固定済みです", "{}: the callee `{}` is already pinned at sha256:{h}", a.name.text, a.path));
+            report.push(tr!("{}: 元の規則 `{}` は meaning:{m} に固定済みです", "{}: the callee `{}` is already pinned at meaning:{m}", a.name.text, a.path));
         }
     }
     for d in &f.sources {

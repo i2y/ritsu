@@ -1,0 +1,28 @@
+rule site_capacity_listed(site_capacity) v1
+description "The same answer the old way: a list of what is loaded, each applied, their answers added up"
+
+enum floor_kind(floor_kind) = ground(ground) | upper(upper) | cellar(cellar)
+
+inputs
+  has_shelving(has_shelving)   : bool
+  has_racking(has_racking)     : bool
+  floor(floor)                 : floor_kind
+  has_mezzanine(has_mezzanine) : bool
+
+outputs
+  extra(extra) : number  round down(1)
+
+apply base = "site_capacity.rule" meaning:ea1ca342e6aba6d9
+  has_shelving = has_shelving
+  has_racking = has_racking
+  floor = floor
+  extra -> base_extra
+
+table from_mezzanine
+policy unique
+| has_mezzanine | floor       | -> mezzanine_extra : number |
+| true          | ground      | 15                          |
+| true          | not: ground | 0                           |
+| false         | -           | 0                           |
+
+define extra : number = base_extra + mezzanine_extra

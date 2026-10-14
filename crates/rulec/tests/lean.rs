@@ -887,6 +887,8 @@ fn 木の規則の証明書は証明付きの検査器でもファイルを添�
         if !o.status.success() {
             continue;
         }
+        // The certificate of a contribution is the rule it adds to, merged with it (§15.231).
+        let rel = held_to(&base, &rel);
         let mut p = Command::new(&bin)
             .current_dir(&base)
             .args(["--rule", &rel])
@@ -1246,4 +1248,14 @@ fn 始まりとonceの値と行の答えはファイルから読み戻される(
         ("行き先を別の行のセルで読む", cert.replacen(r#"{"row":3,"stay":true,"source":{"line":22,"col":34,"len":5,"text":"state"}}"#, r#"{"row":3,"stay":true,"source":{"line":25,"col":34,"len":5,"text":"state"}}"#, 1), "machine: row 3's move is not read from the row's own cell of next_state"),
         ("行が書く語", cert.replacen(r#""produces":["paid",null,"true"]"#, r#""produces":["paid",null,"false"]"#, 1), "step: row 1, answer 3: the file writes `true` there, and the certificate reads it as `false`"),
     ]);
+}
+
+/// The file a rule's certificate is held to: the rule itself, or for a contribution the rule it comes
+/// down to, which `rulec certificate` writes the certificate of (§15.231). From `base`.
+fn held_to(base: &std::path::Path, rel: &str) -> String {
+    let abs = base.join(rel).to_string_lossy().into_owned();
+    match rulec::link::target_of(&abs) {
+        Some((_, root)) if rulec::link::is_contribution_file(&abs) => std::path::Path::new(&root).strip_prefix(base).map(|p| p.to_string_lossy().into_owned()).unwrap_or(root),
+        _ => rel.to_string(),
+    }
 }

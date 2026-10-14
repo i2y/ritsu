@@ -1,0 +1,9 @@
+warning[W132]: The term bulk_campaign:bulk_cap of the open value cap changes nothing
+  --> tests/mutants/m_w132.rule:15
+   |
+15 |   bulk_cap
+   |   ^^^^^^^^ every value it takes is at or above the `empty` value, 50USD
+   |
+ The term takes 50USD .. 60USD. It is a term of the contribution bulk_campaign (tests/mutants/m_w132.rule).
+ cap is `combine min`, so its `empty` value always takes part, not only when there is no term; no input's answer moves with this term.
+ If the term sets a floor, put the value together with `max`: the `empty` value of a `min` is a cap. If the term can fall below `empty`, write the values that do. If it is not needed, take it out.

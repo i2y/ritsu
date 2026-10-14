@@ -76,6 +76,35 @@ examples
 | 10000USDc | true          | 548USDc |
 ```
 
+A rule can also leave places for other files to add to: a value its terms put together, an enum, a
+table. A `contribution` file adds to them — a campaign a discount, a product line a kind of product
+and its markup — and pins the shape of what it relies on, so that a change to that shape stops it.
+There is no list of what to load: `ritsu check` and `ritsu gen` merge a project's contributions
+into the rules they reach, check each rule alone and merged, and ask every table that reads an
+enum for a row of the value a contribution adds to it.
+
+```rule
+contribution garden_price(garden_price) v1
+description "The markup of garden supplies"
+to "../product_price.rule" signature:d5379dca48aa13d2
+after "garden_kind.rule" signature:650e995b6929bca3
+
+clause garden_markup -> markup
+  when item_kind garden
+  then 15%
+```
+
+```console
+$ cd crates/ritsu/tests/projects/product_line
+$ ritsu check
+ok rules/contrib/garden_kind.rule (contributes to rules/shared/product_kinds.rule)
+ok rules/contrib/garden_price.rule (contributes to rules/product_price.rule)
+ok rules/product_price.rule (2 contributions: rules/contrib/garden_price.rule, rules/contrib/garden_kind.rule)
+ok rules/shared/product_kinds.rule (1 contribution: rules/contrib/garden_kind.rule)
+pricing.flow: ok
+ritsu check: 5 files (rulec 4, dandori 1): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
 ### dandori — the skeleton of a workflow
 
 A workflow says what is called, in what order, with which retries and timeouts, and what each

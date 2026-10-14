@@ -1,0 +1,4 @@
+enums 商品の種類(goods_kinds) v1
+description "店で売る商品の種類。商品ラインは、別のファイルから種類を足す"
+
+enum 種類(kind) = 本(books) "本" | 音楽(music) "音楽" | おもちゃ(toys) "おもちゃ"  open

@@ -36,6 +36,9 @@ pub struct Engine {
     /// The most nodes one check of a rule visits (`--budget`), when it is not the default
     /// (§15.209).
     budget: Option<i64>,
+    /// The files of the project, as the person gave them: the contributions among them are merged
+    /// into the rules they reach (§15.231). `None` outside a project.
+    set: std::sync::Mutex<Option<Vec<String>>>,
 }
 
 /// The file a path names, its links followed and `..` folded: how the reports are kept.
@@ -148,9 +151,20 @@ impl Engine {
         self.budget.unwrap_or(crate::region::DEFAULT_BUDGET)
     }
 
-    /// Runs `f` with this engine's port of dates joined on the thread.
+    /// The project the engine answers for (§15.231): the contributions among `files` are merged into
+    /// the rules they reach, in every check and every answer of a rule.
+    pub fn set_project(&self, files: Vec<String>) {
+        *self.set.lock().unwrap_or_else(|e| e.into_inner()) = Some(files);
+    }
+
+    /// Runs `f` with this engine's port of dates joined on the thread, and the project's
+    /// contributions merged into the rules they reach.
     fn joined<R>(&self, f: impl FnOnce() -> R) -> R {
-        crate::days::with(self.dates.clone(), f)
+        let set = self.set.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        match set {
+            Some(files) => crate::link::with_set(&files, || crate::days::with(self.dates.clone(), f)),
+            None => crate::days::with(self.dates.clone(), f),
+        }
     }
 
     /// The rule at `rule`, checked: read again when its text has changed. A report `check` already
@@ -211,6 +225,14 @@ impl Engine {
     pub fn checked(&self, root: &Path, files: &[String], lang: Lang) -> Vec<ritsu_ports::Checked> {
         use ritsu_ports::{Checked, Finding, Part, Verdict};
         let rl = rlang(lang);
+        // The files checked together are the project whose contributions are merged (§15.231),
+        // unless the engine was given one.
+        if self.set.lock().unwrap_or_else(|e| e.into_inner()).is_none() {
+            self.set_project(files.to_vec());
+        }
+        // A finding said for one file is not said again for another: a rule and a contribution to
+        // it are each checked in its own scope (§15.231).
+        let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
         files
             .iter()
             .map(|path| {
@@ -220,9 +242,10 @@ impl Engine {
                 let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
                 let r = self.report(path, &src, rl);
                 let file = ritsu_base::paths::from_root(root, Path::new(path));
-                let mut parts: Vec<Part> = r
-                    .diags
+                let shown: Vec<&crate::diag::Diag> = r.diags.iter().filter(|d| said.insert(crate::finding_key(d, path))).collect();
+                let mut parts: Vec<Part> = shown
                     .iter()
+                    .copied()
                     .map(|d| {
                         let json = ritsu_base::json::parse(&crate::diag::render_json(d, path)).unwrap_or(ritsu_base::json::Json::Null);
                         Part::Finding(Finding {
@@ -238,7 +261,13 @@ impl Engine {
                         })
                     })
                     .collect();
-                parts.push(Part::Text(i18n::with(rl, || crate::check_tail(&r.shadow, &r.diags, path, 0))));
+                // Its errors were all said for a file above: one line says so, as `rulec check` does.
+                let all_said = crate::has_error(&r.diags) && !shown.iter().any(|d| d.severity == crate::diag::Severity::Error);
+                if all_said {
+                    parts.push(Part::Text(i18n::with(rl, || crate::tr!("note {path}: エラーは上のファイルで言いました\n", "note {path}: its errors are said above\n"))));
+                } else {
+                    parts.push(Part::Text(i18n::with(rl, || crate::check_tail_of(&r.shadow, &r.diags, path, 0, &r.merged, r.adds_to.as_deref()))));
+                }
                 // E129: no koyomi is joined to read the rule's range from (§15.174), which the
                 // command exits 2 for.
                 let verdict = if r.diags.iter().any(|d| d.code == "E129") {

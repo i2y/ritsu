@@ -1,0 +1,19 @@
+contribution holiday(holiday) v1
+description "A holiday promotion: 100% more, of the shop's kind, so it adds before the kinds multiply"
+to "../reward_points.rule" signature:ccadef75314dbc18
+
+inputs
+  holiday(holiday) : bool
+
+table holiday_part
+policy unique
+| holiday | -> from_holiday : rate[step 1%] |
+| true    | 100%                            |
+| false   | 0%                              |
+
+into shop_bonus
+  from_holiday
+
+examples
+| base_points | member | weekend | partner_card | holiday | -> points |
+| 100         | true   | false   | true         | true    | 350       |

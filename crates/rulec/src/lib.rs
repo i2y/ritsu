@@ -62,6 +62,8 @@ pub mod json;
 pub mod jsonschema;
 pub mod kw;
 pub mod lex;
+/// Merging contributions into the rules they add to (§15.227–§15.231).
+pub mod link;
 pub mod machine;
 pub mod num;
 pub mod ooxml;
@@ -103,6 +105,30 @@ pub struct Report {
     pub nodes: i64,
     pub quiet: Vec<Diag>,
     pub shadow: region::Shadow,
+    /// The contributions merged into the rule the report is about, as the run shows them
+    /// (§15.231): what `check`'s last line names.
+    pub merged: Vec<String>,
+    /// For a contribution: the file it adds to, as the run shows it.
+    pub adds_to: Option<String>,
+}
+
+impl Report {
+    fn of(diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64) -> Report {
+        Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: None }
+    }
+}
+
+/// What makes two findings the same, for a report of two checks (the rule alone and the rule
+/// merged, §15.231) and for a run that checks a rule and the contributions to it: the code, the
+/// title, where it is, and the place of every mark in its file.
+/// Where a finding points: the place of every mark in its file.
+fn finding_marks(d: &Diag, path: &str) -> String {
+    d.marks.iter().map(|m| format!("{}:{}:{}:{}", m.span.file_path().unwrap_or(path), m.span.line, m.span.col, m.span.len)).collect::<Vec<_>>().join(",")
+}
+
+pub fn finding_key(d: &Diag, path: &str) -> String {
+    let marks: Vec<String> = d.marks.iter().map(|m| format!("{}:{}:{}:{}", m.span.file_path().unwrap_or(path), m.span.line, m.span.col, m.span.len)).collect();
+    format!("{}|{}|{}|{}|{}", d.code, d.title, d.where_, marks.join(","), d.notes.join("\n"))
 }
 
 pub fn check_source(src: &str, path: &str) -> Vec<Diag> {
@@ -121,45 +147,107 @@ pub fn report_with(src: &str, path: &str, budget: i64) -> Report {
     r
 }
 
-/// The three stages of the check.
+/// The three stages of the check. A rule a contribution of the run reaches is checked twice
+/// (§15.231): alone, with its examples — what it claims when there are none — and merged with them,
+/// without its examples, which are about it alone. The report holds what both say, each finding
+/// once.
 fn stages(src: &str, path: &str, budget: i64) -> Report {
     let parsed = parse::parse(src, path);
-    let mut diags = parsed.diags.clone();
+    let diags = parsed.diags.clone();
+    if !diags.is_empty() {
+        return Report::of(diags, Vec::new(), region::Shadow::default(), 0);
+    }
+    let Some(f) = parsed.file else { return Report::of(diags, Vec::new(), region::Shadow::default(), 0) };
+    match f.kind {
+        ast::FileKind::Rule if link::reaches(path) => {
+            let alone = link::without(|| pipeline(f.clone(), path, budget));
+            let mut merged = pipeline(f, path, budget);
+            // A claim of chances the rule alone breaks the same way is said once, as the rule's
+            // (§15.224): the merged rule says it again only when the contributions move the chance.
+            let alone_claims: Vec<(String, Option<String>)> = alone
+                .diags
+                .iter()
+                .filter(|d| d.code == "E133")
+                .map(|d| (finding_marks(d, path), d.notes.first().cloned()))
+                .collect();
+            merged.diags.retain(|d| d.code != "E133" || !alone_claims.contains(&(finding_marks(d, path), d.notes.first().cloned())));
+            let seen: std::collections::HashSet<String> = alone.diags.iter().map(|d| finding_key(d, path)).collect();
+            let mut diags = alone.diags;
+            diags.extend(merged.diags.drain(..).filter(|d| !seen.contains(&finding_key(d, path))));
+            let qseen: std::collections::HashSet<String> = alone.quiet.iter().map(|d| finding_key(d, path)).collect();
+            let mut quiet = alone.quiet;
+            quiet.extend(merged.quiet.drain(..).filter(|d| !qseen.contains(&finding_key(d, path))));
+            Report { diags, quiet, shadow: merged.shadow, nodes: alone.nodes + merged.nodes, merged: merged.merged, adds_to: None }
+        }
+        _ => pipeline(f, path, budget),
+    }
+}
+
+/// The check of one parsed file, from the enums it reads to the claims of its machine.
+fn pipeline(mut f: ast::RuleFile, path: &str, budget: i64) -> Report {
+    let mut r = pipeline_inner(&mut f, path, budget);
+    // A finding about a line of a file merged into this one says that file (§15.227).
+    link::relocate(&mut r.diags, path);
+    link::relocate(&mut r.quiet, path);
+    if r.adds_to.is_none() {
+        // The contributions merged into it, and those that added a value to an enum it reads from
+        // an `enums` file: the check was of the rule with them.
+        let mut merged: Vec<String> = f.contributions.iter().map(|m| m.file.clone()).collect();
+        for a in f.enums.iter().flat_map(|e| &e.added) {
+            if !merged.contains(&a.file) {
+                merged.push(a.file.clone());
+            }
+        }
+        r.merged = merged;
+    }
+    r
+}
+
+fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
+    let mut diags = Vec::new();
     let mut quiet = Vec::new();
     let mut shadow = region::Shadow::default();
     let mut nodes = 0i64;
-    if !diags.is_empty() {
-        return Report { diags, quiet, shadow, nodes };
-    }
-    let Some(mut f) = parsed.file else { return Report { diags, quiet, shadow, nodes } };
+    let adds_to = (f.kind == ast::FileKind::Contribution).then(|| f.contrib.as_ref().and_then(|h| h.to.as_ref()).map(|t| link::join(path, &t.file))).flatten();
+    let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone() };
     // The enums it reads from an `enums` file come first (§15.212): everything below, the
     // rule an `apply` brings in included, is checked over them as over the rule's own.
-    diags.extend(enums::read_imports(&mut f, path));
+    diags.extend(enums::read_imports(f, path));
     if has_error(&diags) {
-        return Report { diags, quiet, shadow, nodes };
+        return done(diags, quiet, shadow, nodes);
     }
     // A rule applied by this one is read and expanded into it first (§15.69). A callee that
     // cannot be expanded leaves holes everything below would trip over, so those errors
     // return here; a pin that does not match (E040) is reported and the check goes on, so
     // that what the changed callee does to this rule can be seen.
-    diags.extend(apply::expand(&mut f, path));
+    diags.extend(apply::expand(f, path));
     if diags.iter().any(|d| d.severity == Severity::Error && d.code != "E040") {
-        return Report { diags, quiet, shadow, nodes };
+        return done(diags, quiet, shadow, nodes);
+    }
+    // The contributions the run gives are merged into the rule they reach, and its open values
+    // become `define`s (§15.227); a contribution becomes the rule it adds to, merged with it and
+    // with what it comes after. Its pins (E040) are said and the check goes on, as an apply's.
+    diags.extend(link::merge(f, path));
+    if diags.iter().any(|d| d.severity == Severity::Error && d.code != "E040") {
+        return done(diags, quiet, shadow, nodes);
     }
     // Every spelling of an imported division becomes the one value it stands for (§15.182).
-    let spelled = prelude::normalize(&mut f, path);
+    let spelled = prelude::normalize(f, path);
     if has_error(&spelled) {
         diags.extend(spelled);
-        return Report { diags, quiet, shadow, nodes };
+        return done(diags, quiet, shadow, nodes);
     }
     // A bare word is read where the type of the place says what it is: a value of the column's
     // enum, or a name (§15.208). Two readings left open (E075) go on with the type errors.
-    diags.extend(types::read_words(&mut f, path));
-    let f = &f;
+    diags.extend(types::read_words(f, path));
+    let f = &*f;
 
     let t = types::check(f, path);
     diags.extend(t.diags.iter().cloned());
     diags.extend(apply::check(f, &t, path));
+    // What the merge proves once the rule is typed: the values a contribution added fall to no
+    // row in silence (E033), and every finding about a contributed row says whose it is.
+    diags.extend(link::check(f, &t, path));
     // The stages that read other files: the enums declared outside it (§15.59, §15.60), and
     // the copies of the sources it cites (§15.68).
     diags.extend(enums::check(f, &t, path));
@@ -170,7 +258,7 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
     enrich_e104(&mut diags, f, &t);
     enrich_arith(&mut diags, f, &t);
     if diags.iter().any(|d| d.severity == Severity::Error) {
-        return Report { diags, quiet, shadow, nodes };
+        return done(diags, quiet, shadow, nodes);
     }
     // The unit is the definition set: one table, or every table that defines one output
     // (§15.66).
@@ -200,7 +288,8 @@ fn stages(src: &str, path: &str, budget: i64) -> Report {
     if tables_hold && !f.chances.is_empty() {
         diags.extend(chances::check(f, &t, path, budget.max(0) as usize));
     }
-    Report { diags, quiet, shadow, nodes }
+    link::attribute(&mut diags, f);
+    done(diags, quiet, shadow, nodes)
 }
 
 /// Per-set check results (shadowing pairs and dead rows) that the §9.2 coverage decision
@@ -236,6 +325,12 @@ pub fn findings_text(diags: &[Diag], lines: &[String]) -> String {
 /// had (`--diff-base`), the count of shadowing pairs (§4), and the `ok` line when nothing
 /// is an error. `--format json` prints none of it; `--terse` prints all of it.
 pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppressed: usize) -> String {
+    check_tail_of(shadow, diags, path, suppressed, &[], None)
+}
+
+/// [`check_tail`] of a report that merged contributions or is about one (§15.231): the `ok` line
+/// names the contributions merged into the rule, or the file a contribution adds to.
+pub fn check_tail_of(shadow: &region::Shadow, diags: &[Diag], path: &str, suppressed: usize, merged: &[String], adds_to: Option<&str>) -> String {
     let mut out = String::new();
     if suppressed > 0 {
         out.push_str(&tr!(
@@ -255,7 +350,16 @@ pub fn check_tail(shadow: &region::Shadow, diags: &[Diag], path: &str, suppresse
         ));
     }
     if !has_error(diags) {
-        out.push_str(&format!("ok {path}\n"));
+        if !merged.is_empty() {
+            let n = merged.len();
+            let list = merged.join(", ");
+            let word = if n == 1 { "contribution" } else { "contributions" };
+            out.push_str(&tr!("ok {path}（寄与 {n} 件: {list}）\n", "ok {path} ({n} {word}: {list})\n"));
+        } else if let Some(t) = adds_to {
+            out.push_str(&tr!("ok {path}（{t} への寄与）\n", "ok {path} (contributes to {t})\n"));
+        } else {
+            out.push_str(&format!("ok {path}\n"));
+        }
     }
     out
 }
@@ -276,8 +380,10 @@ fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked)
     use num::Rat;
     use std::collections::{BTreeMap, BTreeSet};
     for w in &t.arith_witness {
-        let same = |s: &diag::Span| s.line == w.span.line && s.col == w.span.col && s.len == w.span.len;
+        let same = |s: &diag::Span| s.same(&w.span);
         let Some(d) = diags.iter_mut().find(|d| d.code == w.code && d.marks.first().is_some_and(|m| same(&m.span))) else { continue };
+        // E131 (§15.227): an input whose terms put the open value outside the range it declares.
+        let open_range = f.opens.iter().find(|o| o.span.same(&w.span)).and_then(|o| t.opens.get(&o.name.text)).copied();
         let hits = |a: &BTreeMap<String, Val>| -> bool {
             if !vectors::allowed(f, a) || !vectors::days_ok(t, a) {
                 return false;
@@ -287,6 +393,9 @@ fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked)
                 Some(Val::Num(v)) => {
                     if w.code == "E132" {
                         v.num == 0
+                    } else if w.code == "E131" {
+                        let (lo, hi) = open_range.unwrap_or((None, None));
+                        lo.is_some_and(|l| v.cmp_to(l) == std::cmp::Ordering::Less) || hi.is_some_and(|h| v.cmp_to(h) == std::cmp::Ordering::Greater)
                     } else {
                         v.num < 0
                     }
@@ -377,6 +486,8 @@ fn enrich_arith(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked)
             0,
             if w.code == "E132" {
                 tr!("割る数を 0 にする入力: {b}", "An input that makes the divisor zero: {b}")
+            } else if w.code == "E131" {
+                tr!("範囲の外にする入力: {b}", "An input that takes it out of the range: {b}")
             } else {
                 tr!("引数を負にする入力: {b}", "An input that makes the argument negative: {b}")
             },
@@ -484,6 +595,12 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
         return Err(ds);
     }
     let ds = apply::expand(&mut f, path);
+    if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
+        return Err(ds);
+    }
+    // What is generated from a rule is the rule merged with the contributions the run gives
+    // (§15.231); from a contribution, the rule it adds to, merged with it.
+    let ds = link::merge(&mut f, path);
     if ds.iter().any(|d| d.severity == Severity::Error && !(tolerate_pin && d.code == "E040")) {
         return Err(ds);
     }

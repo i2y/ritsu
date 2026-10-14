@@ -288,9 +288,18 @@ pub fn format(src: &str) -> String {
     let mut in_apply = false;
     // The lines under a `machine`, up to the next blank line or line head.
     let mut in_machine = false;
+    // The terms under an `open` value or an `into` (§15.227), up to the next blank line or line
+    // head: one name each, two spaces in.
+    let mut in_terms = false;
     while i < lines.len() {
         if !is_row(&lines[i]) {
             let w = first_word(&lines[i]);
+            if in_terms && !lines[i].trim().is_empty() && !w.starts_with('#') && !crate::kw::LINE_HEAD.contains(&w) && !crate::kw::CONTRIBUTION_HEAD.contains(&w) {
+                out.push(clause_body(&lines[i]));
+                i += 1;
+                continue;
+            }
+            in_terms = (w == crate::kw::OPEN || w == crate::kw::INTO) && !lines[i].starts_with(char::is_whitespace) && !binding(&lines[i]);
             if in_machine && MACHINE_LINES.contains(&w) {
                 out.push(machine_body(&lines[i]));
                 i += 1;
@@ -352,6 +361,7 @@ pub fn format(src: &str) -> String {
         in_clause = false;
         in_apply = false;
         in_machine = false;
+        in_terms = false;
         // A run of consecutive `|` lines is one table. Widths are decided within this block only.
         let start = i;
         while i < lines.len() && is_row(&lines[i]) {

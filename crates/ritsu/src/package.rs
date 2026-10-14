@@ -280,11 +280,19 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
     };
     // rulec: each rule's module
     let rulec_lang = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
+    // The project is what the contributions are merged from (rulec's §15.231): each rule's module is
+    // the rule with every contribution of the project that reaches it, and a contribution has no
+    // module of its own.
+    let rule_files: Vec<String> = project.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect();
     for f in project.of(Tool::Rulec) {
+        if rulec::link::is_contribution_file(&f.shown) {
+            continue;
+        }
         let src = read(project, f, lang)?;
         // A file of enums is the module of its types, beside the rules that read them (rulec's
         // §15.212).
-        let (rel, body) = rulec::i18n::with(rulec_lang, || rulec::codegen::package_module_in(&src, &f.shown, &f.rel, target.key(), &o.module)).map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
+        let (rel, body) = rulec::link::with_set(&rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_module_in(&src, &f.shown, &f.rel, target.key(), &o.module)))
+            .map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
         named.push(("rules", module_of(&rel), f.rel.clone()));
         kinds.entry("rules").or_default().push(module_of(&rel));
         files.push((format!("{base}rules/{rel}"), body, Some(f.rel.clone())));

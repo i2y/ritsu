@@ -200,16 +200,67 @@ impl Default for Fix {
 }
 
 /// One source span. Columns are byte offsets within the line, 0-based.
+///
+/// A span is in the file being checked unless `file` names another: a rule merged with the
+/// contributions to it (§15.227) holds lines of several files, and a finding about a row a
+/// contribution wrote is framed with that file's line and named by its path.
 #[derive(Debug, Clone)]
 pub struct Span {
     pub line: usize,
     pub col: usize,
     pub len: usize,
+    /// The file the span is in, when it is not the one being checked.
+    pub file: Option<std::sync::Arc<SpanFile>>,
+}
+
+/// A file other than the one being checked, as a span in it needs it: its path as the run shows
+/// it, and its lines, to frame the span with.
+#[derive(Debug)]
+pub struct SpanFile {
+    pub path: String,
+    pub lines: Vec<String>,
+    /// The SHA-256 of the file's text, in hex: what the certificate pins a row read from it to.
+    pub sha256: String,
+}
+
+thread_local! {
+    /// The file every span made now is in, while a file other than the one being checked is read
+    /// (`in_file`).
+    static FILE: std::cell::RefCell<Option<std::sync::Arc<SpanFile>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `f` with every span made in it marked as in the file at `path` holding `src`: how a file
+/// merged into the one being checked is read (§15.227).
+pub fn in_file<R>(path: &str, src: &str, f: impl FnOnce() -> R) -> R {
+    let file = std::sync::Arc::new(SpanFile { path: path.to_string(), lines: src.lines().map(str::to_string).collect(), sha256: crate::sha256::hex(src.as_bytes()) });
+    let before = FILE.with(|c| c.replace(Some(file)));
+    let out = f();
+    FILE.with(|c| *c.borrow_mut() = before);
+    out
+}
+
+/// Runs `f` with spans in the file being checked again: what is read of it inside `in_file`.
+pub fn in_main<R>(f: impl FnOnce() -> R) -> R {
+    let before = FILE.with(|c| c.replace(None));
+    let out = f();
+    FILE.with(|c| *c.borrow_mut() = before);
+    out
 }
 
 impl Span {
     pub fn new(line: usize, col: usize, len: usize) -> Self {
-        Span { line, col, len }
+        Span { line, col, len, file: FILE.with(|c| c.borrow().clone()) }
+    }
+
+    /// The path of the file the span is in, when it is not the one being checked.
+    pub fn file_path(&self) -> Option<&str> {
+        self.file.as_ref().map(|f| f.path.as_str())
+    }
+
+    /// Whether the two spans are the same place: the same line, column and length in the same
+    /// file.
+    pub fn same(&self, o: &Span) -> bool {
+        self.line == o.line && self.col == o.col && self.len == o.len && self.file_path() == o.file_path()
     }
 }
 
@@ -431,7 +482,10 @@ pub fn render(d: &Diag, src_lines: &[String]) -> String {
     if !d.marks.is_empty() {
         let _ = writeln!(out, "{:>w$} |", "", w = gw);
         for m in &d.marks {
-            let Some(text) = src_lines.get(m.span.line.saturating_sub(1)) else { continue };
+            // A mark in a contribution merged into this rule (§15.227) is framed with that
+            // file's line.
+            let lines = m.span.file.as_ref().map(|f| f.lines.as_slice()).unwrap_or(src_lines);
+            let Some(text) = lines.get(m.span.line.saturating_sub(1)) else { continue };
             // a key on the line is masked (ritsu-base's `secrets::mask`), and the carets are counted
             // on the line as it is shown: a frame must not carry a key into the logs
             let masked = |s: &str| ritsu_base::secrets::mask(s);
@@ -490,6 +544,8 @@ pub fn terse_footer() -> String {
 /// unit, and the rewritten form that removes it — so that acting on a diagnostic no longer
 /// means taking a sentence apart.
 pub fn render_json(d: &Diag, path: &str) -> String {
+    // A finding about a line of a contribution merged into this rule names that file (§15.227).
+    let path = d.marks.first().and_then(|m| m.span.file_path()).unwrap_or(path);
     let line = d.line().unwrap_or(1);
     let col = d.marks.first().map(|m| m.span.col + 1).or(d.place.map(|(_, c)| c)).unwrap_or(1);
 
@@ -510,6 +566,7 @@ pub fn render_json(d: &Diag, path: &str) -> String {
                 .int("column", (m.span.col + 1) as i128)
                 .int("length", m.span.len as i128)
                 .str("label", &m.label)
+                .opt_str("file", m.span.file_path())
                 .finish()
         })
         .collect();

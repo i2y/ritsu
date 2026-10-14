@@ -11,6 +11,8 @@ use crate::lex::{Kind, Token, lex_line_soft};
 mod prereq;
 /// The `chances` table (§15.224).
 mod chances;
+/// The `open` value and the lines of a `contribution` file (§15.227–§15.229).
+mod contrib;
 
 /// The keywords that can start a line. Used to detect E009 (a declaration named like a
 /// reserved word) and to check that the README's keyword table matches this list.
@@ -117,6 +119,32 @@ const DECLARING: &[&str] = &[
 /// values need which before them is vocabulary too (§15.222).
 const ENUMS_FILE: &[&str] = &[crate::kw::DESCRIPTION, crate::kw::IMPORT, crate::kw::ENUM, crate::kw::GROUP, crate::kw::PREREQUISITES];
 
+/// The lines of a rule a `contribution` file holds besides its own (`kw::CONTRIBUTION_HEAD`,
+/// §15.227): its new inputs, the definitions it adds, open values of its own, the summaries and
+/// folds of a walk it adds to, the sequences its examples walk, the prerequisites lines it adds,
+/// and its examples. What decides the function's shape — its outputs, its `result`, an `apply`, a
+/// machine, the sequences it walks, its enums and imports, its sources and constraints — is the
+/// file it adds to's.
+const CONTRIBUTION_FILE: &[&str] = &[
+    crate::kw::DESCRIPTION,
+    crate::kw::INPUTS,
+    crate::kw::DERIVE,
+    crate::kw::DEFINE,
+    crate::kw::TABLE,
+    crate::kw::POLICY,
+    crate::kw::OVERRIDES,
+    crate::kw::CLAUSE,
+    crate::kw::COUNT,
+    crate::kw::SUM,
+    crate::kw::MAX,
+    crate::kw::MIN,
+    crate::kw::FOLD,
+    crate::kw::SEQUENCE,
+    crate::kw::EXAMPLES,
+    crate::kw::PREREQUISITES,
+    crate::kw::OPEN,
+];
+
 /// Whether a line that starts with a line head is a declaration or a binding named like it, not
 /// a heading: the word is one that is not reserved (`prerequisites`, §15.222), and the line goes on
 /// the way a declaration (`prerequisites(p) :`, `prerequisites :`) or a binding under `apply`
@@ -186,6 +214,8 @@ fn declared(f: &RuleFile) -> usize {
         + usize::from(f.machine.is_some())
         + f.prerequisites.len()
         + f.chances.len()
+        + f.opens.len()
+        + f.contrib.as_ref().map_or(0, |h| usize::from(h.to.is_some()) + h.afters.len() + h.extends.len() + h.intos.len() + h.prereq_lines.len())
 }
 
 /// How a line that starts with `word` is written, for the note under E058.
@@ -258,6 +288,7 @@ impl P {
         let kind = match head.first().and_then(|t| t.ident()) {
             Some(crate::kw::RULE) => FileKind::Rule,
             Some(crate::kw::ENUMS) => FileKind::Enums,
+            Some(crate::kw::CONTRIBUTION) => FileKind::Contribution,
             _ => {
                 self.err(
                     Diag::error("E003", tr!("ファイルは `{}` の行で始まらなければなりません", "The file must start with a `{}` line", crate::kw::RULE))
@@ -271,7 +302,11 @@ impl P {
                 return None;
             }
         };
-        let word = if kind == FileKind::Enums { crate::kw::ENUMS } else { crate::kw::RULE };
+        let word = match kind {
+            FileKind::Enums => crate::kw::ENUMS,
+            FileKind::Contribution => crate::kw::CONTRIBUTION,
+            FileKind::Rule => crate::kw::RULE,
+        };
         // A `rule` line with no name used to end the parse with nothing said, and the file
         // passed the check with no declarations in it (§15.156).
         let Some((name, mut k)) = self.name_at(&head, 1) else {
@@ -315,6 +350,9 @@ impl P {
             scenarios: Vec::new(),
             prerequisites: Vec::new(),
             chances: Vec::new(),
+            opens: Vec::new(),
+            contrib: (kind == FileKind::Contribution).then(contrib::head),
+            contributions: Vec::new(),
         };
 
         loop {
@@ -366,6 +404,31 @@ impl P {
                             )
                         }),
                 );
+            }
+            // A contribution adds to another file's open places and decides nothing of its own
+            // (§15.227). What else it holds is said once, at its line, and read as usual.
+            if f.kind == FileKind::Contribution
+                && crate::kw::LINE_HEAD.contains(&word.as_str())
+                && !CONTRIBUTION_FILE.contains(&word.as_str())
+                && !named_like_head(&line)
+            {
+                let at = self.at(span_of(&line).line);
+                let mut d = Diag::error("E067", tr!("寄与のファイルに `{}` は書けません", "A contribution file cannot hold `{}`", word))
+                    .at(at)
+                    .mark(span_of(&line), "")
+                    .note(tr!(
+                        "寄与は、足す先の規則の開いた場所に足すだけで、関数の形（出力、`result`、`apply`、機械、たどる並び、列挙、取り込み、出典、契約、制約、確率の主張）は足す先の規則が決めます。",
+                        "A contribution only adds to the open places of the rule it adds to. The shape of the function — its outputs, its `result`, an `apply`, a machine, the sequences it walks, its enums, imports, sources, contracts and constraints, and the claims of chances — is that rule's."
+                    ));
+                // The claims of chances (§15.224) are the rule's: what is drawn, and how likely each
+                // answer is, whatever is added to it.
+                if word == crate::kw::CHANCES {
+                    d = d.note(tr!(
+                        "確率の主張は、足す先の規則が書きます。規則は寄与を合わせた形でも主張を確かめ、寄与が答えの確率を変えれば E133 で、どの寄与の行が関わるかを言います。",
+                        "The claims of chances are written in the rule a contribution adds to. The rule is held to them merged with its contributions too: a contribution that moves the chance of an answer is E133, which names the contribution's rows that take part."
+                    ));
+                }
+                self.err(d.note(contrib::contrib_shape()));
             }
             let before = (self.diags.len(), declared(&f));
             match word.as_str() {
@@ -585,6 +648,15 @@ impl P {
                         f.examples.push(t);
                     }
                 }
+                // The lines a contribution adds to an open block (§15.229): its heading names the
+                // block and nothing else.
+                crate::kw::PREREQUISITES if f.kind == FileKind::Contribution => {
+                    if let Some(d) = self.contrib_prereq(&line) {
+                        if let Some(h) = f.contrib.as_mut() {
+                            h.prereq_lines.push(d);
+                        }
+                    }
+                }
                 crate::kw::PREREQUISITES => {
                     if let Some(d) = self.prerequisites(&line) {
                         f.prerequisites.push(d);
@@ -593,6 +665,45 @@ impl P {
                 crate::kw::CHANCES => {
                     if let Some(d) = self.chances(&line) {
                         f.chances.push(d);
+                    }
+                }
+                // A value other files may add terms to (§15.227), where a line starts outside every
+                // block; `open : …` under `inputs` is an input of that name.
+                crate::kw::OPEN if !named_like_head(&line) => {
+                    let (head, _cite) = self.split_cite(&line);
+                    let at = f.items.len();
+                    if let Some(d) = self.open_decl(&head, at) {
+                        f.opens.push(d);
+                    }
+                }
+                crate::kw::TO | crate::kw::AFTER if f.kind == FileKind::Contribution => {
+                    if let Some(t) = self.target_line(&line, &word) {
+                        let h = f.contrib.as_mut().expect("a contribution has a head");
+                        if word == crate::kw::AFTER {
+                            h.afters.push(t);
+                        } else if h.to.is_some() {
+                            self.err(
+                                Diag::error("E067", tr!("`to` の行が二行あります", "There are two `to` lines"))
+                                    .at(self.at(t.span.line))
+                                    .mark(t.span.clone(), tr!("二行目です", "this is the second"))
+                                    .note(tr!(
+                                        "一つの寄与のファイルが足す先は一つです。別の規則にも足すなら、ファイルを分けてください。",
+                                        "One contribution file adds to one file. To add to another rule too, write a second file."
+                                    )),
+                            );
+                        } else {
+                            h.to = Some(t);
+                        }
+                    }
+                }
+                crate::kw::EXTEND if f.kind == FileKind::Contribution => {
+                    if let Some(e) = self.extend_line(&line) {
+                        f.contrib.as_mut().expect("a contribution has a head").extends.push(e);
+                    }
+                }
+                crate::kw::INTO if f.kind == FileKind::Contribution => {
+                    if let Some(d) = self.into_decl(&line) {
+                        f.contrib.as_mut().expect("a contribution has a head").intos.push(d);
                     }
                 }
                 crate::kw::MACHINE => {
@@ -635,6 +746,8 @@ impl P {
                                 clause: false,
                                 cite: None,
                                 applied: None,
+                                open: None,
+                                contributed: None,
                             },
                             span,
                         }),
@@ -827,7 +940,7 @@ impl P {
             }
             seen.push((s.clone(), value));
         }
-        Some(EnumDecl { name, values, default_marks, labels, ordered, open, from: None, span: span_of(line) })
+        Some(EnumDecl { name, values, default_marks, labels, ordered, open, from: None, added: Vec::new(), span: span_of(line) })
     }
 
     /// `import enum <enum> from "<file>" [-> <name>]` (§15.212).
@@ -2629,12 +2742,40 @@ impl P {
                         ok = false;
                         continue;
                     };
-                    if l.len() > k {
+                    // `with <callee's value> -> <this rule's value>, …` (§15.230): an output of an enum
+                    // the callee declares, read in this rule's values.
+                    let mut map: Vec<(String, String)> = Vec::new();
+                    if l.get(k).and_then(|t| t.ident()) == Some(crate::kw::WITH) {
+                        let mut j = k + 1;
+                        loop {
+                            let (Some(a), Some(arrow), Some(b)) = (l.get(j).and_then(|t| t.ident()), l.get(j + 1), l.get(j + 2).and_then(|t| t.ident())) else {
+                                bad(self, span_of(&l), tr!("`{}` の後は `<値> -> <値>` の並びです", "after `{}` come `<value> -> <value>` pairs", crate::kw::WITH));
+                                ok = false;
+                                break;
+                            };
+                            if !arrow.is(&Kind::Arrow) {
+                                bad(self, span_of(&l), tr!("`{}` の後は `<値> -> <値>` の並びです", "after `{}` come `<value> -> <value>` pairs", crate::kw::WITH));
+                                ok = false;
+                                break;
+                            }
+                            map.push((a.to_string(), b.to_string()));
+                            j += 3;
+                            match l.get(j) {
+                                None => break,
+                                Some(t) if t.is(&Kind::Comma) => j += 1,
+                                Some(_) => {
+                                    bad(self, span_of(&l), tr!("対応の区切りは `,` です", "pairs are separated by `,`"));
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                        }
+                    } else if l.len() > k {
                         bad(self, span_of(&l), tr!("名前の後に余分な語があります", "extra words after the name"));
                         ok = false;
                         continue;
                     }
-                    outputs.push(OutBinding { output: first, name, span: span_of(&l) });
+                    outputs.push(OutBinding { output: first, name, map, span: span_of(&l) });
                 }
                 _ => {
                     bad(self, span_of(&l), tr!("`<入力> = <値>` か `<出力> -> <名前>` の形です", "a line is `<input> = <value>` or `<output> -> <name>`"));
@@ -2654,11 +2795,13 @@ impl P {
             bad(self, span.clone(), tr!("規則ファイルを `\"…\"` で書いてください", "write the rule file in quotes"));
             return None;
         };
-        let hash = match head.get(k + 2).map(|t| t.kind.clone()) {
-            Some(Kind::Hash(h)) => Some(h),
-            None => None,
+        // The pin: `meaning:` from §15.230 on, `sha256:` as it was written before, read alike.
+        let (hash, meaning) = match head.get(k + 2).map(|t| t.kind.clone()) {
+            Some(Kind::Hash(h)) => (Some(h), None),
+            Some(Kind::Meaning(h)) => (None, Some(h)),
+            None => (None, None),
             Some(_) => {
-                bad(self, span.clone(), tr!("ファイル名の後に書けるのは `sha256:<ハッシュ>` だけです", "only `sha256:<digest>` may follow the file name"));
+                bad(self, span.clone(), tr!("ファイル名の後に書けるのは `meaning:<16 桁>` か `sha256:<ハッシュ>` だけです", "only `meaning:<16 hex>` or `sha256:<digest>` may follow the file name"));
                 return None;
             }
         };
@@ -2673,6 +2816,7 @@ impl P {
             name,
             path,
             hash,
+            meaning,
             bindings,
             excepts,
             outputs,
@@ -2729,18 +2873,21 @@ impl P {
         // lost the scale of its output — a rate of 0.6% came back a thousand times too large
         // (§15.156). The rows are read first, so that they are not reported line by line.
         let at = self.at(span.line);
+        // `table <name> open` (§15.229): contributions may add definitions of its outputs.
+        let mut open = None;
         match named {
             None => {
                 self.err(unreadable(crate::kw::TABLE, head, tr!("`table` の後に名前がありません", "there is no name after `table`"), at));
                 return None;
             }
+            Some((_, k)) if k + 1 == head.len() && head[k].ident() == Some(crate::kw::OPEN) => open = Some(head[k].span.clone()),
             Some((_, k)) if k < head.len() => {
                 self.err(unreadable(crate::kw::TABLE, &head[k..], tr!("名前の後のこの語は読まれません", "this is not read after the name"), at));
                 return None;
             }
             _ => {}
         }
-        Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None, applied: None })
+        Some(Table { name, policy, inputs, outputs, rows, span, overrides, clause: false, cite: None, applied: None, open, contributed: None })
     }
 
     /// A clause (§15.67): `clause <name>(<alias>) -> <output>[ : <type>]`, then a
@@ -2810,6 +2957,12 @@ impl P {
             bad(self, span.clone(), tr!("`->` の後に出力の名前がありません", "no output name after `->`"));
             return None;
         };
+        // `clause <name> -> <output> open` (§15.229): contributions may add definitions of the
+        // output. The mark comes last, after the type when there is one.
+        let (head, open) = match head.last() {
+            Some(t) if t.ident() == Some(crate::kw::OPEN) && head.len() > k2 => (&head[..head.len() - 1], Some(t.span.clone())),
+            _ => (head, None),
+        };
         let ty = self.type_ref(head, k2).map(|(t, _)| t);
         let out = OutCol { name: oname, ty, span: span_of(&head[k + 1..]) };
         for l in twice {
@@ -2844,12 +2997,14 @@ impl P {
             }
             let mut ok = true;
             for part in parts {
-                let Some(col) = part.first().and_then(|t| t.ident()).map(|s| s.to_string()) else {
+                // The column may be a name an `apply` brought in, `準用:名前` (§15.230).
+                let Some((colname, ck)) = part.first().and_then(|t| t.ident()).and_then(|_| self.name_at(&part, 0)) else {
                     bad(self, span_of(&wl), tr!("`and` の区切りの中に列の名前がありません", "a part between `and` has no column name"));
                     ok = false;
                     continue;
                 };
-                if part.len() < 2 {
+                let col = colname.text.clone();
+                if part.len() < ck + 1 {
                     bad(self, part[0].span.clone(), tr!("列 {col} の条件がありません", "column {col} has no condition"));
                     ok = false;
                     continue;
@@ -2859,13 +3014,13 @@ impl P {
                     ok = false;
                     continue;
                 }
-                let Some(cell) = self.cell(&part[1..]) else {
+                let Some(cell) = self.cell(&part[ck..]) else {
                     ok = false;
                     continue;
                 };
-                inputs.push((col, part[0].span.clone()));
+                inputs.push((col, span_of(&part[..ck])));
                 cells.push(cell);
-                cell_spans.push(span_of(&part[1..]));
+                cell_spans.push(span_of(&part[ck..]));
             }
             if !ok {
                 return None;
@@ -2898,6 +3053,8 @@ impl P {
             clause: true,
             cite: None,
             applied: None,
+            open,
+            contributed: None,
         })
     }
 
@@ -2982,6 +3139,8 @@ impl P {
             clause: false,
             cite: None,
             applied: None,
+            open: None,
+            contributed: None,
         })
     }
 
@@ -3439,6 +3598,26 @@ impl P {
             return self.expr(&ts[1..close]);
         }
         if let Some(name) = first.ident() {
+            // `準用:名前`, the colon touching both words, is one name: what an `apply` brought in
+            // (§15.230), and a contribution's own name (§15.227).
+            let mut joined = name.to_string();
+            let mut j = 1;
+            let mut end = first.span.col + first.span.len;
+            while ts.get(j).is_some_and(|c| c.is(&Kind::Colon) && c.span.col == end)
+                && ts.get(j + 1).and_then(|n| n.ident()).is_some()
+                && ts[j + 1].span.col == ts[j].span.col + ts[j].span.len
+            {
+                joined.push(':');
+                joined.push_str(ts[j + 1].ident().unwrap_or(""));
+                end = ts[j + 1].span.col + ts[j + 1].span.len;
+                j += 2;
+            }
+            if j > 1 {
+                if ts.len() > j {
+                    return self.trailing(&ts[j..]);
+                }
+                return Some(Expr::Name(joined, span_of(&ts[..j])));
+            }
             if ts.get(1).is_some_and(|t| t.is(&Kind::LParen)) {
                 let Some(close) = matching(ts, 1) else {
                     self.err(bad_expr(&ts[1..=1], tr!("この `(` が閉じていません", "this `(` is never closed"), self.at(ts[1].span.line)));

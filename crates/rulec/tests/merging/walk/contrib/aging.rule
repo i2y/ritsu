@@ -1,0 +1,21 @@
+contribution aging(aging) v1
+description "An aging surcharge: a vehicle ten years old or more costs 50 dollars more"
+to "../fleet_upkeep.rule" signature:d64d9b3c10e711f4
+
+table age_surcharge
+policy unique
+| age  | -> surcharge : money[USD] |
+| <10  | 0USD                      |
+| >=10 | 50USD                     |
+
+into vehicle_cost
+  surcharge
+
+sequence two_vans
+| kind | age |
+| van  | 3   |
+| van  | 12  |
+
+examples
+| depot_size | vehicles | -> upkeep |
+| 5          | two_vans | 190USD    |

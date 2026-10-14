@@ -89,6 +89,15 @@ fn run() -> Cmd {
             flag("--target", Some("<target>"), tr!("呼び出しを、どのプラットフォームの形で出すか", "the platform whose calls the trace shows"))
                 .choices(dandori::cli::RUN_TARGETS)
                 .default("reference"),
+            flag(
+                "--with",
+                Some("<path>"),
+                tr!(
+                    "フローが呼ぶ規則に合わせる寄与のファイルかディレクトリ（何度でも書ける）。規則は、ここに挙げた寄与のうち、その規則に足すものと合わせて計算する",
+                    "a contribution, or a directory of them, to merge into the rules the flow calls (may be given more than once): a rule is computed with every one of them that adds to it"
+                ),
+            )
+            .repeats(),
             flag("--format", Some("json"), tr!("一つの JSON で出す", "print one JSON object")).choices(&["json"]),
         ],
         exits: vec![

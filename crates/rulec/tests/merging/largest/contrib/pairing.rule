@@ -1,0 +1,24 @@
+contribution pairing(pairing) v1
+description "A pairing program: a trainee paired with a coach gets 25%, which does not stack with a mentor's"
+to "../mentor_bonus.rule" signature:0291849fa434a25e
+
+inputs
+  paired(paired) : bool
+
+table pairing_value
+policy unique
+| paired | -> pairing_rate : rate[step 1%] |
+| true   | 25%                             |
+| false  | 0%                              |
+
+into best_value
+  pairing_rate
+
+sequence one_mentor
+| mentor_grade |
+| 2            |
+
+examples
+| grade | paired | mentors    | -> bonus |
+| 1     | true   | one_mentor | 25%      |
+| 0     | true   | one_mentor | 50%      |

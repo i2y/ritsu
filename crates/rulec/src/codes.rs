@@ -64,14 +64,17 @@ pub struct Also {
     pub what: String,
     pub example: &'static str,
     pub english: Option<&'static str>,
+    /// What has to sit next to it, as for the entry's own reproduction: the rule a contribution
+    /// adds to, a rule an `apply` reads (§15.227, §15.230).
+    pub files: &'static [(&'static str, &'static str)],
 }
 
 impl Also {
     /// The reproduction `explain` shows in `lang`.
     pub fn repro(&self, lang: Lang) -> Repro {
         match (lang, self.english) {
-            (Lang::En, Some(en)) => Repro { example: en, files: &[] },
-            _ => Repro { example: self.example, files: &[] },
+            (Lang::En, Some(en)) => Repro { example: en, files: self.files },
+            _ => Repro { example: self.example, files: self.files },
         }
     }
 }
@@ -128,7 +131,14 @@ impl Entry {
 
     /// Another form of the code, reproduced (see the field).
     fn also(mut self, what: String, example: &'static str, english: &'static str) -> Entry {
-        self.also.push(Also { what, example, english: Some(english) });
+        self.also.push(Also { what, example, english: Some(english), files: &[] });
+        self
+    }
+
+    /// Another form of the code, reproduced with files beside it, written with English names
+    /// alone (§15.227).
+    fn also_with(mut self, what: String, example: &'static str, files: &'static [(&'static str, &'static str)]) -> Entry {
+        self.also.push(Also { what, example, english: None, files });
         self
     }
 
@@ -1831,6 +1841,147 @@ policy unique
 | top | -> x |
 | -   | true |
 "##;
+// The merging of files (§15.227–§15.230). Each reproduction is the file checked, `explain.rule`,
+// with the rule it adds to or reads beside it; every name is English.
+const X_E067: &str = r##"contribution c(c) v1
+to "base.rule" signature:9e889c8a59016488
+
+extend kind with z
+"##;
+const E067_BASE: &[(&str, &str)] = &[("base.rule", r##"rule base(base) v1
+
+enum kind(kind) = a(a) | b(b)
+
+inputs
+  k(k) : kind
+
+outputs
+  fee(fee) : number  round down(1)
+
+table t(t)
+policy unique
+| k | -> fee : number |
+| a | 1               |
+| b | 2               |
+"##)];
+const X_E068: &str = r##"rule t(t) v1
+
+inputs
+  member(member) : bool
+
+outputs
+  bonus(bonus) : rate[step 1%]  round down(1%)
+
+table p(p)
+policy unique
+| member | -> from_member : rate[step 1%] |
+| true   | 10%                            |
+| false  | 0%                             |
+
+open bonus : rate[step 1%]  combine sum
+  from_member
+"##;
+const X_E131: &str = r##"contribution c(c) v1
+to "base.rule" signature:b10f6ca4271b3f2f
+
+inputs
+  promo(promo) : bool
+
+table q(q)
+policy unique
+| promo | -> from_promo : rate[step 1%] |
+| true  | 15%                           |
+| false | 0%                            |
+
+into bonus
+  from_promo
+"##;
+const E131_BASE: &[(&str, &str)] = &[("base.rule", r##"rule base(base) v1
+
+inputs
+  member(member) : bool
+
+outputs
+  bonus(bonus) : rate[step 1%]  round down(1%)
+
+table p(p)
+policy unique
+| member | -> from_member : rate[step 1%] |
+| true   | 10%                            |
+| false  | 0%                             |
+
+open bonus : rate[step 1%]  combine sum  range >=0% <=20%
+  from_member
+"##)];
+const X_E033_ADDED: &str = r##"contribution c(c) v1
+to "base.rule" signature:69e01897ab91b191
+
+extend kind with z
+"##;
+const E033_BASE: &[(&str, &str)] = &[("base.rule", r##"rule base(base) v1
+
+enum kind(kind) = a(a) | b(b)  open
+
+inputs
+  k(k) : kind
+
+outputs
+  fee(fee) : number  round down(1)
+
+table t(t)
+policy first
+| k | -> fee : number |
+| a | 1               |
+| - | 2               |
+"##)];
+const X_E040_SHAPE: &str = r##"contribution c(c) v1
+to "base.rule" signature:0123456789abcdef
+
+extend kind with z
+"##;
+const X_W132: &str = r##"rule t(t) v1
+
+inputs
+  plan(plan) : bool
+
+outputs
+  limit(limit) : number  round down(1)
+
+table cap_of(cap_of)
+policy unique
+| plan  | -> plan_cap : number |
+| true  | 40                   |
+| false | 60                   |
+
+open cap : number  combine max  empty 100  range >=0 <=100
+  plan_cap
+
+define limit : number = cap
+"##;
+const X_E044_RING: &str = r##"rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply o(o) = "other.rule"
+  a = n
+  x -> y
+"##;
+const E044_OTHER: &[(&str, &str)] = &[("other.rule", r##"rule other(other) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+apply back(back) = "explain.rule"
+  n = a
+  y -> x
+"##)];
 
 pub fn ledger() -> Vec<Entry> {
     vec![
@@ -2300,19 +2451,20 @@ pub fn ledger() -> Vec<Entry> {
         .with_files(TIER_PROTO),
         err(
             "E033",
-            tr!("取り込んだ列挙の値に、行も `default` もありません", "A value of an imported enum has neither a row nor `default`"),
+            tr!("外から来た列挙の値に、行も `default` もありません", "A value that came from elsewhere has neither a row nor `default`"),
             tr!(
-                "取り込んだ列挙の値が、どの行にも現れず、`default` も付いていないとき。自分で書いた値なら書き忘れの警告（W111）で済みますが、契約から来た値の場合は**外の変更がまだ誰にも読まれていない**ことを示すので、rulec はエラーにして止めます。既定の行がある表では完全性の検査が通ってしまい、新しい値には既定の行の答えが黙って当たります。",
-                "A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default row's answer."
+                "取り込んだ列挙の値が、どの行にも現れず、`default` も付いていないとき。寄与が `extend` で足した値が、表のどの行にも名前で書かれず、`-` の行、その値を外さない `not:` の行、その値まで覆うようになった比べるセルの行に黙って落ちるときも同じです（行ごとに言います）。自分で書いた値なら書き忘れの警告（W111）で済みますが、契約や寄与から来た値の場合は**外の変更がまだ誰にも読まれていない**ことを示すので、rulec はエラーにして止めます。既定の行がある表では完全性の検査が通ってしまい、新しい値には既定の行の答えが黙って当たります。",
+                "A value of an imported enum appears in no row and is not marked `default`. The same holds for a value a contribution adds with `extend` that no row of a table names and that falls in silence to a row of `-`, a `not:` that does not leave it out, or a comparing cell that now covers it (each such row is named). For a value you wrote yourself that is a forgotten line (W111); for a value that came through a contract or a contribution it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default row's answer."
             ),
             tr!(
-                "その値の行を表に足すか、値の宣言に `default` を付けてください。`default` は「既定の行に落ちるのが意図です」という宣言で、誰かがその値の扱いを決めたことを示します。",
-                "Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided how it is treated."
+                "その値の行を表に足すか、値の宣言に `default` を付けてください。寄与が足した値なら、開いた表に寄与が行を足すか、`extend` の行に `default` を付けてください。`default` は「既定の行に落ちるのが意図です」という宣言で、誰かがその値の扱いを決めたことを示します。",
+                "Add a row for it, or mark the value `default` in the declaration. For a value a contribution adds, have a contribution add its row to the open table, or put `default` on the `extend` line. `default` is a signature saying that falling through to the default row is what is meant — that someone decided how it is treated."
             ),
             X_E033,
-            &["E032", "W111", "E101"],
+            &["E032", "W111", "E101", "E067"],
         )
-        .with_files(TIER_PROTO),
+        .with_files(TIER_PROTO)
+        .also_with(tr!("寄与が足した値（`extend`）", "A value a contribution adds (`extend`)"), X_E033_ADDED, E033_BASE),
         err(
             "E034",
             tr!("行ラベルが二度あります", "A row label appears twice"),
@@ -2404,20 +2556,21 @@ pub fn ledger() -> Vec<Entry> {
         ),
         err(
             "E040",
-            tr!("準用する元の規則が、書いてあるハッシュと違います", "The callee differs from its pinned digest"),
+            tr!("固定した元のファイルが、書いてあるハッシュと違います", "A file relied on differs from its pin"),
             tr!(
-                "`apply` の見出しに `sha256:…` が無いとき、または書いてあるハッシュと、いま隣にある元の規則のファイルのハッシュが違うとき。元の規則が改正されれば、それを準用するこの規則の答えも変わっています。ハッシュを書いておかないと、その変化を誰も承認しないまま通ってしまいます。",
-                "The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it."
+                "`apply` の見出しに固定が無いとき、または書いてある固定と、いま隣にある元の規則が違うとき。固定は `meaning:…`（元の規則の行と宣言から、コメント、`description`、出典の引用を除いたもの）で、前に書いた `sha256:…`（ファイルのバイト列）もそのまま読みます。元の規則の行が改正されれば、それを準用するこの規則の答えも変わっています。寄与のファイルの `to` と `after` の `signature:…` が無いとき、合わないときも同じです。こちらは足す先の形（名前、入力と出力、開いた値と開いた出力、開いた列挙と塊、寄与が読む名前の宣言）で、元の行やコメントを直しても落ちず、形が変わると、何が変わったかを言います（リポジトリの履歴に固定したときの版があれば）。固定を書いておかないと、その変化を誰も承認しないまま通ってしまいます。",
+                "An `apply` heading carries no pin, or the pin differs from the callee beside the rule. The pin is `meaning:…` — the callee's rows and declarations with its comments, `description` and citations left out — and a `sha256:…` written before (the file's bytes) is still read. When the callee's rows are amended, the answers of the rule that applies it change too. The same holds for the `signature:…` on a contribution's `to` and `after` lines, missing or not matching: it is the shape of the file added to (its name, inputs and outputs, open values and outputs, open enums and blocks, and the declarations of the names the contribution reads), so a row or a comment of that file does not move it, and when the shape moves the diagnostic says what moved (when the repository's history holds the version it was pinned at). Without a pin, the change passes with nobody approving it."
             ),
             tr!(
-                "`rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、それでよければ、見出しを `fix.text` のとおり書き換えるか `rulec source pin <file.rule>` を実行してハッシュを書き直してください。",
-                "See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again."
+                "`rulec diff <古い版> <新しい版>` でこの規則の答えが何件いくら動くかを見て、それでよければ、見出しを `fix.text` のとおり書き換えるか `rulec source pin <file.rule>` を実行して固定を書き直してください。寄与なら、寄与を新しい形で読み直してから、`rulec source pin <寄与のファイル>` で `signature:` を書き直してください。",
+                "See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again. For a contribution, read it against the new shape, then rewrite the `signature:` with `rulec source pin <contribution>`."
             ),
             X_E040,
-            &["E037", "E038", "E044"],
+            &["E037", "E038", "E044", "E067"],
         )
         .with_files(CALLEE)
-        .english_with_files(X_E040_EN, CALLEE_EN),
+        .english_with_files(X_E040_EN, CALLEE_EN)
+        .also_with(tr!("寄与の `signature:` が足す先の形と違う", "A contribution's `signature:` differs from the shape it adds to"), X_E040_SHAPE, E033_BASE),
         err(
             "E041",
             tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
@@ -2470,18 +2623,19 @@ pub fn ledger() -> Vec<Entry> {
             "E044",
             tr!("その規則は準用できません", "That rule cannot be applied"),
             tr!(
-                "元の規則が読めないとき、元の規則が `check` を通らないとき（注に、出たコードが並びます）、元の規則自身が `apply` を持つとき、元の規則が並びを順に見ていく規則（`elements`、`fold`、`count`）のとき、元の規則の表や節が元の規則自身の列挙を出力に持つとき。通らない規則を準用しても、通らない規則になるだけです。準用の準用は、一段の準用に書き直す必要があります。",
-                "The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level."
+                "元の規則が読めないとき、元の規則が `check` を通らないとき（注に、出たコードが並びます）、準用が輪になっているとき（ある規則を準用する規則を、その規則が、直接かほかの規則を通して準用している。輪の全部のファイルを挙げます）。通らない規則を準用しても、通らない規則になるだけで、自分を通して自分を読む規則は答えが決まりません。準用している規則の準用、並びをたどる規則の準用、元の規則の列挙を出す表の準用はできます。",
+                "The callee cannot be read, does not pass `check` (the codes are listed), or the applies go round: a rule applies a rule that applies it back, directly or through others (every file of the ring is listed). A broken rule expanded is a broken rule, and a rule that reads itself through itself has no answer. A rule that applies another, one that walks a sequence, and one whose tables produce its own enums can all be applied."
             ),
             tr!(
-                "先に元の規則を直してください。`apply` を持つ規則や、並びを順に見ていく規則を準用するなら、その中身を、この規則の中に書いてください。",
-                "Fix the callee first. To apply a rule that itself applies another or walks a sequence, write its expansion into this rule."
+                "先に元の規則を直してください。輪なら、どこか一つの `apply` を外してください。",
+                "Fix the callee first. For a ring, take one of the `apply` lines out."
             ),
             X_E044,
             &["E040", "E041"],
         )
         .with_files(BROKEN_CALLEE)
-        .english_with_files(X_E044_EN, BROKEN_CALLEE_EN),
+        .english_with_files(X_E044_EN, BROKEN_CALLEE_EN)
+        .also_with(tr!("準用の輪", "Applies that go round"), X_E044_RING, E044_OTHER),
         err(
             "E045",
             tr!("出力を共有する表に、出力の列が二つ以上あります", "A table that shares an output has two or more output columns"),
@@ -3810,6 +3964,64 @@ pub fn ledger() -> Vec<Entry> {
             X_W131,
             &["W129", "E108"],
         ),
+        err(
+            "E067",
+            tr!("寄与の形が違います", "A contribution is not shaped as one"),
+            tr!(
+                "見出しが `contribution` のファイルが、寄与として読めないとき。`to` の行が無い、二行ある、足す先が読めないか check を通らない。`open` の付いていない列挙に `extend` で値を足す、足す先の列挙が別の `enums` のファイルのもの、ある値を二度足す、順序のある列挙に `after` の無い値を足す。`into` の先が開いた値でない、項がどこにも宣言されていないか開いた値より下で決まる。`open` の付いていない出力を決める表や節を足す、開いた出力を決める表や節が、その出力の最後の定義より下の名前を読む。`open` の付いていない前提の塊に行を足す、元の値の行を足す。`after` の輪、二つの寄与が同じ名前、寄与に書けない行（出力、`result`、`apply`、機械、たどる並び、列挙、取り込み、出典、契約、制約、確率の主張）、乱数にした入力。",
+                "A file headed `contribution` cannot be read as one. Its `to` line is missing or written twice, or the file it names cannot be read or does not pass check. An `extend` adds a value to an enum not marked `open`, to an enum another `enums` file owns, a value the enum has, or a value with no `after` to an ordered enum. An `into` names something that is not an open value, or a term that is declared nowhere or is decided below the open value. A table or clause decides an output no definition opens, or one of an open output reads a name below the output's last definition. Lines are added to a `prerequisites` block not marked `open`, or a line of one of the block's own values. The `after` lines go round, two contributions share a name, the file holds a line a contribution cannot (outputs, `result`, `apply`, a machine, a sequence it walks, enums, imports, sources, contracts, constraints, claims of chances), or an input is drawn at random."
+            ),
+            tr!(
+                "寄与が足せるのは、足す先が `open` で開いた場所だけです。開いていなければ、足す先の作り手に開いてもらうか、`apply` で読んで自分の規則を書いてください。注に、どこに足せるかが出ます。",
+                "A contribution adds only to the places the file it adds to opens with `open`. Where it does not, ask its author to open it, or read it with `apply` and write a rule of your own. The notes say where it can add."
+            ),
+            X_E067,
+            &["E068", "E040", "E033", "E131"],
+        )
+        .with_files(E067_BASE),
+        err(
+            "E068",
+            tr!("開いた値の形が違います", "An open value is not shaped as one"),
+            tr!(
+                "`open` の行に合わせ方（`combine sum`・`product`・`max`・`min`）が無いとき、範囲が無いとき、`max` と `min` に `empty` が無いとき、型が合わせ方に合わないとき（足すのは数・お金・量・率、掛けるのは数と率、`max` と `min` はそれに温度と音量）、オプショナルにしたとき、項が値の刻みより細かい刻みのとき。範囲は、寄与を全部合わせても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されます。",
+                "An `open` line has no way of combining (`combine sum`, `product`, `max` or `min`), no range, or no `empty` for `max` and `min`; its type is not one the way of combining puts together (a sum takes numbers, money, quantities and rates, a product numbers and rates, `max` and `min` those and temperatures and sound levels); it is optional; or a term is on a finer step than the value. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it."
+            ),
+            tr!(
+                "`open <名前> : <型> combine sum|product|max|min [empty <値>] range >=… <=…` の形にしてください。`empty` は、項が無いときの答えで、`max` ならいちばん小さい答え（`min` ならいちばん大きい答え）として合わさります。細かい項は、値の刻みに丸めてから足してください。",
+                "Write it `open <name> : <type> combine sum|product|max|min [empty <value>] range >=… <=…`. `empty` is the answer when there is no term, and it takes part as the smallest answer for `max` (the largest for `min`). Round a finer term to the value's step before adding it."
+            ),
+            X_E068,
+            &["E067", "E131"],
+        ),
+        err(
+            "E131",
+            tr!("合わせた値が、宣言した範囲を出ます", "A value put together leaves the range it declares"),
+            tr!(
+                "開いた値の項（規則の項と、寄与が足した項）を合わせ方どおりに合わせた値の区間が、`open` の行の範囲を出るとき。注に、項ごとの区間と、どの寄与の項かと、範囲の外にする入力の例が出ます。範囲は、どの寄与が来ても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されているので、範囲を出た値には、検査されていない答えが返ります。",
+                "The interval of an open value's terms — the rule's and those contributions add — put together as its `combine` says, leaves the range on the `open` line. The notes give each term's interval, the contribution each comes from, and an input that takes the value out of the range. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it; a value outside it would get an answer nothing checked."
+            ),
+            tr!(
+                "範囲を広げるか（下の表は、広げた範囲で検査し直されます）、寄与が足す項を狭めてください。どちらにするかは業務の判断なので、`fix.text` はありません。",
+                "Widen the range (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision, so there is no `fix.text`."
+            ),
+            X_E131,
+            &["E068", "E112", "E067"],
+        )
+        .with_files(E131_BASE),
+        warn(
+            "W132",
+            tr!("開いた値の項が、合わせた値を変えません", "A term of an open value changes nothing"),
+            tr!(
+                "開いた値の項が、どの値を取っても合わせた値を変えられないとき。`max` で項の値が全部 `empty` の値以下のとき、`min` で全部 `empty` の値以上のとき、`sum` でいつも 0 のとき、`product` でいつも 1 のとき。`max` と `min` の `empty` は、項が無いときだけの値ではなく、いつも合わせに加わる出発の値なので、上限を `max` で書くと、項は黙って効かなくなります。寄与が足した項でも、この規則の項でも言います。",
+                "A term of an open value cannot move the value whatever it takes: in a `max`, every value of the term is at or below the `empty` value; in a `min`, at or above it; in a `sum`, it is always 0; in a `product`, always 1. The `empty` value of `max` and `min` is the value the terms start from, and it always takes part, not only when there is no term, so a cap written as a `max` leaves its terms with nothing to do, in silence. It is said of a term a contribution adds and of a term of the rule alike."
+            ),
+            tr!(
+                "`max` の項が上限を決めるなら、合わせ方を `min` にしてください（`min` の項が下限を決めるなら `max` に）。`empty` を越える（`min` なら下回る）ことがある項なら、その値を書いてください。要らない項なら外してください。",
+                "If a term of a `max` sets a cap, put the value together with `min` (and with `max` if a term of a `min` sets a floor). If the term can pass the `empty` value — above it for a `max`, below it for a `min` — write the values that do. If it is not needed, take it out."
+            ),
+            X_W132,
+            &["E068", "E131"],
+        ),
     ]
 }
 
@@ -3849,7 +4061,12 @@ pub fn render_text(e: &Entry) -> String {
     }
     for a in &e.also {
         o.push_str(&format!("\n{}\n", a.what));
-        o.push_str(&indent(a.repro(crate::i18n::current()).example));
+        let r = a.repro(crate::i18n::current());
+        o.push_str(&indent(r.example));
+        for (name, text) in r.files {
+            o.push_str(&tr!("\n隣に置くファイル `{name}`\n", "\nThe file `{name}` beside it\n"));
+            o.push_str(&indent(text));
+        }
     }
     if !e.related.is_empty() {
         o.push_str(&tr!("\n関係するコード: {}\n", "\nRelated codes: {}\n", e.related.join(" ")));
@@ -3883,8 +4100,15 @@ pub fn render_markdown(e: &Entry) -> String {
     }
     for a in &e.also {
         o.push_str(&format!("\n**{}**:\n\n```rule\n", a.what));
-        o.push_str(a.repro(crate::i18n::current()).example);
+        let r = a.repro(crate::i18n::current());
+        o.push_str(r.example);
         o.push_str("```\n");
+        for (name, text) in r.files {
+            o.push_str(&tr!("\n隣に置く `{name}`:\n\n", "\nWith `{name}` beside it:\n\n"));
+            o.push_str("```rule\n");
+            o.push_str(text);
+            o.push_str("```\n");
+        }
     }
     if !e.related.is_empty() {
         let links: Vec<String> =

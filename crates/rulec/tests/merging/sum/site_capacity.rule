@@ -1,0 +1,35 @@
+rule site_capacity(site_capacity) v1
+description "The extra capacity a storage site gets from its equipment: every piece adds its own, and a piece added by another file adds too"
+
+enum floor_kind(floor_kind) = ground(ground) | upper(upper) | cellar(cellar)
+
+inputs
+  has_shelving(has_shelving) : bool
+  has_racking(has_racking)   : bool
+  floor(floor)               : floor_kind
+
+outputs
+  extra(extra) : number  round down(1)
+
+table from_shelving
+policy unique
+| has_shelving | -> shelving_extra : number |
+| true         | 10                         |
+| false        | 0                          |
+
+table from_racking
+policy unique
+| has_racking | floor  | -> racking_extra : number |
+| true        | ground | 20                        |
+| true        | upper  | 10                        |
+| true        | cellar | 0                         |
+| false       | -      | 0                         |
+
+open extra : number  combine sum  range >=0 <=100
+  shelving_extra
+  racking_extra
+
+examples
+| has_shelving | has_racking | floor  | -> extra |
+| true         | true        | ground | 30       |
+| false        | true        | cellar | 0        |

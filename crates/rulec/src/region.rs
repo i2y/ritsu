@@ -1163,7 +1163,9 @@ impl TableRegion {
                     }
                 }
                 Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number => {
-                    let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone());
+                    // An open value's axis runs over its declared range, as an input's does
+                    // (§15.227): the contributions may bring it anywhere inside.
+                    let range = inputs.iter().find(|i| i.name.text == *name).and_then(|i| i.range.clone()).or_else(|| f.open_value(name).and_then(|o| o.range.clone()));
                     let (mut b, mut lo, mut hi) = num_bounds(&t.rows, ci, &ty, &range);
                     // A count is bounded by construction — never negative, never longer than
                     // the sequence the guard caps — and it declares that bound (§15.58). The
@@ -1261,7 +1263,8 @@ impl TableRegion {
             .zip(&axes)
             .map(|(n, a)| {
                 let numeric = matches!(a, Axis::Num { date: false, .. });
-                let a_define = f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == *n));
+                // An open value is read over its declared range, not over what its terms reach.
+                let a_define = f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == *n)) && f.open_value(n).is_none();
                 if !numeric || !a_define {
                     return None;
                 }
@@ -2211,7 +2214,7 @@ pub fn gap_inputs(f: &RuleFile, c: &Checked, covered: &dyn Fn(&str, usize) -> bo
     if f.walks() || !f.elements.is_empty() {
         return out;
     }
-    let computed = |col: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
+    let computed = |col: &str| f.open_value(col).is_none() && f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
     for set in &c.sets {
         let t = &set.table;
         let asks: Vec<usize> = (0..t.rows.len())
@@ -2795,7 +2798,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
         .position(|it| matches!(it, Item::Table(x) if x.name.as_ref().is_some_and(|n| n.text == set.eval_at)))
         .map(|k| crate::types::stages(f).at(k));
     if stage_of_set.is_none_or(|s| s == crate::types::Stage::BEFORE) {
-        let computed = |col: &str| f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
+        let computed = |col: &str| f.open_value(col).is_none() && f.items.iter().any(|it| matches!(it, Item::Derived(d) if d.name.text == col) || matches!(it, Item::Define(d) if d.name.text == col));
         let asks: Vec<(usize, Vec<String>)> = (0..t.rows.len())
             .filter(|i| !dead_rows.contains(i) && set.applied[set.member_of[*i]].is_none())
             .filter_map(|i| {
@@ -4905,6 +4908,9 @@ pub struct CertRow {
     /// cell of the row is on this line; a `clause` whose `when` names no column has no
     /// cell at all, and this is the only thing that says where it is (§15.99).
     pub line: usize,
+    /// The file the row is written in, when it is not the rule's own: a row a contribution adds
+    /// (§15.231). Its spans are in that file, and the certificate pins it by its SHA-256.
+    pub file: Option<std::sync::Arc<crate::diag::SpanFile>>,
 }
 
 /// One cell, as the re-checker reads it.
@@ -5072,7 +5078,11 @@ impl TableRegion {
         let axes: Vec<CertAxis> = (0..self.axes.len())
             .map(|ai| CertAxis {
                 name: self.col_names[ai].clone(),
-                kind: if self.derived[ai].is_some() {
+                kind: if f.open_value(&self.col_names[ai]).is_some() {
+                    // An open value (§15.227): its range is declared, as an input's is, and what the
+                    // contributions bring stays inside it (E131, `opens` of the certificate).
+                    "open"
+                } else if self.derived[ai].is_some() {
                     "derived"
                 } else if self.is_define[ai] || f.items.iter().any(|it| matches!(it, Item::Define(d) if d.name.text == self.col_names[ai])) {
                     // A `define` of any type: a truth value and a number alike (§15.196). A
@@ -5151,6 +5161,7 @@ impl TableRegion {
                     })
                     .collect(),
                 origin: row.origin.clone().unwrap_or_else(|| t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default()),
+                file: if applied.get(ri).copied().unwrap_or(false) { None } else { row.span.file.clone() },
                 line: if applied.get(ri).copied().unwrap_or(false) { 0 } else { row.span.line },
                 spans: if applied.get(ri).copied().unwrap_or(false) {
                     Vec::new()

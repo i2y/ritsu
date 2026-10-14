@@ -1,0 +1,34 @@
+rule standing_decay_listed(standing_decay) v1
+description "The same answer the old way: the base applied, and two clauses taking precedence over its decay, the second over the first"
+
+inputs
+  score(score)     : number  range >=0 <=1000
+  resting(resting) : number  range >=0 <=100
+  hostile(hostile) : bool
+  strict(strict)   : bool
+  grace(grace)     : bool
+
+outputs
+  new_score(new_score) : number  round down(1)
+
+apply base = "standing.rule" meaning:042e1838b65290e3
+  score = score
+  resting = resting
+  hostile = hostile
+  new_score -> new_score
+
+define strict_rate : number = 2 * base:decay_rate
+
+clause strict_decay -> base:decay
+  when strict true and base:above >0
+  then strict_rate
+  overrides base:decay_now
+
+clause grace_cap -> base:decay
+  when grace true and strict true and base:above >0
+  then 12
+  overrides strict_decay
+
+examples
+| score | resting | hostile | strict | grace | -> new_score |
+| 50    | 20      | false   | true   | true  | 38           |

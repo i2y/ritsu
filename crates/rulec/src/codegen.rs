@@ -793,12 +793,28 @@ impl<'a> Gen<'a> {
         // A rule applied by this one is part of what was generated (§15.69): its path and the
         // digest the rule pinned, so the file says which callee it was made from.
         for a in &self.f.applies {
+            // The pin as written: `meaning:` from §15.230 on, `sha256:` before.
+            let pin = match (&a.meaning, &a.hash) {
+                (Some(m), _) => format!("meaning:{m}"),
+                (None, h) => format!("sha256:{}", h.as_deref().unwrap_or("")),
+            };
             h.push_str(&tr!(
-                "{comment} 準用: {} = {} (sha256:{})\n",
-                "{comment} Applies: {} = {} (sha256:{})\n",
+                "{comment} 準用: {} = {} ({pin})\n",
+                "{comment} Applies: {} = {} ({pin})\n",
                 a.name.text,
-                ritsu_emit::header::one_line(&a.path),
-                a.hash.as_deref().unwrap_or("")
+                ritsu_emit::header::one_line(&a.path)
+            ));
+        }
+        // The contributions merged into the rule (§15.231): the function is the rule with them,
+        // so the file says which ones, from where, at which shape and which bytes.
+        for m in &self.f.contributions {
+            h.push_str(&tr!(
+                "{comment} 寄与: {} = {} (signature:{}, sha256:{})\n",
+                "{comment} Contributions: {} = {} (signature:{}, sha256:{})\n",
+                m.name.text,
+                ritsu_emit::header::one_line(&crate::link::relative(&self.path, &m.file)),
+                m.signature.as_deref().unwrap_or(""),
+                &m.sha256[..16.min(m.sha256.len())]
             ));
         }
         // The documents the rule transcribes (§15.68): each law at the date it was read, with
@@ -10232,8 +10248,14 @@ impl Gen<'_> {
                     .str("name", &a.name.text)
                     .str("path", &a.path)
                     .str("sha256", a.hash.as_deref().unwrap_or(""))
+                    .opt_str("meaning", a.meaning.as_deref())
                     .finish()
             }).collect::<Vec<_>>()))
+            // The contributions merged into the function (§15.231), each with the inputs it added,
+            // and the open values with where each term comes from. Written only for a rule that has
+            // them, so no other description changes.
+            .opt_raw("contributions", (!self.f.contributions.is_empty()).then(|| crate::link::contributions_json(self.f, &self.path)))
+            .opt_raw("opens", (!self.f.opens.is_empty()).then(|| crate::link::opens_json(self.f)))
             // Where the caller's object holds each input, and the one function per language
             // that reads it (§15.125). Absent when the rule takes its inputs as they come.
             .raw("projection", self.projection_json())

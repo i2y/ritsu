@@ -1,0 +1,15 @@
+contribution regional_campaign(regional_campaign) v1
+description "A campaign of the north region adds 7 dollars off to `discount`, the rule's output, which is not open: the stackable discounts are where it adds (E067)"
+to "../corpus/order_discount.rule" signature:89535e4a11dc1aed
+
+inputs
+  north(north) : bool
+
+table campaign_parts
+policy unique
+| north | -> campaign_off : money[USD] |
+| true  | 7USD                         |
+| false | 0USD                         |
+
+into discount
+  campaign_off

@@ -1,0 +1,12 @@
+contribution garden_tax(garden_tax) v1
+description "The sales tax rate of garden supplies"
+to "../../product_tax.rule" signature:287cfca65efc4c68
+after "garden_kind.rule" signature:650e995b6929bca3
+
+clause garden_tax_rate -> tax_rate
+  when item_kind garden
+  then 5%
+
+examples
+| item_kind | -> tax_rate |
+| garden    | 5%          |

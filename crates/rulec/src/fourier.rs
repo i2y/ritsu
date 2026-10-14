@@ -251,7 +251,9 @@ fn ground_in(seed: &[String], want: &Ty, f: &RuleFile, c: &Checked) -> Option<Gr
     let expr_of = |n: &str| -> Option<(&Expr, bool)> {
         f.items.iter().find_map(|it| match it {
             crate::ast::Item::Derived(d) if d.name.text == n => Some((&d.expr, false)),
-            crate::ast::Item::Define(d) if d.name.text == n => Some((&d.expr, true)),
+            // An open value is not its terms' equation: the contributions change the terms, and
+            // the rule is checked over its declared range whatever they are (§15.227).
+            crate::ast::Item::Define(d) if d.name.text == n && f.open_value(n).is_none() => Some((&d.expr, true)),
             _ => None,
         })
     };

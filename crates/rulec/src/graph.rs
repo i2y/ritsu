@@ -160,6 +160,22 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
                 v.reads = names(&d.expr);
                 vals.push(v);
             }
+            // An open value (§15.227): its terms put together, each from where it is written.
+            Item::Define(d) if f.open_value(&d.name.text).is_some() => {
+                let o = f.open_value(&d.name.text).expect("checked above");
+                let mut v = val(&d.name, "value");
+                let terms: Vec<String> = o.terms.iter().map(|t| t.name.text.clone()).collect();
+                v.by.push(
+                    Obj::new()
+                        .str("kind", "open")
+                        .str("combine", o.combine.as_ref().map(|(k, _)| k.word()).unwrap_or(""))
+                        .opt_str("empty", o.empty.as_ref().map(|(l, _)| l.src()).as_deref())
+                        .raw("terms", crate::json::strs(&terms))
+                        .finish(),
+                );
+                v.reads = names(&d.expr);
+                vals.push(v);
+            }
             Item::Define(d) => {
                 let mut v = val(&d.name, "value");
                 v.by.push(by_expr("define", &d.name, d.name.span.line));

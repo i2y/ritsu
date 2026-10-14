@@ -64,3 +64,7 @@ Claude利用料.rule	claude_api_usage_fee.rule
 くじの景品.rule	prize_lottery.rule
 案件の振り分け.rule	case_routing.rule
 抽選の特典.rule	reward_box.rule
+注文の値引き.rule	order_discount.rule
+商品の料金.rule	product_price.rule
+商品の税.rule	product_tax.rule
+商品の配送.rule	product_shipping.rule

@@ -62,6 +62,30 @@ examples
 | 10000USDc | true          | 548USDc |
 ```
 
+規則は、ほかのファイルが足せる場所を残しておけます。項を合わせて決まる値、列挙、表です。`contribution` のファイルがそこに足します。キャンペーンなら値引きを、商品ラインなら商品の種類とその上乗せを足し、頼る形を固定するので、その形が変われば止まります。読み込むものの一覧はありません。`ritsu check` と `ritsu gen` は、プロジェクトの寄与を、それが届く規則に合わせ、規則をそれだけでも合わせたものでも検査し、寄与が列挙に足した値の行を、その列挙を読むどの表にも求めます。
+
+```rule
+contribution garden_price(garden_price) v1
+description "The markup of garden supplies"
+to "../product_price.rule" signature:d5379dca48aa13d2
+after "garden_kind.rule" signature:650e995b6929bca3
+
+clause garden_markup -> markup
+  when item_kind garden
+  then 15%
+```
+
+```console
+$ cd crates/ritsu/tests/projects/product_line
+$ ritsu check --lang ja
+ok rules/contrib/garden_kind.rule（rules/shared/product_kinds.rule への寄与）
+ok rules/contrib/garden_price.rule（rules/product_price.rule への寄与）
+ok rules/product_price.rule（寄与 2 件: rules/contrib/garden_price.rule, rules/contrib/garden_kind.rule）
+ok rules/shared/product_kinds.rule（寄与 1 件: rules/contrib/garden_kind.rule）
+pricing.flow: 検査を通りました
+ritsu check: ファイル 5 個（rulec 4、dandori 1）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
 ### dandori：ワークフローの骨組み
 
 ワークフローには、何をどの順に呼ぶか、リトライとタイムアウト、そして呼び出しが外の案件（注文、支払い、予約）をどう動かすかを書きます。`dandori check` は、すべての道筋で、引き渡さない案件を、手を付けないか終えるかのどちらかで残し、途中で放り出さないことを示します。同じファイルが、Temporal（TypeScript、Python、Go）、Step Functions、Argo Workflows、Lambda の durable functions、pydantic-graph のコードになり、どれも dandori の参照インタプリタと突き合わせて確かめます。

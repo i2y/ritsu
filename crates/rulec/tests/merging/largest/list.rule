@@ -1,0 +1,42 @@
+rule mentor_bonus_listed(mentor_bonus) v1
+description "The same answer the old way: the walk applied, its answer and the pairing put together by the largest, the team size added"
+
+inputs
+  grade(grade)         : number  range >=0 <=5
+  paired(paired)       : bool
+  teammates(teammates) : number  range >=0 <=6
+
+elements mentors(mentors)
+  mentor_grade(mentor_grade) : number  range >=0 <=5
+
+outputs
+  bonus(bonus) : rate[step 1%]  round down(1%)
+
+apply base = "mentor_bonus.rule" meaning:2516e30ca6006de3
+  grade = grade
+  mentors = mentors
+  bonus -> from_mentors
+
+table pairing_value
+policy unique
+| paired | -> pairing_rate : rate[step 1%] |
+| true   | 25%                             |
+| false  | 0%                              |
+
+table size_value
+policy unique
+| teammates | -> size_rate : rate[step 1%] |
+| <=1       | 0%                           |
+| 2         | 10%                          |
+| 3         | 20%                          |
+| >=4       | 30%                          |
+
+define bonus : rate = max(from_mentors, pairing_rate) + size_rate
+
+sequence one_mentor
+| mentor_grade |
+| 2            |
+
+examples
+| grade | paired | teammates | mentors    | -> bonus |
+| 0     | true   | 3         | one_mentor | 70%      |

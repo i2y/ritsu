@@ -1,0 +1,12 @@
+contribution 園芸の料金(gardening_price) v1
+description "園芸用品の上乗せ"
+to "../../商品の料金.rule" signature:15ffd46548fd6e16
+after "園芸の種類.rule" signature:a2c6efaa2b1b20ff
+
+clause 園芸の上乗せ -> 上乗せ
+  when 商品の種類 園芸
+  then 15%
+
+examples
+| 商品の種類 | 定価  | -> 料金 |
+| 園芸       | 20USD | 23USD   |

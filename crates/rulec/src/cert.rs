@@ -117,6 +117,9 @@ fn values_json(f: &RuleFile, c: &Checked) -> Vec<String> {
     for it in &f.items {
         match it {
             Item::Derived(d) => named.push((&d.name, &d.expr, "derive")),
+            // An open value is stated in `opens`, with its terms and where each comes from; its
+            // range in `ranges` is declared, as an input's is (§15.227).
+            Item::Define(d) if f.open_value(&d.name.text).is_some() => {}
             Item::Define(d) => named.push((&d.name, &d.expr, "define")),
             _ => {}
         }
@@ -213,7 +216,7 @@ fn source_json(src: &str, spans: &[Option<(usize, usize, usize)>], tests: &[Cert
 }
 
 pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> String {
-    let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src))).collect();
+    let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src, rule_path))).collect();
     let contracts: Vec<String> = crate::projection::contract_certificates(f, c, rule_path).iter().map(contract_json).collect();
     let mut ranges = Obj::new();
     let mut names: Vec<&String> = c.ranges.keys().collect();
@@ -350,7 +353,46 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         // The claims about the chances when the random inputs are drawn, and how each was counted
         // (§15.224). Written only for a rule that has them, so no other certificate changes.
         .opt_raw("chances", crate::chances::certificate_json(f, c))
+        // The open values (§15.227): each with how its terms are put together, the value they start
+        // from, and every term with where it comes from. Its range in `ranges` is the promise the
+        // tables below are checked over; that the terms stay inside it is the claim. Written only
+        // for a rule that has one.
+        .opt_raw("opens", opens_json(f, c, rule_path))
         .finish()
+}
+
+/// The `opens` of the certificate (§15.227), on the scale of `ranges`.
+fn opens_json(f: &RuleFile, c: &Checked, rule_path: &str) -> Option<String> {
+    if f.opens.is_empty() {
+        return None;
+    }
+    let os: Vec<String> = f
+        .opens
+        .iter()
+        .map(|o| {
+            let ty = c.ty_of(&o.name.text).unwrap_or(crate::types::Ty::Unknown);
+            let empty = o.empty.as_ref().and_then(|(l, _)| match l {
+                crate::ast::Lit::Num(n) => crate::types::lit_value_in_pub(n, &ty).map(|v| rat(&v)),
+                _ => None,
+            });
+            let terms: Vec<String> = o
+                .terms
+                .iter()
+                .map(|t| {
+                    let from = t.from.as_ref().map(|(name, file)| Obj::new().str("contribution", name).str("file", &crate::link::relative(rule_path, file)).finish());
+                    Obj::new().str("name", &t.name.text).opt_raw("from", from).finish()
+                })
+                .collect();
+            Obj::new()
+                .str("name", &o.name.text)
+                .str("type", ty.to_string())
+                .str("combine", o.combine.as_ref().map(|(k, _)| k.word()).unwrap_or(""))
+                .raw("empty", empty.map(|e| crate::json::quote(&e)).unwrap_or_else(|| "null".into()))
+                .raw("terms", arr(&terms))
+                .finish()
+        })
+        .collect();
+    Some(arr(&os))
 }
 
 /// Each `max` and `min` of the rule (§15.219): its name, which of the two it is, the sequence it
@@ -1906,7 +1948,7 @@ fn contract_json(k: &crate::projection::ContractCert) -> String {
         .finish()
 }
 
-fn table_json(t: CertTable, src: &str) -> String {
+fn table_json(t: CertTable, main_src: &str, rule_path: &str) -> String {
     let axes: Vec<String> = t
         .axes
         .iter()
@@ -1948,6 +1990,16 @@ fn table_json(t: CertTable, src: &str) -> String {
         .rows
         .iter()
         .map(|r| {
+            // A row a contribution adds is written in that file (§15.231): its cells are read there,
+            // and the row names the file from the rule's directory with its SHA-256.
+            let other_src;
+            let src: &str = match &r.file {
+                Some(fl) => {
+                    other_src = fl.lines.join("\n");
+                    &other_src
+                }
+                None => main_src,
+            };
             let accepts: Vec<String> = r.accepts.iter().map(|xs| arr(&xs.iter().map(|x| x.to_string()).collect::<Vec<_>>())).collect();
             let writes = arr(&r
                 .writes
@@ -1985,6 +2037,15 @@ fn table_json(t: CertTable, src: &str) -> String {
                 .raw("tests", arr(&r.tests.iter().map(cell_json).collect::<Vec<_>>()))
                 .str("origin", &r.origin)
                 .int("line", r.line as i128)
+                .opt_raw(
+                    "file",
+                    // The contribution's own names come into the rule as `<contribution>:<name>`, and the
+                    // file writes them without the prefix; the name says which prefix that is.
+                    r.file.as_ref().map(|fl| {
+                        let by = r.origin.split_once(':').map(|(c, _)| c.to_string()).unwrap_or_default();
+                        Obj::new().str("path", &crate::link::relative(rule_path, &fl.path)).str("sha256", &fl.sha256).str("contribution", &by).finish()
+                    }),
+                )
                 .raw("source", source_json(src, &r.spans, &r.tests))
                 .raw("accepts", arr(&accepts))
                 .raw(

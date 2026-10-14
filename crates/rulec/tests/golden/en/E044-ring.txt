@@ -1,0 +1,7 @@
+error[E044]: `retirement` cannot be applied: the applies go round (tests/mutants/m_e044ring.rule → tests/mutants/m_e044ring.rule)
+  --> tests/mutants/m_e044ring.rule:14 apply retirement
+   |
+14 | apply retirement = "m_e044ring.rule"  # Source: Article 31 (sketch)
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ A rule applies a rule that applies it back, directly or through others; no rule can read itself through itself. Take one of the `apply` lines out.

@@ -1,0 +1,20 @@
+contribution mezzanine(mezzanine) v1
+description "A mezzanine floor adds 15 on the ground floor"
+to "../site_capacity.rule" signature:db5e4557d7d786ef
+
+inputs
+  has_mezzanine(has_mezzanine) : bool
+
+table from_mezzanine
+policy unique
+| has_mezzanine | floor       | -> mezzanine_extra : number |
+| true          | ground      | 15                          |
+| true          | not: ground | 0                           |
+| false         | -           | 0                           |
+
+into extra
+  mezzanine_extra
+
+examples
+| has_shelving | has_racking | floor  | has_mezzanine | -> extra |
+| true         | true        | ground | true          | 45       |

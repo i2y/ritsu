@@ -1,0 +1,12 @@
+contribution garden_price(garden_price) v1
+description "The markup of garden supplies"
+to "../../product_price.rule" signature:d5379dca48aa13d2
+after "garden_kind.rule" signature:650e995b6929bca3
+
+clause garden_markup -> markup
+  when item_kind garden
+  then 15%
+
+examples
+| item_kind | list_price | -> price |
+| garden    | 20USD      | 23USD    |

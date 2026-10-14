@@ -11,7 +11,7 @@ inputs
 outputs
   part_time_allowance : money[JPY]  round down(1JPY)
 
-apply retirement = "retirement_pay.rule" sha256:b3c4704669a8f8ad  # Source: Article 31 (sketch)
+apply retirement = "retirement_pay.rule" meaning:aadc7468b292ff52  # Source: Article 31 (sketch)
   years = tenure
   reason = end_reason with term_end -> retirement_age, resignation -> voluntary
   base_pay = monthly_pay

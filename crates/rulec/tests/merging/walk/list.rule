@@ -1,0 +1,55 @@
+rule fleet_upkeep_listed(fleet_upkeep) v1
+description "The same answer written out by hand: the surcharge in each vehicle's cost, the green allowance in the depot's"
+
+enum vehicle_kind(vehicle_kind) = van(van) | truck(truck) | bike(bike)
+
+inputs
+  depot_size(depot_size)   : number  range >=1 <=50
+  green_depot(green_depot) : bool
+
+elements vehicles(vehicles)
+  kind(kind) : vehicle_kind
+  age(age)   : number  range >=0 <=30
+
+outputs
+  upkeep(upkeep) : money[USD]  round down(1USD)
+
+table base_cost_of
+policy unique
+| kind  | -> base_cost : money[USD] |
+| van   | 120USD                    |
+| truck | 300USD                    |
+| bike  | 20USD                     |
+
+table age_surcharge
+policy unique
+| age  | -> surcharge : money[USD] |
+| <10  | 0USD                      |
+| >=10 | 50USD                     |
+
+define vehicle_cost : money[USD] = base_cost + surcharge
+
+sum total(total) over vehicles of vehicle_cost  range >=0USD <=20000USD
+
+table allowance_of
+policy unique
+| depot_size | -> depot_allowance : money[USD] |
+| <=10       | 100USD                          |
+| >10        | 300USD                          |
+
+table green_allowance
+policy unique
+| green_depot | -> green_extra : money[USD] |
+| true        | 100USD                      |
+| false       | 0USD                        |
+
+define upkeep : money[USD] = max(0USD, total - (depot_allowance + green_extra))
+
+sequence two_vans
+| kind | age |
+| van  | 3   |
+| van  | 12  |
+
+examples
+| depot_size | green_depot | vehicles | -> upkeep |
+| 5          | true        | two_vans | 90USD     |

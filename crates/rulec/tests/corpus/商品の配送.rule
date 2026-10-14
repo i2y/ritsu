@@ -1,0 +1,23 @@
+rule 商品の配送(goods_delivery) v1
+description "商品一点の送り方。おもちゃは大型の荷物、ほかは普通の荷物で送る"
+
+import enum 種類 from "shared/商品の種類.rule"
+
+enum 荷物(parcel) = 普通(standard) | 大型(bulky)
+
+inputs
+  商品の種類(item_kind) : 種類
+
+outputs
+  送り方(ships_as) : 荷物
+
+table 荷物表
+policy first
+| 商品の種類 | -> 送り方 : 荷物 |
+| おもちゃ   | 大型             |
+| -          | 普通             |
+
+examples
+| 商品の種類 | -> 送り方 |
+| おもちゃ   | 大型      |
+| 本         | 普通      |

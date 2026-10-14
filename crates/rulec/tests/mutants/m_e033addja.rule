@@ -1,0 +1,5 @@
+contribution アプリの経路(app_route) v1
+description "アプリからの注文。自分の行も `default` も無いまま経路を足したので、経路の分の `-` の行が黙って決める（E033）"
+to "../corpus/注文の値引き.rule" signature:7954896efe5908c5
+
+extend 経路 with アプリ(app)

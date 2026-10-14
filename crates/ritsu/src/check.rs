@@ -239,6 +239,9 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
         geas::proc::stop_groups_on_signals();
     }
     let joined = Joined::with_budget(budget);
+    // The project's contributions are merged into the rules they reach (rulec's §15.231), for the
+    // checks of the files and for what the checks across the languages ask of a rule.
+    joined.rulec.set_project(project.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect());
     let units = project.check(&joined, lang);
     let crossed = ritsu_cross::check(&project, &joined, lang);
     let report = Report { project: &project, units, ours: crossed.findings, borders: crossed.borders };

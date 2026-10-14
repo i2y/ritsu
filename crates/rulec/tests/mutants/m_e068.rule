@@ -1,0 +1,52 @@
+rule order_discount(order_discount) v1
+description "The discount of an order. The stackable discounts are open with no range, so nothing says how far a campaign may move them, nor over what the tables below them are checked (E068)"
+
+enum channel(channel) = web(web) | store(store) default | phone(phone) default  open
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=5000USD
+  member(member)     : bool
+  coupon(coupon)     : bool
+  via(via)           : channel
+
+outputs
+  discount(discount) : money[USD]  round down(1USD)
+
+table member_part
+policy unique
+| member | -> member_off : money[USD] |
+| true   | 5USD                       |
+| false  | 0USD                       |
+
+table channel_part
+policy first
+| via | -> channel_off : money[USD] |
+| web | 3USD                        |
+| -   | 0USD                        |
+
+table coupon_part
+policy unique
+| coupon | -> coupon_off : money[USD] |
+| true   | 10USD                      |
+| false  | 0USD                       |
+
+# Discounts that stack: every one applies.
+open stackable : money[USD]  combine sum
+  member_off
+  channel_off
+
+# Discounts that do not stack: only the largest applies.
+open exclusive : money[USD]  combine max  empty 0USD  range >=0USD <=60USD
+  coupon_off
+
+# The cap on the whole discount: the lowest any campaign sets, 50 dollars when none does.
+open cap : money[USD]  combine min  empty 50USD  range >=0USD <=50USD
+
+define discount : money[USD] = min(min(stackable + exclusive, cap), subtotal)
+
+examples
+| subtotal | member | coupon | via   | -> discount |
+| 200USD   | true   | true   | web   | 18USD       |
+| 200USD   | false  | false  | store | 0USD        |
+| 12USD    | true   | true   | web   | 12USD       |
+| 200USD   | true   | false  | phone | 5USD        |

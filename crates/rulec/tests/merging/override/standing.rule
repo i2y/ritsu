@@ -1,0 +1,34 @@
+rule standing_decay(standing_decay) v1
+description "How a customer's standing score moves in a month: down toward the resting point by the decay rate"
+
+inputs
+  score(score)     : number  range >=0 <=1000
+  resting(resting) : number  range >=0 <=100
+  hostile(hostile) : bool
+
+outputs
+  new_score(new_score) : number  round down(1)
+
+table base_rate
+policy unique
+| hostile | -> rate : number |
+| true    | 15               |
+| false   | 10               |
+
+define decay_rate : number = rate
+
+derive above : number = score - resting  range >=-100 <=1000
+
+table decay_now open
+policy unique
+| above | -> decay : number |
+| >0    | decay_rate        |
+| <=0   | 0                 |
+
+define new_score : number = max(resting, score - decay)
+
+examples
+| score | resting | hostile | -> new_score |
+| 50    | 20      | false   | 40           |
+| 50    | 20      | true    | 35           |
+| 10    | 20      | false   | 20           |

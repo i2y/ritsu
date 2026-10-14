@@ -1,0 +1,9 @@
+error[E033]: The added value app has neither a row of table channel_part nor `default`
+  --> tests/corpus/order_discount.rule:25 table channel_part
+   |
+25 | | -   | 0USD                        |
+   |   ^ app falls to this row in silence
+   |
+ app is the value app_channel adds with `extend channel with app` (tests/mutants/m_e033add.rule).
+ The rows that take app: channel_part 2
+ No row of this table names app, so its answer comes in silence from a row written for other values. If the table is open, a contribution can add a row for app; otherwise put `default` on the `extend` line to say that this answer is meant.

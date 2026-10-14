@@ -68,6 +68,19 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     };
     // the flow, checked with every language it reads joined, as `ritsu dandori` checks it
     let j = Joined::new();
+    // The contributions given with `--with` are merged into the rules the flow calls (rulec's
+    // §15.231), as `ritsu check` merges a project's.
+    let with: Vec<String> = a.all("--with").into_iter().map(str::to_string).collect();
+    if !with.is_empty() {
+        let mut files: Vec<String> = Vec::new();
+        for w in &with {
+            if !ritsu_base::fs::exists(w) {
+                return refuse(tr!("`{w}` がありません", "`{w}` is not there"), lang);
+            }
+            files.extend(rule_files_under(w));
+        }
+        j.rulec.set_project(files);
+    }
     let (rules, dates, books): (_, Rc<dyn Dates>, Rc<dyn Books>) = (j.rules(), j.koyomi.clone(), j.chobo.clone());
     let path = Path::new(flow);
     let (src, checked) = match dandori::sources::with_ports(rules.clone(), dates.clone(), books.clone(), || dandori::check::check_file(path)) {
@@ -356,5 +369,28 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
             out.push_str(&format!("  {}\n", tr!("何も動いていません", "nothing has moved").get(lang)));
         }
     }
+    out
+}
+
+/// The `.rule` files at `p`: the file itself, or every one under the directory, by path.
+fn rule_files_under(p: &str) -> Vec<String> {
+    let path = Path::new(p);
+    if !ritsu_base::fs::is_dir(p) {
+        return vec![p.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut stack = vec![path.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = ritsu_base::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            let q = e.path();
+            if q.is_dir() {
+                stack.push(q);
+            } else if q.extension().is_some_and(|x| x == "rule") {
+                out.push(q.to_string_lossy().into_owned());
+            }
+        }
+    }
+    out.sort();
     out
 }

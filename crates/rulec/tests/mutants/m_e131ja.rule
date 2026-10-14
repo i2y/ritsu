@@ -1,0 +1,28 @@
+contribution 地域のキャンペーン(area_campaign) v1
+description "北の地域のキャンペーンの 7 ドル引きを 95 ドルと書いた。会員とウェブの値引きと合わせると、重ねる値引が宣言した 100 ドルを超える（E131）"
+to "../corpus/注文の値引き.rule" signature:7954896efe5908c5
+
+inputs
+  北の地域(north) : bool
+
+table キャンペーンの分
+policy unique
+| 北の地域 | -> キャンペーン値引 : money[USD] | 割引券 : money[USD] | キャンペーン上限 : money[USD] |
+| true     | 95USD                            | 20USD               | 30USD                         |
+| false    | 0USD                             | 0USD                | 50USD                         |
+
+into 重ねる値引
+  キャンペーン値引
+
+into 重ねない値引
+  割引券
+
+into 上限
+  キャンペーン上限
+
+examples
+| 小計   | 会員  | クーポン | 注文経路 | 北の地域 | -> 値引き |
+| 200USD | true  | true     | ウェブ   | true     | 30USD     |
+| 200USD | false | true     | 店頭     | true     | 27USD     |
+| 200USD | true  | true     | ウェブ   | false    | 18USD     |
+| 9USD   | false | false    | 店頭     | true     | 9USD      |

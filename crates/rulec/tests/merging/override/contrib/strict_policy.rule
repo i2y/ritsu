@@ -1,0 +1,18 @@
+contribution strict_policy(strict_policy) v1
+description "Under the strict policy, the standing decays at twice the rate"
+to "../standing.rule" signature:20c9cbd39873c423
+
+inputs
+  strict(strict) : bool
+
+define strict_rate : number = 2 * decay_rate
+
+clause strict_decay -> decay
+  when strict true and above >0
+  then strict_rate
+  overrides decay_now
+
+examples
+| score | resting | hostile | strict | -> new_score |
+| 50    | 20      | false   | true   | 30           |
+| 50    | 20      | false   | false  | 40           |

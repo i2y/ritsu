@@ -431,6 +431,8 @@ fn merge(tables: &[&Table], members: &[usize], raw: &[RawEdge]) -> DefSet {
         clause: false,
         cite: None,
         applied: None,
+        open: None,
+        contributed: None,
     };
     let eval_at = names[members.len() - 1].clone();
     DefSet { key, members: names, policies, clause, applied, table, member_of, beats, edges, eval_at }

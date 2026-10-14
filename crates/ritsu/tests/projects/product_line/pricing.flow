@@ -1,0 +1,21 @@
+# The price of an item, as a rule decides it. A product line adds a kind of product, and the markup
+# of that kind, from files of its own: `ritsu check` and `ritsu gen` merge the project's into the
+# rule, and `ritsu run --with` the ones it is given.
+workflow pricing v1
+description "The price of an item, as the price rule decides it with the product lines merged into it"
+
+use rule price from "rules/product_price.rule"
+
+record Item
+  kind       : price.kind
+  list_price : money[USD]  range >=0 <=1000
+
+inputs
+  item : Item
+
+outputs
+  total : money[USD]
+
+flow
+  let p = price(item_kind: item.kind, list_price: item.list_price)
+  succeed total = p.price

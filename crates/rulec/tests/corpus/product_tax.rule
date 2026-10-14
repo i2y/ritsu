@@ -1,0 +1,22 @@
+rule product_tax(product_tax) v1
+description "The sales tax rate of one item by its kind"
+
+import enum kind from "shared/product_kinds.rule"
+
+inputs
+  item_kind(item_kind) : kind
+
+outputs
+  tax_rate(tax_rate) : rate[step 0.5%]  round down(0.5%)
+
+table tax_of open
+policy unique
+| item_kind | -> tax_rate : rate[step 0.5%] |
+| books     | 0%                            |
+| music     | 7.5%                          |
+| toys      | 7.5%                          |
+
+examples
+| item_kind | -> tax_rate |
+| books     | 0%          |
+| music     | 7.5%        |

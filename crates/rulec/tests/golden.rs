@@ -169,3 +169,12 @@ golden!(e115_余りの割る数, "E115-mod", "tests/mutants/m_e115modja.rule", "
 // sequence taken from a collection the contract does not have.
 golden!(e074_最大の空, "E074", "tests/mutants/m_e074ja.rule", "E074");
 golden!(e121_契約に無い並び, "E121-seq", "tests/mutants/m_e121seqja.rule", "E121");
+// §15.227–§15.230: the merging of files. A finding about a line of the rule a contribution adds
+// to is drawn from that file's lines.
+golden!(e067_開いていない出力, "E067", "tests/mutants/m_e067ja.rule", "E067");
+golden!(e068_範囲の無い開いた値, "E068", "tests/mutants/m_e068ja.rule", "E068");
+golden!(e131_範囲を出る寄与, "E131", "tests/mutants/m_e131ja.rule", "E131");
+golden!(e033_寄与が足した値, "E033-added", "tests/mutants/m_e033addja.rule", "E033");
+golden!(e040_形の固定, "E040-signature", "tests/mutants/m_e040sigja.rule", "E040");
+golden!(e044_準用の輪, "E044-ring", "tests/mutants/m_e044ringja.rule", "E044");
+golden!(w132_変えない項, "W132", "tests/mutants/m_w132ja.rule", "W132");

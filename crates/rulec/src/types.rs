@@ -431,6 +431,11 @@ pub struct Checked {
     /// a row that writes one of its table's columns writes only the values its cell there lets
     /// through (§15.213). The certificate says so on each such row (`inside`).
     pub narrowed: HashSet<String>,
+    /// The open values (§15.227), each with its declared range: the whole of what the tables
+    /// below it are checked over, whatever the contributions are. A value here is computed like a
+    /// `define`, and read like an input: its declared range is its range, nothing ties it to its
+    /// terms in the elimination, and its column's points are not held to what the terms reach.
+    pub opens: HashMap<String, (Option<Rat>, Option<Rat>)>,
 }
 
 /// One expression E132 or E139 was said about (see [`Checked::arith_witness`]).
@@ -1275,6 +1280,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         day_sets: HashMap::new(),
         arith_witness: Vec::new(),
         narrowed: HashSet::new(),
+        opens: HashMap::new(),
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
     // order of declarations in the file should not change what is accepted. Whether both
@@ -2171,6 +2177,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.check_same(&ty, &got, &d.span, path, &tr!("定義", "definition"));
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 c.record_value(&d.name.text, &d.expr, &ty);
+                // An open value (§15.227): its declared range, not what its terms reach, is what
+                // the rest of the rule reads, and what they reach together has to stay inside it.
+                if let Some(o) = f.open_value(&d.name.text) {
+                    c.open_value(o, &d.expr, &ty, path);
+                }
                 c.syms.insert(
                     d.name.text.clone(),
                     Sym { ty, span: d.name.span.clone(), kind: SymKind::Define, contract_only: false },
@@ -2716,7 +2727,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 && uses.iter().all(|n| c.syms[*n].kind == SymKind::Input && c.enum_ranges.get(*n).is_some_and(|vs| !vs.iter().any(|x| x == v)))
         };
         let prereq_only = unnamed.len() == e.values.len() && f.prerequisites.iter().any(|p| p.over_name() == e.name.text);
-        let unused: Vec<&Name> = unnamed.into_iter().filter(|v| !kept_out(&v.text)).collect();
+        // A value a contribution added is said by what the merge proves of it (§15.228): E033 where
+        // it falls to a row in silence, E101 where no row takes it.
+        let unused: Vec<&Name> = unnamed.into_iter().filter(|v| !kept_out(&v.text) && !e.added.iter().any(|a| a.value == v.text)).collect();
         // An enum bound to a `.proto` is reported by the pass that read the file (E033): the
         // question there is not "did you forget a line" but "has anyone read the change the
         // contract shipped", and it is only a fair question once the file resolved (§15.59).
@@ -6363,6 +6376,141 @@ fn bounds_of(r: &Range, ty: &Ty) -> ((Option<Rat>, Option<Rat>), Vec<crate::lex:
 }
 
 impl Checked {
+    /// An open value once its `define` is typed (§15.227): its declared range becomes its range
+    /// and its step the one its type declares, and E131 says when what its terms reach together —
+    /// the rule's and every contribution's — can leave the range. A term on a finer step than the
+    /// value declares would be cut in silence where the value is stored, and is E068.
+    fn open_value(&mut self, o: &crate::ast::OpenDecl, e: &Expr, ty: &Ty, path: &str) {
+        let name = o.name.text.clone();
+        let declared = o.range.as_ref().map(|r| bounds_of(r, ty).0).unwrap_or((None, None));
+        let declares_step = o.ty.args.iter().any(|a| matches!(a, TypeArg::Scaled(w, _) if w == crate::kw::STEP));
+        let at = |sp: &Span| match sp.file_path() {
+            Some(p) => format!("{p}:{}", sp.line),
+            None => format!("{path}:{}", sp.line),
+        };
+        if declares_step {
+            let dsc = scale_of_type(&o.ty, ty);
+            if let Some(esc) = self.scale(e) {
+                // The terms' values are whole numbers of 1/esc; held at 1/dsc they are exact only
+                // when 1/esc is a whole number of 1/dsc.
+                if dsc > 0 && esc > 0 && dsc % esc != 0 {
+                    let step = |sc: i128| fmt_val(Rat::new(1, sc), ty);
+                    let finer: Vec<String> = o
+                        .terms
+                        .iter()
+                        .filter(|t| self.scales.get(&t.name.text).is_some_and(|s| *s > 0 && dsc % *s != 0))
+                        .map(|t| t.name.text.clone())
+                        .collect();
+                    self.diags.push(
+                        Diag::error("E068", tr!("開いた値 {name} の項の刻みが、値の刻みより細かい", "A term of the open value {name} is on a finer step than the value"))
+                            .at(at(&o.span))
+                            .mark(o.span.clone(), tr!("値の刻み: {}", "the value's step: {}", step(dsc)))
+                            .note(tr!("項 {} の刻みは {} です。", "The terms {} are on the step {}.", finer.join(", "), step(esc)))
+                            .note(tr!(
+                                "開いた値は宣言した刻みで持たれるので、細かい項は黙って切られます。項を値の刻みに丸めてから（`down(<式>, {})` など）足してください。",
+                                "An open value is held on its declared step, so a finer term would be cut in silence. Round the term to the value's step first (`down(<expression>, {})`, say)."
+                            , step(dsc))),
+                    );
+                }
+            }
+            // The value is stored on its terms' scale, which the generated code reads it at; the
+            // checks cut its axis on the declared step, every value a contribution may bring.
+            self.grids.insert(name.clone(), Rat::new(1, dsc.max(1)));
+        }
+        if let (Some((lo, hi)), (Some(dl), Some(dh))) = (self.interval(e, ty), declared) {
+            if lo.cmp_to(dl) == std::cmp::Ordering::Less || hi.cmp_to(dh) == std::cmp::Ordering::Greater {
+                let show = |r: Rat| fmt_val(r, ty);
+                let mut d = Diag::error("E131", tr!("開いた値 {name} が、宣言した範囲を出ることがあります", "The open value {name} can leave the range it declares"))
+                    .at(at(&o.span))
+                    .mark(o.span.clone(), tr!("範囲: {} 〜 {}", "range: {} .. {}", show(dl), show(dh)))
+                    .note(tr!("項を合わせた値は {} 〜 {} になりえます。", "Its terms together come to {} .. {}.", show(lo), show(hi)));
+                for t in &o.terms {
+                    let Some((tl, th)) = self.ranges.get(&t.name.text).and_then(|(a, b)| a.zip(*b)) else { continue };
+                    let whose = match &t.from {
+                        Some((c, file)) => tr!("寄与 {c}（{file}）", "contribution {c} ({file})"),
+                        None => tr!("この規則", "this rule"),
+                    };
+                    d = d.note(tr!("  {}: {} 〜 {}（{whose}）", "  {}: {} .. {} ({whose})", t.name.text, show(tl), show(th)));
+                }
+                self.diags.push(
+                    d.note(tr!(
+                        "範囲は、どの寄与を合わせても値がその外に出ないという約束で、下の表はこの範囲の全体で検査されています。範囲を広げるか（下の表がその範囲で検査し直されます）、寄与が足す項を狭めてください。どちらにするかは業務の判断です。",
+                        "The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision."
+                    )),
+                );
+                self.arith_witness.push(Witnessed { code: "E131", span: o.span.clone(), expr: e.clone() });
+            }
+        }
+        self.idle_terms(o, ty, path);
+        if declared.0.is_some() || declared.1.is_some() {
+            self.ranges.insert(name.clone(), declared);
+        }
+        self.opens.insert(name, declared);
+    }
+
+    /// W132 (§15.227): a term of an open value that no value of its moves the value — at or below
+    /// the `empty` value of a `max`, at or above that of a `min`, always 0 in a `sum`, always 1 in a
+    /// `product`. The `empty` value of `max` and `min` always takes part, so a cap written as a
+    /// `max` whose terms all sit under it changes no answer, in silence.
+    fn idle_terms(&mut self, o: &crate::ast::OpenDecl, ty: &Ty, path: &str) {
+        use std::cmp::Ordering;
+        let Some((how, _)) = &o.combine else { return };
+        let empty = o.empty.as_ref().and_then(|(l, _)| if let Lit::Num(n) = l { lit_value_in(n, ty) } else { None });
+        let show = |r: Rat| fmt_val(r, ty);
+        let name = &o.name.text;
+        for t in &o.terms {
+            let Some((lo, hi)) = self.interval(&Expr::Name(t.name.text.clone(), t.name.span.clone()), ty) else { continue };
+            let one = Rat::int(1);
+            let zero = Rat::int(0);
+            let label = match (how, empty) {
+                (Combine::Max, Some(ev)) if hi.cmp_to(ev) != Ordering::Greater => tr!(
+                    "どの値も `empty` の {} 以下です",
+                    "every value it takes is at or below the `empty` value, {}",
+                    show(ev)
+                ),
+                (Combine::Min, Some(ev)) if lo.cmp_to(ev) != Ordering::Less => tr!(
+                    "どの値も `empty` の {} 以上です",
+                    "every value it takes is at or above the `empty` value, {}",
+                    show(ev)
+                ),
+                (Combine::Sum, _) if lo.cmp_to(zero) == Ordering::Equal && hi.cmp_to(zero) == Ordering::Equal => tr!("いつも 0 です", "it is always 0"),
+                (Combine::Product, _) if lo.cmp_to(one) == Ordering::Equal && hi.cmp_to(one) == Ordering::Equal => tr!("いつも {} です", "it is always {}", show(one)),
+                _ => continue,
+            };
+            let at = match t.name.span.file_path() {
+                Some(p) => format!("{p}:{}", t.name.span.line),
+                None => format!("{path}:{}", t.name.span.line),
+            };
+            let whose = match &t.from {
+                Some((c, file)) => tr!("寄与 {c}（{file}）の項です。", "It is a term of the contribution {c} ({file})."),
+                None => tr!("この規則の項です。", "It is a term of this rule."),
+            };
+            let how_word = how.word();
+            let mut d = Diag::warning("W132", tr!("開いた値 {name} の項 {} は、合わせた値を変えません", "The term {} of the open value {name} changes nothing", t.name.text))
+                .at(at)
+                .mark(t.name.span.clone(), label)
+                .note(tr!("項の値は {} 〜 {} です。{whose}", "The term takes {} .. {}. {whose}", show(lo), show(hi)));
+            let always = tr!(
+                "{name} は `combine {how_word}` なので、`empty` の値はいつも合わせに加わります。項が無いときだけの値ではありません。どの入力でも、この項で答えは変わりません。",
+                "{name} is `combine {how_word}`, so its `empty` value always takes part, not only when there is no term; no input's answer moves with this term."
+            );
+            d = match how {
+                Combine::Max => d.note(always).note(tr!(
+                    "上限を決める項なら、合わせ方を `min` にしてください（`max` の `empty` は下限です）。`empty` を越えることがある項なら、その値を書いてください。要らない項なら外してください。",
+                    "If the term sets a cap, put the value together with `min`: the `empty` value of a `max` is a floor. If the term can rise above `empty`, write the values that do. If it is not needed, take it out."
+                )),
+                Combine::Min => d.note(always).note(tr!(
+                    "下限を決める項なら、合わせ方を `max` にしてください（`min` の `empty` は上限です）。`empty` より下になることがある項なら、その値を書いてください。要らない項なら外してください。",
+                    "If the term sets a floor, put the value together with `max`: the `empty` value of a `min` is a cap. If the term can fall below `empty`, write the values that do. If it is not needed, take it out."
+                )),
+                _ => d
+                    .note(tr!("どの入力でも、この項で答えは変わりません。", "No input's answer moves with this term."))
+                    .note(tr!("要らない項なら外してください。", "If it is not needed, take it out.")),
+            };
+            self.diags.push(d);
+        }
+    }
+
     /// E112: the declared range must contain the reachable interval obtained by interval
     /// arithmetic over the input ranges. Otherwise the completeness check answers "complete"
     /// without ever seeing the values that actually occur.

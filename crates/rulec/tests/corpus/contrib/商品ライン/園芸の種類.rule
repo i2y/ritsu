@@ -1,0 +1,5 @@
+contribution 園芸の種類(gardening_kind) v1
+description "園芸の商品ライン。園芸用品を商品の種類に足す。送り方はほかの種類と同じなので `default` を付ける"
+to "../../shared/商品の種類.rule" signature:2d5435caf2fc6ddb
+
+extend 種類 with 園芸(garden) "園芸用品" default

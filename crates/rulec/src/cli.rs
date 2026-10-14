@@ -947,6 +947,26 @@ fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
         print!("{}", crate::findings_text(&parsed.diags, &lines));
         return ExitCode::from(1);
     };
+    // A contribution's pins are the shapes it relies on (§15.230): `pin` writes them; it cites no
+    // source, so `fetch` and `outdated` have nothing to do with it.
+    if f.kind == crate::ast::FileKind::Contribution {
+        if verb != "pin" {
+            println!("{}", tr!("{path}: 出典の宣言がありません", "{path}: no source is declared"));
+            return ExitCode::from(0);
+        }
+        return match crate::link::pin::pin_contribution(&f, path, &src) {
+            Ok((text, said)) => {
+                if text != src && std::fs::write(path, &text).is_err() {
+                    return refuse(tr!("`{path}` に書けません", "cannot write `{path}`"));
+                }
+                for l in &said {
+                    println!("{l}");
+                }
+                ExitCode::from(0)
+            }
+            Err(e) => refuse(e),
+        };
+    }
     let result = match verb {
         "fetch" => crate::sources::fetch(&f, path, via),
         "outdated" => crate::sources::outdated(&f, path),
@@ -1098,6 +1118,20 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
         }
     }
 
+    // The contributions among the files are merged into the rules they reach (§15.231). A
+    // command that works on rules takes a contribution as the rule it comes down to; `check` takes
+    // each file as given, a contribution as its own scope.
+    let rooted: Vec<String> = if matches!(cmd.name, "gen" | "doc" | "api" | "certificate" | "coverage" | "vectors" | "graph" | "schema" | "adapter") {
+        crate::link::roots(&expanded)
+    } else {
+        expanded.clone()
+    };
+    let files: Vec<&String> = rooted.iter().collect();
+    crate::link::with_set(&expanded, || run_cmd(cmd, &a, &files, json, markdown))
+}
+
+fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -> ExitCode {
+    let files = files.to_vec();
     match cmd.name {
         "check" => {
             let budget = match a.get("--budget") {
@@ -1347,6 +1381,10 @@ fn check(
 ) -> ExitCode {
     let mut printed = 0usize;
     let mut worst = 0u8;
+    // A finding already said for one file of the run is not said again for another: a rule and a
+    // contribution to it are checked each in its own scope, and what they share comes up in both
+    // (§15.231).
+    let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
     for path in files {
         let Ok(src) = std::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
@@ -1355,6 +1393,8 @@ fn check(
         let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
         let r = crate::report_with(&src, path, budget);
         let mut diags = r.diags;
+        let errors_before = diags.iter().any(|d| d.severity == Severity::Error);
+        diags.retain(|d| said.insert(crate::finding_key(d, path)));
 
         // Pairs are matched by the normal form of their cells. With line numbers, inserting a
         // single row would make everything new.
@@ -1404,7 +1444,13 @@ fn check(
         if !terse {
             print!("{}", crate::findings_text(&diags, &lines));
         }
-        print!("{}", crate::check_tail(&r.shadow, &diags, path, suppressed));
+        if errors_before && !crate::has_error(&diags) {
+            // Its errors were said for a file above; the file still does not pass.
+            worst = worst.max(1);
+            println!("{}", tr!("note {path}: エラーは上のファイルで言いました", "note {path}: its errors are said above"));
+            continue;
+        }
+        print!("{}", crate::check_tail_of(&r.shadow, &diags, path, suppressed, &r.merged, r.adds_to.as_deref()));
     }
     // §11 principle 3 still has to reach the reader; in terse mode it reaches them once,
     // as a pointer, instead of once per finding.

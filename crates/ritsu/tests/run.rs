@@ -392,3 +392,30 @@ fn every_scenario_of_a_flow_that_calls_a_rule_runs_under_ritsu_run() {
     }
 }
 
+
+/// `ritsu run --with` (rulec's §15.231): the contributions it is given are merged into the rules the
+/// flow calls. With the product line, an item of the kind it adds is priced with its markup; without
+/// it, the kind is no value of the rule and the input is turned away; a kind the rule has is priced
+/// alike either way. A path that is not there stops the run.
+#[test]
+fn ritsu_run_with_merges_the_contributions_it_is_given() {
+    let dir = here().join("tests/projects/product_line");
+    let total = |args: &[&str]| -> Value {
+        let mut a = vec!["run", "pricing.flow", "--format", "json", "--lang", "en"];
+        a.extend_from_slice(args);
+        let (code, out, err) = ritsu_in(&dir, &a);
+        assert_eq!(code, 0, "{args:?}: {err}");
+        let ran: Value = serde_json::from_str(&out).unwrap();
+        ran["trace"]["end"].clone()
+    };
+    assert_eq!(total(&["--scenario", "scenarios/garden.json", "--with", "rules/contrib"]), json!({"succeed": {"total": 23}}));
+    assert_eq!(total(&["--scenario", "scenarios/garden.json", "--with", "rules/contrib/garden_kind.rule", "--with", "rules/contrib/garden_price.rule"]), json!({"succeed": {"total": 23}}));
+    assert_eq!(total(&["--scenario", "scenarios/garden.json"])["fail"]["error"], "Dandori.BadInput");
+    for with in [&["--with", "rules/contrib"][..], &[][..]] {
+        let mut args = vec!["--scenario", "scenarios/toys.json"];
+        args.extend_from_slice(with);
+        assert_eq!(total(&args), json!({"succeed": {"total": 24}}));
+    }
+    let (code, out, err) = ritsu_in(&dir, &["run", "pricing.flow", "--scenario", "scenarios/garden.json", "--with", "rules/nowhere", "--lang", "en"]);
+    assert!(code == 2 && out.is_empty() && err.contains("`rules/nowhere` is not there"), "{code} {out} {err}");
+}

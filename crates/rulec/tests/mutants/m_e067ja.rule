@@ -1,0 +1,15 @@
+contribution 地域のキャンペーン(area_campaign) v1
+description "北の地域のキャンペーンが、7 ドル引きを規則の出力の `値引き` に足している。出力は開いていないので、足せるのは重ねる値引（E067）"
+to "../corpus/注文の値引き.rule" signature:4a6342faf0d9e59a
+
+inputs
+  北の地域(north) : bool
+
+table キャンペーンの分
+policy unique
+| 北の地域 | -> キャンペーン値引 : money[USD] |
+| true     | 7USD                             |
+| false    | 0USD                             |
+
+into 値引き
+  キャンペーン値引

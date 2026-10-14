@@ -844,3 +844,33 @@ fn what_cannot_be_a_package_is_refused() {
     assert_eq!(code, 2);
     assert_eq!(err, "error: `--name Stock-Room` cannot name a package: it starts with a lowercase letter and has only lowercase letters, digits and `_` (and is not a word Python keeps)\n");
 }
+
+/// The package of a project whose rules are added to by contributions (rulec's §15.231): each rule's
+/// module is the rule merged with the project's contributions that reach it, its header names them,
+/// and a contribution has no module of its own. The new kind is a member of the enum's module, and
+/// the price module answers for it.
+#[test]
+fn a_rules_module_is_the_rule_merged_with_the_projects_contributions() {
+    let t = TempDir::new("gen-product-line");
+    let out = t.path().join("product_line");
+    let (code, _, err) = generate(&here().join("tests/projects/product_line"), &out, &[]);
+    assert_eq!(code, 0, "ritsu gen of the product line:\n{err}");
+    let rules: Vec<String> = files(&out).into_iter().filter(|f| f.starts_with("python/generated/rules/")).collect();
+    assert_eq!(rules, ["python/generated/rules/__init__.py", "python/generated/rules/product_kinds.py", "python/generated/rules/product_price.py"]);
+    let price = read(&out.join("python/generated/rules/product_price.py"));
+    assert!(price.lines().any(|l| l.starts_with("# Contributions: garden_price = contrib/garden_price.rule (signature:")), "{price}");
+    let kinds = read(&out.join("python/generated/rules/product_kinds.py"));
+    assert!(kinds.lines().any(|l| l.starts_with("# Contributions: garden_kind = ")) && kinds.contains("GARDEN = \"garden\""), "{kinds}");
+    if ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not installed; the app over the package is not run") {
+        let app = out.join("python/app.py");
+        std::fs::write(
+            &app,
+            "from generated.rules import product_kinds, product_price\n\n\
+             print(product_price.product_price(product_kinds.Kind.GARDEN, product_price.USD(20)), product_kinds.kind_label(product_kinds.Kind.GARDEN))\n",
+        )
+        .unwrap();
+        let o = Command::new("python3").arg("app.py").current_dir(out.join("python")).output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "23 Garden supplies");
+    }
+}

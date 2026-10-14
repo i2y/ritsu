@@ -134,21 +134,23 @@ awk '/^\| true  \| >2kg        \|/ { print "| true  | >2kg <=5kg  | 1800円     
      { print }' "$q" > "$M/m_w124.rule"
 
 # --- A rule applied by another (§15.69). The callee stays in the corpus, so the
-# mutants reach it by a relative path; the digest in the heading is the corpus caller's own.
+# mutants reach it by a relative path; the pin in the heading is the corpus caller's own, the
+# callee's meaning (§15.230), which the path does not move.
 a="$C/非常勤退職手当.rule"
 callee='"退職手当.rule"'
 via='"../corpus/退職手当.rule"'
 # A pinned digest the callee no longer has
-awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v); sub(/sha256:[0-9a-f]+/, "sha256:0000000000000000") } { print }' "$a" > "$M/m_e040.rule"
+awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v); sub(/(sha256|meaning):[0-9a-f]+/, "meaning:0000000000000000") } { print }' "$a" > "$M/m_e040.rule"
 # A callee input left unbound
 awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } !/^  基本給 = / { print }' "$a" > "$M/m_e041.rule"
 # A value of this rule's enum that stands for no value of the callee's
 awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { sub(/, 辞職 -> 自己都合/, ""); print }' "$a" > "$M/m_e042.rule"
 # A range that reaches outside the callee's
 awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { sub(/range >=1 <=3/, "range >=0 <=3"); print }' "$a" > "$M/m_e043.rule"
-# A callee that does not pass check (the E101 mutant, made above)
+# A callee that does not pass check (the E101 mutant, made above). It is pinned at the digest of
+# its bytes, the pin written before §15.230, which is still read and which shasum computes.
 h=$(shasum -a 256 "$M/m_e101.rule" | cut -c1-16)
-awk -v c="$callee" -v h="$h" '/^apply / { sub(c, "\"m_e101.rule\""); sub(/sha256:[0-9a-f]+/, "sha256:" h) } { print }' "$a" > "$M/m_e044.rule"
+awk -v c="$callee" -v h="$h" '/^apply / { sub(c, "\"m_e101.rule\""); sub(/(sha256|meaning):[0-9a-f]+/, "sha256:" h) } { print }' "$a" > "$M/m_e044.rule"
 # A clause of this rule that takes precedence over the whole applied table
 awk -v c="$callee" -v v="$via" '/^apply / { sub(c, v) } { print } /^  手当 -> 非常勤手当$/ { print ""; print "clause 特例(special) -> 退職手当:支給月数"; print "  when always"; print "  then 5"; print "  overrides 退職手当:支給表" }' "$a" > "$M/m_w118.rule"
 

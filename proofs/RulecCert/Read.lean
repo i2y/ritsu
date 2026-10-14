@@ -323,6 +323,13 @@ structure WriteCell where
 structure ReadRow where
   index : Nat
   origin : String
+  /-- The file the row is written in, from the rule's directory, when it is not the rule's own: a
+      row a contribution adds (rulec's §15.231). `""` for the rule's own file. -/
+  file : String := ""
+  /-- That file's SHA-256, which the cell check holds the text it reads to. -/
+  fileSha : String := ""
+  /-- The contribution the row comes from: its own names come into the rule as `<it>:<name>`. -/
+  contribution : String := ""
   /-- The line the row itself is written on; 0 for one an `apply` brought in. -/
   line : Nat
   tests : List CellTest
@@ -626,7 +633,11 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
         | none => none
       some { column := (decides[oi]?).getD "", span := sp, says := says
              value := field e "value" >>= optRat, isName := isName })
+    let fileJ := field r "file"
     some { index := i, origin := fieldStr r "origin", line := (fieldNat r "line").getD 0
+           file := (fileJ.map (fun x => fieldStr x "path")).getD ""
+           fileSha := (fileJ.map (fun x => fieldStr x "sha256")).getD ""
+           contribution := (fileJ.map (fun x => fieldStr x "contribution")).getD ""
            tests := tests, accepts := accepts, source := (field r "source").bind srcOfJson
            writes := writes, produces := (fieldArr r "produces").toList.map str })
   some {

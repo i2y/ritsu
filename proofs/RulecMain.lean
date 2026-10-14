@@ -337,6 +337,8 @@ def kindOf (cert : Json) (n : String) : String :=
   | none =>
     if (fieldArr cert "inputs").toList.any (fun x => str x == some n) then "input"
     else if (fieldArr cert "walks").toList.any (fun x => str x == some n) then "walk"
+    -- An open value's range is declared, as an input's is (rulec's §15.227).
+    else if (fieldArr cert "opens").toList.any (fun o => fieldStr o "name" == n) then "open"
     else "upstream"
 
 /-- A boolean `define` of one comparison whose two sides have intervals (rulec's §15.196): the
@@ -617,7 +619,7 @@ def literalValue (text : String) (cur : Option String) : Option (Option Rat) :=
     are that line's own `|`-separated fields, all of them; the rows of one table are
     written one under another with no other table's rows between them; and a column no row
     is written with is a column this table does not have. -/
-def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
+def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Report)
     (curOf : String → Option String := fun _ => none) : Report × Nat × Nat :=
   Id.run do
   let mut r := r
@@ -632,11 +634,14 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
   -- answer cells stand in the order it decides its columns.
   let single := t.rowsRaw.all (fun x => x.origin == ((t.rowsRaw.head?.map (·.origin)).getD ""))
   for row in t.rowsRaw do
-    let o := row.origin
+    -- A row a contribution adds is written in its own file (rulec's §15.231): its rows are one
+    -- table there, and its cells are read there.
+    let o := row.file ++ "\n" ++ row.origin
+    let lines := linesOf row.file
     let has := row.source.isSome
     match written.lookup o with
     | some w => if w != has then
-        r := r.fail s!"{t.name}: some rows of `{o}` are written in this file and some are not, which no one table is"
+        r := r.fail s!"{t.name}: some rows of `{row.origin}` are written in this file and some are not, which no one table is"
     | none => written := written ++ [(o, has)]
     match row.source with
     | none =>
@@ -650,7 +655,7 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
         let pattern := spans.map (·.isNone)
         match shape.lookup o with
         | some p => if p != pattern then
-            r := r.fail s!"{t.name}: rows of `{o}` disagree about which columns they have a cell in"
+            r := r.fail s!"{t.name}: rows of `{row.origin}` disagree about which columns they have a cell in"
         | none => shape := shape ++ [(o, pattern)]
         let here := spans.filterMap id
         if row.line == 0 then
@@ -661,7 +666,7 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
           let ln := row.line
           match prevLine.lookup o with
           | some q => if ln ≤ q then
-              r := r.fail s!"{t.name}: row {row.index} of `{o}` is written at line {ln}, at or above the row before it"
+              r := r.fail s!"{t.name}: row {row.index} of `{row.origin}` is written at line {ln}, at or above the row before it"
           | none => pure ()
           prevLine := (prevLine.filter (·.1 != o)) ++ [(o, ln)]
           let (lo, hi) := (lineOf.lookup o).getD (ln, ln)
@@ -730,7 +735,11 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
                     else if 0 < sp.line && sp.line ≤ lines.size then lines[sp.line - 1]! else .empty
                   let out := if sp.col + sp.len ≤ wline.size then
                       String.fromUTF8? (wline.extract sp.col (sp.col + sp.len)) else none
-                  if out != some sp.text || sp.text != wc.says then
+                  -- A contribution writes its own names without the `<contribution>:` they come into
+                  -- the rule with (rulec's §15.231).
+                  let named := sp.text == wc.says ||
+                    (wc.isName && !row.contribution.isEmpty && row.contribution ++ ":" ++ sp.text.trimAscii.toString == wc.says)
+                  if out != some sp.text || !named then
                     r := r.fail s!"{t.name}: row {row.index}, -> {wc.column}: the file does not say `{wc.says}` there"
                   else if wc.isName then
                     read := read + 1
@@ -745,8 +754,11 @@ def checkSpans (t : ReadTable) (lines : Array ByteArray) (r : Report)
   -- No two tables of a merged set are written among each other.
   for (a, (alo, ahi)) in lineOf do
     for (b, (blo, bhi)) in lineOf do
-      if a < b && alo ≤ bhi && blo ≤ ahi then
-        r := r.fail s!"{t.name}: rows of `{a}` and `{b}` are written among each other, which no two tables are"
+      -- Two tables of one file; the rows of two files are not written among each other.
+      let fileOf := fun (k : String) => (k.splitOn "\n").headD ""
+      let tableOf := fun (k : String) => (k.splitOn "\n").getLastD ""
+      if a < b && fileOf a == fileOf b && alo ≤ bhi && blo ≤ ahi then
+        r := r.fail s!"{t.name}: rows of `{tableOf a}` and `{tableOf b}` are written among each other, which no two tables are"
   if !lineOf.isEmpty then
     for ai in [0 : t.columns.length] do
       -- A column of a table an `apply` brought in has its cells in that rule's file, where its own
@@ -2183,6 +2195,12 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     -- what it is worked out from here (`extreme_mem_stated`, `foldAnswer_mem_stated`).
     r := checkExtremes cert worked r
     r := checkFoldAnswers cert worked r
+    -- An open value (rulec's §15.227): its range is declared, the tables below are checked over the
+    -- whole of it, and that the terms the rule and its contributions give stay inside it is the
+    -- claim. No theorem of RulecCert says it yet.
+    for o in fieldArr cert "opens" do
+      let n := (fieldArr o "terms").size
+      r := r.state s!"the range of {fieldStr o "name"}, which its {n} terms put together ({fieldStr o "combine"}) stay inside"
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
       if kindsKnown then
@@ -2238,15 +2256,39 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
         let lines := readLines bs
         let mut read := 0
         let mut apart := 0
+        -- The rows a contribution adds are written in its file (rulec's §15.231), named from the
+        -- rule's directory and held to the SHA-256 the row gives.
+        let dir0 : System.FilePath := match (System.FilePath.mk path).parent with
+          | some d => if d.toString.isEmpty then "." else d
+          | none => "."
+        let mut others : List (String × Array ByteArray) := []
         for t in tables do
-          let (r', n, a) := checkSpans t lines r curOf
+          for row in t.rowsRaw do
+            if !row.file.isEmpty && !(others.any (·.1 == row.file)) then
+              let there := dir0 / row.file
+              let got ← try pure (some (← IO.FS.readBinFile there)) catch _ => pure none
+              match got with
+              | none => r := r.fail s!"{t.name}: row {row.index} is written in {row.file}, which cannot be read"
+              | some cb =>
+                if Sha256.hex cb != row.fileSha then
+                  r := r.fail s!"{t.name}: row {row.index} is written in {row.file}, and that file is another text than the certificate's"
+                else
+                  others := others ++ [(row.file, readLines cb)]
+        let linesOf : String → Array ByteArray := fun f =>
+          if f.isEmpty then lines else (others.lookup f).getD #[]
+        for t in tables do
+          let (r', n, a) := checkSpans t linesOf r curOf
           r := r'; read := read + n; apart := apart + a
         let (r', mread) := checkMachineSpans cert lines r curOf
         r := r'; read := read + mread
         let rest := if apart > 0 then s!", {apart} rows written in an applied rule" else ""
         if apart > 0 then
           r := r.state s!"{apart} rows written in an applied rule, and read back in its own certificate"
-        r := r.say s!"  the digest is {path}'s, and {read} cells are read back out of it{rest}"
+        let fromOthers := match others.length with
+          | 0 => ""
+          | 1 => " and the 1 file of its contributions"
+          | n => s!" and the {n} files of its contributions"
+        r := r.say s!"  the digest is {path}'s, and {read} cells are read back out of it{fromOthers}{rest}"
         -- Each contract's reading is tied to its text the same way (§15.142): the file is
         -- named relative to the rule, and its digest is in the certificate.
         let dir : System.FilePath := match (System.FilePath.mk path).parent with

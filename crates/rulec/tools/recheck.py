@@ -625,6 +625,65 @@ def check_extremes(cert, known):
     return n
 
 
+def check_opens(cert, known):
+    """An open value (rulec's §15.227) is its terms put together — added, multiplied, the largest
+    or the smallest, starting from its `empty` value — and the range `ranges` states for it is
+    declared: the tables below are checked over the whole of it, and the claim is that the terms,
+    the rule's and every contribution's, together stay inside it (E131). Each term's interval is
+    worked out here, or declared for an input, and the combination is held to the stated range.
+    Returns (open values held, terms, terms from contributions)."""
+    stated = cert.get("ranges", {})
+    held = terms = by = 0
+    for o in cert.get("opens", []):
+        name, how = o.get("name"), o.get("combine")
+        if how not in ("sum", "product", "max", "min"):
+            raise Bad(f"{name}: `combine {how}` is not one of sum, product, max and min")
+        s = stated.get(name)
+        if s is None or num(s[0]) is None or num(s[1]) is None:
+            raise Bad(f"{name}: an open value declares its range, and the certificate states none")
+        ivs = []
+        if o.get("empty") is not None:
+            z = num(o["empty"])
+            ivs.append((z, z))
+        elif how == "sum":
+            ivs.append((Fraction(0), Fraction(0)))
+        elif how == "product":
+            ivs.append((Fraction(1), Fraction(1)))
+        else:
+            raise Bad(f"{name}: a `combine {how}` states no `empty` value")
+        for t in o.get("terms", []):
+            n = t.get("name")
+            terms += 1
+            if t.get("from"):
+                by += 1
+            if n in known:
+                ivs.append(known[n])
+            elif n in stated and num(stated[n][0]) is not None and num(stated[n][1]) is not None:
+                ivs.append((num(stated[n][0]), num(stated[n][1])))
+            else:
+                raise Bad(f"{name}: this program cannot work out the range of its term {n}")
+        lo, hi = ivs[0]
+        for a, b in ivs[1:]:
+            if how == "sum":
+                lo, hi = lo + a, hi + b
+            elif how == "product":
+                cs = [lo * a, lo * b, hi * a, hi * b]
+                lo, hi = min(cs), max(cs)
+            elif how == "max":
+                lo, hi = max(lo, a), max(hi, b)
+            else:
+                lo, hi = min(lo, a), min(hi, b)
+        a, b = num(s[0]), num(s[1])
+        if lo < a or hi > b:
+            raise Bad(f"{name}: its terms together come to [{lo}, {hi}], outside the range [{s[0]}, {s[1]}] it declares")
+        held += 1
+    for t in cert.get("tables", []):
+        for ax in t.get("axes", []):
+            if ax.get("kind") == "open" and not any(o.get("name") == ax.get("column") for o in cert.get("opens", [])):
+                raise Bad(f"{t['table']}: {ax.get('column')} is called an open value, and `opens` does not name it")
+    return held, terms, by
+
+
 def check_fold_answers(cert, known):
     """The answer of a fold the items below read is one of the values the fold answers with
     (§15.219): `empty`, `exhausted` unless it is `held`, a `stop with`, what an arm takes or
@@ -674,6 +733,9 @@ def column_kinds(cert):
         out.setdefault(n, "input")
     for n in cert.get("walks", []):
         out.setdefault(n, "walk")
+    # An open value's range is declared, as an input's is (rulec's §15.227).
+    for o in cert.get("opens", []):
+        out.setdefault(o.get("name"), "open")
     return out
 
 
@@ -2374,33 +2436,66 @@ def fields_of(line):
     return out
 
 
+def row_file(r):
+    """The file a row is written in, from the rule's directory, when it is not the rule's own: a
+    row a contribution adds (rulec's §15.231). `""` for the rule's own file."""
+    f = r.get("file")
+    return f.get("path", "") if isinstance(f, dict) else ""
+
+
+def contribution_lines(cert, path):
+    """The lines of every file a row of the certificate is written in besides the rule's own, read
+    from the rule's directory and held to the SHA-256 the row names (rulec's §15.231)."""
+    out = {}
+    base = os.path.dirname(path)
+    for t in cert["tables"]:
+        for r in t["rows"]:
+            f = r.get("file")
+            if not isinstance(f, dict):
+                continue
+            rel = f.get("path", "")
+            there = os.path.normpath(os.path.join(base, rel))
+            try:
+                with open(there, "rb") as fh:
+                    data = fh.read()
+            except OSError:
+                raise Bad(f"{t['table']}: row {r['row']} is written in {rel}, which cannot be read from {base or '.'}")
+            if hashlib.sha256(data).hexdigest() != f.get("sha256"):
+                raise Bad(f"{t['table']}: row {r['row']} is written in {rel}, and that file is another text than the certificate's")
+            out[rel] = data.split(b"\n")
+    return out
+
+
 def check_cells(cert, path):
     """The table stated here is the table in the file. Returns (cells read back, literals
     whose number could not be pinned, rows written in an applied rule)."""
     with open(path, "rb") as fh:
-        lines = fh.read().split(b"\n")
+        own_lines = fh.read().split(b"\n")
+    # A row a contribution adds is written in its file (rulec's §15.231), read from there.
+    others = contribution_lines(cert, path)
     read = loose = apart = 0
     for t in cert["tables"]:
         axes = t["axes"]
         # Rows written in one table have a cell in the same columns and in no others, and
-        # they are written one under another with no other table's rows between them.
+        # they are written one under another with no other table's rows between them — in the
+        # one file they are written in.
         shape, lines_of, seen_axis, at_line, written = {}, {}, [False] * len(axes), {}, {}
         for r in t["rows"]:
             src = r.get("source")
-            o = r.get("origin", "")
+            o = (row_file(r), r.get("origin", ""))
             # A table is either written in this file or brought in by an `apply`; its rows
             # cannot differ about that. Without this one row could hide behind `null` and
             # never be read back (§15.99).
             was = written.setdefault(o, src is not None)
             if was != (src is not None):
-                raise Bad(f"{t['table']}: some rows of `{o}` are written in this file and "
+                raise Bad(f"{t['table']}: some rows of `{o[1]}` are written in this file and "
                           f"some are not, which no one table is")
             if src is None:
                 continue
             here = tuple(sp is None for sp in src)
             was = shape.setdefault(o, here)
             if was != here:
-                raise Bad(f"{t['table']}: rows of `{o}` disagree about which columns they "
+                raise Bad(f"{t['table']}: rows of `{o[1]}` disagree about which columns they "
                           f"have a cell in")
             ln = r.get("line", 0)
             if not ln:
@@ -2413,7 +2508,7 @@ def check_cells(cert, path):
                           f"is written on")
             prev = at_line.get(o)
             if prev is not None and ln <= prev:
-                raise Bad(f"{t['table']}: row {r['row']} of `{o}` is written at line "
+                raise Bad(f"{t['table']}: row {r['row']} of `{o[1]}` is written at line "
                           f"{ln}, at or above the row before it")
             at_line[o] = ln
             lo, hi = lines_of.get(o, (ln, ln))
@@ -2423,8 +2518,8 @@ def check_cells(cert, path):
                     seen_axis[ai] = True
         for a, (alo, ahi) in lines_of.items():
             for b, (blo, bhi) in lines_of.items():
-                if a < b and alo <= bhi and blo <= ahi:
-                    raise Bad(f"{t['table']}: rows of `{a}` and `{b}` are written among "
+                if a[0] == b[0] and a < b and alo <= bhi and blo <= ahi:
+                    raise Bad(f"{t['table']}: rows of `{a[1]}` and `{b[1]}` are written among "
                               f"each other, which no two tables are")
         if lines_of and not all(seen_axis):
             # A column of a table an `apply` brought in has its cells in that rule's file, where
@@ -2454,6 +2549,7 @@ def check_cells(cert, path):
                 raise Bad(f"{t['table']}: row {r['row']} names {len(src)} cells, the table has {len(axes)} columns")
             here = [sp for sp in src if sp is not None]
             ln = r["line"]
+            lines = others.get(row_file(r), own_lines) if row_file(r) else own_lines
             line = lines[ln - 1] if 0 < ln <= len(lines) else b""
             got = sorted((sp["col"], sp["col"] + sp["len"]) for sp in here)
             if not here and b"|" in line:
@@ -2512,7 +2608,10 @@ def check_cells(cert, path):
                 if text != wsp.get("text"):
                     raise Bad(f"{where}: the file says `{text}` where the certificate quotes `{wsp.get('text')}`")
                 if "name" in e:
-                    if text.strip() != e["name"]:
+                    # A contribution writes its own names without the `<contribution>:` they come
+                    # into the rule with (rulec's §15.231).
+                    by = (r.get("file") or {}).get("contribution", "") if isinstance(r.get("file"), dict) else ""
+                    if text.strip() != e["name"] and not (by and f"{by}:{text.strip()}" == e["name"]):
                         raise Bad(f"{where}: the file writes `{text}`, the certificate reads it as the name {e['name']}")
                 elif "num" in e:
                     if text.strip() != e["num"]:
@@ -3595,6 +3694,14 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED fold answers: {e}")
             ok = False
+    if cert.get("opens"):
+        try:
+            held, terms, by = check_opens(cert, known)
+            out.append(f"  open values: {held} hold what their {terms} terms come to together inside the range they declare"
+                       + (f", {by} of the terms from contributions" if by else ""))
+        except Bad as e:
+            out.append(f"  FAILED open values: {e}")
+            ok = False
     # The reach of a derived value is the interval its own expression is forced into — the
     # cover's "out of reach" leaves are held to that, recomputed here.
     computed = {v["name"] for v in cert.get("values", [])}
@@ -4050,7 +4157,13 @@ def main(argv):
                             STATED.append(f"{loose} literals written in a unit this program cannot read")
                         if apart:
                             STATED.append(f"{apart} rows written in an applied rule, and read back in its own certificate")
-                        lines.append(f"  the file says the same: {read} cells read back from it{rest}")
+                        # Rows a contribution adds are read back out of its own file (§15.231).
+                        others = sorted({r["file"]["path"] for t in cert.get("tables", []) for r in t.get("rows", []) if r.get("file")})
+                        if others:
+                            files = "file" if len(others) == 1 else "files"
+                            lines.append(f"  the files say the same: {read} cells read back from {rule} and the {len(others)} {files} of its contributions{rest}")
+                        else:
+                            lines.append(f"  the file says the same: {read} cells read back from it{rest}")
                     except Bad as e:
                         lines.append(f"  FAILED {e}")
                         ok = False

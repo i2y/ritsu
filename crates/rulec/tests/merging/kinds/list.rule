@@ -1,0 +1,35 @@
+rule reward_points_listed(reward_points) v1
+description "The same answer the old way: the base applied, and the product written again around the promotion, reading the base's two sums"
+
+inputs
+  base_points(base_points)   : number  range >=0 <=10000
+  member(member)             : bool
+  weekend(weekend)           : bool
+  partner_card(partner_card) : bool
+  holiday(holiday)           : bool
+
+outputs
+  points(points) : number  round down(1)
+
+apply base = "reward_points.rule" meaning:97c98269424ace7c
+  base_points = base_points
+  member = member
+  weekend = weekend
+  partner_card = partner_card
+  points -> points_without
+
+table holiday_part
+policy unique
+| holiday | -> from_holiday : rate[step 1%] |
+| true    | 100%                            |
+| false   | 0%                              |
+
+define shop_all : rate = base:shop_bonus + from_holiday
+
+define factor : rate = down((100% + shop_all) * (100% + base:partner_bonus), 1%)
+
+define points : number = down(base_points * factor, 1)
+
+examples
+| base_points | member | weekend | partner_card | holiday | -> points |
+| 100         | true   | false   | true         | true    | 350       |

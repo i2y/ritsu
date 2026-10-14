@@ -1,0 +1,46 @@
+rule reward_points(reward_points) v1
+description "The points an order earns: the base points times the bonus of each kind. The bonuses of one kind add up, and the kinds multiply"
+
+inputs
+  base_points(base_points)   : number  range >=0 <=10000
+  member(member)             : bool
+  weekend(weekend)           : bool
+  partner_card(partner_card) : bool
+
+outputs
+  points(points) : number  round down(1)
+
+table member_part
+policy unique
+| member | -> from_member : rate[step 1%] |
+| true   | 50%                            |
+| false  | 0%                             |
+
+table weekend_part
+policy unique
+| weekend | -> from_weekend : rate[step 1%] |
+| true    | 20%                             |
+| false   | 0%                              |
+
+table partner_part
+policy unique
+| partner_card | -> from_partner : rate[step 1%] |
+| true         | 40%                             |
+| false        | 0%                              |
+
+# The shop's own bonuses add up, and so do a partner's; the two kinds multiply.
+open shop_bonus : rate[step 1%]  combine sum  range >=-100% <=1000%
+  from_member
+  from_weekend
+
+open partner_bonus : rate[step 1%]  combine sum  range >=0% <=1000%
+  from_partner
+
+define factor : rate = down((100% + shop_bonus) * (100% + partner_bonus), 1%)
+
+define points : number = down(base_points * factor, 1)
+
+examples
+| base_points | member | weekend | partner_card | -> points |
+| 100         | true   | false   | false        | 150       |
+| 100         | true   | true    | true         | 238       |

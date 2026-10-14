@@ -280,3 +280,12 @@ fn english_doc_writes_ranges_and_big_amounts_in_english() {
     let ja = run(&["doc", file], "ja");
     assert!(ja.contains("| weight | mass[g] | 1g 〜 4万g |") && ja.contains("0JPY 〜 1000万JPY"), "{ja}");
 }
+
+// §15.227–§15.230: the merging of files.
+golden!(e067_not_open, "E067", "tests/mutants/m_e067.rule", "E067");
+golden!(e068_open_without_range, "E068", "tests/mutants/m_e068.rule", "E068");
+golden!(e131_contribution_out_of_range, "E131", "tests/mutants/m_e131.rule", "E131");
+golden!(e033_added_value, "E033-added", "tests/mutants/m_e033add.rule", "E033");
+golden!(e040_signature, "E040-signature", "tests/mutants/m_e040sig.rule", "E040");
+golden!(e044_ring, "E044-ring", "tests/mutants/m_e044ring.rule", "E044");
+golden!(w132_idle_term, "W132", "tests/mutants/m_w132.rule", "W132");

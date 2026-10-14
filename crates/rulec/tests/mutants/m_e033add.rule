@@ -1,0 +1,5 @@
+contribution app_channel(app_channel) v1
+description "Orders from the app: a channel added with no row of its own and no `default`, so the `-` row of the channel discount decides it in silence (E033)"
+to "../corpus/order_discount.rule" signature:fe7307da2694d75a
+
+extend channel with app
