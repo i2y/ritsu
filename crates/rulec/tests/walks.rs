@@ -588,3 +588,41 @@ fn sqlとnumpyは二つの並びの規則も生成しない() {
     assert!(!out.join("sql").exists() || std::fs::read_dir(out.join("sql")).unwrap().next().is_none(), "SQL was written for a walk");
     assert!(!out.join("numpy").exists() || std::fs::read_dir(out.join("numpy")).unwrap().next().is_none(), "NumPy was written for a walk");
 }
+
+/// The same row, in a rule whose walk has a `max` beside the count: the pool of a walk with more
+/// than one kind of summary holds the count to the row's cell too, out of the sequences that reach
+/// each of its values.
+#[test]
+fn 数えた列と入力の境界が同じ行にあれば_歩きの答えをそろえて境界の対を作る() {
+    let src = r#"rule walk_fee(walk_fee) v1
+description "The handling fee of an order: waived when two or more lines are in stock and the subtotal is 100 dollars or more; the largest quantity is reported too"
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+elements lines(lines)
+  in_stock(in_stock) : bool
+  qty(qty)           : number  range >=0 <=10
+
+outputs
+  fee(fee)         : money[USD]  round down(1USD)
+  largest(largest) : number  round down(1)
+
+count stocked over lines where in_stock = true  range >=0 <=10
+max largest over lines of qty empty 0
+
+table fee_of
+policy first
+| stocked | subtotal  | -> fee : money[USD] |
+| >=2     | >=100USD  | 0USD                |
+| -       | -         | 5USD                |
+"#;
+    let (f, c) = rulec::prepare(src, "walk_fee.rule").unwrap_or_else(|ds| panic!("{ds:?}"));
+    let vs = rulec::vectors::generate(&f, &c);
+    let a = rulec::coverage::audit(&f, &c, "walk_fee.rule", &vs, &[]);
+    assert!(a.ok(), "{:?}", a.missing.iter().map(|m| &m.what).collect::<Vec<_>>());
+    let outside = |v: &rulec::vectors::Vector| {
+        matches!(v.input.get("lines"), Some(Val::Seq(s)) if s.len() == 2) && v.input.get("subtotal") == Some(&Val::Num(Rat::int(99)))
+    };
+    assert!(vs.iter().any(outside), "no vector with two stocked lines and 99 dollars");
+}

@@ -1322,6 +1322,27 @@ fn walk_pool(f: &RuleFile, c: &Checked, cands: &BTreeMap<String, Vec<Val>>) -> V
         let m = with(&a, usize::MAX, Val::Seq(Vec::new()));
         out.push((m, why));
     }
+
+    // A row that holds what a walk answers and a value of the call together: the value's pairs
+    // again, with the sequence that brings the answer to the row's cell (`held_pairs`).
+    let held = |t: &Table, row: &Row| -> Option<BTreeMap<String, Val>> {
+        for (ci, (col, _)) in t.inputs.iter().enumerate() {
+            let Some(cell) = row.cells.get(ci) else { continue };
+            if matches!(cell, Cell::DontCare) {
+                continue;
+            }
+            let Some((_, s, reached)) = reach.iter().find(|(n, _, _)| n == col) else { continue };
+            let ty = c.ty_of(col).unwrap_or(Ty::Number);
+            let vals: Vec<Val> = reached.iter().map(|(r, _)| to_val(*r, &ty)).collect();
+            let Some(v) = satisfying(cell, &vals, &ty, c) else { continue };
+            let i = vals.iter().position(|x| *x == v)?;
+            return Some(with(&BTreeMap::new(), *s, reached[i].1.clone()));
+        }
+        None
+    };
+    let summaries: Vec<String> = f.aggs().map(|d| d.name.text.clone()).collect();
+    let skip = |n: &str| fields.iter().any(|x| x == n) || summaries.iter().any(|x| x == n);
+    out.extend(held_pairs(f, c, cands, &scalars, &skip, &held));
     out
 }
 
@@ -1563,6 +1584,107 @@ fn count_pool(
             let mut m = a.clone();
             m.insert(over.clone(), seq(vec![e]));
             out.push((m, why));
+        }
+    }
+
+    // A row that holds a count and a value of the call together: the value's pairs again, with
+    // as many counted elements as the row's cell asks, or a total that meets it (`held_pairs`).
+    let lengths = |d: &crate::ast::AggDecl| -> Vec<Val> {
+        let top = numeric_bounds(f, &d.name.text, &Ty::Number, c).iter().map(|r| r.num / r.den).max().unwrap_or(1);
+        let cap = c.ranges.get(&d.name.text).and_then(|(_, hi)| *hi).map(|h| h.num / h.den).unwrap_or(top + 1);
+        (0..=(top + 1).min(cap)).map(|n| Val::Num(Rat::int(n))).collect()
+    };
+    let totals = |d: &crate::ast::AggDecl, ty: &Ty| -> Vec<Val> {
+        std::iter::once(Rat::zero())
+            .chain(numeric_bounds(f, &d.name.text, ty, c).into_iter().flat_map(|b| [b, b.sub(Rat::int(1)), b.add(Rat::int(1))]))
+            .filter(|v| crate::coverage::in_range(c, &d.name.text, *v))
+            .map(|v| to_val(v, ty))
+            .collect()
+    };
+    let held = |t: &Table, row: &Row| -> Option<BTreeMap<String, Val>> {
+        for (ci, (col, _)) in t.inputs.iter().enumerate() {
+            let Some(cell) = row.cells.get(ci) else { continue };
+            if matches!(cell, Cell::DontCare) {
+                continue;
+            }
+            if let Some(&(d, hit)) = counted.iter().find(|(d, _)| d.name.text == *col) {
+                let Some(Val::Num(n)) = satisfying(cell, &lengths(d), &Ty::Number, c) else { continue };
+                return Some(BTreeMap::from([(over.clone(), seq((0..n.num).map(|_| hit).collect()))]));
+            }
+            if let Some(&d) = summed.iter().find(|d| d.name.text == *col) {
+                let ty = c.ty_of(col).unwrap_or(Ty::Number);
+                let Some(want) = satisfying(cell, &totals(d, &ty), &ty, c).as_ref().and_then(as_rat) else { continue };
+                if let Some(xs) = total_seq(d, want) {
+                    return Some(BTreeMap::from([(over.clone(), xs)]));
+                }
+            }
+        }
+        None
+    };
+    let skip = |n: &str| fields.iter().any(|x| x == n) || counts.iter().any(|d| d.name.text == n);
+    out.extend(held_pairs(f, c, cands, &scalars, &skip, &held));
+    out
+}
+
+/// The boundary pairs of a row's values of one call, walked with the row's other columns held
+/// (§9.2) and the sequences set to what the row's cells on the walks' answers ask for. A pool
+/// carries a value's pairs with a sequence at rest, which lands on the near side of a cell like
+/// `>=2` on a count: a row `| >=2 | >=100USD |` had no vector with two counted elements and 99
+/// dollars, so the outside point of the subtotal was never run. `held` gives the sequences for a
+/// row, or `None` when its cells on the walks' answers are all `-`, where the pool's own pairs are
+/// already on the row. `skip` names the columns that are not values of the call.
+fn held_pairs(
+    f: &RuleFile,
+    c: &Checked,
+    cands: &BTreeMap<String, Vec<Val>>,
+    scalars: &BTreeMap<String, Val>,
+    skip: &dyn Fn(&str) -> bool,
+    held: &dyn Fn(&Table, &Row) -> Option<BTreeMap<String, Val>>,
+) -> Vec<(BTreeMap<String, Val>, String)> {
+    let mut out = Vec::new();
+    for set in &c.sets {
+        let t = &set.table;
+        for (ri, row) in t.rows.iter().enumerate() {
+            let Some(seqs) = held(t, row) else { continue };
+            let tname = set.row_table(ri).to_string();
+            for (ci, (col, _)) in t.inputs.iter().enumerate() {
+                if skip(col) {
+                    continue;
+                }
+                let Some(ty) = c.ty_of(col) else { continue };
+                if !matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date) {
+                    continue;
+                }
+                let Some(cell) = row.cells.get(ci) else { continue };
+                let q = crate::coverage::quantum(c, col, &ty);
+                let pairs = crate::coverage::thresholds_pub(cell, &ty, q);
+                if pairs.is_empty() {
+                    continue;
+                }
+                let mut a = scalars.clone();
+                for (cj, (other, _)) in t.inputs.iter().enumerate() {
+                    if cj == ci || skip(other) {
+                        continue;
+                    }
+                    let (Some(oc), Some(ovs)) = (row.cells.get(cj), cands.get(other)) else { continue };
+                    let oty = c.ty_of(other).unwrap_or(Ty::Unknown);
+                    if let Some(v) = satisfying(oc, ovs, &oty, c) {
+                        a.insert(other.clone(), v);
+                    }
+                }
+                a.extend(seqs.clone());
+                for (b, inside, outside) in pairs {
+                    let (Some(ain), Some(aout)) =
+                        (place(f, c, &a, col, inside, &BTreeSet::new()), place(f, c, &a, col, outside, &BTreeSet::new()))
+                    else {
+                        continue;
+                    };
+                    let b = crate::coverage::show_rat(b, &ty);
+                    let why = tr!("境界両側: 表 {tname} 行{} {col} {b} の", "boundary pair: table {tname} row {} {col} {b}", row.index);
+                    out.push((ain, tr!("{why}内側", "{why} inside")));
+                    out.push((aout, tr!("{why}外側", "{why} outside")));
+                }
+            }
         }
     }
     out

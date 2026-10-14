@@ -346,3 +346,40 @@ fn 要素ごとの値の出力は混ぜられない_両方を読む項目は二�
     }
 }
 
+
+/// A row that holds a count and a value of the call together (`| >=2 | >=100USD |`): the value's
+/// boundary pair is walked with the count held to the row, so two counted lines and 99 dollars is a
+/// vector and the audit asks for nothing. The pool used to carry the subtotal's pair with one line,
+/// on the near side of `>=2`, and the outside point was never run.
+#[test]
+fn 数えた列と入力の境界が同じ行にあっても境界の対はそろう() {
+    let src = r#"rule bulk_fee(bulk_fee) v1
+description "The handling fee of an order: waived when two or more lines are in stock and the subtotal is 100 dollars or more"
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+elements lines(lines)
+  in_stock(in_stock) : bool
+
+outputs
+  fee(fee) : money[USD]  round down(1USD)
+
+count stocked over lines where in_stock = true  range >=0 <=10
+
+table fee_of
+policy first
+| stocked | subtotal  | -> fee : money[USD] |
+| >=2     | >=100USD  | 0USD                |
+| -       | -         | 5USD                |
+"#;
+    let (f, c) = rulec::prepare(src, "bulk_fee.rule").unwrap_or_else(|ds| panic!("{ds:?}"));
+    let vs = rulec::vectors::generate(&f, &c);
+    let a = rulec::coverage::audit(&f, &c, "bulk_fee.rule", &vs, &[]);
+    assert!(a.ok(), "{:?}", a.missing.iter().map(|m| &m.what).collect::<Vec<_>>());
+    let outside = |v: &rulec::vectors::Vector| {
+        matches!(v.input.get("lines"), Some(rulec::eval::Val::Seq(s)) if s.len() == 2)
+            && v.input.get("subtotal") == Some(&rulec::eval::Val::Num(rulec::num::Rat::int(99)))
+    };
+    assert!(vs.iter().any(outside), "no vector with two stocked lines and 99 dollars");
+}
