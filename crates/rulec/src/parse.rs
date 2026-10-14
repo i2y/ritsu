@@ -73,6 +73,21 @@ fn span_of(ts: &[Token]) -> Span {
     }
 }
 
+/// The shape of `from sum`, `from max` or `from min`, said in the note of an E074 (§15.223).
+fn numeric_shape(word: &str) -> String {
+    if word == crate::kw::SUM {
+        tr!(
+            "形は `from sum <shape の名前>.<並び> of <要素のフィールド> [where <フィールド> = <値>]` です。答えは、`where` に当てはまる要素のフィールドの合計で、当てはまる要素が無ければ 0 です。",
+            "The shape is `from sum <shape>.<collection> of <field> [where <field> = <value>]`: the total of the field over the elements the `where` lets in, and 0 when there are none."
+        )
+    } else {
+        tr!(
+            "形は `from {word} <shape の名前>.<並び> of <要素のフィールド> [where <フィールド> = <値>] empty <値>` です。`empty` は、見る要素が一つも無いときの値です。",
+            "The shape is `from {word} <shape>.<collection> of <field> [where <field> = <value>] empty <value>`; `empty` is the value when no element is looked at."
+        )
+    }
+}
+
 /// The words whose line declares one thing. A block heading (`inputs`, `examples`, …) is not
 /// among them: its heading alone is complete, and its rows speak for themselves.
 const DECLARING: &[&str] = &[
@@ -417,14 +432,22 @@ impl P {
                     self.i += 1;
                 }
                 crate::kw::ELEMENTS => {
-                    let name = self.name_at(&line, 1).map(|(n, _)| n);
+                    let head = self.name_at(&line, 1);
+                    let name = head.as_ref().map(|(n, _)| n.clone());
                     let span = span_of(&line);
+                    // `elements lines from order.lines`: the collection of the caller's object the
+                    // sequence is taken from (§15.223). Anything else after the name used to be
+                    // dropped without a word.
+                    let from = match head.as_ref().map(|(_, k)| *k) {
+                        Some(k) if k < line.len() => self.seq_from(&line[k..]),
+                        _ => None,
+                    };
                     self.i += 1;
                     let fields = self.var_block(crate::kw::ELEMENTS);
                     // A rule may walk more than one sequence (§15.219): which one a summary or a
                     // fold walks is what its `over` says.
                     match name {
-                        Some(name) => f.elements.push(ElementsDecl { name, fields, span }),
+                        Some(name) => f.elements.push(ElementsDecl { name, fields, from, span }),
                         None => self.err(
                             Diag::error("E020", tr!("`elements` に名前がありません", "The `elements` line has no name"))
                                 .at(self.at(span.line))
@@ -965,7 +988,13 @@ impl P {
                 .position(|(k, t)| t.ident() == Some(crate::kw::FROM) && !(k > 0 && line[k - 1].ident() == Some(crate::kw::RANGE)))
                 .unwrap_or(line.len());
             let head = &line[..cut];
-            let from = (cut < line.len()).then(|| self.projection(&line[cut..])).flatten();
+            // A field of an element says where it stands in the element (§15.223), a path and
+            // nothing else; an input says where it stands in the caller's object.
+            let from = match cut < line.len() {
+                false => None,
+                true if section == crate::kw::ELEMENTS => self.elem_path(&line[cut..]),
+                true => self.projection(&line[cut..]),
+            };
             let (range, contract_only) = self.tail_range(head, k);
             self.tail_junk(head, k);
             v.push(VarDecl { name, ty, range, contract_only, from, span: span_of(&line) });
@@ -1028,7 +1057,7 @@ impl P {
         Some(ShapeDecl { name, source, file, at, span: span_of(line) })
     }
 
-    /// The tail of an input line, from `from` to the end (§15.125).
+    /// The tail of an input line, from `from` to the end (§15.125, §15.223).
     fn projection(&mut self, ts: &[Token]) -> Option<Projection> {
         let shape = || {
             Diag::error("E013", tr!("`from` の形が違います", "The shape of `from` is wrong"))
@@ -1039,40 +1068,85 @@ impl P {
                 ))
         };
         let (word, mut k) = match ts.get(1).and_then(|t| t.ident()) {
-            Some(w @ (crate::kw::ANY | crate::kw::ALL | crate::kw::COUNT)) => (Some(w.to_string()), 2),
+            Some(w @ (crate::kw::ANY | crate::kw::ALL | crate::kw::COUNT | crate::kw::SUM | crate::kw::MAX | crate::kw::MIN)) => {
+                (Some(w.to_string()), 2)
+            }
             _ => (None, 1),
         };
+        // `sum`, `max` and `min` read a field of the elements (§15.223). What is wrong with one of
+        // them is E074; the older shapes keep the E013 they always had.
+        let numeric = matches!(word.as_deref(), Some(crate::kw::SUM | crate::kw::MAX | crate::kw::MIN));
+        let fail = |p: &mut Self, at: Span, what: String| {
+            if numeric {
+                let w = word.clone().unwrap_or_default();
+                let line = at.line;
+                p.err(
+                    Diag::error("E074", tr!("`from {w}` の形が違います", "The shape of `from {w}` is wrong"))
+                        .at(p.at(line))
+                        .mark(at, what)
+                        .note(numeric_shape(&w)),
+                );
+            } else if what.is_empty() {
+                p.err(shape());
+            } else {
+                p.err(shape().mark(at, what));
+            }
+        };
+        // A label the older shapes did not carry is left off them, so what they print is unchanged.
+        let new_label = |label: String| if numeric { label } else { String::new() };
         // The path: a name, then `.name` as far as it goes.
         let Some(root) = ts.get(k).and_then(|t| t.ident()).map(|w| Name {
             text: w.to_string(),
             ascii: None,
             span: ts[k].span.clone(),
         }) else {
-            self.err(shape());
+            fail(self, span_of(ts), String::new());
             return None;
         };
         k += 1;
         let mut path = Vec::new();
         while ts.get(k).is_some_and(|t| t.is(&Kind::Dot)) {
             let Some(n) = ts.get(k + 1).and_then(|t| t.ident()) else {
-                self.err(shape());
+                fail(self, span_of(ts), String::new());
                 return None;
             };
             path.push(Name { text: n.to_string(), ascii: None, span: ts[k + 1].span.clone() });
             k += 2;
         }
         if path.is_empty() {
-            self.err(shape());
+            fail(self, span_of(ts), new_label(tr!("`<shape の名前>.<並び>` のパスがありません", "there is no `<shape>.<collection>` path")));
             return None;
         }
+        // `of <field>`: the field of an element `sum`, `max` and `min` read, and only they.
+        let of = if ts.get(k).and_then(|t| t.ident()) == Some(crate::kw::OF) {
+            let Some(field) = ts.get(k + 1).and_then(|t| t.ident()).map(|w| Name { text: w.to_string(), ascii: None, span: ts[k + 1].span.clone() }) else {
+                fail(self, ts[k].span.clone(), tr!("`of` の後に要素のフィールドがありません", "`of` names no field of an element"));
+                return None;
+            };
+            if !numeric {
+                self.misplaced(ts, k, word.as_deref());
+                return None;
+            }
+            k += 2;
+            Some(field)
+        } else {
+            None
+        };
+        if numeric && of.is_none() {
+            fail(self, span_of(ts), tr!("`of <要素のフィールド>` がありません", "there is no `of <field of an element>`"));
+            return None;
+        }
+        // `empty <value>` ends the line, so the test of a `where` stops before it.
+        let e = ts[k..].iter().position(|t| t.ident() == Some(crate::kw::EMPTY)).map(|i| i + k);
+        let end = e.unwrap_or(ts.len());
         // `where <field> [=] <test>`
         let test = if ts.get(k).and_then(|t| t.ident()) == Some(crate::kw::WHERE) {
-            let Some(field) = ts.get(k + 1).and_then(|t| t.ident()).map(|w| Name {
+            let Some(field) = ts.get(k + 1).filter(|_| k + 1 < end).and_then(|t| t.ident()).map(|w| Name {
                 text: w.to_string(),
                 ascii: None,
                 span: ts[k + 1].span.clone(),
             }) else {
-                self.err(shape());
+                fail(self, ts[k].span.clone(), new_label(tr!("`where` の後にフィールドがありません", "`where` names no field")));
                 return None;
             };
             let mut j = k + 2;
@@ -1081,27 +1155,161 @@ impl P {
             }
             // `where chilled` with nothing to compare it to used to reach `cell` with no tokens
             // at all, and index past the end of them (§15.156).
-            if j >= ts.len() {
-                self.err(shape().mark(ts[j - 1].span.clone(), tr!("`where` の後に比べる値がありません", "`where` names a field and nothing to compare it to")));
+            if j >= end {
+                fail(self, ts[j - 1].span.clone(), tr!("`where` の後に比べる値がありません", "`where` names a field and nothing to compare it to"));
                 return None;
             }
-            let c = self.cell(&ts[j..])?;
+            let c = self.cell(&ts[j..end])?;
             Some((field, c))
         } else {
-            self.tail_junk(ts, k);
+            self.tail_junk(&ts[..end], k);
             None
+        };
+        // `empty <value>`: what `max` and `min` give when no element passes, and nothing after it.
+        let empty = match e {
+            None => None,
+            Some(i) => {
+                if !matches!(word.as_deref(), Some(crate::kw::MAX | crate::kw::MIN)) {
+                    self.misplaced(ts, i, word.as_deref());
+                    return None;
+                }
+                let Some(l) = ts.get(i + 1).and_then(lit_of) else {
+                    fail(self, ts[i].span.clone(), tr!("`empty` の後に値がありません", "`empty` has no value after it"));
+                    return None;
+                };
+                if let Some(t) = ts.get(i + 2) {
+                    fail(self, t.span.clone(), tr!("`empty` の値の後ろには何も書けません", "nothing may follow the value of `empty`"));
+                    return None;
+                }
+                Some((l, ts[i + 1].span.clone()))
+            }
         };
         let kind = match (word.as_deref(), test) {
             (None, None) => ProjKind::Field,
             (Some(crate::kw::ANY), Some((n, c))) => ProjKind::Any(n, c),
             (Some(crate::kw::ALL), Some((n, c))) => ProjKind::All(n, c),
             (Some(crate::kw::COUNT), t) => ProjKind::Count(t),
+            (Some(crate::kw::SUM), t) => ProjKind::Sum(of?, t),
+            (Some(crate::kw::MAX), t) => ProjKind::Max(of?, t, empty),
+            (Some(crate::kw::MIN), t) => ProjKind::Min(of?, t, empty),
             _ => {
                 self.err(shape());
                 return None;
             }
         };
         Some(Projection { root, path, kind, span: span_of(ts) })
+    }
+
+    /// E074 for `of` or `empty` where the `from` does not take it (§15.223): `of` belongs to
+    /// `sum`, `max` and `min`, and `empty` to `max` and `min`.
+    fn misplaced(&mut self, ts: &[Token], at: usize, word: Option<&str>) {
+        let kw = ts[at].ident().unwrap_or_default().to_string();
+        let shown = match word {
+            Some(w) => format!("from {w}"),
+            None => crate::kw::FROM.to_string(),
+        };
+        let note = if kw == crate::kw::OF {
+            tr!(
+                "`of <フィールド>` は、要素のフィールドを読む `from sum`・`from max`・`from min` に書きます。",
+                "`of <field>` goes with `from sum`, `from max` and `from min`, which read a field of the elements."
+            )
+        } else {
+            tr!(
+                "`empty <値>` は、見る要素が無いときの値です。それが要るのは `from max` と `from min` だけです。合計なら 0、件数なら 0 件、`any` なら false、`all` なら true に決まっています。",
+                "`empty <value>` is the value when no element is looked at, which only `from max` and `from min` need: a sum of none is 0, a count is 0, `any` is false and `all` is true."
+            )
+        };
+        let line = ts[at].span.line;
+        self.err(
+            Diag::error("E074", tr!("`{shown}` に `{kw}` は書けません", "`{shown}` takes no `{kw}`"))
+                .at(self.at(line))
+                .mark(ts[at].span.clone(), "")
+                .note(note),
+        );
+    }
+
+    /// `from order.lines` after the name on an `elements` line (§15.223): the collection of the
+    /// caller's object the sequence is taken from. A path and nothing else, and nothing else may
+    /// follow the name.
+    fn seq_from(&mut self, ts: &[Token]) -> Option<Projection> {
+        let fail = |p: &mut Self, at: Span, what: String| {
+            let line = at.line;
+            p.err(
+                Diag::error("E074", tr!("`elements … from` の形が違います", "The shape of `elements … from` is wrong"))
+                    .at(p.at(line))
+                    .mark(at, what)
+                    .note(tr!(
+                        "形は `elements <名前>(<別名>)` か、並びを呼び出し側のオブジェクトから取るなら `elements <名前>(<別名>) from <shape の名前>.<並び>` です。そのときフィールドはそれぞれ、要素の中のどこにあるかを `from <要素からのパス>` で書きます。",
+                        "The line is `elements <name>(<alias>)`, or `elements <name>(<alias>) from <shape>.<collection>` to take the sequence from the caller's object; each field then says where it stands in an element with `from <path from the element>`."
+                    )),
+            );
+        };
+        if ts.first().and_then(|t| t.ident()) != Some(crate::kw::FROM) {
+            fail(self, span_of(ts), tr!("名前の後ろに書けるのは `from <shape の名前>.<並び>` だけです", "only `from <shape>.<collection>` may follow the name"));
+            return None;
+        }
+        let Some(root) = ts.get(1).and_then(|t| t.ident()).map(|w| Name { text: w.to_string(), ascii: None, span: ts[1].span.clone() }) else {
+            fail(self, span_of(ts), String::new());
+            return None;
+        };
+        let mut k = 2;
+        let mut path = Vec::new();
+        while ts.get(k).is_some_and(|t| t.is(&Kind::Dot)) {
+            let Some(n) = ts.get(k + 1).and_then(|t| t.ident()) else {
+                fail(self, span_of(ts), String::new());
+                return None;
+            };
+            path.push(Name { text: n.to_string(), ascii: None, span: ts[k + 1].span.clone() });
+            k += 2;
+        }
+        if path.is_empty() || k < ts.len() {
+            let what = if path.is_empty() {
+                tr!("`<shape の名前>.<並び>` のパスがありません", "there is no `<shape>.<collection>` path")
+            } else {
+                tr!("並びは要素を全部取ります。`where` などで絞ることはできません", "a sequence takes every element; nothing narrows it here")
+            };
+            fail(self, span_of(ts), what);
+            return None;
+        }
+        Some(Projection { root, path, kind: ProjKind::Field, span: span_of(ts) })
+    }
+
+    /// `from qty`, `from unit.kind` on a field of an element (§15.223): where the value stands in
+    /// one element. A path from the element, and nothing else: an element is one value of the
+    /// collection, so there is nothing for `any`, `count` or `sum` to walk.
+    fn elem_path(&mut self, ts: &[Token]) -> Option<Projection> {
+        let fail = |p: &mut Self, what: String| {
+            let line = ts[0].span.line;
+            p.err(
+                Diag::error("E074", tr!("要素のフィールドの `from` の形が違います", "The shape of a field's `from` is wrong"))
+                    .at(p.at(line))
+                    .mark(span_of(ts), what)
+                    .note(tr!(
+                        "要素のフィールドの `from` は、要素の中のパスだけです（`from qty`、`from unit.kind`）。並びは `elements <名前> from <shape の名前>.<並び>` の行で取ります。",
+                        "A field of an element says only the path inside the element (`from qty`, `from unit.kind`); the sequence itself is taken on the line `elements <name> from <shape>.<collection>`."
+                    )),
+            );
+        };
+        let step = |t: &Token| t.ident().map(|w| Name { text: w.to_string(), ascii: None, span: t.span.clone() });
+        let Some(root) = ts.get(1).and_then(step) else {
+            fail(self, tr!("`from` の後にパスがありません", "`from` names no path"));
+            return None;
+        };
+        let mut k = 2;
+        let mut path = Vec::new();
+        while ts.get(k).is_some_and(|t| t.is(&Kind::Dot)) {
+            let Some(n) = ts.get(k + 1).and_then(step) else {
+                fail(self, String::new());
+                return None;
+            };
+            path.push(n);
+            k += 2;
+        }
+        if k < ts.len() {
+            fail(self, tr!("パスの後ろには何も書けません", "nothing may follow the path"));
+            return None;
+        }
+        Some(Projection { root, path, kind: ProjKind::Field, span: span_of(ts) })
     }
 
     fn out_block(&mut self) -> Vec<OutDecl> {

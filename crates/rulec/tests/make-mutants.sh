@@ -411,6 +411,17 @@ awk '/^  統計学 / { sub(/requires 微積分$/, "requires 微積分, アルゴ
 # Algorithms made to need introductory programming, which data structures already needs
 awk '{ sub(/^  algorithms        requires data_structures, discrete_math$/, "  algorithms        requires data_structures, discrete_math, intro_programming"); print }' "$k"  > "$M/m_w130.rule"
 awk '/^  アルゴリズム / { sub(/requires データ構造, 離散数学$/, "requires データ構造, 離散数学, プログラミング入門") } { print }' "$kj" > "$M/m_w130ja.rule"
+# --- Sums, largest values and sequences taken from a contract (§15.223). The English rule, and its
+# Japanese version beside it; the mutants reach a copy of the contract by the same relative path
+# the corpus rule uses.
+h="$C/order_handling_fee.rule"
+hj="$C/注文の取扱手数料.rule"
+# A `max` with no `empty`: what the most expensive fragile line is when there is none is not said
+awk '{ sub(/ empty 0USD$/, ""); print }'                                                    "$h"  > "$M/m_e074.rule"
+awk '{ sub(/ empty 0USD$/, ""); print }'                                                    "$hj" > "$M/m_e074ja.rule"
+# The contract's collection renamed: the sequence is taken from a path the contract does not have
+awk '{ sub(/^elements lines from order\.lines$/, "elements lines from order.items"); print }'         "$h"  > "$M/m_e121seq.rule"
+awk '{ sub(/^elements 明細\(lines\) from 注文\.lines$/, "elements 明細(lines) from 注文.items"); print }' "$hj" > "$M/m_e121seqja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

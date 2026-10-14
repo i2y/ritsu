@@ -709,6 +709,32 @@ class, the module or the namespace where the language needs one — and by signa
 of a rule, the methods of the runtime that read it. `without` names the targets that have no
 functions, and why ([generated-code.md](generated-code.md#which-values-need-which-before-them)).
 
+A rule that reads its inputs out of the caller's object (§15.125) carries `projection`; it is
+`null` for a rule that takes its inputs as they come:
+
+```json
+"projection":{"shapes":[{"name":"order","alias":"order","kind":"jsonschema",
+                         "file":"contracts/order_lines.schema.json","at":"#/$defs/Order"}],
+  "inputs":[{"name":"total","alias":"total","from":"sum order.lines of amount_usd"},
+            {"name":"top_fragile","alias":"top_fragile",
+             "from":"max order.lines of amount_usd where fragile = true empty 0USD"}],
+  "elements":[{"name":"lines","alias":"lines","from":"order.lines",
+               "fields":[{"name":"quantity","alias":"quantity","from":"quantity"},
+                         {"name":"amount","alias":"amount","from":"amount_usd"}]}],
+  "python":{"function":"order_handling_fee_from",
+            "signature":"def order_handling_fee_from(order: dict[str, Any]) -> USD:"},…,
+  "without":{"numpy":"it takes columns, and there is no object to read from",
+             "rust":"it holds the caller's object as a type, which would have to be generated or followed",…}}
+```
+
+`shapes` are the contracts as declared; `inputs`, each projected input with its `from` written
+back as the rule writes it; `elements`, each sequence taken from an object (§15.223) with the
+collection it comes from and each field's path from the element — an empty list for a rule that
+takes none, never absent. Each of the five languages that generate the projection function
+gives its name and its signature: the objects first, then the inputs no `from` reaches, then the
+sequences no `from` takes. `without` names the seven targets that have no such function, each
+with the reason, in the language of the run.
+
 ## `graph`
 
 One object: the rule as a graph of **what decides each value and which values it reads**.

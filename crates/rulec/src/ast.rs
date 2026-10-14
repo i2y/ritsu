@@ -212,19 +212,25 @@ pub struct VarDecl {
     /// Where the caller's object holds this input, when it says (§15.125). It changes no
     /// check of the table: what comes out of a projection is a scalar input like any other,
     /// and the region analysis never sees that it was projected.
+    ///
+    /// On a field of an element taken from a contract (`elements lines from order.lines`), it is
+    /// the path **from the element** (§15.223): `root` is its first step and `path` the rest, and
+    /// the kind is always [`ProjKind::Field`]. [`Projection::steps`] gives the whole of it.
     pub from: Option<Projection>,
     pub span: Span,
 }
 
-/// `from order.shipping.prefecture`, and the three that walk one collection.
+/// `from order.shipping.prefecture`, the three that walk one collection to a truth value or a
+/// count, and the three that walk it to a number (§15.223).
 ///
-/// The language stops here on purpose: **one collection, `any` / `all` / `count`, and a
-/// unary test on a field of an element**. A join, a nested quantifier or a path inside a
-/// cell would put the caller's object model inside the checks, and the cell language is
-/// where this tool's boundary is (§0).
+/// The language stops here on purpose: **one collection, `any` / `all` / `count` / `sum` /
+/// `max` / `min`, and a unary test on a field of an element**. A join, a nested quantifier or a
+/// path inside a cell would put the caller's object model inside the checks, and the cell
+/// language is where this tool's boundary is (§0).
 #[derive(Debug, Clone)]
 pub struct Projection {
-    /// The `shape` the path starts at.
+    /// The `shape` the path starts at. On a field of an element, the first step from the
+    /// element (see [`VarDecl::from`]).
     pub root: Name,
     /// The field names after the root, in order. For a walk, the path of the collection.
     pub path: Vec<Name>,
@@ -242,6 +248,15 @@ pub enum ProjKind {
     All(Name, Cell),
     /// `count order.lines [where category = chilled]` — how many pass.
     Count(Option<(Name, Cell)>),
+    /// `sum order.lines of amount [where …]` — the total of one field over the elements that
+    /// pass, 0 when none does (§15.223).
+    Sum(Name, Option<(Name, Cell)>),
+    /// `max order.lines of amount [where …] empty 0円` — the largest value of one field over the
+    /// elements that pass, and the `empty` value, with where it is written, when none does
+    /// (§15.223). Leaving `empty` out is E074.
+    Max(Name, Option<(Name, Cell)>, Option<(Lit, Span)>),
+    /// `min order.lines of due [where …] empty 2026-12-31` — the smallest, the same way.
+    Min(Name, Option<(Name, Cell)>, Option<(Lit, Span)>),
 }
 
 impl ProjKind {
@@ -252,6 +267,9 @@ impl ProjKind {
             ProjKind::Any(..) => crate::kw::ANY,
             ProjKind::All(..) => crate::kw::ALL,
             ProjKind::Count(_) => crate::kw::COUNT,
+            ProjKind::Sum(..) => crate::kw::SUM,
+            ProjKind::Max(..) => crate::kw::MAX,
+            ProjKind::Min(..) => crate::kw::MIN,
         }
     }
 
@@ -259,9 +277,36 @@ impl ProjKind {
     pub fn test(&self) -> Option<(&Name, &Cell)> {
         match self {
             ProjKind::Any(n, c) | ProjKind::All(n, c) => Some((n, c)),
-            ProjKind::Count(Some((n, c))) => Some((n, c)),
+            ProjKind::Count(Some((n, c))) | ProjKind::Sum(_, Some((n, c))) => Some((n, c)),
+            ProjKind::Max(_, Some((n, c)), _) | ProjKind::Min(_, Some((n, c)), _) => Some((n, c)),
             _ => None,
         }
+    }
+
+    /// The field of an element `sum`, `max` and `min` read, after `of` (§15.223).
+    pub fn of(&self) -> Option<&Name> {
+        match self {
+            ProjKind::Sum(n, _) | ProjKind::Max(n, ..) | ProjKind::Min(n, ..) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// The value `max` and `min` give when no element passes, and where it is written.
+    pub fn empty(&self) -> Option<&(Lit, Span)> {
+        match self {
+            ProjKind::Max(_, _, e) | ProjKind::Min(_, _, e) => e.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// `max` or `min`: a walk that picks one value of a field rather than adding them up.
+    pub fn extreme(&self) -> bool {
+        matches!(self, ProjKind::Max(..) | ProjKind::Min(..))
+    }
+
+    /// `sum`, `max` or `min`: a walk to a number read from a field of the elements (§15.223).
+    pub fn numeric(&self) -> bool {
+        self.of().is_some()
     }
 }
 
@@ -269,18 +314,32 @@ impl Projection {
     /// The clause written back as it is read, for the inventory and for the reader's
     /// page. One spelling, so the two cannot disagree.
     pub fn text(&self) -> String {
-        let path = std::iter::once(self.root.text.clone())
-            .chain(self.path.iter().map(|n| n.text.clone()))
-            .collect::<Vec<_>>()
-            .join(".");
-        let head = match self.kind.word() {
+        let path = self.steps().join(".");
+        let mut out = match self.kind.word() {
             "" => path,
             w => format!("{w} {path}"),
         };
-        match self.kind.test() {
-            Some((fd, c)) => format!("{head} {} {} {}", crate::kw::WHERE, fd.text, cell_text(c)),
-            None => head,
+        if let Some(of) = self.kind.of() {
+            out = format!("{out} {} {}", crate::kw::OF, of.text);
         }
+        if let Some((fd, c)) = self.kind.test() {
+            out = format!("{out} {} {} {}", crate::kw::WHERE, fd.text, cell_text(c));
+        }
+        if let Some((l, _)) = self.kind.empty() {
+            out = format!("{out} {} {}", crate::kw::EMPTY, lit_text(l));
+        }
+        out
+    }
+
+    /// Every step written, the root first: `order.lines` as `["order", "lines"]`, and on a field
+    /// of an element the whole path from the element (§15.223).
+    pub fn steps(&self) -> Vec<String> {
+        std::iter::once(self.root.text.clone()).chain(self.path.iter().map(|n| n.text.clone())).collect()
+    }
+
+    /// The steps after the root: the path inside the shape.
+    pub fn path_steps(&self) -> Vec<String> {
+        self.path.iter().map(|n| n.text.clone()).collect()
     }
 }
 
@@ -720,6 +779,11 @@ pub struct ResultDecl {
 pub struct ElementsDecl {
     pub name: Name,
     pub fields: Vec<VarDecl>,
+    /// `elements lines from order.lines`: the collection of the caller's object the sequence is
+    /// taken from, each field then saying with its own `from` where it stands in an element
+    /// (§15.223). The kind is [`ProjKind::Field`]. Like an input's, it changes no check: the
+    /// elements are elements like any others.
+    pub from: Option<Projection>,
     pub span: Span,
 }
 

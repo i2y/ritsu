@@ -1,0 +1,7 @@
+エラー[E074]: `from max` に、見る要素が無いときの値がありません
+  --> tests/mutants/m_e074ja.rule:10
+   |
+10 |   割れ物の最高額(top_fragile) : money[USD]  range >=0USD <=5_000USD    from max 注文.lines of amount_usd where fragile = true
+   |                                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `empty <値>` がありません
+   |
+ 並びが空のときと、`where` に当てはまる要素が無いときに 割れ物の最高額 が何になるかを、`empty <値>` で書いてください。何にするかは業務の判断で、ツールが決められることではありません。

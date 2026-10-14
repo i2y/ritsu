@@ -652,3 +652,226 @@ fn コーパスのprotoの規則は要求をそのまま読む() {
         ],
     );
 }
+
+/// An order read straight from its contract (§15.223): the total and the largest fragile line
+/// out of the object, and its lines as the sequence the rule walks. Each order is one of the
+/// corpus rule's own examples, with the lines its `sequence` lists and the totals its row gives,
+/// so what this holds the five to is a number the reference evaluator already agreed with. The
+/// Japanese version of the rule is run the same way, under its own alias.
+#[test]
+fn 合計と最大と並びは五つの言語で同じ答えを出す() {
+    let line = |q: u32, amount: u32, fragile: bool| format!("{{\"sku\":\"s{q}\",\"quantity\":{q},\"amount_usd\":{amount},\"fragile\":{fragile}}}");
+    let order = |lines: &[String]| format!("{{\"id\":\"o1\",\"lines\":[{}]}}", lines.join(","));
+    let cases: Vec<(String, &str)> = vec![
+        // small_order: 120USD, nothing fragile, no line for a pallet.
+        (order(&[line(2, 40, false), line(1, 80, false)]), "5"),
+        // large_order: 12000USD, handled for free; three lines of 2000USD or more need the forklift.
+        (order(&[line(3, 5000, false), line(2, 5000, false), line(1, 2000, false)]), "10"),
+        // glass_order: the fragile line of 1500USD is the largest.
+        (order(&[line(1, 1500, true), line(4, 600, false)]), "25"),
+        // bulk_order: two lines of 50 pieces or more go on pallets, and need the forklift.
+        (order(&[line(60, 300, false), line(80, 400, false), line(5, 200, false)]), "15"),
+        // The fragile line is not the largest line: the `where` picks the fragile ones first.
+        (order(&[line(1, 1200, false), line(2, 300, true)]), "5"),
+    ];
+    for (rule, alias) in [("tests/corpus/order_handling_fee.rule", "order_handling_fee"), ("tests/corpus/注文の取扱手数料.rule", "order_handling")] {
+        let tmp = TempDir::new("projection-facts");
+        let dir = tmp.path().to_path_buf();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+            .env("RULEC_LANG", "ja")
+            .current_dir(root())
+            .args(["gen", rule, "--out", &dir.join("gen").to_string_lossy()])
+            .output()
+            .expect("rulec を起動できない");
+        assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stdout));
+        five(&dir, alias, &cases);
+    }
+}
+
+/// `sum`, `max` and `min` over a `.proto` collection, and a sequence taken from it, read in the
+/// JSON form protojson gives (§15.223, §15.133): lowerCamelCase names or the `.proto`'s own, an
+/// int64 as a string or a number, an enum's value numbered 0 and a `false` left out of an
+/// element, and no collection at all. The latest date the rule reads is the earliest of the lines'.
+#[test]
+fn protoの合計と最大と最小と並びはprotojsonのとおりに読む() {
+    const PROTO: &str = "syntax = \"proto3\";\npackage shop.v1;\n\n\
+        enum Temp {\n  TEMP_AMBIENT = 0;\n  TEMP_CHILLED = 1;\n}\n\n\
+        message Order {\n  repeated Line order_lines = 1 [(buf.validate.field).repeated.max_items = 20];\n}\n\n\
+        message Line {\n  int64 amount_usd = 1 [(buf.validate.field).int64 = {gte: 0, lte: 5000}];\n  \
+        int64 qty = 2 [(buf.validate.field).int64 = {gte: 1, lte: 99}];\n  bool is_fragile = 3;\n  Temp temp = 4;\n  \
+        string ships_on = 5 [(buf.validate.field).string.min_len = 1];\n}\n";
+    const RULE: &str = "rule 明細の集計(line_totals) v1\n\n\
+        shape 注文(order) = proto \"order.proto\" shop.v1.Order\n\n\
+        inputs\n  \
+        合計(total)       : money[USD]  range >=0USD <=100000USD  from sum 注文.order_lines of amount_usd\n  \
+        割れ物(fragile)   : money[USD]  range >=0USD <=5000USD    from max 注文.order_lines of amount_usd where is_fragile = true empty 0USD\n  \
+        冷蔵の最小(cold)  : money[USD]  range >=0USD <=5000USD    from min 注文.order_lines of amount_usd where temp = TEMP_CHILLED empty 0USD\n  \
+        最初の出荷(first) : date  range >=2020-01-01 <=2030-12-31  from min 注文.order_lines of ships_on empty 2030-12-31\n\n\
+        elements 明細(lines) from 注文.order_lines\n  \
+        数量(qty)           : number  range >=1 <=99  from qty\n  \
+        割れ物か(breakable) : bool                    from is_fragile\n\n\
+        outputs\n  手数料(fee) : money[USD]  round up(1USD)\n\n\
+        table 大口(bulk)\npolicy unique\n\
+        | 数量 | 割れ物か | -> 大口か(big) : bool |\n\
+        | >=50 | -        | true                  |\n\
+        | <50  | true     | true                  |\n\
+        | <50  | false    | false                 |\n\n\
+        count 大口数(bigs) over 明細 where 大口か  range >=0 <=20\n\n\
+        table 決め(decide)\npolicy first\n\
+        | 合計       | 割れ物    | 冷蔵の最小 | 最初の出荷   | 大口数 | -> 手数料 |\n\
+        | >=10000USD | -         | -          | -            | -      | 0USD      |\n\
+        | -          | >=1000USD | -          | -            | -      | 25USD     |\n\
+        | -          | -         | >=1USD     | -            | -      | 20USD     |\n\
+        | -          | -         | -          | <=2026-06-30 | -      | 18USD     |\n\
+        | -          | -         | -          | -            | >=2    | 15USD     |\n\
+        | -          | -         | -          | -            | -      | 5USD      |\n";
+    let (_tmp, dir) = built("pb-facts", RULE, ("order.proto", PROTO));
+    five(
+        &dir,
+        "line_totals",
+        &[
+            // protojson as it comes: the fragile line is the largest fragile one.
+            ("{\"orderLines\":[{\"amountUsd\":\"1200\",\"qty\":\"2\",\"isFragile\":true,\"shipsOn\":\"2027-01-05\"},{\"amountUsd\":\"300\",\"qty\":\"1\",\"shipsOn\":\"2027-02-01\"}]}".into(), "25"),
+            // The `.proto`'s own names: the smallest chilled line.
+            ("{\"order_lines\":[{\"amount_usd\":\"100\",\"qty\":\"3\",\"temp\":\"TEMP_CHILLED\",\"ships_on\":\"2027-01-05\"},{\"amount_usd\":\"40\",\"qty\":\"1\",\"temp\":\"TEMP_CHILLED\",\"ships_on\":\"2027-03-01\"}]}".into(), "20"),
+            // An int64 written as a number, and the earliest date before the half of the year.
+            ("{\"orderLines\":[{\"amountUsd\":100,\"qty\":\"3\",\"shipsOn\":\"2026-05-01\"},{\"amountUsd\":\"40\",\"qty\":\"1\",\"shipsOn\":\"2027-03-01\"}]}".into(), "18"),
+            // Two lines of 50 pieces or more, a `false` left out of each.
+            ("{\"orderLines\":[{\"amountUsd\":\"100\",\"qty\":\"60\",\"shipsOn\":\"2027-05-01\"},{\"amountUsd\":\"40\",\"qty\":\"70\",\"shipsOn\":\"2027-03-01\"}]}".into(), "15"),
+            // No collection at all: a total of 0, and every `empty` value.
+            ("{}".into(), "5"),
+            // A total of 12000USD.
+            ("{\"orderLines\":[{\"amountUsd\":\"5000\",\"qty\":\"1\",\"shipsOn\":\"2027-05-01\"},{\"amountUsd\":\"5000\",\"qty\":\"1\",\"shipsOn\":\"2027-03-01\"},{\"amountUsd\":\"2000\",\"qty\":\"1\",\"shipsOn\":\"2027-03-01\"}]}".into(), "0"),
+        ],
+    );
+}
+
+/// A rule that takes one sequence out of the object and is still passed another: the one it
+/// takes is built in the projection function, the other stays its parameter, and what `rulec
+/// api` says the function takes is what each module declares (§15.223). Before, the signatures in
+/// `api` listed no sequence at all, while the functions took every one.
+#[test]
+fn 並びを取る規則のapiの署名は生成物と同じ() {
+    const SCHEMA: &str = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"required\":[\"lines\"],\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":10,\
+        \"items\":{\"type\":\"object\",\"required\":[\"qty\"],\"properties\":{\"qty\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":9}}}}}}}}";
+    const RULE: &str = "rule 二つの並び(two_lists) v1\n\n\
+        shape 注文(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+        elements 明細(lines) from 注文.lines\n  数(qty) : number  range >=1 <=9  from qty\n\n\
+        elements 支払い(payments)\n  額(amount) : money[円]  range >=1円 <=1000円\n\n\
+        outputs\n  件数(n) : number  round down(1)\n\n\
+        count 多い(many) over 明細 where 多いか  range >=0 <=10\n\
+        sum 払った(paid) over 支払い of 額  range >=0円 <=10000円\n";
+    // A rule that walks two sequences and decides from both: `n` is how many lines have 5 or more.
+    let rule = RULE.replace(
+        "count 多い(many)",
+        "table 判定(judge)\npolicy unique\n| 数  | -> 多いか(big) : bool |\n| >=5 | true                  |\n| <5  | false                 |\n\ncount 多い(many)",
+    ) + "\ntable 決め(decide)\npolicy unique\n| 多い | 払った | -> 件数 |\n| -    | -      | 1       |\n";
+    let (_tmp, dir) = built("two-lists", &rule, ("order.json", SCHEMA));
+    let api = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&dir).args(["api", "r.rule"]).output().expect("rulec を起動できない");
+    let api = String::from_utf8_lossy(&api.stdout).into_owned();
+    let out = dir.join("gen");
+    for (lang, file, needle) in [
+        ("python", "python/two_lists.py", "def two_lists_from("),
+        ("typescript", "typescript/two_lists.ts", "export function two_lists_from("),
+        ("php", "php/two_lists.php", "function two_lists_from("),
+    ] {
+        let text = std::fs::read_to_string(out.join(file)).unwrap();
+        let line = text.lines().find(|l| l.starts_with(needle)).unwrap_or_else(|| panic!("{file} に射影関数がありません"));
+        // The signature as the module writes it, up to the body.
+        let sig = line.trim_end_matches(" {").trim_end_matches(':').to_string();
+        let sig = if lang == "python" { format!("{sig}:") } else { sig };
+        assert!(api.contains(&format!("\"signature\":{}", rulec::json::quote(&sig))), "{lang}: api の署名が生成物と違います:\n{sig}\n{api}");
+        assert!(sig.contains("payments") && !sig.contains("lines"), "{lang}: 渡される並びは支払いだけのはず: {sig}");
+    }
+    assert!(api.contains("\"elements\":[{\"name\":\"明細\",\"alias\":\"lines\",\"from\":\"注文.lines\",\"fields\":[{\"name\":\"数\",\"alias\":\"qty\",\"from\":\"qty\"}]}]"), "{api}");
+}
+
+/// The shapes `from sum`, `from max`, `from min` and `elements … from` take, and what is said
+/// when one is wrong (§15.223): E074 for the shape, E120 for a type, E121 for a path.
+#[test]
+fn 合計と最大と並びの形の誤りを言う() {
+    const SCHEMA: &str = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"required\":[\"lines\",\"id\"],\"properties\":{\"id\":{\"type\":\"string\"},\"lines\":{\"type\":\"array\",\"maxItems\":10,\
+        \"items\":{\"type\":\"object\",\"required\":[\"amount\",\"sku\"],\"properties\":{\"amount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":100},\"sku\":{\"type\":\"string\"}}}}}}}}";
+    let check = |tag: &str, body: &str| -> String {
+        let tmp = TempDir::new(&format!("facts-{tag}"));
+        let dir = tmp.path().to_path_buf();
+        std::fs::write(dir.join("order.json"), SCHEMA).unwrap();
+        let rule = format!("rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n{body}\n\noutputs\n  x(x) : bool\n\ntable t(t)\npolicy unique\n| a | -> x |\n| - | true |\n");
+        std::fs::write(dir.join("r.rule"), rule).unwrap();
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").current_dir(&dir).args(["check", "r.rule"]).output().expect("rulec を起動できない");
+        String::from_utf8_lossy(&o.stdout).into_owned()
+    };
+    let input = |from: &str| format!("inputs\n  a(a) : money[USD]  range >=0USD <=1000USD  from {from}");
+    for (tag, body, want) in [
+        ("max-empty", input("max order.lines of amount"), "error[E074]: `from max` has no value for when no element is looked at"),
+        ("sum-of", input("sum order.lines"), "error[E074]: The shape of `from sum` is wrong"),
+        ("count-of", "inputs\n  a(a) : number  range >=0 <=10  from count order.lines of amount".to_string(), "error[E074]: `from count` takes no `of`"),
+        ("sum-empty", input("sum order.lines of amount empty 0USD"), "error[E074]: `from sum` takes no `empty`"),
+        ("empty-range", input("min order.lines of amount empty 2000USD"), "error[E074]: The `empty` value `2000USD` is outside the range of a"),
+        ("empty-type", input("max order.lines of amount empty 2026-01-01"), "error[E074]: The `empty` value `2026-01-01` is not a value of money[USD]"),
+        ("sum-bool", "inputs\n  a(a) : bool  from sum order.lines of amount".to_string(), "error[E120]: `from sum` yields a number"),
+        ("of-string", input("max order.lines of sku empty 0USD"), "error[E120]: The field `sku` of an element does not fit the input"),
+        ("of-missing", input("sum order.lines of price"), "error[E121]: An element has no field `price`"),
+        ("not-collection", input("sum order.id of amount"), "error[E120]: `order.id` is not a collection"),
+    ] {
+        let out = check(tag, &body);
+        assert!(out.contains(want), "{tag}: `{want}` が出ません:\n{out}");
+        assert_eq!(out.matches("error[").count(), 1, "{tag}: エラーは一つのはず:\n{out}");
+    }
+    // A sequence taken from the contract: its line, and a field that says no path.
+    let walked = |head: &str, field: &str| {
+        format!("{head}\n  {field}\n\ninputs\n  a(a) : number  range >=0 <=10  from count order.lines\n\ntable b(b)\npolicy unique\n| amount | -> big : bool |\n| >=50USD | true         |\n| <50USD  | false        |\n\ncount n(n) over items where big  range >=0 <=10")
+    };
+    for (tag, body, want) in [
+        ("seq-junk", walked("elements items(items) from order.lines where amount = 1", "amount(amount) : money[USD]  range >=0USD <=100USD  from amount"), "error[E074]: The shape of `elements … from` is wrong"),
+        ("seq-word", walked("elements items(items) of order.lines", "amount(amount) : money[USD]  range >=0USD <=100USD"), "error[E074]: The shape of `elements … from` is wrong"),
+        ("field-walk", walked("elements items(items) from order.lines", "amount(amount) : money[USD]  range >=0USD <=100USD  from sum amount"), "error[E074]: The shape of a field's `from` is wrong"),
+        ("field-none", walked("elements items(items) from order.lines", "amount(amount) : money[USD]  range >=0USD <=100USD"), "error[E074]: The field amount does not say where it stands in an element of `order.lines`"),
+        ("field-alone", walked("elements items(items)", "amount(amount) : money[USD]  range >=0USD <=100USD  from amount"), "error[E074]: The sequence items is not taken from a contract"),
+        ("seq-path", walked("elements items(items) from order.items", "amount(amount) : money[USD]  range >=0USD <=100USD  from amount"), "error[E121]: The contract has no path `order.items`"),
+        ("field-path", walked("elements items(items) from order.lines", "amount(amount) : money[USD]  range >=0USD <=100USD  from price"), "error[E121]: The contract has no path `order.lines[].price`"),
+        ("field-type", walked("elements items(items) from order.lines", "amount(amount) : money[USD]  range >=0USD <=100USD  from sku"), "error[E120]: The type at `order.lines[].sku` does not fit the field"),
+    ] {
+        let out = check(tag, &body);
+        assert!(out.contains(want), "{tag}: `{want}` が出ません:\n{out}");
+    }
+}
+
+/// The seven targets that get no projection function are named as the rest is written, each with
+/// the reason, and `rulec api` lists the same under `projection.without` (§15.223): a target that
+/// cannot write a function says so by name, the way a walk or a column of strings does.
+#[test]
+fn 射影の関数の無い生成先を名前で言う() {
+    let tmp = TempDir::new("projection-without");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .current_dir(root())
+        .args(["gen", "tests/corpus/order_shipping_fee.rule", "--out", &tmp.path().to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(o.status.success());
+    let out = String::from_utf8_lossy(&o.stdout);
+    let said = |name: &str| out.contains(&format!("{name}: the function that reads the inputs out of the caller's object (`order_shipping_fee_from`) is not generated for this target: "));
+    for name in ["NumPy", "Rust", "Go", "Swift", "Java", "SQL", "Wasm"] {
+        assert!(said(name), "{name} が名前で言われていません:\n{out}");
+    }
+    for name in ["Python", "TypeScript", "JavaScript", "Ruby", "PHP"] {
+        assert!(!said(name), "{name} は射影の関数を書くのに、書かないと言われました:\n{out}");
+    }
+    let api = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").current_dir(root()).args(["api", "tests/corpus/order_shipping_fee.rule"]).output().expect("rulec を起動できない");
+    let api = rulec::json::parse(String::from_utf8_lossy(&api.stdout).trim()).expect("api の出力が JSON でない");
+    let without = api.get("projection").and_then(|p| p.get("without")).expect("projection.without が無い");
+    let keys: Vec<String> = rulec::json::members(without).expect("without がオブジェクトでない").into_keys().map(str::to_string).collect();
+    let mut keys = keys;
+    keys.sort();
+    assert_eq!(keys, vec!["go", "java", "numpy", "rust", "sql", "swift", "wasm"]);
+    // A rule that projects nothing says nothing of it.
+    let tmp = TempDir::new("projection-without-none");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .current_dir(root())
+        .args(["gen", "tests/corpus/member_shipping_fee.rule", "--out", &tmp.path().to_string_lossy()])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(!String::from_utf8_lossy(&o.stdout).contains("caller's object"));
+}

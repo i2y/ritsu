@@ -1,0 +1,77 @@
+rule order_handling_fee v1
+description "The handling fee of an order, decided from the order object the shop's API receives: the order's total and its most expensive fragile line are read out of the object, and its lines become the sequence the rule walks. An example of a sum, a largest value and a sequence taken from a contract"
+
+# The caller has already fixed the shape of an order with a JSON Schema. The total, the largest
+# fragile line and the lines themselves are read from it: the code that flattens the order is
+# generated, and every check holds each path against the contract.
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  total       : money[USD]  range >=0USD <=100_000USD  from sum order.lines of amount_usd
+  top_fragile : money[USD]  range >=0USD <=5_000USD    from max order.lines of amount_usd where fragile = true
+
+# One line of the order, taken from the order object as it is
+elements lines from order.lines
+  quantity : number      range >=1 <=99          from quantity
+  amount   : money[USD]  range >=1USD <=5000USD  from amount_usd
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+# A line of 50 pieces or more, or one worth 2000USD or more, goes on a pallet
+table pallet
+policy unique
+| quantity | amount    | -> pallet_line : bool |
+| >=50     | -         | true                  |
+| <50      | >=2000USD | true                  |
+| <50      | <2000USD  | false                 |
+
+count pallet_lines over lines where pallet_line  range >=0 <=20
+
+# A large order is handled for free, and an expensive fragile item is packed with care
+table handling
+policy unique
+| total      | top_fragile | -> base : money[USD] |
+| >=10000USD | -           | 0USD                 |
+| <10000USD  | >=1000USD   | 25USD                |
+| <10000USD  | <1000USD    | 5USD                 |
+
+# Two pallets or more need the forklift
+table forklift
+policy unique
+| pallet_lines | -> lift : money[USD] |
+| >=2          | 10USD                |
+| <2           | 0USD                 |
+
+define handling_fee : money[USD] = base + lift
+
+result fee = handling_fee
+
+examples
+| total    | top_fragile | lines       | -> fee |
+| 120USD   | 0USD        | small_order | 5USD   |
+| 12000USD | 0USD        | large_order | 10USD  |
+| 2100USD  | 1500USD     | glass_order | 25USD  |
+| 900USD   | 0USD        | bulk_order  | 15USD  |
+
+sequence small_order
+| quantity | amount |
+| 2        | 40USD  |
+| 1        | 80USD  |
+
+sequence large_order
+| quantity | amount  |
+| 3        | 5000USD |
+| 2        | 5000USD |
+| 1        | 2000USD |
+
+sequence glass_order
+| quantity | amount  |
+| 1        | 1500USD |
+| 4        | 600USD  |
+
+sequence bulk_order
+| quantity | amount |
+| 60       | 300USD |
+| 80       | 400USD |
+| 5        | 200USD |

@@ -114,6 +114,13 @@ pub struct Backend {
     /// names them as written without, `rulec api` says they lack the functions, and `rulec test`
     /// says it skipped them.
     pub prereqs: bool,
+    /// Whether the module has the function that reads the inputs, and the sequences, out of the
+    /// caller's object (`<alias>_from`, §15.125, §15.223). The five that hold a parsed JSON object
+    /// as a plain map do. Go, Swift, Java and Rust hold it as a type, which would have to be
+    /// generated or followed; SQL takes flat columns, NumPy columns, and Wasm one JSON object of
+    /// the rule's own inputs, so there is no object to read from. `rulec gen` names the targets
+    /// that say no, and `rulec api` lists them under `projection.without`.
+    pub projects: bool,
     /// The words this language will not let **any** identifier be — its keywords
     /// (§15.103). Every ASCII alias reaches at least one target verbatim: measured, a rule
     /// with an input aliased `type` generated Rust that reads `pub fn sum(type: i64, …)`
@@ -325,6 +332,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: true,
         reserved: words::PYTHON.reserved,
         globals: words::PYTHON.globals,
         modules: words::PYTHON.modules,
@@ -376,6 +384,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: false,
         reserved: words::NUMPY.reserved,
         globals: words::NUMPY.globals,
         modules: words::NUMPY.modules,
@@ -411,6 +420,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: true,
         reserved: words::TYPESCRIPT.reserved,
         globals: words::TYPESCRIPT.globals,
         modules: words::TYPESCRIPT.modules,
@@ -446,6 +456,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: true,
         reserved: words::JAVASCRIPT.reserved,
         globals: words::JAVASCRIPT.globals,
         modules: words::JAVASCRIPT.modules,
@@ -498,6 +509,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: false,
         reserved: words::RUST.reserved,
         globals: words::RUST.globals,
         modules: words::RUST.modules,
@@ -531,6 +543,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: true,
         reserved: words::RUBY.reserved,
         globals: words::RUBY.globals,
         modules: words::RUBY.modules,
@@ -565,6 +578,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: true,
         reserved: words::PHP.reserved,
         globals: words::PHP.globals,
         modules: words::PHP.modules,
@@ -598,6 +612,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: false,
         reserved: words::GO.reserved,
         globals: words::GO.globals,
         modules: words::GO.modules,
@@ -641,6 +656,7 @@ pub const ALL: &[Backend] = &[
         owner_source: Some(|m| format!("{m}.swift")),
         labels: true,
         prereqs: true,
+        projects: false,
         reserved: words::SWIFT.reserved,
         globals: words::SWIFT.globals,
         modules: words::SWIFT.modules,
@@ -701,6 +717,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: true,
         prereqs: true,
+        projects: false,
         reserved: words::JAVA.reserved,
         globals: words::JAVA.globals,
         modules: words::JAVA.modules,
@@ -737,6 +754,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: false,
         prereqs: false,
+        projects: false,
         reserved: words::SQL.reserved,
         globals: words::SQL.globals,
         modules: words::SQL.modules,
@@ -793,6 +811,7 @@ pub const ALL: &[Backend] = &[
         owner_source: None,
         labels: false,
         prereqs: false,
+        projects: false,
         reserved: words::WASM.reserved,
         globals: words::WASM.globals,
         modules: words::WASM.modules,

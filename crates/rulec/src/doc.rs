@@ -400,7 +400,7 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         // this as "what the application has to have got right", and `check` held the path
         // to the contract before the page was rendered.
         if let Some(pr) = &i.from {
-            note.push(tr!("生成コードが呼び出し側のオブジェクトから読みます: `{}`", "Taken from the caller's object: `{}`", pr.text()));
+            note.push(tr!("生成コードが呼び出し側のオブジェクトから読みます: {}", "Taken from the caller's object: {}", projection_words(pr)));
         }
         // The days of a koyomi date (§15.174): the reader reads which file decides them, and
         // that the checks held the tables to those days only.
@@ -440,14 +440,32 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
     // --- The sequence the rule walks, and the fields of one element (§15.56). A reader
     // who cannot see these is reading half the rule: the caller passes them too.
     for el in &f.elements {
+        // A sequence taken from the caller's object says where it comes from, and each field
+        // where it stands in an element (§15.223).
+        let intro = match &el.from {
+            Some(p) => tr!(
+                "一件ぶんのフィールドです。生成コードが、呼び出し側のオブジェクトの `{}` から要素を一件ずつ取り、各フィールドを注記のパスから読みます。",
+                "The fields of one element. The generated code takes the elements from `{}` of the caller's object, and reads each field from the path in its notes.",
+                p.steps().join(".")
+            ),
+            None => tr!(
+                "一件ぶんのフィールドです。呼び出し側は、このフィールドのそろった要素を何件でも渡せます。",
+                "The fields of one element. The caller passes any number of elements, each with these fields filled in."
+            ),
+        };
         o.push_str(&tr!(
-            "\n## 順に見ていく並び: {}\n\n一件ぶんのフィールドです。呼び出し側は、このフィールドのそろった要素を何件でも渡せます。\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
-            "\n## The sequence walked: {}\n\nThe fields of one element. The caller passes any number of elements, each with these fields filled in.\n\n| Name | Type | Range | Notes |\n|---|---|---|---|\n",
+            "\n## 順に見ていく並び: {}\n\n{intro}\n\n| 名前 | 型 | 範囲 | 注記 |\n|---|---|---|---|\n",
+            "\n## The sequence walked: {}\n\n{intro}\n\n| Name | Type | Range | Notes |\n|---|---|---|---|\n",
             el.name.text
         ));
         for fd in &el.fields {
             let n = &fd.name.text;
-            let note = trailing_comment(&lines, fd.name.span.line).unwrap_or_default();
+            let mut note: Vec<String> = Vec::new();
+            if let Some(p) = &fd.from {
+                note.push(tr!("要素の `{}` から読みます", "read from `{}` of the element", p.steps().join(".")));
+            }
+            note.extend(trailing_comment(&lines, fd.name.span.line));
+            let note = note.join(" / ");
             o.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
                 md_esc(n),
@@ -1337,6 +1355,35 @@ fn machine_section(f: &RuleFile, c: &Checked, lines: &[&str]) -> String {
 }
 
 /// Whether the walk answers with `held` (only `exhausted` may say it, E021).
+/// What a projection reads out of the caller's object, in words (§15.223): `` `order.lines` の
+/// `amount` の合計 ``, `` the total of `amount` over the elements of `order.lines` ``. A path to
+/// one value is the path.
+fn projection_words(pr: &crate::ast::Projection) -> String {
+    use crate::ast::ProjKind;
+    let path = pr.steps().join(".");
+    let test = pr.kind.test().map(|(fd, c)| format!("{} {}", fd.text, crate::ast::cell_text(c)));
+    let of = pr.kind.of().map(|n| n.text.clone()).unwrap_or_default();
+    let empty = pr.kind.empty().map(|(l, _)| l.src()).unwrap_or_default();
+    match (&pr.kind, &test) {
+        (ProjKind::Field, _) => format!("`{path}`"),
+        (ProjKind::Any(..), Some(t)) => tr!("`{path}` のうち `{t}` の要素があるか", "whether some element of `{path}` has `{t}`"),
+        (ProjKind::All(..), Some(t)) => tr!("`{path}` の要素がどれも `{t}` か", "whether every element of `{path}` has `{t}`"),
+        (ProjKind::Count(_), Some(t)) => tr!("`{path}` のうち `{t}` の要素の数", "the number of elements of `{path}` with `{t}`"),
+        (ProjKind::Count(_), None) => tr!("`{path}` の要素の数", "the number of elements of `{path}`"),
+        (ProjKind::Sum(..), Some(t)) => tr!("`{path}` のうち `{t}` の要素の `{of}` の合計", "the total of `{of}` over the elements of `{path}` with `{t}`"),
+        (ProjKind::Sum(..), None) => tr!("`{path}` の `{of}` の合計", "the total of `{of}` over the elements of `{path}`"),
+        (ProjKind::Max(..) | ProjKind::Min(..), t) => {
+            let (ja, en) = if matches!(pr.kind, ProjKind::Max(..)) { ("最大", "largest") } else { ("最小", "smallest") };
+            match t {
+                Some(t) => tr!("`{path}` のうち `{t}` の要素の `{of}` の{ja}。無ければ {empty}", "the {en} `{of}` of the elements of `{path}` with `{t}`, {empty} when there is none"),
+                None => tr!("`{path}` の `{of}` の{ja}。無ければ {empty}", "the {en} `{of}` of the elements of `{path}`, {empty} when there is none"),
+            }
+        }
+        // `any` and `all` always have a test.
+        (_, None) => format!("`{}`", pr.text()),
+    }
+}
+
 /// What one summary is, in one sentence (§15.219): `the largest price over lines, 0 when there
 /// is none`.
 fn summary_text(d: &crate::ast::AggDecl) -> String {

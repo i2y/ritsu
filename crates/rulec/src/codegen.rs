@@ -1748,7 +1748,7 @@ const PY_BUILTINS: [(&str, &str); 10] = [
 ];
 
 /// The other names the module defines at its top level beside the bound builtins: the helpers.
-const PY_HELPERS: [&str; 20] = [
+const PY_HELPERS: [&str; 22] = [
     "_Trace",
     "_min",
     "_max",
@@ -1769,6 +1769,8 @@ const PY_HELPERS: [&str; 20] = [
     "_proto",
     "_dig",
     "_days",
+    "_largest",
+    "_smallest",
 ];
 
 /// Whether `word` stands in `text` as a name of its own, not as part of a longer one.
@@ -8991,27 +8993,47 @@ impl Gen<'_> {
                 )
             })
             .collect();
+        // The sequences taken out of an object (§15.223): where each comes from, and where each
+        // field stands in an element. The list is empty for a rule that takes none, and never
+        // absent.
+        let elements: Vec<String> = self
+            .f
+            .elements
+            .iter()
+            .filter_map(|el| {
+                let p = el.from.as_ref()?;
+                let fields: Vec<String> = el
+                    .fields
+                    .iter()
+                    .filter_map(|fd| {
+                        let q = fd.from.as_ref()?;
+                        Some(crate::json::Obj::new().str("name", &fd.name.text).str("alias", &pub_name(&fd.name)).str("from", &q.text()).finish())
+                    })
+                    .collect();
+                Some(
+                    crate::json::Obj::new()
+                        .str("name", &el.name.text)
+                        .str("alias", &pub_name(&el.name))
+                        .str("from", &p.text())
+                        .raw("fields", crate::json::arr(&fields))
+                        .finish(),
+                )
+            })
+            .collect();
         let one = |f: &str, sig: String| crate::json::Obj::new().str("function", f).str("signature", &sig).finish();
         let py_ret = self.py_ret();
-        let mut py_params: Vec<String> =
-            self.proj_params().iter().map(|r| format!("{}: dict[str, Any]", self.ident(r))).collect();
-        py_params.extend(
-            self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text)))),
-        );
+        let py_params = self.py_from_params();
         let ts_ret = match self.f.outputs.len() {
             1 => self.ts_ty(&self.ty_of(&self.f.outputs[0].name.text)),
             _ => "Output".into(),
         };
-        let mut ts_params: Vec<String> = self.proj_params().iter().map(|r| format!("{}: _Obj", self.ident(r))).collect();
-        ts_params.extend(
-            self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))),
-        );
-        let mut plain: Vec<String> = self.proj_params().iter().map(|r| self.ident(r)).collect();
-        plain.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
+        let ts_params = self.ts_from_params();
+        let plain = self.plain_from_params();
         let fname = self.ident(&alias);
         crate::json::Obj::new()
             .raw("shapes", crate::json::arr(&shapes))
             .raw("inputs", crate::json::arr(&inputs))
+            .raw("elements", crate::json::arr(&elements))
             .raw("python", one(&format!("{alias}_from"), format!("def {alias}_from({}) -> {py_ret}:", py_params.join(", "))))
             .raw(
                 "typescript",
@@ -9026,6 +9048,13 @@ impl Gen<'_> {
                 one(&format!("{fname}_from"), format!("{}.{fname}_from({})", self.rb_module(), plain.join(", "))),
             )
             .raw("php", one(&format!("{alias}_from"), self.php_from_signature()))
+            .raw("without", {
+                let mut without = crate::json::Obj::new();
+                for b in crate::backend::ALL.iter().filter(|b| !b.projects) {
+                    without = without.str(b.id, &proj_why(b.id));
+                }
+                without.finish()
+            })
             .finish()
     }
 
@@ -11466,7 +11495,8 @@ impl<'a> Gen<'a> {
                     .iter()
                     .map(|i| format!("{} {}", self.rbs_ty(&self.ty_of(&i.name.text)), pub_name(&i.name))),
             );
-            from.extend(self.f.elements.iter().enumerate().map(|(s, el)| format!("Array[{}] {}", self.element_type(s), pub_name(&el.name))));
+            // A sequence taken out of the object is built there, not passed (§15.223).
+            from.extend(self.proj_seq_rest().into_iter().map(|s| format!("Array[{}] {}", self.element_type(s), pub_name(&self.f.elements[s].name))));
             o.push_str(&format!(
                 "  def self.{}_from: ({}) -> {ret}\n",
                 pub_name(&self.f.name),
@@ -13560,30 +13590,46 @@ pub(crate) struct Proj<'x> {
     pub(crate) proto: Option<crate::projection::ProtoPath>,
 }
 
+/// A sequence the projection function builds out of the caller's object (§15.223): which of the
+/// rule's sequences it is, the collection it is taken from, and each field of an element read
+/// from one element — a [`Proj`] whose root is the name the language's loop gives the element.
+pub(crate) struct SeqProj<'x> {
+    pub(crate) s: usize,
+    /// The shape's alias, which is the parameter the projection takes.
+    pub(crate) root: String,
+    pub(crate) path: Vec<String>,
+    /// How the collection is read when the shape is a `.proto`: its JSON form (§15.133).
+    pub(crate) proto: Option<crate::projection::ProtoPath>,
+    pub(crate) fields: Vec<Proj<'x>>,
+}
+
 impl<'a> Gen<'a> {
-    /// The projections of this rule, in the order the inputs are declared.
-    pub(crate) fn projections(&self) -> Vec<Proj<'_>> {
-        let reads = if self.f.shapes.iter().any(|d| d.source == crate::ast::EnumSource::Proto) {
+    /// How each path is read from a `.proto` shape, by the name it is read into.
+    fn proto_reads(&self) -> std::collections::HashMap<String, crate::projection::ProtoPath> {
+        if self.f.shapes.iter().any(|d| d.source == crate::ast::EnumSource::Proto) {
             crate::projection::proto_paths(self.f, &self.path)
         } else {
             Default::default()
-        };
+        }
+    }
+
+    /// The parameter a shape is passed as: its public name.
+    fn shape_param(&self, root: &str) -> String {
+        self.f.shapes.iter().find(|d| d.name.text == root).map(pub_name_of_shape).unwrap_or_else(|| root.to_string())
+    }
+
+    /// The projections of this rule, in the order the inputs are declared.
+    pub(crate) fn projections(&self) -> Vec<Proj<'_>> {
+        let reads = self.proto_reads();
         self.f
             .inputs
             .iter()
             .filter_map(|i| {
                 let p = i.from.as_ref()?;
-                let root = self
-                    .f
-                    .shapes
-                    .iter()
-                    .find(|d| d.name.text == p.root.text)
-                    .map(pub_name_of_shape)
-                    .unwrap_or_else(|| p.root.text.clone());
                 Some(Proj {
                     jp: i.name.text.clone(),
                     ty: self.ty_of(&i.name.text),
-                    root,
+                    root: self.shape_param(&p.root.text),
                     path: p.path.iter().map(|n| n.text.clone()).collect(),
                     kind: &p.kind,
                     proto: reads.get(&i.name.text).cloned(),
@@ -13592,26 +13638,107 @@ impl<'a> Gen<'a> {
             .collect()
     }
 
-    /// The parameters the projection function takes: one per shape some input is projected
-    /// from, in the order the shapes are declared. A rule with no projection has none, and
-    /// no projection function is written.
+    /// The sequences taken from the caller's object (§15.223), in the order they are declared,
+    /// with their fields read from one element called `elem`.
+    pub(crate) fn seq_projections(&self, elem: &str) -> Vec<SeqProj<'_>> {
+        let reads = self.proto_reads();
+        self.f
+            .elements
+            .iter()
+            .enumerate()
+            .filter_map(|(s, el)| {
+                let sp = el.from.as_ref()?;
+                let fields = el
+                    .fields
+                    .iter()
+                    .filter_map(|fd| {
+                        let p = fd.from.as_ref()?;
+                        Some(Proj {
+                            jp: fd.name.text.clone(),
+                            ty: self.ty_of(&fd.name.text),
+                            root: elem.to_string(),
+                            path: p.steps(),
+                            kind: &p.kind,
+                            proto: reads.get(&fd.name.text).cloned(),
+                        })
+                    })
+                    .collect();
+                Some(SeqProj { s, root: self.shape_param(&sp.root.text), path: sp.path_steps(), proto: reads.get(&el.name.text).cloned(), fields })
+            })
+            .collect()
+    }
+
+    /// The parameters the projection function takes: one per shape some input or sequence is
+    /// projected from, in the order the shapes are declared. A rule with no projection has none,
+    /// and no projection function is written.
     pub(crate) fn proj_params(&self) -> Vec<String> {
+        let roots = |p: &Option<crate::ast::Projection>, d: &crate::ast::ShapeDecl| p.as_ref().is_some_and(|p| p.root.text == d.name.text);
         self.f
             .shapes
             .iter()
-            .filter(|d| self.f.inputs.iter().any(|i| i.from.as_ref().is_some_and(|p| p.root.text == d.name.text)))
+            .filter(|d| self.f.inputs.iter().any(|i| roots(&i.from, d)) || self.f.elements.iter().any(|e| roots(&e.from, d)))
             .map(pub_name_of_shape)
             .collect()
     }
 
+    /// The sequences the caller still passes as they are, by their index: the ones no `from`
+    /// takes out of the object (§15.223).
+    pub(crate) fn proj_seq_rest(&self) -> Vec<usize> {
+        self.f.elements.iter().enumerate().filter(|(_, el)| el.from.is_none()).map(|(s, _)| s).collect()
+    }
+
     /// Whether this rule projects at all. Every emitter asks before writing anything.
     pub fn projects(&self) -> bool {
-        self.f.inputs.iter().any(|i| i.from.is_some())
+        self.f.inputs.iter().any(|i| i.from.is_some()) || self.f.elements.iter().any(|e| e.from.is_some())
+    }
+
+    /// Every read the projection function makes that ends at one value: the inputs it reads, and
+    /// each field of an element of a sequence it builds.
+    fn proj_reads_all(&self) -> Vec<Proj<'_>> {
+        let mut v = self.projections();
+        for q in self.seq_projections("_e") {
+            v.extend(q.fields);
+        }
+        v
+    }
+
+    /// Which of the two helpers `max` and `min` over a contract's collection need (§15.223): the
+    /// largest, and the smallest.
+    pub(crate) fn proj_extremes(&self) -> (bool, bool) {
+        let ps = self.projections();
+        (ps.iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Max(..))), ps.iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Min(..))))
+    }
+
+    /// What `max` or `min` gives when no element passes, as the integer the rule takes: a number
+    /// at the input's wire scale, a date as its day number (§15.223).
+    pub(crate) fn proj_empty(&self, p: &Proj) -> String {
+        let v = match (p.kind.empty(), p.ty.present()) {
+            (Some((Lit::Num(n), _)), t) => crate::types::lit_value_in_pub(n, t).map(|v| crate::types::wire_int(v, self.c.wire_scale(&p.jp))),
+            (Some((Lit::Date(y, m, d), _)), _) => {
+                let r = crate::types::date_ord(*y, *m, *d);
+                Some(r.num / r.den)
+            }
+            _ => None,
+        };
+        v.unwrap_or(0).to_string()
+    }
+
+    /// The name of the helper that picks the largest or the smallest value (§15.223).
+    pub(crate) fn extreme_helper(kind: &crate::ast::ProjKind) -> &'static str {
+        if matches!(kind, crate::ast::ProjKind::Max(..)) { "_largest" } else { "_smallest" }
     }
 
     /// The docstring every language puts on the projection function, in one place so the
     /// five say the same thing.
     pub(crate) fn proj_doc(&self) -> String {
+        // A rule that takes a sequence out of the object says so (§15.223); every other keeps the
+        // sentence it always had.
+        if self.f.elements.iter().any(|e| e.from.is_some()) {
+            return tr!(
+                "呼び出し側のオブジェクトから入力と並びを取り出して、この規則を呼びます。パスは宣言した契約に照らして検査済みです。",
+                "Reads the inputs and the sequences out of the caller's object and calls this rule. The paths were held to the declared contract before this was written."
+            );
+        }
         tr!(
             "呼び出し側のオブジェクトから入力を取り出して、この規則を呼びます。パスは宣言した契約に照らして検査済みです。",
             "Reads the inputs out of the caller's object and calls this rule. The paths were held to the declared contract before this was written."
@@ -13728,10 +13855,11 @@ pub(crate) fn elem_cond_with(cell: &Cell, at: &str, y: &Syn, lit: &dyn Fn(&Lit) 
 }
 
 impl<'a> Gen<'a> {
-    /// Whether some projected value lands in an optional input, which reads a field the
-    /// contract lets an object leave out: the Python side then needs `_dig` (§15.132).
+    /// Whether some projected value lands in an optional input, or an optional field of an
+    /// element (§15.223), which reads a field the contract lets an object leave out: the Python
+    /// side then needs `_dig` (§15.132).
     pub(crate) fn proj_optional(&self) -> bool {
-        self.projections()
+        self.proj_reads_all()
             .iter()
             .any(|p| p.proto.is_none() && matches!(p.kind, crate::ast::ProjKind::Field) && matches!(p.ty, Ty::Opt(_)))
     }
@@ -13739,7 +13867,7 @@ impl<'a> Gen<'a> {
     /// Whether some projection reads a `.proto` contract's JSON form, which every one of the
     /// five reads through its own `_proto` (§15.133).
     pub(crate) fn proj_proto(&self) -> bool {
-        self.projections().iter().any(|p| p.proto.is_some())
+        self.proj_reads_all().iter().any(|p| p.proto.is_some()) || self.seq_projections("_e").iter().any(|q| q.proto.is_some())
     }
 
     /// The two defaults a `.proto` read passes to `_proto`, in one language's spelling: what the
@@ -13775,12 +13903,40 @@ impl<'a> Gen<'a> {
             (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
             (None, _) => "True".into(),
         };
+        // The field `sum`, `max` and `min` read, as protojson writes it (§15.223).
+        let of = || match &pp.of {
+            Some((j, n, z)) if j == n => format!("_e.get({j:?}, {})", lit(z)),
+            Some((j, n, z)) => format!("_e.get({j:?}, _e.get({n:?}, {}))", lit(z)),
+            None => format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()),
+        };
         match p.kind {
             crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("_any({} for _e in {walk})", cond()),
             crate::ast::ProjKind::All(..) => format!("_all({} for _e in {walk})", cond()),
             crate::ast::ProjKind::Count(None) => format!("_len({walk})"),
             crate::ast::ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {walk} if {})", cond()),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                self.py_numeric(p, &walk, of(), p.kind.test().map(|_| cond()))
+            }
+        }
+    }
+
+    /// `sum`, `max` and `min` in Python (§15.223): the field `read` of every element of `walk`
+    /// that passes `cond`, as the integer the rule takes, added up or the largest or smallest of
+    /// them picked. A date is its day number.
+    fn py_numeric(&self, p: &Proj, walk: &str, read: String, cond: Option<String>) -> String {
+        let tail = match cond {
+            Some(c) => format!(" for _e in {walk} if {c}"),
+            None => format!(" for _e in {walk}"),
+        };
+        let date = matches!(p.ty, Ty::Date);
+        let each = if date { format!("_days({read})") } else { format!("_int({read})") };
+        match p.kind {
+            crate::ast::ProjKind::Sum(..) => self.py_take(&p.ty, format!("_sum({each}{tail})")),
+            _ => {
+                let v = format!("{}([{each}{tail}], {})", Self::extreme_helper(p.kind), self.proj_empty(p));
+                if date { v } else { self.py_take(&p.ty, v) }
+            }
         }
     }
 
@@ -13810,12 +13966,40 @@ impl<'a> Gen<'a> {
             (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
             (None, _) => "true".into(),
         };
+        // The field `sum`, `max` and `min` read, as protojson writes it (§15.223).
+        let of = || match &pp.of {
+            Some((j, n, z)) if j == n => format!("(_e[{j:?}] ?? {})", lit(z)),
+            Some((j, n, z)) => format!("(_e[{j:?}] ?? _e[{n:?}] ?? {})", lit(z)),
+            None => format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()),
+        };
         match p.kind {
             crate::ast::ProjKind::Field => self.ts_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("({walk} as _Row[]).some((_e) => {})", cond()),
             crate::ast::ProjKind::All(..) => format!("({walk} as _Row[]).every((_e) => {})", cond()),
             crate::ast::ProjKind::Count(None) => format!("BigInt(({walk} as _Row[]).length)"),
             crate::ast::ProjKind::Count(Some(_)) => format!("BigInt(({walk} as _Row[]).filter((_e) => {}).length)", cond()),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                self.ts_numeric(p, &walk, of(), p.kind.test().map(|_| cond()))
+            }
+        }
+    }
+
+    /// `sum`, `max` and `min` in TypeScript (§15.223), as `py_numeric` writes them in Python. Every
+    /// value is a BigInt, which reads a number and the string protojson writes a 64-bit integer as.
+    fn ts_numeric(&self, p: &Proj, walk: &str, read: String, cond: Option<String>) -> String {
+        let rows = match cond {
+            Some(c) => format!("({walk} as _Row[]).filter((_e) => {c})"),
+            None => format!("({walk} as _Row[])"),
+        };
+        let date = matches!(p.ty, Ty::Date);
+        let each = if date { format!("_days(String({read}))") } else { format!("BigInt({read})") };
+        let v = match p.kind {
+            crate::ast::ProjKind::Sum(..) => format!("{rows}.reduce((_s, _e) => _s + {each}, 0n)"),
+            _ => format!("{}({rows}.map((_e) => {each}), {}n)", Self::extreme_helper(p.kind), self.proj_empty(p)),
+        };
+        match &p.ty {
+            Ty::Number | Ty::Date => v,
+            ty => format!("({v}) as {}", brand_of(ty)),
         }
     }
 
@@ -13840,17 +14024,42 @@ impl<'a> Gen<'a> {
             (Some((fd, c)), None) => elem_cond(c, &format!("e[{:?}]", fd.text), &syn),
             (None, _) => "true".into(),
         };
+        // The field `sum`, `max` and `min` read, as protojson writes it (§15.223).
+        let of = || match &pp.of {
+            Some((j, n, z)) if j == n => format!("e.fetch({j:?}, {})", lit(z)),
+            Some((j, n, z)) => format!("e.fetch({j:?}) {{ e.fetch({n:?}, {}) }}", lit(z)),
+            None => format!("e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()),
+        };
         match p.kind {
             crate::ast::ProjKind::Field => self.rb_take(&p.ty, walk),
             crate::ast::ProjKind::Any(..) => format!("{walk}.any? {{ |e| {} }}", cond()),
             crate::ast::ProjKind::All(..) => format!("{walk}.all? {{ |e| {} }}", cond()),
             crate::ast::ProjKind::Count(None) => format!("{walk}.length"),
             crate::ast::ProjKind::Count(Some(_)) => format!("{walk}.count {{ |e| {} }}", cond()),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                self.rb_numeric(p, &walk, of(), p.kind.test().map(|_| cond()))
+            }
+        }
+    }
+
+    /// `sum`, `max` and `min` in Ruby (§15.223), as `py_numeric` writes them in Python. `max` and
+    /// `min` of no values are nil, which is where the `empty` value comes in.
+    fn rb_numeric(&self, p: &Proj, walk: &str, read: String, cond: Option<String>) -> String {
+        let rows = match cond {
+            Some(c) => format!("{walk}.select {{ |e| {c} }}"),
+            None => walk.to_string(),
+        };
+        let each = if matches!(p.ty, Ty::Date) { format!("_days({read})") } else { format!("({read}).to_i") };
+        match p.kind {
+            crate::ast::ProjKind::Sum(..) => format!("{rows}.sum {{ |e| {each} }}"),
+            crate::ast::ProjKind::Max(..) => format!("({rows}.map {{ |e| {each} }}.max || {})", self.proj_empty(p)),
+            _ => format!("({rows}.map {{ |e| {each} }}.min || {})", self.proj_empty(p)),
         }
     }
 
     /// Hinnant's days_from_civil, the inverse of the `civil_from_days` the record function
-    /// already writes. Emitted only when a projected input is a date, because that is the
+    /// already writes. Emitted only when a projected value is a date — an input, a field of an
+    /// element, or the latest or earliest date of a collection (§15.223) — because that is the
     /// only place a contract's `YYYY-MM-DD` has to become the day number the rule counts in.
     pub(crate) fn proj_dates(&self) -> bool {
         let date = |t: &Ty| match t {
@@ -13858,7 +14067,7 @@ impl<'a> Gen<'a> {
             Ty::Opt(i) => matches!(i.as_ref(), Ty::Date),
             _ => false,
         };
-        self.projections().iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Field) && date(&p.ty))
+        self.proj_reads_all().iter().any(|p| (matches!(p.kind, crate::ast::ProjKind::Field) || p.kind.extreme()) && date(&p.ty))
     }
 
     /// The inputs a projection does not reach, which the projection function takes as it
@@ -13914,7 +14123,43 @@ impl<'a> Gen<'a> {
             crate::ast::ProjKind::All(..) => format!("_all({} for _e in {walk})", cond(p.kind.test())),
             crate::ast::ProjKind::Count(None) => format!("_len({walk})"),
             crate::ast::ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {walk} if {})", cond(p.kind.test())),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                let of = format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default());
+                self.py_numeric(p, &walk, of, p.kind.test().map(|t| cond(Some(t))))
+            }
         }
+    }
+
+    /// The parameters of the Python projection function, with their types: the objects, the
+    /// inputs no `from` reaches, and the sequences no `from` takes out of an object (§15.223).
+    fn py_from_params(&self) -> Vec<String> {
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{}: dict[str, Any]", self.ident(r))).collect();
+        params.extend(self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text)))));
+        for s in self.proj_seq_rest() {
+            params.push(format!("{}: list[{}]", pub_name(&self.f.elements[s].name), self.element_type(s)));
+        }
+        params
+    }
+
+    /// The public name of a field of an element, by the rule's name for it.
+    fn elem_field_alias(&self, s: usize, jp: &str) -> String {
+        self.f.elements[s].fields.iter().find(|fd| fd.name.text == jp).map(|fd| pub_name(&fd.name)).unwrap_or_else(|| jp.to_string())
+    }
+
+    /// One sequence built out of the caller's object in Python (§15.223): an element of the
+    /// rule's own type for every element of the collection, each field read from that element.
+    fn py_seq(&self, q: &SeqProj) -> String {
+        let root = self.ident(&q.root);
+        let walk = match &q.proto {
+            Some(pp) => {
+                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("({j:?}, {n:?})")).collect();
+                let tuple = if steps.len() == 1 { format!("({},)", steps[0]) } else { format!("({})", steps.join(", ")) };
+                format!("_proto({root}, {tuple}, [], [])")
+            }
+            None => q.path.iter().fold(root, |o, s| format!("{o}[{s:?}]")),
+        };
+        let fields: Vec<String> = q.fields.iter().map(|p| format!("{}={}", self.elem_field_alias(q.s, &p.jp), self.py_proj(p))).collect();
+        format!("[{}({}) for _e in {walk}]", self.element_type(q.s), fields.join(", "))
     }
 
     fn py_from(&self) -> String {
@@ -13922,14 +14167,7 @@ impl<'a> Gen<'a> {
             return String::new();
         }
         let alias = pub_name(&self.f.name);
-        let mut params: Vec<String> =
-            self.proj_params().iter().map(|r| format!("{}: dict[str, Any]", self.ident(r))).collect();
-        params.extend(
-            self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text)))),
-        );
-        for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: list[{}]", pub_name(&el.name), self.element_type(s)));
-        }
+        let params = self.py_from_params();
         let mut o = String::new();
         if self.proj_proto() {
             o.push_str(
@@ -13963,6 +14201,15 @@ impl<'a> Gen<'a> {
                  return era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy - 719468\n\n\n",
             );
         }
+        // The largest and the smallest value of a field over a collection, or the value for none
+        // (§15.223). `max` and `min` here are Python's: these helpers hold no name of the rule's.
+        let (largest, smallest) = self.proj_extremes();
+        if largest {
+            o.push_str("def _largest(vs: list[int], empty: int) -> int:\n    return max(vs) if len(vs) > 0 else empty\n\n\n");
+        }
+        if smallest {
+            o.push_str("def _smallest(vs: list[int], empty: int) -> int:\n    return min(vs) if len(vs) > 0 else empty\n\n\n");
+        }
         o.push_str(&format!(
             "def {alias}_from({}) -> {}:\n    \"\"\"{}\"\"\"\n    return {alias}(\n",
             params.join(", "),
@@ -13977,8 +14224,13 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("        {e},\n"));
         }
-        for el in &self.f.elements {
-            o.push_str(&format!("        {},\n", pub_name(&el.name)));
+        let seqs = self.seq_projections("_e");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let e = match seqs.iter().find(|q| q.s == s) {
+                Some(q) => self.py_seq(q),
+                None => pub_name(&el.name),
+            };
+            o.push_str(&format!("        {e},\n"));
         }
         o.push_str("    )\n");
         o
@@ -14037,7 +14289,45 @@ impl<'a> Gen<'a> {
             crate::ast::ProjKind::Count(Some(_)) => {
                 format!("BigInt(({walk} as _Row[]).filter((_e) => {}).length)", cond())
             }
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                let of = format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default());
+                self.ts_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
+            }
         }
+    }
+
+    /// The parameters of the TypeScript projection function, with their types, in the order
+    /// `py_from_params` gives them (§15.223).
+    fn ts_from_params(&self) -> Vec<String> {
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{}: _Obj", self.ident(r))).collect();
+        params.extend(self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))));
+        for s in self.proj_seq_rest() {
+            params.push(format!("{}: {}[]", pub_name(&self.f.elements[s].name), self.element_type(s)));
+        }
+        params
+    }
+
+    /// The parameters with no types, as JavaScript and Ruby write them.
+    fn plain_from_params(&self) -> Vec<String> {
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| self.ident(r)).collect();
+        params.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
+        params.extend(self.proj_seq_rest().into_iter().map(|s| pub_name(&self.f.elements[s].name)));
+        params
+    }
+
+    /// One sequence built out of the caller's object in TypeScript (§15.223): an object of the
+    /// element's interface for every element of the collection.
+    fn ts_seq(&self, q: &SeqProj) -> String {
+        let root = self.ident(&q.root);
+        let walk = match &q.proto {
+            Some(pp) => {
+                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
+                format!("_proto({root}, [{}], [], [])", steps.join(", "))
+            }
+            None => q.path.iter().fold(root, |o, s| format!("{o}[{s:?}]")),
+        };
+        let fields: Vec<String> = q.fields.iter().map(|p| format!("{}: {}", self.elem_field_alias(q.s, &p.jp), self.ts_proj(p))).collect();
+        format!("({walk} as _Row[]).map((_e) => ({{ {} }}))", fields.join(", "))
     }
 
     fn ts_from(&self) -> String {
@@ -14046,13 +14336,7 @@ impl<'a> Gen<'a> {
         }
         let alias = pub_name(&self.f.name);
         let fname = self.ident(&alias);
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{}: _Obj", self.ident(r))).collect();
-        params.extend(
-            self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))),
-        );
-        for (s, el) in self.f.elements.iter().enumerate() {
-            params.push(format!("{}: {}[]", pub_name(&el.name), self.element_type(s)));
-        }
+        let params = self.ts_from_params();
         let outs = &self.f.outputs;
         let ret = if outs.len() == 1 { self.ts_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
         let mut o = String::new();
@@ -14084,6 +14368,25 @@ impl<'a> Gen<'a> {
                  return BigInt(era * 146097 + doe - 719468);\n}\n\n",
             );
         }
+        // The largest and the smallest value of a field over a collection, or the value for none
+        // (§15.223).
+        let (largest, smallest) = self.proj_extremes();
+        for (want, name, op) in [(largest, "_largest", ">"), (smallest, "_smallest", "<")] {
+            if want {
+                o.push_str(&format!(
+                    "function {name}(vs: bigint[], empty: bigint): bigint {{\n  \
+                     let m = empty;\n  \
+                     let seen = false;\n  \
+                     for (const v of vs) {{\n    \
+                     if (!seen || v {op} m) {{\n      \
+                     m = v;\n      \
+                     seen = true;\n    \
+                     }}\n  \
+                     }}\n  \
+                     return m;\n}}\n\n"
+                ));
+            }
+        }
         o.push_str(&format!(
             "/** {} */\nexport function {fname}_from({}): {ret} {{\n  return {fname}(\n",
             self.proj_doc(),
@@ -14097,8 +14400,13 @@ impl<'a> Gen<'a> {
             };
             o.push_str(&format!("    {e},\n"));
         }
-        for el in &self.f.elements {
-            o.push_str(&format!("    {},\n", pub_name(&el.name)));
+        let seqs = self.seq_projections("_e");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            let e = match seqs.iter().find(|q| q.s == s) {
+                Some(q) => self.ts_seq(q),
+                None => pub_name(&el.name),
+            };
+            o.push_str(&format!("    {e},\n"));
         }
         o.push_str("  );\n}\n");
         o
@@ -14141,6 +14449,10 @@ impl<'a> Gen<'a> {
             crate::ast::ProjKind::All(..) => format!("{walk}.all? {{ |e| {} }}", cond()),
             crate::ast::ProjKind::Count(None) => format!("{walk}.length"),
             crate::ast::ProjKind::Count(Some(_)) => format!("{walk}.count {{ |e| {} }}", cond()),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                let of = format!("e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default());
+                self.rb_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
+            }
         }
     }
 
@@ -14150,11 +14462,7 @@ impl<'a> Gen<'a> {
         }
         let alias = pub_name(&self.f.name);
         let fname = self.ident(&alias);
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| self.ident(r)).collect();
-        params.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
-        for el in &self.f.elements {
-            params.push(pub_name(&el.name));
-        }
+        let params = self.plain_from_params();
         let mut o = String::new();
         if self.proj_proto() {
             o.push_str(
@@ -14189,14 +14497,33 @@ impl<'a> Gen<'a> {
                 None => pub_name(&i.name),
             });
         }
-        for el in &self.f.elements {
-            args.push(pub_name(&el.name));
+        let seqs = self.seq_projections("e");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            args.push(match seqs.iter().find(|q| q.s == s) {
+                Some(q) => self.rb_seq(q),
+                None => pub_name(&el.name),
+            });
         }
         for a in &args {
             o.push_str(&format!("      {a},\n"));
         }
         o.push_str("    )\n  end\n");
         o
+    }
+
+    /// One sequence built out of the caller's object in Ruby (§15.223): a `Struct` of the
+    /// element's for every element of the collection, its fields in the order they are declared.
+    fn rb_seq(&self, q: &SeqProj) -> String {
+        let root = self.ident(&q.root);
+        let walk = match &q.proto {
+            Some(pp) => {
+                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
+                format!("_proto({root}, [{}], Array.new, Array.new)", steps.join(", "))
+            }
+            None => q.path.iter().fold(root, |o, s| format!("{o}[{s:?}]")),
+        };
+        let fields: Vec<String> = q.fields.iter().map(|p| self.rb_proj(p)).collect();
+        format!("{walk}.map {{ |e| {}.new({}) }}", self.element_type(q.s), fields.join(", "))
     }
 }
 
@@ -14542,6 +14869,12 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
             if !b.prereqs && !f.prerequisites.is_empty() && !json {
                 let _ = writeln!(out, "{}", prereq_skipped(b.name));
             }
+            // The function that reads a rule's inputs out of the caller's object, where the
+            // language has no object to read them from (§15.125, §15.223): the rule is generated,
+            // and the reader told which function it lacks.
+            if !b.projects && g.projects() && !json {
+                let _ = writeln!(out, "{}", proj_skipped(b.name, b.id, &alias));
+            }
             for (rel, body) in (b.files)(&g, &alias, &pkg) {
                 targets.push((format!("{out_dir}/{rel}"), body));
             }
@@ -14658,6 +14991,34 @@ fn prereq_not_here(name: &str) -> String {
     tr!(
         "{name}: `enums` のファイルの前提のつながりは、この言語には生成しません。列挙の値は規則の計画が持ち、前提は規則に書いた塊だけを持ちます",
         "{name}: an `enums` file's `prerequisites` are not generated for this target: a rule's plan holds the values of its enums, and the blocks the rule itself writes"
+    )
+}
+
+/// Why a target writes no function that reads the inputs out of the caller's object (§15.125,
+/// §15.223), by its id: what `rulec gen` says, and what `rulec api` lists under
+/// `projection.without`.
+pub(crate) fn proj_why(id: &str) -> String {
+    match id {
+        "sql" => tr!("平たい列の関係を受け取るので、取り出す相手のオブジェクトがありません", "it takes a relation of flat columns, and there is no object to read from"),
+        "numpy" => tr!("列を受け取るので、取り出す相手のオブジェクトがありません", "it takes columns, and there is no object to read from"),
+        "wasm" => tr!(
+            "入口は規則自身の入力の JSON を一つ受け取るので、取り出す相手のオブジェクトがありません",
+            "its one entry takes a JSON object of the rule's own inputs, and there is no object to read from"
+        ),
+        _ => tr!(
+            "呼び出し側のオブジェクトを型で持つ言語で、その型を生成するか、呼び出し側の型に合わせて書くことになります",
+            "it holds the caller's object as a type, which would have to be generated or followed"
+        ),
+    }
+}
+
+/// What `rulec gen` says of a target that gets no function reading the inputs out of the caller's
+/// object (§15.125, §15.223).
+fn proj_skipped(name: &str, id: &str, alias: &str) -> String {
+    let why = proj_why(id);
+    tr!(
+        "{name}: この言語には、呼び出し側のオブジェクトから入力を取り出す関数（`{alias}_from`）を生成しません。{why}",
+        "{name}: the function that reads the inputs out of the caller's object (`{alias}_from`) is not generated for this target: {why}"
     )
 }
 

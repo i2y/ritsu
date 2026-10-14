@@ -160,6 +160,8 @@ const CORPUS: &[&str] = &[
 "tests/corpus/order_settlement.rule",
 "tests/corpus/earliest_due.rule",
 "tests/corpus/rate_adjustment.rule",
+"tests/corpus/order_handling_fee.rule",
+"tests/corpus/注文の取扱手数料.rule",
 ];
 
 /// The `enums` files four of the rules above read (§15.212). They hold no table, so the checks of

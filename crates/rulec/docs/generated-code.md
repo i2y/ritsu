@@ -1027,7 +1027,34 @@ function was written, so a field the contract renamed is E121 at build time rath
 because a type for it would be a domain object model and this tool makes none.
 
 A rule may project some inputs and pass the rest: the ones with no `from` stay parameters of
-the projection function, after the objects, and a sequence stays last.
+the projection function, after the objects, and a sequence the object does not hold stays last.
+
+A `sum`, a `max` or a `min` reads one field of every element that passes, and a sequence taken
+from the object is built where the function calls the rule — an element of the rule's own type
+for each element of the collection. From `order_handling_fee` in the corpus, in Python:
+
+```python
+def order_handling_fee_from(order: dict[str, Any]) -> USD:
+    return order_handling_fee(
+        USD(_int(_sum(_int(_e["amount_usd"]) for _e in order["lines"]))),
+        USD(_int(_largest([_int(_e["amount_usd"]) for _e in order["lines"] if _e["fragile"]], 0))),
+        [Element(quantity=_int(_e["quantity"]), amount=USD(_int(_e["amount_usd"]))) for _e in order["lines"]],
+    )
+```
+
+`_largest` and `_smallest` are two helpers written beside it when the rule needs them: the
+largest (smallest) value of a list, or the `empty` value when the list is empty. Each of the
+other four has the same sum and the same two helpers or their equivalent, and reads a date as
+its day number, as it is read everywhere. A sequence taken from the object is no longer a
+parameter: the function takes the objects, the inputs no `from` reaches and the sequences no
+`from` takes, in that order.
+
+TypeScript and JavaScript add the BigInts up with `reduce` and make each element an object
+literal (`{ quantity: …, amount: … }`, of the element's interface in TypeScript).
+
+Ruby adds up with `sum` and writes `max || <empty>` and `min || <empty>` for the two helpers,
+and PHP adds up with `array_sum`. Ruby makes each element the element's `Struct` and PHP the
+element's class, both given the fields in the order they are declared.
 
 From a JSON Schema, an optional input (`T?`) reads its field so that a missing one — or a
 missing object on the way to it — is none: `_dig(order, "coupon", "kind")` in the Python module,
@@ -1055,9 +1082,12 @@ is compared by its value's name.
 **Python, TypeScript, JavaScript, Ruby and PHP are generated.** Go, Swift, Java and Rust hold
 the caller's object as a type, and naming that type would mean generating it or following the
 caller's own; SQL takes a relation of flat columns, NumPy takes columns, and the Wasm ABI takes
-one JSON object of the rule's own inputs. The **path check applies to every target equally** —
+one JSON object of the rule's own inputs; `rulec gen` names each of the seven as it writes the
+rest, with the reason. The **path check applies to every target equally** —
 it happens in `check`. `rulec api` lists it all under `projection`: the contracts, the path of
-every projected input, and the function name and signature in each of the five.
+every projected input, every sequence taken from an object with the path of each field of its
+elements (`elements`, empty when there is none), the function name and signature in each of
+the five, and under `without` the seven that have none, each with its reason.
 
 ## The digest in the header
 

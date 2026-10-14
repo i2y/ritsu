@@ -592,7 +592,7 @@ buy is that the glue between the caller's object and the rule's flat inputs is *
 rather than written by hand, and that a field the contract renamed is E121 rather than a
 `KeyError` in production.
 
-`from` comes last on the line and runs to its end. Four shapes, and no more:
+`from` comes last on the line and runs to its end. Seven shapes, and no more:
 
 | written | what it yields |
 |---|---|
@@ -600,6 +600,43 @@ rather than written by hand, and that a field the contract renamed is E121 rathe
 | `from any <shape>.<collection> where <field> = <value>` | `bool` — some element passed |
 | `from all <shape>.<collection> where <field> = <value>` | `bool` — every element did |
 | `from count <shape>.<collection> [where …]` | `number` — how many passed |
+| `from sum <shape>.<collection> of <field> [where …]` | a number — the total of one field over the elements that passed, 0 when none did |
+| `from max <shape>.<collection> of <field> [where …] empty <value>` | a number or a date — the largest value of one field over the elements that passed, the `empty` value when none did |
+| `from min <shape>.<collection> of <field> [where …] empty <value>` | the same, the smallest |
+
+A sequence the rule walks can be taken from a collection of the contract too, each field of an
+element saying where it stands in the element:
+
+```rule
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  total       : money[USD]  range >=0USD <=100_000USD  from sum order.lines of amount_usd
+  top_fragile : money[USD]  range >=0USD <=5_000USD    from max order.lines of amount_usd where fragile = true empty 0USD
+
+elements lines from order.lines
+  quantity : number      range >=1 <=99          from quantity
+  amount   : money[USD]  range >=1USD <=5000USD  from amount_usd
+```
+
+`sum` adds the field up, and the input that takes it is a `number`, money, a quantity or a rate:
+the field travels as a whole number in the input's unit, and a field the contract carries as a
+fraction is E120, since it cannot be added up exactly. `max` and `min` pick one value of the
+field, a number or a date, and **`empty` is required** (E074): it is what the input is when the
+collection is empty or no element passes the `where`, which is the author's to decide. It is
+written as a value of the input, in its unit (`empty 0USD`, `empty 2030-12-31`), and has to be
+one the input takes (E074 again: otherwise the function that reads it out would hand the rule a
+value its door refuses). None of the three gives none, so none of them goes into an optional
+input. `of` names one field of an element, as `where` does; `of` belongs to these three and
+`empty` to `max` and `min`, and either written elsewhere is E074.
+
+`elements <name> from <shape>.<collection>` takes the sequence from the collection, every
+element of it, nothing filtered. Every field of such a sequence says with its own `from` where
+it is read in an element — a path from the element and nothing else (`from qty`,
+`from unit.kind`) — and a field that says none, or a field that says one under a sequence not
+taken from a contract, is E074. The elements are then elements like any other: the checks, the
+walks and the vectors are exactly what they are for a sequence the caller passes. A message
+names a field of an element by the collection with `[]` after it, `order.lines[].qty`.
 
 **One collection, and a unary test on a field of an element.** A join, a nested quantifier
 and a path inside a cell are all refused, for the reason §0 gives: the cell language is where
@@ -621,7 +658,8 @@ as draft-07 and OpenAPI 3.0 say. A `.proto` is read far enough for the same: mes
 their fields, `repeated` included, with `map` skipped rather than guessed at; the members of a
 `oneof` are fields of the message, each with presence of its own like an `optional` field.
 A path that cannot be resolved is **E121**, which says how far it got and which names were
-there; a type that does not fit is **E120**; a `shape` no input projects from is **W122**.
+there; a type that does not fit is **E120**; a `shape` no input and no sequence is taken from is
+**W122**.
 
 **The contract says which values can come, too, and that is held to the input.** A path says
 where a value comes from; the contract's validation says which values pass — Protovalidate's
@@ -641,6 +679,17 @@ possible, a missed one is not. `fix.text` of an E122 is the option or keywords t
 contract (`narrow_contract`); whether the contract or the rule is the side to change is a
 person's decision. Still no check of the table moves: what is compared is the contract with
 the input's own declaration.
+
+The same holds for `sum`, `max`, `min` and a sequence taken from the contract. A total reaches
+as far as the field's values times how many elements the contract lets through: ten lines of
+at most 100 come to 1000, and an input that takes at most 500 is E122, with `"maxItems": 5` as
+the narrowing (with no end on either, the fix is `none`, since no one keyword bounds a total). A
+largest or smallest value is one of the field's, held to the input as a value read straight from
+a path is. A sequence taken from a contract has each field of its elements held as an input is
+(its `required`, its null, its range, its enum's values, its proto3 default); its length held
+to the cap its `count`s put on it; and its total of a column to the upper end of each `sum` over
+it, the column's largest value times the longest sequence the contract and the cap let through.
+A field of an element is no input, so its E122 carries no example under `inputs`.
 
 **Conditions across fields are read too.** A contract relates fields to each other: a CEL
 expression on a `.proto` message (`(buf.validate.message).cel`, `cel_expression`) or on a field,
@@ -685,11 +734,14 @@ date arrive as strings, and money and a quantity as whole numbers in the unit th
 declares.
 
 **Five of the twelve targets generate the projection function** — Python, TypeScript,
-JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name. Go,
+JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name; a sequence
+taken from the object is built there, one element of the rule's own type for each element of
+the collection, and is no longer a parameter. Go,
 Swift, Java and Rust hold it as a type, and the only ways to name that type would be to
 generate it (this tool makes no domain object model) or to follow the caller's own; SQL takes
 a relation of flat columns, NumPy takes columns, and the Wasm ABI takes one JSON object of the
-rule's own inputs. **The path check applies to every target equally** — it happens in `check`,
+rule's own inputs. `rulec gen` names the seven and says why, and `rulec api` lists them under
+`projection.without`. **The path check applies to every target equally** — it happens in `check`,
 before anything is generated. `rulec api` lists the contracts, the path of every projected
 input, and the function in each language that reads them, under `projection`.
 
@@ -927,7 +979,9 @@ of a tariff sheet, the candidates a predicate left — and the answer comes from
 `elements` declares what one element carries; `fold` declares how the walk ends. A case may
 carry more than one sequence — an order's lines and the payments made against it — and each is
 declared under an `elements` of its own, with a name, and walked by the lines that name it after
-`over` (§6.3). A sequence nothing walks is E020.
+`over` (§6.3). A sequence nothing walks is E020. A sequence the caller's object already holds can
+be taken from it with `elements <name> from <shape>.<collection>`, each field saying where it is
+read in an element (§3.3).
 
 ```rule
 elements fee_rows

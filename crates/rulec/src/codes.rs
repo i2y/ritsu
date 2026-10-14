@@ -1807,6 +1807,31 @@ const X_W901_EN: &str = concat!(
     "\n\nenum kind = workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| workshop   | 30                 |\n| talk       | 80                 |\n"
 );
 
+/// The contract of the E074 examples: an order whose lines carry an amount, always there and
+/// never more than ten of them, so that the one thing wrong is the shape of the `from`
+/// (§15.223).
+const AMOUNTS_DOC: &[(&str, &str)] = &[(
+    "order.json",
+    "{\"$defs\":{\"Order\":{\"type\":\"object\",\"required\":[\"lines\"],\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":10,\
+     \"items\":{\"type\":\"object\",\"required\":[\"amount\"],\"properties\":{\"amount\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":1000}}}}}}}}\n",
+)];
+const X_E074: &str = "rule t(t) v1\n\nshape 注文(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  最高額(top) : money[円]  range >=0円 <=1000円  from max 注文.lines of amount\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| 最高額 | -> x |\n| -      | true |\n";
+const X_E074_EN: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  top(top) : money[JPY]  range >=0JPY <=1000JPY  from max order.lines of amount
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| top | -> x |
+| -   | true |
+"##;
+
 pub fn ledger() -> Vec<Entry> {
     vec![
         err(
@@ -3126,8 +3151,8 @@ pub fn ledger() -> Vec<Entry> {
             "E120",
             tr!("`from` が入力の型と合いません", "A `from` does not fit the input's type"),
             tr!(
-                "`from` の返すものが、それを受ける入力の型と合わないとき。`any` と `all` は `bool` を、`count` は `number` を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っているフィールドを `number` の入力で受けるなど）と、`any`・`all`・`count` が並びでないものを歩こうとしているとき、`where` の値がフィールドの型と合わないときにも出ます。契約が決めるのは値の運ばれ方なので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で届きます。",
-                "What a `from` yields does not fit the input that takes it. `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
+                "`from` の返すものが、それを受ける入力の型と合わないとき。`any` と `all` は `bool` を、`count` は `number` を、`sum` は数（`number`・お金・量・率）を、`max` と `min` は数か日付を返します。パスの先にあるものの型が入力と合わないとき（契約が文字列と言っているフィールドを `number` の入力で受けるなど）と、`any`・`all`・`count`・`sum`・`max`・`min` が並びでないものを歩こうとしているとき、`where` の値がフィールドの型と合わないときにも出ます。`of` が読む要素のフィールドの型が入力と合わないとき（`sum` は整数を足し、小数は足せません）、契約から取る並びが配列でないとき、並びの要素のフィールドの型が合わないときも同じです。契約が決めるのは値の運ばれ方なので、列挙も日付も文字列で、金額と数量は宣言した単位の整数で届きます。",
+                "What a `from` yields does not fit the input that takes it. `any` and `all` yield a `bool`, `count` yields a `number`, `sum` a number (a `number`, money, a quantity or a rate), and `max` and `min` a number or a date. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all`, `count`, `sum`, `max` or `min` would walk something that is not a collection, and when the value of a `where` does not fit the field; when the field of an element `of` reads does not fit the input (`sum` adds whole numbers, and a fraction cannot be added up exactly); when a sequence is taken from something that is not a collection; and when a field of an element does not fit the field it is read into. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
             ),
             tr!(
                 "型のほうか `from` のほうを直してください。件数が欲しいなら `number` の入力に範囲を付けて受け、当てはまるかどうかが欲しいなら `bool` で受けてください。値そのものが欲しいなら `from <shape の名前>.<フィールド>` と書いてください。`where` の値に単位は書けません。契約の値には単位が無いので、書けば目盛りの違う数どうしを黙って比べることになるからです。",
@@ -3142,8 +3167,8 @@ pub fn ledger() -> Vec<Entry> {
             "E121",
             tr!("`from` のパスが契約にありません", "The contract has no such path"),
             tr!(
-                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` の見るフィールドが要素に無いときの三つです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
-                "A `from` path is not in the contract of the `shape` it starts at. Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
+                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` や `of` の見るフィールドが要素に無いときです。`elements … from` の並びのパスと、その要素のフィールドのパス（`order.lines[].qty` のように、要素の中を `[]` の後ろに示します）も同じです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "A `from` path is not in the contract of the `shape` it starts at: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests or an `of` reads is not a field of an element. The same goes for the path of a sequence taken with `elements … from`, and for the path of each field of its elements, shown after `[]` inside the element (`order.lines[].qty`). The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
             ),
             tr!(
                 "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**このエラーはそのためにあります。** 契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行するまで気づきませんが、rulec は生成の前に止まります。",
@@ -3174,8 +3199,8 @@ pub fn ledger() -> Vec<Entry> {
             "W122",
             tr!("その `shape` を使っている入力がありません", "No input is projected from that shape"),
             tr!(
-                "`shape` を宣言しているのに、`from <その名前>.…` と書いた入力が一つも無いとき。契約は読まれますが、何も確かめていません。",
-                "A `shape` is declared and no input says `from <that name>.…`. The contract is read and holds nothing."
+                "`shape` を宣言しているのに、`from <その名前>.…` と書いた入力も並びも一つも無いとき。契約は読まれますが、何も確かめていません。",
+                "A `shape` is declared and no input or sequence says `from <that name>.…`. The contract is read and holds nothing."
             ),
             tr!(
                 "使うか、消してください。読まれているだけの契約は、次に読む人に「ここは契約に縛られている」と思わせます。縛られているのは `from` を書いた入力だけです。",
@@ -3190,8 +3215,8 @@ pub fn ledger() -> Vec<Entry> {
             "E122",
             tr!("契約が通す値を、規則が受け付けません", "The contract lets through a value the rule refuses"),
             tr!(
-                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます。JSON Schema の型に null があるのに、入力が省略できないときにも出ます。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで出ることはあっても、見逃すことはありません。",
-                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
+                "`from` で読む値について、契約の検証は通すのに、入力の宣言が受け付けない値があるとき。比べるのは、数の範囲（Protovalidate の `gte`・`lte` など、JSON Schema の `minimum`・`maximum`）、並びの件数（`min_items`・`max_items`、`minItems`・`maxItems`）、列挙の値（`string.in`、`enum`）、JSON Schema の `required` です。`from sum` は、要素のフィールドの値の範囲と要素の数から決まる合計の届く先を、`from max`・`from min` はフィールドの値を比べます。`elements … from` で契約から取る並びは、要素のフィールドを入力と同じに比べ、並びの件数を `count` の上限と、要素の値の合計を `sum` の上限と比べます。proto3 で注釈の無い数のフィールドは、入れ忘れると 0 として届くので、0 を受け付けない入力はここで止まります。`required` の無いメッセージのフィールドと `optional` のフィールドは省略でき、そのとき中の値は規則を通らずに既定値（0、\"\"、0 件）として届きます。`.proto` の文字列から読む日付は、\"\" を通すかどうかを見ます。フィールドをまたぐ条件（CEL の式、`oneof`、JSON Schema の `allOf`・`anyOf`・`oneOf`・`not`・`if`）が一つのフィールドの幅を狭めていれば、それも読みます。JSON Schema の型に null があるのに、入力が省略できないときにも出ます。読めない規則（剰余や文字列の関数を使う CEL など）は、無いものとして扱います。契約を実際より広く読むので、要らないところで出ることはあっても、見逃すことはありません。",
+                "A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A `from sum` is held by how far its total reaches — the values of the field times how many elements there may be — and a `from max` or `from min` by the values of the field. A sequence taken with `elements … from` has each field of its elements held as an input is, its length held to the cap its `count`s put on it, and its totals to the upper end of each `sum` over it. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, \"\", no elements) with no rule applied; a date read from a `.proto` string is held to whether \"\" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken."
             ),
             tr!(
                 "どちらを直すかは、人が決めることです。その値が来ないはずなら、契約を狭めてください。`fix.text` が、契約に書く注釈そのものです（`narrow_contract`）。来るのなら、規則の範囲を広げるか列挙に値を足して、その値の答えを決めてください。`where` で絞った件数の下限のように契約に書けない前提もあり、そのときは `fix.kind` が `none` です。読む値が無いことがあるなら、入力を `T?` にしてください。値が無いとき、規則はそれを none として読みます。",
@@ -3695,6 +3720,25 @@ pub fn ledger() -> Vec<Entry> {
             &[],
         )
         .english(X_W901_EN),
+        err(
+            "E074",
+            tr!(
+                "`from sum`・`from max`・`from min` か `elements … from` の形が違います",
+                "A `from sum`, `from max` or `from min`, or an `elements … from`, is misshapen"
+            ),
+            tr!(
+                "`from sum|max|min` に `of <要素のフィールド>` が無いとき、`from max`・`from min` に `empty <値>` が無いとき、`empty` の値が入力の型の値でないか、入力の範囲の外にあるとき、`of` や `empty` をそれを取らない `from` に書いたとき（`empty` が要るのは `max` と `min` だけです。合計なら 0、件数なら 0 件に決まっています）。また、`elements <名前>` の後ろに `from <shape の名前>.<並び>` 以外のものを書いたとき、契約から取る並びのフィールドに `from` が無いとき、契約から取らない並びのフィールドに `from` があるとき、要素のフィールドの `from` が要素の中のパスでないとき。",
+                "A `from sum`, `from max` or `from min` has no `of <field of an element>`; a `from max` or `from min` has no `empty <value>`, or its `empty` value is not a value of the input's type, or lies outside the input's range; or `of` or `empty` is written on a `from` that takes none (only `max` and `min` need `empty`: a sum of none is 0, and a count of none is 0). Also: something other than `from <shape>.<collection>` follows the name of an `elements` line; a field of a sequence taken from a contract has no `from`; a field of a sequence not taken from one has one; or the `from` of a field of an element is not a path inside the element."
+            ),
+            tr!(
+                "形を直してください。`from max 注文.lines of amount empty 0円` のように書きます。`empty` は見る要素が一つも無いときの入力の値で、何にするかは業務の判断です。並びを契約から取るなら `elements 明細 from 注文.lines` と書き、フィールドごとに、要素の中のどこから読むかを `from qty` のように書いてください。並びを呼び出し側が組み立てて渡すなら、フィールドの `from` を消してください。",
+                "Correct the shape: `from max order.lines of amount empty 0JPY`. `empty` is the input's value when no element is looked at, and what it is is a business decision. To take a sequence from the contract, write `elements lines from order.lines`, and on each field the path it is read from in an element, such as `from qty`. If the caller builds the sequence and passes it, take the `from` off its fields."
+            ),
+            X_E074,
+            &["E120", "E121", "E122", "E022"],
+        )
+        .with_files(AMOUNTS_DOC)
+        .english(X_E074_EN),
     ]
 }
 

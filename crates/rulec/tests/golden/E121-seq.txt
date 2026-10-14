@@ -1,0 +1,7 @@
+エラー[E121]: `注文.items` というパスは契約にありません
+  --> tests/mutants/m_e121seqja.rule:13
+   |
+13 | elements 明細(lines) from 注文.items
+   |                      ^^^^^^^^^^^^^^^
+   |
+ `注文` までは見つかりました。そこにあるフィールド: id, lines

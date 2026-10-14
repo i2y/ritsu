@@ -176,6 +176,9 @@ const CORPUS: &[(&str, &str)] = &[
     ("tests/corpus/order_settlement.rule", "order_settlement"),
     ("tests/corpus/earliest_due.rule", "earliest_due"),
     ("tests/corpus/rate_adjustment.rule", "rate_adjustment"),
+    // §15.223: a total, a largest value and a sequence read out of an order's contract.
+    ("tests/corpus/order_handling_fee.rule", "order_handling_fee"),
+    ("tests/corpus/注文の取扱手数料.rule", "order_handling"),
 ];
 
 #[test]

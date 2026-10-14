@@ -1,0 +1,7 @@
+error[E121]: The contract has no path `order.items`
+  --> tests/mutants/m_e121seq.rule:14
+   |
+14 | elements lines from order.items
+   |                ^^^^^^^^^^^^^^^^
+   |
+ It resolved as far as `order`. The fields there: id, lines

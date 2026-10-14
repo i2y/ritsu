@@ -14,8 +14,10 @@ the same thing, and its generated code is called the same way and answers the sa
    besides the state: a further `carry`, `initial <input> <value>`, `always`), the
    prerequisites of an enum's values (`prerequisites` with `start`, `requires`, `nothing` and
    `ordered by`), several sequences walked by any number of `count`, `sum`, `max`, `min` and
-   `fold` lines in the order what they read gives them, and a fold's answer named with `->`
-   included. New constructs may be added.
+   `fold` lines in the order what they read gives them, a fold's answer named with `->`, and
+   what a rule reads out of the caller's object — a total, a largest or smallest value of one
+   field over a collection (`from sum`, `from max`, `from min`), and a sequence taken from a
+   collection (`elements … from`) — included. New constructs may be added.
 2. **The names you may use.** The reserved words — the 65 words E009 refuses as a name,
    listed in `src/kw.rs` — are fixed at 1.0, and a test holds the list. A later release may
    add words to the language, but never to that list: a new word is read only where no name

@@ -87,6 +87,7 @@ pub struct Stuck {
 }
 
 /// The contract of one shape, read once and asked many times.
+#[derive(Clone)]
 pub struct Contract {
     kind: EnumSource,
     /// For a schema: the whole document, so `$ref` can be followed. For a `.proto`: unused.
@@ -236,6 +237,41 @@ fn at_pointer<'a>(doc: &'a Json, pointer: &str) -> Option<&'a Json> {
         node = get(node, &step.replace("~1", "/").replace("~0", "~"))?;
     }
     Some(node)
+}
+
+/// The JSON Pointer of `target` in `doc`, found by where it is held rather than by what it says:
+/// the schema of an element can be reached through `$ref`, `allOf` or an inline `items`, and its
+/// place is what a contract of its own needs (§15.223).
+fn pointer_to(doc: &Json, target: &Json) -> Option<String> {
+    fn walk(node: &Json, target: &Json, at: &mut Vec<String>) -> bool {
+        if std::ptr::eq(node, target) {
+            return true;
+        }
+        match node {
+            Json::Obj(m) => {
+                for (k, v) in m {
+                    at.push(k.replace('~', "~0").replace('/', "~1"));
+                    if walk(v, target, at) {
+                        return true;
+                    }
+                    at.pop();
+                }
+            }
+            Json::Arr(vs) => {
+                for (i, v) in vs.iter().enumerate() {
+                    at.push(i.to_string());
+                    if walk(v, target, at) {
+                        return true;
+                    }
+                    at.pop();
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+    let mut at = Vec::new();
+    walk(doc, target, &mut at).then(|| format!("#/{}", at.join("/")))
 }
 
 /// Whether the keywords beside a `$ref` apply as well as the ones it leads to (§15.140). They
@@ -401,6 +437,27 @@ impl Contract {
     fn items<'a>(&'a self, v: &'a Json) -> Option<&'a Json> {
         self.applying(v).into_iter().find_map(|x| get(x, "items"))
     }
+
+    /// One element of the collection at `steps`, as a contract of its own (§15.223): a path from
+    /// the element resolves in it, and is held to what the contract says there, exactly as a
+    /// path from the root is. `None` when what stands there is not a collection of objects.
+    pub(crate) fn element(&self, steps: &[String]) -> Option<Contract> {
+        match self.kind {
+            EnumSource::JsonSchema => {
+                let doc = self.doc.as_ref()?;
+                let items = self.items(self.schema_chain(steps)?.last().copied()?)?;
+                let at = pointer_to(doc, items)?;
+                Some(Contract { at, ..self.clone() })
+            }
+            EnumSource::Proto => {
+                let last = *self.proto_chain(steps)?.last()?;
+                if !last.repeated || !self.msgs.iter().any(|m| crate::proto::same_message(&m.name, &last.ty)) {
+                    return None;
+                }
+                Some(Contract { at: last.ty.clone(), ..self.clone() })
+            }
+        }
+    }
 }
 
 // --- The check ---------------------------------------------------------------------------
@@ -442,7 +499,9 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
             ),
         }
     }
-    let mut doms = Vec::new();
+    // What each projected value lets through, for W123: the name it is read into, the set, and
+    // the path it is read from as a message writes it.
+    let mut doms: Vec<(String, Dom, String)> = Vec::new();
     // What each contract says across the fields the rule reads from it (§15.140).
     let across: Vec<(String, Across)> = read_ok.iter().map(|(d, con)| (d.name.text.clone(), con.across(f, c, &d.name.text))).collect();
     for i in &f.inputs {
@@ -451,6 +510,11 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         let shaped = fits_the_type(pr, &ty, rule_path, &i.name.text);
         let fits = shaped.is_empty();
         out.extend(shaped);
+        // The value `max` and `min` give when no element passes is the input's own (§15.223):
+        // it is held to the input before anything is read.
+        if fits {
+            out.extend(empty_value(i, pr, c, rule_path));
+        }
         let Some((_, con)) = read_ok.iter().find(|(d, _)| d.name.text == pr.root.text) else {
             // A root with no shape of its own, or one whose file did not read. The first is
             // an error the reader can act on; the second was already said once.
@@ -459,19 +523,23 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
             }
             continue;
         };
-        let resolved = resolves(con, pr, &ty, rule_path, &i.name.text);
+        let resolved = resolves(con, pr, &ty, rule_path, &i.name.text, Who::Input);
         // What the contract lets through is only asked of a path that reached a value of the
         // input's kind: past an E120 or an E121 there is nothing to compare.
         if fits && resolved.is_empty() {
             let ac = across.iter().find(|(n, _)| *n == pr.root.text).map(|(_, a)| a);
-            let (found, dom) = holds(f, con, pr, i, c, rule_path, ac);
+            let (found, dom) = holds(f, con, pr, i, c, rule_path, ac, Who::Input);
             out.extend(found);
             if let Some(d) = dom {
-                doms.push((i.name.text.clone(), d, pr));
+                doms.push((i.name.text.clone(), d, full_path(pr)));
             }
         }
         out.extend(resolved);
     }
+    // The sequences taken from a contract, and each field of their elements (§15.223).
+    let (found, more) = sequences(f, c, &read_ok, rule_path);
+    out.extend(found);
+    doms.extend(more);
     let w123 = dead_rows(f, c, &doms, rule_path);
     let dead: BTreeSet<(String, usize)> = w123.iter().filter_map(|d| Some((d.table.clone()?, d.row?))).collect();
     out.extend(w123);
@@ -480,7 +548,8 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
         out.extend(unreachable_rows(f, c, ac, &d.name.text, &dead, rule_path));
     }
     for d in &f.shapes {
-        if f.inputs.iter().any(|i| i.from.as_ref().is_some_and(|p| p.root.text == d.name.text)) {
+        let roots = |p: &Option<Projection>| p.as_ref().is_some_and(|p| p.root.text == d.name.text);
+        if f.inputs.iter().any(|i| roots(&i.from)) || f.elements.iter().any(|e| roots(&e.from)) {
             continue;
         }
         out.push(
@@ -488,8 +557,8 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                 .at(format!("{rule_path}:{}", d.span.line))
                 .mark(d.span.clone(), "")
                 .note(tr!(
-                    "`from {}.…` と書いた入力が一つもないので、この契約は読まれるだけで何も確かめていません。使わないなら消してください。",
-                    "No input says `from {}.…`, so this contract is read and holds nothing. Delete it if it is not used.",
+                    "`from {}.…` と書いた入力も並びも無いので、この契約は読まれるだけで何も確かめていません。使わないなら消してください。",
+                    "No input and no sequence says `from {}.…`, so this contract is read and holds nothing. Delete it if it is not used.",
                     d.name.text
                 )),
         );
@@ -497,12 +566,128 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     out
 }
 
+/// Whose value a path reads, for the words of a message: an input's, or a field's of an element
+/// taken from a contract (§15.223).
+#[derive(Clone, Copy, PartialEq)]
+enum Who {
+    Input,
+    Field,
+}
+
+impl Who {
+    fn ja(self) -> &'static str {
+        match self {
+            Who::Input => "入力",
+            Who::Field => "フィールド",
+        }
+    }
+
+    fn en(self) -> &'static str {
+        match self {
+            Who::Input => "the input",
+            Who::Field => "the field",
+        }
+    }
+}
+
+/// Whether a type is one `sum`, `max` and `min` read numbers into: a number, money, a quantity or
+/// a rate (§15.223).
+fn takes_number(ty: &Ty) -> bool {
+    matches!(ty, Ty::Number | Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate)
+}
+
+/// E074 for the value `max` and `min` give when no element passes (§15.223). It has to be written,
+/// and it is the input's own value: one of the input's type, inside its range, or the projection
+/// function would hand the rule a value its door refuses whenever nothing passes.
+fn empty_value(i: &VarDecl, pr: &Projection, c: &Checked, rule_path: &str) -> Vec<Diag> {
+    if !pr.kind.extreme() {
+        return Vec::new();
+    }
+    let name = &i.name.text;
+    let w = pr.kind.word();
+    let at = format!("{rule_path}:{}", pr.span.line);
+    let Some((l, sp)) = pr.kind.empty() else {
+        return vec![
+            Diag::error("E074", tr!("`from {w}` に、見る要素が無いときの値がありません", "`from {w}` has no value for when no element is looked at"))
+                .at(at)
+                .mark(pr.span.clone(), tr!("`empty <値>` がありません", "there is no `empty <value>`"))
+                .note(tr!(
+                    "並びが空のときと、`where` に当てはまる要素が無いときに {name} が何になるかを、`empty <値>` で書いてください。何にするかは業務の判断で、ツールが決められることではありません。",
+                    "Say with `empty <value>` what {name} is when the collection is empty, or when no element passes the `where`. What it is is a business decision, and not one the tool can make."
+                )),
+        ];
+    };
+    let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+    let v = match (l, &ty) {
+        (Lit::Num(n), t) if takes_number(t) => crate::types::lit_value_in_pub(n, t),
+        (Lit::Date(y, m, d), Ty::Date) => Some(crate::types::date_ord(*y, *m, *d)),
+        _ => None,
+    };
+    let Some(v) = v else {
+        return vec![
+            Diag::error("E074", tr!("`empty` の `{}` は {ty} の値ではありません", "The `empty` value `{}` is not a value of {ty}", l.src()))
+                .at(at)
+                .mark(sp.clone(), tr!("入力 {name} は {ty}", "the input {name} is {ty}"))
+                .note(tr!(
+                    "`empty` は、見る要素が無いときの {name} の値です。入力と同じ型で、単位も入力の単位で書いてください（`empty 0円`、`empty 2026-12-31`）。",
+                    "`empty` is the value of {name} when no element is looked at: write it as a value of the input's type, in its unit (`empty 0JPY`, `empty 2026-12-31`)."
+                )),
+        ];
+    };
+    let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+    let outside = lo.is_some_and(|lo| v.cmp_to(lo).is_lt()) || hi.is_some_and(|hi| v.cmp_to(hi).is_gt());
+    if !outside {
+        return Vec::new();
+    }
+    vec![
+        Diag::error("E074", tr!("`empty` の値 `{}` が {name} の範囲の外にあります", "The `empty` value `{}` is outside the range of {name}", l.src()))
+            .at(at)
+            .mark(sp.clone(), tr!("{name} の範囲は {}", "{name} takes {}", range_text(i)))
+            .note(tr!(
+                "見る要素が無いとき、生成した `…_from` の関数はこの値を規則に渡し、規則は入口でそれを受け付けません。範囲の中の値にするか、範囲を広げてその値のときの答えを決めてください。",
+                "When no element is looked at, the generated `…_from` function hands the rule this value, which the rule refuses at its door. Make it a value inside the range, or widen the range and decide what the rule answers for it."
+            )),
+    ]
+}
+
 /// E120 without reading anything: the shape of the projection against the input's own type.
 fn fits_the_type(pr: &Projection, ty: &Ty, rule_path: &str, name: &str) -> Vec<Diag> {
+    // `sum`, `max` and `min` give a number in the input's own unit, and `max` and `min` a date as
+    // well (§15.223). None of them gives none: what nothing gives is 0, or the `empty` value.
+    if pr.kind.numeric() {
+        if takes_number(ty) || matches!(ty, Ty::Unknown) || (pr.kind.extreme() && *ty == Ty::Date) {
+            return Vec::new();
+        }
+        let w = pr.kind.word();
+        let (title, note) = if pr.kind.extreme() {
+            (
+                tr!("`from {w}` は数か日付を返します", "`from {w}` yields a number or a date"),
+                tr!(
+                    "`{w}` は要素のフィールドの{}なので、受ける入力は `number`・お金・量・率・日付のどれかです。省略できる入力（`T?`）にはなりません。見る要素が無いときの値は `empty` で決めるからです。",
+                    "`{w}` picks the {} value of a field of the elements, so the input that takes it is a `number`, money, a quantity, a rate or a date. It is never optional (`T?`): what it gives when no element is looked at is the `empty` value.",
+                    if w == crate::kw::MAX { tr!("最大", "largest") } else { tr!("最小", "smallest") }
+                ),
+            )
+        } else {
+            (
+                tr!("`from {w}` は数を返します", "`from {w}` yields a number"),
+                tr!(
+                    "`sum` は要素のフィールドの合計なので、受ける入力は `number`・お金・量・率のどれかです。省略できる入力（`T?`）にはなりません。要素が無ければ合計は 0 です。",
+                    "`sum` adds a field of the elements up, so the input that takes it is a `number`, money, a quantity or a rate. It is never optional (`T?`): the total of no elements is 0."
+                ),
+            )
+        };
+        return vec![
+            Diag::error("E120", title)
+                .at(format!("{rule_path}:{}", pr.span.line))
+                .mark(pr.span.clone(), tr!("入力 {name} は {ty}", "the input {name} is {ty}"))
+                .note(note),
+        ];
+    }
     let want = match &pr.kind {
-        ProjKind::Field => return Vec::new(),
         ProjKind::Any(..) | ProjKind::All(..) => Ty::Bool,
         ProjKind::Count(_) => Ty::Number,
+        _ => return Vec::new(),
     };
     if *ty == want || matches!(ty, Ty::Unknown) {
         return Vec::new();
@@ -540,35 +725,21 @@ fn no_such_root(f: &RuleFile, pr: &Projection, rule_path: &str) -> Diag {
         })
 }
 
-/// E121 and E120 against the contract: the path, and what stands at the end of it.
-fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &str) -> Vec<Diag> {
+/// E121 and E120 against the contract: the path, and what stands at the end of it. `who` says
+/// whether the value is an input's or a field's of an element (§15.223).
+fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &str, who: Who) -> Vec<Diag> {
     let at = format!("{rule_path}:{}", pr.span.line);
     let steps: Vec<String> = pr.path.iter().map(|n| n.text.clone()).collect();
     let full = || format!("{}.{}", pr.root.text, steps.join("."));
-    let stuck = |s: Stuck| {
-        let where_ = if s.reached.is_empty() { pr.root.text.clone() } else { format!("{}.{}", pr.root.text, s.reached) };
-        Diag::error("E121", tr!("`{}` というパスは契約にありません", "The contract has no path `{}`", full()))
-            .at(at.clone())
-            .mark(pr.span.clone(), "")
-            .note(if s.had.is_empty() {
-                tr!("`{where_}` までは見つかりました。その先にフィールドはありません。", "It resolved as far as `{where_}`, which has no fields under it.")
-            } else {
-                tr!(
-                    "`{where_}` までは見つかりました。そこにあるフィールド: {}",
-                    "It resolved as far as `{where_}`. The fields there: {}",
-                    s.had.join(", ")
-                )
-            })
-    };
     let here = match con.at(&steps) {
         Ok(a) => a,
-        Err(s) => return vec![stuck(s)],
+        Err(s) => return vec![stuck_path(pr, &at, s)],
     };
     let mut out = Vec::new();
     match &pr.kind {
         ProjKind::Field => {
             if !here.fits(ty) {
-                out.push(mismatch(&at, pr, &full(), &here, ty, name));
+                out.push(mismatch(&at, pr, &full(), &here, ty, name, who));
             }
         }
         _ => {
@@ -578,22 +749,27 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
                         .at(at.clone())
                         .mark(pr.span.clone(), tr!("契約では {}", "the contract says {}", here.word()))
                         .note(tr!(
-                            "`any`・`all`・`count` は並びを一度だけたどります。値そのものが欲しいなら `from <shape の名前>.<フィールド>` を書いてください。",
-                            "`any`, `all` and `count` walk a collection once. For the value itself, write `from <shape>.<field>`."
+                            "`any`・`all`・`count`・`sum`・`max`・`min` は並びを一度だけたどります。値そのものが欲しいなら `from <shape の名前>.<フィールド>` を書いてください。",
+                            "`any`, `all`, `count`, `sum`, `max` and `min` walk a collection once. For the value itself, write `from <shape>.<field>`."
                         )),
                 );
                 return out;
             };
+            // `where` and `of` both read a field of an element, so an element has to have fields.
+            let Some(first) = pr.kind.test().map(|(n, _)| n).or(pr.kind.of()) else { return out };
+            let At::Object(had) = elem.as_ref() else {
+                out.push(
+                    Diag::error("E121", tr!("`{}` の要素にフィールドはありません", "An element of `{}` has no fields", full()))
+                        .at(at.clone())
+                        .mark(first.span.clone(), tr!("契約では {}", "the contract says {}", elem.word()))
+                        .note(tr!("`where` と `of` は要素のフィールドを見ます。", "`where` and `of` read a field of an element.")),
+                );
+                return out;
+            };
+            if let Some(of) = pr.kind.of() {
+                out.extend(of_field(con, pr, &steps, had, of, ty, name, &at));
+            }
             if let Some((field, cell)) = pr.kind.test() {
-                let At::Object(had) = elem.as_ref() else {
-                    out.push(
-                        Diag::error("E121", tr!("`{}` の要素にフィールドはありません", "An element of `{}` has no fields", full()))
-                            .at(at.clone())
-                            .mark(field.span.clone(), tr!("契約では {}", "the contract says {}", elem.word()))
-                            .note(tr!("`where` は要素のフィールドを見ます。", "`where` tests a field of an element.")),
-                    );
-                    return out;
-                };
                 if !had.contains(&field.text) {
                     out.push(
                         Diag::error("E121", tr!("要素に `{}` というフィールドはありません", "An element has no field `{}`", field.text))
@@ -618,10 +794,54 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
     out
 }
 
-fn mismatch(at: &str, pr: &Projection, full: &str, here: &At, ty: &Ty, name: &str) -> Diag {
-    let d = Diag::error("E120", tr!("`{full}` の型が入力と合いません", "The type at `{full}` does not fit the input"))
+/// E121 and E120 for the field `of` names (§15.223): it is a field of an element, and what the
+/// contract carries there is what `sum` adds up, or what `max` and `min` compare — a whole number
+/// in the input's unit, or for `max` and `min` a date.
+#[allow(clippy::too_many_arguments)]
+fn of_field(con: &Contract, pr: &Projection, steps: &[String], had: &[String], of: &crate::ast::Name, ty: &Ty, name: &str, at: &str) -> Vec<Diag> {
+    if !had.contains(&of.text) {
+        return vec![
+            Diag::error("E121", tr!("要素に `{}` というフィールドはありません", "An element has no field `{}`", of.text))
+                .at(at.to_string())
+                .mark(of.span.clone(), "")
+                .note(tr!("要素にあるフィールド: {}", "The fields of an element: {}", had.join(", "))),
+        ];
+    }
+    let Some(k) = con.element(steps).and_then(|e| e.at(std::slice::from_ref(&of.text)).ok()) else { return Vec::new() };
+    let fits = match (&k, ty) {
+        // An input of a type no `sum`, `max` or `min` gives is said once, of the input.
+        (_, t) if !(takes_number(t) || *t == Ty::Date) => true,
+        (At::Int, t) => takes_number(t),
+        (At::Str, Ty::Date) => pr.kind.extreme(),
+        _ => false,
+    };
+    if fits {
+        return Vec::new();
+    }
+    let w = pr.kind.word();
+    vec![
+        Diag::error("E120", tr!("要素の `{}` の型が入力と合いません", "The field `{}` of an element does not fit the input", of.text))
+            .at(at.to_string())
+            .mark(of.span.clone(), tr!("契約では {}、入力 {name} は {ty}", "the contract says {}, the input {name} is {ty}", k.word()))
+            .note(if pr.kind.extreme() {
+                tr!(
+                    "`{w}` は、整数で届く数（金額と数量は宣言した単位の整数で届きます）か、`YYYY-MM-DD` の文字列で届く日付を比べます。",
+                    "`{w}` compares numbers that travel as whole numbers — money and quantities in the unit the rule declares — or dates that travel as `YYYY-MM-DD` strings."
+                )
+            } else {
+                tr!(
+                    "`sum` は整数を足します。金額と数量は宣言した単位の整数で届き、小数の数は正確には足せません。",
+                    "`sum` adds whole numbers: money and quantities travel as whole numbers in the unit the rule declares, and a number with a fraction cannot be added up exactly."
+                )
+            }),
+    ]
+}
+
+fn mismatch(at: &str, pr: &Projection, full: &str, here: &At, ty: &Ty, name: &str, who: Who) -> Diag {
+    let (wj, we) = (who.ja(), who.en());
+    let d = Diag::error("E120", tr!("`{full}` の型が{wj}と合いません", "The type at `{full}` does not fit {we}"))
         .at(at.to_string())
-        .mark(pr.span.clone(), tr!("契約では {}、入力 {name} は {ty}", "the contract says {}, the input {name} is {ty}", here.word()))
+        .mark(pr.span.clone(), tr!("契約では {}、{wj} {name} は {ty}", "the contract says {}, {we} {name} is {ty}", here.word()))
         .note(tr!(
             "契約は値がどんな形で届くかを決め、規則はその値が何を意味するかを決めます。列挙も日付も文字列で届き、金額と数量は宣言した単位の整数で届きます。",
             "A contract says how a value travels and the rule says what it means: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares."
@@ -1120,9 +1340,12 @@ fn unread_note(unread: &[String]) -> Option<String> {
 
 /// E122: what the contract lets through where an input is read, held against what the input
 /// takes. Returns the findings, and what passes when the contract names it — the set W123
-/// holds the rows to.
-fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_path: &str, ac: Option<&Across>) -> (Vec<Diag>, Option<Dom>) {
+/// holds the rows to. `who` says whether the value is an input's or a field's of an element
+/// taken from a contract (§15.223), whose `con` is then the element's.
+#[allow(clippy::too_many_arguments)]
+fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Checked, rule_path: &str, ac: Option<&Across>, who: Who) -> (Vec<Diag>, Option<Dom>) {
     let mut out = Vec::new();
+    let (wj, we) = (who.ja(), who.en());
     let name = input.name.text.as_str();
     let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
     let optional = matches!(ty, Ty::Opt(_));
@@ -1153,8 +1376,8 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 let fix = format!("\"required\": [{}]", quoted(&want));
                 let hint = if matches!(pr.kind, ProjKind::Field) {
                     tr!(
-                        "ヒント: いつもあるはずなら、`{parent}` に {fix} と書いてください。無いことがあるなら、入力を `{inner}?` にしてください。無いときは none として読みます。",
-                        "hint: if it is always there, write {fix} on `{parent}`. If it can be missing, make the input `{inner}?`; a missing value is then read as none."
+                        "ヒント: いつもあるはずなら、`{parent}` に {fix} と書いてください。無いことがあるなら、{wj}を `{inner}?` にしてください。無いときは none として読みます。",
+                        "hint: if it is always there, write {fix} on `{parent}`. If it can be missing, make {we} `{inner}?`; a missing value is then read as none."
                     )
                 } else {
                     tr!("ヒント: `{parent}` に {fix} と書いてください。", "hint: write {fix} on `{parent}`.")
@@ -1203,6 +1426,52 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                     }
                 }
             }
+            // `sum`, `max` and `min` read one field of every element as well, and cannot read a
+            // null there either (§15.223).
+            if let (Some(of), Some(items)) = (pr.kind.of(), chain.last().and_then(|n| con.items(n))) {
+                let w = pr.kind.word();
+                let req = con.required(items);
+                if !req.contains(&of.text) {
+                    let mut want = req.clone();
+                    want.push(of.text.clone());
+                    let fix = format!("\"required\": [{}]", quoted(&want));
+                    out.push(
+                        Diag::error(
+                            "E122",
+                            tr!(
+                                "契約では要素の `{}` を省略できますが、`from {w}` はそれを必ず読みます",
+                                "The contract lets an element leave out `{}`, and `from {w}` always reads it",
+                                of.text
+                            ),
+                        )
+                        .at(at.clone())
+                        .mark(of.span.clone(), tr!("`{full}` の要素の `required` にありません", "not in the `required` of an element of `{full}`"))
+                        .fix(FixKind::NarrowContract, fix.clone())
+                        .note(tr!(
+                            "生成した `…_from` の関数は、無いフィールドを読むと落ちます（Python なら KeyError）。",
+                            "The generated `…_from` function fails on a field that is not there (a KeyError in Python)."
+                        ))
+                        .note(tr!("ヒント: `{full}` の要素に {fix} と書いてください。", "hint: write {fix} on an element of `{full}`.")),
+                    );
+                }
+                if let Some(node) = con.property(items, &of.text).filter(|n| con.schema_type(n).1) {
+                    let shown = format!("{full}[].{}", of.text);
+                    let ty = con.schema_type(node).0.unwrap_or_default();
+                    let by_keyword = con.applying(node).iter().any(|x| matches!(get(x, "nullable"), Some(Json::Bool(true))));
+                    let fix = if by_keyword { "\"nullable\": false".to_string() } else { format!("\"type\": \"{ty}\"") };
+                    out.push(
+                        Diag::error("E122", tr!("契約は `{shown}` に null を通しますが、`from {w}` はそれを読めません", "The contract lets `{shown}` be null, which `from {w}` cannot read"))
+                            .at(at.clone())
+                            .mark(of.span.clone(), if by_keyword { tr!("`nullable` が付いています", "it is marked `nullable`") } else { tr!("型に \"null\" があります", "its type has \"null\" in it") })
+                            .fix(FixKind::NarrowContract, fix.clone())
+                            .note(tr!(
+                                "生成した `…_from` の関数は、null を数としても日付としても読めずに落ちます。",
+                                "The generated `…_from` function fails on null, which it can read neither as a number nor as a date."
+                            ))
+                            .note(tr!("ヒント: `{shown}` を {fix} と書いてください。", "hint: write {fix} on `{shown}`.")),
+                    );
+                }
+            }
         }
     }
 
@@ -1213,7 +1482,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
     // unless the input may be missing (§15.140).
     if let (Some(n), ProjKind::Field, false) = (leaf_schema, &pr.kind, optional) {
         if con.schema_type(n).1 {
-            out.push(null_passes(&at, pr, con, n, &full, &inner));
+            out.push(null_passes(&at, pr, con, n, &full, &inner, who));
         }
     }
     match &pr.kind {
@@ -1234,7 +1503,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 // whatever the rules on it say: Protovalidate validates nothing under an unset
                 // message, nor an unset `optional` field (§15.133).
                 let unset = fields.as_deref().filter(|_| !optional).and_then(|fs| unset_step(fs, true));
-                let refused = unset.filter(|_| !(rl <= 0 && 0 <= rh)).map(|(si, _)| defaulted(&at, pr, &steps, si, &full, "0", WVal::Int(0), name, &inner));
+                let refused = unset.filter(|_| !(rl <= 0 && 0 <= rh)).map(|(si, _)| defaulted(&at, pr, &steps, si, &full, "0", WVal::Int(0), name, &inner, who));
                 let Some((seen, mut unread, kind)) = seen else {
                     out.extend(refused);
                     return (out, dom);
@@ -1261,7 +1530,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                         .win(name, WVal::Int(v))
                         .mark(
                             pr.span.clone(),
-                            tr!("契約では {}、入力 {name} の範囲は {}", "the contract lets through {}; {name} takes {}", seen.describe(), range_text(input)),
+                            tr!("契約では {}、{wj} {name} の範囲は {}", "the contract lets through {}; {name} takes {}", seen.describe(), range_text(input)),
                         )
                         .fix(FixKind::NarrowContract, fix.clone())
                         .note(refused_note());
@@ -1359,7 +1628,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 }
                 let unset = fields.as_deref().filter(|_| !optional).and_then(|fs| unset_step(fs, true));
                 if let Some((si, _)) = unset.filter(|_| !vals.iter().any(String::is_empty)) {
-                    out.push(defaulted(&at, pr, &steps, si, &full, "\"\"", WVal::Str(String::new()), name, &inner));
+                    out.push(defaulted(&at, pr, &steps, si, &full, "\"\"", WVal::Str(String::new()), name, &inner, who));
                 }
                 if let Some(mut l) = list {
                     if unset.is_some() && !l.iter().any(String::is_empty) {
@@ -1374,7 +1643,7 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
             Ty::Date => {
                 let Some(fs) = fields.as_deref() else { return (out, dom) };
                 if let Some((si, _)) = fs.last().and_then(|_| if optional { None } else { unset_step(fs, true) }) {
-                    out.push(defaulted(&at, pr, &steps, si, &full, "\"\"", WVal::Str(String::new()), name, &inner));
+                    out.push(defaulted(&at, pr, &steps, si, &full, "\"\"", WVal::Str(String::new()), name, &inner, who));
                 }
                 if let Some(fd) = fs.last().filter(|fd| empty_passes(fd)) {
                     out.push(empty_date(&at, pr, fd, &full, name, optional));
@@ -1445,20 +1714,492 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
             // What a `where` picks out can be none at all, and the finding above says so already;
             // making the message `required` would not change it.
             if let Some((si, _)) = unset.filter(|_| rl > 0 && !filtered) {
-                out.push(defaulted(&at, pr, &steps, si, &full, &tr!("0 件", "0 elements"), WVal::Int(0), name, &inner));
+                out.push(defaulted(&at, pr, &steps, si, &full, &tr!("0 件", "0 elements"), WVal::Int(0), name, &inner, who));
             }
             let seen = if unset.is_some() { seen.union(&Ints::points(&[0])) } else { seen };
             dom = Some(Dom::Ints(seen, true));
         }
         ProjKind::Any(..) | ProjKind::All(..) => {}
+        ProjKind::Sum(of, t) | ProjKind::Max(of, t, _) | ProjKind::Min(of, t, _) => {
+            let (found, d) = numeric_holds(con, pr, of, t.is_some(), input, c, &at, &full, &steps);
+            out.extend(found);
+            dom = d;
+        }
     }
     (out, dom)
+}
+
+/// The total `n` elements of values in `vals` can come to, for every `n` in `count`: the lowest
+/// and the highest, `None` where there is no end (§15.223).
+fn sum_reach(count: &Ints, vals: &Ints) -> (Option<i128>, Option<i128>) {
+    if count.is_empty() || vals.is_empty() {
+        return (Some(0), Some(0));
+    }
+    let (n_lo, n_hi) = (count.min().unwrap_or(0).max(0), count.max());
+    let none_but_zero = n_hi == Some(0);
+    // The highest total: as many of the largest value as there may be, or as few as there must be
+    // when every value is negative. The lowest, the other way round.
+    let hi = match vals.max() {
+        Some(h) if h >= 0 => match n_hi {
+            Some(n) => n.checked_mul(h),
+            None => (h == 0).then_some(0),
+        },
+        Some(h) => n_lo.checked_mul(h),
+        None => none_but_zero.then_some(0),
+    };
+    let lo = match vals.min() {
+        Some(l) if l <= 0 => match n_hi {
+            Some(n) => n.checked_mul(l),
+            None => (l == 0).then_some(0),
+        },
+        Some(l) => n_lo.checked_mul(l),
+        None => none_but_zero.then_some(0),
+    };
+    (lo, hi)
+}
+
+/// E122 for `sum`, `max` and `min` (§15.223): what the contract lets the total, or the largest or
+/// smallest value, be, held against what the input takes. A total reaches as far as the field's
+/// values times how many elements the contract lets through; a largest or smallest value is one
+/// of the field's. Dates are not compared (§15.132); a `.proto` string that may be "" is, being
+/// no date at all.
+#[allow(clippy::too_many_arguments)]
+fn numeric_holds(con: &Contract, pr: &Projection, of: &crate::ast::Name, filtered: bool, input: &VarDecl, c: &Checked, at: &str, full: &str, steps: &[String]) -> (Vec<Diag>, Option<Dom>) {
+    let mut out = Vec::new();
+    let name = input.name.text.as_str();
+    let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
+    let w = pr.kind.word();
+    let shown = format!("{full}[].{}", of.text);
+    // The collection and the field, as the contract says them: how many elements, which values,
+    // the rules not read, and for a `.proto` the field's kind and its own declaration.
+    let (count, vals, mut unread, kind, field) = match con.kind {
+        EnumSource::JsonSchema => {
+            let Some(coll) = con.schema_chain(steps).and_then(|ch| ch.last().copied()) else { return (out, None) };
+            let Some(node) = con.items(coll).and_then(|items| con.property(items, &of.text)) else { return (out, None) };
+            let vals = (con.kind_at(node) == At::Int).then(|| con.ints_at(node));
+            let mut unread = con.unread_at(node, false);
+            unread.extend(con.unread_at(coll, false));
+            (con.count_at(coll, filtered), vals, unread, None, None)
+        }
+        EnumSource::Proto => {
+            let Some(chain) = con.proto_chain(steps) else { return (out, None) };
+            let Some(coll) = chain.last().copied() else { return (out, None) };
+            let Some(econ) = con.element(steps) else { return (out, None) };
+            let Some(fd) = econ.root_message().and_then(|m| m.fields.iter().find(|x| x.name == of.text)).cloned() else { return (out, None) };
+            // Under a message the contract lets be unset, the collection reads as no elements.
+            let mut count = proto_count(coll, filtered);
+            if unset_step(&chain, false).is_some() {
+                count = count.union(&Ints::points(&[0]));
+            }
+            let mut unread = fd.rules.unread.clone();
+            unread.extend(coll.rules.unread.iter().cloned());
+            let kind = fd.ty.rsplit('.').next().unwrap_or(&fd.ty).to_string();
+            (count, proto_ints(&fd), unread, Some(kind), Some(fd))
+        }
+    };
+    if ty == Ty::Date {
+        if let Some(fd) = field.filter(empty_passes) {
+            out.push(empty_date(at, pr, &fd, &shown, name, false));
+        }
+        return (out, None);
+    }
+    let Some((Some(lo), Some(hi))) = c.ranges.get(name).copied() else { return (out, None) };
+    let sc = c.wire_scale(name);
+    let (rl, rh) = (crate::types::wire_int(lo, sc), crate::types::wire_int(hi, sc));
+    // A field the contract carries as a fraction is E120's, and is not compared here.
+    let Some(vals) = vals else { return (out, None) };
+    if field.as_ref().is_some_and(|fd| con.element(steps).is_some_and(|e| e.cel_unread(fd, std::slice::from_ref(&of.text)))) {
+        unread.push("cel".into());
+    }
+    if let ProjKind::Sum(..) = pr.kind {
+        let (s_lo, s_hi) = sum_reach(&count, &vals);
+        let above = s_hi.is_none_or(|h| h > rh);
+        let below = s_lo.is_none_or(|l| l < rl);
+        let seen = Ints::between(s_lo, s_hi);
+        if above || below {
+            // A total the contract lets through: as many elements as there may be at the end the
+            // range is left by, or the fewest that pass it where there is no end.
+            let n_lo = count.min().unwrap_or(0).max(0);
+            let v = if above {
+                s_hi.unwrap_or_else(|| match vals.max() {
+                    Some(h) if h > 0 => h.saturating_mul((rh / h + 1).max(1).max(n_lo)),
+                    _ => rh.saturating_add(1),
+                })
+            } else {
+                s_lo.unwrap_or_else(|| match vals.min() {
+                    Some(l) if l < 0 => l.saturating_mul((rl / l + 1).max(1).max(n_lo)),
+                    _ => rl.saturating_sub(1),
+                })
+            };
+            // The narrowing that keeps the total inside: fewer elements of the field's largest
+            // value, or a smaller largest value for as many elements as there may be.
+            let fix = if !above {
+                None
+            } else {
+                match (vals.max(), count.max()) {
+                    (Some(h), _) if h > 0 && rh / h >= 1 => Some(match &kind {
+                        Some(_) => (format!("[(buf.validate.field).repeated = {{max_items: {}}}]", rh / h), full.to_string()),
+                        None => (format!("\"maxItems\": {}", rh / h), full.to_string()),
+                    }),
+                    (_, Some(n)) if n > 0 && rh >= 0 => Some(match &kind {
+                        Some(k) => (format!("[(buf.validate.field).{k} = {{lte: {}}}]", rh / n), shown.clone()),
+                        None => (format!("\"maximum\": {}", rh / n), shown.clone()),
+                    }),
+                    _ => None,
+                }
+            };
+            let mut d = Diag::error(
+                "E122",
+                tr!(
+                    "契約は `{full}` の `{}` の合計が {v} になるのを通しますが、規則はそれを受け付けません",
+                    "The contract lets the total of `{}` over `{full}` come to {v}, which the rule refuses",
+                    of.text
+                ),
+            )
+            .at(at.to_string())
+            .win(name, WVal::Int(v))
+            .mark(pr.span.clone(), tr!("契約では合計は {}、入力 {name} の範囲は {}", "the contract lets the total be {}; {name} takes {}", seen.describe(), range_text(input)))
+            .note(refused_note())
+            .note(tr!(
+                "合計の届く先は、契約が通す `{}` の値（{}）と、要素の数（{}）から決まります。",
+                "How far the total reaches comes from the values of `{}` the contract lets through ({}) and from how many elements it lets through ({}).",
+                of.text,
+                vals.describe(),
+                count.describe_in("件")
+            ));
+            d = match &fix {
+                Some((x, on)) => d.fix(FixKind::NarrowContract, x.clone()).note(tr!(
+                    "ヒント: その合計が来ないはずなら、`{on}` に {x} と書いて契約を狭めてください。来るのなら、規則の範囲を広げて、その合計のときの答えを決めてください。どちらにするかは人が決めることです。",
+                    "hint: if that total cannot occur, narrow the contract with {x} on `{on}`. If it can, widen the rule's range and decide what it answers for that total. Which of the two is a person's decision."
+                )),
+                None => d.fix_kind(FixKind::None).note(two_ways(
+                    None,
+                    tr!(
+                        "契約で要素の数と `{}` の値の両方に上限を書くか、規則の範囲を広げてその合計のときの答えを決めてください",
+                        "bound both how many elements the contract lets through and the values of `{}`, or widen the rule's range and decide what it answers for that total",
+                        of.text
+                    ),
+                )),
+            };
+            if let Some(u) = unread_note(&unread) {
+                d = d.note(u);
+            }
+            out.push(d);
+        }
+        return (out, Some(Dom::Ints(seen, false)));
+    }
+    // `max` and `min`: the answer is one of the field's values, or the `empty` value, which
+    // E074 has already held to the input.
+    let below = vals.intersect(&Ints::between(None, Some(rl - 1)));
+    let above = vals.intersect(&Ints::between(Some(rh + 1), None));
+    if !below.is_empty() || !above.is_empty() {
+        let v = below.max().or(above.min()).unwrap_or(rl - 1);
+        let (a, b) = (vals.min().map_or(rl, |m| m.max(rl)), vals.max().map_or(rh, |m| m.min(rh)));
+        let fix = match &kind {
+            Some(k) => format!("[(buf.validate.field).{k} = {{gte: {a}, lte: {b}}}]"),
+            None => format!("\"minimum\": {a}, \"maximum\": {b}"),
+        };
+        let mut d = Diag::error("E122", tr!("契約は `{shown}` に {v} を通しますが、規則はそれを受け付けません", "The contract lets `{shown}` be {v}, which the rule refuses"))
+            .at(at.to_string())
+            .win(name, WVal::Int(v))
+            .mark(of.span.clone(), tr!("契約では {}、入力 {name} の範囲は {}", "the contract lets through {}; {name} takes {}", vals.describe(), range_text(input)))
+            .fix(FixKind::NarrowContract, fix.clone())
+            .note(tr!(
+                "`from {w}` の答えは、要素の `{}` の値のどれかです。その値の要素が一つあれば、生成した `…_from` の関数はそれを規則に渡します。",
+                "What `from {w}` gives is one of the values of `{}`: one element with that value is enough for the generated `…_from` function to hand it to the rule.",
+                of.text
+            ))
+            .note(refused_note());
+        if let Some(u) = unread_note(&unread) {
+            d = d.note(u);
+        }
+        out.push(d.note(two_ways(Some(&fix), tr!("規則の範囲を広げて、その値の答えを決めてください", "widen the rule's range and decide what it answers there"))));
+    }
+    // The `empty` value too, when no element may pass: a collection the contract lets be empty,
+    // or a `where` that may let none in.
+    let mut seen = vals;
+    if filtered || count.min().unwrap_or(0) == 0 {
+        let e = pr.kind.empty().and_then(|(l, _)| match l {
+            Lit::Num(n) => crate::types::lit_value_in_pub(n, &ty),
+            _ => None,
+        });
+        if let Some(e) = e {
+            seen = seen.union(&Ints::points(&[crate::types::wire_int(e, sc)]));
+        }
+    }
+    (out, Some(Dom::Ints(seen, false)))
+}
+
+/// E121 for a path that does not resolve: how far it got, and which names were there.
+fn stuck_path(pr: &Projection, at: &str, s: Stuck) -> Diag {
+    let full = full_path(pr);
+    let where_ = if s.reached.is_empty() { pr.root.text.clone() } else { format!("{}.{}", pr.root.text, s.reached) };
+    Diag::error("E121", tr!("`{full}` というパスは契約にありません", "The contract has no path `{full}`"))
+        .at(at.to_string())
+        .mark(pr.span.clone(), "")
+        .note(if s.had.is_empty() {
+            tr!("`{where_}` までは見つかりました。その先にフィールドはありません。", "It resolved as far as `{where_}`, which has no fields under it.")
+        } else {
+            tr!("`{where_}` までは見つかりました。そこにあるフィールド: {}", "It resolved as far as `{where_}`. The fields there: {}", s.had.join(", "))
+        })
+}
+
+/// The sequences a rule takes from a contract (§15.223): the collection each is taken from, where
+/// every field stands in one element, and what the contract lets through there, held against
+/// what the walk takes — each field as an input is held, and the collection to the length and the
+/// totals the walk's door holds it to. Also the `from` a field of a sequence cannot do without, or
+/// cannot have (E074). Returns the findings, and for W123 what each field lets through.
+fn sequences(f: &RuleFile, c: &Checked, read_ok: &[(&ShapeDecl, Contract)], rule_path: &str) -> (Vec<Diag>, Vec<(String, Dom, String)>) {
+    let mut out = Vec::new();
+    let mut doms = Vec::new();
+    for el in &f.elements {
+        let seq = &el.name.text;
+        let Some(sp) = &el.from else {
+            // A path from an element, on a sequence the caller builds itself: there is no element
+            // for it to start at.
+            for p in el.fields.iter().filter_map(|fd| fd.from.as_ref()) {
+                out.push(
+                    Diag::error(
+                        "E074",
+                        tr!(
+                            "並び {seq} は契約から取っていないので、フィールドの `from` が指す要素がありません",
+                            "The sequence {seq} is not taken from a contract, so the `from` of its field has no element to start at"
+                        ),
+                    )
+                    .at(format!("{rule_path}:{}", p.span.line))
+                    .mark(p.span.clone(), "")
+                    .note(tr!(
+                        "並びを呼び出し側のオブジェクトから取るなら、`elements {seq} from <shape の名前>.<並び>` と書いてください。並びを呼び出し側が組み立てて渡すなら、フィールドの `from` を消してください。",
+                        "To take the sequence from the caller's object, write `elements {seq} from <shape>.<collection>`. If the caller builds the sequence and passes it, take the `from` off the field."
+                    )),
+                );
+            }
+            continue;
+        };
+        let full = full_path(sp);
+        // Every field of a sequence taken from a contract says where it stands in an element: one
+        // that did not would have no value.
+        for fd in el.fields.iter().filter(|fd| fd.from.is_none()) {
+            out.push(
+                Diag::error(
+                    "E074",
+                    tr!("フィールド {} が、`{full}` の要素のどこにあるかを書いていません", "The field {} does not say where it stands in an element of `{full}`", fd.name.text),
+                )
+                .at(format!("{rule_path}:{}", fd.span.line))
+                .mark(fd.name.span.clone(), tr!("`from <要素からのパス>` がありません", "there is no `from <path from the element>`"))
+                .note(tr!(
+                    "並びを契約から取るときは、どのフィールドも、要素の中のどこから読むかを `from` で書きます（`from qty`、`from unit.kind`）。",
+                    "When a sequence is taken from a contract, every field says with `from` where it is read in an element (`from qty`, `from unit.kind`)."
+                )),
+            );
+        }
+        let Some((_, con)) = read_ok.iter().find(|(d, _)| d.name.text == sp.root.text) else {
+            if !f.shapes.iter().any(|d| d.name.text == sp.root.text) {
+                out.push(no_such_root(f, sp, rule_path));
+            }
+            continue;
+        };
+        let at = format!("{rule_path}:{}", sp.span.line);
+        let steps = sp.path_steps();
+        // The collection: a path to a collection of objects.
+        let here = match con.at(&steps) {
+            Ok(a) => a,
+            Err(s) => {
+                out.push(stuck_path(sp, &at, s));
+                continue;
+            }
+        };
+        let At::Array(elem) = &here else {
+            out.push(
+                Diag::error("E120", tr!("`{full}` は並びではありません", "`{full}` is not a collection"))
+                    .at(at.clone())
+                    .mark(sp.span.clone(), tr!("契約では {}", "the contract says {}", here.word()))
+                    .note(tr!(
+                        "並びは、契約の配列（JSON Schema の `array`、`.proto` の `repeated`）から取ります。",
+                        "A sequence is taken from a collection of the contract: an `array` in a JSON Schema, a `repeated` field in a `.proto`."
+                    )),
+            );
+            continue;
+        };
+        let Some(econ) = con.element(&steps).filter(|_| matches!(elem.as_ref(), At::Object(_))) else {
+            out.push(
+                Diag::error("E121", tr!("`{full}` の要素にフィールドはありません", "An element of `{full}` has no fields"))
+                    .at(at.clone())
+                    .mark(sp.span.clone(), tr!("契約では {}", "the contract says {}", here.word()))
+                    .note(tr!(
+                        "並びの要素は、フィールドを持つオブジェクト（`.proto` ならメッセージ）でなければなりません。要素のフィールドは、その中から読みます。",
+                        "An element of a sequence is an object with fields (a message, in a `.proto`): the fields of the element are read out of it."
+                    )),
+            );
+            continue;
+        };
+        out.extend(collection_holds(f, c, con, sp, seq, &at));
+        // Each field, held to the element's contract as an input is held to the root's. A path is
+        // shown from the collection, `order.lines[].qty`.
+        let root = crate::ast::Name { text: format!("{full}[]"), ascii: None, span: sp.span.clone() };
+        for fd in &el.fields {
+            let Some(p) = &fd.from else { continue };
+            let dp = Projection {
+                root: root.clone(),
+                path: std::iter::once(p.root.clone()).chain(p.path.iter().cloned()).collect(),
+                kind: ProjKind::Field,
+                span: p.span.clone(),
+            };
+            let ty = c.ty_of(&fd.name.text).unwrap_or(Ty::Unknown);
+            let resolved = resolves(&econ, &dp, &ty, rule_path, &fd.name.text, Who::Field);
+            if resolved.is_empty() {
+                let (mut found, dom) = holds(f, &econ, &dp, fd, c, rule_path, None, Who::Field);
+                // A field of an element is no input, and an example given as one would be read so.
+                for d in &mut found {
+                    d.witness.inputs.clear();
+                }
+                out.extend(found);
+                if let Some(d) = dom {
+                    doms.push((fd.name.text.clone(), d, full_path(&dp)));
+                }
+            }
+            out.extend(resolved);
+        }
+    }
+    (out, doms)
+}
+
+/// E122 for the collection a sequence is taken from (§15.223). The function that reads it out
+/// indexes straight into the object, so every step to it has to be there; and the walk's door
+/// holds the sequence to the cap its `count`s put on its length, and to the upper end of each
+/// `sum` over it — either of which a collection the contract lets through can pass.
+fn collection_holds(f: &RuleFile, c: &Checked, con: &Contract, sp: &Projection, seq: &str, at: &str) -> Vec<Diag> {
+    let mut out = Vec::new();
+    let steps = sp.path_steps();
+    let full = full_path(sp);
+    let (count, proto, unread) = match con.kind {
+        EnumSource::JsonSchema => {
+            let Some(chain) = con.schema_chain(&steps) else { return out };
+            for (i, step) in steps.iter().enumerate() {
+                let req = con.required(chain[i]);
+                if req.iter().any(|r| r == step) {
+                    continue;
+                }
+                let parent = std::iter::once(sp.root.text.as_str()).chain(steps[..i].iter().map(String::as_str)).collect::<Vec<_>>().join(".");
+                let mut want = req.clone();
+                want.push(step.clone());
+                let fix = format!("\"required\": [{}]", quoted(&want));
+                out.push(
+                    Diag::error("E122", tr!("契約では `{parent}.{step}` を省略できますが、規則はこの値を必ず読みます", "The contract lets `{parent}.{step}` be left out, and the rule always reads it"))
+                        .at(at.to_string())
+                        .mark(sp.span.clone(), tr!("`{parent}` の `required` に `{step}` がありません", "`{step}` is not in the `required` of `{parent}`"))
+                        .fix(FixKind::NarrowContract, fix.clone())
+                        .note(tr!(
+                            "生成した `…_from` の関数は、無いフィールドを読むと落ちます（Python なら KeyError）。",
+                            "The generated `…_from` function fails on a field that is not there (a KeyError in Python)."
+                        ))
+                        .note(tr!("ヒント: `{parent}` に {fix} と書いてください。", "hint: write {fix} on `{parent}`.")),
+                );
+            }
+            let Some(coll) = chain.last().copied() else { return out };
+            (con.count_at(coll, false), false, con.unread_at(coll, false))
+        }
+        EnumSource::Proto => {
+            let Some(chain) = con.proto_chain(&steps) else { return out };
+            let Some(coll) = chain.last().copied() else { return out };
+            // Under a message the contract lets be unset, the collection reads as no elements.
+            let mut count = proto_count(coll, false);
+            if unset_step(&chain, false).is_some() {
+                count = count.union(&Ints::points(&[0]));
+            }
+            (count, true, coll.rules.unread.clone())
+        }
+    };
+    let cap = crate::door::count_cap(f, c, seq);
+    // The length: the smallest upper end the rule's `count`s over the sequence declare.
+    if let Some(cap) = cap {
+        let above = count.intersect(&Ints::between(Some(cap + 1), None));
+        if !above.is_empty() {
+            let v = above.min().unwrap_or(cap + 1);
+            let min = count.min().unwrap_or(0).max(0);
+            let min_part = |p: &str| if min > 0 { format!("{p}: {min}, ") } else { String::new() };
+            let fix = if proto {
+                format!("[(buf.validate.field).repeated = {{{}max_items: {cap}}}]", min_part("min_items"))
+            } else {
+                format!("{}\"maxItems\": {cap}", min_part("\"minItems\""))
+            };
+            let mut d = Diag::error(
+                "E122",
+                tr!("契約は `{full}` が {v} 件でも通しますが、並び {seq} は {cap} 件までしか受け付けません", "The contract lets `{full}` hold {v} elements, and the sequence {seq} takes at most {cap}"),
+            )
+            .at(at.to_string())
+            .mark(sp.span.clone(), tr!("契約では {}、`count` の範囲から {cap} 件まで", "the contract lets through {}; the `count`s take up to {cap}", count.describe_in("件")))
+            .fix(FixKind::NarrowContract, fix.clone())
+            .note(tr!(
+                "並びの件数の上限は、それを数える `count` の範囲のうちいちばん小さい上限です。生成したコードは、それより長い並びを入口で受け付けません。",
+                "A sequence's length is capped by the smallest upper end among the ranges of the `count`s over it, and the generated code refuses a longer one at its door."
+            ))
+            .note(refused_note());
+            if let Some(u) = unread_note(&unread) {
+                d = d.note(u);
+            }
+            out.push(d.note(two_ways(Some(&fix), tr!("`count` の範囲を広げて、その件数のときの答えを決めてください", "widen the range of the `count` and decide what it answers for that many"))));
+        }
+    }
+    // The totals: each `sum` over the sequence holds its total to its upper end. How long a
+    // sequence can be is what the contract lets through, and no longer than the cap above.
+    let longest = match (count.max(), cap) {
+        (Some(n), Some(k)) => Some(n.min(k)),
+        (n, k) => n.or(k),
+    };
+    for d in crate::door::sums(f).into_iter().filter(|d| d.over == seq) {
+        let (Some((_, Some(hi))), Some((_, Some(col_hi)))) = (c.ranges.get(&d.name.text).copied(), c.ranges.get(&d.column.text).copied()) else { continue };
+        if col_hi.cmp_to(Rat::zero()).is_le() {
+            continue;
+        }
+        let reach = longest.and_then(|n| col_hi.checked_mul(Rat::int(n)));
+        if reach.is_some_and(|r| r.cmp_to(hi).is_le()) {
+            continue;
+        }
+        let ty = c.ty_of(&d.name.text).unwrap_or(Ty::Unknown);
+        let shown = |v: Rat| crate::types::fmt_val(v, &ty);
+        let (sum, col) = (&d.name.text, &d.column.text);
+        let title = match (longest, reach) {
+            (Some(n), Some(r)) => tr!(
+                "契約は `{full}` を {n} 件まで通し、{col} の合計は {} に届きますが、{sum} は {} までしか受け付けません",
+                "The contract lets `{full}` hold {n} elements, whose total of {col} comes to {}, and {sum} takes at most {}",
+                shown(r),
+                shown(hi)
+            ),
+            _ => tr!(
+                "契約は `{full}` の件数に上限を置いていないので、{col} の合計にも上限がありませんが、{sum} は {} までしか受け付けません",
+                "The contract puts no upper end on how many elements `{full}` holds, so the total of {col} has none either, and {sum} takes at most {}",
+                shown(hi)
+            ),
+        };
+        // As many elements at the column's largest value as the total takes.
+        let most = hi.checked_div(col_hi).map(|q| q.num.div_euclid(q.den)).filter(|m| *m >= 1);
+        let fix = most.map(|m| if proto { format!("[(buf.validate.field).repeated = {{max_items: {m}}}]") } else { format!("\"maxItems\": {m}") });
+        let mut e = Diag::error("E122", title)
+            .at(at.to_string())
+            .mark(sp.span.clone(), tr!("一件の {col} は {} まで", "one element's {col} is at most {}", shown(col_hi)))
+            .note(tr!(
+                "生成したコードは、{col} の合計が {sum} の範囲を超えた並びを、入口で受け付けません。",
+                "The generated code refuses, at its door, a sequence whose total of {col} passes the range of {sum}."
+            ))
+            .note(refused_note());
+        e = match &fix {
+            Some(x) => e.fix(FixKind::NarrowContract, x.clone()).note(two_ways(Some(x), tr!("{sum} の範囲を広げて、その合計のときの答えを決めてください", "widen the range of {sum} and decide what it answers for that total"))),
+            None => e.fix_kind(FixKind::None).note(two_ways(None, tr!("{sum} の範囲を広げて、その合計のときの答えを決めてください", "widen the range of {sum} and decide what it answers for that total"))),
+        };
+        if let Some(u) = unread_note(&unread) {
+            e = e.note(u);
+        }
+        out.push(e);
+    }
+    out
 }
 
 /// E122 for a default: a `.proto` step that may be unset, under which the value read arrives
 /// as its default with no rule of the contract applied to it (§15.133).
 #[allow(clippy::too_many_arguments)]
-fn defaulted(at: &str, pr: &Projection, steps: &[String], si: usize, full: &str, zero: &str, w: WVal, name: &str, inner: &Ty) -> Diag {
+fn defaulted(at: &str, pr: &Projection, steps: &[String], si: usize, full: &str, zero: &str, w: WVal, name: &str, inner: &Ty, who: Who) -> Diag {
+    let (wj, we) = (who.ja(), who.en());
     let step = std::iter::once(pr.root.text.as_str()).chain(steps[..=si].iter().map(String::as_str)).collect::<Vec<_>>().join(".");
     let fix = "[(buf.validate.field).required = true]".to_string();
     let why = if si + 1 < steps.len() {
@@ -1485,8 +2226,8 @@ fn defaulted(at: &str, pr: &Projection, steps: &[String], si: usize, full: &str,
     .fix(FixKind::NarrowContract, fix.clone())
     .note(why)
     .note(tr!(
-        "ヒント: いつもあるはずなら、`{step}` に {fix} と書いてください。無いことがあるなら、入力を `{inner}?` にしてください。無いときは none として読みます。",
-        "hint: if it is always there, write {fix} on `{step}`. If it can be missing, make the input `{inner}?`; a missing value is then read as none."
+        "ヒント: いつもあるはずなら、`{step}` に {fix} と書いてください。無いことがあるなら、{wj}を `{inner}?` にしてください。無いときは none として読みます。",
+        "hint: if it is always there, write {fix} on `{step}`. If it can be missing, make {we} `{inner}?`; a missing value is then read as none."
     ))
 }
 
@@ -1550,7 +2291,9 @@ fn empty_date(at: &str, pr: &Projection, fd: &crate::proto::Field, full: &str, n
 
 /// E122 for null: the schema lets the value be null, and an input that is not optional does
 /// not take it (§15.140).
-fn null_passes(at: &str, pr: &Projection, con: &Contract, n: &Json, full: &str, inner: &Ty) -> Diag {
+fn null_passes(at: &str, pr: &Projection, con: &Contract, n: &Json, full: &str, inner: &Ty, who: Who) -> Diag {
+    let (wj, we) = (who.ja(), who.en());
+    let an = if who == Who::Input { "an input" } else { "a field" };
     let ty = con.schema_type(n).0.unwrap_or_default();
     let by_keyword = con.applying(n).iter().any(|x| matches!(get(x, "nullable"), Some(Json::Bool(true))));
     let fix = if by_keyword { "\"nullable\": false".to_string() } else { format!("\"type\": \"{ty}\"") };
@@ -1562,12 +2305,12 @@ fn null_passes(at: &str, pr: &Projection, con: &Contract, n: &Json, full: &str, 
         )
         .fix(FixKind::NarrowContract, fix.clone())
         .note(tr!(
-            "生成した `…_from` の関数は、省略できない入力に null が来ると落ちます。",
-            "The generated `…_from` function fails when null comes for an input that is not optional."
+            "生成した `…_from` の関数は、省略できない{wj}に null が来ると落ちます。",
+            "The generated `…_from` function fails when null comes for {an} that is not optional."
         ))
         .note(tr!(
-            "ヒント: null が来ないはずなら、`{full}` を {fix} と書いてください。来るのなら、入力を `{inner}?` にしてください。null は none として読みます。",
-            "hint: if null cannot come, write {fix} on `{full}`. If it can, make the input `{inner}?`: null is then read as none."
+            "ヒント: null が来ないはずなら、`{full}` を {fix} と書いてください。来るのなら、{wj}を `{inner}?` にしてください。null は none として読みます。",
+            "hint: if null cannot come, write {fix} on `{full}`. If it can, make {we} `{inner}?`: null is then read as none."
         ))
 }
 
@@ -1641,7 +2384,7 @@ fn cell_values(cell: &Cell, c: &Checked, all: &[String]) -> Option<Vec<String>> 
 /// W123: a row whose cell on a projected input admits nothing the contract lets through. The
 /// cell is on the input itself, so the row can only be reached by a value that did not pass
 /// the contract's validation; a cell on anything derived from it is not judged.
-fn dead_rows(f: &RuleFile, c: &Checked, doms: &[(String, Dom, &Projection)], rule_path: &str) -> Vec<Diag> {
+fn dead_rows(f: &RuleFile, c: &Checked, doms: &[(String, Dom, String)], rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     for it in &f.items {
         let Item::Table(t) = it else { continue };
@@ -1650,13 +2393,12 @@ fn dead_rows(f: &RuleFile, c: &Checked, doms: &[(String, Dom, &Projection)], rul
         }
         let tname = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
         for (ci, (col, _)) in t.inputs.iter().enumerate() {
-            let Some((_, dom, pr)) = doms.iter().find(|(n, _, _)| n == col) else { continue };
+            let Some((_, dom, full)) = doms.iter().find(|(n, _, _)| n == col) else { continue };
             let ty = match c.ty_of(col) {
                 Some(Ty::Opt(i)) => *i,
                 Some(t) => t,
                 None => continue,
             };
-            let full = format!("{}.{}", pr.root.text, pr.path.iter().map(|n| n.text.as_str()).collect::<Vec<_>>().join("."));
             for row in &t.rows {
                 let Some(cell) = row.cells.get(ci) else { continue };
                 let (dead, desc) = match dom {
@@ -2659,32 +3401,57 @@ pub struct ProtoPath {
     pub leaf_optional: bool,
     /// For a `where`: the element field's two names and what it reads as when missing.
     pub elem: Option<(String, String, Zero)>,
+    /// For `sum`, `max` and `min`: the field `of` names, the same way (§15.223).
+    pub of: Option<(String, String, Zero)>,
 }
 
-/// The `.proto` reads of every input projected from a `.proto` shape, by input name. The
-/// contract is read from beside the rule, the way `check` read it; an input whose path does
-/// not resolve has none, and `check` has already refused the rule for it.
+/// The `.proto` reads of every input projected from a `.proto` shape, by input name; and of every
+/// sequence taken from one and each field of its elements, by their names, which share one
+/// namespace with the inputs (§15.223). The contract is read from beside the rule, the way `check`
+/// read it; a path that does not resolve has none, and `check` has already refused the rule for it.
 pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<String, ProtoPath> {
     let mut out = std::collections::HashMap::new();
     let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
+    let contract = |root: &str| -> Option<Contract> {
+        let d = f.shapes.iter().find(|d| d.name.text == root && d.source == EnumSource::Proto)?;
+        let text = ritsu_base::fs::read_to_string(dir.join(&d.file)).ok()?;
+        read(d, &text).ok()
+    };
+    // One field of the element message `ty`, as a `where` or an `of` reads it.
+    let elem_field = |con: &Contract, ty: &str, field: &str| -> Option<(String, String, Zero)> {
+        let m = con.msgs.iter().find(|m| crate::proto::same_message(&m.name, ty))?;
+        let fd = m.fields.iter().find(|x| x.name == field)?;
+        Some((fd.json(), fd.name.clone(), zero_of(con, fd)?))
+    };
+    let path_of = |con: &Contract, steps: &[String]| -> Option<ProtoPath> {
+        let chain = con.proto_chain(steps)?;
+        let leaf = chain.last()?;
+        let zero = zero_of(con, leaf)?;
+        Some(ProtoPath { steps: chain.iter().map(|fd| (fd.json(), fd.name.clone())).collect(), zero, leaf_optional: leaf.optional, elem: None, of: None })
+    };
     for i in &f.inputs {
         let Some(pr) = &i.from else { continue };
-        let Some(d) = f.shapes.iter().find(|d| d.name.text == pr.root.text && d.source == EnumSource::Proto) else { continue };
-        let Ok(text) = ritsu_base::fs::read_to_string(dir.join(&d.file)) else { continue };
-        let Ok(con) = read(d, &text) else { continue };
-        let steps: Vec<String> = pr.path.iter().map(|n| n.text.clone()).collect();
-        let Some(chain) = con.proto_chain(&steps) else { continue };
-        let Some(leaf) = chain.last() else { continue };
-        let Some(zero) = zero_of(&con, leaf) else { continue };
-        let elem = pr.kind.test().and_then(|(field, _)| {
-            let m = con.msgs.iter().find(|m| crate::proto::same_message(&m.name, &leaf.ty))?;
-            let fd = m.fields.iter().find(|x| x.name == field.text)?;
-            Some((fd.json(), fd.name.clone(), zero_of(&con, fd)?))
-        });
-        out.insert(
-            i.name.text.clone(),
-            ProtoPath { steps: chain.iter().map(|fd| (fd.json(), fd.name.clone())).collect(), zero, leaf_optional: leaf.optional, elem },
-        );
+        let Some(con) = contract(&pr.root.text) else { continue };
+        let steps = pr.path_steps();
+        let Some(mut pp) = path_of(&con, &steps) else { continue };
+        let Some(leaf) = con.proto_chain(&steps).and_then(|ch| ch.last().map(|fd| fd.ty.clone())) else { continue };
+        pp.elem = pr.kind.test().and_then(|(field, _)| elem_field(&con, &leaf, &field.text));
+        pp.of = pr.kind.of().and_then(|of| elem_field(&con, &leaf, &of.text));
+        out.insert(i.name.text.clone(), pp);
+    }
+    for el in &f.elements {
+        let Some(sp) = &el.from else { continue };
+        let Some(con) = contract(&sp.root.text) else { continue };
+        let steps = sp.path_steps();
+        let Some(pp) = path_of(&con, &steps) else { continue };
+        out.insert(el.name.text.clone(), pp);
+        let Some(econ) = con.element(&steps) else { continue };
+        for fd in &el.fields {
+            let Some(p) = &fd.from else { continue };
+            if let Some(pp) = path_of(&econ, &p.steps()) {
+                out.insert(fd.name.text.clone(), pp);
+            }
+        }
     }
     out
 }

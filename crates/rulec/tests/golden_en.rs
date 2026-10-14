@@ -204,6 +204,11 @@ golden!(e139_isqrt_below_zero, "E139", "tests/mutants/m_e139.rule", "E139");
 golden!(e115_division_outside_rounding, "E115-div", "tests/mutants/m_e115div.rule", "E115");
 golden!(e115_mod_divisor, "E115-mod", "tests/mutants/m_e115mod.rule", "E115");
 
+// What a rule reads out of the caller's object (§15.223): a `from max` with no `empty`, and a
+// sequence taken from a collection the contract does not have.
+golden!(e074_max_without_empty, "E074", "tests/mutants/m_e074.rule", "E074");
+golden!(e121_sequence_not_in_contract, "E121-seq", "tests/mutants/m_e121seq.rule", "E121");
+
 // ── The pages and the amounts an English reader sees ─────────────────────────────────────────
 
 /// What a command prints, in a language, as the person who typed it sees it.

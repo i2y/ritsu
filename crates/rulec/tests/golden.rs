@@ -154,3 +154,8 @@ golden!(e132_割る数が0になりうる, "E132", "tests/mutants/m_e132ja.rule"
 golden!(e139_平方根の引数が負になりうる, "E139", "tests/mutants/m_e139ja.rule", "E139");
 golden!(e115_丸めの外の割り算, "E115-div", "tests/mutants/m_e115divja.rule", "E115");
 golden!(e115_余りの割る数, "E115-mod", "tests/mutants/m_e115modja.rule", "E115");
+
+// What a rule reads out of the caller's object (§15.223): a `from max` with no `empty`, and a
+// sequence taken from a collection the contract does not have.
+golden!(e074_最大の空, "E074", "tests/mutants/m_e074ja.rule", "E074");
+golden!(e121_契約に無い並び, "E121-seq", "tests/mutants/m_e121seqja.rule", "E121");

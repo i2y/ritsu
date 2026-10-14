@@ -1,0 +1,7 @@
+error[E074]: `from max` has no value for when no element is looked at
+  --> tests/mutants/m_e074.rule:11
+   |
+11 |   top_fragile : money[USD]  range >=0USD <=5_000USD    from max order.lines of amount_usd where fragile = true
+   |                                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ there is no `empty <value>`
+   |
+ Say with `empty <value>` what top_fragile is when the collection is empty, or when no element passes the `where`. What it is is a business decision, and not one the tool can make.

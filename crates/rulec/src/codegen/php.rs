@@ -1442,7 +1442,42 @@ impl<'a> Gen<'a> {
             }
             crate::ast::ProjKind::Count(None) => format!("count({walk})"),
             crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({walk}, fn($e) => {}))", cond()),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                let of = format!("$e[{}]", php_str(p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()));
+                self.php_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
+            }
         }
+    }
+
+    /// `sum`, `max` and `min` in PHP (§15.223): the field `read` of every element of `walk` that
+    /// passes `cond`, as the integer the rule takes, added up or the largest or smallest of them
+    /// picked. A date is its day number.
+    fn php_numeric(&self, p: &super::Proj, walk: &str, read: String, cond: Option<String>) -> String {
+        let rows = match cond {
+            Some(c) => format!("array_filter({walk}, fn($e) => {c})"),
+            None => walk.to_string(),
+        };
+        let each = if matches!(p.ty, Ty::Date) { format!("_days((string) {read})") } else { format!("(int) {read}") };
+        let vals = format!("array_map(fn($e) => {each}, {rows})");
+        match p.kind {
+            crate::ast::ProjKind::Sum(..) => format!("array_sum({vals})"),
+            _ => format!("{}({vals}, {})", Self::extreme_helper(p.kind), self.proj_empty(p)),
+        }
+    }
+
+    /// One sequence built out of the caller's object in PHP (§15.223): an object of the element's
+    /// class for every element of the collection, its fields in the order they are declared.
+    fn php_seq(&self, q: &super::SeqProj) -> String {
+        let root = php_var_pub(&q.root);
+        let walk = match &q.proto {
+            Some(pp) => {
+                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
+                format!("_proto({root}, [{}], [], [])", steps.join(", "))
+            }
+            None => q.path.iter().fold(root, |o, s| format!("{o}[{}]", php_str(s))),
+        };
+        let fields: Vec<String> = q.fields.iter().map(|p| self.php_proj(p)).collect();
+        format!("array_map(fn($e) => new {}({}), {walk})", self.element_type(q.s), fields.join(", "))
     }
 
     /// One projection read from a `.proto` contract's JSON form, through `_proto` (§15.133).
@@ -1472,7 +1507,31 @@ impl<'a> Gen<'a> {
             crate::ast::ProjKind::All(..) => format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond()),
             crate::ast::ProjKind::Count(None) => format!("count({walk})"),
             crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({walk}, fn($e) => {}))", cond()),
+            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
+                // The field read, as protojson writes it (§15.223).
+                let of = match &pp.of {
+                    Some((j, n, z)) if j == n => format!("($e[{}] ?? {})", php_str(j), lit(z)),
+                    Some((j, n, z)) => format!("($e[{}] ?? $e[{}] ?? {})", php_str(j), php_str(n), lit(z)),
+                    None => format!("$e[{}]", php_str(p.kind.of().map(|n| n.text.as_str()).unwrap_or_default())),
+                };
+                self.php_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
+            }
         }
+    }
+
+    /// The parameters of the PHP projection function, with their types: the objects, the inputs
+    /// no `from` reaches, and the sequences no `from` takes out of an object (§15.223).
+    fn php_from_params(&self) -> Vec<String> {
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("array {}", php_var_pub(r))).collect();
+        params.extend(
+            self.proj_rest()
+                .iter()
+                .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var_pub(&super::pub_name(&i.name)))),
+        );
+        for s in self.proj_seq_rest() {
+            params.push(format!("array {}", php_var_pub(&super::pub_name(&self.f.elements[s].name))));
+        }
+        params
     }
 
     pub(super) fn php_from(&self) -> String {
@@ -1480,15 +1539,7 @@ impl<'a> Gen<'a> {
             return String::new();
         }
         let fname = self.php_fname();
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("array {}", php_var_pub(r))).collect();
-        params.extend(
-            self.proj_rest()
-                .iter()
-                .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var_pub(&pub_name(&i.name)))),
-        );
-        for el in &self.f.elements {
-            params.push(format!("array {}", php_var_pub(&pub_name(&el.name))));
-        }
+        let params = self.php_from_params();
         let mut o = String::new();
         if self.proj_proto() {
             o.push_str(
@@ -1514,6 +1565,14 @@ impl<'a> Gen<'a> {
                  return $era * 146097 + $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy - 719468;\n}\n\n",
             );
         }
+        // The largest and the smallest value of a field over a collection, or the value for none
+        // (§15.223).
+        let (largest, smallest) = self.proj_extremes();
+        for (want, name, f) in [(largest, "_largest", "max"), (smallest, "_smallest", "min")] {
+            if want {
+                o.push_str(&format!("function {name}(array $vs, int $empty): int\n{{\n    return count($vs) === 0 ? $empty : {f}($vs);\n}}\n\n"));
+            }
+        }
         o.push_str(&format!("/** {} */\nfunction {fname}_from({})\n{{\n    return {fname}(\n", self.proj_doc(), params.join(", ")));
         let projs = self.projections();
         let mut args: Vec<String> = Vec::new();
@@ -1523,8 +1582,12 @@ impl<'a> Gen<'a> {
                 None => php_var_pub(&pub_name(&i.name)),
             });
         }
-        for el in &self.f.elements {
-            args.push(php_var_pub(&pub_name(&el.name)));
+        let seqs = self.seq_projections("e");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            args.push(match seqs.iter().find(|q| q.s == s) {
+                Some(q) => self.php_seq(q),
+                None => php_var_pub(&pub_name(&el.name)),
+            });
         }
         for a in &args {
             o.push_str(&format!("        {a},\n"));
@@ -1537,13 +1600,7 @@ impl<'a> Gen<'a> {
 impl Gen<'_> {
     /// The projection function's signature, for the inventory (§15.125).
     pub(super) fn php_from_signature(&self) -> String {
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("array {}", php_var_pub(r))).collect();
-        params.extend(
-            self.proj_rest()
-                .iter()
-                .map(|i| format!("{} {}", self.php_ty(&self.ty_of(&i.name.text)), php_var_pub(&super::pub_name(&i.name)))),
-        );
-        format!("function {}_from({})", self.php_fname(), params.join(", "))
+        format!("function {}_from({})", self.php_fname(), self.php_from_params().join(", "))
     }
 }
 
