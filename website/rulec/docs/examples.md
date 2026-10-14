@@ -804,8 +804,8 @@ examples
 - **A count is what the walk leaves behind.** `count hits over candidates where kind = same` is how many elements the per-element table judged `same`. From there it is a `number`, so it can be a column.
 - **What turns the number into a decision is an ordinary table.** A gap or an overlap in the `0` / `1` / `>=2` boundaries stops the check as it always would. Counting and deciding are checked separately.
 - **The range says two things** (`range >=0 <=50`): the universe the completeness check quantifies over, and **the cap on the sequence**. Pass 51 candidates and the generated code refuses at the door — the same answer a number outside its range gets.
-- **A count counts and a `sum` adds one column up** — "Adding the lines up" below. An average does not follow: dividing by the count is dividing by a variable, so compute one before the call.
-- **A `fold` and a `count` cannot share a rule** (E031): two endings for the same walk, and a fold may stop partway.
+- **A count counts and a `sum` adds one column up** — "Adding the lines up" below. An average is the total divided by the count inside a rounding — "Dividing by a value: the average unit price" below.
+- **A `fold` and a `count` can share a rule**, over one sequence or several, and a second walk may read what the first one found — "Two sequences and a second walk" below. What stops (E031) is one item reading the elements of two sequences.
 
 ## Adding the lines up
 
@@ -870,7 +870,7 @@ sequence no_lines
 
 - **`sum total over lines of amount` leaves one amount behind.** From there it is an ordinary column, so `>=5000JPY` becomes a boundary and completeness and overlap are checked as they always are.
 - **The summed column cannot go negative** (E029). The running total then only rises, so the entry guard can refuse the moment it leaves the declared range — which is what keeps the int64 claim true of a sequence whose length nothing caps. For a difference, sum two non-negative columns and subtract.
-- **An average does not follow**: dividing by the count is dividing by a variable (E115). Work it out before the call and pass it in.
+- **An average divides inside a rounding**: the total over the count is a division by a value, so it is written as a rounding's outermost operation, `half_up(total / max(n, 1), 1JPY)` — "Dividing by a value: the average unit price" below.
 
 ## Sorting by the head of a part number
 
@@ -961,7 +961,7 @@ examples
 
 **What this one shows**
 
-- **`allocate(<amount>, <running total>, <whole>)` is the one place a rule divides by something that is not a constant.** The answer is `<amount> × <running total> ÷ <whole>` rounded down to a whole unit.
+- **`allocate(<amount>, <running total>, <whole>)` divides by a value**, which a rule may otherwise do only as the outermost division inside a rounding. The answer is `<amount> × <running total> ÷ <whole>` rounded down to a whole unit.
 - **Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).
 - **A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.
 

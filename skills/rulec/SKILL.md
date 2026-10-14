@@ -97,7 +97,7 @@ A few shapes are worth knowing before the first draft:
   says what each verdict does next: `next`, `stop with <value>`, `take_unique`, `take_first`,
   `keep_max <value> by <key>`, plus the required `empty` and `exhausted`. The table that judges one
   element is checked exactly as any other table is, and an example names a `sequence` rather than
-  holding one in a cell (§6.2). Every target but SQL generates it.
+  holding one in a cell (§6.2). Every target but SQL and NumPy generates it.
 - **A `string` column takes a prefix and nothing else.** `starts_with "CH-", "CL-"` is the
   one test it accepts (E110 for any other): the prefixes a column's own cells name cut the
   strings into finitely many classes, which is what keeps completeness decidable. Bytes, no
@@ -108,8 +108,9 @@ A few shapes are worth knowing before the first draft:
   its boundaries are checked like any other (§6.3). The `range` is required: it is the
   universe the completeness check quantifies over **and** the cap on the sequence. `sum
   <name>(<alias>) over <sequence> of <column>` ends it with a total instead, over a column
-  that cannot go negative; an average does not, dividing by the count being division by a
-  variable. A rule has a `fold` or a `count`/`sum`, never both (E031).
+  that cannot go negative, and `max`/`min` with the largest or the smallest. An average divides
+  inside a rounding: `half_up(total / max(n, 1), 1JPY)`. Folds and these mix freely, over any
+  number of sequences; one item reading the elements of two sequences is E031.
 - **Handing one amount out over several lines.** `allocate(<amount>, <running total>,
   <whole>)` is `<amount> × <running total> ÷ <whole>` rounded down. Write one line's share
   as the share up to it minus the share up to the line before: the parts then add up to the
@@ -435,12 +436,11 @@ not overlap, fix the rows.
 ## 4. What rulec will not do, and why that is the point
 
 It has no loops in an expression, no recursion, no state of its own (a `machine`'s is kept by
-the caller), no nested objects in a cell, and no date arithmetic. A sequence is walked once,
-by a `fold`, and that is the whole of the iteration there is: nothing accumulates across
-elements, so a total or a count is computed before the call and passed in. Do not look for a
-way around these. They are the price of the checks terminating: because a cell is a unary test
-on its own column, a row is a box, and completeness and overlap are exactly decidable. Flatten
-nested data at the boundary; keep the rest of the iteration in the caller.
+the caller), no nested objects in a cell, and no date arithmetic; only `fold`, `count`, `sum`,
+`max` and `min` walk a sequence, twice when an item needs what the first walk found. Do not look
+for a way around these. They are the price of the checks terminating: because a cell is a unary
+test on its own column, a row is a box, and completeness and overlap are exactly decidable.
+Flatten nested data at the boundary; keep the rest of the iteration in the caller.
 
 It will not print a green result it cannot prove. When a check runs out of budget (E109) or
 cannot decide an overlap (W114), it says so rather than approximating.

@@ -112,8 +112,8 @@ always comes out exact** — nothing is over- or under-allocated (checked over 2
 different sets of lines).
 
 **Splitting by ratio.** "Apportion by each line's share of the list price" is written with
-`allocate`. Division by a variable is still refused everywhere else (E115); a share is the
-one exception.
+`allocate`. Besides a share, a rule divides by a value only as the outermost division inside a
+rounding (`half_up(total / max(n, 1), 1USD)`); any other division by a value is E115.
 
 ```rule
 constraint price_upto <= price_total
@@ -133,13 +133,16 @@ sets of lines; here it is a theorem in `proofs/`.
 - **Running a workflow** — the steps themselves, the waiting between them and what they do
   outside. **One step of a process with state is writable** (`machine`: an order's status as a
   table of state and event, with `check` proving what no sequence of calls may do, and the
-  caller keeping the state). Several machines at once, a number carried from call to call, and
-  the time between steps are not
-- **An average over a collection** — it divides by how many there are, which is dividing by
-  a variable; compute it before the call and pass it in. **The total and the count are
-  writable** (`sum`: "the lines total more than 10,000 yen" becomes a row of a table;
-  `count`: "three or more refrigerated items"), and so is picking **one element** out of a
-  sequence (`fold`: "refuse if any line is refrigerated", "take the dearest row") 
+  caller keeping the state). Numbers whose range has both ends, flags and other enums can be
+  carried with the state; several machines at once, a number without both ends, and the time
+  between steps are not
+- **Walking one sequence for each element of another** — an item reads the elements of one
+  sequence at most (E031), so pairing every line with every payment happens before the call.
+  **Totals, counts, the largest and the smallest are writable** (`sum`: "the lines total more
+  than 10,000 yen" becomes a row of a table; `count`: "three or more refrigerated items";
+  `max`, `min`), over each of a rule's sequences, and so are an average, divided inside a
+  rounding, and picking **one element** out of a sequence (`fold`: "refuse if any line is
+  refrigerated", "take the dearest row")
 - **Branching on a whole string** — a `string` column takes a prefix and nothing else
   (`starts_with "CH-"`; anything else is E110), which is enough to sort SKUs or categories
   by their heads. Where the values can be enumerated an `enum` is better: the closed set is

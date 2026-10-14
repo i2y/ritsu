@@ -530,12 +530,14 @@ result fee = base + base × fuel + extra
 ```
 
 The operations are addition and subtraction, multiplication by a
-constant, multiplication by a rate, `min`, `max`, `allocate`, and the
-five rounding modes. **There is no loop and no recursion.**
+constant, multiplication by a rate, `min`, `max`, `mod`, `isqrt`,
+`allocate`, and the five rounding modes, whose outermost division may be
+by a value (`half_up(total / max(units, 1), 1JPY)`). **There is no loop
+and no recursion.**
 
 **`allocate` hands an amount out over a run of lines**, in the ratio of
-their prices. It is the one place a rule divides by something that is not
-a constant.
+their prices. Outside a rounding, it is the one place a rule divides by
+something that is not a constant.
 
 ```rule
 constraint price_upto <= price_total
@@ -867,8 +869,9 @@ examples
 
 A `sequence` with no rows is the example for a sequence with nothing in
 it. What comes out is the same function with one more argument — for
-every target **but SQL**, where one query has no place to carry a value
-from row to row and stop partway.
+every target **but SQL and NumPy**: one SQL query has no place to carry
+a value from row to row and stop partway, and NumPy works on whole
+columns, which a walk carrying state from element to element is not.
 
 A rule that runs is in [Examples](examples.md), under "A sequence walked
 into one answer".
@@ -906,19 +909,21 @@ check quantifies over, and **the cap on the sequence**. A longer sequence is
 refused at the door by the generated code, for the reason a number outside its
 range is — the proof was made over what was declared.
 
-**A count counts and a `sum` adds one column up** — `sum total over lines
-of amount`. An average does not follow: dividing by a count is dividing by a
-variable, so it belongs before the call, as a value. A rule cannot hold both a
-`fold` and a `count` or `sum` (E031): two endings for one walk, and a fold may
-stop partway.
+**A count counts, a `sum` adds one column up, and a `max` or a `min` keeps
+the largest or the smallest** — `sum total over lines of amount`. An average
+is a total divided by a count inside a rounding:
+`half_up(total / max(n, 1), 1JPY)`. A rule may hold any number of these and
+of folds, over one sequence or several.
 
 **What is computed once and what is computed per element follows from what
 each item reads.** An item that reads only the inputs — a table over them, a
 `define` — is computed once before the walk, so `empty` may answer it and an
 element's item may read it; an item that reads a value of one element is
 computed on each element; one that reads what the walk answers (the fold's
-answer, a count, a sum) once after it. An item that reads both a value of one
-element and the answer would take a second walk, and stops as E031.
+answer, a count, a sum, a max, a min) once after it. An item that reads both a
+value of one element and an answer is computed on a second walk, once the
+answers it reads are known. One that reads the elements of two sequences stops
+as E031.
 
 A rule that runs is in [Examples](examples.md), under "Counting a sequence, and
 deciding from the count".
@@ -993,12 +998,17 @@ call. Between two versions, `rulec diff` gives the shortest sequence of
 calls the two answer differently, and the states from which a case in
 progress could no longer finish.
 
-The claims stay decidable because the state is a finite enum and nothing
-else is carried. A total so far — refunds paid, a balance — is kept by the
-caller and passed in, as it always was.
+The claims stay decidable because what a case carries takes finitely many
+values. The state is an enum, and further `carry` lines carry numbers whose range has both
+ends, flags and other enums, each started by an `initial` line. `always`
+says what a carried value may be while a case is in a state (E135), and a
+call that takes a carried number out of its range is E134. A number without
+both ends — a running total with no ceiling — is kept by the caller and
+passed in.
 
 A rule that runs is in [Examples](examples.md), under "One event in an
-order that goes on".
+order that goes on", and one that carries a number with its state under
+"Carrying a count: retrying a card charge".
 
 ## Examples
 
@@ -1025,15 +1035,17 @@ wrote.
 
 - Nested objects (`order.destination.state`) — flatten at the boundary and
   pass the scalar in.
-- Iteration anywhere you like, and recursion — a sequence is walked once,
-  by `fold` (the section above); every other repetition, a stack of
-  coupons applied in order among them, stays with the caller.
-- An average over the elements — it divides by how many there are, which is
-  dividing by a variable. Compute it before the call and pass it in (**the
-  count and the total are written with `count` and `sum`**).
-- A number carried from one call to the next — a balance, how many times
-  so far. The state a `machine` carries is an enum; a running total is
-  kept by the caller and passed in.
+- Iteration anywhere you like, and recursion — sequences are walked by
+  `fold`, `count`, `sum`, `max` and `min` (the section above), a second
+  time when an item needs what the first walk found; every other
+  repetition, a stack of coupons applied in order among them, stays with
+  the caller.
+- A sequence walked for each element of another — an item reads the
+  elements of one sequence at most (E031); pair them before the call.
+- A number carried from one call to the next without both ends of its
+  range — a `machine` carries its state and numbers, flags and enums with
+  declared bounds; any other running total is kept by the caller and
+  passed in.
 - Date arithmetic — comparison and range only.
 
 Allowing these would stop the completeness and overlap checks from
