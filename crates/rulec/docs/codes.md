@@ -38,14 +38,14 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E030](#e030) | error | A `count` needs a range |
 | [E031](#e031) | error | One item reads the elements of two sequences |
 | [E032](#e032) | error | The declared enum and the imported one disagree |
-| [E033](#e033) | error | A value of an imported enum has neither a row nor `default` |
+| [E033](#e033) | error | A value that came from elsewhere has neither a row nor `default` |
 | [E034](#e034) | error | A row label appears twice |
 | [E035](#e035) | error | The target of `overrides` does not exist |
 | [E036](#e036) | error | The target of `overrides` does not define the same output |
 | [E037](#e037) | error | A cited fragment is not pinned |
 | [E038](#e038) | error | A source fragment has changed |
 | [E039](#e039) | error | There is no copy of a source |
-| [E040](#e040) | error | The callee differs from its pinned digest |
+| [E040](#e040) | error | A file relied on differs from its pin |
 | [E041](#e041) | error | The bindings of an apply do not match the callee |
 | [E042](#e042) | error | A binding does not agree in type |
 | [E043](#e043) | error | A value passed leaves the callee's range or constraint |
@@ -133,6 +133,16 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 | [W901](#w901) | warning | A key is written in the file |
+| [E074](#e074) | error | A `from sum`, `from max` or `from min`, or an `elements … from`, is misshapen |
+| [E070](#e070) | error | A random input or a claim of `chances` is not shaped right |
+| [E073](#e073) | error | A pick by weight is not shaped right |
+| [E133](#e133) | error | A claim of `chances` does not hold |
+| [W129](#w129) | warning | A claim of `chances` could not be decided within the budget |
+| [W131](#w131) | warning | The chances function runs the rule many times on every call |
+| [E067](#e067) | error | A contribution is not shaped as one |
+| [E068](#e068) | error | An open value is not shaped as one |
+| [E131](#e131) | error | A value put together leaves the range it declares |
+| [W132](#w132) | warning | A term of an open value changes nothing |
 
 ## E001
 
@@ -193,7 +203,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -211,7 +221,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -629,7 +639,7 @@ Related codes: [E028](#e028), [E021](#e021), [E031](#e031)
 
 `error` — **The `fold` is not written correctly**
 
-**When.** The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
+**When.** The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
 
 **Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`. Name the answer with `-> <name>` for the items below to read it; a verdict that needs a fold's answer goes in another fold, which reads it on a second walk.
 
@@ -1091,11 +1101,11 @@ Related codes: [E013](#e013), [E033](#e033), [E101](#e101)
 
 ## E033
 
-`error` — **A value of an imported enum has neither a row nor `default`**
+`error` — **A value that came from elsewhere has neither a row nor `default`**
 
-**When.** A value of an imported enum appears in no row and is not marked `default`. For a value you wrote yourself that is a forgotten line (W111); for a value that came through the contract it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default row's answer.
+**When.** A value of an imported enum appears in no row and is not marked `default`. The same holds for a value a contribution adds with `extend` that no row of a table names and that falls in silence to a row of `-`, a `not:` that does not leave it out, or a comparing cell that now covers it (each such row is named). For a value you wrote yourself that is a forgotten line (W111); for a value that came through a contract or a contribution it means **a change from elsewhere that nobody has read yet**, so it stops. With a default row the completeness check passes and the new value quietly takes the default row's answer.
 
-**Fix.** Add a row for it, or mark the value `default` in the declaration. `default` is a signature saying that falling through to the default row is what is meant — that someone decided how it is treated.
+**Fix.** Add a row for it, or mark the value `default` in the declaration. For a value a contribution adds, have a contribution add its row to the open table, or put `default` on the `extend` line. `default` is a signature saying that falling through to the default row is what is meant — that someone decided how it is treated.
 
 **Smallest reproduction**:
 
@@ -1130,7 +1140,36 @@ enum Tier {
 }
 ```
 
-Related codes: [E032](#e032), [W111](#w111), [E101](#e101)
+**A value a contribution adds (`extend`)**:
+
+```rule
+contribution c(c) v1
+to "base.rule" signature:69e01897ab91b191
+
+extend kind with z
+```
+
+With `base.rule` beside it:
+
+```rule
+rule base(base) v1
+
+enum kind(kind) = a(a) | b(b)  open
+
+inputs
+  k(k) : kind
+
+outputs
+  fee(fee) : number  round down(1)
+
+table t(t)
+policy first
+| k | -> fee : number |
+| a | 1               |
+| - | 2               |
+```
+
+Related codes: [E032](#e032), [W111](#w111), [E101](#e101), [E067](#e067)
 
 ## E034
 
@@ -1318,11 +1357,11 @@ Related codes: [E037](#e037), [E038](#e038)
 
 ## E040
 
-`error` — **The callee differs from its pinned digest**
+`error` — **A file relied on differs from its pin**
 
-**When.** The `apply` heading carries no `sha256:…`, or the digest it carries differs from the digest of the callee file beside the rule. When the callee is amended, the answers of the rule that applies it change too; without a pin, that change passes with nobody approving it.
+**When.** An `apply` heading carries no pin, or the pin differs from the callee beside the rule. The pin is `meaning:…` — the callee's rows and declarations with its comments, `description` and citations left out — and a `sha256:…` written before (the file's bytes) is still read. When the callee's rows are amended, the answers of the rule that applies it change too. The same holds for the `signature:…` on a contribution's `to` and `after` lines, missing or not matching: it is the shape of the file added to (its name, inputs and outputs, open values and outputs, open enums and blocks, and the declarations of the names the contribution reads), so a row or a comment of that file does not move it, and when the shape moves the diagnostic says what moved (when the repository's history holds the version it was pinned at). Without a pin, the change passes with nobody approving it.
 
-**Fix.** See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again.
+**Fix.** See with `rulec diff <old> <new>` how many answers of this rule move and by how much; once the movement is approved, rewrite the heading as `fix.text` says or run `rulec source pin <file.rule>` to pin the callee again. For a contribution, read it against the new shape, then rewrite the `signature:` with `rulec source pin <contribution>`.
 
 **Smallest reproduction**:
 
@@ -1358,7 +1397,36 @@ small | <=5 | 1    |
 large | >5  | 2    |
 ```
 
-Related codes: [E037](#e037), [E038](#e038), [E044](#e044)
+**A contribution's `signature:` differs from the shape it adds to**:
+
+```rule
+contribution c(c) v1
+to "base.rule" signature:0123456789abcdef
+
+extend kind with z
+```
+
+With `base.rule` beside it:
+
+```rule
+rule base(base) v1
+
+enum kind(kind) = a(a) | b(b)  open
+
+inputs
+  k(k) : kind
+
+outputs
+  fee(fee) : number  round down(1)
+
+table t(t)
+policy first
+| k | -> fee : number |
+| a | 1               |
+| - | 2               |
+```
+
+Related codes: [E037](#e037), [E038](#e038), [E044](#e044), [E067](#e067)
 
 ## E041
 
@@ -1500,9 +1568,9 @@ Related codes: [E041](#e041), [E042](#e042), [E101](#e101)
 
 `error` — **That rule cannot be applied**
 
-**When.** The callee cannot be read, does not pass `check` (the codes are listed), itself has an `apply`, walks a sequence (`elements`, `fold`, `count`), or has a table or clause that produces one of its own enums. A broken rule expanded is a broken rule, and a provision applied through another is written flattened to one level.
+**When.** The callee cannot be read, does not pass `check` (the codes are listed), or the applies go round: a rule applies a rule that applies it back, directly or through others (every file of the ring is listed). A broken rule expanded is a broken rule, and a rule that reads itself through itself has no answer. A rule that applies another, one that walks a sequence, and one whose tables produce its own enums can all be applied.
 
-**Fix.** Fix the callee first. To apply a rule that itself applies another or walks a sequence, write its expansion into this rule.
+**Fix.** Fix the callee first. For a ring, take one of the `apply` lines out.
 
 **Smallest reproduction**:
 
@@ -1535,6 +1603,38 @@ table t(t)
 policy unique
 | a   | -> x |
 | <=5 | 1    |
+```
+
+**Applies that go round**:
+
+```rule
+rule t(t) v1
+
+inputs
+  n(n) : number  range >=1 <=10
+
+outputs
+  y(y) : number  round down(1)
+
+apply o(o) = "other.rule"
+  a = n
+  x -> y
+```
+
+With `other.rule` beside it:
+
+```rule
+rule other(other) v1
+
+inputs
+  a(a) : number  range >=1 <=10
+
+outputs
+  x(x) : number  round down(1)
+
+apply back(back) = "explain.rule"
+  n = a
+  y -> x
 ```
 
 Related codes: [E040](#e040), [E041](#e041)
@@ -2666,9 +2766,9 @@ Related codes: [E111](#e111), [E105](#e105)
 
 `error` — **Cannot prove an intermediate value fits in int64**
 
-**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value.
+**When.** The reachable interval computed from the declared ranges and steps exceeds int64. With a rate step of 1%, the stored integer is 100 times the value. So is a rule whose random inputs (`random`) have more than 2^62 points together: a chance is worked out by counting the points, and every language holds the count in an int64.
 
-**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it.
+**Fix.** Narrow the input ranges, or insert one rounding step along the way. Where to round is a business decision that moves yen, so the tool does not decide it. Where the random inputs have too many points, narrow their ranges.
 
 **Smallest reproduction**:
 
@@ -2688,6 +2788,25 @@ table j(j)
 policy unique
 | off | -> r(r) : money[JPY, incl_tax] |
 | -   | 0JPY                           |
+```
+
+**The points of the random inputs**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=9999999999  random
+  b(b) : number  range >=0 <=9999999999  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a   | b | -> r(r) : bool |
+| <5  | - | true           |
+| >=5 | - | false          |
 ```
 
 Related codes: [E112](#e112), [E103](#e103)
@@ -3012,7 +3131,7 @@ Related codes: [E103](#e103), [E115](#e115)
 
 `error` — **A `from` does not fit the input's type**
 
-**When.** What a `from` yields does not fit the input that takes it. `any` and `all` yield a `bool` and `count` yields a `number`. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all` or `count` would walk something that is not a collection, and when the value of a `where` does not fit the field. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares.
+**When.** What a `from` yields does not fit the input that takes it. `any` and `all` yield a `bool`, `count` yields a `number`, `sum` a number (a `number`, money, a quantity or a rate), and `max` and `min` a number or a date. It is also this code when the type at the end of the path does not fit the input — a field the contract calls a string taken by a `number` input — when `any`, `all`, `count`, `sum`, `max` or `min` would walk something that is not a collection, and when the value of a `where` does not fit the field; when the field of an element `of` reads does not fit the input (`sum` adds whole numbers, and a fraction cannot be added up exactly); when a sequence is taken from something that is not a collection; and when a field of an element does not fit the field it is read into. A contract says how a value travels: an enum and a date arrive as strings, and money and a quantity as whole numbers in the unit the rule declares.
 
 **Fix.** Correct the type or the `from`. A count is taken by a `number` input with a range, whether the elements passed by a `bool`, and the value itself by `from <shape>.<field>`. A `where` value carries no unit: a contract has none, and comparing a scaled number with a raw one is the thing this must not do quietly.
 
@@ -3047,7 +3166,7 @@ Related codes: [E121](#e121), [W122](#w122), [E103](#e103)
 
 `error` — **The contract has no such path**
 
-**When.** A `from` path is not in the contract of the `shape` it starts at. Three shapes of it: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests is not a field of an element. The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
+**When.** A `from` path is not in the contract of the `shape` it starts at: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests or an `of` reads is not a field of an element. The same goes for the path of a sequence taken with `elements … from`, and for the path of each field of its elements, shown after `[]` inside the element (`order.lines[].qty`). The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
 
 **Fix.** Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here.
 
@@ -3132,7 +3251,7 @@ Related codes: [E116](#e116), [W120](#w120), [E105](#e105)
 
 `warning` — **No input is projected from that shape**
 
-**When.** A `shape` is declared and no input says `from <that name>.…`. The contract is read and holds nothing.
+**When.** A `shape` is declared and no input or sequence says `from <that name>.…`. The contract is read and holds nothing.
 
 **Fix.** Use it or delete it. A contract that is only read makes the next reader believe this rule is held to it; what is held to it is the inputs that say `from`.
 
@@ -3167,7 +3286,7 @@ Related codes: [E121](#e121), [W111](#w111)
 
 `error` — **The contract lets through a value the rule refuses**
 
-**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
+**When.** A value read with `from` can pass the contract's validation and still be refused by the input's declaration. What is compared: the range of a number (Protovalidate's `gte`, `lte` and the rest; JSON Schema's `minimum` and `maximum`), the length of a collection (`min_items` and `max_items`; `minItems` and `maxItems`), the values of an enum (`string.in`; `enum`), and JSON Schema's `required`. A `from sum` is held by how far its total reaches — the values of the field times how many elements there may be — and a `from max` or `from min` by the values of the field. A sequence taken with `elements … from` has each field of its elements held as an input is, its length held to the cap its `count`s put on it, and its totals to the upper end of each `sum` over it. A proto3 number field with no rule arrives as 0 when it is left unset, so an input that does not take 0 stops here. A message field that is not `required`, and an `optional` field, may be left unset, and the value under it then arrives as its default (0, "", no elements) with no rule applied; a date read from a `.proto` string is held to whether "" passes. A condition across fields — a CEL expression, a `oneof`, JSON Schema's `allOf`, `anyOf`, `oneOf`, `not` and `if` — is read too where it narrows one field, and a JSON Schema type that has null in it is this code when the input is not optional. A rule that cannot be read, such as CEL with a remainder or a string function, is read as not there: the contract is then read wider than it is, so this may speak where it did not need to, and never stays quiet where it should have spoken.
 
 **Fix.** Which side to change is a person's decision. If the value cannot occur, narrow the contract: `fix.text` is the annotation to write there (`narrow_contract`). If it can, widen the rule's range or add the value to the enum, and decide what it answers. Some preconditions cannot be written in a contract, such as a floor on how many elements a `where` picks out; `fix.kind` is then `none`. When the value read may be missing, make the input `T?`: a missing value is then read as none.
 
@@ -4466,3 +4585,356 @@ policy unique
 | workshop   | 30                 |
 | talk       | 80                 |
 ```
+
+## E074
+
+`error` — **A `from sum`, `from max` or `from min`, or an `elements … from`, is misshapen**
+
+**When.** A `from sum`, `from max` or `from min` has no `of <field of an element>`; a `from max` or `from min` has no `empty <value>`, or its `empty` value is not a value of the input's type, or lies outside the input's range; or `of` or `empty` is written on a `from` that takes none (only `max` and `min` need `empty`: a sum of none is 0, and a count of none is 0). Also: something other than `from <shape>.<collection>` follows the name of an `elements` line; a field of a sequence taken from a contract has no `from`; a field of a sequence not taken from one has one; or the `from` of a field of an element is not a path inside the element.
+
+**Fix.** Correct the shape: `from max order.lines of amount empty 0JPY`. `empty` is the input's value when no element is looked at, and what it is is a business decision. To take a sequence from the contract, write `elements lines from order.lines`, and on each field the path it is read from in an element, such as `from qty`. If the caller builds the sequence and passes it, take the `from` off its fields.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  top(top) : money[JPY]  range >=0JPY <=1000JPY  from max order.lines of amount
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| top | -> x |
+| -   | true |
+```
+
+With `order.json` beside it:
+
+```proto
+{"$defs":{"Order":{"type":"object","required":["lines"],"properties":{"lines":{"type":"array","maxItems":10,"items":{"type":"object","required":["amount"],"properties":{"amount":{"type":"integer","minimum":0,"maximum":1000}}}}}}}}
+```
+
+Related codes: [E120](#e120), [E121](#e121), [E122](#e122), [E022](#e022)
+
+## E070
+
+`error` — **A random input or a claim of `chances` is not shaped right**
+
+**When.** An input marked `random` cannot be drawn: a number without both ends of its range, an input that may be absent (`?`), a date or a string, an input read out of the caller's object with `from` (what `from sum` and the like read is the caller's value, not a draw, whether `random` is written before the `from` or after it), or an input a machine carries. Or `random` is written on an output or on a field of an element. Or `chances` is misshapen: something follows `chances` on its line, there is no table under it, the header has no `->`, its last column is not `chance`, it names no output, or there are no rows; an input that is not random has no column, a random input or a name that is not an input is on the left, a name that is not an output is on the right, a sequence's column in a rule that walks holds something other than the name of a `sequence`, or a chance cell cannot be read as a rational, a rate or comparisons with one, between 0 and 1. A `chances` table in a rule with no random input is this too.
+
+**Fix.** Give a number that is drawn a range with both ends, as in `range >=0 <=13`, and draw a number, an enum or a truth value. The header of `chances` names every input that is not random, then `->`, the outputs the claims are about, and `chance` last. A column that takes any value gets `-`, and a chance is written like `5/14`, `35%` or `<=1/100`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  roll(roll) : number  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| roll | -> r(r) : bool |
+| <5   | true           |
+| >=5  | false          |
+```
+
+Related codes: [E073](#e073), [E133](#e133), [E108](#e108)
+
+## E073
+
+`error` — **A pick by weight is not shaped right**
+
+**When.** A `take_weighted` has no `by`; there are two `draw` lines; or a fold with no `take_weighted` has a `draw` line. Or a rule has two folds that pick by weight; such a fold has an arm other than `next` and `take_weighted`; a weight is not a number, or can be negative; there is no `draw` line; or what `draw` names is not an input marked `random` that is a number whose range starts at 0.
+
+**Fix.** Write the arm `take_weighted <value> by <weight>` and one line `draw -> <random input>`, and make the input it names a `random` number with `range >=0 <=<top>`. A weight is a whole number, 0 or more. Split the rule in two if it needs two picks.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+enum v(v) = skip(skip) | pick(pick)
+
+elements os(os)
+  ix(ix) : number  range >=1 <=9
+  ok(ok) : bool
+  w(w)   : number  range >=0 <=10
+
+inputs
+  roll(roll) : number  range >=0 <=99  random
+
+outputs
+  p(p) : number  round down(1)
+
+table j(j)
+policy unique
+| ok    | -> v(v) : v |
+| true  | pick        |
+| false | skip        |
+
+fold v over os
+  skip      -> next
+  pick      -> take_weighted ix by w
+  empty     -> 0
+  exhausted -> held
+```
+
+Related codes: [E021](#e021), [E070](#e070)
+
+## E133
+
+`error` — **A claim of `chances` does not hold**
+
+**When.** The chance a row of `chances` states is not the chance, with the random inputs drawn uniformly, at some combination of the inputs that are not random its cells let in (or does not pass the comparisons it states). The combination comes with it, and the chance there: an exact rational, from counting the points of the random inputs.
+
+**Fix.** If the table is right, correct the claim; if the claim is the business truth, correct the table's rows.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  roll(roll) : number  range >=0 <=9  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| roll | -> r(r) : bool |
+| <3   | true           |
+| >=3  | false          |
+
+chances
+| -> r | chance |
+| true | 1/3    |
+```
+
+Related codes: [E070](#e070), [W129](#w129), [E107](#e107)
+
+## W129
+
+`warning` — **A claim of `chances` could not be decided within the budget**
+
+**When.** Where an answer moves inside a box with the random inputs, or the random inputs are read together with the others, the points that have to be run one by one go past the budget of one claim (one 50th of `--budget`'s nodes, a million points by default). A sequence that cannot be read, or a point where the rule contradicts itself, leaves the claim undecided too. A claim that is not decided is said to be neither holding nor broken.
+
+**Fix.** Narrow the cells of the inputs that are not random, or raise `--budget`.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  roll(roll) : number  range >=0 <=999  random
+  a(a)       : number  range >=0 <=9999
+
+outputs
+  r(r) : bool
+
+derive d(d) : number = roll - a  range >=-9999 <=999
+
+table j(j)
+policy unique
+| d   | -> r(r) : bool |
+| <0  | true           |
+| >=0 | false          |
+
+chances
+| a | -> r | chance |
+| - | true | >=0    |
+```
+
+Related codes: [E133](#e133), [E109](#e109)
+
+## W131
+
+`warning` — **The chances function runs the rule many times on every call**
+
+**When.** The points of the random inputs, multiplied together, are more than a million, and the function generated to count the answers runs the rule that many times on every call. A rule that picks by weight, its random input read by the `draw` line alone, is counted from its weights and does not get it.
+
+**Fix.** If it is called often, narrow the ranges of the random inputs; in a rule that picks by weight, let only the `draw` line read the random input.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  a(a) : number  range >=0 <=999  random
+  b(b) : number  range >=0 <=9999  random
+
+outputs
+  r(r) : bool
+
+table j(j)
+policy unique
+| a     | b | -> r(r) : bool |
+| <500  | - | true           |
+| >=500 | - | false          |
+```
+
+Related codes: [W129](#w129), [E108](#e108)
+
+## E067
+
+`error` — **A contribution is not shaped as one**
+
+**When.** A file headed `contribution` cannot be read as one. Its `to` line is missing or written twice, or the file it names cannot be read or does not pass check. An `extend` adds a value to an enum not marked `open`, to an enum another `enums` file owns, a value the enum has, or a value with no `after` to an ordered enum. An `into` names something that is not an open value, or a term that is declared nowhere or is decided below the open value. A table or clause decides an output no definition opens, or one of an open output reads a name below the output's last definition. Lines are added to a `prerequisites` block not marked `open`, or a line of one of the block's own values. The `after` lines go round, two contributions share a name, the file holds a line a contribution cannot (outputs, `result`, `apply`, a machine, a sequence it walks, enums, imports, sources, contracts, constraints, claims of chances), or an input is drawn at random.
+
+**Fix.** A contribution adds only to the places the file it adds to opens with `open`. Where it does not, ask its author to open it, or read it with `apply` and write a rule of your own. The notes say where it can add.
+
+**Smallest reproduction**:
+
+```rule
+contribution c(c) v1
+to "base.rule" signature:9e889c8a59016488
+
+extend kind with z
+```
+
+With `base.rule` beside it:
+
+```proto
+rule base(base) v1
+
+enum kind(kind) = a(a) | b(b)
+
+inputs
+  k(k) : kind
+
+outputs
+  fee(fee) : number  round down(1)
+
+table t(t)
+policy unique
+| k | -> fee : number |
+| a | 1               |
+| b | 2               |
+```
+
+Related codes: [E068](#e068), [E040](#e040), [E033](#e033), [E131](#e131)
+
+## E068
+
+`error` — **An open value is not shaped as one**
+
+**When.** An `open` line has no way of combining (`combine sum`, `product`, `max` or `min`), no range, or no `empty` for `max` and `min`; its type is not one the way of combining puts together (a sum takes numbers, money, quantities and rates, a product numbers and rates, `max` and `min` those and temperatures and sound levels); it is optional; or a term is on a finer step than the value. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it.
+
+**Fix.** Write it `open <name> : <type> combine sum|product|max|min [empty <value>] range >=… <=…`. `empty` is the answer when there is no term, and it takes part as the smallest answer for `max` (the largest for `min`). Round a finer term to the value's step before adding it.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  member(member) : bool
+
+outputs
+  bonus(bonus) : rate[step 1%]  round down(1%)
+
+table p(p)
+policy unique
+| member | -> from_member : rate[step 1%] |
+| true   | 10%                            |
+| false  | 0%                             |
+
+open bonus : rate[step 1%]  combine sum
+  from_member
+```
+
+Related codes: [E067](#e067), [E131](#e131)
+
+## E131
+
+`error` — **A value put together leaves the range it declares**
+
+**When.** The interval of an open value's terms — the rule's and those contributions add — put together as its `combine` says, leaves the range on the `open` line. The notes give each term's interval, the contribution each comes from, and an input that takes the value out of the range. The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it; a value outside it would get an answer nothing checked.
+
+**Fix.** Widen the range (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision, so there is no `fix.text`.
+
+**Smallest reproduction**:
+
+```rule
+contribution c(c) v1
+to "base.rule" signature:b10f6ca4271b3f2f
+
+inputs
+  promo(promo) : bool
+
+table q(q)
+policy unique
+| promo | -> from_promo : rate[step 1%] |
+| true  | 15%                           |
+| false | 0%                            |
+
+into bonus
+  from_promo
+```
+
+With `base.rule` beside it:
+
+```proto
+rule base(base) v1
+
+inputs
+  member(member) : bool
+
+outputs
+  bonus(bonus) : rate[step 1%]  round down(1%)
+
+table p(p)
+policy unique
+| member | -> from_member : rate[step 1%] |
+| true   | 10%                            |
+| false  | 0%                             |
+
+open bonus : rate[step 1%]  combine sum  range >=0% <=20%
+  from_member
+```
+
+Related codes: [E068](#e068), [E112](#e112), [E067](#e067)
+
+## W132
+
+`warning` — **A term of an open value changes nothing**
+
+**When.** A term of an open value cannot move the value whatever it takes: in a `max`, every value of the term is at or below the `empty` value; in a `min`, at or above it; in a `sum`, it is always 0; in a `product`, always 1. The `empty` value of `max` and `min` is the value the terms start from, and it always takes part, not only when there is no term, so a cap written as a `max` leaves its terms with nothing to do, in silence. It is said of a term a contribution adds and of a term of the rule alike.
+
+**Fix.** If a term of a `max` sets a cap, put the value together with `min` (and with `max` if a term of a `min` sets a floor). If the term can pass the `empty` value — above it for a `max`, below it for a `min` — write the values that do. If it is not needed, take it out.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+
+inputs
+  plan(plan) : bool
+
+outputs
+  limit(limit) : number  round down(1)
+
+table cap_of(cap_of)
+policy unique
+| plan  | -> plan_cap : number |
+| true  | 40                   |
+| false | 60                   |
+
+open cap : number  combine max  empty 100  range >=0 <=100
+  plan_cap
+
+define limit : number = cap
+```
+
+Related codes: [E068](#e068), [E131](#e131)

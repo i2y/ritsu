@@ -535,14 +535,14 @@ fn 色づけの語彙はkwと同じ() {
     assert_eq!(heads, want_heads, "レクサの行頭語が kw::LINE_HEAD と違います");
 
     for (name, want) in [
-        ("MODIFIERS", sorted(&[kw::RANGE, kw::ROUND, kw::CONTRACT_ONLY, kw::DEFAULT, kw::STEP])),
+        ("MODIFIERS", sorted(&[kw::RANGE, kw::ROUND, kw::CONTRACT_ONLY, kw::DEFAULT, kw::STEP, kw::RANDOM, kw::COMBINE])),
         ("TYPES", sorted(&[kw::MONEY, kw::MASS, kw::LENGTH, kw::AREA, kw::VOLUME, kw::DURATION,
             kw::TEMPERATURE, kw::SOUND, kw::RATE, kw::NUMBER, kw::BOOL, kw::STRING, kw::DATE])),
         ("TAX", sorted(&[kw::INCL_TAX, kw::EXCL_TAX])),
         ("POLICIES", sorted(&[kw::UNIQUE, kw::FIRST])),
         ("ROUNDING", sorted(&[kw::UP, kw::DOWN, kw::HALF_UP, kw::HALF_DOWN, kw::HALF_EVEN])),
         ("CONSTANTS", sorted(&[kw::TRUE, kw::FALSE, kw::NONE, kw::STARTS_WITH])),
-        ("ARMS", sorted(&[kw::OVER, kw::WHERE, kw::OF, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
+        ("ARMS", sorted(&[kw::OVER, kw::WHERE, kw::OF, kw::NEXT, kw::STOP, kw::WITH, kw::TAKE_UNIQUE, kw::TAKE_FIRST, kw::KEEP_MAX, kw::TAKE_WEIGHTED, kw::DRAW, kw::BY, kw::EMPTY, kw::EXHAUSTED, kw::HELD])),
         ("FUNCTIONS", sorted(&[kw::MIN, kw::MAX, kw::ALLOCATE])),
         ("CLAUSE", sorted(&[kw::WHEN, kw::THEN, kw::ALWAYS])),
         ("APPLY", sorted(&[kw::EXCEPT])),
@@ -854,7 +854,7 @@ fn トップと道案内が言う規則の本数は実物と合っている() {
     let n = corpus_rules();
     // The ones written rather than transcribed, as tests/readme.rs counts them. The English
     // page said nine for a while after the tenth went in.
-    const WRITTEN: usize = 91;
+    const WRITTEN: usize = 109;
     for (page, want) in [
         ("website/rulec/docs/index.md", format!("{n} rules checked, generated and run on every commit")),
         ("website/rulec/docs/assurance.md", format!("**{n} rules** — {} transcribed from a published source, {WRITTEN} written", n - WRITTEN)),

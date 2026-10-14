@@ -343,6 +343,9 @@ pub struct GatePorts { rules: Rc<dyn Rules>, dates: Rc<dyn Dates>, books: Rc<dyn
 - `Rules` に `doc` を足した（表の中身にあった「`rulec doc` が描いたもの」）。言語は呼ぶ側が渡し、rulec はそのスレッドの言語で描く（4.1）。ファイルの名前（ページの頭に書くもの）も呼ぶ側が渡す。dandori は、ファイルの名前だけを書いたページを埋め込むからである。
 - `RuleFacts` は `RuleInfo` の項目を全部作れる形にした。規則の名前と別名と版と SHA-256、rulec の版、入力と出力（名前、別名、型。数は rulec の綴りのままの型と、単位の型（率は刻みつき）と、受け渡す整数での範囲）、並び、列挙（別名と値の別名つき）、ステートマシン（軸、行が受け付ける座標、行き先、書く値、held）、前提、Connect のサービスの形（パス、フィールド、ワイヤの列挙の名前と番号）、生成したコードの TypeScript・Python・Go での呼び方（モジュール、関数、引数と出力の名前と型、列挙のメンバー）である。`RuleInfo` の `api`（`rulec api` の JSON そのもの）にあたるものは、dandori が読んでいるところ（TypeScript・Python・Go の呼び方と Connect の形）を型にした。率の刻みは、JSON の側が JSON Schema の説明の文から読んでいるが、型の側は rulec の型の刻みを持つ。rulec の `tests/ports.rs` が、コーパスの 50 本の全部で、口の事実が `rulec api`・`certificate`・`schema` の JSON を読んだものと同じことを確かめる。
 - `Rules` の口の `RuleFacts.elements` と `Connect.elements` は、規則がたどる並びのリストになった（`Option` から `Vec` へ。rulec の DESIGN §15.219、2026-10-14）。並びが一つの規則では要素が一つのリストで、前と同じことを言う。並びごとに名前、別名、一要素のフィールドを持ち、Connect は並びごとに名前とフィールドを持つ。dandori（`src/rulec.rs`）と sekisho（`src/names.rs`）の読み手を合わせた。読み手が並びを一つと決めてかかる所は無い。
+- `elements … from` で並びが呼び出し側のオブジェクトから来ることは、`Rules` の口（`RuleFacts.elements`、`Connect.elements`）には載せない。口が述べるのは規則の関数の呼び方で、ワークフローは規則の関数を呼ぶ。入力の `from` も口には載っていない。並びがどこから来るかは、`rulec api` の `projection.elements` が述べる（rulec の DESIGN §15.223、2026-10-14）。
+- 確率の関数（`<規則>_chances`）は、`Rules` の口（`RuleFacts`、`Connect`）には載せない。口が述べるのは規則の関数の呼び方で、ワークフローは規則の関数を呼び、乱数は呼び出し側が引いて渡す。確率の関数は、答えの見込みを画面や分析に出す側が `rulec api` の `chances` を読んで呼ぶ（rulec の DESIGN §15.225、2026-10-14）。
+- 寄与のファイルは `RuleFacts` を持たない。`rulec::ports::Engine::facts` は寄与のファイルに、足す先の規則を合わせたものを返す。ritsu-cross の言語をまたぐ検査は合わせた規則の入力と出力で行い、寄与が足す入力は、合わせた規則の関数の引数の後ろに並ぶ（rulec の DESIGN §15.231、2026-10-14）。
 - 出す側の実装は、どれも各言語の `src/ports.rs` の `Engine` である。geas は、口に答えるためにライブラリとコマンドに分けた（`src/lib.rs` と `src/main.rs`）。
 
 この段階で答えを作った問いと、まだ答えない問い（決められない、と理由を言う）は次のとおり。
@@ -837,6 +840,8 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 列挙の値どうしの前提のつながりを、`prerequisites <名前> over <列挙>` の塊で書ける（rulec の DESIGN §15.222、2026-10-14）。科目の履修、資格の段階、製品のモジュールや機能フラグの依存のように、ある値を取る前に別の値を持っていなければならない決まりである。前提のつながりは有限のグラフなので、循環、`start` からたどり着けない値、余分な前提、表の順との食い違いは全部決まる。塊は規則にも `enums` のファイルにも置け、生成コードは塊を持つファイルのモジュールに、値に要るものと、持っているものでその値を取れるかの二つの関数を持つ。口を渡るのは、これまでどおり規則の関数の入力と出力で、前提の関数は口に載らない（sekisho がこの判断を使いたいときは、規則の `available` を計算した値として読む、という拡張の設計 8.1 の形は、まだ作っていない）。`prerequisites` は行の頭の語だが予約語ではなく、どのブロックにも入っていない行の頭でだけ見出しとして読む。
 
+列挙は、ほかのファイルから値を足せるように開いておける（`enum … open`。rulec の DESIGN §15.228、2026-10-14）。`contribution` のファイルが `extend <列挙> with <値>` で値を足すと、その値は列挙を読む全部の規則に入り、どの表にもその値の行を求める（行が無ければ E101、開いていない表の既定の行に黙って落ちれば E033）。新しい商品の種類を足したとき、料金・税・配送のどの表がその種類について何も決めていないかが、全部出る。`enums` のファイルの列挙に足した値は、そのファイルの生成モジュールの値になり、口を渡るのも、これまでどおり列挙の値の名前である。
+
 ### 5.7 捨てたもの
 
 - **次元の掛け算と割り算**（長さ × 長さ = 面積）：rulec の §2.1 と §15.83 が捨てたもので、ここでも足さない。
@@ -1281,6 +1286,8 @@ book stock (books/stock.book) at the end:
 
 テスト（`crates/ritsu/tests/run.rs`）は、プロジェクトの二つの版（英語の `invoice.flow` と日本語の `invoice.ja.flow`）の五つのシナリオ（請求書払いで出荷、期日の前に仮押さえが切れる、リトライのあと未払いで戻す、前払い、在庫切れ）を、それぞれの言語のテキストと JSON の golden と比べる。ほかに、`replay` を `dandori run` で流すと同じトレースになること（reference と Temporal の見え方）、各言語が返した結果がその言語のコマンドの出すものと同じであること（規則は `rulec replay`、日付は `koyomi eval`、帳簿は、走らせる前の操作と実行の中の操作をそのあいだの時間と一緒に `chobo run` で流し、操作ごとの結果と終わりの勘定と仮押さえ）、二つの版が名前のほかは同じに流れること、Connect で呼ぶ規則の結果がサービスの書く形で返り、同じに終わること、止まる場合（終了コードと文）を確かめる。
 
+`--with <パス>`（何度でも書ける。2026-10-14）は、フローが呼ぶ規則に合わせる寄与のファイルかディレクトリである。`ritsu run` はプロジェクトを読まないので、どの寄与で規則を計算するかをここで選ぶ。テストのプロジェクト `crates/ritsu/tests/projects/product_line` の料金のフローは、`--with rules/contrib` で園芸の品（20 ドル）を 23 ドルにし、`--with` が無ければ園芸は列挙の値でないので、入力が受け付けられない（`Dandori.BadInput`）。
+
 ### 7.10 yuen、sakai、参照（X8〜X10）
 
 - **yuen**：段階 C で止めていた「一式の読み込み」（yuen の PLAN の C.1〜C.9）を、子プロセスと JSON ではなく、`Rules`・`Dates`・`Books`・`Claims`・`Items` の口で作る。端は 6.4 の定義の文になり、表や日付の関数や主張の一つ一つを追える。借りた出典は土台の出典（4.6）から読み、E107 も同じ手続きで比べる。`affected` は geas の記録を geas の口で読む。D の最後の部分で、そう作った（PLAN の D.7）。読むのは `Items`（中のものと定義の文）、`Sources`（規則とカレンダーの出典。D.7 で足した口）、`Rules` と `Dates`（別名だけ）、`Claims`（記録と、D.7 で足した `affected`）で、`Books` は読まない（chobo の中のものと定義の文は `Items` が渡す）。E203 は「指したものの言語が、そのファイルについて答えられない」に意味を替え、E204 と、記録で主張の名前を確かめていた W201 を退かせた（yuen の DESIGN 6.2）。
@@ -1323,7 +1330,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 
 ```
 ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--lang ja|en]
-ritsu run <file.flow> --scenario <file.json> [--target <target>] [--format json]
+ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <target>] [--format json]
 ritsu gen [<パス>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle] [--name <name>] [--module <path>] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
 ritsu <言語> <引数>...        rulec・dandori・koyomi・chobo・geas・yuen・sakai・sekisho のコマンドそのもの
@@ -1343,6 +1350,7 @@ ritsu --help | --version
 - 言語は `--lang` で選び、無ければ `RITSU_LANG`、どちらも無ければ英語である。各言語の `<名前>_LANG` は読まない（一つのコマンドの文面を一つの言語にする）。
 - `ritsu explain <コード> | --all [--format markdown|json]` は E.3 で作った（7.1）。
 - 言語のコマンドは、どれもライブラリの関数になった。rulec、koyomi、chobo、geas は、E.2 で `src/main.rs` の中身を `rulec::cli::run`、`koyomi::run::run`、`chobo::run::run`、`geas::cli::run` に移した（振る舞いは変えていない。各言語の DESIGN.md）。これで `ritsu <言語>` は七つの全部にある（8.2）。
+- **寄与**（rulec の DESIGN §15.231、2026-10-14）。`ritsu check` と `ritsu gen` は、プロジェクトの rulec のファイルを、寄与を合わせる組として rulec に渡す（`rulec::ports::Engine::set_project`）。寄与が届く規則は、規則だけと、プロジェクトの寄与を合わせた規則の両方で検査され、`ok` の行が合わせた寄与を言う。プロジェクトの rulec のファイルを一度に `rulec check` に渡したときと、同じことを言う（前のファイルで言ったことは繰り返さず、エラーが全部上で言われたファイルには「its errors are said above」の一行）。フローは、寄与を合わせた規則で検査する。`ritsu gen` は、寄与のファイルにモジュールを作らず、各規則のモジュールを、それに届く寄与を合わせた関数にする。
 
 **E の二つ目の部分で作った形**。`ritsu run` を作った（7.9）。★`--target` は、8.1 の A の段階の形には無かったもので、`dandori run` と同じ八つ（`reference`、`asl`、`temporal`、`temporal-python`、`temporal-go`、`durable`、`argo`、`pydantic-graph`。既定は `reference`）から、トレースの呼び出しをどのプラットフォームの形で出すかを選ぶ。一つの生成パッケージ（9.3）と突き合わせるときは Temporal の見え方を使う。フローの診断は、`dandori run` と同じくテキストなら標準エラーに出し、`--format json` なら JSON の `diagnostics` に入れる。`ritsu gen` は E.7 で作った（9.3）。
 
@@ -1687,6 +1695,7 @@ generated/typescript/          generated/python/              generated/go/
 
 確かめ方：`crates/ritsu/tests/gen.rs`。テストのプロジェクト `crates/ritsu/tests/projects/stockroom`（英語。rulec の規則 `delivery`、koyomi の日付のファイルとカレンダー、chobo の帳簿、三つを使う dandori のフロー）のパッケージが、帳簿の二つの出力先で、`tsc --strict`、`mypy --strict`、`go vet` と gofmt を通ること（通販は TypeScript だけ。dandori の Python の残りは dandori の DESIGN 7 章）。フローの import がパッケージのモジュールを指し、規則と日付のアクティビティを走らせるとパッケージのモジュールを通って答えること（Python と Go）。`--check` が、無いもの・古いもの・残ったものを言うこと。sekisho の例をプロジェクトにしたパッケージで、三つの言語のファイルの形、インデックス、依存が正しく、型の検査（`tsc --strict` と cedar-wasm の型、`mypy --strict` と cedarpy、sekisho の Go のランナーの `go.mod` で作ったモジュールの `go vet` と gofmt）と `--check` を通り、`--authorizer avp` なら avp の依存を書くこと（`the_gates_of_a_project_go_into_the_package`）。どのファイルの頭も 9.2 の形で、元のファイルとそのハッシュを書くこと（パッケージの形の golden `crates/ritsu/tests/golden/gen/stockroom.txt`。バージョンは `<version>` に置き換えてある）。中身ごとの突き合わせは、いままでどおり各言語のテスト（rulec の 12 言語のベクタ、koyomi の五つの出力先、chobo の七つの組み合わせ、dandori のプラットフォーム）がする。sekisho のテストは、三つの言語の生成したコードに、検査を通る 35 の `.gate` の生の値 27,579 件を cedar-wasm、cedarpy、cedar-go で答えさせ、参照の評価と比べる（sekisho の DESIGN 6.3）。
 - **前提のつながり**（rulec の DESIGN §15.222、2026-10-14）。`ritsu gen` のパッケージでも、塊を持つ規則のモジュール（`enums` のファイルの塊なら、そのファイルのモジュール）に二つの関数が入る。Python・TypeScript・Go の名前は `rulec gen` と同じ（`enrollment_requires`、`enrollmentRequires`、`EnrollmentRequires`）。
+- **寄与**（rulec の DESIGN §15.231、2026-10-14）。各規則のモジュールは、プロジェクトの寄与のうちその規則に届くものを合わせた関数で、頭に `Contributions: <名前> = <ファイル> (signature:…, sha256:…)` を書く。寄与のファイルにはモジュールを作らない。`enums` のファイルに寄与が足した値は、そのファイルのモジュールの値になる。確率の関数と取り出す関数も合わせた規則のもので、寄与が足した入力を引数に取る。テストのプロジェクト `product_line` の Python のパッケージで、`product_price(Kind.GARDEN, USD(20))` が 23 を返す（`crates/ritsu/tests/gen.rs`）。
 
 ### 9.4 生成物のバージョン
 

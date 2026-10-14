@@ -35,10 +35,10 @@ __all__ = ["RuleLexer"]
 
 # Words that start a line. The seven that name something push `decl`, so that what follows
 # is coloured as a declaration rather than as a bare word.
-HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sum", "sequence", "clause", "source", "shape", "apply", "machine", "scenario", "max", "min", "prerequisites")
-HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint")
+HEAD_NAMED = ("rule", "enum", "group", "derive", "define", "table", "result", "elements", "fold", "count", "sum", "sequence", "clause", "source", "shape", "apply", "machine", "scenario", "max", "min", "prerequisites", "open")
+HEAD_PLAIN = ("description", "import", "inputs", "outputs", "policy", "overrides", "examples", "constraint", "chances")
 
-MODIFIERS = ("range", "round", "contract_only", "default", "step")
+MODIFIERS = ("range", "round", "contract_only", "default", "step", "random", "combine")
 CLAUSE = ("when", "then", "always")
 # The body of an `apply`: what the callee's definitions it leaves out are introduced with.
 APPLY = ("except",)
@@ -61,7 +61,7 @@ CONSTANTS = ("true", "false", "none", "starts_with")
 # What a `fold`, a `count` and a `sum` are made of: the connectors of their headings and
 # the arms.
 ARMS = ("over", "where", "of", "next", "stop", "with", "take_unique", "take_first",
-        "keep_max", "by", "empty", "exhausted", "held")
+        "keep_max", "take_weighted", "draw", "by", "empty", "exhausted", "held")
 FUNCTIONS = ("min", "max", "allocate")
 NAMESPACE = "std"
 

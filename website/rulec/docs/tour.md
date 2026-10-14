@@ -58,6 +58,8 @@ These are all the words that may start a line.
 | `examples` | an executable specification |
 | `scenario` | an example that runs for several calls, each starting where the one before ended |
 | `prerequisites` | what values of an enum require: `start`, and a `requires` line for each value (`,` for all of them, `or` for any one) |
+| `chances` | claims of how likely each answer is when the inputs marked `random` are drawn: the inputs that are not drawn, `->`, the outputs, and a `chance` column (`1/1000`, `5%`, `<=1/100`) |
+| `open` | a value other files may add to: `open <name> : <type> combine <how> [empty <value>] range …`, with its terms under it, `<how>` being `sum`, `product`, `max` or `min`. A `contribution` file adds a term with `into` |
 
 ## A complete rule
 
@@ -377,7 +379,7 @@ inputs
 A `.proto` is named by its file and message:
 `shape shipment = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest`.
 
-`from` comes in four shapes:
+`from` comes in seven shapes:
 
 | written | what it yields |
 |---|---|
@@ -385,6 +387,13 @@ A `.proto` is named by its file and message:
 | `from any order.lines where chilled = true` | `bool` — whether some element passes |
 | `from all order.lines where chilled = true` | `bool` — whether every element does |
 | `from count order.lines` | `number` — how many elements there are (with `where`, how many pass) |
+| `from sum order.lines of amount_usd` | a number — the total of one field of the elements (with `where`, of those that pass; 0 when none do) |
+| `from max order.lines of amount_usd empty 0USD` | a number or a date — the largest value of one field, and the `empty` value when there is no element |
+| `from min order.lines of amount_usd empty 0USD` | the same, the smallest |
+
+A sequence the rule walks can be taken from the contract too: `elements lines from order.lines`,
+with each field of an element saying with its own `from` where it is in the element
+(`from quantity`).
 
 Four things follow.
 
@@ -841,6 +850,7 @@ What `fold` adds is a single line per verdict: what the walk does next.
 | `take_unique <value>` | take this element's value; a second element that also takes is a run-time error |
 | `take_first <value>` | take the first, ignore any later one |
 | `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
+| `take_weighted <value> by <weight>` | pick one element with the chance of its weight, by the value `draw -> <input>` names: an input marked `random` |
 | `empty -> <value>` | the answer when there are no elements. **Required** |
 | `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value being held |
 

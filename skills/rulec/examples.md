@@ -1058,7 +1058,7 @@ The contract it reads (`contracts/order.schema.json`):
 
 **What this one shows**
 
-- **`from` comes in four shapes.** The value of a field (`from order.shipping.zone`), whether some element passes a test (`from any order.lines where chilled = true`), whether every one does (`from all …`), and how many there are (`from count order.lines`). A join or a nested quantifier cannot be written.
+- **`from` comes in seven shapes.** The value of a field (`from order.shipping.zone`), whether some element passes a test (`from any order.lines where chilled = true`), whether every one does (`from all …`), how many there are (`from count order.lines`), the total of a field (`from sum order.lines of amount_usd`), and its largest and smallest value (`from max …`, `from min …`, with `empty` for when there is no element). A join or a nested quantifier cannot be written.
 - **`rulec gen` also writes `order_shipping_fee_from(order)`.** Hand it the order object as it is, and it reads the inputs out and calls the rule. It is written for Python, TypeScript, JavaScript, Ruby and PHP, where parsed JSON is usually used as it comes, as a plain map; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.
 - **Every `rulec check` holds the paths to the contract.** A field the contract does not have is E121, which says how far the path got and which fields were there; a type that does not fit is E120.
 - **The contract's validation is held to the inputs' declarations too.** The contract keeps `lines` to 1 to 50 elements (`minItems`, `maxItems`), the same as the `range >=1 <=50` of `lines`. Take `maxItems` away and an order of 51 lines passes the contract but not the rule, which stops at E122; `fix.text` is the keyword to write back into the contract (`"minItems": 1, "maxItems": 50`).
@@ -1827,6 +1827,217 @@ examples
 - The courses on `start` need nothing. Every other course has a `requires` line: what `,` separates is all needed, and of what `or` joins any one is enough.
 - `requires nothing "…"` is a course withdrawn from the catalog. A course that needs it cannot be reached from `start`, and the check says so (E137).
 - `ordered by level_of` holds that no course is taught in a year before a course it needs (E138). The generated code answers, in every language, what a course needs and whether it can be taken with the courses passed.
+
+## A total, a largest value and the lines, taken from the contract
+
+The handling fee of an order, decided from the order object the shop's API receives. The order's total and its most expensive fragile line are read out of the object's lines with `from sum` and `from max`, and the lines themselves are taken with `elements … from`, as the sequence the rule walks.
+
+```rule
+rule order_handling_fee v1
+description "The handling fee of an order, decided from the order object the shop's API receives: the order's total and its most expensive fragile line are read out of the object, and its lines become the sequence the rule walks. An example of a sum, a largest value and a sequence taken from a contract"
+
+# The caller has already fixed the shape of an order with a JSON Schema. The total, the largest
+# fragile line and the lines themselves are read from it: the code that flattens the order is
+# generated, and every check holds each path against the contract.
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  total       : money[USD]  range >=0USD <=100_000USD  from sum order.lines of amount_usd
+  top_fragile : money[USD]  range >=0USD <=5_000USD    from max order.lines of amount_usd where fragile = true empty 0USD
+
+# One line of the order, taken from the order object as it is
+elements lines from order.lines
+  quantity : number      range >=1 <=99          from quantity
+  amount   : money[USD]  range >=1USD <=5000USD  from amount_usd
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+# A line of 50 pieces or more, or one worth 2000USD or more, goes on a pallet
+table pallet
+policy unique
+| quantity | amount    | -> pallet_line : bool |
+| >=50     | -         | true                  |
+| <50      | >=2000USD | true                  |
+| <50      | <2000USD  | false                 |
+
+count pallet_lines over lines where pallet_line  range >=0 <=20
+
+# A large order is handled for free, and an expensive fragile item is packed with care
+table handling
+policy unique
+| total      | top_fragile | -> base : money[USD] |
+| >=10000USD | -           | 0USD                 |
+| <10000USD  | >=1000USD   | 25USD                |
+| <10000USD  | <1000USD    | 5USD                 |
+
+# Two pallets or more need the forklift
+table forklift
+policy unique
+| pallet_lines | -> lift : money[USD] |
+| >=2          | 10USD                |
+| <2           | 0USD                 |
+
+define handling_fee : money[USD] = base + lift
+
+result fee = handling_fee
+
+examples
+| total    | top_fragile | lines       | -> fee |
+| 120USD   | 0USD        | small_order | 5USD   |
+| 12000USD | 0USD        | large_order | 10USD  |
+| 2100USD  | 1500USD     | glass_order | 25USD  |
+| 900USD   | 0USD        | bulk_order  | 15USD  |
+
+sequence small_order
+| quantity | amount |
+| 2        | 40USD  |
+| 1        | 80USD  |
+
+sequence large_order
+| quantity | amount  |
+| 3        | 5000USD |
+| 2        | 5000USD |
+| 1        | 2000USD |
+
+sequence glass_order
+| quantity | amount  |
+| 1        | 1500USD |
+| 4        | 600USD  |
+
+sequence bulk_order
+| quantity | amount |
+| 60       | 300USD |
+| 80       | 400USD |
+| 5        | 200USD |
+```
+
+**What this one shows**
+
+- **`from sum order.lines of amount_usd` is the total of `amount_usd` over the lines.** `from max order.lines of amount_usd where fragile = true empty 0USD` is the most expensive fragile line; `empty` is what it is when there is no fragile line, and leaving it out is E074.
+- **`elements lines from order.lines` takes the lines from the contract's array as they are.** Each field says where it is read in an element, as `from quantity`. The elements taken are checked and walked exactly as a sequence the caller passes would be.
+- **The contract's validation is held to the rule too.** The contract lets through up to 20 lines of at most 5000 each, so the total reaches 100,000, the same as the range of `total`. Take `maxItems` away, and an order whose total passes the range and an order of 21 lines both pass the contract; each stops at E122.
+- **The `order_handling_fee_from(order)` that `rulec gen` writes takes the order as it is.** The lines are built inside the function, so the order is its only argument. It is written for Python, TypeScript, JavaScript, Ruby and PHP; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.
+
+## The chances on the poster, held to the table
+
+The prize a ticket of a store's lottery wins. The ticket's number is drawn from 0 to 999, and during a campaign more numbers win the third prize. Mark the number's input `random`, and the chances printed on the poster can be written in a `chances` table, which `rulec check` holds to the rows by counting.
+
+```rule
+rule prize_lottery v1
+description "The prize a ticket of a store's lottery wins. The ticket's number is drawn from 0 to 999, and during a campaign more numbers win the third prize. The chances printed on the poster are the claims below, so the poster and the code come from one source. An example written for the purpose"
+
+enum prize = first | second | third | no_prize
+
+inputs
+  ticket   : number  range >=0 <=999  random
+  campaign : bool
+
+outputs
+  prize : prize
+
+table numbers
+policy unique
+| ticket    | campaign | -> prize |
+| 0         | -        | first    |
+| >=1 <=9   | -        | second   |
+| >=10 <=99 | true     | third    |
+| >=10 <=59 | false    | third    |
+| >=60 <=99 | false    | no_prize |
+| >=100     | -        | no_prize |
+
+# The chances printed on the poster.
+chances
+| campaign | -> prize | chance |
+| -        | first    | 0.1%   |
+| -        | second   | 0.9%   |
+| true     | third    | 9%     |
+| false    | third    | 5%     |
+| true     | no_prize | 90%    |
+| false    | no_prize | 94%    |
+
+examples
+| ticket | campaign | -> prize |
+| 0      | false    | first    |
+| 9      | false    | second   |
+| 59     | false    | third    |
+| 60     | false    | no_prize |
+| 99     | true     | third    |
+| 100    | true     | no_prize |
+```
+
+**What this one shows**
+
+- **`random` declares that the caller draws the input uniformly from its range and passes it in.** The rule's function does not change: the caller draws, and the same inputs give the same prize.
+- **A row of `chances` claims the chance of an answer for every combination of the inputs that are not random.** A chance is written `1/1000`, `0.9%` or `>=1/2`. The rows of a table are boxes, so `rulec check` counts the numbers interval by interval and compares exact rationals.
+- **A poster that disagrees with the table stops the check.** Write 6% for the third prize out of a campaign, and E133 says: "With campaign = false, the chance of prize = third is 1/20 (5.0%)."
+- **`rulec gen` writes a function that counts the chances, too.** `prize_lottery_chances(campaign)` returns how many numbers win each prize and how many numbers there are. It is written for every target but SQL and Wasm, and the panel of the HTML page shows each prize's chance with it.
+
+## Stacking, exclusive and capped discounts, left open
+
+An order's discount, built from three values other files may add to: the discounts that stack add up, of the exclusive ones only the largest counts, and the lowest cap holds. A campaign adds to all three from a file of its own.
+
+```rule
+rule order_discount(order_discount) v1
+description "The discount of an order: the stackable discounts add up, of the exclusive ones only the largest counts, and the total stays under the cap and the subtotal. Campaigns add to the three open values from files of their own"
+
+enum channel(channel) = web(web) | store(store) default | phone(phone) default  open
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=5000USD
+  member(member)     : bool
+  coupon(coupon)     : bool
+  via(via)           : channel
+
+outputs
+  discount(discount) : money[USD]  round down(1USD)
+
+table member_part
+policy unique
+| member | -> member_off : money[USD] |
+| true   | 5USD                       |
+| false  | 0USD                       |
+
+table channel_part
+policy first
+| via | -> channel_off : money[USD] |
+| web | 3USD                        |
+| -   | 0USD                        |
+
+table coupon_part
+policy unique
+| coupon | -> coupon_off : money[USD] |
+| true   | 10USD                      |
+| false  | 0USD                       |
+
+# Discounts that stack: every one applies.
+open stackable : money[USD]  combine sum  range >=0USD <=100USD
+  member_off
+  channel_off
+
+# Discounts that do not stack: only the largest applies.
+open exclusive : money[USD]  combine max  empty 0USD  range >=0USD <=60USD
+  coupon_off
+
+# The cap on the whole discount: the lowest any campaign sets, 50 dollars when none does.
+open cap : money[USD]  combine min  empty 50USD  range >=0USD <=50USD
+
+define discount : money[USD] = min(min(stackable + exclusive, cap), subtotal)
+
+examples
+| subtotal | member | coupon | via   | -> discount |
+| 200USD   | true   | true   | web   | 18USD       |
+| 200USD   | false  | false  | store | 0USD        |
+| 12USD    | true   | true   | web   | 12USD       |
+| 200USD   | true   | false  | phone | 5USD        |
+```
+
+**What this one shows**
+
+- `open stackable : money[USD]  combine sum  range …` is a value other files may add to, with this rule's own terms under it, one to a line. The four ways of putting it together — `sum`, `product`, `max` and `min` — do not depend on the order of the terms.
+- **The range is required, and the tables below are checked over the whole of it.** That is why this rule's check holds whatever campaign comes; a campaign that takes the value outside the range is E131.
+- The `empty` of a `max` or a `min` is the value the terms start from, and it takes part when there are terms too: the cap's `empty 50USD` means 50 dollars unless a campaign sets less, and a cap above it caps nothing, which is W132.
+- A campaign is a `contribution` file (`contrib/order_discount/regional_campaign.rule`) that adds with `into stackable`. `rulec check order_discount.rule contrib/order_discount/` checks the rule alone and the rule merged.
 
 ## A Stripe PaymentIntent's status (machine)
 
@@ -3151,7 +3362,7 @@ inputs
 outputs
   part_time_allowance : money[JPY]  round down(1JPY)
 
-apply retirement = "retirement_pay.rule" sha256:b3c4704669a8f8ad  # Source: Article 31 (sketch)
+apply retirement = "retirement_pay.rule" meaning:aadc7468b292ff52  # Source: Article 31 (sketch)
   years = tenure
   reason = end_reason with term_end -> retirement_age, resignation -> voluntary
   base_pay = monthly_pay

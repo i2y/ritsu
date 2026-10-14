@@ -243,8 +243,8 @@ Beside the module, `single_coupon_proof.rs` holds proof harnesses for the [Kani 
 Verifier](https://model-checking.github.io/kani/). Everything in it is behind `#[cfg(kani)]`,
 so `rustc` never reads it; `kani single_coupon_proof.rs` does, and so does `rulec test
 --proofs` — a pass of its own, skipped and said so when `kani` is not on PATH. It is behind
-a flag because it is the one pass whose cost is noticeable: on the corpus of 125 rules it
-adds about 700 seconds to a run that otherwise takes seconds. `rulec api` names
+a flag because it is the one pass whose cost is noticeable: on the corpus of 143 rules it
+adds about 800 seconds to a run that otherwise takes seconds. `rulec api` names
 the file under `rust.proof` and every harness under `rust.harnesses`.
 
 What it holds, over **every** input in the declared domain rather than the vectors:
@@ -993,6 +993,133 @@ beside its module in each language. `rulec test` asks every runner with `--prere
 compares the answers byte for byte (docs/formats.md), and so does the corpus's agreement suite
 (`tests/threeway.rs`) for the rules with a block.
 
+## How likely each answer is
+
+A rule with `random` inputs ([reference §6.6](reference.md#66-random-and-chances)) generates one
+more function beside the rule's own: it takes the inputs that are not random, runs the rule on
+every point of the random ones, and counts each answer. From `tests/corpus/prize_lottery.rule`, in
+Python:
+
+```python
+class Chances(NamedTuple):
+    """How many draws give each answer (ways), and how many draws there are (total). A chance is ways over total (rulec's §15.225)."""
+    total: int
+    ways: list[tuple[Prize, int]]
+
+
+def prize_lottery_chances(campaign: bool) -> Chances:
+    """The answers of rule prize_lottery when ticket is drawn uniformly: each answer with how many of the draws give it, and how many draws there are. An answer's chance is its count over the total."""
+    total = 0
+    ways: list[tuple[Prize, int]] = []
+    last: RuleInputError | None = None
+    _i0 = -1
+    while _i0 < 999:
+        _i0 += 1
+        ticket = _i0
+        try:
+            out = prize_lottery(ticket, campaign)
+        except RuleInputError as e:
+            last = e
+            continue
+        total += 1
+        k = 0
+        while k < _len(ways) and ways[k][0] != out:
+            k += 1
+        if k == _len(ways):
+            ways.append((out, 1))
+        else:
+            ways[k] = (out, ways[k][1] + 1)
+    if total == 0 and last is not None:
+        raise last
+    return Chances(total, ways)
+```
+
+`prize_lottery_chances(False)` answers `Chances(total=1000, ways=[(<Prize.FIRST: 'first'>, 1),
+(<Prize.SECOND: 'second'>, 9), (<Prize.THIRD: 'third'>, 50), (<Prize.NOPRIZE: 'no_prize'>, 940)])`:
+the chance of the third prize out of a campaign is 50/1000. The counts are
+whole numbers, so the chance is exact, and a caller turns it into a fraction or a percentage as it
+needs. It is the rule's own function that is run, so the counts never disagree with it: a point
+the function refuses — one a `constraint` rules out, a drawn value past the weights — is no point,
+and when no point is left, the function raises the last refusal, as the rule would. The answers
+come in the order they are first met: the first random input outermost, each from its lowest value
+(an enum's values in their order, `false` before `true`).
+
+A rule whose one random input is read by nothing but the `draw` line of its pick by weight is
+counted from the weights instead (§15.226). The walk is run once, in a private function the rule's
+own functions call too, which hands back the running totals of the weights; then the rule is run
+once for each element weighed, at the first drawn value that takes it, and its count is its weight.
+From `tests/corpus/case_routing.rule`:
+
+```python
+def case_routing_chances(reviewers: list[Element]) -> Chances:
+    """The answers of rule case_routing when roll is drawn uniformly: each answer with how many of the draws give it, and how many draws there are. An answer's chance is its count over the total."""
+    total = 0
+    ways: list[tuple[int, int]] = []
+    _, _, cuts = _case_routing_walked(0, reviewers)
+    if _len(cuts) == 0 or cuts[_len(cuts) - 1] == 0:
+        return Chances(10000, [(case_routing(0, reviewers), 10000)])
+    low = 0
+    for cut in cuts:
+        if cut > low and low <= 9999:
+            n = _min(cut, 10000) - low
+            out = case_routing(low, reviewers)
+            k = 0
+            while k < _len(ways) and ways[k][0] != out:
+                k += 1
+            if k == _len(ways):
+                ways.append((out, n))
+            else:
+                ways[k] = (out, ways[k][1] + n)
+            total += n
+        if cut > low:
+            low = cut
+    return Chances(total, ways)
+```
+
+The walk itself adds each weight to the running total as the element lands on the arm, takes the
+first element the drawn value is below, and refuses the call once the walk is over when the drawn
+value is not below the total:
+
+```python
+        if presence is Presence.INOFFICE:  # in_office
+            weight = elem.capacity
+            weights += weight
+            cuts.append(weights)
+            if taken is None and roll < weights:
+                taken = elem.reviewer_id
+    if weights > 0 and roll >= weights:
+        raise RuleInputError("roll is not below the total of the weights", _repr(roll))
+```
+
+The private function is `_case_routing_walked` in Python, Rust (and the Wasm build of it), Ruby and
+PHP, `_caseRoutingWalked` in TypeScript, JavaScript, Swift and Java, `caseRoutingWalked` in Go;
+NumPy and SQL do not walk a sequence at all. The rule's public functions are the ones they always
+were.
+
+| language | the function | what it answers |
+|---|---|---|
+| Python | `prize_lottery_chances(campaign: bool) -> Chances` | `class Chances(NamedTuple)`: `total: int`, `ways: list[tuple[Prize, int]]` — a rule of several outputs counts its `Output` |
+| TypeScript | `prizeLotteryChances(campaign: boolean): Chances` | `interface Chances { readonly total: bigint; readonly ways: [Prize, bigint][] }` |
+| JavaScript | `prizeLotteryChances(campaign)` | `{ total, ways }`, the counts as `bigint` |
+| Rust | `prize_lottery_chances(campaign: bool) -> Result<Chances, RuleError>` | `pub struct Chances { pub total: i64, pub ways: Vec<(Prize, i64)> }` |
+| Ruby | `PrizeLottery.prize_lottery_chances(campaign)` | `Chances = Struct.new(:total, :ways)`, typed in the `.rbs` |
+| PHP | `\PrizeLottery\prize_lottery_chances(bool $campaign): Chances` | `final class Chances { int $total; list<array{0: Prize, 1: int}> $ways }` |
+| Go | `PrizeLotteryChances(in Input) (Chances, error)` | `Chances{Total int64; Ways []Way}`, `Way{Out Prize; Count int64}`. It takes the rule's own `Input`, whose random fields it does not read |
+| Swift | `prizeLotteryChances(campaign: Bool) throws -> Chances` | `struct Chances { total: Int64; ways: [Way] }`, `struct Way { out: Prize; count: Int64 }` |
+| Java | `PrizeLottery.prizeLotteryChances(boolean campaign)` | `record Chances(long total, List<Way> ways)`, `record Way(Prize out, long count)` |
+| NumPy | `rule.chances(**fixed)` | `(total, [(outputs, count), …])`: the random axes as one column of every point, evaluated at once |
+| SQL, Wasm | none | a query that walked the points would give up the one-to-one of its branches and the rule's rows; Wasm has one entry, and no room for a second function. `rulec gen` says so as it writes them, `rulec api` names them under `without`, and `rulec test` notes that nothing was compared there |
+
+One call costs as many runs of the rule as there are points of the random inputs, and `rulec api`
+says how many (`chances.runs`); past a million, `rulec check` says so (W131). A pick by weight
+counted from its weights runs the walk once and the rule once per element.
+
+`rulec gen` writes `vectors/<alias>.chances.jsonl` and `.chances.expected` beside the vectors: the
+inputs of a call, one line per combination of the inputs that are not random the vectors meet, and
+what the reference evaluator counted for it (docs/formats.md). Every runner answers `--chances`:
+for each line it calls the function and prints `{"total":N}`, then a line per answer, its count, a
+tab and its outputs as the record writes them; `rulec test` holds that to the second file.
+
 ## A rule whose inputs are projected from the caller's object
 
 A rule whose inputs say `from`
@@ -1027,7 +1154,34 @@ function was written, so a field the contract renamed is E121 at build time rath
 because a type for it would be a domain object model and this tool makes none.
 
 A rule may project some inputs and pass the rest: the ones with no `from` stay parameters of
-the projection function, after the objects, and a sequence stays last.
+the projection function, after the objects, and a sequence the object does not hold stays last.
+
+A `sum`, a `max` or a `min` reads one field of every element that passes, and a sequence taken
+from the object is built where the function calls the rule — an element of the rule's own type
+for each element of the collection. From `order_handling_fee` in the corpus, in Python:
+
+```python
+def order_handling_fee_from(order: dict[str, Any]) -> USD:
+    return order_handling_fee(
+        USD(_int(_sum(_int(_e["amount_usd"]) for _e in order["lines"]))),
+        USD(_int(_largest([_int(_e["amount_usd"]) for _e in order["lines"] if _e["fragile"]], 0))),
+        [Element(quantity=_int(_e["quantity"]), amount=USD(_int(_e["amount_usd"]))) for _e in order["lines"]],
+    )
+```
+
+`_largest` and `_smallest` are two helpers written beside it when the rule needs them: the
+largest (smallest) value of a list, or the `empty` value when the list is empty. Each of the
+other four has the same sum and the same two helpers or their equivalent, and reads a date as
+its day number, as it is read everywhere. A sequence taken from the object is no longer a
+parameter: the function takes the objects, the inputs no `from` reaches and the sequences no
+`from` takes, in that order.
+
+TypeScript and JavaScript add the BigInts up with `reduce` and make each element an object
+literal (`{ quantity: …, amount: … }`, of the element's interface in TypeScript).
+
+Ruby adds up with `sum` and writes `max || <empty>` and `min || <empty>` for the two helpers,
+and PHP adds up with `array_sum`. Ruby makes each element the element's `Struct` and PHP the
+element's class, both given the fields in the order they are declared.
 
 From a JSON Schema, an optional input (`T?`) reads its field so that a missing one — or a
 missing object on the way to it — is none: `_dig(order, "coupon", "kind")` in the Python module,
@@ -1055,9 +1209,52 @@ is compared by its value's name.
 **Python, TypeScript, JavaScript, Ruby and PHP are generated.** Go, Swift, Java and Rust hold
 the caller's object as a type, and naming that type would mean generating it or following the
 caller's own; SQL takes a relation of flat columns, NumPy takes columns, and the Wasm ABI takes
-one JSON object of the rule's own inputs. The **path check applies to every target equally** —
+one JSON object of the rule's own inputs; `rulec gen` names each of the seven as it writes the
+rest, with the reason. The **path check applies to every target equally** —
 it happens in `check`. `rulec api` lists it all under `projection`: the contracts, the path of
-every projected input, and the function name and signature in each of the five.
+every projected input, every sequence taken from an object with the path of each field of its
+elements (`elements`, empty when there is none), the function name and signature in each of
+the five, and under `without` the seven that have none, each with its reason.
+
+## A rule merged with contributions
+
+What `rulec gen` writes for a rule given with contributions to it (`rulec gen order_discount.rule
+contrib/order_discount/`, reference.md §6.7) is one function, under the rule's name, in every
+language: the rule with the contributions merged into it. Its parameters are the rule's inputs, then
+the inputs each contribution adds, in the order they were merged. A contribution's tables, clauses
+and definitions are inside it, as an `apply`'s are, their names prefixed with the contribution's —
+`regional_campaign:campaign_parts` in the trace and on the page, `regional_campaign_campaign_off`
+where the language needs an identifier — and an open value is a local of the function, computed at
+the place the rule writes it, from the empty value of a `max` or a `min` and every term:
+
+```python
+# Code generated by rulec 0.28.0. DO NOT EDIT.
+# Source: order_discount.rule (rule order_discount v1, sha256:67459a43383579d2)
+# Contributions: regional_campaign = contrib/order_discount/regional_campaign.rule (signature:fe7307da2694d75a, sha256:614de68c6eea81c6)
+…
+def order_discount(subtotal: USD, member: bool, coupon: bool, via: Channel, north: bool) -> USD:
+…
+    stackable = (member_off + channel_off) + regional_campaign_campaign_off  # definition
+    exclusive = _max(_max(0, coupon_off), regional_campaign_voucher_off)  # definition
+    cap = _min(50, regional_campaign_campaign_cap)  # definition
+    discount = _min(_min((stackable + exclusive), cap), subtotal)  # definition
+```
+
+The header names each contribution with its file from the rule's directory, the signature it
+pinned the rule's shape at, and the SHA-256 of its bytes (the first 16 hex digits), so the file says
+which contributions it was made with. A contribution given without its rule generates the rule it
+adds to, merged with it and with the contributions it comes after; a contribution has no module of
+its own. A value a contribution adds to an enum of an `enums` file is a member of that file's
+module, whose header names the contribution. Under `ritsu gen`, each rule's module is the rule
+merged with every contribution of the project that reaches it. The functions beside the rule's are
+the merged rule's too: the one that counts the chances of a rule with random inputs takes an input a
+contribution adds among its parameters (`prize_lottery_chances(campaign, holiday)`), and the one that
+reads a rule's inputs out of the caller's object reads a contribution's input that says `from`, and
+takes one that does not after the objects (`handling_fee_from(order, rush)`).
+
+`rulec api` gives the same under `contributions` and the open values under `opens`
+([formats.md](formats.md#api)); the vectors, the certificate and the page are those of the merged
+rule.
 
 ## The digest in the header
 
@@ -1074,6 +1271,10 @@ document, and at the table, the rows were transcribed from. A law from a databas
 e-Gov names it in both places — `Cites: osha = law ecfr 29 CFR 1910 asof 2026-01-01
 ("§1910.157" sha256:…)`, and `"db": "ecfr"` beside the id under `sources`.
 
+
+A rule that applies another names the callee and its pin, one line per `apply`: `Applies: retirement
+= retirement_pay.rule (meaning:aadc7468b292ff52)`, or `(sha256:…)` for a heading pinned at the
+callee's bytes as before §15.230.
 ## The rows that matched
 
 Beside every function there is a twin with `_traced` on its name, spelled `Traced` wherever the

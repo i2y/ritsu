@@ -272,9 +272,10 @@ each language's). A value without one is shown by its declared name. A display n
 anything but a line break, not empty, and no two values of one enum share one (E069). It never
 travels: the wire and the records carry the value's name.
 
-**`open`** written after the last value — `enum building = farm | market | temple  open` —
-marks an enum whose list may be extended from outside its file. It is read and kept; nothing
-in this version extends a list, so within a rule the enum is closed as every enum is.
+**`open`** written after the last value — `enum channel = web | store default | phone default  open`
+— marks an enum a `contribution` file may add values to (`extend`, §6.7). Within the rule's own
+check the enum is closed, as every enum is; merged with a contribution, every table that reads it
+is asked for a row of the value added, or for `default` on the line that adds it (E101, E033).
 
 Two enums may have values of the same name — Stripe's `capture_method` and
 `confirmation_method` both have `automatic` and `manual`. A value is read in the enum of the
@@ -592,7 +593,7 @@ buy is that the glue between the caller's object and the rule's flat inputs is *
 rather than written by hand, and that a field the contract renamed is E121 rather than a
 `KeyError` in production.
 
-`from` comes last on the line and runs to its end. Four shapes, and no more:
+`from` comes last on the line and runs to its end. Seven shapes, and no more:
 
 | written | what it yields |
 |---|---|
@@ -600,6 +601,43 @@ rather than written by hand, and that a field the contract renamed is E121 rathe
 | `from any <shape>.<collection> where <field> = <value>` | `bool` — some element passed |
 | `from all <shape>.<collection> where <field> = <value>` | `bool` — every element did |
 | `from count <shape>.<collection> [where …]` | `number` — how many passed |
+| `from sum <shape>.<collection> of <field> [where …]` | a number — the total of one field over the elements that passed, 0 when none did |
+| `from max <shape>.<collection> of <field> [where …] empty <value>` | a number or a date — the largest value of one field over the elements that passed, the `empty` value when none did |
+| `from min <shape>.<collection> of <field> [where …] empty <value>` | the same, the smallest |
+
+A sequence the rule walks can be taken from a collection of the contract too, each field of an
+element saying where it stands in the element:
+
+```rule
+shape order = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  total       : money[USD]  range >=0USD <=100_000USD  from sum order.lines of amount_usd
+  top_fragile : money[USD]  range >=0USD <=5_000USD    from max order.lines of amount_usd where fragile = true empty 0USD
+
+elements lines from order.lines
+  quantity : number      range >=1 <=99          from quantity
+  amount   : money[USD]  range >=1USD <=5000USD  from amount_usd
+```
+
+`sum` adds the field up, and the input that takes it is a `number`, money, a quantity or a rate:
+the field travels as a whole number in the input's unit, and a field the contract carries as a
+fraction is E120, since it cannot be added up exactly. `max` and `min` pick one value of the
+field, a number or a date, and **`empty` is required** (E074): it is what the input is when the
+collection is empty or no element passes the `where`, which is the author's to decide. It is
+written as a value of the input, in its unit (`empty 0USD`, `empty 2030-12-31`), and has to be
+one the input takes (E074 again: otherwise the function that reads it out would hand the rule a
+value its door refuses). None of the three gives none, so none of them goes into an optional
+input. `of` names one field of an element, as `where` does; `of` belongs to these three and
+`empty` to `max` and `min`, and either written elsewhere is E074.
+
+`elements <name> from <shape>.<collection>` takes the sequence from the collection, every
+element of it, nothing filtered. Every field of such a sequence says with its own `from` where
+it is read in an element — a path from the element and nothing else (`from qty`,
+`from unit.kind`) — and a field that says none, or a field that says one under a sequence not
+taken from a contract, is E074. The elements are then elements like any other: the checks, the
+walks and the vectors are exactly what they are for a sequence the caller passes. A message
+names a field of an element by the collection with `[]` after it, `order.lines[].qty`.
 
 **One collection, and a unary test on a field of an element.** A join, a nested quantifier
 and a path inside a cell are all refused, for the reason §0 gives: the cell language is where
@@ -621,7 +659,8 @@ as draft-07 and OpenAPI 3.0 say. A `.proto` is read far enough for the same: mes
 their fields, `repeated` included, with `map` skipped rather than guessed at; the members of a
 `oneof` are fields of the message, each with presence of its own like an `optional` field.
 A path that cannot be resolved is **E121**, which says how far it got and which names were
-there; a type that does not fit is **E120**; a `shape` no input projects from is **W122**.
+there; a type that does not fit is **E120**; a `shape` no input and no sequence is taken from is
+**W122**.
 
 **The contract says which values can come, too, and that is held to the input.** A path says
 where a value comes from; the contract's validation says which values pass — Protovalidate's
@@ -641,6 +680,17 @@ possible, a missed one is not. `fix.text` of an E122 is the option or keywords t
 contract (`narrow_contract`); whether the contract or the rule is the side to change is a
 person's decision. Still no check of the table moves: what is compared is the contract with
 the input's own declaration.
+
+The same holds for `sum`, `max`, `min` and a sequence taken from the contract. A total reaches
+as far as the field's values times how many elements the contract lets through: ten lines of
+at most 100 come to 1000, and an input that takes at most 500 is E122, with `"maxItems": 5` as
+the narrowing (with no end on either, the fix is `none`, since no one keyword bounds a total). A
+largest or smallest value is one of the field's, held to the input as a value read straight from
+a path is. A sequence taken from a contract has each field of its elements held as an input is
+(its `required`, its null, its range, its enum's values, its proto3 default); its length held
+to the cap its `count`s put on it; and its total of a column to the upper end of each `sum` over
+it, the column's largest value times the longest sequence the contract and the cap let through.
+A field of an element is no input, so its E122 carries no example under `inputs`.
 
 **Conditions across fields are read too.** A contract relates fields to each other: a CEL
 expression on a `.proto` message (`(buf.validate.message).cel`, `cel_expression`) or on a field,
@@ -685,11 +735,14 @@ date arrive as strings, and money and a quantity as whole numbers in the unit th
 declares.
 
 **Five of the twelve targets generate the projection function** — Python, TypeScript,
-JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name. Go,
+JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name; a sequence
+taken from the object is built there, one element of the rule's own type for each element of
+the collection, and is no longer a parameter. Go,
 Swift, Java and Rust hold it as a type, and the only ways to name that type would be to
 generate it (this tool makes no domain object model) or to follow the caller's own; SQL takes
 a relation of flat columns, NumPy takes columns, and the Wasm ABI takes one JSON object of the
-rule's own inputs. **The path check applies to every target equally** — it happens in `check`,
+rule's own inputs. `rulec gen` names the seven and says why, and `rulec api` lists them under
+`projection.without`. **The path check applies to every target equally** — it happens in `check`,
 before anything is generated. `rulec api` lists the contracts, the path of every projected
 input, and the function in each language that reads them, under `projection`.
 
@@ -927,7 +980,9 @@ of a tariff sheet, the candidates a predicate left — and the answer comes from
 `elements` declares what one element carries; `fold` declares how the walk ends. A case may
 carry more than one sequence — an order's lines and the payments made against it — and each is
 declared under an `elements` of its own, with a name, and walked by the lines that name it after
-`over` (§6.3). A sequence nothing walks is E020.
+`over` (§6.3). A sequence nothing walks is E020. A sequence the caller's object already holds can
+be taken from it with `elements <name> from <shape>.<collection>`, each field saying where it is
+read in an element (§3.3).
 
 ```rule
 elements fee_rows
@@ -965,6 +1020,7 @@ The arms:
 | `take_unique <value>` | take this element's value; a second element that also takes is an error at run time |
 | `take_first <value>` | take the first, ignore any later one |
 | `keep_max <value> by <key>` | hold this element's value, replacing what is held when the key is larger |
+| `take_weighted <value> by <weight>` | pick one element with the chance of its weight, by a drawn value (§6.6) |
 | `empty -> <value>` | the answer when there are no elements. **Required** |
 | `exhausted -> <value>` | the answer when the walk reached the end. **Required**; `held` is the value taken (`take_unique`, `take_first`), else the value kept (`keep_max`), else the `empty` answer |
 
@@ -1484,7 +1540,7 @@ prerequisites enrollment over course
 
 | line | what it says |
 |---|---|
-| `prerequisites <name>(<alias>) over <enum> [open]` | the block, its name — which names the generated functions, so a name that is not ASCII takes an alias (E011) — and the enum whose values it is about. `open` marks a block other files may add lines to, for the values they add; it is read and kept, and changes nothing yet |
+| `prerequisites <name>(<alias>) over <enum> [open]` | the block, its name — which names the generated functions, so a name that is not ASCII takes an alias (E011) — and the enum whose values it is about. `open` marks a block a contribution may add lines to, for the values it adds to the enum (§6.7) |
 | `start <value>, …` | the values that need nothing. Every other value is reached from them. **Required** |
 | `<value> requires <value>, …` | what a case has to hold before it can take the value. `,` separates groups that are all needed; `or` joins the values of a group, any one of which is enough: `a, b or c` is a, and b or c |
 | `<value> requires nothing "<reason>"` | a value no case can take, and why: a retired course, a certification no longer examined |
@@ -1492,7 +1548,8 @@ prerequisites enrollment over course
 
 Every value of the enum is in exactly one place: on `start`, or on a line of its own (E071). A
 value added to the enum without its prerequisites stops the check rather than passing as one that
-needs nothing.
+needs nothing — a value a contribution adds too, unless the contribution adds its line to an open
+block (§6.7).
 
 The block stands in a rule or in an `enums` file (§3.1); `ordered by` only in a rule, since an
 `enums` file has no tables. None of its words is reserved: `start`, `requires`, `or`, `nothing`
@@ -1558,6 +1615,415 @@ The vector suite holds every language to the reference evaluator over a handful 
 — nothing held, one value of each group, that less the value of one group, each other value of an
 `or`, the value itself besides, every other value — and the certificate carries the graph with the
 orders that show it has no cycle and that every value is reached (docs/formats.md).
+
+## 6.6 random and chances
+
+Some inputs are not chosen but drawn: the number an audit draws for each claim to decide whether
+it is inspected, the number of a lottery ticket, the roll that decides one round of a contest. Mark
+such an input `random`, and the rule can say — and `rulec check` can prove — how likely each answer
+is:
+
+```rule
+inputs
+  sample_number : number  range >=0 <=99  random
+  category      : category
+  amount        : money[JPY]  range >=0JPY <=10_000_000JPY
+```
+
+`random` at the end of an input's line says that the caller draws the value uniformly from what
+the declaration lets in, independently of the other inputs, and passes it in. The function the
+rule generates does not change: the caller draws, and the same inputs give the same answer. What
+can be drawn is finite and countable:
+
+| type | drawn from |
+|---|---|
+| `number`, `money`, a quantity, `rate` | every value of the range in the steps its type is held in, both ends included — `range >=0 <=13` is 14 values. Both ends are required |
+| an enum | its values, or those its range lets in (§3) |
+| `bool` | `true` and `false` |
+
+Where a `constraint` names a random input, the draw is uniform over the points that meet it:
+with `constraint roll < challenger_strength + holder_strength`, `roll` is drawn from 0 to the
+two strengths added together, less one. Completeness and overlap are proved over the random
+inputs as over any other, and a `machine`'s claims (§6.4) treat a random input as any value it can
+be, since they are about what can happen.
+
+E070 stops what cannot be drawn: a number whose range lacks an end, an input that may be absent
+(`?`), a date, a string, an input read `from` the caller's object (§3.3), one a `machine` carries,
+a field of an element (drawn once per element, so the number of points would turn on the length
+of the sequence), and `random` on an output. The points of the random inputs multiplied together
+are at most 2^62, since every language counts the ways in an int64: past that is E108.
+
+### chances
+
+A `chances` table claims how likely an answer is:
+
+```rule
+chances
+| category      | amount       | -> inspect | chance |
+| entertainment | -            | true       | 1      |
+| travel        | -            | true       | 1/10   |
+| expenses      | >=100_000JPY | true       | 1/4    |
+| expenses      | <100_000JPY  | true       | 5%     |
+| supplies      | -            | true       | 1/50   |
+| -             | -            | true       | >=1/50 |
+```
+
+| column | what it holds |
+|---|---|
+| before `->` | **every** input that is not random, each cell a condition like a table's (`-` for any value). A rule that walks a sequence has a column for it, whose cells name a `sequence` (§6.2), as in `examples`. A random input has no column: it is what is counted |
+| after `->` | the outputs the claim is about, each cell a condition like a table's. An output with no column may be anything |
+| `chance`, last | an exact rational (`5/14`, `0`, `1`), a rate (`35%`, `0.1%`), or comparisons with one (`<=1/100`, `>=1/4 <=1/2`) |
+
+A row says: for **every** combination of the inputs that are not random its cells let in, with the
+random inputs drawn uniformly, the chance that the outputs match its output cells is the value
+written — or passes the comparisons written. A chance is a count of points over a count of points,
+so it is always an exact rational, and `rulec check` compares it exactly.
+
+How `rulec check` counts: the inputs that are not random are cut at the rule's own boundaries into
+classes — the cells `diff` and the `machine` walk (§15.122, §15.148 of DESIGN.md) — and so are the
+axes of the random inputs. Where nothing the rule computes reads a random input together with one
+that is not, and no `constraint` ties the two, each cell of that walk is a class crossed with a box
+of the random axes, the answer is one value over it, and the box holds the product of the lengths
+of its intervals: the claim is counted exactly without looking at a single point, however wide the
+ranges. Where an answer moves inside a box, or the two kinds of input are read together, the points
+are run one by one, up to a million for one claim (one fiftieth of `--budget`'s nodes).
+
+| check | what it finds | code |
+|---|---|---|
+| shape | a column missing or of the wrong kind, a cell that is not a chance, a table where nothing is drawn | E070 |
+| claim | a combination of the inputs that are not random where the chance is not the one written | E133 |
+| budget | a claim whose points to run one by one are past its share of the budget, which is said to be neither holding nor broken | W129 |
+
+A claim that fails names the combination and the chance there:
+
+```console
+error[E133]: A claim of `chances` does not hold (row 4)
+  --> tests/mutants/m_e133.rule:29 chances
+   |
+29 | | false    | third    | 6%     |
+   |                         ^^ 6% is written here
+   |
+ With campaign = false, the chance of prize = third is 1/20 (5.0%).
+ A claim speaks of every combination its cells let in, with the random inputs drawn uniformly. If the table is right, correct the claim; if the claim is the business truth, correct the table's rows.
+```
+
+### Picking by weight: `take_weighted` and `draw`
+
+A fold can pick one element with the chance of its weight — a case for one of the reviewers who are
+in, in proportion to their capacity:
+
+```rule
+inputs
+  roll : number  range >=0 <=9999  random
+
+fold presence over reviewers
+  away      -> next
+  in_office -> take_weighted reviewer_id by capacity
+  draw      -> roll
+  empty     -> 0
+  exhausted -> held
+```
+
+| line | what it says |
+|---|---|
+| `<verdict> -> take_weighted <value> by <weight>` | add the weight of each element that lands on the verdict to a running total, in order, and take the value of the first element at which the drawn value is below that total. An element is taken with the chance of its weight over the total of the weights |
+| `draw -> <input>` | the drawn value: an input marked `random`, a `number` whose range starts at 0 |
+
+The drawn value has to be below the total of the weights: the generated code checks it once the
+walk is over and refuses the call otherwise, as it refuses an input out of its range, and the
+draw is uniform over the values below the total. When the weights add up to 0 the walk answers
+`exhausted`, with `held` the `empty` answer. A rule picks by weight once, the arms of that fold are
+`next` and `take_weighted` alone, and a weight is a `number` that cannot be negative (E073).
+
+### What chances generate
+
+A rule with random inputs generates one more function in every language with modules: it takes the
+inputs that are not random (and the sequences), and answers how many draws give each answer and how
+many draws there are. A chance is the count over the total.
+
+| language | function | result |
+|---|---|---|
+| Python | `prize_lottery_chances(campaign)` | `Chances(NamedTuple)`: `total: int`, `ways: list[tuple[Prize, int]]` |
+| TypeScript, JavaScript | `prizeLotteryChances(campaign)` | `{ total: bigint, ways: [Prize, bigint][] }` |
+| Rust | `prize_lottery_chances(campaign)` | `Result<Chances, RuleError>`, `Chances { total: i64, ways: Vec<(Prize, i64)> }` |
+| Ruby | `PrizeLottery.prize_lottery_chances(campaign)` | `Chances = Struct.new(:total, :ways)` |
+| PHP | `\PrizeLottery\prize_lottery_chances($campaign)` | `final class Chances(int $total, array $ways)` |
+| Go | `PrizeLotteryChances(in Input)` | `(Chances, error)`, `Chances{Total, Ways []Way{Out, Count}}`; the random fields of `in` are not read |
+| Swift | `prizeLotteryChances(campaign:)` | `throws -> Chances`, `Chances{total, ways: [Way]}` |
+| Java | `PrizeLottery.prizeLotteryChances(campaign)` | `record Chances(long total, List<Way> ways)` |
+| NumPy | `rule.chances(**fixed)` | `(total, [(outputs, count), …])` |
+| SQL, Wasm | — | — |
+
+The answers come in the order they are first met — the first random input outermost, each from its
+lowest value. A point the door refuses (a `constraint`,
+a drawn value past the weights) is no point. The function runs the rule's own function on every
+point, so it never disagrees with it; a rule whose one random input only the `draw` line reads is
+counted from the weights instead, one walk for the running totals and one run per element weighed.
+A function that runs the rule over more than a million points on every call is W131. SQL and Wasm
+have one entry and no room for a second function: `rulec gen` says so, `rulec api` names them under
+`without`, and `rulec test` notes that nothing was compared there.
+
+`rulec test` holds the function in every language to the reference evaluator over
+`vectors/<alias>.chances.jsonl` (docs/formats.md), the certificate carries the counts box by box
+(docs/formats.md), and the page for people shows each claim beside what the check counted, and
+counts the chances of the case entered in its panel.
+
+## 6.7 open values and contributions
+
+A rule may leave places for other files to add to, and a `contribution` file adds to them: a
+campaign that adds a discount, a product line that adds a kind of product with its markup and its
+tax rate, a policy that takes precedence over a clause. The rule says where it may be added to; the
+contribution names the rule and says what it adds; and rulec merges the two into one rule before
+anything is checked, so the checks, the evaluator, the generated code, the page and the certificate
+all see one ordinary rule.
+
+| the rule writes | a contribution adds |
+|---|---|
+| `open <name> : <type> combine … range …` | a term to the value (`into`) |
+| `enum <name> = …  open` (§3) | a value to the enum (`extend`) |
+| `table <name> open`, `clause <name> -> <output> open` | a table or a clause of the same output that takes precedence over it (`overrides`) |
+| `prerequisites <name> over <enum> open` (§6.5) | the `requires` lines of the values it adds |
+
+Which contributions are merged is decided by the files a command is given, and by nothing else:
+`rulec check order_discount.rule contrib/` checks the rule with every contribution under
+`contrib/` that adds to it, and `rulec check order_discount.rule` the rule alone. There is no list of
+what to load, and no order to keep: the four ways of putting a value together do not depend on the
+order of their terms.
+
+### open — a value its terms put together
+
+```rule
+# Discounts that stack: every one applies.
+open stackable : money[USD]  combine sum  range >=0USD <=100USD
+  member_off
+  channel_off
+
+# Discounts that do not stack: only the largest applies.
+open exclusive : money[USD]  combine max  empty 0USD  range >=0USD <=60USD
+  coupon_off
+
+# The cap on the whole discount: the lowest any campaign sets, 50 dollars when none does.
+open cap : money[USD]  combine min  empty 50USD  range >=0USD <=50USD
+
+define discount : money[USD] = min(min(stackable + exclusive, cap), subtotal)
+```
+
+The line declares a value as a `define` does — a name, with an alias when it is not ASCII, and a
+type — then how its terms are put together and the range it stays inside. Under it, one to a line,
+are the names of its terms: values decided above it (an output of a table or a clause, a `derive`,
+a `define`, a summary, a fold's answer, another open value, a name an `apply` brought in). A rule
+may give an open value no term of its own (`cap` above); the contributions give it theirs.
+
+| `combine` | the value | types |
+|---|---|---|
+| `sum` | 0 plus every term | `number`, `money`, the quantities, `rate` |
+| `product` | 1 (100% for a rate) times every term | `number`, `rate` |
+| `max` | the largest of `empty` and every term | any numeric type, `temperature` and `sound` too |
+| `min` | the smallest of `empty` and every term | the same |
+
+`empty` is written for `max` and `min`, and only for them. It is the value the terms start from,
+as 0 is for `sum` and 1 for `product`, and it always takes part: it is the value when there is no
+term, and a floor (`max`) or a ceiling (`min`) every term is compared with — `cap` above is 50
+dollars, or less when a campaign sets less. That is not the `empty` of a `max` or a `min` that walks
+a sequence (§6.3), of a fold (§6.2), or of `from max` and `from min` (§3.3), which is the answer
+when there is no element to look at and takes no part otherwise. A term that cannot move the value
+whatever it takes — at or below `empty` in a `max`, at or above it in a `min`, always 0 in a `sum`,
+always 1 in a `product` — changes no answer, and W132 says so: a cap written as a `max` is the
+usual way to get one. Only a numeric value can be open — not a value of an enum, a date, a truth
+value, a string or an optional type — and a term is on the value's step or a coarser one (E068).
+
+**The range is required, and the rule is checked over it.** A table that reads an open value is
+asked to cover the whole declared range, not just what the terms written today reach, since a
+contribution may move the value anywhere inside it: that is what keeps the rule's own check true
+whatever is added later. Whether the terms, put together, stay inside the range is checked on the
+merged rule (E131), by interval arithmetic over each term's range, with the term that takes it out,
+the file that term came from, and an input that does it:
+
+```console
+error[E131]: The open value stackable can leave the range it declares
+  --> tests/corpus/order_discount.rule:34
+   |
+34 | open stackable : money[USD]  combine sum  range >=0USD <=100USD
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ range: 0USD .. 100USD
+   |
+ An input that takes it out of the range: member = true, via = web, north = true
+ Its terms together come to 0USD .. 103USD.
+   member_off: 0USD .. 5USD (this rule)
+   channel_off: 0USD .. 3USD (this rule)
+   regional_campaign:campaign_off: 0USD .. 95USD (contribution regional_campaign (tests/mutants/m_e131.rule))
+ The range is the promise that the value stays inside it whatever is added, and the tables below are checked over the whole of it. Widen it (the tables below are then checked over the wider range), or narrow what the contribution adds. Which is a business decision.
+```
+
+The value is generated as an ordinary definition at the place its line is written, and the page
+lists its terms with the file each came from.
+
+### A contribution file
+
+```rule
+contribution regional_campaign(regional_campaign) v1
+description "A campaign of the north region: 7 dollars off that stacks with the rest, a 20-dollar voucher that does not, and a cap of 30 dollars for its orders"
+to "../../order_discount.rule" signature:fe7307da2694d75a
+
+inputs
+  north(north) : bool
+
+table campaign_parts
+policy unique
+| north | -> campaign_off : money[USD] | voucher_off : money[USD] | campaign_cap : money[USD] |
+| true  | 7USD                         | 20USD                    | 30USD                     |
+| false | 0USD                         | 0USD                     | 50USD                     |
+
+into stackable
+  campaign_off
+
+into exclusive
+  voucher_off
+
+into cap
+  campaign_cap
+
+examples
+| subtotal | member | coupon | via   | north | -> discount |
+| 200USD   | true   | true   | web   | true  | 30USD       |
+| 200USD   | false  | true   | store | true  | 27USD       |
+| 200USD   | true   | true   | web   | false | 18USD       |
+| 9USD     | false  | false  | store | true  | 9USD        |
+```
+
+| line | what it says |
+|---|---|
+| `contribution <name>(<alias>) v<version>` | that the file is a contribution, and its name, which comes before the names it brings in. **First** |
+| `to "<file>" signature:<16 hex>` | the file it adds to, relative to this one: a rule, an `enums` file, or another contribution, whose rule it then adds to as well. **Required**, once |
+| `after "<file>" signature:<16 hex>` | a contribution this one builds on: merged before it, its names read here as `<contribution>:<name>`. Any number |
+| `inputs` | the inputs the merged function takes besides the rule's. An input of the same name as one of the rule's is that input, and has its type and range (E042). One may be read out of a contract the rule declares (`from`, §3.3); none is drawn at random (`random`, E067) |
+| `extend <enum> with <value>(<alias>) ["<label>"] [after <value>] [default]` | a value added to an open enum: at the end, or right after the value named, which is where it falls in the order of an ordered enum (the `after` is required there) |
+| tables, clauses, `derive`, `define`, `count`, `sum`, `max`, `min`, `fold`, `open` | what it decides, written as in a rule |
+| `into <open value>`, and names under it | terms it adds to an open value |
+| `prerequisites <block>`, and `<value> requires …` lines under it | the prerequisites of the values it adds, in an open block |
+| `sequence`, `examples` | its examples, with the rule's inputs and its own, and the rule's outputs |
+
+What decides the shape of the function — outputs, `result`, `apply`, `machine`, the sequences a rule
+walks, enums and imports, sources and constraints — belongs to the rule, and a contribution that
+writes one is E067.
+
+**Names.** The names a contribution declares come into the merged rule as `<contribution>:<name>`
+(`regional_campaign:campaign_off`), and the generated code spells them with `_` (alias
+`regional_campaign_campaign_off`), so two contributions may each have a `campaign_off` and neither
+meets a name of the rule. A contribution reads the rule's names as they are written, and the names
+of a contribution it comes `after` as `<contribution>:<name>`.
+
+**Where a contribution's lines go.** A contributed table or definition is placed after everything
+it reads and before the first thing that reads it. A table or a clause of an open output goes right
+after the output's last definition, since the tables of one output are decided where the last of
+them is; one that would read a value decided below that place is E067. The contributions are merged
+in the order their `after` lines put them, the rest in the order of their paths; `after` lines that
+go round are E067.
+
+### extend — a value added to an open enum
+
+```rule
+contribution garden_kind(garden_kind) v1
+description "The garden line: garden supplies, a new kind of product. It ships the way any other kind does, which `default` says"
+to "../../shared/product_kinds.rule" signature:3b66d8e9012538cc
+
+extend kind with garden "Garden supplies" default
+```
+
+Every table of every rule merged with it that reads the enum is asked for a row of the new value: a
+table that has none is E101, and the value it misses says which contribution added it. A table that
+is not open, so that no contribution can add a row to it, catches the new value in its `-` row or in
+a cell that compares; the value then takes a row its writer never saw, and that is E033 unless the
+`extend` line marks it `default` — the same word, meaning the same, as on an `enum` line. W111 is
+not said of a value a contribution added.
+
+### A definition that contributions may take precedence over
+
+```rule
+table decay_now open
+policy unique
+| above | -> decay : number |
+| >0    | decay_rate        |
+| <=0   | 0                 |
+```
+
+`open` after a table's name, or at the end of a clause's heading, lets a contribution add a table or
+a clause of the same output with `overrides` naming it, or naming the clause of a contribution it
+comes `after` (`overrides strict_policy:strict_decay`). The tables of the output are checked
+together, as tables that share an output always are (§7). Taking precedence over a definition that
+is not open is E067.
+
+**Contributions, chances and contracts.** What is drawn and what is claimed of its chances (§6.6)
+is the rule's: a contribution draws no input and writes no `chances` (E067). The rule's claims hold
+whatever is added — the merged rule is held to them, an input a contribution adds is a `-` column of
+every claim, and a contribution that moves the chance of a claimed answer is E133, which names the
+contribution's rows that take part in deciding it. A rule that reads its inputs out of the caller's
+object (§3.3) lends its contracts to its contributions: an input a contribution adds may be read
+`from` them, the projection function of the merged rule reads it from the object, and an input
+added without `from` comes after the objects among its parameters.
+
+### What check checks
+
+Given a rule and contributions to it, `rulec check` checks
+
+1. the rule alone, with its examples, each open value over its declared range;
+2. the rule merged with every contribution given that reaches it — completeness, overlap,
+   unreachable rows, the values contributions add and the ranges of the open values (E101, E102,
+   E105, E033, E131), each naming the file and the contribution of the row it is about. The
+   examples of the files are not run here: each was written for the files it was written with;
+3. each contribution, merged with the rule and the contributions it comes `after`, and nothing
+   else, with its own examples.
+
+A diagnostic about a line of a contribution points into that file. A finding said for one file is
+not said again for another: a file whose errors were all said above gets one line that says so. The
+`ok` lines say what each file was merged with:
+
+```console
+$ rulec check tests/corpus/shared/product_kinds.rule tests/corpus/product_price.rule tests/corpus/product_tax.rule tests/corpus/product_shipping.rule tests/corpus/contrib/product_line
+ok tests/corpus/shared/product_kinds.rule (1 contribution: tests/corpus/contrib/product_line/garden_kind.rule)
+ok tests/corpus/product_price.rule (2 contributions: tests/corpus/contrib/product_line/garden_price.rule, tests/corpus/contrib/product_line/garden_kind.rule)
+ok tests/corpus/product_tax.rule (2 contributions: tests/corpus/contrib/product_line/garden_tax.rule, tests/corpus/contrib/product_line/garden_kind.rule)
+note tests/corpus/product_shipping.rule: 1 shadow pairs (1 structural, 0 equivalent, 0 needs review)
+ok tests/corpus/product_shipping.rule (1 contribution: tests/corpus/contrib/product_line/garden_kind.rule)
+ok tests/corpus/contrib/product_line/garden_kind.rule (contributes to tests/corpus/shared/product_kinds.rule)
+ok tests/corpus/contrib/product_line/garden_price.rule (contributes to tests/corpus/product_price.rule)
+ok tests/corpus/contrib/product_line/garden_tax.rule (contributes to tests/corpus/product_tax.rule)
+```
+
+### The pins: `signature:`
+
+A contribution relies on the shape of what it adds to, not on its rows: a campaign that adds to the
+discount is still right when a row of the member discount changes, and may be wrong when the range of
+`stackable` or the type of an input it reads changes. `signature:` on the `to` and `after` lines is
+the first 16 hex digits of a SHA-256 of that shape — the file's name, its inputs and outputs with
+their types, ranges and rounding, its open values' lines, its open enums (with their values, when
+they are ordered), the outputs its open tables and clauses decide, its open blocks, and the
+declaration of each name the contribution reads. `rulec source pin <contribution>` writes them. A
+shape that moved is E040, which says what moved when the repository holds the version the signature
+was taken at (it looks through the file's last 60 commits). Here the range of `stackable` was
+narrowed to 80 dollars after the campaign was pinned:
+
+```console
+error[E040]: The shape of `../order_discount.rule` this contribution relies on has changed
+  --> contrib/regional_campaign.rule:3
+  |
+3 | to "../order_discount.rule" signature:fe7307da2694d75a
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ pinned: signature:fe7307da2694d75a
+  |
+ The shape now: signature:377d5b0bbf770662
+ `open stackable : money[USD] combine sum range >=0USD <=100USD` is now `open stackable : money[USD] combine sum range >=0USD <=80USD`
+ Read this contribution against the new shape; once it holds, make the line as `fix.text` says (`rulec source pin` writes it too).
+```
+
+### Every command, on the merged rule
+
+Every command that takes rules takes their contributions beside them — `gen`, `doc`, `api`,
+`certificate`, `coverage`, `vectors`, `graph`, `schema` and `adapter` answer for the merged rule, and
+a contribution given without its rule answers for the rule it adds to, merged with it. The generated
+code names each contribution with its file, its signature and the digest of its bytes in its header
+(generated-code.md); `rulec api` lists them under `contributions`, with the inputs each adds, and
+every open value under `opens`, with its terms (formats.md); the page has a section for what adds to
+each open value and one for each contribution, with its tables drawn from its own file; and the
+certificate reads every row out of the file it is written in.
 
 ## 7. Tables
 
@@ -1656,7 +2122,7 @@ service' as 'period in office'" — is an `apply`: another rule file, used once 
 inputs bound to values of this rule.
 
 ```rule
-apply retirement = "retirement_pay.rule" sha256:b58648ea2767ebbd  # Source: Article 31
+apply retirement = "retirement_pay.rule" meaning:aadc7468b292ff52  # Source: Article 31
   years = tenure
   reason = end_reason with term_end -> retirement_age, resignation -> voluntary
   base_pay = monthly_pay
@@ -1664,9 +2130,13 @@ apply retirement = "retirement_pay.rule" sha256:b58648ea2767ebbd  # Source: Arti
   allowance -> part_time_allowance
 ```
 
-The heading names the apply, the callee (a path relative to this file) and the digest of the
-callee file, which `rulec source pin` writes and `check` holds the callee to (E040: a callee
-that changed is looked at with `rulec diff` before the new digest is pasted). Under it, one
+The heading names the apply, the callee (a path relative to this file) and the pin of the
+callee's meaning: the first 16 hex digits of a SHA-256 of its lines with comments, the
+`description` and the citations left out, so that a comment moves nothing and a row does.
+`rulec source pin` writes it, and `check` holds the callee to it (E040, which shows the lines that
+moved when the repository holds the version the pin was taken at: a callee that changed is looked
+at with `rulec diff` before it is pinned again). A `sha256:` pin, the digest of the file's bytes,
+is read as it was, and `rulec source pin` writes it again as `meaning:`. Under the heading, one
 line per callee input binds it to an input, a derived value, a definition, a table or clause
 output of this rule, or a literal — every input, exactly once (E041). The types agree (E042);
 two enums are mapped with `with`, which covers every value of this rule's enum, values spelled
@@ -1678,17 +2148,41 @@ this rule's E101 to fill. The callee's outputs become definitions of this rule, 
 own names or renamed with `->`, rounded as the callee declares and then, if one is an output
 here, rounded once more as this rule declares.
 
+An output of an enum the callee declares is read in this rule's values with `with`, from the
+callee's value to this rule's — the way the value goes, as the `with` of an input goes from this
+rule's value to the callee's:
+
+```rule
+apply grade = "grade.rule" meaning:…
+  score = points
+  band -> verdict with low -> needs_work, high -> fine
+```
+
+Values spelled the same on both sides map by themselves. An output read without `with` keeps the
+callee's enum, which comes into this rule as `<apply>:<enum>`; an enum both files import from one
+`enums` file is the same enum on both sides and needs no `with`.
+
 The callee is expanded into this rule: its tables, clauses, derives and defines appear under
 `<apply>:<name>` (`retirement:schedule`), which is how a clause of this rule takes precedence over
 one of them (`overrides retirement:reduction`, defining `retirement:allowance`) and how the trace names a
-row (`{"table":"retirement:schedule","row":1,"label":"short"}`). Rows of the callee this rule never
+row (`{"table":"retirement:schedule","row":1,"label":"short"}`). `<apply>:<name>` is a name of this
+rule like any other: an expression may read it (`define strict_rate : number = 2 * base:decay_rate`)
+and a clause may test it (`when strict true and base:above >0`). Rows of the callee this rule never
 reaches — its ranges are usually narrower — are silent, and the page lists them under the
-apply; a whole table none of whose rows is reached is W118. A callee that itself applies a
-rule, walks a sequence, produces one of its own enums, or does not pass `check` cannot be
-applied (E044). The callee's sources come along with its definitions, and the page draws its
-tables from its own file, under a heading that says what was applied and how. Generated files
-name the callee and its digest in their header, `rulec api` lists them under `applies`, and
-`rulec diff old@rev new` reads the callee at the same revision as the rule.
+apply; a whole table none of whose rows is reached is W118.
+
+A callee may apply a rule in turn: it is expanded as its own check expands it, and what it brought
+in comes in under both names (`a:b:name`). A callee that walks a sequence is applied by binding
+each of its sequences to one of this rule's — `mentors = coaches`, the fields of an element mapping
+by name, or as `with <this rule's field> -> <callee's field>, …` says — and its summaries and folds
+then walk this rule's sequence. An input of a callee that does not walk may be bound to a field of
+the elements this rule walks (`kg = weight`): the callee is then applied to each element. Applies that go round — a rule that applies itself, or a callee that
+applies, directly or through others, the rule that applies it — are E044, said where the ring is
+entered and naming every file of it; so is a callee that cannot be read or does not pass `check`.
+The callee's sources come along with its definitions, and the page draws its tables from its own
+file, under a heading that says what was applied and how. Generated files name the callee and its
+pin in their header, `rulec api` lists them under `applies`, and `rulec diff old@rev new` reads the
+callee at the same revision as the rule.
 
 ### The eight kinds of cell
 
@@ -1936,8 +2430,15 @@ An enum **value** never starts a line, so it may be any of them but eleven: `not
 money attributes (`incl_tax` `excl_tax`), `std`, `enums` (the heading of a file of enums, read
 on its first line only) and `open` (the mark after an enum's last value, §3) are part of the
 vocabulary but are told apart by position, so they are not reserved as names. A value may be
-called `open` too: the mark is only the word that follows the last value. So are `prerequisites`
-— a line head outside every block, and a name inside one, as `prerequisites(p) : number` under
-`inputs` — and the words under it, `start`, `requires`, `or`, `nothing` and `ordered` (§6.5).
+called `open` too: the mark is only the word that follows the last value, and `open` starts a line
+of an open value only outside every block (§6.7), so `open(o) : bool` under `inputs` is an input.
+So are `prerequisites` — a line head outside every block, and a name inside one, as
+`prerequisites(p) : number` under `inputs` — and the words under it, `start`, `requires`, `or`,
+`nothing` and `ordered` (§6.5). So are the four words of §6.6: `chances`, a line head; `random`,
+read only at the end of an input's line; `take_weighted`, read only after the `->` of an arm; and
+`draw`, read only as `draw -> <name>` under a `fold` — `draw -> next` stays the arm of a verdict
+called `draw`. So are the words of §6.7: `combine` and `product`, read on an `open` line;
+`contribution` (a file's first line), `to`, `into` and `extend` (lines of a contribution file, as
+`after` is); and the pins `meaning:` and `signature:` (§6.7, §7).
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

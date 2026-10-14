@@ -41,6 +41,8 @@
 | `examples` | 実行される仕様 |
 | `scenario` | 何回かの呼び出しにわたって走る例。どの呼び出しも、一つ前が答えた状態から始まる |
 | `prerequisites` | 列挙の値どうしの前提のつながり。`start` と、値ごとの `requires`（`,` は全部、`or` はどれか一つ） |
+| `chances` | `random` を付けた入力を引いたときの、答えごとの確率の主張。引かない入力の列、`->`、出力の列、最後に `chance` の列（`1/1000`、`5%`、`<=1/100`） |
+| `open` | ほかのファイルが足せる値。`open <名前> : <型> combine <合わせ方> [empty <値>] range …` の下に項を書く。合わせ方は `sum`・`product`・`max`・`min`。`contribution` のファイルが `into` で項を足す |
 
 ## 一本まるごとの例
 
@@ -261,7 +263,7 @@ inputs
 
 `.proto` なら、ファイルとメッセージの名前を書きます。`shape 出荷(shipment) = proto "contracts/shipment.proto" shop.v1.CreateShipmentRequest` です。
 
-`from` の形は四つです。
+`from` の形は七つです。
 
 | 書き方 | 返すもの |
 |---|---|
@@ -269,6 +271,11 @@ inputs
 | `from any 注文.lines where chilled = true` | `bool`。要素のどれかが当てはまるか |
 | `from all 注文.lines where chilled = true` | `bool`。要素の全部が当てはまるか |
 | `from count 注文.lines` | `number`。要素の数（`where` を付ければ、当てはまる要素の数） |
+| `from sum 注文.lines of amount_usd` | 数。要素の一つのフィールドの合計（`where` を付ければ、当てはまる要素の合計。一件も無ければ 0） |
+| `from max 注文.lines of amount_usd empty 0USD` | 数か日付。要素の一つのフィールドのいちばん大きい値。要素が無いときの値は `empty` に書く |
+| `from min 注文.lines of amount_usd empty 0USD` | `max` と同じで、いちばん小さい値 |
+
+規則がたどる並びも、契約から取れます。`elements 明細(lines) from 注文.lines` と書き、要素のフィールドごとに、要素の中のどこにあるかを `from` で書きます（`from quantity`）。
 
 これで起きることは四つです。
 
@@ -582,6 +589,7 @@ fold 採用 over 運賃行
 | `take_unique <値>` | この要素の値を採る。二件目も採ろうとしたら実行時にエラー |
 | `take_first <値>` | 最初の一件を採り、あとは無視する |
 | `keep_max <値> by <鍵>` | 鍵がいちばん大きい要素の値を持ち越す |
+| `take_weighted <値> by <重み>` | 重みに比例する確率で一件を選ぶ。選ぶのに使う値は `draw -> <入力>` で書く（`random` を付けた入力） |
 | `empty -> <値>` | 要素がゼロ件のときの答え。**必須** |
 | `exhausted -> <値>` | 最後まで見終えたときの答え。**必須**。`held` は持ち越している値 |
 

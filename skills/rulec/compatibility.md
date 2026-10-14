@@ -14,20 +14,29 @@ the same thing, and its generated code is called the same way and answers the sa
    besides the state: a further `carry`, `initial <input> <value>`, `always`), the
    prerequisites of an enum's values (`prerequisites` with `start`, `requires`, `nothing` and
    `ordered by`), several sequences walked by any number of `count`, `sum`, `max`, `min` and
-   `fold` lines in the order what they read gives them, and a fold's answer named with `->`
-   included. New constructs may be added.
+   `fold` lines in the order what they read gives them, a fold's answer named with `->`, what a
+   rule reads out of the caller's object — a total, a largest or smallest value of one field over
+   a collection (`from sum`, `from max`, `from min`), and a sequence taken from a collection
+   (`elements … from`) — the inputs drawn at random with what is claimed of the chances of the
+   answers (`random`, `chances`, a pick by weight with `take_weighted` and `draw`), and the merging
+   of files — open values (`open … combine`), contribution files (`contribution`, `to`, `after`,
+   `into`, `extend`), open tables, clauses, enums and blocks, and the pins `signature:` and
+   `meaning:` — included. An `apply` heading pinned with `sha256:`, as written before `meaning:`
+   came, is read as it was. New constructs may be added.
 2. **The names you may use.** The reserved words — the 65 words E009 refuses as a name,
    listed in `src/kw.rs` — are fixed at 1.0, and a test holds the list. A later release may
    add words to the language, but never to that list: a new word is read only where no name
    can stand, or gives way to a name the rule declares. A name that is legal under 1.0 stays
-   legal.
+   legal. The words of the merging of files came this way: `open`, `combine`, `product`,
+   `contribution`, `to`, `into` and `extend` are read by their place in the line, and a rule may
+   name an input `open` or `to`.
 3. **What the generated code answers.** For a rule that passes, the code generated in every
    language returns the same outputs for the same inputs under every 1.x, and so does the
    reference evaluator: a record replayed under a later 1.x gets the answer it got before.
 4. **How the generated code is called.** The names of modules, functions, types, fields and
    errors, the integers on the wire (§10.2), the record a call writes, the `_traced`,
-   `_record` and `_from` functions — everything [`rulec api`](formats.md#api) describes. New
-   functions may appear beside them.
+   `_record`, `_from` and `_chances` functions — everything [`rulec api`](formats.md#api)
+   describes. New functions may appear beside them.
 5. **The command line.** Commands, flags, their values, and the exit codes: 0 notes only, 1
    findings, 2 bad arguments or a file that cannot be read. New commands and flags may be
    added.
@@ -38,6 +47,11 @@ the same thing, and its generated code is called the same way and answers the sa
    1.0, when a rule came to walk more than one sequence and to walk one twice (§15.219): E031,
    which had said that a rule needs a second walk, says that one item reads the elements of two
    sequences, and E020, which had said that a rule declares two, says that nothing walks one.
+   E044 narrowed before 1.0, when an `apply` came to read a rule that applies another, walks a
+   sequence or produces an enum of its own (§15.230): it says that applies go round, or that the
+   callee cannot be read or does not pass `check`, and a rule it stopped for the other three now
+   passes. E033 and E040 say of a value a contribution adds and of a contribution's pin what they
+   say of an imported value and of an apply's pin (§15.228, §15.230).
 7. **Machine-readable formats.** Every `--format json` output, the vectors, the fixtures and
    the replay manifest, the `adapter/1` and `extract/1` protocols, the certificate, the MCP
    tools with their arguments and resources, the GitHub Action's inputs, and the names of the
@@ -46,7 +60,9 @@ the same thing, and its generated code is called the same way and answers the sa
    field, and may add a value to a set of values the documentation lists — a new diagnostic
    code, a new `what` in the `domain` of `diff`. A new construct may give a field a new shape
    where it is written, and nowhere else: a `constraint` that adds inputs up is the one place
-   its `left` or `right` is a list of names, in the certificate and under `preconditions` alike.
+   its `left` or `right` is a list of names, in the certificate and under `preconditions` alike,
+   and an `apply` pinned with `meaning:` the one place its entry of `applies` has an empty
+   `sha256`, beside `meaning`.
    **A reader should skip a key it does not know, and treat a value it does not know as it
    treats an unknown key.** Where a format carries
    `v`, that is the version of its shape: `check` is at 2 and the certificate at 1, and an

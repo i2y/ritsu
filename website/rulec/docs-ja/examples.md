@@ -1039,7 +1039,7 @@ examples
 
 **この例が見せていること**
 
-- **`from` の形は四つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）。結合や量化のネストは書けません。
+- **`from` の形は七つです。** フィールドの値（`from 注文.shipping.zone`）、要素のどれかが当てはまるか（`from any 注文.lines where chilled = true`）、全部が当てはまるか（`from all …`）、何件あるか（`from count 注文.lines`）、フィールドの合計（`from sum 注文.lines of amount_usd`）、いちばん大きい値と小さい値（`from max …`・`from min …`。要素が無いときの値は `empty` に書きます）。結合や量化のネストは書けません。
 - **`rulec gen` は `order_shipping_from(order)` も書きます。** 注文オブジェクトをそのまま渡すと、入力を取り出して規則を呼びます。この関数が出るのは、読み込んだ JSON を連想配列のまま使うことの多い Python・TypeScript・JavaScript・Ruby・PHP です。Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。
 - **パスは `rulec check` のたびに契約に照らされます。** 契約に無いフィールドを書けば E121 で、どこまで届いたかと、そこにあったフィールドを言います。型が合わなければ E120 です。
 - **契約の検証も、入力の宣言と突き合わせます。** 契約は `lines` を 1〜50 件（`minItems`・`maxItems`）に限っていて、規則の `明細数` の `range >=1 <=50` と同じです。`maxItems` を消すと、51 件の注文は契約を通るのに規則は受け付けないので、E122 で止まります。`fix.text` は契約に書き足すキーワード（`"minItems": 1, "maxItems": 50`）そのものです。
@@ -1808,6 +1808,216 @@ examples
 - `start` の科目は何も要りません。ほかの科目は一行ずつ `requires` で前提を書き、`,` で区切ったものは全部が、`or` でつないだものはどれか一つが要ります。
 - `requires nothing "…"` は、取れなくなった科目です。それを前提にした科目があると、`start` からたどり着けないと言われます（E137）。
 - `ordered by 年次表` は、どの科目も前提より前の年次に置かないことを確かめます（E138）。生成コードは、科目に要るものと、合格した科目でその科目を取れるかを、どの言語でも返します。
+
+## 注文の合計と最大、明細の並びを契約から取る
+
+店の API が受け取る注文オブジェクトから、取扱手数料を決めます。注文の合計と、割れ物の明細でいちばん高い額は、オブジェクトの明細から `from sum` と `from max` で読みます。明細そのものは `elements … from` で、規則がたどる並びとして取ります。
+
+```rule
+rule 注文の取扱手数料(order_handling) v1
+description "店の API が受け取る注文オブジェクトから、取扱手数料を決める。注文の合計と、割れ物の明細でいちばん高い額はオブジェクトから読み、明細はそのまま規則がたどる並びになる。合計・最大・並びを契約から取る例"
+
+# 呼び出し側はもう JSON Schema で注文の形を決めている。合計、割れ物の最高額、明細の並びをそこから読む。
+# 注文を平たくするコードは生成され、どのパスも毎回の check で契約に照らされる。
+shape 注文(order) = jsonschema "contracts/order_lines.schema.json" "#/$defs/Order"
+
+inputs
+  合計(total)                 : money[USD]  range >=0USD <=100_000USD  from sum 注文.lines of amount_usd
+  割れ物の最高額(top_fragile) : money[USD]  range >=0USD <=5_000USD    from max 注文.lines of amount_usd where fragile = true empty 0USD
+
+# 注文の明細一件。注文オブジェクトからそのまま取る
+elements 明細(lines) from 注文.lines
+  数量(quantity) : number      range >=1 <=99          from quantity
+  金額(amount)   : money[USD]  range >=1USD <=5000USD  from amount_usd
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+# 50 個以上の明細と、2000USD 以上の明細は、パレットに載せる
+table パレット(pallet)
+policy unique
+| 数量 | 金額      | -> パレット行(pallet_line) : bool |
+| >=50 | -         | true                              |
+| <50  | >=2000USD | true                              |
+| <50  | <2000USD  | false                             |
+
+count パレット数(pallet_lines) over 明細 where パレット行  range >=0 <=20
+
+# 大きな注文は無料で扱い、高い割れ物は丁寧に梱包する
+table 取扱い(handling)
+policy unique
+| 合計       | 割れ物の最高額 | -> 基本料(base) : money[USD] |
+| >=10000USD | -              | 0USD                         |
+| <10000USD  | >=1000USD      | 25USD                        |
+| <10000USD  | <1000USD       | 5USD                         |
+
+# パレットが二枚以上ならフォークリフトを使う
+table フォークリフト(forklift)
+policy unique
+| パレット数 | -> 荷役料(lift) : money[USD] |
+| >=2        | 10USD                        |
+| <2         | 0USD                         |
+
+define 取扱料(handling_fee) : money[USD] = 基本料 + 荷役料
+
+result 手数料 = 取扱料
+
+examples
+| 合計     | 割れ物の最高額 | 明細         | -> 手数料 |
+| 120USD   | 0USD           | 小さな注文   | 5USD      |
+| 12000USD | 0USD           | 大きな注文   | 10USD     |
+| 2100USD  | 1500USD        | 割れ物の注文 | 25USD     |
+| 900USD   | 0USD           | まとめ買い   | 15USD     |
+
+sequence 小さな注文(small_order)
+| 数量 | 金額  |
+| 2    | 40USD |
+| 1    | 80USD |
+
+sequence 大きな注文(large_order)
+| 数量 | 金額    |
+| 3    | 5000USD |
+| 2    | 5000USD |
+| 1    | 2000USD |
+
+sequence 割れ物の注文(glass_order)
+| 数量 | 金額    |
+| 1    | 1500USD |
+| 4    | 600USD  |
+
+sequence まとめ買い(bulk_order)
+| 数量 | 金額   |
+| 60   | 300USD |
+| 80   | 400USD |
+| 5    | 200USD |
+```
+
+**この例が見せていること**
+
+- **`from sum 注文.lines of amount_usd` は、明細の `amount_usd` の合計です。** `from max 注文.lines of amount_usd where fragile = true empty 0USD` は、割れ物の明細のうちいちばん高い額です。割れ物が一つも無いときの値を `empty` に書きます。書かなければ E074 です。
+- **`elements 明細 from 注文.lines` で、明細を契約の配列からそのまま取ります。** フィールドはそれぞれ、要素の中のどこから読むかを `from quantity` のように書きます。取り出した要素は、呼び出し側が並びを渡すときとまったく同じに検査され、たどられます。
+- **契約の検証とも突き合わせます。** 契約は明細を 20 件まで、一件の額を 5000 まで通すので、合計は 10 万まで届き、規則の `合計` の範囲と同じです。`maxItems` を消すと、合計が範囲を超える注文と、21 件の明細を持つ注文が契約を通ってしまうので、どちらも E122 で止まります。
+- **`rulec gen` が書く `order_handling_from(order)` は、注文をそのまま受け取ります。** 明細の並びは関数の中で組み立てるので、引数は注文だけです。この関数が出るのは Python・TypeScript・JavaScript・Ruby・PHP で、Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。
+
+## ポスターの確率を、表と突き合わせる
+
+店のくじの景品です。券の番号は 0 から 999 のどれかが引かれ、キャンペーン中は三等に当たる番号が増えます。番号の入力に `random` を付けると、ポスターに刷る確率を `chances` の表に書けて、`rulec check` が表の行から数えて確かめます。
+
+```rule
+rule くじの景品(lottery_prize) v1
+description "店のくじの券が当たる景品。券の番号は 0 から 999 のどれかが引かれ、キャンペーン中は三等に当たる番号が増える。ポスターに刷る確率を下の主張にしているので、ポスターとコードが一つの元から出る。書き下ろしの例"
+
+enum 景品(prize) = 一等(first) | 二等(second) | 三等(third) | はずれ(no_prize)
+
+inputs
+  番号(ticket)             : number  range >=0 <=999  random
+  キャンペーン中(campaign) : bool
+
+outputs
+  景品(prize) : 景品
+
+table 番号表(numbers)
+policy unique
+| 番号      | キャンペーン中 | -> 景品 |
+| 0         | -              | 一等    |
+| >=1 <=9   | -              | 二等    |
+| >=10 <=99 | true           | 三等    |
+| >=10 <=59 | false          | 三等    |
+| >=60 <=99 | false          | はずれ  |
+| >=100     | -              | はずれ  |
+
+# ポスターに刷る確率。
+chances
+| キャンペーン中 | -> 景品 | chance |
+| -              | 一等    | 0.1%   |
+| -              | 二等    | 0.9%   |
+| true           | 三等    | 9%     |
+| false          | 三等    | 5%     |
+| true           | はずれ  | 90%    |
+| false          | はずれ  | 94%    |
+
+examples
+| 番号 | キャンペーン中 | -> 景品 |
+| 0    | false          | 一等    |
+| 9    | false          | 二等    |
+| 59   | false          | 三等    |
+| 60   | false          | はずれ  |
+| 99   | true           | 三等    |
+| 100  | true           | はずれ  |
+```
+
+**この例が見せていること**
+
+- **`random` は、呼び出し側がその入力を範囲から一様に引いて渡す、という宣言です。** 規則の関数は変わりません。引くのは呼び出し側で、同じ入力からは同じ景品が出ます。
+- **`chances` の行は、乱数でない入力のどの組み合わせでも、その確率で答えが出ることを主張します。** 確率は `1/1000`、`0.9%`、`>=1/2` のように書けます。表の行は区画なので、`rulec check` は番号の点を区間ごとに数え、正確な有理数で比べます。
+- **表とポスターが食い違えば止まります。** キャンペーン外の三等を 6% と書くと E133 になり、「キャンペーン中 = false のとき、景品 = 三等 の確率は 1/20（5.0%）です」と言います。
+- **`rulec gen` は、確率を数える関数も書きます。** `lottery_prize_chances(campaign)` は、景品ごとに当たる番号の数と、番号の全部の数を返します。SQL と Wasm のほかのどの生成先にもあり、HTML のページの「試してみる」は、この関数で景品ごとの確率を出します。
+
+## 重ねる値引き、重ねない値引き、上限を開いておく
+
+注文の値引きを、ほかのファイルが足せる三つの値で組み立てます。重ねられる値引きは足し合わせ、重ねられない値引きはいちばん大きいものだけを使い、上限はいちばん低いものを使います。キャンペーンは、別のファイルからこの三つに足します。
+
+```rule
+rule 注文の値引き(order_savings) v1
+description "注文の値引き。重ねられる値引きは足し合わせ、重ねられない値引きはいちばん大きいものだけを使い、合計は上限と小計を超えない。キャンペーンは、三つの開いた値に別のファイルから足す"
+
+enum 経路(channel) = ウェブ(web) | 店頭(store) default | 電話(phone) default  open
+
+inputs
+  小計(subtotal)       : money[USD]  range >=0USD <=5000USD
+  会員(member)         : bool
+  クーポン(coupon)     : bool
+  注文経路(via)        : 経路
+
+outputs
+  値引き(discount) : money[USD]  round down(1USD)
+
+table 会員の分
+policy unique
+| 会員  | -> 会員値引 : money[USD] |
+| true  | 5USD                     |
+| false | 0USD                     |
+
+table 経路の分
+policy first
+| 注文経路 | -> 経路値引 : money[USD] |
+| ウェブ   | 3USD                     |
+| -        | 0USD                     |
+
+table クーポンの分
+policy unique
+| クーポン | -> クーポン値引 : money[USD] |
+| true     | 10USD                        |
+| false    | 0USD                         |
+
+# 重ねられる値引き: どれも使う。
+open 重ねる値引 : money[USD]  combine sum  range >=0USD <=100USD
+  会員値引
+  経路値引
+
+# 重ねられない値引き: いちばん大きいものだけを使う。
+open 重ねない値引 : money[USD]  combine max  empty 0USD  range >=0USD <=60USD
+  クーポン値引
+
+# 値引き全体の上限: キャンペーンが決めたうちでいちばん低いもの。決めていなければ 50 ドル。
+open 上限 : money[USD]  combine min  empty 50USD  range >=0USD <=50USD
+
+define 値引き : money[USD] = min(min(重ねる値引 + 重ねない値引, 上限), 小計)
+
+examples
+| 小計   | 会員  | クーポン | 注文経路 | -> 値引き |
+| 200USD | true  | true     | ウェブ   | 18USD     |
+| 200USD | false | false    | 店頭     | 0USD      |
+| 12USD  | true  | true     | ウェブ   | 12USD     |
+| 200USD | true  | false    | 電話     | 5USD      |
+```
+
+**この例が見せていること**
+
+- `open 重ねる値引 : money[USD]  combine sum  range …` が、ほかのファイルが足せる値です。下に、この規則の項を一行ずつ書きます。合わせ方は `sum`・`product`・`max`・`min` の四つで、どれも項の順によりません。
+- **範囲は必ず書き、下の表はその範囲の全体で検査されます。** だから、この規則の検査は、どんなキャンペーンが来ても成り立ちます。キャンペーンを合わせた値が範囲を出れば E131 です。
+- `max` と `min` の `empty` は、項があっても合わせに加わる出発の値です。上限の `empty 50USD` は「決めていなければ 50 ドル」で、50 ドルより高い上限は何も抑えないので W132 と言われます。
+- キャンペーンは `contribution` のファイル（`contrib/注文の値引き/地域のキャンペーン.rule`）に書き、`into 重ねる値引` で足します。`rulec check 注文の値引き.rule contrib/注文の値引き/` が、規則だけと、合わせた規則の両方を検査します。
 
 ## Stripe の PaymentIntent の状態（machine）
 
@@ -3132,7 +3342,7 @@ inputs
 outputs
   非常勤手当(allowance) : money[円]  round down(1円)
 
-apply 退職手当(retirement) = "退職手当.rule" sha256:fb21d081458c197e  # 出典: 第31条（スケッチ）
+apply 退職手当(retirement) = "退職手当.rule" meaning:6812e6cdf8088ad4  # 出典: 第31条（スケッチ）
   勤続年数 = 在職期間
   退職事由 = 任期終了事由 with 任期満了 -> 定年, 辞職 -> 自己都合
   基本給 = 報酬月額

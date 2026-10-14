@@ -149,11 +149,12 @@ the table and adds two lines to what was verified: every amount in this table is
 copy shows, and its boundaries fall on the side the copy puts them on.
 
 A rule that applies another (`apply`, the way a statute applies one provision to another case
-with its terms read differently) is held to the applied rule's digest (E040), has to substitute
-every input of the applied rule (E041) with agreeing types (E042), and has to keep what it
-passes inside the applied rule's ranges and constraints (E043, with a value outside them as the
-example). A rule that cannot be applied — it applies a rule itself, walks a sequence, or fails
-check — is E044. The applied rule's tables and clauses are expanded into the rule and checked
+with its terms read differently) is pinned to the applied rule's lines with the comments left out
+(E040), has to substitute every input of the applied rule (E041) with agreeing types (E042), and
+has to keep what it passes inside the applied rule's ranges and constraints (E043, with a value
+outside them as the example). A rule that cannot be applied — the applies go round, through it or
+through others, or it fails check — is E044; a rule that applies another, walks a sequence or
+produces an enum of its own can be applied. The applied rule's tables and clauses are expanded into the rule and checked
 with it; the rows this rule never reaches stay silent, and only a whole table none of whose
 rows is reached is W118.
 
@@ -200,6 +201,29 @@ every language with a module. The certificate writes the block out as it is, bot
 check it again, and the Lean one proves the three claims: no cycle, every value but those no
 case can take reached from `start`, and the table's order kept along every edge.
 
+An input can be drawn rather than chosen: `random` at the end of its line says that the caller
+draws it uniformly from its range, and a `chances` table claims how likely each answer is — for a
+store's lottery out of a campaign, `| false | third | 5% |`. The rows of a table are regions, so
+the check counts the points of each region exactly, however wide the range, and a claim the table
+does not keep is **E133**, with the combination and the chance it comes to: "With campaign = false,
+the chance of prize = third is 1/20 (5.0%)." A claim the count cannot settle within the budget is
+**W129**, never a pass. A `fold` can pick one element by weight with a drawn value
+(`take_weighted <value> by <weight>`), and what it picks is claimed and counted the same way. The
+generated code gives the chances as a function beside the rule's, in every target but SQL and
+Wasm; the certificate writes the counts out, both re-checkers add them up again, and the
+Lean one names the claims it does not prove yet.
+
+A rule can leave places for other files to add to: a value its terms put together (`open stackable
+: money[USD]  combine sum  range >=0USD <=100USD`), an enum, a table or a clause. A `contribution`
+file adds to them, and pins the shape of what it relies on (E040 says what moved). The rule is
+checked over the whole range it declares for an open value, so its own check holds whatever is
+added; a contribution whose terms take the value out of that range is **E131**, with the term and
+an input that does it, and a term that cannot move the value at all is **W132**. A value a
+contribution adds to an enum is asked for a row by every table that reads the enum (E101), and one
+that a table that is not open would decide in silence, by its `-` row or a comparing cell, is
+**E033**. The rule is checked alone and merged: its claims of chances hold whatever is added, and
+a contribution that moves a claimed chance is E133, naming the contribution's rows.
+
 Every diagnostic writes its first line in the words of the business,
 **always carries a concrete case**, and states the fix down to the
 rewritten form.
@@ -234,7 +258,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 158 deliberately broken
+   and that implementation has not been proved correct. The evidence is 188 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -258,8 +282,9 @@ theorems that each check settles its claim are all written down and machine-chec
 moves what (4) asks you to take on trust from 42,000 lines of Rust to a few hundred lines
 of checking whose soundness is proved — plus the reading of the document itself, which is
 not. It does not remove (4): whether the tool *produces* a right certificate is still
-evidence, the declared ranges and types and constraints in it are its own word, and five
-things are named in a run rather than proved. Both programs end by saying which. See
+evidence, the declared ranges and types and constraints in it are its own word, and some
+things are named in a run rather than proved — the claims of `chances` and the ranges of open
+values among them. Both programs end by saying which. See
 [formats](formats.md) for the document, its limits, and both re-checkers.
 
 ## Reading a diagnostic

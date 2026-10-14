@@ -27,7 +27,7 @@ down, and nothing here can check that reading.
 | **5. The seven coverage criteria** | the vector suite actually reaches every row, every boundary pair, every shadowed pair, every computed value at two values, every rounding tie, every fold transition and every transition of a state machine | `rulec coverage` |
 | **6. The model checker** | the generated Rust, over every input in the declared domain, read by a tool that shares no code with rulec | `rulec test --proofs` |
 | **7. The certificate** | the evidence, small enough to hand over, re-checked by two programs that share no code with rulec — one of them carrying machine-checked proofs | `rulec certificate` |
-| **8. The repository's own tests** | 158 deliberately broken rules each produce the diagnostic they should; 125 rules are checked, generated and run on every commit | `cargo test` |
+| **8. The repository's own tests** | 188 deliberately broken rules each produce the diagnostic they should; 143 rules are checked, generated and run on every commit | `cargo test` |
 | **9. The source** | an amount that disagrees with the document the row cites fails | `rulec source fetch`, then `rulec check` |
 
 ---
@@ -46,6 +46,12 @@ reach can still finish (E125), and what its `never` and `once` lines say (E126, 
 states are a finite enum and every other input is cut at the table's own boundaries, so the
 sequences are walks on a finite graph, and a claim that fails comes back as the shortest
 sequence of calls that breaks it.
+
+A rule with an input drawn at random gets its claims of **how likely each answer is** decided
+the same way. The regions the table's boundaries cut are counted by the lengths of their
+intervals, point by point only where an answer moves inside one, so a claimed chance is checked
+as an exact fraction (E133) however wide the range. The certificate writes the counts out, and
+both re-checkers add them up again.
 
 **Where it stops:** at the table as written. A tariff transcribed wrong passes every one of
 the five. That is what layer 9 is for, and even that only ties the table to a copy.
@@ -173,15 +179,15 @@ the contract's text by a digest, and neither re-checker reads CEL or a schema.
 The five proofs come out of rulec's implementation, and **that implementation has not been
 proved correct**. What stands in for a proof is evidence, and it is kept deliberately:
 
-- **158 deliberately broken rules**, each producing the diagnostic it should — and the
+- **188 deliberately broken rules**, each producing the diagnostic it should — and the
   expected codes are pinned, so a mutant that starts reporting something else fails.
-- **125 rules** — 34 transcribed from a published source, 91 written to reach the corners of
+- **143 rules** — 34 transcribed from a published source, 109 written to reach the corners of
   the language — checked, generated and run on every commit, in every language that takes
   them.
 - **The documents are held to the tool.** The diagnostic ledger is regenerated from the code,
   the generated-code page is held to the tool's own output, and the examples on this site are
   held to the corpus files they came from. A page that drifts is a failing test.
-- **Every diagnostic is in the ledger**: 127 codes, each with a smallest reproduction that is
+- **Every diagnostic is in the ledger**: 137 codes, each with a smallest reproduction that is
   run on every commit to check it still produces that code.
 
 ## 9. The source a rule was transcribed from

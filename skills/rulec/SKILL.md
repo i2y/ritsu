@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E066, E069, E071, E072, E075, E101-E130, E132, E134-E139, W105, W110, W111, W114-W128, W130, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E075, E101-E139, W105, W110, W111, W114-W132, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -132,45 +132,44 @@ A few shapes are worth knowing before the first draft:
   over their union, every overlap either ordered by an `overrides` line or reported (E105) — and
   `doc` says which is the exception (§7 of the grammar).
 - **A source is declared, cited and pinned.** `source stamp_act = law "342AC0000000023" asof
-  2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR; the word after
-  `law` picks the database, e-Gov when left out. `@stamp_act 別表第一` at the end of a table, clause,
-  row, derive or define line says what it transcribes, quoted if not one word. `rulec source fetch`
-  puts a copy of each cited fragment beside the rule and `rulec source pin` writes its digest;
-  `check` then holds the rule to the copies (E037–E039, W119) without reading the network, and
-  `doc` quotes the fragment under the definition. Any other document is `source japanpost = file
-  "…" sha256:…`, and a `url "…"` on it says where that copy came from, so `fetch` can bring it
-  again and `outdated` can ask whether it moved on — pinned to a commit the answer names the
-  commits that touched it, otherwise only that the bytes differ. **A document's fragments are its
-  tables**: `@japanpost table1` cites the first table in document order (a sheet, in a workbook),
-  and `fetch` writes it beside the document under `<document>.fragments/`, where it is pinned,
-  checked and quoted exactly as a law's article is. Cite the table the rows came from and a
-  revision that moves it fails the check, naming the rows to reread. The formats read are csv, md,
-  xlsx and docx; for a PDF or a scan, `fetch --via <cmd>` runs an extractor (docling and the like)
-  as a child process and pins what it produced, so the extraction happens once and is reviewed once
-  — `rulec adapter <file.rule> --template docling` prints the shape. **The rows are then held to
-  that copy**: an amount the copy does not show (under the row's own heading, where the copy has
-  one) is E116, a number the copy states that no row uses is W120, and a boundary the copy puts on
-  the other side of itself is E119 — the only checks that look outside the rule at all.
+  2026-04-01` names a law on e-Gov and `law ecfr "29 CFR 1910"` one in the US eCFR. `@stamp_act
+  別表第一` at the end of a table, clause, row, derive or define line says what it transcribes.
+  `rulec source fetch` puts a copy of each cited fragment beside the rule and `rulec source pin`
+  writes its digest; `check` then holds the rule to the copies (E037–E039, W119) without reading
+  the network, and `doc` quotes the fragment under the definition. Any other document is `source
+  japanpost = file "…" sha256:…`, with a `url "…"` so that `fetch` can bring it again and `outdated`
+  can ask whether it moved on. **A document's fragments are its tables**: `@japanpost table1` cites
+  the first table in document order (a sheet, in a workbook), pinned, checked and quoted as a law's
+  article is. The formats read are csv, md, xlsx and docx; for a PDF or a scan, `fetch --via <cmd>`
+  runs an extractor as a child process and pins what it produced (`rulec adapter <file.rule>
+  --template docling` prints the shape). **The rows are then held to that copy**: an amount the
+  copy does not show is E116, a number it states that no row uses is W120, and a boundary it puts
+  on the other side of itself is E119 — the only checks that look outside the rule at all.
 - **A provision applied mutatis mutandis is an `apply`.** `apply retirement = "retirement_pay.rule"
-  sha256:…` uses another rule with every input bound (`years = tenure`, enums mapped with
+  meaning:…` uses another rule with every input bound (`years = tenure`, enums mapped with
   `with term_end -> retirement_age`), definitions left out with `except reduction`, and outputs taken under a
   name (`allowance -> part_time_allowance`). The callee is expanded into the rule under `retirement:…`, held to
-  its digest (E040, `rulec source pin` writes it), and what is passed has to stay inside its
+  its meaning, comments aside (E040, `rulec source pin` writes it), and what is passed has to stay inside its
   ranges (E043). `check` and `doc` show the applied tables as the callee wrote them.
 - **An input may say where the caller's object holds it.** `shape order = jsonschema
   "order.json" "#/$defs/Order"` borrows the contract the object is already described by, and
   `from` says where the value stands in it: `from order.shipping.zone`, `from any order.lines
-  where chilled = true`, `from all order.lines where chilled = true`, `from count order.lines`.
+  where chilled = true` (or `all`, `count`), `from sum order.lines of amount_usd`, `from max
+  order.lines of amount_usd empty 0USD`; `elements lines from order.lines` takes a whole sequence.
   **It changes no check of the table**; what it buys is the glue generated, a renamed field
   caught as E121, and a value the contract's validation lets through but the input refuses caught as E122 (§3.3 of the grammar).
-- **An enum may belong to somebody else.** When the values come from a service contract,
-  `import proto "<file>" <Enum> -> <enum of this rule>` (or `import jsonschema "<file>"
-  "<pointer>" -> <enum of this rule>`, for a JSON Schema or an OpenAPI document in JSON)
-  says so, and every `check` reads that file and holds the two together: the `.proto` owns which values exist, the `.rule` owns what
-  they are called here and what each one costs. A value on one side only is E032. Once the sets
-  agree, a value that no row names and no `default` marks is E033 — not the warning W111, because
-  a value that arrived through the contract is a change nobody has read yet, and a table with a
-  `-` row would pass completeness while the new value quietly takes the default amount.
+- **An input may be drawn.** `roll : number range >=0 <=99 random` says the caller draws it
+  uniformly, and a `chances` table claims how likely each answer is (`1/1000`, `5%`, `<=1/100`);
+  `check` counts it exactly and E133 says where a claim fails. `take_weighted <value> by <weight>`
+  in a `fold` picks one element by weight (§6.6).
+- **A rule may leave places for other files to add to.** `open stackable : money[USD] combine sum
+  range >=0USD <=100USD` (or `product`, `max`, `min`), an `open` enum, table or clause; a
+  `contribution` file adds terms, values and rows with `into`, `extend` and `overrides`, pinned by
+  `signature:`. `check` runs on the rule alone and merged with the files it is given (§6.7).
+- **An enum may belong to somebody else.** `import proto "<file>" <Enum> -> <enum>` (or `import
+  jsonschema "<file>" "<pointer>" -> <enum>`, JSON Schema or OpenAPI in JSON) holds the rule's enum
+  to a service contract on every `check`: a value on one side only is E032, and a value no row names
+  and no `default` marks is E033, not W111 — it arrived as a change nobody has read yet.
 - **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
   divisions (`std/us/states`, `std/jp/prefectures`, … in [reference.md](reference.md)); `import std/都道府県` spells Japan's in Japanese.
 - **Enums can be ordered, labelled, shared and given prerequisites.** `enum tier = basic < silver`
