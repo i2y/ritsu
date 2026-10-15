@@ -1633,15 +1633,10 @@ impl<'a> Gen<'a> {
         // `enum` only where the module declares an enum of its own: a rule whose enums all come
         // from an `enums` file imports them from its module instead (§15.212).
         let classes = self.own_enums().iter().any(|(jp, _)| self.c.enums.contains_key(jp));
-        // The projection function reads a value of an enum through a helper typed by a type
-        // variable (§15.234).
-        let enum_read = self.py_from_reads_enum();
         o.push_str(&format!(
-            "from __future__ import annotations\n\n{}from typing import {}{}NamedTuple, NewType{}{}\n\n",
+            "from __future__ import annotations\n\n{}from typing import {}NamedTuple, NewType{}\n\n",
             if classes { "import enum\n" } else { "" },
             if self.projects() { "Any, " } else { "" },
-            if enum_read { "Callable, " } else { "" },
-            if enum_read { ", TypeVar" } else { "" },
             // The readers take the object as the dict it is checked to be (§15.234).
             if self.projects() { ", cast" } else { "" }
         ));
@@ -1960,6 +1955,8 @@ const PY_HELPERS: [&str; 40] = [
     "_date_at",
     "_num_of",
     "_num_at",
+    // Written until §15.244, which reads a value of each enum with a function of its own
+    // (`_shipping_zone_of`, named in `from.rs`): kept, so that a group's constant keeps its name.
     "_enum_of",
     "_E",
 ];

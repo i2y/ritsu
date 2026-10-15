@@ -629,6 +629,203 @@ fn 生成pythonはmypy_strictを通る() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The kinds of statement a generated module may put at its top level, and the check that holds
+/// the modules to them (§15.244). Given the directories `rulec gen` wrote, each with the output of
+/// `rulec api` beside it as `api.jsonl`, it parses every module the api names — a rule's and an
+/// `enums` file's — prints how many statements of each kind it found, then each statement of
+/// another kind and each `TypeVar` with where it is, and exits with 1 when there is one.
+const TOP_LEVEL: &str = r##"
+import ast
+import builtins
+import json
+import os
+import sys
+from collections import Counter
+
+BASES = {"enum.Enum", "NamedTuple", "ValueError", "AssertionError"}
+
+
+def dotted(e):
+    if isinstance(e, ast.Name):
+        return e.id
+    if isinstance(e, ast.Attribute):
+        return dotted(e.value) + "." + e.attr
+    return "?"
+
+
+def frozen(v):
+    """`frozenset({Kind.A, Kind.B})`: the members of a group, or the states a case ends in."""
+    return (
+        isinstance(v, ast.Call)
+        and dotted(v.func) == "frozenset"
+        and not v.keywords
+        and len(v.args) <= 1
+        and all(isinstance(a, ast.Set) and all(isinstance(m, ast.Attribute) for m in a.elts) for a in v.args)
+    )
+
+
+def kind(st, siblings):
+    plain = not getattr(st, "decorator_list", []) and not getattr(st, "type_params", [])
+    one = isinstance(st, ast.Assign) and len(st.targets) == 1 and isinstance(st.targets[0], ast.Name)
+    v = getattr(st, "value", None)
+    if isinstance(st, ast.ImportFrom) and st.level == 0:
+        if st.module == "__future__" and [a.name for a in st.names] == ["annotations"]:
+            return "from __future__ import annotations"
+        if st.module == "typing":
+            return "from typing import ..."
+        if st.module in siblings:
+            return "from <the module of an enums file> import ..."
+    if isinstance(st, ast.Import) and [(a.name, a.asname) for a in st.names] == [("enum", None)]:
+        return "import enum"
+    if isinstance(st, ast.ClassDef) and plain and not st.keywords and len(st.bases) == 1 and dotted(st.bases[0]) in BASES:
+        return f"class X({dotted(st.bases[0])})"
+    if isinstance(st, ast.FunctionDef) and plain:
+        return "def"
+    if one and isinstance(v, ast.Call) and dotted(v.func) == "NewType" and len(v.args) == 2 and not v.keywords:
+        return 'X = NewType("X", int)'
+    if one and isinstance(v, ast.Name) and hasattr(builtins, v.id):
+        return "_x = <builtin>"
+    if one and isinstance(v, ast.Subscript) and dotted(v.value) == "list" and isinstance(v.slice, ast.Name):
+        return "_Trace = list[X]"
+    if one and frozen(v):
+        return "_group = frozenset({...})"
+    if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name) and v is not None:
+        if isinstance(v, ast.Attribute):
+            return "X: E = E.V"
+        if frozen(v):
+            return "X: frozenset[E] = frozenset({...})"
+        if isinstance(v, ast.Constant) and type(v.value) in (int, bool):
+            return f"X: {type(v.value).__name__} = <literal>"
+    return None
+
+
+def objects(text):
+    dec, i, out = json.JSONDecoder(), 0, []
+    while i < len(text):
+        while i < len(text) and text[i].isspace():
+            i += 1
+        if i < len(text):
+            o, i = dec.raw_decode(text, i)
+            out.append(o)
+    return out
+
+
+def main(dirs):
+    counts, outside, modules = Counter(), [], 0
+    for d in dirs:
+        with open(os.path.join(d, "api.jsonl"), encoding="utf-8") as f:
+            names = [o["python"]["module"] for o in objects(f.read()) if "module" in o.get("python", {})]
+        for name in names:
+            path = os.path.join(d, "python", name + ".py")
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            tree = ast.parse(text, path)
+            modules += 1
+            for st in tree.body:
+                k = kind(st, names)
+                if k is None:
+                    shown = ast.get_source_segment(text, st) or type(st).__name__
+                    outside.append(f"{path}:{st.lineno}: {shown.splitlines()[0]}")
+                else:
+                    counts[k] += 1
+            for node in ast.walk(tree):
+                named = [a.name for a in node.names] if isinstance(node, (ast.Import, ast.ImportFrom)) else []
+                if getattr(node, "id", None) == "TypeVar" or getattr(node, "attr", None) == "TypeVar" or "TypeVar" in named:
+                    outside.append(f"{path}:{node.lineno}: TypeVar")
+    print(f"{modules} modules")
+    for k, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        print(f"{n:6}  {k}")
+    for line in outside:
+        print("outside: " + line)
+    sys.exit(1 if outside or modules == 0 else 0)
+
+
+main(sys.argv[1:])
+"##;
+
+/// What a generated module puts at its top level is what 0.29.0 put there, kind by kind (§15.244):
+/// the imports, classes of four bases, functions, the brands, the names bound to builtins,
+/// `_Trace`, and the constants of a group and of a machine — and `TypeVar` nowhere. A compiler of
+/// typed Python that builds the module ahead of time reads these and runs nothing at the top of
+/// it. 0.29.1 put a type variable there for the reader of an enum (`_E = TypeVar("_E")`), and such
+/// a compiler stopped at the import of the module, whether the application called the function
+/// that used it or not. The corpus with its `enums` files, and the rules merged with their
+/// contributions as tests/contrib.rs merges them. The runners, the MCP server and the Connect
+/// service are programs Python runs, not modules an application imports, and are left out.
+#[test]
+fn 生成pythonのモジュールの直下には決まった種類の文だけを置く() {
+    if !need(Need::Python) {
+        return;
+    }
+    let tmp = TempDir::new("top-level");
+    let mut corpus: Vec<String> = CORPUS.iter().map(|(f, _)| (*f).to_string()).collect();
+    let mut shared: Vec<String> = std::fs::read_dir(root().join("tests/corpus/shared"))
+        .unwrap()
+        .flatten()
+        .map(|e| format!("tests/corpus/shared/{}", e.file_name().to_string_lossy()))
+        .filter(|p| p.ends_with(".rule"))
+        .collect();
+    shared.sort();
+    corpus.extend(shared);
+    let set = |files: &[&str]| -> Vec<String> { files.iter().map(|f| format!("tests/corpus/{f}")).collect() };
+    let sets: Vec<(&str, Vec<String>)> = vec![
+        ("corpus", corpus),
+        ("discount", set(&["order_discount.rule", "contrib/order_discount/regional_campaign.rule"])),
+        ("discount-ja", set(&["注文の値引き.rule", "contrib/注文の値引き/地域のキャンペーン.rule"])),
+        (
+            "product-line",
+            set(&[
+                "shared/product_kinds.rule",
+                "product_price.rule",
+                "product_tax.rule",
+                "product_shipping.rule",
+                "contrib/product_line/garden_kind.rule",
+                "contrib/product_line/garden_price.rule",
+                "contrib/product_line/garden_tax.rule",
+            ]),
+        ),
+        (
+            "product-line-ja",
+            set(&[
+                "shared/商品の種類.rule",
+                "商品の料金.rule",
+                "商品の税.rule",
+                "商品の配送.rule",
+                "contrib/商品ライン/園芸の種類.rule",
+                "contrib/商品ライン/園芸の料金.rule",
+                "contrib/商品ライン/園芸の税.rule",
+            ]),
+        ),
+    ];
+    let mut dirs: Vec<String> = Vec::new();
+    for (name, files) in &sets {
+        let dir = tmp.path().join(name);
+        let out = dir.to_string_lossy().into_owned();
+        let files: Vec<&str> = files.iter().map(String::as_str).collect();
+        let mut made = vec!["gen"];
+        made.extend(&files);
+        made.extend(["--out", out.as_str()]);
+        rulec(&made);
+        let mut api = vec!["api"];
+        api.extend(&files);
+        api.extend(["--format", "json"]);
+        std::fs::write(dir.join("api.jsonl"), rulec(&api)).unwrap();
+        dirs.push(out);
+    }
+    // The case it is here for: the projection function that reads a value of an enum, whose
+    // reader is a function of that enum's type.
+    let read = std::fs::read_to_string(tmp.path().join("corpus/python/order_shipping_fee.py")).unwrap();
+    assert!(read.contains("\ndef _shipping_zone_of(v: Any, what: str) -> ShippingZone:\n"), "列挙を読む関数がありません:\n{read}");
+    let o = Command::new("python3").args(["-I", "-B", "-c", TOP_LEVEL]).args(&dirs).output().expect("python3 を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        o.status.success(),
+        "生成した Python のモジュールの直下に、0.29.0 が書かなかった種類の文があります（DESIGN §15.244）:\n{said}{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    println!("{said}");
+}
+
 /// `tsc`: named by `RITSU_TSC` or `RULEC_TSC`, else the one `npm ci --prefix tools` puts beside
 /// the tests, else on the PATH.
 fn tsc() -> Option<PathBuf> {

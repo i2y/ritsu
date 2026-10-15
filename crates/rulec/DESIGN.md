@@ -4481,6 +4481,70 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 - ritsu の `tests/check.rs` に一本を足した（上の 1 の、英語と日本語の要約の行）。言語をまたぐ試験の golden で、通らないファイルの括弧に警告を数えているもの（X3a、X5、X6 など）は、警告が通らないファイルのものなので、変わらない。
 - ritsu の DESIGN の W905 の例は、台帳の再現を走らせると `1 fail (1 error), 5 pass (1 warning)`（日本語は「検査を通らないもの 1 個（エラー 1 件）、通るもの 5 個（警告 1 件）」）になる。
 
+### 15.244 生成する Python のモジュールの直下に、型変数を置かない（2026-10-15）
+
+**きっかけ**：§15.234 で、取り出し関数が列挙の値を読むための補助関数 `_enum_of(make: Callable[[str], _E], v: Any, what: str) -> _E` を書き、その型変数 `_E = TypeVar("_E")` をモジュールの直下に置いた。型を付けた Python の部分集合を静的にコンパイルする処理系は、モジュールの直下の文を翻訳し、モジュールが動くときに計算される値の代入を受け付けない（§15.207）。`_E = TypeVar("_E")` もその一つで、アプリケーションが取り出し関数を呼ばなくても、規則のモジュールを import するだけで止まる。0.29.0 の生成物のモジュールの直下には型変数が無く、その処理系は、コーパスの 143 本と寄与を合わせた 8 本の全部を受け付けていた。0.29.1 の生成物では、列挙を読む取り出し関数を持つコーパスの 4 本（`order_shipping_fee`、`order_shipping`、`shipment_delivery_fee`、`shipment_fee`）が、それぞれその一行で止まる。作例のゲームの生成物でも、列挙を読む取り出し関数を持つ 5 本のモジュールが止まった。
+
+**決定**：
+
+1. **列挙を読む補助関数を、列挙の型ごとに一つ書く。** `def _shipping_zone_of(v: Any, what: str) -> ShippingZone:` のように、型の名前を snake case にして `_` と `_of` で挟み、答えをその型にする。ほかの型を読む `_int_of`・`_bool_of`・`_str_of` と同じ形で、型の名前から関数の名前を作るのは、公開の `shipping_zone_rank`・`shipping_zone_label`（§15.210、§15.211）と同じである。中身は前の `_enum_of` と同じで、文字列でない値と、列挙のどの値でもない値を、同じ文の `RuleInputError` で止める。書くのは取り出し関数が読む型の分だけで、`shipment_fee` は `_region_of` と `_window_of` の二つになる。型変数が要らないので、`typing` から `Callable` と `TypeVar` を取り込まない。
+2. **名前がほかとぶつかるときは、下線を一つずつ足す。** 組み込み関数に付けた名前、補助関数の名前、グループの定数、取り出し関数の引数、先に名前を決めた列挙の補助関数のどれかと同じなら、ぶつからなくなるまで後ろに `_` を足す。グループの定数の付け方（§15.207）と同じである。列挙 `seq` の補助関数は、並びを読む `_seq_of` があるので `_seq_of_` になり、グループ `level_of` を持つ規則の列挙 `level` の補助関数は、そのグループの定数 `_level_of` があるので `_level_of_` になる。
+3. **補助関数の名前の一覧（`PY_HELPERS`）には、`_enum_of` と `_E` を残す。** グループの定数は、この一覧の名前を避けて名前を決める。外すと、`enum_of` という名前のグループの定数が `_enum_of_` から `_enum_of` に変わる。前に書いていた `_dig` も、同じく一覧に残っている。
+4. **TypeScript・JavaScript・Ruby・PHP は変えない。** TypeScript と JavaScript の `_enumOf` は列挙の値の配列を受け取り、答えには呼ぶ所で `as` で型を付ける。Ruby は値の配列を、PHP はクラスの名前を受け取る。どれもモジュールの直下に型変数を置かない。
+5. **モジュールの直下に置く文は、0.29.0 が書いた種類に限り、試験で確かめる。** 種類は下の表のとおりである。試験は、ほかの種類の文と、モジュールのどこかにある `TypeVar` を、場所を言って止める。
+
+**モジュールの直下に置く文の種類**：0.29.0（1e7d646e のビルド）で、コーパスの 143 本と `shared/` の `enums` のファイル 6 本を一度の `rulec gen` に、寄与を合わせた 4 組（値引きの英語と日本語、商品ラインの英語と日本語。`tests/contrib.rs` と同じ組）を一組ずつ `rulec gen` に渡した。`rulec api` が挙げるモジュール 159 本（規則のモジュール 151、`enums` のファイルのモジュール 8）の直下の文を Python の `ast` で数えると、次の 17 の種類だけだった。
+
+| 種類 | 例 | 文 | モジュール |
+|---|---|---|---|
+| `__future__` からの import | `from __future__ import annotations` | 159 | 159 |
+| `typing` からの import | `from typing import NamedTuple, NewType` | 151 | 151 |
+| `enum` の import | `import enum` | 110 | 110 |
+| `enums` のファイルのモジュールからの import | `from goods_catalog import Category as Category, Zone as Zone, zone_rank` | 18 | 18 |
+| `enum.Enum` のクラス | `class SizeClass(enum.Enum):` | 165 | 110 |
+| `NamedTuple` のクラス | `class Fired(NamedTuple):` | 221 | 151 |
+| `ValueError` のクラス | `class RuleInputError(ValueError):` | 151 | 151 |
+| `AssertionError` のクラス | `class RuleContradictionError(AssertionError):` | 151 | 151 |
+| 関数 | `def _min(a: int, b: int) -> int:` | 1,750 | 159 |
+| ブランド | `Yen = NewType("Yen", int)` | 147 | 107 |
+| 組み込み関数に付けた名前 | `_isinstance = isinstance` | 726 | 151 |
+| 一致した行のリストの型の別名 | `_Trace = list[Fired]` | 151 | 151 |
+| グループの定数 | `_fragile = frozenset({Category.ELECTRONICS, Category.FURNITURE})` | 26 | 14 |
+| machine の始まりの状態 | `INITIAL: Subscription = Subscription.ACTIVE` | 9 | 9 |
+| machine の終わりの状態 | `FINAL: frozenset[Subscription] = frozenset({Subscription.SUSPENDED})` | 9 | 9 |
+| 持ち越す数の始まり | `INITIAL_DAYS_LEFT: int = 0` | 4 | 4 |
+| 持ち越す真偽の始まり | `INITIAL_TRIAL_TAKEN: bool = False` | 2 | 2 |
+
+- クラスは、基底が表の四つのどれか一つで、デコレータもキーワードも型引数も無いもの。関数は、`async` でなく、デコレータも型引数も無いもの。代入は、名前一つへの代入で、右辺が表の形のもの（`NewType` の呼び出し、組み込み関数の名前、`list[…]`、列挙の値を並べた `frozenset`、列挙の値、整数と真偽のリテラル）である。
+- 0.29.1 の生成物には、このほかに `_E = TypeVar("_E")` が 4 本にあった。この節のあとの生成物も 17 の種類だけで、関数のほかは数も 0.29.0 と同じである。関数は 1,750 から 1,796 に増える。§15.234 が足した補助関数の 44 と、列挙を二つ読む 2 本で補助関数が一つずつ増えた分である。
+
+**捨てたもの**：
+
+- **静的にコンパイルする処理系の側で、モジュールの直下の `TypeVar(...)` を、型の宣言として受け付ける。** 生成する側で型変数を使わずに済み、そうしても型の確かさは失わない。モジュールの直下で値を計算しない形にとどめておけば、同じように前もってコンパイルするほかの処理系にも、受け付けを広げてもらわずに済む。
+- **`_enum_of` の答えを `Any` にする**（`make: Callable[[str], Any]`、`-> Any`）。型変数は消えるが、取り出し関数が規則の関数に渡す列挙の値の型を、型検査器が見なくなる。`Any` は増やさない。`object` を答えにする形も、§15.207 のとおり使わない。
+- **PEP 695 の書き方（`def _enum_of[E](…)`）にする。** 型変数はモジュールの直下に出ないが、Python 3.12 からの書き方である。生成物は 3.10 から動かす（`requires-python` が 3.10 以上）。
+
+**変わること**：
+
+- 列挙を読む取り出し関数を持つ規則の、Python のモジュールだけが変わる。コーパスでは 4 本で、`from typing import` から `Callable` と `TypeVar` が消え、`_E = TypeVar("_E")` の行が消え、`_enum_of(Zone, …)` が `_zone_of(…)` になる。取り出し関数の答えと、止まるときの文は変わらない。§15.234 の決定 5 の `_enum_of` と、変わることの `Callable` と `TypeVar` を、この節で置き換えた。
+- ほかの言語の生成物、runner、ページ、ベクタ、`rulec api` は変わらない。
+- runner（`<alias>_runner.py`）、MCP のサーバー（`<alias>_mcp.py`）、Connect のサービスとその runner（`<alias>_service.py`、`<alias>_connect_runner.py`）は、前からモジュールの直下に `E = TypeVar("E", bound=enum.Enum)` を置いている。どれも Python がそのまま走らせるプログラムで、アプリケーションが import するモジュールではないので、変えず、試験にも入れない。
+
+**確かめたこと**：
+
+- `tests/threeway.rs` に一本を足した。「生成pythonのモジュールの直下には決まった種類の文だけを置く」：コーパスと `enums` のファイル、寄与を合わせた 4 組を生成し、`rulec api` が挙げるモジュール 159 本の直下の文が表の 17 の種類のどれかで、`TypeVar` がどこにも無いことを確かめる。試験の Python のスクリプトを、そのまま 0.29.0 と 0.29.1 の生成物にかけると、0.29.0 は通り、0.29.1 は 4 本の `_E = TypeVar("_E")` と、`typing` の import と型変数を作る所の `TypeVar` で止まる。
+- `tests/projection.rs` に二本を足し、一本に二つの場合を足した。「列挙を読む関数はほかの名前とぶつからない」：列挙 `seq` と `level`、グループ `level_of`、並びの数を読む規則で、補助関数が `_seq_of_` と `_level_of_` になり、五つの言語が同じ答えを返し、文字列でない値と列挙に無い値を同じ文で止める。下線を足さないビルドでは、この試験が止まる。「ほかのファイルの列挙もその型の関数で読む」：コーパスの `shared/catalog.rule` の列挙を二つ読む規則で、モジュールが `from catalog import Category as Category, Zone as Zone, zone_rank` と `_category_of`・`_zone_of` を持ち、五つの言語が同じ答えと同じ文を返す。`enums` のファイルの列挙を取り出し関数で読む規則は、コーパスに無い。「protoの値も型どおりに確かめる」には、二つめの列挙（`時間帯`）に無い値と、数で書いた列挙の値を足した。
+- 前からある射影の試験 18 本、`tests/threeway.rs` の全部（`mypy --strict`、`tsc --strict`、steep、整形器、決定性、全部の言語の一致）、`tests/builtin_names.rs`、`tests/error_value.rs`、`tests/boolean.rs` が通る。
+- pyright の strict（1.1.414）：`from` を持つコーパスの 8 本のモジュールは、替える前も替えた後も 50 件で、全部が前からある使われない補助関数（丸めの五つ、`_min`、`_max`、`_civil`）である。
+- 替える前のビルド（db494dff）と比べた。コーパスと寄与を合わせた 4 組の `gen` の全部のファイルと、`from` を持つ 8 本の `api`・`doc`（Markdown と HTML）・証明書・`gen`（英語と日本語）で、違うのは列挙を読む 4 本の Python のモジュールだけだった。
+- 型を付けた Python の部分集合を静的にコンパイルする処理系で、この節の生成物を確かめた。コーパスの 143 本と寄与を合わせた 8 本の全部で、拒否が 0 になり、CPython の答えがベクタ 11,044 件と一致し、ネイティブのビルドと CPython の印字 44,618 行が一致した。同じ 4 本を 0.29.1 の生成物にすると、それぞれ `_E = TypeVar("_E")` の一行で止まる。この処理系が翻訳するのは、モジュールの直下の文と、アプリケーションが呼ぶ関数である。取り出し関数は `dict[str, Any]` を受け取り、この処理系は `Any` を受け付けないので、確かめたアプリケーションは取り出し関数を呼ばず、列挙を読む補助関数も翻訳の対象にならない。
+- `ritsu gen` で作った `shop` のプロジェクトの Python のパッケージでも、`rules/shipment_fee.py` は `_region_of` と `_window_of` を持ち、`TypeVar` が無く、`mypy --strict` を通る。
+
+**正直な限界**：
+
+- 表の種類は、コーパスと寄与を合わせた規則が書くものから決めた。生成器は、コーパスのどの規則も書かない形を一つ書く。お金・量・率を持ち越す machine の始まりの値（`INITIAL_BALANCE: USD = USD(20)`）で、0.29.0 から同じである。静的にコンパイルする処理系は、これも、モジュールが動くときに計算される値として受け付けない（再現の規則で確かめた）。そういう規則をコーパスに足すと、この節の試験が止まる。
+- 試験が見るのは `rulec gen` の生成物である。`ritsu gen` のパッケージのモジュールは、`enums` のファイルのモジュールを相対の import（`from .goods_catalog import …`）で読み、試験の表にはその形が無い。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

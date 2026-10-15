@@ -1027,9 +1027,127 @@ fn protoの値も型どおりに確かめる() {
         (format!("{{\"destination\":\"honshu\",\"parcels\":[{parcel}]}}"), "REFUSED 出荷.destination is not an object".to_string()),
         // `null` is protojson's default: here, no window
         (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"deliveryWindow\":null}}"), "800".to_string()),
+        // the second enum the function reads, and a value of an enum that is no string
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"deliveryWindow\":\"night\"}}"), "REFUSED 出荷.delivery_window is not a value of enum 時間帯".to_string()),
+        (format!("{{\"destination\":{{\"region\":5}},\"parcels\":[{parcel}]}}"), "REFUSED 出荷.destination.region is not a value of enum 地域".to_string()),
     ] {
         for (l, got) in five_say(&made, "shipment_fee", &case) {
             assert_eq!(got, want, "shipment_fee ({l}): {case}");
+        }
+    }
+}
+
+/// A value of an enum is read by a function of that enum's type, named after it (§15.244): an enum
+/// `level` by `_level_of`. Where the module already has the name, the reader takes one more `_`.
+/// `_seq_of` is the helper that reads a collection, and here `_level_of` is the constant of the
+/// group `level_of`, so the two enums of this rule are read by `_seq_of_` and `_level_of_`. With
+/// either name written twice, the second definition would take the place of the first, and the
+/// collection would be read as an enum, or the group tested as a function. The five read the
+/// object alike, and refuse a value that is not a string, or not one of the enum's, with the same
+/// sentence.
+#[test]
+fn 列挙を読む関数はほかの名前とぶつからない() {
+    if !need(Need::Python) {
+        return;
+    }
+    const SCHEMA: &str = r#"{"$defs":{"Order":{"type":"object","required":["kind","tier","lines"],"properties":{"kind":{"type":"string","enum":["single","many"]},"tier":{"type":"string","enum":["low","high"]},"lines":{"type":"array","maxItems":10,"items":{"type":"object"}}}}}}"#;
+    const RULE: &str = "rule seq_reader(seq_reader) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+        enum seq(seq) = single(single) | many(many)\nenum level(level) = low(low) | high(high)\n\n\
+        group level_of(level_of) = high\n\n\
+        inputs\n  kind(kind)   : seq    from order.kind\n  tier(tier)   : level  from order.tier\n  \
+        lines(lines) : number  range >=0 <=10  from count order.lines\n\n\
+        outputs\n  fee(fee) : money[USD]  round up(1USD)\n\n\
+        table fee_of(fee_of)\npolicy unique\n\
+        | kind   | tier     | lines | -> fee |\n\
+        | many   | level_of | -     | 30USD  |\n\
+        | many   | low      | -     | 20USD  |\n\
+        | single | -        | >=5   | 10USD  |\n\
+        | single | -        | <5    | 5USD   |\n";
+    let tmp = TempDir::new("projection-readers");
+    let dir = tmp.path();
+    std::fs::write(dir.join("r.rule"), RULE).unwrap();
+    std::fs::write(dir.join("order.json"), SCHEMA).unwrap();
+    let rulec = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").current_dir(dir).args(args).output().expect("rulec を起動できない");
+    let o = rulec(&["check", "r.rule"]);
+    let said = String::from_utf8_lossy(&o.stdout);
+    assert!(o.status.success() && !said.contains("warning"), "規則は警告なしに通るはず:\n{said}");
+    let o = rulec(&["gen", "r.rule", "--out", "gen"]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    let py = std::fs::read_to_string(dir.join("gen/python/seq_reader.py")).unwrap();
+    for want in [
+        "\ndef _seq_of(v: Any, at: str) -> list[Any]:\n",
+        "\ndef _seq_of_(v: Any, what: str) -> Seq:\n",
+        "\n_level_of = frozenset({Level.HIGH})\n",
+        "\ndef _level_of_(v: Any, what: str) -> Level:\n",
+    ] {
+        assert!(py.contains(want), "{want:?} がありません:\n{py}");
+    }
+    let order = |kind: &str, tier: &str, n: usize| format!("{{\"kind\":{kind},\"tier\":{tier},\"lines\":[{}]}}", vec!["{\"sku\":\"s\"}"; n].join(","));
+    for (case, want) in [
+        (order("\"many\"", "\"high\"", 1), "30"),
+        (order("\"many\"", "\"low\"", 1), "20"),
+        (order("\"single\"", "\"low\"", 5), "10"),
+        (order("\"single\"", "\"high\"", 0), "5"),
+        (order("\"several\"", "\"low\"", 1), "REFUSED order.kind is not a value of enum seq"),
+        (order("1", "\"low\"", 1), "REFUSED order.kind is not a value of enum seq"),
+        (order("\"single\"", "\"mid\"", 1), "REFUSED order.tier is not a value of enum level"),
+        (order("\"single\"", "true", 1), "REFUSED order.tier is not a value of enum level"),
+    ] {
+        for (l, got) in five_say(&dir.join("gen"), "seq_reader", &case) {
+            assert_eq!(got, want, "seq_reader ({l}): {case}");
+        }
+    }
+}
+
+/// An enum the rule reads from an `enums` file is read by a function of that file's type, which
+/// the module imports from the file's module beside it (§15.212, §15.244): no rule of the corpus
+/// projects one. The enums file is the corpus's `shared/catalog.rule`.
+#[test]
+fn ほかのファイルの列挙もその型の関数で読む() {
+    if !need(Need::Python) {
+        return;
+    }
+    const SCHEMA: &str = r#"{"$defs":{"Item":{"type":"object","required":["category","zone"],"properties":{"category":{"type":"string","enum":["food","apparel","electronics","furniture"]},"zone":{"type":"string","enum":["local","regional","national","overseas"]}}}}}"#;
+    const RULE: &str = "rule item_fee v1\n\nshape item = jsonschema \"item.json\" \"#/$defs/Item\"\n\n\
+        import enum category from \"shared/catalog.rule\"\nimport enum zone from \"shared/catalog.rule\"\n\n\
+        inputs\n  kind : category  from item.category\n  dest : zone      from item.zone\n\n\
+        outputs\n  fee : money[USD]  round up(1USD)\n\n\
+        table fee_of\npolicy unique\n\
+        | kind    | dest       | -> fee |\n\
+        | fragile | <=regional | 20USD  |\n\
+        | fragile | >regional  | 40USD  |\n\
+        | food    | -          | 5USD   |\n\
+        | apparel | -          | 8USD   |\n";
+    let tmp = TempDir::new("projection-foreign-enum");
+    let dir = tmp.path();
+    std::fs::create_dir_all(dir.join("shared")).unwrap();
+    std::fs::copy(root().join("tests/corpus/shared/catalog.rule"), dir.join("shared/catalog.rule")).unwrap();
+    std::fs::write(dir.join("item_fee.rule"), RULE).unwrap();
+    std::fs::write(dir.join("item.json"), SCHEMA).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .current_dir(dir)
+        .args(["gen", "item_fee.rule", "shared/catalog.rule", "--out", "gen"])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    let py = std::fs::read_to_string(dir.join("gen/python/item_fee.py")).unwrap();
+    for want in [
+        "\nfrom catalog import Category as Category, Zone as Zone, zone_rank\n",
+        "\ndef _category_of(v: Any, what: str) -> Category:\n",
+        "\ndef _zone_of(v: Any, what: str) -> Zone:\n",
+    ] {
+        assert!(py.contains(want), "{want:?} がありません:\n{py}");
+    }
+    for (case, want) in [
+        ("{\"category\":\"electronics\",\"zone\":\"overseas\"}", "40"),
+        ("{\"category\":\"furniture\",\"zone\":\"local\"}", "20"),
+        ("{\"category\":\"food\",\"zone\":\"national\"}", "5"),
+        ("{\"category\":\"toys\",\"zone\":\"local\"}", "REFUSED item.category is not a value of enum category"),
+        ("{\"category\":\"food\",\"zone\":3}", "REFUSED item.zone is not a value of enum zone"),
+    ] {
+        for (l, got) in five_say(&dir.join("gen"), "item_fee", case) {
+            assert_eq!(got, want, "item_fee ({l}): {case}");
         }
     }
 }

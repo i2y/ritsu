@@ -1139,7 +1139,7 @@ the scalars.
 def order_shipping_from(order: dict[str, Any]) -> Yen:
     """Reads the inputs out of the caller's object and calls this rule. …"""
     return order_shipping(
-        _enum_of(Zone, _at(_at(order, "shipping", "注文"), "zone", "注文.shipping"), "注文.shipping.zone is not a value of enum 地域"),
+        _zone_of(_at(_at(order, "shipping", "注文"), "zone", "注文.shipping"), "注文.shipping.zone is not a value of enum 地域"),
         _any([_bool_at(_e, "chilled", "注文.lines[]") for _e in _seq_at(order, "lines", "注文")]),
         _len(_seq_at(order, "lines", "注文")),
     )
@@ -1180,9 +1180,16 @@ object stops at the same value in each.
 The readers are small functions written beside it, only the ones the rule uses: `_at` (the value at
 a key of an object), `_int_at`, `_bool_at`, `_str_at`, `_date_at`, `_num_at` and `_seq_at` (the
 value at a key, held to its kind), the same ending in `_of` for a value already read, `_int_pb` for
-an integer a `.proto` carries, `_enum_of`, `_opt` for an optional input and `_pget` for a field of
-an element of a `.proto` collection. TypeScript and JavaScript write the same in camelCase
-(`_intAt`, `_seqOf`).
+an integer a `.proto` carries, `_opt` for an optional input and `_pget` for a field of an element of
+a `.proto` collection. A value of an enum is read by a function of that enum's own, named after its
+type and answering that type: `_zone_of` for `Zone`, with one more `_` where the module already has
+the name (`_seq_of_` for an enum `Seq`, since `_seq_of` reads a collection). One function taking the
+type as an argument would need a type variable, a statement at the top of the module that is
+computed when the module runs, which a compiler of typed Python that builds the module ahead of
+time cannot take.
+
+TypeScript and JavaScript write the others in camelCase (`_intAt`, `_seqOf`) and read every enum
+through one `_enumOf`, given the enum's values.
 
 Ruby writes them as methods of the module, with their signatures in the `.rbs`, and PHP as
 functions of its namespace.
@@ -1232,10 +1239,10 @@ left the field out (or wrote `null`, which protojson reads as the default), and 
 starts, so that a place on the way that is not an object is refused by its path:
 
 ```python
-_enum_of(Region, _proto(shipment, (("destination", "destination"), ("region", "region")), "", ""), "出荷.destination.region is not a value of enum 地域"),
-_any([_str_of(_pget(_e, "handling", "handling", "HANDLING_STANDARD", "出荷.parcels[]"), "出荷.parcels[].handling") == "HANDLING_FRAGILE" for _e in _seq_of(_proto(shipment, (("parcels", "parcels"),), [], []), "出荷.parcels")]),
-_len(_seq_of(_proto(shipment, (("parcels", "parcels"),), [], []), "出荷.parcels")),
-Yen(_int_pb(_proto(shipment, (("declaredValueJpy", "declared_value_jpy"),), 0, 0), "出荷.declared_value_jpy")),
+_region_of(_proto(shipment, (("destination", "destination"), ("region", "region")), "", "", "出荷"), "出荷.destination.region is not a value of enum 地域"),
+_any([_str_of(_pget(_e, "handling", "handling", "HANDLING_STANDARD", "出荷.parcels[]"), "出荷.parcels[].handling") == "HANDLING_FRAGILE" for _e in _seq_of(_proto(shipment, (("parcels", "parcels"),), [], [], "出荷"), "出荷.parcels")]),
+_len(_seq_of(_proto(shipment, (("parcels", "parcels"),), [], [], "出荷"), "出荷.parcels")),
+Yen(_int_pb(_proto(shipment, (("declaredValueJpy", "declared_value_jpy"),), 0, 0, "出荷"), "出荷.declared_value_jpy")),
 ```
 
 A step is looked up under its JSON name first — `json_name`, or the lowerCamelCase of the name —

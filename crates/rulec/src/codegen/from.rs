@@ -1,4 +1,4 @@
-//! How the projection function reads the caller's object (§15.125, §15.223, §15.234).
+//! How the projection function reads the caller's object (§15.125, §15.223, §15.234, §15.244).
 //!
 //! Each value the function reads out of the object is held to the kind the rule takes it as before
 //! it is used, the way the rule's own door holds an argument (§15.203, §15.205): a whole number
@@ -212,8 +212,8 @@ impl Gen<'_> {
             Kind::Date => format!("_date_at({o}, {kq}, {aq})"),
             Kind::Num => format!("_num_at({o}, {kq}, {aq})"),
             Kind::Enum(n) => format!(
-                "_enum_of({}, _at({o}, {kq}, {aq}), {})",
-                self.read_enum_ty(n),
+                "{}(_at({o}, {kq}, {aq}), {})",
+                self.py_enum_reader(n),
                 dq(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
             ),
         }
@@ -229,8 +229,43 @@ impl Gen<'_> {
             Kind::Str => format!("_str_of({v}, {aq})"),
             Kind::Date => format!("_date_of({v}, {aq})"),
             Kind::Num => format!("_num_of({v}, {aq})"),
-            Kind::Enum(n) => format!("_enum_of({}, {v}, {})", self.read_enum_ty(n), dq(&crate::door::not_in_enum(at, n))),
+            Kind::Enum(n) => format!("{}({v}, {})", self.py_enum_reader(n), dq(&crate::door::not_in_enum(at, n))),
         }
+    }
+
+    /// The function that reads a value of an enum, for each type of enum the rule has, in the
+    /// order it has them (§15.244): `_shipping_zone_of` for `ShippingZone`, the type in snake case
+    /// between `_` and `_of`, as `_int_of` and `_bool_of` read the other kinds. One function per
+    /// type, each answering its own type: a function that took the type as an argument would need
+    /// a type variable, a statement at the top of the module that is computed when the module
+    /// runs, and a compiler of typed Python that builds the module ahead of time does not take
+    /// one. A name the module already gives a builtin, a helper or a group, a parameter of the
+    /// projection function, or the reader of a type before it, gets one more `_`.
+    fn py_enum_readers(&self) -> Vec<(String, String)> {
+        let mut taken: Vec<String> = super::PY_BUILTINS.iter().map(|(alias, _)| alias.to_string()).collect();
+        taken.extend(super::PY_HELPERS.iter().map(|h| h.to_string()));
+        taken.extend(self.f.groups.iter().map(|g| self.py_group(&g.name.text)));
+        taken.extend(self.plain_from_params());
+        let mut readers: Vec<(String, String)> = Vec::new();
+        for en in &self.c.enum_order {
+            let ty = self.enum_type(en);
+            if readers.iter().any(|(t, _)| *t == ty) {
+                continue;
+            }
+            let mut name = format!("_{}_of", super::snake(&ty));
+            while taken.contains(&name) {
+                name.push('_');
+            }
+            taken.push(name.clone());
+            readers.push((ty, name));
+        }
+        readers
+    }
+
+    /// The function that reads a value of the enum `en` (§15.244).
+    fn py_enum_reader(&self, en: &str) -> String {
+        let ty = self.enum_type(en);
+        self.py_enum_readers().into_iter().find(|(t, _)| *t == ty).map(|(_, r)| r).unwrap_or_else(|| format!("_{}_of", super::snake(&ty)))
     }
 
     /// A checked whole number as the rule's brand of its type (Python).
@@ -390,7 +425,7 @@ impl Gen<'_> {
         let mut want: Vec<&str> = Vec::new();
         let names = [
             "_int_at", "_bool_at", "_str_at", "_date_at", "_num_at", "_seq_at", "_int_pb", "_int_of", "_bool_of", "_str_of", "_date_of", "_num_of",
-            "_seq_of", "_enum_of", "_opt", "_pget", "_at",
+            "_seq_of", "_opt", "_pget", "_at",
         ];
         for n in names {
             if calls(body, n) {
@@ -474,10 +509,14 @@ impl Gen<'_> {
                 said = j(&s.date, "at")
             ));
         }
-        if want.contains(&"_enum_of") {
-            o.push_str(
-                "def _enum_of(make: Callable[[str], _E], v: Any, what: str) -> _E:\n    if isinstance(v, str):\n        try:\n            return make(v)\n        except ValueError:\n            pass\n    raise RuleInputError(what, _repr(v))\n\n\n",
-            );
+        // A value of an enum: one reader per type the function reads, answering that type
+        // (§15.244).
+        for (ty, reader) in self.py_enum_readers() {
+            if calls(body, &reader) {
+                o.push_str(&format!(
+                    "def {reader}(v: Any, what: str) -> {ty}:\n    if isinstance(v, str):\n        try:\n            return {ty}(v)\n        except ValueError:\n            pass\n    raise RuleInputError(what, _repr(v))\n\n\n"
+                ));
+            }
         }
         for (fused, of) in [("_int_at", "_int_of"), ("_bool_at", "_bool_of"), ("_str_at", "_str_of"), ("_date_at", "_date_of"), ("_num_at", "_num_of"), ("_seq_at", "_seq_of")] {
             if want.contains(&fused) {
@@ -492,12 +531,6 @@ impl Gen<'_> {
             }
         }
         o
-    }
-
-    /// Whether the Python projection function reads a value of an enum, which `_enum_of` takes by
-    /// a type variable (`TypeVar` and `Callable` are imported for it).
-    pub(super) fn py_from_reads_enum(&self) -> bool {
-        self.projects() && calls(&self.py_from_body(), "_enum_of")
     }
 
     /// The Python projection function itself, with no helper.
@@ -531,9 +564,6 @@ impl Gen<'_> {
         }
         let body = self.py_from_body();
         let mut o = String::new();
-        if calls(&body, "_enum_of") {
-            o.push_str("_E = TypeVar(\"_E\")\n\n\n");
-        }
         if calls(&body, "_proto") {
             // A place on the way that is not an object is refused, as `_at` refuses it; one that
             // is not there, or is `null`, is protojson's default (§15.234).
