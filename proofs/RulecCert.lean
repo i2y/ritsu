@@ -12,3 +12,5 @@ import RulecCert.Sha256
 import RulecCert.Machine
 import RulecCert.Carried
 import RulecCert.Prereq
+import RulecCert.Axes
+import RulecCert.Chances

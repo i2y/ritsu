@@ -1259,8 +1259,11 @@ fn coord_json(co: &Coord) -> String {
 /// the random boxes that tile the random axes, each with its number of points, what its points
 /// answer and whether that passes the claim — or that the class holds no input, or that its points
 /// were run one by one (counted, and stated). `None` for a rule with no `chances`, so no other
-/// certificate changes.
-pub fn certificate_json(f: &RuleFile, c: &Checked) -> Option<String> {
+/// certificate changes. Each claim says where its cells and its chance stand in the file (`source`),
+/// so a re-checker holds the claim it proves to the one the rule makes; and `rounds` gives the grid
+/// each numeric output a claim reads rounds to, which is what tells a re-checker that the value a row
+/// writes is the value the rule returns (§15.243).
+pub fn certificate_json(f: &RuleFile, c: &Checked, src: &str) -> Option<String> {
     use crate::json::{arr, quote, Obj};
     if f.chances.is_empty() || !f.has_random() {
         return None;
@@ -1367,6 +1370,16 @@ pub fn certificate_json(f: &RuleFile, c: &Checked) -> Option<String> {
             Verdict::Broken { .. } => "broken",
             Verdict::Undecided(_) => "undecided",
         };
+        // Where the claim's cells and its chance stand in the file, and what stands there (§15.243).
+        let span = |sp: &crate::diag::Span| -> String {
+            let text = src.lines().nth(sp.line.wrapping_sub(1)).and_then(|l| l.get(sp.col..sp.col + sp.len)).unwrap_or("");
+            Obj::new().int("line", sp.line as i128).int("col", sp.col as i128).int("len", sp.len as i128).str("text", text).finish()
+        };
+        let source = Obj::new()
+            .raw("inputs", arr(&row.cell_spans.iter().map(span).collect::<Vec<_>>()))
+            .raw("outputs", arr(&row.out_spans.iter().map(span).collect::<Vec<_>>()))
+            .raw("chance", span(&row.chance_span))
+            .finish();
         claims.push(
             Obj::new()
                 .int("chances", cl.table as i128)
@@ -1376,8 +1389,121 @@ pub fn certificate_json(f: &RuleFile, c: &Checked) -> Option<String> {
                 .raw("chance", chance)
                 .str("verdict", verdict)
                 .raw("classes", arr(&classes))
+                .raw("source", source)
                 .finish(),
         );
     }
-    Some(Obj::new().raw("random", arr(&random)).raw("axes", arr(&axes)).raw("claims", arr(&claims)).finish())
+    // The grid each numeric output a claim reads rounds to (§7.2: every numeric output declares one,
+    // E104), on the scale of `ranges`.
+    let mut rounds = Obj::new();
+    let mut seen: Vec<&str> = Vec::new();
+    for ch in &f.chances {
+        for (name, _) in &ch.outputs {
+            if seen.contains(&name.as_str()) {
+                continue;
+            }
+            seen.push(name);
+            let Some(ty) = c.ty_of(name) else { continue };
+            let g = f
+                .outputs
+                .iter()
+                .find(|o| o.name.text == *name)
+                .and_then(|od| od.rounding.as_ref())
+                .and_then(|rd| crate::types::lit_value_in_pub(&rd.grid, &ty))
+                .map(|g| if g.num < 0 { Rat::zero().sub(g) } else { g })
+                .filter(|g| g.num != 0);
+            if let Some(g) = g {
+                rounds = rounds.raw(name, quote(&rat_text(&g)));
+            }
+        }
+    }
+    let o = Obj::new().raw("random", arr(&random)).raw("axes", arr(&axes)).raw("claims", arr(&claims)).raw("rounds", rounds.finish());
+    Some(match weighted_json(f, c, src) {
+        Some(w) => o.raw("weighted", w).finish(),
+        None => o.finish(),
+    })
+}
+
+/// The walk of a fold that picks by weight (§15.226), for a re-checker to run it at every draw: the
+/// sequence it walks and its column of verdicts, the drawn input, the column its answer goes to, each
+/// arm — the verdict it is for and, where it takes the element, the value and the weight — the `empty`
+/// value and the `exhausted` one (`null` for `held`), and every `sequence` a claim may name, each
+/// element's fields with the cells they are written in (§15.243). `None` for a rule with none.
+fn weighted_json(f: &RuleFile, c: &Checked, src: &str) -> Option<String> {
+    use crate::json::{arr, quote, Obj};
+    let fold = f.folds().find(|d| d.weighted())?;
+    let answer = fold.answer_name(f)?;
+    let answer_ty = c.ty_of(answer).unwrap_or(Ty::Unknown);
+    let arms: Vec<String> = fold
+        .arms
+        .iter()
+        .map(|(v, arm, _)| {
+            let o = Obj::new().str("is", &v.text);
+            match arm {
+                Arm::TakeWeighted { expr, weight } => o
+                    .raw(
+                        "take",
+                        Obj::new().raw("value", crate::cert::expr_json(expr, &answer_ty)).raw("weight", crate::cert::expr_json(weight, &Ty::Number)).finish(),
+                    )
+                    .finish(),
+                _ => o.raw("take", "null").finish(),
+            }
+        })
+        .collect();
+    let exhausted = match &fold.exhausted {
+        Some(Expr::Name(n, _)) if n == crate::kw::HELD => "null".to_string(),
+        Some(e) => crate::cert::expr_json(e, &answer_ty),
+        None => "null".to_string(),
+    };
+    let empty = fold.empty.as_ref().map(|e| crate::cert::expr_json(e, &answer_ty)).unwrap_or_else(|| "null".into());
+    let span = |sp: &crate::diag::Span| -> String {
+        let text = src.lines().nth(sp.line.wrapping_sub(1)).and_then(|l| l.get(sp.col..sp.col + sp.len)).unwrap_or("");
+        Obj::new().int("line", sp.line as i128).int("col", sp.col as i128).int("len", sp.len as i128).str("text", text).finish()
+    };
+    let sequences: Vec<String> = f
+        .sequences
+        .iter()
+        .map(|sq| {
+            let rows: Vec<String> = sq
+                .rows
+                .iter()
+                .map(|row| {
+                    let cells: Vec<String> = sq
+                        .cols
+                        .iter()
+                        .enumerate()
+                        .map(|(ci, (col, _))| {
+                            let v = match (row.cells.get(ci), c.ty_of(col)) {
+                                (Some(Cell::Lit(l)), Some(ty)) => crate::eval::lit_to_val(l, ty.present()),
+                                _ => None,
+                            };
+                            let o = Obj::new().raw("value", value_json(&v));
+                            match row.cell_spans.get(ci) {
+                                Some(sp) => o.raw("source", span(sp)).finish(),
+                                None => o.raw("source", "null").finish(),
+                            }
+                        })
+                        .collect();
+                    Obj::new().int("line", row.span.line as i128).raw("cells", arr(&cells)).finish()
+                })
+                .collect();
+            Obj::new()
+                .str("name", &sq.name.text)
+                .raw("fields", crate::json::strs(&sq.cols.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>()))
+                .raw("rows", arr(&rows))
+                .finish()
+        })
+        .collect();
+    Some(
+        Obj::new()
+            .str("over", &fold.over)
+            .str("verdict", &fold.verdict)
+            .raw("draw", fold.draw.as_ref().map(|d| quote(&d.text)).unwrap_or_else(|| "null".into()))
+            .str("answer", answer)
+            .raw("arms", arr(&arms))
+            .raw("empty", empty)
+            .raw("exhausted", exhausted)
+            .raw("sequences", arr(&sequences))
+            .finish(),
+    )
 }

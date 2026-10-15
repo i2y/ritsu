@@ -342,6 +342,10 @@ structure ReadRow where
   /-- The word the row writes into each column, in the order the table decides them: an enum's
       value or a truth value; `none` for a number, a name the rule computes, or nothing. -/
   produces : List (Option String) := []
+  /-- Where the row writes each of those words, for a table written in more than one place (rulec's
+      §15.243): the answer cell of that column in the row's own file. Empty where the certificate
+      names none. -/
+  answers : List (Option SrcSpan) := []
 
 structure ReadTable where
   name : String
@@ -639,7 +643,12 @@ def readTable (rangesOf : String → Option Span2) (groups : String → List Str
            fileSha := (fileJ.map (fun x => fieldStr x "sha256")).getD ""
            contribution := (fileJ.map (fun x => fieldStr x "contribution")).getD ""
            tests := tests, accepts := accepts, source := (field r "source").bind srcOfJson
-           writes := writes, produces := (fieldArr r "produces").toList.map str })
+           writes := writes, produces := (fieldArr r "produces").toList.map str
+           answers := (fieldArr r "answers").toList.map (fun x => do
+             let line ← fieldNat x "line"
+             let col ← fieldNat x "col"
+             let len ← fieldNat x "len"
+             some { line := line, col := col, len := len, text := fieldStr x "text" }) })
   some {
     name := name
     outputs := (fieldNat j "outputs").getD 0

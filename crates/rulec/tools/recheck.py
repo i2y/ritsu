@@ -21,6 +21,17 @@ What it checks, per rule:
     its column's range and its `empty` value, since it answers one of those.
   * **fold answers** (§15.219): the range stated for a fold's answer that the items below
     read holds every value the fold answers with, worked out here from their expressions.
+  * **open values** (§15.227): the range an open value declares holds what its terms come to
+    together — added, multiplied, the largest or the smallest — each term's interval worked out
+    here as any other value's is.
+  * **chances** (§15.224–§15.226, §15.243): every claim of a `chances` table is counted again.
+    Box by box: the coordinates of each random axis tile what its input is drawn from, a box
+    holds the product of its lengths, what the rows answer in it is worked out here from the
+    tables, a class's boxes add up to its points and hits, and an axis that is not random covers
+    what its column takes, cut on a step that divides the one its values sit on. Point by point:
+    every draw of every combination the claim's cells let in is run here through the tables and
+    the values the rule computes. By weight: the walk of the pick is run here at every draw, over the
+    sequence the certificate carries. The hits over the points have to pass the claim.
 
 What it checks, per table:
 
@@ -41,7 +52,9 @@ What it checks, per table:
     (§15.190): the coordinates run from one end of the range to the other, each touching the
     next or one step past it, and that step has to divide the one worked out here from the
     values' expressions and the `scales` the certificate states — a column of tenths of a
-    pound cut every whole pound leaves the values between two coordinates to no row.
+    pound cut every whole pound leaves the values between two coordinates to no row. Two
+    intervals side by side, or one point written twice, are refused (§15.243): the first leaves
+    the value they meet at to no row, the second puts it on two coordinates.
 
 What it checks, per contract (§15.142): the rule's door — each numeric input's declared
 range at the scale the value travels at, each `constraint` between two of them, each enum
@@ -54,7 +67,11 @@ opens into cases, is the certificate's reading of the contract.
 Given `--rule <file.rule>` it also checks that the certificate is **about that text**: the
 digest matches, and every cell of every row is read back out of the file at the byte span
 the certificate names and held beside the parsed form it states. Each contract, named
-relative to the rule, has to have the digest the certificate gives for it. A literal is
+relative to the rule, has to have the digest the certificate gives for it, and so does every
+contribution merged into the rule (`contributions`, §15.243), whose rows are read back out of
+its own file. A contribution's certificate is the certificate of the rule it is merged into,
+so `--rule` names that rule. The cells of every claim of `chances` and of every `sequence` a
+pick by weight walks are read back too. A literal is
 turned into a number by looking it up among the axis's own boundary coordinates, so no unit
 table is needed here; a literal that is not one of them is counted and reported rather than
 passed.
@@ -64,8 +81,8 @@ carries: the columns each table decides, the value each of its rows writes, and 
 those rows take are all here, so the span a value puts an input into is recomputed rather
 than believed. Such a leaf has to come with its reason or it is refused.
 
-What it does **not** check: the pairs the axes do not part, which are listed rather than
-proved.
+What it does **not** check: the pairs the axes do not part, and a claim of `chances` the
+check left undecided within its budget (W129), which are listed rather than proved.
 
 Exit code 0 when every table holds, 1 when one does not, 2 on a certificate it cannot
 read. No dependencies; Python 3.9 or later.
@@ -1799,7 +1816,9 @@ def check_axis(t, ai):
     The axis of what a walk leaves behind — a `count`, a `sum`, a `max`, a `min`, a fold's answer
     — runs over the range `ranges` states for it, as an input's runs over its declared range: the
     table that reads it is complete over that range and no further, and the range is the one the
-    sections on `extremes` and `fold_answers` hold to what the walk can answer (§15.236)."""
+    sections on `extremes` and `fold_answers` hold to what the walk can answer (§15.236). An open
+    value runs over the range the rule declares for it, which `opens` holds to what its terms come to
+    together (§15.227). Any other column is cut open at both ends."""
     a = t["axes"][ai]
     bs = a.get("bounds") or []
     if optional_input(t, a):
@@ -1823,15 +1842,32 @@ def check_axis(t, ai):
         if lo is not None and hi is not None and lo > hi:
             raise Bad(f"{t['table']}: {a['column']} has a coordinate that runs backwards")
         vals.append((lo, hi))
+    # Two coordinates side by side: two points a step apart, or a point and an interval that begins
+    # or ends at it. Two intervals that meet leave the value they meet at out of both, and one point
+    # written twice puts a value on two coordinates (`axisTilesB` in the Lean program).
     for k in range(len(vals) - 1):
-        hi, lo = vals[k][1], vals[k + 1][0]
-        if not (lo == hi or lo == hi + step):
-            raise Bad(f"{t['table']}: {a['column']} has a gap between {hi} and {lo}")
-    if a.get("kind") in ("input", "walk"):
+        (a1, b1), (a2, b2) = vals[k], vals[k + 1]
+        p1 = a1 is not None and a1 == b1
+        p2 = a2 is not None and a2 == b2
+        if p1 and p2:
+            ok = a2 == b1 + step
+        elif p1:
+            ok = a2 == b1
+        elif p2:
+            ok = b1 is not None and a2 == b1
+        else:
+            ok = False
+        if not ok:
+            raise Bad(f"{t['table']}: {a['column']} has a gap between {b1} and {a2}, or a value on two coordinates")
+    if a.get("kind") not in ("input", "walk", "open") and (vals[0][0] is not None or vals[-1][1] is not None):
+        # A column the rule computes, or one a table above decides, is cut open at both ends: what
+        # it can take is the whole line, and an axis that stopped short would leave the rest out.
+        raise Bad(f"{t['table']}: {a['column']} does not run the whole of the values it can take")
+    if a.get("kind") in ("input", "walk", "open"):
         r = t.get("_ranges", {}).get(a["column"])
         if r is not None:
             lo, hi = num(r[0]), num(r[1])
-            said = "the rule declares" if a.get("kind") == "input" else "its range is"
+            said = "the rule declares" if a.get("kind") in ("input", "open") else "its range is"
             if vals[0][0] != lo or vals[-1][1] != hi:
                 raise Bad(f"{t['table']}: {a['column']} runs from {vals[0][0]} to "
                           f"{vals[-1][1]}, and {said} {lo} to {hi}")
@@ -2586,6 +2622,25 @@ def check_cells(cert, path):
                     a, b = bars[len(got) + j] if len(got) + j < len(bars) else (0, 0)
                     said = line[a:b].decode("utf-8", "replace")
                     if said != w:
+                        raise Bad(f"{t['table']}: row {r['row']}, answer {j + 1}: the file writes `{said}` there, "
+                                  f"and the certificate reads it as `{w}`")
+                    read += 1
+            # In a table written in more than one place, the certificate names the cell each word is
+            # written in (§15.243): one of the row's answer cells on its line, or a `clause`'s `then` line.
+            elif len({(row_file(x), x.get("origin", "")) for x in t["rows"]}) > 1:
+                answers = r.get("answers") or []
+                for j, w in enumerate(r.get("produces") or []):
+                    if w is None:
+                        continue
+                    sp = answers[j] if j < len(answers) else None
+                    if not isinstance(sp, dict):
+                        STATED.append(f"{t['table']}: row {r['row']}, answer {j + 1}: the word `{w}`, which the certificate names no answer cell for")
+                        continue
+                    if bars and (sp["line"] != ln or (sp["col"], sp["col"] + sp["len"]) not in bars[len(got):]):
+                        raise Bad(f"{t['table']}: row {r['row']}, answer {j + 1}: the cell named is not one of the row's answer cells")
+                    wline = line if bars else (lines[sp["line"] - 1] if 0 < sp["line"] <= len(lines) else b"")
+                    said = wline[sp["col"]:sp["col"] + sp["len"]].decode("utf-8", "replace")
+                    if said != w or sp.get("text") != w:
                         raise Bad(f"{t['table']}: row {r['row']}, answer {j + 1}: the file writes `{said}` there, "
                                   f"and the certificate reads it as `{w}`")
                     read += 1
@@ -3842,17 +3897,6 @@ def coord_span(co, step):
     return None
 
 
-def coord_points(co, step):
-    """How many values of the axis's grid a coordinate holds."""
-    if "word" in co or "other" in co:
-        return 1
-    lo, hi = coord_span(co, step)
-    if lo is None or hi is None:
-        raise Bad("a random input's coordinate runs on without an end")
-    a, b = math.ceil(lo / step), math.floor(hi / step)
-    return max(0, b - a + 1)
-
-
 def coord_in_cell(axis, co, cell):
     """Whether a whole coordinate of an input's axis lies inside a claim's cell. The axis is cut
     at every value the claims name, so a coordinate is wholly inside or wholly outside."""
@@ -3871,56 +3915,666 @@ def coord_in_cell(axis, co, cell):
     return inside[0]
 
 
+# What the answers read, as the Lean program's `RulecCert.Chances` reads it (§15.243). A coordinate is
+# ("x", a), one number; ("b", lo, hi), the numbers strictly between two ends, either of which may be
+# None; or ("w", word). A cell holds ("run", k, i, j), the whole steps of 1/k from the i-th to the j-th;
+# ("coord", c), every value of a coordinate; or ("val", v), one value.
+
+def chance_rin(cert, name):
+    """What a column takes or a random input is drawn from: ("num", lo, hi, k) — the whole steps of
+    1/k inside the range — or ("words", [...]); None for a string, an optional value, a number with no
+    two ends."""
+    ty = str((cert.get("types") or {}).get(name, ""))
+    if ty.endswith("?"):
+        return None
+    if ty == "bool":
+        return ("words", ["false", "true"])
+    enums = cert.get("enums") or {}
+    if ty in enums:
+        er = (cert.get("enum_ranges") or {}).get(name)
+        return ("words", list(er) if er is not None else list(enums[ty]))
+    if ty == "string":
+        return None
+    r = (cert.get("ranges") or {}).get(name)
+    k = (cert.get("scales") or {}).get(name)
+    if r is None or r[0] is None or r[1] is None or not k:
+        return None
+    return ("num", Fraction(r[0]), Fraction(r[1]), int(k))
+
+
+def rin_count(rin):
+    if rin[0] == "num":
+        _, lo, hi, k = rin
+        return max(0, math.floor(hi * k) - math.ceil(lo * k) + 1)
+    return len(rin[1])
+
+
+def rin_grid(rin):
+    if rin[0] == "num":
+        _, lo, hi, k = rin
+        return [Fraction(n, k) for n in range(math.ceil(lo * k), math.floor(hi * k) + 1)]
+    return list(rin[1])
+
+
+def wcoord(co):
+    if "point" in co:
+        return ("x", Fraction(co["point"]))
+    if "open" in co:
+        lo, hi = co["open"]
+        return ("b", None if lo is None else Fraction(lo), None if hi is None else Fraction(hi))
+    if "word" in co:
+        return ("w", co["word"])
+    return None
+
+
+def wholds(c, v):
+    if c[0] == "w":
+        return isinstance(v, str) and v == c[1]
+    if not isinstance(v, Fraction):
+        return False
+    if c[0] == "x":
+        return v == c[1]
+    return (c[1] is None or c[1] < v) and (c[2] is None or v < c[2])
+
+
+def table_coords(t):
+    """Each axis of a table as the answers read it: a number's coordinate from its bounds — equal ends
+    one number, unequal ones the numbers strictly between — or the word a coordinate is written as."""
+    out = []
+    for a in t["axes"]:
+        labels = a.get("coords") or []
+        bs = a.get("bounds") or []
+        cs = []
+        for i, lab in enumerate(labels):
+            b = bs[i] if i < len(bs) else None
+            if b is None:
+                cs.append(("w", lab))
+            else:
+                lo, hi = num(b[0]), num(b[1])
+                cs.append(("x", lo) if lo is not None and lo == hi else ("b", lo, hi))
+        out.append(cs)
+    return out
+
+
+def t_run(k, c):
+    """The whole steps of 1/k a number's coordinate holds, an end None where it runs on."""
+    if c[0] == "x":
+        return (math.ceil(c[1] * k), math.floor(c[1] * k))
+    return (None if c[1] is None else math.floor(c[1] * k) + 1, None if c[2] is None else math.ceil(c[2] * k) - 1)
+
+
+def cv_holds(cv, v):
+    if cv[0] == "val":
+        return v == cv[1]
+    if cv[0] == "coord":
+        return wholds(cv[1], v)
+    _, k, i, j = cv
+    return isinstance(v, Fraction) and (v * k).denominator == 1 and i <= v * k <= j
+
+
+def coord_inside(y, x):
+    if y[0] == "x":
+        return wholds(x, y[1])
+    if x[0] != "b":
+        return False
+    return (x[1] is None or (y[1] is not None and x[1] <= y[1])) and (x[2] is None or (y[2] is not None and y[2] <= x[2]))
+
+
+def coord_apart(y, x):
+    if y[0] == "x":
+        return not wholds(x, y[1])
+    if x[0] == "x":
+        return not wholds(y, x[1])
+    return (y[2] is not None and x[1] is not None and y[2] <= x[1]) or (x[2] is not None and y[1] is not None and x[2] <= y[1])
+
+
+def near_of(cs, cv):
+    """The coordinates of a table's axis a cell may stand on."""
+    out = []
+    for idx, c in enumerate(cs):
+        if cv[0] == "val":
+            ok = wholds(c, cv[1])
+        elif cv[0] == "coord" and cv[1][0] == "w":
+            ok = c == cv[1]
+        elif cv[0] == "coord":
+            ok = c[0] != "w" and not coord_apart(cv[1], c)
+        else:
+            _, k, i, j = cv
+            if c[0] == "w":
+                ok = False
+            else:
+                a, b = t_run(k, c)
+                ok = (a is None or a <= j) and (b is None or i <= b)
+        if ok:
+            out.append(idx)
+    return out
+
+
+def covers_from(j, cur, runs):
+    for a, b in runs:
+        if a is None or a <= cur:
+            if b is None:
+                return True
+            cur = max(cur, b + 1)
+    return j < cur
+
+
+def covered(cs, cv):
+    """Every value of the cell stands on some coordinate of the axis."""
+    if cv[0] == "val":
+        return any(wholds(c, cv[1]) for c in cs)
+    if cv[0] == "coord" and cv[1][0] == "w":
+        return cv[1] in cs
+    if cv[0] == "coord":
+        return any(c[0] != "w" and coord_inside(cv[1], c) for c in cs)
+    _, k, i, j = cv
+    return k > 0 and covers_from(j, i, [t_run(k, cs[c]) for c in near_of(cs, cv) if cs[c][0] != "w"])
+
+
+def cv_single(cv):
+    if cv[0] == "val":
+        return cv[1]
+    if cv[0] == "coord" and cv[1][0] == "w":
+        return cv[1][1]
+    if cv[0] == "coord" and cv[1][0] == "x":
+        return cv[1][1]
+    if cv[0] == "run" and cv[2] == cv[3] and cv[1] > 0:
+        return Fraction(cv[2], cv[1])
+    return None
+
+
+def row_at(t, p):
+    """The row of a table that answers at a point: under `first` the earliest whose box takes it,
+    under `unique` the only one."""
+    taking = [r for r in t["rows"] if all(c in r["accepts"][ai] for ai, c in enumerate(p))]
+    if t["policy"] == "first":
+        return taking[0] if taking else None
+    return taking[0] if len(taking) == 1 else None
+
+
+def out_of(t, r, col):
+    """What a row writes into a column it decides: ("val", v), ("name", n), or None."""
+    decides = t.get("decides") or []
+    if col not in decides:
+        return None
+    oi = decides.index(col)
+    prods = r.get("produces") or []
+    if oi < len(prods) and prods[oi] is not None:
+        return ("val", prods[oi])
+    writes = r.get("writes") or []
+    w = writes[oi] if oi < len(writes) else None
+    e = (w or {}).get("expr") if isinstance(w, dict) else None
+    if not isinstance(e, dict):
+        return None
+    if "name" in e:
+        return ("name", e["name"])
+    if "value" in e:
+        return ("val", Fraction(e["value"]))
+    return None
+
+
+def decider_of(tables, col):
+    return next((t for t in tables if col in (t.get("decides") or [])), None)
+
+
+def cell_of(tables, coords, cell, fuel, n):
+    """What a cell holds for a column: what the table that decides it answers there, one value at
+    every point the cell may stand on — or what the cell holds for a column of the walk."""
+    t = decider_of(tables, n)
+    if t is None:
+        return cell(n)
+    if fuel == 0:
+        return None
+    nears = []
+    for ai, a in enumerate(t["axes"]):
+        cv = cell_of(tables, coords, cell, fuel - 1, a["column"])
+        cs = coords[id(t)][ai]
+        if cv is None or not covered(cs, cv):
+            return None
+        nears.append(near_of(cs, cv))
+    vals = []
+    for p in itertools.product(*nears):
+        r = row_at(t, p)
+        if r is None:
+            return None
+        o = out_of(t, r, n)
+        if o is None:
+            return None
+        if o[0] == "val":
+            vals.append(o[1])
+        else:
+            m = cell_of(tables, coords, cell, fuel - 1, o[1])
+            v = None if m is None else cv_single(m)
+            if v is None:
+                return None
+            vals.append(v)
+    if not vals or any(v != vals[0] for v in vals[1:]):
+        return None
+    return ("val", vals[0])
+
+
+def value_of(tables, coords, env, fuel, n):
+    """The value of a column at a call: what the table that decides it answers, read where the values
+    of its own columns stand on its axes; any other name the call's."""
+    t = decider_of(tables, n)
+    if t is None:
+        return env(n)
+    if fuel == 0:
+        return None
+    p = []
+    for ai, a in enumerate(t["axes"]):
+        v = value_of(tables, coords, env, fuel - 1, a["column"])
+        idx = next((i for i, c in enumerate(coords[id(t)][ai]) if v is not None and wholds(c, v)), None)
+        if idx is None:
+            return None
+        p.append(idx)
+    r = row_at(t, p)
+    if r is None:
+        return None
+    o = out_of(t, r, n)
+    if o is None:
+        return None
+    if o[0] == "val":
+        return o[1]
+    return value_of(tables, coords, env, fuel - 1, o[1])
+
+
+def keeps(rounds, col, v):
+    """A value its output's rounding leaves as it is: a word, or a number on the grid it rounds to."""
+    if isinstance(v, str):
+        return True
+    g = rounds.get(col)
+    return g is not None and Fraction(g) > 0 and (v / Fraction(g)).denominator == 1
+
+
+def fixed_tiles(cert, axis, cs):
+    """An axis that is not random covers what its column takes: a number's coordinates tile its range
+    on the grid the walk cuts it on (two points a step apart, or a point and an interval that begins or
+    ends at it), after the absent value where it is optional; a word's are its words."""
+    col = axis["column"]
+    ty = str((cert.get("types") or {}).get(col, ""))
+    base = ty[:-1] if ty.endswith("?") else ty
+    enums = cert.get("enums") or {}
+    if base == "bool" or base in enums:
+        words = ["false", "true"] if base == "bool" else list((cert.get("enum_ranges") or {}).get(col) or enums[base])
+        if ty.endswith("?"):
+            words = ["none"] + words
+        have = [c[1] for c in cs if c[0] == "w"]
+        return all(w in have for w in words)
+    if base == "string":
+        return False
+    xs = cs
+    if ty.endswith("?"):
+        if not xs or xs[0] != ("w", "none"):
+            return False
+        xs = xs[1:]
+    st = num(axis.get("step"))
+    r = (cert.get("ranges") or {}).get(col) or [None, None]
+    lo, hi = num(r[0]), num(r[1])
+    if not xs or st is None or st <= 0 or any(c[0] == "w" for c in xs):
+        return False
+    def on_grid(v):
+        return (v / st).denominator == 1
+    first, last = xs[0], xs[-1]
+    if (lo is not None and first != ("x", lo)) or (lo is None and not (first[0] == "b" and first[1] is None)):
+        return False
+    if (hi is not None and last != ("x", hi)) or (hi is None and not (last[0] == "b" and last[2] is None)):
+        return False
+    for c in xs:
+        ends = [c[1]] if c[0] == "x" else [e for e in (c[1], c[2]) if e is not None]
+        if not all(on_grid(e) for e in ends):
+            return False
+        if c[0] == "b" and c[1] is not None and c[2] is not None and not c[1] < c[2]:
+            return False
+    for a, b in zip(xs, xs[1:]):
+        if a[0] == "x" and b[0] == "x":
+            ok = b[1] == a[1] + st
+        elif a[0] == "x":
+            ok = b[1] == a[1]
+        elif b[0] == "x":
+            ok = a[2] is not None and b[1] == a[2]
+        else:
+            ok = False
+        if not ok:
+            return False
+    return True
+
+
+def run_arith(where, k, holds):
+    """A class whose points the check ran one by one, held to its own arithmetic: the chance it came
+    to is its lowest and its highest, and both pass the claim — a claim is one value or comparisons
+    with values, so what it lets in is an interval, and the two ends passing it is every chance between
+    them passing it."""
+    p, lo, hi = k.get("chance"), k.get("low"), k.get("high")
+    if (lo is None) != (hi is None) or (p is not None and (lo != p or hi != p)):
+        raise Bad(f"{where}: a class's chance {p} is not the lowest and the highest it came to")
+    if lo is not None and Fraction(lo) > Fraction(hi):
+        raise Bad(f"{where}: a class's lowest chance {lo} is above its highest {hi}")
+    for q in (lo, hi):
+        if q is not None and not holds(Fraction(q)):
+            raise Bad(f"{where}: a class's chance {q} does not pass the claim")
+
+
+def chance_of_text(text):
+    """The chance a claim's cell writes, as the file writes it: a value (`5/14`, `0`, `35%`, `0.1%`),
+    or comparisons with values (`>=1/4 <=1/2`). None where it is not one."""
+    def value(t):
+        t = t.strip()
+        if "/" in t:
+            a, b = t.split("/", 1)
+            ka, kb = lit_key(a), lit_key(b)
+            if ka[0] != "n" or kb[0] != "n" or ka[2] or kb[2] or kb[1] == 0 or ka[1].denominator != 1 or kb[1].denominator != 1:
+                return None
+            return ka[1] / kb[1]
+        k = lit_key(t)
+        if k[0] != "n":
+            return None
+        if k[2] == "%":
+            return k[1] / 100
+        return k[1] if not k[2] else None
+    s = text.strip()
+    if not any(s.startswith(o) for o in ("<", ">")):
+        v = value(s)
+        return None if v is None else {"is": v}
+    out = []
+    for op, lit in split_cmp(s) or []:
+        v = value(lit)
+        if v is None:
+            return None
+        out.append((op, v))
+    return {"cmp": out} if out else None
+
+
+def check_claim_cells(cert, path):
+    """The claims of `chances` are the file's (rulec's §15.243): every cell of a claim and its chance
+    are the cells of the line of the `chances` table they stand on, and the chance the file writes is
+    the one the counts are held to. Returns how many cells were read back."""
+    ch = cert.get("chances")
+    if not ch:
+        return 0
+    with open(path, "rb") as fh:
+        lines = fh.read().split(b"\n")
+    read = 0
+    for cl in ch.get("claims", []):
+        where = f"chances {cl['chances'] + 1} row {cl['row']}"
+        src = cl.get("source")
+        if not isinstance(src, dict):
+            STATED.append(f"{where}: where its cells stand, which the certificate does not say")
+            continue
+        spans = list(src.get("inputs") or []) + list(src.get("outputs") or []) + [src.get("chance")]
+        if len(spans) != len(cl.get("inputs", [])) + len(cl.get("outputs", [])) + 1 or any(not isinstance(sp, dict) for sp in spans):
+            raise Bad(f"{where}: the certificate names another number of cells than the claim has")
+        ln = spans[0]["line"]
+        line = lines[ln - 1] if 0 < ln <= len(lines) else b""
+        if any(sp["line"] != ln for sp in spans) or fields_of(line) != [(sp["col"], sp["col"] + sp["len"]) for sp in spans]:
+            raise Bad(f"{where}: its cells are not the cells of the line it is written on")
+        for sp in spans:
+            got = line[sp["col"]:sp["col"] + sp["len"]].decode("utf-8", "replace")
+            if got != sp.get("text"):
+                raise Bad(f"{where}: the file says `{got}` where the certificate quotes `{sp.get('text')}`")
+            read += 1
+        said = chance_of_text(src["chance"]["text"])
+        want = cl.get("chance") or {}
+        if said is None:
+            raise Bad(f"{where}: the chance the file writes, `{src['chance']['text']}`, cannot be read as one")
+        if "is" in want:
+            same = "is" in said and said["is"] == Fraction(want["is"])
+        else:
+            same = "cmp" in said and [(op, v) for op, v in said["cmp"]] == [(op, Fraction(v)) for op, v in want.get("cmp", [])]
+        if not same:
+            raise Bad(f"{where}: the file writes the chance `{src['chance']['text']}`, and the certificate holds the counts to another")
+    # The elements of the sequences a pick by weight walks are the file's (§15.243).
+    for sq in (ch.get("weighted") or {}).get("sequences", []):
+        for row in sq.get("rows", []):
+            ln = row.get("line", 0)
+            line = lines[ln - 1] if 0 < ln <= len(lines) else b""
+            cells = row.get("cells", [])
+            spans = [c.get("source") for c in cells]
+            if any(not isinstance(sp, dict) or sp.get("line") != ln for sp in spans) or \
+                    fields_of(line) != [(sp["col"], sp["col"] + sp["len"]) for sp in spans]:
+                raise Bad(f"sequence {sq['name']}: the cells of a row are not the cells of the line it is written on")
+            for c, sp in zip(cells, spans):
+                got = line[sp["col"]:sp["col"] + sp["len"]].decode("utf-8", "replace")
+                if got != sp.get("text"):
+                    raise Bad(f"sequence {sq['name']}: the file says `{got}` where the certificate quotes `{sp.get('text')}`")
+                v = c.get("value")
+                k = lit_key(got)
+                agrees = got == v or (k[0] == "n" and not k[2] and num(v) == k[1])
+                if not agrees:
+                    raise Bad(f"sequence {sq['name']}: the file writes `{got}`, and the certificate reads another value")
+                read += 1
+    return read
+
+
+def check_weighted(cert, ch, cl, where, holds, tables, coords, fuel, rounds, draws, classes):
+    """A claim over a pick by weight (rulec's §15.226), run again: at every draw the walk goes through the
+    elements of the sequence the claim names, each element's verdict read off the tables, an arm that
+    takes it putting its weight on the running total and taking its value the first time the draw is
+    below it; the door turns away a draw at or past the total, unless the weights add up to 0, when the
+    walk answers `exhausted`, and a walk over no element answers `empty`. Every value is worked out
+    exactly. Returns how many draws were walked, or None where the claim is left stated."""
+    w = ch["weighted"]
+    types = cert.get("types") or {}
+    def numeric(n):
+        return str(types.get(n, "")).rstrip("?") not in ("bool", "string", "") and str(types.get(n, "")).rstrip("?") not in (cert.get("enums") or {})
+    seq_name = next(c["cell"]["sequence"] for c in cl.get("inputs", []) if "sequence" in c["cell"])
+    sq = next((q for q in w.get("sequences", []) if q["name"] == seq_name), None)
+    if sq is None:
+        raise Bad(f"{where}: the sequence {seq_name} the claim names is none the certificate carries")
+    elems = []
+    for row in sq.get("rows", []):
+        e = {}
+        for f, c in zip(sq.get("fields", []), row.get("cells", [])):
+            v = c.get("value")
+            e[f] = Fraction(v) if numeric(f) and v is not None else v
+        elems.append(e)
+    ins = [(c["column"], c["cell"]) for c in cl.get("inputs", []) if "sequence" not in c["cell"]]
+    outs = [(c["column"], c["cell"]) for c in cl.get("outputs", [])]
+    rins = [chance_rin(cert, n) for n, _ in ins]
+    if any(x is None for x in rins):
+        STATED.append(f"{where}: an input that is not random takes values this program does not list")
+        return None
+    lists = [[v for v in rin_grid(rin) if cell_passes(cell, v if isinstance(v, str) else str(v))] for (n, cell), rin in zip(ins, rins)]
+    draw = w.get("draw")
+    grid = rin_grid(draws[draw])
+    arms = {a["is"]: a.get("take") for a in w.get("arms", [])}
+    values = cert.get("values", [])
+    walked = runs = 0
+    seen = []
+    for xs in itertools.product(*lists):
+        base = dict(zip([n for n, _ in ins], xs))
+        d = h = 0
+        taking = None
+        for r in grid:
+            env = dict(base)
+            env[draw] = r
+            try:
+                for v in values:
+                    x = exact_value(v["expr"], env)
+                    if x is not None and v.get("type") == "bool":
+                        x = "true" if x == 1 else "false"
+                    env[v["name"]] = x
+                ts = []
+                for e in elems:
+                    ee = dict(env)
+                    ee.update(e)
+                    verdict = value_of(tables, coords, ee.get, fuel, w["verdict"])
+                    if verdict not in arms:
+                        raise Bad(f"{where}: an element's verdict {verdict} has no arm")
+                    take = arms[verdict]
+                    if take is None:
+                        continue
+                    val = exact_value(take["value"], ee)
+                    wt = exact_value(take["weight"], ee)
+                    if val is None or wt is None:
+                        raise Bad(f"{where}: an element's value or weight cannot be worked out")
+                    ts.append((val, wt))
+                empty = exact_value(w["empty"], env)
+                total = sum((wt for _, wt in ts), Fraction(0))
+                if not elems:
+                    door, ans = True, empty
+                else:
+                    door = total == 0 or r < total
+                    if w.get("exhausted") is None:
+                        acc, ans = Fraction(0), None
+                        for val, wt in ts:
+                            acc += wt
+                            if r < acc:
+                                ans = val
+                                break
+                        if ans is None:
+                            ans = empty
+                    else:
+                        ans = exact_value(w["exhausted"], env)
+            except Inexact:
+                STATED.append(f"{where}: a value of the walk is rounded at a draw where the way it is rounded decides it")
+                return None
+            taking = len(ts) if taking is None else taking
+            walked += 1
+            if not door:
+                continue
+            env[w["answer"]] = ans
+            hit = True
+            for col, cell in outs:
+                if "any" in cell:
+                    continue
+                val = value_of(tables, coords, env.get, fuel, col)
+                if val is not None and not keeps(rounds, col, val):
+                    STATED.append(f"{where}: an output is rounded at a draw where the way it is rounded decides it")
+                    return None
+                if not cell_passes(cell, val if val is None or isinstance(val, str) else str(val)):
+                    hit = False
+            d += 1
+            h += 1 if hit else 0
+        if d:
+            runs += (taking or 0) + 1
+            seen.append(Fraction(h, d))
+            if not holds(Fraction(h, d)):
+                raise Bad(f"{where}: at {base} the chance {Fraction(h, d)} does not pass the claim")
+    k0 = classes[0] if classes else {}
+    low, high = (min(seen), max(seen)) if seen else (None, None)
+    if int(k0.get("run", -1)) != runs:
+        raise Bad(f"{where}: the rule is run {runs} times here, and the certificate says {k0.get('run')}")
+    if (num(k0.get("low")), num(k0.get("high"))) != (low, high):
+        raise Bad(f"{where}: the chances of the draws come to {low}–{high}, and the certificate says {k0.get('low')}–{k0.get('high')}")
+    return walked
+
+
 def check_chances(cert, ch):
-    """The claims of `chances` (rulec's §15.224), held to their arithmetic. Each random input's
-    number of points is worked out again from its range and step, or its values. Each random axis
-    tiles its input's range. For each class of the inputs that are not random counted box by box,
-    the boxes are every combination of the random axes' coordinates once, each with the product of
-    its coordinates' points; whether a box's answer passes the claim is worked out again from its
-    outputs; and the hits over the points pass the chance claimed. The classes listed for a claim
-    are every combination of the other axes' coordinates its cells take. What a box's points answer,
-    which class holds no input, and the chances of the classes whose points were run one by one are
-    the certificate's word, and are listed as stated."""
-    ranges, scales, enums = cert.get("ranges", {}), cert.get("scales", {}), cert.get("enums", {})
-    types, enum_ranges = cert.get("types", {}), cert.get("enum_ranges", {})
+    """The claims of `chances` (rulec's §15.224–§15.226, §15.243), held to the rows. Each random input
+    is drawn from the whole steps of its range or its words, and each random axis's coordinates tile
+    them, side by side, none twice. The answer of each box is worked out again here from the tables'
+    rows — at every point of each table the box may stand on, the row that answers writes one value —
+    so the hits of a class are counted here, not read; the classes listed are every combination of the
+    other axes' coordinates inside the claim's cells, and those axes cover what their columns take.
+    A claim the check ran point by point is run again here, every value the rule computes worked out
+    exactly. What is left stated: a claim undecided within the budget (W129), one over a sequence the
+    rule walks, and a class the walk found no input in."""
+    ranges, scales = cert.get("ranges", {}), cert.get("scales", {})
+    types = cert.get("types", {})
+    tables = cert.get("tables", [])
+    coords = {id(t): table_coords(t) for t in tables}
+    fuel = len(tables) + 1
+    rounds = ch.get("rounds") or {}
+    # What each random input is drawn from, held to the rule's ranges and types.
+    draws = {}
     for r in ch.get("random", []):
         name = r["name"]
-        if "values" in r:
-            ty = types.get(name)
-            want = ["false", "true"] if ty == "bool" else enum_ranges.get(name) or enums.get(ty)
-            if want is None or list(r["values"]) != list(want):
-                raise Bad(f"chances: {name} is drawn from {r['values']}, and the rule's type gives {want}")
-            n = len(want)
+        rin = chance_rin(cert, name)
+        if rin is None:
+            raise Bad(f"chances: {name} is drawn, and its type {types.get(name)} is none this program draws")
+        if rin[0] == "words":
+            if list(r.get("values") or []) != rin[1]:
+                raise Bad(f"chances: {name} is drawn from {r.get('values')}, and the rule's type gives {rin[1]}")
         else:
             lo, hi = ranges.get(name, [None, None])
-            if lo is None or hi is None or [str(x) for x in r["range"]] != [str(lo), str(hi)]:
-                raise Bad(f"chances: {name} is drawn over {r['range']}, and its range is {[lo, hi]}")
-            k = Fraction(scales.get(name, 1))
-            n = math.floor(Fraction(hi) * k) - math.ceil(Fraction(lo) * k) + 1
-        if int(r["points"]) != n:
-            raise Bad(f"chances: {name} has {n} points, and the certificate says {r['points']}")
+            if [str(x) for x in r.get("range") or []] != [str(lo), str(hi)]:
+                raise Bad(f"chances: {name} is drawn over {r.get('range')}, and its range is {[lo, hi]}")
+            if int(r.get("scale", 0)) != rin[3]:
+                raise Bad(f"chances: {name} is drawn on another grid than the scale it is stored at")
+        if int(r["points"]) != rin_count(rin):
+            raise Bad(f"chances: {name} has {rin_count(rin)} points, and the certificate says {r['points']}")
+        draws[name] = rin
     axes = ch.get("axes", [])
     random_ix = [i for i, a in enumerate(axes) if a.get("random")]
     fixed_ix = [i for i, a in enumerate(axes) if not a.get("random")]
-    # Each random axis tiles its input: its points add up to the input's.
-    points = {r["name"]: int(r["points"]) for r in ch.get("random", [])}
+    if axes and sorted(axes[i]["column"] for i in random_ix) != sorted(draws):
+        raise Bad("chances: the random axes are not the random inputs, each once")
+    # Each random axis: its coordinates, each with the points it holds, side by side over the draws.
+    rand = []
     for i in random_ix:
         a = axes[i]
-        step = Fraction(a["step"])
-        spans = [coord_span(co, step) for co in a["coords"]]
-        if all(sp is not None for sp in spans):
-            spans.sort(key=lambda sp: sp[0])
-            for (lo1, hi1), (lo2, hi2) in zip(spans, spans[1:]):
-                if lo2 != hi1 + step:
+        rin = draws[a["column"]]
+        cs = []
+        for co in a["coords"]:
+            c = wcoord(co)
+            if c is None:
+                raise Bad(f"chances: a coordinate of {a['column']} is no number and no word")
+            if rin[0] == "num":
+                k = rin[3]
+                if c[0] == "w" or (c[0] == "b" and (c[1] is None or c[2] is None)):
+                    raise Bad(f"chances: a coordinate of {a['column']} runs on without an end")
+                ij = t_run(k, c)
+                cs.append((("run", k, ij[0], ij[1]), max(0, ij[1] - ij[0] + 1)))
+            else:
+                if c[0] != "w":
+                    raise Bad(f"chances: a coordinate of {a['column']} is no word")
+                drawn = c[1] in rin[1]
+                cs.append((("coord", c), 1 if drawn else 0))
+        if rin[0] == "num":
+            _, lo, hi, k = rin
+            cur = math.ceil(lo * k)
+            for (cv, _n) in cs:
+                if cv[2] != cur or cv[2] > cv[3] + 1:
                     raise Bad(f"chances: the coordinates of {a['column']} do not tile its range")
-            lo, hi = ranges.get(a["column"], [None, None])
-            if spans and (spans[0][0] != Fraction(lo) or spans[-1][1] != Fraction(hi)):
-                raise Bad(f"chances: the coordinates of {a['column']} run from {spans[0][0]} to {spans[-1][1]}, not over its range")
-        total = sum(coord_points(co, step) for co in a["coords"])
-        if a["column"] in points and total != points[a["column"]] and not enum_ranges.get(a["column"]):
-            raise Bad(f"chances: the coordinates of {a['column']} hold {total} points, and the input has {points[a['column']]}")
-    full = set(itertools.product(*[range(len(axes[i]["coords"])) for i in random_ix]))
-    counted = run = empty = 0
+                cur = cv[3] + 1
+            if cur != math.floor(hi * k) + 1:
+                raise Bad(f"chances: the coordinates of {a['column']} do not run over its range")
+        else:
+            if [cv[1][1] for (cv, n) in cs if n] != rin[1]:
+                raise Bad(f"chances: the words of {a['column']} are not the ones its input is drawn from, each once")
+        rand.append(cs)
+    # The axes that are not random cover what their columns take.
+    fixed = []
+    strings = False
+    for i in fixed_ix:
+        a = axes[i]
+        cs = [wcoord(co) for co in a["coords"]]
+        if any(c is None for c in cs) or str(types.get(a["column"], "")).rstrip("?") == "string":
+            strings = True
+            fixed.append(cs)
+            continue
+        if not fixed_tiles(cert, a, cs):
+            raise Bad(f"chances: the coordinates of {a['column']} do not cover what it takes")
+        # A claim counted box by box speaks for the values on the grid this axis is cut on, which has
+        # to divide the step the column's values sit on (§15.190): cut coarser, a value the column
+        # takes would lie off the grid, and the claim would be counted over fewer values than there are.
+        ty = str(types.get(a["column"], ""))
+        base = ty[:-1] if ty.endswith("?") else ty
+        if base != "bool" and base not in (cert.get("enums") or {}):
+            st, g = num(a.get("step")), column_grid(cert, a["column"])
+            if g is None:
+                STATED.append(f"the step chances' {a['column']} is cut at, which no scale here bears out")
+            elif (g / st).denominator != 1:
+                raise Bad(f"chances: {a['column']} is cut every {st}, and its values sit on a step of {g}, "
+                          f"so a value can fall between two coordinates")
+        fixed.append(cs)
+    def fixed_cell(i, c):
+        """What a coordinate of an axis that is not random holds: a number's whole steps of the walk's
+        grid, where both its ends are there; otherwise every value of it."""
+        a = axes[fixed_ix[i]]
+        st = num(a.get("step"))
+        if c[0] != "w" and st is not None and st > 0 and (1 / st).denominator == 1:
+            k = int(1 / st)
+            ij = t_run(k, c)
+            if ij[0] is not None and ij[1] is not None:
+                return ("run", k, ij[0], ij[1])
+        return ("coord", c)
+    values = cert.get("values", [])
+    value_names = [v["name"] for v in values]
+    inputs = list(cert.get("inputs") or [])
+    walks = bool(cert.get("walks") or cert.get("fold_answers") or cert.get("extremes"))
+    counted = run_total = proved = walked = 0
     for cl in ch.get("claims", []):
         where = f"chances {cl['chances'] + 1} row {cl['row']}"
         test = cl.get("chance") or {}
@@ -3932,83 +4586,204 @@ def check_chances(cert, ch):
         if cl.get("verdict") == "undecided":
             STATED.append(f"{where}: undecided within the budget (W129)")
             continue
+        if cl.get("verdict") != "holds":
+            raise Bad(f"{where}: the claim is {cl.get('verdict')}, and a rule whose claim does not hold has no certificate")
+        ins = [(c["column"], c["cell"]) for c in cl.get("inputs", [])]
+        outs = [(c["column"], c["cell"]) for c in cl.get("outputs", [])]
+        sequence = any("sequence" in c for _, c in ins)
+        classes = cl.get("classes", [])
+        if not axes:
+            # Run one by one: every combination the cells let in, every draw.
+            if sequence and ch.get("weighted"):
+                walked_here = check_weighted(cert, ch, cl, where, holds, tables, coords, fuel, rounds, draws, classes)
+                if walked_here is None:
+                    continue
+                walked += walked_here
+                proved += 1
+                continue
+            if walks or sequence:
+                # What the check ran is not run again here; its lowest and highest chance still pass the claim.
+                for k in classes:
+                    run_arith(where, k, holds)
+                STATED.append(f"{where}: its draws are counted over a sequence the rule walks, which this program does not walk")
+                continue
+            rins = [chance_rin(cert, n) for n, _ in ins]
+            if any(x is None for x in rins):
+                STATED.append(f"{where}: an input that is not random takes values this program does not list")
+                continue
+            # Each value reads only inputs, the columns tables decide, and the values listed before it.
+            decided = {d for t in tables for d in (t.get("decides") or [])}
+            def names(e):
+                if not isinstance(e, dict):
+                    return set()
+                out = {e["name"]} if "name" in e else set()
+                for k in ("l", "r"):
+                    if k in e:
+                        out |= names(e[k])
+                for a in e.get("args", []) or []:
+                    out |= names(a)
+                return out
+            if not all(m in inputs or m in decided or m in value_names[:i]
+                       for i, v in enumerate(values) for m in names(v.get("expr"))):
+                STATED.append(f"{where}: a value the rule computes reads one listed after it")
+                continue
+            lists = []
+            for (n, cell), rin in zip(ins, rins):
+                if rin[0] == "num" and "cmp" in cell:
+                    _, lo, hi, k = rin
+                    for op, b in cell["cmp"]:
+                        b = Fraction(b)
+                        if op in (">=", ">"):
+                            lo = max(lo, b)
+                        else:
+                            hi = min(hi, b)
+                    vals = [v for v in rin_grid(("num", lo, hi, k)) if cell_passes(cell, str(v))]
+                else:
+                    vals = [v for v in rin_grid(rin) if cell_passes(cell, v if isinstance(v, str) else str(v))]
+                lists.append(vals)
+            names_r = list(draws)
+            grids = [rin_grid(draws[n]) for n in names_r]
+            per = math.prod(len(g) for g in grids)
+            if math.prod(len(l) for l in lists) * per > 4000000:
+                STATED.append(f"{where}: its points are more than this program runs")
+                continue
+            cons = cert.get("constraints", [])
+            def side(env, s):
+                ns = s if isinstance(s, list) else [s]
+                vs = [env.get(n) for n in ns]
+                return None if any(not isinstance(v, Fraction) for v in vs) else sum(vs, Fraction(0))
+            ran, seen, inexact = 0, [], False
+            for xs in itertools.product(*lists):
+                base = dict(zip([n for n, _ in ins], xs))
+                d = h = 0
+                for rs in itertools.product(*grids):
+                    env = dict(base)
+                    env.update(zip(names_r, rs))
+                    ok_door = True
+                    for k in cons:
+                        a, b = side(env, k["left"]), side(env, k["right"])
+                        if a is None or b is None or not {"<=": a <= b, "<": a < b, ">=": a >= b, ">": a > b}[k["op"]]:
+                            ok_door = False
+                            break
+                    if not ok_door:
+                        continue
+                    try:
+                        for v in values:
+                            x = exact_value(v["expr"], env)
+                            if x is not None and v.get("type") == "bool":
+                                x = "true" if x == 1 else "false"
+                            env[v["name"]] = x
+                    except Inexact:
+                        inexact = True
+                        break
+                    hit = True
+                    for col, cell in outs:
+                        if "any" in cell:
+                            continue
+                        val = value_of(tables, coords, env.get, fuel, col)
+                        if val is not None and not keeps(rounds, col, val):
+                            inexact = True
+                            break
+                        if not cell_passes(cell, val if val is None or isinstance(val, str) else str(val)):
+                            hit = False
+                    if inexact:
+                        break
+                    d += 1
+                    h += 1 if hit else 0
+                if inexact:
+                    break
+                if d:
+                    ran += per
+                    seen.append(Fraction(h, d))
+                    if not holds(Fraction(h, d)):
+                        raise Bad(f"{where}: at {base} the chance {Fraction(h, d)} does not pass {test}")
+            if inexact:
+                STATED.append(f"{where}: a value the rule computes, or an output, is rounded at a draw where the way it is rounded decides it")
+                continue
+            k0 = classes[0] if classes else {}
+            low, high = (min(seen), max(seen)) if seen else (None, None)
+            if int(k0.get("run", -1)) != ran:
+                raise Bad(f"{where}: {ran} points are run here, and the certificate says {k0.get('run')}")
+            if (num(k0.get("low")), num(k0.get("high"))) != (low, high):
+                raise Bad(f"{where}: the chances run here come to {low}–{high}, and the certificate says {k0.get('low')}–{k0.get('high')}")
+            run_total += ran
+            proved += 1
+            continue
+        if strings:
+            STATED.append(f"{where}: a column of the walk is one of strings, which this program does not cut")
+            continue
         # The classes listed are every combination of the other axes' coordinates inside the row.
-        if axes:
-            cells = {c["column"]: c["cell"] for c in cl.get("inputs", [])}
-            inside = set()
-            for at in itertools.product(*[range(len(axes[i]["coords"])) for i in fixed_ix]):
-                ok = True
-                for i, ci in zip(fixed_ix, at):
-                    cell = cells.get(axes[i]["column"])
-                    if cell is not None and "sequence" not in cell and not coord_in_cell(axes[i], axes[i]["coords"][ci], cell):
-                        ok = False
-                        break
-                    if axes[i]["column"] in enum_ranges and "word" in axes[i]["coords"][ci] \
-                            and axes[i]["coords"][ci]["word"] not in enum_ranges[axes[i]["column"]]:
-                        ok = False
-                        break
-                if ok:
-                    inside.add(at)
-            listed = set()
-            for k in cl.get("classes", []):
-                at = tuple(ci for _, ci in k["at"])
-                if [i for i, _ in k["at"]] != fixed_ix:
-                    raise Bad(f"{where}: a class is not one coordinate of each axis that is not random")
-                listed.add(at)
-            if listed != inside:
-                raise Bad(f"{where}: the classes listed are not the ones the row's cells take ({len(listed)} listed, {len(inside)} taken)")
-        for k in cl.get("classes", []):
-            if k.get("empty"):
-                empty += 1
+        cells = {c: cell for c, cell in ins}
+        inside = set()
+        for at in itertools.product(*[range(len(axes[i]["coords"])) for i in fixed_ix]):
+            ok = True
+            for i, ci in zip(fixed_ix, at):
+                cell = cells.get(axes[i]["column"])
+                if cell is not None and not coord_in_cell(axes[i], axes[i]["coords"][ci], cell):
+                    ok = False
+                    break
+            if ok:
+                inside.add(at)
+        listed = {}
+        for k in classes:
+            if [i for i, _ in k["at"]] != fixed_ix:
+                raise Bad(f"{where}: a class is not one coordinate of each axis that is not random")
+            listed[tuple(ci for _, ci in k["at"])] = k
+        if set(listed) != inside:
+            raise Bad(f"{where}: the classes listed are not the ones the row's cells take ({len(listed)} listed, {len(inside)} taken)")
+        unsure = 0
+        for at, k in listed.items():
+            if k.get("empty") or "run" in k:
+                if "run" in k:
+                    run_arith(where, k, holds)
+                unsure += 1
                 continue
-            if "run" in k:
-                run += int(k["run"])
-                # The chance every combination run came to, or the lowest and the highest: a claim is
-                # one value or comparisons with values, so what it lets in is an interval, and the
-                # two ends passing it is every chance between them passing it.
-                p, lo, hi = k.get("chance"), k.get("low"), k.get("high")
-                if (lo is None) != (hi is None) or (p is not None and (lo != p or hi != p)):
-                    raise Bad(f"{where}: a class's chance {p} is not the lowest and the highest it came to")
-                if lo is not None and Fraction(lo) > Fraction(hi):
-                    raise Bad(f"{where}: a class's lowest chance {lo} is above its highest {hi}")
-                for q in (lo, hi):
-                    if q is not None and not holds(Fraction(q)):
-                        raise Bad(f"{where}: a class's chance {q} does not pass {test}")
-                continue
-            boxes = k.get("boxes", [])
-            seen = set()
+            cls = {axes[i]["column"]: fixed_cell(q, fixed[q][ci]) for q, (i, ci) in enumerate(zip(fixed_ix, at))}
+            stated_boxes = {tuple(ci for _, ci in b["at"]): b for b in k.get("boxes", [])}
             tot = hits = 0
-            outs_cells = cl.get("outputs", [])
-            for b in boxes:
-                at = tuple(ci for _, ci in b["at"])
-                if [i for i, _ in b["at"]] != random_ix or at in seen:
-                    raise Bad(f"{where}: a box is listed twice, or not on the random axes")
-                seen.add(at)
-                n = 1
-                for i, ci in zip(random_ix, at):
-                    n *= coord_points(axes[i]["coords"][ci], Fraction(axes[i]["step"]))
-                if n != int(b["points"]):
-                    raise Bad(f"{where}: a box holds {n} points, and the certificate says {b['points']}")
-                hit = all(cell_passes(c["cell"], b["outputs"].get(c["column"])) for c in outs_cells)
-                if hit != b.get("hit"):
-                    raise Bad(f"{where}: whether a box's answer passes the claim is not what the certificate says")
+            for bx in itertools.product(*[range(len(cs)) for cs in rand]):
+                n = math.prod(rand[q][ci][1] for q, ci in enumerate(bx))
+                if n == 0:
+                    continue
+                cellmap = dict(cls)
+                for q, ci in enumerate(bx):
+                    cellmap[axes[random_ix[q]]["column"]] = rand[q][ci][0]
+                hit, outs_here = True, {}
+                for col, cell in outs:
+                    if "any" in cell:
+                        continue
+                    cv = cell_of(tables, coords, cellmap.get, fuel, col)
+                    if cv is None or cv[0] != "val" or not keeps(rounds, col, cv[1]):
+                        raise Bad(f"{where}: the rows do not give {col} one value in a box")
+                    outs_here[col] = cv[1]
+                    if not cell_passes(cell, cv[1] if isinstance(cv[1], str) else str(cv[1])):
+                        hit = False
                 tot += n
                 hits += n if hit else 0
-            if seen != full:
-                raise Bad(f"{where}: the boxes of a class do not tile the random axes ({len(seen)} of {len(full)})")
+                b = stated_boxes.get(bx)
+                if b is None:
+                    raise Bad(f"{where}: a box of a class is not listed")
+                if int(b["points"]) != n or bool(b.get("hit")) != hit:
+                    raise Bad(f"{where}: a box holds {n} points{' that pass' if hit else ''}, and the certificate says {b['points']}{' that pass' if b.get('hit') else ''}")
+                for col, v in outs_here.items():
+                    if chance_value((b.get("outputs") or {}).get(col)) != v:
+                        raise Bad(f"{where}: the rows answer {col} = {v} in a box, and the certificate says {(b.get('outputs') or {}).get(col)}")
+            if len(stated_boxes) != sum(1 for bx in itertools.product(*[range(len(cs)) for cs in rand])
+                                        if math.prod(rand[q][ci][1] for q, ci in enumerate(bx))):
+                raise Bad(f"{where}: the boxes of a class do not tile the random axes")
             if tot != int(k["points"]) or hits != int(k["hits"]):
                 raise Bad(f"{where}: the boxes add up to {hits} of {tot}, and the certificate says {k['hits']} of {k['points']}")
             if tot and not holds(Fraction(hits, tot)):
                 raise Bad(f"{where}: the chance {Fraction(hits, tot)} does not pass {test}")
             counted += 1
-    if counted:
-        STATED.append("what each box of the random axes answers: the tables' rows, as the certificate states them")
-    if empty:
-        STATED.append(f"{empty} classes of `chances` holding no input")
-    if run:
-        STATED.append(f"the chances of the classes whose {run} points were run one by one")
+        if unsure:
+            STATED.append(f"{where}: {unsure} classes the walk found no input in, or ran one by one, which this program does not show")
+        else:
+            proved += 1
     n = len(ch.get("claims", []))
-    return f"chances: {n} claims, {counted} classes counted box by box and added up again, {empty} empty, {run} points run one by one"
+    walk_note = f", {walked} draws walked by weight" if walked else ""
+    return (f"chances: {proved} of {n} claims re-checked — {counted} classes counted box by box over the rows, "
+            f"{run_total} points run one by one{walk_note}")
 
 
 def check_prerequisites(cert, p):
@@ -4156,7 +4931,14 @@ def main(argv):
                             lines.append(f"  FAILED {e}")
                             ok = False
                     try:
+                        claimed = check_claim_cells(cert, rule)
+                    except Bad as e:
+                        lines.append(f"  FAILED {e}")
+                        ok = False
+                        claimed = 0
+                    try:
                         read, loose, apart = check_cells(cert, rule)
+                        read += claimed
                         rest = f", {loose} literals not pinned to a boundary" if loose else ""
                         rest += f", {apart} rows written in an applied rule" if apart else ""
                         if loose:
@@ -4176,6 +4958,39 @@ def main(argv):
                 else:
                     lines.append(f"  FAILED the certificate is about another text than {rule}")
                     ok = False
+                # Every contribution merged into the rule is the very file the certificate names (§15.243):
+                # held to its SHA-256 whether it adds a row or not, and every row a contribution adds and
+                # every term it puts into an open value is one of them.
+                contribs = cert.get("contributions") or []
+                held_files = 0
+                for k in contribs:
+                    there = os.path.join(os.path.dirname(rule), k.get("file", ""))
+                    try:
+                        with open(there, "rb") as fh:
+                            digest = hashlib.sha256(fh.read()).hexdigest()
+                    except OSError:
+                        lines.append(f"  FAILED contribution {k.get('name')} is named as {k.get('file')}, which cannot be read")
+                        ok = False
+                        continue
+                    if digest != k.get("sha256"):
+                        lines.append(f"  FAILED contribution {k.get('name')} is read from another text than {there}")
+                        ok = False
+                    else:
+                        held_files += 1
+                if contribs:
+                    named = {k.get("file") for k in contribs}
+                    for t in cert.get("tables", []):
+                        for r in t.get("rows", []):
+                            if row_file(r) and row_file(r) not in named:
+                                lines.append(f"  FAILED {t['table']}: row {r['row']} is written in {row_file(r)}, which is no contribution the certificate names")
+                                ok = False
+                    for o in cert.get("opens", []):
+                        for term in o.get("terms", []):
+                            fr = term.get("from")
+                            if isinstance(fr, dict) and fr.get("file") not in named:
+                                lines.append(f"  FAILED {o['name']}: a term comes from {fr.get('file')}, which is no contribution the certificate names")
+                                ok = False
+                    lines.append(f"  the digests of the {held_files} contributions merged into it are their files'")
                 # Each contract's reading is tied to its text the same way (§15.142): the file
                 # is named relative to the rule, and its digest is in the certificate.
                 for k in cert.get("contracts", []):

@@ -1842,4 +1842,93 @@ theorem evalExact_sound {env : String → Option UVal} {rnd : Rat → Rat → Ra
   | typed t => intro r h; simpa [evalExact, eval] using h
   | unread => intro r h; simpa [evalExact, eval] using h
 
+/-! ## What an open value comes to (rulec's §15.227)
+
+An open value is its terms put together — added, multiplied, the largest or the smallest — the rule's
+own terms and every contribution's. The rule declares its range, and the tables below are checked over
+the whole of it, so what has to hold is that the terms together stay inside it. Each way of putting
+them together starts from a value of its own — `sum` from 0, `product` from 1, `max` and `min` from their
+`empty` value, which takes part even where there are terms — and takes the terms in turn. None of the
+four depends on the order the terms come in, so neither does anything below. -/
+
+/-- How an open value puts its terms together. -/
+inductive Combine where
+  | sum
+  | product
+  | max
+  | min
+  deriving DecidableEq, Repr, Inhabited
+
+/-- One term taken into what the value comes to so far. -/
+def Combine.step : Combine → Rat → Rat → Rat
+  | .sum, acc, x => acc + x
+  | .product, acc, x => acc * x
+  | .max, acc, x => rmax acc x
+  | .min, acc, x => rmin acc x
+
+/-- **What an open value comes to**: its start, with every term taken in turn. -/
+def openValue (c : Combine) (start : Rat) (xs : List Rat) : Rat := xs.foldl c.step start
+
+/-- The interval one more term takes the value into, from the interval it was in and the term's. -/
+def Combine.stepIval : Combine → Span2 → Span2 → Span2
+  | .sum, I, J => (I.1 + J.1, I.2 + J.2)
+  | .product, I, J =>
+    (rmin4 (I.1 * J.1) (I.1 * J.2) (I.2 * J.1) (I.2 * J.2), rmax4 (I.1 * J.1) (I.1 * J.2) (I.2 * J.1) (I.2 * J.2))
+  | .max, I, J => (rmax I.1 J.1, rmax I.2 J.2)
+  | .min, I, J => (rmin I.1 J.1, rmin I.2 J.2)
+
+/-- The interval an open value comes to, from its start and its terms' intervals. -/
+def openIval (c : Combine) (start : Rat) (Is : List Span2) : Span2 := Is.foldl c.stepIval (start, start)
+
+theorem rmax_mono {a b c d : Rat} (h1 : a ≤ b) (h2 : c ≤ d) : rmax a c ≤ rmax b d :=
+  rmax_le (Rat.le_trans h1 (left_le_rmax _ _)) (Rat.le_trans h2 (right_le_rmax _ _))
+
+theorem rmin_mono {a b c d : Rat} (h1 : a ≤ b) (h2 : c ≤ d) : rmin a c ≤ rmin b d :=
+  le_rmin (Rat.le_trans (rmin_le_left _ _) h1) (Rat.le_trans (rmin_le_right _ _) h2)
+
+/-- One more term keeps the value inside the interval `stepIval` works out. -/
+theorem Combine.step_mem (c : Combine) {I J : Span2} {v x : Rat} (hv : inSpan I v) (hx : inSpan J x) :
+    inSpan (c.stepIval I J) (c.step v x) := by
+  cases c with
+  | sum => exact ⟨add_le_add hv.1 hx.1, add_le_add hv.2 hx.2⟩
+  | product => exact mul_box hv.1 hv.2 hx.1 hx.2
+  | max => exact ⟨rmax_mono hv.1 hx.1, rmax_mono hv.2 hx.2⟩
+  | min => exact ⟨rmin_mono hv.1 hx.1, rmin_mono hv.2 hx.2⟩
+
+/-- Each term inside its own interval, in the order the intervals are listed. -/
+def TermsIn : List Rat → List Span2 → Prop
+  | [], [] => True
+  | x :: xs, I :: Is => inSpan I x ∧ TermsIn xs Is
+  | _, _ => False
+
+theorem foldl_step_mem (c : Combine) :
+    ∀ (xs : List Rat) (Is : List Span2) (v : Rat) (I : Span2), inSpan I v → TermsIn xs Is →
+      inSpan (Is.foldl c.stepIval I) (xs.foldl c.step v)
+  | [], [], _, _, hv, _ => hv
+  | x :: xs, J :: Is, v, I, hv, ⟨hx, hrest⟩ => by
+    simp only [List.foldl_cons]
+    exact foldl_step_mem c xs Is _ _ (c.step_mem hv hx) hrest
+  | [], _ :: _, _, _, _, h => by simp [TermsIn] at h
+  | _ :: _, [], _, _, _, h => by simp [TermsIn] at h
+
+/-- **An open value comes to a value inside the interval its terms' intervals work out to.** -/
+theorem openValue_mem (c : Combine) (start : Rat) {xs : List Rat} {Is : List Span2} (h : TermsIn xs Is) :
+    inSpan (openIval c start Is) (openValue c start xs) :=
+  foldl_step_mem c xs Is start (start, start) ⟨Rat.le_refl, Rat.le_refl⟩ h
+
+/-- **The open values check**: the range the rule declares holds the interval the terms work out to. -/
+def openOk (c : Combine) (start : Rat) (Is : List Span2) (S : Span2) : Bool :=
+  decide (S.1 ≤ (openIval c start Is).1) && decide ((openIval c start Is).2 ≤ S.2)
+
+/-- **The range an open value declares holds what its terms come to**, where the check passes and
+    each term is inside its interval — the interval worked out from its expression, from what the rows
+    that write it write, or the range declared for it (`eval_mem_interval`, `eval_mem_hull` and the
+    door say each of those). What the tables below read the value with, they read it soundly, whatever
+    the contributions add. -/
+theorem openValue_mem_stated {c : Combine} {start : Rat} {Is : List Span2} {S : Span2} {xs : List Rat}
+    (h : openOk c start Is S = true) (hx : TermsIn xs Is) : inSpan S (openValue c start xs) := by
+  simp only [openOk, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨h1, h2⟩ := openValue_mem c start hx
+  exact ⟨Rat.le_trans h.1 h1, Rat.le_trans h2 h.2⟩
+
 end RulecCert

@@ -4907,6 +4907,13 @@ pub struct CertRow {
     /// reads these to learn which rows of this one can put a column at a value, which is
     /// what turns an upstream leaf from a claim into a check (§15.115).
     pub produces: Vec<Option<String>>,
+    /// Where the row writes each word of `produces`, as `(line, byte column, byte length)`, in the
+    /// row's own file: the answer cell of that column, on the row's line or, for a `clause`, on its
+    /// `then` line. `None` where `produces` has none, and everywhere in a row an `apply` brought in.
+    /// The certificate writes these for the rows of a table written in more than one place — a set of
+    /// tables and clauses that decide one column, a contribution's rows among them — whose answer
+    /// cells are not in the order the table decides its columns (§15.243).
+    pub produced: Vec<Option<(usize, usize, usize)>>,
     /// What the row writes into each of the table's own output columns that holds a number,
     /// in the order `CertTable::decides` names them — a literal or a name, the only two things
     /// an answer cell can be (§3.2) — with where the cell stands, and `None` for a column that
@@ -5144,6 +5151,16 @@ impl TableRegion {
                     .collect(),
                 produces: (0..t.outputs.len())
                     .map(|oi| written_value(row.outs.get(oi), chk).cloned())
+                    .collect(),
+                produced: (0..t.outputs.len())
+                    .map(|oi| {
+                        written_value(row.outs.get(oi), chk)?;
+                        if applied.get(ri).copied().unwrap_or(false) {
+                            return None;
+                        }
+                        let span = row.out_spans.get(oi)?;
+                        Some((span.line, span.col, span.len))
+                    })
                     .collect(),
                 writes: (0..t.outputs.len())
                     .map(|oi| {

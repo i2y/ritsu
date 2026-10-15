@@ -404,18 +404,44 @@ def checkBoxes (t : ReadTable) (r : Report) : Report := Id.run do
   if read > 0 then r := r.say s!"    {read} boxes read back from the cells they were written as"
   return r
 
-/-- **A numeric axis tiles.** Its coordinates run from the declared range's low end to its
-    high end, each touching the next or one grid step past it, with nothing between —
-    §6.2's construction, checked rather than assumed. Without this a coordinate could be
-    quietly removed and the gap under it covered by nothing. -/
+/-- Why a numeric axis does not tile, said for a reader: the first thing the check finds wrong. -/
+def tilingWhy (col : String) (said : String) (st : Rat) (lo hi : Option Rat) (xs : List Coord) : String := Id.run do
+  if st ≤ 0 then return s!"{col} has a grid that does not move"
+  for c in [0 : xs.length] do
+    let x := xs[c]!
+    let (l, h) := x.span
+    if (l.isNone && c > 0) || (h.isNone && c + 1 < xs.length) then
+      return s!"{col} has an open end away from its ends"
+    if !x.onGridB st then
+      return s!"{col} has a coordinate that runs backwards or ends off the step {ratText st} it is cut at"
+  let first := xs[0]!
+  let last := xs[xs.length - 1]!
+  if first.span.1 != lo || last.span.2 != hi then
+    return s!"{col} does not run the whole of {said}"
+  if !beginsAt lo first || !endsAt hi last then
+    return s!"{col} does not end on the ends of {said}, so a value at an end is in no coordinate"
+  for c in [0 : xs.length - 1] do
+    if !nextTo st xs[c]! xs[c + 1]! then
+      return s!"{col} has a gap between two coordinates, or a value on two of them"
+  return s!"{col} does not tile {said}"
+
+/-- **A numeric axis tiles** (`axisTilesB`). Its coordinates run from the low end of the range its
+    column takes to the high end, each side by side with the next — two points a step apart, or a point
+    and an interval that begins or ends at it — on the grid the axis is cut on. The range is the one the
+    rule declares for an input and the one the certificate states for what a walk leaves behind (rulec's
+    §15.236); any other column's axis runs open at both ends. `axisTilesB_cover` and `axisTilesB_unique`
+    are what a pass settles: every value of the range on the grid stands on one coordinate, and on one
+    only. Without this a coordinate could be quietly removed and the gap under it covered by nothing; two
+    intervals that meet would leave the value between them out of both, and a point written twice would
+    put one value on two coordinates. -/
 def checkAxes (t : ReadTable) (r : Report) : Report × Nat := Id.run do
   let mut r := r
   let mut tiled := 0
   for ai in [0 : t.columns.length] do
     let mut bs := t.spans[ai]!
-    -- An optional input's axis starts with the absent value, which stands for no number; the
-    -- values that are there tile the rest (rulec's §15.201). Without it, the cover leaves out
-    -- an input the rule takes.
+    -- An optional input's axis starts with the absent value, which stands for no number; the values
+    -- that are there tile the rest (rulec's §15.201). Without it, the cover leaves out an input the
+    -- rule takes.
     if (t.optional[ai]?).getD false then
       let first := match bs[0]? with | some none => true | _ => false
       if (t.labels[ai]!)[0]? != some "none" || !first then
@@ -428,50 +454,28 @@ def checkAxes (t : ReadTable) (r : Report) : Report × Nat := Id.run do
     else if bs.all (·.isNone) then
       pure ()  -- an enum or a flag: no grid, and nothing to tile
     else
-      match t.steps[ai]! with
-      | none => r := r.fail s!"{t.name}: {t.columns[ai]!} has coordinates and no grid to read them on"
-      | some step =>
-        if step ≤ 0 then
-          r := r.fail s!"{t.name}: {t.columns[ai]!} has a grid that does not move"
-        else
-          let mut ok := true
-          for c in [0 : bs.length] do
-            match bs[c]! with
-            | none =>
-              r := r.fail s!"{t.name}: {t.columns[ai]!} mixes coordinates that stand for a number with ones that do not"
-              ok := false
-            | some x =>
-              let (lo, hi) := x.span
-              if (lo.isNone && c > 0) || (hi.isNone && c + 1 < bs.length) then
-                r := r.fail s!"{t.name}: {t.columns[ai]!} has an open end away from its ends"
-                ok := false
-          if ok then
-            for c in [0 : bs.length - 1] do
-              match bs[c]!, bs[c + 1]! with
-              | some x, some y =>
-                match x.span.2, y.span.1 with
-                | some hi, some lo =>
-                  if !(lo == hi || lo == hi + step) then
-                    r := r.fail s!"{t.name}: {t.columns[ai]!} has a gap between two coordinates"
-                | _, _ => pure ()
-              | _, _ => pure ()
-            -- What a walk leaves behind — a `count`, a `sum`, a `max`, a `min`, a fold's answer —
-            -- runs over the range `ranges` states for it, as an input's runs over its declared
-            -- range; `extremes` and `fold_answers` hold that range to what the walk can answer
-            -- (rulec's §15.236).
-            if t.kinds[ai]! == "input" || t.kinds[ai]! == "walk" then
-              let said := if t.kinds[ai]! == "input" then "the range the rule declares" else "the range it states"
-              match t.declared[ai]!, bs[0]!, bs[bs.length - 1]! with
-              | some d, some first, some last =>
-                if first.span.1 != some d.1 || last.span.2 != some d.2 then
-                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not run the whole of {said}"
-                -- An interval leaves its ends out, so an end of the declared range is covered
-                -- only by a point on it (rulec's §15.201): an axis whose last point was taken
-                -- away still reached the end with the interval before it.
-                else if first.span.2 != some d.1 || last.span.1 != some d.2 then
-                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not end on the ends of {said}, so a value at an end is in no coordinate"
-              | _, _, _ => pure ()
-            tiled := tiled + 1
+      match t.steps[ai]!, bs.mapM id with
+      | none, _ => r := r.fail s!"{t.name}: {t.columns[ai]!} has coordinates and no grid to read them on"
+      | _, none => r := r.fail s!"{t.name}: {t.columns[ai]!} mixes coordinates that stand for a number with ones that do not"
+      | some step, some xs =>
+        -- What a walk leaves behind — a `count`, a `sum`, a `max`, a `min`, a fold's answer — runs over
+        -- the range `ranges` states for it, as an input's runs over its declared range; `extremes` and
+        -- `fold_answers` hold that range to what the walk can answer (rulec's §15.236), and
+        -- `extreme_on_axis` and `foldAnswer_on_axis` put what it answers on a coordinate. An open value
+        -- runs over the range the rule declares for it, which `checkOpens` holds to what its terms come
+        -- to together (rulec's §15.227, `openValue_mem_stated`). Any other column is cut open at both
+        -- ends: what it can take is the whole line.
+        let ranged := t.kinds[ai]! == "input" || t.kinds[ai]! == "walk" || t.kinds[ai]! == "open"
+        let said := if t.kinds[ai]! == "input" || t.kinds[ai]! == "open" then "the range the rule declares"
+          else if t.kinds[ai]! == "walk" then "the range it states" else "the values it can take"
+        let (lo, hi) : Option Rat × Option Rat :=
+          if ranged then
+            match t.declared[ai]! with
+            | some d => (some d.1, some d.2)
+            | none => ((xs.head?.bind (·.span.1)), (xs.getLast?.bind (·.span.2)))
+          else (none, none)
+        if axisTilesB step lo hi xs then tiled := tiled + 1
+        else r := r.fail s!"{t.name}: {tilingWhy t.columns[ai]! said step lo hi xs}"
   return (r, tiled)
 
 /-- The largest step two steps are both whole multiples of (rulec's §15.190): a tenth and a
@@ -699,7 +703,7 @@ def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Repor
               -- What the row writes into a column of words is the cell in the file too (rulec's
               -- §15.233): the answer cell of that column says the word the certificate reads — what
               -- a machine moves on, what a `once` line counts, what an `ordered by` table answers,
-              -- and what a table above writes.
+              -- what a table above writes, and what a box of `chances` answers.
               for (pj, j) in row.produces.zip (List.range row.produces.length) do
                 if let some w := pj then
                   let txt : Option String := (bars[got.size + j]?).bind (fun ab =>
@@ -721,6 +725,26 @@ def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Repor
                   r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the file does not say `{sp.text}` there"
                 else
                   read := read + 1
+          -- In a table written in more than one place, the certificate names the answer cell each word
+          -- is written in (rulec's §15.243): one of the cells after the ones the row's tests read, on
+          -- its own line — or, for a `clause`, on its `then` line — saying the word.
+          if !single then
+            for (pj, j) in row.produces.zip (List.range row.produces.length) do
+              if let some w := pj then
+                match row.answers[j]? with
+                | some (some sp) =>
+                  let answersHere := bars.extract got.size bars.size
+                  if bars.size > 0 && (sp.line != ln || !answersHere.contains (sp.col, sp.col + sp.len)) then
+                    r := r.fail s!"{t.name}: row {row.index}, answer {j + 1}: the cell named is not one of the row's answer cells"
+                  else
+                    let wline := if bars.size > 0 then line
+                      else if 0 < sp.line && sp.line ≤ lines.size then lines[sp.line - 1]! else .empty
+                    let out := if sp.col + sp.len ≤ wline.size then
+                        String.fromUTF8? (wline.extract sp.col (sp.col + sp.len)) else none
+                    if out == some w && sp.text == w then read := read + 1
+                    else r := r.fail s!"{t.name}: row {row.index}, answer {j + 1}: the file writes `{out.getD ""}` there, and the certificate reads it as `{w}`"
+                | _ =>
+                  r := r.state s!"{t.name}: row {row.index}, answer {j + 1}: the word `{w}`, which the certificate names no answer cell for"
           -- What the row writes into a column of numbers is the cell in the file (rulec's §15.196):
           -- one of the cells after the ones its tests read, on its own line — or, for a `clause`,
           -- on its `then` line — and the literal or the name the certificate says it is.
@@ -1958,6 +1982,54 @@ def checkFoldAnswers (cert : Json) (w : Worked) (r : Report) : Report := Id.run 
     r := r.say s!"  fold answers: {held} ranges hold every value their fold answers with"
   return r
 
+/-- **What an open value comes to, held to the range it declares** (rulec's §15.227). The value is its
+    terms put together — added from 0, multiplied from 1, the largest or the smallest from its `empty`
+    value — so the interval it comes to is worked out from each term's: the interval this program works
+    out for it as for every name (`Worked.rangesOf`: from its expression, from what the rows that write it
+    write, or the range declared for it). The range the rule declares has to hold that interval
+    (`openOk`), and `openValue_mem_stated` is what a pass settles: whatever the terms are at a call, the
+    value is inside the range the tables below were checked over. -/
+def checkOpens (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
+  let mut r := r
+  let rangesJ := (field cert "ranges").getD Json.null
+  let mut held := 0
+  let mut terms := 0
+  let mut by_ := 0
+  for o in fieldArr cert "opens" do
+    let name := fieldStr o "name"
+    let how := fieldStr o "combine"
+    let some c := (if how == "sum" then some Combine.sum else if how == "product" then some Combine.product
+        else if how == "max" then some Combine.max else if how == "min" then some Combine.min else none)
+      | r := r.fail s!"{name}: `combine {how}` is not one of sum, product, max and min"
+        continue
+    let some S := field rangesJ name >>= ratPair
+      | r := r.fail s!"{name}: an open value declares its range, and the certificate states none with two ends"
+        continue
+    let start : Option Rat := match field o "empty" >>= optRat with
+      | some z => some z
+      | none => match c with
+        | .sum => some 0
+        | .product => some 1
+        | _ => none
+    let some z := start
+      | r := r.fail s!"{name}: a `combine {how}` states no `empty` value"
+        continue
+    let ts := (fieldArr o "terms").toList
+    terms := terms + ts.length
+    by_ := by_ + (ts.filter (fun t => (field t "from").isSome)).length
+    let some Is := ts.mapM (fun t => w.rangesOf (fieldStr t "name"))
+      | let missing := (ts.filter (fun t => (w.rangesOf (fieldStr t "name")).isNone)).map (fun t => fieldStr t "name")
+        r := r.fail s!"{name}: this program cannot work out the range of its term {", ".intercalate missing}"
+        continue
+    if openOk c z Is S then held := held + 1
+    else
+      let I := openIval c z Is
+      r := r.fail s!"{name}: its terms together come to [{ratText I.1}, {ratText I.2}], outside the range [{ratText S.1}, {ratText S.2}] it declares"
+  if held > 0 then
+    let from_ := if by_ > 0 then s!", {by_} of the terms from contributions" else ""
+    r := r.say s!"  open values: {held} hold what their {terms} terms come to together inside the range they declare{from_}"
+  return r
+
 /-- Whether two lists hold the same values, each once. -/
 def sameOnce (a b : List String) : Bool :=
   a.length == b.length && b.all (fun x => a.count x == 1)
@@ -2081,6 +2153,642 @@ def checkPrerequisites (cert p : Json) (r : Report) : Report := Id.run do
       kept := s!", and {fieldStr ob "table"} keeps its order along {had} edges"
   return r.say s!"  prerequisites {name} over {over}: {values.length} values and {edges} edges with no cycle, {reached.length} reached from start and {never.length} no case can take{kept}"
 
+/-! ## The claims of `chances` (rulec's §15.224–§15.226, §15.243) -/
+
+/-- The names an expression reads. -/
+def exprNames : RulecCert.Expr → List String
+  | .name n => [n]
+  | .lit _ _ | .typed _ | .unread => []
+  | .add a b | .sub a b | .mul a b | .minOf a b | .maxOf a b | .compare _ a b => exprNames a ++ exprNames b
+  | .divc a _ _ | .roundTo a _ | .modc a _ | .isqrt a => exprNames a
+  | .divRound a b _ _ => exprNames a ++ exprNames b
+  | .alloc a b c => exprNames a ++ exprNames b ++ exprNames c
+
+/-- A cell of a claim, as the certificate writes it (`{"any":true}`, `{"words":[…]}`, `{"cmp":[[op, v],
+    …]}`, …). `none` for a cell this program does not read — a sequence's name among them. -/
+def ccellOfJson (j : Json) : Option Chances.CCell :=
+  if (field j "any").isSome then some .any
+  else if (field j "nothing").isSome then some .nothing
+  else if let some ws := field j "words" >>= arr then some (.words (ws.toList.filterMap str))
+  else if let some ws := field j "not_words" >>= arr then some (.notWords (ws.toList.filterMap str))
+  else if let some ws := field j "strs" >>= arr then some (.words (ws.toList.filterMap str))
+  else if let some vs := field j "nums" >>= arr then (vs.toList.mapM optRat).map .nums
+  else if let some vs := field j "not_nums" >>= arr then (vs.toList.mapM optRat).map .notNums
+  else if let some ps := field j "prefix" >>= arr then some (.prefixes (ps.toList.filterMap str))
+  else if let some ts := field j "cmp" >>= arr then
+    (ts.toList.mapM (fun t => do
+      let a ← arr t
+      let op ← a[0]? >>= str >>= cmpOfString
+      let v ← a[1]? >>= optRat
+      some (op, v))).map .cmp
+  else none
+
+/-- The chance a claim writes, as the certificate states it. -/
+def chanceTestOfJson (j : Json) : Option Chances.ChanceTest :=
+  match field j "is" >>= optRat with
+  | some q => some (.is q)
+  | none => do
+    let ts ← field j "cmp" >>= arr
+    let cs ← ts.toList.mapM (fun t => do
+      let a ← arr t
+      let op ← a[0]? >>= str >>= cmpOfString
+      let v ← a[1]? >>= optRat
+      some (op, v))
+    some (.cmp cs)
+
+/-- One value a chance is written with in the file: `5/14`, `0`, `1`, `35%`, `0.25`. -/
+def chanceValueOfText (t : String) : Option Rat :=
+  let t := t.trimAscii.toString
+  match t.splitOn "/" with
+  | [a, b] => do
+    let x ← (literalValue a none).join
+    let y ← (literalValue b none).join
+    if y == 0 || x.den != 1 || y.den != 1 then none else some (x / y)
+  | [a] => (literalValue a none).join
+  | _ => none
+
+/-- The chance cell as the file writes it: a value, or comparisons with values (`>=1/4 <=1/2`). -/
+def chanceTestOfText (text : String) : Option Chances.ChanceTest := Id.run do
+  -- The ops and the values between them, in order.
+  let cs := text.toList
+  let mut items : Array (Option Cmp × String) := #[]
+  let mut cur : String := ""
+  let mut i := 0
+  let mut op : Option Cmp := none
+  while i < cs.length do
+    let c := cs[i]!
+    if c == '<' || c == '>' then
+      if !cur.trimAscii.toString.isEmpty || op.isSome then
+        items := items.push (op, cur)
+      cur := ""
+      let eq := cs[i + 1]? == some '='
+      op := some (if c == '<' then (if eq then .le else .lt) else (if eq then .ge else .gt))
+      i := i + (if eq then 2 else 1)
+    else
+      cur := cur.push c
+      i := i + 1
+  items := items.push (op, cur)
+  match items.toList with
+  | [(none, v)] => return (chanceValueOfText v).map .is
+  | xs =>
+    let mut out : List (Cmp × Rat) := []
+    for (o, v) in xs do
+      match o, chanceValueOfText v with
+      | some o, some q => out := out ++ [(o, q)]
+      | _, _ => return none
+    return some (.cmp out)
+
+/-- Two chances the same: the same value, or the same comparisons in the same order. -/
+def sameChance : Chances.ChanceTest → Chances.ChanceTest → Bool
+  | .is a, .is b => a == b
+  | .cmp xs, .cmp ys => xs.length == ys.length && (xs.zip ys).all (fun p => p.1.1 == p.2.1 && p.1.2 == p.2.2)
+  | _, _ => false
+
+/-- A coordinate of the walk, as the certificate writes it: `{"point":v}`, `{"open":[a,b]}` (the
+    values strictly between), `{"word":w}`. `none` for `{"other":true}`, the strings under no prefix. -/
+def wcoordOfJson (j : Json) : Option Chances.WCoord :=
+  match field j "point" >>= optRat with
+  | some a => some (.num (.exactly a))
+  | none =>
+    match field j "open" >>= arr with
+    | some a => some (.num (.between ((a[0]?).bind optRat) ((a[1]?).bind optRat)))
+    | none => (field j "word" >>= str).map .word
+
+/-- A table as the answers read it (`Chances.ATable`): each axis's coordinates — a number's interval,
+    or the word a coordinate that stands for no number is written as — the rows, and what each row
+    writes into the columns the table decides: the word it produces, the number or the name its answer
+    cell writes. -/
+def atableOfJson (tj : Json) : Option Chances.ATable := do
+  let policy ← (if fieldStr tj "policy" == "unique" then some Policy.unique
+    else if fieldStr tj "policy" == "first" then some Policy.first else none)
+  let axes := fieldArr tj "axes"
+  let columns := axes.toList.map (fun a => fieldStr a "column")
+  let coords : List (List Chances.WCoord) := axes.toList.map (fun a =>
+    let labels := (fieldArr a "coords").toList.filterMap str
+    let bs := fieldArr a "bounds"
+    (List.range labels.length).filterMap (fun c =>
+      match bs[c]? >>= coordOfJson with
+      | some x => some (Chances.WCoord.num x)
+      | none => (labels[c]?).map Chances.WCoord.word))
+  let rowsJ := (fieldArr tj "rows").toList
+  let rows : List Row := rowsJ.filterMap (fun r => do
+    let i ← fieldNat r "row"
+    some { index := i, box := (fieldArr r "accepts").toList.map (fun xs => (arr xs).getD #[] |>.toList.filterMap nat) })
+  let decides := (fieldArr tj "decides").toList.filterMap str
+  let outsL : List (Nat × List Chances.Out) := rowsJ.filterMap (fun r => do
+    let i ← fieldNat r "row"
+    let prods := fieldArr r "produces"
+    let writes := fieldArr r "writes"
+    some (i, (List.range decides.length).map (fun oi =>
+      match prods[oi]? >>= str with
+      | some w => Chances.Out.val (.word w)
+      | none =>
+        match writes[oi]? >>= (field · "expr") with
+        | some e =>
+          match field e "name" >>= str with
+          | some n => .name n
+          | none => match field e "value" >>= optRat with
+            | some v => .val (.num v)
+            | none => .none
+        | none => .none)))
+  some { columns := columns, coords := coords, rows := rows, policy := policy, decides := decides
+         outs := fun i => (outsL.lookup i).getD [] }
+
+/-- What a column takes, from its type and range: a number on the grid `1/scale` inside its range, or
+    its words — an enum's values (those its range lets in), `false` and `true`. `none` for a string, an
+    optional number and anything else this program does not draw or list. -/
+def rinOf (cert : Json) (n : String) : Option Chances.RIn :=
+  let ty := fieldStr ((field cert "types").getD Json.null) n
+  if ty.endsWith "?" then none
+  else if ty == "bool" then some (.words ["false", "true"])
+  else match field ((field cert "enums").getD Json.null) ty >>= arr with
+    | some vs =>
+      match field ((field cert "enum_ranges").getD Json.null) n >>= arr with
+      | some rs => some (.words (rs.toList.filterMap str))
+      | none => some (.words (vs.toList.filterMap str))
+    | none =>
+      if ty == "string" then none else do
+      let a ← field ((field cert "ranges").getD Json.null) n >>= arr
+      let lo ← a[0]? >>= optRat
+      let hi ← a[1]? >>= optRat
+      let k ← field ((field cert "scales").getD Json.null) n >>= nat
+      if k == 0 then none else some (.num lo hi k)
+
+/-- The words a column takes, after the absent value where it is optional. -/
+def wordsTaken (cert : Json) (n : String) : Option (List String) :=
+  let ty := fieldStr ((field cert "types").getD Json.null) n
+  let base := if ty.endsWith "?" then (ty.dropEnd 1).toString else ty
+  let none_ := if ty.endsWith "?" then ["none"] else []
+  if base == "bool" then some (none_ ++ ["false", "true"])
+  else match field ((field cert "enums").getD Json.null) base >>= arr with
+    | some vs =>
+      match field ((field cert "enum_ranges").getD Json.null) n >>= arr with
+      | some rs => some (none_ ++ rs.toList.filterMap str)
+      | none => some (none_ ++ vs.toList.filterMap str)
+    | none => none
+
+/-- How many values a random input is drawn from, worked out from what it is drawn from. -/
+def drawnCount : Chances.RIn → Nat
+  | .num lo hi k => (Chances.floorI (hi * k) + 1 - Chances.ceilI (lo * k)).toNat
+  | .words ws => ws.length
+
+/-- A class whose points the check ran one by one and this program does not run again, held to its own
+    arithmetic: the chance it came to is its lowest and its highest, and both pass the claim — a claim
+    is one value or comparisons with values, so the two ends passing it is every chance between them
+    passing it. -/
+def runArith (where_ : String) (k : Json) (test : Chances.ChanceTest) (r : Report) : Report := Id.run do
+  let mut r := r
+  let p := field k "chance" >>= optRat
+  let lo := field k "low" >>= optRat
+  let hi := field k "high" >>= optRat
+  if lo.isNone != hi.isNone || (p.isSome && (lo != p || hi != p)) then
+    r := r.fail s!"{where_}: a class's chance is not the lowest and the highest it came to"
+  match lo, hi with
+  | some a, some b =>
+    if b < a then r := r.fail s!"{where_}: a class's lowest chance is above its highest"
+    for q in [a, b] do
+      if !test.holds q then r := r.fail s!"{where_}: a class's chance {ratText q} does not pass the claim"
+  | _, _ => pure ()
+  return r
+
+/-- A value a sequence's cell holds, as the certificate writes it: a number where the field holds one, a
+    word otherwise. -/
+def fieldVal (numeric : Bool) (j : Json) : Option Chances.Val :=
+  if numeric then (optRat j).map .num else (str j).map .word
+
+/-- **A claim over a pick by weight, run** (rulec's §15.226). The walk — the sequence the claim names,
+    its column of verdicts read off the tables at each element, the arms, the `empty` and `exhausted`
+    values — is read into `Chances.WeightedClaim` and the walk run at every draw, every value worked out
+    exactly; `Chances.WeightedClaim.holds` is what a pass settles. What the certificate says the draws
+    came to — how many runs, the lowest chance and the highest — is held to what the program works out. -/
+def checkWeighted (cert wj cl : Json) (where_ : String) (test : Chances.ChanceTest) (tables : List Chances.ATable)
+    (fuel : Nat) (valuesL : List (String × RulecCert.Expr)) (numTy : String → Option Ty)
+    (draws : List (String × Chances.RIn)) (rounds : String → Option Rat) (classes : List Json)
+    (ins : List (String × Chances.CCell)) (r : Report) : Report × Nat := Id.run do
+  let mut r := r
+  let typesJ := (field cert "types").getD Json.null
+  let isNum : String → Bool := fun n => (numTy n).isSome
+  let seqName := ((fieldArr cl "inputs").toList.findSome? (fun c => field ((field c "cell").getD Json.null) "sequence" >>= str)).getD ""
+  let some sq := (fieldArr wj "sequences").toList.find? (fun q => fieldStr q "name" == seqName)
+    | return (r.fail s!"{where_}: the sequence {seqName} the claim names is none the certificate carries", 0)
+  let fields := (fieldArr sq "fields").toList.filterMap str
+  let some elems := (fieldArr sq "rows").toList.mapM (fun row =>
+      ((fieldArr row "cells").toList.zip fields).mapM (fun (c, f) => (field c "value" >>= fieldVal (isNum f)).map (fun v => (f, v))))
+    | return (r.fail s!"{where_}: an element of {seqName} cannot be read", 0)
+  let some arms := (fieldArr wj "arms").toList.mapM (fun a =>
+      match field a "take" with
+      | some (.null) | none => some ({ verdict := fieldStr a "is", take := none } : Chances.WArm)
+      | some t => do
+        let ve ← field t "value" >>= answerExprOfJson
+        let we ← field t "weight" >>= answerExprOfJson
+        some ({ verdict := fieldStr a "is", take := some (ve, we) } : Chances.WArm))
+    | return (r.fail s!"{where_}: an arm of the pick by weight cannot be read", 0)
+  let drawCol := fieldStr wj "draw"
+  let some draw := draws.lookup drawCol
+    | return (r.fail s!"{where_}: the pick draws {drawCol}, which is no random input", 0)
+  let some empty := field wj "empty" >>= answerExprOfJson
+    | return (r.fail s!"{where_}: the walk's `empty` value cannot be read", 0)
+  let exhausted : Option RulecCert.Expr := match field wj "exhausted" with
+    | some .null | none => none
+    | some e => answerExprOfJson e
+  if (field wj "exhausted").isSome && !(field wj "exhausted" matches some .null) && exhausted.isNone then
+    return (r.fail s!"{where_}: the walk's `exhausted` value cannot be read", 0)
+  let fixedNames := ins.map (·.1)
+  let some fixedIn := fixedNames.mapM (rinOf cert)
+    | return (r.state s!"{where_}: an input that is not random takes values this program does not list", 0)
+  let K : Chances.WeightedClaim := {
+    tables := tables, fuel := fuel, values := valuesL, types := numTy
+    fixedCols := fixedNames, fixedIn := fixedIn, elems := elems
+    verdict := fieldStr wj "verdict", arms := arms, drawCol := drawCol, draw := draw
+    empty := empty, exhausted := exhausted, answer := fieldStr wj "answer"
+    ins := ins, outs := ((fieldArr cl "outputs").toList.filterMap (fun c =>
+      (field c "cell" >>= ccellOfJson).map (fun cc => (fieldStr c "column", cc))))
+    rounds := rounds, test := test }
+  let _ := typesJ
+  let combos := K.combos
+  if combos.length * drawnCount draw > 4000000 then
+    return (r.state s!"{where_}: its draws are more than this program runs", 0)
+  -- What the certificate says the draws came to: the runs of the rule, the lowest chance and the highest.
+  let mut runs := 0
+  let mut walked := 0
+  let mut lowQ : Option Rat := none
+  let mut highQ : Option Rat := none
+  let mut exact := true
+  for xs in combos do
+    if !K.insPass xs then continue
+    match K.comboCount xs with
+    | some (d, h) =>
+      walked := walked + drawnCount draw
+      if d > 0 then
+        -- the check runs the rule once for the weights and once per element a weight is put in for
+        let taking := match draw.grid.head? >>= fun r0 => K.callExact xs r0 >>= K.tsExact with
+          | some ts => ts.length
+          | none => 0
+        runs := runs + taking + 1
+        let q : Rat := (h : Rat) / (d : Rat)
+        lowQ := some (match lowQ with | some l => if q < l then q else l | none => q)
+        highQ := some (match highQ with | some u => if u < q then q else u | none => q)
+    | none => exact := false
+  if !exact then
+    return (r.state s!"{where_}: a value of the walk is rounded at a draw where the way it is rounded decides it", 0)
+  let stated := classes.head?.getD Json.null
+  if (field stated "run" >>= str >>= String.toNat?) != some runs then
+    r := r.fail s!"{where_}: the rule is run {runs} times here, and the certificate says {fieldStr stated "run"}"
+  if (field stated "low" >>= optRat) != lowQ || (field stated "high" >>= optRat) != highQ then
+    r := r.fail s!"{where_}: the chances of the draws come to {(lowQ.map ratText).getD "nothing"}–{(highQ.map ratText).getD "nothing"}, and the certificate says {fieldStr stated "low"}–{fieldStr stated "high"}"
+  if !K.okB then
+    r := r.fail s!"{where_}: a combination its cells let in does not pass the chance it claims"
+  return (r, walked)
+
+/-- **The claims of `chances`, proved** (rulec's §15.224–§15.226). Each claim is read into the shape the
+    theorems speak about and held to the check they name: `Chances.Claim.okB` for a claim the walk
+    counted box by box, whose pass `Chances.Claim.holds` turns into the claim itself — the random axes
+    tile what their inputs are drawn from, one row of each table answers inside a box, and the hits over
+    the points pass the chance at every class inside the claim's cells — and `Chances.RunClaim.okB` for
+    a claim whose points the check ran one by one, which this program runs again, every value worked out
+    exactly (`Chances.RunClaim.holds`). What the certificate lists — the points of each box, its answer,
+    its hit, the points and hits of each class, the points run and the lowest and highest chance they
+    came to — is held to what the program works out, so a forged count is refused. A claim the check
+    left undecided (W129), and one this program cannot put in either shape, is named rather than
+    proved. -/
+def checkChances (cert : Json) (r : Report) : Report := Id.run do
+  let some ch := field cert "chances" | return r
+  let mut r := r
+  let typesJ := (field cert "types").getD Json.null
+  let rangesJ := (field cert "ranges").getD Json.null
+  -- What each random input is drawn from, held to the rule's ranges and types.
+  let mut draws : List (String × Chances.RIn) := []
+  for e in fieldArr ch "random" do
+    let name := fieldStr e "name"
+    match rinOf cert name with
+    | none => r := r.fail s!"chances: {name} is drawn, and its type `{fieldStr typesJ name}` is none this program draws"
+    | some inp =>
+      match inp, field e "values" >>= arr, field e "range" >>= arr with
+      | .words ws, some vs, _ =>
+        if vs.toList.filterMap str != ws then
+          r := r.fail s!"chances: {name} is drawn from {vs.toList.filterMap str}, and its type gives {ws}"
+      | .num lo hi k, _, some a =>
+        if (a[0]? >>= optRat) != some lo || (a[1]? >>= optRat) != some hi then
+          r := r.fail s!"chances: {name} is drawn over another range than the rule declares"
+        if (field e "scale" >>= nat) != some k then
+          r := r.fail s!"chances: {name} is drawn on another grid than the scale it is stored at"
+      | _, _, _ => r := r.fail s!"chances: what {name} is drawn from is not what its type gives"
+      if (field e "points" >>= str >>= String.toNat?) != some (drawnCount inp) then
+        r := r.fail s!"chances: {name} has {drawnCount inp} points, and the certificate says {fieldStr e "points"}"
+      draws := draws ++ [(name, inp)]
+  let tables := (fieldArr cert "tables").toList.filterMap atableOfJson
+  if tables.length != (fieldArr cert "tables").size then
+    r := r.fail "chances: a table cannot be read the way the answers read it"
+  let fuel := tables.length + 1
+  let roundsJ := (field ch "rounds").getD Json.null
+  let rounds : String → Option Rat := fun n => field roundsJ n >>= optRat
+  let axes := (fieldArr ch "axes").toList
+  let randIx := (List.range axes.length).filter (fun i => ((axes[i]?).bind (field · "random") >>= boolOf) == some true)
+  let fixedIx := (List.range axes.length).filter (fun i => !randIx.contains i)
+  let colOf : Nat → String := fun i => (axes[i]?.map (fieldStr · "column")).getD ""
+  let coordsOf : Nat → List Json := fun i => (axes[i]?.map (fun a => (fieldArr a "coords").toList)).getD []
+  let stepOf : Nat → Option Rat := fun i => axes[i]? >>= (field · "step") >>= optRat
+  -- The random axes, each coordinate with the run of whole steps it holds.
+  let randCols := randIx.map colOf
+  let rcOf : Nat → Json → Option Chances.RC := fun i c =>
+    match draws.lookup (colOf i) with
+    | some (.num _ _ k) => do
+      let x ← match wcoordOfJson c with
+        | some (.num x) => some x
+        | _ => none
+      let (a, b) ← Chances.runOf k x
+      some (.num x k a b)
+    | some (.words ws) => do
+      let w ← field c "word" >>= str
+      some (.word w (ws.contains w))
+    | none => none
+  let rand? : Option (List (List Chances.RC)) := randIx.mapM (fun i => (coordsOf i).mapM (rcOf i))
+  -- The axes that are not random, and what each column takes.
+  let fixedCols := fixedIx.map colOf
+  let faxOf : Nat → Option Chances.FAx := fun i =>
+    let n := colOf i
+    match wordsTaken cert n with
+    | some ws => some (.words ws)
+    | none =>
+      let ty := fieldStr typesJ n
+      if ty == "string" || ty.startsWith "string" then none else do
+      let st ← stepOf i
+      let a := (field rangesJ n >>= arr).getD #[]
+      some (.num st ((a[0]?).bind optRat) ((a[1]?).bind optRat) (ty.endsWith "?"))
+  let fixed? : Option (List (List Chances.WCoord)) := fixedIx.mapM (fun i => (coordsOf i).mapM wcoordOfJson)
+  let takes? : Option (List Chances.FAx) := fixedIx.mapM faxOf
+  if !axes.isEmpty && randCols.toArray.qsort (· < ·) != (draws.map (·.1)).toArray.qsort (· < ·) then
+    r := r.fail "chances: the random axes are not the random inputs, each once"
+  -- A claim counted box by box speaks for the values on the grid each axis that is not random is cut
+  -- on (`FAx.takes`). That grid has to divide the step the column's values sit on, worked out as for
+  -- a table's axis (rulec's §15.190): cut coarser, a value the column takes would lie off the grid, and
+  -- the claim would be counted over fewer values than there are.
+  for i in fixedIx do
+    if let some (.num st _ _ _) := faxOf i then
+      if st > 0 then
+        match columnStep cert [] (colOf i) with
+        | none => r := r.state s!"the step chances' {colOf i} is cut at, which no scale here bears out"
+        | some g =>
+          if (g / st).den != 1 then
+            r := r.fail s!"chances: {colOf i} is cut every {ratText st}, and its values sit on a step of {ratText g}, so a value can fall between two coordinates"
+  -- The values the rule computes, in the order the certificate lists them, for the claims run one by
+  -- one; a value that reads a later one, or one this program cannot read, leaves those claims named.
+  let valuesL : List (String × RulecCert.Expr) := (fieldArr cert "values").toList.filterMap (fun v => do
+    let e ← field v "expr" >>= answerExprOfJson
+    some (fieldStr v "name", e))
+  let valuesRead := valuesL.length == (fieldArr cert "values").size
+  let numTy : String → Option Ty := fun n =>
+    match field typesJ n >>= str >>= tyOfString with
+    | some t => if t.numeric || t == Ty.other "date" then some t else none
+    | none => none
+  let consL : List (List String × Cmp × List String) := (fieldArr cert "constraints").toList.filterMap (fun k => do
+    let op ← cmpOfString (fieldStr k "op")
+    some (sideNames k "left", op, sideNames k "right"))
+  let walks := (fieldArr cert "walks").size > 0 || (fieldArr cert "fold_answers").size > 0 || (fieldArr cert "extremes").size > 0
+  let mut proved := 0
+  let mut boxes := 0
+  let mut ran := 0
+  let mut walkedAll := 0
+  for cl in fieldArr ch "claims" do
+    let where_ := s!"chances {(fieldNat cl "chances").getD 0 + 1} row {(fieldNat cl "row").getD 0}"
+    let verdict := fieldStr cl "verdict"
+    if verdict == "undecided" then
+      r := r.state s!"{where_}: undecided within the budget (W129)"
+      continue
+    if verdict != "holds" then
+      r := r.fail s!"{where_}: the claim is {verdict}, and a rule whose claim does not hold has no certificate"
+      continue
+    let some test := field cl "chance" >>= chanceTestOfJson
+      | r := r.fail s!"{where_}: the chance it claims cannot be read"; continue
+    let insJ := (fieldArr cl "inputs").toList
+    let outsJ := (fieldArr cl "outputs").toList
+    let sequence := insJ.any (fun c => (field (((field c "cell").getD Json.null)) "sequence").isSome)
+    -- The cells on the inputs that are not random; a sequence's name is read by the walk.
+    let some ins := (insJ.filter (fun c => (field ((field c "cell").getD Json.null) "sequence").isNone)).mapM
+        (fun c => (field c "cell" >>= ccellOfJson).map (fun cc => (fieldStr c "column", cc)))
+      | r := r.fail s!"{where_}: a cell of its inputs cannot be read"
+        continue
+    let some outs := outsJ.mapM (fun c => (field c "cell" >>= ccellOfJson).map (fun cc => (fieldStr c "column", cc)))
+      | r := r.fail s!"{where_}: a cell of its outputs cannot be read"; continue
+    let classes := (fieldArr cl "classes").toList
+    if axes.isEmpty then
+      -- Run one by one: every combination the cells let in, every draw (§15.224, rulec's `by_points`).
+      -- A pick by weight over a sequence the claim names (rulec's §15.226): the walk is run at every
+      -- draw, its elements as the certificate carries them, read back out of the file.
+      if let some wj := field ch "weighted" then
+        if sequence then
+          let before := r.bad.size + r.stated.size
+          let (r', w) := checkWeighted cert wj cl where_ test tables fuel valuesL numTy draws rounds classes ins r
+          r := r'
+          walkedAll := walkedAll + w
+          if r.bad.size + r.stated.size == before then
+            proved := proved + 1
+          continue
+      if walks || sequence then
+        for k in classes do
+          r := runArith where_ k test r
+        r := r.state s!"{where_}: its draws are counted over a sequence the rule walks, which this program does not walk"
+        continue
+      let fixedNames := ins.map (·.1)
+      let some fixedIn := fixedNames.mapM (rinOf cert)
+        | r := r.state s!"{where_}: an input that is not random takes values this program does not list"
+          continue
+      -- Each value reads only inputs, the columns tables decide, and the values listed before it: the
+      -- order a call works them out in.
+      let inputsL := (fieldArr cert "inputs").toList.filterMap str
+      let decided := tables.flatMap (·.decides)
+      let inOrder := (List.range valuesL.length).all (fun i =>
+        match valuesL[i]? with
+        | some (_, e) => (exprNames e).all (fun m => inputsL.contains m || decided.contains m ||
+            (valuesL.take i).any (·.1 == m))
+        | none => false)
+      if !valuesRead || !inOrder then
+        r := r.state s!"{where_}: a value the rule computes cannot be read here, or reads one listed after it"
+        continue
+      let K : Chances.RunClaim := {
+        tables := tables, fuel := fuel, values := valuesL, types := numTy
+        fixedCols := fixedNames, fixedIn := fixedIn
+        randCols := draws.map (·.1), draws := draws.map (·.2)
+        cons := consL, ins := ins, outs := outs, rounds := rounds, test := test }
+      -- How many points running it takes, before running any.
+      let combos := K.combos
+      let per := (draws.map (fun d => drawnCount d.2)).foldl (· * ·) 1
+      if combos.length * per > 4000000 then
+        r := r.state s!"{where_}: its {combos.length * per} points are more than this program runs"
+        continue
+      -- What the certificate says the points came to: how many were run, the lowest chance and the highest.
+      let mut runPts := 0
+      let mut lowQ : Option Rat := none
+      let mut highQ : Option Rat := none
+      let mut exact := true
+      for xs in combos do
+        if !K.insPass xs then continue
+        match K.comboCount xs with
+        | some (d, h) =>
+          if d > 0 then
+            runPts := runPts + per
+            let q : Rat := (h : Rat) / (d : Rat)
+            lowQ := some (match lowQ with | some l => if q < l then q else l | none => q)
+            highQ := some (match highQ with | some u => if u < q then q else u | none => q)
+        | none => exact := false
+      if !exact then
+        r := r.state s!"{where_}: a value the rule computes, or an output, is rounded at a draw where the way it is rounded decides it"
+        continue
+      let stated := classes.head?.getD Json.null
+      if (field stated "run" >>= str >>= String.toNat?) != some runPts then
+        r := r.fail s!"{where_}: {runPts} points are run here, and the certificate says {fieldStr stated "run"}"
+      if (field stated "low" >>= optRat) != lowQ || (field stated "high" >>= optRat) != highQ then
+        r := r.fail s!"{where_}: the chances run here come to {(lowQ.map ratText).getD "nothing"}–{(highQ.map ratText).getD "nothing"}, and the certificate says {fieldStr stated "low"}–{fieldStr stated "high"}"
+      if K.okB then
+        proved := proved + 1
+        ran := ran + runPts
+      else
+        r := r.fail s!"{where_}: a combination its cells let in does not pass the chance it claims"
+      continue
+    -- Counted box by box over the walk's axes.
+    let (some rand, some fixed, some takes) := (rand?, fixed?, takes?)
+      | if fixed?.isNone || takes?.isNone then
+          r := r.state s!"{where_}: a column of the walk is one of strings, which this program does not cut"
+        else
+          r := r.fail s!"{where_}: a coordinate of a random axis cannot be read"
+        continue
+    let K : Chances.Claim := {
+      tables := tables, fuel := fuel, fixedCols := fixedCols, fixedTakes := takes, fixed := fixed
+      randCols := randCols, draws := randCols.filterMap (fun n => draws.lookup n), rand := rand
+      ins := ins, outs := outs, rounds := rounds, test := test }
+    if !K.wellB then
+      r := r.fail s!"{where_}: the axes do not tile what their columns take and their inputs are drawn from, or a cell is read off its own axis"
+      continue
+    -- The classes the certificate lists are the ones inside the cells, each once.
+    let fixedCombos := Chances.cart (fixed.map (fun cs => List.range cs.length))
+    let inside := fixedCombos.filter (fun ix => K.insideAll (ix.zip fixed |>.filterMap (fun (c, cs) => cs[c]?)))
+    let listedAt : Json → List Nat := fun k => (fieldArr k "at").toList.filterMap (fun p => (arr p) >>= (·[1]?) >>= nat)
+    let listed := classes.map listedAt
+    if listed.length != inside.length || !inside.all (fun ix => listed.contains ix) then
+      r := r.fail s!"{where_}: the classes listed are not the ones the row's cells take ({listed.length} listed, {inside.length} taken)"
+      continue
+    let mut unsure := 0
+    let mut bad := false
+    for k in classes do
+      let ix := listedAt k
+      let cls := (ix.zip fixed).filterMap (fun (c, cs) => cs[c]?)
+      if (field k "empty").isSome || (field k "run").isSome then
+        if (field k "run").isSome then r := runArith where_ k test r
+        unsure := unsure + 1
+        continue
+      match K.count cls with
+      | none =>
+        r := r.fail s!"{where_}: the rows do not give each output the claim reads one value in every box of a class"
+        bad := true
+      | some (pts, hits) =>
+        if (field k "points" >>= str >>= String.toNat?) != some pts || (field k "hits" >>= str >>= String.toNat?) != some hits then
+          r := r.fail s!"{where_}: a class's boxes add up to {hits} of {pts}, and the certificate says {fieldStr k "hits"} of {fieldStr k "points"}"
+          bad := true
+        boxes := boxes + 1
+        -- Each box the certificate lists, held to what the rows answer there.
+        for b in fieldArr k "boxes" do
+          let bix := listedAt b
+          let box := (bix.zip rand).filterMap (fun (c, cs) => cs[c]?)
+          match K.boxCount cls box with
+          | some (p, h) =>
+            let hit := (field b "hit" >>= boolOf).getD false
+            if (field b "points" >>= str >>= String.toNat?) != some p || (p > 0 && (hit != (h > 0))) then
+              r := r.fail s!"{where_}: a box holds {p} points{if h > 0 then " that pass" else ""}, and the certificate says {fieldStr b "points"}{if hit then " that pass" else ""}"
+              bad := true
+            for oc in outs do
+              if oc.2 matches .any then continue
+              match Chances.cellOf tables (K.cellAt cls box) fuel oc.1, field ((field b "outputs").getD Json.null) oc.1 with
+              | some (.val (.word w)), some sj =>
+                if str sj != some w then
+                  r := r.fail s!"{where_}: the rows answer {oc.1} = {w} in a box, and the certificate says {sj.compress}"
+                  bad := true
+              | some (.val (.num v)), some sj =>
+                if (optRat sj) != some v then
+                  r := r.fail s!"{where_}: the rows answer {oc.1} = {ratText v} in a box, and the certificate says {sj.compress}"
+                  bad := true
+              | _, _ => pure ()
+          | none =>
+            r := r.fail s!"{where_}: the rows do not give each output the claim reads one value in a box"
+            bad := true
+    if bad then continue
+    if K.okB then
+      proved := proved + 1
+    else if unsure > 0 then
+      r := r.state s!"{where_}: {unsure} classes the walk found no input in, or ran one by one, which this program does not show"
+    else
+      r := r.fail s!"{where_}: a class inside its cells does not pass the chance it claims"
+  let n := (fieldArr ch "claims").size
+  let walkNote := if walkedAll > 0 then s!", {walkedAll} draws walked by weight" else ""
+  r := r.say s!"  chances: {proved} of {n} claims proved — {boxes} classes counted box by box over the rows, {ran} points run one by one{walkNote}"
+  return r
+
+/-- **The claims say what the file says** (rulec's §15.243): every cell of a claim and its chance are
+    read back out of the line of the `chances` table they stand on, and the chance the file writes is
+    the one the certificate holds the counts to. Returns how many cells were read back. -/
+def checkClaimSpans (cert : Json) (lines : Array ByteArray) (r : Report) : Report × Nat := Id.run do
+  let some ch := field cert "chances" | return (r, 0)
+  let mut r := r
+  let mut read := 0
+  for cl in fieldArr ch "claims" do
+    let where_ := s!"chances {(fieldNat cl "chances").getD 0 + 1} row {(fieldNat cl "row").getD 0}"
+    let some src := field cl "source"
+      | r := r.state s!"{where_}: where its cells stand, which the certificate does not say"
+        continue
+    let spans := (fieldArr src "inputs").toList ++ (fieldArr src "outputs").toList ++ ((field src "chance").toList)
+    let ln := (spans.head?.bind (fieldNat · "line")).getD 0
+    let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+    let bars := fieldsOf line
+    if spans.length != (fieldArr cl "inputs").size + (fieldArr cl "outputs").size + 1 then
+      r := r.fail s!"{where_}: the certificate names {spans.length} cells of a row of {(fieldArr cl "inputs").size + (fieldArr cl "outputs").size + 1}"
+      continue
+    let got := spans.map (fun sp => ((fieldNat sp "col").getD 0, (fieldNat sp "col").getD 0 + (fieldNat sp "len").getD 0))
+    if spans.any (fun sp => fieldNat sp "line" != some ln) || bars.toList != got then
+      r := r.fail s!"{where_}: its cells are not the cells of the line it is written on"
+      continue
+    let mut ok := true
+    for sp in spans do
+      if textAt lines sp != some (fieldStr sp "text") then
+        r := r.fail s!"{where_}: the file does not say `{fieldStr sp "text"}` at line {ln}"
+        ok := false
+    if !ok then continue
+    read := read + spans.length
+    match (field src "chance").bind (fun c => chanceTestOfText (fieldStr c "text")), field cl "chance" >>= chanceTestOfJson with
+    | some a, some b =>
+      if !sameChance a b then
+        r := r.fail s!"{where_}: the file writes the chance `{((field src "chance").map (fieldStr · "text")).getD ""}`, and the certificate holds the counts to another"
+    | _, _ =>
+      r := r.fail s!"{where_}: the chance the file writes cannot be read as one"
+  -- The elements of the sequences a pick by weight walks are the file's (rulec's §15.243): each cell
+  -- is read back out of the row of its `sequence` table, and holds what the file writes.
+  if let some wj := field ch "weighted" then
+    for sq in fieldArr wj "sequences" do
+      for row in fieldArr sq "rows" do
+        let cells := (fieldArr row "cells").toList
+        let ln := (fieldNat row "line").getD 0
+        let line := if 0 < ln && ln ≤ lines.size then lines[ln - 1]! else .empty
+        let spans := cells.filterMap (field · "source")
+        let got := spans.map (fun sp => ((fieldNat sp "col").getD 0, (fieldNat sp "col").getD 0 + (fieldNat sp "len").getD 0))
+        if spans.length != cells.length || spans.any (fun sp => fieldNat sp "line" != some ln) || (fieldsOf line).toList != got then
+          r := r.fail s!"sequence {fieldStr sq "name"}: the cells of a row are not the cells of the line it is written on"
+          continue
+        for c in cells do
+          let some sp := field c "source" | continue
+          let text := fieldStr sp "text"
+          if textAt lines sp != some text then
+            r := r.fail s!"sequence {fieldStr sq "name"}: the file does not say `{text}` at line {ln}"
+          else
+            let agrees := match field c "value" with
+              | some v =>
+                match str v with
+                | some w => w == text || (match literalValue text none, optRat v with
+                    | some (some x), some y => x == y
+                    | _, _ => false)
+                | none => false
+              | none => false
+            if agrees then read := read + 1
+            else r := r.fail s!"sequence {fieldStr sq "name"}: the file writes `{text}`, and the certificate reads another value"
+  return (r, read)
+
 /-- The file a certificate is about, split into lines the way a span counts them. -/
 def readLines (bs : ByteArray) : Array ByteArray := Id.run do
   let mut out : Array ByteArray := #[]
@@ -2201,11 +2909,9 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     r := checkExtremes cert worked r
     r := checkFoldAnswers cert worked r
     -- An open value (rulec's §15.227): its range is declared, the tables below are checked over the
-    -- whole of it, and that the terms the rule and its contributions give stay inside it is the
-    -- claim. No theorem of RulecCert says it yet.
-    for o in fieldArr cert "opens" do
-      let n := (fieldArr o "terms").size
-      r := r.state s!"the range of {fieldStr o "name"}, which its {n} terms put together ({fieldStr o "combine"}) stay inside"
+    -- whole of it, and the claim is that the terms the rule and its contributions give stay inside it
+    -- put together (`openOk`, and `openValue_mem_stated` is what a pass settles).
+    r := checkOpens cert worked r
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
       if kindsKnown then
@@ -2241,15 +2947,10 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     -- (`Prereq.no_cycle`, `Prereq.reached_holds`, `Prereq.never_held`, `Prereq.order_along`).
     for p in fieldArr cert "prerequisites" do
       r := checkPrerequisites cert p r
-    -- The claims of `chances` over the random inputs (rulec's §15.224): `tools/recheck.py` adds the
-    -- boxes of the random axes up again and holds each claim to them; no theorem here says yet that
-    -- the boxes tile the axes or that the chance follows from the rows, so each claim is named as
-    -- stated rather than proved.
-    if let some ch := field cert "chances" then
-      for c in fieldArr ch "claims" do
-        let t := (fieldNat c "chances").getD 0
-        let row := (fieldNat c "row").getD 0
-        r := r.state s!"chances {t + 1} row {row}: the chance of its outputs over the random inputs"
+    -- The claims of `chances` over the random inputs (rulec's §15.224–§15.226): counted box by box
+    -- over the rows, or run one by one, each held to the check its theorem names
+    -- (`Chances.Claim.holds`, `Chances.RunClaim.holds`).
+    r := checkChances cert r
     match rule with
     | none =>
       r := r.state "the certificate is held to no text: pass `--rule <file.rule>`"
@@ -2281,11 +2982,39 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
                   others := others ++ [(row.file, readLines cb)]
         let linesOf : String → Array ByteArray := fun f =>
           if f.isEmpty then lines else (others.lookup f).getD #[]
+        -- Every contribution merged into the rule is the very file the certificate names, held to its
+        -- SHA-256 — one that adds no row as much as one that does — and every row a contribution adds
+        -- and every term it puts into an open value is one of them (rulec's §15.243).
+        let contribs := fieldArr cert "contributions"
+        let mut heldFiles := 0
+        for k in contribs do
+          let there := dir0 / fieldStr k "file"
+          let got ← try pure (some (← IO.FS.readBinFile there)) catch _ => pure none
+          match got with
+          | none => r := r.fail s!"contribution {fieldStr k "name"} is named as {fieldStr k "file"}, which cannot be read"
+          | some cb =>
+            if Sha256.hex cb == fieldStr k "sha256" then heldFiles := heldFiles + 1
+            else r := r.fail s!"contribution {fieldStr k "name"} is read from another text than {there}"
+        if contribs.size > 0 then
+          let named := contribs.toList.map (fieldStr · "file")
+          for t in tables do
+            for row in t.rowsRaw do
+              if !row.file.isEmpty && !named.contains row.file then
+                r := r.fail s!"{t.name}: row {row.index} is written in {row.file}, which is no contribution the certificate names"
+          for o in fieldArr cert "opens" do
+            for term in fieldArr o "terms" do
+              if let some fr := field term "from" then
+                if !named.contains (fieldStr fr "file") then
+                  r := r.fail s!"{fieldStr o "name"}: a term comes from {fieldStr fr "file"}, which is no contribution the certificate names"
+          r := r.say s!"  the digests of the {heldFiles} contributions merged into it are their files'"
         for t in tables do
           let (r', n, a) := checkSpans t linesOf r curOf
           r := r'; read := read + n; apart := apart + a
         let (r', mread) := checkMachineSpans cert lines r curOf
         r := r'; read := read + mread
+        -- The claims of `chances` are the file's (rulec's §15.243).
+        let (r', cread) := checkClaimSpans cert lines r
+        r := r'; read := read + cread
         let rest := if apart > 0 then s!", {apart} rows written in an applied rule" else ""
         if apart > 0 then
           r := r.state s!"{apart} rows written in an applied rule, and read back in its own certificate"

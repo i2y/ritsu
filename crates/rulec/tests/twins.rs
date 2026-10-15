@@ -282,12 +282,12 @@ fn items<'a>(j: &'a Json, k: &str) -> &'a [Json] {
 /// certificate and never names, except in the objects under `values` and under `inputs` (the
 /// numbers a call on a machine's path to a final state is made with, rulec's §15.233), which are
 /// keyed by the names of the inputs they give a value to, and under `outputs` (what a box of the
-/// random axes answers, §15.224), keyed by the names of the outputs, so those count their members
-/// only.
+/// random axes answers, §15.224) and `rounds` (the grid each numeric output a claim reads rounds to,
+/// §15.243), keyed by the names of the outputs, so those count their members only.
 fn shape(j: &Json, parent: &str, out: &mut BTreeMap<String, usize>) {
     match j {
         Json::Obj(m) => {
-            let key = if parent == "values" || parent == "inputs" || parent == "outputs" {
+            let key = if parent == "values" || parent == "inputs" || parent == "outputs" || parent == "rounds" {
                 format!("names x {}", m.len())
             } else {
                 let mut ks: Vec<&str> = m.iter().map(|(k, _)| k.as_str()).collect();

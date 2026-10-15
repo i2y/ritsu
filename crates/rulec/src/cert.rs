@@ -34,7 +34,7 @@ fn end(r: &Option<Rat>) -> String {
 
 /// One expression as a tree the checker can walk. Only the shapes §5 allows appear: a name,
 /// a number, the four operators, and a call (a rounding, `min`, `max`).
-fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
+pub(crate) fn expr_json(e: &Expr, ty: &crate::types::Ty) -> String {
     match e {
         Expr::Name(n, _) => Obj::new().str("name", n).finish(),
         // A literal carries its unit (`10%`, `1万円`), so the value it stands for is
@@ -349,12 +349,16 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
         .opt_raw("prerequisites", crate::prereq::certificate_json(f, c))
         // The claims about the chances when the random inputs are drawn, and how each was counted
         // (§15.224). Written only for a rule that has them, so no other certificate changes.
-        .opt_raw("chances", crate::chances::certificate_json(f, c))
+        .opt_raw("chances", crate::chances::certificate_json(f, c, src))
         // The open values (§15.227): each with how its terms are put together, the value they start
         // from, and every term with where it comes from. Its range in `ranges` is the promise the
         // tables below are checked over; that the terms stay inside it is the claim. Written only
         // for a rule that has one.
         .opt_raw("opens", opens_json(f, c, rule_path))
+        // Every contribution merged into the rule, each named from the rule's directory with the
+        // SHA-256 of its text, so a re-checker holds the certificate to the very files it is about —
+        // one that adds no row as much as one that does (§15.243). Only for a merged rule.
+        .opt_raw("contributions", (!f.contributions.is_empty()).then(|| contributions_json(f, rule_path)))
         .finish()
 }
 
@@ -390,6 +394,16 @@ fn opens_json(f: &RuleFile, c: &Checked, rule_path: &str) -> Option<String> {
         })
         .collect();
     Some(arr(&os))
+}
+
+/// The contributions merged into the rule (§15.231, §15.243): each one's name, its file from the
+/// rule's directory, and the SHA-256 of its text.
+fn contributions_json(f: &RuleFile, rule_path: &str) -> String {
+    arr(&f
+        .contributions
+        .iter()
+        .map(|m| Obj::new().str("name", &m.shown_name()).str("file", &crate::link::relative(rule_path, &m.file)).str("sha256", &m.sha256).finish())
+        .collect::<Vec<_>>())
 }
 
 /// Each `max` and `min` of the rule (§15.219): its name, which of the two it is, the sequence it
@@ -1999,6 +2013,18 @@ fn table_json(t: CertTable, main_src: &str, rule_path: &str) -> String {
     // What the rows write into the columns that hold a number, for a table that has one: written
     // only there, so no other certificate changes (§15.196).
     let writes_numbers = t.rows.iter().any(|r| r.writes.iter().any(|w| w.is_some()));
+    // Where each row writes a word, for a table written in more than one place — a set of tables and
+    // clauses that decide one column, a contribution's rows among them — whose answer cells are not in
+    // the order it decides its columns, so a re-checker reads each word back from its own cell
+    // (§15.243). Only there, so no other certificate changes.
+    let mut origins: Vec<(&str, Option<&str>)> = Vec::new();
+    for r in &t.rows {
+        let o = (r.origin.as_str(), r.file.as_ref().map(|f| f.path.as_str()));
+        if !origins.contains(&o) {
+            origins.push(o);
+        }
+    }
+    let answers_named = origins.len() > 1;
     let rows: Vec<String> = t
         .rows
         .iter()
@@ -2072,6 +2098,26 @@ fn table_json(t: CertTable, main_src: &str, rule_path: &str) -> String {
                         })
                         .collect::<Vec<_>>()),
                 );
+            let o = if answers_named && r.produced.iter().any(|p| p.is_some()) {
+                o.raw(
+                    "answers",
+                    arr(&r
+                        .produced
+                        .iter()
+                        .map(|p| match p {
+                            Some((line, col, len)) => Obj::new()
+                                .int("line", *line as i128)
+                                .int("col", *col as i128)
+                                .int("len", *len as i128)
+                                .str("text", at_span(src, *line, *col, *len))
+                                .finish(),
+                            None => "null".into(),
+                        })
+                        .collect::<Vec<_>>()),
+                )
+            } else {
+                o
+            };
             if writes_numbers { o.raw("writes", writes).finish() } else { o.finish() }
         })
         .collect();

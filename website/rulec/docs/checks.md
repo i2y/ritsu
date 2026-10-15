@@ -210,15 +210,18 @@ the chance of prize = third is 1/20 (5.0%)." A claim the count cannot settle wit
 **W129**, never a pass. A `fold` can pick one element by weight with a drawn value
 (`take_weighted <value> by <weight>`), and what it picks is claimed and counted the same way. The
 generated code gives the chances as a function beside the rule's, in every target but SQL and
-Wasm; the certificate writes the counts out, both re-checkers add them up again, and the
-Lean one names the claims it does not prove yet.
+Wasm; the certificate writes the counts out, both re-checkers count them again — working out from
+the rows what each region answers, and running a pick by weight at every draw — and the Lean one
+proves the claims hold; one the check left undecided (W129) is named rather than proved.
 
 A rule can leave places for other files to add to: a value its terms put together (`open stackable
 : money[USD]  combine sum  range >=0USD <=100USD`), an enum, a table or a clause. A `contribution`
 file adds to them, and pins the shape of what it relies on (E040 says what moved). The rule is
 checked over the whole range it declares for an open value, so its own check holds whatever is
 added; a contribution whose terms take the value out of that range is **E131**, with the term and
-an input that does it, and a term that cannot move the value at all is **W132**. A value a
+an input that does it, and a term that cannot move the value at all is **W132**. The certificate
+names each contribution with the digest of its file, and both re-checkers hold the range to what the
+terms come to together; the Lean one proves it. A value a
 contribution adds to an enum is asked for a row by every table that reads the enum (E101), and one
 that a table that is not open would decide in silence, by its `-` row or a comparing cell, is
 **E033**. The rule is checked alone and merged: its claims of chances hold whatever is added, and
@@ -283,8 +286,8 @@ moves what (4) asks you to take on trust from 42,000 lines of Rust to a few hund
 of checking whose soundness is proved — plus the reading of the document itself, which is
 not. It does not remove (4): whether the tool *produces* a right certificate is still
 evidence, the declared ranges and types and constraints in it are its own word, and some
-things are named in a run rather than proved — the claims of `chances` and the ranges of open
-values among them. Both programs end by saying which. See
+things are named in a run rather than proved — a pair of rows the axes do not part, and a claim of
+`chances` the check left undecided, among them. Both programs end by saying which. See
 [formats](formats.md) for the document, its limits, and both re-checkers.
 
 ## Reading a diagnostic

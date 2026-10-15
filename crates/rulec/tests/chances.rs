@@ -364,9 +364,10 @@ fn the_functions_count_the_chances_the_reference_counts() {
     }
 }
 
-/// The certificate's `chances` is held by `tools/recheck.py` to the rule's ranges and to its own
-/// arithmetic: the boxes tile the random axes, each holds the product of its lengths, and the hits
-/// over the points pass the claim. One that lies is refused.
+/// The certificate's `chances` is held by `tools/recheck.py` to the rule's ranges, to its rows and to
+/// its own arithmetic: the boxes tile the random axes, each holds the product of its lengths, the rows
+/// answer in each box what the certificate says, and the hits over the points pass the claim. One that
+/// lies is refused.
 #[test]
 fn the_certificate_of_the_chances_is_rechecked() {
     if !ready(Need::Python, || have("python3"), "no python3, so tools/recheck.py was not run") {
@@ -383,7 +384,7 @@ fn the_certificate_of_the_chances_is_rechecked() {
     assert_eq!(c, 0);
     let (ok, said) = recheck(&cert);
     assert!(ok, "{said}");
-    assert!(said.contains("chances: 6 claims, 8 classes counted box by box and added up again, 0 empty, 0 points run one by one"), "{said}");
+    assert!(said.contains("chances: 6 of 6 claims re-checked — 8 classes counted box by box over the rows, 0 points run one by one"), "{said}");
     let lies: &[(&str, &str, &str)] = &[
         ("a box with a point more", "\"points\":\"48\"", "\"points\":\"49\""),
         ("a box that does not pass said to", "\"outputs\":{\"prize\":\"first\"},\"hit\":true", "\"outputs\":{\"prize\":\"first\"},\"hit\":false"),
@@ -395,11 +396,11 @@ fn the_certificate_of_the_chances_is_rechecked() {
         let (ok, said) = recheck(&cert.replacen(from, to, 1));
         assert!(!ok, "{what}: a lying certificate passed:\n{said}");
     }
-    // A claim whose points were run one by one states its chances, and the two ends are held to it.
+    // A claim whose points were run one by one is run again, and its two ends are held to what that comes to.
     let (c, cert, _) = run(&["certificate", CONTEST]);
     assert_eq!(c, 0);
     let (ok, said) = recheck(&cert);
-    assert!(ok && said.contains("the chances of the classes whose 25000 points were run one by one"), "{said}");
+    assert!(ok && said.contains("chances: 5 of 5 claims re-checked — 0 classes counted box by box over the rows, 25000 points run one by one"), "{said}");
     let (ok, said) = recheck(&cert.replacen("\"low\":\"3/5\"", "\"low\":\"2/5\"", 1));
     assert!(!ok, "a lowest chance that fails the claim passed:\n{said}");
 }

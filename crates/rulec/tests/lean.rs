@@ -406,6 +406,29 @@ fn 定理が立つ公理は三つだけ() {
         "RulecCert.Carried.Model.fires_of_callOk",
         "RulecCert.Carried.Model.finishes_of_pathOk",
         "RulecCert.Carried.Model.reachable_finishes",
+        "RulecCert.axisTilesB_cover",
+        "RulecCert.axisTilesB_unique",
+        "RulecCert.extreme_on_axis",
+        "RulecCert.foldAnswer_on_axis",
+        "RulecCert.Certified.answers_at",
+        "RulecCert.openValue_mem_stated",
+        "RulecCert.Chances.countP_cart_flatMap",
+        "RulecCert.Chances.chain_flatMap",
+        "RulecCert.Chances.tiles_flatMap",
+        "RulecCert.Chances.mem_grid_num",
+        "RulecCert.Chances.holds_iff_inRun",
+        "RulecCert.Chances.nearOf_sound",
+        "RulecCert.Chances.cellOf_sound",
+        "RulecCert.Chances.CCell.inside_iff",
+        "RulecCert.Chances.FAx.cover",
+        "RulecCert.Chances.Claim.box_const",
+        "RulecCert.Chances.Claim.count_share",
+        "RulecCert.Chances.Claim.holds",
+        "RulecCert.Chances.envExact_sound",
+        "RulecCert.Chances.RunClaim.pointHit_sound",
+        "RulecCert.Chances.RunClaim.holds",
+        "RulecCert.Chances.WeightedClaim.pointHit_sound",
+        "RulecCert.Chances.WeightedClaim.holds",
     ];
     let tmp = TempDir::new("axioms");
     let dir = tmp.path().to_path_buf();
@@ -1248,6 +1271,172 @@ fn 始まりとonceの値と行の答えはファイルから読み戻される(
         ("行き先を別の行のセルで読む", cert.replacen(r#"{"row":3,"stay":true,"source":{"line":22,"col":34,"len":5,"text":"state"}}"#, r#"{"row":3,"stay":true,"source":{"line":25,"col":34,"len":5,"text":"state"}}"#, 1), "machine: row 3's move is not read from the row's own cell of next_state"),
         ("行が書く語", cert.replacen(r#""produces":["paid",null,"true"]"#, r#""produces":["paid",null,"false"]"#, 1), "step: row 1, answer 3: the file writes `true` there, and the certificate reads it as `false`"),
     ]);
+}
+
+/// The claims the fourth stage added, proved (rulec's §15.243): the claims of `chances` counted box by
+/// box over the rows (`Chances.Claim.holds`), run point by point (`Chances.RunClaim.holds`) and walked by
+/// weight (`Chances.WeightedClaim.holds`), the range of an open value (`openValue_mem_stated`), and every
+/// contribution held to the digest of its file. Each one broken in one place is refused by the Lean
+/// checker and by `tools/recheck.py` alike.
+#[test]
+fn 第4段の主張は証明付きの検査器で証明される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    for (rel, line) in [
+        ("tests/corpus/prize_lottery.rule", "chances: 6 of 6 claims proved — 8 classes counted box by box over the rows, 0 points run one by one"),
+        ("tests/corpus/くじの景品.rule", "chances: 6 of 6 claims proved — 8 classes counted box by box over the rows, 0 points run one by one"),
+        ("tests/corpus/reward_box.rule", "chances: 6 of 6 claims proved — 450 classes counted box by box over the rows, 0 points run one by one"),
+        ("tests/corpus/invoice_sampling.rule", "chances: 6 of 6 claims proved — 40 classes counted box by box over the rows, 0 points run one by one"),
+        ("tests/corpus/contested_roll.rule", "chances: 5 of 5 claims proved — 0 classes counted box by box over the rows, 25000 points run one by one"),
+        ("tests/corpus/case_routing.rule", "chances: 7 of 7 claims proved — 0 classes counted box by box over the rows, 0 points run one by one, 70000 draws walked by weight"),
+        ("tests/corpus/案件の振り分け.rule", "chances: 7 of 7 claims proved — 0 classes counted box by box over the rows, 0 points run one by one, 70000 draws walked by weight"),
+    ] {
+        let (c, cert) = rulec(&["certificate", rel]);
+        assert_eq!(c, 0, "{rel}: {cert}");
+        let (code, said) = lean(&bin, &cert, Some(rel));
+        assert_eq!(code, 0, "{rel}: {said}");
+        assert!(said.contains(line), "{rel}: {said}");
+        assert!(said.contains("OK: every claim this program states was proved"), "{rel}: {said}");
+    }
+    // A claim the check left undecided is the one thing named.
+    let (c, cert) = rulec(&["certificate", "tests/mutants/m_w129.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let (code, said) = lean(&bin, &cert, Some("tests/mutants/m_w129.rule"));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("OK, and one thing is stated rather than proved: chances 1 row 5: undecided within the budget (W129)."), "{said}");
+
+    let rel = "tests/corpus/prize_lottery.rule";
+    let (_, cert) = rulec(&["certificate", rel]);
+    both_refuse(&bin, &cert, rel, &[
+        ("区画の点の数", cert.replacen(r#""points":"48""#, r#""points":"49""#, 1), "a box holds 48 points"),
+        ("引く軸の敷き詰めの隙間", cert.replacen(r#"{"point":"1"},"#, "", 1), "do not tile what their columns take"),
+        ("区分の当たりの数", cert.replacen(r#""points":"1000","hits":"1""#, r#""points":"1000","hits":"2""#, 1), "a class's boxes add up to 1 of 1000, and the certificate says 2 of 1000"),
+        ("主張の分数", cert.replacen(r#""chance":{"is":"1/1000"}"#, r#""chance":{"is":"1/999"}"#, 1), "does not pass the chance it claims"),
+        ("区画の答え", cert.replacen(r#""outputs":{"prize":"first"},"hit":true"#, r#""outputs":{"prize":"second"},"hit":true"#, 1), "the rows answer prize = first in a box"),
+        ("主張のセルの場所", cert.replacen(r#""chance":{"line":26,"col":24,"len":4,"text":"0.1%"}"#, r#""chance":{"line":27,"col":24,"len":4,"text":"0.1%"}"#, 1), "chances 1 row 1: its cells are not the cells of the line it is written on"),
+    ]);
+    // An axis that is not random cut coarser than the values its column takes: the claim would be
+    // counted over fewer values than there are.
+    let rel = "tests/corpus/invoice_sampling.rule";
+    let (_, cert) = rulec(&["certificate", rel]);
+    both_refuse(&bin, &cert, rel, &[(
+        "引かない軸の刻み",
+        cert.replacen(r#""column":"amount","random":false,"type":"money[JPY]","step":"1""#, r#""column":"amount","random":false,"type":"money[JPY]","step":"100000""#, 1),
+        "chances: amount is cut every 100000, and its values sit on a step of 1",
+    )]);
+    let rel = "tests/corpus/contested_roll.rule";
+    let (_, cert) = rulec(&["certificate", rel]);
+    both_refuse(&bin, &cert, rel, &[
+        ("一つずつ走らせた点の数", cert.replacen(r#""run":"200""#, r#""run":"199""#, 1), "200 points are run here, and the certificate says 199"),
+        ("一つずつ走らせた確率", cert.replacen(r#""low":"3/5""#, r#""low":"2/5""#, 1), "the chances run here come to 3/5–3/5, and the certificate says 2/5–3/5"),
+    ]);
+    let rel = "tests/corpus/case_routing.rule";
+    let (_, cert) = rulec(&["certificate", rel]);
+    both_refuse(&bin, &cert, rel, &[
+        ("並びの要素のセル", cert.replacen(r#"{"value":"50","source":{"line":35,"col":26,"len":2,"text":"50"}}"#, r#"{"value":"60","source":{"line":35,"col":26,"len":2,"text":"50"}}"#, 1), "the file writes `50`, and the certificate reads another value"),
+        ("重みで選ぶ主張の分数", cert.replacen(r#""chance":{"is":"1/2"}"#, r#""chance":{"is":"1/3"}"#, 1), "does not pass the chance it claims"),
+    ]);
+
+    // The range of an open value, and the files of the contributions merged into the rule.
+    let (c, cert) = rulec(&["certificate", "tests/corpus/contrib/order_discount/regional_campaign.rule"]);
+    assert_eq!(c, 0, "{cert}");
+    let rel = "tests/corpus/order_discount.rule";
+    let (code, said) = lean(&bin, &cert, Some(rel));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("open values: 3 hold what their 6 terms come to together inside the range they declare, 3 of the terms from contributions"), "{said}");
+    assert!(said.contains("the digests of the 1 contributions merged into it are their files'"), "{said}");
+    assert!(said.contains("OK: every claim this program states was proved"), "{said}");
+    let at = cert.find("\"contributions\":").expect("no contributions");
+    let (head, tail) = cert.split_at(at);
+    both_refuse(&bin, &cert, rel, &[
+        ("合わせた値の区間", cert.replacen(r#""stackable":["0","100"]"#, r#""stackable":["0","10"]"#, 1), "stackable: its terms together come to [0, 15], outside the range [0, 10] it declares"),
+        ("寄与の行のセル", cert.replacen(r#""text":"7USD""#, r#""text":"8USD""#, 1), "the file does not say"),
+        ("寄与のファイルのハッシュ", format!("{head}{}", tail.replacen("614de68c", "000de68c", 1)), "contribution regional_campaign is read from another text than"),
+    ]);
+}
+
+/// A rule whose open table a contribution adds a clause to that writes a word (§15.231, §15.243): the
+/// table is written in two places, so the certificate names the cell each row writes its word in, and
+/// both re-checkers read every word back out of its own file.
+const CARRIER: &str = "rule carrier_pick(carrier_pick) v1\ndescription \"Which carrier takes a parcel\"\n\nenum carrier = post | truck | drone\n\ninputs\n  weight(weight) : number  range >=0 <=30\n\noutputs\n  carrier(carrier) : carrier\n\ntable by_weight open\npolicy unique\n| weight | -> carrier |\n| <=5    | post       |\n| >5     | truck      |\n\nexamples\n| weight | -> carrier |\n| 2      | post       |\n| 9      | truck      |\n";
+const DRONES: &str = "contribution drones(drones) v1\ndescription \"Light parcels near the depot go by drone\"\nto \"../carrier.rule\" signature:a340e3857fd84c35\n\ninputs\n  near(near) : bool\n\nclause drone_light -> carrier\n  when near true and weight <=2\n  then drone\n  overrides by_weight\n\nexamples\n| weight | near | -> carrier |\n| 1      | true | drone      |\n";
+
+#[test]
+fn 寄与の行が書く語は寄与のファイルから読み戻される() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let t = TempDir::new("contributed-words");
+    let d = t.path();
+    std::fs::create_dir_all(d.join("contrib")).unwrap();
+    std::fs::write(d.join("carrier.rule"), CARRIER).unwrap();
+    std::fs::write(d.join("contrib/drones.rule"), DRONES).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(d).args(["certificate", "contrib/drones.rule"]).output().unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let cert = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(cert.contains(r#""answers":[{"line":10,"col":7,"len":5,"text":"drone"}]"#), "{cert}");
+    let run = |cert: &str| -> (i32, String, Option<(i32, String)>) {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut p = Command::new(&bin).current_dir(d).args(["--rule", "carrier.rule"]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+        let o = p.wait_with_output().unwrap();
+        let py = Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false).then(|| {
+            let p = d.join("c.json");
+            std::fs::write(&p, cert).unwrap();
+            let o = Command::new("python3").current_dir(d).arg(root().join("tools/recheck.py")).arg(&p).args(["--rule", "carrier.rule"]).output().unwrap();
+            (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+        });
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), py)
+    };
+    let (code, said, py) = run(&cert);
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("7 cells are read back out of it and the 1 file of its contributions"), "{said}");
+    if let Some((code, said)) = py {
+        assert_eq!(code, 0, "{said}");
+        assert!(said.contains("7 cells read back from carrier.rule and the 1 file of its contributions"), "{said}");
+    }
+    let forged = cert.replacen(r#""produces":["drone"]"#, r#""produces":["truck"]"#, 1);
+    assert_ne!(forged, cert);
+    let (code, said, py) = run(&forged);
+    assert_eq!(code, 1, "{said}");
+    assert!(said.contains("answer 1: the file writes `drone` there, and the certificate reads it as `truck`"), "{said}");
+    if let Some((code, said)) = py {
+        assert_eq!(code, 1, "{said}");
+    }
+}
+
+/// A table that reads an open value (rulec's §15.227): its axis runs over the range the rule declares for
+/// the value, as an input's does, and `opens` holds that range to what the terms come to together.
+const OPEN_BAND: &str = "rule site_band(site_band) v1\ndescription \"The band of a storage site, from the extra capacity its equipment adds\"\n\ninputs\n  has_shelving(has_shelving) : bool\n  has_racking(has_racking)   : bool\n\noutputs\n  band(band) : number  round down(1)\n\ntable from_shelving\npolicy unique\n| has_shelving | -> shelving_extra : number |\n| true         | 10                         |\n| false        | 0                          |\n\ntable from_racking\npolicy unique\n| has_racking | -> racking_extra : number |\n| true        | 20                        |\n| false       | 0                         |\n\nopen extra : number  combine sum  range >=0 <=100\n  shelving_extra\n  racking_extra\n\ntable band_of\npolicy unique\n| extra | -> band |\n| <=20  | 1       |\n| >20   | 2       |\n\nexamples\n| has_shelving | has_racking | -> band |\n| true         | true        | 2       |\n| false        | false       | 1       |\n";
+
+/// Both re-checkers tile the axis of an open value over the range the rule declares for it — the Lean
+/// one's reason is `axisTilesB_cover` with `openValue_mem_stated` — and refuse an axis that stops short
+/// of that range.
+#[test]
+fn 開いた値を読む表の軸は宣言した範囲を敷き詰める() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let t = TempDir::new("open-axis");
+    let rule = t.write("site_band.rule", OPEN_BAND);
+    let rule = rule.to_string_lossy().into_owned();
+    let (c, cert) = rulec(&["certificate", &rule]);
+    assert_eq!(c, 0, "{cert}");
+    assert!(cert.contains(r#""column":"extra","kind":"open""#), "{cert}");
+    let (code, said) = lean(&bin, &cert, Some(&rule));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains("open values: 1 hold what their 2 terms come to together inside the range they declare"), "{said}");
+    assert!(said.contains("OK: every claim this program states was proved"), "{said}");
+    if let Some((code, said)) = python(&cert, &rule) {
+        assert_eq!(code, 0, "{said}");
+    }
+    both_refuse(&bin, &cert, &rule, &[(
+        "宣言した範囲に届かない軸",
+        cert.replacen(r#""extra":["0","100"]"#, r#""extra":["0","200"]"#, 1),
+        "band_of: extra does not run the whole of the range the rule declares",
+    )]);
 }
 
 /// The file a rule's certificate is held to: the rule itself, or for a contribution the rule it comes

@@ -242,8 +242,9 @@ fn the_header_the_api_and_the_page_say_what_was_merged() {
 
 /// The certificate of a merged rule reads the rows a contribution adds back out of the contribution's
 /// file, held to its SHA-256: both re-checkers pass it as written, and fail it when the file is
-/// another text. The open values are stated in `opens`, the axis of one is of the kind `open`, and the
-/// Lean one names the claim that the terms stay inside the range as stated rather than proved.
+/// another text. The open values are stated in `opens`, the axis of one is of the kind `open`, and both
+/// hold the range each declares to what its terms come to together — the Lean one by
+/// `openValue_mem_stated` — and every contribution merged into the rule to the digest of its file.
 #[test]
 fn the_certificate_reads_a_contributed_row_out_of_its_own_file() {
     if !ready(Need::Python, || have("python3"), "no python3, so tools/recheck.py was not run") {
@@ -289,7 +290,8 @@ fn the_certificate_reads_a_contributed_row_out_of_its_own_file() {
     if with_lean {
         let (ok, out) = lean_says(d);
         assert!(ok, "{out}");
-        assert!(out.contains("stated rather than proved") && out.contains("the range of stackable, which its 3 terms put together (sum) stay inside"), "{out}");
+        assert!(out.contains("open values: 3 hold what their 6 terms come to together inside the range they declare, 3 of the terms from contributions"), "{out}");
+        assert!(out.contains("OK: every claim this program states was proved"), "{out}");
     }
     // The contribution's file changed under the certificate: both refuse it.
     let p = d.join("contrib/order_discount/regional_campaign.rule");
