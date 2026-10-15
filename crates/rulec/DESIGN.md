@@ -4593,6 +4593,26 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 - 表の種類は、コーパスと寄与を合わせた規則が書くものから決めた。生成器は、コーパスのどの規則も書かない形を一つ書く。お金・量・率を持ち越す machine の始まりの値（`INITIAL_BALANCE: USD = USD(20)`）で、0.29.0 から同じである。静的にコンパイルする処理系は、これも、モジュールが動くときに計算される値として受け付けない（再現の規則で確かめた）。そういう規則をコーパスに足すと、この節の試験が止まる。
 - 試験が見るのは `rulec gen` の生成物である。`ritsu gen` のパッケージのモジュールは、`enums` のファイルのモジュールを相対の import（`from .goods_catalog import …`）で読み、試験の表にはその形が無い。
 
+### 15.245 HTML のページで、説明の `<` とコードスパンを Markdown のとおりに見せる（2026-10-16）
+
+**きっかけ**：規則の説明（`description`）にある、HTML として読まれうる `<` は、Markdown のページで `&lt;` と書く（ritsu の DESIGN 16 章の頭）。`--format html` のページはその Markdown を `md_to_html` で HTML にするので、`inline_html` がこの `&lt;` の `&` をもう一度 `&amp;` にしていた。`description "A <img src=https://example.invalid/a.png> test"` は、HTML のページで `A &lt;img src=https://example.invalid/a.png> test` と見えた。タグとして読まれることは無いが、書いた文のとおりには見えない。同じ説明の ``a`<i>`b`` も、`inline_html` がバッククォートを一つずつ開け閉めするので、空のコードスパン二つと `<i>` だけのコードスパンに割れ、バッククォートが消えていた。
+
+**決定**：
+
+1. **`inline_html` は、コードスパンの外の `&lt;` を `&lt;` のまま書く。** `md_prose` が書いた `&lt;` は文の `<` で、HTML でも一度だけエスケープした形になる。説明に `&lt;` と書いたときも `<` と見えるが、その Markdown をサイトが見せるときも同じである。ほかの文字参照（説明に書いた `&amp;` など）は、前のとおり字のまま書く。
+2. **コードスパンは、開けたのと同じ数のバッククォートの並びで閉じる。** `md_prose` と CommonMark の読み方である。閉じる並びが無いバッククォートは字のまま書き、前のように残りを全部コードにはしない。中の改行は空白にし、両端が空白で、空白だけではない中身からは、両端の空白を一つずつ外す（``` `` `x` `` ``` の中身は `` `x` `` になる）。
+
+**確かめたこと**：
+
+- `tests/doc.rs` の「説明のタグは文字のまま書く」に、HTML のページを足した。同じ説明が `<p>Sizes &lt;=60cm, a &gt; b, R&amp;D. &lt;img src=x onerror=alert(1)&gt; … <code>&lt;b&gt;</code> and <code>a`&lt;i&gt;`b</code> and <code>`x`</code> and a ` alone</p>` になる。直す前のコードでは、`&amp;lt;img` と空のコードスパンが出て、この試験が止まる。
+- コーパスの 143 本を、0.29.2 のリリースのバイナリと直したビルドで `doc --format html` にかけると、英語と日本語の 286 ページが一字も変わらない。コーパスの説明には HTML として読まれうる `<` が無く、rulec が自分で書く Markdown のコードスパンは、どれもバッククォート一つで開け閉めするからである。規則のページを埋め込む dandori のサイトの例のページも、dandori の `tests/doc.rs` のとおり変わらない。
+- playground の人が読むページは、作り直した `website/docs/playground/ritsu.wasm` で同じ直しになる。
+
+**正直な限界**：
+
+- HTML のページは Markdown から組むので、説明に書いた `&lt;` と `md_prose` が書いた `&lt;` を区別できず、どちらも `<` と見える。ほかの文字参照は、Markdown をサイトが見せるときは解かれ（`&amp;` が `&`）、HTML のページでは字のまま見える。
+- `inline_html` が読むのは、rulec が書く Markdown の部分集合（コードスパン、太字、バックスラッシュのエスケープ）のままである。説明に書いた `*強調*` やリンクは、HTML のページでは字のまま見える。
+
 ## 16. この設計で最も危うい点
 
 第一に、**rulec が消したかった二重実装が、一段上で小さく再発する**。

@@ -4005,7 +4005,6 @@ pub(crate) fn html_esc(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
-/// Inline markdown of the subset the rendering uses: `code` and **bold**, over escaped text.
 /// The fact the copy adds to the list (§15.82): this rendering only exists because `check`
 /// passed, and a table that cites a document's table passed E116 to get here — so every amount
 /// in it is a value the copy shows. It is the one line that ties the table above to the table
@@ -4044,30 +4043,64 @@ fn transcribed(f: &RuleFile, t: &Table, path: &str) -> String {
     out
 }
 
-/// One pass, so that bold may hold a code span (`**`rulec check` が確かめたこと**` does).
+/// Inline markdown of the subset the rendering uses: `code` and **bold**, over escaped text. One
+/// pass, so that bold may hold a code span (`**`rulec check` が確かめたこと**` does). A code span
+/// runs to the next run of as many backquotes, as [`md_prose`] reads it, so a description's
+/// ``a`b`` is one span; without one, the backquotes are text (§15.245).
 fn inline_html(s: &str) -> String {
     let mut o = String::new();
-    let mut code = false;
     let mut strong = false;
     let cs: Vec<char> = s.chars().collect();
     let mut i = 0;
     while i < cs.len() {
         let ch = cs[i];
         if ch == '`' {
-            o.push_str(if code { "</code>" } else { "<code>" });
-            code = !code;
-            i += 1;
+            let n = cs[i..].iter().take_while(|c| **c == '`').count();
+            let mut j = i + n;
+            let mut end = None;
+            while j < cs.len() {
+                let m = cs[j..].iter().take_while(|c| **c == '`').count();
+                if m == n {
+                    end = Some(j);
+                    break;
+                }
+                j += m.max(1);
+            }
+            match end {
+                Some(j) => {
+                    // As CommonMark: a line break is a space, and one space comes off each side
+                    // of a span that starts and ends with one, so that it can hold a backquote.
+                    let inner: String = cs[i + n..j].iter().map(|c| if *c == '\n' { ' ' } else { *c }).collect();
+                    let inner = match inner.strip_prefix(' ').and_then(|t| t.strip_suffix(' ')) {
+                        Some(t) if inner.chars().any(|c| c != ' ') => t,
+                        _ => inner.as_str(),
+                    };
+                    o.push_str(&format!("<code>{}</code>", html_esc(inner)));
+                    i = j + n;
+                }
+                None => {
+                    o.extend(&cs[i..i + n]);
+                    i += n;
+                }
+            }
             continue;
         }
-        if !code && ch == '*' && cs.get(i + 1) == Some(&'*') {
+        if ch == '*' && cs.get(i + 1) == Some(&'*') {
             o.push_str(if strong { "</strong>" } else { "<strong>" });
             strong = !strong;
             i += 2;
             continue;
         }
+        // The `<` that `md_prose` keeps from opening HTML in the Markdown is written `&lt;` there,
+        // and stays `&lt;` here: it is a `<` of the text, escaped once, not `&amp;lt;` (§15.245).
+        if cs[i..].starts_with(&['&', 'l', 't', ';']) {
+            o.push_str("&lt;");
+            i += 4;
+            continue;
+        }
         // A backslash before a punctuation mark is the mark itself, as CommonMark reads it: what
         // a display name escapes (§15.211), and the bar a table's cell escapes.
-        if !code && ch == '\\' && cs.get(i + 1).is_some_and(|n| n.is_ascii_punctuation()) {
+        if ch == '\\' && cs.get(i + 1).is_some_and(|n| n.is_ascii_punctuation()) {
             match cs[i + 1] {
                 '&' => o.push_str("&amp;"),
                 '<' => o.push_str("&lt;"),
@@ -4086,9 +4119,6 @@ fn inline_html(s: &str) -> String {
             c => o.push(c),
         }
         i += 1;
-    }
-    if code {
-        o.push_str("</code>");
     }
     if strong {
         o.push_str("</strong>");

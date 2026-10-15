@@ -637,11 +637,13 @@ fn ページはホストの枠の中で名乗る() {
 /// The description is prose the rule writes (ritsu's DESIGN 9.2): a `<` that would open HTML in
 /// the Markdown — a tag, a comment, an autolink — is written `&lt;` there, outside the code spans,
 /// in the page for people and in the one for customers, so that the text reads as text wherever the
-/// page is put. `<=60cm`, `a > b`, `R&D` and a code span are as written.
+/// page is put. `<=60cm`, `a > b`, `R&D` and a code span are as written. The HTML page, made from
+/// the same Markdown, shows the text as a site shows that Markdown: every `<` escaped once, and the
+/// code spans as CommonMark reads them (§15.245).
 #[test]
 fn 説明のタグは文字のまま書く() {
-    let src = "rule t(t) v1\ndescription \"Sizes <=60cm, a > b, R&D. <img src=x onerror=alert(1)> </b> <!-- c --> <https://example.com> `<b>` and ``a`<i>`b``\"\n\ninputs\n  b(b) : bool\n\noutputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n| b | -> r(r) : bool |\n| true | true |\n| false | false |\n";
-    let want = "Sizes <=60cm, a > b, R&D. &lt;img src=x onerror=alert(1)> &lt;/b> &lt;!-- c --> &lt;https://example.com> `<b>` and ``a`<i>`b``";
+    let src = "rule t(t) v1\ndescription \"Sizes <=60cm, a > b, R&D. <img src=x onerror=alert(1)> </b> <!-- c --> <https://example.com> `<b>` and ``a`<i>`b`` and `` `x` `` and a ` alone\"\n\ninputs\n  b(b) : bool\n\noutputs\n  r(r) : bool\n\ntable x(x)\npolicy unique\n| b | -> r(r) : bool |\n| true | true |\n| false | false |\n";
+    let want = "Sizes <=60cm, a > b, R&D. &lt;img src=x onerror=alert(1)> &lt;/b> &lt;!-- c --> &lt;https://example.com> `<b>` and ``a`<i>`b`` and `` `x` `` and a ` alone";
     let page = doc_of(src, "markup");
     assert!(page.contains(&format!("\n{want}\n")), "{page}");
     let tmp = TempDir::new("doc-markup-customer");
@@ -650,6 +652,10 @@ fn 説明のタグは文字のまま書く() {
     let (c, out, e) = run(&["doc", p.to_str().unwrap(), "--audience", "customer"]);
     assert_eq!(c, 0, "{out}{e}");
     assert!(out.contains(&format!("\n{want}\n")), "{out}");
+    let (c, html, e) = run(&["doc", p.to_str().unwrap(), "--format", "html"]);
+    assert_eq!(c, 0, "{html}{e}");
+    let want = "<p>Sizes &lt;=60cm, a &gt; b, R&amp;D. &lt;img src=x onerror=alert(1)&gt; &lt;/b&gt; &lt;!-- c --&gt; &lt;https://example.com&gt; <code>&lt;b&gt;</code> and <code>a`&lt;i&gt;`b</code> and <code>`x`</code> and a ` alone</p>";
+    assert!(html.contains(want), "{html}");
 }
 
 /// A rate is shown in percent wherever the page gives a range (§15.241): an element's field, an
