@@ -5,36 +5,27 @@ project, each file checked by its own language with what one language checks rea
 and each language's generator and page. **Nothing is sent anywhere.** The files you edit stay in
 the browser.
 
-<div class="pg" data-lang="en">
-  <div class="pg-bar">
-    <select class="pg-project" aria-label="The project to open"></select>
-    <button class="pg-add" type="button"></button>
-    <button class="pg-remove" type="button"></button>
-    <button class="pg-revert" type="button" hidden></button>
-    <button class="pg-share" type="button"></button>
-    <span class="pg-status"></span>
-  </div>
-  <div class="pg-files" role="tablist" aria-label="The project's files"></div>
-  <textarea class="pg-src" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="The file"></textarea>
-  <div class="pg-tabs">
-    <button data-view="check" class="on" type="button">ritsu check</button>
-    <button data-view="gen" type="button">generate</button>
-    <button data-view="doc" type="button">the page for people</button>
-    <select class="pg-target" aria-label="The target" hidden></select>
-    <select class="pg-picker" aria-label="The file written" hidden></select>
-  </div>
-  <div class="pg-out"></div>
-</div>
+<div class="pg" data-lang="en"></div>
 
-<script src="playground/playground.js" defer></script>
+<script type="module" src="playground/playground.js"></script>
 
-A project here is a handful of files, one to a tab. Every time a file changes, the page hands all of
-them to the module, which runs the command as it would run in a directory holding the same files:
-`ritsu check .` for the project, and the generator or the page of the file that is open. The list
-holds a small shop where every language meets, the examples of rulec and dandori, sekisho's example,
-and an empty project to start from one file of your own. The tests hold what this page answers to what the
-`ritsu` binary prints and writes on the same files, word for word
-(`crates/ritsu/tests/playground.rs`).
+A project here is a handful of files, one to a tab, and the file that is open is in the editor.
+Every time a file changes, the page hands all of them to the module, which runs beside the page (in
+a worker, so that typing never waits for it) as it would run in a directory holding the same files:
+`ritsu check .` for the project, and the generator or the page of the file that is open. What it
+makes of them is under the editor, in four tabs: *the page for people* the file's language draws,
+its *Markdown*, the *problems* `ritsu check` finds, with how many there are, and the *generated
+code*. A finding is underlined where it is in the editor, and the tab of its file is marked. While
+the open file does not pass, the page for people last drawn of it stays, faded, with the first
+problem under it; press the problem to go to its line. The list holds a small shop where every
+language meets, the examples of rulec and dandori, sekisho's example, and an empty project to start
+from one file of your own. The tests hold what this page answers to what the `ritsu` binary prints
+and writes on the same files, word for word (`crates/ritsu/tests/playground.rs`).
+
+The same playground fills a whole window on [the full-screen page](play/): the code on the left,
+the four tabs on the right, and a border between them to drag; on a phone, one of the two at a
+time. It opens on a small rule of rulec's and the page drawn of it. *open full screen* takes the
+project there as it stands here: the file that is open, the tab, the target and every edit.
 
 ## What to try
 
@@ -43,7 +34,8 @@ and an empty project to start from one file of your own. The tests hold what thi
 requirement in `requirements/billing.req` names the rule's table, and the map names the rule as
 billing's layer against ordering. One line in one file, and three languages say what it does to them.
 
-1. **Read the findings.** Each headline carries the tool that says it. rulec:
+1. **Read the findings.** The page opens on *problems*: a line for each finding, then what
+   `ritsu check` prints. Each carries the tool that says it. rulec:
    `Enum order_status does not agree with OrderStatus in ../../proto/shop/v1/order.proto`, with the
    value the rule does not have. yuen: `rulec cannot answer for rulec "billing/rules/billing_need.rule"
    table decide`, the end of a requirement it can no longer hash. sakai: `The file
@@ -89,21 +81,22 @@ billing's layer against ordering. One line in one file, and three languages say 
    `ship_order` in no combination ``: every run that comes to the call is denied there. yuen, whose
    `requirements/warehouse.req` names the permit, says it `changed after warehouse_lead looked at
    this link on 2026-10-07`, and shows the line that changed.
-7. **Generate.** Open `ordering/ship_order.flow` and press *generate*: what Temporal runs, in
-   TypeScript, eight files. The three tasks that call the warehouse call operations of its contract,
-   so dandori holds their arguments, their results and their errors to
+7. **Generate.** Open `ordering/ship_order.flow` and the tab *generated code*: what Temporal runs,
+   in TypeScript, eight files. The three tasks that call the warehouse call operations of its
+   contract, so dandori holds their arguments, their results and their errors to
    `warehouse/api/warehouse.json`, and the activities it writes send them to the server the document
-   names. Pick Step Functions beside it, and nothing is written: the flow waits for an event sent to
-   the workflow and cleans up in `on cancel`, which Step Functions cannot do, and its tasks name no
-   connection to call the warehouse through. Every language that generates does it here: a rule its
-   code in twelve languages, a calendar in five, the book its SQL and its clients, a gate its Cedar,
-   the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
+   names. Pick Step Functions in the list above the code, and nothing is written: the flow waits for
+   an event sent to the workflow and cleans up in `on cancel`, which Step Functions cannot do, and
+   its tasks name no connection to call the warehouse through. Every language that generates does
+   it here: a rule its code in twelve languages, a calendar in five, the book its SQL and its
+   clients, a gate its Cedar, the map its Context Mapper CML, the requirements ReqIF or W3C PROV.
 8. **Open the page for people** of a rule, a calendar, the book, the flow or a gate: the page for
    those who read to understand and check what the code is to carry out. The page of the
    warehouse's gate lists each call the flow makes, the action that guards it and whether the
-   workflow is allowed it, and the operations of the book each action guards. A page is laid out for
-   a whole window, so it opens in a tab of its own; the Markdown each writes for a pull request is
-   below the link.
+   workflow is allowed it, and the operations of the book each action guards. The tab draws the page
+   as it stands on its own, and an edit draws it again where you had scrolled to; *save as HTML*
+   keeps a copy, and *open in a tab of its own* gives it a whole window. The tab *Markdown* has
+   what each writes for a pull request, rendered or as its text, to copy.
 
 *A small shop, in Japanese* in the list is the same project with Japanese names, and the same steps
 work there.
@@ -119,7 +112,7 @@ the English versions, and the Japanese page the Japanese ones.
 
 1. **Find the row a table lacks.** *The table with a row missing* is the table on rulec's front page
    without its last row. rulec does not say the table is incomplete: it names the input that falls
-   through, `An input that matches no row: Destination = Overseas, Weight = 2001g`, and gives the
+   through, `An input that matches no row: destination = overseas, weight = 2001g`, and gives the
    shape of the row that closes it. *The whole table* has the row. Change `<=2kg` to `<=6kg` in it,
    and rulec says `Overlapping rows: the same input matches row 1 and row 2`, with an input that
    matches both.
@@ -137,12 +130,12 @@ the English versions, and the Japanese page the Japanese ones.
    dandori's playground could only show them; here, change one, and the flow's check reads the rule
    as you left it. A rule's page for people is what `rulec doc` renders, and a case can be tried on
    it.
-5. **Build a version for its platform.** *Hotel booking · for Temporal* opens on its flow; press
-   *generate*, and the list beside it starts on Temporal. Pick Step Functions, and nothing is written:
-   the version waits for Stripe's webhook as an event sent to the workflow and releases the hold in
-   `on cancel`, which Step Functions cannot do, and it names no EventBridge connection to call Stripe
-   through and no Lambda function for the rule. *Hotel booking · for AWS* is the version written for
-   it.
+5. **Build a version for its platform.** *Hotel booking · for Temporal* opens on its flow; open
+   *generated code*, and the list above the code starts on Temporal. Pick Step Functions, and
+   nothing is written: the version waits for Stripe's webhook as an event sent to the workflow and
+   releases the hold in `on cancel`, which Step Functions cannot do, and it names no EventBridge
+   connection to call Stripe through and no Lambda function for the rule. *Hotel booking · for AWS*
+   is the version written for it.
 
 ## Who may do what: sekisho's example
 
@@ -161,8 +154,8 @@ it names it by.
    now allow nothing (`` The permit `managers_refund_in_period` allows nothing: a forbid denies
    every combination it would allow ``), each with a combination it would have allowed, and that the
    expectation that a manager refunds while the period lasts no longer holds.
-3. **Generate.** Press *generate* on the gate: the Cedar schema and policies, in their text and in
-   their JSON, the files `sekisho gen --target cedar` writes.
+3. **Generate.** Open *generated code* on the gate: the Cedar schema and policies, in their text and
+   in their JSON, the files `sekisho gen --target cedar` writes.
 4. **Open the page for people**: each action's table of the combinations allowed and denied, each
    policy beside the Cedar it becomes, and the pages of the rule and the dates the conditions read.
 
@@ -170,19 +163,19 @@ it names it by.
 
 To try one rule or one flow of your own, pick **An empty project** in the list. It has no file yet,
 so *add a file* is the way in: give the file a path that ends in the extension of its language
-(`fee.rule`, `order.flow`, `days.cal`, `stock.book`, `refunds.gate`, …), and paste the file into its tab. A file it
-reads, such as a rule a flow calls, is one more file of the project, at the path the first one names
-it by.
+(`fee.rule`, `order.flow`, `days.cal`, `stock.book`, `refunds.gate`, …), and write or paste the file
+in the editor. A file it reads, such as a rule a flow calls, is one more file of the project, at the
+path the first one names it by.
 
 ## Share what you made
 
 *copy a link* puts a link to the project as it stands into the address bar, and onto the clipboard
-where the browser allows it. The link holds the project, the file that is open, which of check,
-generate and the page for people is showing, the target, and every file you changed, added or
-removed, packed into the link itself. Nothing is stored anywhere: whoever opens the link has the
-same files in the same tabs, and *undo my edits* takes them back to the project as it opens. The
-links dandori's playground gave, such as `#flow=examples/hotel/temporal/hotel.flow&view=build`, open
-the same flow here.
+where the browser allows it. The link holds the project, the file that is open, which of the four
+tabs is showing, the target, and every file you changed, added or removed, packed into the link
+itself. Nothing is stored anywhere: whoever opens the link has the same files in the same tabs, on
+this page or on the full-screen one, and *undo my edits* takes them back to the project as it
+opens. The links dandori's playground gave, such as
+`#flow=examples/hotel/temporal/hotel.flow&view=build`, open the same flow here.
 
 ## What is not here
 
@@ -195,11 +188,17 @@ the same flow here.
   page cannot run Cargo.
 - **Writing into the project.** `rulec fmt` and `yuen review` change the files they are given. Here
   nothing changes the files but you.
+- **Help as you type.** The editor colours the words of each language and marks where each finding
+  is, and no more: it does not complete a word or lay a table out.
+- **Diagrams in the Markdown.** The Markdown of a flow, of a book and of a rule with a state machine
+  draws its diagrams in ` ```mermaid ` blocks, which the tab shows as their code.
 
 The module this page loads, `playground/ritsu.wasm`, is built from ritsu's code (MIT OR
 Apache-2.0) and, like the `ritsu` binary, holds the work of others: names from Unicode CLDR
 (Unicode-3.0), a table made from the WHATWG Encoding Standard (BSD-3-Clause), eight crates from
-crates.io, and copies of laws for the examples of `explain`.
+crates.io, and copies of laws for the examples of `explain`. The editor and the rendering of the
+Markdown come from `playground/libraries.js`, which bundles CodeMirror 6 and marked from npm; each
+package is under the MIT License, and the file carries the text of each license at its head.
 [THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/THIRD_PARTY_NOTICES) gives where
 each comes from and the text of its license or its terms. dandori's examples in the list carry
 cut-down copies of Stripe's OpenAPI document and of the Smithy models of Amazon SNS and SQS,

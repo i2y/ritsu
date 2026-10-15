@@ -9,6 +9,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 つなぎのコードはエージェントが書き、コードが実現すべきものは ritsu が持ちます。
 
 [ブラウザで試す](playground.md){ .md-button .md-button--primary }
+[全画面で試す](play/){ .md-button }
 [GitHub](https://github.com/i2y/ritsu){ .md-button }
 
 ## 八つの言語

@@ -103,24 +103,24 @@ JA = dict(
 EN = dict(
     alt="Write the table. rulec turns each row into a box in the input space and proves "
         "by computation that the boxes leave no gap and no overlap. If there is a gap, "
-        "back comes the input that falls through it (Destination = Overseas, Weight = 2001g): "
+        "back comes the input that falls through it (destination = overseas, weight = 2001g): "
         "add the row and run again - only what the fee is takes a person. Only a proved "
         "table generates, and what comes out is dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm and NumPy.",
     table=("Table", "a domain expert reads and checks it", ".rule"),
-    head=("Destination", "Weight", "→ Fee"),
-    rows=[("Domestic", "<=2kg", "8USD"),
-          ("Domestic", ">2kg <=5kg", "10USD"),
-          ("Domestic", ">5kg", "13USD"),
-          ("Overseas", "<=2kg", "12USD"),
-          ("Overseas", ">5kg", "20USD")],
-    ghost=("Overseas", ">2kg <=5kg", "?USD"),
-    bands=("Domestic", "Overseas"),
+    head=("destination", "weight", "→ fee"),
+    rows=[("domestic", "<=2kg", "8USD"),
+          ("domestic", ">2kg <=5kg", "10USD"),
+          ("domestic", ">5kg", "13USD"),
+          ("overseas", "<=2kg", "12USD"),
+          ("overseas", ">5kg", "20USD")],
+    ghost=("overseas", ">2kg <=5kg", "?USD"),
+    bands=("domestic", "overseas"),
     rulec=("rulec", ["each row becomes a box in the input space",
                      "gaps and overlaps are computed, not eyeballed"]),
-    witness=("An input that matches no row", "Destination = Overseas, Weight = 2001g",
+    witness=("An input that matches no row", "destination = overseas, weight = 2001g",
              "what is the fee? only a person can say", "E101"),
     code=("Generated code",
-          ["def fee(dest: Zone, weight: Gram) -> USDInclTax:",
+          ["def fee(destination: Zone, weight: Gram) -> USDInclTax:",
            "    ...",
            "        fee = 8",
            "    ...",

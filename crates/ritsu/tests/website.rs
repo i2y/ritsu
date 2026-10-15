@@ -8,7 +8,9 @@
 //!   that build.sh builds, read as Zensical reads it (a link that names no `.md` from the directory
 //!   of the page's file, and none climbing out of the site), and every `#anchor` to a heading of the
 //!   page it names, or, on a link to the playground, to a project the playground lists in the
-//!   page's language (`#project=shop&file=gates/orders.gate`);
+//!   page's language (`#project=shop&file=gates/orders.gate`); a page may be an HTML page the site
+//!   publishes as it is, as the page of the playground alone (website/docs/play/index.html and the
+//!   Japanese one), whose own links lead to the page that explains the playground and to its files;
 //! - the English pages and the Japanese ones are the same pages, the two navs list them in the same
 //!   order (all but the page of yuen's namespace), and each home page links to every other page its
 //!   nav lists;
@@ -177,7 +179,7 @@ fn source_of(url: &str, sites: &[String]) -> Option<PathBuf> {
     };
     let d = base.join(docs);
     let rest = parts.join("/");
-    let candidates = if rest.is_empty() { vec![d.join("index.md")] } else { vec![d.join(format!("{rest}.md")), d.join(&rest).join("index.md"), d.join(&rest)] };
+    let candidates = if rest.is_empty() { vec![d.join("index.md")] } else { vec![d.join(format!("{rest}.md")), d.join(&rest).join("index.md"), d.join(&rest).join("index.html"), d.join(&rest)] };
     candidates.into_iter().find(|p| p.is_file())
 }
 
@@ -218,7 +220,8 @@ fn the_links_of_ritsus_pages_lead_to_pages_headings_and_sites() {
                 (Some(at), Some(a)) if a.contains('=') => {
                     let ja = p.name.starts_with("website/docs-ja/");
                     let playground = website().join(if ja { "docs-ja/playground.md" } else { "docs/playground.md" });
-                    if at != playground || !opens_a_project(a, ja) {
+                    let alone = website().join(if ja { "docs-ja/play/index.html" } else { "docs/play/index.html" });
+                    if (at != playground && at != alone) || !opens_a_project(a, ja) {
                         wrong.push(format!("{}:{line}: `{target}` opens no project the playground of the page's language lists", p.name));
                     }
                 }
@@ -232,6 +235,39 @@ fn the_links_of_ritsus_pages_lead_to_pages_headings_and_sites() {
     // The playground and the site of each language, from the two index pages.
     assert!(seen >= 4, "{seen} relative links on ritsu's pages: were they changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The page of the playground alone, in each language: its file and the directory the site publishes
+/// it at (it is copied as it is).
+const ALONE: [(&str, &str); 2] = [("website/docs/play/index.html", "/play/"), ("website/docs-ja/play/index.html", "/ja/play/")];
+
+/// The page of the playground alone is an HTML page of its own, which the site publishes as it is:
+/// every relative link and source of it leads, from where it is published, to the page that explains
+/// the playground in its language or to a file of the playground (the Japanese site's are the English
+/// site's, which sync.sh copies), and the pages that explain the playground link to it.
+#[test]
+fn the_page_of_the_playground_alone_leads_to_the_one_that_explains_it() {
+    let sites = sites();
+    let mut seen = 0;
+    for (file, at) in ALONE {
+        let html = read(&root().join(file));
+        let ja = at.starts_with("/ja/");
+        let mut explained = false;
+        for target in targets_in(&html) {
+            assert!(!target.contains("://") && !target.starts_with('/'), "{file}: `{target}` leaves the site; the page loads nothing from elsewhere");
+            let path = target.split(['#', '?']).next().unwrap();
+            let to = follow(at, path).unwrap_or_else(|| panic!("{file}: `{target}` climbs out of the site"));
+            let found = source_of(&to, &sites).or_else(|| to.strip_prefix("/ja/playground/").map(|f| website().join("docs/playground").join(f)).filter(|p| p.is_file()));
+            let found = found.unwrap_or_else(|| panic!("{file}: `{target}` leads to {to}, which is no page or file of the site"));
+            explained |= found == website().join(if ja { "docs-ja/playground.md" } else { "docs/playground.md" });
+            seen += 1;
+        }
+        assert!(explained, "{file} does not link to the page that explains the playground");
+        let page = if ja { "website/docs-ja/playground.md" } else { "website/docs/playground.md" };
+        assert!(link_targets(&read(&root().join(page))).iter().any(|(_, t)| t.split('#').next() == Some("play/")), "{page} does not link to the page of the playground alone");
+    }
+    // the stylesheet, the script and the page that explains, in each language
+    assert!(seen >= 6, "{seen} links on the pages of the playground alone: were they changed?");
 }
 
 /// The Markdown pages of ritsu's site and of the site of every language build.sh builds.
@@ -410,7 +446,7 @@ fn opens_a_project(fragment: &str, ja: bool) -> bool {
     };
     let Some(project) = project else { return false };
     let files: Vec<&str> = project["files"].as_array().unwrap().iter().filter_map(|f| f[0].as_str()).collect();
-    part("file").is_none_or(|f| files.contains(&f)) && part("view").is_none_or(|v| ["check", "gen", "doc", "build", "rules"].contains(&v))
+    part("file").is_none_or(|f| files.contains(&f)) && part("view").is_none_or(|v| ["check", "gen", "doc", "markdown", "build", "rules"].contains(&v))
 }
 
 /// The playgrounds rulec's and dandori's sites had are ritsu's now (DESIGN 13.2). The page each had
@@ -954,6 +990,11 @@ fn build_sh_builds_the_tree_that_is_published() {
         "playground/ritsu.wasm",
         "ja/playground/index.html",
         "ja/playground/projects.json",
+        "ja/playground/words.json",
+        "ja/playground/libraries.js",
+        "ja/playground/worker.js",
+        "play/index.html",
+        "ja/play/index.html",
         "sekisho/index.html",
         "ja/sekisho/index.html",
         "ns/yuen/index.html",
@@ -1037,6 +1078,19 @@ fn build_sh_builds_the_tree_that_is_published() {
             let f = built.join(at.trim_start_matches('/'));
             if !(f.is_file() || f.join("index.html").is_file()) {
                 wrong.push(format!("{file} (from {}): `{target}` is no file of the built site", p.name));
+            }
+        }
+    }
+    // and of the pages of the playground alone, which the tree has as they are
+    for (source, url) in ALONE {
+        let file = format!("{}index.html", url.trim_start_matches('/'));
+        let html = read(&built.join(&file));
+        assert!(html == read(&root().join(source)), "{file} is not {source} as it is");
+        for target in targets_in(&html) {
+            let path = target.split(['#', '?']).next().unwrap();
+            match follow(url, path) {
+                Some(at) if built.join(at.trim_start_matches('/')).is_file() || built.join(at.trim_start_matches('/')).join("index.html").is_file() => seen += 1,
+                _ => wrong.push(format!("{file}: `{target}` is no file of the built site")),
             }
         }
     }

@@ -67,9 +67,9 @@ EN = dict(
     panels=[
         ("Gap", "E101", "policy unique",
          [("An input that matches no row:", False),
-          ("Destination = Overseas, Weight = 2001g", True)]),
+          ("destination = overseas, weight = 2001g", True)]),
         ("Overlap", "E105", "policy unique",
-         [("Both rows match:", False), ("Destination = Overseas, Weight = 2001g", True)]),
+         [("Both rows match:", False), ("destination = overseas, weight = 2001g", True)]),
         ("Unreachable row", "E102", "policy first",
          [("row 7 never matches", False),
           ("the earlier rows take all of this row's range first", False)]),

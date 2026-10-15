@@ -11,15 +11,19 @@ website/
 ├── zensical.toml       # ritsu's English pages: docs/ -> build/
 ├── zensical.ja.toml    # ritsu's Japanese pages: docs-ja/ -> build/ja/
 ├── build.sh            # all of it, in the one order that works
-├── sync.sh             # copies the playground into docs-ja/
+├── sync.sh             # copies the playground's files into docs-ja/
 ├── serve.sh            # previews build/ under /ritsu/, with caching off
 ├── docs/               # the English pages: index.md, playground.md, sekisho.md
 │   ├── ns/             # what a namespace IRI opens: yuen.md (see below)
-│   └── playground/     # the playground: ritsu.wasm, projects.json, playground.js and .css
-├── docs-ja/            # the Japanese pages (and ns/yuen.md)
+│   ├── play/           # index.html: the playground alone, filling the window (published as it is)
+│   └── playground/     # the playground: playground.js and .css, worker.js, libraries.js, ritsu.wasm,
+│                       #   projects.json, words.json
+├── docs-ja/            # the Japanese pages (ns/yuen.md and play/index.html too)
 ├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
-│   └── make_wasm.sh    # builds docs/playground/ritsu.wasm
+│   ├── make_wasm.sh    # builds docs/playground/ritsu.wasm
+│   ├── make_libraries.sh  # bundles docs/playground/libraries.js from libraries/
+│   └── libraries/      # what libraries.js holds: package.json, package-lock.json, entry.js, bundle.mjs
 ├── rulec/              # rulec's site: its own zensical.toml, build.sh and pages (its README)
 └── dandori/            # dandori's site: its own zensical.toml, build.sh and pages (its README)
 ```
@@ -55,17 +59,30 @@ person gets to it from an IRI, or from yuen's reference.
 
 ## The playground
 
-`docs/playground.md` (and `docs-ja/playground.md`) runs ritsu in the page. Its module and the projects
-it opens are committed, so building the site needs no Rust toolchain, and both go stale. At the root
-of the repository:
+One component runs ritsu in the browser, on two pages: `docs/playground.md` (and
+`docs-ja/playground.md`), which explains it and stacks the code above what ritsu makes of it, and
+`docs/play/index.html` (and `docs-ja/play/index.html`), where it fills the window, the code on the
+left and the results on the right. Zensical publishes an HTML file of `docs/` as it is, at
+`/ritsu/play/`. Both pages load the same files from `docs/playground/` (`sync.sh` copies them for the
+Japanese pages): the component, the worker that runs `ritsu.wasm`, and `libraries.js`, the editor
+(CodeMirror 6) and the Markdown (marked) bundled into one file, so that the page loads nothing from
+anywhere else. The module, the libraries, the projects and the words the editor colours are
+committed, so building the site needs neither Rust nor Node, and each goes stale. At the root of the
+repository:
 
 ```console
-$ website/tools/make_wasm.sh    # after a change to what a language's check, gen or doc answers
+$ website/tools/make_wasm.sh        # after a change to what a language's check, gen or doc answers
+$ website/tools/make_libraries.sh   # after a change to tools/libraries (npm installs the lock as it is)
 $ RITSU_BLESS=1 cargo test -p ritsu --test playground the_projects_are_what_the_page_opens
-                                # after a change to website/playground/, rulec's corpus or dandori's examples
+                                    # after a change to website/playground/, rulec's corpus or dandori's examples
+$ RITSU_BLESS=1 cargo test -p ritsu --test playground the_editor_colours_the_words_each_language_reserves
+                                    # after a language gains or loses a keyword
 ```
 
-`crates/ritsu/tests/playground.rs` fails until they are made anew.
+`crates/ritsu/tests/playground.rs` fails until they are made anew. The packages of
+`tools/libraries` are pinned to versions out for two weeks or more when they were locked
+(`npm install --before=<date>`); the audit's osv-scanner reads their lock with the repository's
+others. What npm installs there (`node_modules`) is not committed.
 
 ## Build and preview
 
@@ -101,13 +118,16 @@ tables (sekisho's READMEs link to the pages); the pages of yuen's
 namespace have every word yuen's exporter writes (its list `TERMS`, which yuen's own tests hold to
 what it writes) and no other, and their example is what the command prints; the two
 configurations name ritsu's URLs; `.github/workflows/docs.yml` runs on a push to main that changes
-what the site is built from, and by hand; and the page each of the two sites had for its
-playground sends a reader on to the playground, where the site's nav and home page lead too. When
-Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and looks at the tree it
-builds, down to an element for every word whose id is the word, and to where the link of each page
-that sends a reader on leads. `crates/ritsu/tests/playground.rs` holds the playground, as its page
-says, and follows in Chrome the links those pages gave, sent on to it; each language's own tests
-hold its site (rulec's and dandori's READMEs say how).
+what the site is built from, and by hand; the page each of the two sites had for its
+playground sends a reader on to the playground, where the site's nav and home page lead too; and
+the page of the playground alone leads to the page that explains it and to the playground's files,
+and nowhere else. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
+looks at the tree it builds, down to an element for every word whose id is the word, to where the
+link of each page that sends a reader on leads, and to the pages of the playground alone, as they
+are. `crates/ritsu/tests/playground.rs` holds the playground, as its page says: it drives Chrome
+through both pages in both languages (an edit, the answer, the page kept while a file does not
+pass, a link from one page to the other) and follows the links the pages before gave, sent on to
+it; each language's own tests hold its site (rulec's and dandori's READMEs say how).
 
 ## Publishing
 

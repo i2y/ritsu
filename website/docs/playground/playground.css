@@ -1,137 +1,391 @@
-/* The playground's own styling. It borrows the theme's variables, so it follows the palette and
-   the dark-mode switch; its own colours (the mark of a selected tab, the terminal the output is
-   shown in) have values of their own, so that the widget reads the same outside the site too. */
+/* The playground's own styling, for both of its pages (DESIGN 8.7). On the page that explains it,
+   the component stacks the code above what ritsu makes of it and follows the site's switch between
+   light and dark (Zensical marks it on <body> as data-md-color-scheme); on the page that is nothing
+   but the playground (.pg-full, in body.pg-page), the two sit side by side, the reader moves the
+   border between them, and the colours follow the system. The colours are the component's own, so
+   that it reads the same in and out of the site. */
 
-.pg {
-  --rt-mark: #2f6f8f;
-  --rt-mark-light: #8fc4dd;
-  --rt-ink: #1d2428;
-  --rt-err: #e0675a;
-  --rt-warn: #d9a83a;
-  border: 1px solid var(--md-default-fg-color--lightest, #ccd);
-  border-radius: .2rem;
-  margin: 1.2em 0;
-  contain: inline-size;
+.pg,
+.pg-page {
+  --pg-bg: #fff;
+  --pg-fg: #1d2428;
+  --pg-dim: #5c676d;
+  --pg-line: #d5dade;
+  --pg-bar: #f4f6f7;
+  --pg-panel: #fafbfb;
+  --pg-mark: #2f6f8f;
+  --pg-mark-fg: #fff;
+  --pg-mark-soft: #e3eff5;
+  --pg-err: #c8463a;
+  --pg-err-soft: #fbecea;
+  --pg-warn: #a87914;
+  --pg-warn-soft: #fbf3df;
+  --pg-selection: #cfe3ee;
+  --pg-active: #f1f6f9;
+  --pg-match: #f7e3a1;
+  --pg-match-soft: #eef3d8;
+  --pg-c-keyword: #7a3e9d;
+  --pg-c-string: #2e7d32;
+  --pg-c-number: #b5551d;
+  --pg-c-comment: #7b868c;
+  --pg-c-punct: #6a7780;
+  --pg-c-atom: #1f6fa3;
+  --pg-c-property: #1d5f8a;
+  --pg-c-type: #9a4f1e;
+  --pg-mono: var(--md-code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  --pg-sans: var(--md-text-font-family, system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif);
 }
 
-/* The playground takes the width of the column and never asks for more: a long line of a file or
-   of the output scrolls in its own box, and a narrow screen does not scroll the whole page. */
+/* Dark: the site's switch on the page that explains, the system on the page alone. */
+[data-md-color-scheme="slate"] .pg {
+  --pg-bg: #16191c;
+  --pg-fg: #dfe6e8;
+  --pg-dim: #96a2a8;
+  --pg-line: #343c41;
+  --pg-bar: #1f2428;
+  --pg-panel: #1a1e21;
+  --pg-mark: #6fb3d2;
+  --pg-mark-fg: #0f1417;
+  --pg-mark-soft: #1f3540;
+  --pg-err: #ef7f73;
+  --pg-err-soft: #3a2220;
+  --pg-warn: #e5b85a;
+  --pg-warn-soft: #362c17;
+  --pg-selection: #2c4a5a;
+  --pg-active: #1c2226;
+  --pg-match: #5a4a16;
+  --pg-match-soft: #2f3a24;
+  --pg-c-keyword: #c792ea;
+  --pg-c-string: #9ccc65;
+  --pg-c-number: #f0a35e;
+  --pg-c-comment: #7f8c93;
+  --pg-c-punct: #8d9aa1;
+  --pg-c-atom: #82b1ff;
+  --pg-c-property: #7cc4e8;
+  --pg-c-type: #e6a57a;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pg-page,
+  .pg-page .pg {
+    --pg-bg: #16191c;
+    --pg-fg: #dfe6e8;
+    --pg-dim: #96a2a8;
+    --pg-line: #343c41;
+    --pg-bar: #1f2428;
+    --pg-panel: #1a1e21;
+    --pg-mark: #6fb3d2;
+    --pg-mark-fg: #0f1417;
+    --pg-mark-soft: #1f3540;
+    --pg-err: #ef7f73;
+    --pg-err-soft: #3a2220;
+    --pg-warn: #e5b85a;
+    --pg-warn-soft: #362c17;
+    --pg-selection: #2c4a5a;
+    --pg-active: #1c2226;
+    --pg-match: #5a4a16;
+    --pg-match-soft: #2f3a24;
+    --pg-c-keyword: #c792ea;
+    --pg-c-string: #9ccc65;
+    --pg-c-number: #f0a35e;
+    --pg-c-comment: #7f8c93;
+    --pg-c-punct: #8d9aa1;
+    --pg-c-atom: #82b1ff;
+    --pg-c-property: #7cc4e8;
+    --pg-c-type: #e6a57a;
+  }
+}
+
+.pg [hidden] { display: none !important; }
+
+.pg {
+  font-family: var(--pg-sans);
+  font-size: .7rem;
+  line-height: 1.45;
+  color: var(--pg-fg);
+  background: var(--pg-bg);
+  border: 1px solid var(--pg-line);
+  border-radius: .2rem;
+  margin: 1.2em 0;
+  container-type: inline-size;
+}
+
+/* ── the bar */
+
 .pg-bar,
 .pg-files,
-.pg-tabs {
+.pg-tabs,
+.pg-tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: .4rem .6rem;
-  padding: .4rem .6rem;
-  background: var(--md-code-bg-color, #f5f6f7);
+  gap: .4em .55em;
+  padding: .45em .7em;
+  background: var(--pg-bar);
 }
 
-.pg-bar { border-bottom: 1px solid var(--md-default-fg-color--lightest, #ccd); }
-.pg-files { gap: .3rem; border-bottom: 1px solid var(--md-default-fg-color--lightest, #ccd); }
-.pg-tabs { border-top: 1px solid var(--md-default-fg-color--lightest, #ccd); }
+.pg-bar { border-bottom: 1px solid var(--pg-line); }
+/* A project of many files (the shop has forty) keeps the editor in sight: the files of the languages
+   come first, and the rest is a scroll away. */
+.pg-files { gap: .3em; border-bottom: 1px solid var(--pg-line); max-height: 7.8em; overflow-y: auto; }
 
 .pg button,
-.pg select {
+.pg select,
+.pg a.pg-expand,
+.pg a.pg-about,
+.pg a.pg-save,
+.pg a.pg-opentab {
   font: inherit;
-  font-size: .68rem;
-  padding: .2rem .55rem;
-  border: 1px solid var(--md-default-fg-color--lighter, #99a);
-  border-radius: .15rem;
-  background: var(--md-default-bg-color, #fff);
-  color: var(--md-default-fg-color, #222);
+  font-size: .95em;
+  padding: .22em .65em;
+  border: 1px solid var(--pg-line);
+  border-radius: .2em;
+  background: var(--pg-bg);
+  color: var(--pg-fg);
+  text-decoration: none;
+  line-height: 1.4;
 }
 
 .pg button { cursor: pointer; }
 .pg button:disabled { cursor: default; opacity: .5; }
-.pg select { min-width: 0; max-width: 100%; padding: .2rem; text-overflow: ellipsis; }
-
-.pg button:hover:not(:disabled) { border-color: var(--rt-mark); color: var(--rt-mark); }
-.pg button.on,
-.pg button.on:hover { background: var(--rt-mark); border-color: var(--rt-mark); color: #fff; }
+.pg select { min-width: 0; max-width: 100%; padding: .22em .3em; text-overflow: ellipsis; }
+.pg select.pg-project { max-width: min(100%, 24em); }
+.pg button:hover:not(:disabled),
+.pg a.pg-expand:hover,
+.pg a.pg-about:hover,
+.pg a.pg-save:hover,
+.pg a.pg-opentab:hover { border-color: var(--pg-mark); color: var(--pg-mark); }
+.pg :focus-visible { outline: 2px solid var(--pg-mark); outline-offset: 1px; }
 
 /* An empty project has one way forward, adding a file, and its button says so. */
 .pg button.pg-cta,
-.pg button.pg-cta:hover { background: var(--rt-mark); border-color: var(--rt-mark); color: #fff; }
+.pg button.pg-cta:hover { background: var(--pg-mark); border-color: var(--pg-mark); color: var(--pg-mark-fg); }
 
-/* A tab is a file of the project, by its path; a dot says what the last check found in it. */
-.pg .pg-file {
-  font-family: var(--md-code-font-family, monospace);
-  font-size: .62rem;
-  padding: .15rem .45rem;
-  overflow-wrap: anywhere;
+.pg a.pg-home {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: var(--pg-fg);
+  text-decoration: none;
+  margin-right: .2em;
 }
-
-.pg .pg-file.err::after,
-.pg .pg-file.warn::after {
-  content: "";
-  display: inline-block;
-  width: .45em;
-  height: .45em;
-  margin-left: .4em;
-  border-radius: 50%;
-  vertical-align: middle;
-  background: var(--rt-err);
-}
-
-.pg .pg-file.warn::after { background: var(--rt-warn); }
-
-/* A file of no language (what yuen keeps of what was looked at, a data file a calendar reads) is
-   read by the file that names it; its tab steps back. */
-.pg .pg-file.pg-other:not(.on) { opacity: .6; }
 
 /* The status line says which version answered, how long it took and what it found. A stale
    ritsu.wasm in a cache shows there rather than answering quietly. */
 .pg-status {
   margin-left: auto;
-  font-size: .62rem;
-  color: var(--md-default-fg-color--light, #667);
+  font-size: .9em;
+  color: var(--pg-dim);
 }
 
-.pg-src,
-.pg-pre {
-  font-family: var(--md-code-font-family, monospace);
-  font-size: .68rem;
-  line-height: 1.5;
-  letter-spacing: 0;
-  tab-size: 2;
+/* ── the files and the editor */
+
+/* A tab is a file of the project, by its path; a dot says what the last check found in it. */
+.pg .pg-file {
+  font-family: var(--pg-mono);
+  font-size: .88em;
+  padding: .15em .5em;
+  overflow-wrap: anywhere;
 }
 
-.pg-src {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
+.pg .pg-file.on,
+.pg .pg-file.on:hover { background: var(--pg-mark); border-color: var(--pg-mark); color: var(--pg-mark-fg); }
+
+.pg .pg-file.err::after,
+.pg .pg-file.warn::after,
+.pg .pg-count.err::before,
+.pg .pg-count.warn::before {
+  content: "";
+  display: inline-block;
+  width: .5em;
+  height: .5em;
+  margin-left: .4em;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--pg-err);
+}
+
+.pg .pg-file.warn::after,
+.pg .pg-count.warn::before { background: var(--pg-warn); }
+
+/* A file of no language (what yuen keeps of what was looked at, a data file a calendar reads) is
+   read by the file that names it; its tab steps back. */
+.pg .pg-file.pg-other:not(.on) { opacity: .6; }
+
+.pg-editor {
   height: 24em;
   min-height: 8em;
-  padding: .7rem .8rem;
-  border: 0;
   resize: vertical;
-  background: var(--md-default-bg-color, #fff);
-  color: var(--md-default-fg-color, #222);
-  white-space: pre;
-  overflow-wrap: normal;
-  overflow: auto;
+  overflow: hidden;
+  background: var(--pg-bg);
 }
 
-.pg-src:focus { outline: 2px solid var(--rt-mark); outline-offset: -2px; }
+.pg-editor .cm-editor { height: 100%; font-size: 1em; }
+.pg-editor .cm-editor.cm-focused { outline: 2px solid var(--pg-mark); outline-offset: -2px; }
 
-.pg-out {
-  max-height: 34em;
-  overflow: auto;
-  background: var(--rt-ink);
-  color: #dfe6e8;
+.pg-note {
+  margin: 0;
+  padding: .8em 1em;
+  max-width: 46em;
 }
 
-/* The theme gives a <pre> its own colours, which on the light scheme are dark on light. */
+.pg-left .pg-empty { padding: 1.2em 1.2em 1.4em; }
+
+/* ── what ritsu makes of the file */
+
+.pg-right {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--pg-line);
+  min-width: 0;
+}
+
+.pg-tabs {
+  gap: 0;
+  padding: 0 .4em;
+  border-bottom: 1px solid var(--pg-line);
+}
+
+.pg .pg-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  padding: .55em .8em .45em;
+  color: var(--pg-dim);
+}
+
+.pg .pg-tab.on,
+.pg .pg-tab.on:hover { color: var(--pg-fg); border-bottom-color: var(--pg-mark); font-weight: 600; }
+.pg .pg-tab:hover:not(.on) { color: var(--pg-fg); }
+
+.pg .pg-count:not(:empty) {
+  margin-left: .45em;
+  padding: 0 .45em;
+  border-radius: 1em;
+  background: var(--pg-line);
+  color: var(--pg-fg);
+  font-size: .85em;
+  font-weight: 600;
+}
+
+.pg .pg-count.err:not(:empty) { background: var(--pg-err-soft); color: var(--pg-err); }
+.pg .pg-count.warn:not(:empty) { background: var(--pg-warn-soft); color: var(--pg-warn); }
+.pg .pg-count::before { display: none !important; }
+
+.pg-panel {
+  display: flex;
+  flex-direction: column;
+  height: 32em;
+  min-height: 0;
+  background: var(--pg-panel);
+}
+
+.pg-panel[data-view="check"],
+.pg-panel[data-view="gen"] { overflow: auto; }
+
+.pg-tools {
+  padding: .35em .7em;
+  border-bottom: 1px solid var(--pg-line);
+  background: var(--pg-bg);
+}
+
+.pg .pg-toggle[aria-pressed="true"],
+.pg .pg-toggle[aria-pressed="true"]:hover { background: var(--pg-mark-soft); border-color: var(--pg-mark); color: var(--pg-fg); }
+
+/* A page a language's `doc` writes is a whole document: it is drawn in a frame of its own, and the
+   frame drawn after an edit takes the place of the one before once it has loaded. */
+.pg-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--pg-bg);
+}
+
+.pg .pg-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--pg-bg);
+  color-scheme: normal;
+}
+
+.pg .pg-frame.pg-coming { visibility: hidden; }
+
+/* While the file does not pass, the last page drawn stays, faded, with the first problem below it. */
+.pg .pg-stale { opacity: .4; filter: grayscale(.5); transition: opacity .2s; }
+
+.pg .pg-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .2em .6em;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-top: 1px solid var(--pg-err);
+  border-radius: 0;
+  padding: .55em .9em;
+  background: var(--pg-err-soft);
+  color: var(--pg-fg);
+}
+
+.pg .pg-band:hover:not(:disabled) { color: var(--pg-fg); background: var(--pg-err-soft); text-decoration: underline; }
+.pg .pg-band-head { color: var(--pg-err); font-weight: 600; }
+.pg .pg-band-first { font-family: var(--pg-mono); font-size: .92em; overflow-wrap: anywhere; }
+
+/* The problems: one button a finding, to the line it is on. */
+.pg-problems {
+  list-style: none;
+  margin: 0;
+  padding: .3em 0;
+  border-bottom: 1px solid var(--pg-line);
+}
+
+.pg-problems:empty { display: none; }
+.pg .pg-problems li,
+.md-typeset .pg .pg-problems li { margin: 0; padding: 0; list-style: none; }
+.md-typeset .pg .pg-problems { margin: 0; padding: .3em 0; }
+
+.pg .pg-problem {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: .1em .6em;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: .35em 1em;
+}
+
+.pg .pg-problem:hover:not(:disabled) { background: var(--pg-active); color: var(--pg-fg); }
+.pg .pg-problem .pg-sev { font-weight: 600; color: var(--pg-err); }
+.pg .pg-problem.warn .pg-sev { color: var(--pg-warn); }
+.pg .pg-problem.info .pg-sev { color: var(--pg-dim); }
+.pg .pg-problem code { font-family: var(--pg-mono); font-size: .92em; color: var(--pg-dim); background: none; padding: 0; }
+.pg .pg-problem .pg-where { font-family: var(--pg-mono); font-size: .92em; color: var(--pg-mark); overflow-wrap: anywhere; }
+.pg .pg-problem .pg-msg { grid-column: 1 / -1; padding-left: 0; }
+
+.pg-said { min-height: 0; }
+
 .pg .pg-pre,
 .md-typeset .pg .pg-pre {
   margin: 0;
-  padding: .7rem .8rem;
+  padding: .8em 1em;
+  font-family: var(--pg-mono);
+  font-size: .95em;
+  line-height: 1.5;
   white-space: pre;
-  color: #dfe6e8;
+  overflow: auto;
+  color: var(--pg-fg);
   background: none;
   border-radius: 0;
+  tab-size: 2;
 }
+
+.pg .pg-mdtext { flex: 1; background: var(--pg-bg); }
 
 /* Where a finding is takes the reader to that line of that file. */
 .pg .pg-at {
@@ -140,71 +394,98 @@
   border: 0;
   border-radius: 0;
   background: none;
-  color: var(--rt-mark-light);
+  color: var(--pg-mark);
   text-decoration: underline;
   text-underline-offset: .15em;
 }
 
-.pg .pg-at:hover { color: #fff; }
+/* ── the page that explains it: wide enough, the two go side by side */
 
-.pg-note {
-  margin: 0;
-  padding: .7rem .8rem 0;
-  font-size: .68rem;
+@container (min-width: 1100px) {
+  .pg-main { display: flex; height: 38em; }
+  .pg-left,
+  .pg-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .pg-right { border-top: 0; border-left: 1px solid var(--pg-line); }
+  .pg-editor { flex: 1; height: auto; resize: none; }
+  .pg-panel { flex: 1; height: auto; }
 }
 
-/* The page `doc` writes is a whole document: it opens in a tab of its own. */
-.pg-board { padding: 1.1em 1.3em; }
-.pg-board p { margin: 0 0 1em; max-width: 44em; font-size: .72rem; }
-.pg-board code,
-.md-typeset .pg-board code { background: rgba(255, 255, 255, .1); color: inherit; padding: 0 .3em; border-radius: .15rem; }
-.pg-board .pg-pre { padding: 1em 0 0; }
+/* ── the page that is nothing but the playground */
 
-/* A link, not a button, so that a middle click and a cmd click do what they should; it is given
-   the colours of the selected tab with the specificity to win over the theme's link colour. */
-.pg a.pg-open,
-.pg a.pg-open:hover {
-  display: inline-block;
-  padding: .4rem 1rem;
-  border-radius: .15rem;
-  font-size: .72rem;
-  font-weight: 700;
-  text-decoration: none;
-  background: var(--rt-mark);
-  color: #fff;
+body.pg-page {
+  margin: 0;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--pg-bg);
+  color: var(--pg-fg);
 }
 
-.pg a.pg-open:hover { background: var(--rt-mark-light); color: var(--rt-ink); }
-
-/* The theme dresses every <details> as an admonition; this one is a plain fold in the pane. */
-.pg details.pg-md,
-.md-typeset .pg details.pg-md {
+.pg.pg-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
-  border-top: 1px solid rgba(255, 255, 255, .12);
-  border-radius: 0;
-  box-shadow: none;
-  background: none;
-  color: #dfe6e8;
-  font-size: inherit;
-}
-
-.pg details.pg-md > summary,
-.md-typeset .pg details.pg-md > summary {
-  margin: 0;
-  padding: .6rem 1.3em;
   border: 0;
   border-radius: 0;
-  background: none;
-  font-size: .68rem;
-  font-weight: normal;
-  color: #dfe6e8;
-  cursor: pointer;
+  font-size: 14px;
+  container-type: normal;
 }
 
-.md-typeset .pg details.pg-md > summary::before,
-.md-typeset .pg details.pg-md > summary::after { display: none; }
-.pg details.pg-md > summary::marker { content: "▸ "; }
-.pg details.pg-md[open] > summary::marker { content: "▾ "; }
-.pg details.pg-md > .pg-pre { margin: 0; }
+.pg-full .pg-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.pg-full .pg-left {
+  display: flex;
+  flex-direction: column;
+  width: var(--pg-left, 45%);
+  min-width: 0;
+}
+
+/* A project of one file needs no tabs. */
+.pg-full .pg-files.pg-one { display: none; }
+.pg-full .pg-files { flex: none; }
+
+.pg-full .pg-editor { flex: 1; height: auto; min-height: 0; resize: none; }
+
+.pg-full .pg-split {
+  flex: none;
+  width: 7px;
+  cursor: col-resize;
+  background: var(--pg-bar);
+  border-left: 1px solid var(--pg-line);
+  border-right: 1px solid var(--pg-line);
+  touch-action: none;
+}
+
+.pg-full .pg-split:hover,
+.pg-full .pg-split:focus-visible,
+.pg-full.pg-dragging .pg-split { background: var(--pg-mark); }
+.pg-full.pg-dragging { user-select: none; }
+.pg-full.pg-dragging .pg-frame { pointer-events: none; }
+
+.pg-full .pg-right { flex: 1; border-top: 0; }
+.pg-full .pg-panel { flex: 1; height: auto; }
+.pg-full .pg-panes { display: none; }
+
+.pg .pg-pane.on,
+.pg .pg-pane.on:hover { background: var(--pg-mark); border-color: var(--pg-mark); color: var(--pg-mark-fg); }
+
+/* A narrow screen shows one of the two at a time. */
+@media (max-width: 760px) {
+  .pg-full .pg-bar { gap: .35em .4em; padding: .4em .5em; }
+  .pg-full .pg-bar select.pg-project { flex: 1 1 10em; max-width: none; }
+  .pg-full .pg-panes { display: flex; gap: .3em; }
+  .pg-full .pg-main { flex-direction: column; }
+  .pg-full .pg-split { display: none; }
+  .pg-full .pg-left,
+  .pg-full .pg-right { width: 100%; flex: 1; min-height: 0; }
+  .pg-full[data-pane="code"] .pg-right,
+  .pg-full[data-pane="result"] .pg-left { display: none; }
+  .pg-full .pg-status { order: 10; width: 100%; margin-left: 0; }
+}

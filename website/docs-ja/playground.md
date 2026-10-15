@@ -2,43 +2,26 @@
 
 このページで動いているのは ritsu そのものです。wasm32 に載せているだけで、プロジェクト全体にかける `ritsu check`（ファイルごとにその言語の検査をかけ、ある言語が確かめたことを隣の言語が読む）も、各言語の生成とページも、コマンドと同じものが走ります。**どこにも送っていません。** 編集したファイルは、ブラウザの中だけにあります。
 
-<div class="pg" data-lang="ja">
-  <div class="pg-bar">
-    <select class="pg-project" aria-label="開くプロジェクト"></select>
-    <button class="pg-add" type="button"></button>
-    <button class="pg-remove" type="button"></button>
-    <button class="pg-revert" type="button" hidden></button>
-    <button class="pg-share" type="button"></button>
-    <span class="pg-status"></span>
-  </div>
-  <div class="pg-files" role="tablist" aria-label="プロジェクトのファイル"></div>
-  <textarea class="pg-src" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="ファイル"></textarea>
-  <div class="pg-tabs">
-    <button data-view="check" class="on" type="button">ritsu check</button>
-    <button data-view="gen" type="button">生成</button>
-    <button data-view="doc" type="button">人が読むページ</button>
-    <select class="pg-target" aria-label="生成先" hidden></select>
-    <select class="pg-picker" aria-label="書いたファイル" hidden></select>
-  </div>
-  <div class="pg-out"></div>
-</div>
+<div class="pg" data-lang="ja"></div>
 
-<script src="playground/playground.js" defer></script>
+<script type="module" src="playground/playground.js"></script>
 
-ここでのプロジェクトは数個のファイルで、一つのタブに一つのファイルが入っています。ファイルが変わるたびに、ページはファイルを全部モジュールに渡し、モジュールは、同じファイルを置いたディレクトリで走らせるのと同じようにコマンドを走らせます。プロジェクトには `ritsu check .` を走らせ、開いているファイルには、その言語の生成かページを出します。リストには、全部の言語がそろう小さな通販と、rulec と dandori の例と、sekisho の例と、自分のファイル一つから始めるための空のプロジェクトがあります。このページの答えが、同じファイルを置いたディレクトリで `ritsu` のバイナリが出す出力と書くファイルに一字も違わないことは、テストで確かめています（`crates/ritsu/tests/playground.rs`）。
+ここでのプロジェクトは数個のファイルで、一つのタブに一つのファイルが入っていて、開いているファイルがエディターに出ます。ファイルが変わるたびに、ページはファイルを全部モジュールに渡し、モジュールは、同じファイルを置いたディレクトリで走らせるのと同じようにコマンドを走らせます。モジュールはページとは別のスレッド（Web Worker）で動くので、打っているあいだに待たされることはありません。プロジェクトには `ritsu check .` を走らせ、開いているファイルには、その言語の生成かページを出します。結果は、エディターの下の四つのタブに出ます。言語が描く「人が読むページ」、その「Markdown」、`ritsu check` が見つけた「問題」（タブに件数が出ます）、「生成したコード」です。指摘は、エディターのその場所に波線で示し、そのファイルのタブにも印を付けます。開いているファイルが検査を通らなくなると、最後に描いた人が読むページを薄くして残し、その下に最初の問題を出します。問題を押すと、その行に移ります。リストには、全部の言語がそろう小さな通販と、rulec と dandori の例と、sekisho の例と、自分のファイル一つから始めるための空のプロジェクトがあります。このページの答えが、同じファイルを置いたディレクトリで `ritsu` のバイナリが出す出力と書くファイルに一字も違わないことは、テストで確かめています（`crates/ritsu/tests/playground.rs`）。
+
+上で動いているものは、ウィンドウいっぱいに広げた[全画面のページ](play/)でも使えます。左にコード、右に四つのタブが並び、あいだの境目はドラッグで動かせます。スマホでは、どちらか一方ずつ出ます。開いたときは、rulec の小さな規則一つと、それから描いた人が読むページが出ます。「全画面で開く」を押すと、ここでのプロジェクトを、開いているファイル、タブ、生成先、編集ごとそのまま、全画面のページで開きます。
 
 ## 試してみること
 
 **最初に開くのは、受注が契約に値を一つ足したばかりの小さな通販**です。`proto/shop/v1/order.proto` に `ORDER_STATUS_RETURNED = 5;` が増えました。請求の規則はこの列挙を取り込み、`requirements/billing.req` の要件は規則の表を指し、地図は規則を受注に対する請求の腐敗防止層として書いています。一つのファイルの一行に、三つの言語がそれぞれ答えます。英語の名前のプロジェクトですが、出力は日本語です。
 
-1. **指摘を読む。** 見出しには、それを言ったツールが入っています。rulec は「列挙 order_status が ../../proto/shop/v1/order.proto の OrderStatus と一致していません」と言い、規則に無い値を示します。yuen は「rulec から rulec "billing/rules/billing_need.rule" table decide の情報を得られません」と言います。規則が rulec の検査を通らないので、yuen がその表のハッシュを取れなくなったからです。sakai は「billing/rules/billing_need.rule が rulec の検査を通らないか、読めません」と言います。`billing/rules/billing_need.rule:5` のような指摘の場所をクリックすると、その行に移ります。通販の二つのゲートは sekisho の検査を通り、最後の行は、言語の境目を 10 か所確かめたと数えます。受注と倉庫がほかのコンテキストに公開している操作が五つ（`.proto` の `OrderService` の二つと、`warehouse/api/warehouse.json` に書いた倉庫の API の三つ）あり、どれもゲートの action が守っています。`ordering/ship_order.flow` が倉庫の API を呼ぶところも五か所あり、どれも倉庫のゲートがこのワークフローに許しています。
+1. **指摘を読む。** ページは「問題」のタブで開きます。指摘が一つずつ並び、その下に `ritsu check` の出力があります。どちらにも、それを言ったツールが入っています。rulec は「列挙 order_status が ../../proto/shop/v1/order.proto の OrderStatus と一致していません」と言い、規則に無い値を示します。yuen は「rulec から rulec "billing/rules/billing_need.rule" table decide の情報を得られません」と言います。規則が rulec の検査を通らないので、yuen がその表のハッシュを取れなくなったからです。sakai は「billing/rules/billing_need.rule が rulec の検査を通らないか、読めません」と言います。`billing/rules/billing_need.rule:5` のような指摘の場所をクリックすると、その行に移ります。通販の二つのゲートは sekisho の検査を通り、最後の行は、言語の境目を 10 か所確かめたと数えます。受注と倉庫がほかのコンテキストに公開している操作が五つ（`.proto` の `OrderService` の二つと、`warehouse/api/warehouse.json` に書いた倉庫の API の三つ）あり、どれもゲートの action が守っています。`ordering/ship_order.flow` が倉庫の API を呼ぶところも五か所あり、どれも倉庫のゲートがこのワークフローに許しています。
 2. **契約の側で直す。** `.proto` からその行を消すと、どのファイルも検査を通ります。
 3. **規則の側で直す。** 「編集を取り消す」を押してから、`billing/rules/billing_need.rule` の列挙の最後に `| returned` を足します。rulec は「取り込んだ列挙 order_status の値に、行も `default` もありません」と言います。`cancelled` の行の下に `| returned  | skip        |` を足すと rulec は通りますが、今度は yuen が、表が「2026-10-04 に accounts がこのリンクを確かめたあとで変わりました」と言い、増えた行を見せます。検査を通った規則が、そのまま誰かの確かめた規則になるわけではありません。
 4. **ワークフローと規則の境目を壊す。** `ordering/rules/urgency.rule` の出力 `carrier` を、`outputs` と、表と例の見出しで `courier` に変えます。rulec は通ります。dandori は規則の出力を同じプロセスの中で rulec から読むので、`ordering/ship_order.flow` でその出力を読む二つの行に「`urgency.outputs` にフィールド `carrier` はありません（urgent・courier）」と言います。
 5. **お客さまにも返金させる。** `gates/orders.gate` は、注文を見ることと取り消すことを、だれがしてよいかを書き、`.proto` の `OrderService` の二つの操作を守ります。注文をそもそも取り消せるかは、ワークフローも従う規則 `ordering/rules/order_state.rule` に尋ね、事務所の開いている日かは、請求のカレンダー `billing/shop_days.cal` に尋ねます。このカレンダーは、地図で受注と請求が共有しています（`shared kernel with`）。permit `customers_cancel_their_unpaid_orders` から `unless resource.state is paid` の行を消すと、sekisho は「期待 `customers_do_not_refund` が成り立ちません。選んだ 4 通りのうち 2 通りが許されます」と言い、その一つとして、お客さま自身の入金済の注文を挙げます。yuen は、`requirements/ordering.req` がこの permit を指しているので、「2026-10-07 に customer_care がこのリンクを確かめたあとで変わりました」と言い、消えた行を見せます。
 6. **ワークフローから操作を一つ取り上げる。** `gates/warehouse.gate` は倉庫のゲートです。ワークフローが呼ぶ倉庫の API の三つの操作と、帳簿 `warehouse/inventory.book` の振替の操作を守っています。入荷と返品の記帳は入荷係に許し、注文の分の在庫を押さえることと、その仮押さえを確定したり取り消したりすることは倉庫のシステムに許しています。ワークフロー `ship_order` を principal に書いているので、`ritsu check` は、フローが API を呼ぶところごとに、ゲートがそれをワークフローに許しているかを確かめます。permit `ship_order_calls_the_warehouse` の `action` の行から `view_order, ` を消します。ピッキング係には注文を見ることを許したままなので、ゲートは検査を通ります。ところが ritsu は、`ordering/ship_order.flow` で `get_order` を呼ぶ二か所に「それを守る gates/warehouse.gate の action `view_order` は、ワークフロー `ship_order` をどの組み合わせでも許しません」と言います。そこまで進んだ実行は、いつもそこで拒まれるということです。yuen は、`requirements/warehouse.req` がこの permit を指しているので、「2026-10-07 に warehouse_lead がこのリンクを確かめたあとで変わりました」と言い、変わった行を見せます。
-7. **生成する。** `ordering/ship_order.flow` を開いて「生成」を押すと、Temporal が動かすもの（TypeScript の八つのファイル）が出ます。倉庫を呼ぶ三つのタスクは、倉庫の契約の操作を呼ぶので、dandori が引数と結果とエラーを `warehouse/api/warehouse.json` と照らし合わせます。生成したアクティビティは、その文書に書いたサーバーに送ります。横のリストで Step Functions を選ぶと、何も書きません。このフローはワークフローに送られるイベントを待ち、`on cancel` で後始末をしますが、Step Functions ではどちらもできません。倉庫を呼ぶための接続も、タスクに書いていません。生成する言語は、どれもここで生成できます。規則は 12 の言語のコード、カレンダーは 5 つの言語のコード、帳簿は SQL とクライアント、ゲートは Cedar、地図は Context Mapper の CML、要件は ReqIF か W3C PROV です。
-8. **人が読むページを開く。** コードが実現すべきものを理解し、確かめる人のためのページです。規則、カレンダー、帳簿、フロー、ゲートのどれでも開けます。倉庫のゲートのページには、フローが API を呼ぶところごとに、それを守る action と、ワークフローに許しているかが並び、action が守る帳簿の操作も載っています。ウィンドウ全体を使うページなので、別のタブで開きます。それぞれがプルリクエスト向けに書く Markdown は、リンクの下にあります。
+7. **生成する。** `ordering/ship_order.flow` を開いて「生成したコード」のタブを開くと、Temporal が動かすもの（TypeScript の八つのファイル）が出ます。倉庫を呼ぶ三つのタスクは、倉庫の契約の操作を呼ぶので、dandori が引数と結果とエラーを `warehouse/api/warehouse.json` と照らし合わせます。生成したアクティビティは、その文書に書いたサーバーに送ります。コードの上のリストで Step Functions を選ぶと、何も書きません。このフローはワークフローに送られるイベントを待ち、`on cancel` で後始末をしますが、Step Functions ではどちらもできません。倉庫を呼ぶための接続も、タスクに書いていません。生成する言語は、どれもここで生成できます。規則は 12 の言語のコード、カレンダーは 5 つの言語のコード、帳簿は SQL とクライアント、ゲートは Cedar、地図は Context Mapper の CML、要件は ReqIF か W3C PROV です。
+8. **人が読むページを開く。** コードが実現すべきものを理解し、確かめる人のためのページです。規則、カレンダー、帳簿、フロー、ゲートのどれでも開けます。倉庫のゲートのページには、フローが API を呼ぶところごとに、それを守る action と、ワークフローに許しているかが並び、action が守る帳簿の操作も載っています。タブには、そのページを単独で開いたときと同じ姿で描きます。編集したあとも、スクロールしていた位置のまま描き直します。「HTML で保存」で手元に保存でき、「別のタブで開く」でウィンドウ全体に広げられます。それぞれがプルリクエスト向けに書く Markdown は「Markdown」のタブにあり、描いたものと元の文字を切り替えられます。元の文字はコピーできます。
 
 リストの「小さな通販（日本語）」は、同じプロジェクトの名前を日本語にしたもので、同じ手順をそのまま試せます。
 
@@ -50,7 +33,7 @@
 2. **ほかの形の規則を読む。** 「表をつなぐ」では、ある表が決めた値を次の表が読みます。「大きい規則」では、同じ入力から出た二本の筋が下でまた合流し、人が読むページもその形に並びます。「並びを歩く」は、件数が呼び出しのたびに変わる明細を受ける規則で、人が読むページの入力に「行を足す」のボタンが付きます。
 3. **下書きのエラーを一つずつ直す。** 「ホテルの予約の最初の下書き（エラーあり）」は、規則二つと Stripe の API を呼ぶフローで、検査するとエラーが四つ見つかります。最後のエラーは、PaymentIntent が `processing` のまま、または `requires_payment_method` に戻ったまま、ワークフローが終わることがあると言い、そうなる例を添えています。91 行目の `fail CardDeclined "The card was declined"` の後ろに `leaving pi` を足すと、ワークフローは PaymentIntent をそのまま引き渡すことになり、エラーは三つになります。
 4. **フローが呼ぶ規則を書き換える。** フローの規則はプロジェクトのファイルで、それぞれのタブに入っています。dandori のページでは見せるだけでしたが、ここでは書き換えられ、フローの検査は書き換えたとおりの規則を読みます。規則の「人が読むページ」は、`rulec doc` が描くページで、ケースを打って試せます。
-5. **版ごとのプラットフォームに向けて生成する。** 「ホテルの予約・Temporal 版」を選ぶと、フローが開きます。「生成」を押すと、横のリストでは Temporal が選ばれています。Step Functions を選ぶと、何も書きません。この版は、Stripe の Webhook をワークフローに送られるイベントとして待ち、`on cancel` で与信を取り消しますが、Step Functions ではどちらもできません。Stripe を呼ぶための EventBridge の接続も、規則を呼ぶための Lambda 関数も書いていません。Step Functions 向けに書いたのは「ホテルの予約・AWS 版」です。
+5. **版ごとのプラットフォームに向けて生成する。** 「ホテルの予約・Temporal 版」を選ぶと、フローが開きます。「生成したコード」のタブを開くと、コードの上のリストでは Temporal が選ばれています。Step Functions を選ぶと、何も書きません。この版は、Stripe の Webhook をワークフローに送られるイベントとして待ち、`on cancel` で与信を取り消しますが、Step Functions ではどちらもできません。Stripe を呼ぶための EventBridge の接続も、規則を呼ぶための Lambda 関数も書いていません。Step Functions 向けに書いたのは「ホテルの予約・AWS 版」です。
 
 ## だれが何をしてよいか：sekisho の例
 
@@ -58,16 +41,16 @@
 
 1. **検査を読む。** ゲートは検査を通り、最後の行は、言語の境目を一か所確かめたと数えます。ワークフロー `返品` は `refundOrder` を呼び、ゲートは返品済の注文を 50 ポンドまで返金することをこのワークフローに許していて、タスクは拒まれたときのエラーを宣言しています。
 2. **forbid で permit を覆う。** `refunds.ja.gate` の forbid `監査は返金しない` の `principal in 監査` を `principal in 係` に変えます。責任者は係を含むので、sekisho は、係の permit と責任者の二つの permit が何も許さなくなったと言います（「permit `責任者は期間内なら返金できる` は何も許しません。許すはずの組み合わせを、どれも forbid が拒みます」）。どれにも、許すはずだった組み合わせの例が付きます。責任者は期間内に返金できる、という期待も成り立たなくなります。
-3. **生成する。** ゲートで「生成」を押すと、Cedar のスキーマとポリシーが、テキストと JSON の両方で出ます。`sekisho gen --target cedar` が書くファイルです。
+3. **生成する。** ゲートで「生成したコード」のタブを開くと、Cedar のスキーマとポリシーが、テキストと JSON の両方で出ます。`sekisho gen --target cedar` が書くファイルです。
 4. **人が読むページを開く。** action ごとに許す組み合わせと拒む組み合わせの表があり、ポリシーごとに生成した Cedar が並び、条件が読む規則と日付のページも開けます。
 
 ## ファイル一つから始める
 
-自分の規則やフローを一つだけ試すなら、リストの「空のプロジェクト」を選んでください。まだファイルが一つもないので、「ファイルを足す」を押し、言語の拡張子で終わるパス（`fee.rule`、`order.flow`、`days.cal`、`stock.book`、`refunds.gate` など）を付けて、開いたタブにファイルの中身を貼り付けてください。フローが呼ぶ規則のように、そのファイルが読むファイルは、そこに書いてあるパスに、もう一つのファイルとして足してください。
+自分の規則やフローを一つだけ試すなら、リストの「空のプロジェクト」を選んでください。まだファイルが一つもないので、「ファイルを足す」を押し、言語の拡張子で終わるパス（`fee.rule`、`order.flow`、`days.cal`、`stock.book`、`refunds.gate` など）を付けて、エディターにファイルの中身を書くか、貼り付けてください。フローが呼ぶ規則のように、そのファイルが読むファイルは、そこに書いてあるパスに、もう一つのファイルとして足してください。
 
 ## 作ったものを共有する
 
-「リンクをコピー」を押すと、いまのプロジェクトへのリンクがアドレスバーに入ります。ブラウザが許せば、クリップボードにも入ります。リンクには、プロジェクト、開いているファイル、check・生成・人が読むページのどれを見ているか、生成先と、変えたファイル・足したファイル・消したファイルの全部が詰めてあります。どこにも保存しないので、リンクを開いた人のブラウザに、同じファイルが同じタブで並びます。「編集を取り消す」を押すと、開いたときのプロジェクトに戻ります。dandori のサイトのブラウザで試すページが出していたリンク（`#flow=examples/hotel/temporal/hotel.ja.flow&view=build` など）も、ここで同じフローを開きます。
+「リンクをコピー」を押すと、いまのプロジェクトへのリンクがアドレスバーに入ります。ブラウザが許せば、クリップボードにも入ります。リンクには、プロジェクト、開いているファイル、四つのタブのどれを見ているか、生成先と、変えたファイル・足したファイル・消したファイルの全部が詰めてあります。どこにも保存しないので、リンクを開いた人のブラウザに、このページでも全画面のページでも、同じファイルが同じタブで並びます。「編集を取り消す」を押すと、開いたときのプロジェクトに戻ります。dandori のサイトのブラウザで試すページが出していたリンク（`#flow=examples/hotel/temporal/hotel.ja.flow&view=build` など）も、ここで同じフローを開きます。
 
 ## ここにないもの
 
@@ -76,5 +59,7 @@
 - **ネットワーク。** `source fetch` と `outdated` は、e-Gov、eCFR、出典に書いた URL に問い合わせます。
 - **地図の Rust のワークスペース。** sakai は、地図の `code rust "…"` のクレートを Cargo に尋ねます。ページの中では Cargo を走らせられません。
 - **プロジェクトへの書き込み。** `rulec fmt` と `yuen review` は、渡したファイルを書き換えます。ここでは、ファイルは編集したときにだけ変わります。
+- **打つときの手助け。** エディターは言語ごとの語に色を付け、指摘の場所に印を付けますが、それ以上のことはしません。語の補完も、表の整形もしません。
+- **Markdown の図。** フロー、帳簿、ステートマシンのある規則の Markdown は、図を ` ```mermaid ` のブロックで書きます。タブには、そのコードのまま出します。
 
-このページが読み込む `playground/ritsu.wasm` は ritsu のコード（MIT OR Apache-2.0）から作ったもので、`ritsu` のバイナリと同じく、他者のものを含みます。Unicode CLDR の区分の名前（Unicode-3.0）、WHATWG の Encoding Standard から作った表（BSD-3-Clause）、crates.io のクレート 8 個と、`explain` の例のための法令のコピーです。それぞれの出どころと、ライセンスの文または利用の条件は [THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/THIRD_PARTY_NOTICES) にあります。リストの dandori の例には、Stripe の OpenAPI の文書と、Amazon SNS・SQS の Smithy のモデルから、例が呼ぶところだけを残したコピーが入っていて、ライセンスはそれぞれの元のものです（[crates/dandori/THIRD_PARTY_NOTICES.md](https://github.com/i2y/ritsu/blob/main/crates/dandori/THIRD_PARTY_NOTICES.md)）。
+このページが読み込む `playground/ritsu.wasm` は ritsu のコード（MIT OR Apache-2.0）から作ったもので、`ritsu` のバイナリと同じく、他者のものを含みます。Unicode CLDR の区分の名前（Unicode-3.0）、WHATWG の Encoding Standard から作った表（BSD-3-Clause）、crates.io のクレート 8 個と、`explain` の例のための法令のコピーです。エディターと、Markdown を描くところは、npm の CodeMirror 6 と marked を一つにまとめた `playground/libraries.js` を使っています。どれも MIT ライセンスで、それぞれのライセンスの文はファイルの頭にあります。それぞれの出どころと、ライセンスの文または利用の条件は [THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/THIRD_PARTY_NOTICES) にあります。リストの dandori の例には、Stripe の OpenAPI の文書と、Amazon SNS・SQS の Smithy のモデルから、例が呼ぶところだけを残したコピーが入っていて、ライセンスはそれぞれの元のものです（[crates/dandori/THIRD_PARTY_NOTICES.md](https://github.com/i2y/ritsu/blob/main/crates/dandori/THIRD_PARTY_NOTICES.md)）。

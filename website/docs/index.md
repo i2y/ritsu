@@ -18,6 +18,7 @@ come to, a ledger knows the amounts a rule can return.
 Agents write the glue. ritsu holds what it all has to carry out.
 
 [Try it in the browser](playground.md){ .md-button .md-button--primary }
+[Try it full screen](play/){ .md-button }
 [GitHub](https://github.com/i2y/ritsu){ .md-button }
 
 ## The eight languages

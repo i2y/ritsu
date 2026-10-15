@@ -5,7 +5,8 @@ ritsu's own code is under the MIT License or the Apache License, Version 2.0, at
 (LICENSE-MIT, LICENSE-APACHE). The `ritsu` binary of a release, with the links `rulec`,
 `dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai` and `sekisho` beside it, `ritsu.wasm`,
 the module loaded by the page that runs ritsu in the browser, and the `ritsu.wasm` of the npm
-package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of others:
+package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of others; and the page
+loads, beside its module, the libraries its editor and its Markdown are made of:
 
   Unicode CLDR 48.2             the names of rulec's built-in divisions  Unicode-3.0
   The WHATWG Encoding Standard  koyomi's Shift_JIS table                 BSD-3-Clause
@@ -20,6 +21,7 @@ package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of other
   zmij 1.0.23                   a crate from crates.io                   MIT
   Żmij, by Victor Zverovich     the code zmij is a port of               MIT
   wasi-libc of wasi-sdk 29.0    the C library of WASI, in the npm module (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND MIT AND CC0-1.0
+  CodeMirror 6 and marked       the editor and the Markdown of the page in the browser  MIT
 
 Each has a section below that says where it comes from and gives the text of its license, or its
 terms, as its source gives it. ritsu's own code and the names and the table above are under
@@ -30,7 +32,9 @@ CFR is under no copyright in the United States. The crates are compiled in under
 licenses: ritsu takes each under the MIT License, which all eight offer, and the section of a
 crate gives the crate's LICENSE-MIT as it is. wasi-libc is linked into the npm package's module
 alone, under its own licenses, which its section gives: wasi-libc's own code taken under the MIT
-License, which it offers, and the parts of the three works it is made from under theirs.
+License, which it offers, and the parts of the three works it is made from under theirs. The
+libraries of the page are in no binary and no package: the page loads them from the site, under
+their own license, MIT, which their section gives.
 
 --------------------------------------------------------------------------------
 Unicode CLDR 48.2
@@ -623,3 +627,216 @@ dlmalloc (dlmalloc/src/malloc.c), CC0-1.0:
   Doug Lea and released to the public domain, as explained at
   http://creativecommons.org/publicdomain/zero/1.0/ Send questions,
   comments, complaints, performance data, etc to dl@cs.oswego.edu
+
+--------------------------------------------------------------------------------
+CodeMirror 6 and marked
+--------------------------------------------------------------------------------
+
+In the page that runs ritsu in the browser only. The page loads libraries.js beside ritsu.wasm
+(website/docs/playground/libraries.js): the editor the reader edits the project's files in
+(CodeMirror 6) and the library that turns the Markdown a language's `doc` writes into HTML
+(marked). website/tools/make_libraries.sh bundles them from npm, at the versions
+website/tools/libraries/package-lock.json pins, and writes above the code what is below: the
+packages libraries.js holds the code of, and the text of each license, as the package gives it.
+License:    MIT
+Text:       each package's license file, as the package has it
+
+  @codemirror/commands 6.11.1       MIT  https://code.haverbeke.berlin/codemirror/commands
+  @codemirror/language 6.12.4       MIT  https://code.haverbeke.berlin/codemirror/language
+  @codemirror/legacy-modes 6.5.4    MIT  https://code.haverbeke.berlin/codemirror/legacy-modes
+  @codemirror/lint 6.9.7            MIT  https://code.haverbeke.berlin/codemirror/lint
+  @codemirror/search 6.7.2          MIT  https://code.haverbeke.berlin/codemirror/search
+  @codemirror/state 6.7.6           MIT  https://code.haverbeke.berlin/codemirror/state
+  @codemirror/view 6.43.13          MIT  https://code.haverbeke.berlin/codemirror/view
+  @lezer/common 1.5.3               MIT  https://code.haverbeke.berlin/lezer/common
+  @lezer/highlight 1.2.5            MIT  https://code.haverbeke.berlin/lezer/highlight
+  @marijn/find-cluster-break 1.0.4  MIT  https://code.haverbeke.berlin/marijn/find-cluster-break
+  crelt 1.0.7                       MIT  https://code.haverbeke.berlin/marijn/crelt
+  marked 18.0.14                    MIT  https://github.com/markedjs/marked
+  style-mod 4.1.4                   MIT  https://code.haverbeke.berlin/marijn/style-mod
+  w3c-keyname 2.2.8                 MIT  https://github.com/marijnh/w3c-keyname
+
+---- @codemirror/commands (LICENSE), @codemirror/language (LICENSE), @codemirror/legacy-modes (LICENSE), @codemirror/lint (LICENSE), @codemirror/search (LICENSE), @codemirror/state (LICENSE), @codemirror/view (LICENSE)
+
+MIT License
+
+Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---- @lezer/common (LICENSE), @lezer/highlight (LICENSE)
+
+MIT License
+
+Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---- @marijn/find-cluster-break (LICENSE)
+
+MIT License
+
+Copyright (C) 2024 by Marijn Haverbeke <marijn@haverbeke.berlin>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---- crelt (LICENSE)
+
+Copyright (C) 2020 by Marijn Haverbeke <marijn@haverbeke.berlin>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---- marked (LICENSE)
+
+# License information
+
+## Contribution License Agreement
+
+If you contribute code to this project, you are implicitly allowing your code
+to be distributed under the MIT license. You are also implicitly verifying that
+all code is your original work. `</legalese>`
+
+## Marked
+
+Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/)
+Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+## Markdown
+
+Copyright © 2004, John Gruber
+http://daringfireball.net/
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+* Neither the name “Markdown” nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+This software is provided by the copyright holders and contributors “as is” and any express or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the copyright owner or contributors be liable for any direct, indirect, incidental, special, exemplary, or consequential damages (including, but not limited to, procurement of substitute goods or services; loss of use, data, or profits; or business interruption) however caused and on any theory of liability, whether in contract, strict liability, or tort (including negligence or otherwise) arising in any way out of the use of this software, even if advised of the possibility of such damage.
+
+---- style-mod (LICENSE)
+
+Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---- w3c-keyname (LICENSE)
+
+Copyright (C) 2016 by Marijn Haverbeke <marijn@haverbeke.berlin> and others
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

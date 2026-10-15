@@ -33,7 +33,6 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
-use std::time::Duration;
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -102,13 +101,14 @@ fn files_of(dir: &Path) -> Vec<(String, String)> {
 }
 
 /// The shop the page opens on, in English and then in Japanese (website/playground/<name>/), open
-/// on the contract that has just gained a value.
+/// on the contract that has just gained a value. Its flow is written for Temporal, and the generator
+/// of the flow starts there, as the version of an example of dandori's starts on its platform.
 fn shop(name: &str) -> Project {
     let files = files_of(&repo().join("website/playground").join(name));
     let open = "proto/shop/v1/order.proto";
     assert!(files.iter().any(|(p, _)| p == open), "{name} has no {open}");
     let from = files.iter().map(|(p, _)| format!("website/playground/{name}/{p}")).collect();
-    Project { name: name.into(), group: "ritsu".into(), open: open.into(), files, from, ..Project::default() }
+    Project { name: name.into(), group: "ritsu".into(), open: open.into(), target: Some("temporal".into()), files, from, ..Project::default() }
 }
 
 /// The examples of the playground rulec's site had (until its page sent its readers on to this one),
@@ -490,6 +490,193 @@ fn the_projects_are_what_the_page_opens() {
     assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus, dandori's examples and sekisho's example hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
 }
 
+/// The quoted words between `start` and the first `end` after it, as dandori's tests read its
+/// KEYWORDS, which its crate keeps to itself.
+fn quoted(text: &str, start: &str, end: &str) -> Vec<String> {
+    let from = text.find(start).unwrap_or_else(|| panic!("no {start:?}")) + start.len();
+    let body = &text[from..from + text[from..].find(end).unwrap()];
+    body.split('"').skip(1).step_by(2).map(String::from).collect()
+}
+
+/// The words of each of ritsu's languages, by the extension of its files, as each language lists
+/// the words it reserves: rulec's reserved words with the words that start a line (`kw::RESERVED`,
+/// `LINE_HEAD`, `CONTRIBUTION_HEAD`), dandori's `KEYWORDS` (src/syntax.rs), koyomi's
+/// `kw::RESERVED`, chobo's `syntax::KEYWORDS`, every word of sekisho's, yuen's and sakai's
+/// `kw::TABLE`, and the words of geas's grammar (crates/geas/DESIGN.md, 6), which geas keeps in
+/// no table of its code. A keyword of several words (`at least`, `shared kernel with`) gives each
+/// of them; a mark (`->`, `sha256:`) gives the word in it, if any. Sorted, each once.
+fn language_words() -> BTreeMap<&'static str, Vec<String>> {
+    let set = |words: Vec<String>| -> Vec<String> {
+        let mut out: BTreeSet<String> = BTreeSet::new();
+        for w in words.iter().flat_map(|w| w.split([' ', ':']).map(str::to_string).collect::<Vec<_>>()) {
+            if !w.is_empty() && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) {
+                out.insert(w);
+            }
+        }
+        out.into_iter().collect()
+    };
+    let strs = |ws: &[&str]| ws.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+    let table = |t: &[(&str, &[&str])]| t.iter().flat_map(|(_, ws)| strs(ws)).collect::<Vec<_>>();
+    let mut out = BTreeMap::new();
+    out.insert("rule", set([strs(rulec::kw::RESERVED), strs(rulec::kw::LINE_HEAD), strs(rulec::kw::CONTRIBUTION_HEAD)].concat()));
+    out.insert("flow", set(quoted(&read_repo("crates/dandori/src/syntax.rs"), "const KEYWORDS: &[&str] = &[", "];")));
+    out.insert("cal", set(strs(koyomi::kw::RESERVED)));
+    out.insert("book", set(chobo::syntax::KEYWORDS.iter().map(|(w, _)| w.to_string()).collect()));
+    out.insert("gate", set(table(sekisho::kw::TABLE)));
+    out.insert("req", set(table(yuen::kw::TABLE)));
+    out.insert("ctx", set(table(sakai::kw::TABLE)));
+    let design = read_repo("crates/geas/DESIGN.md");
+    let surface = design.split("\n## 6. Surface, v1\n").nth(1).expect("geas's DESIGN.md has its grammar in 6");
+    let grammar = surface.split("```").nth(1).expect("the grammar is the first block of 6");
+    out.insert("geas", set(grammar.split('"').skip(1).step_by(2).map(String::from).collect()));
+    out
+}
+
+/// words.json: `{"<extension>": [word, …]}`, a language to a line.
+fn words_json() -> String {
+    let lines: Vec<String> = language_words().iter().map(|(ext, ws)| format!("  {}: {}", json!(ext), json!(ws))).collect();
+    format!("{{\n{}\n}}\n", lines.join(",\n"))
+}
+
+/// The editor colours the words of each of ritsu's eight languages, and they are the words the
+/// language itself reserves (`language_words`): words.json, which the page reads, is written from
+/// the languages' own lists (`RITSU_BLESS=1`), so a word a language gains or loses is a word the
+/// page colours or stops colouring. Each language has words, and words a file of it starts with.
+#[test]
+fn the_editor_colours_the_words_each_language_reserves() {
+    let words = language_words();
+    let want: BTreeMap<&str, &str> = [("rule", "rule"), ("flow", "workflow"), ("cal", "calendar"), ("book", "book"), ("gate", "gate"), ("req", "requirements"), ("ctx", "context"), ("geas", "target")].into();
+    assert_eq!(words.keys().copied().collect::<Vec<_>>(), want.keys().copied().collect::<Vec<_>>(), "the eight languages, by their extensions");
+    for (ext, first) in want {
+        assert!(words[ext].iter().any(|w| w == first), "the words of .{ext} have no `{first}`: {:?}", words[ext]);
+        assert_eq!(ritsu_project::project::kind_of(&format!("x.{ext}")).map(|t| t.word()), Some(match ext {
+            "rule" => "rulec",
+            "flow" => "dandori",
+            "cal" => "koyomi",
+            "book" => "chobo",
+            "gate" => "sekisho",
+            "req" => "yuen",
+            "ctx" => "sakai",
+            _ => "geas",
+        }), ".{ext} is not the language the words are of");
+    }
+    // geas keeps its words in the grammar of its DESIGN.md: each is one its parser reads, or a state
+    // of a node, which it reads where it reads a node (src/screen.rs)
+    let parser = format!("{}{}", read_repo("crates/geas/src/parse.rs"), read_repo("crates/geas/src/screen.rs"));
+    for w in &words["geas"] {
+        assert!(parser.contains(&format!("\"{w}\"")), "geas's grammar has `{w}`, which its code does not read");
+    }
+    let now = words_json();
+    let file = site().join("words.json");
+    if ritsu_testkit::golden::bless() {
+        std::fs::write(&file, &now).unwrap();
+        return;
+    }
+    let was = std::fs::read_to_string(&file).unwrap_or_default();
+    assert!(was == now, "website/docs/playground/words.json is not the words the languages reserve now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
+    eprintln!("compared: the words of {} languages ({} words) with the lists of the languages", words.len(), words.values().map(Vec::len).sum::<usize>());
+}
+
+/// The page that explains the playground and the page of the playground alone hold one component, in
+/// each language: the explaining page writes the component's element and loads its script; the page
+/// alone loads the same stylesheet and script from beside the explaining page (`../playground/`),
+/// opens on a small rule of rulec's examples listed in its language, which draws a page for people,
+/// and is the other language's page but for its words. sync.sh copies every file of the component to
+/// the Japanese site, and the component names nothing to load from elsewhere: its only import is the
+/// libraries bundled beside it.
+#[test]
+fn the_two_pages_hold_one_component() {
+    let projects = committed();
+    let mut shapes = Vec::new();
+    for (tag, explaining, alone) in [("en", "website/docs/playground.md", "website/docs/play/index.html"), ("ja", "website/docs-ja/playground.md", "website/docs-ja/play/index.html")] {
+        let md = read_repo(explaining);
+        assert_eq!(md.matches("<div class=\"pg\"").count(), 1, "{explaining} does not hold the component once");
+        for want in [format!("<div class=\"pg\" data-lang=\"{tag}\"></div>"), "<script type=\"module\" src=\"playground/playground.js\"></script>".to_string()] {
+            assert!(md.contains(&want), "{explaining} has no {want}");
+        }
+        let html = read_repo(alone);
+        for want in [
+            format!("<html lang=\"{tag}\">"),
+            "<link rel=\"stylesheet\" href=\"../playground/playground.css\">".to_string(),
+            "<script type=\"module\" src=\"../playground/playground.js\"></script>".to_string(),
+            "<body class=\"pg-page\">".to_string(),
+        ] {
+            assert!(html.contains(&want), "{alone} has no {want}");
+        }
+        let element = html.split("<div class=\"pg pg-full\"").nth(1).and_then(|r| r.split('>').next()).unwrap_or_else(|| panic!("{alone} has no component"));
+        assert!(element.contains(&format!(" data-lang=\"{tag}\"")) && element.contains(" data-view=\"doc\""), "{alone}: the component is not in its language, on the page for people");
+        let name = element.split(" data-project=\"").nth(1).and_then(|r| r.split('"').next()).unwrap_or_else(|| panic!("{alone} names no project to open on"));
+        let p = projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("{alone} opens on {name}, which projects.json does not have"));
+        assert_eq!((p.group.as_str(), p.lang.as_deref(), p.files.len()), ("rulec", Some(tag), 1), "{alone} does not open on one rule of rulec's examples in its language");
+        assert_eq!(playground::doc(&ask_in(tag, &p.files, &p.open, None))["html"]["code"], 0, "{name} draws no page for people");
+        shapes.push(html.split('<').skip(1).map(|t| t.split([' ', '>', '\n']).next().unwrap().to_string()).collect::<Vec<_>>());
+    }
+    assert_eq!(shapes[0], shapes[1], "the two pages alone are not one page in two languages");
+    let sync = read_repo("website/sync.sh");
+    let copied: BTreeSet<String> = sync.split_whitespace().filter_map(|w| w.strip_prefix("docs/playground/")).map(String::from).collect();
+    let files: BTreeSet<String> = std::fs::read_dir(site()).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| !n.starts_with('.')).collect();
+    assert_eq!(copied, files, "website/sync.sh copies other files than website/docs/playground holds to the Japanese site");
+    for f in ["playground.js", "worker.js", "playground.css"] {
+        let text = std::fs::read_to_string(site().join(f)).unwrap();
+        assert!(!text.contains("https://") && !text.contains("http://"), "website/docs/playground/{f} names a URL; the page loads nothing from elsewhere");
+    }
+    let js = std::fs::read_to_string(site().join("playground.js")).unwrap();
+    let imports: Vec<&str> = js.lines().filter(|l| l.starts_with("import ")).collect();
+    assert_eq!(imports, ["import * as cm from \"./libraries.js\";"], "playground.js imports more than the libraries bundled beside it");
+}
+
+/// The libraries the page loads (libraries.js, website/tools/make_libraries.sh) hold the packages
+/// they say they hold, at the versions website/tools/libraries/package-lock.json pins, and none for
+/// development; package.json asks for each package at one version, and the lock pins it there; every
+/// package the page's code depends on is in the file; the text of each license is there, every
+/// package under one heading; THIRD_PARTY_NOTICES gives the same list and the same texts; and the
+/// packages npm installs are not committed.
+#[test]
+fn the_libraries_are_what_the_lock_pins() {
+    let lib = std::fs::read_to_string(site().join("libraries.js")).unwrap();
+    let header = lib.strip_prefix("/*!\n").and_then(|r| r.split_once("\n*/\n")).map(|(h, _)| h).expect("libraries.js begins with its notice");
+    let body = &header[header.find("\n\n  ").expect("the notice lists the packages") + 2..];
+    let listed: Vec<(String, String, String)> = body
+        .lines()
+        .take_while(|l| l.starts_with("  "))
+        .map(|l| {
+            let w: Vec<&str> = l.split_whitespace().collect();
+            (w[0].to_string(), w[1].to_string(), w[2].to_string())
+        })
+        .collect();
+    assert!(listed.iter().any(|(n, _, _)| n == "@codemirror/view") && listed.iter().any(|(n, _, _)| n == "marked"), "libraries.js lists no CodeMirror or marked: {listed:?}");
+    let lock: Value = serde_json::from_str(&read_repo("website/tools/libraries/package-lock.json")).unwrap();
+    let manifest: Value = serde_json::from_str(&read_repo("website/tools/libraries/package.json")).unwrap();
+    for deps in ["dependencies", "devDependencies"] {
+        for (name, v) in manifest[deps].as_object().unwrap() {
+            let v = v.as_str().unwrap();
+            assert!(v.split('.').count() == 3 && v.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())), "package.json asks for {name} at `{v}`, not at one version");
+            assert_eq!(lock["packages"][format!("node_modules/{name}")]["version"], v, "the lock pins {name} otherwise than package.json asks");
+        }
+    }
+    for (name, version, license) in &listed {
+        let p = &lock["packages"][format!("node_modules/{name}")];
+        assert_eq!(p["version"], version.as_str(), "libraries.js holds {name} {version}, which the lock does not pin");
+        assert!(p["dev"].is_null(), "libraries.js holds {name}, which is for development");
+        assert_eq!(p["license"], license.as_str(), "libraries.js says {name} is under {license}, and the lock otherwise");
+    }
+    for name in manifest["dependencies"].as_object().unwrap().keys() {
+        assert!(listed.iter().any(|(n, _, _)| n == name), "libraries.js does not hold {name}, which the page's code depends on");
+    }
+    let mut carried: Vec<String> = body.lines().filter_map(|l| l.strip_prefix("---- ")).flat_map(|l| l.split(", ").map(|c| c.split(" (").next().unwrap().to_string()).collect::<Vec<_>>()).collect();
+    carried.sort();
+    let mut names: Vec<String> = listed.iter().map(|(n, _, _)| n.clone()).collect();
+    names.sort();
+    assert_eq!(carried, names, "the texts of the licenses in libraries.js are not each package's, once");
+    let notices = read_repo("THIRD_PARTY_NOTICES");
+    let rule = "-".repeat(80);
+    let section = notices.split(&format!("\n{rule}\nCodeMirror 6 and marked\n{rule}\n\n")).nth(1).expect("THIRD_PARTY_NOTICES has no section for the libraries of the page");
+    let text = section.split(&format!("\n{rule}\n")).next().unwrap().split_once("\n\n").map(|(_, t)| t).expect("the section has a head, then the text");
+    assert!(text.trim_end() == body.trim_end(), "THIRD_PARTY_NOTICES gives another list or other texts than libraries.js: {}", ritsu_testkit::golden::line_diff(body.trim_end(), text.trim_end()));
+    assert!(read_repo("website/.gitignore").lines().any(|l| l == "tools/libraries/node_modules/"), "website/.gitignore does not leave out the packages npm installs for make_libraries.sh");
+    eprintln!("compared: {} packages of libraries.js with the lock and the notices", listed.len());
+}
+
 /// The page opens every example the playgrounds of rulec's and dandori's sites opened, as they
 /// opened it (their pages send their readers on here: `the_pages_before_send_their_links_on`):
 /// rulec's five rules in both languages, in the order of its buttons, each word for word as that
@@ -728,7 +915,7 @@ fn edits() -> Vec<(&'static str, &'static str, Vec<(String, String)>)> {
         x.1 = x.1.replacen(from, to, 1);
         f
     };
-    for (name, lang, rule, rounding) in [("rulec/full", "en", "Fee.rule", "  round up(1USD)"), ("rulec/full.ja", "ja", "運賃.rule", "  round up(10円)")] {
+    for (name, lang, rule, rounding) in [("rulec/full", "en", "fee.rule", "  round up(1USD)"), ("rulec/full.ja", "ja", "運賃.rule", "  round up(10円)")] {
         out.push(("a band of the table widened over the next", lang, edited(name, rule, "<=2kg", "<=6kg")));
         out.push(("the rounding taken off the output", lang, edited(name, rule, rounding, "")));
     }
@@ -1079,19 +1266,33 @@ fn requests_of(files: &[(String, String)], lang: &str) -> Vec<(&'static str, Val
     requests(files, lang)
 }
 
-/// Chrome, when the level lets the test run it and the machine has it; a SKIP line says why not.
+/// Chrome, when the level lets the test run it and the machine has it, with node, which drives it,
+/// and the module the page loads; a SKIP line says why not.
 fn chrome() -> Option<PathBuf> {
     if !need(Need::Chrome) {
         return None;
     }
-    let found = ritsu_testkit::chrome::find();
-    if found.is_none() {
+    let Some(found) = ritsu_testkit::chrome::find() else {
         skip("Chrome is not found; set RITSU_CHROME to run this test");
+        return None;
+    };
+    if !node_available() {
+        skip("node is not found; it drives Chrome in this test");
+        return None;
     }
-    found
+    if !site().join("ritsu.wasm").exists() {
+        skip("website/docs/playground/ritsu.wasm is missing; run website/tools/make_wasm.sh");
+        return None;
+    }
+    Some(found)
 }
 
-/// A server for the pages: each at its path (`/` and the others), and the playground's files beside
+/// Where the site publishes the playground's files, in each language (sync.sh copies them to the
+/// Japanese site): the page that explains the playground is published at the same path, and the page
+/// of the playground alone loads them from beside it (`../playground/`).
+const PUBLISHED: [&str; 2] = ["/ritsu/playground/", "/ritsu/ja/playground/"];
+
+/// A server for the pages, each at its path, and the playground's files where the site publishes
 /// them.
 fn serve(pages: Vec<(String, String)>) -> u16 {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1107,7 +1308,7 @@ fn serve(pages: Vec<(String, String)>) -> u16 {
 }
 
 fn respond(mut s: std::net::TcpStream, pages: &[(String, String)]) {
-    let mut buf = [0u8; 4096];
+    let mut buf = [0u8; 8192];
     let n = s.read(&mut buf).unwrap_or(0);
     let head = String::from_utf8_lossy(&buf[..n]);
     let asked = head.split_whitespace().nth(1).unwrap_or("/").split(['?', '#']).next().unwrap_or("/").to_string();
@@ -1121,7 +1322,12 @@ fn respond(mut s: std::net::TcpStream, pages: &[(String, String)]) {
             Some("json") => "application/json",
             _ => "application/octet-stream",
         };
-        std::fs::read(site().join(asked.trim_start_matches('/'))).ok().map(|b| (b, kind))
+        PUBLISHED
+            .iter()
+            .find_map(|at| asked.strip_prefix(at))
+            .filter(|f| !f.is_empty() && !f.contains(".."))
+            .and_then(|f| std::fs::read(site().join(f)).ok())
+            .map(|b| (b, kind))
     };
     let (status, body, kind) = match found {
         Some((b, k)) => ("200 OK", b, k),
@@ -1131,59 +1337,293 @@ fn respond(mut s: std::net::TcpStream, pages: &[(String, String)]) {
     let _ = s.write_all(&body);
 }
 
-/// The DOM of a page after its scripts ran (up to 20 s of virtual time), as headless Chrome dumps it.
-fn dump_dom(chrome: &Path, url: &str) -> String {
-    ritsu_testkit::chrome::dump_dom(chrome, url, 20_000, Duration::from_secs(120))
-}
-
-/// The text inside the first element of a class, up to the tag that closes it, as a person reads it.
-fn text_in(dom: &str, class: &str, close: &str) -> String {
-    let from = dom.find(&format!("class=\"{class}\"")).map(|i| i + dom[i..].find('>').unwrap() + 1).unwrap_or(dom.len());
-    let inner = &dom[from..from + dom[from..].find(close).unwrap_or(0)];
-    let mut text = String::new();
-    let mut in_tag = false;
-    for c in inner.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            c if !in_tag => text.push(c),
-            _ => {}
-        }
-    }
-    text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", "\u{a0}").replace("&amp;", "&")
-}
-
-/// The widget as a page has it, with the script served from the test's server.
-fn widget_of(page: &str) -> String {
-    let md = std::fs::read_to_string(repo().join(page)).unwrap();
+/// The page that explains the playground, in a language, as the site publishes it at
+/// /ritsu/playground/ (and /ritsu/ja/playground/): the component and its script as the Markdown
+/// writes them, in a page whose body carries the scheme as Zensical marks it. Zensical publishes the
+/// page a directory deeper than its file and writes the script's path from there
+/// (tests/website.rs holds the built page to it), which is the directory of the playground's files.
+fn explaining(page: &str) -> String {
+    let md = read_repo(page);
     let from = md.find("<div class=\"pg\"").unwrap_or_else(|| panic!("{page} has no playground"));
-    let tail = "<script src=\"playground/playground.js\" defer></script>";
+    let tail = "<script type=\"module\" src=\"playground/playground.js\"></script>";
     let to = md[from..].find(tail).unwrap_or_else(|| panic!("{page} does not load playground.js")) + from + tail.len();
-    md[from..to].replace("playground/playground.js", "/playground.js")
+    let widget = md[from..to].replace("src=\"playground/playground.js\"", "src=\"playground.js\"");
+    format!("<!doctype html><html><head><meta charset=\"utf-8\"></head><body data-md-color-scheme=\"default\">{widget}</body></html>")
 }
 
-/// A script for a test's page, run once the page has answered for the project it opens on: the
-/// steps `then` takes (an async function's body, with `root`, the widget, and `until`, which waits
-/// for a condition), and what `location.hash` is after them, written into the page as
-/// `<pre id="shared">`.
-fn steps(then: &str) -> String {
+/// The four pages of the playground where the site publishes them: the two that explain it and the
+/// two of the playground alone, as they are committed, and `more`.
+fn playground_pages(more: Vec<(String, String)>) -> Vec<(String, String)> {
+    let mut out = vec![
+        ("/ritsu/playground/".to_string(), explaining("website/docs/playground.md")),
+        ("/ritsu/ja/playground/".to_string(), explaining("website/docs-ja/playground.md")),
+        ("/ritsu/play/".to_string(), read_repo("website/docs/play/index.html")),
+        ("/ritsu/ja/play/".to_string(), read_repo("website/docs-ja/play/index.html")),
+    ];
+    out.extend(more);
+    out
+}
+
+/// Drives Chrome over its DevTools protocol, on the pipe `--remote-debugging-pipe` opens (fds 3 and
+/// 4): `node cdp.mjs <chrome> <profile> <visits.json> <out.json>`. Each visit opens a tab of the
+/// given size, in the given scheme, goes to the page and takes its steps: `wait` until an
+/// expression is true (in real time: the playground answers from a worker), `run` a script, `get`
+/// a value (what comes back, in order), `key` press a key, `type` text, `click` the middle of what a
+/// selector names, `wheel` turn the mouse's wheel at a place in it, `sleep`, `shot` a picture. A step
+/// that
+/// fails ends the visit, and the errors, with what the page threw, come back with the values.
+const CDP: &str = r#"
+import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+const [chromePath, profile, visitsPath, outPath] = process.argv.slice(2);
+const visits = JSON.parse(readFileSync(visitsPath, "utf8"));
+const chrome = spawn(chromePath, ["--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check", "--remote-debugging-pipe", `--user-data-dir=${profile}`, "about:blank"], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] });
+const [toChrome, fromChrome] = [chrome.stdio[3], chrome.stdio[4]];
+let nextId = 1;
+const waiting = new Map();
+const events = [];
+let buf = Buffer.alloc(0);
+fromChrome.on("data", (chunk) => {
+  buf = Buffer.concat([buf, chunk]);
+  let at;
+  while ((at = buf.indexOf(0)) >= 0) {
+    const msg = JSON.parse(buf.subarray(0, at).toString("utf8"));
+    buf = buf.subarray(at + 1);
+    if (msg.id && waiting.has(msg.id)) {
+      const { ok, no } = waiting.get(msg.id);
+      waiting.delete(msg.id);
+      msg.error ? no(new Error(JSON.stringify(msg.error))) : ok(msg.result);
+    } else if (msg.method) events.push(msg);
+  }
+});
+const send = (method, params = {}, sessionId) => new Promise((ok, no) => {
+  const id = nextId++;
+  waiting.set(id, { ok, no });
+  toChrome.write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + "\0");
+});
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function evaluate(s, expression) {
+  const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true }, s);
+  if (r.exceptionDetails) throw new Error(`${expression.slice(0, 160)}: ${(r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text}`);
+  return r.result.value;
+}
+const out = [];
+try {
+  for (const visit of visits) {
+    const { targetId } = await send("Target.createTarget", { url: "about:blank" });
+    const { sessionId: s } = await send("Target.attachToTarget", { targetId, flatten: true });
+    await send("Page.enable", {}, s);
+    await send("Runtime.enable", {}, s);
+    await send("Network.enable", {}, s);
+    await send("Emulation.setDeviceMetricsOverride", { width: visit.width, height: visit.height, deviceScaleFactor: 1, mobile: false }, s);
+    await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: visit.dark ? "dark" : "light" }] }, s);
+    const got = { values: [], errors: [] };
+    try {
+      await send("Page.navigate", { url: visit.url }, s);
+      for (const step of visit.steps) {
+        if (step.wait) {
+          const until = Date.now() + 60000;
+          let ok = false;
+          while (Date.now() < until) {
+            try { if (await evaluate(s, step.wait)) { ok = true; break; } } catch (e) {}
+            await sleep(40);
+          }
+          if (!ok) throw new Error(`waited 60 s for ${step.wait.slice(0, 200)}`);
+        } else if (step.run) await evaluate(s, `(async () => { ${step.run} })()`);
+        else if (step.get) got.values.push(await evaluate(s, step.get));
+        else if (step.key) {
+          for (const type of ["keyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: step.key, code: step.key, windowsVirtualKeyCode: { ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35, Enter: 13 }[step.key] || 0 }, s);
+        } else if (step.type) await send("Input.insertText", { text: step.type }, s);
+        else if (step.click) {
+          const at = await evaluate(s, `(() => { const r = document.querySelector(${JSON.stringify(step.click)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+          for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: at[0], y: at[1], button: "left", clickCount: 1 }, s);
+        } else if (step.wheel) {
+          const at = await evaluate(s, `(() => { const r = document.querySelector(${JSON.stringify(step.wheel)}).getBoundingClientRect(); return [r.left + r.width * ${step.at[0]}, r.top + r.height * ${step.at[1]}]; })()`);
+          await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: at[0], y: at[1], deltaX: 0, deltaY: step.dy }, s);
+        } else if (step.sleep) await sleep(step.sleep);
+        else if (step.shot) {
+          const r = await send("Page.captureScreenshot", { format: "png" }, s);
+          writeFileSync(step.shot, Buffer.from(r.data, "base64"));
+        }
+      }
+    } catch (e) {
+      got.errors.push(String(e.message || e));
+    }
+    got.thrown = events.filter((e) => e.sessionId === s && e.method === "Runtime.exceptionThrown").map((e) => JSON.stringify(e.params.exceptionDetails).slice(0, 400));
+    got.requests = events.filter((e) => e.sessionId === s && e.method === "Network.requestWillBeSent").map((e) => e.params.request.url);
+    out.push(got);
+    await send("Target.closeTarget", { targetId });
+  }
+} finally {
+  writeFileSync(outPath, JSON.stringify(out));
+  await Promise.race([send("Browser.close").catch(() => {}), sleep(2000)]);
+  chrome.kill("SIGKILL");
+  process.exit(0);
+}
+"#;
+
+/// Until the playground has answered for what it shows: nothing is asked of the module or waiting
+/// to be (`aria-busy`), and the status says how long the last answer took.
+const READY: &str = r#"(() => { const r = document.querySelector(".pg"); const s = r && r.querySelector(".pg-status"); return !!(r && s && r.getAttribute("aria-busy") !== "true" && / ms/.test(s.textContent)); })()"#;
+
+/// What the playground shows, as a reader sees it: the project and the file open (by the tab
+/// selected, which is there even when a project of one file hides the tabs), the file's text in the
+/// editor, the view, the tabs marked, the list of projects, the status, what the panel of the check
+/// or of the generator prints, the problems and their count, the page for people as its frame holds
+/// it, whether it is faded, the band under it, the Markdown, the line the cursor is on, and where
+/// the page is.
+const STATE: &str = r#"(async () => {
+  const r = document.querySelector(".pg");
+  const lib = new URL("libraries.js", document.querySelector('script[src$="playground.js"]').src).href;
+  const { EditorView } = await import(lib);
+  const v = EditorView.findFromDOM(r.querySelector(".cm-editor"));
+  const tab = r.querySelector('.pg-tab[aria-selected="true"]');
+  const view = tab ? tab.dataset.view : null;
+  const said = view === "check" || view === "gen" ? r.querySelector(`.pg-panel[data-view="${view}"] .pg-said`).textContent : null;
+  const frame = r.querySelector('.pg-panel[data-view="doc"] .pg-stage iframe:not(.pg-coming)');
+  const band = r.querySelector(".pg-band");
+  const save = r.querySelector(".pg-save");
+  const open = r.querySelector('.pg-file[aria-selected="true"]');
+  return {
+    status: r.querySelector(".pg-status").textContent,
+    project: (r.querySelector(".pg-project").selectedOptions[0] || { dataset: {} }).dataset.name || null,
+    open: open ? open.dataset.path : null,
+    text: v.state.doc.toString(),
+    line: v.state.doc.lineAt(v.state.selection.main.head).number,
+    view,
+    marked: [...r.querySelectorAll(".pg-file.err")].map((b) => b.dataset.path),
+    listed: [...r.querySelectorAll(".pg-project option")].map((o) => o.dataset.name),
+    groups: r.querySelectorAll(".pg-project optgroup").length,
+    said,
+    problems: [...r.querySelectorAll(".pg-problem")].map((b) => b.textContent),
+    count: r.querySelector(".pg-count").textContent,
+    page: frame ? frame.srcdoc : null,
+    stale: r.querySelector('.pg-panel[data-view="doc"] .pg-stage').classList.contains("pg-stale"),
+    markdownStale: r.querySelector('.pg-panel[data-view="markdown"] .pg-stage').classList.contains("pg-stale"),
+    band: band.hidden ? null : band.textContent,
+    markdown: r.querySelector(".pg-mdtext").textContent,
+    revert: !r.querySelector(".pg-revert").hidden,
+    cta: r.querySelector(".pg-add").classList.contains("pg-cta"),
+    tabs: getComputedStyle(r.querySelector(".pg-files")).display !== "none",
+    save: save.href.startsWith("blob:") ? save.download : null,
+    focused: document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.view || null : null,
+    path: location.pathname,
+    hash: location.hash,
+  };
+})()"#;
+
+/// A script that edits the open file as a reader would, by the editor (CodeMirror's own
+/// transaction, which is what typing makes): the first `from` in it becomes `to`.
+fn edit(from: &str, to: &str) -> String {
     format!(
-        r#"<script>
-(async () => {{
-  const until = async (f) => {{ for (let i = 0; i < 600; i++) {{ if (f()) return true; await new Promise((r) => setTimeout(r, 50)); }} return false; }};
-  const root = document.querySelector(".pg");
-  await until(() => / ms/.test(root.querySelector(".pg-status").textContent));
-  {then}
-  await until(() => location.hash.includes("edits="));
-  document.body.append(Object.assign(document.createElement("pre"), {{ id: "shared", textContent: location.hash }}));
-}})();
-</script>"#
+        r#"const lib = new URL("libraries.js", document.querySelector('script[src$="playground.js"]').src).href;
+const {{ EditorView }} = await import(lib);
+const v = EditorView.findFromDOM(document.querySelector(".pg .cm-editor"));
+const at = v.state.doc.toString().indexOf({from});
+if (at < 0) throw new Error("the file has no " + {from});
+v.dispatch({{ changes: {{ from: at, to: at + {from}.length, insert: {to} }} }});"#,
+        from = json!(from),
+        to = json!(to)
     )
 }
 
-/// What a page of [`steps`] wrote of `location.hash`.
-fn shared(dom: &str) -> String {
-    dom.split("<pre id=\"shared\">").nth(1).and_then(|r| r.split("</pre>").next()).unwrap_or_default().replace("&amp;", "&")
+/// A script that presses a button of the playground, by its class (or a selector).
+fn press(selector: &str) -> String {
+    format!("document.querySelector({}).click();", json!(selector))
+}
+
+/// One visit of Chrome to a page ([`drive`]): the size of the window, the scheme of the system, and
+/// the steps it takes.
+struct Visit {
+    url: String,
+    width: u32,
+    height: u32,
+    dark: bool,
+    steps: Vec<Value>,
+}
+
+impl Visit {
+    fn to(url: impl Into<String>) -> Visit {
+        Visit { url: url.into(), width: 1280, height: 900, dark: false, steps: Vec::new() }
+    }
+    fn step(mut self, s: Value) -> Visit {
+        self.steps.push(s);
+        self
+    }
+    fn ready(self) -> Visit {
+        self.step(json!({ "wait": READY }))
+    }
+    fn wait(self, js: &str) -> Visit {
+        self.step(json!({ "wait": js }))
+    }
+    fn run(self, js: &str) -> Visit {
+        self.step(json!({ "run": js }))
+    }
+    fn get(self, js: &str) -> Visit {
+        self.step(json!({ "get": js }))
+    }
+    fn state(self) -> Visit {
+        self.get(STATE)
+    }
+    fn key(self, key: &str) -> Visit {
+        self.step(json!({ "key": key }))
+    }
+    /// A click, as a mouse makes it, in the middle of what `selector` names.
+    fn click(self, selector: &str) -> Visit {
+        self.step(json!({ "click": selector }))
+    }
+    /// The mouse's wheel turned `dy` down, at `(x, y)` of what `selector` names (from its top left,
+    /// as fractions of its width and height).
+    fn wheel(self, selector: &str, at: (f64, f64), dy: i64) -> Visit {
+        self.step(json!({ "wheel": selector, "at": [at.0, at.1], "dy": dy }))
+    }
+    fn sleep(self, ms: u64) -> Visit {
+        self.step(json!({ "sleep": ms }))
+    }
+    /// An edit of the open file, and the playground's answer to it.
+    fn edited(self, from: &str, to: &str) -> Visit {
+        self.run(&edit(from, to)).ready()
+    }
+    /// A button pressed, and the playground's answer.
+    fn pressed(self, selector: &str) -> Visit {
+        self.run(&press(selector)).ready()
+    }
+}
+
+/// What each visit read, in order. A visit whose step failed, or whose page threw, fails the test
+/// with what Chrome said; so does one whose page asked for anything from anywhere but the test's
+/// server (the page loads nothing from elsewhere: its libraries are bundled beside it).
+fn drive(chrome: &Path, visits: Vec<Visit>) -> Vec<Vec<Value>> {
+    let t = TempDir::new("cdp");
+    let dir = t.path();
+    std::fs::write(dir.join("cdp.mjs"), CDP).unwrap();
+    let plan: Vec<Value> = visits.iter().map(|v| json!({ "url": v.url, "width": v.width, "height": v.height, "dark": v.dark, "steps": v.steps })).collect();
+    std::fs::write(dir.join("visits.json"), serde_json::to_string(&plan).unwrap()).unwrap();
+    std::fs::create_dir_all(dir.join("profile")).unwrap();
+    let o = Command::new("node")
+        .current_dir(dir)
+        .args(["cdp.mjs", chrome.to_str().unwrap(), dir.join("profile").to_str().unwrap(), "visits.json", "out.json"])
+        .output()
+        .expect("could not run node");
+    let out: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(dir.join("out.json")).unwrap_or_else(|_| panic!("the driver wrote nothing: {}", String::from_utf8_lossy(&o.stderr)))).unwrap();
+    assert_eq!(out.len(), visits.len(), "the driver came back from {} of {} visits: {}", out.len(), visits.len(), String::from_utf8_lossy(&o.stderr));
+    let mut wrong = Vec::new();
+    for (v, got) in visits.iter().zip(&out) {
+        let errors = got["errors"].as_array().cloned().unwrap_or_default();
+        let thrown = got["thrown"].as_array().cloned().unwrap_or_default();
+        if !errors.is_empty() || !thrown.is_empty() {
+            wrong.push(format!("{}: {errors:?} {thrown:?}", v.url));
+        }
+        let server = v.url.split('/').take(3).collect::<Vec<_>>().join("/") + "/";
+        for r in got["requests"].as_array().cloned().unwrap_or_default() {
+            let r = r.as_str().unwrap_or_default();
+            if !(r.starts_with(&server) || r.starts_with("blob:") || r.starts_with("data:") || r.starts_with("about:")) {
+                wrong.push(format!("{}: asked for {r}", v.url));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "Chrome:\n{}", wrong.join("\n"));
+    out.iter().map(|g| g["values"].as_array().cloned().unwrap_or_default()).collect()
 }
 
 /// What the page asks the module of a project's files, in a page's language.
@@ -1210,141 +1650,384 @@ fn said(a: &Value) -> String {
     format!("$ {}\n{}{}", a["command"].as_str().unwrap(), a["out"].as_str().unwrap(), a["err"].as_str().unwrap())
 }
 
-/// The page starts in Chrome, as the site's pages have it: it loads the module and the projects,
-/// shows what `ritsu check` prints for the project it opens with a mark on the files it names, lists
-/// the projects of its language in their groups, opens a project, a file, a view and a target from a
-/// link (the page's own, and the links dandori's page gave), and gives a link to what the reader has
-/// made of a project that opens it as it was, the shop edited and a file of the reader's own in the
-/// empty project.
+/// A page as its frame holds it, without what the playground adds: the scheme on its root, and the
+/// script that keeps where the reader scrolled to.
+fn unframed(srcdoc: &str) -> String {
+    let mut s = srcdoc.to_string();
+    for scheme in ["light", "dark"] {
+        s = s.replacen(&format!("<html data-theme=\"{scheme}\""), "<html", 1);
+    }
+    if let Some(i) = s.find("<script data-pg-scroll>") {
+        let j = i + s[i..].find("</script>").expect("the script closes") + "</script>".len();
+        s.replace_range(i..j, "");
+    }
+    s
+}
+
+/// The scheme a frame's page is drawn in.
+fn scheme_of(srcdoc: &str) -> &'static str {
+    if srcdoc.contains("<html data-theme=\"dark\"") {
+        "dark"
+    } else if srcdoc.contains("<html data-theme=\"light\"") {
+        "light"
+    } else {
+        "none"
+    }
+}
+
+fn text_of<'a>(v: &'a Value, key: &str) -> &'a str {
+    v[key].as_str().unwrap_or_default()
+}
+
+/// The pages that explain the playground start in Chrome, as the site has them: each loads the
+/// module in its worker and the projects, opens on the shop with what `ritsu check` prints in the
+/// problems and the files it names marked, lists the projects of its language in their groups, and
+/// opens a project, a file, a view and a target from a link (its own, and the links dandori's page
+/// gave), and gives a link to what the reader has made of a project that opens it as it was: the
+/// shop edited, and a file of the reader's own in the empty project. The page for people follows the
+/// site's switch to dark.
 #[test]
 fn the_page_starts_in_chrome() {
     let Some(chrome) = chrome() else {
         return;
     };
-    if !site().join("ritsu.wasm").exists() {
-        skip("website/docs/playground/ritsu.wasm is missing; run website/tools/make_wasm.sh");
-        return;
-    }
     let projects = committed();
     let project = |name: &str| projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}")).clone();
     let shop = project("shop");
+    let base = format!("http://127.0.0.1:{}", serve(playground_pages(Vec::new())));
     let mut looked = 0;
-    for (tag, page) in [("en", "website/docs/playground.md"), ("ja", "website/docs-ja/playground.md")] {
-        let widget = widget_of(page);
-        let doc = |extra: &str| format!("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>{widget}{extra}</body></html>");
+    for tag in ["en", "ja"] {
+        let at = format!("{base}{}", if tag == "ja" { PUBLISHED[1] } else { PUBLISHED[0] });
+        let page = if tag == "ja" { "the Japanese page" } else { "the English page" };
+        let ask = |files: &[(String, String)], path: &str, target: Option<&str>| ask_in(tag, files, path, target);
         let contract = "proto/shop/v1/order.proto";
         let returned = "  ORDER_STATUS_RETURNED = 5;\n";
-        let edit_shop = format!(
-            "const src = root.querySelector(\".pg-src\");\n  src.value = src.value.replace({}, \"\");\n  src.dispatchEvent(new Event(\"input\"));\n  root.querySelector(\".pg-share\").click();",
-            json!(returned)
-        );
+        let flow = "ordering/ship_order.flow";
+        let urgency = "ordering/rules/urgency.rule";
+        let gap = project(if tag == "ja" { "rulec/gap.ja" } else { "rulec/gap" });
+        let gate = project(if tag == "ja" { "sekisho/refunds.ja" } else { "sekisho/refunds" });
+        let draft = project(&format!("dandori/{DRAFT}"));
+        let hotel = if tag == "ja" { "examples/hotel/temporal/hotel.ja.flow" } else { "examples/hotel/temporal/hotel.flow" };
+        let version = project(&format!("dandori/{hotel}"));
         let rule = project(if tag == "ja" { "rulec/full.ja" } else { "rulec/full" }).files[0].1.clone();
         let own = if tag == "ja" { "運賃.rule" } else { "fee.rule" };
+        let shared = r#"!!location.hash && location.hash.includes("edits=")"#;
         let paste = format!(
-            "const chooser = root.querySelector(\".pg-project\");\n  chooser.value = chooser.querySelector('option[data-name=\"empty\"]').value;\n  chooser.dispatchEvent(new Event(\"change\"));\n  window.prompt = () => {};\n  root.querySelector(\".pg-add\").click();\n  const src = root.querySelector(\".pg-src\");\n  src.value = {};\n  src.dispatchEvent(new Event(\"input\"));\n  root.querySelector(\".pg-share\").click();",
-            json!(own),
-            json!(rule)
+            "const chooser = document.querySelector('.pg-project');\nchooser.value = chooser.querySelector('option[data-name=\"empty\"]').value;\nchooser.dispatchEvent(new Event('change'));\nwindow.prompt = () => {};\ndocument.querySelector('.pg-add').click();",
+            json!(own)
         );
-        let port = serve(vec![("/".to_string(), doc("")), ("/edit".to_string(), doc(&steps(&edit_shop))), ("/own".to_string(), doc(&steps(&paste)))]);
-        let ask = |files: &[(String, String)], path: &str, target: Option<&str>| ask_in(tag, files, path, target);
-        let counts = |a: &Value| counts_in(tag, a);
-        let base = format!("http://127.0.0.1:{port}");
+        let visits = vec![
+            // the shop, as the page opens; then the site switched to dark, which the page for people of
+            // the open file follows
+            Visit::to(&at).ready().state().pressed(".pg-tab[data-view=\"doc\"]").run("document.body.setAttribute('data-md-color-scheme', 'slate');").ready().state(),
+            // a link to a file and a view, the generator starting on the shop's platform, and to a
+            // rule's page for people
+            Visit::to(format!("{at}#project=shop&file={flow}&view=gen")).ready().state(),
+            Visit::to(format!("{at}#project=shop&file={urgency}&view=doc")).ready().state(),
+            // an example of rulec's page, and sekisho's example: the check of its gate, and the
+            // first file of the Cedar it writes
+            Visit::to(format!("{at}#project={}", gap.name)).ready().state(),
+            Visit::to(format!("{at}#project={}", gate.name)).ready().state(),
+            Visit::to(format!("{at}#project={}&file={}&view=gen", gate.name, gate.open)).ready().state(),
+            // the links dandori's page gave: the first draft, a version built for a platform it
+            // cannot run on and for its own, and the rules tab
+            Visit::to(format!("{at}#flow={DRAFT}")).ready().state(),
+            Visit::to(format!("{at}#flow={hotel}&view=build&target=asl")).ready().state(),
+            Visit::to(format!("{at}#flow={hotel}&view=build")).ready().state(),
+            Visit::to(format!("{at}#flow={hotel}&view=rules")).ready().state(),
+            // the empty project, which asks for a file
+            Visit::to(format!("{at}#project=empty")).ready().state(),
+            // the shop edited, and the link the page gives to it
+            Visit::to(&at).ready().edited(returned, "").run(&press(".pg-share")).wait(shared).state(),
+            // one file of the reader's own, pasted into the empty project, and the link to it
+            Visit::to(&at).ready().run(&paste).ready().run(&format!("{}\n", edit_into_empty(&rule))).ready().run(&press(".pg-share")).wait(shared).state(),
+        ];
+        let got = drive(&chrome, visits);
 
-        // the shop, as the page opens
-        let dom = dump_dom(&chrome, &format!("{base}/"));
-        let status = text_in(&dom, "pg-status", "</span>");
-        assert!(status.starts_with(&format!("ritsu {}", env!("CARGO_PKG_VERSION"))), "{page}: the status says {status:?}");
+        // the shop, as the page opens: the check in the problems, the files it names marked
+        let (opened, dark) = (&got[0][0], &got[0][1]);
         let want = playground::check(&ask(&shop.files, "", None));
-        assert!(status.ends_with(&counts(&want)), "{page}: the status says {status:?}");
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check");
+        let status = text_of(opened, "status");
+        assert!(status.starts_with(&format!("ritsu {}", env!("CARGO_PKG_VERSION"))) && status.ends_with(&counts_in(tag, &want)), "{page}: the status says {status:?}");
+        assert_eq!(text_of(opened, "view"), "check", "{page}: the page does not open on the problems");
+        assert_eq!(text_of(opened, "said"), said(&want), "{page}: the page shows another check");
+        let diagnostics = want["json"]["diagnostics"].as_array().unwrap();
+        assert_eq!(opened["problems"].as_array().unwrap().len(), diagnostics.len(), "{page}: the problems list another number of findings than the check says");
+        let first = opened["problems"][0].as_str().unwrap_or_default();
+        assert!(first.contains("rulec E032") && first.contains("billing/rules/billing_need.rule:5"), "{page}: the first problem is not rulec's E032 at billing/rules/billing_need.rule:5: {first:?}");
+        assert_eq!(text_of(opened, "count"), diagnostics.len().to_string(), "{page}: the tab of the problems counts otherwise");
         for marked in ["billing/rules/billing_need.rule", "requirements/billing.req"] {
-            assert!(dom.contains(&format!("class=\"pg-file err\" role=\"tab\" aria-selected=\"false\">{marked}")), "{page}: the tab of {marked} is not marked");
+            assert!(opened["marked"].as_array().unwrap().iter().any(|m| m == marked), "{page}: the tab of {marked} is not marked");
         }
-        assert!(dom.contains(&format!("aria-selected=\"true\">{contract}")), "{page}: the page does not open on the contract");
+        assert_eq!(text_of(opened, "open"), contract, "{page}: the page does not open on the contract");
+        assert_eq!(text_of(opened, "text"), shop.files.iter().find(|(p, _)| p == contract).unwrap().1, "{page}: the editor holds another contract");
         // the list: the projects of this page's language, in their five groups
-        let listed: Vec<&str> = dom.match_indices("data-name=\"").map(|(i, m)| &dom[i + m.len()..i + m.len() + dom[i + m.len()..].find('"').unwrap()]).collect();
         let mine: Vec<&str> = projects.iter().filter(|p| p.langs().contains(&tag)).map(|p| p.name.as_str()).collect();
-        assert_eq!(listed, mine, "{page}: the list has other projects than projects.json has for this page");
-        assert_eq!(dom.matches("<optgroup label=").count(), 5, "{page}: the list does not have its five groups");
-        looked += 1;
+        assert_eq!(opened["listed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect::<Vec<_>>(), mine, "{page}: the list has other projects than projects.json has for this page");
+        assert_eq!(opened["groups"], 5, "{page}: the list does not have its five groups");
+        // a .proto has no page for people, which the page says; under the site's dark scheme, a rule's
+        // page is drawn dark (the next visit opens one)
+        assert_eq!(dark["page"], Value::Null, "{page}: a page is drawn of the contract");
+        looked += 3;
 
-        // a link to a file, a view and a target
-        let flow = "ordering/ship_order.flow";
-        let dom = dump_dom(&chrome, &format!("{base}/#project=shop&file={flow}&view=gen&target=temporal"));
+        // a link to a file and a view: the flow's generator starts on Temporal, the shop's platform
         let want = playground::generate(&ask(&shop.files, flow, Some("temporal")));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of {flow} for Temporal");
-        let urgency = "ordering/rules/urgency.rule";
-        let dom = dump_dom(&chrome, &format!("{base}/#project=shop&file={urgency}&view=doc"));
-        assert!(dom.contains("class=\"pg-open\" href=\"blob:"), "{page}: the page has no link to the page rulec doc draws of {urgency}");
+        assert_eq!(text_of(&got[1][0], "said"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of {flow} than Temporal's");
+        assert_eq!((text_of(&got[1][0], "open"), text_of(&got[1][0], "view")), (flow, "gen"), "{page}: the link does not open {flow} on the generator");
+        let n = want["files"].as_array().unwrap().len();
+        let files = if tag == "ja" { format!("{n} ファイル") } else { format!("{n} files") };
+        assert!(text_of(&got[1][0], "status").ends_with(&files), "{page}: the status does not count the {n} files written for Temporal: {}", text_of(&got[1][0], "status"));
+        let want = playground::doc(&ask(&shop.files, urgency, None));
+        let shown = got[2][0]["page"].as_str().unwrap_or_else(|| panic!("{page}: no page for people of {urgency}"));
+        assert!(unframed(shown) == want["html"]["out"].as_str().unwrap(), "{page}: the frame holds another page than rulec doc draws of {urgency}");
+        assert_eq!(scheme_of(shown), "light", "{page}: the page of {urgency} is not drawn in the site's light scheme");
         looked += 2;
 
         // an example of rulec's page
-        let gap = project(if tag == "ja" { "rulec/gap.ja" } else { "rulec/gap" });
-        let dom = dump_dom(&chrome, &format!("{base}/#project={}", gap.name));
         let want = playground::check(&ask(&gap.files, "", None));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of {}", gap.name);
-        assert!(text_in(&dom, "pg-status", "</span>").ends_with(&counts(&want)), "{page}: the status of {} is not its check's", gap.name);
-        looked += 1;
-
-        // sekisho's example: the check of its gate, and the first file of the Cedar it writes
-        let gate = project(if tag == "ja" { "sekisho/refunds.ja" } else { "sekisho/refunds" });
-        let dom = dump_dom(&chrome, &format!("{base}/#project={}", gate.name));
+        assert_eq!(text_of(&got[3][0], "said"), said(&want), "{page}: the page shows another check of {}", gap.name);
+        assert!(text_of(&got[3][0], "status").ends_with(&counts_in(tag, &want)), "{page}: the status of {} is not its check's", gap.name);
+        // sekisho's example
         let want = playground::check(&ask(&gate.files, "", None));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of {}", gate.name);
-        assert!(dom.contains(&format!("aria-selected=\"true\">{}", gate.open)), "{page}: {} does not open on its gate", gate.name);
-        let dom = dump_dom(&chrome, &format!("{base}/#project={}&file={}&view=gen", gate.name, gate.open));
+        assert_eq!(text_of(&got[4][0], "said"), said(&want), "{page}: the page shows another check of {}", gate.name);
+        assert_eq!(text_of(&got[4][0], "open"), gate.open, "{page}: {} does not open on its gate", gate.name);
         let want = playground::generate(&ask(&gate.files, &gate.open, None));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of the Cedar of {}", gate.open);
-        looked += 2;
+        assert_eq!(text_of(&got[5][0], "said"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page shows another first file of the Cedar of {}", gate.open);
+        looked += 3;
 
-        // the links dandori's page gave: the first draft, a version built for a platform it cannot
-        // run on, and the rules tab
-        let draft = project(&format!("dandori/{DRAFT}"));
-        let dom = dump_dom(&chrome, &format!("{base}/#flow={DRAFT}"));
+        // the links dandori's page gave
         let want = playground::check(&ask(&draft.files, "", None));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the page shows another check of the first draft");
-        assert!(dom.contains(&format!("aria-selected=\"true\">{DRAFT}")), "{page}: the page does not open on the first draft");
-        let hotel = if tag == "ja" { "examples/hotel/temporal/hotel.ja.flow" } else { "examples/hotel/temporal/hotel.flow" };
-        let version = project(&format!("dandori/{hotel}"));
-        let dom = dump_dom(&chrome, &format!("{base}/#flow={hotel}&view=build&target=asl"));
+        assert_eq!(text_of(&got[6][0], "said"), said(&want), "{page}: the page shows another check of the first draft");
+        assert_eq!(text_of(&got[6][0], "open"), DRAFT, "{page}: the page does not open on the first draft");
         let want = playground::generate(&ask(&version.files, hotel, Some("asl")));
         assert_ne!(want["code"], 0, "{hotel} is built for Step Functions after all");
-        assert!(text_in(&dom, "pg-out", "</div>").ends_with(&said(&want)), "{page}: the page does not say why {hotel} is not built for Step Functions");
-        let dom = dump_dom(&chrome, &format!("{base}/#flow={hotel}&view=build"));
+        assert!(text_of(&got[7][0], "said").ends_with(&said(&want)), "{page}: the page does not say why {hotel} is not built for Step Functions");
         let want = playground::generate(&ask(&version.files, hotel, version.target.as_deref()));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page does not build {hotel} for the platform its version is for");
-        let dom = dump_dom(&chrome, &format!("{base}/#flow={hotel}&view=rules"));
+        assert_eq!(text_of(&got[8][0], "said"), want["files"][0]["body"].as_str().unwrap(), "{page}: the page does not build {hotel} for the platform its version is for");
         let first_rule = version.files.iter().map(|(p, _)| p.as_str()).find(|p| p.ends_with(".rule")).unwrap();
-        assert!(dom.contains(&format!("aria-selected=\"true\">{first_rule}")) && dom.contains("class=\"pg-open\" href=\"blob:"), "{page}: the rules tab of dandori's page does not open {first_rule} and its page");
+        let want = playground::doc(&ask(&version.files, first_rule, None));
+        assert_eq!((text_of(&got[9][0], "open"), text_of(&got[9][0], "view")), (first_rule, "doc"), "{page}: the rules tab of dandori's page does not open {first_rule} on its page");
+        assert!(got[9][0]["page"].as_str().is_some_and(|p| unframed(p) == want["html"]["out"].as_str().unwrap()), "{page}: the page of {first_rule} is not what rulec doc draws");
         looked += 4;
 
         // the empty project, which asks for a file
-        let dom = dump_dom(&chrome, &format!("{base}/#project=empty"));
-        assert!(dom.contains("pg-add pg-cta"), "{page}: the empty project does not point at adding a file");
+        assert_eq!(got[10][0]["cta"], true, "{page}: the empty project does not point at adding a file");
         looked += 1;
 
-        // a link to the shop as the reader edited it, given by the page, opens it as it was
-        let dom = dump_dom(&chrome, &format!("{base}/edit"));
-        let hash = shared(&dom);
-        assert!(hash.starts_with("#project=shop&") && hash.contains("&edits="), "{page}: the page gives no link to the edited shop: {hash:?}");
+        // links to what the reader made, given by the page, open it as it was
+        let edited_hash = text_of(&got[11][0], "hash").to_string();
+        assert!(edited_hash.starts_with("#project=shop&") && edited_hash.contains("&edits="), "{page}: the page gives no link to the edited shop: {edited_hash:?}");
+        let own_hash = text_of(&got[12][0], "hash").to_string();
+        assert!(own_hash.starts_with("#project=empty&") && own_hash.contains("&edits="), "{page}: the page gives no link to the file pasted into the empty project: {own_hash:?}");
+        let again = drive(&chrome, vec![Visit::to(format!("{at}{edited_hash}")).ready().state(), Visit::to(format!("{at}{own_hash}")).ready().state()]);
         let mut fixed = shop.files.clone();
-        fixed.iter_mut().find(|(p, _)| p == contract).unwrap().1 = fixed.iter().find(|(p, _)| p == contract).unwrap().1.replace(returned, "");
-        let dom = dump_dom(&chrome, &format!("{base}/{hash}"));
+        fixed.iter_mut().find(|(p, _)| p == contract).unwrap().1 = shop.files.iter().find(|(p, _)| p == contract).unwrap().1.replace(returned, "");
         let want = playground::check(&ask(&fixed, "", None));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the link {hash} does not open the shop as it was edited");
-        assert!(dom.contains("class=\"pg-revert\" type=\"button\">"), "{page}: the edited shop has no way back to the shop as it opens");
-        looked += 1;
-
-        // one file of the reader's own, pasted into the empty project, and the link to it
-        let dom = dump_dom(&chrome, &format!("{base}/own"));
-        let hash = shared(&dom);
-        assert!(hash.starts_with("#project=empty&") && hash.contains("&edits="), "{page}: the page gives no link to the file pasted into the empty project: {hash:?}");
-        let dom = dump_dom(&chrome, &format!("{base}/{hash}"));
+        assert_eq!(text_of(&again[0][0], "said"), said(&want), "{page}: the link {edited_hash} does not open the shop as it was edited");
+        assert_eq!(again[0][0]["revert"], true, "{page}: the edited shop has no way back to the shop as it opens");
         let want = playground::check(&ask(&[(own.to_string(), rule.clone())], "", None));
-        assert_eq!(text_in(&dom, "pg-out", "</div>"), said(&want), "{page}: the link {hash} does not open the file pasted into the empty project");
-        looked += 1;
+        assert_eq!(text_of(&again[1][0], "said"), said(&want), "{page}: the link {own_hash} does not open the file pasted into the empty project");
+        assert_eq!((text_of(&again[1][0], "open"), text_of(&again[1][0], "text")), (own, rule.as_str()), "{page}: the link {own_hash} opens another file");
+        looked += 2;
     }
-    eprintln!("compared: {looked} views of the page in Chrome with what the library answers");
+    // the site switched to dark draws the page of a rule dark: the shop's first rule, from a link
+    let dark = drive(
+        &chrome,
+        vec![Visit::to(format!("{base}{}#project=shop&file=ordering/rules/urgency.rule&view=doc", PUBLISHED[0])).ready().run("document.body.setAttribute('data-md-color-scheme', 'slate');").wait(r#"(() => { const f = document.querySelector('.pg-panel[data-view="doc"] .pg-stage iframe:not(.pg-coming)'); return !!f && f.srcdoc.includes('<html data-theme="dark"'); })()"#).ready().state()],
+    );
+    assert_eq!(scheme_of(text_of(&dark[0][0], "page")), "dark", "the page of a rule does not follow the site's switch to dark");
+    looked += 1;
+    eprintln!("compared: {looked} views of the pages that explain the playground, in Chrome, with what the library answers");
+}
+
+/// A script that writes `text` into the file the empty project has just been given.
+fn edit_into_empty(text: &str) -> String {
+    format!(
+        r#"const lib = new URL("libraries.js", document.querySelector('script[src$="playground.js"]').src).href;
+const {{ EditorView }} = await import(lib);
+const v = EditorView.findFromDOM(document.querySelector(".pg .cm-editor"));
+v.dispatch({{ changes: {{ from: 0, to: v.state.doc.length, insert: {} }} }});"#,
+        json!(text)
+    )
+}
+
+/// The page of the playground alone (website/docs/play/index.html, and the Japanese one) starts in
+/// Chrome on a small rule of rulec's examples in its language, with the page for people drawn of
+/// it: the rule in the editor (a project of one file shows no tabs), and the page `rulec doc` draws
+/// in the frame on the right, in the system's scheme, to save as HTML. An edit that breaks the rule
+/// leaves the last page drawn there, faded, and the Markdown too, with the first problem in the band
+/// under it, which takes the reader to its line; putting it right draws the page again. The tabs on
+/// the right move with the arrow keys.
+#[test]
+fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
+    let Some(chrome) = chrome() else {
+        return;
+    };
+    let projects = committed();
+    let base = format!("http://127.0.0.1:{}", serve(playground_pages(Vec::new())));
+    let mut looked = 0;
+    for tag in ["en", "ja"] {
+        let at = format!("{base}{}", if tag == "ja" { "/ritsu/ja/play/" } else { "/ritsu/play/" });
+        let page = format!("the {} page alone", if tag == "ja" { "Japanese" } else { "English" });
+        let name = if tag == "ja" { "rulec/full.ja" } else { "rulec/full" };
+        let p = projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}"));
+        let (file, rule) = p.files[0].clone();
+        let row = if tag == "ja" { "| 遠隔地 | >2kg <=5kg | 1500円                             |\n" } else { "| overseas    | >2kg <=5kg | 15USD  |\n" };
+        assert!(rule.ends_with(row), "{name} no longer ends with the row `{row}`");
+        let broken = rule.replacen(row, "", 1);
+        let ask = |text: &str| ask_in(tag, &[(file.clone(), text.to_string())], &file, None);
+        let good = playground::doc(&ask(&rule));
+        assert_eq!(good["html"]["code"], 0, "{name} draws no page");
+        let bad = playground::check(&ask_in(tag, &[(file.clone(), broken.clone())], "", None));
+        let first = bad["json"]["diagnostics"].as_array().unwrap().iter().find(|d| d["severity"] == "error").expect("the rule without its row has an error").clone();
+        let line = first["line"].as_u64().unwrap();
+        let visits = vec![
+            Visit::to(&at).ready().state()
+                // the rule broken, the Markdown of it, and the band pressed
+                .edited(row, "").state()
+                .pressed(".pg-tab[data-view=\"markdown\"]").state()
+                .pressed(".pg-tab[data-view=\"doc\"]").click(".pg-band").state()
+                // put right again
+                .run(&format!("{}\n", edit_into_end(row))).ready().state()
+                // the reader scrolls the page for people (rulec's scrolls its side, on the left of
+                // it), and edits: the page drawn again starts where the reader left it
+                .wheel(".pg-panel[data-view=\"doc\"] .pg-stage", (0.15, 0.6), 800).sleep(400).edited(from_fee(tag).0, from_fee(tag).1).state().edited(from_fee(tag).1, from_fee(tag).0)
+                // the tabs on the right, by the keys
+                .run("document.querySelector('.pg-tab[aria-selected=\"true\"]').focus();").key("ArrowRight").ready().state(),
+            // the system's dark scheme
+            Visit { dark: true, ..Visit::to(&at) }.ready().state(),
+        ];
+        let got = drive(&chrome, visits);
+        let [opened, broken_page, broken_markdown, banded, fixed, scrolled, keyed] = [&got[0][0], &got[0][1], &got[0][2], &got[0][3], &got[0][4], &got[0][5], &got[0][6]];
+        assert_eq!((text_of(opened, "project"), text_of(opened, "open"), text_of(opened, "view")), (name, file.as_str(), "doc"), "{page} does not open on {name} and its page for people");
+        assert_eq!(text_of(opened, "text"), rule, "{page}: the editor holds another rule");
+        assert_eq!(opened["tabs"], false, "{page}: a project of one file shows its tabs");
+        assert!(unframed(text_of(opened, "page")) == good["html"]["out"].as_str().unwrap(), "{page}: the frame holds another page than rulec doc draws of {file}");
+        assert_eq!(scheme_of(text_of(opened, "page")), "light", "{page}: the page is not drawn in the system's light scheme");
+        assert_eq!(text_of(opened, "save"), format!("{}.html", file.trim_end_matches(".rule")), "{page}: the page is not saved under the name of its file");
+        let mine: Vec<&str> = projects.iter().filter(|q| q.langs().contains(&tag)).map(|q| q.name.as_str()).collect();
+        assert_eq!(opened["listed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect::<Vec<_>>(), mine, "{page}: the list has other projects than projects.json has for this page");
+        // broken: the last page stays, faded, with the first problem under it
+        assert_eq!(broken_page["stale"], true, "{page}: the page is not faded while the rule does not pass");
+        assert!(unframed(text_of(broken_page, "page")) == good["html"]["out"].as_str().unwrap(), "{page}: the frame does not keep the last page drawn");
+        let band = text_of(broken_page, "band");
+        let (code, message) = (first["code"].as_str().unwrap(), first["title"].as_str().or(first["message"].as_str()).unwrap());
+        assert!(band.contains(code) && band.contains(message), "{page}: the band does not say the first problem, {code} {message}: {band:?}");
+        assert_eq!(text_of(broken_page, "count"), bad["json"]["diagnostics"].as_array().unwrap().len().to_string(), "{page}: the tab of the problems counts otherwise");
+        assert_eq!(broken_markdown["markdownStale"], true, "{page}: the Markdown is not faded while the rule does not pass");
+        assert_eq!(text_of(broken_markdown, "markdown"), good["markdown"]["out"].as_str().unwrap(), "{page}: the Markdown is not the last one drawn");
+        assert_eq!(banded["line"].as_u64(), Some(line), "{page}: the band does not take the reader to line {line}");
+        // put right: drawn again, not faded, no band
+        assert_eq!((fixed["stale"].clone(), fixed["band"].clone()), (Value::Bool(false), Value::Null), "{page}: the page put right is still faded, or has the band");
+        assert!(unframed(text_of(fixed, "page")) == good["html"]["out"].as_str().unwrap(), "{page}: the page put right is not drawn again");
+        assert_eq!(text_of(fixed, "text"), rule, "{page}: the rule is not what it was");
+        // the page drawn after the edit starts where the reader scrolled to, which its frame said
+        let drawn = text_of(scrolled, "page");
+        let at: Value = drawn.split("const at = ").nth(1).and_then(|r| r.split(';').next()).and_then(|r| serde_json::from_str(r).ok()).unwrap_or_else(|| panic!("{page}: the page drawn again does not say where to start"));
+        let y = at.as_array().unwrap().iter().filter_map(|p| p[2].as_i64()).max().unwrap_or(0);
+        assert!(y > 200, "{page}: the page drawn again starts at {at}, not where the reader scrolled to");
+        assert!(unframed(drawn) == playground::doc(&ask(&rule.replacen(from_fee(tag).0, from_fee(tag).1, 1)))["html"]["out"].as_str().unwrap(), "{page}: the page drawn again is not the page of the rule edited");
+        // the arrow key moved the selection to the next tab, and the focus with it
+        assert_eq!((text_of(keyed, "view"), text_of(keyed, "focused")), ("markdown", "markdown"), "{page}: the arrow key does not move from the page for people to the Markdown");
+        // the system's dark scheme draws the page dark
+        assert_eq!(scheme_of(text_of(&got[1][0], "page")), "dark", "{page}: the page is not drawn in the system's dark scheme");
+        looked += got.iter().map(Vec::len).sum::<usize>();
+    }
+    eprintln!("compared: {looked} views of the page of the playground alone, in Chrome, with what the library answers");
+}
+
+/// A small edit of the rule the page alone opens on, which it passes after: a fee of its table.
+fn from_fee(tag: &str) -> (&'static str, &'static str) {
+    if tag == "ja" { ("| 近畿圏 | <=2kg      | 800円 ", "| 近畿圏 | <=2kg      | 900円 ") } else { ("| domestic    | <=2kg      | 8USD ", "| domestic    | <=2kg      | 9USD ") }
+}
+
+/// A script that adds `text` at the end of the open file.
+fn edit_into_end(text: &str) -> String {
+    format!(
+        r#"const lib = new URL("libraries.js", document.querySelector('script[src$="playground.js"]').src).href;
+const {{ EditorView }} = await import(lib);
+const v = EditorView.findFromDOM(document.querySelector(".pg .cm-editor"));
+v.dispatch({{ changes: {{ from: v.state.doc.length, insert: {} }} }});"#,
+        json!(text)
+    )
+}
+
+/// A link carries the playground from one of its pages to the other, as the reader left it: the
+/// link the page alone gives (the project, the file, the view and the edits) opens the same on the
+/// page that explains it, and that page's "open full screen" opens the page alone on what the
+/// reader has made there, in each language. The links the pages before gave, and the ones their
+/// pages send on, open on the page alone too.
+#[test]
+fn a_link_opens_the_same_file_and_tab_on_either_page() {
+    let Some(chrome) = chrome() else {
+        return;
+    };
+    let projects = committed();
+    let base = format!("http://127.0.0.1:{}", serve(playground_pages(Vec::new())));
+    let mut looked = 0;
+    for tag in ["en", "ja"] {
+        let (explained, alone) = if tag == "ja" { ("/ritsu/ja/playground/", "/ritsu/ja/play/") } else { ("/ritsu/playground/", "/ritsu/play/") };
+        let name = if tag == "ja" { "rulec/full.ja" } else { "rulec/full" };
+        let (file, rule) = projects.iter().find(|p| p.name == name).unwrap().files[0].clone();
+        let (from, to) = if tag == "ja" { ("| 近畿圏 | <=2kg      | 800円 ", "| 近畿圏 | <=2kg      | 900円 ") } else { ("| domestic    | <=2kg      | 8USD ", "| domestic    | <=2kg      | 9USD ") };
+        let changed = rule.replacen(from, to, 1);
+        let shop = projects.iter().find(|p| p.name == "shop").unwrap();
+        let urgency = "ordering/rules/urgency.rule";
+        let text = shop.files.iter().find(|(p, _)| p == urgency).unwrap().1.clone();
+        let (u_from, u_to) = ("anyone else's from 30,000 yen", "anyone else's from 20,000 yen");
+        let shared = r#"!!location.hash && location.hash.includes("edits=")"#;
+        let landed = format!("location.pathname === {} && {READY}", json!(alone));
+        let got = drive(
+            &chrome,
+            vec![
+                // the page alone: the rule edited, the Markdown, and the link it gives
+                Visit::to(format!("{base}{alone}")).ready().edited(from, to).pressed(".pg-tab[data-view=\"markdown\"]").run(&press(".pg-share")).wait(shared).state(),
+                // the page that explains it: another file, the generator, an edit, and full screen
+                Visit::to(format!("{base}{explained}")).ready().pressed(&format!(".pg-file[data-path=\"{urgency}\"]")).pressed(".pg-tab[data-view=\"gen\"]").edited(u_from, u_to).run(&press(".pg-expand")).wait(&landed).state(),
+            ],
+        );
+        let (given, expanded) = (&got[0][0], &got[1][0]);
+        let hash = text_of(given, "hash").to_string();
+        assert!(hash.starts_with(&format!("#project={}&view=markdown&edits=", name.replace('/', "%2F"))) || hash.starts_with(&format!("#project={name}&view=markdown&edits=")), "{tag}: the page alone gives another link: {hash:?}");
+        let opened = drive(&chrome, vec![Visit::to(format!("{base}{explained}{hash}")).ready().state()]);
+        let opened = &opened[0][0];
+        assert_eq!((text_of(opened, "project"), text_of(opened, "open"), text_of(opened, "view")), (name, file.as_str(), "markdown"), "{tag}: the link of the page alone opens another project, file or view on the page that explains it");
+        assert_eq!(text_of(opened, "text"), changed, "{tag}: the link does not carry the edit");
+        let want = playground::doc(&ask_in(tag, &[(file.clone(), changed.clone())], &file, None));
+        assert_eq!(text_of(opened, "markdown"), want["markdown"]["out"].as_str().unwrap(), "{tag}: the Markdown of the edited rule is not what rulec doc writes");
+        looked += 1;
+        // full screen, from the page that explains it
+        assert_eq!(text_of(expanded, "path"), alone, "{tag}: full screen does not open the page alone");
+        assert_eq!((text_of(expanded, "project"), text_of(expanded, "open"), text_of(expanded, "view")), ("shop", urgency, "gen"), "{tag}: full screen opens another project, file or view");
+        let mut files = shop.files.clone();
+        files.iter_mut().find(|(p, _)| p == urgency).unwrap().1 = text.replacen(u_from, u_to, 1);
+        assert_eq!(text_of(expanded, "text"), files.iter().find(|(p, _)| p == urgency).unwrap().1, "{tag}: full screen does not carry the edit");
+        let want = playground::generate(&ask_in(tag, &files, urgency, None));
+        assert_eq!(text_of(expanded, "said"), want["files"][0]["body"].as_str().unwrap(), "{tag}: full screen shows another first file of the generator");
+        looked += 1;
+        // the links the pages before gave, and those their pages send on, open on the page alone as
+        // on the page that explains it: a link with no view opens the problems there too
+        let gap = projects.iter().find(|p| p.name == if tag == "ja" { "rulec/gap.ja" } else { "rulec/gap" }).unwrap();
+        let draft = projects.iter().find(|p| p.name == format!("dandori/{DRAFT}")).unwrap();
+        let hotel = if tag == "ja" { "examples/hotel/temporal/hotel.ja.flow" } else { "examples/hotel/temporal/hotel.flow" };
+        let version = projects.iter().find(|p| p.name == format!("dandori/{hotel}")).unwrap();
+        let old = drive(
+            &chrome,
+            vec![
+                Visit::to(format!("{base}{alone}#project={}", gap.name)).ready().state(),
+                Visit::to(format!("{base}{alone}#flow={DRAFT}")).ready().state(),
+                Visit::to(format!("{base}{alone}#flow={hotel}&view=build&target=asl")).ready().state(),
+            ],
+        );
+        let want = playground::check(&ask_in(tag, &gap.files, "", None));
+        assert_eq!((text_of(&old[0][0], "view"), text_of(&old[0][0], "said")), ("check", said(&want).as_str()), "{tag}: the page alone does not open {} on its check", gap.name);
+        let want = playground::check(&ask_in(tag, &draft.files, "", None));
+        assert_eq!((text_of(&old[1][0], "open"), text_of(&old[1][0], "said")), (DRAFT, said(&want).as_str()), "{tag}: the page alone does not open the first draft dandori's page linked to");
+        let want = playground::generate(&ask_in(tag, &version.files, hotel, Some("asl")));
+        assert!(text_of(&old[2][0], "said").ends_with(&said(&want)), "{tag}: the page alone does not say why {hotel} is not built for Step Functions");
+        looked += 3;
+    }
+    eprintln!("compared: {looked} links between the two pages of the playground and of the pages before, in Chrome, with what the library answers");
 }
 
 /// A page the playground of rulec's or dandori's site had, kept to send a reader on to this page
@@ -1367,69 +2050,26 @@ fn page_before(site: &str, tag: &str) -> String {
     format!("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>{published}{}</body></html>", cut("<script>", "</script>"))
 }
 
-/// A page that opens `src` in a frame and, once the frame has come to the playground and the
-/// playground has answered, writes into itself where the frame came to (`<pre id="landed">`), the
-/// tabs of the files (the open one marked `*`), the status and the output, as the frame shows them.
-/// Chrome does not dump a page that sends it on (`--dump-dom` waits for the page it was given), so
-/// the page sent on is the frame's, and the page that dumps stays.
-fn framing(src: &str) -> String {
-    format!(
-        r#"<!doctype html><html><head><meta charset="utf-8"></head><body>
-<iframe id="frame" src="{src}" style="width:1200px;height:900px"></iframe>
-<script>
-(async () => {{
-  const f = document.getElementById("frame");
-  const answered = () => {{
-    const w = f.contentWindow;
-    const status = /^\/ritsu\/(ja\/)?playground\/$/.test(w.location.pathname) && w.document.querySelector(".pg-status");
-    return status && / ms/.test(status.textContent);
-  }};
-  for (let i = 0; i < 600; i++) {{
-    try {{
-      if (answered()) break;
-    }} catch (e) {{}}
-    await new Promise((r) => setTimeout(r, 50));
-  }}
-  const w = f.contentWindow, d = w.document;
-  const put = (tag, props) => document.body.append(Object.assign(document.createElement(tag), props));
-  put("pre", {{ id: "landed", textContent: w.location.pathname + w.location.hash }});
-  put("pre", {{ id: "tabs", textContent: [...d.querySelectorAll(".pg-file")].map((b) => (b.classList.contains("on") ? "*" : "") + b.textContent).join("\n") }});
-  put("span", {{ className: "pg-status", textContent: (d.querySelector(".pg-status") || {{}}).textContent || "" }});
-  put("div", {{ className: "pg-out", innerHTML: (d.querySelector(".pg-out") || {{}}).innerHTML || "" }});
-}})();
-</script></body></html>"#
-    )
-}
-
-/// The text of `<pre id="…">` in a page [`framing`] wrote.
-fn pre_of(dom: &str, id: &str) -> String {
-    let open = format!("<pre id=\"{id}\">");
-    dom.split(&open).nth(1).and_then(|r| r.split("</pre>").next()).unwrap_or_default().replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&amp;", "&")
-}
-
-/// The pages the playgrounds of rulec's and dandori's sites had send a reader on to this page, in
-/// their language, with the link the reader followed: one that opened something there opens the same
-/// here (the links dandori's page gave, `#flow=…&view=…&target=…`, which this page reads), and any
-/// other (none, or a heading of the page that was there) opens what that page opened on, rulec's
-/// table with a row missing and dandori's first draft. The pages are served where the site publishes
-/// them, /ritsu/<site>/playground/ and /ritsu/<site>/ja/playground/, beside this page at
-/// /ritsu/playground/ and /ritsu/ja/playground/: a link that climbed out of /ritsu/ would land on no
-/// page here, as on the site.
+/// The pages the playgrounds of rulec's and dandori's sites had send a reader on to the page that
+/// explains ritsu's playground, in their language, with the link the reader followed: one that
+/// opened something there opens the same here (the links dandori's page gave,
+/// `#flow=…&view=…&target=…`, which this page reads), and any other (none, or a heading of the page
+/// that was there) opens what that page opened on, rulec's table with a row missing and dandori's
+/// first draft. The pages are served where the site publishes them, /ritsu/<site>/playground/ and
+/// /ritsu/<site>/ja/playground/, beside the playground at /ritsu/playground/ and
+/// /ritsu/ja/playground/: a link that climbed out of /ritsu/ would land on no page here, as on the
+/// site.
 #[test]
 fn the_pages_before_send_their_links_on() {
     let Some(chrome) = chrome() else {
         return;
     };
-    if !site().join("ritsu.wasm").exists() {
-        skip("website/docs/playground/ritsu.wasm is missing; run website/tools/make_wasm.sh");
-        return;
-    }
     let projects = committed();
     let project = |name: &str| projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}")).clone();
     let draft = format!("#flow={DRAFT}");
     let (hotel, hotel_ja) = ("examples/hotel/temporal/hotel.flow", "examples/hotel/temporal/hotel.ja.flow");
     // the page that was there, the link followed to it, and where it should send the reader: the
-    // link this page opens on, the project, the file open, and the target of the generator shown
+    // link the playground opens on, the project, the file open, and the target of the generator shown
     let visits: Vec<(&str, &str, String, String, String, Option<&str>)> = vec![
         ("/ritsu/rulec/playground/", "", "#project=rulec/gap".into(), "rulec/gap".into(), String::new(), None),
         ("/ritsu/rulec/playground/", "#what-to-try", "#project=rulec/gap".into(), "rulec/gap".into(), String::new(), None),
@@ -1439,32 +2079,34 @@ fn the_pages_before_send_their_links_on() {
         ("/ritsu/dandori/ja/playground/", "", draft.clone(), format!("dandori/{DRAFT}"), DRAFT.into(), None),
         ("/ritsu/dandori/ja/playground/", "#flow=examples/hotel/temporal/hotel.ja.flow&view=build", "#flow=examples/hotel/temporal/hotel.ja.flow&view=build".into(), format!("dandori/{hotel_ja}"), hotel_ja.into(), Some("temporal")),
     ];
-    let mut pages: Vec<(String, String)> = Vec::new();
-    for (at, page) in [("/ritsu/playground/", "website/docs/playground.md"), ("/ritsu/ja/playground/", "website/docs-ja/playground.md")] {
-        pages.push((at.to_string(), format!("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>{}</body></html>", widget_of(page))));
-    }
+    let mut more: Vec<(String, String)> = Vec::new();
     for s in ["rulec", "dandori"] {
-        pages.push((format!("/ritsu/{s}/playground/"), page_before(s, "en")));
-        pages.push((format!("/ritsu/{s}/ja/playground/"), page_before(s, "ja")));
+        more.push((format!("/ritsu/{s}/playground/"), page_before(s, "en")));
+        more.push((format!("/ritsu/{s}/ja/playground/"), page_before(s, "ja")));
     }
-    for (i, (before, link, _, _, _, _)) in visits.iter().enumerate() {
-        pages.push((format!("/visit/{i}"), framing(&format!("{before}{link}"))));
-    }
-    let base = format!("http://127.0.0.1:{}", serve(pages));
-    for (i, (before, link, lands, name, open, target)) in visits.iter().enumerate() {
+    let base = format!("http://127.0.0.1:{}", serve(playground_pages(more)));
+    let plan = visits
+        .iter()
+        .map(|(before, link, _, _, _, _)| {
+            let to = if before.contains("/ja/") { PUBLISHED[1] } else { PUBLISHED[0] };
+            Visit::to(format!("{base}{before}{link}")).wait(&format!("location.pathname === {} && {READY}", json!(to))).state()
+        })
+        .collect();
+    let got = drive(&chrome, plan);
+    for ((before, link, lands, name, open, target), got) in visits.iter().zip(&got) {
         let tag = if before.contains("/ja/") { "ja" } else { "en" };
-        let dom = dump_dom(&chrome, &format!("{base}/visit/{i}"));
-        let came = format!("{}{lands}", if tag == "ja" { "/ritsu/ja/playground/" } else { "/ritsu/playground/" });
-        assert_eq!(pre_of(&dom, "landed"), came, "{before}{link} sends the reader elsewhere");
+        let state = &got[0];
+        let came = format!("{}{lands}", if tag == "ja" { PUBLISHED[1] } else { PUBLISHED[0] });
+        assert_eq!(format!("{}{}", text_of(state, "path"), text_of(state, "hash")), came, "{before}{link} sends the reader elsewhere");
         let p = project(name);
         let open = if open.is_empty() { p.open.clone() } else { open.clone() };
-        assert!(pre_of(&dom, "tabs").lines().any(|t| t == format!("*{open}")), "{before}{link} does not open {name} on {open}");
-        let shown = text_in(&dom, "pg-out", "</div>");
+        assert_eq!((text_of(state, "project"), text_of(state, "open")), (name.as_str(), open.as_str()), "{before}{link} does not open {name} on {open}");
+        let shown = text_of(state, "said");
         match target {
             None => {
                 let want = playground::check(&ask_in(tag, &p.files, "", None));
                 assert_eq!(shown, said(&want), "{before}{link} opens another check than that of {name}");
-                assert!(text_in(&dom, "pg-status", "</span>").ends_with(&counts_in(tag, &want)), "{before}{link}: the status is not that of the check of {name}");
+                assert!(text_of(state, "status").ends_with(&counts_in(tag, &want)), "{before}{link}: the status is not that of the check of {name}");
             }
             Some(t) => {
                 let want = playground::generate(&ask_in(tag, &p.files, &open, Some(t)));
@@ -1476,5 +2118,5 @@ fn the_pages_before_send_their_links_on() {
             }
         }
     }
-    eprintln!("compared: {} links to the pages rulec's and dandori's playgrounds had, sent on to the page in Chrome, with what the library answers", visits.len());
+    eprintln!("compared: {} links to the pages rulec's and dandori's playgrounds had, sent on to the playground in Chrome, with what the library answers", visits.len());
 }
