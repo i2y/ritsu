@@ -455,16 +455,21 @@ def checkAxes (t : ReadTable) (r : Report) : Report × Nat := Id.run do
                     r := r.fail s!"{t.name}: {t.columns[ai]!} has a gap between two coordinates"
                 | _, _ => pure ()
               | _, _ => pure ()
-            if t.kinds[ai]! == "input" then
+            -- What a walk leaves behind — a `count`, a `sum`, a `max`, a `min`, a fold's answer —
+            -- runs over the range `ranges` states for it, as an input's runs over its declared
+            -- range; `extremes` and `fold_answers` hold that range to what the walk can answer
+            -- (rulec's §15.236).
+            if t.kinds[ai]! == "input" || t.kinds[ai]! == "walk" then
+              let said := if t.kinds[ai]! == "input" then "the range the rule declares" else "the range it states"
               match t.declared[ai]!, bs[0]!, bs[bs.length - 1]! with
               | some d, some first, some last =>
                 if first.span.1 != some d.1 || last.span.2 != some d.2 then
-                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not run the whole of the range the rule declares"
+                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not run the whole of {said}"
                 -- An interval leaves its ends out, so an end of the declared range is covered
                 -- only by a point on it (rulec's §15.201): an axis whose last point was taken
                 -- away still reached the end with the interval before it.
                 else if first.span.2 != some d.1 || last.span.1 != some d.2 then
-                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not end on the ends of the range the rule declares, so a value at an end is in no coordinate"
+                  r := r.fail s!"{t.name}: {t.columns[ai]!} does not end on the ends of {said}, so a value at an end is in no coordinate"
               | _, _, _ => pure ()
             tiled := tiled + 1
   return (r, tiled)

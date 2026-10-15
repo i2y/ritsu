@@ -253,10 +253,9 @@ pub fn imports_of(f: &RuleFile) -> &[EnumFrom] {
 pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     for im in &f.enum_imports {
-        let p = std::path::Path::new(rule_path)
-            .parent()
-            .unwrap_or(std::path::Path::new("."))
-            .join(&im.file);
+        // Followed from the rule that wrote the line: the rule a contribution adds to, in the
+        // contribution's check (§15.235).
+        let p = im.file_path(rule_path);
         let at = format!("{rule_path}:{}", im.span.line);
         match ritsu_base::fs::read_to_string(&p) {
             Ok(text) => match wanted(im, &text, &at) {

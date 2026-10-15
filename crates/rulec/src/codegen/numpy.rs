@@ -636,16 +636,18 @@ impl<'a> Gen<'a> {
         // What it answers with `--prerequisites`: each block's functions, from the plan (§15.222).
         // And with `--chances`, what the runtime counts over the random inputs (§15.225).
         let prereqs = self.np_prereq_mode() + &self.np_chances_mode();
-        if self.f.machine.is_some() {
-            let load = format!("rule = rulec_np.load(\"{alias}.json\")\n");
-            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()).replacen(&load, &format!("{load}{prereqs}"), 1));
-        }
         // What it answers with `--labels`: the display name of each value a line names (§15.211).
+        // A machine's runner answers it too (§15.238): `rulec test` asks every runner of a rule
+        // whose enums give display names.
         let labels = if self.labeled_enums().is_empty() {
             String::new()
         } else {
             "if \"--labels\" in sys.argv[1:]:\n    for l in sys.stdin:\n        en, v = l.rstrip(\"\\n\").split(\"\\t\")\n        print(rule.label(en, v))\n    sys.exit(0)\n".to_string()
         };
+        if self.f.machine.is_some() {
+            let load = format!("rule = rulec_np.load(\"{alias}.json\")\n");
+            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()).replacen(&load, &format!("{load}{labels}{prereqs}"), 1));
+        }
         let body = format!(
             r#"import json
 import sys

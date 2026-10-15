@@ -95,6 +95,11 @@ impl Report<'_> {
 
     /// The last line: how many files of each language, how they came out, and the borders between
     /// the languages ritsu checked.
+    ///
+    /// Each finding is counted with the files that came out as the file it is about did: a warning
+    /// of a file that passes is counted with the files that pass, whether or not another file fails
+    /// (`1 fail (1 error), 1 pass (2 warnings)`), as it is when every file passes (`all pass (2
+    /// warnings)`). A finding of no file of the project is counted with the ones that fail.
     fn summary(&self) -> Text {
         let n = self.project.files.len();
         let by_tool: Vec<String> = self.project.counts().iter().map(|(t, k)| format!("{} {k}", t.word())).collect();
@@ -102,33 +107,47 @@ impl Report<'_> {
         let statuses: Vec<Status> = self.project.files.iter().map(|f| self.status(f)).collect();
         let fails = statuses.iter().filter(|s| **s == Status::Fails).count();
         let unchecked = statuses.iter().filter(|s| **s == Status::Unchecked).count();
-        let errors = self.findings().filter(|(_, f)| f.severity == Severity::Error).count();
-        let warnings = self.findings().filter(|(_, f)| f.severity == Severity::Warning).count();
-        let mut counts_ja = Vec::new();
-        let mut counts_en = Vec::new();
-        if errors > 0 {
-            counts_ja.push(format!("エラー {errors} 件"));
-            counts_en.push(ritsu_base::text::plural(errors, "error", "errors"));
-        }
-        if warnings > 0 {
-            counts_ja.push(format!("警告 {warnings} 件"));
-            counts_en.push(ritsu_base::text::plural(warnings, "warning", "warnings"));
-        }
-        let in_brackets = |ja: &str, en: &str| -> (String, String) {
-            if counts_ja.is_empty() { (ja.to_string(), en.to_string()) } else { (format!("{ja}（{}）", counts_ja.join("、")), format!("{en} ({})", counts_en.join(", "))) }
+        let passes = statuses.iter().filter(|s| **s == Status::Passes).count();
+        let passing: Vec<&str> = self.project.files.iter().zip(&statuses).filter(|(_, s)| **s == Status::Passes).map(|(f, _)| f.rel.as_str()).collect();
+        let of_passing = |x: &Finding| x.file.as_deref().is_some_and(|p| passing.contains(&p));
+        // The counts of the findings `pick` takes, in both languages: `(ja, en)`, empty for none.
+        let counts = |pick: &dyn Fn(&Finding) -> bool| -> (Vec<String>, Vec<String>) {
+            let errors = self.findings().filter(|(_, f)| f.severity == Severity::Error && pick(f)).count();
+            let warnings = self.findings().filter(|(_, f)| f.severity == Severity::Warning && pick(f)).count();
+            let mut ja = Vec::new();
+            let mut en = Vec::new();
+            if errors > 0 {
+                ja.push(format!("エラー {errors} 件"));
+                en.push(ritsu_base::text::plural(errors, "error", "errors"));
+            }
+            if warnings > 0 {
+                ja.push(format!("警告 {warnings} 件"));
+                en.push(ritsu_base::text::plural(warnings, "warning", "warnings"));
+            }
+            (ja, en)
+        };
+        let in_brackets = |ja: &str, en: &str, (cj, ce): &(Vec<String>, Vec<String>)| -> (String, String) {
+            if cj.is_empty() { (ja.to_string(), en.to_string()) } else { (format!("{ja}（{}）", cj.join("、")), format!("{en} ({})", ce.join(", "))) }
         };
         let (ja, en) = if fails == 0 && unchecked == 0 {
-            in_brackets("どれも検査を通りました", "all pass")
+            in_brackets("どれも検査を通りました", "all pass", &counts(&|_| true))
         } else {
             let mut ja = Vec::new();
             let mut en = Vec::new();
+            let elsewhere = counts(&|x| !of_passing(x));
             if fails > 0 {
-                let (j, e) = in_brackets(&format!("検査を通らないもの {fails} 個"), &format!("{fails} fail"));
+                let (j, e) = in_brackets(&format!("検査を通らないもの {fails} 個"), &format!("{fails} fail"), &elsewhere);
                 ja.push(j);
                 en.push(e);
-            } else if !counts_ja.is_empty() {
-                ja.push(counts_ja.join("、"));
-                en.push(counts_en.join(", "));
+            } else if !elsewhere.0.is_empty() {
+                ja.push(elsewhere.0.join("、"));
+                en.push(elsewhere.1.join(", "));
+            }
+            let theirs = counts(&of_passing);
+            if passes > 0 && !theirs.0.is_empty() {
+                let (j, e) = in_brackets(&format!("通るもの {passes} 個"), &format!("{passes} pass"), &theirs);
+                ja.push(j);
+                en.push(e);
             }
             if unchecked > 0 {
                 ja.push(format!("確かめられなかったもの {unchecked} 個"));

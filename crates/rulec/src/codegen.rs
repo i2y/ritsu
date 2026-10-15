@@ -174,6 +174,66 @@ pub fn pub_name_of(n: &Name) -> String {
     pub_name(n)
 }
 
+/// The type a declared enum is generated as in every language that names types: its alias in
+/// PascalCase (§8.1).
+pub fn type_name_of(n: &Name) -> String {
+    pascal(&pub_name(n))
+}
+
+/// The enums a rule declares itself whose type takes a name the rule's own functions or class take
+/// (§15.239), each with what it clashes with: in Go, one of the rule's functions (`Size`,
+/// `SizeTraced`, `SizeRecord`, `SizeChances`); in Java, the rule's class. An enum read from an
+/// `enums` file is not among them: the generated code names it by the file's package or class.
+pub fn rule_name_clashes(f: &RuleFile) -> Vec<(&crate::ast::EnumDecl, (Option<String>, Option<String>))> {
+    let alias = pub_name(&f.name);
+    let fname = pascal(&alias);
+    let go_fns = [fname.clone(), format!("{fname}Traced"), format!("{fname}Record"), crate::codegen::chances::chances_fn_name(&alias, "go")];
+    let class = crate::codegen::java::java_class(&alias);
+    f.enums
+        .iter()
+        .filter(|e| e.from.is_none())
+        .filter_map(|e| {
+            let ty = type_name_of(&e.name);
+            let go = go_fns.iter().find(|n| **n == ty).cloned();
+            let java = (crate::codegen::java::java_class(&pub_name(&e.name)) == class).then(|| class.clone());
+            (go.is_some() || java.is_some()).then_some((e, (go, java)))
+        })
+        .collect()
+}
+
+/// The names the Go package of a rule declares at its top level for the rule itself (§15.239): the
+/// rule's function and the functions beside it (`Size`, `SizeTraced`, `SizeRecord`,
+/// `SizeChances`), the types they take and give (`Input`, `Output`, `Fired`, the elements of its
+/// sequences, the two errors, `Chances` and `Way`), and a machine's `Initial`, `Final` and
+/// `IsFinal`. One package holds one thing of a name, so an enum's type of one of these names is
+/// either named by the package that owns it or, for an enum the rule declares, said by `check`.
+pub fn go_rule_names(f: &RuleFile) -> Vec<String> {
+    let alias = pub_name(&f.name);
+    let fname = pascal(&alias);
+    let mut out = vec![
+        fname.clone(),
+        format!("{fname}Traced"),
+        format!("{fname}Record"),
+        crate::codegen::chances::chances_fn_name(&alias, "go"),
+        "Input".to_string(),
+        "Output".to_string(),
+        "Fired".to_string(),
+        "RuleInputError".to_string(),
+        "RuleContradictionError".to_string(),
+        "Chances".to_string(),
+        "Way".to_string(),
+    ];
+    if f.elements.len() <= 1 {
+        out.push("Element".to_string());
+    } else {
+        out.extend(f.elements.iter().map(|el| format!("{}Element", pascal(&pub_name(&el.name)))));
+    }
+    if f.machine.is_some() {
+        out.extend(["Initial", "Final", "IsFinal"].map(str::to_string));
+    }
+    out
+}
+
 fn pub_name(n: &Name) -> String {
     n.ascii.clone().unwrap_or_else(|| n.text.clone())
 }
@@ -292,6 +352,8 @@ pub use prereq::prereq_fn_names;
 /// The function that counts the answers over the points of the random inputs, in each language
 /// (§15.225).
 mod chances;
+/// How the projection function reads the caller's object (§15.234).
+mod from;
 pub use chances::chances_fn_name;
 pub use connect::template as connect_template;
 pub use connect::{buf_gen_yaml, buf_lock, buf_yaml, BufDeps, Contracts};
@@ -805,13 +867,15 @@ impl<'a> Gen<'a> {
                 ritsu_emit::header::one_line(&a.path)
             ));
         }
-        // The contributions merged into the rule (§15.231): the function is the rule with them,
-        // so the file says which ones, from where, at which shape and which bytes.
-        for m in &self.f.contributions {
+        // The contributions merged into the rule (§15.231), and into a rule it applies, under the
+        // apply's name (§15.237): the function is the rule with them, so the file says which ones,
+        // from where, at which shape and which bytes.
+        let direct = self.f.contributions.iter().filter(|m| m.via.is_none());
+        for m in direct.chain(self.f.contributions.iter().filter(|m| m.via.is_some())) {
             h.push_str(&tr!(
                 "{comment} 寄与: {} = {} (signature:{}, sha256:{})\n",
                 "{comment} Contributions: {} = {} (signature:{}, sha256:{})\n",
-                m.name.text,
+                m.shown_name(),
                 ritsu_emit::header::one_line(&crate::link::relative(&self.path, &m.file)),
                 m.signature.as_deref().unwrap_or(""),
                 &m.sha256[..16.min(m.sha256.len())]
@@ -944,6 +1008,44 @@ impl<'a> Gen<'a> {
     /// The type an enum is generated as: `Era`.
     pub(crate) fn enum_type(&self, en: &str) -> String {
         self.enum_names.get(en).cloned().unwrap_or_else(|| pascal(en))
+    }
+
+    /// The names the Go package of the rule declares at its top level for the rule itself
+    /// (§15.239): its functions, the types its functions take and give, and a machine's constants.
+    /// An enum's type of one of these names cannot be declared beside them.
+    pub(crate) fn go_taken_names(&self) -> Vec<String> {
+        crate::codegen::go_rule_names(self.f)
+    }
+
+    /// The package that owns an enum read from an `enums` file, when the rule's Go package cannot
+    /// declare the enum's type under its own name (§15.239): the rule `size` reading `enum size`
+    /// would declare `func Size` and `type Size = sizes.Size` in one package. The package then names
+    /// the type by the package that owns it, `sizes.Size`, as Java names it by its class.
+    pub(crate) fn go_owner_of(&self, en: &str) -> Option<String> {
+        let o = self.f.enums.iter().find(|e| e.name.text == en)?.from.as_ref()?;
+        let t = self.enum_type(en);
+        self.go_taken_names().contains(&t).then(|| crate::backend::go_package(&pub_name(&o.module)))
+    }
+
+    /// The Go type of an enum as the rule's package writes it (§15.212, §15.239): the type it
+    /// declares, or the alias it declares for one an `enums` file owns, or that file's type by its
+    /// package where the alias would take a name the rule's own functions have.
+    pub(crate) fn go_enum_ty(&self, en: &str) -> String {
+        let t = self.enum_type(en);
+        match self.go_owner_of(en) {
+            Some(pkg) => format!("{pkg}.{t}"),
+            None => t,
+        }
+    }
+
+    /// The Go type of an enum as the runner writes it, the rule's package imported as `r`: `r.Size`,
+    /// or the owner's type by its package where the rule's package names it so (§15.239).
+    pub(crate) fn go_runner_enum_ty(&self, en: &str) -> String {
+        let t = self.enum_type(en);
+        match self.go_owner_of(en) {
+            Some(pkg) => format!("{pkg}.{t}"),
+            None => format!("r.{t}"),
+        }
     }
 
     /// The enums the generated code declares itself, by name in the rule, with their types:
@@ -1531,10 +1633,17 @@ impl<'a> Gen<'a> {
         // `enum` only where the module declares an enum of its own: a rule whose enums all come
         // from an `enums` file imports them from its module instead (§15.212).
         let classes = self.own_enums().iter().any(|(jp, _)| self.c.enums.contains_key(jp));
+        // The projection function reads a value of an enum through a helper typed by a type
+        // variable (§15.234).
+        let enum_read = self.py_from_reads_enum();
         o.push_str(&format!(
-            "from __future__ import annotations\n\n{}from typing import {}NamedTuple, NewType\n\n",
+            "from __future__ import annotations\n\n{}from typing import {}{}NamedTuple, NewType{}{}\n\n",
             if classes { "import enum\n" } else { "" },
-            if self.projects() { "Any, " } else { "" }
+            if self.projects() { "Any, " } else { "" },
+            if enum_read { "Callable, " } else { "" },
+            if enum_read { ", TypeVar" } else { "" },
+            // The readers take the object as the dict it is checked to be (§15.234).
+            if self.projects() { ", cast" } else { "" }
         ));
 
         // Brands. They work with mypy and pyright and cost nothing at runtime.
@@ -1811,7 +1920,7 @@ const PY_BUILTINS: [(&str, &str); 10] = [
 ];
 
 /// The other names the module defines at its top level beside the bound builtins: the helpers.
-const PY_HELPERS: [&str; 22] = [
+const PY_HELPERS: [&str; 40] = [
     "_Trace",
     "_min",
     "_max",
@@ -1834,6 +1943,25 @@ const PY_HELPERS: [&str; 22] = [
     "_days",
     "_largest",
     "_smallest",
+    // What the projection function reads the caller's object with (§15.234).
+    "_at",
+    "_opt",
+    "_pget",
+    "_seq_of",
+    "_seq_at",
+    "_int_of",
+    "_int_at",
+    "_int_pb",
+    "_bool_of",
+    "_bool_at",
+    "_str_of",
+    "_str_at",
+    "_date_of",
+    "_date_at",
+    "_num_of",
+    "_num_at",
+    "_enum_of",
+    "_E",
 ];
 
 /// Whether `word` stands in `text` as a name of its own, not as part of a longer one.
@@ -2931,7 +3059,8 @@ impl<'a> Gen<'a> {
 
     fn go_ty(&self, ty: &Ty) -> String {
         match ty {
-            Ty::Enum(n) => self.enum_names.get(n).cloned().unwrap_or_else(|| "string".into()),
+            Ty::Enum(n) if self.enum_names.contains_key(n) => self.go_enum_ty(n),
+            Ty::Enum(_) => "string".into(),
             Ty::Bool => "bool".into(),
             Ty::Number | Ty::Date => "int64".into(),
             Ty::Str => "string".into(),
@@ -3073,7 +3202,7 @@ impl<'a> Gen<'a> {
 
         // The machine this function is one step of (§15.148).
         if let Some((en, init, fins)) = self.machine_consts() {
-            let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            let cls = self.go_enum_ty(&en);
             o.push_str(&format!(
                 "// Initial {}\nconst Initial = {}\n\n// Final {}\nvar Final = []{cls}{{{}}}\n\n\
                  // IsFinal {}\nfunc IsFinal(s {cls}) bool {{\n\tfor _, f := range Final {{\n\t\tif f == s {{\n\t\t\treturn true\n\t\t}}\n\t}}\n\treturn false\n}}\n\n",
@@ -3106,7 +3235,7 @@ impl<'a> Gen<'a> {
                 .c
                 .groups
                 .get(&g.name.text)
-                .and_then(|(owner, _)| self.enum_names.get(owner).cloned())
+                .and_then(|(owner, _)| self.enum_names.contains_key(owner).then(|| self.go_enum_ty(owner)))
                 .unwrap_or_else(|| "int".into());
             o.push_str(&format!(
                 "func is{}(v {ty}) bool {{\n\tswitch v {{\n\tcase ",
@@ -3212,10 +3341,16 @@ impl<'a> Gen<'a> {
             let pkg = crate::backend::go_package(&module);
             for (jp, ascii) in types {
                 let Some(vals) = self.c.enums.get(&jp) else { continue };
-                o.push_str(&format!(
-                    "// {ascii} {}\ntype {ascii} = {pkg}.{ascii}\n\nconst (\n",
-                    tr!("は {pkg}.{ascii} の別名で、同じ型。", "is {pkg}.{ascii} under another name: the same type.")
-                ));
+                // Where the rule's own functions take the type's name, the package names it by the
+                // package that owns it and declares no alias of it (§15.239).
+                if self.go_owner_of(&jp).is_some() {
+                    o.push_str("const (\n");
+                } else {
+                    o.push_str(&format!(
+                        "// {ascii} {}\ntype {ascii} = {pkg}.{ascii}\n\nconst (\n",
+                        tr!("は {pkg}.{ascii} の別名で、同じ型。", "is {pkg}.{ascii} under another name: the same type.")
+                    ));
+                }
                 for v in vals {
                     let n = self.go_value(v, &Ty::Enum(jp.clone()));
                     o.push_str(&format!("\t{n}{CELL}= {pkg}.{n}\n"));
@@ -3224,7 +3359,7 @@ impl<'a> Gen<'a> {
                 // On one line where gofmt keeps it on one: its header and its one statement
                 // within 100 bytes (go/printer's `funcBody`). A longer one gofmt breaks, and so
                 // does this, or `gofmt -l` names the file (§15.222).
-                let (head, stmt) = (format!("func Parse{ascii}(s string) ({ascii}, bool)"), format!("return {pkg}.Parse{ascii}(s)"));
+                let (head, stmt) = (format!("func Parse{ascii}(s string) ({}, bool)", self.go_enum_ty(&jp)), format!("return {pkg}.Parse{ascii}(s)"));
                 let body = if head.len() + stmt.len() <= 100 { format!("{head} {{ {stmt} }}") } else { format!("{head} {{\n\t{stmt}\n}}") };
                 o.push_str(&format!(
                     "// Parse{ascii} {}\n{body}\n\n",
@@ -3241,15 +3376,16 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for en in self.c.enum_order.iter().filter(|e| self.c.ordered.contains(*e)) {
             let (rank, max, min) = self.enum_helpers(en);
-            let t = self.enum_type(en);
+            // The helper is named by the type's own name, and takes the type as the package writes it.
+            let (t, ty) = (self.enum_type(en), self.go_enum_ty(en));
             if rank {
-                o.push_str(&format!("func _rank_{t}(x {t}) int64 {{\n\treturn int64(x)\n}}\n\n"));
+                o.push_str(&format!("func _rank_{t}(x {ty}) int64 {{\n\treturn int64(x)\n}}\n\n"));
             }
             if max {
-                o.push_str(&format!("func _max_{t}(a, b {t}) {t} {{\n\tif a >= b {{\n\t\treturn a\n\t}}\n\treturn b\n}}\n\n"));
+                o.push_str(&format!("func _max_{t}(a, b {ty}) {ty} {{\n\tif a >= b {{\n\t\treturn a\n\t}}\n\treturn b\n}}\n\n"));
             }
             if min {
-                o.push_str(&format!("func _min_{t}(a, b {t}) {t} {{\n\tif a <= b {{\n\t\treturn a\n\t}}\n\treturn b\n}}\n\n"));
+                o.push_str(&format!("func _min_{t}(a, b {ty}) {ty} {{\n\tif a <= b {{\n\t\treturn a\n\t}}\n\treturn b\n}}\n\n"));
             }
         }
         o
@@ -4774,6 +4910,8 @@ impl<'a> Gen<'a> {
         );
         if let (Some((en, _, _)), Some(out)) = (self.machine_consts(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
+            // The state's type as the runner writes it: the rule's package's, or the owner's (§15.239).
+            let state_ty = self.go_runner_enum_ty(&en);
             let all: Vec<String> = self.c.enums.get(&en).into_iter().flatten().map(|v| format!("r.{}", self.go_value(v, &Ty::Enum(en.clone())))).collect();
             // The values carried along with the state (§15.217): a local each, from the
             // module's constant; the line the traces begin with says where each starts, and the
@@ -4808,7 +4946,7 @@ impl<'a> Gen<'a> {
                  if err := decode(sc.Bytes(), &top); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\t\t\
                  if _, ok := top[\"machine\"]; ok {{\n\t\t\t\
                      fin := []string{{}}\n\t\t\t\
-                     for _, s := range []r.{cls}{{{}}} {{\n\t\t\t\tif r.IsFinal(s) {{\n\t\t\t\t\tfin = append(fin, s.String())\n\t\t\t\t}}\n\t\t\t}}\n\t\t\t\
+                     for _, s := range []{state_ty}{{{}}} {{\n\t\t\t\tif r.IsFinal(s) {{\n\t\t\t\t\tfin = append(fin, s.String())\n\t\t\t\t}}\n\t\t\t}}\n\t\t\t\
                      meta, _ := json.Marshal(struct {{\n\t\t\t\tInitial string   `json:\"initial\"`\n\t\t\t\tFinal   []string `json:\"final\"`\n\t\t\t}}{{r.Initial.String(), fin}})\n\t\t\t\
                      {print_meta}\n\t\t\t\
                      continue\n\t\t}}\n\t\t\
@@ -4819,10 +4957,27 @@ impl<'a> Gen<'a> {
             );
             tail = format!("\t\t\tif stepping {{\n\t\t\t\tstate = {}\n{more_tail}\t\t\t}}\n", self.next_state_of("got", &format!(".{}", pascal(&out))));
         }
+        // The packages of `enums` files whose types the runner names by their package, where the
+        // rule's package names them so (§15.239): a machine's state, an enum a block of
+        // prerequisites is over.
+        // gofmt keeps the specs of one group sorted by path, so the rule's package goes among them.
+        let mut ours: Vec<(String, String)> = vec![(pkg.clone(), format!("\tr {pkg:?}\n"))];
+        let named = self.machine_consts().map(|(en, _, _)| en).into_iter().chain(self.prereq_graphs().into_iter().map(|g| g.over));
+        for en in named {
+            if let (Some(owner), Some(o)) = (self.go_owner_of(&en), self.f.enums.iter().find(|e| e.name.text == en).and_then(|e| e.from.as_ref())) {
+                let path = self.go_owner_path(&pub_name(&o.module));
+                let line = if path == owner { format!("\t{path:?}\n") } else { format!("\t{owner} {path:?}\n") };
+                if !ours.iter().any(|(_, l)| *l == line) {
+                    ours.push((path, line));
+                }
+            }
+        }
+        ours.sort();
+        let ours: String = ours.into_iter().map(|(_, l)| l).collect();
         format!(
             "// Code generated by rulec {}. DO NOT EDIT.\n\
              package main\n\n\
-             import (\n\t\"bufio\"\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n\t\"time\"\n\n\tr \"{pkg}\"\n)\n\n\
+             import (\n\t\"bufio\"\n\t\"bytes\"\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"os\"\n\t\"strconv\"\n\t\"strings\"\n\t\"time\"\n\n{ours})\n\n\
              {GO_WIRE}\
              func main() {{\n\t\
                  sc := bufio.NewScanner(os.Stdin)\n\t\
@@ -6159,9 +6314,18 @@ impl<'a> Gen<'a> {
         let state = runner_local("state", &alias);
         let (mut head, mut tail) = (String::new(), String::new());
         let mut body = format!("  const {d} = JSON.parse({line}).in as unknown;\n");
+        // The parser of a machine's state read from an `enums` file is that file's module's, which
+        // the rule's module does not re-export (§15.238).
+        let mut state_owner: Option<(String, String)> = None;
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
             let cls = self.enum_names.get(&en).cloned().unwrap_or_default();
-            for w in ["INITIAL".to_string(), "isFinal".to_string(), cls.clone(), format!("parse{cls}")] {
+            let parse = format!("parse{cls}");
+            let mut ws = vec!["INITIAL".to_string(), "isFinal".to_string(), cls.clone()];
+            match self.c.owners.get(&en) {
+                Some(o) => state_owner = Some((pub_name(&o.module), parse)),
+                None => ws.push(parse),
+            }
+            for w in ws {
                 if !imports.contains(&w) {
                     imports.push(w);
                 }
@@ -6207,10 +6371,17 @@ impl<'a> Gen<'a> {
         // `enums` file's enum the labels have not imported already comes from that file's module.
         let mut prereq_owners: Vec<(String, Vec<String>)> = Vec::new();
         let labels = labels + &self.ts_prereq_mode(&lines, &mut imports, &mut prereq_owners) + &self.ts_chances_mode(&d, &lines, &read_args, &prelude, &mut imports);
+        if let Some((m, n)) = state_owner {
+            match prereq_owners.iter_mut().find(|(x, _)| *x == m) {
+                Some((_, ns)) if ns.contains(&n) => {}
+                Some((_, ns)) => ns.push(n),
+                None => prereq_owners.push((m, vec![n])),
+            }
+        }
         let more_owners: String = prereq_owners
             .into_iter()
             .filter_map(|(m, ns)| {
-                let ns: Vec<String> = ns.into_iter().filter(|n| !has_word(&owner_imports, n)).collect();
+                let ns: Vec<String> = ns.into_iter().filter(|n| !has_word(&owner_imports, n) && !imports.contains(n)).collect();
                 (!ns.is_empty()).then(|| format!("import {{ {} }} from \"./{m}.ts\";\n", ns.join(", ")))
             })
             .collect();
@@ -6279,8 +6450,16 @@ impl<'a> Gen<'a> {
             }
             arms.push_str(&format!("    if (en === {}) {{\n      console.log({label}({parse}(v)));\n    }}\n", str_lit(en)));
         }
+        // A name the rule's module is already imported for — the parser of a machine's state,
+        // which the module re-exports (§15.238) — is not imported a second time from the owner.
         (
-            owners.iter().map(|(m, ns)| format!("import {{ {} }} from \"./{m}.ts\";\n", ns.join(", "))).collect(),
+            owners
+                .iter()
+                .filter_map(|(m, ns)| {
+                    let ns: Vec<&String> = ns.iter().filter(|n| !imports.contains(n)).collect();
+                    (!ns.is_empty()).then(|| format!("import {{ {} }} from \"./{m}.ts\";\n", ns.iter().map(|n| n.as_str()).collect::<Vec<_>>().join(", ")))
+                })
+                .collect(),
             format!(
                 "if (process.argv.includes(\"--labels\")) {{\n  for (const l of {lines}) {{\n    if (l === \"\") {{\n      continue;\n    }}\n    const [en, v] = l.split(\"\\t\");\n{arms}  }}\n  process.exit(0);\n}}\n\n"
             ),
@@ -11780,14 +11959,9 @@ impl<'a> Gen<'a> {
                 pub_name(&self.f.name),
                 from.join(", ")
             ));
-            if self.proj_dates() {
-                o.push_str("  private def self._days: (String) -> Integer\n");
-            }
-            // The walk over a `.proto` contract's JSON form (§15.133): the object, each step's
-            // two names, and what to read when a step is missing.
-            if self.proj_proto() {
-                o.push_str("  private def self._proto: (untyped, Array[[String, String]], untyped, untyped) -> untyped\n");
-            }
+            // The helpers it reads the object with (§15.133, §15.234): the walk over a `.proto`
+            // contract's JSON form, the day number of a date, and each value held to its kind.
+            o.push_str(&self.rbs_from_helpers());
         }
         o.push_str("end\n");
         o
@@ -13917,6 +14091,11 @@ pub(crate) struct Proj<'x> {
     pub(crate) kind: &'x crate::ast::ProjKind,
     /// How the path is read when the shape is a `.proto`: its JSON form (§15.133).
     pub(crate) proto: Option<crate::projection::ProtoPath>,
+    /// The path as the rule writes it, which a refusal names (§15.234): `order.shipping.zone`,
+    /// `order.lines` for a walk, `order.lines[].amount_usd` for a field of an element.
+    pub(crate) shown: String,
+    /// What the contract carries at the field a `where` tests (§15.234).
+    pub(crate) test_kind: Option<crate::projection::At>,
 }
 
 /// A sequence the projection function builds out of the caller's object (§15.223): which of the
@@ -13930,6 +14109,8 @@ pub(crate) struct SeqProj<'x> {
     /// How the collection is read when the shape is a `.proto`: its JSON form (§15.133).
     pub(crate) proto: Option<crate::projection::ProtoPath>,
     pub(crate) fields: Vec<Proj<'x>>,
+    /// The collection's path as the rule writes it: `order.lines` (§15.234).
+    pub(crate) shown: String,
 }
 
 impl<'a> Gen<'a> {
@@ -13950,6 +14131,12 @@ impl<'a> Gen<'a> {
     /// The projections of this rule, in the order the inputs are declared.
     pub(crate) fn projections(&self) -> Vec<Proj<'_>> {
         let reads = self.proto_reads();
+        // What a `where` reads is held to what the contract carries there (§15.234).
+        let kinds = if self.f.inputs.iter().any(|i| i.from.as_ref().is_some_and(|p| p.kind.test().is_some())) {
+            crate::projection::where_kinds(self.f, &self.path)
+        } else {
+            Default::default()
+        };
         self.f
             .inputs
             .iter()
@@ -13962,6 +14149,8 @@ impl<'a> Gen<'a> {
                     path: p.path.iter().map(|n| n.text.clone()).collect(),
                     kind: &p.kind,
                     proto: reads.get(&i.name.text).cloned(),
+                    shown: std::iter::once(p.root.text.clone()).chain(p.path.iter().map(|n| n.text.clone())).collect::<Vec<_>>().join("."),
+                    test_kind: kinds.get(&i.name.text).cloned(),
                 })
             })
             .collect()
@@ -13977,6 +14166,7 @@ impl<'a> Gen<'a> {
             .enumerate()
             .filter_map(|(s, el)| {
                 let sp = el.from.as_ref()?;
+                let shown = std::iter::once(sp.root.text.clone()).chain(sp.path_steps()).collect::<Vec<_>>().join(".");
                 let fields = el
                     .fields
                     .iter()
@@ -13989,10 +14179,12 @@ impl<'a> Gen<'a> {
                             path: p.steps(),
                             kind: &p.kind,
                             proto: reads.get(&fd.name.text).cloned(),
+                            shown: format!("{shown}[].{}", p.steps().join(".")),
+                            test_kind: None,
                         })
                     })
                     .collect();
-                Some(SeqProj { s, root: self.shape_param(&sp.root.text), path: sp.path_steps(), proto: reads.get(&el.name.text).cloned(), fields })
+                Some(SeqProj { s, root: self.shape_param(&sp.root.text), path: sp.path_steps(), proto: reads.get(&el.name.text).cloned(), fields, shown })
             })
             .collect()
     }
@@ -14019,23 +14211,6 @@ impl<'a> Gen<'a> {
     /// Whether this rule projects at all. Every emitter asks before writing anything.
     pub fn projects(&self) -> bool {
         self.f.inputs.iter().any(|i| i.from.is_some()) || self.f.elements.iter().any(|e| e.from.is_some())
-    }
-
-    /// Every read the projection function makes that ends at one value: the inputs it reads, and
-    /// each field of an element of a sequence it builds.
-    fn proj_reads_all(&self) -> Vec<Proj<'_>> {
-        let mut v = self.projections();
-        for q in self.seq_projections("_e") {
-            v.extend(q.fields);
-        }
-        v
-    }
-
-    /// Which of the two helpers `max` and `min` over a contract's collection need (§15.223): the
-    /// largest, and the smallest.
-    pub(crate) fn proj_extremes(&self) -> (bool, bool) {
-        let ps = self.projections();
-        (ps.iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Max(..))), ps.iter().any(|p| matches!(p.kind, crate::ast::ProjKind::Min(..))))
     }
 
     /// What `max` or `min` gives when no element passes, as the integer the rule takes: a number
@@ -14131,20 +14306,15 @@ pub(crate) struct Syn<'s> {
     pub and: &'s str,
     pub or: &'s str,
     pub tru: &'s str,
-    pub fls: &'s str,
     /// How a language spells "not", when comparing with a boolean literal is a lint there
     /// rather than an expression. Python's `== True` is E712; every other target writes the
     /// comparison out.
     pub not: Option<&'s str>,
 }
 
-/// A `where` test on one element, in the spelling one language asks for.
-pub(crate) fn elem_cond(cell: &Cell, at: &str, y: &Syn) -> String {
-    elem_cond_with(cell, at, y, &|l| raw_lit(l, y.tru, y.fls))
-}
-
-/// `elem_cond` with the literals spelled by the caller: a JavaScript BigInt is compared with
-/// `100n`, not `100` (§15.133).
+/// A `where` test on one element, in the spelling one language asks for, with the literals spelled
+/// by the caller: a JavaScript BigInt is compared with `100n`, not `100` (§15.133), and a date with
+/// its day number (§15.234).
 pub(crate) fn elem_cond_with(cell: &Cell, at: &str, y: &Syn, lit: &dyn Fn(&Lit) -> String) -> String {
     let (is, isnt, and, or, tru) = (y.is, y.isnt, y.and, y.or, y.tru);
     // A boolean field tested against `true` or `false` is the field itself, or its negation,
@@ -14184,21 +14354,6 @@ pub(crate) fn elem_cond_with(cell: &Cell, at: &str, y: &Syn, lit: &dyn Fn(&Lit) 
 }
 
 impl<'a> Gen<'a> {
-    /// Whether some projected value lands in an optional input, or an optional field of an
-    /// element (§15.223), which reads a field the contract lets an object leave out: the Python
-    /// side then needs `_dig` (§15.132).
-    pub(crate) fn proj_optional(&self) -> bool {
-        self.proj_reads_all()
-            .iter()
-            .any(|p| p.proto.is_none() && matches!(p.kind, crate::ast::ProjKind::Field) && matches!(p.ty, Ty::Opt(_)))
-    }
-
-    /// Whether some projection reads a `.proto` contract's JSON form, which every one of the
-    /// five reads through its own `_proto` (§15.133).
-    pub(crate) fn proj_proto(&self) -> bool {
-        self.proj_reads_all().iter().any(|p| p.proto.is_some()) || self.seq_projections("_e").iter().any(|q| q.proto.is_some())
-    }
-
     /// The two defaults a `.proto` read passes to `_proto`, in one language's spelling: what the
     /// value reads as when it is missing, and when a message on the way to it is. An optional
     /// input reads as none where the contract gives presence — an unset message, an `optional`
@@ -14215,248 +14370,11 @@ impl<'a> Gen<'a> {
         }
     }
 
-    fn py_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath, root: &str) -> String {
-        let lit = |z: &crate::projection::Zero| pb_zero(z, "False", &|s| format!("{s:?}"));
-        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("({j:?}, {n:?})")).collect();
-        let tuple = if steps.len() == 1 { format!("({},)", steps[0]) } else { format!("({})", steps.join(", ")) };
-        let (absent, unset) = self.proto_defaults(p, pp, &lit, "None");
-        let walk = format!("_proto({root}, {tuple}, {absent}, {unset})");
-        let syn = Syn { is: "==", isnt: "!=", and: "and", or: "or", tru: "True", fls: "False", not: Some("not ") };
-        let cond = || match (p.kind.test(), &pp.elem) {
-            (Some((_, c)), Some((j, n, z))) => {
-                let at = if j == n { format!("_e.get({j:?}, {})", lit(z)) } else { format!("_e.get({j:?}, _e.get({n:?}, {}))", lit(z)) };
-                // protojson writes a 64-bit integer as a string.
-                let at = if *z == crate::projection::Zero::Int { format!("_int({at})") } else { at };
-                elem_cond(c, &at, &syn)
-            }
-            (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
-            (None, _) => "True".into(),
-        };
-        // The field `sum`, `max` and `min` read, as protojson writes it (§15.223).
-        let of = || match &pp.of {
-            Some((j, n, z)) if j == n => format!("_e.get({j:?}, {})", lit(z)),
-            Some((j, n, z)) => format!("_e.get({j:?}, _e.get({n:?}, {}))", lit(z)),
-            None => format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()),
-        };
-        match p.kind {
-            crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("_any({} for _e in {walk})", cond()),
-            crate::ast::ProjKind::All(..) => format!("_all({} for _e in {walk})", cond()),
-            crate::ast::ProjKind::Count(None) => format!("_len({walk})"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {walk} if {})", cond()),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                self.py_numeric(p, &walk, of(), p.kind.test().map(|_| cond()))
-            }
-        }
-    }
-
-    /// `sum`, `max` and `min` in Python (§15.223): the field `read` of every element of `walk`
-    /// that passes `cond`, as the integer the rule takes, added up or the largest or smallest of
-    /// them picked. A date is its day number.
-    fn py_numeric(&self, p: &Proj, walk: &str, read: String, cond: Option<String>) -> String {
-        let tail = match cond {
-            Some(c) => format!(" for _e in {walk} if {c}"),
-            None => format!(" for _e in {walk}"),
-        };
-        let date = matches!(p.ty, Ty::Date);
-        let each = if date { format!("_days({read})") } else { format!("_int({read})") };
-        match p.kind {
-            crate::ast::ProjKind::Sum(..) => self.py_take(&p.ty, format!("_sum({each}{tail})")),
-            _ => {
-                let v = format!("{}([{each}{tail}], {})", Self::extreme_helper(p.kind), self.proj_empty(p));
-                if date { v } else { self.py_take(&p.ty, v) }
-            }
-        }
-    }
-
-    fn ts_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath) -> String {
-        let lit = |z: &crate::projection::Zero| pb_zero(z, "false", &|s| format!("{s:?}"));
-        let root = self.ident(&p.root);
-        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
-        let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
-        let walk = format!("_proto({root}, [{}], {absent}, {unset})", steps.join(", "));
-        let syn = Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None };
-        let cond = || match (p.kind.test(), &pp.elem) {
-            (Some((_, c)), Some((j, n, z))) => {
-                let at = if j == n { format!("(_e[{j:?}] ?? {})", lit(z)) } else { format!("(_e[{j:?}] ?? _e[{n:?}] ?? {})", lit(z)) };
-                // protojson writes a 64-bit integer as a string, which a JavaScript number
-                // cannot always hold; a whole literal is compared as a BigInt too.
-                if *z == crate::projection::Zero::Int && cell_whole(c) {
-                    elem_cond_with(c, &format!("BigInt({at})"), &syn, &|l| match l {
-                        Lit::Num(n) => format!("{}n", n.raw),
-                        l => raw_lit(l, syn.tru, syn.fls),
-                    })
-                } else if *z == crate::projection::Zero::Int {
-                    elem_cond(c, &format!("Number({at})"), &syn)
-                } else {
-                    elem_cond(c, &at, &syn)
-                }
-            }
-            (Some((fd, c)), None) => elem_cond(c, &format!("_e[{:?}]", fd.text), &syn),
-            (None, _) => "true".into(),
-        };
-        // The field `sum`, `max` and `min` read, as protojson writes it (§15.223).
-        let of = || match &pp.of {
-            Some((j, n, z)) if j == n => format!("(_e[{j:?}] ?? {})", lit(z)),
-            Some((j, n, z)) => format!("(_e[{j:?}] ?? _e[{n:?}] ?? {})", lit(z)),
-            None => format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()),
-        };
-        match p.kind {
-            crate::ast::ProjKind::Field => self.ts_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("({walk} as _Row[]).some((_e) => {})", cond()),
-            crate::ast::ProjKind::All(..) => format!("({walk} as _Row[]).every((_e) => {})", cond()),
-            crate::ast::ProjKind::Count(None) => format!("BigInt(({walk} as _Row[]).length)"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("BigInt(({walk} as _Row[]).filter((_e) => {}).length)", cond()),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                self.ts_numeric(p, &walk, of(), p.kind.test().map(|_| cond()))
-            }
-        }
-    }
-
-    /// `sum`, `max` and `min` in TypeScript (§15.223), as `py_numeric` writes them in Python. Every
-    /// value is a BigInt, which reads a number and the string protojson writes a 64-bit integer as.
-    fn ts_numeric(&self, p: &Proj, walk: &str, read: String, cond: Option<String>) -> String {
-        let rows = match cond {
-            Some(c) => format!("({walk} as _Row[]).filter((_e) => {c})"),
-            None => format!("({walk} as _Row[])"),
-        };
-        let date = matches!(p.ty, Ty::Date);
-        let each = if date { format!("_days(String({read}))") } else { format!("BigInt({read})") };
-        let v = match p.kind {
-            crate::ast::ProjKind::Sum(..) => format!("{rows}.reduce((_s, _e) => _s + {each}, 0n)"),
-            _ => format!("{}({rows}.map((_e) => {each}), {}n)", Self::extreme_helper(p.kind), self.proj_empty(p)),
-        };
-        match &p.ty {
-            Ty::Number | Ty::Date => v,
-            ty => format!("({v}) as {}", brand_of(ty)),
-        }
-    }
-
-    fn rb_proto(&self, p: &Proj, pp: &crate::projection::ProtoPath) -> String {
-        // `Array.new` rather than `[]`: steep asks an empty literal for a type annotation.
-        let lit = |z: &crate::projection::Zero| match z {
-            crate::projection::Zero::List => "Array.new".to_string(),
-            z => pb_zero(z, "false", &|s| format!("{s:?}")),
-        };
-        let root = self.ident(&p.root);
-        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
-        let (absent, unset) = self.proto_defaults(p, pp, &lit, "nil");
-        let walk = format!("_proto({root}, [{}], {absent}, {unset})", steps.join(", "));
-        let syn = Syn { is: "==", isnt: "!=", and: "&&", or: "||", tru: "true", fls: "false", not: None };
-        let cond = || match (p.kind.test(), &pp.elem) {
-            (Some((_, c)), Some((j, n, z))) => {
-                let at = if j == n { format!("e.fetch({j:?}, {})", lit(z)) } else { format!("e.fetch({j:?}) {{ e.fetch({n:?}, {}) }}", lit(z)) };
-                // protojson writes a 64-bit integer as a string.
-                let at = if *z == crate::projection::Zero::Int { format!("({at}).to_i") } else { at };
-                elem_cond(c, &at, &syn)
-            }
-            (Some((fd, c)), None) => elem_cond(c, &format!("e[{:?}]", fd.text), &syn),
-            (None, _) => "true".into(),
-        };
-        // The field `sum`, `max` and `min` read, as protojson writes it (§15.223).
-        let of = || match &pp.of {
-            Some((j, n, z)) if j == n => format!("e.fetch({j:?}, {})", lit(z)),
-            Some((j, n, z)) => format!("e.fetch({j:?}) {{ e.fetch({n:?}, {}) }}", lit(z)),
-            None => format!("e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()),
-        };
-        match p.kind {
-            crate::ast::ProjKind::Field => self.rb_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("{walk}.any? {{ |e| {} }}", cond()),
-            crate::ast::ProjKind::All(..) => format!("{walk}.all? {{ |e| {} }}", cond()),
-            crate::ast::ProjKind::Count(None) => format!("{walk}.length"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("{walk}.count {{ |e| {} }}", cond()),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                self.rb_numeric(p, &walk, of(), p.kind.test().map(|_| cond()))
-            }
-        }
-    }
-
-    /// `sum`, `max` and `min` in Ruby (§15.223), as `py_numeric` writes them in Python. `max` and
-    /// `min` of no values are nil, which is where the `empty` value comes in.
-    fn rb_numeric(&self, p: &Proj, walk: &str, read: String, cond: Option<String>) -> String {
-        let rows = match cond {
-            Some(c) => format!("{walk}.select {{ |e| {c} }}"),
-            None => walk.to_string(),
-        };
-        let each = if matches!(p.ty, Ty::Date) { format!("_days({read})") } else { format!("({read}).to_i") };
-        match p.kind {
-            crate::ast::ProjKind::Sum(..) => format!("{rows}.sum {{ |e| {each} }}"),
-            crate::ast::ProjKind::Max(..) => format!("({rows}.map {{ |e| {each} }}.max || {})", self.proj_empty(p)),
-            _ => format!("({rows}.map {{ |e| {each} }}.min || {})", self.proj_empty(p)),
-        }
-    }
-
-    /// Hinnant's days_from_civil, the inverse of the `civil_from_days` the record function
-    /// already writes. Emitted only when a projected value is a date — an input, a field of an
-    /// element, or the latest or earliest date of a collection (§15.223) — because that is the
-    /// only place a contract's `YYYY-MM-DD` has to become the day number the rule counts in.
-    pub(crate) fn proj_dates(&self) -> bool {
-        let date = |t: &Ty| match t {
-            Ty::Date => true,
-            Ty::Opt(i) => matches!(i.as_ref(), Ty::Date),
-            _ => false,
-        };
-        self.proj_reads_all().iter().any(|p| (matches!(p.kind, crate::ast::ProjKind::Field) || p.kind.extreme()) && date(&p.ty))
-    }
-
     /// The inputs a projection does not reach, which the projection function takes as it
     /// is: a rule may take some of its inputs from the caller's object and the rest from
     /// the caller.
     pub(crate) fn proj_rest(&self) -> Vec<&crate::ast::VarDecl> {
         self.f.inputs.iter().filter(|i| i.from.is_none()).collect()
-    }
-
-    /// One projected value as the Python the module itself takes — the same reader as
-    /// `py_read` with no `m.` in front of it, because here we are inside the module.
-    fn py_take(&self, ty: &Ty, expr: String) -> String {
-        match ty {
-            Ty::Enum(n) => format!("{}({expr})", self.enum_names.get(n).cloned().unwrap_or_default()),
-            // As it came, for the module's door to hold to `True` and `False`: `bool("false")`
-            // is true (§15.203).
-            Ty::Bool => expr,
-            Ty::Date => format!("_days({expr})"),
-            Ty::Str => format!("_str({expr})"),
-            Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => format!("{}(_int({expr}))", brand_of(ty)),
-            Ty::Opt(inner) => format!("(None if {expr} is None else {})", self.py_take(inner, expr.clone())),
-            _ => format!("_int({expr})"),
-        }
-    }
-
-    /// The expression one projection reads, in Python.
-    fn py_proj(&self, p: &Proj) -> String {
-        let root = self.ident(&p.root);
-        let at = |path: &[String]| {
-            path.iter().fold(root.clone(), |o, s| format!("{o}[{s:?}]"))
-        };
-        let cond = |t: Option<(&Name, &Cell)>| match t {
-            Some((fd, c)) => elem_cond(
-                c,
-                &format!("_e[{:?}]", fd.text),
-                &Syn { is: "==", isnt: "!=", and: "and", or: "or", tru: "True", fls: "False", not: Some("not ") },
-            ),
-            None => "True".into(),
-        };
-        let walk = at(&p.path);
-        if let Some(pp) = &p.proto {
-            return self.py_proto(p, pp, &root);
-        }
-        match p.kind {
-            // An optional input takes a field the contract lets an object leave out, and a
-            // missing one — or a missing object on the way to it — is read as none (§15.132).
-            crate::ast::ProjKind::Field if matches!(p.ty, Ty::Opt(_)) => self.py_take(
-                &p.ty,
-                format!("_dig({root}, {})", p.path.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(", ")),
-            ),
-            crate::ast::ProjKind::Field => self.py_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("_any({} for _e in {walk})", cond(p.kind.test())),
-            crate::ast::ProjKind::All(..) => format!("_all({} for _e in {walk})", cond(p.kind.test())),
-            crate::ast::ProjKind::Count(None) => format!("_len({walk})"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("_sum(1 for _e in {walk} if {})", cond(p.kind.test())),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                let of = format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default());
-                self.py_numeric(p, &walk, of, p.kind.test().map(|t| cond(Some(t))))
-            }
-        }
     }
 
     /// The parameters of the Python projection function, with their types: the objects, the
@@ -14475,96 +14393,6 @@ impl<'a> Gen<'a> {
         self.f.elements[s].fields.iter().find(|fd| fd.name.text == jp).map(|fd| pub_name(&fd.name)).unwrap_or_else(|| jp.to_string())
     }
 
-    /// One sequence built out of the caller's object in Python (§15.223): an element of the
-    /// rule's own type for every element of the collection, each field read from that element.
-    fn py_seq(&self, q: &SeqProj) -> String {
-        let root = self.ident(&q.root);
-        let walk = match &q.proto {
-            Some(pp) => {
-                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("({j:?}, {n:?})")).collect();
-                let tuple = if steps.len() == 1 { format!("({},)", steps[0]) } else { format!("({})", steps.join(", ")) };
-                format!("_proto({root}, {tuple}, [], [])")
-            }
-            None => q.path.iter().fold(root, |o, s| format!("{o}[{s:?}]")),
-        };
-        let fields: Vec<String> = q.fields.iter().map(|p| format!("{}={}", self.elem_field_alias(q.s, &p.jp), self.py_proj(p))).collect();
-        format!("[{}({}) for _e in {walk}]", self.element_type(q.s), fields.join(", "))
-    }
-
-    fn py_from(&self) -> String {
-        if !self.projects() {
-            return String::new();
-        }
-        let alias = pub_name(&self.f.name);
-        let params = self.py_from_params();
-        let mut o = String::new();
-        if self.proj_proto() {
-            o.push_str(
-                "def _proto(o: Any, path: tuple[tuple[str, str], ...], absent: Any, unset: Any) -> Any:\n    \
-                 for i, (j, p) in enumerate(path):\n        \
-                 v = o.get(j, o.get(p)) if isinstance(o, dict) else None\n        \
-                 if v is None:\n            \
-                 return absent if i == len(path) - 1 else unset\n        \
-                 o = v\n    \
-                 return o\n\n\n",
-            );
-        }
-        if self.proj_optional() {
-            o.push_str(
-                "def _dig(o: Any, *path: str) -> Any:\n    \
-                 for k in path:\n        \
-                 if o is None:\n            \
-                 return None\n        \
-                 o = o.get(k)\n    \
-                 return o\n\n\n",
-            );
-        }
-        if self.proj_dates() {
-            o.push_str(
-                "def _days(s: str) -> int:\n    \
-                 y, m, d = (int(x) for x in s.split(\"-\"))\n    \
-                 y -= 1 if m <= 2 else 0\n    \
-                 era = (y if y >= 0 else y - 399) // 400\n    \
-                 yoe = y - era * 400\n    \
-                 doy = (153 * (m + (-3 if m > 2 else 9)) + 2) // 5 + d - 1\n    \
-                 return era * 146097 + yoe * 365 + yoe // 4 - yoe // 100 + doy - 719468\n\n\n",
-            );
-        }
-        // The largest and the smallest value of a field over a collection, or the value for none
-        // (§15.223). `max` and `min` here are Python's: these helpers hold no name of the rule's.
-        let (largest, smallest) = self.proj_extremes();
-        if largest {
-            o.push_str("def _largest(vs: list[int], empty: int) -> int:\n    return max(vs) if len(vs) > 0 else empty\n\n\n");
-        }
-        if smallest {
-            o.push_str("def _smallest(vs: list[int], empty: int) -> int:\n    return min(vs) if len(vs) > 0 else empty\n\n\n");
-        }
-        o.push_str(&format!(
-            "def {alias}_from({}) -> {}:\n    \"\"\"{}\"\"\"\n    return {alias}(\n",
-            params.join(", "),
-            self.py_ret(),
-            self.proj_doc()
-        ));
-        let projs = self.projections();
-        for i in &self.f.inputs {
-            let e = match projs.iter().find(|p| p.jp == i.name.text) {
-                Some(p) => self.py_proj(p),
-                None => pub_name(&i.name),
-            };
-            o.push_str(&format!("        {e},\n"));
-        }
-        let seqs = self.seq_projections("_e");
-        for (s, el) in self.f.elements.iter().enumerate() {
-            let e = match seqs.iter().find(|q| q.s == s) {
-                Some(q) => self.py_seq(q),
-                None => pub_name(&el.name),
-            };
-            o.push_str(&format!("        {e},\n"));
-        }
-        o.push_str("    )\n");
-        o
-    }
-
     /// The return type the projection function repeats, so its signature reads like the
     /// rule's own.
     fn py_ret(&self) -> String {
@@ -14576,55 +14404,6 @@ impl<'a> Gen<'a> {
 }
 
 impl<'a> Gen<'a> {
-    /// One projected value as the TypeScript the module takes. `parse…` and the brands are
-    /// in scope here, so nothing is imported.
-    fn ts_take(&self, ty: &Ty, e: String) -> String {
-        match ty {
-            Ty::Enum(n) => format!("parse{}(String({e}))", self.enum_names.get(n).cloned().unwrap_or_default()),
-            // As it came, for the module's door to hold to `true` and `false` (§15.203).
-            Ty::Bool => format!("({e} as boolean)"),
-            Ty::Date => format!("_days(String({e}))"),
-            Ty::Str => format!("String({e})"),
-            Ty::Number => format!("BigInt({e} as number)"),
-            Ty::Opt(inner) => format!("({e} == null ? null : {})", self.ts_take(inner, e.clone())),
-            _ => format!("BigInt({e} as number) as {}", brand_of(ty)),
-        }
-    }
-
-    fn ts_proj(&self, p: &Proj) -> String {
-        if let Some(pp) = &p.proto {
-            return self.ts_proto(p, pp);
-        }
-        let root = self.ident(&p.root);
-        let walk = p.path.iter().fold(root, |o, s| format!("{o}[{s:?}]"));
-        let cond = || match p.kind.test() {
-            Some((fd, c)) => elem_cond(
-                c,
-                &format!("_e[{:?}]", fd.text),
-                &Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None },
-            ),
-            None => "true".into(),
-        };
-        match p.kind {
-            crate::ast::ProjKind::Field if matches!(p.ty, Ty::Opt(_)) => {
-                let root = self.ident(&p.root);
-                let walk = p.path.iter().enumerate().fold(root, |o, (i, s)| if i == 0 { format!("{o}[{s:?}]") } else { format!("{o}?.[{s:?}]") });
-                self.ts_take(&p.ty, walk)
-            }
-            crate::ast::ProjKind::Field => self.ts_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("({walk} as _Row[]).some((_e) => {})", cond()),
-            crate::ast::ProjKind::All(..) => format!("({walk} as _Row[]).every((_e) => {})", cond()),
-            crate::ast::ProjKind::Count(None) => format!("BigInt(({walk} as _Row[]).length)"),
-            crate::ast::ProjKind::Count(Some(_)) => {
-                format!("BigInt(({walk} as _Row[]).filter((_e) => {}).length)", cond())
-            }
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                let of = format!("_e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default());
-                self.ts_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
-            }
-        }
-    }
-
     /// The parameters of the TypeScript projection function, with their types, in the order
     /// `py_from_params` gives them (§15.223).
     fn ts_from_params(&self) -> Vec<String> {
@@ -14642,217 +14421,6 @@ impl<'a> Gen<'a> {
         params.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
         params.extend(self.proj_seq_rest().into_iter().map(|s| pub_name(&self.f.elements[s].name)));
         params
-    }
-
-    /// One sequence built out of the caller's object in TypeScript (§15.223): an object of the
-    /// element's interface for every element of the collection.
-    fn ts_seq(&self, q: &SeqProj) -> String {
-        let root = self.ident(&q.root);
-        let walk = match &q.proto {
-            Some(pp) => {
-                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
-                format!("_proto({root}, [{}], [], [])", steps.join(", "))
-            }
-            None => q.path.iter().fold(root, |o, s| format!("{o}[{s:?}]")),
-        };
-        let fields: Vec<String> = q.fields.iter().map(|p| format!("{}: {}", self.elem_field_alias(q.s, &p.jp), self.ts_proj(p))).collect();
-        format!("({walk} as _Row[]).map((_e) => ({{ {} }}))", fields.join(", "))
-    }
-
-    fn ts_from(&self) -> String {
-        if !self.projects() {
-            return String::new();
-        }
-        let alias = pub_name(&self.f.name);
-        let fname = self.ident(&alias);
-        let params = self.ts_from_params();
-        let outs = &self.f.outputs;
-        let ret = if outs.len() == 1 { self.ts_ty(&self.ty_of(&outs[0].name.text)) } else { "Output".into() };
-        let mut o = String::new();
-        // The caller's object is read, never named: a type for it would be a domain object
-        // model, and this tool does not make one (§15-6).
-        o.push_str("type _Obj = { [k: string]: any };\ntype _Row = { [k: string]: any };\n\n");
-        if self.proj_proto() {
-            o.push_str(
-                "function _proto(o: _Obj, path: [string, string][], absent: unknown, unset: unknown): any {\n  \
-                 let v: any = o;\n  \
-                 for (let i = 0; i < path.length; i++) {\n    \
-                 const [j, p] = path[i];\n    \
-                 const next = v == null ? undefined : (v[j] ?? v[p]);\n    \
-                 if (next == null) return i === path.length - 1 ? absent : unset;\n    \
-                 v = next;\n  \
-                 }\n  \
-                 return v;\n}\n\n",
-            );
-        }
-        if self.proj_dates() {
-            o.push_str(
-                "function _days(s: string): bigint {\n  \
-                 const [y0, m, d] = s.split(\"-\").map(Number);\n  \
-                 const y = m <= 2 ? y0 - 1 : y0;\n  \
-                 const era = Math.floor((y >= 0 ? y : y - 399) / 400);\n  \
-                 const yoe = y - era * 400;\n  \
-                 const doy = Math.floor((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1;\n  \
-                 const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;\n  \
-                 return BigInt(era * 146097 + doe - 719468);\n}\n\n",
-            );
-        }
-        // The largest and the smallest value of a field over a collection, or the value for none
-        // (§15.223).
-        let (largest, smallest) = self.proj_extremes();
-        for (want, name, op) in [(largest, "_largest", ">"), (smallest, "_smallest", "<")] {
-            if want {
-                o.push_str(&format!(
-                    "function {name}(vs: bigint[], empty: bigint): bigint {{\n  \
-                     let m = empty;\n  \
-                     let seen = false;\n  \
-                     for (const v of vs) {{\n    \
-                     if (!seen || v {op} m) {{\n      \
-                     m = v;\n      \
-                     seen = true;\n    \
-                     }}\n  \
-                     }}\n  \
-                     return m;\n}}\n\n"
-                ));
-            }
-        }
-        o.push_str(&format!(
-            "/** {} */\nexport function {fname}_from({}): {ret} {{\n  return {fname}(\n",
-            self.proj_doc(),
-            params.join(", ")
-        ));
-        let projs = self.projections();
-        for i in &self.f.inputs {
-            let e = match projs.iter().find(|p| p.jp == i.name.text) {
-                Some(p) => self.ts_proj(p),
-                None => pub_name(&i.name),
-            };
-            o.push_str(&format!("    {e},\n"));
-        }
-        let seqs = self.seq_projections("_e");
-        for (s, el) in self.f.elements.iter().enumerate() {
-            let e = match seqs.iter().find(|q| q.s == s) {
-                Some(q) => self.ts_seq(q),
-                None => pub_name(&el.name),
-            };
-            o.push_str(&format!("    {e},\n"));
-        }
-        o.push_str("  );\n}\n");
-        o
-    }
-
-    /// One projected value as the Ruby the module takes. An enum member is the source
-    /// string here, exactly as it is on the wire.
-    fn rb_take(&self, ty: &Ty, e: String) -> String {
-        match ty {
-            Ty::Enum(_) | Ty::Str => format!("{e}.to_s"),
-            // As it came, for the module's door to hold to `true` and `false` (§15.203).
-            Ty::Bool => e,
-            Ty::Date => format!("_days({e})"),
-            Ty::Opt(inner) => format!("({e}.nil? ? nil : {})", self.rb_take(inner, e.clone())),
-            _ => format!("{e}.to_i"),
-        }
-    }
-
-    fn rb_proj(&self, p: &Proj) -> String {
-        if let Some(pp) = &p.proto {
-            return self.rb_proto(p, pp);
-        }
-        let root = self.ident(&p.root);
-        let walk = p.path.iter().fold(root, |o, s| format!("{o}[{s:?}]"));
-        let cond = || match p.kind.test() {
-            Some((fd, c)) => elem_cond(
-                c,
-                &format!("e[{:?}]", fd.text),
-                &Syn { is: "==", isnt: "!=", and: "&&", or: "||", tru: "true", fls: "false", not: None },
-            ),
-            None => "true".into(),
-        };
-        match p.kind {
-            crate::ast::ProjKind::Field if matches!(p.ty, Ty::Opt(_)) => self.rb_take(
-                &p.ty,
-                format!("{}.dig({})", self.ident(&p.root), p.path.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join(", ")),
-            ),
-            crate::ast::ProjKind::Field => self.rb_take(&p.ty, walk),
-            crate::ast::ProjKind::Any(..) => format!("{walk}.any? {{ |e| {} }}", cond()),
-            crate::ast::ProjKind::All(..) => format!("{walk}.all? {{ |e| {} }}", cond()),
-            crate::ast::ProjKind::Count(None) => format!("{walk}.length"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("{walk}.count {{ |e| {} }}", cond()),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                let of = format!("e[{:?}]", p.kind.of().map(|n| n.text.as_str()).unwrap_or_default());
-                self.rb_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
-            }
-        }
-    }
-
-    fn rb_from(&self) -> String {
-        if !self.projects() {
-            return String::new();
-        }
-        let alias = pub_name(&self.f.name);
-        let fname = self.ident(&alias);
-        let params = self.plain_from_params();
-        let mut o = String::new();
-        if self.proj_proto() {
-            o.push_str(
-                "  def self._proto(o, path, absent, unset)\n    \
-                 path.each_with_index do |(j, p), i|\n      \
-                 v = o.is_a?(Hash) ? (o.key?(j) ? o[j] : o[p]) : nil\n      \
-                 return (i == path.length - 1 ? absent : unset) if v.nil?\n      \
-                 o = v\n    \
-                 end\n    \
-                 o\n  \
-                 end\n\n",
-            );
-        }
-        if self.proj_dates() {
-            o.push_str(
-                "  def self._days(s)\n    \
-                 y, m, d = s.split(\"-\").map(&:to_i)\n    \
-                 y -= 1 if m <= 2\n    \
-                 era = (y >= 0 ? y : y - 399) / 400\n    \
-                 yoe = y - era * 400\n    \
-                 doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1\n    \
-                 era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468\n  \
-                 end\n\n",
-            );
-        }
-        o.push_str(&format!("  # {}\n  def self.{fname}_from({})\n    {fname}(\n", self.proj_doc(), params.join(", ")));
-        let projs = self.projections();
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            args.push(match projs.iter().find(|p| p.jp == i.name.text) {
-                Some(p) => self.rb_proj(p),
-                None => pub_name(&i.name),
-            });
-        }
-        let seqs = self.seq_projections("e");
-        for (s, el) in self.f.elements.iter().enumerate() {
-            args.push(match seqs.iter().find(|q| q.s == s) {
-                Some(q) => self.rb_seq(q),
-                None => pub_name(&el.name),
-            });
-        }
-        for a in &args {
-            o.push_str(&format!("      {a},\n"));
-        }
-        o.push_str("    )\n  end\n");
-        o
-    }
-
-    /// One sequence built out of the caller's object in Ruby (§15.223): a `Struct` of the
-    /// element's for every element of the collection, its fields in the order they are declared.
-    fn rb_seq(&self, q: &SeqProj) -> String {
-        let root = self.ident(&q.root);
-        let walk = match &q.proto {
-            Some(pp) => {
-                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{j:?}, {n:?}]")).collect();
-                format!("_proto({root}, [{}], Array.new, Array.new)", steps.join(", "))
-            }
-            None => q.path.iter().fold(root, |o, s| format!("{o}[{s:?}]")),
-        };
-        let fields: Vec<String> = q.fields.iter().map(|p| self.rb_proj(p)).collect();
-        format!("{walk}.map {{ |e| {}.new({}) }}", self.element_type(q.s), fields.join(", "))
     }
 }
 

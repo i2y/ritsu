@@ -248,7 +248,7 @@ Intermediate values that can be placed in a table column. The expressions are as
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 判断 | 判断 (3 values) |  |  |
-| 確信度 | rate | 0 to 1 |  |
+| 確信度 | rate | 0% to 100% |  |
 
 ## Outputs
 

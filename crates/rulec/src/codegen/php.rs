@@ -26,7 +26,7 @@
 //! which side of the proof the language sits on.
 
 use super::{
-    cell_src, civil_needed, fired_doc, mode_fn, not_bool, out_src, pascal, plain_doc, pub_name,
+    cell_src, civil_needed, fired_doc, mode_fn, out_src, pascal, plain_doc, pub_name,
     raw_base, record_doc, round_cases, traced_doc, unparen, walked_doc, wire_of, Expr2, Gen, Lang, Phase, WalkStep, Wire,
 };
 use crate::ast::{Arm, Cell, CmpOp, Item, Lit, OutCell, Table};
@@ -1317,7 +1317,9 @@ impl<'a> Gen<'a> {
         let (v, state) = (php_var(&self.temp("v")), php_var(&self.temp("state")));
         let (mut head, mut body, mut tail) = (String::new(), format!("{d} = json_decode({line}, true, 512, JSON_THROW_ON_ERROR)['in'];\n"), String::new());
         if let (Some((en, _, _)), Some((cin, _)), Some(out)) = (self.machine_consts(), self.carried(), self.carried_out_alias()) {
-            let cls = php_name(&self.enum_names.get(&en).cloned().unwrap_or_default());
+            // The state's enum where it is declared: the rule's namespace, or that of the `enums`
+            // file it is read from (§15.212, §15.238).
+            let cls = self.php_enum_fqn(&en);
             if let Some(k) = self.f.inputs.iter().position(|i| i.name.text == cin) {
                 args[k] = format!("(isset({v}['step']) ? {state} : {})", args[k]);
             }
@@ -1340,11 +1342,11 @@ impl<'a> Gen<'a> {
             body = format!(
                 "{v} = json_decode({line}, true, 512, JSON_THROW_ON_ERROR);\n    \
                  if (isset({v}['machine'])) {{\n        \
-                     $fin = array_values(array_map(fn($s) => $s->value, array_filter(\\{ns}\\{cls}::cases(), fn($s) => \\{ns}\\is_final($s))));\n        \
+                     $fin = array_values(array_map(fn($s) => $s->value, array_filter({cls}::cases(), fn($s) => \\{ns}\\is_final($s))));\n        \
                      echo json_encode(['initial' => \\{ns}\\INITIAL->value, 'final' => $fin{carried_meta}], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), \"\\n\";\n        \
                      continue;\n    }}\n    \
                  {d} = {v}['in'];\n    \
-                 if (({v}['step'] ?? null) === 'start') {{\n        {state} = \\{ns}\\{cls}::from({v}['state']);\n{more_start}    }}\n"
+                 if (({v}['step'] ?? null) === 'start') {{\n        {state} = {cls}::from({v}['state']);\n{more_start}    }}\n"
             );
             tail = format!("    if (isset({v}['step'])) {{\n        {state} = {};\n{more_tail}    }}\n", self.next_state_of(&r, &format!("->{out}")));
         }
@@ -1444,121 +1446,264 @@ pub fn round_tests_php(u: &super::Uses) -> String {
 }
 
 impl<'a> Gen<'a> {
-    /// One projected value as the PHP the module takes (§15.125).
-    fn php_take(&self, ty: &Ty, e: String, name: &str) -> String {
-        let ns = self.php_ns();
-        match ty {
-            Ty::Enum(n) => {
-                let _ = &ns;
-                format!("{}::from((string) {e})", self.php_enum_fqn(n))
-            }
-            Ty::Str => format!("(string) {e}"),
-            // `true` and `false` and nothing else, where `(bool)` read `"false"` as true (§15.203).
-            Ty::Bool => format!("({e} === true || {e} === false ? {e} : throw new RuleInputError({}))", php_str(&not_bool(name))),
-            Ty::Date => format!("_days((string) {e})"),
-            Ty::Opt(inner) => format!("({e} === null ? null : {})", self.php_take(inner, e.clone(), name)),
-            _ => format!("(int) {e}"),
-        }
-    }
-
-    fn php_proj(&self, p: &super::Proj) -> String {
-        if let Some(pp) = &p.proto {
-            return self.php_proto(p, pp);
-        }
-        let walk = p.path.iter().fold(php_var_pub(&p.root), |o, s| format!("{o}[{}]", php_str(s)));
-        let cond = || match p.kind.test() {
-            Some((fd, c)) => super::elem_cond(
-                c,
-                &format!("$e[{}]", php_str(&fd.text)),
-                &super::Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None },
+    /// A value read out of the object `o` at the key `k`, `at` naming `o`, held to `kind` (PHP,
+    /// §15.234).
+    fn php_obj_at(&self, kind: &super::from::Kind, o: &str, k: &str, at: &str) -> String {
+        use super::from::Kind;
+        let (kq, aq) = (php_str(k), php_str(at));
+        match kind {
+            Kind::Int => format!("_int_at({o}, {kq}, {aq})"),
+            Kind::IntPb => format!("_int_pb(_at({o}, {kq}, {aq}), {})", php_str(&format!("{at}.{k}"))),
+            Kind::Bool => format!("_bool_at({o}, {kq}, {aq})"),
+            Kind::Str => format!("_str_at({o}, {kq}, {aq})"),
+            Kind::Date => format!("_date_at({o}, {kq}, {aq})"),
+            Kind::Num => format!("_num_at({o}, {kq}, {aq})"),
+            Kind::Enum(n) => format!(
+                "_enum_of({}::class, _at({o}, {kq}, {aq}), {})",
+                self.php_enum_fqn(n),
+                php_str(&crate::door::not_in_enum(&format!("{at}.{k}"), n))
             ),
-            None => "true".into(),
-        };
-        match p.kind {
-            // `??` reads a missing key, at any depth, as null (§15.132).
-            crate::ast::ProjKind::Field if matches!(p.ty, crate::types::Ty::Opt(_)) => self.php_take(&p.ty, format!("({walk} ?? null)"), &p.jp),
-            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk, &p.jp),
-            crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
-            crate::ast::ProjKind::All(..) => {
-                format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond())
+        }
+    }
+
+    /// A value already read, `at` naming it, held to `kind` (PHP).
+    fn php_obj_of(&self, kind: &super::from::Kind, v: &str, at: &str) -> String {
+        use super::from::Kind;
+        let aq = php_str(at);
+        match kind {
+            Kind::Int => format!("_int_of({v}, {aq})"),
+            Kind::IntPb => format!("_int_pb({v}, {aq})"),
+            Kind::Bool => format!("_bool_of({v}, {aq})"),
+            Kind::Str => format!("_str_of({v}, {aq})"),
+            Kind::Date => format!("_date_of({v}, {aq})"),
+            Kind::Num => format!("_num_of({v}, {aq})"),
+            Kind::Enum(n) => format!("_enum_of({}::class, {v}, {})", self.php_enum_fqn(n), php_str(&crate::door::not_in_enum(at, n))),
+        }
+    }
+
+    /// The test of an element a `where` makes, in PHP. A number with a fraction is compared with
+    /// `==`, which compares an integer and a float by their values.
+    fn php_obj_test(&self, p: &super::Proj, t: (&crate::ast::Name, &Cell)) -> String {
+        use super::from::{Kind, elem_at, test_kind};
+        let (field, cell) = t;
+        let (kind, v) = match &p.proto {
+            Some(pp) => {
+                let (j, n, z) = pp.elem.clone().unwrap_or((field.text.clone(), field.text.clone(), crate::projection::Zero::Str));
+                let kind = test_kind(cell, None, Some(&z));
+                let zero = super::pb_zero(&z, "false", &php_str);
+                let at = elem_at(p);
+                (kind.clone(), self.php_obj_of(&kind, &format!("_pget($e, {}, {}, {zero}, {})", php_str(&j), php_str(&n), php_str(&at)), &format!("{at}.{}", field.text)))
             }
-            crate::ast::ProjKind::Count(None) => format!("count({walk})"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({walk}, fn($e) => {}))", cond()),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                let of = format!("$e[{}]", php_str(p.kind.of().map(|n| n.text.as_str()).unwrap_or_default()));
-                self.php_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
+            None => {
+                let kind = test_kind(cell, p.test_kind.as_ref(), None);
+                (kind.clone(), self.php_obj_at(&kind, "$e", &field.text, &elem_at(p)))
+            }
+        };
+        let (is, isnt) = if kind == Kind::Num { ("==", "!=") } else { ("===", "!==") };
+        let syn = super::Syn { is, isnt, and: "&&", or: "||", tru: "true", not: None };
+        super::elem_cond_with(cell, &v, &syn, &|l| self.read_lit(l, &kind, "php"))
+    }
+
+    /// The value of an element `sum`, `max` and `min` read, in PHP.
+    fn php_obj_of_field(&self, p: &super::Proj, of: &crate::ast::Name) -> String {
+        use super::from::{Kind, elem_at};
+        let at = format!("{}.{}", elem_at(p), of.text);
+        match p.proto.as_ref().and_then(|pp| pp.of.clone()) {
+            Some((j, n, z)) => {
+                let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::IntPb };
+                let zero = super::pb_zero(&z, "false", &php_str);
+                self.php_obj_of(&kind, &format!("_pget($e, {}, {}, {zero}, {})", php_str(&j), php_str(&n), php_str(&elem_at(p))), &at)
+            }
+            None => {
+                let kind = if matches!(p.ty, Ty::Date) { Kind::Date } else { Kind::Int };
+                self.php_obj_at(&kind, "$e", &of.text, &elem_at(p))
             }
         }
     }
 
-    /// `sum`, `max` and `min` in PHP (§15.223): the field `read` of every element of `walk` that
-    /// passes `cond`, as the integer the rule takes, added up or the largest or smallest of them
-    /// picked. A date is its day number.
-    fn php_numeric(&self, p: &super::Proj, walk: &str, read: String, cond: Option<String>) -> String {
-        let rows = match cond {
-            Some(c) => format!("array_filter({walk}, fn($e) => {c})"),
-            None => walk.to_string(),
-        };
-        let each = if matches!(p.ty, Ty::Date) { format!("_days((string) {read})") } else { format!("(int) {read}") };
-        let vals = format!("array_map(fn($e) => {each}, {rows})");
+    /// The collection a walk reads, as a list, in PHP.
+    fn php_obj_collection(&self, p: &super::Proj, root: &str) -> String {
+        match &p.proto {
+            Some(pp) => {
+                let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
+                format!("_seq_of(_proto({root}, [{}], [], [], {}), {})", steps.join(", "), php_str(&super::from::base_of(p)), php_str(&p.shown))
+            }
+            None => {
+                let (o, at) = self.walk_to_last(p, root, &|o, k, at| format!("_at({o}, {}, {})", php_str(k), php_str(at)));
+                format!("_seq_at({o}, {}, {})", php_str(p.path.last().map(String::as_str).unwrap_or("")), php_str(&at))
+            }
+        }
+    }
+
+    /// One projected value in PHP: an input's, or a field's of an element read from `$e`
+    /// (§15.125, §15.234).
+    fn php_obj_read(&self, p: &super::Proj) -> String {
+        use super::from::kind_of;
+        let root = if p.root == "e" { "$e".to_string() } else { php_var_pub(&p.root) };
         match p.kind {
-            crate::ast::ProjKind::Sum(..) => format!("array_sum({vals})"),
-            _ => format!("{}({vals}, {})", Self::extreme_helper(p.kind), self.proj_empty(p)),
+            crate::ast::ProjKind::Field => {
+                let Some(kind) = kind_of(&p.ty, p.proto.is_some()) else { return "null".into() };
+                let opt = matches!(p.ty, Ty::Opt(_));
+                match &p.proto {
+                    Some(pp) => {
+                        let lit = |z: &crate::projection::Zero| super::pb_zero(z, "false", &php_str);
+                        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
+                        let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
+                        let walk = format!("_proto({root}, [{}], {absent}, {unset}, {})", steps.join(", "), php_str(&super::from::base_of(p)));
+                        let read = self.php_obj_of(&kind, &walk, &p.shown);
+                        if opt { format!("({walk} === null ? null : {read})") } else { read }
+                    }
+                    None if opt => {
+                        let keys: Vec<String> = p.path.iter().map(|s| php_str(s)).collect();
+                        let walk = format!("_opt({root}, [{}], {})", keys.join(", "), php_str(&super::from::base_of(p)));
+                        format!("({walk} === null ? null : {})", self.php_obj_of(&kind, &walk, &p.shown))
+                    }
+                    None => {
+                        let (o, at) = self.walk_to_last(p, &root, &|o, k, at| format!("_at({o}, {}, {})", php_str(k), php_str(at)));
+                        self.php_obj_at(&kind, &o, p.path.last().map(String::as_str).unwrap_or(""), &at)
+                    }
+                }
+            }
+            _ => {
+                let seq = self.php_obj_collection(p, &root);
+                let test = p.kind.test().map(|t| self.php_obj_test(p, t));
+                let t = || test.clone().unwrap_or_else(|| "true".into());
+                match p.kind {
+                    // Every element is tested, as in every other language.
+                    crate::ast::ProjKind::Any(..) => format!("array_reduce({seq}, fn($a, $e) => ({}) || $a, false)", t()),
+                    crate::ast::ProjKind::All(..) => format!("array_reduce({seq}, fn($a, $e) => ({}) && $a, true)", t()),
+                    crate::ast::ProjKind::Count(None) => format!("count({seq})"),
+                    crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({seq}, fn($e) => {}))", t()),
+                    _ => {
+                        let Some(of) = p.kind.of().cloned() else { return "0".into() };
+                        let each = self.php_obj_of_field(p, &of);
+                        let vals = match &test {
+                            Some(c) => format!("array_merge([], ...array_map(fn($e) => {c} ? [{each}] : [], {seq}))"),
+                            None => format!("array_map(fn($e) => {each}, {seq})"),
+                        };
+                        match p.kind {
+                            crate::ast::ProjKind::Sum(..) => format!("array_sum({vals})"),
+                            _ => format!("{}({vals}, {})", Self::extreme_helper(p.kind), self.proj_empty(p)),
+                        }
+                    }
+                }
+            }
         }
     }
 
     /// One sequence built out of the caller's object in PHP (§15.223): an object of the element's
     /// class for every element of the collection, its fields in the order they are declared.
-    fn php_seq(&self, q: &super::SeqProj) -> String {
+    fn php_obj_sequence(&self, q: &super::SeqProj) -> String {
         let root = php_var_pub(&q.root);
-        let walk = match &q.proto {
+        let seq = match &q.proto {
             Some(pp) => {
                 let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
-                format!("_proto({root}, [{}], [], [])", steps.join(", "))
+                format!("_seq_of(_proto({root}, [{}], [], [], {}), {})", steps.join(", "), php_str(&super::from::seq_base(q)), php_str(&q.shown))
             }
-            None => q.path.iter().fold(root, |o, s| format!("{o}[{}]", php_str(s))),
+            None => {
+                let mut o = root;
+                let mut at: String = q.shown.split('.').next().unwrap_or_default().to_string();
+                for s in &q.path[..q.path.len().saturating_sub(1)] {
+                    o = format!("_at({o}, {}, {})", php_str(s), php_str(&at));
+                    at = format!("{at}.{s}");
+                }
+                format!("_seq_at({o}, {}, {})", php_str(q.path.last().map(String::as_str).unwrap_or("")), php_str(&at))
+            }
         };
-        let fields: Vec<String> = q.fields.iter().map(|p| self.php_proj(p)).collect();
-        format!("array_map(fn($e) => new {}({}), {walk})", self.element_type(q.s), fields.join(", "))
+        let fields: Vec<String> = q.fields.iter().map(|p| self.php_obj_read(p)).collect();
+        format!("array_map(fn($e) => new {}({}), {seq})", self.element_type(q.s), fields.join(", "))
     }
 
-    /// One projection read from a `.proto` contract's JSON form, through `_proto` (§15.133).
-    fn php_proto(&self, p: &super::Proj, pp: &crate::projection::ProtoPath) -> String {
-        let lit = |z: &crate::projection::Zero| super::pb_zero(z, "false", &php_str);
-        let steps: Vec<String> = pp.steps.iter().map(|(j, n)| format!("[{}, {}]", php_str(j), php_str(n))).collect();
-        let (absent, unset) = self.proto_defaults(p, pp, &lit, "null");
-        let walk = format!("_proto({}, [{}], {absent}, {unset})", php_var_pub(&p.root), steps.join(", "));
-        let syn = super::Syn { is: "===", isnt: "!==", and: "&&", or: "||", tru: "true", fls: "false", not: None };
-        let cond = || match (p.kind.test(), &pp.elem) {
-            (Some((_, c)), Some((j, n, z))) => {
-                let at = if j == n {
-                    format!("($e[{}] ?? {})", php_str(j), lit(z))
-                } else {
-                    format!("($e[{}] ?? $e[{}] ?? {})", php_str(j), php_str(n), lit(z))
-                };
-                // protojson writes a 64-bit integer as a string.
-                let at = if *z == crate::projection::Zero::Int { format!("(int) {at}") } else { at };
-                super::elem_cond(c, &at, &syn)
-            }
-            (Some((fd, c)), None) => super::elem_cond(c, &format!("$e[{}]", php_str(&fd.text)), &syn),
-            (None, _) => "true".into(),
-        };
-        match p.kind {
-            crate::ast::ProjKind::Field => self.php_take(&p.ty, walk, &p.jp),
-            crate::ast::ProjKind::Any(..) => format!("count(array_filter({walk}, fn($e) => {})) > 0", cond()),
-            crate::ast::ProjKind::All(..) => format!("count(array_filter({walk}, fn($e) => {})) === count({walk})", cond()),
-            crate::ast::ProjKind::Count(None) => format!("count({walk})"),
-            crate::ast::ProjKind::Count(Some(_)) => format!("count(array_filter({walk}, fn($e) => {}))", cond()),
-            crate::ast::ProjKind::Sum(..) | crate::ast::ProjKind::Max(..) | crate::ast::ProjKind::Min(..) => {
-                // The field read, as protojson writes it (§15.223).
-                let of = match &pp.of {
-                    Some((j, n, z)) if j == n => format!("($e[{}] ?? {})", php_str(j), lit(z)),
-                    Some((j, n, z)) => format!("($e[{}] ?? $e[{}] ?? {})", php_str(j), php_str(n), lit(z)),
-                    None => format!("$e[{}]", php_str(p.kind.of().map(|n| n.text.as_str()).unwrap_or_default())),
-                };
-                self.php_numeric(p, &walk, of, p.kind.test().map(|_| cond()))
+    /// The helpers the PHP projection function calls, the ones `body` uses and what they call
+    /// (§15.234). The error carries no value: PHP's `RuleInputError` holds an integer, and a value
+    /// that is not one is what is being refused (§15.204).
+    fn php_from_helpers(&self, body: &str) -> String {
+        use super::from::{calls, joined, says};
+        let s = says();
+        let j = |p: &(String, String), at: &str| joined(p, at, ".", &php_str);
+        let names = [
+            "_int_at", "_bool_at", "_str_at", "_date_at", "_num_at", "_seq_at", "_int_pb", "_int_of", "_bool_of", "_str_of", "_date_of", "_num_of",
+            "_seq_of", "_enum_of", "_opt", "_pget", "_at",
+        ];
+        let mut want: Vec<&str> = names.iter().copied().filter(|n| calls(body, n)).collect();
+        for (fused, of) in [("_int_at", "_int_of"), ("_bool_at", "_bool_of"), ("_str_at", "_str_of"), ("_date_at", "_date_of"), ("_num_at", "_num_of"), ("_seq_at", "_seq_of"), ("_int_pb", "_int_of")] {
+            if want.contains(&fused) {
+                if !want.contains(&of) {
+                    want.push(of);
+                }
+                if fused.ends_with("_at") && !want.contains(&"_at") {
+                    want.push("_at");
+                }
             }
         }
+        let not_object = |v: &str| format!("!is_array({v}) || ({v} !== [] && array_is_list({v}))");
+        let at_key = "$at . '.' . $k";
+        let mut o = String::new();
+        if want.contains(&"_at") {
+            o.push_str(&format!(
+                "function _at(mixed $o, string $k, string $at): mixed\n{{\n    if ({}) {{\n        throw new RuleInputError({});\n    }}\n    $v = $o[$k] ?? null;\n    if ($v === null) {{\n        throw new RuleInputError({});\n    }}\n    return $v;\n}}\n\n",
+                not_object("$o"),
+                j(&s.object, "$at"),
+                j(&s.missing, at_key)
+            ));
+        }
+        if want.contains(&"_opt") {
+            o.push_str(&format!(
+                "function _opt(mixed $o, array $keys, string $at): mixed\n{{\n    $v = $o;\n    $here = $at;\n    foreach ($keys as $k) {{\n        if ($v === null) {{\n            return null;\n        }}\n        if ({}) {{\n            throw new RuleInputError({});\n        }}\n        $here = $here . '.' . $k;\n        $v = $v[$k] ?? null;\n    }}\n    return $v;\n}}\n\n",
+                not_object("$v"),
+                j(&s.object, "$here")
+            ));
+        }
+        if want.contains(&"_pget") {
+            o.push_str(&format!(
+                "function _pget(mixed $e, string $j, string $n, mixed $absent, string $at): mixed\n{{\n    if ({}) {{\n        throw new RuleInputError({});\n    }}\n    return $e[$j] ?? $e[$n] ?? $absent;\n}}\n\n",
+                not_object("$e"),
+                j(&s.object, "$at")
+            ));
+        }
+        if want.contains(&"_seq_of") {
+            o.push_str(&format!(
+                "function _seq_of(mixed $v, string $at): array\n{{\n    if (!is_array($v) || !array_is_list($v)) {{\n        throw new RuleInputError({});\n    }}\n    return $v;\n}}\n\n",
+                j(&s.sequence, "$at")
+            ));
+        }
+        if want.contains(&"_int_of") {
+            o.push_str(&format!(
+                "function _int_of(mixed $v, string $at): int\n{{\n    if (is_float($v) && is_finite($v) && floor($v) == $v && $v >= -9.2233720368547758E18 && $v < 9.2233720368547758E18) {{\n        return (int) $v;\n    }}\n    if (!is_int($v)) {{\n        throw new RuleInputError({});\n    }}\n    return $v;\n}}\n\n",
+                j(&s.integer, "$at")
+            ));
+        }
+        if want.contains(&"_int_pb") {
+            o.push_str(&format!(
+                "function _int_pb(mixed $v, string $at): int\n{{\n    if (is_string($v)) {{\n        if (preg_match('/^-?[0-9]+$/D', $v) !== 1) {{\n            throw new RuleInputError({});\n        }}\n        return (int) $v;\n    }}\n    return _int_of($v, $at);\n}}\n\n",
+                j(&s.integer, "$at")
+            ));
+        }
+        for (name, test, ret, said) in [("_bool_of", "is_bool($v)", "bool", &s.boolean), ("_str_of", "is_string($v)", "string", &s.string), ("_num_of", "is_int($v) || is_float($v)", "int|float", &s.number)] {
+            if want.contains(&name) {
+                o.push_str(&format!(
+                    "function {name}(mixed $v, string $at): {ret}\n{{\n    if (!({test})) {{\n        throw new RuleInputError({});\n    }}\n    return $v;\n}}\n\n",
+                    j(said, "$at")
+                ));
+            }
+        }
+        if want.contains(&"_date_of") {
+            o.push_str(&format!(
+                "function _date_of(mixed $v, string $at): int\n{{\n    if (!is_string($v) || preg_match('/^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$/D', $v) !== 1) {{\n        throw new RuleInputError({said});\n    }}\n    [$y, $m, $d] = array_map('intval', explode('-', $v));\n    if (!checkdate($m, $d, $y)) {{\n        throw new RuleInputError({said});\n    }}\n    return _days($v);\n}}\n\n",
+                said = j(&s.date, "$at")
+            ));
+        }
+        if want.contains(&"_enum_of") {
+            o.push_str(
+                "/** @param class-string<\\BackedEnum> $cls */\nfunction _enum_of(string $cls, mixed $v, string $what): \\BackedEnum\n{\n    $e = is_string($v) ? $cls::tryFrom($v) : null;\n    if ($e === null) {\n        throw new RuleInputError($what);\n    }\n    return $e;\n}\n\n",
+            );
+        }
+        for (fused, of, ret) in [("_int_at", "_int_of", "int"), ("_bool_at", "_bool_of", "bool"), ("_str_at", "_str_of", "string"), ("_date_at", "_date_of", "int"), ("_num_at", "_num_of", "int|float"), ("_seq_at", "_seq_of", "array")] {
+            if want.contains(&fused) {
+                o.push_str(&format!("function {fused}(mixed $o, string $k, string $at): {ret}\n{{\n    return {of}(_at($o, $k, $at), {at_key});\n}}\n\n"));
+            }
+        }
+        o
     }
 
     /// The parameters of the PHP projection function, with their types: the objects, the inputs
@@ -1576,27 +1721,56 @@ impl<'a> Gen<'a> {
         params
     }
 
+    /// The projection function in PHP, with the helpers it calls above it (§15.125, §15.234).
     pub(super) fn php_from(&self) -> String {
+        use super::from::{calls, joined, says};
         if !self.projects() {
             return String::new();
         }
         let fname = self.php_fname();
-        let params = self.php_from_params();
-        let mut o = String::new();
-        if self.proj_proto() {
-            o.push_str(
-                "function _proto($o, array $path, $absent, $unset)\n{\n    \
-                 foreach ($path as $i => [$j, $p]) {\n        \
-                 $v = is_array($o) ? ($o[$j] ?? $o[$p] ?? null) : null;\n        \
-                 if ($v === null) {\n            \
-                 return $i === count($path) - 1 ? $absent : $unset;\n        \
-                 }\n        \
-                 $o = $v;\n    \
-                 }\n    \
-                 return $o;\n}\n\n",
-            );
+        let mut body = format!("/** {} */\nfunction {fname}_from({})\n{{\n    return {fname}(\n", self.proj_doc(), self.php_from_params().join(", "));
+        let projs = self.projections();
+        let mut args: Vec<String> = Vec::new();
+        for i in &self.f.inputs {
+            args.push(match projs.iter().find(|p| p.jp == i.name.text) {
+                Some(p) => self.php_obj_read(p),
+                None => php_var_pub(&super::pub_name(&i.name)),
+            });
         }
-        if self.proj_dates() {
+        let seqs = self.seq_projections("e");
+        for (s, el) in self.f.elements.iter().enumerate() {
+            args.push(match seqs.iter().find(|q| q.s == s) {
+                Some(q) => self.php_obj_sequence(q),
+                None => php_var_pub(&super::pub_name(&el.name)),
+            });
+        }
+        for a in &args {
+            body.push_str(&format!("        {a},\n"));
+        }
+        body.push_str("    );\n}\n");
+        let mut o = String::new();
+        if calls(&body, "_proto") {
+            // A place on the way that is not an object is refused, as `_at` refuses it; one that
+            // is not there, or is `null`, is protojson's default (§15.234).
+            o.push_str(&format!(
+                "function _proto($o, array $path, $absent, $unset, string $at)\n{{\n    \
+                 foreach ($path as $i => [$j, $p]) {{\n        \
+                 if (!is_array($o) || ($o !== [] && array_is_list($o))) {{\n            \
+                 throw new RuleInputError({});\n        \
+                 }}\n        \
+                 $v = $o[$j] ?? $o[$p] ?? null;\n        \
+                 if ($v === null) {{\n            \
+                 return $i === count($path) - 1 ? $absent : $unset;\n        \
+                 }}\n        \
+                 $o = $v;\n        \
+                 $at = $at . '.' . $p;\n    \
+                 }}\n    \
+                 return $o;\n}}\n\n",
+                joined(&says().object, "$at", ".", &php_str)
+            ));
+        }
+        let helpers = self.php_from_helpers(&body);
+        if calls(&helpers, "_days") {
             o.push_str(
                 "function _days(string $s): int\n{\n    \
                  [$y, $m, $d] = array_map('intval', explode('-', $s));\n    \
@@ -1607,34 +1781,15 @@ impl<'a> Gen<'a> {
                  return $era * 146097 + $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy - 719468;\n}\n\n",
             );
         }
+        o.push_str(&helpers);
         // The largest and the smallest value of a field over a collection, or the value for none
         // (§15.223).
-        let (largest, smallest) = self.proj_extremes();
-        for (want, name, f) in [(largest, "_largest", "max"), (smallest, "_smallest", "min")] {
-            if want {
+        for (name, f) in [("_largest", "max"), ("_smallest", "min")] {
+            if calls(&body, name) {
                 o.push_str(&format!("function {name}(array $vs, int $empty): int\n{{\n    return count($vs) === 0 ? $empty : {f}($vs);\n}}\n\n"));
             }
         }
-        o.push_str(&format!("/** {} */\nfunction {fname}_from({})\n{{\n    return {fname}(\n", self.proj_doc(), params.join(", ")));
-        let projs = self.projections();
-        let mut args: Vec<String> = Vec::new();
-        for i in &self.f.inputs {
-            args.push(match projs.iter().find(|p| p.jp == i.name.text) {
-                Some(p) => self.php_proj(p),
-                None => php_var_pub(&pub_name(&i.name)),
-            });
-        }
-        let seqs = self.seq_projections("e");
-        for (s, el) in self.f.elements.iter().enumerate() {
-            args.push(match seqs.iter().find(|q| q.s == s) {
-                Some(q) => self.php_seq(q),
-                None => php_var_pub(&pub_name(&el.name)),
-            });
-        }
-        for a in &args {
-            o.push_str(&format!("        {a},\n"));
-        }
-        o.push_str("    );\n}\n");
+        o.push_str(&body);
         o
     }
 }

@@ -310,6 +310,11 @@ awk '{ sub(/down\(min\(素割引, 上限額\), 1円\)/, "down(min(素割引), 1�
 # An alias that the target language will not take. `type` is a Rust keyword, and the
 # generated Rust reads `pub fn … (type: i64, …)` — measured, it does not compile (§15.103).
 awk '{ sub(/^  区分\(kind\)/, "  区分(type)"); print }' "$C/ポイント付与.rule" > "$M/m_w121.rule"
+# A rule named like an enum it declares (§15.239): Go puts the rule's function `Tier` and the enum's
+# type `Tier` in one package, and Java nests the enum `Tier` in the class `Tier`. The English rule,
+# and its Japanese version beside it.
+awk '/^rule member_tier_shipping v1$/ { $0 = "rule tier v1" } { print }' "$C/member_tier_shipping.rule" > "$M/m_w121rule.rule"
+awk '/^rule 会員段階の送料\(tier_shipping\) v1$/ { sub(/\(tier_shipping\)/, "(tier)") } { print }' "$C/会員段階の送料.rule" > "$M/m_w121ruleja.rule"
 
 # --- A rule that is one step of a state machine (§15.148). The section's own shape errors
 # first, then the claims about every sequence of calls, each broken the way a revision of the

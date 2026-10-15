@@ -75,7 +75,7 @@ Whether the scoring's verdict on an application is acted on at once or goes to a
 | 名前 | 型 | 範囲 | 注記 |
 |---|---|---|---|
 | verdict | verdict（3 値） |  |  |
-| sure | rate | 0 〜 1 |  |
+| sure | rate | 0% 〜 100% |  |
 
 ## 出力
 

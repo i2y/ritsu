@@ -327,15 +327,12 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
             }
             o.finish()
         }))
-        // The rule's inputs and the values its walks leave behind (`count`, `sum`), each by
-        // name: with `values` and the tables' `decides`, what a re-checker works the kind of
-        // every axis out from (§15.196). They are also the names whose ranges are declared
-        // rather than computed.
+        // The rule's inputs and the values its walks leave behind (`count`, `sum`, `max`, `min`,
+        // and a fold's answer that has a range), each by name: with `values` and the tables'
+        // `decides`, what a re-checker works the kind of every axis out from (§15.196), and the
+        // names whose axes it holds to the range `ranges` states, as it holds an input's (§15.236).
         .raw("inputs", crate::json::strs(&f.inputs.iter().map(|i| i.name.text.clone()).collect::<Vec<_>>()))
-        .raw(
-            "walks",
-            crate::json::strs(&f.items.iter().filter_map(|it| if let Item::Agg(d) = it { Some(d.name.text.clone()) } else { None }).collect::<Vec<_>>()),
-        )
+        .raw("walks", crate::json::strs(&walked_names(f, c)))
         // What a `max` or a `min` answers (§15.219): its range in `ranges` is worked out from
         // the column's and the `empty` value, not declared, so a re-checker holds it to those.
         // Written only for a rule that has one, so no other certificate changes.
@@ -424,6 +421,22 @@ fn extremes_json(f: &RuleFile, c: &Checked) -> Option<String> {
         })
         .collect();
     (!items.is_empty()).then(|| arr(&items))
+}
+
+/// The values the walks of a rule leave behind, by name (§15.196, §15.236): every `count`, `sum`,
+/// `max` and `min`, in the order written, then the answer of every fold that has a range in
+/// `ranges` (the ones `fold_answers` lists). A table that reads one runs it over that range, and
+/// the certificate calls its axis `walk`.
+pub fn walked_names(f: &RuleFile, c: &Checked) -> Vec<String> {
+    let mut out: Vec<String> = f.aggs().map(|d| d.name.text.clone()).collect();
+    for fold in f.folds() {
+        if let Some(name) = fold.answer_name(f).filter(|n| c.ranges.contains_key(*n)) {
+            if !out.iter().any(|x| x == name) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out
 }
 
 /// Each fold whose answer has a range in `ranges` (§15.219): the answer's name, the sequence it

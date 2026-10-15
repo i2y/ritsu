@@ -578,11 +578,13 @@ fn protoの要素のwhereはprotojsonの値で比べる() {
     );
 }
 
-/// A date in a `where` is compared with the string the contract carries. It was written into
-/// the five as `2026-01-01` bare — arithmetic in four of them, and a syntax error in Python,
-/// whose integers take no leading zero.
+/// A date in a `where` is compared with what the contract carries, read as the day it is: the
+/// `YYYY-MM-DD` string, held to the calendar, against the day the cell names (§15.234). It was
+/// written into the five as `2026-01-01` bare once — arithmetic in four of them, and a syntax
+/// error in Python, whose integers take no leading zero — and then compared as strings, which
+/// took a string that is no date for one.
 #[test]
-fn whereの日付は文字列として比べる() {
+fn whereの日付は暦の日として比べる() {
     const SCHEMA: &str = "{\"$defs\":{\"Order\":{\"type\":\"object\",\"required\":[\"lines\"],\"properties\":{\"lines\":{\"type\":\"array\",\"maxItems\":20,\
         \"items\":{\"type\":\"object\",\"required\":[\"ships_on\"],\"properties\":{\"ships_on\":{\"type\":\"string\",\"format\":\"date\"}}}}}}}}";
     const RULE: &str = "rule 出荷日の判定(ship_dates) v1\n\n\
@@ -874,4 +876,160 @@ fn 射影の関数の無い生成先を名前で言う() {
         .output()
         .expect("rulec を起動できない");
     assert!(!String::from_utf8_lossy(&o.stdout).contains("caller's object"));
+}
+
+/// What each of the five says of one object passed to `<alias>_from`: the answer, or `REFUSED`
+/// and the sentence of the module's `RuleInputError` (§15.234). Python is required; a language
+/// whose toolchain is not here is left out and said so.
+fn five_say(made: &Path, alias: &str, case: &str) -> Vec<(&'static str, String)> {
+    let module: String = alias.split('_').map(|w| w[..1].to_uppercase() + &w[1..]).collect();
+    let run = |lang: &str, cmd: &mut Command| -> String {
+        let o = cmd.output().unwrap_or_else(|e| panic!("{lang} を起動できない: {e}"));
+        assert!(o.status.success(), "{lang}: {case} で落ちた:\n{}\n{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    };
+    let mut out = Vec::new();
+    let py = format!(
+        "import json, {alias} as m\ntry:\n    print(m.{alias}_from(json.loads({case:?})))\nexcept m.RuleInputError as e:\n    print('REFUSED ' + e.what)\n"
+    );
+    out.push(("Python", run("Python", Command::new("python3").current_dir(made.join("python")).args(["-B", "-c", &py]))));
+    if have("node") {
+        for (lang, sub, file) in [("JavaScript", "javascript", format!("{alias}.mjs")), ("TypeScript", "typescript", format!("{alias}.ts"))] {
+            let js = format!(
+                "import('./{file}').then(m => {{ try {{ console.log(String(m.{alias}_from(JSON.parse({case:?})))); }} catch (e) {{ if (e instanceof m.RuleInputError) {{ console.log('REFUSED ' + e.what); }} else {{ throw e; }} }} }});"
+            );
+            out.push((lang, run(lang, Command::new("node").current_dir(made.join(sub)).args(["--no-warnings", "--input-type=module", "-e", &js]))));
+        }
+    } else {
+        eprintln!("SKIP JavaScript, TypeScript: node is not installed");
+    }
+    if have("ruby") {
+        let rb = format!("require 'json'\nrequire './{alias}.rb'\nbegin\n  puts {module}.{alias}_from(JSON.parse({case:?}))\nrescue {module}::RuleInputError => e\n  puts 'REFUSED ' + e.what\nend\n");
+        out.push(("Ruby", run("Ruby", Command::new("ruby").current_dir(made.join("ruby")).args(["-e", &rb]))));
+    } else {
+        eprintln!("SKIP Ruby: ruby is not installed");
+    }
+    if have("php") {
+        let php = format!(
+            "require './{alias}.php'; try {{ echo \\{module}\\{alias}_from(json_decode({}, true)), \"\\n\"; }} catch (\\{module}\\RuleInputError $e) {{ echo 'REFUSED ' . $e->what, \"\\n\"; }}",
+            php_str(case)
+        );
+        out.push(("PHP", run("PHP", Command::new("php").current_dir(made.join("php")).args(["-d", "display_errors=stderr", "-r", &php]))));
+    } else {
+        eprintln!("SKIP PHP: php is not installed");
+    }
+    out
+}
+
+/// The rule at `rule`, generated in English or Japanese into `gen` under `dir`.
+fn generated_in(lang: &str, dir: &Path, rule: &str) -> PathBuf {
+    let made = dir.join("gen");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", lang).current_dir(root()).args(["gen", rule, "--out", &made.to_string_lossy()]).output().expect("rulec を起動できない");
+    assert!(o.status.success(), "{rule}: {}", String::from_utf8_lossy(&o.stdout));
+    made
+}
+
+/// Every value the projection function reads out of the caller's object is held to the kind the
+/// rule takes it as, as the rule's own door holds an argument, and one that is not stops the five
+/// alike: `RuleInputError`, with a sentence that names the value's path (§15.234). Before, Python
+/// read `1.5`, `true` and `"7"` for an amount as 1, 1 and 7; TypeScript and JavaScript read `true`
+/// and `"7"` as numbers; Ruby and PHP read `"abc"` as 0; and Python tested a line's `fragile` by
+/// its truth. A value with a point that is whole is still that integer, as at the door (§15.205). The corpus rule of a total, a largest fragile line and the lines themselves,
+/// in English and in its Japanese version.
+#[test]
+fn 読む値は型どおりに確かめ_五つの言語で同じ文で止まる() {
+    if !need(Need::Python) {
+        return;
+    }
+    assert!(have("python3"), "python3 が要ります");
+    let line = |amount: &str, fragile: &str, qty: &str| format!("{{\"sku\":\"s\",\"quantity\":{qty},\"amount_usd\":{amount},\"fragile\":{fragile}}}");
+    let order = |lines: &[String]| format!("{{\"id\":\"o1\",\"lines\":[{}]}}", lines.join(","));
+    let ok = line("1500", "true", "1");
+    for (lang, rule, alias, at, said) in [
+        ("en", "tests/corpus/order_handling_fee.rule", "order_handling_fee", "order", ["is not an integer", "is not a boolean", "is missing", "is not a sequence", "is not an object"]),
+        ("ja", "tests/corpus/注文の取扱手数料.rule", "order_handling", "注文", ["が整数ではありません", "が真偽ではありません", "がありません", "が並びではありません", "がオブジェクトではありません"]),
+    ] {
+        let tmp = TempDir::new(&format!("projection-kinds-{alias}"));
+        let made = generated_in(lang, tmp.path(), rule);
+        let [integer, boolean, missing, sequence, object] = said;
+        let cases: Vec<(String, String)> = vec![
+            // glass_order: the answer, and a whole number written with a point is that number.
+            (order(&[ok.clone(), line("600", "false", "4")]), "25".to_string()),
+            (order(&[line("1500.0", "true", "1.0"), line("600", "false", "4")]), "25".to_string()),
+            // an amount that is no integer, in each of its three readings before
+            (order(&[ok.clone(), line("1.5", "false", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
+            (order(&[ok.clone(), line("true", "false", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
+            (order(&[ok.clone(), line("\"7\"", "false", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
+            // a `where` reads a boolean, and a number is not one
+            (order(&[ok.clone(), line("600", "1", "4")]), format!("REFUSED {at}.lines[].fragile {boolean}")),
+            (order(&[ok.clone(), "{\"sku\":\"s\",\"quantity\":4,\"amount_usd\":600}".to_string()]), format!("REFUSED {at}.lines[].fragile {missing}")),
+            // a field of an element the rule walks
+            (order(&[ok.clone(), line("600", "false", "\"abc\"")]), format!("REFUSED {at}.lines[].quantity {integer}")),
+            // the collection, and an element of it
+            // (an empty object is not used: PHP reads `{}` and `[]` as the same empty array)
+            ("{\"id\":\"o1\",\"lines\":{\"first\":1}}".to_string(), format!("REFUSED {at}.lines {sequence}")),
+            ("{\"id\":\"o1\"}".to_string(), format!("REFUSED {at}.lines {missing}")),
+            ("{\"id\":\"o1\",\"lines\":[5]}".to_string(), format!("REFUSED {at}.lines[] {object}")),
+            // two wrong values: the one read first, the same in every language
+            (order(&[line("1.5", "false", "1"), line("600", "\"x\"", "4")]), format!("REFUSED {at}.lines[].amount_usd {integer}")),
+        ];
+        for (case, want) in &cases {
+            for (l, got) in five_say(&made, alias, case) {
+                assert_eq!(&got, want, "{alias} ({l}): {case}");
+            }
+        }
+    }
+    // Along a collection the five read element by element: whether the element passes its
+    // `where`, then the value of it that is compared. The first line passes and its amount is not
+    // an integer; the second line's `fragile` is not a boolean, and is read after. (`built`
+    // generates in Japanese, so the sentences are the Japanese ones.)
+    const SCHEMA: &str = r#"{"$defs":{"Order":{"type":"object","required":["lines"],"properties":{"lines":{"type":"array","maxItems":20,"items":{"type":"object","required":["amount_usd","fragile","ships_on"],"properties":{"amount_usd":{"type":"integer","minimum":0,"maximum":5000},"fragile":{"type":"boolean"},"ships_on":{"type":"string","format":"date"}}}}}}}}"#;
+    const RULE: &str = "rule top_fragile(top_fragile) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\n\
+        inputs\n  top(top)   : money[USD]  range >=0USD <=5000USD  from max order.lines of amount_usd where fragile = true empty 0USD\n  \
+        late(late) : bool  from any order.lines where ships_on >= 2026-07-01\n\n\
+        outputs\n  fee(fee) : money[USD]  round up(1USD)\n\n\
+        table fee_of\npolicy first\n| top       | late  | -> fee |\n| >=1000USD | -     | 25USD  |\n| -         | true  | 10USD  |\n| -         | -     | 5USD   |\n";
+    let (_tmp, dir) = built("where-order", RULE, ("order.json", SCHEMA));
+    let row = |a: &str, f: &str, d: &str| format!("{{\"amount_usd\":{a},\"fragile\":{f},\"ships_on\":{d}}}");
+    for (case, want) in [
+        (format!("{{\"lines\":[{},{}]}}", row("1.5", "true", "\"2026-01-01\""), row("3", "\"x\"", "\"2026-01-01\"")), "REFUSED order.lines[].amount_usd が整数ではありません"),
+        (format!("{{\"lines\":[{},{}]}}", row("2000", "true", "\"2026-01-01\""), row("3", "false", "\"2026-08-01\"")), "25"),
+        (format!("{{\"lines\":[{}]}}", row("3", "false", "\"2026-08-01\"")), "10"),
+        // a date is held to the calendar before it is compared, and `any` reads every element
+        (format!("{{\"lines\":[{},{}]}}", row("3", "false", "\"2026-08-01\""), row("3", "false", "\"2026-02-30\"")), "REFUSED order.lines[].ships_on が日付ではありません"),
+    ] {
+        for (l, got) in five_say(&dir.join("gen"), "top_fragile", &case) {
+            assert_eq!(got, want, "top_fragile ({l}): {case}");
+        }
+    }
+}
+
+/// A `.proto` contract is read in its JSON form, and the values are held the same way (§15.234):
+/// an int64 is a number or the decimal string protojson writes, and nothing else; an enum's value
+/// is one of the rule's; a place on the way is an object, or not there, or `null` (the default).
+/// The corpus rule that reads a shipment request.
+#[test]
+fn protoの値も型どおりに確かめる() {
+    if !need(Need::Python) {
+        return;
+    }
+    let tmp = TempDir::new("projection-proto-kinds");
+    let made = generated_in("en", tmp.path(), "tests/corpus/出荷の送料.rule");
+    let parcel = "{\"weightG\":\"1200\"}";
+    for (case, want) in [
+        // honshu | false | 1 | 0円 | none -> 800円, the value left out
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}]}}"), "800".to_string()),
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"declaredValueJpy\":\"5万\"}}"), "REFUSED 出荷.declared_value_jpy is not an integer".to_string()),
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"declaredValueJpy\":true}}"), "REFUSED 出荷.declared_value_jpy is not an integer".to_string()),
+        (format!("{{\"destination\":{{\"region\":\"kyushu\"}},\"parcels\":[{parcel}]}}"), "REFUSED 出荷.destination.region is not a value of enum 地域".to_string()),
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{{\"handling\":7}}]}}"), "REFUSED 出荷.parcels[].handling is not a string".to_string()),
+        // a place on the way that is not an object, where protojson writes a message
+        (format!("{{\"destination\":\"honshu\",\"parcels\":[{parcel}]}}"), "REFUSED 出荷.destination is not an object".to_string()),
+        // `null` is protojson's default: here, no window
+        (format!("{{\"destination\":{{\"region\":\"honshu\"}},\"parcels\":[{parcel}],\"deliveryWindow\":null}}"), "800".to_string()),
+    ] {
+        for (l, got) in five_say(&made, "shipment_fee", &case) {
+            assert_eq!(got, want, "shipment_fee ({l}): {case}");
+        }
+    }
 }

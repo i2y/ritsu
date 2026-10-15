@@ -1027,7 +1027,7 @@ impl P {
             self.err(shape());
             return None;
         };
-        Some(EnumImport { kind, file, source, target, span: span_of(line) })
+        Some(EnumImport { kind, file, source, target, span: span_of(line), base: None })
     }
 
     fn group_decl(&mut self, line: &[Token]) -> Option<GroupDecl> {
@@ -1212,7 +1212,7 @@ impl P {
             },
         };
         self.tail_junk(line, end);
-        Some(ShapeDecl { name, source, file, at, span: span_of(line) })
+        Some(ShapeDecl { name, source, file, at, span: span_of(line), base: None })
     }
 
     /// The tail of an input line, from `from` to the end (§15.125, §15.223).
@@ -1623,7 +1623,7 @@ impl P {
                     let start = k;
                     let end = (k + 6).min(ts.len());
                     let days = match (ts.get(k + 2).and_then(|t| t.ident()), ts.get(k + 3).map(|t| &t.kind), ts.get(k + 4).and_then(|t| t.ident()), ts.get(k + 5).and_then(|t| t.ident())) {
-                        (Some("koyomi"), Some(Kind::Str(file)), Some(crate::kw::DATE), Some(date)) => Some(DaysFrom { file: file.clone(), date: date.to_string(), span: span_of(&ts[start..end]) }),
+                        (Some("koyomi"), Some(Kind::Str(file)), Some(crate::kw::DATE), Some(date)) => Some(DaysFrom { file: file.clone(), date: date.to_string(), span: span_of(&ts[start..end]), base: None }),
                         _ => {
                             let at = self.at(ts[start].span.line);
                             self.err(

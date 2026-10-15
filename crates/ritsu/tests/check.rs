@@ -343,3 +343,35 @@ fn a_projects_contributions_are_merged_into_the_rules_they_reach() {
     assert!(said.contains("note rules/product_price.rule: its errors are said above\n"), "{said}");
     assert_eq!(said.matches("error[E105]").count(), 1, "{said}");
 }
+
+/// The last line counts each finding with the files that came out as the file it is about did
+/// (rulec's §15.242): a warning of a file that passes is counted with the files that pass whether or
+/// not another file fails, as it is when every file passes. Before, the warnings of a file that
+/// passed were counted with the files that failed when one did, `1 fail (1 error, 2 warnings)`, and
+/// with the ones that passed when none did, `all pass (2 warnings)`.
+#[test]
+fn a_warning_of_a_file_that_passes_is_counted_with_the_files_that_pass() {
+    let t = TempDir::new("summary-counts");
+    let d = t.path();
+    std::fs::write(d.join("ritsu.toml"), "").unwrap();
+    // two warnings: an input no table reads, and a value of an enum no row names
+    std::fs::write(
+        d.join("warned.rule"),
+        "rule warned v1\ndescription \"A rule with two warnings\"\n\nenum k = x | y | z\n\ninputs\n  n : number  range >=0 <=9\n  w : k\n\noutputs\n  fee : number  round down(1)\n\n\
+         table t\npolicy unique\n| n   | -> fee : number |\n| <=4 | 1               |\n| >=5 | 2               |\n",
+    )
+    .unwrap();
+    let broken = "rule broken v1\ndescription \"A rule with a gap\"\n\ninputs\n  n : number  range >=0 <=9\n\noutputs\n  fee : number  round down(1)\n\n\
+                  table t\npolicy unique\n| n   | -> fee : number |\n| <=4 | 1               |\n";
+    std::fs::write(d.join("broken.rule"), broken).unwrap();
+    let last = |out: &str| out.lines().last().unwrap_or_default().to_string();
+    let (code, out, _) = ritsu_in(d, &["check", ".", "--lang", "en"]);
+    assert_eq!(code, 1, "{out}");
+    assert!(last(&out).contains(": 1 fail (1 error), 1 pass (2 warnings); "), "{out}");
+    let (_, out, _) = ritsu_in(d, &["check", ".", "--lang", "ja"]);
+    assert!(last(&out).contains("。検査を通らないもの 1 個（エラー 1 件）、通るもの 1 個（警告 2 件）。"), "{out}");
+    std::fs::remove_file(d.join("broken.rule")).unwrap();
+    let (code, out, _) = ritsu_in(d, &["check", ".", "--lang", "en"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(last(&out).contains(": all pass (2 warnings); "), "{out}");
+}

@@ -464,15 +464,15 @@ impl Contract {
 
 /// Every projection of a rule, against the shape it starts at.
 ///
-/// The path is resolved against the directory of the `.rule`, the way an enum import's is.
+/// The path is resolved against the directory of the `.rule` that wrote the `shape` line, the way
+/// an enum import's is — the rule a contribution adds to, in the contribution's check (§15.235).
 /// A shape whose file cannot be read is reported once, and the projections that start at it
 /// are then left alone: one unreadable file should not print one error per input.
 pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
-    let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
     let mut read_ok = Vec::new();
     for d in &f.shapes {
-        let p = dir.join(&d.file);
+        let p = d.contract_path(rule_path);
         let at = format!("{rule_path}:{}", d.span.line);
         match ritsu_base::fs::read_to_string(&p) {
             Ok(text) => match read(d, &text) {
@@ -3411,10 +3411,9 @@ pub struct ProtoPath {
 /// read it; a path that does not resolve has none, and `check` has already refused the rule for it.
 pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<String, ProtoPath> {
     let mut out = std::collections::HashMap::new();
-    let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
     let contract = |root: &str| -> Option<Contract> {
         let d = f.shapes.iter().find(|d| d.name.text == root && d.source == EnumSource::Proto)?;
-        let text = ritsu_base::fs::read_to_string(dir.join(&d.file)).ok()?;
+        let text = ritsu_base::fs::read_to_string(d.contract_path(rule_path)).ok()?;
         read(d, &text).ok()
     };
     // One field of the element message `ty`, as a `where` or an `of` reads it.
@@ -3451,6 +3450,26 @@ pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<S
             if let Some(pp) = path_of(&econ, &p.steps()) {
                 out.insert(fd.name.text.clone(), pp);
             }
+        }
+    }
+    out
+}
+
+/// What the contract carries at the field a `where` tests, for each input that reads a collection
+/// of the caller's object with one, by the input's name (§15.234): the kind the projection
+/// function holds the value it reads there to before comparing it — a boolean, a whole number, a
+/// number, a string. An input whose contract cannot be read here has none; `check` has refused the
+/// rule then.
+pub fn where_kinds(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<String, At> {
+    let mut out = std::collections::HashMap::new();
+    for i in &f.inputs {
+        let Some(pr) = &i.from else { continue };
+        let Some((field, _)) = pr.kind.test() else { continue };
+        let Some(d) = f.shapes.iter().find(|d| d.name.text == pr.root.text) else { continue };
+        let Ok(text) = ritsu_base::fs::read_to_string(d.contract_path(rule_path)) else { continue };
+        let Ok(con) = read(d, &text) else { continue };
+        if let Some(k) = con.elem_field(&pr.path_steps(), &field.text) {
+            out.insert(i.name.text.clone(), k);
         }
     }
     out
@@ -3510,10 +3529,9 @@ pub struct ContractCert {
 /// The contracts' sections of a certificate: every shape an input reads from, with what its
 /// condition says and why the rule's door keeps it (§15.142).
 pub fn contract_certificates(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<ContractCert> {
-    let dir = std::path::Path::new(rule_path).parent().unwrap_or(std::path::Path::new(".")).to_path_buf();
     let mut out = Vec::new();
     for d in &f.shapes {
-        let Ok(text) = ritsu_base::fs::read_to_string(dir.join(&d.file)) else { continue };
+        let Ok(text) = ritsu_base::fs::read_to_string(d.contract_path(rule_path)) else { continue };
         let Ok(con) = read(d, &text) else { continue };
         let ac = con.across(f, c, &d.name.text);
         if ac.terms.is_empty() {

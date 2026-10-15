@@ -345,3 +345,75 @@ fn a_value_every_range_keeps_out_is_not_said_to_be_unused() {
         }
     }
 }
+
+/// A rule named like an enum it reads from an `enums` file (§15.239): `rule size` and `enum size`
+/// make `func Size` and the type `Size` in Go, which one package cannot hold both of. The rule's
+/// package then names the type by the package that owns it, `sizes.Size`, as Java names it by its
+/// class, and declares no alias of it; the constants and the parser are there as for any other
+/// enum it reads. Before, the package declared both and did not compile, and `check` said nothing.
+/// A rule and an enum it declares itself under one name cannot be written apart in Go or Java, and
+/// `check` says so (W121), naming both targets.
+#[test]
+fn a_rule_named_like_the_enum_it_reads_compiles_in_go() {
+    let t = TempDir::new("enums-rule-named-like-its-enum");
+    let d = t.path();
+    std::fs::create_dir_all(d.join("shared")).unwrap();
+    std::fs::write(d.join("shared/sizes.rule"), "enums sizes v1\ndescription \"Parcel sizes\"\n\nenum size = small | large\n").unwrap();
+    let rule = "rule size v1\ndescription \"The fee of a parcel by its size; the rule is named like the enum it reads\"\n\n\
+                import enum size from \"shared/sizes.rule\"\n\ninputs\n  parcel : size\n\noutputs\n  fee : number  round down(1)\n\n\
+                table fee_of\npolicy unique\n| parcel | -> fee : number |\n| small  | 5               |\n| large  | 9               |\n\n\
+                examples\n| parcel | -> fee |\n| small  | 5      |\n";
+    std::fs::write(d.join("size.rule"), rule).unwrap();
+    let (c, out, e) = run_in(d, &["check", "size.rule"]);
+    assert_eq!((c, out.as_str()), (0, "ok size.rule\n"), "{e}");
+    let (c, out, e) = run_in(d, &["gen", "size.rule", "--out", "gen"]);
+    assert_eq!(c, 0, "{out}{e}");
+    let go = std::fs::read_to_string(d.join("gen/go/size/size.go")).unwrap();
+    assert!(!go.contains("type Size = sizes.Size"), "{go}");
+    assert!(go.contains("func Size(in Input) (int64, error)"), "{go}");
+    assert!(go.contains("\tParcel sizes.Size"), "{go}");
+    assert!(go.contains("func ParseSize(s string) (sizes.Size, bool) { return sizes.ParseSize(s) }"), "{go}");
+    let (_, api, _) = run_in(d, &["api", "size.rule"]);
+    let j = json(&api);
+    let field = j.get("go").and_then(|g| g.get("input_fields")).and_then(|x| x.as_arr()).and_then(|a| a.first().cloned()).unwrap();
+    assert_eq!(field.get("type").and_then(|x| x.as_str()), Some("sizes.Size"), "{api}");
+    if ready(Need::Go, || Command::new("go").arg("version").output().is_ok_and(|o| o.status.success()), "go is not installed") {
+        let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").env("TMPDIR", tmpdir_in(&d.join("gen"))).current_dir(d).args(["test", "gen"]).output().expect("cannot start rulec test");
+        let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+        assert!(o.status.success(), "{said}");
+        assert!(said.lines().any(|l| l.starts_with("ok    size (Go)")), "{said}");
+    }
+    // The rule's own enum of the same name: no way to write the two apart in Go and Java.
+    let own = rule.replace("import enum size from \"shared/sizes.rule\"", "enum size = small | large");
+    std::fs::write(d.join("own.rule"), own).unwrap();
+    let (c, out, _) = run_in(d, &["check", "own.rule"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("warning[W121]: The type of enum `size` takes the name the rule takes"), "{out}");
+    assert!(out.contains(" Go: the rule's package declares the rule's function `Size` and the enum's type `Size` side by side"), "{out}");
+    assert!(out.contains(" Java: the enum is nested in the class `Size` the rule is"), "{out}");
+}
+
+/// A contribution stands for the file it comes down to (§15.231), and one that adds to an `enums`
+/// file is refused where a decision is asked for, as the file is (§15.240): `doc` as HTML and for
+/// customers, `schema`. Before, the HTML page of the enums file came out through the contribution,
+/// with a panel to try a case on a file that decides nothing. Its Markdown page still does.
+#[test]
+fn an_enums_file_reached_through_a_contribution_is_refused_as_the_file_is() {
+    let t = TempDir::new("enums-through-contribution");
+    let d = t.path();
+    std::fs::create_dir_all(d.join("rules")).unwrap();
+    std::fs::create_dir_all(d.join("mods/m")).unwrap();
+    std::fs::write(d.join("rules/content.rule"), "enums content v1\ndescription \"Events\"\n\nenum event = harvest \"Harvest\" | quiet \"Quiet\"  open\n").unwrap();
+    std::fs::write(d.join("mods/m/content.rule"), "contribution m_content v1\ndescription \"A storm\"\nto \"../../rules/content.rule\"\n\nextend event with storm \"Storm\"\n").unwrap();
+    let (c, _, e) = run_in(d, &["source", "pin", "mods/m/content.rule"]);
+    assert_eq!(c, 0, "{e}");
+    for args in [vec!["doc", "mods/m/content.rule", "--format", "html", "--out", "pages"], vec!["doc", "mods/m/content.rule", "--audience", "customer"], vec!["schema", "mods/m/content.rule"]] {
+        let (c, _, e) = run_in(d, &args);
+        assert_eq!(c, 2, "{args:?}: {e}");
+        assert!(e.contains("error: `mods/m/content.rule` adds to `rules/content.rule`, an enums file that decides nothing"), "{args:?}: {e}");
+    }
+    assert!(!d.join("pages").exists(), "a page was written");
+    let (c, out, e) = run_in(d, &["doc", "mods/m/content.rule"]);
+    assert_eq!(c, 0, "{e}");
+    assert!(out.contains("storm"), "{out}");
+}

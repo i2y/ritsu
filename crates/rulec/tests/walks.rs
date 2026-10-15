@@ -423,7 +423,7 @@ fn leanの検査器も二つの範囲を確かめる() {
         ("the empty value moved", cert.replace(r#""of":"price","empty":"0""#, r#""of":"price","empty":"-5""#), "top_price: a `max` of price answers from -5 to 500"),
         ("the fold's range cut short", cert.replace(r#""discount":["0","2500"]"#, r#""discount":["0","2000"]"#), "discount: the fold answers with values from 0 to 2500, and the certificate states the range [0, 2000]"),
         ("an answer the fold cannot read", cert.replace(r#"{"name":"top_off"}"#, r#"{"name":"held"}"#), "discount: one of the values the fold answers with has no interval this program can work out"),
-        ("a `max` no walk leaves behind", cert.replace(r#""walks":["subtotal","top_price","paid"]"#, r#""walks":["subtotal","paid"]"#), "top_price: a `max` is a value a walk leaves behind, and `walks` does not name it"),
+        ("a `max` no walk leaves behind", cert.replace(r#""walks":["subtotal","top_price","paid","discount"]"#, r#""walks":["subtotal","paid","discount"]"#), "top_price: a `max` is a value a walk leaves behind, and `walks` does not name it"),
     ] {
         assert_ne!(forged, cert, "{what}: the certificate's shape changed, and nothing was forged");
         let (code, said) = lean(&forged, rule);
@@ -625,4 +625,155 @@ policy first
         matches!(v.input.get("lines"), Some(Val::Seq(s)) if s.len() == 2) && v.input.get("subtotal") == Some(&Val::Num(Rat::int(99)))
     };
     assert!(vs.iter().any(outside), "no vector with two stocked lines and 99 dollars");
+}
+
+/// A fold that answers the number of the first member who qualifies, or 0 when none does: its
+/// answer is 1 to 4 or 0 (§15.236). The table below it reads the answer with a row for `0` and one
+/// for `>=1`, which covers every value the fold can answer with.
+const FIRST_MEMBER: &str = r#"rule first_member v1
+description "The first member who qualifies, or 0 when none does"
+
+enum verdict = takes | skips
+
+elements members
+  member : number  range >=1 <=4
+  score  : number  range >=0 <=10
+
+outputs
+  found : bool
+
+table judge
+policy unique
+| score | -> verdict : verdict |
+| >=5   | takes                |
+| <5    | skips                |
+
+fold verdict over members -> first : number
+  takes     -> take_first member
+  skips     -> next
+  empty     -> 0
+  exhausted -> held
+
+table found_of
+policy unique
+| first | -> found : bool |
+| >=1   | true           |
+| 0     | false          |
+
+sequence one
+| member | score |
+| 2      | 7     |
+
+examples
+| members | -> found |
+| one     | true     |
+"#;
+
+/// The Japanese version of `FIRST_MEMBER`.
+const FIRST_MEMBER_JA: &str = r#"rule 最初の該当者(first_member_ja) v1
+description "条件に合う最初の人の番号。誰も合わなければ 0"
+
+enum 判定(verdict) = 取る(takes) | 飛ばす(skips)
+
+elements 会員(members)
+  番号(member) : number  range >=1 <=4
+  点数(score)  : number  range >=0 <=10
+
+outputs
+  見つかった(found) : bool
+
+table 判定表(judge)
+policy unique
+| 点数 | -> 判定 : 判定 |
+| >=5  | 取る           |
+| <5   | 飛ばす         |
+
+fold 判定 over 会員 -> 最初(first) : number
+  取る      -> take_first 番号
+  飛ばす    -> next
+  empty     -> 0
+  exhausted -> held
+
+table 見つかったか(found_of)
+policy unique
+| 最初 | -> 見つかった : bool |
+| >=1  | true                 |
+| 0    | false                |
+"#;
+
+/// The latest date of a year's lines, read by a table with a row for each half of the year.
+const LATEST_LINE: &str = r#"rule latest_line v1
+description "Whether the latest line of an order ships in the second half of the year"
+
+elements lines
+  ships : date  range >=2026-01-01 <=2026-12-31
+
+outputs
+  late : bool
+
+max latest over lines of ships empty 2026-01-01
+
+table late_of
+policy unique
+| latest                    | -> late : bool |
+| >=2026-07-01              | true           |
+| >=2026-01-01 <=2026-06-30 | false          |
+"#;
+
+/// A table that reads what a walk answers is checked over the range the check worked out for it,
+/// as a table that reads an input is checked over the input's declared range (§15.236): a fold's
+/// answer over the hull of the values it answers with, as reference §6.2 says, and the latest of
+/// the dates a `max` reads over its column's range and its `empty` date. Before, the axis of a
+/// fold's answer and of a date's `max` ran over every number, and the table was asked for a row
+/// of −1 and of the day before the year. Both re-checkers hold the axis to the range the
+/// certificate states.
+#[test]
+fn 歩きの答えを読む表は_その範囲の上で検査される() {
+    for (name, src) in [("first_member.rule", FIRST_MEMBER), ("最初の該当者.rule", FIRST_MEMBER_JA), ("latest_line.rule", LATEST_LINE)] {
+        let ds = codes(src);
+        assert!(ds.iter().all(|(c, _)| !c.starts_with('E')), "{name}: {ds:?}");
+    }
+    // The two re-checkers hold each axis to the range the certificate states for it.
+    let (d_tmp, d) = dir("walk-answers");
+    let python = ready(Need::Python, || have("python3"), "python3 is not installed");
+    let bin = root().join("../../proofs/.lake/build/bin/rulec-recheck");
+    let lean = ready(Need::Lean, || bin.exists(), "ritsu's proofs/ is not built (lake build there)");
+    for (name, src, column, range, forged) in [
+        ("first_member.rule", FIRST_MEMBER, "first", r#""first":["0","4"]"#, r#""first":["0","5"]"#),
+        ("latest_line.rule", LATEST_LINE, "latest", r#""latest":["20454","20818"]"#, r#""latest":["20454","20819"]"#),
+    ] {
+        let path = write(&d, name, src);
+        let (c, cert, e) = run(&["certificate", &path]);
+        assert_eq!(c, 0, "{name}: {e}");
+        let j = rulec::json::parse(&cert).unwrap();
+        let walks: Vec<&str> = j.get("walks").and_then(|x| x.as_arr()).unwrap().iter().filter_map(|x| x.as_str()).collect();
+        assert!(walks.contains(&column), "{name}: {walks:?}");
+        assert!(cert.contains(range), "{name}: the range is not stated as {range}:\n{cert}");
+        let axis = j.get("tables").and_then(|x| x.as_arr()).unwrap().iter().flat_map(|t| t.get("axes").and_then(|x| x.as_arr()).unwrap().iter()).find(|a| a.get("column").and_then(|x| x.as_str()) == Some(column)).expect("no axis");
+        assert_eq!(axis.get("kind").and_then(|x| x.as_str()), Some("walk"), "{name}");
+        let forged = cert.replace(range, forged);
+        assert_ne!(forged, cert);
+        if python {
+            let (code, said) = recheck(&cert, &path);
+            assert_eq!(code, 0, "{name}: {said}");
+            let (code, said) = recheck(&forged, &path);
+            assert_eq!(code, 1, "{name}: a forged range passed\n{said}");
+            assert!(said.contains(&format!("{column} runs from")) && said.contains("and its range is"), "{name}: {said}");
+        }
+        if lean {
+            use std::io::Write;
+            let run_lean = |cert: &str| {
+                let mut p = Command::new(&bin).current_dir(root()).args(["--rule", &path]).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+                p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+                let o = p.wait_with_output().unwrap();
+                (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned())
+            };
+            let (code, said) = run_lean(&cert);
+            assert_eq!(code, 0, "{name}: {said}");
+            let (code, said) = run_lean(&forged);
+            assert_eq!(code, 1, "{name}: a forged range passed\n{said}");
+            assert!(said.contains(&format!("{column} does not run the whole of the range it states")), "{name}: {said}");
+        }
+    }
+    drop(d_tmp);
 }

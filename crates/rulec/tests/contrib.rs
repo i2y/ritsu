@@ -539,3 +539,143 @@ fn a_contributions_input_may_be_read_out_of_the_rules_contract() {
     assert_eq!(c, 1, "{out}");
     assert!(out.contains("error[E121]: An element has no field `quantty`\n  --> pieces.rule:5"), "{out}");
 }
+
+/// A contribution's check is about the rule it adds to, and runs under the contribution's path
+/// (§15.231); what the rule cites is still followed from the rule's directory (§15.235): its
+/// contract (`shape`), the enum it reads from a `.proto` (`import proto`), and the koyomi file of a
+/// date it takes its days from. Before, each was looked for from the contribution's directory, and
+/// the contribution's check stopped with E013 or E130 while the rule merged with it passed. A date
+/// the contribution adds is the other way round: its koyomi file is named from the contribution's
+/// directory, whichever file the merged rule is checked as.
+#[test]
+fn what_a_rule_cites_is_found_from_its_own_directory_in_a_contributions_check() {
+    let t = TempDir::new("contrib-cites");
+    let d = t.path();
+    for sub in ["rules", "mods/m", "views", "api", "cal"] {
+        std::fs::create_dir_all(d.join(sub)).unwrap();
+    }
+    std::fs::write(
+        d.join("views/thing.schema.json"),
+        r#"{"$defs":{"Thing":{"type":"object","properties":{"size":{"type":"integer","minimum":0,"maximum":9}},"required":["size"]}}}"#,
+    )
+    .unwrap();
+    std::fs::write(d.join("api/kinds.proto"), "syntax = \"proto3\";\npackage shop.v1;\nenum Kind {\n  KIND_UNSPECIFIED = 0;\n  KIND_SMALL = 1;\n  KIND_LARGE = 2;\n}\n").unwrap();
+    std::fs::write(
+        d.join("rules/fee.rule"),
+        "rule fee v1\ndescription \"A fee by the size and the kind of a thing read out of the caller's object\"\n\n\
+         enum kind = small | large\nimport proto \"../api/kinds.proto\" Kind -> kind\n\n\
+         shape thing = jsonschema \"../views/thing.schema.json\" \"#/$defs/Thing\"\n\n\
+         inputs\n  size : number  range >=0 <=9  from thing.size\n  k    : kind\n\n\
+         outputs\n  fee : number  round down(1)\n\n\
+         table base\npolicy unique\n| size | k     | -> base_fee : number |\n| <=4  | -     | 1                    |\n| >=5  | small | 2                    |\n| >=5  | large | 3                    |\n\n\
+         open extra : number  combine sum  range >=0 <=10\n\ndefine fee : number = base_fee + extra\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("mods/m/extra.rule"),
+        "contribution extra_fee v1\ndescription \"One more for every thing\"\nto \"../../rules/fee.rule\"\n\n\
+         table one_more\npolicy unique\n| size | -> more : number |\n| -    | 1                |\n\ninto extra\n  more\n",
+    )
+    .unwrap();
+    let (c, _, e) = run_in(d, &["source", "pin", "mods/m/extra.rule"]);
+    assert_eq!(c, 0, "{e}");
+    for args in [&["check", "rules/fee.rule", "mods/m"][..], &["check", "mods/m"][..]] {
+        let (c, out, err) = run_in(d, args);
+        assert_eq!(c, 0, "{args:?}:\n{out}{err}");
+        assert!(out.contains("ok mods/m/extra.rule (contributes to rules/fee.rule)\n"), "{args:?}:\n{out}");
+    }
+    // The koyomi file of the rule's date, and of a date the contribution adds, each from its own
+    // file's directory: checked with koyomi joined, as `ritsu rulec` joins it.
+    std::fs::copy(root().join("tests/days/payment_terms.cal"), d.join("cal/payment_terms.cal")).unwrap();
+    std::fs::write(
+        d.join("rules/settlement.rule"),
+        "rule settlement v1\ndescription \"A fee by the half of the year a payment day falls in\"\n\n\
+         inputs\n  pay_day : date  range from koyomi \"../cal/payment_terms.cal\" date payment\n\n\
+         outputs\n  fee : number  round down(1)\n\n\
+         table base_of\npolicy unique\n| pay_day      | -> base : number |\n| <=2026-06-30 | 1                |\n| >=2026-07-01 | 2                |\n\n\
+         open extra : number  combine sum  range >=0 <=10\n\ndefine fee : number = base + extra\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("mods/m/rush.rule"),
+        "contribution rush_fee v1\ndescription \"One more for a rush, by the day it is due\"\nto \"../../rules/settlement.rule\"\n\n\
+         inputs\n  due : date  range from koyomi \"../../cal/payment_terms.cal\" date payment\n\n\
+         table more_of\npolicy unique\n| due          | -> more : number |\n| <=2026-06-30 | 1                |\n| >=2026-07-01 | 2                |\n\ninto extra\n  more\n",
+    )
+    .unwrap();
+    let (c, _, e) = run_in(d, &["source", "pin", "mods/m/rush.rule"]);
+    assert_eq!(c, 0, "{e}");
+    let rule = d.join("rules/settlement.rule").to_string_lossy().into_owned();
+    let rush = d.join("mods/m/rush.rule").to_string_lossy().into_owned();
+    let port: rulec::days::Port = std::sync::Arc::new(koyomi::ports::Engine);
+    for (what, path) in [("the rule merged with the contribution", &rule), ("the contribution", &rush)] {
+        let src = std::fs::read_to_string(path).unwrap();
+        let ds = rulec::days::with(Some(port.clone()), || rulec::link::with_set(&[rule.clone(), rush.clone()], || rulec::report(&src, path).diags));
+        let errors: Vec<(&str, &str)> = ds.iter().filter(|x| x.severity == rulec::diag::Severity::Error).map(|x| (x.code, x.title.as_str())).collect();
+        assert!(errors.is_empty(), "{what}: {errors:?}");
+    }
+}
+
+/// A contribution merged into a rule another rule applies is part of the function the applying rule
+/// is generated as (§15.237): the applied rule's rows come in with the contribution's among them.
+/// The applying rule's `ok` line names its file, the head of every file generated from it names it
+/// under the apply's name (`elig:m_elig`, as the names the apply brings in are written), and `rulec
+/// api` lists it with no input of its own, since the apply binds what the applied rule takes. Before,
+/// none of the three said it, while the generated code took the contribution's clause.
+#[test]
+fn a_contribution_to_an_applied_rule_is_named_by_the_rule_that_applies_it() {
+    let t = TempDir::new("contrib-applied");
+    let d = t.path();
+    for sub in ["rules", "mods/m"] {
+        std::fs::create_dir_all(d.join(sub)).unwrap();
+    }
+    std::fs::write(d.join("rules/content.rule"), "enums content v1\ndescription \"Events\"\n\nenum event = harvest \"Harvest\" | quiet \"Quiet\"  open\n").unwrap();
+    std::fs::write(
+        d.join("rules/elig.rule"),
+        "rule elig v1\ndescription \"Whether an event can happen, and its weight\"\n\nimport enum event from \"content.rule\"\n\n\
+         inputs\n  event  : event\n  autumn : bool\n\noutputs\n  weight : number  round down(1)\n\n\
+         table weight_of open\npolicy unique\n| event   | autumn | -> weight : number |\n| harvest | true   | 30                 |\n| harvest | false  | 0                  |\n| quiet   | -      | 40                 |\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("rules/pick.rule"),
+        "rule pick v1\ndescription \"Pick one event by weight\"\n\nimport enum event from \"content.rule\"\n\nenum pick_verdict = weighed | skipped\n\n\
+         elements candidates\n  candidate : event\n\ninputs\n  roll   : number  range >=0 <=999  random\n  autumn : bool\n\noutputs\n  picked : event\n\n\
+         apply elig = \"elig.rule\"\n  event = candidate\n  autumn = autumn\n\n\
+         table verdict_of\npolicy unique\n| elig:weight | -> verdict : pick_verdict |\n| >=1         | weighed                   |\n| <=0         | skipped                   |\n\n\
+         fold verdict over candidates -> picked\n  weighed   -> take_weighted candidate by elig:weight\n  skipped   -> next\n  draw      -> roll\n  empty     -> quiet\n  exhausted -> held\n",
+    )
+    .unwrap();
+    std::fs::write(d.join("mods/m/content.rule"), "contribution m_content v1\ndescription \"A storm\"\nto \"../../rules/content.rule\"\n\nextend event with storm \"Storm\"\n").unwrap();
+    std::fs::write(
+        d.join("mods/m/elig.rule"),
+        "contribution m_elig v1\ndescription \"The storm's weight\"\nto \"../../rules/elig.rule\"\nafter \"content.rule\"\n\nclause storm_weight -> weight\n  when event storm\n  then 12\n",
+    )
+    .unwrap();
+    for f in ["mods/m/content.rule", "mods/m/elig.rule", "rules/pick.rule"] {
+        let (c, out, e) = run_in(d, &["source", "pin", f]);
+        assert_eq!(c, 0, "{f}: {out}{e}");
+    }
+    let (c, out, e) = run_in(d, &["check", "rules", "mods"]);
+    assert_eq!(c, 0, "{out}{e}");
+    assert!(out.contains("ok rules/pick.rule (2 contributions: mods/m/elig.rule, mods/m/content.rule)\n"), "{out}");
+    let (c, out, e) = run_in(d, &["gen", "rules", "mods", "--out", "gen"]);
+    assert_eq!(c, 0, "{out}{e}");
+    let line = "Contributions: elig:m_elig = ../mods/m/elig.rule (signature:";
+    for (file, comment) in [("gen/python/pick.py", "#"), ("gen/typescript/pick.ts", "//"), ("gen/go/pick/pick.go", "//"), ("gen/java/Pick.java", "//")] {
+        let text = std::fs::read_to_string(d.join(file)).unwrap();
+        let head: Vec<&str> = text.lines().take(8).collect();
+        assert!(head.iter().any(|l| l.starts_with(&format!("{comment} {line}"))), "{file}:\n{}", head.join("\n"));
+    }
+    let (_, api, _) = run_in(d, &["api", "rules/pick.rule", "mods"]);
+    let j = rulec::json::parse(api.lines().next().unwrap()).unwrap();
+    let cs = j.get("contributions").and_then(|x| x.as_arr()).expect("no `contributions`");
+    assert_eq!(cs.len(), 1, "{api}");
+    assert_eq!(cs[0].get("name").and_then(|x| x.as_str()), Some("elig:m_elig"));
+    assert_eq!(cs[0].get("file").and_then(|x| x.as_str()), Some("../mods/m/elig.rule"));
+    assert_eq!(cs[0].get("inputs").and_then(|x| x.as_arr()).map(|x| x.len()), Some(0));
+    // The rule alone, with nothing merged into what it applies, names none.
+    let (c, out, _) = run_in(d, &["check", "rules/pick.rule"]);
+    assert_eq!(c, 0, "{out}");
+    assert!(out.contains("ok rules/pick.rule\n"), "{out}");
+}

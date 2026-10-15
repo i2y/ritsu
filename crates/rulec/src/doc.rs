@@ -225,6 +225,7 @@ fn range_text(c: &Checked, name: &str) -> String {
     // What the source wrote as `100万円` must not be shown as `1000000円` (§1.6; the same
     // write-back as §2.1).
     let is_date = matches!(ty, Some(Ty::Date));
+    let is_rate = matches!(ty, Some(Ty::Rate));
     let s = |b: &Option<crate::num::Rat>| match b {
         // A date is held as its day number (§2.1); the reader reads the calendar date the
         // rule wrote, not `16161 〜 22279` (§15.71).
@@ -232,6 +233,9 @@ fn range_text(c: &Checked, name: &str) -> String {
             let (y, m, d) = crate::types::ord_to_date(*v);
             format!("{y:04}-{m:02}-{d:02}")
         }
+        // A rate is held as the fraction it is; the reader reads it in percent, as the rule
+        // writes it: `0% to 100%`, not `0 to 1` (§15.241).
+        Some(v) if is_rate => crate::eval::Val::Num(*v).show(&Ty::Rate),
         Some(v) => format!("{}{unit}", crate::types::fmt_big_pub(*v)),
         None => "…".into(),
     };
@@ -1890,7 +1894,9 @@ fn opens_section(f: &RuleFile, c: &Checked, path: &str) -> String {
 /// inputs it adds, the values it adds to enums, and its tables and clauses as its file writes them.
 fn contributions_section(f: &RuleFile, c: &Checked, path: &str) -> String {
     let mut o = String::new();
-    for m in &f.contributions {
+    // One merged into a rule this one applies has its section under that apply's, among the
+    // applied rule's own (§15.237).
+    for m in f.contributions.iter().filter(|m| m.via.is_none()) {
         o.push_str(&tr!("
 ## 寄与 {}: {}
 

@@ -1104,3 +1104,70 @@ fn 過去の記録は持ち越す値も通し直す() {
     assert_eq!(parted.len(), 1, "{out}");
     assert_eq!((s(&parted[0], "tag"), int(&parted[0], "line")), ("s:1", 5), "s:1 は三回目で、記録の残り日数が答えと違う");
 }
+
+/// The runners `rulec test` drives a machine through, for the forms the example game met (§15.238):
+/// a machine whose state is an enum read from an `enums` file with display names (`door`), one
+/// whose enums are its own with display names (`lamp`), and one whose state comes from an `enums`
+/// file without them (`gate`). Before, the NumPy runner of a machine had no `--labels` branch, the
+/// TypeScript and JavaScript runners imported the state's parser twice — and from the rule's module,
+/// which does not export it — and the PHP runner named the state's enum in the rule's namespace.
+/// Every comparison runs where its toolchain is installed, and none of them fails.
+#[test]
+fn enumsのファイルから状態を読む機械も全部のrunnerで走る() {
+    if !need(Need::Python) {
+        return;
+    }
+    let (_tmp, d) = scratch("runners");
+    std::fs::create_dir_all(d.join("shared")).unwrap();
+    write(&d, "shared/doors.rule", "enums doors v1\ndescription \"The states of a door, and of a gate\"\n\nenum door = open \"Open\" | shut \"Shut\"\nenum gate = up | down\n");
+    let door = write(
+        &d,
+        "door.rule",
+        "rule door_step v1\ndescription \"A door that opens and shuts, its state read from an enums file\"\n\nimport enum door from \"shared/doors.rule\"\n\n\
+         enum push = pull \"Pull\" | slam \"Slam\"\n\ninputs\n  state : door\n  push  : push\n\noutputs\n  next_state : door\n\n\
+         table step\npolicy unique\n| state | push | -> next_state |\n| -     | pull | open          |\n| -     | slam | shut          |\n\n\
+         machine doorway over step\n  carry   state -> next_state\n  initial shut\n",
+    );
+    let lamp = write(
+        &d,
+        "lamp.rule",
+        "rule lamp v1\ndescription \"A lamp that is lit and put out, its states declared here\"\n\nenum light = lit \"Lit\" | dark \"Dark\"\n\nenum press = on \"On\" | off \"Off\"\n\n\
+         inputs\n  state : light\n  press : press\n\noutputs\n  next_state : light\n\n\
+         table step\npolicy unique\n| state | press | -> next_state |\n| -     | on    | lit           |\n| -     | off   | dark          |\n\n\
+         machine switch over step\n  carry   state -> next_state\n  initial dark\n",
+    );
+    let gate = write(
+        &d,
+        "gate.rule",
+        "rule gate_step v1\ndescription \"A gate raised and lowered, its state read from an enums file with no display names\"\n\nimport enum gate from \"shared/doors.rule\"\n\n\
+         inputs\n  state : gate\n  raise : bool\n\noutputs\n  next_state : gate\n\n\
+         table step\npolicy unique\n| state | raise | -> next_state |\n| -     | true  | up            |\n| -     | false | down          |\n\n\
+         machine barrier over step\n  carry   state -> next_state\n  initial down\n",
+    );
+    let out_dir = d.join("gen").to_string_lossy().into_owned();
+    let (c, out) = rulec(&["gen", &door, &lamp, &gate, "--out", &out_dir]);
+    assert_eq!(c, 0, "{out}");
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .env("TMPDIR", tmpdir_in(Path::new(&out_dir)))
+        .args(["test", &out_dir])
+        .output()
+        .expect("rulec を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr);
+    assert!(o.status.success(), "{said}");
+    assert!(!said.contains("FAIL"), "{said}");
+    let have = |cmd: &str, arg: &str| Command::new(cmd).arg(arg).output().is_ok_and(|o| o.status.success());
+    let numpy = Command::new("python3").args(["-c", "import numpy"]).output().is_ok_and(|o| o.status.success());
+    for (lang, here) in [("NumPy, labels", numpy), ("TypeScript", have("node", "--version")), ("JavaScript", have("node", "--version")), ("PHP", have("php", "--version")), ("Go", have("go", "version"))] {
+        if !here {
+            eprintln!("SKIP {lang}: the toolchain is not installed");
+            continue;
+        }
+        for rule in ["door_step", "lamp", "gate_step"] {
+            if lang == "NumPy, labels" && rule == "gate_step" {
+                continue; // no display names to ask for
+            }
+            assert!(said.lines().any(|l| l.starts_with(&format!("ok    {rule} ({lang})"))), "{rule} ({lang}) did not run:\n{said}");
+        }
+    }
+}

@@ -75,7 +75,7 @@ The rules this workflow calls, each as the page for people that `rulec doc` rend
 | Name | Type | Range | Notes |
 |---|---|---|---|
 | 判断 | 判断 (3 values) |  |  |
-| 確信度 | rate | 0 to 1 |  |
+| 確信度 | rate | 0% to 100% |  |
 
 ## Outputs
 

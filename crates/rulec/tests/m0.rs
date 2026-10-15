@@ -237,6 +237,8 @@ fn 変異は決めたコードだけを出す() {
         ("m_e115modja.rule", &[("E115", 1)], "上と同じ規則の日本語の版"),
         ("m_e118.rule", &[("E118", 1), ("W111", 1)], "引数が一つ足りない呼び出し（§15.102）"),
         ("m_w121.rule", &[("W121", 1)], "生成先の予約語と同じ別名（§15.103）"),
+        ("m_w121rule.rule", &[("W121", 1)], "規則の名前を、自分の列挙と同じにした（Go の関数と型、Java のクラスと列挙がぶつかる。§15.239）"),
+        ("m_w121ruleja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         // §15.92. Five more codes that had no mutant. The syntax errors keep their minimal
         // example in the ledger — a misplaced character has no amount attached — but these
         // change what a real table answers, or what it is allowed to claim.

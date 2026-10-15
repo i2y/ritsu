@@ -1794,7 +1794,12 @@ def check_axis(t, ai):
 
     An optional input's axis starts with the absent value, `none`, which stands for no number
     at all; the values that are there tile the rest (§15.201). A certificate that leaves the
-    absent value out has covered less than the inputs the rule takes."""
+    absent value out has covered less than the inputs the rule takes.
+
+    The axis of what a walk leaves behind — a `count`, a `sum`, a `max`, a `min`, a fold's answer
+    — runs over the range `ranges` states for it, as an input's runs over its declared range: the
+    table that reads it is complete over that range and no further, and the range is the one the
+    sections on `extremes` and `fold_answers` hold to what the walk can answer (§15.236)."""
     a = t["axes"][ai]
     bs = a.get("bounds") or []
     if optional_input(t, a):
@@ -1822,13 +1827,14 @@ def check_axis(t, ai):
         hi, lo = vals[k][1], vals[k + 1][0]
         if not (lo == hi or lo == hi + step):
             raise Bad(f"{t['table']}: {a['column']} has a gap between {hi} and {lo}")
-    if a.get("kind") == "input":
+    if a.get("kind") in ("input", "walk"):
         r = t.get("_ranges", {}).get(a["column"])
         if r is not None:
             lo, hi = num(r[0]), num(r[1])
+            said = "the rule declares" if a.get("kind") == "input" else "its range is"
             if vals[0][0] != lo or vals[-1][1] != hi:
                 raise Bad(f"{t['table']}: {a['column']} runs from {vals[0][0]} to "
-                          f"{vals[-1][1]}, and the rule declares {lo} to {hi}")
+                          f"{vals[-1][1]}, and {said} {lo} to {hi}")
             # A coordinate that is an interval leaves its ends out, so an end of the declared
             # range is only covered by a point on it. An axis whose last point was taken away
             # still reached the end with the interval before it, and the value at the end was

@@ -282,7 +282,9 @@ impl<'a> Gen<'a> {
         let mut o = String::new();
         for g in self.prereq_graphs() {
             let ty = self.prereq_ty(&g);
-            let t = self.enum_type(&g.over);
+            // The type as the package writes it: by its owner's package where the rule's own
+            // functions take its name (§15.239).
+            let t = self.go_enum_ty(&g.over);
             let n = self.prereq_names(&g, "go");
             let list = |gs: Vec<Vec<String>>| -> String {
                 if gs.is_empty() {
@@ -319,10 +321,10 @@ impl<'a> Gen<'a> {
         }
         let mut arms = String::new();
         for g in &gs {
-            let t = self.enum_type(&g.over);
+            let (t, rt) = (self.enum_type(&g.over), self.go_runner_enum_ty(&g.over));
             let n = self.prereq_names(g, "go");
             arms.push_str(&format!(
-                "\t\t\tcase {}:\n\t\t\t\tx, _ := r.Parse{t}(parts[1])\n\t\t\t\ths := []r.{t}{{}}\n\t\t\t\tfor _, h := range strings.Split(parts[2], \",\") {{\n\t\t\t\t\tif h != \"\" {{\n\t\t\t\t\t\ty, _ := r.Parse{t}(h)\n\t\t\t\t\t\ths = append(hs, y)\n\t\t\t\t\t}}\n\t\t\t\t}}\n\t\t\t\tgs := \"\"\n\t\t\t\tfor _, gr := range r.{}(x) {{\n\t\t\t\t\tps := []string{{}}\n\t\t\t\t\tfor _, p := range gr {{\n\t\t\t\t\t\tps = append(ps, p.String())\n\t\t\t\t\t}}\n\t\t\t\t\tgs += \"[\" + strings.Join(ps, \"|\") + \"]\"\n\t\t\t\t}}\n\t\t\t\tfmt.Printf(\"%t\\t%s\\n\", r.{}(x, hs), gs)\n",
+                "\t\t\tcase {}:\n\t\t\t\tx, _ := r.Parse{t}(parts[1])\n\t\t\t\ths := []{rt}{{}}\n\t\t\t\tfor _, h := range strings.Split(parts[2], \",\") {{\n\t\t\t\t\tif h != \"\" {{\n\t\t\t\t\t\ty, _ := r.Parse{t}(h)\n\t\t\t\t\t\ths = append(hs, y)\n\t\t\t\t\t}}\n\t\t\t\t}}\n\t\t\t\tgs := \"\"\n\t\t\t\tfor _, gr := range r.{}(x) {{\n\t\t\t\t\tps := []string{{}}\n\t\t\t\t\tfor _, p := range gr {{\n\t\t\t\t\t\tps = append(ps, p.String())\n\t\t\t\t\t}}\n\t\t\t\t\tgs += \"[\" + strings.Join(ps, \"|\") + \"]\"\n\t\t\t\t}}\n\t\t\t\tfmt.Printf(\"%t\\t%s\\n\", r.{}(x, hs), gs)\n",
                 str_lit(&g.alias),
                 n.requires,
                 n.available

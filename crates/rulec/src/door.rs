@@ -53,6 +53,18 @@ pub fn not_object(name: &str) -> String {
     tr!("{name} の要素がオブジェクトではありません", "an element of {name} is not an object")
 }
 
+/// A place in the caller's object the projection function reads a field of, holding anything but
+/// an object (§15.234): `order.shipping`, or `order.lines[]` for an element.
+pub fn not_an_object(name: &str) -> String {
+    tr!("{name} がオブジェクトではありません", "{name} is not an object")
+}
+
+/// A field a `where` compares with a number that may have a fraction, holding anything but a
+/// number (§15.234).
+pub fn not_number(name: &str) -> String {
+    tr!("{name} が数ではありません", "{name} is not a number")
+}
+
 /// A number or a date outside its declared range.
 pub fn out_of_range(name: &str) -> String {
     tr!("{name} が範囲の外です", "{name} is out of range")

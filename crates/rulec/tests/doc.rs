@@ -651,3 +651,39 @@ fn 説明のタグは文字のまま書く() {
     assert_eq!(c, 0, "{out}{e}");
     assert!(out.contains(&format!("\n{want}\n")), "{out}");
 }
+
+/// A rate is shown in percent wherever the page gives a range (§15.241): an element's field, an
+/// input, and the total a `sum` adds up — `0% to 100%`, as the rule writes it, and not the fraction
+/// it is held as (`0 to 1`). The English rule, and its Japanese version beside it.
+#[test]
+fn 率の範囲はパーセントで書く() {
+    let en = "rule bonus v1\ndescription \"The bonus rate of a shop: the rates of its perks added up, and a cap on it\"\n\n\
+              elements perks\n  rate_off : rate[step 1%]  range >=0% <=20%\n\n\
+              inputs\n  cap : rate[step 0.5%]  range >=0.5% <=50%\n\n\
+              outputs\n  bonus : rate[step 0.5%]  round down(0.5%)\n\n\
+              sum total over perks of rate_off  range >=0% <=100%\n\n\
+              define bonus : rate = min(total, cap)\n";
+    let tmp = TempDir::new("doc-rate-ranges");
+    let p = tmp.path().join("t.rule");
+    std::fs::write(&p, en).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "en").args(["doc", p.to_str().unwrap()]).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout);
+    for want in ["| rate_off | rate | 0% to 20% |", "| cap | rate | 0.5% to 50% |", "| total | the total of rate_off over perks | 0% to 100% |"] {
+        assert!(out.contains(want), "`{want}` is not on the page:\n{out}");
+    }
+    assert!(!out.contains(" 0 to 1 ") && !out.contains("0 to 0.2"), "{out}");
+    let ja = "rule 特典の率(bonus_ja) v1\ndescription \"店の特典の率を足し合わせ、上限で抑える\"\n\n\
+              elements 特典(perks)\n  割引率(rate_off) : rate[step 1%]  range >=0% <=20%\n\n\
+              inputs\n  上限(cap) : rate[step 0.5%]  range >=0.5% <=50%\n\n\
+              outputs\n  率(bonus) : rate[step 0.5%]  round down(0.5%)\n\n\
+              sum 合計(total) over 特典 of 割引率  range >=0% <=100%\n\n\
+              define 率 : rate = min(合計, 上限)\n";
+    let tmp = TempDir::new("doc-rate-ranges-ja");
+    let p = tmp.path().join("t.rule");
+    std::fs::write(&p, ja).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec")).env("RULEC_LANG", "ja").args(["doc", p.to_str().unwrap()]).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout);
+    for want in ["0% 〜 20%", "0.5% 〜 50%", "0% 〜 100%"] {
+        assert!(out.contains(want), "`{want}` が資料にありません:\n{out}");
+    }
+}

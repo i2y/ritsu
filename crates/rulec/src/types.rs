@@ -2106,6 +2106,37 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         }
     }
 
+    // A rule and an enum it declares under one name (§15.239). Go's package of the rule declares
+    // the rule's functions and the enum's type side by side, and Java nests the enum in the class
+    // the rule is, so `rule size` with `enum size` compiles in neither: `func Size` and `type
+    // Size`, `class Size` and `enum Size`. An enum read from an `enums` file is that file's
+    // package's type, and the rule's package names it by that package where it would clash.
+    for (e, (go, java)) in crate::codegen::rule_name_clashes(f) {
+        let ty = crate::codegen::type_name_of(&e.name);
+        let mut d = Diag::warning(
+            "W121",
+            tr!("列挙 `{}` の型の名前が、規則の名前と同じになります", "The type of enum `{}` takes the name the rule takes", e.name.text),
+        )
+        .at(at(e.name.span.line))
+        .mark(e.name.span.clone(), tr!("型 {ty}", "the type {ty}"));
+        if let Some(fname) = go {
+            d = d.note(tr!(
+                "Go: 規則のパッケージに、規則の関数 `{fname}` と列挙の型 `{ty}` が並び、同じ名前は二つ置けないので、コンパイルできません。",
+                "Go: the rule's package declares the rule's function `{fname}` and the enum's type `{ty}` side by side, and one package holds one thing of a name, so it does not compile."
+            ));
+        }
+        if let Some(class) = java {
+            d = d.note(tr!(
+                "Java: 列挙は規則のクラス `{class}` の中に置かれ、クラスと同じ名前の型はその中に置けないので、コンパイルできません。",
+                "Java: the enum is nested in the class `{class}` the rule is, and a class holds no type of its own name, so it does not compile."
+            ));
+        }
+        c.diags.push(d.note(tr!(
+            "使わない生成先なら、このままで構いません。使うなら、規則か列挙の別名を変えてください（`rule size(parcel_fee)`）。列挙を `enums` のファイルに置いて読めば、その生成先は列挙をファイルのパッケージやクラスの名前で書きます。",
+            "For a target you do not generate, leave it. For one you do, change the alias of the rule or of the enum (`rule size(parcel_fee)`). An enum put in an `enums` file and read from there is written by that file's package or class in those targets."
+        )));
+    }
+
     // A table's or a clause's name is what the trace, an `overrides` line and a later version
     // refer to, so two cannot share one (E034, the same rule as for row labels).
     {
@@ -6250,8 +6281,9 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
         );
         return;
     }
-    let dir = std::path::Path::new(path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    let file = dir.join(&from.file);
+    // Followed from the file that wrote the line: the rule a contribution adds to, or the
+    // contribution an input of a merged rule came from (§15.235).
+    let file = from.file_path(path);
     let shown = file.to_string_lossy().to_string();
     let naming = format!("koyomi \"{}\" date {}", from.file, from.date);
     let stop = |c: &mut Checked, title: String, mark: String, notes: Vec<String>| {

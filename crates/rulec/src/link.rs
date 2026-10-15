@@ -380,6 +380,8 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         return out;
     }
     let Some(mut rf) = r.file else { return out };
+    // What the rule cites is followed from the rule's directory, not the contribution's (§15.235).
+    cites_from(&mut rf, &root);
     let mut mine = others.clone();
     mine.push(normalize(Path::new(path)));
     // The rule is read as its own check reads it — its enums from their files, its applies
@@ -416,6 +418,27 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
     out.extend(merge_into(&mut rf, &root, cs, Some(at)));
     *f = rf;
     out
+}
+
+/// Marks every file `f` cites as followed from the directory of `base`, the file `f` was read from
+/// (§15.235): its contracts (`shape`), the enums it reads from a `.proto` or a schema (`import`), the
+/// koyomi files of its dates, and the copies of its sources. A contribution's check is about the rule
+/// it adds to, and runs under the contribution's path; what the rule names is the rule's to find.
+/// A source so marked is one the rule's own check holds to its copies, as one an `apply` brought in.
+fn cites_from(f: &mut RuleFile, base: &str) {
+    for d in f.shapes.iter_mut() {
+        d.base.get_or_insert_with(|| base.to_string());
+    }
+    for im in f.enum_imports.iter_mut() {
+        im.base.get_or_insert_with(|| base.to_string());
+    }
+    for s in f.sources.iter_mut() {
+        s.base.get_or_insert_with(|| base.to_string());
+    }
+    let days = f.inputs.iter_mut().chain(f.elements.iter_mut().flat_map(|el| el.fields.iter_mut())).filter_map(|i| i.range.as_mut().and_then(|r| r.days.as_mut()));
+    for d in days {
+        d.base.get_or_insert_with(|| base.to_string());
+    }
 }
 
 /// The order the contributions are merged in: each after the ones it comes after and the one it
@@ -946,8 +969,14 @@ fn merge_into(f: &mut RuleFile, path: &str, cs: Vec<Contrib>, main: Option<usize
                     }
                 }
                 None => {
-                    f.inputs.push(i.clone());
+                    // The days of a date it adds come from a koyomi file named from its own
+                    // directory, whichever file the merged rule is checked as (§15.235).
+                    let mut i = i.clone();
+                    if let Some(d) = i.range.as_mut().and_then(|r| r.days.as_mut()) {
+                        d.base.get_or_insert_with(|| shown.clone());
+                    }
                     added_inputs.push(i.name.text.clone());
+                    f.inputs.push(i);
                 }
             }
         }
@@ -1150,6 +1179,7 @@ fn merge_into(f: &mut RuleFile, path: &str, cs: Vec<Contrib>, main: Option<usize
             to: c.to.clone(),
             inputs: added_inputs,
             src: c.src.clone(),
+            via: None,
         });
         let _ = is_main;
     }
@@ -1584,14 +1614,17 @@ pub fn relative(from: &str, to: &str) -> String {
 }
 
 /// `rulec api`'s `contributions` (§15.231): each contribution merged into the rule, its file from
-/// the rule's directory, the shape it pinned, its SHA-256, and the inputs it added.
+/// the rule's directory, the shape it pinned, its SHA-256, and the inputs it added; then each merged
+/// into a rule it applies, named `<apply>:<name>`, which adds no input (§15.237).
 pub fn contributions_json(f: &RuleFile, shown: &str) -> String {
+    // The ones merged into a rule it applies come after its own, under the apply's name (§15.237).
+    let direct = f.contributions.iter().filter(|m| m.via.is_none());
     crate::json::arr(
-        &f.contributions
-            .iter()
+        &direct
+            .chain(f.contributions.iter().filter(|m| m.via.is_some()))
             .map(|m| {
                 crate::json::Obj::new()
-                    .str("name", &m.name.text)
+                    .str("name", &m.shown_name())
                     .str("file", &relative(shown, &m.file))
                     .str("signature", m.signature.as_deref().unwrap_or(""))
                     .str("sha256", &m.sha256)

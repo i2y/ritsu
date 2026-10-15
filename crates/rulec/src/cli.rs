@@ -1116,6 +1116,25 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
                 )
             });
         }
+        // A contribution stands for the file it comes down to (§15.231), and one that adds to an
+        // `enums` file is refused as that file is: the page would be the enums file's (§15.240).
+        let to_enums = files.iter().filter(|c| crate::link::is_contribution_file(c)).find_map(|c| {
+            crate::link::target_of(c).map(|(_, root)| root).filter(|r| crate::enums::is_enums_file(r)).map(|r| ((*c).clone(), r))
+        });
+        if let Some((c, p)) = to_enums {
+            let name = cmd.name;
+            return refuse(if name == "doc" {
+                tr!(
+                    "`{c}` は enums のファイル `{p}` への寄与で、そのファイルは何も決めません。事例を試すページも、お客さま向けのページもありません。ページは `rulec doc {c}` が書きます",
+                    "`{c}` adds to `{p}`, an enums file that decides nothing, so it has no page to try a case on and none for customers; `rulec doc {c}` writes its page"
+                )
+            } else {
+                tr!(
+                    "`{c}` は enums のファイル `{p}` への寄与で、そのファイルは何も決めません。`rulec {name}` が扱うものが無いので、それを読む規則に使ってください",
+                    "`{c}` adds to `{p}`, an enums file that decides nothing, so `rulec {name}` has nothing to work on; run it on a rule that reads it"
+                )
+            });
+        }
     }
 
     // The contributions among the files are merged into the rules they reach (§15.231). A

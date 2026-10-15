@@ -375,6 +375,32 @@ fn lit_rat(l: &Lit, want: &Ty) -> Option<Rat> {
     }
 }
 
+/// The range a walk's answer takes where a table reads it (§15.219, §15.220, §15.236): a summary's
+/// (`count`, `sum`, `max`, `min`) and a fold's named answer, as the type check worked it out — the
+/// declared range of a `count` and a `sum`, the hull of the column's range and the `empty` value
+/// of a `max` and a `min`, the hull of the values a fold answers with. A table that reads one is
+/// checked over that range, as it is over an input's declared one, and the certificate states it
+/// for the re-checkers to hold the axis to (`walks`, `extremes`, `fold_answers`).
+fn walk_answer_range(f: &RuleFile, c: &Checked, name: &str) -> Option<(Option<Rat>, Option<Rat>)> {
+    let answers = f.items.iter().any(|it| match it {
+        Item::Agg(d) => d.name.text == name,
+        Item::Fold(d) => d.answer_name(f) == Some(name),
+        _ => false,
+    });
+    if answers { c.ranges.get(name).copied() } else { None }
+}
+
+/// Takes the ends of a range among the boundaries of an axis, and as its ends.
+fn bound_by(b: &mut Vec<Rat>, lo: &mut Option<Rat>, hi: &mut Option<Rat>, (rlo, rhi): (Option<Rat>, Option<Rat>)) {
+    for v in [rlo, rhi].into_iter().flatten() {
+        b.push(v);
+    }
+    b.sort_by(|x, y| x.cmp_to(*y));
+    b.dedup_by(|x, y| x.cmp_to(*y) == std::cmp::Ordering::Equal);
+    *lo = rlo.or(*lo);
+    *hi = rhi.or(*hi);
+}
+
 /// Collect the boundaries of a numeric axis. Both ends of the declared range count as
 /// boundaries too, which closes the universe into a finite one.
 fn num_bounds(rows: &[Row], ci: usize, want: &Ty, range: &Option<Range>) -> (Vec<Rat>, Option<Rat>, Option<Rat>) {
@@ -1136,14 +1162,14 @@ impl TableRegion {
                     // The days of a koyomi date (§15.174): the axis runs over their hull, and
                     // every coordinate with none of them in it is one no input reaches.
                     let days = c.day_sets.get(name).map(|d| std::sync::Arc::new(d.days.clone()));
-                    if let Some((dlo, dhi)) = days.as_ref().and_then(|_| c.ranges.get(name).copied()) {
-                        for v in [dlo, dhi].into_iter().flatten() {
-                            b.push(v);
-                        }
-                        b.sort_by(|x, y| x.cmp_to(*y));
-                        b.dedup_by(|x, y| x.cmp_to(*y) == std::cmp::Ordering::Equal);
-                        lo = dlo.or(lo);
-                        hi = dhi.or(hi);
+                    if let Some(r) = days.as_ref().and_then(|_| c.ranges.get(name).copied()) {
+                        bound_by(&mut b, &mut lo, &mut hi, r);
+                    }
+                    // The latest or earliest date a walk found, and a fold's answer that is a
+                    // date, run over the range the check worked out for them, as a number does
+                    // (§15.236).
+                    if let Some(r) = walk_answer_range(f, c, name) {
+                        bound_by(&mut b, &mut lo, &mut hi, r);
                     }
                     // `outputs_over` (ritsu's port): the input takes only the days given.
                     if let Some(h) = crate::over::held(name) {
@@ -1170,19 +1196,11 @@ impl TableRegion {
                     // A count is bounded by construction — never negative, never longer than
                     // the sequence the guard caps — and it declares that bound (§15.58). The
                     // axis takes it, or the completeness check would ask for a row covering a
-                    // count of −1.
-                    let counted = f.items.iter().find_map(|it| match it {
-                        Item::Agg(d) if d.name.text == *name => c.ranges.get(name).copied(),
-                        _ => None,
-                    });
-                    if let Some((clo, chi)) = counted {
-                        for v in [clo, chi].into_iter().flatten() {
-                            b.push(v);
-                        }
-                        b.sort_by(|x, y| x.cmp_to(*y));
-                        b.dedup_by(|x, y| x.cmp_to(*y) == std::cmp::Ordering::Equal);
-                        lo = clo.or(lo);
-                        hi = chi.or(hi);
+                    // count of −1. So does every other answer of a walk: a sum's declared range,
+                    // the range a `max` or a `min` was worked out to, and the hull of the values
+                    // a fold answers with (§15.236).
+                    if let Some(r) = walk_answer_range(f, c, name) {
+                        bound_by(&mut b, &mut lo, &mut hi, r);
                     }
                     // `outputs_over` (ritsu's port): the input takes only the values given.
                     if let Some(h) = crate::over::held(name) {
@@ -5015,11 +5033,7 @@ pub fn certificate_of(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile) ->
     // callee's row, and §15.69 keeps it out of the coverage demand. The certificate says so.
     let applied: Vec<bool> = (0..t.rows.len()).map(|i| set.applied[set.member_of[i]].is_some()).collect();
     let cover = reg.cover(t, c, f, DEFAULT_BUDGET);
-    let walked: Vec<String> = f
-        .items
-        .iter()
-        .filter_map(|it| if let crate::ast::Item::Agg(d) = it { Some(d.name.text.clone()) } else { None })
-        .collect();
+    let walked = crate::cert::walked_names(f, c);
     Some(reg.certificate(t, &w114, &walked, &applied, cover, c, f))
 }
 

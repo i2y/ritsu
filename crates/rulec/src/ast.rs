@@ -74,6 +74,10 @@ pub struct DaysFrom {
     pub file: String,
     pub date: String,
     pub span: Span,
+    /// The file the line was written in, when it is not the one being checked: the rule a
+    /// contribution's check is about, or the contribution an input of a merged rule came from
+    /// (§15.235). The path is followed from its directory.
+    pub base: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -209,6 +213,9 @@ pub struct EnumImport {
     /// The enum declared here that it has to agree with.
     pub target: Name,
     pub span: Span,
+    /// The file the line was written in, when it is not the one being checked: the rule a
+    /// contribution's check is about (§15.235). The path is followed from its directory.
+    pub base: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -428,6 +435,35 @@ pub struct ShapeDecl {
     /// A JSON Pointer for a schema, a message name for a `.proto`.
     pub at: String,
     pub span: Span,
+    /// The file the line was written in, when it is not the one being checked: the rule a
+    /// contribution's check is about (§15.235). The path is followed from its directory.
+    pub base: Option<String>,
+}
+
+impl ShapeDecl {
+    /// The file the contract is read from: `file` followed from the directory of the rule that
+    /// wrote the line — `rule_path`, the file being checked, unless the line came from another.
+    pub fn contract_path(&self, rule_path: &str) -> std::path::PathBuf {
+        let base = self.base.as_deref().unwrap_or(rule_path);
+        std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(&self.file)
+    }
+}
+
+impl EnumImport {
+    /// The file the enum is read from, followed from the directory of the rule that wrote the line.
+    pub fn file_path(&self, rule_path: &str) -> std::path::PathBuf {
+        let base = self.base.as_deref().unwrap_or(rule_path);
+        std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(&self.file)
+    }
+}
+
+impl DaysFrom {
+    /// The koyomi file the days are read from, followed from the directory of the file that wrote
+    /// the line.
+    pub fn file_path(&self, rule_path: &str) -> std::path::PathBuf {
+        let base = self.base.as_deref().unwrap_or(rule_path);
+        std::path::Path::new(base).parent().unwrap_or(std::path::Path::new("")).join(&self.file)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1284,6 +1320,21 @@ pub struct Merged {
     pub inputs: Vec<String>,
     /// The source of the file, for what reads its cells back (the certificate, the page).
     pub src: String,
+    /// The `apply` the contribution reaches this rule through, when it was merged into a rule this
+    /// one applies (§15.237): the apply's name, `a:b` for an apply inside an applied rule. Such a
+    /// contribution is part of the function as the callee's rows are, and adds no input to it.
+    pub via: Option<String>,
+}
+
+impl Merged {
+    /// The contribution's name as this rule shows it: `<apply>:<name>` for one that came in through
+    /// an `apply`, as the names the apply brings in are written (§15.237).
+    pub fn shown_name(&self) -> String {
+        match &self.via {
+            Some(a) => format!("{a}:{}", self.name.text),
+            None => self.name.text.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

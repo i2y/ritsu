@@ -190,12 +190,15 @@ fn pipeline(mut f: ast::RuleFile, path: &str, budget: i64) -> Report {
     link::relocate(&mut r.diags, path);
     link::relocate(&mut r.quiet, path);
     if r.adds_to.is_none() {
-        // The contributions merged into it, and those that added a value to an enum it reads from
-        // an `enums` file: the check was of the rule with them.
-        let mut merged: Vec<String> = f.contributions.iter().map(|m| m.file.clone()).collect();
-        for a in f.enums.iter().flat_map(|e| &e.added) {
-            if !merged.contains(&a.file) {
-                merged.push(a.file.clone());
+        // The contributions merged into it, those merged into a rule it applies (§15.237), and those
+        // that added a value to an enum it reads from an `enums` file: the check was of the rule
+        // with them.
+        let mut merged: Vec<String> = Vec::new();
+        let direct = f.contributions.iter().filter(|m| m.via.is_none());
+        let applied = f.contributions.iter().filter(|m| m.via.is_some());
+        for file in direct.chain(applied).map(|m| &m.file).chain(f.enums.iter().flat_map(|e| &e.added).map(|a| &a.file)) {
+            if !merged.contains(file) {
+                merged.push(file.clone());
             }
         }
         r.merged = merged;

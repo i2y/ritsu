@@ -873,6 +873,15 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             // between two inputs of the built-in divisions is checked against these values.
             enums: cc.enum_order.iter().filter_map(|e| cc.enums.get(e).map(|vs| (e.clone(), vs.clone()))).collect(),
         });
+        // The contributions merged into the callee are part of what came in (§15.237): the rule's
+        // check names them, and so do the head of its generated code and `rulec api`.
+        for m in &cf.contributions {
+            let via = match &m.via {
+                Some(inner) => format!("{an}:{inner}"),
+                None => an.clone(),
+            };
+            f.contributions.push(Merged { via: Some(via), inputs: Vec::new(), ..m.clone() });
+        }
         shift += n;
         done.push(a);
     }

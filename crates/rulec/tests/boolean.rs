@@ -215,9 +215,11 @@ fn every_language_says_the_same_sentence() {
     }
 }
 
-/// The projection functions hand a truth value read from the caller's object to the door as it
-/// came, where they turned it into one with `bool(…)`, `Boolean(…)`, `? true : false` and
-/// `(bool)`: the string "false" in the contract's field was true in four of the five.
+/// The projection functions hold a truth value read from the caller's object to JSON's `true` and
+/// `false`, as the door does, and say the path they read it at (§15.234). They turned it into one
+/// with `bool(…)`, `Boolean(…)`, `? true : false` and `(bool)` once — the string "false" in the
+/// contract's field was true in four of the five — and then handed it to the door as it came, which
+/// named the input and not where in the object the value was (§15.203).
 #[test]
 fn a_projected_truth_value_is_held_to_the_door() {
     if !ready(Need::Python, || have("python3", &["--version"]), "python3 is not here") {
@@ -271,7 +273,8 @@ fn a_projected_truth_value_is_held_to_the_door() {
                 let said = String::from_utf8_lossy(&o.stdout).trim().to_string();
                 assert!(o.status.success(), "{}: {lang} failed on {case}:\n{said}\n{}", c.rule, String::from_utf8_lossy(&o.stderr));
                 if refused {
-                    assert_eq!(said, format!("refused {}", c.said), "{}: {lang} on {case}", c.rule);
+                    let at = if c.lang == "en" { "quote.express is not a boolean" } else { "見積.express が真偽ではありません" };
+                    assert_eq!(said, format!("refused {at}"), "{}: {lang} on {case}", c.rule);
                 } else {
                     assert!(!said.starts_with("refused"), "{}: {lang} refused {case}: {said}", c.rule);
                 }
