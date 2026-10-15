@@ -457,7 +457,7 @@ the file is named on the command line (generated-code.md), so an app that calls 
 both the same value. `rulec api` of an `enums` file names that module in each language, and
 `rulec doc` renders its enums with their order and display names. The commands that are about
 a decision — `schema`, `adapter`, `verify`, `replay`, `fixtures lint`, `diff`, and `doc` as
-HTML or for customers — refuse one.
+HTML or for customers — refuse one, and a contribution to one, which stands for it there (§6.7).
 
 ## 3.2 source — the documents a rule transcribes
 
@@ -734,6 +734,18 @@ A contract says how a value **travels**, and the rule says what it **means**: an
 date arrive as strings, and money and a quantity as whole numbers in the unit the rule
 declares.
 
+**The projection function holds every value it reads to what the rule takes**, as the rule's
+door holds an argument: a whole number (one written with a point that is whole too; from a
+`.proto`, the decimal string protojson writes a 64-bit integer as), JSON's `true` or `false`, a
+string, a `YYYY-MM-DD` string of a day the calendar has, a value of the enum. A field a `where`
+tests is held to what the contract carries there, and a date there is compared as the day it
+is. A value that is not — `1.5`, `true` or `"7"` where an amount is read, `"yes"` where a
+`where` reads a boolean — is refused with `RuleInputError` and a sentence naming its path as the
+rule writes it, `order.lines[].amount_usd is not an integer`; so are a place on the way that is
+not an object, a value that is not there, and a collection that is not an array. The five
+languages read in one order — the inputs as declared, then the sequences; element by element,
+the `where` and then the value — and stop at the same value (DESIGN §15.234).
+
 **Five of the twelve targets generate the projection function** — Python, TypeScript,
 JavaScript, Ruby and PHP, where the caller's object is a plain map and needs no name; a sequence
 taken from the object is built there, one element of the rule's own type for each element of
@@ -778,6 +790,16 @@ are the same over them. A rate input may leave `range` out: it is then
 `>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
 like any other number. A table's numeric output column needs no range of its own — its cells
 are its range.
+
+**Where another table reads that column, it is not held to its cells.** A table whose column
+is a number another table writes — or a number an applied rule answers, an open table's output
+among them — is checked over every number, so its rows cover the whole line: `>=1` and `<=0`,
+not `>=1` and `0`. That is also what keeps it complete whatever rows a contribution adds to an
+open table (§6.7). A word a table writes — a value of an enum, a truth value — is read as the
+values its rows write, and a table needs no row for a value nothing writes. A value whose range
+the rule states — an input, a `derive`, a `count`, a `sum`, an open value — is read over that
+range, and what a walk answers (`max`, `min`, a fold's answer) over the range the check works
+out for it (§6.2, §6.3).
 
 `contract_only` marks an input that is only ever an entry check and appears in no table:
 
@@ -1057,7 +1079,9 @@ type, when an output's name is given another type, and when another item decides
 a fold with no `->` answers the first output, so a table or a `sum` that decides that output
 too leaves two answers for one name. A numeric answer that the items below read takes the hull
 of the values the fold answers with as its range, the way a `sum` takes its declared one, so a
-`define` over it is held to int64 like any other (E108).
+`define` over it is held to int64 like any other (E108), and a table that reads it is checked
+over that range: a fold that answers a member's number from 1 to 4, or `empty -> 0`, needs rows
+for 0 and for 1 to 4 and none below 0. A date answer takes the hull of the days the same way.
 
 ### Before the walks, on each walk, after them
 
@@ -1952,6 +1976,12 @@ comes `after` (`overrides strict_policy:strict_decay`). The tables of the output
 together, as tables that share an output always are (§7). Taking precedence over a definition that
 is not open is E067.
 
+A table that reads a number an open table writes covers every number, not only those the rule's
+rows write (§4, `range`): a contribution's row may write any value of
+the output's type, and the reading table is complete over all of them in the rule's own check. A
+table that reads such a weight to tell a candidate that is weighed from one that is not has `>=1`
+and `<=0` rows, not `>=1` and `0`.
+
 **Contributions, chances and contracts.** What is drawn and what is claimed of its chances (§6.6)
 is the rule's: a contribution draws no input and writes no `chances` (E067). The rule's claims hold
 whatever is added — the merged rule is held to them, an input a contribution adds is a `-` column of
@@ -1971,7 +2001,10 @@ Given a rule and contributions to it, `rulec check` checks
    E105, E033, E131), each naming the file and the contribution of the row it is about. The
    examples of the files are not run here: each was written for the files it was written with;
 3. each contribution, merged with the rule and the contributions it comes `after`, and nothing
-   else, with its own examples.
+   else, with its own examples. What the rule cites — its contracts, the enums it reads from a
+   `.proto` or a schema, the koyomi files of its dates, the copies of its sources — is found from
+   the rule's directory there as in the rule's own check, and a koyomi file a contribution's input
+   names from the contribution's (DESIGN §15.235).
 
 A diagnostic about a line of a contribution points into that file. A finding said for one file is
 not said again for another: a file whose errors were all said above gets one line that says so. The
@@ -2024,6 +2057,11 @@ code names each contribution with its file, its signature and the digest of its 
 every open value under `opens`, with its terms (formats.md); the page has a section for what adds to
 each open value and one for each contribution, with its tables drawn from its own file; and the
 certificate reads every row out of the file it is written in.
+
+A rule that applies a rule a contribution is merged into takes the contribution with the applied
+rule's rows, so it is part of that rule too: its `ok` line names the contribution's file, and the
+header of its generated code and `rulec api` name the contribution under the apply's name, as the
+names an apply brings in are written — `elig:m_elig` in a rule that applies `elig` (DESIGN §15.237).
 
 ## 7. Tables
 

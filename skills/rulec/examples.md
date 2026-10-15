@@ -1918,6 +1918,7 @@ sequence bulk_order
 - **`elements lines from order.lines` takes the lines from the contract's array as they are.** Each field says where it is read in an element, as `from quantity`. The elements taken are checked and walked exactly as a sequence the caller passes would be.
 - **The contract's validation is held to the rule too.** The contract lets through up to 20 lines of at most 5000 each, so the total reaches 100,000, the same as the range of `total`. Take `maxItems` away, and an order whose total passes the range and an order of 21 lines both pass the contract; each stops at E122.
 - **The `order_handling_fee_from(order)` that `rulec gen` writes takes the order as it is.** The lines are built inside the function, so the order is its only argument. It is written for Python, TypeScript, JavaScript, Ruby and PHP; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.
+- **Every value it reads is held to the rule's type.** An `amount_usd` of `1.5` or `"7"` gets no answer: the function stops with `RuleInputError` and says where the value is, `order.lines[].amount_usd is not an integer: 1.5`, the same sentence in all five languages.
 
 ## The chances on the poster, held to the table
 

@@ -889,6 +889,14 @@ to read ([reference §3.1](reference.md#enums-several-rules-share)). The code th
 | NumPy | none: the plan carries the values | — | the plan's `rank` cells | the plan's `labels`, read by `rule.label(enum, value)` |
 | Wasm | none: the types are written into the rule's own crate | — | in the crate | none: the module answers over JSON, which carries values only |
 
+A rule named like an enum it reads (`rule size` reading `enum size`) has a Go package that
+declares `func Size`, and a type of that name cannot be declared beside it: the package then
+names the type by the package that owns it, `sizes.Size`, as Java names it by its class, and
+declares no alias of it — the constants and `ParseSize` are there as for any other enum, and
+`rulec api` gives the type of the input's field as `sizes.Size` (§15.239). A rule named like an
+enum it declares itself cannot be written apart in Go, where the function and the type share the
+package, nor in Java, where the enum is nested in the rule's class: `rulec check` says so (W121).
+
 A value without a display name is shown by its declared name, by every one of these. `rulec
 gen` writes the module of each `enums` file a rule reads, whether or not the file is named on
 the command line, once however many of the rules given read it; two different files that would
@@ -1131,18 +1139,18 @@ the scalars.
 def order_shipping_from(order: dict[str, Any]) -> Yen:
     """Reads the inputs out of the caller's object and calls this rule. …"""
     return order_shipping(
-        Zone(order["shipping"]["zone"]),
-        any(_e["chilled"] for _e in order["lines"]),
-        len(order["lines"]),
+        _enum_of(Zone, _at(_at(order, "shipping", "注文"), "zone", "注文.shipping"), "注文.shipping.zone is not a value of enum 地域"),
+        _any([_bool_at(_e, "chilled", "注文.lines[]") for _e in _seq_at(order, "lines", "注文")]),
+        _len(_seq_at(order, "lines", "注文")),
     )
 ```
 
 ```typescript
 export function order_shipping_from(order: _Obj): Yen {
   return order_shipping(
-    parseZone(String(order["shipping"]["zone"])),
-    (order["lines"] as _Row[]).some((_e) => _e["chilled"] === true),
-    BigInt((order["lines"] as _Row[]).length),
+    (_enumOf(Object.values(Zone), _at(_at(order, "shipping", "注文"), "zone", "注文.shipping"), "注文.shipping.zone is not a value of enum 地域") as Zone),
+    (_seqAt(order, "lines", "注文").reduce((_a, _e) => (_boolAt(_e, "chilled", "注文.lines[]") === true) || _a, false) as boolean),
+    BigInt(_seqAt(order, "lines", "注文").length),
   );
 }
 ```
@@ -1152,6 +1160,32 @@ nothing checking it. Here the paths were held to the contract by `rulec check` b
 function was written, so a field the contract renamed is E121 at build time rather than a
 `KeyError` in production. The object is **read and never named**: the parameter is a plain map,
 because a type for it would be a domain object model and this tool makes none.
+
+**Every value it reads is held to what the rule takes, as the rule's own door holds an argument**
+(§15.234 of DESIGN.md). A number is a JSON integer, or a number written with a point that is
+whole (`1500.0`, as at the door, §15.205); a truth value is JSON's `true` or `false`; a string is a
+string; a date is a `YYYY-MM-DD` string of a day the calendar has, read as its day number; a value
+of an enum is one of the enum's. A field a `where` tests is held to what the contract carries
+there. A value that is not is refused with the module's `RuleInputError`, the same sentence in all
+five, naming the value's path as the rule writes it — `order.lines[].amount_usd is not an
+integer`, with the value beside it where the language's error carries one (not in PHP, whose
+error holds an integer). A place on the way that is not an object (`order.lines[] is not an
+object`), a value that is not there or is `null` (`order.lines[].fragile is missing`), and a
+collection that is not an array (`order.lines is not a sequence`) are refused the same way. The
+function reads in one order in every language: the inputs as the rule declares them, then the
+sequences; along a collection, element by element, the value the `where` tests and then, when the
+element passes, the value added up or compared; `any` and `all` test every element. So one
+object stops at the same value in each.
+
+The readers are small functions written beside it, only the ones the rule uses: `_at` (the value at
+a key of an object), `_int_at`, `_bool_at`, `_str_at`, `_date_at`, `_num_at` and `_seq_at` (the
+value at a key, held to its kind), the same ending in `_of` for a value already read, `_int_pb` for
+an integer a `.proto` carries, `_enum_of`, `_opt` for an optional input and `_pget` for a field of
+an element of a `.proto` collection. TypeScript and JavaScript write the same in camelCase
+(`_intAt`, `_seqOf`).
+
+Ruby writes them as methods of the module, with their signatures in the `.rbs`, and PHP as
+functions of its namespace.
 
 A rule may project some inputs and pass the rest: the ones with no `from` stay parameters of
 the projection function, after the objects, and a sequence the object does not hold stays last.
@@ -1163,9 +1197,9 @@ for each element of the collection. From `order_handling_fee` in the corpus, in 
 ```python
 def order_handling_fee_from(order: dict[str, Any]) -> USD:
     return order_handling_fee(
-        USD(_int(_sum(_int(_e["amount_usd"]) for _e in order["lines"]))),
-        USD(_int(_largest([_int(_e["amount_usd"]) for _e in order["lines"] if _e["fragile"]], 0))),
-        [Element(quantity=_int(_e["quantity"]), amount=USD(_int(_e["amount_usd"]))) for _e in order["lines"]],
+        USD(_sum(_int_at(_e, "amount_usd", "order.lines[]") for _e in _seq_at(order, "lines", "order"))),
+        USD(_largest([_int_at(_e, "amount_usd", "order.lines[]") for _e in _seq_at(order, "lines", "order") if _bool_at(_e, "fragile", "order.lines[]")], 0)),
+        [Element(quantity=_int_at(_e, "quantity", "order.lines[]"), amount=USD(_int_at(_e, "amount_usd", "order.lines[]"))) for _e in _seq_at(order, "lines", "order")],
     )
 ```
 
@@ -1176,35 +1210,40 @@ its day number, as it is read everywhere. A sequence taken from the object is no
 parameter: the function takes the objects, the inputs no `from` reaches and the sequences no
 `from` takes, in that order.
 
-TypeScript and JavaScript add the BigInts up with `reduce` and make each element an object
-literal (`{ quantity: …, amount: … }`, of the element's interface in TypeScript).
+TypeScript and JavaScript take the values of the elements that pass with `flatMap`, add the
+BigInts up with `reduce`, and make each element an object literal (`{ quantity: …, amount: … }`,
+of the element's interface in TypeScript).
 
-Ruby adds up with `sum` and writes `max || <empty>` and `min || <empty>` for the two helpers,
-and PHP adds up with `array_sum`. Ruby makes each element the element's `Struct` and PHP the
-element's class, both given the fields in the order they are declared.
+Ruby takes them with `flat_map`, adds up with `sum` and writes `max || <empty>` and
+`min || <empty>` for the two helpers; PHP takes them with `array_map`, flattens with
+`array_merge` and adds up with `array_sum`. Ruby makes each element the element's `Struct` and
+PHP the element's class, both given the fields in the order they are declared.
 
 From a JSON Schema, an optional input (`T?`) reads its field so that a missing one — or a
-missing object on the way to it — is none: `_dig(order, "coupon", "kind")` in the Python module,
-and the same in each of the other four. Every other input reads straight into the object, which
-is why `rulec check` requires a field a required input reads to be `required` in the contract
-(E122).
+missing object on the way to it — is none: `_opt(order, ("coupon", "kind"), "order")` in the
+Python module, and the same in each of the other four; a value that is there is held to its kind
+like any other. Every other input reads its path through `_at`, which refuses a value that is not
+there, which is why `rulec check` requires a field a required input reads to be `required` in the
+contract (E122).
 
-From a `.proto`, the object is taken in the JSON form protojson gives it, and every read goes
-through one helper, `_proto`, given each step's JSON name and `.proto` name and what to read
-when protojson left the field out:
+From a `.proto`, the object is taken in the JSON form protojson gives it, and a path goes through
+one helper, `_proto`, given each step's JSON name and `.proto` name, what to read when protojson
+left the field out (or wrote `null`, which protojson reads as the default), and where the path
+starts, so that a place on the way that is not an object is refused by its path:
 
 ```python
-Zone(_proto(order, (("shipping", "shipping"), ("zoneCode", "zone_code")), "", "")),
-any(_e.get("chilled", False) for _e in _proto(order, (("lines", "lines"),), [], [])),
-len(_proto(order, (("lines", "lines"),), [], [])),
+_enum_of(Region, _proto(shipment, (("destination", "destination"), ("region", "region")), "", ""), "出荷.destination.region is not a value of enum 地域"),
+_any([_str_of(_pget(_e, "handling", "handling", "HANDLING_STANDARD", "出荷.parcels[]"), "出荷.parcels[].handling") == "HANDLING_FRAGILE" for _e in _seq_of(_proto(shipment, (("parcels", "parcels"),), [], []), "出荷.parcels")]),
+_len(_seq_of(_proto(shipment, (("parcels", "parcels"),), [], []), "出荷.parcels")),
+Yen(_int_pb(_proto(shipment, (("declaredValueJpy", "declared_value_jpy"),), 0, 0), "出荷.declared_value_jpy")),
 ```
 
 A step is looked up under its JSON name first — `json_name`, or the lowerCamelCase of the name —
 and then under the name the `.proto` writes. A field that is not there reads as its default — 0, `""`, false, no
 elements, an enum's value numbered 0 — and an optional input reads an unset message or
-`optional` field as none. A 64-bit integer, which protojson writes as a string, is made the
-number it is before a `where` compares it (a BigInt in TypeScript and JavaScript), and an enum
-is compared by its value's name.
+`optional` field as none. A 64-bit integer, which protojson writes as a string, is read from the
+decimal string it is or from a number, and nothing else (`_int_pb`), before a `where` compares it
+(a BigInt in TypeScript and JavaScript), and an enum is compared by its value's name.
 
 **Python, TypeScript, JavaScript, Ruby and PHP are generated.** Go, Swift, Java and Rust hold
 the caller's object as a type, and naming that type would mean generating it or following the
@@ -1245,7 +1284,9 @@ pinned the rule's shape at, and the SHA-256 of its bytes (the first 16 hex digit
 which contributions it was made with. A contribution given without its rule generates the rule it
 adds to, merged with it and with the contributions it comes after; a contribution has no module of
 its own. A value a contribution adds to an enum of an `enums` file is a member of that file's
-module, whose header names the contribution. Under `ritsu gen`, each rule's module is the rule
+module, whose header names the contribution. A rule that applies a rule a contribution was merged
+into takes the contribution with the applied rule's rows, and its header names it under the apply's
+name (`elig:m_elig`, §15.237). Under `ritsu gen`, each rule's module is the rule
 merged with every contribution of the project that reaches it. The functions beside the rule's are
 the merged rule's too: the one that counts the chances of a rule with random inputs takes an input a
 contribution adds among its parameters (`prize_lottery_chances(campaign, holiday)`), and the one that
@@ -1274,7 +1315,10 @@ e-Gov names it in both places — `Cites: osha = law ecfr 29 CFR 1910 asof 2026-
 
 A rule that applies another names the callee and its pin, one line per `apply`: `Applies: retirement
 = retirement_pay.rule (meaning:aadc7468b292ff52)`, or `(sha256:…)` for a heading pinned at the
-callee's bytes as before §15.230.
+callee's bytes as before §15.230. A contribution merged into the callee is part of what came in,
+and is named after the rule's own contributions, under the apply's name as the names an apply
+brings in are written (§15.237): `Contributions: elig:m_elig = ../mods/m/elig.rule
+(signature:27c066c70c2eb169, sha256:59b421dbd9bf48e4)` in a rule that applies `elig`.
 ## The rows that matched
 
 Beside every function there is a twin with `_traced` on its name, spelled `Traced` wherever the

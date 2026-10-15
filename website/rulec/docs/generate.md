@@ -255,6 +255,14 @@ body = """{"destination": {"region": "okinawa"},
 print(shipment_fee_from(json.loads(body)))  # 5100
 ```
 
+Each value it reads is held to the rule's type before the rule is called. A value of
+another type, a value that is missing, or something other than the object or the array a
+path goes through stops the call with `RuleInputError`, which says where the value is: a
+line whose `chilled` is `"yes"` gets `order.lines[].chilled is not a boolean: 'yes'`, and an
+order whose `shipping` is a string gets `order.shipping is not an object: 'okinawa'`. The
+five languages say the same and read the values in the same order. A value the rule does
+not read is not looked at.
+
 It is written for five of the twelve targets. In Python, TypeScript, JavaScript, Ruby and
 PHP, parsed JSON is usually used as it comes, as a plain map (a `dict` in Python, a `Hash`
 in Ruby), so the function takes a plain map too, and never needs to know the caller's type.

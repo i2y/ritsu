@@ -1398,7 +1398,7 @@ error[sakai E105]: billing/rules/billing_need.rule:5:1: The file billing/rules/b
 ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided
 ```
 
-要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通りました」）、通らないファイルがあればその数、確かめられなかったファイルがあればその数で、エラーと警告の数を括弧に添える。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、dandori）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。E.4 で、X2（前提を呼び出しの場所で）と X3 の (b)（rulec の `range from koyomi`）が数に入り、E.5 で、`ritsu check` が dandori に日付の口と帳簿の口も渡すようになって（6.1。前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` でも E018 になっていた）、X3 の (a)、X4、X5、X6 が入った。テストのプロジェクト（`shop` と `通販`）は、フローが呼ぶ規則に前提も koyomi の範囲も無く、日付も帳簿も使わないので、どちらも 0 のままである（golden は変わらない）。2026-10-06 に、X14（16.8）も数に入った。フローが地図のコンテキストに属し、秘密の値をプロジェクトの中のファイルへ送る呼び出しごとに、境目を一つ数える（地図の無いプロジェクトでは数えない）。テストのプロジェクト四つ（`shop`、`通販`、`invoice`、`stockroom`）には秘密の値を送るフローが無いので、数は変わらない（替える前と後で確かめた）。dandori の例の `invoice` を `ritsu check` にかけると、W205 が二つ（`now` から来る日）と W206 が六つ（仮押さえを作るタスクに `timeout` が無い）出て、要約は `ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); borders between the languages: 8 checked, 8 undecided` になる。これが正しい振る舞いで、`ritsu run` の担当のテスト（`crates/ritsu/tests/dandori.rs`）の期待は、取り込むときにこの 8 件に合わせた。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
+要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通りました」）で、エラーと警告の数を括弧に添える。通らないファイルがあればその数を、確かめられなかったファイルがあればその数を言い、指摘の数は、その指摘があるファイルの結果の側の括弧に添える。通るファイルの警告は、ほかのファイルが通らなくても通る側に数え（`1 fail (1 error), 5 pass (1 warning)`）、通るファイルに指摘が無ければ通る側は書かない。どのファイルのものでもない指摘は、通らない側に数える（rulec の DESIGN §15.242）。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、dandori）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。E.4 で、X2（前提を呼び出しの場所で）と X3 の (b)（rulec の `range from koyomi`）が数に入り、E.5 で、`ritsu check` が dandori に日付の口と帳簿の口も渡すようになって（6.1。前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` でも E018 になっていた）、X3 の (a)、X4、X5、X6 が入った。テストのプロジェクト（`shop` と `通販`）は、フローが呼ぶ規則に前提も koyomi の範囲も無く、日付も帳簿も使わないので、どちらも 0 のままである（golden は変わらない）。2026-10-06 に、X14（16.8）も数に入った。フローが地図のコンテキストに属し、秘密の値をプロジェクトの中のファイルへ送る呼び出しごとに、境目を一つ数える（地図の無いプロジェクトでは数えない）。テストのプロジェクト四つ（`shop`、`通販`、`invoice`、`stockroom`）には秘密の値を送るフローが無いので、数は変わらない（替える前と後で確かめた）。dandori の例の `invoice` を `ritsu check` にかけると、W205 が二つ（`now` から来る日）と W206 が六つ（仮押さえを作るタスクに `timeout` が無い）出て、要約は `ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); borders between the languages: 8 checked, 8 undecided` になる。これが正しい振る舞いで、`ritsu run` の担当のテスト（`crates/ritsu/tests/dandori.rs`）の期待は、取り込むときにこの 8 件に合わせた。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
 
 JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided`）の順である。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。境目の検査が数えたときの `borders` の三つの数は、`crates/ritsu/tests/cross.rs` がプロジェクトごとに確かめる（テキストは `tests/golden/cross/` の golden）。
 
@@ -2627,7 +2627,7 @@ warning[ritsu W905]: ordering/checkout.flow:17: Where in the map shop.ctx the ta
     17 |   tell(order: order, card: card)
   = The map does not pass sakai's check, so which context a file belongs to is not known (sakai's E009: The path "contexts/billing.ctx" is not there).
   = Correct the map so that `sakai check` passes.
-ritsu check: 6 files (proto 1, dandori 1, sakai 4): 1 fail (1 error, 1 warning); borders between the languages: 1 checked, 1 undecided
+ritsu check: 6 files (proto 1, dandori 1, sakai 4): 1 fail (1 error), 5 pass (1 warning); borders between the languages: 1 checked, 1 undecided
 ```
 
 ```
@@ -2639,7 +2639,7 @@ ritsu check: 6 files (proto 1, dandori 1, sakai 4): 1 fail (1 error, 1 warning);
     17 |   知らせる(order: 注文, card: カード)
   = 地図が sakai の検査を通らないので、ファイルがどのコンテキストに属するかが分かりません（sakai の E009: パス "contexts/請求.ctx" がありません）。
   = `sakai check` が通るよう地図を直してください。
-ritsu check: ファイル 6 個（proto 1、dandori 1、sakai 4）。検査を通らないもの 1 個（エラー 1 件、警告 1 件）。言語の境目: 確かめた 1 か所、決められない 1 か所
+ritsu check: ファイル 6 個（proto 1、dandori 1、sakai 4）。検査を通らないもの 1 個（エラー 1 件）、通るもの 5 個（警告 1 件）。言語の境目: 確かめた 1 か所、決められない 1 か所
 ```
 
 **捨てたもの**：

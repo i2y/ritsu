@@ -571,6 +571,7 @@ EXAMPLES = [
             "**`elements 明細 from 注文.lines` で、明細を契約の配列からそのまま取ります。** フィールドはそれぞれ、要素の中のどこから読むかを `from quantity` のように書きます。取り出した要素は、呼び出し側が並びを渡すときとまったく同じに検査され、たどられます。",
             "**契約の検証とも突き合わせます。** 契約は明細を 20 件まで、一件の額を 5000 まで通すので、合計は 10 万まで届き、規則の `合計` の範囲と同じです。`maxItems` を消すと、合計が範囲を超える注文と、21 件の明細を持つ注文が契約を通ってしまうので、どちらも E122 で止まります。",
             "**`rulec gen` が書く `order_handling_from(order)` は、注文をそのまま受け取ります。** 明細の並びは関数の中で組み立てるので、引数は注文だけです。この関数が出るのは Python・TypeScript・JavaScript・Ruby・PHP で、Go・Swift・Java・Rust・SQL・NumPy・Wasm には出ません。",
+            "**読む値は、規則の型どおりかを確かめます。** 明細の `amount_usd` が `1.5` や `\"7\"` なら、関数は答えを返さず、`注文.lines[].amount_usd is not an integer: 1.5` のように値の場所を言って `RuleInputError` で止まります。五つの言語で同じ文です。",
         ],
         "A total, a largest value and the lines, taken from the contract",
         "The handling fee of an order, decided from the order object the shop's API receives. The order's total and its most expensive fragile line are read out of the object's lines with `from sum` and `from max`, and the lines themselves are taken with `elements … from`, as the sequence the rule walks.",
@@ -579,6 +580,7 @@ EXAMPLES = [
             "**`elements lines from order.lines` takes the lines from the contract's array as they are.** Each field says where it is read in an element, as `from quantity`. The elements taken are checked and walked exactly as a sequence the caller passes would be.",
             "**The contract's validation is held to the rule too.** The contract lets through up to 20 lines of at most 5000 each, so the total reaches 100,000, the same as the range of `total`. Take `maxItems` away, and an order whose total passes the range and an order of 21 lines both pass the contract; each stops at E122.",
             "**The `order_handling_fee_from(order)` that `rulec gen` writes takes the order as it is.** The lines are built inside the function, so the order is its only argument. It is written for Python, TypeScript, JavaScript, Ruby and PHP; Go, Swift, Java, Rust, SQL, NumPy and Wasm do not get it.",
+            "**Every value it reads is held to the rule's type.** An `amount_usd` of `1.5` or `\"7\"` gets no answer: the function stops with `RuleInputError` and says where the value is, `order.lines[].amount_usd is not an integer: 1.5`, the same sentence in all five languages.",
         ],
     ),
     (
