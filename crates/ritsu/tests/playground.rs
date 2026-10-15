@@ -1857,7 +1857,9 @@ v.dispatch({{ changes: {{ from: 0, to: v.state.doc.length, insert: {} }} }});"#,
 /// in the frame on the right, in the system's scheme, to save as HTML. An edit that breaks the rule
 /// leaves the last page drawn there, faded, and the Markdown too, with the first problem in the band
 /// under it, which takes the reader to its line; putting it right draws the page again. The tabs on
-/// the right move with the arrow keys.
+/// the right move with the arrow keys. In the Japanese rule, the wide characters of the table's rows
+/// are each in a box two columns wide, so that the last `|` of every row is drawn at one place, and
+/// those of the other lines are not.
 #[test]
 fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
     let Some(chrome) = chrome() else {
@@ -1893,7 +1895,9 @@ fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
                 // it), and edits: the page drawn again starts where the reader left it
                 .wheel(".pg-panel[data-view=\"doc\"] .pg-stage", (0.15, 0.6), 800).sleep(400).edited(from_fee(tag).0, from_fee(tag).1).state().edited(from_fee(tag).1, from_fee(tag).0)
                 // the tabs on the right, by the keys
-                .run("document.querySelector('.pg-tab[aria-selected=\"true\"]').focus();").key("ArrowRight").ready().state(),
+                .run("document.querySelector('.pg-tab[aria-selected=\"true\"]').focus();").key("ArrowRight").ready().state()
+                // the rule as it was, its rows and its other lines in the editor
+                .get(LINES_DRAWN),
             // the system's dark scheme
             Visit { dark: true, ..Visit::to(&at) }.ready().state(),
         ];
@@ -1929,12 +1933,124 @@ fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
         assert!(unframed(drawn) == playground::doc(&ask(&rule.replacen(from_fee(tag).0, from_fee(tag).1, 1)))["html"]["out"].as_str().unwrap(), "{page}: the page drawn again is not the page of the rule edited");
         // the arrow key moved the selection to the next tab, and the focus with it
         assert_eq!((text_of(keyed, "view"), text_of(keyed, "focused")), ("markdown", "markdown"), "{page}: the arrow key does not move from the page for people to the Markdown");
+        // the wide characters of the rows are in boxes, and the rows' last `|` under one another
+        let (rows, others) = (got[0][7]["rows"].as_array().unwrap(), got[0][7]["others"].as_array().unwrap());
+        if tag == "ja" {
+            assert!(!rows.is_empty() && !others.is_empty(), "{page}: {name} has no row of a table, or no other line, in Japanese");
+            for r in rows {
+                assert!(r["boxes"].as_u64() >= r["wide"].as_u64(), "{page}: a wide character of the row {} is not in a box two columns wide", r["text"]);
+            }
+            for o in others {
+                assert_eq!(o["boxes"], 0, "{page}: the line {}, not a row of a table, has its wide characters in boxes", o["text"]);
+            }
+            let ends: Vec<f64> = rows.iter().map(|r| r["end"].as_f64().unwrap()).collect();
+            let (lo, hi) = ends.iter().fold((f64::MAX, f64::MIN), |(lo, hi), e| (lo.min(*e), hi.max(*e)));
+            assert!(hi - lo < 0.5, "{page}: the last `|` of the rows of {name} are drawn at {ends:?}, not under one another");
+        }
         // the system's dark scheme draws the page dark
         assert_eq!(scheme_of(text_of(&got[1][0], "page")), "dark", "{page}: the page is not drawn in the system's dark scheme");
         looked += got.iter().map(Vec::len).sum::<usize>();
     }
     eprintln!("compared: {looked} views of the page of the playground alone, in Chrome, with what the library answers");
 }
+
+/// The lines of the open file as the editor draws them: each row of a table (a line that starts with
+/// `|`), with its wide characters (CJK, kana), the boxes they are in, and where its last `|` is
+/// drawn; and each other line that has wide characters, with its boxes.
+const LINES_DRAWN: &str = r#"(() => {
+  const wide = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/gu;
+  const rows = [], others = [];
+  for (const l of document.querySelectorAll(".pg .cm-line")) {
+    const text = l.textContent;
+    const line = { text, wide: (text.match(wide) || []).length, boxes: l.querySelectorAll(".pg-wide").length };
+    if (/^\s*\|/.test(text)) {
+      let last = null;
+      const walk = document.createTreeWalker(l, NodeFilter.SHOW_TEXT);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) if (n.data.includes("|")) last = [n, n.data.lastIndexOf("|")];
+      const r = document.createRange();
+      r.setStart(last[0], last[1]);
+      r.setEnd(last[0], last[1] + 1);
+      rows.push({ ...line, end: r.getBoundingClientRect().left });
+    } else if (line.wide) others.push(line);
+  }
+  return { rows, others };
+})()"#;
+
+/// The page for people that rulec draws reads in a narrow frame (rulec's DESIGN 15.246). In the
+/// playground's half of a window, its side is wide enough for the tables of the inputs and the
+/// outputs, which break a cell between words only and never set a heading or a name one character
+/// to a line, and the form to try the rule keeps its inputs inside it; on a phone the form, the
+/// picture it lights up and the rest of the document are one column, in that order, and nothing is
+/// wider than the page. The rules are the one the page alone opens on and the biggest of rulec's
+/// examples, in Japanese, which breaks a line between any two characters.
+#[test]
+fn the_page_for_people_reads_in_a_narrow_frame() {
+    let Some(chrome) = chrome() else {
+        return;
+    };
+    let projects = committed();
+    let mut pages = Vec::new();
+    for name in ["rulec/full.ja", "rulec/big.ja"] {
+        let p = projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}"));
+        let (file, rule) = p.files[0].clone();
+        let page = playground::doc(&ask_in("ja", &[(file.clone(), rule)], &file, None));
+        assert_eq!(page["html"]["code"], 0, "{name} draws no page");
+        pages.push((format!("/{name}/"), page["html"]["out"].as_str().unwrap().to_string()));
+    }
+    let base = format!("http://127.0.0.1:{}", serve(pages.clone()));
+    // the whole window, the playground's half of a window of 1400, and a phone
+    let sizes = [(1400, 860), (761, 748), (390, 844)];
+    let mut visits = Vec::new();
+    for (path, _) in &pages {
+        for (width, height) in sizes {
+            visits.push(Visit { width, height, ..Visit::to(format!("{base}{path}")) }.sleep(500).get(LAID_OUT));
+        }
+    }
+    let got = drive(&chrome, visits);
+    let mut looked = 0;
+    for (i, (path, _)) in pages.iter().enumerate() {
+        for (j, (width, _)) in sizes.iter().enumerate() {
+            let at = &got[i * sizes.len() + j][0];
+            let page = format!("the page for people of {path} at {width}px");
+            assert!(at["broken"].as_array().unwrap().is_empty(), "{page} sets a cell of its side one character to a line: {}", at["broken"]);
+            assert_eq!(at["over"], 0, "{page}: an input of the form to try the rule is wider than the form");
+            assert!(at["wide"].as_f64() <= at["vw"].as_f64(), "{page} is wider than the window: {} > {}", at["wide"], at["vw"]);
+            let (form, picture, rest) = (at["form"].as_f64().unwrap(), at["picture"].as_f64().unwrap(), at["rest"].as_f64().unwrap());
+            if *width < 720 {
+                assert!(form < picture && picture < rest, "{page} is not one column of the form, the picture and the rest, in that order: {form}, {picture}, {rest}");
+            } else {
+                assert!(at["side"].as_f64().unwrap() >= 320.0, "{page}: the side is {} wide, too narrow for its tables", at["side"]);
+                assert!(picture < rest, "{page} does not put the picture beside the side");
+            }
+            looked += 1;
+        }
+    }
+    eprintln!("compared: {looked} views of rulec's page for people, in Chrome, at three widths");
+}
+
+/// How the page for people is laid out: the cells of its side's tables set one character to a line,
+/// the inputs of the form wider than the form, how wide the document is against the window, where
+/// the form, the picture and the first table of the rest of the document begin on the page, and how
+/// wide the side is.
+const LAID_OUT: &str = r##"(() => {
+  const at = (q) => { const e = document.querySelector(q); return e ? e.getBoundingClientRect().top + scrollY : null; };
+  const broken = [];
+  for (const c of document.querySelectorAll(".app .side th, .app .side td")) {
+    const text = c.textContent.replace(/\s+/g, "");
+    if (text.length < 2) continue;
+    const r = document.createRange();
+    r.selectNodeContents(c);
+    if (new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size >= text.length) broken.push(text);
+  }
+  const form = document.querySelector("#try").getBoundingClientRect().right;
+  const over = [...document.querySelectorAll("#try-form input, #try-form select")].filter((e) => e.getBoundingClientRect().right > form + 0.5).length;
+  return {
+    broken, over,
+    vw: document.documentElement.clientWidth, wide: document.documentElement.scrollWidth,
+    form: at("#try"), picture: at(".app .stage"), rest: at('.app section[data-sec="inputs"]'),
+    side: document.querySelector(".app .side").getBoundingClientRect().width,
+  };
+})()"##;
 
 /// A small edit of the rule the page alone opens on, which it passes after: a fee of its table.
 fn from_fee(tag: &str) -> (&'static str, &'static str) {

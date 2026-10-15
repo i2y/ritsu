@@ -604,9 +604,10 @@ body.boarded { max-width: none; margin: 0; padding: 0; }
 body.boarded main { display: none; }
 .app { display: flex; height: 100vh; align-items: stretch; }
 /* A third of the window, but never more than a comfortable measure and never less than
-   the form needs. A fixed width takes over half of a narrow window — an MCP host's panel,
-   the playground's frame — and leaves the board nowhere to be. */
-.app .side { box-sizing: border-box; width: clamp(15rem, 34%, 26rem); flex: none; border-right: 1px solid var(--rc-edge); background: var(--rc-side); padding: 22px 24px; overflow-y: auto; }
+   the tables of the inputs and the outputs need. A fixed width takes over half of a narrow
+   window — an MCP host's panel, the playground's frame — and leaves the board nowhere to be;
+   a window too narrow for both puts one above the other (the end of this sheet). */
+.app .side { box-sizing: border-box; width: clamp(20rem, 34%, 26rem); flex: none; border-right: 1px solid var(--rc-edge); background: var(--rc-side); padding: 22px 24px; overflow-y: auto; }
 .app .split { flex: none; width: 6px; cursor: col-resize; background: var(--rc-split); }
 .app .split:hover, .app .split.on { background: var(--rc-split-on); }
 .app .board { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--rc-bg); }
@@ -631,7 +632,27 @@ body.boarded main { display: none; }
 .gcard .ex { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; color: var(--rc-ex); margin: 6px 0 0; padding: 5px 8px; background: var(--rc-ex-bg); border-radius: 5px; }
 .gcard table { margin: 10px 0 0; }
 .gcard th, .gcard td { padding: 3px 8px; white-space: nowrap; }
-.app .side table { width: 100%; }
+/* A cell of the side's tables breaks between words only. Japanese breaks between any two
+   characters, so a column squeezed to its narrowest set a heading or a name one character
+   to a line; the notes, the last column, are prose and break as prose does. A table that
+   still does not fit scrolls by itself, and the side does not. */
+.app .side table { display: block; width: auto; max-width: 100%; overflow-x: auto; }
+.app .side th { white-space: nowrap; }
+.app .side td { word-break: keep-all; overflow-wrap: break-word; }
+.app .side td:last-child { word-break: normal; }
+/* Too narrow for the side and the board side by side (a phone, a small frame): one column
+   the page scrolls, in the order a reader takes it. The form to try the rule, the picture
+   it lights up, and then the rest of the document. */
+@media (max-width: 719px) {
+  .app { flex-direction: column; height: auto; }
+  .app .side, .app .board { display: contents; }
+  .app .split, .app .hsplit { display: none; }
+  .app .side > * { order: 3; margin-left: 16px; margin-right: 16px; }
+  .app .side > #try { order: 1; margin: 16px; }
+  .app .stage { order: 2; flex: none; height: 70vh; padding: 16px; border-top: 1px solid var(--rc-edge-soft); border-bottom: 1px solid var(--rc-edge-soft); }
+  .app .cap { order: 2; padding: 10px 16px; border-top: 0; }
+  .app .dock { order: 2; height: auto; max-height: 60vh; padding: 12px 16px; }
+}
 "##;
 
 /// The board, built from the document the page already is. **Without this the page is that

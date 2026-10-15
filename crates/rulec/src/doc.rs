@@ -3283,11 +3283,12 @@ th, td { border: 1px solid var(--rc-line); padding: 2px 10px; text-align: left; 
 th { background: var(--rc-head); }
 tr.hit td { background: var(--rc-hit); }
 code { background: var(--rc-code); padding: 0 3px; }
-#try { border: 1px solid var(--rc-line); border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: var(--rc-panel); }
+#try { border: 1px solid var(--rc-line); border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: var(--rc-panel); container-type: inline-size; }
 #try h2 { margin-top: 0; }
-#try-form { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; align-items: center; max-width: 36rem; }
+#try-form { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; align-items: center; max-width: 36rem; }
 #try-form label { display: contents; }
-#try-form input, #try-form select { font: inherit; padding: 2px 6px; }
+#try-form input, #try-form select { font: inherit; padding: 2px 6px; min-width: 0; max-width: 100%; box-sizing: border-box; }
+@container (max-width: 20rem) { #try-form { grid-template-columns: minmax(0, 1fr); row-gap: 2px; } #try-form input, #try-form select { margin-bottom: 6px; } }
 #try-rows { margin: 10px 0; }
 #try-rows table { margin: 4px 0; }
 #try-rows input, #try-rows select, #try-rows button { font: inherit; padding: 2px 6px; }

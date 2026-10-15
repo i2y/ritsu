@@ -357,10 +357,18 @@ const COLOURS = cm.HighlightStyle.define([
 // A wide character takes two columns, as the languages count them when they line a table up (rulec's
 // `diag::char_width`: East Asian Width W and F, and ℃ and ℉, which every monospace face that has them
 // draws two columns wide). A monospace face seldom has the CJK characters, and the face the browser
-// falls back to for them does not draw them two columns wide, so each wide character is set in a box
-// two columns wide, and the `|` of a table written in Japanese line up.
+// falls back to for them does not draw them two columns wide, so each wide character of a table's row
+// (a line that starts with `|`) is set in a box two columns wide, and the `|` of a table written in
+// Japanese line up. On any other line it is left as the face draws it: the box is wider than the
+// character, and would set the characters of a name apart.
 const WIDE = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6\u2103\u2109\u{20000}-\u{2FFFD}\u{30000}-\u{3FFFD}]/gu;
-const wideBoxes = new cm.MatchDecorator({ regexp: WIDE, decoration: cm.Decoration.mark({ class: "pg-wide" }) });
+const WIDE_BOX = cm.Decoration.mark({ class: "pg-wide" });
+const wideBoxes = new cm.MatchDecorator({
+  regexp: WIDE,
+  // an edit is matched again over the whole of each line it touches, so a line that becomes a row
+  // gets its boxes, and one that stops being a row loses them
+  decoration: (m, view, at) => (/^\s*\|/.test(view.state.doc.lineAt(at).text) ? WIDE_BOX : null),
+});
 const COLUMNS = cm.ViewPlugin.fromClass(
   class {
     constructor(view) {
