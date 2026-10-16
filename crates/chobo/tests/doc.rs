@@ -1,15 +1,18 @@
 //! `chobo doc` draws what the checker and the reference interpreter know. Its Markdown for the
 //! examples is the page beside each of them (`doc.md`, `doc.ja.md`), which GitHub shows; for the
 //! books of tests/books and a book with warnings, it is word for word the golden files in
-//! tests/doc, as is the HTML of every example and test book. The HTML fetches nothing. Every step
-//! a page shows is what the reference interpreter left after it. Every Mermaid chart draws, in
-//! Mermaid 11 and 12 in headless Chrome; and in Chrome, a page shows the balances its data says,
-//! and lights up the transfers each step called.
+//! tests/doc, as is the HTML of every example and test book. chobo's site (website/chobo, at the
+//! root of ritsu's workspace) shows the HTML of each example, and the chart of the refunds on its
+//! home pages, as `doc` draws them now. The HTML fetches nothing. Every step a page shows is what
+//! the reference interpreter left after it. Every Mermaid chart draws, in Mermaid 11 and 12 in
+//! headless Chrome; and in Chrome, a page shows the balances its data says, and lights up the
+//! transfers each step called.
 //!
 //! Mermaid is in tools/mermaid (`npm ci --prefix tools/mermaid`); Chrome is found by ritsu-testkit
 //! (`RITSU_CHROME` or `CHOBO_CHROME`, else Google Chrome where macOS keeps it, else `google-chrome`
 //! or `chromium` on the PATH). A test that cannot find them says so and skips; read the skip lines.
-//! `CHOBO_BLESS=1` (or `RITSU_BLESS=1`) rewrites the golden files and the examples' pages.
+//! `CHOBO_BLESS=1` (or `RITSU_BLESS=1`) rewrites the golden files, the examples' pages and the
+//! site's pages of the examples; the site's chart is drawn anew by website/chobo/tools/make_chart.py.
 
 mod common;
 use ritsu_base::text::Lang;
@@ -97,6 +100,53 @@ fn html_matches_the_golden_files() {
     for p in pages() {
         if let Some(h) = &p.html {
             golden(h, &written(&p.book, p.lang, true));
+        }
+    }
+}
+
+/// chobo's site (website/chobo at the root of ritsu's workspace) shows each example as the page
+/// `chobo doc --format html` writes of it now, run where the crate is: the English site the English
+/// book (docs/doc/<name>.html), and the Japanese site the Japanese version, drawn with `--lang ja`
+/// (docs-ja/doc/<name>.html). It has no other page there.
+#[test]
+fn the_site_shows_the_pages_doc_writes_now() {
+    let mut drawn = Vec::new();
+    for dir in examples() {
+        let name = dir.file_name().unwrap().to_string_lossy().to_string();
+        for (lang, book, at) in [
+            (Lang::En, dir.join(format!("{name}.book")), site().join(format!("docs/doc/{name}.html"))),
+            (Lang::Ja, dir.join(format!("{name}.ja.book")), site().join(format!("docs-ja/doc/{name}.html"))),
+        ] {
+            golden(&at, &written(&book, lang, true));
+            drawn.push(at);
+        }
+    }
+    for d in ["docs/doc", "docs-ja/doc"] {
+        for e in std::fs::read_dir(site().join(d)).unwrap().flatten() {
+            assert!(drawn.contains(&e.path()), "website/chobo/{d} has {}, which is no example's page", e.file_name().to_string_lossy());
+        }
+    }
+    assert_eq!(drawn.len(), 8, "four examples, each in English and in Japanese");
+}
+
+/// The chart on the home pages of chobo's site (website/chobo/docs/images/chart*.svg, which
+/// website/chobo/tools/make_chart.py cuts out of a page) is the chart of how things move that
+/// `chobo doc --format html` draws of the refunds now, byte for byte. The script adds nothing but
+/// the colours and the background the page gives it (a `<style>` and a `<rect>` after its
+/// `<title>`) and the namespace a file of SVG names on its `<svg>`.
+#[test]
+fn the_chart_on_the_home_page_is_what_doc_draws() {
+    let added_from = "\n<style>\n";
+    let added_to = "<rect class=\"cb-bg\" width=\"100%\" height=\"100%\" rx=\"8\"/>";
+    for (book, lang, files) in [("examples/refunds/refunds.book", Lang::En, ["chart.svg", "chart-light.svg"]), ("examples/refunds/refunds.ja.book", Lang::Ja, ["chart-ja.svg", "chart-ja-light.svg"])] {
+        let page = written(&root().join(book), lang, true);
+        let start = page.find("<svg class=\"flow\"").expect("the page draws how things move");
+        let chart = &page[start..start + page[start..].find("</svg>").unwrap() + "</svg>".len()];
+        for f in files {
+            let text = std::fs::read_to_string(site().join("docs/images").join(f)).unwrap();
+            let (Some(from), Some(to)) = (text.find(added_from), text.find(added_to)) else { panic!("website/chobo/docs/images/{f} is not as make_chart.py writes it") };
+            let left = format!("{}{}", &text[..from], &text[to + added_to.len()..]).replacen(" xmlns=\"http://www.w3.org/2000/svg\"", "", 1);
+            assert!(left.strip_suffix('\n') == Some(chart), "website/chobo/docs/images/{f} is not the chart `chobo doc {book} --format html` draws now; run `python3 website/chobo/tools/make_chart.py <chobo>`");
         }
     }
 }

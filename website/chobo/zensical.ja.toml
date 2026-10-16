@@ -1,0 +1,119 @@
+[project]
+site_name = "chobo"
+site_url = "https://i2y.github.io/ritsu/chobo/ja/"
+site_description = "在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語。帳簿に勘定の下限と上限を書くと、どの振替も一度の書き込みの中でそれを守る。帳簿は PostgreSQL か TigerBeetle 向けにビルドし、呼び出すクライアントを TypeScript・Python・Go で出す。"
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh"
+
+repo_url = "https://github.com/i2y/ritsu"
+repo_name = "i2y/ritsu"
+edit_uri = "edit/main/website/chobo/docs-ja"
+
+docs_dir = "docs-ja"
+site_dir = "build/ja"
+use_directory_urls = true
+
+extra_css = ["stylesheets/extra.css"]
+
+# The same pages as the English site's, in the same order: chobo's tests/docs.rs holds the two navs
+# to each other, and to the pages docs/ and docs-ja/ hold.
+nav = [
+  { "ホーム" = "index.md" },
+  # ritsu's playground, from this site's root (/ritsu/chobo/ja/), on the book of this site's home page
+  { "ブラウザで試す" = "../../ja/playground/#project=chobo/refunds.ja" },
+  { "インストール" = "install.md" },
+  { "帳簿を書く" = "tour.md" },
+  { "何を検査するか" = "checks.md" },
+  { "シナリオを流す" = "scenarios.md" },
+  { "データベース向けのビルド" = "databases.md" },
+  { "お金と単位" = "units.md" },
+  { "人が読むページ" = "pages.md" },
+  { "ほかの言語と組み合わせる" = "together.md" },
+  { "例で見る" = "examples.md" },
+  { "エージェント向け" = "agents.md" },
+  { "どうやって確かめているか" = "assurance.md" },
+  { "設計" = "design.md" },
+  # chobo's own documents, which sync.sh copies in from crates/chobo/docs: the diagnostics in
+  # Japanese, the other three in English with a note that says so
+  { "リファレンス" = [
+    { "言語" = "reference.md" },
+    { "診断コード" = "codes.md" },
+    { "形式" = "formats.md" },
+    { "出力先" = "targets.md" },
+  ] },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/ritsu/chobo/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/ritsu/chobo/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+# Search, the copy button, previous / next and "edit this page" come from the theme's own
+# Japanese pack; without this, the chrome stays English.
+language = "ja"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer     previous / next at the foot of every page, so the site reads in order
+# navigation.top        a back-to-top button on long pages
+# navigation.tracking   the address bar follows the section being read
+# content.code.copy     a copy button on every code block
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
+logo = "images/logo.svg"
+favicon = "images/favicon.svg"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "deep orange"
+toggle.icon = "lucide/moon"
+toggle.name = "ダークモードにする"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "deep orange"
+toggle.icon = "lucide/sun"
+toggle.name = "ライトモードにする"
+
+# Unicode-preserving heading anchors, so that a Japanese heading gets the anchor GitHub gives it.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+# Colours a ```book fence. Naming the module here is how it gets imported, and importing it is
+# what registers the lexer with Pygments; build.sh puts tools/ on PYTHONPATH.
+[project.markdown_extensions.booklexer]
+
+[project.markdown_extensions.pymdownx.details]
+# A ```mermaid fence is drawn as a Mermaid chart: the picture `chobo doc` gives a pull request.
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"

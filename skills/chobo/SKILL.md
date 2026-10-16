@@ -234,4 +234,6 @@ than the reference interpreter.
 | [codes.md](codes.md) | every diagnostic code, as `ritsu chobo explain --all` prints it |
 
 They are copies of the pages under `crates/chobo/docs/` in <https://github.com/i2y/ritsu>, where
-the examples and their pages are too.
+the examples and their pages are too. The site <https://i2y.github.io/ritsu/chobo/> has them as
+well, beside a walk through the language and the examples drawn as pages for people, in English and
+Japanese.

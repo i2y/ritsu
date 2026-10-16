@@ -589,7 +589,7 @@ native binary.
 - `crates/ritsu-*` — the shared base, units, ports, project reading, the checks across
   languages, the `.proto` reader, the emitters, the browser build
 - `proofs/` — the Lean models
-- `website/` — the site: ritsu's pages and the playground, with rulec's site in `website/rulec` and dandori's in `website/dandori`
+- `website/` — the site: ritsu's pages and the playground, with rulec's site in `website/rulec`, dandori's in `website/dandori` and chobo's in `website/chobo`
 - `DESIGN.md`, `PLAN.md` — the design of the whole (in Japanese)
 - `SECURITY.md` — how to report a vulnerability
 

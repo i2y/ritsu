@@ -1,0 +1,18 @@
+build/
+.cache/
+
+# Copied in by sync.sh from chobo's own documents. One source of truth: edit crates/chobo/docs,
+# not these.
+docs/reference.md
+docs/formats.md
+docs/targets.md
+docs/codes.md
+docs-ja/reference.md
+docs-ja/formats.md
+docs-ja/targets.md
+docs-ja/codes.md
+docs-ja/stylesheets/
+docs-ja/images/
+
+# Left behind by the scripts importing tools/booklexer.py.
+tools/__pycache__/

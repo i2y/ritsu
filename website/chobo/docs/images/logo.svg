@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="chobo">
+  <!-- Three balances standing on a bound: the line under them is the `at least` no transfer
+       takes them past. The header takes the page's background, near-white in one scheme and
+       near-black in the other, and the logo is an <img>, so both colours clear 3:1 against both
+       (the slate 4.6:1 on white and 4.0:1 on #12151c, the vermilion 3.8:1 and 4.8:1). -->
+  <rect x="8" y="20" width="8" height="15" rx="1.5" fill="#6b7689"/>
+  <rect x="20" y="9" width="8" height="26" rx="1.5" fill="#6b7689"/>
+  <rect x="32" y="26" width="8" height="9" rx="1.5" fill="#6b7689"/>
+  <path d="M5 40.5H43" stroke="#dc5a24" stroke-width="3.4" stroke-linecap="round"/>
+</svg>

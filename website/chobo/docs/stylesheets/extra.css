@@ -1,0 +1,240 @@
+/* chobo site styling, in the family of rulec's and dandori's sites: a hero that is real text
+   rather than a picture of text, the chart chobo draws of a book, and a book shown beside what
+   the checker says of it. */
+
+/* Code is set in a face whose Japanese is exactly twice as wide as its Latin, so that a book
+   with Japanese names, and what the checker prints of it, lines up. M PLUS 1 Code has Latin at
+   0.5em and Japanese at 1em; BIZ UDGothic, in the same proportions, draws what M PLUS 1 Code
+   lacks. */
+@import url("https://fonts.googleapis.com/css2?family=M+PLUS+1+Code:wght@400;700&family=BIZ+UDGothic:wght@400;700&display=swap");
+
+/* The theme tightens its text, and code inherited it, which pulled a wide character apart
+   from a narrow one. */
+.md-typeset pre,
+.md-typeset code,
+.md-typeset kbd {
+  letter-spacing: 0;
+}
+
+:root {
+  --md-code-font: "M PLUS 1 Code", "BIZ UDGothic";
+  --cb-ink: #0f1417;
+  --cb-ink-2: #090c0e;
+  --cb-mark: #d9531e;
+  --cb-mark-light: #f59a6b;
+  --cb-mark-dark: #b8400d;
+}
+
+/* ---- hero ------------------------------------------------------- */
+
+.cb-hero {
+  position: relative;
+  margin: 0 0 2.4rem;
+  padding: 2.6rem 2.4rem 2.4rem;
+  border-radius: 1rem;
+  background:
+    radial-gradient(120% 140% at 14% 0%, #241b17 0%, var(--cb-ink) 46%, var(--cb-ink-2) 100%);
+  color: #fff;
+  overflow: hidden;
+}
+
+/* The ruled lines of a ledger, kept as CSS so that they scale with the block. */
+.cb-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, .055) 1px, transparent 1px);
+  background-size: 100% 28px;
+  mask-image: radial-gradient(110% 100% at 50% 0%, #000 25%, transparent 78%);
+  pointer-events: none;
+}
+
+.cb-hero > * { position: relative; z-index: 1; }
+
+.cb-hero__mark {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: 0 0 1.1rem;
+  display: block;
+}
+
+/* The wordmark is the command, set in the face the site sets code in. */
+.cb-hero h1 {
+  margin: 0;
+  color: #fff;
+  font-family: var(--md-code-font-family, SFMono-Regular, Consolas, Menlo, monospace);
+  font-size: 2.9rem;
+  line-height: 1.05;
+  letter-spacing: -.045em;
+  font-weight: 700;
+}
+
+.cb-hero__tag {
+  margin: .5rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--cb-mark-light);
+}
+
+.cb-hero__lede {
+  margin: 1.15rem 0 0;
+  max-width: 44rem;
+  font-size: .82rem;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, .82);
+}
+
+.cb-hero__lede strong { color: #fff; }
+
+.md-typeset .cb-hero code {
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .16);
+  padding: .1em .4em;
+}
+
+.cb-hero__cta {
+  margin: 1.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+}
+
+.cb-hero__cta .md-button {
+  margin: 0;
+  border-radius: 2rem;
+  border-color: rgba(255, 255, 255, .28);
+  color: #fff;
+  padding: .42rem 1.15rem;
+  font-size: .72rem;
+}
+
+.cb-hero__cta .md-button:hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .45);
+  color: #fff;
+}
+
+.cb-hero__cta .md-button--primary {
+  background: var(--cb-mark);
+  border-color: var(--cb-mark);
+  color: #fff;
+}
+
+.cb-hero__cta .md-button--primary:hover {
+  background: var(--cb-mark-light);
+  border-color: var(--cb-mark-light);
+  color: var(--cb-ink);
+}
+
+@media screen and (max-width: 44.9em) {
+  .cb-hero { padding: 2rem 1.4rem 1.8rem; }
+  .cb-hero h1 { font-size: 2.3rem; }
+  .cb-hero__tag { font-size: 1.1rem; }
+}
+
+/* ---- the hero on a light page ------------------------------------ */
+/* On the light scheme the same block is drawn in paper and ink: the ruled lines stay, and so
+   does the vermilion. */
+
+[data-md-color-scheme="default"] .cb-hero {
+  background:
+    radial-gradient(120% 140% at 14% 0%, #fff 0%, #fdf8f4 45%, #f6ece4 100%);
+  color: var(--cb-ink);
+  border: 1px solid #efe1d6;
+}
+
+[data-md-color-scheme="default"] .cb-hero::after {
+  background-image: linear-gradient(rgba(15, 20, 23, .06) 1px, transparent 1px);
+}
+
+[data-md-color-scheme="default"] .cb-hero h1 { color: var(--cb-ink); }
+[data-md-color-scheme="default"] .cb-hero__tag { color: var(--cb-mark-dark); }
+[data-md-color-scheme="default"] .cb-hero__lede { color: rgba(15, 20, 23, .78); }
+[data-md-color-scheme="default"] .cb-hero__lede strong { color: var(--cb-ink); }
+
+[data-md-color-scheme="default"] .md-typeset .cb-hero code {
+  background: rgba(15, 20, 23, .06);
+  color: var(--cb-ink);
+  border: 1px solid rgba(15, 20, 23, .12);
+}
+
+[data-md-color-scheme="default"] .cb-hero__cta .md-button {
+  border-color: rgba(15, 20, 23, .22);
+  color: var(--cb-ink);
+}
+
+[data-md-color-scheme="default"] .cb-hero__cta .md-button:hover {
+  background: rgba(15, 20, 23, .06);
+  border-color: rgba(15, 20, 23, .4);
+  color: var(--cb-ink);
+}
+
+[data-md-color-scheme="default"] .cb-hero__cta .md-button--primary,
+[data-md-color-scheme="default"] .cb-hero__cta .md-button--primary:hover {
+  color: #fff;
+}
+
+[data-md-color-scheme="default"] .cb-hero__cta .md-button--primary:hover {
+  background: var(--cb-mark-dark);
+  border-color: var(--cb-mark-dark);
+}
+
+/* ---- the chart chobo draws of a book ------------------------------- */
+/* It is drawn at its own size: below the width where its labels stop being legible, it scrolls
+   sideways in its own box rather than shrink, and the page itself never scrolls sideways. */
+.cb-chart { overflow-x: auto; }
+.md-typeset .cb-chart img { max-width: none; }
+
+/* ---- a row: a book on the left, the point on the right ------------- */
+/* Below the theme's own breakpoint the two stack, the book first. */
+
+.cb-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 1.4rem;
+  align-items: center;
+  margin: 1.8rem 0;
+}
+.cb-row + .cb-row { border-top: .05rem solid var(--md-default-fg-color--lightest); padding-top: 1.8rem; }
+.md-typeset .cb-row h3 { margin: 0 0 .4rem; font-size: 1.05rem; line-height: 1.35; }
+.md-typeset .cb-row p { margin: .4rem 0 0; }
+.md-typeset .cb-row .highlight { margin: 0; }
+.md-typeset .cb-row pre > code { font-size: .62rem; line-height: 1.5; }
+
+.cb-row--flip { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+.cb-row--flip > :first-child { order: 2; }
+
+@media screen and (max-width: 59.9375em) {
+  .cb-row, .cb-row--flip { grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  .cb-row--flip > :first-child { order: 0; }
+}
+
+/* ---- what the tool prints, shown as itself ------------------------- */
+/* A diagnostic or a run is quoted verbatim, so it gets a terminal's colours rather than the
+   page's. */
+
+.md-typeset .cb-term > .highlight > pre > code,
+.md-typeset pre.cb-term > code {
+  background: var(--cb-ink);
+  color: #dfe6e8;
+}
+
+/* ---- rhythm -------------------------------------------------------- */
+
+.md-typeset h2 {
+  margin-top: 2.6rem;
+  letter-spacing: -.01em;
+}
+
+.md-typeset hr { margin: 2.6rem 0; }
+
+/* A picture drawn for one colour scheme names it in the fragment. The theme ships only half of
+   that pair, so the other half is written here. */
+[data-md-color-scheme="slate"] .md-typeset img[src$="#only-light"] {
+  display: none;
+}
+
+/* The mark in the hero carries its own background. */
+.cb-hero__mark { border: 0; padding: 0; background: none; box-shadow: none; }

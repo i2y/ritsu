@@ -1,9 +1,10 @@
 //! `chobo api`: how to call the book, what each operation can be refused with, and the life
-//! of a hold as a state machine, as JSON (DESIGN 5). A tool that reads it, dandori among them,
-//! needs nothing but this output.
+//! of a hold as a state machine, as JSON (DESIGN 5), for a tool outside ritsu, which needs
+//! nothing but this output. The languages of ritsu, dandori among them, ask the book through
+//! ritsu's ports instead (`src/ports.rs`).
 //!
-//! The machine is written with the keys dandori's `src/rulec.rs` reads from rulec's `api`
-//! and `certificate` (`machine()`), so that the same reader takes a hold of chobo's.
+//! The machine is written with the keys of the machine rulec's `api` and `certificate` write,
+//! so that a reader of one takes a hold of chobo's.
 
 use crate::check;
 use crate::ids;

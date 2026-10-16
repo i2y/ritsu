@@ -31,6 +31,10 @@ transfer 返金(申請: string, 注文: string, 額: 円)
 
 キーワードは英語で、勘定や振替の名前は日本語でも書けます。名前は帳簿（ちょうぼ）から取りました。
 
+**ドキュメント：<https://i2y.github.io/ritsu/chobo/ja/>**（英語は <https://i2y.github.io/ritsu/chobo/>）。ページは、このリポジトリの [website/chobo/docs-ja](../../website/chobo/docs-ja) と [website/chobo/docs](../../website/chobo/docs) でも読めます。
+
+**ブラウザで試す：[i2y.github.io/ritsu/ja/playground](https://i2y.github.io/ritsu/ja/playground/#project=chobo/refunds.ja)**。chobo を含む ritsu を wasm32 にコンパイルして、ページの中で動かします。例の帳簿でも、書き換えた帳簿でも、検査、二つのデータベース向けのビルド、`chobo doc` を試せます。どこにも何も送りません。
+
 ## 検査が言うこと
 
 動かす前に、`chobo check` が、振替の種類と操作ごとに、拒否されうる理由を並べます。境界に付けた理由のほかに、chobo が決めている理由もあります。同じキーで中身の違う二度目、取り消したあとの確定、期限が切れたあとの確定などです。
@@ -82,7 +86,7 @@ examples/refunds/refunds.ja.book (more: 30000 円の売上に 20000 円の返金
 …
 ```
 
-先に処理された方が押さえられ、もう一方は拒否されます。残りの 10000 円の返金は、どちらの結果でも通ります。データベースの答えはこのどちらかでなければならず、テストがそれを確かめています。
+先に処理された方が押さえられ、もう一方は拒否されます。残りの 10000 円の返金は、どちらの結果でも通ります。データベースが返す結果はこのどちらかでなければならず、テストがそれを確かめています。
 
 ## 税込と税抜
 
@@ -110,7 +114,7 @@ $ chobo build examples/refunds/refunds.ja.book --target postgres --out db
 
 ## 経理や運用の人に見せる
 
-`chobo doc` は、帳簿を、経理や運用の人が読むページにします。載るのは、勘定と境界、勘定のあいだの流れの図、振替ごとの移動とキーと操作ごとの拒否されうる理由、仮押さえのライフサイクル、そしてシナリオごとの、ステップのたびの残高です。GitHub が描く Mermaid の図を入れた Markdown か、一つの HTML で出します。HTML では図を chobo が自分で描き、シナリオを一ステップずつ進めて見られます。`--lang ja` で日本語になります。例の横には、それぞれのページを置いてあります。たとえば [返金](examples/refunds/doc.ja.md) と、その英語の版の [refunds](examples/refunds/doc.md) です。
+`chobo doc` は、帳簿を、経理や運用の人が読むページにします。載るのは、勘定と境界、勘定のあいだの流れの図、振替ごとの移動とキーと操作ごとの拒否されうる理由、仮押さえのライフサイクル、そしてシナリオごとの、ステップのたびの残高です。GitHub が描く Mermaid の図を入れた Markdown か、一つの HTML で出します。HTML では図を chobo が自分で描き、シナリオを一ステップずつ進めて見られます。`--lang ja` で日本語になります。例の横には、それぞれのページを置いてあります。たとえば [返金](examples/refunds/doc.ja.md) と、その英語の版の [refunds](examples/refunds/doc.md) です。サイトでは、例ごとに一つの HTML のページを開けます（たとえば[返金](https://i2y.github.io/ritsu/chobo/ja/doc/refunds.html)）。
 
 ## AI エージェント向け
 
@@ -165,12 +169,10 @@ PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch
 まだ始めたばかりです。まだやっていないことは次のとおりです。
 
 - 残高のある勘定の種類について、境界を変えること。いまは新しい勘定の種類を作り、残高を移す振替を書きます。
-- 規則から受け取る額が、入れる先の単位と同じ税込か税抜かを確かめること（単位は、もう区別を持っています）。
-- dandori の側。帳簿の振替をタスクとして呼び、仮押さえを案件として追うワークフロー（`chobo api` は、そのためのステートマシンを出しています）。
 - PostgreSQL と TigerBeetle のほかのデータベース。
 - TigerBeetle を本番の構成（レプリカ六つ）で動かすこと（テストは `--development` で立てたレプリカ一つで流します）と、キーから作る ID でどれだけ遅くなるかの測定。
 - 勘定が受けた記録や振替を読む操作。
-- TigerBeetle の答えが参照インタプリタと違う二つの場合をそろえること（[docs/targets.md](docs/targets.md) に書いてあります）。
+- TigerBeetle の結果が参照インタプリタと違う二つの場合をそろえること（[docs/targets.md](docs/targets.md) に書いてあります）。
 
 設計と、決めたこと、残したことは [DESIGN.md](DESIGN.md) にあります。
 

@@ -662,6 +662,78 @@
       ]
     },
     {
+      "name": "chobo/inventory",
+      "group": "chobo",
+      "lang": "en",
+      "open": "inventory.book",
+      "files": [
+        ["inventory.book","crates/chobo/examples/inventory/inventory.book"]
+      ]
+    },
+    {
+      "name": "chobo/points",
+      "group": "chobo",
+      "lang": "en",
+      "open": "points.book",
+      "files": [
+        ["points.book","crates/chobo/examples/points/points.book"]
+      ]
+    },
+    {
+      "name": "chobo/refunds",
+      "group": "chobo",
+      "lang": "en",
+      "open": "refunds.book",
+      "files": [
+        ["refunds.book","crates/chobo/examples/refunds/refunds.book"]
+      ]
+    },
+    {
+      "name": "chobo/marketplace",
+      "group": "chobo",
+      "lang": "en",
+      "open": "marketplace.book",
+      "files": [
+        ["marketplace.book","crates/chobo/examples/marketplace/marketplace.book"]
+      ]
+    },
+    {
+      "name": "chobo/inventory.ja",
+      "group": "chobo",
+      "lang": "ja",
+      "open": "inventory.ja.book",
+      "files": [
+        ["inventory.ja.book","crates/chobo/examples/inventory/inventory.ja.book"]
+      ]
+    },
+    {
+      "name": "chobo/points.ja",
+      "group": "chobo",
+      "lang": "ja",
+      "open": "points.ja.book",
+      "files": [
+        ["points.ja.book","crates/chobo/examples/points/points.ja.book"]
+      ]
+    },
+    {
+      "name": "chobo/refunds.ja",
+      "group": "chobo",
+      "lang": "ja",
+      "open": "refunds.ja.book",
+      "files": [
+        ["refunds.ja.book","crates/chobo/examples/refunds/refunds.ja.book"]
+      ]
+    },
+    {
+      "name": "chobo/marketplace.ja",
+      "group": "chobo",
+      "lang": "ja",
+      "open": "marketplace.ja.book",
+      "files": [
+        ["marketplace.ja.book","crates/chobo/examples/marketplace/marketplace.ja.book"]
+      ]
+    },
+    {
       "name": "sekisho/refunds",
       "group": "sekisho",
       "lang": "en",
@@ -693,6 +765,14 @@
     }
   ],
   "texts": {
+    "crates/chobo/examples/inventory/inventory.book": "# Stock held for an order: within 30 minutes it ships or is cancelled.\nbook inventory v1\ndescription \"Stock per SKU. A delivery adds to it, an order holds what it takes for 30 minutes, shipping posts the hold, cancelling voids it, and a return puts the goods back on the shelves\"\n\nunit pcs\n\naccount stock(sku: string) : pcs\n  description \"what is on the shelves\"\n  at least 0 refused as out_of_stock\naccount suppliers : pcs outside\naccount customers : pcs outside\n\ntransfer receive(delivery: string, sku: string, qty: pcs)\n  key delivery, sku\n  move qty from suppliers to stock(sku)\n\ntransfer reserve(order: string, sku: string, qty: pcs)\n  description \"posted when the order ships, voided when it is cancelled\"\n  key order, sku\n  pending expires after 30 minutes\n  move qty from stock(sku) to customers\n\ntransfer take_back(return_id: string, sku: string, qty: pcs)\n  description \"what a customer sent back, on the shelves again\"\n  key return_id, sku\n  move qty from customers to stock(sku)\n",
+    "crates/chobo/examples/inventory/inventory.ja.book": "# 注文のために在庫を押さえる。30 分のうちに出荷するか、キャンセルする\nbook 在庫の引当 v1\ndescription \"SKU ごとの在庫。入荷で増え、注文のために 30 分押さえ、出荷で確定し、キャンセルで取り消す。返品は棚に戻す\"\n\nunit 個\n\naccount 在庫(sku: string) : 個\n  description \"倉庫の棚にある数\"\n  at least 0 refused as 在庫切れ\naccount 仕入先 : 個 outside\naccount 客 : 個 outside\n\ntransfer 入荷(納品書: string, sku: string, 数: 個)\n  key 納品書, sku\n  move 数 from 仕入先 to 在庫(sku)\n\ntransfer 引当(注文: string, sku: string, 数: 個)\n  description \"出荷で確定し、キャンセルで取り消す\"\n  key 注文, sku\n  pending expires after 30 minutes\n  move 数 from 在庫(sku) to 客\n\ntransfer 返品(返品番号: string, sku: string, 数: 個)\n  description \"客から返ってきた品を棚に戻す\"\n  key 返品番号, sku\n  move 数 from 客 to 在庫(sku)\n",
+    "crates/chobo/examples/marketplace/marketplace.book": "# A sale splits what the buyer paid between the shop and the marketplace's fee, in amounts the caller works out.\nbook marketplace v1\ndescription \"The marketplace keeps a balance for each shop. A sale splits what the buyer paid between the shop's balance and the marketplace's fee, in amounts the caller works out (a rule decides the fee). A payout is held until the bank confirms it, and a refund takes both parts back\"\n\nunit USD scale 2\n\naccount shop_balance(shop: string) : USD\n  description \"what the marketplace owes the shop\"\n  at least 0 refused as insufficient_balance\naccount buyers : USD outside\naccount fees : USD outside\naccount bank : USD outside\n\ntransfer sale(order: string, shop: string, to_shop: USD, fee: USD)\n  description \"to_shop and fee add up to what the buyer paid; the caller works out the fee\"\n  key order\n  move to_shop from buyers to shop_balance(shop)\n  move fee from buyers to fees\n\ntransfer refund(refund_id: string, shop: string, to_shop: USD, fee: USD)\n  description \"gives back the fee and the shop's part, both or neither\"\n  key refund_id\n  move fee from fees to buyers\n  move to_shop from shop_balance(shop) to buyers\n\ntransfer payout(payout_id: string, shop: string, amount: USD)\n  description \"held when the bank transfer starts: posted when the bank confirms it, voided when it fails\"\n  key payout_id\n  pending never expires\n  move amount from shop_balance(shop) to bank\n",
+    "crates/chobo/examples/marketplace/marketplace.ja.book": "# 売上は、買い手が払った額を店の取り分とマーケットプレイスの手数料に分ける。額は呼ぶ側が計算して渡す\nbook マーケットプレイス v1\ndescription \"店ごとに売上金を持つ。売上は、買い手が払った額を店の売上金と手数料に分ける（額は呼ぶ側が計算して渡す。手数料は規則が決める）。振込は銀行が受け付けるまで押さえ、返金は両方を戻す\"\n\nunit 円\n\naccount 売上金(店: string) : 円\n  description \"マーケットプレイスが店に払う分\"\n  at least 0 refused as 売上金不足\naccount 買い手 : 円 outside\naccount 手数料収入 : 円 outside\naccount 銀行 : 円 outside\n\ntransfer 売上(注文: string, 店: string, 店の取り分: 円, 手数料: 円)\n  description \"店の取り分と手数料を足すと、買い手が払った額になる。手数料は呼ぶ側が計算する\"\n  key 注文\n  move 店の取り分 from 買い手 to 売上金(店)\n  move 手数料 from 買い手 to 手数料収入\n\ntransfer 返金(返金番号: string, 店: string, 店の取り分: 円, 手数料: 円)\n  description \"手数料と店の取り分を、両方とも戻すか、どちらも戻さない\"\n  key 返金番号\n  move 手数料 from 手数料収入 to 買い手\n  move 店の取り分 from 売上金(店) to 買い手\n\ntransfer 振込(振込番号: string, 店: string, 額: 円)\n  description \"銀行振込を始めたときに押さえる。銀行が受け付けたら確定し、失敗したら取り消す\"\n  key 振込番号\n  pending never expires\n  move 額 from 売上金(店) to 銀行\n",
+    "crates/chobo/examples/points/points.book": "# Points a purchase earns wait out its return period; points a checkout spends wait for the payment.\nbook points v1\ndescription \"Loyalty points per member. What a purchase earns is held until its return period is over, what a checkout spends is held for 15 minutes while the payment goes through, and what is left unused at the end of a period lapses\"\n\nunit pt\n\naccount points(member: string) : pt\n  at least 0 refused as not_enough_points\n  at most 1000000 refused as points_cap\naccount issued : pt outside\naccount redeemed : pt outside\naccount lapsed : pt outside\n\ntransfer earn(purchase: string, member: string, pts: pt)\n  description \"posted when the return period is over, voided when the purchase is returned\"\n  key purchase\n  pending never expires\n  move pts from issued to points(member)\n\ntransfer spend(checkout: string, member: string, pts: pt)\n  description \"posted when the payment goes through, voided when it fails\"\n  key checkout\n  pending expires after 15 minutes\n  move pts from points(member) to redeemed\n\ntransfer lapse(member: string, period: string, pts: pt)\n  description \"what the member did not use in the period\"\n  key member, period\n  move pts from points(member) to lapsed\n",
+    "crates/chobo/examples/points/points.ja.book": "# 購入で付くポイントは返品の期間が過ぎるまで押さえ、会計で使うポイントは支払いが通るまで押さえる\nbook ポイント v1\ndescription \"会員ごとのポイント。購入で付く分は返品の期間が過ぎるまで押さえ、会計で使う分は支払いが通るまで 15 分押さえる。期間の終わりに使われずに残った分は失効する\"\n\nunit pt\n\naccount ポイント(会員: string) : pt\n  at least 0 refused as ポイント不足\n  at most 1000000 refused as 上限超え\naccount 発行 : pt outside\naccount 利用済み : pt outside\naccount 失効済み : pt outside\n\ntransfer 付与(購入: string, 会員: string, 数: pt)\n  description \"返品の期間が過ぎたら確定し、返品されたら取り消す\"\n  key 購入\n  pending never expires\n  move 数 from 発行 to ポイント(会員)\n\ntransfer 利用(会計: string, 会員: string, 数: pt)\n  description \"支払いが通ったら確定し、通らなかったら取り消す\"\n  key 会計\n  pending expires after 15 minutes\n  move 数 from ポイント(会員) to 利用済み\n\ntransfer 失効(会員: string, 期間: string, 数: pt)\n  description \"その期間に使われなかった分\"\n  key 会員, 期間\n  move 数 from ポイント(会員) to 失効済み\n",
+    "crates/chobo/examples/refunds/refunds.book": "# A refund never exceeds the sale: what is left to refund on each order is an account of its own.\nbook refunds v1\ndescription \"What is left to refund on each order is an account of its own: the sale adds to it, a refund takes from it, and it never goes below 0. A refund is held while it waits for approval\"\n\nunit USD scale 2\n\naccount refundable(order: string) : USD\n  description \"what is left to refund on the order\"\n  at least 0 refused as refund_exceeds_sale\naccount sales : USD outside\naccount refunded : USD outside\n\ntransfer sale(order: string, amount: USD)\n  key order\n  move amount from sales to refundable(order)\n\ntransfer refund(request: string, order: string, amount: USD)\n  description \"held while it waits for approval: posted when it is approved, voided when it is turned down\"\n  key request\n  pending expires after 7 days\n  move amount from refundable(order) to refunded\n",
+    "crates/chobo/examples/refunds/refunds.ja.book": "# 返金は売上を超えない。注文ごとの「返金できる残り」を勘定にして、下限を 0 にする\nbook 返金 v1\ndescription \"注文ごとに、返金できる残りを勘定にする。売上で増え、返金で減り、0 より下にはならない。返金は承認を待つあいだ押さえる\"\n\nunit 円\n\naccount 返金できる残り(注文: string) : 円\n  description \"その注文でまだ返金できる額\"\n  at least 0 refused as 返金超過\naccount 売上 : 円 outside\naccount 返金済み : 円 outside\n\ntransfer 売上計上(注文: string, 額: 円)\n  key 注文\n  move 額 from 売上 to 返金できる残り(注文)\n\ntransfer 返金(申請: string, 注文: string, 額: 円)\n  description \"承認を待つあいだ押さえる。承認されたら確定し、却下されたら取り消す\"\n  key 申請\n  pending expires after 7 days\n  move 額 from 返金できる残り(注文) to 返金済み\n",
     "crates/dandori/examples/fulfillment/arrange_delivery.flow": "workflow arrange_delivery v1\ndescription \"Book the delivery of an order with the carrier the urgency rule chose, and answer with its tracking number. Written once for every platform, since its calls are HTTP ones that dandori writes for each (`connection` is what Step Functions needs of them): each version of fulfillment runs it as its child, a child workflow on Temporal, an invoked durable function on Lambda durable functions, a workflow of this WorkflowTemplate on Argo, a nested execution on Step Functions\"\n\nenum carrier = standard | next_day\n\nrecord Booking\n  tracking_number : string\n\ninputs\n  order_id  : string\n  carrier   : carrier\n  recipient : string?\n  extra     : json\n\noutputs\n  tracking_number : string\n\n# The next-day carrier sends a van for the parcels; on a busy day it has no van left.\ntask book_next_day(order_id: string, recipient: string?) -> Booking\n  http POST \"https://next-day.example.com/v1/pickups\"\n  connection \"arn:aws:events:ap-northeast-1:123456789012:connection/next-day/2a3b4c\"\n  errors no_van = 409\n  key\n  retry 2 times every 5 seconds\n\ntask book_standard(order_id: string, recipient: string?, extra: json) -> Booking\n  http POST \"https://post.example.com/v1/parcels\"\n  connection \"arn:aws:events:ap-northeast-1:123456789012:connection/post/3b4c5d\"\n  key\n  retry 2 times every 5 seconds\n\nflow\n  match carrier\n    next_day =>\n      let booked = book_next_day(order_id: order_id, recipient: recipient)\n        on no_van => fail NoVan \"No next-day van is left for order {order_id}\"\n      succeed tracking_number = booked.tracking_number\n    standard =>\n      let booked = book_standard(order_id: order_id, recipient: recipient, extra: extra)\n      succeed tracking_number = booked.tracking_number\n",
     "crates/dandori/examples/fulfillment/arrange_delivery.ja.flow": "workflow 配送の手配 v1\ndescription \"注文の配送を、急ぎの規則が選んだ便で頼み、追跡番号を返す。呼び出しはどれも、dandori がプラットフォームごとに生成する HTTP の呼び出しなので、すべてのプラットフォーム向けにこの一つだけを書く（`connection` は Step Functions のためのもの）。引当と発送のどの版も、これを子として走らせる。Temporal では子ワークフロー、Lambda durable functions では invoke する durable function、Argo ではこの WorkflowTemplate のワークフロー、Step Functions ではネストした実行になる\"\n\nenum 便 = 通常便 | 翌日便\n\nrecord 集荷\n  追跡番号 : string\n\ninputs\n  注文ID : string\n  便     : 便\n  宛名   : string?\n  付帯   : json\n\noutputs\n  追跡番号 : string\n\n# 翌日便の運送会社は、荷物を取りに車を出す。忙しい日には、空いている車がないことがある。\ntask 翌日便を頼む(注文ID: string, 宛名: string?) -> 集荷\n  http POST \"https://next-day.example.com/v1/pickups\"\n  connection \"arn:aws:events:ap-northeast-1:123456789012:connection/next-day/2a3b4c\"\n  errors 空きなし = 409\n  key\n  retry 2 times every 5 seconds\n\ntask 通常便を頼む(注文ID: string, 宛名: string?, 付帯: json) -> 集荷\n  http POST \"https://post.example.com/v1/parcels\"\n  connection \"arn:aws:events:ap-northeast-1:123456789012:connection/post/3b4c5d\"\n  key\n  retry 2 times every 5 seconds\n\nflow\n  match 便\n    翌日便 =>\n      let 受付 = 翌日便を頼む(注文ID: 注文ID, 宛名: 宛名)\n        on 空きなし => fail 翌日便の空きなし \"注文 {注文ID} の翌日便の車が空いていません\"\n      succeed 追跡番号 = 受付.追跡番号\n    通常便 =>\n      let 受付 = 通常便を頼む(注文ID: 注文ID, 宛名: 宛名, 付帯: 付帯)\n      succeed 追跡番号 = 受付.追跡番号\n",
     "crates/dandori/examples/fulfillment/aws/fulfillment.flow": "workflow fulfillment v1 implements shop.FulfillmentService\ndescription \"Reserve stock for each line of an order, arrange the delivery, wait for the warehouse to pack it, and then tell the customer. The lines are reserved side by side, and when one is short, what was reserved is released. Written for AWS, for Step Functions and Lambda durable functions: the rule is a Lambda function, the warehouse is called by Connect through an EventBridge connection, the delivery is arrange_delivery.flow started by the ARN it is deployed as, the packing request goes to SQS with the task token in the message, the customer hears by SNS, and the audit log is a Lambda function. The other platforms run it too, with the calls dandori writes for each\"\n\nuse rule urgency from \"../../order/rules/urgency.rule\"\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:urgency\"\nuse proto shop from \"../specs/fulfillment.proto\"\nuse proto warehouse from \"../specs/warehouse.proto\"\n  url \"https://warehouse.example.com\"\nuse smithy sns from \"../specs/sns.json\"\nuse smithy sqs from \"../specs/sqs.json\"\n\nrecord Line\n  sku      : string\n  quantity : int\n\nrecord Gift\n  recipient : string\n  message   : string?\n\nrecord Order\n  id     : string\n  member : bool\n  amount : money[JPY, incl_tax]  range >=0 <=1000000\n  lines  : list[Line]\n  gift   : Gift?\n  extra  : json\n\nrecord Delivery\n  tracking_number : string\n\nrecord PackingRequest\n  order_id     : string\n  reservations : list[warehouse.ReserveResponse]\n\nrecord Packing\n  boxes : int\n\nrecord Sent\n  MessageId : string\n\ninputs\n  order : Order\n\noutputs\n  reservations    : list[warehouse.ReserveResponse]\n  tracking_number : string\n\n# The warehouse answers every reservation: secured with its id, or short when the stock is short.\ntask reserve_stock(sku: string, quantity: int) -> warehouse.ReserveResponse\n  connect warehouse \"StockService/Reserve\"\n  connection \"arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d\"\n  errors busy = resource_exhausted\n  key\n  retry 2 times every 1 second on busy\n\ntask release_stock(id: string)\n  connect warehouse \"StockService/Release\"\n  connection \"arn:aws:events:ap-northeast-1:123456789012:connection/warehouse/1f2e3d\"\n  idempotent\n\n# Another workflow arranges the delivery, written as a .flow of its own; the checker holds this\n# task to its inputs, outputs and errors. It is a child workflow on Temporal (its type and task\n# queue are arrange_delivery_v1) and a workflow of its WorkflowTemplate on Argo; Step Functions\n# and Lambda durable functions start it by the ARN it is deployed as.\ntask arrange_delivery(order_id: string, carrier: urgency.carrier, recipient: string?, extra: json) -> Delivery\n  flow \"../arrange_delivery.flow\"\n  state machine \"arn:aws:states:ap-northeast-1:123456789012:stateMachine:arrange-delivery\"\n  durable function \"arn:aws:lambda:ap-northeast-1:123456789012:function:arrange-delivery:live\"\n\n# The packing crew reads the request from a queue, and answers when the boxes are packed.\ntask wait_for_packing(QueueUrl: string, MessageBody: PackingRequest) -> Packing\n  aws sqs:sendMessage\n  callback\n  timeout 2 days\n\ntask notify(TopicArn: string, Message: string) -> Sent\n  aws sns:publish\n  errors no_recipient = NotFoundException\n\ntask audit(order_id: string, extra: json)\n  lambda \"arn:aws:lambda:ap-northeast-1:123456789012:function:audit-log\"\n  idempotent\n\nflow\n  let decision = urgency(member: order.member, amount: order.amount)\n  let results = for line in order.lines at most 50 in parallel, 10 at a time\n    let r = reserve_stock(sku: line.sku, quantity: line.quantity)\n    yield r\n  let any_short = false\n  for one in results at most 50\n    match one.stock\n      short => let any_short = true\n      secured => pass\n  match any_short\n    true =>\n      for taken in results at most 50 in parallel\n        match taken.id\n          some id => release_stock(id: id)\n          none => pass\n      fail OutOfStock \"Order {order.id} has lines the stock is short of\"\n    false => pass\n  let recipient: string? = none\n  match order.gift\n    some gift =>\n      let recipient = gift.recipient\n      match gift.message\n        some words => audit(order_id: order.id, extra: {message: words, recipient: gift.recipient})\n        none => pass\n    none => pass\n  let delivery = arrange_delivery(order_id: order.id, carrier: decision.carrier, recipient: recipient, extra: order.extra)\n    on failure => fail DeliveryFailed \"Could not arrange the delivery of order {order.id}\"\n  let packed = wait_for_packing(QueueUrl: \"https://sqs.ap-northeast-1.amazonaws.com/123456789012/packing\", MessageBody: {order_id: order.id, reservations: results})\n    on timeout => fail PackingLate \"No word of the packing in two days\"\n  notify(TopicArn: \"arn:aws:sns:ap-northeast-1:123456789012:orders\", Message: \"Order {order.id} went out by {decision.carrier} ({packed.boxes} boxes, tracking number {delivery.tracking_number})\")\n    on no_recipient => pass\n  succeed reservations = results, tracking_number = delivery.tracking_number\n",

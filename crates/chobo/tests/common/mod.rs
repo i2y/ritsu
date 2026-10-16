@@ -10,6 +10,17 @@ pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+/// The root of ritsu's workspace, two directories above this crate.
+pub fn repo() -> PathBuf {
+    root().parent().and_then(Path::parent).expect("the crate is in crates/ of the workspace").to_path_buf()
+}
+
+/// chobo's site, which ritsu's site holds at website/chobo (its English pages in docs, the
+/// Japanese ones in docs-ja).
+pub fn site() -> PathBuf {
+    repo().join("website/chobo")
+}
+
 /// Every `.book` directly under `dir`, in name order, without the `.before.book` ones.
 pub fn books_in(dir: &str) -> Vec<PathBuf> {
     let mut v: Vec<PathBuf> = std::fs::read_dir(root().join(dir))

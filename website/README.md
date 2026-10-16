@@ -25,17 +25,19 @@ website/
 │   ├── make_libraries.sh  # bundles docs/playground/libraries.js from libraries/
 │   └── libraries/      # what libraries.js holds: package.json, package-lock.json, entry.js, bundle.mjs
 ├── rulec/              # rulec's site: its own zensical.toml, build.sh and pages (its README)
-└── dandori/            # dandori's site: its own zensical.toml, build.sh and pages (its README)
+├── dandori/            # dandori's site: its own zensical.toml, build.sh and pages (its README)
+└── chobo/              # chobo's site: its own zensical.toml, build.sh and pages (its README)
 ```
 
 A language's site keeps its own configuration in its own directory, as it had in the language's
 own repository, and its own `build.sh` builds it into `<language>/build`. `build.sh` here builds
 ritsu's pages, then runs each language's `build.sh` (the list `sites` in it) and copies what it
-built to `build/<language>`, published at `/ritsu/<language>/` and `/ritsu/<language>/ja/`. The two
-sites are rulec's (`rulec/`, from rulec's repository) and dandori's (`dandori/`, from dandori's).
-Each had a playground of its own; ritsu's took them over, with every example they opened and the
-links they gave, and their `playground.md` is kept only to send a link to it on (the nav of each
-site links to ritsu's page itself).
+built to `build/<language>`, published at `/ritsu/<language>/` and `/ritsu/<language>/ja/`. The
+sites are rulec's (`rulec/`, from rulec's repository), dandori's (`dandori/`, from dandori's) and
+chobo's (`chobo/`, written here). rulec's and dandori's each had a playground of its own; ritsu's
+took them over, with every example they opened and the links they gave, and their `playground.md`
+is kept only to send a link to it on. The nav of each site links to ritsu's page itself, on a
+project of the site's language, as chobo's does on its examples.
 
 A language with no site of its own can have a page among ritsu's. sekisho's, `sekisho.md`, follows
 its example from the answer of a rule a gate reads to the Cedar and the code generated from it,
@@ -89,7 +91,7 @@ others. What npm installs there (`node_modules`) is not committed.
 ```console
 $ cd website
 $ uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python zensical
-$ ./build.sh      # build/ and build/ja, then build/rulec, build/rulec/ja, build/dandori, build/dandori/ja
+$ ./build.sh      # build/ and build/ja, then build/<site> and build/<site>/ja for rulec, dandori and chobo
 $ ./serve.sh      # http://localhost:8003/ritsu/ (./serve.sh <port> for another port)
 ```
 
@@ -118,8 +120,9 @@ tables (sekisho's READMEs link to the pages); the pages of yuen's
 namespace have every word yuen's exporter writes (its list `TERMS`, which yuen's own tests hold to
 what it writes) and no other, and their example is what the command prints; the two
 configurations name ritsu's URLs; `.github/workflows/docs.yml` runs on a push to main that changes
-what the site is built from, and by hand; the page each of the two sites had for its
-playground sends a reader on to the playground, where the site's nav and home page lead too; and
+what the site is built from, and by hand; the nav and the home page of each language's site lead to
+the playground in the site's language, on a project the playground lists in it; the page each of
+rulec's and dandori's sites had for its playground sends a reader on to the same place; and
 the page of the playground alone leads to the page that explains it and to the playground's files,
 and nowhere else. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
 looks at the tree it builds, down to an element for every word whose id is the word, to where the
@@ -127,13 +130,14 @@ link of each page that sends a reader on leads, and to the pages of the playgrou
 are. `crates/ritsu/tests/playground.rs` holds the playground, as its page says: it drives Chrome
 through both pages in both languages (an edit, the answer, the page kept while a file does not
 pass, a link from one page to the other) and follows the links the pages before gave, sent on to
-it; each language's own tests hold its site (rulec's and dandori's READMEs say how).
+it; each language's own tests hold its site (the READMEs of rulec's, dandori's and chobo's sites say
+how).
 
 ## Publishing
 
 `.github/workflows/docs.yml` builds the whole site with `build.sh` and deploys `build/` to GitHub
 Pages, on a push to main that changes what the site is built from (`website/`, the documents
-rulec's `sync.sh` copies in, and the workflow itself), and by hand from the Actions tab. Pages
+rulec's and chobo's `sync.sh` copy in, and the workflow itself), and by hand from the Actions tab. Pages
 takes its source from "GitHub Actions" in the repository's settings. ritsu's site took over from
 the sites rulec's and dandori's own repositories published, at <https://i2y.github.io/rulec/> and
 <https://i2y.github.io/dandori/>.

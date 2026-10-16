@@ -28,7 +28,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | rulec | `.rule` | business rules: tariffs, fees, eligibility, tax | [the rulec site](rulec/) |
 | dandori | `.flow` | the skeleton of a workflow | [the dandori site](dandori/) |
 | koyomi | `.cal` | dates: closing and payment days, business days, legal periods | [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.md) |
-| chobo | `.book` | ledgers: accounts, their bounds, transfers, holds | [README](https://github.com/i2y/ritsu/blob/main/crates/chobo/README.md) |
+| chobo | `.book` | ledgers: accounts, their bounds, transfers, holds | [the chobo site](chobo/) |
 | geas | `.geas` | claims about the code an agent wrote | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.md) |
 | yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
 | sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |

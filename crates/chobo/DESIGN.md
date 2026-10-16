@@ -57,9 +57,9 @@ rulec の規則は純関数で、時刻も在庫も入力として渡す（rulec
 
 dandori は一つの案件のワークフローを動かす。最後の一個を二つの注文が取り合うとき、どちらの注文のワークフローも自分の分しか知らないので、どちらが取るかを決められない。決められるのはデータベースの一度の書き込みだけで、それが chobo の振替である。在庫や残高を守るコードはいま利用者が書いていて、売り越し、返金のしすぎ、リトライでの二重計上、片づけ忘れた仮押さえは、どれもそのコードで起きる。
 
-dandori は chobo の振替をタスクとして呼び、仮押さえを案件として追う（5 章）。ワークフローがどう進んでも仮押さえを片づけてから終わるかは、dandori が案件のステートマシンで確かめる（dandori の E020）。chobo はそのステートマシンを `chobo api` の JSON に出す。
+dandori は chobo の振替をタスクとして呼び、仮押さえを案件として追う（5 章）。ワークフローがどう進んでも仮押さえを片づけてから終わるかは、dandori が案件のステートマシンで確かめる（dandori の E020）。そのステートマシンは chobo が渡す。
 
-**決定**：chobo は rulec も dandori も呼ばない。dandori は将来 `chobo api` の JSON を読む。dandori が rulec を読むのと同じく、CLI の出力だけを読み、chobo は dandori を知らない。今回 dandori は変えない。
+**決定**：chobo は rulec も dandori も呼ばない。dandori は帳簿を、規則と同じく ritsu の口から読む。帳簿の口（`ritsu_ports::Books`。ritsu の DESIGN 3.2）に答えるのは chobo の `src/ports.rs` で、口をつなぐのは dandori を走らせる側（`ritsu dandori`、`ritsu check`）である。dandori のクレートは chobo のクレートに依存せず、chobo は dandori を知らない。ritsu の外のツールには、同じことを `chobo api` の JSON で出す（5 章）。
 
 ### 0.4 似たもの
 
@@ -808,31 +808,43 @@ enc(s) = s の UTF-8 のバイト長（ビッグエンディアンの 32 ビッ�
 
 ## 5. `chobo api` と dandori
 
-`chobo api <file.book>` は、呼び方と拒否されうる理由と仮押さえのステートマシンを JSON で出す。dandori が rulec の `api` と `certificate` を読むのと同じく、将来の dandori が CLI の出力だけを読めるようにする。
+`chobo api <file.book>` は、呼び方と拒否されうる理由と仮押さえのステートマシンを JSON で出す。ritsu の外のツールが、生成したコードも帳簿も読まずに、帳簿を呼ぶコードを組み立てられるようにするためのものである。ritsu の中の言語には、同じことを ritsu の口で、型の付いた値として渡す（下）。
 
 - **振替の種類ごと**：引数（名前、型、単位）、キー、仮押さえかどうかと有効期限、移動、操作ごとの拒否されうる理由（名前、どの境界か、キーを使ったことになるか、そうなる操作の列）、`code` と定義のハッシュ。
-- **出力先ごと**（`targets`）：PostgreSQL のスキーマ、操作ごとの関数の名前と引数の名前（`default null` の引数も）、勘定ごとの `balance_…`、`expire`。TypeScript と Python のファイル、帳簿の値を作る関数、振替の種類ごとのメンバーの名前（TypeScript は引数の型の名前も、Python は引数のキーワードの名前も）。Go のパッケージ、帳簿の値を作る関数、振替の種類ごとのフィールドと型とフィールドの名前、勘定ごとのメソッドの名前。TigerBeetle の一つのリクエストに入る件数と、操作ごとのチェーンの並び（移動と役目）。生成したコードを読まずに、ほかの道具（将来の dandori）が呼び方を組み立てられるように。
+- **出力先ごと**（`targets`）：PostgreSQL のスキーマ、操作ごとの関数の名前と引数の名前（`default null` の引数も）、勘定ごとの `balance_…`、`expire`。TypeScript と Python のファイル、帳簿の値を作る関数、振替の種類ごとのメンバーの名前（TypeScript は引数の型の名前も、Python は引数のキーワードの名前も）。Go のパッケージ、帳簿の値を作る関数、振替の種類ごとのフィールドと型とフィールドの名前、勘定ごとのメソッドの名前。TigerBeetle の一つのリクエストに入る件数と、操作ごとのチェーンの並び（移動と役目）。生成したコードを読まずに、ほかのツールが呼び方を組み立てられるように。
 - **単位ごと**：名前、`scale`、TigerBeetle の ledger（4.3）。税込か税抜を書いた単位には、その語（`tax`。書かない単位には、このキーを出さない）。
 - **勘定の種類ごと**：引数、単位、境界と理由の名前、外の勘定か。
-- **ID の決め方**（4.3 の表）。ほかの道具が自分で ID を求められるように。
-- **仮押さえのステートマシン**：仮押さえの振替の種類ごとに一つ。dandori の `src/rulec.rs` が rulec のステートマシンを読むのと同じフィールドで書く。`name`、`carry`（`input`・`output`・`enum`）、`held`（空）、`states`（`held`・`posted`・`voided`・`expired`）、`initial`（`held`）、`final`（`posted`・`voided`・`expired`）に、chobo で足す `events`（`post`・`void`・`expire`）と `external`（`expire`。`never expires` なら空）。その下の `certificate` に、rulec の証明書と同じ形で、`machine`（`table`、`carry`、`axis`、状態の番号での `initial` と `finals`、行ごとの `to` か `stay`）と、`tables`（軸は `event` と `state`、`decides` は `next_state`・`refused`・`reason`、行ごとの `accepts` と `produces`）と `enums` を入れる。2.4 の表がそのまま行になる。`never expires` の種類は、`events` と軸から `expire` を、表から `expire` の行を除き、行の番号を 1 から振り直す。dandori の読み方（`machine(&api["machine"], &cert)`）に、そのステートマシンと `certificate` を渡せば読める形にしてある。
+- **ID の決め方**（4.3 の表）。ほかのツールが自分で ID を求められるように。
+- **仮押さえのステートマシン**（`machines`）：仮押さえの振替の種類ごとに一つ。rulec の `api` がステートマシンに書くのと同じキーで書く。`name`、`over`（振替の種類）、`carry`（`input`・`output`・`enum`）、`held`・`never`・`once`（どれも空）、`states`（`held`・`posted`・`voided`・`expired`）、`initial`（`held`）、`final`（`posted`・`voided`・`expired`）に、chobo で足す `events`（`post`・`void`・`expire`）と `external`（`expire`。`never expires` なら空）。その下の `certificate` に、rulec の証明書と同じ形で、`machine`（`table`、`carry`、`axis`、状態の番号での `initial` と `finals`、行ごとの `to` か `stay`）、`tables`（軸は `event` と `state`、`decides` は `next_state`・`refused`・`reason`、行ごとの `accepts` と `produces`）、`enums`、`types` を入れる。2.4 の表がそのまま行になる。`never expires` の種類は、`events` と軸から `expire` を、表から `expire` の行を除き、行の番号を 1 から振り直す。rulec のステートマシンを読めるツールは、仮押さえのステートマシンも同じに読める。
 
-dandori の側の書き方は、将来こうなると見ている（dandori は今回変えない）。
+ritsu の中では、dandori、sakai、ritsu-cross、sekisho が、帳簿を帳簿の口（`ritsu_ports::Books`。ritsu の DESIGN 3.2）から読む。答えるのは `src/ports.rs` の `Engine` である。`facts` は、上と同じこと（単位、勘定と境界と理由の名前、振替、仮押さえのステートマシン、`targets` と同じクライアントの名前）を型の付いた値で渡し、仮押さえのステートマシンは `chobo api` と同じ表（`api::hold_table`）から作る。`refusals` は、額を範囲に限って chobo の探索を走らせ、そこで拒否されうる理由を答える（ritsu の X4）。`open` は参照インタプリタの帳簿を開き、`ritsu run` が操作を流す。yuen が要件とのつながりを確かめるハッシュは、`chobo api` が書く単位・勘定・振替・操作を決まった形にした定義の文から作る（ritsu の口 `Items`）。
+
+dandori のワークフローでは、帳簿の操作がタスクになり、仮押さえが案件になる。dandori の請求の例の日本語の版（`crates/dandori/examples/invoice/invoice.ja.flow`）から抜き出すと、次のとおりである。
 
 ```
-use book 在庫 from "在庫.book"
-
-case 押さえ : 引当 follows 在庫.引当
-  external expire
-  refused when refused = true
-
-task 引き当てる(注文: string, sku: string, 数: int) -> 引当
+use book 在庫 from "books/在庫.book"
+…
+task 引き当てる(注文: string, sku: string, 数: int) -> 在庫.引当
   book 在庫.引当.hold
   starts 在庫.引当
   errors 在庫切れ
+
+task 出荷する(注文: string, sku: string) -> 在庫.引当
+  book 在庫.引当.post
+  sends post
+  errors expired
+
+task 戻す(注文: string, sku: string) -> 在庫.引当
+  book 在庫.引当.void
+  sends void
+  errors expired, already_posted
+…
+case 押さえ : 在庫.引当 follows 在庫.引当
 ```
 
-仮押さえを作るタスクが案件を始め、確定と取消のタスクが `post` と `void` を送る。ワークフローが押さえ中の仮押さえを残して終われば、dandori の E020 が止める。`expire` は外で起きるので、確定の前に期限切れでありうることも、dandori が数える（dandori の 2.2）。拒否の理由は、dandori のタスクが宣言するエラーの名前としてそのまま使える。chobo の操作はキーで冪等なので、dandori の E030（キーなしのリトライ）にはあたらない（`idempotent` として読める）。
+仮押さえを作るタスクが案件を始め（`starts`）、確定と取消のタスクが `post` と `void` を送る（`sends`）。三つとも、仮押さえのレコード（振替の名前の型で、キーの引数と状態 `state` を持つ）を返す。タスクの引数は振替の引数で、額の型は帳簿の単位で決まる（違えば dandori の E016）。拒否の理由は、そのままタスクが宣言するエラーの名前になる。帳簿がその操作で返しえない名前は dandori の E016 で、宣言していない理由で拒否されれば、呼び出しは失敗する。案件に `external expire` は要らず、`refused when` は書けない（dandori の E008）。有効期限のある振替なら、dandori は期限切れを外で起きるイベントとして足し、どの確定と取消の前にも数える。拒否するかどうかと理由は、状態ごとに帳簿が決めている（dandori の DESIGN 2.7）。ワークフローが押さえ中の仮押さえを残して終われば、dandori の E020 が止める。chobo の操作はキーで冪等なので、タスクに `key` は書かず、dandori の E030（キーなしのリトライ）にもあたらない。
+
+言語の境目では、`ritsu check` が、規則が振替に渡す額（ritsu の E203）、その額で拒否されうる理由とタスクのエラー（E204、W204）、仮押さえの有効期限と確定までの待ち（E206、W206）を確かめる（ritsu の DESIGN 7.6・7.7）。
 
 ## 6. 確かめ方
 
@@ -1020,7 +1032,12 @@ chobo は帳簿から取った。拡張子 `.book` も同じ。
 
 ### 11.2 dandori の側
 
-- dandori が `chobo api` を読むこと（`use book`、案件が chobo の仮押さえに従う形、タスクの呼び方。5 章）。dandori を変えるときに決める。
+dandori は帳簿を帳簿の口から読み、操作をタスクに、仮押さえを案件にする（5 章）。dandori の側に残っているのは次のことで、dandori の DESIGN 7 章にある。
+
+- 残高（クライアントの `balance`）と仮押さえの状態（`status`）を読むタスクと、PostgreSQL の帳簿の `expire()` を、ワークフローから呼ぶこと。
+- 帳簿の操作を、生成したワークフローを通して本物の帳簿に送ること。いまは、dandori が書く `Transport` と Step Functions の Lambda 関数のコードを、本物のデータベースの上の chobo のクライアントで確かめるところまでである。
+- 帳簿の Lambda 関数で、データベースにつなぐところ（`make_handler` に渡す関数）を dandori が書くこと。いまは利用者が書く。
+- 言語をまたぐ検査の答え（ritsu の X4 の、額の範囲で絞った拒否されうる理由と、X5 の、仮押さえが必ず期限切れになるかどうか）を、dandori 自身の検査（E022）に返すこと。いまは `ritsu check` が言い、dandori の検査は、帳簿の検査が言う理由で数え、期限が切れうるものとして `expired` の処理を求める。
 
 ### 11.3 出力先
 
@@ -1040,4 +1057,19 @@ chobo は帳簿から取った。拡張子 `.book` も同じ。
 
 ### 11.5 配り方
 
-- インストールは、リポジトリを取ってきて `cargo install --path .` とするだけである。リリースのバイナリ、crates.io、Homebrew は無い。
+chobo は ritsu のリリースで配る（ritsu の DESIGN 13.2）。リリースには、macOS（arm64、x64）と Linux（x64、arm64）の `ritsu` と、それを指すリンク `chobo` が入る。同じものを Homebrew（`i2y/tap/ritsu`）、`.deb` と `.rpm`、GitHub Actions（`uses: i2y/ritsu@v<版>`）からも入れられる。npm のパッケージ `@i2y/ritsu`（WASI で組んだ ritsu）の `chobo` は、git を走らせる `check --diff-base` のほかは、ネイティブのバイナリと同じに動く。スキルは `ritsu skills install chobo` と、リリースの `ritsu-skills-v<版>.zip` で配る。ソースからは、ritsu のリポジトリから `cargo install --git https://github.com/i2y/ritsu --locked chobo`（chobo だけ）か `ritsu`（全部の言語）で入れる。
+
+- crates.io と npm のレジストリには出していない。どちらも ritsu の DESIGN 13.2 のとおりで、npm のパッケージはリリースに付けた .tgz を URL から入れる。
+
+## 12. サイト
+
+chobo のサイトは、ritsu のサイトの下の `website/chobo/` に置き、英語を `https://i2y.github.io/ritsu/chobo/`、日本語を `/ritsu/chobo/ja/` に出す。作りは rulec と dandori のサイトと同じで、二つの設定（`zensical.toml`、`zensical.ja.toml`）、二つの言語を決まった順に組む `build.sh`、コピーをする `sync.sh`、ページ（`docs/`、`docs-ja/`）、道具（`tools/`）を持つ。ritsu の `website/build.sh` がほかのサイトと一緒に組み、`website/build/chobo` にコピーする（根の DESIGN 13.2）。
+
+- **書くページ**：ホーム、インストール、帳簿を書く、何を検査するか、シナリオを流す、データベース向けのビルド、お金と単位、人が読むページ、ほかの言語と組み合わせる、例で見る、エージェント向け、どうやって確かめているか、設計。英語を先に書き、日本語のサイトも同じページを同じ順に持つ。日本語のページは日本語の読み手に向けて書き、文ごとの翻訳にはしない。例は日本語の版（`examples/*/*.ja.book`、`refunds.ja.more.json`、`tests/books` の日本語の名前の帳簿）から取り、コマンドは `--lang ja` を付けて走らせた出力を、診断は日本語の golden を貼る。
+- **コピーするページ**：`docs/` の四つ（`reference.md`、`formats.md`、`targets.md`、`codes.md`）は、このクレートで書いて試験しているものなので、`sync.sh` がサイトにコピーし、コピーはコミットしない（`.gitignore`）。`../` で始まるリンクは、スキルのコピーと同じく GitHub のファイルへ向ける。日本語のサイトには `codes.ja.md` をコピーし、ほかの三つは英語のまま、頭に「この資料は英語です」の囲みを付ける。文を直すときは、サイトのコピーではなく `docs/` を直す。
+- **例のページ**：四つの例を `chobo doc --format html` で描いたページを、英語の版は `docs/doc/` に、日本語の版を `--lang ja` で描いたものは `docs-ja/doc/` に置く。クレートの根で `chobo doc examples/<名前>/<名前>.book --format html` を走らせた出力そのもので、`tests/doc/` の golden（`<名前>.html`、`<名前>.ja.html`）と同じバイト列になる。golden はクレートの試験がクレートの中で完結するためのもの、サイトのページは公開するものとして、両方を置く。どちらも `CHOBO_BLESS=1` で書き直す。
+- **ホームの図**：`tools/make_chart.py` が、返金の例とその日本語の版のページから流れの図の SVG を切り出し、ページの配色（明るいものと暗いもの）、字、背景だけを足して `docs/images/chart*.svg` に書く。図そのものは chobo が描いたまま、一字も変えない。
+- **`.book` の色付け**：`tools/booklexer.py` が Pygments の字句解析器になり、`book` のフェンスを色付けする。`KEYWORDS` は `src/syntax.rs` と同じ語を同じ順に持つ。
+- **ブラウザで試すページ**：ritsu のブラウザで試すページに、四つの例を英語の版と日本語の版のプロジェクトとして足した（`chobo/<名前>` と `chobo/<名前>.ja`。組は `chobo`。どれも帳簿一つのプロジェクト）。サイトのナビとホームは、英語のサイトなら `chobo/refunds`、日本語のサイトなら `chobo/refunds.ja` を開く。
+
+試験は次のとおり。`tests/docs.rs` は、README と `docs/` とスキルに加えて、サイトで書いたページを両方の言語で読み（コピーするページは `docs/` として読む）、次を確かめる。診断が golden のとおりであること（言語をまたぐ検査の診断は ritsu の `tests/golden` のとおり）。`book` のフェンスの行が、例かテストの帳簿か `chobo explain` の再現の行であること（`…` で切った行は、その片を順に持つ行。切っていない行は、行の全体）。出力つきの `chobo` のコマンドが、いまその出力を出すこと。相対リンクが、Zensical の読み方（`use_directory_urls`）で行き先を持つこと（サイトのページとその見出し、サイトのファイル、ritsu やほかの言語のサイトのページ、ページの言語で並ぶブラウザで試すページのプロジェクト。例のページを開くリンクは、そのシナリオと結果とステップがあること。日本語のページの画像とスタイルシートは、`sync.sh` が英語のサイトからコピーしてコミットしないので、`docs/` のファイルとして読む）。数が実数であること。英語と日本語のサイトが同じページを持ち、二つの目次が同じページを同じ順に並べ、どちらのホームも書いたページの全部へリンクすること。サイトにしか無いものも元と突き合わせる。ほかの言語のコードはその言語のファイルの行と、シナリオの JSON は帳簿の横の JSON の行と、`ritsu run` などのテキストは golden と、`<!-- chobo build … -->` を付けた生成物の抜粋はそのビルドが書くファイルと、Mermaid の図は `chobo doc` のページと照らす。`booklexer.py` の `KEYWORDS` も確かめる。`tests/doc.rs` は、例のページが `chobo doc` のいまの出力と、ホームの図が `chobo doc` のいま描く図と、一字も違わないことを確かめる。ritsu の `tests/website.rs` は、`build.sh` が chobo のサイトを組むこと、ritsu のホームの表がサイトにリンクすること、二つのナビと二つのホームがサイトの言語のブラウザで試すページを開くことを確かめ、`tests/playground.rs` は、ブラウザで試すページが例のプロジェクトをバイナリと同じに答えることを確かめる。

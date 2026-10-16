@@ -39,8 +39,9 @@ const TEXT = {
     counts: (e, w) => (e || w ? `${e} error${e === 1 ? "" : "s"}, ${w} warning${w === 1 ? "" : "s"}` : "all pass"),
     files: (n) => `${n} file${n === 1 ? "" : "s"}`,
     projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", empty: "An empty project", "sekisho/refunds": "Who may refund an order of a shop" },
-    groups: { ritsu: "ritsu: every language in one project", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", sekisho: "sekisho: a gate and the files it reads" },
+    groups: { ritsu: "ritsu: every language in one project", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", chobo: "chobo: one book", sekisho: "sekisho: a gate and the files it reads" },
     rules: { gap: "The table with a row missing", full: "The whole table", multi: "Tables in stages", big: "A bigger rule", walk: "Walking a list" },
+    books: { inventory: "Stock held for an order", points: "Loyalty points", refunds: "Refunds that never exceed the sale", marketplace: "A sale split between a shop and its fee" },
     draft: "A first draft of the hotel booking, with errors",
     and: " · ",
     examples: { hotel: "Hotel booking", order: "Order", fulfillment: "Fulfillment", inquiry: "Inquiry", review: "Review", invoice: "Invoice", payout: "Payout" },
@@ -123,8 +124,9 @@ const TEXT = {
     counts: (e, w) => (e || w ? `エラー ${e} 件、警告 ${w} 件` : "どれも検査を通りました"),
     files: (n) => `${n} ファイル`,
     projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", empty: "空のプロジェクト", "sekisho/refunds.ja": "店の注文を返金してよい人" },
-    groups: { ritsu: "ritsu（全部の言語がそろうプロジェクト）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）" },
+    groups: { ritsu: "ritsu（全部の言語がそろうプロジェクト）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", chobo: "chobo（帳簿一つ）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）" },
     rules: { gap: "一行足りない表", full: "そろった表", multi: "表をつなぐ", big: "大きい規則", walk: "並びを歩く" },
+    books: { inventory: "注文のために押さえる在庫", points: "ポイント", refunds: "売上を超えない返金", marketplace: "店の取り分と手数料に分ける売上" },
     draft: "ホテルの予約の最初の下書き（エラーあり）",
     and: "・",
     examples: { hotel: "ホテルの予約", order: "注文", fulfillment: "引当と発送", inquiry: "問い合わせ", review: "審査", invoice: "請求", payout: "支払い" },
@@ -260,6 +262,7 @@ function flowLabel(t, path) {
 function title(t, p) {
   if (t.projects[p.name]) return t.projects[p.name];
   if (p.group === "rulec") return t.rules[p.name.replace(/^rulec\//, "").replace(/\.ja$/, "")] || p.name;
+  if (p.group === "chobo") return t.books[p.name.replace(/^chobo\//, "").replace(/\.ja$/, "")] || p.name;
   if (p.group === "dandori") return flowLabel(t, p.open);
   return p.name;
 }

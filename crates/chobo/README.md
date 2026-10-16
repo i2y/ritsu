@@ -41,6 +41,14 @@ transfer refund(request: string, order: string, amount: USD)
   move amount from refundable(order) to refunded
 ```
 
+**Documentation: <https://i2y.github.io/ritsu/chobo/>**, in English and Japanese. The pages are also
+readable here, in [website/chobo/docs](../../website/chobo/docs) and
+[website/chobo/docs-ja](../../website/chobo/docs-ja).
+
+**Try it in the browser: [i2y.github.io/ritsu/playground](https://i2y.github.io/ritsu/playground/#project=chobo/refunds)**.
+ritsu, with chobo in it, compiled to wasm32 and run in the page: the checker, the builds for both
+databases and `chobo doc`, on each example or on a book you edit; nothing is sent anywhere.
+
 The name comes from 帳簿 (chōbo), a book of accounts.
 
 ## What the checker says
@@ -153,6 +161,7 @@ after each step. In Markdown, with Mermaid charts that GitHub draws, or as one H
 charts chobo draws itself and whose scenarios can be stepped through, in English or, with
 `--lang ja`, Japanese. Each example has its page beside it: the
 [refunds](examples/refunds/doc.md), and the same book in Japanese, [返金](examples/refunds/doc.ja.md).
+The site has each as one HTML page, such as [the refunds, drawn](https://i2y.github.io/ritsu/chobo/doc/refunds.html).
 
 ## For AI agents
 
@@ -233,15 +242,12 @@ and prints a `SKIP:` line for each it does not find.
 ## Status
 
 Early. Not yet: changing the bound of an account kind that already has balances (a new kind and
-a transfer that moves the balance do it for now); the check that holds an amount a rule hands over
-to the tax of the unit it goes into (the units carry the tax already); dandori's side, a workflow that calls a book's
-transfers as tasks and follows its holds as cases (`chobo api` writes the state machine for it);
-databases other than PostgreSQL and TigerBeetle; TigerBeetle in its production layout of six
-replicas (the tests use one, started with `--development`), and how much the IDs made from keys
-slow it down; reading the entries and transfers an account has had; and the two answers on
-which TigerBeetle differs from the reference interpreter, which [docs/targets.md](docs/targets.md)
-describes. The design, the decisions and what is left are in [DESIGN.md](DESIGN.md), in
-Japanese.
+a transfer that moves the balance do it for now); databases other than PostgreSQL and TigerBeetle;
+TigerBeetle in its production layout of six replicas (the tests use one, started with
+`--development`), and how much the IDs made from keys slow it down; reading the entries and
+transfers an account has had; and the two answers on which TigerBeetle differs from the reference
+interpreter, which [docs/targets.md](docs/targets.md) describes. The design, the decisions and
+what is left are in [DESIGN.md](DESIGN.md), in Japanese.
 
 ## License
 

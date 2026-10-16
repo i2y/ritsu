@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="flow" viewBox="0 0 841 112" width="841" role="img" aria-labelledby="flow-t"><title id="flow-t">How things move between the accounts of refunds</title>
+<style>
+svg { font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+.cb-bg { fill: #ffffff; }
+svg { display: block; max-width: none; height: auto; }
+svg text { fill: #1f2328; font-size: 13px; }
+svg .name { font-weight: 600; font-size: 14px; }
+svg .sub { fill: #59636e; }
+.node rect { fill: #f6f8fa; stroke: #1f2328; stroke-width: 1.2; }
+.node.outside rect { stroke: #59636e; stroke-dasharray: 5 3; }
+.edge path { fill: none; stroke: #59636e; stroke-width: 1.5; }
+.edge.pending path { stroke-dasharray: 6 4; }
+.head { fill: #59636e; }
+.head.ok { fill: #1a7f37; }
+.head.no { fill: #cf222e; }
+.label rect { fill: #ffffff; opacity: 0.92; }
+.label text { font-size: 12px; }
+.edge.lit path { stroke: #1a7f37; stroke-width: 3; }
+.edge.no path { stroke: #cf222e; stroke-width: 3; }
+.label.lit text { fill: #1a7f37; font-weight: 600; }
+.label.no text { fill: #cf222e; font-weight: 600; }
+</style>
+<rect class="cb-bg" width="100%" height="100%" rx="8"/>
+<defs><marker id="flow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head ok" d="M0 0 L10 5 L0 10 z"/></marker><marker id="flow-no" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="head no" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<g class="edge" data-k="0"><path d="M142 58 C207 58, 207 58, 272 58" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="edge pending" data-k="1"><path d="M568 58 C633 58, 633 58, 698 58" marker-end="url(#flow-a)" data-a="url(#flow-a)" data-ok="url(#flow-ok)" data-no="url(#flow-no)"/></g>
+<g class="label" data-k="0"><rect x="188" y="49" width="40" height="16" rx="3"/><text x="207" y="61" text-anchor="middle">sale</text></g>
+<g class="label" data-k="1"><rect x="606" y="49" width="55" height="16" rx="3"/><text x="633" y="61" text-anchor="middle">refund</text></g>
+<g class="node" data-a="0"><rect x="272" y="24" width="296" height="68" rx="4"/><text x="420" y="44" text-anchor="middle" class="name">refundable(order)</text><text x="420" y="62" text-anchor="middle" class="sub">USD</text><text x="420" y="80" text-anchor="middle" class="sub">at least 0.00 (refund_exceeds_sale)</text></g>
+<g class="node outside" data-a="1"><rect x="20" y="33" width="122" height="50" rx="16"/><text x="81" y="53" text-anchor="middle" class="name">sales</text><text x="81" y="71" text-anchor="middle" class="sub">USD · outside</text></g>
+<g class="node outside" data-a="2"><rect x="698" y="33" width="122" height="50" rx="16"/><text x="759" y="53" text-anchor="middle" class="name">refunded</text><text x="759" y="71" text-anchor="middle" class="sub">USD · outside</text></g>
+</svg>

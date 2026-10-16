@@ -14,11 +14,11 @@
 //! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. The projects
 //! are the shop (website/playground/), an empty one, the examples of rulec's playground (one rule
 //! each, from rulec's corpus and the table on rulec's front page), the examples of dandori's (each
-//! flow with every file it reads, from dandori's examples) and sekisho's example (each version of
-//! its gate with every file it reads). Node drives the module, Chrome the page (ritsu-testkit's:
-//! `RITSU_CHROME`, else where macOS keeps it, else on the PATH), and the Cedar CLI is
-//! ritsu-testkit's too (`RITSU_CEDAR`, else on the PATH, at 4.13.0). A test that cannot find what it
-//! needs prints `SKIP: ritsu: …` and passes.
+//! flow with every file it reads, from dandori's examples), chobo's examples (one book each, which
+//! chobo's site opens) and sekisho's example (each version of its gate with every file it reads).
+//! Node drives the module, Chrome the page (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps
+//! it, else on the PATH), and the Cedar CLI is ritsu-testkit's too (`RITSU_CEDAR`, else on the
+//! PATH, at 4.13.0). A test that cannot find what it needs prints `SKIP: ritsu: …` and passes.
 
 use ritsu_base::fs::{Files, Kind, Memory, Meta};
 use ritsu_base::naming::Tool;
@@ -331,6 +331,27 @@ fn dandori_examples() -> Vec<Project> {
     out
 }
 
+/// chobo's examples, in the order its README lists them. Each is a project of one book, in English
+/// and in its Japanese version (`examples/<name>/<name>.book` and `<name>.ja.book`), at its file's
+/// name, listed on the page of its language. A project's name is `chobo/<name>`, and
+/// `chobo/<name>.ja` for the Japanese version, as rulec's are; chobo's site opens `chobo/refunds` and
+/// `chobo/refunds.ja` from its nav and its home page.
+const CHOBO: [&str; 4] = ["inventory", "points", "refunds", "marketplace"];
+
+/// chobo's examples, as projects of the page: every example in English, then every one in Japanese.
+fn chobo_examples() -> Vec<Project> {
+    let mut out = Vec::new();
+    for (lang, tail) in [("en", ""), ("ja", ".ja")] {
+        for ex in CHOBO {
+            let path = format!("{ex}{tail}.book");
+            let from = format!("crates/chobo/examples/{ex}/{path}");
+            let files = vec![(path.clone(), read_repo(&from))];
+            out.push(Project { name: format!("chobo/{ex}{tail}"), group: "chobo".into(), lang: Some(lang.into()), open: path, files, from: vec![from], ..Project::default() });
+        }
+    }
+    out
+}
+
 /// sekisho's example, whose gate reads a rule, a dates file, a calendar and its data, a contract and
 /// a flow, each version (English, then Japanese) at its path in the example's directory.
 const SEKISHO: &str = "crates/sekisho/examples/refunds";
@@ -390,8 +411,9 @@ fn sekisho_examples() -> Vec<Project> {
 
 /// The projects the page opens, in the order its list has them (each page lists those of its
 /// language): the shop in English and in Japanese, an empty project to start from one file, the
-/// examples of rulec's page in English and then in Japanese, the examples of dandori's page, and
-/// sekisho's example in English and in Japanese.
+/// examples of rulec's page in English and then in Japanese, the examples of dandori's page,
+/// chobo's examples in English and then in Japanese, and sekisho's example in English and in
+/// Japanese.
 fn made() -> Vec<Project> {
     let mut out = vec![shop("shop"), shop("shop.ja")];
     out.push(Project { name: "empty".into(), group: "own".into(), ..Project::default() });
@@ -401,6 +423,7 @@ fn made() -> Vec<Project> {
         }
     }
     out.extend(dandori_examples());
+    out.extend(chobo_examples());
     out.extend(sekisho_examples());
     out
 }
@@ -487,7 +510,7 @@ fn the_projects_are_what_the_page_opens() {
         return;
     }
     let was = std::fs::read_to_string(&file).unwrap_or_default();
-    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus, dandori's examples and sekisho's example hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
+    assert!(was == now, "website/docs/playground/projects.json is not what website/playground, rulec's corpus, dandori's examples, chobo's examples and sekisho's example hold now; write it anew with RITSU_BLESS=1 cargo test -p ritsu --test playground");
 }
 
 /// The quoted words between `start` and the first `end` after it, as dandori's tests read its
@@ -1761,10 +1784,10 @@ fn the_page_starts_in_chrome() {
         }
         assert_eq!(text_of(opened, "open"), contract, "{page}: the page does not open on the contract");
         assert_eq!(text_of(opened, "text"), shop.files.iter().find(|(p, _)| p == contract).unwrap().1, "{page}: the editor holds another contract");
-        // the list: the projects of this page's language, in their five groups
+        // the list: the projects of this page's language, in their six groups
         let mine: Vec<&str> = projects.iter().filter(|p| p.langs().contains(&tag)).map(|p| p.name.as_str()).collect();
         assert_eq!(opened["listed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect::<Vec<_>>(), mine, "{page}: the list has other projects than projects.json has for this page");
-        assert_eq!(opened["groups"], 5, "{page}: the list does not have its five groups");
+        assert_eq!(opened["groups"], 6, "{page}: the list does not have its six groups");
         // a .proto has no page for people, which the page says; under the site's dark scheme, a rule's
         // page is drawn dark (the next visit opens one)
         assert_eq!(dark["page"], Value::Null, "{page}: a page is drawn of the contract");

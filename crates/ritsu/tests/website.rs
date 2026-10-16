@@ -1,8 +1,8 @@
 //! ritsu's site (website/, DESIGN 13.2): ritsu's own pages in English and Japanese, and below them
 //! the site of each language that website/build.sh builds, each with its own configuration in a
 //! directory of its own (website/rulec and website/dandori, the sites the two languages had in
-//! their own repositories), all built into one tree, website/build, which is published at
-//! https://i2y.github.io/ritsu/. This holds:
+//! their own repositories, and website/chobo), all built into one tree, website/build, which is
+//! published at https://i2y.github.io/ritsu/. This holds:
 //!
 //! - every relative link of ritsu's pages leads to one of its pages, or to the site of a language
 //!   that build.sh builds, read as Zensical reads it (a link that names no `.md` from the directory
@@ -25,17 +25,17 @@
 //!   language by itself, its releases included (ritsu's releases hand out every language);
 //! - the code on the index pages is the lines of files of the languages, `ritsu check` prints what
 //!   they show under it, and a command the prose names is one;
-//! - build.sh builds rulec's site and dandori's; both index pages link to the site of every
-//!   language build.sh builds, and each such site is there, with its own build.sh and
+//! - build.sh builds rulec's, dandori's and chobo's sites; both index pages link to the site of
+//!   every language build.sh builds, and each such site is there, with its own build.sh and
 //!   configurations;
 //! - the configurations name the URL each site is published at, under /ritsu/, and ritsu's
 //!   repository;
 //! - .github/workflows/docs.yml runs on a push to main that changes what the site is built from,
 //!   and by hand;
-//! - the pages the playgrounds of rulec's and dandori's sites had (`playground.md` in each language)
-//!   send a reader on to ritsu's playground in the same language, on a project it opens, and the nav
-//!   and the home page of each site link to the same place (tests/playground.rs follows them in
-//!   Chrome);
+//! - the nav and the home page of each language's site lead to ritsu's playground in the site's
+//!   language, on a project the playground lists in that language; and the pages the playgrounds of
+//!   rulec's and dandori's sites had (`playground.md` in each language) send a reader on to the same
+//!   place (tests/playground.rs follows them in Chrome);
 //! - the pages of a language's namespace (website/docs/ns/yuen.md and website/docs-ja/ns/yuen.md,
 //!   which the IRIs of yuen's PROV words open: `https://i2y.github.io/ritsu/ns/yuen#Requirement`)
 //!   say every word yuen writes and no other, each once, under the heading of its kind, with the
@@ -67,8 +67,8 @@ use yuen::export::prov::{Kind, TERMS, YUEN_NS};
 const PUBLISHED: &str = "https://i2y.github.io/ritsu/";
 
 /// The sites of the languages that ritsu's site holds: the ones rulec and dandori had in their own
-/// repositories, moved into website/<language> (DESIGN 13.2).
-const HELD: [&str; 2] = ["rulec", "dandori"];
+/// repositories, moved into website/<language> (DESIGN 13.2), and chobo's, written in website/chobo.
+const HELD: [&str; 3] = ["rulec", "dandori", "chobo"];
 
 fn website() -> PathBuf {
     root().join("website")
@@ -403,8 +403,8 @@ fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_and_by_hand() {
     let mut lines = text.lines().skip_while(|l| *l != "on:");
     assert_eq!(lines.next(), Some("on:"), "docs.yml has no `on:`");
     let triggers: Vec<&str> = lines.take_while(|l| l.is_empty() || l.starts_with(' ')).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
-    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
-    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's sync.sh copies in, and itself), and by hand");
+    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \"crates/chobo/docs/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
+    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's and chobo's sync.sh copy in, and itself), and by hand");
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
 }
 
@@ -500,6 +500,51 @@ fn the_pages_the_playgrounds_had_send_a_reader_on() {
     }
     // rulec's and dandori's, in two languages each
     assert!(seen >= 4, "{seen} pages that send a reader on: were they changed?");
+}
+
+/// Every language's site leads to ritsu's playground in its own language: its nav (read from the
+/// site's root, as Zensical reads a nav) and its home page (whose links are read from its file,
+/// which is at the site's root) open the playground of the language the site is in, on a project
+/// the playground lists in that language. A site's English pages open the English version of an
+/// example, and its Japanese pages the Japanese one.
+#[test]
+fn every_site_leads_to_the_playground_in_its_language() {
+    let mut seen = 0;
+    for site in sites() {
+        for ja in [false, true] {
+            let config = website().join(&site).join(if ja { "zensical.ja.toml" } else { "zensical.toml" });
+            let name = config.strip_prefix(root()).unwrap().display().to_string();
+            let site_root = if ja { format!("/ritsu/{site}/ja/") } else { format!("/ritsu/{site}/") };
+            let playground = if ja { "/ritsu/ja/playground/" } else { "/ritsu/playground/" };
+            let nav: Vec<String> = read(&config)
+                .lines()
+                .filter_map(|l| l.trim().strip_prefix('{')?.split_once("\" = \"").map(|(_, t)| t.trim_end_matches(['}', ',', ' ']).trim_end_matches('"').to_string()))
+                .filter(|t| t.contains("playground/#"))
+                .collect();
+            assert!(!nav.is_empty(), "{name}: the nav does not lead to the playground");
+            for t in &nav {
+                let (path, fragment) = t.split_once('#').unwrap();
+                assert_eq!(normal(&format!("{site_root}{path}")), playground, "{name}: the nav's `{t}` leads, from the site's root {site_root}, elsewhere than to the playground in the site's language");
+                assert!(opens_a_project(fragment, ja), "{name}: the nav's `{t}` opens no project the playground lists in the site's language");
+            }
+            let index = website().join(&site).join(if ja { "docs-ja/index.md" } else { "docs/index.md" });
+            let index_name = index.strip_prefix(root()).unwrap().display().to_string();
+            let leads: Vec<String> = link_targets(&read(&index))
+                .into_iter()
+                .filter_map(|(_, t)| {
+                    let (path, fragment) = t.split_once('#')?;
+                    (normal(&format!("{site_root}{path}")) == playground).then(|| fragment.to_string())
+                })
+                .collect();
+            assert!(!leads.is_empty(), "{index_name} does not lead to the playground in the site's language");
+            for fragment in leads {
+                assert!(opens_a_project(&fragment, ja), "{index_name}: `#{fragment}` opens no project the playground lists in the site's language");
+            }
+            seen += 1;
+        }
+    }
+    // rulec's, dandori's and chobo's, in two languages each
+    assert!(seen >= 6, "{seen} sites' navs lead to the playground: were they changed?");
 }
 
 /// The pages of yuen's namespace, in English and in Japanese: what the IRI of a word of yuen's

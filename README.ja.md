@@ -490,7 +490,7 @@ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.29.2/i2
   [sakai](crates/sakai/README.ja.md)、[sekisho](crates/sekisho/README.ja.md)（rulec と dandori は英語だけ）
 - `crates/ritsu-*`：共通の土台、単位、口、プロジェクトの読み込み、言語をまたぐ検査、`.proto` の読み手、生成の共通部分、ブラウザ向けのビルド
 - `proofs/`：Lean のモデル
-- `website/`：サイト（ritsu のページ、ブラウザで試すページ、`website/rulec` に置いた rulec のサイト、`website/dandori` に置いた dandori のサイト）
+- `website/`：サイト（ritsu のページ、ブラウザで試すページ、`website/rulec` に置いた rulec のサイト、`website/dandori` に置いた dandori のサイト、`website/chobo` に置いた chobo のサイト）
 - `DESIGN.md`、`PLAN.md`：全体の設計（日本語）
 - `SECURITY.md`：脆弱性の知らせ方
 

@@ -1,0 +1,120 @@
+[project]
+site_name = "chobo"
+site_url = "https://i2y.github.io/ritsu/chobo/"
+site_description = "A small language for the things you count and move between accounts: stock, money, points, seats. A book puts bounds on its accounts, every transfer keeps them in one write, and the book is built for PostgreSQL or TigerBeetle, with a client in TypeScript, Python or Go."
+site_author = "Yasushi Itoh"
+copyright = "Copyright &copy; 2026 Yasushi Itoh"
+
+# One of the sites inside ritsu's: website/build.sh builds it here and copies it to
+# website/build/chobo. `edit_uri` names this site's own docs directory in ritsu's repository.
+repo_url = "https://github.com/i2y/ritsu"
+repo_name = "i2y/ritsu"
+edit_uri = "edit/main/website/chobo/docs"
+
+docs_dir = "docs"
+site_dir = "build"
+use_directory_urls = true
+
+extra_css = ["stylesheets/extra.css"]
+
+nav = [
+  { Home = "index.md" },
+  # ritsu's playground, from this site's root (/ritsu/chobo/), on the book of this site's home page
+  { "Try it in the browser" = "../playground/#project=chobo/refunds" },
+  { Install = "install.md" },
+  { "Write a book" = "tour.md" },
+  { "What it checks" = "checks.md" },
+  { "Run scenarios" = "scenarios.md" },
+  { "Build for a database" = "databases.md" },
+  { "Money and units" = "units.md" },
+  { "Pages for people" = "pages.md" },
+  { "With the other languages" = "together.md" },
+  { Examples = "examples.md" },
+  { "For agents" = "agents.md" },
+  { "How it is checked" = "assurance.md" },
+  { Design = "design.md" },
+  # chobo's own documents, which sync.sh copies in from crates/chobo/docs
+  { Reference = [
+    { Language = "reference.md" },
+    { Diagnostics = "codes.md" },
+    { Formats = "formats.md" },
+    { Targets = "targets.md" },
+  ] },
+]
+
+# ---- Language switcher ----------------------------------------------------
+
+[[project.extra.alternate]]
+name = "English"
+link = "/ritsu/chobo/"
+lang = "en"
+
+[[project.extra.alternate]]
+name = "日本語"
+link = "/ritsu/chobo/ja/"
+lang = "ja"
+
+[project.theme]
+variant = "modern"
+icon.repo = "fontawesome/brands/github"
+# navigation.footer     previous / next at the foot of every page, so the site reads in order
+# navigation.top        a back-to-top button on long pages
+# navigation.tracking   the address bar follows the section being read
+# content.code.copy     a copy button on every code block
+features = [
+  "navigation.footer",
+  "navigation.top",
+  "navigation.tracking",
+  "content.code.copy",
+]
+logo = "images/logo.svg"
+favicon = "images/favicon.svg"
+
+# ---- Palette --------------------------------------------------------------
+
+# Ink and a vermilion line: a ledger's balances and the bound under them. The same pair holds on
+# both schemes.
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "black"
+accent = "deep orange"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "black"
+accent = "deep orange"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+# Unicode-preserving heading anchors, so that a Japanese heading gets the anchor GitHub gives it.
+[project.markdown_extensions.toc]
+slugify = { object = "pymdownx.slugs.slugify", kwds = { case = "lower" } }
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+
+# Colours a ```book fence. Naming the module here is how it gets imported, and importing it is
+# what registers the lexer with Pygments; build.sh puts tools/ on PYTHONPATH.
+[project.markdown_extensions.booklexer]
+
+[project.markdown_extensions.pymdownx.details]
+# A ```mermaid fence is drawn as a Mermaid chart: the picture `chobo doc` gives a pull request.
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_generator = "zensical.extensions.emoji.to_svg"
+emoji_index = "zensical.extensions.emoji.twemoji"

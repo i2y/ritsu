@@ -1598,3 +1598,9 @@ ritsu を wasm32-wasip1 で組み、Node の `node:wasi` で動く npm のパッ
 - 新しい語（`random`、`chances`、`take_weighted`、`draw`、`open`、`combine`、`contribution`、`extend`、`into` など）は予約語にしなかった（§15.157 の約束）。
 
 残り：作例のゲーム。確率の主張のうち検査が予算の中で決めないもの（W129）と、区間で調べた持ち越す値のある機械の「終われる」（W127）は、`check` 自身が決めないので、述べただけのまま。ritsu の口の `Machine` は、持ち越す値をまだ持たない。
+
+### 7.17 chobo のサイト（2026-10-16）
+
+chobo のサイトを、rulec と dandori のサイトと同じ形で `website/chobo/` に作った（chobo の DESIGN 12 章、根の DESIGN 13.2）。英語と日本語で同じ 13 枚のページ（ホーム、インストール、帳簿を書く、何を検査するか、シナリオを流す、データベース向けのビルド、お金と単位、人が読むページ、ほかの言語と組み合わせる、例で見る、エージェント向け、どうやって確かめているか、設計）と、`sync.sh` がコピーするリファレンスの四つ、例の四つを `chobo doc --format html` で描いたページ（英日）、`chobo doc` の図を切り出したホームの図、```` ```book ```` の色付け。日本語のページは日本語の読み手に向けて書き、例は日本語の版、コマンドの出力は `--lang ja` で走らせたもの、診断は日本語の golden から取った。ブラウザで試すページに chobo の例の英日の八つのプロジェクトを足した。chobo の DESIGN の 0.3・5 章・11.2・11.5 を、dandori が帳簿の口から帳簿を読むいまの形と、ritsu のリリースで配るいまの形に書き直した。
+
+確かめたこと：chobo の `docs`（16 件）・`doc`（9 件）・`skill`（3 件）、ritsu の `website`（19 件）・`playground`（13 件）・`skill`（15 件）が通った（tools の段、SKIP 0）。`website/build.sh` で、chobo のサイトは英日とも Zensical の警告なしに組めた。
