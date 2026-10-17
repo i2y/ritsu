@@ -1476,7 +1476,7 @@ BoundedContext ordering {
 
 ```json
 {
-  "sakai": "0.29.2",
+  "sakai": "0.29.3",
   "map": {
     "name": "基本",
     "alias": "basic",
