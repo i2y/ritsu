@@ -2,9 +2,10 @@ name: platforms
 
 # The tests of the platforms level (DESIGN 10.2, 10.5, 10.6): the workflows dandori writes,
 # run on the platforms themselves (Temporal's dev server, Argo Workflows on a kind cluster,
-# Step Functions on LocalStack) and compared with its reference interpreter; and the tests that
-# ask a server outside: e-Gov and the eCFR for the base layer, koyomi and yuen, and the Buf
-# Schema Registry for rulec. Nightly, by hand, and on a pull request that changes dandori.
+# Step Functions on LocalStack) and compared with its reference interpreter; the books of chobo
+# on a TiDB cluster (TiUP's playground) and on Vitess, as on MySQL; and the tests that ask a
+# server outside: e-Gov and the eCFR for the base layer, koyomi and yuen, and the Buf Schema
+# Registry for rulec. Nightly, by hand, and on a pull request that changes dandori.
 #
 # The tests of the tools level are tools.yml's: the steps here run only the tests that need a
 # platform, one at a time, as on the machine where they were written; the runner is this job's
@@ -124,6 +125,54 @@ jobs:
       - name: The LocalStack image
         run: docker pull -q localstack/localstack:4.14.0
 
+      # --- chobo: the MySQL family on TiDB (chobo's DESIGN 4.5). TiUP v1.17.1, held to its
+      # release's checksum, with the root.json the mirror's install script puts beside it (version
+      # 2, held to the checksum taken when this was written; TiUP checks the roots that follow it,
+      # and the components against them), runs the playground of TiDB 8.5.8: one TiDB, TiKV and PD.
+      # MySQL 8.4's client loads the tables there, and its server is the one the same tests start
+      # for MySQL.
+      - name: "chobo: the runners, MySQL 8.4 and TiDB 8.5.8 on TiUP's playground"
+        run: |
+          set -eu
+          npm ci --prefix crates/chobo/tools/runner
+          uv venv --python 3.13 crates/chobo/tools/runner/.venv
+          uv pip install --python crates/chobo/tools/runner/.venv/bin/python --require-hashes -r crates/chobo/tools/runner/requirements.txt
+          sudo apt-get install -y -q libaio1t64 libnuma1
+          [ -e /usr/lib/x86_64-linux-gnu/libaio.so.1 ] || sudo ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
+          sh crates/chobo/tools/mysql/fetch.sh
+          echo "RITSU_MYSQL_BIN=$GITHUB_WORKSPACE/crates/chobo/tools/mysql/mysql/bin" >> "$GITHUB_ENV"
+          export TIUP_HOME="$RUNNER_TEMP/tiup"
+          mkdir -p "$TIUP_HOME/bin"
+          curl -fsSL -o "$RUNNER_TEMP/tiup.tar.gz" https://tiup-mirrors.pingcap.com/tiup-v1.17.1-linux-amd64.tar.gz
+          echo "1dda2543e8d8ef98f69f76981982ff1176e09276d7df26bcd63a198287d6a945  $RUNNER_TEMP/tiup.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/tiup.tar.gz" -C "$TIUP_HOME/bin"
+          curl -fsSL -o "$TIUP_HOME/bin/root.json" https://tiup-mirrors.pingcap.com/root.json
+          echo "032201888f247db943a3ab5b84ecb5e6dbd1d77c6b9adc9657b01175cdb534bf  $TIUP_HOME/bin/root.json" | sha256sum -c -
+          nohup "$TIUP_HOME/bin/tiup" playground v8.5.8 --tag chobo --tiflash 0 --without-monitor --host 127.0.0.1 --db.port 4000 > "$RUNNER_TEMP/tidb.log" 2>&1 &
+          mysql="crates/chobo/tools/mysql/mysql/bin/mysql --no-defaults -h 127.0.0.1 -P 4000 -u root"
+          for i in $(seq 1 150); do
+            if $mysql -e 'select 1' > /dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          $mysql -e 'select tidb_version()\G' || { cat "$RUNNER_TEMP/tidb.log"; exit 1; }
+          echo "RITSU_TIDB=127.0.0.1:4000" >> "$GITHUB_ENV"
+
+      # --- chobo: the MySQL family on Vitess (chobo's DESIGN 4.5). vttestserver, vtcombo and
+      # mysqlctl, built from the source of Vitess v24.0.5: the tag alone is cloned, and held to the
+      # commit it was when this was written. The tests start a throwaway vttestserver of their own,
+      # with the MySQL 8.4 of the step above under it (RITSU_MYSQL_BIN).
+      - name: "chobo: Vitess v24.0.5, built from its source"
+        env:
+          GOTOOLCHAIN: auto
+        run: |
+          set -eu
+          git clone -q --depth 1 --branch v24.0.5 https://github.com/vitessio/vitess.git "$RUNNER_TEMP/vitess"
+          cd "$RUNNER_TEMP/vitess"
+          test "$(git rev-parse HEAD)" = 9b28c872ea20bfbe9d5ab89621473910157aa772
+          go build -trimpath -o bin/ ./go/cmd/vttestserver ./go/cmd/vtcombo ./go/cmd/mysqlctl
+          bin/vtcombo --version
+          echo "RITSU_VITESS_BIN=$RUNNER_TEMP/vitess/bin" >> "$GITHUB_ENV"
+
       - name: Copy in the pages the sites share
         run: |
           website/rulec/sync.sh
@@ -165,6 +214,31 @@ jobs:
             kubectl --context kind-dandori -n argo get workflows
             failed=1
           fi
+          exit $failed
+
+      - name: "chobo: the MySQL family on MySQL, TiDB and Vitess, one test at a time"
+        run: |
+          set -u
+          failed=0
+          for pt in \
+            chobo:every_scenario_matches_on_the_mysql_family \
+            chobo:what_only_the_mysql_family_has \
+            chobo:what_only_the_mysql_family_has_in_japanese \
+            ritsu-testkit:the_databases_made_on_a_server_of_the_machines_are_dropped_with_the_value \
+            ritsu-testkit:a_vitess_is_started_and_stopped
+          do
+            p="${pt%%:*}"
+            t="${pt#*:}"
+            echo "::group::$p $t"
+            if ! cargo xtask test --level platforms -p "$p" -- --exact "$t"; then
+              echo "::warning::$t failed once; it runs once more (DESIGN 10.6)"
+              if ! cargo xtask test --level platforms -p "$p" -- --exact "$t"; then
+                echo "::error::$t failed twice"
+                failed=1
+              fi
+            fi
+            echo "::endgroup::"
+          done
           exit $failed
 
       # --- The servers outside. rulec's test fetches a dependency of a contract from the Buf

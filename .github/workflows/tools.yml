@@ -249,12 +249,12 @@ jobs:
           echo "$d/bin" >> "$GITHUB_PATH"
 
       # dandori's tests/examples.rs runs the books its examples call on chobo's clients, through
-      # chobo's runners, on a throwaway PostgreSQL cluster (the step below) and a TigerBeetle
-      # replica; ritsu's tests/gen.rs type-checks the packages with chobo's tigerbeetle packages,
-      # koyomi's mypy and the Cedar of sekisho's runners (cedar-wasm, cedarpy, cedar-go), and
-      # dandori's tests/secrets.rs takes the same mypy (DANDORI_MYPY) to hold the Python of a flow
-      # with `history encrypted` to `mypy --strict`. They are installed as the others' steps
-      # install them.
+      # chobo's runners, on a throwaway PostgreSQL cluster (the step below), a TigerBeetle replica
+      # and a throwaway MySQL server (chobo's MySQL step, further down); ritsu's tests/gen.rs
+      # type-checks the packages with chobo's tigerbeetle packages, koyomi's mypy and the Cedar of
+      # sekisho's runners (cedar-wasm, cedarpy, cedar-go), and dandori's tests/secrets.rs takes the
+      # same mypy (DANDORI_MYPY) to hold the Python of a flow with `history encrypted` to
+      # `mypy --strict`. They are installed as the others' steps install them.
       - name: "dandori: chobo's runners and TigerBeetle, for the books; koyomi's mypy and sekisho's runners, for ritsu's packages and dandori's encrypted history"
         if: matrix.group == 'dandori'
         run: |
@@ -304,6 +304,19 @@ jobs:
           npm ci --prefix crates/chobo/tools/mermaid
           sh crates/chobo/tools/tigerbeetle/fetch.sh
           echo "RITSU_TIGERBEETLE=$GITHUB_WORKSPACE/crates/chobo/tools/tigerbeetle/tigerbeetle" >> "$GITHUB_ENV"
+
+      # chobo's tests of the MySQL family (tests/backends.rs, tests/mysql.rs) and dandori's of the
+      # books (tests/examples.rs) start throwaway servers of MySQL 8.4 from chobo's
+      # tools/mysql/fetch.sh's build; TiDB's are the platforms job's. mysqld asks libaio and libnuma,
+      # and Ubuntu 24.04 names libaio's library libaio.so.1t64.
+      - name: "chobo: MySQL 8.4, for the throwaway servers of the MySQL family"
+        if: matrix.group == 'the others' || matrix.group == 'dandori'
+        run: |
+          set -eu
+          sudo apt-get install -y -q libaio1t64 libnuma1
+          [ -e /usr/lib/x86_64-linux-gnu/libaio.so.1 ] || sudo ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
+          sh crates/chobo/tools/mysql/fetch.sh
+          echo "RITSU_MYSQL_BIN=$GITHUB_WORKSPACE/crates/chobo/tools/mysql/mysql/bin" >> "$GITHUB_ENV"
 
       - name: "yuen: prov and reqif, and the schemas of ReqIF"
         if: matrix.group == 'the others'
