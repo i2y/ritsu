@@ -1,15 +1,16 @@
 //! What the testkit does, held to itself: directories that remove themselves and those of ended
 //! test processes, finding a program (the Cedar CLI at its version), the time limit, golden files,
-//! the SKIP line and its log, the levels, and what a test starts — PostgreSQL, TigerBeetle, Chrome,
-//! Mermaid, a small HTTP server — each stopped when it is dropped.
+//! the SKIP line and its log, the levels, and what a test starts — PostgreSQL, TigerBeetle, MySQL,
+//! Vitess (or databases on a TiDB cluster of the machine's), Chrome, Mermaid, a small HTTP server —
+//! each stopped when it is dropped.
 //!
 //! What reads an environment variable (`RITSU_SKIP_LOG`, `RITSU_TEST_LEVEL`, `RITSU_BLESS`) is
 //! tried in a child: this test binary run again on one test, with the variable set for it alone.
 
-use ritsu_testkit::{TempDir, cedar, chrome, golden, level, mermaid, pg, run, skip, tigerbeetle, tmp, tools};
+use ritsu_testkit::{TempDir, cedar, chrome, golden, level, mermaid, mysql, pg, run, skip, tigerbeetle, tmp, tools};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// This test binary, run again on `test` alone, with `envs`: what the child printed.
@@ -56,9 +57,25 @@ fn the_directories_of_ended_processes_are_removed_and_their_servers_stopped() {
     assert!(tmp::alive(std::process::id()));
     // A server it left running: a sleep, noted under its program's name.
     let mut server = Command::new("sleep").arg("60").spawn().unwrap();
+    // Two process groups it left, whose first process has ended and left a sleep in the group,
+    // as vttestserver can leave its MySQL server: one noted with the program of the sleep, one
+    // with a program none of its processes runs.
+    let group = || {
+        let mut sh = Command::new("sh");
+        sh.args(["-c", "sleep 60 >/dev/null 2>&1 & echo $!"]).stdout(Stdio::piped());
+        std::os::unix::process::CommandExt::process_group(&mut sh, 0);
+        let sh = sh.spawn().unwrap();
+        let pgid = sh.id();
+        let out = sh.wait_with_output().unwrap();
+        let sleep: u32 = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
+        assert!(tmp::alive(sleep));
+        (pgid, sleep)
+    };
+    let (noted, orphan) = group();
+    let (other, kept) = group();
     let left = std::env::temp_dir().join(format!("ritsu-test-ritsu-testkit-{pid}-0-left"));
     std::fs::create_dir_all(&left).unwrap();
-    std::fs::write(left.join(".servers"), format!("{} sleep\n", server.id())).unwrap();
+    std::fs::write(left.join(".servers"), format!("{} sleep\n-{noted} vtcombo sleep\n-{other} ritsu-no-such-program\n", server.id())).unwrap();
     // A directory of this process is kept.
     let mine = TempDir::new("mine");
     tmp::sweep();
@@ -73,6 +90,12 @@ fn the_directories_of_ended_processes_are_removed_and_their_servers_stopped() {
         assert!(start.elapsed() < Duration::from_secs(10), "the server is still running");
         std::thread::sleep(Duration::from_millis(20));
     }
+    while tmp::alive(orphan) {
+        assert!(start.elapsed() < Duration::from_secs(10), "the noted group is still running");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(tmp::alive(kept), "a group none of whose processes runs a program noted with it is kept");
+    let _ = Command::new("kill").args(["-9", &format!("-{other}")]).status();
 }
 
 #[test]
@@ -330,6 +353,105 @@ fn a_tigerbeetle_replica_is_started_and_stopped() {
         assert!(start.elapsed() < Duration::from_secs(10), "it still takes connections");
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+#[test]
+fn a_mysql_server_is_started_and_stopped() {
+    if !level::need(level::Need::MySql) {
+        return;
+    }
+    let my = match mysql::MySql::start() {
+        Ok(m) => m,
+        Err(why) => {
+            skip(&why);
+            return;
+        }
+    };
+    assert!(my.label.starts_with("MySQL "), "{}", my.label);
+    assert_eq!(my.sql("", "select 40 + 2").unwrap().trim(), "42");
+    assert!(my.sql("", "select nonsense").is_err());
+    let db = my.database("kit").unwrap();
+    my.sql(&db, "create table t (n int); insert into t values (42)").unwrap();
+    assert_eq!(my.sql(&db, "select n from t").unwrap().trim(), "42");
+    let addr = format!("{}:{}", my.host, my.port);
+    assert!(std::net::TcpStream::connect(&addr).is_ok(), "it takes connections");
+    drop(my);
+    let start = Instant::now();
+    while std::net::TcpStream::connect(&addr).is_ok() {
+        assert!(start.elapsed() < Duration::from_secs(10), "it still takes connections");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// A server of the machine's (`RITSU_TIDB`) keeps running when its value is dropped, and the
+/// databases the test made on it go with the value.
+#[test]
+fn the_databases_made_on_a_server_of_the_machines_are_dropped_with_the_value() {
+    if !level::need(level::Need::TiDb) {
+        return;
+    }
+    let tidb = match mysql::MySql::at("TIDB", "TiDB") {
+        Ok(m) => m,
+        Err(why) => {
+            skip(&why);
+            return;
+        }
+    };
+    assert!(tidb.label.starts_with("TiDB v"), "{}", tidb.label);
+    let db = tidb.database("kit").unwrap();
+    let has = |my: &mysql::MySql| my.sql("", "show databases").unwrap().lines().any(|l| l == db);
+    assert!(has(&tidb), "{db} is made");
+    let other = mysql::MySql::at("TIDB", "TiDB").unwrap();
+    drop(tidb);
+    assert!(!has(&other), "{db} is dropped with the value");
+    assert_eq!(other.sql("", "select 40 + 2").unwrap().trim(), "42", "the server still answers");
+}
+
+/// A throwaway Vitess answers through vtgate in its keyspace, shards a table by a column, fails a
+/// transaction that would cross shards, and stops with what it started under it when it is
+/// dropped.
+#[test]
+fn a_vitess_is_started_and_stopped() {
+    if !level::need(level::Need::Vitess) {
+        return;
+    }
+    let vt = match mysql::MySql::vitess(2) {
+        Ok(v) => v,
+        Err(why) => {
+            skip(&why);
+            return;
+        }
+    };
+    assert!(vt.label.starts_with("Vitess ") && vt.label.ends_with(", 2 shards"), "{}", vt.label);
+    assert!(vt.is_vitess());
+    let ks = vt.database("kit").unwrap();
+    assert_eq!(ks, "chobo", "Vitess makes no database: the keyspace stands for it");
+    assert_eq!(vt.sql(&ks, "show vitess_shards").unwrap().split_whitespace().collect::<Vec<_>>(), ["chobo/-80", "chobo/80-"]);
+    vt.sql(&ks, "create table `t` (`k` varchar(10) not null, `n` int, primary key (`k`))").unwrap();
+    vt.shard_by("t", "k").unwrap();
+    let keys = ["a", "b", "c", "d", "e", "f", "g", "h"];
+    for (i, k) in keys.iter().enumerate() {
+        vt.sql(&ks, &format!("insert into `t` (`k`, `n`) values ('{k}', {i})")).unwrap();
+    }
+    assert_eq!(vt.sql(&ks, "select sum(`n`) from `t`").unwrap().trim(), "28", "a scatter read adds up both shards");
+    let shard_of = |k: &str| vt.sql(&format!("{ks}:-80"), &format!("select count(*) from `t` where `k` = '{k}'")).unwrap().trim() == "1";
+    let (low, high): (Vec<&str>, Vec<&str>) = keys.iter().partition(|k| shard_of(k));
+    assert!(!low.is_empty() && !high.is_empty(), "the keys are on both shards: {low:?} {high:?}");
+    let err = vt.sql(&ks, &format!("begin; update `t` set `n` = 0 where `k` = '{}'; update `t` set `n` = 0 where `k` = '{}'; commit", low[0], high[0])).unwrap_err();
+    assert!(err.contains("multi-db transaction attempted"), "a transaction over two shards fails: {err}");
+    let link = format!("/tmp/ritsu-vt-{}-", std::process::id());
+    let running = || {
+        let out = Command::new("ps").args(["-A", "-o", "command="]).output().unwrap();
+        String::from_utf8_lossy(&out.stdout).lines().filter(|l| l.contains(&link)).count()
+    };
+    assert!(running() > 0, "its MySQL server runs with its data under {link}…");
+    drop(vt);
+    let start = Instant::now();
+    while running() > 0 {
+        assert!(start.elapsed() < Duration::from_secs(60), "what Vitess started is still running");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    assert!(!std::fs::read_dir("/tmp").unwrap().flatten().any(|e| e.file_name().to_string_lossy().starts_with(&link["/tmp/".len()..])), "the short name of its data is removed");
 }
 
 #[test]

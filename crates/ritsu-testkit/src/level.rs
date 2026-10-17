@@ -3,8 +3,8 @@
 //! | level | what runs |
 //! |---|---|
 //! | `fast` | nothing but cargo (git may be used, and curl, to ask a server the test itself started) |
-//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the Cedar CLI, the binaries of the other languages a test runs (rulec, koyomi, chobo and dandori for sakai's) |
-//! | `platforms` | services and clusters a test starts, and the network: Temporal, Argo on kind, LocalStack, Ollama, TypeSafe, OpenAI, e-Gov and the eCFR, Kani |
+//! | `tools` | the tools installed on the machine: compilers and checkers of generated code, PostgreSQL, TigerBeetle, MySQL, Chrome, Mermaid, xmllint, Lean, the linters, pixie's greeter, the Cedar CLI, the binaries of the other languages a test runs (rulec, koyomi, chobo and dandori for sakai's) |
+//! | `platforms` | services and clusters a test starts or uses, and the network: Temporal, Argo on kind, LocalStack, a TiDB cluster, Vitess, Ollama, TypeSafe, OpenAI, e-Gov and the eCFR, Kani |
 //!
 //! `RITSU_TEST_LEVEL` names the highest level to run; a test that needs a higher one prints a
 //! SKIP line and passes. Without it, every test runs what the machine has, as the crates did
@@ -67,6 +67,8 @@ pub enum Need {
     Protoc,
     Postgres,
     TigerBeetle,
+    /// A MySQL server the test starts from `RITSU_MYSQL_BIN` ([`crate::mysql`]).
+    MySql,
     Chrome,
     Mermaid,
     Xmllint,
@@ -81,6 +83,10 @@ pub enum Need {
     Temporal,
     Argo,
     LocalStack,
+    /// A TiDB cluster of the machine's, at `RITSU_TIDB` ([`crate::mysql`]).
+    TiDb,
+    /// A throwaway Vitess the test starts from `RITSU_VITESS_BIN` ([`crate::mysql`]).
+    Vitess,
     Ollama,
     TypeSafe,
     /// OpenAI's API, with the key of `OPENAI_API_KEY` (dandori's decision tasks of the Decisions API).
@@ -93,7 +99,7 @@ pub enum Need {
 impl Need {
     pub fn level(self) -> Level {
         match self {
-            Need::Temporal | Need::Argo | Need::LocalStack | Need::Ollama | Need::TypeSafe | Need::OpenAi | Need::Network | Need::Kani => Level::Platforms,
+            Need::Temporal | Need::Argo | Need::LocalStack | Need::TiDb | Need::Vitess | Need::Ollama | Need::TypeSafe | Need::OpenAi | Need::Network | Need::Kani => Level::Platforms,
             _ => Level::Tools,
         }
     }
@@ -112,6 +118,7 @@ impl Need {
             Need::Protoc => "protoc",
             Need::Postgres => "postgres",
             Need::TigerBeetle => "tigerbeetle",
+            Need::MySql => "mysql",
             Need::Chrome => "chrome",
             Need::Mermaid => "mermaid",
             Need::Xmllint => "xmllint",
@@ -122,6 +129,8 @@ impl Need {
             Need::Temporal => "temporal",
             Need::Argo => "argo",
             Need::LocalStack => "localstack",
+            Need::TiDb => "tidb",
+            Need::Vitess => "vitess",
             Need::Ollama => "ollama",
             Need::TypeSafe => "typesafe",
             Need::OpenAi => "openai",

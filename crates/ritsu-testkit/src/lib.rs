@@ -11,9 +11,10 @@
 //!   own `<NAME>_BLESS`.
 //! - [`skip`] and [`level`]: the `SKIP: <crate>: <reason>` line, `RITSU_SKIP_LOG`, and the three
 //!   levels of `RITSU_TEST_LEVEL` (DESIGN 10.2, 10.3).
-//! - [`pg`], [`tigerbeetle`], [`chrome`], [`mermaid`], [`http`]: what a test starts — a
-//!   throwaway PostgreSQL cluster, one TigerBeetle replica, a headless Chrome, Mermaid in that
-//!   Chrome, a small HTTP server — each stopped when its value is dropped.
+//! - [`pg`], [`tigerbeetle`], [`mysql`], [`chrome`], [`mermaid`], [`http`]: what a test starts —
+//!   a throwaway PostgreSQL cluster, one TigerBeetle replica, a throwaway MySQL server or Vitess (or
+//!   a database on a TiDB cluster of the machine's), a headless Chrome, Mermaid in that Chrome, a
+//!   small HTTP server — each stopped when its value is dropped.
 //! - [`cedar`]: the official Cedar CLI, at the version the tests are written for.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1). Every crate takes it as a
@@ -25,6 +26,7 @@ pub mod golden;
 pub mod http;
 pub mod level;
 pub mod mermaid;
+pub mod mysql;
 pub mod pg;
 pub mod run;
 pub mod skip;

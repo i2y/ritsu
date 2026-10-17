@@ -5,7 +5,8 @@
 //! process makes removes those of every test process that has ended (`kill -0` says there is no
 //! such process), and first stops the servers such a process noted in its directory
 //! ([`TempDir::note_server`]) while they are still the program it noted (a process ID can belong
-//! to another program by then). sakai and chobo did each half of this.
+//! to another program by then), and the process groups it noted ([`TempDir::note_group`]) while
+//! a process of one still runs a program noted with it. sakai and chobo did each half of this.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -15,7 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub const PREFIX: &str = "ritsu-test-";
 
 /// The file in a directory that names the servers started for it, a `<pid> <program>` line
-/// each.
+/// each, and a `-<pgid> <program> …` line for a process group.
 const SERVERS: &str = ".servers";
 
 pub struct TempDir(PathBuf);
@@ -64,9 +65,21 @@ impl TempDir {
     /// Note a server started for this directory, so that the first test process after this
     /// one stops it if this one is killed before it can.
     pub fn note_server(&self, pid: u32, program: &str) {
+        self.note(&format!("{pid} {program}"));
+    }
+
+    /// Note a process group started for this directory, a server and what it starts under it, so
+    /// that the first test process after this one kills the whole group if this one is killed
+    /// before it can, while a process of the group runs one of `programs`.
+    pub fn note_group(&self, pgid: u32, programs: &[&str]) {
+        self.note(&format!("-{pgid} {}", programs.join(" ")));
+    }
+
+    fn note(&self, line: &str) {
         let f = self.0.join(SERVERS);
         let mut text = std::fs::read_to_string(&f).unwrap_or_default();
-        text.push_str(&format!("{pid} {program}\n"));
+        text.push_str(line);
+        text.push('\n');
         let _ = std::fs::write(f, text);
     }
 }
@@ -117,6 +130,13 @@ fn program_of(pid: u32) -> String {
     Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default()
 }
 
+/// Whether a process of the process group `pgid` runs one of `programs`, as `ps` names them.
+fn group_runs(pgid: u32, programs: &[&str]) -> bool {
+    let Ok(o) = Command::new("ps").args(["-A", "-o", "pgid=,comm="]).output() else { return false };
+    let pgid = pgid.to_string();
+    String::from_utf8_lossy(&o.stdout).lines().any(|l| l.trim_start().split_once(' ').is_some_and(|(g, comm)| g == pgid && programs.iter().any(|p| comm.contains(p))))
+}
+
 /// The pid in a directory's name, after the prefix and the crate's name.
 fn pid_of(name: &str) -> Option<u32> {
     let rest = name.strip_prefix(PREFIX)?;
@@ -143,9 +163,15 @@ pub fn sweep() {
         }
         for line in std::fs::read_to_string(e.path().join(SERVERS)).unwrap_or_default().lines() {
             let mut it = line.split_whitespace();
-            let (Some(Ok(spid)), Some(program)) = (it.next().map(str::parse::<u32>), it.next()) else { continue };
-            if program_of(spid).contains(program) {
-                let _ = Command::new("kill").args(["-9", &spid.to_string()]).stderr(Stdio::null()).status();
+            let Some(id) = it.next() else { continue };
+            if let Some(Ok(pgid)) = id.strip_prefix('-').map(str::parse::<u32>) {
+                if group_runs(pgid, &it.collect::<Vec<_>>()) {
+                    let _ = Command::new("kill").args(["-9", &format!("-{pgid}")]).stderr(Stdio::null()).status();
+                }
+            } else if let (Ok(spid), Some(program)) = (id.parse::<u32>(), it.next()) {
+                if program_of(spid).contains(program) {
+                    let _ = Command::new("kill").args(["-9", &spid.to_string()]).stderr(Stdio::null()).status();
+                }
             }
         }
         let _ = std::fs::remove_dir_all(e.path());
