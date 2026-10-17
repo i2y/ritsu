@@ -125,6 +125,13 @@ pub fn alive(pid: u32) -> bool {
     }
 }
 
+/// Kill the process group `pgid`, all of it. The `--` keeps procps's kill from reading the negative
+/// ID as options: without it, `kill -9 -12345` signals the group of the first digit alone, and that
+/// of `-1` is every process the user may signal.
+pub fn kill_group(pgid: u32) {
+    let _ = Command::new("kill").args(["-KILL", "--", &format!("-{pgid}")]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+}
+
 /// The program a process runs, as `ps` names it.
 fn program_of(pid: u32) -> String {
     Command::new("ps").args(["-p", &pid.to_string(), "-o", "comm="]).output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default()
@@ -166,7 +173,7 @@ pub fn sweep() {
             let Some(id) = it.next() else { continue };
             if let Some(Ok(pgid)) = id.strip_prefix('-').map(str::parse::<u32>) {
                 if group_runs(pgid, &it.collect::<Vec<_>>()) {
-                    let _ = Command::new("kill").args(["-9", &format!("-{pgid}")]).stderr(Stdio::null()).status();
+                    kill_group(pgid);
                 }
             } else if let (Ok(spid), Some(program)) = (id.parse::<u32>(), it.next()) {
                 if program_of(spid).contains(program) {

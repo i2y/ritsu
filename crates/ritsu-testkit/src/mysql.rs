@@ -234,7 +234,7 @@ impl MySql {
         loop {
             if let Ok(Some(status)) = child.try_wait() {
                 // what it started before it stopped, its MySQL server, goes with it
-                let _ = Command::new("kill").args(["-9", &format!("-{}", child.id())]).stderr(Stdio::null()).status();
+                crate::tmp::kill_group(child.id());
                 let _ = std::fs::remove_file(&link);
                 let text = std::fs::read_to_string(dir.path().join("vttestserver.log")).unwrap_or_default();
                 return Err(format!("vttestserver stopped ({status}) before it took connections:\n{}", errors(&text)));
@@ -243,7 +243,7 @@ impl MySql {
                 break;
             }
             if started.elapsed() > Duration::from_secs(300) {
-                let _ = Command::new("kill").args(["-9", &format!("-{}", child.id())]).status();
+                crate::tmp::kill_group(child.id());
                 let _ = child.wait();
                 let _ = std::fs::remove_file(&link);
                 let text = std::fs::read_to_string(dir.path().join("vttestserver.log")).unwrap_or_default();
@@ -367,7 +367,7 @@ impl Drop for MySql {
                 while child.try_wait().ok().flatten().is_none() && started.elapsed() < Duration::from_secs(30) {
                     std::thread::sleep(Duration::from_millis(200));
                 }
-                let _ = Command::new("kill").args(["-9", &format!("-{}", child.id())]).stderr(Stdio::null()).status();
+                crate::tmp::kill_group(child.id());
             } else {
                 let _ = child.kill();
             }

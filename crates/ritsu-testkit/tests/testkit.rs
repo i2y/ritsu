@@ -95,7 +95,7 @@ fn the_directories_of_ended_processes_are_removed_and_their_servers_stopped() {
         std::thread::sleep(Duration::from_millis(20));
     }
     assert!(tmp::alive(kept), "a group none of whose processes runs a program noted with it is kept");
-    let _ = Command::new("kill").args(["-9", &format!("-{other}")]).status();
+    tmp::kill_group(other);
 }
 
 #[test]
