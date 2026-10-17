@@ -211,7 +211,7 @@ WorkflowTemplate on Argo Workflows in a kind cluster, and the graph with pydanti
 make the same calls, with the same arguments and idempotency keys, and end the same way. ritsu's
 playground, which runs dandori in the browser, must answer every example as the command does
 (ritsu's tests hold it to that). The operations of books that the runs make also go through the code dandori writes to chobo's clients,
-on PostgreSQL and TigerBeetle, and must answer what chobo's reference interpreter answers.
+on PostgreSQL, TigerBeetle and MySQL, and must answer what chobo's reference interpreter answers.
 [How it is checked](https://i2y.github.io/ritsu/dandori/assurance/) tells the rest, and how to run the
 tests.
 

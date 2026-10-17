@@ -1,16 +1,16 @@
 """Runs the operations of books of chobo's through the default Transport that dandori writes in
 Python (io.py's `book`), and through the Lambda function it writes for Step Functions
-(lambda/book_<book>_handler.py), on the Python clients chobo writes, against PostgreSQL or
-TigerBeetle, for tests/examples.rs (books_run_on_postgres_and_tigerbeetle). The TypeScript twin is
-run.ts, which says what goes in and what comes out; a run here answers its calls twice: through
-the Transport on its tenant ("answers"), and through the handler on the tenant with "/lambda" after
-it ("handled": the handler's result, or the type of what it raised, "raised", which for a refusal
-is the reason, as Step Functions names the error).
+(lambda/book_<book>_handler.py), on the Python clients chobo writes, against PostgreSQL,
+TigerBeetle or MySQL, for tests/examples.rs (books_run_on_postgres_tigerbeetle_and_mysql). The
+TypeScript twin is run.ts, which says what goes in and what comes out; a run here answers its calls
+twice: through the Transport on its tenant ("answers"), and through the handler on the tenant with
+"/lambda" after it ("handled": the handler's result, or the type of what it raised, "raised", which
+for a refusal is the reason, as Step Functions names the error).
 
     <chobo>/tools/runner/.venv/bin/python -B run.py <input.json>
 
-The Python is chobo's tools/runner's, which has psycopg and tigerbeetle; -B keeps it from writing
-bytecode into that venv.
+The Python is chobo's tools/runner's, which has psycopg, tigerbeetle and PyMySQL; -B keeps it from
+writing bytecode into that venv.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ import traceback
 from typing import Any
 
 import psycopg
+import pymysql
 import tigerbeetle as tb
 
 with open(sys.argv[1], encoding="utf-8") as f:
@@ -48,16 +49,25 @@ def load(path: str) -> Any:
 async def main() -> None:
     conn: Any = None
     client: Any = None
+    my: Any = None
     if INPUT["backend"] == "postgres":
         c = INPUT["postgres"]
         conn = psycopg.connect(host=c["host"], port=c["port"], dbname=c["database"], user=c["user"], autocommit=True)
+    elif INPUT["backend"] == "mysql":
+        c = INPUT["mysql"]
+        # autocommit: each call is a transaction of the client's own
+        my = pymysql.connect(host=c["host"], port=c["port"], user=c["user"], password="", database=c["database"], autocommit=True, charset="utf8mb4")
     else:
         c = INPUT["tigerbeetle"]
         client = tb.ClientSync(cluster_id=int(c["cluster"]), replica_addresses=",".join(c["addresses"]))
 
     def book(path: str, tenant: str) -> Any:
         mod = load(path)
-        return mod.postgres(conn, tenant) if conn is not None else mod.tigerbeetle(client, tenant)
+        if conn is not None:
+            return mod.postgres(conn, tenant)
+        if my is not None:
+            return mod.mysql(my, tenant)
+        return mod.tigerbeetle(client, tenant)
 
     try:
         runs = []
@@ -87,6 +97,8 @@ async def main() -> None:
     finally:
         if conn is not None:
             conn.close()
+        if my is not None:
+            my.close()
         if client is not None:
             client.close()
 

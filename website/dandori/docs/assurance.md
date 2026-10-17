@@ -201,7 +201,8 @@ protoc.
   the calendar's offset, which must read as the same day.
 - The operations of books that the flows' runs make go through the `Transport` dandori writes in
   TypeScript, Python and Go, and through the Lambda function it writes for Step Functions, to the
-  clients chobo writes, on PostgreSQL and on TigerBeetle, started as chobo's own tests start them.
+  clients chobo writes, on PostgreSQL, on TigerBeetle and on MySQL, started as chobo's own tests
+  start them.
   Each must answer what chobo's reference interpreter answers for the same operations: on an empty
   book, after a delivery has filled it, and once more on the same book, where every operation was
   done before. The `io.ts` of durable functions and of Argo's caller is Temporal's, and the `io.py` of
@@ -282,10 +283,12 @@ changes.
 
 A test that cannot find Node, the tools, buf, protoc, the cluster, the `argo` command, the image of
 LocalStack or Chrome prints a `SKIP:` line and passes, so read the output with `-- --nocapture`.
-The test of the books uses PostgreSQL, TigerBeetle and chobo's `tools/runner` (its `node_modules`,
-`.venv` and Go module) as chobo's own tests do, and says SKIP when one is missing. The whole
-`cargo test` takes six to seven minutes; `tools/argo/setup.sh` sets Argo's controller up for it, to
-look at a workflow again a second after a change rather than ten, on the node image of kind 0.33.0.
+The test of the books uses PostgreSQL, TigerBeetle, MySQL (the `bin` directory `RITSU_MYSQL_BIN`
+names, which `crates/chobo/tools/mysql/fetch.sh` prints, or `mysqld` on the PATH) and chobo's
+`tools/runner` (its `node_modules`, `.venv` and Go module) as chobo's own tests do, and says SKIP
+when one is missing. The whole `cargo test` takes six to seven minutes; `tools/argo/setup.sh` sets
+Argo's controller up for it, to look at a workflow again a second after a change rather than ten,
+on the node image of kind 0.33.0.
 `DANDORI_FLOW=<part of a path>` runs only the flows whose path
 has it, and `DANDORI_BLESS=1` rewrites the golden files and the site's pages of the examples, and records the kept histories anew.
 After a change to what `check`, `build` or `doc` answers, `website/tools/make_wasm.sh`, at the root of

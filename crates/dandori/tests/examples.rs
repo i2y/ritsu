@@ -1711,7 +1711,7 @@ fn default_transports_send_what_the_calls_say() {
     assert!(checked > 0, "no call went through a Transport");
 }
 
-/// What a flow's runs ask of its books, for books_run_on_postgres_and_tigerbeetle: the operations
+/// What a flow's runs ask of its books, for books_run_on_postgres_tigerbeetle_and_mysql: the operations
 /// each scenario's run makes, in order, as the reference interpreter shows them for Temporal
 /// (`{"book", "transfer", "op", "args", "amounts"?}`), each different list once; then each list
 /// after the operations that open its books (book_opening), and that with the list once more on the
@@ -1839,15 +1839,15 @@ fn go_newer(a: &str, b: &str) -> bool {
 
 /// The operations the flows run on books of chobo's go through the default Transport dandori
 /// writes in TypeScript (io.ts), in Python (io.py) and in Go, and through the Lambda function it
-/// writes for Step Functions, to the clients chobo writes, on PostgreSQL and on TigerBeetle started
-/// as chobo's tests start them (ritsu-testkit's): each answers what chobo's reference interpreter
-/// answers for the same operations. The operations are those the scenarios' runs make
+/// writes for Step Functions, to the clients chobo writes, on PostgreSQL, on TigerBeetle and on
+/// MySQL started as chobo's tests start them (ritsu-testkit's): each answers what chobo's reference
+/// interpreter answers for the same operations. The operations are those the scenarios' runs make
 /// (book_lists). The other targets hand them to the same code: durable's io.ts and the Argo
 /// caller's are Temporal's, and pydantic-graph's io.py is Temporal's for Python, which the test
 /// holds them to.
 #[test]
-fn books_run_on_postgres_and_tigerbeetle() {
-    if !need(Need::Postgres) || !need(Need::TigerBeetle) {
+fn books_run_on_postgres_tigerbeetle_and_mysql() {
+    if !need(Need::Postgres) || !need(Need::TigerBeetle) || !need(Need::MySql) {
         return;
     }
     type Flow = (PathBuf, Model, Vec<Vec<Value>>, Vec<Vec<Value>>);
@@ -1863,7 +1863,7 @@ fn books_run_on_postgres_and_tigerbeetle() {
         flows.push((f, m, lists, expected));
     }
     if flows.is_empty() {
-        skip("no flow runs an operation on a book; books_run_on_postgres_and_tigerbeetle has nothing to run");
+        skip("no flow runs an operation on a book; books_run_on_postgres_tigerbeetle_and_mysql has nothing to run");
         return;
     }
     let work = scratch("books");
@@ -1983,7 +1983,7 @@ fn books_run_on_postgres_and_tigerbeetle() {
 
     // TypeScript: beside chobo's tools/runner/node_modules, as chobo's runner is
     let ts_dir = work.join("ts");
-    let typescript = Command::new("node").arg("--version").output().is_ok_and(|o| o.status.success()) && runner.join("node_modules/pg").is_dir() && runner.join("node_modules/tigerbeetle-node").is_dir();
+    let typescript = Command::new("node").arg("--version").output().is_ok_and(|o| o.status.success()) && ["pg", "tigerbeetle-node", "mysql2"].iter().all(|m| runner.join("node_modules").join(m).is_dir());
     if typescript {
         std::fs::create_dir_all(&ts_dir).unwrap();
         std::os::unix::fs::symlink(runner.join("node_modules"), ts_dir.join("node_modules")).unwrap();
@@ -1993,7 +1993,7 @@ fn books_run_on_postgres_and_tigerbeetle() {
             std::fs::copy(p, ts_dir.join(format!("io{i}.ts"))).unwrap();
         }
     } else {
-        skip("node, or pg and tigerbeetle-node in chobo's tools/runner/node_modules, is missing; the books are not run through io.ts");
+        skip("node, or pg, tigerbeetle-node and mysql2 in chobo's tools/runner/node_modules, is missing; the books are not run through io.ts");
     }
     // Python: chobo's tools/runner/.venv, which has psycopg and tigerbeetle
     let python = runner.join(".venv/bin/python");
@@ -2036,7 +2036,7 @@ fn books_run_on_postgres_and_tigerbeetle() {
         std::fs::create_dir_all(&module).unwrap();
         std::fs::write(module.join("go.mod"), gomod).unwrap();
         std::fs::write(module.join("go.sum"), sums.join("\n") + "\n").unwrap();
-        let mut imports = vec!["\"context\"".to_string(), "\"encoding/json\"".into(), "\"fmt\"".into(), "\"math/big\"".into(), "\"os\"".into(), String::new(), "\"github.com/jackc/pgx/v5/pgxpool\"".into(), "tb \"github.com/tigerbeetle/tigerbeetle-go\"".into(), String::new()];
+        let mut imports = vec!["\"context\"".to_string(), "\"database/sql\"".into(), "\"encoding/json\"".into(), "\"fmt\"".into(), "\"math/big\"".into(), "\"os\"".into(), String::new(), "_ \"github.com/go-sql-driver/mysql\"".into(), "\"github.com/jackc/pgx/v5/pgxpool\"".into(), "tb \"github.com/tigerbeetle/tigerbeetle-go\"".into(), String::new()];
         let mut flow_entries = String::new();
         for (i, (_, m, _, _)) in flows.iter().enumerate() {
             let pkg = dandori::temporal_go::package(m);
@@ -2056,12 +2056,16 @@ fn books_run_on_postgres_and_tigerbeetle() {
         for (k, name) in books.keys().enumerate() {
             client(name, chobo::target::Target::PostgresGo, &module.join(format!("books/pg{k}")));
             client(name, chobo::target::Target::TigerBeetleGo, &module.join(format!("books/tb{k}")));
+            client(name, chobo::target::Target::MySqlGo, &module.join(format!("books/my{k}")));
             imports.push(format!("pg{k} \"dandoribooks/books/pg{k}\""));
             imports.push(format!("tb{k} \"dandoribooks/books/tb{k}\""));
-            book_entries.push_str(&format!("\t{name:?}: func(p *pgxpool.Pool, c tb.Client, tenant string) any {{\n\t\tif p != nil {{\n\t\t\treturn pg{k}.Postgres(p, tenant)\n\t\t}}\n\t\treturn tb{k}.TigerBeetle(c, tenant)\n\t}},\n"));
+            imports.push(format!("my{k} \"dandoribooks/books/my{k}\""));
+            book_entries.push_str(&format!(
+                "\t{name:?}: func(p *pgxpool.Pool, c tb.Client, d *sql.DB, tenant string) any {{\n\t\tif p != nil {{\n\t\t\treturn pg{k}.Postgres(p, tenant)\n\t\t}}\n\t\tif d != nil {{\n\t\t\treturn my{k}.MySQL(d, tenant, false)\n\t\t}}\n\t\treturn tb{k}.TigerBeetle(c, tenant)\n\t}},\n"
+            ));
         }
         let main = format!(
-            "// The default Transport dandori writes in Go, running the operations of books on the Go clients chobo writes,\n// for books_run_on_postgres_and_tigerbeetle (tests/examples.rs), as tools/books/run.ts does in TypeScript.\npackage main\n\nimport (\n{}\n)\n\n{GO_BOOKS_MAIN}\nvar flows = map[string]func(map[string]any) func(context.Context, call) answer{{\n{flow_entries}}}\n\nvar books = map[string]func(*pgxpool.Pool, tb.Client, string) any{{\n{book_entries}}}\n",
+            "// The default Transport dandori writes in Go, running the operations of books on the Go clients chobo writes,\n// for books_run_on_postgres_tigerbeetle_and_mysql (tests/examples.rs), as tools/books/run.ts does in TypeScript.\npackage main\n\nimport (\n{}\n)\n\n{GO_BOOKS_MAIN}\nvar flows = map[string]func(map[string]any) func(context.Context, call) answer{{\n{flow_entries}}}\n\nvar books = map[string]func(*pgxpool.Pool, tb.Client, *sql.DB, string) any{{\n{book_entries}}}\n",
             imports.iter().map(|i| if i.is_empty() { String::new() } else { format!("\t{i}") }).collect::<Vec<_>>().join("\n")
         );
         std::fs::write(module.join("main.go"), main).unwrap();
@@ -2075,11 +2079,12 @@ fn books_run_on_postgres_and_tigerbeetle() {
 
     let pg = ritsu_testkit::pg::Postgres::start();
     let tb = ritsu_testkit::tigerbeetle::TigerBeetle::start();
+    let my = ritsu_testkit::mysql::MySql::start();
     let mut failures: Vec<String> = Vec::new();
     let mut counts: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
-    for backend in ["postgres", "tigerbeetle"] {
-        let connection = match (backend, &pg, &tb) {
-            ("postgres", Ok(pg), _) => {
+    for backend in ["postgres", "tigerbeetle", "mysql"] {
+        let connection = match (backend, &pg, &tb, &my) {
+            ("postgres", Ok(pg), _, _) => {
                 // the SQL of every book, in the database the clients call
                 for name in books.keys() {
                     let sql = client(name, chobo::target::Target::Postgres, &work.join("sql"));
@@ -2088,9 +2093,19 @@ fn books_run_on_postgres_and_tigerbeetle() {
                 }
                 json!({ "host": pg.socket.to_str().unwrap(), "port": pg.port, "database": "postgres", "user": pg.user })
             }
-            ("tigerbeetle", _, Ok(tb)) => json!({ "cluster": "0", "addresses": [tb.address] }),
+            ("tigerbeetle", _, Ok(tb), _) => json!({ "cluster": "0", "addresses": [tb.address] }),
+            ("mysql", _, _, Ok(my)) => {
+                // the tables of every book, in a database of the server's
+                let db = my.database("books").unwrap();
+                for name in books.keys() {
+                    let sql = client(name, chobo::target::Target::MySql, &work.join("mysql"));
+                    let out = my.mysql(&db).stdin(std::fs::File::open(&sql).unwrap()).output().unwrap();
+                    assert!(out.status.success(), "{name}: the tables do not load on {}:\n{}", my.label, String::from_utf8_lossy(&out.stderr));
+                }
+                json!({ "host": my.host, "port": my.port, "database": db, "user": my.user })
+            }
             // each backend's own reason: TigerBeetle's is not PostgreSQL's
-            ("postgres", Err(why), _) | ("tigerbeetle", _, Err(why)) => {
+            ("postgres", Err(why), _, _) | ("tigerbeetle", _, Err(why), _) | ("mysql", _, _, Err(why)) => {
                 skip(&format!("{why}; the books are not run on {backend}"));
                 continue;
             }
@@ -2103,7 +2118,11 @@ fn books_run_on_postgres_and_tigerbeetle() {
         };
         if typescript {
             let dir = ts_dir.join(backend);
-            let target = if backend == "postgres" { chobo::target::Target::PostgresTypeScript } else { chobo::target::Target::TigerBeetleTypeScript };
+            let target = match backend {
+                "postgres" => chobo::target::Target::PostgresTypeScript,
+                "mysql" => chobo::target::Target::MySqlTypeScript,
+                _ => chobo::target::Target::TigerBeetleTypeScript,
+            };
             let clients: serde_json::Map<String, Value> = books.keys().map(|n| (n.clone(), json!(client(n, target, &dir)))).collect();
             let rs = runs("typescript", backend, &|i, _, r| {
                 r["io"] = json!(ts_dir.join(format!("io{i}.ts")));
@@ -2119,7 +2138,11 @@ fn books_run_on_postgres_and_tigerbeetle() {
         }
         if python.is_file() {
             let dir = work.join("py").join(backend);
-            let target = if backend == "postgres" { chobo::target::Target::PostgresPython } else { chobo::target::Target::TigerBeetlePython };
+            let target = match backend {
+                "postgres" => chobo::target::Target::PostgresPython,
+                "mysql" => chobo::target::Target::MySqlPython,
+                _ => chobo::target::Target::TigerBeetlePython,
+            };
             let clients: serde_json::Map<String, Value> = books.keys().map(|n| (n.clone(), json!(client(n, target, &dir)))).collect();
             let rs = runs("python", backend, &|i, _, r| {
                 r["io"] = json!(io_py[i]);
@@ -2191,6 +2214,12 @@ type input struct {
 		Cluster   string   `json:"cluster"`
 		Addresses []string `json:"addresses"`
 	} `json:"tigerbeetle"`
+	MySQL struct {
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Database string `json:"database"`
+		User     string `json:"user"`
+	} `json:"mysql"`
 	Runs []struct {
 		Flow   string `json:"flow"`
 		Tenant string `json:"tenant"`
@@ -2221,6 +2250,7 @@ func run() error {
 	ctx := context.Background()
 	var pool *pgxpool.Pool
 	var client tb.Client
+	var db *sql.DB
 	if in.Backend == "postgres" {
 		c := in.Postgres
 		pool, err = pgxpool.New(ctx, fmt.Sprintf("host=%s port=%d dbname=%s user=%s", c.Host, c.Port, c.Database, c.User))
@@ -2228,6 +2258,13 @@ func run() error {
 			return err
 		}
 		defer pool.Close()
+	} else if in.Backend == "mysql" {
+		c := in.MySQL
+		db, err = sql.Open("mysql", fmt.Sprintf("%s@tcp(%s:%d)/%s", c.User, c.Host, c.Port, c.Database))
+		if err != nil {
+			return err
+		}
+		defer db.Close()
 	} else {
 		var cluster big.Int
 		cluster.SetString(in.TigerBeetle.Cluster, 10)
@@ -2242,7 +2279,7 @@ func run() error {
 		values := map[string]any{}
 		for _, c := range r.Calls {
 			if _, ok := values[c.Book]; !ok {
-				values[c.Book] = books[c.Book](pool, client, r.Tenant)
+				values[c.Book] = books[c.Book](pool, client, db, r.Tenant)
 			}
 		}
 		book := flows[r.Flow](values)
