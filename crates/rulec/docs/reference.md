@@ -2077,7 +2077,9 @@ policy unique
 
 The first row is the header. Left of `->` are input columns, right of it output columns. A
 column may name an input, a `derive`, a boolean or enum `define`, or an output of an earlier
-table. An output column that introduces a new name declares its type there.
+table. An output column that introduces a new name declares its type there. One under a name
+that already has a type — an output, or a name a table above decides — may write that type
+again and no other (E103): what the column decides is what the name answers.
 
 ### Policies
 
@@ -2145,7 +2147,8 @@ clause free -> fee
 ```
 
 The heading names the clause and the output it defines (an `outputs` name, an intermediate an
-earlier table or clause introduced, or a new one with `-> name : type`). `when` is a list of
+earlier table or clause introduced, or a new one with `-> name : type`; on a name that already
+has a type, `: type` may only repeat it, as on a table's heading). `when` is a list of
 `<column> <cell>` joined by `and`, the cell being any of the seven kinds above, the column
 anything a table's column may be; a clause with no condition writes `when always` (leaving the
 line out is E046, for the reason a blank cell is E008). `then` holds what an output cell holds:
@@ -2401,7 +2404,8 @@ Its cells are held to the types of the columns they sit under, exactly as a tabl
 heading that names nothing is E012, a value that is not one of the column's is E012, and a
 literal the column cannot hold — `1lb` under `mass[g]`, a bare number where a unit is
 required, an expected `800kg` under a `money[JPY]` output — is E103. An expected value that
-cannot be read would otherwise leave nothing to hold the rule to.
+cannot be read would otherwise leave nothing to hold the rule to. A heading may write its
+output's type after the name, as a table's may, and no other type (E103).
 
 An example naming an enum value is **not** a row for it: W111 still asks which values no table
 names.

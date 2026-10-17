@@ -386,6 +386,9 @@ pub struct Checked {
     /// with none declared its rounding grid, which every answer sits on (§15.144). `scales`
     /// holds the value inside the code, which may be finer; this is what a caller counts.
     pub out_scales: HashMap<String, i128>,
+    /// Each output as its declaration types it (§15.247). A table takes the output's place in
+    /// `syms`; a type a heading writes on the output's name is held to this one.
+    outputs: HashMap<String, Sym>,
     /// Enum name -> values, in declaration order (§6.3 picks the first as a witness).
     pub enums: HashMap<String, Vec<String>>,
     /// The enums in the order they were declared, the imported ones first. Two enums may
@@ -1265,6 +1268,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         scales: HashMap::new(),
         grids: HashMap::new(),
         out_scales: HashMap::new(),
+        outputs: HashMap::new(),
         enums: HashMap::new(),
         groups: HashMap::new(),
         ordered: HashSet::new(),
@@ -1703,10 +1707,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 _ => {}
             }
         }
-        c.syms.insert(
-            o.name.text.clone(),
-            Sym { ty, span: o.name.span.clone(), kind: SymKind::Output, contract_only: false },
-        );
+        let sym = Sym { ty, span: o.name.span.clone(), kind: SymKind::Output, contract_only: false };
+        c.outputs.insert(o.name.text.clone(), sym.clone());
+        c.syms.insert(o.name.text.clone(), sym);
     }
 
     // E060: a step or a rounding grid of zero or less. `round up(0円)` passed the check and the
@@ -4474,6 +4477,27 @@ impl Checked {
                 Some(tr) => self.resolve(tr),
                 None => self.syms.get(&oc.name.text).map(|s| s.ty.clone()).unwrap_or(Ty::Unknown),
             };
+            // A type on the heading of a name that already has one — an output's, or the type a
+            // table or clause above decides it in — is that type again, or E103 (§15.247). The
+            // column took the type it wrote, in silence: an output declared `money[円, excl_tax]`
+            // came back `money[円, incl_tax]` from the generated code, and a column of `mass[g]`
+            // turned a money output into grams. The cells are still read in the type written, and
+            // the name keeps the type it had, so what reads the name further down does not say it
+            // again. An applied table's headings carry the types of the callee's declarations,
+            // which the callee's own check holds.
+            let had = match &oc.ty {
+                Some(tr) if t.applied.is_none() => self
+                    .outputs
+                    .get(&oc.name.text)
+                    .or_else(|| self.syms.get(&oc.name.text).filter(|s| s.kind == SymKind::TableOut))
+                    .filter(|s| s.ty != ty && s.ty != Ty::Unknown && ty != Ty::Unknown)
+                    .cloned()
+                    .map(|s| (tr.span.clone(), s)),
+                _ => None,
+            };
+            if let Some((sp, s)) = &had {
+                self.diags.push(retyped(&oc.name.text, &ty, sp, s, at(sp.line), false));
+            }
             out_ty.push(ty.clone());
             if t.name.is_some() {
                 // A column's storage scale, which is fixed by what its cells hold: the
@@ -4572,6 +4596,10 @@ impl Checked {
                         self.ranges.remove(&oc.name.text);
                     }
                 }
+                let ty = match had {
+                    Some((_, s)) => s.ty,
+                    None => ty,
+                };
                 self.syms.insert(
                     oc.name.text.clone(),
                     Sym { ty, span: oc.name.span.clone(), kind: SymKind::TableOut, contract_only: false },
@@ -4768,6 +4796,20 @@ impl Checked {
 
         let mut out_ty: Vec<Option<Ty>> = Vec::new();
         for oc in &t.outputs {
+            // A type on the heading is the output's again, or E103, as on a table's (§15.247).
+            // Nothing read it: the cells were read in the output's type whatever it said.
+            if let Some(tr) = &oc.ty {
+                let written = self.resolve(tr);
+                let had = self
+                    .outputs
+                    .get(&oc.name.text)
+                    .or_else(|| self.syms.get(&oc.name.text))
+                    .filter(|s| s.ty != written && s.ty != Ty::Unknown && written != Ty::Unknown)
+                    .cloned();
+                if let Some(s) = had {
+                    self.diags.push(retyped(&oc.name.text, &written, &tr.span, &s, at(tr.span.line), true));
+                }
+            }
             match self.syms.get(&oc.name.text) {
                 Some(s) => out_ty.push(Some(s.ty.clone())),
                 None => {
@@ -6826,6 +6868,47 @@ fn scale_of_type(tr: &TypeRef, ty: &Ty) -> i128 {
 /// Whether the type declares a step at all (`rate[step 1%]`), readable or not.
 fn has_step(tr: &TypeRef) -> bool {
     tr.args.iter().any(|a| matches!(a, TypeArg::Scaled(w, _) if w == crate::kw::STEP))
+}
+
+/// E103 for a type written at `sp` on the heading of `name`, whose type is `had`'s: an output's
+/// declaration, or the table or clause above that decides it (§15.247). The heading of a table or
+/// a clause decides the name, so which of the two is right is the author's to say; the heading of
+/// an example (`examples`) only reads the output.
+fn retyped(name: &str, written: &Ty, sp: &Span, had: &Sym, at: String, examples: bool) -> Diag {
+    let output = had.kind == SymKind::Output;
+    let (title, there) = if output {
+        (
+            tr!("出力 {name} は {} ですが、ここには {written} と書かれています", "Output {name} is {}, but {written} is written here", had.ty),
+            tr!("出力の宣言です", "the output is declared here"),
+        )
+    } else {
+        (
+            tr!("{name} は {} に決まっていますが、ここには {written} と書かれています", "{name} is decided as {}, but {written} is written here", had.ty),
+            tr!("ここで {} に決まります", "it is decided as {} here", had.ty),
+        )
+    };
+    let note = if examples && output {
+        tr!(
+            "例の値は、出力の型で読みます。ここに書いた型を消すか、出力の型にそろえてください。",
+            "An example's values are read in the output's type. Drop the type written here, or make it the output's."
+        )
+    } else if examples {
+        tr!(
+            "例の値は、上で決まった型で読みます。ここに書いた型を消すか、その型にそろえてください。",
+            "An example's values are read in the type decided above. Drop the type written here, or make it that type."
+        )
+    } else if output {
+        tr!(
+            "ここで決める値が、出力の値になります。どちらの型が正しいかを決めて、出力の宣言か、ここに書いた型を直してください。ここの型を消せば、出力の型で読みます。",
+            "What is decided here is what the output answers. Decide which type is right, and correct the output's declaration or the type written here; with no type here, it is read in the output's type."
+        )
+    } else {
+        tr!(
+            "一つの名前を決める表と節は、どれも同じ型で決めます。どちらの型が正しいかを決めて、片方を直してください。ここの型を消せば、上と同じ型で読みます。",
+            "The tables and clauses that decide one name decide it in one type. Decide which is right and correct the other; with no type here, it is read in the type above."
+        )
+    };
+    Diag::error("E103", title).at(at).mark(sp.clone(), "").mark(had.span.clone(), there).note(note)
 }
 
 /// E103 for a rate that is passed in with no step (§15.139). What the caller hands over is one

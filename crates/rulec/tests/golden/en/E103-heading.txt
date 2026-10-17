@@ -1,0 +1,9 @@
+error[E103]: Output fee is money[JPY, excl_tax], but money[JPY, incl_tax] is written here
+  --> tests/mutants/m_e103colen.rule:36 table fee_table
+   |
+36 | | dest    | size | -> fee : money[JPY, incl_tax] |
+   |                             ^^^^^^^^^^^^^^^^^^^^
+21 |   fee : money[JPY, excl_tax]  round up(10JPY)
+   |   ^^^ the output is declared here
+   |
+ What is decided here is what the output answers. Decide which type is right, and correct the output's declaration or the type written here; with no type here, it is read in the output's type.

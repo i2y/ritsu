@@ -1,0 +1,84 @@
+rule yupack_base_fee v1
+description "The base fee for sending from Tokyo"
+
+import std/jp/prefectures
+
+enum size_class = S60 | S80 | S100 | S120 | S140 | S160 | S170
+
+group tokyo   = Tokyo
+group hk      = Hokkaido, Fukuoka, Saga, Nagasaki, Kumamoto, Oita, Miyazaki, Kagoshima
+group near    = Aomori, Iwate, Miyagi, Akita, Yamagata, Fukushima, Ibaraki, Tochigi, Gunma, Saitama, Chiba, Kanagawa, Yamanashi, Niigata, Nagano, Toyama, Ishikawa, Fukui, Gifu, Shizuoka, Aichi, Mie
+group kinki   = Shiga, Kyoto, Osaka, Hyogo, Nara, Wakayama
+group cs      = Tottori, Shimane, Okayama, Hiroshima, Yamaguchi, Tokushima, Kagawa, Ehime, Kochi
+group okinawa = Okinawa
+
+inputs
+  dest   : jp_prefecture
+  girth  : length[cm]  range >=1cm <=170cm
+  weight : mass[g]  range >=1g <=25kg  contract_only
+
+outputs
+  fee : money[JPY, excl_tax]  round up(10JPY)
+
+table size_of  # Source: Japan Post, base fee table (Tokyo), size classes
+policy first
+| girth   | -> size : size_class |
+| <=60cm  | S60                  |
+| <=80cm  | S80                  |
+| <=100cm | S100                 |
+| <=120cm | S120                 |
+| <=140cm | S140                 |
+| <=160cm | S160                 |
+| -       | S170                 |
+
+table fee_table  # Source: Japan Post, base fee table (Tokyo)
+policy unique
+| dest    | size | -> fee : money[JPY, incl_tax] |
+| tokyo   | S60  | 820JPY                        |
+| tokyo   | S80  | 1130JPY                       |
+| tokyo   | S100 | 1450JPY                       |
+| tokyo   | S120 | 1770JPY                       |
+| tokyo   | S140 | 2120JPY                       |
+| tokyo   | S160 | 2450JPY                       |
+| tokyo   | S170 | 3000JPY                       |
+| near    | S60  | 880JPY                        |
+| near    | S80  | 1200JPY                       |
+| near    | S100 | 1500JPY                       |
+| near    | S120 | 1830JPY                       |
+| near    | S140 | 2170JPY                       |
+| near    | S160 | 2500JPY                       |
+| near    | S170 | 3070JPY                       |
+| kinki   | S60  | 990JPY                        |
+| kinki   | S80  | 1310JPY                       |
+| kinki   | S100 | 1620JPY                       |
+| kinki   | S120 | 1940JPY                       |
+| kinki   | S140 | 2300JPY                       |
+| kinki   | S160 | 2610JPY                       |
+| kinki   | S170 | 3750JPY                       |
+| cs      | S60  | 1150JPY                       |
+| cs      | S80  | 1440JPY                       |
+| cs      | S100 | 1780JPY                       |
+| cs      | S120 | 2080JPY                       |
+| cs      | S140 | 2440JPY                       |
+| cs      | S160 | 2750JPY                       |
+| cs      | S170 | 3890JPY                       |
+| hk      | S60  | 1410JPY                       |
+| hk      | S80  | 1710JPY                       |
+| hk      | S100 | 2020JPY                       |
+| hk      | S120 | 2340JPY                       |
+| hk      | S140 | 2680JPY                       |
+| hk      | S160 | 3010JPY                       |
+| hk      | S170 | 4140JPY                       |
+| okinawa | S60  | 1450JPY                       |
+| okinawa | S80  | 1810JPY                       |
+| okinawa | S100 | 2160JPY                       |
+| okinawa | S120 | 2490JPY                       |
+| okinawa | S140 | 2860JPY                       |
+| okinawa | S160 | 3180JPY                       |
+| okinawa | S170 | 4350JPY                       |
+
+examples
+| dest     | girth | weight | -> fee  |
+| Tokyo    | 55cm  | 1kg    | 820JPY  |
+| Okinawa  | 100cm | 3kg    | 2160JPY |
+| Hokkaido | 61cm  | 20kg   | 1710JPY |

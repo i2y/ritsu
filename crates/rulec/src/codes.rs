@@ -51,9 +51,9 @@ pub struct Entry {
     /// what `explain` shows in English. The budget is the same for both.
     pub english: Option<Repro>,
     /// Forms of the code the first reproduction does not show, each with a reproduction of its
-    /// own. Only E102 has them: its third form, a row past what a derive reaches (§15.189), past
-    /// what a `define` reaches, and past what a derive reaches while a table above writes the
-    /// value the row asks for (§15.195).
+    /// own: E102's third form, a row past what a derive reaches (§15.189), past what a `define`
+    /// reaches, and past what a derive reaches while a table above writes the value the row asks
+    /// for (§15.195), and the forms of the other entries `tests/codes.rs` lists.
     pub also: Vec<Also>,
     pub related: &'static [&'static str],
 }
@@ -1297,6 +1297,32 @@ policy unique
 | - | 100JPY                         |
 
 result r = p + w
+"##;
+const X_E103_HEADING: &str = r##"rule t(t) v1
+
+inputs
+  w(w) : mass[g]  range >=0g <=10kg
+
+outputs
+  r(r) : money[円, excl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| w | -> r(r) : money[円, incl_tax] |
+| - | 100円                         |
+"##;
+const X_E103_HEADING_EN: &str = r##"rule t(t) v1
+
+inputs
+  w(w) : mass[g]  range >=0g <=10kg
+
+outputs
+  r(r) : money[JPY, excl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| w | -> r(r) : money[JPY, incl_tax] |
+| - | 100JPY                         |
 "##;
 const X_E104: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]\n\n\
@@ -3068,17 +3094,22 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`)."
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in."
             ),
             tr!(
-                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。",
-                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives)."
+                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。見出しの型が名前の型と違うなら、どちらが正しいかを決めて直してください。見出しの型は消してもかまいません。消せば、名前の型で読みます。",
+                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's."
             ),
             X_E103,
             &["E108", "E112"],
         )
-        .english(X_E103_EN),
+        .english(X_E103_EN)
+        .also(
+            tr!("出力と違う型を書いた、表の見出し", "A table's heading that writes a type other than the output's"),
+            X_E103_HEADING,
+            X_E103_HEADING_EN,
+        ),
         err(
             "E104",
             tr!("数値の出力に丸めの宣言がありません", "A numeric output declares no rounding"),

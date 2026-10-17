@@ -207,7 +207,7 @@ meet while transcribing:
 - **E102 unreachable row** — a row nothing can reach: earlier rows cover it, the upstream table
   never produces its value, or a derive or a `define` (a boolean one too) never takes what it asks.
 - **E103 unit mismatch** — you are adding or comparing values of different units, currencies
-  or tax flags. The fix is a table, not a cast.
+  or tax flags, or a heading's type is not its name's. The fix is a table, not a cast.
 - **E104 no rounding** / **E106 off the grid** — see §3.
 - **E107 example does not hold** — the rule and your expected value disagree. **Decide which
   one is wrong from the source**, not from which is easier to change.

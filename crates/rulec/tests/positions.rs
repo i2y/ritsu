@@ -297,3 +297,69 @@ fn 種類の違う値はどの位置でも止まる() {
 fn 必須の列の_none_は行が死ぬこととして出る() {
     seed("表の入力セル", PLAIN, "| true  | 乙   |", "| true  | none |", "E102");
 }
+
+/// A table, a clause and examples that write the type again on every heading, as the corpus does.
+const RETYPED: &str = r#"rule 重ね書き(restated) v1
+
+enum 区分(kind) = 甲(a) | 乙(b)
+
+inputs
+  種別(k)    : 区分
+  急ぎ(rush) : bool
+
+outputs
+  料金(fee) : money[円, incl_tax]  round up(10円)
+
+table 基本(base_table)
+policy unique
+| 種別 | -> 基本額(base) : money[円, incl_tax] |
+| 甲   | 800円                                 |
+| 乙   | 900円                                 |
+
+clause 特例(special) -> 基本額 : money[円, incl_tax]
+  when 急ぎ true
+  then 1000円
+  overrides 基本
+
+table 料金表(fee_table)
+policy unique
+| 基本額 | -> 料金(fee) : money[円, incl_tax] |
+| -      | 基本額                             |
+
+examples
+| 種別 | 急ぎ  | -> 料金 : money[円, incl_tax] |
+| 甲   | false | 800円                         |
+| 乙   | true  | 1000円                        |
+"#;
+
+/// `seed`, with the diagnostic marking the line the seed changed. A type over a name could be
+/// caught further down before, by a cell that read the name in the other type, when one did; what
+/// has to be said is the heading.
+#[track_caller]
+fn seed_here(what: &str, good: &str, from: &str, to: &str, want: &str) {
+    seed(what, good, from, to, want);
+    let line = good[..good.find(from).unwrap()].matches('\n').count() + 1;
+    let broken = good.replace(from, to);
+    let ds = rulec::check_source(&broken, "positions.rule");
+    assert!(
+        ds.iter().any(|d| d.code == want && d.marks.first().is_some_and(|m| m.span.line == line)),
+        "{what}: {want} が {line} 行目に出ない（出たのは {:?}）\n{broken}",
+        ds.iter().map(|d| (d.code, d.marks.first().map(|m| m.span.line))).collect::<Vec<_>>()
+    );
+}
+
+/// The other side of a heading: not a value under a type, but **a type over a name that already
+/// has one**. A table's output column that names an output, or a name a table or clause above
+/// decides, may write the type again, and only that type. The column took whatever it wrote: an
+/// output declared `money[円, excl_tax]` under a heading of `money[円, incl_tax]` came back with
+/// tax from the generated code, and a heading of `mass[g]` made the output grams (§15.247). The
+/// examples' headings were read by nobody. A fold's answer was held already (E021, §15.219).
+#[test]
+fn 見出しの型は名前の型と同じでなければ止まる() {
+    seed("出力の宣言（表の見出しと違う型）", RETYPED, "料金(fee) : money[円, incl_tax]  round", "料金(fee) : money[円, excl_tax]  round", "E103");
+    seed_here("表の見出し（出力の名前）", RETYPED, "-> 料金(fee) : money[円, incl_tax]", "-> 料金(fee) : money[円, excl_tax]", "E103");
+    seed_here("表の見出し（ほかの単位）", RETYPED, "-> 料金(fee) : money[円, incl_tax]", "-> 料金(fee) : mass[g]", "E103");
+    seed_here("節の見出し（上の表と違う型）", RETYPED, "-> 基本額 : money[円, incl_tax]", "-> 基本額 : money[円, excl_tax]", "E103");
+    seed_here("例の見出し", RETYPED, "-> 料金 : money[円, incl_tax]", "-> 料金 : money[円, excl_tax]", "E103");
+    seed_here("畳み込みの答え", WALK, "fold 採用 over 行", "fold 採用 over 行 -> 合計 : money[円, excl_tax]", "E021");
+}

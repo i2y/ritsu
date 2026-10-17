@@ -1897,7 +1897,7 @@ fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
         let name = if tag == "ja" { "rulec/full.ja" } else { "rulec/full" };
         let p = projects.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("projects.json has no {name}"));
         let (file, rule) = p.files[0].clone();
-        let row = if tag == "ja" { "| 遠隔地 | >2kg <=5kg | 1500円                             |\n" } else { "| overseas    | >2kg <=5kg | 15USD  |\n" };
+        let row = if tag == "ja" { "| 遠隔地 | >2kg <=5kg | 1500円       |\n" } else { "| overseas    | >2kg <=5kg | 15USD  |\n" };
         assert!(rule.ends_with(row), "{name} no longer ends with the row `{row}`");
         let broken = rule.replacen(row, "", 1);
         let ask = |text: &str| ask_in(tag, &[(file.clone(), text.to_string())], &file, None);

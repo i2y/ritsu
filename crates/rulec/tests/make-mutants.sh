@@ -178,6 +178,12 @@ awk '/^  料率\(rate\)/ { sub(/step 0.1%/, "step 0.1g") } { print }'      "$C/�
 # generated code multiplied by 0 (§15.191). The English rule, and its Japanese version beside it.
 awk '{ sub(/full \* 80%/, "full * 0.8"); print }'                       "$C/retirement_pay.rule" > "$M/m_e103bare.rule"
 awk '{ sub(/満額 × 80%/, "満額 × 0.8"); print }'                         "$C/退職手当.rule" > "$M/m_e103bareja.rule"
+# --- A type over a name that already has one (§15.247). The output is declared without tax, and
+# the heading of the table that decides it still says with tax. The heading's type took the
+# output's place in silence, and the generated code returned the fee with tax. The Japanese rule,
+# and its English twin.
+awk '/^  運賃\(fee\) :/ { sub(/incl_tax/, "excl_tax") } { print }'              "$y" > "$M/m_e103col.rule"
+awk '/^  fee :/ { sub(/incl_tax/, "excl_tax") } { print }'                     "$C/yupack_base_fee.rule" > "$M/m_e103colen.rule"
 
 # --- The walk and the count. Neither shape was in the mutants at all, so the diagnostics
 # that hold a `fold` and a `count` together (§15.56, §15.58) were exercised only by their own

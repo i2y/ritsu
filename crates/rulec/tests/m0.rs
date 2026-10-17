@@ -132,6 +132,10 @@ fn 変異は決めたコードだけを出す() {
         // and the generated code multiplied by 0. The English rule, and its Japanese version.
         ("m_e103bare.rule", &[("E103", 1)], "定義の率 80% を 0.8 と転記した（単位の無い小数には値が無く、生成コードは 0 を掛けていた）"),
         ("m_e103bareja.rule", &[("E103", 1)], "上と同じ規則の日本語の版"),
+        // §15.247: a heading's type over an output's name went unread against the output's
+        // declaration, and took its place. The Japanese rule, and its English twin.
+        ("m_e103col.rule", &[("E103", 1)], "出力を税抜にして、表の見出しの税込を直し忘れた（見出しの型が黙って出力の型になっていた）"),
+        ("m_e103colen.rule", &[("E103", 1)], "上と同じ規則の英語の版"),
         ("m_e012group.rule", &[("E012", 1)], "群の一員を打ち間違えた（黙って群から外れていた）"),
         // §15.88. The walk and the count had no mutant of any kind: their diagnostics were
         // exercised only by their own minimal examples in the ledger, never by a rule a
