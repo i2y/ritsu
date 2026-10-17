@@ -107,9 +107,9 @@ holds:
 ```
 
 A post after the expiry is refused with `expired`, whatever it asks for. On TigerBeetle a hold
-expires on the cluster's clock; PostgreSQL has none that acts by itself, so a hold past its expiry
-answers `expired` at once, and what it holds goes back when `expire()` is next called
-([Build for a database](databases.md#postgresql)).
+expires on the cluster's clock; PostgreSQL and the MySQL family have none that acts by itself, so
+a hold past its expiry answers `expired` at once, and what it holds goes back when `expire()` is
+next called ([Build for a database](databases.md#postgresql)).
 
 ## The scenarios chobo writes
 
@@ -153,10 +153,11 @@ meet by chance; the numbers in a name are written in the unit's decimal places. 
 
 ## What a database is sent
 
-`--show postgres` and `--show tigerbeetle` print, in place of the answers, what the clients
-`chobo build` writes send each target for the scenario: the SQL and its arguments for PostgreSQL,
-and for TigerBeetle the accounts made, the opening transfers and the chain of each operation, field
-by field.
+`--show postgres`, `--show tigerbeetle` and `--show mysql` print, in place of the answers, what the
+clients `chobo build` writes send each target for the scenario: the SQL and its arguments for
+PostgreSQL; for TigerBeetle the accounts made, the opening transfers and the chain of each
+operation, field by field; and for the MySQL family the statements of each operation, with the
+values in place ([Build for a database](databases.md#mysql-tidb-and-vitess)).
 
 ```console
 $ chobo run examples/refunds/refunds.book --scenario examples/refunds/refunds.more.json --show postgres

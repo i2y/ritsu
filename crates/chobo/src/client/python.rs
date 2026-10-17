@@ -1,11 +1,13 @@
 //! The Python clients: one module each. The PostgreSQL one takes a DB-API connection
-//! (psycopg 3's, or psycopg2's); the TigerBeetle one a `tigerbeetle.ClientSync`.
+//! (psycopg 3's, or psycopg2's); the TigerBeetle one a `tigerbeetle.ClientSync`; the one of the
+//! MySQL family a DB-API connection of PyMySQL or mysqlclient.
 
 use super::*;
 use crate::postgres;
 
 const TB_RUNTIME: &str = include_str!("runtime/tigerbeetle.py");
 const PG_RUNTIME: &str = include_str!("runtime/postgres.py");
+const MY_RUNTIME: &str = include_str!("runtime/mysql.py");
 
 use ritsu_emit::words::python::KEYWORDS;
 
@@ -250,4 +252,142 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
     o.push_str(tail);
     // what the calls run on, by its type, so that what they answer is typed too
     o.replace("(self, r: Any) -> None:", "(self, r: _Postgres) -> None:")
+}
+
+/// The part of the MySQL client that differs from book to book: the TigerBeetle client's plan, with
+/// the book's SQL in it.
+fn mysql_literal(book: &Book) -> String {
+    let st = crate::mysql::statements(book);
+    let tf = |b: bool| if b { "True" } else { "False" };
+    let mut o = format!("_BOOK: dict[str, Any] = {{\n    'name': {},\n    'accounts': {{\n", q(&book.name));
+    let bound = |b: &Option<Bound>| b.as_ref().map(|b| b.value.to_string()).unwrap_or_else(|| "None".into());
+    for (a, row) in book.accounts.iter().zip(&st.account_rows) {
+        let ps: Vec<String> = a.params.iter().map(|x| q(x)).collect();
+        o.push_str(&format!(
+            "        {}: {{'params': [{}], 'bounded': {}, 'lower': {}, 'upper': {}, 'row': {}}},\n",
+            q(&a.name),
+            ps.join(", "),
+            tf(crate::mysql::bounded(a)),
+            bound(&a.lower),
+            bound(&a.upper),
+            q(row)
+        ));
+    }
+    o.push_str("    },\n    'transfers': {\n");
+    let rf = |r: &Ref| {
+        let args: Vec<String> = r
+            .args
+            .iter()
+            .map(|a| match a {
+                Arg::Param(i) => format!("{{'param': {i}}}"),
+                Arg::Lit(s) => format!("{{'literal': {}}}", q(s)),
+            })
+            .collect();
+        format!("{{'kind': {}, 'args': [{}]}}", q(&book.accounts[r.kind].name), args.join(", "))
+    };
+    for (t, ts) in book.transfers.iter().zip(&st.transfers) {
+        let ps: Vec<String> = t.params.iter().map(|x| format!("{{'name': {}, 'amount': {}}}", q(&x.name), tf(matches!(x.ty, Ty::Amount(_))))).collect();
+        let key: Vec<String> = t.key.iter().map(|i| i.to_string()).collect();
+        o.push_str(&format!(
+            "        {}: {{\n            'params': [{}],\n            'key': [{}],\n            'pending': {},\n            'definition': {},\n            'moves': [\n",
+            q(&t.name),
+            ps.join(", "),
+            key.join(", "),
+            tf(t.is_pending()),
+            q(&ids::definition(book, t))
+        ));
+        for m in &t.moves {
+            let amount = match &m.amount {
+                Amount::Param(i) => format!("{{'param': {i}}}"),
+                Amount::Lit(v) => format!("{{'literal': {v}}}"),
+            };
+            o.push_str(&format!("                {{'amount': {amount}, 'from': {}, 'to': {}}},\n", rf(&m.from), rf(&m.to)));
+        }
+        let opt = |s: &Option<String>| s.as_ref().map(|x| q(x)).unwrap_or_else(|| "None".into());
+        let pend = |s: &str| if t.is_pending() { q(s) } else { q("") };
+        let pends = |v: &[String]| if t.is_pending() { format!("[{}]", v.iter().map(|s| q(s)).collect::<Vec<_>>().join(", ")) } else { "[]".into() };
+        let checks: Vec<String> = ts.checks.iter().map(|(n, r, sql)| format!("{{'n': {n}, 'reason': {}, 'sql': {}}}", q(r), q(sql))).collect();
+        o.push_str(&format!(
+            "            ],\n            'sql': {{\n                'key': {},\n                'lock': {},\n                'checks': [{}],\n                'refuse': {},\n                'entries': {},\n                'apply': {},\n                'postApply': {},\n                'postEntries': {},\n                'voidApply': {},\n                'voidEntries': {},\n                'expireApply': {},\n                'expireEntries': {},\n            }},\n        }},\n",
+            q(&ts.key_insert),
+            opt(&ts.lock),
+            checks.join(", "),
+            q(&ts.refuse),
+            q(&ts.entries),
+            opt(&ts.apply),
+            pends(&ts.post_apply),
+            pend(&ts.post_entries),
+            pends(&ts.void_apply),
+            pend(&ts.void_entries),
+            pends(&ts.expire_apply),
+            pend(&ts.expire_entries),
+        ));
+    }
+    o.push_str("    },\n    'sql': {\n");
+    for (name, sql) in [
+        ("begin", &st.begin),
+        ("readAccounts", &st.read_accounts),
+        ("makeAccounts", &st.make_accounts),
+        ("readCall", &st.read_call),
+        ("holdLock", &st.hold_lock),
+        ("status", &st.status),
+        ("balance", &st.balance),
+        ("due", &st.due),
+        ("foldList", &st.fold_list),
+        ("foldLock", &st.fold_lock),
+        ("foldRead", &st.fold_read),
+        ("foldApply", &st.fold_apply),
+        ("foldMark", &st.fold_mark),
+    ] {
+        o.push_str(&format!("        '{name}': {},\n", q(sql)));
+    }
+    o.push_str("    },\n}\n");
+    o
+}
+
+/// The client of the MySQL family (DESIGN 4.5): a DB-API connection of PyMySQL or mysqlclient.
+pub fn mysql(book: &Book, origin: &Origin) -> String {
+    let (head, tail) = split(MY_RUNTIME);
+    let tables: Vec<String> = crate::mysql::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect();
+    let mut o = header(
+        book,
+        origin,
+        &format!("It runs the calls on the tables of `chobo build --target mysql` ({}) through a DB-API connection: MySQL, TiDB or Vitess.", tables.join(", ")),
+    );
+    o.push_str(head.trim_end());
+    o.push('\n');
+    for t in &book.transfers {
+        let all: Vec<usize> = (0..t.params.len()).collect();
+        let kind = q(&t.name);
+        o.push_str(&format!("\n\nclass {}:\n{}\n    def __init__(self, r: Any) -> None:\n        self._r = r\n", class_name(t), doc(book, t)));
+        if t.is_pending() {
+            let key = values(t, &t.key);
+            let keys = postgres::key_params(t);
+            o.push_str(&format!("\n    def hold({}) -> Result:\n        return self._r.move({kind}, 'hold', [{}])\n", sig(t, &all, &[]), values(t, &all)));
+            let ap = t.amount_params();
+            let am = if ap.is_empty() { "None".to_string() } else { amounts(t) };
+            o.push_str(&format!("\n    def post({}) -> Result:\n        return self._r.end({kind}, 'post', [{key}], {am})\n", sig(t, &keys, &ap)));
+            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.end({kind}, 'void', [{key}], None)\n", sig(t, &keys, &[])));
+            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({kind}, [{key}])\n", sig(t, &keys, &[])));
+        } else {
+            o.push_str(&format!("\n    def do({}) -> Result:\n        return self._r.move({kind}, 'do', [{}])\n", sig(t, &all, &[]), values(t, &all)));
+        }
+    }
+    o.push_str(&balances(book, |a, vals| format!("self._r.balance({}, [{vals}])", q(&a.name))));
+    o.push_str(&format!(
+        "\n\nclass Book:\n    \"\"\"The book {} (v{}), called on MySQL, TiDB or Vitess.\"\"\"\n\n    def __init__(self, r: Any) -> None:\n        self._r = r\n",
+        book.name, book.version
+    ));
+    for (t, n) in book.transfers.iter().zip(members(book)) {
+        o.push_str(&format!("        self.{n} = {}(r)\n", class_name(t)));
+    }
+    o.push_str("        self.balance = _Balances(r)\n");
+    o.push_str("\n    def expire(self) -> int:\n        \"\"\"Give back what the holds past their expiry hold; call it from a job.\"\"\"\n        return self._r.expire()\n");
+    o.push_str(
+        "\n\ndef mysql(conn: Any, tenant: str = \"\", batch: bool = False) -> Book:\n    \"\"\"The book on MySQL, TiDB or Vitess, through a DB-API connection of PyMySQL or mysqlclient. A\n    tenant is a set of balances of its own. With autocommit on and no transaction open, each call\n    is a transaction of its own; in a transaction (any with autocommit off, or one begin() opened\n    on PyMySQL's connection), the call is part of it, and the caller commits it. With `batch`, the\n    statements a call sends in a row go in one request, which the connection has to allow\n    (CLIENT.MULTI_STATEMENTS).\"\"\"\n    return Book(_MySql(_BOOK, conn, tenant, batch))\n\n\n",
+    );
+    o.push_str(&mysql_literal(book));
+    o.push_str("\n\n");
+    o.push_str(tail);
+    o.replace("(self, r: Any) -> None:", "(self, r: _MySql) -> None:")
 }

@@ -548,3 +548,36 @@ dandori の `skills/dandori` を手本にする。`SKILL.md`（手で書く。�
 - 文書：README.md、README.ja.md、`docs/`（reference、formats、targets、codes、codes.ja）。`tests/docs.rs` が、文書に出力つきで書いた `chobo` のコマンド 16 本を走らせて出力を比べ、診断の抜粋、帳簿の行、相対リンク、コードとシナリオの数、キーワードの表を確かめる。`docs/targets.md` のクライアントの呼び方と出力は、使い捨ての PostgreSQL のクラスタと TigerBeetle のレプリカで、TypeScript・Python・Go から実際に呼んで取った。
 - スキル：`skills/chobo/SKILL.md`（手で書いた）と、`skills/sync.sh` が作る `docs/` の四つのページのコピー、`skills/README.md`。
 - 計画から変えたこと：ライセンスのファイルと README のライセンスの節を、ライセンスが決まるまで置かなかった（2026-10-03 に MIT OR Apache-2.0 に決まり、置いた）。英語の診断の帳簿 `tests/fixtures/split.book` を足した（README.md に英語の名前の診断を載せるため）。手で書いたシナリオの結果を `<帳簿>.more.runs.json` に固定した。シナリオの名前に入る数を単位の桁にした（テストの帳簿の名前は変わらなかった）。
+
+## 4. 段階 E：MySQL の系統
+
+MySQL・TiDB・Vitess に出す（DESIGN 4.5）。PostgreSQL と同じくデータベースが一度の書き込みを守り、TigerBeetle と同じくクライアントが手順を踏む。手順の確かめは SQL の文に書き、Rust の生成器の一か所に置く。
+
+### E1 段階 A（実機で前提を確かめる）
+
+MySQL 8.4.11（公式の tarball）と TiDB 8.5.8（TiUP の playground）で、手順が頼る振る舞いを、二つの接続から SQL を流して確かめる。ロックつきの読みと普通の読みが読むもの、`id in (…) for update` のロックの順、複数の文のリクエストがエラーで止まること、BIGINT を超える計算、同じキーの INSERT の待ち、複数のテーブルの UPDATE、CHECK と `update ignore`、名前の長さと基本多言語面の外の文字、CLIENT_FOUND_ROWS と影響行数、ギャップロック、autocommit のもとのプロシージャ。結果は DESIGN 4.5 の表に貼る。
+
+### E2 生成（mysql.rs と target.rs）
+
+`chobo build --target mysql` のテーブルの SQL、四つのターゲット、E062（名前の長さと基本多言語面の外の文字）、`chobo run --show mysql`（render.rs）、`chobo api` の `mysql` の項目。クライアントが送る文の型（`{NAME}` に値を入れる）を `mysql::statements` が書き、三つの言語のクライアントは帳簿ごとのデータの中にそれを持つ。
+
+### E3 クライアント（client/ と runtime/mysql.*）
+
+TypeScript（mysql2）、Python（PyMySQL と mysqlclient の DB-API）、Go（database/sql と go-sql-driver/mysql）。プールなら呼び出しごとに自分のトランザクション、接続なら呼ぶ側のトランザクション。`batch` で続けて送る文を一つのリクエストにまとめる。名前、引数、結果は PostgreSQL と TigerBeetle のクライアントと同じ。
+
+### E4 道具と突き合わせ
+
+ritsu-testkit に `mysql`（`RITSU_MYSQL_BIN` の使い捨てのサーバー、`RITSU_TIDB` のサーバー、`RITSU_VITESS_BIN` の使い捨ての vttestserver）と、`Need::MySql`（tools の段）、`Need::TiDb` と `Need::Vitess`（platforms の段）、その自分の試験の三つ（使い捨てのサーバーが立って止まること、機械のサーバーに作ったデータベースが値と一緒に消えること、Vitess がテナントで分け、シャードをまたぐトランザクションを誤りにし、下に立てたものと一緒に止まること）。ランナーの三つに MySQL の系統（mysql2 3.24.5、PyMySQL 1.2.3、go-sql-driver/mysql v1.10.1）。`tests/backends.rs` の `every_scenario_matches_on_the_mysql_family`、`tests/mysql.rs`、`tests/generated.rs` に MySQL の系統の三つ。dandori の帳簿の試験（`tests/examples.rs` の `books_run_on_postgres_tigerbeetle_and_mysql`）にも MySQL を足す（dandori の `tools/books/run.ts` と `run.py`、試験が書く Go の main）。
+
+### E5 ritsu
+
+`ritsu gen --books mysql`（帳簿のクライアントと、テーブルの SQL）、Go の `doc.go` が go-sql-driver/mysql の版を書く、`tests/gen.rs` と `tests/audit.rs` に `--books mysql` のパッケージ、`tests/npm.rs` と `tests/playground.rs` の出力先の一覧。
+
+### 段階 E の終わりの条件
+
+1. テストの帳簿 12 冊と例の 8 冊の全部のシナリオが、MySQL、TiDB、Vitess（シャード一つと二つ）のそれぞれで、三つの言語のクライアントの一文ずつ送る形とまとめて送る形で、参照インタプリタと一致する。一文ずつの形では、送った文が `chobo run --show mysql` と一字一句同じになる。
+2. `tests/mysql.rs` が MySQL、TiDB、Vitess のどれでも通る。
+3. 生成したクライアントが `tsc --strict`、`py_compile`、`gofmt` と `go vet` を、`ritsu gen --books mysql` のパッケージが `tsc --strict`、`mypy --strict`、`go vet` を通る。
+4. DESIGN 4.5 に、段階 A の結果と、測った速さを実物で貼ってある。
+
+段階 E の結果（2026-10-17）：1 から 4 を満たした。20 冊の 468 本のシナリオが、MySQL 8.4.11 と TiDB v8.5.8 で、三つの言語のクライアントの二つの形のどれでも一致した（`tests/backends.rs` の MySQL の系統の分は 63 秒）。`tests/mysql.rs` では、反対の向きの 400 回の移し替えで、デッドロックも呼び直しも 0 回だった。接続を渡したときに誰のトランザクションになるかを三つの言語で確かめ（mysqlclient 2.3.0 は手で一度）、呼ぶ側のトランザクションで作った勘定の行を確かめ済みにしないことを、それを外すと残高が 0 になって落ちることで確かめた。dandori の帳簿の試験では、MySQL 8.4.11 の上でも、`io.ts`・`io.py`・Go の `Transport`・Step Functions の Lambda 関数の四通りのどれでも、170 件の帳簿の操作が参照インタプリタと同じ答えだった。ritsu の npm のパッケージ（WASI）とブラウザで試すページも、MySQL の系統の四つの出力先と `--show mysql` で、元のバイナリと同じ答えを返した。Vitess 24.0.5（ソースから組んだ vttestserver）では、シャード一つと、テナントで二つに分けてシャードをまたぐトランザクションを誤りにしたものの両方で、468 本のシナリオが一致し、`tests/mysql.rs` の段も通った（四つのサーバーで 188 秒）。そこへ届くまでに、SQL のコメントの `;`、二つのテーブルを結んだ UPDATE、聞く文の `do 0` の三つを直した（DESIGN 4.5）。Vitess を動かすサービスの上では確かめていない（DESIGN 11.4）。

@@ -1,5 +1,5 @@
-//! The reference interpreter: what a book means (DESIGN 2). PostgreSQL and TigerBeetle are
-//! matched against it, operation by operation.
+//! The reference interpreter: what a book means (DESIGN 2). The clients on PostgreSQL, on
+//! TigerBeetle and on the MySQL family are matched against it, operation by operation.
 
 use crate::model::*;
 use std::collections::BTreeMap;

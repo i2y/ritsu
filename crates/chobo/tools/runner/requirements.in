@@ -2,3 +2,4 @@
 #   uv pip compile requirements.in --python-version 3.13 --generate-hashes -o requirements.txt
 tigerbeetle==0.17.9
 psycopg[binary]==3.3.6
+PyMySQL==1.2.3

@@ -28,10 +28,10 @@ account of its own.
 </p>
 
 <p class="cb-hero__lede">
-<strong>Two databases, one meaning.</strong> chobo checks a book, runs it in a reference
-interpreter, and builds it for PostgreSQL or TigerBeetle, with a client in TypeScript, Python or
-Go. The tests run every scenario on all seven, and each must answer as the reference interpreter
-does.
+<strong>Every target, one meaning.</strong> chobo checks a book, runs it in a reference
+interpreter, and builds it for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB
+and Vitess), with a client in TypeScript, Python or Go. The tests run every scenario through every
+client, and each must answer as the reference interpreter does.
 </p>
 
 <div class="cb-hero__cta" markdown>
@@ -158,18 +158,21 @@ tests see that it does. [Run scenarios](scenarios.md)
 $ chobo build examples/refunds/refunds.book --target postgres --out db
 $ chobo build examples/refunds/refunds.book --target postgres-typescript --out db
 $ chobo build examples/refunds/refunds.book --target tigerbeetle-python --out db
-$ chobo build examples/refunds/refunds.book --target tigerbeetle-go --out db
+$ chobo build examples/refunds/refunds.book --target mysql --out db
+$ chobo build examples/refunds/refunds.book --target mysql-go --out db
 ```
 
 </div>
 <div markdown>
 
-### One book, two databases, three languages
+### One book, three kinds of database, three languages
 
 On PostgreSQL, each operation is a function that locks the rows of its accounts, checks every
 move and writes them in one transaction, the caller's if there is one. On TigerBeetle, the client
-sends one chain of transfers that is applied whole or not at all. The clients of both have the
-same names, arguments and answers, and a refusal is an answer, not an exception.
+sends one chain of transfers that is applied whole or not at all. On MySQL, TiDB and Vitess, the
+client sends the statements chobo wrote in one transaction, the caller's if it is given one, and a
+locking read of the accounts says which move would break a bound. The clients of all three have
+the same names, arguments and answers, and a refusal is an answer, not an exception.
 [Build for a database](databases.md)
 
 </div>
@@ -229,9 +232,11 @@ come to.
 ## Status
 
 Early. Not yet: changing the bound of an account kind that already has balances (a new kind and a
-transfer that moves the balance do it for now); databases other than PostgreSQL and TigerBeetle;
-TigerBeetle in its production layout of six replicas (the tests use one, started with
-`--development`), and how much the IDs made from keys slow it down; reading the entries and
+transfer that moves the balance do it for now); databases other than PostgreSQL, TigerBeetle and
+the MySQL family (MariaDB, whose `CHECK` and JSON behave otherwise than MySQL's, is not one of the
+family); a service that runs Vitess, where the tests have not been (they run on vttestserver);
+TigerBeetle in its production layout of six replicas (the tests use one, started
+with `--development`), and how much the IDs made from keys slow it down; reading the entries and
 transfers an account has had; and the two answers on which TigerBeetle differs from the reference
 interpreter, which [Targets](targets.md#tigerbeetle) describes. The design, the decisions and what
 is left are in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md), in
@@ -246,11 +251,11 @@ option.
 | [Write a book](tour.md) | the language, through the marketplace example: units, accounts and bounds, transfers, keys and holds |
 | [What it checks](checks.md) | what each operation can be refused with, the diagnostics, and changes the data cannot follow |
 | [Run scenarios](scenarios.md) | the reference interpreter, callers at the same time, and the scenarios chobo writes |
-| [Build for a database](databases.md) | what PostgreSQL and TigerBeetle are given, and how a client is called |
+| [Build for a database](databases.md) | what PostgreSQL, TigerBeetle and the MySQL family are given, and how a client is called |
 | [Money and units](units.md) | units, money with tax or without, and the units the other languages see |
 | [Pages for people](pages.md) | `chobo doc`, and the four examples drawn |
 | [With the other languages](together.md) | a workflow, a gate, a requirement and a rule around a book |
 | [Examples](examples.md) | stock, points, refunds and a marketplace, in English and in Japanese |
 | [For agents](agents.md) | the agent skill |
-| [How it is checked](assurance.md) | seven targets against one reference interpreter |
+| [How it is checked](assurance.md) | every client, on PostgreSQL, TigerBeetle, MySQL, TiDB and Vitess, against one reference interpreter |
 | [Design](design.md) | the decisions behind the language, and why |

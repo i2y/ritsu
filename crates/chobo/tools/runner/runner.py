@@ -4,7 +4,8 @@
 
 The input and the output are those of runner.ts (see there, `late` too). Every scenario runs in a
 thread of its own; the callers of a `together` run in threads of their own too, each through a
-connection (or a TigerBeetle client) of its own.
+connection (or a TigerBeetle client) of its own. On the MySQL family, each value of the book has a
+connection of its own, in autocommit, so that each call is a transaction of its own.
 """
 
 from __future__ import annotations
@@ -21,7 +22,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import psycopg
+import pymysql
 import tigerbeetle as tb
+from pymysql.constants import CLIENT
 
 INPUT = json.load(open(sys.argv[1], encoding="utf-8"))
 
@@ -129,6 +132,58 @@ class PgConnection:
         return _Cursor(self._pool, self._rec)
 
 
+class _MyCursor:
+    def __init__(self, cur: Any, rec: Recorder) -> None:
+        self._cur, self._rec = cur, rec
+
+    def execute(self, sql: str, args: Any = None) -> Any:
+        if self._rec.current is not None:
+            self._rec.current.append({"sql": sql})
+        return self._cur.execute(sql)
+
+    def fetchall(self) -> Any:
+        return self._cur.fetchall()
+
+    def nextset(self) -> Any:
+        return self._cur.nextset()
+
+    @property
+    def description(self) -> Any:
+        return self._cur.description
+
+    def close(self) -> None:
+        self._cur.close()
+
+
+class MyConnection:
+    """What the client takes as a DB-API connection on the MySQL family: one PyMySQL connection, in
+    autocommit, its statements written down."""
+
+    def __init__(self, conn: Any, rec: Recorder) -> None:
+        self._c, self._rec = conn, rec
+
+    def get_autocommit(self) -> bool:
+        return bool(self._c.get_autocommit())
+
+    def cursor(self) -> _MyCursor:
+        return _MyCursor(self._c.cursor(), self._rec)
+
+
+MY_OPEN: list = []
+MY_LOCK = threading.Lock()
+
+
+def my_connect() -> Any:
+    c = INPUT["mysql"]
+    conn = pymysql.connect(
+        host=c["host"], port=c["port"], user=c["user"], password="", database=c["database"], autocommit=True, charset="utf8mb4",
+        client_flag=CLIENT.MULTI_STATEMENTS if c.get("batch") else 0,
+    )
+    with MY_LOCK:
+        MY_OPEN.append(conn)
+    return conn
+
+
 class TbClient:
     def __init__(self, client: Any, rec: Recorder) -> None:
         self._c, self._rec = client, rec
@@ -163,11 +218,17 @@ _next = itertools.count()
 def connection(rec: Recorder) -> Any:
     if INPUT["backend"] == "postgres":
         return PgConnection(POOL, rec)
+    if INPUT["backend"] == "mysql":
+        return MyConnection(my_connect(), rec)
     return TbClient(CLIENTS[next(_next) % len(CLIENTS)], rec)
 
 
 def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
-    factory = mod.postgres if INPUT["backend"] == "postgres" else mod.tigerbeetle
+    if INPUT["backend"] == "mysql":
+        def factory(conn: Any, tenant: str) -> Any:
+            return mod.mysql(conn, tenant=tenant, batch=bool(INPUT["mysql"].get("batch")))
+    else:
+        factory = mod.postgres if INPUT["backend"] == "postgres" else mod.tigerbeetle
     sent: list = []
     sent_lock = threading.Lock()
     done_holds: list = []
@@ -236,7 +297,7 @@ def run_scenario(mod: Any, book: dict, sc: dict) -> dict:
     def expire_all() -> None:
         until = max(done_holds, default=0) + book["expiry"] + 0.3
         time.sleep(max(0.0, until - time.monotonic()))
-        if INPUT["backend"] == "postgres":
+        if INPUT["backend"] in ("postgres", "mysql"):
             # one expire() at a time, as one job would call it: an expire() skips the holds another
             # is giving back, and returns before that one commits
             with EXPIRING:
@@ -318,6 +379,8 @@ def main() -> None:
     if INPUT["backend"] == "postgres":
         c = INPUT["postgres"]
         POOL = Pool({"host": c["host"], "port": c["port"], "dbname": c["database"], "user": c["user"]}, 20)
+    elif INPUT["backend"] == "mysql":
+        pass
     else:
         c = INPUT["tigerbeetle"]
         for _ in range(4):
@@ -335,6 +398,11 @@ def main() -> None:
             POOL.close()
         for c in CLIENTS:
             c.close()
+        for c in MY_OPEN:
+            try:
+                c.close()
+            except Exception:
+                pass
 
 
 main()

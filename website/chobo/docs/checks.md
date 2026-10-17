@@ -159,12 +159,14 @@ warning[W104]: hold_order.book:14:3: in a hold, what move 1 puts into held(order
 | W107 | with `--diff-base`, an account or a transfer gone since the revision compared with (below) |
 | W901 | a key written in the file, in a string or a comment: the diagnostic gives its kind, its prefix and its length, never the key |
 
-Two errors belong to a target, and `chobo build` gives them: a chain of transfers too long for one
-TigerBeetle request (E060, at 253), and a name longer than PostgreSQL's 63 bytes (E061), which
-PostgreSQL would cut short without a word. A book built only for PostgreSQL is not held to
-TigerBeetle's limit.
+Three errors belong to a target, and `chobo build` gives them: a chain of transfers too long for
+one TigerBeetle request (E060, at 253); a name longer than PostgreSQL's 63 bytes (E061), which
+PostgreSQL would cut short without a word; and a book's name the MySQL family's tables and checks
+cannot be named after (E062), longer than 51 characters or with a character beyond the Basic
+Multilingual Plane, which MySQL would write as `?` with only a warning. A book is held only to the
+limits of the target it is built for.
 
-[Diagnostics](codes.md) has all 30 codes, each with when it appears, how to fix it and the smallest
+[Diagnostics](codes.md) has all 31 codes, each with when it appears, how to fix it and the smallest
 book that shows it, as `chobo explain --all` prints them; `chobo explain <code>` prints one. Every
 diagnostic of chobo's on this site is taken from a golden file of chobo's tests, which hold the
 diagnostics of each test book, in English and in Japanese, to what the checker prints.
@@ -229,8 +231,9 @@ error[E051]: changes.book:14:10: the transfer `reserve` differs from HEAD in how
 
 </div>
 
-The databases hold the same line when the book is called. PostgreSQL keeps the bounds an account
-was made with in its row, and stops a call whose book says other bounds with the error `CB001`.
+The databases hold the same line when the book is called. PostgreSQL and the MySQL family keep
+the bounds an account was made with in its row, and stop a call whose book says other bounds with
+the error `CB001`.
 TigerBeetle's client finds the account, or the opening transfer that keeps its bound, already there
 with another definition, and fails. To change a bound, declare an account kind under a new name and write a transfer that moves
 the balance over; a limit that will change is an account of its own from the start.

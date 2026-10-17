@@ -16,8 +16,8 @@ unit USD scale 2
 literals of the book, its bounds and the amounts its moves write, have two decimal places: a bound
 of `12.50` is 1250 cents. `chobo doc`, and the bounds `chobo check` names, show amounts so; a
 scenario, what `chobo run` prints and what a client is called with take the whole number. An
-amount is from 0 to 2⁶³ − 1, what PostgreSQL's `bigint` holds, and a bound from −(2⁶³ − 1) to
-2⁶³ − 1. A number its unit cannot hold stops the book:
+amount is from 0 to 2⁶³ − 1, what a `bigint` of PostgreSQL or MySQL holds, and a bound from
+−(2⁶³ − 1) to 2⁶³ − 1. A number its unit cannot hold stops the book:
 
 ```text
 error[E011]: numbers.book:9:11: `10.505` has 3 decimal places, and the unit `USD` takes 2

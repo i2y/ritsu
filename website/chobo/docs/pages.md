@@ -50,9 +50,9 @@ The Japanese site draws the Japanese version of each, with `--lang ja`.
   once for each way it can come out.
 - **The checker's warnings**, as `chobo check` prints them, when the book has any.
 
-A page shows the book, not the database: TigerBeetle's extra accounts and chains and PostgreSQL's
-tables are not on it. Those are for whoever runs the database, and `chobo run --show` and
-[Targets](targets.md) have them.
+A page shows the book, not the database: TigerBeetle's extra accounts and chains, and the tables of
+PostgreSQL and the MySQL family, are not on it. Those are for whoever runs the database, and
+`chobo run --show` and [Targets](targets.md) have them.
 
 ## As Markdown
 

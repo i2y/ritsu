@@ -175,7 +175,7 @@ pub fn commands() -> Vec<Cmd> {
                 ),
             )
             .choices(&["json"]),
-            flag("--books", Some("<database>"), tr!("帳簿のクライアントがつなぐ先", "what the clients of the books call")).choices(&["postgres", "tigerbeetle"]).default("postgres"),
+            flag("--books", Some("<database>"), tr!("帳簿のクライアントがつなぐ先（mysql は MySQL・TiDB・Vitess）", "what the clients of the books call (mysql is MySQL, TiDB or Vitess)")).choices(&["postgres", "tigerbeetle", "mysql"]).default("postgres"),
             flag(
                 "--authorizer",
                 Some("cedar|avp"),

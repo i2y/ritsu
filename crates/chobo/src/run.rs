@@ -60,7 +60,7 @@ fn commands() -> Vec<Cmd> {
         },
         Cmd {
             name: "run",
-            usage: Some("chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle] [--format json]"),
+            usage: Some("chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]"),
             args: "",
             purpose: tr!(
                 "シナリオを参照インタプリタで流し、操作ごとの結果と、終わりの残高と仮押さえを出す。together があれば、とりうる結果を全部出す",
@@ -71,13 +71,13 @@ fn commands() -> Vec<Cmd> {
                 flag("--scenario", Some("<file.json>"), tr!("流すシナリオ（一つ、または `chobo scenarios` が出す配列）", "the scenario to run (one, or the list `chobo scenarios` prints)")),
                 flag(
                     "--show",
-                    Some("postgres|tigerbeetle"),
+                    Some("postgres|tigerbeetle|mysql"),
                     tr!(
-                        "結果の代わりに、クライアントがその出力先に送るものを操作ごとに出す（PostgreSQL では関数と引数、TigerBeetle では作る勘定とチェーン）",
-                        "instead of the results, print what a client sends that target for each operation (the function and its arguments for PostgreSQL; the accounts it makes and the chain for TigerBeetle)"
+                        "結果の代わりに、クライアントがその出力先に送るものを操作ごとに出す（PostgreSQL では関数と引数、TigerBeetle では作る勘定とチェーン、MySQL の系統では文）",
+                        "instead of the results, print what a client sends that target for each operation (the function and its arguments for PostgreSQL; the accounts it makes and the chain for TigerBeetle; the statements for the MySQL family)"
                     ),
                 )
-                .choices(&["postgres", "tigerbeetle"]),
+                .choices(&["postgres", "tigerbeetle", "mysql"]),
                 flag("--format", Some("json"), tr!("結果を JSON で出す", "print the result as JSON")).choices(&["json"]),
             ],
             exits: vec![
@@ -107,21 +107,21 @@ fn commands() -> Vec<Cmd> {
             usage: Some("chobo build <file.book> --target <target> [--out <dir>]"),
             args: "",
             purpose: tr!(
-                "帳簿を、PostgreSQL のスキーマと関数の SQL か、TypeScript・Python・Go のクライアント（PostgreSQL を呼ぶもの、TigerBeetle を呼ぶもの）にする",
-                "build the book into PostgreSQL's schema and functions, as SQL, or into a client in TypeScript, Python or Go that calls PostgreSQL or TigerBeetle"
+                "帳簿を、PostgreSQL のスキーマと関数の SQL、MySQL の系統のテーブルの SQL、TypeScript・Python・Go のクライアント（PostgreSQL、TigerBeetle、MySQL の系統を呼ぶもの）にする",
+                "build the book into PostgreSQL's schema and functions or the MySQL family's tables, as SQL, or into a client in TypeScript, Python or Go that calls PostgreSQL, TigerBeetle or the MySQL family"
             ),
             params: vec![book(false)],
             flags: vec![
-                flag("--target", Some("<target>"), tr!("書くもの。postgres は SQL、ほかはクライアント", "what to write: postgres is the SQL, the others are clients")).choices(&TARGETS),
+                flag("--target", Some("<target>"), tr!("書くもの。postgres と mysql は SQL、ほかはクライアント", "what to write: postgres and mysql are SQL, the others are clients")).choices(&TARGETS),
                 flag("--out", Some("<dir>"), tr!("書く先のディレクトリ", "the directory to write into")).default("."),
             ],
             exits: vec![
                 (0, tr!("書いた", "written")),
-                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061）", "the book has errors, or the target cannot take it (E060, E061)")),
+                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061、E062）", "the book has errors, or the target cannot take it (E060, E061, E062)")),
                 (2, usage_exit.clone()),
             ],
             examples: vec!["chobo build inventory.book --target postgres --out db/", "chobo build inventory.book --target tigerbeetle-go --out internal/"],
-            codes: vec!["E060", "E061"],
+            codes: vec!["E060", "E061", "E062"],
         },
         Cmd {
             name: "doc",
@@ -192,7 +192,19 @@ fn table() -> Table {
 }
 
 /// The values of `--target`: crate::target::Target's names, in its order.
-const TARGETS: [&str; 7] = ["postgres", "postgres-typescript", "postgres-python", "postgres-go", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go"];
+const TARGETS: [&str; 11] = [
+    "postgres",
+    "postgres-typescript",
+    "postgres-python",
+    "postgres-go",
+    "tigerbeetle-typescript",
+    "tigerbeetle-python",
+    "tigerbeetle-go",
+    "mysql",
+    "mysql-typescript",
+    "mysql-python",
+    "mysql-go",
+];
 
 fn top_help(lang: Lang) -> String {
     let mut o = String::new();
@@ -482,10 +494,16 @@ fn cmd_run(a: &Args) -> u8 {
         };
         if let Some(target) = &show {
             if a.flags.contains_key("--format") {
-                let ops = if target == "postgres" { render::postgres_json(&book, "", &s) } else { render::tigerbeetle_json(&book, "", &s) };
+                let ops = match target.as_str() {
+                    "postgres" => render::postgres_json(&book, "", &s),
+                    "mysql" => render::mysql_json(&book, "", &s),
+                    _ => render::tigerbeetle_json(&book, "", &s),
+                };
                 outs.push(json!({"scenario": s.name, "target": target, "tenant": "", "operations": ops}));
             } else if target == "postgres" {
                 text.push_str(&render::postgres_text(&book, &file, "", &s, a.lang));
+            } else if target == "mysql" {
+                text.push_str(&render::mysql_text(&book, &file, "", &s, a.lang));
             } else {
                 text.push_str(&render::tigerbeetle_text(&book, &file, "", &s, a.lang));
             }

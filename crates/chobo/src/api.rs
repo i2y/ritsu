@@ -153,13 +153,15 @@ fn ids_json() -> Value {
             "transfer": ["book", "tenant", "transfer kind", "operation", "the key values, in the order of the key", "the place in the chain, from 0, in decimal"],
             "content": ["book", "tenant", "transfer kind", "operation", "definition", "the content as JSON without spaces"],
             "definition": ["the transfer kind written the one way", "each account kind its moves touch, written the one way"],
+            "tenant": ["book", "tenant"],
+            "expire": ["the hold's id, as 32 lowercase hex digits"],
             "ledger": ["unit", "scale, in decimal"],
             "code": ["book", "account, transfer or sink", "the kind's name, or the unit's for a sink"],
         },
     })
 }
 
-/// How each target names what it writes (DESIGN 4.3, 5): for a tool that calls a book through a
+/// How each target names what it writes (DESIGN 4.3, 4.5, 5): for a tool that calls a book through a
 /// client chobo built, or through the SQL, without reading the code. `stem` is the book's file
 /// name without `.book`, which the Go package falls back on.
 pub fn targets(book: &Book, stem: &str) -> Value {
@@ -279,11 +281,14 @@ pub fn targets(book: &Book, stem: &str) -> Value {
             chains.push(json!({"kind": t.name, "op": "do", "transfers": hold}));
         }
     }
+    let mut mysql = crate::mysql::names(book);
+    mysql["expire"] = json!("expire");
     json!({
         "postgres": {"schema": book.name, "functions": functions, "balances": balances, "expire": "expire"},
-        "typescript": {"file": format!("{}.ts", book.name), "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle"}, "transfers": ts, "balance": "balance"},
-        "python": {"module": book.name, "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle"}, "transfers": py, "balance": "balance"},
-        "go": {"package": go::package(book, stem), "factories": {"postgres": "Postgres", "tigerbeetle": "TigerBeetle"}, "transfers": gos, "balances": go_balances},
+        "mysql": mysql,
+        "typescript": {"file": format!("{}.ts", book.name), "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle", "mysql": "mysql"}, "transfers": ts, "balance": "balance"},
+        "python": {"module": book.name, "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle", "mysql": "mysql"}, "transfers": py, "balance": "balance"},
+        "go": {"package": go::package(book, stem), "factories": {"postgres": "Postgres", "tigerbeetle": "TigerBeetle", "mysql": "MySQL"}, "transfers": gos, "balances": go_balances},
         "tigerbeetle": {"request_max": client::REQUEST_MAX, "chains": chains},
     })
 }

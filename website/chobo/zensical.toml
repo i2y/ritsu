@@ -1,7 +1,7 @@
 [project]
 site_name = "chobo"
 site_url = "https://i2y.github.io/ritsu/chobo/"
-site_description = "A small language for the things you count and move between accounts: stock, money, points, seats. A book puts bounds on its accounts, every transfer keeps them in one write, and the book is built for PostgreSQL or TigerBeetle, with a client in TypeScript, Python or Go."
+site_description = "A small language for the things you count and move between accounts: stock, money, points, seats. A book puts bounds on its accounts, every transfer keeps them in one write, and the book is built for PostgreSQL, TigerBeetle or the MySQL family (MySQL, TiDB, Vitess), with a client in TypeScript, Python or Go."
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 

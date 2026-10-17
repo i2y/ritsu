@@ -20,6 +20,7 @@ pub mod draw;
 pub mod ids;
 pub mod interp;
 pub mod model;
+pub mod mysql;
 pub mod parse;
 pub mod ports;
 pub mod postgres;

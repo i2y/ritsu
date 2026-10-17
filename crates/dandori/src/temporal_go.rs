@@ -1148,7 +1148,7 @@ fn io_file(n: &Needs, pkg: &str, header: &str) -> String {
         t.push_str("\t// Claude are options of Anthropic's client for the Claude agents, such as option.WithAPIKey or\n\t// option.WithBaseURL. The client does not retry by itself unless they say so: the workflow retries,\n\t// as `retry` says.\n\tClaude []anthropicoption.RequestOption\n");
     }
     if n.books {
-        t.push_str("\t// Books are the books the tasks run operations on, by the book's name: the *Book the Go client chobo\n\t// writes for it makes (its Postgres or TigerBeetle function).\n\tBooks map[string]any\n");
+        t.push_str("\t// Books are the books the tasks run operations on, by the book's name: the *Book the Go client chobo\n\t// writes for it makes (its Postgres, TigerBeetle or MySQL function).\n\tBooks map[string]any\n");
     }
     t.push_str("}\n");
     t.push_str(&IO.replace("{{CLAUDE_MAX_TOKENS}}", &render::CLAUDE_MAX_TOKENS.to_string()).replace("{{BEAT_SECONDS}}", &crate::temporal::BEAT_SECONDS.to_string()));

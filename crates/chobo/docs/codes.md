@@ -28,6 +28,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 | [E051](#e051) | error | A transfer kind changed since the revision compared with |
 | [E060](#e060) | error | An operation that does not fit one TigerBeetle request |
 | [E061](#e061) | error | A name too long for PostgreSQL |
+| [E062](#e062) | error | A name MySQL cannot hold as written |
 | [W101](#w101) | warning | An account that only fills |
 | [W102](#w102) | warning | A transfer that is always refused |
 | [W103](#w103) | warning | A transfer refused for the order of its moves |
@@ -575,7 +576,7 @@ transfer spread(note: string, a: string, b: string, amount: yen)
   move amount from pool(a) to credit(b)
 ```
 
-Related codes: [E061](#e061)
+Related codes: [E061](#e061), [E062](#e062)
 
 ## E061
 
@@ -604,7 +605,36 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ```
 
-Related codes: [E060](#e060)
+Related codes: [E060](#e060), [E062](#e062)
+
+## E062
+
+`error` — **A name MySQL cannot hold as written**
+
+**When.** With a target of the MySQL family of `chobo build`: a name made from the book's, of a table (`<book>_accounts`, …) or of a check (`<book>_within_lower`, …), is longer than 64 characters, or the book's name has a character beyond the Basic Multilingual Plane (𠮷 and the like). MySQL writes such a character as `?` with only a warning, so two names could become one. TiDB and Vitess keep the same rules.
+
+**Fix.** Make the book's name at most 51 characters (`_within_lower` follows it), and take out any character beyond the Basic Multilingual Plane.
+
+**The command that shows it**: `chobo build <file.book> --target mysql`
+
+**Smallest reproduction**:
+
+```book
+book stock_of_the_central_warehouse_and_of_each_branch_stores v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+```
+
+Related codes: [E060](#e060), [E061](#e061)
 
 ## W101
 

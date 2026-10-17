@@ -1,8 +1,8 @@
 # The chobo agent skill
 
 `chobo/` is an [Agent Skill](https://agentskills.io) for **using chobo**: writing a `.book`,
-getting it past `chobo check`, building it for PostgreSQL or TigerBeetle, and knowing what to
-ask a person. It is not about working on chobo itself.
+getting it past `chobo check`, building it for PostgreSQL, TigerBeetle or the MySQL family, and
+knowing what to ask a person. It is not about working on chobo itself.
 
 ## Install
 

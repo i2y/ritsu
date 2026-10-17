@@ -1,0 +1,4 @@
+error[E062]: wide_letters.book:2:6: The book's name `stock_𝐀𝐁` has 𝐀 (U+1D400); MySQL holds no character beyond the Basic Multilingual Plane in a name, and writes it as `?` with only a warning, so two names could become one
+     2 | book stock_𝐀𝐁 v1
+  hint: Take the character out of the book's name: the names of the tables and checks are made from it
+wide_letters.book: 1 error(s), 0 warning(s)

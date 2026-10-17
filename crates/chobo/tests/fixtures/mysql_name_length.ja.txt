@@ -1,0 +1,4 @@
+エラー[E062]: mysql_name_length.book:2:6: 制約の名前 `stock_of_the_central_warehouse_and_of_each_branch_stores_within_lower` は 69 字あります。MySQL の名前は 64 字までです
+     2 | book stock_of_the_central_warehouse_and_of_each_branch_stores v1
+  ヒント: 帳簿の名前を 51 字までにしてください（後ろに `_within_lower` が付きます）
+mysql_name_length.book: エラー 1 件、警告 0 件

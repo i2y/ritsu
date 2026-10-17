@@ -28,6 +28,7 @@ chobo が出すコードの全部について、いつ出るかと、どう直�
 | [E051](#e051) | エラー | 前のリビジョンからある振替の定義が変わりました |
 | [E060](#e060) | エラー | 一つの操作が TigerBeetle の一つのリクエストに入りません |
 | [E061](#e061) | エラー | 名前が PostgreSQL の識別子に収まりません |
+| [E062](#e062) | エラー | 名前を MySQL がそのままでは持てません |
 | [W101](#w101) | 警告 | 残高がたまる一方の勘定 |
 | [W102](#w102) | 警告 | いつも拒否される振替 |
 | [W103](#w103) | 警告 | 移動の順序のせいで拒否される振替 |
@@ -575,7 +576,7 @@ transfer spread(note: string, a: string, b: string, amount: yen)
   move amount from pool(a) to credit(b)
 ```
 
-関係するコード: [E061](#e061)
+関係するコード: [E061](#e061), [E062](#e062)
 
 ## E061
 
@@ -604,7 +605,36 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ```
 
-関係するコード: [E060](#e060)
+関係するコード: [E060](#e060), [E062](#e062)
+
+## E062
+
+`エラー` — **名前を MySQL がそのままでは持てません**
+
+**いつ出るか。** `chobo build` の MySQL の系統のターゲットで、帳簿の名前から作るテーブル（`<帳簿>_accounts` など）と制約（`<帳簿>_within_lower` など）の名前が 64 字を超えるとき、または帳簿の名前に基本多言語面の外の文字（𠮷 など）があるときに出ます。MySQL はそういう文字を、警告だけで `?` に書き換えるので、二つの名前が同じになりえます。TiDB と Vitess も同じ決まりです。
+
+**直し方。** 帳簿の名前を 51 字までにし（後ろに `_within_lower` が付きます）、基本多言語面の外の文字を外してください。
+
+**どのコマンドで出るか**: `chobo build <file.book> --target mysql`
+
+**最小の再現**:
+
+```book
+book stock_of_the_central_warehouse_and_of_each_branch_stores v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+```
+
+関係するコード: [E060](#e060), [E061](#e061)
 
 ## W101
 

@@ -1006,6 +1006,13 @@
         "the transfer kind written the one way",
         "each account kind its moves touch, written the one way"
       ],
+      "tenant": [
+        "book",
+        "tenant"
+      ],
+      "expire": [
+        "the hold's id, as 32 lowercase hex digits"
+      ],
       "ledger": [
         "unit",
         "scale, in decimal"
@@ -1126,11 +1133,25 @@
       ],
       "expire": "expire"
     },
+    "mysql": {
+      "tables": {
+        "accounts": "分配_accounts",
+        "calls": "分配_calls",
+        "entries": "分配_entries"
+      },
+      "checks": [
+        "分配_within_lower",
+        "分配_within_upper"
+      ],
+      "begin": "begin /*T! pessimistic */",
+      "expire": "expire"
+    },
     "typescript": {
       "file": "分配.ts",
       "factories": {
         "postgres": "postgres",
-        "tigerbeetle": "tigerbeetle"
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
       },
       "transfers": [
         {
@@ -1155,7 +1176,8 @@
       "module": "分配",
       "factories": {
         "postgres": "postgres",
-        "tigerbeetle": "tigerbeetle"
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
       },
       "transfers": [
         {
@@ -1194,7 +1216,8 @@
       "package": "book",
       "factories": {
         "postgres": "Postgres",
-        "tigerbeetle": "TigerBeetle"
+        "tigerbeetle": "TigerBeetle",
+        "mysql": "MySQL"
       },
       "transfers": [
         {

@@ -4,6 +4,7 @@
   "description": "Runs the scenarios of a book through the TypeScript clients chobo writes, for the tests (tests/backends.rs)",
   "type": "module",
   "dependencies": {
+    "mysql2": "3.24.5",
     "pg": "8.23.1",
     "tigerbeetle-node": "0.17.9"
   },

@@ -24,7 +24,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [rulec](#rulec--business-rules) | `.rule` | business rules: tariffs, fees, eligibility, tax | functions in twelve languages |
 | [dandori](#dandori--the-skeleton-of-a-workflow) | `.flow` | the skeleton of a workflow | Temporal, Step Functions, Argo and more |
 | [koyomi](#koyomi--dates) | `.cal` | dates: closing and payment days, business days, legal periods | TypeScript, Python, Go, Rust, SQL |
-| [chobo](#chobo--ledgers) | `.book` | ledgers: accounts, their bounds, transfers, holds | clients for PostgreSQL and TigerBeetle |
+| [chobo](#chobo--ledgers) | `.book` | ledgers: accounts, their bounds, transfers, holds | clients for PostgreSQL, TigerBeetle, MySQL, TiDB and Vitess |
 | [geas](#geas--claims-about-the-code-an-agent-wrote) | `.geas` | claims about the code an agent wrote | — |
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
@@ -191,8 +191,8 @@ net30.cal: ok — 3 claims hold on all 1,064 days of invoice_date (2026-01-01..2
 
 A book declares accounts and the bounds each must keep, and the transfers between them. chobo
 checks that no sequence of transfers, holds and expiries can take an account past a bound, and
-generates clients in which every transfer is one write that keeps them, on PostgreSQL or on
-TigerBeetle, in TypeScript, Python and Go.
+generates clients in which every transfer is one write that keeps them, on PostgreSQL, on
+TigerBeetle or on the MySQL family (MySQL, TiDB and Vitess), in TypeScript, Python and Go.
 
 ```book
 # A refund never exceeds the sale: what is left to refund on each order is an account of its own.

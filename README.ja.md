@@ -15,7 +15,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | [rulec](#rulec業務の規則) | `.rule` | 業務の規則：運賃、手数料、資格、税 | 12 の言語の関数 |
 | [dandori](#dandoriワークフローの骨組み) | `.flow` | ワークフローの骨組み | Temporal、Step Functions、Argo ほか |
 | [koyomi](#koyomi期日) | `.cal` | 期日：締め日と支払日、営業日、法令の期間 | TypeScript、Python、Go、Rust、SQL |
-| [chobo](#chobo帳簿) | `.book` | 帳簿：勘定、その上限と下限、振替、仮押さえ | PostgreSQL と TigerBeetle を使うクライアント |
+| [chobo](#chobo帳簿) | `.book` | 帳簿：勘定、その上限と下限、振替、仮押さえ | PostgreSQL、TigerBeetle、MySQL、TiDB、Vitess を使うクライアント |
 | [geas](#geasエージェントが書いたコードについての主張) | `.geas` | エージェントが書いたコードについての主張 | — |
 | [yuen](#yuen要件の出どころ) | `.req` | 要件の出どころと、それを満たすもの | ReqIF、W3C PROV |
 | [sakai](#sakai境界づけられたコンテキストの地図) | `.ctx` | 境界づけられたコンテキストの地図 | import を確かめるツールの設定、Context Mapper |
@@ -163,7 +163,7 @@ net30.cal: ok — 3 つの条件が、invoice_date 2026-01-01〜2028-11-29 の 1
 
 ### chobo：帳簿
 
-帳簿には、勘定と、それぞれが守る上限と下限、勘定のあいだの振替を書きます。chobo は、振替、仮押さえ、期限切れをどう重ねても、勘定が上限と下限の外に出ないことを確かめます。生成するクライアントでは、どの振替も、上限と下限を守る一度の書き込みになります。PostgreSQL と TigerBeetle の上で、TypeScript、Python、Go で使えます。
+帳簿には、勘定と、それぞれが守る上限と下限、勘定のあいだの振替を書きます。chobo は、振替、仮押さえ、期限切れをどう重ねても、勘定が上限と下限の外に出ないことを確かめます。生成するクライアントでは、どの振替も、上限と下限を守る一度の書き込みになります。PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）の上で、TypeScript、Python、Go で使えます。
 
 ```book
 # A refund never exceeds the sale: what is left to refund on each order is an account of its own.

@@ -64,5 +64,9 @@ Claude Code なら、プラグイン `ritsu` に九つのスキルが入って�
 | `tigerbeetle-typescript` | `tigerbeetle-node` 0.17.9 のクライアント |
 | `tigerbeetle-python` | `tigerbeetle` 0.17.9 の `ClientSync` |
 | `tigerbeetle-go` | `tigerbeetle-go` v0.17.9 のクライアント（cgo を使う） |
+| `mysql` | MySQL 8.4 以降、TiDB 8.5 以降、Vitess のどれか。SQL が、流したデータベースに帳簿の三つのテーブルを作る。何度流してもよい。TiDB では `tidb_enable_check_constraint` を ON にして流す |
+| `mysql-typescript` | `mysql2`（`mysql2/promise`）のプールか接続 |
+| `mysql-python` | PyMySQL か mysqlclient の DB-API の接続 |
+| `mysql-go` | database/sql の `*sql.DB`、`*sql.Conn`、`*sql.Tx` のどれか（ドライバは `go-sql-driver/mysql`） |
 
-ターゲットごとに何を書くかは[データベース向けのビルド](databases.md)に、三つの言語からの呼び方は[出力先](targets.md)（英語）にあります。
+テストは、PostgreSQL 18.0、TigerBeetle 0.17.9、MySQL 8.4.11、TiDB 8.5.8、Vitess 24.0.5 の上でクライアントを動かしています。ドライバのバージョンは[出力先](targets.md#the-clients-own-needs)（英語）にあります。ターゲットごとに何を書くかは[データベース向けのビルド](databases.md)に、三つの言語からの呼び方は[出力先](targets.md)（英語）にあります。

@@ -195,9 +195,10 @@ What you put beside the generated code:
   module of its own (`koyomi/go/<package>`), which your `go.mod` requires and replaces, as
   `rules.go` says at its top.
 - **The books.** chobo writes a client for the book (`chobo build <file.book> --target
-  postgres-typescript`, `tigerbeetle-python`, `postgres-go`, …). Give the `Transport` the book
-  value it makes, by the book's name: `transport({ books: { stock: postgres(pool, { tenant }) } })`
-  in TypeScript, `transport(books={"stock": postgres(connection)})` in Python, and
+  postgres-typescript`, `tigerbeetle-python`, `postgres-go`, `mysql-go`, …). Give the `Transport`
+  the book value it makes, by the book's name:
+  `transport({ books: { stock: postgres(pool, { tenant }) } })` in TypeScript,
+  `transport(books={"stock": postgres(connection)})` in Python, and
   `TransportOptions{Books: map[string]any{"stock": stock.Postgres(pool, tenant)}}` in Go. On Step
   Functions, deploy `lambda/book_stock_handler.py` with chobo's Python client, made by
   `handler = make_handler(lambda: tigerbeetle(ClientSync(…)))`.
@@ -214,6 +215,6 @@ What you put beside the generated code:
   calendar's offset.
 - The operations of every flow's runs go through the `Transport` dandori writes in TypeScript,
   Python and Go, and through its Lambda function for Step Functions, to the clients chobo writes,
-  on PostgreSQL and on TigerBeetle, and must answer what chobo's reference interpreter answers:
-  on an empty book, on one a delivery has filled, and once more on the same book, where each
-  operation was done before.
+  on PostgreSQL, on TigerBeetle and on MySQL, and must answer what chobo's reference interpreter
+  answers: on an empty book, on one a delivery has filled, and once more on the same book, where
+  each operation was done before.

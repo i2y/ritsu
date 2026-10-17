@@ -88,7 +88,7 @@ tests/books/在庫.book (more: 引当 expired, then posted for more than it held
 …
 ```
 
-期限が切れたあとの確定は、何を頼んでも `expired` で拒否されます。TigerBeetle では、仮押さえはクラスタの時計で切れます。PostgreSQL には、時刻が来たら自分で動く仕組みがありません。期限を過ぎた仮押さえはすぐに `expired` を返しますが、押さえていた量が戻るのは、次に `expire()` を呼んだときです（[データベース向けのビルド](databases.md#postgresql)）。
+期限が切れたあとの確定は、何を頼んでも `expired` で拒否されます。TigerBeetle では、仮押さえはクラスタの時計で切れます。PostgreSQL と MySQL の系統には、時刻が来たら自分で動く仕組みがありません。期限を過ぎた仮押さえはすぐに `expired` を返しますが、押さえていた量が戻るのは、次に `expire()` を呼んだときです（[データベース向けのビルド](databases.md#postgresql)）。
 
 ## chobo が作るシナリオ
 
@@ -126,7 +126,7 @@ $ chobo run examples/refunds/refunds.ja.book --scenario examples/refunds/refunds
 
 ## データベースに送るもの
 
-`--show postgres` と `--show tigerbeetle` を付けると、結果の代わりに、`chobo build` が書くクライアントがそのシナリオで出力先に送るものを出します。PostgreSQL なら SQL とその引数を、TigerBeetle なら作る勘定、最初に流す振替、操作ごとのチェーンを、フィールドまで出します。
+`--show postgres`、`--show tigerbeetle`、`--show mysql` を付けると、結果の代わりに、`chobo build` が書くクライアントがそのシナリオで出力先に送るものを出します。PostgreSQL なら SQL とその引数を、TigerBeetle なら作る勘定、最初に流す振替、操作ごとのチェーンを、フィールドまで出します。MySQL の系統なら、操作ごとの SQL 文を、値を入れた形で出します（[データベース向けのビルド](databases.md#mysqltidbvitess)）。
 
 ```console
 $ chobo run examples/refunds/refunds.ja.book --scenario examples/refunds/refunds.ja.more.json --show postgres --lang ja

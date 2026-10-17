@@ -1,0 +1,4 @@
+error[E062]: 名前の文字.book:2:6: The book's name `𠮷野の在庫` has 𠮷 (U+20BB7); MySQL holds no character beyond the Basic Multilingual Plane in a name, and writes it as `?` with only a warning, so two names could become one
+     2 | book 𠮷野の在庫 v1
+  hint: Take the character out of the book's name: the names of the tables and checks are made from it
+名前の文字.book: 1 error(s), 0 warning(s)

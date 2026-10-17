@@ -187,10 +187,10 @@ itself; the gates' Cedar goes once into `<out>/cedar/`. Run it after `ritsu chec
 writes nothing and exits 1 if a package is stale, for CI; `--format json` prints one object instead
 of lines, every file of the packages with what became of it (`written`, `same` or `removed`; under
 `--check`, `same`, `missing`, `stale` or `left`), or why nothing was generated with the diagnostics
-of the files that stopped it; `--books postgres|tigerbeetle` says what
-the clients of the books call; `--authorizer cedar|avp` says whether a gate's code asks the
-language's own Cedar in the process or Amazon Verified Permissions; `--name` and `--module` name
-the package. Each language's own `gen` or `build` still writes that language's code alone (`rulec
+of the files that stopped it; `--books postgres|tigerbeetle|mysql` says what the clients of the
+books call (`mysql` is MySQL, TiDB or Vitess); `--authorizer cedar|avp` says whether a gate's code
+asks the language's own Cedar in the process or Amazon Verified Permissions; `--name` and
+`--module` name the package. Each language's own `gen` or `build` still writes that language's code alone (`rulec
 gen`, `koyomi gen`, `chobo build`, `dandori build`, `sekisho gen`).
 
 ## 5. Which skill to read

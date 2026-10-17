@@ -2,9 +2,9 @@
 
 **勘定に下限と上限を書く。どの振替も、一度の書き込みの中でそれを守る。**
 
-在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語です。帳簿（`.book`）には、勘定と、勘定ごとの下限や上限と、勘定のあいだで動かす振替の種類を書きます。振替には、同じ呼び出しを一度しか通さないためのキーと、確定か取消を待つ仮押さえも書けます。chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL か TigerBeetle 向けにビルドします。呼び出すクライアントは TypeScript、Python、Go で出します。
+在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語です。帳簿（`.book`）には、勘定と、勘定ごとの下限や上限と、勘定のあいだで動かす振替の種類を書きます。振替には、同じ呼び出しを一度しか通さないためのキーと、確定か取消を待つ仮押さえも書けます。chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けにビルドします。呼び出すクライアントは TypeScript、Python、Go で出します。
 
-帳簿に書ける条件は、一つの勘定の下限と上限だけです。これはわざとそうしています。一つの勘定の境界なら、その勘定を書き換える書き込みの中で確かめられ、あいだに別の読み取りが入りません。PostgreSQL では勘定の行をロックする関数が、TigerBeetle では勘定のフラグと、全部通るか一つも通らないかのどちらかになる振替のチェーンが、それを受け持ちます。二つの勘定にまたがる条件は、こうはいきません。同時に来た二つの呼び出しが、どちらも、もう一方が書き込む前の残高を読めてしまうからです。そこで、またがる条件は、勘定を一つ足して、その勘定の境界として書きます。「返金は売上を超えない」なら、注文ごとに「返金できる残り」の勘定を立て、売上で増やし、返金で減らし、0 を下回らないようにします。
+帳簿に書ける条件は、一つの勘定の下限と上限だけです。これはわざとそうしています。一つの勘定の境界なら、その勘定を書き換える書き込みの中で確かめられ、あいだに別の読み取りが入りません。PostgreSQL では勘定の行をロックする関数が、TigerBeetle では勘定のフラグと、全部通るか一つも通らないかのどちらかになる振替のチェーンが、MySQL の系統では勘定の行をロックしながら読むトランザクションが、それを受け持ちます。二つの勘定にまたがる条件は、こうはいきません。同時に来た二つの呼び出しが、どちらも、もう一方が書き込む前の残高を読めてしまうからです。そこで、またがる条件は、勘定を一つ足して、その勘定の境界として書きます。「返金は売上を超えない」なら、注文ごとに「返金できる残り」の勘定を立て、売上で増やし、返金で減らし、0 を下回らないようにします。
 
 ```book
 book 返金 v1
@@ -33,7 +33,7 @@ transfer 返金(申請: string, 注文: string, 額: 円)
 
 **ドキュメント：<https://i2y.github.io/ritsu/chobo/ja/>**（英語は <https://i2y.github.io/ritsu/chobo/>）。ページは、このリポジトリの [website/chobo/docs-ja](../../website/chobo/docs-ja) と [website/chobo/docs](../../website/chobo/docs) でも読めます。
 
-**ブラウザで試す：[i2y.github.io/ritsu/ja/playground](https://i2y.github.io/ritsu/ja/playground/#project=chobo/refunds.ja)**。chobo を含む ritsu を wasm32 にコンパイルして、ページの中で動かします。例の帳簿でも、書き換えた帳簿でも、検査、二つのデータベース向けのビルド、`chobo doc` を試せます。どこにも何も送りません。
+**ブラウザで試す：[i2y.github.io/ritsu/ja/playground](https://i2y.github.io/ritsu/ja/playground/#project=chobo/refunds.ja)**。chobo を含む ritsu を wasm32 にコンパイルして、ページの中で動かします。例の帳簿でも、書き換えた帳簿でも、検査、データベースごとのビルド、`chobo doc` を試せます。どこにも何も送りません。
 
 ## 検査が言うこと
 
@@ -60,7 +60,7 @@ examples/refunds/refunds.ja.book: ok
   ヒント: 店の売上(店) へ入れる移動を先に書いてください
 ```
 
-診断のコードは全部で 30 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
+診断のコードは全部で 31 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
 
 ## 二つの返金が同時に来る
 
@@ -109,8 +109,10 @@ $ chobo build examples/refunds/refunds.ja.book --target postgres --out db
 | `postgres` | スキーマ、テーブルと制約、操作ごとの関数（SQL） |
 | `postgres-typescript`、`postgres-python`、`postgres-go` | その関数を呼ぶクライアント |
 | `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
+| `mysql` | MySQL、TiDB、Vitess 向けの、帳簿のテーブルと制約（SQL） |
+| `mysql-typescript`、`mysql-python`、`mysql-go` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
 
-二つのデータベースのクライアントは、名前も引数も結果も同じです。拒否されたことは例外ではなく、`{ result: "refused", reason: "返金超過" }` という結果で返ります。同じ呼び出しの二度目は `done_before` を返すので、リトライで二重に動くことはありません。PostgreSQL では、関数が呼ぶ側のトランザクションの中で動くので、注文の行と在庫の仮押さえを一緒にコミットできます。TigerBeetle は利用者のコードを中で動かせないので、クライアントがチェーンを組み立てます。下限 0 は勘定のフラグで守り、ほかの境界は、chobo が同じチェーンに足す振替で守ります。出力先ごとに何を書き、三つの言語からどう呼ぶかは [docs/targets.md](docs/targets.md)（英語）にあります。
+どの出力先のクライアントも、名前も引数も結果も同じです。拒否されたことは例外ではなく、`{ result: "refused", reason: "返金超過" }` という結果で返ります。同じ呼び出しの二度目は `done_before` を返すので、リトライで二重に動くことはありません。PostgreSQL では、関数が呼ぶ側のトランザクションの中で動くので、注文の行と在庫の仮押さえを一緒にコミットできます。TigerBeetle は利用者のコードを中で動かせないので、クライアントがチェーンを組み立てます。下限 0 は勘定のフラグで守り、ほかの境界は、chobo が同じチェーンに足す振替で守ります。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、その読み取りで、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、呼び出しもそのトランザクションに入ります。出力先ごとに何を書き、三つの言語からどう呼ぶかは [docs/targets.md](docs/targets.md)（英語）にあります。
 
 ## 経理や運用の人に見せる
 
@@ -140,7 +142,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked chobo
 
 ```
 chobo check <file.book>... [--format json] [--diff-base <rev>]
-chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle] [--format json]
+chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]
 chobo scenarios <file.book> [--out <dir>]
 chobo build <file.book> --target <target> [--out <dir>]
 chobo doc <file.book> [--format html] [--out <dir>]
@@ -156,20 +158,21 @@ chobo explain <code> | --all [--format markdown]
 
 ## 確かめ方
 
-帳簿の意味を決めるのは参照インタプリタです。テストは、例とテスト用の帳簿の全部からシナリオを作り（手で書いたものを含めて 468 本、そのうち 38 本は呼び出し元が同時に来るもの）、どれも七つの出力先で流します。SQL そのもの（psql から関数を呼ぶ）、PostgreSQL を呼ぶ三つの言語のクライアント、TigerBeetle を呼ぶ三つの言語のクライアントです。操作ごとの結果、終わりの残高、仮押さえの状態が、参照インタプリタと同じ（同時に来るシナリオなら、とりうる結果のどれか）でなければなりません。三つの言語のクライアントが送ったものは、`chobo run --show` と一字ずつ比べるので、どの言語も同じ ID を作ることも確かめられます。PostgreSQL では、四つのセッションから同じ勘定に逆の向きの移し替えを流し、デッドロックが起きないことも見ます。生成した TypeScript は `tsc --strict`、Python は `py_compile`、Go は `gofmt` と `go vet` を通します。`chobo doc` のページはテストが期待する出力として固定し、Mermaid の図は Mermaid 11 と 12 で描けることを、HTML のページは Chrome で、各ステップのあとに参照インタプリタと同じ残高が出ることを確かめます。
+帳簿の意味を決めるのは参照インタプリタです。テストは、例とテスト用の帳簿の全部からシナリオを作り（手で書いたものを含めて 468 本、そのうち 38 本は呼び出し元が同時に来るもの）、どれもすべてのクライアントで流します。SQL そのもの（psql から関数を呼ぶ）、PostgreSQL を呼ぶ三つの言語のクライアント、TigerBeetle を呼ぶ三つの言語のクライアント、MySQL と TiDB と Vitess の上の、MySQL の系統の三つの言語のクライアントです。Vitess では、シャード一つのキースペースと、テナントで二つのシャードに分け、シャードをまたぐトランザクションを誤りにしたキースペースの両方で流します。MySQL の系統のクライアントは、SQL 文を一つずつ送る形と、まとめて送る形の両方で流します。操作ごとの結果、終わりの残高、仮押さえの状態が、参照インタプリタと同じ（同時に来るシナリオなら、とりうる結果のどれか）でなければなりません。クライアントが一つずつ送ったものは、`chobo run --show` と一字ずつ比べるので、どの言語も同じ ID を作ることも確かめられます。PostgreSQL、MySQL、TiDB、Vitess では、四つの呼び出し元から同じ勘定に逆の向きの移し替えを流し、デッドロックが起きないことも見ます。生成した TypeScript は `tsc --strict`、Python は `py_compile`、Go は `gofmt` と `go vet` を通します。`chobo doc` のページはテストが期待する出力として固定し、Mermaid の図は Mermaid 11 と 12 で描けることを、HTML のページは Chrome で、各ステップのあとに参照インタプリタと同じ残高が出ることを確かめます。
 
 ```console
 $ cargo test
 ```
 
-PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch.sh` か `CHOBO_TIGERBEETLE`）、Node.js と Python と `tools/runner` に書いた依存、Go、Chrome（`CHOBO_CHROME`）、Mermaid（`npm ci --prefix tools/mermaid`）のうち、見つかったものを使います。見つからないものは、それぞれ `SKIP:` の行を出して飛ばします。
+PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch.sh` か `CHOBO_TIGERBEETLE`）、MySQL（`tools/mysql/fetch.sh` か `RITSU_MYSQL_BIN`）、TiDB のクラスタ（`RITSU_TIDB` に `host:port`）、Vitess（`RITSU_VITESS_BIN` に、Vitess のソースから組んだ vttestserver・vtcombo・mysqlctl の `bin` のディレクトリ）、Node.js と Python と `tools/runner` に書いた依存、Go、Chrome（`CHOBO_CHROME`）、Mermaid（`npm ci --prefix tools/mermaid`）のうち、見つかったものを使います。見つからないものは、それぞれ `SKIP:` の行を出して飛ばします。
 
 ## いまの状態
 
 まだ始めたばかりです。まだやっていないことは次のとおりです。
 
 - 残高のある勘定の種類について、境界を変えること。いまは新しい勘定の種類を作り、残高を移す振替を書きます。
-- PostgreSQL と TigerBeetle のほかのデータベース。
+- PostgreSQL、TigerBeetle、MySQL の系統のほかのデータベース。MariaDB は、`CHECK` や JSON の振る舞いが MySQL と違うので、MySQL の系統に入れていません。
+- Vitess を動かすサービスの上で確かめること。テストは、Vitess の試験用のサーバー（vttestserver）で流しています。
 - TigerBeetle を本番の構成（レプリカ六つ）で動かすこと（テストは `--development` で立てたレプリカ一つで流します）と、キーから作る ID でどれだけ遅くなるかの測定。
 - 勘定が受けた記録や振替を読む操作。
 - TigerBeetle の結果が参照インタプリタと違う二つの場合をそろえること（[docs/targets.md](docs/targets.md) に書いてあります）。

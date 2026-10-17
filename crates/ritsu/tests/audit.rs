@@ -181,12 +181,12 @@ fn locked() -> Locked {
     Locked { npm, pypi, go }
 }
 
-/// The package of the stockroom project in each language, with its books on PostgreSQL and on
-/// TigerBeetle; and of sekisho's example, whose gates ask Cedar in the process or Verified
+/// The package of the stockroom project in each language, with its books on PostgreSQL, on
+/// TigerBeetle and on the MySQL family; and of sekisho's example, whose gates ask Cedar in the process or Verified
 /// Permissions.
 fn packages(t: &TempDir) -> Vec<PathBuf> {
     let mut outs = Vec::new();
-    for (project, flag, value) in [("crates/ritsu/tests/projects/stockroom", "--books", "postgres"), ("crates/ritsu/tests/projects/stockroom", "--books", "tigerbeetle"), ("crates/sekisho/examples/refunds", "--authorizer", "cedar"), ("crates/sekisho/examples/refunds", "--authorizer", "avp")] {
+    for (project, flag, value) in [("crates/ritsu/tests/projects/stockroom", "--books", "postgres"), ("crates/ritsu/tests/projects/stockroom", "--books", "tigerbeetle"), ("crates/ritsu/tests/projects/stockroom", "--books", "mysql"), ("crates/sekisho/examples/refunds", "--authorizer", "cedar"), ("crates/sekisho/examples/refunds", "--authorizer", "avp")] {
         let out = t.path().join(format!("{}-{value}", project.rsplit('/').next().unwrap()));
         let o = Command::new(env!("CARGO_BIN_EXE_ritsu")).current_dir(root().join(project)).args(["gen", "--root", ".", "--out", out.to_str().unwrap(), flag, value]).output().unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));

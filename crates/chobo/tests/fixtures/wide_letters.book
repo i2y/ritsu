@@ -1,0 +1,17 @@
+# E062: MySQL holds no character beyond the Basic Multilingual Plane in a name; the tables and checks are named after the book, so the bold letters of this book's name would become `?`
+book stock_𝐀𝐁 v1
+
+unit item
+
+account stock(sku: string) : item
+  at least 0 refused as out_of_stock
+account supplier : item outside
+account customer : item outside
+
+transfer receive(slip: string, sku: string, qty: item)
+  key slip, sku
+  move qty from supplier to stock(sku)
+
+transfer ship(order: string, sku: string, qty: item)
+  key order, sku
+  move qty from stock(sku) to customer

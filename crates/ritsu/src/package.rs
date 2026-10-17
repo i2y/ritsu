@@ -78,6 +78,8 @@ impl Target {
 pub enum Books {
     Postgres,
     TigerBeetle,
+    /// MySQL, TiDB or Vitess (chobo's DESIGN 4.5)
+    MySql,
 }
 
 impl Books {
@@ -90,6 +92,19 @@ impl Books {
             (Books::TigerBeetle, Target::TypeScript) => C::TigerBeetleTypeScript,
             (Books::TigerBeetle, Target::Python) => C::TigerBeetlePython,
             (Books::TigerBeetle, Target::Go) => C::TigerBeetleGo,
+            (Books::MySql, Target::TypeScript) => C::MySqlTypeScript,
+            (Books::MySql, Target::Python) => C::MySqlPython,
+            (Books::MySql, Target::Go) => C::MySqlGo,
+        }
+    }
+
+    /// The SQL the clients need in the database, beside them: PostgreSQL's schema and functions,
+    /// or the MySQL family's tables; TigerBeetle needs none.
+    fn sql(self) -> Option<chobo::target::Target> {
+        match self {
+            Books::Postgres => Some(chobo::target::Target::Postgres),
+            Books::MySql => Some(chobo::target::Target::MySql),
+            Books::TigerBeetle => None,
         }
     }
 }
@@ -130,6 +145,7 @@ const GO_MODULES: &[(&str, &str)] = &[
     ("go.temporal.io/api", "v1.63.5"),
     ("github.com/jackc/pgx/v5", "v5.11.0"),
     ("github.com/tigerbeetle/tigerbeetle-go", "v0.17.9"),
+    ("github.com/go-sql-driver/mysql", "v1.10.1"),
     ("github.com/aws/aws-sdk-go-v2", "v1.47.1"),
     ("github.com/aws/aws-sdk-go-v2/config", "v1.33.6"),
     ("github.com/aws/aws-sdk-go-v2/service/lambda", "v1.110.0"),
@@ -317,7 +333,8 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
         kinds.entry("dates").or_default().push(module_of(&rel));
         files.push((format!("{base}dates/{rel}"), body, Some(f.rel.clone())));
     }
-    // chobo: each book's client, and on PostgreSQL the schema and the functions it calls
+    // chobo: each book's client, and on PostgreSQL the schema and the functions it calls, on the
+    // MySQL family the tables its calls run on
     for f in project.of(Tool::Chobo) {
         let (src, c) = chobo::check::check_file(Path::new(&f.shown)).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
         let Some(book) = c.book.as_ref() else {
@@ -327,9 +344,7 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
         let stem = Path::new(&f.rel).file_name().map(|n| n.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
         let origin = Origin::at(&f.rel, src.as_bytes());
         let mut wanted = vec![o.books.chobo(target)];
-        if o.books == Books::Postgres {
-            wanted.push(chobo::target::Target::Postgres);
-        }
+        wanted.extend(o.books.sql());
         for ct in wanted {
             let built = chobo::target::build(book, &stem, ct, &origin).map_err(|ds| {
                 let text: String = ds.iter().map(|d| chobo::diag::Show::shown(d, &f.shown, &src, lang)).collect();
@@ -338,7 +353,7 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
                 stopped(text, 1, tr!("`{shown}` からは {to} のパッケージを生成できません", "`{shown}` cannot be made into the {to} package"), json, lang)
             })?;
             for (rel, body) in built {
-                if ct != chobo::target::Target::Postgres {
+                if Some(ct) != o.books.sql() {
                     named.push(("books", module_of(&rel), f.rel.clone()));
                     kinds.entry("books").or_default().push(module_of(&rel));
                 }
@@ -889,7 +904,11 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     if !good_module(&module) {
         return say(refusal(2, tr!("`--module {module}` は Go の import のパスになりません", "`--module {module}` is not a Go import path"), lang), answer);
     }
-    let books = if a.get("--books") == Some("tigerbeetle") { Books::TigerBeetle } else { Books::Postgres };
+    let books = match a.get("--books") {
+        Some("tigerbeetle") => Books::TigerBeetle,
+        Some("mysql") => Books::MySql,
+        _ => Books::Postgres,
+    };
     let authorizer = a.get("--authorizer").and_then(sekisho::r#gen::Authorizer::parse).unwrap_or(sekisho::r#gen::Authorizer::Cedar);
     let targets: Vec<Target> = match a.get("--target") {
         Some(t) => Target::parse(t).into_iter().collect(),

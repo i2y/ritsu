@@ -22,7 +22,7 @@ hide:
 </p>
 
 <p class="cb-hero__lede">
-<strong>データベースが二つでも、帳簿の意味は一つです。</strong>chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL か TigerBeetle 向けにビルドします。呼び出すクライアントは TypeScript、Python、Go で出します。テストはどのシナリオも七つの出力先で流し、どの出力先も、参照インタプリタと同じ結果を返さなければなりません。
+<strong>どの出力先でも、帳簿の意味は一つです。</strong>chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けにビルドします。呼び出すクライアントは TypeScript、Python、Go で出します。テストはどのシナリオもすべてのクライアントで流し、どのクライアントも、参照インタプリタと同じ結果を返さなければなりません。
 </p>
 
 <div class="cb-hero__cta" markdown>
@@ -136,15 +136,16 @@ examples/refunds/refunds.ja.book (more: 30000 円の売上に 20000 円の返金
 $ chobo build examples/refunds/refunds.ja.book --target postgres --out db
 $ chobo build examples/refunds/refunds.ja.book --target postgres-typescript --out db
 $ chobo build examples/refunds/refunds.ja.book --target tigerbeetle-python --out db
-$ chobo build examples/refunds/refunds.ja.book --target tigerbeetle-go --out db
+$ chobo build examples/refunds/refunds.ja.book --target mysql --out db
+$ chobo build examples/refunds/refunds.ja.book --target mysql-go --out db
 ```
 
 </div>
 <div markdown>
 
-### 一つの帳簿から、二つのデータベースと三つの言語へ
+### 一つの帳簿から、三種類のデータベースと三つの言語へ
 
-PostgreSQL では、操作ごとに関数を一つ作ります。関数は勘定の行をロックし、移動を全部確かめてから、一つのトランザクションの中で書き込みます。呼ぶ側がトランザクションを開いていれば、そのトランザクションの中で動きます。TigerBeetle では、クライアントが操作ごとに振替のチェーンを一つ送り、TigerBeetle はそれを全部通すか、一つも通さないかのどちらかにします。二つのクライアントは名前も引数も結果も同じで、拒否は例外ではなく、結果の一つとして返ります。[データベース向けのビルド](databases.md)
+PostgreSQL では、操作ごとに関数を一つ作ります。関数は勘定の行をロックし、移動を全部確かめてから、一つのトランザクションの中で書き込みます。呼ぶ側がトランザクションを開いていれば、そのトランザクションの中で動きます。TigerBeetle では、クライアントが操作ごとに振替のチェーンを一つ送り、TigerBeetle はそれを全部通すか、一つも通さないかのどちらかにします。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、そのトランザクションの中で動きます。どのデータベースのクライアントも、名前と引数と結果が同じで、拒否は例外ではなく、結果の一つとして返ります。[データベース向けのビルド](databases.md)
 
 </div>
 </div>
@@ -196,7 +197,8 @@ dandori のワークフローは、帳簿の操作をタスクとして呼び、
 まだ始めたばかりです。次のことは、まだできません。
 
 - 残高のある勘定の種類について、境界を変えること。いまは、新しい勘定の種類を作り、残高を移す振替を書きます。
-- PostgreSQL と TigerBeetle のほかのデータベース。
+- PostgreSQL、TigerBeetle、MySQL の系統のほかのデータベース。MariaDB は、`CHECK` や JSON の振る舞いが MySQL と違うので、MySQL の系統に入れていません。
+- Vitess を動かすサービスの上で確かめること。テストは、Vitess の試験用のサーバー（vttestserver）で流しています。
 - TigerBeetle を本番の構成（レプリカ六つ）で動かすこと（テストは `--development` で立てたレプリカ一つで流します）と、キーから作る ID でどれだけ遅くなるかの測定。
 - 勘定が受けた記録や振替を読む操作。
 - TigerBeetle の結果が参照インタプリタと違う二つの場合を、そろえること（[出力先](targets.md#tigerbeetle)に書いてあります）。
@@ -210,11 +212,11 @@ dandori のワークフローは、帳簿の操作をタスクとして呼び、
 | [帳簿を書く](tour.md) | マーケットプレイスの例を通して読む言語。単位、勘定と境界、振替、キー、仮押さえ |
 | [何を検査するか](checks.md) | 操作ごとの拒否されうる理由、診断、データベースにある残高や仮押さえと合わなくなる変更 |
 | [シナリオを流す](scenarios.md) | 参照インタプリタ、同時に来る呼び出し元、chobo が作るシナリオ |
-| [データベース向けのビルド](databases.md) | PostgreSQL と TigerBeetle に何を書くか、クライアントの呼び方 |
+| [データベース向けのビルド](databases.md) | PostgreSQL、TigerBeetle、MySQL の系統に何を書くか、クライアントの呼び方 |
 | [お金と単位](units.md) | 単位、税込と税抜のお金、ほかの言語から見た単位 |
 | [人が読むページ](pages.md) | `chobo doc` と、四つの例を描いたページ |
 | [ほかの言語と組み合わせる](together.md) | 帳簿のまわりのワークフロー、ゲート、要件、規則 |
 | [例で見る](examples.md) | 在庫、ポイント、返金、マーケットプレイスの四つ（英語の版と日本語の版） |
 | [エージェント向け](agents.md) | エージェントのスキル |
-| [どうやって確かめているか](assurance.md) | 一つの参照インタプリタと、七つの出力先の突き合わせ |
+| [どうやって確かめているか](assurance.md) | 一つの参照インタプリタと、PostgreSQL、TigerBeetle、MySQL、TiDB、Vitess の上のすべてのクライアントの突き合わせ |
 | [設計](design.md) | 言語の決めごとと、その理由 |

@@ -264,6 +264,31 @@ $ chobo api examples/refunds/refunds.book
       ],
       "certificate": {
 …
+  "targets": {
+    "postgres": {
+      "schema": "refunds",
+…
+    "mysql": {
+      "tables": {
+        "accounts": "refunds_accounts",
+        "calls": "refunds_calls",
+        "entries": "refunds_entries"
+      },
+      "checks": [
+        "refunds_within_lower",
+        "refunds_within_upper"
+      ],
+      "begin": "begin /*T! pessimistic */",
+      "expire": "expire"
+    },
+    "typescript": {
+      "file": "refunds.ts",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+…
 ```
 
 - `units`, `accounts` and `transfers` are the book; a unit that says whether it is with tax or
@@ -277,16 +302,20 @@ $ chobo api examples/refunds/refunds.book
   `certificate` gives a rule's state machine. dandori reads rulec's machines in this shape; it
   does not read chobo's yet.
 - `ids` says how an ID is made, for a tool that works one out itself; `targets` says what each
-  target names: the PostgreSQL schema, functions and parameters, the members and types of the
-  TypeScript, Python and Go clients, and the chain TigerBeetle is sent for each operation.
+  target names: the PostgreSQL schema, functions and parameters; the MySQL family's tables, the
+  names of their checks and the `begin` a call starts its transaction with; the members and types
+  of the TypeScript, Python and Go clients, with the function that makes the book value for each
+  database (`factories`); and the chain TigerBeetle is sent for each operation.
 
 ## What a client sends
 
-`chobo run --show postgres` or `--show tigerbeetle` prints, for each operation of a scenario,
-what the clients `chobo build` writes send that target: the SQL and its arguments for
-PostgreSQL; for TigerBeetle, the hold read before a post or a void, the accounts made, the
-opening transfers, and the chain, field by field. The tests hold the clients of all three
-languages to it, on every scenario. [targets.md](targets.md) says what the clients do.
+`chobo run --show postgres`, `--show tigerbeetle` or `--show mysql` prints, for each operation of
+a scenario, what the clients `chobo build` writes send that target: the SQL and its arguments for
+PostgreSQL; for TigerBeetle, the hold read before a post or a void, the accounts made, the opening
+transfers, and the chain, field by field; for the MySQL family, the accounts a book value makes
+sure of and the statements, with the values in place. The tests hold the clients of all three
+languages to it, on every scenario. [targets.md](targets.md) says what the clients do, and shows
+what `--show mysql` prints.
 
 ```console
 $ chobo run examples/refunds/refunds.book --scenario examples/refunds/refunds.more.json --show postgres
@@ -318,4 +347,39 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
 
 The IDs are made from the keys (the tenant is `""` here), so a retry sends the same ones; with
 `--format json`, the same is written field by field, as the tests compare it with what each
-client sent.
+client sent. For the MySQL family, an operation has its statements as a client sends them one at
+a time, in a transaction of its own:
+
+```console
+$ chobo run examples/refunds/refunds.book --scenario examples/refunds/refunds.more.json --show mysql --format json
+{
+  "scenario": "more: two refunds of 20.00 at the same time on a sale of 30.00, then one of 10.00",
+  "target": "mysql",
+  "tenant": "",
+  "operations": [
+    {
+      "step": 1,
+      "op": "do",
+      "kind": "sale",
+      "accounts": [
+        "069c57ca75a83bb1b62d3735a168e8ae",
+        "5e57413e175e6a7135612aa241f9cdb7"
+      ],
+      "statements": [
+        "begin /*T! pessimistic */",
+…
+        "commit"
+      ],
+      "head": 2,
+      "tails": [
+…
+```
+
+- `accounts` has the IDs of the accounts a `do` or a `hold` names, which a book value makes sure
+  of, outside the call's transaction, the first time it names each; a post or a void has none.
+- `statements` is what the client sends, in order, for the state the steps before it left.
+- The first `head` statements are sent whatever the call finds, and `tails` has every way the
+  rest can go: for a `do` or a `hold`, done, the key used before, or refused by each bound it
+  checks; for a post or a void, rolled back, or the writes that end the hold. An operation of a
+  `together` can find another state than the one before the `together`, so the tests hold what it
+  sent after the head to one of the tails.

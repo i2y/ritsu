@@ -32,7 +32,7 @@ $ chobo doc examples/refunds/refunds.book --format html --out pages
 - **シナリオ**：`chobo scenarios` が作るシナリオの全部です。ステップごとに、確定した量と、括弧の中に仮押さえの量を載せます。呼び出し元が同時に来るシナリオは、とりうる結果ごとに一つずつ載ります。
 - **検査の警告**：帳簿に警告があれば、`chobo check` の出力のとおりに載ります。
 
-ページに載るのは帳簿で、データベースではありません。TigerBeetle に足す勘定やチェーン、PostgreSQL のテーブルは載りません。そうしたものはデータベースを動かす人のためのもので、`chobo run --show` と[出力先](targets.md)（英語）にあります。
+ページに載るのは帳簿で、データベースではありません。TigerBeetle に足す勘定やチェーン、PostgreSQL と MySQL の系統のテーブルは載りません。そうしたものはデータベースを動かす人のためのもので、`chobo run --show` と[出力先](targets.md)（英語）にあります。
 
 ## Markdown
 

@@ -141,10 +141,10 @@ task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
 生成したコードの横に置くもの：
 
 - **日付**：`koyomi gen <file.cal> --out koyomi` が日付のファイルのコードを書き、生成したコードは、隣の `koyomi/` からそれを読み込みます。Temporal の Go では、日付のファイルごとに Go のモジュール（`koyomi/go/<パッケージ>`）になるので、`rules.go` の頭に書いたとおり、自分の `go.mod` で require して replace します。
-- **帳簿**：chobo が帳簿のクライアントを書きます（`chobo build <file.book> --target postgres-typescript`、`tigerbeetle-python`、`postgres-go` など）。クライアントが作る帳簿の値を、帳簿の名前で `Transport` に渡します。TypeScript では `transport({ books: { 在庫: postgres(pool, { tenant }) } })`、Python では `transport(books={"在庫": postgres(connection)})`、Go では `TransportOptions{Books: map[string]any{"在庫": book.Postgres(pool, tenant)}}` です。Step Functions では、`lambda/book_在庫_handler.py` を chobo の Python のクライアントと一緒に置き、`handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` で作ります。
+- **帳簿**：chobo が帳簿のクライアントを書きます（`chobo build <file.book> --target postgres-typescript`、`tigerbeetle-python`、`postgres-go`、`mysql-go` など）。クライアントが作る帳簿の値を、帳簿の名前で `Transport` に渡します。TypeScript では `transport({ books: { 在庫: postgres(pool, { tenant }) } })`、Python では `transport(books={"在庫": postgres(connection)})`、Go では `TransportOptions{Books: map[string]any{"在庫": book.Postgres(pool, tenant)}}` です。Step Functions では、`lambda/book_在庫_handler.py` を chobo の Python のクライアントと一緒に置き、`handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` で作ります。
 
 ## どう確かめているか
 
 - どのプラットフォームも、ほかの呼び出しと同じく、すべてのシナリオを参照インタプリタと突き合わせます。シナリオは、日付には日付（と時刻）で、帳簿の操作には、通った・前に通った・拒否された、のどれかで答えます。`now` がどこでも同じ時刻を読むよう、各プラットフォームの時計は一つの時刻に替えます。
 - dandori が koyomi のコードのまわりに書くコード（Lambda 関数、`rules.ts`、`rules.py`、`rules.go`）は、koyomi が書くコードと一緒に、ファイルの範囲のすべての入力で動かし、koyomi が言う日付と同じ答えでなければなりません。七つに一つの入力は、日付の代わりにその日の時刻で渡し、カレンダーのオフセットで同じ日として読むことも確かめます。
-- すべてのフローの実行が出す帳簿の操作を、dandori が TypeScript・Python・Go で書く `Transport` と、Step Functions 向けに書く Lambda 関数から、chobo が書くクライアントに通し、PostgreSQL と TigerBeetle の上で動かします。答えは、chobo の参照インタプリタと同じでなければなりません。空の帳簿、入荷で満たした帳簿、そして同じ帳簿でもう一度（どの操作も前にした）の三通りで確かめます。
+- すべてのフローの実行が出す帳簿の操作を、dandori が TypeScript・Python・Go で書く `Transport` と、Step Functions 向けに書く Lambda 関数から、chobo が書くクライアントに通し、PostgreSQL、TigerBeetle、MySQL の上で動かします。答えは、chobo の参照インタプリタと同じでなければなりません。空の帳簿、入荷で満たした帳簿、そして同じ帳簿でもう一度（どの操作も前にした）の三通りで確かめます。

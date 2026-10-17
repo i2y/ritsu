@@ -2,7 +2,7 @@
 
 Four books, each in English with its Japanese version beside it (`<name>.ja.book`), whose names are
 all Japanese and whose units are `個`, `pt` and `円`. Each passes `chobo check` without a warning,
-and the tests run every scenario `chobo scenarios` writes for it on all seven targets
+and the tests run every scenario `chobo scenarios` writes for it through every client
 ([How it is checked](assurance.md)). Beside each book in the repository are the pages `chobo doc`
 writes of it, `doc.md` and `doc.ja.md`, which GitHub shows.
 

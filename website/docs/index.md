@@ -51,7 +51,7 @@ people.
   each claim on every one of them.
 - **chobo** declares accounts, the bounds each must keep, and the transfers between them, checks
   that no sequence of transfers, holds and expiries can take an account past a bound, and generates
-  clients for PostgreSQL and TigerBeetle.
+  clients for PostgreSQL, TigerBeetle and the MySQL family (MySQL, TiDB and Vitess).
 - **geas** runs each claim about a program against it — a command line, an HTTP service, a page in
   a browser — and, given a diff, tells which claims it touches. Given an OpenSpec spec, it lists the
   scenarios that no claim of the same name checks.

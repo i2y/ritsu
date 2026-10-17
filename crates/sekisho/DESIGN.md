@@ -973,7 +973,7 @@ sekisho は Verified Permissions に何も送らない（ritsu の検査と生�
 - スキーマが要るとする属性（エンティティの型と action の context）ごとに、その属性を持つ最初のテストから属性を一つ抜いたテストを作り、`cedar run-tests` がどれもスキーマに合わないと言うことを確かめる（Cedar の形と JSON の形の両方で）。Verified Permissions は、渡されたスキーマでリクエストを確かめる。要る属性を省けるものとして書いたスキーマは、値の無いリクエストを受け付け、値が無いものとして答える。この誤りは、読むところが全部 `has` で守られていると、`validate` にも答えにも出ない。
 - 生成の誤りを見つけられることも、同じファイルで確かめる。生成したポリシーとスキーマを ritsu-base の Cedar で読み、一か所ずつ変えて書き直した変異の全部が、上の確かめ（`validate`、`run-tests`、ポリシーを一つずつ流すこと、要る属性を抜いたテスト）のどれかで落ちること（6.2）。構文木を変えて書き直すので、どの変異も CLI が読め、`cedar format` の形である。答えに出ない変異（役割が一つで `includes` が無いときの、役割の型の親）は作らない。
 - CLI は、公式のリリースのバイナリ（`cedar-policy-cli` 4.13.0）を、チェックサムで確かめて置く。テストは ritsu-testkit の `cedar::cli()`（`Need::Cedar`、tools の段）で、環境変数 `RITSU_CEDAR`（か `SEKISHO_CEDAR`）、無ければ PATH の `cedar` を探し、`cedar --version` が `cedar-policy-cli 4.13.0` のときだけ使う。出力を一字ずつ比べるので、ほかの版では違う形で出すことがあるからである。無いか版が違えば `SKIP: sekisho: …` を言う（ritsu の DESIGN 10.3）。CLI を使うテストは二つ（全部のファイルを CLI にかけるものと、変異のもの）で、それぞれが SKIP の行を一つ出す。CI は ritsu の `tools.yml` の「それ以外」の組で、Linux の x86-64 のアーカイブ（`cedar-policy-cli-x86_64-unknown-linux-gnu.tar.xz`、SHA-256 `23d358ef38edad8ade629a09f6a7359ecbd1761c9ff82e9fd0a5c5bce36b8c79`。リリースの `.sha256` と `sha256.sum` と同じ）を、wasm-tools と protoc と同じ形で入れ、`RITSU_CEDAR` に渡す。Cedar の読み手と書き手（`ritsu_base::cedar`）の材料も、同じ組が同じバイナリの `expected.sh` で作り直し、一字も変わらないことを確かめる（ritsu の DESIGN 4.18）。CI の入れ方は一つである。
-- ほかの言語のランナーと突き合わせのテストと同じ形にする：生成物（Cedar）を、本物の評価器（公式の CLI）に、参照の評価が作った全部の場合をかけ、一字も違わないこと。dandori が Temporal の dev server で、chobo が PostgreSQL と TigerBeetle で確かめるのと同じ位置にある。
+- ほかの言語のランナーと突き合わせのテストと同じ形にする：生成物（Cedar）を、本物の評価器（公式の CLI）に、参照の評価が作った全部の場合をかけ、一字も違わないこと。dandori が Temporal の dev server で、chobo が PostgreSQL、TigerBeetle、MySQL、TiDB、Vitess で確かめるのと同じ位置にある。
 
 ### 6.2 試したこと（2026-10-06）
 

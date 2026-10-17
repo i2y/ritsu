@@ -1,7 +1,7 @@
 [project]
 site_name = "chobo"
 site_url = "https://i2y.github.io/ritsu/chobo/ja/"
-site_description = "在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語。帳簿に勘定の下限と上限を書くと、どの振替も一度の書き込みの中でそれを守る。帳簿は PostgreSQL か TigerBeetle 向けにビルドし、呼び出すクライアントを TypeScript・Python・Go で出す。"
+site_description = "在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語。帳簿に勘定の下限と上限を書くと、どの振替も一度の書き込みの中でそれを守る。帳簿は PostgreSQL、TigerBeetle、MySQL の系統（MySQL・TiDB・Vitess）のどれか向けにビルドし、呼び出すクライアントを TypeScript・Python・Go で出す。"
 site_author = "Yasushi Itoh"
 copyright = "Copyright &copy; 2026 Yasushi Itoh"
 

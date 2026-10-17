@@ -3,8 +3,8 @@
 A book (`.book`) holds three things: the units things are counted in, the accounts they are kept
 in with the bounds each account keeps, and the kinds of transfer that move them from account to
 account. This page is the whole language. [formats.md](formats.md) has the JSON chobo reads and
-writes, [targets.md](targets.md) what `chobo build` writes for PostgreSQL and TigerBeetle, and
-[codes.md](codes.md) every diagnostic.
+writes, [targets.md](targets.md) what `chobo build` writes for PostgreSQL, TigerBeetle and the
+MySQL family, and [codes.md](codes.md) every diagnostic.
 
 ## A book
 
@@ -53,7 +53,7 @@ unit USD scale 2
 An amount is a whole number of the smallest step of its unit: one piece, one cent. `scale` says
 how many decimal places the literals of the book (bounds and amounts) are written with, and
 `chobo doc` shows: in `USD scale 2`, `12.50` is 1250 cents. An amount is from 0 to 2⁶³ − 1
-(what PostgreSQL's `bigint` holds), and a bound from −(2⁶³ − 1) to 2⁶³ − 1.
+(what a `bigint` of PostgreSQL or MySQL holds), and a bound from −(2⁶³ − 1) to 2⁶³ − 1.
 
 The account a move takes from, the account it puts into, and its amount are in one unit (E010).
 chobo converts nothing: an exchange is two moves, one in each unit, each through an account
@@ -265,5 +265,5 @@ No name may be a word of the first three rows. The words of durations are keywor
 
 Every diagnostic has a code, the line it is about, and, when it only shows when the book is
 called, the operations that get there, which the checker ran in the reference interpreter before
-saying so. [codes.md](codes.md) has all 30 codes, as `chobo explain --all` prints them, and
+saying so. [codes.md](codes.md) has all 31 codes, as `chobo explain --all` prints them, and
 `chobo explain <code>` prints one.

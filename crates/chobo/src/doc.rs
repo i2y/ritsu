@@ -6,7 +6,7 @@
 //!
 //! `markdown` writes Mermaid charts, which GitHub draws in a pull request. `html` writes one page
 //! with charts chobo draws itself (`draw`), and a scenario a reader can step through. Neither
-//! says how PostgreSQL or TigerBeetle keep the bounds: the reader is not the one who runs them.
+//! says how a database keeps the bounds: the reader is not the one who runs them.
 //!
 //! Every number is written in its unit's decimal places (`12.50` in a unit of scale 2), as the
 //! book writes its literals, not in the smallest step a target stores.

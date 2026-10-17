@@ -372,6 +372,20 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ";
 
+const X_E062: &str = "book stock_of_the_central_warehouse_and_of_each_branch_stores v1
+unit pcs
+account stock(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account supplier : pcs outside
+account customers : pcs outside
+transfer receive(note: string, sku: string, qty: pcs)
+  key note, sku
+  move qty from supplier to stock(sku)
+transfer ship(order: string, sku: string, qty: pcs)
+  key order, sku
+  move qty from stock(sku) to customers
+";
+
 /// The one fake key the reproduction of W901 holds (ritsu's DESIGN 16.10): a Google API key that
 /// reads as a fake. It is put together from two pieces, so that no file of the source holds a key
 /// in one run; the pages of codes that `explain` writes hold it whole.
@@ -686,7 +700,7 @@ pub fn ledger() -> Vec<Entry> {
                     "Split the transfer kind into kinds with fewer moves. Each kind is a write of its own, so keep together the moves that have to go through all or none."
                 ),
                 X_E060,
-                &["E061"],
+                &["E061", "E062"],
             )
         },
         Entry {
@@ -700,7 +714,24 @@ pub fn ledger() -> Vec<Entry> {
                 ),
                 tr!("名前を短くしてください。ASCII なら 63 字、日本語なら 21 字までです（関数の名前では、後ろに付く `_hold` などの分を引いた字数です）。", "Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …)."),
                 X_E061,
-                &["E060"],
+                &["E060", "E062"],
+            )
+        },
+        Entry {
+            target: Some("mysql"),
+            ..e(
+                "E062",
+                tr!("名前を MySQL がそのままでは持てません", "A name MySQL cannot hold as written"),
+                tr!(
+                    "`chobo build` の MySQL の系統のターゲットで、帳簿の名前から作るテーブル（`<帳簿>_accounts` など）と制約（`<帳簿>_within_lower` など）の名前が 64 字を超えるとき、または帳簿の名前に基本多言語面の外の文字（𠮷 など）があるときに出ます。MySQL はそういう文字を、警告だけで `?` に書き換えるので、二つの名前が同じになりえます。TiDB と Vitess も同じ決まりです。",
+                    "With a target of the MySQL family of `chobo build`: a name made from the book's, of a table (`<book>_accounts`, …) or of a check (`<book>_within_lower`, …), is longer than 64 characters, or the book's name has a character beyond the Basic Multilingual Plane (𠮷 and the like). MySQL writes such a character as `?` with only a warning, so two names could become one. TiDB and Vitess keep the same rules."
+                ),
+                tr!(
+                    "帳簿の名前を 51 字までにし（後ろに `_within_lower` が付きます）、基本多言語面の外の文字を外してください。",
+                    "Make the book's name at most 51 characters (`_within_lower` follows it), and take out any character beyond the Basic Multilingual Plane."
+                ),
+                X_E062,
+                &["E060", "E061"],
             )
         },
         e(

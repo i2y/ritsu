@@ -1,5 +1,6 @@
 // Package harness runs scenarios through the Go clients chobo writes, for tests/backends.rs. Its
-// input and output are those of ../../runner.ts (see there).
+// input and output are those of ../../runner.ts (see there). On the MySQL family, each value of
+// the book has a *sql.DB of its own, whose connections write down every statement they send.
 //
 // The test builds one binary of this package and every generated package it runs, with a main.go
 // of its own that adapts each package's typed calls to Book, and calls Main.
@@ -7,6 +8,8 @@ package harness
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	tb "github.com/tigerbeetle/tigerbeetle-go"
@@ -47,6 +51,7 @@ type TBClient interface {
 type Entry struct {
 	Postgres    func(q Querier, tenant string) Book
 	TigerBeetle func(c TBClient, tenant string) Book
+	MySQL       func(db *sql.DB, tenant string, batch bool) Book
 }
 
 // Str and Amt read an argument of the scenario: a string, or an amount.
@@ -78,6 +83,13 @@ type input struct {
 		Cluster   string   `json:"cluster"`
 		Addresses []string `json:"addresses"`
 	} `json:"tigerbeetle"`
+	MySQL *struct {
+		Host     string `json:"host"`
+		Port     int    `json:"port"`
+		Database string `json:"database"`
+		User     string `json:"user"`
+		Batch    bool   `json:"batch"`
+	} `json:"mysql"`
 	Books []struct {
 		Name      string              `json:"name"`
 		Client    string              `json:"client"`
@@ -208,6 +220,70 @@ func (t tbConn) LookupTransfers(ids []tb.Uint128) ([]tb.Transfer, error) {
 	return t.c.LookupTransfers(ids)
 }
 
+// recConnector makes the connections of a value of the book's *sql.DB on the MySQL family: go-sql-driver's,
+// each statement written down as it is sent.
+type recConnector struct {
+	inner driver.Connector
+	rec   *recorder
+}
+
+func (c recConnector) Connect(ctx context.Context) (driver.Conn, error) {
+	conn, err := c.inner.Connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return recConn{conn, c.rec}, nil
+}
+
+func (c recConnector) Driver() driver.Driver { return c.inner.Driver() }
+
+type recConn struct {
+	driver.Conn
+	rec *recorder
+}
+
+func (c recConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+	c.rec.note(map[string]any{"sql": query})
+	return c.Conn.(driver.QueryerContext).QueryContext(ctx, query, args)
+}
+
+func (c recConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	c.rec.note(map[string]any{"sql": query})
+	return c.Conn.(driver.ExecerContext).ExecContext(ctx, query, args)
+}
+
+func (c recConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	return c.Conn.(driver.ConnBeginTx).BeginTx(ctx, opts)
+}
+
+func (c recConn) Ping(ctx context.Context) error {
+	if p, ok := c.Conn.(driver.Pinger); ok {
+		return p.Ping(ctx)
+	}
+	return nil
+}
+
+func (c recConn) ResetSession(ctx context.Context) error {
+	if r, ok := c.Conn.(driver.SessionResetter); ok {
+		return r.ResetSession(ctx)
+	}
+	return nil
+}
+
+func (c recConn) IsValid() bool {
+	if v, ok := c.Conn.(driver.Validator); ok {
+		return v.IsValid()
+	}
+	return true
+}
+
+func (c recConn) CheckNamedValue(nv *driver.NamedValue) error {
+	if ch, ok := c.Conn.(driver.NamedValueChecker); ok {
+		return ch.CheckNamedValue(nv)
+	}
+	return driver.ErrSkip
+}
+
 type pendingTransfer struct {
 	debit   string
 	amount  *big.Int
@@ -220,11 +296,27 @@ type runner struct {
 	clients  []tb.Client
 	next     atomic.Int64
 	expiring sync.Mutex
+	myCfg    *mysql.Config
+	dbs      sync.Mutex
+	opened   []*sql.DB
 }
 
 func (r *runner) connection(rec *recorder, e Entry, tenant string) Book {
 	if r.in.Backend == "postgres" {
 		return e.Postgres(pgConn{r.pool, rec}, tenant)
+	}
+	if r.in.Backend == "mysql" {
+		inner, err := mysql.NewConnector(r.myCfg)
+		if err != nil {
+			panic(err)
+		}
+		db := sql.OpenDB(recConnector{inner, rec})
+		db.SetMaxOpenConns(2)
+		db.SetMaxIdleConns(1)
+		r.dbs.Lock()
+		r.opened = append(r.opened, db)
+		r.dbs.Unlock()
+		return e.MySQL(db, tenant, r.in.MySQL.Batch)
 	}
 	c := r.clients[r.next.Add(1)%int64(len(r.clients))]
 	return e.TigerBeetle(tbConn{c, rec}, tenant)
@@ -348,7 +440,7 @@ func (r *runner) scenario(ctx context.Context, e Entry, expiry float64, keys map
 		}
 		until = until.Add(time.Duration(expiry*float64(time.Second)) + 300*time.Millisecond)
 		time.Sleep(time.Until(until))
-		if r.in.Backend == "postgres" {
+		if r.in.Backend == "postgres" || r.in.Backend == "mysql" {
 			// one expire() at a time, as one job would call it: an expire() skips the holds another
 			// is giving back, and returns before that one commits
 			r.expiring.Lock()
@@ -502,6 +594,19 @@ func run(entries map[string]Entry) error {
 			return err
 		}
 		defer r.pool.Close()
+	} else if in.Backend == "mysql" {
+		c := in.MySQL
+		cfg := mysql.NewConfig()
+		cfg.User, cfg.Net, cfg.Addr, cfg.DBName = c.User, "tcp", fmt.Sprintf("%s:%d", c.Host, c.Port), c.Database
+		cfg.MultiStatements = c.Batch
+		r.myCfg = cfg
+		defer func() {
+			r.dbs.Lock()
+			defer r.dbs.Unlock()
+			for _, db := range r.opened {
+				db.Close()
+			}
+		}()
 	} else {
 		c := in.TigerBeetle
 		var cluster big.Int

@@ -829,7 +829,7 @@ fn requests(files: &[(String, String)], lang: &str) -> Vec<(&'static str, Value)
     for (p, _) in files {
         let targets: Vec<&str> = match ritsu_project::project::kind_of(p) {
             Some(Tool::Dandori) => vec!["asl", "temporal", "temporal-python", "temporal-go", "durable", "argo", "pydantic-graph"],
-            Some(Tool::Chobo) => vec!["postgres", "postgres-typescript", "postgres-python", "postgres-go", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go"],
+            Some(Tool::Chobo) => vec!["postgres", "postgres-typescript", "postgres-python", "postgres-go", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "mysql", "mysql-typescript", "mysql-python", "mysql-go"],
             Some(Tool::Yuen) => vec!["reqif", "prov"],
             _ => vec![],
         };

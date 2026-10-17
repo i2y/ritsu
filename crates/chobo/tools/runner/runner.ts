@@ -2,7 +2,8 @@
 //
 //   node runner.ts <input.json>
 //
-// The input names the database, and for each book the client file and the scenarios, each with
+// The input names the database (PostgreSQL, TigerBeetle, or one of the MySQL family), and for
+// each book the client file and the scenarios, each with
 // a tenant of its own. Every scenario of every book runs at once; within a scenario the steps
 // run in order, and the callers of a `together` at the same time, each through a connection (or
 // a TigerBeetle client) of its own. What comes out, on standard output, is for each scenario its
@@ -10,8 +11,9 @@
 // operation by operation, for the test to compare with `chobo run --show`.
 //
 // `pass` waits until the expiry of every hold the scenario has made is past, then, on
-// PostgreSQL, calls the book's expire(); on TigerBeetle, it reads the accounts again until what
-// they hold is what the holds that never expire still hold (10 seconds at most).
+// PostgreSQL and the MySQL family, calls the book's expire(); on TigerBeetle, it reads the
+// accounts again until what they hold is what the holds that never expire still hold (10 seconds
+// at most).
 //
 // The reference lets no time pass but at a `pass`, and the holds expire after a few seconds of
 // real time: a scenario with a step or a read that long after a hold it made since its last
@@ -20,14 +22,16 @@
 
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import mysql from "mysql2/promise";
 import pg from "pg";
 import { createClient } from "tigerbeetle-node";
 import type { Account, Client, Transfer } from "tigerbeetle-node";
 
 type Json = any;
 type Input = {
-  backend: "postgres" | "tigerbeetle";
+  backend: "postgres" | "tigerbeetle" | "mysql";
   postgres?: { host: string; port: number; database: string; user: string };
+  mysql?: { host: string; port: number; database: string; user: string; batch: boolean };
   tigerbeetle?: { cluster: string; addresses: string[] };
   books: Array<{ name: string; client: string; expiry: number; keys: Record<string, string[]>; scenarios: ScenarioIn[] }>;
 };
@@ -76,11 +80,27 @@ class Recorder {
 }
 
 let pool: pg.Pool | null = null;
+let mypool: mysql.Pool | null = null;
 let expiring: Promise<unknown> = Promise.resolve();
 const clients: Client[] = [];
 let next = 0;
 
 function connection(rec: Recorder): unknown {
+  if (input.backend === "mysql") {
+    // a pool, so that each call is a transaction of its own; every statement is written down
+    return {
+      getConnection: async () => {
+        const c = await mypool!.getConnection();
+        return {
+          query: (o: { sql: string; rowsAsArray: boolean }) => {
+            rec.current?.push({ sql: o.sql });
+            return c.query(o);
+          },
+          release: () => c.release(),
+        };
+      },
+    };
+  }
   if (input.backend === "postgres") {
     return {
       query: (text: string, values?: unknown[]) => {
@@ -118,7 +138,12 @@ function amounts(o: Record<string, unknown>): Record<string, unknown> {
 type Pending = { debit: string; amount: bigint; timeout: number };
 
 async function runScenario(mod: Json, book: Input["books"][number], sc: ScenarioIn): Promise<Json> {
-  const factory = input.backend === "postgres" ? mod.postgres : mod.tigerbeetle;
+  const factory =
+    input.backend === "postgres"
+      ? mod.postgres
+      : input.backend === "mysql"
+        ? (db: unknown, o: { tenant: string }) => mod.mysql(db, { ...o, batch: input.mysql!.batch })
+        : mod.tigerbeetle;
   const sent: Json[] = [];
   const doneHolds: number[] = [];
   // when the first hold since the last `pass` was asked for, and whether a step or a read came
@@ -181,7 +206,7 @@ async function runScenario(mod: Json, book: Input["books"][number], sc: Scenario
   async function expireAll(): Promise<void> {
     const until = Math.max(0, ...doneHolds) + book.expiry * 1000 + 300;
     await sleep(Math.max(0, until - Date.now()));
-    if (input.backend === "postgres") {
+    if (input.backend === "postgres" || input.backend === "mysql") {
       // one expire() at a time, as one job would call it: an expire() skips the holds another is
       // giving back, and returns before that one commits
       const mine = expiring.then(() => main.book.expire());
@@ -244,6 +269,9 @@ async function main(): Promise<void> {
   if (input.backend === "postgres") {
     const c = input.postgres!;
     pool = new pg.Pool({ host: c.host, port: c.port, database: c.database, user: c.user, max: 20 });
+  } else if (input.backend === "mysql") {
+    const c = input.mysql!;
+    mypool = mysql.createPool({ host: c.host, port: c.port, database: c.database, user: c.user, connectionLimit: 40, multipleStatements: c.batch });
   } else {
     const c = input.tigerbeetle!;
     for (let i = 0; i < 4; i++) clients.push(createClient({ cluster_id: BigInt(c.cluster), replica_addresses: c.addresses }));
@@ -261,6 +289,7 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify({ books }) + "\n");
   } finally {
     await pool?.end();
+    await mypool?.end();
     for (const c of clients) c.destroy();
   }
 }

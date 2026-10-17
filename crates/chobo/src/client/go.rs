@@ -6,6 +6,7 @@ use crate::postgres;
 
 const TB_RUNTIME: &str = include_str!("runtime/tigerbeetle.go");
 const PG_RUNTIME: &str = include_str!("runtime/postgres.go");
+const MY_RUNTIME: &str = include_str!("runtime/mysql.go");
 
 use ritsu_emit::ident::is_ascii_ident as ascii_ident;
 use ritsu_emit::words::go::KEYWORDS;
@@ -178,11 +179,11 @@ fn calls_type(t: &TransferKind, runtime: &str, methods: &[Method]) -> String {
     o
 }
 
-fn book_struct(book: &Book, backend: &str, pg: bool) -> String {
+fn book_struct(book: &Book, backend: &str, runtime: Option<&str>) -> String {
     let mut rows: Vec<(String, String)> = book.transfers.iter().zip(members(book)).map(|(t, f)| (f, format!("{}Calls", go_name(&t.name)))).collect();
     rows.push(("Balance".into(), "Balances".into()));
-    if pg {
-        rows.push(("r".into(), "*pgRuntime".into()));
+    if let Some(r) = runtime {
+        rows.push(("r".into(), format!("*{r}")));
     }
     format!("// Book is the book {} (v{}), called on {backend}.\ntype Book struct {{\n{}}}\n\n", book.name, book.version, struct_fields(&rows))
 }
@@ -196,7 +197,7 @@ pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, Str
     let pkg = package(book, stem);
     let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9.", &pkg);
     o.push_str(&arg_types(book));
-    o.push_str(&book_struct(book, "TigerBeetle", false));
+    o.push_str(&book_struct(book, "TigerBeetle", None));
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
     o.push_str(&format!(
@@ -287,7 +288,7 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String
         &pkg,
     );
     o.push_str(&arg_types(book));
-    o.push_str(&book_struct(book, "PostgreSQL", true));
+    o.push_str(&book_struct(book, "PostgreSQL", Some("pgRuntime")));
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
     o.push_str(&format!(
@@ -375,4 +376,181 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String
         o.pop();
     }
     vec![(format!("{pkg}/book.go"), o), (format!("{pkg}/runtime.go"), runtime(PG_RUNTIME, &pkg))]
+}
+
+/// The part of the MySQL client that differs from book to book: positional literals of the
+/// TigerBeetle client's shape, with the book's SQL in them.
+fn mysql_literal(book: &Book) -> String {
+    let st = crate::mysql::statements(book);
+    let strs = |xs: &[String]| if xs.is_empty() { "nil".to_string() } else { format!("[]string{{{}}}", xs.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")) };
+    let bound = |b: &Option<Bound>| b.as_ref().map(|b| format!("i64({})", b.value)).unwrap_or_else(|| "nil".into());
+    let mut o = String::from("var theAccounts = []accountDef{\n");
+    for (a, row) in book.accounts.iter().zip(&st.account_rows) {
+        o.push_str(&format!("\t{{{}, {}, {}, {}, {}, {}}},\n", q(&a.name), strs(&a.params), crate::mysql::bounded(a), bound(&a.lower), bound(&a.upper), q(row)));
+    }
+    o.push_str("}\n\nvar theTransfers = []transferDef{\n");
+    let rf = |r: &Ref| {
+        let args: Vec<String> = r
+            .args
+            .iter()
+            .map(|a| match a {
+                Arg::Param(i) => format!("{{{i}, \"\"}}"),
+                Arg::Lit(s) => format!("{{-1, {}}}", q(s)),
+            })
+            .collect();
+        let args = if args.is_empty() { "nil".to_string() } else { format!("[]argDef{{{}}}", args.join(", ")) };
+        format!("refDef{{{}, {args}}}", q(&book.accounts[r.kind].name))
+    };
+    for (t, ts) in book.transfers.iter().zip(&st.transfers) {
+        let ps: Vec<String> = t.params.iter().map(|x| format!("{{{}, {}}}", q(&x.name), matches!(x.ty, Ty::Amount(_)))).collect();
+        let key: Vec<String> = t.key.iter().map(|i| i.to_string()).collect();
+        let moves: Vec<String> = t
+            .moves
+            .iter()
+            .map(|m| {
+                let amount = match &m.amount {
+                    Amount::Param(i) => format!("amountDef{{{i}, 0}}"),
+                    Amount::Lit(v) => format!("amountDef{{-1, {v}}}"),
+                };
+                format!("{{{amount}, {}, {}}}", rf(&m.from), rf(&m.to))
+            })
+            .collect();
+        let pend = |s: &str| if t.is_pending() { q(s) } else { q("") };
+        let pends = |v: &[String]| if t.is_pending() { format!("[]string{{{}}}", v.iter().map(|s| q(s)).collect::<Vec<_>>().join(", ")) } else { "nil".into() };
+        let checks: Vec<String> = ts.checks.iter().map(|(n, r, sql)| format!("{{{n}, {}, {}}}", q(r), q(sql))).collect();
+        let checks = if checks.is_empty() { "nil".to_string() } else { format!("[]checkDef{{{}}}", checks.join(", ")) };
+        let sql = format!(
+            "transferSQL{{{}, {}, {checks}, {}, {}, {}, {}, {}, {}, {}, {}, {}}}",
+            q(&ts.key_insert),
+            q(ts.lock.as_deref().unwrap_or("")),
+            q(&ts.refuse),
+            q(&ts.entries),
+            q(ts.apply.as_deref().unwrap_or("")),
+            pends(&ts.post_apply),
+            pend(&ts.post_entries),
+            pends(&ts.void_apply),
+            pend(&ts.void_entries),
+            pends(&ts.expire_apply),
+            pend(&ts.expire_entries),
+        );
+        o.push_str(&format!(
+            "\t{{{}, []paramDef{{{}}}, []int{{{}}}, {}, {}, []moveDef{{{}}}, {sql}}},\n",
+            q(&t.name),
+            ps.join(", "),
+            key.join(", "),
+            t.is_pending(),
+            q(&ids::definition(book, t)),
+            moves.join(", ")
+        ));
+    }
+    let bs = [
+        &st.begin,
+        &st.read_accounts,
+        &st.make_accounts,
+        &st.read_call,
+        &st.hold_lock,
+        &st.status,
+        &st.balance,
+        &st.due,
+        &st.fold_list,
+        &st.fold_lock,
+        &st.fold_read,
+        &st.fold_apply,
+        &st.fold_mark,
+    ];
+    o.push_str(&format!(
+        "}}\n\nvar theBook = newBook({}, theAccounts, theTransfers, bookSQL{{{}}})\n",
+        q(&book.name),
+        bs.iter().map(|x| q(x)).collect::<Vec<_>>().join(", ")
+    ));
+    o
+}
+
+/// The client of the MySQL family (DESIGN 4.5): database/sql with go-sql-driver/mysql.
+pub fn mysql(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
+    let pkg = package(book, stem);
+    let tables: Vec<String> = crate::mysql::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect();
+    let mut o = header(
+        book,
+        origin,
+        &format!("on MySQL, TiDB or Vitess, through the tables of `chobo build --target mysql` ({}),\n// database/sql and go-sql-driver/mysql.", tables.join(", ")),
+        &pkg,
+    );
+    o.push_str(&arg_types(book));
+    o.push_str(&book_struct(book, "MySQL, TiDB or Vitess", Some("myRuntime")));
+    let names = members(book);
+    let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
+    o.push_str(&format!(
+        "// MySQL is the book on MySQL, TiDB or Vitess. A tenant is a set of balances of its own; \"\" for one. Given\n// a *sql.DB or a *sql.Conn, each call is a transaction of its own; given a *sql.Tx, a call is part\n// of the caller's transaction, which the caller commits. With batch, the statements a call sends\n// in a row go in one request, which the connection has to allow (multiStatements=true).\nfunc MySQL(q Querier, tenant string, batch bool) *Book {{\n\tr := newMyRuntime(&theBook, q, tenant, batch)\n\treturn &Book{{{}, Balance: Balances{{r}}, r: r}}\n}}\n\n",
+        inits.join(", ")
+    ));
+    o.push_str("// Expire gives back what the holds past their expiry hold; call it from a job.\nfunc (b *Book) Expire(ctx context.Context) (int, error) {\n\treturn b.r.expire(ctx)\n}\n\n");
+    for t in &book.transfers {
+        let g = go_name(&t.name);
+        let all: Vec<usize> = (0..t.params.len()).collect();
+        let kind = q(&t.name);
+        let args = field_values(t, &all, "args").join(", ");
+        let mut methods = Vec::new();
+        if t.is_pending() {
+            let key = field_values(t, &t.key, "key").join(", ");
+            let ap = t.amount_params();
+            methods.push(Method {
+                doc: format!("Hold holds {}.", moves_text(book, t)),
+                sig: format!("Hold(ctx context.Context, args {g}Args) (Result, error)"),
+                body: format!("\treturn c.r.move(ctx, {kind}, \"hold\", []any{{{args}}})\n"),
+            });
+            if ap.is_empty() {
+                methods.push(Method {
+                    doc: "Post posts the hold of key.".into(),
+                    sig: format!("Post(ctx context.Context, key {g}Key) (Result, error)"),
+                    body: format!("\treturn c.r.end(ctx, {kind}, \"post\", []string{{{key}}}, nil)\n"),
+                });
+            } else {
+                let am = field_values(t, &ap, "amounts").join(", ");
+                methods.push(Method {
+                    doc: "Post posts the hold of key: all of it when amounts is nil.".into(),
+                    sig: format!("Post(ctx context.Context, key {g}Key, amounts *{g}Amounts) (Result, error)"),
+                    body: format!("\tvar a []int64\n\tif amounts != nil {{\n\t\ta = []int64{{{am}}}\n\t}}\n\treturn c.r.end(ctx, {kind}, \"post\", []string{{{key}}}, a)\n"),
+                });
+            }
+            methods.push(Method {
+                doc: "Void voids the hold of key.".into(),
+                sig: format!("Void(ctx context.Context, key {g}Key) (Result, error)"),
+                body: format!("\treturn c.r.end(ctx, {kind}, \"void\", []string{{{key}}}, nil)\n"),
+            });
+            methods.push(Method {
+                doc: "Status is where the hold of key is; \"\" when there is no such hold.".into(),
+                sig: format!("Status(ctx context.Context, key {g}Key) (HoldState, error)"),
+                body: format!("\treturn c.r.status(ctx, {kind}, []string{{{key}}})\n"),
+            });
+        } else {
+            methods.push(Method {
+                doc: format!("Do moves {}.", moves_text(book, t)),
+                sig: format!("Do(ctx context.Context, args {g}Args) (Result, error)"),
+                body: format!("\treturn c.r.move(ctx, {kind}, \"do\", []any{{{args}}})\n"),
+            });
+        }
+        o.push_str(&calls_type(t, "myRuntime", &methods));
+    }
+    o.push_str("// Balances are the balance of each account kind.\ntype Balances struct{ r *myRuntime }\n\n");
+    for (a, m) in book.accounts.iter().zip(balance_methods(book)) {
+        if a.params.is_empty() {
+            o.push_str(&format!(
+                "// {m} is the balance of {}.\nfunc (b Balances) {m}(ctx context.Context) (Balance, error) {{\n\treturn b.r.balance(ctx, {}, nil)\n}}\n\n",
+                a.name,
+                q(&a.name)
+            ));
+        } else {
+            let vals: Vec<String> = account_fields(a).into_iter().map(|f| format!("args.{f}")).collect();
+            o.push_str(&format!(
+                "// {m} is the balance of {}.\nfunc (b Balances) {m}(ctx context.Context, args {}Account) (Balance, error) {{\n\treturn b.r.balance(ctx, {}, []string{{{}}})\n}}\n\n",
+                a.name,
+                go_name(&a.name),
+                q(&a.name),
+                vals.join(", ")
+            ));
+        }
+    }
+    o.push_str(&mysql_literal(book));
+    vec![(format!("{pkg}/book.go"), o), (format!("{pkg}/runtime.go"), runtime(MY_RUNTIME, &pkg))]
 }

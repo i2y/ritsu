@@ -1231,6 +1231,13 @@
         "the transfer kind written the one way",
         "each account kind its moves touch, written the one way"
       ],
+      "tenant": [
+        "book",
+        "tenant"
+      ],
+      "expire": [
+        "the hold's id, as 32 lowercase hex digits"
+      ],
       "ledger": [
         "unit",
         "scale, in decimal"
@@ -1323,11 +1330,25 @@
       ],
       "expire": "expire"
     },
+    "mysql": {
+      "tables": {
+        "accounts": "to_itself_accounts",
+        "calls": "to_itself_calls",
+        "entries": "to_itself_entries"
+      },
+      "checks": [
+        "to_itself_within_lower",
+        "to_itself_within_upper"
+      ],
+      "begin": "begin /*T! pessimistic */",
+      "expire": "expire"
+    },
     "typescript": {
       "file": "to_itself.ts",
       "factories": {
         "postgres": "postgres",
-        "tigerbeetle": "tigerbeetle"
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
       },
       "transfers": [
         {
@@ -1357,7 +1378,8 @@
       "module": "to_itself",
       "factories": {
         "postgres": "postgres",
-        "tigerbeetle": "tigerbeetle"
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
       },
       "transfers": [
         {
@@ -1408,7 +1430,8 @@
       "package": "to_itself",
       "factories": {
         "postgres": "Postgres",
-        "tigerbeetle": "TigerBeetle"
+        "tigerbeetle": "TigerBeetle",
+        "mysql": "MySQL"
       },
       "transfers": [
         {

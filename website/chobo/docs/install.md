@@ -85,6 +85,12 @@ The code a build writes is called by your program, with a client of the database
 | `tigerbeetle-typescript` | a client of `tigerbeetle-node` 0.17.9 |
 | `tigerbeetle-python` | a `ClientSync` of `tigerbeetle` 0.17.9 |
 | `tigerbeetle-go` | a client of `tigerbeetle-go` v0.17.9, which uses cgo |
+| `mysql` | MySQL 8.4 or later, TiDB 8.5 or later, or Vitess: the SQL makes the book's three tables in the database it runs in, and can run any number of times; on TiDB, run it with `tidb_enable_check_constraint` ON |
+| `mysql-typescript` | a pool or a connection of `mysql2`'s promise API |
+| `mysql-python` | a DB-API connection of PyMySQL or mysqlclient |
+| `mysql-go` | database/sql's `*sql.DB`, `*sql.Conn` or `*sql.Tx`, through `go-sql-driver/mysql` |
 
+The tests run the clients on PostgreSQL 18.0, TigerBeetle 0.17.9, MySQL 8.4.11, TiDB 8.5.8 and
+Vitess 24.0.5, with the drivers at the versions [Targets](targets.md#the-clients-own-needs) gives.
 [Build for a database](databases.md) says what each target writes, and
 [Targets](targets.md) how to call it from each language.

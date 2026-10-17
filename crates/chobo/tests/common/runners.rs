@@ -122,6 +122,24 @@ pub fn python() -> Result<PathBuf, String> {
     Ok(py)
 }
 
+/// node with mysql2 in tools/runner/node_modules, besides what `node()` asks.
+pub fn node_mysql() -> Result<(), String> {
+    node()?;
+    if !runner_dir().join("node_modules/mysql2").is_dir() {
+        return Err("tools/runner/node_modules has no mysql2; run `npm ci --prefix tools/runner`".into());
+    }
+    Ok(())
+}
+
+/// The runner's Python with PyMySQL, besides what `python()` asks.
+pub fn python_mysql() -> Result<std::path::PathBuf, String> {
+    let py = python()?;
+    if !ritsu_testkit::tools::runs(&py, &["-c", "import pymysql"]) {
+        return Err("tools/runner/.venv has no PyMySQL; install tools/runner/requirements.txt into it".into());
+    }
+    Ok(py)
+}
+
 pub fn go() -> Result<(), String> {
     if !runs("go", "version") || !runner_dir().join("go/go.mod").is_file() {
         return Err("go or tools/runner/go is missing".into());
@@ -181,7 +199,7 @@ pub struct GoRunner {
     pub keys: BTreeMap<(String, &'static str), String>,
 }
 
-fn go_adapter(alias: &str, book: &Book, pg: bool) -> String {
+fn go_adapter(alias: &str, book: &Book, expire: bool) -> String {
     use chobo::client::go::{account_fields, balance_methods, fields, go_name, members};
     let ty = format!("a_{alias}");
     let mut o = format!("type {ty} struct{{ b *{alias}.Book }}\n\n");
@@ -236,7 +254,7 @@ fn go_adapter(alias: &str, book: &Book, pg: bool) -> String {
         o.push_str(&format!("\tcase {:?}:\n\t\ts, err := a.b.{member}.Status(ctx, {alias}.{}Key{{{lit}}})\n\t\treturn string(s), err\n", t.name, go_name(&t.name)));
     }
     o.push_str("\t}\n\treturn \"\", fmt.Errorf(\"no %s\", kind)\n}\n\n");
-    if pg {
+    if expire {
         o.push_str(&format!("func (a {ty}) Expire(ctx context.Context) error {{\n\t_, err := a.b.Expire(ctx)\n\treturn err\n}}\n\n"));
     } else {
         o.push_str(&format!("func (a {ty}) Expire(ctx context.Context) error {{ return nil }}\n\n"));
@@ -258,24 +276,24 @@ pub fn build_go(cases: &[Case], work: &Path) -> Result<GoRunner, String> {
     let module = work.join("go");
     copy_files(&runner_dir().join("go"), &module);
     copy_files(&runner_dir().join("go/harness"), &module.join("harness"));
-    let mut imports = vec!["\"context\"".to_string(), "\"fmt\"".to_string(), String::new(), "\"chobo-runner/harness\"".to_string()];
+    let mut imports = vec!["\"context\"".to_string(), "\"database/sql\"".to_string(), "\"fmt\"".to_string(), String::new(), "\"chobo-runner/harness\"".to_string()];
     let mut adapters = String::new();
     let mut entries = String::new();
     let mut keys = BTreeMap::new();
     for (i, c) in cases.iter().enumerate() {
-        for (backend, target, pg) in [("postgres", Target::PostgresGo, true), ("tigerbeetle", Target::TigerBeetleGo, false)] {
-            let key = format!("{}{i}", if pg { "pg" } else { "tb" });
+        for (backend, target, prefix) in [("postgres", Target::PostgresGo, "pg"), ("tigerbeetle", Target::TigerBeetleGo, "tb"), ("mysql", Target::MySqlGo, "my")] {
+            let key = format!("{prefix}{i}");
             let files = target::build(&c.copy, &c.stem, target, &c.origin).map_err(|d| d[0].message.en.clone())?;
             for (rel, text) in &files {
                 let name = Path::new(rel).file_name().unwrap();
                 write(&module.join("books").join(&key).join(name), text);
             }
             imports.push(format!("{key} \"chobo-runner/books/{key}\""));
-            adapters.push_str(&go_adapter(&key, &c.copy, pg));
-            let make = if pg {
-                format!("Postgres: func(q harness.Querier, tenant string) harness.Book {{ return a_{key}{{{key}.Postgres(q, tenant)}} }}")
-            } else {
-                format!("TigerBeetle: func(c harness.TBClient, tenant string) harness.Book {{ return a_{key}{{{key}.TigerBeetle(c, tenant)}} }}")
+            adapters.push_str(&go_adapter(&key, &c.copy, backend != "tigerbeetle"));
+            let make = match backend {
+                "postgres" => format!("Postgres: func(q harness.Querier, tenant string) harness.Book {{ return a_{key}{{{key}.Postgres(q, tenant)}} }}"),
+                "mysql" => format!("MySQL: func(db *sql.DB, tenant string, batch bool) harness.Book {{ return a_{key}{{{key}.MySQL(db, tenant, batch)}} }}"),
+                _ => format!("TigerBeetle: func(c harness.TBClient, tenant string) harness.Book {{ return a_{key}{{{key}.TigerBeetle(c, tenant)}} }}"),
             };
             entries.push_str(&format!("\t\t{key:?}: {{{make}}},\n"));
             keys.insert((c.stem.clone(), backend), key);
@@ -683,6 +701,9 @@ fn order(v: &Value) -> (u64, u64) {
 /// chain, field by field. Every account the show names is sent at least once.
 pub fn compare_sent(c: &Case, backend: &str, i: usize, tenant: &str, got: &Value) -> Result<(), String> {
     let s = scenario::from_json(&c.copy, &scenario::to_json(&c.book, &c.scenarios[i])).unwrap();
+    if backend == "mysql" {
+        return compare_statements(c, tenant, &s, got);
+    }
     let want = if backend == "postgres" { chobo::render::postgres_json(&c.copy, tenant, &s) } else { chobo::render::tigerbeetle_json(&c.copy, tenant, &s) };
     let want = want.as_array().unwrap();
     let mut got: Vec<Value> = got.as_array().cloned().unwrap_or_default();
@@ -751,6 +772,55 @@ pub fn compare_sent(c: &Case, backend: &str, i: usize, tenant: &str, got: &Value
     for a in &shown_accounts {
         if !sent_accounts.contains(a) {
             return Err(format!("the account {a} is never sent"));
+        }
+    }
+    Ok(())
+}
+
+/// Compare what a client of the MySQL family sent, operation by operation, with `chobo run --show
+/// mysql`: its statements, word for word, but for those that make sure of the accounts (a value of
+/// the book does that the first time it names an account, and the show names every account each
+/// time); every account the show names is made sure of once at least. An operation of a
+/// `together` can find another state than the one before it: its statements start as the show's
+/// head, and go on as one of the ways the show allows.
+fn compare_statements(c: &Case, tenant: &str, s: &Scenario, got: &Value) -> Result<(), String> {
+    let want = chobo::render::mysql_json(&c.copy, tenant, s);
+    let want = want.as_array().unwrap();
+    let mut got: Vec<Value> = got.as_array().cloned().unwrap_or_default();
+    got.sort_by_key(order);
+    if want.len() != got.len() {
+        return Err(format!("{} operations were sent, and the show has {}", got.len(), want.len()));
+    }
+    let strings = |v: &Value| -> Vec<String> { v.as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect() };
+    let mut made_sure: Vec<String> = Vec::new();
+    let mut shown_accounts: Vec<String> = Vec::new();
+    for (w, g) in want.iter().zip(&got) {
+        let at = format!("step {} {}.{}", w["step"], w["kind"].as_str().unwrap_or(""), w["op"].as_str().unwrap_or(""));
+        if order(w) != order(g) || w["op"] != g["op"] || w["kind"] != g["kind"] {
+            return Err(format!("{at}: the client sent {}.{} at step {}", g["kind"], g["op"], g["step"]));
+        }
+        let sent: Vec<String> = g["requests"].as_array().into_iter().flatten().flat_map(|r| r["sql"].as_str().unwrap_or("").split("; ").map(String::from).collect::<Vec<_>>()).collect();
+        let (sure, rest): (Vec<String>, Vec<String>) = sent.into_iter().partition(|q| chobo::mysql::is_making_sure(&c.copy, q));
+        made_sure.extend(sure);
+        shown_accounts.extend(strings(&w["accounts"]));
+        let shown = strings(&w["statements"]);
+        if w.get("caller").is_some() {
+            let head = w["head"].as_u64().unwrap_or(0) as usize;
+            if rest.len() < head || rest[..head] != shown[..head] {
+                return Err(format!("{at}: the statements sent do not start as the show's:\n  sent {rest:?}\n  show {:?}", &shown[..head]));
+            }
+            let tails: Vec<Vec<String>> = w["tails"].as_array().into_iter().flatten().map(strings).collect();
+            if !tails.iter().any(|t| *t == rest[head..]) {
+                return Err(format!("{at}: the statements sent go on in no way the show allows:\n  sent {:?}\n  ways {tails:?}", &rest[head..]));
+            }
+        } else if rest != shown {
+            return Err(format!("{at}: the statements sent are not the show's:\n  sent {rest:?}\n  show {shown:?}"));
+        }
+    }
+    for a in &shown_accounts {
+        let lit = format!("X'{a}'");
+        if !made_sure.iter().any(|q| q.contains(&lit)) {
+            return Err(format!("the account {a} is never made sure of"));
         }
     }
     Ok(())

@@ -235,13 +235,14 @@ fn have_go() -> bool {
     Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// The packages of the English project, with the books on PostgreSQL and on TigerBeetle, and the
-/// TypeScript and the Python of the Japanese one, pass `tsc --strict`, `mypy --strict` and `go vet`.
+/// The packages of the English project, with the books on PostgreSQL, on TigerBeetle and on the MySQL
+/// family, and the TypeScript and the Python of the Japanese one, pass `tsc --strict`, `mypy --strict`
+/// and `go vet`.
 #[test]
 fn the_packages_pass_the_type_checkers() {
     let t = TempDir::new("gen-types");
     let mut made = Vec::new();
-    for books in ["postgres", "tigerbeetle"] {
+    for books in ["postgres", "tigerbeetle", "mysql"] {
         let out = t.path().join(format!("stockroom-{books}"));
         let (code, _, err) = generate(&here().join(STOCKROOM), &out, &["--books", books]);
         assert_eq!(code, 0, "ritsu gen of the stockroom ({books}):\n{err}");
@@ -256,7 +257,7 @@ fn the_packages_pass_the_type_checkers() {
                 for out in made.iter().chain([&shop]) {
                     type_check_typescript(&out.join("typescript"), &tsc, &modules);
                 }
-                println!("tsc --strict passes the TypeScript of three packages");
+                println!("tsc --strict passes the TypeScript of four packages");
             }
             None => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) or tigerbeetle-node (crates/chobo/tools/runner) is not installed; the TypeScript of the packages is not type-checked"),
         }
@@ -267,7 +268,7 @@ fn the_packages_pass_the_type_checkers() {
                 for out in &made {
                     type_check_python(&out.join("python"), &mypy, &python, std::slice::from_ref(&tigerbeetle));
                 }
-                println!("mypy --strict passes the Python of two packages");
+                println!("mypy --strict passes the Python of three packages");
             }
             None => ritsu_testkit::skip("mypy, Temporal's Python SDK (crates/dandori/tools/temporal-python) or tigerbeetle (crates/chobo/tools/runner) is not installed; the Python of the packages is not type-checked"),
         }
@@ -279,7 +280,7 @@ fn the_packages_pass_the_type_checkers() {
                     let name = out.file_name().unwrap().to_string_lossy().to_string();
                     type_check_go(&t.path().join(format!("go-{name}")), &out.join("go"), &gomod);
                 }
-                println!("go vet and gofmt pass the Go of two packages");
+                println!("go vet and gofmt pass the Go of three packages");
             }
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the packages is not vetted"),
         }

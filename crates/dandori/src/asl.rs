@@ -1411,7 +1411,7 @@ fn book_handler(m: &Model, b: usize) -> (String, String) {
     let mut text = String::new();
     text.push_str(&m.head("#"));
     text.push_str(&format!("# The Lambda function the state machine calls for the operations of the book {} v{} (sha256:{}).\n", f.name, f.version, &f.sha256[..12.min(f.sha256.len())]));
-    text.push_str(&format!("# It runs them with the Python client `chobo build --target postgres-python` (or tigerbeetle-python) writes,\n# {module}.py: make the handler with the client's book, as\n#   handler = make_handler(lambda: tigerbeetle(ClientSync(cluster_id=0, replica_addresses=\"3000\")))\n\n"));
+    text.push_str(&format!("# It runs them with the Python client `chobo build --target postgres-python` (or tigerbeetle-python, or mysql-python) writes,\n# {module}.py: make the handler with the client's book, as\n#   handler = make_handler(lambda: tigerbeetle(ClientSync(cluster_id=0, replica_addresses=\"3000\")))\n\n"));
     text.push_str("from typing import Any, Callable\n\n");
     text.push_str(&format!("# each transfer: the member of the book value, and its parameters as the client takes them\nNAMES = {}\n", book_py_names(bu)));
     text.push_str(PY_BOOK_RUN);

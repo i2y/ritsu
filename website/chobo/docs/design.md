@@ -2,7 +2,7 @@
 
 A `.book` is parsed, its names and units are resolved, and the typed book is checked: its units,
 its bounds, its keys, its holds, and how things can move between its accounts. The reference
-interpreter runs it, and the scenarios it plays are what every database is held to. Seven
+interpreter runs it, and the scenarios it plays are what every database is held to. Eleven
 generators build it, and `chobo doc` and `chobo api` say what it is, to a person and to a tool.
 
 ## The bound of one account
@@ -11,8 +11,9 @@ The one condition a book can write is a lower or an upper bound of one account, 
 decision the rest stands on. A bound looks at one account, so the write that changes the account
 can check it, with nothing else to read in between: on PostgreSQL, a function that locks the
 account's row; on TigerBeetle, a flag of the account and a chain of transfers applied whole or not
-at all. A database that can change a row on a condition and write several rows at once has what this
-needs; these two are the ones it is tried on.
+at all; on the MySQL family, a transaction that locks the account's row as it reads it. A database
+that can change a row on a condition and write several rows at once has what this needs; it is
+tried on PostgreSQL, TigerBeetle, MySQL, TiDB and Vitess.
 
 A condition over two accounts cannot be kept so. Two refunds at the same moment would each read the
 sale and the refunds before the other wrote, and both would go through. So such a condition becomes the bound of
@@ -45,8 +46,8 @@ for.
   transfer's own arguments, rather than an ID the caller makes and keeps: so the checker can say what
   a second call gets, the people who keep the accounts read *once per order and SKU* in the book,
   and two runs of one workflow cannot move twice.
-- **P5. One reference interpreter says what a book means,** and PostgreSQL and TigerBeetle are each
-  held to it, scenario by scenario.
+- **P5. One reference interpreter says what a book means,** and PostgreSQL, TigerBeetle, MySQL,
+  TiDB and Vitess are each held to it, scenario by scenario.
 - **P6. chobo computes nothing.** An amount is a parameter or a literal; a transfer does not read a
   balance to decide one, and adds nothing up. That keeps every answer to *goes through, or is
   refused with a bound's reason*, so the reasons can be listed before anything runs.
@@ -56,10 +57,10 @@ for.
 ## Decisions that follow
 
 - **Moves are checked one at a time, in the order written.** TigerBeetle checks a chain transfer by
-  transfer, and PostgreSQL does the same, so the two answer alike, and what a book means can be read
-  from it. Checking the balances only after every move would mean reordering the chain behind the
-  reader's back. The price is that the order can refuse what the moves together would allow, which
-  the checker says (W103).
+  transfer, and PostgreSQL and the MySQL family do the same, so they answer alike, and what a book
+  means can be read from it. Checking the balances only after every move would mean reordering the
+  chain behind the reader's back. The price is that the order can refuse what the moves together
+  would allow, which the checker says (W103).
 - **A hold is counted for the worst case.** What is held going out counts against a lower bound,
   what is held coming in against an upper one, and neither counts the other way, as TigerBeetle
   counts it. A hold that went through is never refused for a bound when it is posted.
@@ -68,12 +69,16 @@ for.
   ID it refused, so that a retry always gets the same answer.
 - **chobo calls no other language.** A workflow reads the book through ritsu's port of books, and
   another tool through `chobo api`; chobo knows neither.
-- **A client for each database, in each language.** The clients of both databases have the same
+- **A client for each database, in each language.** The clients of every database have the same
   names, arguments and answers, so that changing the database changes how the book value is made and
-  nothing else; and the same client carries the tests through both.
+  nothing else; and one runner in each language carries the tests through all of them.
+- **On the MySQL family, the client sends the statements.** TiDB has no stored procedures, and a
+  service that runs Vitess may allow neither stored routines nor making a database, so there is no
+  function to call: the client runs each call as one transaction of statements chobo wrote, in
+  which the checks are, and fills in nothing but the values.
 - **The build stops where its database would.** A chain longer than one TigerBeetle request of a
-  replica chobo can be tested on (253 transfers) and a name longer than PostgreSQL's 63 bytes stop
-  the build for that database, and no other.
+  replica chobo can be tested on (253 transfers), a name longer than PostgreSQL's 63 bytes, and a
+  name MySQL cannot hold stop the build for that database, and no other.
 
 ## Dropped
 
@@ -93,5 +98,5 @@ for.
 ## The whole record
 
 [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md), in Japanese, gives the
-reasons for these and for every other decision, what TigerBeetle and PostgreSQL were seen to do
-before the design relied on it, the designs that were dropped, and what is left.
+reasons for these and for every other decision, what TigerBeetle, PostgreSQL, MySQL, TiDB and
+Vitess were seen to do before the design relied on it, the designs that were dropped, and what is left.

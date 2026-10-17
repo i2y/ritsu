@@ -1,4 +1,4 @@
-//! `chobo run --show postgres|tigerbeetle`: what a client sends for each operation of a
+//! `chobo run --show postgres|tigerbeetle|mysql`: what a client sends for each operation of a
 //! scenario (PLAN C1). The tests compare what the clients of the three languages really send
 //! with this, field by field.
 //!
@@ -245,6 +245,40 @@ pub fn tigerbeetle_text(book: &Book, file: &str, tenant: &str, s: &Scenario, lan
             }
             o.push_str(&format!("       {}\n", title.get(lang)));
             o.push_str(&table(&rows, "         "));
+        }
+    }
+    o
+}
+
+// ── the MySQL family ──────────────────────────────────────────────────────
+
+fn mysql_ops(book: &Book, tenant: &str, s: &Scenario) -> Vec<(Call, Value)> {
+    each(book, s, |state, c| crate::mysql::one(book, tenant, state, c))
+}
+
+/// What a client of the MySQL family sends, operation by operation: the accounts it makes sure
+/// of, and its statements, with the values in place (DESIGN 4.5).
+pub fn mysql_json(book: &Book, tenant: &str, s: &Scenario) -> Value {
+    Value::Array(mysql_ops(book, tenant, s).into_iter().map(|(_, v)| v).collect())
+}
+
+/// `--show mysql` as text: for each operation the accounts it makes sure of the first time a
+/// value of the book names them, then its statements, one a line.
+pub fn mysql_text(book: &Book, file: &str, tenant: &str, s: &Scenario, lang: Lang) -> String {
+    let mut o = header(file, s, lang, "MySQL", tenant);
+    for (c, v) in mysql_ops(book, tenant, s) {
+        o.push_str(&op_line(book, &c, &v));
+        o.push('\n');
+        let accounts: Vec<&str> = v["accounts"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).collect();
+        if !accounts.is_empty() {
+            o.push_str(&format!("       {} {}\n", tr!("確かめる勘定:", "makes sure of the accounts:").get(lang), accounts.join(", ")));
+        }
+        let sql: Vec<&str> = v["statements"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).collect();
+        if sql.is_empty() {
+            o.push_str(&format!("       {}\n", tr!("何も送らない", "sends nothing").get(lang)));
+        }
+        for q in sql {
+            o.push_str(&format!("       {q}\n"));
         }
     }
     o

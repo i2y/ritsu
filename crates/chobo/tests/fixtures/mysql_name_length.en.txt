@@ -1,0 +1,4 @@
+error[E062]: mysql_name_length.book:2:6: The check's name `stock_of_the_central_warehouse_and_of_each_branch_stores_within_lower` is 69 characters long; MySQL keeps a name to 64
+     2 | book stock_of_the_central_warehouse_and_of_each_branch_stores v1
+  hint: Make the book's name at most 51 characters: `_within_lower` follows it
+mysql_name_length.book: 1 error(s), 0 warning(s)

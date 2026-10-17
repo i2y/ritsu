@@ -12,7 +12,7 @@ on this repository.
 | [rulec](rulec/SKILL.md) | business rules (`.rule`): tariffs, fees, discounts, eligibility, turned into proved code |
 | [dandori](dandori/SKILL.md) | workflows (`.flow`), checked before they run and built for Temporal, Step Functions, durable functions, Argo and pydantic-graph |
 | [koyomi](koyomi/SKILL.md) | closing days, payment days and business days (`.cal`) |
-| [chobo](chobo/SKILL.md) | books of stock, money, points and booking slots (`.book`), kept on PostgreSQL or TigerBeetle |
+| [chobo](chobo/SKILL.md) | books of stock, money, points and booking slots (`.book`), kept on PostgreSQL, TigerBeetle, MySQL, TiDB or Vitess |
 | [geas](geas/SKILL.md) | claims a person has read, held over the code an agent wrote (`.geas`) |
 | [yuen](yuen/SKILL.md) | where requirements come from, and what meets and checks them (`.req`) |
 | [sakai](sakai/SKILL.md) | maps of bounded contexts, held to the rules, workflows and code they name (`.ctx`) |

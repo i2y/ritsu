@@ -2,6 +2,8 @@
 # TigerBeetle's release binary, fetched by tools/tigerbeetle/fetch.sh
 /tools/tigerbeetle/tigerbeetle
 /tools/tigerbeetle/*.zip
+# MySQL's build, fetched by tools/mysql/fetch.sh
+/tools/mysql/mysql/
 # what the runners install: `npm ci --prefix tools/runner`, and the venv of tools/runner/requirements.txt
 /tools/runner/node_modules/
 /tools/runner/.venv/

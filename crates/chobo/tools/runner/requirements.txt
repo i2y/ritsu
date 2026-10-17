@@ -72,6 +72,10 @@ psycopg-binary==3.3.6 \
     --hash=sha256:fa34eb47969297471db7b7f193622c7e3ee839ec05abd05f1fe104d5b1b1dcf4 \
     --hash=sha256:fdccb3a0e184b03e9baa673b15a809cf36c339c85dbda0ebc25a698846dfbee8
     # via psycopg
+pymysql==1.2.3 \
+    --hash=sha256:14f1c68e2ed859243ae5ca41ffbe677027fc46bc136a9f0be8a4e928e5e7415a \
+    --hash=sha256:d5b288529782e536ae171866df3ca9dc4f6cbfb3cc2f18e6f837fbb90dbc262b
+    # via -r requirements.in
 tigerbeetle==0.17.9 \
     --hash=sha256:405910bfdf74f169a27a282abfd6a124bee57ac2ef8cc50d247bb753e9a119ec
     # via -r requirements.in
