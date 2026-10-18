@@ -1023,10 +1023,10 @@ flaky without a word.
   whatever `--jobs` says, and each says that it cannot start its program.
 - Ports are what geas can see. `port auto` gives each instance a free port
   on 127.0.0.1: geas binds port 0, reads the number, closes it, and never
-  hands one number to two live instances. `{port}` in the target's command
-  and in its `env` values is replaced by it. Claims that touch a fixed
-  `port 8123` never run at the same time (a lock per fixed port); other
-  claims run beside them.
+  hands one number to two live instances, its own or another geas's on the
+  machine. `{port}` in the target's command and in its `env` values is
+  replaced by it. Claims that touch a fixed `port 8123` never run at the
+  same time (a lock per fixed port); other claims run beside them.
 - `serial` on a target runs the claims that touch it one at a time, for
   state geas cannot see.
 - On a `port auto` target, `127.0.0.1:<port>`, `localhost:<port>` and
@@ -1073,6 +1073,25 @@ As built:
   lock (`proc::starting`), so no program starts while that socket is
   open, and the same runs came back clean 10 times of 10. A start takes
   a moment, and claims still run side by side.
+- Two geas side by side, as the tests run them, kept their numbers apart
+  only each within itself. The system offered a number one had just
+  closed to the other, both services were given it, and the second failed
+  to bind it while its geas found the port open (on the first one's
+  service) and ran its claims there. On GitHub's runner, a first `geas
+  check` of the greeter in Japanese answered 1 because the English one
+  beside it had changed its own page (2026-10-18), and a `snap` before a
+  `drift` met E033 (2026-10-14). A number is now claimed against every
+  geas of the user as well: a lock (`flock`) on a file named for it in
+  `/tmp/geas-ports-<uid>`, held until the instance stops. The file goes
+  with the claim, and the lock goes with the process, however it ends.
+  The directory is not under TMPDIR, which one geas may be given and
+  another not; where it cannot be made, or is not the user's alone, geas
+  keeps its own instances apart as before. `proc.rs` holds a second
+  process to it.
+- geas cannot tell from a connection whether the listener is the service
+  it started. Asking whether the service is still running once the port
+  answers comes too early: the service that will fail to bind has
+  usually not tried yet when the other's answers.
 - `port auto` on a target whose command and `env` values never say
   `{port}` is E004: the service would have no way to learn its port.
 - A masked value, of a header or of a JSON path in a body that is JSON, is

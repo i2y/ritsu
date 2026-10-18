@@ -42,6 +42,7 @@ unsafe extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
     fn signal(sig: i32, handler: extern "C" fn(i32)) -> usize;
     fn _exit(code: i32) -> !;
+    fn getuid() -> u32;
 }
 
 // Where there are no processes to signal (wasm32, in the page in the browser), no program starts
@@ -268,8 +269,12 @@ pub fn output(cmd: &mut Command) -> std::io::Result<std::process::Output> {
 
 /// A free port on 127.0.0.1 for one instance of a `port auto` service, held until
 /// dropped (DESIGN §10): geas binds port 0, reads the number, closes it, and skips
-/// numbers it has handed to an instance still running.
-pub struct AutoPort(pub u16);
+/// numbers handed to an instance still running, by itself or by another geas.
+pub struct AutoPort {
+    pub port: u16,
+    /// The number held against every other geas, while the instance runs.
+    _claim: Option<Claim>,
+}
 
 impl AutoPort {
     pub fn take() -> std::io::Result<AutoPort> {
@@ -278,8 +283,15 @@ impl AutoPort {
                 let _starting = starting();
                 TcpListener::bind("127.0.0.1:0")?.local_addr()?.port()
             };
-            if HANDED.lock().unwrap_or_else(|e| e.into_inner()).insert(port) {
-                return Ok(AutoPort(port));
+            if !HANDED.lock().unwrap_or_else(|e| e.into_inner()).insert(port) {
+                continue;
+            }
+            match Claim::take(port) {
+                Claimed::Mine(c) => return Ok(AutoPort { port, _claim: Some(c) }),
+                Claimed::Nowhere => return Ok(AutoPort { port, _claim: None }),
+                Claimed::Taken => {
+                    HANDED.lock().unwrap_or_else(|e| e.into_inner()).remove(&port);
+                }
             }
         }
         Err(std::io::Error::other("every free port the system offered is held by another instance"))
@@ -288,8 +300,96 @@ impl AutoPort {
 
 impl Drop for AutoPort {
     fn drop(&mut self) {
-        HANDED.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.0);
+        HANDED.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.port);
     }
+}
+
+/// A port's number held against every geas of the user on the machine (DESIGN §10): a lock on a
+/// file named for the number, in a directory they all find. The system lets go of the lock when
+/// the process ends, however it ends; the file goes when the claim is dropped.
+struct Claim {
+    path: PathBuf,
+    _file: std::fs::File,
+}
+
+/// What came of claiming a number.
+enum Claimed {
+    Mine(Claim),
+    /// Another geas holds it.
+    Taken,
+    /// There is no directory to keep claims in: geas keeps only its own instances apart.
+    Nowhere,
+}
+
+impl Claim {
+    fn take(port: u16) -> Claimed {
+        let Some(dir) = claims_dir() else {
+            return Claimed::Nowhere;
+        };
+        let path = dir.join(port.to_string());
+        for _ in 0..10 {
+            let Ok(file) = std::fs::OpenOptions::new().write(true).create(true).truncate(false).open(&path) else {
+                return Claimed::Nowhere;
+            };
+            match file.try_lock() {
+                Ok(()) => {}
+                Err(std::fs::TryLockError::WouldBlock) => return Claimed::Taken,
+                Err(std::fs::TryLockError::Error(_)) => return Claimed::Nowhere,
+            }
+            // The geas that held the number before removed its file before it let go: a lock on
+            // that file is a lock on nothing anyone else finds, so the claim is the file at the path.
+            if same_file(&file, &path) {
+                return Claimed::Mine(Claim { path, _file: file });
+            }
+        }
+        Claimed::Nowhere
+    }
+}
+
+impl Drop for Claim {
+    fn drop(&mut self) {
+        // removed while still locked, so that whoever claims the number next makes the file anew
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+/// Where every geas of the user keeps its claims: one directory under /tmp, not under the
+/// temporary directory, since TMPDIR can differ from one geas to another (a run that starts
+/// Chrome is often given one of its own). None when it cannot be made, or is not the user's alone.
+#[cfg(unix)]
+fn claims_dir() -> Option<PathBuf> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
+    DIR.get_or_init(|| {
+        // SAFETY: `getuid` always succeeds.
+        let uid = unsafe { getuid() };
+        let dir = PathBuf::from(format!("/tmp/geas-ports-{uid}"));
+        let _ = std::fs::DirBuilder::new().mode(0o700).create(&dir);
+        // a directory another user made, or a link put in its place, is not one to write in
+        let m = std::fs::symlink_metadata(&dir).ok()?;
+        (m.is_dir() && m.uid() == uid && m.mode() & 0o077 == 0).then_some(dir)
+    })
+    .clone()
+}
+
+// Where no program starts (wasm32), no port is handed to one either.
+#[cfg(not(unix))]
+fn claims_dir() -> Option<PathBuf> {
+    None
+}
+
+#[cfg(unix)]
+fn same_file(file: &std::fs::File, path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (file.metadata(), std::fs::metadata(path)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(_file: &std::fs::File, _path: &Path) -> bool {
+    false
 }
 
 /// Why a `when` got no observation.
@@ -735,12 +835,64 @@ mod tests {
     #[test]
     fn auto_ports_are_never_handed_out_twice_while_held() {
         let held: Vec<AutoPort> = (0..20).map(|_| AutoPort::take().expect("a free port")).collect();
-        let mut numbers: Vec<u16> = held.iter().map(|p| p.0).collect();
+        let mut numbers: Vec<u16> = held.iter().map(|p| p.port).collect();
         numbers.sort();
         numbers.dedup();
         assert_eq!(numbers.len(), 20);
-        let first = held[0].0;
+        let first = held[0].port;
         drop(held);
         assert!(!HANDED.lock().unwrap_or_else(|e| e.into_inner()).contains(&first));
+    }
+
+    /// The other process of `auto_ports_held_by_another_process_are_not_claimed`: with
+    /// `GEAS_HOLD_AUTO_PORTS` set, it takes that many auto ports, prints their numbers, and holds
+    /// them until its stdin closes. Run alone, it does nothing.
+    #[test]
+    fn holds_auto_ports_for_another_process() {
+        let Some(n) = std::env::var("GEAS_HOLD_AUTO_PORTS").ok().and_then(|v| v.parse::<usize>().ok()) else {
+            return;
+        };
+        let held: Vec<AutoPort> = (0..n).map(|_| AutoPort::take().expect("a free port")).collect();
+        for p in &held {
+            println!("held {}", p.port);
+        }
+        std::io::stdout().flush().unwrap();
+        let _ = std::io::stdin().read_to_end(&mut Vec::new());
+    }
+
+    /// Two geas run side by side, as tests run them (DESIGN §10): the numbers one holds, the
+    /// other cannot claim, and can once the first has ended.
+    #[test]
+    fn auto_ports_held_by_another_process_are_not_claimed() {
+        assert!(claims_dir().is_some(), "no directory to keep claims in");
+        let me = module_path!().split_once("::").expect("a crate's module").1;
+        let mut other = Command::new(std::env::current_exe().unwrap())
+            .args([&format!("{me}::holds_auto_ports_for_another_process"), "--exact", "--nocapture"])
+            .env("GEAS_HOLD_AUTO_PORTS", "5")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut out = std::io::BufReader::new(other.stdout.take().unwrap());
+        let mut held: Vec<u16> = Vec::new();
+        let mut line = String::new();
+        while held.len() < 5 {
+            line.clear();
+            assert!(std::io::BufRead::read_line(&mut out, &mut line).unwrap() > 0, "the other process held {held:?} and ended");
+            // after the test's name, when the runner prints it as the test starts
+            if let Some((_, n)) = line.split_once("held ") {
+                held.push(n.trim().parse().unwrap());
+            }
+        }
+        for &p in &held {
+            assert!(matches!(Claim::take(p), Claimed::Taken), "port {p}, held by the other process, was claimed here");
+        }
+        drop(other.stdin.take());
+        assert!(other.wait().unwrap().success());
+        for &p in &held {
+            assert!(matches!(Claim::take(p), Claimed::Mine(_)), "port {p} is still held after the other process ended");
+            assert!(!claims_dir().unwrap().join(p.to_string()).exists(), "the claim on port {p} left its file");
+        }
     }
 }
