@@ -8,6 +8,10 @@
 //!   and the rule's and the date's activities, run, answer through the package's modules.
 //! - `--check` says what is stale, missing or left over, and writing again puts it right.
 //! - Every file begins with the head of DESIGN 9.2, naming the project's file it is made from.
+//! - An amount of money or of a quantity is the package's one type of its unit (`units`), in the
+//!   rules' modules and the books' clients alike: code written by hand that gives a book what a rule
+//!   returns, with no workflow between them, is held to the book's unit by the type checker, and
+//!   runs (`tests/projects/marketplace`, its checkout in `service/`).
 //!
 //! The project is `tests/projects/stockroom` (English): a rule of rulec's, a dates file and a
 //! calendar of koyomi's, a book of chobo's, and a flow of dandori's that uses all three. The
@@ -104,6 +108,13 @@ fn tsc() -> Option<(PathBuf, Vec<PathBuf>)> {
 /// when a task needs them (the AWS SDK's clients, the agents' SDKs) are declared as modules of any
 /// type, as dandori's own test of its TypeScript does.
 fn type_check_typescript(dir: &Path, tsc: &Path, modules: &[PathBuf]) {
+    let out = tsc_in(dir, tsc, modules);
+    assert!(out.status.success(), "{}: tsc --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+}
+
+/// `tsc --strict` on the TypeScript under `dir`, as [`type_check_typescript`] runs it, in `dir`: what
+/// it answers, the files it names by their paths from `dir`.
+fn tsc_in(dir: &Path, tsc: &Path, modules: &[PathBuf]) -> std::process::Output {
     let nm = dir.join("node_modules");
     std::fs::create_dir_all(&nm).unwrap();
     for m in modules {
@@ -120,8 +131,7 @@ fn type_check_typescript(dir: &Path, tsc: &Path, modules: &[PathBuf]) {
         "exclude": ["node_modules"]
     });
     std::fs::write(dir.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
-    let out = Command::new(tsc).arg("-p").arg(dir.join("tsconfig.json")).output().unwrap();
-    assert!(out.status.success(), "{}: tsc --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    Command::new(tsc).arg("-p").arg("tsconfig.json").current_dir(dir).output().unwrap()
 }
 
 /// mypy (koyomi's, or one on the PATH), the Python whose packages it reads (dandori's runner's, with
@@ -140,6 +150,13 @@ fn mypy() -> Option<(PathBuf, PathBuf, PathBuf)> {
 /// packages `extra` names (tigerbeetle from chobo's runner, cedarpy from sekisho's) are read beside
 /// it, and followed without their own errors said, as an installed package is.
 fn type_check_python(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf]) {
+    let out = mypy_in(dir, mypy, python, extra_packages, &["-p", "generated"], &[]);
+    assert!(out.status.success(), "{}: mypy --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+}
+
+/// `mypy --strict` in `dir` on `what`, as [`type_check_python`] runs it, with `path` on its path
+/// beside the installed packages: what it answers.
+fn mypy_in(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[PathBuf], what: &[&str], path: &[PathBuf]) -> std::process::Output {
     let extra = dir.join("extra");
     std::fs::create_dir_all(&extra).unwrap();
     let mut ini = String::from("[mypy]\n");
@@ -149,17 +166,17 @@ fn type_check_python(dir: &Path, mypy: &Path, python: &Path, extra_packages: &[P
         ini.push_str(&format!("\n[mypy-{name}.*]\nfollow_imports = silent\n"));
     }
     std::fs::write(dir.join("mypy.ini"), ini).unwrap();
-    let out = Command::new(mypy)
+    let mypypath = std::env::join_paths(path.iter().chain([&extra])).unwrap();
+    Command::new(mypy)
         .args(["--strict", "--config-file", "mypy.ini", "--no-incremental", "--cache-dir"])
         .arg(dir.join(".mypy_cache"))
         .arg("--python-executable")
         .arg(python)
-        .args(["-p", "generated"])
-        .env("MYPYPATH", &extra)
+        .args(what)
+        .env("MYPYPATH", mypypath)
         .current_dir(dir)
         .output()
-        .unwrap();
-    assert!(out.status.success(), "{}: mypy --strict finds fault with the package:\n{}{}", dir.display(), String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        .unwrap()
 }
 
 /// cedarpy, from sekisho's runner of Python (tools/runner-py), which the Python of a gate imports.
@@ -352,6 +369,374 @@ fn a_file_of_enums_is_one_module_the_rules_of_the_package_import() {
         let gomod = ("module gocheck\n\ngo 1.24\n".to_string(), String::new());
         type_check_go(&t.path().join("go-catalog"), &out.join("go"), &gomod);
         println!("go vet and gofmt pass the Go of the catalog");
+    }
+}
+
+// ── the units ────────────────────────────────────────────────────────────────────────────────────
+
+/// The marketplace (English): a rule that splits a sale into the marketplace's fee and the shop's
+/// part, in cents (`rules/sale_split.rule`), the book that records the sale (chobo's example), and a
+/// checkout written by hand in each language on the package (`service/`), with no workflow between
+/// the rule and the book.
+const MARKETPLACE: &str = "tests/projects/marketplace";
+
+/// The marketplace at `app`, laid out as its checkout is written against: the package's TypeScript
+/// and Python under `generated/` (`--out generated`), its Go put at `gen/` in the module
+/// `marketplace` (`--module marketplace/gen`), with the books kept where `books` says. With
+/// `dollars`, the rule counts whole dollars (`money[USD]`) where the book counts cents.
+fn marketplace(app: &Path, books: &str, dollars: bool) {
+    ritsu_testkit::tmp::copy_dir(&here().join(MARKETPLACE), app);
+    if dollars {
+        let rule = app.join("rules/sale_split.rule");
+        std::fs::write(&rule, read(&rule).replace("USDc", "USD")).unwrap();
+    }
+    let (code, _, err) = ritsu_in(app, &["gen", "--root", ".", "--out", "generated", "--module", "marketplace/gen", "--books", books]);
+    assert_eq!(code, 0, "ritsu gen of the marketplace ({books}):\n{err}");
+    std::fs::rename(app.join("generated/go"), app.join("gen")).unwrap();
+}
+
+/// The module `marketplace` at `app`, requiring what the package's Go imports.
+fn marketplace_module(app: &Path, gomod: &(String, String)) {
+    std::fs::write(app.join("go.mod"), gomod.0.replacen("module gocheck", "module marketplace", 1)).unwrap();
+    std::fs::write(app.join("go.sum"), &gomod.1).unwrap();
+}
+
+fn said(o: &std::process::Output) -> String {
+    format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
+}
+
+/// The amounts of money and of the quantities are the package's one type of their unit (rulec's
+/// DESIGN §15.248): `units` declares it, the rule's module hands it on, and the book's client takes
+/// it. So the checkout, which gives the book's sale the fee and the shop's part the rule returns,
+/// passes tsc --strict, mypy --strict and go vet with the books on PostgreSQL, on TigerBeetle and on
+/// the MySQL family; and when the rule counts whole dollars instead, each of the three stops the
+/// checkout where the dollars meet the book's cents.
+#[test]
+fn the_checkout_hands_the_book_the_rules_amounts_in_their_units_type() {
+    let t = TempDir::new("gen-units");
+    let mut apps = Vec::new();
+    for books in ["postgres", "tigerbeetle", "mysql"] {
+        let app = t.path().join(format!("app-{books}"));
+        marketplace(&app, books, false);
+        apps.push(app);
+    }
+    let app = &apps[0];
+    assert_has(&app.join("generated/typescript/units.ts"), "export type USDc = bigint & { readonly __rulec: \"USDc\" }; // money[USDc]");
+    assert_has(&app.join("generated/typescript/rules/sale_split.ts"), "import type { USDc } from \"../units\";\nexport type { USDc };");
+    assert_has(&app.join("generated/typescript/books/marketplace.ts"), "export type saleArgs = { order: string; shop: string; to_shop: units.USDc; fee: units.USDc };");
+    assert_has(&app.join("generated/typescript/index.ts"), "export * as units from \"./units\";");
+    assert_has(&app.join("generated/python/generated/units.py"), "USDc = NewType(\"USDc\", int)  # money[USDc]");
+    assert_has(&app.join("generated/python/generated/rules/sale_split.py"), "from ..units import USDc as USDc");
+    assert_has(&app.join("generated/python/generated/books/marketplace.py"), "def do(self, *, order: str, shop: str, to_shop: units.USDc, fee: units.USDc) -> Result:");
+    assert_has(&app.join("gen/units/units.go"), "type USDc int64");
+    assert_has(&app.join("gen/rules/salesplit/sale_split.go"), "type USDc = units.USDc");
+    // the runtime of each client reads an amount as an int64
+    for (app, books) in apps.iter().zip(["postgres", "tigerbeetle", "mysql"]) {
+        let book = read(&app.join("gen/books/marketplace/book.go"));
+        assert!(book.contains("\tFee     units.USDc\n") && book.contains("int64(args.Fee)") && !book.contains(", args.Fee"), "{books}:\n{book}");
+    }
+    let dollars = t.path().join("dollars");
+    marketplace(&dollars, "postgres", true);
+    assert_has(&dollars.join("generated/typescript/units.ts"), "export type USD = bigint & { readonly __rulec: \"USD\" }; // money[USD]");
+
+    if ritsu_testkit::need(Need::Node) {
+        match tsc() {
+            Some((tsc, modules)) => {
+                for app in &apps {
+                    type_check_typescript(app, &tsc, &modules);
+                }
+                // what it says is on chobo's site (website/chobo/docs/together.md)
+                let o = tsc_in(&dollars, &tsc, &modules);
+                assert!(!o.status.success(), "tsc --strict passes the checkout of a rule of dollars");
+                golden(here().join("tests/golden/gen/checkout-dollars.tsc.txt"), &said(&o));
+                println!("tsc --strict passes the checkout on three books, and stops it where a rule of dollars meets the book's cents");
+            }
+            None => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) or tigerbeetle-node (crates/chobo/tools/runner) is not installed; the checkout is not type-checked"),
+        }
+    }
+    if ritsu_testkit::need(Need::Python) {
+        match mypy() {
+            Some((mypy, python, tigerbeetle)) => {
+                for app in apps.iter().chain([&dollars]) {
+                    let o = mypy_in(app, &mypy, &python, std::slice::from_ref(&tigerbeetle), &["service/checkout.py"], &[app.join("generated/python")]);
+                    let s = said(&o);
+                    if app == &dollars {
+                        assert!(!o.status.success() && s.contains("service/checkout.py") && s.contains("incompatible type \"USD\"; expected \"USDc\""), "{s}");
+                    } else {
+                        assert!(o.status.success(), "{}: mypy --strict finds fault with the checkout:\n{s}", app.display());
+                    }
+                }
+                println!("mypy --strict passes the checkout on three books, and stops it where a rule of dollars meets the book's cents");
+            }
+            None => ritsu_testkit::skip("mypy, Temporal's Python SDK (crates/dandori/tools/temporal-python) or tigerbeetle (crates/chobo/tools/runner) is not installed; the checkout is not type-checked"),
+        }
+    }
+    if ready(Need::Go, have_go, "go is not installed; the checkout is not vetted") {
+        match go_module() {
+            Some(gomod) => {
+                for app in apps.iter().chain([&dollars]) {
+                    marketplace_module(app, &gomod);
+                    let o = go_in(app).args(["vet", "./..."]).output().unwrap();
+                    let s = said(&o);
+                    if app == &dollars {
+                        assert!(!o.status.success() && s.contains("service/checkout.go") && s.contains("cannot use") && s.contains("units.USDc") && s.contains("salesplit.USD"), "{s}");
+                    } else {
+                        assert!(o.status.success(), "{}: go vet finds fault with the checkout:\n{s}", app.display());
+                        let fmt = Command::new("gofmt").args(["-l", "gen", "service"]).current_dir(app).output().unwrap();
+                        assert!(fmt.status.success() && fmt.stdout.is_empty(), "{}: gofmt would write these otherwise:\n{}", app.display(), said(&fmt));
+                    }
+                }
+                println!("go vet and gofmt pass the checkout on three books, and go vet stops it where a rule of dollars meets the book's cents");
+            }
+            None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the checkout is not vetted"),
+        }
+    }
+}
+
+/// A rule that writes yen as `円`, and one that writes it as `JPY`.
+const PRICE_RULE: &str = "rule price v1\ndescription \"The price of a size, with tax. Written for ritsu's tests\"\n\nenum size = small | large\n\ninputs\n  size : size\n\noutputs\n  price : money[円, incl_tax]  round down(1円)\n\ntable pick\npolicy unique\n| size  | -> price : money[円, incl_tax] |\n| small | 500円                          |\n| large | 800円                          |\n";
+const COUPON_RULE: &str = "rule coupon v1\ndescription \"What a total with tax comes to with the coupon: 100 yen off a total of 600 yen or more. Written for ritsu's tests\"\n\ninputs\n  total : money[JPY, incl_tax]  range >=0JPY <=100000JPY\n\noutputs\n  pay : money[JPY, incl_tax]  round down(1JPY)\n\ndefine less : money[JPY, incl_tax] = total - 100JPY\n\ntable off\npolicy unique\n| total    | -> pay : money[JPY, incl_tax] |\n| >=600JPY | less                          |\n| <600JPY  | total                         |\n";
+
+/// A unit is one type in a package however its rules spell it: the price that one rule returns in
+/// `円` is what the other takes in `JPY`. The `units` module declares `YenInclTax`, and `JPYInclTax`
+/// as another name of it; each rule's module names the type as its rule writes it. Code that hands
+/// one rule's answer to the other passes tsc --strict, mypy --strict and go vet, and runs (800 yen,
+/// 100 off). Each rule's module used to declare a brand of its own, and none of the three took it.
+#[test]
+fn a_unit_is_one_type_across_the_rules_however_they_spell_it() {
+    let t = TempDir::new("gen-spellings");
+    let app = t.path().join("app");
+    std::fs::create_dir_all(app.join("rules")).unwrap();
+    std::fs::write(app.join("rules/price.rule"), PRICE_RULE).unwrap();
+    std::fs::write(app.join("rules/coupon.rule"), COUPON_RULE).unwrap();
+    let (code, _, err) = ritsu_in(&app, &["gen", "--root", ".", "--out", "generated", "--module", "spellings/gen"]);
+    assert_eq!(code, 0, "{err}");
+    std::fs::rename(app.join("generated/go"), app.join("gen")).unwrap();
+    assert_has(&app.join("generated/typescript/units.ts"), "export type YenInclTax = bigint & { readonly __rulec: \"YenInclTax\" }; // money[円, incl_tax]\nexport type JPYInclTax = YenInclTax; // money[JPY, incl_tax], the same unit\n");
+    assert_has(&app.join("generated/python/generated/units.py"), "YenInclTax = NewType(\"YenInclTax\", int)  # money[円, incl_tax]\nJPYInclTax = YenInclTax  # money[JPY, incl_tax], the same unit\n");
+    assert_has(&app.join("gen/units/units.go"), "type JPYInclTax = YenInclTax\n");
+    assert_has(&app.join("generated/typescript/rules/coupon.ts"), "import type { JPYInclTax } from \"../units\";");
+    std::fs::write(app.join("app.ts"), "import { rules } from \"./generated/typescript/index\";\n\nexport const pay = rules.coupon.coupon(rules.price.price(rules.price.Size.LARGE));\n").unwrap();
+    std::fs::write(app.join("app.py"), "from generated.rules import coupon, price\n\nprint(coupon.coupon(price.price(price.Size.LARGE)))\n").unwrap();
+    std::fs::create_dir_all(app.join("app")).unwrap();
+    std::fs::write(
+        app.join("app/main.go"),
+        "package main\n\nimport (\n\t\"fmt\"\n\n\t\"spellings/gen/rules/coupon\"\n\t\"spellings/gen/rules/price\"\n)\n\nfunc main() {\n\tp, err := price.Price(price.Input{Size: price.SizeLarge})\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tpay, err := coupon.Coupon(coupon.Input{Total: p})\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tfmt.Println(pay)\n}\n",
+    )
+    .unwrap();
+    if ritsu_testkit::need(Need::Node) {
+        match tsc() {
+            Some((tsc, modules)) => {
+                type_check_typescript(&app, &tsc, &modules);
+                println!("tsc --strict passes the price of one rule given to the other");
+            }
+            None => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) is not installed; the two rules are not type-checked"),
+        }
+    }
+    if ritsu_testkit::need(Need::Python) {
+        match mypy() {
+            Some((mypy, python, _)) => {
+                let o = mypy_in(&app, &mypy, &python, &[], &["app.py"], &[app.join("generated/python")]);
+                assert!(o.status.success(), "mypy --strict finds fault with the price given to the coupon:\n{}", said(&o));
+                let o = Command::new(&python).arg("app.py").env("PYTHONPATH", app.join("generated/python")).current_dir(&app).output().unwrap();
+                assert!(o.status.success(), "{}", said(&o));
+                assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "700");
+                println!("mypy --strict passes the price of one rule given to the other, and it runs");
+            }
+            None => ritsu_testkit::skip("mypy or Temporal's Python SDK (crates/dandori/tools/temporal-python) is not installed; the two rules are not type-checked"),
+        }
+    }
+    if ready(Need::Go, have_go, "go is not installed; the two rules are not vetted") {
+        std::fs::write(app.join("go.mod"), "module spellings\n\ngo 1.24\n").unwrap();
+        let o = go_in(&app).args(["vet", "./..."]).output().unwrap();
+        assert!(o.status.success(), "go vet finds fault with the price given to the coupon:\n{}", said(&o));
+        let o = go_in(&app).args(["run", "./app"]).output().unwrap();
+        assert!(o.status.success(), "{}", said(&o));
+        assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "700");
+        println!("go vet passes the price of one rule given to the other, and it runs");
+    }
+}
+
+/// What a run of the checkout prints: the first sale's answer, the second's (the same order again),
+/// and the balances after them. A sale of $9.99 on the basic plan is 149 cents of fee and 850 to the
+/// shop.
+fn checkout_ran(lang: &str) -> String {
+    format!("{lang}: done, then done_before; shop-1 850, fees 149")
+}
+
+/// One sale through the TypeScript checkout, compiled by tsc, on the PostgreSQL of the environment.
+const CHECKOUT_TS: &str = r#"// One sale through the checkout, and the same sale again, then the balances.
+const { Client } = require("pg");
+const { books } = require("./dist/generated/typescript/index");
+const { checkout } = require("./dist/service/checkout");
+(async () => {
+  const db = new Client({ host: process.env.PGHOST, port: Number(process.env.PGPORT), user: process.env.PGUSER, database: process.env.PGDATABASE });
+  await db.connect();
+  const book = books.marketplace.postgres(db, { tenant: "typescript" });
+  const r = await checkout(book, "A-1", "shop-1", "basic", 999n);
+  const again = await checkout(book, "A-1", "shop-1", "basic", 999n);
+  const shop = await book.balance.shop_balance({ shop: "shop-1" });
+  const fees = await book.balance.fees();
+  console.log(`typescript: ${r.result}, then ${again.result}; shop-1 ${shop.posted}, fees ${fees.posted}`);
+  await db.end();
+})().catch((e) => { console.error(e); process.exit(1); });
+"#;
+
+/// The same in Python, through psycopg.
+const CHECKOUT_PY: &str = r#""""One sale through the checkout, and the same sale again, then the balances."""
+import os
+import sys
+
+here = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [os.path.join(here, "generated", "python"), os.path.join(here, "service")]
+
+import psycopg  # noqa: E402
+
+from checkout import checkout  # noqa: E402
+from generated import units  # noqa: E402
+from generated.books import marketplace  # noqa: E402
+from generated.rules import sale_split  # noqa: E402
+
+conn = psycopg.connect(host=os.environ["PGHOST"], port=os.environ["PGPORT"], user=os.environ["PGUSER"], dbname=os.environ["PGDATABASE"], autocommit=True)
+book = marketplace.postgres(conn, tenant="python")
+r = checkout(book, "A-1", "shop-1", sale_split.Plan.BASIC, units.USDc(999))
+again = checkout(book, "A-1", "shop-1", sale_split.Plan.BASIC, units.USDc(999))
+shop = book.balance.shop_balance(shop="shop-1")
+fees = book.balance.fees()
+print(f"python: {r.result}, then {again.result}; shop-1 {shop.posted}, fees {fees.posted}")
+conn.close()
+"#;
+
+/// The same in Go, on the book `open` makes (with what it imports for that).
+fn checkout_go(imports: &str, open: &str) -> String {
+    format!(
+        r#"// One sale through the checkout, and the same sale again, then the balances.
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+{imports}
+	"marketplace/gen/books/marketplace"
+	"marketplace/gen/rules/salesplit"
+	"marketplace/service"
+)
+
+func main() {{
+	ctx := context.Background()
+{open}
+	r, err := service.Checkout(ctx, book, "A-1", "shop-1", salesplit.PlanBasic, 999)
+	if err != nil {{
+		panic(err)
+	}}
+	again, err := service.Checkout(ctx, book, "A-1", "shop-1", salesplit.PlanBasic, 999)
+	if err != nil {{
+		panic(err)
+	}}
+	shop, err := book.Balance.Shop_balance(ctx, marketplace.Shop_balanceAccount{{Shop: "shop-1"}})
+	if err != nil {{
+		panic(err)
+	}}
+	fees, err := book.Balance.Fees(ctx)
+	if err != nil {{
+		panic(err)
+	}}
+	fmt.Printf("go: %s, then %s; shop-1 %d, fees %d\n", r.Outcome, again.Outcome, shop.Posted, fees.Posted)
+}}
+"#
+    )
+}
+
+/// `go run` of the checkout's Go at `app`, with `env`: what it prints.
+fn run_checkout_go(app: &Path, gomod: &(String, String), imports: &str, open: &str, env: &[(&str, String)]) -> String {
+    marketplace_module(app, gomod);
+    std::fs::create_dir_all(app.join("cmd/run")).unwrap();
+    std::fs::write(app.join("cmd/run/main.go"), checkout_go(imports, open)).unwrap();
+    let o = go_in(app).args(["run", "./cmd/run"]).envs(env.iter().map(|(k, v)| (*k, v.as_str()))).output().unwrap();
+    assert!(o.status.success(), "{}: the checkout's Go does not run:\n{}", app.display(), said(&o));
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+/// The checkout runs, recording the sale: on a PostgreSQL the test starts, in TypeScript (compiled by
+/// tsc, through pg), in Python (through psycopg) and in Go (through pgx); and in Go on TigerBeetle and
+/// on MySQL too, whose clients read an amount as the int64 its type of the unit is. The fee is the
+/// rule's, the rest is the shop's, and the same order again is done before.
+#[test]
+fn the_checkout_records_the_sale() {
+    let t = TempDir::new("gen-checkout");
+    let go = ready(Need::Go, have_go, "go is not installed; the checkout's Go is not run");
+    let gomod = if go { go_module() } else { None };
+    if go && gomod.is_none() {
+        ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the checkout's Go is not run");
+    }
+    if ready(Need::Postgres, || ritsu_testkit::pg::bin().is_ok(), "PostgreSQL is not here; the checkout is not run on it") {
+        let pg = ritsu_testkit::pg::Postgres::start().unwrap_or_else(|e| panic!("{e}"));
+        let app = t.path().join("app-postgres");
+        marketplace(&app, "postgres", false);
+        let o = pg.psql("postgres").arg("-f").arg(app.join("generated/typescript/books/marketplace.sql")).output().unwrap();
+        assert!(o.status.success(), "the book's schema: {}", said(&o));
+        let env = [("PGHOST", pg.socket.to_string_lossy().to_string()), ("PGPORT", pg.port.to_string()), ("PGUSER", pg.user.clone()), ("PGDATABASE", "postgres".to_string())];
+        let mut ran = Vec::new();
+        let pg_module = workspace().join("crates/chobo/tools/runner/node_modules/pg");
+        if ritsu_testkit::need(Need::Node) {
+            match tsc() {
+                Some((tsc, _)) if pg_module.exists() => {
+                    let tsconfig = serde_json::json!({
+                        "compilerOptions": { "strict": true, "module": "commonjs", "target": "es2022", "outDir": "dist", "rootDir": ".", "skipLibCheck": true, "types": [] },
+                        "include": ["service/**/*.ts", "generated/typescript/**/*.ts"]
+                    });
+                    std::fs::write(app.join("tsconfig.json"), serde_json::to_string_pretty(&tsconfig).unwrap()).unwrap();
+                    let o = Command::new(&tsc).arg("-p").arg(app.join("tsconfig.json")).output().unwrap();
+                    assert!(o.status.success(), "tsc of the checkout: {}", said(&o));
+                    std::fs::create_dir_all(app.join("node_modules")).unwrap();
+                    std::os::unix::fs::symlink(&pg_module, app.join("node_modules/pg")).unwrap();
+                    std::fs::write(app.join("run.js"), CHECKOUT_TS).unwrap();
+                    let o = Command::new("node").arg("run.js").envs(env.iter().map(|(k, v)| (*k, v.as_str()))).current_dir(&app).output().unwrap();
+                    assert!(o.status.success(), "the checkout's TypeScript does not run: {}", said(&o));
+                    assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), checkout_ran("typescript"));
+                    ran.push("TypeScript");
+                }
+                _ => ritsu_testkit::skip("TypeScript (crates/dandori/tools/temporal) or pg (crates/chobo/tools/runner) is not installed; the checkout's TypeScript is not run"),
+            }
+        }
+        let python = workspace().join("crates/chobo/tools/runner/.venv/bin/python");
+        if ready(Need::Python, || python.exists(), "chobo's runner of Python (crates/chobo/tools/runner/.venv) is not installed; the checkout's Python is not run") {
+            std::fs::write(app.join("run.py"), CHECKOUT_PY).unwrap();
+            let o = Command::new(&python).args(["-I", "run.py"]).envs(env.iter().map(|(k, v)| (*k, v.as_str()))).current_dir(&app).output().unwrap();
+            assert!(o.status.success(), "the checkout's Python does not run: {}", said(&o));
+            assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), checkout_ran("python"));
+            ran.push("Python");
+        }
+        if let Some(gomod) = &gomod {
+            let url = format!("host={} port={} user={} dbname=postgres", pg.socket.display(), pg.port, pg.user);
+            let open = "\tconn, err := pgx.Connect(ctx, os.Getenv(\"DATABASE_URL\"))\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer conn.Close(ctx)\n\tbook := marketplace.Postgres(conn, \"go\")";
+            assert_eq!(run_checkout_go(&app, gomod, "\t\"github.com/jackc/pgx/v5\"\n", open, &[("DATABASE_URL", url)]), checkout_ran("go"));
+            ran.push("Go");
+        }
+        println!("the checkout ran on PostgreSQL in {}", ran.join(", "));
+    }
+    let Some(gomod) = gomod else { return };
+    if ready(Need::TigerBeetle, || ritsu_testkit::tigerbeetle::bin().is_ok(), "TigerBeetle is not here; the checkout's Go is not run on it") {
+        let tb = ritsu_testkit::tigerbeetle::TigerBeetle::start().unwrap_or_else(|e| panic!("{e}"));
+        let app = t.path().join("app-tigerbeetle");
+        marketplace(&app, "tigerbeetle", false);
+        let open = "\tclient, err := tb.NewClient(tb.ToUint128(0), []string{os.Getenv(\"TB_ADDRESS\")})\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer client.Close()\n\tbook := marketplace.TigerBeetle(client, \"go\")";
+        assert_eq!(run_checkout_go(&app, &gomod, "\ttb \"github.com/tigerbeetle/tigerbeetle-go\"\n", open, &[("TB_ADDRESS", tb.address.clone())]), checkout_ran("go"));
+        println!("the checkout's Go ran on TigerBeetle");
+    }
+    if ready(Need::MySql, || ritsu_testkit::mysql::bin().is_ok(), "MySQL is not here; the checkout's Go is not run on it") {
+        let my = ritsu_testkit::mysql::MySql::start().unwrap_or_else(|e| panic!("{e}"));
+        let db = my.database("checkout").unwrap_or_else(|e| panic!("{e}"));
+        let app = t.path().join("app-mysql");
+        marketplace(&app, "mysql", false);
+        let o = my.mysql(&db).stdin(std::fs::File::open(app.join("generated/typescript/books/marketplace.sql")).unwrap()).output().unwrap();
+        assert!(o.status.success(), "the book's tables: {}", said(&o));
+        let open = "\tcfg := mysql.NewConfig()\n\tcfg.User, cfg.Net, cfg.Addr, cfg.DBName = os.Getenv(\"MYSQL_USER\"), \"tcp\", os.Getenv(\"MYSQL_ADDR\"), os.Getenv(\"MYSQL_DB\")\n\tconnector, err := mysql.NewConnector(cfg)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdb := sql.OpenDB(connector)\n\tdefer db.Close()\n\tbook := marketplace.MySQL(db, \"go\", false)";
+        let env = [("MYSQL_USER", my.user.clone()), ("MYSQL_ADDR", format!("{}:{}", my.host, my.port)), ("MYSQL_DB", db.clone())];
+        assert_eq!(run_checkout_go(&app, &gomod, "\t\"database/sql\"\n\n\t\"github.com/go-sql-driver/mysql\"\n", open, &env), checkout_ran("go"));
+        println!("the checkout's Go ran on {}", my.label);
     }
 }
 

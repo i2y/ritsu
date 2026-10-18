@@ -1,0 +1,29 @@
+# How the marketplace splits a sale. Its book (books/marketplace.book) records the split and does
+# not compute it; this rule does, and the checkout in service/ hands the book what it returns.
+rule sale_split v1
+description "How a sale of the marketplace is split: the marketplace's fee is a share of what the buyer paid, set by the shop's plan and rounded down to the cent, and the shop gets the rest. In cents, as the marketplace's book counts. Written for ritsu's tests"
+
+enum plan = basic | pro
+
+inputs
+  plan : plan
+  paid : money[USDc]  range >=0USDc <=10000000USDc
+
+outputs
+  fee     : money[USDc]  round down(1USDc)
+  to_shop : money[USDc]  round down(1USDc)
+
+table share
+policy unique
+| plan  | -> rate : rate[step 1%] |
+| basic | 15%                     |
+| pro   | 8%                      |
+
+define fee : money[USDc] = down(paid × rate, 1USDc)
+define to_shop : money[USDc] = paid - fee
+
+examples
+| plan  | paid      | -> fee   | -> to_shop |
+| basic | 10000USDc | 1500USDc | 8500USDc   |
+| pro   | 10000USDc | 800USDc  | 9200USDc   |
+| basic | 999USDc   | 149USDc  | 850USDc    |

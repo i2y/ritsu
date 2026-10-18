@@ -152,8 +152,8 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローとゲートのコードは同じパッケージの規則と期日と帳簿を読む。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
-            "write the rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows and gates read the package's own rules, dates and books; the gates' Cedar goes once into <out>/cedar/"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローとゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
+            "write the rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units); the gates' Cedar goes once into <out>/cedar/"
         ),
         params: vec![(
             "<path>...",

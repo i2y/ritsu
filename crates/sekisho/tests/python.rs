@@ -64,8 +64,8 @@ fn write(p: &Path, text: &str) {
 }
 
 /// The package of one gate, as `ritsu gen` lays it out under `dir/<name>/`: the rules' and the
-/// dates' modules the gate reads (each written by its own language's generator) and the gate's
-/// own, for `authorizer`. None for a gate whose check finds an error.
+/// dates' modules the gate reads (each written by its own language's generator), the types of the
+/// units the rules take amounts in, and the gate's own, for `authorizer`. None for a gate whose check finds an error.
 fn package(gate: &str, dir: &Path, name: &str, authorizer: Authorizer, lang: ritsu_base::text::Lang) -> Option<sekisho::check::Outcome> {
     let suite = common::joined();
     let o = sekisho::check::check_file(gate, &suite, &sekisho::check::Options::default()).unwrap();
@@ -78,11 +78,17 @@ fn package(gate: &str, dir: &Path, name: &str, authorizer: Authorizer, lang: rit
     }
     write(&base.join("py.typed"), "");
     let scope = o.scope.as_ref().unwrap();
+    let mut units = Vec::new();
     for read in scope.rules.values() {
         let src = std::fs::read_to_string(&read.path).unwrap();
         let p = read.path.to_string_lossy().to_string();
-        let (rel, body) = rulec::codegen::package_module(&src, &p, &p, "python").unwrap();
+        let (rel, body, used) = rulec::codegen::package_parts(&src, &p, &p, "python", "").unwrap();
+        units.extend(used);
         write(&base.join("rules").join(rel), &body);
+    }
+    // the types of the units the rules take amounts in, as the package's `units` module
+    if let Some((rel, body)) = rulec::codegen::units_module("python", &units) {
+        write(&base.join(rel), &body);
     }
     let checked = o.walked.as_ref().unwrap();
     let mut loader = koyomi::calendar::Loader::default();

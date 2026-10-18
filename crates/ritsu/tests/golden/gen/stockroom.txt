@@ -18,6 +18,7 @@ typescript:
   package.json: ritsu
   rules/delivery.ts: rulec <- rules/delivery.rule
   rules/index.ts: ritsu
+  units.ts: ritsu
 python:
   generated/__init__.py: ritsu
   generated/books/__init__.py: ritsu
@@ -39,6 +40,7 @@ python:
   generated/py.typed: (empty)
   generated/rules/__init__.py: ritsu
   generated/rules/delivery.py: rulec <- rules/delivery.rule
+  generated/units.py: ritsu
   pyproject.toml: ritsu
 go:
   books/stock.sql: chobo <- books/stock.book
@@ -59,3 +61,4 @@ go:
   flows/order/worker.go: dandori <- orders/order.flow
   flows/order/workflow.go: dandori <- orders/order.flow
   rules/delivery/delivery.go: rulec <- rules/delivery.rule
+  units/units.go: ritsu

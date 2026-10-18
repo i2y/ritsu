@@ -228,6 +228,46 @@ pub fn plan(book: &Book) -> Plan {
     Plan { units, accounts, transfers }
 }
 
+/// A client written into a package of ritsu's (ritsu's DESIGN 9.3, DESIGN 4.3): the amounts of
+/// money and of the quantities its calls take are the package's types of their units, which its
+/// `units` module declares (TypeScript's `units.ts` and Python's `units.py` beside the package's
+/// `books/`, Go's package at `<module>/units`), the same types the package's rules take and return.
+/// An amount of one unit is then not given where the book takes another, by the type checker of the
+/// language the caller writes. A count stays a plain integer.
+#[derive(Clone, Debug, Default)]
+pub struct InPackage {
+    /// The Go import path of the package's directory.
+    pub module: String,
+}
+
+/// The name of the type an amount of `ty` has in a client in a package: its unit's type in the
+/// package's `units` module ([`ritsu_units::Unit::type_name`]). None outside a package, and for a
+/// count.
+pub fn unit_type(book: &Book, ty: &Ty, pkg: Option<&InPackage>) -> Option<String> {
+    match (pkg, ty) {
+        (Some(_), Ty::Amount(u)) => book.units[*u].ty.type_name(),
+        _ => None,
+    }
+}
+
+/// The units the amounts of the book's calls are in, of those a package of ritsu's has a type of
+/// (money and the quantities, as the book writes them), for the package to declare them in its
+/// `units` module.
+pub fn package_units(book: &Book) -> Vec<ritsu_units::Unit> {
+    let mut out: Vec<ritsu_units::Unit> = Vec::new();
+    for t in &book.transfers {
+        for p in &t.params {
+            if let Ty::Amount(u) = p.ty {
+                let unit = &book.units[u].ty;
+                if unit.type_name().is_some() && !out.contains(unit) {
+                    out.push(unit.clone());
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The first line of every file chobo writes for a book.
 /// The head every file chobo writes from a book begins with (ritsu's DESIGN 9.2): ritsu's version,
 /// and the `.book` with the digest of its bytes, as `origin` names it (the file's name, or its path

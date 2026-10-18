@@ -934,6 +934,51 @@ language's spelling under `machine.carried`. The traces hand these values over a
 state: the first call of a trace is passed where each starts, every later one what the language
 itself answered.
 
+## The units of a package of ritsu's
+
+`ritsu gen` writes a project's rules into one package with its dates and the clients of its
+books. There, the brand of an amount of money or of a quantity is not declared by each rule's
+module: the package has one type of each unit, in its `units` module, and each rule's module
+imports it under the name it would have declared, and hands it on. The names a caller writes are
+the ones above. For an amount in cents (`money[USDc]`), the package's `units.ts`, `units.py` and
+`units/units.go` declare
+
+```ts
+export type USDc = bigint & { readonly __rulec: "USDc" }; // money[USDc]
+```
+
+```python
+USDc = NewType("USDc", int)  # money[USDc]
+```
+
+```go
+type USDc int64
+```
+
+and the rule's module, in each, takes it from there:
+
+```ts
+import type { USDc } from "../units";
+export type { USDc };
+```
+
+```python
+from ..units import USDc as USDc
+```
+
+```go
+type USDc = units.USDc // money[USDc]
+```
+
+One rule's amount is then what another rule takes, however the two write the unit. A price one
+rule returns in `money[円, incl_tax]` goes to a rule that takes `money[JPY, incl_tax]`: `units`
+declares `YenInclTax`, from the spelling the table gives the unit first, and `JPYInclTax` as
+another name of it, and each rule's module names the type as its rule writes it. The clients of
+the books in the package take their amounts in the same types, so code written by hand that gives
+a book's call what a rule returns is held to the book's unit by the type checker of its language.
+A rate keeps its brand in the rule's module, as its integer counts the step that rule declares.
+`rulec gen` writes no `units` module, and its modules declare their brands themselves.
+
 ## Which values need which before them
 
 A `prerequisites` block ([reference §6.5](reference.md#65-prerequisites)) is generated as two

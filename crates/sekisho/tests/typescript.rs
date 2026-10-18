@@ -78,10 +78,12 @@ fn gates() -> Vec<String> {
 }
 
 /// The TypeScript of the rules, the dates and the calendars a gate reads, as `ritsu gen` writes
-/// them into a package: `rules/<module>.ts` and `dates/<alias>.ts`.
+/// them into a package: `rules/<module>.ts`, `dates/<alias>.ts`, and `units.ts` with the types of
+/// the units the rules take amounts in.
 fn languages(g: &sekisho::model::Gate, lang: Lang) -> Vec<(String, String)> {
     use sekisho::model::UseKind;
     let mut out = Vec::new();
+    let mut units = Vec::new();
     let rulec_lang = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
     let mut loader = koyomi::calendar::Loader::default();
     for u in &g.uses {
@@ -89,7 +91,8 @@ fn languages(g: &sekisho::model::Gate, lang: Lang) -> Vec<(String, String)> {
         match u.kind {
             UseKind::Rule => {
                 let src = std::fs::read_to_string(&u.file).unwrap();
-                let (rel, body) = rulec::i18n::with(rulec_lang, || rulec::codegen::package_module(&src, &path, &u.path, "typescript")).unwrap();
+                let (rel, body, used) = rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts(&src, &path, &u.path, "typescript", "")).unwrap();
+                units.extend(used);
                 out.push((format!("rules/{rel}"), body));
             }
             UseKind::Dates | UseKind::Calendar => {
@@ -101,6 +104,7 @@ fn languages(g: &sekisho::model::Gate, lang: Lang) -> Vec<(String, String)> {
             _ => {}
         }
     }
+    out.extend(rulec::codegen::units_module("typescript", &units));
     out
 }
 

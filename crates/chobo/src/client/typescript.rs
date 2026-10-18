@@ -28,31 +28,44 @@ fn reason_type(book: &Book) -> String {
     )
 }
 
-fn field_list(t: &TransferKind, which: &[usize]) -> String {
+/// The fields of the parameters `which` of `t`: an amount is a `bigint`, or in a package of ritsu's
+/// the package's type of its unit (`units.USDc`).
+fn field_list(book: &Book, t: &TransferKind, which: &[usize], pkg: Option<&InPackage>) -> String {
     let fs: Vec<String> = which
         .iter()
         .map(|i| {
             let p = &t.params[*i];
-            format!("{}: {}", p.name, if matches!(p.ty, Ty::Amount(_)) { "bigint" } else { "string" })
+            let ty = match (unit_type(book, &p.ty, pkg), p.ty) {
+                (Some(u), _) => format!("units.{u}"),
+                (None, Ty::Amount(_)) => "bigint".into(),
+                (None, Ty::Str) => "string".into(),
+            };
+            format!("{}: {ty}", p.name)
         })
         .collect();
     format!("{{ {} }}", fs.join("; "))
 }
 
+/// The import of the package's types of the units (ritsu's DESIGN 9.3), for a client in a package
+/// whose calls take an amount of money or of a quantity.
+fn units_import(book: &Book, pkg: Option<&InPackage>) -> &'static str {
+    if pkg.is_some() && !package_units(book).is_empty() { "import type * as units from \"../units\";\n" } else { "" }
+}
+
 /// The types of the arguments: `入荷Args`, `引当Key`, `引当Amounts`, `在庫Account`.
-fn arg_types(book: &Book) -> String {
+fn arg_types(book: &Book, pkg: Option<&InPackage>) -> String {
     let mut o = String::new();
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
         let moves: Vec<String> = t.moves.iter().map(|m| format!("{} from {} to {}", book.amount_text(t, m), book.ref_text(t, &m.from), book.ref_text(t, &m.to))).collect();
         let keys: Vec<&str> = t.key.iter().map(|i| t.params[*i].name.as_str()).collect();
         o.push_str(&format!("/** {}: {}; once per {}. */\n", t.name, moves.join(", then "), keys.join(", ")));
-        o.push_str(&format!("export type {}Args = {};\n", t.name, field_list(t, &all)));
+        o.push_str(&format!("export type {}Args = {};\n", t.name, field_list(book, t, &all, pkg)));
         if t.is_pending() {
-            o.push_str(&format!("export type {}Key = {};\n", t.name, field_list(t, &postgres::key_params(t))));
+            o.push_str(&format!("export type {}Key = {};\n", t.name, field_list(book, t, &postgres::key_params(t), pkg)));
             let ap = t.amount_params();
             if !ap.is_empty() {
-                o.push_str(&format!("export type {}Amounts = {};\n", t.name, field_list(t, &ap)));
+                o.push_str(&format!("export type {}Amounts = {};\n", t.name, field_list(book, t, &ap, pkg)));
             }
         }
     }
@@ -169,14 +182,15 @@ fn split(runtime: &str) -> (&str, &str) {
     runtime.split_once("//@@BOOK@@\n").expect("the runtime has its //@@BOOK@@ line")
 }
 
-pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
+pub fn tigerbeetle(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(TB_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str("// It calls the book on TigerBeetle through tigerbeetle-node 0.17.9.\n\n");
     o.push_str(head);
+    o.push_str(units_import(book, pkg));
     o.push('\n');
     o.push_str(&reason_type(book));
-    o.push_str(&arg_types(book));
+    o.push_str(&arg_types(book, pkg));
     o.push_str(&book_interface(book, "TigerBeetle", false));
     let names = members(book);
     o.push_str(&format!(
@@ -210,7 +224,7 @@ pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     o
 }
 
-pub fn postgres(book: &Book, origin: &Origin) -> String {
+pub fn postgres(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(PG_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str(&format!(
@@ -218,8 +232,13 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
         postgres::ident(&book.name)
     ));
     o.push_str(head);
+    let units = units_import(book, pkg);
+    if !units.is_empty() {
+        o.push_str(units);
+        o.push('\n');
+    }
     o.push_str(&reason_type(book));
-    o.push_str(&arg_types(book));
+    o.push_str(&arg_types(book, pkg));
     o.push_str(&book_interface(book, "PostgreSQL", true));
     let names = members(book);
     o.push_str(
@@ -353,7 +372,7 @@ fn mysql_literal(book: &Book) -> String {
     o
 }
 
-pub fn mysql(book: &Book, origin: &Origin) -> String {
+pub fn mysql(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(MY_RUNTIME);
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str(&format!(
@@ -361,9 +380,10 @@ pub fn mysql(book: &Book, origin: &Origin) -> String {
         my::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect::<Vec<_>>().join(", ")
     ));
     o.push_str(head);
+    o.push_str(units_import(book, pkg));
     o.push('\n');
     o.push_str(&reason_type(book));
-    o.push_str(&arg_types(book));
+    o.push_str(&arg_types(book, pkg));
     o.push_str(&book_interface(book, "MySQL, TiDB or Vitess", true));
     let names = members(book);
     o.push_str(

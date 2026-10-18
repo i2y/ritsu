@@ -26,7 +26,12 @@ uses, for a tool that calls them without reading the code ([formats.md](formats.
 of ritsu's languages, `ritsu gen --books postgres`, `--books tigerbeetle` or `--books mysql`
 (PostgreSQL unless it is given) writes the clients of every book into the project's package for
 each language, under `books/`, and the SQL of PostgreSQL or of the MySQL family beside them as
-`books/<book>.sql`.
+`books/<book>.sql`. There, an amount of money or of a quantity that an operation takes is the
+package's type of its unit, the one the package's rules take and return: the `sale` of a book in
+`USD scale 2` takes `to_shop: units.USDc` in TypeScript and Python and `To_shop units.USDc` in Go,
+so code written by hand that gives the book what a rule returns is held to the book's unit by the
+type checker. An amount of a count (`pcs`, `seats`) stays a plain integer, as it does everywhere
+`chobo build` writes it, and so does a balance.
 
 ## PostgreSQL
 

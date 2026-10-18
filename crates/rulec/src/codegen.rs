@@ -715,6 +715,35 @@ impl<'a> Gen<'a> {
             .collect()
     }
 
+    /// The brands of the module (§8.2), by name, with the type each one brands: those the module
+    /// declares, and those it takes from the `units` module of a package of ritsu's (§15.248).
+    /// From `rulec gen`, the module declares all of them. In a package, the brands of money and
+    /// of the quantities are the package's, one type of each unit that every rule and every book
+    /// of the package names, so that what one rule returns is what another takes; a rate keeps
+    /// its brand in the module, as its integer counts the step this rule declares. A number gets
+    /// no brand: it is a plain integer on purpose, and branding it would shadow the language's
+    /// own integer. An optional amount is the same brand when it is there: the runner builds it,
+    /// and a rule whose only amount is optional declared none (§15.201).
+    fn brands(&self) -> (BTreeMap<String, Ty>, BTreeMap<String, Ty>) {
+        let (mut own, mut units) = (BTreeMap::new(), BTreeMap::new());
+        for v in self.branded() {
+            let ty = self.ty_of(v).present().clone();
+            let into = match ty {
+                Ty::Money { .. } | Ty::Qty { .. } if self.package.is_some() => &mut units,
+                Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate => &mut own,
+                _ => continue,
+            };
+            into.insert(brand_of(&ty), ty);
+        }
+        (own, units)
+    }
+
+    /// The units whose types the module of a package of ritsu's takes from the package's `units`
+    /// module (§15.248), as the rule writes them, for the package to declare them there.
+    pub fn package_units(&self) -> Vec<ritsu_units::Unit> {
+        self.brands().1.values().filter_map(|ty| ty.unit(None)).collect()
+    }
+
     /// The identifier a declared name gets in the generated code. §1.3: the public face
     /// always uses its ASCII alias, and an internal name uses one when the author wrote it
     /// and the name itself when they did not. Every lookup in this file keys on the declared
@@ -1583,30 +1612,26 @@ impl<'a> Gen<'a> {
         // `enum` only where the module declares an enum of its own: a rule whose enums all come
         // from an `enums` file imports them from its module instead (§15.212).
         let classes = self.own_enums().iter().any(|(jp, _)| self.c.enums.contains_key(jp));
+        // Brands. They work with mypy and pyright and cost nothing at runtime. In a package of
+        // ritsu's, those of money and of the quantities are the package's, imported (§15.248).
+        let (own, units) = self.brands();
         o.push_str(&format!(
-            "from __future__ import annotations\n\n{}from typing import {}NamedTuple, NewType{}\n\n",
+            "from __future__ import annotations\n\n{}from typing import {}NamedTuple{}{}\n\n",
             if classes { "import enum\n" } else { "" },
             if self.projects() { "Any, " } else { "" },
+            if own.is_empty() && self.package.is_some() { "" } else { ", NewType" },
             // The readers take the object as the dict it is checked to be (§15.234).
             if self.projects() { ", cast" } else { "" }
         ));
-
-        // Brands. They work with mypy and pyright and cost nothing at runtime.
-        let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.branded() {
-            // An optional amount is the same brand when it is there: the runner builds it, and
-            // a rule whose only amount is optional declared none (§15.201).
-            let ty = self.ty_of(v).present().clone();
-            // A number gets no brand: it is a plain integer on purpose, and branding it
-            // would shadow the language's own `int`.
-            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
-                brands.insert(brand_of(&ty), format!("{ty}"));
-            }
+        for (b, ty) in &own {
+            o.push_str(&format!("{b} = NewType(\"{b}\", int)  # {ty}\n"));
         }
-        for (b, doc) in &brands {
-            o.push_str(&format!("{b} = NewType(\"{b}\", int)  # {doc}\n"));
+        if !units.is_empty() {
+            // handed on as the module's own (`X as X`), as the types of an `enums` file are
+            let names: Vec<String> = units.keys().map(|b| format!("{b} as {b}")).collect();
+            o.push_str(&format!("from ..units import {}\n", names.join(", ")));
         }
-        if !brands.is_empty() {
+        if !own.is_empty() || !units.is_empty() {
             o.push('\n');
         }
 
@@ -3120,22 +3145,17 @@ impl<'a> Gen<'a> {
         let mut o = self.header("//");
         o.push_str(&format!("\npackage {pkg}\n\n{IMPORT_MARK}"));
 
-        let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.branded() {
-            // An optional amount is the same brand when it is there: the runner builds it, and
-            // a rule whose only amount is optional declared none (§15.201).
-            let ty = self.ty_of(v).present().clone();
-            // A number gets no brand: it is a plain integer on purpose, and branding it
-            // would shadow the language's own `int`.
-            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
-                brands.insert(brand_of(&ty), format!("{ty}"));
-            }
+        // A brand is a defined type (not an alias): the compiler rejects YenInclTax + YenExclTax.
+        // In a package of ritsu's, those of money and of the quantities are the package's defined
+        // types, under the same names (§15.248).
+        let (own, units) = self.brands();
+        for (b, ty) in &own {
+            o.push_str(&format!("type {b} int64{CELL}// {ty}\n"));
         }
-        for (b, doc) in &brands {
-            // A defined type (not an alias): the compiler rejects YenInclTax + YenExclTax.
-            o.push_str(&format!("type {b} int64{CELL}// {doc}\n"));
+        for (b, ty) in &units {
+            o.push_str(&format!("type {b} = units.{b}{CELL}// {ty}\n"));
         }
-        if !brands.is_empty() {
+        if !own.is_empty() || !units.is_empty() {
             o.push('\n');
         }
 
@@ -3214,6 +3234,13 @@ impl<'a> Gen<'a> {
             paths.push("strings".to_string());
         }
         paths.extend(self.foreign_enums().into_iter().map(|(m, _)| self.go_owner_path(&m)));
+        // The package's types of the units (§15.248).
+        if !units.is_empty() {
+            paths.push(match &self.package {
+                Some(m) if !m.is_empty() => format!("{m}/units"),
+                _ => "units".to_string(),
+            });
+        }
         // gofmt keeps the specs of one block in order
         paths.sort();
         let imports = if paths.len() == 1 {
@@ -5362,20 +5389,18 @@ impl<'a> Gen<'a> {
         o.push('\n');
 
         // Brands. A branded bigint is still a bigint at runtime; the brand exists only for
-        // the type checker, exactly as `NewType` does on the Python side.
-        let mut brands: BTreeMap<String, String> = BTreeMap::new();
-        for v in self.branded() {
-            // An optional amount is the same brand when it is there: the runner builds it, and
-            // a rule whose only amount is optional declared none (§15.201).
-            let ty = self.ty_of(v).present().clone();
-            if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
-                brands.insert(brand_of(&ty), format!("{ty}"));
-            }
+        // the type checker, exactly as `NewType` does on the Python side. In a package of
+        // ritsu's, those of money and of the quantities are the package's, imported and handed on
+        // under the same names (§15.248).
+        let (own, units) = self.brands();
+        for (b, ty) in &own {
+            o.push_str(&format!("export type {b} = bigint & {{ readonly __rulec: \"{b}\" }}; // {ty}\n"));
         }
-        for (b, doc) in &brands {
-            o.push_str(&format!("export type {b} = bigint & {{ readonly __rulec: \"{b}\" }}; // {doc}\n"));
+        if !units.is_empty() {
+            let names: Vec<&str> = units.keys().map(String::as_str).collect();
+            o.push_str(&format!("import type {{ {0} }} from \"../units\";\nexport type {{ {0} }};\n", names.join(", ")));
         }
-        if !brands.is_empty() {
+        if !own.is_empty() || !units.is_empty() {
             o.push('\n');
         }
 
@@ -14392,6 +14417,13 @@ pub fn package_module(src: &str, path: &str, shown: &str, target: &str) -> Resul
 /// the types of an `enums` file from that file's module beside it in the package's `rules/`, and
 /// an `enums` file is that module (§15.212).
 pub fn package_module_in(src: &str, path: &str, shown: &str, target: &str, go_module: &str) -> Result<(String, String), String> {
+    package_parts(src, path, shown, target, go_module).map(|(rel, body, _)| (rel, body))
+}
+
+/// [`package_module_in`], with the units whose types the module takes from the package's `units`
+/// module (§15.248), for the package to declare them there: money and the quantities, as the rule
+/// writes them. An `enums` file takes none.
+pub fn package_parts(src: &str, path: &str, shown: &str, target: &str, go_module: &str) -> Result<(String, String, Vec<ritsu_units::Unit>), String> {
     let rep = crate::report(src, path);
     if crate::has_error(&rep.diags) {
         return Err(tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"));
@@ -14399,14 +14431,81 @@ pub fn package_module_in(src: &str, path: &str, shown: &str, target: &str, go_mo
     let (f, c) = crate::prepare(src, path).map_err(|_| tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"))?;
     let g = Gen::new(&f, &c, src, path).shown(shown).in_package(go_module);
     if f.kind == FileKind::Enums {
-        return g.enums_module_for(target).ok_or_else(|| format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", ")));
+        let (rel, body) = g.enums_module_for(target).ok_or_else(|| format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", ")))?;
+        return Ok((rel, body, Vec::new()));
     }
     let alias = f.name.ascii.clone().unwrap_or_else(|| f.name.text.clone());
-    Ok(match target {
+    let (rel, body) = match target {
         "typescript" => (format!("{alias}.ts"), g.typescript()),
         "python" => (format!("{alias}.py"), g.python()),
         "go" => (format!("{}/{alias}.go", crate::backend::go_package(&alias)), g.go()),
         _ => return Err(format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", "))),
+    };
+    Ok((rel, body, g.package_units()))
+}
+
+/// The `units` module of a package of ritsu's (§15.248, ritsu's DESIGN 9.3), at its path from the
+/// package's directory: one brand of each unit its rules and its books take amounts in, as §8.2
+/// brands an amount (a branded bigint, `NewType`, a defined int64 type). The modules of the rules
+/// and the clients of the books name these, so that the type checker keeps an amount of one unit
+/// from where another is taken: a rule's output given to a book's call, or to another rule. A unit's
+/// brand is named by the spelling the table gives the unit first (`円` for `JPY`, `cm3` for `mL`); a
+/// spelling the package also writes it in is an alias of that brand, the same type under the name
+/// its files give it. None when nothing in the package takes such an amount, or for a language a
+/// package is not written in.
+pub fn units_module(target: &str, units: &[ritsu_units::Unit]) -> Option<(String, String)> {
+    // each brand by its name: the unit as the table spells it first, and its other names
+    let mut brands: BTreeMap<String, (String, BTreeMap<String, String>)> = BTreeMap::new();
+    for u in units {
+        let first = u.first_spelling();
+        let (Some(name), Some(base)) = (u.type_name(), first.type_name()) else { continue };
+        let entry = brands.entry(base.clone()).or_insert_with(|| (first.to_string(), BTreeMap::new()));
+        if name != base {
+            entry.1.insert(name, u.to_string());
+        }
+    }
+    if brands.is_empty() {
+        return None;
+    }
+    use ritsu_emit::header::{Comment, generated};
+    let head = |c: Comment| c.line(&generated("ritsu"));
+    let what = "The types of the units the package's rules and books take amounts in, one type of each unit (ritsu gen). The modules of the rules and the clients of the books name these types, so that the type checker keeps an amount of one unit from where another unit is taken.";
+    Some(match target {
+        "typescript" => {
+            let mut o = format!("{}// {what}\n\n", head(Comment::Slashes));
+            for (base, (shown, others)) in &brands {
+                o.push_str(&format!("export type {base} = bigint & {{ readonly __rulec: \"{base}\" }}; // {shown}\n"));
+                for (name, written) in others {
+                    o.push_str(&format!("export type {name} = {base}; // {written}, the same unit\n"));
+                }
+            }
+            ("units.ts".to_string(), o)
+        }
+        "python" => {
+            let mut o = format!("{}\"\"\"{what}\"\"\"\n\nfrom __future__ import annotations\n\nfrom typing import NewType\n\n", head(Comment::Hash));
+            for (base, (shown, others)) in &brands {
+                o.push_str(&format!("{base} = NewType(\"{base}\", int)  # {shown}\n"));
+                for (name, written) in others {
+                    o.push_str(&format!("{name} = {base}  # {written}, the same unit\n"));
+                }
+            }
+            ("units.py".to_string(), o)
+        }
+        "go" => {
+            let mut o = format!(
+                "{}\n// Package units is the types of the units the package's rules and books take amounts in, one type of each\n// unit (ritsu gen). The packages of the rules and the clients of the books name these types, so that the\n// compiler keeps an amount of one unit from where another unit is taken.\npackage units\n",
+                head(Comment::Slashes)
+            );
+            for (base, (shown, others)) in &brands {
+                // a defined type, as a rule's own brand is: the compiler rejects YenInclTax + YenExclTax
+                o.push_str(&format!("\n// {base} is an amount of {shown}.\ntype {base} int64\n"));
+                for (name, written) in others {
+                    o.push_str(&format!("\n// {name} is an amount of {written}, the same unit as {base}.\ntype {name} = {base}\n"));
+                }
+            }
+            ("units/units.go".to_string(), o)
+        }
+        _ => return None,
     })
 }
 

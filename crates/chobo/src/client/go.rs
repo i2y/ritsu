@@ -67,21 +67,26 @@ fn moves_text(book: &Book, t: &TransferKind) -> String {
     format!("{}; once per {}", moves.join(", then "), keys.join(", "))
 }
 
-fn arg_types(book: &Book) -> String {
+fn arg_types(book: &Book, in_pkg: Option<&InPackage>) -> String {
     let mut o = String::new();
     for t in &book.transfers {
         let g = go_name(&t.name);
-        let ty = |i: &usize| if matches!(t.params[*i].ty, Ty::Amount(_)) { "int64" } else { "string" };
+        // an amount is an int64, or in a package of ritsu's the package's type of its unit
+        let ty = |i: &usize| match (unit_type(book, &t.params[*i].ty, in_pkg), t.params[*i].ty) {
+            (Some(u), _) => format!("units.{u}"),
+            (None, Ty::Amount(_)) => "int64".to_string(),
+            (None, Ty::Str) => "string".to_string(),
+        };
         let all: Vec<usize> = (0..t.params.len()).collect();
-        let rows: Vec<(String, String)> = fields(t, &all).into_iter().zip(all.iter().map(ty)).map(|(n, t)| (n, t.to_string())).collect();
+        let rows: Vec<(String, String)> = fields(t, &all).into_iter().zip(all.iter().map(ty)).collect();
         o.push_str(&struct_type(&format!("are the arguments of {}: {}.", t.name, moves_text(book, t)), &format!("{g}Args"), &rows));
         if t.is_pending() {
             let keys = postgres::key_params(t);
-            let rows: Vec<(String, String)> = fields(t, &keys).into_iter().zip(keys.iter().map(ty)).map(|(n, t)| (n, t.to_string())).collect();
+            let rows: Vec<(String, String)> = fields(t, &keys).into_iter().zip(keys.iter().map(ty)).collect();
             o.push_str(&struct_type(&format!("is the key of a hold of {}.", t.name), &format!("{g}Key"), &rows));
             let ap = t.amount_params();
             if !ap.is_empty() {
-                let rows: Vec<(String, String)> = fields(t, &ap).into_iter().map(|n| (n, "int64".to_string())).collect();
+                let rows: Vec<(String, String)> = fields(t, &ap).into_iter().zip(ap.iter().map(ty)).collect();
                 o.push_str(&struct_type(&format!("are what a post of {} posts, when not all of it.", t.name), &format!("{g}Amounts"), &rows));
             }
         }
@@ -95,9 +100,14 @@ fn arg_types(book: &Book) -> String {
     o
 }
 
-/// `args.X注文` for each parameter of `which`.
-fn field_values(t: &TransferKind, which: &[usize], obj: &str) -> Vec<String> {
-    fields(t, which).into_iter().map(|f| format!("{obj}.{f}")).collect()
+/// `args.X注文` for each parameter of `which`. An amount of a unit's type of a package of ritsu's
+/// goes to the runtime as the int64 it is (`int64(args.Fee)`): the runtime reads amounts as int64.
+fn field_values(book: &Book, t: &TransferKind, which: &[usize], obj: &str, in_pkg: Option<&InPackage>) -> Vec<String> {
+    fields(t, which)
+        .into_iter()
+        .zip(which)
+        .map(|(f, i)| if unit_type(book, &t.params[*i].ty, in_pkg).is_some() { format!("int64({obj}.{f})") } else { format!("{obj}.{f}") })
+        .collect()
 }
 
 fn plan_literal(book: &Book) -> String {
@@ -188,15 +198,20 @@ fn book_struct(book: &Book, backend: &str, runtime: Option<&str>) -> String {
     format!("// Book is the book {} (v{}), called on {backend}.\ntype Book struct {{\n{}}}\n\n", book.name, book.version, struct_fields(&rows))
 }
 
-fn header(book: &Book, origin: &Origin, what: &str, pkg: &str) -> String {
+fn header(book: &Book, origin: &Origin, what: &str, pkg: &str, in_pkg: Option<&InPackage>) -> String {
     let line = super::head(book, origin, Comment::Slashes);
-    format!("{line}\n// Package {pkg} calls the book {} (v{}) {what}\npackage {pkg}\n\nimport \"context\"\n\n", book.name, book.version)
+    // the package's types of the units (ritsu's DESIGN 9.3), when an amount is of one
+    let imports = match in_pkg {
+        Some(p) if !package_units(book).is_empty() => format!("import (\n\t\"context\"\n\n\t\"{}/units\"\n)", p.module),
+        _ => "import \"context\"".to_string(),
+    };
+    format!("{line}\n// Package {pkg} calls the book {} (v{}) {what}\npackage {pkg}\n\n{imports}\n\n", book.name, book.version)
 }
 
-pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
+pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin, in_pkg: Option<&InPackage>) -> Vec<(String, String)> {
     let pkg = package(book, stem);
-    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9.", &pkg);
-    o.push_str(&arg_types(book));
+    let mut o = header(book, origin, "on TigerBeetle, through tigerbeetle-go v0.17.9.", &pkg, in_pkg);
+    o.push_str(&arg_types(book, in_pkg));
     o.push_str(&book_struct(book, "TigerBeetle", None));
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
@@ -208,10 +223,10 @@ pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, Str
         let g = go_name(&t.name);
         let all: Vec<usize> = (0..t.params.len()).collect();
         let kind = q(&t.name);
-        let args = field_values(t, &all, "args").join(", ");
+        let args = field_values(book, t, &all, "args", in_pkg).join(", ");
         let mut methods = Vec::new();
         if t.is_pending() {
-            let key = field_values(t, &t.key, "key").join(", ");
+            let key = field_values(book, t, &t.key, "key", in_pkg).join(", ");
             let ap = t.amount_params();
             methods.push(Method {
                 doc: format!("Hold holds {}.", moves_text(book, t)),
@@ -225,7 +240,7 @@ pub fn tigerbeetle(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, Str
                     body: format!("\treturn c.r.end(ctx, {kind}, \"post\", []string{{{key}}}, nil)\n"),
                 });
             } else {
-                let am = field_values(t, &ap, "amounts").join(", ");
+                let am = field_values(book, t, &ap, "amounts", in_pkg).join(", ");
                 methods.push(Method {
                     doc: "Post posts the hold of key: all of it when amounts is nil.".into(),
                     sig: format!("Post(ctx context.Context, key {g}Key, amounts *{g}Amounts) (Result, error)"),
@@ -279,15 +294,16 @@ fn raw(s: &str) -> String {
     format!("`{s}`")
 }
 
-pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
+pub fn postgres(book: &Book, stem: &str, origin: &Origin, in_pkg: Option<&InPackage>) -> Vec<(String, String)> {
     let pkg = package(book, stem);
     let mut o = header(
         book,
         origin,
         &format!("on PostgreSQL, through the SQL functions of `chobo build --target postgres` (schema {}) and pgx v5.", postgres::ident(&book.name)),
         &pkg,
+        in_pkg,
     );
-    o.push_str(&arg_types(book));
+    o.push_str(&arg_types(book, in_pkg));
     o.push_str(&book_struct(book, "PostgreSQL", Some("pgRuntime")));
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
@@ -304,10 +320,10 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String
         let g = go_name(&t.name);
         let all: Vec<usize> = (0..t.params.len()).collect();
         let keys = postgres::key_params(t);
-        let args = field_values(t, &all, "args").join(", ");
+        let args = field_values(book, t, &all, "args", in_pkg).join(", ");
         let mut methods = Vec::new();
         if t.is_pending() {
-            let key = field_values(t, &keys, "key").join(", ");
+            let key = field_values(book, t, &keys, "key", in_pkg).join(", ");
             let ap = t.amount_params();
             methods.push(Method {
                 doc: format!("Hold holds {}.", moves_text(book, t)),
@@ -321,7 +337,7 @@ pub fn postgres(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String
                     body: format!("\treturn c.r.call(ctx, {}, []any{{c.r.tenant, {key}}})\n", sql(t, "post", 1 + keys.len())),
                 });
             } else {
-                let am = field_values(t, &ap, "amounts");
+                let am = field_values(book, t, &ap, "amounts", in_pkg);
                 let nulls = vec!["nil"; ap.len()].join(", ");
                 let mut body = format!("\targs := []any{{c.r.tenant, {key}, {nulls}}}\n\tif amounts != nil {{\n");
                 for (j, v) in am.iter().enumerate() {
@@ -467,7 +483,7 @@ fn mysql_literal(book: &Book) -> String {
 }
 
 /// The client of the MySQL family (DESIGN 4.5): database/sql with go-sql-driver/mysql.
-pub fn mysql(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> {
+pub fn mysql(book: &Book, stem: &str, origin: &Origin, in_pkg: Option<&InPackage>) -> Vec<(String, String)> {
     let pkg = package(book, stem);
     let tables: Vec<String> = crate::mysql::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect();
     let mut o = header(
@@ -475,8 +491,9 @@ pub fn mysql(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> 
         origin,
         &format!("on MySQL, TiDB or Vitess, through the tables of `chobo build --target mysql` ({}),\n// database/sql and go-sql-driver/mysql.", tables.join(", ")),
         &pkg,
+        in_pkg,
     );
-    o.push_str(&arg_types(book));
+    o.push_str(&arg_types(book, in_pkg));
     o.push_str(&book_struct(book, "MySQL, TiDB or Vitess", Some("myRuntime")));
     let names = members(book);
     let inits: Vec<String> = book.transfers.iter().zip(&names).map(|(t, f)| format!("{f}: {}Calls{{r}}", go_name(&t.name))).collect();
@@ -489,10 +506,10 @@ pub fn mysql(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> 
         let g = go_name(&t.name);
         let all: Vec<usize> = (0..t.params.len()).collect();
         let kind = q(&t.name);
-        let args = field_values(t, &all, "args").join(", ");
+        let args = field_values(book, t, &all, "args", in_pkg).join(", ");
         let mut methods = Vec::new();
         if t.is_pending() {
-            let key = field_values(t, &t.key, "key").join(", ");
+            let key = field_values(book, t, &t.key, "key", in_pkg).join(", ");
             let ap = t.amount_params();
             methods.push(Method {
                 doc: format!("Hold holds {}.", moves_text(book, t)),
@@ -506,7 +523,7 @@ pub fn mysql(book: &Book, stem: &str, origin: &Origin) -> Vec<(String, String)> 
                     body: format!("\treturn c.r.end(ctx, {kind}, \"post\", []string{{{key}}}, nil)\n"),
                 });
             } else {
-                let am = field_values(t, &ap, "amounts").join(", ");
+                let am = field_values(book, t, &ap, "amounts", in_pkg).join(", ");
                 methods.push(Method {
                     doc: "Post posts the hold of key: all of it when amounts is nil.".into(),
                     sig: format!("Post(ctx context.Context, key {g}Key, amounts *{g}Amounts) (Result, error)"),

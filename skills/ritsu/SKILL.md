@@ -183,7 +183,11 @@ cancelled), 1 the flow has errors or the run could not go on (the scenario ran o
 TypeScript, Python and Go (`<out>/<language>/`, `generated` by default): the rules, the dates, the
 clients of the books, the workflows and the code that asks the gates of the project, where a
 workflow reads its rules, dates and books, and a gate's code its rules and dates, from the package
-itself; the gates' Cedar goes once into `<out>/cedar/`. Run it after `ritsu check` passes. `--check`
+itself; the gates' Cedar goes once into `<out>/cedar/`. An amount of money or of a quantity is of
+the package's one type of its unit, declared in `units` and taken and returned in it by the rules
+and the clients of the books alike, so code written by hand that gives a book what a rule returns,
+with no workflow between them, is held to the book's unit by the type checker of the language
+(`USDc` from a rule is what the book's `sale` takes; `USD` is not). Run it after `ritsu check` passes. `--check`
 writes nothing and exits 1 if a package is stale, for CI; `--format json` prints one object instead
 of lines, every file of the packages with what became of it (`written`, `same` or `removed`; under
 `--check`, `same`, `missing`, `stale` or `left`), or why nothing was generated with the diagnostics

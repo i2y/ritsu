@@ -1,0 +1,12 @@
+service/checkout.ts(10,51): error TS2345: Argument of type 'USDc' is not assignable to parameter of type 'USD'.
+  Type 'USDc' is not assignable to type '{ readonly __rulec: "USD"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USDc"' is not assignable to type '"USD"'.
+service/checkout.ts(11,38): error TS2322: Type 'USD' is not assignable to type 'USDc'.
+  Type 'USD' is not assignable to type '{ readonly __rulec: "USDc"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USD"' is not assignable to type '"USDc"'.
+service/checkout.ts(11,62): error TS2322: Type 'USD' is not assignable to type 'USDc'.
+  Type 'USD' is not assignable to type '{ readonly __rulec: "USDc"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USD"' is not assignable to type '"USDc"'.

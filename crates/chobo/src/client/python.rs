@@ -26,16 +26,27 @@ pub fn members(book: &Book) -> Vec<String> {
     unique(book.transfers.iter().map(|t| name(&t.name)).collect(), &["balance", "expire"])
 }
 
-fn sig(t: &TransferKind, which: &[usize], optional: &[usize]) -> String {
-    let mut ps: Vec<String> = which
-        .iter()
-        .map(|i| {
-            let p = &t.params[*i];
-            format!("{}: {}", name(&p.name), if matches!(p.ty, Ty::Amount(_)) { "int" } else { "str" })
-        })
-        .collect();
-    ps.extend(optional.iter().map(|i| format!("{}: Optional[int] = None", name(&t.params[*i].name))));
+/// The type of a parameter: an amount is an `int`, or in a package of ritsu's the package's type
+/// of its unit (`units.USDc`).
+fn param_type(book: &Book, t: &TransferKind, i: usize, pkg: Option<&InPackage>) -> String {
+    let p = &t.params[i];
+    match (unit_type(book, &p.ty, pkg), p.ty) {
+        (Some(u), _) => format!("units.{u}"),
+        (None, Ty::Amount(_)) => "int".into(),
+        (None, Ty::Str) => "str".into(),
+    }
+}
+
+fn sig(book: &Book, t: &TransferKind, which: &[usize], optional: &[usize], pkg: Option<&InPackage>) -> String {
+    let mut ps: Vec<String> = which.iter().map(|i| format!("{}: {}", name(&t.params[*i].name), param_type(book, t, *i, pkg))).collect();
+    ps.extend(optional.iter().map(|i| format!("{}: Optional[{}] = None", name(&t.params[*i].name), param_type(book, t, *i, pkg))));
     if ps.is_empty() { "self".into() } else { format!("self, *, {}", ps.join(", ")) }
+}
+
+/// The import of the package's types of the units (ritsu's DESIGN 9.3), for a client in a package
+/// whose calls take an amount of money or of a quantity.
+fn units_import(book: &Book, pkg: Option<&InPackage>) -> &'static str {
+    if pkg.is_some() && !package_units(book).is_empty() { "from .. import units\n" } else { "" }
 }
 
 fn values(t: &TransferKind, which: &[usize]) -> String {
@@ -150,11 +161,12 @@ fn balances(book: &Book, call: impl Fn(&AccountKind, String) -> String) -> Strin
     o
 }
 
-pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
+pub fn tigerbeetle(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(TB_RUNTIME);
     let mut o = header(book, origin, "It calls the book on TigerBeetle through the tigerbeetle package 0.17.9.");
     o.push_str(head.trim_end());
     o.push('\n');
+    o.push_str(units_import(book, pkg));
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
         let kind = q(&t.name);
@@ -162,14 +174,14 @@ pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
         if t.is_pending() {
             let key = values(t, &t.key);
             let keys = postgres::key_params(t);
-            o.push_str(&format!("\n    def hold({}) -> Result:\n        return self._r.move({kind}, 'hold', [{}])\n", sig(t, &all, &[]), values(t, &all)));
+            o.push_str(&format!("\n    def hold({}) -> Result:\n        return self._r.move({kind}, 'hold', [{}])\n", sig(book, t, &all, &[], pkg), values(t, &all)));
             let ap = t.amount_params();
             let am = if ap.is_empty() { "None".to_string() } else { amounts(t) };
-            o.push_str(&format!("\n    def post({}) -> Result:\n        return self._r.end({kind}, 'post', [{key}], {am})\n", sig(t, &keys, &ap)));
-            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.end({kind}, 'void', [{key}], None)\n", sig(t, &keys, &[])));
-            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({kind}, [{key}])\n", sig(t, &keys, &[])));
+            o.push_str(&format!("\n    def post({}) -> Result:\n        return self._r.end({kind}, 'post', [{key}], {am})\n", sig(book, t, &keys, &ap, pkg)));
+            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.end({kind}, 'void', [{key}], None)\n", sig(book, t, &keys, &[], pkg)));
+            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({kind}, [{key}])\n", sig(book, t, &keys, &[], pkg)));
         } else {
-            o.push_str(&format!("\n    def do({}) -> Result:\n        return self._r.move({kind}, 'do', [{}])\n", sig(t, &all, &[]), values(t, &all)));
+            o.push_str(&format!("\n    def do({}) -> Result:\n        return self._r.move({kind}, 'do', [{}])\n", sig(book, t, &all, &[], pkg), values(t, &all)));
         }
     }
     o.push_str(&balances(book, |a, vals| format!("self._r.balance({}, [{vals}])", q(&a.name))));
@@ -188,7 +200,7 @@ pub fn tigerbeetle(book: &Book, origin: &Origin) -> String {
     o.replace("(self, r: Any) -> None:", "(self, r: _TigerBeetle) -> None:")
 }
 
-pub fn postgres(book: &Book, origin: &Origin) -> String {
+pub fn postgres(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(PG_RUNTIME);
     let mut o = header(
         book,
@@ -197,6 +209,7 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
     );
     o.push_str(head.trim_end());
     o.push('\n');
+    o.push_str(units_import(book, pkg));
     let sql = |t: &TransferKind, op: &str, n: usize| q(&format!("select * from {}({})", postgres::qualified(book, &postgres::op_function(t, op)), vec!["%s"; n].join(", ")));
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
@@ -207,23 +220,23 @@ pub fn postgres(book: &Book, origin: &Origin) -> String {
             let key = values(t, &keys);
             o.push_str(&format!(
                 "\n    def hold({}) -> Result:\n        return self._r.call({}, [self._r.tenant, {}])\n",
-                sig(t, &all, &[]),
+                sig(book, t, &all, &[], pkg),
                 sql(t, "hold", 1 + all.len()),
                 values(t, &all)
             ));
             let am = if ap.is_empty() { String::new() } else { format!(", *{}", amounts(t)) };
             o.push_str(&format!(
                 "\n    def post({}) -> Result:\n        return self._r.call({}, [self._r.tenant, {key}{am}])\n",
-                sig(t, &keys, &ap),
+                sig(book, t, &keys, &ap, pkg),
                 sql(t, "post", 1 + keys.len() + ap.len())
             ));
-            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.call({}, [self._r.tenant, {key}])\n", sig(t, &keys, &[]), sql(t, "void", 1 + keys.len())));
+            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.call({}, [self._r.tenant, {key}])\n", sig(book, t, &keys, &[], pkg), sql(t, "void", 1 + keys.len())));
             let status = format!("select {}({}) as state", postgres::qualified(book, &postgres::op_function(t, "status")), vec!["%s"; 1 + keys.len()].join(", "));
-            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({}, [self._r.tenant, {key}])\n", sig(t, &keys, &[]), q(&status)));
+            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({}, [self._r.tenant, {key}])\n", sig(book, t, &keys, &[], pkg), q(&status)));
         } else {
             o.push_str(&format!(
                 "\n    def do({}) -> Result:\n        return self._r.call({}, [self._r.tenant, {}])\n",
-                sig(t, &all, &[]),
+                sig(book, t, &all, &[], pkg),
                 sql(t, "do", 1 + all.len()),
                 values(t, &all)
             ));
@@ -346,7 +359,7 @@ fn mysql_literal(book: &Book) -> String {
 }
 
 /// The client of the MySQL family (DESIGN 4.5): a DB-API connection of PyMySQL or mysqlclient.
-pub fn mysql(book: &Book, origin: &Origin) -> String {
+pub fn mysql(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     let (head, tail) = split(MY_RUNTIME);
     let tables: Vec<String> = crate::mysql::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect();
     let mut o = header(
@@ -356,6 +369,7 @@ pub fn mysql(book: &Book, origin: &Origin) -> String {
     );
     o.push_str(head.trim_end());
     o.push('\n');
+    o.push_str(units_import(book, pkg));
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
         let kind = q(&t.name);
@@ -363,14 +377,14 @@ pub fn mysql(book: &Book, origin: &Origin) -> String {
         if t.is_pending() {
             let key = values(t, &t.key);
             let keys = postgres::key_params(t);
-            o.push_str(&format!("\n    def hold({}) -> Result:\n        return self._r.move({kind}, 'hold', [{}])\n", sig(t, &all, &[]), values(t, &all)));
+            o.push_str(&format!("\n    def hold({}) -> Result:\n        return self._r.move({kind}, 'hold', [{}])\n", sig(book, t, &all, &[], pkg), values(t, &all)));
             let ap = t.amount_params();
             let am = if ap.is_empty() { "None".to_string() } else { amounts(t) };
-            o.push_str(&format!("\n    def post({}) -> Result:\n        return self._r.end({kind}, 'post', [{key}], {am})\n", sig(t, &keys, &ap)));
-            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.end({kind}, 'void', [{key}], None)\n", sig(t, &keys, &[])));
-            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({kind}, [{key}])\n", sig(t, &keys, &[])));
+            o.push_str(&format!("\n    def post({}) -> Result:\n        return self._r.end({kind}, 'post', [{key}], {am})\n", sig(book, t, &keys, &ap, pkg)));
+            o.push_str(&format!("\n    def void({}) -> Result:\n        return self._r.end({kind}, 'void', [{key}], None)\n", sig(book, t, &keys, &[], pkg)));
+            o.push_str(&format!("\n    def status({}) -> Optional[str]:\n        return self._r.status({kind}, [{key}])\n", sig(book, t, &keys, &[], pkg)));
         } else {
-            o.push_str(&format!("\n    def do({}) -> Result:\n        return self._r.move({kind}, 'do', [{}])\n", sig(t, &all, &[]), values(t, &all)));
+            o.push_str(&format!("\n    def do({}) -> Result:\n        return self._r.move({kind}, 'do', [{}])\n", sig(book, t, &all, &[], pkg), values(t, &all)));
         }
     }
     o.push_str(&balances(book, |a, vals| format!("self._r.balance({}, [{vals}])", q(&a.name))));

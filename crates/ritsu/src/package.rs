@@ -11,6 +11,7 @@
 //!   books/<book>.ts                <name>/books/<book>.py         books/<package>/book.go
 //!   flows/<flow>/…                 <name>/flows/<flow>/…          flows/<package>/…
 //!   authz/<gate>.ts
+//!   units.ts                       <name>/units.py                units/units.go
 //! generated/cedar/<gate>.cedar, .cedarschema, .cedarschema.json, .policies.json
 //! ```
 //!
@@ -21,7 +22,10 @@
 //! package's rules/, dates/ and books/ (dandori's `InPackage`), not from code put beside it: the
 //! imports name the package's modules, and the books the transport takes are typed with the
 //! package's clients, so that the type checker of the target holds the two languages to each
-//! other. Every file begins with the same head (ritsu's version, and the file it is made from by
+//! other. An amount of money or of a quantity that a rule takes or returns, or that a book's call
+//! takes, is of the package's one type of its unit, from `units`, so that the type checker holds
+//! a rule's output given to a book in code written by hand to the book's unit as well. Every file
+//! begins with the same head (ritsu's version, and the file it is made from by
 //! its path from the project's root; DESIGN 9.2). `--check` writes nothing and says what is stale,
 //! as `rulec gen --check` does.
 
@@ -300,6 +304,8 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
     // the rule with every contribution of the project that reaches it, and a contribution has no
     // module of its own.
     let rule_files: Vec<String> = project.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect();
+    // the units the rules and the books take amounts in, for the package's `units` module
+    let mut units = Vec::new();
     for f in project.of(Tool::Rulec) {
         if rulec::link::is_contribution_file(&f.shown) {
             continue;
@@ -307,8 +313,9 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
         let src = read(project, f, lang)?;
         // A file of enums is the module of its types, beside the rules that read them (rulec's
         // §15.212).
-        let (rel, body) = rulec::link::with_set(&rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_module_in(&src, &f.shown, &f.rel, target.key(), &o.module)))
+        let (rel, body, used) = rulec::link::with_set(&rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts(&src, &f.shown, &f.rel, target.key(), &o.module)))
             .map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
+        units.extend(used);
         named.push(("rules", module_of(&rel), f.rel.clone()));
         kinds.entry("rules").or_default().push(module_of(&rel));
         files.push((format!("{base}rules/{rel}"), body, Some(f.rel.clone())));
@@ -343,10 +350,12 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
         };
         let stem = Path::new(&f.rel).file_name().map(|n| n.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
         let origin = Origin::at(&f.rel, src.as_bytes());
+        let in_package = chobo::client::InPackage { module: o.module.clone() };
+        units.extend(chobo::client::package_units(book));
         let mut wanted = vec![o.books.chobo(target)];
         wanted.extend(o.books.sql());
         for ct in wanted {
-            let built = chobo::target::build(book, &stem, ct, &origin).map_err(|ds| {
+            let built = chobo::target::build_in(book, &stem, ct, &origin, Some(&in_package)).map_err(|ds| {
                 let text: String = ds.iter().map(|d| chobo::diag::Show::shown(d, &f.shown, &src, lang)).collect();
                 let json = ds.iter().map(|d| diagnostic("chobo", Some(f.rel.clone()), from_serde(&chobo::diag::Show::json_in(d, &f.shown, &src, lang)))).collect();
                 let (shown, to) = (&f.shown, target.key());
@@ -426,6 +435,10 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
             kinds.entry("authz").or_default().push(module);
             files.push((format!("{base}{rel}"), body, Some(f.rel.clone())));
         }
+    }
+    // the package's one type of each unit they take amounts in (rulec's §15.248)
+    if let Some((rel, body)) = rulec::codegen::units_module(target.key(), &units) {
+        files.push((format!("{base}{rel}"), body, None));
     }
     for list in kinds.values_mut() {
         list.dedup();
@@ -551,6 +564,9 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
                 }
                 out.push((format!("{kind}/index.ts"), sub, None));
             }
+            if files.iter().any(|(p, _, _)| p == "units.ts") {
+                index.push_str("export * as units from \"./units\";\n");
+            }
             out.push(("index.ts".to_string(), index, None));
             // what the TypeScript imports from outside the package
             let mut deps: BTreeMap<String, &str> = BTreeMap::new();
@@ -589,6 +605,9 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             let mut init = format!("{}\"\"\"{what}\"\"\"\n\n", head(Comment::Hash));
             for kind in kinds.keys() {
                 init.push_str(&format!("from . import {kind} as {kind}\n"));
+            }
+            if files.iter().any(|(p, _, _)| *p == format!("{n}/units.py")) {
+                init.push_str("from . import units as units\n");
             }
             out.push((format!("{n}/__init__.py"), init, None));
             out.push((format!("{n}/py.typed"), String::new(), None));
@@ -650,6 +669,9 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             } else {
                 format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module)
             };
+            if files.iter().any(|(p, _, _)| p == "units/units.go") {
+                doc.push_str("//\n// The types of the units its rules and books take amounts in are in units/, one of each unit.\n");
+            }
             if !imported.is_empty() {
                 doc.push_str("//\n// It imports these modules, which the go.mod of the module it is in requires (`go mod tidy`); these are\n// the versions it is tested with:\n//\n");
                 for m in &imported {

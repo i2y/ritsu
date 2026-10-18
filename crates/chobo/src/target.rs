@@ -105,22 +105,29 @@ pub fn check(book: &Book, target: Target) -> Vec<Diag> {
 /// `stem` is the book's file name without `.book` (the Go package falls back on it); `origin` is
 /// the `.book` as the head of each file names it (ritsu's DESIGN 9.2).
 pub fn build(book: &Book, stem: &str, target: Target, origin: &Origin) -> Result<Vec<(String, String)>, Vec<Diag>> {
+    build_in(book, stem, target, origin, None)
+}
+
+/// [`build`], for a client written into a package of ritsu's when `in_pkg` says so (DESIGN 4.3,
+/// ritsu's DESIGN 9.3): its amounts of money and of the quantities are then the package's types of
+/// their units. The SQL is the same either way.
+pub fn build_in(book: &Book, stem: &str, target: Target, origin: &Origin, in_pkg: Option<&client::InPackage>) -> Result<Vec<(String, String)>, Vec<Diag>> {
     let d = check(book, target);
     if !d.is_empty() {
         return Err(d);
     }
     Ok(match target {
         Target::Postgres => vec![(format!("{}.sql", book.name), postgres::build(book, origin)?)],
-        Target::PostgresTypeScript => vec![(format!("{}.ts", book.name), client::typescript::postgres(book, origin))],
-        Target::TigerBeetleTypeScript => vec![(format!("{}.ts", book.name), client::typescript::tigerbeetle(book, origin))],
-        Target::PostgresPython => vec![(format!("{}.py", book.name), client::python::postgres(book, origin))],
-        Target::TigerBeetlePython => vec![(format!("{}.py", book.name), client::python::tigerbeetle(book, origin))],
-        Target::PostgresGo => client::go::postgres(book, stem, origin),
-        Target::TigerBeetleGo => client::go::tigerbeetle(book, stem, origin),
+        Target::PostgresTypeScript => vec![(format!("{}.ts", book.name), client::typescript::postgres(book, origin, in_pkg))],
+        Target::TigerBeetleTypeScript => vec![(format!("{}.ts", book.name), client::typescript::tigerbeetle(book, origin, in_pkg))],
+        Target::PostgresPython => vec![(format!("{}.py", book.name), client::python::postgres(book, origin, in_pkg))],
+        Target::TigerBeetlePython => vec![(format!("{}.py", book.name), client::python::tigerbeetle(book, origin, in_pkg))],
+        Target::PostgresGo => client::go::postgres(book, stem, origin, in_pkg),
+        Target::TigerBeetleGo => client::go::tigerbeetle(book, stem, origin, in_pkg),
         Target::MySql => vec![(format!("{}.sql", book.name), mysql::build(book, origin)?)],
-        Target::MySqlTypeScript => vec![(format!("{}.ts", book.name), client::typescript::mysql(book, origin))],
-        Target::MySqlPython => vec![(format!("{}.py", book.name), client::python::mysql(book, origin))],
-        Target::MySqlGo => client::go::mysql(book, stem, origin),
+        Target::MySqlTypeScript => vec![(format!("{}.ts", book.name), client::typescript::mysql(book, origin, in_pkg))],
+        Target::MySqlPython => vec![(format!("{}.py", book.name), client::python::mysql(book, origin, in_pkg))],
+        Target::MySqlGo => client::go::mysql(book, stem, origin, in_pkg),
     })
 }
 
