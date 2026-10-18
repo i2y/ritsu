@@ -448,6 +448,17 @@ there against the range and the step of the type it wraps, and lets the
 absent value through to its row. See
 [the reference](reference.md#3-types).
 
+## An answer that may be missing
+
+An output may be optional too. A row that answers no value writes `none`,
+and every other row a value of the type the output wraps, read in that
+type: `439USDc` under `money[USDc]?`, rounded as any amount is
+(`round down(1USDc)`; E104 without it). `none` under an output that is
+not optional is E103. A table that reads an optional column is asked
+for a row for `none` wherever a table above can write it or pass on an
+input that has none (E101). The generated code answers no value the way
+its language writes one: `None`, `null`, `nil`, `NULL`.
+
 ## Showing it to people
 
 ```console
@@ -502,8 +513,9 @@ is on the left; the middle holds one card per **decider** — one table, one `de
 `define` — with that table itself inside the card. A reader types a case: the row that
 fired lights up inside the card it belongs to, the card says which row that was, the answer
 appears on the card that produced it, and the line the generated code would write to a log
-is shown as it is. The example buttons fill in the rule's own verified examples. The page is
-drawn light or dark, as the reader's browser is set.
+is shown as it is. The example buttons fill in the rule's own verified examples. An input that
+may have no value takes `none` from the top of its list, or an empty field, and an answer with
+no value reads `none`. The page is drawn light or dark, as the reader's browser is set.
 
 ![The board for the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the result reads fee = 13USD; the cards size, fuel and extra stand in a column, base beside them and fee on the right, with row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz), row 1 of fuel_rate (north_america, 5%) and row 2 of signature_fee lit](images/try-en-dark.png#only-dark)
 ![The board for the parcel tariff. Example 2 (5 lb, 40 in, canada, no signature) is in the form on the left and the result reads fee = 13USD; the cards size, fuel and extra stand in a column, base beside them and fee on the right, with row 2 of size_of (up to 60 in, small), row 2 of base_rate (north_america, small, up to 160 oz), row 1 of fuel_rate (north_america, 5%) and row 2 of signature_fee lit](images/try-en.png#only-light)

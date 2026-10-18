@@ -1,0 +1,19 @@
+rule いつも答える署名(plain_signed_ja) v1
+description "どの小包にも答えのある署名の要否を、メディア便かどうかから決める。それでも、例の一つが none を期待する。optional でない出力の例に書いた `none`"
+
+inputs
+  メディア便(media_only) : bool
+
+outputs
+  署名(signed) : bool
+
+table 署名の表(signed_of)
+policy unique
+| メディア便 | -> 署名 : bool |
+| false      | false          |
+| true       | true           |
+
+examples
+| メディア便 | -> 署名 |
+| false      | none    |
+| true       | true    |

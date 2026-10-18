@@ -1,0 +1,16 @@
+rule 値の無いことの無い料金(plain_price_ja) v1
+description "どの小包にもある料金を、重さとメディア便かどうかから決める。それでも、ある行が none と答える。optional でない出力に書いた `none`"
+
+inputs
+  重さ(weight)           : mass[oz]  range >=1oz <=32oz
+  メディア便(media_only) : bool
+
+outputs
+  料金(price) : money[USDc]  round down(1USDc)
+
+table 料金の表(price_of)
+policy unique
+| メディア便 | 重さ       | -> 料金 : money[USDc] |
+| false      | -          | none                  |
+| true       | <=1lb      | 439USDc               |
+| true       | >1lb <=2lb | 513USDc               |

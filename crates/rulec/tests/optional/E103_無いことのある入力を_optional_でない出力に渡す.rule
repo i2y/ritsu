@@ -1,0 +1,15 @@
+rule 見積もりを渡す料金(handed_price_ja) v1
+description "どの小包にもある料金を、差出人が出す見積もりとメディア便かどうかから決める。見積もりは無いことがあるのに、ある行がそれをそのまま渡す。無いことのある入力を、optional でない出力に渡す"
+
+inputs
+  見積もり(quoted)       : money[USDc]?  range >=0USDc <=10_000USDc
+  メディア便(media_only) : bool
+
+outputs
+  料金(price) : money[USDc]  round down(1USDc)
+
+table 料金の表(price_of)
+policy unique
+| メディア便 | -> 料金 : money[USDc] |
+| false      | 見積もり              |
+| true       | 0USDc                 |

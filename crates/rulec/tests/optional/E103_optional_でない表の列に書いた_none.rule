@@ -1,0 +1,22 @@
+rule いつも決まる種類(plain_kind_ja) v1
+description "小包の便の種類を規則が認めるかどうかを、メディア便かどうかから、上の表がどの小包にも決める種類を通して決める。それでも、上の表のある行が none と答える。optional でない表の列に書いた `none`"
+
+enum 便の種類(service) = メディア(media) | 図書(library)
+
+inputs
+  メディア便(media_only) : bool
+
+outputs
+  認める(approved) : bool
+
+table 種類の表(kind_of)
+policy unique
+| メディア便 | -> 種類 : 便の種類 |
+| false      | none               |
+| true       | メディア           |
+
+table 認めるかの表(approved_of)
+policy unique
+| 種類     | -> 認める : bool |
+| メディア | true             |
+| 図書     | false            |

@@ -1,0 +1,11 @@
+error[E104]: The output declares no rounding
+  --> tests/optional/E104_an_optional_amount_with_no_rounding.rule:9
+  |
+9 |   price : money[USDc]?
+  |           ^^^^^^^^^^^^ no rounding is declared
+  |
+ Output price has type money[USDc]?.
+ Several witnesses were tried and none produced a fraction in this output (either the amount looked up from the table is emitted as is, or the expression already rounds it).
+ Here the rounding declaration does its second job: it is used to check that the literals in the output cells sit on that grid, so a mistyped digit such as 1451USDc is stopped by E106.
+ Hint: add rounding to the output declaration, e.g. round up(10USDc)
+

@@ -471,8 +471,9 @@ impl<'a> Gen<'a> {
     }
 
     /// The comment beside a field: the rule's own name for it, what the number means, and the
-    /// range the generated guard will enforce.
-    fn proto_note(&self, name: &str, ty: &Ty) -> String {
+    /// range the generated guard will enforce. `sent` is a field of the request; an optional one
+    /// of the answer is unset where the rule answers that there is no value (§15.249).
+    fn proto_note(&self, name: &str, ty: &Ty, sent: bool) -> String {
         let mut s = name.to_string();
         let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
         let unit = crate::verify::wire_unit(name, inner, self.c);
@@ -491,8 +492,10 @@ impl<'a> Gen<'a> {
         if matches!(inner, Ty::Date) {
             s.push_str(&tr!("：日付。YYYY-MM-DD", ": a date, YYYY-MM-DD"));
         }
-        if matches!(ty, Ty::Opt(_)) {
+        if matches!(ty, Ty::Opt(_)) && sent {
             s.push_str(&tr!("。無い場合は入れない", ". Leave it unset for none"));
+        } else if matches!(ty, Ty::Opt(_)) {
+            s.push_str(&tr!("。無い場合は入らない", ". Unset when there is none"));
         }
         s
     }
@@ -506,10 +509,11 @@ impl<'a> Gen<'a> {
     /// `presence` is for a field the caller sends. proto3 reads a field left out as its zero,
     /// so a request that named nothing would be decided as one that said 0, false and the
     /// first value; marked `optional`, a field left out is told apart and refused (§15.160).
-    /// What the service answers keeps the plain form: an answer always has every output.
+    /// What the service answers keeps the plain form, but for an optional output, which is
+    /// unset where the rule answers that there is none (§15.249).
     fn proto_field(&self, name: &str, alias: &str, ty: &Ty, n: u32, presence: bool) -> String {
         let label = if presence || matches!(ty, Ty::Opt(_)) { "optional " } else { "" };
-        let note = self.proto_note(name, ty);
+        let note = self.proto_note(name, ty, presence);
         let comment = if note.eq_ignore_ascii_case(alias) { String::new() } else { format!("  // {note}\n") };
         format!("{comment}  {label}{} {alias} = {n};\n", self.proto_ty(name, ty))
     }
@@ -1674,6 +1678,11 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
     let ins: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
     let sep = if crate::i18n::ja() { "・" } else { ", " };
+    // An optional output answers that there is no value as `null` (§15.249).
+    let none = match f.outputs.first() {
+        Some(o) if o.ty.optional => tr!("。値が無いときは None", ". None when it has no value"),
+        _ => String::new(),
+    };
     tr!(
         "# rulec のアダプタのテンプレート（規則 {}）。いま動いているのが Connect のサービスのとき。\n\
          #\n\
@@ -1700,7 +1709,7 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
                  try:\n            \
                      # TODO: d から相手のリクエストを組み立てる\n            \
                      res = client.decide(TheirRequest())\n            \
-                     # TODO: 相手の答えの中で {} に当たるところ\n            \
+                     # TODO: 相手の答えの中で {} に当たるところ{none}\n            \
                      got = 0\n        \
                  except ConnectError as e:\n            \
                      # 答えられないと言った件は一致率の分母から外れる（docs/formats.md）\n            \
@@ -1732,7 +1741,7 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
                  try:\n            \
                      # TODO: build their request from d\n            \
                      res = client.decide(TheirRequest())\n            \
-                     # TODO: where {} is in their answer\n            \
+                     # TODO: where {} is in their answer{none}\n            \
                      got = 0\n        \
                  except ConnectError as e:\n            \
                      # A record they say they cannot answer is left out of the match rate (docs/formats.md)\n            \

@@ -692,11 +692,20 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         // an ordered enum all say what they take — or an integer interval, with the scale the wire
         // counts the number at (§15.233). A cell of numbers that is not a comparison has no interval
         // to say, and the line is not laid on the rows.
+        //
+        // An optional output has the absent value as one more word, `none`, which a `none` cell
+        // writes and a `none` or `not:` cell of the line takes (§15.249).
         let words_of: Option<Vec<String>> = match oty.present() {
             crate::types::Ty::Bool => Some(vec![crate::kw::FALSE.to_string(), crate::kw::TRUE.to_string()]),
             crate::types::Ty::Enum(en) => c.enums.get(en).cloned(),
             _ => None,
-        };
+        }
+        .map(|mut ws| {
+            if matches!(oty, crate::types::Ty::Opt(_)) {
+                ws.insert(0, crate::kw::NONE.to_string());
+            }
+            ws
+        });
         let test = match (&on.cell, words_of) {
             (cell, Some(values)) => {
                 let words: Vec<String> = values
@@ -741,13 +750,19 @@ fn machine_json(f: &RuleFile, c: &Checked, src: &str) -> String {
         for r in &t.rows {
             let lit = match r.outs.get(jo) {
                 Some(OutCell::Lit(l)) => Some(l.clone()),
-                // A value word (an enum's value, `true`) is kept as a name by the parser.
+                // A value word (an enum's value, `true`) is kept as a name by the parser. A word
+                // that is a declared name is that name's value, which the row computes: it was read
+                // as a word of its own, which no `once` cell takes, and the row was said never to
+                // count where it may (§15.249).
                 Some(OutCell::Name(w))
-                    if matches!(oty, crate::types::Ty::Enum(_) | crate::types::Ty::Bool)
+                    if matches!(oty.present(), crate::types::Ty::Enum(_) | crate::types::Ty::Bool)
+                        && !c.syms.contains_key(w)
                         && crate::eval::lit_to_val(&Lit::Word(w.clone()), &oty).is_some() =>
                 {
                     Some(Lit::Word(w.clone()))
                 }
+                // `none`: the absent value an optional output answers with (§15.249).
+                Some(OutCell::Nothing) if matches!(oty, crate::types::Ty::Opt(_)) => Some(Lit::Word(crate::kw::NONE.to_string())),
                 _ => None,
             };
             let (value, counts) = match lit.as_ref() {

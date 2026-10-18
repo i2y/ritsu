@@ -1,0 +1,67 @@
+rule 小包の答え(parcel_answers_ja) v1
+description "小包のラベルに書く料金、区域の番号、便の種類、署名の要否、発送日、注記を、重さ、メディア便かどうか、届け先の区域から決める。メディア便でない小包には、どれも無い。金額、数、列挙、真偽、日付、文字列の optional の出力の例で、どの表も値の横に `none` を書く。rulec のテストのために書いたもので、どの文書の転記でもない。parcel_answers.rule の日本語の版"
+
+enum 便の種類(service) = メディア(media) | 図書(library)
+enum 区域(zone) = 近距離(local) | 全国(national)
+
+inputs
+  重さ(weight)           : mass[oz]  range >=1oz <=32oz
+  メディア便(media_only) : bool
+  届け先(zone)           : 区域
+
+outputs
+  料金(price)           : money[USDc]?  round down(1USDc)
+  区域番号(zone_number) : number?  round down(1)
+  種類(kind)            : 便の種類?
+  署名(signed)          : bool?
+  発送日(ships)         : date?
+  注記(note)            : string?
+
+# メディア便でない小包には料金が無く、メディア便は重さで料金が決まる。
+table 料金の表(price_of)
+policy unique
+| メディア便 | 重さ       | -> 料金 : money[USDc]? |
+| false      | -          | none                   |
+| true       | <=1lb      | 439USDc                |
+| true       | >1lb <=2lb | 513USDc                |
+
+# 値が無いときの行を、この表では最後に、次の表では真ん中に置く。生成したコードは行を書いた順に見る。
+table 区域番号の表(zone_number_of)
+policy unique
+| メディア便 | 届け先 | -> 区域番号 : number? |
+| true       | 近距離 | 1                     |
+| true       | 全国   | 8                     |
+| false      | -      | none                  |
+
+table 種類の表(kind_of)
+policy unique
+| メディア便 | 重さ  | -> 種類 : 便の種類? |
+| true       | <=1lb | メディア            |
+| false      | -     | none                |
+| true       | >1lb  | 図書                |
+
+table 署名の表(signed_of)
+policy unique
+| メディア便 | 届け先 | -> 署名 : bool? |
+| false      | -      | none            |
+| true       | 近距離 | false           |
+| true       | 全国   | true            |
+
+table 発送日の表(ships_of)
+policy unique
+| メディア便 | 届け先 | -> 発送日 : date? |
+| false      | -      | none              |
+| true       | 近距離 | 2026-11-02        |
+| true       | 全国   | 2026-11-09        |
+
+table 注記の表(note_of)
+policy unique
+| メディア便 | -> 注記 : string? |
+| false      | none              |
+| true       | "MEDIA MAIL"      |
+
+examples
+| 重さ | メディア便 | 届け先 | -> 料金 | 区域番号 | 種類     | 署名  | 発送日     | 注記         |
+| 1oz  | false      | 近距離 | none    | none     | none     | none  | none       | none         |
+| 16oz | true       | 近距離 | 439USDc | 1        | メディア | false | 2026-11-02 | "MEDIA MAIL" |
+| 17oz | true       | 全国   | 513USDc | 8        | 図書     | true  | 2026-11-09 | "MEDIA MAIL" |

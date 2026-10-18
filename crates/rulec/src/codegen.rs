@@ -2039,10 +2039,19 @@ impl<'a> Gen<'a> {
     /// Storage scale of an output: a single integer in the declared unit (§7.1), and for a
     /// rate the step it travels at (§15.144).
     fn out_scale(&self, name: &str) -> i128 {
-        match self.ty_of(name) {
+        match self.ty_of(name).present() {
             Ty::Rate => self.c.wire_scale(name),
             _ => 1,
         }
+    }
+
+    /// Whether output `oi` may answer that there is no value: an optional output the tables
+    /// decide, whose column holds the absent value or one of the type it wraps (§15.249). Each
+    /// language takes the column's value through the output's steps — the scale, the rounding,
+    /// the brand — only when it is there.
+    fn opt_out(&self, oi: usize) -> bool {
+        let Some(od) = self.f.outputs.get(oi) else { return false };
+        matches!(self.ty_of(&od.name.text), Ty::Opt(_)) && !(oi == 0 && self.f.result.is_some())
     }
 
     /// The scale an output's value is held at before its rounding: one that the step it
@@ -2638,6 +2647,9 @@ impl<'a> Gen<'a> {
         let mut finals: Vec<String> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            // An optional output is its column's value when there is one, taken through the same
+            // steps, and `None` when there is none (§15.249).
+            let absent = self.opt_out(oi).then(|| local(out_name));
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
@@ -2645,15 +2657,16 @@ impl<'a> Gen<'a> {
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
-            finals.push(match &od.rounding {
+            let body = match &od.rounding {
                 Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
                     // Bind the expression to an intermediate instead of nesting it (the same shape as
                     // the example in §8.2). Criterion 1 demands readability, and deep nesting breaks
-                    // the visual correspondence with the generated code.
-                    if res.scale != os {
+                    // the visual correspondence with the generated code. An optional value is
+                    // brought over only when it is there, so it stays in the one expression.
+                    if res.scale != os && absent.is_none() {
                         let raw = self.temp(&raw_base(oi));
                         o.push_str(&format!(
                             "    {raw} = {}  # {}\n",
@@ -2661,30 +2674,30 @@ impl<'a> Gen<'a> {
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
                         format!("_round_{}({raw}, {}) // {}", mode_fn(m), grid_i, res.scale / os)
+                    } else if res.scale != os {
+                        format!("_round_{}({}, {}) // {}", mode_fn(m), unparen(&res.text), grid_i, res.scale / os)
                     } else {
                         format!("_round_{}({}, {})", mode_fn(m), res.text, grid_i)
                     }
                 }
                 None => res.text.clone(),
+            };
+            // The brand has to be put back on. Arithmetic on a `NewType` yields the supertype —
+            // `YenInclTax * int` is `int` — so the value that comes out of the rounding helper
+            // is a plain `int` and assigning it to a branded output is exactly the mistake the
+            // brand exists to catch. Eight of the thirteen corpus rules did not pass
+            // `mypy --strict` because of this (§15.22). `NewType.__call__` returns its argument.
+            let branded = if matches!(ty.present(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
+                format!("{}({body})", brand_of(ty.present()))
+            } else {
+                body
+            };
+            finals.push(match absent {
+                Some(v) if branded != v => format!("None if {v} is None else {branded}"),
+                _ => branded,
             });
         }
-        // The brand has to be put back on. Arithmetic on a `NewType` yields the supertype —
-        // `YenInclTax * int` is `int` — so the value that comes out of the rounding helper
-        // is a plain `int` and assigning it to a branded output is exactly the mistake the
-        // brand exists to catch. Eight of the thirteen corpus rules did not pass
-        // `mypy --strict` because of this (§15.22). `NewType.__call__` returns its argument.
-        let branded: Vec<String> = outs
-            .iter()
-            .zip(&finals)
-            .map(|(od, f)| {
-                let ty = self.ty_of(&od.name.text);
-                if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) {
-                    format!("{}({f})", brand_of(&ty))
-                } else {
-                    f.clone()
-                }
-            })
-            .collect();
+        let branded = finals;
         let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
         if outs.len() == 1 {
             o.push_str(&format!("    return {}, {trace}{cuts}\n", branded[0]));
@@ -2697,6 +2710,17 @@ impl<'a> Gen<'a> {
 
     fn py_table(&self, t: &Table, local: &dyn Fn(&str) -> String, trace: &str) -> String {
         let mut o = format!("    # {}\n", self.table_head(t));
+        // An optional column is annotated before its rows: the first row to bind it could be
+        // `None` or a value, and mypy takes a local's type from its first binding (§15.249).
+        for oc in &t.outputs {
+            if let Ty::Opt(inner) = self.ty_of(&oc.name.text) {
+                let raw = match inner.as_ref() {
+                    Ty::Enum(_) | Ty::Bool | Ty::Str => self.py_ty(&inner),
+                    _ => "int".to_string(),
+                };
+                o.push_str(&format!("    {}: {raw} | None\n", self.ident(&oc.name.text)));
+            }
+        }
         for (ri, row) in t.rows.iter().enumerate() {
             // §8.1 criterion 1: write out every cell. Conditions already known to be true from
             // earlier branches are not dropped either.
@@ -2740,9 +2764,15 @@ impl<'a> Gen<'a> {
                         } else if self.is_value(w) {
                             self.py_value(w, &self.ty_of(&oc.name.text))
                         } else {
-                            self.rescaled(w, &oc.name.text, local(w))
+                            let v = local(w);
+                            match self.rescaled(w, &oc.name.text, v.clone()) {
+                                // A value that may be absent is scaled only when it is there.
+                                r if r != v && matches!(self.ty_of(w), Ty::Opt(_)) => format!("None if {v} is None else {r}"),
+                                r => r,
+                            }
                         }
                     }
+                    Some(OutCell::Nothing) => "None".into(),
                     None => "0".into(),
                 };
                 o.push_str(&format!("        {} = {v}\n", self.ident(&oc.name.text)));
@@ -2947,6 +2977,7 @@ fn out_src(o: &OutCell) -> String {
     match o {
         OutCell::Lit(l) => lit_src(l),
         OutCell::Name(n) => n.clone(),
+        OutCell::Nothing => crate::kw::NONE.into(),
     }
 }
 
@@ -3902,26 +3933,39 @@ impl<'a> Gen<'a> {
         // the first output, the binding of its own name otherwise — brought to the wire
         // scale, then its declared rounding applied exactly once (§15.16).
         let mut finals: Vec<String> = Vec::new();
+        // The outputs that are already the pointer they are returned as (§15.249).
+        let mut bare: Vec<bool> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            let ty = self.ty_of(out_name);
+            // An optional output is its column's pointer. A number on it goes through the
+            // output's steps only when it is there, into a pointer of the output's own type.
+            let opt = self.opt_out(oi);
+            let numeric = ty.present().is_numeric();
+            if opt && !numeric {
+                finals.push(local(out_name));
+                bare.push(true);
+                continue;
+            }
+            let (pre, indent) = if opt { (format!("*{}", local(out_name)), "\t\t") } else { (local(out_name), "\t") };
+            let mut block = String::new();
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
-                _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
+                _ => Expr2 { text: pre, scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
-            let ty = self.ty_of(out_name);
-            finals.push(match &od.rounding {
+            let body = match &od.rounding {
                 Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
                     if res.scale != os {
                         let raw = self.temp(&raw_base(oi));
-                        o.push_str(&format!(
+                        block.push_str(&format!(
                             // The cast needs its own parentheses: an expression that begins with
                             // a call rather than a `(` glued itself to the type name.
-                            "\t{raw} := int64({}){CELL}// {}\n",
+                            "{indent}{raw} := int64({}){CELL}// {}\n",
                             go_expr(&res.text),
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
@@ -3931,20 +3975,36 @@ impl<'a> Gen<'a> {
                     }
                 }
                 // Only a number needs the widening cast; `int64(可否)` does not compile.
-                None if !ty.is_numeric() => go_expr(&res.text),
+                None if !ty.is_numeric() && !opt => go_expr(&res.text),
                 None => format!("int64({})", go_expr(&res.text)),
-            });
+            };
+            if opt {
+                let v = local(out_name);
+                let present = self.go_ty(ty.present());
+                let out = self.temp(&format!("{v}Out"));
+                let one = self.temp("v");
+                o.push_str(&format!("\tvar {out} *{present}\n\tif {v} != nil {{\n{block}\t\t{one} := {present}({body})\n\t\t{out} = &{one}\n\t}}\n"));
+                finals.push(out);
+                bare.push(true);
+            } else {
+                o.push_str(&block);
+                finals.push(body);
+                bare.push(false);
+            }
         }
         let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
         if outs.len() == 1 {
-            o.push_str(&format!("\treturn {ret}({}), {trace}{cuts}, nil\n}}\n", finals[0]));
+            let v = if bare[0] { finals[0].clone() } else { format!("{ret}({})", finals[0]) };
+            o.push_str(&format!("\treturn {v}, {trace}{cuts}, nil\n}}\n"));
         } else {
             // Each output gets its own rounding, applied exactly once (§7.2).
             let fields: Vec<String> = outs
                 .iter()
                 .zip(&finals)
-                .map(|(od, body)| {
-                    format!("{}: {}({body})", pascal(&pub_name(&od.name)), self.go_ty(&self.ty_of(&od.name.text)))
+                .zip(&bare)
+                .map(|((od, body), bare)| {
+                    let v = if *bare { body.clone() } else { format!("{}({body})", self.go_ty(&self.ty_of(&od.name.text))) };
+                    format!("{}: {v}", pascal(&pub_name(&od.name)))
                 })
                 .collect();
             o.push_str(&format!("\treturn Output{{{}}}, {trace}{cuts}, nil\n}}\n", fields.join(", ")));
@@ -3990,33 +4050,53 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("\t}}{kw} {cond} {{ // {line}\n"));
             }
             for (oi, oc) in t.outputs.iter().enumerate() {
-                let v = match row.outs.get(oi) {
-                    Some(OutCell::Lit(Lit::Num(n))) => {
-                        let ty = self.ty_of(&oc.name.text);
-                        self.int_lit(n, &ty, self.scale(&oc.name.text))
-                    }
-                    Some(OutCell::Lit(l)) => match l {
+                let col = self.ident(&oc.name.text);
+                let col_ty = self.ty_of(&oc.name.text);
+                // An optional column is a pointer, `nil` when there is no value (§15.249). Go takes
+                // no address of a constant, so a value is put where `new` points.
+                let opt = |v: String| -> String {
+                    let Ty::Opt(inner) = &col_ty else { return format!("\t\t{col} = {v}\n") };
+                    let inner_go = self.go_ty(inner);
+                    let v = if matches!(inner.as_ref(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) { format!("{inner_go}({})", go_expr(&v)) } else { v };
+                    format!("\t\t{col} = new({inner_go})\n\t\t*{col} = {v}\n")
+                };
+                let line = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => opt(self.int_lit(n, &col_ty, self.scale(&oc.name.text))),
+                    Some(OutCell::Lit(l)) => opt(match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.go_value(w, &self.ty_of(&oc.name.text)),
+                        Lit::Word(w) => self.go_value(w, &col_ty),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
-                    },
+                    }),
                     Some(OutCell::Name(w)) => {
                         if w == crate::kw::TRUE {
-                            "true".into()
+                            opt("true".into())
                         } else if w == crate::kw::FALSE {
-                            "false".into()
+                            opt("false".into())
                         } else if self.is_value(w) {
-                            self.go_value(w, &self.ty_of(&oc.name.text))
+                            opt(self.go_value(w, &col_ty))
+                        } else if let (Ty::Opt(inner), Ty::Opt(_)) = (&col_ty, self.ty_of(w)) {
+                            // A value that may be absent passes on as the pointer it is, and is
+                            // scaled only when it is there.
+                            let v = local(w);
+                            let numeric = matches!(inner.as_ref(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number | Ty::Date);
+                            let scaled = self.rescaled(w, &oc.name.text, format!("int64(*{v})"));
+                            if !numeric || scaled == format!("int64(*{v})") {
+                                format!("\t\t{col} = {v}\n")
+                            } else {
+                                let inner_go = self.go_ty(inner);
+                                format!("\t\t{col} = nil\n\t\tif {v} != nil {{\n\t\t\t{col} = new({inner_go})\n\t\t\t*{col} = {inner_go}({})\n\t\t}}\n", go_expr(&scaled))
+                            }
                         } else {
-                            self.rescaled(w, &oc.name.text, local(w))
+                            opt(self.rescaled(w, &oc.name.text, local(w)))
                         }
                     }
-                    None => "0".into(),
+                    Some(OutCell::Nothing) => format!("\t\t{col} = nil\n"),
+                    None => format!("\t\t{col} = 0\n"),
                 };
-                o.push_str(&format!("\t\t{} = {v}\n", self.ident(&oc.name.text)));
+                o.push_str(&line);
             }
             let (tn, rn, lbl) = self.fired_of(t, ri);
             o.push_str(&format!("\t\t{trace} = append({trace}, Fired{{{tn:?}, {rn}, {lbl:?}}})\n"));
@@ -6086,6 +6166,9 @@ impl<'a> Gen<'a> {
         let mut finals: Vec<String> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            // An optional output is its column's value when there is one, taken through the same
+            // steps, and `null` when there is none (§15.249).
+            let opt = self.opt_out(oi);
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
@@ -6098,7 +6181,7 @@ impl<'a> Gen<'a> {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
-                    if res.scale != os {
+                    if res.scale != os && !opt {
                         let raw = self.temp(&raw_base(oi));
                         o.push_str(&format!(
                             "  const {raw} = {}; // {}\n",
@@ -6106,13 +6189,19 @@ impl<'a> Gen<'a> {
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
                         format!("_round{}({raw}, {grid_i}n) / {}n", pascal(mode_fn(m)), res.scale / os)
+                    } else if res.scale != os {
+                        format!("_round{}({}, {grid_i}n) / {}n", pascal(mode_fn(m)), ts_expr(unparen(&res.text)), res.scale / os)
                     } else {
                         format!("_round{}({}, {grid_i}n)", pascal(mode_fn(m)), ts_expr(&res.text))
                     }
                 }
                 None => ts_expr(&res.text),
             };
-            finals.push(cast(&ty, body));
+            let v = local(out_name);
+            finals.push(match cast(ty.present(), body) {
+                b if opt && b != v => format!("{v} === null ? null : ({b})"),
+                b => b,
+            });
         }
         let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
         if outs.len() == 1 {
@@ -6133,11 +6222,16 @@ impl<'a> Gen<'a> {
         // `let` up front: a binding made inside a branch does not leave it.
         for oc in &t.outputs {
             let ty = self.ty_of(&oc.name.text);
-            let decl = match ty {
+            let decl = |ty: &Ty| match ty {
                 Ty::Bool => "boolean".to_string(),
                 Ty::Str => "string".to_string(),
-                Ty::Enum(_) => self.ts_ty(&ty),
+                Ty::Enum(_) => self.ts_ty(ty),
                 _ => "bigint".to_string(),
+            };
+            // An optional column holds `null` when there is no value (§15.249).
+            let decl = match &ty {
+                Ty::Opt(inner) => format!("{} | null", decl(inner)),
+                ty => decl(ty),
             };
             o.push_str(&format!("  let {}: {decl};\n", self.ident(&oc.name.text)));
         }
@@ -6182,9 +6276,15 @@ impl<'a> Gen<'a> {
                         } else if self.is_value(w) {
                             self.ts_value(w, &self.ty_of(&oc.name.text))
                         } else {
-                            ts_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                            let v = local(w);
+                            match ts_expr(&self.rescaled(w, &oc.name.text, v.clone())) {
+                                // A value that may be absent is scaled only when it is there.
+                                r if r != v && matches!(self.ty_of(w), Ty::Opt(_)) => format!("{v} === null ? null : {r}"),
+                                r => r,
+                            }
                         }
                     }
+                    Some(OutCell::Nothing) => "null".into(),
                     None => "0n".into(),
                 };
                 o.push_str(&format!("    {} = {v};\n", self.ident(&oc.name.text)));
@@ -7344,19 +7444,29 @@ impl<'a> Gen<'a> {
         let mut finals: Vec<String> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            let ty = self.ty_of(out_name);
+            // An optional output is its column's `Option`, taken through the output's steps only
+            // when it is there (§15.249). An enum, a truth value, a string and a date take no step.
+            let opt = self.opt_out(oi);
+            if opt && !ty.present().is_numeric() {
+                finals.push(local(out_name));
+                continue;
+            }
+            // The value inside the `Option`: the brand's integer, or the integer a `number` is.
+            let inside = if matches!(ty.present(), Ty::Number) { "__v" } else { "__v.0" };
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
+                _ if opt => Expr2 { text: inside.into(), scale: self.scale(out_name) },
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
-            let ty = self.ty_of(out_name);
             let body = match &od.rounding {
                 Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
-                    if res.scale != os {
+                    if res.scale != os && !opt {
                         let raw = self.temp(&raw_base(oi));
                         o.push_str(&format!(
                             "    let {raw} = {}; // {}\n",
@@ -7364,13 +7474,19 @@ impl<'a> Gen<'a> {
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
                         format!("round_{}({raw}, {grid_i}) / {}", mode_fn(m), res.scale / os)
+                    } else if res.scale != os {
+                        format!("round_{}({}, {grid_i}) / {}", mode_fn(m), rs_expr(unparen(&res.text)), res.scale / os)
                     } else {
                         format!("round_{}({}, {grid_i})", mode_fn(m), rs_expr(&res.text))
                     }
                 }
                 None => rs_expr(&res.text),
             };
-            finals.push(wrap(&ty, body));
+            if opt {
+                finals.push(format!("{}.map(|__v| {})", local(out_name), wrap(ty.present(), body)));
+            } else {
+                finals.push(wrap(&ty, body));
+            }
         }
         if outs.len() == 1 {
             let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
@@ -7395,6 +7511,9 @@ impl<'a> Gen<'a> {
                 Ty::Bool => "bool".to_string(),
                 Ty::Str => "String".to_string(),
                 Ty::Enum(_) => self.rs_ty(&ty),
+                // An optional column is the `Option` an optional input is, of the brand
+                // (§15.249): an input that may be absent passes on as it stands.
+                Ty::Opt(_) => self.rs_ty(&ty),
                 _ => "i64".to_string(),
             };
             o.push_str(&format!("    let {}: {decl};\n", self.ident(&oc.name.text)));
@@ -7419,32 +7538,56 @@ impl<'a> Gen<'a> {
                 o.push_str(&format!("    }}{head} {cond} {{ // {line}\n"));
             }
             for (oi, oc) in t.outputs.iter().enumerate() {
-                let v = match row.outs.get(oi) {
-                    Some(OutCell::Lit(Lit::Num(n))) => {
-                        let oty = self.ty_of(&oc.name.text);
-                        self.int_lit(n, &oty, self.scale(&oc.name.text))
+                let col_ty = self.ty_of(&oc.name.text);
+                // A value written into an optional column is `Some` of the brand; `none` is `None`
+                // (§15.249).
+                let some = |v: String| -> String {
+                    match &col_ty {
+                        Ty::Opt(inner) if matches!(inner.as_ref(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) => {
+                            format!("Some({}({v}))", self.rs_ty(inner))
+                        }
+                        Ty::Opt(_) => format!("Some({v})"),
+                        _ => v,
                     }
-                    Some(OutCell::Lit(l)) => match l {
+                };
+                let v = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => some(self.int_lit(n, &col_ty, self.scale(&oc.name.text))),
+                    Some(OutCell::Lit(l)) => some(match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.rs_value(w, &self.ty_of(&oc.name.text)),
+                        Lit::Word(w) => self.rs_value(w, &col_ty),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         // Rust's string output is a `String`, so the literal is owned here
                         // rather than at every use.
                         Lit::Str(x) => format!("{}.to_string()", str_lit(x)),
                         _ => "0".into(),
-                    },
+                    }),
                     Some(OutCell::Name(w)) => {
                         if w == crate::kw::TRUE {
-                            "true".into()
+                            some("true".into())
                         } else if w == crate::kw::FALSE {
-                            "false".into()
+                            some("false".into())
                         } else if self.is_value(w) {
-                            self.rs_value(w, &self.ty_of(&oc.name.text))
+                            some(self.rs_value(w, &col_ty))
+                        } else if let (Ty::Opt(inner), Ty::Opt(_)) = (&col_ty, self.ty_of(w)) {
+                            // A value that may be absent passes on as the `Option` it is, and is
+                            // scaled only when it is there.
+                            let v = local(w);
+                            let branded = matches!(inner.as_ref(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate);
+                            let raw = if branded { "__v.0" } else { "__v" };
+                            let scaled = self.rescaled(w, &oc.name.text, raw.to_string());
+                            if scaled == raw {
+                                v
+                            } else if branded {
+                                format!("{v}.map(|__v| {}({}))", self.rs_ty(inner), rs_expr(&scaled))
+                            } else {
+                                format!("{v}.map(|__v| {})", rs_expr(&scaled))
+                            }
                         } else {
-                            rs_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                            some(rs_expr(&self.rescaled(w, &oc.name.text, local(w))))
                         }
                     }
+                    Some(OutCell::Nothing) => "None".into(),
                     None => "0".into(),
                 };
                 o.push_str(&format!("        {} = {v};\n", self.ident(&oc.name.text)));
@@ -11350,10 +11493,13 @@ impl<'a> Gen<'a> {
             o.push_str(&self.rb_items(&local, &trace, Phase::All));
         }
 
-        // Every output: its source, brought to the wire scale, then its rounding once.
+        // Every output: its source, brought to the wire scale, then its rounding once. An
+        // optional output takes those steps only when its column has a value, and is `nil` when
+        // it has none (§15.249).
         let mut finals: Vec<String> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            let opt = self.opt_out(oi);
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
@@ -11361,12 +11507,12 @@ impl<'a> Gen<'a> {
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
-            finals.push(match &od.rounding {
+            let body = match &od.rounding {
                 Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
-                    if res.scale != os {
+                    if res.scale != os && !opt {
                         let raw = self.temp(&raw_base(oi));
                         o.push_str(&format!(
                             "    {raw} = {}  # {}\n",
@@ -11374,12 +11520,16 @@ impl<'a> Gen<'a> {
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
                         format!("_round_{}({raw}, {}) / {}", mode_fn(m), grid_i, res.scale / os)
+                    } else if res.scale != os {
+                        format!("_round_{}({}, {}) / {}", mode_fn(m), rb_expr(unparen(&res.text)), grid_i, res.scale / os)
                     } else {
                         format!("_round_{}({}, {})", mode_fn(m), rb_expr(&res.text), grid_i)
                     }
                 }
                 None => rb_expr(&res.text),
-            });
+            };
+            let v = local(out_name);
+            finals.push(if opt && body != v { format!("{v}.nil? ? nil : {body}") } else { body });
         }
         if outs.len() == 1 {
             let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
@@ -11430,9 +11580,15 @@ impl<'a> Gen<'a> {
                         } else if self.is_value(w) {
                             self.rb_value(w, &self.ty_of(&oc.name.text))
                         } else {
-                            rb_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                            let v = local(w);
+                            match rb_expr(&self.rescaled(w, &oc.name.text, v.clone())) {
+                                // A value that may be absent is scaled only when it is there.
+                                r if r != v && matches!(self.ty_of(w), Ty::Opt(_)) => format!("{v}.nil? ? nil : {r}"),
+                                r => r,
+                            }
                         }
                     }
+                    Some(OutCell::Nothing) => "nil".into(),
                     None => "0".into(),
                 };
                 o.push_str(&format!("      {} = {v}\n", self.ident(&oc.name.text)));
@@ -12961,19 +13117,29 @@ impl<'a> Gen<'a> {
         let mut finals: Vec<String> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            let ty = self.ty_of(out_name);
+            // An optional output is its column's optional, taken through the output's steps only
+            // when it is there (§15.249). An enum, a truth value, a string and a date take no step.
+            let opt = self.opt_out(oi);
+            if opt && !ty.present().is_numeric() {
+                finals.push(local(out_name));
+                continue;
+            }
+            // The value inside the optional: the brand's integer, or the integer a `number` is.
+            let inside = if matches!(ty.present(), Ty::Number) { "$0" } else { "$0.value" };
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
+                _ if opt => Expr2 { text: inside.into(), scale: self.scale(out_name) },
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
             };
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
-            let ty = self.ty_of(out_name);
             let body = match &od.rounding {
                 Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
-                    if res.scale != os {
+                    if res.scale != os && !opt {
                         let raw = self.temp(&raw_base(oi));
                         o.push_str(&format!(
                             "    let {} = {}  // {}\n",
@@ -12982,13 +13148,19 @@ impl<'a> Gen<'a> {
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
                         format!("{}({}, {grid_i}) / {}", sw_round_fn(m), sw_name(&raw), res.scale / os)
+                    } else if res.scale != os {
+                        format!("{}({}, {grid_i}) / {}", sw_round_fn(m), sw_expr(unparen(&res.text)), res.scale / os)
                     } else {
                         format!("{}({}, {grid_i})", sw_round_fn(m), sw_expr(&res.text))
                     }
                 }
                 None => sw_expr(&res.text),
             };
-            finals.push(wrap(&ty, body));
+            if opt {
+                finals.push(format!("{}.map {{ {} }}", local(out_name), wrap(ty.present(), body)));
+            } else {
+                finals.push(wrap(&ty, body));
+            }
         }
         if outs.len() == 1 {
             let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
@@ -13015,6 +13187,9 @@ impl<'a> Gen<'a> {
                 Ty::Bool => "Bool".to_string(),
                 Ty::Str => "String".to_string(),
                 Ty::Enum(_) => self.sw_ty(&ty),
+                // An optional column is the optional an optional input is, of the brand
+                // (§15.249): an input that may be absent passes on as it stands.
+                Ty::Opt(_) => self.sw_ty(&ty),
                 _ => "Int64".to_string(),
             };
             o.push_str(&format!("    let {}: {decl}\n", self.sw_ident(&oc.name.text)));
@@ -13035,15 +13210,23 @@ impl<'a> Gen<'a> {
             let head = if ri == 0 { "    if" } else { "    } else if" };
             o.push_str(&format!("{head} {cond} {{ // {line}\n"));
             for (oi, oc) in t.outputs.iter().enumerate() {
-                let v = match row.outs.get(oi) {
-                    Some(OutCell::Lit(Lit::Num(n))) => {
-                        let oty = self.ty_of(&oc.name.text);
-                        self.int_lit(n, &oty, self.scale(&oc.name.text))
+                let col_ty = self.ty_of(&oc.name.text);
+                // A value written into an optional column is one of the brand, which Swift makes
+                // optional on its own; `none` is `nil` (§15.249).
+                let branded = |v: String| -> String {
+                    match &col_ty {
+                        Ty::Opt(inner) if matches!(inner.as_ref(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate) => {
+                            format!("{}({v})", self.sw_ty(inner))
+                        }
+                        _ => v,
                     }
+                };
+                let v = match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Num(n))) => branded(self.int_lit(n, &col_ty, self.scale(&oc.name.text))),
                     Some(OutCell::Lit(l)) => match l {
                         Lit::Word(w) if w == crate::kw::TRUE => "true".into(),
                         Lit::Word(w) if w == crate::kw::FALSE => "false".into(),
-                        Lit::Word(w) => self.sw_value(w, &self.ty_of(&oc.name.text)),
+                        Lit::Word(w) => self.sw_value(w, &col_ty),
                         Lit::Date(y, m, d) => format!("{}", crate::types::date_ord(*y, *m, *d).num),
                         Lit::Str(x) => str_lit(x),
                         _ => "0".into(),
@@ -13054,11 +13237,26 @@ impl<'a> Gen<'a> {
                         } else if w == crate::kw::FALSE {
                             "false".into()
                         } else if self.is_value(w) {
-                            self.sw_value(w, &self.ty_of(&oc.name.text))
+                            self.sw_value(w, &col_ty)
+                        } else if let (Ty::Opt(inner), Ty::Opt(_)) = (&col_ty, self.ty_of(w)) {
+                            // A value that may be absent passes on as the optional it is, and is
+                            // scaled only when it is there.
+                            let v = local(w);
+                            let brand = matches!(inner.as_ref(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate);
+                            let raw = if brand { "$0.value" } else { "$0" };
+                            let scaled = self.rescaled(w, &oc.name.text, raw.to_string());
+                            if scaled == raw {
+                                v
+                            } else if brand {
+                                format!("{v}.map {{ {}({}) }}", self.sw_ty(inner), sw_expr(&scaled))
+                            } else {
+                                format!("{v}.map {{ {} }}", sw_expr(&scaled))
+                            }
                         } else {
-                            sw_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                            branded(sw_expr(&self.rescaled(w, &oc.name.text, local(w))))
                         }
                     }
+                    Some(OutCell::Nothing) => "nil".into(),
                     None => "0".into(),
                 };
                 o.push_str(&format!("        {} = {v}\n", self.sw_ident(&oc.name.text)));

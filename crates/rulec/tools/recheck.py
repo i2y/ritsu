@@ -402,13 +402,17 @@ def check_types(cert):
 def numeric_outputs(cert):
     """For every column a table writes numbers into, what its rows write there, as expressions
     (§15.196): `None` where a row writes something this program cannot read. And the columns
-    whose rows state nothing they write — a certificate from before they did."""
+    whose rows state nothing they write — a certificate from before they did. An optional column
+    holds a number where it has a value (rulec's §15.249): it is read as the type it wraps, and a
+    row whose answer cell is `none` — the word read back out of the file — writes no number."""
     types = cert.get("types", {})
     outs, unstated = {}, []
     for t in cert.get("tables", []):
         rows = t.get("rows", [])
         for oi, col in enumerate(t.get("decides", [])):
-            if not numeric(types.get(col)):
+            ty = types.get(col) or ""
+            optional = ty.endswith("?")
+            if not numeric(ty[:-1] if optional else ty):
                 continue
             if not any("writes" in r for r in rows):
                 if col not in unstated:
@@ -420,6 +424,9 @@ def numeric_outputs(cert):
             for r in rows:
                 ws = r.get("writes") or []
                 w = ws[oi] if oi < len(ws) else None
+                ps = r.get("produces") or []
+                if optional and w is None and oi < len(ps) and ps[oi] == "none":
+                    continue
                 if not isinstance(w, dict) or not isinstance(w.get("expr"), dict):
                     outs[col] = None
                     break
@@ -3632,6 +3639,15 @@ def check_machine_cells(cert, path):
             if not answer_cell(r["row"], on["output"], src):
                 raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']} is not read from the row's own cell of {on['output']}")
             v, said = r.get("value"), text(src).strip()
+            # A word is one of the output's own values, `none` among them where the output is
+            # optional (rulec's §15.249). A cell that names something the rule computes holds no
+            # word of its own: read as one, the row would count nowhere, wherever it may.
+            if isinstance(v, str) and "words" in test:
+                ty = types.get(on["output"], "")
+                base = ty[:-1] if ty.endswith("?") else ty
+                values = (["none"] if ty.endswith("?") else []) + list((cert.get("enums") or {}).get(base, []))
+                if v not in values:
+                    raise Bad(f"machine: the value `once {on['output']}` reads on row {r['row']}, `{v}`, is not a value of {on['output']}")
             # A computed value counts wherever it might: nothing to hold it to.
             if v is not None:
                 if "words" not in test:

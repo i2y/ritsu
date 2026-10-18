@@ -696,6 +696,9 @@ pub enum OutCell {
     Lit(Lit),
     /// §3.2: a name (input, derived, define). Expressions are not allowed.
     Name(String),
+    /// `none`: the row answers that there is no value. Only a column of `T?` takes it
+    /// (§15.249); anywhere else it is E103.
+    Nothing,
 }
 
 #[derive(Debug, Clone)]

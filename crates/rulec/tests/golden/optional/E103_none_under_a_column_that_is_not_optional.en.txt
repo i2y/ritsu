@@ -1,0 +1,9 @@
+error[E103]: This column is service, but `none` is written here
+  --> tests/optional/E103_none_under_a_column_that_is_not_optional.rule:15 table kind_of
+   |
+15 | | false      | none              |
+   |                ^^^^
+   |
+ `none` answers that there is no value, which only an optional column (`service?`) does; kind is not optional.
+ If kind may have no value, write its heading `-> kind : service?`. Otherwise write a value of service here.
+

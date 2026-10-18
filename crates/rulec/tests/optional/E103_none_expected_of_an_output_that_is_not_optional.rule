@@ -1,0 +1,19 @@
+rule plain_signed v1
+description "Whether a parcel is signed for, which every parcel has an answer to, from whether it is media. An example expects none all the same: `none` expected of an output that is not optional"
+
+inputs
+  media_only : bool
+
+outputs
+  signed : bool
+
+table signed_of
+policy unique
+| media_only | -> signed : bool |
+| false      | false            |
+| true       | true             |
+
+examples
+| media_only | -> signed |
+| false      | none      |
+| true       | true      |

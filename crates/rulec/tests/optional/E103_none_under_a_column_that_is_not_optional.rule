@@ -1,0 +1,22 @@
+rule plain_kind v1
+description "Whether a parcel goes by a service the rule approves, from whether it is media, through the service a table above decides for every parcel. A row of that table answers none all the same: `none` under a table's own column that is not optional"
+
+enum service = media | library
+
+inputs
+  media_only : bool
+
+outputs
+  approved : bool
+
+table kind_of
+policy unique
+| media_only | -> kind : service |
+| false      | none              |
+| true       | media             |
+
+table approved_of
+policy unique
+| kind    | -> approved : bool |
+| media   | true               |
+| library | false              |

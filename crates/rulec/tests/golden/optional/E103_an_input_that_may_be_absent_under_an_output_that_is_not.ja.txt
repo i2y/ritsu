@@ -1,0 +1,8 @@
+エラー[E103]: この列は money[USDc] ですが `quoted` は money[USDc]? です
+  --> tests/optional/E103_an_input_that_may_be_absent_under_an_output_that_is_not.rule:14 表 price_of
+   |
+14 | | false      | quoted                 |
+   |                ^^^^^^
+   |
+ `quoted` には値が無いことがあり、money[USDc] の列にはそのときの答えがありません。値が無いことを答えるなら、この列の型を `money[USDc]?` にしてください。
+

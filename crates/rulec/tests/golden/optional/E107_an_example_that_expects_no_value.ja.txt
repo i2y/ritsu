@@ -1,0 +1,9 @@
+エラー[E107]: 例が合いません: price は none のはずが 513USDc になりました
+  --> tests/optional/E107_an_example_that_expects_no_value.rule:21 例
+   |
+21 | | 20oz   | true       | none     |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ 当てはまった行: 表 price_of 行3
+ 例は実行される仕様です。表を直すか、例のほうが間違っているなら例を直してください。
+

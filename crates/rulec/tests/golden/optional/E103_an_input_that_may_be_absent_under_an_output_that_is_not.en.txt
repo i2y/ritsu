@@ -1,0 +1,8 @@
+error[E103]: This column is money[USDc], but `quoted` is money[USDc]?
+  --> tests/optional/E103_an_input_that_may_be_absent_under_an_output_that_is_not.rule:14 table price_of
+   |
+14 | | false      | quoted                 |
+   |                ^^^^^^
+   |
+ `quoted` may have no value, and a column of money[USDc] has no answer for that. If the answer is that there is no value, make this column's type `money[USDc]?`.
+

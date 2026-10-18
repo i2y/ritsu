@@ -1,0 +1,24 @@
+rule rush_by_service v1
+description "Whether a parcel is a rush, from the service a table above passes on from its sender, which may be missing. The table below has no row for no service: the absent value a table above passes on is asked for"
+
+enum service = media | library | express
+
+inputs
+  requested  : service?
+  media_only : bool
+
+outputs
+  rush : bool
+
+table service_of
+policy unique
+| media_only | -> service : service? |
+| false      | requested             |
+| true       | media                 |
+
+table rush_of
+policy unique
+| service | -> rush : bool |
+| media   | false          |
+| library | false          |
+| express | true           |

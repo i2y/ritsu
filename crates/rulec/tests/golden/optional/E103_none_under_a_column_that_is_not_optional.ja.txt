@@ -1,0 +1,9 @@
+エラー[E103]: この列は service ですが `none` が書かれています
+  --> tests/optional/E103_none_under_a_column_that_is_not_optional.rule:15 表 kind_of
+   |
+15 | | false      | none              |
+   |                ^^^^
+   |
+ `none` は値が無いことを答えるセルで、書けるのは optional の列（`service?`）だけです。kind は optional ではありません。
+ kind に値が無いことがあるなら、見出しを `-> kind : service?` にしてください。そうでなければ、ここには service の値を書いてください。
+

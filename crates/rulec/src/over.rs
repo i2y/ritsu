@@ -185,19 +185,26 @@ fn narrow_upstream(f: &RuleFile, c: &mut Checked) {
                 for (oi, oc) in set.table.outputs.iter().enumerate() {
                     let name = &oc.name.text;
                     let Some(before) = c.out_values.get(name) else { continue };
-                    let values: Vec<String> = match c.ty_of(name) {
-                        Some(Ty::Enum(e)) => c.enums.get(&e).cloned().unwrap_or_default(),
+                    // An optional column has the absent value too, which a `none` cell writes
+                    // (§15.249).
+                    let ty = c.ty_of(name);
+                    let mut values: Vec<String> = match ty.as_ref().map(Ty::present) {
+                        Some(Ty::Enum(e)) => c.enums.get(e).cloned().unwrap_or_default(),
                         Some(Ty::Bool) => vec![crate::kw::TRUE.to_string(), crate::kw::FALSE.to_string()],
                         _ => continue,
                     };
-                    let mut written: Vec<&String> = Vec::new();
+                    if matches!(ty, Some(Ty::Opt(_))) {
+                        values.insert(0, crate::kw::NONE.to_string());
+                    }
+                    let mut written: Vec<String> = Vec::new();
                     let mut computed = false;
                     for (ri, row) in set.table.rows.iter().enumerate() {
                         if live.as_ref().is_some_and(|l| !l[ri]) {
                             continue;
                         }
                         match row.outs.get(oi) {
-                            Some(OutCell::Name(w)) if values.contains(w) => written.push(w),
+                            Some(OutCell::Name(w)) if values.contains(w) => written.push(w.clone()),
+                            Some(OutCell::Nothing) if values.iter().any(|v| v == crate::kw::NONE) => written.push(crate::kw::NONE.to_string()),
                             _ => computed = true,
                         }
                     }
@@ -368,6 +375,8 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
                     let at = ritsu_base::tr!("{table} の行 {}", "row {} of {table}", row.index);
                     let word = match row.outs.get(oi) {
                         Some(OutCell::Name(w)) | Some(OutCell::Lit(Lit::Word(w))) => word_value(w, &all),
+                        // `none`: the absent value, which an optional output comes to (§15.249)
+                        Some(OutCell::Nothing) => word_value(crate::kw::NONE, &all),
                         _ => None,
                     };
                     match (word, passed_on(&f2, &c2, &set.table, row, oi, &all)) {

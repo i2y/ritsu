@@ -269,6 +269,8 @@ fn out_value(g: &Gen, oc_name: &str, out: Option<&OutCell>, local: &dyn Fn(&str)
                 sql.translate(&g.rescaled(w, oc_name, local(w)))
             }
         }
+        // No value: NULL, which the scaling and the rounding over it carry through (§15.249).
+        Some(OutCell::Nothing) => "NULL".into(),
         None => "0".into(),
     }
 }

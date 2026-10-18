@@ -1,0 +1,21 @@
+rule priced_media v1
+description "A media parcel's price, which a parcel that is not media does not have, from its weight. An example expects no price for a media parcel: an example that expects no value where the rule answers one"
+
+inputs
+  weight     : mass[oz]  range >=1oz <=32oz
+  media_only : bool
+
+outputs
+  price : money[USDc]?  round down(1USDc)
+
+table price_of
+policy unique
+| media_only | weight     | -> price : money[USDc]? |
+| false      | -          | none                    |
+| true       | <=1lb      | 439USDc                 |
+| true       | >1lb <=2lb | 513USDc                 |
+
+examples
+| weight | media_only | -> price |
+| 1oz    | false      | none     |
+| 20oz   | true       | none     |

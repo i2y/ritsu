@@ -1917,7 +1917,8 @@ pub fn show(v: &Val) -> String {
 /// already whole numbers of their own unit, so only a rate needs its `%` back: `0.1` on its
 /// own reads as either a tenth or ten percent.
 pub fn show_named(c: &Checked, name: &str, v: &Val) -> String {
-    match (v, c.ty_of(name)) {
+    // An optional rate that is there is a rate (§15.249).
+    match (v, c.ty_of(name).as_ref().map(crate::types::Ty::present)) {
         (Val::Num(r), Some(crate::types::Ty::Rate)) => format!("{}%", r.mul(Rat::int(100))),
         _ => show(v),
     }

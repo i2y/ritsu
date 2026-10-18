@@ -2678,6 +2678,8 @@ pub fn check_scenarios(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                 let want = row.outs.get(hi).and_then(|o| match o {
                     OutCell::Lit(l) => crate::eval::lit_to_val(l, &oty),
                     OutCell::Name(w) => crate::eval::lit_to_val(&Lit::Word(w.clone()), &oty),
+                    // An expected `none`: the output has no value after this call (§15.249).
+                    OutCell::Nothing => Some(crate::eval::Val::Enum(crate::kw::NONE.into())),
                 });
                 let g = out_val(&got, &od.name.text).cloned();
                 let title = match (&want, &g) {

@@ -1,0 +1,8 @@
+error[E103]: This column is money[USDc], but `見積もり` is money[USDc]?
+  --> tests/optional/E103_無いことのある入力を_optional_でない出力に渡す.rule:14 table 料金の表
+   |
+14 | | false      | 見積もり              |
+   |                ^^^^^^^^
+   |
+ `見積もり` may have no value, and a column of money[USDc] has no answer for that. If the answer is that there is no value, make this column's type `money[USDc]?`.
+

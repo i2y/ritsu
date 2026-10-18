@@ -1,0 +1,16 @@
+rule 丸めの無い料金(unrounded_price_ja) v1
+description "メディア便でない小包には無い料金を、重さから決める。出力に丸めの宣言が無い。optional の金額にも、ふつうの金額と同じく丸めが要る"
+
+inputs
+  重さ(weight)           : mass[oz]  range >=1oz <=32oz
+  メディア便(media_only) : bool
+
+outputs
+  料金(price) : money[USDc]?
+
+table 料金の表(price_of)
+policy unique
+| メディア便 | 重さ       | -> 料金 : money[USDc]? |
+| false      | -          | none                   |
+| true       | <=1lb      | 439USDc                |
+| true       | >1lb <=2lb | 513USDc                |

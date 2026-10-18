@@ -382,7 +382,7 @@ Related codes: [E009](#e009), [E012](#e012)
 
 `error` — **The name is not declared**
 
-**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia).
+**When.** A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia). `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103.
 
 **Fix.** Match the spelling to the declaration, or declare the input, derived value or definition above. For a spelling two countries share, write the value's name (`Washington` or `Western_Australia`).
 
@@ -1568,7 +1568,7 @@ Related codes: [E041](#e041), [E042](#e042), [E101](#e101)
 
 `error` — **That rule cannot be applied**
 
-**When.** The callee cannot be read, does not pass `check` (the codes are listed), or the applies go round: a rule applies a rule that applies it back, directly or through others (every file of the ring is listed). A broken rule expanded is a broken rule, and a rule that reads itself through itself has no answer. A rule that applies another, one that walks a sequence, and one whose tables produce its own enums can all be applied.
+**When.** The callee cannot be read, does not pass `check` (the codes are listed), or the applies go round: a rule applies a rule that applies it back, directly or through others (every file of the ring is listed). A broken rule expanded is a broken rule, and a rule that reads itself through itself has no answer. A rule that applies another, one that walks a sequence, and one whose tables produce its own enums can all be applied. It is also an output of the callee that is a number that may have no value (`money[JPY]?`): an applied output becomes a definition rounded as the callee declares, and a value that may be absent cannot be rounded. An optional enum, truth value, date or string can be applied, and hands the absent value on.
 
 **Fix.** Fix the callee first. For a ring, take one of the `apply` lines out.
 
@@ -2465,7 +2465,7 @@ Related codes: [E103](#e103), [E012](#e012)
 
 `error` — **Completeness gap: some input matches no row**
 
-**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides.
+**When.** The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there.
 
 **Fix.** Add a row that matches the witness. If a new enum value caused it, add a row for that value or a `-` row that catches everything. If the value needs no row of its own, mark it `default` in the enum declaration.
 
@@ -2616,9 +2616,9 @@ Related codes: [E101](#e101), [W105](#w105), [W110](#w110), [E112](#e112)
 
 `error` — **Unit mismatch: values of different types are being mixed**
 
-**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in.
+**When.** An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else.
 
-**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's.
+**Fix.** Move one side into a table. "A surcharge that depends on weight" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`.
 
 **Smallest reproduction**:
 
@@ -2657,13 +2657,31 @@ policy unique
 | - | 100JPY                         |
 ```
 
+**`none` under an output that is not optional**:
+
+```rule
+rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | none                           |
+```
+
 Related codes: [E108](#e108), [E112](#e112)
 
 ## E104
 
 `error` — **A numeric output declares no rounding**
 
-**When.** A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer.
+**When.** A quantity, money or rate output has no `round`, an optional one (`money[JPY]?`) included. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer.
 
 **Fix.** Add rounding to the output declaration, e.g. `round up(10JPY)`. There are five directions (`up`, `down`, `half_up`, `half_down`, `half_even`), pinned down for negative values as well.
 
@@ -2751,7 +2769,7 @@ Related codes: [E104](#e104)
 
 `error` — **An example does not match**
 
-**When.** Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification.
+**When.** Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification. An expected `none` under an optional output expects no value.
 
 **Fix.** If the table is right, fix the expected value. If the expected value is the business truth, fix the row that fired. Which one to fix is settled by the source: the written rule, the spreadsheet, or the legacy implementation.
 
@@ -4246,7 +4264,7 @@ Related codes: [W105](#w105), [E105](#e105)
 
 `warning` — **A declaration is never used**
 
-**When.** An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it.
+**When.** An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it. Nor is a value a cell that hands an input on (`| false | requested |`) answers with, when no table tests the enum in a column: no table could give it a row of its own.
 
 **Fix.** If the input serves only as a range check at the entry, mark the declaration `contract_only`. If an enum value is meant to fall through to the default row, mark the value `default`. Otherwise either add the column to a table, or delete the declaration.
 

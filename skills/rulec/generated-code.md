@@ -1460,6 +1460,59 @@ same in every language and is the one the reference evaluator says of the same i
 `rulec api` names the function under `record` and gives its signature under
 `record_signature`.
 
+## An output that may have no value
+
+An optional output (`price : money[USDc]?  round down(1USDc)`) answers in each language the
+way that language writes an optional input, so an input that may have no value passes through
+to an output unchanged:
+
+| | no value | a value |
+|---|---|---|
+| Python | `None` | the type it wraps (`USDc \| None`) |
+| TypeScript, JavaScript | `null` | the type it wraps (`USDc \| null`) |
+| Rust | `None` | `Some` of the type it wraps (`Option<USDc>`) |
+| Ruby | `nil` | the value |
+| PHP | `null` | the value (`?int`) |
+| Go | `nil` | a pointer to the type it wraps (`*USDc`) |
+| Swift | `nil` | the type it wraps (`USDc?`) |
+| Java | `null` | the boxed type (`Long`, `Boolean`) |
+| SQL | `NULL` | the column's value |
+| Wasm | `null` in the answer | the value |
+| NumPy | `None` in an array of objects | the value, in the same array |
+| MCP, the record | `null` | the value |
+| Connect | the field left unset | the field set |
+
+A row that answers `none` writes the absent value, and every other row a value of the type the
+output wraps, read in that type. The rounding and the unit's type are put on a value only where
+there is one:
+
+```python
+    # table price_of (policy unique)
+    price: int | None
+    if not media_only:  # row 1: false | - | none
+        price = None
+        trace.append(Fired("price_of", 1))
+    elif media_only and weight <= 16:  # row 2: true | <=1lb | 439USDc
+        price = 439
+        trace.append(Fired("price_of", 2))
+```
+
+```python
+    return Output(None if price is None else USDc(_round_down(price, 1)), None if zone_number is None else _round_down(zone_number, 1), kind, signed, ships, note), trace
+```
+
+Rust maps the `Option` (`price.map(|__v| USDc(round_down(__v.0, 1)))`), and Go takes no
+address of a constant, so a row puts its value where `new` points and the rounding makes a
+pointer of its own only where there is a value:
+
+```go
+	var priceOut *USDc
+	if price != nil {
+		v := USDc(roundDown(int64(*price), 1))
+		priceOut = &v
+	}
+```
+
 ## The two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is

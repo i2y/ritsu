@@ -48,8 +48,8 @@ Two declarations are mandatory and are where most first drafts fail:
 - **`range` on every numeric input and every `derive`.** It is the universe the completeness
   proof quantifies over, and the entry guard of the generated code. A rate may leave it out
   and is then 0% to 100%, guard included; a rate that can go above 100% declares its range.
-- **`round` on every numeric output.** Without it the generated code would settle fractions
-  silently.
+- **`round` on every numeric output**, an optional one (`money[JPY]?`) too. Without it the
+  generated code would settle fractions silently.
 
 A few shapes are worth knowing before the first draft:
 
@@ -59,6 +59,7 @@ A few shapes are worth knowing before the first draft:
 - **An output returns the binding of its own name** — a `define` or a table output column
   called `fee` is what the output `fee` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
+- **An output may be `T?`**: a row answers `none` for no value, the others a value of `T`.
 - **Combinations that cannot happen are said once.** `constraint <input> <= <input>` states a
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
   witness becomes a case somebody could really send, and the generated code refuses a

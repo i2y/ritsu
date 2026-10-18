@@ -3449,6 +3449,9 @@ impl P {
             );
         }
         match lit_of(&ts[0]) {
+            // The absent value, which an optional output answers with (§15.249). `none` is a
+            // reserved word, so no name and no enum value is spelled like it.
+            Some(Lit::Word(w)) if w == crate::kw::NONE => OutCell::Nothing,
             Some(Lit::Word(w)) => {
                 // A bare word is an enum value or, per §3.2, the name of an input / derived / define.
                 OutCell::Name(w)

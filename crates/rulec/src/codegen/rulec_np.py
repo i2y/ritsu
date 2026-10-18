@@ -148,6 +148,12 @@ def _ord(s: str) -> int:
     return (datetime.date(y, m, d) - _EPOCH).days
 
 
+def civil(days: int) -> str:
+    """A day number as YYYY-MM-DD, the way a date travels on the wire. A date output is a
+    column of day numbers, and the runners write each one this way."""
+    return (_EPOCH + datetime.timedelta(days=days)).isoformat()
+
+
 def _ord_or_none(x):
     """A date on the wire as its day number, or None when it is not a date: a YYYY-MM-DD
     string of a day the calendar has, as every door reads one."""
@@ -346,6 +352,18 @@ def _plain(v):
 
 def _unreachable(kind):
     return 0 if kind in ("int", "date") else False if kind == "bool" else ""
+
+
+def _absent(a, env, n):
+    """Where one row of an optional column has no value (rulec's §15.249): everywhere for `none`,
+    nowhere for a value, and where the name it passes on has none. A column of words that may be
+    absent holds the word `none` there; the others keep where they are absent beside them."""
+    if a is True:
+        return np.ones(n, dtype=bool)
+    if a is False:
+        return np.zeros(n, dtype=bool)
+    m = env.get(("absent", a["of"]))
+    return m if m is not None else np.asarray(env[a["of"]]).astype(str) == "none"
 
 
 def _test(t, v, absent=None):
@@ -601,9 +619,18 @@ class Rule:
                 if both.any():
                     raise RuleContradictionError(g["what"], int(np.argmax(both)), self.plan.get("row", "row"))
             for oi, out in enumerate(st["outs"]):
-                env[out] = np.select(
-                    conds, [_val(p[oi], env) for p in picks], default=_unreachable(st["kinds"][oi])
-                )
+                kind = st["kinds"][oi]
+                z = _unreachable(kind)
+                env[out] = np.select(conds, [z if p[oi] is None else _val(p[oi], env) for p in picks], default=z)
+                # An optional column has no value where the row that decided it says so: a column
+                # of words holds `none` there, as an optional enum input does, and any other its
+                # placeholder, with where it is absent beside it (rulec's §15.249).
+                if st.get("optional", [False] * len(st["outs"]))[oi]:
+                    gone = np.select(conds, [_absent(r["absent"][oi], env, n) for r in st["rows"]], default=False)
+                    if kind == "enum":
+                        env[out] = np.where(gone, "none", env[out])
+                    else:
+                        env[("absent", out)] = gone
             # Which row decided each element. A merged set's rows come from different tables,
             # so the trace entry travels with the row rather than with the step.
             fired.append((np.select(conds, np.arange(len(conds)), default=0), [r["fired"] for r in st["rows"]]))
@@ -616,6 +643,12 @@ class Rule:
                 raw = _ROUND[r["mode"]](raw, r["grid"])
                 if r["div"] != 1:
                     raw = raw // r["div"]
+            # An optional output is `None` where it has no value (rulec's §15.249).
+            if spec.get("optional"):
+                gone = env.get(("absent", spec["name"]))
+                if gone is None:
+                    gone = np.asarray(raw).astype(str) == "none"
+                raw = _objects([None if g else x for x, g in zip(np.atleast_1d(raw), gone)])
             out[spec["name"]] = raw
         return out, fired
 

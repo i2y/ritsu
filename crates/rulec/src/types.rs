@@ -284,7 +284,14 @@ pub fn same_value(a: &(Option<String>, Rat), b: &(Option<String>, Rat)) -> bool 
 /// Value of a numeric literal, expressed in `want`'s declared unit.
 /// `None` means the literal's unit does not belong to `want`'s dimension, or that a decimal
 /// was written where the declared unit only has whole values.
+///
+/// A literal written for a `T?` is a value of `T`: the absent value is `none`, and no number
+/// spells it. Read in `T?` itself, no literal was a value, so `439USDc` and the grid of
+/// `round down(1USDc)` on a `money[USDc]?` output were E103, and every reader that fell back to
+/// a default on `None` — the generators' rounding grid among them — used the default
+/// (§15.201, §15.249).
 fn lit_value_in(n: &crate::lex::Num, want: &Ty) -> Option<Rat> {
+    let want = want.present();
     let v = magnitude(n)?;
     // A number carries no unit, and that is the whole point of it: `3` is three of whatever
     // the column counts. Nothing else accepts a bare literal (§3).
@@ -413,6 +420,10 @@ pub struct Checked {
     /// column of one enum leaves another enum's `automatic` unnamed. W111 uses it to report
     /// "values that appear in no row".
     pub used_values: HashSet<(String, String)>,
+    /// Enum values a row answers with through a name that carries them (`| false | requested |`),
+    /// as `(enum, value)`: the values the name may hold there (`row_writes`). W111 counts them as
+    /// appearing in a row when no table tests the enum in a column (§15.249).
+    pub carried_values: HashSet<(String, String)>,
     pub diags: Vec<Diag>,
     /// The definition sets: one per table, or one per output that several tables define
     /// (§15.66). Everything downstream — the region checks, the evaluator, the
@@ -1277,6 +1288,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         owners: HashMap::new(),
         used: HashSet::new(),
         used_values: HashSet::new(),
+        carried_values: HashSet::new(),
         enum_order: Vec::new(),
         diags: Vec::new(),
         sets: Vec::new(),
@@ -1665,8 +1677,10 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     }
     for o in &f.outputs {
         let ty = c.resolve(&o.ty);
-        // §7.2: a numeric output must declare its rounding.
-        if ty.is_numeric() && o.rounding.is_none() {
+        // §7.2: a numeric output must declare its rounding — an optional one too, whose value,
+        // when it has one, is a number like any other. `Ty::is_numeric` does not look inside
+        // `T?`, so `money[USDc]?` with no `round` passed while `money[USDc]` was E104 (§15.249).
+        if ty.present().is_numeric() && o.rounding.is_none() {
             c.diags.push(
                 Diag::error("E104", tr!("出力に丸めの宣言がありません", "The output declares no rounding"))
                     .at(at(o.span.line))
@@ -2731,13 +2745,31 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     // Only types declared in this file are checked. For an imported type (the 47 prefectures)
     // it is normal that a cell like `not: 沖縄` leaves 45 values unnamed; demanding a mark on
     // each of them would wreck the whole warning channel.
+    // The enums some table tests in a column. A value of another enum that a row answers with
+    // through a name carrying it is in that row: no table could have a row of its own for it, and
+    // `default` would say it falls to one (§15.249).
+    let tested: HashSet<String> = f
+        .items
+        .iter()
+        .filter_map(|it| match it {
+            Item::Table(t) => Some(t),
+            _ => None,
+        })
+        .flat_map(|t| t.inputs.iter())
+        .filter_map(|(col, _)| match c.ty_of(col).as_ref().map(Ty::present) {
+            Some(Ty::Enum(en)) => Some(en.clone()),
+            _ => None,
+        })
+        .collect();
     for e in &f.enums {
         let unnamed: Vec<&Name> = e
             .values
             .iter()
             .enumerate()
             .filter(|(i, v)| {
-                !c.used_values.contains(&(e.name.text.clone(), v.text.clone())) && !e.default_marks.get(*i).copied().unwrap_or(false)
+                let key = (e.name.text.clone(), v.text.clone());
+                let carried = !tested.contains(&e.name.text) && c.carried_values.contains(&key);
+                !c.used_values.contains(&key) && !carried && !e.default_marks.get(*i).copied().unwrap_or(false)
             })
             .map(|(_, v)| v)
             .collect();
@@ -2835,7 +2867,8 @@ impl Checked {
     /// is held at a scale this divides, and brought down to it after the rounding.
     fn output_steps(&mut self, f: &RuleFile, path: &str) {
         for o in &f.outputs {
-            if !matches!(self.syms.get(&o.name.text).map(|s| &s.ty), Some(Ty::Rate)) {
+            // An optional rate travels at the same step when it has a value (§15.249).
+            if !matches!(self.syms.get(&o.name.text).map(|s| s.ty.present()), Some(Ty::Rate)) {
                 continue;
             }
             let grid = self.roundings.get(&o.name.text).map(|(_, g)| *g);
@@ -2998,6 +3031,37 @@ impl Checked {
         }
     }
 
+    /// E103 for a value that may be absent where an expression works with it (§2.1, §15.249). It
+    /// is tested by a `none` cell and handed on to a column of `T?`, and nothing else: in an
+    /// expression it was typed `T?` and carried along, so `define d : money[USD]? = quoted * 2`
+    /// passed, and the generated code multiplied the absent value. A name alone is no
+    /// arithmetic, and is let through: a `define` or a fold's answer that only names one passes
+    /// it on. True when it said so.
+    fn absent_in_expr(&mut self, e: &Expr, t: &Ty, path: &str) -> bool {
+        if !matches!(t, Ty::Opt(_)) {
+            return false;
+        }
+        let sp = e.span().clone();
+        let what = match e {
+            Expr::Name(n, _) => format!("`{n}`"),
+            _ => tr!("この値", "this value"),
+        };
+        self.diags.push(
+            Diag::error("E103", tr!("{what} は値が無いことがあるので、式には書けません", "{what} may have no value, and an expression cannot work with one"))
+                .at(format!("{path}:{}", sp.line))
+                .mark(sp, tr!("型は {t} です", "its type is {t}"))
+                .note(tr!(
+                    "値の無いことのある値は、表のセルで確かめることと、optional の列にそのまま渡すことしかできません。",
+                    "A value that may be absent is tested in a table's cells and handed on to an optional column as it is, and that is all."
+                ))
+                .note(tr!(
+                    "式で使う値は、値の無いことのない入力として受け取ってください。",
+                    "Take a value an expression works with as an input that always has one."
+                )),
+        );
+        true
+    }
+
     pub(crate) fn expr_ty(&mut self, e: &Expr, path: &str) -> Ty {
         match e {
             Expr::Name(n, sp) => {
@@ -3034,6 +3098,9 @@ impl Checked {
                     return self.divided_rounding(name, n, d, &args[0], &args[1], sp, path);
                 }
                 let ats: Vec<Ty> = args.iter().map(|a| self.expr_ty(a, path)).collect();
+                if args.iter().zip(&ats).map(|(a, t)| self.absent_in_expr(a, t, path)).fold(false, |x, y| x | y) {
+                    return Ty::Unknown;
+                }
                 // The set of calls is closed and each one takes a fixed number of
                 // arguments. Until §15.102 neither was checked: `foo(a, b)` and
                 // `min(a, b, c)` both passed, and the generator had no case for either —
@@ -3388,6 +3455,9 @@ impl Checked {
             Expr::Bin(l, op, r, sp) => {
                 let lt = self.expr_ty(l, path);
                 let rt = self.expr_ty(r, path);
+                if self.absent_in_expr(l, &lt, path) | self.absent_in_expr(r, &rt, path) {
+                    return Ty::Unknown;
+                }
                 use BinOp::*;
                 // Ordered, not arithmetic (§15.84). The comparisons below are exactly what
                 // these dimensions are for, so the guard sits in front of the four that are
@@ -3527,6 +3597,9 @@ impl Checked {
     fn divided_rounding(&mut self, name: &str, n: &Expr, d: &Expr, arg: &Expr, grid: &Expr, sp: &Span, path: &str) -> Ty {
         let nt = self.expr_ty(n, path);
         let dt = self.expr_ty(d, path);
+        if self.absent_in_expr(n, &nt, path) | self.absent_in_expr(d, &dt, path) {
+            return Ty::Unknown;
+        }
         let asp = arg.span().clone();
         if let Some(t) = [&nt, &dt].into_iter().find(|t| compares_only(t)).cloned() {
             self.no_arithmetic(&t, &asp, path);
@@ -4505,7 +4578,10 @@ impl Checked {
                 // names. Without this a later `define` that multiplies by a rate column
                 // read that rate as if it were whole units, and the generated code came
                 // back a factor of the rate's step too large (§15.16).
-                if matches!(ty, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
+                //
+                // An optional column is its type's when it has a value, and a `none` cell holds
+                // no value to widen anything with (§15.249).
+                if matches!(ty.present(), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) {
                     let mut sc: i128 = 1;
                     for row in &t.rows {
                         match row.outs.get(oi) {
@@ -4568,6 +4644,8 @@ impl Checked {
                                 }
                                 _ => known = false,
                             },
+                            // No value, so nothing to bound; the range is of the values there are.
+                            Some(OutCell::Nothing) => {}
                             _ => known = false,
                         }
                     }
@@ -4611,14 +4689,26 @@ impl Checked {
         // downstream column (§5.3). A cell that names one of the table's own columns passes on
         // what that column holds in the row, and a name of anything else whatever its type
         // holds (`row_writes`, §15.208).
+        // An optional one is read the same way, with `none` among its values when a row answers
+        // it or passes on a name that may be absent: a table below asks a row for the absent
+        // value only where one above can give it (§15.249).
         if t.name.is_some() {
             for (oi, oc) in t.outputs.iter().enumerate() {
-                if !matches!(out_ty.get(oi), Some(Ty::Enum(_)) | Some(Ty::Bool)) {
+                if !matches!(out_ty.get(oi).map(Ty::present), Some(Ty::Enum(_)) | Some(Ty::Bool)) {
                     continue;
                 }
                 let mut vs: Vec<String> = Vec::new();
                 for ri in 0..t.rows.len() {
-                    for w in self.row_writes(t, ri, oi).unwrap_or_default() {
+                    let written = self.row_writes(t, ri, oi).unwrap_or_default();
+                    // The values a name carries into the column (§15.249): W111 asks of them too.
+                    if let (Some(OutCell::Name(w)), Some(Ty::Enum(en))) = (t.rows[ri].outs.get(oi), out_ty.get(oi).map(Ty::present)) {
+                        if self.syms.contains_key(w) {
+                            for v in written.iter().filter(|v| v.as_str() != crate::kw::NONE) {
+                                self.carried_values.insert((en.clone(), v.clone()));
+                            }
+                        }
+                    }
+                    for w in written {
                         if !vs.contains(&w) {
                             vs.push(w);
                         }
@@ -4707,11 +4797,12 @@ impl Checked {
                             if let Some(e) = self.enum_of_value_in(w, want) {
                                 self.used_values.insert((e.clone(), w.clone()));
                             }
-                            if !s.ty.unifies(want) {
+                            if !fits_column(&s.ty, want) {
                                 self.diags.push(
                                     Diag::error("E103", tr!("この列は {want} ですが `{w}` は {} です", "This column is {want}, but `{w}` is {}", s.ty))
                                         .at(at(row.span.line))
-                                        .mark(osp.clone(), ""),
+                                        .mark(osp.clone(), "")
+                                        .maybe_note(absent_into_present(w, &s.ty, want)),
                                 );
                             }
                         } else if let Some(e) = self.enum_of_value_in(w, want) {
@@ -4725,6 +4816,12 @@ impl Checked {
                                     .maybe_note(crate::prelude::hint(w, &self.imported))
                                     .note(tr!("出力セルに書けるのは リテラルか名前（入力・導出・定義）だけです。式は書けません。", "An output cell holds only a literal or a name (an input, derived value, or definition). Expressions are not allowed.")),
                             );
+                        }
+                    }
+                    // The absent value, which only a column of `T?` answers with (§15.249).
+                    OutCell::Nothing => {
+                        if let Some(d) = none_in_present(want, &ocol, self.outputs.contains_key(&ocol)) {
+                            self.diags.push(d.at(at(row.span.line)).mark(osp.clone(), ""));
                         }
                     }
                     _ => {}
@@ -4863,11 +4960,12 @@ impl Checked {
                         if let Some(e) = self.enum_of_value_in(w, &want) {
                             self.value_of_other_enum(w, &e, &want, &at(row.span.line), &osp);
                         } else if let Some(s) = self.syms.get(w).cloned() {
-                            if !s.ty.unifies(&want) {
+                            if !fits_column(&s.ty, &want) {
                                 self.diags.push(
                                     Diag::error("E103", tr!("この列は {want} ですが `{w}` は {} です", "This column is {want}, but `{w}` is {}", s.ty))
                                         .at(at(row.span.line))
-                                        .mark(osp, ""),
+                                        .mark(osp, "")
+                                        .maybe_note(absent_into_present(w, &s.ty, &want)),
                                 );
                             }
                         } else if w != crate::kw::TRUE && w != crate::kw::FALSE {
@@ -4877,6 +4975,14 @@ impl Checked {
                                     .mark(osp, "")
                                     .maybe_note(crate::prelude::hint(w, &self.imported)),
                             );
+                        }
+                    }
+                    // An expected `none` says the output has no value (§15.249); under an output
+                    // that always has one, the example asks for what the rule cannot answer.
+                    OutCell::Nothing => {
+                        let ocol = t.outputs.get(oi).map(|o| o.name.text.clone()).unwrap_or_default();
+                        if let Some(d) = none_in_present(&want, &ocol, self.outputs.contains_key(&ocol)) {
+                            self.diags.push(d.at(at(row.span.line)).mark(osp, ""));
                         }
                     }
                     _ => {}
@@ -5972,6 +6078,11 @@ impl Checked {
     /// write, with the name taken for a value of its own, against "a name can be anything" — so the
     /// same rule was told to delete a row (E102) and to add it (E101) at once. `None` for a
     /// column of another type, or a name whose type is not one of words.
+    ///
+    /// The absent value is one of them, `none`: a `none` cell writes it, and a name that may be
+    /// absent passes it on unless the row's own cell for it keeps it out. Without it, a table
+    /// below that read an optional column was asked no row for the absent value, and its `none`
+    /// row was called dead (§15.249).
     pub fn row_writes(&self, t: &Table, ri: usize, oi: usize) -> Option<Vec<String>> {
         let row = t.rows.get(ri)?;
         let col = self.ty_of(&t.outputs.get(oi)?.name.text)?;
@@ -5979,18 +6090,23 @@ impl Checked {
         match row.outs.get(oi)? {
             OutCell::Lit(Lit::Word(w)) => Some(vec![w.clone()]),
             OutCell::Lit(_) => None,
+            OutCell::Nothing => Some(vec![crate::kw::NONE.to_string()]),
             OutCell::Name(w) => {
                 let Some(ty) = self.ty_of(w) else {
                     // No name of that spelling where the cell is: the word is a value.
                     return Some(vec![w.clone()]);
                 };
-                let all = self.values_of(&ty)?;
+                let mut all = self.values_of(&ty)?;
+                if matches!(ty, Ty::Opt(_)) {
+                    all.insert(0, crate::kw::NONE.to_string());
+                }
                 let Some(ci) = t.inputs.iter().position(|(n, _)| n == w) else { return Some(all) };
                 let Some(cell) = row.cells.get(ci) else { return Some(all) };
                 Some(
                     all.into_iter()
                         .filter(|v| {
                             let val = match ty.present() {
+                                _ if v == crate::kw::NONE => crate::eval::Val::Enum(v.clone()),
                                 Ty::Bool => crate::eval::Val::Bool(v == crate::kw::TRUE),
                                 _ => crate::eval::Val::Enum(v.clone()),
                             };
@@ -6262,7 +6378,8 @@ fn group_digits(n: i128) -> String {
 /// changing the answer the least. **Which direction and which grid are right is a business
 /// decision**, which the notes say and `fix.text` cannot.
 fn unit_one(ty: &Ty) -> String {
-    match ty {
+    // An optional output's grid is a value of the type it wraps (§15.249).
+    match ty.present() {
         Ty::Money { cur, .. } => format!("1{cur}"),
         Ty::Qty { unit, .. } => format!("1{unit}"),
         Ty::Rate => "1%".into(),
@@ -6284,7 +6401,8 @@ pub fn fmt_val_fixed(v: Rat, ty: &Ty) -> String {
 }
 
 fn fmt_val_in(v: Rat, ty: &Ty, ja: bool) -> String {
-    match ty {
+    // A value of `T?` that is there is a value of `T`, and is written as one.
+    match ty.present() {
         Ty::Money { cur, .. } => format!("{}{cur}", fmt_big(v, ja)),
         Ty::Qty { unit, .. } => format!("{v}{unit}"),
         Ty::Rate => format!("{}%", v.mul(Rat::int(100))),
@@ -6909,6 +7027,56 @@ fn retyped(name: &str, written: &Ty, sp: &Span, had: &Sym, at: String, examples:
         )
     };
     Diag::error("E103", title).at(at).mark(sp.clone(), "").mark(had.span.clone(), there).note(note)
+}
+
+/// Whether a name of type `ty` can be written into an output cell of a column of type `col`: a
+/// value of the column's type, or of the type an optional column wraps, which the column then
+/// answers as a value that is there (§15.249). A name of `T?` fits only a column of `T?`, since
+/// a column of `T` has no answer for the absent value it may carry.
+pub fn fits_column(ty: &Ty, col: &Ty) -> bool {
+    ty.unifies(col) || matches!(col, Ty::Opt(inner) if ty.unifies(inner))
+}
+
+/// The note of E103 for a name that may be absent written into a column that is not optional.
+fn absent_into_present(name: &str, ty: &Ty, col: &Ty) -> Option<String> {
+    let Ty::Opt(inner) = ty else { return None };
+    if matches!(col, Ty::Opt(_)) || !inner.unifies(col) {
+        return None;
+    }
+    Some(tr!(
+        "`{name}` には値が無いことがあり、{col} の列にはそのときの答えがありません。値が無いことを答えるなら、この列の型を `{col}?` にしてください。",
+        "`{name}` may have no value, and a column of {col} has no answer for that. If the answer is that there is no value, make this column's type `{col}?`."
+    ))
+}
+
+/// E103 for `none` written into an output cell, or an expected value, under a column that always
+/// has a value (§15.249). `None` when the column is optional, or of a type not known. The caller
+/// says where and marks the cell.
+fn none_in_present(col: &Ty, name: &str, output: bool) -> Option<Diag> {
+    if matches!(col, Ty::Opt(_) | Ty::Unknown) {
+        return None;
+    }
+    let none = crate::kw::NONE;
+    let fix = if output {
+        tr!(
+            "{name} に値が無いことがあるなら、`{}` の宣言を `{name} : {col}?` にしてください。見出しに型を書いた表があれば、その型もそろえてください。そうでなければ、ここには {col} の値を書いてください。",
+            "If {name} may have no value, declare it `{name} : {col}?` under `{}`, and write the same type on any heading that writes one. Otherwise write a value of {col} here.",
+            crate::kw::OUTPUTS
+        )
+    } else {
+        tr!(
+            "{name} に値が無いことがあるなら、見出しを `-> {name} : {col}?` にしてください。そうでなければ、ここには {col} の値を書いてください。",
+            "If {name} may have no value, write its heading `-> {name} : {col}?`. Otherwise write a value of {col} here."
+        )
+    };
+    Some(
+        Diag::error("E103", tr!("この列は {col} ですが `{none}` が書かれています", "This column is {col}, but `{none}` is written here"))
+            .note(tr!(
+                "`{none}` は値が無いことを答えるセルで、書けるのは optional の列（`{col}?`）だけです。{name} は optional ではありません。",
+                "`{none}` answers that there is no value, which only an optional column (`{col}?`) does; {name} is not optional."
+            ))
+            .note(fix),
+    )
 }
 
 /// E103 for a rate that is passed in with no step (§15.139). What the caller hands over is one

@@ -1,0 +1,9 @@
+error[E103]: This column is bool, but `none` is written here
+  --> tests/optional/E103_optional_でない出力の例に書いた_none.rule:18 examples
+   |
+18 | | false      | none    |
+   |                ^^^^
+   |
+ `none` answers that there is no value, which only an optional column (`bool?`) does; 署名 is not optional.
+ If 署名 may have no value, declare it `署名 : bool?` under `outputs`, and write the same type on any heading that writes one. Otherwise write a value of bool here.
+

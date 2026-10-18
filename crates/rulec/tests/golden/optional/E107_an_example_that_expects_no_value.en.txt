@@ -1,0 +1,9 @@
+error[E107]: Example does not hold: price should be none but came out as 513USDc
+  --> tests/optional/E107_an_example_that_expects_no_value.rule:21 examples
+   |
+21 | | 20oz   | true       | none     |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Fired rows: table price_of row 3
+ Examples are executable specification. Fix the table, or fix the example if the example is what is wrong.
+

@@ -198,7 +198,7 @@ Fourteen, and no others.
 | number | `number` | a whole number with no unit — a count of things, a number of days, a score |
 | date | `date` | comparison and range only. **There is no date arithmetic** (E048) |
 | string | `string` | **cannot be a table column** (E110). Use it for an output, or for an input that only passes through. A value that decides a branch belongs in an `enum` |
-| optional | `member_kind?` | any of the above, plus the absent value, which the cell `none` tests. Its `range` and its step are those of the type it wraps and hold the value when there is one; it never appears in an expression or a `constraint`. A comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too. Completeness asks for a row for the absent value and for the whole declared range beside it (E101), and the generated code guards a value that is there as it guards the type it wraps |
+| optional | `member_kind?` | any of the above, plus the absent value, which the cell `none` tests. Its `range` and its step are those of the type it wraps and hold the value when there is one; it never appears in an expression or a `constraint` (an expression that works with one is E103; a `define` that only names one hands it on). A comparison, a literal and a set of values match only a value that is there, while `-` and `not:` match the absent value too. Completeness asks for a row for the absent value and for the whole declared range beside it (E101), and the generated code guards a value that is there as it guards the type it wraps. An output may be optional too: a row answers `none` for no value, or a value of the type it wraps, read in that type (`439USDc` under `money[USDc]?`), and an optional number declares its rounding like any other (E104) |
 
 Every quantity, money, rate, number and date is an **integer** internally. No floating point appears
 anywhere in the tool or in the generated code.
@@ -872,6 +872,10 @@ Five modes, each pinned down for negative values:
 The value in parentheses is the **grid**: `up(10JPY)` rounds to a multiple of 10 yen. Rounding
 is applied once per output, last. A missing one is E104; an output literal that is not a
 multiple of the grid is E106.
+
+An optional number (`price : money[USD]?  round down(1USD)`) declares its rounding the same
+way, written in the unit of the type it wraps. It applies where the output has a value; where a
+row answers `none`, the output has none and there is nothing to round.
 
 ## 5. derive
 
@@ -2187,7 +2191,9 @@ never fixed by adding a row: the callee is another unit of approval). `except` l
 a clause or a labelled row (`table:row`) of the callee out; a hole that leaves in the main rule is
 this rule's E101 to fill. The callee's outputs become definitions of this rule, under their
 own names or renamed with `->`, rounded as the callee declares and then, if one is an output
-here, rounded once more as this rule declares.
+here, rounded once more as this rule declares. An optional output of the callee that is not a
+number hands the absent value on, through `with` as well; an optional number would be a
+definition that rounds a value that may be absent, and is E044.
 
 An output of an enum the callee declares is read in this rule's values with `with`, from the
 callee's value to this rule's — the way the value goes, as the `with` of an input goes from this
@@ -2256,6 +2262,16 @@ comparison operator does.
 
 An output cell holds a literal or the name of a value declared above (an input, a `derive` or
 a `define`). It never holds an expression.
+
+In a column of `T?` it may hold `none`, which answers that there is no value. Its other cells
+are read in `T`: `439USDc` under `money[USDc]?`, `media` under `service?`. A name of `T` writes a
+value that is there; a name of `T?` passes on its value or the absence of one. `none` under a
+column that is not optional — an output, a column a table decides, an expected value — is
+E103, which says which declaration or heading takes the `?`, and so is a name that may have no
+value under such a column. A table below that reads an optional column is asked a row for the
+absent value wherever a row above can write `none` or pass on a name that may have none, and
+the generated code answers no value the way its language writes one
+([generated-code.md](generated-code.md)).
 
 A word in an output cell is read in the type of its column (§15.208 of DESIGN.md). In the
 column of an enum, a value of that enum is the value, even where an output or an input of
@@ -2406,6 +2422,10 @@ literal the column cannot hold — `1lb` under `mass[g]`, a bare number where a 
 required, an expected `800kg` under a `money[JPY]` output — is E103. An expected value that
 cannot be read would otherwise leave nothing to hold the rule to. A heading may write its
 output's type after the name, as a table's may, and no other type (E103).
+
+An expected `none` says the output has no value, which only an optional output can say: under
+one that is not optional it is E103, and where the rule answers a value it is E107, as an
+expected value the rule does not answer is.
 
 An example naming an enum value is **not** a row for it: W111 still asks which values no table
 names.

@@ -113,7 +113,10 @@ def writesOf (cert tj rj : Json) (oi : Nat) : Except String (Option (Writes × O
     And the columns whose rows state nothing they write — a certificate from before they did. And
     the rows that say their own cell narrows what they write (`inside`, §15.213), each with the cut
     worked out from its cell: `RulecCert.cut_of_box` is why the value a row writes where it fires is
-    inside that cut, and `eval_mem_hull` why the column's values are then inside the hull. -/
+    inside that cut, and `eval_mem_hull` why the column's values are then inside the hull. An
+    optional column holds a number where it has a value (rulec's §15.249): it is read as the type it
+    wraps, and a row whose answer cell is `none` — the word read back out of the file — writes no
+    number. -/
 def writtenCols (cert : Json) (types : String → Option Ty) :
     List (String × Option (List Writes)) × List String × List InsideClaim × List String := Id.run do
   let mut outs : List (String × Option (List Writes)) := []
@@ -124,13 +127,18 @@ def writtenCols (cert : Json) (types : String → Option Ty) :
     let rows := fieldArr t "rows"
     let ds := (fieldArr t "decides").toList.filterMap str
     for (col, oi) in ds.zip (List.range ds.length) do
-      let some ty := types col | continue
+      let written := fieldStr ((field cert "types").getD Json.null) col
+      let optional := written.endsWith "?"
+      let some ty := (if optional then tyOfString (written.dropEnd 1).toString else types col) | continue
       if !ty.numeric then continue
       if !rows.any (fun r => (field r "writes").isSome) then
         if !unstated.contains col then unstated := unstated ++ [col]
         continue
       let mut ws : Option (List Writes) := some []
       for rj in rows do
+        let absent := optional && ((fieldArr rj "writes")[oi]?).all (·.isNull) &&
+          ((fieldArr rj "produces")[oi]? >>= str) == some "none"
+        if absent then continue
         match writesOf cert t rj oi with
         | .error why => bad := bad ++ [why]; ws := none
         | .ok none => ws := none
@@ -1832,6 +1840,17 @@ def checkMachineSpans (cert : Json) (lines : Array ByteArray) (r : Report)
       if v.isNull then
         read := read + 1
         continue
+      -- A word is one of the output's own values, `none` among them where the output is optional
+      -- (rulec's §15.249). A cell that names something the rule computes holds no word of its own:
+      -- read as one, the row would count nowhere, wherever it may.
+      if !numeric && (boolOf v).isNone then
+        let ty := fieldStr ((field cert "types").getD Json.null) out
+        let base := if ty.endsWith "?" then (ty.dropEnd 1).toString else ty
+        let values := (if ty.endsWith "?" then ["none"] else []) ++
+          ((field ((field cert "enums").getD Json.null) base >>= arr).map (·.toList.filterMap str)).getD []
+        if !values.contains ((str v).getD "") then
+          r := r.fail s!"machine: the value `once {out}` reads on row {row}, `{(str v).getD ""}`, is not a value of {out}"
+          continue
       let agrees : Option Bool :=
         if numeric then do
           let sc ← scale

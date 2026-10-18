@@ -514,6 +514,14 @@ impl ritsu_ports::Rules for Engine {
         use crate::ast::{Lit, OutCell};
         let (_, _, got) = self.rule(rule)?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        // An optional output is undecided here as it was: what it comes to is a range of numbers or
+        // no value at all, and the answer has no room for the second (§15.249).
+        if f.outputs.iter().any(|o| o.name.text == output) && c.ty_of(output).is_some_and(|t| matches!(t, Ty::Opt(_)) && t.present().is_numeric()) {
+            return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!(
+                "`{output}` には値が無いことがあるので、とる数を範囲で答えられません",
+                "`{output}` may have no value, so what it comes to is not answered as a range of numbers"
+            )));
+        }
         if !f.outputs.iter().any(|o| o.name.text == output) || !c.ty_of(output).is_some_and(|t| t.is_numeric()) {
             return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!("`{output}` は、この規則の数の出力ではありません", "`{output}` is not a numeric output of this rule")));
         }

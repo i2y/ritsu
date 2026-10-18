@@ -174,6 +174,15 @@ pub fn run(f: &RuleFile, c: &Checked, adapter: &[String], vs: &[Vector]) -> Resu
 pub fn template(lang: &str, f: &RuleFile) -> String {
     let ins: Vec<String> = f.inputs.iter().map(|i| i.name.text.clone()).collect();
     let out = f.outputs.first().map(|o| o.name.text.clone()).unwrap_or_default();
+    // An optional output answers that there is no value as `null` (§15.249), and the template says
+    // how its language writes that.
+    let absent = |none: &str| -> String {
+        match f.outputs.first() {
+            Some(o) if o.ty.optional => tr!("{out} に値が無いときは {none} を返す。", " When {out} has no value, send {none}."),
+            _ => String::new(),
+        }
+    };
+    let (py_none, go_none) = (absent("None"), absent("nil"));
     match lang {
         // The legacy implementation is not always a process to start. When it is a Connect
         // service, what goes in front of it is a client, and the template says so (§15.112).
@@ -191,7 +200,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              for sc.Scan() {{\n\t\t\
              var req struct {{\n\t\t\tID  int            `json:\"id\"`\n\t\t\tIn  map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
              if err := json.Unmarshal(sc.Bytes(), &req); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\n\t\t\
-             // ここでいまの実装を呼ぶ。入力は {}。\n\t\t\
+             // ここでいまの実装を呼ぶ。入力は {}。{go_none}\n\t\t\
              var got any = 0 // TODO: legacy.Compute(req.In)\n\n\t\t\
              b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{:?}: got}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
@@ -207,7 +216,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              for sc.Scan() {{\n\t\t\
              var req struct {{\n\t\t\tID  int            `json:\"id\"`\n\t\t\tIn  map[string]any `json:\"in\"`\n\t\t}}\n\t\t\
              if err := json.Unmarshal(sc.Bytes(), &req); err != nil {{\n\t\t\tpanic(err)\n\t\t}}\n\n\t\t\
-             // Call the legacy implementation here. Inputs: {}.\n\t\t\
+             // Call the legacy implementation here. Inputs: {}.{go_none}\n\t\t\
              var got any = 0 // TODO: legacy.Compute(req.In)\n\n\t\t\
              b, _ := json.Marshal(map[string]any{{\"id\": req.ID, \"out\": map[string]any{{{:?}: got}}}})\n\t\t\
              fmt.Println(string(b))\n\t}}\n}}\n",
@@ -227,7 +236,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              continue\n    \
              req = json.loads(line)\n    \
              d = req[\"in\"]  # 入力は {}\n\n    \
-             # ここでいまの実装を呼ぶ。\n    \
+             # ここでいまの実装を呼ぶ。{py_none}\n    \
              got = 0  # TODO: legacy.compute(d)\n\n    \
              print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
             "# rulec adapter template (rule {}).\n\
@@ -241,7 +250,7 @@ pub fn template(lang: &str, f: &RuleFile) -> String {
              continue\n    \
              req = json.loads(line)\n    \
              d = req[\"in\"]  # inputs: {}\n\n    \
-             # Call the legacy implementation here.\n    \
+             # Call the legacy implementation here.{py_none}\n    \
              got = 0  # TODO: legacy.compute(d)\n\n    \
              print(json.dumps({{\"id\": req[\"id\"], \"out\": {{{:?}: got}}}}, ensure_ascii=False), flush=True)\n",
             f.name.text,

@@ -441,9 +441,10 @@ impl<'a> Grid<'a> {
                         match row.outs.get(ci)? {
                             OutCell::Lit(Lit::Num(x)) => out.push(GridForm::con(crate::types::lit_value_in_pub(x, &ty)?)),
                             OutCell::Lit(_) => return None,
-                            // A word that names nothing is `none`, or a value of an enum: no
-                            // number, so nothing that could sit on a tie.
+                            // A word that names nothing is a value of an enum, and `none` is no
+                            // value at all: no number, so nothing that could sit on a tie.
                             OutCell::Name(m) if !bound(f, m) => {}
+                            OutCell::Nothing => {}
                             OutCell::Name(m) => {
                                 for g in self.forms(&Expr::Name(m.clone(), row.span.clone()), depth + 1, fresh)? {
                                     for bx in &boxes {
@@ -462,7 +463,9 @@ impl<'a> Grid<'a> {
                 if column {
                     return Some(out);
                 }
-                // A value that comes in: a multiple of its own step.
+                // A value that comes in: a multiple of its own step. An optional one is a number
+                // only where it is there, and the type it wraps there (§15.249).
+                let ty = ty.present().clone();
                 if !numeric(&ty) {
                     return None;
                 }

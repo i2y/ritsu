@@ -1,0 +1,9 @@
+エラー[E103]: この列は money[USDc] ですが `none` が書かれています
+  --> tests/optional/E103_optional_でない出力に書いた_none.rule:14 表 料金の表
+   |
+14 | | false      | -          | none                  |
+   |                             ^^^^
+   |
+ `none` は値が無いことを答えるセルで、書けるのは optional の列（`money[USDc]?`）だけです。料金 は optional ではありません。
+ 料金 に値が無いことがあるなら、`outputs` の宣言を `料金 : money[USDc]?` にしてください。見出しに型を書いた表があれば、その型もそろえてください。そうでなければ、ここには money[USDc] の値を書いてください。
+

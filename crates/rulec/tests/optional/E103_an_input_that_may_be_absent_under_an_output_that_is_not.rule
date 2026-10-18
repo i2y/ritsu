@@ -1,0 +1,15 @@
+rule handed_price v1
+description "A parcel's price, which every parcel has, from the price a sender quotes, which may be missing, and whether it is media. A row passes the quote on all the same: an input that may be absent written under an output that is not optional"
+
+inputs
+  quoted     : money[USDc]?  range >=0USDc <=10_000USDc
+  media_only : bool
+
+outputs
+  price : money[USDc]  round down(1USDc)
+
+table price_of
+policy unique
+| media_only | -> price : money[USDc] |
+| false      | quoted                 |
+| true       | 0USDc                  |

@@ -1,0 +1,16 @@
+rule unrounded_price v1
+description "A parcel's price, which a parcel that is not media does not have, from its weight. The output declares no rounding: an optional amount needs one as a plain amount does"
+
+inputs
+  weight     : mass[oz]  range >=1oz <=32oz
+  media_only : bool
+
+outputs
+  price : money[USDc]?
+
+table price_of
+policy unique
+| media_only | weight     | -> price : money[USDc]? |
+| false      | -          | none                    |
+| true       | <=1lb      | 439USDc                 |
+| true       | >1lb <=2lb | 513USDc                 |

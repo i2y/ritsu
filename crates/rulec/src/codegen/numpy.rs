@@ -346,21 +346,47 @@ impl<'a> Gen<'a> {
                                     bin_node("*", &n, &int_node(b / a))
                                 }
                             }
+                            // No value: the runtime holds the column's placeholder there and
+                            // says where it is absent beside it (§15.249).
+                            Some(OutCell::Nothing) => "null".into(),
                             None => "0".into(),
                         }
                     })
                     .collect();
+                // Where each optional column is absent in this row: everywhere (`none`), nowhere
+                // (a value), or where the name it passes on is (§15.249).
+                let absent: Vec<String> = t
+                    .outputs
+                    .iter()
+                    .enumerate()
+                    .map(|(oi, oc)| match (self.ty_of(&oc.name.text), row.outs.get(oi)) {
+                        (Ty::Opt(_), Some(OutCell::Nothing)) => "true".into(),
+                        (Ty::Opt(_), Some(OutCell::Name(w))) if matches!(self.ty_of(w), Ty::Opt(_)) => format!(r#"{{"of":{}}}"#, quote(w)),
+                        _ => "false".into(),
+                    })
+                    .collect();
+                let optional = t.outputs.iter().any(|oc| matches!(self.ty_of(&oc.name.text), Ty::Opt(_)));
                 let (tn, rn, label) = self.fired_of(t, _ri);
                 let mut fired = Obj::new().str("table", &tn).int("row", rn as i128);
                 if !label.is_empty() {
                     fired = fired.str("label", &label);
                 }
-                format!(
-                    r#"{{"tests":[{}],"vals":[{}],"fired":{}}}"#,
-                    tests.join(","),
-                    vals.join(","),
-                    fired.finish()
-                )
+                if optional {
+                    format!(
+                        r#"{{"tests":[{}],"vals":[{}],"absent":[{}],"fired":{}}}"#,
+                        tests.join(","),
+                        vals.join(","),
+                        absent.join(","),
+                        fired.finish()
+                    )
+                } else {
+                    format!(
+                        r#"{{"tests":[{}],"vals":[{}],"fired":{}}}"#,
+                        tests.join(","),
+                        vals.join(","),
+                        fired.finish()
+                    )
+                }
             })
             .collect();
         // W114: a pair of rows whose exclusivity could not be proven statically. The other
@@ -385,6 +411,7 @@ impl<'a> Gen<'a> {
                     .collect()
             })
             .unwrap_or_default();
+        let optional: Vec<bool> = t.outputs.iter().map(|o| matches!(self.ty_of(&o.name.text), Ty::Opt(_))).collect();
         Obj::new()
             .str("op", "table")
             .raw("outs", crate::json::strs(&t.outputs.iter().map(|o| o.name.text.clone()).collect::<Vec<_>>()))
@@ -393,6 +420,10 @@ impl<'a> Gen<'a> {
                 crate::json::strs(
                     &t.outputs.iter().map(|o| kind_of(&self.ty_of(&o.name.text)).to_string()).collect::<Vec<_>>(),
                 ),
+            )
+            .opt_raw(
+                "optional",
+                optional.iter().any(|x| *x).then(|| format!("[{}]", optional.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(","))),
             )
             .raw("rows", format!("[{}]", rows.join(",")))
             .opt_raw("guards", (!guards.is_empty()).then(|| format!("[{}]", guards.join(","))))
@@ -507,6 +538,10 @@ impl<'a> Gen<'a> {
             let to = self.wire_target(scale, os, od);
             let (expr, scale) = (rescale_node(&expr, scale, to), to);
             let mut o = Obj::new().str("name", name).str("kind", kind_of(&ty)).raw("expr", expr);
+            // An optional output answers `None` where its column has no value (§15.249).
+            if self.opt_out(oi) {
+                o = o.bool("optional", true);
+            }
             if let Some(rd) = &od.rounding {
                 let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                 let grid = g.num * scale / g.den;
@@ -631,6 +666,28 @@ impl<'a> Gen<'a> {
     /// The runner `rulec test` drives: it reads the whole file, decides it in one pass, and
     /// writes the records back in order. Reading every line first is the point — a runner
     /// that called the rule per line would answer correctly and prove nothing.
+    /// How a runner writes one output value on the wire, and the record's outputs with it. A date
+    /// output is a column of day numbers, written YYYY-MM-DD as every other language writes it, and
+    /// an optional output is `None` where it has no value (§15.249). A rule with neither keeps the
+    /// plain form.
+    fn np_wire(&self) -> (String, String) {
+        let dates = self.f.outputs.iter().any(|od| matches!(self.ty_of(&od.name.text).present(), Ty::Date));
+        let opt = (0..self.f.outputs.len()).any(|oi| self.opt_out(oi));
+        let mut w = String::new();
+        if dates {
+            w.push_str("_DATES = {o[\"name\"] for o in rule.plan[\"outputs\"] if o[\"kind\"] == \"date\"}\n\n\n");
+        }
+        w.push_str(if dates { "def _wire(v, date=False):\n" } else { "def _wire(v):\n" });
+        if opt {
+            w.push_str("    if v is None:\n        return None\n");
+        }
+        w.push_str("    if isinstance(v, np.bool_):\n        return bool(v)\n    if isinstance(v, np.integer):\n");
+        w.push_str(if dates { "        return rulec_np.civil(int(v)) if date else int(v)\n" } else { "        return int(v)\n" });
+        w.push_str("    return str(v)");
+        let observed = if dates { "{k: _wire(v[n], k in _DATES) for k, v in out.items()}" } else { "{k: _wire(v[n]) for k, v in out.items()}" };
+        (w, observed.to_string())
+    }
+
     pub fn np_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
         // What it answers with `--prerequisites`: each block's functions, from the plan (§15.222).
@@ -644,9 +701,10 @@ impl<'a> Gen<'a> {
         } else {
             "if \"--labels\" in sys.argv[1:]:\n    for l in sys.stdin:\n        en, v = l.rstrip(\"\\n\").split(\"\\t\")\n        print(rule.label(en, v))\n    sys.exit(0)\n".to_string()
         };
+        let (wire, observed) = self.np_wire();
         if self.f.machine.is_some() {
             let load = format!("rule = rulec_np.load(\"{alias}.json\")\n");
-            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty()).replacen(&load, &format!("{load}{labels}{prereqs}"), 1));
+            return format!("{}{}", self.header("#"), np_machine_runner(&alias, !self.more_carried().is_empty(), &wire, &observed).replacen(&load, &format!("{load}{labels}{prereqs}"), 1));
         }
         let body = format!(
             r#"import json
@@ -659,12 +717,7 @@ rule = rulec_np.load("{alias}.json")
 {labels}{prereqs}rows = [json.loads(l) for l in sys.stdin if l.strip()]
 
 
-def _wire(v):
-    if isinstance(v, np.bool_):
-        return bool(v)
-    if isinstance(v, np.integer):
-        return int(v)
-    return str(v)
+{wire}
 
 
 def _in(x):
@@ -680,7 +733,7 @@ def _print(rows, out, fired):
             trace.append(rows_[int(picked[n])])
         rec = {{
             "in": _in(r["in"]),
-            "observed": {{k: _wire(v[n]) for k, v in out.items()}},
+            "observed": {observed},
             "trace": trace,
         }}
         print(json.dumps(rec, ensure_ascii=False, separators=(",", ":")))
@@ -736,9 +789,13 @@ except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
             .f
             .outputs
             .iter()
-            .map(|od| {
+            .enumerate()
+            .map(|(oi, od)| {
                 let ty = self.ty_of(&od.name.text);
-                let v = self.value_json(&od.name.text, &od.name.text, np_ty(&ty), &ty);
+                // An optional output is an array of objects, `None` where there is no value
+                // (§15.249).
+                let np = if self.opt_out(oi) { "ndarray[object]" } else { np_ty(&ty) };
+                let v = self.value_json(&od.name.text, &od.name.text, np, &ty);
                 match self.rounding_json(od) {
                     Some(r) => format!("{},\"rounding\":{r}}}", v.trim_end_matches('}')),
                     None => v,
@@ -753,9 +810,21 @@ except (rulec_np.RuleInputError, rulec_np.RuleContradictionError):
             .str("traced", "rule.traced(**{column: sequence}) -> (outputs, fired)")
             .str(
                 "wire",
-                &tr!(
-                    "列ごとに同じ長さの並びを渡す。値の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。",
-                    "One equal-length sequence per column. The values are the wire format the generated code takes: an integer in the declared unit, a rate as the count of steps, a date as YYYY-MM-DD, an enum as its name."
+                &format!(
+                    "{}{}",
+                    tr!(
+                        "列ごとに同じ長さの並びを渡す。値の形は、生成コードが受け取る入力と同じ（宣言した単位の整数、率は刻みの個数、日付は YYYY-MM-DD、列挙はその名前）。",
+                        "One equal-length sequence per column. The values are the wire format the generated code takes: an integer in the declared unit, a rate as the count of steps, a date as YYYY-MM-DD, an enum as its name."
+                    ),
+                    // Said only where there is one, so a rule without stays as it was.
+                    if (0..self.f.outputs.len()).any(|oi| self.opt_out(oi)) {
+                        tr!(
+                            "optional の出力は、値が無いところが None の、オブジェクトの配列で返る。",
+                            " An optional output comes back as an array of objects, None where there is no value."
+                        )
+                    } else {
+                        String::new()
+                    }
                 ),
             )
             .raw("columns", crate::json::arr(&columns))
@@ -822,7 +891,7 @@ pub fn round_tests_numpy(u: &super::Uses) -> String {
 /// decided a step at a time, **every trace's k-th call in one pass**: the way a host that
 /// holds many cases advances them all by one event at once. The constants come from the
 /// plan, which is where this target keeps them.
-fn np_machine_runner(alias: &str, more: bool) -> String {
+fn np_machine_runner(alias: &str, more: bool, wire: &str, observed: &str) -> String {
     // The values carried along with the state (§15.217), when there are any: each trace holds
     // them beside its state, from where the plan says they start.
     let (meta, start, pass, next) = if more {
@@ -846,12 +915,7 @@ rule = rulec_np.load("{alias}.json")
 lines = [json.loads(l) for l in sys.stdin if l.strip()]
 
 
-def _wire(v):
-    if isinstance(v, np.bool_):
-        return bool(v)
-    if isinstance(v, np.integer):
-        return int(v)
-    return str(v)
+{wire}
 
 
 def _in(x):
@@ -869,7 +933,7 @@ def _decide(ins):
         trace = []
         for picked, rows_ in fired:
             trace.append(rows_[int(picked[n])])
-        recs.append({{"in": _in(x), "observed": {{k: _wire(v[n]) for k, v in out.items()}}, "trace": trace}})
+        recs.append({{"in": _in(x), "observed": {observed}, "trace": trace}})
     return recs
 
 

@@ -550,10 +550,13 @@ struct Upstream<'a> {
 /// The one value an output cell writes, when it writes one: a value written as such, or a word
 /// no declared name is spelled like (§3.2). A name stands for what it holds when the row fires,
 /// which these readings do not follow (`Checked::row_writes` does).
-fn written_value<'o>(o: Option<&'o OutCell>, c: &Checked) -> Option<&'o String> {
+///
+/// `none` writes the absent value, the word an optional column's axis has for it (§15.249).
+fn written_value<'o>(o: Option<&'o OutCell>, c: &Checked) -> Option<&'o str> {
     match o? {
         OutCell::Lit(Lit::Word(w)) => Some(w),
         OutCell::Name(w) if !c.syms.contains_key(w) => Some(w),
+        OutCell::Nothing => Some(crate::kw::NONE),
         _ => None,
     }
 }
@@ -733,7 +736,7 @@ fn carry(from: &Axis, mask: &[bool], to: &Axis) -> Vec<bool> {
 fn produces_where(up: &Upstream, c: &Checked, cell: &Cell) -> Option<Vec<Vec<bool>>> {
     let mut acc: Vec<Vec<bool>> = up.reg.axes.iter().map(|a| vec![false; a.len()]).collect();
     for ri in 0..up.table.rows.len() {
-        let v = written_value(up.table.rows[ri].outs.get(up.oi), c)?.clone();
+        let v = written_value(up.table.rows[ri].outs.get(up.oi), c)?.to_string();
         if !crate::eval::cell_matches(c, cell, &crate::eval::Val::Enum(v), &up.ty) {
             continue;
         }
@@ -853,7 +856,7 @@ fn span_of_value(up: &Upstream, c: &Checked, val: &str, col: &str) -> Option<Cer
     let ai = up.reg.col_names.iter().position(|n| n == col)?;
     let mut picked: Vec<usize> = Vec::new();
     for ri in 0..up.table.rows.len() {
-        let w = written_value(up.table.rows[ri].outs.get(up.oi), c)?.clone();
+        let w = written_value(up.table.rows[ri].outs.get(up.oi), c)?.to_string();
         if w == val {
             picked.push(ri);
         }
@@ -1933,6 +1936,7 @@ fn pairs_to_witness(ps: Vec<(String, crate::diag::WVal)>) -> crate::diag::Witnes
 fn out_cell_text(o: &OutCell) -> String {
     match o {
         OutCell::Name(n) => n.clone(),
+        OutCell::Nothing => crate::kw::NONE.into(),
         OutCell::Lit(Lit::Num(n)) => n.raw.clone(),
         OutCell::Lit(Lit::Word(n)) => n.clone(),
         OutCell::Lit(Lit::Date(y, m, d)) => format!("{y:04}-{m:02}-{d:02}"),
@@ -2204,6 +2208,8 @@ fn outs_equal(a: &Row, b: &Row) -> bool {
         (OutCell::Name(p), OutCell::Name(q)) => p == q,
         (OutCell::Lit(Lit::Num(p)), OutCell::Lit(Lit::Num(q))) => p == q,
         (OutCell::Lit(Lit::Word(p)), OutCell::Lit(Lit::Word(q))) => p == q,
+        // Two rows that both answer that there is no value answer the same (§15.249).
+        (OutCell::Nothing, OutCell::Nothing) => true,
         _ => false,
     })
 }
@@ -2472,6 +2478,7 @@ pub fn check_set(set: &crate::defset::DefSet, c: &Checked, f: &RuleFile, path: &
                                 OutCell::Name(n) => n.clone(),
                                 OutCell::Lit(Lit::Num(n)) => n.raw.clone(),
                                 OutCell::Lit(Lit::Word(n)) => n.clone(),
+                                OutCell::Nothing => crate::kw::NONE.into(),
                                 _ => String::new(),
                             })
                             .collect::<Vec<_>>()
@@ -4146,7 +4153,7 @@ impl TableRegion {
         // The smallest reason first: the table that decides the column never writes the
         // value, whatever the rest of the box says.
         for (up, v) in &held {
-            if !up.table.rows.iter().any(|r| written_value(r.outs.get(up.oi), c).is_some_and(|w| w == v))
+            if !up.table.rows.iter().any(|r| written_value(r.outs.get(up.oi), c).is_some_and(|w| w == v.as_str()))
                 && up.table.rows.iter().all(|r| written_value(r.outs.get(up.oi), c).is_some())
             {
                 return Some(Apart::Never { column: up.name.clone(), value: v.clone() });
@@ -4644,7 +4651,7 @@ impl TableRegion {
         for (ri, r) in up.table.rows.iter().enumerate() {
             match written_value(r.outs.get(up.oi), chk) {
                 Some(w) => {
-                    if *w == value {
+                    if w == value {
                         writers.push(ri);
                     }
                 }
@@ -5150,7 +5157,7 @@ impl TableRegion {
                     .map(|ai| (0..self.axes[ai].len()).filter(|&c| self.masks[ri][ai][c]).collect())
                     .collect(),
                 produces: (0..t.outputs.len())
-                    .map(|oi| written_value(row.outs.get(oi), chk).cloned())
+                    .map(|oi| written_value(row.outs.get(oi), chk).map(str::to_string))
                     .collect(),
                 produced: (0..t.outputs.len())
                     .map(|oi| {
@@ -5419,7 +5426,7 @@ impl TableRegion {
             for (ri, r) in up.table.rows.iter().enumerate() {
                 match written_value(r.outs.get(up.oi), chk) {
                     Some(w) => {
-                        if *w == value {
+                        if w == value {
                             writers.push((up, ri));
                         }
                     }

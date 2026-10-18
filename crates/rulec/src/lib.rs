@@ -510,7 +510,7 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
     let unit = unit_word(f, t);
     let u = unit.as_str();
     let first = f.outputs.first().map(|o| o.name.text.as_str()).unwrap_or("");
-    let rate = matches!(t.syms.get(first).map(|s| &s.ty), Some(types::Ty::Rate));
+    let rate = matches!(t.syms.get(first).map(|s| s.ty.present()), Some(types::Ty::Rate));
     let scale = t.wire_scale(first);
     // A fraction of the grid the output is stored on: a whole yen, one step of a rate.
     let whole = raw.mul(Rat::int(scale)).is_int();
@@ -564,10 +564,11 @@ fn enrich_e104(diags: &mut [diag::Diag], f: &ast::RuleFile, t: &types::Checked) 
 }
 
 /// The unit the first numeric output counts in, as a literal writes it: `円`, `USD`, `g`,
-/// `%`. A `number` counts nothing, so it is empty and the messages read as bare numbers.
+/// `%`. A `number` counts nothing, so it is empty and the messages read as bare numbers. An
+/// optional output counts in the unit of the type it wraps (§15.249).
 fn unit_word(f: &ast::RuleFile, t: &types::Checked) -> String {
     let first = f.outputs.first().map(|o| o.name.text.as_str()).unwrap_or("");
-    match t.syms.get(first).map(|s| &s.ty) {
+    match t.syms.get(first).map(|s| s.ty.present()) {
         Some(types::Ty::Money { cur, .. }) => cur.clone(),
         Some(types::Ty::Qty { unit, .. }) => unit.clone(),
         Some(types::Ty::Rate) => "%".to_string(),

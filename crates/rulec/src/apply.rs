@@ -715,6 +715,20 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 );
                 continue;
             }
+            // An optional output with a rounding — every optional number has one (E104) — would be
+            // a definition that rounds a value that may be absent, which no expression may hold
+            // (§2.1, §15.249). One with none is a definition that names the column, and passes the
+            // absent value on as it is.
+            if od.ty.optional && od.rounding.is_some() {
+                out.push(e044(
+                    tr!("元の規則の出力 `{}` は値が無いことがあり、丸めを宣言しています", "the callee's output `{}` may have no value and declares a rounding", od.name.text),
+                    tr!(
+                        "準用した出力は、元の規則の丸めを掛けた定義になります。値の無いことのある値は式に書けないので、丸めを掛けられません。",
+                        "An applied output becomes a definition of this rule, rounded as the callee declares, and a value that may be absent cannot be rounded in an expression."
+                    ),
+                ));
+                continue;
+            }
             let value = Expr::Name(inner.clone(), rn.sp());
             let expr = match &od.rounding {
                 Some(rd) => Expr::Call(rd.mode.clone(), vec![value, Expr::Lit(Lit::Num(rd.grid.clone()), rn.sp())], rn.sp()),
@@ -756,7 +770,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                     continue;
                 }
                 let ours = ours.expect("checked above");
-                let rows: Vec<Row> = rows_map
+                let mut rows: Vec<Row> = rows_map
                     .iter()
                     .enumerate()
                     .map(|(i, (from, to))| Row {
@@ -771,12 +785,26 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                         origin: None,
                     })
                     .collect();
+                // An optional output's absent value is absent here too (§15.249).
+                if od.ty.optional {
+                    rows.push(Row {
+                        cells: vec![Cell::Nothing],
+                        cell_spans: vec![ob.span.clone()],
+                        outs: vec![OutCell::Nothing],
+                        out_spans: vec![ob.span.clone()],
+                        span: ob.span.clone(),
+                        index: rows.len() + 1,
+                        cite: None,
+                        label: None,
+                        origin: None,
+                    });
+                }
                 a.defines.push(target.text.clone());
                 items.push(Item::Table(Table {
                     name: Some(Name { text: format!("{an}:{}_as_{}", od.name.text, target.text), ascii: None, span: ob.span.clone() }),
                     policy: Policy::Unique,
                     inputs: vec![(inner.clone(), ob.span.clone())],
-                    outputs: vec![OutCol { name: Name { text: target.text.clone(), ascii: target.ascii.clone(), span: ob.span.clone() }, ty: Some(TypeRef { base: ours.text.clone(), args: Vec::new(), optional: false, span: ob.span.clone() }), span: ob.span.clone() }],
+                    outputs: vec![OutCol { name: Name { text: target.text.clone(), ascii: target.ascii.clone(), span: ob.span.clone() }, ty: Some(TypeRef { base: ours.text.clone(), args: Vec::new(), optional: od.ty.optional, span: ob.span.clone() }), span: ob.span.clone() }],
                     rows,
                     span: ob.span.clone(),
                     overrides: Vec::new(),
@@ -1129,6 +1157,7 @@ fn inline_table(rn: &Renamer, cc: &Checked, t: &Table, dropped_rows: &[(String, 
                     None => OutCell::Name(w.clone()),
                 },
                 OutCell::Lit(l) => OutCell::Lit(l.clone()),
+                OutCell::Nothing => OutCell::Nothing,
             })
             .collect();
         rows.push(Row {

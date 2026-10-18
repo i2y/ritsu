@@ -1,0 +1,9 @@
+error[E103]: This column is money[USDc], but `none` is written here
+  --> tests/optional/E103_none_under_an_output_that_is_not_optional.rule:14 table price_of
+   |
+14 | | false      | -          | none                   |
+   |                             ^^^^
+   |
+ `none` answers that there is no value, which only an optional column (`money[USDc]?`) does; price is not optional.
+ If price may have no value, declare it `price : money[USDc]?` under `outputs`, and write the same type on any heading that writes one. Otherwise write a value of money[USDc] here.
+

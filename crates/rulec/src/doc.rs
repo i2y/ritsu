@@ -3142,9 +3142,21 @@ fn customer_present(ty: Option<Ty>, range: &str) -> String {
     }
 }
 
-/// What an output is, for the customer.
+/// What an output is, for the customer. An optional one is what it is when it has a value, or
+/// none (§15.249), as an optional input is.
 fn customer_output(c: &Checked, name: &str) -> String {
     match c.ty_of(name) {
+        Some(Ty::Opt(inner)) => match customer_output_of(c, Some(*inner)) {
+            p if p.is_empty() => tr!("任意", "optional"),
+            p => tr!("{p}、または無し", "{p}, or none"),
+        },
+        ty => customer_output_of(c, ty),
+    }
+}
+
+/// What a value of an output's type is, for the customer.
+fn customer_output_of(c: &Checked, ty: Option<Ty>) -> String {
+    match ty {
         Some(Ty::Enum(e)) => {
             let vs = c.enums.get(&e).cloned().unwrap_or_default();
             if vs.len() <= 8 {
@@ -3178,8 +3190,16 @@ fn customer_val(c: &Checked, name: &str, v: &crate::eval::Val) -> String {
                 tr!("いいえ", "no")
             }
         }
-        (Val::Num(r), Some(Ty::Money { cur, .. })) => format!("{}{cur}", crate::types::fmt_big_pub(*r)),
-        (Val::Num(r), Some(Ty::Qty { unit, .. })) => qty_words(*r, &unit),
+        // A value of an optional output is a value of the type it wraps (§15.249).
+        (Val::Num(r), Some(t)) if matches!(t.present(), Ty::Money { .. }) => {
+            let Ty::Money { cur, .. } = t.present() else { unreachable!() };
+            format!("{}{cur}", crate::types::fmt_big_pub(*r))
+        }
+        (Val::Num(r), Some(t)) if matches!(t.present(), Ty::Qty { .. }) => {
+            let Ty::Qty { unit, .. } = t.present() else { unreachable!() };
+            qty_words(*r, unit)
+        }
+        (Val::Enum(w), Some(Ty::Opt(_))) if w == crate::kw::NONE => tr!("無し", "none"),
         _ => crate::vectors::show_named(c, name, v),
     }
 }
@@ -3327,7 +3347,6 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             Ty::Date => "date",
             Ty::Str => "string",
             Ty::Rate => "rate",
-            Ty::Opt(_) => "string",
             _ => "number",
         }
     };
@@ -3339,10 +3358,15 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
             _ => None,
         }
     };
+    // An optional value is described as the type it wraps, and `optional` says it may be
+    // absent: the script gives it the field of that type, reads an empty field or the list's
+    // `none` as the absent value, and shows an absent answer as `none` (§15.249). It was a
+    // text field, whose words no generated code took for a number, a date or a truth value.
     let one = |name: &str, alias: &str| -> String {
-        let ty = c.ty_of(name).unwrap_or(Ty::Unknown);
-        let mut o = Obj::new().str("name", name).str("alias", alias).str("kind", kind_of(&ty));
-        if let Some(u) = unit_of(&ty) {
+        let whole = c.ty_of(name).unwrap_or(Ty::Unknown);
+        let ty = whole.present();
+        let mut o = Obj::new().str("name", name).str("alias", alias).str("kind", kind_of(ty));
+        if let Some(u) = unit_of(ty) {
             o = o.str("unit", &u);
         }
         let sc = c.wire_scale(name);
@@ -3356,11 +3380,14 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
                     .finish(),
             );
         }
-        if let Ty::Enum(e) = &ty {
+        if let Ty::Enum(e) = ty {
             if let Some(vs) = c.enums.get(e) {
                 let vs: Vec<String> = vs.iter().map(|v| format!("{v:?}")).collect();
                 o = o.raw("values", crate::json::arr(&vs));
             }
+        }
+        if matches!(whole, Ty::Opt(_)) {
+            o = o.bool("optional", true);
         }
         o.finish()
     };
@@ -3377,7 +3404,8 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         })
         .collect();
     let outs: Vec<String> = f.outputs.iter().map(|o| one(&o.name.text, &crate::codegen::pub_name_of(&o.name))).collect();
-    // The examples, as the wire values the script puts into the fields.
+    // The examples, as the wire values the script puts into the fields. The absent value of an
+    // optional input is `null`.
     let mut exs: Vec<String> = Vec::new();
     for t in &f.examples {
         for row in &t.rows {
@@ -3398,7 +3426,11 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
                 }
                 let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
                 let v = match row.cells.get(k) {
-                    Some(Cell::Lit(l)) => crate::eval::lit_to_val(l, &ty),
+                    Some(Cell::Lit(l)) => crate::eval::lit_to_val(l, ty.present()),
+                    Some(Cell::Nothing) if matches!(ty, Ty::Opt(_)) => {
+                        o = o.raw(col, "null");
+                        continue;
+                    }
                     _ => None,
                 };
                 match v.and_then(|v| crate::report::wire(c, col, Some(&v))) {
@@ -3492,8 +3524,15 @@ fn seq_json(f: &RuleFile, c: &Checked, name: &str) -> Option<String> {
         let mut o = Obj::new();
         for (ci, (col, _)) in sq.cols.iter().enumerate() {
             let ty = c.ty_of(col).unwrap_or(Ty::Unknown);
-            let Some(Cell::Lit(l)) = row.cells.get(ci) else { return None };
-            let w = crate::eval::lit_to_val(l, &ty).and_then(|v| crate::report::wire(c, col, Some(&v)))?;
+            let l = match row.cells.get(ci) {
+                Some(Cell::Lit(l)) => l,
+                Some(Cell::Nothing) if matches!(ty, Ty::Opt(_)) => {
+                    o = o.raw(col, "null");
+                    continue;
+                }
+                _ => return None,
+            };
+            let w = crate::eval::lit_to_val(l, ty.present()).and_then(|v| crate::report::wire(c, col, Some(&v)))?;
             o = o.str(col, &w);
         }
         rows.push(o.finish());
@@ -3518,7 +3557,7 @@ const PAGE_MORE_JS: &str = r##"
     if (e.target !== next || carried === null) return;
     (RULE.machine.more || []).forEach((m, k) => {
       const inp = RULE.inputs.find((i) => i.alias === m.in);
-      if (inp && heldMore[k] !== undefined) fromWire(inp, form.elements[inp.alias], String(heldMore[k]));
+      if (inp && heldMore[k] !== undefined) fromWire(inp, form.elements[inp.alias], heldMore[k] === null ? null : String(heldMore[k]));
     });
   }, true);
 }
@@ -3528,14 +3567,17 @@ const PAGE_JS: &str = r##"
 const $ = (s) => document.querySelector(s);
 const form = $("#try-form");
 const dateOf = (days) => new Date(Number(days) * 86400000).toISOString().slice(0, 10);
+// An optional value may be absent: its list starts with `none`, a truth value becomes a list
+// of `none`, `true` and `false`, and any other field left empty is the absent value.
 function widget(inp) {
   let el;
-  if (inp.kind === "enum") {
+  if (inp.kind === "enum" || (inp.kind === "bool" && inp.optional)) {
     el = document.createElement("select");
-    for (const v of inp.values) {
+    const vs = inp.kind === "bool" ? ["true", "false"] : inp.values;
+    for (const v of inp.optional ? [""].concat(vs) : vs) {
       const o = document.createElement("option");
       o.value = v;
-      o.textContent = v;
+      o.textContent = v === "" ? "none" : v;
       el.appendChild(o);
     }
   } else if (inp.kind === "bool") {
@@ -3547,6 +3589,7 @@ function widget(inp) {
   } else if (inp.kind === "string") {
     el = document.createElement("input");
     el.type = "text";
+    if (inp.optional) el.placeholder = "none";
   } else {
     el = document.createElement("input");
     el.type = "number";
@@ -3555,7 +3598,9 @@ function widget(inp) {
       const show = (v) => (inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
       el.min = show(inp.range.min);
       el.max = show(inp.range.max);
-      el.placeholder = show(inp.range.min) + " … " + show(inp.range.max);
+      el.placeholder = (inp.optional ? "none / " : "") + show(inp.range.min) + " … " + show(inp.range.max);
+    } else if (inp.optional) {
+      el.placeholder = "none";
     }
   }
   return el;
@@ -3637,12 +3682,13 @@ function fillRows(ex) {
   for (const e of es) addRow(e);
 }
 function toWire(inp, el) {
+  if (inp.optional && el.value === "") return null;
   switch (inp.kind) {
     case "enum":
     case "string":
       return el.value;
     case "bool":
-      return el.checked;
+      return inp.optional ? el.value === "true" : el.checked;
     case "date": {
       const [y, m, d] = el.value.split("-").map(Number);
       return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));
@@ -3654,13 +3700,18 @@ function toWire(inp, el) {
   }
 }
 function fromWire(inp, el, v) {
+  if (inp.optional && (v === null || v === "")) {
+    el.value = "";
+    return;
+  }
   switch (inp.kind) {
     case "enum":
     case "string":
       el.value = v;
       break;
     case "bool":
-      el.checked = v === "true";
+      if (inp.optional) el.value = String(v);
+      else el.checked = v === "true";
       break;
     case "date":
       el.value = v;
@@ -3673,6 +3724,7 @@ function fromWire(inp, el, v) {
   }
 }
 function shown(o, v) {
+  if (v === null) return "none";
   if (o.kind === "rate") return String((Number(v) * 100) / o.scale) + "%";
   if (o.kind === "bool") return v ? "true" : "false";
   if (o.kind === "date") return dateOf(v);
@@ -3716,7 +3768,8 @@ function run() {
       const q = new URLSearchParams();
       for (const inp of RULE.inputs) {
         const el = form.elements[inp.alias];
-        q.set(inp.alias, inp.kind === "bool" ? String(el.checked) : inp.kind === "rate" ? String(toWire(inp, el)) : inp.kind === "date" ? el.value : el.value);
+        const w = toWire(inp, el);
+        q.set(inp.alias, w === null ? "" : inp.kind === "bool" || inp.kind === "rate" ? String(w) : el.value);
       }
       history.replaceState(null, "", "?" + q.toString() + location.hash);
     } catch (_) {

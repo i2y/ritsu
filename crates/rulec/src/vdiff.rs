@@ -1324,6 +1324,7 @@ fn row_map(c: &Checked) -> RowMap {
                 .map(|o| match o {
                     OutCell::Name(n) => format!("={n}"),
                     OutCell::Lit(l) => lit_key(l),
+                    OutCell::Nothing => crate::kw::NONE.to_string(),
                 })
                 .collect();
             // **What the row tests, not only what it answers.** Moving a threshold leaves
@@ -1441,7 +1442,8 @@ pub(crate) fn names_constant_over(f: &RuleFile, c: &Checked, open: &BTreeSet<&st
                 let t = set.row_table(i);
                 if fired.get(t) == Some(&r.index) {
                     return match r.outs.get(ci) {
-                        Some(OutCell::Lit(_)) => true,
+                        // A literal, or no value at all: the same whatever the input.
+                        Some(OutCell::Lit(_)) | Some(OutCell::Nothing) => true,
                         Some(OutCell::Name(m)) => walk_name(m, f, c, open, fired, seen),
                         None => false,
                     };

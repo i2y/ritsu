@@ -1006,10 +1006,13 @@ impl<'a> Gen<'a> {
             o.push_str(&self.php_items(&local, &trace, Phase::All));
         }
 
-        // Every output: its source, brought to the wire scale, then its rounding once.
+        // Every output: its source, brought to the wire scale, then its rounding once. An
+        // optional output takes those steps only when its column has a value, and is `null` when
+        // it has none (§15.249).
         let mut finals: Vec<String> = Vec::new();
         for (oi, od) in outs.iter().enumerate() {
             let out_name = &od.name.text;
+            let opt = self.opt_out(oi);
             let res = match (&self.f.result, oi) {
                 (Some(r), 0) => self.expr(&r.expr, &local),
                 _ => Expr2 { text: local(out_name), scale: self.scale(out_name) },
@@ -1017,12 +1020,12 @@ impl<'a> Gen<'a> {
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
             let ty = self.ty_of(out_name);
-            finals.push(match &od.rounding {
+            let body = match &od.rounding {
                 Some(rd) => {
                     let g = crate::types::lit_value_in_pub(&rd.grid, &ty).unwrap_or(Rat::int(1));
                     let m = RoundMode::parse(&rd.mode).unwrap_or(RoundMode::Down);
                     let grid_i = g.num * res.scale / g.den;
-                    if res.scale != os {
+                    if res.scale != os && !opt {
                         let raw = php_var(&self.temp(&raw_base(oi)));
                         o.push_str(&format!(
                             "    {raw} = {};  // {}\n",
@@ -1030,12 +1033,16 @@ impl<'a> Gen<'a> {
                             tr!("単位: 1/{} {}", "unit: 1/{} {}", res.scale, ty)
                         ));
                         format!("intdiv(_round_{}({raw}, {}), {})", mode_fn(m), grid_i, res.scale / os)
+                    } else if res.scale != os {
+                        format!("intdiv(_round_{}({}, {}), {})", mode_fn(m), php_expr(unparen(&res.text)), grid_i, res.scale / os)
                     } else {
                         format!("_round_{}({}, {})", mode_fn(m), php_expr(&res.text), grid_i)
                     }
                 }
                 None => php_expr(&res.text),
-            });
+            };
+            let v = local(out_name);
+            finals.push(if opt && body != v { format!("{v} === null ? null : {body}") } else { body });
         }
         if outs.len() == 1 {
             let cuts = walked.as_ref().map(|(_, c)| format!(", {c}")).unwrap_or_default();
@@ -1086,9 +1093,15 @@ impl<'a> Gen<'a> {
                         } else if self.is_value(w) {
                             self.php_value(w, &self.ty_of(&oc.name.text))
                         } else {
-                            php_expr(&self.rescaled(w, &oc.name.text, local(w)))
+                            let v = local(w);
+                            match php_expr(&self.rescaled(w, &oc.name.text, v.clone())) {
+                                // A value that may be absent is scaled only when it is there.
+                                r if r != v && matches!(self.ty_of(w), Ty::Opt(_)) => format!("{v} === null ? null : {r}"),
+                                r => r,
+                            }
                         }
                     }
+                    Some(OutCell::Nothing) => "null".into(),
                     None => "0".into(),
                 };
                 o.push_str(&format!("        {} = {v};\n", php_var(&self.ident(&oc.name.text))));

@@ -1,0 +1,9 @@
+error[E103]: This column is money[USDc], but `none` is written here
+  --> tests/optional/E103_optional_でない出力に書いた_none.rule:14 table 料金の表
+   |
+14 | | false      | -          | none                  |
+   |                             ^^^^
+   |
+ `none` answers that there is no value, which only an optional column (`money[USDc]?`) does; 料金 is not optional.
+ If 料金 may have no value, declare it `料金 : money[USDc]?` under `outputs`, and write the same type on any heading that writes one. Otherwise write a value of money[USDc] here.
+

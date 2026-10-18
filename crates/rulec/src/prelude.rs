@@ -459,6 +459,7 @@ impl Norm {
             match o {
                 OutCell::Lit(l) => self.lit(l, &sp),
                 OutCell::Name(w) => self.word(w, &sp),
+                OutCell::Nothing => {}
             }
         }
     }

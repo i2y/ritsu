@@ -1,0 +1,44 @@
+rule carried_answers v1
+description "The service a parcel goes by, the amount it is insured for and whether it is a rush, from the service its sender asks for, the value the sender declares and whether it is media. The sender may give neither, and the rule passes on what it was given. An example of optional inputs handed on to optional outputs, and of an optional column a table below reads. A sketch written for rulec's tests; it is not a transcription of any document"
+
+enum service = media | library | express
+
+inputs
+  requested  : service?
+  declared   : money[USDc]?  range >=0USDc <=10_000USDc
+  media_only : bool
+
+outputs
+  service : service?
+  insured : money[USDc]?  round down(1USDc)
+  rush    : bool
+
+# The service the sender asks for, unless the parcel is media.
+table service_of
+policy unique
+| media_only | -> service : service? |
+| false      | requested             |
+| true       | media                 |
+
+# A media parcel is insured for nothing; any other for the value its sender declares, if any.
+table insured_of
+policy unique
+| media_only | -> insured : money[USDc]? |
+| false      | declared                  |
+| true       | none                      |
+
+# A parcel with no service asked for is no rush; only express is.
+table rush_of
+policy unique
+| service | -> rush : bool |
+| none    | false          |
+| media   | false          |
+| library | false          |
+| express | true           |
+
+examples
+| requested | declared  | media_only | -> service | insured  | rush  |
+| none      | none      | false      | none       | none     | false |
+| express   | 2_500USDc | false      | express    | 2500USDc | true  |
+| library   | 2_500USDc | true       | media      | none     | false |
+| library   | none      | false      | library    | none     | false |

@@ -1,0 +1,9 @@
+error[E103]: This column is 便の種類, but `none` is written here
+  --> tests/optional/E103_optional_でない表の列に書いた_none.rule:15 table 種類の表
+   |
+15 | | false      | none               |
+   |                ^^^^
+   |
+ `none` answers that there is no value, which only an optional column (`便の種類?`) does; 種類 is not optional.
+ If 種類 may have no value, write its heading `-> 種類 : 便の種類?`. Otherwise write a value of 便の種類 here.
+

@@ -1,0 +1,9 @@
+error[E107]: Example does not hold: 料金 should be none but came out as 513USDc
+  --> tests/optional/E107_値の無いことを期待する例.rule:21 examples
+   |
+21 | | 20oz | true       | none    |
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ Fired rows: table 料金の表 row 3
+ Examples are executable specification. Fix the table, or fix the example if the example is what is wrong.
+

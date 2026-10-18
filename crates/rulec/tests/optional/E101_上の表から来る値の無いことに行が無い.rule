@@ -1,0 +1,24 @@
+rule 種類で決まる急ぎ(rush_by_service_ja) v1
+description "小包が急ぎかどうかを、上の表が差出人から受け取って渡す便の種類から決める。種類は無いことがあるのに、下の表には種類の無いときの行が無い。上の表が渡す値の無いことにも、行が要る"
+
+enum 便の種類(service) = メディア(media) | 図書(library) | 速達(express)
+
+inputs
+  希望(requested)        : 便の種類?
+  メディア便(media_only) : bool
+
+outputs
+  急ぎ(rush) : bool
+
+table 種類の表(service_of)
+policy unique
+| メディア便 | -> 種類 : 便の種類? |
+| false      | 希望                |
+| true       | メディア            |
+
+table 急ぎの表(rush_of)
+policy unique
+| 種類     | -> 急ぎ : bool |
+| メディア | false          |
+| 図書     | false          |
+| 速達     | true           |

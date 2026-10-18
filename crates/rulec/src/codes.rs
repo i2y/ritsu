@@ -1324,6 +1324,34 @@ policy unique
 | w | -> r(r) : money[JPY, incl_tax] |
 | - | 100JPY                         |
 "##;
+const X_E103_NONE: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : money[円, incl_tax]  round down(1円)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[円, incl_tax] |
+| true  | 100円                         |
+| false | none                          |
+"##;
+const X_E103_NONE_EN: &str = r##"rule t(t) v1
+
+inputs
+  x(x) : bool
+
+outputs
+  r(r) : money[JPY, incl_tax]  round down(1JPY)
+
+table j(j)
+policy unique
+| x     | -> r(r) : money[JPY, incl_tax] |
+| true  | 100JPY                         |
+| false | none                           |
+"##;
 const X_E104: &str = "rule t(t) v1\n\ninputs\n  x(x) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]\n\n\
                       table j(j)\npolicy unique\n| x     | -> r(r) : money[円, incl_tax] |\n\
@@ -2172,8 +2200,8 @@ pub fn ledger() -> Vec<Entry> {
             "E012",
             tr!("宣言されていない名前です", "The name is not declared"),
             tr!(
-                "表の列や式が、どこにも宣言されていない名前を指しているとき。前に宣言していない名前は使えないので、名前はそれを使う行より上で宣言する必要があります。セルやグループに書いた値がどの列挙の値でもないときにも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、注に、似た綴りの値か、その語を値に持つ別の国の名前空間が出ます。取り込んだ二つの国が同じ綴りの値を持つとき（`WA` はワシントン州と西オーストラリア州の符号です）は、その綴りをそのまま書いても出ます。",
-                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia)."
+                "表の列や式が、どこにも宣言されていない名前を指しているとき。前に宣言していない名前は使えないので、名前はそれを使う行より上で宣言する必要があります。セルやグループに書いた値がどの列挙の値でもないときにも出ます。組み込みの区分（`std/us/states` など）を取り込んでいれば、注に、似た綴りの値か、その語を値に持つ別の国の名前空間が出ます。取り込んだ二つの国が同じ綴りの値を持つとき（`WA` はワシントン州と西オーストラリア州の符号です）は、その綴りをそのまま書いても出ます。`none` はこれに当たりません。optional の列では値の無いことで、optional でない列では E103 です。",
+                "A column or an expression names something that is declared nowhere. There is no forward reference: a name is declared above the line that uses it. It also appears when a value written in a cell or a group is a value of no enum; when the rule imports a built-in namespace of divisions (`std/us/states` and the rest), the note gives the closest spelling, or the namespace of another country that has the word. And it appears when a word is a spelling two imported countries share (`WA` is the code of Washington and of Western Australia). `none` is not one of these: under an optional column it is the absent value, and under any other column it is E103."
             ),
             tr!(
                 "綴りを宣言に合わせるか、その入力・導出・定義を上に宣言してください。二つの国が共有する綴りなら、値の名前（`Washington` か `Western_Australia`）で書いてください。",
@@ -2649,8 +2677,8 @@ pub fn ledger() -> Vec<Entry> {
             "E044",
             tr!("その規則は準用できません", "That rule cannot be applied"),
             tr!(
-                "元の規則が読めないとき、元の規則が `check` を通らないとき（注に、出たコードが並びます）、準用が輪になっているとき（ある規則を準用する規則を、その規則が、直接かほかの規則を通して準用している。輪の全部のファイルを挙げます）。通らない規則を準用しても、通らない規則になるだけで、自分を通して自分を読む規則は答えが決まりません。準用している規則の準用、並びをたどる規則の準用、元の規則の列挙を出す表の準用はできます。",
-                "The callee cannot be read, does not pass `check` (the codes are listed), or the applies go round: a rule applies a rule that applies it back, directly or through others (every file of the ring is listed). A broken rule expanded is a broken rule, and a rule that reads itself through itself has no answer. A rule that applies another, one that walks a sequence, and one whose tables produce its own enums can all be applied."
+                "元の規則が読めないとき、元の規則が `check` を通らないとき（注に、出たコードが並びます）、準用が輪になっているとき（ある規則を準用する規則を、その規則が、直接かほかの規則を通して準用している。輪の全部のファイルを挙げます）。通らない規則を準用しても、通らない規則になるだけで、自分を通して自分を読む規則は答えが決まりません。準用している規則の準用、並びをたどる規則の準用、元の規則の列挙を出す表の準用はできます。元の規則の出力が、値の無いことのある数（`money[円]?` など）のときにも出ます。準用した出力は、元の規則の丸めを掛けた定義になり、値の無いことのある値には丸めを掛けられないからです。値の無いことのある列挙・真偽・日付・文字列の出力は準用でき、値の無いことをそのまま渡します。",
+                "The callee cannot be read, does not pass `check` (the codes are listed), or the applies go round: a rule applies a rule that applies it back, directly or through others (every file of the ring is listed). A broken rule expanded is a broken rule, and a rule that reads itself through itself has no answer. A rule that applies another, one that walks a sequence, and one whose tables produce its own enums can all be applied. It is also an output of the callee that is a number that may have no value (`money[JPY]?`): an applied output becomes a definition rounded as the callee declares, and a value that may be absent cannot be rounded. An optional enum, truth value, date or string can be applied, and hands the absent value on."
             ),
             tr!(
                 "先に元の規則を直してください。輪なら、どこか一つの `apply` を外してください。",
@@ -3040,8 +3068,8 @@ pub fn ledger() -> Vec<Entry> {
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
             tr!(
-                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。列が規則の計算する値（導出、`define`、上の表の出力）なら、例はその値で書かれ、その値を作る入力も、参照の評価器で確かめられたときは付きます。その入力は、導出が足し算・引き算・定数倍だけなら式から求め、ほかの列（`min` や丸めを使う導出、`define`、上の表の出力）では、入力の組み合わせが 16,384 通りまでなら全部を確かめて探します。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。どの入力も届かない値には、行を求めません。導出と、数を計算する `define` の列では、その列が実際に取りうる値の外に、行を求めません（取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので、導出では `constraint` も読みます）。上流の表が出す値の列では、上流の表がその値を出す行の条件と合わせて、ほかの列が取りえない値に、行を求めません。一つの比べ方でできた真偽の `define` の列では、入力の範囲でいつも同じ値をとるなら、もう一方の値に行を求めません（`作成日 <= 2027-03-31` で、作成日がその日までしかとらないなら、false に行を求めません）。optional の入力（`T?`）では、値が無いことも入力の一つで、その行を求めます。数・日付・真偽の optional の入力では、値があるときの宣言した範囲の全部にも行を求めます。",
-                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides."
+                "行を全部合わせても、宣言した範囲の入力を覆いきれていないとき。完全性は宣言で外せず、常に必須です。当てはまらない入力の具体例が必ず付きます。列が規則の計算する値（導出、`define`、上の表の出力）なら、例はその値で書かれ、その値を作る入力も、参照の評価器で確かめられたときは付きます。その入力は、導出が足し算・引き算・定数倍だけなら式から求め、ほかの列（`min` や丸めを使う導出、`define`、上の表の出力）では、入力の組み合わせが 16,384 通りまでなら全部を確かめて探します。導出の値は、セルを書く単位より細かい刻みをとることがあり（`amount * 10%` は 0.1 刻み）、その刻みで調べます。どの入力も届かない値には、行を求めません。導出と、数を計算する `define` の列では、その列が実際に取りうる値の外に、行を求めません（取りうる値は、式を入力の範囲と上流の表が出す値で計算したもので、導出では `constraint` も読みます）。上流の表が出す値の列では、上流の表がその値を出す行の条件と合わせて、ほかの列が取りえない値に、行を求めません。一つの比べ方でできた真偽の `define` の列では、入力の範囲でいつも同じ値をとるなら、もう一方の値に行を求めません（`作成日 <= 2027-03-31` で、作成日がその日までしかとらないなら、false に行を求めません）。optional の入力（`T?`）では、値が無いことも入力の一つで、その行を求めます。数・日付・真偽の optional の入力では、値があるときの宣言した範囲の全部にも行を求めます。上の表が決める optional の列では、上の表が `none` を書く行か、値の無いことのある名前を渡す行があれば、値の無いことにも行を求めます。",
+                "The union of the rows does not cover the declared input space. Completeness cannot be waived and is always required. A concrete input that matches no row is always attached. Where a column is a value the rule computes (a derive, a `define`, the output of a table above), the example gives its value, and the input that produces it too, once the reference evaluator has confirmed it. That input is worked out from the expression where a derive only adds, subtracts and multiplies by constants, and otherwise (a `min` or a rounding, a `define`, a table above) looked for among every combination of the inputs when there are no more than 16,384. A derive's values can fall finer than the units a cell is written in (`amount * 10%` comes in tenths), and they are read on that step. No row is asked for where no input reaches: on the column of a derive or of a `define` that computes a number, past what it can actually come to (its expression computed over the inputs' ranges and the values the tables above produce, and for a derive over the `constraint` lines too); on a column a table above decides, at values of the other columns that the rows writing its value never let come with it; on the column of a boolean `define` of one comparison, at the truth value it never takes over the inputs' ranges (`made <= 2027-03-31` with `made` declared only up to that day is never false). An optional input (`T?`) takes the absent value too, and a row is asked for it; an optional number, date or truth value is asked for the whole of its declared range besides. An optional column a table above decides takes the absent value where a row above writes `none` or passes on a name that may have none, and a row is asked for it there."
             ),
             tr!(
                 "それを起こす入力に当てはまる行を足してください。列挙の値が増えたのが原因なら、その値の行か、全部を受ける `-` の行を足してください。値に専用の行が要らないなら、列挙の宣言に `default` を付けてください。",
@@ -3094,12 +3122,12 @@ pub fn ledger() -> Vec<Entry> {
             "E103",
             tr!("単位の混同: 型の違う値を混ぜています", "Unit mismatch: values of different types are being mixed"),
             tr!(
-                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。",
-                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in."
+                "式やセルで、単位・通貨・税区分の違う値を足したり比べたりしているとき。`money[円, incl_tax]` と `money[円, excl_tax]` も別物です。型の刻みが読めないとき（`rate[step 1g]`）と、率の入力に刻みが無いときにも出ます。どちらも、実行時に受け渡す整数が何を単位に数えているのかが決まりません。お金の型の税区分に `incl_tax` と `excl_tax` のほかの語を書いたとき（`money[円, foo]`）にも出ます。列の列挙に無い値やグループをセルに書いたときにも出ます。出力のセルに書いたときと、グループが二つの列挙の値を混ぜているときも同じです。式の中の数が、書いた単位の値にならないときにも出ます。単位の無い小数（`amount * 0.4`。単位の無い数は整数の `number` です）と、金額や量の端数（`0.5円`）です。表・節・例の見出しに、その名前がもう持っている型と違う型を書いたときにも出ます。出力の名前なら出力の宣言の型、上の表や節が決める名前ならその型です。optional でない列（規則の出力、表が決める列、例の期待値）に `none` を書いたときと、値の無いことのある名前を書いたときにも出ます。値の無いことのある名前を式の中で使ったとき（`quoted * 2`）にも出ます。そういう値は、表のセルで確かめるか、optional の列にそのまま渡すことしかできません。",
+                "An expression or a cell adds or compares values whose unit, currency or tax flag differ. `money[JPY, incl_tax]` and `money[JPY, excl_tax]` are different types too. It is also a step that cannot be read (`rate[step 1g]`), and a rate input that declares no step: either way, what the integer passed at runtime counts is not settled. So is a money type whose tax is a word other than `incl_tax` and `excl_tax` (`money[JPY, foo]`). And it is a value or a group written in a column whose enum does not have it, an output cell included, and a group that mixes the values of two enums. And it is a number in an expression that is no value of the unit it is written in: a bare decimal (`amount * 0.4`; a number with no unit is a `number`, which is whole) and a fraction of a money or quantity unit (`0.5JPY`). And it is the heading of a table, a clause or examples that writes a type other than the one its name already has: the declared type of an output, or the type a table or clause above decides the name in. And it is `none`, or a name that may have no value, written under a column that is not optional: an output, a column a table decides, an expected value. And it is a name that may have no value worked with in an expression (`quoted * 2`): such a value is tested in a table's cells, or handed on to an optional column as it is, and nothing else."
             ),
             tr!(
-                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。見出しの型が名前の型と違うなら、どちらが正しいかを決めて直してください。見出しの型は消してもかまいません。消せば、名前の型で読みます。",
-                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's."
+                "混ぜている片方を表に移してください。「重量に応じた加算料金」なら `table 重量加算 | 重量 | -> 加算額 : money[円, incl_tax] |` の形です。税の変換も、式ではなく表として書いてください。刻みなら、型と同じ単位で書いてください（率の入力は `rate[step 1%]` や `rate[step 0.1%]`）。税区分は、税込なら `incl_tax`、税抜なら `excl_tax` と書いてください。率は `%` で書いてください（`0.4` は `40%`。`fix.text` がこの形を出します）。見出しの型が名前の型と違うなら、どちらが正しいかを決めて直してください。見出しの型は消してもかまいません。消せば、名前の型で読みます。値の無いことを答える列なら、その型を `T?` にしてください（規則の出力なら `outputs` の宣言、表が決める列なら見出しの型です）。そうでなければ、`none` の代わりに値を書いてください。",
+                "Move one side into a table. \"A surcharge that depends on weight\" is `table weight_surcharge | weight | -> surcharge : money[JPY, incl_tax] |`. A tax conversion is also written as a table, never as a formula. A step is written in the unit of its type (a rate input takes `rate[step 1%]` or `rate[step 0.1%]`). A tax is `incl_tax` with tax and `excl_tax` without. A rate is written with `%` (`0.4` is `40%`, which `fix.text` gives). Where a heading's type is not its name's, decide which is right and correct the other; a heading may also go without a type, and is then read in the name's. Where a column is to answer that there is no value, make its type `T?`: the declaration under `outputs` for an output, the heading for a column a table decides; otherwise write a value in the place of `none`."
             ),
             X_E103,
             &["E108", "E112"],
@@ -3109,13 +3137,14 @@ pub fn ledger() -> Vec<Entry> {
             tr!("出力と違う型を書いた、表の見出し", "A table's heading that writes a type other than the output's"),
             X_E103_HEADING,
             X_E103_HEADING_EN,
-        ),
+        )
+        .also(tr!("optional でない出力に書いた `none`", "`none` under an output that is not optional"), X_E103_NONE, X_E103_NONE_EN),
         err(
             "E104",
             tr!("数値の出力に丸めの宣言がありません", "A numeric output declares no rounding"),
             tr!(
-                "数量・金額・率の出力に `round` が無いとき。端数がどう決まるかを宣言しないと、生成コードが黙って決めてしまいます。式が端数を生む場合は、丸め方で答えがどれだけ動くかが、診断に数字で出ます。",
-                "A quantity, money or rate output has no `round`. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer."
+                "数量・金額・率の出力に `round` が無いとき。optional の出力（`money[円]?` など）も同じです。端数がどう決まるかを宣言しないと、生成コードが黙って決めてしまいます。式が端数を生む場合は、丸め方で答えがどれだけ動くかが、診断に数字で出ます。",
+                "A quantity, money or rate output has no `round`, an optional one (`money[JPY]?`) included. Unless the fraction is declared, the generated code settles it silently. When the expression can produce a fraction, the message shows in yen how far the choice moves the answer."
             ),
             tr!(
                 "出力の宣言に丸めを書いてください。例: `round up(10円)`。向きは五種（`up` `down` `half_up` `half_down` `half_even`）で、負の側まで固定されています。",
@@ -3159,8 +3188,8 @@ pub fn ledger() -> Vec<Entry> {
             "E107",
             tr!("例の期待値と一致しません", "An example does not match"),
             tr!(
-                "`examples` の行を参照評価器で走らせた結果が、書かれた期待値と違うとき。**どの表のどの行に当てはまったか**が付きます。`examples` は実行される仕様です。",
-                "Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification."
+                "`examples` の行を参照評価器で走らせた結果が、書かれた期待値と違うとき。**どの表のどの行に当てはまったか**が付きます。`examples` は実行される仕様です。optional の出力の期待値の `none` は、値の無いことを期待します。",
+                "Running a row of `examples` through the reference evaluator gives something other than the value written. **Which row of which table fired** is attached. `examples` is an executable specification. An expected `none` under an optional output expects no value."
             ),
             tr!(
                 "表が正しいなら期待値を直してください。期待値のほうが正しいなら、当てはまった行を直してください。どちらを直すかは、出典（規約、Excel、いま動いている実装）が決めます。",
@@ -3761,8 +3790,8 @@ pub fn ledger() -> Vec<Entry> {
             "W111",
             tr!("使われていない宣言があります", "A declaration is never used"),
             tr!(
-                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。`import` で持ち込んだ型の値は対象外です。順のある列挙の値のうち、その列挙を型に持つ名前がどれも入力で、どの入力の `range` もその値を外しているものも対象外です。その値を持ってくる呼び出しは無いからです。",
-                "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it."
+                "入力・導出・グループ・列挙の値が、どの表のどのセルにも現れないとき。書き忘れのしるしであることも、意図した契約であることもあります。`import` で持ち込んだ型の値は対象外です。順のある列挙の値のうち、その列挙を型に持つ名前がどれも入力で、どの入力の `range` もその値を外しているものも対象外です。その値を持ってくる呼び出しは無いからです。入力をそのまま渡すセル（`| false | requested |`）が答える値も、その列挙をどの表も列で確かめていなければ対象外です。その値の行を持てる表が無いからです。",
+                "An input, a derived value, a group or an enum value appears in no cell of any table. It can be the symptom of a forgotten column, or a legitimate contract. Values of an imported type are not checked this way, nor is a value of an ordered enum when every name of that type is an input whose `range` leaves the value out: no call brings it. Nor is a value a cell that hands an input on (`| false | requested |`) answers with, when no table tests the enum in a column: no table could give it a row of its own."
             ),
             tr!(
                 "入力が範囲の入口検査としてだけ効いているなら、宣言に `contract_only` を付けて黙らせてください。列挙の値が既定行に落ちるのが正しいなら、値の宣言に `default` を付けてください。どちらでもないなら、その列を表に足すか、宣言を消してください。",

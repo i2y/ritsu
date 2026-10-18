@@ -137,17 +137,22 @@ fn 台帳の別の形の再現はその形を出す() {
     // (§15.224); and, with the rule beside them that a contribution adds to or an apply reads, E033
     // with a value a contribution adds, E040 with a contribution's signature, and E044 with applies
     // that go round (§15.228, §15.230); E103 with a table's heading that writes a type other than
-    // the output's (§15.247)
+    // the output's (§15.247), and with `none` under an output that is not optional (§15.249)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
     assert_eq!(with, ["E022", "E031", "E033", "E040", "E044", "E102", "E103", "E108"]);
-    for (code, says) in [
-        ("E033", [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
-        ("E040", [(Lang::En, "The shape of `base.rule` this contribution relies on has changed"), (Lang::Ja, "この寄与が頼る `base.rule` の形が変わっています")]),
-        ("E044", [(Lang::En, "the applies go round"), (Lang::Ja, "準用が輪になっています")]),
-        ("E103", [(Lang::En, "Output r is money[JPY, excl_tax], but money[JPY, incl_tax] is written here"), (Lang::Ja, "出力 r は money[円, excl_tax] ですが、ここには money[円, incl_tax] と書かれています")]),
+    // Each by its place among the entry's other forms; `None` is the last.
+    for (code, form, says) in [
+        ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
+        ("E040", None, [(Lang::En, "The shape of `base.rule` this contribution relies on has changed"), (Lang::Ja, "この寄与が頼る `base.rule` の形が変わっています")]),
+        ("E044", None, [(Lang::En, "the applies go round"), (Lang::Ja, "準用が輪になっています")]),
+        ("E103", Some(0), [(Lang::En, "Output r is money[JPY, excl_tax], but money[JPY, incl_tax] is written here"), (Lang::Ja, "出力 r は money[円, excl_tax] ですが、ここには money[円, incl_tax] と書かれています")]),
+        ("E103", Some(1), [(Lang::En, "This column is money[JPY, incl_tax], but `none` is written here"), (Lang::Ja, "この列は money[円, incl_tax] ですが `none` が書かれています")]),
     ] {
         let e = rulec::codes::find(code).unwrap();
-        let a = e.also.last().unwrap();
+        let a = match form {
+            Some(i) => &e.also[i],
+            None => e.also.last().unwrap(),
+        };
         for (lang, said) in says {
             let r = a.repro(lang);
             let tmp = TempDir::new(&format!("also-{code}"));

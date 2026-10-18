@@ -1,0 +1,67 @@
+rule parcel_answers v1
+description "What a parcel's label says, from its weight, whether it is media and the zone it goes to: a price, a zone number, a service, whether it is signed for, the day it ships and a note. A parcel that is not media has none of them. An example of optional outputs that are an amount, a number, an enum, a truth value, a date and a string: each table writes `none` beside the values. A sketch written for rulec's tests; it is not a transcription of any document"
+
+enum service = media | library
+enum zone = local | national
+
+inputs
+  weight     : mass[oz]  range >=1oz <=32oz
+  media_only : bool
+  zone       : zone
+
+outputs
+  price       : money[USDc]?  round down(1USDc)
+  zone_number : number?  round down(1)
+  kind        : service?
+  signed      : bool?
+  ships       : date?
+  note        : string?
+
+# A parcel that is not media has no price; a media parcel is priced by its weight.
+table price_of
+policy unique
+| media_only | weight     | -> price : money[USDc]? |
+| false      | -          | none                    |
+| true       | <=1lb      | 439USDc                 |
+| true       | >1lb <=2lb | 513USDc                 |
+
+# The row for no value comes last here, and in the middle in the next table: the generated code takes the rows in their order.
+table zone_number_of
+policy unique
+| media_only | zone     | -> zone_number : number? |
+| true       | local    | 1                        |
+| true       | national | 8                        |
+| false      | -        | none                     |
+
+table kind_of
+policy unique
+| media_only | weight | -> kind : service? |
+| true       | <=1lb  | media              |
+| false      | -      | none               |
+| true       | >1lb   | library            |
+
+table signed_of
+policy unique
+| media_only | zone     | -> signed : bool? |
+| false      | -        | none              |
+| true       | local    | false             |
+| true       | national | true              |
+
+table ships_of
+policy unique
+| media_only | zone     | -> ships : date? |
+| false      | -        | none             |
+| true       | local    | 2026-11-02       |
+| true       | national | 2026-11-09       |
+
+table note_of
+policy unique
+| media_only | -> note : string? |
+| false      | none              |
+| true       | "MEDIA MAIL"      |
+
+examples
+| weight | media_only | zone     | -> price | zone_number | kind    | signed | ships      | note         |
+| 1oz    | false      | local    | none     | none        | none    | none   | none       | none         |
+| 16oz   | true       | local    | 439USDc  | 1           | media   | false  | 2026-11-02 | "MEDIA MAIL" |
+| 17oz   | true       | national | 513USDc  | 8           | library | true   | 2026-11-09 | "MEDIA MAIL" |

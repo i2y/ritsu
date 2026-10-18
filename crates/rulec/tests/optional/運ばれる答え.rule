@@ -1,0 +1,44 @@
+rule 運ばれる答え(carried_answers_ja) v1
+description "小包の便の種類、補償額、急ぎかどうかを、差出人が求めた便の種類、差出人が申告した額、メディア便かどうかから決める。差出人はどちらも渡さないことがあり、規則は渡されたものをそのまま渡す。optional の入力を optional の出力に渡す例で、下の表がその optional の列を読む例でもある。rulec のテストのために書いたもので、どの文書の転記でもない。carried_answers.rule の日本語の版"
+
+enum 便の種類(service) = メディア(media) | 図書(library) | 速達(express)
+
+inputs
+  希望(requested)        : 便の種類?
+  申告額(declared)       : money[USDc]?  range >=0USDc <=10_000USDc
+  メディア便(media_only) : bool
+
+outputs
+  種類(service)   : 便の種類?
+  補償額(insured) : money[USDc]?  round down(1USDc)
+  急ぎ(rush)      : bool
+
+# 差出人が求めた便の種類。メディア便ならメディア。
+table 種類の表(service_of)
+policy unique
+| メディア便 | -> 種類 : 便の種類? |
+| false      | 希望                |
+| true       | メディア            |
+
+# メディア便は補償しない。ほかは差出人が申告した額で補償し、申告が無ければ補償額も無い。
+table 補償額の表(insured_of)
+policy unique
+| メディア便 | -> 補償額 : money[USDc]? |
+| false      | 申告額                   |
+| true       | none                     |
+
+# 便の種類が無い小包は急ぎではなく、速達だけが急ぎ。
+table 急ぎの表(rush_of)
+policy unique
+| 種類     | -> 急ぎ : bool |
+| none     | false          |
+| メディア | false          |
+| 図書     | false          |
+| 速達     | true           |
+
+examples
+| 希望 | 申告額    | メディア便 | -> 種類  | 補償額   | 急ぎ  |
+| none | none      | false      | none     | none     | false |
+| 速達 | 2_500USDc | false      | 速達     | 2500USDc | true  |
+| 図書 | 2_500USDc | true       | メディア | none     | false |
+| 図書 | none      | false      | 図書     | none     | false |

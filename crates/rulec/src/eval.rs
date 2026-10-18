@@ -31,7 +31,8 @@ impl Val {
             Val::Enum(s) | Val::Str(s) => s.clone(),
             Val::Bool(b) => if *b { crate::kw::TRUE } else { crate::kw::FALSE }.into(),
             Val::Date(y, m, d) => format!("{y:04}-{m:02}-{d:02}"),
-            Val::Num(r) => match ty {
+            // A value of `T?` that is there is shown as a value of `T` (§15.249).
+            Val::Num(r) => match ty.present() {
                 Ty::Money { cur, .. } => format!("{r}{cur}"),
                 Ty::Qty { unit, .. } => format!("{r}{unit}"),
                 Ty::Rate => format!("{}%", r.mul(Rat::int(100))),
@@ -322,6 +323,8 @@ impl<'a> Env<'a> {
                     .get(w)
                     .cloned()
                     .or_else(|| lit_to_val(&Lit::Word(w.clone()), &ty)),
+                // The absent value, as an optional input holds it (§15.249).
+                Some(OutCell::Nothing) => Some(Val::Enum(crate::kw::NONE.into())),
                 None => None,
             };
             if let Some(v) = v {
@@ -1351,9 +1354,11 @@ fn check_example_table(f: &RuleFile, c: &Checked, path: &str, ex: &Table) -> Vec
             // it. Reading it by the output's place in the declaration held `-> y | x` to the
             // wrong column and reported two examples that were right as wrong (§15.148).
             let Some(hi) = ex.outputs.iter().position(|o| o.name.text == od.name.text) else { continue };
+            // An expected `none` holds the output to having no value (§15.249).
             let want = row.outs.get(hi).and_then(|o| match o {
                 OutCell::Lit(l) => lit_to_val(l, &oty),
                 OutCell::Name(w) => lit_to_val(&Lit::Word(w.clone()), &oty),
+                OutCell::Nothing => Some(Val::Enum(crate::kw::NONE.into())),
             });
             let g = got.get(oi).and_then(|(_, v)| v.clone());
             match (&want, &g) {
@@ -1423,7 +1428,9 @@ pub fn witness_inputs(f: &RuleFile, c: &Checked, pick: Pick) -> HashMap<String, 
     let mut env = HashMap::new();
     for i in &f.inputs {
         let Some(ty) = c.ty_of(&i.name.text) else { continue };
-        let v = match &ty {
+        // An optional input is given a value of the type it wraps: an absent one fires no
+        // fraction, and an optional output that only passes it on had no witness at all (§15.249).
+        let v = match ty.present() {
             Ty::Enum(en) => c.enums.get(en).and_then(|vs| vs.first()).map(|v| Val::Enum(v.clone())),
             Ty::Bool => Some(Val::Bool(true)),
             Ty::Rate => {
