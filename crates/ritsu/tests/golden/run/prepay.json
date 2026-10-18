@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.29.3",
+  "ritsu": "0.30.0",
   "flow": "invoice.flow",
   "scenario": "scenarios/prepay.json",
   "target": "reference",

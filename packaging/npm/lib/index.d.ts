@@ -1,6 +1,6 @@
 // The types of @i2y/ritsu (lib/index.js).
 
-/** The version of ritsu the module was built from, such as "0.29.3". */
+/** The version of ritsu the module was built from, such as "0.30.0". */
 export const version: string;
 
 /** The absolute path of ritsu.wasm in the package. */
