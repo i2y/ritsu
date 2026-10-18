@@ -663,7 +663,7 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
                     }
                 }
             }
-            let package = go_package_name(&o.module);
+            let package = go_package_name(&o.module, &o.name);
             let mut doc = if kinds.contains_key("authz") {
                 format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the code that\n// asks the gates of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and authz/ under\n// the import path {}.\n", head(Comment::Slashes), o.module)
             } else {
@@ -693,11 +693,20 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
     out
 }
 
-/// The name of the Go package of the directory at `module`: its last part, as a Go identifier.
-fn go_package_name(module: &str) -> String {
+/// The name of the Go package of the directory at `module`: its last part, as a Go identifier. A
+/// last part Go keeps as a word cannot name a package: the directory `<out>/go`, put in a module as
+/// it is, would be `package go`, which no Go compiler takes. The package then takes the package's
+/// name (`name`, the `--name` of all three languages), or, when Go keeps that too, the last part with
+/// a `p` before it, as a last part that does not begin with a letter has.
+fn go_package_name(module: &str, name: &str) -> String {
     let last = module.rsplit('/').next().unwrap_or(module);
     let s: String = last.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
-    if s.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) { s } else { format!("p{s}") }
+    let kept = |n: &str| ritsu_emit::words::go::KEYWORDS.contains(&n);
+    match s.chars().next() {
+        Some(c) if c.is_ascii_alphabetic() && !kept(&s) => s,
+        Some(c) if c.is_ascii_alphabetic() && !kept(name) => name.to_string(),
+        _ => format!("p{s}"),
+    }
 }
 
 /// A package's name, as all three of its languages take it.

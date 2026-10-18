@@ -372,6 +372,36 @@ fn a_file_of_enums_is_one_module_the_rules_of_the_package_import() {
     }
 }
 
+/// The Go of a package put in a module as ritsu gen writes it, its directory named `go`
+/// (`--module gocheck/gen/go`): the root of the package cannot be `package go`, a word Go keeps, and
+/// is the package's name instead (`generated`), or, with Go keeping that too (`--name go`), `pgo`.
+/// go vet and gofmt pass both.
+#[test]
+fn a_package_whose_directory_is_named_go_vets() {
+    if !ready(Need::Go, have_go, "go is not installed; the package at a directory named go is not vetted") {
+        return;
+    }
+    let t = TempDir::new("gen-go-dir");
+    for (more, want) in [(&[][..], "generated"), (&["--name", "go"][..], "pgo")] {
+        let out = t.path().join(format!("out-{want}"));
+        let mut args = vec!["gen", "--root", ".", "--out", out.to_str().unwrap(), "--target", "go", "--module", "gocheck/gen/go"];
+        args.extend_from_slice(more);
+        let (code, _, err) = ritsu_in(&here().join(CATALOG), &args);
+        assert_eq!(code, 0, "{err}");
+        assert_has(&out.join("go/doc.go"), &format!("// Package {want} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path gocheck/gen/go.\n"));
+        assert_has(&out.join("go/doc.go"), &format!("\npackage {want}\n"));
+        let module = t.path().join(format!("go-{want}"));
+        std::fs::create_dir_all(module.join("gen")).unwrap();
+        std::fs::write(module.join("go.mod"), "module gocheck\n\ngo 1.24\n").unwrap();
+        ritsu_testkit::tmp::copy_dir(&out.join("go"), &module.join("gen/go"));
+        let o = go_in(&module).args(["vet", "./..."]).output().unwrap();
+        assert!(o.status.success(), "go vet finds fault with the package at gen/go ({want}):\n{}", said(&o));
+        let fmt = Command::new("gofmt").args(["-l", "gen"]).current_dir(&module).output().unwrap();
+        assert!(fmt.status.success() && fmt.stdout.is_empty(), "gofmt would write these otherwise:\n{}", said(&fmt));
+    }
+    println!("go vet and gofmt pass the package at a directory named go, as package generated and as package pgo");
+}
+
 // ── the units ────────────────────────────────────────────────────────────────────────────────────
 
 /// The marketplace (English): a rule that splits a sale into the marketplace's fee and the shop's
