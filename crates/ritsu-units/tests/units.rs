@@ -1,6 +1,6 @@
 //! The table of units, pinned spelling by spelling, and what a unit answers (PLAN D.1): the same
-//! unit under two spellings, an exact conversion, one that does not land on a whole number, ℉'s
-//! offset, and the dimensions that are ordered only.
+//! unit under two spellings, the one type a package names it by, an exact conversion, one that
+//! does not land on a whole number, ℉'s offset, and the dimensions that are ordered only.
 
 use ritsu_units::table::{self, CURRENCIES};
 use ritsu_units::{Dim, Problem, Rat, Tax, Unit};
@@ -95,6 +95,47 @@ fn jpy_is_another_spelling_of_yen() {
     assert!(!sen.same(&yen));
     assert_eq!(yen.whole(Rat::int(5), &sen), Some(Rat::int(500)));
     assert_eq!(sen.whole(Rat::int(150), &yen), None, "150銭 is no whole number of yen");
+}
+
+/// The name of a unit's type in generated code, and the spelling a package of ritsu's names the
+/// unit's one type by (DESIGN 9.3): two spellings of one unit come to one type, and two units never
+/// do.
+#[test]
+fn a_unit_has_one_type_however_it_is_spelled() {
+    let name = |s: &str| Unit::parse(s).unwrap().type_name();
+    assert_eq!(name("money[円, incl_tax]").as_deref(), Some("YenInclTax"));
+    assert_eq!(name("money[JPY, incl_tax]").as_deref(), Some("JPYInclTax"), "the name is of the spelling as written");
+    assert_eq!(name("money[円]").as_deref(), Some("Yen"));
+    assert_eq!(name("money[銭, excl_tax]").as_deref(), Some("SenExclTax"));
+    assert_eq!(name("money[USDc]").as_deref(), Some("USDc"));
+    assert_eq!(name("mass[kg]").as_deref(), Some("Kilogram"));
+    assert_eq!(name("area[坪]").as_deref(), Some("Tsubo"));
+    assert_eq!(name("temperature[℃]").as_deref(), Some("Celsius"));
+    for none in ["rate", "rate[step 0.1%]", "number"] {
+        assert_eq!(name(none), None, "{none} is a plain integer, or counts a step of its own");
+    }
+    assert_eq!(Unit::count("席").type_name(), None);
+    // the spelling the table gives a unit first
+    let first = |s: &str| Unit::parse(s).unwrap().first_spelling().to_string();
+    assert_eq!(first("money[JPY, incl_tax]"), "money[円, incl_tax]");
+    assert_eq!(first("volume[mL]"), "volume[cm3]");
+    assert_eq!(first("volume[kL]"), "volume[m3]");
+    for s in ["money[円]", "money[銭]", "money[USD]", "money[USDc, excl_tax]", "mass[kg]", "volume[L]", "temperature[℉]"] {
+        assert_eq!(first(s), s, "{s} is its own first spelling");
+    }
+    assert_eq!(Unit::count("席").first_spelling(), Unit::count("席"));
+    // every unit of the table has a name of its own: an ASCII identifier, which two spellings share
+    // only when they are one unit
+    let mut by_name: std::collections::BTreeMap<String, Unit> = std::collections::BTreeMap::new();
+    for s in table::spellings() {
+        let (dim, _) = table::unit(&s).unwrap();
+        let u = Unit { dim, unit: s.clone(), tax: None, step: None };
+        let Some(n) = u.first_spelling().type_name() else { continue };
+        assert!(n.starts_with(|c: char| c.is_ascii_uppercase()) && n.chars().all(|c| c.is_ascii_alphanumeric()), "{s}: {n}");
+        if let Some(other) = by_name.insert(n.clone(), u.clone()) {
+            assert!(other.same(&u), "{other} and {u} are two units, and both would be {n}");
+        }
+    }
 }
 
 #[test]

@@ -10,66 +10,16 @@ use crate::num::{Rat, RoundMode, RoundTo};
 use crate::types::{Checked, Ty};
 use std::collections::{BTreeMap, HashSet};
 
-/// Build the ASCII brand name from a unit. Units are a closed set, so a fixed table suffices.
+/// Build the ASCII brand name from a unit. Units are a closed set, so a fixed table suffices: ritsu's
+/// table of units (`ritsu_units::table::type_name`), which began as this function's, so that a
+/// package of ritsu's names the type of a unit as the rules do (ritsu's DESIGN 9.3).
 fn brand_of(ty: &Ty) -> String {
     match ty {
         Ty::Money { cur, tax } => {
-            let c = match cur.as_str() {
-                "円" => "Yen",
-                "銭" => "Sen",
-                other => other,
-            };
-            let t = match tax.as_deref() {
-                Some(crate::kw::INCL_TAX) => "InclTax",
-                Some(crate::kw::EXCL_TAX) => "ExclTax",
-                _ => "",
-            };
-            format!("{c}{t}")
+            let t = tax.as_deref().and_then(ritsu_units::Tax::parse).map(ritsu_units::Tax::type_suffix).unwrap_or("");
+            format!("{}{t}", ritsu_units::table::type_name(cur))
         }
-        Ty::Qty { unit, .. } => match unit.as_str() {
-            "mg" => "Milligram".into(),
-            "g" => "Gram".into(),
-            "kg" => "Kilogram".into(),
-            "t" => "Tonne".into(),
-            "oz" => "Ounce".into(),
-            "lb" => "Pound".into(),
-            "mm" => "Millimeter".into(),
-            "cm" => "Cm".into(),
-            "m" => "Meter".into(),
-            "km" => "Kilometer".into(),
-            "in" => "Inch".into(),
-            "ft" => "Foot".into(),
-            "yd" => "Yard".into(),
-            "mi" => "Mile".into(),
-            "mm2" => "SquareMillimeter".into(),
-            "cm2" => "SquareCentimeter".into(),
-            "m2" => "SquareMeter".into(),
-            "a" => "Are".into(),
-            "ha" => "Hectare".into(),
-            "km2" => "SquareKilometer".into(),
-            "坪" => "Tsubo".into(),
-            "in2" => "SquareInch".into(),
-            "ft2" => "SquareFoot".into(),
-            "yd2" => "SquareYard".into(),
-            "mi2" => "SquareMile".into(),
-            "ac" => "Acre".into(),
-            "mm3" => "CubicMillimeter".into(),
-            "cm3" => "CubicCentimeter".into(),
-            "m3" => "CubicMeter".into(),
-            "mL" => "Milliliter".into(),
-            "L" => "Liter".into(),
-            "kL" => "Kiloliter".into(),
-            "ms" => "Millisecond".into(),
-            "s" => "Second".into(),
-            "min" => "Minute".into(),
-            "h" => "Hour".into(),
-            "d" => "Day".into(),
-            "w" => "Week".into(),
-            "℃" => "Celsius".into(),
-            "℉" => "Fahrenheit".into(),
-            "dB" => "Decibel".into(),
-            other => other.into(),
-        },
+        Ty::Qty { unit, .. } => ritsu_units::table::type_name(unit),
         Ty::Rate => "Rate".into(),
         // A number carries no unit, so there is nothing to brand it apart from. Two counts
         // of different things would get the same brand anyway, and the caller would be left

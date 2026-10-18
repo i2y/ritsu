@@ -116,6 +116,14 @@ impl Tax {
             _ => None,
         }
     }
+
+    /// What the name of an amount's type ends in, with this tax: `YenInclTax`, `USDExclTax`.
+    pub fn type_suffix(self) -> &'static str {
+        match self {
+            Tax::Incl => "InclTax",
+            Tax::Excl => "ExclTax",
+        }
+    }
 }
 
 /// A unit: the dimension, the spelling, the tax, and the step.
@@ -278,6 +286,35 @@ impl Unit {
     /// Whether values of the unit are ordered but have no arithmetic.
     pub fn compares_only(&self) -> bool {
         self.dim.compares_only()
+    }
+
+    /// The name of the unit's type in generated code: [`table::type_name`] of the unit as written,
+    /// then its tax ([`Tax::type_suffix`]): `money[円, incl_tax]` is `YenInclTax`, `money[USDc]` is
+    /// `USDc`, `mass[kg]` is `Kilogram`. Only money and the quantities have one. A rate's integer
+    /// counts a step its own type declares, and a number and a count are plain integers.
+    pub fn type_name(&self) -> Option<String> {
+        match self.dim {
+            Dim::Rate | Dim::Number | Dim::Count(_) => None,
+            _ => Some(format!("{}{}", table::type_name(&self.unit), self.tax.map(Tax::type_suffix).unwrap_or(""))),
+        }
+    }
+
+    /// The same unit in the spelling the table gives it first: `円` for `JPY`, `cm3` for `mL`, `m3`
+    /// for `kL`. Every spelling of one unit ([`Unit::same`]) comes to the same one, so that a package
+    /// of ritsu's has one type for the unit however its files write it (DESIGN 9.3). A unit the
+    /// table does not spell (a count) is itself.
+    pub fn first_spelling(&self) -> Unit {
+        for s in table::spellings() {
+            let Some((dim, _)) = table::unit(&s) else { continue };
+            if dim != self.dim {
+                continue;
+            }
+            let u = Unit { dim, unit: s, tax: self.tax, step: self.step };
+            if u.same(self) {
+                return u;
+            }
+        }
+        self.clone()
     }
 }
 

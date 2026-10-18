@@ -46,67 +46,68 @@ impl Kind {
     }
 }
 
-/// Every unit that is not a currency: its spelling, its dimension, and its factor to the
-/// dimension's base unit as numerator and denominator.
+/// Every unit that is not a currency: its spelling, its dimension, its factor to the dimension's
+/// base unit as numerator and denominator, and the name generated code gives its type
+/// ([`type_name`]).
 ///
 /// The imperial factors are exact rationals (a pound is 453.59237 g on the nose), so they cost
 /// nothing in precision. What they do cost is scale: `1lb` in a column that counts grams is not a
 /// whole number of grams and is refused, which is right — a pound is not writable there.
-const QUANTITIES: &[(&str, Kind, i128, i128)] = &[
-    ("mg", Kind::Mass, 1, 1000),
-    ("g", Kind::Mass, 1, 1),
-    ("kg", Kind::Mass, 1000, 1),
-    ("t", Kind::Mass, 1_000_000, 1),
-    ("oz", Kind::Mass, 28_349_523_125, 1_000_000_000),
-    ("lb", Kind::Mass, 45_359_237, 100_000),
-    ("mm", Kind::Length, 1, 10),
-    ("cm", Kind::Length, 1, 1),
-    ("m", Kind::Length, 100, 1),
-    ("km", Kind::Length, 100_000, 1),
-    ("in", Kind::Length, 254, 100),
-    ("ft", Kind::Length, 3048, 100),
-    ("yd", Kind::Length, 9144, 100),
-    ("mi", Kind::Length, 1_609_344, 10),
+const QUANTITIES: &[(&str, Kind, i128, i128, &str)] = &[
+    ("mg", Kind::Mass, 1, 1000, "Milligram"),
+    ("g", Kind::Mass, 1, 1, "Gram"),
+    ("kg", Kind::Mass, 1000, 1, "Kilogram"),
+    ("t", Kind::Mass, 1_000_000, 1, "Tonne"),
+    ("oz", Kind::Mass, 28_349_523_125, 1_000_000_000, "Ounce"),
+    ("lb", Kind::Mass, 45_359_237, 100_000, "Pound"),
+    ("mm", Kind::Length, 1, 10, "Millimeter"),
+    ("cm", Kind::Length, 1, 1, "Cm"),
+    ("m", Kind::Length, 100, 1, "Meter"),
+    ("km", Kind::Length, 100_000, 1, "Kilometer"),
+    ("in", Kind::Length, 254, 100, "Inch"),
+    ("ft", Kind::Length, 3048, 100, "Foot"),
+    ("yd", Kind::Length, 9144, 100, "Yard"),
+    ("mi", Kind::Length, 1_609_344, 10, "Mile"),
     // Area, in square metres. It is a dimension of its own: two lengths do not multiply into one
     // of these (rulec's §15.83). 坪 is exact — 一間 is 六尺 and a 尺 is 10/33 m, so a 坪 is
     // (20/11)² = 400/121 m².
-    ("mm2", Kind::Area, 1, 1_000_000),
-    ("cm2", Kind::Area, 1, 10_000),
-    ("m2", Kind::Area, 1, 1),
-    ("a", Kind::Area, 100, 1),
-    ("ha", Kind::Area, 10_000, 1),
-    ("km2", Kind::Area, 1_000_000, 1),
-    ("坪", Kind::Area, 400, 121),
-    ("in2", Kind::Area, 64_516, 100_000_000),
-    ("ft2", Kind::Area, 9_290_304, 100_000_000),
-    ("yd2", Kind::Area, 83_612_736, 100_000_000),
-    ("mi2", Kind::Area, 2_589_988_110_336, 1_000_000),
-    ("ac", Kind::Area, 40_468_564_224, 10_000_000),
+    ("mm2", Kind::Area, 1, 1_000_000, "SquareMillimeter"),
+    ("cm2", Kind::Area, 1, 10_000, "SquareCentimeter"),
+    ("m2", Kind::Area, 1, 1, "SquareMeter"),
+    ("a", Kind::Area, 100, 1, "Are"),
+    ("ha", Kind::Area, 10_000, 1, "Hectare"),
+    ("km2", Kind::Area, 1_000_000, 1, "SquareKilometer"),
+    ("坪", Kind::Area, 400, 121, "Tsubo"),
+    ("in2", Kind::Area, 64_516, 100_000_000, "SquareInch"),
+    ("ft2", Kind::Area, 9_290_304, 100_000_000, "SquareFoot"),
+    ("yd2", Kind::Area, 83_612_736, 100_000_000, "SquareYard"),
+    ("mi2", Kind::Area, 2_589_988_110_336, 1_000_000, "SquareMile"),
+    ("ac", Kind::Area, 40_468_564_224, 10_000_000, "Acre"),
     // Volume, in litres. `cm3` and `mL` are the same size and so are `m3` and `kL`; both spellings
     // are kept because a water tariff writes m³ and a fire code writes L. **No gallon**: the US
     // one is 3.785411784 L and the imperial one 4.54609 L, and a unit that means two different
     // sizes is the one thing this table must not hold.
-    ("mm3", Kind::Volume, 1, 1_000_000),
-    ("cm3", Kind::Volume, 1, 1000),
-    ("mL", Kind::Volume, 1, 1000),
-    ("L", Kind::Volume, 1, 1),
-    ("m3", Kind::Volume, 1000, 1),
-    ("kL", Kind::Volume, 1000, 1),
+    ("mm3", Kind::Volume, 1, 1_000_000, "CubicMillimeter"),
+    ("cm3", Kind::Volume, 1, 1000, "CubicCentimeter"),
+    ("mL", Kind::Volume, 1, 1000, "Milliliter"),
+    ("L", Kind::Volume, 1, 1, "Liter"),
+    ("m3", Kind::Volume, 1000, 1, "CubicMeter"),
+    ("kL", Kind::Volume, 1000, 1, "Kiloliter"),
     // Time, in seconds: the span a rule compares, not a calendar day (a `date` has no
     // arithmetic). A minute is `min` because `m` is the metre.
-    ("ms", Kind::Duration, 1, 1000),
-    ("s", Kind::Duration, 1, 1),
-    ("min", Kind::Duration, 60, 1),
-    ("h", Kind::Duration, 3600, 1),
-    ("d", Kind::Duration, 86_400, 1),
-    ("w", Kind::Duration, 604_800, 1),
+    ("ms", Kind::Duration, 1, 1000, "Millisecond"),
+    ("s", Kind::Duration, 1, 1, "Second"),
+    ("min", Kind::Duration, 60, 1, "Minute"),
+    ("h", Kind::Duration, 3600, 1, "Hour"),
+    ("d", Kind::Duration, 86_400, 1, "Day"),
+    ("w", Kind::Duration, 604_800, 1, "Week"),
     // Ordered, not arithmetic (rulec's §15.84). A ℃ is a scale with a displaced zero, so ℉
     // carries an offset as well as a factor — see `offset`. A decibel is a logarithm and has one
     // spelling, so there is nothing to convert it to.
-    ("℃", Kind::Temperature, 1, 1),
-    ("℉", Kind::Temperature, 5, 9),
-    ("dB", Kind::Sound, 1, 1),
-    ("%", Kind::Rate, 1, 100),
+    ("℃", Kind::Temperature, 1, 1, "Celsius"),
+    ("℉", Kind::Temperature, 5, 9, "Fahrenheit"),
+    ("dB", Kind::Sound, 1, 1, "Decibel"),
+    ("%", Kind::Rate, 1, 100, "Rate"),
 ];
 
 /// A money unit: the currency it belongs to, and its factor to that currency's main unit.
@@ -133,7 +134,21 @@ pub fn unit(u: &str) -> Option<(Dim, Rat)> {
     if let Some((cur, f)) = money(u) {
         return Some((Dim::Money(cur), f));
     }
-    QUANTITIES.iter().find(|(s, ..)| *s == u).map(|(_, k, n, d)| (k.dim(), Rat::new(*n, *d)))
+    QUANTITIES.iter().find(|(s, ..)| *s == u).map(|(_, k, n, d, _)| (k.dim(), Rat::new(*n, *d)))
+}
+
+/// The name generated code gives the type of an amount written in `u` (ritsu's DESIGN 9.3): the
+/// English name of a quantity's unit (`kg` is `Kilogram`, `坪` is `Tsubo`), and a currency by its
+/// spelling, `円` as `Yen` and `銭` as `Sen` (`JPY`, `USD` and `USDc` as they are). ASCII, so that
+/// every language takes it as an identifier. It is the naming of rulec's brands (rulec's §8.2),
+/// kept here so that rulec and a package of ritsu's name a unit's type alike. A spelling the table
+/// does not have is its own name.
+pub fn type_name(u: &str) -> String {
+    match u {
+        "円" => "Yen".into(),
+        "銭" => "Sen".into(),
+        _ => QUANTITIES.iter().find(|(s, ..)| *s == u).map(|(.., name)| name.to_string()).unwrap_or_else(|| u.to_string()),
+    }
 }
 
 /// What a unit adds after its factor, to reach its dimension's base unit: `base = v × f + o`.
