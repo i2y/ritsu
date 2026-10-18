@@ -1,0 +1,3 @@
+error[E006]: example.kn:6:4: `quote` is given twice (the function on line 3, and this function)
+     6 | fn quote() -> number
+  = Rename one of them; an alias may not be another's name or alias either.

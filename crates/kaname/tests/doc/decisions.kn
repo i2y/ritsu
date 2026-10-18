@@ -1,0 +1,28 @@
+module decisions v1
+description "What the page for people shows that the examples do not: a function checked when it runs, and decisions written in code. A material of kaname's tests, not an example to follow"
+
+use rule media_mail from "../../examples/media_mail/rules/media_mail.rule"
+
+record Line
+  qty    : number  range >=1 <=20
+  weight : mass[oz]  range >=1oz <=160oz
+  media  : bool
+
+# The weight is read one function at a time: here a cart may have no lines, so it may be 0 ounces,
+# which the rule does not take, though `quote` gives it one line or more.
+fn weight_of(lines: list[Line] count >=0 <=30) -> mass[oz]
+  sum(lines, l => l.weight × l.qty)
+
+fn quote(lines: list[Line] count >=1 <=30) -> money[USDc]?
+  description "The rule's price, where the weight is 15 pounds at most"
+  let weight = weight_of(lines: lines)
+  if weight <= 15lb
+    media_mail(weight: weight, media_only: all(lines, l => l.media)).price
+  else
+    none
+
+fn shipping(total: money[USD] range >=0USD <=10_000USD) -> money[USD]
+  if total >= 35USD then 0USD else 5USD
+
+examples
+  shipping(total: 40USD) = 0USD

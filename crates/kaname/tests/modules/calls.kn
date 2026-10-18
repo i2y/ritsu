@@ -1,0 +1,13 @@
+module calls v1
+description "Calls of the functions of another module, with its record and its enum"
+
+use module lib from "tests/modules/lib.kn"
+
+fn count_in(boxes: list[lib.Box] count <=4, room: number range >=0 <=100) -> number
+  count(boxes, b => lib.fits(b: b, room: room))
+
+fn largest(a: lib.size, b: lib.size) -> lib.size
+  lib.bigger(a: a, b: b)
+
+fn packed(boxes: list[lib.Box] count <=4) -> number
+  lib.total(boxes: boxes) * 2

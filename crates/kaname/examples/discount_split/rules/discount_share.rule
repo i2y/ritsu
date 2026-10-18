@@ -1,0 +1,28 @@
+rule discount_share v1
+description "One line's share of a discount spread over the lines of a bill in proportion to their amounts. The caller keeps the running totals, and the shares come to the discount exactly; the line that carries what the rounding leaves is the last. Virginia's regulation on discounts (23VAC10-210-250) asks a discount on a bill of taxable and nontaxable charges to be split so; the examples are its Example 3, with the labor first and the parts last"
+
+source va = file "sources/23vac10-210-250.md" sha256:73c0c7337d586218  # the Virginia Administrative Code
+
+inputs
+  discount : money[USDc]  range >=0USDc <=10_000_000USDc
+  before   : money[USDc]  range >=0USDc <=100_000_000USDc
+  upto     : money[USDc]  range >=0USDc <=100_000_000USDc
+  total    : money[USDc]  range >=1USDc <=100_000_000USDc
+
+constraint before <= upto
+constraint upto <= total
+
+outputs
+  share : money[USDc]  round down(1USDc)
+
+derive to_before : money[USDc] = allocate(discount, before, total)  range >=0USDc <=10_000_000USDc  @va
+derive to_upto   : money[USDc] = allocate(discount, upto, total)    range >=0USDc <=10_000_000USDc  @va
+
+result share = to_upto - to_before
+
+# $10.00 off a bill of $50.00 of labor and $100.00 of parts: the regulation gives $3.33 to the
+# labor and $6.67 to the parts.
+examples
+| discount | before   | upto      | total     | -> share |
+| 1000USDc | 0USDc    | 5000USDc  | 15000USDc | 333USDc  |
+| 1000USDc | 5000USDc | 15000USDc | 15000USDc | 667USDc  |

@@ -1,0 +1,78 @@
+{
+  "kaname": "<version>",
+  "file": "payout.kn",
+  "module": "payout",
+  "function": "settle",
+  "input": {
+    "payment": {
+      "id": "pay_2",
+      "seller": "s_1",
+      "amount": 10000,
+      "international": true
+    }
+  },
+  "calls": [
+    {
+      "line": 19,
+      "module": "payout",
+      "rule": "card_fee",
+      "in": {
+        "amount": 10000,
+        "international": true
+      },
+      "out": {
+        "fee": 548
+      }
+    },
+    {
+      "line": 21,
+      "module": "payout",
+      "transfer": {
+        "book": "ledger",
+        "transfer": "capture",
+        "op": "do",
+        "args": {
+          "payment": "pay_2",
+          "seller": "s_1",
+          "amount": 10000
+        }
+      }
+    },
+    {
+      "line": 22,
+      "module": "payout",
+      "transfer": {
+        "book": "ledger",
+        "transfer": "processing_fee",
+        "op": "do",
+        "args": {
+          "payment": "pay_2",
+          "seller": "s_1",
+          "fee": 548
+        }
+      }
+    }
+  ],
+  "result": {
+    "capture": {
+      "book": "ledger",
+      "transfer": "capture",
+      "op": "do",
+      "args": {
+        "payment": "pay_2",
+        "seller": "s_1",
+        "amount": 10000
+      }
+    },
+    "fee": {
+      "book": "ledger",
+      "transfer": "processing_fee",
+      "op": "do",
+      "args": {
+        "payment": "pay_2",
+        "seller": "s_1",
+        "fee": 548
+      }
+    }
+  }
+}

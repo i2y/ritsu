@@ -1,0 +1,3 @@
+error[E007]: example.kn:4:3: The generated code cannot take `class` as a name
+     4 |   class : string
+  = `class` is a reserved word of the TypeScript, Python or Go the module is generated in, or a name of kaname's helper module; choose another name or alias.

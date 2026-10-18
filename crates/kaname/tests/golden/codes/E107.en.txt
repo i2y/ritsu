@@ -1,0 +1,2 @@
+error[E107]: example.kn:7:3: The function `double` is missing arguments: `n`
+     7 |   double()

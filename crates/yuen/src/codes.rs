@@ -227,10 +227,10 @@ pub fn ledger() -> Ledger {
             "E011",
             tr!("参照の最初の語が、ツール名ではありません", "A tool that does not exist"),
             tr!(
-                "参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho のどれでもないとき（`dir` も、ツール名ではありません）。",
-                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai and sekisho (`dir` is not a word of a naming either)."
+                "参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho、kaname のどれでもないとき（`dir` も、ツール名ではありません）。",
+                "The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho and kaname (`dir` is not a word of a naming either)."
             ),
-            tr!("この十三のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the thirteen; name any other file with `file \"…\"`."),
+            tr!("この十四のツール名のどれかを書いてください。ほかのファイルは `file \"…\"` で指してください。", "Write one of the fourteen; name any other file with `file \"…\"`."),
             "requirements 例 v1\nrole 法務\n\nrequirement r1\n  text \"x\"\n  owner 法務\n  decided 2026-10-03 by 法務 \"例\"\n  satisfied by excel \"a.xlsx\"\n",
             &["E012", "E013"],
         )

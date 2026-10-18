@@ -1,0 +1,7 @@
+module dollars v1
+description "A fee counted in dollars given to a book that counts cents: what the README shows kaname stops. A material of kaname's tests"
+
+use book ledger from "../../examples/payout/books/ledger.book"
+
+fn charge(payment: string, seller: string, fee: money[USD] range >=0USD <=1_000USD) -> ledger.processing_fee.do
+  ledger.processing_fee.do(payment: payment, seller: seller, fee: fee)

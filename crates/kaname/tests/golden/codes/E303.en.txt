@@ -1,0 +1,4 @@
+error[E303]: example.kn:4:8: The divisor of `amount / people` can be 0
+     4 |   down(amount / people, 1USDc)
+  = For example, `each(amount: 0USDc, people: 0)` divides by 0.
+  = Leave 0 out with an `if` before the division, or out of the divisor's range.

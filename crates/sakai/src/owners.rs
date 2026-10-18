@@ -208,8 +208,8 @@ pub fn own(m: &Model) -> (Vec<Artifact>, Vec<Diag>) {
                     diag::at("W101", &c.file, o.pos.line, o.pos.col, tr!("{t} は成果物を一つも含みません", "The entry {t} holds no artifact"))
                         .source(&c.src)
                         .note(tr!(
-                            "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.gate、.proto のファイル、OpenAPI と AsyncAPI の文書、`cedar \"…\"` と書いた Cedar のファイル、地図の `code` に書いた言語の、その置き場所の下のコードです。",
-                            "The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas, .gate and .proto files, the OpenAPI and AsyncAPI documents, the files of Cedar written as `cedar \"…\"`, and the code of the languages the map's `code` lines name, under the places they give."
+                            "パスの書き誤りかもしれません。成果物は、.rule、.flow、.cal、.book、.geas、.gate、.kn、.proto のファイル、OpenAPI と AsyncAPI の文書、`cedar \"…\"` と書いた Cedar のファイル、地図の `code` に書いた言語の、その置き場所の下のコードです。",
+                            "The path may be mistyped. The artifacts are the .rule, .flow, .cal, .book, .geas, .gate, .kn and .proto files, the OpenAPI and AsyncAPI documents, the files of Cedar written as `cedar \"…\"`, and the code of the languages the map's `code` lines name, under the places they give."
                         )),
                 );
             }

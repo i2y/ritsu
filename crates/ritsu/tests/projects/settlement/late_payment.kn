@@ -1,0 +1,34 @@
+# A module of kaname in the project (ritsu gen, tests/gen.rs): what a supplier claims for an invoice paid late, from the day the dates file says it fell due and the charges the rule gives.
+module late_payment v1
+description "What a supplier claims for an invoice paid late: the day it fell due, how many days late it was paid, and the fixed sum and the interest the rule gives for them"
+
+use dates terms from "dates/payment_terms.cal"
+use rule charges from "rules/late_payment_charges.rule"
+
+record Invoice
+  id       : string
+  invoiced : date  range >=2026-01-01 <=2027-12-31
+  amount   : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+
+record Claim
+  due          : date
+  days_late    : number  range >=1 <=1500
+  compensation : money[GBP]
+  interest     : money[GBPc]
+
+fn claim(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%) -> Claim? total
+  description "None when the invoice was paid by the day it fell due"
+  let due = terms.due(invoiced: invoice.invoiced)
+  let late = paid_on - due
+  if late >= 1
+    let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)
+    Claim { due: due, days_late: late, compensation: c.compensation, interest: c.interest }
+  else
+    none
+
+# The first is GOV.UK's example: £1,000 at a base rate of 0.5%, paid 50 days late.
+examples
+  claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
+    = Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }
+  claim(invoice: Invoice { id: "inv_2", invoiced: 2026-03-02, amount: 100_000GBPc }, paid_on: 2026-03-31, reference_rate: 0.5%)
+    = none

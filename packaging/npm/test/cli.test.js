@@ -1,4 +1,4 @@
-// The commands of @i2y/ritsu: `ritsu` and the eight languages, each a bin of its own (bin/).
+// The commands of @i2y/ritsu: `ritsu` and the nine languages, each a bin of its own (bin/).
 
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { api, bin, copy, pkg, plainEnv, scratch, skip } from "./helpers.js";
 
-const NAMES = ["ritsu", "rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
+const NAMES = ["ritsu", "rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
 
 function cli(name, args, options = {}) {
   const r = spawnSync(process.execPath, [bin(name), ...args], { env: plainEnv(), encoding: "utf8", maxBuffer: 1 << 28, ...options });

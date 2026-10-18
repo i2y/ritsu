@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="kaname <version>">
+<title>payout</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 30px 0 8px; }
+h4 { font-size: 15px; margin: 22px 0 6px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+pre { margin: 0 0 12px; padding: 10px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+pre code { background: none; padding: 0; font: inherit; }
+figure.code { margin: 0 0 12px; min-width: 0; }
+figure.code figcaption { font-size: 12px; color: var(--dim); margin: 0 0 4px; }
+figure.code pre { margin: 0; }
+button.open { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--accent); cursor: pointer; }
+button.open:hover, button.open:focus-visible { background: var(--soft); }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--accent); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
+body.sheet-open { overflow: hidden; }
+:target { scroll-margin-top: 8px; }
+@media print { .sheet, button.open { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>payout</h1>
+<p class="desc">Takes a card payment for a seller, and charges the processor&#39;s fee to the seller&#39;s balance: two transfers of the ledger, which the host makes</p>
+</header>
+<ul>
+<li>File: <code>payout.kn</code> (module payout v1, sha256:36d497aea1d25a96)</li>
+<li>Reads: the rule <code>card_fee</code> (<code>rules/card_fee.rule</code>); the book <code>ledger</code> (<code>books/ledger.book</code>)</li>
+<li>kaname: <version></li>
+</ul>
+<p>kaname <version> made this page by checking the file above and the files it reads. If the file&#39;s digest is no longer what it says here, the page is out of date.</p>
+<p class="note">1 function, total. It calls 1 rule and no date of koyomi. It builds 2 transfers. No decision is written in its code.</p>
+<nav class="toc" aria-label="Contents">
+<ul>
+<li><a href="#tables">Decisions in tables</a>
+<ul>
+<li><a href="#rule-card-fee">The rule <code>card_fee</code></a></li>
+<li><a href="#book-ledger">The book <code>ledger</code></a></li>
+</ul>
+</li>
+<li><a href="#functions">Functions</a>
+<ul>
+<li><a href="#total">Total</a></li>
+<li><a href="#checked">Checked when they run</a></li>
+<li><a href="#recursive">May not stop</a></li>
+</ul>
+</li>
+<li><a href="#code">Decisions in code</a></li>
+<li><a href="#examples">Examples</a></li>
+</ul>
+</nav>
+<h2 id="tables">Decisions in tables</h2>
+<p>The decisions the module uses are in the files it reads, each checked by its own language: the rules by rulec, the dates by koyomi, the books by chobo. The module carries their answers and joins them.</p>
+<h3 id="rule-card-fee">The rule <code>card_fee</code></h3>
+<p><code>rules/card_fee.rule</code>, called on line 19 (<code>settle</code>).</p>
+<p><button class="open" type="button" data-page="0">Open the page of <code>rules/card_fee.rule</code> (<code>rulec doc</code>)</button></p>
+<h3 id="book-ledger">The book <code>ledger</code></h3>
+<p><code>books/ledger.book</code>. The module builds these transfers as values; the host makes them, and kaname writes no book. The reasons each can be refused with are the ones chobo finds at the amounts the module gives.</p>
+<div class="scroll"><table>
+<thead><tr><th>Transfer</th><th>Arguments</th><th>Built on</th><th>Can be refused with</th></tr></thead>
+<tbody>
+<tr><td><code>ledger.capture.do</code></td><td><code>payment</code>: string, <code>seller</code>: string, <code>amount</code>: money[USDc]</td><td>line 21 (<code>settle</code>)</td><td><code>key_conflict</code></td></tr>
+<tr><td><code>ledger.processing_fee.do</code></td><td><code>payment</code>: string, <code>seller</code>: string, <code>fee</code>: money[USDc]</td><td>line 22 (<code>settle</code>)</td><td><code>insufficient_balance</code>, <code>key_conflict</code>, <code>already_refused</code></td></tr>
+</tbody>
+</table></div>
+<h2 id="functions">Functions</h2>
+<p>A function&#39;s effect puts it in one of three parts. A total function answers every input in the ranges it declares. A function checked when it runs has places the checks could not show: the generated code checks the value there, and when it is outside, fails with the kind of the place (<code>rule</code> and so on). A function that may not stop recurses.</p>
+<h3 id="total">Total</h3>
+<h4 id="fn-settle"><code>settle</code></h4>
+<p>Total: it answers every input in the ranges it declares. Its head writes <code>total</code>, and kaname holds it to that.</p>
+<p>The amount goes to the seller, and the fee the rule gives for it goes from the seller to the processor.</p>
+<pre><code class="language-kn">fn settle(payment: Payment) -&gt; Settlement total
+  description &quot;The amount goes to the seller, and the fee the rule gives for it goes from the seller to the processor&quot;
+  let fee = card_fee(amount: payment.amount, international: payment.international).fee
+  Settlement {
+    capture: ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount),
+    fee: ledger.processing_fee.do(payment: payment.id, seller: payment.seller, fee: fee),
+  }</code></pre>
+<h3 id="checked">Checked when they run</h3>
+<p>None.</p>
+<h3 id="recursive">May not stop</h3>
+<p>None.</p>
+<h2 id="code">Decisions in code</h2>
+<p>The module&#39;s decisions are all in tables.</p>
+<h2 id="examples">Examples</h2>
+<p><code>kaname check</code> runs each line of <code>examples</code> in the reference interpreter, as a host would call the function, and compares the answer with the one written. The reference interpreter answers these.</p>
+<pre><code class="language-kn">settle(payment: Payment { id: &quot;pay_1&quot;, seller: &quot;s_1&quot;, amount: 10000USDc, international: false })
+  = Settlement { capture: ledger.capture.do(payment: &quot;pay_1&quot;, seller: &quot;s_1&quot;, amount: 10000USDc), fee: ledger.processing_fee.do(payment: &quot;pay_1&quot;, seller: &quot;s_1&quot;, fee: 398USDc) }
+settle(payment: Payment { id: &quot;pay_2&quot;, seller: &quot;s_1&quot;, amount: 10000USDc, international: true })
+  = Settlement { capture: ledger.capture.do(payment: &quot;pay_2&quot;, seller: &quot;s_1&quot;, amount: 10000USDc), fee: ledger.processing_fee.do(payment: &quot;pay_2&quot;, seller: &quot;s_1&quot;, fee: 548USDc) }</code></pre>
+<div class="sheet" id="kn-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="Close" aria-label="Close">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
+<script type="application/json" id="kn-pages">[the pages]</script>
+<script>
+(function () {
+  var pages = JSON.parse(document.getElementById('kn-pages').textContent);
+  var sheet = document.getElementById('kn-sheet');
+  var frame = sheet.querySelector('iframe');
+  var opener = null;
+  function code(t) { var c = document.createElement('code'); c.textContent = t; return c; }
+  function open(k) {
+    var p = pages[k];
+    if (!p) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(p.file), ' · ' + p.tool + ' doc');
+    if (p.page !== null) {
+      frame.srcdoc = p.page;
+    } else {
+      var pre = document.createElement('pre');
+      pre.textContent = p.error;
+      pre.setAttribute('style', 'white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px');
+      frame.srcdoc = '<!doctype html><meta charset="utf-8">' + pre.outerHTML;
+    }
+    sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    sheet.querySelector('.close').focus();
+    try { history.replaceState(null, '', '#page=' + (k + 1)); } catch (e) {}
+  }
+  function close() {
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    frame.srcdoc = '';
+    document.body.classList.remove('sheet-open');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (opener && opener.focus) opener.focus();
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button[data-page]');
+    if (b) open(+b.dataset.page);
+  });
+  sheet.querySelector('.close').addEventListener('click', close);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+  var m = /^#page=(\d+)$/.exec(location.hash);
+  if (m) open(+m[1] - 1);
+})();
+</script>
+</main>
+</body>
+</html>

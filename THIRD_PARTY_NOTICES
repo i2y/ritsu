@@ -3,7 +3,7 @@ Third-party notices for ritsu
 
 ritsu's own code is under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE). The `ritsu` binary of a release, with the links `rulec`,
-`dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai` and `sekisho` beside it, `ritsu.wasm`,
+`dandori`, `koyomi`, `chobo`, `geas`, `yuen`, `sakai`, `sekisho` and `kaname` beside it, `ritsu.wasm`,
 the module loaded by the page that runs ritsu in the browser, and the `ritsu.wasm` of the npm
 package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of others; and the page
 loads, beside its module, the libraries its editor and its Markdown are made of:

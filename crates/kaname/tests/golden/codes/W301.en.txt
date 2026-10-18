@@ -1,0 +1,6 @@
+warning[W301]: example.kn:4:3: Whether the answer of `area` stays in what it declares (range >=0 <=24) cannot be decided
+     4 |   side * (10 - side)
+  = The analysis of ranges finds the value in >=2 <=72, and no input among the function's vectors takes it out.
+  = The generated code checks it there when it runs.
+  = Narrow it with an `if`, which the analysis reads, and it is shown.
+ok example.kn: 1 function, fails range

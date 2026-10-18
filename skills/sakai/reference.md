@@ -76,12 +76,12 @@ owns
   dir "../py/inventory", "../py/warehouse", "../ts/inventory", "../ts/warehouse"
 ```
 
-`owns` lists directories (`dir "…"`) and files, a file named by the tool that reads it (`rulec "…"`, `koyomi "…"`, `dandori "…"`, `chobo "…"`, `proto "…"`), or for an OpenAPI or AsyncAPI document by its kind (`openapi "…"`, `asyncapi "…"`).
+`owns` lists directories (`dir "…"`) and files, a file named by the tool that reads it (`rulec "…"`, `koyomi "…"`, `dandori "…"`, `chobo "…"`, `sekisho "…"`, `kaname "…"`, `proto "…"`), or for an OpenAPI or AsyncAPI document by its kind (`openapi "…"`, `asyncapi "…"`).
 An artifact belongs to the context that wrote the deepest entry holding it; an entry that names the file is deeper than any directory.
 That lets a map give most of a repository to one context and carve a directory out of it for another.
 An artifact no entry holds is E101; two contexts writing entries of the same depth for it is E102; an entry that holds no artifact is W101.
 
-These files are artifacts: `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.proto`, the OpenAPI and AsyncAPI documents (a `.yaml`, `.yml` or `.json` whose top holds `openapi`, `asyncapi` or `swagger`) with the files of YAML or JSON they reach by `$ref`, and the code of a language the map declares, under its directory (`.py`; `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`; `.java`; `.go`; `.rs` and a crate's `Cargo.toml`).
+These files are artifacts: `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.gate`, `.kn`, `.proto`, the OpenAPI and AsyncAPI documents (a `.yaml`, `.yml` or `.json` whose top holds `openapi`, `asyncapi` or `swagger`) with the files of YAML or JSON they reach by `$ref`, and the code of a language the map declares, under its directory (`.py`; `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`; `.java`; `.go`; `.rs` and a crate's `Cargo.toml`).
 A `.ctx` is not.
 What an artifact reads as part of itself (a calendar's table of holidays, a copy of a law, a Smithy model) does not need an owner.
 A `.proto` that is distributed elsewhere (`google/protobuf/…`, `buf/validate/…`, dandori's `dandori/v1/options.proto`) is not an artifact, even when a copy is in the repository.
@@ -198,6 +198,7 @@ What each relationship lets cross a boundary:
 A reference that calls a service (dandori's `connect`, `use rule … connect`) also needs the service to be an open host service of the other context (E207).
 A flow runs a child flow across a boundary only in a partnership, a shared kernel, or when the child implements the other's open host service (E209).
 A rule bundled, deployed or applied across a boundary is a use of the rule itself, and is allowed only inside a shared kernel (E202).
+A kaname module's `use rule`, `use dates` and `use module` are a use of the thing itself too, since the code a module is made into calls theirs: across a boundary, each is allowed only inside a shared kernel (E202). A module's `use book` is not counted: the host applies the transfers the module builds.
 
 ### Mappings in an anticorruption layer
 
@@ -243,9 +244,9 @@ A context file names a file or a thing in it in one form, the same in yuen and i
 <tool> "<path>" [<kind> <name>]...
 ```
 
-The tools are `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai` and `sekisho`.
-A kind can hold another only as its tool nests them: `service S method M`, `message M field f`, `enum E value V` for a `.proto`, `enum E value V` for a rule, `transfer T operation O` for a book, `schema S property P` and `schema S value V` for an OpenAPI or AsyncAPI document, `channel C message M` for an AsyncAPI one, `principal P attribute a`, `resource R attribute a`, `enum E value V`, `action A input i` and `action A context c` for a gate.
-The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`, `operation`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; OpenAPI's `schema`, `property`, `value`, `operation`, `pointer`; AsyncAPI's `channel`, `message`, `operation`, `schema`, `property`, `value`, `pointer`; Cedar's `policy`, `action`, `entity`; yuen's `requirement`, `source`; sakai's `context`, `term`; sekisho's `principal`, `resource`, `attribute`, `role`, `workflow`, `enum`, `value`, `action`, `input`, `context`, `policy`, `expect`, `separate`.
+The tools are `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho` and `kaname`.
+A kind can hold another only as its tool nests them: `service S method M`, `message M field f`, `enum E value V` for a `.proto`, `enum E value V` for a rule, `record R field f` and `enum E value V` for a workflow, `transfer T operation O` for a book, `schema S property P` and `schema S value V` for an OpenAPI or AsyncAPI document, `channel C message M` for an AsyncAPI one, `principal P attribute a`, `resource R attribute a`, `enum E value V`, `action A input i` and `action A context c` for a gate, `record R field f` and `enum E value V` for a module of kaname.
+The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`, `operation`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; OpenAPI's `schema`, `property`, `value`, `operation`, `pointer`; AsyncAPI's `channel`, `message`, `operation`, `schema`, `property`, `value`, `pointer`; Cedar's `policy`, `action`, `entity`; yuen's `requirement`, `source`; sakai's `context`, `term`; sekisho's `principal`, `resource`, `attribute`, `role`, `workflow`, `enum`, `value`, `action`, `input`, `context`, `policy`, `expect`, `separate`; kaname's `function`, `record`, `field`, `enum`, `value`.
 A name is a word (no space, `"` or `#`) or a string in `"…"` with `\"` and `\\` as its only escapes.
 A path is from the directory of the file it is written in, `/` between its parts; an absolute path, or one that leaves the root, is E012.
 In JSON, a path is from the root: the nearest directory above the first path given that holds `.git`, or `--root`.
@@ -260,7 +261,7 @@ A gate (`.gate`) is an artifact wherever it is, as the files of the other langua
 
 1. The words, the sections, the names, the aliases and the paths (E001 to E012), and the keys written in the map and its context files (W901).
 2. Who owns what: every artifact covered belongs to exactly one context (E101 to E103, W101, W103).
-3. What the artifacts say: the `.proto` files, what rulec, koyomi, dandori and sekisho answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s, with their servers and how they ask a client to prove who it is; then the elements the map names (E104 to E108, W102, W104, W902, W903, E007, E011).
+3. What the artifacts say: the `.proto` files, what rulec, koyomi, dandori, sekisho and kaname answer of their files through ritsu's ports, the crates of the Rust code as Cargo says them, the OpenAPI and AsyncAPI documents and their `$ref`s, with their servers and how they ask a client to prove who it is; then the elements the map names (E104 to E108, W102, W104, W902, W903, E007, E011).
 4. The patterns agree with each other (E301 to E313, W301).
 5. The references that cross a boundary (E201 to E211): a document's `$ref` to another context's, an AsyncAPI operation on another context's channel, and a gate's `guards` (or a Cedar schema's `@guards`) on another context's operation, among them.
 6. The mappings and the glossaries (E401 to E410, W401, W402).
@@ -286,8 +287,8 @@ Every keyword has one English spelling and no synonym.
 | map file | `map`, `description`, `use context`, `covers`, `except`, `proto root`, `code`, `python`, `typescript`, `java`, `go`, `rust`, `test` |
 | context file | `context`, `description`, `owner`, `also`, `owns`, `dir`, `published language`, `crate`, `openapi`, `asyncapi`, `open host service`, `generated dir`, `terms`, `means`, `as` |
 | relationship | `upstream`, `downstream`, `conformist`, `anticorruption layer`, `customer`, `supplier`, `through`, `layer`, `enum`, `term`, `refuse`, `shared kernel with`, `partnership with`, `separate ways from` |
-| tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho` |
-| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation`, `property`, `pointer`, `policy`, `action`, `entity`, `principal`, `resource`, `attribute`, `role`, `workflow`, `expect`, `separate` |
+| tool | `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `proto`, `openapi`, `asyncapi`, `cedar`, `file`, `yuen`, `sakai`, `sekisho`, `kaname` |
+| kind | `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`, `date`, `claim`, `unit`, `account`, `transfer`, `service`, `method`, `message`, `field`, `requirement`, `context`, `term`, `task`, `case`, `record`, `schema`, `channel`, `operation`, `property`, `pointer`, `policy`, `action`, `entity`, `principal`, `resource`, `attribute`, `role`, `workflow`, `expect`, `separate`, `function` |
 
 ## Commands
 

@@ -1,0 +1,9 @@
+# What tests/python.rs type-checks the Python kaname generates with (mypy --strict); the same Python
+# runs it, with nothing but its standard library. requirements.txt is the lock, made from this with
+#   uv pip compile requirements.in --python-version 3.13 --generate-hashes -o requirements.txt
+# and installed with
+#   uv venv --python 3.13 tools/.venv
+#   uv pip install --python tools/.venv/bin/python -r tools/requirements.txt
+#
+# The test finds mypy at tools/.venv/bin/mypy, or where KANAME_MYPY says, or on the PATH.
+mypy==2.4.0

@@ -1,0 +1,20 @@
+book 台帳 v1
+description "マーケットプレイスのお金を、セントで数える。カードの支払いは売り手の分として入り、決済の事業者の手数料は売り手の残高から出る。ledger.book の日本語の版"
+
+unit USD scale 2
+
+account 売り手の残高(売り手: string) : USD
+  description "マーケットプレイスが売り手のために預かっている額"
+  at least 0 refused as 残高不足
+account カード会社 : USD outside
+account 決済の事業者 : USD outside
+
+transfer 入金(支払い: string, 売り手: string, 金額: USD)
+  description "売り手のために受けたカードの支払い"
+  key 支払い
+  move 金額 from カード会社 to 売り手の残高(売り手)
+
+transfer 決済手数料(支払い: string, 売り手: string, 手数料: USD)
+  description "その支払いに事業者が取る手数料。売り手の残高から出る"
+  key 支払い
+  move 手数料 from 売り手の残高(売り手) to 決済の事業者

@@ -38,6 +38,42 @@ fn every_reproduction_prints_its_code() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// The reproductions of the borders call the rule, the date or the transfer from a module of kaname
+/// too, and the module's call prints the code beside the workflow's, in English and in Japanese.
+/// E204 has none: a transfer a module builds leaves its refusals to the host, and they go on the
+/// type kaname generates for it; W204 comes to a module only when chobo cannot answer (kaname's
+/// DESIGN 14.4). E206 and W206 are of a workflow's waits, which a module does not have.
+#[test]
+fn the_reproductions_of_the_borders_call_from_a_module_too() {
+    const WITH_A_MODULE: [&str; 8] = ["E201", "W201", "E202", "W202", "E203", "W203", "E205", "W205"];
+    let l = ritsu_cross::codes::ledger();
+    let scratch = TempDir::new("codes-kaname");
+    let mut wrong = Vec::new();
+    for e in &l.entries {
+        let ritsu_base::ledger::Repro::Dir { files, .. } = &e.repro else { continue };
+        let module = files.iter().find(|(n, _)| n.ends_with(".kn")).map(|(n, _)| *n);
+        let Some(kn) = module else {
+            if WITH_A_MODULE.contains(&e.code) {
+                wrong.push(format!("{}: the reproduction has no module", e.code));
+            }
+            continue;
+        };
+        if !WITH_A_MODULE.contains(&e.code) {
+            wrong.push(format!("{}: a module in a reproduction this test does not expect one in", e.code));
+            continue;
+        }
+        let dir = scratch.path().join(e.code);
+        l.lay_out(e, &dir).unwrap();
+        for lang in ["en", "ja"] {
+            let (_, out, _) = ritsu_in(&dir, &["check", ".", "--lang", lang]);
+            if !out.lines().any(|line| line.contains(&format!("[ritsu {}]: {kn}:", e.code))) {
+                wrong.push(format!("{} ({lang}): {kn} does not print the code:\n{out}", e.code));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// `ritsu explain` looks up ritsu's codes, and says where a language's code is looked up.
 #[test]
 fn ritsu_explain() {

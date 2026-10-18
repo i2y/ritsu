@@ -1,0 +1,3 @@
+エラー[E202]: example.kn:3:1: この kaname は規則を読めません（rulec が入っていません）。このモジュールは `カード手数料` を読みます
+     3 | use rule カード手数料 from "カード手数料.rule"
+  = kaname 単独のバイナリには、ほかの言語が入っていません。同じコマンドを、すべての言語をつないだ ritsu で、`ritsu kaname check <file.kn>` のように走らせてください。

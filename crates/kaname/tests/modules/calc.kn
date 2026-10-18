@@ -1,0 +1,45 @@
+module calc v1
+
+record Line
+  qty    : number  range >=1 <=20
+  weight : mass[oz]  range >=1oz <=160oz
+
+fn total_weight(lines: list[Line] count >=0 <=5) -> mass[oz]
+  sum(lines, l => l.weight * l.qty)
+
+fn heavy(w: mass[oz] range >=0oz <=1000oz) -> bool
+  w > 15lb
+
+fn pounds(w: mass[lb] range >=0lb <=100lb) -> mass[oz]
+  let ounces : mass[oz] = 2lb
+  (w in oz) + ounces
+
+fn in_cents(d: money[USD] range >=0USD <=1000USD) -> money[USDc]
+  d in USDc
+
+fn fee(a: money[USDc] range >=0USDc <=1_000_000USDc) -> money[USDc]
+  half_up(a * 3.49% + 49USDc, 1USDc)
+
+fn ratio(a: money[USDc] range >=1USDc <=1000USDc, b: money[USDc] range >=1USDc <=1000USDc) -> rate[step 0.1%]
+  half_even(a / b, 0.1%)
+
+fn per(a: money[USDc] range >=0USDc <=1000USDc, n: number range >=0 <=10) -> money[USDc]
+  down(a / n, 1USDc)
+
+fn days(a: date range >=2026-01-01 <=2026-12-31, b: date range >=2026-01-01 <=2026-12-31) -> number
+  b - a
+
+fn big(a: number range >=0 <=5_000_000_000_000_000_000) -> number
+  a * 2
+
+fn safe(a: number range >=0 <=9, b: number range >=0 <=9) -> bool
+  b != 0 and a / b > 1
+
+fn pair(x: number range >=0 <=9, y: number range >=0 <=9_000_000_000_000_000_000) -> number
+  x + y
+
+fn left_first(a: number range >=1 <=9, z: number range >=0 <=0) -> number
+  pair(x: down(a / z, 1), y: a * 4_000_000_000_000_000_000)
+
+fn right_first(a: number range >=1 <=9, z: number range >=0 <=0) -> number
+  pair(y: a * 4_000_000_000_000_000_000, x: down(a / z, 1))

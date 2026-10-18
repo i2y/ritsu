@@ -1,0 +1,26 @@
+module メディアメールの見積もり(media_mail_ja) v1
+description "カートの Media Mail の料金を見積もる。品物の重さを数量の分だけ足した重さと、どの品物もメディアかを規則に渡す。media_mail.kn の日本語の版"
+
+use rule メディアメール from "rules/メディアメール.rule"
+
+record 明細(Line)
+  品番(sku)    : string
+  数量(qty)    : number  range >=1 <=20
+  重さ(weight) : mass[oz]  range >=1oz <=160oz   # 品物一つの重さ
+  メディア(media) : bool
+
+fn 重さの合計(weight_of)(明細(lines): list[明細] count >=1 <=30) -> mass[oz]
+  sum(明細, 一件 => 一件.重さ × 一件.数量)
+
+fn 見積もる(quote)(明細(lines): list[明細] count >=1 <=30) -> money[USDc]? total
+  description "Media Mail の小包にならないカートか、規則が持つ料金表の部分より重いカートには none"
+  let 重さ = 重さの合計(明細: 明細)
+  if 重さ <= 15lb
+    メディアメール(重さ: 重さ, メディアだけ: all(明細, 一件 => 一件.メディア)).料金
+  else
+    none
+
+examples
+  見積もる(明細: [明細 { 品番: "book-1", 数量: 2, 重さ: 22oz, メディア: true }]) = 586USDc
+  見積もる(明細: [明細 { 品番: "book-1", 数量: 2, 重さ: 22oz, メディア: true }, 明細 { 品番: "mug-1", 数量: 1, 重さ: 12oz, メディア: false }]) = none
+  見積もる(明細: [明細 { 品番: "book-1", 数量: 11, 重さ: 22oz, メディア: true }]) = none

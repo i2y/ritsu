@@ -1,0 +1,202 @@
+{
+  "kaname": "<version>",
+  "file": "payout.ja.kn",
+  "module": {
+    "name": "売り手への支払い",
+    "alias": "payout_ja",
+    "version": "v1",
+    "description": "売り手のためにカードの支払いを受け、決済の事業者の手数料を売り手の残高に付ける。台帳の振替が二つで、それを当てるのはホスト。payout.kn の日本語の版",
+    "sha256": "d3c1492745b29d9cac30124416a184ed22dd030f85ad1b48a673311dec31b7ca"
+  },
+  "generated": {
+    "typescript": "glue/payout_ja.ts",
+    "python": "glue/payout_ja.py",
+    "go": "glue/payoutja/payoutja.go"
+  },
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "カード手数料",
+      "path": "rules/カード手数料.rule",
+      "file": "rules/カード手数料.rule",
+      "line": 4
+    },
+    {
+      "kind": "book",
+      "name": "台帳",
+      "path": "books/台帳.book",
+      "file": "books/台帳.book",
+      "line": 5
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "支払い",
+      "alias": "Payment",
+      "fields": [
+        {
+          "name": "番号",
+          "alias": "id",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 8
+        },
+        {
+          "name": "売り手",
+          "alias": "seller",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "金額",
+          "alias": "amount",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=100000000USDc",
+          "count": null,
+          "line": 10
+        },
+        {
+          "name": "海外",
+          "alias": "international",
+          "type": "bool",
+          "range": null,
+          "count": null,
+          "line": 11
+        }
+      ],
+      "line": 7,
+      "generated": {
+        "typescript": "Payment",
+        "python": "Payment",
+        "go": "Payment"
+      }
+    },
+    {
+      "name": "精算",
+      "alias": "Settlement",
+      "fields": [
+        {
+          "name": "入金",
+          "alias": "capture",
+          "type": "台帳.入金.do",
+          "range": null,
+          "count": null,
+          "line": 14
+        },
+        {
+          "name": "手数料",
+          "alias": "fee",
+          "type": "台帳.決済手数料.do",
+          "range": null,
+          "count": null,
+          "line": 15
+        }
+      ],
+      "line": 13,
+      "generated": {
+        "typescript": "Settlement",
+        "python": "Settlement",
+        "go": "Settlement"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "精算する",
+      "alias": "settle",
+      "line": 17,
+      "description": "金額は売り手へ入り、規則がその金額に付ける手数料は、売り手から決済の事業者へ出る",
+      "params": [
+        {
+          "name": "支払い",
+          "alias": "payment",
+          "type": "支払い",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "精算",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [
+          "range"
+        ],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 19,
+          "col": 13,
+          "calls": "rule",
+          "callee": "カード手数料",
+          "checks": []
+        },
+        {
+          "line": 21,
+          "col": 9,
+          "calls": "transfer",
+          "callee": "台帳.入金.do",
+          "checks": [
+            {
+              "line": 21,
+              "col": 49,
+              "check": "X4",
+              "about": "金額",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        },
+        {
+          "line": 22,
+          "col": 10,
+          "calls": "transfer",
+          "callee": "台帳.決済手数料.do",
+          "checks": [
+            {
+              "line": 22,
+              "col": 54,
+              "check": "X4",
+              "about": "手数料",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        }
+      ],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "settle",
+        "python": "settle",
+        "go": "Settle"
+      }
+    }
+  ],
+  "transfers": [
+    {
+      "type": "台帳.入金.do",
+      "book": "books/台帳.book",
+      "operation": "入金.do",
+      "refusals": null
+    },
+    {
+      "type": "台帳.決済手数料.do",
+      "book": "books/台帳.book",
+      "operation": "決済手数料.do",
+      "refusals": null
+    }
+  ]
+}

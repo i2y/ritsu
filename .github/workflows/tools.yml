@@ -11,7 +11,7 @@ name: tools
 # The crates run in three groups side by side, each on a runner of its own with what it needs:
 # rulec (the twelve languages it writes, a PostgreSQL server, Lean), dandori (the SDKs and
 # runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and run
-# the books its examples call on chobo's clients) with ritsu, and the other six languages with
+# the books its examples call on chobo's clients) with ritsu, and the other seven languages with
 # the base layer, the test kit and xtask. The tests of the npm package (ritsu's tests/npm.rs)
 # run in a job of their own, once for each Node the package is for (DESIGN 8.8).
 
@@ -53,7 +53,7 @@ jobs:
             # the npm package's tests are the job `npm`'s
             crates: "-p dandori -p ritsu -- --skip npm::"
           - group: the others
-            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p sekisho -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
+            crates: -p koyomi -p chobo -p geas -p yuen -p sakai -p sekisho -p kaname -p ritsu-base -p ritsu-units -p ritsu-ports -p ritsu-testkit -p ritsu-proto -p ritsu-emit -p xtask
 
     # `rulec test` runs the generated SQL against a real PostgreSQL, because the query and the
     # function beside it are two doors on one rule and only a server can open the second. The
@@ -294,6 +294,17 @@ jobs:
           uv venv --python 3.13 crates/koyomi/tools/.venv
           uv pip install --python crates/koyomi/tools/.venv/bin/python -r crates/koyomi/tools/requirements.txt
 
+      # kaname's tests type-check the TypeScript and the Python it generates, and run them (Node
+      # runs the TypeScript tsc compiles); ritsu's tests run the code `ritsu gen` writes for a
+      # project's modules the same way. Go reads tools/go's go.mod.
+      - name: "kaname: tsc and mypy"
+        if: matrix.group == 'the others' || matrix.group == 'dandori'
+        run: |
+          set -eu
+          npm ci --prefix crates/kaname/tools
+          uv venv --python 3.13 crates/kaname/tools/.venv
+          uv pip install --python crates/kaname/tools/.venv/bin/python --require-hashes -r crates/kaname/tools/requirements.txt
+
       - name: "chobo: the runners, Mermaid and TigerBeetle"
         if: matrix.group == 'the others'
         run: |
@@ -416,6 +427,7 @@ jobs:
             "$RITSU_PG_BIN/postgres" --version && "$RITSU_TIGERBEETLE" version && xmllint --version
             "$RITSU_CEDAR" --version
             crates/sekisho/tools/runner-ts/node_modules/.bin/tsc --version
+            crates/kaname/tools/node_modules/.bin/tsc --version && crates/kaname/tools/.venv/bin/mypy --version
           fi
           google-chrome --version
 

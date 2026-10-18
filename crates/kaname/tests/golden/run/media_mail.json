@@ -1,0 +1,37 @@
+{
+  "kaname": "<version>",
+  "file": "media_mail.kn",
+  "module": "media_mail",
+  "function": "quote",
+  "input": {
+    "lines": [
+      {
+        "sku": "book-1",
+        "qty": 2,
+        "weight": 22,
+        "media": true
+      },
+      {
+        "sku": "book-2",
+        "qty": 1,
+        "weight": 9,
+        "media": true
+      }
+    ]
+  },
+  "calls": [
+    {
+      "line": 19,
+      "module": "media_mail",
+      "rule": "media_mail",
+      "in": {
+        "weight": 53,
+        "media_only": true
+      },
+      "out": {
+        "price": 660
+      }
+    }
+  ],
+  "result": 660
+}

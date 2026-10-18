@@ -1,0 +1,17 @@
+module lib v1
+description "A module another reads: its enum, its record and its functions"
+
+enum size = small < medium < large
+
+record Box
+  size  : size
+  items : number  range >=0 <=100
+
+fn fits(b: Box, room: number range >=0 <=100) -> bool
+  b.items <= room
+
+fn bigger(a: size, b: size) -> size
+  max(a, b)
+
+fn total(boxes: list[Box] count <=4) -> number range >=0 <=400
+  sum(boxes, b => b.items)

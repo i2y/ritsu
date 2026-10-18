@@ -6,7 +6,7 @@
 //! (DESIGN 2.3). Called by a language's name (a link named `rulec`), ritsu is that command
 //! (DESIGN 2.3, 8.2). `ritsu run` runs a workflow with its rules, dates and books computed by
 //! their languages (DESIGN 7.9); `ritsu gen` writes a project as one package for each of
-//! TypeScript, Python and Go (DESIGN 9.3); `ritsu skills` writes the nine Agent Skills the binary
+//! TypeScript, Python and Go (DESIGN 9.3); `ritsu skills` writes the ten Agent Skills the binary
 //! carries where an agent reads them (PLAN F.3).
 
 mod package;
@@ -75,6 +75,8 @@ fn language(name: &str, args: &[String]) -> ExitCode {
         "sakai" => sakai::run::run(args, Joined::new().sakai(), &mut out, &mut err),
         // a gate reads its rules, dates files, calendars, books and flows in the same process
         "sekisho" => sekisho::run::run(args, Joined::new().sekisho().into(), &mut out, &mut err),
+        // a module calls its rules, dates files and books in the same process (kaname's DESIGN 11.2)
+        "kaname" => ritsu::languages::kaname(args, &mut out, &mut err),
         _ => unreachable!("only the languages come here"),
     };
     let _ = out.flush();

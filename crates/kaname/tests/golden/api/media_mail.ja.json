@@ -1,0 +1,158 @@
+{
+  "kaname": "<version>",
+  "file": "media_mail.ja.kn",
+  "module": {
+    "name": "メディアメールの見積もり",
+    "alias": "media_mail_ja",
+    "version": "v1",
+    "description": "カートの Media Mail の料金を見積もる。品物の重さを数量の分だけ足した重さと、どの品物もメディアかを規則に渡す。media_mail.kn の日本語の版",
+    "sha256": "d3b180f38dff698d0a75528131f4b41fe8c593591c7b29e05f7fac14dcb12237"
+  },
+  "generated": {
+    "typescript": "glue/media_mail_ja.ts",
+    "python": "glue/media_mail_ja.py",
+    "go": "glue/mediamailja/mediamailja.go"
+  },
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "メディアメール",
+      "path": "rules/メディアメール.rule",
+      "file": "rules/メディアメール.rule",
+      "line": 4
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "明細",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 7
+        },
+        {
+          "name": "数量",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=1 <=20",
+          "count": null,
+          "line": 8
+        },
+        {
+          "name": "重さ",
+          "alias": "weight",
+          "type": "mass[oz]",
+          "range": ">=1oz <=160oz",
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "メディア",
+          "alias": "media",
+          "type": "bool",
+          "range": null,
+          "count": null,
+          "line": 10
+        }
+      ],
+      "line": 6,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "重さの合計",
+      "alias": "weight_of",
+      "line": 12,
+      "description": null,
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=30"
+        }
+      ],
+      "result": {
+        "type": "mass[oz]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "weight_of",
+        "python": "weight_of",
+        "go": "WeightOf"
+      }
+    },
+    {
+      "name": "見積もる",
+      "alias": "quote",
+      "line": 15,
+      "description": "Media Mail の小包にならないカートか、規則が持つ料金表の部分より重いカートには none",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=30"
+        }
+      ],
+      "result": {
+        "type": "money[USDc]?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 19,
+          "col": 5,
+          "calls": "rule",
+          "callee": "メディアメール",
+          "checks": []
+        }
+      ],
+      "places": [],
+      "calls": [
+        {
+          "line": 17,
+          "function": "重さの合計"
+        }
+      ],
+      "generated": {
+        "typescript": "quote",
+        "python": "quote",
+        "go": "Quote"
+      }
+    }
+  ],
+  "transfers": []
+}

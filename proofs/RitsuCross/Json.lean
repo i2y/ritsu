@@ -7,6 +7,8 @@
   {"corner": {"op": "<=", "left": [lo, hi], "right": [lo, hi], "scales": [sl, sr]}}
   {"x2": {"kind": "relation", "op": "<", "left": {"shown": "x", "range": [lo, hi]}, "right": …, "scales": [sl, sr]}}
   {"x2": {"kind": "days", "days": [d, …], "arg": {"shown": "due.day", "origins": [{"day": [d, …]}, "other", …]}}}
+  {"x2k": {"op": "<=", "names": ["before", "upto"], "left": arg, "right": arg, "scales": [sl, sr],
+           "rels": [["before", "<=", "upto"], …], "runs": [[l, r], …]}}
   {"days_fit": {"days": [d, …], "range": [lo, hi]}}
   {"days_given": {"dates": [[d, …], null, …], "other": false, "range": [lo, hi]}}
   {"values": k}
@@ -25,6 +27,7 @@
 -/
 import Lean.Data.Json
 import RitsuCross.Relation
+import RitsuCross.Program
 import RitsuCross.Borders
 import RitsuCross.Days
 
@@ -129,6 +132,27 @@ def x2Line (j : Json) : Except String Json := do
     if n == "left" then l else if n == "right" then r else if n == "input" then a else none
   let scale : String → Nat := fun n => if n == "left" then sl else sr
   return answerJ exampleJ (x2 pre arg scale)
+
+/-- The answer to one `x2k` line: the decision at a call of a module of kaname, for one relation
+    between two inputs, with the relations kaname gives at the call and what the runs of the
+    function's vectors give the two inputs. -/
+def x2kLine (j : Json) : Except String Json := do
+  let op ← readOp (← (← jfield j "op").getStr?)
+  let names ← strings (← jfield j "names")
+  let (ln, rn) := (names[0]?.getD "left", names[1]?.getD "right")
+  let l ← readArg ((jfield j "left").toOption.getD Json.null)
+  let r ← readArg ((jfield j "right").toOption.getD Json.null)
+  let (sl, sr) ← readScales (← jfield j "scales")
+  let rels ← (← jarr (← jfield j "rels")).mapM fun x => do
+    let p ← strings x
+    let k : Kept := (p[0]?.getD "", p[1]?.getD "", p[2]?.getD "")
+    return k
+  let runs ← (← jarr (← jfield j "runs")).mapM fun x => do
+    let p ← ints x
+    return (p[0]?.getD 0, p[1]?.getD 0)
+  let arg : String → Option Arg := fun n => if n == ln then l else if n == rn then r else none
+  let scale : String → Nat := fun n => if n == ln then sl else sr
+  return answerJ exampleJ (x2k op ln rn rels arg scale runs)
 
 /-- The answer to one `days_fit` line. -/
 def daysFitLine (j : Json) : Except String Json := do
@@ -254,6 +278,7 @@ def answerLine (runs : Option (Found (List (Array Int)))) (j : Json) : Json :=
   let go : Except String Json :=
     if let some x := joptField j "corner" then cornerLine x
     else if let some x := joptField j "x2" then x2Line x
+    else if let some x := joptField j "x2k" then x2kLine x
     else if let some x := joptField j "days_fit" then daysFitLine x
     else if let some x := joptField j "values" then valuesLine runs x
     else if let some x := joptField j "days_given" then daysGivenLine x

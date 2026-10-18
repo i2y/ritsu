@@ -1,0 +1,195 @@
+{
+  "kaname": "<version>",
+  "file": "late_payment.kn",
+  "module": {
+    "name": "late_payment",
+    "alias": "late_payment",
+    "version": "v1",
+    "description": "What a supplier claims for an invoice paid late: the day it fell due, how many days late it was paid, and the fixed sum and the interest the rule gives for them",
+    "sha256": "56982857c3a1dff6db3cc62743a9430eb41bee53e76e37bb8d1f510b872c1f85"
+  },
+  "generated": {
+    "typescript": "glue/late_payment.ts",
+    "python": "glue/late_payment.py",
+    "go": "glue/latepayment/latepayment.go"
+  },
+  "uses": [
+    {
+      "kind": "dates",
+      "name": "terms",
+      "path": "dates/payment_terms.cal",
+      "file": "dates/payment_terms.cal",
+      "line": 4
+    },
+    {
+      "kind": "rule",
+      "name": "charges",
+      "path": "rules/late_payment_charges.rule",
+      "file": "rules/late_payment_charges.rule",
+      "line": 5
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "Invoice",
+      "alias": "Invoice",
+      "fields": [
+        {
+          "name": "id",
+          "alias": "id",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 8
+        },
+        {
+          "name": "invoiced",
+          "alias": "invoiced",
+          "type": "date",
+          "range": ">=2026-01-01 <=2027-12-31",
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[GBPc]",
+          "range": ">=1GBPc <=100000000GBPc",
+          "count": null,
+          "line": 10
+        }
+      ],
+      "line": 7,
+      "generated": {
+        "typescript": "Invoice",
+        "python": "Invoice",
+        "go": "Invoice"
+      }
+    },
+    {
+      "name": "Claim",
+      "alias": "Claim",
+      "fields": [
+        {
+          "name": "due",
+          "alias": "due",
+          "type": "date",
+          "range": null,
+          "count": null,
+          "line": 13
+        },
+        {
+          "name": "days_late",
+          "alias": "days_late",
+          "type": "number",
+          "range": ">=1 <=1500",
+          "count": null,
+          "line": 14
+        },
+        {
+          "name": "compensation",
+          "alias": "compensation",
+          "type": "money[GBP]",
+          "range": null,
+          "count": null,
+          "line": 15
+        },
+        {
+          "name": "interest",
+          "alias": "interest",
+          "type": "money[GBPc]",
+          "range": null,
+          "count": null,
+          "line": 16
+        }
+      ],
+      "line": 12,
+      "generated": {
+        "typescript": "Claim",
+        "python": "Claim",
+        "go": "Claim"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "claim",
+      "alias": "claim",
+      "line": 18,
+      "description": "None when the invoice was paid by the day it fell due",
+      "params": [
+        {
+          "name": "invoice",
+          "alias": "invoice",
+          "type": "Invoice",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "paid_on",
+          "alias": "paid_on",
+          "type": "date",
+          "range": ">=2026-01-01 <=2029-12-31",
+          "count": null
+        },
+        {
+          "name": "reference_rate",
+          "alias": "reference_rate",
+          "type": "rate[step 0.01%]",
+          "range": ">=0% <=15%",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Claim?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [
+          "date"
+        ],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 20,
+          "col": 13,
+          "calls": "date",
+          "callee": "terms.due",
+          "checks": [
+            {
+              "line": 20,
+              "col": 33,
+              "check": "X6",
+              "about": "invoiced",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        },
+        {
+          "line": 23,
+          "col": 13,
+          "calls": "rule",
+          "callee": "charges",
+          "checks": []
+        }
+      ],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "claim",
+        "python": "claim",
+        "go": "ClaimFn"
+      }
+    }
+  ],
+  "transfers": []
+}

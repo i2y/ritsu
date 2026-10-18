@@ -1,0 +1,195 @@
+{
+  "kaname": "<version>",
+  "file": "late_payment.ja.kn",
+  "module": {
+    "name": "支払いの遅れ",
+    "alias": "late_payment_ja",
+    "version": "v1",
+    "description": "遅れて払われた請求書について、売り手が請求するもの。期日、何日遅れて払われたか、規則がそれに付ける定額と利息。late_payment.kn の日本語の版",
+    "sha256": "b5276356b2150cffa82af03a51299ef6ff1a5237fc44625927848a9f4c620b3a"
+  },
+  "generated": {
+    "typescript": "glue/late_payment_ja.ts",
+    "python": "glue/late_payment_ja.py",
+    "go": "glue/latepaymentja/latepaymentja.go"
+  },
+  "uses": [
+    {
+      "kind": "dates",
+      "name": "期限",
+      "path": "dates/支払期限.cal",
+      "file": "dates/支払期限.cal",
+      "line": 4
+    },
+    {
+      "kind": "rule",
+      "name": "請求額",
+      "path": "rules/遅延の請求額.rule",
+      "file": "rules/遅延の請求額.rule",
+      "line": 5
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "請求書",
+      "alias": "Invoice",
+      "fields": [
+        {
+          "name": "番号",
+          "alias": "id",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 8
+        },
+        {
+          "name": "請求日",
+          "alias": "invoiced",
+          "type": "date",
+          "range": ">=2026-01-01 <=2027-12-31",
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "金額",
+          "alias": "amount",
+          "type": "money[GBPc]",
+          "range": ">=1GBPc <=100000000GBPc",
+          "count": null,
+          "line": 10
+        }
+      ],
+      "line": 7,
+      "generated": {
+        "typescript": "Invoice",
+        "python": "Invoice",
+        "go": "Invoice"
+      }
+    },
+    {
+      "name": "請求",
+      "alias": "Claim",
+      "fields": [
+        {
+          "name": "期日",
+          "alias": "due",
+          "type": "date",
+          "range": null,
+          "count": null,
+          "line": 13
+        },
+        {
+          "name": "遅れた日数",
+          "alias": "days_late",
+          "type": "number",
+          "range": ">=1 <=1500",
+          "count": null,
+          "line": 14
+        },
+        {
+          "name": "定額の補償",
+          "alias": "compensation",
+          "type": "money[GBP]",
+          "range": null,
+          "count": null,
+          "line": 15
+        },
+        {
+          "name": "利息",
+          "alias": "interest",
+          "type": "money[GBPc]",
+          "range": null,
+          "count": null,
+          "line": 16
+        }
+      ],
+      "line": 12,
+      "generated": {
+        "typescript": "Claim",
+        "python": "Claim",
+        "go": "Claim"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "遅れの請求",
+      "alias": "claim",
+      "line": 18,
+      "description": "期日までに払われていれば none",
+      "params": [
+        {
+          "name": "請求書",
+          "alias": "invoice",
+          "type": "請求書",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "支払日",
+          "alias": "paid_on",
+          "type": "date",
+          "range": ">=2026-01-01 <=2029-12-31",
+          "count": null
+        },
+        {
+          "name": "基準金利",
+          "alias": "reference_rate",
+          "type": "rate[step 0.01%]",
+          "range": ">=0% <=15%",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "請求?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [
+          "date"
+        ],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 20,
+          "col": 12,
+          "calls": "date",
+          "callee": "期限.期日",
+          "checks": [
+            {
+              "line": 20,
+              "col": 23,
+              "check": "X6",
+              "about": "請求日",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        },
+        {
+          "line": 23,
+          "col": 13,
+          "calls": "rule",
+          "callee": "請求額",
+          "checks": []
+        }
+      ],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "claim",
+        "python": "claim",
+        "go": "ClaimFn"
+      }
+    }
+  ],
+  "transfers": []
+}

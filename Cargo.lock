@@ -68,6 +68,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "kaname"
+version = "0.31.0"
+dependencies = [
+ "chobo",
+ "koyomi",
+ "ritsu-base",
+ "ritsu-emit",
+ "ritsu-ports",
+ "ritsu-testkit",
+ "ritsu-units",
+ "rulec",
+]
+
+[[package]]
 name = "koyomi"
 version = "0.31.0"
 dependencies = [
@@ -109,6 +123,7 @@ dependencies = [
  "chobo",
  "dandori",
  "geas",
+ "kaname",
  "koyomi",
  "ritsu-base",
  "ritsu-cross",
@@ -159,12 +174,14 @@ version = "0.31.0"
 dependencies = [
  "chobo",
  "dandori",
+ "kaname",
  "koyomi",
  "ritsu-base",
  "ritsu-cross",
  "ritsu-ports",
  "ritsu-project",
  "ritsu-testkit",
+ "ritsu-units",
  "rulec",
  "serde_json",
 ]
@@ -184,6 +201,7 @@ dependencies = [
  "chobo",
  "dandori",
  "geas",
+ "kaname",
  "koyomi",
  "ritsu-base",
  "ritsu-ports",

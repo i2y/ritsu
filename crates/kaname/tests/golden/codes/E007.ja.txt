@@ -1,0 +1,3 @@
+エラー[E007]: example.kn:4:6: 生成するコードは、`class` を名前に使えません
+     4 |   等級(class) : string
+  = `class` は、生成する TypeScript、Python、Go のどれかの予約語か、kaname の補助のモジュールの名前です。別の名前か別名にしてください。

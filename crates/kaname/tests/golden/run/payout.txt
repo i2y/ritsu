@@ -1,0 +1,6 @@
+settle(payment: Payment { id: "pay_2", seller: "s_1", amount: 10000USDc, international: true })
+  line 19: card_fee(amount: 10000USDc, international: true) = { fee: 548USDc }
+  line 19: let fee = 548USDc
+  line 21: ledger.capture.do(payment: "pay_2", seller: "s_1", amount: 10000USDc)
+  line 22: ledger.processing_fee.do(payment: "pay_2", seller: "s_1", fee: 548USDc)
+= Settlement { capture: ledger.capture.do(payment: "pay_2", seller: "s_1", amount: 10000USDc), fee: ledger.processing_fee.do(payment: "pay_2", seller: "s_1", fee: 548USDc) }

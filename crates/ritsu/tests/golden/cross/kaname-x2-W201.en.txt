@@ -1,0 +1,17 @@
+ok rules/discount_share.rule
+error[kaname E401]: discount_split.kn:14:1: `split` is written `total`, but it can fail with `rule`
+    14 | fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc) -> list[Share] total
+  = Line 17: whether the call of the rule discount_share keeps its precondition `before <= upto` cannot be decided (ritsu W201)
+  = Line 17: whether the call of the rule discount_share keeps its precondition `upto <= total` cannot be decided (ritsu W201)
+  = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
+warning[ritsu W201]: discount_split.kn:17:41: Whether the call of the rule discount_share keeps its precondition `before <= upto` cannot be decided
+    17 |     Share { label: r.item.label, share: discount_share(discount: discount, before: r.before, upto: reduce([r.item.amount], r.before, (acc, x) => acc + x), total: r.total).share })
+  = The analysis of ranges finds `r.before` in >=0 <=90000000 and `reduce([r.item.amount], r.before, (acc, x) => acc + x)` in >=0 <=100000000; at the ends of the ranges, before = 90000000, upto = 0, `before <= upto` does not hold, and no input among the function's vectors gives such values.
+  = kaname's generated code checks it there when it runs: where the rule's generated code refuses the call at its door, the function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown.
+warning[ritsu W201]: discount_split.kn:17:41: Whether the call of the rule discount_share keeps its precondition `upto <= total` cannot be decided
+    17 |     Share { label: r.item.label, share: discount_share(discount: discount, before: r.before, upto: reduce([r.item.amount], r.before, (acc, x) => acc + x), total: r.total).share })
+  = The analysis of ranges finds `reduce([r.item.amount], r.before, (acc, x) => acc + x)` in >=0 <=100000000 and `r.total` in >=1 <=100000000; at the ends of the ranges, upto = 100000000, total = 1, `upto <= total` does not hold, and no input among the function's vectors gives such values.
+  = kaname's generated code checks it there when it runs: where the rule's generated code refuses the call at its door, the function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`), and it is shown.
+ritsu check: 2 files (rulec 1, kaname 1): 1 fail (1 error, 2 warnings); borders between the languages: 2 checked, 2 undecided

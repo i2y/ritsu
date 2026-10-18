@@ -1,0 +1,42 @@
+rule media_mail v1
+description "The retail price of a Media Mail parcel of up to 15 pounds, and none for a parcel the Postal Service does not take as Media Mail, one with anything in it that is not media. From the United States Postal Service's price list (Notice 123, prices effective 2026-10-04), the part up to 15 pounds"
+
+source usps = file "sources/notice-123-media-mail.md" sha256:14eb63283ba4e05f  # the Postal Service's own price list
+  table1 sha256:4f85197efffc5e0e
+
+inputs
+  weight     : mass[oz]  range >=1oz <=240oz
+  media_only : bool
+
+outputs
+  price : money[USDc]?  round down(1USDc)
+
+# The price list goes on to 70 pounds and the rule holds the part up to 15, so each row it copies
+# cites the price list on its own, rather than the table citing it whole.
+table price_table
+policy unique
+| media_only | weight       | -> price : money[USDc]? |
+| false      | -            | none                    |
+| true       | <=1lb        | 439USDc                 |  @usps table1
+| true       | >1lb <=2lb   | 513USDc                 |  @usps table1
+| true       | >2lb <=3lb   | 586USDc                 |  @usps table1
+| true       | >3lb <=4lb   | 660USDc                 |  @usps table1
+| true       | >4lb <=5lb   | 734USDc                 |  @usps table1
+| true       | >5lb <=6lb   | 808USDc                 |  @usps table1
+| true       | >6lb <=7lb   | 881USDc                 |  @usps table1
+| true       | >7lb <=8lb   | 955USDc                 |  @usps table1
+| true       | >8lb <=9lb   | 1029USDc                |  @usps table1
+| true       | >9lb <=10lb  | 1102USDc                |  @usps table1
+| true       | >10lb <=11lb | 1176USDc                |  @usps table1
+| true       | >11lb <=12lb | 1250USDc                |  @usps table1
+| true       | >12lb <=13lb | 1323USDc                |  @usps table1
+| true       | >13lb <=14lb | 1397USDc                |  @usps table1
+| true       | >14lb <=15lb | 1471USDc                |  @usps table1
+
+examples
+| weight | media_only | -> price |
+| 16oz   | true       | 439USDc  |
+| 17oz   | true       | 513USDc  |
+| 44oz   | true       | 586USDc  |
+| 240oz  | true       | 1471USDc |
+| 44oz   | false      | none     |

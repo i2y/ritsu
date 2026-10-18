@@ -44,7 +44,7 @@ test("installed offline from the .tgz, with no script run, the bins work in a re
       console.log("# note: the network could not be taken away here; the install ran with it");
     }
     const bins = readdirSync(join(project, "node_modules/.bin")).sort();
-    assert.deepEqual(bins, ["chobo", "dandori", "geas", "koyomi", "ritsu", "rulec", "sakai", "sekisho", "yuen"]);
+    assert.deepEqual(bins, ["chobo", "dandori", "geas", "kaname", "koyomi", "ritsu", "rulec", "sakai", "sekisho", "yuen"]);
     const { version } = JSON.parse(readFileSync(join(project, "node_modules/@i2y/ritsu/package.json"), "utf8"));
     const v = sh(join(project, "node_modules/.bin/ritsu"), ["--version"], { cwd: project, env });
     assert.deepEqual([v.code, v.stdout, v.stderr], [0, `ritsu ${version}\n`, ""]);

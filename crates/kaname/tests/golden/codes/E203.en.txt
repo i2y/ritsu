@@ -1,0 +1,3 @@
+error[E203]: example.kn:3:23: `other.kn` is in a ring of modules that read each other
+     3 | use module other from "other.kn"
+  = `kaname check other.kn` says where the ring goes; make the modules read one way only.

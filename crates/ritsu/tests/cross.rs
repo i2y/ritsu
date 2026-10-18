@@ -71,11 +71,13 @@ fn golden(name: &str, got: &str, failures: &mut Vec<String>) {
     }
 }
 
-/// The files of a reproduction in ritsu's ledger.
+/// The files of a reproduction in ritsu's ledger, but for its module of kaname: the projects here
+/// are the workflows', and the modules' calls are `kaname_calls_across_the_borders` (and the
+/// reproductions' modules `tests/codes.rs`).
 fn repro(code: &str) -> Vec<(&'static str, &'static str)> {
     let l = ritsu_cross::codes::ledger();
     match &l.find(code).expect("the code is in the ledger").repro {
-        ritsu_base::ledger::Repro::Dir { files, .. } => files.clone(),
+        ritsu_base::ledger::Repro::Dir { files, .. } => files.iter().filter(|(n, _)| !n.ends_with(".kn")).cloned().collect(),
         other => panic!("{code} has no files: {other:?}"),
     }
 }
@@ -352,5 +354,65 @@ fn x16_what_a_workflow_calls() {
         ],
     );
     run("x16-allowed", &allowed, 0, (1, 0, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// One of kaname's examples (its DESIGN 17), English only: the module with `edits` made to it
+/// (the module's own examples dropped where it is changed), and the files it reads, with the copies
+/// of the sources a rule cites.
+fn kaname_example(name: &str, files: &[&'static str], edits: &[(&str, &str)]) -> Vec<(&'static str, String)> {
+    let dir = here().join("../kaname/examples").join(name);
+    let mut kn = std::fs::read_to_string(dir.join(format!("{name}.kn"))).unwrap();
+    for (from, to) in edits {
+        assert!(kn.contains(from), "{name} has no {from:?}");
+        kn = kn.replacen(from, to, 1);
+    }
+    if !edits.is_empty() {
+        kn = kn.split("\nexamples\n").next().unwrap().to_string() + "\n";
+    }
+    let module: &'static str = Box::leak(format!("{name}.kn").into_boxed_str());
+    let mut out = vec![(module, kn)];
+    for f in files {
+        out.push((*f, std::fs::read_to_string(dir.join(f)).unwrap()));
+    }
+    out
+}
+
+/// The checks across the borders where a module of kaname calls a rule, a koyomi date or a transfer
+/// (kaname's DESIGN 14.3; PLAN C3.7): the same codes as a workflow's, with an example only where a
+/// run of the function's vectors breaks a check, and the borders counted with the others. `settle`
+/// and `split` are written `total`, so a check that is not shown fails kaname's own check too (E401).
+///
+/// - X4: the payout's amounts and the refusals of its two operations (held); the fee taken from the
+///   amount the seller gets, which a payment of a cent takes below 0 (E203); the same with payments
+///   of a dollar or more, which no run takes below 0 (W203).
+/// - X2: the running totals keep the discount rule's preconditions (held); `upto` put together by
+///   `reduce` keeps no relation, and no run breaks them (W201); `before` and `upto` swapped (E201).
+/// - X3 (a) and X6: the payment day of koyomi given to a rule whose range starts after the first of
+///   them (E202), and to a reminder whose range ends before the last (E205).
+#[test]
+fn kaname_calls_across_the_borders() {
+    let mut failures = Vec::new();
+    let payout = ["rules/card_fee.rule", "rules/sources/paypal-us-fees.md", "rules/sources/paypal-us-fees.md.fragments/table1.tsv", "books/ledger.book"];
+    run("kaname-x4-held", &kaname_example("payout", &payout, &[]), 0, (4, 0, 0), &mut failures);
+    let net = ("amount: payment.amount),", "amount: payment.amount - fee),");
+    run("kaname-x4-E203", &kaname_example("payout", &payout, &[net]), 1, (3, 1, 0), &mut failures);
+    let dollar = ("range >=1USDc <=100_000_000USDc", "range >=100USDc <=100_000_000USDc");
+    run("kaname-x4-W203", &kaname_example("payout", &payout, &[net, dollar]), 1, (3, 0, 1), &mut failures);
+    let split = ["rules/discount_share.rule", "rules/sources/23vac10-210-250.md"];
+    run("kaname-x2-held", &kaname_example("discount_split", &split, &[]), 0, (2, 0, 0), &mut failures);
+    let reduce = ("upto: r.upto", "upto: reduce([r.item.amount], r.before, (acc, x) => acc + x)");
+    run("kaname-x2-W201", &kaname_example("discount_split", &split, &[reduce]), 1, (0, 0, 2), &mut failures);
+    let swapped = ("before: r.before, upto: r.upto", "before: r.upto, upto: r.before");
+    run("kaname-x2-E201", &kaname_example("discount_split", &split, &[swapped]), 1, (1, 1, 0), &mut failures);
+    let file = |code: &str, name: &str| repro(code).into_iter().find(|(n, _)| *n == name).unwrap().1.to_string();
+    let billing = "module billing v1\ndescription \"The billing batch of the day an order's payment is due, and the day to remind the customer\"\n\nuse dates terms from \"payment_terms.cal\"\nuse dates reminders from \"reminders.cal\"\nuse rule batch from \"batch.rule\"\n\nfn pick(received: date range >=2026-01-01 <=2026-12-20) -> batch.run\n  let due = terms.payment(received: received)\n  batch(pay_day: due).batch\n\nfn remind(received: date range >=2026-01-01 <=2026-12-20) -> date\n  let due = terms.payment(received: received)\n  reminders.reminder(due: due)\n";
+    let files = vec![
+        ("payment_terms.cal", file("E202", "payment_terms.cal")),
+        ("batch.rule", file("E202", "batch.rule")),
+        ("reminders.cal", file("E205", "reminders.cal")),
+        ("billing.kn", billing.to_string()),
+    ];
+    run("kaname-x3a-x6-E202-E205", &files, 1, (2, 2, 0), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

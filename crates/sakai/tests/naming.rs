@@ -34,6 +34,9 @@ const REASONS: &[(&str, &str)] = &[
     ("attribute only right after principal or resource", "`attribute` comes only right after `principal` or `resource`"),
     ("nothing under policy", "`action` cannot come under `policy`"),
     ("only input or context under action", "`role` cannot come under `action`"),
+    ("field only right after record", "`field` comes only right after `record`"),
+    ("nothing under function", "`record` cannot come under `function`"),
+    ("only field under record (function)", "`function` cannot come under `record`"),
 ];
 
 #[test]
@@ -76,7 +79,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (47, 28), "the table has 47 names and 28 refusals");
+    assert_eq!((ok, refused), (53, 31), "the table has 53 names and 31 refusals");
 }
 
 /// The table is ritsu-base's, and yuen is held to it too; this test only says what it holds, so

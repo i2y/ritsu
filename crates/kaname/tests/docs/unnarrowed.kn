@@ -1,0 +1,15 @@
+module unnarrowed v1
+description "The late payment without the branch that narrows the days late to the rule's range: what the README shows kaname finds. A material of kaname's tests"
+
+use dates terms from "../../examples/late_payment/dates/payment_terms.cal"
+use rule charges from "../../examples/late_payment/rules/late_payment_charges.rule"
+
+record Invoice
+  id       : string
+  invoiced : date  range >=2026-01-01 <=2027-12-31
+  amount   : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+
+fn interest(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%) -> money[GBPc]
+  let due = terms.due(invoiced: invoice.invoiced)
+  let late = paid_on - due
+  charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate).interest

@@ -1,0 +1,28 @@
+rule 値引きの配分(discount_share_ja) v1
+description "請求書の明細に、金額の比で値引きを配るときの、一つの明細の分。途中までの合計は呼ぶ側が持ち、配った分の合計はちょうど値引きになる。端数を受け持つのは最後の明細。バージニア州の値引きの規則（23VAC10-210-250）は、課税と非課税の料金がある請求書の値引きをこう分けるよう求めている。例はその Example 3 で、工賃を先に、部品を後に並べた。discount_share.rule の日本語の版"
+
+source 規則(va) = file "sources/23vac10-210-250.md" sha256:73c0c7337d586218  # バージニア州の行政規則集
+
+inputs
+  値引き(discount) : money[USDc]  range >=0USDc <=10_000_000USDc
+  手前まで(before) : money[USDc]  range >=0USDc <=100_000_000USDc
+  ここまで(upto)   : money[USDc]  range >=0USDc <=100_000_000USDc
+  合計(total)      : money[USDc]  range >=1USDc <=100_000_000USDc
+
+constraint 手前まで <= ここまで
+constraint ここまで <= 合計
+
+outputs
+  配分(share) : money[USDc]  round down(1USDc)
+
+derive 手前までの配分(to_before) : money[USDc] = allocate(値引き, 手前まで, 合計)  range >=0USDc <=10_000_000USDc  @規則
+derive ここまでの配分(to_upto)   : money[USDc] = allocate(値引き, ここまで, 合計)  range >=0USDc <=10_000_000USDc  @規則
+
+result 配分 = ここまでの配分 - 手前までの配分
+
+# 工賃 50.00 ドルと部品 100.00 ドルの請求書から 10.00 ドルを値引く。規則は工賃に 3.33 ドル、部品に
+# 6.67 ドルを配る。
+examples
+| 値引き   | 手前まで | ここまで  | 合計      | -> 配分 |
+| 1000USDc | 0USDc    | 5000USDc  | 15000USDc | 333USDc |
+| 1000USDc | 5000USDc | 15000USDc | 15000USDc | 667USDc |

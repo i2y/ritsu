@@ -1,0 +1,12 @@
+context Programs(kaname) v1
+description "The code that joins rules, dates and books, in ritsu's types: functions, records and lists that call rulec's rules, koyomi's dates and chobo's transfers, checked by the same rules of units and rounding (kaname)"
+
+owns
+  dir "../crates/kaname"
+
+published language kaname
+  crate "../crates/kaname"
+
+# A language stands on the base, and reads another language only through the ports.
+upstream Base conformist
+  through ritsu_base, ritsu_units, ritsu_emit, ritsu_ports

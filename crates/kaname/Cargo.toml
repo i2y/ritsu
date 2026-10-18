@@ -1,0 +1,24 @@
+[package]
+name = "kaname"
+version.workspace = true
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "A small language for the code that joins rules, dates and books: functions, records and lists in ritsu's types, which call rulec's rules, koyomi's dates and chobo's transfers and are checked by the same rules of units and rounding"
+repository.workspace = true
+
+# ritsu's base layer, and nothing from outside (ritsu's DESIGN 3.1): JSON is ritsu-base's, as
+# rulec's, geas's and sekisho's are. The languages kaname calls (rulec, koyomi, chobo) are handed to
+# it through ritsu's ports; the library holds none of them.
+[dependencies]
+ritsu-base = { path = "../ritsu-base" }
+ritsu-emit = { path = "../ritsu-emit" }
+ritsu-ports = { path = "../ritsu-ports" }
+ritsu-units = { path = "../ritsu-units" }
+
+# The languages kaname calls, each through its own engine of ritsu's ports: the tests join them as
+# `ritsu kaname` does (ritsu's DESIGN 3.3). kaname's own code holds none of them.
+[dev-dependencies]
+ritsu-testkit = { path = "../ritsu-testkit" }
+chobo = { path = "../chobo" }
+koyomi = { path = "../koyomi" }
+rulec = { path = "../rulec" }

@@ -1,0 +1,17 @@
+dates payment_terms v1
+description "The day a commercial invoice falls due when no day was agreed: the last day of the 30 days beginning with the day the buyer had the invoice. As this example reads the Late Payment of Commercial Debts (Interest) Act 1998, section 4(2A) and (2H); it says nothing of how the law is read"
+
+# The copy of section 4 is rules/sources/late-payment-act-1998.md, which the rule pins: a dates
+# file pins only the laws of e-Gov. "The period of 30 days beginning with" a day counts that day as
+# the first, so the last day is 29 days after it.
+
+inputs
+  invoiced : date  range >=2026-01-01 <=2027-12-31
+
+date due = invoiced
+  + 29 days          # the last of the 30 days
+
+examples
+| invoiced   | -> due      |
+| 2026-03-02 | 2026-03-31  |
+| 2027-12-31 | 2028-01-29  |

@@ -200,9 +200,9 @@ requirement r1
 
 ## E011 — A tool that does not exist
 
-**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai and sekisho (`dir` is not a word of a naming either).
+**When**: The first word of a naming is none of rulec, dandori, koyomi, chobo, geas, proto, openapi, asyncapi, cedar, file, yuen, sakai, sekisho and kaname (`dir` is not a word of a naming either).
 
-**Fix**: Write one of the thirteen; name any other file with `file "…"`.
+**Fix**: Write one of the fourteen; name any other file with `file "…"`.
 
 **Example**:
 

@@ -10,11 +10,13 @@ publish = false
 [dev-dependencies]
 chobo = { path = "../chobo" }
 dandori = { path = "../dandori" }
+kaname = { path = "../kaname" }
 koyomi = { path = "../koyomi" }
 ritsu-base = { path = "../ritsu-base" }
 ritsu-cross = { path = "../ritsu-cross" }
 ritsu-ports = { path = "../ritsu-ports" }
 ritsu-project = { path = "../ritsu-project" }
 ritsu-testkit = { path = "../ritsu-testkit" }
+ritsu-units = { path = "../ritsu-units" }
 rulec = { path = "../rulec" }
 serde_json = { version = "1", features = ["preserve_order"] }

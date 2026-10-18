@@ -1,0 +1,3 @@
+error[E005]: example.kn:3:4: The function `café_price` has no ASCII alias
+     3 | fn café_price() -> money[USDc]
+  = A name the generated code takes (a module, a function, a parameter, a record, a field, an enum and its values) that is not ASCII takes an ASCII alias in parentheses: `café_price(name)`.

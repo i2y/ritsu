@@ -1,0 +1,17 @@
+ok rules/card_fee.rule
+books/ledger.book: ok
+  capture.do         may be refused: key_conflict
+  processing_fee.do  may be refused: insufficient_balance (seller_balance(seller) at least 0.00), key_conflict, already_refused
+  key: capture once per payment; a second call that differs only in seller or amount is refused with key_conflict
+  key: processing_fee once per payment; a second call that differs only in seller or fee is refused with key_conflict
+error[kaname E401]: payout.kn:17:1: `settle` is written `total`, but it can fail with `range`
+    17 | fn settle(payment: Payment) -> Settlement total
+  = Line 21: `payment.amount - fee`, given to `amount` of the transfer `ledger.capture.do`, can be an amount chobo does not take (ritsu E203)
+  = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
+error[ritsu E203]: payout.kn:21:85: `payment.amount - fee`, given to `amount` of the transfer `ledger.capture.do`, can be an amount chobo does not take
+    21 |     capture: ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee),
+  = For example, `settle(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` gives it -48.
+  = chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step.
+  = kaname's generated code checks the amount where it builds the transfer, and the function fails there with `range`.
+  = Narrow the amount with an `if` before the transfer, or make a negative amount a transfer the other way.
+ritsu check: 3 files (rulec 1, chobo 1, kaname 1): 1 fail (2 errors); borders between the languages: 4 checked, 0 undecided

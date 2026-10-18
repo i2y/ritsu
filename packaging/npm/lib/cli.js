@@ -1,4 +1,4 @@
-// The commands of the package: `ritsu`, and each of the eight languages by its own name (bin/),
+// The commands of the package: `ritsu`, and each of the nine languages by its own name (bin/),
 // as the links of a release's archive are. The module works on this process's own standard input,
 // output and error, so that a command reads a pipe (`geas affected spec.geas -`) and prints as it
 // goes; the exit code is the module's. Nothing is written through process.stdout or

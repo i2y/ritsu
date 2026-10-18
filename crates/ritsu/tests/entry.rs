@@ -1,5 +1,5 @@
 //! The one entry (DESIGN 8.1, 8.2): `ritsu --help` and `--version`, `ritsu <language>` for each of
-//! the eight, and ritsu called by a language's name.
+//! the nine, and ritsu called by a language's name.
 
 use ritsu_testkit::TempDir;
 use std::path::{Path, PathBuf};
@@ -45,10 +45,10 @@ fn ritsu_says_what_it_has() {
     assert!(code == 0 && out.starts_with("ritsu check — "), "{out}");
 }
 
-/// `ritsu <language>` is the language's own command, for every one of the eight.
+/// `ritsu <language>` is the language's own command, for every one of the nine.
 #[test]
 fn ritsu_is_every_language() {
-    for name in ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"] {
+    for name in ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"] {
         let (code, out, err) = ritsu(&[name, "--version"]);
         assert!(code == 0 && out.starts_with(&format!("{name} ")) && out.lines().count() == 1, "{name}: {out}{err}");
     }
@@ -65,6 +65,9 @@ fn ritsu_is_every_language() {
     let gate = "sekisho/examples/refunds/refunds.gate";
     let (code, out, err) = ritsu(&["sekisho", "check", gate, "--root", "sekisho/examples/refunds"]);
     assert_eq!((code, out.as_str(), err.as_str()), (0, format!("{gate}: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectations, 1 separation\n").as_str(), ""));
+    // a module that calls a rule and a date of koyomi: the languages it reads are joined
+    let kn = "kaname/examples/late_payment/late_payment.kn";
+    assert_eq!(ritsu(&["kaname", "check", kn]), (0, format!("ok {kn}: 1 function, total\n"), String::new()));
 }
 
 /// Called by a language's name, ritsu is that command: what the release's links do (DESIGN 2.3).

@@ -39,7 +39,7 @@ struct Asked {
 
 impl Suite {
     /// The languages whose things yuen reads through the index, by their tool words.
-    pub const READ: [Tool; 7] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho, Tool::Sakai];
+    pub const READ: [Tool; 8] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho, Tool::Sakai, Tool::Kaname];
 
     /// Whether yuen is handed what it needs to read the files of `tool`.
     pub fn reads(&self, tool: Tool) -> bool {

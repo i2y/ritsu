@@ -1,6 +1,6 @@
 # The Lean layer of ritsu
 
-This directory says, in Lean 4, what a rulec certificate means and what the core of three of
+This directory says, in Lean 4, what a rulec certificate means and what the core of four of
 ritsu's languages means, what the checks across the languages decide, and proves that each check
 settles what it says (ritsu's DESIGN 11). It builds two programs that run the same functions: one
 holds a rulec certificate to its claims, the other holds the Rust implementations to the models.
@@ -19,16 +19,18 @@ $ cargo test -p ritsu-model -- --nocapture    # from the root, RITSU_TEST_LEVEL=
 | `ChoboModel` | chobo's transfers (chobo's DESIGN 2): accounts with posted, held-in and held-out amounts, the moves of a `do` or a `hold` made in the order written and each checked against the bounds, every move or none, the keys, how a hold ends, time passing, `together` | `apply_kept`, `pass_kept`, `within_stays`: no call and no time passing takes an account across a bound in the direction the bound forbids, counting what is held pessimistically; `refused_keeps_balances`, `doneBefore_keeps_state`, `again_doneBefore`: a refusal changes no balance, and the same call a second time is `done_before` and changes nothing |
 | `KoyomiModel` | koyomi's dates (koyomi's DESIGN 2): Hinnant's day numbers with Rust's division, month arithmetic and the three ways with a missing day, closing days, the calendar's rules, rolling and counting business days, the times `at` gives | `monotone_of_adjacentOk`, `monotone_on_range`: comparing every day with the next is enough for `is monotonic` over the whole range; `seek_following`, `seek_preceding`: `roll following` gives the first business day on or after the day, `roll preceding` the last on or before it; `roll_open`, `addBusiness_open`, `ifClosed_open`: every convention and every count of business days, `± 0` included, gives a business day |
 | `DandoriCore` | dandori's core (dandori's DESIGN 1.5, 1.16, 2): the statements, `match`, `for` and `repeat` with their bounds, the calls, their arguments and what comes of them, `on failure` and `on cancel`; the dates of koyomi's dates files (`use dates`), the operations of chobo's books and the holds a case follows (`use book`, `case … follows`), and `now`; a run against a scenario, as dandori's reference interpreter runs it for Temporal; and the check of what a case is left in when the flow ends (E020), with the cases' true states on the other side | `exec_sound`, `chkFlow_sound`: a flow the check passes ends, in every run where the check looks — the end of the flow, `succeed`, `fail`, the end of `on failure` — with every case it does not hand over with `leaving` either not started or in a final state, and in one the events on the other side cannot take it out of |
-| `RitsuCross` | the checks across the languages (ritsu's DESIGN 7, `crates/ritsu-cross`): a rule's precondition where a workflow calls it (X2) — rulec's answer for a relation over two ranges, and the days of a koyomi date a value given to a date input can be; the days a value can be against a rule's range (X3 (a)) and as a rule's range (X3 (b)); the amounts a value can be as a transfer's amount, what chobo's search is held to, and the refusals of the transfer against the errors a task handles (X4); a hold against when it expires (X5); the day given to a koyomi date (X6); and the set of days a koyomi date comes to, computed over every combination of its inputs | each answer settles what it says: `corner_holds`, `corner_fails`, `x2_holds`, `x2_fails`, `x2_days_holds`, `x2_days_fails` (every value the call can give keeps the precondition, or the example breaks it); `daysFit_holds`, `daysFit_fails`, `daysGiven_holds`, `daysGiven_fails`, `amountFits_holds_iff`, `amountFits_fails`, `amountsGiven_holds`, `amountsHull_covers`, `refusalsMet_holds`, `refusalsMet_fails`, `refusalsMet_undecided`, `heldUntil_holds`, `heldUntil_fails`, `inputRange_some`. Across the border itself: `x3a_holds`, `x3a_fails` (for every input of koyomi's ranges the date is computed and lies in the rule's range; the example is a day koyomi computes); `x3b_complete`, `x3b_unique` (a rule whose certificate takes koyomi's days and passes its checks answers, for every input of koyomi's ranges, every point with koyomi's day, with exactly one row); `amountFits_chobo_takes`, `amountFits_fails_chobo` (an amount the check lets through is one `ChoboModel.fits` takes, and the amount it gives as an example is one it does not take: both take 0 to 2⁶³ − 1); `heldUntil_fails_expired`, `heldUntil_holds_held` (a hold X5 says always expires first has expired, as `ChoboModel.expiredAt` says, when the call comes, and one X5 says is still held has not) |
+| `RitsuCross` | the checks across the languages (ritsu's DESIGN 7, `crates/ritsu-cross`): a rule's precondition where a workflow calls it (X2) — rulec's answer for a relation over two ranges, and the days of a koyomi date a value given to a date input can be — and where a module of kaname calls it, the relations kaname gives first, then the corner of its ranges, then the runs of the function's vectors (kaname's DESIGN 14.3); the days a value can be against a rule's range (X3 (a)) and as a rule's range (X3 (b)); the amounts a value can be as a transfer's amount, what chobo's search is held to, and the refusals of the transfer against the errors a task handles (X4); a hold against when it expires (X5); the day given to a koyomi date (X6); and the set of days a koyomi date comes to, computed over every combination of its inputs | each answer settles what it says: `corner_holds`, `corner_fails`, `x2_holds`, `x2_fails`, `x2_days_holds`, `x2_days_fails` (every value the call can give keeps the precondition, or the example breaks it); `daysFit_holds`, `daysFit_fails`, `daysGiven_holds`, `daysGiven_fails`, `amountFits_holds_iff`, `amountFits_fails`, `amountsGiven_holds`, `amountsHull_covers`, `refusalsMet_holds`, `refusalsMet_fails`, `refusalsMet_undecided`, `heldUntil_holds`, `heldUntil_fails`, `inputRange_some`. Across the border itself: `x3a_holds`, `x3a_fails` (for every input of koyomi's ranges the date is computed and lies in the rule's range; the example is a day koyomi computes); `x3b_complete`, `x3b_unique` (a rule whose certificate takes koyomi's days and passes its checks answers, for every input of koyomi's ranges, every point with koyomi's day, with exactly one row); `amountFits_chobo_takes`, `amountFits_fails_chobo` (an amount the check lets through is one `ChoboModel.fits` takes, and the amount it gives as an example is one it does not take: both take 0 to 2⁶³ − 1); `heldUntil_fails_expired`, `heldUntil_holds_held` (a hold X5 says always expires first has expired, as `ChoboModel.expiredAt` says, when the call comes, and one X5 says is still held has not); at a call of kaname, `kept_sound` (where the relations kaname gives say the precondition, every value that keeps them keeps it), `x2k_holds`, `x2k_fails`, `x2k_undecided` |
+| `KanameCore` | kaname's evaluation and its analysis of ranges (kaname's DESIGN 5, 8, 15): numbers as exact rationals held to int64, the five ways of rounding as one integer procedure, every form of expression and builtin, the places a value is held to what it declares (an input of a rule's ordered enum among them, held to the values its range lets in), a rule's and a date's answers from outside (what rulec and koyomi show of their own: rulec refuses a number outside its input's range, a value of an enum the range does not let in and a field of an element outside its range), and the analysis of `ranges.rs` written again — intervals with a bound on the denominator, narrowing by conditions, `match` and calls, the relations a condition and `running_totals` keep, the places and whether each is shown, the relations each call of a rule keeps between its inputs, the rings of calls and the effects, and the verdicts of the checks across the languages taken after the analysis | `roundInt_eq_roundQ`, `roundInt_roundsTo`, `roundInt_mono`, `In_round`: the integer procedure is the rational rounding, on the grid between the value rounded down and up, monotone, and an interval rounds to one that holds every value of it rounded; `ranges_sound`: where the environment is among those the analysis says, an answer of an expression is among its abstract values, the narrowed scope still holds it, and a failure of one of the five kinds is a place not shown or a function called that can fail; `analyzeFn_sound`, `module_sound`: the same of each function's answer, for any values its parameters take; `no_failure`, `fn_noFail`, `total_sound`: where every place is shown and every function called does not fail, there is no failure, and a function the analysis infers total fails for no values its parameters take; `callRels_sound`: every relation a call of a rule keeps holds between the values of the two names given, in every environment the scope of the call holds, and `kept_holds`, with RitsuCross's `kept_sound`: where those say a precondition, it holds there; `analyzeWith_nil`, `decideAcross_other`, `total_with_sound`: a verdict changes only a place that waits for one, with none the analysis is the one above, and a function the effects with the verdicts call total fails for no values its parameters take, where what each verdict that holds says is so. For an analysis that let no running value of a `reduce` go |
 
 `RulecMain.lean` is `rulec-recheck`: it reads a certificate and the rule it is about and runs the
 checks of `RulecCert` on them (rulec's `tests/lean.rs`, and over the corpus in CI).
 
 `Main.lean` is `ritsu-model`: `ritsu-model chobo <book.json>`, `koyomi <file.json>`,
-`dandori <flow.json>` or `cross <file.json>` reads the file a test wrote (a book, a dates or
-calendar file, a flow, resolved the way the model reads them; for `cross`, a dates file whose days
-the lines ask for, or nothing) and answers every line of its standard input with one line: a
-scenario's result, what an input of the range gives, a run, a check's answer.
+`dandori <flow.json>`, `cross <file.json>` or `kaname <module.json>` reads the file a test wrote (a
+book, a dates or calendar file, a flow, a module of kaname, resolved the way the model reads them;
+for `cross`, a dates file whose days the lines ask for, or nothing) and answers every line of its
+standard input with one line: a scenario's result, what an input of the range gives, a run, a
+check's answer, a function's answer or the analysis of the module.
 
 ## How the Rust side is held to it
 
@@ -55,11 +57,21 @@ the first five lines that differ, each with its input:
   the days the model computes; `days_fit` and `days_given`, `amount_fits`, `amounts_given` and
   `amounts_hull` (every numeric output of rulec's corpus), `refusals_met` (what chobo's search
   finds for every transfer, held to each book's bounds), `held_until` and `input_range` (every
-  input of the dates files), over inputs around each answer.
+  input of the dates files), over inputs around each answer;
+- kaname: every input `kaname vectors` chooses for every function of kaname's examples (in English
+  and Japanese), of its test modules (but `calls`, which calls the functions of another module) and
+  of modules made from the examples so that the checks across the languages come to each of their
+  answers, checked as `ritsu kaname` checks them, with the answers the reference interpreter got
+  from the rules and dates it called — every answer or failure; and the analysis, with ritsu-cross's
+  verdicts taken where kaname took them — each function's result, places, effect and the relations
+  each of its calls of a rule keeps, and the abstract value of every expression; every value the
+  reference interpreter sees is within what the analysis says. And X2 at a call of kaname: small
+  modules that call a rule with a `constraint`, each given the relations, ranges and runs kaname's
+  port hands over, against the verdict ritsu-cross gives.
 
 `-- --nocapture` prints how many of each it compared. `tests/proofs.rs` there reads every file
 here for `sorry`, `axiom`, `native_decide` and `implemented_by`, and asks Lean what each
-declaration of the five libraries stands on: every one stands on `propext`, `Classical.choice` and
+declaration of the six libraries stands on: every one stands on `propext`, `Classical.choice` and
 `Quot.sound` at most, the axioms Lean itself stands on.
 
 `DandoriCore/Examples.lean` works the check out on four flows when the library builds. In the
@@ -99,3 +111,16 @@ step is not given to an input of another). X3 (b) says what a rule's certificate
 days when they are koyomi's set; that the certificate carries koyomi's set is compared, not proved.
 X5 takes the fewest and the most seconds dandori counts along the flow as given, and says what
 follows of the hold's expiry in chobo's interpreter.
+
+`KanameCore` takes a rule's and a date's answers from outside, as rulec and koyomi show them of
+their own (`OracleOK`), and its evaluation leans on what kaname's check of types holds — a value on
+the step its type says, an argument among the values of its type, an arm that takes the value —
+by failing `type` where it does not hold, which no module that passes the check meets. The
+theorems leave out an analysis that lets the ends of a `reduce`'s running value go (kaname's
+DESIGN 5.5): every function's facts must say `widened` is false. They say nothing of an evaluation
+that runs out of steps or calls too deep. The model is `ranges.rs` and `interp.rs` written again;
+where it is not as they are (the reference interpreter leaves a value's step to the check of
+types; which place a verdict is taken at is Rust's to find; the model reads one module), kaname's
+DESIGN 15.3 lists it. `total_with_sound` takes it as given that what each verdict that holds says
+is so: that is what RitsuCross proves of each check, and only the relation stage of X2 is tied to
+the model's evaluation (`kept_holds`).

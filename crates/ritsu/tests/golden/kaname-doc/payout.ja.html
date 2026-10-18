@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="kaname <version>">
+<title>売り手への支払い（payout_ja）</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1f2328; --dim: #59636e; --line: #d1d9e0; --soft: #f6f8fa; --panel: #f6f8fa; --code: #eff2f5; --accent: #0969da; --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #0d1117; --fg: #e6edf3; --dim: #9198a1; --line: #3d444d; --soft: #151b23; --panel: #151b23; --code: #262c36; --accent: #4493f8; --ok: #3fb950; --warn: #d29922; --bad: #f85149; }
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 26px; margin: 8px 0 6px; }
+h2 { font-size: 21px; margin: 44px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+h3 { font-size: 17px; margin: 30px 0 8px; }
+h4 { font-size: 15px; margin: 22px 0 6px; }
+p, li { max-width: 88ch; }
+p.desc { color: var(--dim); margin: 0 0 12px; }
+a { color: var(--accent); }
+code { font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; overflow-wrap: anywhere; }
+nav.toc { margin: 16px 0 8px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+nav.toc ul { margin: 0; padding-left: 18px; }
+nav.toc li { max-width: none; }
+.note { margin: 12px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); border-radius: 0 6px 6px 0; }
+.scroll { overflow-x: auto; margin: 8px 0 16px; }
+table { border-collapse: collapse; font-size: 13px; }
+th, td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; vertical-align: top; }
+th { background: var(--soft); white-space: nowrap; }
+pre { margin: 0 0 12px; padding: 10px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+pre code { background: none; padding: 0; font: inherit; }
+figure.code { margin: 0 0 12px; min-width: 0; }
+figure.code figcaption { font-size: 12px; color: var(--dim); margin: 0 0 4px; }
+figure.code pre { margin: 0; }
+button.open { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--bg); color: var(--accent); cursor: pointer; }
+button.open:hover, button.open:focus-visible { background: var(--soft); }
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; background: var(--bg); }
+.sheet[hidden] { display: none; }
+.sheet .bar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.sheet .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet button.close { font: inherit; font-size: 16px; line-height: 1; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); cursor: pointer; }
+.sheet button.close:hover { border-color: var(--accent); }
+.sheet iframe { flex: 1; width: 100%; border: 0; }
+body.sheet-open { overflow: hidden; }
+:target { scroll-margin-top: 8px; }
+@media print { .sheet, button.open { display: none; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>売り手への支払い（payout_ja）</h1>
+<p class="desc">売り手のためにカードの支払いを受け、決済の事業者の手数料を売り手の残高に付ける。台帳の振替が二つで、それを当てるのはホスト。payout.kn の日本語の版</p>
+</header>
+<ul>
+<li>ファイル：<code>payout.ja.kn</code>（module 売り手への支払い v1、sha256:d3c1492745b29d9c）</li>
+<li>読むファイル：規則 <code>カード手数料</code>（<code>rules/カード手数料.rule</code>）、帳簿 <code>台帳</code>（<code>books/台帳.book</code>）</li>
+<li>kaname：<version></li>
+</ul>
+<p>上のファイルと、それが読むファイルを kaname <version> で検査して作ったページです。ファイルのハッシュが今のものと違えば、このページは古くなっています。</p>
+<p class="note">関数 1 個、total。呼ぶのは規則 1 個です。振替を 2 個組み立てます。コードに書いた判断はありません。</p>
+<nav class="toc" aria-label="目次">
+<ul>
+<li><a href="#tables">表にある判断</a>
+<ul>
+<li><a href="#rule-">規則 <code>カード手数料</code></a></li>
+<li><a href="#book-">帳簿 <code>台帳</code></a></li>
+</ul>
+</li>
+<li><a href="#functions">関数</a>
+<ul>
+<li><a href="#total">total な関数</a></li>
+<li><a href="#checked">実行時に確かめる関数</a></li>
+<li><a href="#recursive">止まらないかもしれない関数</a></li>
+</ul>
+</li>
+<li><a href="#code">コードにある判断</a></li>
+<li><a href="#examples">例</a></li>
+</ul>
+</nav>
+<h2 id="tables">表にある判断</h2>
+<p>モジュールが使う判断は、読むファイルにあります。規則は rulec が、日付は koyomi が、帳簿は chobo が、それぞれ検査しています。モジュールは、その答えを運んでつなぎます。</p>
+<h3 id="rule-">規則 <code>カード手数料</code></h3>
+<p><code>rules/カード手数料.rule</code>。19 行目（<code>精算する</code>）で呼んでいます。</p>
+<p><button class="open" type="button" data-page="0"><code>rules/カード手数料.rule</code> のページを開く（<code>rulec doc</code>）</button></p>
+<h3 id="book-">帳簿 <code>台帳</code></h3>
+<p><code>books/台帳.book</code>。モジュールは、次の振替を値として組み立てます。振替を当てるのはホストで、kaname は帳簿に書きません。拒否されうる理由は、モジュールが渡す額の範囲で chobo が探したものです。</p>
+<div class="scroll"><table>
+<thead><tr><th>振替</th><th>引数</th><th>組み立てる行</th><th>拒否されうる理由</th></tr></thead>
+<tbody>
+<tr><td><code>台帳.入金.do</code></td><td><code>支払い</code>: string, <code>売り手</code>: string, <code>金額</code>: money[USDc]</td><td>21 行目（<code>精算する</code>）</td><td><code>key_conflict</code></td></tr>
+<tr><td><code>台帳.決済手数料.do</code></td><td><code>支払い</code>: string, <code>売り手</code>: string, <code>手数料</code>: money[USDc]</td><td>22 行目（<code>精算する</code>）</td><td><code>残高不足</code>, <code>key_conflict</code>, <code>already_refused</code></td></tr>
+</tbody>
+</table></div>
+<h2 id="functions">関数</h2>
+<p>関数は、エフェクトで三つに分かれます。total な関数は、宣言した範囲のどの入力にも答えます。実行時に確かめる関数には、検査が示せなかった場所があります。生成したコードはそこで値を確かめ、外れれば、その場所の失敗の種類（<code>rule</code> など）で失敗します。止まらないかもしれない関数は、再帰を持ちます。</p>
+<h3 id="total">total な関数</h3>
+<h4 id="fn-settle"><code>精算する</code>（<code>settle</code>）</h4>
+<p>total な関数です。宣言した範囲のどの入力にも答えます。見出しに <code>total</code> と書いてあり、kaname がそれを確かめています。</p>
+<p>金額は売り手へ入り、規則がその金額に付ける手数料は、売り手から決済の事業者へ出る。</p>
+<pre><code class="language-kn">fn 精算する(settle)(支払い(payment): 支払い) -&gt; 精算 total
+  description &quot;金額は売り手へ入り、規則がその金額に付ける手数料は、売り手から決済の事業者へ出る&quot;
+  let 手数料 = カード手数料(金額: 支払い.金額, 海外: 支払い.海外).手数料
+  精算 {
+    入金: 台帳.入金.do(支払い: 支払い.番号, 売り手: 支払い.売り手, 金額: 支払い.金額),
+    手数料: 台帳.決済手数料.do(支払い: 支払い.番号, 売り手: 支払い.売り手, 手数料: 手数料),
+  }</code></pre>
+<h3 id="checked">実行時に確かめる関数</h3>
+<p>ありません。</p>
+<h3 id="recursive">止まらないかもしれない関数</h3>
+<p>ありません。</p>
+<h2 id="code">コードにある判断</h2>
+<p>このモジュールの判断は、どれも表にあります。</p>
+<h2 id="examples">例</h2>
+<p><code>kaname check</code> は、<code>examples</code> の行ごとに、ホストが呼ぶときと同じように関数を参照インタプリタで流し、書いてある答えと比べます。参照インタプリタの答えは次のとおりです。</p>
+<pre><code class="language-kn">精算する(支払い: 支払い { 番号: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc, 海外: false })
+  = 精算 { 入金: 台帳.入金.do(支払い: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc), 手数料: 台帳.決済手数料.do(支払い: &quot;pay_1&quot;, 売り手: &quot;s_1&quot;, 手数料: 398USDc) }
+精算する(支払い: 支払い { 番号: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc, 海外: true })
+  = 精算 { 入金: 台帳.入金.do(支払い: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 金額: 10000USDc), 手数料: 台帳.決済手数料.do(支払い: &quot;pay_2&quot;, 売り手: &quot;s_1&quot;, 手数料: 548USDc) }</code></pre>
+<div class="sheet" id="kn-sheet" role="dialog" aria-modal="true" aria-label="doc" hidden><div class="bar"><span class="what"></span><button class="close" type="button" title="閉じる" aria-label="閉じる">×</button></div><iframe sandbox="allow-scripts" title="doc"></iframe></div>
+<script type="application/json" id="kn-pages">[the pages]</script>
+<script>
+(function () {
+  var pages = JSON.parse(document.getElementById('kn-pages').textContent);
+  var sheet = document.getElementById('kn-sheet');
+  var frame = sheet.querySelector('iframe');
+  var opener = null;
+  function code(t) { var c = document.createElement('code'); c.textContent = t; return c; }
+  function open(k) {
+    var p = pages[k];
+    if (!p) return;
+    if (sheet.hidden) opener = document.activeElement;
+    sheet.querySelector('.what').replaceChildren(code(p.file), ' · ' + p.tool + ' doc');
+    if (p.page !== null) {
+      frame.srcdoc = p.page;
+    } else {
+      var pre = document.createElement('pre');
+      pre.textContent = p.error;
+      pre.setAttribute('style', 'white-space:pre-wrap;font:13px ui-monospace,monospace;padding:16px');
+      frame.srcdoc = '<!doctype html><meta charset="utf-8">' + pre.outerHTML;
+    }
+    sheet.hidden = false;
+    document.body.classList.add('sheet-open');
+    sheet.querySelector('.close').focus();
+    try { history.replaceState(null, '', '#page=' + (k + 1)); } catch (e) {}
+  }
+  function close() {
+    if (sheet.hidden) return;
+    sheet.hidden = true;
+    frame.srcdoc = '';
+    document.body.classList.remove('sheet-open');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    if (opener && opener.focus) opener.focus();
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button[data-page]');
+    if (b) open(+b.dataset.page);
+  });
+  sheet.querySelector('.close').addEventListener('click', close);
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
+  var m = /^#page=(\d+)$/.exec(location.hash);
+  if (m) open(+m[1] - 1);
+})();
+</script>
+</main>
+</body>
+</html>

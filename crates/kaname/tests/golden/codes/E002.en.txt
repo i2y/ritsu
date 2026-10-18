@@ -1,0 +1,3 @@
+error[E002]: example.kn:4:7: `then` is a keyword and cannot be a name
+     4 |   let then = 3
+  = The thirteen words an expression reads as something else cannot be names: `let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in`. Choose another word.

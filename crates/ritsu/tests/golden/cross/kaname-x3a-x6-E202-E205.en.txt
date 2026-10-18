@@ -1,0 +1,17 @@
+ok batch.rule
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+reminders.cal: ok — every date computes on all 334 days of due (2026-02-01..2026-12-31)
+ok billing.kn: 2 functions: 1 fails rule; 1 fails date
+error[ritsu E202]: billing.kn:10:18: The day given to `pay_day` of the rule `batch` can be outside the range the rule declares
+    10 |   batch(pay_day: due).batch
+  = For example, `pick(received: 2026-01-01)` gives it 2026-02-10.
+  = `pay_day` takes `>=2026-03-01 <=2027-01-31`.
+  = The rule's generated code refuses a day outside its range at its door, and the kaname function fails there with `rule`.
+  = Narrow the day to the range with an `if` before the call, or widen the rule input's range.
+error[ritsu E205]: billing.kn:14:27: The day given to `due` of the koyomi date `reminders.reminder` can be outside the input's range
+    14 |   reminders.reminder(due: due)
+  = For example, `remind(received: 2026-12-20)` gives it 2027-01-10.
+  = "reminders.cal" takes 2026-02-01 to 2026-12-31 for `due`.
+  = koyomi's generated code refuses a day outside the range, and the kaname function fails there with `date`.
+  = Narrow the day with an `if` before the call, or widen the range of `due` in "reminders.cal" (and the data of its calendar).
+ritsu check: 4 files (rulec 1, koyomi 2, kaname 1): 1 fail (2 errors); borders between the languages: 4 checked, 0 undecided

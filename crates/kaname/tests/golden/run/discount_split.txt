@@ -1,0 +1,4 @@
+split(lines: [Line { label: "labor", amount: 5000USDc }, Line { label: "parts", amount: 10000USDc }], discount: 1000USDc)
+  line 17: discount_share(discount: 1000USDc, before: 0USDc, upto: 5000USDc, total: 15000USDc) = { share: 333USDc }
+  line 17: discount_share(discount: 1000USDc, before: 5000USDc, upto: 15000USDc, total: 15000USDc) = { share: 667USDc }
+= [Share { label: "labor", share: 333USDc }, Share { label: "parts", share: 667USDc }]

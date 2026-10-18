@@ -1,0 +1,4 @@
+error[E302]: example.kn:4:3: The value of `n * 2` can leave int64
+     4 |   n * 2
+  = For example, `double(n: 5000000000000000000)` takes it past int64.
+  = Narrow the ranges of the inputs, or round sooner.

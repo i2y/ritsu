@@ -1,6 +1,6 @@
-//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books, the workflows and the
-//! code that asks the gates of a project, as one package for each of TypeScript, Python and Go,
-//! with the gates' Cedar beside them, written once.
+//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books, the workflows, the code
+//! that joins them and the code that asks the gates of a project, as one package for each of
+//! TypeScript, Python and Go, with the gates' Cedar beside them, written once.
 //!
 //! ```text
 //! generated/typescript/          generated/python/              generated/go/
@@ -10,6 +10,8 @@
 //!   dates/<alias>.ts               <name>/dates/<alias>.py        dates/<package>/<package>.go
 //!   books/<book>.ts                <name>/books/<book>.py         books/<package>/book.go
 //!   flows/<flow>/…                 <name>/flows/<flow>/…          flows/<package>/…
+//!   glue/<module>.ts, kaname.ts    <name>/glue/<module>.py, …     glue/<package>/<package>.go, …
+//!   glue/books/<book>.ts, …        <name>/glue/books/<book>.py, … glue/books/<package>/…
 //!   authz/<gate>.ts
 //!   units.ts                       <name>/units.py                units/units.go
 //! generated/cedar/<gate>.cedar, .cedarschema, .cedarschema.json, .policies.json
@@ -17,8 +19,10 @@
 //!
 //! Each language writes its part with its own generator (DESIGN 9.1): rulec the rule's module,
 //! koyomi the dates file's, chobo the client of the book (and, on PostgreSQL, the SQL it calls),
-//! dandori the workflow for Temporal, sekisho the gate's Cedar and the code that builds its
-//! requests and asks them (sekisho's DESIGN 5.6), which reads the package's rules/ and dates/. A workflow reads the rules, the dates and the books from the
+//! dandori the workflow for Temporal, kaname the module's code under glue/, which calls the
+//! package's rules/ and dates/ and builds the transfers of its books (kaname's DESIGN 10), and
+//! sekisho the gate's Cedar and the code that builds its requests and asks them (sekisho's DESIGN
+//! 5.6), which reads the package's rules/ and dates/. A workflow reads the rules, the dates and the books from the
 //! package's rules/, dates/ and books/ (dandori's `InPackage`), not from code put beside it: the
 //! imports name the package's modules, and the books the transport takes are typed with the
 //! package's clients, so that the type checker of the target holds the two languages to each
@@ -209,14 +213,15 @@ fn from_serde(v: &serde_json::Value) -> Json {
     ritsu_base::json::parse(&v.to_string()).unwrap_or(Json::Null)
 }
 
-/// Whether every file of the four languages a package is made of passes its language's check; the
+/// Whether every file of the languages a package is made of passes its language's check (kaname's
+/// with what the checks across the borders came to at its calls, as `ritsu check` checks it); the
 /// diagnostics of those that do not, as `ritsu check` prints them, when one does not.
-fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal> {
+fn checked(project: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, lang: Lang) -> Result<(), Refusal> {
     let mut said = String::new();
     let mut found: Vec<Json> = Vec::new();
     let mut worst = 0u8;
     let mut failing: Vec<String> = Vec::new();
-    for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Sekisho] {
+    for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Kaname, Tool::Sekisho] {
         let files: Vec<String> = project.of(tool).iter().map(|f| f.shown.clone()).collect();
         if files.is_empty() {
             continue;
@@ -224,6 +229,10 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
         let units = match tool {
             Tool::Rulec => joined.rulec.checked(&project.root, &files, lang),
             Tool::Koyomi => joined.koyomi.checked(&project.root, &files, lang),
+            Tool::Kaname => {
+                let v: Rc<dyn ritsu_ports::Verdicts> = verdicts.clone();
+                joined.kaname.checked_with(&project.root, &files, &joined.ports(), Some(v), lang)
+            }
             Tool::Sekisho => sekisho::check::checked(&project.root, &files, &joined.sekisho().into(), lang),
             _ => joined.chobo.checked(&project.root, &files, lang),
         };
@@ -279,6 +288,49 @@ fn checked(project: &Project, joined: &Joined, lang: Lang) -> Result<(), Refusal
     Err(Refusal { said: format!("{said}{}", r.said), diagnostics: found, ..r })
 }
 
+/// The modules of kaname of the project, as they go into a package: each checked with the ports of
+/// the rules, the dates and the books joined and with what the checks across the borders came to at
+/// its calls, as `ritsu check` checks it (a place they show is not checked again in the code;
+/// kaname's DESIGN 10.4), with its path from the root. Err when one does not pass, or reads a rule,
+/// a dates file, a book or another module the project does not hold (the code of a module reads
+/// them from the package).
+pub fn kaname_modules(project: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, lang: Lang) -> Result<Vec<(Rc<kaname::check::Checked>, String)>, Refusal> {
+    let files = project.of(Tool::Kaname);
+    if files.is_empty() {
+        return Ok(Vec::new());
+    }
+    let v: Rc<dyn ritsu_ports::Verdicts> = verdicts.clone();
+    let suite: kaname::suite::Suite = joined.ports().into();
+    let run = kaname::check::Run::new(suite.with_verdicts(v));
+    let mut out = Vec::new();
+    for f in files {
+        let shown = &f.shown;
+        let o = run.file(shown).map_err(|e| refusal(2, tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}"), lang))?;
+        let Some(c) = o.checked.clone() else {
+            return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
+        };
+        // what the module reads beside it has to be the project's, for the package to hold it
+        let p = kaname::value::Program::of(&c);
+        let read: Vec<PathBuf> = p.rules.keys().chain(p.dates.keys()).chain(p.books.keys()).map(|k| p.file(k)).chain(c.world.modules.values().map(|m| PathBuf::from(&m.path))).collect();
+        for path in read {
+            let rel = ritsu_base::paths::from_root(&project.root, &path);
+            if rel.as_ref().and_then(|r| project.holds(r)).is_none() {
+                let other = rel.unwrap_or_else(|| path.display().to_string());
+                return Err(refusal(
+                    1,
+                    tr!(
+                        "`{shown}` が読む {other} が、プロジェクトのファイルにありません。パッケージはプロジェクトのファイルから作るので、そのファイルも ritsu gen に渡してください",
+                        "`{shown}` reads {other}, which is not one of the project's files; a package is made of the project's files, so give ritsu gen that file too"
+                    ),
+                    lang,
+                ));
+            }
+        }
+        out.push((c, f.rel.clone()));
+    }
+    Ok(out)
+}
+
 /// `f`, with the ports of the rules, the dates and the books joined, as dandori reads a flow.
 fn with_ports<R>(joined: &Joined, f: impl FnOnce() -> R) -> R {
     let dates: Rc<dyn ritsu_ports::Dates> = joined.koyomi.clone();
@@ -286,8 +338,9 @@ fn with_ports<R>(joined: &Joined, f: impl FnOnce() -> R) -> R {
     dandori::sources::with_ports(joined.rules(), dates, books, f)
 }
 
-/// The package of `target`, made from the project's files (which pass their checks).
-pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) -> Result<Package, Refusal> {
+/// The package of `target`, made from the project's files (which pass their checks) and its modules
+/// of kaname as [`kaname_modules`] checks them.
+pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check::Checked>, String)], target: Target, o: &Options) -> Result<Package, Refusal> {
     let lang = o.lang;
     let mut files: Vec<(String, String, Option<String>)> = Vec::new();
     // what goes under each kind's directory, for the indexes: each module by its name
@@ -436,6 +489,21 @@ pub fn package(project: &Project, joined: &Joined, target: Target, o: &Options) 
             files.push((format!("{base}{rel}"), body, Some(f.rel.clone())));
         }
     }
+    // kaname: each module's code under glue/, which calls the package's rules/ and dates/ and builds
+    // the transfers of its books, with the helper every module reads and the types of the
+    // transfers; glue/'s indexes are kaname's own (the books' transfers are under glue/books/)
+    if !modules.is_empty() {
+        let kt = kaname::r#gen::Target::parse(target.key()).expect("the three targets are kaname's");
+        let made = kaname::r#gen::package(modules, kt, lang, &o.module);
+        units.extend(made.units);
+        for (c, rel) in modules {
+            named.push(("glue", c.module.name.ascii().to_string(), rel.clone()));
+        }
+        kinds.entry("glue").or_default();
+        for (rel, body, from) in made.files {
+            files.push((format!("{base}{rel}"), body, from));
+        }
+    }
     // the package's one type of each unit they take amounts in (rulec's §15.248)
     if let Some((rel, body)) = rulec::codegen::units_module(target.key(), &units) {
         files.push((format!("{base}{rel}"), body, None));
@@ -544,10 +612,12 @@ fn module_of(rel: &str) -> String {
 /// package files of Python.
 fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, files: &[(String, String, Option<String>)]) -> Vec<(String, String, Option<String>)> {
     let head = |c: Comment| c.line(&ritsu_emit::header::generated("ritsu"));
-    let what = if kinds.contains_key("authz") {
-        "The rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project, as one package (ritsu gen)."
-    } else {
-        "The rules, the dates, the clients of the books and the workflows of a project, as one package (ritsu gen)."
+    let (glue, authz) = (kinds.contains_key("glue"), kinds.contains_key("authz"));
+    let what = match (glue, authz) {
+        (false, false) => "The rules, the dates, the clients of the books and the workflows of a project, as one package (ritsu gen).",
+        (false, true) => "The rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project, as one package (ritsu gen).",
+        (true, false) => "The rules, the dates, the clients of the books, the workflows of a project and the code that joins them, as one package (ritsu gen).",
+        (true, true) => "The rules, the dates, the clients of the books, the workflows of a project, the code that joins them and the code that asks its gates, as one package (ritsu gen).",
     };
     let generated = ritsu_emit::header::generated("ritsu");
     let mut out = Vec::new();
@@ -556,6 +626,10 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             let mut index = format!("{}// {what}\n\n", head(Comment::Slashes));
             for (kind, modules) in kinds {
                 index.push_str(&format!("export * as {kind} from \"./{kind}/index\";\n"));
+                // glue/'s index is kaname's
+                if *kind == "glue" {
+                    continue;
+                }
                 let mut sub = format!("{}// The {kind} of the package, each by its name.\n\n", head(Comment::Slashes));
                 for m in modules {
                     // a flow's index is its client: how to start it, answer it and ask it
@@ -611,7 +685,7 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             }
             out.push((format!("{n}/__init__.py"), init, None));
             out.push((format!("{n}/py.typed"), String::new(), None));
-            for (kind, modules) in kinds {
+            for (kind, modules) in kinds.iter().filter(|(k, _)| **k != "glue") {
                 let mut sub = format!("{}\"\"\"The {kind} of the package, each by its name.\"\"\"\n\n", head(Comment::Hash));
                 for m in modules {
                     sub.push_str(&format!("from . import {m} as {m}\n"));
@@ -664,10 +738,11 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
                 }
             }
             let package = go_package_name(&o.module, &o.name);
-            let mut doc = if kinds.contains_key("authz") {
-                format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the code that\n// asks the gates of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and authz/ under\n// the import path {}.\n", head(Comment::Slashes), o.module)
-            } else {
-                format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module)
+            let mut doc = match (glue, authz) {
+                (false, true) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the code that\n// asks the gates of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and authz/ under\n// the import path {}.\n", head(Comment::Slashes), o.module),
+                (false, false) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module),
+                (true, false) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows of a project and the\n// code that joins them, as one package (ritsu gen): rules/, dates/, books/, flows/ and glue/ under the\n// import path {}.\n", head(Comment::Slashes), o.module),
+                (true, true) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows of a project, the code\n// that joins them and the code that asks its gates, as one package (ritsu gen): rules/, dates/, books/,\n// flows/, glue/ and authz/ under the import path {}.\n", head(Comment::Slashes), o.module),
             };
             if files.iter().any(|(p, _, _)| p == "units/units.go") {
                 doc.push_str("//\n// The types of the units its rules and books take amounts in are in units/, one of each unit.\n");
@@ -780,7 +855,7 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
 /// Whether a file begins with the head of a file ritsu's generators write (DESIGN 9.2).
 fn generated_here(p: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(p) else { return false };
-    text.lines().take(3).any(|l| ["rulec", "koyomi", "chobo", "dandori", "sekisho", "ritsu"].iter().any(|t| l.contains(&format!("Code generated by {t} ")) && l.ends_with("DO NOT EDIT.")))
+    text.lines().take(3).any(|l| ["rulec", "koyomi", "chobo", "dandori", "kaname", "sekisho", "ritsu"].iter().any(|t| l.contains(&format!("Code generated by {t} ")) && l.ends_with("DO NOT EDIT.")))
 }
 
 /// Write the package into `dir`, or under `check` say what differs from it.
@@ -951,14 +1026,14 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         Err(e) => return say(refusal(2, e, lang), answer),
     };
     answer.root = Some(project.root_shown());
-    if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
+    if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Kaname, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
         let given = project.given.join(" ");
         return say(
             refusal(
                 2,
                 tr!(
-                    "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow、.gate）がありません",
-                    "there is no file to make a package of (.rule, .cal, .book, .flow, .gate) in {given}"
+                    "{given} には、パッケージにするファイル（.rule、.cal、.book、.flow、.kn、.gate）がありません",
+                    "there is no file to make a package of (.rule, .cal, .book, .flow, .kn, .gate) in {given}"
                 ),
                 lang,
             ),
@@ -966,15 +1041,21 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         );
     }
     let joined = Joined::new();
-    if let Err(r) = checked(&project, &joined, lang) {
+    // what the checks across the borders come to at the calls of the modules of kaname, once
+    let verdicts = Rc::new(ritsu_cross::ProgramVerdicts::new(&joined));
+    if let Err(r) = checked(&project, &joined, &verdicts, lang) {
         return say(r, answer);
     }
+    let modules = match kaname_modules(&project, &joined, &verdicts, lang) {
+        Ok(m) => m,
+        Err(r) => return say(r, answer),
+    };
     let o = Options { name, module, books, authorizer, lang };
     let out = PathBuf::from(&answer.out);
     let check = a.has("--check");
     let mut st = Emitted::default();
     for t in targets {
-        let p = match package(&project, &joined, t, &o) {
+        let p = match package(&project, &joined, &modules, t, &o) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
         };

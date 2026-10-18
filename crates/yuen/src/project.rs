@@ -688,7 +688,7 @@ pub fn placed(n: &Name, place: Place) -> Result<(), Refused> {
             (n.tool, kind),
             (Tool::Geas | Tool::Koyomi, Some("claim"))
                 | (Tool::Sekisho, Some("expect" | "separate"))
-                | (Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Geas | Tool::Sekisho | Tool::Sakai | Tool::File, None)
+                | (Tool::Rulec | Tool::Koyomi | Tool::Chobo | Tool::Dandori | Tool::Geas | Tool::Sekisho | Tool::Sakai | Tool::Kaname | Tool::File, None)
         );
         if !ok {
             let t = n.text();

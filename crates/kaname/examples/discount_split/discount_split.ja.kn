@@ -1,0 +1,22 @@
+module 値引きの按分(discount_split_ja) v1
+description "請求書の明細に、金額の比で値引きを配る。規則を明細ごとに一回ずつ呼び、配った分の合計がちょうど値引きになる。discount_split.kn の日本語の版"
+
+use rule 値引きの配分 from "rules/値引きの配分.rule"
+
+record 明細(Line)
+  項目(label)  : string
+  金額(amount) : money[USDc]  range >=1USDc <=10_000_000USDc
+
+record 明細の値引き(Share)
+  項目(label)   : string
+  値引き(share) : money[USDc]
+
+fn 按分する(split)(明細(lines): list[明細] count >=1 <=10, 値引き(discount): money[USDc] range >=0USDc <=10_000_000USDc) -> list[明細の値引き] total
+  description "途中までの合計を規則に渡す。端数を受け持つのは最後の明細"
+  map(running_totals(明細, 一件 => 一件.金額), 途中 =>
+    明細の値引き { 項目: 途中.item.項目, 値引き: 値引きの配分(値引き: 値引き, 手前まで: 途中.before, ここまで: 途中.upto, 合計: 途中.total).配分 })
+
+# バージニア州の Example 3。工賃 50.00 ドルと部品 100.00 ドルから 10.00 ドルを値引く。
+examples
+  按分する(明細: [明細 { 項目: "labor", 金額: 5000USDc }, 明細 { 項目: "parts", 金額: 10000USDc }], 値引き: 1000USDc)
+    = [明細の値引き { 項目: "labor", 値引き: 333USDc }, 明細の値引き { 項目: "parts", 値引き: 667USDc }]

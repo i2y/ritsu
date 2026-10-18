@@ -1,0 +1,53 @@
+typescript:
+  books/index.ts: ritsu
+  books/ledger.sql: chobo <- books/ledger.book
+  books/ledger.ts: chobo <- books/ledger.book
+  dates/index.ts: ritsu
+  dates/payment_terms.ts: koyomi <- dates/payment_terms.cal
+  glue/books/index.ts: kaname
+  glue/books/ledger.ts: kaname
+  glue/books/ledger_apply.ts: kaname
+  glue/index.ts: kaname
+  glue/kaname.ts: kaname
+  glue/late_payment.ts: kaname <- late_payment.kn
+  glue/payout.ts: kaname <- payout.kn
+  index.ts: ritsu
+  package.json: ritsu
+  rules/card_fee.ts: rulec <- rules/card_fee.rule
+  rules/index.ts: ritsu
+  rules/late_payment_charges.ts: rulec <- rules/late_payment_charges.rule
+  units.ts: ritsu
+python:
+  generated/__init__.py: ritsu
+  generated/books/__init__.py: ritsu
+  generated/books/ledger.py: chobo <- books/ledger.book
+  generated/books/ledger.sql: chobo <- books/ledger.book
+  generated/dates/__init__.py: ritsu
+  generated/dates/payment_terms.py: koyomi <- dates/payment_terms.cal
+  generated/glue/__init__.py: kaname
+  generated/glue/books/__init__.py: kaname
+  generated/glue/books/ledger.py: kaname
+  generated/glue/books/ledger_apply.py: kaname
+  generated/glue/kaname.py: kaname
+  generated/glue/late_payment.py: kaname <- late_payment.kn
+  generated/glue/payout.py: kaname <- payout.kn
+  generated/py.typed: (empty)
+  generated/rules/__init__.py: ritsu
+  generated/rules/card_fee.py: rulec <- rules/card_fee.rule
+  generated/rules/late_payment_charges.py: rulec <- rules/late_payment_charges.rule
+  generated/units.py: ritsu
+  pyproject.toml: ritsu
+go:
+  books/ledger.sql: chobo <- books/ledger.book
+  books/ledger/book.go: chobo <- books/ledger.book
+  books/ledger/runtime.go: chobo
+  dates/paymentterms/paymentterms.go: koyomi <- dates/payment_terms.cal
+  doc.go: ritsu
+  glue/books/ledger/ledger.go: kaname
+  glue/books/ledgerapply/ledgerapply.go: kaname
+  glue/kaname/kaname.go: kaname
+  glue/latepayment/latepayment.go: kaname <- late_payment.kn
+  glue/payout/payout.go: kaname <- payout.kn
+  rules/cardfee/card_fee.go: rulec <- rules/card_fee.rule
+  rules/latepaymentcharges/late_payment_charges.go: rulec <- rules/late_payment_charges.rule
+  units/units.go: ritsu

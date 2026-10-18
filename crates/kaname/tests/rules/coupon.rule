@@ -1,0 +1,15 @@
+rule coupon v1
+description "A coupon's amount, passed on as it is, or none when there is no coupon"
+
+inputs
+  coupon : money[USDc]?  range >=0USDc <=10_000USDc
+  member : bool
+
+outputs
+  discount : money[USDc]?  round down(1USDc)
+
+table pass
+policy unique
+| member | -> discount : money[USDc]? |
+| true   | coupon                     |
+| false  | coupon                     |

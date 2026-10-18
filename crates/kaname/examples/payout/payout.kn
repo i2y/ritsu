@@ -1,0 +1,35 @@
+module payout v1
+description "Takes a card payment for a seller, and charges the processor's fee to the seller's balance: two transfers of the ledger, which the host makes"
+
+use rule card_fee from "rules/card_fee.rule"
+use book ledger from "books/ledger.book"
+
+record Payment
+  id            : string
+  seller        : string
+  amount        : money[USDc]  range >=1USDc <=100_000_000USDc
+  international : bool
+
+record Settlement
+  capture : ledger.capture.do
+  fee     : ledger.processing_fee.do
+
+fn settle(payment: Payment) -> Settlement total
+  description "The amount goes to the seller, and the fee the rule gives for it goes from the seller to the processor"
+  let fee = card_fee(amount: payment.amount, international: payment.international).fee
+  Settlement {
+    capture: ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount),
+    fee: ledger.processing_fee.do(payment: payment.id, seller: payment.seller, fee: fee),
+  }
+
+examples
+  settle(payment: Payment { id: "pay_1", seller: "s_1", amount: 10000USDc, international: false })
+    = Settlement {
+        capture: ledger.capture.do(payment: "pay_1", seller: "s_1", amount: 10000USDc),
+        fee: ledger.processing_fee.do(payment: "pay_1", seller: "s_1", fee: 398USDc),
+      }
+  settle(payment: Payment { id: "pay_2", seller: "s_1", amount: 10000USDc, international: true })
+    = Settlement {
+        capture: ledger.capture.do(payment: "pay_2", seller: "s_1", amount: 10000USDc),
+        fee: ledger.processing_fee.do(payment: "pay_2", seller: "s_1", fee: 548USDc),
+      }

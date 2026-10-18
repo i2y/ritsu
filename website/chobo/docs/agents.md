@@ -39,9 +39,9 @@ $ ritsu skills install chobo --user                         # every project on t
 $ ritsu skills install chobo --dir path/to/skills           # where another agent reads skills
 ```
 
-In Claude Code, the plugin `ritsu` holds all nine: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
+In Claude Code, the plugin `ritsu` holds all ten: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
 then `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/chobo` into
-`~/.claude/skills/` or a project's `.claude/skills/` does the same, and every release has the nine
+`~/.claude/skills/` or a project's `.claude/skills/` does the same, and every release has the ten
 in `ritsu-skills-v<version>.zip`. Asked for something it covers ("keep the stock from going below
 0", "fix this W103"), the agent usually takes it up by itself; to be certain, name it: "use the
 chobo skill".

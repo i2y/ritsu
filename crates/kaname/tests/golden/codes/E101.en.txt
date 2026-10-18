@@ -1,0 +1,2 @@
+error[E101]: example.kn:4:11: There is no `shipping`
+     4 |   price + shipping

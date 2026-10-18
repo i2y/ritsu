@@ -1,0 +1,3 @@
+error[E102]: example.kn:4:3: The answer of `fee` is money[USDc]; this is money[USD]
+     4 |   amount
+  = `<value> in USDc` converts it: money[USD] and money[USDc] are two units of one dimension, and nothing converts one into the other unasked.

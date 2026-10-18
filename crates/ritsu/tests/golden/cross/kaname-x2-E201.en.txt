@@ -1,0 +1,11 @@
+ok rules/discount_share.rule
+error[kaname E401]: discount_split.kn:14:1: `split` is written `total`, but it can fail with `rule`
+    14 | fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc) -> list[Share] total
+  = Line 17: the call of the rule discount_share can give it values that break its precondition `before <= upto` (ritsu E201)
+  = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
+error[ritsu E201]: discount_split.kn:17:41: The call of the rule discount_share can give it values that break its precondition `before <= upto`
+    17 |     Share { label: r.item.label, share: discount_share(discount: discount, before: r.upto, upto: r.before, total: r.total).share })
+  = For example, `split(lines: [Line { label: "a", amount: 5000000USDc }], discount: 0USDc)` gives the rule before = 5000000, upto = 0.
+  = The rule's generated code refuses a call that breaks a precondition at its door, and the kaname function fails there with `rule`.
+  = Branch on the precondition with an `if` before the call, or correct the ranges of the values given.
+ritsu check: 2 files (rulec 1, kaname 1): 1 fail (2 errors); borders between the languages: 2 checked, 0 undecided

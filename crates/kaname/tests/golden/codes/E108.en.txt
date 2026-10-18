@@ -1,0 +1,3 @@
+error[E108]: example.kn:3:11: The parameter `n` of `double` declares no range (`range`)
+     3 | fn double(n: number) -> number
+  = A function's parameters come in from the host, so the numbers and dates of a parameter and of every field it reaches declare a range, a list the most elements it holds, and a rate its step: they are the promise to the host, and what the analysis of ranges starts from.

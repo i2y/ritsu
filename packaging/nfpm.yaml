@@ -1,6 +1,6 @@
 # The .deb and the .rpm of one release (DESIGN 13.2). packaging/linux.sh fills in the three
 # variables from the static binary in the release archive. That binary needs no library, so the
-# packages depend on nothing and install the same file the archive holds, with the same eight links
+# packages depend on nothing and install the same file the archive holds, with the same nine links
 # beside it (/usr/bin/rulec -> ritsu, and so on), and the two licenses and THIRD_PARTY_NOTICES in
 # /usr/share/doc/ritsu.
 #
@@ -23,7 +23,7 @@ license: (MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause
 description: |-
   Small languages for the rules a system must follow, checked so that every input gets exactly
   one answer and no two rules disagree:
-  rulec, dandori, koyomi, chobo, geas, yuen, sakai and sekisho.
+  rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho and kaname.
   From the checked rules, ritsu generates code, pages for people to read, and the inputs,
   answers and scenarios to test with. One static binary, no runtime and no dependencies; each
   language's command is a link to it.
@@ -64,6 +64,9 @@ contents:
     type: symlink
   - src: ritsu
     dst: /usr/bin/sekisho
+    type: symlink
+  - src: ritsu
+    dst: /usr/bin/kaname
     type: symlink
   - src: LICENSE-MIT
     dst: /usr/share/doc/ritsu/LICENSE-MIT

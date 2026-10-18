@@ -16,7 +16,7 @@ Node 22 では、パッケージを読み込むと、プロセス全体で V8 �
 
 ## コマンド
 
-パッケージは `node_modules/.bin` に九つのコマンドを置きます。`ritsu` と、言語の名前の `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho` です。言語の名前のコマンドは、リリースのアーカイブのリンクと同じく、`ritsu <言語> …` と同じものです。規則、カレンダー、日付のファイル、帳簿、ワークフローが一つずつあるプロジェクトで走らせると、次のようになります。
+パッケージは `node_modules/.bin` に十のコマンドを置きます。`ritsu` と、言語の名前の `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname` です。言語の名前のコマンドは、リリースのアーカイブのリンクと同じく、`ritsu <言語> …` と同じものです。規則、カレンダー、日付のファイル、帳簿、ワークフローが一つずつあるプロジェクトで走らせると、次のようになります。
 
 <!-- run in crates/ritsu/tests/projects/stockroom -->
 ```console
@@ -110,7 +110,7 @@ WASI 向けの WebAssembly のモジュールは、ほかのプログラムを�
 | `geas check`、`geas snap`、`geas drift`、`geas map` | 主張が動かすプログラム |
 | `code rust` を書いた地図の `sakai check`（と `ritsu check`） | `cargo metadata`。sakai は E107 を出し、ほかの検査は続ける |
 
-ほかのコマンドは、ネイティブのバイナリと同じに動きます。各言語の `check`、言語をまたぐ `ritsu check`、`ritsu gen` と `ritsu run`、すべての `doc`、`api`、`vectors`、`export`、`trace`、`affected`、`scenarios`、`explain`、それに `ritsu skills install` です。リリースのたびに、八つの言語の例、ritsu のテストのプロジェクト、[ブラウザで試すページ](playground.md)のプロジェクトで、そこで走らせるコマンドを英語と日本語で、パッケージとネイティブのバイナリの両方で走らせ、出力、終了コード、書いたファイルが一字も違わないことを確かめています。
+ほかのコマンドは、ネイティブのバイナリと同じに動きます。各言語の `check`、言語をまたぐ `ritsu check`、`ritsu gen` と `ritsu run`、すべての `doc`、`api`、`vectors`、`export`、`trace`、`affected`、`scenarios`、`explain`、それに `ritsu skills install` です。リリースのたびに、九つの言語の例、ritsu のテストのプロジェクト、[ブラウザで試すページ](playground.md)のプロジェクトで、そこで走らせるコマンドを英語と日本語で、パッケージとネイティブのバイナリの両方で走らせ、出力、終了コード、書いたファイルが一字も違わないことを確かめています。
 
 Windows では、パッケージはすぐに理由を言って止まります。作業するディレクトリとパスを、そのままの形では WebAssembly のモジュールに渡せないからです。ネイティブの ritsu か、WSL を使ってください。
 

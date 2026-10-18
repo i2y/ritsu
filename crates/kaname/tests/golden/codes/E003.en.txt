@@ -1,0 +1,2 @@
+error[E003]: example.kn:6:1: The `use` lines come before the declarations (`enum`, `record`, `fn`)
+     6 | use module pricing from "pricing.kn"

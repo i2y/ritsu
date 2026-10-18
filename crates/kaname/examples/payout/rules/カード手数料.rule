@@ -1,0 +1,30 @@
+rule カード手数料(card_fee_ja) v1
+description "米国でカードで受けた一件の支払いに、決済の事業者が取る手数料。金額の 3.49% と、決まった 49 セント。海外のカードなら 1.50% を足す。事業者が公開している加盟店の手数料を、rulec のコーパスが保存しているコピーから転記した。card_fee.rule の日本語の版"
+
+source 手数料表(fees) = file "sources/paypal-us-fees.md" sha256:0318950a982c3c7d  # 事業者が公開している数字
+  table1 sha256:5e481ef40e570eeb
+
+inputs
+  金額(amount)        : money[USDc]  range >=1USDc <=100_000_000USDc
+  海外(international) : bool
+
+# セント未満の端数をどちらへ寄せるかは、元のページに書かれていない。半分を上げるのは仮置きで、
+# 出す前に人が決めること。
+outputs
+  手数料(fee) : money[USDc]  round half_up(1USDc)
+
+# 元のページは、国内の率と、海外のカードで足す率を分けて載せていて、足した率は載せていない。
+# だからここも足さない。国内のカードの行は何も足さず、`0%` はコピーにある数ではないので、
+# その行には出典を書かない。
+table 上乗せ(surcharge)
+policy unique
+| 海外  | -> 上乗せ率(extra) : rate[step 0.01%] |
+| false | 0%                                   |
+| true  | 1.5%                                 |  @手数料表 table1
+
+define 手数料 : money[USDc] = 金額 × 3.49% + 金額 × 上乗せ率 + 49USDc  @手数料表 table1
+
+examples
+| 金額      | 海外  | -> 手数料 |
+| 10000USDc | false | 398USDc   |
+| 10000USDc | true  | 548USDc   |

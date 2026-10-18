@@ -1,0 +1,158 @@
+{
+  "kaname": "<version>",
+  "file": "discount_split.ja.kn",
+  "module": {
+    "name": "値引きの按分",
+    "alias": "discount_split_ja",
+    "version": "v1",
+    "description": "請求書の明細に、金額の比で値引きを配る。規則を明細ごとに一回ずつ呼び、配った分の合計がちょうど値引きになる。discount_split.kn の日本語の版",
+    "sha256": "5650171d06621c416e74e2ed65d8c1096a1d1a2814ffe97da3eddaae7cb5314a"
+  },
+  "generated": {
+    "typescript": "glue/discount_split_ja.ts",
+    "python": "glue/discount_split_ja.py",
+    "go": "glue/discountsplitja/discountsplitja.go"
+  },
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "値引きの配分",
+      "path": "rules/値引きの配分.rule",
+      "file": "rules/値引きの配分.rule",
+      "line": 4
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "明細",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "項目",
+          "alias": "label",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 7
+        },
+        {
+          "name": "金額",
+          "alias": "amount",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=10000000USDc",
+          "count": null,
+          "line": 8
+        }
+      ],
+      "line": 6,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line"
+      }
+    },
+    {
+      "name": "明細の値引き",
+      "alias": "Share",
+      "fields": [
+        {
+          "name": "項目",
+          "alias": "label",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 11
+        },
+        {
+          "name": "値引き",
+          "alias": "share",
+          "type": "money[USDc]",
+          "range": null,
+          "count": null,
+          "line": 12
+        }
+      ],
+      "line": 10,
+      "generated": {
+        "typescript": "Share",
+        "python": "Share",
+        "go": "Share"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "按分する",
+      "alias": "split",
+      "line": 14,
+      "description": "途中までの合計を規則に渡す。端数を受け持つのは最後の明細",
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "値引き",
+          "alias": "discount",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[明細の値引き]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [
+          "rule"
+        ],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 17,
+          "col": 35,
+          "calls": "rule",
+          "callee": "値引きの配分",
+          "checks": [
+            {
+              "line": 17,
+              "col": 35,
+              "check": "X2",
+              "about": "手前まで <= ここまで",
+              "outcome": "waiting",
+              "code": null
+            },
+            {
+              "line": 17,
+              "col": 35,
+              "check": "X2",
+              "about": "ここまで <= 合計",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        }
+      ],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "split",
+        "python": "split",
+        "go": "Split"
+      }
+    }
+  ],
+  "transfers": []
+}

@@ -1,0 +1,3 @@
+error[E601]: example.kn:7:3: The example answers 4, and the answer written is 5
+     7 |   double(n: 2) = 5
+  = `check` runs the function of an example in the reference interpreter, as a host would call it, and compares the answer: correct the function, or the answer the example writes.

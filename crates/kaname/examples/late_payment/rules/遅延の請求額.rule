@@ -1,0 +1,35 @@
+rule 遅延の請求額(late_payment_charges_ja) v1
+description "事業者間の代金の支払いが遅れたとき、売り手が請求できるもの。取り立ての費用としての定額と、基準金利に 8% を足した率で一日ずつ数える法定の利息。Late Payment of Commercial Debts (Interest) Act 1998 の第 5A 条 (2) と、GOV.UK の事業者間の請求の利息の手引きを、この例として読んだもの。法令の読み方を示すものではない。late_payment_charges.rule の日本語の版"
+
+source 法令(act) = file "sources/late-payment-act-1998.md" sha256:c25a0fe113e58d1a  # legislation.gov.uk、Open Government Licence v3.0
+source 手引き(guide) = file "sources/late-commercial-payments.md" sha256:2928a96aa000426e  # GOV.UK、Open Government Licence v3.0
+  table1 sha256:9395f13ea5957e66
+
+inputs
+  債権額(debt)               : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+  遅れた日数(days_late)      : number  range >=1 <=1500
+  基準金利(reference_rate)   : rate[step 0.01%]  range >=0% <=15%
+
+outputs
+  定額の補償(compensation) : money[GBP]  round down(1GBP)
+  利息(interest)           : money[GBPc]  round down(1GBPc)
+
+# 第 5A 条 (2)：債権の大きさで決まる定額。GOV.UK の手引きは、同じ額を表で載せている。
+table 定額(fixed_sum)  @法令
+policy unique
+| 債権額                        | -> 定額の補償 : money[GBP] |
+| <100_000GBPc                  | 40GBP                      |  @手引き table1
+| >=100_000GBPc <1_000_000GBPc  | 70GBP                      |  @手引き table1
+| >=1_000_000GBPc               | 100GBP                     |  @手引き table1
+
+# GOV.UK は、利息を一日ずつ数える。一年の利息を 365 で割り、ペンスの整数にする。ペンス未満の端数を
+# どちらへ寄せるかは書かれていない（ページの例はどちらでも 23 ペンスになる）。半分を上げるのは仮置き。
+define 一日の利息(daily) : money[GBPc] = half_up(債権額 × (8% + 基準金利) ÷ 365, 1GBPc)  @手引き
+define 利息 : money[GBPc] = 一日の利息 × 遅れた日数
+
+# 一行目は GOV.UK の例。1,000 ポンド、基準金利 0.5%、50 日の遅れ。
+examples
+| 債権額        | 遅れた日数 | 基準金利 | -> 定額の補償 | 利息     |
+| 100_000GBPc   | 50         | 0.5%     | 70GBP         | 1150GBPc |
+| 99_999GBPc    | 1          | 0%       | 40GBP         | 22GBPc   |
+| 1_000_000GBPc | 30         | 4%       | 100GBP        | 9870GBPc |

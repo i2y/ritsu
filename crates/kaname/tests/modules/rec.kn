@@ -1,0 +1,3 @@
+module rec v1
+fn countdown(n: number range >=0 <=100000) -> number
+  if n <= 0 then 0 else countdown(n: n - 1) + 1

@@ -27,9 +27,9 @@ message Order {
 
 ## E201 — A call can give a rule values that break its precondition
 
-**When**: Where a workflow calls a rule, the ranges dandori knows for the values it gives hold a combination that breaks one of the rule's preconditions, a relation between two inputs (`constraint`). The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's. The rule's generated code refuses such a call at its door, so it would fail only when the workflow runs. The notes give the ranges and the combination or the day that breaks it.
+**When**: Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a bound on the total or the length of the list it walks; the days of `range from koyomi`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door, so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does.
 
-**Fix**: Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result). If the precondition is the part that is wrong, correct the rule's `constraint`.
+**Fix**: Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). If the precondition is the part that is wrong, correct the rule's `constraint`.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -86,15 +86,27 @@ flow
     review => pass
 ```
 
+`refund.kn`:
+
+```kn
+module refund v1
+description "Whether a refund is paid at once or reviewed, as the rule decides for the amount the customer asks for"
+
+use rule check from "refund_check.rule"
+
+fn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> check.path
+  check(paid: paid, asked: asked).route
+```
+
 See also: [W201](#w201)
 
 <a id="w201"></a>
 
 ## W201 — Whether a call keeps a rule's precondition cannot be decided
 
-**When**: Where a workflow calls a rule, whether a precondition holds cannot be decided: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`.
+**When**: Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call.
 
-**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time.
+**Fix**: Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time. In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`).
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -151,13 +163,25 @@ flow
     review => pass
 ```
 
+`refund.kn`:
+
+```kn
+module refund v1
+description "Whether a refund is paid at once or reviewed, as the rule decides for the amount asked for, capped at what was paid"
+
+use rule check from "refund_check.rule"
+
+fn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> check.path
+  check(paid: paid, asked: min(asked, paid)).route
+```
+
 See also: [E201](#e201)
 
 <a id="e202"></a>
 
-## E202 — The days a koyomi date comes to fall outside a rule input's range
+## E202 — A day given to a rule's date input falls outside its range
 
-**When**: Where a workflow gives the day of a koyomi date (`due.day`) to a rule's date input, a day koyomi counts that date coming to lies outside the range the rule declares for the input. koyomi computes the date on every input of its range, so the day outside is an exact example; the notes give it, with the input at which koyomi comes to it. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to.
+**When**: Where a workflow or a function of kaname gives a day to a rule's date input, the day can lie outside the range the rule declares for the input. For a workflow, the day of a koyomi date (`due.day`) is given, and a day koyomi counts that date coming to lies outside: koyomi computes the date on every input of its range, so the day outside is an exact example, and the notes give it with the input at which koyomi comes to it. For a function of kaname, a run of the function's vectors gives a day outside, of the days of the koyomi dates the value comes from or of the range kaname finds; the notes give the function's input and the day. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to.
 
 **Fix**: Widen the rule input's range, or make it `range from koyomi`, so that koyomi's days are the range.
 
@@ -225,13 +249,27 @@ flow
   bill(order: order, due: due.day, run: pick.batch)
 ```
 
+`billing.kn`:
+
+```kn
+module billing v1
+description "The billing batch of the day an order's payment is due"
+
+use dates terms from "payment_terms.cal"
+use rule batch from "batch.rule"
+
+fn pick(received: date range >=2026-01-01 <=2026-12-20) -> batch.run
+  let due = terms.payment(received: received)
+  batch(pay_day: due).batch
+```
+
 See also: [W202](#w202), [E205](#e205)
 
 <a id="w202"></a>
 
-## W202 — Whether the days of a koyomi date stay inside a rule input's range cannot be decided
+## W202 — Whether a day given to a rule's date input stays inside its range cannot be decided
 
-**When**: The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). The rule's generated code checks the day at its door when the workflow runs.
+**When**: The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). For a function of kaname, it is also the days kaname's ranges find holding one outside, which no run of the function's vectors gives. The rule's generated code checks the day at its door when it runs.
 
 **Fix**: Give the input days of koyomi dates only, and it can be decided; where koyomi does not count them, narrow the inputs of its file.
 
@@ -303,15 +341,33 @@ flow
   bill(order: order, due: day, run: pick.batch)
 ```
 
+`billing.kn`:
+
+```kn
+module billing v1
+description "The billing batch of an order: that of the day the customer promised to pay, when it is no earlier than the payment day, and that of the payment day otherwise"
+
+use dates terms from "payment_terms.cal"
+use rule batch from "batch.rule"
+
+fn pick(received: date range >=2026-01-01 <=2026-12-20, promised: date range >=2026-01-01 <=2027-01-31) -> batch.run
+  let due = terms.payment(received: received)
+  let grace = promised - due
+  if grace >= 0
+    batch(pay_day: promised).batch
+  else
+    batch(pay_day: due).batch
+```
+
 See also: [E202](#e202)
 
 <a id="e203"></a>
 
-## E203 — A rule's output can be an amount chobo does not take
+## E203 — An amount given to a transfer can be one chobo does not take
 
-**When**: Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors.
+**When**: An amount of a transfer can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1), and chobo fails such a call rather than refusing it as a business outcome. For a workflow, it is checked where a rule's numeric output is given to a chobo transfer as its amount: rulec counts what the output comes to (the numbers the rows write, or its intervals), and the notes give an input of the rule that comes to that amount, from the rule's vectors. For a function of kaname, every amount is checked, a rule's output or one kaname computes, and it is this error where a run of the function's vectors comes to such an amount; the notes give the function's input and the amount.
 
-**Fix**: Make the rule's amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer.
+**Fix**: Make the amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -383,15 +439,28 @@ flow
   give_seats(event: event, count: need.needed)
 ```
 
+`booking.kn`:
+
+```kn
+module booking v1
+description "The seats to give an event, as the rule says for its kind: the transfer the host makes"
+
+use rule seats from "seats.rule"
+use book hall from "hall.book"
+
+fn give(event: string, kind: seats.kind) -> hall.assign.do
+  hall.assign.do(event: event, count: seats(event_kind: kind).needed)
+```
+
 See also: [W203](#w203), [E204](#e204)
 
 <a id="w203"></a>
 
-## W203 — Whether chobo takes a rule's output as an amount cannot be decided
+## W203 — Whether chobo takes an amount given to a transfer cannot be decided
 
-**When**: Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say). An amount chobo does not take fails the call when the workflow runs.
+**When**: Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say); an amount chobo does not take fails the call when the workflow runs. For a function of kaname, the amounts kaname's ranges find do not stay inside what chobo takes, and no run of the function's vectors comes to one outside; kaname's generated code checks the amount where it builds the transfer, and the function fails with `range` for one chobo does not take.
 
-**Fix**: Give the places the value comes from a range (the `range` of a task's answer or of the workflow's input).
+**Fix**: Give the places the value comes from a range (the `range` of a task's answer or of the workflow's input). In kaname, narrow the amount with an `if` before the transfer.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -470,13 +539,27 @@ flow
   give_seats(event: event, count: count)
 ```
 
+`booking.kn`:
+
+```kn
+module booking v1
+description "The seats to give an event: what the rule says its kind needs, less those it holds already, which are never more than it needs"
+
+use rule seats from "seats.rule"
+use book hall from "hall.book"
+
+fn give(event: string, kind: seats.kind, held: number range >=0 <=50) -> hall.assign.do
+  let needed = seats(event_kind: kind).needed
+  hall.assign.do(event: event, count: needed - min(held, needed))
+```
+
 See also: [E203](#e203)
 
 <a id="e204"></a>
 
 ## E204 — The task does not handle a refusal the transfer can come to
 
-**When**: Where a `do` or a `hold` is given a rule's output as its amount, chobo's search, with the amounts held to the range the call gives, finds a run in which the operation is refused for a reason the task does not handle as an error it declares. Only the reasons of the book's bounds (an account's `refused as`) are compared, the refusals that turn on the amounts; one that turns on the calls made before, such as a key used again with other arguments, is not. The search goes as deep as chobo's check goes. A `post` and a `void` are refused for the state their hold is in, which dandori follows with the case (dandori's E022).
+**When**: Where a `do` or a `hold` is given a rule's output as its amount, chobo's search, with the amounts held to the range the call gives, finds a run in which the operation is refused for a reason the task does not handle as an error it declares. Only the reasons of the book's bounds (an account's `refused as`) are compared, the refusals that turn on the amounts; one that turns on the calls made before, such as a key used again with other arguments, is not. The search goes as deep as chobo's check goes. A `post` and a `void` are refused for the state their hold is in, which dandori follows with the case (dandori's E022). A transfer a function of kaname builds does not get this error: the host that applies it handles a refusal, and the reasons the search finds go on the type kaname generates for the transfer (W204).
 
 **Fix**: Declare the reason as an error of the task, and handle it.
 
@@ -556,7 +639,7 @@ See also: [E203](#e203), [W204](#w204)
 
 ## W204 — Which refusals a transfer can come to cannot be decided
 
-**When**: The task handles a reason of the book's bounds, and chobo's search, with the amounts held to the range the call gives, finds no run that comes to it. The search goes only as deep as chobo's check does, so all it shows is that the reason does not come within that depth. A case that cannot be decided at all (no range for the amounts, a book that does not answer) is this warning too.
+**When**: The task handles a reason of the book's bounds, and chobo's search, with the amounts held to the range the call gives, finds no run that comes to it. The search goes only as deep as chobo's check does, so all it shows is that the reason does not come within that depth. A case that cannot be decided at all (no range for the amounts, a book that does not answer) is this warning too. For a `do` or a `hold` a function of kaname builds, the host that applies the transfer handles a refusal, and the reasons the search finds go on the type kaname generates for the transfer; only a case that cannot be decided is this warning, and the type then lists every reason of the book's bounds.
 
 **Fix**: If the reason cannot happen, drop it from the task's errors; if it happens only after a longer run, leave it.
 
@@ -637,9 +720,9 @@ See also: [E204](#e204)
 
 ## E205 — A day given to a koyomi date is outside its input's range
 
-**When**: Where a workflow calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). The notes give the day outside and the input at which koyomi comes to it.
+**When**: Where a workflow or a function of kaname calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). For a workflow, the notes give the day outside and the input at which koyomi comes to it; for a function of kaname, a run of the function's vectors gives a day outside, and the notes give the function's input and the day.
 
-**Fix**: Widen the koyomi input's range (and the calendar's data), or give it a day that stays inside.
+**Fix**: Widen the koyomi input's range (and the calendar's data), or give it a day that stays inside (in kaname, narrow it with an `if` before the call).
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -697,13 +780,27 @@ flow
   remind(order: order, on: note.day)
 ```
 
+`reminding.kn`:
+
+```kn
+module reminding v1
+description "The day to remind a customer, a week before an order's payment is due"
+
+use dates terms from "payment_terms.cal"
+use dates reminders from "reminders.cal"
+
+fn remind(received: date range >=2026-01-01 <=2026-12-20) -> date
+  let due = terms.payment(received: received)
+  reminders.reminder(due: due)
+```
+
 See also: [W205](#w205), [E202](#e202)
 
 <a id="w205"></a>
 
 ## W205 — Whether a day given to a koyomi date stays inside its range cannot be decided
 
-**When**: dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date. koyomi's generated code refuses a day outside its range when the workflow runs.
+**When**: dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date; koyomi's generated code refuses a day outside its range when the workflow runs. For a function of kaname, the days kaname's ranges find hold one outside the range, which no run of the function's vectors gives; kaname's generated code checks it there, and the function fails with `date` where koyomi refuses the day.
 
 **Fix**: Give it the day of another koyomi date, and it can be decided; otherwise leave it: koyomi refuses at run time.
 
@@ -761,6 +858,24 @@ flow
   let due = terms.payment(received: received)
   let note = reminders.reminder(due: due.day)
   remind(order: order, on: note.day)
+```
+
+`reminding.kn`:
+
+```kn
+module reminding v1
+description "The day to remind a customer: a week before the day the customer promised to pay, when it is no earlier than the payment day, and a week before the payment day otherwise"
+
+use dates terms from "payment_terms.cal"
+use dates reminders from "reminders.cal"
+
+fn remind(received: date range >=2026-01-01 <=2026-12-20, promised: date range >=2026-01-01 <=2027-01-31) -> date
+  let due = terms.payment(received: received)
+  let grace = promised - due
+  if grace >= 0
+    reminders.reminder(due: promised)
+  else
+    reminders.reminder(due: due)
 ```
 
 See also: [E205](#e205)

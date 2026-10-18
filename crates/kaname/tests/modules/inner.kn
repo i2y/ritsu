@@ -1,0 +1,23 @@
+module inner v1
+
+use rule charges from "examples/late_payment/rules/late_payment_charges.rule"
+use dates terms from "examples/late_payment/dates/payment_terms.cal"
+use rule coupon from "tests/rules/coupon.rule"
+use book ledger from "examples/payout/books/ledger.book"
+
+fn charge(days: number range >=0 <=2000) -> money[GBPc]
+  charges(debt: 100_000GBPc, days_late: days, reference_rate: 0.5%).interest
+
+fn due(on: date range >=2025-01-01 <=2027-12-31) -> date
+  terms.due(invoiced: on)
+
+fn gap(on: date range >=2026-01-01 <=2027-12-31) -> number
+  terms.due(invoiced: on) - on
+
+fn discount(c: money[USDc]? range >=0USDc <=10_000USDc) -> money[USDc]
+  match coupon(coupon: c, member: true).discount
+    none => 0USDc
+    some d => d
+
+fn pay(id: string, amount: money[USDc] range >=0USDc <=1_000USDc, fee: money[USDc] range >=0USDc <=1_000USDc) -> ledger.capture.do
+  ledger.capture.do(payment: id, seller: "s_1", amount: amount - fee)

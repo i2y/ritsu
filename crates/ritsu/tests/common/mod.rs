@@ -17,7 +17,7 @@ pub fn root() -> PathBuf {
 }
 
 /// The words after the opening fence of a block that hold the lines of one language.
-pub const CODE: [&str; 8] = ["rule", "flow", "cal", "book", "geas", "req", "ctx", "gate"];
+pub const CODE: [&str; 9] = ["rule", "flow", "cal", "book", "geas", "req", "ctx", "gate", "kn"];
 
 pub struct Block {
     pub info: String,
@@ -146,11 +146,17 @@ pub fn repros() -> Vec<Vec<(&'static str, &'static str)>> {
         .collect()
 }
 
-/// The files of the reproduction whose every file is a code block of the page above `at`, in the
-/// same section: where a command shown after such blocks is run.
+/// The files of the reproduction that the code blocks of the page above `at`, in the same section,
+/// all are: where a command shown after such blocks is run, on those files.
 fn reproduction_above(p: &Page, at: &Block) -> Option<Vec<(&'static str, &'static str)>> {
     let above: Vec<Vec<String>> = p.blocks.iter().filter(|b| b.section == at.section && b.at < at.at && CODE.contains(&b.info.as_str())).map(|b| lines_of(&b.lines.join("\n"))).collect();
-    repros().into_iter().find(|files| files.iter().all(|(_, body)| above.contains(&lines_of(body))))
+    // Every block above is a file of the reproduction, which can hold more than the page shows: the
+    // reproductions of the borders call from a module of kaname beside the workflow. The commands
+    // run on the files the page shows.
+    repros().into_iter().find_map(|files| {
+        let shown: Vec<(&'static str, &'static str)> = files.into_iter().filter(|(_, body)| above.contains(&lines_of(body))).collect();
+        (!above.is_empty() && shown.len() == above.len()).then_some(shown)
+    })
 }
 
 /// The runs a block shows: each command, and the lines under it up to the next `$`.

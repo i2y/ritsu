@@ -11,7 +11,7 @@ Where each requirement came from, and what still satisfies it.
 ritsu gives each of those a small language of its own, in a file people can read. Each language
 checks what it says as far as it can be checked — over every input, every day, every path, not a
 sample — generates code where code is needed, and draws pages for whoever needs to understand
-it. Because the eight share one toolchain, a proof does not stop at a language's edge: a
+it. Because the nine share one toolchain, a proof does not stop at a language's edge: a
 workflow knows the preconditions of the rules it calls, a rule knows the days a calendar can
 come to, a ledger knows the amounts a rule can return.
 
@@ -21,7 +21,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 [Try it full screen](play/){ .md-button }
 [GitHub](https://github.com/i2y/ritsu){ .md-button }
 
-## The eight languages
+## The nine languages
 
 | | File | What it is for | Read more |
 |---|---|---|---|
@@ -33,6 +33,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
 | sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
 | sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [the sekisho page](sekisho.md) |
+| kaname | `.kn` | the code that joins rules, dates and books, in ritsu's types | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.md) |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -67,6 +68,11 @@ people.
   does; only a gate that passes compiles, into Cedar's schema and policies, and into TypeScript,
   Python and Go that compute the conditions from the service's own data and ask Cedar.
   [The sekisho page](sekisho.md) follows the answer of a rule from a gate to Cedar.
+- **kaname** is the code that joins them: a module (a `.kn` file) puts a rule's inputs together,
+  carries one answer into the next call and hands an amount to a book, in ritsu's types and with
+  no input or output of its own. `kaname check` holds it to units, money, rounding and int64 and to
+  the range of every value it passes, and shows that a function marked `total` answers every input
+  of its ranges; `ritsu gen` writes it as TypeScript, Python and Go beside the code it calls.
 
 ## Where the languages meet
 
@@ -124,8 +130,8 @@ flow
     review => pass
 ```
 
-Each file passes its own language's check. Together they do not (the two files are the
-reproduction that `ritsu explain E201` prints):
+Each file passes its own language's check. Together they do not (the two files are from the
+reproduction that `ritsu explain E201` prints, which calls the rule from a module of kaname too):
 
 ```console
 $ ritsu check .
@@ -148,11 +154,13 @@ them:
   against the range the rule declares;
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
-- money and units, one type across rulec, dandori and chobo;
+- every value a kaname module passes to a rule, a date or a transfer, against the range that one
+  declares;
+- money and units, one type across rulec, dandori, chobo and kaname;
 - every operation a context of sakai's map opens, held to the action of a gate that guards it, and
   every operation a workflow calls, to what its gate allows the workflow;
-- yuen pins each table, date, claim and task one by one, and sakai checks every reference in
-  every language, with its line.
+- yuen pins each table, date, claim, task and function one by one, and sakai checks every
+  reference in every language, with its line.
 
 ## Pages for people
 
@@ -165,6 +173,8 @@ reviewing the code — so they can read what was written and check it against wh
 - `koyomi doc` — a calendar, month by month;
 - `chobo doc` — a ledger, its bounds and its transfers;
 - `sekisho doc` — who may do what, action by action, beside the Cedar it compiles to;
+- `kaname doc` — a module: the decisions in its tables, its functions by their effects and where
+  each can fail, and the decisions written in its code;
 - `yuen trace` — a requirement back to its source and on to what satisfies it.
 
 ## Install
@@ -189,13 +199,13 @@ Japanese. ritsu is MIT OR Apache-2.0.
 
 ## For AI agents
 
-ritsu and its languages are made to be used by AI agents, and the repository holds nine
+ritsu and its languages are made to be used by AI agents, and the repository holds ten
 [Agent Skills](https://agentskills.io) for them: [one for ritsu](https://github.com/i2y/ritsu/tree/main/skills/ritsu),
-for a project of more than one language, and one for each of the eight languages
+for a project of more than one language, and one for each of the nine languages
 ([skills/README.md](https://github.com/i2y/ritsu/blob/main/skills/README.md) lists them). There are
 four ways to install them:
 
-- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the nine.
+- **Claude Code**: this site publishes a plugin marketplace whose plugin `ritsu` holds the ten.
   Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then `/plugin install ritsu@ritsu`;
   Claude Code fetches the folder `skills/` alone, not the whole repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
@@ -204,5 +214,5 @@ four ways to install them:
   `ritsu skills list` lists them.
 - **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
   project's `.claude/skills/`.
-- **From a release**: `ritsu-skills-v<version>.zip` holds the nine folders; unzip it where your
+- **From a release**: `ritsu-skills-v<version>.zip` holds the ten folders; unzip it where your
   agent reads skills.

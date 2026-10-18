@@ -33,3 +33,6 @@ upstream ContextMaps conformist
 
 upstream Gates conformist
   through sekisho
+
+upstream Programs conformist
+  through kaname

@@ -10,6 +10,29 @@ use ritsu_ports::{Books, Claims, Dates, Item, Items, Ledger, References, Rules, 
 #[allow(dead_code)]
 fn held(_: &dyn Rules, _: &dyn Dates, _: &dyn Books, _: &dyn Claims, _: &dyn Items, _: &dyn References, _: Box<dyn Ledger>) {}
 
+/// The ports of programs (kaname's DESIGN 14) are held so too: ritsu-cross holds kaname's
+/// `&dyn Programs`, and kaname ritsu-cross's `Rc<dyn Verdicts>`.
+#[allow(dead_code)]
+fn held_programs(_: &dyn ritsu_ports::Programs, _: std::rc::Rc<dyn ritsu_ports::Verdicts>) {}
+
+/// A day written `YYYY-MM-DD` reads back as the day number `day_text` writes it from, every day from
+/// 1900 to 2100 and at the ends four digits hold; a text that is no such date reads as none. A day
+/// on the wire is its text, and the checks across the borders count days by their numbers.
+#[test]
+fn a_day_reads_back_as_its_number() {
+    use ritsu_ports::{day_of, day_text};
+    for d in day_of("1900-01-01").unwrap()..=day_of("2100-12-31").unwrap() {
+        assert_eq!(day_of(&day_text(d)), Some(d));
+    }
+    assert_eq!(day_of("1970-01-01"), Some(0));
+    for end in ["0001-01-01", "9999-12-31", "2024-02-29"] {
+        assert_eq!(day_of(end).map(day_text).as_deref(), Some(end));
+    }
+    for wrong in ["2026-02-29", "2026-13-01", "2026-00-10", "2026-04-31", "2026-04-00", "26-04-01", "2026-4-01", "2026-04-01x", "２０２６-04-01", ""] {
+        assert_eq!(day_of(wrong), None, "{wrong}");
+    }
+}
+
 #[test]
 fn an_item_is_named_by_its_last_pair() {
     let it = Item { naming: Name::file(Tool::Rulec, "rules/a.rule").with("enum", "区分").with("value", "一般"), lines: (3, 3), text: "一般(basic)".into() };

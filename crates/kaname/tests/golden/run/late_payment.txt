@@ -1,0 +1,7 @@
+claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
+  line 20: terms.due(invoiced: 2026-03-02) = 2026-03-31
+  line 20: let due = 2026-03-31
+  line 21: let late = 50
+  line 23: charges(debt: 100000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }
+  line 23: let c = { compensation: 70GBP, interest: 1150GBPc }
+= Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }

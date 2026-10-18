@@ -1,0 +1,15 @@
+rule shipping v1
+description "The shipping fee of an order, by whether it ships free: a rule of the tests of kaname's warning of decisions written in code"
+
+inputs
+  total : money[USD]  range >=0USD <=10_000USD  contract_only
+  free  : bool
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee
+policy unique
+| free  | -> fee : money[USD] |
+| true  | 0USD                |
+| false | 5USD                |

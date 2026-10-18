@@ -9772,23 +9772,32 @@ impl Gen<'_> {
 
     /// Every enum the rule knows, by name: its class in the generated code, and each value with
     /// the alias the generated code builds the member's name from (`Gold`, which TypeScript and
-    /// Python write `GOLD`). For ritsu's port of rules (`crate::ports`).
+    /// Python write `GOLD`); the enum's public name as the rule writes it, whether its values are
+    /// ordered (§15.210), and the `enums` file it is read from whole (§15.212). For ritsu's port of
+    /// rules (`crate::ports`).
     pub fn rule_enums(&self) -> Vec<ritsu_ports::RuleEnum> {
         let mut names: Vec<&String> = self.c.enums.keys().collect();
         names.sort();
         names
             .into_iter()
-            .map(|jp| ritsu_ports::RuleEnum {
-                name: jp.clone(),
-                alias: self.enum_names.get(jp).cloned().unwrap_or_else(|| pascal(jp)),
-                values: self.c.enums[jp]
-                    .iter()
-                    .map(|v| ritsu_ports::EnumValue {
-                        name: v.clone(),
-                        alias: self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone()),
-                        public: public_value(self.f, jp, v),
-                    })
-                    .collect(),
+            .map(|jp| {
+                // the enum as the rule declares it, or reads it whole from an `enums` file (§15.212)
+                let decl = self.f.enums.iter().find(|e| e.name.text == *jp);
+                ritsu_ports::RuleEnum {
+                    name: jp.clone(),
+                    alias: self.enum_names.get(jp).cloned().unwrap_or_else(|| pascal(jp)),
+                    values: self.c.enums[jp]
+                        .iter()
+                        .map(|v| ritsu_ports::EnumValue {
+                            name: v.clone(),
+                            alias: self.value_names.get(&(jp.clone(), v.clone())).map(|(_, a)| a.clone()).unwrap_or_else(|| v.clone()),
+                            public: public_value(self.f, jp, v),
+                        })
+                        .collect(),
+                    public: decl.map(|e| pub_name(&e.name)).unwrap_or_else(|| jp.clone()),
+                    ordered: self.c.ordered.contains(jp),
+                    origin: decl.and_then(|e| e.from.as_ref()).map(|o| (std::path::PathBuf::from(&o.path), o.name.text.clone())),
+                }
             })
             .collect()
     }

@@ -1,0 +1,158 @@
+{
+  "kaname": "<version>",
+  "file": "discount_split.kn",
+  "module": {
+    "name": "discount_split",
+    "alias": "discount_split",
+    "version": "v1",
+    "description": "Spreads a discount over the lines of a bill in proportion to their amounts, a line at a time through the rule, so that the shares come to the discount",
+    "sha256": "0fd204b8bd5c18fbe559fb98267d7ab52ab89b19bde35273c08465546f95a2ee"
+  },
+  "generated": {
+    "typescript": "glue/discount_split.ts",
+    "python": "glue/discount_split.py",
+    "go": "glue/discountsplit/discountsplit.go"
+  },
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "discount_share",
+      "path": "rules/discount_share.rule",
+      "file": "rules/discount_share.rule",
+      "line": 4
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "Line",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "label",
+          "alias": "label",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 7
+        },
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=10000000USDc",
+          "count": null,
+          "line": 8
+        }
+      ],
+      "line": 6,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line"
+      }
+    },
+    {
+      "name": "Share",
+      "alias": "Share",
+      "fields": [
+        {
+          "name": "label",
+          "alias": "label",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 11
+        },
+        {
+          "name": "share",
+          "alias": "share",
+          "type": "money[USDc]",
+          "range": null,
+          "count": null,
+          "line": 12
+        }
+      ],
+      "line": 10,
+      "generated": {
+        "typescript": "Share",
+        "python": "Share",
+        "go": "Share"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "split",
+      "alias": "split",
+      "line": 14,
+      "description": "The running totals go to the rule; the last line carries what the rounding leaves",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=10"
+        },
+        {
+          "name": "discount",
+          "alias": "discount",
+          "type": "money[USDc]",
+          "range": ">=0USDc <=10000000USDc",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[Share]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [
+          "rule"
+        ],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 17,
+          "col": 41,
+          "calls": "rule",
+          "callee": "discount_share",
+          "checks": [
+            {
+              "line": 17,
+              "col": 41,
+              "check": "X2",
+              "about": "before <= upto",
+              "outcome": "waiting",
+              "code": null
+            },
+            {
+              "line": 17,
+              "col": 41,
+              "check": "X2",
+              "about": "upto <= total",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        }
+      ],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "split",
+        "python": "split",
+        "go": "Split"
+      }
+    }
+  ],
+  "transfers": []
+}

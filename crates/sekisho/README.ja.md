@@ -3,7 +3,7 @@
 だれが何をしてよいかを書く小さな言語です。
 principal、役割、属性、関係に加えて、業務の規則と日付の答えを条件に使えます。
 書いた範囲のすべての組み合わせで確かめてから、[Cedar](https://www.cedarpolicy.com/) のポリシーを生成します。
-sekisho は [ritsu](../../README.ja.md) の八つの言語の一つで、rulec の規則、koyomi の日付とカレンダー、dandori のワークフローを ritsu を通して読みます。サービスが OpenAPI、AsyncAPI、`.proto` に書いた契約も読みます。
+sekisho は [ritsu](../../README.ja.md) の九つの言語の一つで、rulec の規則、koyomi の日付とカレンダー、dandori のワークフローを ritsu を通して読みます。サービスが OpenAPI、AsyncAPI、`.proto` に書いた契約も読みます。
 
 ritsu のサイトの **[sekisho のページ](https://i2y.github.io/ritsu/ja/sekisho/)** では、下の例を、規則の答えから、生成する Cedar とコードまで順にたどれます。
 

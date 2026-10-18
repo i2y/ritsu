@@ -1,0 +1,89 @@
+module ranges v1
+description "What the analysis of ranges is held to: lists, optionals, enums, records, narrowing, relations, units and rounding"
+
+enum tier = basic < silver < gold
+
+record Line
+  qty    : number  range >=1 <=20
+  weight : mass[oz]  range >=1oz <=160oz
+  price  : money[USDc]  range >=0USDc <=10_000USDc
+  tier   : tier
+  coupon : money[USDc]?  range >=0USDc <=500USDc
+
+record Totals
+  count  : number  range >=0 <=30
+  weight : mass[oz]
+  best   : money[USDc]?
+
+fn totals(lines: list[Line] count >=0 <=30) -> Totals
+  Totals {
+    count: count(lines),
+    weight: sum(lines, l => l.weight * l.qty),
+    best: max_of(filter(lines, l => l.tier >= tier.silver), l => l.price),
+  }
+
+fn narrowed(n: number range >=-50 <=50, m: number range >=-50 <=50) -> number
+  if n > 0 and m > n
+    let d = m - n
+    isqrt(d) + mod(n, 7)
+  else if n = 0
+    0
+  else
+    n * m
+
+fn days(a: date range >=2026-01-01 <=2026-12-31, b: date range >=2026-01-01 <=2027-12-31) -> number
+  let gap = b - a
+  if gap >= 0 then gap else 0 - gap
+
+fn average(xs: list[Line] count >=0 <=30) -> money[USDc]?
+  let n = count(xs)
+  if n = 0
+    none
+  else
+    half_even(sum(xs, x => x.price) / n, 1USDc)
+
+fn coupon_of(l: Line) -> money[USDc]
+  match l.coupon
+    none => 0USDc
+    some c => min(c, l.price)
+
+fn coupons(xs: list[Line] count >=0 <=30) -> money[USDc]
+  sum(xs, x => coupon_of(l: x))
+
+fn product(xs: list[number] count >=0 <=6 range >=1 <=9) -> number
+  reduce(xs, 1, (acc, x) => acc * x)
+
+fn ratio(a: money[USDc] range >=1USDc <=1000USDc, b: money[USDc] range >=1USDc <=1000USDc) -> rate[step 0.1%]
+  half_even(a / b, 0.1%)
+
+fn converted(d: money[USD] range >=0USD <=1000USD) -> money[USDc]
+  let cents = d in USDc
+  cents + down(cents * 3%, 1USDc)
+
+fn ounces(w: mass[lb] range >=0lb <=100lb) -> mass[oz]
+  let o : mass[oz] = w in oz
+  o + 2lb
+
+fn shares(lines: list[Line] count >=1 <=10) -> list[money[USDc]]
+  map(running_totals(lines, l => l.price), r => r.upto - r.before)
+
+fn rate_of(r: rate[step 0.5%]) -> rate[step 0.5%]
+  min(r + 1%, 100%)
+
+fn first_heavy(lines: list[Line] count >=0 <=30) -> tier?
+  match first(lines, l => l.weight >= 100oz)
+    none => none
+    some l => l.tier
+
+fn mean(xs: list[Line] count >=0 <=30) -> money[USDc]?
+  if count(xs) = 0 then none else half_even(sum(xs, x => x.price) / count(xs), 1USDc)
+
+fn small(k: number range >=0 <=5) -> number
+  k * k
+
+fn kept(n: number range >=0 <=9) -> number
+  let s = small(k: n)
+  n * 2 + s
+
+fn warm(t: temperature[℉] range >=0℉ <=200℉) -> bool
+  t > 30℃ and t < 40℃

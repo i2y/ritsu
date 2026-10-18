@@ -1,8 +1,8 @@
 name: release
 
 # A tag `v*` builds `ritsu` once per platform (static on Linux; on macOS linked only to the system
-# library), puts it in an archive with a link to it for each of the eight languages, the two
-# licenses and THIRD_PARTY_NOTICES, checks that the tag is the version every one of the nine names
+# library), puts it in an archive with a link to it for each of the nine languages, the two
+# licenses and THIRD_PARTY_NOTICES, checks that the tag is the version every one of the ten names
 # says, and publishes the archives with their SHA-256 sums as a GitHub Release (DESIGN 13.2).
 # `action.yml` at the root of the repository installs one of them onto a runner, and the install
 # page says which lines to run by hand. Before anything is built, audit.yml looks up every
@@ -24,10 +24,10 @@ name: release
 #   SHA256SUMS
 #
 # An archive holds `ritsu` and, beside it, `rulec`, `dandori`, `koyomi`, `chobo`, `geas`, `yuen`,
-# `sakai` and `sekisho`, links to it, LICENSE-MIT and LICENSE-APACHE, and THIRD_PARTY_NOTICES, the notices and
+# `sakai`, `sekisho` and `kaname`, links to it, LICENSE-MIT and LICENSE-APACHE, and THIRD_PARTY_NOTICES, the notices and
 # licenses of what the binary holds from others (packaging/archive.sh). The .deb and the .rpm put
 # the same three files in /usr/share/doc/ritsu, and the formula in the keg. The zip holds the
-# nine Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
+# ten Agent Skills of skills/, a folder each, and the two licenses (packaging/skills.sh): the same
 # files `ritsu skills install` writes, for an agent that is given folders rather than the binary.
 # The .tgz is the npm package @i2y/ritsu: `ritsu` built for WASI, which Node runs with no native
 # binary, the same on every platform, so it is packed once (packaging/npm/build.sh, DESIGN 8.8). It
@@ -121,21 +121,21 @@ jobs:
         run: sh packaging/archive.sh "$GITHUB_REF_NAME" ${{ matrix.target }} target/${{ matrix.target }}/release/ritsu dist
 
       # Not the test suite — that needs a dozen tools — but the archive has to unpack, every name
-      # in it has to say the version of the tag, and each of the eight languages has to read what
-      # it is given (packaging/smoke.sh), the four that read others with the others joined.
+      # in it has to say the version of the tag, and each of the nine languages has to read what
+      # it is given (packaging/smoke.sh), the five that read others with the others joined.
       - name: The archive unpacks, every name says the version, every language reads its example
         run: |
           set -eu
           d=$(mktemp -d)
           tar -xzf "dist/ritsu-$GITHUB_REF_NAME-${{ matrix.target }}.tar.gz" -C "$d"
           ls -l "$d"
-          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
+          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho kaname; do
             test "$("$d/$n" --version)" = "$n ${GITHUB_REF_NAME#v}" || { echo "::error::$n --version says '$("$d/$n" --version)'"; exit 1; }
           done
           sh packaging/smoke.sh "$d" crates
 
       # The same binary as a .deb and an .rpm, each installed on Debian and on Fedora, run under
-      # all eight names and removed again before it is kept.
+      # all nine names and removed again before it is kept.
       - name: The Linux packages
         if: runner.os == 'Linux'
         run: sh packaging/linux.sh "${GITHUB_REF_NAME#v}" ${{ matrix.target }} target/${{ matrix.target }}/release/ritsu dist
@@ -230,7 +230,7 @@ jobs:
           cd "$d"
           echo '{ "name": "a-service", "private": true }' > package.json
           offline npm install --ignore-scripts --offline --no-audit --no-fund --cache "$RUNNER_TEMP/npm-cache" "$GITHUB_WORKSPACE/dist/i2y-ritsu-$v.tgz" < /dev/null
-          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
+          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho kaname; do
             test "$(offline "node_modules/.bin/$n" --version < /dev/null)" = "$n $v" || { echo "::error::$n --version says '$(offline "node_modules/.bin/$n" --version < /dev/null)'"; exit 1; }
           done
           offline node_modules/.bin/ritsu gen < /dev/null
@@ -254,7 +254,7 @@ jobs:
           set -eu
           sh packaging/skills.sh "$GITHUB_REF_NAME" dist
           unzip -l "dist/ritsu-skills-$GITHUB_REF_NAME.zip"
-          for skill in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
+          for skill in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho kaname; do
             unzip -l "dist/ritsu-skills-$GITHUB_REF_NAME.zip" "$skill/SKILL.md" >/dev/null || { echo "::error::the zip has no $skill/SKILL.md"; exit 1; }
           done
 
@@ -267,7 +267,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "ritsu $GITHUB_REF_NAME" \
-            --notes "One static binary per platform, with a link to it for each of the eight languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the eight languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. The npm package @i2y/ritsu, ritsu built for WebAssembly, which Node 22 or later runs with no native binary, is i2y-ritsu-${GITHUB_REF_NAME#v}.tgz; npm install its URL. Verify a download against SHA256SUMS before running it; the install page says how." \
+            --notes "One static binary per platform, with a link to it for each of the nine languages (rulec, dandori, koyomi, chobo, geas, yuen, sakai, sekisho, kaname); on Linux also as a .deb and an .rpm. The Agent Skills of ritsu and the nine languages are in ritsu-skills-$GITHUB_REF_NAME.zip, a folder each, to unzip where an agent reads skills. The npm package @i2y/ritsu, ritsu built for WebAssembly, which Node 22 or later runs with no native binary, is i2y-ritsu-${GITHUB_REF_NAME#v}.tgz; npm install its URL. Verify a download against SHA256SUMS before running it; the install page says how." \
             dist/ritsu-*.tar.gz dist/ritsu_*.deb dist/ritsu-*.rpm dist/ritsu-skills-*.zip dist/i2y-ritsu-*.tgz dist/SHA256SUMS
 
   # The formula is written once, from the SHA256SUMS that was just published, so it points at
@@ -323,7 +323,7 @@ jobs:
           brew audit --strict --online --formula i2y/tap/ritsu
           brew install --formula i2y/tap/ritsu
           brew test i2y/tap/ritsu
-          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho; do
+          for n in ritsu rulec dandori koyomi chobo geas yuen sakai sekisho kaname; do
             test "$("$n" --version)" = "$n ${GITHUB_REF_NAME#v}"
           done
 

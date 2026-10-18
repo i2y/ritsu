@@ -4,11 +4,11 @@
 
 コーディングエージェントは、人が一行ずつ読めるより速く、多くのコードを書くようになりました。そこで問いがはっきりします。誰が、あるいは何がコードを書いても、コードが実現すべきものは何か。サービスのあいだと中の契約。業務の規則。暦と期日。帳簿と、その上限と下限。ワークフローの骨組み。だれが何をしてよいか。要件がどこから来て、いま何がそれを満たしているか。
 
-ritsu は、そのそれぞれに小さな言語を一つずつ与えます。どれも、人が読めるファイルです。各言語は、書いたことを確かめられるところまで確かめます。試しに選んだ例ではなく、すべての入力、すべての日、すべての道筋についてです。コードが要るところではコードを生成し、中身を理解したい人のためのページを作ります。八つが一つの処理系を共有しているので、証明が言語の境目で切れません。ワークフローは呼ぶ規則の前提を知り、規則は暦がとりうる日を知り、帳簿は規則が返しうる額を知っています。
+ritsu は、そのそれぞれに小さな言語を一つずつ与えます。どれも、人が読めるファイルです。各言語は、書いたことを確かめられるところまで確かめます。試しに選んだ例ではなく、すべての入力、すべての日、すべての道筋についてです。コードが要るところではコードを生成し、中身を理解したい人のためのページを作ります。九つが一つの処理系を共有しているので、証明が言語の境目で切れません。ワークフローは呼ぶ規則の前提を知り、規則は暦がとりうる日を知り、帳簿は規則が返しうる額を知っています。
 
 つなぎのコードはエージェントが書き、コードが実現すべきものは ritsu が持ちます。
 
-## 八つの言語
+## 九つの言語
 
 | | ファイル | 何のための言語か | 生成するもの |
 |---|---|---|---|
@@ -20,6 +20,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | [yuen](#yuen要件の出どころ) | `.req` | 要件の出どころと、それを満たすもの | ReqIF、W3C PROV |
 | [sakai](#sakai境界づけられたコンテキストの地図) | `.ctx` | 境界づけられたコンテキストの地図 | import を確かめるツールの設定、Context Mapper |
 | [sekisho](#sekishoだれが何をしてよいか) | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | Cedar と、Cedar に尋ねる TypeScript、Python、Go |
+| [kaname](#kaname規則と日付と帳簿をつなぐコード) | `.kn` | 規則と日付と帳簿をつなぐコード。ritsu の型で書く | `ritsu gen` が書くパッケージの中の TypeScript、Python、Go |
 
 どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
 
@@ -308,9 +309,52 @@ refunds.gate: ok — action 3、ポリシー 10（permit 7、forbid 3）、期�
 
 この例は、[サイトのページ](https://i2y.github.io/ritsu/ja/sekisho/)で、検査が規則に何を尋ねるか、生成する Cedar とコード、人が読むページまで、順に見られます。
 
+### kaname：規則と日付と帳簿をつなぐコード
+
+規則は判断を、日付のファイルは日付を、帳簿は額の動きを受け持ち、それぞれの言語の検査を受けています。そのあいだのコードは、規則の入力を組み立て、一つの答えを次の呼び出しに渡し、額を帳簿に渡します。モジュール（`.kn` のファイル）はそのコードを ritsu の型で書いたもので、自分では入出力を持ちません。`kaname check` は、モジュールをほかの言語と同じ決まり（単位とお金、丸め、int64）で確かめ、渡す値がどれも相手の範囲に入るかも確かめます。`total` と書いた関数が、宣言した範囲のどの入力にも答えることも示します。表ではなくコードに書いた判断は、警告になります。`ritsu gen` は、呼ぶ規則と日付と帳簿のコードの横に、TypeScript、Python、Go のコードを書きます。
+
+```kn
+module late_payment v1
+description "What a supplier claims for an invoice paid late: the day it fell due, how many days late it was paid, and the fixed sum and the interest the rule gives for them"
+
+use dates terms from "dates/payment_terms.cal"
+use rule charges from "rules/late_payment_charges.rule"
+
+record Invoice
+  id       : string
+  invoiced : date  range >=2026-01-01 <=2027-12-31
+  amount   : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+
+record Claim
+  due          : date
+  days_late    : number  range >=1 <=1500
+  compensation : money[GBP]
+  interest     : money[GBPc]
+
+fn claim(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%) -> Claim? total
+  description "None when the invoice was paid by the day it fell due"
+  let due = terms.due(invoiced: invoice.invoiced)
+  let late = paid_on - due
+  if late >= 1
+    let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)
+    Claim { due: due, days_late: late, compensation: c.compensation, interest: c.interest }
+  else
+    none
+```
+
+請求書の期日は koyomi が、遅れた日数に対して請求できる額は規則が言い、そのあいだの日数は kaname が数えます。`paid_on - due` は −758 日から 1,431 日で、`late >= 1` の枝では 1 から 1,431 になり、規則の範囲（1 から 1,500）に入ります。`ritsu check` は、三つの言語を一度に読みます。
+
+```console
+$ cd crates/kaname/examples/late_payment
+$ ritsu check --lang ja
+…
+ok late_payment.kn: 関数 1 個、total
+ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
+```
+
 ## 言語が出会うところ
 
-八つが一つの処理系を共有しているのは、ある言語が確かめたことを、別の言語が前提にできるようにするためです。たとえば返金の規則は、支払った額より多くを求める人はいない、と決めてかかっています。
+九つが一つの処理系を共有しているのは、ある言語が確かめたことを、別の言語が前提にできるようにするためです。たとえば返金の規則は、支払った額より多くを求める人はいない、と決めてかかっています。
 
 ```rule
 rule refund_check v1
@@ -363,7 +407,7 @@ flow
     review => pass
 ```
 
-どちらのファイルも、それぞれの言語の検査は通ります。合わせると通りません（この二つのファイルは、`ritsu explain E201` が出す再現です）。
+どちらのファイルも、それぞれの言語の検査は通ります。合わせると通りません（この二つのファイルは、`ritsu explain E201` が出す再現のものです。再現には、同じ規則を kaname のモジュールから呼ぶファイルもあります）。
 
 ```console
 $ ritsu check . --lang ja
@@ -383,9 +427,10 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 - koyomi の日付がとりうる日を、規則の入力の範囲にすること（`range from koyomi`）。規則が宣言した範囲に収まるか
 - 規則の出力を chobo の振替の額に渡すとき、その額で振替が拒否されうる理由
 - chobo の仮押さえの有効期限と、ワークフローが営業日で数える待ちの長さ
-- rulec、dandori、chobo で一つの型になったお金と単位
+- kaname のモジュールが規則、日付、振替に渡すどの値も、相手が宣言した範囲に入るか
+- rulec、dandori、chobo、kaname で一つの型になったお金と単位
 - sakai の地図のコンテキストが公開する操作に、それを守るゲートの action があるか。ワークフローが呼ぶ操作を、ゲートがそのワークフローに許しているか
-- yuen は表、日付、主張、タスクを一つずつハッシュで固定し、sakai はすべての言語の参照を行番号つきで確かめる
+- yuen は表、日付、主張、タスク、関数を一つずつハッシュで固定し、sakai はすべての言語の参照を行番号つきで確かめる
 
 ## セキュリティの検査
 
@@ -427,21 +472,22 @@ $ dandori check E906_payout_holder.flow --lang ja
 - `koyomi doc`：暦を月ごとに
 - `chobo doc`：帳簿、その上限と下限、振替
 - `sekisho doc`：だれが何をしてよいかを action ごとの表にし、生成する Cedar と並べる
+- `kaname doc`：モジュールの、表にある判断、エフェクトごとの関数とそれぞれが失敗しうる場所、コードにある判断
 - `yuen trace`：要件を出典までさかのぼり、満たすものまでたどる
 - `explain <コード>`：すべての診断の説明と、そのまま走らせられる再現
 
 ## 証明
 
-rulec の証明書は、Lean 4 で検査し直します。chobo、koyomi、dandori の芯、ritsu の言語をまたぐ検査には、Rust の実装の横に Lean のモデルがあり、同じ入力（数百万行）を両方に流して、答えを一つずつ突き合わせます。`sorry` や自前の公理に頼る証明はありません。
+rulec の証明書は、Lean 4 で検査し直します。chobo、koyomi、dandori の芯、kaname の評価と範囲の解析、ritsu の言語をまたぐ検査には、Rust の実装の横に Lean のモデルがあり、同じ入力（数百万行）を両方に流して、答えを一つずつ突き合わせます。kaname では、範囲の解析が健全であることと、`total` と推論した関数が、宣言した範囲のどの入力でも失敗しないことも Lean で証明しています。`sorry` や自前の公理に頼る証明はありません。
 
 ## AI エージェント向け
 
-ritsu とその言語は、AI エージェントに使ってもらうためのものです。[skills/](skills) に、九つの [Agent Skills](https://agentskills.io) を置いています。[skills/ritsu](skills/ritsu) は二つ以上の言語を使うプロジェクトのためのスキルで、`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。残りの八つは言語ごとのスキルで、`skills/<言語>/` にあります。一覧は [skills/README.ja.md](skills/README.ja.md) にあります。入れ方は四つあります。
+ritsu とその言語は、AI エージェントに使ってもらうためのものです。[skills/](skills) に、十の [Agent Skills](https://agentskills.io) を置いています。[skills/ritsu](skills/ritsu) は二つ以上の言語を使うプロジェクトのためのスキルで、`ritsu check` から、ワークフローの実行とパッケージの生成までの手順、言語をまたぐ診断の読み方と直し方、残りは言語ごとのどのスキルを読むか、が入っています。残りの九つは言語ごとのスキルで、`skills/<言語>/` にあります。一覧は [skills/README.ja.md](skills/README.ja.md) にあります。入れ方は四つあります。
 
-- **Claude Code**：ritsu のサイトがプラグインのマーケットプレイスを公開していて、プラグイン `ritsu` に九つが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。Claude Code が取ってくるのは `skills/` のフォルダーだけで、リポジトリ全体はダウンロードしません。
+- **Claude Code**：ritsu のサイトがプラグインのマーケットプレイスを公開していて、プラグイン `ritsu` に十のスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。Claude Code が取ってくるのは `skills/` のフォルダーだけで、リポジトリ全体はダウンロードしません。
 - **どのエージェントでも、バイナリから**：`ritsu skills install` が、プロジェクトの `.claude/skills/` に書きます。`--user` を付けると `~/.claude/skills/` に、`--dir <dir>` を付けると、ほかのエージェントがスキルを読む場所に書きます。名前を挙げると（`ritsu skills install rulec dandori`）そのスキルだけを書き、`ritsu skills list` で一覧を出します。
 - **手で**：`skills/` から必要なフォルダーを、`~/.claude/skills/` か、プロジェクトの `.claude/skills/` にコピーします。
-- **リリースから**：`ritsu-skills-v<版>.zip` に九つのフォルダーが入っています。エージェントがスキルを読む場所に展開します。
+- **リリースから**：`ritsu-skills-v<版>.zip` に十のフォルダーが入っています。エージェントがスキルを読む場所に展開します。
 
 ## コマンド
 
@@ -455,7 +501,7 @@ ritsu skills install              Agent Skills を、エージェントが読む
 ritsu <言語> …                    各言語のコマンド（例：ritsu rulec doc fee.rule）
 ```
 
-リリースのアーカイブには、`ritsu` と、それを指す八つのリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`）が入っていて、どれもその言語として動きます。`cargo install` で入るのは `ritsu` のバイナリだけなので、言語は `ritsu <言語> …` で呼ぶか、言語の名前のリンクを自分で作ります（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec` など）。日本語にするには `--lang ja` を付けます。
+リリースのアーカイブには、`ritsu` と、それを指す九つのリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`）が入っていて、どれもその言語として動きます。`cargo install` で入るのは `ritsu` のバイナリだけなので、言語は `ritsu <言語> …` で呼ぶか、言語の名前のリンクを自分で作ります（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec` など）。日本語にするには `--lang ja` を付けます。
 
 ## 入れ方
 
@@ -487,7 +533,8 @@ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.31.0/i2
   [rulec](crates/rulec/README.md)、[dandori](crates/dandori/README.md)、
   [koyomi](crates/koyomi/README.ja.md)、[chobo](crates/chobo/README.ja.md)、
   [geas](crates/geas/README.ja.md)、[yuen](crates/yuen/README.ja.md)、
-  [sakai](crates/sakai/README.ja.md)、[sekisho](crates/sekisho/README.ja.md)（rulec と dandori は英語だけ）
+  [sakai](crates/sakai/README.ja.md)、[sekisho](crates/sekisho/README.ja.md)、
+  [kaname](crates/kaname/README.ja.md)（rulec と dandori は英語だけ）
 - `crates/ritsu-*`：共通の土台、単位、口、プロジェクトの読み込み、言語をまたぐ検査、`.proto` の読み手、生成の共通部分、ブラウザ向けのビルド
 - `proofs/`：Lean のモデル
 - `website/`：サイト（ritsu のページ、ブラウザで試すページ、`website/rulec` に置いた rulec のサイト、`website/dandori` に置いた dandori のサイト、`website/chobo` に置いた chobo のサイト）

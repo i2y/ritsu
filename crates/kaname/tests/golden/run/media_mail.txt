@@ -1,0 +1,4 @@
+quote(lines: [Line { sku: "book-1", qty: 2, weight: 22oz, media: true }, Line { sku: "book-2", qty: 1, weight: 9oz, media: true }])
+  line 17: let weight = 53oz
+  line 19: media_mail(weight: 53oz, media_only: true) = { price: 660USDc }
+= 660USDc

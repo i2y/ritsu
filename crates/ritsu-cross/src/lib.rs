@@ -18,6 +18,12 @@
 //! rulec, koyomi and chobo say of it. X1, the units at a border, is the languages' own check
 //! (dandori's E003, rulec's E065), and X3 (b) is rulec's (`range from koyomi`, rulec's §15.174).
 //!
+//! The same checks hold where a module of kaname calls a rule, a koyomi date or a chobo transfer
+//! (X2, X3 (a), X4, X6; kaname's DESIGN 14.3), with the same codes, over what kaname says a module
+//! calls (`Programs::crossings`): [`ProgramVerdicts`] decides them, hands kaname the verdicts it
+//! decides the effects of its functions with (ritsu's port `Verdicts`), and is what `ritsu check`
+//! says of them.
+//!
 //! Two are of security (DESIGN 16): a key written in a contract of the project, a `.proto` or a
 //! document a language reads, looked at once whatever reads it ([`secrets`], W901); and where a
 //! flow sends a value a contract marks secret, against sakai's map ([`egress`], X14, E905 and
@@ -32,11 +38,13 @@ pub mod egress;
 pub mod gates;
 mod holds;
 mod preconditions;
+mod programs;
 mod protos;
 pub mod secrets;
 mod transfers;
 
 pub use preconditions::UndecidedCalls;
+pub use programs::ProgramVerdicts;
 
 use ritsu_base::naming::Tool;
 use ritsu_base::text::Lang;
@@ -70,6 +78,12 @@ pub struct Crossed {
 /// Every check ritsu makes of a project across its languages, in `lang`. `joined` is what every
 /// check of a border will read the languages through (PLAN E.4).
 pub fn check(project: &Project, joined: &Joined, lang: Lang) -> Crossed {
+    check_with(project, joined, &ProgramVerdicts::new(joined), lang)
+}
+
+/// [`check`], with the verdicts at the calls of the project's modules of kaname that kaname was
+/// handed when the project's files were checked: each module is decided once in a run.
+pub fn check_with(project: &Project, joined: &Joined, programs: &ProgramVerdicts, lang: Lang) -> Crossed {
     let mut findings = Vec::new();
     let mut borders = Borders::default();
     findings.extend(protos::unread(project, lang));
@@ -80,6 +94,7 @@ pub fn check(project: &Project, joined: &Joined, lang: Lang) -> Crossed {
     findings.extend(transfers::check(project, &flows, joined, lang, &mut borders));
     findings.extend(dates::days_to_dates(project, &flows, joined, lang, &mut borders));
     findings.extend(holds::check(project, &flows, joined, lang, &mut borders));
+    findings.extend(programs::check(project, programs, lang, &mut borders));
     findings.extend(secrets::keys(project, joined, lang));
     findings.extend(egress::check(project, joined, lang, &mut borders));
     findings.extend(gates::check(project, joined, lang, &mut borders));

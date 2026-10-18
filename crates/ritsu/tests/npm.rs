@@ -2,8 +2,8 @@
 //! Node, as `packaging/npm/build.sh` packs it.
 //!
 //! - `the_package_answers_as_the_binary_does`: the commands a person runs on the examples of the
-//!   eight languages (rulec's corpus is its examples), ritsu's test projects, the shops of the
-//!   playground and sekisho's examples, in English and in Japanese, each run by the native binary
+//!   nine languages (rulec's corpus is its examples), ritsu's test projects, the shops of the
+//!   playground, sekisho's examples and kaname's, in English and in Japanese, each run by the native binary
 //!   (`ritsu`, and a link to it named for each language) and by the package (`node
 //!   bin/<name>.js`) in the same copy of the files: standard output, standard error, exit code, and
 //!   every file the command wrote, byte for byte.
@@ -40,8 +40,8 @@ mod npm {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    const LANGUAGES: [&str; 8] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
-    const LANG_VARS: [&str; 9] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"];
+    const LANGUAGES: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
+    const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"];
     /// A run of the debug build on the largest rule of the corpus takes seconds; one that takes this
     /// long is stuck.
     const LIMIT: Duration = Duration::from_secs(600);
@@ -113,7 +113,7 @@ mod npm {
         Said { code: r.code, stdout: r.stdout, stderr: r.stderr }
     }
 
-    /// A directory holding a link to the native `ritsu` for `ritsu` and for each of the eight
+    /// A directory holding a link to the native `ritsu` for `ritsu` and for each of the nine
     /// languages, as a release's archive does.
     fn links(t: &TempDir) -> PathBuf {
         for name in std::iter::once("ritsu").chain(LANGUAGES) {
@@ -645,6 +645,36 @@ mod npm {
             }
             gs.push(Group { from: "crates/sekisho/examples".into(), into: "examples".into(), reads, writes });
         }
+
+        // kaname
+        {
+            let mut reads = vec![case(
+                "ritsu",
+                ".",
+                vec![en("ritsu", &["check", "examples/late_payment"]), en("ritsu", &["check", "examples/payout", "--format", "json"]), ja("ritsu", &["check", "examples/discount_split"])],
+            )];
+            let writes = vec![case("ritsu", "examples/payout", vec![en("ritsu", &["gen"]), en("ritsu", &["gen", "--check", "--format", "json"])])];
+            for f in files("crates/kaname/examples", ".kn") {
+                let p = format!("examples/{f}");
+                let p = p.as_str();
+                // each example with its own directory as the root
+                let r = p.rsplit_once('/').map_or(".", |(d, _)| d);
+                for args in [
+                    &["check", p][..],
+                    &["check", p, "--root", r, "--format", "json"],
+                    &["vectors", p],
+                    &["api", p, "--root", r],
+                    &["doc", p, "--root", r],
+                    &["doc", p, "--root", r, "--format", "html"],
+                ] {
+                    reads.push(case("kaname", ".", both("kaname", args).to_vec()));
+                }
+            }
+            for code in codes(links, "kaname") {
+                reads.push(case("kaname", ".", both("kaname", &["explain", &code]).to_vec()));
+            }
+            gs.push(Group { from: "crates/kaname/examples".into(), into: "examples".into(), reads, writes });
+        }
         gs
     }
 
@@ -872,7 +902,7 @@ mod npm {
         std::iter::once("ritsu").chain(LANGUAGES).map(|n| (n.to_string(), format!("bin/{n}.js"))).collect()
     }
 
-    /// packaging/npm/package.json: the workspace's version and the binary's license, the nine bins,
+    /// packaging/npm/package.json: the workspace's version and the binary's license, the ten bins,
     /// Node 22 and later, ESM with its types, and nothing npm runs when it installs the package.
     #[test]
     fn the_manifest_is_the_workspaces() {

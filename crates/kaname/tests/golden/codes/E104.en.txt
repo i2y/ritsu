@@ -1,0 +1,2 @@
+error[E104]: example.kn:4:13: `in GBP` does not convert money[USD]: there is no exchange rate between two currencies
+     4 |   amount in GBP

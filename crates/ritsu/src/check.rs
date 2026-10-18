@@ -35,7 +35,7 @@ pub struct Report<'a> {
 
 /// The languages whose `check` takes one file at a time: whatever their check of a file comes
 /// to is that file's.
-const ONE_FILE: [Tool; 6] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Dandori, Tool::Sekisho];
+const ONE_FILE: [Tool; 7] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Kaname, Tool::Dandori, Tool::Sekisho];
 
 impl Report<'_> {
     fn findings(&self) -> impl Iterator<Item = (&str, &Finding)> {
@@ -261,8 +261,11 @@ pub fn run(args: &[String], lang: Lang, out: &mut dyn Write, err: &mut dyn Write
     // The project's contributions are merged into the rules they reach (rulec's §15.231), for the
     // checks of the files and for what the checks across the languages ask of a rule.
     joined.rulec.set_project(project.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect());
-    let units = project.check(&joined, lang);
-    let crossed = ritsu_cross::check(&project, &joined, lang);
+    // kaname decides the effects of its functions with what the checks across the borders came to at
+    // their calls (kaname's DESIGN 4.3), and ritsu says those checks with the same decisions
+    let verdicts = std::rc::Rc::new(ritsu_cross::ProgramVerdicts::new(&joined));
+    let units = project.check_with(&joined, Some(verdicts.clone()), lang);
+    let crossed = ritsu_cross::check_with(&project, &joined, &verdicts, lang);
     let report = Report { project: &project, units, ours: crossed.findings, borders: crossed.borders };
     if a.get("--format") == Some("json") {
         let _ = writeln!(out, "{}", report.json().pretty());

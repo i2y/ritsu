@@ -1,0 +1,2 @@
+error[E004]: example.kn:5:4: The fields are not indented alike (3 spaces where the first has 2)
+     5 |    qty : number  range >=1 <=20

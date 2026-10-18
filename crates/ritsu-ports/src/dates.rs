@@ -160,6 +160,29 @@ fn unanswered(file: &Path, message: ritsu_base::text::Text) -> Vec<Said> {
     vec![Said { code: String::new(), file: file.display().to_string(), line: None, message }]
 }
 
+/// A date written `YYYY-MM-DD` as its day number (days since 1970-01-01): what [`day_text`] writes,
+/// read back. None for a text that is no such date.
+pub fn day_of(text: &str) -> Option<Day> {
+    let mut parts = text.splitn(3, '-');
+    let (y, m, d) = (parts.next()?, parts.next()?, parts.next()?);
+    if y.len() != 4 || m.len() != 2 || d.len() != 2 || !(y.bytes().chain(m.bytes()).chain(d.bytes())).all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let (y, m, d): (i64, i64, i64) = (y.parse().ok()?, m.parse().ok()?, d.parse().ok()?);
+    if !(1..=12).contains(&m) || d < 1 {
+        return None;
+    }
+    // Howard Hinnant's days_from_civil
+    let yy = if m <= 2 { y - 1 } else { y };
+    let era = if yy >= 0 { yy } else { yy - 399 } / 400;
+    let yoe = yy - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let n = era * 146_097 + doe - 719_468;
+    // a day past the end of its month is no date
+    (day_text(n) == text).then_some(n)
+}
+
 /// A day number as a date, `YYYY-MM-DD` (days since 1970-01-01, as rulec and koyomi count them).
 pub fn day_text(d: Day) -> String {
     // Howard Hinnant's civil_from_days

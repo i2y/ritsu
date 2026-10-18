@@ -1,0 +1,46 @@
+{
+  "kaname": "<version>",
+  "file": "late_payment.kn",
+  "module": "late_payment",
+  "function": "claim",
+  "input": {
+    "invoice": {
+      "id": "inv_1",
+      "invoiced": "2026-03-02",
+      "amount": 100000
+    },
+    "paid_on": "2026-05-20",
+    "reference_rate": 50
+  },
+  "calls": [
+    {
+      "line": 20,
+      "module": "late_payment",
+      "date": "terms.due",
+      "in": {
+        "invoiced": "2026-03-02"
+      },
+      "out": "2026-03-31"
+    },
+    {
+      "line": 23,
+      "module": "late_payment",
+      "rule": "charges",
+      "in": {
+        "debt": 100000,
+        "days_late": 50,
+        "reference_rate": 50
+      },
+      "out": {
+        "compensation": 70,
+        "interest": 1150
+      }
+    }
+  ],
+  "result": {
+    "due": "2026-03-31",
+    "days_late": 50,
+    "compensation": 70,
+    "interest": 1150
+  }
+}

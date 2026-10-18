@@ -1,0 +1,2 @@
+error[E602]: example.kn:7:18: The answer of the example is bool, and `double` answers number
+     7 |   double(n: 2) = true

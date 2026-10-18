@@ -1,0 +1,8 @@
+ok rules/card_fee.rule
+books/ledger.book: ok
+  capture.do         拒否されうる理由: key_conflict
+  processing_fee.do  拒否されうる理由: insufficient_balance（seller_balance(seller) at least 0.00）、key_conflict、already_refused
+  キー: capture は、payment ごとに一度だけ動きます。キーが同じで seller、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: processing_fee は、payment ごとに一度だけ動きます。キーが同じで seller、fee のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+ok payout.kn: 関数 1 個、total
+ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。どれも検査を通りました。言語の境目: 確かめた 4 か所、決められない 0 か所

@@ -1,0 +1,15 @@
+module net v1
+description "The payout with the fee taken from the amount the seller gets: what the README shows ritsu finds across the languages. A material of kaname's tests"
+
+use rule card_fee from "../../examples/payout/rules/card_fee.rule"
+use book ledger from "../../examples/payout/books/ledger.book"
+
+record Payment
+  id            : string
+  seller        : string
+  amount        : money[USDc]  range >=1USDc <=100_000_000USDc
+  international : bool
+
+fn capture(payment: Payment) -> ledger.capture.do total
+  let fee = card_fee(amount: payment.amount, international: payment.international).fee
+  ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee)

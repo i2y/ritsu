@@ -219,7 +219,7 @@ requirement 満了日_142条(last_day_142)
 | 出典 | `law` `file` `url` `asof` `sha256:`、データベースの語 `egov` `ecfr`、借りた出典の `source` |
 | 要件の中 | `text` `in force` `owner` `replaces` `from` `decided` `by` `satisfied by` `verified by` `not satisfied` `not verified` |
 | 確かめた記録 | `reviewed` `approved` `by` `->` |
-| 成果物の名前 | ツール名（`rulec` `dandori` `koyomi` `chobo` `geas` `proto` `openapi` `asyncapi` `cedar` `file` `yuen` `sakai` `sekisho`）と、ツールごとの種類の語（どちらも 2.3） |
+| 成果物の名前 | ツール名（`rulec` `dandori` `koyomi` `chobo` `geas` `proto` `openapi` `asyncapi` `cedar` `file` `yuen` `sakai` `sekisho` `kaname`）と、ツールごとの種類の語（どちらも 2.3） |
 | 記号 | `@`（出典の引用）、`..`（日付の区間。両端を含む）、`,`、`->`、`#`（行末までコメント） |
 
 名前に使えないのは、行頭の語と、要件の中の語（確かめた記録の `reviewed` と `approved` を含む）である（E002）。ツール名と種類の語は、成果物の名前を書く位置（`satisfied by` と `verified by` のあと、`scope` のあと、`source <名前> =` のあと）でだけキーワードとして読む。要件の名前を `output` にしても、ほかの位置の `output` とは読み違えない。chobo が時間の語を `expires after` のあとでだけ読むのと同じ考えである。
@@ -349,7 +349,7 @@ requirement 支払日(payment_day) v2
 | `geas "<spec>" claim "<名前>"` | geas が走らせる主張 |
 | `koyomi "<file>" claim <名前>` | koyomi が範囲のすべての日で確かめる条件 |
 | `sekisho "<file>" expect <名前>`、`sekisho "<file>" separate <名前>` | sekisho が全部の組み合わせで確かめる期待と職務の分離（2026-10-06。3.7） |
-| `rulec "<file>"`、`koyomi "<file>"`、`chobo "<file>"`、`dandori "<file>"`、`geas "<spec>"`、`sekisho "<file>"` | そのツールの `check` がそのファイルに対して確かめること（rulec なら完全性、重なり、例） |
+| `rulec "<file>"`、`koyomi "<file>"`、`chobo "<file>"`、`dandori "<file>"`、`geas "<spec>"`、`sekisho "<file>"`、`kaname "<file>"` | そのツールの `check` がそのファイルに対して確かめること（rulec なら完全性、重なり、例。kaname なら型と範囲とエフェクトと例。3.8） |
 | `file "<path>"` | テストのファイル。何が走らせるかを yuen は知らない |
 
 `rulec "x.rule" output 送料` や `chobo "在庫.book" transfer 引当` は、満たす側には書けるが、確かめる側には書けない。出力や振替は、それ自身では何も確かめないからである。
@@ -461,7 +461,7 @@ sakai "contexts/受注.ctx" term キャンセル
 
 ### 2.3 ツールと種類
 
-ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho` の十三である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。
+ツール名は、`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname` の十四である。ほかの語は E011 にする。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（3.6）。`sekisho` も同じ日に足した（3.7）。`kaname` は 2026-10-18 に足した（3.8）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、yuen と sakai が使う種類を合わせたものにした。どちらの言語も、自分では使わない種類も参照として読み、JSON に出す。
 
@@ -480,6 +480,7 @@ sakai "contexts/受注.ctx" term キャンセル
 | `yuen` | `.req` | `requirement`、`source` | yuen 自身（ほかの言語へは `yuen api`（11 章）と yuen の口） |
 | `sakai` | `.ctx` | `context`、`term` | sakai の口（`Items`） |
 | `sekisho` | `.gate` | `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate` | sekisho の口（`Items`。構文だけから読む。3.7） |
+| `kaname` | `.kn` | `function`、`record`（下に `field`）、`enum`（下に `value`） | kaname の口（`Items`。構文だけから読む。3.8） |
 
 - 取り込む前は、名前をツールの JSON（`rulec graph` の `nodes`、`rulec api` の `python.enums`、`koyomi api`、`chobo api`、geas の記録の一行め、`sakai api`）から読むと決めていた。ritsu の D.7 から、どの言語も口の `Items`（ritsu の DESIGN 6.4）で中のものを渡し、yuen はそれを読む。その言語の名前で読むので、JSON の二つの出口（`graph` と `api`）が同じ名前を出すかを確かめる必要は無くなった。
 - ディレクトリを指すツール名（`dir`）は置かない。yuen でディレクトリを書けるのは `scope` だけで、その書き方は 1.8 で決める。JSON では、ディレクトリをパスの文字列で出す（11 章の `scopes`）。
@@ -548,6 +549,7 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | dandori | `Items`（索引で） | 中のもの（構文だけから。規則は要らない） |
 | sakai | `Items`（索引で） | コンテキストと語 |
 | sekisho | `Items`（索引で） | `.gate` の中のもの（構文だけから。規則も契約も要らない。3.7） |
+| kaname | `Items`（索引で） | `.kn` の中のもの（構文だけから。規則も日付のファイルも帳簿も要らない。3.8） |
 | proto | 口は使わない | ritsu の `.proto` の読み手（ritsu-proto）で yuen が読む（3.4） |
 | openapi、asyncapi | 口は使わない | ritsu の YAML と JSON の読み手（`ritsu_base::yaml`）で yuen が読み、要素は `ritsu_base::document` で引く（3.6） |
 | cedar | 口は使わない | ritsu の Cedar の読み手（`ritsu_base::cedar`）で yuen が読む（3.6） |
@@ -582,6 +584,7 @@ ritsu-base の `tests/fixtures/naming.tsv` は、この決まりを試す表で�
 | dandori | `task`、`case`、`record`、`enum`、`input`、`output` と下の `field`、`value` | タスクや案件やレコードの宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori の DESIGN 0.3） |
 | sakai | `context`、`term` | コンテキストのファイルの行、語の塊の行（コメントと前後の空白を除く） |
 | sekisho | `principal`、`resource`、`role`、`workflow`、`enum`、`action`、`policy`、`expect`、`separate` と下の `attribute`、`value`、`input`、`context` | 宣言の塊の行（コメントと前後の空白を除き、文字列の外の続いた空白を一つにし、字下げは深さごとに空白二つに直す。dandori と同じ。sekisho の DESIGN 8.2） |
+| kaname | `function`、`record`、`enum` と下の `field`、`value` | 関数は見出しから本体の最後の行まで、レコードは宣言の塊、フィールドと列挙はその行、列挙の値は名前と別名（sekisho と同じ決まりで空白を直す。kaname の DESIGN 14.6） |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | 3.4 の決まった形の文 |
 | openapi、asyncapi | `schema`、`property`、`value`、`operation`、`channel`、`message`、`pointer` | 3.6 の文（要素の値と、その `$ref` がたどる値） |
 | cedar | `policy`、`action`、`entity` | 3.6 の文（ポリシー、宣言） |
@@ -793,6 +796,25 @@ requirement clerks_refund
 - 生成した Cedar は指さない（`.gate` の中のものと一対一の生成物だから。sekisho の DESIGN 1.3）。手で書いた Cedar は、ツール名 `cedar` で指す（3.6）。
 
 **確かめ方**：`tests/gates.rs`。英語の材料 `tests/fixtures/refund_gates/`（`refunds.gate` と `refunds.req`）と、同じものを日本語の名前で書いた `tests/fixtures/返金のゲート/`。二つの材料のどちらでも、ポリシーと期待の端が宣言の塊の行であること、ほかのポリシー（forbid）の説明、permit の行の中の空白、行末のコメントを直しても二つの端が変わらず、permit の説明を直せばその端が変わること。E011 と E403 の文と golden は、ツール名 `sekisho` と、確かめる側に書ける sekisho の種類を足して取り直した。
+
+### 3.8 kaname の `.kn`（2026-10-18）
+
+**決定**：kaname のモジュール（`.kn`。規則と日付と帳簿をつなぐコード）の中のもの（関数、レコードとそのフィールド、列挙とその値）を、リンクの端にする。ツール名は `kaname` で、種類は 2.3 の表のとおりである（kaname の DESIGN 14.6）。読むのは kaname の口 `Items` で、ほかの言語と同じく索引で引く。
+
+```req
+requirement fee_from_seller
+  text "The processor's fee on a payment comes out of the seller's balance"
+  owner payments
+  satisfied by kaname "payouts/payout.kn" function settle
+  verified by kaname "payouts/payout.kn"
+```
+
+- `verified by` には、モジュールのファイル全体（kaname の検査）を書ける。検査は、型と単位と丸め、渡す値の範囲と int64 と 0 での割り算、書いたエフェクト（`total` と書いた関数がどの入力にも答えること）、`examples` の答えを確かめ、成り立たなければ落ちる（1.6）。関数、レコード、列挙は、それ自身では何も確かめないので、`satisfied by` に書く（`verified by` なら E403）。
+- `Items` は構文だけから読む。規則や帳簿が読めないモジュールの中のものも引ける。名前と型の検査を通らないモジュールかどうかは、kaname の検査が言う。
+- yuen のクレートのバイナリは kaname を持たないので、`.kn` を指すプロジェクトは E206 で止まる（3.1。`Suite::READ` に kaname を足した）。
+- 生成したコード（`ritsu gen` が書く `glue/` のファイル）は指さない（モジュールと一対一の生成物だから）。
+
+**確かめ方**：ritsu の `tests/kaname.rs`。例の支払いのモジュールを二つのコンテキストの地図に置いたプロジェクトで、要件の `satisfied by kaname "…" function settle` と `verified by kaname "…"` の二つのリンクが、人が見るのを待つ（E301）こと、無い関数の名前（`settled`）は E202 で、注に似た名前を挙げること。E011 の文と golden は、ツール名 `kaname` を足して取り直した（kaname の段階 C3）。
 
 ## 4. ハッシュと印
 

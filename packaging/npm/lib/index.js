@@ -1,4 +1,4 @@
-// @i2y/ritsu: ritsu and its eight languages, built for WASI and run by Node (ritsu's DESIGN 8.8).
+// @i2y/ritsu: ritsu and its nine languages, built for WASI and run by Node (ritsu's DESIGN 8.8).
 //
 //   import { run, runSync, version, wasmPath } from "@i2y/ritsu";
 //   const { code, stdout, stderr } = await run(["check", ".", "--format", "json"], { cwd: repo });

@@ -561,7 +561,8 @@ fn words_json() -> String {
     format!("{{\n{}\n}}\n", lines.join(",\n"))
 }
 
-/// The editor colours the words of each of ritsu's eight languages, and they are the words the
+/// The editor colours the words of each of the eight languages the page runs (kaname is not on it
+/// yet: kaname's DESIGN 19), and they are the words the
 /// language itself reserves (`language_words`): words.json, which the page reads, is written from
 /// the languages' own lists (`RITSU_BLESS=1`), so a word a language gains or loses is a word the
 /// page colours or stops colouring. Each language has words, and words a file of it starts with.

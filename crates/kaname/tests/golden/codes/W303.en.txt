@@ -1,0 +1,6 @@
+warning[W303]: example.kn:9:10: Whether the divisor of `sum(lines, l => l.amount) / count(filter(lines, l => l.media))` stays away from 0 cannot be decided
+     9 |     down(sum(lines, l => l.amount) / count(filter(lines, l => l.media)), 1USDc)
+  = The analysis of ranges finds the divisor in >=0 <=10, and no input among the function's vectors takes it out.
+  = The generated code checks it there when it runs.
+  = Leave 0 out with an `if` before the division, which the analysis reads, and it is shown.
+ok example.kn: 1 function, fails zero

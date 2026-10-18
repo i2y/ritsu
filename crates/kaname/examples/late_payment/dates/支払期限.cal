@@ -1,0 +1,17 @@
+dates 支払期限(payment_terms_ja) v1
+description "支払いの日を決めていない事業者間の請求書の期日。買い手が請求書を受けた日から数えて 30 日の、最後の日。Late Payment of Commercial Debts (Interest) Act 1998 の第 4 条 (2A) と (2H) を、この例として読んだもの。法令の読み方を示すものではない。payment_terms.cal の日本語の版"
+
+# 第 4 条のコピーは rules/sources/late-payment-act-1998.md にあり、規則が固定している。日付のファイルが
+# 固定できるのは e-Gov の法令だけである。「the period of 30 days beginning with」はその日を一日目に
+# 数えるので、最後の日はその日の 29 日後になる。
+
+inputs
+  請求日(invoiced) : date  range >=2026-01-01 <=2027-12-31
+
+date 期日(due) = 請求日
+  + 29 days          # 30 日の最後の日
+
+examples
+| 請求日     | -> 期日     |
+| 2026-03-02 | 2026-03-31  |
+| 2027-12-31 | 2028-01-29  |

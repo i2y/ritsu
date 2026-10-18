@@ -10,14 +10,16 @@ use std::path::{Path, PathBuf};
 
 /// The languages of a project's files, in the order they are checked (DESIGN 6.1, step 3): the
 /// ones that give facts through the ports first (rulec, koyomi, chobo, geas, and the `.proto`
-/// files every language reads with ritsu-proto), then dandori, which receives rules and gives its
-/// tasks, then sekisho, which receives rules, dates and workflows and gives its gates, then yuen
-/// and sakai, which receive from all of them.
-pub const ORDER: [Tool; 9] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Dandori, Tool::Sekisho, Tool::Yuen, Tool::Sakai];
+/// files every language reads with ritsu-proto), then kaname, which receives rules, dates and books
+/// and gives nothing yet, then dandori, which receives rules and gives its tasks, then sekisho,
+/// which receives rules, dates and workflows and gives its gates, then yuen and sakai, which receive
+/// from all of them. kaname comes before dandori, for when a flow calls a function of kaname's
+/// (kaname's DESIGN 11.2).
+pub const ORDER: [Tool; 10] = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Kaname, Tool::Dandori, Tool::Sekisho, Tool::Yuen, Tool::Sakai];
 
-/// The language of a file, by its extension: `.rule`, `.cal`, `.book`, `.geas`, `.proto`, `.flow`
-/// (`.ja.flow` too), `.gate`, `.req` and `.ctx`. None for any other file, which a project reads only
-/// when something in it names the file.
+/// The language of a file, by its extension: `.rule`, `.cal`, `.book`, `.geas`, `.proto`, `.kn`,
+/// `.flow` (`.ja.flow` too), `.gate`, `.req` and `.ctx`. None for any other file, which a project
+/// reads only when something in it names the file.
 pub fn kind_of(path: &str) -> Option<Tool> {
     let ext = Path::new(path).extension()?.to_str()?;
     ORDER.into_iter().find(|t| t.extension() == Some(ext))

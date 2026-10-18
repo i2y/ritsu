@@ -1,0 +1,26 @@
+module media_mail v1
+description "Quotes Media Mail for a cart: the weight of every item counted, and whether every item is media, handed to the rule"
+
+use rule media_mail from "rules/media_mail.rule"
+
+record Line
+  sku    : string
+  qty    : number  range >=1 <=20
+  weight : mass[oz]  range >=1oz <=160oz   # the weight of one item
+  media  : bool
+
+fn weight_of(lines: list[Line] count >=1 <=30) -> mass[oz]
+  sum(lines, l => l.weight × l.qty)
+
+fn quote(lines: list[Line] count >=1 <=30) -> money[USDc]? total
+  description "None when the cart is not a Media Mail parcel, or is heavier than the part of the price list the rule holds"
+  let weight = weight_of(lines: lines)
+  if weight <= 15lb
+    media_mail(weight: weight, media_only: all(lines, l => l.media)).price
+  else
+    none
+
+examples
+  quote(lines: [Line { sku: "book-1", qty: 2, weight: 22oz, media: true }]) = 586USDc
+  quote(lines: [Line { sku: "book-1", qty: 2, weight: 22oz, media: true }, Line { sku: "mug-1", qty: 1, weight: 12oz, media: false }]) = none
+  quote(lines: [Line { sku: "book-1", qty: 11, weight: 22oz, media: true }]) = none

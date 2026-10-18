@@ -1,0 +1,158 @@
+{
+  "kaname": "<version>",
+  "file": "media_mail.kn",
+  "module": {
+    "name": "media_mail",
+    "alias": "media_mail",
+    "version": "v1",
+    "description": "Quotes Media Mail for a cart: the weight of every item counted, and whether every item is media, handed to the rule",
+    "sha256": "9a15b4834e4b79c2de9ec05f9b775df7655d8dfb3182476865dcab509dc6816e"
+  },
+  "generated": {
+    "typescript": "glue/media_mail.ts",
+    "python": "glue/media_mail.py",
+    "go": "glue/mediamail/mediamail.go"
+  },
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "media_mail",
+      "path": "rules/media_mail.rule",
+      "file": "rules/media_mail.rule",
+      "line": 4
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "Line",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 7
+        },
+        {
+          "name": "qty",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=1 <=20",
+          "count": null,
+          "line": 8
+        },
+        {
+          "name": "weight",
+          "alias": "weight",
+          "type": "mass[oz]",
+          "range": ">=1oz <=160oz",
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "media",
+          "alias": "media",
+          "type": "bool",
+          "range": null,
+          "count": null,
+          "line": 10
+        }
+      ],
+      "line": 6,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "weight_of",
+      "alias": "weight_of",
+      "line": 12,
+      "description": null,
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=30"
+        }
+      ],
+      "result": {
+        "type": "mass[oz]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "weight_of",
+        "python": "weight_of",
+        "go": "WeightOf"
+      }
+    },
+    {
+      "name": "quote",
+      "alias": "quote",
+      "line": 15,
+      "description": "None when the cart is not a Media Mail parcel, or is heavier than the part of the price list the rule holds",
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": ">=1 <=30"
+        }
+      ],
+      "result": {
+        "type": "money[USDc]?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 19,
+          "col": 5,
+          "calls": "rule",
+          "callee": "media_mail",
+          "checks": []
+        }
+      ],
+      "places": [],
+      "calls": [
+        {
+          "line": 17,
+          "function": "weight_of"
+        }
+      ],
+      "generated": {
+        "typescript": "quote",
+        "python": "quote",
+        "go": "Quote"
+      }
+    }
+  ],
+  "transfers": []
+}

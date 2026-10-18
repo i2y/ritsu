@@ -1,0 +1,3 @@
+error[E103]: example.kn:4:3: An unrounded value goes to the answer of `fee`: a value of money[USDc] that comes with a fraction, in steps of 0.03
+     4 |   amount * 3%
+  = Write the way of rounding and the step, as in `half_up(amount * 3%, 1USDc)`. The five ways are `up`, `down`, `half_up`, `half_down` and `half_even`: which way a fraction goes is the writer's to decide.

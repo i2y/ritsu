@@ -1,7 +1,7 @@
 # The Agent Skills of ritsu
 
-This folder holds nine [Agent Skills](https://agentskills.io): one for ritsu, and one for each of
-its eight languages. An agent that reads Agent Skills (Claude Code is one) reads a skill's
+This folder holds ten [Agent Skills](https://agentskills.io): one for ritsu, and one for each of
+its nine languages. An agent that reads Agent Skills (Claude Code is one) reads a skill's
 `SKILL.md` when a task matches the skill's description, and the other pages of the folder only when
 it needs them. The skills are about *using* ritsu and its languages in a project, not about working
 on this repository.
@@ -17,6 +17,7 @@ on this repository.
 | [yuen](yuen/SKILL.md) | where requirements come from, and what meets and checks them (`.req`) |
 | [sakai](sakai/SKILL.md) | maps of bounded contexts, held to the rules, workflows and code they name (`.ctx`) |
 | [sekisho](sekisho/SKILL.md) | who may do what (`.gate`), checked on every combination and compiled to Cedar, with the code that asks it |
+| [kaname](kaname/SKILL.md) | the code that joins rules, dates and books (`.kn`), held to their types, ranges and rounding, and generated beside their code |
 
 Each skill runs ritsu, so `ritsu` has to be on PATH; the [README](../README.md#install) says how to
 install it. Under the name of a language (a link named `rulec`, say) ritsu is that language, and
@@ -29,7 +30,7 @@ There are four ways, and each installs the same files.
 ### Claude Code: the plugin
 
 ritsu's site publishes a Claude Code plugin marketplace, `ritsu`, with one plugin, also `ritsu`,
-which holds the nine skills:
+which holds the ten skills:
 
 ```text
 /plugin marketplace add https://i2y.github.io/ritsu/marketplace.json
@@ -57,6 +58,7 @@ geas     claims a person has read, held over the code (.geas)
 yuen     where requirements come from (.req)
 sakai    maps of bounded contexts (.ctx)
 sekisho  who may do what, compiled to Cedar (.gate)
+kaname   the code that joins rules, dates and books (.kn)
 $ ritsu skills install
 $ ritsu skills install --user
 $ ritsu skills install rulec dandori
@@ -82,7 +84,7 @@ $ cp -r skills/rulec skills/dandori <your-project>/.claude/skills/     # one pro
 
 ### From a release
 
-Every release has `ritsu-skills-v<version>.zip`, listed in its `SHA256SUMS`. It holds the nine
+Every release has `ritsu-skills-v<version>.zip`, listed in its `SHA256SUMS`. It holds the ten
 folders and the two licenses, so unzipping it where an agent reads skills is the install:
 
 ```console
@@ -95,7 +97,7 @@ To let the skills run ritsu and the languages without asking each time, allow th
 project's settings (`.claude/settings.json` for Claude Code):
 
 ```json
-{ "permissions": { "allow": ["Bash(ritsu check:*)", "Bash(ritsu explain:*)", "Bash(rulec:*)", "Bash(dandori:*)", "Bash(koyomi:*)", "Bash(chobo:*)", "Bash(geas:*)", "Bash(ritsu sekisho:*)"] } }
+{ "permissions": { "allow": ["Bash(ritsu check:*)", "Bash(ritsu explain:*)", "Bash(rulec:*)", "Bash(dandori:*)", "Bash(koyomi:*)", "Bash(chobo:*)", "Bash(geas:*)", "Bash(ritsu sekisho:*)", "Bash(ritsu kaname:*)"] } }
 ```
 
 Leave out what a person should be asked about each time: `ritsu yuen review` records that a person
@@ -106,8 +108,8 @@ looked at a link, so it should always ask, and `ritsu skills install` writes fil
 `ritsu/SKILL.md` is written by hand. The skill of a language is kept with the language:
 `crates/<language>/skills/sync.sh` writes the pages that are copies of the language's documents, and
 `crates/<language>/skills/README.md` says which pages those are. The tests of each language hold its
-skill to what the tool does. `crates/ritsu/tests/skill.rs` holds the nine together: each folder's
+skill to what the tool does. `crates/ritsu/tests/skill.rs` holds the ten together: each folder's
 `SKILL.md` names the folder and the repository's license, the binary carries every file of the
-nine folders and `ritsu skills install` writes them as they are, the release zip holds the same
+ten folders and `ritsu skills install` writes them as they are, the release zip holds the same
 files, and the marketplace on the site says the version of the workspace and hands out `skills/`
 alone.

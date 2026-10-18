@@ -49,7 +49,7 @@ $ ritsu skills install chobo --user                         # このマシンの
 $ ritsu skills install chobo --dir path/to/skills           # ほかのエージェントがスキルを読む場所に入れる
 ```
 
-Claude Code なら、プラグイン `ritsu` に九つのスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。スキルの中身は[エージェント向け](agents.md)に書いています。
+Claude Code なら、プラグイン `ritsu` に十のスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。スキルの中身は[エージェント向け](agents.md)に書いています。
 
 ## 生成したコードを動かすのに要るもの
 

@@ -1,4 +1,4 @@
-//! The eight languages, each made once (DESIGN 3.2, 6.4): the engine every language answers the
+//! The nine languages, each made once (DESIGN 3.2, 6.4): the engine every language answers the
 //! ports with, the index of what the files hold and name, and the ports each language that reads
 //! others is handed. `ritsu dandori`, `ritsu yuen`, `ritsu sakai` and `ritsu check` take them from
 //! here, so the three readers share one rulec (which keeps each rule it has checked) and one index
@@ -15,13 +15,16 @@ pub struct Joined {
     pub chobo: Rc<chobo::ports::Engine>,
     pub geas: Rc<geas::ports::Engine>,
     pub dandori: Rc<dandori::ports::Engine>,
+    /// kaname, which calls the rules, the dates files and the books of `ports` (kaname's DESIGN
+    /// 11.2); one check of the project checks each module once, the ones other modules read too.
+    pub kaname: Rc<kaname::ports::Engine>,
     /// sekisho, with the languages a gate reads joined: it keeps each gate it checks for the
     /// questions the checks across the borders ask of it after the check (`Gates`).
     pub sekisho: Rc<sekisho::ports::Engine>,
     pub sakai: Rc<sakai::ports::Engine>,
-    /// What the files of rulec, koyomi, chobo, geas, dandori, sekisho and sakai hold, and what the
-    /// files of rulec, koyomi, dandori, sekisho and sakai name outside themselves (and the files of
-    /// Cedar written by hand, the operations their schemas guard). yuen's own things are named by no
+    /// What the files of rulec, koyomi, chobo, geas, dandori, kaname, sekisho and sakai hold, and what
+    /// the files of rulec, koyomi, dandori, kaname, sekisho and sakai name outside themselves (and the
+    /// files of Cedar written by hand, the operations their schemas guard). yuen's own things are named by no
     /// language yet: yuen's engine reads what it borrows through the other languages' ports, so it
     /// would have to hold this index itself, and the index is left without it until a reader of
     /// requirements needs it (the LSP, DESIGN 15).
@@ -54,6 +57,7 @@ impl Joined {
         let chobo = Rc::new(chobo::ports::Engine);
         let geas = Rc::new(geas::ports::Engine);
         let dandori = Rc::new(dandori::ports::Engine);
+        let kaname = Rc::new(kaname::ports::Engine);
         let sekisho = sekisho::ports::Engine::new(
             ritsu_ports::GatePorts { rules: rulec.clone(), dates: koyomi.clone(), books: chobo.clone(), flows: dandori.clone(), items: dandori.clone() }.into(),
         );
@@ -71,12 +75,14 @@ impl Joined {
             .with_items(Tool::Geas, geas.clone())
             .with_items(Tool::Dandori, dandori.clone())
             .with_references(Tool::Dandori, dandori.clone())
+            .with_items(Tool::Kaname, kaname.clone())
+            .with_references(Tool::Kaname, kaname.clone())
             .with_items(Tool::Sekisho, sekisho.clone())
             .with_references(Tool::Sekisho, sekisho.clone())
             .with_references(Tool::Cedar, sekisho.clone())
             .with_items(Tool::Sakai, sakai.clone())
             .with_references(Tool::Sakai, sakai.clone());
-        Joined { rulec, koyomi, chobo, geas, dandori, sekisho, sakai, index: Rc::new(index) }
+        Joined { rulec, koyomi, chobo, geas, dandori, kaname, sekisho, sakai, index: Rc::new(index) }
     }
 
     /// The port of dates, as rulec reads the days of `range from koyomi` with it (DESIGN 7.5
@@ -110,7 +116,8 @@ impl Joined {
     }
 
     /// The ports of rules, dates and books, as dandori reads a flow's rules, dates files and books
-    /// with them (`ritsu check`, and the checks across the borders a flow crosses).
+    /// with them (`ritsu check`, and the checks across the borders a flow crosses), and as kaname
+    /// calls a module's rules, dates and transfers (`ritsu kaname`, `ritsu check`).
     pub fn ports(&self) -> ritsu_ports::Ports {
         ritsu_ports::Ports { rules: self.rulec.clone(), dates: self.koyomi.clone(), books: self.chobo.clone() }
     }

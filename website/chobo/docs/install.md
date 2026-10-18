@@ -69,7 +69,7 @@ $ ritsu skills install chobo --user                         # every project on t
 $ ritsu skills install chobo --dir path/to/skills           # where another agent reads skills
 ```
 
-In Claude Code, the plugin `ritsu` holds all nine: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
+In Claude Code, the plugin `ritsu` holds all ten: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
 then `/plugin install ritsu@ritsu`. [For agents](agents.md) says what is in the skill.
 
 ## What the output needs

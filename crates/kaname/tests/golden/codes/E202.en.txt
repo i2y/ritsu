@@ -1,0 +1,3 @@
+error[E202]: example.kn:3:1: This kaname cannot read rules (rulec is not in it), and the module reads `card_fee`
+     3 | use rule card_fee from "card_fee.rule"
+  = The binary of kaname's own crate holds no other language; run the same command with every language joined, through ritsu: `ritsu kaname check <file.kn>`.

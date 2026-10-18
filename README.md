@@ -11,13 +11,13 @@ Where each requirement came from, and what still satisfies it.
 ritsu gives each of those a small language of its own, in a file people can read. Each language
 checks what it says as far as it can be checked — over every input, every day, every path, not a
 sample — generates code where code is needed, and draws pages for whoever needs to understand
-it. Because the eight share one toolchain, a proof does not stop at a language's edge: a
+it. Because the nine share one toolchain, a proof does not stop at a language's edge: a
 workflow knows the preconditions of the rules it calls, a rule knows the days a calendar can
 come to, a ledger knows the amounts a rule can return.
 
 Agents write the glue. ritsu holds what it all has to carry out.
 
-## The eight languages
+## The nine languages
 
 | | File | What it is for | What it generates |
 |---|---|---|---|
@@ -29,6 +29,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
 | [sekisho](#sekisho--who-may-do-what) | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | Cedar, and the TypeScript, Python and Go that ask it |
+| [kaname](#kaname--the-code-that-joins-them) | `.kn` | the code that joins rules, dates and books, in ritsu's types | TypeScript, Python and Go, in the package `ritsu gen` writes |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -357,6 +358,59 @@ refunds.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectatio
 The [page on the site](https://i2y.github.io/ritsu/sekisho/) follows this example through: what the
 check asks the rule, the Cedar and the code it writes, and the page for people.
 
+### kaname — the code that joins them
+
+A rule decides, a dates file computes a day, a book moves an amount, and each is checked by its own
+language. The code between them puts a rule's inputs together, carries one answer into the next
+call and hands an amount to a book. A module (a `.kn` file) is that code, written in ritsu's types,
+with no input or output of its own. `kaname check` holds it to the rules the other languages are
+held to — units and money, rounding, int64 — and to the range of every value it passes: a
+function marked `total` answers every input of the ranges it declares, and a decision written in
+code rather than in a table is a warning. `ritsu gen` writes it as TypeScript, Python and Go,
+beside the code of the rules, dates and books it calls.
+
+```kn
+module late_payment v1
+description "What a supplier claims for an invoice paid late: the day it fell due, how many days late it was paid, and the fixed sum and the interest the rule gives for them"
+
+use dates terms from "dates/payment_terms.cal"
+use rule charges from "rules/late_payment_charges.rule"
+
+record Invoice
+  id       : string
+  invoiced : date  range >=2026-01-01 <=2027-12-31
+  amount   : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+
+record Claim
+  due          : date
+  days_late    : number  range >=1 <=1500
+  compensation : money[GBP]
+  interest     : money[GBPc]
+
+fn claim(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%) -> Claim? total
+  description "None when the invoice was paid by the day it fell due"
+  let due = terms.due(invoiced: invoice.invoiced)
+  let late = paid_on - due
+  if late >= 1
+    let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)
+    Claim { due: due, days_late: late, compensation: c.compensation, interest: c.interest }
+  else
+    none
+```
+
+koyomi says the day the invoice fell due, a rule what the supplier may claim for the days it was
+paid late, and kaname counts the days between: `paid_on - due` is −758 to 1,431 days, and 1 to
+1,431 in the branch of `late >= 1`, inside the rule's 1 to 1,500. `ritsu check` reads the three
+languages at once:
+
+```console
+$ cd crates/kaname/examples/late_payment
+$ ritsu check
+…
+ok late_payment.kn: 1 function, total
+ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass; borders between the languages: 2 checked, 0 undecided
+```
+
 ## Where the languages meet
 
 The languages share one toolchain so that what one has checked, another can take as given.
@@ -413,8 +467,8 @@ flow
     review => pass
 ```
 
-Each file passes its own language's check. Together they do not (the two files are the
-reproduction that `ritsu explain E201` prints):
+Each file passes its own language's check. Together they do not (the two files are from the
+reproduction that `ritsu explain E201` prints, which calls the rule from a module of kaname too):
 
 ```console
 $ ritsu check .
@@ -437,11 +491,13 @@ them:
   against the range the rule declares;
 - a rule's output as the amount of a chobo transfer, and the refusals that transfer can come to;
 - a chobo hold's expiry, against the wait a workflow counts in business days;
-- money and units, one type across rulec, dandori and chobo;
+- every value a kaname module passes to a rule, a date or a transfer, against the range that one
+  declares;
+- money and units, one type across rulec, dandori, chobo and kaname;
 - every operation a context of sakai's map opens, held to the action of a gate that guards it, and
   every operation a workflow calls, to what its gate allows the workflow;
-- yuen pins each table, date, claim and task one by one, and sakai checks every reference in
-  every language, with its line.
+- yuen pins each table, date, claim, task and function one by one, and sakai checks every
+  reference in every language, with its line.
 
 ## Security checks
 
@@ -499,27 +555,31 @@ team that signs off on its rules can sign off on these pages too.
 - `koyomi doc` — a calendar, month by month;
 - `chobo doc` — a ledger, its bounds and its transfers;
 - `sekisho doc` — who may do what, action by action, beside the Cedar it compiles to;
+- `kaname doc` — a module: the decisions in its tables, its functions by their effects and where
+  each can fail, and the decisions written in its code;
 - `yuen trace` — a requirement back to its source and on to what satisfies it;
 - `explain <code>` — every diagnostic, with a reproduction you can run.
 
 ## Proofs
 
-rulec's certificates are rechecked in Lean 4. Lean models of chobo, koyomi, dandori's core and
-ritsu's checks across languages sit beside the Rust, and the two are run on the same generated
-inputs — millions of lines — and compared answer by answer. No proof rests on `sorry` or an
-axiom of its own.
+rulec's certificates are rechecked in Lean 4. Lean models of chobo, koyomi, dandori's core,
+kaname's evaluation and its analysis of ranges, and ritsu's checks across languages sit beside the
+Rust, and the two are run on the same generated inputs — millions of lines — and compared answer by
+answer. For kaname, Lean also proves the analysis of ranges sound, and that a function it infers
+`total` fails on no input in the ranges it declares. No proof rests on `sorry` or an axiom of its
+own.
 
 ## For AI agents
 
-ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds nine
+ritsu and its languages are made to be used by AI agents, and [skills/](skills) holds ten
 [Agent Skills](https://agentskills.io) for them: [skills/ritsu](skills/ritsu) for a project of more
 than one language (the loop from `ritsu check` to a run and a package, how to read each diagnostic
 across the languages and fix it, and which language's skill to read for the rest), and one for each
-of the eight languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
+of the nine languages, in `skills/<language>/`. [skills/README.md](skills/README.md) lists them.
 There are four ways to install them:
 
 - **Claude Code**: ritsu's site publishes a plugin marketplace whose plugin `ritsu` holds the
-  nine. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
+  ten. Run `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`, then
   `/plugin install ritsu@ritsu`; Claude Code fetches the folder `skills/` alone, not the whole
   repository.
 - **Any agent, from the binary**: `ritsu skills install` writes them into the project's
@@ -528,7 +588,7 @@ There are four ways to install them:
   `ritsu skills list` lists them.
 - **By hand**: copy the folders you need from `skills/` into `~/.claude/skills/`, or into a
   project's `.claude/skills/`.
-- **From a release**: `ritsu-skills-v<version>.zip` holds the nine folders; unzip it where your
+- **From a release**: `ritsu-skills-v<version>.zip` holds the ten folders; unzip it where your
   agent reads skills.
 
 ## Commands
@@ -543,8 +603,8 @@ ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule
 ```
 
-A release archive holds `ritsu` and eight links to it — `rulec`, `dandori`, `koyomi`, `chobo`,
-`geas`, `yuen`, `sakai`, `sekisho` — and each runs as its language. `cargo install` installs the `ritsu`
+A release archive holds `ritsu` and nine links to it — `rulec`, `dandori`, `koyomi`, `chobo`,
+`geas`, `yuen`, `sakai`, `sekisho`, `kaname` — and each runs as its language. `cargo install` installs the `ritsu`
 binary alone: call a language as `ritsu <language> …`, or make the link yourself, named for the
 language (`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`). Add `--lang ja` for Japanese.
 
@@ -585,7 +645,8 @@ native binary.
   [rulec](crates/rulec/README.md), [dandori](crates/dandori/README.md),
   [koyomi](crates/koyomi/README.md), [chobo](crates/chobo/README.md),
   [geas](crates/geas/README.md), [yuen](crates/yuen/README.md),
-  [sakai](crates/sakai/README.md), [sekisho](crates/sekisho/README.md)
+  [sakai](crates/sakai/README.md), [sekisho](crates/sekisho/README.md),
+  [kaname](crates/kaname/README.md)
 - `crates/ritsu-*` — the shared base, units, ports, project reading, the checks across
   languages, the `.proto` reader, the emitters, the browser build
 - `proofs/` — the Lean models

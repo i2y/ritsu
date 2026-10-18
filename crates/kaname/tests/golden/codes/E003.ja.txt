@@ -1,0 +1,2 @@
+エラー[E003]: example.kn:6:1: `use` の行は、宣言（`enum`、`record`、`fn`）より前に書いてください
+     6 | use module 価格 from "価格.kn"

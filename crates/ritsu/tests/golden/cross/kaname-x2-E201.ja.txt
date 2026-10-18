@@ -1,0 +1,11 @@
+ok rules/discount_share.rule
+エラー[kaname E401]: discount_split.kn:14:1: 関数 `split` には `total` と書いてありますが、`rule` で失敗することがあります
+    14 | fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc) -> list[Share] total
+  = 17 行目: 規則 discount_share を呼ぶところで、前提 `before <= upto` を破る値を渡すことがあります（ritsu E201）
+  = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
+エラー[ritsu E201]: discount_split.kn:17:41: 規則 discount_share を呼ぶところで、前提 `before <= upto` を破る値を渡すことがあります
+    17 |     Share { label: r.item.label, share: discount_share(discount: discount, before: r.upto, upto: r.before, total: r.total).share })
+  = たとえば `split(lines: [Line { label: "a", amount: 5000000USDc }], discount: 0USDc)` のとき、規則に before = 5000000, upto = 0 を渡します。
+  = 規則から生成したコードは、前提を破る呼び出しを入口で受け付けません。kaname の関数は、そこで `rule` で失敗します。
+  = 呼ぶ前に前提を `if` で確かめて分けるか、渡す値の範囲を直してください。
+ritsu check: ファイル 2 個（rulec 1、kaname 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 2 か所、決められない 0 か所

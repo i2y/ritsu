@@ -137,7 +137,7 @@ fn headings(lang: Lang) -> (&'static str, &'static str, &'static str) {
 /// The fence a file of a [`Repro::Dir`] is shown in: its extension, for the languages of the
 /// suite and `.proto`.
 fn fence_of(name: &str) -> &'static str {
-    const KNOWN: &[&str] = &["rule", "flow", "cal", "book", "geas", "req", "ctx", "proto"];
+    const KNOWN: &[&str] = &["rule", "flow", "cal", "book", "geas", "req", "ctx", "proto", "kn"];
     let ext = name.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
     KNOWN.iter().find(|k| **k == ext).copied().unwrap_or("")
 }

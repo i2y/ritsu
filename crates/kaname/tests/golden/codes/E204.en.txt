@@ -1,0 +1,3 @@
+error[E204]: example.kn:6:18: The transfer `ledger.capture` has no operation `hold`
+     6 |   ledger.capture.hold(payment: payment, seller: seller, amount: amount)
+  = `capture` is a transfer done at once, whose operations are `do` (as chobo's are).

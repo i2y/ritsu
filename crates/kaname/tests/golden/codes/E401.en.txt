@@ -1,0 +1,4 @@
+error[E401]: example.kn:3:1: `steps` is written `total`, but it may not stop
+     3 | fn steps(n: number range >=0 <=100) -> number range >=0 <=100 total
+  = Line 4: it calls `steps`, and the calls go round
+  = Write `diverges` on a function whose calls go round: kaname does not check that a recursion stops.

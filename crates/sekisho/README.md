@@ -1,7 +1,7 @@
 # sekisho
 
 A small language for who may do what: principals, roles, attributes and relations, with the answers of business rules and dates as conditions, checked on every combination it declares and compiled to [Cedar](https://www.cedarpolicy.com/).
-sekisho is one of the eight languages of [ritsu](../../README.md): it reads the rules of rulec, the dates and calendars of koyomi and the workflows of dandori through ritsu, and the contracts services keep in OpenAPI, AsyncAPI and `.proto` files.
+sekisho is one of the nine languages of [ritsu](../../README.md): it reads the rules of rulec, the dates and calendars of koyomi and the workflows of dandori through ritsu, and the contracts services keep in OpenAPI, AsyncAPI and `.proto` files.
 
 On ritsu's site, **[the page of sekisho](https://i2y.github.io/ritsu/sekisho/)** follows the example below from the answer of a rule to the Cedar and the code generated from it.
 

@@ -1,0 +1,4 @@
+warning[W501]: example.kn:4:3: This `if` chooses a constant of the business by the values it compares (`0USD`, `5USD`): a decision, which belongs in a table
+     4 |   if total >= 35USD then 0USD else 5USD
+  = Write the decision in a rulec table and call the rule: there, rulec checks it is complete and without overlap, and the person who approves it reads it on its page.
+ok example.kn: 1 function, total

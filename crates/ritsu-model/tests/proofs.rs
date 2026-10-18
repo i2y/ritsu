@@ -3,12 +3,13 @@
 //! A `sorry` would make every theorem above it worth nothing, and it is the one thing a reader
 //! cannot see from the outside. Two tests hold `proofs/` to that. One reads every `.lean` of it for
 //! `sorry`, `axiom`, `native_decide` and `implemented_by`. The other asks Lean: every declaration of
-//! every library — `RulecCert`, `ChoboModel`, `KoyomiModel`, `DandoriCore` and `RitsuCross`, every
-//! theorem, and every definition the theorems, `rulec-recheck` and `ritsu-model` stand on — is put
-//! to `collectAxioms`, what `#print axioms` prints, and may stand only on the three axioms Lean
-//! itself stands on: `propext`, `Classical.choice`, `Quot.sound`. A `sorry` shows there as
-//! `sorryAx`, a `native_decide` as `Lean.ofReduceBool`, an `axiom` by its name, wherever a tactic
-//! hid it. rulec's `tests/lean.rs` asks the same of the theorems a certificate's claims rest on.
+//! every library — `RulecCert`, `ChoboModel`, `KoyomiModel`, `DandoriCore`, `RitsuCross` and
+//! `KanameCore`, every theorem, and every definition the theorems, `rulec-recheck` and
+//! `ritsu-model` stand on — is put to `collectAxioms`, what `#print axioms` prints, and may stand
+//! only on the three axioms Lean itself stands on: `propext`, `Classical.choice`, `Quot.sound`. A
+//! `sorry` shows there as `sorryAx`, a `native_decide` as `Lean.ofReduceBool`, an `axiom` by its
+//! name, wherever a tactic hid it. rulec's `tests/lean.rs` asks the same of the theorems a
+//! certificate's claims rest on.
 
 use ritsu_testkit::{Need, TempDir, ready, skip};
 use std::path::{Path, PathBuf};
@@ -19,7 +20,7 @@ fn proofs() -> PathBuf {
 }
 
 /// The libraries of the Lean layer, and the theorems each one exists for.
-const LIBRARIES: &[&str] = &["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross"];
+const LIBRARIES: &[&str] = &["RulecCert", "ChoboModel", "KoyomiModel", "DandoriCore", "RitsuCross", "KanameCore"];
 const THEOREMS: &[&str] = &[
     "RulecCert.Certified.complete",
     "RulecCert.Certified.reached",
@@ -119,6 +120,36 @@ const THEOREMS: &[&str] = &[
     "RitsuCross.x3a_fails",
     "RitsuCross.x3b_complete",
     "RitsuCross.x3b_unique",
+    "RitsuCross.kept_sound",
+    "RitsuCross.x2k_holds",
+    "RitsuCross.x2k_fails",
+    "RitsuCross.x2k_undecided",
+    "KanameCore.roundInt_eq_roundQ",
+    "KanameCore.roundInt_roundsTo",
+    "KanameCore.roundInt_onGrid",
+    "KanameCore.roundInt_mono",
+    "KanameCore.In_round",
+    "KanameCore.ranges_sound",
+    "KanameCore.sound_all",
+    "KanameCore.Sat.apply",
+    "KanameCore.Sat.narrowCmp",
+    "KanameCore.armScope_sound",
+    "KanameCore.relation_sound",
+    "KanameCore.subRel_sound",
+    "KanameCore.running_mem",
+    "KanameCore.decide'_sound",
+    "KanameCore.analyzeFn_sound",
+    "KanameCore.module_sound",
+    "KanameCore.shown_sound",
+    "KanameCore.no_wit",
+    "KanameCore.no_failure",
+    "KanameCore.fn_noFail",
+    "KanameCore.total_sound",
+    "KanameCore.analyzeWith_nil",
+    "KanameCore.decideAcross_other",
+    "KanameCore.total_with_sound",
+    "KanameCore.callRels_sound",
+    "KanameCore.kept_holds",
 ];
 
 fn lean_files(dir: &Path, out: &mut Vec<PathBuf>) {

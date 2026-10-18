@@ -10,11 +10,11 @@ ends. When an article is amended, a rule is rewritten or a line of code moves, t
 match and the check stops on that link, with the difference from what was looked at, until someone
 looks again.
 
-yuen is one of the eight languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
+yuen is one of the nine languages of [ritsu](https://github.com/i2y/ritsu), and reads what the other languages
 hold through them, in the same process: the tables of a rulec rule, the dates and claims of a
 koyomi calendar, the accounts and transfers of a chobo book, the claims of a geas spec, the tasks of
-a dandori workflow, the terms of a sakai map, the policies and expectations of a sekisho gate, and
-the services and messages of a `.proto`. It reads
+a dandori workflow, the terms of a sakai map, the policies and expectations of a sekisho gate, the
+functions of a kaname module, and the services and messages of a `.proto`. It reads
 the operations and schemas of OpenAPI and AsyncAPI documents and the policies and actions of
 [Cedar](https://www.cedarpolicy.com/) itself, an element at a time, and the requirements of an
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) spec as sources, a requirement at a time.
@@ -256,6 +256,12 @@ A sekisho gate is named the same way, through sekisho: a policy meets a requirem
 duties, which sekisho holds over every combination, checks it
 (`verified by sekisho "refunds.gate" expect clerks_who_are_not_suspended_refund`). The end is the
 declaration's lines, so a change to another policy of the gate stops neither link.
+
+A kaname module is named the same way, through kaname: a function meets a requirement
+(`satisfied by kaname "payouts/payout.kn" function settle`), and the module itself checks it
+(`verified by kaname "payouts/payout.kn"`), since kaname holds its types, units and rounding, the
+values its calls pass, the effects it writes and its examples, and fails when one does not hold. A
+function's end is its lines, from its heading to the last line of its body.
 
 ## What it checks, and what it does not
 

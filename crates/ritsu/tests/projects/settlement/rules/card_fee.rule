@@ -1,0 +1,30 @@
+rule card_fee v1
+description "The processor's fee on one card payment taken in the United States: 3.49% of the amount and a fixed 49 cents, and 1.50% more for an international card. Transcribed from the processor's published merchant fees, in the copy rulec's corpus keeps"
+
+source fees = file "sources/paypal-us-fees.md" sha256:0318950a982c3c7d  # the processor's own published figures
+  table1 sha256:5e481ef40e570eeb
+
+inputs
+  amount        : money[USDc]  range >=1USDc <=100_000_000USDc
+  international : bool
+
+# The page does not say which way a fraction of a cent goes: half up is a placeholder, the thing a
+# person decides before this ships.
+outputs
+  fee : money[USDc]  round half_up(1USDc)
+
+# The page prints the domestic rate and, separately, what an international card adds. It does not
+# print the sum, so neither does this: the row for a domestic card adds nothing, and that row
+# carries no citation because `0%` is not a figure the copy shows.
+table surcharge
+policy unique
+| international | -> extra : rate[step 0.01%] |
+| false         | 0%                          |
+| true          | 1.5%                        |  @fees table1
+
+define fee : money[USDc] = amount × 3.49% + amount × extra + 49USDc  @fees table1
+
+examples
+| amount    | international | -> fee  |
+| 10000USDc | false         | 398USDc |
+| 10000USDc | true          | 548USDc |

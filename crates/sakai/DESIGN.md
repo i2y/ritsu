@@ -1,10 +1,10 @@
 # sakai 設計文書
 
-境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。ファイルは `.ctx`、コマンドは `sakai`。どの成果物がどのコンテキストに属するか、境界を越える参照が宣言した関係と公表された言語を通っているか、腐敗防止層が上流の列挙のどの値も読み替えているか、同じ語が違う意味のまま境界を越えていないかを、一式の成果物（rulec・dandori・koyomi・chobo・geas）、proto、コードの import に照らして確かめる。コードの import は、各言語の既存のツール（Python は import-linter、JavaScript と TypeScript は dependency-cruiser、Java は ArchUnit、Go は go-arch-lint）の設定にして、そのツールで確かめる。Rust のクレートの依存は、Cargo が言うものを sakai が確かめる（7.7）。Context Mapper の CML にも書き出す。
+境界づけられたコンテキストと、そのあいだの関係を書く小さな言語。ファイルは `.ctx`、コマンドは `sakai`。どの成果物がどのコンテキストに属するか、境界を越える参照が宣言した関係と公表された言語を通っているか、腐敗防止層が上流の列挙のどの値も読み替えているか、同じ語が違う意味のまま境界を越えていないかを、一式の成果物（rulec・dandori・koyomi・chobo・geas・sekisho・kaname）、proto、コードの import に照らして確かめる。コードの import は、各言語の既存のツール（Python は import-linter、JavaScript と TypeScript は dependency-cruiser、Java は ArchUnit、Go は go-arch-lint）の設定にして、そのツールで確かめる。Rust のクレートの依存は、Cargo が言うものを sakai が確かめる（7.7）。Context Mapper の CML にも書き出す。
 
 名前は境（さかい）から取った。
 
-この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階（ritsu の F.2）で、doc、例の README、`docs/`、README、スキルを作った（10 章、11 章、12.5）。doc のページと README に貼った出力も実際に出したもので、`tests/doc.rs` と `tests/docs.rs` が確かめる。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。15 章（OpenAPI と AsyncAPI の契約）は ritsu 0.23.0 のあとに足した。そこに書いた仕様の版は 2026-10-05 に仕様の文書を読んで確かめ、例の文書を確かめた Redocly CLI 2.58.1 と AsyncAPI の parser 3.6.3、YAML の読み手を確かめた yaml-test-suite の data-2022-01-17 は、2026-10-06 に同じ機械で走らせた。
+この文書は設計の段階（A）で書き、言語の芯と地図の検査を作った段階（B）と、例とコードの import の検査の設定と CML を作った段階（C の一部）で、作ったものに合わせて直した。C の段階のうち、一式の成果物を読むところ（PLAN の C.1〜C.5）は、一式の言語を一つの処理系（ritsu）にまとめると決まってから、子プロセスと JSON ではなく ritsu の口で作った（ritsu の D.8。4.1、4.7、12.2）。作ったもの（`.ctx` の構文、`check`、`api`、`explain`、`build`、`export cml`、診断）について貼った sakai の出力と、7 章のツールの出力は、どれも実際に出したもので、`tests/design.rs` が実物と同じかを確かめる。D の段階（ritsu の F.2）で、doc、例の README、`docs/`、README、スキルを作った（10 章、11 章、12.5）。doc のページと README に貼った出力も実際に出したもので、`tests/doc.rs` と `tests/docs.rs` が確かめる。一方、一式のツール（rulec 0.22.1、koyomi 0.1.0、chobo 0.1.0、geas 0.0.1、dandori 0.1.0）と外のツール（import-linter 2.15、dependency-cruiser 16.10.4、ArchUnit 1.5.1、go-arch-lint v1.19.0、depguard v2.2.1、Spring Modulith 2.1.1、Context Mapper CLI 6.12.0、buf 1.54.0）の振る舞いとして書いたことは、2026-10-03 にこの機械（macOS arm64）で実際に走らせて確かめたもので、出力を貼るときは版を添える。外のツールの出力からは、この機械の場所を示すパスと、端末の色の制御文字と、行頭の字下げを省いた。Rust のクレートの依存（7.7）のために試した cargo 1.94.1 と cargo-deny 0.20.2 は、2026-10-04 に同じ機械で走らせた。15 章（OpenAPI と AsyncAPI の契約）は ritsu 0.23.0 のあとに足した。そこに書いた仕様の版は 2026-10-05 に仕様の文書を読んで確かめ、例の文書を確かめた Redocly CLI 2.58.1 と AsyncAPI の parser 3.6.3、YAML の読み手を確かめた yaml-test-suite の data-2022-01-17 は、2026-10-06 に同じ機械で走らせた。17 章（sekisho のゲートと Cedar）は 2026-10-06 に、18 章（kaname のモジュール）は 2026-10-18 に足した。18 章に引いた出力は ritsu 0.30.0 で実際に出したもので、英語の版は ritsu の `tests/kaname.rs` が確かめる。
 
 ## 0. 全体像
 
@@ -325,7 +325,7 @@ partnership with 受注
 | `terms` | 用語集 |
 | `refuse` | 拒否 |
 
-ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`rust`、`test`、`owns`、`dir`、`crate`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツール名（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`。2.2）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
+ほかのキーワードは、`description`、`owner`、`also`、`use`、`covers`、`except`、`proto root`、`code`、`python`、`typescript`、`java`、`go`、`rust`、`test`、`owns`、`dir`、`crate`、`generated`、`through`、`layer`、`means`、`as`、`enum`、`term`、`with`、`from`、成果物のツール名（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`。2.2）と要素の種類の語（2 章）。表は B の段階の `src/kw.rs` に一枚で置く。
 
 **決定**：地図とコンテキストには ASCII の別名を必ず書く（`受注(ordering)`。無ければ E008）。形は `[A-Za-z_][A-Za-z0-9_]*`。
 
@@ -565,6 +565,7 @@ asyncapi "payments/events/payments.yaml" channel paymentFailed
 file "src/app.py"
 yuen "民法の期間.req" requirement 満了日_142条
 sakai "contexts/受注.ctx" term キャンセル
+kaname "payouts/payout.kn" function settle
 ```
 
 ツール名のあとに、パスを `"…"` で書き、そのあとに種類と名前の組をゼロ個以上続ける。組がゼロ個ならファイルそのものを指す。
@@ -575,6 +576,9 @@ sakai "contexts/受注.ctx" term キャンセル
 - rulec：`enum E [value V]`。
 - chobo：`transfer T [operation O]`（振替の操作。2026-10-06 から）。
 - openapi と asyncapi：`schema S [property P]`、`schema S [value V]`。asyncapi の `channel C [message M]`（2026-10-06 から。15.10）。
+- dandori：`record R [field F]`、`enum E [value V]`。
+- sekisho：`principal P [attribute A]`、`resource R [attribute A]`、`enum E [value V]`、`action A [input I]`、`action A [context C]`（2026-10-06 から。17 章）。
+- kaname：`record R [field F]`、`enum E [value V]`（2026-10-18 から。18 章）。
 
 子の種類（`method`、`field`、`value`）は、親の種類のすぐあとにしか書けない。子の組は一つまでである。
 
@@ -582,7 +586,7 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 
 ### 2.2 ツール名と種類の語
 
-ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho` の十三である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。`sekisho` も同じ日に足した（17 章）。
+ツール名は `rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname` の十四である。`openapi`、`asyncapi`、`cedar` は 2026-10-06 に足した（15.10）。`sekisho` も同じ日に足した（17 章）。`kaname` は 2026-10-18 に足した（18 章）。
 
 種類の語は、それぞれのツールが JSON で出す名前の種類から取り、二つの言語で使う種類を合わせた。表の右の列は、種類の語を取った元である。ritsu に取り込んでからは、どの言語の名前も、その言語の口（`Items`）が渡す（ritsu の DESIGN 6.4）。
 
@@ -598,6 +602,7 @@ sakai が列挙の値（対応の網羅）とフィールド（語の `means`）
 | `asyncapi` | AsyncAPI の文書と、その一部 | `channel`（下に `message`）、`message`、`operation`、`schema`（下に `property`、`value`）、`pointer` | 文書の中の名前（15.10） |
 | `cedar` | `.cedar`、`.cedarschema`、`.cedarschema.json` | `policy`、`action`、`entity` | 中の名前は sakai は読まない（yuen が読む）。`owns`・`layer`・`shared kernel with` の `cedar "…"` で書いたファイルは成果物で、スキーマの `@guards` を sekisho の口で読む（17 章） |
 | `sekisho` | `.gate` | `principal`（下に `attribute`）、`resource`（下に `attribute`）、`role`、`workflow`、`enum`（下に `value`）、`action`（下に `input`、`context`）、`policy`、`expect`、`separate` | 中の名前は sakai は読まない（yuen が sekisho の口 `Items` で読む）。`.gate` が指すものは sekisho の口 `References` で読む（17 章） |
+| `kaname` | `.kn` | `function`、`record`（下に `field`）、`enum`（下に `value`） | 中の名前は sakai は読まない（yuen が kaname の口 `Items` で読む）。`.kn` が指すものは kaname の口 `References` で読む（18 章） |
 | `file` | 何でも | なし | |
 | `yuen` | `.req` | `requirement`、`source` | `yuen api` |
 | `sakai` | `.ctx` | `context`、`term` | sakai の地図とコンテキストのファイル |
@@ -736,11 +741,12 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
 | sekisho のゲート（`.gate`） | sekisho の `References` の `use rule`・`use dates`・`use calendar`・`use gate`（行と、先のファイル）、`guards`（行と、守る操作の参照）。17 章 | 規則、日付のファイルとカレンダー、ほかの `.gate`、契約の操作 |
 | 手で書いた Cedar のスキーマ | sekisho の `References` の `guards`（action の `@guards` の参照と、action の行）。17 章 | 契約の操作 |
+| kaname のモジュール（`.kn`） | kaname の `References` の `use rule`・`use dates`・`use module`（行と、先のファイル）。18 章 | 規則、日付のファイル、ほかのモジュール |
 | Rust のクレート（`[package]` のある `Cargo.toml`） | Cargo が言う、パスで書いたほかのクレートへの依存（`[dependencies]` と `[build-dependencies]`。行は依存を書いたマニフェストの行）。7.7 | クレート（その `Cargo.toml`） |
 | OpenAPI と AsyncAPI の文書 | ファイルをまたぐ `$ref`（行と列）。AsyncAPI のチャネルを指すものは、その上の操作の `send` か `receive`。15.5 | 文書の要素（ファイルと JSON Pointer） |
 | ほかの言語のコード | sakai は読まない。7 章の設定で各ツールが確かめる | |
 
-ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`）は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
+ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
 
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
@@ -806,6 +812,7 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
 | dandori | `References`（索引で） | `use rule`、`use proto`、`connect`、`flow`、`implements`（4.7） | 境界を越える参照、E207〜E209 |
 | sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
+| kaname | `References`（索引で） | `.kn` の `use rule`・`use dates`・`use module`（18 章） | 境界を越える参照 |
 | koyomi | `Dates`（`facts`） | 日付の名前と、使うカレンダーの名前とデータの範囲 | doc のコンテキストのページ（4.4） |
 | chobo | `Books`（`facts`） | 勘定と振替の名前 | doc のコンテキストのページ（4.5） |
 | geas | 読まない | | 属し方だけ（4.6） |
@@ -824,7 +831,7 @@ rulec には、検査を通る規則にだけ答える事実（`Rules`）を先�
   = そのファイルを、rulec の検査を通るように直してください。検査を通らないファイルや読めないファイルからは参照を読み取れないので、sakai はその参照を確かめられません。
 ```
 
-ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、地図が rulec、koyomi、dandori、sekisho の成果物（sekisho は `.gate` と、`cedar "…"` と書いた Cedar のファイル。17 章）を含めば、言語ごとに一つの E104 を、その言語の最初の成果物を持つ `owns` の行に出す。注に、同じコマンドを `ritsu sakai` で走らせる形を書き、exit 2 で終わる（走らせ方の問題で、地図の誤りではないため。ritsu の段階 E の前は、ほかの誤りと同じく exit 1 だった。12.3）。
+ほかの言語が渡されていないとき（sakai のクレートのバイナリ）は、地図が rulec、koyomi、dandori、sekisho、kaname の成果物（sekisho は `.gate` と、`cedar "…"` と書いた Cedar のファイル。17 章。kaname は `.kn`。18 章）を含めば、言語ごとに一つの E104 を、その言語の最初の成果物を持つ `owns` の行に出す。注に、同じコマンドを `ritsu sakai` で走らせる形を書き、exit 2 で終わる（走らせ方の問題で、地図の誤りではないため。ritsu の段階 E の前は、ほかの誤りと同じく exit 1 だった。12.3）。
 
 ```
 $ sakai check examples/shop/shop.ctx
@@ -2225,3 +2232,54 @@ error[E211]: ordering/charges.gate:18:1: The file ordering/charges.gate of Order
 - `tests/gates.rs`：`examples/webshop` に、決済のゲートと Cedar の組を置くと何も出ないこと、受注に置いた Cedar のスキーマが決済の `getCharge` を守ると E211 になること、項で書いていない Cedar のファイルは成果物にならず何も出ないこと、`cedar "…"` の項に Cedar でないファイルを書くと E011 になること。`examples/webshop` と `examples/webshop.ja` の両方で、決済のゲートの `use rule` が、共有カーネル（`common/`）の規則なら通って要約に `sekisho 1` と数え、受注の内側の規則なら E202（注に、ゲートが使うのは規則そのものであること）、関係の無い配送のゲートからなら E201 になること。
 - `tests/maps.rs`：公開する操作（16.4）。
 - sekisho の `References` は、`ritsu sakai` と `ritsu check` では ritsu-project の索引が、sakai のテストでは `tests/common` の索引が持つ。sakai のクレートのバイナリは sekisho を持たないので、地図に `.gate` か `cedar "…"` の Cedar があれば、ほかの言語と同じく、ツール名ごとに一つの E104 で止まる（4.1。読む言語の並びは `Suite::READ` の rulec、koyomi、dandori、sekisho、cedar）。
+
+## 18. kaname のモジュール（2026-10-18）
+
+kaname（規則と日付と帳簿をつなぐコードの言語、`.kn`）のモジュールを、地図の成果物として扱う。kaname の DESIGN 14.6 の決まりを、sakai の側で確かめる。
+
+### 18.1 属し方
+
+**決定**：`.kn` は一式の成果物で、ほかの成果物と同じく、ちょうど一つのコンテキストに属する（`dir` の下に置くか、`kaname "…"` の項で書く）。
+
+```ctx
+owns
+  kaname "../payouts/payout.kn", chobo "../payouts/ledger.book"
+```
+
+- W101 の注の成果物の種類と、`owns` に書けるものを言う E002 の注に、`.kn`（`kaname`）を足した。
+- 中のもの（関数、レコードとフィールド、列挙と値）の名前は、sakai は読まない。要件から指すのは yuen で、kaname の口 `Items` で読む（yuen の DESIGN 3.8）。
+
+### 18.2 境界を越える参照
+
+kaname の `References`（索引で。4.1）が言う参照のうち、次のものを境界を越える参照に数える。
+
+| 参照 | 先 | 境界を越えたとき |
+|---|---|---|
+| `.kn` の `use rule`・`use dates` | 規則、日付のファイル | 二つの共有カーネルに並べたものだけを読める。関係が無ければ E201、あれば E202 |
+| `.kn` の `use module` | ほかの `.kn` | 同じ |
+
+- 共有カーネルを求めるのは、モジュールから生成したコードが、規則と日付とほかのモジュールから生成したコードを、同じプロセスで呼ぶからである（kaname の DESIGN 10.5）。使うのは相手の内側で、ゲートの `use rule` と同じく、規則そのもの、日付のファイル、モジュールを使う。規則を相手の公表された言語（`published language rulec.…`）に入れても、それは Connect のサービスとして呼ぶ形（ワークフローの `use rule … connect`）のためなので、モジュールの `use rule` は通らない。E202 の注は、モジュールが使うのはそのものであることを言う。
+- `use book` は数えない。モジュールは振替の値を組み立てて返すだけで、帳簿に当てるのはホストである（`ritsu gen` が書く当てる関数を、ホストが帳簿のクライアントで呼ぶ。kaname の DESIGN 10.6）。ワークフローの `use book`（dandori が書く実装が、`Transport` の `book` で帳簿のクライアントを呼ぶ。dandori の DESIGN 4.2）とゲートの `use book` も数えない（3.3、17.2）ので、三つの言語でそろう。帳簿をほかのコンテキストから使うのは、帳簿の後ろに立つサービスを通すときである（4.5）。
+
+例の支払いのモジュール（kaname の `examples/payout`）を、手数料の規則を持つ Fees と、モジュールと台帳を持つ Payouts の地図に置き、Fees が規則を公表された言語 `rulec.card_fee.v1` に入れ、Payouts をその順応者にしたときの、`ritsu sakai check market.ctx` の最初の行と注は次のとおりである。
+
+- `error[E202]: payouts/payout.kn:4:1: The file payouts/payout.kn of Payouts refers to fees/card_fee.rule (use rule), which is inside Fees`
+- `= The code a module of kaname is made into calls the code made of the rules, the dates and the other modules it reads: the thing itself, inside Fees. One across the boundary is read from the two's shared kernel.`
+
+日本語の名前で書いた同じ地図（手数料と支払い。`--lang ja`）では、`エラー[E202]: 支払い/支払い.kn:4:1: 「支払い」の 支払い/支払い.kn が、「手数料」の内側の 手数料/カード手数料.rule を参照しています（use rule）` で、注は「kaname のモジュールから生成したコードは、読む規則と日付とほかのモジュールから生成したコードを呼ぶので、使うのはそのもの（「手数料」の内側）です。境界の向こうのものは、二つの共有カーネルに並べてください。」である。
+
+二つのコンテキストが規則を共有カーネルに並べれば通り、地図の最後の行は `market.ctx: ok — 2 contexts, 2 relationships; 3 artifacts, each in one context; 1 crossing checked (kaname 1)` になる。台帳を Fees に移しても、この行は変わらない（`use book` は数えない）。
+
+### 18.3 変えたこと
+
+- キーワード：ツール名 `kaname` と、kaname の種類の語のうち新しいもの（`function`）が加わり、地図、コンテキスト、語、下流の値の名前にできなくなった（E002。2.2 の決まりのとおり）。例とテストに、これらを名前にしたものは無かった。
+- `owns`・`layer`・`shared kernel with` に `kaname "…"` を書ける（ツール名は ritsu-base の `Tool::ALL` から読む）。
+- 参照の種類 `Kind::ModuleUse`（`src/refs.rs`）と、その E202 の注。
+- sakai のクレートのバイナリは、地図に `.kn` があれば E104 で止まる（4.1。`Suite::READ` に kaname を足した）。
+- 要約の越える参照の数に、`kaname N` が加わる（共有カーネルを通るモジュールの `use` の行。モジュールの無い地図では変わらない）。
+- 2.1 の入れ子の一覧に、kaname と、書き漏らしていた dandori と sekisho のものを足した。
+
+### 18.4 テスト
+
+- ritsu の `tests/kaname.rs`（`sakai_and_yuen_read_what_a_module_holds_and_names`）：上の地図で、モジュールの `use rule` が順応者からは E202（注に、使うのはそのものであること）、共有カーネルからなら通って要約に `kaname 1` と数え、台帳を Fees に移しても変わらず、関係を消すと E201 になること。
+- kaname の `References` は、`ritsu sakai` と `ritsu check` では ritsu-project の索引が持つ。sakai のテストは kaname を持たない（sakai の dev-dependency に kaname は無い）ので、kaname の参照の検査は ritsu の側で確かめる。sakai のクレートのバイナリは kaname を持たないので、地図に `.kn` があれば、ほかの言語と同じく、ツール名ごとに一つの E104 で止まる（4.1。読む言語の並びは `Suite::READ` の rulec、koyomi、dandori、sekisho、cedar、kaname）。

@@ -1,0 +1,16 @@
+module corners v1
+
+fn half(a: number range >=0 <=9) -> number
+  half_up(a / 2, 1)
+
+fn countdown(n: number range >=0 <=20) -> number
+  if n <= 0 then 0 else countdown(n: n - 1) + 1
+
+fn outer(n: number range >=0 <=10) -> number
+  countdown(n: n)
+
+fn climb(xs: list[number] count >=0 <=100 range >=0 <=1) -> number
+  reduce(xs, 0, (acc, x) => min(acc + 1, 2))
+
+fn same(a: number range >=0 <=9, b: number range >=0 <=9) -> number
+  if a = b then a - b else 0

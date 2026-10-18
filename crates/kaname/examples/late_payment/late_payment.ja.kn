@@ -1,0 +1,33 @@
+module 支払いの遅れ(late_payment_ja) v1
+description "遅れて払われた請求書について、売り手が請求するもの。期日、何日遅れて払われたか、規則がそれに付ける定額と利息。late_payment.kn の日本語の版"
+
+use dates 期限 from "dates/支払期限.cal"
+use rule 請求額 from "rules/遅延の請求額.rule"
+
+record 請求書(Invoice)
+  番号(id)         : string
+  請求日(invoiced) : date  range >=2026-01-01 <=2027-12-31
+  金額(amount)     : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+
+record 請求(Claim)
+  期日(due)                : date
+  遅れた日数(days_late)    : number  range >=1 <=1500
+  定額の補償(compensation) : money[GBP]
+  利息(interest)           : money[GBPc]
+
+fn 遅れの請求(claim)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%) -> 請求? total
+  description "期日までに払われていれば none"
+  let 期日 = 期限.期日(請求日: 請求書.請求日)
+  let 遅れ = 支払日 - 期日
+  if 遅れ >= 1
+    let 額 = 請求額(債権額: 請求書.金額, 遅れた日数: 遅れ, 基準金利: 基準金利)
+    請求 { 期日: 期日, 遅れた日数: 遅れ, 定額の補償: 額.定額の補償, 利息: 額.利息 }
+  else
+    none
+
+# 一つ目は GOV.UK の例。1,000 ポンド、基準金利 0.5%、50 日遅れて払われた。
+examples
+  遅れの請求(請求書: 請求書 { 番号: "inv_1", 請求日: 2026-03-02, 金額: 100_000GBPc }, 支払日: 2026-05-20, 基準金利: 0.5%)
+    = 請求 { 期日: 2026-03-31, 遅れた日数: 50, 定額の補償: 70GBP, 利息: 1150GBPc }
+  遅れの請求(請求書: 請求書 { 番号: "inv_2", 請求日: 2026-03-02, 金額: 100_000GBPc }, 支払日: 2026-03-31, 基準金利: 0.5%)
+    = none

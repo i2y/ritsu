@@ -1,0 +1,59 @@
+{
+  "kaname": "<version>",
+  "file": "discount_split.kn",
+  "module": "discount_split",
+  "function": "split",
+  "input": {
+    "lines": [
+      {
+        "label": "labor",
+        "amount": 5000
+      },
+      {
+        "label": "parts",
+        "amount": 10000
+      }
+    ],
+    "discount": 1000
+  },
+  "calls": [
+    {
+      "line": 17,
+      "module": "discount_split",
+      "rule": "discount_share",
+      "in": {
+        "discount": 1000,
+        "before": 0,
+        "upto": 5000,
+        "total": 15000
+      },
+      "out": {
+        "share": 333
+      }
+    },
+    {
+      "line": 17,
+      "module": "discount_split",
+      "rule": "discount_share",
+      "in": {
+        "discount": 1000,
+        "before": 5000,
+        "upto": 15000,
+        "total": 15000
+      },
+      "out": {
+        "share": 667
+      }
+    }
+  ],
+  "result": [
+    {
+      "label": "labor",
+      "share": 333
+    },
+    {
+      "label": "parts",
+      "share": 667
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+module lists v1
+
+record Line
+  label  : string
+  amount : money[USDc]  range >=0USDc <=10_000USDc
+  media  : bool
+
+record Stats
+  count   : number
+  media   : number
+  total   : money[USDc]
+  largest : money[USDc]?
+  first   : string?
+  all     : bool
+  any     : bool
+  labels  : list[string]
+
+record Running
+  label  : string
+  before : money[USDc]
+  upto   : money[USDc]
+  total  : money[USDc]
+
+fn stats(lines: list[Line] count >=0 <=5) -> Stats
+  let found = first(lines, l => starts_with(l.label, "b"))
+  let label =
+    match found
+      none => none
+      some x => x.label
+  Stats {
+    count: count(lines),
+    media: count(lines, l => l.media),
+    total: sum(lines, l => l.amount),
+    largest: max_of(lines, l => l.amount),
+    first: label,
+    all: all(lines, l => l.media),
+    any: any(lines, l => l.media),
+    labels: map(filter(lines, l => l.amount > 0), l => concat(l.label, "=", text(l.amount))),
+  }
+
+fn totals(lines: list[Line] count >=0 <=5) -> list[Running]
+  map(running_totals(lines, l => l.amount), r => Running { label: r.item.label, before: r.before, upto: r.upto, total: r.total })
+
+fn product(xs: list[number] count >=0 <=5 range >=1 <=9) -> number
+  reduce(xs, 1, (acc, x) => acc * x)
+
+fn smallest(xs: list[date] count >=0 <=5 range >=2026-01-01 <=2026-12-31) -> date?
+  min_of(xs, d => d)

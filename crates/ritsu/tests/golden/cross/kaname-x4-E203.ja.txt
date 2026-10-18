@@ -1,0 +1,17 @@
+ok rules/card_fee.rule
+books/ledger.book: ok
+  capture.do         拒否されうる理由: key_conflict
+  processing_fee.do  拒否されうる理由: insufficient_balance（seller_balance(seller) at least 0.00）、key_conflict、already_refused
+  キー: capture は、payment ごとに一度だけ動きます。キーが同じで seller、amount のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: processing_fee は、payment ごとに一度だけ動きます。キーが同じで seller、fee のどれかが違う二度目の呼び出しは、key_conflict で拒否されます。
+エラー[kaname E401]: payout.kn:17:1: 関数 `settle` には `total` と書いてありますが、`range` で失敗することがあります
+    17 | fn settle(payment: Payment) -> Settlement total
+  = 21 行目: 振替 `ledger.capture.do` の `amount` に渡す `payment.amount - fee` が、chobo の受け取らない額になることがあります（ritsu E203）
+  = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
+エラー[ritsu E203]: payout.kn:21:85: 振替 `ledger.capture.do` の `amount` に渡す `payment.amount - fee` が、chobo の受け取らない額になることがあります
+    21 |     capture: ledger.capture.do(payment: payment.id, seller: payment.seller, amount: payment.amount - fee),
+  = たとえば `settle(payment: Payment { id: "a", seller: "a", amount: 1USDc, international: true })` のとき、-48 になります。
+  = chobo が受け取る額は、単位のいちばん小さい刻みで 0 から 9223372036854775807 までです。
+  = kaname の生成したコードは、振替を組み立てるところで額を確かめます。関数は、そこで `range` で失敗します。
+  = 振替の前に `if` で額を狭めるか、負の額は向きの違う振替に分けてください。
+ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 4 か所、決められない 0 か所

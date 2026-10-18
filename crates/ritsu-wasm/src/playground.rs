@@ -183,7 +183,9 @@ pub fn generate(r: &Request) -> Value {
                 let (args, shown) = words(&["sekisho", "gen", p, "--target", "cedar", "--root", ".", "--out", OUT], l);
                 ran(shown, |o, e| sekisho::run::run(&args[1..], joined.sekisho().into(), o, e))
             }
-            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File => return None,
+            // kaname writes into a package of ritsu gen only, and is not on the page yet (kaname's
+            // DESIGN 19)
+            Tool::Geas | Tool::Proto | Tool::Openapi | Tool::Asyncapi | Tool::Cedar | Tool::File | Tool::Kaname => return None,
         })
     });
     let Some(did) = did else {

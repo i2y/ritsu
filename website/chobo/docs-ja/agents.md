@@ -26,7 +26,7 @@ $ ritsu skills install chobo --user                         # このマシンの
 $ ritsu skills install chobo --dir path/to/skills           # ほかのエージェントがスキルを読む場所に入れる
 ```
 
-Claude Code なら、プラグイン `ritsu` に九つのスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。リポジトリのクローンから `skills/chobo` を `~/.claude/skills/` かプロジェクトの `.claude/skills/` にコピーしても同じで、リリースごとの `ritsu-skills-v<バージョン>.zip` にも九つが入っています。スキルが扱うことを頼めば（「在庫が 0 を下回らないようにして」「この W103 を直して」）、たいていはエージェントが自分でスキルを使います。確実に使わせたいときは、「chobo のスキルを使って」と、スキルの名前を出して頼んでください。
+Claude Code なら、プラグイン `ritsu` に十のスキルが入っています。`/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json` を実行してから、`/plugin install ritsu@ritsu` を実行します。リポジトリのクローンから `skills/chobo` を `~/.claude/skills/` かプロジェクトの `.claude/skills/` にコピーしても同じで、リリースごとの `ritsu-skills-v<バージョン>.zip` にも十のスキルが入っています。スキルが扱うことを頼めば（「在庫が 0 を下回らないようにして」「この W103 を直して」）、たいていはエージェントが自分でスキルを使います。確実に使わせたいときは、「chobo のスキルを使って」と、スキルの名前を出して頼んでください。
 
 ## 機械が読むもの
 

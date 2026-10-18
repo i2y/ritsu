@@ -39,13 +39,16 @@ pub enum Tool {
     /// with their attributes, its roles, workflows and enums, its actions with their inputs and
     /// computed values, its policies, expectations and separations.
     Sekisho,
+    /// The language of `.kn` files, the code that joins rules, dates and books (kaname's DESIGN
+    /// 14.6): a module's functions, its records with their fields and its enums with their values.
+    Kaname,
 }
 
 /// A tool's kinds, each with the kinds that can come right after it.
 pub type Kinds = &'static [(&'static str, &'static [&'static str])];
 
 impl Tool {
-    pub const ALL: [Tool; 13] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho];
+    pub const ALL: [Tool; 14] = [Tool::Rulec, Tool::Dandori, Tool::Koyomi, Tool::Chobo, Tool::Geas, Tool::Proto, Tool::Openapi, Tool::Asyncapi, Tool::Cedar, Tool::File, Tool::Yuen, Tool::Sakai, Tool::Sekisho, Tool::Kaname];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -62,6 +65,7 @@ impl Tool {
             Tool::Yuen => "yuen",
             Tool::Sakai => "sakai",
             Tool::Sekisho => "sekisho",
+            Tool::Kaname => "kaname",
         }
     }
 
@@ -85,6 +89,7 @@ impl Tool {
             Tool::Yuen => Some("req"),
             Tool::Sakai => Some("ctx"),
             Tool::Sekisho => Some("gate"),
+            Tool::Kaname => Some("kn"),
         }
     }
 
@@ -104,6 +109,7 @@ impl Tool {
             Tool::Yuen => &[".req"],
             Tool::Sakai => &[".ctx"],
             Tool::Sekisho => &[".gate"],
+            Tool::Kaname => &[".kn"],
         }
     }
 
@@ -154,6 +160,8 @@ impl Tool {
                 ("expect", &[]),
                 ("separate", &[]),
             ],
+            // kaname's DESIGN 14.6: a field under a record, a value under an enum
+            Tool::Kaname => &[("function", &[]), ("record", &["field"]), ("enum", &["value"])],
         }
     }
 

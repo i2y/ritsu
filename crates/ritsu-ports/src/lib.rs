@@ -38,6 +38,11 @@
 //! - [`Gates`]: a `.gate`'s actions with the operations they guard, its workflows, policies and
 //!   expectations, and how far someone is allowed an action, for the checks across the borders;
 //!   and [`GatePorts`], the ports sekisho reads a `.gate` with.
+//! - [`Programs`]: the calls a module of kaname makes to rules, koyomi dates and chobo transfers,
+//!   with what kaname knows of each value it gives (its range as kaname's analysis finds it, the
+//!   places it can come from, the relations between the inputs of a call) and what the function's
+//!   vectors gave there; and [`Verdicts`], what the checks across the borders came to at each of
+//!   those places, which kaname decides the effects of its functions with.
 //!
 //! Every check across a border answers with an [`Answer`]: shown to hold, an example where it
 //! does not, or why it cannot be decided (P5). A question that asks for a value answers with a
@@ -51,6 +56,7 @@ mod flows;
 mod gates;
 mod index;
 mod maps;
+mod programs;
 mod rules;
 mod sources;
 
@@ -58,7 +64,7 @@ pub use books::{Account, Balance, BookCall, BookClient, BookFacts, BookOutcome, 
 pub use check::{Checked, Finding, Part, Verdict};
 pub use claims::{Affected, Claim, Claims, MapRecord, RecordClaim, RecordFile, RecordRan, Touched, TouchedLines, Untouched};
 pub use sources::{Source, SourceKind, Sources};
-pub use dates::{day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
+pub use dates::{day_of, day_text, DateCalendar, DateFacts, DateFunction, DateInput, DateKind, DateValue, Dates, Day, DaySet, DaySpan};
 pub use dates::CalendarFacts;
 pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
@@ -67,6 +73,7 @@ pub use flows::{
     TransferCall, Undecided, UndecidedPrecondition,
 };
 pub use maps::{MapFacts, MapRelationship, Maps, PublishedOperation};
+pub use programs::{At, CallVerdict, Crossing, Ends, Given, ProgramCrossings, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs, Seen, Verdicts};
 pub use rules::{Axis, Call, CallEnum, Column, ColumnType, Connect, EnumValue, Machine, MachineRow, OutputValues, Param, Precondition, RuleEnum, RuleError, RuleFacts, Rules, Value, Values, WireEnum, WireField};
 
 use ritsu_base::text::Text;

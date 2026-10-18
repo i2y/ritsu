@@ -1,0 +1,41 @@
+rule メディアメール(media_mail_ja) v1
+description "15 ポンドまでの Media Mail の小包の窓口の料金。メディアでないものが入っていて、米国郵便公社が Media Mail として受け付けない小包には none。米国郵便公社の料金表（Notice 123、2026-10-04 からの料金）の 15 ポンドまでの部分から。media_mail.rule の日本語の版"
+
+source 料金表(usps) = file "sources/notice-123-media-mail.md" sha256:14eb63283ba4e05f  # 米国郵便公社の料金表
+  table1 sha256:4f85197efffc5e0e
+
+inputs
+  重さ(weight)             : mass[oz]  range >=1oz <=240oz
+  メディアだけ(media_only) : bool
+
+outputs
+  料金(price) : money[USDc]?  round down(1USDc)
+
+# 料金表は 70 ポンドまで続く。規則が持つのは 15 ポンドまでなので、表ではなく行ごとに出典を書いた。
+table 料金表(price_table)
+policy unique
+| メディアだけ | 重さ         | -> 料金 : money[USDc]? |
+| false        | -            | none                   |
+| true         | <=1lb        | 439USDc                |  @料金表 table1
+| true         | >1lb <=2lb   | 513USDc                |  @料金表 table1
+| true         | >2lb <=3lb   | 586USDc                |  @料金表 table1
+| true         | >3lb <=4lb   | 660USDc                |  @料金表 table1
+| true         | >4lb <=5lb   | 734USDc                |  @料金表 table1
+| true         | >5lb <=6lb   | 808USDc                |  @料金表 table1
+| true         | >6lb <=7lb   | 881USDc                |  @料金表 table1
+| true         | >7lb <=8lb   | 955USDc                |  @料金表 table1
+| true         | >8lb <=9lb   | 1029USDc               |  @料金表 table1
+| true         | >9lb <=10lb  | 1102USDc               |  @料金表 table1
+| true         | >10lb <=11lb | 1176USDc               |  @料金表 table1
+| true         | >11lb <=12lb | 1250USDc               |  @料金表 table1
+| true         | >12lb <=13lb | 1323USDc               |  @料金表 table1
+| true         | >13lb <=14lb | 1397USDc               |  @料金表 table1
+| true         | >14lb <=15lb | 1471USDc               |  @料金表 table1
+
+examples
+| 重さ  | メディアだけ | -> 料金  |
+| 16oz  | true         | 439USDc  |
+| 17oz  | true         | 513USDc  |
+| 44oz  | true         | 586USDc  |
+| 240oz | true         | 1471USDc |
+| 44oz  | false        | none     |

@@ -27,9 +27,9 @@ message Order {
 
 ## E201 — 規則を呼ぶところで、前提を破る値を渡すことがあります
 
-**いつ出るか**: ワークフローが規則を呼ぶところで、dandori が知っている値の範囲の中に、規則の前提（入力どうしの関係 `constraint`）を破る組み合わせがあるとき。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日なら、その日のどれかが規則の日でないときも、このエラーです。前提を破る呼び出しは、規則から生成したコードが入口で受け付けないので、ワークフローを走らせたときに初めて落ちます。注には、値の範囲と、前提を破る組み合わせや日が出ます。
+**いつ出るか**: ワークフローか kaname の関数が規則を呼ぶところで、規則の前提（入力どうしの関係 `constraint`、並びの合計と長さの上限、`range from koyomi` の日）を破る値を渡すことがあるとき。ワークフローでは、dandori が知っている値の範囲の中に、前提を破る組み合わせがあるときです。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日なら、その日のどれかが規則の日でないときも、このエラーです。kaname の関数では、関数のベクタを流したときに前提を破る値を渡す入力があるときです。kaname の範囲は上からの見積もりで、範囲の角は起きないことがあるので、角だけでは例にしません。前提を破る呼び出しは、規則から生成したコードが入口で受け付けないので、走らせたときに初めて落ちます。注には、値の範囲と前提を破る組み合わせや日か、前提を破る関数の入力が出ます。
 
-**直し方**: 呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`）。前提のほうが業務に合っていないなら、規則の `constraint` を直してください。
+**直し方**: 呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`。kaname では、呼ぶ前の `if`）。前提のほうが業務に合っていないなら、規則の `constraint` を直してください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -86,15 +86,27 @@ flow
     review => pass
 ```
 
+`refund.kn`:
+
+```kn
+module refund v1
+description "Whether a refund is paid at once or reviewed, as the rule decides for the amount the customer asks for"
+
+use rule check from "refund_check.rule"
+
+fn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> check.path
+  check(paid: paid, asked: asked).route
+```
+
 関連: [W201](#w201)
 
 <a id="w201"></a>
 
 ## W201 — 規則を呼ぶところで、前提が保たれるかを決められません
 
-**いつ出るか**: ワークフローが規則を呼ぶところで、前提が保たれるかを決められないとき。渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。
+**いつ出るか**: ワークフローか kaname の関数が規則を呼ぶところで、前提が保たれるかを決められないとき。ワークフローでは、渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。kaname の関数では、範囲の解析が見積もった範囲と、kaname が知っている入力どうしの関係で示せず、関数のベクタにも前提を破る入力が無いときです。kaname の生成したコードがその場所で確かめ、規則が受け付けない呼び出しでは、関数が `rule` で失敗します。
 
-**直し方**: 値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。
+**直し方**: 値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。kaname では、呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡してください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -151,13 +163,25 @@ flow
     review => pass
 ```
 
+`refund.kn`:
+
+```kn
+module refund v1
+description "Whether a refund is paid at once or reviewed, as the rule decides for the amount asked for, capped at what was paid"
+
+use rule check from "refund_check.rule"
+
+fn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> check.path
+  check(paid: paid, asked: min(asked, paid)).route
+```
+
 関連: [E201](#e201)
 
 <a id="e202"></a>
 
-## E202 — koyomi の日付がとる日が、規則の入力の範囲を外れます
+## E202 — 規則の日付の入力に渡す日が、入力の範囲を外れます
 
-**いつ出るか**: ワークフローが koyomi の日付の日（`due.day`）を規則の日付の入力に渡すとき、koyomi がその日付について数えた日のどれかが、規則が宣言した入力の範囲の外にあるとき。koyomi は入力の範囲のすべてで日付を計算するので、外れる日は例として一つに決まります。注には、その日と、koyomi がその日を返す入力が出ます。範囲を `range from koyomi` にした入力では、日は規則の前提なので、E201 と W201 が確かめます。
+**いつ出るか**: ワークフローか kaname の関数が規則の日付の入力に日を渡すとき、その日が、規則が宣言した入力の範囲の外になることがあるとき。ワークフローでは、koyomi の日付の日（`due.day`）を渡すときで、koyomi がその日付について数えた日のどれかが範囲の外にあるときです。koyomi は入力の範囲のすべてで日付を計算するので、外れる日は例として一つに決まります。注には、その日と、koyomi がその日を返す入力が出ます。kaname の関数では、koyomi の日付の日や、範囲の解析が見積もった日のうち、範囲の外の日を渡す入力が、関数のベクタにあるときです。注には、その関数の入力と日が出ます。範囲を `range from koyomi` にした入力では、日は規則の前提なので、E201 と W201 が確かめます。
 
 **直し方**: 規則の入力の範囲を広げるか、規則の範囲を `range from koyomi` にして、koyomi の日をそのまま範囲にしてください。
 
@@ -225,13 +249,27 @@ flow
   bill(order: order, due: due.day, run: pick.batch)
 ```
 
+`billing.kn`:
+
+```kn
+module billing v1
+description "The billing batch of the day an order's payment is due"
+
+use dates terms from "payment_terms.cal"
+use rule batch from "batch.rule"
+
+fn pick(received: date range >=2026-01-01 <=2026-12-20) -> batch.run
+  let due = terms.payment(received: received)
+  batch(pay_day: due).batch
+```
+
 関連: [W202](#w202), [E205](#e205)
 
 <a id="w202"></a>
 
-## W202 — koyomi の日付がとる日が、規則の入力の範囲に収まるかを決められません
+## W202 — 規則の日付の入力に渡す日が、入力の範囲に収まるかを決められません
 
-**いつ出るか**: 規則の日付の入力に渡す値が、koyomi の日付の日のほかに、何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来ることがあるとき、または koyomi がその日付の日を数えないとき（入力の組み合わせが確かめる数を超える、途中で計算が止まる入力がある）。規則から生成したコードが、ワークフローを走らせたときに入口で日を確かめます。
+**いつ出るか**: 規則の日付の入力に渡す値が、koyomi の日付の日のほかに、何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来ることがあるとき、または koyomi がその日付の日を数えないとき（入力の組み合わせが確かめる数を超える、途中で計算が止まる入力がある）。kaname の関数では、範囲の解析が見積もった日に範囲の外の日があり、関数のベクタにはその日を渡す入力が無いときも、この警告です。規則から生成したコードが、走らせたときに入口で日を確かめます。
 
 **直し方**: 値を koyomi の日付の日だけから渡せば、決められるようになります。koyomi が日を数えないなら、koyomi のファイルの入力の範囲を狭めてください。
 
@@ -303,15 +341,33 @@ flow
   bill(order: order, due: day, run: pick.batch)
 ```
 
+`billing.kn`:
+
+```kn
+module billing v1
+description "The billing batch of an order: that of the day the customer promised to pay, when it is no earlier than the payment day, and that of the payment day otherwise"
+
+use dates terms from "payment_terms.cal"
+use rule batch from "batch.rule"
+
+fn pick(received: date range >=2026-01-01 <=2026-12-20, promised: date range >=2026-01-01 <=2027-01-31) -> batch.run
+  let due = terms.payment(received: received)
+  let grace = promised - due
+  if grace >= 0
+    batch(pay_day: promised).batch
+  else
+    batch(pay_day: due).batch
+```
+
 関連: [E202](#e202)
 
 <a id="e203"></a>
 
-## E203 — 規則の出力が、chobo の受け取らない額になることがあります
+## E203 — 振替に渡す額が、chobo の受け取らない額になることがあります
 
-**いつ出るか**: ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が負か 2⁶³ − 1 を超えることがあるとき（chobo は 0 から 2⁶³ − 1 までを受け取ります）。出力の値は rulec が求めます（表の行に書いた数か、区間の計算から）。chobo は範囲の外の額を、拒否する（業務の結果）のではなく呼び出しの失敗にします。注には、その額になる規則の入力の例（規則のベクタから取ったもの）が出ます。
+**いつ出るか**: 振替の額が、負か 2⁶³ − 1 を超えることがあるとき（chobo は 0 から 2⁶³ − 1 までを受け取ります）。chobo は範囲の外の額を、拒否する（業務の結果）のではなく呼び出しの失敗にします。ワークフローでは、規則の数の出力を chobo の振替の額に渡すときに確かめます。出力の値は rulec が求めます（表の行に書いた数か、区間の計算から）。注には、その額になる規則の入力の例（規則のベクタから取ったもの）が出ます。kaname の関数では、規則の出力でも kaname が計算した額でも、どの額も確かめ、関数のベクタにその額になる入力があるときにこのエラーにします。注には、その関数の入力と額が出ます。
 
-**直し方**: 規則が返す額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けてください）、振替に渡す前に分岐してください。
+**直し方**: 額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けてください）、振替に渡す前に分岐してください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -383,15 +439,28 @@ flow
   give_seats(event: event, count: need.needed)
 ```
 
+`booking.kn`:
+
+```kn
+module booking v1
+description "The seats to give an event, as the rule says for its kind: the transfer the host makes"
+
+use rule seats from "seats.rule"
+use book hall from "hall.book"
+
+fn give(event: string, kind: seats.kind) -> hall.assign.do
+  hall.assign.do(event: event, count: seats(event_kind: kind).needed)
+```
+
 関連: [W203](#w203), [E204](#e204)
 
 <a id="w203"></a>
 
-## W203 — 規則の出力を、chobo が額として受け取るかを決められません
+## W203 — 振替に渡す額を、chobo が受け取るかを決められません
 
-**いつ出るか**: ワークフローが規則の数の出力を振替の額に渡すとき、出力の範囲に上限か下限が無いか、値が範囲の分からないところ（範囲の無いタスクの結果など）からも来ることがあるとき。chobo が受け取らない額なら、ワークフローを走らせたときに呼び出しが失敗します。
+**いつ出るか**: ワークフローが規則の数の出力を振替の額に渡すとき、出力の範囲に上限か下限が無いか、値が範囲の分からないところ（範囲の無いタスクの結果など）からも来ることがあるとき。chobo が受け取らない額なら、ワークフローを走らせたときに呼び出しが失敗します。kaname の関数では、範囲の解析が見積もった額が chobo の受け取る範囲に収まらず、関数のベクタにはその額になる入力が無いときです。kaname の生成したコードが振替を組み立てるところで額を確かめ、受け取らない額なら関数が `range` で失敗します。
 
-**直し方**: 値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。
+**直し方**: 値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。kaname では、振替の前に `if` で額を狭めてください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -470,13 +539,27 @@ flow
   give_seats(event: event, count: count)
 ```
 
+`booking.kn`:
+
+```kn
+module booking v1
+description "The seats to give an event: what the rule says its kind needs, less those it holds already, which are never more than it needs"
+
+use rule seats from "seats.rule"
+use book hall from "hall.book"
+
+fn give(event: string, kind: seats.kind, held: number range >=0 <=50) -> hall.assign.do
+  let needed = seats(event_kind: kind).needed
+  hall.assign.do(event: event, count: needed - min(held, needed))
+```
+
 関連: [E203](#e203)
 
 <a id="e204"></a>
 
 ## E204 — 振替が拒否されうる理由を、タスクが処理していません
 
-**いつ出るか**: 規則の出力を額に渡す `do` か `hold` の呼び出しで、操作が拒否されうる理由を、タスクが宣言したエラーとして処理していないとき。拒否されうる理由とは、額を呼び出しが渡す範囲に限った chobo の探索で、拒否される例が見つかった理由です。比べるのは帳簿の境界の理由（勘定の `refused as`）、つまり額で決まる拒否だけです。同じキーを別の引数で使い直すことのように、前の呼び出しで決まる拒否は比べません。探索は chobo の検査と同じ深さまでたどります。`post` と `void` は仮押さえの状態で拒否され、dandori が案件の状態ごとに確かめます（dandori の E022）。
+**いつ出るか**: 規則の出力を額に渡す `do` か `hold` の呼び出しで、操作が拒否されうる理由を、タスクが宣言したエラーとして処理していないとき。拒否されうる理由とは、額を呼び出しが渡す範囲に限った chobo の探索で、拒否される例が見つかった理由です。比べるのは帳簿の境界の理由（勘定の `refused as`）、つまり額で決まる拒否だけです。同じキーを別の引数で使い直すことのように、前の呼び出しで決まる拒否は比べません。探索は chobo の検査と同じ深さまでたどります。`post` と `void` は仮押さえの状態で拒否され、dandori が案件の状態ごとに確かめます（dandori の E022）。kaname の関数が組み立てる振替には、このエラーを出しません。拒否を扱うのは振替を当てるホストで、探索が見つけた理由は、kaname が生成する振替の型に載ります（W204）。
 
 **直し方**: その理由をタスクのエラーとして宣言し、処理してください。
 
@@ -556,7 +639,7 @@ flow
 
 ## W204 — 振替がどの理由で拒否されうるかを決められません
 
-**いつ出るか**: タスクが帳簿の境界の理由を処理しているのに、額を呼び出しが渡す範囲に限った chobo の探索で、その理由で拒否される例が見つからないとき。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです。額の範囲が分からないときや、chobo から帳簿の情報を得られないときも、この警告で「決められない」と知らせます。
+**いつ出るか**: タスクが帳簿の境界の理由を処理しているのに、額を呼び出しが渡す範囲に限った chobo の探索で、その理由で拒否される例が見つからないとき。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです。額の範囲が分からないときや、chobo から帳簿の情報を得られないときも、この警告で「決められない」と知らせます。kaname の関数が組み立てる `do` と `hold` では、拒否を扱うのは振替を当てるホストで、探索が見つけた理由を、kaname が生成する振替の型に載せます。決められないときにだけこの警告を出し、型には帳簿の境界の理由を全部載せます。
 
 **直し方**: 起きない理由なら、タスクのエラーから外してください。深い手順でしか起きないなら、そのままで構いません。
 
@@ -637,9 +720,9 @@ flow
 
 ## E205 — koyomi の日付に渡す日が、入力の範囲を外れます
 
-**いつ出るか**: ワークフローが koyomi の日付を呼ぶとき、日付の入力に渡す日が、koyomi の入力の範囲を外れることがあるとき。渡す日がほかの koyomi の日付の日なら、koyomi が数えたその日の全部で確かめます。範囲の中の日なら、カレンダーに問い合わせる日がデータの範囲に収まることを、koyomi の検査が確かめています（koyomi の E203）。注には、外れる日と、koyomi がその日を返す入力が出ます。
+**いつ出るか**: ワークフローか kaname の関数が koyomi の日付を呼ぶとき、日付の入力に渡す日が、koyomi の入力の範囲を外れることがあるとき。渡す日がほかの koyomi の日付の日なら、koyomi が数えたその日の全部で確かめます。範囲の中の日なら、カレンダーに問い合わせる日がデータの範囲に収まることを、koyomi の検査が確かめています（koyomi の E203）。ワークフローでは、注に、外れる日と、koyomi がその日を返す入力が出ます。kaname の関数では、範囲の外の日を渡す入力が関数のベクタにあるときで、注には、その関数の入力と日が出ます。
 
-**直し方**: koyomi の入力の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください。
+**直し方**: koyomi の入力の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください（kaname では、呼ぶ前の `if` で狭めます）。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -697,13 +780,27 @@ flow
   remind(order: order, on: note.day)
 ```
 
+`reminding.kn`:
+
+```kn
+module reminding v1
+description "The day to remind a customer, a week before an order's payment is due"
+
+use dates terms from "payment_terms.cal"
+use dates reminders from "reminders.cal"
+
+fn remind(received: date range >=2026-01-01 <=2026-12-20) -> date
+  let due = terms.payment(received: received)
+  reminders.reminder(due: due)
+```
+
 関連: [W205](#w205), [E202](#e202)
 
 <a id="w205"></a>
 
 ## W205 — koyomi の日付に渡す日が、範囲に収まるかを決められません
 
-**いつ出るか**: ワークフローが koyomi の日付の入力に渡す日を、dandori が知らないとき。ワークフローの入力、タスクの結果、`now` から来る日は、何日かを言いません。dandori には、日付の範囲を書く書き方がまだありません。範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。
+**いつ出るか**: ワークフローが koyomi の日付の入力に渡す日を、dandori が知らないとき。ワークフローの入力、タスクの結果、`now` から来る日は、何日かを言いません。dandori には、日付の範囲を書く書き方がまだありません。範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。kaname の関数では、範囲の解析が見積もった日に範囲の外の日があり、関数のベクタにはその日を渡す入力が無いときです。kaname の生成したコードがその場所で確かめ、koyomi が受け付けない日では、関数が `date` で失敗します。
 
 **直し方**: ほかの koyomi の日付の日を渡せば、決められるようになります。そうでなければ、このままで構いません。範囲の外の日は、koyomi が実行時に受け付けません。
 
@@ -761,6 +858,24 @@ flow
   let due = terms.payment(received: received)
   let note = reminders.reminder(due: due.day)
   remind(order: order, on: note.day)
+```
+
+`reminding.kn`:
+
+```kn
+module reminding v1
+description "The day to remind a customer: a week before the day the customer promised to pay, when it is no earlier than the payment day, and a week before the payment day otherwise"
+
+use dates terms from "payment_terms.cal"
+use dates reminders from "reminders.cal"
+
+fn remind(received: date range >=2026-01-01 <=2026-12-20, promised: date range >=2026-01-01 <=2027-01-31) -> date
+  let due = terms.payment(received: received)
+  let grace = promised - due
+  if grace >= 0
+    reminders.reminder(due: promised)
+  else
+    reminders.reminder(due: due)
 ```
 
 関連: [E205](#e205)

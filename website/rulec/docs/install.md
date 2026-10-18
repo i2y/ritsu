@@ -25,7 +25,7 @@ $ rulec --version
 rulec 0.25.0
 ```
 
-That puts `ritsu` on the path with the eight links beside it, so `rulec` is a
+That puts `ritsu` on the path with the nine links beside it, so `rulec` is a
 command just as before. The old name, `i2y/tap/rulec`, leads to the same
 formula, but Homebrew 7 takes it only once that formula is trusted: by itself,
 `brew install i2y/tap/rulec` stops with
@@ -58,7 +58,7 @@ ritsu-0.25.0-1.x86_64.rpm: OK
 $ sudo dnf install "./ritsu-$v-1.$a.rpm"
 ```
 
-The package installs `/usr/bin/ritsu` with the eight links beside it
+The package installs `/usr/bin/ritsu` with the nine links beside it
 (`/usr/bin/rulec -> ritsu`, and so on), and replaces the package `rulec` of
 rulec's own releases.
 
@@ -195,9 +195,9 @@ That gives `.claude/skills/rulec/SKILL.md` with six files beside it.
 The folder is what makes the skill findable, so keep it whole. To have
 it in every project rather than one, add `--user`, which puts it in
 `~/.claude/skills/` instead; `--dir <dir>` puts it where another agent reads skills.
-In Claude Code, the plugin `ritsu` holds all nine skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
+In Claude Code, the plugin `ritsu` holds all ten skills: `/plugin marketplace add https://i2y.github.io/ritsu/marketplace.json`,
 then `/plugin install ritsu@ritsu`. From a clone of the repository, copying `skills/rulec` does
-the same, and every release has the nine in `ritsu-skills-v<version>.zip`.
+the same, and every release has the ten in `ritsu-skills-v<version>.zip`.
 
 The only thing it needs is `rulec` on the path, whichever way above put it there.
 

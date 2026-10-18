@@ -1,0 +1,35 @@
+module 売り手への支払い(payout_ja) v1
+description "売り手のためにカードの支払いを受け、決済の事業者の手数料を売り手の残高に付ける。台帳の振替が二つで、それを当てるのはホスト。payout.kn の日本語の版"
+
+use rule カード手数料 from "rules/カード手数料.rule"
+use book 台帳 from "books/台帳.book"
+
+record 支払い(Payment)
+  番号(id)            : string
+  売り手(seller)      : string
+  金額(amount)        : money[USDc]  range >=1USDc <=100_000_000USDc
+  海外(international) : bool
+
+record 精算(Settlement)
+  入金(capture) : 台帳.入金.do
+  手数料(fee)   : 台帳.決済手数料.do
+
+fn 精算する(settle)(支払い(payment): 支払い) -> 精算 total
+  description "金額は売り手へ入り、規則がその金額に付ける手数料は、売り手から決済の事業者へ出る"
+  let 手数料 = カード手数料(金額: 支払い.金額, 海外: 支払い.海外).手数料
+  精算 {
+    入金: 台帳.入金.do(支払い: 支払い.番号, 売り手: 支払い.売り手, 金額: 支払い.金額),
+    手数料: 台帳.決済手数料.do(支払い: 支払い.番号, 売り手: 支払い.売り手, 手数料: 手数料),
+  }
+
+examples
+  精算する(支払い: 支払い { 番号: "pay_1", 売り手: "s_1", 金額: 10000USDc, 海外: false })
+    = 精算 {
+        入金: 台帳.入金.do(支払い: "pay_1", 売り手: "s_1", 金額: 10000USDc),
+        手数料: 台帳.決済手数料.do(支払い: "pay_1", 売り手: "s_1", 手数料: 398USDc),
+      }
+  精算する(支払い: 支払い { 番号: "pay_2", 売り手: "s_1", 金額: 10000USDc, 海外: true })
+    = 精算 {
+        入金: 台帳.入金.do(支払い: "pay_2", 売り手: "s_1", 金額: 10000USDc),
+        手数料: 台帳.決済手数料.do(支払い: "pay_2", 売り手: "s_1", 手数料: 548USDc),
+      }

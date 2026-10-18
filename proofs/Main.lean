@@ -6,20 +6,22 @@
   ritsu-model koyomi <file.json>    each line of stdin an input; each line out what it gives
   ritsu-model dandori <flow.json>   each line of stdin a scenario; each line out the run
   ritsu-model cross <file.json>     each line of stdin a check across a border; each line out its answer
+  ritsu-model kaname <module.json>  each line of stdin a run of a function, or the analysis; each line out its answer
   ```
 
   The first argument names the model and the second is the file the Rust test wrote for it: a
-  book, a dates or calendar file, a flow, resolved the way the model reads them; for `cross`, a
-  dates file whose days the lines ask for, or nothing. Every line in is answered by exactly one
+  book, a dates or calendar file, a flow, a module of kaname, resolved the way the model reads them;
+  for `cross`, a dates file whose days the lines ask for, or nothing. Every line in is answered by exactly one
   line out, in order, so the test can compare them a line at a time. What runs here is the
-  functions the theorems of `ChoboModel`, `KoyomiModel`, `DandoriCore` and `RitsuCross` are about;
-  nothing in this file decides anything.
+  functions the theorems of `ChoboModel`, `KoyomiModel`, `DandoriCore`, `RitsuCross` and
+  `KanameCore` are about; nothing in this file decides anything.
 -/
 import Lean.Data.Json
 import ChoboModel
 import KoyomiModel
 import DandoriCore
 import RitsuCross
+import KanameCore
 
 open Lean
 
@@ -43,7 +45,7 @@ def jsonAnswer (f : Json → Json) (line : String) : String :=
   | .error e => (Json.mkObj [("error", Json.str s!"unreadable line: {e}")]).compress
 
 def usage : String :=
-  "ritsu-model chobo <book.json> | koyomi <file.json> | dandori <flow.json> | cross <file.json>, with the inputs on stdin, a JSON value a line"
+  "ritsu-model chobo <book.json> | koyomi <file.json> | dandori <flow.json> | cross <file.json> | kaname <module.json>, with the inputs on stdin, a JSON value a line"
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -74,5 +76,9 @@ def main (args : List String) : IO UInt32 := do
         let runs := dates.map (fun (f, budget) => RitsuCross.runAll f budget)
         eachLine (jsonAnswer (RitsuCross.answerLine runs)); return 0
       | .error e => IO.eprintln s!"ritsu-model: cannot read the file: {e}"; return 2
+    | "kaname" =>
+      match KanameCore.readModule j with
+      | .ok m => eachLine (jsonAnswer (KanameCore.answerLine m)); return 0
+      | .error e => IO.eprintln s!"ritsu-model: cannot read the module: {e}"; return 2
     | _ => IO.eprintln usage; return 2
   | _ => IO.eprintln usage; return 2

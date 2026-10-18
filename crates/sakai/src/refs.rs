@@ -68,6 +68,10 @@ pub enum Kind {
     /// code a gate is made into calls the code made of the rule and of the dates, and a gate reads
     /// another's declarations, so each is the thing itself.
     GateUse { how: String },
+    /// A module's `use rule`, `use dates` or `use module` (kaname's DESIGN 14.6): the code a module
+    /// is made into calls the code made of the rule, of the dates and of the other module, so each is
+    /// the thing itself.
+    ModuleUse { how: String },
     /// An operation an action of a gate guards (`guards`), or that the `@guards` of a schema of
     /// Cedar written by hand names: only a gate of the context that holds the operation's contract
     /// may guard it (E211).
@@ -92,6 +96,7 @@ impl Kind {
             Kind::FlowOpenApi => "use openapi".into(),
             Kind::RuleJsonSchema { how } => how.clone(),
             Kind::GateUse { how } => how.clone(),
+            Kind::ModuleUse { how } => how.clone(),
             Kind::GateGuards => "guards".into(),
         }
     }
@@ -269,6 +274,9 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 // workflow it names is who calls, which the workflow's own calls are held for
                 (Tool::Sekisho, h @ ("use rule" | "use dates" | "use calendar" | "use gate")) => Kind::GateUse { how: h.to_string() },
                 (Tool::Sekisho | Tool::Cedar, "guards") => Kind::GateGuards,
+                // a module's rules, dates and other modules; its books, as a gate's and a workflow's,
+                // are what the host applies its transfers to
+                (Tool::Kaname, h @ ("use rule" | "use dates" | "use module")) => Kind::ModuleUse { how: h.to_string() },
                 _ => continue,
             };
             let to = r.target.path.clone();
@@ -571,7 +579,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         }
         let pkg = match &c.kind {
             Kind::FlowRule { connect: true, .. } => m.contexts[y].published.iter().find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q)).map(|pl| pl.package.clone()),
-            Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse | Kind::GateUse { .. } => None,
+            Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
             // the operation a gate guards, of a document or a `.proto`
@@ -702,6 +710,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::GateUse { .. } => tr!(
                     "ゲートから生成したコードは、日付とカレンダーから生成したコードを呼びます。日付のファイルとカレンダーは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
                     "The code a gate is made into calls the code made of the dates and the calendar; a dates file and a calendar cannot be a published language, and one across the boundary is read only from the two's shared kernel."
+                ),
+                Kind::ModuleUse { .. } => tr!(
+                    "kaname のモジュールから生成したコードは、読む規則と日付とほかのモジュールから生成したコードを呼ぶので、使うのはそのもの（「{yn}」の内側）です。境界の向こうのものは、二つの共有カーネルに並べてください。",
+                    "The code a module of kaname is made into calls the code made of the rules, the dates and the other modules it reads: the thing itself, inside {yn}. One across the boundary is read from the two's shared kernel."
                 ),
                 Kind::RuleApply => tr!(
                     "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼んでください。",

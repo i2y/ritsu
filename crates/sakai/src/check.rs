@@ -132,8 +132,8 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 }
 
 /// The line `check` prints when nothing is wrong (DESIGN 3.1): the crossings counted by the
-/// language of the artifact that refers, in the order proto, rulec, koyomi, dandori, rust (the
-/// manifests of Rust's crates).
+/// language of the artifact that refers, in the order proto, rulec, koyomi, dandori, sekisho,
+/// kaname, rust (the manifests of Rust's crates).
 pub fn summary(m: &Model, arts: &[Artifact], crossings: &[Crossing]) -> Text {
     use crate::naming::Tool;
     let (c, r, a, x) = (m.contexts.len(), relationship_count(m), arts.len(), crossings.len());
@@ -151,7 +151,7 @@ pub fn summary(m: &Model, arts: &[Artifact], crossings: &[Crossing]) -> Text {
     }
     // a gate's crossings that pass are its `use` lines through a shared kernel (DESIGN 17); one of
     // Cedar's is a `guards`, which never passes (E211)
-    for t in [Tool::Rulec, Tool::Koyomi, Tool::Dandori, Tool::Sekisho] {
+    for t in [Tool::Rulec, Tool::Koyomi, Tool::Dandori, Tool::Sekisho, Tool::Kaname] {
         if count(t) > 0 {
             by.push(format!("{} {}", t.word(), count(t)));
         }

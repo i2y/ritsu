@@ -1,5 +1,5 @@
 //! The commands of `ritsu` and their flags, in one table (DESIGN 8.1; ritsu-base's `cli`, as every
-//! language draws its `--help` and reads its command line). The eight languages are in the table
+//! language draws its `--help` and reads its command line). The nine languages are in the table
 //! for `ritsu --help` only: what follows `ritsu <language>` is the language's own command line.
 
 use ritsu_base::cli::{Cmd, Flag, Reading, Table, flag, help_flag, lang_flag};
@@ -12,7 +12,7 @@ pub fn global_flags() -> Vec<Flag> {
 
 /// The languages, in the order `ritsu --help` lists them, each with what `ritsu <language>` reads
 /// of the others.
-pub const LANGUAGES: [&str; 8] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho"];
+pub const LANGUAGES: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname"];
 
 /// Whether `ritsu <name> …` is a language's own command.
 pub fn is_language(name: &str) -> bool {
@@ -37,9 +37,13 @@ fn language(name: &'static str) -> Cmd {
             "sakai のコマンド（境界づけられたコンテキスト）。地図が持つ規則、カレンダー、ワークフローの参照と、規則の列挙を、同じプロセスの中で読む",
             "sakai's commands (bounded contexts), reading in the same process what the rules, calendars and workflows of a map refer to, and the enums of its rules"
         ),
-        _ => tr!(
+        "sekisho" => tr!(
             "sekisho のコマンド（だれが何をしてよいか）。ゲートが条件に使う規則、日付のファイル、カレンダーと、ワークフローのフローを、同じプロセスの中で読む",
             "sekisho's commands (who may do what), reading in the same process the rules, dates files and calendars a gate takes as conditions, and the flows of its workflows"
+        ),
+        _ => tr!(
+            "kaname のコマンド（規則と日付と帳簿をつなぐコード）。モジュールが呼ぶ規則、日付のファイル、帳簿を、同じプロセスの中で読む",
+            "kaname's commands (the code that joins rules, dates and books), reading in the same process the rules, dates files and books a module calls"
         ),
     };
     Cmd {
@@ -122,8 +126,8 @@ pub fn commands() -> Vec<Cmd> {
         params: vec![(
             "<path>...",
             tr!(
-                "ファイルかディレクトリ。無ければ今いるディレクトリ。ディレクトリは、下の .rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.proto を全部",
-                "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate and .proto under it"
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。ディレクトリは、下の .rule、.flow、.cal、.book、.geas、.req、.ctx、.gate、.kn、.proto を全部",
+                "files or directories; else the directory you are in. A directory stands for every .rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn and .proto under it"
             ),
         )],
         flags: vec![
@@ -152,14 +156,14 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローとゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
-            "write the rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units); the gates' Cedar goes once into <out>/cedar/"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、つなぐコード、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローとつなぐコードとゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
+            "write the rules, the dates, the clients of the books, the workflows, the code that joins them and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows, joining code and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units); the gates' Cedar goes once into <out>/cedar/"
         ),
         params: vec![(
             "<path>...",
             tr!(
-                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow、.gate がパッケージに入る",
-                "files or directories; else the directory you are in. The .rule, .cal, .book, .flow and .gate files under them go into the package"
+                "ファイルかディレクトリ。無ければ今いるディレクトリ。下の .rule、.cal、.book、.flow、.kn、.gate がパッケージに入る",
+                "files or directories; else the directory you are in. The .rule, .cal, .book, .flow, .kn and .gate files under them go into the package"
             ),
         )],
         flags: vec![
@@ -223,7 +227,7 @@ pub fn commands() -> Vec<Cmd> {
     cmds
 }
 
-/// `ritsu skills` (PLAN F.3): the nine Agent Skills the binary carries, listed or written where an
+/// `ritsu skills` (PLAN F.3): the ten Agent Skills the binary carries, listed or written where an
 /// agent reads them.
 fn skills() -> Cmd {
     Cmd {
@@ -231,13 +235,13 @@ fn skills() -> Cmd {
         name: "skills",
         args: "list | install [<name>...]",
         purpose: tr!(
-            "ritsu と八つの言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
-            "list the Agent Skills of ritsu and the eight languages (the guides for AI agents), or write them where an agent reads them"
+            "ritsu と九つの言語の Agent Skills（AI エージェント向けの手引き）を一覧する、またはエージェントが読む場所に書く",
+            "list the Agent Skills of ritsu and the nine languages (the guides for AI agents), or write them where an agent reads them"
         ),
         params: vec![
-            ("list", tr!("九つのスキルの名前と、何に使うか", "the names of the nine skills, and what each is for")),
+            ("list", tr!("十のスキルの名前と、何に使うか", "the names of the ten skills, and what each is for")),
             ("install", tr!("スキルを <dir>/<name>/ に書く", "write the skills as <dir>/<name>/")),
-            ("<name>...", tr!("書くスキル。無ければ九つとも", "the skills to write; else all nine")),
+            ("<name>...", tr!("書くスキル。無ければ十のスキルすべて", "the skills to write; else all ten")),
         ],
         flags: vec![
             flag("--dir", Some("<dir>"), tr!("スキルを書くディレクトリ（ほかのエージェントが読む場所）", "the directory to write the skills into (where another agent reads them)")).default(".claude/skills"),

@@ -88,6 +88,35 @@ const STOCK_BOOK_LONG: &str = "book stock v1\ndescription \"Stock per SKU. An or
 /// The flow of X5: the goods are held until the payment is due, then shipped.
 const INVOICE_FLOW: &str = "workflow invoice v1\ndescription \"Holds an order's goods until its payment is due, then ships them\"\n\nuse dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\nuse book stock from \"stock.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:stock\"\n\ninputs\n  order : string\n  sku   : string\n  qty   : int  range >=1 <=100\n\ntask reserve(order: string, sku: string, qty: int) -> stock.reserve\n  book stock.reserve.hold\n  starts stock.reserve\n  errors out_of_stock\n\ntask ship(order: string, sku: string) -> stock.reserve\n  book stock.reserve.post\n  sends post\n  errors expired\n\ncase goods : stock.reserve follows stock.reserve\n\nflow\n  goods <- reserve(order: order, sku: sku, qty: qty)\n    on out_of_stock => fail OutOfStock \"nothing left on the shelf\"\n  let due = terms.payment(received: now)\n  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"the hold expired before the payment was due\"\n";
 
+/// The module of E201: it gives the rule the amount asked for as it is, which can be more than was paid.
+const REFUND_KN: &str = "module refund v1\ndescription \"Whether a refund is paid at once or reviewed, as the rule decides for the amount the customer asks for\"\n\nuse rule check from \"refund_check.rule\"\n\nfn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> check.path\n  check(paid: paid, asked: asked).route\n";
+
+/// The module of W201: the amount asked for, capped at what was paid. kaname's ranges do not show
+/// that it keeps the precondition, and no run breaks it.
+const REFUND_KN_CAPPED: &str = "module refund v1\ndescription \"Whether a refund is paid at once or reviewed, as the rule decides for the amount asked for, capped at what was paid\"\n\nuse rule check from \"refund_check.rule\"\n\nfn route(paid: number range >=0 <=10000, asked: number range >=0 <=10000) -> check.path\n  check(paid: paid, asked: min(asked, paid)).route\n";
+
+/// The module of X3 (a) for E202: the payment day goes to the rule.
+const BILLING_KN: &str = "module billing v1\ndescription \"The billing batch of the day an order's payment is due\"\n\nuse dates terms from \"payment_terms.cal\"\nuse rule batch from \"batch.rule\"\n\nfn pick(received: date range >=2026-01-01 <=2026-12-20) -> batch.run\n  let due = terms.payment(received: received)\n  batch(pay_day: due).batch\n";
+
+/// The module of W202: the day promised goes to the rule when the days from the payment day to it
+/// are 0 or more. The `if` narrows that number, not the day, so kaname's ranges do not show the day
+/// inside the rule's range.
+const BILLING_KN_PROMISED: &str = "module billing v1\ndescription \"The billing batch of an order: that of the day the customer promised to pay, when it is no earlier than the payment day, and that of the payment day otherwise\"\n\nuse dates terms from \"payment_terms.cal\"\nuse rule batch from \"batch.rule\"\n\nfn pick(received: date range >=2026-01-01 <=2026-12-20, promised: date range >=2026-01-01 <=2027-01-31) -> batch.run\n  let due = terms.payment(received: received)\n  let grace = promised - due\n  if grace >= 0\n    batch(pay_day: promised).batch\n  else\n    batch(pay_day: due).batch\n";
+
+/// The module of X4 for E203: the seats the rule says go to the transfer the host makes.
+const BOOKING_KN: &str = "module booking v1\ndescription \"The seats to give an event, as the rule says for its kind: the transfer the host makes\"\n\nuse rule seats from \"seats.rule\"\nuse book hall from \"hall.book\"\n\nfn give(event: string, kind: seats.kind) -> hall.assign.do\n  hall.assign.do(event: event, count: seats(event_kind: kind).needed)\n";
+
+/// The module of W203: the seats needed less those held, never below 0, which kaname's ranges do not
+/// show.
+const BOOKING_KN_HELD: &str = "module booking v1\ndescription \"The seats to give an event: what the rule says its kind needs, less those it holds already, which are never more than it needs\"\n\nuse rule seats from \"seats.rule\"\nuse book hall from \"hall.book\"\n\nfn give(event: string, kind: seats.kind, held: number range >=0 <=50) -> hall.assign.do\n  let needed = seats(event_kind: kind).needed\n  hall.assign.do(event: event, count: needed - min(held, needed))\n";
+
+/// The module of X6 for E205: the payment day goes to the reminder.
+const REMINDING_KN: &str = "module reminding v1\ndescription \"The day to remind a customer, a week before an order's payment is due\"\n\nuse dates terms from \"payment_terms.cal\"\nuse dates reminders from \"reminders.cal\"\n\nfn remind(received: date range >=2026-01-01 <=2026-12-20) -> date\n  let due = terms.payment(received: received)\n  reminders.reminder(due: due)\n";
+
+/// The module of W205: the day promised goes to the reminder when the days from the payment day to it
+/// are 0 or more, as in W202's.
+const REMINDING_KN_PROMISED: &str = "module reminding v1\ndescription \"The day to remind a customer: a week before the day the customer promised to pay, when it is no earlier than the payment day, and a week before the payment day otherwise\"\n\nuse dates terms from \"payment_terms.cal\"\nuse dates reminders from \"reminders.cal\"\n\nfn remind(received: date range >=2026-01-01 <=2026-12-20, promised: date range >=2026-01-01 <=2027-01-31) -> date\n  let due = terms.payment(received: received)\n  let grace = promised - due\n  if grace >= 0\n    reminders.reminder(due: promised)\n  else\n    reminders.reminder(due: due)\n";
+
 /// The one fake key the reproductions of W901 hold (DESIGN 16.10): a Google API key that reads as
 /// a fake. It is put together from two pieces, so that no file of the source holds a key in one
 /// run; the pages of codes that `explain` writes hold it whole.
@@ -257,92 +286,92 @@ pub fn ledger() -> Ledger {
             "E201",
             tr!("規則を呼ぶところで、前提を破る値を渡すことがあります", "A call can give a rule values that break its precondition"),
             tr!(
-                "ワークフローが規則を呼ぶところで、dandori が知っている値の範囲の中に、規則の前提（入力どうしの関係 `constraint`）を破る組み合わせがあるとき。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日なら、その日のどれかが規則の日でないときも、このエラーです。前提を破る呼び出しは、規則から生成したコードが入口で受け付けないので、ワークフローを走らせたときに初めて落ちます。注には、値の範囲と、前提を破る組み合わせや日が出ます。",
-                "Where a workflow calls a rule, the ranges dandori knows for the values it gives hold a combination that breaks one of the rule's preconditions, a relation between two inputs (`constraint`). The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's. The rule's generated code refuses such a call at its door, so it would fail only when the workflow runs. The notes give the ranges and the combination or the day that breaks it."
+                "ワークフローか kaname の関数が規則を呼ぶところで、規則の前提（入力どうしの関係 `constraint`、並びの合計と長さの上限、`range from koyomi` の日）を破る値を渡すことがあるとき。ワークフローでは、dandori が知っている値の範囲の中に、前提を破る組み合わせがあるときです。範囲は dandori が値を入れるすべての場所から集めたもので、dandori の E014 と同じ読み方です。範囲を `range from koyomi` にした日付の入力では、渡す値が koyomi の日付の日なら、その日のどれかが規則の日でないときも、このエラーです。kaname の関数では、関数のベクタを流したときに前提を破る値を渡す入力があるときです。kaname の範囲は上からの見積もりで、範囲の角は起きないことがあるので、角だけでは例にしません。前提を破る呼び出しは、規則から生成したコードが入口で受け付けないので、走らせたときに初めて落ちます。注には、値の範囲と前提を破る組み合わせや日か、前提を破る関数の入力が出ます。",
+                "Where a workflow or a function of kaname calls a rule, it can give the rule values that break one of its preconditions (a relation between inputs, `constraint`; a bound on the total or the length of the list it walks; the days of `range from koyomi`). For a workflow, the ranges dandori knows for the values it gives hold a combination that breaks it. The ranges are dandori's, gathered from every place a value comes from, read as dandori's E014 reads them. A date input whose range is `range from koyomi` and is given the day of a koyomi date is this error too when one of those days is not one of the rule's. For a function of kaname, a run of the function's vectors gives values that break it: kaname's ranges are an estimate from above, so a corner of them alone is no example. The rule's generated code refuses such a call at its door, so it would fail only when it runs. The notes give the ranges and the combination or the day that breaks it, or the function's input that does."
             ),
             tr!(
-                "呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`）。前提のほうが業務に合っていないなら、規則の `constraint` を直してください。",
-                "Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result). If the precondition is the part that is wrong, correct the rule's `constraint`."
+                "呼ぶ前に前提が保たれるよう分岐するか、値の範囲を狭めてください（入力やタスクの結果の `range`。kaname では、呼ぶ前の `if`）。前提のほうが業務に合っていないなら、規則の `constraint` を直してください。",
+                "Branch so that the precondition holds before the call, or narrow the ranges (the `range` of an input or a task's result; in kaname, an `if` before the call). If the precondition is the part that is wrong, correct the rule's `constraint`."
             ),
-            Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW), ("refund.kn", REFUND_KN)], command: CHECK.to_vec() },
             &["W201"],
         ),
         Entry::new(
             "W201",
             tr!("規則を呼ぶところで、前提が保たれるかを決められません", "Whether a call keeps a rule's precondition cannot be decided"),
             tr!(
-                "ワークフローが規則を呼ぶところで、前提が保たれるかを決められないとき。渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。",
-                "Where a workflow calls a rule, whether a precondition holds cannot be decided: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`."
+                "ワークフローか kaname の関数が規則を呼ぶところで、前提が保たれるかを決められないとき。ワークフローでは、渡す値に範囲の無いところから来るものがある（タスクの結果に `range` が無い、など）、前提が並びの合計や長さの上限である（dandori は並びの長さを知りません）、前提が koyomi の日付の日で、渡す値が何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来る、のどれかです。決められない前提は、`ritsu dandori build` が書くワークフローのコードが実行時に確かめます。値ができたところですぐに確かめ、前提を破る実行を `Dandori.BrokenPrecondition` で失敗させます。kaname の関数では、範囲の解析が見積もった範囲と、kaname が知っている入力どうしの関係で示せず、関数のベクタにも前提を破る入力が無いときです。kaname の生成したコードがその場所で確かめ、規則が受け付けない呼び出しでは、関数が `rule` で失敗します。",
+                "Where a workflow or a function of kaname calls a rule, whether a precondition holds cannot be decided. For a workflow: a value comes from a place with no range (a task's result without `range`, say), the precondition bounds the total or the length of a list (dandori knows no list's length), or it is the days of a koyomi date and the value can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`). The workflow's code that `ritsu dandori build` writes checks such a precondition when the workflow runs, as soon as the values are made, and fails a run that breaks it with `Dandori.BrokenPrecondition`. For a function of kaname: neither the ranges kaname finds nor a relation it keeps between the inputs shows it, and no run of the function's vectors breaks it. kaname's generated code checks it there, and the function fails with `rule` where the rule refuses the call."
             ),
             tr!(
-                "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。",
-                "Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time."
+                "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。範囲を書けないなら、このままで構いません。ワークフローのコードが実行時に確かめます。kaname では、呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡してください。",
+                "Give the place the value comes from a range (the `range` of a task's result or of the workflow's input). Where none can be given, leave it: the workflow's code checks it at run time. In kaname, branch on the precondition with an `if` before the call, or give values whose relation kaname keeps (the running totals of `running_totals`)."
             ),
-            Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW_OPEN)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("refund_check.rule", REFUND_RULE), ("refund.flow", REFUND_FLOW_OPEN), ("refund.kn", REFUND_KN_CAPPED)], command: CHECK.to_vec() },
             &["E201"],
         ),
         Entry::new(
             "E202",
-            tr!("koyomi の日付がとる日が、規則の入力の範囲を外れます", "The days a koyomi date comes to fall outside a rule input's range"),
+            tr!("規則の日付の入力に渡す日が、入力の範囲を外れます", "A day given to a rule's date input falls outside its range"),
             tr!(
-                "ワークフローが koyomi の日付の日（`due.day`）を規則の日付の入力に渡すとき、koyomi がその日付について数えた日のどれかが、規則が宣言した入力の範囲の外にあるとき。koyomi は入力の範囲のすべてで日付を計算するので、外れる日は例として一つに決まります。注には、その日と、koyomi がその日を返す入力が出ます。範囲を `range from koyomi` にした入力では、日は規則の前提なので、E201 と W201 が確かめます。",
-                "Where a workflow gives the day of a koyomi date (`due.day`) to a rule's date input, a day koyomi counts that date coming to lies outside the range the rule declares for the input. koyomi computes the date on every input of its range, so the day outside is an exact example; the notes give it, with the input at which koyomi comes to it. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to."
+                "ワークフローか kaname の関数が規則の日付の入力に日を渡すとき、その日が、規則が宣言した入力の範囲の外になることがあるとき。ワークフローでは、koyomi の日付の日（`due.day`）を渡すときで、koyomi がその日付について数えた日のどれかが範囲の外にあるときです。koyomi は入力の範囲のすべてで日付を計算するので、外れる日は例として一つに決まります。注には、その日と、koyomi がその日を返す入力が出ます。kaname の関数では、koyomi の日付の日や、範囲の解析が見積もった日のうち、範囲の外の日を渡す入力が、関数のベクタにあるときです。注には、その関数の入力と日が出ます。範囲を `range from koyomi` にした入力では、日は規則の前提なので、E201 と W201 が確かめます。",
+                "Where a workflow or a function of kaname gives a day to a rule's date input, the day can lie outside the range the rule declares for the input. For a workflow, the day of a koyomi date (`due.day`) is given, and a day koyomi counts that date coming to lies outside: koyomi computes the date on every input of its range, so the day outside is an exact example, and the notes give it with the input at which koyomi comes to it. For a function of kaname, a run of the function's vectors gives a day outside, of the days of the koyomi dates the value comes from or of the range kaname finds; the notes give the function's input and the day. An input whose range is `range from koyomi` takes the days as a precondition of the rule, which E201 and W201 hold the call to."
             ),
             tr!(
                 "規則の入力の範囲を広げるか、規則の範囲を `range from koyomi` にして、koyomi の日をそのまま範囲にしてください。",
                 "Widen the rule input's range, or make it `range from koyomi`, so that koyomi's days are the range."
             ),
-            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("batch.rule", BATCH_RULE), ("billing.flow", BILLING_FLOW)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("batch.rule", BATCH_RULE), ("billing.flow", BILLING_FLOW), ("billing.kn", BILLING_KN)], command: CHECK.to_vec() },
             &["W202", "E205"],
         ),
         Entry::new(
             "W202",
-            tr!("koyomi の日付がとる日が、規則の入力の範囲に収まるかを決められません", "Whether the days of a koyomi date stay inside a rule input's range cannot be decided"),
+            tr!("規則の日付の入力に渡す日が、入力の範囲に収まるかを決められません", "Whether a day given to a rule's date input stays inside its range cannot be decided"),
             tr!(
-                "規則の日付の入力に渡す値が、koyomi の日付の日のほかに、何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来ることがあるとき、または koyomi がその日付の日を数えないとき（入力の組み合わせが確かめる数を超える、途中で計算が止まる入力がある）。規則から生成したコードが、ワークフローを走らせたときに入口で日を確かめます。",
-                "The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). The rule's generated code checks the day at its door when the workflow runs."
+                "規則の日付の入力に渡す値が、koyomi の日付の日のほかに、何日かを言わないところ（ワークフローの入力、タスクの結果、`now`）からも来ることがあるとき、または koyomi がその日付の日を数えないとき（入力の組み合わせが確かめる数を超える、途中で計算が止まる入力がある）。kaname の関数では、範囲の解析が見積もった日に範囲の外の日があり、関数のベクタにはその日を渡す入力が無いときも、この警告です。規則から生成したコードが、走らせたときに入口で日を確かめます。",
+                "The value given to a rule's date input can come from somewhere that says nothing of what day it is (an input of the workflow, a task's answer, `now`) as well as from a koyomi date, or koyomi does not count the days of the date (more input combinations than it checks, or an input where the computation stops). For a function of kaname, it is also the days kaname's ranges find holding one outside, which no run of the function's vectors gives. The rule's generated code checks the day at its door when it runs."
             ),
             tr!(
                 "値を koyomi の日付の日だけから渡せば、決められるようになります。koyomi が日を数えないなら、koyomi のファイルの入力の範囲を狭めてください。",
                 "Give the input days of koyomi dates only, and it can be decided; where koyomi does not count them, narrow the inputs of its file."
             ),
-            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("batch.rule", BATCH_RULE_WIDE), ("billing.flow", BILLING_FLOW_EITHER)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("batch.rule", BATCH_RULE_WIDE), ("billing.flow", BILLING_FLOW_EITHER), ("billing.kn", BILLING_KN_PROMISED)], command: CHECK.to_vec() },
             &["E202"],
         ),
         Entry::new(
             "E203",
-            tr!("規則の出力が、chobo の受け取らない額になることがあります", "A rule's output can be an amount chobo does not take"),
+            tr!("振替に渡す額が、chobo の受け取らない額になることがあります", "An amount given to a transfer can be one chobo does not take"),
             tr!(
-                "ワークフローが規則の数の出力を chobo の振替の額に渡すとき、その出力が負か 2⁶³ − 1 を超えることがあるとき（chobo は 0 から 2⁶³ − 1 までを受け取ります）。出力の値は rulec が求めます（表の行に書いた数か、区間の計算から）。chobo は範囲の外の額を、拒否する（業務の結果）のではなく呼び出しの失敗にします。注には、その額になる規則の入力の例（規則のベクタから取ったもの）が出ます。",
-                "Where a workflow gives a rule's numeric output to a chobo transfer as its amount, the output can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1). rulec counts what the output comes to (the numbers the rows write, or its intervals). chobo fails such a call rather than refusing it as a business outcome. The notes give an input of the rule that comes to that amount, from the rule's vectors."
+                "振替の額が、負か 2⁶³ − 1 を超えることがあるとき（chobo は 0 から 2⁶³ − 1 までを受け取ります）。chobo は範囲の外の額を、拒否する（業務の結果）のではなく呼び出しの失敗にします。ワークフローでは、規則の数の出力を chobo の振替の額に渡すときに確かめます。出力の値は rulec が求めます（表の行に書いた数か、区間の計算から）。注には、その額になる規則の入力の例（規則のベクタから取ったもの）が出ます。kaname の関数では、規則の出力でも kaname が計算した額でも、どの額も確かめ、関数のベクタにその額になる入力があるときにこのエラーにします。注には、その関数の入力と額が出ます。",
+                "An amount of a transfer can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1), and chobo fails such a call rather than refusing it as a business outcome. For a workflow, it is checked where a rule's numeric output is given to a chobo transfer as its amount: rulec counts what the output comes to (the numbers the rows write, or its intervals), and the notes give an input of the rule that comes to that amount, from the rule's vectors. For a function of kaname, every amount is checked, a rule's output or one kaname computes, and it is this error where a run of the function's vectors comes to such an amount; the notes give the function's input and the amount."
             ),
             tr!(
-                "規則が返す額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けてください）、振替に渡す前に分岐してください。",
-                "Make the rule's amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer."
+                "額を 0 以上にするか（返金などの負の額は、向きの違う振替に分けてください）、振替に渡す前に分岐してください。",
+                "Make the amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer."
             ),
-            Repro::Dir { files: vec![("seats.rule", SEATS_RULE_HANDBACK), ("hall.book", HALL_BOOK), ("booking.flow", BOOKING_FLOW)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("seats.rule", SEATS_RULE_HANDBACK), ("hall.book", HALL_BOOK), ("booking.flow", BOOKING_FLOW), ("booking.kn", BOOKING_KN)], command: CHECK.to_vec() },
             &["W203", "E204"],
         ),
         Entry::new(
             "W203",
-            tr!("規則の出力を、chobo が額として受け取るかを決められません", "Whether chobo takes a rule's output as an amount cannot be decided"),
+            tr!("振替に渡す額を、chobo が受け取るかを決められません", "Whether chobo takes an amount given to a transfer cannot be decided"),
             tr!(
-                "ワークフローが規則の数の出力を振替の額に渡すとき、出力の範囲に上限か下限が無いか、値が範囲の分からないところ（範囲の無いタスクの結果など）からも来ることがあるとき。chobo が受け取らない額なら、ワークフローを走らせたときに呼び出しが失敗します。",
-                "Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say). An amount chobo does not take fails the call when the workflow runs."
+                "ワークフローが規則の数の出力を振替の額に渡すとき、出力の範囲に上限か下限が無いか、値が範囲の分からないところ（範囲の無いタスクの結果など）からも来ることがあるとき。chobo が受け取らない額なら、ワークフローを走らせたときに呼び出しが失敗します。kaname の関数では、範囲の解析が見積もった額が chobo の受け取る範囲に収まらず、関数のベクタにはその額になる入力が無いときです。kaname の生成したコードが振替を組み立てるところで額を確かめ、受け取らない額なら関数が `range` で失敗します。",
+                "Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say); an amount chobo does not take fails the call when the workflow runs. For a function of kaname, the amounts kaname's ranges find do not stay inside what chobo takes, and no run of the function's vectors comes to one outside; kaname's generated code checks the amount where it builds the transfer, and the function fails with `range` for one chobo does not take."
             ),
             tr!(
-                "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。",
-                "Give the places the value comes from a range (the `range` of a task's answer or of the workflow's input)."
+                "値の来るところに範囲を書いてください（タスクの結果やワークフローの入力の `range`）。kaname では、振替の前に `if` で額を狭めてください。",
+                "Give the places the value comes from a range (the `range` of a task's answer or of the workflow's input). In kaname, narrow the amount with an `if` before the transfer."
             ),
-            Repro::Dir { files: vec![("seats.rule", SEATS_RULE), ("hall.book", HALL_BOOK), ("booking.flow", BOOKING_FLOW_ASKED)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("seats.rule", SEATS_RULE), ("hall.book", HALL_BOOK), ("booking.flow", BOOKING_FLOW_ASKED), ("booking.kn", BOOKING_KN_HELD)], command: CHECK.to_vec() },
             &["E203"],
         ),
         Entry::new(
             "E204",
             tr!("振替が拒否されうる理由を、タスクが処理していません", "The task does not handle a refusal the transfer can come to"),
             tr!(
-                "規則の出力を額に渡す `do` か `hold` の呼び出しで、操作が拒否されうる理由を、タスクが宣言したエラーとして処理していないとき。拒否されうる理由とは、額を呼び出しが渡す範囲に限った chobo の探索で、拒否される例が見つかった理由です。比べるのは帳簿の境界の理由（勘定の `refused as`）、つまり額で決まる拒否だけです。同じキーを別の引数で使い直すことのように、前の呼び出しで決まる拒否は比べません。探索は chobo の検査と同じ深さまでたどります。`post` と `void` は仮押さえの状態で拒否され、dandori が案件の状態ごとに確かめます（dandori の E022）。",
-                "Where a `do` or a `hold` is given a rule's output as its amount, chobo's search, with the amounts held to the range the call gives, finds a run in which the operation is refused for a reason the task does not handle as an error it declares. Only the reasons of the book's bounds (an account's `refused as`) are compared, the refusals that turn on the amounts; one that turns on the calls made before, such as a key used again with other arguments, is not. The search goes as deep as chobo's check goes. A `post` and a `void` are refused for the state their hold is in, which dandori follows with the case (dandori's E022)."
+                "規則の出力を額に渡す `do` か `hold` の呼び出しで、操作が拒否されうる理由を、タスクが宣言したエラーとして処理していないとき。拒否されうる理由とは、額を呼び出しが渡す範囲に限った chobo の探索で、拒否される例が見つかった理由です。比べるのは帳簿の境界の理由（勘定の `refused as`）、つまり額で決まる拒否だけです。同じキーを別の引数で使い直すことのように、前の呼び出しで決まる拒否は比べません。探索は chobo の検査と同じ深さまでたどります。`post` と `void` は仮押さえの状態で拒否され、dandori が案件の状態ごとに確かめます（dandori の E022）。kaname の関数が組み立てる振替には、このエラーを出しません。拒否を扱うのは振替を当てるホストで、探索が見つけた理由は、kaname が生成する振替の型に載ります（W204）。",
+                "Where a `do` or a `hold` is given a rule's output as its amount, chobo's search, with the amounts held to the range the call gives, finds a run in which the operation is refused for a reason the task does not handle as an error it declares. Only the reasons of the book's bounds (an account's `refused as`) are compared, the refusals that turn on the amounts; one that turns on the calls made before, such as a key used again with other arguments, is not. The search goes as deep as chobo's check goes. A `post` and a `void` are refused for the state their hold is in, which dandori follows with the case (dandori's E022). A transfer a function of kaname builds does not get this error: the host that applies it handles a refusal, and the reasons the search finds go on the type kaname generates for the transfer (W204)."
             ),
             tr!(
                 "その理由をタスクのエラーとして宣言し、処理してください。",
@@ -355,8 +384,8 @@ pub fn ledger() -> Ledger {
             "W204",
             tr!("振替がどの理由で拒否されうるかを決められません", "Which refusals a transfer can come to cannot be decided"),
             tr!(
-                "タスクが帳簿の境界の理由を処理しているのに、額を呼び出しが渡す範囲に限った chobo の探索で、その理由で拒否される例が見つからないとき。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです。額の範囲が分からないときや、chobo から帳簿の情報を得られないときも、この警告で「決められない」と知らせます。",
-                "The task handles a reason of the book's bounds, and chobo's search, with the amounts held to the range the call gives, finds no run that comes to it. The search goes only as deep as chobo's check does, so all it shows is that the reason does not come within that depth. A case that cannot be decided at all (no range for the amounts, a book that does not answer) is this warning too."
+                "タスクが帳簿の境界の理由を処理しているのに、額を呼び出しが渡す範囲に限った chobo の探索で、その理由で拒否される例が見つからないとき。探索は chobo の検査と同じ深さまでしかたどらないので、起きないと言えるのはその深さまでです。額の範囲が分からないときや、chobo から帳簿の情報を得られないときも、この警告で「決められない」と知らせます。kaname の関数が組み立てる `do` と `hold` では、拒否を扱うのは振替を当てるホストで、探索が見つけた理由を、kaname が生成する振替の型に載せます。決められないときにだけこの警告を出し、型には帳簿の境界の理由を全部載せます。",
+                "The task handles a reason of the book's bounds, and chobo's search, with the amounts held to the range the call gives, finds no run that comes to it. The search goes only as deep as chobo's check does, so all it shows is that the reason does not come within that depth. A case that cannot be decided at all (no range for the amounts, a book that does not answer) is this warning too. For a `do` or a `hold` a function of kaname builds, the host that applies the transfer handles a refusal, and the reasons the search finds go on the type kaname generates for the transfer; only a case that cannot be decided is this warning, and the type then lists every reason of the book's bounds."
             ),
             tr!(
                 "起きない理由なら、タスクのエラーから外してください。深い手順でしか起きないなら、そのままで構いません。",
@@ -369,28 +398,28 @@ pub fn ledger() -> Ledger {
             "E205",
             tr!("koyomi の日付に渡す日が、入力の範囲を外れます", "A day given to a koyomi date is outside its input's range"),
             tr!(
-                "ワークフローが koyomi の日付を呼ぶとき、日付の入力に渡す日が、koyomi の入力の範囲を外れることがあるとき。渡す日がほかの koyomi の日付の日なら、koyomi が数えたその日の全部で確かめます。範囲の中の日なら、カレンダーに問い合わせる日がデータの範囲に収まることを、koyomi の検査が確かめています（koyomi の E203）。注には、外れる日と、koyomi がその日を返す入力が出ます。",
-                "Where a workflow calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). The notes give the day outside and the input at which koyomi comes to it."
+                "ワークフローか kaname の関数が koyomi の日付を呼ぶとき、日付の入力に渡す日が、koyomi の入力の範囲を外れることがあるとき。渡す日がほかの koyomi の日付の日なら、koyomi が数えたその日の全部で確かめます。範囲の中の日なら、カレンダーに問い合わせる日がデータの範囲に収まることを、koyomi の検査が確かめています（koyomi の E203）。ワークフローでは、注に、外れる日と、koyomi がその日を返す入力が出ます。kaname の関数では、範囲の外の日を渡す入力が関数のベクタにあるときで、注には、その関数の入力と日が出ます。",
+                "Where a workflow or a function of kaname calls a koyomi date, the day it gives the date input can be outside the range of that input. A day of another koyomi date is held to it with every day koyomi counts for that date. A day inside the range is one koyomi's own check has held to the data of its calendar wherever it asks the calendar (koyomi's E203). For a workflow, the notes give the day outside and the input at which koyomi comes to it; for a function of kaname, a run of the function's vectors gives a day outside, and the notes give the function's input and the day."
             ),
             tr!(
-                "koyomi の入力の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください。",
-                "Widen the koyomi input's range (and the calendar's data), or give it a day that stays inside."
+                "koyomi の入力の範囲を広げるか（カレンダーのデータも足してください）、範囲に収まる日を渡してください（kaname では、呼ぶ前の `if` で狭めます）。",
+                "Widen the koyomi input's range (and the calendar's data), or give it a day that stays inside (in kaname, narrow it with an `if` before the call)."
             ),
-            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("reminders.cal", REMINDERS_CAL), ("reminding.flow", REMINDING_FLOW)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("reminders.cal", REMINDERS_CAL), ("reminding.flow", REMINDING_FLOW), ("reminding.kn", REMINDING_KN)], command: CHECK.to_vec() },
             &["W205", "E202"],
         ),
         Entry::new(
             "W205",
             tr!("koyomi の日付に渡す日が、範囲に収まるかを決められません", "Whether a day given to a koyomi date stays inside its range cannot be decided"),
             tr!(
-                "ワークフローが koyomi の日付の入力に渡す日を、dandori が知らないとき。ワークフローの入力、タスクの結果、`now` から来る日は、何日かを言いません。dandori には、日付の範囲を書く書き方がまだありません。範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。",
-                "dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date. koyomi's generated code refuses a day outside its range when the workflow runs."
+                "ワークフローが koyomi の日付の入力に渡す日を、dandori が知らないとき。ワークフローの入力、タスクの結果、`now` から来る日は、何日かを言いません。dandori には、日付の範囲を書く書き方がまだありません。範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。kaname の関数では、範囲の解析が見積もった日に範囲の外の日があり、関数のベクタにはその日を渡す入力が無いときです。kaname の生成したコードがその場所で確かめ、koyomi が受け付けない日では、関数が `date` で失敗します。",
+                "dandori does not know the day a workflow gives a koyomi date's input: a day that comes from an input of the workflow, a task's answer or `now` says nothing of what day it is, and dandori has no way yet to write the range of a date; koyomi's generated code refuses a day outside its range when the workflow runs. For a function of kaname, the days kaname's ranges find hold one outside the range, which no run of the function's vectors gives; kaname's generated code checks it there, and the function fails with `date` where koyomi refuses the day."
             ),
             tr!(
                 "ほかの koyomi の日付の日を渡せば、決められるようになります。そうでなければ、このままで構いません。範囲の外の日は、koyomi が実行時に受け付けません。",
                 "Give it the day of another koyomi date, and it can be decided; otherwise leave it: koyomi refuses at run time."
             ),
-            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("reminders.cal", REMINDERS_CAL_WIDE), ("reminding.flow", REMINDING_FLOW)], command: CHECK.to_vec() },
+            Repro::Dir { files: vec![("payment_terms.cal", TERMS_CAL), ("reminders.cal", REMINDERS_CAL_WIDE), ("reminding.flow", REMINDING_FLOW), ("reminding.kn", REMINDING_KN_PROMISED)], command: CHECK.to_vec() },
             &["E205"],
         ),
         Entry::new(

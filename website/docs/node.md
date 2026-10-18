@@ -32,10 +32,10 @@ nothing is set.
 
 ## The commands
 
-The package puts nine commands into `node_modules/.bin`: `ritsu`, and `rulec`, `dandori`, `koyomi`,
-`chobo`, `geas`, `yuen`, `sakai` and `sekisho`, each the same as `ritsu <language> …`, as the links
-of a release's archive are. In a project with a rule, a calendar, a dates file, a ledger and a
-workflow:
+The package puts ten commands into `node_modules/.bin`: `ritsu`, and `rulec`, `dandori`, `koyomi`,
+`chobo`, `geas`, `yuen`, `sakai`, `sekisho` and `kaname`, each the same as `ritsu <language> …`, as
+the links of a release's archive are. In a project with a rule, a calendar, a dates file, a ledger
+and a workflow:
 
 <!-- run in crates/ritsu/tests/projects/stockroom -->
 ```console
@@ -161,7 +161,7 @@ when the program it needs is missing:
 Everything else runs as the native binary does: every language's `check`, `ritsu check` across the
 languages, `ritsu gen` and `ritsu run`, every `doc`, `api`, `vectors`, `export`, `trace`, `affected`,
 `scenarios` and `explain`, and `ritsu skills install`. Each release holds the package to the native
-binary on the examples of the eight languages, ritsu's test projects and the projects of the
+binary on the examples of the nine languages, ritsu's test projects and the projects of the
 [playground](playground.md): the same output, the same exit code and the same files written, for
 every command a person runs there, in English and in Japanese.
 

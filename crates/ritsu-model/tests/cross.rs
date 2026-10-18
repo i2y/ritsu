@@ -11,6 +11,11 @@
 //!   with an input whose range is a koyomi date, checked as `ritsu check` checks them; the values
 //!   the call gives are what dandori's port says (`Flows::crossings`), and the answer is what
 //!   `ritsu check` says of the precondition (E201 with its example, W201, or nothing).
+//! - X2 at a call of kaname (`ProgramVerdicts`): small modules that call a rule with a `constraint`,
+//!   under a condition that keeps a relation between the two values, with none, with the values
+//!   swapped, and with one value to both; the relations, ranges and runs are what kaname's port says
+//!   (`Programs::crossings` and `seen`), and the answer is the verdict ritsu-cross hands kaname
+//!   (shown, the run that breaks it, or undecided).
 //! - X3 (a): every date of every dates file of koyomi's examples and fixtures that passes its check
 //!   (the port answers for no other: the examples that break a claim on purpose are left out) —
 //!   the set of days koyomi's port hands over (`Dates::values`) against the set the model computes
@@ -35,7 +40,7 @@ use koyomi::check::{Checked, DEFAULT_BUDGET, check};
 use ritsu_base::text::Lang;
 use ritsu_cross::borders::{amount_fits, amounts_given, amounts_hull, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom};
 use ritsu_model::{compare, program};
-use ritsu_ports::{Answer, Books, DateKind, Dates, Flows, Found, Origin, OutputValues, Precondition, Rules, Value as Wire, Values};
+use ritsu_ports::{Answer, Books, Crossing, DateKind, Dates, Flows, Found, Origin, OutputValues, Precondition, Programs, Rules, Value as Wire, Values, Verdicts};
 use ritsu_testkit::{Need, TempDir, ready};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -299,6 +304,110 @@ fn x2_at_the_call_is_the_models_decision() {
     assert!(answers.iter().any(|a| a.contains("\"day\"")), "no day was given as an example");
     let lines = run(&bin, &tmp, &json!({}), "x2 at the call", rows);
     assert_eq!(lines, OPS.len() * cases.len() + days_cases.len());
+}
+
+// ── X2: the decision at a call of kaname ──────────────────────────────────────────────────────
+
+/// A module of kaname that calls the rule `check` with what `BODY` gives it.
+const CALL_MODULE: &str = "module call v1\n\nuse rule check from \"check.rule\"\n\nfn f(x: number range XR, y: number range YR) -> check.verdict?\n  BODY\n";
+
+/// What a call of a module of kaname gives one input, as `RitsuCross.Arg` reads it: as the module
+/// writes it, and the range kaname finds (every value it gives a number comes from kaname's own
+/// ranges, a place that says nothing of what day it is).
+fn given_json(g: Option<&ritsu_ports::Given>) -> Value {
+    match g {
+        None => Value::Null,
+        Some(g) => json!({"shown": g.shown, "range": [end(g.range.0), end(g.range.1)], "origins": g.from.iter().map(|_| json!("other")).collect::<Vec<_>>()}),
+    }
+}
+
+#[test]
+fn x2_at_a_call_of_kaname_is_the_models_decision() {
+    let Some(bin) = model() else { return };
+    let tmp = TempDir::new("model-cross-kaname");
+    // a relation kept by a condition (`<=`, `<`, `=`), none, the values swapped, one value to both,
+    // and two values the corner of their ranges breaks though no run does
+    let bodies = [
+        ("kept", "if x <= y then check(a: x, b: y).r else none"),
+        ("strict", "if x < y then check(a: x, b: y).r else none"),
+        ("equal", "if x = y then check(a: x, b: y).r else none"),
+        ("none", "check(a: x, b: y).r"),
+        ("swapped", "if x <= y then check(a: y, b: x).r else none"),
+        ("same", "check(a: x, b: x).r"),
+        ("bounded", "check(a: min(x, y), b: max(x, y)).r"),
+    ];
+    let ranges = [("0 10", "0 10"), ("0 5", "5 10"), ("-5 0", "0 10"), ("10 20", "0 5")];
+    let range = |r: &str| {
+        let (lo, hi) = r.split_once(' ').unwrap();
+        format!(">={lo} <={hi}")
+    };
+    let mut rows = Vec::new();
+    let mut n = 0;
+    let (mut held, mut failed, mut undecided, mut by_relation, mut unreached) = (0, 0, 0, 0, 0);
+    for op in OPS {
+        for (what, body) in bodies {
+            for (xr, yr) in ranges {
+                let dir = tmp.path().join(format!("k{n}"));
+                n += 1;
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(dir.join("check.rule"), CHECK_RULE.replace("OP", op)).unwrap();
+                let kn = dir.join("call.kn");
+                std::fs::write(&kn, CALL_MODULE.replace("XR", &range(xr)).replace("YR", &range(yr)).replace("BODY", body)).unwrap();
+                let joined = ritsu_project::Joined::new();
+                let calls = joined.kaname.crossings(&kn, &joined.ports()).unwrap_or_else(|e| panic!("{what}: the module does not pass kaname's check: {e:?}")).rules;
+                // a branch the ranges never reach makes no call
+                let Some(call) = calls.first() else {
+                    unreached += 1;
+                    continue;
+                };
+                assert_eq!(calls.len(), 1, "{what}");
+                let arg = |name: &str| call.args.iter().find(|g| g.to == name);
+                // what the runs of the function's vectors gave the two inputs at the call
+                let int = |v: &Wire| match v {
+                    Wire::Int(i) => Some(*i),
+                    _ => None,
+                };
+                let runs: Vec<Value> = joined
+                    .kaname
+                    .seen(&kn, &joined.ports(), &call.function)
+                    .iter()
+                    .filter(|s| s.at == call.at)
+                    .filter_map(|s| {
+                        let of = |n: &str| s.given.iter().find(|(m, _)| m == n).and_then(|(_, v)| int(v));
+                        Some(json!([of("a")?, of("b")?]))
+                    })
+                    .collect();
+                let verdicts = ritsu_cross::ProgramVerdicts::new(&joined).verdicts(&kn);
+                let pre: Vec<_> = verdicts.iter().filter(|v| v.check == Crossing::Precondition).collect();
+                assert_eq!(pre.len(), 1, "{what}: one precondition at one call");
+                let rust = match &pre[0].outcome {
+                    Answer::Holds => {
+                        held += 1;
+                        "\"holds\"".to_string()
+                    }
+                    Answer::Undecided(_) => {
+                        undecided += 1;
+                        "\"undecided\"".to_string()
+                    }
+                    Answer::Fails(seen) => {
+                        failed += 1;
+                        let of = |n: &str| seen.given.iter().find(|(m, _)| m == n).and_then(|(_, v)| int(v)).unwrap();
+                        json!({"fails": {"at": [of("a"), of("b")]}}).to_string()
+                    }
+                };
+                let rels: Vec<Value> = call.relations.iter().map(|(a, r, b)| json!([a, r, b])).collect();
+                if !rels.is_empty() && rust == "\"holds\"" {
+                    by_relation += 1;
+                }
+                let line = json!({"x2k": {"op": op, "names": ["a", "b"], "left": given_json(arg("a")), "right": given_json(arg("b")), "scales": [1, 1], "rels": rels, "runs": runs}});
+                rows.push((line.to_string(), rust));
+            }
+        }
+    }
+    println!("x2 at a call of kaname: {held} shown ({by_relation} with a relation kept), {failed} broken by a run, {undecided} undecided; {unreached} calls in a branch never reached");
+    assert!(held > 0 && failed > 0 && undecided > 0 && by_relation > 0, "every verdict comes: {held} {failed} {undecided} {by_relation}");
+    let lines = run(&bin, &tmp, &json!({}), "x2 at a call of kaname", rows);
+    assert_eq!(lines + unreached, OPS.len() * bodies.len() * ranges.len());
 }
 
 // ── X3 (a): the days of every koyomi date ─────────────────────────────────────────────────────

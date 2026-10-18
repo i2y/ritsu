@@ -1,6 +1,6 @@
-//! `ritsu skills` (PLAN F.3): the nine Agent Skills, carried in the binary, so that an agent that
+//! `ritsu skills` (PLAN F.3): the ten Agent Skills, carried in the binary, so that an agent that
 //! has only `ritsu` gets the guides this repository has. The files are `skills/<name>/` at the root,
-//! taken in as they are (`include_str!`), one skill for ritsu and one for each of the eight
+//! taken in as they are (`include_str!`), one skill for ritsu and one for each of the nine
 //! languages, as geas's `geas skill --install` takes in its own.
 //!
 //! `ritsu skills list` names them; `ritsu skills install` writes them as `<dir>/<name>/`, where
@@ -22,7 +22,7 @@ pub struct Skill {
     pub files: &'static [(&'static str, &'static str)],
 }
 
-/// The nine skills, ritsu's first and then the languages in the order `ritsu --help` lists them.
+/// The ten skills, ritsu's first and then the languages in the order `ritsu --help` lists them.
 pub const SKILLS: &[Skill] = &[
     Skill {
         name: "ritsu",
@@ -118,6 +118,14 @@ pub const SKILLS: &[Skill] = &[
             ("reference.md", include_str!("../../../skills/sekisho/reference.md")),
         ],
     },
+    Skill {
+        name: "kaname",
+        files: &[
+            ("SKILL.md", include_str!("../../../skills/kaname/SKILL.md")),
+            ("codes.md", include_str!("../../../skills/kaname/codes.md")),
+            ("reference.md", include_str!("../../../skills/kaname/reference.md")),
+        ],
+    },
 ];
 
 /// What `ritsu skills list` says of a skill, in a line.
@@ -134,7 +142,8 @@ pub fn purpose(name: &str) -> Text {
         "geas" => tr!("人が読んだ主張に、コードを従わせる（.geas）", "claims a person has read, held over the code (.geas)"),
         "yuen" => tr!("要件の来歴（.req）", "where requirements come from (.req)"),
         "sakai" => tr!("境界づけられたコンテキストの地図（.ctx）", "maps of bounded contexts (.ctx)"),
-        _ => tr!("だれが何をしてよいかを書き、Cedar を生成する（.gate）", "who may do what, compiled to Cedar (.gate)"),
+        "sekisho" => tr!("だれが何をしてよいかを書き、Cedar を生成する（.gate）", "who may do what, compiled to Cedar (.gate)"),
+        _ => tr!("規則と日付と帳簿をつなぐコード（.kn）", "the code that joins rules, dates and books (.kn)"),
     }
 }
 

@@ -16,14 +16,14 @@ fn here() -> PathBuf {
 fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args);
-    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
+    for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
         c.env_remove(v);
     }
     let o = c.output().expect("could not run ritsu");
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
-const TOOLS: [&str; 9] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "ritsu"];
+const TOOLS: [&str; 10] = ["rulec", "dandori", "koyomi", "chobo", "geas", "yuen", "sakai", "sekisho", "kaname", "ritsu"];
 
 /// The text without the tools' words in the headlines: `[rulec E032]` is `[E032]` again.
 fn without_tools(s: &str) -> String {
@@ -374,4 +374,37 @@ fn a_warning_of_a_file_that_passes_is_counted_with_the_files_that_pass() {
     let (code, out, _) = ritsu_in(d, &["check", ".", "--lang", "en"]);
     assert_eq!(code, 0, "{out}");
     assert!(last(&out).contains(": all pass (2 warnings); "), "{out}");
+}
+
+/// A project with modules of kaname (kaname's PLAN B.6): `ritsu check` checks each `.kn` after the
+/// rules and the books it calls, with them joined, and says of it what `ritsu kaname check` says;
+/// a mistake in a module fails the project with kaname's word in its headline.
+#[test]
+fn the_modules_of_kaname_are_checked_as_kaname_checks_them() {
+    let t = TempDir::new("kaname-project");
+    ritsu_testkit::tmp::copy_dir(&here().join("../kaname/examples/payout"), t.path());
+    let out = holds_to_the_languages(t.path(), ".", "en");
+    // each module's two amounts and the refusals of its two operations are borders between the
+    // languages (X4), shown
+    assert!(out.ends_with("ritsu check: 6 files (rulec 2, chobo 2, kaname 2): all pass; borders between the languages: 8 checked, 0 undecided\n"), "{out}");
+    let out = holds_to_the_languages(t.path(), ".", "ja");
+    assert!(out.contains("ok payout.ja.kn: 関数 1 個、total\n"), "{out}");
+    // the modules come after the rules and the books
+    let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--root", "."]);
+    assert!(out.find("ok payout.kn").unwrap() > out.find("books/ledger.book: ok").unwrap(), "{out}");
+    // a fee counted in dollars given to a book that counts cents
+    let kn = t.path().join("payout.kn");
+    let src = std::fs::read_to_string(&kn).unwrap();
+    std::fs::write(&kn, src.replace("seller: payment.seller, fee: fee)", "seller: payment.seller, fee: fee in USD)")).unwrap();
+    let (code, out, _) = ritsu_in(t.path(), &["check", ".", "--root", "."]);
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("error[kaname E102]: payout.kn:22:"), "{out}");
+    assert!(out.ends_with("ritsu check: 6 files (rulec 2, chobo 2, kaname 2): 1 fail (1 error); borders between the languages: 4 checked, 0 undecided\n"), "{out}");
+    holds_to_the_languages(t.path(), ".", "en");
+    let (_, out, _) = ritsu_in(t.path(), &["check", ".", "--root", ".", "--format", "json"]);
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let d = &v["diagnostics"][0];
+    assert_eq!((d["tool"].as_str(), d["code"].as_str(), d["file"].as_str()), (Some("kaname"), Some("E102"), Some("payout.kn")));
+    let files: Vec<(&str, bool)> = v["files"].as_array().unwrap().iter().filter(|f| f["tool"] == "kaname").map(|f| (f["file"].as_str().unwrap(), f["ok"].as_bool().unwrap())).collect();
+    assert_eq!(files, [("payout.ja.kn", true), ("payout.kn", false)]);
 }

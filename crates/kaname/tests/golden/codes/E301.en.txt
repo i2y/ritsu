@@ -1,0 +1,4 @@
+error[E301]: example.kn:7:16: `paid - due` can be outside what the parameter `days` of `charge` declares (range >=1 <=30)
+     7 |   charge(days: paid - due)
+  = For example, `late(paid: 2026-01-01, due: 2026-01-01)` gives it 0.
+  = Narrow it to that range with an `if` before it goes there, or widen the range it goes to.

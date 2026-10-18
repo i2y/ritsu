@@ -1,0 +1,36 @@
+rule late_payment_charges v1
+description "What a supplier may claim on a commercial debt paid late: the fixed sum for the cost of recovering it, and statutory interest at 8% over the reference rate, worked out a day at a time. As this example reads the Late Payment of Commercial Debts (Interest) Act 1998, section 5A(2), and GOV.UK's guide to charging interest on a commercial debt; it says nothing of how the law is read"
+
+source act = file "sources/late-payment-act-1998.md" sha256:c25a0fe113e58d1a  # legislation.gov.uk, Open Government Licence v3.0
+source guide = file "sources/late-commercial-payments.md" sha256:2928a96aa000426e  # GOV.UK, Open Government Licence v3.0
+  table1 sha256:9395f13ea5957e66
+
+inputs
+  debt           : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+  days_late      : number  range >=1 <=1500
+  reference_rate : rate[step 0.01%]  range >=0% <=15%
+
+outputs
+  compensation : money[GBP]  round down(1GBP)
+  interest     : money[GBPc]  round down(1GBPc)
+
+# Section 5A(2): a fixed sum by the size of the debt. GOV.UK's guide gives the same sums in a table.
+table fixed_sum  @act
+policy unique
+| debt                          | -> compensation : money[GBP] |
+| <100_000GBPc                  | 40GBP                        |  @guide table1
+| >=100_000GBPc <1_000_000GBPc  | 70GBP                        |  @guide table1
+| >=1_000_000GBPc               | 100GBP                       |  @guide table1
+
+# GOV.UK works the interest out a day at a time: the year's interest divided by 365, in whole pence.
+# Which way a fraction of a penny goes, the page does not say (its example comes to 23p either
+# way): half up is a placeholder.
+define daily : money[GBPc] = half_up(debt × (8% + reference_rate) ÷ 365, 1GBPc)  @guide
+define interest : money[GBPc] = daily × days_late
+
+# The first row is GOV.UK's example: £1,000 at a base rate of 0.5%, 50 days late.
+examples
+| debt          | days_late | reference_rate | -> compensation | interest |
+| 100_000GBPc   | 50        | 0.5%           | 70GBP           | 1150GBPc |
+| 99_999GBPc    | 1         | 0%             | 40GBP           | 22GBPc   |
+| 1_000_000GBPc | 30        | 4%             | 100GBP          | 9870GBPc |

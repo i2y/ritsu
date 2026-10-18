@@ -1,0 +1,55 @@
+module walks v1
+description "Rules that walk a list, take and answer dates and order their enum, the holds of a book, and allocate: what the tests of the generated code run besides the drafts"
+
+use rule due from "../rulec/tests/corpus/earliest_due.rule"
+use rule tiers from "../rulec/tests/corpus/member_tier_shipping.rule"
+use rule cart from "../rulec/tests/corpus/cart_shipping_fee.rule"
+use book stock from "../ritsu/tests/projects/stockroom/books/stock.book"
+
+record Task
+  on   : date  range >=2026-01-01 <=2027-12-31
+  done : bool
+
+record Line
+  sku    : string
+  qty    : number  range >=1 <=10
+  amount : money[JPY]  range >=0JPY <=100_000JPY
+
+record Due
+  earliest : date
+  open     : number
+  level    : due.urgency
+  said     : string
+
+fn due_of(today: date range >=2026-01-01 <=2027-12-31, tasks: list[Task] count <=5) -> Due
+  let d = due(today: today, week_end: today, tasks: map(tasks, t => due.tasks { due: t.on, done: t.done }))
+  Due { earliest: d.earliest, open: d.open_tasks, level: d.level, said: concat(text(d.earliest), " ", text(d.level), " ", text(d.open_tasks > 0)) }
+
+fn higher(a: tiers.tier, b: tiers.tier) -> tiers.tier
+  max(a, b)
+
+fn above(a: tiers.tier, b: tiers.tier) -> bool
+  a > b
+
+fn shipping(member: tiers.tier, subtotal: money[USD] range >=0USD <=1000USD) -> money[USD]
+  tiers(member: member, campaign: tiers.tier.basic, subtotal: subtotal).shipping
+
+fn fee(tier: cart.member_tier, lines: list[Line] count <=4) -> money[JPY]
+  cart(tier: tier, lines: map(lines, l => cart.lines { amount: l.amount })).fee
+
+fn hold(order: string, lines: list[Line] count <=3) -> list[stock.reserve.hold]
+  map(lines, l => stock.reserve.hold(order: order, sku: l.sku, qty: l.qty))
+
+fn post(order: string, sku: string, qty: number? range >=0 <=10) -> stock.reserve.post
+  match qty
+    none => stock.reserve.post(order: order, sku: sku)
+    some q => stock.reserve.post(order: order, sku: sku, qty: q)
+
+fn release(order: string, sku: string) -> stock.reserve.void
+  stock.reserve.void(order: order, sku: sku)
+
+fn parts(total: money[JPY] range >=0JPY <=10_000JPY, a: money[JPY] range >=1JPY <=1000JPY, b: money[JPY] range >=1JPY <=1000JPY) -> money[JPY]
+  allocate(total, a, a + b)
+
+fn week(n: number range >=-20 <=20) -> number
+  mod(n, 7)

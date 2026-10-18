@@ -144,8 +144,9 @@ fn days_kept(dates: &dyn Dates, a: &CallArg, days: &ritsu_ports::DaySet, file: &
     }
 }
 
-/// One precondition at one call, decided.
-fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Precondition, args: &[CallArg]) -> Answer<Text> {
+/// One precondition at one call, decided. kaname's calls are decided with it too, their values
+/// handed over as a flow's (`programs`).
+pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Precondition, args: &[CallArg]) -> Answer<Text> {
     let arg = |n: &str| args.iter().find(|a| a.input == n);
     match p {
         Precondition::Relation { left, op, right } => {
@@ -262,7 +263,7 @@ fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Path, p: &Prec
 }
 
 /// How a precondition reads in a message.
-fn said(p: &Precondition) -> String {
+pub(crate) fn said(p: &Precondition) -> String {
     match p {
         Precondition::Relation { left, op, right } => format!("{left} {op} {right}"),
         Precondition::SumRelation { left, op, right } => format!("{} {op} {}", left.join(" + "), right.join(" + ")),

@@ -1,0 +1,202 @@
+{
+  "kaname": "<version>",
+  "file": "payout.kn",
+  "module": {
+    "name": "payout",
+    "alias": "payout",
+    "version": "v1",
+    "description": "Takes a card payment for a seller, and charges the processor's fee to the seller's balance: two transfers of the ledger, which the host makes",
+    "sha256": "36d497aea1d25a9619b436b906010914ad367f72526589e2dae82d5c90d37787"
+  },
+  "generated": {
+    "typescript": "glue/payout.ts",
+    "python": "glue/payout.py",
+    "go": "glue/payout/payout.go"
+  },
+  "uses": [
+    {
+      "kind": "rule",
+      "name": "card_fee",
+      "path": "rules/card_fee.rule",
+      "file": "rules/card_fee.rule",
+      "line": 4
+    },
+    {
+      "kind": "book",
+      "name": "ledger",
+      "path": "books/ledger.book",
+      "file": "books/ledger.book",
+      "line": 5
+    }
+  ],
+  "enums": [],
+  "records": [
+    {
+      "name": "Payment",
+      "alias": "Payment",
+      "fields": [
+        {
+          "name": "id",
+          "alias": "id",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 8
+        },
+        {
+          "name": "seller",
+          "alias": "seller",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 9
+        },
+        {
+          "name": "amount",
+          "alias": "amount",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=100000000USDc",
+          "count": null,
+          "line": 10
+        },
+        {
+          "name": "international",
+          "alias": "international",
+          "type": "bool",
+          "range": null,
+          "count": null,
+          "line": 11
+        }
+      ],
+      "line": 7,
+      "generated": {
+        "typescript": "Payment",
+        "python": "Payment",
+        "go": "Payment"
+      }
+    },
+    {
+      "name": "Settlement",
+      "alias": "Settlement",
+      "fields": [
+        {
+          "name": "capture",
+          "alias": "capture",
+          "type": "ledger.capture.do",
+          "range": null,
+          "count": null,
+          "line": 14
+        },
+        {
+          "name": "fee",
+          "alias": "fee",
+          "type": "ledger.processing_fee.do",
+          "range": null,
+          "count": null,
+          "line": 15
+        }
+      ],
+      "line": 13,
+      "generated": {
+        "typescript": "Settlement",
+        "python": "Settlement",
+        "go": "Settlement"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "settle",
+      "alias": "settle",
+      "line": 17,
+      "description": "The amount goes to the seller, and the fee the rule gives for it goes from the seller to the processor",
+      "params": [
+        {
+          "name": "payment",
+          "alias": "payment",
+          "type": "Payment",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Settlement",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [
+          "range"
+        ],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "crossings": [
+        {
+          "line": 19,
+          "col": 13,
+          "calls": "rule",
+          "callee": "card_fee",
+          "checks": []
+        },
+        {
+          "line": 21,
+          "col": 14,
+          "calls": "transfer",
+          "callee": "ledger.capture.do",
+          "checks": [
+            {
+              "line": 21,
+              "col": 85,
+              "check": "X4",
+              "about": "amount",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        },
+        {
+          "line": 22,
+          "col": 10,
+          "calls": "transfer",
+          "callee": "ledger.processing_fee.do",
+          "checks": [
+            {
+              "line": 22,
+              "col": 85,
+              "check": "X4",
+              "about": "fee",
+              "outcome": "waiting",
+              "code": null
+            }
+          ]
+        }
+      ],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "settle",
+        "python": "settle",
+        "go": "Settle"
+      }
+    }
+  ],
+  "transfers": [
+    {
+      "type": "ledger.capture.do",
+      "book": "books/ledger.book",
+      "operation": "capture.do",
+      "refusals": null
+    },
+    {
+      "type": "ledger.processing_fee.do",
+      "book": "books/ledger.book",
+      "operation": "processing_fee.do",
+      "refusals": null
+    }
+  ]
+}

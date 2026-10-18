@@ -200,9 +200,9 @@ requirement r1
 
 ## E011 — 参照の最初の語が、ツール名ではありません
 
-**いつ出るか**: 参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho のどれでもないとき（`dir` も、ツール名ではありません）。
+**いつ出るか**: 参照の最初の語が、rulec、dandori、koyomi、chobo、geas、proto、openapi、asyncapi、cedar、file、yuen、sakai、sekisho、kaname のどれでもないとき（`dir` も、ツール名ではありません）。
 
-**直し方**: この十三のツール名のどれかを書いてください。ほかのファイルは `file "…"` で指してください。
+**直し方**: この十四のツール名のどれかを書いてください。ほかのファイルは `file "…"` で指してください。
 
 **再現**:
 

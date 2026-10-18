@@ -1,0 +1,17 @@
+ok rules/discount_share.rule
+エラー[kaname E401]: discount_split.kn:14:1: 関数 `split` には `total` と書いてありますが、`rule` で失敗することがあります
+    14 | fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <=10_000_000USDc) -> list[Share] total
+  = 17 行目: 規則 discount_share を呼ぶところで、前提 `before <= upto` が保たれるかを決められません（ritsu W201）
+  = 17 行目: 規則 discount_share を呼ぶところで、前提 `upto <= total` が保たれるかを決められません（ritsu W201）
+  = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
+警告[ritsu W201]: discount_split.kn:17:41: 規則 discount_share を呼ぶところで、前提 `before <= upto` が保たれるかを決められません
+    17 |     Share { label: r.item.label, share: discount_share(discount: discount, before: r.before, upto: reduce([r.item.amount], r.before, (acc, x) => acc + x), total: r.total).share })
+  = 範囲の解析では、`r.before` は >=0 <=90000000、`reduce([r.item.amount], r.before, (acc, x) => acc + x)` は >=0 <=100000000 です。範囲の端の before = 90000000, upto = 0 では `before <= upto` が成り立ちませんが、関数のベクタに、そういう値を渡す入力はありませんでした。
+  = kaname の生成したコードが、走らせたときにその場所で確かめます。規則から生成したコードが入口で受け付けなければ、関数はそこで `rule` で失敗します。
+  = 呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡すと、示せるようになります。
+警告[ritsu W201]: discount_split.kn:17:41: 規則 discount_share を呼ぶところで、前提 `upto <= total` が保たれるかを決められません
+    17 |     Share { label: r.item.label, share: discount_share(discount: discount, before: r.before, upto: reduce([r.item.amount], r.before, (acc, x) => acc + x), total: r.total).share })
+  = 範囲の解析では、`reduce([r.item.amount], r.before, (acc, x) => acc + x)` は >=0 <=100000000、`r.total` は >=1 <=100000000 です。範囲の端の upto = 100000000, total = 1 では `upto <= total` が成り立ちませんが、関数のベクタに、そういう値を渡す入力はありませんでした。
+  = kaname の生成したコードが、走らせたときにその場所で確かめます。規則から生成したコードが入口で受け付けなければ、関数はそこで `rule` で失敗します。
+  = 呼ぶ前に前提を `if` で確かめて分けるか、kaname が関係を知っている値（`running_totals` の途中までの合計など）を渡すと、示せるようになります。
+ritsu check: ファイル 2 個（rulec 1、kaname 1）。検査を通らないもの 1 個（エラー 1 件、警告 2 件）。言語の境目: 確かめた 2 か所、決められない 2 か所

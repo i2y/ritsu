@@ -1,0 +1,9 @@
+{
+  "name": "kaname-tools",
+  "private": true,
+  "description": "The TypeScript compiler that tests/typescript.rs type-checks the TypeScript kaname generates with (tsc --strict --erasableSyntaxOnly) and compiles it with, to run it in Node. Install with: npm ci --prefix tools",
+  "devDependencies": {
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2"
+  }
+}

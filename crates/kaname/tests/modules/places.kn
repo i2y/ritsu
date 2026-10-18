@@ -1,0 +1,37 @@
+module places v1
+
+enum tier = basic < silver < gold
+
+record Box
+  size : number  range >=0 <=5
+
+fn inner(n: number range >=0 <=5) -> number
+  n
+
+fn outer(n: number range >=0 <=9) -> number
+  inner(n: n)
+
+fn boxed(n: number range >=0 <=9) -> Box
+  Box { size: n }
+
+fn capped(n: number range >=0 <=9) -> number range >=0 <=5
+  n
+
+fn root(n: number range >=-9 <=9) -> number
+  isqrt(n)
+
+fn better(a: tier, b: tier) -> tier
+  max(a, b)
+
+fn code(t: tier) -> string
+  match t
+    gold => "G"
+    silver, basic => "S"
+
+fn or_zero(x: number? range >=0 <=9) -> number
+  match x
+    none => 0
+    some v => v + 1
+
+fn share(r: rate[step 1%]) -> rate[step 1%]
+  r

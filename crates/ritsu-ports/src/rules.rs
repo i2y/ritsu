@@ -70,12 +70,26 @@ pub enum ColumnType {
 }
 
 /// An enum of the rule.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct RuleEnum {
     pub name: String,
     /// The enum's ASCII name in the generated code (`MemberKind`).
     pub alias: String,
     pub values: Vec<EnumValue>,
+    /// The enum's public name as the rule writes it: its alias in parentheses (`緊急度(urgency)`
+    /// is `urgency`), else its name. What a module of kaname names it by beside its name (kaname's
+    /// DESIGN 2.6). An enum the rule does not declare in words of its own (one of a `.proto`, a
+    /// machine's states) has its name.
+    pub public: String,
+    /// Whether its values are ordered as written (`enum era = ancient < medieval`, rulec's
+    /// §15.210), so that two of them compare. False for a port that does not say.
+    pub ordered: bool,
+    /// Where it is declared, when the rule reads it whole from an `enums` file (`import enum
+    /// <name> from "<file>"`, rulec's §15.212): the file as the caller reaches it (the rule's
+    /// directory joined with the path written), and the enum's name there. Two rules that read the
+    /// same enum of the same file hold one type (kaname's DESIGN 3.5). None for an enum the rule
+    /// declares itself, and for a port that does not say.
+    pub origin: Option<(std::path::PathBuf, String)>,
 }
 
 /// A value of a rule's enum.

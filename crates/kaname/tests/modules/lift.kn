@@ -1,0 +1,28 @@
+module lift v1
+description "A rule that holds an input of an ordered enum to a range over its values: a tier given as it is can be one the range does not let in, and one narrowed with a match, or with an if that leaves a value out, is not"
+
+use rule tiers from "../rulec/tests/corpus/member_tier_shipping.rule"
+
+# the campaign can be platinum, which the range >=basic <=gold of the rule's campaign does not let in (E301)
+fn lifted(campaign: tiers.tier) -> bool
+  tiers(member: tiers.tier.basic, campaign: campaign, subtotal: 10USD).lifted
+
+# in the first arm the campaign is one of the three values the range lets in: shown, and the other
+# answers none (W501 is not said of a branch that narrows a value before a rule takes it)
+fn lifted_held(campaign: tiers.tier) -> bool?
+  match campaign
+    basic, silver, gold => tiers(member: tiers.tier.basic, campaign: campaign, subtotal: 10USD).lifted
+    platinum => none
+
+# platinum left out with an if: shown
+fn lifted_below(campaign: tiers.tier) -> bool?
+  if campaign != tiers.tier.platinum
+    tiers(member: tiers.tier.basic, campaign: campaign, subtotal: 10USD).lifted
+  else
+    none
+
+# the tier a rule answers can be any of the four, as far as the analysis reads it, and is gold on every
+# run: undecided (W301), and the generated code checks it when it runs
+fn lifted_again(member: tiers.tier) -> bool
+  let first = tiers(member: tiers.tier.basic, campaign: tiers.tier.gold, subtotal: 10USD)
+  tiers(member: member, campaign: first.effective, subtotal: 10USD).lifted

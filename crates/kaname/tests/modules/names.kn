@@ -1,0 +1,20 @@
+module names v1
+description "Names the generated code keeps apart: two parameters with one name in Go's mixed caps, parameters and locals that are words of a target"
+
+record Item
+  qty : number  range >=0 <=9
+
+fn both(paid_on: number range >=0 <=9, paidOn: number range >=0 <=9) -> number
+  let days_late = paid_on + paidOn
+  let daysLate = days_late * 2
+  daysLate + days_late
+
+fn words(Type: number range >=0 <=9, len: number range >=0 <=9, max: number range >=0 <=9, items: list[Item] count <=3) -> number
+  let string = count(items)
+  let map = max(Type, len) + string
+  let int = sum(items, i => i.qty)
+  map + int + max
+
+fn helpers(units: number range >=0 <=9, ctx: number range >=0 <=9) -> number
+  let err = units + ctx
+  err

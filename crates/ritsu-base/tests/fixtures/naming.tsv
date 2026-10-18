@@ -42,6 +42,12 @@ sekisho "refunds.gate" expect clerks_never_refund_over_their_limit	{"text":"seki
 sekisho "refunds.gate" principal User attribute refund_limit	{"text":"sekisho \"refunds.gate\" principal User attribute refund_limit","tool":"sekisho","path":"refunds.gate","items":[["principal","User"],["attribute","refund_limit"]]}
 sekisho "refunds.gate" action refund_order context refund_band	{"text":"sekisho \"refunds.gate\" action refund_order context refund_band","tool":"sekisho","path":"refunds.gate","items":[["action","refund_order"],["context","refund_band"]]}
 sekisho "gates/返金.gate" policy 係は上限まで返金できる	{"text":"sekisho \"gates/返金.gate\" policy 係は上限まで返金できる","tool":"sekisho","path":"gates/返金.gate","items":[["policy","係は上限まで返金できる"]]}
+kaname "payout.kn"	{"text":"kaname \"payout.kn\"","tool":"kaname","path":"payout.kn","items":[]}
+kaname "payout.kn" function settle	{"text":"kaname \"payout.kn\" function settle","tool":"kaname","path":"payout.kn","items":[["function","settle"]]}
+kaname "late_payment.kn" record Claim field days_late	{"text":"kaname \"late_payment.kn\" record Claim field days_late","tool":"kaname","path":"late_payment.kn","items":[["record","Claim"],["field","days_late"]]}
+kaname "pricing.kn" enum tier value gold	{"text":"kaname \"pricing.kn\" enum tier value gold","tool":"kaname","path":"pricing.kn","items":[["enum","tier"],["value","gold"]]}
+kaname "glue/late_payment.ja.kn" function 遅れの請求	{"text":"kaname \"glue/late_payment.ja.kn\" function 遅れの請求","tool":"kaname","path":"glue/late_payment.ja.kn","items":[["function","遅れの請求"]]}
+kaname "glue/late_payment.ja.kn" record 請求 field 遅れた日数	{"text":"kaname \"glue/late_payment.ja.kn\" record 請求 field 遅れた日数","tool":"kaname","path":"glue/late_payment.ja.kn","items":[["record","請求"],["field","遅れた日数"]]}
 dandori "hotel.flow" value awaiting_review	ERROR: value only right after enum
 dandori "order.flow" task reserve case payment	ERROR: nothing under task
 dandori "order.flow" record Delivery task reserve	ERROR: only field under record
@@ -64,6 +70,9 @@ cedar "policies/refunds.cedar" policy p action a	ERROR: cedar has no nested kind
 sekisho "refunds.gate" attribute suspended	ERROR: attribute only right after principal or resource
 sekisho "refunds.gate" policy p action a	ERROR: nothing under policy
 sekisho "refunds.gate" action refund_order role clerk	ERROR: only input or context under action
+kaname "payout.kn" field amount	ERROR: field only right after record
+kaname "payout.kn" function settle record Settlement	ERROR: nothing under function
+kaname "payout.kn" record Settlement function settle	ERROR: only field under record (function)
 koyomi "支払条件.cal" claim "受領から　60日"	{"text":"koyomi \"支払条件.cal\" claim \"受領から　60日\"","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から　60日"]]}
 file "."	{"text":"file \".\"","tool":"file","path":".","items":[]}
 file "src/"	{"text":"file \"src\"","tool":"file","path":"src","items":[]}

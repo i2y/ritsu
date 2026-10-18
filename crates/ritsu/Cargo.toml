@@ -20,6 +20,7 @@ ritsu-ports = { path = "../ritsu-ports" }
 chobo = { path = "../chobo" }
 dandori = { path = "../dandori" }
 geas = { path = "../geas" }
+kaname = { path = "../kaname" }
 koyomi = { path = "../koyomi" }
 rulec = { path = "../rulec" }
 sakai = { path = "../sakai" }
