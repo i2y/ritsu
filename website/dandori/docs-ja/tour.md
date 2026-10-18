@@ -173,6 +173,27 @@ Stripe が取消を拒否したときは、失敗したように見えた売上�
 
 変数の範囲は、フローのどこかでその変数に入れるすべての値を合わせたものです。`.flow` には計算が無いので、範囲は値の出どころから使われる場所まで、そのまま運ばれます。Temporal では、範囲を足したり狭めたりすると、走っている実行のうち、値がその範囲の外にあるものの振る舞いが変わります。そのため、この変更は新しいバージョンとして出すか、Worker Deployment Versioning で出します。
 
+規則の、順序のある列挙の入力にも範囲を書けます。`campaign : tier  range >=basic <=gold` と書いた規則は、キャンペーンで会員をゴールドまでしか引き上げず、プラチナのキャンペーンは、規則から生成したコードが受け付けません。こうした入力に渡す値は、範囲に入る値でなければなりません（E014）。書いた値はその値のままです。入力、フィールド、タスクの結果、規則の出力は、列挙のどの値にもなりえます。`.flow` の列挙には範囲を書けないからです。ワークフローが受け取った値を規則に渡すときは、`match` で分けて、範囲に入る値を書いて渡します（[tests/fixtures/enum_ranges_held.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges_held.flow)）。
+
+```flow
+  match campaign
+    basic => let quote = tiers(member: member, campaign: basic, subtotal: subtotal)
+    silver => let quote = tiers(member: member, campaign: silver, subtotal: subtotal)
+    gold, platinum => let quote = tiers(member: member, campaign: gold, subtotal: subtotal)
+```
+
+受け取ったキャンペーンをそのまま渡すと（[tests/fixtures/enum_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges.flow)）、`--lang ja` ではこうなります。
+
+<div class="dd-term" markdown>
+
+```text
+エラー[E014]: tests/fixtures/enum_ranges.flow:28:1: `campaign` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    28 |   let c = tiers(member: member.tier, campaign: campaign, subtotal: subtotal)
+  = `.flow` の列挙には範囲を書けません。`match` で分けて、規則の範囲に入る値を書いて渡してください
+```
+
+</div>
+
 ## 秘密の値
 
 値を置くところには、そこに入る値が秘密だということも書けます。入力、出力、フィールド、タスクの引数と結果の型のあとに `secret` と書きます（`APIトークン    : string  secret`）。`.proto` の `debug_redact` や、OpenAPI の文書の `x-data-classification` が、自分のフィールドについて言うのと同じことです。検査は、範囲と同じように秘密の値をたどり、プラットフォームがそれを実行の履歴に残すところ（W904）と、タスクがそれをプロジェクトの外へ送るところ（E906）を言います。履歴を鍵で暗号化しているワークフローは、一行目の下にそう書きます。Temporal 向けのコードは、そのときペイロードのコーデックを受け取ります。

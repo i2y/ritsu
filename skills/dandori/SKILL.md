@@ -381,7 +381,7 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E011 | an arm no value reaches | remove it |
 | E012 | a variable read where it may not have a value yet | give it a value on every way there, or read it later |
 | E013 | a task on a case not started yet, or a case started twice | start it first, once |
-| E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the task's answer) |
+| E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the task's answer); for a rule's input of an ordered enum with a range, branch with `match` and write out a value the range lets in |
 | E015 | a task that does not fit the child `.flow` it runs | match the child's inputs, outputs and `fail`s |
 | E016 | a task that does not fit its API's description, or the book's transfer it runs | follow it: `T?` for what the answer may leave out, every value of an enum; or use the `.proto`'s messages as the types; for a book, the transfer's parameters by name, the hold as the answer, only reasons the book refuses with |
 | E017 | a workflow that does not fit the service it implements | follow the service: the inputs and outputs by their JSON names, every `fail` in `fails`, the events and callbacks it names; one of dandori's options on each method |

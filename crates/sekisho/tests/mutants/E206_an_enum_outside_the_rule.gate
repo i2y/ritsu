@@ -1,0 +1,43 @@
+gate tiers v1
+description "tests/walk/ranges/tiers.gate with campaigns past gold, the range the rule takes: an attribute of an enum that goes on to platinum, and platinum as a constant"
+namespace Shop
+
+use rule campaign_lift from "../walk/ranges/campaign_lift.rule"
+
+enum tier = basic | silver | gold | platinum
+
+principal User
+  description "A member of the shop"
+  attributes
+    tier : tier
+
+resource Order
+  description "An order, and the campaign it was placed under"
+  attributes
+    campaign : tier
+
+action ship_lifted
+  description "Ship an order at the tier its campaign lifts the member to"
+  principal User
+  resource Order
+  context
+    lifted = campaign_lift(member: principal.tier, campaign: resource.campaign).lifted
+
+action ship_at_platinum
+  description "Ship an order at platinum"
+  principal User
+  resource Order
+  context
+    raised = campaign_lift(member: principal.tier, campaign: platinum).lifted
+
+permit orders_a_campaign_lifts
+  description "An order whose campaign lifts its member ships at the campaign's tier"
+  principal is User
+  action ship_lifted
+  when lifted
+
+permit orders_platinum_lifts
+  description "An order platinum lifts its member for ships at platinum"
+  principal is User
+  action ship_at_platinum
+  when raised

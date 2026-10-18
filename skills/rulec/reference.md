@@ -667,8 +667,8 @@ where a value comes from; the contract's validation says which values pass — P
 `(buf.validate.field)` rules on a field of a `.proto` (`gte`, `lte`, `in` and the rest, the count
 of a `repeated`, the listed values of a `string`), and a schema's `minimum`, `maximum`,
 `exclusiveMinimum`, `exclusiveMaximum`, `enum`, `minItems`, `maxItems` and `required`. Each is
-compared with what the input takes — its `range`, the values of its enum, the range of a
-`count` — and a value that passes the contract but not the input is **E122**: the generated
+compared with what the input takes — its `range`, the values of its enum (those its `range`
+lets in, for an ordered enum that has one, §15.251), the range of a `count` — and a value that passes the contract but not the input is **E122**: the generated
 code would refuse, at the door, something the caller's own validation let through. A proto3
 number field with no rule lets 0 through, because that is what an unset field is; an input
 that does not take 0 stops there. A schema that lets a value be null — `"type": ["integer",
@@ -786,7 +786,10 @@ The form is `range` followed by one or two bounds: `range >=0JPY <=10_000_000JPY
 A `derive` whose declared range does not contain what it can actually reach is E112, and the
 message states the interval to widen to. An input of an ordered enum (§3) may declare a range
 over its values, `range >=basic <=gold`: the bounds are values of the enum, and the three jobs
-are the same over them. A rate input may leave `range` out: it is then
+are the same over them. What the rule tells its callers says it as it says a number's range:
+`rulec schema` lists only the values inside it, `rulec api` and `rulec graph` give its two ends,
+the generated MCP tool, the `.proto` and the page say the same, and `rulec diff` tells a range
+that moved as a change of what the rule takes (§15.251). A rate input may leave `range` out: it is then
 `>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
 like any other number. A table's numeric output column needs no range of its own — its cells
 are its range.

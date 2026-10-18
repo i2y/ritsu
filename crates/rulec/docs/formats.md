@@ -318,7 +318,7 @@ answer, and is there anything outside them" (DESIGN §15.122).
 | `feasible` | of those, how many an input could be built for. The rest are combinations of coordinates no caller can send |
 | `same` / `differing` / `unsettled` | settled alike / settled apart / neither |
 | `unrealized` | cells that were not shown to be impossible and that no input could be built for. They are also listed in `unknown`. A cell the arithmetic proves no input reaches is not one of these: it is passed over like a cell the shape ruled out |
-| `domain` | what the rule **accepts**, where that changed: `{"what":…,"name":…,"old":…,"new":…}`. `what` is one of `input_added`, `input_removed`, `input_type`, `input_range`, `enum_added`, `enum_removed`, `enum_value_added`, `enum_value_removed`, `output_added`, `output_removed`, `output_rounding`, `output_type`, `output_step`. A wider door is not a different answer, so it is reported apart from `changes`. `output_type` (`money[USD]` to `money[USDc]`) and `output_step` (a rate's step, `0.1%` to `1%`) are what callers of the generated code receive changing: answers are compared as values, so a version that only counts an output in another unit or at another step moves no answer, and is told here |
+| `domain` | what the rule **accepts**, where that changed: `{"what":…,"name":…,"old":…,"new":…}`. `what` is one of `input_added`, `input_removed`, `input_type`, `input_range`, `enum_added`, `enum_removed`, `enum_value_added`, `enum_value_removed`, `output_added`, `output_removed`, `output_rounding`, `output_type`, `output_step`. A wider door is not a different answer, so it is reported apart from `changes`. The `old` and `new` of an `input_range` are its two ends, `0..100000`; for an input of an ordered enum they are the values at the ends, and the side with no `range` is the whole enum, `basic..platinum` to `basic..gold` (§15.251). `output_type` (`money[USD]` to `money[USDc]`) and `output_step` (a rate's step, `0.1%` to `1%`) are what callers of the generated code receive changing: answers are compared as values, so a version that only counts an output in another unit or at another step moves no answer, and is told here |
 | `changes` | the regions where the two answer differently |
 | `unknown` | the regions that could not be settled, each with `why` |
 | `blocked` | present only when the two cannot be compared cell by cell at all, with the reason. A rule that folds a sequence is one such case: its answer depends on the whole sequence, so it is not a function of finitely many columns. A rule that walks two sequences or more, takes a `max` or a `min`, or walks a sequence twice is another (§15.219): a cell is built by finding a sequence whose summaries land on it, and that is done only for a `count` and a `sum` over one sequence. Either way, two versions in which nothing that decides an answer changed — the rows, the expressions, the sequences and their fields, and every summary line — are called the same instead |
@@ -568,7 +568,11 @@ and in PHP, `CouponKind.PERCENT` in Java, `singlecoupon.CouponKindPercent` in Go
 enum being its own name there, and the Wasm module and the NumPy plan read and write the name itself, as the wire does). `unit`, `range` and `rounding` are absent when the
 type has none. `range` and `rounding.grid` are integers the way the value itself travels, so
 for a rate they count its steps: a rate stored in tenths of a percent with `round
-half_up(0.1%)` says `"grid":1`. The NumPy entry is shaped differently from the rest, because it names no
+half_up(0.1%)` says `"grid":1`. An input of an ordered enum with a `range` carries one too,
+its two ends named as the wire names them, by the rule's names: `campaign : tier  range
+>=basic <=gold` says `"range":{"min":"basic","max":"gold"}`, every value from the one to the
+other in the enum's order is in, and `enums` gives each value's spelling in that language
+(§15.251). The NumPy entry is shaped differently from the rest, because it names no
 function: it carries `plan` and `runtime`, the two files, `load`, `call` and `traced`, and
 `columns` and `outputs` in place of parameters, beside `errors` and `error_types` as the languages' entries have them. The Ruby entry also carries `rbs`, the path of the signature file that ships
 with the module, and an entry whose language gets a server carries `mcp`, the file beside the
@@ -845,7 +849,7 @@ clause takes precedence over a table.
 |---|---|
 | `kind` | `input`, `sequence` (the list a walk runs over), `element` (a field of one element of it), or `value` |
 | `of` | for an `element`, the sequence it belongs to |
-| `type`, `range` | what the value is, and what it is held to. On an `input` or an `element` these are the guard the caller is held to at the door |
+| `type`, `range` | what the value is, and what it is held to. On an `input` or an `element` these are the guard the caller is held to at the door. An input of an ordered enum with a `range` has it in the shape `api` gives it, the names of the values at its two ends (`{"min":"basic","max":"gold"}`, §15.251) |
 | `output` | present and true where the rule declares the value as an output |
 | `per_element` | present and true where the value is decided once **per element** rather than once per call. A `sum`, a `count` and a `fold` are the three ways out of that frame, and nothing in the rule's text says which side of the line a value is on |
 | `from_apply` | the `apply` a value came in through. Its name is `<apply>:<name>`, and everything under one apply is one subgraph |
@@ -1110,6 +1114,9 @@ Already machine-readable and take no `--format`.
 - `schema` prints one JSON Schema for the wire an adapter speaks (see below). The
   description of an integer property says its unit and, for a rate, its step, so that a
   caller who never reads the rule knows that 18.3% at a step of 0.1% travels as 183.
+  An enum's property lists its values under `enum`; an input of an ordered enum with a
+  `range` lists only the values the range lets in, which is also what the generated MCP
+  tool's `inputSchema` says (§15.251).
   Where the rule has preconditions this shape cannot state, a `$comment` says so and names
   their kinds — a document that passes validation and is refused anyway has to say that
   about itself. The preconditions themselves are in `api` under `preconditions`.
@@ -1397,7 +1404,8 @@ generated code needs no extraction. What still has to be extracted is a log of a
 implementation rulec did not generate.
 
 An input must be an integer in the canonical unit; a decimal is refused, naming the field,
-unless its value is whole: `1000.0` is 1000 (§15.205).
+unless its value is whole: `1000.0` is 1000 (§15.205). An input of an ordered enum with a
+`range` is held to the values the range lets in, as a number is held to its range (§15.251).
 An observed value is read as the value it is, decimals included: `11.0` is 11, and an
 implementation that computed finer than the output's step (`820.5` yen, `123.4` for 12.34% at a
 step of 0.1%) answered something the rule does not, which `replay` compares exactly — below the

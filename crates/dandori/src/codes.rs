@@ -161,8 +161,8 @@ pub fn ledger() -> Ledger {
         e(
             "E014",
             tr!("範囲を外れうる値を渡しています", "A value that can be outside the range where it goes"),
-            tr!("範囲のある場所（規則の入力、タスクの引数、書き出すレコードのフィールド、出力）に、範囲を外れうる値を渡すとき。dandori は、値の範囲を、入力の範囲、タスクの結果の範囲、規則が出す範囲、式から求めます。", "A value that can be outside the range of where it goes: a rule's input, a task's parameter, a field of a record written out, an output. The range of a value is worked out from the ranges of the inputs, of the tasks' answers, of what the rules answer, and of the expressions."),
-            tr!("渡す値の範囲を狭める（入力やタスクの結果に `range` を書く）か、受け取る側の範囲を広げてください。", "Narrow the value's range (write a `range` on the input or on the task's answer), or widen the range of where it goes."),
+            tr!("範囲のある場所（規則の入力、タスクの引数、書き出すレコードのフィールド、出力）に、範囲を外れうる値を渡すとき。dandori は、値の範囲を、入力の範囲、タスクの結果の範囲、規則が出す範囲、式から求めます。規則の、順序のある列挙の入力に範囲があるとき（`range >=basic <=gold`）は、範囲に入らない列挙の値になりうる値を渡すときです。書いた値はその値で、入力・フィールド・タスクの結果・規則の出力は、列挙のどの値にもなりえます。", "A value that can be outside the range of where it goes: a rule's input, a task's parameter, a field of a record written out, an output. The range of a value is worked out from the ranges of the inputs, of the tasks' answers, of what the rules answer, and of the expressions. For a rule's input of an ordered enum with a range (`range >=basic <=gold`), a value that can be one of the enum's values the range does not let in: a value written out is itself, and an input, a field, a task's answer or a rule's output can be any value of its enum."),
+            tr!("渡す値の範囲を狭める（入力やタスクの結果に `range` を書く）か、受け取る側の範囲を広げてください。列挙の値は、`match` で分けて、範囲に入る値を書いて渡してください（`.flow` の列挙には範囲を書けません）。", "Narrow the value's range (write a `range` on the input or on the task's answer), or widen the range of where it goes. For an enum's value, branch with `match` and give a value the range lets in, written out (an enum in a `.flow` takes no range)."),
             "workflow w v1\n\ninputs\n  n : int  range >=0 <=100\n\ntask take(n: int range >=0 <=10)\n\nflow\n  take(n: n)\n",
             &["W104", "E003"],
         ),

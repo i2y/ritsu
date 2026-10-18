@@ -502,8 +502,17 @@ fn promises(rel: &str) -> Vec<String> {
         !matches!(field(&api, "projection"), Json::Null),
         !matches!(field(&api, "machine"), Json::Null)
     ));
+    // An ordered enum's range names its two ends (§15.251); with no name in it, it is where they
+    // stand in the order of the enum.
+    let range = |p: &Json| -> String {
+        let ends = p.get("range").and_then(|r| Some((r.get("min")?.as_str()?, r.get("max")?.as_str()?)));
+        let Some((lo, hi)) = ends else { return shown(p.get("range")) };
+        let en = items(py, "enums").iter().find(|e| e.get("alias") == p.get("type")).unwrap_or_else(|| panic!("{rel}: no enum for {}", json::unparse(p)));
+        let at = |v: &str| items(en, "values").iter().position(|x| x.get("name").and_then(|n| n.as_str()) == Some(v)).unwrap_or_else(|| panic!("{rel}: {v} is not a value"));
+        format!("the values {}..{} of the order", at(lo), at(hi))
+    };
     for p in items(py, "params") {
-        v.push(format!("in {} {} {}", unit(p.get("unit")), shown(p.get("range")), json::show(field(p, "optional"))));
+        v.push(format!("in {} {} {}", unit(p.get("unit")), range(p), json::show(field(p, "optional"))));
     }
     for o in items(py, "outputs") {
         v.push(format!("out {} {} {}", unit(o.get("unit")), shown(o.get("rounding")), json::show(field(o, "optional"))));

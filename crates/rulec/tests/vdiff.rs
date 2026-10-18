@@ -576,3 +576,40 @@ fn 入力を共有する導出の規則でも_外について言い切れる() {
     assert!(int(&j, "differing") > 0, "差があるはず\n{out}");
     assert_eq!(code, 1, "差があるので exit は 1");
 }
+
+/// A range put on an input of an ordered enum is a change of what the version takes, as a
+/// number's range is (§15.251). The corpus's campaign stops at gold; a version of it whose
+/// campaign takes every tier was said to take every input the other does, with "every input gets
+/// the same answer", and the run passed. It says the range moved, by the values at its ends, and
+/// compares only what both take. English first, then the Japanese version.
+#[test]
+fn a_range_put_on_an_enum_input_is_a_change_of_what_the_version_takes() {
+    for (rule, range, name, wide, narrow) in [
+        ("tests/corpus/member_tier_shipping.rule", "  range >=basic <=gold", "campaign", "basic..platinum", "basic..gold"),
+        ("tests/corpus/会員段階の送料.rule", "  range >=一般 <=ゴールド", "キャンペーン", "一般..プラチナ", "一般..ゴールド"),
+    ] {
+        let src = std::fs::read_to_string(root().join(rule)).unwrap();
+        assert!(src.contains(range), "{rule}");
+        let tmp = TempDir::new("vdiff-enum-range");
+        let (a, b) = (tmp.path().join("wide.rule"), tmp.path().join("narrow.rule"));
+        std::fs::write(&a, src.replace(range, "")).unwrap();
+        std::fs::write(&b, &src).unwrap();
+        let (a, b) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
+        for (from, to, old, new) in [(&a, &b, wide, narrow), (&b, &a, narrow, wide)] {
+            let (c, out) = rulec(&["diff", from, to, "--format", "json"]);
+            assert_eq!(c, 1, "{rule}: {out}");
+            let j = json(&out);
+            let moved: Vec<(&str, &str, &str, &str)> = arr(&j, "domain")
+                .iter()
+                .map(|d| {
+                    let s = |k: &str| d.get(k).and_then(|x| x.as_str()).unwrap_or("");
+                    (s("what"), s("name"), s("old"), s("new"))
+                })
+                .collect();
+            assert_eq!(moved, [("input_range", name, old, new)], "{rule}: {out}");
+            assert!(arr(&j, "changes").is_empty() && int(&j, "differing") == 0, "{rule}: {out}");
+            let (_, text) = rulec(&["diff", from, to]);
+            assert!(text.contains(&format!("{name}  {old} → {new}")) && text.contains("両方の版が受け付ける入力"), "{rule}:\n{text}");
+        }
+    }
+}

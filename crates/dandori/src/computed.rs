@@ -478,7 +478,7 @@ fn to_rule_value(ty: &RType, v: &Value) -> Option<ritsu_ports::Value> {
         (RType::Bool, Value::Bool(b)) => Some(P::Bool(*b)),
         (RType::Str, Value::String(s)) => Some(P::Str(s.clone())),
         (RType::Date, Value::String(s)) if render::is_date(s) => Some(P::Date(s.clone())),
-        (RType::Enum(_), Value::String(s)) => Some(P::Enum(s.clone())),
+        (RType::Enum { .. }, Value::String(s)) => Some(P::Enum(s.clone())),
         (RType::Num { .. }, Value::Number(n)) => n.as_i64().map(|n| P::Int(n as i128)).or_else(|| n.as_f64().filter(|f| f.fract() == 0.0).map(|f| P::Int(f as i128))),
         _ => None,
     }

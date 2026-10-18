@@ -540,3 +540,73 @@ fn protoの並びと合計も既定値まで突き合わせる() {
     assert!(titles[2].contains("契約は `注文.lines[].qty` に 0 を通しますが"), "{titles:?}");
     assert!(f[2].2.contains("[(buf.validate.field).int64 = {gte: 1, lte: 5}]"), "{f:?}");
 }
+
+/// An ordered enum input with a range takes only the values inside it, and that is what the
+/// contract is held to (§15.251). A contract that lets platinum through where the range stops at
+/// gold is E122, with the contract narrowed to the range as the fix; one that lets through only
+/// the range's values says nothing. The input without a range, read from a field that lets every
+/// value through, says nothing either. The range was not read here, so the first contract was
+/// quiet and the door refused platinum. English first, then the Japanese version, one against a
+/// JSON Schema and one against a `.proto`.
+#[test]
+fn an_enum_input_with_a_range_is_held_to_the_values_inside_it() {
+    let rule = |shape: &str, en: &str, member: &str, campaign: &str, range: &str| {
+        format!(
+            "rule t(t) v1\n\nshape {shape}\n\nenum {en}\n\n\
+             inputs\n  {member}\n  {campaign}  range {range}  from order.campaign\n\noutputs\n  x(x) : bool\n\n\
+             table t1(t1)\npolicy unique\n| a | b | -> x |\n| - | - | true |\n"
+        )
+    };
+    let quote = |vs: &[&str]| vs.iter().map(|v| format!("\"{v}\"")).collect::<Vec<_>>().join(", ");
+
+    // English, against a JSON Schema.
+    let en = rule(
+        "order(order) = jsonschema \"order.json\" \"#/$defs/Order\"",
+        "tier(tier) = basic(basic) < silver(silver) < gold(gold) < platinum(platinum)",
+        "a(a) : tier  from order.tier",
+        "b(b) : tier",
+        ">=basic <=gold",
+    );
+    let schema = |campaign: &[&str]| {
+        format!(
+            "{{\"$defs\":{{\"Order\":{{\"type\":\"object\",\"properties\":{{\"tier\":{{\"type\":\"string\",\"enum\":[{}]}},\"campaign\":{{\"type\":\"string\",\"enum\":[{}]}}}},\"required\":[\"tier\",\"campaign\"]}}}}}}",
+            quote(&["basic", "silver", "gold", "platinum"]).replace(", ", ","),
+            quote(campaign).replace(", ", ","),
+        )
+    };
+    let f = check("enum-range-en", &en, "order.json", &schema(&["basic", "silver", "gold", "platinum"]));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("`order.campaign`") && f[0].1.contains("platinum") && f[0].1.contains("受け付けません"), "{f:?}");
+    assert!(f[0].2.contains(r#""witness":{"inputs":{"b":"platinum"}}"#), "{f:?}");
+    assert!(f[0].2.contains(r#""fix":{"kind":"narrow_contract","text":"\"enum\": [\"basic\", \"silver\", \"gold\"]"}"#), "{f:?}");
+    let f = check("enum-range-en-narrow", &en, "order.json", &schema(&["basic", "silver", "gold"]));
+    assert!(codes(&f).is_empty(), "{f:?}");
+    // One that lets through only a value past the range leaves nothing to narrow it to, and the
+    // value is the enum's own name, not an alias the contract spells it by.
+    let f = check("enum-range-en-past", &en, "order.json", &schema(&["platinum"]));
+    assert_eq!(codes(&f).first(), Some(&"E122"), "{f:?}");
+    assert!(f[0].2.contains(r#""kind":"none""#) && f[0].2.contains("範囲に入る値は一つもありません") && !f[0].2.contains("別名"), "{f:?}");
+
+    // The Japanese version, against a `.proto` whose strings carry the names.
+    let ja = rule(
+        "注文(order) = proto \"order.proto\" shop.v1.Order",
+        "段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)",
+        "a(a) : 段階  from 注文.tier",
+        "b(b) : 段階",
+        ">=一般 <=ゴールド",
+    )
+    .replace("from order.campaign", "from 注文.campaign");
+    let body = |campaign: &[&str]| {
+        proto(&format!(
+            "message Order {{\n  string tier = 1 [(buf.validate.field).string = {{in: [{}]}}];\n  string campaign = 2 [(buf.validate.field).string = {{in: [{}]}}];\n}}",
+            quote(&["一般", "シルバー", "ゴールド", "プラチナ"]),
+            quote(campaign),
+        ))
+    };
+    let f = check("enum-range-ja", &ja, "order.proto", &body(&["一般", "シルバー", "ゴールド", "プラチナ"]));
+    assert_eq!(codes(&f), vec!["E122"], "{f:?}");
+    assert!(f[0].1.contains("`注文.campaign`") && f[0].1.contains("プラチナ"), "{f:?}");
+    assert!(f[0].2.contains(r#""fix":{"kind":"narrow_contract","text":"[(buf.validate.field).string = {in: [\"一般\", \"シルバー\", \"ゴールド\"]}]"}"#), "{f:?}");
+    let f = check("enum-range-ja-narrow", &ja, "order.proto", &body(&["一般", "シルバー", "ゴールド"]));
+    assert!(codes(&f).is_empty(), "{f:?}");
+}

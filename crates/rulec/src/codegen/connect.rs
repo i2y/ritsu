@@ -489,6 +489,15 @@ impl<'a> Gen<'a> {
                 ));
             }
         }
+        // An input of an ordered enum held to a range: its two ends, by the names the values
+        // travel as on this wire (§15.210, §15.251).
+        if let (Ty::Enum(en), Some(r)) = (inner, self.c.enum_ranges.get(name)) {
+            let wire = self.wire_enum(en);
+            let named = |v: &String| wire.values.iter().find(|(n, _, _)| n == v).map(|(_, p, _)| p.clone()).unwrap_or_else(|| v.clone());
+            if let (Some(lo), Some(hi)) = (r.first(), r.last()) {
+                s.push_str(&tr!("。{} から {} まで", ". {} to {}", named(lo), named(hi)));
+            }
+        }
         if matches!(inner, Ty::Date) {
             s.push_str(&tr!("：日付。YYYY-MM-DD", ": a date, YYYY-MM-DD"));
         }

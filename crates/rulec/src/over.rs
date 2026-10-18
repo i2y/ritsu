@@ -236,8 +236,9 @@ fn shown(v: &Value) -> String {
 
 /// What the output `output` (an enum or a bool) comes to when each input of `ranges` takes only
 /// the values between its ends (the integers on the wire: a date as its day number; an enum by the
-/// places of its values in the order the rule declares them, from 0; a bool as 0 for false and 1
-/// for true), and every other input its whole range: each value with an input that comes to it, in
+/// places of its values in the order the rule declares them, from 0, and of those only the ones
+/// its own `range` lets in, §15.251; a bool as 0 for false and 1 for true), and every other input
+/// its whole range: each value with an input that comes to it, in
 /// the order the values are declared, an enum's value by its public name (`上限まで(within_limit)`
 /// is `within_limit`, what a gate writes into Cedar) and the input as `eval` takes it; or
 /// undecided, with why. `f` and `c` are the rule as checked; `src` and
@@ -292,7 +293,13 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
         };
         if let Some(words) = words {
             let (from, to) = (lo.unwrap_or(0).max(0), hi.unwrap_or(i128::MAX).min(words.len() as i128 - 1));
-            let these: Vec<String> = if from > to { Vec::new() } else { words[from as usize..=to as usize].to_vec() };
+            let mut these: Vec<String> = if from > to { Vec::new() } else { words[from as usize..=to as usize].to_vec() };
+            // an input of an ordered enum that declares a range takes only the values it lets in,
+            // as a number is met with its declared range, and held to values outside, no input
+            // lies inside (§15.251): a define over the input could be left undecided before
+            if let Some(allowed) = c.enum_ranges.get(name) {
+                these.retain(|w| allowed.contains(w));
+            }
             // an input given more than once takes the values of each (a gate's enum with fewer
             // values than the rule's, whose places need not run on), in the rule's order
             match held.values.iter_mut().find(|(n, _)| n == name) {

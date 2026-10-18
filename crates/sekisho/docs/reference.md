@@ -240,7 +240,9 @@ service's data, the input and the clock, and puts it in the request; a caller ca
 A value given to a rule or a date is an attribute of the principal or the resource, an input, a
 constant or `today`; another computed value cannot be (E105). Its range has to fit within what the
 rule or the date takes, and a precondition of the rule (its `constraint`) has to hold over it
-(E206; W201 when rulec cannot decide). A calendar has to have data for every day of `today`'s range
+(E206; W201 when rulec cannot decide). An input of a rule that holds an ordered enum to a range
+(`campaign : tier  range >=basic <=gold`) takes the values the range lets in: an enum given to it
+has to have only those values, and a constant has to be one of them (E206). A calendar has to have data for every day of `today`'s range
 and every day the dates can come to (E207). What a rule's output can be (over the stretches the
 policies cut its number inputs into, at each value of an enum or a bool the policies read too or
 the gate writes as a constant, and over only the values of an enum of the gate's that has fewer

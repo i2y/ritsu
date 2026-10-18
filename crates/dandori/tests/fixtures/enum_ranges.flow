@@ -1,0 +1,41 @@
+workflow enum_ranges v1
+description "Ranges of an enum: what a workflow gives a rule's input that holds an ordered enum to a range has to be a value the range lets in, whatever place it comes from"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Member
+  name : string
+  tier : tiers.tier
+
+inputs
+  member   : Member
+  campaign : tiers.tier
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  shipping : money[USD]
+
+task pick_campaign(name: string) -> tiers.tier
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pick-campaign"
+  idempotent
+
+flow
+  # the rule lifts a member as far as gold: a campaign of gold is inside its range, platinum is not
+  let a = tiers(member: member.tier, campaign: gold, subtotal: subtotal)
+  let b = tiers(member: member.tier, campaign: platinum, subtotal: subtotal)
+  # an input, a field of a record, a task's answer and a rule's output can each be any value of the enum
+  let c = tiers(member: member.tier, campaign: campaign, subtotal: subtotal)
+  let d = tiers(member: member.tier, campaign: member.tier, subtotal: subtotal)
+  let picked = pick_campaign(name: member.name)
+  let e = tiers(member: member.tier, campaign: picked, subtotal: subtotal)
+  let f = tiers(member: member.tier, campaign: a.effective, subtotal: subtotal)
+  # and so can a variable put one of those in
+  let chosen = campaign
+  let g = tiers(member: member.tier, campaign: chosen, subtotal: subtotal)
+  # branching on the campaign and writing out a value the range lets in keeps inside it
+  match campaign
+    basic => let h = tiers(member: member.tier, campaign: basic, subtotal: subtotal)
+    silver => let h = tiers(member: member.tier, campaign: silver, subtotal: subtotal)
+    gold, platinum => let h = tiers(member: member.tier, campaign: gold, subtotal: subtotal)
+  succeed shipping = a.shipping

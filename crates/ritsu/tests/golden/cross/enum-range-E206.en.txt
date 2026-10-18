@@ -1,0 +1,7 @@
+ok campaign_lift.rule
+lift.flow: ok
+error[sekisho E206]: tiers.gate:25:1: `resource.campaign` can be outside the range of the input `campaign` of the rule `campaign_lift` (basic..gold)
+    25 |     lifted = campaign_lift(member: principal.tier, campaign: resource.campaign).lifted
+  = For example: `resource.campaign` at `platinum`.
+  = Give it an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant.
+ritsu check: 3 files (rulec 1, dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

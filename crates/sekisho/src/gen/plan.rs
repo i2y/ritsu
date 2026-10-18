@@ -278,7 +278,7 @@ fn call_of(g: &Gate, imports: &BTreeMap<usize, Import>, a: &Action, cv: &Compute
                 })
                 .collect();
             let values = match strip(&out.ty) {
-                ritsu_ports::ColumnType::Enum(e) => facts.enums.iter().find(|x| x.name == *e).map(|x| x.values.iter().map(|v| (v.name.clone(), v.public.clone())).collect()),
+                ritsu_ports::ColumnType::Enum { name: e, .. } => facts.enums.iter().find(|x| x.name == *e).map(|x| x.values.iter().map(|v| (v.name.clone(), v.public.clone())).collect()),
                 _ => None,
             };
             Some(Call::Rule { module: *rule, output: Box::new(out), args: given, values })

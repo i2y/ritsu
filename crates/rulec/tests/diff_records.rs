@@ -912,3 +912,83 @@ fn what_carries_into_the_new_version_s_types() {
         assert_eq!(lines_of(arr(&j, "refused")), [1], "{}: {out}", k.lang);
     }
 }
+
+/// The corpus's shipping by membership tier, whose campaign the range caps at gold, and an
+/// older version of it whose campaign lifts a member to any tier.
+struct Tiers {
+    lang: &'static str,
+    rule: &'static str,
+    range: &'static str,
+    records: &'static str,
+    field: &'static str,
+    /// What `diff` says of the records the new version turns away, and what `fixtures lint` says.
+    refused: &'static str,
+    lint: &'static str,
+}
+
+const TIERS_EN: Tiers = Tiers {
+    lang: "en",
+    rule: "member_tier_shipping.rule",
+    range: "  range >=basic <=gold",
+    records: r#"{"in":{"member":"basic","campaign":"gold","subtotal":10},"observed":{"shipping":0,"effective":"gold","lifted":true}}
+{"in":{"member":"basic","campaign":"platinum","subtotal":10},"observed":{"shipping":0,"effective":"platinum","lifted":true}}
+{"in":{"member":"silver","campaign":"basic","subtotal":60},"observed":{"shipping":0,"effective":"silver","lifted":false}}
+{"in":{"member":"gold","campaign":"platinum","subtotal":20},"observed":{"shipping":0,"effective":"platinum","lifted":true}}
+"#,
+    field: "campaign",
+    refused: "campaign is outside the new version's range basic..gold",
+    lint: "`in.campaign`: `platinum` is outside the declared range basic..gold",
+};
+
+const TIERS_JA: Tiers = Tiers {
+    lang: "ja",
+    rule: "会員段階の送料.rule",
+    range: "  range >=一般 <=ゴールド",
+    records: r#"{"in":{"会員":"一般","キャンペーン":"ゴールド","小計":10},"observed":{"送料":0,"適用段階":"ゴールド","引き上げ":true}}
+{"in":{"会員":"一般","キャンペーン":"プラチナ","小計":10},"observed":{"送料":0,"適用段階":"プラチナ","引き上げ":true}}
+{"in":{"会員":"シルバー","キャンペーン":"一般","小計":60},"observed":{"送料":0,"適用段階":"シルバー","引き上げ":false}}
+{"in":{"会員":"ゴールド","キャンペーン":"プラチナ","小計":20},"observed":{"送料":0,"適用段階":"プラチナ","引き上げ":true}}
+"#,
+    field: "キャンペーン",
+    refused: "キャンペーン が新しい版の範囲 一般..ゴールド の外です",
+    lint: "`in.キャンペーン`: `プラチナ` は宣言した範囲 一般..ゴールド の外です",
+};
+
+/// An ordered enum input's range is held as a number's is (§15.251). `diff` counts the records
+/// whose campaign is platinum as ones the new version turns away, `fixtures lint` against the new
+/// version says they are outside its declared range, and `replay` leaves them out. All three
+/// took them before, and compared the new version's answers for inputs it refuses.
+#[test]
+fn an_enum_value_outside_the_new_range_is_turned_away_as_a_number_is() {
+    for q in [&TIERS_EN, &TIERS_JA] {
+        let t = TempDir::new(&format!("diff-records-tiers-{}", q.lang));
+        let d = t.path();
+        let src = std::fs::read_to_string(root().join("tests/corpus").join(q.rule)).unwrap();
+        write(d, "old.rule", &edit(&src, q.range, ""));
+        write(d, "new.rule", &src);
+        write(d, "r.jsonl", q.records);
+        let (c, out, e) = rulec(d, q.lang, &["check", "old.rule"]);
+        assert_eq!(c, 0, "{out}{e}");
+
+        let (c, out, e) = rulec(d, q.lang, &["diff", "old.rule", "new.rule", "--fixtures", "r.jsonl", "--format", "json"]);
+        assert_eq!(c, 1, "{}: {out}{e}", q.lang);
+        let j = json(&out);
+        assert_eq!((int(&j, "compared"), int(&j, "matched")), (4, 2), "{}: {out}", q.lang);
+        assert!(arr(&j, "clusters").is_empty() && nothing_left_out(&j), "{}: {out}", q.lang);
+        let refused = arr(&j, "refused");
+        assert_eq!(refused.len(), 1, "{}: {out}", q.lang);
+        assert_eq!((s(&refused[0], "kind"), s(&refused[0], "field"), s(&refused[0], "what")), ("input_range", q.field, q.refused), "{}: {out}", q.lang);
+        assert_eq!(lines_of(refused), [2, 4], "{}: {out}", q.lang);
+
+        let (c, out, _) = rulec(d, q.lang, &["fixtures", "lint", "r.jsonl", "new.rule"]);
+        assert_eq!(c, 1, "{}: {out}", q.lang);
+        assert!(out.contains(q.lint), "{}: `{}` が無い:\n{out}", q.lang, q.lint);
+        let (c, out, _) = rulec(d, q.lang, &["fixtures", "lint", "r.jsonl", "old.rule"]);
+        assert_eq!(c, 0, "{}: the old version takes every record: {out}", q.lang);
+
+        let (_, out, e) = rulec(d, q.lang, &["replay", "new.rule", "--fixtures", "r.jsonl", "--format", "json"]);
+        let j = json(&out);
+        assert_eq!((int(&j, "compared"), int(&j, "matched")), (2, 2), "{}: {out}{e}", q.lang);
+        assert_eq!(int(j.get("excluded").unwrap(), "bad_format"), 2, "{}: {out}", q.lang);
+    }
+}

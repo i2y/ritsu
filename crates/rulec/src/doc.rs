@@ -3380,8 +3380,11 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
                     .finish(),
             );
         }
+        // An input of an ordered enum with a range offers only the values the range lets in, as
+        // a number's field is bounded by its range (§15.251): the list offered every value of the
+        // enum, and the one picked outside the range was refused by the call it was put to.
         if let Ty::Enum(e) = ty {
-            if let Some(vs) = c.enums.get(e) {
+            if let Some(vs) = c.enum_ranges.get(name).or_else(|| c.enums.get(e)) {
                 let vs: Vec<String> = vs.iter().map(|v| format!("{v:?}")).collect();
                 o = o.raw("values", crate::json::arr(&vs));
             }

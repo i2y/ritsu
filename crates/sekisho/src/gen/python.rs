@@ -895,7 +895,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                     let put = match values {
                         Some(vs) => {
                             let ty_name = match plan::strip(&output.ty) {
-                                ritsu_ports::ColumnType::Enum(en) => py.enums.iter().find(|x| x.name == *en).map(|x| (x.alias.clone(), x.values.clone())),
+                                ritsu_ports::ColumnType::Enum { name: en, .. } => py.enums.iter().find(|x| x.name == *en).map(|x| (x.alias.clone(), x.values.clone())),
                                 _ => None,
                             };
                             match ty_name {
@@ -1142,7 +1142,7 @@ fn rule_arg(p: &Plan, facts: &ritsu_ports::RuleFacts, m: &str, col: &ritsu_ports
                 format!("{m}.{pty}({raw})")
             }
         }
-        (C::Enum(en), src) => {
+        (C::Enum { name: en, .. }, src) => {
             let Some(ce) = facts.python.enums.iter().find(|x| x.name == *en) else { return raw.to_string() };
             let Some(re) = facts.enums.iter().find(|x| x.name == *en) else { return raw.to_string() };
             // the rule's value a word names: its name, its alias in the code, its public name

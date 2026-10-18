@@ -10,8 +10,10 @@
 //!   a dates file and its inputs): `names.rs` says them, and a file whose names hold has none. They
 //!   are said here too, for a reading of the facts that would differ from the names', rather than
 //!   leave the computed value out of the walk without a word.
-//! - E206: a value given to a rule or a date can be outside the input's range, or can break a
-//!   precondition of the rule (rulec answers, with an example); W201 when rulec cannot decide.
+//! - E206: a value given to a rule or a date can be outside the input's range — for an input of
+//!   the rule that holds its ordered enum to a range, a value the range does not let in, said in
+//!   the enum's values — or can break a precondition of the rule (rulec answers, with an example);
+//!   W201 when rulec cannot decide.
 //! - E207: a calendar `today is open in` reads does not cover every day of `today`.
 //! - E208: a workflow's `.flow` does not pass dandori's check, cannot be read, or is outside the
 //!   root.
@@ -304,8 +306,8 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
             // each value by the rule's name of it, and by its public name: the alias the `.rule` writes
             // in parentheses (`上限まで(within_limit)`), what Cedar is given and what rulec answers
             // `outputs_over` with
-            ColumnType::Enum(e) => facts.enums.iter().find(|x| x.name == *e).map(|x| Domain::Enum(x.values.iter().map(|v| Named::new(&v.name, &v.public, 0)).collect())),
-            ColumnType::Opt(inner) if matches!(**inner, ColumnType::Bool | ColumnType::Enum(_)) => {
+            ColumnType::Enum { name: e, .. } => facts.enums.iter().find(|x| x.name == *e).map(|x| Domain::Enum(x.values.iter().map(|v| Named::new(&v.name, &v.public, 0)).collect())),
+            ColumnType::Opt(inner) if matches!(**inner, ColumnType::Bool | ColumnType::Enum { .. }) => {
                 diags.push(at("E105", g, line, tr!("規則 `{}` の出力 `{output}` は値が無いことがあり、条件に使えません", "The output `{output}` of the rule `{}` may have no value, and a condition cannot read it", facts.rule; facts.rule)));
                 None
             }
@@ -376,22 +378,33 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
                     diags.push(at("E206", g, line, tr!("`{shown}` は規則 `{}` の入力 `{name}` の範囲（{x}〜{y}）の外になりえます", "`{shown}` can be outside the range of the input `{name}` of the rule `{}` ({x}..{y})", facts.rule; facts.rule)));
                 }
             }
-            (ColumnType::Enum(e), Given::Enum(ge)) => {
+            (ColumnType::Enum { name: e, range }, Given::Enum(ge)) => {
                 let rv: Vec<String> = facts.enums.iter().find(|x| x.name == *e).map(|x| x.values.iter().flat_map(|v| [v.name.clone(), v.alias.clone(), v.public.clone()]).collect()).unwrap_or_default();
                 let missing: Vec<Text> = g.enums[*ge].values.iter().filter(|v| !rv.contains(&v.name) && !rv.contains(&v.alias)).map(|v| Text::same(v.name.clone())).collect();
                 if missing.is_empty() {
                     inputs.push((col.name.clone(), None));
+                    // the values of the gate's enum the input's range does not let in, in the
+                    // gate's order, each by the gate's name of it
+                    if let Some(takes) = range {
+                        let out: Vec<String> = g.enums[*ge].values.iter().filter(|v| enum_value_named(facts, e, &[&v.name, &v.alias]).is_some_and(|x| !takes.contains(&x))).map(|v| v.name.clone()).collect();
+                        outside_values(g, line, &facts.rule, name, &shown, takes, &out, false, diags);
+                    }
                 } else {
                     let l = Text::list(&missing);
                     diags.push(mismatch(tr!("{} は規則の列挙 `{e}` の値にありません", "{} are not values of the rule's enum `{e}`", l.ja; l.en)));
                 }
             }
-            (ColumnType::Enum(e), Given::Word(w)) => {
-                let ok = facts.enums.iter().find(|x| x.name == *e).is_some_and(|x| x.values.iter().any(|v| v.name == *w || v.alias == *w || v.public == *w));
-                if ok {
-                    inputs.push((col.name.clone(), None));
-                } else {
-                    diags.push(at("E101", g, line, tr!("`{w}` は規則 `{}` の列挙 `{e}` の値ではありません", "`{w}` is not a value of the enum `{e}` of the rule `{}`", facts.rule; facts.rule)));
+            (ColumnType::Enum { name: e, range }, Given::Word(w)) => {
+                match enum_value_named(facts, e, &[w]) {
+                    Some(x) => {
+                        inputs.push((col.name.clone(), None));
+                        if let Some(takes) = range
+                            && !takes.contains(&x)
+                        {
+                            outside_values(g, line, &facts.rule, name, &shown, takes, std::slice::from_ref(w), true, diags);
+                        }
+                    }
+                    None => diags.push(at("E101", g, line, tr!("`{w}` は規則 `{}` の列挙 `{e}` の値ではありません", "`{w}` is not a value of the enum `{e}` of the rule `{}`", facts.rule; facts.rule))),
                 }
             }
             (want, _) => diags.push(mismatch(tr!("型が違います（入力は {}）", "it is not of the input's type ({})", column_type(want); column_type(want)))),
@@ -444,9 +457,9 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
         .iter()
         .filter_map(|i| {
             let e = match &i.ty {
-                ColumnType::Enum(e) => e,
+                ColumnType::Enum { name: e, .. } => e,
                 ColumnType::Opt(x) => match x.as_ref() {
-                    ColumnType::Enum(e) => e,
+                    ColumnType::Enum { name: e, .. } => e,
                     _ => return None,
                 },
                 _ => return None,
@@ -457,7 +470,7 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
         .collect();
     // the name of each value of an enum output in the generated code, which a condition may write too
     let members: Vec<String> = match column(&facts.outputs, output).map(|c| &c.ty) {
-        Some(ColumnType::Enum(e)) => facts.enums.iter().find(|x| x.name == *e).map(|x| x.values.iter().map(|v| v.alias.clone()).collect()).unwrap_or_default(),
+        Some(ColumnType::Enum { name: e, .. }) => facts.enums.iter().find(|x| x.name == *e).map(|x| x.values.iter().map(|v| v.alias.clone()).collect()).unwrap_or_default(),
         _ => Vec::new(),
     };
     domain.map(|domain| Kn::Rule { file: u.file.clone(), output: column(&facts.outputs, output).map(|c| c.name.clone()).unwrap_or_default(), domain, inputs, enums, members })
@@ -468,7 +481,7 @@ fn column_type(t: &ColumnType) -> String {
         ColumnType::Bool => "bool".into(),
         ColumnType::Str => "string".into(),
         ColumnType::Date => "date".into(),
-        ColumnType::Enum(e) => e.clone(),
+        ColumnType::Enum { name: e, .. } => e.clone(),
         ColumnType::Num { written, .. } => written.clone(),
         ColumnType::Opt(x) => format!("{}?", column_type(x)),
     }
@@ -518,6 +531,34 @@ fn outside(g: &Gate, line: usize, rule: &str, input: &str, shown: &str, have: (i
             .note(tr!("例：`{shown}` が {ex} のとき。", "For example: `{shown}` at {ex}."))
             .note(tr!("渡す値の範囲を、入力の範囲の中に狭めてください。", "Narrow the range of what is given to the input's.")),
     );
+}
+
+/// The rule's name of the value of its enum `en` that one of `words` names: by the rule's name of
+/// it, its alias in the generated code, or its public name.
+fn enum_value_named(facts: &RuleFacts, en: &str, words: &[&str]) -> Option<String> {
+    let e = facts.enums.iter().find(|x| x.name == en)?;
+    e.values.iter().find(|v| words.iter().any(|w| v.name == *w || v.alias == *w || v.public == *w)).map(|v| v.name.clone())
+}
+
+/// E206 when what is given to an input of the rule that holds its ordered enum to a range can be a
+/// value the range does not let in (`outside`, as the gate writes those values, in its order), or
+/// is one, for a constant: the range said by its two ends, as the rule writes it, and an example of
+/// those values for what can be several.
+#[allow(clippy::too_many_arguments)]
+fn outside_values(g: &Gate, line: usize, rule: &str, input: &str, shown: &str, takes: &[String], outside: &[String], constant: bool, diags: &mut Vec<Diag>) {
+    let Some(ex) = outside.first() else { return };
+    let (x, y) = (takes.first().cloned().unwrap_or_default(), takes.last().cloned().unwrap_or_default());
+    let fix = tr!(
+        "値がどれも範囲の中にある列挙の属性か input を渡すか、範囲の中の値を定数で書いてください。",
+        "Give it an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant."
+    );
+    let d = if constant {
+        at("E206", g, line, tr!("`{shown}` は規則 `{rule}` の入力 `{input}` の範囲（{x}〜{y}）の外です", "`{shown}` is outside the range of the input `{input}` of the rule `{rule}` ({x}..{y})"))
+    } else {
+        at("E206", g, line, tr!("`{shown}` は規則 `{rule}` の入力 `{input}` の範囲（{x}〜{y}）の外になりえます", "`{shown}` can be outside the range of the input `{input}` of the rule `{rule}` ({x}..{y})"))
+            .note(tr!("例：`{shown}` が `{ex}` のとき。", "For example: `{shown}` at `{ex}`."))
+    };
+    diags.push(d.note(fix));
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -1,0 +1,21 @@
+workflow 列挙の範囲に収まる v1
+description "列挙の範囲に収まる流れ：規則の、順序のある列挙の入力に、範囲に入る値だけを書いて渡すワークフローは、検査を通る"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:member-tier-shipping"
+
+inputs
+  会員         : 送料.段階
+  キャンペーン : 送料.段階
+  小計         : money[USD]  range >=0USD <=100000USD
+
+outputs
+  送料 : money[USD]
+
+flow
+  # 規則が会員を引き上げるのはゴールドまで。プラチナのキャンペーンはゴールドとして渡す
+  match キャンペーン
+    一般 => let 見積もり = 送料(会員: 会員, キャンペーン: 一般, 小計: 小計)
+    シルバー => let 見積もり = 送料(会員: 会員, キャンペーン: シルバー, 小計: 小計)
+    ゴールド, プラチナ => let 見積もり = 送料(会員: 会員, キャンペーン: ゴールド, 小計: 小計)
+  succeed 送料 = 見積もり.送料

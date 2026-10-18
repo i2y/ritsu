@@ -86,13 +86,14 @@ fn checked(path: &str, src: &str, budget: i64) -> Result<(RuleFile, Checked), Ve
     crate::prepare(src, path).map_err(|_| refused(path, src))
 }
 
-/// A value's type as the port hands it over: a number with its unit and its range on the wire.
+/// A value's type as the port hands it over: a number with its unit and its range on the wire, an
+/// enum with the values its input's range lets in (§15.210, §15.251).
 fn column_type(c: &Checked, name: &str, ty: &Ty) -> ColumnType {
     match ty {
         Ty::Bool => ColumnType::Bool,
         Ty::Str => ColumnType::Str,
         Ty::Date => ColumnType::Date,
-        Ty::Enum(e) => ColumnType::Enum(e.clone()),
+        Ty::Enum(e) => ColumnType::Enum { name: e.clone(), range: c.enum_ranges.get(name).cloned() },
         Ty::Opt(t) => ColumnType::Opt(Box::new(column_type(c, name, t))),
         _ => {
             let sc = c.wire_scale(name);
@@ -337,16 +338,30 @@ fn to_val(c: &Checked, name: &str, ty: &Ty, v: &Value) -> Result<crate::eval::Va
                 Err(ritsu_base::tr!("`{name}` の `{x}` は {e} の値ではありません", "`{x}` of `{name}` is not a value of {e}"))
             }
         }
-        (Ty::Date, Value::Date(d)) => {
-            let p: Vec<&str> = d.split('-').collect();
-            match (p.first().and_then(|y| y.parse().ok()), p.get(1).and_then(|m| m.parse().ok()), p.get(2).and_then(|x| x.parse().ok())) {
-                (Some(y), Some(m), Some(dd)) if p.len() == 3 => Ok(Val::Date(y, m, dd)),
-                _ => Err(wrong()),
-            }
-        }
+        // `YYYY-MM-DD` of a day the calendar has, as the generated code's door reads a date: a
+        // day it does not have (2026-02-30) was read into a date before (§15.251)
+        (Ty::Date, Value::Date(d)) => match crate::door::civil(d) {
+            Some((y, m, dd)) => Ok(Val::Date(y, m, dd)),
+            None => Err(wrong()),
+        },
         (t, Value::Int(n)) if t.is_numeric() => Ok(Val::Num(crate::types::from_wire(*n, c.wire_scale(name)))),
         _ => Err(wrong()),
     }
+}
+
+/// Whether the value of the input or the element's field `name` is outside the range its
+/// declaration holds it to, as the generated code's door holds it: a number by its value and a date
+/// by its day number (reading only numbers let any date through, §15.198), and a value of an
+/// ordered enum by the values its `range` lets in (§15.210, §15.251).
+fn outside_range(c: &Checked, name: &str, v: &crate::eval::Val) -> bool {
+    use crate::eval::Val;
+    let at = match v {
+        Val::Num(x) => *x,
+        Val::Date(y, m, d) => crate::types::date_ord(*y, *m, *d),
+        Val::Enum(x) => return c.enum_ranges.get(name).is_some_and(|allowed| !allowed.contains(x)),
+        _ => return false,
+    };
+    c.ranges.get(name).is_some_and(|(lo, hi)| lo.is_some_and(|lo| at.cmp_to(lo) == std::cmp::Ordering::Less) || hi.is_some_and(|hi| at.cmp_to(hi) == std::cmp::Ordering::Greater))
 }
 
 /// An output of the evaluator, on the wire: `none` of a value that may be absent is the absence.
@@ -603,19 +618,8 @@ impl ritsu_ports::Rules for Engine {
                 continue;
             }
             let val = to_val(c, name, &ty, v).map_err(RuleError::Input)?;
-            // A date is held to its range by its day number, the way the generated code's door
-            // holds it; reading only numbers here let any date through (§15.198).
-            let at = match &val {
-                Val::Num(x) => Some(*x),
-                Val::Date(y, m, d) => Some(crate::types::date_ord(*y, *m, *d)),
-                _ => None,
-            };
-            if let (Some(x), Some((lo, hi))) = (at, c.ranges.get(name)) {
-                let below = lo.is_some_and(|lo| x.cmp_to(lo) == std::cmp::Ordering::Less);
-                let above = hi.is_some_and(|hi| x.cmp_to(hi) == std::cmp::Ordering::Greater);
-                if below || above {
-                    return Err(RuleError::Input(ritsu_base::tr!("入力 `{name}` が範囲の外です", "the input `{name}` is outside its range")));
-                }
+            if outside_range(c, name, &val) {
+                return Err(RuleError::Input(ritsu_base::tr!("入力 `{name}` が範囲の外です", "the input `{name}` is outside its range")));
             }
             // A date of koyomi's days takes those days only, and the door refuses any other
             // (§15.174).
@@ -646,7 +650,13 @@ impl ritsu_ports::Rules for Engine {
                         one.insert(fname.clone(), Val::Enum(crate::kw::NONE.into()));
                         continue;
                     }
-                    one.insert(fname.clone(), to_val(c, fname, &ty, v).map_err(RuleError::Input)?);
+                    let val = to_val(c, fname, &ty, v).map_err(RuleError::Input)?;
+                    // a field is held to its range as an input is, the way the generated code's
+                    // door holds each element's (§15.251)
+                    if outside_range(c, fname, &val) {
+                        return Err(RuleError::Input(ritsu_base::tr!("要素のフィールド `{fname}` が範囲の外です", "an element's field `{fname}` is outside its range")));
+                    }
+                    one.insert(fname.clone(), val);
                 }
                 seq.push(one);
             }

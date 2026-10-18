@@ -220,12 +220,15 @@ An enum is a plain Rust enum whose members are the aliases in PascalCase
 (`CouponKind::Percent`); `as_str()` gives the name from the rule that the wire format uses, and
 `CouponKind::parse(&str)` reads one back.
 
-**There is no entry guard on an enum input**, unlike Python, TypeScript, JavaScript, Ruby, SQL and NumPy — the last of which checks a whole column with one `np.isin`. A value
+**There is no entry guard on an enum input's value**, unlike Python, TypeScript, JavaScript, Ruby, Go, SQL and NumPy — the last of which checks a whole column with one `np.isin`. A value
 of a Rust enum type is one of its variants by construction, so the check the others have to
-make at run time is already made by the compiler. Swift, PHP, Java and Go are in the same
+make at run time is already made by the compiler. Swift, PHP and Java are in the same
 position, and so is
 the Wasm module, which is the Rust one behind a door that turns an unknown value into an
-`error` line before the module is reached.
+`error` line before the module is reached. Go's enum is an integer type, so its guard asks
+`Valid()`. An input of an ordered enum with a `range` is guarded in every language all the
+same: which of its values the range lets in is a question of the run, as a number's range is
+(`if campaign < Tier::Basic || campaign > Tier::Gold`, §15.210).
 
 Errors come back as `Err(RuleError)`, whose two variants carry the same distinction as
 Python's two exception classes: `RuleError::Input { what, value }` is a contract violation by
@@ -449,7 +452,8 @@ spelling it used, so nothing has to be guessed. Types keep their PascalCase.
 An enum is a `String`-backed Swift enum whose raw value *is* the source name — which is also
 what the wire format carries — so `.rawValue` and `init?(rawValue:)` are the whole conversion
 in both directions and no parser is generated. It is `CaseIterable`, so `.allCases` is the
-list. **There is no entry guard on an enum input**, for the reason given under Rust.
+list. **There is no entry guard on an enum input's value**, for the reason given under Rust; one
+with a `range` is held to it.
 
 With one output the function returns that value; with two or more it returns a struct named
 `Output`. Both it and the brands are `Hashable` and `Sendable`, and `Output` declares a public
@@ -1516,7 +1520,8 @@ pointer of its own only where there is a value:
 ## The two guards
 
 **The entry guard** enforces at run time what the proof assumed. Every numeric input is
-checked against its declared `range`, and every enum input against its set of values; then
+checked against its declared `range`, and every enum input against its set of values — an
+ordered enum's with a `range` against the values the range lets in (§15.210); then
 every `constraint` — between two inputs, or between inputs added up and one more, the sum taken
 on the step the inputs share, which E108 has shown fits in int64 — and a date input that takes
 its range from a koyomi date against the days that date comes to. If the check were absent, a caller outside the
@@ -1686,7 +1691,8 @@ reaching a server running on their machine.
 
 The tool speaks the wire. Its `inputSchema` is the `in` object `rulec schema` prints — every
 input, required, nothing extra; an integer in the declared unit, with the unit and, for a
-rate, the step in its description; an enum as its listed names; a date as `YYYY-MM-DD` — and
+rate, the step in its description; an enum as its listed names, and an ordered enum's input
+with a `range` as the names the range lets in (§15.251); a date as `YYYY-MM-DD` — and
 its result is the line the record function writes, as text and as `structuredContent`:
 
 ```json

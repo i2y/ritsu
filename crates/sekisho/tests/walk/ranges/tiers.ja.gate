@@ -1,0 +1,54 @@
+gate 段階(tiers_ja) v1
+description "規則が範囲を書いた、順序のある列挙の入力に、範囲に入る値だけを渡すゲート。ゴールドで止まる列挙の属性と、定数のゴールドを渡す"
+namespace ShopJa
+
+use rule キャンペーンの引き上げ from "キャンペーンの引き上げ.rule"
+
+enum 段階(tier) = 一般(basic) | シルバー(silver) | ゴールド(gold) | プラチナ(platinum)
+enum キャンペーンの段階(campaign_tier) = 一般(basic) | シルバー(silver) | ゴールド(gold)
+
+principal 会員(User)
+  description "店の会員"
+  attributes
+    段階(tier) : 段階
+
+resource 注文(Order)
+  description "注文と、その注文のキャンペーン"
+  attributes
+    キャンペーン(campaign) : キャンペーンの段階
+
+action 引き上げて送る(ship_lifted)
+  description "キャンペーンが会員を引き上げる段階で、注文を送る"
+  principal 会員
+  resource 注文
+  context
+    引き上げる(lifted) = キャンペーンの引き上げ(会員: principal.段階, キャンペーン: resource.キャンペーン).引き上げ
+
+action ゴールドで送る(ship_at_gold)
+  description "注文をゴールドの段階で送る"
+  principal 会員
+  resource 注文
+  context
+    上がる(raised) = キャンペーンの引き上げ(会員: principal.段階, キャンペーン: ゴールド).引き上げ
+
+permit キャンペーンが引き上げる注文(orders_a_campaign_lifts)
+  description "キャンペーンが会員を引き上げる注文は、キャンペーンの段階で送る"
+  principal is 会員
+  action 引き上げて送る
+  when 引き上げる
+
+permit ゴールドが引き上げる注文(orders_gold_lifts)
+  description "ゴールドなら会員が引き上がる注文は、ゴールドで送る"
+  principal is 会員
+  action ゴールドで送る
+  when 上がる
+
+expect deny ゴールドから上は引き上げない(nothing_lifts_gold)
+  description "ゴールドから上の会員は、どのキャンペーンでも引き上がらない"
+  action 引き上げて送る
+  when principal.段階 is ゴールド or principal.段階 is プラチナ
+
+expect allow ゴールドのキャンペーンは一般の会員を引き上げる(a_campaign_of_gold_lifts_a_basic_member)
+  description "一般の会員は、ゴールドのキャンペーンで引き上がる"
+  action 引き上げて送る
+  when principal.段階 is 一般 and resource.キャンペーン is ゴールド

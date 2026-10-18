@@ -56,8 +56,23 @@ fn check_column(at: &str, col: &Column, cert: &Json, sch: Option<&Json>) {
     let enums: Vec<String> = cert.get("enums").and_then(|e| e.as_obj()).map(|kv| kv.iter().map(|(k, _)| k.clone()).collect()).unwrap_or_default();
     let sch = sch.unwrap_or_else(|| panic!("{at}: the schema has no `{}`", col.name));
     let ty = st(sch.get("type"));
+    // an input of an ordered enum with a range carries the values the certificate lists for it
+    // (§15.210, §15.251), an optional one inside its `T?`; every other column of an enum carries none
+    let inner = match &col.ty {
+        ColumnType::Opt(t) => t.as_ref(),
+        t => t,
+    };
+    if let ColumnType::Enum { name: e, range } = inner {
+        let listed = cert.get("enum_ranges").and_then(|r| r.get(&col.name)).map(|v| strs(Some(v)));
+        assert_eq!(*range, listed, "{at}: the range of {}", col.name);
+        // and the schema's `enum` is the same values: the range's, else every value of the enum
+        let every = cert.get("enums").and_then(|x| x.get(e)).map(|v| strs(Some(v))).unwrap_or_default();
+        let one = sch.get("oneOf").and_then(|x| x.as_arr()).and_then(|a| a.iter().find(|b| b.get("enum").is_some()).cloned());
+        let offered = strs(one.as_ref().unwrap_or(sch).get("enum"));
+        assert_eq!(offered, range.clone().unwrap_or(every), "{at}: the schema's enum of {}", col.name);
+    }
     match &col.ty {
-        ColumnType::Enum(e) => assert!(*e == written && enums.contains(e), "{at}: {} is the enum {e}", col.name),
+        ColumnType::Enum { name: e, .. } => assert!(*e == written && enums.contains(e), "{at}: {} is the enum {e}", col.name),
         ColumnType::Bool => assert_eq!(ty, "boolean", "{at}: {}", col.name),
         ColumnType::Date => assert!(ty == "string" && st(sch.get("format")) == "date", "{at}: {}", col.name),
         ColumnType::Str => assert!(ty == "string" && sch.get("format").is_none(), "{at}: {}", col.name),
@@ -467,9 +482,9 @@ fn witnesses_hold(e: &Engine, path: &str, output: &str, held: &[(String, Option<
     // the place of an enum's value in the order the rule declares them
     let place = |input: &str, name: &str| -> Option<i128> {
         let en = match &facts.inputs.iter().find(|c| c.name == input)?.ty {
-            ritsu_ports::ColumnType::Enum(en) => en.clone(),
+            ritsu_ports::ColumnType::Enum { name: en, .. } => en.clone(),
             ritsu_ports::ColumnType::Opt(t) => match t.as_ref() {
-                ritsu_ports::ColumnType::Enum(en) => en.clone(),
+                ritsu_ports::ColumnType::Enum { name: en, .. } => en.clone(),
                 _ => return None,
             },
             _ => return None,
@@ -505,9 +520,9 @@ fn public(e: &Engine, path: &str, output: &str, v: &Value) -> Value {
     let facts = e.facts(Path::new(path)).unwrap();
     let ty = facts.outputs.iter().find(|c| c.name == output).map(|c| c.ty.clone());
     let en = match ty {
-        Some(ritsu_ports::ColumnType::Enum(en)) => en,
+        Some(ritsu_ports::ColumnType::Enum { name: en, .. }) => en,
         Some(ritsu_ports::ColumnType::Opt(t)) => match *t {
-            ritsu_ports::ColumnType::Enum(en) => en,
+            ritsu_ports::ColumnType::Enum { name: en, .. } => en,
             _ => return v.clone(),
         },
         _ => return v.clone(),
@@ -1125,4 +1140,136 @@ fn a_value_of_an_enum_has_the_public_name_the_rule_writes() {
         }
     }
     assert!(aliased > 20, "{aliased} values are written with an alias");
+}
+
+/// The range an input of an ordered enum declares crosses the port (§15.251): `campaign : tier
+/// range >=basic <=gold` is handed over with the three values it lets in, and `member`, with no
+/// range, and the outputs with none; the evaluator answers a campaign inside the range and refuses
+/// platinum at its door, as the generated code does (before, it answered platinum); and an output
+/// over a place the range keeps out comes to nothing, as over a number past its range. The English
+/// rule of the corpus, and its Japanese version beside it.
+#[test]
+fn the_range_of_an_enum_input_crosses_the_port() {
+    let e = Engine::new();
+    #[allow(clippy::type_complexity)]
+    let rules: [(&str, &str, [&str; 4], [&str; 3]); 2] = [
+        ("tests/corpus/member_tier_shipping.rule", "tier", ["member", "campaign", "subtotal", "lifted"], ["basic", "silver", "gold"]),
+        ("tests/corpus/会員段階の送料.rule", "段階", ["会員", "キャンペーン", "小計", "引き上げ"], ["一般", "シルバー", "ゴールド"]),
+    ];
+    for (path, tier, [member, campaign, subtotal, lifted], inside) in rules {
+        let p = Path::new(path);
+        let f = e.facts(p).unwrap_or_else(|x| panic!("{path}: {x:?}"));
+        let ty = |n: &str| f.inputs.iter().chain(&f.outputs).find(|c| c.name == n).map(|c| c.ty.clone()).unwrap_or_else(|| panic!("{path}: no {n}"));
+        assert_eq!(ty(campaign), ColumnType::Enum { name: tier.into(), range: Some(inside.iter().map(|v| v.to_string()).collect()) }, "{path}");
+        assert_eq!(ty(member), ColumnType::Enum { name: tier.into(), range: None }, "{path}");
+        assert!(f.outputs.iter().all(|c| !matches!(&c.ty, ColumnType::Enum { range: Some(_), .. })), "{path}: an output carries a range");
+        let values: Vec<String> = f.enums.iter().find(|x| x.name == tier).unwrap().values.iter().map(|v| v.name.clone()).collect();
+        let (lowest, highest) = (values[0].clone(), values[3].clone());
+        let at = |c: &str| -> ritsu_ports::Values { vec![(member.into(), Value::Enum(lowest.clone())), (campaign.into(), Value::Enum(c.into())), (subtotal.into(), Value::Int(10))] };
+        let got = e.eval(p, &at(inside[2])).unwrap_or_else(|x| panic!("{path}: {x:?}"));
+        assert!(got.contains(&(lifted.to_string(), Value::Bool(true))), "{path}: {got:?}");
+        match e.eval(p, &at(&highest)) {
+            Err(RuleError::Input(t)) => {
+                assert_eq!(t.en, format!("the input `{campaign}` is outside its range"), "{path}");
+                assert_eq!(t.ja, format!("入力 `{campaign}` が範囲の外です"), "{path}");
+            }
+            other => panic!("{path}: a campaign past its range is answered: {other:?}"),
+        }
+        // the places of the values, from 0: platinum is 3, and over it no input lies inside
+        let over = |lo: i128, hi: i128| e.outputs_over(p, lifted, &[(campaign.to_string(), Some(lo), Some(hi))]).unwrap();
+        assert_eq!(over(3, 3), ritsu_ports::Found::Value(vec![]), "{path}");
+        assert_eq!(values_of(&over(0, 3)), values_of(&over(0, 2)), "{path}");
+    }
+}
+
+/// A door case on the wire, as the port takes it: None for what the port has no value for (a
+/// number with a fraction, an element that is not an object).
+fn door_value(ty: &rulec::types::Ty, j: &Json) -> Option<Value> {
+    use rulec::types::Ty;
+    let inner = match ty {
+        Ty::Opt(t) => t.as_ref(),
+        t => t,
+    };
+    Some(match (inner, j) {
+        (_, Json::Null) => Value::None,
+        (_, Json::Bool(b)) => Value::Bool(*b),
+        (_, Json::Int(n)) => Value::Int(*n),
+        (Ty::Enum(_), Json::Str(s)) => Value::Enum(s.clone()),
+        (Ty::Date, Json::Str(s)) => Value::Date(s.clone()),
+        (_, Json::Str(s)) => Value::Str(s.clone()),
+        _ => return None,
+    })
+}
+
+/// The evaluator behind the port refuses every input the door of the generated code refuses (what
+/// `rulec gen` writes for `rulec test` to hold every language to, §15.204), over every rule of the
+/// corpus, wherever the port can carry the input: a value of another kind, one past each end of
+/// its range — of an ordered enum's too — a day the calendar does not have, an element's field past
+/// its range, a combination a `constraint` rules out. Before §15.251 it answered 66 of them: the
+/// value past the range of an enum in each of the two rules that hold one to a range, 12 days the
+/// calendar does not have, and 52 fields of an element past their range or on such a day.
+#[test]
+fn the_port_refuses_every_input_the_door_refuses() {
+    let e = Engine::new();
+    let (mut asked, mut enums) = (0, 0);
+    let mut answered = Vec::new();
+    for path in corpus() {
+        let src = std::fs::read_to_string(&path).unwrap();
+        if rulec::has_error(&rulec::report(&src, &path).diags) {
+            continue;
+        }
+        let (f, c) = rulec::prepare(&src, &path).unwrap();
+        let vectors = rulec::vectors::generate(&f, &c);
+        'cases: for line in rulec::vectors::door_cases(&f, &c, &vectors) {
+            let j = json(&line);
+            let given = j.get("in").unwrap();
+            let mut values: ritsu_ports::Values = Vec::new();
+            for i in &f.inputs {
+                let n = &i.name.text;
+                let Some(x) = given.get(n) else { continue };
+                let Some(v) = door_value(&c.ty_of(n).unwrap_or(rulec::types::Ty::Unknown), x) else { continue 'cases };
+                values.push((n.clone(), v));
+            }
+            for el in &f.elements {
+                let seq = &el.name.text;
+                match given.get(seq) {
+                    Some(Json::Arr(xs)) => {
+                        let mut rows = Vec::new();
+                        for x in xs {
+                            if !matches!(x, Json::Obj(_)) {
+                                continue 'cases;
+                            }
+                            let mut row = Vec::new();
+                            for fd in &el.fields {
+                                let n = &fd.name.text;
+                                let Some(v) = x.get(n) else { continue };
+                                let Some(v) = door_value(&c.ty_of(n).unwrap_or(rulec::types::Ty::Unknown), v) else { continue 'cases };
+                                row.push((n.clone(), v));
+                            }
+                            rows.push(row);
+                        }
+                        values.push((seq.clone(), Value::List(rows)));
+                    }
+                    Some(other) => match door_value(&rulec::types::Ty::Unknown, other) {
+                        Some(v) => values.push((seq.clone(), v)),
+                        None => continue 'cases,
+                    },
+                    None => {}
+                }
+            }
+            asked += 1;
+            let why = st(j.get("why"));
+            if f.inputs.iter().any(|i| c.enum_ranges.contains_key(&i.name.text) && why.starts_with(i.name.text.as_str()) && why.contains("range")) {
+                enums += 1;
+            }
+            match e.eval(Path::new(&path), &values) {
+                Err(RuleError::Input(_)) | Err(RuleError::Contradiction(_)) => {}
+                other => answered.push(format!("{path}: {why}: {other:?}")),
+            }
+        }
+    }
+    assert!(answered.is_empty(), "the port answers what the door refuses:\n{}", answered.join("\n"));
+    assert!(asked > 1500, "{asked} inputs the door refuses");
+    // `campaign` and `キャンペーン`, one value past the end of each range
+    assert_eq!(enums, 2, "the values of an enum past its range");
 }

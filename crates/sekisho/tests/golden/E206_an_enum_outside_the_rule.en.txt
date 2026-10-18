@@ -1,0 +1,7 @@
+error[E206]: tests/mutants/E206_an_enum_outside_the_rule.gate:24:1: `resource.campaign` can be outside the range of the input `campaign` of the rule `campaign_lift` (basic..gold)
+    24 |     lifted = campaign_lift(member: principal.tier, campaign: resource.campaign).lifted
+  = For example: `resource.campaign` at `platinum`.
+  = Give it an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant.
+error[E206]: tests/mutants/E206_an_enum_outside_the_rule.gate:31:1: `platinum` is outside the range of the input `campaign` of the rule `campaign_lift` (basic..gold)
+    31 |     raised = campaign_lift(member: principal.tier, campaign: platinum).lifted
+  = Give it an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant.

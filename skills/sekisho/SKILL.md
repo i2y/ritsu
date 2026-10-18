@@ -192,7 +192,7 @@ reproduction. The usual ones:
 | E110 | what `allowed` asks with does not fit: an input given nothing or a value it does not take, a type the action asked does not take, one action asking it two ways | write the inputs (`allowed approve(amount: <value>)`) or the types of the action asked; split the action to ask it two ways |
 | E201 | a file a `use` reads does not pass its check, cannot be read, or is outside the root | fix that file with its language, or `--root` |
 | E202-E205 | an operation the contract does not have, an input it does not take, a `from` it has no parameter for, an operation two actions guard | follow the contract; ask which action decides an operation |
-| E206, W201 | a value given to a rule or a date outside what it takes, or breaking its precondition | narrow the range, or ask whether the rule should take more |
+| E206, W201 | a value given to a rule or a date outside what it takes, or breaking its precondition | narrow the range, or ask whether the rule should take more; for a rule's input of an ordered enum with a range, give an enum whose values are all inside it, or a value inside it as a constant |
 | E207 | a calendar without data for every day `today` can be | narrow `today`'s range, or bring the calendar's data |
 | E208 | a workflow's flow does not pass dandori's check | fix the flow with dandori |
 | E209 | the command was run without the other languages | run it as `ritsu sekisho` |

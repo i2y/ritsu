@@ -1,0 +1,29 @@
+rule キャンペーンの引き上げ(campaign_lift) v1
+description "キャンペーンが、その注文に限って会員を上の段階へ引き上げるか。キャンペーンが引き上げるのはゴールドまで"
+
+# 段階は低い順に並べる。セルは段階と比べられる（`>=ゴールド`）。
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member)           : 段階                            # 会員自身の段階
+  キャンペーン(campaign) : 段階  range >=一般 <=ゴールド    # キャンペーンが引き上げるのはゴールドまで
+
+outputs
+  引き上げ(lifted) : bool
+
+table 引き上げの表(lift)
+policy unique
+| 会員       | キャンペーン | -> 引き上げ |
+| >=ゴールド | -            | false       |
+| シルバー   | ゴールド     | true        |
+| シルバー   | <=シルバー   | false       |
+| 一般       | >=シルバー   | true        |
+| 一般       | 一般         | false       |
+
+examples
+| 会員     | キャンペーン | -> 引き上げ |
+| プラチナ | ゴールド     | false       |
+| シルバー | ゴールド     | true        |
+| シルバー | 一般         | false       |
+| 一般     | シルバー     | true        |
+| 一般     | 一般         | false       |

@@ -1,0 +1,21 @@
+workflow enum_ranges_held v1
+description "Ranges of an enum, held: a workflow that gives a rule's input of an ordered enum only values its range lets in, written out, passes the check"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+inputs
+  member   : tiers.tier
+  campaign : tiers.tier
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  shipping : money[USD]
+
+flow
+  # the rule lifts a member as far as gold: a campaign of platinum is given as gold
+  match campaign
+    basic => let quote = tiers(member: member, campaign: basic, subtotal: subtotal)
+    silver => let quote = tiers(member: member, campaign: silver, subtotal: subtotal)
+    gold, platinum => let quote = tiers(member: member, campaign: gold, subtotal: subtotal)
+  succeed shipping = quote.shipping

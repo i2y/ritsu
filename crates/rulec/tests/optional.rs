@@ -833,7 +833,7 @@ fn the_port_says_no_value_as_it_did() {
     let rule = Path::new("tests/optional/carried_answers.rule");
     let facts = e.facts(rule).unwrap_or_else(|x| panic!("{x:?}"));
     let ty = |n: &str| facts.outputs.iter().find(|c| c.name == n).map(|c| c.ty.clone()).unwrap();
-    assert_eq!(ty("service"), ColumnType::Opt(Box::new(ColumnType::Enum("service".into()))));
+    assert_eq!(ty("service"), ColumnType::Opt(Box::new(ColumnType::Enum { name: "service".into(), range: None })));
     match ty("insured") {
         ColumnType::Opt(inner) => assert!(matches!(*inner, ColumnType::Num { min: Some(0), max: Some(10_000), .. }), "{inner:?}"),
         other => panic!("{other:?}"),

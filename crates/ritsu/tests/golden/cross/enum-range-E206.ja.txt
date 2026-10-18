@@ -1,0 +1,7 @@
+ok campaign_lift.rule
+lift.flow: 検査を通りました
+エラー[sekisho E206]: tiers.gate:25:1: `resource.campaign` は規則 `campaign_lift` の入力 `campaign` の範囲（basic〜gold）の外になりえます
+    25 |     lifted = campaign_lift(member: principal.tier, campaign: resource.campaign).lifted
+  = 例：`resource.campaign` が `platinum` のとき。
+  = 値がどれも範囲の中にある列挙の属性か input を渡すか、範囲の中の値を定数で書いてください。
+ritsu check: ファイル 3 個（rulec 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

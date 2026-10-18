@@ -235,6 +235,36 @@ arithmetic, a range travels as it is, from where a value comes to where it goes.
 a range or narrowing one changes what a running workflow does when its values fall outside, so it
 ships as a new version or through Worker Deployment Versioning.
 
+A rule's input of an ordered enum can have a range too: a rule that declares `campaign : tier
+range >=basic <=gold` lifts a member as far as gold, and the code generated for it refuses a
+campaign of platinum.
+A value given to such an input must be one the range lets in (E014). A value written out is
+itself, and an input, a field, a task's answer or a rule's output can be any value of its enum,
+since an enum in a `.flow` takes no range. To hand the rule a value the workflow is given, branch
+on it with `match` and write out a value the range lets in
+([tests/fixtures/enum_ranges_held.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges_held.flow)):
+
+```flow
+  match campaign
+    basic => let quote = tiers(member: member, campaign: basic, subtotal: subtotal)
+    silver => let quote = tiers(member: member, campaign: silver, subtotal: subtotal)
+    gold, platinum => let quote = tiers(member: member, campaign: gold, subtotal: subtotal)
+```
+
+Handing the rule the campaign as it comes
+([tests/fixtures/enum_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges.flow))
+is E014:
+
+<div class="dd-term" markdown>
+
+```text
+error[E014]: tests/fixtures/enum_ranges.flow:28:1: `campaign` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    28 |   let c = tiers(member: member.tier, campaign: campaign, subtotal: subtotal)
+  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+```
+
+</div>
+
 ## Secrets
 
 A place a value is put can also say that what is put there is secret: `secret` after the type of an

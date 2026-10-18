@@ -1002,8 +1002,9 @@ impl<'a> Gen<'a> {
         };
         let sc = self.c.wire_scale(name);
         let mut s = match inner {
+            // An input with a range takes the values it lets in, as the guard holds it (§15.251).
             Ty::Enum(en) => {
-                let vs = self.c.enums.get(en).cloned().unwrap_or_default();
+                let vs = self.c.enum_ranges.get(name).or_else(|| self.c.enums.get(en)).cloned().unwrap_or_default();
                 tr!("text。{} のどれか", "text, one of {}", vs.join(", "))
             }
             Ty::Str => "text".into(),

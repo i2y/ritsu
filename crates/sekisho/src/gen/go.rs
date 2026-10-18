@@ -959,7 +959,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                     let got = if optional_out { "(*v)" } else { "v" };
                     let mut put_lines: Vec<String> = Vec::new();
                     let put = match (values, plan::strip(&output.ty)) {
-                        (Some(vs), ritsu_ports::ColumnType::Enum(en)) => match go.enums.iter().find(|x| x.name == *en) {
+                        (Some(vs), ritsu_ports::ColumnType::Enum { name: en, .. }) => match go.enums.iter().find(|x| x.name == *en) {
                             Some(ce) => {
                                 let pairs: Vec<String> = vs.iter().filter_map(|(nm, public)| ce.values.iter().find(|(x, _)| x == nm).map(|(_, mem)| format!("{m}.{mem}: {}", s(public)))).collect();
                                 put_lines.push(format!("name, ok := map[{m}.{}]string{{{}}}[{got}]", ce.alias, pairs.join(", ")));
@@ -1054,7 +1054,7 @@ fn rule_arg(p: &Plan, facts: &ritsu_ports::RuleFacts, m: &str, col: &ritsu_ports
             typed(v.to_string())
         }
         (C::Num { .. }, _) => typed(raw.to_string()),
-        (C::Enum(en), src) => {
+        (C::Enum { name: en, .. }, src) => {
             let Some(ce) = facts.go.enums.iter().find(|x| x.name == *en) else { return raw.to_string() };
             let Some(re) = facts.enums.iter().find(|x| x.name == *en) else { return raw.to_string() };
             let member_of = |word: &str| -> Option<String> {

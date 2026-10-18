@@ -1544,7 +1544,13 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 dom = Some(Dom::Ints(seen, false));
             }
             Ty::Enum(e) => {
-                let vals = c.enums.get(e).cloned().unwrap_or_default();
+                // What the input takes: the values its `range` lets in, for an input of an ordered
+                // enum that declares one (§15.210), as a number is held to its range above; else
+                // every value of the enum. Before, the range was not read here, and a contract
+                // that let a value past it through passed (§15.251).
+                let all = c.enums.get(e).cloned().unwrap_or_default();
+                let ranged = c.enum_ranges.contains_key(name);
+                let vals = c.enum_ranges.get(name).cloned().unwrap_or_else(|| all.clone());
                 let seen = match (leaf_schema, leaf_proto) {
                     (Some(n), _) => Some((con.strs_at(n), con.unread_at(n, true), false)),
                     (_, Some(fd)) => Some((proto_strs(fd), fd.rules.unread.clone(), true)),
@@ -1577,19 +1583,39 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                 } else {
                     format!("\"enum\": [{}]", quoted(&keep))
                 };
-                let label = tr!(
-                    "契約では {}、列挙 {e} は {}",
-                    "the contract lets through {}; enum {e} has {}",
-                    list.as_ref().map(|l| quoted(l)).unwrap_or_else(|| tr!("どの文字列でも", "any string")),
-                    quoted(&vals)
-                );
-                let widen = tr!("列挙に値を足して、その値の答えを決めてください", "add the value to the enum and decide what it answers there");
+                let lets = list.as_ref().map(|l| quoted(l)).unwrap_or_else(|| tr!("どの文字列でも", "any string"));
+                let label = if ranged {
+                    tr!("契約では {}、{wj} {name} の範囲は {}", "the contract lets through {}; {name} takes {}", lets, range_text(input))
+                } else {
+                    tr!("契約では {}、列挙 {e} は {}", "the contract lets through {}; enum {e} has {}", lets, quoted(&vals))
+                };
                 let extra = list.as_ref().and_then(|l| l.iter().find(|x| !vals.contains(x)).cloned());
+                // The rule's side of the fix: for a value of the enum past the input's range, the
+                // range; for a value the enum does not have, the enum.
+                let widen = if ranged && extra.as_ref().is_some_and(|x| all.contains(x)) {
+                    tr!("規則の範囲を広げて、その値の答えを決めてください", "widen the rule's range and decide what it answers there")
+                } else {
+                    tr!("列挙に値を足して、その値の答えを決めてください", "add the value to the enum and decide what it answers there")
+                };
                 let mut d = match (&list, &extra) {
+                    // a value of the enum past the input's range: refused at the door as a number
+                    // past its range is
+                    (Some(_), Some(x)) if all.contains(x) => Some(
+                        Diag::error("E122", tr!("契約は `{full}` に \"{x}\" を通しますが、規則はそれを受け付けません", "The contract lets `{full}` be \"{x}\", which the rule refuses"))
+                            .win(name, WVal::Str(x.clone())),
+                    ),
                     (Some(_), Some(x)) => Some(
                         Diag::error("E122", tr!("契約は `{full}` に \"{x}\" を通しますが、列挙 {e} にその値はありません", "The contract lets `{full}` be \"{x}\", which enum {e} does not have"))
                             .win(name, WVal::Str(x.clone())),
                     ),
+                    (None, _) if ranged => Some(Diag::error(
+                        "E122",
+                        tr!(
+                            "契約は `{full}` にどの文字列でも通しますが、規則が受け付けるのは {} だけです",
+                            "The contract lets any string through at `{full}`, and the rule takes only {}",
+                            quoted(&vals)
+                        ),
+                    )),
                     (None, _) => Some(Diag::error(
                         "E122",
                         tr!(
@@ -1605,7 +1631,9 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                     dd = if keep.is_empty() {
                         let aliases: Vec<String> =
                             f.enums.iter().find(|d| d.name.text == *e).map(|d| d.values.iter().filter_map(|v| v.ascii.clone()).collect()).unwrap_or_default();
-                        let spelled = list.as_ref().is_some_and(|l| !l.is_empty() && l.iter().all(|x| aliases.contains(x)));
+                        // An alias spelled as the value's own name is that name: one past the range
+                        // is not a spelling the contract chose.
+                        let spelled = list.as_ref().is_some_and(|l| !l.is_empty() && l.iter().all(|x| aliases.contains(x) && !all.contains(x)));
                         let dd = dd.fix_kind(FixKind::None);
                         if spelled {
                             dd.note(tr!(
@@ -1614,6 +1642,9 @@ fn holds(f: &RuleFile, con: &Contract, pr: &Projection, input: &VarDecl, c: &Che
                                 quoted(&aliases),
                                 quoted(&vals)
                             ))
+                        } else if ranged && list.as_ref().is_some_and(|l| l.iter().any(|x| all.contains(x))) {
+                            dd.note(tr!("契約の通す値に、{wj} {name} の範囲に入る値は一つもありません。", "None of the values the contract lets through is inside the range of {name}."))
+                                .note(two_ways(None, widen))
                         } else {
                             dd.note(tr!("契約の通す値に、列挙 {e} の値は一つもありません。", "None of the values the contract lets through is a value of enum {e}."))
                                 .note(two_ways(None, widen))

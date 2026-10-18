@@ -297,7 +297,7 @@ pub(crate) fn used_types(m: &Model) -> (BTreeSet<usize>, BTreeSet<usize>) {
             visit(m, &Ty::Record(m.rules[*r].outputs), &mut enums, &mut recs);
             let rn = &m.rules[*r].name;
             for c in &m.rules[*r].info.inputs {
-                if let crate::rulec::RType::Enum(en) = &c.ty {
+                if let crate::rulec::RType::Enum { name: en, .. } = &c.ty {
                     if let Some(i) = m.enums.iter().position(|x| x.name == format!("{rn}.{en}")) {
                         enums.insert(i);
                     }

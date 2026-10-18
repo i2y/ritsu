@@ -3,6 +3,7 @@
 //! table of `refund_order` merges to its five rows that allow, relations are counted by which terms
 //! are one entity, the budget stops a walk (E307), an answer that rests on a value no language
 //! vouches for is undecided (W303), an enum and a bool given to a rule are held to their values,
+//! an enum given inside the range a rule holds its input to is counted exactly,
 //! how far a workflow and a role are allowed an action (the port `Gates::allowed`), and a condition
 //! on another action's answer (`allowed`) counted exactly. The mutants of the example are
 //! `tests/mutants/`, run by `tests/mutants.rs`.
@@ -205,6 +206,35 @@ fn an_enum_and_a_bool_given_to_a_rule_are_held_to_their_values() {
         assert_eq!(counts, [(8, 3), (2, 1)], "{path}");
         let expects: Vec<(u128, u128)> = c.report.expects.iter().map(|e| (e.picked, e.broken)).collect();
         assert_eq!(expects, [(4, 0), (1, 0), (2, 0)], "{path}");
+        reports.push(c.report);
+    }
+    assert_eq!(reports[0].actions, reports[1].actions);
+    assert_eq!(reports[0].policies, reports[1].policies);
+    assert_eq!(reports[0].expects, reports[1].expects);
+}
+
+/// A rule that holds an input of an ordered enum to a range (`campaign : tier  range >=basic
+/// <=gold`), given only values the range lets in: an attribute of an enum that stops at gold, and
+/// gold as a constant. The gate passes, rulec is asked with each held to its values, so what the
+/// rule answers is exact, and the expectations hold. The English version and the Japanese one come
+/// to the same counts. The same gate with a campaign that can be platinum is E206 (the mutants
+/// `E206_an_enum_outside_the_rule` and `E206_規則の列挙の範囲の外`; rulec's §15.251).
+#[test]
+fn an_enum_inside_the_range_a_rule_holds_it_to_is_counted_exactly() {
+    let mut reports = Vec::new();
+    for path in ["tests/walk/ranges/tiers.gate", "tests/walk/ranges/tiers.ja.gate"] {
+        let (diags, c) = check(path, checks::BUDGET as u64);
+        assert!(diags.is_empty(), "{path}: {}", rendered(&diags));
+        assert!(c.report.spaces.iter().flatten().all(|s| !s.inexact()), "{path}: a value is counted in case");
+        // ship_lifted: 4 tiers of the member x the 3 campaigns the gate's enum has, 3 of them
+        // lifted (silver under gold, basic under silver or gold); ship_at_gold: a member gold
+        // lifts or not, the one allowed
+        let counts: Vec<(u128, u128)> = c.report.actions.iter().map(|a| (a.combinations, a.allowed)).collect();
+        assert_eq!(counts, [(12, 3), (2, 1)], "{path}");
+        // a member at gold or platinum under each of the 3 campaigns, none lifted; a basic member
+        // under gold, lifted
+        let expects: Vec<(u128, u128)> = c.report.expects.iter().map(|e| (e.picked, e.broken)).collect();
+        assert_eq!(expects, [(6, 0), (1, 0)], "{path}");
         reports.push(c.report);
     }
     assert_eq!(reports[0].actions, reports[1].actions);

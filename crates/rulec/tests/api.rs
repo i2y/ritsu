@@ -911,3 +911,137 @@ fn 率の出力は宣言した刻みで渡る() {
     assert_eq!(c, 1, "{out}");
     assert!(out.contains("E114") && out.contains("does not sit on the output's step of 1%"), "{out}");
 }
+
+/// **The range of an ordered enum input is said wherever the inputs are** (§15.251).
+///
+/// `campaign : tier  range >=basic <=gold` is refused at the door when it is platinum, as a
+/// number outside its range is. A caller has to be told so before it sends platinum: the
+/// schema's `enum` lists only the values the range lets in, keyed by the rule's names and by
+/// the aliases; every section of the inventory that lists the inputs gives the range by its two
+/// ends, under the `range`, `min` and `max` a number's range has, and so does `rulec graph`; and
+/// the MCP tools' `inputSchema`, the `.proto` comment, the SQL header, the Go field's comment
+/// and the list the page offers say the same. The Python guard is held to the inventory the
+/// way the numbers' guards are in `署名とガードが生成物と一致する`. The input with no range,
+/// and the output, keep every value of the enum.
+#[test]
+fn the_range_of_an_enum_input_is_said_wherever_the_inputs_are() {
+    // (tag, rule, (name, alias) of the input with a range, of the input with none, of an
+    // output of the enum, the values inside the range, every value of the enum)
+    #[allow(clippy::type_complexity)]
+    let cases: &[(&str, &str, (&str, &str), (&str, &str), (&str, &str), &[&str], &[&str])] = &[
+        (
+            "enum-range-en",
+            "tests/corpus/member_tier_shipping.rule",
+            ("campaign", "campaign"),
+            ("member", "member"),
+            ("effective", "effective"),
+            &["basic", "silver", "gold"],
+            &["basic", "silver", "gold", "platinum"],
+        ),
+        (
+            "enum-range-ja",
+            "tests/corpus/会員段階の送料.rule",
+            ("キャンペーン", "campaign"),
+            ("会員", "member"),
+            ("適用段階", "effective"),
+            &["一般", "シルバー", "ゴールド"],
+            &["一般", "シルバー", "ゴールド", "プラチナ"],
+        ),
+    ];
+    let listed = |j: Option<&rulec::json::Json>| -> Vec<String> {
+        j.and_then(|p| p.get("enum"))
+            .and_then(|e| e.as_arr())
+            .unwrap_or_else(|| panic!("no enum in {j:?}"))
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    };
+    for (tag, rule, ranged, plain, output, inside, every) in cases {
+        let inside: Vec<String> = inside.iter().map(|v| v.to_string()).collect();
+        let every: Vec<String> = every.iter().map(|v| v.to_string()).collect();
+        let (lo, hi) = (inside.first().unwrap().clone(), inside.last().unwrap().clone());
+
+        // The schema, keyed by the rule's names and by the aliases.
+        for keys in ["name", "alias"] {
+            let (c, out, e) = run(&["schema", rule, "--keys", keys]);
+            assert_eq!(c, 0, "{e}");
+            let j = rulec::json::parse(out.trim()).unwrap();
+            let side = |s: &str| j.get("properties").and_then(|p| p.get(s)).and_then(|p| p.get("properties"));
+            let key = |p: &(&str, &str)| if keys == "name" { p.0.to_string() } else { p.1.to_string() };
+            assert_eq!(listed(side("in").and_then(|p| p.get(&key(ranged)))), inside, "{rule} --keys {keys}: the input with a range");
+            assert_eq!(listed(side("in").and_then(|p| p.get(&key(plain)))), every, "{rule} --keys {keys}: the input with none");
+            assert_eq!(listed(side("out").and_then(|p| p.get(&key(output)))), every, "{rule} --keys {keys}: the output");
+        }
+
+        // Every section of the inventory that lists the inputs.
+        let (_tmp, dir, inv) = setup(tag, rule);
+        let mut sections = Vec::new();
+        for (lang, sec) in inv.as_obj().unwrap() {
+            for list in ["params", "input_fields", "columns"] {
+                for p in sec.get(list).and_then(|x| x.as_arr()).unwrap_or_default() {
+                    let end = |r: &rulec::json::Json, k: &str| r.get(k).and_then(|x| x.as_str()).map(String::from);
+                    let range = p.get("range").map(|r| (end(r, "min"), end(r, "max")));
+                    if s(p, "name") == ranged.0 {
+                        assert_eq!(range, Some((Some(lo.clone()), Some(hi.clone()))), "{rule}: {lang}.{list}");
+                        sections.push(lang.as_str());
+                    } else if s(p, "name") == plain.0 {
+                        assert_eq!(range, None, "{rule}: {lang}.{list}");
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            sections,
+            ["python", "typescript", "javascript", "rust", "ruby", "php", "go", "swift", "java", "numpy", "sql"],
+            "{rule}: the sections that list the inputs"
+        );
+
+        // `rulec graph` holds an input to the guard the door holds it to, in the same shape.
+        let (c, out, e) = run(&["graph", rule]);
+        assert_eq!(c, 0, "{e}");
+        let g = rulec::json::parse(out.trim()).unwrap();
+        let node = |n: &str| arr(&g, "nodes").iter().find(|x| s(x, "name") == n).cloned().unwrap_or_else(|| panic!("{rule}: no node {n}"));
+        assert_eq!(node(ranged.0).get("range").map(|r| (s(r, "min"), s(r, "max"))), Some((lo.clone(), hi.clone())), "{rule}: graph");
+        assert!(node(plain.0).get("range").is_none(), "{rule}: graph");
+
+        // The Python guard, built from the inventory alone.
+        let py_j = inv.get("python").unwrap();
+        let py = std::fs::read_to_string(dir.join("python").join(format!("{}.py", s(&inv, "alias")))).unwrap();
+        let en = &arr(py_j, "enums")[0];
+        let alias_in = |en: &rulec::json::Json, v: &str| -> String {
+            arr(en, "values").iter().find(|x| s(x, "name") == v).map(|x| s(x, "alias")).unwrap_or_else(|| panic!("{v} is not in {en:?}"))
+        };
+        let (rank, ty) = (s(en, "rank"), s(en, "alias"));
+        let guard = format!("if not {rank}({ty}.{}) <= {rank}({}) <= {rank}({ty}.{}):", alias_in(en, &lo), ranged.1, alias_in(en, &hi));
+        assert!(py.contains(&guard), "{rule}: the Python guard is not the inventory's range: {guard}");
+
+        // The MCP tools, Python's and Node's: the inputSchema is the schema's `in`.
+        let quoted = |vs: &[String]| vs.iter().map(|v| format!("\"{v}\"")).collect::<Vec<_>>().join(",");
+        let narrowed = format!("\"{}\":{{\"type\":\"string\",\"enum\":[{}]}}", ranged.0, quoted(&inside));
+        let whole = format!("\"{}\":{{\"type\":\"string\",\"enum\":[{}]}}", plain.0, quoted(&every));
+        for lang in ["python", "typescript", "javascript"] {
+            let tool = std::fs::read_to_string(dir.join(lang).join(s(inv.get(lang).unwrap(), "mcp"))).unwrap();
+            assert!(tool.contains(&narrowed) && tool.contains(&whole), "{rule}: {lang}'s MCP tool does not list {narrowed}");
+        }
+
+        // The `.proto` comment, by the proto's names for the values (the run is in Japanese).
+        let connect = inv.get("connect").unwrap();
+        let proto = std::fs::read_to_string(dir.join(s(connect, "proto"))).unwrap();
+        let pe = &arr(connect, "enums")[0];
+        let note = format!("// {}。{} から {} まで", ranged.0, alias_in(pe, &lo), alias_in(pe, &hi));
+        assert!(proto.contains(&note), "{rule}: the .proto does not say {note}:\n{proto}");
+
+        // The SQL header, the Go field's comment, and the list the page offers.
+        let sql = std::fs::read_to_string(dir.join("sql").join(s(inv.get("sql").unwrap(), "file"))).unwrap();
+        let col = format!("\"{}\"  {}: text。{} のどれか", ranged.1, ranged.0, inside.join(", "));
+        assert!(sql.contains(&col), "{rule}: the SQL header does not say {col}");
+        let go_j = inv.get("go").unwrap();
+        let go = std::fs::read_to_string(dir.join("go").join(s(go_j, "package")).join(format!("{}.go", s(&inv, "alias")))).unwrap();
+        let ge = &arr(go_j, "enums")[0];
+        let field = format!("// {} 範囲 {}..{}", ranged.0, alias_in(ge, &lo), alias_in(ge, &hi));
+        assert!(go.contains(&field), "{rule}: the Go field does not say {field}");
+        let page = std::fs::read_to_string(dir.join("python").join(s(py_j, "page"))).unwrap();
+        let offered = format!("\"name\":\"{}\",\"alias\":\"{}\",\"kind\":\"enum\",\"scale\":1,\"values\":[{}]", ranged.0, ranged.1, quoted(&inside));
+        assert!(page.contains(&offered), "{rule}: the page offers more than {offered}");
+    }
+}

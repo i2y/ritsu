@@ -1,0 +1,54 @@
+gate tiers v1
+description "A gate that gives a rule's input of an ordered enum, which the rule holds to a range, only values the range lets in: an attribute of an enum that stops at gold, and gold as a constant"
+namespace Shop
+
+use rule campaign_lift from "campaign_lift.rule"
+
+enum tier = basic | silver | gold | platinum
+enum campaign_tier = basic | silver | gold
+
+principal User
+  description "A member of the shop"
+  attributes
+    tier : tier
+
+resource Order
+  description "An order, and the campaign it was placed under"
+  attributes
+    campaign : campaign_tier
+
+action ship_lifted
+  description "Ship an order at the tier its campaign lifts the member to"
+  principal User
+  resource Order
+  context
+    lifted = campaign_lift(member: principal.tier, campaign: resource.campaign).lifted
+
+action ship_at_gold
+  description "Ship an order at gold"
+  principal User
+  resource Order
+  context
+    raised = campaign_lift(member: principal.tier, campaign: gold).lifted
+
+permit orders_a_campaign_lifts
+  description "An order whose campaign lifts its member ships at the campaign's tier"
+  principal is User
+  action ship_lifted
+  when lifted
+
+permit orders_gold_lifts
+  description "An order gold lifts its member for ships at gold"
+  principal is User
+  action ship_at_gold
+  when raised
+
+expect deny nothing_lifts_gold
+  description "A member at gold or above is lifted by no campaign"
+  action ship_lifted
+  when principal.tier is gold or principal.tier is platinum
+
+expect allow a_campaign_of_gold_lifts_a_basic_member
+  description "A basic member under a campaign of gold is lifted"
+  action ship_lifted
+  when principal.tier is basic and resource.campaign is gold

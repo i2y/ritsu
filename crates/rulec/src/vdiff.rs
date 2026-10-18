@@ -1469,6 +1469,12 @@ pub(crate) fn names_constant_over(f: &RuleFile, c: &Checked, open: &BTreeSet<&st
 // ---------------------------------------------------------------------------------------
 
 fn show_range(c: &Checked, n: &str) -> String {
+    // An input of an ordered enum with a range, by the values at its two ends (§15.251): a range
+    // added to one was not seen here, and a version that turns a value away was said to take
+    // every input the other does.
+    if let Some((lo, hi)) = c.enum_ranges.get(n).and_then(|vs| Some((vs.first()?, vs.last()?))) {
+        return format!("{lo}..{hi}");
+    }
     match c.ranges.get(n) {
         Some((lo, hi)) => format!(
             "{}..{}",
@@ -1501,7 +1507,18 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                         new: tb.map(|x| x.to_string()),
                     });
                 }
-                let (ra, rb) = (show_range(o.1, &a.name.text), show_range(n.1, &b.name.text));
+                let (mut ra, mut rb) = (show_range(o.1, &a.name.text), show_range(n.1, &b.name.text));
+                // The side of an enum's input with no range takes every value of the enum.
+                let whole = |c: &Checked, name: &str| match c.ty_of(name).as_ref().map(|t| t.present().clone()) {
+                    Some(Ty::Enum(e)) => c.enums.get(&e).and_then(|vs| Some(format!("{}..{}", vs.first()?, vs.last()?))),
+                    _ => None,
+                };
+                if ra.is_empty() && !rb.is_empty() {
+                    ra = whole(o.1, &a.name.text).unwrap_or(ra);
+                }
+                if rb.is_empty() && !ra.is_empty() {
+                    rb = whole(n.1, &b.name.text).unwrap_or(rb);
+                }
                 if ra != rb {
                     out.push(DomainChange { what: "input_range", name: b.name.text.clone(), old: Some(ra), new: Some(rb) });
                 }

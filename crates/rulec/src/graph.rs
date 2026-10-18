@@ -398,6 +398,12 @@ pub fn json(f: &RuleFile, c: &Checked, src: &str, src_hash: &str) -> String {
             if let Some((lo, hi)) = n.range {
                 o = o.raw("range", Obj::new().int("min", lo).int("max", hi).finish());
             }
+            // An input of an ordered enum with a range is held to it at the door as a number is,
+            // and says so in the shape `api` gives it: the names of the values at its two ends
+            // (§15.251).
+            if let Some((lo, hi)) = c.enum_ranges.get(&n.name).filter(|_| n.kind == "input").and_then(|vs| Some((vs.first()?, vs.last()?))) {
+                o = o.raw("range", Obj::new().str("min", lo).str("max", hi).finish());
+            }
             if n.output {
                 o = o.bool("output", true);
             }

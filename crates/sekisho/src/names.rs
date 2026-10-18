@@ -193,7 +193,7 @@ impl Scope {
                 let Some(read) = self.rules.get(&rule.word) else { return Domain::Bool };
                 let facts = &read.facts;
                 match facts.outputs.iter().find(|o| o.name == output.word || o.alias == output.word).map(|o| unopt(&o.ty)) {
-                    Some(ColumnType::Enum(e)) => Domain::Enum(rule_values(facts, e)),
+                    Some(ColumnType::Enum { name: e, .. }) => Domain::Enum(rule_values(facts, e)),
                     _ => Domain::Bool,
                 }
             }
@@ -1550,7 +1550,7 @@ impl<'a> Ck<'a> {
                 };
                 let ty = match unopt(&out.ty) {
                     ColumnType::Bool => Ty::Bool,
-                    ColumnType::Enum(e) => Ty::RuleEnum(name.clone(), e.clone()),
+                    ColumnType::Enum { name: e, .. } => Ty::RuleEnum(name.clone(), e.clone()),
                     other => {
                         let shown = column_text(other);
                         self.err("E105", output.span, tr!("規則の出力 `{o}` は {shown} です。計算した値にできるのは、列挙か真偽の出力だけです", "The rule's output `{o}` is {shown}; a computed value is an output that is an enum or true or false")).notes.push(tr!(
@@ -1694,7 +1694,7 @@ impl<'a> Ck<'a> {
             },
             ArgValue::Path(p) => {
                 // a bare word that names no input of the action: a value of the input's enum
-                if let (Path::Local(r), ColumnType::Enum(e)) = (p, a_ct)
+                if let (Path::Local(r), ColumnType::Enum { name: e, .. }) = (p, a_ct)
                     && a.local(&r.word).is_none()
                 {
                     let values = rule_enum_values(facts, e);
@@ -1710,7 +1710,7 @@ impl<'a> Ck<'a> {
                     (ColumnType::Bool, Ty::Bool) | (ColumnType::Date, Ty::Date) => true,
                     (ColumnType::Num { unit: Some(u), .. }, Ty::Num(t)) => u.same(t),
                     (ColumnType::Num { unit: None, .. }, Ty::Num(_)) => true,
-                    (ColumnType::Enum(e), Ty::Enum(g)) => {
+                    (ColumnType::Enum { name: e, .. }, Ty::Enum(g)) => {
                         // every value of the gate's enum is a value of the rule's
                         let values = rule_enum_values(facts, e);
                         let missing: Vec<String> = self
@@ -2655,7 +2655,7 @@ fn column_text(t: &ColumnType) -> String {
         ColumnType::Bool => "bool".into(),
         ColumnType::Str => "string".into(),
         ColumnType::Date => "date".into(),
-        ColumnType::Enum(e) => e.clone(),
+        ColumnType::Enum { name: e, .. } => e.clone(),
         ColumnType::Num { written, .. } => written.clone(),
         ColumnType::Opt(x) => format!("{}?", column_text(x)),
     }

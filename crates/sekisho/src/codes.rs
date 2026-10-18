@@ -389,8 +389,8 @@ pub fn ledger() -> Ledger {
             "E206",
             tr!("規則か日付の入力に渡す値が、その範囲か前提から外れることがあります", "A value given to a rule or a date can fall outside its range or break its precondition"),
             tr!(
-                "規則か日付の入力に渡す値の範囲が、その入力の範囲を外れうるとき、または規則の前提を破りうるとき（例つき）。",
-                "The range of a value given to a rule's or a date's input can fall outside that input's range, or break a precondition of the rule (with an example)."
+                "規則か日付の入力に渡す値の範囲が、その入力の範囲を外れうるとき（規則の、順序のある列挙の入力では、範囲に入らない値になりうるとき）、または規則の前提を破りうるとき（例つき）。",
+                "The range of a value given to a rule's or a date's input can fall outside that input's range (for a rule's input of an ordered enum, be a value the range does not let in), or break a precondition of the rule (with an example)."
             ),
             tr!("渡す値の範囲を、入力の範囲に収めてください。", "Keep the range of the value within the input's."),
             &["W201"],

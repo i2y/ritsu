@@ -115,10 +115,13 @@ pub fn entries() -> Vec<Entry> {
             "E206",
             tr!("規則か日付に渡す値が、入力の範囲を外れるか、規則の前提を破りえます", "A value given to a rule or a date can be outside its input's range, or break a precondition of the rule"),
             tr!(
-                "計算した値で規則や日付の関数に渡す属性・input・定数の範囲が、その入力の範囲に収まらないとき。渡す値の範囲の中に、規則の前提（`constraint`）を破る例があるとき。",
-                "The range of an attribute, an input or a constant a computed value gives to a rule or a date is not within the range of the input it is given to; or, over the ranges given, an example breaks a precondition (`constraint`) of the rule."
+                "計算した値で規則や日付の関数に渡す属性・input・定数の範囲が、その入力の範囲に収まらないとき。規則の、順序のある列挙の入力に範囲があるとき（`range >=basic <=gold`）は、渡す列挙の値が、範囲に入らない値になりうるとき。渡す値の範囲の中に、規則の前提（`constraint`）を破る例があるとき。",
+                "The range of an attribute, an input or a constant a computed value gives to a rule or a date is not within the range of the input it is given to — for a rule's input of an ordered enum with a range (`range >=basic <=gold`), the value of an enum given can be one the range does not let in; or, over the ranges given, an example breaks a precondition (`constraint`) of the rule."
             ),
-            tr!("渡す値の範囲を、入力の範囲（前提を守る範囲）に狭めてください。", "Narrow the ranges of what is given to the input's, or to ones that keep the precondition."),
+            tr!(
+                "渡す値の範囲を、入力の範囲（前提を守る範囲）に狭めてください。列挙の値は、値がどれも範囲の中にある列挙の属性か input を渡すか、範囲の中の値を定数で書いてください。",
+                "Narrow the ranges of what is given to the input's, or to ones that keep the precondition. For an enum's value, give an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant."
+            ),
             joined(vec![
                 (
                     "example.gate",

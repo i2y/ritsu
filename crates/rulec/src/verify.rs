@@ -279,13 +279,16 @@ fn prop(name: &Name, ty: &Ty, c: &Checked, alias: bool) -> String {
 
 /// The schema of one value of a property: of the value an optional wraps too, which is the same
 /// value with `null` beside it. An optional date was an integer here and an optional number had
-/// no range, while the entry guard holds both to what the plain type is held to (§15.201).
+/// no range, while the entry guard holds both to what the plain type is held to (§15.201). An
+/// input of an ordered enum that declares a range lists the values the range lets in, as a number
+/// has its `minimum` and `maximum`: the entry guard refuses the others (§15.210, §15.251).
 fn prop_body(name: &str, ty: &Ty, c: &Checked) -> String {
     match ty {
         Ty::Enum(en) => {
             let vs: Vec<String> = c
-                .enums
-                .get(en)
+                .enum_ranges
+                .get(name)
+                .or_else(|| c.enums.get(en))
                 .cloned()
                 .unwrap_or_default()
                 .iter()

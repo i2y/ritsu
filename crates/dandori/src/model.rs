@@ -141,6 +141,15 @@ impl crate::rulec::Column {
             _ => None,
         }
     }
+
+    /// The values rulec says the column takes, for an input of an ordered enum that declares a
+    /// range (`range >=basic <=gold`): the values the range lets in, in the enum's order.
+    pub fn values(&self) -> Option<&[String]> {
+        match &self.ty {
+            crate::rulec::RType::Enum { range: Some(values), .. } => Some(values),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1200,6 +1209,12 @@ impl Model {
     /// The range rulec gives the input `param` of the rule.
     pub fn rule_input_range(&self, rule: usize, param: &str) -> Option<Range> {
         self.rules[rule].info.inputs.iter().find(|c| c.name == param).and_then(|c| c.range())
+    }
+
+    /// The values rulec says the input `param` of the rule takes, when it holds its ordered enum to
+    /// a range: what the rule's generated code and its evaluator take at their door.
+    pub fn rule_input_values(&self, rule: usize, param: &str) -> Option<&[String]> {
+        self.rules[rule].info.inputs.iter().find(|c| c.name == param).and_then(|c| c.values())
     }
 
     pub fn case_index(&self, name: &str) -> Option<usize> {

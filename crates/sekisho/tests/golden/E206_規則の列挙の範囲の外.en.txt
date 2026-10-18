@@ -1,0 +1,7 @@
+error[E206]: tests/mutants/E206_規則の列挙の範囲の外.gate:24:1: `resource.キャンペーン` can be outside the range of the input `キャンペーン` of the rule `キャンペーンの引き上げ` (一般..ゴールド)
+    24 |     引き上げる(lifted) = キャンペーンの引き上げ(会員: principal.段階, キャンペーン: resource.キャンペーン).引き上げ
+  = For example: `resource.キャンペーン` at `プラチナ`.
+  = Give it an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant.
+error[E206]: tests/mutants/E206_規則の列挙の範囲の外.gate:31:1: `プラチナ` is outside the range of the input `キャンペーン` of the rule `キャンペーンの引き上げ` (一般..ゴールド)
+    31 |     上がる(raised) = キャンペーンの引き上げ(会員: principal.段階, キャンペーン: プラチナ).引き上げ
+  = Give it an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant.

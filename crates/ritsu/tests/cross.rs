@@ -8,6 +8,10 @@
 //! - X2 (a rule's preconditions where a workflow calls it): `refund` — the amount asked is kept
 //!   below what was paid by the ranges (held), can pass it (E201), or comes from a task with no
 //!   range (W201). `quota` is the same with a sum on one side (`used + requested <= quota`).
+//! - The range of a rule's input of an ordered enum (rulec's §15.251), which the languages that give
+//!   the rule a value hold it to themselves, as they hold a number's: `lift` and `tiers` — a flow
+//!   and a gate that give only values the range lets in (held), the flow giving a campaign that can
+//!   be platinum (dandori's E014), the gate giving one (sekisho's E206).
 //! - X3 (b) (`range from koyomi`, rulec's own check): `settlement` — a rule over the days a koyomi
 //!   date comes to, checked by `ritsu check` with koyomi joined, passing and with a payment day no
 //!   row takes (rulec's E101 with that day).
@@ -142,6 +146,36 @@ fn x2_a_sum_as_a_rules_precondition() {
     let open = flow.replace("task ask_amount(account: string) -> int range >=0 <=10000", "task ask_amount(account: string) -> int");
     assert_ne!(open, flow);
     run("x2-sum-W201", &[("quota_check.rule", rule), ("quota.flow", open)], 0, (0, 0, 1), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The range of a rule's input of an ordered enum, where a flow and a gate give it a value (rulec's
+/// §15.251): `campaign : tier  range >=basic <=gold` reaches dandori's E014 and sekisho's E206
+/// through the port, which hands over the values the range lets in. Held: the flow branches on its
+/// campaign and writes out a value the range lets in, and the gate gives an attribute of an enum
+/// that stops at gold, and gold as a constant. The flow giving its own campaign, which can be
+/// platinum, is dandori's E014; the gate giving one is sekisho's E206. The rule and the gate are
+/// sekisho's test material; before, all three passed.
+#[test]
+fn the_range_of_an_enum_input_where_a_flow_and_a_gate_give_it() {
+    let mut failures = Vec::new();
+    let ranges = here().join("../sekisho/tests/walk/ranges");
+    let rule = std::fs::read_to_string(ranges.join("campaign_lift.rule")).unwrap();
+    let gate = std::fs::read_to_string(ranges.join("tiers.gate")).unwrap();
+    let flow = "workflow lift v1\ndescription \"Ships an order at the tier its campaign lifts the member to, as the rule decides\"\n\nuse rule campaign_lift from \"campaign_lift.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:campaign-lift\"\n\ninputs\n  member   : campaign_lift.tier\n  campaign : campaign_lift.tier\n\noutputs\n  lifted : bool\n\nflow\n  # the rule lifts a member as far as gold: a campaign of platinum is given as gold\n  match campaign\n    basic => let d = campaign_lift(member: member, campaign: basic)\n    silver => let d = campaign_lift(member: member, campaign: silver)\n    gold, platinum => let d = campaign_lift(member: member, campaign: gold)\n  succeed lifted = d.lifted\n".to_string();
+    let files = |flow: &str, gate: &str| vec![("campaign_lift.rule", rule.clone()), ("lift.flow", flow.to_string()), ("tiers.gate", gate.to_string())];
+    run("enum-range-held", &files(&flow, &gate), 0, (0, 0, 0), &mut failures);
+    // the flow gives the campaign it is given
+    let given = flow.replace(
+        "  match campaign\n    basic => let d = campaign_lift(member: member, campaign: basic)\n    silver => let d = campaign_lift(member: member, campaign: silver)\n    gold, platinum => let d = campaign_lift(member: member, campaign: gold)\n",
+        "  let d = campaign_lift(member: member, campaign: campaign)\n",
+    );
+    assert_ne!(given, flow);
+    run("enum-range-E014", &files(&given, &gate), 1, (0, 0, 0), &mut failures);
+    // the gate gives a campaign of an enum that goes on to platinum
+    let past = gate.replace("    campaign : campaign_tier\n", "    campaign : tier\n");
+    assert_ne!(past, gate);
+    run("enum-range-E206", &files(&flow, &past), 1, (0, 0, 0), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

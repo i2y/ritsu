@@ -3777,17 +3777,27 @@ impl<'a> Gen<'a> {
             // The field holds the wire integer, so the range is shown in the same units as
             // the guard below it, not in the units the declaration was written in.
             let sc = self.c.wire_scale(&i.name.text);
-            let doc = match self.c.ranges.get(&i.name.text) {
-                Some((Some(lo), Some(hi))) => tr!(
+            let ty = self.ty_of(&i.name.text);
+            // An ordered enum's range, by the constants the guard compares it with (§15.251).
+            let ends = self.c.enum_ranges.get(&i.name.text).and_then(|vs| Some((vs.first()?, vs.last()?)));
+            let doc = match (self.c.ranges.get(&i.name.text), ends) {
+                (Some((Some(lo), Some(hi))), _) => tr!(
                     "// {} 範囲 {}..{}",
                     "// {} range {}..{}",
                     i.name.text,
                     crate::types::wire_int(*lo, sc),
                     crate::types::wire_int(*hi, sc)
                 ),
+                (_, Some((lo, hi))) => tr!(
+                    "// {} 範囲 {}..{}",
+                    "// {} range {}..{}",
+                    i.name.text,
+                    self.go_value(lo, ty.present()),
+                    self.go_value(hi, ty.present())
+                ),
                 _ => format!("// {}", i.name.text),
             };
-            o.push_str(&format!("\t{}{CELL}{}{CELL}{doc}\n", pascal(&pub_name(&i.name)), self.go_ty(&self.ty_of(&i.name.text))));
+            o.push_str(&format!("\t{}{CELL}{}{CELL}{doc}\n", pascal(&pub_name(&i.name)), self.go_ty(&ty)));
         }
         // A sequence a walk reads is a field like the rest (§15.56), each its own (§15.219).
         for (s, el) in self.f.elements.iter().enumerate() {
@@ -9594,8 +9604,14 @@ impl Gen<'_> {
     /// The range **the generated guard actually enforces**, not a second computation of it.
     /// Both entry guards above take `lo.num` and `hi.num`, so this does too: an inventory that
     /// disagreed with the guard would send a caller values the code then rejects. A test holds
-    /// these two numbers to the text of the generated guard (§8.6).
+    /// these two numbers to the text of the generated guard (§8.6). An input of an ordered enum
+    /// held to a range has the same keys, with the first and the last value its range lets in,
+    /// by the names that travel: the guard compares the value's place with those two (§15.210,
+    /// §15.251).
     fn range_json(&self, name: &str) -> Option<String> {
+        if let Some(vs) = self.c.enum_ranges.get(name) {
+            return Some(crate::json::Obj::new().str("min", vs.first()?).str("max", vs.last()?).finish());
+        }
         let (lo, hi) = self.c.ranges.get(name)?;
         let (lo, hi) = (lo.as_ref()?, hi.as_ref()?);
         let sc = self.c.wire_scale(name);

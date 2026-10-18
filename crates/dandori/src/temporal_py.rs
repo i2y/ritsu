@@ -774,7 +774,7 @@ pub(crate) fn rule_doc(m: &Model, r: usize) -> String {
     let ru = &m.rules[r];
     let params: Vec<String> = ru.info.inputs.iter().map(|c| format!("{}: {}", q(&c.name), match &c.ty {
         crate::rulec::RType::Bool => "bool".to_string(),
-        crate::rulec::RType::Str | crate::rulec::RType::Date | crate::rulec::RType::Enum(_) => "str".to_string(),
+        crate::rulec::RType::Str | crate::rulec::RType::Date | crate::rulec::RType::Enum { .. } => "str".to_string(),
         crate::rulec::RType::Num { .. } => "int".to_string(),
     })).collect();
     format!("The rule {} v{}, called at its Connect service. args: {{{}}}. Answers the record of its outputs.", ru.info.rule, ru.info.version, params.join(", "))

@@ -115,11 +115,17 @@ pub fn to_val_as(j: &Json, ty: &Ty, c: &Checked, name: &str, then: Option<&Check
     match (&inner, j) {
         (Ty::Enum(en), Json::Str(s)) => {
             let vs = c.enums.get(en).cloned().unwrap_or_default();
-            if vs.iter().any(|v| v == s) {
-                Ok(Val::Enum(s.clone()))
-            } else {
-                Err(tr!("`{s}` は列挙 {en} の値ではありません", "`{s}` is not a value of enum {en}"))
+            if !vs.iter().any(|v| v == s) {
+                return Err(tr!("`{s}` は列挙 {en} の値ではありません", "`{s}` is not a value of enum {en}"));
             }
+            // An input of an ordered enum held to a range takes the values the range lets in,
+            // and the generated code's entry turns the others away, as it does a number past its
+            // range (§15.210, §15.251).
+            if let Some(r) = c.enum_ranges.get(name).filter(|r| !r.contains(s)) {
+                let (lo, hi) = (r.first().cloned().unwrap_or_default(), r.last().cloned().unwrap_or_default());
+                return Err(tr!("`{s}` は宣言した範囲 {lo}..{hi} の外です", "`{s}` is outside the declared range {lo}..{hi}"));
+            }
+            Ok(Val::Enum(s.clone()))
         }
         (Ty::Bool, Json::Bool(b)) => Ok(Val::Bool(*b)),
         (Ty::Str, Json::Str(s)) => Ok(Val::Str(s.clone())),
@@ -413,11 +419,15 @@ pub fn carry(v: &Val, name: &str, from: &Checked, to: &Checked) -> Result<Val, S
     let other_kind = || Shut::Type { name: name.into(), was: was_in.to_string(), now: now_in.to_string() };
     match (v, &now_in) {
         (Val::Enum(s), Ty::Enum(en)) if matches!(was_in, Ty::Enum(_)) => {
-            if to.enums.get(en).is_some_and(|vs| vs.iter().any(|x| x == s)) {
-                Ok(v.clone())
-            } else {
-                Err(Shut::EnumValue { name: name.into(), value: s.clone(), en: en.clone() })
+            if !to.enums.get(en).is_some_and(|vs| vs.iter().any(|x| x == s)) {
+                return Err(Shut::EnumValue { name: name.into(), value: s.clone(), en: en.clone() });
             }
+            // The new version's range of an ordered enum, as a number is held to the new range
+            // below (§15.251).
+            if let Some(r) = to.enum_ranges.get(name).filter(|r| !r.contains(s)) {
+                return Err(Shut::Range { name: name.into(), value: s.clone(), lo: r.first().cloned().unwrap_or_default(), hi: r.last().cloned().unwrap_or_default() });
+            }
+            Ok(v.clone())
         }
         (Val::Bool(_), Ty::Bool) | (Val::Str(_), Ty::Str) | (Val::Date(..), Ty::Date) => Ok(v.clone()),
         (Val::Num(x), Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number) => {

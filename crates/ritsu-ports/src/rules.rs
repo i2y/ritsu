@@ -55,8 +55,12 @@ pub enum ColumnType {
     Str,
     /// A calendar day, `YYYY-MM-DD` on the wire.
     Date,
-    /// One of the rule's enums, by its name.
-    Enum(String),
+    /// One of the rule's enums, by its name; and for an input of an ordered enum that declares a
+    /// `range` over its values (`range >=basic <=gold`, rulec's §15.210), the values the range
+    /// lets in, by the rule's names of them, in the enum's order: what the generated code takes at
+    /// its door, and the reference evaluator (`Rules::eval`) too. None where every value of the
+    /// enum is taken: an input with no range, an output, a field of an element.
+    Enum { name: String, range: Option<Vec<String>> },
     /// A number: the type as rulec spells it (`money[JPY, incl_tax]`, `rate`); its unit, with a
     /// rate's step (None for a spelling the table of units does not have, which rulec lets
     /// through); and its declared range, as the integers that go on the wire.
@@ -265,8 +269,8 @@ pub type Values = Vec<(String, Value)>;
 pub enum RuleError {
     /// The rule does not pass its check, or cannot be read.
     Unread(Vec<Said>),
-    /// An input the generated code refuses at its door: not of its type, outside its range, or
-    /// breaking a precondition.
+    /// An input the generated code refuses at its door: not of its type, outside its range (a
+    /// number's or a date's, or the values an enum's range lets in), or breaking a precondition.
     Input(Text),
     /// No row answers, or two answer differently (a rule that passes its check never does this
     /// for an input it takes).
@@ -298,7 +302,9 @@ pub trait Rules {
     /// reads, counted over the intervals its conditions cut and the values of the enums and the
     /// bools it reads). An enum input is held by the places of its values, from 0 in the order
     /// `RuleFacts::enums` lists them, and a bool input as 0 for false and 1 for true; an enum or a
-    /// bool input named more than once takes the values of each. An enum's value is its public name
+    /// bool input named more than once takes the values of each. An enum input that declares a
+    /// range of its own takes only the values inside it (`ColumnType::Enum`'s `range`), whatever
+    /// places it is held to, as a number takes only its own range. An enum's value is its public name
     /// (`EnumValue::public`, what a gate writes into Cedar); the input is as `eval` takes it.
     /// Exact, or undecided with the reason: a value the rule's own analysis cannot rule out and
     /// no input is found to reach. An empty list when no input is inside the ranges. The default
@@ -324,7 +330,8 @@ pub trait Rules {
     }
 
     /// The outputs for these inputs (rulec's reference evaluator), refusing what the generated
-    /// code refuses.
+    /// code refuses at its door, an enum's value outside the range its input declares among it
+    /// (`RuleError::Input`).
     fn eval(&self, rule: &Path, inputs: &Values) -> Result<Values, RuleError>;
 
     /// The page for people, as `rulec doc` draws it — Markdown, or with `html` the page that

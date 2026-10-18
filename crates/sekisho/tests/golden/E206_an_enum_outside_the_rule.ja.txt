@@ -1,0 +1,7 @@
+エラー[E206]: tests/mutants/E206_an_enum_outside_the_rule.gate:24:1: `resource.campaign` は規則 `campaign_lift` の入力 `campaign` の範囲（basic〜gold）の外になりえます
+    24 |     lifted = campaign_lift(member: principal.tier, campaign: resource.campaign).lifted
+  = 例：`resource.campaign` が `platinum` のとき。
+  = 値がどれも範囲の中にある列挙の属性か input を渡すか、範囲の中の値を定数で書いてください。
+エラー[E206]: tests/mutants/E206_an_enum_outside_the_rule.gate:31:1: `platinum` は規則 `campaign_lift` の入力 `campaign` の範囲（basic〜gold）の外です
+    31 |     raised = campaign_lift(member: principal.tier, campaign: platinum).lifted
+  = 値がどれも範囲の中にある列挙の属性か input を渡すか、範囲の中の値を定数で書いてください。

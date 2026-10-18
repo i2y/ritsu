@@ -630,9 +630,9 @@ See also: [E202](#e202)
 
 ## E206 — A value given to a rule or a date can be outside its input's range, or break a precondition of the rule
 
-**When**: The range of an attribute, an input or a constant a computed value gives to a rule or a date is not within the range of the input it is given to; or, over the ranges given, an example breaks a precondition (`constraint`) of the rule.
+**When**: The range of an attribute, an input or a constant a computed value gives to a rule or a date is not within the range of the input it is given to — for a rule's input of an ordered enum with a range (`range >=basic <=gold`), the value of an enum given can be one the range does not let in; or, over the ranges given, an example breaks a precondition (`constraint`) of the rule.
 
-**Fix**: Narrow the ranges of what is given to the input's, or to ones that keep the precondition.
+**Fix**: Narrow the ranges of what is given to the input's, or to ones that keep the precondition. For an enum's value, give an attribute or an input of an enum whose values are all inside the range, or write a value inside it as a constant.
 
 **Example**: put the files below in one directory, and run `ritsu sekisho check example.gate` there.
 

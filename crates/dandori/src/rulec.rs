@@ -4,7 +4,8 @@
 //! itself, and the dandori binary of this crate one that reads no rule.
 //!
 //! - the inputs and the outputs: their names, ASCII aliases, types with their units (a rate with
-//!   the step its integer counts), and their ranges as the integers that go on the wire
+//!   the step its integer counts), and their ranges as the integers that go on the wire; for an
+//!   input of an ordered enum that declares a range, the values the range lets in
 //! - the enums, and for a machine the deciding table's axes, each row's accepted coordinates, what
 //!   it writes and where it goes, and the inputs a case holds
 //! - the preconditions, the rule's Connect service, and how the generated TypeScript, Python and Go
@@ -22,7 +23,10 @@ pub enum RType {
     Str,
     /// a day of the calendar, `YYYY-MM-DD` on the wire
     Date,
-    Enum(String),
+    /// One of the rule's enums, by its name; for an input of an ordered enum that declares a range
+    /// (`range >=basic <=gold`), the values the range lets in, in the enum's order (the code rulec
+    /// generates refuses the others at its door, and so does its evaluator)
+    Enum { name: String, range: Option<Vec<String>> },
     /// A number, with its unit as rulec has it (`money[JPY, incl_tax]`, a rate with its step), and
     /// its range as the integers that go on the wire
     Num { unit: Unit, min: Option<i64>, max: Option<i64> },
@@ -160,7 +164,7 @@ fn rtype(t: &ColumnType) -> RType {
         ColumnType::Bool => RType::Bool,
         ColumnType::Str => RType::Str,
         ColumnType::Date => RType::Date,
-        ColumnType::Enum(e) => RType::Enum(e.clone()),
+        ColumnType::Enum { name, range } => RType::Enum { name: name.clone(), range: range.clone() },
         ColumnType::Opt(inner) => rtype(inner),
         ColumnType::Num { written, unit, min, max } => {
             // a spelling the table of units does not have (rulec lets none through a check now) is a

@@ -546,7 +546,7 @@ impl<'a> Lowerer<'a> {
             RType::Bool => Ty::Bool,
             RType::Str => Ty::Str,
             RType::Date => Ty::Date,
-            RType::Enum(n) => Ty::Enum(*self.enum_ix.get(&format!("{rule}.{n}")).expect("rule enums are registered first")),
+            RType::Enum { name: n, .. } => Ty::Enum(*self.enum_ix.get(&format!("{rule}.{n}")).expect("rule enums are registered first")),
             // rulec's `number` has no unit: it is an integer like dandori's `int`
             RType::Num { unit, .. } if unit.dim == ritsu_units::Dim::Number => Ty::Int,
             RType::Num { unit, .. } => Ty::Num(unit.clone()),

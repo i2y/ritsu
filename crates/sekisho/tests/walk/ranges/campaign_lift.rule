@@ -1,0 +1,29 @@
+rule campaign_lift v1
+description "Whether a campaign lifts a member to a higher tier for an order: a campaign lifts a member as far as gold"
+
+# The tiers in order, lowest first: a cell compares against one (`>=gold`).
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member   : tier                          # the member's own tier
+  campaign : tier  range >=basic <=gold    # a campaign lifts a member as far as gold
+
+outputs
+  lifted : bool
+
+table lift
+policy unique
+| member | campaign | -> lifted |
+| >=gold | -        | false     |
+| silver | gold     | true      |
+| silver | <=silver | false     |
+| basic  | >=silver | true      |
+| basic  | basic    | false     |
+
+examples
+| member   | campaign | -> lifted |
+| platinum | gold     | false     |
+| silver   | gold     | true      |
+| silver   | basic    | false     |
+| basic    | silver   | true      |
+| basic    | basic    | false     |
