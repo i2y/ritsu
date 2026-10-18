@@ -33,7 +33,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
 | sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
 | sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [the sekisho page](sekisho.md) |
-| kaname | `.kn` | the code that joins rules, dates and books, in ritsu's types | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.md) |
+| kaname | `.kn` | a functional core in ritsu's types, which calls rules, dates and books | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.md) |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different

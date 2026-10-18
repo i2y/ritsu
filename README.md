@@ -29,7 +29,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
 | [sekisho](#sekisho--who-may-do-what) | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | Cedar, and the TypeScript, Python and Go that ask it |
-| [kaname](#kaname--the-code-that-joins-them) | `.kn` | the code that joins rules, dates and books, in ritsu's types | TypeScript, Python and Go, in the package `ritsu gen` writes |
+| [kaname](#kaname--the-code-that-joins-them) | `.kn` | a functional core in ritsu's types, which calls rules, dates and books | TypeScript, Python and Go, in the package `ritsu gen` writes |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different

@@ -20,7 +20,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | [yuen](#yuen要件の出どころ) | `.req` | 要件の出どころと、それを満たすもの | ReqIF、W3C PROV |
 | [sakai](#sakai境界づけられたコンテキストの地図) | `.ctx` | 境界づけられたコンテキストの地図 | import を確かめるツールの設定、Context Mapper |
 | [sekisho](#sekishoだれが何をしてよいか) | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | Cedar と、Cedar に尋ねる TypeScript、Python、Go |
-| [kaname](#kaname規則と日付と帳簿をつなぐコード) | `.kn` | 規則と日付と帳簿をつなぐコード。ritsu の型で書く | `ritsu gen` が書くパッケージの中の TypeScript、Python、Go |
+| [kaname](#kaname規則と日付と帳簿をつなぐコード) | `.kn` | Functional Core。ritsu の型で書き、規則と日付と帳簿を呼ぶ | `ritsu gen` が書くパッケージの中の TypeScript、Python、Go |
 
 どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
 

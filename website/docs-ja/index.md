@@ -24,7 +24,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | yuen | `.req` | 要件の出どころと、それを満たすもの | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.ja.md) |
 | sakai | `.ctx` | 境界づけられたコンテキストの地図 | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.ja.md) |
 | sekisho | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | [sekisho のページ](sekisho.md) |
-| kaname | `.kn` | 規則と日付と帳簿をつなぐコード。ritsu の型で書く | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.ja.md) |
+| kaname | `.kn` | Functional Core。ritsu の型で書き、規則と日付と帳簿を呼ぶ | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.ja.md) |
 
 どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
 

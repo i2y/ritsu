@@ -1,12 +1,15 @@
 # kaname
 
-A small language for the code that joins rules, dates and books: it calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types, and checks the computation between them by the rules those languages are checked by — units, currencies and tax, the steps of rates, ranges, rounding and int64.
+A small language for writing the functional core of a program — the part that only computes and decides — in ritsu's types: functions, records, enums and lists, with no input or output of its own.
+The rest of the program — reading a request, the clock or a database, and carrying out what the core decides — stays in the host, the imperative shell that calls it.
+kaname checks the core by the rules ritsu's languages are checked by — units, currencies and tax, the steps of rates, ranges, rounding and int64 — and works out what each function can do (`total`, `fails …`, `diverges`).
+Today it is shaped for the core around business rules: it calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types. Extensions that would make it more general are being considered.
 kaname is one of the nine languages of [ritsu](../../README.md): it reads the rules, the dates files and the books through ritsu, and `ritsu gen` writes it as TypeScript, Python and Go beside their code.
 
 A rule decides, a dates file computes a day, a book moves an amount, and each is checked by its own language.
 The code that joins them is host code: it puts a rule's inputs together from a cart, carries one answer into the next call and hands an amount to a book.
 The package `ritsu gen` writes gives each unit one type, so the host's type checker stops a fee in dollars handed to a book of cents; but nothing checks what that code computes: a rounding left out, a sum outside the range a rule takes, running totals that break a rule's precondition, a product past int64.
-kaname is that code, written in ritsu's types and held to their rules, with no input or output of its own:
+kaname is that code — the functional core between them — written in ritsu's types and held to their rules:
 
 ```kn
 module late_payment v1
