@@ -228,7 +228,7 @@ machine 注文(order) over 遷移
 ```console
 $ rulec certificate 運賃.rule > cert.json
 $ proofs/.lake/build/bin/rulec-recheck --rule 運賃.rule cert.json
-運賃 (0.31.0), re-checked against the Lean proofs
+運賃 (0.32.0), re-checked against the Lean proofs
   ranges: 1 columns a table writes numbers into hold every value their rows write
   運賃表: 6 rows — complete, 6 rows reached, no two rows meet, 1 axes tiled
     12 boxes read back from the cells they were written as

@@ -1538,7 +1538,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori は、`ritsu dandori` の本体（`ritsu` のライブラリの `languages::dandori`）で走らせる。フローの規則、日付のファイル、帳簿の口と、X2 で決められない前提（7.4）を同じプロセスの中で渡すので、日付と帳簿を使うフロー（請求の例）も、バイナリと同じに答える。バイナリ（`src/main.rs`）とページは同じ関数を呼ぶ。
 - rulec の E129（koyomi をつないでいない rulec で `range from koyomi` を確かめた）の注と台帳は、koyomi が無いところとして rulec のクレートのバイナリだけを挙げる。このページは koyomi をつなぐ（rulec の §15.185）。
 
-`ritsu.wasm` は 15,370,730 バイト（gzip で 4,554,701 バイト。2026-10-19）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
+`ritsu.wasm` は 15,369,700 バイト（gzip で 4,553,260 バイト。2026-10-19）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
 
 **部品と二つのページ。** 部品は `website/docs/playground/` の七つのファイルである。ページの部分を全部作る `playground.js`（ES のモジュール）、`playground.css`、モジュールを動かす `worker.js`、エディターと Markdown のライブラリをまとめた `libraries.js`、開くプロジェクトの `projects.json`、言語ごとに色を付ける語の `words.json`、`ritsu.wasm`。日本語のサイトへは、`website/sync.sh` がこの七つをコピーする（`docs-ja/playground` はコミットしない）。ページが書くのは部品の要素（`<div class="pg" data-lang="en">`）と、`playground.js` を読む `<script type="module">` だけで、上の帯、ファイルのタブ、エディター、右側のタブは `playground.js` が作る。二つのページの違いは並べ方だけで、CSS が決める。
 

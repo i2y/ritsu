@@ -8,7 +8,7 @@
     {
       "name": "ritsu",
       "description": "Agent Skills for ritsu and its nine small languages: business rules (rulec), workflows (dandori), dates (koyomi), ledgers (chobo), claims about code (geas), where requirements come from (yuen), maps of bounded contexts (sakai), who may do what (sekisho) and the code that joins rules, dates and ledgers (kaname). The skills run the ritsu binary, which has to be on PATH.",
-      "version": "0.31.0",
+      "version": "0.32.0",
       "author": {
         "name": "i2y"
       },
