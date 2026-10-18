@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.30.0",
+  "ritsu": "0.31.0",
   "flow": "invoice.flow",
   "scenario": "scenarios/invoice_unpaid.json",
   "target": "reference",
