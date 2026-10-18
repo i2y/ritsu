@@ -1488,6 +1488,7 @@ else:
 const SQL_FUNCTION_RUNNER: &str = r#"@HEADER@
 import json
 import datetime
+import secrets
 import subprocess
 import sys
 from pathlib import Path
@@ -1509,6 +1510,10 @@ ENUM_LABELS = {@ENUM_LABELS@}
 # `-q` keeps the command tags out of the answers and ON_ERROR_STOP makes the first raise
 # the last thing that happens, which is what a refused input has to do here.
 PSQL = ["psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+# The run's own schema, which its sessions make the functions in and drop when they end: two runs
+# on one database, of one rule or of two with one alias, never meet, and a function of the rule's
+# name that the database already has stays as it was.
+SCHEMA = "rulec_run_" + secrets.token_hex(8)
 
 
 def _ord(s: str) -> int:
@@ -1621,6 +1626,14 @@ def _psql(script: str) -> "subprocess.CompletedProcess[str]":
     return subprocess.run(PSQL, input=script, capture_output=True, text=True)
 
 
+def _session(script) -> "subprocess.CompletedProcess[str]":
+    """One psql session over these statements, in the run's schema."""
+    p = _psql("\n".join(["CREATE SCHEMA IF NOT EXISTS %s;" % SCHEMA, "SET search_path TO %s;" % SCHEMA] + script))
+    # However it went, the function does not stay behind in somebody's database.
+    _psql("DROP SCHEMA IF EXISTS %s CASCADE;" % SCHEMA)
+    return p
+
+
 def _decide(cases):
     """One psql session over these cases: each case's record, and its answer."""
     script = [SQL, TRY]
@@ -1641,9 +1654,7 @@ def _decide(cases):
         # column's type in FROM, and row_to_json has no form for a bare bigint.
         one = 'SELECT row_to_json(t)::text FROM (SELECT * FROM "%s"(%s)) AS t' % (FN, args)
         script.append("SELECT pg_temp._case($rulec_case$%s$rulec_case$);" % one)
-    p = _psql("\n".join(script))
-    # However it went, the function does not stay behind in somebody's database.
-    _psql('DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES)))
+    p = _session(script)
     if p.returncode != 0:
         sys.stderr.write(p.stderr)
         sys.exit(1)
@@ -1673,8 +1684,7 @@ if "--labels" in sys.argv[1:]:
     # The display name of each value a line names, from the functions the file declares.
     asked = [l.rstrip("\n").split("\t") for l in sys.stdin if l.strip()]
     script = [SQL] + ["SELECT %s(%s);" % (ENUM_LABELS.get(en, "text"), _lit("str", v)) for en, v in asked]
-    p = _psql("\n".join(script))
-    _psql("\n".join(["DROP FUNCTION IF EXISTS %s(text);" % f for f in ENUM_LABELS.values()] + ['DROP FUNCTION IF EXISTS "%s"(%s);' % (FN, ", ".join(ARGTYPES))]))
+    p = _session(script)
     if p.returncode != 0:
         sys.stderr.write(p.stderr)
         sys.exit(1)

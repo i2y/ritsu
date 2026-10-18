@@ -3,8 +3,9 @@
 //! the rest of the contract: the shape of the file, the entry in `rulec api`, and that the
 //! query really runs as a relation — many rows in one statement, in order.
 
+use std::io::Write as _;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use ritsu_testkit::{Need, TempDir, ready};
 
 fn root() -> PathBuf {
@@ -222,4 +223,59 @@ print(json.dumps({
         got,
         r#"{"answers": [{"fee": 0, "base_fee_row": 2, "payer_row": 1}, {"fee": 400, "base_fee_row": 3, "payer_row": 2}, {"fee": 1200, "base_fee_row": 1, "payer_row": 3}], "refused": true}"#
     );
+}
+
+/// Runs of the function on one database never meet (§15.250): each makes the function in a schema
+/// of its own and drops the schema when it is done. Four runners at once all answer, and a function
+/// of the rule's name that the database already has is still there afterwards.
+#[test]
+fn 同じデータベースで走る関数は互いにもデータベースの関数にも触れない() {
+    if !ready(Need::Postgres, || have("psql") && rulec::backend::psql_ready(), "psql が無いか繋がらないので飛ばした") {
+        return;
+    }
+    if !ready(Need::Python, || have("python3"), "python3 が無いので飛ばした") {
+        return;
+    }
+    // A name no other test gives a function, so that only this test's runs meet the database's.
+    let t = TempDir::new("sql-side-by-side");
+    let rule = t.path().join("期間区分.rule");
+    let src = std::fs::read_to_string(root().join("tests/corpus/期間区分.rule")).unwrap();
+    std::fs::write(&rule, src.replacen("(period) v1", "(period_side_by_side) v1", 1)).unwrap();
+    let dir = t.path().join("out");
+    let (c, _, e) = run(&["gen", rule.to_str().unwrap(), "--out", dir.to_str().unwrap()]);
+    assert_eq!(c, 0, "{e}");
+    let psql = |sql: &str| Command::new("psql").args(["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", sql]).output().unwrap();
+    let theirs = psql("CREATE OR REPLACE FUNCTION period_side_by_side(n integer) RETURNS text LANGUAGE sql AS $$ SELECT 'theirs' $$;");
+    assert!(theirs.status.success(), "{}", String::from_utf8_lossy(&theirs.stderr));
+
+    let cases = ["2026-03-31", "2026-04-01", "2026-12-01"].map(|d| format!("{{\"in\":{{\"注文日\":\"{d}\"}}}}\n")).concat();
+    let runs: Vec<_> = (0..4)
+        .map(|_| {
+            let mut p = Command::new("python3")
+                .args(["-B", dir.join("sql/period_side_by_side_function_runner.py").to_str().unwrap()])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap();
+            p.stdin.take().unwrap().write_all(cases.as_bytes()).unwrap();
+            p
+        })
+        .collect();
+    let outs: Vec<_> = runs.into_iter().map(|p| p.wait_with_output().unwrap()).collect();
+    let after = psql("SELECT period_side_by_side(1);");
+    psql("DROP FUNCTION IF EXISTS period_side_by_side(integer);");
+
+    for o in &outs {
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        assert_eq!(
+            String::from_utf8_lossy(&o.stdout),
+            concat!(
+                r#"{"in":{"注文日":"2026-03-31"},"observed":{"区分":"改定前"},"trace":[{"table":"期間判定","row":1}]}"#, "\n",
+                r#"{"in":{"注文日":"2026-04-01"},"observed":{"区分":"春季"},"trace":[{"table":"期間判定","row":2}]}"#, "\n",
+                r#"{"in":{"注文日":"2026-12-01"},"observed":{"区分":"年末"},"trace":[{"table":"期間判定","row":4}]}"#, "\n",
+            )
+        );
+    }
+    assert_eq!(String::from_utf8_lossy(&after.stdout).trim(), "theirs", "{}", String::from_utf8_lossy(&after.stderr));
 }

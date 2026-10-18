@@ -597,9 +597,12 @@ column it ignored is the worse of the two failures.
 PostgreSQL only — SQLite has no `CREATE FUNCTION`, so this is the one file the query's own
 runner cannot stand in for. `rulec test` runs it on a real PostgreSQL through `psql`, taking the
 connection from libpq's own environment (`PGHOST`, `PGDATABASE`), and skips that pass with a
-note when there is no server to reach. The runner creates the function, calls it once per vector
-**by argument name**, holds the answers to the reference evaluator byte for byte like every other
-runner, and drops it again, so the run leaves nothing behind in the database.
+note when there is no server to reach. The runner creates the function in a schema of its own,
+made for the run, calls it once per vector **by argument name**, holds the answers to the reference
+evaluator byte for byte like every other runner, and drops the schema with everything in it. Two
+runs on one database do not meet, a function of the same name the database already has is left as
+it is, and the run leaves nothing behind. The role it connects as needs `CREATE` on the database,
+to make that schema.
 
 Call it by argument name yourself: `SELECT * FROM "member_shipping_fee"("dest" => 'Hokkaido', "weight" =>
 1200, "total" => 0, "member" => 'basic');`. Positionally it is ambiguous whenever the rule's alias
