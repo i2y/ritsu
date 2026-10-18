@@ -2,7 +2,8 @@
 
 A book stands on its own, and chobo reads no other language. In a project of ritsu's, the book is
 also where other files meet: a dandori workflow runs its operations as tasks and follows its holds
-as cases, a rulec rule works out the amounts the workflow hands it, a sekisho gate says who may run
+as cases, a rulec rule works out the amounts the workflow (or code written by hand) hands it, a
+sekisho gate says who may run
 each operation, a yuen requirement names the operations that satisfy it, and a sakai map says which
 context keeps the book. `ritsu check` reads them together, and checks where they meet.
 
@@ -55,6 +56,56 @@ dandori reads the book through ritsu's port of books, as it reads a rule through
 `ritsu dandori` and `ritsu check` hand it what chobo knows of the book, and the code dandori writes
 calls the client `chobo build` writes, on every platform it builds for. dandori's
 [Dates and books](../dandori/dates-and-books/) says how.
+
+## A rule and the book, without a workflow
+
+A book is not always called from a workflow. A checkout works the amounts out and records the
+sale in the one request it serves. `ritsu gen` writes the rule's module and the book's client into
+one package, and there an amount of money or of a quantity is of the package's one type of its
+unit: the type the rule returns is the type the book's operation takes. In ritsu's tests, the
+marketplace splits a sale with a rule, in cents, and its checkout, written by hand, gives the book
+what the rule returns
+([crates/ritsu/tests/projects/marketplace](https://github.com/i2y/ritsu/tree/main/crates/ritsu/tests/projects/marketplace)):
+
+```ts
+import { books, rules, units } from "../generated/typescript/index";
+…
+export async function checkout(book: books.marketplace.Book, order: string, shop: string, plan: rules.sale_split.Plan, paid: units.USDc): Promise<books.marketplace.Result> {
+  const split = rules.sale_split.sale_split(plan, paid);
+  return book.sale.do({ order, shop, to_shop: split.to_shop, fee: split.fee });
+}
+```
+
+The rule's `fee` and `to_shop` are `units.USDc`, and so are the amounts the book's `sale` takes
+(`unit USD scale 2`). What lies between the two is code of no language of ritsu's, so `ritsu
+check` does not see this border; the type checker of the code's language holds it instead. Were
+the rule to count in whole dollars (`money[USD]`), tsc would stop the checkout where the dollars
+meet the book's cents:
+
+<div class="cb-term" markdown>
+
+```text
+service/checkout.ts(10,51): error TS2345: Argument of type 'USDc' is not assignable to parameter of type 'USD'.
+  Type 'USDc' is not assignable to type '{ readonly __rulec: "USD"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USDc"' is not assignable to type '"USD"'.
+service/checkout.ts(11,38): error TS2322: Type 'USD' is not assignable to type 'USDc'.
+  Type 'USD' is not assignable to type '{ readonly __rulec: "USDc"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USD"' is not assignable to type '"USDc"'.
+service/checkout.ts(11,62): error TS2322: Type 'USD' is not assignable to type 'USDc'.
+  Type 'USD' is not assignable to type '{ readonly __rulec: "USDc"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USD"' is not assignable to type '"USDc"'.
+```
+
+</div>
+
+mypy stops the Python checkout the same way (`Argument "to_shop" to "do" of "_saleTransfer" has
+incompatible type "USD"; expected "USDc"`), and go vet the Go one. An amount of a count (`pcs`,
+`seats`) is a plain integer, as it is everywhere, and so is a balance the client reads. In a
+workflow, `ritsu check` holds the same amounts itself, and what tsc cannot see besides: the range
+of the amounts and the refusals they can come to, below.
 
 ## Where they meet, checked
 

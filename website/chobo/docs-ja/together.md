@@ -1,6 +1,6 @@
 # ほかの言語と組み合わせる
 
-帳簿はそれだけで完結していて、chobo はほかの言語のファイルを読みません。ritsu のプロジェクトでは、ほかの言語のファイルのほうが帳簿を使います。dandori のワークフローは帳簿の操作をタスクとして走らせ、仮押さえを案件として追います。rulec の規則は、ワークフローが帳簿に渡す額を計算します。sekisho のゲートは、操作ごとにだれが走らせてよいかを決めます。yuen の要件は、それを満たす操作を挙げます。sakai の地図は、どのコンテキストが帳簿を持つかを言います。`ritsu check` はそれらを一緒に読み、言語の境目で食い違いが無いかを確かめます。
+帳簿はそれだけで完結していて、chobo はほかの言語のファイルを読みません。ritsu のプロジェクトでは、ほかの言語のファイルのほうが帳簿を使います。dandori のワークフローは帳簿の操作をタスクとして走らせ、仮押さえを案件として追います。rulec の規則は、ワークフロー（や手で書いたコード）が帳簿に渡す額を計算します。sekisho のゲートは、操作ごとにだれが走らせてよいかを決めます。yuen の要件は、それを満たす操作を挙げます。sakai の地図は、どのコンテキストが帳簿を持つかを言います。`ritsu check` はそれらを一緒に読み、言語の境目で食い違いが無いかを確かめます。
 
 ## ワークフローが操作を走らせる
 
@@ -38,6 +38,43 @@ flow
 - `case 押さえ : 在庫.引当 follows 在庫.引当` は、仮押さえを、そのライフサイクルのステートマシンに沿って追います。このステートマシンは `chobo api` も出します。仮押さえはひとりでに期限が切れうるので、dandori の検査は、どの確定と取消の前にも、期限が切れている場合を考えに入れます。品を押さえたまま終わりうるワークフローはエラーです。
 
 dandori は、規則を読むのと同じく、帳簿を ritsu を通して読みます。`ritsu dandori` と `ritsu check` が、chobo が帳簿について知っていることを dandori に渡します。dandori が書くコードは、どのプラットフォーム向けでも、`chobo build` が書くクライアントを呼びます。くわしくは dandori の[日付と帳簿](../../dandori/ja/dates-and-books/)にあります。
+
+## ワークフローを通さずに規則と帳簿を使う
+
+帳簿を呼ぶのに、いつもワークフローが要るわけではありません。決済なら、受けた一つのリクエストの中で額を計算し、売上を記帳すれば済みます。`ritsu gen` は、規則のモジュールと帳簿のクライアントを一つのパッケージに書きます。その中では、お金と量の額は単位ごとに一つの型で、規則が返す額と帳簿の操作が受け取る額は同じ型です。ritsu のテストのマーケットプレイスでは、規則が売上をセントで分け、手で書いた決済のコードが、規則の返す額を帳簿に渡します
+（[crates/ritsu/tests/projects/marketplace](https://github.com/i2y/ritsu/tree/main/crates/ritsu/tests/projects/marketplace)）。
+
+```ts
+import { books, rules, units } from "../generated/typescript/index";
+…
+export async function checkout(book: books.marketplace.Book, order: string, shop: string, plan: rules.sale_split.Plan, paid: units.USDc): Promise<books.marketplace.Result> {
+  const split = rules.sale_split.sale_split(plan, paid);
+  return book.sale.do({ order, shop, to_shop: split.to_shop, fee: split.fee });
+}
+```
+
+規則の `fee` と `to_shop` は `units.USDc` で、帳簿（`unit USD scale 2`）の `sale` が受け取る額も同じ型です。二つのあいだにあるのは ritsu の言語ではないコードなので、`ritsu check` にはこの境目が見えません。代わりに、そのコードの言語の型の検査が確かめます。規則がドル（`money[USD]`）で数えていれば、tsc は、ドルが帳簿のセントに渡るところで決済のコードを止めます。
+
+<div class="cb-term" markdown>
+
+```text
+service/checkout.ts(10,51): error TS2345: Argument of type 'USDc' is not assignable to parameter of type 'USD'.
+  Type 'USDc' is not assignable to type '{ readonly __rulec: "USD"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USDc"' is not assignable to type '"USD"'.
+service/checkout.ts(11,38): error TS2322: Type 'USD' is not assignable to type 'USDc'.
+  Type 'USD' is not assignable to type '{ readonly __rulec: "USDc"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USD"' is not assignable to type '"USDc"'.
+service/checkout.ts(11,62): error TS2322: Type 'USD' is not assignable to type 'USDc'.
+  Type 'USD' is not assignable to type '{ readonly __rulec: "USDc"; }'.
+    Types of property '__rulec' are incompatible.
+      Type '"USD"' is not assignable to type '"USDc"'.
+```
+
+</div>
+
+Python の決済のコードは mypy が同じように止め（`Argument "to_shop" to "do" of "_saleTransfer" has incompatible type "USD"; expected "USDc"`）、Go の決済のコードは go vet が止めます。数え方の単位（`個`、`席`）の額は、どこでもそうであるように素の整数で、クライアントが読む残高も素の整数です。ワークフローの中なら、同じ額を `ritsu check` が自分で確かめ、tsc には見えないことも確かめます。額の範囲と、その額で起きうる拒否です（次の節）。
 
 ## 言語の境目で確かめること
 

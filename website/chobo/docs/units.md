@@ -86,6 +86,13 @@ also holds the amounts a rule can return to the 0 or more that chobo takes (rits
 reasons the transfer can be refused with, for those amounts, to the errors the task handles
 ([With the other languages](together.md)).
 
+In the package `ritsu gen` writes for a project, the client takes an amount of money or of a
+quantity in the package's type of its unit, the type the rules return: the refunds example's
+`amount` is `units.USDc` there, and code written by hand that gives it a rule's amount of another
+unit, or with another tax, is stopped by the type checker of its language
+([A rule and the book, without a workflow](together.md#a-rule-and-the-book-without-a-workflow)).
+An amount of a count, and a balance, are plain integers in the package too.
+
 ## What a book does not compute
 
 A transfer is given its amounts. It does not read a balance to work one out, and it adds nothing
