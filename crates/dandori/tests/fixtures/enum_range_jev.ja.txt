@@ -1,0 +1,4 @@
+エラー[E007]: tests/fixtures/enum_range_jev.flow:21:5: `platinum` は範囲 `>=silver <=gold` の外の値なので、Jev には尋ねません。この意味は外してください
+    21 |     platinum "orders every day"
+エラー[E007]: tests/fixtures/enum_range_jev.flow:26:7: choice の選択肢は二つ以上で、`tiers.tier range >=gold <=gold` の値は一つだけです
+    26 |   jev "Which campaign suits this member?"

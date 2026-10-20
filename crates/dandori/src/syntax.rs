@@ -150,7 +150,8 @@ pub struct Field {
 }
 
 /// `range >=1 <=30`, `range >=1kg`: the whole numbers a value may be, both ends included, in the
-/// unit of its type. Either end can be left out.
+/// unit of its type; `range >=basic <=gold`: the values of an ordered enum from one to the other.
+/// Either end can be left out.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RangeDecl {
     pub lo: Option<Bound>,
@@ -166,6 +167,9 @@ pub enum Bound {
     /// A number with a unit, as rulec writes a bound: `1kg`, `1.5%`, `100万円`. lower counts it in
     /// the unit of the type, and refuses one that does not come to a whole number of it.
     Quantity { value: ritsu_units::Rat, unit: String, raw: String, span: Span },
+    /// A value of an ordered enum, as rulec writes a bound of one: `gold`. lower finds it in the
+    /// enum's order, and refuses it for another type.
+    Value { name: String, span: Span },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -920,7 +924,7 @@ fn secret_mark(cur: &mut Cur) -> Option<Span> {
     cur.eat_kw("secret").then_some(sp)
 }
 
-/// `range >=1 <=30`, `range >=0`, `range <=100`, `range >=1kg`, after a type.
+/// `range >=1 <=30`, `range >=0`, `range <=100`, `range >=1kg`, `range >=basic <=gold`, after a type.
 fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
     let span = cur.span();
     if !cur.eat_kw("range") {
@@ -943,7 +947,13 @@ fn range_decl(cur: &mut Cur) -> Result<Option<RangeDecl>, Diag> {
                 cur.i += 1;
                 b
             }
-            _ => Bound::Int(cur.int(tr!("整数", "a whole number"))?.0),
+            // a value of an ordered enum: `>=gold`
+            Some(Tok::Ident(name)) => {
+                let b = Bound::Value { name: name.clone(), span: at };
+                cur.i += 1;
+                b
+            }
+            _ => Bound::Int(cur.int(tr!("整数か列挙の値", "a whole number or a value of an enum"))?.0),
         });
     }
     if lo.is_none() && hi.is_none() {

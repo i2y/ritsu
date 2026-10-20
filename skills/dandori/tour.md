@@ -231,30 +231,41 @@ arithmetic, a range travels as it is, from where a value comes to where it goes.
 a range or narrowing one changes what a running workflow does when its values fall outside, so it
 ships as a new version or through Worker Deployment Versioning.
 
-A rule's input of an ordered enum can have a range too: a rule that declares `campaign : tier
-range >=basic <=gold` lifts a member as far as gold, and the code generated for it refuses a
-campaign of platinum.
-A value given to such an input must be one the range lets in (E014). A value written out is
-itself, and an input, a field, a task's answer or a rule's output can be any value of its enum,
-since an enum in a `.flow` takes no range. To hand the rule a value the workflow is given, branch
-on it with `match` and write out a value the range lets in
-([tests/fixtures/enum_ranges_held.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges_held.flow)):
+A value of an ordered enum can have a range too, written by its values as a rule writes one:
+`campaign : tiers.tier  range >=basic <=gold`. Only an enum a rule declares in order, with `<`
+(`enum tier = basic < silver < gold < platinum`), takes one; on a `.flow`'s own enum, a `.proto`'s,
+or a rule's declared with `|`, a range is E003. It goes where a number's goes and works as a
+number's does. An input, a field or a task's answer outside its range fails the run with
+`Dandori.BadInput` or `Dandori.BadResponse` on every platform. A value given to a place with a range,
+a rule's input among them, must be one the range lets in (E014): a value written out is itself, an
+input, a field or a task's answer any value its range lets in (every value of its enum without one),
+and a rule's output any value of its enum. A `match` on a value held to a range takes the values the
+range lets in, and an arm for another can never be taken (E011).
+
+A workflow that holds the campaign it is given to the range of the rule's input hands it to the rule
+as it is
+([tests/flows/lift.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/flows/lift.flow)):
 
 ```flow
-  match campaign
-    basic => let quote = tiers(member: member, campaign: basic, subtotal: subtotal)
-    silver => let quote = tiers(member: member, campaign: silver, subtotal: subtotal)
-    gold, platinum => let quote = tiers(member: member, campaign: gold, subtotal: subtotal)
+inputs
+  member   : tiers.tier
+  campaign : tiers.tier  range >=basic <=gold
+  order    : Order
+
+flow
+  let quote = tiers(member: member, campaign: campaign, subtotal: order.subtotal)
 ```
 
-Handing the rule the campaign as it comes
-([tests/fixtures/enum_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges.flow))
-is E014:
+A campaign that can be platinum, from an input without a range or from a rule's output, is E014
+([tests/fixtures/enum_ranges.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges.flow)).
+Where no range can be written, branch on the value with `match` and write out one the range lets in,
+as [tests/fixtures/enum_ranges_held.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/enum_ranges_held.flow)
+does.
 
 ```text
 error[E014]: tests/fixtures/enum_ranges.flow:28:1: `campaign` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     28 |   let c = tiers(member: member.tier, campaign: campaign, subtotal: subtotal)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 ```
 
 ## Secrets

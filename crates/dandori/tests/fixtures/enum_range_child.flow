@@ -1,0 +1,29 @@
+workflow enum_range_child v1
+description "Ranges of an enum between a task and the .flow it runs as its child: what the task passes is in the range of the child's input, and what the child answers is in the range of the task's answer"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+
+record Offered
+  offered : tiers.tier  range >=basic <=gold
+
+record Any
+  offered : tiers.tier
+
+inputs
+  campaign : tiers.tier  range >=silver <=gold
+
+# passes a campaign in the child's range, and reads its answer whatever it is
+task held(campaign: tiers.tier  range >=silver <=gold) -> Any
+  flow "children/offer.flow"
+
+# passes a campaign that may be any tier
+task unheld(campaign: tiers.tier) -> Any
+  flow "children/offer.flow"
+
+# passes one that may be platinum, and reads the answer as if it never were
+task wide(campaign: tiers.tier  range >=basic <=platinum) -> Offered
+  flow "children/offer.flow"
+
+flow
+  let a = held(campaign: campaign)
+  pass

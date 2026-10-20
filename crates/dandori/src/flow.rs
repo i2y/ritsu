@@ -280,6 +280,9 @@ pub struct Flow<'a> {
     seen: BTreeMap<usize, Seen>,
     /// and at each end
     ends: BTreeMap<Ending, Seen>,
+    /// what the values of an enum each variable holds can be, as the ranges of the places they come
+    /// from hold them (`ranges::held`): a `match` on one takes only those
+    held: BTreeMap<String, crate::ranges::Est>,
 }
 
 pub struct FlowResult {
@@ -289,7 +292,7 @@ pub struct FlowResult {
 }
 
 pub fn analyze(m: &Model) -> FlowResult {
-    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false, seen: BTreeMap::new(), ends: BTreeMap::new() };
+    let mut f = Flow { m, diags: BTreeMap::new(), loops: vec![], failures: vec![], cancels: vec![], monitors: BTreeMap::new(), in_on_failure: false, in_on_cancel: false, seen: BTreeMap::new(), ends: BTreeMap::new(), held: crate::ranges::held(m) };
     let mut start = Abs { live: true, set: BTreeMap::new(), cases: vec![], narrow: BTreeMap::new(), path: vec![] };
     for (v, _) in &m.vars {
         let is_input = m.inputs.iter().any(|(i, _)| i == v);
@@ -1138,9 +1141,13 @@ impl<'a> Flow<'a> {
         }
         let ety = expr.ty();
         let optional = matches!(ety, Ty::Opt(_));
-        let mut domain: Vec<String> = match ety.inner() {
-            Ty::Enum(e) => self.m.enums[*e].values.clone(),
-            Ty::Bool => vec!["true".into(), "false".into()],
+        // a value of an enum that every place it comes from holds to a range is one of the values
+        // the ranges let in: the code each platform is given checks it where it comes in
+        let held = if case_state.is_none() { crate::ranges::held_values(self.m, &self.held, expr) } else { None };
+        let mut domain: Vec<String> = match (ety.inner(), &held) {
+            (Ty::Enum(_), Some(values)) => values.clone(),
+            (Ty::Enum(e), None) => self.m.enums[*e].values.clone(),
+            (Ty::Bool, _) => vec!["true".into(), "false".into()],
             _ => vec![],
         };
         // a value that may be absent: `none`, and its values, or `some` when they are not listed
@@ -1183,11 +1190,19 @@ impl<'a> Flow<'a> {
                     for v in &domain {
                         possible.insert(v.clone(), a.path.clone());
                     }
-                    narrowed = false;
+                    // a value the ranges keep out can never be there, as one an arm above took
+                    narrowed = held.is_some();
                 }
             },
         }
-        let listed: Vec<String> = possible.keys().cloned().collect();
+        // the values a range keeps it to are said in the enum's order, `none` after them
+        let in_order = |vs: Vec<String>| -> Vec<String> {
+            match (&held, a.narrow.contains_key(&key)) {
+                (Some(order), false) => order.iter().filter(|v| vs.contains(v)).chain(vs.iter().filter(|v| !order.contains(v))).cloned().collect(),
+                _ => vs,
+            }
+        };
+        let listed: Vec<String> = in_order(possible.keys().cloned().collect());
         let mut covered: BTreeSet<String> = BTreeSet::new();
         let mut after = Abs::dead();
         for (i, arm) in arms.iter().enumerate() {
@@ -1258,7 +1273,7 @@ impl<'a> Flow<'a> {
         }
         let missing: Vec<(String, Path)> = possible.iter().filter(|(v, _)| !covered.contains(*v)).map(|(v, p)| (v.clone(), p.clone())).collect();
         if !missing.is_empty() {
-            let names: Vec<String> = missing.iter().map(|(v, _)| v.clone()).collect();
+            let names: Vec<String> = in_order(missing.iter().map(|(v, _)| v.clone()).collect());
             let message = tr!("`match` に {} の分岐がありません。ここで `{key}` はその値を取りえます", "`match` has no arm for {}, which `{key}` can be here", names.join("・"); names.join(", "));
             let path = missing[0].1.clone();
             self.push(Diag::error("E010", s.line, 1, message).with_path(path));

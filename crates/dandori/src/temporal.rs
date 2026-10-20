@@ -238,8 +238,9 @@ fn ts_type(m: &Model, t: &Ty) -> String {
     }
 }
 
-/// A check that `x` is a well-formed value of `t`, as TypeScript. `p` is how the code
-/// reaches types.ts: "" inside it, "T." from the workflow.
+/// A check that `x` is a well-formed value of `t`, in `rg` (a number's range, or the values an
+/// enum's range lets in), as TypeScript. `p` is how the code reaches types.ts: "" inside it, "T."
+/// from the workflow.
 fn ts_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize) -> String {
     match t {
         Ty::Int | Ty::Num(_) => match rg {
@@ -250,7 +251,11 @@ fn ts_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize
         Ty::Timestamp => format!("(typeof {x} === \"string\" && {p}TIMESTAMP.test({x}))"),
         Ty::Date => format!("(typeof {x} === \"string\" && {p}DATE.test({x}))"),
         Ty::Bool => format!("typeof {x} === \"boolean\""),
-        Ty::Enum(e) => format!("{p}{}_values.includes({x})", type_name(&m.enums[*e].name)),
+        Ty::Enum(e) => match m.held_values(t, rg) {
+            // a place that holds the enum to a range: the values the range lets in
+            Some(values) => format!("([{}] as readonly unknown[]).includes({x})", values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
+            None => format!("{p}{}_values.includes({x})", type_name(&m.enums[*e].name)),
+        },
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");

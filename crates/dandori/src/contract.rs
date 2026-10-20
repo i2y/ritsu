@@ -70,8 +70,9 @@ pub(crate) fn fail_names(m: &Model) -> Vec<String> {
         .collect()
 }
 
-/// Whether a value of `a` (of `am`, its numbers in `arg`) is one that `b` (of `bm`, its numbers in
-/// `brg`) takes. `seen` holds the pairs of records being compared, for records that hold themselves.
+/// Whether a value of `a` (of `am`, its numbers or its enum's values in `arg`) is one that `b` (of
+/// `bm`, its numbers or its enum's values in `brg`) takes. `seen` holds the pairs of records being
+/// compared, for records that hold themselves.
 fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<Range>, seen: &mut Vec<(RecordId, RecordId)>) -> Result<(), Words> {
     let (an, bn) = (am.ty_name(a), bm.ty_name(b));
     let differ = || tr!("`{an}` で、`{bn}` ではありません", "`{an}` is not `{bn}`");
@@ -84,10 +85,27 @@ fn fits(am: &Model, a: &Ty, arg: Option<Range>, bm: &Model, b: &Ty, brg: Option<
         (Ty::Int, Ty::Int) => within(arg, brg),
         (Ty::Num(u), Ty::Num(v)) if u.same(v) => within(arg, brg),
         (Ty::Str, Ty::Str) | (Ty::Bool, Ty::Bool) | (Ty::Timestamp, Ty::Timestamp) => Ok(()),
-        (Ty::Enum(x), Ty::Enum(y)) => match am.enums[*x].values.iter().find(|v| !bm.enums[*y].values.contains(v)) {
-            Some(v) => Err(tr!("`{an}` の `{v}` が `{bn}` の値にありません", "`{v}` of `{an}` is not a value of `{bn}`")),
-            None => Ok(()),
-        },
+        // each value `a` can be (its range's, every value without one) is one `b` takes: a value of
+        // its enum, in its range when it has one
+        (Ty::Enum(x), Ty::Enum(y)) => {
+            let (have, takes) = (am.values_in(*x, arg), bm.values_in(*y, brg));
+            match have.iter().find(|v| !bm.enums[*y].values.contains(v)) {
+                Some(v) => Err(tr!("`{an}` の `{v}` が `{bn}` の値にありません", "`{v}` of `{an}` is not a value of `{bn}`")),
+                None => match have.iter().any(|v| !takes.contains(v)) {
+                    false => Ok(()),
+                    true => {
+                        let w = ends_text(&takes);
+                        match arg {
+                            Some(_) => {
+                                let h = ends_text(&have);
+                                Err(tr!("`{h}` で、受け取るのは `{w}` です", "it is `{h}`, and `{w}` is taken"))
+                            }
+                            None => Err(tr!("範囲が書かれていませんが、受け取るのは `{w}` です", "it has no range, and `{w}` is taken")),
+                        }
+                    }
+                },
+            }
+        }
         (Ty::Record(x), Ty::Record(y)) => {
             if seen.contains(&(*x, *y)) {
                 return Ok(());

@@ -3,7 +3,7 @@
   = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
 エラー[E003]: tests/fixtures/values.flow:14:8: リストのリストは書けません。内側のリストはレコードに入れてください
     14 |   履歴 : list[list[string]]
-エラー[E003]: tests/fixtures/values.flow:20:16: 範囲を書けるのは数（`int` か単位の付いた数）だけです。これは `string` です
+エラー[E003]: tests/fixtures/values.flow:20:16: 範囲を書けるのは、数（`int` か単位の付いた数）と、順序のある列挙だけです。これは `string` です
     20 |   名前 : string  range >=1
 エラー[E003]: tests/fixtures/values.flow:21:14: `>=10 <=5` に入る数はありません
     21 |   数   : int  range >=10 <=5

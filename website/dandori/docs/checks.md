@@ -65,8 +65,9 @@ there must be handled (E022). [Dates and books](dates-and-books.md)
 case without a `key` is a warning (W103).
 
 **Ranges.** A value given to a rule, a task, a record or an output fits the range there (E014), and
-a value whose range nothing says is a warning (W104). A value given to a rule's input of an ordered
-enum with a range is one the range lets in (E014). [Ranges](tour.md#ranges)
+a value whose range nothing says is a warning (W104). So does a value of an ordered enum, held to a
+range by its values (`range >=basic <=gold`) on a rule's input or on a place of the flow, and a
+`match` on one takes the values its range lets in. [Ranges](tour.md#ranges)
 
 **A rule's precondition.** Some of what a rule takes for granted its inputs' types cannot say: that
 one input stays at or below another (`constraint asked <= paid`), or that a day is one of the days a

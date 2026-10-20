@@ -1,0 +1,26 @@
+workflow 記述との列挙の範囲 v1
+description "API の記述と列挙の範囲：送るのは範囲に入る値で、API が返しうる値は、それを読む場所の範囲に入っていなければならない"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+use openapi 案内 from "apis/案内.json"
+
+record 引き上げ先
+  tier : 送料.段階
+
+record 収めた引き上げ先
+  tier : 送料.段階  range >=一般 <=ゴールド
+
+# 範囲に収めたキャンペーンは、API が受け取る値だけを送る。答えはどの段階でも読む
+task 収めて送る(campaign: 送料.段階  range >=一般 <=ゴールド) -> 引き上げ先
+  http POST 案内 "/offers"
+
+# どの段階にもなりうるキャンペーンは、API が受け取らないプラチナになりうる
+task 収めずに送る(campaign: 送料.段階) -> 引き上げ先
+  http POST 案内 "/offers"
+
+# API はプラチナを返しうるが、答えの範囲はそれを受け付けない
+task 収めて読む(campaign: 送料.段階  range >=一般 <=ゴールド) -> 収めた引き上げ先
+  http POST 案内 "/offers"
+
+flow
+  pass

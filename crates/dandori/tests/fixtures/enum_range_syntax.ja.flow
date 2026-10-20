@@ -1,0 +1,21 @@
+workflow 列挙の範囲の書き方 v1
+description "列挙の範囲の書き方の誤り：範囲を書けるのは、規則が順に並べた列挙だけで、端はその値のどれかで、範囲に入る値がなければならない"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+use rule 手数料 from "rules/account_fee.rule"
+
+enum 色 = 赤 | 緑 | 青
+
+record 誤り
+  収めた       : 送料.段階  range >=一般 <=ゴールド
+  片方の端     : 送料.段階  range >=シルバー
+  自分の列挙   : 色  range >=赤 <=緑
+  規則の列挙   : 手数料.口座の状態  range >=有効
+  値でない     : 送料.段階  range >=ブロンズ
+  数           : 送料.段階  range <=2
+  入る値が無い : 送料.段階  range >=ゴールド <=シルバー
+  名前         : int  range >=一般
+  文字列       : string  range >=一般
+
+flow
+  pass

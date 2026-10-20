@@ -2,16 +2,16 @@ error[E014]: tests/fixtures/enum_ranges.ja.flow:26:1: `プラチナ` is outside 
     26 |   let b = 送料(会員: 会員.段階, キャンペーン: プラチナ, 小計: 小計)
 error[E014]: tests/fixtures/enum_ranges.ja.flow:28:1: `キャンペーン` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
     28 |   let c = 送料(会員: 会員.段階, キャンペーン: キャンペーン, 小計: 小計)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.ja.flow:29:1: `会員.段階` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
     29 |   let d = 送料(会員: 会員.段階, キャンペーン: 会員.段階, 小計: 小計)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.ja.flow:31:1: `選んだ段階` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
     31 |   let e = 送料(会員: 会員.段階, キャンペーン: 選んだ段階, 小計: 小計)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.ja.flow:32:1: `a.適用段階` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
     32 |   let f = 送料(会員: 会員.段階, キャンペーン: a.適用段階, 小計: 小計)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.ja.flow:35:1: `選ぶ段階` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
     35 |   let g = 送料(会員: 会員.段階, キャンペーン: 選ぶ段階, 小計: 小計)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out

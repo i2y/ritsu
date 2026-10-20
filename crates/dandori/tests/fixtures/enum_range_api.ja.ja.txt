@@ -1,0 +1,4 @@
+エラー[E016]: tests/fixtures/enum_range_api.ja.flow:18:1: 引数 `campaign` は、`案内` の POST /offers が受け取るものと合いません。`送料.段階` の `プラチナ` が、受け取る値（一般・シルバー・ゴールド）にありません
+    18 | task 収めずに送る(campaign: 送料.段階) -> 引き上げ先
+エラー[E016]: tests/fixtures/enum_range_api.ja.flow:22:1: `案内` の POST /offers のレスポンスは `収めた引き上げ先` に合いません。`tier` は、`プラチナ` のことがあり、範囲 `>=一般 <=ゴールド` の外です
+    22 | task 収めて読む(campaign: 送料.段階  range >=一般 <=ゴールド) -> 収めた引き上げ先

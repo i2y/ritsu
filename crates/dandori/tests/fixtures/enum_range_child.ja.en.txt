@@ -1,0 +1,6 @@
+error[E015]: tests/fixtures/enum_range_child.ja.flow:20:1: the parameter `キャンペーン` is not what `案内` takes as its input `キャンペーン`: it has no range, and `>=一般 <=ゴールド` is taken
+    20 | task 収めずに渡す(キャンペーン: 送料.段階) -> どれでも
+error[E015]: tests/fixtures/enum_range_child.ja.flow:24:1: the parameter `キャンペーン` is not what `案内` takes as its input `キャンペーン`: it is `>=一般 <=プラチナ`, and `>=一般 <=ゴールド` is taken
+    24 | task 広く渡す(キャンペーン: 送料.段階  range >=一般 <=プラチナ) -> 勧め
+error[E015]: tests/fixtures/enum_range_child.ja.flow:24:1: `案内` answers `勧めた段階` with what the field `勧めた段階` of `勧め` does not take: it is `>=一般 <=プラチナ`, and `>=一般 <=ゴールド` is taken
+    24 | task 広く渡す(キャンペーン: 送料.段階  range >=一般 <=プラチナ) -> 勧め

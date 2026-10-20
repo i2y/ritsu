@@ -1,0 +1,6 @@
+エラー[E015]: tests/fixtures/enum_range_child.flow:20:1: 引数 `campaign` は、`offer` が入力 `campaign` として受け取るものと合いません。範囲が書かれていませんが、受け取るのは `>=basic <=gold` です
+    20 | task unheld(campaign: tiers.tier) -> Any
+エラー[E015]: tests/fixtures/enum_range_child.flow:24:1: 引数 `campaign` は、`offer` が入力 `campaign` として受け取るものと合いません。`>=basic <=platinum` で、受け取るのは `>=basic <=gold` です
+    24 | task wide(campaign: tiers.tier  range >=basic <=platinum) -> Offered
+エラー[E015]: tests/fixtures/enum_range_child.flow:24:1: `offer` が返す `offered` は、`Offered` のフィールド `offered` と合いません。`>=basic <=platinum` で、受け取るのは `>=basic <=gold` です
+    24 | task wide(campaign: tiers.tier  range >=basic <=platinum) -> Offered

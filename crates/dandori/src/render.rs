@@ -608,9 +608,9 @@ pub fn answer_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Optio
 /// Outputs: a record's fields are all required and no others are allowed, a value that may
 /// be absent is a choice with null, a timestamp has the form Step Functions' Wait takes, and
 /// a number with a unit says its unit. A number's range is its `minimum` and `maximum` for
-/// OpenAI, and words in its description for Claude, whose structured outputs take neither.
-/// None when `t` holds `json`, or a record that holds itself through others, which such a
-/// schema cannot say.
+/// OpenAI, and words in its description for Claude, whose structured outputs take neither; an
+/// enum's range, the values it lets in as the `enum`, which both take. None when `t` holds
+/// `json`, or a record that holds itself through others, which such a schema cannot say.
 pub fn json_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<Value> {
     fn number(unit: Option<&str>, rg: Option<Range>, p: Provider) -> Value {
         let mut o = Map::new();
@@ -637,7 +637,8 @@ pub fn json_schema(m: &Model, t: &Ty, rg: Option<Range>, p: Provider) -> Option<
             Ty::Bool => json!({ "type": "boolean" }),
             Ty::Timestamp => json!({ "type": "string", "pattern": TIMESTAMP_RE }),
             Ty::Date => json!({ "type": "string", "pattern": DATE_RE }),
-            Ty::Enum(e) => json!({ "type": "string", "enum": m.enums[*e].values }),
+            // an enum held to a range: the values it lets in, for OpenAI and for Claude alike
+            Ty::Enum(e) => json!({ "type": "string", "enum": m.values_in(*e, rg) }),
             Ty::List(x) => json!({ "type": "array", "items": go(m, x, rg, p, within)? }),
             Ty::Opt(x) => json!({ "anyOf": [go(m, x, rg, p, within)?, { "type": "null" }] }),
             Ty::Json => return None,
@@ -1201,7 +1202,8 @@ pub fn jsonata_rule_read(c: &RuleConnect, x: &str) -> String {
 }
 
 /// A JSONata test that `x` is a well-formed value of type `t`, and in `rg` when it is a number
-/// (or its numbers, when it is a `?` or a list).
+/// (or its numbers, when it is a `?` or a list); for an enum held to a range, one of the values the
+/// range lets in.
 pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize) -> String {
     match t {
         Ty::List(inner) => {
@@ -1219,7 +1221,7 @@ pub fn jsonata_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, depth: usize
             parts.extend(rg.map(|r| r.tests(|op, n| format!("{x} {op} {n}"))).unwrap_or_default());
             format!("({})", parts.join(" and "))
         }
-        Ty::Enum(e) => format!("{x} in {}", jsonata_list(&m.enums[*e].values)),
+        Ty::Enum(e) => format!("{x} in {}", jsonata_list(&m.values_in(*e, rg))),
         Ty::Record(r) => {
             let mut parts = vec![format!("$type({x}) = \"object\"")];
             if depth < 4 {
@@ -1271,7 +1273,8 @@ pub fn jsonata_list(values: &[String]) -> String {
     format!("[{}]", values.iter().map(|v| jsonata_string(v)).collect::<Vec<_>>().join(", "))
 }
 
-/// Whether a JSON value is a well-formed value of type `t`, in `rg` (the interpreter's side of `jsonata_check`).
+/// Whether a JSON value is a well-formed value of type `t`, in `rg` (the interpreter's side of
+/// `jsonata_check`): for an enum held to a range, one of the values the range lets in.
 pub fn value_fits(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> bool {
     match t {
         Ty::List(inner) => v.as_array().map(|a| a.iter().all(|x| value_fits(m, x, inner, rg))).unwrap_or(false),
@@ -1282,7 +1285,7 @@ pub fn value_fits(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> bool {
         Ty::Timestamp => v.as_str().map(is_timestamp).unwrap_or(false),
         Ty::Date => v.as_str().map(is_date).unwrap_or(false),
         Ty::Int | Ty::Num(_) => v.as_f64().is_some_and(|f| f.fract() == 0.0 && rg.map_or(true, |r| r.lo.map_or(true, |lo| f >= lo as f64) && r.hi.map_or(true, |hi| f <= hi as f64))),
-        Ty::Enum(e) => v.as_str().map(|s| m.enums[*e].values.iter().any(|x| x == s)).unwrap_or(false),
+        Ty::Enum(e) => v.as_str().map(|s| m.values_in(*e, rg).iter().any(|x| x == s)).unwrap_or(false),
         Ty::Record(r) => match v.as_object() {
             Some(o) => m.records[*r].fields.iter().all(|(f, ft)| match o.get(f) {
                 Some(x) => value_fits(m, x, ft, m.field_range(*r, f)),

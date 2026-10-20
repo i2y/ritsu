@@ -1,0 +1,4 @@
+ok campaign_lift.rule
+lift.flow: 検査を通りました
+tiers.gate: ok — action 2、ポリシー 2（permit 2、forbid 0）、期待 2、職務の分離 0
+ritsu check: ファイル 3 個（rulec 1、dandori 1、sekisho 1）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所

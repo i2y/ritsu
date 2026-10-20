@@ -1,0 +1,52 @@
+workflow enum_range_places v1
+description "Ranges of an enum on the places of a workflow: a value goes where it fits, from a place whose range is inside the range of where it goes, and a match on it takes the values its range lets in"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Offer
+  campaign : tiers.tier  range >=basic <=gold
+
+inputs
+  wide     : tiers.tier  range >=basic <=platinum
+  open     : tiers.tier  range >=silver
+  narrow   : tiers.tier  range >=silver <=gold
+  maybe    : tiers.tier?  range >=basic <=gold
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  top : tiers.tier  range >=gold <=gold
+
+task wider(campaign: tiers.tier) -> tiers.tier  range >=basic <=platinum
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:wider"
+  idempotent
+
+task send(campaign: tiers.tier  range >=silver <=gold)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:send"
+  idempotent
+
+task send_all(campaigns: list[tiers.tier]  range >=silver <=gold)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:send-all"
+  idempotent
+
+flow
+  # a range wider than the rule's, and one whose open end goes up to the last value
+  let a = tiers(member: narrow, campaign: wide, subtotal: subtotal)
+  let b = tiers(member: narrow, campaign: open, subtotal: subtotal)
+  # a range inside the rule's fits
+  let c = tiers(member: narrow, campaign: narrow, subtotal: subtotal)
+  # a task's parameter, a task's answer, and a field of a record written out have ranges too
+  send(campaign: wide)
+  send_all(campaigns: [platinum, basic, gold])
+  let w = wider(campaign: narrow)
+  let d = tiers(member: narrow, campaign: w, subtotal: subtotal)
+  let o: Offer = {campaign: platinum}
+  # a match on a value held to a range takes the values the range lets in, wherever it was put
+  let chosen = narrow
+  match chosen
+    silver => pass
+    platinum => pass
+  # and a value that may be absent, `none` beside them
+  match maybe
+    basic, silver, gold => pass
+  succeed top = narrow

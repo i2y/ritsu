@@ -1,0 +1,32 @@
+workflow enum_range_jev v1
+description "Ranges of an enum on what a decision model answers: Jev is asked among the values the range lets in, so a meaning is written for those, and a choice has two of them at least"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+
+inputs
+  note : string
+
+# asked among basic, silver and gold
+task suggest(note: string) -> tiers.tier  range >=basic <=gold
+  jev "Which campaign suits this member?"
+    basic "a member who has just joined"
+    gold "a member who orders every week"
+  model "jev-1.13.0"
+
+# a level of the scale is never asked for outside the range
+task rate(note: string) -> tiers.tier  range >=silver <=gold
+  jev score "How loyal is this member?"
+    silver "orders now and then"
+    gold "orders every week"
+    platinum "orders every day"
+  model "jev-1.13.0"
+
+# one value is no choice
+task only(note: string) -> tiers.tier  range >=gold <=gold
+  jev "Which campaign suits this member?"
+  model "jev-1.13.0"
+
+flow
+  let a = suggest(note: note)
+  let b = rate(note: note)
+  let c = only(note: note)

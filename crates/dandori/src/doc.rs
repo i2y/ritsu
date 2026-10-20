@@ -1016,6 +1016,16 @@ fn md_prose(s: &str) -> String {
     o
 }
 
+/// The type of an input or an output as the page names it: its type, and for an enum held to a
+/// range, the range (`tiers.tier range >=basic <=gold`), without which the type reads as taking
+/// every value of the enum. A number's range is not shown, as the page never has (DESIGN 7).
+fn typed(m: &Model, t: &Ty, rg: Option<&Range>) -> String {
+    match rg.filter(|_| t.enum_inside().is_some()) {
+        Some(r) => format!("{} range {}", m.ty_name(t), m.range_text(t, r)),
+        None => m.ty_name(t),
+    }
+}
+
 pub fn markdown(i: &Input) -> String {
     let m = i.m;
     let lang = i.lang;
@@ -1026,15 +1036,15 @@ pub fn markdown(i: &Input) -> String {
     if !m.description.is_empty() {
         let _ = writeln!(o, "{}\n", md_prose(&m.description));
     }
-    let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("`{n}: {}`", m.ty_name(t))).collect::<Vec<_>>().join(", ");
+    let io = |list: &[(String, Ty)], ranges: &BTreeMap<String, Range>| list.iter().map(|(n, t)| format!("`{n}: {}`", typed(m, t, ranges.get(n)))).collect::<Vec<_>>().join(", ");
     match lang {
         Lang::En => {
             let _ = write!(o, "`{}`, drawn by `dandori doc`.", i.file);
             if !m.inputs.is_empty() {
-                let _ = write!(o, " Inputs: {}.", io(&m.inputs));
+                let _ = write!(o, " Inputs: {}.", io(&m.inputs, &m.input_ranges));
             }
             if !m.outputs.is_empty() {
-                let _ = write!(o, " Outputs: {}.", io(&m.outputs));
+                let _ = write!(o, " Outputs: {}.", io(&m.outputs, &m.output_ranges));
             }
             if let Some(s) = &m.service {
                 let _ = write!(o, " It implements `{}` (`{}`).", s.name, s.file);
@@ -1042,13 +1052,13 @@ pub fn markdown(i: &Input) -> String {
         }
         Lang::Ja => {
             let _ = write!(o, "`{}` を `dandori doc` で描いたものです。", i.file);
-            let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("`{n}: {}`", m.ty_name(t))).collect::<Vec<_>>().join("・");
+            let io = |list: &[(String, Ty)], ranges: &BTreeMap<String, Range>| list.iter().map(|(n, t)| format!("`{n}: {}`", typed(m, t, ranges.get(n)))).collect::<Vec<_>>().join("・");
             if !m.inputs.is_empty() {
-                let _ = write!(o, "入力は {}", io(&m.inputs));
+                let _ = write!(o, "入力は {}", io(&m.inputs, &m.input_ranges));
                 let _ = write!(o, "{}", if m.outputs.is_empty() { " です。" } else { "、" });
             }
             if !m.outputs.is_empty() {
-                let _ = write!(o, "出力は {} です。", io(&m.outputs));
+                let _ = write!(o, "出力は {} です。", io(&m.outputs, &m.output_ranges));
             }
             if let Some(s) = &m.service {
                 let _ = write!(o, "このワークフローは `{}`（`{}`）を実装します。", s.name, s.file);
@@ -1633,13 +1643,13 @@ impl<'a> Page<'a> {
                 if !m.description.is_empty() {
                     let _ = write!(o, "<p>{}</p>", esc(&m.description));
                 }
-                let io = |list: &[(String, Ty)]| list.iter().map(|(n, t)| format!("<code>{}: {}</code>", esc(n), esc(&m.ty_name(t)))).collect::<Vec<_>>().join(sep(lang));
+                let io = |list: &[(String, Ty)], ranges: &BTreeMap<String, Range>| list.iter().map(|(n, t)| format!("<code>{}: {}</code>", esc(n), esc(&typed(m, t, ranges.get(n))))).collect::<Vec<_>>().join(sep(lang));
                 o.push_str("<dl class=\"facts\">");
                 if !m.inputs.is_empty() {
-                    let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Inputs", "入力"), io(&m.inputs));
+                    let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Inputs", "入力"), io(&m.inputs, &m.input_ranges));
                 }
                 if !m.outputs.is_empty() {
-                    let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Outputs", "出力"), io(&m.outputs));
+                    let _ = write!(o, "<dt>{}</dt><dd>{}</dd>", tr(lang, "Outputs", "出力"), io(&m.outputs, &m.output_ranges));
                 }
                 if let Some(s) = &m.service {
                     let methods: Vec<String> = service_rows(s, lang)

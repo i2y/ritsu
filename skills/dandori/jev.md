@@ -60,7 +60,7 @@ task pick_kind(text: string) -> routing.kind
 
 | The task answers | The model is asked | The answer is |
 |---|---|---|
-| an enum, with `jev "<question>"` | a choice among the enum's values; under it, what each value means (a value left out goes with none) | the value the model chooses |
+| an enum, with `jev "<question>"` | a choice among the enum's values (those its range lets in, when the answer holds it to one); under it, what each value means (a value left out goes with none) | the value the model chooses |
 | an enum, with `jev score "<question>"` | a score: the values are the levels, listed from the lowest, each with what it means (2 to 10 of them on TypeSafe's API) | the level nearest where the model puts it, a half going up |
 | `bool`, with `jev "<question>"` | yes or no; under it, what `true` and `false` mean, both or neither (the Decisions API takes no meanings: say them in the question) | yes when the probability of yes is over one half |
 | a record, with `jev` alone | a question for each field, each as above, all in one request | a record of the answers |

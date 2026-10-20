@@ -1,0 +1,4 @@
+error[E007]: tests/fixtures/enum_range_jev.ja.flow:21:5: `プラチナ` is outside the range `>=シルバー <=ゴールド`, so Jev is not asked about it; leave its meaning out
+    21 |     プラチナ "毎日注文する"
+error[E007]: tests/fixtures/enum_range_jev.ja.flow:26:7: a choice has two options at least, and `送料.段階 range >=ゴールド <=ゴールド` has one value only
+    26 |   jev "この会員に合うキャンペーンはどれか"

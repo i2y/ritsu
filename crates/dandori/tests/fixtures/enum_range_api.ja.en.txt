@@ -1,0 +1,4 @@
+error[E016]: tests/fixtures/enum_range_api.ja.flow:18:1: the parameter `campaign` is not what `案内` POST /offers takes: `プラチナ` of `送料.段階` is not one of the values it takes (一般, シルバー, ゴールド)
+    18 | task 収めずに送る(campaign: 送料.段階) -> 引き上げ先
+error[E016]: tests/fixtures/enum_range_api.ja.flow:22:1: what `案内` POST /offers answers is not `収めた引き上げ先`: in `tier`, it may be `プラチナ`, outside `>=一般 <=ゴールド`
+    22 | task 収めて読む(campaign: 送料.段階  range >=一般 <=ゴールド) -> 収めた引き上げ先

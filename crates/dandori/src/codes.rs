@@ -57,8 +57,8 @@ pub fn ledger() -> Ledger {
             "E003",
             tr!("型が合いません", "Types that do not match"),
             tr!(
-                "値の型が、置いた場所の型と違うとき。オプショナルな値をそのまま使ったもの、`none` を置けない場所に置いたもの、リストのリスト、型の決まらない `{{…}}` や `[]`、数でないものに付けた範囲、どの数も入らない範囲、型の次元に無い単位を付けた範囲の端、型の単位で数えると整数にならない範囲の端、自分自身を含むレコード（`.flow` に書いたものも、`.proto` のメッセージから作ったものも）、UTC オフセットの書かれていないカレンダーを使う日付に渡した時刻（`now` など）が、これにあたります。単位は単位の型で比べるので、`JPY` と `円` は同じ型で、`kg` と `g`、税込と税抜は違う型です。",
-                "A value's type is not the type of where it goes: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{{…}}` or `[]` whose type cannot be told, a range on what is not a number, a range no number is in, a bound of a range whose unit is not of its type or that does not come to a whole number of it, a record that contains itself, written in the `.flow` or made of a message of a `.proto`, a time (`now`, say) passed to a date of a dates file whose calendar says no UTC offset. Units are compared as units: `JPY` and `円` are one type, `kg` and `g`, and tax in and tax out, are not."
+                "値の型が、置いた場所の型と違うとき。オプショナルな値をそのまま使ったもの、`none` を置けない場所に置いたもの、リストのリスト、型の決まらない `{{…}}` や `[]`、数でも順序のある列挙でもないものに付けた範囲（順序の無い列挙に付けたものも）、どの値も入らない範囲、型の次元に無い単位を付けた範囲の端、型の単位で数えると整数にならない範囲の端、列挙の値でない範囲の端、自分自身を含むレコード（`.flow` に書いたものも、`.proto` のメッセージから作ったものも）、UTC オフセットの書かれていないカレンダーを使う日付に渡した時刻（`now` など）が、これにあたります。単位は単位の型で比べるので、`JPY` と `円` は同じ型で、`kg` と `g`、税込と税抜は違う型です。",
+                "A value's type is not the type of where it goes: a value that may be absent used as it is, `none` where it cannot go, a list of lists, a `{{…}}` or `[]` whose type cannot be told, a range on what is neither a number nor an ordered enum (an enum with no order among them), a range no value is in, a bound of a range whose unit is not of its type or that does not come to a whole number of it, a bound that is not a value of its enum, a record that contains itself, written in the `.flow` or made of a message of a `.proto`, a time (`now`, say) passed to a date of a dates file whose calendar says no UTC offset. Units are compared as units: `JPY` and `円` are one type, `kg` and `g`, and tax in and tax out, are not."
             ),
             tr!("渡す値を、受け取る側の型にしてください。単位が違うなら、換算する規則かタスクを通してください（dandori は値を換算しません）。", "Pass a value of the type that is taken; for another unit, go through a rule or a task that converts it (dandori converts nothing)."),
             "workflow w v1\n\ninputs\n  count : int\n\ntask send(text: string)\n\nflow\n  send(text: count)\n",
@@ -128,7 +128,7 @@ pub fn ledger() -> Ledger {
         e(
             "E010",
             tr!("どの分岐にも当たらない値があります", "A value no arm of a match takes"),
-            tr!("`match` の分岐が、値がとりうるすべてを書いていないとき。抜けうるのは、列挙の値、`bool` の値、案件の状態（始まっていない案件の `none` も）、オプショナルな値の `none` です。", "A `match` whose arms leave out a value it can take: a value of an enum, of a `bool`, a state of a case (`none` for a case not started, too), `none` of a value that may be absent."),
+            tr!("`match` の分岐が、値がとりうるすべてを書いていないとき。抜けうるのは、列挙の値（範囲を書いた場所から来る値なら、範囲に入る値）、`bool` の値、案件の状態（始まっていない案件の `none` も）、オプショナルな値の `none` です。", "A `match` whose arms leave out a value it can take: a value of an enum (one the range lets in, for a value that comes from where a range is written), of a `bool`, a state of a case (`none` for a case not started, too), `none` of a value that may be absent."),
             tr!("抜けている値の分岐を足してください。その値と、そこに至る実行は、メッセージに出ます。", "Add an arm for the value left out; the message names it, and the run that gets there."),
             "workflow w v1\n\nenum color = red | green\n\ninputs\n  c : color\n\nflow\n  match c\n    red => pass\n",
             &["E011"],
@@ -136,7 +136,7 @@ pub fn ledger() -> Ledger {
         e(
             "E011",
             tr!("通ることのない分岐があります", "An arm that can never be taken"),
-            tr!("`match` の分岐が、そこで値がとりえない値だけを受けるとき。前の分岐がもう受けた値や、その場所で案件のレコードがとりえない状態などです（案件の状態で分かれる `match` が読むのは、ワークフローが最後に聞いた状態です）。", "An arm of a `match` that takes only values that cannot be there: values an arm before it takes, a state the case's record cannot say at that point (a `match` on a case's state reads what the workflow last heard of it)."),
+            tr!("`match` の分岐が、そこで値がとりえない値だけを受けるとき。前の分岐がもう受けた値、範囲を書いた場所から来る列挙の値では範囲の外の値、その場所で案件のレコードがとりえない状態などです（案件の状態で分かれる `match` が読むのは、ワークフローが最後に聞いた状態です）。", "An arm of a `match` that takes only values that cannot be there: values an arm before it takes, values outside the range of where an enum's value comes from, a state the case's record cannot say at that point (a `match` on a case's state reads what the workflow last heard of it)."),
             tr!("その分岐を消すか、来うる値を受ける分岐に直してください。", "Take the arm out, or make it take a value that can come."),
             "workflow w v1\n\nenum color = red | green\n\ninputs\n  c : color\n\nflow\n  match c\n    red => pass\n    green => pass\n    red => pass\n",
             &["E010"],
@@ -161,8 +161,8 @@ pub fn ledger() -> Ledger {
         e(
             "E014",
             tr!("範囲を外れうる値を渡しています", "A value that can be outside the range where it goes"),
-            tr!("範囲のある場所（規則の入力、タスクの引数、書き出すレコードのフィールド、出力）に、範囲を外れうる値を渡すとき。dandori は、値の範囲を、入力の範囲、タスクの結果の範囲、規則が出す範囲、式から求めます。規則の、順序のある列挙の入力に範囲があるとき（`range >=basic <=gold`）は、範囲に入らない列挙の値になりうる値を渡すときです。書いた値はその値で、入力・フィールド・タスクの結果・規則の出力は、列挙のどの値にもなりえます。", "A value that can be outside the range of where it goes: a rule's input, a task's parameter, a field of a record written out, an output. The range of a value is worked out from the ranges of the inputs, of the tasks' answers, of what the rules answer, and of the expressions. For a rule's input of an ordered enum with a range (`range >=basic <=gold`), a value that can be one of the enum's values the range does not let in: a value written out is itself, and an input, a field, a task's answer or a rule's output can be any value of its enum."),
-            tr!("渡す値の範囲を狭める（入力やタスクの結果に `range` を書く）か、受け取る側の範囲を広げてください。列挙の値は、`match` で分けて、範囲に入る値を書いて渡してください（`.flow` の列挙には範囲を書けません）。", "Narrow the value's range (write a `range` on the input or on the task's answer), or widen the range of where it goes. For an enum's value, branch with `match` and give a value the range lets in, written out (an enum in a `.flow` takes no range)."),
+            tr!("範囲のある場所（規則の入力、タスクの引数、書き出すレコードのフィールド、出力）に、範囲を外れうる値を渡すとき。dandori は、値の範囲を、入力の範囲、タスクの結果の範囲、規則が出す範囲、式から求めます。順序のある列挙の値の範囲（`range >=basic <=gold`。規則の入力のほか、`.flow` の入力・出力・レコードのフィールド・タスクの引数と結果に書けます）では、範囲に入らない値になりうる値を渡すときです。書いた値はその値で、入力・フィールド・タスクの結果は、範囲を書いていれば範囲に入る値のどれか、書いていなければ列挙のどの値にもなりえます。規則の出力は、列挙のどの値にもなりえます。", "A value that can be outside the range of where it goes: a rule's input, a task's parameter, a field of a record written out, an output. The range of a value is worked out from the ranges of the inputs, of the tasks' answers, of what the rules answer, and of the expressions. For a range of an ordered enum's values (`range >=basic <=gold`: on a rule's input, and in a `.flow` on an input, an output, a field of a record, a task's parameter or answer), a value that can be one of the enum's values the range does not let in: a value written out is itself, an input, a field or a task's answer any value its range lets in, every value of its enum without one, and a rule's output any value of its enum."),
+            tr!("渡す値の範囲を狭める（入力やタスクの結果に `range` を書く）か、受け取る側の範囲を広げてください。列挙の値も同じです。範囲を書けない出どころ（規則の出力など）から来る列挙の値は、`match` で分けて、範囲に入る値を書いて渡してください。", "Narrow the value's range (write a `range` on the input or on the task's answer), or widen the range of where it goes, for a number and an enum's value alike. Branch with `match` on an enum's value that comes from where no range can be written (a rule's output, say), and give a value the range lets in, written out."),
             "workflow w v1\n\ninputs\n  n : int  range >=0 <=100\n\ntask take(n: int range >=0 <=10)\n\nflow\n  take(n: n)\n",
             &["W104", "E003"],
         ),

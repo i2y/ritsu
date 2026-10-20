@@ -187,8 +187,10 @@ into; an input or a field that is not there reads as null), `list[T]`, `T?` (a v
 (`money[JPY, incl_tax]`, `duration[h]`), a rule's enums and records (`hold.room`), a message or an
 enum of a `.proto` read by `use proto` (`warehouse.ReserveResponse`), and the file's own. A number
 can say what it may be: `nights : int  range >=1 <=30`, either end may be left out,
-and the ends are integers in the type's unit. A record cannot contain itself, directly or
-through others (E003); carry what has no fixed depth, a tree, as `json`.
+and the ends are integers in the type's unit. So can a value of an enum a rule declares in order
+(`enum tier = basic < silver < gold`), by its values: `campaign : tiers.tier  range >=basic <=gold`.
+A record cannot contain itself, directly or through others (E003); carry what has no fixed depth,
+a tree, as `json`.
 
 ### Tasks
 
@@ -381,7 +383,7 @@ error[E020]: tests/fixtures/hotel_naive.flow:91:1: the workflow can fail here wi
 | E011 | an arm no value reaches | remove it |
 | E012 | a variable read where it may not have a value yet | give it a value on every way there, or read it later |
 | E013 | a task on a case not started yet, or a case started twice | start it first, once |
-| E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the task's answer); for a rule's input of an ordered enum with a range, branch with `match` and write out a value the range lets in |
+| E014, W104 | a value that can be outside a range, or whose range is unknown | say the range where the value comes from (the input, the field, the task's answer), for a number or an ordered enum's value alike; for an enum's value from where no range is written (a rule's output), branch with `match` and write out a value the range lets in |
 | E015 | a task that does not fit the child `.flow` it runs | match the child's inputs, outputs and `fail`s |
 | E016 | a task that does not fit its API's description, or the book's transfer it runs | follow it: `T?` for what the answer may leave out, every value of an enum; or use the `.proto`'s messages as the types; for a book, the transfer's parameters by name, the hold as the answer, only reasons the book refuses with |
 | E017 | a workflow that does not fit the service it implements | follow the service: the inputs and outputs by their JSON names, every `fail` in `fails`, the events and callbacks it names; one of dandori's options on each method |

@@ -1,0 +1,19 @@
+error[E003]: tests/fixtures/enum_range_syntax.flow:12:24: the enum `color` has no order, so it takes no range
+    12 |   own_enum    : color  range >=red <=green
+  = a range is for an enum a rule declares in order, with `<` (`enum tier = basic < silver < gold`)
+error[E003]: tests/fixtures/enum_range_syntax.flow:13:33: the enum `capture.status` has no order, so it takes no range
+    13 |   rules_enum  : capture.status  range >=pending
+  = a range is for an enum a rule declares in order, with `<` (`enum tier = basic < silver < gold`)
+error[E003]: tests/fixtures/enum_range_syntax.flow:14:37: the bound `bronze` is not a value of `tiers.tier`
+    14 |   not_a_value : tiers.tier  range >=bronze
+  = the values of `tiers.tier` are, in order, basic < silver < gold < platinum
+error[E003]: tests/fixtures/enum_range_syntax.flow:15:29: the bound `2` is not a value of `tiers.tier`
+    15 |   a_number    : tiers.tier  range <=2
+  = the values of `tiers.tier` are, in order, basic < silver < gold < platinum
+error[E003]: tests/fixtures/enum_range_syntax.flow:16:29: no value of `tiers.tier` is in `>=gold <=silver`
+    16 |   none_in     : tiers.tier  range >=gold <=silver
+  = the values of `tiers.tier` are, in order, basic < silver < gold < platinum
+error[E003]: tests/fixtures/enum_range_syntax.flow:17:30: the bound `basic` is not a value of `int`
+    17 |   a_name      : int  range >=basic
+error[E003]: tests/fixtures/enum_range_syntax.flow:18:25: a range is for a number (`int` or a unit) or an ordered enum, and this is `string`
+    18 |   a_text      : string  range >=basic

@@ -1,0 +1,4 @@
+エラー[E016]: tests/fixtures/enum_range_api.flow:18:1: 引数 `campaign` は、`offers` の POST /offers が受け取るものと合いません。`tiers.tier` の `platinum` が、受け取る値（basic・silver・gold）にありません
+    18 | task send_any(campaign: tiers.tier) -> Lifted
+エラー[E016]: tests/fixtures/enum_range_api.flow:22:1: `offers` の POST /offers のレスポンスは `HeldLifted` に合いません。`tier` は、`platinum` のことがあり、範囲 `>=basic <=gold` の外です
+    22 | task send_read_held(campaign: tiers.tier  range >=basic <=gold) -> HeldLifted

@@ -643,7 +643,8 @@ impl<'a> Op<'a> {
             // protobuf's JSON takes a 64-bit integer as a string, which is how a flow has it from an answer
             (Ty::Str, Shape::Int { text: true, .. }) => Ok(()),
             (Ty::Str, Shape::Str(Some(vs))) => Err(tr!("受け取るのは {} のどれかですが、`string` はどんな値にもなりえます。列挙にしてください", "`{}` takes one of {}, and `string` can be anything; give it an enum", vs.join("・"); m.ty_name(t), vs.join(", "))),
-            (Ty::Enum(e), Shape::Str(vs)) => match (vs, m.enums[*e].values.iter().find(|v| vs.as_ref().is_some_and(|vs| !vs.contains(v)))) {
+            // what the flow sends: the values of the enum its range lets in, every value without one
+            (Ty::Enum(e), Shape::Str(vs)) => match (vs, m.values_in(*e, rg).into_iter().find(|v| vs.as_ref().is_some_and(|vs| !vs.contains(v)))) {
                 (_, Some(v)) => Err(tr!("`{}` の `{v}` が、受け取る値（{}）にありません", "`{v}` of `{}` is not one of the values it takes ({})", m.enums[*e].name, vs.as_ref().unwrap().join("・"); m.enums[*e].name, vs.as_ref().unwrap().join(", "))),
                 _ => Ok(()),
             },
@@ -701,7 +702,13 @@ impl<'a> Op<'a> {
             (Shape::Str(_), Ty::Str) | (Shape::Bytes, Ty::Str) | (Shape::Int { text: true, .. }, Ty::Str) => Ok(()),
             (Shape::Str(Some(vs)), Ty::Enum(e)) => {
                 let zero = self.proto_zero(n);
-                match vs.iter().find(|v| !m.enums[*e].values.contains(v) && Some(v.as_str()) != zero.as_deref()) {
+                // what the flow takes: the values of the enum its range lets in, every value without one
+                let takes = m.values_in(*e, rg);
+                match vs.iter().find(|v| !takes.contains(v) && Some(v.as_str()) != zero.as_deref()) {
+                    Some(v) if m.enums[*e].values.contains(v) => {
+                        let w = ends_text(&takes);
+                        Err(tr!("`{v}` のことがあり、範囲 `{w}` の外です", "it may be `{v}`, outside `{w}`"))
+                    }
                     Some(v) => Err(tr!("`{v}` のことがありますが、`{}` にその値はありません", "it may be `{v}`, which `{}` has no value for", m.enums[*e].name)),
                     None => Ok(()),
                 }

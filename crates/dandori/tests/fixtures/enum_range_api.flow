@@ -1,0 +1,26 @@
+workflow enum_range_api v1
+description "Ranges of an enum against an API's description: the values a range lets in are the ones sent, and the values the API may answer are to be in the range of what reads them"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+use openapi offers from "apis/offers.json"
+
+record Lifted
+  tier : tiers.tier
+
+record HeldLifted
+  tier : tiers.tier  range >=basic <=gold
+
+# a campaign held to the range sends only values the API takes; the answer is read as any tier
+task send_held(campaign: tiers.tier  range >=basic <=gold) -> Lifted
+  http POST offers "/offers"
+
+# a campaign of any tier may be platinum, which the API does not take
+task send_any(campaign: tiers.tier) -> Lifted
+  http POST offers "/offers"
+
+# the API may answer platinum, which the answer's range does not let in
+task send_read_held(campaign: tiers.tier  range >=basic <=gold) -> HeldLifted
+  http POST offers "/offers"
+
+flow
+  pass

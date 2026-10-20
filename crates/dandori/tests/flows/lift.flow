@@ -1,0 +1,42 @@
+workflow lift v1
+description "A campaign lifts a member's tier for one order, as far as the rule lets it: gold. The workflow holds what it is given to that range where it comes in (the campaign it is given, the campaign of the order, and the one a task picks), and hands each to the rule as it is. Runs on every platform"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:member-tier-shipping"
+
+record Order
+  id       : string
+  campaign : tiers.tier  range >=basic <=gold
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+inputs
+  member   : tiers.tier
+  campaign : tiers.tier  range >=basic <=gold
+  order    : Order
+
+outputs
+  lifted   : bool
+  shipping : money[USD]
+  offered  : tiers.tier  range >=silver <=gold
+
+task pick_campaign(member: tiers.tier) -> tiers.tier  range >=silver <=gold
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:pick-campaign"
+  idempotent
+
+task send_offer(order: string, campaign: tiers.tier  range >=basic <=gold)
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:send-offer"
+  key
+
+flow
+  # the campaign it is given is held to the rule's range where it comes in
+  let quote = tiers(member: member, campaign: campaign, subtotal: order.subtotal)
+  # and so is the campaign of the order, as a field of the record
+  let own = tiers(member: member, campaign: order.campaign, subtotal: order.subtotal)
+  # a match on a value held to a range takes the values the range lets in
+  match campaign
+    basic => send_offer(order: order.id, campaign: basic)
+    silver, gold => send_offer(order: order.id, campaign: campaign)
+  # the campaign a task picks is held to the range of its answer
+  let picked = pick_campaign(member: member)
+  let offer = tiers(member: member, campaign: picked, subtotal: order.subtotal)
+  succeed lifted = offer.lifted, shipping = offer.shipping, offered = picked

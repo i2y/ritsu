@@ -2,16 +2,16 @@ error[E014]: tests/fixtures/enum_ranges.flow:26:1: `platinum` is outside `>=basi
     26 |   let b = tiers(member: member.tier, campaign: platinum, subtotal: subtotal)
 error[E014]: tests/fixtures/enum_ranges.flow:28:1: `campaign` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     28 |   let c = tiers(member: member.tier, campaign: campaign, subtotal: subtotal)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.flow:29:1: `member.tier` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     29 |   let d = tiers(member: member.tier, campaign: member.tier, subtotal: subtotal)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.flow:31:1: `picked` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     31 |   let e = tiers(member: member.tier, campaign: picked, subtotal: subtotal)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.flow:32:1: `a.effective` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     32 |   let f = tiers(member: member.tier, campaign: a.effective, subtotal: subtotal)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 error[E014]: tests/fixtures/enum_ranges.flow:35:1: `chosen` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
     35 |   let g = tiers(member: member.tier, campaign: chosen, subtotal: subtotal)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out

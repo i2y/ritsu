@@ -1,0 +1,19 @@
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:12:24: 列挙 `color` には順序が無いので、範囲は書けません
+    12 |   own_enum    : color  range >=red <=green
+  = 範囲を書けるのは、規則が値を `<` で順に並べた列挙です（`enum tier = basic < silver < gold`）
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:13:33: 列挙 `capture.status` には順序が無いので、範囲は書けません
+    13 |   rules_enum  : capture.status  range >=pending
+  = 範囲を書けるのは、規則が値を `<` で順に並べた列挙です（`enum tier = basic < silver < gold`）
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:14:37: 範囲の端 `bronze` は `tiers.tier` の値ではありません
+    14 |   not_a_value : tiers.tier  range >=bronze
+  = `tiers.tier` の値は、順に basic < silver < gold < platinum です
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:15:29: 範囲の端 `2` は `tiers.tier` の値ではありません
+    15 |   a_number    : tiers.tier  range <=2
+  = `tiers.tier` の値は、順に basic < silver < gold < platinum です
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:16:29: `>=gold <=silver` に入る `tiers.tier` の値はありません
+    16 |   none_in     : tiers.tier  range >=gold <=silver
+  = `tiers.tier` の値は、順に basic < silver < gold < platinum です
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:17:30: 範囲の端 `basic` は `int` の値ではありません
+    17 |   a_name      : int  range >=basic
+エラー[E003]: tests/fixtures/enum_range_syntax.flow:18:25: 範囲を書けるのは、数（`int` か単位の付いた数）と、順序のある列挙だけです。これは `string` です
+    18 |   a_text      : string  range >=basic

@@ -1,0 +1,67 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "案内",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://offers.example.com"
+    }
+  ],
+  "paths": {
+    "/offers": {
+      "post": {
+        "operationId": "sendOffer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "campaign": {
+                    "type": "string",
+                    "enum": [
+                      "一般",
+                      "シルバー",
+                      "ゴールド"
+                    ]
+                  }
+                },
+                "required": [
+                  "campaign"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "案内が会員を引き上げる段階",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tier": {
+                      "type": "string",
+                      "enum": [
+                        "一般",
+                        "シルバー",
+                        "ゴールド",
+                        "プラチナ"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tier"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

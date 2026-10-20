@@ -82,7 +82,7 @@ task reserve_stock(sku: string, quantity: int) -> Reservation
 
 The task passes no parameter the operation does not take and every one it requires, of a type and
 in a range it takes. It reads the answer into a type the answer fits, with `T?` for a field the answer
-may leave out or send as null, and an enum with every value the answer may have. Its errors are ones
+may leave out or send as null, and an enum that takes every value the answer may have (inside its range, when it has one). Its errors are ones
 the operation answers with, and an AWS API's `key <parameter>` must be the operation's idempotency
 token.
 

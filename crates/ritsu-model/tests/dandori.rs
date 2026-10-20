@@ -106,6 +106,24 @@ fn range(r: Option<Range>) -> Value {
     r.map(|r| json!({"lo": r.lo, "hi": r.hi})).unwrap_or(Value::Null)
 }
 
+/// A place's type and range as `DandoriCore.readFlow` reads them: a number's range as it is, and
+/// for an enum held to a range (dandori's DESIGN 1.20), the enum of the values the range lets in,
+/// which is what the model's check of a value takes there (`render::value_fits` reads the same).
+fn place(m: &Model, t: &Ty, r: Option<Range>) -> (Value, Value) {
+    fn held(m: &Model, t: &Ty, r: Range) -> Value {
+        match t {
+            Ty::Enum(e) => json!({"enum": m.values_in(*e, Some(r))}),
+            Ty::List(x) => json!({"list": held(m, x, r)}),
+            Ty::Opt(x) => json!({"opt": held(m, x, r)}),
+            other => ty(m, other),
+        }
+    }
+    match r {
+        Some(r) if t.enum_inside().is_some() => (held(m, t, r), Value::Null),
+        _ => (ty(m, t), range(r)),
+    }
+}
+
 fn ty(m: &Model, t: &Ty) -> Value {
     match t {
         Ty::Int | Ty::Num(_) => json!("int"),
@@ -236,12 +254,18 @@ fn stmt(m: &Model, s: &TStmt) -> Value {
 /// The flow as `DandoriCore.readFlow` reads it.
 fn flow_json(m: &Model) -> Value {
     json!({
-        "records": m.records.iter().enumerate().map(|(r, rec)| rec.fields.iter().map(|(f, t)| json!({"name": f, "ty": ty(m, t), "range": range(m.field_range(r, f))})).collect::<Vec<_>>()).collect::<Vec<_>>(),
-        "inputs": m.inputs.iter().map(|(n, t)| json!({"name": n, "ty": ty(m, t), "range": range(m.input_ranges.get(n).copied())})).collect::<Vec<_>>(),
+        "records": m.records.iter().enumerate().map(|(r, rec)| rec.fields.iter().map(|(f, t)| {
+            let (ty, range) = place(m, t, m.field_range(r, f));
+            json!({"name": f, "ty": ty, "range": range})
+        }).collect::<Vec<_>>()).collect::<Vec<_>>(),
+        "inputs": m.inputs.iter().map(|(n, t)| {
+            let (ty, range) = place(m, t, m.input_ranges.get(n).copied());
+            json!({"name": n, "ty": ty, "range": range})
+        }).collect::<Vec<_>>(),
         "tasks": m.tasks.iter().enumerate().map(|(i, t)| json!({
             "name": t.name,
-            "result": t.result.as_ref().map(|r| ty(m, r)),
-            "range": range(t.result_range),
+            "result": t.result.as_ref().map(|r| place(m, r, t.result_range).0),
+            "range": t.result.as_ref().map_or(range(t.result_range), |r| place(m, r, t.result_range).1),
             "retriers": retriers(m, &Callee::Task(i)),
             "book": t.book().map(|b| json!({"book": b.book, "transfer": b.transfer, "op": b.op})),
         })).collect::<Vec<_>>(),

@@ -10,8 +10,9 @@
 //!   range (W201). `quota` is the same with a sum on one side (`used + requested <= quota`).
 //! - The range of a rule's input of an ordered enum (rulec's §15.251), which the languages that give
 //!   the rule a value hold it to themselves, as they hold a number's: `lift` and `tiers` — a flow
-//!   and a gate that give only values the range lets in (held), the flow giving a campaign that can
-//!   be platinum (dandori's E014), the gate giving one (sekisho's E206).
+//!   and a gate that give only values the range lets in (held), a flow that holds the campaign it is
+//!   given to the range where it comes in and gives it as it is (held), the flow giving a campaign
+//!   that can be platinum (dandori's E014), the gate giving one (sekisho's E206).
 //! - X3 (b) (`range from koyomi`, rulec's own check): `settlement` — a rule over the days a koyomi
 //!   date comes to, checked by `ritsu check` with koyomi joined, passing and with a payment day no
 //!   row takes (rulec's E101 with that day).
@@ -155,9 +156,10 @@ fn x2_a_sum_as_a_rules_precondition() {
 /// §15.251): `campaign : tier  range >=basic <=gold` reaches dandori's E014 and sekisho's E206
 /// through the port, which hands over the values the range lets in. Held: the flow branches on its
 /// campaign and writes out a value the range lets in, and the gate gives an attribute of an enum
-/// that stops at gold, and gold as a constant. The flow giving its own campaign, which can be
-/// platinum, is dandori's E014; the gate giving one is sekisho's E206. The rule and the gate are
-/// sekisho's test material; before, all three passed.
+/// that stops at gold, and gold as a constant. A flow that writes the rule's range on the campaign it
+/// is given (dandori's DESIGN 1.20) gives it as it is, and passes too. The flow giving its own
+/// campaign with no range, which can be platinum, is dandori's E014; the gate giving one is
+/// sekisho's E206. The rule and the gate are sekisho's test material.
 #[test]
 fn the_range_of_an_enum_input_where_a_flow_and_a_gate_give_it() {
     let mut failures = Vec::new();
@@ -174,6 +176,10 @@ fn the_range_of_an_enum_input_where_a_flow_and_a_gate_give_it() {
     );
     assert_ne!(given, flow);
     run("enum-range-E014", &files(&given, &gate), 1, (0, 0, 0), &mut failures);
+    // the flow holds the campaign it is given to the rule's range where it comes in, and gives it as it is
+    let on_input = given.replace("  campaign : campaign_lift.tier\n", "  campaign : campaign_lift.tier  range >=basic <=gold\n");
+    assert_ne!(on_input, given);
+    run("enum-range-on-input", &files(&on_input, &gate), 0, (0, 0, 0), &mut failures);
     // the gate gives a campaign of an enum that goes on to platinum
     let past = gate.replace("    campaign : campaign_tier\n", "    campaign : tier\n");
     assert_ne!(past, gate);

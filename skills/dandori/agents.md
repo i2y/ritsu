@@ -36,7 +36,7 @@ flow
 ## The answer is typed
 
 The answer's type becomes a JSON Schema in the strict form of OpenAI's Structured Outputs: every
-field of a record required, `T?` a choice with null, an enum its values, around `{"answer": …}`,
+field of a record required, `T?` a choice with null, an enum its values (those its range lets in, when the answer holds it to one), around `{"answer": …}`,
 since the top must be an object. Claude's structured outputs take the same schema. The answer is
 then checked against the type like any other answer, and one that does not fit fails the call.
 

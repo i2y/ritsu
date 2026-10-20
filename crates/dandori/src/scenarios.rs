@@ -196,6 +196,11 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
             out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["input:absent"] }));
         }
     }
+    // a workflow that holds an input of an enum to a range, or a field of one: a run's input with the
+    // first of them outside its range, which every platform turns away at once (`Dandori.BadInput`)
+    if let Some(input) = out.iter().find_map(|r| outside_input(m, &r["input"])) {
+        out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["input:outside"] }));
+    }
     // a workflow that takes a `json`, as an input or as a field of one: the run that goes furthest again,
     // its input as protobuf's JSON writes it when nothing is set. What may be absent is left out, a `json`
     // and a `T?` that is none, and it reads as null on every platform (DESIGN 1.2)
@@ -224,6 +229,61 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
         }
     }
     out
+}
+
+/// A value of the enum `e` that the range `rg` (places in the enum's order) does not let in: the one
+/// just past its high end, else the one just before its low end. None for a range that lets in every
+/// value.
+fn enum_outside(m: &Model, e: EnumId, rg: Range) -> Option<String> {
+    let values = &m.enums[e].values;
+    let n = values.len() as i64;
+    let (lo, hi) = (rg.lo.unwrap_or(0), rg.hi.unwrap_or(n - 1));
+    let at = if hi + 1 < n {
+        hi + 1
+    } else if lo > 0 {
+        lo - 1
+    } else {
+        return None;
+    };
+    values.get(at as usize).cloned()
+}
+
+/// A run's input with the first input of an enum held to a range, or the first such field of an
+/// input's record (at any depth, in a list's first item), given a value its range does not let in.
+/// None when the workflow holds no input's enum to a range, or the run's input has none of those
+/// values there (a record that is absent).
+fn outside_input(m: &Model, input: &Value) -> Option<Value> {
+    fn put(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> Option<Value> {
+        match t {
+            Ty::Enum(e) => enum_outside(m, *e, rg?).map(Value::String),
+            Ty::Opt(x) => put(m, v, x, rg),
+            Ty::List(x) => {
+                let mut items = v.as_array()?.clone();
+                let first = put(m, items.first()?, x, rg)?;
+                items[0] = first;
+                Some(Value::Array(items))
+            }
+            Ty::Record(r) => {
+                let mut o = v.as_object()?.clone();
+                for (f, ft) in &m.records[*r].fields {
+                    if let Some(y) = o.get(f).and_then(|x| put(m, x, ft, m.field_range(*r, f))) {
+                        o.insert(f.clone(), y);
+                        return Some(Value::Object(o));
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+    let mut o = input.as_object()?.clone();
+    for (n, t) in &m.inputs {
+        if let Some(y) = o.get(n).and_then(|v| put(m, v, t, m.input_ranges.get(n).copied())) {
+            o.insert(n.clone(), y);
+            return Some(Value::Object(o));
+        }
+    }
+    None
 }
 
 /// Whether a value of type `t` holds a record with a `json` field, at any depth. (The items of a
@@ -463,13 +523,13 @@ impl<'a> Ex<'a> {
     }
 
     /// A value of type `t` with nothing left open: every value that may be absent there, every
-    /// list with two items, and the enums' values in turn.
+    /// list with two items, and the enums' values in turn (those their ranges let in).
     fn full(&mut self, t: &Ty, name: &str, rg: Option<Range>) -> Value {
         match t {
             Ty::Bool => json!(true),
             Ty::Enum(e) => {
                 self.made_values += 1;
-                let values = &self.m.enums[*e].values;
+                let values = self.m.values_in(*e, rg);
                 json!(values[self.made_values % values.len()])
             }
             Ty::Opt(inner) => self.full(inner, name, rg),
@@ -487,12 +547,12 @@ impl<'a> Ex<'a> {
         }
     }
 
-    /// A value of type `t` unlike the one a value left open reads as: each enum its last value, a
-    /// bool false, where an open one reads as the first value and true.
+    /// A value of type `t` unlike the one a value left open reads as: each enum its last value (of
+    /// those its range lets in), a bool false, where an open one reads as the first value and true.
     fn unlike(&mut self, t: &Ty, name: &str, rg: Option<Range>) -> Value {
         match t {
             Ty::Bool => json!(false),
-            Ty::Enum(e) => json!(self.m.enums[*e].values.last()),
+            Ty::Enum(e) => json!(self.m.values_in(*e, rg).last()),
             Ty::Record(r) => {
                 let fields = self.m.records[*r].fields.clone();
                 let mut o = Map::new();
@@ -506,11 +566,12 @@ impl<'a> Ex<'a> {
         }
     }
 
-    /// A value of type `t` with a number outside its range, the first there is: None when no
-    /// number in it has a range.
+    /// A value of type `t` with a number outside its range, or a value of an enum its range does not
+    /// let in, the first there is: None when nothing in it has a range with room outside.
     fn outside(&mut self, t: &Ty, rg: Option<Range>) -> Option<Value> {
         match t {
             Ty::Int | Ty::Num(_) => rg?.beyond().map(|n| json!(n)),
+            Ty::Enum(e) => enum_outside(self.m, *e, rg?).map(|v| json!(v)),
             Ty::Opt(inner) => self.outside(inner, rg),
             Ty::List(inner) => self.outside(inner, rg).map(|v| json!([v])),
             Ty::Record(r) => {
@@ -528,20 +589,23 @@ impl<'a> Ex<'a> {
         }
     }
 
-    /// Whether `outside` finds a number with a range in a value of type `t`.
+    /// Whether `outside` finds a number or an enum's value with a range in a value of type `t`.
     fn has_outside(&self, t: &Ty, rg: Option<Range>) -> bool {
         match t {
             Ty::Int | Ty::Num(_) => rg.and_then(|r| r.beyond()).is_some(),
+            Ty::Enum(e) => rg.and_then(|r| enum_outside(self.m, *e, r)).is_some(),
             Ty::Opt(inner) | Ty::List(inner) => self.has_outside(inner, rg),
             Ty::Record(r) => self.m.records[*r].fields.iter().any(|(f, ft)| self.has_outside(ft, self.m.field_range(*r, f))),
             _ => false,
         }
     }
 
-    fn domain(&self, t: &Ty) -> Vec<Value> {
+    /// The values a value left open of type `t` can be chosen as: an enum's, those its range `rg`
+    /// lets in.
+    fn domain(&self, t: &Ty, rg: Option<Range>) -> Vec<Value> {
         match t {
             Ty::Bool => vec![json!(true), json!(false)],
-            Ty::Enum(e) => self.m.enums[*e].values.iter().map(|v| json!(v)).collect(),
+            Ty::Enum(e) => self.m.values_in(*e, rg).iter().map(|v| json!(v)).collect(),
             // a list left open until the end is empty, an optional value absent
             Ty::List(_) => vec![json!([])],
             _ => vec![Value::Null],
@@ -560,13 +624,14 @@ impl<'a> Ex<'a> {
                     return x.clone();
                 }
                 let t = self.holes[id].0.clone();
+                let rg = self.holes[id].2;
                 let picked = match &t {
                     Ty::Opt(inner) => {
-                        // absent, or each value of an enum or a bool, or some value
+                        // absent, or each value of an enum (that its range lets in) or a bool, or some value
                         let mut dom = vec![Value::Null];
                         let listed = matches!(**inner, Ty::Bool | Ty::Enum(_));
                         if listed {
-                            dom.extend(self.domain(inner));
+                            dom.extend(self.domain(inner, rg));
                         }
                         let n = if listed { dom.len() } else { 2 };
                         let c = self.choose(at, n);
@@ -575,12 +640,11 @@ impl<'a> Ex<'a> {
                         } else if listed {
                             dom[c].clone()
                         } else {
-                            let rg = self.holes[id].2;
                             self.template(inner, "value", rg)
                         }
                     }
                     _ => {
-                        let dom = self.domain(&t);
+                        let dom = self.domain(&t, rg);
                         let c = self.choose(at, dom.len());
                         dom[c].clone()
                     }
@@ -646,7 +710,7 @@ impl<'a> Ex<'a> {
         match v {
             Value::String(_) => match Ex::hole_id(v) {
                 Some(id) => {
-                    let x = self.holes[id].1.clone().unwrap_or_else(|| self.domain(&self.holes[id].0)[0].clone());
+                    let x = self.holes[id].1.clone().unwrap_or_else(|| self.domain(&self.holes[id].0, self.holes[id].2)[0].clone());
                     self.fill(&x)
                 }
                 None => v.clone(),

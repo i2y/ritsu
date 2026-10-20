@@ -1,0 +1,4 @@
+error[E016]: tests/fixtures/enum_range_api.flow:18:1: the parameter `campaign` is not what `offers` POST /offers takes: `platinum` of `tiers.tier` is not one of the values it takes (basic, silver, gold)
+    18 | task send_any(campaign: tiers.tier) -> Lifted
+error[E016]: tests/fixtures/enum_range_api.flow:22:1: what `offers` POST /offers answers is not `HeldLifted`: in `tier`, it may be `platinum`, outside `>=basic <=gold`
+    22 | task send_read_held(campaign: tiers.tier  range >=basic <=gold) -> HeldLifted

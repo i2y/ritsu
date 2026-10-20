@@ -1,0 +1,19 @@
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:12:16: the enum `色` has no order, so it takes no range
+    12 |   自分の列挙   : 色  range >=赤 <=緑
+  = a range is for an enum a rule declares in order, with `<` (`enum tier = basic < silver < gold`)
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:13:24: the enum `手数料.口座の状態` has no order, so it takes no range
+    13 |   規則の列挙   : 手数料.口座の状態  range >=有効
+  = a range is for an enum a rule declares in order, with `<` (`enum tier = basic < silver < gold`)
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:14:29: the bound `ブロンズ` is not a value of `送料.段階`
+    14 |   値でない     : 送料.段階  range >=ブロンズ
+  = the values of `送料.段階` are, in order, 一般 < シルバー < ゴールド < プラチナ
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:15:24: the bound `2` is not a value of `送料.段階`
+    15 |   数           : 送料.段階  range <=2
+  = the values of `送料.段階` are, in order, 一般 < シルバー < ゴールド < プラチナ
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:16:19: no value of `送料.段階` is in `>=ゴールド <=シルバー`
+    16 |   入る値が無い : 送料.段階  range >=ゴールド <=シルバー
+  = the values of `送料.段階` are, in order, 一般 < シルバー < ゴールド < プラチナ
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:17:29: the bound `一般` is not a value of `int`
+    17 |   名前         : int  range >=一般
+error[E003]: tests/fixtures/enum_range_syntax.ja.flow:18:23: a range is for a number (`int` or a unit) or an ordered enum, and this is `string`
+    18 |   文字列       : string  range >=一般

@@ -64,7 +64,7 @@ task reserve_stock(sku: string, quantity: int) -> Reservation
 - **AWS の API の Smithy のモデル**（AWS が公開している JSON の AST）：`aws` のタスクとは、サービスの名前で結びつきます。`aws sns:publish` なら、SNS の `Publish` の定義と照らし合わせます。
 - **`.proto`（proto3）**：`connect` のタスクが呼ぶメソッドを、ここから引きます。呼び出しは JSON を使う Connect プロトコルで、`<url>/<パッケージ>.<Service>/<Method>` に `Connect-Protocol-Version: 1` を付けて POST します。Connect のエラーは `resource_exhausted` のようなコードで宣言し、実行時には、コードに対応する HTTP ステータスで見分けます。
 
-検査は、引数が操作と合うか（受け取らない引数を渡していないか、要る引数がそろっているか、型と範囲が合うか）と、結果の型が操作のレスポンスに合うかを確かめます。レスポンスが省くことのあるフィールドや、null になることのあるフィールドは `T?` にし、列挙には、レスポンスに現れうる値をすべて持たせます。宣言するエラーは、操作が実際に返すものに限られます。AWS の API で `key <引数>` に使えるのは、その操作の冪等トークンだけです。
+検査は、引数が操作と合うか（受け取らない引数を渡していないか、要る引数がそろっているか、型と範囲が合うか）と、結果の型が操作のレスポンスに合うかを確かめます。レスポンスが省くことのあるフィールドや、null になることのあるフィールドは `T?` にし、列挙には、レスポンスに現れうる値をすべて持たせます（範囲を書いた列挙なら、その値がすべて範囲に入るようにします）。宣言するエラーは、操作が実際に返すものに限られます。AWS の API で `key <引数>` に使えるのは、その操作の冪等トークンだけです。
 
 Stripe と在庫のサービスを呼ぶ下書き
 （[tests/fixtures/api_calls.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/tests/fixtures/api_calls.flow)）を `--lang ja` で検査すると、こうなります。

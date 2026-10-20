@@ -1,0 +1,4 @@
+error[E007]: tests/fixtures/enum_range_jev.flow:21:5: `platinum` is outside the range `>=silver <=gold`, so Jev is not asked about it; leave its meaning out
+    21 |     platinum "orders every day"
+error[E007]: tests/fixtures/enum_range_jev.flow:26:7: a choice has two options at least, and `tiers.tier range >=gold <=gold` has one value only
+    26 |   jev "Which campaign suits this member?"

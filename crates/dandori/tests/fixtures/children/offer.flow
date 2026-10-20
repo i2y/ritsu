@@ -1,0 +1,15 @@
+workflow offer v1
+description "A child workflow that takes a campaign held to the range the rule lifts a member by, and answers the tier it offers"
+
+use rule tiers from "../rules/member_tier_shipping.rule"
+
+inputs
+  campaign : tiers.tier  range >=basic <=gold
+
+outputs
+  offered : tiers.tier  range >=basic <=platinum
+
+flow
+  match campaign
+    basic => succeed offered = silver
+    silver, gold => succeed offered = platinum

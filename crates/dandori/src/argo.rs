@@ -440,7 +440,8 @@ impl<'a> Gen<'a> {
     }
 
     /// A test that `x` is a well-formed value of `t`, and in `rg` when it is a number (or its
-    /// numbers, when it is a `?` or a list).
+    /// numbers, when it is a `?` or a list); for an enum held to a range, one of the values the
+    /// range lets in.
     fn check(&self, x: &str, t: &Ty, rg: Option<Range>) -> String {
         let m = self.m;
         match t {
@@ -453,7 +454,8 @@ impl<'a> Gen<'a> {
                 format!("({})", parts.join(" && "))
             }
             Ty::Bool => format!("type({x}) == \"bool\""),
-            Ty::Enum(e) => format!("{x} in [{}]", m.enums[*e].values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
+            // for a place that holds the enum to a range, the values the range lets in
+            Ty::Enum(e) => format!("{x} in [{}]", m.values_in(*e, rg).iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
             Ty::Json => "true".into(),
             Ty::Opt(inner) => format!("({x} == nil || {})", self.check(x, inner, rg)),
             Ty::List(inner) => format!("(type({x}) == \"array\" && all({x}, {{{}}}))", self.check("#", inner, rg)),

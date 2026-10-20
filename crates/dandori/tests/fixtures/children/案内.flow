@@ -1,0 +1,15 @@
+workflow 案内 v1
+description "子ワークフロー：規則が会員を引き上げる範囲に収めたキャンペーンを受け取り、勧める段階を返す"
+
+use rule 送料 from "../rules/会員段階の送料.rule"
+
+inputs
+  キャンペーン : 送料.段階  range >=一般 <=ゴールド
+
+outputs
+  勧めた段階 : 送料.段階  range >=一般 <=プラチナ
+
+flow
+  match キャンペーン
+    一般 => succeed 勧めた段階 = シルバー
+    シルバー, ゴールド => succeed 勧めた段階 = プラチナ

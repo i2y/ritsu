@@ -1,0 +1,50 @@
+エラー[E014]: tests/fixtures/enum_range_places.flow:34:1: `wide` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    34 |   let a = tiers(member: narrow, campaign: wide, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、`match` で分けて、範囲に入る値を書いて渡してください
+エラー[E014]: tests/fixtures/enum_range_places.flow:35:1: `open` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    35 |   let b = tiers(member: narrow, campaign: open, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、`match` で分けて、範囲に入る値を書いて渡してください
+エラー[E014]: tests/fixtures/enum_range_places.flow:39:1: `wide` は `basic` か `platinum` になることがあり、`send` の引数 `campaign` の範囲 `>=silver <=gold` を外れます
+    39 |   send(campaign: wide)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=silver <=gold` を書くか、`match` で分けて、範囲に入る値を書いて渡してください
+エラー[E014]: tests/fixtures/enum_range_places.flow:40:1: `[platinum, basic, gold]` は `basic` か `platinum` になることがあり、`send_all` の引数 `campaigns` の範囲 `>=silver <=gold` を外れます
+    40 |   send_all(campaigns: [platinum, basic, gold])
+エラー[E014]: tests/fixtures/enum_range_places.flow:42:1: `w` は `platinum` になることがあり、規則 `tiers` の `campaign` の範囲 `>=basic <=gold` を外れます
+    42 |   let d = tiers(member: narrow, campaign: w, subtotal: subtotal)
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、`match` で分けて、範囲に入る値を書いて渡してください
+エラー[E014]: tests/fixtures/enum_range_places.flow:43:1: `platinum` は `Offer` のフィールド `campaign` の範囲 `>=basic <=gold` の外です
+    43 |   let o: Offer = {campaign: platinum}
+エラー[E010]: tests/fixtures/enum_range_places.flow:46:1: `match` に gold の分岐がありません。ここで `chosen` はその値を取りえます
+    46 |   match chosen
+  そうなる例:
+      34  a = tiers(…)
+      35  b = tiers(…)
+      37  c = tiers(…)
+      41  w = wider(…)
+      42  d = tiers(…)
+      43  o = {campaign: platinum}
+      45  chosen = narrow
+エラー[E011]: tests/fixtures/enum_range_places.flow:48:1: 分岐 `platinum` は通りません。ここで `chosen` がとりうる値は silver・gold だけです
+    48 |     platinum => pass
+  そうなる例:
+      34  a = tiers(…)
+      35  b = tiers(…)
+      37  c = tiers(…)
+      41  w = wider(…)
+      42  d = tiers(…)
+      43  o = {campaign: platinum}
+      45  chosen = narrow
+エラー[E010]: tests/fixtures/enum_range_places.flow:50:1: `match` に none の分岐がありません。ここで `maybe` はその値を取りえます
+    50 |   match maybe
+  そうなる例:
+      34  a = tiers(…)
+      35  b = tiers(…)
+      37  c = tiers(…)
+      41  w = wider(…)
+      42  d = tiers(…)
+      43  o = {campaign: platinum}
+      45  chosen = narrow
+      47  match chosen: silver
+エラー[E014]: tests/fixtures/enum_range_places.flow:52:1: `narrow` は `silver` になることがあり、出力 `top` の範囲 `>=gold <=gold` を外れます
+    52 |   succeed top = narrow
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=gold <=gold` を書くか、`match` で分けて、範囲に入る値を書いて渡してください

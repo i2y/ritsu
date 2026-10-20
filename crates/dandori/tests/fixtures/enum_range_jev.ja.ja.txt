@@ -1,0 +1,4 @@
+エラー[E007]: tests/fixtures/enum_range_jev.ja.flow:21:5: `プラチナ` は範囲 `>=シルバー <=ゴールド` の外の値なので、Jev には尋ねません。この意味は外してください
+    21 |     プラチナ "毎日注文する"
+エラー[E007]: tests/fixtures/enum_range_jev.ja.flow:26:7: choice の選択肢は二つ以上で、`送料.段階 range >=ゴールド <=ゴールド` の値は一つだけです
+    26 |   jev "この会員に合うキャンペーンはどれか"

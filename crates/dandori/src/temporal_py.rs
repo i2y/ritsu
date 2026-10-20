@@ -71,8 +71,8 @@ pub(crate) fn py_type(m: &Model, t: &Ty) -> String {
     }
 }
 
-/// A check that `x` is a well-formed value of `t`. `p` is how the code reaches types.py: ""
-/// inside it, "T." from the workflow.
+/// A check that `x` is a well-formed value of `t`, in `rg` (a number's range, or the values an
+/// enum's range lets in). `p` is how the code reaches types.py: "" inside it, "T." from the workflow.
 pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, depth: usize) -> String {
     match t {
         Ty::Int | Ty::Num(_) => match rg {
@@ -83,7 +83,11 @@ pub(crate) fn py_check(m: &Model, x: &str, t: &Ty, rg: Option<Range>, p: &str, d
         Ty::Timestamp => format!("(isinstance({x}, str) and {p}TIMESTAMP.match({x}) is not None)"),
         Ty::Date => format!("(isinstance({x}, str) and {p}DATE.match({x}) is not None)"),
         Ty::Bool => format!("isinstance({x}, bool)"),
-        Ty::Enum(e) => format!("({x} in {p}{}_values)", type_name(&m.enums[*e].name)),
+        Ty::Enum(e) => match m.held_values(t, rg) {
+            // a place that holds the enum to a range: the values the range lets in
+            Some(values) => format!("({x} in ({}{}))", values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", "), if values.len() == 1 { "," } else { "" }),
+            None => format!("({x} in {p}{}_values)", type_name(&m.enums[*e].name)),
+        },
         Ty::Record(r) => format!("{p}is_{}({x})", type_name(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");

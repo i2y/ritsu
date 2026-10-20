@@ -1,0 +1,50 @@
+error[E014]: tests/fixtures/enum_range_places.flow:34:1: `wide` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    34 |   let a = tiers(member: narrow, campaign: wide, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.flow:35:1: `open` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    35 |   let b = tiers(member: narrow, campaign: open, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.flow:39:1: `wide` can be outside `>=silver <=gold`, the range of the parameter `campaign` of `send`: it can be `basic` or `platinum`
+    39 |   send(campaign: wide)
+  = Write `range >=silver <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.flow:40:1: `[platinum, basic, gold]` can be outside `>=silver <=gold`, the range of the parameter `campaigns` of `send_all`: it can be `basic` or `platinum`
+    40 |   send_all(campaigns: [platinum, basic, gold])
+error[E014]: tests/fixtures/enum_range_places.flow:42:1: `w` can be outside `>=basic <=gold`, the range of `campaign` of the rule `tiers`: it can be `platinum`
+    42 |   let d = tiers(member: narrow, campaign: w, subtotal: subtotal)
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.flow:43:1: `platinum` is outside `>=basic <=gold`, the range of the field `campaign` of `Offer`
+    43 |   let o: Offer = {campaign: platinum}
+error[E010]: tests/fixtures/enum_range_places.flow:46:1: `match` has no arm for gold, which `chosen` can be here
+    46 |   match chosen
+  the run that gets there:
+      34  a = tiers(…)
+      35  b = tiers(…)
+      37  c = tiers(…)
+      41  w = wider(…)
+      42  d = tiers(…)
+      43  o = {campaign: platinum}
+      45  chosen = narrow
+error[E011]: tests/fixtures/enum_range_places.flow:48:1: the arm `platinum` can never be taken: `chosen` is one of silver, gold here
+    48 |     platinum => pass
+  the run that gets there:
+      34  a = tiers(…)
+      35  b = tiers(…)
+      37  c = tiers(…)
+      41  w = wider(…)
+      42  d = tiers(…)
+      43  o = {campaign: platinum}
+      45  chosen = narrow
+error[E010]: tests/fixtures/enum_range_places.flow:50:1: `match` has no arm for none, which `maybe` can be here
+    50 |   match maybe
+  the run that gets there:
+      34  a = tiers(…)
+      35  b = tiers(…)
+      37  c = tiers(…)
+      41  w = wider(…)
+      42  d = tiers(…)
+      43  o = {campaign: platinum}
+      45  chosen = narrow
+      47  match chosen: silver
+error[E014]: tests/fixtures/enum_range_places.flow:52:1: `narrow` can be outside `>=gold <=gold`, the range of the output `top`: it can be `silver`
+    52 |   succeed top = narrow
+  = Write `range >=gold <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out

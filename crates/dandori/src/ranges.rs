@@ -4,12 +4,13 @@
 //! be (W104). What a variable can be is gathered from every value put in it anywhere in the flow,
 //! so a variable that is given 1 in one arm and 40 in another is `>=1 <=40` everywhere.
 //!
-//! An input of a rule of an ordered enum may declare a range over its values too (`range >=basic
-//! <=gold`, which rulec hands over with the values it lets in): the values of the enum a value can
-//! be are gathered the same way, a value written out being itself, and an input, a task's answer or
-//! a field any value of its enum, which its type says. A value that can be a value the range does
-//! not let in is E014, said in those values; the type always says what an enum's value can be, so
-//! there is no W104 for one.
+//! A place of an ordered enum may hold its value to a range too (`range >=basic <=gold`): an input
+//! of a rule (which rulec hands over with the values it lets in), and in the `.flow` an input, an
+//! output, a field of a record, a parameter or the answer of a task. The values of the enum a value
+//! can be are gathered the same way, a value written out being itself, and an input, a task's
+//! answer or a field the values its range lets in, every value of its enum without one. A value
+//! that can be a value the range of where it goes does not let in is E014, said in those values;
+//! the type always says what an enum's value can be, so there is no W104 for one.
 //!
 //! Where a value comes in (an input, the answer of a task or a rule) its range is checked when
 //! the workflow runs, by the code each platform is given; here, the ranges are taken as true.
@@ -46,10 +47,15 @@ impl Est {
         }
     }
 
-    /// The same, a value of the type `t`: of an enum, it can be any of the enum's values.
-    fn of_type(mut self, m: &Model, t: &Ty) -> Est {
-        self.values = every_value(m, t);
-        self
+    /// What a value read from a place of the type `t` with the range `rg` (named `from` in case it
+    /// has none) can be: the numbers of its range, and for a value of an enum the values the range
+    /// lets in, every value of the enum without one. An enum's range is not numbers, and a place
+    /// of an enum is named as one without a range of numbers, as it always was.
+    fn at(m: &Model, t: &Ty, rg: Option<Range>, from: Text) -> Est {
+        let numbers = if t.enum_inside().is_some() { None } else { rg };
+        let mut est = Est::or(numbers, from);
+        est.values = place_values(m, t, rg);
+        est
     }
 
     fn join(&self, o: &Est) -> Est {
@@ -64,24 +70,29 @@ impl Est {
     }
 }
 
-/// Every value of the enum a value of the type `t` is (inside a `?` or a list); none for a type
-/// that is not an enum.
-fn every_value(m: &Model, t: &Ty) -> BTreeSet<String> {
-    let mut inner = t;
-    while let Ty::Opt(x) | Ty::List(x) = inner {
-        inner = x;
-    }
-    match inner {
-        Ty::Enum(e) => m.enums[*e].values.iter().cloned().collect(),
-        _ => BTreeSet::new(),
+/// The values of the enum a value of the type `t` is (inside a `?` or a list) that a place with
+/// the range `rg` lets in, every value of it without one; none for a type that is not an enum.
+fn place_values(m: &Model, t: &Ty, rg: Option<Range>) -> BTreeSet<String> {
+    match t.enum_inside() {
+        Some(e) => m.values_in(e, rg).into_iter().collect(),
+        None => BTreeSet::new(),
     }
 }
 
-/// What a place takes: the numbers of a range, or of a rule's input that holds its enum to a
-/// range, the values the range lets in (in the enum's order).
-enum Takes<'a> {
+/// What a place takes: the numbers of a range, or of a place that holds its enum to a range, the
+/// values the range lets in (in the enum's order).
+enum Takes {
     Numbers(Range),
-    Values(&'a [String]),
+    Values(Vec<String>),
+}
+
+/// What a place of the `.flow` of the type `t` with the range `rg` takes: for an enum, the values
+/// its range lets in; for a number, its range. None for a place without a range.
+fn takes(m: &Model, t: &Ty, rg: Option<Range>) -> Option<Takes> {
+    match t.enum_inside() {
+        Some(_) => m.held_values(t, rg).map(Takes::Values),
+        None => rg.map(Takes::Numbers),
+    }
 }
 
 pub fn check(m: &Model) -> Vec<Diag> {
@@ -91,7 +102,7 @@ pub fn check(m: &Model) -> Vec<Diag> {
         let mut give = |e: &TExpr, want: Option<Takes>, en: String, ja: String| {
             let d = match want {
                 Some(Takes::Numbers(want)) => fit(m, &vars, e, want, s.line, &en, &ja),
-                Some(Takes::Values(takes)) => fit_values(m, &vars, e, takes, s.line, &en, &ja),
+                Some(Takes::Values(takes)) => fit_values(m, &vars, e, &takes, s.line, &en, &ja),
                 None => None,
             };
             if let Some(d) = d {
@@ -104,11 +115,12 @@ pub fn check(m: &Model) -> Vec<Diag> {
                     match callee {
                         Callee::Task(t) => {
                             let t = &m.tasks[*t];
-                            give(e, t.param_ranges.get(p).copied().map(Takes::Numbers), format!("the parameter `{p}` of `{}`", t.name), format!("`{}` の引数 `{p}`", t.name));
+                            let want = t.params.iter().find(|(n, _)| n == p).and_then(|(_, pt)| takes(m, pt, t.param_ranges.get(p).copied()));
+                            give(e, want, format!("the parameter `{p}` of `{}`", t.name), format!("`{}` の引数 `{p}`", t.name));
                         }
                         Callee::Rule(r) => {
                             let rn = &m.rules[*r].name;
-                            let want = m.rule_input_range(*r, p).map(Takes::Numbers).or_else(|| m.rule_input_values(*r, p).map(Takes::Values));
+                            let want = m.rule_input_range(*r, p).map(Takes::Numbers).or_else(|| m.rule_input_values(*r, p).map(|v| Takes::Values(v.to_vec())));
                             give(e, want, format!("`{p}` of the rule `{rn}`"), format!("規則 `{rn}` の `{p}`"));
                         }
                     }
@@ -116,7 +128,8 @@ pub fn check(m: &Model) -> Vec<Diag> {
             }
             TK::Succeed { fields } => {
                 for (f, e) in fields {
-                    give(e, m.output_ranges.get(f).copied().map(Takes::Numbers), format!("the output `{f}`"), format!("出力 `{f}`"));
+                    let want = m.outputs.iter().find(|(n, _)| n == f).and_then(|(_, t)| takes(m, t, m.output_ranges.get(f).copied()));
+                    give(e, want, format!("the output `{f}`"), format!("出力 `{f}`"));
                 }
             }
             _ => {}
@@ -126,7 +139,8 @@ pub fn check(m: &Model) -> Vec<Diag> {
             records(e, &mut |fields, r| {
                 for (f, x) in fields {
                     let rd = &m.records[r];
-                    give(x, rd.ranges.get(f).copied().map(Takes::Numbers), format!("the field `{f}` of `{}`", rd.name), format!("`{}` のフィールド `{f}`", rd.name));
+                    let want = rd.fields.iter().find(|(n, _)| n == f).and_then(|(_, ft)| takes(m, ft, rd.ranges.get(f).copied()));
+                    give(x, want, format!("the field `{f}` of `{}`", rd.name), format!("`{}` のフィールド `{f}`", rd.name));
                 }
             });
         }
@@ -185,25 +199,23 @@ fn fit(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, want: Range, line: us
     ))
 }
 
-/// The diagnostic for giving `e` to a rule's input that takes only the values `takes` of its enum
-/// (the values its `range` lets in, in the enum's order), if `e` can be another: E014, said in the
-/// values of the enum. The range is written as a rule writes it, by its two ends (`>=basic <=gold`).
+/// The diagnostic for giving `e` to a place that takes only the values `takes` of its enum (the
+/// values its `range` lets in, in the enum's order: a rule's input, or a place of the `.flow`), if
+/// `e` can be another: E014, said in the values of the enum. The range is written as a rule writes
+/// it, by its two ends (`>=basic <=gold`).
 fn fit_values(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, takes: &[String], line: usize, place_en: &str, place_ja: &str) -> Option<Diag> {
     let est = estimate(m, vars, e);
     // the values `e` can be that the range does not let in, in the enum's order
-    let order: Vec<String> = match e.ty().inner() {
-        Ty::Enum(id) => m.enums[*id].values.clone(),
-        _ => est.values.iter().cloned().collect(),
+    let order: Vec<String> = match e.ty().enum_inside() {
+        Some(id) => m.enums[id].values.clone(),
+        None => est.values.iter().cloned().collect(),
     };
     let outside: Vec<&String> = order.iter().filter(|v| est.values.contains(*v) && !takes.contains(v)).collect();
     if outside.is_empty() {
         return None;
     }
     let x = e.show();
-    let w = match (takes.first(), takes.last()) {
-        (Some(lo), Some(hi)) => format!(">={lo} <={hi}"),
-        _ => String::new(),
-    };
+    let w = ends_text(takes);
     let quoted: Vec<String> = outside.iter().map(|v| format!("`{v}`")).collect();
     let (one_en, one_ja) = match quoted.as_slice() {
         [one] => (one.clone(), one.clone()),
@@ -212,18 +224,23 @@ fn fit_values(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, takes: &[Strin
         [] => unreachable!("a value outside was found"),
     };
     // A value of an enum is written out only where its type is known (a call's argument), so a
-    // variable, an input, a field or an answer can be any value of its enum: nothing narrows one.
-    Some(match e {
-        TExpr::Enum(..) => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は{place_ja}の範囲`{w}`の外です")), format!("`{x}` is outside `{w}`, the range of {place_en}"))),
-        _ => Diag::error(
+    // variable, an input, a field or an answer can be any value its range lets in, every value of its
+    // enum without one: a `match` does not narrow it.
+    let can_be = || {
+        Diag::error(
             "E014",
             line,
             1,
             Text::new(spaced(format!("`{x}`は{one_ja}になることがあり、{place_ja}の範囲`{w}`を外れます")), format!("`{x}` can be outside `{w}`, the range of {place_en}: it can be {one_en}")),
         )
-        .note(Text::new(
-            spaced("`.flow`の列挙には範囲を書けません。`match`で分けて、規則の範囲に入る値を書いて渡してください".to_string()),
-            "An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out".to_string(),
+    };
+    Some(match e {
+        TExpr::Enum(..) => Diag::error("E014", line, 1, Text::new(spaced(format!("`{x}`は{place_ja}の範囲`{w}`の外です")), format!("`{x}` is outside `{w}`, the range of {place_en}"))),
+        // a list of values written out: what to write is in the values themselves
+        TExpr::List { items, .. } if items.iter().all(|i| matches!(i, TExpr::Enum(..))) => can_be(),
+        _ => can_be().note(Text::new(
+            spaced(format!("値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に`range {w}`を書くか、`match`で分けて、範囲に入る値を書いて渡してください")),
+            format!("Write `range {w}` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out"),
         )),
     })
 }
@@ -251,12 +268,42 @@ fn spaced(text: String) -> String {
     out
 }
 
+/// How a value of an enum written out counts: as itself (E014), or, for what a `match` can find, as
+/// any value of its enum, which the check of a `match` does not narrow by (`held`).
+#[derive(Clone, Copy, PartialEq)]
+enum Written {
+    Itself,
+    Any,
+}
+
 /// What each variable can be: every value put in it, joined, until nothing more changes. An input
-/// and a task's answer of an enum can be any value of it.
+/// and a task's answer of an enum can be any value its range lets in, every value of it without one.
 pub(crate) fn variables(m: &Model) -> BTreeMap<String, Est> {
+    variables_by(m, Written::Itself)
+}
+
+/// What the values of an enum each variable holds can be, as the places they come from hold them
+/// (the check of a `match` reads it, `held_values`): a place's range lets in its values, a place
+/// without one every value of its enum, and so does a value written out.
+pub(crate) fn held(m: &Model) -> BTreeMap<String, Est> {
+    variables_by(m, Written::Any)
+}
+
+/// The values of its enum `e` can be where a `match` reads it, in the enum's order, when the places
+/// it comes from hold it to fewer than its enum has: the ranges a value is checked against where
+/// it comes in (an input, a task's answer, a field) keep it there. None when it can be any of them.
+pub(crate) fn held_values(m: &Model, held: &BTreeMap<String, Est>, e: &TExpr) -> Option<Vec<String>> {
+    let en = e.ty().enum_inside()?;
+    let est = estimate_by(m, held, e, Written::Any);
+    let order = &m.enums[en].values;
+    let values: Vec<String> = order.iter().filter(|v| est.values.contains(*v)).cloned().collect();
+    (values.len() < order.len()).then_some(values)
+}
+
+fn variables_by(m: &Model, w: Written) -> BTreeMap<String, Est> {
     let mut vars: BTreeMap<String, Est> = BTreeMap::new();
     for (n, t) in &m.inputs {
-        vars.insert(n.clone(), Est::or(m.input_ranges.get(n).copied(), tr!("入力 `{n}`", "the input `{n}`")).of_type(m, t));
+        vars.insert(n.clone(), Est::at(m, t, m.input_ranges.get(n).copied(), tr!("入力 `{n}`", "the input `{n}`")));
     }
     let stmts = m.all_stmts();
     for _ in 0..=m.vars.len() + 1 {
@@ -269,23 +316,23 @@ pub(crate) fn variables(m: &Model) -> BTreeMap<String, Est> {
             match &s.kind {
                 TK::Call { target: Some(Target::Let(x)), callee: Callee::Task(t), .. } => {
                     let t = &m.tasks[*t];
-                    let answer = Est::or(t.result_range, tr!("`{}` の結果", "the answer of `{}`", t.name));
+                    let from = tr!("`{}` の結果", "the answer of `{}`", t.name);
                     put(x, match &t.result {
-                        Some(ty) => answer.of_type(m, ty),
-                        None => answer,
+                        Some(ty) => Est::at(m, ty, t.result_range, from),
+                        None => Est::or(t.result_range, from),
                     });
                 }
-                TK::Assign { name, expr } => put(name, estimate(m, &vars, expr)),
+                TK::Assign { name, expr } => put(name, estimate_by(m, &vars, expr, w)),
                 TK::For { var, list, result, .. } => {
-                    put(var, estimate(m, &vars, list));
+                    put(var, estimate_by(m, &vars, list, w));
                     if let Some((r, y)) = result {
-                        put(r, estimate(m, &vars, y));
+                        put(r, estimate_by(m, &vars, y, w));
                     }
                 }
                 TK::Match { expr, arms } => {
                     for a in arms {
                         if let Some(x) = &a.some {
-                            put(x, estimate(m, &vars, expr));
+                            put(x, estimate_by(m, &vars, expr, w));
                         }
                     }
                 }
@@ -303,10 +350,15 @@ pub(crate) fn variables(m: &Model) -> BTreeMap<String, Est> {
 /// What numbers `e` can be, or the numbers inside it when it is a `?` or a list; and for a value of
 /// an enum, the values it can be.
 pub(crate) fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Est {
+    estimate_by(m, vars, e, Written::Itself)
+}
+
+fn estimate_by(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr, w: Written) -> Est {
     match e {
         TExpr::Int(n) => Est::range(Range::exactly(*n)),
-        TExpr::Enum(v, _) => Est { values: BTreeSet::from([v.clone()]), ..Est::default() },
-        TExpr::List { items, .. } => items.iter().fold(Est::default(), |a, x| a.join(&estimate(m, vars, x))),
+        TExpr::Enum(v, _) if w == Written::Itself => Est { values: BTreeSet::from([v.clone()]), ..Est::default() },
+        TExpr::Enum(_, en) => Est { values: m.enums[*en].values.iter().cloned().collect(), ..Est::default() },
+        TExpr::List { items, .. } => items.iter().fold(Est::default(), |a, x| a.join(&estimate_by(m, vars, x, w))),
         TExpr::Var { name, fields, .. } if fields.is_empty() => vars.get(name).cloned().unwrap_or_default(),
         TExpr::Var { name, fields, .. } => {
             // the last field's range, in the record it belongs to
@@ -332,7 +384,7 @@ pub(crate) fn estimate(m: &Model, vars: &BTreeMap<String, Est>, e: &TExpr) -> Es
                 RecordOrigin::RuleOutputs(ix) => tr!("規則 `{}` の出力 `{f}`", "the output `{f}` of the rule `{}`", m.rules[*ix].name),
                 RecordOrigin::Local | RecordOrigin::Proto { .. } | RecordOrigin::Hold { .. } => tr!("`{}` のフィールド `{f}`", "the field `{f}` of `{}`", rd.name),
             };
-            Est::or(m.field_range(r, f), from).of_type(m, &ty)
+            Est::at(m, &ty, m.field_range(r, f), from)
         }
         _ => Est::default(),
     }

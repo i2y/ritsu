@@ -58,6 +58,15 @@ impl Ty {
         }
     }
 
+    /// The enum a value of this type is, inside a `?` or a list: None for a type that is no enum's.
+    pub fn enum_inside(&self) -> Option<EnumId> {
+        match self {
+            Ty::Opt(x) | Ty::List(x) => x.enum_inside(),
+            Ty::Enum(e) => Some(*e),
+            _ => None,
+        }
+    }
+
     /// Whether a value of `self` can be given where `want` is expected.
     pub fn fits(&self, want: &Ty) -> bool {
         if self == want || *want == Ty::Json {
@@ -75,6 +84,11 @@ impl Ty {
 /// None is open. A range belongs to a place a value is put: an input, an output, a field of a
 /// record, a parameter or the answer of a task, an input or an output of a rule (as rulec gives
 /// it). For a `T?` or a `list[T]`, it holds the numbers inside.
+///
+/// For a value of an ordered enum (`range >=basic <=gold` over `basic < silver < gold <
+/// platinum`), the places of the values it lets in, in the enum's order from 0: `>=0 <=2`, with
+/// both ends always there. The type beside it says which it is; what it lets in, said in the
+/// values, is `Model::values_in`, and as a `.flow` writes it, `Model::range_text`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Range {
     pub lo: Option<i64>,
@@ -133,6 +147,16 @@ impl Range {
     }
 }
 
+/// The values a range of an ordered enum lets in, in the enum's order, as rulec writes the range:
+/// by the values at its two ends, `>=basic <=gold`. Its values are one after another in the order,
+/// so the ends say them all.
+pub fn ends_text(values: &[String]) -> String {
+    match (values.first(), values.last()) {
+        (Some(lo), Some(hi)) => format!(">={lo} <={hi}"),
+        _ => String::new(),
+    }
+}
+
 impl crate::rulec::Column {
     /// The range rulec gives the column: its schema's minimum and maximum.
     pub fn range(&self) -> Option<Range> {
@@ -157,6 +181,10 @@ pub struct EnumDef {
     /// how the enum is written in a `.flow`: `status` for a local one, `payment_intent.status` for a rule's
     pub name: String,
     pub values: Vec<String>,
+    /// a rule's enum whose values are in order (`enum tier = basic < silver < gold`): a place of it
+    /// can hold a value to a range (`range >=basic <=gold`). A `.flow`'s own enums and a `.proto`'s
+    /// have no order.
+    pub ordered: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1187,6 +1215,34 @@ impl Model {
 
     pub fn var_ty(&self, name: &str) -> Option<&Ty> {
         self.vars.iter().find(|(n, _)| n == name).map(|(_, t)| t)
+    }
+
+    /// The values of the enum `e` that a place's range `rg` lets in (the places of the values, in
+    /// the enum's order), in that order: every value of it when there is no range.
+    pub fn values_in(&self, e: EnumId, rg: Option<Range>) -> Vec<String> {
+        let values = &self.enums[e].values;
+        match rg {
+            None => values.clone(),
+            Some(r) => values.iter().enumerate().filter(|(i, _)| r.contains(*i as i64)).map(|(_, v)| v.clone()).collect(),
+        }
+    }
+
+    /// For a place of the type `t` that holds an enum's value to a range (inside a `?` or a list),
+    /// the values the range lets in, in the enum's order; None for a place of another type, or one
+    /// without a range, which takes every value of its type.
+    pub fn held_values(&self, t: &Ty, rg: Option<Range>) -> Option<Vec<String>> {
+        let e = t.enum_inside()?;
+        rg?;
+        Some(self.values_in(e, rg))
+    }
+
+    /// A place's range as a `.flow` writes it: `>=1 <=30`, and for an ordered enum, by the values
+    /// at its ends, `>=basic <=gold`.
+    pub fn range_text(&self, t: &Ty, rg: &Range) -> String {
+        match t.enum_inside() {
+            Some(e) => ends_text(&self.values_in(e, Some(*rg))),
+            None => rg.show(),
+        }
     }
 
     pub fn field_ty(&self, rec: RecordId, field: &str) -> Option<&Ty> {

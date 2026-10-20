@@ -179,7 +179,8 @@ fn go_type(m: &Model, n: &Names, t: &Ty) -> String {
     }
 }
 
-/// A check that `x` is a well-formed JSON value of `t`, as a Go expression.
+/// A check that `x` is a well-formed JSON value of `t`, in `rg` (a number's range, or the values
+/// an enum's range lets in), as a Go expression.
 fn go_check(m: &Model, n: &Names, x: &str, t: &Ty, rg: Option<Range>, depth: usize) -> String {
     match t {
         Ty::Int | Ty::Num(_) => match rg {
@@ -190,7 +191,11 @@ fn go_check(m: &Model, n: &Names, x: &str, t: &Ty, rg: Option<Range>, depth: usi
         Ty::Timestamp => format!("ddIsTimestamp({x})"),
         Ty::Date => format!("ddIsDate({x})"),
         Ty::Bool => format!("ddIsBool({x})"),
-        Ty::Enum(e) => format!("ddIsOneOf({x}, {}Values...)", n.ty(&m.enums[*e].name)),
+        Ty::Enum(e) => match m.held_values(t, rg) {
+            // a place that holds the enum to a range: the values the range lets in
+            Some(values) => format!("ddIsOneOf({x}, {})", values.iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
+            None => format!("ddIsOneOf({x}, {}Values...)", n.ty(&m.enums[*e].name)),
+        },
         Ty::Record(r) => format!("Is{}({x})", n.ty(&m.records[*r].name)),
         Ty::List(inner) => {
             let v = format!("dd_v{depth}");

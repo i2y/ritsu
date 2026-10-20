@@ -103,6 +103,9 @@ pub struct RuleInfo {
     pub inputs: Vec<Column>,
     pub outputs: Vec<Column>,
     pub enums: Vec<(String, Vec<String>)>,
+    /// the enums whose values are in order (`enum tier = basic < silver < gold`, rulec's §15.210):
+    /// what a `.flow` may hold to a range of their values (`range >=basic <=gold`)
+    pub ordered: Vec<String>,
     pub machine: Option<Machine>,
     /// what the generated code holds a caller to beyond the shape of each input (rulec's §15.116);
     /// read, and not yet checked at the call (ritsu's DESIGN 7.4)
@@ -140,6 +143,7 @@ impl RuleInfo {
             inputs: f.inputs.iter().map(column).collect(),
             outputs: f.outputs.iter().map(column).collect(),
             enums,
+            ordered: f.enums.iter().filter(|e| e.ordered).map(|e| e.name.clone()).collect(),
             machine: f.machine.map(machine),
             preconditions: f.preconditions,
             connect: f.connect,
@@ -450,6 +454,7 @@ mod tests {
             inputs: vec![],
             outputs: vec![],
             enums: vec![],
+            ordered: vec![],
             machine: None,
             preconditions: vec![],
             connect: Some(Connect {

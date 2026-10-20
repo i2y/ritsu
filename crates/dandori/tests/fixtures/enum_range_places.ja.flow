@@ -1,0 +1,52 @@
+workflow 列挙の範囲の場所 v1
+description "ワークフローの場所に書いた列挙の範囲：値を渡せるのは、範囲が渡す先の範囲に収まる場所から来る値だけで、範囲に収めた値の match は、範囲に入る値で分ける"
+
+use rule 送料 from "rules/会員段階の送料.rule"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:member-tier-shipping"
+
+record 案内
+  キャンペーン : 送料.段階  range >=一般 <=ゴールド
+
+inputs
+  広い     : 送料.段階  range >=一般 <=プラチナ
+  片側     : 送料.段階  range >=シルバー
+  狭い     : 送料.段階  range >=シルバー <=ゴールド
+  無いかも : 送料.段階?  range >=一般 <=ゴールド
+  小計     : money[USD]  range >=0USD <=100000USD
+
+outputs
+  最上位 : 送料.段階  range >=ゴールド <=ゴールド
+
+task 広げる(キャンペーン: 送料.段階) -> 送料.段階  range >=一般 <=プラチナ
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:wider"
+  idempotent
+
+task 送る(キャンペーン: 送料.段階  range >=シルバー <=ゴールド)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send"
+  idempotent
+
+task まとめて送る(キャンペーン: list[送料.段階]  range >=シルバー <=ゴールド)
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:send-all"
+  idempotent
+
+flow
+  # 規則より広い範囲と、上の端を書かずにいちばん後の値まで届く範囲
+  let a = 送料(会員: 狭い, キャンペーン: 広い, 小計: 小計)
+  let b = 送料(会員: 狭い, キャンペーン: 片側, 小計: 小計)
+  # 規則の範囲に収まる範囲は渡せる
+  let c = 送料(会員: 狭い, キャンペーン: 狭い, 小計: 小計)
+  # タスクの引数、タスクの結果、書き出すレコードのフィールドにも範囲がある
+  送る(キャンペーン: 広い)
+  まとめて送る(キャンペーン: [プラチナ, 一般, ゴールド])
+  let w = 広げる(キャンペーン: 狭い)
+  let d = 送料(会員: 狭い, キャンペーン: w, 小計: 小計)
+  let o: 案内 = {キャンペーン: プラチナ}
+  # 範囲に収めた値の match は、どこで入れた値でも、範囲に入る値で分ける
+  let 選んだ段階 = 狭い
+  match 選んだ段階
+    シルバー => pass
+    プラチナ => pass
+  # 無いことがある値は、範囲に入る値のほかに none も分ける
+  match 無いかも
+    一般, シルバー, ゴールド => pass
+  succeed 最上位 = 狭い

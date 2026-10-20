@@ -297,7 +297,7 @@ impl<'a> Lowerer<'a> {
             for (en, values) in &info.enums {
                 let q = format!("{name}.{en}");
                 self.enum_ix.insert(q.clone(), self.m.enums.len());
-                self.m.enums.push(EnumDef { name: q, values: values.clone() });
+                self.m.enums.push(EnumDef { name: q, values: values.clone(), ordered: info.ordered.contains(en) });
             }
             let fields: Vec<(String, Ty)> = info.outputs.iter().map(|c| (c.name.clone(), self.rty(name, &c.ty))).collect();
             let ranges = info.outputs.iter().filter_map(|c| Some((c.name.clone(), c.range()?))).collect();
@@ -392,6 +392,7 @@ impl<'a> Lowerer<'a> {
                     inputs: params.iter().map(column).collect(),
                     outputs: vec![],
                     enums: vec![],
+                    ordered: vec![],
                     machine: None,
                     preconditions: vec![],
                     connect: None,
@@ -452,7 +453,7 @@ impl<'a> Lowerer<'a> {
                 let rname = format!("{name}.{}", t.name);
                 let state = self.m.enums.len();
                 self.enum_ix.insert(format!("{rname}.{}", mc.state_enum), state);
-                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone() });
+                self.m.enums.push(EnumDef { name: format!("{rname}.{}", mc.state_enum), values: mc.states.clone(), ordered: false });
                 // the key's parameters, in the order the transfer declares them: what a post and a void take
                 let mut fields: Vec<(String, Ty)> = t.params.iter().filter(|p| t.key.contains(&p.name)).map(|p| (p.name.clone(), Ty::Str)).collect();
                 fields.push(("state".to_string(), Ty::Enum(state)));
@@ -469,6 +470,7 @@ impl<'a> Lowerer<'a> {
                     inputs: vec![],
                     outputs: vec![],
                     enums: vec![(mc.state_enum.clone(), mc.states.clone())],
+                    ordered: vec![],
                     machine: Some(rulec::machine(mc.clone())),
                     preconditions: vec![],
                     connect: None,
@@ -571,7 +573,7 @@ impl<'a> Lowerer<'a> {
                 }
             }
             self.enum_ix.insert(name.clone(), self.m.enums.len());
-            self.m.enums.push(EnumDef { name: name.clone(), values });
+            self.m.enums.push(EnumDef { name: name.clone(), values, ordered: false });
         }
         // records: names first, so that a field can have a record type declared further down
         for r in &self.prog.records {
@@ -781,7 +783,7 @@ impl<'a> Lowerer<'a> {
         self.enum_ix.insert(name.clone(), ix);
         self.made_enums.insert(ix);
         self.made_at.entry(name.clone()).or_insert(sp);
-        self.m.enums.push(EnumDef { name, values });
+        self.m.enums.push(EnumDef { name, values, ordered: false });
         ix
     }
 
@@ -1159,16 +1161,20 @@ impl<'a> Lowerer<'a> {
         None
     }
 
-    /// The range written after a type, which only a number can have (or a `?` or a list of numbers).
+    /// The range written after a type, which only a number or a value of an ordered enum can have
+    /// (or a `?` or a list of them).
     fn range(&mut self, t: &Ty, r: Option<&RangeDecl>) -> Option<Range> {
         let r = r?;
         let mut inner = t;
         while let Ty::Opt(x) | Ty::List(x) = inner {
             inner = x;
         }
+        if let Ty::Enum(en) = inner {
+            return self.enum_range(*en, r);
+        }
         if !matches!(inner, Ty::Int | Ty::Num(_)) {
             let n = self.m.ty_name(t);
-            self.push(e("E003", r.span, tr!("範囲を書けるのは数（`int` か単位の付いた数）だけです。これは `{n}` です", "a range is for a number (`int` or a unit), and this is `{n}`")));
+            self.push(e("E003", r.span, tr!("範囲を書けるのは、数（`int` か単位の付いた数）と、順序のある列挙だけです。これは `{n}` です", "a range is for a number (`int` or a unit) or an ordered enum, and this is `{n}`")));
             return None;
         }
         let lo = match &r.lo {
@@ -1189,6 +1195,49 @@ impl<'a> Lowerer<'a> {
         Some(rg)
     }
 
+    /// `range >=basic <=gold` on a place of the ordered enum `en`, as a rule writes one on its input
+    /// (rulec's §15.210): the places of the values at its ends in the enum's order, an end left out
+    /// the first or the last value. E003 for an enum with no order (a `.flow`'s own, a `.proto`'s,
+    /// a rule's declared with `|`), an end that is none of its values, and a range no value is in.
+    fn enum_range(&mut self, en: EnumId, r: &RangeDecl) -> Option<Range> {
+        let def = &self.m.enums[en];
+        let (n, values, ordered) = (def.name.clone(), def.values.clone(), def.ordered);
+        if !ordered {
+            self.push(e("E003", r.span, tr!("列挙 `{n}` には順序が無いので、範囲は書けません", "the enum `{n}` has no order, so it takes no range")).note(tr!(
+                "範囲を書けるのは、規則が値を `<` で順に並べた列挙です（`enum tier = basic < silver < gold`）",
+                "a range is for an enum a rule declares in order, with `<` (`enum tier = basic < silver < gold`)"
+            )));
+            return None;
+        }
+        let order = values.join(" < ");
+        let mut at = |b: &syntax::Bound| -> Option<usize> {
+            let (word, sp) = match b {
+                syntax::Bound::Value { name, span } => match values.iter().position(|v| v == name) {
+                    Some(i) => return Some(i),
+                    None => (name.clone(), *span),
+                },
+                syntax::Bound::Int(k) => (k.to_string(), r.span),
+                syntax::Bound::Quantity { raw, span, .. } => (raw.clone(), *span),
+            };
+            self.push(e("E003", sp, tr!("範囲の端 `{word}` は `{n}` の値ではありません", "the bound `{word}` is not a value of `{n}`")).note(tr!("`{n}` の値は、順に {order} です", "the values of `{n}` are, in order, {order}")));
+            None
+        };
+        let lo = match &r.lo {
+            Some(b) => at(b)?,
+            None => 0,
+        };
+        let hi = match &r.hi {
+            Some(b) => at(b)?,
+            None => values.len().saturating_sub(1),
+        };
+        if lo > hi {
+            let text = format!(">={} <={}", values[lo], values[hi]);
+            self.push(e("E003", r.span, tr!("`{text}` に入る `{n}` の値はありません", "no value of `{n}` is in `{text}`")).note(tr!("`{n}` の値は、順に {order} です", "the values of `{n}` are, in order, {order}")));
+            return None;
+        }
+        Some(Range { lo: Some(lo as i64), hi: Some(hi as i64) })
+    }
+
     /// One end of a range, counted in the unit of the number `ty`: a whole number as it is; a number
     /// with a unit, as rulec counts one (ritsu-units: `1kg` is 1000 in `mass[g]`, `5%` is 50 steps of
     /// `rate[step 0.1%]`, an amount in yen is the same in `money[円, incl_tax]` and in
@@ -1198,6 +1247,12 @@ impl<'a> Lowerer<'a> {
         let (value, unit, raw, sp) = match b {
             syntax::Bound::Int(n) => return Some(*n),
             syntax::Bound::Quantity { value, unit, raw, span } => (*value, unit.as_str(), raw.as_str(), *span),
+            // a value of an enum, where a number goes
+            syntax::Bound::Value { name, span } => {
+                let tn = self.m.ty_name(ty);
+                self.push(e("E003", *span, tr!("範囲の端 `{name}` は `{tn}` の値ではありません", "the bound `{name}` is not a value of `{tn}`")));
+                return None;
+            }
         };
         let tn = self.m.ty_name(ty);
         let not_of = tr!("範囲の端 `{raw}` は `{tn}` の値ではありません", "the bound `{raw}` is not a value of `{tn}`");
@@ -1372,7 +1427,7 @@ impl<'a> Lowerer<'a> {
             };
             // what a Jev task asks, from the type of its answer
             let jev = match &t.binding {
-                Some((syntax::Binding::Jev(jd), bsp)) => Some(self.jev(t, jd, *bsp, result.as_ref())),
+                Some((syntax::Binding::Jev(jd), bsp)) => Some(self.jev(t, jd, *bsp, result.as_ref(), result_range)),
                 _ => None,
             };
             if let (Some((_, _, csp)), None) = (&t.confidence, &jev) {
@@ -2333,7 +2388,7 @@ impl<'a> Lowerer<'a> {
     /// (`score`: a place on a scale of them), `bool` yes or no, and a record a question for each
     /// field, or the field that takes how sure Jev is of another's answer. Jev writes no text, so
     /// an answer that is not one of these is refused (E007).
-    fn jev(&mut self, t: &syntax::TaskDecl, jd: &syntax::JevDecl, bsp: Span, result: Option<&Ty>) -> Jev {
+    fn jev(&mut self, t: &syntax::TaskDecl, jd: &syntax::JevDecl, bsp: Span, result: Option<&Ty>, result_range: Option<Range>) -> Jev {
         let model = t.model.as_ref().map(|x| x.0.clone()).unwrap_or_default();
         let floor = t.confidence.as_ref().map(|(v, e, _)| (*v, e.0.clone()));
         // whose API: TypeSafe's System One (which other servers speak too), or OpenAI's Decisions
@@ -2372,7 +2427,7 @@ impl<'a> Lowerer<'a> {
         };
         match (&jd.ask, r) {
             (Some(ask), Ty::Enum(_) | Ty::Bool) => {
-                if let Some(q) = self.jev_question(ask, r, None, api, url.is_none() && api == DecisionApi::SystemOne) {
+                if let Some(q) = self.jev_question(ask, r, result_range, None, api, url.is_none() && api == DecisionApi::SystemOne) {
                     out.questions.push(q);
                 }
             }
@@ -2414,7 +2469,7 @@ impl<'a> Lowerer<'a> {
                     if let syntax::JevField::Ask(ask) = what {
                         match fty {
                             Ty::Enum(_) | Ty::Bool => {
-                                if let Some(q) = self.jev_question(ask, fty, Some(fname), api, url.is_none() && api == DecisionApi::SystemOne) {
+                                if let Some(q) = self.jev_question(ask, fty, rec.ranges.get(fname).copied(), Some(fname), api, url.is_none() && api == DecisionApi::SystemOne) {
                                     out.questions.push(q);
                                 }
                             }
@@ -2498,8 +2553,10 @@ impl<'a> Lowerer<'a> {
         out
     }
 
-    /// One question of a Jev task, whose answer is of type `ty` (an enum or `bool`).
-    fn jev_question(&mut self, ask: &syntax::JevAsk, ty: &Ty, field: Option<&str>, api: DecisionApi, typesafe: bool) -> Option<Question> {
+    /// One question of a Jev task, whose answer is of type `ty` (an enum or `bool`) in a place with
+    /// the range `rg`: an enum held to a range is asked among the values the range lets in, as the
+    /// answer is checked against them when it comes.
+    fn jev_question(&mut self, ask: &syntax::JevAsk, ty: &Ty, rg: Option<Range>, field: Option<&str>, api: DecisionApi, typesafe: bool) -> Option<Question> {
         let id = field.unwrap_or("answer").to_string();
         let mut seen: BTreeMap<String, Span> = BTreeMap::new();
         for (v, vsp) in ask.criteria.iter().map(|(n, _)| n) {
@@ -2512,12 +2569,23 @@ impl<'a> Lowerer<'a> {
         let meaning = |v: &str| ask.criteria.iter().find(|((n, _), _)| n == v).map(|(_, m)| m.clone());
         match ty {
             Ty::Enum(en) => {
-                let def = self.m.enums[*en].clone();
+                let mut def = self.m.enums[*en].clone();
                 for ((v, vsp), _) in &ask.criteria {
                     if !def.values.contains(v) {
                         self.push(e("E002", *vsp, tr!("`{v}` は `{}` の値ではありません（値は {}）", "`{v}` is not a value of `{}`, whose values are {}", def.name, def.values.join("・"); def.name, def.values.join(", "))));
                         return None;
                     }
+                }
+                // an enum held to a range: Jev is asked among the values it lets in, which are what
+                // the checks below count, and a meaning written for another is never asked for
+                if rg.is_some() {
+                    let takes = self.m.values_in(*en, rg);
+                    let w = ends_text(&takes);
+                    if let Some(((v, vsp), _)) = ask.criteria.iter().find(|((v, _), _)| !takes.contains(v)) {
+                        self.push(e("E007", *vsp, tr!("`{v}` は範囲 `{w}` の外の値なので、Jev には尋ねません。この意味は外してください", "`{v}` is outside the range `{w}`, so Jev is not asked about it; leave its meaning out")));
+                        return None;
+                    }
+                    def = EnumDef { name: format!("{} range {w}", def.name), values: takes, ordered: def.ordered };
                 }
                 if let Some(ssp) = ask.score {
                     // the levels are the values, each with what it means, from the lowest; TypeSafe's

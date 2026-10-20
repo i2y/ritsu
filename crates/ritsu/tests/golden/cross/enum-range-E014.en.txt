@@ -1,6 +1,6 @@
 ok campaign_lift.rule
 error[dandori E014]: lift.flow:16:1: `campaign` can be outside `>=basic <=gold`, the range of `campaign` of the rule `campaign_lift`: it can be `platinum`
     16 |   let d = campaign_lift(member: member, campaign: campaign)
-  = An enum in a `.flow` takes no range: branch with `match`, and give the rule a value its range lets in, written out
+  = Write `range >=basic <=gold` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
 tiers.gate: ok — 2 actions, 2 policies (2 permits, 0 forbids), 2 expectations, 0 separations
 ritsu check: 3 files (rulec 1, dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

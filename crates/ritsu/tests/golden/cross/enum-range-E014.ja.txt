@@ -1,6 +1,6 @@
 ok campaign_lift.rule
 エラー[dandori E014]: lift.flow:16:1: `campaign` は `platinum` になることがあり、規則 `campaign_lift` の `campaign` の範囲 `>=basic <=gold` を外れます
     16 |   let d = campaign_lift(member: member, campaign: campaign)
-  = `.flow` の列挙には範囲を書けません。`match` で分けて、規則の範囲に入る値を書いて渡してください
+  = 値の出どころ（ワークフローの入力、レコードのフィールド、タスクの結果）に `range >=basic <=gold` を書くか、`match` で分けて、範囲に入る値を書いて渡してください
 tiers.gate: ok — action 2、ポリシー 2（permit 2、forbid 0）、期待 2、職務の分離 0
 ritsu check: ファイル 3 個（rulec 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

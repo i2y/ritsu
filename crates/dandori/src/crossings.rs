@@ -91,7 +91,8 @@ fn origins(m: &Model, vars: &BTreeMap<String, Vec<From>>, e: &TExpr) -> Vec<From
                     RuleKind::Rule => vec![From::Output(*ix, f.clone())],
                     _ => vec![unknown()],
                 },
-                _ => match m.field_range(r, f) {
+                // an enum's range is not numbers
+                _ => match m.field_range(r, f).filter(|_| ty.enum_inside().is_none()) {
                     Some(rg) => vec![From::Range(rg)],
                     None => vec![unknown()],
                 },
@@ -104,8 +105,9 @@ fn origins(m: &Model, vars: &BTreeMap<String, Vec<From>>, e: &TExpr) -> Vec<From
 /// Where each variable can come from: every value put in it, joined, until nothing more changes.
 fn variables(m: &Model) -> BTreeMap<String, Vec<From>> {
     let mut vars: BTreeMap<String, Vec<From>> = BTreeMap::new();
-    for (n, _) in &m.inputs {
-        let from = match m.input_ranges.get(n) {
+    for (n, t) in &m.inputs {
+        // an enum's range is not numbers
+        let from = match m.input_ranges.get(n).filter(|_| t.enum_inside().is_none()) {
             Some(r) => From::Range(*r),
             None => From::Unknown(tr!("入力 `{n}`", "the input `{n}`")),
         };
@@ -119,7 +121,8 @@ fn variables(m: &Model) -> BTreeMap<String, Vec<From>> {
             match &s.kind {
                 TK::Call { target: Some(Target::Let(x)), callee: Callee::Task(t), .. } => {
                     let t = &m.tasks[*t];
-                    let from = match t.result_range {
+                    // an enum's range is not numbers
+                    let from = match t.result_range.filter(|_| t.result.as_ref().is_none_or(|ty| ty.enum_inside().is_none())) {
                         Some(r) => From::Range(r),
                         None => From::Unknown(tr!("`{}` の結果", "the answer of `{}`", t.name)),
                     };

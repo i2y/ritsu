@@ -1,0 +1,67 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Offers",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://offers.example.com"
+    }
+  ],
+  "paths": {
+    "/offers": {
+      "post": {
+        "operationId": "sendOffer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "campaign": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "silver",
+                      "gold"
+                    ]
+                  }
+                },
+                "required": [
+                  "campaign"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The tier the offer lifts a member to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tier": {
+                      "type": "string",
+                      "enum": [
+                        "basic",
+                        "silver",
+                        "gold",
+                        "platinum"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "tier"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

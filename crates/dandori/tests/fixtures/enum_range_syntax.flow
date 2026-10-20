@@ -1,0 +1,21 @@
+workflow enum_range_syntax v1
+description "Ranges of an enum, written wrongly: only an enum a rule declares in order takes one, each end is one of its values, and some value is in it"
+
+use rule tiers from "rules/member_tier_shipping.rule"
+use rule capture from "rules/capture.rule"
+
+enum color = red | green | blue
+
+record Mistakes
+  held        : tiers.tier  range >=basic <=gold
+  one_end     : tiers.tier  range >=silver
+  own_enum    : color  range >=red <=green
+  rules_enum  : capture.status  range >=pending
+  not_a_value : tiers.tier  range >=bronze
+  a_number    : tiers.tier  range <=2
+  none_in     : tiers.tier  range >=gold <=silver
+  a_name      : int  range >=basic
+  a_text      : string  range >=basic
+
+flow
+  pass

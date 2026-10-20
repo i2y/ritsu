@@ -1,0 +1,6 @@
+error[E015]: tests/fixtures/enum_range_child.flow:20:1: the parameter `campaign` is not what `offer` takes as its input `campaign`: it has no range, and `>=basic <=gold` is taken
+    20 | task unheld(campaign: tiers.tier) -> Any
+error[E015]: tests/fixtures/enum_range_child.flow:24:1: the parameter `campaign` is not what `offer` takes as its input `campaign`: it is `>=basic <=platinum`, and `>=basic <=gold` is taken
+    24 | task wide(campaign: tiers.tier  range >=basic <=platinum) -> Offered
+error[E015]: tests/fixtures/enum_range_child.flow:24:1: `offer` answers `offered` with what the field `offered` of `Offered` does not take: it is `>=basic <=platinum`, and `>=basic <=gold` is taken
+    24 | task wide(campaign: tiers.tier  range >=basic <=platinum) -> Offered

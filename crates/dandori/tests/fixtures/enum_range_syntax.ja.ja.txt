@@ -1,0 +1,19 @@
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:12:16: 列挙 `色` には順序が無いので、範囲は書けません
+    12 |   自分の列挙   : 色  range >=赤 <=緑
+  = 範囲を書けるのは、規則が値を `<` で順に並べた列挙です（`enum tier = basic < silver < gold`）
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:13:24: 列挙 `手数料.口座の状態` には順序が無いので、範囲は書けません
+    13 |   規則の列挙   : 手数料.口座の状態  range >=有効
+  = 範囲を書けるのは、規則が値を `<` で順に並べた列挙です（`enum tier = basic < silver < gold`）
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:14:29: 範囲の端 `ブロンズ` は `送料.段階` の値ではありません
+    14 |   値でない     : 送料.段階  range >=ブロンズ
+  = `送料.段階` の値は、順に 一般 < シルバー < ゴールド < プラチナ です
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:15:24: 範囲の端 `2` は `送料.段階` の値ではありません
+    15 |   数           : 送料.段階  range <=2
+  = `送料.段階` の値は、順に 一般 < シルバー < ゴールド < プラチナ です
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:16:19: `>=ゴールド <=シルバー` に入る `送料.段階` の値はありません
+    16 |   入る値が無い : 送料.段階  range >=ゴールド <=シルバー
+  = `送料.段階` の値は、順に 一般 < シルバー < ゴールド < プラチナ です
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:17:29: 範囲の端 `一般` は `int` の値ではありません
+    17 |   名前         : int  range >=一般
+エラー[E003]: tests/fixtures/enum_range_syntax.ja.flow:18:23: 範囲を書けるのは、数（`int` か単位の付いた数）と、順序のある列挙だけです。これは `string` です
+    18 |   文字列       : string  range >=一般

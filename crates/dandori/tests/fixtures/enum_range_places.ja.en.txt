@@ -1,0 +1,50 @@
+error[E014]: tests/fixtures/enum_range_places.ja.flow:34:1: `広い` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    34 |   let a = 送料(会員: 狭い, キャンペーン: 広い, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.ja.flow:35:1: `片側` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    35 |   let b = 送料(会員: 狭い, キャンペーン: 片側, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.ja.flow:39:1: `広い` can be outside `>=シルバー <=ゴールド`, the range of the parameter `キャンペーン` of `送る`: it can be `一般` or `プラチナ`
+    39 |   送る(キャンペーン: 広い)
+  = Write `range >=シルバー <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.ja.flow:40:1: `[プラチナ, 一般, ゴールド]` can be outside `>=シルバー <=ゴールド`, the range of the parameter `キャンペーン` of `まとめて送る`: it can be `一般` or `プラチナ`
+    40 |   まとめて送る(キャンペーン: [プラチナ, 一般, ゴールド])
+error[E014]: tests/fixtures/enum_range_places.ja.flow:42:1: `w` can be outside `>=一般 <=ゴールド`, the range of `キャンペーン` of the rule `送料`: it can be `プラチナ`
+    42 |   let d = 送料(会員: 狭い, キャンペーン: w, 小計: 小計)
+  = Write `range >=一般 <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
+error[E014]: tests/fixtures/enum_range_places.ja.flow:43:1: `プラチナ` is outside `>=一般 <=ゴールド`, the range of the field `キャンペーン` of `案内`
+    43 |   let o: 案内 = {キャンペーン: プラチナ}
+error[E010]: tests/fixtures/enum_range_places.ja.flow:46:1: `match` has no arm for ゴールド, which `選んだ段階` can be here
+    46 |   match 選んだ段階
+  the run that gets there:
+      34  a = 送料(…)
+      35  b = 送料(…)
+      37  c = 送料(…)
+      41  w = 広げる(…)
+      42  d = 送料(…)
+      43  o = {キャンペーン: プラチナ}
+      45  選んだ段階 = 狭い
+error[E011]: tests/fixtures/enum_range_places.ja.flow:48:1: the arm `プラチナ` can never be taken: `選んだ段階` is one of シルバー, ゴールド here
+    48 |     プラチナ => pass
+  the run that gets there:
+      34  a = 送料(…)
+      35  b = 送料(…)
+      37  c = 送料(…)
+      41  w = 広げる(…)
+      42  d = 送料(…)
+      43  o = {キャンペーン: プラチナ}
+      45  選んだ段階 = 狭い
+error[E010]: tests/fixtures/enum_range_places.ja.flow:50:1: `match` has no arm for none, which `無いかも` can be here
+    50 |   match 無いかも
+  the run that gets there:
+      34  a = 送料(…)
+      35  b = 送料(…)
+      37  c = 送料(…)
+      41  w = 広げる(…)
+      42  d = 送料(…)
+      43  o = {キャンペーン: プラチナ}
+      45  選んだ段階 = 狭い
+      47  match 選んだ段階: シルバー
+error[E014]: tests/fixtures/enum_range_places.ja.flow:52:1: `狭い` can be outside `>=ゴールド <=ゴールド`, the range of the output `最上位`: it can be `シルバー`
+    52 |   succeed 最上位 = 狭い
+  = Write `range >=ゴールド <=ゴールド` where the value comes from (an input of the workflow, a field of a record, the answer of a task), or branch with `match` and give a value the range lets in, written out
