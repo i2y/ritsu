@@ -70,7 +70,7 @@ $ cp -r skills/rulec skills/dandori <your-project>/.claude/skills/     # 一つ�
 リリースごとに `ritsu-skills-v<版>.zip` があり、`SHA256SUMS` にも載っています。中身は十のフォルダーと二つのライセンスなので、エージェントがスキルを読む場所に展開すれば入ります。
 
 ```console
-$ unzip ritsu-skills-v0.32.0.zip -d ~/.claude/skills -x 'LICENSE-*'
+$ unzip ritsu-skills-v0.33.0.zip -d ~/.claude/skills -x 'LICENSE-*'
 ```
 
 ## スキルにコマンドを走らせてもらう

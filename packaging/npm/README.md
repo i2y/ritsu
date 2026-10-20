@@ -19,11 +19,11 @@ The package is not on the npm registry. Every release of ritsu from 0.26.0 on ca
 `i2y-ritsu-<version>.tgz`, with its SHA-256 in the release's `SHA256SUMS`:
 
 ```console
-$ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.32.0/i2y-ritsu-0.32.0.tgz
+$ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.33.0/i2y-ritsu-0.33.0.tgz
 ```
 
 Or download the file, check it against `SHA256SUMS`, and install the file itself
-(`npm install --save-dev ./i2y-ritsu-0.32.0.tgz`), which works with `--ignore-scripts` and with no
+(`npm install --save-dev ./i2y-ritsu-0.33.0.tgz`), which works with `--ignore-scripts` and with no
 network (`--offline`).
 
 It needs Node 22 or later (22, 24 and 26 are tested), on Linux or macOS.
