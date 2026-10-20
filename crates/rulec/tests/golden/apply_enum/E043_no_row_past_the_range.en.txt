@@ -1,0 +1,18 @@
+warning[W111]: Values of type tier appear in no row
+  --> tests/apply_enum/E043_no_row_past_the_range.rule:4
+  |
+4 | enum tier = basic < silver < gold < platinum
+  |      ^^^^
+  |
+ Values that never appear: platinum
+ Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.
+
+error[E043]: A value passed to `campaign` leaves the callee's range
+  --> tests/apply_enum/E043_no_row_past_the_range.rule:13 apply campaign
+   |
+13 |   campaign = campaign_tier
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^ what is passed: one of basic, silver, gold, platinum
+   |
+ For example campaign = platinum is outside range >=basic <=gold of `campaign` in `campaign_points.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow what is passed to the values inside it, or define the values outside it in a clause of this rule. Which is a business decision.
+

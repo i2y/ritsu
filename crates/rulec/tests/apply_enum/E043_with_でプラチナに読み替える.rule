@@ -1,0 +1,13 @@
+rule ランクの値引き(loyalty_credit) v1
+description "ロイヤルティプログラムのランクの値引き。ランクを段階に読み替える"
+
+enum 会員ランク(level) = エントリー(entry) < プラス(plus) < プレミアム(premium) < エリート(elite)
+
+inputs
+  ランク(loyalty) : 会員ランク
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+apply ランク特典(loyal) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = ランク with エントリー -> 一般, プラス -> シルバー, プレミアム -> ゴールド, エリート -> プラチナ

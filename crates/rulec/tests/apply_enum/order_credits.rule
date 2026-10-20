@@ -1,0 +1,60 @@
+rule order_credits v1
+description "The credits an order gets from the campaign rule, each passing a tier the campaign's range lets in"
+
+# The tiers in order, lowest first, as the campaign rule declares them.
+enum tier = basic < silver < gold < platinum
+# The levels of a loyalty program, read as tiers.
+enum level = entry < plus < premium < elite
+
+inputs
+  campaign_tier : tier  range >=basic <=gold   # held to the campaign's range
+  member : tier                                # a member may be platinum
+  loyalty : level
+
+outputs
+  campaign_credit : money[USD]  round down(1USD)
+  launch_credit : money[USD]  round down(1USD)
+  member_points : number  round down(1)
+  loyalty_credit : money[USD]  round down(1USD)
+  repeat_credit : money[USD]  round down(1USD)
+
+# The member's own tier, as far as gold.
+table own_tier_by_member
+policy unique
+| member | -> own_tier : tier |
+| basic  | basic              |
+| silver | silver             |
+| >=gold | gold               |
+
+# Only a name: it can be what campaign_tier can be.
+define repeat_tier : tier = campaign_tier
+
+# An input held to the same range
+apply campaign = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = campaign_tier
+  credit -> campaign_credit
+
+# A value inside the range
+apply launch = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = silver
+  credit -> launch_credit
+
+# The output of a table whose rows write values inside the range
+apply own = "campaign_points.rule" meaning:ea7a9c79742eb207
+  campaign = own_tier
+  points -> member_points
+
+# Every level read as a tier inside the range
+apply loyal = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = loyalty with entry -> basic, plus -> silver, premium -> gold, elite -> gold
+  credit -> loyalty_credit
+
+# A definition that names an input held to the range
+apply repeat = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = repeat_tier
+  credit -> repeat_credit
+
+examples
+| campaign_tier | member   | loyalty | -> campaign_credit | launch_credit | member_points | loyalty_credit | repeat_credit |
+| basic         | platinum | elite   | 0USD               | 5USD          | 100           | 5USD           | 0USD          |
+| gold          | basic    | entry   | 5USD               | 5USD          | 0             | 0USD           | 5USD          |

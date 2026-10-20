@@ -1524,9 +1524,9 @@ Related codes: [E041](#e041), [E043](#e043)
 
 `error` — **A value passed leaves the callee's range or constraint**
 
-**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
+**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, and what the rows of a table write for its output (what a name can take, for a row that writes one). A value an expression decides is taken to be any value of its enum, since check does not work out which ones an expression comes to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
 
-**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`.
+**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`.
 
 **Smallest reproduction**:
 
@@ -1560,6 +1560,44 @@ policy unique
       | a   | -> x |
 small | <=5 | 1    |
 large | >5  | 2    |
+```
+
+**The range of an input of an ordered enum**:
+
+```rule
+rule t(t) v1
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  k(k) : tier
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "tier_callee.rule" meaning:137f2373042d3154
+  campaign = k
+  x -> y
+```
+
+With `tier_callee.rule` beside it:
+
+```rule
+rule tier_callee(tier_callee) v1
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign(campaign) : tier  range >=basic <=gold
+
+outputs
+  x(x) : number  round down(1)
+
+table t(t)
+policy unique
+| campaign | -> x |
+| basic    | 1    |
+| >=silver | 2    |
 ```
 
 Related codes: [E041](#e041), [E042](#e042), [E101](#e101)

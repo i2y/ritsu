@@ -1,0 +1,17 @@
+rule better_credit v1
+description "The credit at the later of the campaign's tier and the member's, both held to the campaign's range"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign_tier : tier  range >=basic <=gold
+  member_tier : tier  range >=basic <=gold
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The later of two tiers inside the range is inside it, and check does not work that out.
+define lift : tier = max(campaign_tier, member_tier)
+
+apply lifted = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = lift

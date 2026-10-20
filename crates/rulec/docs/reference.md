@@ -789,9 +789,10 @@ over its values, `range >=basic <=gold`: the bounds are values of the enum, and 
 are the same over them. What the rule tells its callers says it as it says a number's range:
 `rulec schema` lists only the values inside it, `rulec api` and `rulec graph` give its two ends,
 the generated MCP tool, the `.proto` and the page say the same, and `rulec diff` tells a range
-that moved as a change of what the rule takes (§15.251). A rate input may leave `range` out: it is then
-`>=0% <=100%`, and the guard enforces that, so a rate that can exceed 100% declares its range
-like any other number. A table's numeric output column needs no range of its own — its cells
+that moved as a change of what the rule takes (§15.251). A rule that applies one with such an
+input is held to its range as to a number's: every value it can pass has to be inside (E043,
+§7). A rate input may leave `range` out: it is then `>=0% <=100%`, and the guard enforces that,
+so a rate that can exceed 100% declares its range like any other number. A table's numeric output column needs no range of its own — its cells
 are its range.
 
 **Where another table reads that column, it is not held to its cells.** A table whose column
@@ -2189,10 +2190,17 @@ line per callee input binds it to an input, a derived value, a definition, a tab
 output of this rule, or a literal — every input, exactly once (E041). The types agree (E042);
 two enums are mapped with `with`, which covers every value of this rule's enum, values spelled
 the same on both sides mapping by themselves. What this rule passes has to stay inside the
-callee's declared ranges and satisfy its constraints (E043, proved by interval arithmetic and
-never fixed by adding a row: the callee is another unit of approval). `except` leaves a table,
-a clause or a labelled row (`table:row`) of the callee out; a hole that leaves in the main rule is
-this rule's E101 to fill. The callee's outputs become definitions of this rule, under their
+callee's declared ranges and satisfy its constraints (E043, never fixed by adding a row: the
+callee is another unit of approval). A number is held there by interval arithmetic. For an input
+the callee holds to a range of an ordered enum (`campaign : tier  range >=basic <=gold`), every
+value the binding can pass, read as the callee's through `with`, has to be one the range lets in:
+an input can pass its range (every value of its enum without one), a literal its value, a table's
+output what its rows write (what a name can take, for a row that writes one), and a definition
+that only names another value what that value can; a value an expression decides (`max`, `min`)
+is taken to be any value of its enum, since check does not work out which ones an expression
+comes to, and E043 then says what is passed is not known. `except` leaves a table, a clause or
+a labelled row (`table:row`) of the callee out; a hole that leaves in the main rule is this
+rule's E101 to fill. The callee's outputs become definitions of this rule, under their
 own names or renamed with `->`, rounded as the callee declares and then, if one is an output
 here, rounded once more as this rule declares. An optional output of the callee that is not a
 number hands the absent value on, through `with` as well; an optional number would be a

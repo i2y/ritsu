@@ -779,8 +779,8 @@ ranges never reach are not errors: the page for people lists them as unused by t
 only a table none of whose rows is reached draws W118.
 
 The generated code carries the applied rule expanded, and the trace says
-`{"table":"retirement:schedule","row":1,"label":"short"}`. An apply goes one level, and a rule
-that walks a sequence cannot be applied (E044).
+`{"table":"retirement:schedule","row":1,"label":"short"}`. A rule that applies another can be
+applied in turn, and so can a rule that walks a sequence; applies that go round are E044.
 
 ## Saying which combinations cannot happen
 

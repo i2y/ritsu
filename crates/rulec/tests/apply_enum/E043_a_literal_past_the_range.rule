@@ -1,0 +1,8 @@
+rule launch_credit v1
+description "The credit of the launch campaign, which runs at platinum"
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+apply launch = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = platinum

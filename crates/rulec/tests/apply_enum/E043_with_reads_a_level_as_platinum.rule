@@ -1,0 +1,13 @@
+rule loyalty_credit v1
+description "The credit of a loyalty level, read as a tier"
+
+enum level = entry < plus < premium < elite
+
+inputs
+  loyalty : level
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+apply loyal = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = loyalty with entry -> basic, plus -> silver, premium -> gold, elite -> platinum

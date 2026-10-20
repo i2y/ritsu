@@ -1,0 +1,13 @@
+rule 注文のポイント(order_points) v1
+description "注文がキャンペーンの規則から受けるポイント。キャンペーンの段階で決まる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  キャンペーン段階(campaign_tier) : 段階   # 範囲を書いていないので、プラチナもとる
+
+outputs
+  ポイント(points) : number  round down(1)
+
+apply キャンペーン(campaign) = "キャンペーンのポイント.rule" meaning:6a512ebe8b265de3
+  キャンペーン = キャンペーン段階

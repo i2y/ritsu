@@ -1,0 +1,9 @@
+error[E043]: The values of what is passed to `campaign` are not known
+  --> tests/apply_enum/E043_the_later_of_two_tiers.rule:17 apply lifted
+   |
+17 |   campaign = lift
+   |   ^^^^^^^^^^^^^^^
+   |
+ The callee's `campaign` was checked over range >=basic <=gold. `lift` is decided by an expression, and check does not work out which values of an enum an expression comes to, so it is read as one that can be platinum too.
+ Decide the value in a table that writes only values inside the range and pass that, or pass an input that declares the same range.
+

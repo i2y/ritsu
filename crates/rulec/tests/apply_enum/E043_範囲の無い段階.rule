@@ -1,0 +1,13 @@
+rule 注文の値引き(order_credit) v1
+description "注文がキャンペーンの規則から受ける値引き。キャンペーンの段階で決まる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  キャンペーン段階(campaign_tier) : 段階   # 範囲を書いていないので、プラチナもとる
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+apply キャンペーン(campaign) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = キャンペーン段階

@@ -1,0 +1,8 @@
+rule 発売記念の値引き(launch_credit) v1
+description "発売記念のキャンペーンの値引き。このキャンペーンはプラチナで行う"
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+apply 発売記念(launch) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = プラチナ

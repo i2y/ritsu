@@ -1,0 +1,9 @@
+error[E043]: A value passed to `キャンペーン` leaves the callee's range
+  --> tests/apply_enum/E043_範囲の外のリテラル.rule:8 apply 発売記念
+  |
+8 |   キャンペーン = プラチナ
+  |   ^^^^^^^^^^^^^^^^^^^^^^^ what is passed: プラチナ
+  |
+ For example キャンペーン = プラチナ is outside range >=一般 <=ゴールド of `キャンペーン` in `キャンペーンの値引き.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow what is passed to the values inside it, or define the values outside it in a clause of this rule. Which is a business decision.
+

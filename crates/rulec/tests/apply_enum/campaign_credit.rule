@@ -1,0 +1,18 @@
+rule campaign_credit v1
+description "The credit a campaign gives on an order. A campaign lifts as far as gold, and silver and gold give the same credit."
+
+# The tiers in order, lowest first.
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign : tier  range >=basic <=gold   # a campaign lifts as far as gold
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The `>=silver` row takes platinum too, which the range does not let in.
+table credit_by_campaign
+policy unique
+| campaign | -> credit |
+| basic    | 0USD      |
+| >=silver | 5USD      |

@@ -1,0 +1,18 @@
+warning[W111]: Values of type 段階 appear in no row
+  --> tests/apply_enum/E043_範囲の外に当たる行が無い.rule:4
+  |
+4 | enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+  |      ^^^^
+  |
+ Values that never appear: プラチナ
+ Even though the completeness check passes, the rows for those values may simply be absorbed by a `-`.
+
+error[E043]: A value passed to `キャンペーン` leaves the callee's range
+  --> tests/apply_enum/E043_範囲の外に当たる行が無い.rule:13 apply キャンペーン
+   |
+13 |   キャンペーン = キャンペーン段階
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ what is passed: one of 一般, シルバー, ゴールド, プラチナ
+   |
+ For example キャンペーン = プラチナ is outside range >=一般 <=ゴールド of `キャンペーン` in `キャンペーンのポイント.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow what is passed to the values inside it, or define the values outside it in a clause of this rule. Which is a business decision.
+

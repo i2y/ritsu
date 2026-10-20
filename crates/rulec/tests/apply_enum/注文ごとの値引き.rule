@@ -1,0 +1,60 @@
+rule 注文ごとの値引き(order_credits) v1
+description "注文がキャンペーンの規則から受ける値引き。どれも、キャンペーンの範囲に入る段階を渡す"
+
+# 段階は低い順に並べる。キャンペーンの規則と同じ。
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+# ロイヤルティプログラムのランク。段階に読み替える。
+enum 会員ランク(level) = エントリー(entry) < プラス(plus) < プレミアム(premium) < エリート(elite)
+
+inputs
+  キャンペーン段階(campaign_tier) : 段階  range >=一般 <=ゴールド   # キャンペーンと同じ範囲
+  会員(member) : 段階                                              # 会員はプラチナのこともある
+  ランク(loyalty) : 会員ランク
+
+outputs
+  キャンペーン値引き(campaign_credit) : money[USD]  round down(1USD)
+  発売記念値引き(launch_credit) : money[USD]  round down(1USD)
+  会員ポイント(member_points) : number  round down(1)
+  ランク値引き(loyalty_credit) : money[USD]  round down(1USD)
+  再訪値引き(repeat_credit) : money[USD]  round down(1USD)
+
+# 会員本人の段階。ゴールドまで。
+table 会員本人の段階(own_tier_by_member)
+policy unique
+| 会員       | -> 本人の段階(own_tier) : 段階 |
+| 一般       | 一般                           |
+| シルバー   | シルバー                       |
+| >=ゴールド | ゴールド                       |
+
+# 名前を書いただけの定義。とりうる値はキャンペーン段階と同じ。
+define 再訪段階(repeat_tier) : 段階 = キャンペーン段階
+
+# 同じ範囲を書いた入力
+apply キャンペーン(campaign) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = キャンペーン段階
+  値引き -> キャンペーン値引き
+
+# 範囲の中の値
+apply 発売記念(launch) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = シルバー
+  値引き -> 発売記念値引き
+
+# 行が範囲の中の値だけを書く表の出力
+apply 本人(own) = "キャンペーンのポイント.rule" meaning:6a512ebe8b265de3
+  キャンペーン = 本人の段階
+  ポイント -> 会員ポイント
+
+# どのランクも範囲の中の段階に読み替える
+apply ランク特典(loyal) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = ランク with エントリー -> 一般, プラス -> シルバー, プレミアム -> ゴールド, エリート -> ゴールド
+  値引き -> ランク値引き
+
+# 範囲を書いた入力を指すだけの定義
+apply 再訪(repeat) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = 再訪段階
+  値引き -> 再訪値引き
+
+examples
+| キャンペーン段階 | 会員     | ランク     | -> キャンペーン値引き | 発売記念値引き | 会員ポイント | ランク値引き | 再訪値引き |
+| 一般             | プラチナ | エリート   | 0USD                  | 5USD           | 100          | 5USD         | 0USD       |
+| ゴールド         | 一般     | エントリー | 5USD                  | 5USD           | 0            | 0USD         | 5USD       |

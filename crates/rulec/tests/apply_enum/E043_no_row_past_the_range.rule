@@ -1,0 +1,13 @@
+rule order_points v1
+description "The points an order gets from the campaign rule, for the campaign's tier"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign_tier : tier   # declared with no range: platinum too
+
+outputs
+  points : number  round down(1)
+
+apply campaign = "campaign_points.rule" meaning:ea7a9c79742eb207
+  campaign = campaign_tier

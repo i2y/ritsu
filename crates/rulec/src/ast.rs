@@ -655,6 +655,11 @@ pub struct CalleeInput {
     pub name: String,
     pub ty: crate::types::Ty,
     pub range: Option<Range>,
+    /// The values the `range` of an input of an ordered enum lets in, in the callee's order and
+    /// spelling (`Checked::enum_ranges`, §15.210): what E043 holds the values passed to (§15.252).
+    /// None for an input with no such range, and for a field of an element, whose enum takes none
+    /// (E069).
+    pub enum_range: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

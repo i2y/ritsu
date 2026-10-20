@@ -1,0 +1,9 @@
+エラー[E043]: `campaign` に渡す値が、元の規則の範囲の外に出ます
+  --> tests/apply_enum/E043_a_table_that_writes_platinum.rule:22 準用 lifted
+   |
+22 |   campaign = lift
+   |   ^^^^^^^^^^^^^^^ 渡す値の取りうる値: silver, gold, platinum
+   |
+ 例: campaign = platinum は、`campaign_credit.rule` の `campaign` の range >=basic <=gold の外です。
+ 元の規則の完全性は、その範囲の中でだけ証明されています。範囲の外の値には定義がありません。渡す値を範囲の中の値に限るか、はみ出す値をこの規則の節で定めてください。どちらにするかは業務の判断です。
+

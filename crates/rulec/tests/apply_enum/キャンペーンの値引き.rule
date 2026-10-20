@@ -1,0 +1,18 @@
+rule キャンペーンの値引き(campaign_credit) v1
+description "キャンペーンが注文に付ける値引き。キャンペーンが引き上げるのはゴールドまでで、シルバーとゴールドは同じ値引き。"
+
+# 段階は低い順に並べる。
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  キャンペーン(campaign) : 段階  range >=一般 <=ゴールド   # キャンペーンが引き上げるのはゴールドまで
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# `>=シルバー` の行はプラチナにも当たるが、プラチナは範囲に入らない。
+table キャンペーンごとの値引き(credit_by_campaign)
+policy unique
+| キャンペーン | -> 値引き |
+| 一般         | 0USD      |
+| >=シルバー   | 5USD      |

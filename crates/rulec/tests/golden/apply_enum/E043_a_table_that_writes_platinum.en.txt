@@ -1,0 +1,9 @@
+error[E043]: A value passed to `campaign` leaves the callee's range
+  --> tests/apply_enum/E043_a_table_that_writes_platinum.rule:22 apply lifted
+   |
+22 |   campaign = lift
+   |   ^^^^^^^^^^^^^^^ what is passed: one of silver, gold, platinum
+   |
+ For example campaign = platinum is outside range >=basic <=gold of `campaign` in `campaign_credit.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow what is passed to the values inside it, or define the values outside it in a clause of this rule. Which is a business decision.
+

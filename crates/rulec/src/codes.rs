@@ -949,7 +949,28 @@ apply call(c) = "callee.rule" sha256:1c554496c37f709f
   a = n
   x -> y
 "##;
-const X_E044: &str = "rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"壊れた呼び先.rule\" sha256:c4f9eba5b2949205\n  a = n\n  x -> y\n";
+/// E043 of an input of an ordered enum held to a range (§15.252), with English names alone, as the
+/// other forms with a rule beside them are: an input with no range bound to the callee's, whose
+/// `>=silver` row takes platinum too, which the range does not let in.
+const X_E043_ENUM: &str = r##"rule t(t) v1
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  k(k) : tier
+
+outputs
+  y(y) : number  round down(1)
+
+apply call(c) = "tier_callee.rule" meaning:137f2373042d3154
+  campaign = k
+  x -> y
+"##;
+const TIER_CALLEE: &[(&str, &str)] = &[(
+    "tier_callee.rule",
+    "rule tier_callee(tier_callee) v1\n\nenum tier = basic < silver < gold < platinum\n\ninputs\n  campaign(campaign) : tier  range >=basic <=gold\n\noutputs\n  x(x) : number  round down(1)\n\ntable t(t)\npolicy unique\n| campaign | -> x |\n| basic    | 1    |\n| >=silver | 2    |\n",
+)];
+const X_E044: &str ="rule t(t) v1\n\ninputs\n  n(n) : number  range >=1 <=10\n\noutputs\n  y(y) : number  round down(1)\n\napply 呼(c) = \"壊れた呼び先.rule\" sha256:c4f9eba5b2949205\n  a = n\n  x -> y\n";
 const X_E044_EN: &str = r##"rule t(t) v1
 
 inputs
@@ -2661,18 +2682,19 @@ pub fn ledger() -> Vec<Entry> {
             "E043",
             tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
             tr!(
-                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
-                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
+                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。順のある列挙の入力の `range`（`range >=basic <=gold`）では、渡す値が取りうる列挙の値を `with` で元の規則の値に読み替えて、範囲に入らない値があるときです。取りうる値は、入力ならその範囲（範囲が無ければ列挙の全部）、リテラルならその値、表の出力なら行が書く値（名前を書く行は、その名前が取りうる値）です。式で決まる値は、check がその値を求めないので列挙の全部とし、範囲の外の値があれば、渡す値の取りうる値が分からないと言います。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
+                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, and what the rows of a table write for its output (what a name can take, for a row that writes one). A value an expression decides is taken to be any value of its enum, since check does not work out which ones an expression comes to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
             ),
             tr!(
-                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。制約なら、同じ関係を `constraint` で宣言してください。",
-                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For a constraint, declare the same relation with `constraint`."
+                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。列挙なら、この規則の入力に同じ `range` を書くか（順のある列挙のとき）、範囲の中の値だけを書く表で値を決めて渡すか、`with` で範囲の中の値に読み替えてください。制約なら、同じ関係を `constraint` で宣言してください。",
+                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`."
             ),
             X_E043,
             &["E041", "E042", "E101"],
         )
         .with_files(CALLEE)
-        .english_with_files(X_E043_EN, CALLEE_EN),
+        .english_with_files(X_E043_EN, CALLEE_EN)
+        .also_with(tr!("順のある列挙の入力の範囲", "The range of an input of an ordered enum"), X_E043_ENUM, TIER_CALLEE),
         err(
             "E044",
             tr!("その規則は準用できません", "That rule cannot be applied"),

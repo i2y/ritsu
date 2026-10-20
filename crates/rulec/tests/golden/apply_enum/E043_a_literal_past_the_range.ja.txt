@@ -1,0 +1,9 @@
+エラー[E043]: `campaign` に渡す値が、元の規則の範囲の外に出ます
+  --> tests/apply_enum/E043_a_literal_past_the_range.rule:8 準用 launch
+  |
+8 |   campaign = platinum
+  |   ^^^^^^^^^^^^^^^^^^^ 渡す値: platinum
+  |
+ 例: campaign = platinum は、`campaign_credit.rule` の `campaign` の range >=basic <=gold の外です。
+ 元の規則の完全性は、その範囲の中でだけ証明されています。範囲の外の値には定義がありません。渡す値を範囲の中の値に限るか、はみ出す値をこの規則の節で定めてください。どちらにするかは業務の判断です。
+

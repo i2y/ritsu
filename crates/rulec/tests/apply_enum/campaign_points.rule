@@ -1,0 +1,18 @@
+rule campaign_points v1
+description "The points a campaign gives on an order, one row for each tier a campaign can lift to."
+
+# The tiers in order, lowest first.
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign : tier  range >=basic <=gold   # a campaign lifts as far as gold
+
+outputs
+  points : number  round down(1)
+
+table points_by_campaign
+policy unique
+| campaign | -> points |
+| basic    | 0         |
+| silver   | 50        |
+| gold     | 100       |

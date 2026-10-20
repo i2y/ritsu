@@ -1,0 +1,13 @@
+rule order_credit v1
+description "The credit an order gets from the campaign rule, for the campaign's tier"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign_tier : tier   # declared with no range: platinum too
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+apply campaign = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = campaign_tier

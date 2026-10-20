@@ -1,0 +1,18 @@
+警告[W111]: 型 tier の値がどの行にも現れません
+  --> tests/apply_enum/E043_no_row_past_the_range.rule:4
+  |
+4 | enum tier = basic < silver < gold < platinum
+  |      ^^^^
+  |
+ 現れない値: platinum
+ 完全性の検査は通っていても、その値は `-` の行に当たっているだけかもしれません。
+
+エラー[E043]: `campaign` に渡す値が、元の規則の範囲の外に出ます
+  --> tests/apply_enum/E043_no_row_past_the_range.rule:13 準用 campaign
+   |
+13 |   campaign = campaign_tier
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^ 渡す値の取りうる値: basic, silver, gold, platinum
+   |
+ 例: campaign = platinum は、`campaign_points.rule` の `campaign` の range >=basic <=gold の外です。
+ 元の規則の完全性は、その範囲の中でだけ証明されています。範囲の外の値には定義がありません。渡す値を範囲の中の値に限るか、はみ出す値をこの規則の節で定めてください。どちらにするかは業務の判断です。
+

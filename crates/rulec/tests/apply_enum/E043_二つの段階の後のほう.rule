@@ -1,0 +1,17 @@
+rule 有利な値引き(better_credit) v1
+description "キャンペーンの段階と会員の段階のうち後のほうの値引き。どちらもキャンペーンの範囲に収まる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  キャンペーン段階(campaign_tier) : 段階  range >=一般 <=ゴールド
+  会員段階(member_tier) : 段階  range >=一般 <=ゴールド
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 範囲の中の二つの段階の後のほうは範囲の中にあるが、check はそれを求めない。
+define 引き上げ段階(lift) : 段階 = max(キャンペーン段階, 会員段階)
+
+apply 引き上げ(lifted) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = 引き上げ段階

@@ -1,0 +1,22 @@
+rule member_credit v1
+description "The credit at the tier a member's own tier lifts the campaign to"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# One step up, and a platinum member stays at platinum.
+table lift_by_member
+policy unique
+| member   | -> lift : tier |
+| basic    | silver         |
+| silver   | gold           |
+| gold     | gold           |
+| platinum | platinum       |
+
+apply lifted = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = lift

@@ -1,0 +1,9 @@
+error[E043]: A value passed to `campaign` leaves the callee's range
+  --> tests/apply_enum/E043_with_reads_a_level_as_platinum.rule:13 apply loyal
+   |
+13 |   campaign = loyalty with entry -> basic, plus -> silver, premium -> gold, elite -> platinum
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ what is passed: one of basic, silver, gold, platinum
+   |
+ For example campaign = platinum is outside range >=basic <=gold of `campaign` in `campaign_credit.rule`.
+ The callee's completeness was proved over that range; outside it there is no definition. Narrow what is passed to the values inside it, or define the values outside it in a clause of this rule. Which is a business decision.
+

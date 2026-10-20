@@ -372,7 +372,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 match mine_el.fields.iter().find(|x| x.name.text == ours) {
                     Some(_) => {
                         field_subs.push((cfd.name.text.clone(), ours.clone()));
-                        field_pairs.push((ours, CalleeInput { name: cfd.name.text.clone(), ty: cc.ty_of(&cfd.name.text).unwrap_or(Ty::Unknown), range: cfd.range.clone() }));
+                        field_pairs.push((ours, CalleeInput { name: cfd.name.text.clone(), ty: cc.ty_of(&cfd.name.text).unwrap_or(Ty::Unknown), range: cfd.range.clone(), enum_range: None }));
                     }
                     None => {
                         out.push(
@@ -894,7 +894,12 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             inputs: cf
                 .inputs
                 .iter()
-                .map(|i| CalleeInput { name: i.name.text.clone(), ty: cc.ty_of(&i.name.text).unwrap_or(Ty::Unknown), range: i.range.clone() })
+                .map(|i| CalleeInput {
+                    name: i.name.text.clone(),
+                    ty: cc.ty_of(&i.name.text).unwrap_or(Ty::Unknown),
+                    range: i.range.clone(),
+                    enum_range: cc.enum_ranges.get(&i.name.text).cloned(),
+                })
                 .collect(),
             constraints: cf.constraints.clone(),
             // Every enum the callee's inputs can take, an imported one too (§15.182): a binding
@@ -1330,6 +1335,14 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
             }
             // Range: what this rule can pass has to stay inside what the callee proved over.
             let Some(r) = &cin.range else { continue };
+            // The range of an input of an ordered enum (§15.210, §15.252): every value the binding
+            // can pass, read as the callee's through `with`, is one the range lets in.
+            if let Some(allowed) = &cin.enum_range {
+                if let Some(d) = enum_outside(f, c, a, cal, b, &value, cin, allowed, r, &at(b.span.line)) {
+                    out.push(d);
+                }
+                continue;
+            }
             let Some((clo, chi)) = bounds_of(r, &cty) else { continue };
             let reach = interval(b);
             let (lo, hi) = match reach {
@@ -1493,6 +1506,209 @@ fn bad_map(at: &str, sp: &Span, what: String) -> Diag {
 
 fn callee_ty(cal: &Callee, input: &str) -> Option<Ty> {
     cal.inputs.iter().find(|i| i.name == input).map(|i| i.ty.clone())
+}
+
+/// What a name of this rule can hold, as values of its enum (§15.252), read the way `types::check`
+/// reads the interval of a number. `known` are the values the name is read to take: what an input's
+/// range lets in (every value of its enum without one), every value of a field of an element (whose
+/// enum takes no range, E069), what the rows of the tables that define it write (a value written,
+/// or what a name written can hold, narrowed by the row's own cell for it, as `Checked::row_writes`
+/// narrows it), and what a definition that only names another value names — which is what an output
+/// another `apply` brought in is. `assumed` are the values it is taken to have only because an
+/// expression decides it (a `max`, a `min`, a fold): check does not work out which values of an enum
+/// an expression comes to, so it is every value of the enum, the safe side, as a number whose
+/// interval is not known; `exprs` names the definitions they come from.
+#[derive(Default, Clone)]
+struct Held {
+    known: Vec<String>,
+    assumed: Vec<String>,
+    exprs: Vec<String>,
+}
+
+fn add_new(list: &mut Vec<String>, vs: impl IntoIterator<Item = String>) {
+    for v in vs {
+        if !list.contains(&v) {
+            list.push(v);
+        }
+    }
+}
+
+/// [`Held`] of the names of one rule, each read once: a table that writes a name another table
+/// writes is read through it, and a name already being read on the way there — which a rule that
+/// passes its type check does not have — is read as an expression is.
+struct Holds<'a> {
+    f: &'a RuleFile,
+    c: &'a Checked,
+    done: HashMap<String, Held>,
+    reading: Vec<String>,
+}
+
+impl<'a> Holds<'a> {
+    fn new(f: &'a RuleFile, c: &'a Checked) -> Holds<'a> {
+        Holds { f, c, done: HashMap::new(), reading: Vec::new() }
+    }
+
+    fn of(&mut self, name: &str) -> Held {
+        if let Some(h) = self.done.get(name) {
+            return h.clone();
+        }
+        if self.reading.iter().any(|n| n == name) {
+            return self.computed(name);
+        }
+        self.reading.push(name.to_string());
+        let h = self.read(name);
+        self.reading.pop();
+        self.done.insert(name.to_string(), h.clone());
+        h
+    }
+
+    fn every(&self, name: &str) -> Vec<String> {
+        self.c
+            .ty_of(name)
+            .and_then(|t| match t.present() {
+                Ty::Enum(e) => self.c.enums.get(e).cloned(),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    fn computed(&self, name: &str) -> Held {
+        Held { known: Vec::new(), assumed: self.every(name), exprs: vec![name.to_string()] }
+    }
+
+    fn read(&mut self, name: &str) -> Held {
+        let (f, c) = (self.f, self.c);
+        if f.inputs.iter().any(|i| i.name.text == name) {
+            return Held { known: c.enum_ranges.get(name).cloned().unwrap_or_else(|| self.every(name)), ..Held::default() };
+        }
+        if f.element_fields().any(|x| x.name.text == name) {
+            return Held { known: self.every(name), ..Held::default() };
+        }
+        let mut out = Held::default();
+        let mut tabled = false;
+        for it in &f.items {
+            let Item::Table(t) = it else { continue };
+            let Some(oi) = t.outputs.iter().position(|o| o.name.text == name) else { continue };
+            tabled = true;
+            for row in &t.rows {
+                match row.outs.get(oi) {
+                    Some(OutCell::Lit(Lit::Word(w))) => add_new(&mut out.known, [w.clone()]),
+                    Some(OutCell::Name(w)) => match c.ty_of(w) {
+                        // No name of that spelling where the cell is: the word is a value.
+                        None => add_new(&mut out.known, [w.clone()]),
+                        Some(wty) => {
+                            let inner = self.of(w);
+                            let cell = t.inputs.iter().position(|(n, _)| n == w).and_then(|ci| row.cells.get(ci));
+                            let lets_in = |v: &String| cell.is_none_or(|cell| crate::eval::cell_matches(c, cell, &crate::eval::Val::Enum(v.clone()), &wty));
+                            add_new(&mut out.known, inner.known.into_iter().filter(|v| lets_in(v)));
+                            let assumed: Vec<String> = inner.assumed.into_iter().filter(|v| lets_in(v)).collect();
+                            if !assumed.is_empty() {
+                                add_new(&mut out.assumed, assumed);
+                                add_new(&mut out.exprs, inner.exprs);
+                            }
+                        }
+                    },
+                    // `none`, or a literal of no enum: no value of one.
+                    _ => {}
+                }
+            }
+        }
+        if tabled {
+            return out;
+        }
+        let expr = f.items.iter().find_map(|it| match it {
+            Item::Define(d) if d.name.text == name => Some(&d.expr),
+            Item::Derived(d) if d.name.text == name => Some(&d.expr),
+            _ => None,
+        });
+        match expr {
+            Some(Expr::Name(w, _)) if c.ty_of(w).is_some() => self.of(w),
+            _ => self.computed(name),
+        }
+    }
+}
+
+/// The callee's values a value of this rule stands for through a binding, as the expansion reads
+/// it: what `with` maps it to, or else the value spelled the same, unless `with` maps another value
+/// to that one.
+fn stands_for(b: &Binding, v: &str, callee_vals: &[String]) -> Vec<String> {
+    if b.map.iter().any(|(from, _)| from == v) {
+        return b.map.iter().filter(|(from, to)| from == v && callee_vals.contains(to)).map(|(_, to)| to.clone()).collect();
+    }
+    if callee_vals.iter().any(|x| x == v) && !b.map.iter().any(|(_, to)| to == v) {
+        return vec![v.to_string()];
+    }
+    Vec::new()
+}
+
+/// E043 for an input of the callee held to a range of its ordered enum (§15.252): the values the
+/// binding can pass, read as the callee's through `with`, against the values the range lets in. A
+/// value the binding is read to pass that the range does not let in is said as a number outside its
+/// range is, with it as the example. Values taken only because an expression decides what is
+/// passed are said as a number whose interval is not known is.
+#[allow(clippy::too_many_arguments)]
+fn enum_outside(f: &RuleFile, c: &Checked, a: &ApplyDecl, cal: &Callee, b: &Binding, value: &BindValue, cin: &CalleeInput, allowed: &[String], r: &Range, at: &str) -> Option<Diag> {
+    let callee_vals: Vec<String> = match cin.ty.present() {
+        Ty::Enum(ke) => cal.enums.iter().find(|(e, _)| e == ke).map(|(_, vs)| vs.clone()).unwrap_or_default(),
+        _ => return None,
+    };
+    let passed = match value {
+        BindValue::Lit(Lit::Word(w)) if callee_vals.contains(w) => Held { known: vec![w.clone()], ..Held::default() },
+        BindValue::Name(n) if matches!(c.ty_of(n).as_ref().map(Ty::present), Some(Ty::Enum(_))) => {
+            let h = Holds::new(f, c).of(n);
+            let read = |vs: Vec<String>| {
+                let mut out = Vec::new();
+                for v in vs {
+                    add_new(&mut out, stands_for(b, &v, &callee_vals));
+                }
+                out
+            };
+            Held { known: read(h.known), assumed: read(h.assumed), exprs: h.exprs }
+        }
+        // A binding of another type, or a literal that is no value of the callee's enum, is E042's.
+        _ => return None,
+    };
+    let outside: Vec<&String> = callee_vals.iter().filter(|v| passed.known.contains(v) && !allowed.contains(v)).collect();
+    let unsure: Vec<&String> = callee_vals.iter().filter(|v| passed.assumed.contains(v) && !passed.known.contains(v) && !allowed.contains(v)).collect();
+    if let Some(w) = outside.first() {
+        let shown: Vec<&str> = callee_vals.iter().filter(|v| passed.known.contains(v) || passed.assumed.contains(v)).map(String::as_str).collect();
+        let mark = match shown.as_slice() {
+            [one] => tr!("渡す値: {one}", "what is passed: {one}"),
+            many => tr!("渡す値の取りうる値: {}", "what is passed: one of {}", many.join(", ")),
+        };
+        return Some(
+            Diag::error("E043", tr!("`{}` に渡す値が、元の規則の範囲の外に出ます", "A value passed to `{}` leaves the callee's range", cin.name))
+                .at(at.to_string())
+                .mark(b.span.clone(), mark)
+                // The arguments in the order of the Japanese sentence, as the number's (§15.179).
+                .note(tr!("例: {} = {w} は、`{}` の `{}` の range {} の外です。", "For example {0} = {w} is outside range {3} of `{2}` in `{1}`.", cin.name, a.path, cin.name, range_text(r)))
+                .note(tr!(
+                    "元の規則の完全性は、その範囲の中でだけ証明されています。範囲の外の値には定義がありません。渡す値を範囲の中の値に限るか、はみ出す値をこの規則の節で定めてください。どちらにするかは業務の判断です。",
+                    "The callee's completeness was proved over that range; outside it there is no definition. Narrow what is passed to the values inside it, or define the values outside it in a clause of this rule. Which is a business decision."
+                )),
+        );
+    }
+    if unsure.is_empty() {
+        return None;
+    }
+    let exprs = passed.exprs.iter().map(|n| format!("`{n}`")).collect::<Vec<_>>().join(tr!("・", ", ").as_str());
+    let values = unsure.iter().map(|v| v.as_str()).collect::<Vec<_>>().join(", ");
+    let (is, one) = if passed.exprs.len() > 1 { ("are", "each is read as one") } else { ("is", "it is read as one") };
+    Some(
+        Diag::error("E043", tr!("`{}` に渡す値の取りうる値が分かりません", "The values of what is passed to `{}` are not known", cin.name))
+            .at(at.to_string())
+            .mark(b.span.clone(), "")
+            .note(tr!(
+                "元の規則の `{}` は、range {} の中で検査されています。{exprs} は式で決まる値で、check は式がとる列挙の値を求めないので、{values} にもなりうるとして読みます。",
+                "The callee's `{}` was checked over range {}. {exprs} {is} decided by an expression, and check does not work out which values of an enum an expression comes to, so {one} that can be {values} too.",
+                cin.name,
+                range_text(r)
+            ))
+            .note(tr!(
+                "範囲の中の値だけを書く表で値を決めて渡すか、同じ range を書いた入力を渡してください。",
+                "Decide the value in a table that writes only values inside the range and pass that, or pass an input that declares the same range."
+            )),
+    )
 }
 
 fn bounds_of(r: &Range, ty: &Ty) -> Option<(Option<Rat>, Option<Rat>)> {
