@@ -290,10 +290,12 @@ requirement extinguisher_distance
 ### sakai — the map of bounded contexts
 
 A map says which context owns which files, which language each publishes, and who may depend on
-whom, through what. sakai checks every reference that crosses contexts, in the files of every
+whom, through what. sakai checks the references that cross contexts, in the files of every
 language here, in the OpenAPI and AsyncAPI documents services keep as their contracts, and in the
 code — handing imports to import-linter, dependency-cruiser, ArchUnit and go-arch-lint, and reading
-Rust's crates from Cargo. ritsu maps its own crates this way; this is one of its contexts:
+Rust's crates from Cargo. It does not count a `use book`, since another context reaches a book through the service in
+front of it, nor, for now, a rule's `import enum` and `range from koyomi`.
+ritsu maps its own crates this way; this is one of its contexts:
 
 ```ctx
 context Workflows(dandori) v1
@@ -496,8 +498,8 @@ them:
 - money and units, one type across rulec, dandori, chobo and kaname;
 - every operation a context of sakai's map opens, held to the action of a gate that guards it, and
   every operation a workflow calls, to what its gate allows the workflow;
-- yuen pins each table, date, claim, task and function one by one, and sakai checks every
-  reference in every language, with its line.
+- yuen pins each table, date, claim, task and function one by one, and sakai checks each
+  reference that crosses contexts, with its line.
 
 ## Security checks
 

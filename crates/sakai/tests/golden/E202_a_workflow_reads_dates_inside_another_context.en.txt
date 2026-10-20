@@ -1,0 +1,6 @@
+error[E202]: ordering/ship_notice.flow:4:1: The file ordering/ship_notice.flow of Ordering refers to delivery/ship_date.cal (use dates), which is inside Delivery
+     4 | use dates shipping from "../delivery/ship_date.cal"
+  = The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside Delivery. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.
+  involved:
+      Ordering  ordering/ship_notice.flow:4      use dates "../delivery/ship_date.cal"
+      Delivery  koyomi "delivery/ship_date.cal"  a part of the inside of Delivery

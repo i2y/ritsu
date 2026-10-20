@@ -1,0 +1,6 @@
+エラー[E202]: ordering/出荷の知らせ.flow:4:1: 「受注」の ordering/出荷の知らせ.flow が、「配送」の内側の delivery/出荷日.cal を参照しています（use dates）
+     4 | use dates 出荷 from "../delivery/出荷日.cal"
+  = ワークフローから生成したコードは、日付のファイルから生成したコードを、同梱して呼ぶか Lambda の関数として呼びます。使うのは日付のファイルそのもの（「配送」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。
+  関わるもの:
+      受注  ordering/出荷の知らせ.flow:4  use dates "../delivery/出荷日.cal"
+      配送  koyomi "delivery/出荷日.cal"  「配送」の内側のもの

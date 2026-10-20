@@ -59,9 +59,11 @@ people.
 - **yuen** says where each requirement came from, who owns it, and what satisfies and verifies it,
   with every link pinned by hashes at both ends. It pins the requirements of an OpenSpec spec the
   same way.
-- **sakai** maps which context owns which files and who may depend on whom, and checks every
-  reference that crosses contexts, in the files of every language here, in the OpenAPI and AsyncAPI
-  documents services keep as their contracts, and in the code.
+- **sakai** maps which context owns which files and who may depend on whom, and checks the
+  references that cross contexts, in the files of every language here, in the OpenAPI and AsyncAPI
+  documents services keep as their contracts, and in the code. It does not count a `use book`,
+  since another context reaches a book through the service in front of it, nor, for now, a rule's
+  `import enum` and `range from koyomi`.
 - **sekisho** says, in a gate (a `.gate` file), which principal may do which action on which
   resource, with roles, attributes and relations, and with the answers of a rule and of dates as
   conditions. `sekisho check` walks every combination that can happen and decides each as Cedar
@@ -159,8 +161,8 @@ them:
 - money and units, one type across rulec, dandori, chobo and kaname;
 - every operation a context of sakai's map opens, held to the action of a gate that guards it, and
   every operation a workflow calls, to what its gate allows the workflow;
-- yuen pins each table, date, claim, task and function one by one, and sakai checks every
-  reference in every language, with its line.
+- yuen pins each table, date, claim, task and function one by one, and sakai checks each
+  reference that crosses contexts, with its line.
 
 ## Pages for people
 

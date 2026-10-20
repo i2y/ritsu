@@ -1,0 +1,6 @@
+エラー[E202]: ordering/ship_notice.flow:4:1: 「Ordering」の ordering/ship_notice.flow が、「Delivery」の内側の delivery/ship_date.cal を参照しています（use dates）
+     4 | use dates shipping from "../delivery/ship_date.cal"
+  = ワークフローから生成したコードは、日付のファイルから生成したコードを、同梱して呼ぶか Lambda の関数として呼びます。使うのは日付のファイルそのもの（「Delivery」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。
+  関わるもの:
+      Ordering  ordering/ship_notice.flow:4      use dates "../delivery/ship_date.cal"
+      Delivery  koyomi "delivery/ship_date.cal"  「Delivery」の内側のもの

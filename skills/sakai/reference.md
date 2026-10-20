@@ -198,7 +198,9 @@ What each relationship lets cross a boundary:
 A reference that calls a service (dandori's `connect`, `use rule … connect`) also needs the service to be an open host service of the other context (E207).
 A flow runs a child flow across a boundary only in a partnership, a shared kernel, or when the child implements the other's open host service (E209).
 A rule bundled, deployed or applied across a boundary is a use of the rule itself, and is allowed only inside a shared kernel (E202).
-A kaname module's `use rule`, `use dates` and `use module` are a use of the thing itself too, since the code a module is made into calls theirs: across a boundary, each is allowed only inside a shared kernel (E202). A module's `use book` is not counted: the host applies the transfers the module builds.
+So are these lines, since the code a workflow, a gate or a kaname module is made into calls the code made of the file each reads: a workflow's `use dates`, a gate's `use rule`, `use dates`, `use calendar` and `use gate`, and a module's `use rule`, `use dates` and `use module`.
+Across a boundary, each is allowed only inside a shared kernel (E202), even when the rule is in a published language for its Connect service.
+A `use book` is not counted, of a workflow, a gate or a module: a book is used from another context through the service in front of it.
 
 ### Mappings in an anticorruption layer
 

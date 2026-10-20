@@ -1,0 +1,15 @@
+workflow ship_notice v1
+description "Tells the customer the day an order ships, by delivery's ship date"
+
+use dates shipping from "../delivery/ship_date.cal"
+
+inputs
+  order   : string
+  ordered : date
+
+task tell(order: string, day: date)
+  key
+
+flow
+  let ship = shipping.ship(ordered: ordered)
+  tell(order: order, day: ship.day)

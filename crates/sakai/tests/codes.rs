@@ -134,7 +134,8 @@ fn every_japanese_mutant_has_an_english_one() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     // the 64 of before, the 10 on the example of OpenAPI and AsyncAPI documents (DESIGN 15), the 8
-    // of the checks of security on the same example (DESIGN 16), and the gate that guards another
-    // context's operation (E211, DESIGN 17)
-    assert_eq!(japanese, 83, "the Japanese mutants are all kept");
+    // of the checks of security on the same example (DESIGN 16), the gate that guards another
+    // context's operation (E211, DESIGN 17), and the workflow that reads a dates file inside another
+    // context (E202, DESIGN 19)
+    assert_eq!(japanese, 84, "the Japanese mutants are all kept");
 }

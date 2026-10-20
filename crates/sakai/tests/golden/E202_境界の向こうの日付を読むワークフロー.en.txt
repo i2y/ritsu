@@ -1,0 +1,6 @@
+error[E202]: ordering/出荷の知らせ.flow:4:1: The file ordering/出荷の知らせ.flow of 受注 refers to delivery/出荷日.cal (use dates), which is inside 配送
+     4 | use dates 出荷 from "../delivery/出荷日.cal"
+  = The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside 配送. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.
+  involved:
+      受注  ordering/出荷の知らせ.flow:4  use dates "../delivery/出荷日.cal"
+      配送  koyomi "delivery/出荷日.cal"  a part of the inside of 配送

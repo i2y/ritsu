@@ -539,7 +539,7 @@ pub fn ledger() -> Ledger {
         e(
             "E202",
             tr!("相手の内側への参照です", "A reference to the inside of another context"),
-            tr!("参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則やカレンダーそのもの）。", "What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule or a calendar itself."),
+            tr!("参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則や日付のファイルやカレンダーそのもの）。", "What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule, a dates file or a calendar itself."),
             tr!("相手の公表された言語を通して参照するか、二つの共有カーネルに並べてください。", "Refer through the other context's published language, or list it in a shared kernel of the two."),
             &[
                 A_CONFORMS,

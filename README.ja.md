@@ -252,7 +252,7 @@ requirement extinguisher_distance
 
 ### sakai：境界づけられたコンテキストの地図
 
-地図には、どのコンテキストがどのファイルを持ち、どの言語を公開し、誰が誰に何を通して依存してよいかを書きます。sakai は、コンテキストのあいだをまたぐすべての参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。コードの import は import-linter、dependency-cruiser、ArchUnit、go-arch-lint に渡し、Rust のクレートは Cargo に尋ねます。ritsu は自分のクレートをこの形で地図にしています。次はそのコンテキストの一つです。
+地図には、どのコンテキストがどのファイルを持ち、どの言語を公開し、誰が誰に何を通して依存してよいかを書きます。sakai は、コンテキストのあいだをまたぐ参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。コードの import は import-linter、dependency-cruiser、ArchUnit、go-arch-lint に渡し、Rust のクレートは Cargo に尋ねます。帳簿の `use book` は数えません。ほかのコンテキストからは、帳簿の前に立つサービスを通して使うからです。規則の `import enum` と `range from koyomi` も、まだ数えていません。ritsu は自分のクレートをこの形で地図にしています。次はそのコンテキストの一つです。
 
 ```ctx
 context Workflows(dandori) v1
@@ -430,7 +430,7 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 - kaname のモジュールが規則、日付、振替に渡すどの値も、相手が宣言した範囲に入るか
 - rulec、dandori、chobo、kaname で一つの型になったお金と単位
 - sakai の地図のコンテキストが公開する操作に、それを守るゲートの action があるか。ワークフローが呼ぶ操作を、ゲートがそのワークフローに許しているか
-- yuen は表、日付、主張、タスク、関数を一つずつハッシュで固定し、sakai はすべての言語の参照を行番号つきで確かめる
+- yuen は表、日付、主張、タスク、関数を一つずつハッシュで固定し、sakai はコンテキストをまたぐ参照を行番号つきで確かめる
 
 ## セキュリティの検査
 

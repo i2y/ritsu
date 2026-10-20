@@ -737,7 +737,7 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | proto | `import` の行（行番号つき）、フィールドとメソッドの型 | 別の proto のファイルと、使っている要素 |
 | rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から | proto のファイルと、列挙と値、メッセージ、規則 |
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
-| dandori のワークフロー | dandori の `References` の `use rule`（呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7 | 規則、proto のファイルとサービスとメソッド、ワークフロー |
+| dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
 | sekisho のゲート（`.gate`） | sekisho の `References` の `use rule`・`use dates`・`use calendar`・`use gate`（行と、先のファイル）、`guards`（行と、守る操作の参照）。17 章 | 規則、日付のファイルとカレンダー、ほかの `.gate`、契約の操作 |
 | 手で書いた Cedar のスキーマ | sekisho の `References` の `guards`（action の `@guards` の参照と、action の行）。17 章 | 契約の操作 |
@@ -746,16 +746,16 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | OpenAPI と AsyncAPI の文書 | ファイルをまたぐ `$ref`（行と列）。AsyncAPI のチャネルを指すものは、その上の操作の `send` か `receive`。15.5 | 文書の要素（ファイルと JSON Pointer） |
 | ほかの言語のコード | sakai は読まない。7 章の設定で各ツールが確かめる | |
 
-ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
+ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、dandori の `use book` と帳簿の操作のタスクの `book`（18.2）、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。rulec の `import enum`（`enums` のファイル）と `range from koyomi`（日付のファイル）も、いまは数えていない。これは数えないと決めたものではなく、19 章の「見つけて直していないもの」に残した穴である。
 
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
 1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
 2. 先が、相手の公表された言語の要素で、関係がそれを許す（1.5 の表）。
 
-先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）とカレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate` も同じである（17 章）。
+先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）、ワークフローの `use dates`（19 章）、カレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate`（17 章）と、モジュールの `use rule`・`use dates`・`use module`（18 章）も同じである。
 
-診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
+診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、日付のファイル、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
 
 一つの参照に出す診断は一つで、次の順に決める。
 
@@ -810,7 +810,7 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 | rulec | `Items`（索引で） | 入力、出力、列挙と値の名前 | 語の `means` の先（E007） |
 | rulec | `References`（索引で） | `import proto`、`shape`、`apply`（3.3） | 境界を越える参照 |
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
-| dandori | `References`（索引で） | `use rule`、`use proto`、`connect`、`flow`、`implements`（4.7） | 境界を越える参照、E207〜E209 |
+| dandori | `References`（索引で） | `use rule`、`use dates`、`use proto`、`connect`、`flow`、`implements`（4.7、19 章） | 境界を越える参照、E207〜E209 |
 | sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
 | kaname | `References`（索引で） | `.kn` の `use rule`・`use dates`・`use module`（18 章） | 境界を越える参照 |
 | koyomi | `Dates`（`facts`） | 日付の名前と、使うカレンダーの名前とデータの範囲 | doc のコンテキストのページ（4.4） |
@@ -867,7 +867,7 @@ proto は sakai が直接読む（P2）。読み手は自分で書いた（依�
 
 ### 4.4 koyomi
 
-dates のファイルとカレンダーは、属し方と、参照のもと（`use calendar`）として現れる。カレンダーは公表された言語にできない（1.4）ので、カレンダーを境界の向こうから読めるのは、共有カーネルに並べたときだけである。11 章の例では、請求の支払条件と配送の出荷日が同じ `東京の営業日.cal` を読み、二つのコンテキストがそれを共有カーネルに並べる。
+dates のファイルとカレンダーは、属し方と、参照のもと（`use calendar`）として現れる。dates のファイルは、ワークフロー、ゲート、モジュールの `use dates` の先としても現れる（19 章、17 章、18 章）。カレンダーと dates のファイルは公表された言語にできない（1.4）ので、境界の向こうから読めるのは、共有カーネルに並べたときだけである。11 章の例では、請求の支払条件と配送の出荷日が同じ `東京の営業日.cal` を読み、二つのコンテキストがそれを共有カーネルに並べる。
 
 doc のコンテキストのページには、koyomi の口（`Dates`）の事実から、dates のファイルの日付の名前と、使うカレンダーの名前とデータの範囲（例では `東京の営業日`、1955-01-01..2027-12-31）を並べる。カレンダーのファイルそのものには `Dates` は答えない（日付のファイルではないので）。そこで、カレンダーのファイルには、地図の中でそれを `use calendar` で読む dates のファイルが聞いた、カレンダーの名前とデータの範囲を並べる。口は D の段階（ritsu の F.2）で `Suite` に足し、`ritsu sakai` は ritsu-project が koyomi のものを渡す。`check` は `Dates` に問わない。
 
@@ -886,12 +886,14 @@ dandori のワークフローは、境界を越える参照をいちばん多く
 | dandori が言う参照 | 先 | sakai の扱い |
 |---|---|---|
 | `use rule`（呼び方の語を添えて：`use rule`、`use rule … connect`、`use rule … lambda`、`use rule … local`） | 規則 | `connect` があれば、規則の Connect のサービスを呼ぶ参照で、先の規則が相手の公表された言語（`published language rulec.…`）に入っていること（E202）と、そのサービスが `open host service` に並ぶこと（E207）。`connect` が無ければ（同梱、Lambda、ローカル）、規則そのものを使う参照で、共有カーネルの中でなければ E202 |
+| `use dates`（呼び方の語を添えて：`use dates`、`use dates … lambda`、`use dates … local`） | 日付のファイル | 日付のファイルそのものを使う参照で、共有カーネルの中でなければ E202（関係が無ければ E201）。19 章 |
 | `use proto` | proto のファイル | proto の import と同じく、相手の公表された言語の proto であること |
 | `connect` | proto のサービスとメソッド | サービスを呼ぶ参照。サービスが相手の `open host service` に並ぶこと（E207） |
 | `flow` | 子の `.flow` | 下の決定（E209） |
 | `implements` | proto のサービス | 境界を越える参照ではない。そのワークフローを持つコンテキストの公表された言語の `open host service` に並ぶこと（E208） |
 | `use openapi` | OpenAPI の文書 | 文書がほかのコンテキストの成果物なら、その文書への参照として、ほかの参照と同じ決まりで確かめる（15.5）。文書が成果物でなければ、それを読むワークフローの一部（1.3） |
 | `use smithy` | 記述のファイル | 記述は、それを読むワークフローの一部（1.3）なので、参照として数えない |
+| `use book`、帳簿の操作のタスクの `book` | 帳簿、帳簿の振替 | 振替を帳簿に当てるのは、dandori が書く実装が呼ぶ帳簿のクライアントなので、参照として数えない（18.2） |
 
 11 章の例では、受注の `受注.flow` から五つの参照が境界を越え（3.1）、`implements 店.FulfillmentService` は受注の公表された言語 `shop.ordering.v1` の公開ホストサービスなので通る。
 
@@ -1578,7 +1580,7 @@ BoundedContext ordering {
 - `contexts[]`：名前、別名、版、ファイル、ファイルの SHA-256、説明、持ち主、`also`、`owns`（ディレクトリは `{"dir": "<パス>"}`、ファイルは `{"name": <参照>}`）、`published`（package、`from` に proto か規則の参照（Rust のクレートなら、その `Cargo.toml` の `file` の参照）、`services`、`generated`）、`terms`（名前、定義、`also`、`means` の参照、`as`）。
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の参照、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
 - `artifacts[]`：範囲の成果物の全部。参照と、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
-- `crossings[]`：境界を越える参照の全部。もとと先（2 章の JSON の形）、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
+- `crossings[]`：境界を越える参照の全部。もとと先（2 章の JSON の形）、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use dates`、`use dates … lambda` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
 - OpenAPI と AsyncAPI の文書（15.7）：`published` の `from` に文書を `openapi "…"`・`asyncapi "…"` の参照で並べ、文書のある塊にだけ `contracts`（ファイル、種類、仕様の版、題、文書の版）を足す。`owns` と `layer` と共有カーネルの文書の項も、その参照（`{"name": …}`）である。文書の要素も参照で書く（15.10）。`means` と `enums` の `from` と `to` は `openapi "…" schema Charge` のような参照になり、文書の `$ref` の `crossings` は、`$ref` の行き着く要素を `to` に、そこからたどる要素の全部を `elements` に入れる。どれも、文書の無い地図の api は変えない。
 - 確かめていない成果物を並べる `not_checked[]` は、ritsu の段階 E で消した。ritsu の口で一式を読むようになってから、いつも空の並びだったからである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないので、api を出すときには、確かめていない成果物は無い。言語をまたいで決められなかったこと（ritsu の口の答えの `Undecided`）は、sakai が尋ねる口（`Rules` の事実、索引の `References` と `Items`、`Books` の事実）には無く、言語の境目の検査（ritsu の DESIGN 7 章）の結果として `ritsu check` が言う（要約の境目の数と JSON の `borders`、`tool` が `ritsu` の診断）。実行のときにしか見えない呼び出し（3.7）は成果物ごとのものではなく、doc の「確かめていないこと」に書く（10 章）。いつも空のキーを残すと、読む人がそこに何かが入ると思って待つことになる。
 
@@ -2259,6 +2261,7 @@ kaname の `References`（索引で。4.1）が言う参照のうち、次のも
 | `.kn` の `use module` | ほかの `.kn` | 同じ |
 
 - 共有カーネルを求めるのは、モジュールから生成したコードが、規則と日付とほかのモジュールから生成したコードを、同じプロセスで呼ぶからである（kaname の DESIGN 10.5）。使うのは相手の内側で、ゲートの `use rule` と同じく、規則そのもの、日付のファイル、モジュールを使う。規則を相手の公表された言語（`published language rulec.…`）に入れても、それは Connect のサービスとして呼ぶ形（ワークフローの `use rule … connect`）のためなので、モジュールの `use rule` は通らない。E202 の注は、モジュールが使うのはそのものであることを言う。
+- `use dates` は、モジュール、ゲート（17.2）、ワークフロー（19 章）の三つで同じ決まりにした。どれも、境界の向こうの日付のファイルを、二つの共有カーネルに並べたときだけ読め、関係が無ければ E201、あれば E202 で、見出しはファイルと行のほかは同じ文になる。要約では、参照のもとの言語の数（`kaname N`、`sekisho N`、`dandori N`）に入る。
 - `use book` は数えない。モジュールは振替の値を組み立てて返すだけで、帳簿に当てるのはホストである（`ritsu gen` が書く当てる関数を、ホストが帳簿のクライアントで呼ぶ。kaname の DESIGN 10.6）。ワークフローの `use book`（dandori が書く実装が、`Transport` の `book` で帳簿のクライアントを呼ぶ。dandori の DESIGN 4.2）とゲートの `use book` も数えない（3.3、17.2）ので、三つの言語でそろう。帳簿をほかのコンテキストから使うのは、帳簿の後ろに立つサービスを通すときである（4.5）。
 
 例の支払いのモジュール（kaname の `examples/payout`）を、手数料の規則を持つ Fees と、モジュールと台帳を持つ Payouts の地図に置き、Fees が規則を公表された言語 `rulec.card_fee.v1` に入れ、Payouts をその順応者にしたときの、`ritsu sakai check market.ctx` の最初の行と注は次のとおりである。
@@ -2283,3 +2286,66 @@ kaname の `References`（索引で。4.1）が言う参照のうち、次のも
 
 - ritsu の `tests/kaname.rs`（`sakai_and_yuen_read_what_a_module_holds_and_names`）：上の地図で、モジュールの `use rule` が順応者からは E202（注に、使うのはそのものであること）、共有カーネルからなら通って要約に `kaname 1` と数え、台帳を Fees に移しても変わらず、関係を消すと E201 になること。
 - kaname の `References` は、`ritsu sakai` と `ritsu check` では ritsu-project の索引が持つ。sakai のテストは kaname を持たない（sakai の dev-dependency に kaname は無い）ので、kaname の参照の検査は ritsu の側で確かめる。sakai のクレートのバイナリは kaname を持たないので、地図に `.kn` があれば、ほかの言語と同じく、ツール名ごとに一つの E104 で止まる（4.1。読む言語の並びは `Suite::READ` の rulec、koyomi、dandori、sekisho、cedar、kaname）。
+
+## 19. ワークフローの `use dates`（2026-10-19）
+
+dandori のワークフローが koyomi の日付のファイルを読む `use dates` を、ゲート（17 章）とモジュール（18 章）の `use dates` と同じく、境界を越える参照として確かめる。
+
+**きっかけ**：kaname のモジュールを地図の成果物にしたとき（18 章）、ゲートとモジュールの `use dates` は共有カーネルを求める参照として数えるのに、ワークフローの `use dates` は数えていないことが分かった。ワークフローがほかのコンテキストの日付のファイルを読んでも、地図はそれを確かめず、関係の無い相手のものでも通していた。同じ日付のファイルを、ゲートかモジュールから読めば E201 か E202 になり、ワークフローから読むと何も言わない。根の DESIGN 6.4 と README の「sakai はすべての言語の参照を確かめる」も、ここで言いすぎになっていた。
+
+**原因**：dandori の `References` は、日付のファイルと帳簿を足したとき（dandori の DESIGN 1.16）から、`use dates` を呼び方の語つきで出している（`use dates`、`use dates … lambda`、`use dates … local`、`use dates … lambda, local`）。sakai の `suite_crossings`（`src/refs.rs`）は、dandori の参照のうち `use rule`、`use proto`、`connect`、`flow`、`use openapi` だけを参照の種類に読み替え、ほかを黙って飛ばしていた。3.3 の数えない参照の並びにも `use dates` は無く、数えないと決めたものでもなかった。
+
+**決定**：ワークフローの `use dates` を、参照の種類 `Kind::FlowDates`（`src/refs.rs`）として数え、ゲートとモジュールの `use dates` と同じ決まりで確かめる。境界の向こうの日付のファイルは、二つの共有カーネルに並べたときだけ読める。関係が無ければ E201、関係があっても共有カーネルに無ければ E202（パートナーシップでも同じ）、別々の道なら E206、地図の範囲の外なら E103 である。
+
+- 理由：ワークフローから生成したコードは、日付のファイルの日付をアクティビティにして、koyomi が日付のファイルから生成したコードを呼ぶ（dandori の DESIGN 1.16）。同梱しても、Lambda の関数（`lambda`）やローカルアクティビティ（`local`）にしても、使うのは日付のファイルそのもので、相手の内側である。日付のファイルは公表された言語にできない（1.4）ので、相手の公表された言語を通して読む形も無い。ゲートとモジュールが日付のファイルを共有カーネルからしか読めないのも同じ理由で、ワークフローが規則を同梱する `use rule` が E202 になるのとも合う。
+- 参照の読み方（`via`）は、dandori が言う語のままにする。ワークフローの `use rule` と同じである。
+- 要約では、ワークフローの `use dates` を `dandori N` に数える。ゲートのものは `sekisho N`、モジュールのものは `kaname N` で、参照のもとの言語ごとに数えるのは、ほかの参照と同じである（3.1）。
+- E202 の注は、ワークフローが使うのは日付のファイルそのものであることと、日付のファイルは公表された言語にできないので共有カーネルに並べたときだけ読めることを言う。後半の文は、ゲートの `use dates` の注と同じにした。見出しは、三つの言語で、ファイルと行のほかは同じ文になる。
+- `use book` と、帳簿の操作のタスクの `book` は、これまでどおり数えない（18.2）。
+
+変異 `E202_a_workflow_reads_dates_inside_another_context`（`examples/shop` の受注に、配送の出荷日を読むワークフローを置いたもの）の英語の出力（`tests/golden/`）：
+
+```
+error[E202]: ordering/ship_notice.flow:4:1: The file ordering/ship_notice.flow of Ordering refers to delivery/ship_date.cal (use dates), which is inside Delivery
+     4 | use dates shipping from "../delivery/ship_date.cal"
+  = The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside Delivery. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.
+  involved:
+      Ordering  ordering/ship_notice.flow:4      use dates "../delivery/ship_date.cal"
+      Delivery  koyomi "delivery/ship_date.cal"  a part of the inside of Delivery
+```
+
+日本語の版の変異 `E202_境界の向こうの日付を読むワークフロー`（`examples/shop.ja`）の日本語の出力：
+
+```
+エラー[E202]: ordering/出荷の知らせ.flow:4:1: 「受注」の ordering/出荷の知らせ.flow が、「配送」の内側の delivery/出荷日.cal を参照しています（use dates）
+     4 | use dates 出荷 from "../delivery/出荷日.cal"
+  = ワークフローから生成したコードは、日付のファイルから生成したコードを、同梱して呼ぶか Lambda の関数として呼びます。使うのは日付のファイルそのもの（「配送」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。
+  関わるもの:
+      受注  ordering/出荷の知らせ.flow:4  use dates "../delivery/出荷日.cal"
+      配送  koyomi "delivery/出荷日.cal"  「配送」の内側のもの
+```
+
+**捨てたもの**：
+
+- 関係があれば通すこと（たとえば、パートナーシップなら通す）。日付のファイルは、ワークフローから生成したコードに同梱するか Lambda の関数にして、ワークフローの中の計算に使うもので、規則を同梱する `use rule` と同じ使い方である。その `use rule` はパートナーシップでも E202 で（3.3）、ゲートとモジュールの `use dates` もそうなので、それにそろえた。パートナーシップで相手の内側を使えるのは、子のワークフローだけである（4.7）。
+- 日付のファイルを公表された言語に並べられるようにすること。公表された言語は、相手が呼ぶ形を決める契約（proto の package、規則の Connect のサービス、文書、クレート）で、日付のファイルには相手から呼ぶ形が無い。1.4 の決まりを崩すことになる。
+- 数えない参照として 3.3 に並べ、決めごとにすること。ゲートとモジュールの `use dates` を数えるのと食い違い、同じ日付のファイルを読んでも、読むのがどの言語かで地図の答えが変わる。
+
+**変わること**：
+
+- 前は通っていた地図が、新しく落ちうる。ワークフローが `use dates` で、共有カーネルに並べていない境界の向こうの日付のファイルを読んでいる地図である。関係が無ければ E201、関係があれば E202、別々の道なら E206 になる。地図の範囲の外の日付のファイルを読んでいれば E103 になる（ワークフローの `use rule` と同じ）。
+- 共有カーネルを通るワークフローの `use dates` は、要約の `dandori N`、`api` の `crossings`（`via` は `use dates` や `use dates … lambda`、`allowed_by` は `shared_kernel`）、`doc` の関係の行（その関係を通る参照）に出る。
+- ワークフローが境界の向こうの日付のファイルを読まない地図では、出力は一字も変わらない。
+- 台帳の E202 の「出るとき」の例に、日付のファイルを足した（`sakai explain E202`、`docs/codes.md`、`docs/codes.ja.md`、スキルのコピー）。ゲートとモジュールの `use dates` を数えるようになってからも、例に入っていなかった。
+
+**確かめたこと**：
+
+- `tests/dates.rs`：英語の例 `examples/shop` と、日本語の名前の `examples/shop.ja` の両方で、次の五つ。受注のワークフローが配送の出荷日を読むと E202 になる（二つはパートナーシップ。注に、使うのは日付のファイルそのものであること）。配送のワークフローが請求の支払条件を Lambda の関数で読むと E201 になる（請求は配送の顧客で、向きが逆であることを注に言う）。支払条件を請求と配送の共有カーネルに並べると通り、要約が `80 artifacts, each in one context; 10 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6)` で終わり、`api` のその参照は `via` が `use dates … lambda`、`allowed_by` が `shared_kernel` になる。請求のワークフローが自分の支払条件を読んでも、何も言わず、数えない。地図の範囲の外の日付のファイルを読むと E103 になる。
+- 上の変異二つ。golden は英語と日本語。
+- ritsu の `tests/sakai.rs`：同じ日付のファイルを、ワークフロー、ゲート、モジュールの三つが読むとき、E201 も E202 も、三つの見出しがファイルと行のほかは同じ文になり、注はそれぞれの言語の読み方を言う。共有カーネルに並べると三つとも通り、要約は `dandori 6, sekisho 1, kaname 1` と数え、`api` の `via` はどれも `use dates` になる。英語と日本語の名前の例の両方で確かめる。kaname までつなぐのは ritsu のテストだけなので、ここに置いた（18.4）。
+- 替える前（0.32.0）と後の突き合わせ：sakai の例（四つ）、テストの地図（七つ）、変異（170）、ritsu のテストのプロジェクトの地図（`shop`、`通販`）、サイトの試すページの例（二つ）の `check`（英語と日本語、それぞれ JSON も）、`api`、`doc`（Markdown の英語と日本語、HTML）と、テストのプロジェクト四つの `ritsu check`、根の `ritsu check ritsu.ctx` と `ritsu sakai check ritsu.ctx`（英語と日本語、JSON も）と `api`。違ったのは、根の地図の `api` の、この変更で直した sakai のソース二つ（`src/refs.rs`、`src/codes.rs`）の SHA-256 だけだった。どの地図にも、境界の向こうの日付のファイルを読むワークフローは無い。リポジトリの地図（`ritsu.ctx`）の範囲には `.flow` が無く（dandori の例とテストは `except` の中にある）、新しく言われるものは無かった。上の変異とテストの場面は、替える前は通り（ゲートとモジュールの `use dates` だけが言われ）、替えた後はワークフローのものも同じに言われる。
+
+**見つけて直していないもの**：
+
+- rulec の `import enum`（`enums` のファイルの列挙を丸ごと読む）と `range from koyomi`（規則の日付の入力の範囲を、koyomi の日付がとる日にする）。rulec の `References` はどちらも出している（先は `rulec "<enums のファイル>" enum <名前>` と `koyomi "<日付のファイル>" date <日付>`）が、sakai は参照の種類に読み替えず、境界を越える参照として数えない。関係の無いコンテキストの `enums` のファイルと日付のファイルを、規則がこの二つで読む地図は `no crossing to check` で通る（替えた後のバイナリで確かめた）。規則の生成したコードは `enums` のファイルから生成したモジュールを読み込み、`range from koyomi` は日付のファイルがとる日を規則の入力の範囲にするので、どちらも相手の内側を使う参照である。ワークフローの `use dates` と同じく共有カーネルを求めるかは、規則の参照の決まりを変えることなので、この変更には入れていない。3.3 には、決めたことではなく残した穴として書いた。
+- 根の DESIGN 6.4、README（英日）、サイトの頭のページ（英日）は、この二つをまだ数えていないと書いている。

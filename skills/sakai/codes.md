@@ -1777,7 +1777,7 @@ See also: [E202](#e202), [E206](#e206)
 
 ## E202 — A reference to the inside of another context
 
-**When**: What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule or a calendar itself.
+**When**: What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule, a dates file or a calendar itself.
 
 **Fix**: Refer through the other context's published language, or list it in a shared kernel of the two.
 

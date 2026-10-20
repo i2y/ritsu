@@ -1,12 +1,12 @@
 //! The references that cross a boundary (DESIGN 3.3; PLAN B.7, C.2–C.4). They are the imports of
 //! the `.proto` files, and what the other languages say their artifacts name: a rule's `import
-//! proto` and `shape` (rulec's `Rules` and `References`), a calendar's `use calendar` (koyomi's
-//! `References`), and a workflow's rules, APIs, methods and child workflows (dandori's
-//! `References`), and the dependencies of Rust's crates on each other (the lines of their
-//! `Cargo.toml`, as Cargo says them; DESIGN 7.7). A crossing is allowed by a shared kernel both
-//! sides write, or by a relationship that lets the one side reach the other's published language
-//! (DESIGN 1.5's table); anything else is E201 to E206, or for a workflow E207 to E209, at the
-//! line of the reference.
+//! proto`, `shape` and `apply` (rulec's `Rules` and `References`), a calendar's `use calendar`
+//! (koyomi's `References`), a workflow's rules, dates files, APIs, methods and child workflows
+//! (dandori's `References`), what a gate and a module read (sekisho's and kaname's), and the
+//! dependencies of Rust's crates on each other (the lines of their `Cargo.toml`, as Cargo says
+//! them; DESIGN 7.7). A crossing is allowed by a shared kernel both sides write, or by a
+//! relationship that lets the one side reach the other's published language (DESIGN 1.5's table);
+//! anything else is E201 to E206, or for a workflow E207 to E209, at the line of the reference.
 
 use crate::ast::Role;
 use crate::diag::{self, Diag, DiagExt, Ref};
@@ -46,6 +46,11 @@ pub enum Kind {
     /// connect`, `use rule … lambda, local`): called as the rule's Connect service when `connect`
     /// is among them, else the rule's own code (bundled, or deployed as a function).
     FlowRule { connect: bool, how: String },
+    /// A workflow's `use dates`, in the words dandori says it with (`use dates`, `use dates …
+    /// lambda`, `use dates … local`): the code a workflow is made into calls the code made of the
+    /// dates file, bundled or deployed as a function, so it is the dates file itself, as a gate's
+    /// and a module's `use dates` are (DESIGN 19).
+    FlowDates { how: String },
     /// A workflow's `use proto`: the `.proto` its tasks call the services of.
     FlowProto,
     /// A task's `connect`: a method of a service of a `.proto`.
@@ -88,6 +93,7 @@ impl Kind {
             Kind::RuleApply => "apply".into(),
             Kind::CalendarUse => "use calendar".into(),
             Kind::FlowRule { how, .. } => how.clone(),
+            Kind::FlowDates { how } => how.clone(),
             Kind::FlowProto => "use proto".into(),
             Kind::FlowConnect => "connect".into(),
             Kind::FlowChild => "flow".into(),
@@ -242,8 +248,10 @@ pub fn proto_crossings(ps: &Protos, arts: &[Artifact]) -> Vec<Crossing> {
 
 /// What the other languages say their artifacts name, as crossings (DESIGN 3.3): a rule's `import
 /// proto` (the enum, its values among what crosses), `shape` (the message, and what it reaches)
-/// and `apply` (another rule), a calendar's `use calendar`, and a workflow's rules, `.proto`
-/// files, methods and child workflows. A reference to a file outside the map's scope is E103.
+/// and `apply` (another rule), a calendar's `use calendar`, a workflow's rules, dates files,
+/// `.proto` files, methods and child workflows, the rules, dates files, calendars and gates a gate
+/// reads and the operations it guards, and the rules, dates files and modules a module reads. A
+/// reference to a file outside the map's scope is E103.
 /// What no context owns is part of the artifact that reads it (DESIGN 1.3): a JSON Schema, a
 /// source's copy, a table of holidays, an OpenAPI or Smithy description. A workflow's `implements`
 /// is no crossing: it is held to the workflow's own published language (E208) by [`implements`].
@@ -261,6 +269,9 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 (Tool::Rulec, "apply") => Kind::RuleApply,
                 (Tool::Koyomi, "use calendar") => Kind::CalendarUse,
                 (Tool::Dandori, h) if h.starts_with("use rule") => Kind::FlowRule { connect: h.contains("connect"), how: h.to_string() },
+                // a dates file a workflow reads, bundled or as a function: the file itself, as a
+                // gate's and a module's (DESIGN 19)
+                (Tool::Dandori, h) if h.starts_with("use dates") => Kind::FlowDates { how: h.to_string() },
                 (Tool::Dandori, "use proto") => Kind::FlowProto,
                 (Tool::Dandori, "connect") => Kind::FlowConnect,
                 (Tool::Dandori, "flow") => Kind::FlowChild,
@@ -579,7 +590,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         }
         let pkg = match &c.kind {
             Kind::FlowRule { connect: true, .. } => m.contexts[y].published.iter().find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q)).map(|pl| pl.package.clone()),
-            Kind::FlowRule { connect: false, .. } | Kind::RuleApply | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
+            Kind::FlowRule { connect: false, .. } | Kind::FlowDates { .. } | Kind::RuleApply | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
             // the operation a gate guards, of a document or a `.proto`
@@ -690,6 +701,10 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::FlowRule { connect: true, .. } => tr!(
                     "{sq} は「{yn}」の公表された言語に入っていません。規則を Connect で呼ぶには、「{yn}」がその規則を公表された言語（`published language rulec.…`）に入れる必要があります。",
                     "The rule {sq} is in no published language of {yn}; to call it by Connect, {yn} puts it in a published language (`published language rulec.…`)."
+                ),
+                Kind::FlowDates { .. } => tr!(
+                    "ワークフローから生成したコードは、日付のファイルから生成したコードを、同梱して呼ぶか Lambda の関数として呼びます。使うのは日付のファイルそのもの（「{yn}」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
+                    "The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside {yn}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel."
                 ),
                 Kind::CalendarUse => tr!(
                     "カレンダーは公表された言語にできません。境界の向こうのカレンダーを読めるのは、二つの共有カーネルに並べたときだけです。",

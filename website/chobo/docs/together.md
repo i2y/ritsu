@@ -250,8 +250,10 @@ the link is no longer what was reviewed.
 ## The map of contexts
 
 The shop's map gives the warehouse's context the directory that holds the book
-(`owns dir "../warehouse"`), and sakai checks every reference that crosses from one context into
-another, in the files of every language, the references to a book's transfers among them.
+(`owns dir "../warehouse"`), and sakai checks the references that cross from one context into
+another, in the files of every language. A `use book` and a transfer task are not among them: the
+host's client of the book applies a transfer, and another context uses a book through the service
+in front of it.
 
 The shop opens in the browser, with the book among its files:
 [the shop's book in the playground](../playground/#project=shop&file=warehouse/inventory.book).

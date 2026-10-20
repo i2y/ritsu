@@ -1,0 +1,15 @@
+workflow 出荷の知らせ v1
+description "注文が出荷される日を、配送の出荷日のとおりにお客さまに知らせる"
+
+use dates 出荷 from "../delivery/出荷日.cal"
+
+inputs
+  注文   : string
+  受注日 : date
+
+task 知らせる(注文: string, 日: date)
+  key
+
+flow
+  let 出す日 = 出荷.出荷日(受注日: 受注日)
+  知らせる(注文: 注文, 日: 出す日.day)
