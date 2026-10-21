@@ -1622,11 +1622,12 @@ fn callee_ty(cal: &Callee, input: &str) -> Option<Ty> {
 /// range lets in (every value of its enum without one), every value of a field of an element (whose
 /// enum takes no range, E069), what the rows of the tables that define it write (a value written,
 /// or what a name written can hold, narrowed by the row's own cell for it, as `Checked::row_writes`
-/// narrows it), and what a definition that only names another value names — which is what an output
-/// another `apply` brought in is. `assumed` are the values it is taken to have only because an
-/// expression decides it (a `max`, a `min`, a fold): check does not work out which values of an enum
-/// an expression comes to, so it is every value of the enum, the safe side, as a number whose
-/// interval is not known; `exprs` names the definitions they come from.
+/// narrows it), what a definition that only names another value names — which is what an output
+/// another `apply` brought in is — and what a `max` or a `min` of two of them comes to (§15.256).
+/// `assumed` are the values it is taken to have only because a fold or another expression decides
+/// it: check does not work out which values of an enum those come to, so it is every value of the
+/// enum, the safe side, as a number whose interval is not known; `exprs` names the definitions they
+/// come from.
 #[derive(Default, Clone)]
 struct Held {
     known: Vec<String>,
@@ -1731,7 +1732,40 @@ impl<'a> Holds<'a> {
             _ => None,
         });
         match expr {
-            Some(Expr::Name(w, _)) if c.ty_of(w).is_some() => self.of(w),
+            Some(e) => self.of_expr(e, name),
+            None => self.computed(name),
+        }
+    }
+
+    /// What an expression that decides `name` can come to (§15.256): a name what it holds, and `max`
+    /// and `min` one of their two arguments — read as a number's
+    /// interval is, from the ends of what the arguments hold in the enum's order: `max` comes to
+    /// no value before the later of the two first values nor after the later of the two last ones,
+    /// and `min` to none before the earlier of the first ones nor after the earlier of the last
+    /// ones. Any other expression is any value of the enum, as check does not work it out.
+    fn of_expr(&mut self, e: &Expr, name: &str) -> Held {
+        let order = self.every(name);
+        match e {
+            Expr::Name(w, _) if self.c.ty_of(w).is_some() => self.of(w),
+            Expr::Call(fun, args, _) if (fun == crate::kw::MAX || fun == crate::kw::MIN) && args.len() == 2 => {
+                let (a, b) = (self.of_expr(&args[0], name), self.of_expr(&args[1], name));
+                let at = |v: &String| order.iter().position(|x| x == v);
+                let ends = |h: &Held| {
+                    let ps: Vec<usize> = h.known.iter().chain(&h.assumed).filter_map(at).collect();
+                    Some((*ps.iter().min()?, *ps.iter().max()?))
+                };
+                let (Some((alo, ahi)), Some((blo, bhi))) = (ends(&a), ends(&b)) else { return self.computed(name) };
+                let (lo, hi) = if fun == crate::kw::MAX { (alo.max(blo), ahi.max(bhi)) } else { (alo.min(blo), ahi.min(bhi)) };
+                let inside = |v: &String| at(v).is_some_and(|p| lo <= p && p <= hi);
+                let mut out = Held::default();
+                add_new(&mut out.known, a.known.iter().chain(&b.known).filter(|v| inside(v)).cloned());
+                let assumed: Vec<String> = a.assumed.iter().chain(&b.assumed).filter(|v| inside(v) && !out.known.contains(v)).cloned().collect();
+                if !assumed.is_empty() {
+                    add_new(&mut out.assumed, assumed);
+                    add_new(&mut out.exprs, a.exprs.into_iter().chain(b.exprs));
+                }
+                out
+            }
             _ => self.computed(name),
         }
     }
@@ -1916,8 +1950,8 @@ fn enum_outside(f: &RuleFile, c: &Checked, a: &ApplyDecl, cal: &Callee, b: &Bind
             .at(at.to_string())
             .mark(b.span.clone(), "")
             .note(tr!(
-                "元の規則の `{}` は、range {} の中で検査されています。{exprs} は式で決まる値で、check は式がとる列挙の値を求めないので、{values} にもなりうるとして読みます。",
-                "The callee's `{}` was checked over range {}. {exprs} {is} decided by an expression, and check does not work out which values of an enum an expression comes to, so {one} that can be {values} too.",
+                "元の規則の `{}` は、range {} の中で検査されています。{exprs} は `fold` の答えか式で決まる値で、check はそれがとる列挙の値を求めないので、{values} にもなりうるとして読みます。",
+                "The callee's `{}` was checked over range {}. {exprs} {is} decided by a fold or an expression, and check does not work out which values of an enum those come to, so {one} that can be {values} too.",
                 cin.name,
                 range_text(r)
             ))

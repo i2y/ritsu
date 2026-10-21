@@ -13,7 +13,11 @@
 //! which passes a tier inside the range in each way a binding can — an input held to the same range,
 //! a value, a table's output, a level read through `with`, a definition that names an input — and
 //! passes; and mutants that each pass one value the range does not let in, every one of which passed
-//! check or stopped at E101 before. What `rulec check` prints for a mutant, in English and in
+//! check or stopped at E101 before. A `max` or a `min` of two tiers is read from what the two can
+//! take (§15.256): the later of two tiers inside the range passes, and so does the earlier of one
+//! inside it and one that may be platinum, while the later of those two is E043 with platinum as
+//! the example; a tier a fold answers is still one whose values are not known. What `rulec check`
+//! prints for a mutant, in English and in
 //! Japanese, is its golden file in `tests/golden/apply_enum` (`RULEC_BLESS=1 cargo test --test
 //! apply_enum` writes them again).
 //!
@@ -32,8 +36,9 @@ fn root() -> PathBuf {
 }
 
 /// The mutants: the English rule, its Japanese version, and what each English report says — the
-/// value outside the range, as the example, or that what is passed is not known. Each passed check
-/// before, but the second, which stopped at E101.
+/// value outside the range, as the example, or that what is passed is not known. Each of the first
+/// five passed check before, but the second, which stopped at E101; the last two said before that
+/// the values were not known.
 const MUTANTS: &[(&str, &str, &str, &str)] = &[
     // An input with no range, to the callee whose `>=silver` row takes platinum too
     ("E043_a_tier_with_no_range", "E043_範囲の無い段階", "For example campaign = platinum is outside range >=basic <=gold", "For example キャンペーン = プラチナ is outside range >=一般 <=ゴールド"),
@@ -43,15 +48,25 @@ const MUTANTS: &[(&str, &str, &str, &str)] = &[
     ("E043_a_literal_past_the_range", "E043_範囲の外のリテラル", "what is passed: platinum", "what is passed: プラチナ"),
     // The output of a table that writes platinum
     ("E043_a_table_that_writes_platinum", "E043_プラチナを書く表", "what is passed: one of silver, gold, platinum", "what is passed: one of シルバー, ゴールド, プラチナ"),
-    // The later of two tiers inside the range: an expression, whose values check does not work out
-    ("E043_the_later_of_two_tiers", "E043_二つの段階の後のほう", "The values of what is passed to `campaign` are not known", "The values of what is passed to `キャンペーン` are not known"),
     // A level read through `with` as platinum
     ("E043_with_reads_a_level_as_platinum", "E043_with_でプラチナに読み替える", "For example campaign = platinum is outside range >=basic <=gold", "For example キャンペーン = プラチナ is outside range >=一般 <=ゴールド"),
+    // The later of a tier inside the range and one that may be platinum (§15.256)
+    ("E043_the_later_of_a_tier_and_any_member", "E043_段階といずれかの会員の後のほう", "For example campaign = platinum is outside range >=basic <=gold", "For example キャンペーン = プラチナ is outside range >=一般 <=ゴールド"),
+    // What a fold answers, whose values check does not work out
+    ("E043_the_tier_a_fold_answers", "E043_fold_が答える段階", "The values of what is passed to `campaign` are not known", "The values of what is passed to `キャンペーン` are not known"),
 ];
 
-/// The rules that pass, each with its Japanese version: the two callees, and the rule that passes a
-/// tier inside the range in every way a binding can.
-const PASSING: [(&str, &str); 3] = [("campaign_credit", "キャンペーンの値引き"), ("campaign_points", "キャンペーンのポイント"), ("order_credits", "注文ごとの値引き")];
+/// The rules that pass, each with its Japanese version: the two callees, the rule that passes a
+/// tier inside the range in every way a binding can, and the `max` and the `min` that come to a
+/// tier inside it (§15.256). The first of those two was a mutant before, whose values were not
+/// known, and keeps its name.
+const PASSING: [(&str, &str); 5] = [
+    ("campaign_credit", "キャンペーンの値引き"),
+    ("campaign_points", "キャンペーンのポイント"),
+    ("order_credits", "注文ごとの値引き"),
+    ("E043_the_later_of_two_tiers", "E043_二つの段階の後のほう"),
+    ("earlier_of_a_tier_and_any_member", "段階といずれかの会員の前のほう"),
+];
 
 fn source(stem: &str) -> (String, String) {
     let rel = format!("tests/apply_enum/{stem}.rule");
@@ -186,6 +201,32 @@ fn an_output_another_apply_brought_in_is_what_its_rows_write() {
         assert_eq!(codes, want, "{:?}", ds.iter().map(|d| (d.code, d.title.clone(), d.notes.clone())).collect::<Vec<_>>());
         if !want.is_empty() {
             assert!(ds[0].notes[0].starts_with("For example campaign = platinum is outside range >=basic <=gold"), "{:?}", ds[0].notes);
+        }
+    }
+}
+
+/// A `max` and a `min` of numbers are read from the ranges of their two arguments as well, the way
+/// the interval of any value is (§15.195): the larger of 0..50 and 10..60 is 10..60, inside the
+/// callee's 0..100, and passes; the larger of 0..50 and 0..200 can be 200, and is E043 with it as
+/// the example; the smaller of those two is 0..50, and passes.
+#[test]
+fn max_and_min_of_numbers_are_read_from_their_arguments() {
+    let callee = "rule quantity_fee v1\ndescription \"A fee for a quantity\"\n\ninputs\n  quantity : number  range >=0 <=100\n\noutputs\n  fee : money[USD]  round down(1USD)\n\ntable fee_by_quantity\npolicy unique\n| quantity | -> fee |\n| <10      | 5USD   |\n| >=10     | 0USD   |\n";
+    for (expr, want) in [("max(a, b)", Vec::<&str>::new()), ("max(a, c)", vec!["E043"]), ("min(a, c)", vec![])] {
+        let tmp = TempDir::new("apply-enum-numbers");
+        std::fs::write(tmp.path().join("quantity_fee.rule"), callee).unwrap();
+        let meaning = rulec::link::pin::meaning(callee);
+        let src = format!(
+            "rule larger v1\ndescription \"The fee at {expr}\"\n\ninputs\n  a : number  range >=0 <=50\n  b : number  range >=10 <=60\n  c : number  range >=0 <=200\n\noutputs\n  fee : money[USD]  round down(1USD)\n\ndefine m : number = {expr}\n\napply charged = \"quantity_fee.rule\" meaning:{meaning}\n  quantity = m\n"
+        );
+        let rel = tmp.path().join("larger.rule").to_string_lossy().into_owned();
+        let ds = i18n::with(Lang::En, || rulec::check_source(&src, &rel));
+        let codes: Vec<&str> = ds.iter().map(|d| d.code).collect();
+        // `b` is used only by the first expression: W111 says so of the others, and is no part of this.
+        let errors: Vec<&str> = codes.into_iter().filter(|c| c.starts_with('E')).collect();
+        assert_eq!(errors, want, "{expr}: {:?}", ds.iter().map(|d| (d.code, d.title.clone(), d.notes.clone())).collect::<Vec<_>>());
+        if !want.is_empty() {
+            assert!(ds.iter().any(|d| d.notes.first().is_some_and(|n| n.starts_with("For example quantity = 200 is outside range >=0 <=100"))), "{expr}");
         }
     }
 }

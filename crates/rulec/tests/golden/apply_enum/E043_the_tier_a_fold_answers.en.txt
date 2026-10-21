@@ -1,0 +1,9 @@
+error[E043]: The values of what is passed to `campaign` are not known
+  --> tests/apply_enum/E043_the_tier_a_fold_answers.rule:29 apply lifted
+   |
+29 |   campaign = chosen
+   |   ^^^^^^^^^^^^^^^^^
+   |
+ The callee's `campaign` was checked over range >=basic <=gold. `chosen` is decided by a fold or an expression, and check does not work out which values of an enum those come to, so it is read as one that can be platinum too.
+ Decide the value in a table that writes only values inside the range and pass that, or pass an input that declares the same range.
+

@@ -1,0 +1,17 @@
+rule later_of_a_tier_and_any_member v1
+description "The credit at the later of the campaign's tier, held to the campaign's range, and the member's, which may be platinum"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign_tier : tier  range >=basic <=gold
+  member_tier : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The later of the two is platinum where the member's is.
+define lift : tier = max(campaign_tier, member_tier)
+
+apply lifted = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = lift

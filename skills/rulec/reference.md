@@ -2203,10 +2203,14 @@ value may be absent and the callee's input takes no absent value (E042 elsewhere
 the callee holds to a range of an ordered enum (`campaign : tier  range >=basic <=gold`), every
 value the binding can pass, read as the callee's through `with`, has to be one the range lets in:
 an input can pass its range (every value of its enum without one), a literal its value, a table's
-output what its rows write (what a name can take, for a row that writes one), and a definition
-that only names another value what that value can; a value an expression decides (`max`, `min`)
-is taken to be any value of its enum, since check does not work out which ones an expression
-comes to, and E043 then says what is passed is not known. `except` leaves a table, a clause or
+output what its rows write (what a name can take, for a row that writes one), a definition
+that only names another value what that value can, and a `max` or a `min` of two values what the
+two can take that it can come to — read as a number's interval is, from the two ends: a `max`
+comes to nothing before the later of their first values, a `min` to nothing after the earlier of
+their last ones (`min(campaign_tier, member_tier)` stays inside `>=basic <=gold` where
+`campaign_tier` does). A value a fold or another expression decides is taken to be any value of
+its enum, since check does not work out which ones those come to, and E043 then says what is
+passed is not known. `except` leaves a table, a clause or
 a labelled row (`table:row`) of the callee out; a hole that leaves in the main rule is this
 rule's E101 to fill. The callee's outputs become definitions of this rule, under their
 own names or renamed with `->`, rounded as the callee declares and then, if one is an output

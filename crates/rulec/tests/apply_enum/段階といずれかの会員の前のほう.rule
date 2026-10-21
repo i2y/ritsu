@@ -1,0 +1,17 @@
+rule 段階といずれかの会員の前のほう(earlier_of_a_tier_and_any_member) v1
+description "キャンペーンの範囲に収まるキャンペーンの段階と、プラチナのこともある会員の段階のうち、前のほうの値引き"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  キャンペーン段階(campaign_tier) : 段階  range >=一般 <=ゴールド
+  会員段階(member_tier) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 前のほうはキャンペーン段階より後にならないので、ゴールドを超えない。
+define 引き下げ段階(lower) : 段階 = min(キャンペーン段階, 会員段階)
+
+apply 引き下げ(lowered) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = 引き下げ段階

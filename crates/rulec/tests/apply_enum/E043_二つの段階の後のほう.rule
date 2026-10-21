@@ -10,7 +10,7 @@ inputs
 outputs
   値引き(credit) : money[USD]  round down(1USD)
 
-# 範囲の中の二つの段階の後のほうは範囲の中にあるが、check はそれを求めない。
+# 範囲の中の二つの段階の後のほうは、範囲の中にある。`max` の答えは二つの引数のどちらかである。
 define 引き上げ段階(lift) : 段階 = max(キャンペーン段階, 会員段階)
 
 apply 引き上げ(lifted) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc

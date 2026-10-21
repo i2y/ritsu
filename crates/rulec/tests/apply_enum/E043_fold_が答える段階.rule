@@ -1,0 +1,29 @@
+rule fold_が答える段階(tier_a_fold_answers) v1
+description "注文の明細のうち、印の付いた最初の明細の段階の値引き。その段階をキャンペーンに渡す"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+enum 印(mark) = 飛ばす(skip) | 選ぶ(pick)
+
+# 注文の明細の一件
+elements 明細(lines)
+  明細の段階(level) : 段階
+  印あり(flagged)   : bool
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 印ごとの扱い(mark_by_flag)
+policy unique
+| 印あり | -> 扱い(verdict) : 印 |
+| true   | 選ぶ                  |
+| false  | 飛ばす                |
+
+# `fold` の答え。check はその値を求めない
+fold 扱い over 明細 -> 選んだ段階(chosen) : 段階
+  選ぶ      -> take_first 明細の段階
+  飛ばす    -> next
+  empty     -> 一般
+  exhausted -> held
+
+apply 引き上げ(lifted) = "キャンペーンの値引き.rule" meaning:e3f3f3218fbb57dc
+  キャンペーン = 選んだ段階

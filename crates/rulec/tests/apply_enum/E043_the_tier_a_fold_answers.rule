@@ -1,0 +1,29 @@
+rule tier_a_fold_answers v1
+description "The credit at the tier of the first line of an order that is flagged, passed to the campaign"
+
+enum tier = basic < silver < gold < platinum
+enum mark = skip | pick
+
+# One line of an order
+elements lines
+  level   : tier
+  flagged : bool
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table mark_by_flag
+policy unique
+| flagged | -> verdict : mark |
+| true    | pick              |
+| false   | skip              |
+
+# What a fold answers, which check does not work out the values of
+fold verdict over lines -> chosen : tier
+  pick      -> take_first level
+  skip      -> next
+  empty     -> basic
+  exhausted -> held
+
+apply lifted = "campaign_credit.rule" meaning:f32dc45b0de51c57
+  campaign = chosen

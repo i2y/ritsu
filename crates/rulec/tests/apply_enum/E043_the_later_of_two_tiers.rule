@@ -10,7 +10,7 @@ inputs
 outputs
   credit : money[USD]  round down(1USD)
 
-# The later of two tiers inside the range is inside it, and check does not work that out.
+# The later of two tiers inside the range is inside it: `max` comes to one of its two arguments.
 define lift : tier = max(campaign_tier, member_tier)
 
 apply lifted = "campaign_credit.rule" meaning:f32dc45b0de51c57

@@ -1,9 +1,0 @@
-エラー[E043]: `campaign` に渡す値の取りうる値が分かりません
-  --> tests/apply_enum/E043_the_later_of_two_tiers.rule:17 準用 lifted
-   |
-17 |   campaign = lift
-   |   ^^^^^^^^^^^^^^^
-   |
- 元の規則の `campaign` は、range >=basic <=gold の中で検査されています。`lift` は式で決まる値で、check は式がとる列挙の値を求めないので、platinum にもなりうるとして読みます。
- 範囲の中の値だけを書く表で値を決めて渡すか、同じ range を書いた入力を渡してください。
-

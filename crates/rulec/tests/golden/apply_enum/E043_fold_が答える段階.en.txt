@@ -1,0 +1,9 @@
+error[E043]: The values of what is passed to `キャンペーン` are not known
+  --> tests/apply_enum/E043_fold_が答える段階.rule:29 apply 引き上げ
+   |
+29 |   キャンペーン = 選んだ段階
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ The callee's `キャンペーン` was checked over range >=一般 <=ゴールド. `選んだ段階` is decided by a fold or an expression, and check does not work out which values of an enum those come to, so it is read as one that can be プラチナ too.
+ Decide the value in a table that writes only values inside the range and pass that, or pass an input that declares the same range.
+
