@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.33.0",
+  "ritsu": "0.34.0",
   "flow": "invoice.flow",
   "scenario": "scenarios/out_of_stock.json",
   "target": "reference",
