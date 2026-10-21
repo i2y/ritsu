@@ -1,0 +1,56 @@
+rule lift_cells v1
+description "Tables below one that writes two of four tiers, each reading them with another kind of cell"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  any_credit : money[USD]  round down(1USD)
+  rank_credit : money[USD]  round down(1USD)
+  not_credit : money[USD]  round down(1USD)
+  below_credit : money[USD]  round down(1USD)
+  list_credit : money[USD]  round down(1USD)
+  apart_credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to: silver or gold, never basic or platinum
+table lift_by_member
+policy unique
+| member | -> lift : tier |
+| basic  | silver         |
+| silver | gold           |
+| >=gold | gold           |
+
+# Each cell below takes basic or platinum, or both, besides silver and gold.
+table any_by_lift
+policy unique
+| lift | -> any_credit |
+| -    | 5USD          |
+
+table rank_by_lift
+policy unique
+| lift     | -> rank_credit |
+| >=silver | 5USD           |
+
+table not_by_lift
+policy unique
+| lift       | -> not_credit |
+| not: basic | 5USD          |
+
+table below_by_lift
+policy unique
+| lift   | -> below_credit |
+| <=gold | 5USD            |
+
+table list_by_lift
+policy unique
+| lift                   | -> list_credit |
+| silver, gold, platinum | 5USD           |
+
+# Two rows that meet only at platinum, which never comes
+table apart_by_lift
+policy unique
+| lift             | -> apart_credit |
+| >=gold           | 5USD            |
+| silver, platinum | 3USD            |

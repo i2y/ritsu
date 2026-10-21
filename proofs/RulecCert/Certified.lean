@@ -208,4 +208,152 @@ theorem Certified.unique (C : Certified) (hc : C.coverChecks = true)
   have h3 : (C.table.firing p).length ≠ 0 := fun h => h1 (List.eq_nil_of_length_eq_zero h)
   omega
 
+/-! ## A row's box, less the values no table above writes (rulec's §15.253)
+
+rulec reads every box of a table without the coordinates of a column decided above whose value
+no row of the deciding table writes: nothing brings the column there. The certificate states
+each such coordinate as a `never` fact, and a row's box is the box its cells describe with those
+coordinates left out of their axes — `RulecMain` holds it to exactly that. The theorems above are
+about the boxes as stated; the ones below carry each claim over to the table whose rows take the
+boxes their cells describe. A point the rule is asked about stands on no `never` coordinate
+(`Sieve.asked` says so), and there the two boxes take the same points. -/
+
+/-- One axis of a box, without the coordinates `never` names on axis `i`. -/
+def dropNeverAt (never : List (Nat × Nat)) (i : Nat) (xs : List Nat) : List Nat :=
+  xs.filter (fun c => !never.any (fun q => q.1 == i && q.2 == c))
+
+/-- A box from axis `i` on, each axis without the coordinates `never` names on it. -/
+def dropNeverFrom (never : List (Nat × Nat)) : Nat → Box → Box
+  | _, [] => []
+  | i, xs :: rest => dropNeverAt never i xs :: dropNeverFrom never (i + 1) rest
+
+/-- A box without the coordinates `never` names, axis by axis. -/
+def dropNever (never : List (Nat × Nat)) (box : Box) : Box := dropNeverFrom never 0 box
+
+theorem contains_dropNeverAt {never : List (Nat × Nat)} {i c : Nat} {xs : List Nat}
+    (h : ∀ q ∈ never, ¬(q.1 = i ∧ q.2 = c)) :
+    (dropNeverAt never i xs).contains c = xs.contains c := by
+  have hc : never.any (fun q => q.1 == i && q.2 == c) = false := by
+    rw [List.any_eq_false]
+    intro q hq hqc
+    simp only [Bool.and_eq_true, beq_iff_eq] at hqc
+    exact h q hq hqc
+  apply Bool.eq_iff_iff.2
+  simp only [dropNeverAt, List.contains_iff_mem, List.mem_filter, hc, Bool.not_false, and_true]
+
+theorem inBox_dropNeverFrom {never : List (Nat × Nat)} :
+    ∀ (i : Nat) (box : Box) (p : Point),
+      (∀ (k c : Nat), p[k]? = some c → ∀ q ∈ never, ¬(q.1 = i + k ∧ q.2 = c)) →
+      inBox (dropNeverFrom never i box) p = inBox box p := by
+  intro i box
+  induction box generalizing i with
+  | nil => intro p _; cases p <;> rfl
+  | cons xs rest ih =>
+    intro p h
+    cases p with
+    | nil => rfl
+    | cons c cs =>
+      simp only [dropNeverFrom, inBox]
+      rw [contains_dropNeverAt (fun q hq hqc => h 0 c (by simp) q hq ⟨by omega, hqc.2⟩)]
+      rw [ih (i + 1) cs (fun k d hd q hq hqd => h (k + 1) d (by simpa using hd) q hq ⟨by omega, hqd.2⟩)]
+
+/-- **Leaving the `never` coordinates out changes nothing at a point that stands on none of
+    them.** -/
+theorem inBox_dropNever {never : List (Nat × Nat)} {p : Point}
+    (h : ∀ q ∈ never, p[q.1]? ≠ some q.2) (b : Box) :
+    inBox (dropNever never b) p = inBox b p :=
+  inBox_dropNeverFrom 0 b p (fun k c hk q hq hqk => h q hq (by rw [hqk.1, Nat.zero_add, hk, hqk.2]))
+
+/-- A point the rule is asked about stands on no coordinate the tables above never write. -/
+theorem Sieve.asked_off_never {s : Sieve} {p : Point} (h : s.asked p) :
+    ∀ q ∈ s.never, p[q.1]? ≠ some q.2 := by
+  obtain ⟨_, _, _, _, hn, _⟩ := h
+  exact hn
+
+/-- Nor does a point the sieve does not exclude: a `never` coordinate is one of its reasons. -/
+theorem off_never_of_pointRuledOut {s : Sieve} {p : Point} (h : pointRuledOut s p = false) :
+    ∀ q ∈ s.never, p[q.1]? ≠ some q.2 := by
+  intro q hq hpq
+  have hn : neverRulesOut s p = true := by
+    simp only [neverRulesOut, List.any_eq_true, beq_iff_eq]
+    exact ⟨q, hq, hpq⟩
+  simp [pointRuledOut, hn] at h
+
+/-- A row, its box stated without the `never` coordinates. -/
+def Row.dropNever (never : List (Nat × Nat)) (r : Row) : Row := { r with box := RulecCert.dropNever never r.box }
+
+/-- The rows a certificate states are the rows its cells describe, each without the coordinates
+    of its `never` facts — what `RulecMain.checkBoxes` holds every row to, axis by axis. -/
+def Certified.statesCells (C : Certified) (cells : List Row) : Prop :=
+  C.rows = cells.map (Row.dropNever C.sieve.never)
+
+/-- The table the cells describe: the same axes, policy and points asked about, and each row
+    taking the box its cells describe. -/
+def Certified.cellTable (C : Certified) (cells : List Row) : Table where
+  arities := C.arities
+  rows := cells
+  policy := C.policy
+  asked := C.sieve.asked
+
+theorem Certified.firing_of_off_never (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    {p : Point} (hoff : ∀ q ∈ C.sieve.never, p[q.1]? ≠ some q.2) :
+    C.table.firing p = ((C.cellTable cells).firing p).map (Row.dropNever C.sieve.never) := by
+  have hrows : C.rows = cells.map (Row.dropNever C.sieve.never) := hc
+  simp only [Table.firing, Certified.table, Certified.cellTable, hrows, List.filter_map]
+  congr 1
+  apply List.filter_congr
+  intro r _
+  simp [Row.dropNever, inBox_dropNever hoff]
+
+/-- **Completeness, of the rows as their cells take them.** -/
+theorem Certified.cells_complete (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    (h : C.table.completeHolds) : (C.cellTable cells).completeHolds := by
+  intro p hsp hask hnil
+  have := h p hsp hask
+  rw [C.firing_of_off_never hc (Sieve.asked_off_never hask), hnil] at this
+  exact this rfl
+
+/-- **Exactly one row, of the rows as their cells take them.** -/
+theorem Certified.cells_unique (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    (h : C.table.uniqueHolds) : (C.cellTable cells).uniqueHolds := by
+  intro p hsp hask
+  have := h p hsp hask
+  rwa [C.firing_of_off_never hc (Sieve.asked_off_never hask), List.length_map] at this
+
+theorem Certified.cells_disjointAsked (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    (h : C.table.disjointAskedHolds) : (C.cellTable cells).disjointAskedHolds := by
+  intro p hsp hask
+  have := h p hsp hask
+  rwa [C.firing_of_off_never hc (Sieve.asked_off_never hask), List.length_map] at this
+
+theorem Certified.cells_holdsFor (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    {P : Point → Prop} (hP : ∀ p, P p → ∀ q ∈ C.sieve.never, p[q.1]? ≠ some q.2)
+    (claimed : List Row) (h : C.table.holdsFor P (claimed.map (Row.dropNever C.sieve.never))) :
+    (C.cellTable cells).holdsFor P claimed := by
+  intro r hr
+  obtain ⟨p, hsp, hp, hin, hfirst⟩ := h (r.dropNever C.sieve.never) (List.mem_map_of_mem hr)
+  refine ⟨p, hsp, hp, ?_, ?_⟩
+  · rw [← inBox_dropNever (hP p hp)]; exact hin
+  · intro hpol q hq hlt
+    have hq' : q.dropNever C.sieve.never ∈ C.table.rows := by
+      have hrows : C.rows = cells.map (Row.dropNever C.sieve.never) := hc
+      show q.dropNever C.sieve.never ∈ C.rows
+      rw [hrows]; exact List.mem_map_of_mem hq
+    rw [← inBox_dropNever (hP p hp)]
+    exact hfirst hpol _ hq' hlt
+
+/-- **Every claimed row reached, as its cells take it**: the point that reaches the stated box
+    reaches the cells' box, and under `first` no earlier row's cells take it either. -/
+theorem Certified.cells_reached (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    (claimed : List Row) (h : C.table.reachedHoldsFor (claimed.map (Row.dropNever C.sieve.never))) :
+    (C.cellTable cells).reachedHoldsFor claimed :=
+  C.cells_holdsFor hc (fun _ hp => Sieve.asked_off_never hp) claimed h
+
+/-- The weaker reading of the same, for points that come with no values behind them. -/
+theorem Certified.cells_notExcluded (C : Certified) {cells : List Row} (hc : C.statesCells cells)
+    (claimed : List Row)
+    (h : C.table.notExcludedFor (pointRuledOut C.sieve) (claimed.map (Row.dropNever C.sieve.never))) :
+    (C.cellTable cells).notExcludedFor (pointRuledOut C.sieve) claimed :=
+  C.cells_holdsFor hc (fun _ hp => off_never_of_pointRuledOut hp) claimed h
+
 end RulecCert

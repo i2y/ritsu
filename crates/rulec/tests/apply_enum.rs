@@ -19,10 +19,9 @@
 //!
 //! The table's output in `order_credits.rule` writes every tier inside the range and goes to
 //! `campaign_points.rule`, whose rows take only those. Where a table above writes some of an enum's
-//! values and a row below takes others too, the certificate states the row's box without the
-//! values the table above never writes, and both rechecks refuse it (§15.252, what was found and
-//! left): the rule passes here, and every rule of the tree is held to both rechecks
-//! (`tests/cert.rs`, `tests/lean.rs`).
+//! values and a row below takes others too, the row's box in the certificate leaves the others out,
+//! and both rechecks read it so (§15.253, `tests/above_never.rs`); every rule of the tree is held
+//! to both rechecks (`tests/cert.rs`, `tests/lean.rs`).
 
 use ritsu_testkit::TempDir;
 use rulec::i18n::{self, Lang};

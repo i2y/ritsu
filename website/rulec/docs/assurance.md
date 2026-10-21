@@ -157,6 +157,11 @@ Two programs read it, and neither shares code with rulec:
   and no `axiom` anywhere in it, and `#print axioms` on the results shows only the three
   axioms Lean itself rests on.
 
+Both rebuild each box from its cell. Below a table that writes only some of an enum's values,
+rulec reads each box without the others, and the certificate says which they are; a re-checker
+leaves them out of the box it rebuilds only once it has read that table's rows and found that
+none of them writes those values.
+
 Writing the second one, and reading it back adversarially, found a soundness bug in the
 completeness check, a witness that could break the rule's own `constraint`, and eleven ways a
 forged certificate got past a re-checker.

@@ -1,0 +1,24 @@
+rule optional_lift v1
+description "A tier that may be absent, which the table above always writes, and never as basic or platinum"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to: silver or gold, and never absent
+table lift_by_member
+policy unique
+| member | -> lift : tier? |
+| basic  | silver          |
+| silver | gold            |
+| >=gold | gold            |
+
+# `-` takes the absent value too
+table credit_by_lift
+policy unique
+| lift | -> credit |
+| -    | 5USD      |

@@ -1,0 +1,26 @@
+rule lift_and_area v1
+description "A table that reads a tier lifted above beside a zone: the tier, with fewer values, is its first axis"
+
+enum tier = basic < silver < gold < platinum
+enum zone = north | south | east | west | central
+
+inputs
+  member : tier
+  region : zone
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to: silver or gold, never basic or platinum
+table lift_by_member
+policy unique
+| member | -> lift : tier |
+| basic  | silver         |
+| silver | gold           |
+| >=gold | gold           |
+
+table credit_by_lift_and_region
+policy unique
+| lift     | region                      | -> credit |
+| >=silver | north                       | 5USD      |
+| >=silver | south, east, west, central  | 3USD      |

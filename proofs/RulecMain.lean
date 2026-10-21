@@ -373,14 +373,20 @@ def truthOfValue (cert : Json) (w : Worked) (n : String) : Option (Cmp × Span2 
   let R ← field e "r" >>= side
   some (op, L, R)
 
-/-- **The box each row states is the box its own cells describe** (§6.2). A box widened
-    without touching the cell it was read from is caught here and nowhere else, and
-    `RulecCert.mem_boxOf_cmp_iff` is why reading it off the coordinates says what the cell
-    says — provided no value a cell compares against falls inside a coordinate, which
-    `axisSplits` checks. -/
+/-- **The box each row states is the box its own cells describe** (§6.2), less the coordinates
+    the table's `never` facts name on its axes: a column decided above at a value no row of the
+    deciding table writes, which `checkAbove` earns back from those rows (rulec's §15.253). A box
+    widened without touching the cell it was read from is caught here and nowhere else, and so is
+    one narrowed by a coordinate no fact names. `RulecCert.mem_boxOf_cmp_iff` is why reading it
+    off the coordinates says what the cell says — provided no value a cell compares against falls
+    inside a coordinate, which `axisSplits` checks — and `RulecCert.Certified.cells_unique` and
+    the theorems beside it carry each claim about the stated boxes over to the boxes the cells
+    describe. -/
 def checkBoxes (t : ReadTable) (r : Report) : Report := Id.run do
   let mut r := r
   let mut read := 0
+  let mut without := 0
+  let never := t.cert.sieve.never
   if t.rowsRaw.length != t.cert.rows.length then
     -- A row whose cells this program cannot read would otherwise vanish from every check
     -- below, which is the one way a reader could be shown fewer claims than were made.
@@ -399,17 +405,20 @@ def checkBoxes (t : ReadTable) (r : Report) : Report := Id.run do
         if let CellTest.prefixOf ws := cell then
           if !axisCovers pres ws then
             r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the cell names a prefix the axis has no coordinate for"
-          else if boxOfPrefix pres ws != row.accepts[ai]! then
+          else if dropNeverAt never ai (boxOfPrefix pres ws) != row.accepts[ai]! then
             r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the box it states is not the one its cell describes"
           else
             read := read + 1
         else if !axisSplits coords cell then
           r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the cell compares against a value that falls inside a coordinate, so the axis does not stand for it"
-        else if boxOf labels coords cell != row.accepts[ai]! then
+        else if dropNeverAt never ai (boxOf labels coords cell) != row.accepts[ai]! then
           r := r.fail s!"{t.name}: row {row.index}, {t.columns[ai]!}: the box it states is not the one its cell describes"
         else
           read := read + 1
-  if read > 0 then r := r.say s!"    {read} boxes read back from the cells they were written as"
+          if (boxOf labels coords cell).length != row.accepts[ai]!.length then without := without + 1
+  if read > 0 then
+    let less := if without > 0 then s!", {without} of them less the values no table above writes" else ""
+    r := r.say s!"    {read} boxes read back from the cells they were written as{less}"
   return r
 
 /-- Why a numeric axis does not tile, said for a reader: the first thing the check finds wrong. -/

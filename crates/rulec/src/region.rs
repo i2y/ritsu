@@ -561,6 +561,14 @@ fn written_value<'o>(o: Option<&'o OutCell>, c: &Checked) -> Option<&'o str> {
     }
 }
 
+/// Whether no row of the table that decides a column writes this value into it, said so that a
+/// re-checker can settle it: every row writes a value word, and none of them is this one. A row
+/// that passes on a name writes whatever the name holds, which a re-checker cannot read off the
+/// certificate, so a table with one says nothing here (§15.115, §15.253).
+fn never_written(up: &Upstream, v: &str, c: &Checked) -> bool {
+    up.table.rows.iter().all(|r| written_value(r.outs.get(up.oi), c).is_some_and(|w| w != v))
+}
+
 /// Every column of `t` that a table above it decides.
 fn upstreams<'a>(t: &'a Table, c: &'a Checked, f: &'a RuleFile) -> Vec<Upstream<'a>> {
     let mut out = Vec::new();
@@ -4135,30 +4143,12 @@ impl TableRegion {
     /// input to. `None` when no such pair settles it — the leaf then goes out bare and is
     /// counted among the things the certificate states rather than proves.
     fn apart_at(&self, path: &[usize], ups: &[Upstream], c: &Checked) -> Option<Apart> {
-        let held: Vec<(&Upstream, String)> = ups
-            .iter()
-            .filter_map(|up| {
-                let ai = self.col_names.iter().position(|x| *x == up.name)?;
-                let &ci = path.get(ai)?;
-                let v = match &self.axes[ai] {
-                    Axis::Enum { values } => values.get(ci)?.clone(),
-                    Axis::Bool => {
-                        if ci == 0 { crate::kw::TRUE.to_string() } else { crate::kw::FALSE.to_string() }
-                    }
-                    _ => return None,
-                };
-                Some((up, v))
-            })
-            .collect();
         // The smallest reason first: the table that decides the column never writes the
         // value, whatever the rest of the box says.
-        for (up, v) in &held {
-            if !up.table.rows.iter().any(|r| written_value(r.outs.get(up.oi), c).is_some_and(|w| w == v.as_str()))
-                && up.table.rows.iter().all(|r| written_value(r.outs.get(up.oi), c).is_some())
-            {
-                return Some(Apart::Never { column: up.name.clone(), value: v.clone() });
-            }
+        if let Some(never) = self.never_at(path, ups, c) {
+            return Some(never);
         }
+        let held = self.held_above(path, ups);
         for (i, (up, v)) in held.iter().enumerate() {
             for col in &up.reg.col_names {
                 let Some(mine) = span_of_value(up, c, v, col) else { continue };
@@ -4185,6 +4175,71 @@ impl TableRegion {
             }
         }
         None
+    }
+
+    /// The value each column decided above holds where this path fixes its axis, in the order
+    /// of `ups`. A column the path has not fixed yet is not among them.
+    fn held_above<'u, 'a>(&self, path: &[usize], ups: &'u [Upstream<'a>]) -> Vec<(&'u Upstream<'a>, String)> {
+        ups.iter()
+            .filter_map(|up| {
+                let ai = self.col_names.iter().position(|x| *x == up.name)?;
+                let &ci = path.get(ai)?;
+                Some((up, self.value_at(ai, ci)?))
+            })
+            .collect()
+    }
+
+    /// The value a coordinate of an enum's or a truth value's axis stands for.
+    fn value_at(&self, ai: usize, ci: usize) -> Option<String> {
+        match &self.axes[ai] {
+            Axis::Enum { values } => values.get(ci).cloned(),
+            Axis::Bool => Some(if ci == 0 { crate::kw::TRUE } else { crate::kw::FALSE }.to_string()),
+            _ => None,
+        }
+    }
+
+    /// The first column decided above that this path fixes at a value no row of the deciding
+    /// table writes: one fact that rules out every point under the path, however many axes it
+    /// has left open (§15.253).
+    fn never_at(&self, path: &[usize], ups: &[Upstream], c: &Checked) -> Option<Apart> {
+        self.held_above(path, ups)
+            .into_iter()
+            .find(|(up, v)| never_written(up, v, c))
+            .map(|(up, v)| Apart::Never { column: up.name.clone(), value: v })
+    }
+
+    /// Every coordinate of a column decided above whose value no row of the deciding table
+    /// writes, as the certificate states it (§15.253). The boxes leave each of them out
+    /// (`reachable`), and a re-checker takes a box back from its cells only with the coordinates
+    /// it is told of left out, so each one is stated whether or not a leaf of the cover rests on
+    /// it.
+    fn never_facts(&self, ups: &[Upstream], c: &Checked) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+        for up in ups {
+            let Some(ai) = self.col_names.iter().position(|x| *x == up.name) else { continue };
+            for ci in 0..self.axes[ai].len() {
+                if self.value_at(ai, ci).is_some_and(|v| never_written(up, &v, c)) {
+                    out.push((ai, ci));
+                }
+            }
+        }
+        out
+    }
+
+    /// What a box of the cover fixes, as a leaf names it: the columns of the axes it has fixed,
+    /// each at the value it holds there, in the table's own column order. At a whole point it is
+    /// the point's text.
+    fn box_text(&self, path: &[usize]) -> String {
+        if path.len() >= self.axes.len() {
+            return self.witness_text(path);
+        }
+        let mut items: Vec<(usize, String)> = path
+            .iter()
+            .enumerate()
+            .map(|(ai, &ci)| (self.display_of[ai], format!("{} = {}", self.col_names[ai], self.axes[ai].witness_at(ci, None))))
+            .collect();
+        items.sort_by_key(|(d, _)| *d);
+        items.into_iter().map(|(_, s)| s).collect::<Vec<_>>().join(", ")
     }
 
     /// Every fact the leaves of a cover rest on, written on this table's own axes and
@@ -5344,6 +5399,14 @@ impl TableRegion {
                 if let Some(cv) = cover.as_ref() {
                     self.gather_above(cv, &mut v);
                 }
+                // The rows' boxes leave out every value no table above writes (`reachable`), not
+                // only the ones a leaf of the cover rests on, and a re-checker takes a box back from
+                // its cells with the coordinates of the stated facts left out (§15.253).
+                for (axis, coord) in self.never_facts(&ups, chk) {
+                    if !v.iter().any(|f| matches!(f, AboveFact::Never { axis: x, coord: y } if *x == axis && *y == coord)) {
+                        v.push(AboveFact::Never { axis, coord });
+                    }
+                }
                 v
             },
             cover,
@@ -5813,6 +5876,16 @@ impl TableRegion {
         }
         if let Some(ai2) = self.truth_rules_out(path) {
             return Some(Cover::ByTruth(ai2));
+        }
+        // A box that fixes a column decided above at a value no row of the deciding table writes
+        // is out of reach whatever the axes it leaves open hold, for one fact a re-checker reads
+        // off those rows (§15.253). Asked of each point under it instead, the re-checkers would need
+        // the fact all the same, and before it was stated the leaf could rest on nothing written.
+        // At a whole point the test below finds the same reason first.
+        if path.len() < self.axes.len()
+            && let Some(never) = self.never_at(path, ups, chk)
+        {
+            return Some(Cover::ByUpstream(self.box_text(path), Some(never)));
         }
         if path.len() == self.axes.len() && self.upstream_dead_at(path, ups, chk) {
             let apart = self.apart_at(path, ups, chk);

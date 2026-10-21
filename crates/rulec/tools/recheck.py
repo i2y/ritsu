@@ -35,6 +35,10 @@ What it checks, per rule:
 
 What it checks, per table:
 
+  * every row's **box** is the one its own cells describe, recomputed here from the parsed
+    cells and the axes — less the coordinates of a column decided above at a value no row of
+    the deciding table writes, each of them a `never` fact of the table's, earned back from
+    those rows (rulec's §15.253). A box wider or narrower than that is refused.
   * every pair of rows of a `unique` table is either **proved disjoint** — the certificate
     names one axis, and the two rows really do take no coordinate in common there — or
     listed as **undecided**, which the rule's own W114 warning already said out loud. A
@@ -1122,13 +1126,18 @@ def truth_rules_out(t, ai, path):
 def point_ruled_out(t, path):
     """Whether the sieve rules this point out: some constraint cannot hold at it, some
     derived column cannot reach it, a boolean `define` stands at the truth value it never
-    takes, or it takes no day of koyomi's on an axis of them."""
+    takes, it takes no day of koyomi's on an axis of them, or a fact of this table's about the
+    tables above rules it out — a value they never write, or two they never hold together, each
+    earned back by `check_above` (rulec's §15.253; the Lean program's `pointRuledOut` reads the
+    same)."""
     for k in t.get("constraints", []):
         if constraint_rules_out(t, k, path):
             return True
     if any(day_rules_out(t, ai, path) for ai in range(len(path))):
         return True
     if any(truth_rules_out(t, ai, path) for ai in range(len(path))):
+        return True
+    if above_rules_out(t, path):
         return True
     return any(derived_rules_out(t, ai, path) for ai in range(len(path)))
 
@@ -2181,21 +2190,32 @@ def check_table(t):
             if any(not isinstance(c, int) or c < 0 or c >= n for c in coords):
                 raise Bad(f"{name}: row {r['row']} names a coordinate axis {ai} does not have")
 
-    # (0) The box each row states is the box its own cells describe.
-    from_cells = 0
+    # (0) The box each row states is the box its own cells describe — less the coordinates of a
+    # column decided above whose values no table above writes (rulec's §15.253). rulec reads every
+    # box without them, since no input brings the column there; each one left out has to be a
+    # `never` fact of this table's, and (3) earns every such fact back from the rows of the
+    # table that decides the column. A coordinate left out with no fact is a box narrower than its
+    # cell, and is refused like a wider one.
+    never = {(f.get("axis"), f.get("coord")) for f in (t.get("above") or {}).get("never", [])}
+    from_cells = narrowed = 0
     for r in t["rows"]:
         if "tests" not in r:
             continue
         got = box_from_cells(t, r, GROUPS)
         if got is None:
             continue
+        left_out = False
         for ai, coords in enumerate(got):
-            if sorted(coords) != sorted(r["accepts"][ai]):
+            want = [c for c in coords if (ai, c) not in never]
+            left_out = left_out or len(want) != len(coords)
+            if sorted(want) != sorted(r["accepts"][ai]):
+                without = " once the values the tables above never write are left out" if len(want) != len(coords) else ""
                 raise Bad(
                     f"{name}: row {r['row']}'s box on {axes[ai]['column']} is not what its cell "
-                    f"`{r['cells'][ai]}` describes"
+                    f"`{r['cells'][ai]}` describes{without}"
                 )
         from_cells += 1
+        narrowed += left_out
 
     # (1) No two rows of a `unique` table meet.
     pairs = model_pairs = days_pairs = above_pairs = 0
@@ -2368,6 +2388,8 @@ def check_table(t):
         unused_note += f", {len(weak)} with no values behind the point"
         STATED.append(f"{name}: {len(weak)} points come with no values behind them")
     boxes = f", {from_cells} boxes read back from their cells" if from_cells else ""
+    if narrowed:
+        boxes += f" ({narrowed} without the values the tables above never write)"
     apart = f" + {model_pairs} apart on the linear model" if model_pairs else ""
     if days_pairs:
         apart += f" + {days_pairs} apart on koyomi's days"

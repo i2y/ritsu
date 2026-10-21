@@ -1,0 +1,24 @@
+rule plain_lift v1
+description "Two tables, the second reading what the first writes: silver and gold, never basic or platinum"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to: silver or gold, never basic or platinum
+table lift_by_member
+policy unique
+| member | -> lift : tier |
+| basic  | silver         |
+| silver | gold           |
+| >=gold | gold           |
+
+# `>=silver` takes platinum too, which never comes
+table credit_by_lift
+policy unique
+| lift     | -> credit |
+| >=silver | 5USD      |

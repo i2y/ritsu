@@ -1,0 +1,24 @@
+rule 値が無いことのある段階(optional_lift) v1
+description "値が無いことのある段階。上の表はいつも書き、一般とプラチナは書かない"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 会員を引き上げる先の段階。シルバーかゴールドで、値が無いことは無い
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階? |
+| 一般       | シルバー                    |
+| シルバー   | ゴールド                    |
+| >=ゴールド | ゴールド                    |
+
+# `-` は値が無いことにも当たる
+table 引き上げ先ごとの値引き(credit_by_lift)
+policy unique
+| 引き上げ先 | -> 値引き |
+| -          | 5USD      |

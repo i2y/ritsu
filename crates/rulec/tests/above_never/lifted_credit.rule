@@ -1,0 +1,23 @@
+rule lifted_credit v1
+description "A credit read through an apply, for a tier a table above lifts to silver or gold"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# The tier a member is lifted to: silver or gold, never basic or platinum
+table lift_by_member
+policy unique
+| member | -> lift : tier |
+| basic  | silver         |
+| silver | gold           |
+| >=gold | gold           |
+
+# The callee's `basic` row is left with nothing to take, and its `>=silver` row takes platinum too
+apply lifted = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = lift
+  credit -> credit

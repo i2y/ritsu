@@ -1,0 +1,26 @@
+rule 引き上げた段階と地域(lift_and_area) v1
+description "上の表が引き上げる段階を、地域と並べて読む表。値の少ない段階のほうが一つ目の軸になる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+enum 地域(zone) = 北(north) | 南(south) | 東(east) | 西(west) | 中央(central)
+
+inputs
+  会員(member) : 段階
+  所在地(region) : 地域
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 会員を引き上げる先の段階。シルバーかゴールドで、一般にもプラチナにもならない
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| シルバー   | ゴールド                   |
+| >=ゴールド | ゴールド                   |
+
+table 引き上げ先と所在地ごとの値引き(credit_by_lift_and_region)
+policy unique
+| 引き上げ先 | 所在地             | -> 値引き |
+| >=シルバー | 北                 | 5USD      |
+| >=シルバー | 南, 東, 西, 中央   | 3USD      |

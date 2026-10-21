@@ -1,0 +1,56 @@
+rule 引き上げた段階のセル(lift_cells) v1
+description "四つの段階のうち二つだけを書く表の下で、それぞれ別の種類のセルで段階を読む表"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  一律の値引き(any_credit) : money[USD]  round down(1USD)
+  シルバー以上の値引き(rank_credit) : money[USD]  round down(1USD)
+  一般以外の値引き(not_credit) : money[USD]  round down(1USD)
+  ゴールド以下の値引き(below_credit) : money[USD]  round down(1USD)
+  並べた段階の値引き(list_credit) : money[USD]  round down(1USD)
+  二行の値引き(apart_credit) : money[USD]  round down(1USD)
+
+# 会員を引き上げる先の段階。シルバーかゴールドで、一般にもプラチナにもならない
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| シルバー   | ゴールド                   |
+| >=ゴールド | ゴールド                   |
+
+# 下のセルは、どれもシルバーとゴールドのほかに、一般かプラチナかその両方にも当たる。
+table 一律(any_by_lift)
+policy unique
+| 引き上げ先 | -> 一律の値引き |
+| -          | 5USD            |
+
+table シルバー以上(rank_by_lift)
+policy unique
+| 引き上げ先 | -> シルバー以上の値引き |
+| >=シルバー | 5USD                    |
+
+table 一般以外(not_by_lift)
+policy unique
+| 引き上げ先 | -> 一般以外の値引き |
+| not: 一般  | 5USD                |
+
+table ゴールド以下(below_by_lift)
+policy unique
+| 引き上げ先 | -> ゴールド以下の値引き |
+| <=ゴールド | 5USD                    |
+
+table 並べた段階(list_by_lift)
+policy unique
+| 引き上げ先                   | -> 並べた段階の値引き |
+| シルバー, ゴールド, プラチナ | 5USD                  |
+
+# 二つの行が交わるのはプラチナだけで、プラチナは来ない
+table 交わらない二行(apart_by_lift)
+policy unique
+| 引き上げ先         | -> 二行の値引き |
+| >=ゴールド         | 5USD            |
+| シルバー, プラチナ | 3USD            |

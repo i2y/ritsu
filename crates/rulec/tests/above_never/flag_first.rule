@@ -1,0 +1,37 @@
+rule flag_first v1
+description "A flag the table above only ever sets, and a first-match table that reads a lifted tier"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  flag_credit : money[USD]  round down(1USD)
+  first_credit : money[USD]  round down(1USD)
+
+# Every member is eligible: the flag is never false
+table eligible_by_member
+policy unique
+| member   | -> eligible : bool |
+| basic    | true               |
+| >=silver | true               |
+
+table credit_by_eligible
+policy unique
+| eligible | -> flag_credit |
+| -        | 5USD           |
+
+# The tier a member is lifted to: silver or gold, never basic or platinum
+table lift_by_member
+policy unique
+| member | -> lift : tier |
+| basic  | silver         |
+| silver | gold           |
+| >=gold | gold           |
+
+table first_by_lift
+policy first
+| lift   | -> first_credit |
+| >=gold | 5USD            |
+| -      | 3USD            |

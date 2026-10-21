@@ -1,0 +1,37 @@
+rule 対象と段階の値引き(flag_first) v1
+description "上の表が真しか書かない真偽の列と、引き上げた段階を上から順に読む表"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  対象の値引き(flag_credit) : money[USD]  round down(1USD)
+  段階の値引き(first_credit) : money[USD]  round down(1USD)
+
+# 会員はみな対象で、偽にはならない
+table 会員ごとの対象(eligible_by_member)
+policy unique
+| 会員       | -> 対象(eligible) : bool |
+| 一般       | true                     |
+| >=シルバー | true                     |
+
+table 対象ごとの値引き(credit_by_eligible)
+policy unique
+| 対象 | -> 対象の値引き |
+| -    | 5USD            |
+
+# 会員を引き上げる先の段階。シルバーかゴールドで、一般にもプラチナにもならない
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| シルバー   | ゴールド                   |
+| >=ゴールド | ゴールド                   |
+
+table 引き上げ先から順に(first_by_lift)
+policy first
+| 引き上げ先 | -> 段階の値引き |
+| >=ゴールド | 5USD            |
+| -          | 3USD            |
