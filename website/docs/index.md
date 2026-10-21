@@ -62,8 +62,7 @@ people.
 - **sakai** maps which context owns which files and who may depend on whom, and checks the
   references that cross contexts, in the files of every language here, in the OpenAPI and AsyncAPI
   documents services keep as their contracts, and in the code. It does not count a `use book`,
-  since another context reaches a book through the service in front of it, nor, for now, a rule's
-  `import enum` and `range from koyomi`.
+  since another context reaches a book through the service in front of it.
 - **sekisho** says, in a gate (a `.gate` file), which principal may do which action on which
   resource, with roles, attributes and relations, and with the answers of a rule and of dates as
   conditions. `sekisho check` walks every combination that can happen and decides each as Cedar

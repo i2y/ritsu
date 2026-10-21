@@ -1,0 +1,14 @@
+rule 出荷の期間(ship_window) v1
+description "注文が 2027 年 3 月末までに出荷されるかどうか。配送が出荷する日で決める"
+
+inputs
+  出す日(ship) : date  range from koyomi "../delivery/出荷日.cal" date 出荷日
+
+outputs
+  期間内(in_window) : bool
+
+table 決める(decide)
+policy unique
+| 出す日       | -> 期間内 : bool |
+| <=2027-03-31 | true            |
+| >2027-03-31  | false           |

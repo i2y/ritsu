@@ -1,0 +1,6 @@
+error[E202]: ordering/next_day.rule:4:1: The file ordering/next_day.rule of Ordering refers to delivery/rules/regions.rule (import enum), which is inside Delivery
+     4 | import enum region from "../delivery/rules/regions.rule"
+  = An `import enum` reads an enum whole from the `enums` file, and the code a rule is made into imports the module made of that file: the `enums` file itself, inside Delivery. An enum across the boundary is read from an `enums` file in the two's shared kernel, or Delivery puts it in a `.proto` of a published language and the rule takes it in with `import proto`.
+  involved:
+      Ordering  ordering/next_day.rule:4                         import enum "../delivery/rules/regions.rule"
+      Delivery  rulec "delivery/rules/regions.rule" enum region  a part of the inside of Delivery

@@ -1,0 +1,6 @@
+error[E202]: ordering/ship_window.rule:5:1: The file ordering/ship_window.rule of Ordering refers to delivery/ship_date.cal (range from koyomi), which is inside Delivery
+     5 |   ship : date  range from koyomi "../delivery/ship_date.cal" date ship
+  = A `range from koyomi` holds the rule's input to the days a date of the dates file comes to: rulec checks the rule on those days, and the code it is made into takes no other day. That is the dates file itself, inside Delivery. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.
+  involved:
+      Ordering  ordering/ship_window.rule:5                range from koyomi "../delivery/ship_date.cal"
+      Delivery  koyomi "delivery/ship_date.cal" date ship  a part of the inside of Delivery

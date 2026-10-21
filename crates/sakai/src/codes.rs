@@ -390,8 +390,8 @@ pub fn ledger() -> Ledger {
             "E103",
             tr!("範囲の外のものを、持っているか参照しています", "Something outside the scope is owned or referred to"),
             tr!(
-                "`owns` の項や、proto の import の先、`means` の proto が、地図の範囲の外にあるとき。範囲は `covers` で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。",
-                "An entry of `owns`, what a proto imports, or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it."
+                "`owns` の項や、proto の import の先、ほかの言語の成果物が参照するファイル（規則、`enums` のファイル、日付のファイル、カレンダー、クレートなど）、`means` の proto が、地図の範囲の外にあるとき。範囲は `covers` で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。",
+                "An entry of `owns`, what a proto imports, a file an artifact of another language refers to (a rule, an `enums` file, a dates file, a calendar, a crate and the like), or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it."
             ),
             tr!("範囲を広げるか、項や参照を消してください。", "Widen the scope, or delete the entry or the reference."),
             &[
@@ -539,7 +539,7 @@ pub fn ledger() -> Ledger {
         e(
             "E202",
             tr!("相手の内側への参照です", "A reference to the inside of another context"),
-            tr!("参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則や日付のファイルやカレンダーそのもの）。", "What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule, a dates file or a calendar itself."),
+            tr!("参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則や `enums` のファイルや日付のファイルやカレンダーそのもの）。", "What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule, an `enums` file, a dates file or a calendar itself."),
             tr!("相手の公表された言語を通して参照するか、二つの共有カーネルに並べてください。", "Refer through the other context's published language, or list it in a shared kernel of the two."),
             &[
                 A_CONFORMS,

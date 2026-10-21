@@ -25,11 +25,12 @@ pub fn sakai(args: &[&str]) -> std::process::Output {
 }
 
 /// Every language sakai reads, joined through the ports, each language's own engine (ritsu's
-/// DESIGN 3.3): what `ritsu sakai` hands it, what the files name and hold in one index.
+/// DESIGN 3.3): what `ritsu sakai` hands it, what the files name and hold in one index. rulec
+/// reads the days of a `range from koyomi` through koyomi's port, as ritsu-project joins it.
 pub fn suite() -> sakai::suite::Suite {
     use ritsu_base::naming::Tool;
     use std::rc::Rc;
-    let rules = Rc::new(rulec::ports::Engine::new());
+    let rules = Rc::new(rulec::ports::Engine::with_dates(std::sync::Arc::new(koyomi::ports::Engine)));
     // sekisho reads a gate with the rules, the dates, the books and the flows it names
     let gates = Rc::new(sekisho::ports::Engine::new(
         ritsu_ports::GatePorts { rules: rules.clone(), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine), flows: Rc::new(dandori::ports::Engine), items: Rc::new(dandori::ports::Engine) }.into(),

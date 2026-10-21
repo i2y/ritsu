@@ -1,0 +1,6 @@
+エラー[E202]: ordering/ship_window.rule:5:1: 「Ordering」の ordering/ship_window.rule が、「Delivery」の内側の delivery/ship_date.cal を参照しています（range from koyomi）
+     5 |   ship : date  range from koyomi "../delivery/ship_date.cal" date ship
+  = `range from koyomi` は、日付のファイルの日付がとる日を、規則の入力の範囲にします。rulec はその日の上で規則を確かめ、規則から生成したコードもほかの日を受け付けません。使うのは日付のファイルそのもの（「Delivery」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。
+  関わるもの:
+      Ordering  ordering/ship_window.rule:5                range from koyomi "../delivery/ship_date.cal"
+      Delivery  koyomi "delivery/ship_date.cal" date ship  「Delivery」の内側のもの

@@ -252,7 +252,7 @@ requirement extinguisher_distance
 
 ### sakai：境界づけられたコンテキストの地図
 
-地図には、どのコンテキストがどのファイルを持ち、どの言語を公開し、誰が誰に何を通して依存してよいかを書きます。sakai は、コンテキストのあいだをまたぐ参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。コードの import は import-linter、dependency-cruiser、ArchUnit、go-arch-lint に渡し、Rust のクレートは Cargo に尋ねます。帳簿の `use book` は数えません。ほかのコンテキストからは、帳簿の前に立つサービスを通して使うからです。規則の `import enum` と `range from koyomi` も、まだ数えていません。ritsu は自分のクレートをこの形で地図にしています。次はそのコンテキストの一つです。
+地図には、どのコンテキストがどのファイルを持ち、どの言語を公開し、誰が誰に何を通して依存してよいかを書きます。sakai は、コンテキストのあいだをまたぐ参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。コードの import は import-linter、dependency-cruiser、ArchUnit、go-arch-lint に渡し、Rust のクレートは Cargo に尋ねます。帳簿の `use book` は数えません。ほかのコンテキストからは、帳簿の前に立つサービスを通して使うからです。ritsu は自分のクレートをこの形で地図にしています。次はそのコンテキストの一つです。
 
 ```ctx
 context Workflows(dandori) v1

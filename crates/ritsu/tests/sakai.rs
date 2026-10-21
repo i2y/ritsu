@@ -125,11 +125,61 @@ fn ritsu_sakai_catches_what_crosses_through_another_language_in_english() {
     assert!(out.contains("  = rulec の診断: [E032] billing/rules/billing_need.rule:5: "), "{out}");
 }
 
-// ── A dates file across a boundary: a workflow's `use dates`, held as a gate's and a module's ──
+// ── A dates file and an `enums` file across a boundary: a workflow's `use dates` and a rule's
+// `range from koyomi` and `import enum`, held as a gate's and a module's `use dates` ──
 
 /// Three files that read a dates file, one of each language: a workflow, a gate and a module, as
 /// (path, text, the line of the `use dates`).
 type Readers = [(&'static str, &'static str, usize); 3];
+
+/// A rule that reads the same dates file with `range from koyomi`, and an `enums` file of the
+/// same context with `import enum`: the `enums` file and the rule, each its path and its text, and
+/// the lines of the rule's `import enum` and `range from koyomi`.
+struct RuleReads {
+    enums: (&'static str, &'static str),
+    rule: (&'static str, &'static str),
+    import_line: usize,
+    range_line: usize,
+}
+
+/// Delivery's rule, reading Billing's payment methods and payment terms; Ordering's, reading
+/// Delivery's regions and ship date.
+const DELIVERY_RULE: RuleReads = RuleReads {
+    enums: ("billing/rules/payment_methods.rule", "enums payment_methods v1\ndescription \"How a customer pays for an order\"\n\nenum payment_method = card | bank_transfer | cash_on_delivery\n"),
+    rule: (
+        "delivery/rules/collect.rule",
+        "rule collect v1\ndescription \"Whether the courier collects the payment of a parcel, by billing's payment methods and the day billing's payment terms make it due\"\n\nimport enum payment_method from \"../../billing/rules/payment_methods.rule\"\n\ninputs\n  paid_by : payment_method\n  due     : date  range from koyomi \"../../billing/payment_terms.cal\" date payment\n\noutputs\n  collect : bool\n\ntable decide\npolicy unique\n| paid_by             | due          | -> collect : bool |\n| cash_on_delivery    | <=2027-03-31 | true              |\n| cash_on_delivery    | >2027-03-31  | false             |\n| card, bank_transfer | -            | false             |\n",
+    ),
+    import_line: 4,
+    range_line: 8,
+};
+const ORDERING_RULE: RuleReads = RuleReads {
+    enums: ("delivery/rules/regions.rule", "enums regions v1\ndescription \"The regions a parcel is delivered to, shared by the rules that read them\"\n\nenum region = honshu | hokkaido | okinawa\n"),
+    rule: (
+        "ordering/next_day.rule",
+        "rule next_day v1\ndescription \"Whether an order is offered next-day delivery, by delivery's regions and the day delivery ships it\"\n\nimport enum region from \"../delivery/rules/regions.rule\"\n\ninputs\n  destination : region\n  ship        : date  range from koyomi \"../delivery/ship_date.cal\" date ship\n\noutputs\n  offered : bool\n\ntable decide\npolicy unique\n| destination       | ship         | -> offered : bool |\n| honshu            | <=2027-03-31 | true              |\n| honshu            | >2027-03-31  | false             |\n| hokkaido, okinawa | -            | false             |\n",
+    ),
+    import_line: 4,
+    range_line: 8,
+};
+const DELIVERY_RULE_JA: RuleReads = RuleReads {
+    enums: ("billing/rules/支払方法.rule", "enums 支払方法(payment_methods) v1\ndescription \"お客さまが注文の代金を払う方法\"\n\nenum 払い方(payment_method) = カード(card) | 振込(bank_transfer) | 代金引換(cash_on_delivery)\n"),
+    rule: (
+        "delivery/rules/代金の受け取り.rule",
+        "rule 代金の受け取り(collect) v1\ndescription \"配達員が荷物の代金を受け取るかどうか。請求の支払方法と、請求の支払条件が決める期日による\"\n\nimport enum 払い方 from \"../../billing/rules/支払方法.rule\"\n\ninputs\n  支払(paid_by) : 払い方\n  期日(due)     : date  range from koyomi \"../../billing/支払条件.cal\" date 支払日\n\noutputs\n  受け取る(collect) : bool\n\ntable 決める(decide)\npolicy unique\n| 支払         | 期日         | -> 受け取る : bool |\n| 代金引換     | <=2027-03-31 | true              |\n| 代金引換     | >2027-03-31  | false             |\n| カード, 振込 | -            | false             |\n",
+    ),
+    import_line: 4,
+    range_line: 8,
+};
+const ORDERING_RULE_JA: RuleReads = RuleReads {
+    enums: ("delivery/rules/配送の地域.rule", "enums 配送の地域(delivery_regions) v1\ndescription \"荷物を届ける地域。この地域を読む規則が分け合う\"\n\nenum 地域(region) = 本州(honshu) | 北海道(hokkaido) | 沖縄(okinawa)\n"),
+    rule: (
+        "ordering/翌日配送.rule",
+        "rule 翌日配送(next_day) v1\ndescription \"注文に翌日配送を出せるかどうか。配送の地域と、配送が出荷する日で決める\"\n\nimport enum 地域 from \"../delivery/rules/配送の地域.rule\"\n\ninputs\n  届け先(destination) : 地域\n  出す日(ship)        : date  range from koyomi \"../delivery/出荷日.cal\" date 出荷日\n\noutputs\n  出せる(offered) : bool\n\ntable 決める(decide)\npolicy unique\n| 届け先       | 出す日       | -> 出せる : bool |\n| 本州         | <=2027-03-31 | true            |\n| 本州         | >2027-03-31  | false           |\n| 北海道, 沖縄 | -            | false           |\n",
+    ),
+    import_line: 4,
+    range_line: 8,
+};
 
 /// Delivery's three, reading Billing's payment terms; Ordering's three, reading Delivery's ship date.
 const DELIVERY_READS: Readers = [
@@ -214,26 +264,34 @@ struct Shop {
     calendar: &'static str,
 }
 
-/// sakai holds a workflow's `use dates` to the map as it holds a gate's and a module's (sakai's
-/// DESIGN 19): Delivery's three read Billing's payment terms, and Billing is Delivery's customer,
-/// the other way round (E201, the same words for each but the file and the line); Ordering's three
-/// read Delivery's ship date, a partner's inside (E202, the same words, each with the note of its
-/// language); and with the payment terms in the shared kernel of Billing and Delivery, Delivery's
-/// three pass and are counted by their languages, each by `use dates`.
-fn a_dates_file_is_read_alike(shop: &Shop, delivery: &Readers, ordering: &Readers) {
+/// sakai holds a workflow's `use dates` and a rule's `range from koyomi` and `import enum` to the
+/// map as it holds a gate's and a module's `use dates` (sakai's DESIGN 19, 20): Delivery's three
+/// and its rule read Billing's payment terms, and the rule Billing's payment methods too, and
+/// Billing is Delivery's customer, the other way round (E201, the same words for each but the
+/// file, the line and how it refers); Ordering's read Delivery's ship date and regions, a partner's
+/// inside (E202, the same words, each with the note of its language); and with the payment terms
+/// and methods in the shared kernel of Billing and Delivery, Delivery's pass and are counted by
+/// their languages, the rule's two as rulec's.
+fn read_alike(shop: &Shop, delivery: (&Readers, &RuleReads), ordering: (&Readers, &RuleReads)) {
     let [o, d, b] = shop.names;
-    let lay = |readers: &[&Readers], kernel: bool| {
+    let lay = |readers: &[(&Readers, &RuleReads)], kernel: bool| {
         let t = TempDir::new("sakai-dates");
         ritsu_testkit::tmp::copy_dir(&sakai_dir().join(shop.dir), t.path());
-        for (f, body, _) in readers.iter().flat_map(|r| r.iter()) {
-            t.write(f, body);
+        for (files, rule) in readers {
+            for (f, body, _) in files.iter() {
+                t.write(f, body);
+            }
+            for (f, body) in [rule.enums, rule.rule] {
+                t.write(f, body);
+            }
         }
         if kernel {
+            let listed = format!("{}  koyomi \"../{}\"\n  rulec \"../{}\"\n", shop.calendar, shop.terms, delivery.1.enums.0);
             for f in shop.kernel {
                 let p = t.path().join(f);
                 let s = std::fs::read_to_string(&p).unwrap();
                 assert!(s.contains(shop.calendar), "{f} has no {:?}", shop.calendar);
-                std::fs::write(&p, s.replacen(shop.calendar, &format!("{}  koyomi \"../{}\"\n", shop.calendar, shop.terms), 1)).unwrap();
+                std::fs::write(&p, s.replacen(shop.calendar, &listed, 1)).unwrap();
             }
         }
         t
@@ -242,42 +300,53 @@ fn a_dates_file_is_read_alike(shop: &Shop, delivery: &Readers, ordering: &Reader
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", shop.map]);
     assert_eq!(code, 1, "{out}{err}");
     let mut got: Vec<&str> = out.lines().filter(|l| l.starts_with("error[")).collect();
-    let mut want: Vec<String> = delivery.iter().map(|(f, _, l)| format!("error[E201]: {f}:{l}:1: The file {f} of {d} refers to {} of {b} (use dates), which {d} has no relationship with", shop.terms)).collect();
-    want.extend(ordering.iter().map(|(f, _, l)| format!("error[E202]: {f}:{l}:1: The file {f} of {o} refers to {} (use dates), which is inside {d}", shop.ship)));
+    let e201 = |f: &str, l: usize, to: &str, via: &str| format!("error[E201]: {f}:{l}:1: The file {f} of {d} refers to {to} of {b} ({via}), which {d} has no relationship with");
+    let e202 = |f: &str, l: usize, to: &str, via: &str| format!("error[E202]: {f}:{l}:1: The file {f} of {o} refers to {to} ({via}), which is inside {d}");
+    let mut want: Vec<String> = delivery.0.iter().map(|(f, _, l)| e201(f, *l, shop.terms, "use dates")).collect();
+    let (dr, or) = (delivery.1, ordering.1);
+    want.extend([e201(dr.rule.0, dr.range_line, shop.terms, "range from koyomi"), e201(dr.rule.0, dr.import_line, dr.enums.0, "import enum")]);
+    want.extend(ordering.0.iter().map(|(f, _, l)| e202(f, *l, shop.ship, "use dates")));
+    want.extend([e202(or.rule.0, or.range_line, shop.ship, "range from koyomi"), e202(or.rule.0, or.import_line, or.enums.0, "import enum")]);
     got.sort();
     want.sort();
     assert_eq!(got, want, "{out}");
-    assert_eq!(out.matches(&format!("  = {b} is downstream of {d}, the other way round: an upstream relationship lets the downstream refer to the upstream.\n")).count(), 3, "{out}");
+    assert_eq!(out.matches(&format!("  = {b} is downstream of {d}, the other way round: an upstream relationship lets the downstream refer to the upstream.\n")).count(), 5, "{out}");
     for note in [
         format!("  = The code a workflow is made into calls the code made of the dates file, bundled or as a Lambda function: the dates file itself, inside {d}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.\n"),
         "  = The code a gate is made into calls the code made of the dates and the calendar; a dates file and a calendar cannot be a published language, and one across the boundary is read only from the two's shared kernel.\n".to_string(),
         format!("  = The code a module of kaname is made into calls the code made of the rules, the dates and the other modules it reads: the thing itself, inside {d}. One across the boundary is read from the two's shared kernel.\n"),
+        format!("  = A `range from koyomi` holds the rule's input to the days a date of the dates file comes to: rulec checks the rule on those days, and the code it is made into takes no other day. That is the dates file itself, inside {d}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.\n"),
+        format!("  = An `import enum` reads an enum whole from the `enums` file, and the code a rule is made into imports the module made of that file: the `enums` file itself, inside {d}. An enum across the boundary is read from an `enums` file in the two's shared kernel, or {d} puts it in a `.proto` of a published language and the rule takes it in with `import proto`.\n"),
     ] {
         assert!(out.contains(&note), "{note}{out}");
     }
-    // in the shared kernel: three more crossings, one of each language
+    // in the shared kernel: five more crossings, a workflow's, a gate's, a module's and the rule's two
     let t = lay(&[delivery], true);
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "check", shop.map]);
-    assert_eq!((code, out.as_str()), (0, format!("{}: ok — 5 contexts, 7 relationships; 82 artifacts, each in one context; 12 crossings checked (proto 1, rulec 2, koyomi 1, dandori 6, sekisho 1, kaname 1)\n", shop.map).as_str()), "{err}");
+    assert_eq!((code, out.as_str()), (0, format!("{}: ok — 5 contexts, 7 relationships; 84 artifacts, each in one context; 14 crossings checked (proto 1, rulec 4, koyomi 1, dandori 6, sekisho 1, kaname 1)\n", shop.map).as_str()), "{err}");
     let (_, out, _) = ritsu_in(t.path(), &["sakai", "check", shop.map, "--lang", "ja"]);
-    assert!(out.ends_with("境界を越える参照 12 件を確かめた（proto 1、rulec 2、koyomi 1、dandori 6、sekisho 1、kaname 1）\n"), "{out}");
+    assert!(out.ends_with("境界を越える参照 14 件を確かめた（proto 1、rulec 4、koyomi 1、dandori 6、sekisho 1、kaname 1）\n"), "{out}");
     let (code, out, err) = ritsu_in(t.path(), &["sakai", "api", shop.map, "--root", "."]);
     assert_eq!(code, 0, "{err}");
     let api: serde_json::Value = serde_json::from_str(&out).unwrap();
-    let mut through: Vec<(String, String, String)> = api["crossings"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|c| c["to"]["path"] == shop.terms)
-        .map(|c| (c["from"]["tool"].as_str().unwrap().to_string(), c["via"].as_str().unwrap().to_string(), c["allowed_by"]["relationship"].as_str().unwrap().to_string()))
-        .collect();
-    through.sort();
-    let kernel = |tool: &str| (tool.to_string(), "use dates".to_string(), "shared_kernel".to_string());
-    assert_eq!(through, [kernel("dandori"), kernel("kaname"), kernel("sekisho")]);
+    let through = |to: &str| -> Vec<(String, String, String)> {
+        let mut v: Vec<(String, String, String)> = api["crossings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["to"]["path"] == to)
+            .map(|c| (c["from"]["tool"].as_str().unwrap().to_string(), c["via"].as_str().unwrap().to_string(), c["allowed_by"]["relationship"].as_str().unwrap().to_string()))
+            .collect();
+        v.sort();
+        v
+    };
+    let kernel = |tool: &str, via: &str| (tool.to_string(), via.to_string(), "shared_kernel".to_string());
+    assert_eq!(through(shop.terms), [kernel("dandori", "use dates"), kernel("kaname", "use dates"), kernel("rulec", "range from koyomi"), kernel("sekisho", "use dates")]);
+    assert_eq!(through(dr.enums.0), [kernel("rulec", "import enum")]);
 }
 
 #[test]
-fn a_workflow_a_gate_and_a_module_read_a_dates_file_across_a_boundary_alike() {
+fn a_workflow_a_gate_a_module_and_a_rule_read_across_a_boundary_alike() {
     let shop = Shop {
         dir: "examples/shop",
         map: "shop.ctx",
@@ -287,12 +356,12 @@ fn a_workflow_a_gate_and_a_module_read_a_dates_file_across_a_boundary_alike() {
         kernel: ["contexts/billing.ctx", "contexts/delivery.ctx"],
         calendar: "  koyomi \"../calendars/tokyo_business_days.cal\"\n",
     };
-    a_dates_file_is_read_alike(&shop, &DELIVERY_READS, &ORDERING_READS);
+    read_alike(&shop, (&DELIVERY_READS, &DELIVERY_RULE), (&ORDERING_READS, &ORDERING_RULE));
 }
 
 /// The same on the example of Japanese names.
 #[test]
-fn a_workflow_a_gate_and_a_module_read_a_dates_file_across_a_boundary_alike_in_japanese() {
+fn a_workflow_a_gate_a_module_and_a_rule_read_across_a_boundary_alike_in_japanese() {
     let shop = Shop {
         dir: "examples/shop.ja",
         map: "通販.ctx",
@@ -302,5 +371,5 @@ fn a_workflow_a_gate_and_a_module_read_a_dates_file_across_a_boundary_alike_in_j
         kernel: ["contexts/請求.ctx", "contexts/配送.ctx"],
         calendar: "  koyomi \"../calendars/東京の営業日.cal\"\n",
     };
-    a_dates_file_is_read_alike(&shop, &DELIVERY_READS_JA, &ORDERING_READS_JA);
+    read_alike(&shop, (&DELIVERY_READS_JA, &DELIVERY_RULE_JA), (&ORDERING_READS_JA, &ORDERING_RULE_JA));
 }

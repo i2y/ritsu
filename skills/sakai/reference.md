@@ -199,7 +199,9 @@ A reference that calls a service (dandori's `connect`, `use rule … connect`) a
 A flow runs a child flow across a boundary only in a partnership, a shared kernel, or when the child implements the other's open host service (E209).
 A rule bundled, deployed or applied across a boundary is a use of the rule itself, and is allowed only inside a shared kernel (E202).
 So are these lines, since the code a workflow, a gate or a kaname module is made into calls the code made of the file each reads: a workflow's `use dates`, a gate's `use rule`, `use dates`, `use calendar` and `use gate`, and a module's `use rule`, `use dates` and `use module`.
+So are a rule's `import enum` and `range from koyomi`, since the code a rule is made into imports the module made of the `enums` file it reads an enum from, and rulec checks the rule on the days a date of the dates file comes to, the only days that code takes.
 Across a boundary, each is allowed only inside a shared kernel (E202), even when the rule is in a published language for its Connect service.
+An enum another context publishes is put in a `.proto` of its published language, and a rule takes it in with `import proto`.
 A `use book` is not counted, of a workflow, a gate or a module: a book is used from another context through the service in front of it.
 
 ### Mappings in an anticorruption layer

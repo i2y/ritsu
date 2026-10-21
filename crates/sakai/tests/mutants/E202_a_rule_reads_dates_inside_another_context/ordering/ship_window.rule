@@ -1,0 +1,14 @@
+rule ship_window v1
+description "Whether an order ships by the end of March 2027, by the day delivery ships it"
+
+inputs
+  ship : date  range from koyomi "../delivery/ship_date.cal" date ship
+
+outputs
+  in_window : bool
+
+table decide
+policy unique
+| ship         | -> in_window : bool |
+| <=2027-03-31 | true                |
+| >2027-03-31  | false               |

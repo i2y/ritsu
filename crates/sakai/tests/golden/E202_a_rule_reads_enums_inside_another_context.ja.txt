@@ -1,0 +1,6 @@
+エラー[E202]: ordering/next_day.rule:4:1: 「Ordering」の ordering/next_day.rule が、「Delivery」の内側の delivery/rules/regions.rule を参照しています（import enum）
+     4 | import enum region from "../delivery/rules/regions.rule"
+  = `import enum` は、`enums` のファイルの列挙を丸ごと読みます。規則から生成したコードはそのファイルから生成したモジュールを読み込むので、使うのは `enums` のファイルそのもの（「Delivery」の内側）です。境界の向こうの列挙は、`enums` のファイルを二つの共有カーネルに並べて読むか、「Delivery」に公表された言語の proto に置いてもらい、規則から `import proto` で取り込んでください。
+  関わるもの:
+      Ordering  ordering/next_day.rule:4                         import enum "../delivery/rules/regions.rule"
+      Delivery  rulec "delivery/rules/regions.rule" enum region  「Delivery」の内側のもの

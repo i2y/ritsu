@@ -125,7 +125,7 @@ The usual ones:
 | E101, E102 | an artifact with no owner, or two | add or deepen an `owns` entry (ask who owns it) |
 | E104 | a language is not joined | run it as `ritsu sakai` |
 | E201 | a reference crosses with no relationship | declare the relationship, or remove the reference (ask) |
-| E202 | a reference to the inside of another context | use what the other context publishes, or publish what is used |
+| E202 | a reference to the inside of another context | use what the other context publishes, publish what is used, or list it in the two's shared kernel (a rule used as it is, an `enums` file, a dates file and a calendar cross only that way) |
 | E203 | a reference through a package `through` does not list | add the package to `through`, or use one it lists |
 | E207 | a call to a service that is not an open host service | the upstream lists it under `open host service`, or the call goes |
 | E108 | an OpenAPI or AsyncAPI document that does not read | fix where it points; YAML beyond what goes to JSON and back (tags, `?` keys) is not read |

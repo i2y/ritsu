@@ -968,7 +968,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E103 — 範囲の外のものを、持っているか参照しています
 
-**いつ出るか**: `owns` の項や、proto の import の先、`means` の proto が、地図の範囲の外にあるとき。範囲は `covers` で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。
+**いつ出るか**: `owns` の項や、proto の import の先、ほかの言語の成果物が参照するファイル（規則、`enums` のファイル、日付のファイル、カレンダー、クレートなど）、`means` の proto が、地図の範囲の外にあるとき。範囲は `covers` で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。
 
 **直し方**: 範囲を広げるか、項や参照を消してください。
 
@@ -1777,7 +1777,7 @@ service BService { rpc Get(B) returns (B); }
 
 ## E202 — 相手の内側への参照です
 
-**いつ出るか**: 参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則や日付のファイルやカレンダーそのもの）。
+**いつ出るか**: 参照の先が、相手の公表された言語にも、二つの共有カーネルにも入っていないとき（公表された言語でない proto や OpenAPI と AsyncAPI の文書、規則や `enums` のファイルや日付のファイルやカレンダーそのもの）。
 
 **直し方**: 相手の公表された言語を通して参照するか、二つの共有カーネルに並べてください。
 

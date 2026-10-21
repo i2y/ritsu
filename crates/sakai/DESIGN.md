@@ -735,7 +735,7 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | 参照のもと | 何を読むか | 参照の先 |
 |---|---|---|
 | proto | `import` の行（行番号つき）、フィールドとメソッドの型 | 別の proto のファイルと、使っている要素 |
-| rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から | proto のファイルと、列挙と値、メッセージ、規則 |
+| rulec の規則 | rulec の `References` の `import proto`（行と、proto の列挙）、`shape`（行と、proto のメッセージ）、`apply`（行と、規則）、`import enum`（行と、`enums` のファイルの列挙）、`range from koyomi`（行と、日付のファイルの日付）。列挙の値は rulec の `Rules` の事実（値ごとのワイヤでの名前）から。20 章 | proto のファイルと、列挙と値、メッセージ、規則、`enums` のファイル、日付のファイル |
 | koyomi の dates とカレンダー | koyomi の `References` の `use calendar`（行と、カレンダー） | koyomi のカレンダー |
 | dandori のワークフロー | dandori の `References` の `use rule` と `use dates`（どちらも呼び方の語を添えて）、`use proto`、`connect`（proto のサービスとメソッド）、`flow`（子の `.flow`）、`implements`（proto のサービス）。4.7、19 章 | 規則、日付のファイル、proto のファイルとサービスとメソッド、ワークフロー |
 | chobo の帳簿、geas の主張 | 参照を持たない（chobo の帳簿はほかの成果物を読まない。geas の主張はプログラムを外から叩く） | |
@@ -746,16 +746,16 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 | OpenAPI と AsyncAPI の文書 | ファイルをまたぐ `$ref`（行と列）。AsyncAPI のチャネルを指すものは、その上の操作の `send` か `receive`。15.5 | 文書の要素（ファイルと JSON Pointer） |
 | ほかの言語のコード | sakai は読まない。7 章の設定で各ツールが確かめる | |
 
-ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、dandori の `use book` と帳簿の操作のタスクの `book`（18.2）、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。rulec の `import enum`（`enums` のファイル）と `range from koyomi`（日付のファイル）も、いまは数えていない。これは数えないと決めたものではなく、19 章の「見つけて直していないもの」に残した穴である。
+ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、dandori の `use book` と帳簿の操作のタスクの `book`（18.2）、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
 
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
 1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
 2. 先が、相手の公表された言語の要素で、関係がそれを許す（1.5 の表）。
 
-先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）、ワークフローの `use dates`（19 章）、カレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate`（17 章）と、モジュールの `use rule`・`use dates`・`use module`（18 章）も同じである。
+先が公表された言語の要素かは、参照の種類で決まる。proto のファイルを指す参照（`import`、規則の `import proto` と `shape`、ワークフローの `use proto` と `connect`）は、そのファイルを並べた `published language` の塊の package のものである。規則を Connect のサービスとして呼ぶ参照（`use rule … connect`）は、その規則を並べた `published language rulec.…` の塊のものである。子の `.flow` は、それが相手の公開ホストサービスを `implements` で実装しているときに、そのサービスの proto のものになる（4.7）。Rust のクレートの依存は、その先のクレートを並べた `published language` の塊（`crate "…"`）のものである。規則そのものを使う参照（`use rule` の同梱、Lambda、ローカルと、規則の `apply`）、規則の `import enum` と `range from koyomi`（20 章）、ワークフローの `use dates`（19 章）、カレンダー（`use calendar`）は、どの公表された言語のものでもない。ゲートの `use rule`・`use dates`・`use calendar`・`use gate`（17 章）と、モジュールの `use rule`・`use dates`・`use module`（18 章）も同じである。
 
-診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、日付のファイル、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
+診断は、関係が無ければ E201、相手の内側（公表された言語でない proto、規則そのもの、`enums` のファイル、日付のファイル、カレンダー）を参照していれば E202、関係はあるが `through` に無い package なら E203、腐敗防止層の `layer` の外からの参照なら E204、腐敗防止層の公表された言語に上流の型が出ていれば E205、別々の道の相手なら E206、相手の公開ホストサービスでないサービスを呼んでいれば E207、境界の向こうのワークフローを子として走らせていれば E209（4.7）。ワークフローの `implements` は境界を越える参照ではなく、実装するサービスが自分の公表された言語の公開ホストサービスであることを確かめる（E208。4.7）。
 
 一つの参照に出す診断は一つで、次の順に決める。
 
@@ -808,7 +808,7 @@ sakai が一式の成果物から読むものは、どれも ritsu の口（rits
 |---|---|---|---|
 | rulec | `Rules`（`facts`） | Connect のパス（package とサービス）、Connect の列挙（値の名前と、ワイヤでの名前と番号、取り込んだ proto のファイルと列挙の完全な名前）、入力と出力の名前 | 公表された言語の rulec の塊（E302、E301）、対応の先が規則の列挙のとき（E403、E405、E407）、`use rule … connect` が呼ぶサービス（E207）、doc の成果物の表と対応の表 |
 | rulec | `Items`（索引で） | 入力、出力、列挙と値の名前 | 語の `means` の先（E007） |
-| rulec | `References`（索引で） | `import proto`、`shape`、`apply`（3.3） | 境界を越える参照 |
+| rulec | `References`（索引で） | `import proto`、`shape`、`apply`、`import enum`、`range from koyomi`（3.3、20 章） | 境界を越える参照 |
 | koyomi | `References`（索引で） | `use calendar`（3.3） | 境界を越える参照 |
 | dandori | `References`（索引で） | `use rule`、`use dates`、`use proto`、`connect`、`flow`、`implements`（4.7、19 章） | 境界を越える参照、E207〜E209 |
 | sekisho | `References`（索引で） | `.gate` の `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、手で書いた Cedar のスキーマの `@guards`（17 章） | 境界を越える参照、E211 |
@@ -863,11 +863,11 @@ proto は sakai が直接読む（P2）。読み手は自分で書いた（依�
 
 ### 4.3 rulec
 
-規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊）、参照のもと（`import proto`、`shape`、`apply`）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。rulec が規則について答えるのは、規則が rulec の検査を通るときだけである。通らない規則は E105 で、その規則の参照も対応も確かめない（4.1）。
+規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊）、参照のもと（`import proto`、`shape`、`apply`、`import enum`、`range from koyomi`）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。`enums` のファイル（列挙だけを持つ `.rule`。rulec の DESIGN 15.212）は、ほかの規則の `import enum` の先としても現れる（20 章）。rulec が規則について答えるのは、規則が rulec の検査を通るときだけである。通らない規則は E105 で、その規則の参照も対応も確かめない（4.1）。
 
 ### 4.4 koyomi
 
-dates のファイルとカレンダーは、属し方と、参照のもと（`use calendar`）として現れる。dates のファイルは、ワークフロー、ゲート、モジュールの `use dates` の先としても現れる（19 章、17 章、18 章）。カレンダーと dates のファイルは公表された言語にできない（1.4）ので、境界の向こうから読めるのは、共有カーネルに並べたときだけである。11 章の例では、請求の支払条件と配送の出荷日が同じ `東京の営業日.cal` を読み、二つのコンテキストがそれを共有カーネルに並べる。
+dates のファイルとカレンダーは、属し方と、参照のもと（`use calendar`）として現れる。dates のファイルは、ワークフロー、ゲート、モジュールの `use dates` と、規則の `range from koyomi` の先としても現れる（19 章、17 章、18 章、20 章）。カレンダーと dates のファイルは公表された言語にできない（1.4）ので、境界の向こうから読めるのは、共有カーネルに並べたときだけである。11 章の例では、請求の支払条件と配送の出荷日が同じ `東京の営業日.cal` を読み、二つのコンテキストがそれを共有カーネルに並べる。
 
 doc のコンテキストのページには、koyomi の口（`Dates`）の事実から、dates のファイルの日付の名前と、使うカレンダーの名前とデータの範囲（例では `東京の営業日`、1955-01-01..2027-12-31）を並べる。カレンダーのファイルそのものには `Dates` は答えない（日付のファイルではないので）。そこで、カレンダーのファイルには、地図の中でそれを `use calendar` で読む dates のファイルが聞いた、カレンダーの名前とデータの範囲を並べる。口は D の段階（ritsu の F.2）で `Suite` に足し、`ritsu sakai` は ritsu-project が koyomi のものを渡す。`check` は `Dates` に問わない。
 
@@ -974,7 +974,7 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | W104 | URL を指す `$ref`（読まずに、範囲の外のものとして扱う。15.5） |
 | N101 | 退いたコード（ritsu 0.23.0）。dandori の参照を確かめていない、と言うためのものだった |
 | E201 | 関係の無いコンテキストへの参照（関係が逆向き、つまり参照の先が下流のときも） |
-| E202 | 相手の内側への参照（公表された言語でない proto、公表された言語に無い規則、規則そのもの（同梱、Lambda、ローカル、`apply`）、カレンダー） |
+| E202 | 相手の内側への参照（公表された言語でない proto、文書、クレート、公表された言語に無い規則、規則そのもの（同梱、Lambda、ローカル、`apply`）、`enums` のファイル、日付のファイル、カレンダー、ほかの `.gate` とモジュール） |
 | E203 | `through` に無い package を通る参照 |
 | E204 | 腐敗防止層の `layer` の外からの、上流の公表された言語への参照 |
 | E205 | 腐敗防止層の下流の公表された言語に、上流の型が出ている |
@@ -1580,7 +1580,7 @@ BoundedContext ordering {
 - `contexts[]`：名前、別名、版、ファイル、ファイルの SHA-256、説明、持ち主、`also`、`owns`（ディレクトリは `{"dir": "<パス>"}`、ファイルは `{"name": <参照>}`）、`published`（package、`from` に proto か規則の参照（Rust のクレートなら、その `Cargo.toml` の `file` の参照）、`services`、`generated`）、`terms`（名前、定義、`also`、`means` の参照、`as`）。
 - `relationships[]`：`kind` は `upstream_downstream`、`shared_kernel`、`partnership`、`separate_ways`。上流と下流の関係は、`roles` の `upstream`（`supplier`、`open_host_service`、`published_language`）と `downstream`（`conformist`、`anticorruption_layer`、`customer`）、`through`、`layer`、`enums`（上流の列挙の参照、先、`checked`、値の対応）、`terms`、`declared`（宣言した `.ctx` の行）を持つ。対応の先が名前だけなら `"to": {"name": "出荷の可否"}` で、`checked` は false になる。共有カーネルは `sides` に両側の並びを持つ。
 - `artifacts[]`：範囲の成果物の全部。参照と、属するコンテキストと、それを決めた `owns` の行と、ファイルの SHA-256（先頭 16 桁）。yuen が、成果物の定義が変わったかを知るのに使える。
-- `crossings[]`：境界を越える参照の全部。もとと先（2 章の JSON の形）、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`use calendar`、`use rule`、`use rule … connect` など、`use dates`、`use dates … lambda` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
+- `crossings[]`：境界を越える参照の全部。もとと先（2 章の JSON の形）、行、二つのコンテキスト、参照の仕方（`via`。proto の import は `proto import`、Rust のクレートの依存は、依存を書いた表の名前の `dependencies` か `build-dependencies`、ほかは、もとの言語が口で言う語：`import proto`、`shape`、`apply`、`import enum`、`range from koyomi`、`use calendar`、`use rule`、`use rule … connect` など、`use dates`、`use dates … lambda` など、`use proto`、`connect`、`flow`）、越えていく要素（使う型と、そこからフィールドでたどれる型。3.3。proto の import と、規則の `import proto` と `shape` のほかは空）、許した関係（`allowed_by`）。
 - OpenAPI と AsyncAPI の文書（15.7）：`published` の `from` に文書を `openapi "…"`・`asyncapi "…"` の参照で並べ、文書のある塊にだけ `contracts`（ファイル、種類、仕様の版、題、文書の版）を足す。`owns` と `layer` と共有カーネルの文書の項も、その参照（`{"name": …}`）である。文書の要素も参照で書く（15.10）。`means` と `enums` の `from` と `to` は `openapi "…" schema Charge` のような参照になり、文書の `$ref` の `crossings` は、`$ref` の行き着く要素を `to` に、そこからたどる要素の全部を `elements` に入れる。どれも、文書の無い地図の api は変えない。
 - 確かめていない成果物を並べる `not_checked[]` は、ritsu の段階 E で消した。ritsu の口で一式を読むようになってから、いつも空の並びだったからである。ほかの言語の成果物を読めなければ、検査が E104 か E105 を出し、api は検査を通らない地図には出さないので、api を出すときには、確かめていない成果物は無い。言語をまたいで決められなかったこと（ritsu の口の答えの `Undecided`）は、sakai が尋ねる口（`Rules` の事実、索引の `References` と `Items`、`Books` の事実）には無く、言語の境目の検査（ritsu の DESIGN 7 章）の結果として `ritsu check` が言う（要約の境目の数と JSON の `borders`、`tool` が `ritsu` の診断）。実行のときにしか見えない呼び出し（3.7）は成果物ごとのものではなく、doc の「確かめていないこと」に書く（10 章）。いつも空のキーを残すと、読む人がそこに何かが入ると思って待つことになる。
 
@@ -2261,7 +2261,7 @@ kaname の `References`（索引で。4.1）が言う参照のうち、次のも
 | `.kn` の `use module` | ほかの `.kn` | 同じ |
 
 - 共有カーネルを求めるのは、モジュールから生成したコードが、規則と日付とほかのモジュールから生成したコードを、同じプロセスで呼ぶからである（kaname の DESIGN 10.5）。使うのは相手の内側で、ゲートの `use rule` と同じく、規則そのもの、日付のファイル、モジュールを使う。規則を相手の公表された言語（`published language rulec.…`）に入れても、それは Connect のサービスとして呼ぶ形（ワークフローの `use rule … connect`）のためなので、モジュールの `use rule` は通らない。E202 の注は、モジュールが使うのはそのものであることを言う。
-- `use dates` は、モジュール、ゲート（17.2）、ワークフロー（19 章）の三つで同じ決まりにした。どれも、境界の向こうの日付のファイルを、二つの共有カーネルに並べたときだけ読め、関係が無ければ E201、あれば E202 で、見出しはファイルと行のほかは同じ文になる。要約では、参照のもとの言語の数（`kaname N`、`sekisho N`、`dandori N`）に入る。
+- 日付のファイルを読む参照は、モジュール、ゲート（17.2）、ワークフロー（19 章）の `use dates` と、規則の `range from koyomi`（20 章）の四つで同じ決まりにした。どれも、境界の向こうの日付のファイルを、二つの共有カーネルに並べたときだけ読め、関係が無ければ E201、あれば E202 で、見出しはファイルと行と参照の仕方のほかは同じ文になる。要約では、参照のもとの言語の数（`kaname N`、`sekisho N`、`dandori N`、`rulec N`）に入る。
 - `use book` は数えない。モジュールは振替の値を組み立てて返すだけで、帳簿に当てるのはホストである（`ritsu gen` が書く当てる関数を、ホストが帳簿のクライアントで呼ぶ。kaname の DESIGN 10.6）。ワークフローの `use book`（dandori が書く実装が、`Transport` の `book` で帳簿のクライアントを呼ぶ。dandori の DESIGN 4.2）とゲートの `use book` も数えない（3.3、17.2）ので、三つの言語でそろう。帳簿をほかのコンテキストから使うのは、帳簿の後ろに立つサービスを通すときである（4.5）。
 
 例の支払いのモジュール（kaname の `examples/payout`）を、手数料の規則を持つ Fees と、モジュールと台帳を持つ Payouts の地図に置き、Fees が規則を公表された言語 `rulec.card_fee.v1` に入れ、Payouts をその順応者にしたときの、`ritsu sakai check market.ctx` の最初の行と注は次のとおりである。
@@ -2345,7 +2345,88 @@ error[E202]: ordering/ship_notice.flow:4:1: The file ordering/ship_notice.flow o
 - ritsu の `tests/sakai.rs`：同じ日付のファイルを、ワークフロー、ゲート、モジュールの三つが読むとき、E201 も E202 も、三つの見出しがファイルと行のほかは同じ文になり、注はそれぞれの言語の読み方を言う。共有カーネルに並べると三つとも通り、要約は `dandori 6, sekisho 1, kaname 1` と数え、`api` の `via` はどれも `use dates` になる。英語と日本語の名前の例の両方で確かめる。kaname までつなぐのは ritsu のテストだけなので、ここに置いた（18.4）。
 - 替える前（0.32.0）と後の突き合わせ：sakai の例（四つ）、テストの地図（七つ）、変異（170）、ritsu のテストのプロジェクトの地図（`shop`、`通販`）、サイトの試すページの例（二つ）の `check`（英語と日本語、それぞれ JSON も）、`api`、`doc`（Markdown の英語と日本語、HTML）と、テストのプロジェクト四つの `ritsu check`、根の `ritsu check ritsu.ctx` と `ritsu sakai check ritsu.ctx`（英語と日本語、JSON も）と `api`。違ったのは、根の地図の `api` の、この変更で直した sakai のソース二つ（`src/refs.rs`、`src/codes.rs`）の SHA-256 だけだった。どの地図にも、境界の向こうの日付のファイルを読むワークフローは無い。リポジトリの地図（`ritsu.ctx`）の範囲には `.flow` が無く（dandori の例とテストは `except` の中にある）、新しく言われるものは無かった。上の変異とテストの場面は、替える前は通り（ゲートとモジュールの `use dates` だけが言われ）、替えた後はワークフローのものも同じに言われる。
 
+**見つけて直していないもの**：rulec の `import enum`（`enums` のファイルの列挙を丸ごと読む）と `range from koyomi`（規則の日付の入力の範囲を、koyomi の日付がとる日にする）も、境界を越える参照として数えていなかった。関係の無いコンテキストの `enums` のファイルと日付のファイルを、規則がこの二つで読む地図は `no crossing to check` で通った。規則の参照の決まりを変えることなので、この変更には入れず、20 章で、ワークフローの `use dates` と同じ決まりにした。
+
+## 20. 規則の `import enum` と `range from koyomi`（2026-10-21）
+
+rulec の規則が `enums` のファイルの列挙を丸ごと読む `import enum` と、日付の入力の範囲を koyomi の日付のファイルからとる `range from koyomi` を、ワークフロー（19 章）、ゲート（17 章）、モジュール（18 章）の `use dates` と同じく、境界を越える参照として確かめる。
+
+**きっかけ**：ワークフローの `use dates` を数えるようにしたとき（19 章）、規則のこの二つも数えていないことが分かった。規則が関係の無いコンテキストの `enums` のファイルや日付のファイルを読んでも、地図は何も言わず、`no crossing to check` で通っていた。同じ日付のファイルを、ワークフロー、ゲート、モジュールから読めば E201 か E202 になり、規則から読むと何も言わない。根の DESIGN 6.4 と README も、この二つを「まだ数えていない」と断っていた。
+
+**原因**：rulec の `References` は、`enums` のファイルを足したとき（rulec の DESIGN 15.212）から `import enum` を、入力の範囲を koyomi の日付からとれるようにしたとき（rulec の DESIGN 15.174）から `range from koyomi` を、参照の仕方として出している。先は `rulec "<enums のファイル>" enum <列挙>` と `koyomi "<日付のファイル>" date <日付>` である。sakai の `suite_crossings`（`src/refs.rs`）は、rulec の参照のうち `import proto`、`shape`、`apply` と、先が文書のときの `import jsonschema` と `shape` だけを参照の種類に読み替え、ほかを黙って飛ばしていた。3.3 は、この二つを、数えないと決めたものではなく残した穴として書いていた。
+
+**決定**：二つを参照の種類 `Kind::RuleImportEnum` と `Kind::RuleRangeFromKoyomi`（`src/refs.rs`）として数え、ワークフローの `use dates` と同じ決まりで確かめる。境界の向こうの `enums` のファイルと日付のファイルは、二つのコンテキストが共有カーネルに並べたときだけ読める。関係が無ければ E201、関係があっても共有カーネルに無ければ E202（パートナーシップでも同じ）、別々の道なら E206、地図の範囲の外なら E103 である。
+
+- 理由：`import enum` は、`enums` のファイルの列挙を、値も順も表示名もそのまま読む。規則から生成したコードは、`enums` のファイルから生成した型のモジュールを読み込み、自分では列挙を宣言しない（rulec の DESIGN 15.212）。`range from koyomi` は、日付のファイルの日付がとる日を、規則の入力の範囲にする。rulec はその日の上で表を確かめ、生成したコードはほかの日を入口で受け付けない（rulec の DESIGN 15.174）。どちらも、相手がファイルを直せば、規則の検査の答えも生成したコードも変わる。使うのは相手の内側で、規則を同梱する `use rule` や、規則の `apply` と同じ使い方である。
+- `enums` のファイルを、相手の公表された言語の rulec の塊（`published language rulec.…`）に並べても、`import enum` は通さない。rulec の塊が公表するのは、規則を Connect のサービスとして呼ぶ形で（1.4）、`enums` のファイルには呼ぶものが無く、`import enum` が使うのはファイルそのものだからである。列挙を相手に公表するなら、公表された言語の proto に置き、規則はそれを `import proto` で取り込む。この形なら、相手が値を足したときに rulec が E032 で止め、sakai は、ほかの proto への参照と同じ決まり（`through`、腐敗防止層の対応）で確かめる。E202 の注は、この二つの直し方を挙げる。
+- 参照の読み方（`via`）は、rulec が言う語のまま（`import enum`、`range from koyomi`）にする。要約では `rulec N` に数える。
+- 越えていく要素（`api` の `elements`）は空のままにする。二つの参照が通るのは共有カーネルの中だけで、共有カーネルを通る参照は、同じ語の検査（3.6）の対象にしない（1.6）。
+- E202 の注は、規則がそれぞれのファイルをどう使うかを言う。`range from koyomi` の注の後半は、ワークフローの `use dates` の注と同じ文にした。日付のファイルを読む四つの参照（ワークフロー、ゲート、モジュールの `use dates` と、規則の `range from koyomi`）の見出しは、ファイルと行と参照の仕方のほかは同じ文になる（18.2）。
+
+変異 `E202_a_rule_reads_enums_inside_another_context`（`examples/shop` の配送に地域の `enums` のファイルを置き、受注の規則がそれを読むもの）と `E202_a_rule_reads_dates_inside_another_context`（受注の規則が、配送の出荷日を `range from koyomi` で読むもの）の英語の出力（`tests/golden/`）：
+
+```
+error[E202]: ordering/next_day.rule:4:1: The file ordering/next_day.rule of Ordering refers to delivery/rules/regions.rule (import enum), which is inside Delivery
+     4 | import enum region from "../delivery/rules/regions.rule"
+  = An `import enum` reads an enum whole from the `enums` file, and the code a rule is made into imports the module made of that file: the `enums` file itself, inside Delivery. An enum across the boundary is read from an `enums` file in the two's shared kernel, or Delivery puts it in a `.proto` of a published language and the rule takes it in with `import proto`.
+  involved:
+      Ordering  ordering/next_day.rule:4                         import enum "../delivery/rules/regions.rule"
+      Delivery  rulec "delivery/rules/regions.rule" enum region  a part of the inside of Delivery
+```
+
+```
+error[E202]: ordering/ship_window.rule:5:1: The file ordering/ship_window.rule of Ordering refers to delivery/ship_date.cal (range from koyomi), which is inside Delivery
+     5 |   ship : date  range from koyomi "../delivery/ship_date.cal" date ship
+  = A `range from koyomi` holds the rule's input to the days a date of the dates file comes to: rulec checks the rule on those days, and the code it is made into takes no other day. That is the dates file itself, inside Delivery. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.
+  involved:
+      Ordering  ordering/ship_window.rule:5                range from koyomi "../delivery/ship_date.cal"
+      Delivery  koyomi "delivery/ship_date.cal" date ship  a part of the inside of Delivery
+```
+
+日本語の版の変異 `E202_境界の向こうの列挙を読む規則` と `E202_境界の向こうの日付を範囲にする規則`（`examples/shop.ja`）の日本語の出力：
+
+```
+エラー[E202]: ordering/翌日配送.rule:4:1: 「受注」の ordering/翌日配送.rule が、「配送」の内側の delivery/rules/配送の地域.rule を参照しています（import enum）
+     4 | import enum 地域 from "../delivery/rules/配送の地域.rule"
+  = `import enum` は、`enums` のファイルの列挙を丸ごと読みます。規則から生成したコードはそのファイルから生成したモジュールを読み込むので、使うのは `enums` のファイルそのもの（「配送」の内側）です。境界の向こうの列挙は、`enums` のファイルを二つの共有カーネルに並べて読むか、「配送」に公表された言語の proto に置いてもらい、規則から `import proto` で取り込んでください。
+  関わるもの:
+      受注  ordering/翌日配送.rule:4                          import enum "../delivery/rules/配送の地域.rule"
+      配送  rulec "delivery/rules/配送の地域.rule" enum 地域  「配送」の内側のもの
+```
+
+```
+エラー[E202]: ordering/出荷の期間.rule:5:1: 「受注」の ordering/出荷の期間.rule が、「配送」の内側の delivery/出荷日.cal を参照しています（range from koyomi）
+     5 |   出す日(ship) : date  range from koyomi "../delivery/出荷日.cal" date 出荷日
+  = `range from koyomi` は、日付のファイルの日付がとる日を、規則の入力の範囲にします。rulec はその日の上で規則を確かめ、規則から生成したコードもほかの日を受け付けません。使うのは日付のファイルそのもの（「配送」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。
+  関わるもの:
+      受注  ordering/出荷の期間.rule:5                range from koyomi "../delivery/出荷日.cal"
+      配送  koyomi "delivery/出荷日.cal" date 出荷日  「配送」の内側のもの
+```
+
+**捨てたもの**：
+
+- 関係があれば通すこと（たとえば、相手が公表された言語に `enums` のファイルを並べたら、その順応者からの `import enum` を通す）。`enums` のファイルには、相手から呼ぶ形も、互換を確かめる仕組み（proto なら buf の `breaking`）も無い。値を足したときに、読む全部の規則の検査が走ることが `enums` のファイルの目的で（rulec の DESIGN 15.212）、それは二つのチームが一緒に持つものの扱いである。日付のファイルは、19 章で捨てたものと同じ理由による。
+- `enums` のファイルを公表された言語に並べる書き方を足すこと。公表された言語は、相手が呼ぶ形を決める契約である（1.4）。列挙を公表する形は、proto にもうある。
+- 数えない参照として 3.3 に並べ、決めごとにすること。同じ日付のファイルを読んでも、読むのがどの言語かで地図の答えが変わる（19 章で捨てたものと同じ）。
+- `range from koyomi` だけを数えること。`import enum` も相手のファイルそのものを使う参照で、片方だけにする理由が無い。
+
+**変わること**：
+
+- 前は通っていた地図が、新しく落ちうる。規則が `import enum` か `range from koyomi` で、共有カーネルに並べていない境界の向こうの `enums` のファイルか日付のファイルを読んでいる地図である。関係が無ければ E201、関係があれば E202、別々の道なら E206 になる。地図の範囲の外のファイルを読んでいれば E103 になる。
+- 共有カーネルを通る二つの参照は、要約の `rulec N`、`api` の `crossings`（`via` は `import enum` と `range from koyomi`、`to` は `rulec "…" enum …` と `koyomi "…" date …`、`allowed_by` は `shared_kernel`）、`doc` の関係の行（その関係を通る参照）に出る。
+- 規則がこの二つで境界の向こうのファイルを読まない地図では、出力は一字も変わらない。
+- 台帳の E202 の「出るとき」の例に `enums` のファイルを足し、E103 の「出るとき」に、ほかの言語の成果物が参照するファイルを足した（ワークフローの `use rule` などでも前から出ていたが、書いていなかった）。5.2 の表の E202 の行も、いまの出るときに合わせた（文書、クレート、日付のファイル、ほかの `.gate` とモジュールが抜けていた）。`sakai explain`、`docs/codes.md`、`docs/codes.ja.md`、スキルのコピーが変わる。
+- sakai のテストは、rulec に koyomi をつないで読む（`tests/common` の `suite`。ritsu-project の `Joined` と同じつなぎ方）。前は koyomi をつながない rulec だったので、`range from koyomi` を書いた規則には、rulec が E129 で事実を答えず、E105 になった。テストの材料にそういう規則は無かったので、ほかのテストの答えは変わらない。
+- 根の DESIGN 6.4、README（英日）、サイトの頭のページ（英日）の sakai の段から、この二つを「まだ数えていない」という断り書きを外した。帳簿の `use book` を数えない断り書きは残した。
+
+**確かめたこと**：
+
+- `tests/rule_reads.rs`：英語の例 `examples/shop` と、日本語の名前の `examples/shop.ja` の両方で、次の四つ。受注の規則が、配送の地域の `enums` のファイルを `import enum` で、出荷日を `range from koyomi` で読むと、二つとも E202 になる（二つはパートナーシップ。注は、それぞれの読み方を言う）。配送の規則が、請求の支払方法の `enums` のファイルと支払条件を読むと、二つとも E201 になる（請求は配送の顧客で、向きが逆であることを注に言う）。二つのファイルを請求と配送の共有カーネルに並べると通り、要約が `81 artifacts, each in one context; 11 crossings checked (proto 1, rulec 4, koyomi 1, dandori 5)` で終わり、`api` の二つの参照は、`via` が `import enum` と `range from koyomi`、`allowed_by` が `shared_kernel` になる。請求の規則が自分の支払方法と支払条件を読んでも、何も言わず、数えない。地図の範囲の外のファイルを読むと、二つとも E103 になる。
+- 上の変異四つ。golden は英語と日本語。
+- ritsu の `tests/sakai.rs`：日付のファイルを読むワークフロー、ゲート、モジュールに、同じ日付のファイルを `range from koyomi` で読み、同じコンテキストの `enums` のファイルを `import enum` で読む規則を足した。E201 も E202 も、見出しはファイルと行と参照の仕方のほかは同じ文になり、注はそれぞれの読み方を言う。共有カーネルに並べると全部が通り、要約は `rulec 4, koyomi 1, dandori 6, sekisho 1, kaname 1` と数え、`api` の `via` は、日付のファイルへの四つが `use dates`（三つ）と `range from koyomi`、`enums` のファイルへの一つが `import enum` になる。英語と日本語の名前の例の両方で確かめる。
+- 替える前（0.33.0）と後の突き合わせ：sakai の例（四つ）、テストの地図（七つ）、変異（172）、ritsu のテストのプロジェクト（九つ。地図のある `shop` と `通販` は sakai のコマンドも）、サイトの試すページの例（二つ）の `check`（英語と日本語、それぞれ JSON も）、sakai のクレートのバイナリの `check`、`api`、`doc`（Markdown と HTML、英語と日本語）、`export cml`、変異の `build`、テストのプロジェクトの `ritsu check`（英語と日本語、JSON も）と、根の `ritsu check ritsu.ctx` と `ritsu sakai check ritsu.ctx`（英語と日本語、JSON も）、`api`、`doc`。出力のファイルは 2,308 で、違ったのは、根の地図の `api` の、この変更で直した sakai のソース二つ（`src/refs.rs`、`src/codes.rs`）の SHA-256 だけだった。どの例とテストの地図にも、規則が `import enum` か `range from koyomi` で境界の向こうのファイルを読むところは無い。新しい変異四つとテストの場面は、替える前は通り（変異の要約は `9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)`）、替えた後は E202 か E201 になる。
+- リポジトリの地図（`ritsu.ctx`）が言うことは変わらない（`73 crossings checked (rust 73)`）。範囲の規則は yuen の例の二つ（`osha_extinguisher.rule`、`印紙税の本則と軽減.rule`）だけで、どちらも `import enum` も `range from koyomi` も書いていない。地図の書き漏れも、本当の境界の破りも無い。
+
 **見つけて直していないもの**：
 
-- rulec の `import enum`（`enums` のファイルの列挙を丸ごと読む）と `range from koyomi`（規則の日付の入力の範囲を、koyomi の日付がとる日にする）。rulec の `References` はどちらも出している（先は `rulec "<enums のファイル>" enum <名前>` と `koyomi "<日付のファイル>" date <日付>`）が、sakai は参照の種類に読み替えず、境界を越える参照として数えない。関係の無いコンテキストの `enums` のファイルと日付のファイルを、規則がこの二つで読む地図は `no crossing to check` で通る（替えた後のバイナリで確かめた）。規則の生成したコードは `enums` のファイルから生成したモジュールを読み込み、`range from koyomi` は日付のファイルがとる日を規則の入力の範囲にするので、どちらも相手の内側を使う参照である。ワークフローの `use dates` と同じく共有カーネルを求めるかは、規則の参照の決まりを変えることなので、この変更には入れていない。3.3 には、決めたことではなく残した穴として書いた。
-- 根の DESIGN 6.4、README（英日）、サイトの頭のページ（英日）は、この二つをまだ数えていないと書いている。
+- `published language rulec.…` の塊に `enums` のファイルを並べても、E302 にならない。`enums` のファイルからは Connect のサービスが生成されない（`rulec gen` は型のモジュールしか書かない）のに、rulec の口（`Rules`）がほかの規則と同じ形の Connect のパスを答え、sakai は塊の package と `open host service` をそのパスで確かめるからである。生成されないサービスの名前（地域の `enums` のファイルなら `RegionsService`）を `open host service` に書いても通る。rulec の口が `enums` のファイルに Connect のパスを答えないようにするか、sakai が `enums` のファイルを見分けて E302 にするかで直せるが、前者は rulec の口を変えることになるので、この変更には入れていない。

@@ -294,7 +294,7 @@ whom, through what. sakai checks the references that cross contexts, in the file
 language here, in the OpenAPI and AsyncAPI documents services keep as their contracts, and in the
 code — handing imports to import-linter, dependency-cruiser, ArchUnit and go-arch-lint, and reading
 Rust's crates from Cargo. It does not count a `use book`, since another context reaches a book through the service in
-front of it, nor, for now, a rule's `import enum` and `range from koyomi`.
+front of it.
 ritsu maps its own crates this way; this is one of its contexts:
 
 ```ctx

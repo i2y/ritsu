@@ -1,0 +1,16 @@
+rule 翌日配送(next_day) v1
+description "注文に翌日配送を出せるかどうか。配送の地域で決める"
+
+import enum 地域 from "../delivery/rules/配送の地域.rule"
+
+inputs
+  届け先(destination) : 地域
+
+outputs
+  出せる(offered) : bool
+
+table 決める(decide)
+policy unique
+| 届け先       | -> 出せる : bool |
+| 本州         | true            |
+| 北海道, 沖縄 | false           |

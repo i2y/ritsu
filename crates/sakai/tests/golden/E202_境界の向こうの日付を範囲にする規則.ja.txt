@@ -1,0 +1,6 @@
+エラー[E202]: ordering/出荷の期間.rule:5:1: 「受注」の ordering/出荷の期間.rule が、「配送」の内側の delivery/出荷日.cal を参照しています（range from koyomi）
+     5 |   出す日(ship) : date  range from koyomi "../delivery/出荷日.cal" date 出荷日
+  = `range from koyomi` は、日付のファイルの日付がとる日を、規則の入力の範囲にします。rulec はその日の上で規則を確かめ、規則から生成したコードもほかの日を受け付けません。使うのは日付のファイルそのもの（「配送」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。
+  関わるもの:
+      受注  ordering/出荷の期間.rule:5                range from koyomi "../delivery/出荷日.cal"
+      配送  koyomi "delivery/出荷日.cal" date 出荷日  「配送」の内側のもの

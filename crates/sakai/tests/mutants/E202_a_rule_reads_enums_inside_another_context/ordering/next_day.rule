@@ -1,0 +1,16 @@
+rule next_day v1
+description "Whether an order is offered next-day delivery, by delivery's regions"
+
+import enum region from "../delivery/rules/regions.rule"
+
+inputs
+  destination : region
+
+outputs
+  offered : bool
+
+table decide
+policy unique
+| destination       | -> offered : bool |
+| honshu            | true              |
+| hokkaido, okinawa | false             |

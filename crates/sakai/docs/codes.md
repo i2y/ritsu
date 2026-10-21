@@ -968,7 +968,7 @@ See also: [E101](#e101)
 
 ## E103 — Something outside the scope is owned or referred to
 
-**When**: An entry of `owns`, what a proto imports, or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.
+**When**: An entry of `owns`, what a proto imports, a file an artifact of another language refers to (a rule, an `enums` file, a dates file, a calendar, a crate and the like), or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.
 
 **Fix**: Widen the scope, or delete the entry or the reference.
 
@@ -1777,7 +1777,7 @@ See also: [E202](#e202), [E206](#e206)
 
 ## E202 — A reference to the inside of another context
 
-**When**: What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule, a dates file or a calendar itself.
+**When**: What a reference crosses to is in no published language of the other context and in no shared kernel of the two: a proto or an OpenAPI or AsyncAPI document that is not published, a rule, an `enums` file, a dates file or a calendar itself.
 
 **Fix**: Refer through the other context's published language, or list it in a shared kernel of the two.
 

@@ -1,0 +1,6 @@
+error[E202]: ordering/翌日配送.rule:4:1: The file ordering/翌日配送.rule of 受注 refers to delivery/rules/配送の地域.rule (import enum), which is inside 配送
+     4 | import enum 地域 from "../delivery/rules/配送の地域.rule"
+  = An `import enum` reads an enum whole from the `enums` file, and the code a rule is made into imports the module made of that file: the `enums` file itself, inside 配送. An enum across the boundary is read from an `enums` file in the two's shared kernel, or 配送 puts it in a `.proto` of a published language and the rule takes it in with `import proto`.
+  involved:
+      受注  ordering/翌日配送.rule:4                          import enum "../delivery/rules/配送の地域.rule"
+      配送  rulec "delivery/rules/配送の地域.rule" enum 地域  a part of the inside of 配送

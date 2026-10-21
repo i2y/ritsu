@@ -1,6 +1,7 @@
 //! The references that cross a boundary (DESIGN 3.3; PLAN B.7, C.2–C.4). They are the imports of
 //! the `.proto` files, and what the other languages say their artifacts name: a rule's `import
-//! proto`, `shape` and `apply` (rulec's `Rules` and `References`), a calendar's `use calendar`
+//! proto`, `shape`, `apply`, `import enum` and `range from koyomi` (rulec's `Rules` and
+//! `References`), a calendar's `use calendar`
 //! (koyomi's `References`), a workflow's rules, dates files, APIs, methods and child workflows
 //! (dandori's `References`), what a gate and a module read (sekisho's and kaname's), and the
 //! dependencies of Rust's crates on each other (the lines of their `Cargo.toml`, as Cargo says
@@ -40,6 +41,13 @@ pub enum Kind {
     RuleShape,
     /// A rule's `apply`: another rule, expanded into this one when rulec checks it.
     RuleApply,
+    /// A rule's `import enum`: an enum read whole from an `enums` file. The code a rule is made
+    /// into imports the module made of the `enums` file, so it is the file itself (DESIGN 20).
+    RuleImportEnum,
+    /// A rule's `range from koyomi`: the days a date of a dates file comes to, as the range of an
+    /// input. rulec checks the rule on those days, and the code it is made into takes no other, so
+    /// it is the dates file itself, as a workflow's `use dates` is (DESIGN 20).
+    RuleRangeFromKoyomi,
     /// A dates file's or a calendar's `use calendar`.
     CalendarUse,
     /// A workflow's `use rule`, in the words dandori says it with (`use rule`, `use rule …
@@ -91,6 +99,8 @@ impl Kind {
             Kind::RuleImportProto => "import proto".into(),
             Kind::RuleShape => "shape".into(),
             Kind::RuleApply => "apply".into(),
+            Kind::RuleImportEnum => "import enum".into(),
+            Kind::RuleRangeFromKoyomi => "range from koyomi".into(),
             Kind::CalendarUse => "use calendar".into(),
             Kind::FlowRule { how, .. } => how.clone(),
             Kind::FlowDates { how } => how.clone(),
@@ -247,8 +257,9 @@ pub fn proto_crossings(ps: &Protos, arts: &[Artifact]) -> Vec<Crossing> {
 }
 
 /// What the other languages say their artifacts name, as crossings (DESIGN 3.3): a rule's `import
-/// proto` (the enum, its values among what crosses), `shape` (the message, and what it reaches)
-/// and `apply` (another rule), a calendar's `use calendar`, a workflow's rules, dates files,
+/// proto` (the enum, its values among what crosses), `shape` (the message, and what it reaches),
+/// `apply` (another rule), `import enum` (an `enums` file) and `range from koyomi` (a dates
+/// file), a calendar's `use calendar`, a workflow's rules, dates files,
 /// `.proto` files, methods and child workflows, the rules, dates files, calendars and gates a gate
 /// reads and the operations it guards, and the rules, dates files and modules a module reads. A
 /// reference to a file outside the map's scope is E103.
@@ -267,6 +278,10 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 (Tool::Rulec, "import proto") => Kind::RuleImportProto,
                 (Tool::Rulec, "shape") if r.target.tool == Tool::Proto => Kind::RuleShape,
                 (Tool::Rulec, "apply") => Kind::RuleApply,
+                // an `enums` file a rule reads an enum from, and a dates file whose days a rule's
+                // input takes: the file itself, as a workflow's dates file is (DESIGN 20)
+                (Tool::Rulec, "import enum") => Kind::RuleImportEnum,
+                (Tool::Rulec, "range from koyomi") => Kind::RuleRangeFromKoyomi,
                 (Tool::Koyomi, "use calendar") => Kind::CalendarUse,
                 (Tool::Dandori, h) if h.starts_with("use rule") => Kind::FlowRule { connect: h.contains("connect"), how: h.to_string() },
                 // a dates file a workflow reads, bundled or as a function: the file itself, as a
@@ -590,7 +605,7 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         }
         let pkg = match &c.kind {
             Kind::FlowRule { connect: true, .. } => m.contexts[y].published.iter().find(|pl| pl.rulec.as_ref().is_some_and(|(f, _)| *f == q)).map(|pl| pl.package.clone()),
-            Kind::FlowRule { connect: false, .. } | Kind::FlowDates { .. } | Kind::RuleApply | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
+            Kind::FlowRule { connect: false, .. } | Kind::FlowDates { .. } | Kind::RuleApply | Kind::RuleImportEnum | Kind::RuleRangeFromKoyomi | Kind::CalendarUse | Kind::GateUse { .. } | Kind::ModuleUse { .. } => None,
             Kind::FlowChild if !child_published => None,
             Kind::Crate { .. } => published_crate(m, y, &q),
             // the operation a gate guards, of a document or a `.proto`
@@ -733,6 +748,14 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
                 Kind::RuleApply => tr!(
                     "`apply` は、呼び先の規則をこの規則の中に展開します。使うのは規則そのもの（「{yn}」の内側）です。境界の向こうの規則は、二つの共有カーネルに並べて展開するか、「{yn}」が公表された言語（`published language rulec.…`）に入れた規則を、ワークフローから `use rule … connect` で呼んでください。",
                     "An `apply` expands the rule it names into this one: the rule itself, inside {yn}. A rule across the boundary is expanded from the two's shared kernel, or called from a workflow with `use rule … connect` once {yn} puts it in a published language (`published language rulec.…`)."
+                ),
+                Kind::RuleImportEnum => tr!(
+                    "`import enum` は、`enums` のファイルの列挙を丸ごと読みます。規則から生成したコードはそのファイルから生成したモジュールを読み込むので、使うのは `enums` のファイルそのもの（「{yn}」の内側）です。境界の向こうの列挙は、`enums` のファイルを二つの共有カーネルに並べて読むか、「{yn}」に公表された言語の proto に置いてもらい、規則から `import proto` で取り込んでください。",
+                    "An `import enum` reads an enum whole from the `enums` file, and the code a rule is made into imports the module made of that file: the `enums` file itself, inside {yn}. An enum across the boundary is read from an `enums` file in the two's shared kernel, or {yn} puts it in a `.proto` of a published language and the rule takes it in with `import proto`."
+                ),
+                Kind::RuleRangeFromKoyomi => tr!(
+                    "`range from koyomi` は、日付のファイルの日付がとる日を、規則の入力の範囲にします。rulec はその日の上で規則を確かめ、規則から生成したコードもほかの日を受け付けません。使うのは日付のファイルそのもの（「{yn}」の内側）です。日付のファイルは公表された言語にできないので、境界の向こうのものは、二つの共有カーネルに並べたときだけ読めます。",
+                    "A `range from koyomi` holds the rule's input to the days a date of the dates file comes to: rulec checks the rule on those days, and the code it is made into takes no other day. That is the dates file itself, inside {yn}. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel."
                 ),
                 // an element of a document is said by its reference, not as a file
                 _ if c.pointer.is_some() => tr!(

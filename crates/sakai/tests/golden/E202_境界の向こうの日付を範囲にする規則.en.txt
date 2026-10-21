@@ -1,0 +1,6 @@
+error[E202]: ordering/出荷の期間.rule:5:1: The file ordering/出荷の期間.rule of 受注 refers to delivery/出荷日.cal (range from koyomi), which is inside 配送
+     5 |   出す日(ship) : date  range from koyomi "../delivery/出荷日.cal" date 出荷日
+  = A `range from koyomi` holds the rule's input to the days a date of the dates file comes to: rulec checks the rule on those days, and the code it is made into takes no other day. That is the dates file itself, inside 配送. A dates file cannot be a published language, and one across the boundary is read only from the two's shared kernel.
+  involved:
+      受注  ordering/出荷の期間.rule:5                range from koyomi "../delivery/出荷日.cal"
+      配送  koyomi "delivery/出荷日.cal" date 出荷日  a part of the inside of 配送
