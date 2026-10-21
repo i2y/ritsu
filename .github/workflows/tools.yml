@@ -41,7 +41,9 @@ jobs:
   tools:
     name: tools (${{ matrix.group }})
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    # rulec's job runs every rule of the tree that applies another in all twelve languages, about
+    # an hour of its own on a runner
+    timeout-minutes: 200
 
     strategy:
       fail-fast: false
