@@ -570,11 +570,15 @@ impl MinWith for Rat {
     }
 }
 
-/// A number counted in `from`, counted in `to`; a number and a rate count alike.
+/// A number counted in `from`, counted in `to`; a number and a rate count alike, and a temperature is
+/// read with its unit's zero (`-40℃` is `-40℉`), as the reference interpreter reads it.
 fn convert_num(v: Rat, from: &ritsu_units::Unit, to: &ritsu_units::Unit) -> Option<Rat> {
     use ritsu_units::Dim;
-    if v.num == 0 || (matches!(from.dim, Dim::Number | Dim::Rate) && matches!(to.dim, Dim::Number | Dim::Rate)) {
+    if v.num == 0 && !(from.compares_only() && to.compares_only()) || (matches!(from.dim, Dim::Number | Dim::Rate) && matches!(to.dim, Dim::Number | Dim::Rate)) {
         return Some(v);
+    }
+    if from.compares_only() && to.compares_only() && from.offset() != to.offset() {
+        return crate::interp::convert(v, from, to).ok();
     }
     factor(from, to).map(|f| v.mul(f))
 }

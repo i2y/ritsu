@@ -162,6 +162,34 @@ fn units_converted_and_not() {
     assert_eq!(codes(&t, "fn f(a: money[JPY] range >=0JPY <=100JPY) -> money[円]\n  a + 10円\n"), none());
 }
 
+/// A temperature read in the other unit with that unit's zero (DESIGN 3.2, 3.10). A constant there is
+/// the value the zero gives it, on its own value as a literal is: `20℃ in ℉` is 68℉, which beside a
+/// ℃ is 20℃ again; `41℉` given to a ℃ is 5℃, `77℉` in a field 25℃ and `14℉` in a `max` -10℃, each
+/// on the step 1 of ℃. A value converted with `in` is on the step the shift between the zeros leaves
+/// it: a whole number of ℃ in ℉ is 32 plus a multiple of 9/5, a multiple of 1/5.
+#[test]
+fn a_temperature_is_read_in_the_other_unit_with_its_zero() {
+    let t = project();
+    // 20℃ in ℉ is 68℉, not 36℉: beside a ℃ it is 20℃, not 20/9℃ (E104)
+    assert_eq!(codes(&t, "fn f(t: temperature[℃] range >=-40℃ <=40℃) -> bool\n  if t >= 20℃ in ℉ then true else false\n"), none());
+    assert_eq!(codes(&t, "fn f() -> temperature[℉]\n  100℃ in ℉\n"), none());
+    // a constant of the other unit given to a ℃, held in a field of ℃, and with a ℃ in a `max`
+    let g = "fn g(t: temperature[℃] range >=-40℃ <=40℃) -> bool\n  if t < 10℃ then true else false\n";
+    assert_eq!(codes(&t, &format!("{g}fn f() -> bool\n  g(t: 41℉)\n")), none());
+    assert_eq!(codes(&t, "record R\n  at : temperature[℃]  range >=-60℃ <=60℃\n\nfn f() -> R\n  R { at: 77℉ }\n"), none());
+    assert_eq!(codes(&t, "fn f(t: temperature[℃] range >=-40℃ <=40℃) -> temperature[℃]\n  max(t, 14℉)\n"), none());
+    // one that is no whole number of ℃ is still E104: 40℉ is 40/9℃
+    assert_eq!(codes(&t, &format!("{g}fn f() -> bool\n  g(t: 40℉)\n")), ["E104"]);
+    assert_eq!(codes(&t, "fn f(t: temperature[℃] range >=-40℃ <=40℃) -> bool\n  if t >= 40℉ then true else false\n"), ["E104"]);
+    // a value converted with `in` is unrounded, on 1/5℉ from ℃ and on 5/9℃ from ℉ (the shift, -160/9,
+    // is on it); rounded, it goes
+    let o = check_in(&t, "module m v1\n\nfn f(t: temperature[℃] range >=-40℃ <=40℃) -> temperature[℉]\n  t in ℉\n");
+    assert!(text(&o).contains("a value of temperature[℉] that comes with a fraction, in steps of 0.2"), "{}", text(&o));
+    let o = check_in(&t, "module m v1\n\nfn f(t: temperature[℉] range >=-40℉ <=104℉) -> temperature[℃]\n  t in ℃\n");
+    assert!(text(&o).contains("a value of temperature[℃] that comes with a fraction, in steps of 5/9"), "{}", text(&o));
+    assert_eq!(codes(&t, "fn f(t: temperature[℃] range >=-40℃ <=40℃) -> temperature[℉]\n  half_up(t in ℉, 1℉)\n"), none());
+}
+
 #[test]
 fn dates_have_their_difference_only() {
     let t = project();

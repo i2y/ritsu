@@ -181,6 +181,38 @@ fn what_the_command_takes() {
     assert!(out.lines().next().unwrap().ends_with("\"why\":\"基本の値\"}"), "{out}");
 }
 
+/// The candidates around a literal of a temperature of the other unit are read with that unit's zero
+/// (DESIGN 9, 3.10): a ℉ compared with 30℃ is tried at 85℉, 86℉ and 87℉, and a ℃ compared with 50℉
+/// at 9℃, 10℃ and 11℃. Read by the factor alone, they were 53℉ to 55℉, and none at all around 50℉
+/// (250/9℃ is on no whole number).
+#[test]
+fn a_temperature_of_the_other_unit_is_tried_around_its_value() {
+    for (function, want) in [
+        (
+            "hot",
+            [
+                r#"{"function":"hot","in":{"t":85},"out":"not hot","why":"t: a step below 30℃"}"#,
+                r#"{"function":"hot","in":{"t":86},"out":"hot","why":"t: compared with 30℃"}"#,
+                r#"{"function":"hot","in":{"t":87},"out":"hot","why":"t: a step above 30℃"}"#,
+            ],
+        ),
+        (
+            "cool",
+            [
+                r#"{"function":"cool","in":{"t":9},"out":"cool","why":"t: a step below 50℉"}"#,
+                r#"{"function":"cool","in":{"t":10},"out":"mild","why":"t: compared with 50℉"}"#,
+                r#"{"function":"cool","in":{"t":11},"out":"mild","why":"t: a step above 50℉"}"#,
+            ],
+        ),
+    ] {
+        let (code, out, err) = joined(&["vectors", "tests/modules/temps.kn", "--function", function]);
+        assert_eq!(code, 0, "{err}");
+        for w in want {
+            assert!(out.lines().any(|l| l == w), "{w} is not among\n{out}");
+        }
+    }
+}
+
 /// A function with more than 256 combinations of its parameters' candidates moves each alone, and
 /// the pairs that meet in one comparison or one call together; a function never has more than 2,000.
 #[test]

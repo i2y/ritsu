@@ -465,7 +465,9 @@ impl<'a> Ck<'a> {
         // the value read with the unit's zero too: 30℃ beside a ℉ is 86℉ (a temperature is the one
         // dimension whose units do not share a zero, and it has no arithmetic)
         let x = convert(v, &n.unit, to)?;
-        Some(NumTy { unit: Unit { step: None, ..to.clone() }, step: n.step.map(|s| s.mul(f)), konst: Some(x), ratio: false })
+        // and is on its own value, as a literal is, where the zeros differ (86℉, not 54℉)
+        let step = step_in(n.step.map(|s| s.mul(f)), Some(x), &n.unit, to);
+        Some(NumTy { unit: Unit { step: None, ..to.clone() }, step, konst: Some(x), ratio: false })
     }
 
     /// Whether a dimensionless value is of the kind of another: a ratio is a number or a rate.
@@ -1202,7 +1204,12 @@ impl<'a> Ck<'a> {
             return Ty::Error;
         };
         let f = factor(&n.unit, &to).unwrap_or(Rat::int(1));
-        Ty::Num(NumTy { unit: Unit { step: None, ..to }, step: n.step.and_then(|s| s.checked_mul(f)), konst: n.konst.map(|v| v.mul(f)), ratio: false })
+        // a constant is read with the zero of its unit too: `20℃ in ℉` is 68℉ (DESIGN 3.2)
+        let konst = n.konst.and_then(|v| crate::ty::convert(v, &n.unit, &to));
+        // and the values are on a step that holds the shift between the zeros: `t in ℉` of a whole
+        // number of ℃ is on 1/5℉, not on 9/5℉
+        let step = step_in(n.step.and_then(|s| s.checked_mul(f)), konst, &n.unit, &to);
+        Ty::Num(NumTy { unit: Unit { step: None, ..to }, step, konst, ratio: false })
     }
 
     // ── match ───────────────────────────────────────────────────────────────────

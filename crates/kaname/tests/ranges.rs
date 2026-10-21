@@ -35,6 +35,8 @@ fn modules() -> Vec<(String, Rc<Checked>)> {
         ("bounds", include_str!("modules/bounds.kn")),
         ("lift", include_str!("modules/lift.kn")),
         ("lift.ja", include_str!("modules/lift.ja.kn")),
+        ("temps", include_str!("modules/temps.kn")),
+        ("temps.ja", include_str!("modules/temps.ja.kn")),
     ] {
         let o = common::check_text("t.kn", src);
         out.push((name.to_string(), o.analysed.clone().unwrap_or_else(|| panic!("{name}: {}", common::shown(&o, Lang::En)))));
@@ -248,7 +250,7 @@ fn the_examples_found_fail_where_they_are_said_to() {
                 }
             }
         }
-        assert_eq!(found, ["calc:27:E303", "calc:33:E302", "calc:42:E303", "calc:45:E302", "calc:45:E303", "places:12:E301", "places:15:E301", "places:18:E301", "places:21:E301", "inner:9:E301", "ranges:85:E301", "bounds:12:E302", "bounds:17:E302", "lift:8:E301", "lift.ja:8:E301"]);
+        assert_eq!(found, ["calc:27:E303", "calc:33:E302", "calc:42:E303", "calc:45:E302", "calc:45:E303", "places:12:E301", "places:15:E301", "places:18:E301", "places:21:E301", "inner:9:E301", "ranges:85:E301", "bounds:12:E302", "bounds:17:E302", "bounds:32:E301", "lift:8:E301", "lift.ja:8:E301"]);
     });
 }
 

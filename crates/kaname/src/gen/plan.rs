@@ -1521,7 +1521,8 @@ impl<'g, 'a> Fx<'g, 'a> {
 
     /// A number of `a` read in the unit and the representation of `b` (`interp.rs`'s `convert`),
     /// held to int64 at `at` where the analysis does not show it fits. A literal is read when the code
-    /// is written.
+    /// is written. A temperature is read with its unit's zero: times the factor, plus the shift
+    /// between the two zeros, held once, at the end, as the interpreter holds it (DESIGN 3.2).
     fn convert(&mut self, x: Ex, a: &NumTy, b: &NumTy, at: &Expr, konst: Option<Rat>) -> Ex {
         let g = self.g;
         if let (Some(k), ExprKind::Num(_)) = (konst, &at.kind)
@@ -1536,6 +1537,13 @@ impl<'g, 'a> Fx<'g, 'a> {
         let f = factor_between(a, b);
         let check = g.overflow_at(at);
         let (ra, rb) = (rep(a), rep(b));
+        let shift = zero_shift(a, b);
+        if shift.num != 0 {
+            let q = self.rep_to(x, ra, Rep::Q);
+            let p = self.q_op(Op::Mul, q, g.frac(f), None);
+            let s = self.q_op(Op::Add, p, g.frac(shift), check.as_ref());
+            return self.rep_to(s, Rep::Q, rb);
+        }
         if f == Rat::int(1) {
             return self.rep_to(x, ra, rb);
         }
@@ -3361,6 +3369,16 @@ impl<'g, 'a> Fx<'g, 'a> {
         let decl = &g.c.module.fns[self.f];
         self.block(&decl.body, &Sink::Return);
         self.out
+    }
+}
+
+/// The shift between the zeros of two units a value is read across: 32 from ℃ to ℉, −160/9 from ℉
+/// to ℃, and 0 for every other pair (a temperature alone has a zero of its own).
+fn zero_shift(a: &NumTy, b: &NumTy) -> Rat {
+    if a.unit.compares_only() && b.unit.compares_only() && a.unit.offset() != b.unit.offset() {
+        crate::ty::convert(Rat::zero(), &a.unit, &b.unit).unwrap_or(Rat::zero())
+    } else {
+        Rat::zero()
     }
 }
 

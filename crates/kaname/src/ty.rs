@@ -228,6 +228,21 @@ pub fn convert(v: Rat, from: &Unit, to: &Unit) -> Option<Rat> {
     Unit { step: None, tax: None, ..from.clone() }.convert(v, &Unit { step: None, tax: None, ..to.clone() })
 }
 
+/// The step of values read from `from` in `to`, given `step`, their step there times the factor,
+/// and `konst`, a constant's value read there. Between two units whose zeros differ (℃ and ℉, DESIGN
+/// 3.2), the shift between the zeros moves every value: a whole number of ℃ is 32℉ plus a multiple
+/// of 9/5℉, so the step is the one the two share, 1/5℉; a constant is on its own value, as a literal
+/// is. Between any other two units, `step`.
+pub fn step_in(step: Option<Rat>, konst: Option<Rat>, from: &Unit, to: &Unit) -> Option<Rat> {
+    if from.offset() == to.offset() {
+        return step;
+    }
+    match konst {
+        Some(x) => Some(abs(x)),
+        None => share(step, convert(Rat::zero(), from, to)),
+    }
+}
+
 /// The factor between two units of one dimension: a value counted in `from` is this many of `to`
 /// per one of `from` (100 from dollars to cents).
 pub fn factor(from: &Unit, to: &Unit) -> Option<Rat> {

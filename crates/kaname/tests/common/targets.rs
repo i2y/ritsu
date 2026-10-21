@@ -21,7 +21,7 @@ pub const GO_PACKAGE: &str = "kanametest/pkg";
 
 /// The test modules of `tests/modules/`, checked as the file `t.kn` beside the crate (where they read
 /// the examples' rules by their paths), and the ones only these tests run.
-pub const MODULES: [(&str, &str); 13] = [
+pub const MODULES: [(&str, &str); 15] = [
     ("calc", include_str!("../modules/calc.kn")),
     ("places", include_str!("../modules/places.kn")),
     ("lists", include_str!("../modules/lists.kn")),
@@ -35,6 +35,8 @@ pub const MODULES: [(&str, &str); 13] = [
     ("bounds", include_str!("../modules/bounds.kn")),
     ("lift", include_str!("../modules/lift.kn")),
     ("lift.ja", include_str!("../modules/lift.ja.kn")),
+    ("temps", include_str!("../modules/temps.kn")),
+    ("temps.ja", include_str!("../modules/temps.ja.kn")),
 ];
 
 /// Every module the tests generate: the examples, and the test modules, with the path the head

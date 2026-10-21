@@ -112,9 +112,10 @@ fn materials(tmp: &TempDir) -> Vec<(String, PathBuf)> {
 /// file `t.kn` beside it). `corners` holds what the others do not reach (a rounding of a half
 /// exactly, a call of a function that goes round from another ring, a `reduce` whose running value
 /// settles on its third round, a difference of two names known to be equal), `bounds` the places
-/// where `ranges.rs` once was not an estimate from above, and `lift` (English and Japanese) a rule's
-/// input of an enum held to a range over its values. `calls` is left out: it calls the functions of
-/// another module, and the model reads one module (kaname's DESIGN 15.4).
+/// where `ranges.rs` once was not an estimate from above, `lift` (English and Japanese) a rule's
+/// input of an enum held to a range over its values, and `temps` (English and Japanese) temperatures
+/// read in the other unit with that unit's zero (kaname's DESIGN 3.10). `calls` is left out: it calls
+/// the functions of another module, and the model reads one module (kaname's DESIGN 15.4).
 const EXAMPLES: [&str; 8] = [
     "examples/payout/payout.kn",
     "examples/payout/payout.ja.kn",
@@ -125,7 +126,7 @@ const EXAMPLES: [&str; 8] = [
     "examples/discount_split/discount_split.kn",
     "examples/discount_split/discount_split.ja.kn",
 ];
-const MODULES: [&str; 13] = ["calc", "places", "lists", "inner", "rec", "ranges", "walks", "names", "lib", "corners", "bounds", "lift", "lift.ja"];
+const MODULES: [&str; 15] = ["calc", "places", "lists", "inner", "rec", "ranges", "walks", "names", "lib", "corners", "bounds", "lift", "lift.ja", "temps", "temps.ja"];
 
 // ── Types, as kaname's analysis reads them ──────────────────────────────────
 

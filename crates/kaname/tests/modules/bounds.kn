@@ -24,3 +24,12 @@ fn kept(x: money[USDc] range >=0USDc <=1_000_000USDc) -> money[USDc]?
     discount_share(discount: 0USDc, before: k, upto: x, total: x).share
   else
     none
+
+# A temperature read in the other unit: a whole number of ℃ in ℉ is 32 plus a multiple of 9/5, so the
+# values are on the step 1/5, not 9/5. Below 34℉ is 33.8℉ (1℃), which rounds to 34℉.
+fn shifted(t: temperature[℃] range >=0℃ <=40℃) -> temperature[℉]? range >=32℉ <=33℉
+  let x = t in ℉
+  if x < 34℉
+    half_up(x, 1℉)
+  else
+    none

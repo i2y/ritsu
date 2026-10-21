@@ -1,0 +1,88 @@
+module temps v1
+description "Temperatures read in the other unit, with that unit's zero: constants compared in their own unit and in the other, kept in a let, read in the other unit with `in`, given as arguments and held in fields; values read in the other unit with `in`, then compared and rounded there"
+
+record Reading
+  at    : temperature[℃]  range >=-60℃ <=60℃
+  where : string
+
+# a constant read in the other unit, with that unit's zero: 30℃ is 86℉, and 50℉ is 10℃
+fn hot(t: temperature[℉] range >=-40℉ <=140℉) -> string
+  if t >= 30℃
+    "hot"
+  else
+    "not hot"
+
+fn cool(t: temperature[℃] range >=-40℃ <=40℃) -> string
+  if t < 50℉
+    "cool"
+  else
+    "mild"
+
+# a constant kept in a let, read in the other unit where it is compared
+fn hot_by_line(t: temperature[℉] range >=-40℉ <=140℉) -> string
+  let line = 30℃
+  if t >= line
+    "hot"
+  else
+    "not hot"
+
+# a value read in the other unit, with that unit's zero: 0℃ is 32℉, 37℃ is 98.6℉, and 100℉ is
+# 37.8℃
+fn in_fahrenheit(t: temperature[℃] range >=-40℃ <=40℃) -> temperature[℉]
+  half_up(t in ℉, 1℉)
+
+fn in_celsius(t: temperature[℉] range >=-40℉ <=104℉) -> temperature[℃]
+  half_even(t in ℃, 1℃)
+
+# a value read in the other unit and compared there: 38℃ is 100.4℉
+fn feverish(t: temperature[℃] range >=30℃ <=45℃) -> string
+  if t in ℉ > 100℉
+    "fever"
+  else
+    "no fever"
+
+# a constant read in the other unit with `in`: 100℃ is 212℉; and 20℃ in ℉, 68℉, compared with a
+# value of ℃, which reads it back as 20℃
+fn boiling() -> temperature[℉]
+  100℃ in ℉
+
+fn warm(t: temperature[℃] range >=-40℃ <=40℃) -> string
+  if t >= 20℃ in ℉
+    "warm"
+  else
+    "not warm"
+
+# a constant converted with `in` that lands between two whole numbers, then rounded: 99℉ is 37.2℃
+fn fever_line() -> temperature[℃]
+  half_up(99℉ in ℃, 1℃)
+
+# constants of the other unit given as an argument, held in a field, and the larger of two values:
+# 41℉ is 5℃, 77℉ is 25℃, and 14℉ is -10℃
+fn fridge() -> string
+  cool(t: 41℉)
+
+fn reading() -> Reading
+  Reading { at: 77℉, where: "porch" }
+
+fn floor_of(r: Reading) -> temperature[℃]
+  max(r.at, 14℉)
+
+examples
+  hot(t: 86℉) = "hot"
+  hot(t: 85℉) = "not hot"
+  cool(t: 9℃) = "cool"
+  cool(t: 10℃) = "mild"
+  hot_by_line(t: 86℉) = "hot"
+  hot_by_line(t: 85℉) = "not hot"
+  in_fahrenheit(t: 0℃) = 32℉
+  in_fahrenheit(t: 37℃) = 99℉
+  in_celsius(t: 32℉) = 0℃
+  in_celsius(t: 100℉) = 38℃
+  feverish(t: 38℃) = "fever"
+  feverish(t: 37℃) = "no fever"
+  boiling() = 212℉
+  warm(t: 20℃) = "warm"
+  warm(t: 19℃) = "not warm"
+  fever_line() = 37℃
+  fridge() = "cool"
+  floor_of(r: Reading { at: 5℃, where: "fridge" }) = 5℃

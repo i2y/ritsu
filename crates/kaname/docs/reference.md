@@ -128,7 +128,8 @@ the 0 of any unit.
 Unlike rulec, kaname divides by a value anywhere: `a / b` is unrounded, and a divisor the analysis
 of ranges cannot keep from 0 is checked when the code runs (`zero`). An amount divided by an amount
 of its unit is a ratio. `x in USDc` is `x` in another unit of its dimension, by the exact factor of
-ritsu's table of units; there is no conversion between currencies, between tax included and
+ritsu's table of units, and a temperature with its unit's zero too (`t in ℉` is `t × 9/5 + 32`);
+there is no conversion between currencies, between tax included and
 excluded, or between dimensions (E104), and no conversion that is not written: dollars given where
 cents go are E102.
 

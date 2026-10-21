@@ -88,6 +88,47 @@ fn a_temperature_is_read_with_its_zero() {
     assert_eq!(ok(&c, "cold", r#"{"t": -1}"#), "true");
 }
 
+/// A temperature read in the other unit with that unit's zero, wherever it is read there: a constant
+/// compared with a value (as a literal and kept in a `let`), given as an argument, held in a field,
+/// taken by `max`, converted with `in`; and a value converted with `in` (DESIGN 3.2, 3.10). Both
+/// versions of the module pass `check` with nothing said, so their `examples` hold.
+#[test]
+fn a_temperature_read_in_the_other_unit() {
+    for (name, src) in [("temps", include_str!("modules/temps.kn")), ("temps.ja", include_str!("modules/temps.ja.kn"))] {
+        let o = common::check_text("t.kn", src);
+        assert!(o.diags.is_empty(), "{name}: {}", common::shown(&o, Lang::En));
+    }
+    let c = module(include_str!("modules/temps.kn"));
+    // 30℃ beside a ℉ is 86℉, written there and kept in a let; 50℉ beside a ℃ is 10℃
+    assert_eq!(ok(&c, "hot", r#"{"t": 86}"#), r#""hot""#);
+    assert_eq!(ok(&c, "hot", r#"{"t": 85}"#), r#""not hot""#);
+    assert_eq!(ok(&c, "hot_by_line", r#"{"t": 86}"#), r#""hot""#);
+    assert_eq!(ok(&c, "hot_by_line", r#"{"t": 85}"#), r#""not hot""#);
+    assert_eq!(ok(&c, "cool", r#"{"t": 9}"#), r#""cool""#);
+    assert_eq!(ok(&c, "cool", r#"{"t": 10}"#), r#""mild""#);
+    // 0℃ is 32℉ and -40℃ is -40℉; 37℃ is 98.6℉, half up to 99℉; 100℉ is 37.8℃, half even to 38℃,
+    // and 0℉ is -17.8℃, to -18℃
+    assert_eq!(ok(&c, "in_fahrenheit", r#"{"t": 0}"#), "32");
+    assert_eq!(ok(&c, "in_fahrenheit", r#"{"t": -40}"#), "-40");
+    assert_eq!(ok(&c, "in_fahrenheit", r#"{"t": 37}"#), "99");
+    assert_eq!(ok(&c, "in_celsius", r#"{"t": 100}"#), "38");
+    assert_eq!(ok(&c, "in_celsius", r#"{"t": 0}"#), "-18");
+    // 38℃ is 100.4℉, above 100℉; 37℃ is 98.6℉
+    assert_eq!(ok(&c, "feverish", r#"{"t": 38}"#), r#""fever""#);
+    assert_eq!(ok(&c, "feverish", r#"{"t": 37}"#), r#""no fever""#);
+    // 100℃ in ℉ is 212℉; 20℃ in ℉ is 68℉, read back beside a ℃ as 20℃
+    assert_eq!(ok(&c, "boiling", "{}"), "212");
+    assert_eq!(ok(&c, "warm", r#"{"t": 20}"#), r#""warm""#);
+    assert_eq!(ok(&c, "warm", r#"{"t": 19}"#), r#""not warm""#);
+    // 99℉ in ℃ is 37.2℃, half up to 37℃
+    assert_eq!(ok(&c, "fever_line", "{}"), "37");
+    // 41℉ given to a ℃ is 5℃, 77℉ in a field of ℃ is 25℃, and 14℉ beside a ℃ in a `max` is -10℃
+    assert_eq!(ok(&c, "fridge", "{}"), r#""cool""#);
+    assert_eq!(ok(&c, "reading", "{}"), r#"{"at":25,"where":"porch"}"#);
+    assert_eq!(ok(&c, "floor_of", r#"{"r": {"at": -20, "where": "freezer"}}"#), "-10");
+    assert_eq!(ok(&c, "floor_of", r#"{"r": {"at": -9, "where": "freezer"}}"#), "-9");
+}
+
 #[test]
 fn what_cannot_be_computed_fails_where_it_is() {
     let c = module(CALC);
