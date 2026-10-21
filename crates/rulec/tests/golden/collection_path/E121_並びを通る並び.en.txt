@@ -1,0 +1,9 @@
+error[E121]: The path `注文.lines.parts` goes on through the collection `注文.lines`
+  --> tests/collection_path/E121_並びを通る並び.rule:9
+  |
+9 | elements 部品(parts) from 注文.lines.parts
+  |                      ^^^^^^^^^^^^^^^^^^^^^ `注文.lines` is an `array`
+  |
+ `elements` walks one collection, and the path to it does not go on through another.
+ If `注文.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+

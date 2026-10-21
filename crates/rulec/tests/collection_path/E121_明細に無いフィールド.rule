@@ -1,0 +1,15 @@
+rule 明細に無いフィールド(field_no_line_has) v1
+description "注文の明細に無いフィールドを、明細の先へ続くパスで読む"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  色(colour) : string  from 注文.lines.colour
+
+outputs
+  扱う(handled) : bool
+
+table 扱い(handled_by)
+policy unique
+| 色 | -> 扱う |
+| -  | true    |

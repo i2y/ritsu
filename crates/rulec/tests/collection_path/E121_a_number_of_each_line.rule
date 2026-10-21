@@ -1,0 +1,15 @@
+rule number_of_each_line v1
+description "The quantity of an order's lines, read with a path that goes on through them"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  quantity : number  range >=1 <=99  from order.lines.quantity
+
+outputs
+  handled : bool
+
+table handled_by
+policy unique
+| quantity | -> handled |
+| -        | true       |

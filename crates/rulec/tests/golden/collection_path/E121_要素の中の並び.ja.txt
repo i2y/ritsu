@@ -1,0 +1,9 @@
+エラー[E121]: パス `注文.lines[].parts.name` は、並び `注文.lines[].parts` の先へ続いています
+  --> tests/collection_path/E121_要素の中の並び.rule:11
+   |
+11 |   部品(part)     : 部品名                  from parts.name
+   |                                            ^^^^^^^^^^^^^^^ `注文.lines[].parts` は `array` です
+   |
+ `from` のパスが読むのは一つの値です。`注文.lines[].parts` の要素はそれぞれ `name` を持ち、パスは、フィールドがどの要素のものを受け取るかを言っていません。
+ `注文.lines[].parts` の要素がいつも一つなら、契約の `parts` を `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。
+

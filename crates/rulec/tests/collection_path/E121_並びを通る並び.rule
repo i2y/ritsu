@@ -1,0 +1,26 @@
+rule 並びを通る並び(sequence_through_a_collection) v1
+description "注文の明細の部品を一つの並びとしてたどる。そこまでのパスが並びを通る"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum 部品名(part_name) = bolt | nut
+
+# 注文の明細の部品の一つ
+elements 部品(parts) from 注文.lines.parts
+  部品名(part) : 部品名  from name
+
+outputs
+  扱う(handled) : bool
+
+table ボルトかどうか(bolt_by_part)
+policy unique
+| 部品名 | -> ボルト(bolt) : bool |
+| bolt   | true                   |
+| nut    | false                  |
+
+count ボルトの数(bolts) over 部品 where ボルト  range >=0 <=20
+
+table 扱い(handled_by)
+policy unique
+| ボルトの数 | -> 扱う |
+| -          | true    |

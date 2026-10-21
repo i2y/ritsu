@@ -1,0 +1,15 @@
+rule count_through_a_collection v1
+description "How many parts the lines of an order have, counted through two collections"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  parts : number  range >=0 <=50  from count order.lines.parts
+
+outputs
+  handled : bool
+
+table handled_by
+policy unique
+| parts | -> handled |
+| -     | true       |

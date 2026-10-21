@@ -1,0 +1,10 @@
+error[E121]: The path `注文.lines.category` goes on through the collection `注文.lines`
+  --> tests/collection_path/E121_repeated_のフィールド.rule:9
+  |
+9 |   明細の区分(category) : 区分  from 注文.lines.category
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` is a `repeated` field
+  |
+ A `from` path reads one value. Each element of `注文.lines` has its own `category`, and the path does not say which one the input takes.
+ Two ways read `category` of the elements. One asks of them: `from any 注文.lines where category = <value>` is true when some element has that value, `all` when every one does, and `count` counts the elements that do. The other walks them as a sequence: write `elements <name> from 注文.lines` with a field `from category`.
+ If `注文.lines` always holds one element, make `lines` a field that is not `repeated` in the contract, and the path reads it.
+

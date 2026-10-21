@@ -84,6 +84,9 @@ pub struct Stuck {
     pub reached: String,
     /// The names that were there, so the next attempt is a correction and not a guess.
     pub had: Vec<String>,
+    /// Whether it stopped at a collection with steps still to go: a path reads one value, and
+    /// each element has its own (§15.254).
+    pub collection: bool,
 }
 
 /// The contract of one shape, read once and asked many times.
@@ -155,7 +158,7 @@ impl Contract {
 
     fn schema_at(&self, path: &[String]) -> Result<At, Stuck> {
         let doc = self.doc.as_ref().expect("a schema contract carries its document");
-        let mut node = at_pointer(doc, &self.at).ok_or_else(|| Stuck { reached: self.at.clone(), had: keys(doc) })?;
+        let mut node = at_pointer(doc, &self.at).ok_or_else(|| Stuck { reached: self.at.clone(), had: keys(doc), collection: false })?;
         let mut reached = String::new();
         for step in path {
             match self.property(node, step) {
@@ -163,7 +166,7 @@ impl Contract {
                     node = v;
                     reached = if reached.is_empty() { step.clone() } else { format!("{reached}.{step}") };
                 }
-                None => return Err(Stuck { reached, had: self.property_names(node) }),
+                None => return Err(Stuck { reached, had: self.property_names(node), collection: matches!(self.kind_at(node), At::Array(_)) }),
             }
         }
         Ok(self.kind_at(node))
@@ -175,10 +178,10 @@ impl Contract {
         let mut last = None;
         for (i, step) in path.iter().enumerate() {
             let Some(m) = msg else {
-                return Err(Stuck { reached, had: Vec::new() });
+                return Err(Stuck { reached, had: Vec::new(), collection: false });
             };
             let Some(fd) = m.fields.iter().find(|x| x.name == *step) else {
-                return Err(Stuck { reached, had: m.fields.iter().map(|x| x.name.clone()).collect() });
+                return Err(Stuck { reached, had: m.fields.iter().map(|x| x.name.clone()).collect(), collection: false });
             };
             reached = if reached.is_empty() { step.clone() } else { format!("{reached}.{step}") };
             let scalar = crate::proto::scalar(&fd.ty).map(|s| match s {
@@ -201,15 +204,15 @@ impl Contract {
                     At::Other(if self.enum_of(&fd.ty).is_some() { format!("enum {}", fd.ty) } else { fd.ty.clone() })
                 }
                 // A message the file does not hold: the path cannot go on.
-                (None, None) => return Err(Stuck { reached, had: Vec::new() }),
+                (None, None) => return Err(Stuck { reached, had: Vec::new(), collection: fd.repeated }),
             };
             last = Some(if fd.repeated { At::Array(Box::new(here)) } else { here });
             // Only the last step may be repeated; a path through a collection is a join.
             if fd.repeated && i + 1 < path.len() {
-                return Err(Stuck { reached, had: Vec::new() });
+                return Err(Stuck { reached, had: Vec::new(), collection: true });
             }
         }
-        last.ok_or(Stuck { reached, had: Vec::new() })
+        last.ok_or(Stuck { reached, had: Vec::new(), collection: false })
     }
 }
 
@@ -733,7 +736,7 @@ fn resolves(con: &Contract, pr: &Projection, ty: &Ty, rule_path: &str, name: &st
     let full = || format!("{}.{}", pr.root.text, steps.join("."));
     let here = match con.at(&steps) {
         Ok(a) => a,
-        Err(s) => return vec![stuck_path(pr, &at, s)],
+        Err(s) => return vec![stuck_path(con, pr, &at, s, who, (!matches!(pr.kind, ProjKind::Field)).then(|| pr.kind.word()))],
     };
     let mut out = Vec::new();
     match &pr.kind {
@@ -1961,10 +1964,16 @@ fn numeric_holds(con: &Contract, pr: &Projection, of: &crate::ast::Name, filtere
     (out, Some(Dom::Ints(seen, false)))
 }
 
-/// E121 for a path that does not resolve: how far it got, and which names were there.
-fn stuck_path(pr: &Projection, at: &str, s: Stuck) -> Diag {
+/// E121 for a path that does not resolve: how far it got, and which names were there. One that
+/// goes on through a collection says so, and what can be written instead (§15.254). `who` is whose
+/// value the path reads, and `walk` the word that walks what it leads to — `count`, `elements` —
+/// where it leads to a collection to walk rather than to a value.
+fn stuck_path(con: &Contract, pr: &Projection, at: &str, s: Stuck, who: Who, walk: Option<&str>) -> Diag {
     let full = full_path(pr);
     let where_ = if s.reached.is_empty() { pr.root.text.clone() } else { format!("{}.{}", pr.root.text, s.reached) };
+    if s.collection {
+        return through_collection(con, pr, at, &s, &where_, who, walk);
+    }
     Diag::error("E121", tr!("`{full}` というパスは契約にありません", "The contract has no path `{full}`"))
         .at(at.to_string())
         .mark(pr.span.clone(), "")
@@ -1973,6 +1982,135 @@ fn stuck_path(pr: &Projection, at: &str, s: Stuck) -> Diag {
         } else {
             tr!("`{where_}` までは見つかりました。そこにあるフィールド: {}", "It resolved as far as `{where_}`. The fields there: {}", s.had.join(", "))
         })
+}
+
+/// E121 for a path that goes on through a collection (§15.254). A path reads one value, and each
+/// element has its own, so the path says nothing about which the input takes; and a walk goes over
+/// one collection, which a path to it does not reach through another. Every collection the path
+/// goes through is named; where there is one, and the rest of the path reads a value in one element
+/// for an input, so are the ways a rule reads a collection; and the contract can hold one element as
+/// one object.
+fn through_collection(con: &Contract, pr: &Projection, at: &str, s: &Stuck, where_: &str, who: Who, walk: Option<&str>) -> Diag {
+    let ask = walk.is_none() && who == Who::Input;
+    let full = full_path(pr);
+    let steps = pr.path_steps();
+    let len = |r: &str| if r.is_empty() { 0 } else { r.split('.').count() };
+    // Each collection along the path, as the path shows it (`line.inQuote[].forDeal`), and its own
+    // name in the contract; then what the rest comes to in one element of the last of them.
+    let k = len(&s.reached).min(steps.len());
+    let mut cols: Vec<(String, String)> = vec![(where_.to_string(), steps[..k].last().cloned().unwrap_or_else(|| pr.root.text.clone()))];
+    let mut cur = con.element(&steps[..k]);
+    let mut off = k;
+    let end = loop {
+        let Some(c) = cur else { break None };
+        match c.at(&steps[off..]) {
+            Err(st) if st.collection => {
+                let k2 = len(&st.reached).min(steps.len() - off);
+                let shown = format!("{}[].{}", cols.last().map(|x| x.0.as_str()).unwrap_or(where_), st.reached);
+                cols.push((shown, steps[off..off + k2].last().cloned().unwrap_or_default()));
+                cur = c.element(&steps[off..off + k2]);
+                off += k2;
+            }
+            r => break Some(r),
+        }
+    };
+    let rest = &steps[off..];
+    let rest_text = rest.join(".");
+    let last_shown = cols.last().map(|x| x.0.clone()).unwrap_or_default();
+    let proto = matches!(con.kind, EnumSource::Proto);
+    let mut d = Diag::error("E121", tr!("パス `{full}` は、並び `{where_}` の先へ続いています", "The path `{full}` goes on through the collection `{where_}`"))
+        .at(at.to_string())
+        .mark(
+            pr.span.clone(),
+            if proto { tr!("`{where_}` は `repeated` のフィールドです", "`{where_}` is a `repeated` field") } else { tr!("`{where_}` は `array` です", "`{where_}` is an `array`") },
+        );
+    let any_number = match walk {
+        Some(w) => tr!("`{w}` がたどる並びは一つで、そこまでのパスは別の並びを通れません。", "`{w}` walks one collection, and the path to it does not go on through another."),
+        None => tr!("`from` のパスが読むのは一つの値で、並びは要素をいくつでも持ちます。", "A `from` path reads one value, and a collection holds any number of elements."),
+    };
+    let inner: Vec<String> = cols[1..].iter().map(|x| format!("`{}`", x.0)).collect();
+    match end {
+        // One collection, and the rest reads a value in one element: the ways to read it across them.
+        Some(Ok(a)) if walk.is_none() && inner.is_empty() && !matches!(a, At::Object(_) | At::Array(_)) => {
+            d = d.note(tr!(
+                "`from` のパスが読むのは一つの値です。`{where_}` の要素はそれぞれ `{rest_text}` を持ち、パスは、{}がどの要素のものを受け取るかを言っていません。",
+                "A `from` path reads one value. Each element of `{where_}` has its own `{rest_text}`, and the path does not say which one {} takes.",
+                if crate::i18n::ja() { who.ja() } else { who.en() }
+            ));
+            if ask && rest.len() == 1 {
+                let f = &rest[0];
+                d = d.note(tr!(
+                    "要素の `{f}` を読むには、二つの書き方があります。一つは要素を調べる書き方で、`from any {where_} where {f} = <値>` はその値の要素があれば真、`all` はどの要素もそうなら真になり、`count` はその要素の数です。もう一つは並びとしてたどる書き方で、`elements <名前> from {where_}` を書き、そのフィールドに `from {f}` と書きます。",
+                    "Two ways read `{f}` of the elements. One asks of them: `from any {where_} where {f} = <value>` is true when some element has that value, `all` when every one does, and `count` counts the elements that do. The other walks them as a sequence: write `elements <name> from {where_}` with a field `from {f}`."
+                ));
+                if matches!(a, At::Int) {
+                    d = d.note(tr!(
+                        "数なら、足し合わせたり比べたりもできます（`from sum {where_} of {f}`、`from max {where_} of {f} empty <値>`）。",
+                        "A number can be added up or compared over them too: `from sum {where_} of {f}`, `from max {where_} of {f} empty <value>`."
+                    ));
+                }
+            } else if ask {
+                d = d.note(tr!(
+                    "要素の中の `{rest_text}` を読むなら、並びとしてたどってください。`elements <名前> from {where_}` を書き、そのフィールドに `from {rest_text}` と書きます。`where` と `of` が指せるのは要素のフィールド一つなので、`any`・`all`・`count`・`sum`・`max`・`min` では読めません。",
+                    "To read `{rest_text}` in the elements, walk them as a sequence: write `elements <name> from {where_}` with a field `from {rest_text}`. `where` and `of` name one field of an element, so `any`, `all`, `count`, `sum`, `max` and `min` cannot read it."
+                ));
+            }
+        }
+        // The rest is not in an element, however it is read.
+        Some(Err(st)) => {
+            let at_ = if st.reached.is_empty() { format!("{last_shown}[]") } else { format!("{last_shown}[].{}", st.reached) };
+            d = d.note(any_number).note(if st.had.is_empty() {
+                tr!("要素の中では `{at_}` までは見つかりました。その先にフィールドはありません。", "In an element it resolved as far as `{at_}`, which has no fields under it.")
+            } else {
+                tr!("要素の中では `{at_}` までは見つかりました。そこにあるフィールド: {}", "In an element it resolved as far as `{at_}`. The fields there: {}", st.had.join(", "))
+            });
+        }
+        // The elements are not objects: nothing is under them, one or many.
+        None => {
+            return d.note(any_number).note(tr!("`{last_shown}` の要素にフィールドはありません。", "The elements of `{last_shown}` have no fields."));
+        }
+        Some(Ok(_)) => d = d.note(any_number),
+    }
+    if !inner.is_empty() {
+        let listed = if crate::i18n::ja() { inner.join("・") } else { and_list(&inner) };
+        d = d.note(if inner.len() == 1 {
+            tr!("要素の中の {listed} も並びです。", "Inside the elements, {listed} is a collection too.")
+        } else {
+            tr!("要素の中の {listed} も並びです。", "Inside the elements, {listed} are collections too.")
+        });
+    }
+    let names: Vec<String> = cols.iter().map(|x| format!("`{}`", x.1)).collect();
+    d.note(match (proto, names.len()) {
+        (true, 1) => tr!(
+            "`{where_}` の要素がいつも一つなら、契約の {} を `repeated` でないフィールドにしてください。パスはそれを読めます。",
+            "If `{where_}` always holds one element, make {} a field that is not `repeated` in the contract, and the path reads it.",
+            names[0]
+        ),
+        (true, _) => tr!(
+            "どの並びも要素がいつも一つなら、契約の {} を、どれも `repeated` でないフィールドにしてください。パスはそれを読めます。",
+            "If each of them always holds one element, make {} fields that are not `repeated` in the contract, and the path reads it.",
+            if crate::i18n::ja() { names.join("・") } else { and_list(&names) }
+        ),
+        (false, 1) => tr!(
+            "`{where_}` の要素がいつも一つなら、契約の {} を `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。",
+            "If `{where_}` always holds one element, make {} one object in the contract rather than an `array`, and the path reads it.",
+            names[0]
+        ),
+        (false, _) => tr!(
+            "どの並びも要素がいつも一つなら、契約の {} を、どれも `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。",
+            "If each of them always holds one element, make {} each one object in the contract rather than an `array`, and the path reads it.",
+            if crate::i18n::ja() { names.join("・") } else { and_list(&names) }
+        ),
+    })
+}
+
+/// `a`, `a and b`, `a, b and c`.
+fn and_list(xs: &[String]) -> String {
+    match xs {
+        [] => String::new(),
+        [one] => one.clone(),
+        [init @ .., last] => format!("{} and {last}", init.join(", ")),
+    }
 }
 
 /// The sequences a rule takes from a contract (§15.223): the collection each is taken from, where
@@ -2036,7 +2174,7 @@ fn sequences(f: &RuleFile, c: &Checked, read_ok: &[(&ShapeDecl, Contract)], rule
         let here = match con.at(&steps) {
             Ok(a) => a,
             Err(s) => {
-                out.push(stuck_path(sp, &at, s));
+                out.push(stuck_path(con, sp, &at, s, Who::Input, Some(crate::kw::ELEMENTS)));
                 continue;
             }
         };

@@ -1,0 +1,26 @@
+rule sequence_through_a_collection v1
+description "The parts of an order's lines walked as one sequence: a path to it through a collection"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum part_name = bolt | nut
+
+# One part of a line of the order
+elements parts from order.lines.parts
+  part : part_name  from name
+
+outputs
+  handled : bool
+
+table bolt_by_part
+policy unique
+| part | -> bolt : bool |
+| bolt | true           |
+| nut  | false          |
+
+count bolts over parts where bolt  range >=0 <=20
+
+table handled_by
+policy unique
+| bolts | -> handled |
+| -     | true       |

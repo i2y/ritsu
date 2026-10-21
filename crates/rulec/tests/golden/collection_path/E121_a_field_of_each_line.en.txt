@@ -1,0 +1,10 @@
+error[E121]: The path `order.lines.category` goes on through the collection `order.lines`
+  --> tests/collection_path/E121_a_field_of_each_line.rule:9
+  |
+9 |   category : kind  from order.lines.category
+  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^ `order.lines` is an `array`
+  |
+ A `from` path reads one value. Each element of `order.lines` has its own `category`, and the path does not say which one the input takes.
+ Two ways read `category` of the elements. One asks of them: `from any order.lines where category = <value>` is true when some element has that value, `all` when every one does, and `count` counts the elements that do. The other walks them as a sequence: write `elements <name> from order.lines` with a field `from category`.
+ If `order.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+

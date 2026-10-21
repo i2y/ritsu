@@ -1,0 +1,11 @@
+エラー[E121]: パス `注文.lines.quantity` は、並び `注文.lines` の先へ続いています
+  --> tests/collection_path/E121_明細ごとの数量.rule:7
+  |
+7 |   数量(quantity) : number  range >=1 <=99  from 注文.lines.quantity
+  |                                            ^^^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` は `array` です
+  |
+ `from` のパスが読むのは一つの値です。`注文.lines` の要素はそれぞれ `quantity` を持ち、パスは、入力がどの要素のものを受け取るかを言っていません。
+ 要素の `quantity` を読むには、二つの書き方があります。一つは要素を調べる書き方で、`from any 注文.lines where quantity = <値>` はその値の要素があれば真、`all` はどの要素もそうなら真になり、`count` はその要素の数です。もう一つは並びとしてたどる書き方で、`elements <名前> from 注文.lines` を書き、そのフィールドに `from quantity` と書きます。
+ 数なら、足し合わせたり比べたりもできます（`from sum 注文.lines of quantity`、`from max 注文.lines of quantity empty <値>`）。
+ `注文.lines` の要素がいつも一つなら、契約の `lines` を `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。
+

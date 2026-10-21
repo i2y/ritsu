@@ -1,0 +1,59 @@
+rule order_lines_read v1
+description "The lines of an order read the ways E121 names for a collection: asked of, counted, added up, compared and walked"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum kind = tool | part | service
+enum unit_kind = piece | box
+
+inputs
+  has_tool  : bool                       from any order.lines where category = tool
+  all_parts : bool                       from all order.lines where category = part
+  services  : number  range >=0 <=20     from count order.lines where category = service
+  pieces    : number  range >=0 <=1980   from sum order.lines of quantity
+  largest   : number  range >=0 <=99     from max order.lines of quantity empty 0
+
+# One line of the order
+elements lines from order.lines
+  quantity : number     range >=1 <=99  from quantity
+  unit     : unit_kind                  from unit.kind
+  category : kind                       from category
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table tool_fee
+policy unique
+| has_tool | all_parts | -> tool_extra : money[USD] |
+| true     | -         | 5USD                       |
+| false    | true      | 0USD                       |
+| false    | false     | 2USD                       |
+
+table volume_fee
+policy unique
+| services | pieces | largest | -> volume_extra : money[USD] |
+| >=1      | -      | -       | 3USD                         |
+| 0        | >=100  | -       | 4USD                         |
+| 0        | <100   | >=50    | 2USD                         |
+| 0        | <100   | <50     | 0USD                         |
+
+# A line of ten boxes or more of tools or parts is a heavy one
+table heavy_line
+policy unique
+| quantity | unit  | category   | -> heavy : bool |
+| >=10     | box   | tool, part | true            |
+| >=10     | box   | service    | false           |
+| >=10     | piece | -          | false           |
+| <10      | -     | -          | false           |
+
+count heavy_lines over lines where heavy  range >=0 <=20
+
+table heavy_fee
+policy unique
+| heavy_lines | -> heavy_extra : money[USD] |
+| >=1         | 6USD                        |
+| 0           | 0USD                        |
+
+define total : money[USD] = tool_extra + volume_extra + heavy_extra
+
+result fee = total

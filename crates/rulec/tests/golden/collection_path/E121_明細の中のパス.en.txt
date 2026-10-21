@@ -1,0 +1,10 @@
+error[E121]: The path `注文.lines.unit.kind` goes on through the collection `注文.lines`
+  --> tests/collection_path/E121_明細の中のパス.rule:9
+  |
+9 |   明細の単位(unit) : 単位  from 注文.lines.unit.kind
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` is an `array`
+  |
+ A `from` path reads one value. Each element of `注文.lines` has its own `unit.kind`, and the path does not say which one the input takes.
+ To read `unit.kind` in the elements, walk them as a sequence: write `elements <name> from 注文.lines` with a field `from unit.kind`. `where` and `of` name one field of an element, so `any`, `all`, `count`, `sum`, `max` and `min` cannot read it.
+ If `注文.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+

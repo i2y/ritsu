@@ -1,0 +1,10 @@
+エラー[E121]: パス `order.lines.parts.name` は、並び `order.lines` の先へ続いています
+  --> tests/collection_path/E121_a_collection_in_each_line.rule:7
+  |
+7 |   part : string  from order.lines.parts.name
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ `order.lines` は `array` です
+  |
+ `from` のパスが読むのは一つの値で、並びは要素をいくつでも持ちます。
+ 要素の中の `order.lines[].parts` も並びです。
+ どの並びも要素がいつも一つなら、契約の `lines`・`parts` を、どれも `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。
+

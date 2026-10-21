@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// An order, and the lines it holds.
+message Order {
+  string customer = 1;
+  repeated Line lines = 2;
+}
+
+message Line {
+  string category = 1;
+  int64 quantity = 2;
+}

@@ -1,0 +1,10 @@
+error[E121]: The path `order.lines.unit.kind` goes on through the collection `order.lines`
+  --> tests/collection_path/E121_a_path_in_each_line.rule:9
+  |
+9 |   unit : unit_kind  from order.lines.unit.kind
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ `order.lines` is an `array`
+  |
+ A `from` path reads one value. Each element of `order.lines` has its own `unit.kind`, and the path does not say which one the input takes.
+ To read `unit.kind` in the elements, walk them as a sequence: write `elements <name> from order.lines` with a field `from unit.kind`. `where` and `of` name one field of an element, so `any`, `all`, `count`, `sum`, `max` and `min` cannot read it.
+ If `order.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+

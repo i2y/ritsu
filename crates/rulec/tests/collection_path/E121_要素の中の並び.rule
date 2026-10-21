@@ -1,0 +1,29 @@
+rule 要素の中の並び(collection_in_an_element) v1
+description "注文の明細を並びとしてたどり、その中の並びを通るパスで要素のフィールドを読む"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum 部品名(part_name) = bolt | nut
+
+# 注文の明細の一件
+elements 明細(lines) from 注文.lines
+  数量(quantity) : number  range >=1 <=99  from quantity
+  部品(part)     : 部品名                  from parts.name
+
+outputs
+  扱う(handled) : bool
+
+# bolt が十本以上の明細は大口
+table 大口の明細(big_line_by_quantity)
+policy unique
+| 数量 | 部品 | -> 大口(big_line) : bool |
+| >=10 | bolt | true                     |
+| >=10 | nut  | false                    |
+| <10  | -    | false                    |
+
+count 大口の数(big_lines) over 明細 where 大口  range >=0 <=20
+
+table 扱い(handled_by)
+policy unique
+| 大口の数 | -> 扱う |
+| -        | true    |

@@ -1,0 +1,10 @@
+エラー[E121]: パス `注文.lines.category` は、並び `注文.lines` の先へ続いています
+  --> tests/collection_path/E121_repeated_のフィールド.rule:9
+  |
+9 |   明細の区分(category) : 区分  from 注文.lines.category
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` は `repeated` のフィールドです
+  |
+ `from` のパスが読むのは一つの値です。`注文.lines` の要素はそれぞれ `category` を持ち、パスは、入力がどの要素のものを受け取るかを言っていません。
+ 要素の `category` を読むには、二つの書き方があります。一つは要素を調べる書き方で、`from any 注文.lines where category = <値>` はその値の要素があれば真、`all` はどの要素もそうなら真になり、`count` はその要素の数です。もう一つは並びとしてたどる書き方で、`elements <名前> from 注文.lines` を書き、そのフィールドに `from category` と書きます。
+ `注文.lines` の要素がいつも一つなら、契約の `lines` を `repeated` でないフィールドにしてください。パスはそれを読めます。
+

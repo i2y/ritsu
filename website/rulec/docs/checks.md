@@ -79,8 +79,11 @@ passing quietly through a table with a `-` row.
 
 A rule whose inputs say where the caller's object holds them (`shape` and `from`) is held to
 that contract the same way. The path is resolved on every `rulec check`: one the contract does
-not have is **E121**, which says how far it got and which fields were there; a type that does
-not fit the input is **E120**; a contract nothing projects from is **W122**. None of this
+not have is **E121**, which says how far it got and which fields were there; so is one that goes
+on through a collection, since a path reads one value and each element has its own, and the
+message says how to read the collection instead (`any`, `count`, `sum`, or the elements as a
+sequence). A type that does not fit the input is **E120**; a contract nothing projects from is
+**W122**. None of this
 changes a check of the table — what comes out of a projection is a scalar input like any other
 — and what it stops is the glue between an application and a rule going stale in silence.
 How to write one is in [Write a rule](tour.md), and two worked rules are in

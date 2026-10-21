@@ -1,0 +1,31 @@
+{
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "properties": {
+        "customer": { "type": "string" },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/Line" }, "maxItems": 20 }
+      },
+      "required": ["customer", "lines"]
+    },
+    "Line": {
+      "type": "object",
+      "properties": {
+        "category": { "type": "string", "enum": ["tool", "part", "service"] },
+        "quantity": { "type": "integer", "minimum": 1, "maximum": 99 },
+        "unit": {
+          "type": "object",
+          "properties": { "kind": { "type": "string", "enum": ["piece", "box"] } },
+          "required": ["kind"]
+        },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/Part" } }
+      },
+      "required": ["category", "quantity", "unit"]
+    },
+    "Part": {
+      "type": "object",
+      "properties": { "name": { "type": "string" } },
+      "required": ["name"]
+    }
+  }
+}

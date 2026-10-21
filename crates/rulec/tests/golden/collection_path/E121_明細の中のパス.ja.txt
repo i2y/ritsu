@@ -1,0 +1,10 @@
+エラー[E121]: パス `注文.lines.unit.kind` は、並び `注文.lines` の先へ続いています
+  --> tests/collection_path/E121_明細の中のパス.rule:9
+  |
+9 |   明細の単位(unit) : 単位  from 注文.lines.unit.kind
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` は `array` です
+  |
+ `from` のパスが読むのは一つの値です。`注文.lines` の要素はそれぞれ `unit.kind` を持ち、パスは、入力がどの要素のものを受け取るかを言っていません。
+ 要素の中の `unit.kind` を読むなら、並びとしてたどってください。`elements <名前> from 注文.lines` を書き、そのフィールドに `from unit.kind` と書きます。`where` と `of` が指せるのは要素のフィールド一つなので、`any`・`all`・`count`・`sum`・`max`・`min` では読めません。
+ `注文.lines` の要素がいつも一つなら、契約の `lines` を `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。
+

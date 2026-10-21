@@ -3239,9 +3239,9 @@ Related codes: [E121](#e121), [W122](#w122), [E103](#e103)
 
 `error` — **The contract has no such path**
 
-**When.** A `from` path is not in the contract of the `shape` it starts at: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests or an `of` reads is not a field of an element. The same goes for the path of a sequence taken with `elements … from`, and for the path of each field of its elements, shown after `[]` inside the element (`order.lines[].qty`). The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
+**When.** A `from` path is not in the contract of the `shape` it starts at: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests or an `of` reads is not a field of an element. The same goes for the path of a sequence taken with `elements … from`, and for the path of each field of its elements, shown after `[]` inside the element (`order.lines[].qty`). The message says how far it resolved and which names were there. A path that goes on through a collection — an `array` in a JSON Schema, a `repeated` field in a `.proto` — is this code too: a path reads one value, and each element has its own, so which one the input takes is not said. The message names every collection along the path. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin.
 
-**Fix.** Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here.
+**Fix.** Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here. Where the path goes through a collection, read the collection instead: test a field of its elements with `from any <collection> where <field> = <value>` (or `all`, `count`), add up or compare a number with `sum`, `max` or `min`, or walk the elements with `elements <name> from <collection>`. Where the collection always holds one element, make it one object in the contract (a field that is not `repeated`).
 
 **Smallest reproduction**:
 
@@ -3265,6 +3265,31 @@ policy unique
 With `order.json` beside it:
 
 ```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+**A path that goes on through a collection**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : string  from order.lines.category
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+With `order.json` beside it:
+
+```rule
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
 ```
 

@@ -1,0 +1,10 @@
+error[E121]: The path `order.lines.parts.name` goes on through the collection `order.lines`
+  --> tests/collection_path/E121_a_collection_in_each_line.rule:7
+  |
+7 |   part : string  from order.lines.parts.name
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ `order.lines` is an `array`
+  |
+ A `from` path reads one value, and a collection holds any number of elements.
+ Inside the elements, `order.lines[].parts` is a collection too.
+ If each of them always holds one element, make `lines` and `parts` each one object in the contract rather than an `array`, and the path reads it.
+

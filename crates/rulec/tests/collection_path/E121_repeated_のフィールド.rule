@@ -1,0 +1,18 @@
+rule repeated_のフィールド(repeated_field) v1
+description "注文の明細の区分を、.proto の repeated のフィールドの先へ続くパスで読む"
+
+shape 注文(order) = proto "orders.proto" shop.v1.Order
+
+enum 区分(kind) = tool | part | service
+
+inputs
+  明細の区分(category) : 区分  from 注文.lines.category
+
+outputs
+  扱う(handled) : bool
+
+table 扱い(handled_by)
+policy unique
+| 明細の区分    | -> 扱う |
+| tool          | true    |
+| part, service | false   |

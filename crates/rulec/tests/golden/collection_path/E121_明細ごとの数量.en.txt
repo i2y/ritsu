@@ -1,0 +1,11 @@
+error[E121]: The path `注文.lines.quantity` goes on through the collection `注文.lines`
+  --> tests/collection_path/E121_明細ごとの数量.rule:7
+  |
+7 |   数量(quantity) : number  range >=1 <=99  from 注文.lines.quantity
+  |                                            ^^^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` is an `array`
+  |
+ A `from` path reads one value. Each element of `注文.lines` has its own `quantity`, and the path does not say which one the input takes.
+ Two ways read `quantity` of the elements. One asks of them: `from any 注文.lines where quantity = <value>` is true when some element has that value, `all` when every one does, and `count` counts the elements that do. The other walks them as a sequence: write `elements <name> from 注文.lines` with a field `from quantity`.
+ A number can be added up or compared over them too: `from sum 注文.lines of quantity`, `from max 注文.lines of quantity empty <value>`.
+ If `注文.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+

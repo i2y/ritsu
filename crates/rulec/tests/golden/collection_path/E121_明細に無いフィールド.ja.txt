@@ -1,0 +1,10 @@
+エラー[E121]: パス `注文.lines.colour` は、並び `注文.lines` の先へ続いています
+  --> tests/collection_path/E121_明細に無いフィールド.rule:7
+  |
+7 |   色(colour) : string  from 注文.lines.colour
+  |                        ^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` は `array` です
+  |
+ `from` のパスが読むのは一つの値で、並びは要素をいくつでも持ちます。
+ 要素の中では `注文.lines[]` までは見つかりました。そこにあるフィールド: category, parts, quantity, unit
+ `注文.lines` の要素がいつも一つなら、契約の `lines` を `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。
+

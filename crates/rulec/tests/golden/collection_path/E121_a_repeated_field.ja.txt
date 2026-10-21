@@ -1,0 +1,10 @@
+エラー[E121]: パス `order.lines.category` は、並び `order.lines` の先へ続いています
+  --> tests/collection_path/E121_a_repeated_field.rule:9
+  |
+9 |   category : kind  from order.lines.category
+  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^ `order.lines` は `repeated` のフィールドです
+  |
+ `from` のパスが読むのは一つの値です。`order.lines` の要素はそれぞれ `category` を持ち、パスは、入力がどの要素のものを受け取るかを言っていません。
+ 要素の `category` を読むには、二つの書き方があります。一つは要素を調べる書き方で、`from any order.lines where category = <値>` はその値の要素があれば真、`all` はどの要素もそうなら真になり、`count` はその要素の数です。もう一つは並びとしてたどる書き方で、`elements <名前> from order.lines` を書き、そのフィールドに `from category` と書きます。
+ `order.lines` の要素がいつも一つなら、契約の `lines` を `repeated` でないフィールドにしてください。パスはそれを読めます。
+

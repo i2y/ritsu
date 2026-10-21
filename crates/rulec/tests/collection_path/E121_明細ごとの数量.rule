@@ -1,0 +1,15 @@
+rule 明細ごとの数量(number_of_each_line) v1
+description "注文の明細の数量を、明細の先へ続くパスで読む"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  数量(quantity) : number  range >=1 <=99  from 注文.lines.quantity
+
+outputs
+  扱う(handled) : bool
+
+table 扱い(handled_by)
+policy unique
+| 数量 | -> 扱う |
+| -    | true    |

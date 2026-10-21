@@ -1,0 +1,18 @@
+rule path_in_each_line v1
+description "The unit of an order's lines, read with a path of two steps past them"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum unit_kind = piece | box
+
+inputs
+  unit : unit_kind  from order.lines.unit.kind
+
+outputs
+  handled : bool
+
+table handled_by
+policy unique
+| unit  | -> handled |
+| piece | true       |
+| box   | false      |

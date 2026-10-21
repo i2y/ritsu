@@ -1,0 +1,15 @@
+rule collection_in_each_line v1
+description "The name of a part of an order's lines: a path through two collections"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  part : string  from order.lines.parts.name
+
+outputs
+  handled : bool
+
+table handled_by
+policy unique
+| part | -> handled |
+| -    | true       |

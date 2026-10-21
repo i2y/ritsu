@@ -1,0 +1,18 @@
+rule field_of_each_line v1
+description "The category of an order's lines, read with a path that goes on through them"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum kind = tool | part | service
+
+inputs
+  category : kind  from order.lines.category
+
+outputs
+  handled : bool
+
+table handled_by
+policy unique
+| category      | -> handled |
+| tool          | true       |
+| part, service | false      |

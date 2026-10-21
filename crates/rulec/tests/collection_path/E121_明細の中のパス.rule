@@ -1,0 +1,18 @@
+rule 明細の中のパス(path_in_each_line) v1
+description "注文の明細の単位を、明細の先へ二段続くパスで読む"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum 単位(unit_kind) = piece | box
+
+inputs
+  明細の単位(unit) : 単位  from 注文.lines.unit.kind
+
+outputs
+  扱う(handled) : bool
+
+table 扱い(handled_by)
+policy unique
+| 明細の単位 | -> 扱う |
+| piece      | true    |
+| box        | false   |

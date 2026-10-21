@@ -1,0 +1,10 @@
+error[E121]: The path `注文.lines.colour` goes on through the collection `注文.lines`
+  --> tests/collection_path/E121_明細に無いフィールド.rule:7
+  |
+7 |   色(colour) : string  from 注文.lines.colour
+  |                        ^^^^^^^^^^^^^^^^^^^^^^ `注文.lines` is an `array`
+  |
+ A `from` path reads one value, and a collection holds any number of elements.
+ In an element it resolved as far as `注文.lines[]`. The fields there: category, parts, quantity, unit
+ If `注文.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+

@@ -659,8 +659,11 @@ as draft-07 and OpenAPI 3.0 say. A `.proto` is read far enough for the same: mes
 their fields, `repeated` included, with `map` skipped rather than guessed at; the members of a
 `oneof` are fields of the message, each with presence of its own like an `optional` field.
 A path that cannot be resolved is **E121**, which says how far it got and which names were
-there; a type that does not fit is **E120**; a `shape` no input and no sequence is taken from is
-**W122**.
+there. A path that goes on through a collection is E121 too: a path reads one value, and each
+element has its own. It names every collection along the path and, where the rest of the path
+reads a value in one element, the ways above that read it across them — `any`, `all`, `count`,
+`sum`, `max` and `min`, or the elements taken as a sequence. A type that does not fit is
+**E120**; a `shape` no input and no sequence is taken from is **W122**.
 
 **The contract says which values can come, too, and that is held to the input.** A path says
 where a value comes from; the contract's validation says which values pass — Protovalidate's

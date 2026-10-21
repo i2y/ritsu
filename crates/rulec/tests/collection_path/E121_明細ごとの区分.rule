@@ -1,0 +1,18 @@
+rule 明細ごとの区分(field_of_each_line) v1
+description "注文の明細の区分を、明細の先へ続くパスで読む"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum 区分(kind) = tool | part | service
+
+inputs
+  明細の区分(category) : 区分  from 注文.lines.category
+
+outputs
+  扱う(handled) : bool
+
+table 扱い(handled_by)
+policy unique
+| 明細の区分    | -> 扱う |
+| tool          | true    |
+| part, service | false   |

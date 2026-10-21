@@ -784,6 +784,22 @@ policy unique
 | a | -> x |
 | - | true |
 "##;
+/// A path past `order.lines`, which is an array (§15.254).
+const X_E121_THROUGH: &str = r##"rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : string  from order.lines.category
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+"##;
 const X_W122: &str = "rule t(t) v1\n\nshape order(order) = jsonschema \"order.json\" \"#/$defs/Order\"\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\ntable 表(t1)\npolicy unique\n| a | -> x |\n| - | true |\n";
 const X_W122_EN: &str = r##"rule t(t) v1
 
@@ -3404,18 +3420,19 @@ pub fn ledger() -> Vec<Entry> {
             "E121",
             tr!("`from` のパスが契約にありません", "The contract has no such path"),
             tr!(
-                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` や `of` の見るフィールドが要素に無いときです。`elements … from` の並びのパスと、その要素のフィールドのパス（`order.lines[].qty` のように、要素の中を `[]` の後ろに示します）も同じです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
-                "A `from` path is not in the contract of the `shape` it starts at: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests or an `of` reads is not a field of an element. The same goes for the path of a sequence taken with `elements … from`, and for the path of each field of its elements, shown after `[]` inside the element (`order.lines[].qty`). The message says how far it resolved and which names were there. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
+                "`from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` や `of` の見るフィールドが要素に無いときです。`elements … from` の並びのパスと、その要素のフィールドのパス（`order.lines[].qty` のように、要素の中を `[]` の後ろに示します）も同じです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。パスが並び（JSON Schema の `array`、`.proto` の `repeated` のフィールド）の先へ続くときも、このエラーです。パスが読むのは一つの値で、要素はそれぞれ自分の値を持つので、入力がどの要素のものを受け取るかが決まりません。注は、パスが通る並びを全部挙げます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。",
+                "A `from` path is not in the contract of the `shape` it starts at: the first word is not the name of a `shape`, a field along the way is not there, or the field a `where` tests or an `of` reads is not a field of an element. The same goes for the path of a sequence taken with `elements … from`, and for the path of each field of its elements, shown after `[]` inside the element (`order.lines[].qty`). The message says how far it resolved and which names were there. A path that goes on through a collection — an `array` in a JSON Schema, a `repeated` field in a `.proto` — is this code too: a path reads one value, and each element has its own, so which one the input takes is not said. The message names every collection along the path. The contract may be a `.proto` or a JSON Schema, is read on every `check` like `import proto`, and carries no pin."
             ),
             tr!(
-                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**このエラーはそのためにあります。** 契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行するまで気づきませんが、rulec は生成の前に止まります。",
-                "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here."
+                "綴りを直すか、契約のほうが動いたのならパスを書き直してください。**このエラーはそのためにあります。** 契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行するまで気づきませんが、rulec は生成の前に止まります。パスが並びを通るときは、並びを読む書き方にしてください。要素のフィールドを調べる `from any <並び> where <フィールド> = <値>`（`all`、`count` も）、数を足し合わせたり比べたりする `sum`・`max`・`min`、要素を一つずつたどる `elements <名前> from <並び>` です。並びに要素がいつも一つなら、契約のほうで、それを一つのオブジェクト（`repeated` でないフィールド）にしてください。",
+                "Correct the spelling, or rewrite the path if the contract moved. **This firing is the point**: a contract that renamed a field goes unnoticed in hand-written glue until it runs, and stops the build here. Where the path goes through a collection, read the collection instead: test a field of its elements with `from any <collection> where <field> = <value>` (or `all`, `count`), add up or compare a number with `sum`, `max` or `min`, or walk the elements with `elements <name> from <collection>`. Where the collection always holds one element, make it one object in the contract (a field that is not `repeated`)."
             ),
             X_E121,
             &["E120", "W122", "E032"],
         )
         .with_files(SHAPE_DOC)
-        .english(X_E121_EN),
+        .english(X_E121_EN)
+        .also_with(tr!("並びの先へ続くパス", "A path that goes on through a collection"), X_E121_THROUGH, SHAPE_DOC),
         err(
             "E119",
             tr!("行の境界が、引いた出典のコピーと反対側です", "A row's boundary falls on the other side from the copy it cites"),

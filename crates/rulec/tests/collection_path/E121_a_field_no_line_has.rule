@@ -1,0 +1,15 @@
+rule field_no_line_has v1
+description "A field the lines of an order do not have, read with a path that goes on through them"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  colour : string  from order.lines.colour
+
+outputs
+  handled : bool
+
+table handled_by
+policy unique
+| colour | -> handled |
+| -      | true       |

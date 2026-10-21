@@ -3239,9 +3239,9 @@ policy unique
 
 `error` — **`from` のパスが契約にありません**
 
-**いつ出るか。** `from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` や `of` の見るフィールドが要素に無いときです。`elements … from` の並びのパスと、その要素のフィールドのパス（`order.lines[].qty` のように、要素の中を `[]` の後ろに示します）も同じです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。
+**いつ出るか。** `from` のパスが、宣言した `shape` の契約の中に見つからないとき。パスの最初の語が `shape` の名前でないとき、途中のフィールドが無いとき、`where` や `of` の見るフィールドが要素に無いときです。`elements … from` の並びのパスと、その要素のフィールドのパス（`order.lines[].qty` のように、要素の中を `[]` の後ろに示します）も同じです。注に、パスがどこまで届いたかと、そこにあったフィールドの名前が出ます。パスが並び（JSON Schema の `array`、`.proto` の `repeated` のフィールド）の先へ続くときも、このエラーです。パスが読むのは一つの値で、要素はそれぞれ自分の値を持つので、入力がどの要素のものを受け取るかが決まりません。注は、パスが通る並びを全部挙げます。契約は `.proto` でも JSON Schema でもよく、`import proto` と同じく毎回の `check` で読まれ、固定は付きません。
 
-**直し方。** 綴りを直すか、契約のほうが動いたのならパスを書き直してください。**このエラーはそのためにあります。** 契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行するまで気づきませんが、rulec は生成の前に止まります。
+**直し方。** 綴りを直すか、契約のほうが動いたのならパスを書き直してください。**このエラーはそのためにあります。** 契約がフィールドの名前を変えたとき、手書きのつなぎのコードなら実行するまで気づきませんが、rulec は生成の前に止まります。パスが並びを通るときは、並びを読む書き方にしてください。要素のフィールドを調べる `from any <並び> where <フィールド> = <値>`（`all`、`count` も）、数を足し合わせたり比べたりする `sum`・`max`・`min`、要素を一つずつたどる `elements <名前> from <並び>` です。並びに要素がいつも一つなら、契約のほうで、それを一つのオブジェクト（`repeated` でないフィールド）にしてください。
 
 **最小の再現**:
 
@@ -3265,6 +3265,31 @@ policy unique
 隣に置く `order.json`:
 
 ```proto
+{"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
+```
+
+**並びの先へ続くパス**:
+
+```rule
+rule t(t) v1
+
+shape order(order) = jsonschema "order.json" "#/$defs/Order"
+
+inputs
+  a(a) : string  from order.lines.category
+
+outputs
+  x(x) : bool
+
+table t1(t1)
+policy unique
+| a | -> x |
+| - | true |
+```
+
+隣に置く `order.json`:
+
+```rule
 {"$defs":{"Order":{"type":"object","properties":{"lines":{"type":"array","items":{"type":"object","properties":{"category":{"type":"string"}}}}}}}}
 ```
 

@@ -1,0 +1,29 @@
+rule collection_in_an_element v1
+description "The lines of an order walked as a sequence, with a field of each read through a collection inside it"
+
+shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum part_name = bolt | nut
+
+# One line of the order
+elements lines from order.lines
+  quantity : number     range >=1 <=99  from quantity
+  part     : part_name                  from parts.name
+
+outputs
+  handled : bool
+
+# A line of ten bolts or more is a big one
+table big_line_by_quantity
+policy unique
+| quantity | part | -> big_line : bool |
+| >=10     | bolt | true               |
+| >=10     | nut  | false              |
+| <10      | -    | false              |
+
+count big_lines over lines where big_line  range >=0 <=20
+
+table handled_by
+policy unique
+| big_lines | -> handled |
+| -         | true       |

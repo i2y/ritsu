@@ -1,0 +1,59 @@
+rule 明細を読む規則(order_lines_read) v1
+description "注文の明細を、E121 が挙げる並びの読み方で読む。調べる、数える、足し合わせる、比べる、たどる"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+enum 区分(kind) = tool | part | service
+enum 単位(unit_kind) = piece | box
+
+inputs
+  工具あり(has_tool)   : bool                       from any 注文.lines where category = tool
+  全部が部品(all_parts) : bool                       from all 注文.lines where category = part
+  作業の数(services)   : number  range >=0 <=20     from count 注文.lines where category = service
+  個数(pieces)         : number  range >=0 <=1980   from sum 注文.lines of quantity
+  最大数量(largest)    : number  range >=0 <=99     from max 注文.lines of quantity empty 0
+
+# 注文の明細の一件
+elements 明細(lines) from 注文.lines
+  数量(quantity)   : number  range >=1 <=99  from quantity
+  明細の単位(unit) : 単位                    from unit.kind
+  明細の区分(category) : 区分                from category
+
+outputs
+  手数料(fee) : money[USD]  round up(1USD)
+
+table 工具の手数料(tool_fee)
+policy unique
+| 工具あり | 全部が部品 | -> 工具料(tool_extra) : money[USD] |
+| true     | -          | 5USD                               |
+| false    | true       | 0USD                               |
+| false    | false      | 2USD                               |
+
+table 量の手数料(volume_fee)
+policy unique
+| 作業の数 | 個数  | 最大数量 | -> 量の料金(volume_extra) : money[USD] |
+| >=1      | -     | -        | 3USD                                   |
+| 0        | >=100 | -        | 4USD                                   |
+| 0        | <100  | >=50     | 2USD                                   |
+| 0        | <100  | <50      | 0USD                                   |
+
+# 工具か部品を十箱以上の明細は重い
+table 重い明細(heavy_line)
+policy unique
+| 数量 | 明細の単位 | 明細の区分 | -> 重い(heavy) : bool |
+| >=10 | box        | tool, part | true                  |
+| >=10 | box        | service    | false                 |
+| >=10 | piece      | -          | false                 |
+| <10  | -          | -          | false                 |
+
+count 重い明細の数(heavy_lines) over 明細 where 重い  range >=0 <=20
+
+table 重さの手数料(heavy_fee)
+policy unique
+| 重い明細の数 | -> 重さの料金(heavy_extra) : money[USD] |
+| >=1          | 6USD                                    |
+| 0            | 0USD                                    |
+
+define 合計(total) : money[USD] = 工具料 + 量の料金 + 重さの料金
+
+result 手数料 = 合計

@@ -1,0 +1,9 @@
+error[E121]: The path `注文.lines[].parts.name` goes on through the collection `注文.lines[].parts`
+  --> tests/collection_path/E121_要素の中の並び.rule:11
+   |
+11 |   部品(part)     : 部品名                  from parts.name
+   |                                            ^^^^^^^^^^^^^^^ `注文.lines[].parts` is an `array`
+   |
+ A `from` path reads one value. Each element of `注文.lines[].parts` has its own `name`, and the path does not say which one the field takes.
+ If `注文.lines[].parts` always holds one element, make `parts` one object in the contract rather than an `array`, and the path reads it.
+

@@ -1,0 +1,10 @@
+エラー[E121]: パス `order.lines.unit.kind` は、並び `order.lines` の先へ続いています
+  --> tests/collection_path/E121_a_path_in_each_line.rule:9
+  |
+9 |   unit : unit_kind  from order.lines.unit.kind
+  |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^ `order.lines` は `array` です
+  |
+ `from` のパスが読むのは一つの値です。`order.lines` の要素はそれぞれ `unit.kind` を持ち、パスは、入力がどの要素のものを受け取るかを言っていません。
+ 要素の中の `unit.kind` を読むなら、並びとしてたどってください。`elements <名前> from order.lines` を書き、そのフィールドに `from unit.kind` と書きます。`where` と `of` が指せるのは要素のフィールド一つなので、`any`・`all`・`count`・`sum`・`max`・`min` では読めません。
+ `order.lines` の要素がいつも一つなら、契約の `lines` を `array` ではなく一つのオブジェクトにしてください。パスはそれを読めます。
+

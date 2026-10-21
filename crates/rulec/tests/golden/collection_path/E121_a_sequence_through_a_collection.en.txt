@@ -1,0 +1,9 @@
+error[E121]: The path `order.lines.parts` goes on through the collection `order.lines`
+  --> tests/collection_path/E121_a_sequence_through_a_collection.rule:9
+  |
+9 | elements parts from order.lines.parts
+  |                ^^^^^^^^^^^^^^^^^^^^^^ `order.lines` is an `array`
+  |
+ `elements` walks one collection, and the path to it does not go on through another.
+ If `order.lines` always holds one element, make `lines` one object in the contract rather than an `array`, and the path reads it.
+
