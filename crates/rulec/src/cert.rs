@@ -2113,6 +2113,13 @@ fn table_json(t: CertTable, main_src: &str, rule_path: &str) -> String {
                         })
                         .collect::<Vec<_>>()),
                 );
+            // The column of its own table a row passes on, where it does (§15.261): written only on
+            // such a row, so no other certificate changes.
+            let o = if r.passes.iter().any(|p| p.is_some()) {
+                o.raw("passes", arr(&r.passes.iter().map(|p| p.map(|a| a.to_string()).unwrap_or_else(|| "null".into())).collect::<Vec<_>>()))
+            } else {
+                o
+            };
             let o = if answers_named && r.produced.iter().any(|p| p.is_some()) {
                 o.raw(
                     "answers",

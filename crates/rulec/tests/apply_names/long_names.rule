@@ -1,0 +1,23 @@
+rule long_names v1
+description "Two identifiers PostgreSQL reads as one: it cuts a name at 63 bytes, and what the long apply brings in agrees that far with this rule's long definition"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  spring_credit : money[USD]  round down(1USD)
+  credit_and_bonus : money[USD]  round down(1USD)
+
+apply lift_every_member_one_tier_up_for_the_spring_campaign_2026 = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member
+  credit -> spring_credit
+
+define lift_every_member_one_tier_up_for_the_spring_campaign_2026_credit_and_bonus : money[USD] = spring_credit + 1USD
+define credit_and_bonus : money[USD] = lift_every_member_one_tier_up_for_the_spring_campaign_2026_credit_and_bonus
+
+examples
+| member | -> spring_credit | credit_and_bonus |
+| basic  | 0USD             | 1USD             |
+| gold   | 5USD             | 6USD             |

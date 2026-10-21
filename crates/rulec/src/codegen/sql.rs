@@ -389,7 +389,7 @@ impl<'a> Gen<'a> {
     /// The name of a table's row column: `<alias>_row`, kept clear of every declared name.
     fn sql_row_col(&self, t: &Table, k: usize) -> String {
         let base = t.name.as_ref().map(pub_name).unwrap_or_else(|| format!("t{}", k + 1));
-        let mut n = format!("{base}_row");
+        let mut n = format!("{base}{}", super::SQL_ROW);
         while self.idents.values().any(|v| *v == n) || self.c.syms.contains_key(&n) {
             n.push('_');
         }

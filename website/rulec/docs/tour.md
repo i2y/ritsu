@@ -780,8 +780,12 @@ ranges never reach are not errors: the page for people lists them as unused by t
 only a table none of whose rows is reached draws W118.
 
 The generated code carries the applied rule expanded, and the trace says
-`{"table":"retirement:schedule","row":1,"label":"short"}`. A rule that applies another can be
-applied in turn, and so can a rule that walks a sequence; applies that go round are E044.
+`{"table":"retirement:schedule","row":1,"label":"short"}`. In the code, the applied rule's values
+are named after the apply and after what the applied rule's own code calls them
+(`retirement_allowance`); where that is a name this rule's code has already, in any of the
+languages, a number goes after it. So one rule can be applied twice, and an output named as you
+like, with nothing to rename. A rule that applies another can be applied in turn, and so can a
+rule that walks a sequence; applies that go round are E044.
 
 ## Saying which combinations cannot happen
 

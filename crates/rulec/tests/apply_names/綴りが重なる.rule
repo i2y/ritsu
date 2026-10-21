@@ -1,0 +1,27 @@
+rule 綴りが重なる(spelled_alike) v1
+description "準用 読む(read) が持ち込む read_credit を、Swift と Java はこの規則の readCredit と同じに綴り、SQLite は read_CREDIT と同じ名前として読む"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  読んだ値引き(readCredit) : money[USD]  round down(1USD)
+  読んだ値引きの控え(read_CREDIT) : money[USD]  round down(1USD)
+  準用した値引き(credit_read) : money[USD]  round down(1USD)
+
+table 会員ごとの読み(read_by_member)
+policy unique
+| 会員       | -> 読んだ値引き | 読んだ値引きの控え |
+| 一般       | 1USD            | 2USD               |
+| >=シルバー | 3USD            | 4USD               |
+
+apply 読む(read) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 会員
+  値引き -> 準用した値引き
+
+examples
+| 会員     | -> 読んだ値引き | 読んだ値引きの控え | 準用した値引き |
+| 一般     | 1USD            | 2USD               | 0USD           |
+| ゴールド | 3USD            | 4USD               | 5USD           |

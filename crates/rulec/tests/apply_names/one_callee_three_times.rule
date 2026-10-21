@@ -1,0 +1,31 @@
+rule one_callee_three_times v1
+description "One callee applied three times: what each apply brings in is written under that apply's name"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  campaign_tier : tier
+  member : tier
+  repeat_tier : tier
+
+outputs
+  on_campaign : money[USD]  round down(1USD)
+  on_member : money[USD]  round down(1USD)
+  on_repeat : money[USD]  round down(1USD)
+
+apply campaign = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = campaign_tier
+  credit -> on_campaign
+
+apply own = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member
+  credit -> on_member
+
+apply repeat = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = repeat_tier
+  credit -> on_repeat
+
+examples
+| campaign_tier | member | repeat_tier | -> on_campaign | on_member | on_repeat |
+| basic         | gold   | silver      | 0USD           | 5USD      | 5USD      |
+| platinum      | basic  | basic       | 5USD           | 0USD      | 0USD      |

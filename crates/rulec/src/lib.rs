@@ -625,8 +625,10 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
         return Err(ds);
     }
     // What is generated from the rule writes a name some language keeps as a keyword with `_`
-    // after it (§15.210). The checks above ran on the names as declared.
+    // after it (§15.210), and what an `apply` or a contribution brings in under an identifier no
+    // other name of the rule is written as, in any language (§15.260). The checks above ran on the
+    // names as declared.
     let mut f = f;
-    codegen::escape_keywords(&mut f);
+    codegen::assign_identifiers(&mut f);
     Ok((f, t))
 }

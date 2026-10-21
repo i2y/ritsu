@@ -35,7 +35,11 @@ enum Sub {
 
 struct Renamer<'a> {
     apply: &'a str,
+    /// What the identifiers of what this apply brings in start with: the apply's own (§15.260).
     alias: String,
+    /// The identifier the callee's generated code writes for each of its values, tables and enums
+    /// (§15.260): what comes in is written under the apply's, followed by that one.
+    idents: crate::codegen::Idents,
     /// The `apply` heading: where every diagnostic about the inlined items points, since the
     /// callee's own positions mean nothing in this file.
     at: Span,
@@ -71,12 +75,15 @@ impl Renamer<'_> {
     fn sp(&self) -> Span {
         self.at.clone()
     }
+    /// A value of the callee's, under this apply: `<apply>:<name>`, its identifier the apply's
+    /// followed by the callee's (§15.260). `codegen::assign_identifiers` then holds it apart from
+    /// every other identifier of this rule.
     fn name(&self, n: &Name) -> Name {
-        Name {
-            text: self.text(&n.text),
-            ascii: Some(format!("{}_{}", self.alias, n.ascii.clone().unwrap_or_else(|| n.text.clone()))),
-            span: self.sp(),
-        }
+        Name { text: self.text(&n.text), ascii: Some(format!("{}_{}", self.alias, self.idents.value(n))), span: self.sp() }
+    }
+    /// A table or a clause of the callee's, under this apply (§15.260).
+    fn table_name(&self, n: &Name) -> Name {
+        Name { text: self.text(&n.text), ascii: Some(format!("{}_{}", self.alias, self.idents.table(n))), span: self.sp() }
     }
     /// A word in an expression: a bound input, a callee name, or a literal word.
     fn expr_word(&self, w: &str) -> Expr {
@@ -358,7 +365,10 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 continue;
             }
         };
-        let cal_alias = cf.name.ascii.clone().unwrap_or_else(|| an.clone());
+        // What the identifiers of what this apply brings in start with (§15.260): the apply's own,
+        // its alias or its name. The callee's alias, which they took before, is the same for every
+        // apply of one callee, so two of them brought in one identifier twice.
+        let ident_head = crate::codegen::apply_prefix(&a.name);
 
         // The bindings: every callee input exactly once, nothing the callee lacks.
         let mut bad = false;
@@ -629,7 +639,8 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         }
         let rn = Renamer {
             apply: &an,
-            alias: cal_alias.clone(),
+            alias: ident_head.clone(),
+            idents: crate::codegen::Idents::of(&cf),
             at: a.span.clone(),
             subs,
             maps,
@@ -750,7 +761,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             let inner = rn.text(&od.name.text);
             if let (Some(r), 0) = (&cf.result, oi) {
                 items.push(Item::Define(DefineDecl {
-                    name: Name { text: inner.clone(), ascii: Some(format!("{}_{}", rn.alias, od.name.ascii.clone().unwrap_or_else(|| od.name.text.clone()))), span: rn.sp() },
+                    name: rn.name(&od.name),
                     ty: rn.ty(&od.ty),
                     expr: rn.expr(&r.expr),
                     span: rn.sp(),
@@ -932,7 +943,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             let copy = format!("{an}:{}", e.name.text);
             if used.contains(&copy) && !f.enums.iter().any(|m| m.name.text == copy) {
                 f.enums.push(EnumDecl {
-                    name: Name { text: copy.clone(), ascii: Some(format!("{cal_alias}_{}", e.name.ascii.clone().unwrap_or_else(|| e.name.text.clone()))), span: a.span.clone() },
+                    name: Name { text: copy.clone(), ascii: Some(format!("{ident_head}_{}", rn.idents.enum_type(&e.name))), span: a.span.clone() },
                     from: None,
                     added: Vec::new(),
                     span: a.span.clone(),
@@ -1236,7 +1247,7 @@ fn inline_table(rn: &Renamer, cc: &Checked, t: &Table, dropped_rows: &[(String, 
         return None;
     }
     Some(Table {
-        name: t.name.as_ref().map(|n| rn.name(n)),
+        name: t.name.as_ref().map(|n| rn.table_name(n)),
         policy: t.policy,
         inputs: cols,
         // An output column that names one of the callee's declared outputs took its type from

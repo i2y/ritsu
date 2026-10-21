@@ -87,10 +87,12 @@ a linear model is, and the range the document states for it is held to it (rulec
 truth value a boolean `define` of one comparison can take is worked out from its comparison and
 the intervals of its two sides, and the kind of every column from `inputs`, `walks`, `values` and
 `decides`. Where a leaf or a pair rests on the rows of a table above that write a value, those
-rows are counted from that table's part of the document, not from the leaf. The
+rows are counted from that table's part of the document, not from the leaf; a row that passes on
+a column of its own table (`passes`) writes only what its own box takes on that column, which is
+how a value no row above writes is settled where such a row stands among them (rulec's §15.261). The
 digest ties the certificate to one text — and every contribution merged into the rule to its own
 file — and every cell is read back from its own line and column in it — the answers a row writes
-into a column of numbers among them, the words it writes, out of the file the row is written in
+into a column of numbers among them, the words it writes — each a value of its column and no name of the rule, which a cell reads as the name — and the name of the column it passes on, out of the file the row is written in
 where a table is written in several (rulec's §15.243), what a machine's moves and `once` lines read
 in each row's own answer cell, where a case starts, out of the `initial` lines (rulec's §15.233),
 and the cells and the chance of every claim of `chances` and of every `sequence` a pick by weight

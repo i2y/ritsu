@@ -1,0 +1,28 @@
+rule 表の外の名前を渡す(passed_other_name) v1
+description "上の表は、自分の列に無い名前を渡す。その名前はどの段階にもなりうるので、下の表は全部の段階を受け取る"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+  キャンペーン(campaign) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| >=シルバー | キャンペーン               |
+
+table 引き上げ先ごとの値引き(credit_by_lift)
+policy unique
+| 引き上げ先 | -> 値引き |
+| <=シルバー | 3USD      |
+| >=ゴールド | 5USD      |
+
+examples
+| 会員     | キャンペーン | -> 値引き |
+| 一般     | ゴールド     | 3USD      |
+| ゴールド | ゴールド     | 5USD      |

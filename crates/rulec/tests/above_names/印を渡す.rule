@@ -1,0 +1,32 @@
+rule 印を渡す(passed_flag) v1
+description "表が、印の立っているところでは印をそのまま渡し、ほかでは印を立てるので、下の印は false にならない"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 会員ごとの対象(eligible_by_member)
+policy unique
+| 会員       | -> 対象(eligible) : bool |
+| 一般       | false                    |
+| >=シルバー | true                     |
+
+table 対象ごとの印(marked_by_eligible)
+policy unique
+| 対象  | -> 印(marked) : bool |
+| true  | 対象                 |
+| false | true                 |
+
+table 印ごとの値引き(credit_by_marked)
+policy unique
+| 印   | -> 値引き |
+| true | 5USD      |
+
+examples
+| 会員     | -> 値引き |
+| 一般     | 5USD      |
+| ゴールド | 5USD      |

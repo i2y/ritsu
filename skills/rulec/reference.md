@@ -133,8 +133,15 @@ the renaming: an input, an output, a `derive`, a `define`, a table's output colu
 or one of its fields called `type`, `class`, `def` or `from` — a keyword in some of the
 languages that write a name as it is — is written with `_` after it in every language
 (`class_`), `rulec api` names it so, and the name a value travels under — the keys of the input
-JSON, the records — stays the one declared. W121 says which languages took the word, and an
-alias chooses the identifier instead. A parameter or a local hides nothing outside its own
+JSON, the records — stays the one declared. Where `class_` is already the identifier of another
+name of the rule, a number goes after it (`class_2`). W121 says which languages took the word,
+and an alias chooses the identifier instead.
+
+An identifier rulec makes — that `_`, and those of everything an `apply` or a contribution brings
+in (below) — is never one the rule has already, in any language's spelling of it: as it is, in
+camelCase or PascalCase, with case set aside (SQLite reads `"Credit"` and `"credit"` as one
+column), or cut to the 63 bytes PostgreSQL keeps of a name. Where it would be, it takes the first
+of `_2`, `_3`, … that is not. The names the rule declares keep theirs. A parameter or a local hides nothing outside its own
 body, so the warning is raised for those only when the word is a keyword. It is a warning
 because a target you do not generate cannot hurt you.
 
@@ -2246,7 +2253,12 @@ row (`{"table":"retirement:schedule","row":1,"label":"short"}`). `<apply>:<name>
 rule like any other: an expression may read it (`define strict_rate : number = 2 * base:decay_rate`)
 and a clause may test it (`when strict true and base:above >0`). Rows of the callee this rule never
 reaches — its ranges are usually narrower — are silent, and the page lists them under the
-apply; a whole table none of whose rows is reached is W118.
+apply; a whole table none of whose rows is reached is W118. In the generated code, what an apply
+brings in is written as the apply's alias, or its name, followed by the identifier the callee's own
+code gives the name: `apply キャンペーン(campaign)` brings `値引き(credit)` in as `campaign_credit`.
+Where that is already an identifier of this rule — `credit -> campaign_credit`, or a second apply
+whose name runs into it — a number goes after it (`campaign_credit_2`), so one rule may be applied
+any number of times and an output named anything without a rename.
 
 A callee may apply a rule in turn: it is expanded as its own check expands it, and what it brought
 in comes in under both names (`a:b:name`). A callee that walks a sequence is applied by binding

@@ -38,7 +38,10 @@ What it checks, per table:
   * every row's **box** is the one its own cells describe, recomputed here from the parsed
     cells and the axes — less the coordinates of a column decided above at a value no row of
     the deciding table writes, each of them a `never` fact of the table's, earned back from
-    those rows (rulec's §15.253). A box wider or narrower than that is refused.
+    those rows (rulec's §15.253): a row that writes another word, or one that passes on a column
+    of its own table (`passes`) whose box there takes no such value (§15.261). A box wider or
+    narrower than that is refused. Every word a row is said to write is a value of its column and
+    no name of the rule, which a cell reads as the name (§15.261).
   * every pair of rows of a `unique` table is either **proved disjoint** — the certificate
     names one axis, and the two rows really do take no coordinate in common there — or
     listed as **undecided**, which the rule's own W114 warning already said out loud. A
@@ -996,17 +999,72 @@ def box_holds(t, path, column, value):
     return ai is not None and ai < len(path) and t["axes"][ai]["coords"][path[ai]] == value
 
 
+def passed_axis(u, r, oi):
+    """The axis of the column of its own table a row passes on into its output `oi` (`passes`,
+    rulec's §15.261): one of the table's axes whose coordinates are words. None where it names
+    none, or names what this program cannot read."""
+    ps = r.get("passes")
+    a = ps[oi] if isinstance(ps, list) and oi < len(ps) else None
+    if not isinstance(a, int) or isinstance(a, bool) or not 0 <= a < len(u["axes"]):
+        return None
+    axis = u["axes"][a]
+    if numeric_axis(axis) or axis.get("prefixes") is not None or not all(isinstance(x, str) for x in axis["coords"]):
+        return None
+    return a
+
+
 def never_written(t, u, oi, col, val):
-    """No row of the table that decides a column writes a value at all."""
+    """No row of the table that decides a column writes a value at all: each writes another
+    word, or passes on a column of its own table whose box there takes no such value — the row
+    writes what that column holds where it fires, and it fires only inside its box (rulec's
+    §15.261)."""
     for r in u["rows"]:
         p = r.get("produces")
-        if not isinstance(p, list) or oi >= len(p) or p[oi] is None:
+        if not isinstance(p, list) or oi >= len(p):
             raise Bad(f"{t['table']}: row {r['row']} of {u['table']} writes something this "
                       f"program cannot read, so «{col} is never {val}» cannot be settled")
+        if p[oi] is None:
+            a = passed_axis(u, r, oi)
+            if a is None:
+                raise Bad(f"{t['table']}: row {r['row']} of {u['table']} writes something this "
+                          f"program cannot read, so «{col} is never {val}» cannot be settled")
+            coords = u["axes"][a]["coords"]
+            if val in coords and coords.index(val) in r["accepts"][a]:
+                raise Bad(f"{t['table']}: row {r['row']} of {u['table']} passes on {u['axes'][a]['column']}, "
+                          f"which can be {val} there, so it is not a value the tables above never reach")
+            continue
         if p[oi] == val:
             raise Bad(f"{t['table']}: row {r['row']} of {u['table']} does write {col} = {val}, "
                       f"so it is not a value the tables above never reach")
     return True
+
+
+def check_words(t):
+    """Every word a row is said to write is a value of the column it is written into, and no name of
+    the rule. rulec reads a word in an answer cell as a name wherever the rule declares one spelled
+    so, and the row then writes whatever the name holds (rulec's §3.2). Without this, a row that
+    passes a name on could be said to write the name as a word — the file does write that word
+    there — and a value it does write could then be called one no row writes (rulec's §15.261)."""
+    cert = t.get("_cert") or {}
+    types, enums = cert.get("types", {}), cert.get("enums", {})
+    decides = t.get("decides") or []
+    for r in t["rows"]:
+        for j, w in enumerate(r.get("produces") or []):
+            if w is None:
+                continue
+            col = decides[j] if j < len(decides) else None
+            ty = types.get(col) if isinstance(col, str) else None
+            if not isinstance(ty, str):
+                raise Bad(f"{t['table']}: row {r['row']} is said to write `{w}` into a column the certificate gives no type for")
+            base = ty[:-1] if ty.endswith("?") else ty
+            values = list(enums.get(base) or (["true", "false"] if base == "bool" else []))
+            if ty.endswith("?"):
+                values.append("none")
+            if w not in values:
+                raise Bad(f"{t['table']}: row {r['row']} is said to write `{w}` into {col}, which is no value of {ty}")
+            if w in types:
+                raise Bad(f"{t['table']}: row {r['row']} is said to write the word `{w}` into {col}, and `{w}` is a name "
+                          f"of the rule, which a cell reads as what the name holds")
 
 
 def decider(tables, column):
@@ -2365,7 +2423,9 @@ def check_table(t):
         raise Bad(f"{name}: no point is given for row(s) {missing}")
 
     # (3) The table is complete. What the tables above rule out is earned back first, so a
-    # leaf that rests on it rests on something already checked.
+    # leaf that rests on it rests on something already checked. The words each row is said to
+    # write are values of their columns before anything reads them (rulec's §15.261).
+    check_words(t)
     check_above(t)
     seen = check_cover(t)
     if True:
@@ -2537,6 +2597,24 @@ def contribution_lines(cert, path):
     return out
 
 
+def answer_words(t, r):
+    """What each answer cell of a row says, as the certificate reads it: the word it writes
+    (`produces`), or the name of the column of its own table it passes on (`passes`, rulec's
+    §15.261), None where it says neither."""
+    words = list(r.get("produces") or [])
+    for j, a in enumerate(r.get("passes") or []):
+        if a is None:
+            continue
+        if not isinstance(a, int) or isinstance(a, bool) or not 0 <= a < len(t["axes"]):
+            raise Bad(f"{t['table']}: row {r['row']}, answer {j + 1}: it passes on axis {a}, which does not exist")
+        while len(words) <= j:
+            words.append(None)
+        if words[j] is not None:
+            raise Bad(f"{t['table']}: row {r['row']}, answer {j + 1}: the certificate reads both a word and a column there")
+        words[j] = t["axes"][a]["column"]
+    return words
+
+
 def check_cells(cert, path):
     """The table stated here is the table in the file. Returns (cells read back, literals
     whose number could not be pinned, rows written in an applied rule)."""
@@ -2645,7 +2723,7 @@ def check_cells(cert, path):
             # above writes. Only for a table written in one place, whose answer cells stand in the
             # order it decides its columns (a set of tables that decide one column does not).
             if bars and here and len({x.get("origin", "") for x in t["rows"]}) == 1:
-                for j, w in enumerate(r.get("produces") or []):
+                for j, w in enumerate(answer_words(t, r)):
                     if w is None:
                         continue
                     a, b = bars[len(got) + j] if len(got) + j < len(bars) else (0, 0)
@@ -2658,7 +2736,7 @@ def check_cells(cert, path):
             # written in (§15.243): one of the row's answer cells on its line, or a `clause`'s `then` line.
             elif len({(row_file(x), x.get("origin", "")) for x in t["rows"]}) > 1:
                 answers = r.get("answers") or []
-                for j, w in enumerate(r.get("produces") or []):
+                for j, w in enumerate(answer_words(t, r)):
                     if w is None:
                         continue
                     sp = answers[j] if j < len(answers) else None

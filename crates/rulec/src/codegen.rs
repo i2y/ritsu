@@ -908,49 +908,375 @@ pub fn keyword_in(word: &str) -> Vec<&'static str> {
     crate::backend::ALL.iter().filter(|b| AS_WRITTEN.contains(&b.id) && b.reserved.contains(word)).map(|b| b.name).collect()
 }
 
-/// The names the generated code writes as parameters, locals and fields — the inputs, the
-/// outputs, the sequence a walk reads and the fields of one element, and what the items name
-/// (derived values, definitions, summaries, the columns a table writes) — given an alias with
-/// `_` after it where the name has no alias and is a keyword of a language rulec writes it in as
-/// it is (§15.210). The name on the wire, in the records and in every message stays the one
-/// declared: only the identifier moves, and in every language alike, so that `rulec api` names
-/// one parameter one way. An alias is the author's own choice of identifier, and is left as it
-/// is: W121 says where a language does not take it, as it always did. The rule's own name and an
-/// enum's are left to W121 too: they name a module and a type, which the files and the other
-/// rules refer to.
-pub fn escape_keywords(f: &mut RuleFile) {
-    fn fix(n: &mut Name) {
-        if n.ascii.is_none() && n.text.is_ascii() && !keyword_in(&n.text).is_empty() {
-            n.ascii = Some(format!("{}_", n.text));
+/// The names the generated code writes as parameters, locals, fields and constants, in the order
+/// [`assign_identifiers`] takes them: the inputs, the outputs, each sequence a walk reads with the
+/// fields of one element, the groups, the shapes, and what the items name (derived values,
+/// definitions, summaries, a fold's answer, the columns a table writes). Each occurrence, so one
+/// name may come more than once, with whether a keyword gives it `_` after it (§15.210), which it
+/// does not give a group's or a shape's.
+fn value_names(f: &RuleFile) -> Vec<(&Name, bool)> {
+    let mut out: Vec<(&Name, bool)> = Vec::new();
+    out.extend(f.inputs.iter().map(|i| (&i.name, true)));
+    out.extend(f.outputs.iter().map(|o| (&o.name, true)));
+    for el in &f.elements {
+        out.push((&el.name, true));
+        out.extend(el.fields.iter().map(|fd| (&fd.name, true)));
+    }
+    out.extend(f.groups.iter().map(|g| (&g.name, false)));
+    out.extend(f.shapes.iter().map(|s| (&s.name, false)));
+    for it in &f.items {
+        match it {
+            Item::Derived(d) => out.push((&d.name, true)),
+            Item::Define(d) => out.push((&d.name, true)),
+            Item::Agg(d) => out.push((&d.name, true)),
+            Item::Fold(d) => out.extend(d.answer.iter().map(|a| (&a.name, true))),
+            Item::Table(t) => out.extend(t.outputs.iter().map(|o| (&o.name, true))),
         }
     }
+    out
+}
+
+/// Every name of [`value_names`], to be written.
+fn each_value_name_mut(f: &mut RuleFile, mut g: impl FnMut(&mut Name)) {
     for i in &mut f.inputs {
-        fix(&mut i.name);
+        g(&mut i.name);
     }
     for o in &mut f.outputs {
-        fix(&mut o.name);
+        g(&mut o.name);
     }
     for el in &mut f.elements {
-        fix(&mut el.name);
+        g(&mut el.name);
         for fd in &mut el.fields {
-            fix(&mut fd.name);
+            g(&mut fd.name);
         }
+    }
+    for gr in &mut f.groups {
+        g(&mut gr.name);
+    }
+    for s in &mut f.shapes {
+        g(&mut s.name);
     }
     for it in &mut f.items {
         match it {
-            Item::Derived(d) => fix(&mut d.name),
-            Item::Define(d) => fix(&mut d.name),
-            Item::Agg(d) => fix(&mut d.name),
+            Item::Derived(d) => g(&mut d.name),
+            Item::Define(d) => g(&mut d.name),
+            Item::Agg(d) => g(&mut d.name),
             Item::Fold(d) => {
                 if let Some(a) = &mut d.answer {
-                    fix(&mut a.name);
+                    g(&mut a.name);
                 }
             }
             Item::Table(t) => {
                 for oc in &mut t.outputs {
-                    fix(&mut oc.name);
+                    g(&mut oc.name);
                 }
             }
+        }
+    }
+}
+
+/// The names of the tables and clauses, which the generated code writes into identifiers of its
+/// own: the SQL query's `<table>_row` column and the Rust proof's `rows_<table>`.
+fn table_names(f: &RuleFile) -> Vec<&Name> {
+    f.items.iter().filter_map(|it| if let Item::Table(t) = it { t.name.as_ref() } else { None }).collect()
+}
+
+/// Whether a name came in from another file: an `apply` brings a callee's in as `<apply>:<name>`
+/// (§15.69) and a contribution its own as `<contribution>:<name>` (§15.231). A name a rule
+/// declares has no `:` in it.
+fn brought_in(text: &str) -> bool {
+    text.contains(':')
+}
+
+/// The identifiers a rule's generated code writes for its values, its tables and its enums: each
+/// name's alias, else the name itself (§1.3), as [`assign_identifiers`] has left them. `apply`
+/// reads a callee's, so that what it brings in is written after the identifier the callee's own
+/// code gives it (§15.260): the callee's `値引き(credit)` is `credit` in the callee's code, and
+/// `<apply>_credit` in this rule's.
+#[derive(Default)]
+pub struct Idents {
+    values: std::collections::HashMap<String, String>,
+    tables: std::collections::HashMap<String, String>,
+    enums: std::collections::HashMap<String, String>,
+}
+
+impl Idents {
+    pub fn of(f: &RuleFile) -> Idents {
+        let mut out = Idents::default();
+        for (n, _) in value_names(f) {
+            if let Some(a) = &n.ascii {
+                out.values.insert(n.text.clone(), a.clone());
+            }
+        }
+        for n in table_names(f) {
+            if let Some(a) = &n.ascii {
+                out.tables.insert(n.text.clone(), a.clone());
+            }
+        }
+        for e in &f.enums {
+            if let Some(a) = &e.name.ascii {
+                out.enums.insert(e.name.text.clone(), a.clone());
+            }
+        }
+        out
+    }
+
+    fn get(map: &std::collections::HashMap<String, String>, n: &Name) -> String {
+        map.get(&n.text).cloned().or_else(|| n.ascii.clone()).unwrap_or_else(|| n.text.clone())
+    }
+
+    /// The identifier of a value: a parameter, a local, a field.
+    pub fn value(&self, n: &Name) -> String {
+        Self::get(&self.values, n)
+    }
+
+    /// The identifier a table's or a clause's name is written into.
+    pub fn table(&self, n: &Name) -> String {
+        Self::get(&self.tables, n)
+    }
+
+    /// The identifier an enum's type is named after.
+    pub fn enum_type(&self, n: &Name) -> String {
+        Self::get(&self.enums, n)
+    }
+}
+
+/// What the identifiers of what an `apply` brings in start with (§15.260): the apply's alias, else
+/// its name, with a capital at its head made small, since Ruby reads a name that starts with one as
+/// a constant, which a function cannot assign.
+pub fn apply_prefix(n: &Name) -> String {
+    let p = n.ascii.clone().unwrap_or_else(|| n.text.clone());
+    let mut cs = p.chars();
+    match cs.next() {
+        Some(c) if c.is_ascii_uppercase() => c.to_ascii_lowercase().to_string() + cs.as_str(),
+        _ => p,
+    }
+}
+
+/// The longest head of `id` within `bytes` bytes that ends at the end of a whole character.
+fn head_within(id: &str, bytes: usize) -> &str {
+    let mut end = 0;
+    for (i, c) in id.char_indices() {
+        if i + c.len_utf8() > bytes {
+            break;
+        }
+        end = i + c.len_utf8();
+    }
+    &id[..end]
+}
+
+/// The head of an identifier PostgreSQL keeps: it cuts a name at 63 bytes, at the end of a whole
+/// character (`NAMEDATALEN`), so two that agree that far are one name to it.
+fn pg_head(id: &str) -> &str {
+    head_within(id, 63)
+}
+
+/// The ways the languages rulec writes spell the identifier of one value, each tagged with the
+/// way, so that two identifiers meet where some language spells them alike (§15.260): as it is
+/// (Python, TypeScript, JavaScript, Rust, Ruby, Go's locals, SQL, NumPy, Wasm), with the case of
+/// its letters set aside (SQLite reads a quoted `"Credit"` and `"credit"` as one column, and the
+/// WIT of the Wasm component lowers every name), in camelCase (Swift) and with Java's escape over
+/// it, in PascalCase (Go's fields), in PHP's two spellings, and cut where PostgreSQL cuts a name.
+fn value_spellings(id: &str) -> [(u8, String); 8] {
+    [
+        (0, id.to_string()),
+        (1, id.to_ascii_lowercase()),
+        (2, camel(id)),
+        (3, java::java_name_pub(id)),
+        (4, pascal(id)),
+        (5, php::php_name(id)),
+        (6, php::php_var_pub(id)),
+        (7, pg_head(id).to_string()),
+    ]
+}
+
+/// The languages' ways of spelling a value's identifier in which `a` and `b` are one identifier,
+/// none when they are two in every language rulec writes (§15.260): `"as written"`, `"case"`,
+/// `"camelCase"`, `"Java"`, `"PascalCase"`, `"PHP"`, `"PHP variable"`, `"PostgreSQL"`.
+pub fn values_meet(a: &str, b: &str) -> Vec<&'static str> {
+    const WAYS: [&str; 8] = ["as written", "case", "camelCase", "Java", "PascalCase", "PHP", "PHP variable", "PostgreSQL"];
+    value_spellings(a).iter().zip(value_spellings(b).iter()).filter(|(x, y)| x.1 == y.1).map(|(x, _)| WAYS[x.0 as usize]).collect()
+}
+
+/// The same for an enum's type, which every language names in PascalCase, and some (PHP's classes,
+/// a file system that does not tell case apart) without telling case apart.
+fn type_spellings(id: &str) -> [(u8, String); 2] {
+    let p = pascal(id);
+    let l = p.to_ascii_lowercase();
+    [(0, p), (1, l)]
+}
+
+/// The same for a table's name: as it is in the Rust proof's `rows_<table>`, and in the SQL
+/// query's `<table>_row` column, which stands among the columns of the values, so it is held to
+/// theirs where SQLite reads it without case and PostgreSQL cuts it.
+fn table_spellings(id: &str) -> [(u8, String); 3] {
+    let col = format!("{id}{SQL_ROW}");
+    [(8, id.to_string()), (1, col.to_ascii_lowercase()), (7, pg_head(&col).to_string())]
+}
+
+/// What the SQL query's column of a table's row number adds to the table's identifier
+/// (`sql::sql_row_col`).
+const SQL_ROW: &str = "_row";
+
+/// Whether some language rulec writes keeps `id` as a word of its own, its case set aside as W121
+/// sets it aside (§15.103): an identifier rulec makes is never one.
+fn reserved_anywhere(id: &str) -> bool {
+    crate::backend::ALL.iter().any(|b| b.reserved.iter().any(|w| w.eq_ignore_ascii_case(id)))
+}
+
+/// The identifier the made one `base` takes among those already `taken`: `base` itself where no
+/// language spells it as one of them, else the first of `base_2`, `base_3`, … that meets none —
+/// `class_2`, not `class__2`, after the `_` a keyword is given. A head longer than PostgreSQL keeps
+/// is cut so that the number stays inside what it keeps, with `after` the bytes a spelling adds
+/// after the identifier (a table's `_row`).
+fn free_identifier<const N: usize>(base: &str, after: usize, taken: &std::collections::HashSet<(u8, String)>, spell: impl Fn(&str) -> [(u8, String); N], keyword: impl Fn(&str) -> bool) -> String {
+    let fits = |id: &str| !keyword(id) && spell(id).iter().all(|k| !taken.contains(k));
+    if fits(base) {
+        return base.to_string();
+    }
+    for k in 2usize.. {
+        let tail = if base.ends_with('_') { k.to_string() } else { format!("_{k}") };
+        let room = 63 - after - tail.len();
+        let head = if base.len() > room { head_within(base, room) } else { base };
+        let id = format!("{head}{tail}");
+        if fits(&id) {
+            return id;
+        }
+    }
+    unreachable!("the numbers run out before the identifiers do")
+}
+
+/// The identifiers rulec makes for a rule, by the name they are for, as [`assign_identifiers`]
+/// writes them in: the values, the tables and the enums. A name rulec does not make an identifier
+/// for — one with an alias, one written as itself — is not among them.
+#[derive(Default)]
+pub struct Made {
+    pub values: BTreeMap<String, String>,
+    pub tables: BTreeMap<String, String>,
+    pub enums: BTreeMap<String, String>,
+}
+
+/// The identifiers rulec makes for a rule (§15.210, §15.260), worked out without writing them in,
+/// so that `check` can say what the generated code writes.
+///
+/// A name the rule declares is written as its alias, else as itself, and those identifiers are the
+/// author's: they are taken first, as they are. Then come the ones rulec makes, in the order the
+/// names are declared: a name with no alias that a language rulec writes names in as they are
+/// keeps as a keyword, which takes `_` after it (§15.210), and everything an `apply` or a
+/// contribution brings in, which takes the identifier its own file gives it, after the apply's or
+/// the contribution's (`apply.rs`, `link.rs`). Each made one goes where no language spells it as
+/// one already taken — as it is, in camelCase, in PascalCase, with Java's and PHP's escapes, with
+/// case set aside, cut at PostgreSQL's 63 bytes — and is no language's keyword; else it takes the
+/// first number after it that is so ([`free_identifier`]). The values, the tables and the enums are
+/// three kinds of identifier, each held apart within its kind.
+pub fn made_identifiers(f: &RuleFile) -> Made {
+    use std::collections::HashSet;
+    let mut made = Made::default();
+    // The values: each name once, with the alias of its last occurrence that has one, as the
+    // generators read it (`Gen::new`).
+    let mut order: Vec<&str> = Vec::new();
+    let mut alias: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    let mut escapes: HashSet<&str> = HashSet::new();
+    for (n, esc) in value_names(f) {
+        if !order.contains(&n.text.as_str()) {
+            order.push(&n.text);
+        }
+        if let Some(a) = &n.ascii {
+            alias.insert(&n.text, a);
+        }
+        if esc {
+            escapes.insert(&n.text);
+        }
+    }
+    // The values and the tables share one set: a table's SQL row column stands among the values'
+    // columns. The rule's own identifiers go in first, the made ones after, each where it meets none.
+    let mut taken: HashSet<(u8, String)> = HashSet::new();
+    let mut escaped: Vec<(&str, String)> = Vec::new();
+    let mut brought: Vec<(&str, String)> = Vec::new();
+    for t in &order {
+        match alias.get(t) {
+            _ if brought_in(t) => brought.push((t, alias.get(t).map(|a| a.to_string()).unwrap_or_else(|| t.to_string()))),
+            Some(a) => taken.extend(value_spellings(a)),
+            None if escapes.contains(t) && t.is_ascii() && !keyword_in(t).is_empty() => escaped.push((t, format!("{t}_"))),
+            None => taken.extend(value_spellings(t)),
+        }
+    }
+    let mut brought_tables: Vec<(&str, String)> = Vec::new();
+    for n in table_names(f) {
+        let id = n.ascii.clone().unwrap_or_else(|| n.text.clone());
+        if brought_in(&n.text) {
+            brought_tables.push((&n.text, id));
+        } else {
+            taken.extend(table_spellings(&id));
+        }
+    }
+    for (t, base) in escaped.into_iter().chain(brought) {
+        let id = free_identifier(&base, 0, &taken, value_spellings, reserved_anywhere);
+        taken.extend(value_spellings(&id));
+        made.values.insert(t.to_string(), id);
+    }
+    for (t, base) in brought_tables {
+        let id = free_identifier(&base, SQL_ROW.len(), &taken, table_spellings, |_| false);
+        taken.extend(table_spellings(&id));
+        made.tables.insert(t.to_string(), id);
+    }
+    // The enums, which name types beside the rule's own function, class and module, the built-in
+    // divisions it imports, and the enums it reads from an `enums` file (§15.212).
+    let mut taken: HashSet<(u8, String)> = HashSet::new();
+    for n in go_rule_names(f) {
+        taken.extend(type_spellings(&n));
+    }
+    for im in crate::prelude::imports(f) {
+        taken.extend(type_spellings(im.ns.generated));
+    }
+    let mut brought: Vec<(&str, String)> = Vec::new();
+    for e in &f.enums {
+        let id = match &e.from {
+            Some(o) => pub_name(&o.name),
+            None => pub_name(&e.name),
+        };
+        if brought_in(&e.name.text) {
+            brought.push((&e.name.text, id));
+        } else {
+            taken.extend(type_spellings(&id));
+        }
+    }
+    let top = |id: &str| reserved_anywhere(id) || crate::backend::ALL.iter().any(|b| b.globals.iter().any(|w| w.eq_ignore_ascii_case(&pascal(id))));
+    for (t, base) in brought {
+        let id = free_identifier(&base, 0, &taken, type_spellings, top);
+        taken.extend(type_spellings(&id));
+        made.enums.insert(t.to_string(), id);
+    }
+    made
+}
+
+/// Write into the rule the identifiers rulec makes for it ([`made_identifiers`]), on every
+/// occurrence of each name, so that every generator, `rulec api` and the pages read one
+/// identifier for one name (§15.210, §15.260). The name on the wire, in the records and in every
+/// message stays the one declared: only the identifier moves, and in every language alike, so
+/// that `rulec api` names one parameter one way. An alias is the author's own choice of
+/// identifier, and is left as it is: W121 says where a language does not take it, as it always
+/// did. The rule's own name and an enum's are left to W121 too: they name a module and a type,
+/// which the files and the other rules refer to.
+pub fn assign_identifiers(f: &mut RuleFile) {
+    let made = made_identifiers(f);
+    each_value_name_mut(f, |n| {
+        if let Some(id) = made.values.get(&n.text) {
+            n.ascii = Some(id.clone());
+        }
+    });
+    for it in &mut f.items {
+        if let Item::Table(t) = it {
+            if let Some(n) = &mut t.name {
+                if let Some(id) = made.tables.get(&n.text) {
+                    n.ascii = Some(id.clone());
+                }
+            }
+        }
+    }
+    for e in &mut f.enums {
+        if let Some(id) = made.enums.get(&e.name.text) {
+            e.name.ascii = Some(id.clone());
         }
     }
 }

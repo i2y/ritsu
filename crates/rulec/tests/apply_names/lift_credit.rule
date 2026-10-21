@@ -1,0 +1,22 @@
+rule lift_credit v1
+description "A credit for the tier a member is lifted to: its table writes a value of its own enum, which an apply brings in"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table lift_by_member
+policy unique
+| member   | -> lift : tier |
+| basic    | silver         |
+| >=silver | gold           |
+
+table credit_by_lift
+policy unique
+| lift     | -> credit |
+| <=silver | 3USD      |
+| >=gold   | 5USD      |

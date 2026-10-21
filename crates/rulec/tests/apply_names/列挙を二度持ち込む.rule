@@ -1,0 +1,26 @@
+rule 列挙を二度持ち込む(enum_brought_twice) v1
+description "自分の列挙を持ち込む規則を二度準用する。準用 会員(member) はその列挙を member_tier として持ち込み、値の違うこの規則の列挙の別名と同じになる"
+
+enum 会員の段階(member_tier) = エントリー(entry) < プラス(plus) < プレミアム(premium) < エリート(elite)
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  ランク(level) : 会員の段階
+  キャンペーン段階(campaign_tier) : 段階
+
+outputs
+  会員への値引き(for_member) : money[USD]  round down(1USD)
+  キャンペーンの値引き(for_campaign) : money[USD]  round down(1USD)
+
+apply 会員(member) = "引き上げの値引き.rule" meaning:28a7d4e76034de14
+  会員 = ランク with エントリー -> 一般, プラス -> シルバー, プレミアム -> ゴールド, エリート -> プラチナ
+  値引き -> 会員への値引き
+
+apply キャンペーン(campaign) = "引き上げの値引き.rule" meaning:28a7d4e76034de14
+  会員 = キャンペーン段階
+  値引き -> キャンペーンの値引き
+
+examples
+| ランク     | キャンペーン段階 | -> 会員への値引き | キャンペーンの値引き |
+| エントリー | ゴールド         | 3USD              | 5USD                 |
+| エリート   | 一般             | 5USD              | 3USD                 |

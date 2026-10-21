@@ -1,0 +1,23 @@
+rule keyword_meets_name v1
+description "The input class, a keyword in Python, is written class_ in the generated code, the name of this rule's definition class_ too: the input takes class_2"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  class : tier
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define class_ : money[USD] = 2USD
+
+table fee_by_class
+policy unique
+| class    | -> fee |
+| basic    | class_ |
+| >=silver | 5USD   |
+
+examples
+| class | -> fee |
+| basic | 2USD   |
+| gold  | 5USD   |

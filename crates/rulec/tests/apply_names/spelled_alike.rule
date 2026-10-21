@@ -1,0 +1,27 @@
+rule spelled_alike v1
+description "The apply called read brings in read_credit, which Swift and Java spell as this rule's readCredit, and SQLite reads as its read_CREDIT"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  readCredit : money[USD]  round down(1USD)
+  read_CREDIT : money[USD]  round down(1USD)
+  credit_read : money[USD]  round down(1USD)
+
+table read_by_member
+policy unique
+| member   | -> readCredit | read_CREDIT |
+| basic    | 1USD          | 2USD        |
+| >=silver | 3USD          | 4USD        |
+
+apply read = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member
+  credit -> credit_read
+
+examples
+| member | -> readCredit | read_CREDIT | credit_read |
+| basic  | 1USD          | 2USD        | 0USD        |
+| gold   | 3USD          | 4USD        | 5USD        |

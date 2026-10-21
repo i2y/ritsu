@@ -1,0 +1,11 @@
+warning[W121]: `class` is a keyword in a target language, so the generated code writes it as `class_2`
+  --> tests/apply_names/keyword_meets_name.rule:7
+  |
+7 |   class : tier
+  |   ^^^^^ the input's name
+  |
+ Python, TypeScript, JavaScript, Ruby: it is a keyword there. Every language's generated code writes this name as `class_2`, and `rulec api` names it so; the name a value travels under (the keys of the input JSON, the records) stays the one declared.
+ `class_` is the identifier of another name of this rule, and one identifier cannot be two names, so the generated code puts a number after it.
+ To choose the name the generated code uses yourself, give it an alias (`class(<alias>)`).
+
+ok tests/apply_names/keyword_meets_name.rule

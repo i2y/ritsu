@@ -1,0 +1,28 @@
+rule passed_other_name v1
+description "The table above passes on a name it has no column for, which can be any tier, so the table below takes them all"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+  campaign : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table lift_by_member
+policy unique
+| member   | -> lift : tier |
+| basic    | silver         |
+| >=silver | campaign       |
+
+table credit_by_lift
+policy unique
+| lift     | -> credit |
+| <=silver | 3USD      |
+| >=gold   | 5USD      |
+
+examples
+| member | campaign | -> credit |
+| basic  | gold     | 3USD      |
+| gold   | gold     | 5USD      |

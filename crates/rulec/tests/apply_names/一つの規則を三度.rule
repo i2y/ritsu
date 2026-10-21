@@ -1,0 +1,31 @@
+rule 一つの規則を三度(one_callee_three_times) v1
+description "一つの規則を三度準用する。準用ごとに、持ち込む名前はその準用の名前の下に書かれる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  キャンペーン段階(campaign_tier) : 段階
+  会員(member) : 段階
+  再訪段階(repeat_tier) : 段階
+
+outputs
+  キャンペーンで(on_campaign) : money[USD]  round down(1USD)
+  会員として(on_member) : money[USD]  round down(1USD)
+  再訪で(on_repeat) : money[USD]  round down(1USD)
+
+apply キャンペーン(campaign) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = キャンペーン段階
+  値引き -> キャンペーンで
+
+apply 本人(own) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 会員
+  値引き -> 会員として
+
+apply 再訪(repeat) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 再訪段階
+  値引き -> 再訪で
+
+examples
+| キャンペーン段階 | 会員     | 再訪段階 | -> キャンペーンで | 会員として | 再訪で |
+| 一般             | ゴールド | シルバー | 0USD              | 5USD       | 5USD   |
+| プラチナ         | 一般     | 一般     | 5USD              | 0USD       | 0USD   |

@@ -639,6 +639,17 @@ def literalValue (text : String) (cur : Option String) : Option (Option Rat) :=
     | some c => if unit == c.toList then some (some v) else some none
     | none => some none
 
+/-- What each answer cell of a row says, as the certificate reads it: the word it writes
+    (`produces`), or the name of the column of its own table it passes on (`passes`, rulec's
+    §15.261); `none` where it says neither. -/
+def answerWords (t : ReadTable) (row : ReadRow) : List (Option String) :=
+  let n := max row.produces.length row.passes.length
+  (List.range n).map (fun j =>
+    match (row.produces[j]?).getD none, (row.passes[j]?).getD none with
+    | some w, _ => some w
+    | none, some a => t.columns[a]?
+    | none, none => none)
+
 /-- **The certificate quotes the file.** Every cell is read back out of the `.rule` text at
     the byte span the certificate names — and the span has to be that cell's place, not
     somewhere else on the page that happens to read the same. A row is one line; its cells
@@ -720,8 +731,9 @@ def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Repor
               -- What the row writes into a column of words is the cell in the file too (rulec's
               -- §15.233): the answer cell of that column says the word the certificate reads — what
               -- a machine moves on, what a `once` line counts, what an `ordered by` table answers,
-              -- what a table above writes, and what a box of `chances` answers.
-              for (pj, j) in row.produces.zip (List.range row.produces.length) do
+              -- what a table above writes, and what a box of `chances` answers — or the name of the
+              -- column of its own table the row passes on (§15.261).
+              for (pj, j) in (answerWords t row).zip (List.range (answerWords t row).length) do
                 if let some w := pj then
                   let txt : Option String := (bars[got.size + j]?).bind (fun ab =>
                     if ab.2 ≤ line.size then String.fromUTF8? (line.extract ab.1 ab.2) else none)
@@ -746,7 +758,7 @@ def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Repor
           -- is written in (rulec's §15.243): one of the cells after the ones the row's tests read, on
           -- its own line — or, for a `clause`, on its `then` line — saying the word.
           if !single then
-            for (pj, j) in row.produces.zip (List.range row.produces.length) do
+            for (pj, j) in (answerWords t row).zip (List.range (answerWords t row).length) do
               if let some w := pj then
                 match row.answers[j]? with
                 | some (some sp) =>
@@ -935,6 +947,47 @@ def statedSpan (j : Json) (like : Span) : Option Span :=
   | some v, .words _ => some (.words (v.toList.filterMap str))
   | none, _ => none
 
+/-- **Every word a row is said to write is a value of its column, and no name of the rule.** rulec
+    reads a word in an answer cell as a name wherever the rule declares one spelled so, and the row
+    then writes whatever the name holds (rulec's §3.2). Without this, a row that passes a name on
+    could be said to write the name as a word — the file does write that word there — and a value
+    it does write could be called one no row writes (rulec's §15.261). -/
+def checkWords (cert tj : Json) (r : Report) : Report := Id.run do
+  let mut r := r
+  let typesJ := (field cert "types").getD Json.null
+  let enumsJ := (field cert "enums").getD Json.null
+  let decides := (fieldArr tj "decides").toList.filterMap str
+  for row in fieldArr tj "rows" do
+    let prods := fieldArr row "produces"
+    for j in [0 : prods.size] do
+      match prods[j]! |> str with
+      | none => pure ()
+      | some w =>
+        let col := (decides[j]?).getD ""
+        match field typesJ col >>= str with
+        | none => r := r.fail s!"{fieldStr tj "table"}: row {(fieldNat row "row").getD 0} is said to write `{w}` into a column the certificate gives no type for"
+        | some ty =>
+          let optional := ty.endsWith "?"
+          let base := if optional then (ty.dropEnd 1).toString else ty
+          let vals := ((field enumsJ base >>= arr).map (·.toList.filterMap str)).getD (if base == "bool" then ["true", "false"] else [])
+          let vals := if optional then vals ++ ["none"] else vals
+          if !vals.contains w then
+            r := r.fail s!"{fieldStr tj "table"}: row {(fieldNat row "row").getD 0} is said to write `{w}` into {col}, which is no value of {ty}"
+          else if (field typesJ w).isSome then
+            r := r.fail s!"{fieldStr tj "table"}: row {(fieldNat row "row").getD 0} is said to write the word `{w}` into {col}, and `{w}` is a name of the rule, which a cell reads as what the name holds"
+  return r
+
+/-- The axis of the column of its own table a row passes on into its output `oi` (`passes`,
+    rulec's §15.261): one of the table's axes whose coordinates are words — no bounds, no
+    prefixes. `none` where it names none. -/
+def passedAxis (u row : Json) (oi : Nat) : Option Nat := do
+  let a ← (fieldArr row "passes")[oi]? >>= nat
+  let ax ← (fieldArr u "axes")[a]?
+  if (fieldArr ax "bounds").any (fun b => !b.isNull) then none
+  else if !((field ax "prefixes").getD Json.null).isNull then none
+  else if (fieldArr ax "coords").any (fun c => (str c).isNone) then none
+  else some a
+
 /-- **Every fact this table rests on, earned back from the tables that decide its columns.**
     A `never` fact is settled by reading those rows; an `apart` fact by recomputing both
     spans and finding they do not meet. The spans the certificate wrote have to contain the
@@ -959,7 +1012,21 @@ def checkAbove (tj : Json) (all : Array Json) (r : Report) : Report := Id.run do
       | some (u, oi) =>
         for row in fieldArr u "rows" do
           match (fieldArr row "produces")[oi]? >>= str with
-          | none => r := r.fail s!"{name}: a row of {fieldStr u "table"} writes something this program cannot read, so «{col} is never {val}» is not settled"
+          | none =>
+            -- A row that passes on a column of its own table writes what that column holds where it
+            -- fires, and it fires only inside its box: a value outside the box on that axis is one it
+            -- never writes (rulec's §15.261).
+            match passedAxis u row oi with
+            | none => r := r.fail s!"{name}: a row of {fieldStr u "table"} writes something this program cannot read, so «{col} is never {val}» is not settled"
+            | some a =>
+              let ax := (fieldArr u "axes")[a]!
+              let coords := (fieldArr ax "coords").toList.filterMap str
+              let box := (((fieldArr row "accepts")[a]? >>= arr).getD #[]).toList.filterMap nat
+              match coords.findIdx? (· == val) with
+              | some ci =>
+                if box.contains ci then
+                  r := r.fail s!"{name}: a row of {fieldStr u "table"} passes on {fieldStr ax "column"}, which can be {val} there, so it is not a value the tables above never reach"
+              | none => pure ()
           | some w => if w == val then
               r := r.fail s!"{name}: {fieldStr u "table"} does write {col} = {val}, so it is not a value the tables above never reach"
   for f in fieldArr ab "apart" do
@@ -2960,6 +3027,7 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
       match readTable reachOf groups declaredRange factOf daysOf (fieldArr cert "tables") (truthOfValue cert worked) optionalOf orderOf tj with
       | none => r := r.fail s!"{fieldStr tj "table"}: this program cannot read the table"
       | some t =>
+        r := checkWords cert tj r
         r := checkAbove tj (fieldArr cert "tables") r
         r := checkTable t r
         r := checkSteps t (columnStep cert []) r

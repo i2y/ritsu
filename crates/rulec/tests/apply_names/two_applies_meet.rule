@@ -1,0 +1,24 @@
+rule two_applies_meet v1
+description "Two applies whose names meet: member brings in member_credit's tier_credit, member_tier brings in tier_credit's credit, and both are member_tier_credit"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  level : tier
+
+outputs
+  by_member : money[USD]  round down(1USD)
+  by_tier : money[USD]  round down(1USD)
+
+apply member = "member_credit.rule" meaning:06d6d72e5539c206
+  member = level
+  tier_credit -> by_member
+
+apply member_tier = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = level
+  credit -> by_tier
+
+examples
+| level    | -> by_member | by_tier |
+| basic    | 2USD         | 0USD    |
+| platinum | 4USD         | 5USD    |

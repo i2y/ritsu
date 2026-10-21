@@ -1,0 +1,24 @@
+rule 二つの準用が重なる(two_applies_meet) v1
+description "二つの準用の名前が重なる。会員(member) は 会員の値引き.rule の tier_credit を、会員の段階(member_tier) は 段階の値引き.rule の credit を持ち込み、どちらも member_tier_credit になる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  ランク(level) : 段階
+
+outputs
+  会員による値引き(by_member) : money[USD]  round down(1USD)
+  段階による値引き(by_tier) : money[USD]  round down(1USD)
+
+apply 会員(member) = "会員の値引き.rule" meaning:f2bfc69c5f9896e6
+  会員 = ランク
+  段階の値引き -> 会員による値引き
+
+apply 会員の段階(member_tier) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = ランク
+  値引き -> 段階による値引き
+
+examples
+| ランク   | -> 会員による値引き | 段階による値引き |
+| 一般     | 2USD                | 0USD             |
+| プラチナ | 4USD                | 5USD             |

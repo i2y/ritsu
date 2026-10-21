@@ -1,0 +1,30 @@
+rule passed_member_and_area v1
+description "The lifted tier is the first of two axes below, and a row there takes any tier: its box leaves out the tier no row above writes"
+
+enum tier = basic < silver < gold < platinum
+enum zone = north | south | east | west | central
+
+inputs
+  member : tier
+  area : zone
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table lift_by_member
+policy unique
+| member | area | -> lift : tier |
+| basic  | -    | silver         |
+| silver | -    | gold           |
+| >=gold | -    | member         |
+
+table credit_by_lift_and_area
+policy unique
+| lift     | area                       | -> credit |
+| >=silver | north                      | 5USD      |
+| -        | south, east, west, central | 3USD      |
+
+examples
+| member | area  | -> credit |
+| basic  | north | 5USD      |
+| gold   | south | 3USD      |

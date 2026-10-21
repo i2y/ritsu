@@ -105,8 +105,9 @@ def single_coupon(subtotal: JPYInclTax, applied: JPYInclTax, kind: CouponKind, r
 
 Parameters are the rule's inputs in declaration order, named by their ASCII aliases. A name
 with no alias that is a keyword in one of the languages — an input called `class`, `type`,
-`def` — is written with `_` after it in every language (`class_`), and `rulec api` names it so;
-the keys of the wire and of the records keep the declared name (W121). With one output the function
+`def` — is written with `_` after it in every language (`class_`, or `class_2` where `class_` is
+another name's identifier already), and `rulec api` names it so; the keys of the wire and of the
+records keep the declared name (W121). With one output the function
 returns that value; with two or more it returns a `NamedTuple` called `Output` whose fields are
 the outputs in declaration order.
 

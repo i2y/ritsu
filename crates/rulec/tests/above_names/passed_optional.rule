@@ -1,0 +1,27 @@
+rule passed_optional v1
+description "The table above passes on a tier that may be absent, from gold up, and writes no absent value and no basic"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier?
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table lift_by_member
+policy unique
+| member   | -> lift : tier? |
+| none     | silver          |
+| <=silver | gold            |
+| >=gold   | member          |
+
+table credit_by_lift
+policy unique
+| lift     | -> credit |
+| >=silver | 5USD      |
+
+examples
+| member | -> credit |
+| none   | 5USD      |
+| gold   | 5USD      |

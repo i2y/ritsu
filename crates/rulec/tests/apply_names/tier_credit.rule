@@ -1,0 +1,16 @@
+rule tier_credit v1
+description "A credit for a tier: the callee most of the rules here apply"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  tier : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table credit_by_tier
+policy unique
+| tier     | -> credit |
+| basic    | 0USD      |
+| >=silver | 5USD      |

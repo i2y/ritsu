@@ -1,0 +1,22 @@
+rule 引き上げの値引き(lift_credit) v1
+description "会員を引き上げた先の段階の値引き。表が自分の列挙の値を書き、準用がその列挙を持ち込む"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| >=シルバー | ゴールド                   |
+
+table 引き上げ先ごとの値引き(credit_by_lift)
+policy unique
+| 引き上げ先 | -> 値引き |
+| <=シルバー | 3USD      |
+| >=ゴールド | 5USD      |

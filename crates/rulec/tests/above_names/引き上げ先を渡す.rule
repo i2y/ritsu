@@ -1,0 +1,32 @@
+rule 引き上げ先を渡す(passed_lift_on) v1
+description "間の表が、上の表の引き上げた段階を、ゴールドから上ではそのまま渡す"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階 |
+| 一般       | シルバー                   |
+| >=シルバー | ゴールド                   |
+
+table 引き上げ先ごとの表示(shown_by_lift)
+policy unique
+| 引き上げ先 | -> 表示する段階(shown) : 段階 |
+| <=シルバー | シルバー                      |
+| >=ゴールド | 引き上げ先                    |
+
+table 表示する段階ごとの値引き(credit_by_shown)
+policy unique
+| 表示する段階 | -> 値引き |
+| >=シルバー   | 5USD      |
+
+examples
+| 会員     | -> 値引き |
+| 一般     | 5USD      |
+| ゴールド | 5USD      |

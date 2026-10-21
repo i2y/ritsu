@@ -1,0 +1,23 @@
+rule 長い名前(long_names) v1
+description "PostgreSQL が一つの名前として読む二つの識別子。PostgreSQL は名前を 63 バイトで切り、長い準用が持ち込む名前は、そこまでこの規則の長い定義と同じ"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  春の値引き(spring_credit) : money[USD]  round down(1USD)
+  値引きと特典(credit_and_bonus) : money[USD]  round down(1USD)
+
+apply 春のキャンペーンで会員を一つ上の段階に引き上げる準用 = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 会員
+  値引き -> 春の値引き
+
+define 春のキャンペーンで会員を一つ上の段階に引き上げる準用の値引きと特典 : money[USD] = 春の値引き + 1USD
+define 値引きと特典 : money[USD] = 春のキャンペーンで会員を一つ上の段階に引き上げる準用の値引きと特典
+
+examples
+| 会員     | -> 春の値引き | 値引きと特典 |
+| 一般     | 0USD          | 1USD         |
+| ゴールド | 5USD          | 6USD         |

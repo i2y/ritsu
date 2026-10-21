@@ -1,0 +1,26 @@
+rule enum_brought_twice v1
+description "A callee that brings its enum in, applied twice: the apply called member brings it in as member_tier, the name of this rule's own enum, whose values are others"
+
+enum member_tier = entry < plus < premium < elite
+enum tier = basic < silver < gold < platinum
+
+inputs
+  level : member_tier
+  campaign_tier : tier
+
+outputs
+  for_member : money[USD]  round down(1USD)
+  for_campaign : money[USD]  round down(1USD)
+
+apply member = "lift_credit.rule" meaning:619d8f166c3ed77b
+  member = level with entry -> basic, plus -> silver, premium -> gold, elite -> platinum
+  credit -> for_member
+
+apply campaign = "lift_credit.rule" meaning:619d8f166c3ed77b
+  member = campaign_tier
+  credit -> for_campaign
+
+examples
+| level | campaign_tier | -> for_member | for_campaign |
+| entry | gold          | 3USD          | 5USD         |
+| elite | basic         | 5USD          | 3USD         |

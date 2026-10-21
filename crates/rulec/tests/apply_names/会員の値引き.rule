@@ -1,0 +1,16 @@
+rule 会員の値引き(member_credit) v1
+description "会員の段階ごとの値引き。出力の別名は tier_credit"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  段階の値引き(tier_credit) : money[USD]  round down(1USD)
+
+table 会員ごとの値引き(tier_credit_by_member)
+policy unique
+| 会員       | -> 段階の値引き |
+| <=シルバー | 2USD            |
+| >=ゴールド | 4USD            |

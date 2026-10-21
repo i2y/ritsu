@@ -561,12 +561,41 @@ fn written_value<'o>(o: Option<&'o OutCell>, c: &Checked) -> Option<&'o str> {
     }
 }
 
-/// Whether no row of the table that decides a column writes this value into it, said so that a
-/// re-checker can settle it: every row writes a value word, and none of them is this one. A row
-/// that passes on a name writes whatever the name holds, which a re-checker cannot read off the
-/// certificate, so a table with one says nothing here (§15.115, §15.253).
+/// The column of its own table a row passes on into the output column `oi`, when its answer cell
+/// names one: the row writes what that column holds where it fires (`Checked::row_writes`), which a
+/// re-checker reads off the row's own box on the column's axis (§15.261). `None` for a word, a
+/// number, and a name of anything else.
+pub(crate) fn passed_column<'t>(t: &'t Table, ri: usize, oi: usize, c: &Checked) -> Option<&'t str> {
+    let OutCell::Name(w) = t.rows.get(ri)?.outs.get(oi)? else { return None };
+    if !c.syms.contains_key(w) || !matches!(c.ty_of(&t.outputs.get(oi)?.name.text).as_ref().map(Ty::present), Some(Ty::Enum(_) | Ty::Bool)) {
+        return None;
+    }
+    t.inputs.iter().find(|(n, _)| n == w).map(|(n, _)| n.as_str())
+}
+
+/// The values a row of the table that decides a column writes into it, said so that a re-checker
+/// can settle them: the word its answer cell writes, or, where it passes on one of the table's own
+/// columns, the values its cell on that column takes (§15.261). `None` where a re-checker could not
+/// work them out from the certificate: a name of anything else writes whatever that name holds.
+fn settled_writes(t: &Table, ri: usize, oi: usize, c: &Checked) -> Option<Vec<String>> {
+    if passed_column(t, ri, oi, c).is_some() {
+        return c.row_writes(t, ri, oi);
+    }
+    written_value(t.rows.get(ri)?.outs.get(oi), c).map(|w| vec![w.to_string()])
+}
+
+/// Whether no row of a table writes this value into its output column `oi`, said so that a
+/// re-checker can settle it: every row writes a value word other than this one, or passes on one of
+/// the table's own columns where its cell takes no such value. A row that passes on any other name
+/// writes whatever the name holds, so a table with one says nothing here (§15.115, §15.253,
+/// §15.261).
+fn never_writes(t: &Table, oi: usize, v: &str, c: &Checked) -> bool {
+    (0..t.rows.len()).all(|ri| settled_writes(t, ri, oi, c).is_some_and(|ws| !ws.iter().any(|w| w == v)))
+}
+
+/// Whether no row of the table that decides a column writes this value into it ([`never_writes`]).
 fn never_written(up: &Upstream, v: &str, c: &Checked) -> bool {
-    up.table.rows.iter().all(|r| written_value(r.outs.get(up.oi), c).is_some_and(|w| w != v))
+    never_writes(up.table, up.oi, v, c)
 }
 
 /// Every column of `t` that a table above it decides.
@@ -1314,8 +1343,23 @@ impl TableRegion {
             .map(|ai| {
                 let name = &col_names[ai];
                 let held = f.inputs.iter().any(|i| i.name.text == *name).then(|| crate::over::held_values(name)).flatten();
+                // What the table above writes into the column: every value of the axis but those no
+                // row of it writes, each of which the certificate states as a fact (§15.253). Only a
+                // value it can state is left out, so no box is narrowed by a fact the certificate
+                // could not say (§15.261); a column with no table above to read is left whole.
+                let above: Option<Vec<String>> = c.out_values.get(name).map(|_| {
+                    let all: Vec<String> = match &axes[ai] {
+                        Axis::Enum { values } => values.clone(),
+                        Axis::Bool => vec![crate::kw::TRUE.to_string(), crate::kw::FALSE.to_string()],
+                        _ => Vec::new(),
+                    };
+                    match producing_table(f, c, t, name).and_then(|u| Some((u, u.outputs.iter().position(|o| o.name.text == *name)?))) {
+                        Some((u, oi)) => all.into_iter().filter(|v| !never_writes(u, oi, v, c)).collect(),
+                        None => all,
+                    }
+                });
                 let mut out: Option<Vec<bool>> = None;
-                for vs in [c.out_values.get(name), held.as_ref()].into_iter().flatten() {
+                for vs in [above.as_ref(), held.as_ref()].into_iter().flatten() {
                     let these: Vec<bool> = match &axes[ai] {
                         Axis::Enum { values } => values.iter().map(|v| vs.contains(v)).collect(),
                         // A boolean can be an upstream output too. Coordinate 0 is true, 1 is false.
@@ -4969,9 +5013,15 @@ pub struct CertRow {
     /// reads these to learn which rows of this one can put a column at a value, which is
     /// what turns an upstream leaf from a claim into a check (§15.115).
     pub produces: Vec<Option<String>>,
-    /// Where the row writes each word of `produces`, as `(line, byte column, byte length)`, in the
-    /// row's own file: the answer cell of that column, on the row's line or, for a `clause`, on its
-    /// `then` line. `None` where `produces` has none, and everywhere in a row an `apply` brought in.
+    /// For each of the table's own output columns that holds a word, the axis of the column of
+    /// this table the row passes on into it, where its answer cell names one: the row writes what
+    /// that column holds where it fires, so a value outside the row's box on that axis is one it
+    /// never writes. `None` everywhere else (§15.261).
+    pub passes: Vec<Option<usize>>,
+    /// Where the row writes each word of `produces`, or the name of the column `passes` names, as
+    /// `(line, byte column, byte length)`, in the row's own file: the answer cell of that column, on
+    /// the row's line or, for a `clause`, on its `then` line. `None` where the row writes neither,
+    /// and everywhere in a row an `apply` brought in.
     /// The certificate writes these for the rows of a table written in more than one place — a set of
     /// tables and clauses that decide one column, a contribution's rows among them — whose answer
     /// cells are not in the order the table decides its columns (§15.243).
@@ -5214,9 +5264,14 @@ impl TableRegion {
                 produces: (0..t.outputs.len())
                     .map(|oi| written_value(row.outs.get(oi), chk).map(str::to_string))
                     .collect(),
+                passes: (0..t.outputs.len())
+                    .map(|oi| passed_column(t, ri, oi, chk).and_then(|n| self.col_names.iter().position(|x| x == n)))
+                    .collect(),
                 produced: (0..t.outputs.len())
                     .map(|oi| {
-                        written_value(row.outs.get(oi), chk)?;
+                        if written_value(row.outs.get(oi), chk).is_none() && passed_column(t, ri, oi, chk).is_none() {
+                            return None;
+                        }
                         if applied.get(ri).copied().unwrap_or(false) {
                             return None;
                         }

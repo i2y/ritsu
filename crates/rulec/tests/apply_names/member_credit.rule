@@ -1,0 +1,16 @@
+rule member_credit v1
+description "A credit for a member's tier, its output called tier_credit"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  tier_credit : money[USD]  round down(1USD)
+
+table tier_credit_by_member
+policy unique
+| member   | -> tier_credit |
+| <=silver | 2USD           |
+| >=gold   | 4USD           |

@@ -1,0 +1,11 @@
+警告[W121]: `class` は生成先の予約語なので、生成コードでは `class_2` と書きます
+  --> tests/apply_names/keyword_meets_name.rule:7
+  |
+7 |   class : tier
+  |   ^^^^^ 入力の名前
+  |
+ Python, TypeScript, JavaScript, Ruby: そこでは予約語です。生成コードは、どの言語でもこの名前を `class_2` と書き、`rulec api` もその名前を挙げます。受け渡しする値の名前（入力の JSON のキーや記録）は、宣言した名前のままです。
+ `class_` は、この規則のほかの名前の識別子です。一つの識別子で二つの名前は書けないので、生成コードは後ろに番号を付けます。
+ 生成コードでの名前を自分で決めるなら、別名を付けてください（`class(<別名>)`）。
+
+ok tests/apply_names/keyword_meets_name.rule

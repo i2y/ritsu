@@ -1948,7 +1948,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             } else if renamed && n.text.is_ascii() && !crate::codegen::keyword_in(&n.text).is_empty() {
                 // A value's name with no alias is its own identifier — a parameter, a local, a
                 // field — and one a language keeps as a keyword is written with `_` after it
-                // there (§15.210, `codegen::escape_keywords`): said as an alias would be.
+                // there (§15.210, `codegen::assign_identifiers`): said as an alias would be.
                 v.push((n.text.as_str(), &n.span, what, top, renamed));
             }
         }
@@ -1996,6 +1996,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
         }
         let rule_alias = f.name.ascii.as_deref();
+        // What the generated code writes for a name rulec makes an identifier for (§15.260): a
+        // keyword's `_` after it, or a number after that where another name is written so already.
+        let made = crate::codegen::made_identifiers(f);
         for (alias, sp, what, top, renames) in aliases {
             let mut kw: Vec<&str> = Vec::new();
             let mut hides: Vec<&str> = Vec::new();
@@ -2019,23 +2022,28 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             // writes names as they are keeps it (§15.210): it compiles, under another name.
             let renamed = if renames { crate::codegen::keyword_in(alias) } else { Vec::new() };
             if !renamed.is_empty() {
-                c.diags.push(
-                    Diag::warning(
-                        "W121",
-                        tr!("`{alias}` は生成先の予約語なので、生成コードでは `{alias}_` と書きます", "`{alias}` is a keyword in a target language, so the generated code writes it as `{alias}_`"),
-                    )
-                    .at(at(sp.line))
-                    .mark(sp.clone(), tr!("{what}の名前", "the {what}'s name"))
-                    .note(tr!(
-                        "{}: そこでは予約語です。生成コードは、どの言語でもこの名前を `{alias}_` と書き、`rulec api` もその名前を挙げます。受け渡しする値の名前（入力の JSON のキーや記録）は、宣言した名前のままです。",
-                        "{}: it is a keyword there. Every language's generated code writes this name as `{alias}_`, and `rulec api` names it so; the name a value travels under (the keys of the input JSON, the records) stays the one declared.",
-                        renamed.join(", ")
-                    ))
-                    .note(tr!(
-                        "生成コードでの名前を自分で決めるなら、別名を付けてください（`{alias}(<別名>)`）。",
-                        "To choose the name the generated code uses yourself, give it an alias (`{alias}(<alias>)`)."
-                    )),
-                );
+                let written = made.values.get(alias).cloned().unwrap_or_else(|| format!("{alias}_"));
+                let mut d = Diag::warning(
+                    "W121",
+                    tr!("`{alias}` は生成先の予約語なので、生成コードでは `{written}` と書きます", "`{alias}` is a keyword in a target language, so the generated code writes it as `{written}`"),
+                )
+                .at(at(sp.line))
+                .mark(sp.clone(), tr!("{what}の名前", "the {what}'s name"))
+                .note(tr!(
+                    "{}: そこでは予約語です。生成コードは、どの言語でもこの名前を `{written}` と書き、`rulec api` もその名前を挙げます。受け渡しする値の名前（入力の JSON のキーや記録）は、宣言した名前のままです。",
+                    "{}: it is a keyword there. Every language's generated code writes this name as `{written}`, and `rulec api` names it so; the name a value travels under (the keys of the input JSON, the records) stays the one declared.",
+                    renamed.join(", ")
+                ));
+                if written != format!("{alias}_") {
+                    d = d.note(tr!(
+                        "`{alias}_` は、この規則のほかの名前の識別子です。一つの識別子で二つの名前は書けないので、生成コードは後ろに番号を付けます。",
+                        "`{alias}_` is the identifier of another name of this rule, and one identifier cannot be two names, so the generated code puts a number after it."
+                    ));
+                }
+                c.diags.push(d.note(tr!(
+                    "生成コードでの名前を自分で決めるなら、別名を付けてください（`{alias}(<別名>)`）。",
+                    "To choose the name the generated code uses yourself, give it an alias (`{alias}(<alias>)`)."
+                )));
                 continue;
             }
             let mut d = Diag::warning(

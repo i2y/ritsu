@@ -1,0 +1,32 @@
+rule passed_lift_on v1
+description "A table in the middle passes on the tier the table above lifts to, from gold up"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table lift_by_member
+policy unique
+| member   | -> lift : tier |
+| basic    | silver         |
+| >=silver | gold           |
+
+table shown_by_lift
+policy unique
+| lift     | -> shown : tier |
+| <=silver | silver          |
+| >=gold   | lift            |
+
+table credit_by_shown
+policy unique
+| shown    | -> credit |
+| >=silver | 5USD      |
+
+examples
+| member | -> credit |
+| basic  | 5USD      |
+| gold   | 5USD      |

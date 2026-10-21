@@ -1,0 +1,32 @@
+rule passed_flag v1
+description "A table passes a flag on where it is set and sets it otherwise, so the flag below is never false"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table eligible_by_member
+policy unique
+| member   | -> eligible : bool |
+| basic    | false              |
+| >=silver | true               |
+
+table marked_by_eligible
+policy unique
+| eligible | -> marked : bool |
+| true     | eligible         |
+| false    | true             |
+
+table credit_by_marked
+policy unique
+| marked | -> credit |
+| true   | 5USD      |
+
+examples
+| member | -> credit |
+| basic  | 5USD      |
+| gold   | 5USD      |

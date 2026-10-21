@@ -1,0 +1,19 @@
+rule renamed_output v1
+description "The apply called read brings in the callee's credit as read_credit, the name this rule gives the output it returns"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  read_credit : money[USD]  round down(1USD)
+
+apply read = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member
+  credit -> read_credit
+
+examples
+| member | -> read_credit |
+| basic  | 0USD           |
+| gold   | 5USD           |

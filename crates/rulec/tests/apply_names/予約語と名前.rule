@@ -1,0 +1,23 @@
+rule 予約語と名前(keyword_meets_name) v1
+description "入力 class は Python の予約語なので、生成コードでは class_ と書かれる。それはこの規則の定義 class_ の名前でもあるので、入力は class_2 になる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  class : 段階
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+define class_ : money[USD] = 2USD
+
+table 区分ごとの手数料(fee_by_class)
+policy unique
+| class      | -> 手数料 |
+| 一般       | class_    |
+| >=シルバー | 5USD      |
+
+examples
+| class    | -> 手数料 |
+| 一般     | 2USD      |
+| ゴールド | 5USD      |
