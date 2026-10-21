@@ -74,7 +74,10 @@ pub fn entries() -> Vec<Entry> {
                 "`guards` の操作が、`use openapi`・`use asyncapi` の文書の `operationId`（無ければ方法とパス）や操作のキー、`use proto` のサービスとメソッド、`use book` の振替の操作のどれでもないとき。",
                 "The operation of a `guards` line is not an `operationId` (or a method and a path) or an operation's key of the `use openapi` or `use asyncapi` document, a service and method of the `use proto`, or an operation of a transfer of the `use book`."
             ),
-            tr!("注にある操作の名前で書いてください。", "Write one of the operations the note lists."),
+            tr!(
+                "注にある操作を書いてください。注には操作が、`guards` の行にそのまま書ける形で並びます（`\"POST /orders/{{orderId}}/refunds\"` のように、一つの語として読めないものは `\"…\"` で囲んであります）。",
+                "Write one of the operations the note lists. The note lists them as a `guards` line takes them: in quotes, `\"…\"`, when one is not read as a word (`\"POST /orders/{{orderId}}/refunds\"`)."
+            ),
             file(shop_with_orders!("action refund_order\n  description \"Refund an order\"\n  guards orders refundOrders\n  principal User\n  resource Order\n\npermit clerks_refund\n  description \"A clerk refunds\"\n  principal in clerk\n  action refund_order\n"), &[ORDERS]),
             &["E203", "E205"],
         ),
@@ -99,7 +102,10 @@ pub fn entries() -> Vec<Entry> {
                 "`resource … from <引数>` の引数が、守る操作のパスかクエリの引数（proto ならリクエストのフィールド）に無いとき。生成するコードは、その引数で resource を読みます。",
                 "The argument of `resource … from <argument>` is not a parameter of the path or the query of an operation the action guards (for a `.proto`, a field of the request); the generated code reads the resource by it."
             ),
-            tr!("操作のパスかクエリの引数の名前で書いてください。", "Write the name of a parameter of the operation's path or query."),
+            tr!(
+                "操作のパスかクエリの引数の名前で書いてください。注には引数が、`from` のあとにそのまま書ける形で並びます（`\"order-id\"` のように、一つの語として読めないものは `\"…\"` で囲んであります）。",
+                "Write the name of a parameter of the operation's path or query. The note lists them as `from` takes them: in quotes, `\"…\"`, when one is not read as a word (`\"order-id\"`)."
+            ),
             file(shop_with_orders!("action refund_order\n  description \"Refund an order\"\n  guards orders refundOrder\n  principal User\n  resource Order from order_id\n\npermit clerks_refund\n  description \"A clerk refunds\"\n  principal in clerk\n  action refund_order\n"), &[ORDERS]),
             &["E203"],
         ),

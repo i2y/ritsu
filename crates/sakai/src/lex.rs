@@ -197,6 +197,21 @@ pub fn spelled_word(s: &str) -> String {
     if is_bare_word(s) { s.to_string() } else { crate::naming::quote(s) }
 }
 
+/// A word as a diagnostic shows it in its message and its notes, where it may stand among others
+/// (DESIGN 22): as a `.ctx` line writes it ([`spelled_word`]), and in quotes as well when it holds
+/// a `、`, which is a character of a word to the lexer and what divides a list in Japanese. Written
+/// into a line as it is shown, it reads back as the word.
+pub fn shown_word(s: &str) -> String {
+    if s.contains('、') { crate::naming::quote(s) } else { spelled_word(s) }
+}
+
+/// Words as a note lists them, each as [`shown_word`] shows it: `、` between them in Japanese, `, `
+/// in English.
+pub fn shown_words<S: AsRef<str>>(words: &[S]) -> ritsu_base::text::Text {
+    let shown: Vec<String> = words.iter().map(|w| shown_word(w.as_ref())).collect();
+    ritsu_base::text::Text { ja: shown.join("、"), en: shown.join(", ") }
+}
+
 /// A line and the lines indented under it.
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -300,6 +315,20 @@ mod tests {
             assert_eq!(ls[0].tokens[0].tok, Tok::Str(s.to_string()), "{s} reads back from its quotes");
             assert_eq!(ls[0].tokens[1].tok, Tok::Arrow, "{s}");
         }
+    }
+
+    /// A word a diagnostic shows is the word a line writes, and in quotes too when it holds `、`:
+    /// in a list of a Japanese note, `保留、手動` bare could not be told from two words.
+    #[test]
+    fn a_word_shown_is_the_word_a_line_writes_and_stands_apart_in_a_list() {
+        for s in ["disputed", "in-transit", "保留中", "refuse", "hold,manual", "on hold", "#1"] {
+            assert_eq!(shown_word(s), spelled_word(s), "{s}");
+        }
+        assert!(is_bare_word("保留、手動"));
+        assert_eq!(shown_word("保留、手動"), "\"保留、手動\"");
+        let l = shown_words(&["pending", "on hold", "保留、手動", "a\"b"]);
+        assert_eq!(l.en, "pending, \"on hold\", \"保留、手動\", \"a\\\"b\"");
+        assert_eq!(l.ja, "pending、\"on hold\"、\"保留、手動\"、\"a\\\"b\"");
     }
 
     #[test]

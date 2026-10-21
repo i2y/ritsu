@@ -194,13 +194,16 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                     open.extend(cs.operations(f).iter().map(|o| o.name()));
                     open.extend(cs.channels(f).iter().map(|c| c.id.clone()));
                 }
+                // each as `open host service` writes it (DESIGN 22): `"GET /orders"` in quotes
+                let listed = crate::lex::shown_words(&open);
                 for (s, at) in &pl.services {
                     if !open.contains(s) {
                         let there = if open.is_empty() {
                             tr!("その文書に、HTTP の操作もチャネルもありません。", "Its documents have no HTTP operation and no channel.")
                         } else {
-                            tr!("その文書の HTTP の操作とチャネルは {} です。", "The HTTP operations and channels of its documents are {}.", open.join("、"); open.join(", "))
+                            tr!("その文書の HTTP の操作とチャネルは {} です。", "The HTTP operations and channels of its documents are {}.", listed.ja; listed.en)
                         };
+                        let s = crate::lex::shown_word(s);
                         p.at(ci, *at, "E301", tr!("公開ホストサービス {s} が、公表された言語 {k} の文書にありません", "The open host service {s} is not in the documents of the published language {k}")).notes.push(there);
                         p.diags.last_mut().unwrap().notes.push(tr!(
                             "OpenAPI と AsyncAPI の文書の公表された言語では、`open host service` に OpenAPI の operationId（無ければ `\"GET /orders\"` のようにメソッドとパス）か、AsyncAPI のチャネル（`channels` のキー）を書いてください。",
@@ -211,9 +214,11 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
             }
             if pl.rulec.is_none() && pl.krate.is_none() && pl.contracts.is_empty() {
                 let services: Vec<&str> = pl.protos.iter().filter_map(|(f, _)| ps.files.get(f)).flat_map(|pf| pf.services.iter().map(|s| s.name.as_str())).collect();
+                let listed = crate::lex::shown_words(&services);
                 for (s, at) in &pl.services {
                     if !services.contains(&s.as_str()) && pl.protos.iter().all(|(f, _)| ps.files.contains_key(f)) {
-                        let there = if services.is_empty() { tr!("その proto にサービスはありません。", "Its proto files have no service.") } else { tr!("その proto のサービスは {} です。", "Its proto files have the services {}.", services.join("、"); services.join(", ")) };
+                        let there = if services.is_empty() { tr!("その proto にサービスはありません。", "Its proto files have no service.") } else { tr!("その proto のサービスは {} です。", "Its proto files have the services {}.", listed.ja; listed.en) };
+                        let s = crate::lex::shown_word(s);
                         p.at(ci, *at, "E301", tr!("公開ホストサービス {s} が、公表された言語 {k} の proto にありません", "The open host service {s} is not in the proto files of the published language {k}")).notes.push(there);
                     }
                 }

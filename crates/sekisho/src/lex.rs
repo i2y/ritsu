@@ -276,6 +276,22 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     (lines, diags)
 }
 
+/// Whether `s` can stand bare as a word of a `.gate`: whether this lexer reads an indented line that
+/// holds `s` alone back as that one word. The question is the lexer's, so it is asked of [`lex`]
+/// itself (DESIGN 18): `refundOrder`, `get_order` and `3日以内` are words to it; `refund-order`,
+/// `POST /orders`, `Orders/Refund`, `2fa` and `5kg` are not, and where a line takes a word or a
+/// string, it writes one of them in quotes.
+pub fn is_bare_word(s: &str) -> bool {
+    let (lines, diags) = lex("", &format!("  {s}"));
+    diags.is_empty() && matches!(lines.as_slice(), [l] if matches!(l.tokens.as_slice(), [t] if t.tok == Tok::Word(s.to_string())))
+}
+
+/// A word as a `.gate` line writes it where the line takes a word or a string: bare when
+/// [`is_bare_word`], else in quotes (`"…"`, with `\"` and `\\` inside).
+pub fn spelled_word(s: &str) -> String {
+    if is_bare_word(s) { s.to_string() } else { ritsu_base::naming::quote(s) }
+}
+
 /// What a symbol the language does not have is said with; Cedar's operators get the word sekisho
 /// writes instead.
 fn unknown_symbol(written: &str, next: Option<char>) -> ritsu_base::text::Text {
@@ -409,6 +425,22 @@ mod tests {
         for (src, code) in [("x \"open", "E001"), ("50XYZ", "E001"), ("2026-02-30", "E001"), ("2026-1-1", "E001"), ("a == b", "E001"), ("\tx", "E004"), ("a\u{3000}b", "E001"), ("x℃ : bool", "E001"), ("rate[%]", "E001"), ("rate[％]", "E001"), ("℉", "E001")] {
             let (_, diags) = lex("t.gate", src);
             assert_eq!(diags.iter().map(|d| d.code).collect::<Vec<_>>(), vec![code], "{src}");
+        }
+    }
+
+    /// A word is bare when the lexer reads it back; else a line writes it in quotes, and the line
+    /// reads the quotes back as the word.
+    #[test]
+    fn a_word_is_bare_when_the_lexer_reads_it_back() {
+        for s in ["refundOrder", "get_order", "Café", "today", "3日以内", "返金する"] {
+            assert!(is_bare_word(s), "{s}");
+            assert_eq!(spelled_word(s), s);
+        }
+        for s in ["refund-order", "POST /orders/{orderId}/refunds", "Orders/Refund", "receive.do", "2fa", "5kg", "10", "a#b", "a\"b", "a\\b", "保留、手動", "保留\u{3000}中", "℃", ""] {
+            assert!(!is_bare_word(s), "{s}");
+            let (lines, diags) = lex("t.gate", &format!("  guards orders {}\n", spelled_word(s)));
+            assert!(diags.is_empty(), "{s}: {diags:?}");
+            assert_eq!(lines[0].tokens[2].tok, Tok::Str(s.to_string()), "{s} reads back from its quotes");
         }
     }
 

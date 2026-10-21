@@ -187,8 +187,11 @@ Every attribute has finitely many values to count:
 | `T?` | an optional attribute | its absence, as one more value |
 
 There are no free strings: there would be no end of values to count. A number or a date needs both
-ends of its range (E103). Only what the generated policies read goes into Cedar's schema and
-entities: an attribute only a computed value reads (`refund_limit`, `paid_on`) stays out of Cedar.
+ends of its range (E103). A `rate` with no step counts 100% as 1, so the ends of its range and the
+constants it is compared with are whole numbers of 100% (0%, 100%); any other is E103, whose note
+gives the step to write on the type (`rate[step 1%]`, or `rate[step 0.1%]` for `12.5%`). Only what
+the generated policies read goes into Cedar's schema and entities: an attribute only a computed
+value reads (`refund_limit`, `paid_on`) stays out of Cedar.
 
 ## Actions
 
@@ -210,14 +213,16 @@ action refund_order
   document, its `operationId`, or its method and path as a string (`"POST /orders/{orderId}/refunds"`);
   in a `.proto`, `"Service/Method"`; in an AsyncAPI document, the operation's key; in a book, a
   transfer's operation as `<transfer>.<operation>`. An action may guard several operations (the
-  same one over REST and gRPC); an operation the document does not have is E202, and one guarded
-  by two actions E205. An action with no `guards` guards no operation a contract writes, and its
-  page says so.
+  same one over REST and gRPC); an operation the document does not have is E202, whose note lists
+  the operations there are as this line writes them (bare when the lexer reads one as a word, or as
+  two joined by a `.`; else in quotes), and one guarded by two actions E205. An action with no
+  `guards` guards no operation a contract writes, and its page says so.
 - `principal` and `resource` list the types a request of the action may bring: Cedar's
   `appliesTo`. A policy whose `principal` line picks no principal the actions it names take is
   E106.
-- `from orderId`: the operation's parameter the resource's id is read from (E204 if the operation
-  has none of that name). Without it, the generated code takes the id as its own argument.
+- `from orderId`: the operation's parameter the resource's id is read from, a word or a string (E204
+  if the operation has none of that name, with a note that lists its parameters as `from` takes
+  them, `"order-id"` in quotes). Without it, the generated code takes the id as its own argument.
 - `nobody "<why>"`, after the `resource` line, says that no one is meant to be allowed the action;
   without it, an action no permit allows is E301, and with it, an action some combination allows
   is E304.

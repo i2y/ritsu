@@ -71,3 +71,36 @@ fn the_upstream_direction_going_round_is_a_warning_in_english() {
     assert_eq!(codes(&os), ["W301"]);
     assert!(os[0].summary.is_some(), "a warning lets the map pass");
 }
+
+/// What the note of E301 lists are the HTTP operations and the channels of the documents as `open
+/// host service` writes them (DESIGN 22): an operation with no `operationId` goes by its method
+/// and path, in quotes, and written as the note lists it, it is an open host service.
+fn operations_shown(example: &str, ctx: &str, lang: ritsu_base::text::Lang) {
+    use ritsu_base::text::Lang;
+    let dir = common::TempDir::new("shown-operations");
+    common::copy_dir(std::path::Path::new(example), dir.path());
+    let edit = |file: &str, old: &str, new: &str| {
+        let p = dir.path().join(file);
+        let s = std::fs::read_to_string(&p).unwrap();
+        assert!(s.contains(old), "{file} has no {old:?}");
+        std::fs::write(&p, s.replacen(old, new, 1)).unwrap();
+    };
+    edit("ordering/api/ordering.json", "\"operationId\": \"getOrder\",", "");
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E301"]);
+    let (head, tail, sep) = if lang == Lang::Ja { ("チャネルは ", " です。", "、") } else { (" are ", ".", ", ") };
+    let listed = common::listed(os[0].diags[0].notes[0].get(lang), head, tail, sep);
+    assert_eq!(listed, ["createOrder", "\"GET /orders/{id}\"", "orderPlaced", "orderCancelled"]);
+    edit(&format!("contexts/{ctx}"), "open host service createOrder, getOrder,", &format!("open host service createOrder, {},", listed[1]));
+    assert_eq!(codes(&check_dir(dir.path())), Vec::<&str>::new(), "the operation, written as the note lists it, is an open host service");
+}
+
+#[test]
+fn the_operations_a_note_lists_are_written_as_open_host_service_takes_them() {
+    operations_shown("examples/webshop", "ordering.ctx", ritsu_base::text::Lang::En);
+}
+
+#[test]
+fn the_operations_a_note_lists_are_written_as_open_host_service_takes_them_in_japanese() {
+    operations_shown("examples/webshop.ja", "受注.ctx", ritsu_base::text::Lang::Ja);
+}

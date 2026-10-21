@@ -211,12 +211,12 @@ pub fn ledger() -> Ledger {
             "E103",
             tr!("範囲の誤りです", "A range that is wrong"),
             tr!(
-                "数か日付の属性と入力に `range` が無いとき、端が片方しかないとき、範囲に入る値が無いとき、定数がその単位で整数にならないとき、±(2⁵³ − 1) を超えるとき、条件で比べる定数が範囲の外のとき。",
-                "A number or a date (an attribute, an input) has no `range`, or one end of it only, or a range no value is in; a constant does not come to a whole number in its unit, or is past ±(2⁵³ − 1); a constant a condition compares with is outside the range."
+                "数か日付の属性と入力に `range` が無いとき、端が片方しかないとき、範囲に入る値が無いとき、定数がその単位で整数にならないとき（刻みの無い `rate` では、0% や 100% のような 100% の整数倍のほかの定数）、±(2⁵³ − 1) を超えるとき、条件で比べる定数が範囲の外のとき。",
+                "A number or a date (an attribute, an input) has no `range`, or one end of it only, or a range no value is in; a constant does not come to a whole number in its unit (for a `rate` with no step, any but a whole number of 100%, such as 0% and 100%), or is past ±(2⁵³ − 1); a constant a condition compares with is outside the range."
             ),
             tr!(
-                "`range >=1GBP <=10_000GBP` のように両端を書き、定数をその単位で整数になるように直してください。",
-                "Write both ends, like `range >=1GBP <=10_000GBP`, and constants that come to whole numbers in the unit."
+                "`range >=1GBP <=10_000GBP` のように両端を書き、定数をその単位で整数になるように直してください。率の属性と入力には、`rate[step 1%]` のように刻みを書いてください。",
+                "Write both ends, like `range >=1GBP <=10_000GBP`, and constants that come to whole numbers in the unit; give a rate attribute or input its step, as in `rate[step 1%]`."
             ),
             "gate t v1\n\nprincipal User\n  attributes\n    refund_limit : money[GBP, incl_tax]\n",
             "gate t v1\n\nprincipal 職員(User)\n  attributes\n    返金できる額(refund_limit) : money[GBP, incl_tax]\n",

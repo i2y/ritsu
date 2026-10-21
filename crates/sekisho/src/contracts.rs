@@ -48,6 +48,14 @@ fn pairs(items: &[(&str, &str)]) -> String {
     items.iter().map(|(k, n)| format!("{k} {}", word_or_quote(n))).collect::<Vec<_>>().join(" ")
 }
 
+/// An operation as a `guards` line writes it, which is how the note of E202 lists it (DESIGN 18):
+/// bare when the lexer reads it as one word, or as two joined by a `.` (`receive.do`, which the
+/// line reads as one); else in quotes, as `"POST /orders/{orderId}/refunds"` and `"Orders/Refund"`.
+fn operation_word(op: &str) -> Text {
+    let bare = crate::lex::is_bare_word(op) || op.split_once('.').is_some_and(|(t, o)| crate::lex::is_bare_word(t) && crate::lex::is_bare_word(o));
+    Text::same(if bare { op.to_string() } else { ritsu_base::naming::quote(op) })
+}
+
 /// How the root is found, for a file outside it: `named` says what is named from the root.
 pub(crate) fn outside_note(named: Text) -> Text {
     tr!(
@@ -157,7 +165,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                         // an operation is named by its `operationId`, however the line writes it
                         Some(op) => (Name::file(tool, rel.clone()).with("operation", op.name()), Found::Op(op)),
                         None => {
-                            let names: Vec<Text> = doc.operations.iter().take(12).map(|o| Text::same(o.name())).collect();
+                            let names: Vec<Text> = doc.operations.iter().take(12).map(|o| operation_word(&o.name())).collect();
                             let l = Text::list(&names);
                             diags.push(at("E202", g, gd.line, has_no(rel, &[("operation", &gd.operation)])).note(tr!("操作は {} です。", "Its operations are {}.", l.ja; l.en)));
                             continue;
@@ -172,7 +180,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                         // a service by its name in the file's package
                         Some((s, x)) => (Name::file(Tool::Proto, rel.clone()).with("service", s.name.clone()).with("method", x.name.clone()), Found::Method { file: pf, method: x, rel, protos: ps }),
                         None => {
-                            let names: Vec<Text> = pf.services.iter().flat_map(|s| s.methods.iter().map(move |x| Text::same(format!("{}/{}", s.name, x.name)))).take(12).collect();
+                            let names: Vec<Text> = pf.services.iter().flat_map(|s| s.methods.iter().map(move |x| operation_word(&format!("{}/{}", s.name, x.name)))).take(12).collect();
                             let l = Text::list(&names);
                             let items: Vec<(&str, &str)> = if svc.is_empty() { vec![("method", m)] } else { vec![("service", svc_short), ("method", m)] };
                             diags.push(at("E202", g, gd.line, has_no(rel, &items)).note(tr!("メソッドは {} です。", "Its methods are {}.", l.ja; l.en)));
@@ -184,7 +192,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                     let (t, op) = gd.operation.split_once('.').unwrap_or((gd.operation.as_str(), ""));
                     let ok = b.transfers.iter().any(|x| x.name == t && x.refusals.iter().any(|(o, _)| o == op));
                     if !ok {
-                        let names: Vec<Text> = b.transfers.iter().flat_map(|x| x.refusals.iter().map(move |(o, _)| Text::same(format!("{}.{o}", x.name)))).take(12).collect();
+                        let names: Vec<Text> = b.transfers.iter().flat_map(|x| x.refusals.iter().map(move |(o, _)| operation_word(&format!("{}.{o}", x.name)))).take(12).collect();
                         let l = Text::list(&names);
                         diags.push(at("E202", g, gd.line, has_no(rel, &[("transfer", t), ("operation", op)])).note(tr!("振替の操作は {} です。", "Its transfers' operations are {}.", l.ja; l.en)));
                         continue;
@@ -213,13 +221,13 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
                 let (ok, listed) = match f {
                     Found::Op(op) => {
                         let ok = op.param(arg).is_some_and(|p| matches!(p.place, Place::Path | Place::Query | Place::Channel));
-                        let listed: Vec<Text> = op.params.iter().filter(|p| matches!(p.place, Place::Path | Place::Query | Place::Channel)).map(|p| Text::same(p.name.clone())).collect();
+                        let listed: Vec<Text> = op.params.iter().filter(|p| matches!(p.place, Place::Path | Place::Query | Place::Channel)).map(|p| Text::same(crate::lex::spelled_word(&p.name))).collect();
                         (ok, listed)
                     }
                     Found::Method { file, method, .. } => {
                         let msg = message_of(file, &method.input);
                         let ok = msg.is_some_and(|m| m.fields.iter().any(|x| x.name == *arg || x.json() == *arg));
-                        (ok, msg.map(|m| m.fields.iter().map(|x| Text::same(x.name.clone())).collect()).unwrap_or_default())
+                        (ok, msg.map(|m| m.fields.iter().map(|x| Text::same(crate::lex::spelled_word(&x.name))).collect()).unwrap_or_default())
                     }
                     Found::Transfer => (true, vec![]),
                 };

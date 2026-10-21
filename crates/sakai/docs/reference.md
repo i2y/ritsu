@@ -128,7 +128,7 @@ A published language may be OpenAPI and AsyncAPI documents (`openapi "…"`, `as
 sakai reads OpenAPI 3.0, 3.1 and 3.2, and AsyncAPI 3.0 and 3.1, in JSON or in YAML; of YAML, what goes to JSON and back (RFC 9512, section 3.4), and E108 stops at the rest, at OpenAPI 2.0 and at AsyncAPI 2.x.
 A server of a document that does not encrypt the connection to a host off the machine is W902, unless the server says why in `x-ritsu-plaintext: "<why>"`; an operation of a published language with no `security` (nor its document's), or an AsyncAPI channel on a server with none, is W903, unless it is open to anyone on purpose and says so with `security: []`.
 The heading is the name the context gives the language, as a document has no package; no two published languages share one (E006).
-Its open host services are the HTTP operations, by their `operationId` (or, with none, a method and a path in quotes, `"GET /orders"`), and the channels, by their keys under `channels`, that anyone may use (each must be in the block's documents, else E301).
+Its open host services are the HTTP operations, by their `operationId` (or, with none, a method and a path in quotes, `"GET /orders"`), and the channels, by their keys under `channels`, that anyone may use (each must be in the block's documents, else E301, whose note lists the documents' operations and channels as `open host service` takes them).
 A part of a document that a listed document reaches by `$ref`, and that belongs to the same context, is in the published language too.
 
 ### Terms
@@ -233,6 +233,7 @@ The upstream enum may be a schema with `enum` under `components/schemas` of the 
 ```
 
 - A value of the upstream with no line is E401, naming every missing value: that is what an upstream adding a value meets. A line for a value the enum does not have is E402.
+- A diagnostic shows a value as a line writes it, and the notes of E402 and E403 list the enum's values so: a value with a blank, a `,`, a `->`, a `#` or a `、` (which divides a list in Japanese) is in quotes, and so is a value of the target named `refuse`, which a right side written bare reads as refusing. Copied from a note into a line, a value reads back as itself.
 - The value 0 whose name, without the enum's prefix, is `unspecified` marks that nothing is set and needs no line (W402 if one is written), as with rulec's `import proto` and dandori's types from a `.proto`. Any other value 0 is a value like the rest.
 - The target is one of three: a rule's enum (`rulec "…" enum …`), where a rule that takes the upstream's enum in with `import proto` is the mapping itself (lines written beside it must agree, E405; rulec keeps it complete with its E032 and E033), and a rule that does not needs value lines whose values are the rule's (E403); a downstream enum of a `.proto` or of the context's own documents, whose values the lines must use (E403); or only a name, whose values are taken as written and not checked (`doc` says so).
 - `term <upstream term> -> <downstream term>` says which downstream term receives an upstream one; both glossaries must have it (E409).

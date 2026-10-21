@@ -2679,7 +2679,7 @@ See also: [E202](#e202)
 
 **When**: A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service.
 
-**Fix**: Correct the service's name, or add the service to the proto.
+**Fix**: Correct the service's name, or add the service to the proto. For a published language of documents, the note lists their HTTP operations and channels as `open host service` takes them, in quotes when they hold a blank or the like (`"GET /orders"`).
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 
@@ -3774,7 +3774,7 @@ See also: [E402](#e402), [W402](#w402)
 
 **When**: The left side of an `enum` mapping is not a value of the upstream enum.
 
-**Fix**: Correct the value's name, or delete the line.
+**Fix**: Correct the value's name, or delete the line. The note lists the values of the upstream enum as a value line takes them: one with a blank, a `,`, a `->`, a `#` or a `、` in it in quotes, `"…"`.
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 
@@ -3847,9 +3847,9 @@ See also: [E401](#e401)
 
 ## E403 — A mapping's value is not one of the target enum
 
-**When**: The target is a proto enum, and a right side is not one of its values.
+**When**: The target is a proto enum, a schema with `enum` of OpenAPI and AsyncAPI documents, or the enum of a rule that does not take the upstream enum in with `import proto`, and a right side is not one of its values.
 
-**Fix**: Make the right side a value of the target enum.
+**Fix**: Make the right side a value of the target enum. The note lists its values as the right side takes them: one with a blank, a `,`, a `->`, a `#` or a `、` in it, or named `refuse`, in quotes, `"…"`.
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 

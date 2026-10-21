@@ -789,11 +789,12 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
             let offered: Vec<String> = m.contexts[y].published.iter().filter(|pl| pl.package == k).flat_map(|pl| pl.services.iter().map(|(s, _)| s.clone())).collect();
             let missing: Vec<&String> = used.iter().filter(|u| !offered.contains(u)).collect();
             if !missing.is_empty() {
+                // each as `open host service` writes it (DESIGN 22)
                 let what = missing.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-                let (wj, we) = (what.join("、"), what.join(", "));
+                let Text { ja: wj, en: we } = crate::lex::shown_words(&what);
                 let (ja_kind, en_kind) = if matches!(&c.kind, Kind::Contract { channel: Some(_), .. }) { ("チャネル", "the channel") } else { ("HTTP の操作", "the HTTP operation") };
                 let mut d = diag("E210", tr!("「{xn}」の {sp} が、「{yn}」の公開ホストサービスでない{ja_kind} {wj} を使っています（{via}）", "The document {sp} of {xn} uses {en_kind} {we} of {yn} ({via}), which is no open host service of {yn}"));
-                let (oj, oe) = (offered.join("、"), offered.join(", "));
+                let Text { ja: oj, en: oe } = crate::lex::shown_words(&offered);
                 d = d.note(if offered.is_empty() {
                     tr!("公表された言語 {k} に、公開ホストサービスはありません。", "The published language {k} has no open host service.")
                 } else {
@@ -810,7 +811,9 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         if let Some(svc) = called {
             let offered: Vec<String> = m.contexts[y].published.iter().filter(|pl| pl.package == k).flat_map(|pl| pl.services.iter().map(|(s, _)| s.clone())).collect();
             if !offered.contains(&svc) {
-                let (ja, en) = (offered.join("、"), offered.join(", "));
+                // each as `open host service` writes it (DESIGN 22)
+                let Text { ja, en } = crate::lex::shown_words(&offered);
+                let svc = crate::lex::shown_word(&svc);
                 let mut d = diag("E207", tr!("「{xn}」の {sp} が、「{yn}」の公開ホストサービスでない {svc} を呼んでいます", "The workflow {sp} of {xn} calls {svc}, which is no open host service of {yn}"));
                 d = d.note(if offered.is_empty() {
                     tr!("公表された言語 {k} に、公開ホストサービスはありません。", "The published language {k} has no open host service.")

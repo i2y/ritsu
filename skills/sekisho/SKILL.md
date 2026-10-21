@@ -186,12 +186,12 @@ reproduction. The usual ones:
 |---|---|---|
 | E001-E005 | a word, a line or the indentation the language does not read | fix the line; E001 says what sekisho writes for Cedar's `==`, `&&` and the rest |
 | E101 | a name names nothing | fix the spelling, or declare it |
-| E103 | a number or a date with no range, or a constant outside it | give both ends of the range |
+| E103 | a number or a date with no range, a constant outside it, or one that is no whole number of its unit (a `rate` with no step counts 100% as 1) | give both ends of the range; give a rate its step, as the note says (`rate[step 1%]`) |
 | E105 | a computed value from what it cannot be computed from | give a rule only attributes, inputs, constants and `today`; read an enum or bool output |
 | E109 | actions read one another's answers with `allowed`, in a circle | take the `allowed` out of a policy of the circle; ask which action is decided first |
 | E110 | what `allowed` asks with does not fit: an input given nothing or a value it does not take, a type the action asked does not take, one action asking it two ways | write the inputs (`allowed approve(amount: <value>)`) or the types of the action asked; split the action to ask it two ways |
 | E201 | a file a `use` reads does not pass its check, cannot be read, or is outside the root | fix that file with its language, or `--root` |
-| E202-E205 | an operation the contract does not have, an input it does not take, a `from` it has no parameter for, an operation two actions guard | follow the contract; ask which action decides an operation |
+| E202-E205 | an operation the contract does not have, an input it does not take, a `from` it has no parameter for, an operation two actions guard | follow the contract: an operation or a parameter as the note lists it, in quotes where it quotes it; ask which action decides an operation |
 | E206, W201 | a value given to a rule or a date outside what it takes, or breaking its precondition | narrow the range, or ask whether the rule should take more; for a rule's input of an ordered enum with a range, give an enum whose values are all inside it, or a value inside it as a constant |
 | E207 | a calendar without data for every day `today` can be | narrow `today`'s range, or bring the calendar's data |
 | E208 | a workflow's flow does not pass dandori's check | fix the flow with dandori |

@@ -80,6 +80,23 @@ pub fn count(n: &Num, to: &Unit) -> Result<i128, Miss> {
     Ok(c.num)
 }
 
+/// The coarsest of the steps `1%`, `0.1%`, `0.01%`, … that a constant in percent comes to a whole
+/// number of: the step the note of E103 gives a rate with no step (DESIGN 19). `30%` is `1%`,
+/// `12.5%` is `0.1%`.
+pub fn step_for(n: &Num) -> String {
+    let mut v = n.value;
+    for k in 0..=18 {
+        if v.is_int() {
+            return if k == 0 { "1%".to_string() } else { format!("0.{}1%", "0".repeat(k - 1)) };
+        }
+        match v.checked_mul(Rat::int(10)) {
+            Some(x) => v = x,
+            None => break,
+        }
+    }
+    "1%".to_string()
+}
+
 /// The day of `y-m-d`, as days since 1970-01-01; None for a date the calendar does not have
 /// (`2026-02-30`) and one outside 0001-01-01..9999-12-31.
 pub fn day(y: i64, m: u32, d: u32) -> Option<Day> {
@@ -134,6 +151,21 @@ mod tests {
         let yen = unit("money[JPY, incl_tax]").unwrap();
         assert_eq!(count(&num(Rat::int(1_000_000), "円"), &yen), Ok(1_000_000));
         assert_eq!(count(&num(Rat::int(1 << 53), ""), &unit("number").unwrap()), Err(Miss::TooLarge(Rat::int(1 << 53))));
+    }
+
+    /// A rate with no step counts 100% as 1: only a whole number of 100% is a value of it, and the
+    /// step a constant comes to a whole number of is the one E103 gives.
+    #[test]
+    fn a_rate_with_no_step_counts_whole_rates() {
+        let whole = unit("rate").unwrap();
+        assert_eq!(count(&num(Rat::int(100), "%"), &whole), Ok(1));
+        assert_eq!(count(&num(Rat::int(0), "%"), &whole), Ok(0));
+        assert_eq!(count(&num(Rat::int(30), "%"), &whole), Err(Miss::NotWhole(Rat::new(3, 10))));
+        for (v, step) in [(Rat::int(30), "1%"), (Rat::int(150), "1%"), (Rat::new(25, 2), "0.1%"), (Rat::new(1, 4), "0.01%"), (Rat::new(-5, 1), "1%")] {
+            let n = num(v, "%");
+            assert_eq!(step_for(&n), step, "{v:?}");
+            assert!(count(&n, &unit(&format!("rate[step {step}]")).unwrap()).is_ok(), "{v:?} comes to a whole number of {step}");
+        }
     }
 
     #[test]

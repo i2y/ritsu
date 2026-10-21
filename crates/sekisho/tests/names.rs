@@ -247,3 +247,32 @@ fn a_rule_value_is_named_by_its_name_its_member_or_its_alias() {
         assert!(said.is_empty(), "{word}: {said}");
     }
 }
+
+/// A `rate` with no step counts 100% as 1 (DESIGN 19): a constant or an end of a range that is no
+/// whole number of 100% is E103, and its note gives the step that makes it one; with that step
+/// written on the type, the file passes.
+#[test]
+fn a_rate_with_no_step_is_told_to_write_one() {
+    let gate = |ty: &str, range: &str, when: &str| {
+        format!("gate t v1\n\nprincipal User\n\nresource Order\n  attributes\n    discount : {ty}  range {range}\n\naction view\n  principal User\n  resource Order\n\npermit small_discounts\n  principal is User\n  action view\n  when resource.discount <= {when}\n")
+    };
+    // the ends 0% and 100%, and a constant of 100%, are whole numbers of 100%
+    passes(&gate("rate", ">=0% <=100%", "100%"));
+    // the constant a condition compares, named by the condition's left side, and the end of a range,
+    // named by the attribute
+    for (range, when, step, at, named) in [(">=0% <=100%", "30%", "1%", "30%", "`resource.discount`"), (">=0% <=100%", "12.5%", "0.1%", "12.5%", "`resource.discount`"), (">=0% <=30%", "0%", "1%", "30%", "`discount`")] {
+        let o = checked(&gate("rate", range, when));
+        let ds: Vec<_> = o.diags.iter().filter(|d| of_names(d.code)).collect();
+        assert_eq!(ds.iter().map(|d| d.code).collect::<Vec<_>>(), ["E103"], "{range} {when}");
+        let d = ds[0];
+        assert!(d.message.en.contains(&format!("The constant `{at}`, counted in rate, is not a whole number")), "{}", d.message.en);
+        for lang in [Lang::En, Lang::Ja] {
+            assert!(d.notes.iter().any(|n| n.get(lang).contains(&format!("`rate[step {step}]`")) && n.get(lang).contains(named)), "{lang:?}: {:?}", d.notes);
+        }
+        passes(&gate(&format!("rate[step {step}]"), range, when));
+    }
+    // a rate with a step says nothing of the step to write
+    let o = checked(&gate("rate[step 1%]", ">=0% <=100%", "12.5%"));
+    let d = o.diags.iter().find(|d| d.code == "E103").unwrap();
+    assert_eq!(d.notes.len(), 1, "{:?}", d.notes);
+}

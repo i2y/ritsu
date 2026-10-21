@@ -258,6 +258,31 @@ pub fn printed_codes(out: &str) -> Vec<String> {
         .collect()
 }
 
+/// The items of the list a note or a message gives after `head`, up to the last `tail` (DESIGN
+/// 22): `sep` between them outside quotes, each as a `.ctx` writes it, a word or a string in `"…"`.
+pub fn listed(text: &str, head: &str, tail: &str, sep: &str) -> Vec<String> {
+    let start = text.find(head).unwrap_or_else(|| panic!("no {head:?} in {text:?}")) + head.len();
+    let body = &text[start..];
+    let body = &body[..body.rfind(tail).unwrap_or_else(|| panic!("no {tail:?} after {head:?} in {text:?}"))];
+    let (mut items, mut item, mut quoted, mut rest) = (Vec::new(), String::new(), false, body);
+    while let Some(c) = rest.chars().next() {
+        if !quoted && rest.starts_with(sep) {
+            items.push(std::mem::take(&mut item));
+            rest = &rest[sep.len()..];
+            continue;
+        }
+        // an escape in quotes is two characters of the item, the second never its end
+        let n = if quoted && c == '\\' { rest.chars().nth(1).map_or(1, |e| 1 + e.len_utf8()) } else { c.len_utf8() };
+        if c == '"' {
+            quoted = !quoted;
+        }
+        item.push_str(&rest[..n]);
+        rest = &rest[n..];
+    }
+    items.push(item);
+    items
+}
+
 /// The command of a mutant, when it has one (its file `command`): the arguments after `sakai`.
 pub fn mutant_command(name: &str) -> Option<Vec<String>> {
     let s = std::fs::read_to_string(Path::new("tests/mutants").join(name).join("command")).ok()?;

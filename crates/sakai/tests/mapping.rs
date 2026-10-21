@@ -190,3 +190,117 @@ fn the_fix_of_a_value_left_out_is_a_line_the_check_reads() {
 fn the_fix_of_a_value_left_out_is_a_line_the_check_reads_in_japanese() {
     the_fix_of_a_value_left_out("examples/webshop.ja", "配送.ctx", "    refunded  -> refuse \"返金した注文は出荷しない\"\n", VALUES_JA);
 }
+
+// ── The values a diagnostic shows (DESIGN 22) ──
+
+/// A value added to an enum of the example's documents, and whether a diagnostic shows it bare.
+type Shown = (&'static str, bool);
+
+/// Values added to the example's enums. A diagnostic shows each as a value line writes it: in
+/// quotes when it holds a blank, a `,`, a `->`, a `#` or a `"`; a `-`, an apostrophe and a `.`
+/// stay bare.
+const SHOWN: &[Shown] = &[("in-transit", true), ("O'Brien", true), ("Re.quote", true), ("on hold", false), ("hold,manual", false), ("a->b", false), ("#1", false), ("say \"hi\"", false)];
+
+/// The same shapes in Japanese, and a `、`, which a list in Japanese puts between its items: a
+/// value that holds one is shown in quotes as well.
+const SHOWN_JA: &[Shown] = &[("係争中", true), ("再-審査", true), ("保留 中", false), ("保留,手動", false), ("確認->出荷", false), ("確認、保留", false)];
+
+/// How a diagnostic shows the values.
+fn shown(values: &[Shown]) -> Vec<String> {
+    values.iter().map(|&(v, bare)| if bare { v.to_string() } else { sakai::naming::quote(v) }).collect()
+}
+
+/// The values as the items of a YAML list.
+fn yaml_items(values: &[Shown]) -> String {
+    values.iter().map(|(v, _)| serde_json::to_string(v).unwrap()).collect::<Vec<_>>().join(", ")
+}
+
+fn edit(path: &std::path::Path, old: &str, new: &str) {
+    let s = std::fs::read_to_string(path).unwrap();
+    assert!(s.contains(old), "{} has no {old:?}", path.display());
+    std::fs::write(path, s.replacen(old, new, 1)).unwrap();
+}
+
+fn diag<'a>(os: &'a [sakai::check::Outcome], code: &str) -> &'a sakai::diag::Diag {
+    os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == code).unwrap_or_else(|| panic!("no {code}: {:?}", codes(os)))
+}
+
+/// What E401 names and what the note of E402 lists are the upstream's values as a value line
+/// writes them: each, written into a line of the mapping as the note gives it, maps its value.
+fn upstream_values_shown(example: &str, ctx: &str, last: &str, values: &[Shown], lang: ritsu_base::text::Lang) {
+    use ritsu_base::text::Lang;
+    let dir = common::TempDir::new("shown-upstream");
+    common::copy_dir(std::path::Path::new(example), dir.path());
+    let list = "enum: [pending, succeeded, failed, refunded]";
+    edit(&dir.path().join("payments/api/payments.yaml"), list, &format!("enum: [pending, succeeded, failed, refunded, {}]", yaml_items(values)));
+    // the values added upstream left unmapped (E401), and a line for a value the enum lacks (E402)
+    let file = dir.path().join("contexts").join(ctx);
+    let mapping = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, mapping.replacen(last, &format!("{last}    \"not a value\" -> hold\n"), 1)).unwrap();
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E401", "E402"]);
+    let (sep, want) = (if lang == Lang::Ja { "、" } else { ", " }, shown(values));
+    let (head, tail) = if lang == Lang::Ja { ("の値 ", " がありません") } else { ("maps no value for ", " of ") };
+    assert_eq!(common::listed(diag(&os, "E401").message.get(lang), head, tail, sep), want, "E401 names the values as a line writes them");
+    let e402 = diag(&os, "E402");
+    let (head, tail) = if lang == Lang::Ja { ("対応の ", " は、") } else { ("names ", ", which") };
+    assert_eq!(common::listed(e402.message.get(lang), head, tail, sep), ["\"not a value\""]);
+    let (head, tail) = if lang == Lang::Ja { ("の値は ", " です。") } else { (" are ", ".") };
+    let listed = common::listed(e402.notes[0].get(lang), head, tail, sep);
+    assert_eq!(listed[..4], ["pending", "succeeded", "failed", "refunded"]);
+    assert_eq!(listed[4..], want[..], "the note of E402 lists the values as a line writes them");
+    let lines: String = listed[4..].iter().map(|v| format!("    {v} -> hold\n")).collect();
+    std::fs::write(&file, mapping.replacen(last, &format!("{last}{lines}"), 1)).unwrap();
+    assert_eq!(codes(&check_dir(dir.path())), Vec::<&str>::new(), "each value, written as the note lists it, maps its value");
+}
+
+/// What the note of E403 lists are the target's values as the right side of a value line takes
+/// them, a value named `refuse` in quotes: each, written there as the note gives it, is the value
+/// it names, and not a refusal.
+fn target_values_shown(example: &str, ctx: &str, last: &str, values: &[Shown], lang: ritsu_base::text::Lang) {
+    use ritsu_base::text::Lang;
+    let dir = common::TempDir::new("shown-target");
+    common::copy_dir(std::path::Path::new(example), dir.path());
+    let mut values = values.to_vec();
+    values.push(("refuse", false));
+    edit(&dir.path().join("shipping/api/shipping.yaml"), "enum: [hold, release]", &format!("enum: [hold, release, {}]", yaml_items(&values)));
+    let file = dir.path().join("contexts").join(ctx);
+    let mapping = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, mapping.replacen("    pending   -> hold\n", "    pending   -> \"not a value\"\n", 1)).unwrap();
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), ["E403"]);
+    let e403 = diag(&os, "E403");
+    let sep = if lang == Lang::Ja { "、" } else { ", " };
+    let (head, tail) = if lang == Lang::Ja { ("の値は ", " です。") } else { (" are ", ".") };
+    let listed = common::listed(e403.notes[0].get(lang), head, tail, sep);
+    assert_eq!(listed[..2], ["hold", "release"]);
+    assert_eq!(listed[2..], shown(&values)[..], "the note of E403 lists the values as the right side takes them");
+    // a value added upstream for each value added to the target, mapped to it as the note lists it
+    let extra: Vec<String> = (0..values.len()).map(|i| format!("extra_{i}")).collect();
+    edit(&dir.path().join("payments/api/payments.yaml"), "enum: [pending, succeeded, failed, refunded]", &format!("enum: [pending, succeeded, failed, refunded, {}]", extra.join(", ")));
+    let lines: String = listed[2..].iter().zip(&extra).map(|(v, x)| format!("    {x} -> {v}\n")).collect();
+    std::fs::write(&file, mapping.replacen(last, &format!("{last}{lines}"), 1)).unwrap();
+    let os = check_dir(dir.path());
+    assert_eq!(codes(&os), Vec::<&str>::new(), "each value, written as the note lists it, is a value of the target");
+    let api = sakai::api::api(os[0].checked.as_ref().unwrap());
+    let rel = api["relationships"].as_array().unwrap().iter().find(|r| r["enums"].as_array().is_some_and(|e| !e.is_empty())).unwrap();
+    let mapped = rel["enums"][0]["values"].as_array().unwrap();
+    for (x, (v, _)) in extra.iter().zip(&values) {
+        let line = mapped.iter().find(|m| m["from"] == x.as_str()).unwrap_or_else(|| panic!("no line for {x}"));
+        assert_eq!(*line, serde_json::json!({"from": x, "to": v}), "{x} maps to {v:?}");
+    }
+}
+
+#[test]
+fn the_values_a_diagnostic_shows_are_written_as_a_line_takes_them() {
+    let last = "    refunded  -> refuse \"A refunded order is not shipped\"\n";
+    upstream_values_shown("examples/webshop", "shipping.ctx", last, SHOWN, ritsu_base::text::Lang::En);
+    target_values_shown("examples/webshop", "shipping.ctx", last, SHOWN, ritsu_base::text::Lang::En);
+}
+
+#[test]
+fn the_values_a_diagnostic_shows_are_written_as_a_line_takes_them_in_japanese() {
+    let last = "    refunded  -> refuse \"返金した注文は出荷しない\"\n";
+    upstream_values_shown("examples/webshop.ja", "配送.ctx", last, SHOWN_JA, ritsu_base::text::Lang::Ja);
+    target_values_shown("examples/webshop.ja", "配送.ctx", last, SHOWN_JA, ritsu_base::text::Lang::Ja);
+}

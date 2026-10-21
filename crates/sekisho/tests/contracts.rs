@@ -170,7 +170,8 @@ fn a_proto_method_its_fields_and_their_ranges() {
     assert!(c.is_empty(), "{text}");
     let (c, text) = codes(&[("example.gate", &proto_gate("\"Orders/Refnd\"", "orderId", "    urgent : bool\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E202"], "{text}");
-    assert!(text.contains("There is no service Orders method Refnd in orders.proto\n") && text.contains("Its methods are Orders/Refund."), "{text}");
+    // a method is listed as the line writes it, in quotes (DESIGN 18)
+    assert!(text.contains("There is no service Orders method Refnd in orders.proto\n") && text.contains("Its methods are \"Orders/Refund\"."), "{text}");
     // a method is named by its service's name in the file's package, however the line writes it
     let (c, text) = codes(&[("example.gate", &proto_gate("\"shop.v1.Orders/Refund\"", "orderId", "    flag : bool\n")), ("orders.proto", PROTO)]);
     assert_eq!(c, vec!["E203"], "{text}");
@@ -294,4 +295,136 @@ fn days_that_can_break_a_precondition_of_the_rule() {
     assert!(text.contains("arrive = 2026-05-31, leave = 2026-03-15"), "{text}");
     let (c, text) = codes(&[("example.gate", &gate(">=2026-03-01 <=2026-04-30", ">=2026-05-01 <=2026-06-30")), ("stay.rule", STAY)]);
     assert!(c.is_empty(), "{text}");
+}
+
+// ── What the notes of E202 and E204 list (DESIGN 18) ──
+
+/// The diagnostics of a gate with what has to be beside it, checked as `codes` checks it.
+fn diags_of(files: &[(&str, &str)]) -> Vec<sekisho::diag::Diag> {
+    let dir = ritsu_testkit::TempDir::new("contracts");
+    for (name, body) in files {
+        std::fs::write(dir.path().join(name), body).unwrap();
+    }
+    let path = dir.path().join("example.gate");
+    check_file(path.to_str().unwrap(), &common::joined(), &Options { root: Some(dir.path().to_path_buf()), ..Options::default() }).unwrap().diags
+}
+
+/// The items of the list a note gives after `head`, up to the last `tail`, as the notes join them
+/// (`、` in Japanese, `, ` and a last ` and ` in English), each outside quotes a word or a `.`
+/// between two, inside a string in `"…"`.
+fn listed(note: &str, head: &str, tail: &str, lang: Lang) -> Vec<String> {
+    let start = note.find(head).unwrap_or_else(|| panic!("no {head:?} in {note:?}")) + head.len();
+    let body = &note[start..note.rfind(tail).unwrap_or_else(|| panic!("no {tail:?} in {note:?}"))];
+    let seps: &[&str] = if lang == Lang::Ja { &["、"] } else { &[", ", " and "] };
+    let (mut items, mut item, mut quoted, mut rest) = (Vec::new(), String::new(), false, body);
+    while let Some(c) = rest.chars().next() {
+        if let Some(sep) = seps.iter().find(|s| !quoted && rest.starts_with(**s)) {
+            items.push(std::mem::take(&mut item));
+            rest = &rest[sep.len()..];
+            continue;
+        }
+        let n = if quoted && c == '\\' { rest.chars().nth(1).map_or(1, |e| 1 + e.len_utf8()) } else { c.len_utf8() };
+        if c == '"' {
+            quoted = !quoted;
+        }
+        item.push_str(&rest[..n]);
+        rest = &rest[n..];
+    }
+    items.push(item);
+    items
+}
+
+/// An OpenAPI document with an operation for each `(operationId, path)`, a GET with no
+/// `operationId` where it is empty and a POST elsewhere; the first takes the path's and the
+/// query's parameters `params`, the others the path's `id`.
+fn document(ops: &[(&str, &str)], params: (&str, &str)) -> String {
+    let q = ritsu_base::naming::quote;
+    let paths: Vec<String> = ops
+        .iter()
+        .enumerate()
+        .map(|(i, (id, path))| {
+            let ps = if i == 0 {
+                format!("{{ \"name\": {}, \"in\": \"path\", \"required\": true, \"schema\": {{ \"type\": \"string\" }} }}, {{ \"name\": {}, \"in\": \"query\", \"schema\": {{ \"type\": \"integer\" }} }}", q(params.0), q(params.1))
+            } else {
+                "{ \"name\": \"id\", \"in\": \"path\", \"required\": true, \"schema\": { \"type\": \"string\" } }".to_string()
+            };
+            let (method, id) = if id.is_empty() { ("get", String::new()) } else { ("post", format!("\"operationId\": {}, ", q(id))) };
+            format!("    {}: {{ \"{method}\": {{ {id}\"parameters\": [{ps}], \"responses\": {{ \"200\": {{ \"description\": \"Done\" }} }} }} }}", q(path))
+        })
+        .collect();
+    format!("{{\n  \"openapi\": \"3.1.0\",\n  \"info\": {{ \"title\": \"Orders\", \"version\": \"1\" }},\n  \"paths\": {{\n{}\n  }}\n}}\n", paths.join(",\n"))
+}
+
+/// A gate with an action that guards each operation written, and one permit for them all; the
+/// first takes the resource's id `from` the parameter written.
+fn guarding(ops: &[String], from: &str) -> String {
+    let mut g = String::from("gate shop v1\n\nuse openapi orders from \"orders.json\"\n\nprincipal User\n\nresource Order\n");
+    for (i, op) in ops.iter().enumerate() {
+        let from = if i == 0 { format!(" from {from}") } else { String::new() };
+        g.push_str(&format!("\naction op_{i}\n  guards orders {op}\n  principal User\n  resource Order{from}\n"));
+    }
+    let actions: Vec<String> = (0..ops.len()).map(|i| format!("op_{i}")).collect();
+    g.push_str(&format!("\npermit users_do\n  principal is User\n  action {}\n", actions.join(", ")));
+    g
+}
+
+/// The note of E202 lists the operations as a `guards` line writes them, and the note of E204 the
+/// parameters as `from` writes them: bare when the lexer reads them as a word (or two joined by a
+/// `.`), else in quotes. Each, written there as the note gives it, is the operation or the
+/// parameter it names.
+fn listed_as_written(ops: &[(&str, &str, bool)], params: (&str, &str), lang: Lang) {
+    let doc = document(&ops.iter().map(|(id, path, _)| (*id, *path)).collect::<Vec<_>>(), params);
+    let want: Vec<String> = ops
+        .iter()
+        .map(|(id, path, bare)| {
+            let name = if id.is_empty() { format!("GET {path}") } else { id.to_string() };
+            if *bare { name } else { ritsu_base::naming::quote(&name) }
+        })
+        .collect();
+    // an operation the document does not have (E202)
+    let ds = diags_of(&[("example.gate", &guarding(&["refundOrders".to_string()], "id")), ("orders.json", &doc)]);
+    assert_eq!(ds.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E202"]);
+    let (head, tail) = if lang == Lang::Ja { ("操作は ", " です。") } else { ("operations are ", ".") };
+    let items = listed(ds[0].notes[0].get(lang), head, tail, lang);
+    assert_eq!(items, want, "the note of E202 lists the operations as a `guards` line writes them");
+    // each, written on a `guards` line as the note lists it, is an operation of the document
+    let ds = diags_of(&[("example.gate", &guarding(&items, ritsu_base::naming::quote(params.0).as_str())), ("orders.json", &doc)]);
+    assert!(ds.is_empty(), "{:?}", ds.iter().map(|d| d.render(lang)).collect::<Vec<_>>());
+    // a parameter the operation does not have (E204)
+    let ds = diags_of(&[("example.gate", &guarding(&items[..1], "order")), ("orders.json", &doc)]);
+    assert_eq!(ds.iter().map(|d| d.code).collect::<Vec<_>>(), vec!["E204"]);
+    let (head, tail) = if lang == Lang::Ja { ("引数は ", " です。") } else { ("parameters are ", ".") };
+    let params_listed = listed(ds[0].notes[0].get(lang), head, tail, lang);
+    assert_eq!(params_listed, [ritsu_base::naming::quote(params.0), ritsu_base::naming::quote(params.1)]);
+    let ds = diags_of(&[("example.gate", &guarding(&items[..1], &params_listed[0])), ("orders.json", &doc)]);
+    assert!(ds.is_empty(), "{:?}", ds.iter().map(|d| d.render(lang)).collect::<Vec<_>>());
+}
+
+#[test]
+fn the_operations_and_parameters_a_note_lists_are_written_as_the_line_takes_them() {
+    let ops = [
+        ("refundOrder", "/orders/{order-id}/refunds", true),
+        ("", "/orders/{id}", false),
+        ("add note", "/orders/{id}/notes", false),
+        ("orders.hold", "/orders/{id}/hold", true),
+        ("release,partly", "/orders/{id}/release", false),
+        ("refund-order", "/orders/{id}/refund", false),
+        ("2fa", "/orders/{id}/check", false),
+        ("say \"hi\"", "/orders/{id}/greet", false),
+    ];
+    listed_as_written(&ops, ("order-id", "page size"), Lang::En);
+}
+
+#[test]
+fn the_operations_and_parameters_a_note_lists_are_written_as_the_line_takes_them_in_japanese() {
+    let ops = [
+        ("返金する", "/orders/{注文-番号}/refunds", true),
+        ("", "/orders/{id}", false),
+        ("返金 一部", "/orders/{id}/partly", false),
+        ("注文.保留", "/orders/{id}/hold", true),
+        ("保留、手動", "/orders/{id}/manual", false),
+        ("出荷-一部", "/orders/{id}/ship", false),
+        ("3日以内", "/orders/{id}/soon", true),
+    ];
+    listed_as_written(&ops, ("注文-番号", "件数 上限"), Lang::Ja);
 }

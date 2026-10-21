@@ -38,6 +38,19 @@ pub fn source(ps: &Protos, cs: &crate::contracts::Contracts, n: &Name) -> Option
     Some(EnumSrc { full: full.clone(), file: f.path.clone(), line: e.line, values: e.values.iter().map(|v| (v.name.clone(), v.line, proto::is_unset(e, v))).collect(), proto: Some((f.path.clone(), full)) })
 }
 
+/// A value of the downstream as the right side of a value line takes it, which is how the
+/// diagnostics show it (DESIGN 22): as a word is shown ([`crate::lex::shown_word`]), and in quotes
+/// when it is `refuse`, which the line reads bare as refusing the upstream value instead.
+fn target_word(s: &str) -> String {
+    if s == crate::kw::REFUSE { crate::naming::quote(s) } else { crate::lex::shown_word(s) }
+}
+
+/// The values of a downstream enum as a note lists them, each as [`target_word`] writes it.
+fn target_words(values: &[&str]) -> Text {
+    let shown: Vec<String> = values.iter().map(|v| target_word(v)).collect();
+    Text { ja: shown.join("、"), en: shown.join(", ") }
+}
+
 /// The proto enum a name points at, with its full name.
 fn enum_of<'a>(ps: &'a Protos, n: &Name) -> Option<(&'a proto::Enum, String, &'a proto::ProtoFile)> {
     if n.tool != Tool::Proto {
@@ -103,14 +116,15 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                     let sr = crate::paths::shown(r);
                     for v in &em.values {
                         let Some((_, rv)) = taken.iter().find(|(wire, _)| *wire == v.from) else { continue };
-                        let (wrote, at) = match &v.to {
-                            ValueTo::Value(x, at) => (x.clone(), *at),
-                            ValueTo::Refuse(_, at) => ("refuse".to_string(), *at),
+                        // each value as the line writes it, the word `refuse` as it is
+                        let (wrote, shown, at) = match &v.to {
+                            ValueTo::Value(x, at) => (x.clone(), target_word(x), *at),
+                            ValueTo::Refuse(_, at) => ("refuse".to_string(), "refuse".to_string(), *at),
                         };
                         if wrote != *rv {
-                            let vn = &v.from;
+                            let (vn, rs) = (crate::lex::shown_word(&v.from), target_word(rv));
                             diags.push(
-                                diag::at("E405", &c.file, at.line, at.col, tr!("{sr} は {vn} を {rv} として取り込んでいますが、対応は {wrote} にしています", "The rule {sr} takes {vn} in as {rv}, and the mapping makes it {wrote}"))
+                                diag::at("E405", &c.file, at.line, at.col, tr!("{sr} は {vn} を {rs} として取り込んでいますが、対応は {shown} にしています", "The rule {sr} takes {vn} in as {rs}, and the mapping makes it {shown}"))
                                     .source(&c.src)
                                     .note(tr!(
                                         "規則の `import proto` と腐敗防止層の対応には、同じ読み替えを書いてください。どちらかを直すか、値の行を消してください。値の行を消せば、規則の取り込みがそのまま対応になります。",
@@ -131,7 +145,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                     if v.2 {
                         if w {
                             let vm = em.values.iter().find(|x| x.from == v.0).unwrap();
-                            let vn = &v.0;
+                            let vn = crate::lex::shown_word(&v.0);
                             let d = if src.proto.is_some() {
                                 diag::at("W402", &c.file, vm.from_pos.line, vm.from_pos.col, tr!("値が無いことを表す 0 番の値 {vn} に、対応は要りません", "The value 0, {vn}, says nothing is set and needs no mapping")).note(tr!(
                                     "0 番の値で、名前から列挙の接頭辞を外すと unspecified になるものは、値が設定されていないことを表す値です。rulec の `import proto` と dandori の proto から作る型も、同じ値を外します。",
@@ -151,10 +165,11 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                 }
                 if !missing.is_empty() {
                     let names: Vec<&str> = missing.iter().map(|v| v.0.as_str()).collect();
-                    let (ja, en) = (names.join("、"), names.join(", "));
+                    // each value as a value line writes it (DESIGN 22)
+                    let Text { ja, en } = crate::lex::shown_words(&names);
                     let mut d = diag::at("E401", &c.file, em.pos.line, em.pos.col, tr!("「{xn}」の腐敗防止層の対応に、「{yn}」の列挙 {full} の値 {ja} がありません", "The anticorruption layer of {xn} maps no value for {en} of {yn}'s enum {full}")).source(&c.src);
                     for v in missing.iter().take(3) {
-                        let (vn, fp, l) = (&v.0, crate::paths::shown(&src.file), v.1);
+                        let (vn, fp, l) = (crate::lex::shown_word(&v.0), crate::paths::shown(&src.file), v.1);
                         // a value of a document is a string written as it is, in any case: the note
                         // does not start with it, which would capitalize it
                         d = d.note(if src.proto.is_some() {
@@ -175,14 +190,17 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                     d = d.refer(rel_ref.clone()).refer(crate::elements::refer(cs, Some(&yn), from, tr!("値は {counted} 個あり、そのうち {k} 個に対応がありません", "{counted} values, {k} of them unmapped")));
                     diags.push(d);
                 }
+                // the values a note lists, and the value a message names, each as a value line
+                // writes it (DESIGN 22)
                 for v in &em.values {
                     if !src.values.iter().any(|x| x.0 == v.from) {
-                        let vn = &v.from;
+                        let vn = crate::lex::shown_word(&v.from);
                         let have: Vec<&str> = src.values.iter().map(|x| x.0.as_str()).collect();
+                        let have = crate::lex::shown_words(&have);
                         diags.push(
                             diag::at("E402", &c.file, v.from_pos.line, v.from_pos.col, tr!("対応の {vn} は、列挙 {full} にありません", "The mapping names {vn}, which is not a value of the enum {full}"))
                                 .source(&c.src)
-                                .note(tr!("{full} の値は {} です。", "The values of {full} are {}.", have.join("、"); have.join(", "))),
+                                .note(tr!("{full} の値は {} です。", "The values of {full} are {}.", have.ja; have.en)),
                         );
                     }
                     // A rule that does not take the enum in: the lines map to the rule's values.
@@ -191,11 +209,11 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                         && !re.values.iter().any(|y| y.name == *x)
                     {
                         let have: Vec<&str> = re.values.iter().map(|y| y.name.as_str()).collect();
-                        let sr = crate::paths::shown(r);
+                        let (sr, xs, have) = (crate::paths::shown(r), target_word(x), target_words(&have));
                         diags.push(
-                            diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {x} は、{sr} の列挙 {name} にありません", "The mapping maps to {x}, which is not a value of the enum {name} of {sr}"))
+                            diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {xs} は、{sr} の列挙 {name} にありません", "The mapping maps to {xs}, which is not a value of the enum {name} of {sr}"))
                                 .source(&c.src)
-                                .note(tr!("{name} の値は {} です。", "The values of {name} are {}.", have.join("、"); have.join(", "))),
+                                .note(tr!("{name} の値は {} です。", "The values of {name} are {}.", have.ja; have.en)),
                         );
                     }
                     if let (Some(te), ValueTo::Value(x, at)) = (&target, &v.to)
@@ -203,10 +221,11 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                     {
                         let tfull = &te.full;
                         let have: Vec<&str> = te.values.iter().map(|y| y.0.as_str()).collect();
+                        let (xs, have) = (target_word(x), target_words(&have));
                         diags.push(
-                            diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {x} は、列挙 {tfull} にありません", "The mapping maps to {x}, which is not a value of the target enum {tfull}"))
+                            diag::at("E403", &c.file, at.line, at.col, tr!("対応の先の {xs} は、列挙 {tfull} にありません", "The mapping maps to {xs}, which is not a value of the target enum {tfull}"))
                                 .source(&c.src)
-                                .note(tr!("{tfull} の値は {} です。", "The values of {tfull} are {}.", have.join("、"); have.join(", "))),
+                                .note(tr!("{tfull} の値は {} です。", "The values of {tfull} are {}.", have.ja; have.en)),
                         );
                     }
                 }

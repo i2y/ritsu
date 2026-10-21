@@ -216,9 +216,9 @@ See also: [E103](#e103)
 
 ## E103 — A range that is wrong
 
-**When**: A number or a date (an attribute, an input) has no `range`, or one end of it only, or a range no value is in; a constant does not come to a whole number in its unit, or is past ±(2⁵³ − 1); a constant a condition compares with is outside the range.
+**When**: A number or a date (an attribute, an input) has no `range`, or one end of it only, or a range no value is in; a constant does not come to a whole number in its unit (for a `rate` with no step, any but a whole number of 100%, such as 0% and 100%), or is past ±(2⁵³ − 1); a constant a condition compares with is outside the range.
 
-**Fix**: Write both ends, like `range >=1GBP <=10_000GBP`, and constants that come to whole numbers in the unit.
+**Fix**: Write both ends, like `range >=1GBP <=10_000GBP`, and constants that come to whole numbers in the unit; give a rate attribute or input its step, as in `rate[step 1%]`.
 
 **Example**:
 
@@ -463,7 +463,7 @@ See also: [E209](#e209)
 
 **When**: The operation of a `guards` line is not an `operationId` (or a method and a path) or an operation's key of the `use openapi` or `use asyncapi` document, a service and method of the `use proto`, or an operation of a transfer of the `use book`.
 
-**Fix**: Write one of the operations the note lists.
+**Fix**: Write one of the operations the note lists. The note lists them as a `guards` line takes them: in quotes, `"…"`, when one is not read as a word (`"POST /orders/{orderId}/refunds"`).
 
 **Example**:
 
@@ -546,7 +546,7 @@ See also: [E202](#e202), [E204](#e204)
 
 **When**: The argument of `resource … from <argument>` is not a parameter of the path or the query of an operation the action guards (for a `.proto`, a field of the request); the generated code reads the resource by it.
 
-**Fix**: Write the name of a parameter of the operation's path or query.
+**Fix**: Write the name of a parameter of the operation's path or query. The note lists them as `from` takes them: in quotes, `"…"`, when one is not read as a word (`"order-id"`).
 
 **Example**:
 

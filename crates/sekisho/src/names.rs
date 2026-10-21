@@ -1457,7 +1457,17 @@ impl<'a> Ck<'a> {
         };
         let d = self.err(m.code(), s, msg);
         match m {
-            Miss::NotWhole(_) => d.notes.push(tr!("値は型の単位で数えた整数として Cedar に渡るので、定数もその単位で整数にならなければなりません。", "A value goes to Cedar as a whole number in the unit of its type, so a constant has to come to one too.")),
+            Miss::NotWhole(_) => {
+                d.notes.push(tr!("値は型の単位で数えた整数として Cedar に渡るので、定数もその単位で整数にならなければなりません。", "A value goes to Cedar as a whole number in the unit of its type, so a constant has to come to one too."));
+                // a rate with no step counts 100% as 1: what to write is a step (DESIGN 19)
+                if unit.dim == ritsu_units::Dim::Rate && unit.step.is_none() {
+                    let step = types::step_for(num);
+                    d.notes.push(tr!(
+                        "刻みの無い `rate` は 100% を 1 と数えるので、書ける定数は 0% や 100% のような 100% の整数倍だけです。`{what}` の型に、`rate[step {step}]` のように刻みを書いてください。",
+                        "A `rate` with no step counts 100% as 1, so the only constants it takes are whole numbers of 100%, such as 0% and 100%. Write a step on the type of `{what}`, as in `rate[step {step}]`."
+                    ));
+                }
+            }
             Miss::TooLarge(_) => d.notes.push(tr!("生成するコードは値を JSON の数として渡し、TypeScript の `number` が正確に表せる整数は 2⁵³ − 1 までです。", "The generated code passes a value as a JSON number, and TypeScript's `number` holds every integer only up to 2⁵³ − 1.")),
             _ => {}
         }

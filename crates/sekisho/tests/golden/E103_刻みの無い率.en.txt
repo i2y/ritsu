@@ -1,0 +1,4 @@
+error[E103]: tests/mutants/E103_刻みの無い率.gate:59:14: The constant `30%`, counted in rate, is not a whole number
+    59 |   when 割合 <= 30%
+  = A value goes to Cedar as a whole number in the unit of its type, so a constant has to come to one too.
+  = A `rate` with no step counts 100% as 1, so the only constants it takes are whole numbers of 100%, such as 0% and 100%. Write a step on the type of `割合`, as in `rate[step 1%]`.

@@ -734,7 +734,10 @@ pub fn ledger() -> Ledger {
             "E301",
             tr!("公開ホストサービスが、公表された言語に無いサービスです", "An open host service is not in the published language"),
             tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。OpenAPI と AsyncAPI の文書の公表された言語では、並べた名前が、文書の HTTP の操作（operationId）にもチャネルにも無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。", "A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service."),
-            tr!("サービスの名前を直すか、proto にサービスを足してください。", "Correct the service's name, or add the service to the proto."),
+            tr!(
+                "サービスの名前を直すか、proto にサービスを足してください。文書の公表された言語では、注に文書の HTTP の操作とチャネルが、`open host service` にそのまま書ける形で並びます（`\"GET /orders\"` のように空白などを含むものは `\"…\"` で囲んであります）。",
+                "Correct the service's name, or add the service to the proto. For a published language of documents, the note lists their HTTP operations and channels as `open host service` takes them, in quotes when they hold a blank or the like (`\"GET /orders\"`)."
+            ),
             &[(
                 "乙.ctx",
                 "context 乙(b) v1\nowns\n  dir \"b\"\n\npublished language b.v1\n  proto \"b/v1/b.proto\"\n  open host service BService, NoService\n\nterms\n  種類 \"乙が扱うものの種類\"\n    means enum Kind\n",
@@ -957,7 +960,10 @@ pub fn ledger() -> Ledger {
             "E402",
             tr!("対応に、上流の列挙に無い値があります", "A mapping has a value the upstream enum lacks"),
             tr!("`enum` の対応の左辺に、上流の列挙の値でない名前を書いたとき。", "The left side of an `enum` mapping is not a value of the upstream enum."),
-            tr!("値の名前を直すか、その行を消してください。", "Correct the value's name, or delete the line."),
+            tr!(
+                "値の名前を直すか、その行を消してください。注には上流の列挙の値が、値の行にそのまま書ける形で並びます。空白、`,`、`->`、`#`、`、` を含む値は `\"…\"` で囲んであります。",
+                "Correct the value's name, or delete the line. The note lists the values of the upstream enum as a value line takes them: one with a blank, a `,`, a `->`, a `#` or a `、` in it in quotes, `\"…\"`."
+            ),
             &[(
                 "甲.ctx",
                 "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  enum Kind -> 甲の種類\n    KIND_ONE -> 一つめ\n    KIND_TWO -> 二つめ\n    KIND_THREE -> 三つめ\n",
@@ -972,8 +978,14 @@ pub fn ledger() -> Ledger {
         e(
             "E403",
             tr!("対応の先の値が、下流の列挙に無い値です", "A mapping's value is not one of the target enum"),
-            tr!("対応の先が proto の列挙なのに、右辺がその列挙の値でないとき。", "The target is a proto enum, and a right side is not one of its values."),
-            tr!("右辺を、先の列挙の値にしてください。", "Make the right side a value of the target enum."),
+            tr!(
+                "対応の先が proto の列挙か、OpenAPI と AsyncAPI の文書の `enum` のスキーマか、`import proto` で上流の列挙を取り込まない規則の列挙なのに、右辺がその列挙の値でないとき。",
+                "The target is a proto enum, a schema with `enum` of OpenAPI and AsyncAPI documents, or the enum of a rule that does not take the upstream enum in with `import proto`, and a right side is not one of its values."
+            ),
+            tr!(
+                "右辺を、先の列挙の値にしてください。注には先の列挙の値が、右辺にそのまま書ける形で並びます。空白、`,`、`->`、`#`、`、` を含む値と、`refuse` という名前の値は `\"…\"` で囲んであります。",
+                "Make the right side a value of the target enum. The note lists its values as the right side takes them: one with a blank, a `,`, a `->`, a `#` or a `、` in it, or named `refuse`, in quotes, `\"…\"`."
+            ),
             &[
                 (
                     "甲.ctx",

@@ -131,6 +131,7 @@ The usual ones:
 | E108 | an OpenAPI or AsyncAPI document that does not read | fix where it points; YAML beyond what goes to JSON and back (tags, `?` keys) is not read |
 | E210 | a document uses a channel or an HTTP operation that is not an open host service | the upstream opens it under `open host service`, or the document stops using it (ask) |
 | E401 | an upstream value with no mapping | add the line the note shows, with the value the team decides |
+| E402, E403 | a value line names a value the enum does not have | write one of the values the note lists, as it lists them (in quotes where it quotes them) |
 | E406, E407 | one word in two meanings crosses | rename, `as`, or map it in an anticorruption layer (ask) |
 | E502 | the linter's settings are not what the map writes | run `ritsu sakai build` again with the same `--lang`, and commit |
 | W901 | a key of a known shape is written in a `.ctx` | take it out and read it where the code runs; tell the person to revoke it if it is real (the history keeps it) |
