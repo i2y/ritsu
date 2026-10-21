@@ -1016,11 +1016,12 @@ fn md_prose(s: &str) -> String {
     o
 }
 
-/// The type of an input or an output as the page names it: its type, and for an enum held to a
-/// range, the range (`tiers.tier range >=basic <=gold`), without which the type reads as taking
-/// every value of the enum. A number's range is not shown, as the page never has (DESIGN 7).
+/// The type of an input or an output as the page names it: its type, and with a range, the range as
+/// a `.flow` writes it, a number's in the whole numbers of its type's unit (`int range >=1 <=30`) and
+/// an ordered enum's by its values (`tiers.tier range >=basic <=gold`). Without it, the type reads
+/// as taking every value of its type, which the run's door does not (DESIGN 9).
 fn typed(m: &Model, t: &Ty, rg: Option<&Range>) -> String {
-    match rg.filter(|_| t.enum_inside().is_some()) {
+    match rg {
         Some(r) => format!("{} range {}", m.ty_name(t), m.range_text(t, r)),
         None => m.ty_name(t),
     }

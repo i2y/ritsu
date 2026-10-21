@@ -2,7 +2,7 @@
 
 Pay a seller what their sales came to: the bank's API pays the account the seller keeps on file, and a model drafts the notice. The flow carries the account's id, and never its number or the name it is held in, which the bank's contract marks secret
 
-`examples/payout/payout.flow` を `dandori doc` で描いたものです。入力は `seller_id: string`・`account_id: string`・`amount: money[JPY, incl_tax]`、出力は `payout_id: string` です。
+`examples/payout/payout.flow` を `dandori doc` で描いたものです。入力は `seller_id: string`・`account_id: string`・`amount: money[JPY, incl_tax] range >=1 <=10000000`、出力は `payout_id: string` です。
 
 ## flow
 

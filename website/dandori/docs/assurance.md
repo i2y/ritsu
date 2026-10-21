@@ -22,14 +22,17 @@ same way.
 A scenario is an input and the answers the calls get, in order. The scenarios take every arm, every
 handler, every way a case can move, and lists that are empty, short, and longer than their loop
 takes. No two values in a scenario are alike, so a platform that mixes up two answers, or the rounds
-of a loop, shows it (a number with a range is picked inside it, where two may meet). The scenarios also
-give answers every platform must refuse: of the wrong shape, with a state the machine does not lead
-to, and with a number outside its range. For a workflow that implements a service, they also give an
-input, and values of events and answers of callbacks that the service sends, with every field at its
-zero value left out, as protobuf's JSON writes them; a platform that does not fill them in reads
-another input, or another answer, from the reference's. And when the workflow reads a field that
-says whether it is set with an input that is not `T?`, one input goes without it, and every
-platform must end that run at once, with `Dandori.BadInput`.
+of a loop, shows it (a number with a range is picked inside it, where two may meet). The scenarios
+also give answers every platform must refuse: of the wrong shape, with a state the machine does not
+lead to, and with a number or an enum's value outside its range. Each place of the inputs held to a
+range, an input or a field of an input's record, has a run of its own whose input has that place
+alone just outside the range (past its high end, or below its low end when that is the only room),
+and every platform must end that run at once, with `Dandori.BadInput`. For a workflow that
+implements a service, they also give an input, and values of events and answers of callbacks that
+the service sends, with every field at its zero value left out, as protobuf's JSON writes them; a
+platform that does not fill them in reads another input, or another answer, from the reference's.
+And when the workflow reads a field that says whether it is set with an input that is not `T?`, one
+input goes without it, and every platform must end that run at once, with `Dandori.BadInput`.
 
 On Temporal, durable functions and pydantic-graph, the tasks dandori writes run with a stand-in
 `Transport` that records what they would send, so what they send is compared with what Step Functions

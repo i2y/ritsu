@@ -55,7 +55,9 @@ a transfer's amounts, refusals and holds (the ritsu skill has the codes).
    `<file.flow>: ok`. A warning does not stop a build, but it says something true about the workflow.
 4. **Watch it run:** `ritsu dandori scenarios <file.flow> --out <dir>` writes scenarios (`001.json`,
    `002.json`, …) that together take every arm, every handler of an error, and every way a case
-   can move. `ritsu dandori run <file.flow> --scenario <dir>/001.json` plays one in the reference
+   can move; for each place of the inputs held to a range, one more has an input just outside it
+   there, which every platform turns away at once (`Dandori.BadInput`).
+   `ritsu dandori run <file.flow> --scenario <dir>/001.json` plays one in the reference
    interpreter and prints each call with its answer, and how the run ended.
 5. **Show it to a person:** `ritsu dandori doc <file.flow> > <file>.md` draws the flow as Mermaid
    charts, with a table of every call (what it calls, its retries, where each of its errors goes)

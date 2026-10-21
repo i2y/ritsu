@@ -2,7 +2,7 @@
 
 返金をすぐに払うか確かめに回し、支払日に精算する。規則の前提は、ここでは ritsu が決められない（求める額と日が、範囲の無いタスクの結果から来る）ので、ワークフローが値のできたところですぐに確かめる。答えたタスクの直後、規則を呼ぶ分岐の始め、イテレーションの始めで確かめる。どのプラットフォームでも動く
 
-`tests/flows/preconditions.ja.flow` を `dandori doc` で描いたものです。入力は `注文: string`・`払った額: int` です。
+`tests/flows/preconditions.ja.flow` を `dandori doc` で描いたものです。入力は `注文: string`・`払った額: int range >=0 <=10000` です。
 
 ## flow
 

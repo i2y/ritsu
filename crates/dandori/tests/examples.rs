@@ -1,5 +1,6 @@
 //! The examples pass `check`; the fixtures print exactly the diagnostics in their golden
-//! files; and on every scenario `scenarios` finds, the generated state machine, run by
+//! files; every place of an input held to a range has a scenario of its own whose input is just
+//! outside it; and on every scenario `scenarios` finds, the generated state machine, run by
 //! tools/asl-run.mjs with JSONata 2.0.6, does exactly what the reference interpreter does.
 //!
 //! The rules are read through rulec's own answer to ritsu's port of rules, in this process (ritsu's
@@ -289,6 +290,122 @@ fn examples_pass_check() {
         assert!(checked.model.is_some(), "{} does not pass check:\n{text}", rel(&f));
         assert!(checked.diags.is_empty(), "{} has warnings:\n{text}", rel(&f));
     }
+}
+
+/// One step of the way from a run's input to a value in it: an input or a field by its name, or the
+/// first item of a list.
+#[derive(Clone, Debug)]
+enum Step {
+    Name(String),
+    First,
+}
+
+/// The places of a workflow's inputs that hold a number or an ordered enum's value to a range with
+/// room outside it, in the order the inputs and the fields are declared, each with the value just
+/// outside its range there: past its high end, else (a range with no high end, or an enum's range
+/// up to its last value) before its low end.
+fn ranged_inputs(m: &Model) -> Vec<(Vec<Step>, Value)> {
+    use dandori::model::{Range, Ty};
+    fn walk(m: &Model, t: &Ty, rg: Option<Range>, at: &mut Vec<Step>, out: &mut Vec<(Vec<Step>, Value)>) {
+        match t {
+            Ty::Int | Ty::Num(_) => {
+                if let Some(r) = rg {
+                    if let Some(n) = r.hi.map(|hi| hi + 1).or(r.lo.map(|lo| lo - 1)) {
+                        out.push((at.clone(), json!(n)));
+                    }
+                }
+            }
+            Ty::Enum(e) => {
+                if let Some(r) = rg {
+                    let values = &m.enums[*e].values;
+                    let (lo, hi) = (r.lo.unwrap_or(0) as usize, r.hi.unwrap_or(values.len() as i64 - 1) as usize);
+                    if let Some(v) = values.get(hi + 1).or(lo.checked_sub(1).and_then(|i| values.get(i))) {
+                        out.push((at.clone(), json!(v)));
+                    }
+                }
+            }
+            Ty::Opt(x) => walk(m, x, rg, at, out),
+            Ty::List(x) => {
+                at.push(Step::First);
+                walk(m, x, rg, at, out);
+                at.pop();
+            }
+            Ty::Record(r) => {
+                for (f, ft) in &m.records[*r].fields {
+                    at.push(Step::Name(f.clone()));
+                    walk(m, ft, m.field_range(*r, f), at, out);
+                    at.pop();
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for (n, t) in &m.inputs {
+        let mut at = vec![Step::Name(n.clone())];
+        walk(m, t, m.input_ranges.get(n).copied(), &mut at, &mut out);
+    }
+    out
+}
+
+/// `v` with `x` at the end of the way `at`; None where the way goes through what `v` does not have.
+fn put_at(v: &Value, at: &[Step], x: &Value) -> Option<Value> {
+    match at.split_first() {
+        None => Some(x.clone()),
+        Some((Step::Name(n), rest)) => {
+            let mut o = v.as_object()?.clone();
+            let y = if rest.is_empty() { x.clone() } else { put_at(o.get(n)?, rest, x)? };
+            o.insert(n.clone(), y);
+            Some(Value::Object(o))
+        }
+        Some((Step::First, rest)) => {
+            let mut items = v.as_array()?.clone();
+            items[0] = put_at(items.first()?, rest, x)?;
+            Some(Value::Array(items))
+        }
+    }
+}
+
+/// Every place of an input held to a range, a number's or an ordered enum's, in an input or in a
+/// field of an input's record at any depth, is tried just outside its range by a scenario of its
+/// own (`input:outside`, dandori's DESIGN 9): the input of a run the walk kept, with that place alone
+/// given the value past its high end (before its low end when that is the only room), in the order
+/// of the places. The reference turns each away at its door, with `Dandori.BadInput` and no step;
+/// the runners of the platforms play the same scenarios, so every check of a range at the door is
+/// tried on every platform.
+#[test]
+fn every_input_held_to_a_range_is_tried_just_outside_it() {
+    let (mut flows, mut places, mut runs) = (0, 0, 0);
+    for f in runnable() {
+        let (_, checked) = check_file(&f).unwrap();
+        let m = checked.model.expect("the flows the platforms run pass check");
+        let scenarios = dandori::scenarios::generate(&m);
+        let made = |sc: &Value, label: &str| sc["covers"].as_array().is_some_and(|c| c.iter().any(|l| l == label));
+        let walked: Vec<&Value> = scenarios.iter().filter(|sc| !["input:absent", "input:outside", "input:left out"].iter().any(|l| made(sc, l))).collect();
+        let outside: Vec<&Value> = scenarios.iter().filter(|sc| made(sc, "input:outside")).collect();
+        // the places a run the walk kept reaches: a record that is there, a list with an item
+        let want: Vec<(Vec<Step>, Value)> = ranged_inputs(&m).into_iter().filter(|(at, x)| walked.iter().any(|r| put_at(&r["input"], at, x).is_some())).collect();
+        assert_eq!(outside.len(), want.len(), "{}: {} run(s) just outside a range, for the {} place(s) of the inputs held to one: {want:?}", rel(&f), outside.len(), want.len());
+        for (sc, (at, x)) in outside.iter().zip(&want) {
+            assert!(
+                walked.iter().any(|r| put_at(&r["input"], at, x).as_ref() == Some(&sc["input"])),
+                "{} {}: the input is not a run's with {at:?} alone made {x}: {}",
+                rel(&f),
+                sc["name"],
+                sc["input"]
+            );
+            assert_eq!(sc["answers"], json!([]), "{} {}", rel(&f), sc["name"]);
+            let trace = dandori::interp::run(&m, sc, View::Temporal).unwrap();
+            assert!(trace["end"]["fail"]["error"] == "Dandori.BadInput" && trace["steps"] == json!([]), "{} {}: the reference does not turn {at:?} = {x} away at the door: {trace}", rel(&f), sc["name"]);
+        }
+        if !want.is_empty() {
+            flows += 1;
+        }
+        places += want.len();
+        runs += outside.len();
+    }
+    assert!(flows >= 20 && places >= 30, "only {places} place(s) held to a range, in {flows} flow(s)");
+    eprintln!("compared: {runs} run(s) just outside a range, one for each of the {places} place(s) of the inputs held to one, in {flows} flow(s)");
 }
 
 #[test]

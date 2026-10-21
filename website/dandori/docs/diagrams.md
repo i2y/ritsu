@@ -17,8 +17,11 @@ such as the check of each answer and the steps of each loop.
 
 ## As Markdown, for a pull request
 
-The Markdown draws the flow, and `on failure` and `on cancel`, as Mermaid flowcharts, which GitHub
-draws in a pull request, an issue or a README. Under them, a table lists every call and another
+The Markdown opens with the workflow's inputs and outputs, each with its type and, where one is
+written, its range: `quota: int range >=1 <=1000`, or `campaign: tiers.tier range >=basic <=gold`.
+A number's range is in whole numbers of its type's unit, as the diagnostics say it. Then it draws
+the flow, and `on failure` and `on cancel`, as Mermaid flowcharts, which GitHub draws in a pull
+request, an issue or a README. Under them, a table lists every call and another
 every way the workflow can end; for a workflow that implements a service, a table of the service's
 methods comes first, with what each does to a run ([Implement a service](services.md)). The review example
 ([examples/review/temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.flow)),
@@ -69,11 +72,13 @@ the page works without a network. The page of each example, as written for Tempo
 
 - **Pick a step.** The pane on the right shows its lines of the `.flow`, what each case can be when
   a run gets there, what the call calls, its retries and timeout, where each of its errors goes,
-  what the case can be after it, and the declaration of the task or the rule.
+  what the case can be after it, and the declaration of the task or the rule. The first step, the
+  workflow's name, shows its inputs and outputs with their ranges, as the Markdown does.
 - **Pick a scenario.** On the left are the scenarios `dandori scenarios` writes, which together take
-  every arm, every handler of an error and every way a case can move, grouped by how they end. The
-  way a scenario's run goes lights up, with the number of times it passed a step beside the step,
-  and the pane lists what each call answered.
+  every arm, every handler of an error and every way a case can move, grouped by how they end; and
+  for each place of the inputs held to a range, a run whose input is just outside it there, which
+  ends at once with `Dandori.BadInput`. The way a scenario's run goes lights up, with the number of
+  times it passed a step beside the step, and the pane lists what each call answered.
 - **Both.** With a step picked, the scenarios that pass it stand out, and the pane says how many of
   them do.
 

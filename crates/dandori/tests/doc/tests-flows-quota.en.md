@@ -2,7 +2,7 @@
 
 Grants a request for part of a quota at once or sends it to review. What was used and what is asked come from tasks with no range, so ritsu cannot decide the rule's precondition that the two never come to more than the quota (a sum on one side), and the workflow checks it as soon as both are made. Runs on every platform
 
-`tests/flows/quota.flow`, drawn by `dandori doc`. Inputs: `account: string`, `quota: int`.
+`tests/flows/quota.flow`, drawn by `dandori doc`. Inputs: `account: string`, `quota: int range >=1 <=1000`.
 
 ## flow
 

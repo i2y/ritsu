@@ -2,7 +2,7 @@
 
 Pays a refund back at once or sends it to review, and settles it on a payment day. ritsu cannot decide the rules' preconditions here (the amount asked and the day come from tasks with no range), so the workflow checks each as soon as its values are made: right after the task that answers them, at the start of the arm that calls the rule, at the start of each round. Runs on every platform
 
-`tests/flows/preconditions.flow`, drawn by `dandori doc`. Inputs: `order: string`, `paid: int`.
+`tests/flows/preconditions.flow`, drawn by `dandori doc`. Inputs: `order: string`, `paid: int range >=0 <=10000`.
 
 ## flow
 

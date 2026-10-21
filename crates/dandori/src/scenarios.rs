@@ -185,6 +185,8 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
             .collect();
         out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": answers, "covers": ex.labels.iter().collect::<Vec<_>>() }));
     }
+    // the runs the walk kept, before the ones made from them
+    let walked = out.len();
     // a workflow that implements a service: a request without a field the workflow needs, which
     // says whether it is set, fails the run at once (DESIGN 1.14)
     if let Some(n) = m.service.as_ref().and_then(|s| needed_presence(m, &s.input_zeros)) {
@@ -196,10 +198,14 @@ fn generate_in(m: &Model, computed: bool) -> Vec<Value> {
             out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["input:absent"] }));
         }
     }
-    // a workflow that holds an input of an enum to a range, or a field of one: a run's input with the
-    // first of them outside its range, which every platform turns away at once (`Dandori.BadInput`)
-    if let Some(input) = out.iter().find_map(|r| outside_input(m, &r["input"])) {
-        out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["input:outside"] }));
+    // a workflow that holds an input to a range, a number or an ordered enum, or a field of an input's
+    // record: for each of them, a run's input with that one alone just outside its range, which every
+    // platform turns away at once (`Dandori.BadInput`), so that each check of a range at the door is
+    // tried on every platform (DESIGN 9)
+    for (at, x) in ranged_inputs(m) {
+        if let Some(input) = out[..walked].iter().find_map(|r| put_at(&r["input"], &at, &x)) {
+            out.push(json!({ "name": format!("run {}", out.len() + 1), "input": input, "answers": [], "covers": ["input:outside"] }));
+        }
     }
     // a workflow that takes a `json`, as an input or as a field of one: the run that goes furthest again,
     // its input as protobuf's JSON writes it when nothing is set. What may be absent is left out, a `json`
@@ -248,42 +254,80 @@ fn enum_outside(m: &Model, e: EnumId, rg: Range) -> Option<String> {
     values.get(at as usize).cloned()
 }
 
-/// A run's input with the first input of an enum held to a range, or the first such field of an
-/// input's record (at any depth, in a list's first item), given a value its range does not let in.
-/// None when the workflow holds no input's enum to a range, or the run's input has none of those
-/// values there (a record that is absent).
-fn outside_input(m: &Model, input: &Value) -> Option<Value> {
-    fn put(m: &Model, v: &Value, t: &Ty, rg: Option<Range>) -> Option<Value> {
+/// A number just outside the range `rg`, as an enum's value is chosen: the one just past its high
+/// end, else the one just before its low end (a range with one end has room only beyond it). None
+/// for a range with no end.
+fn number_outside(rg: Range) -> Option<i64> {
+    rg.hi.and_then(|hi| hi.checked_add(1)).or_else(|| rg.lo.and_then(|lo| lo.checked_sub(1)))
+}
+
+/// One step of the way from a run's input to a value in it: an input or a field, by its name, or
+/// the first item of a list.
+#[derive(Clone)]
+enum Step {
+    Name(String),
+    First,
+}
+
+/// Every place of the inputs that holds a number or an ordered enum's value to a range with room
+/// outside it, in the order the inputs and the fields are declared: an input, a field of an input's
+/// record at any depth, the items of a list (as its first one), what a `T?` holds. Each is the way
+/// to it, and the value just outside its range there.
+fn ranged_inputs(m: &Model) -> Vec<(Vec<Step>, Value)> {
+    fn walk(m: &Model, t: &Ty, rg: Option<Range>, at: &mut Vec<Step>, out: &mut Vec<(Vec<Step>, Value)>) {
         match t {
-            Ty::Enum(e) => enum_outside(m, *e, rg?).map(Value::String),
-            Ty::Opt(x) => put(m, v, x, rg),
+            Ty::Int | Ty::Num(_) => {
+                if let Some(n) = rg.and_then(number_outside) {
+                    out.push((at.clone(), json!(n)));
+                }
+            }
+            Ty::Enum(e) => {
+                if let Some(v) = rg.and_then(|r| enum_outside(m, *e, r)) {
+                    out.push((at.clone(), json!(v)));
+                }
+            }
+            Ty::Opt(x) => walk(m, x, rg, at, out),
             Ty::List(x) => {
-                let mut items = v.as_array()?.clone();
-                let first = put(m, items.first()?, x, rg)?;
-                items[0] = first;
-                Some(Value::Array(items))
+                at.push(Step::First);
+                walk(m, x, rg, at, out);
+                at.pop();
             }
             Ty::Record(r) => {
-                let mut o = v.as_object()?.clone();
                 for (f, ft) in &m.records[*r].fields {
-                    if let Some(y) = o.get(f).and_then(|x| put(m, x, ft, m.field_range(*r, f))) {
-                        o.insert(f.clone(), y);
-                        return Some(Value::Object(o));
-                    }
+                    at.push(Step::Name(f.clone()));
+                    walk(m, ft, m.field_range(*r, f), at, out);
+                    at.pop();
                 }
-                None
             }
-            _ => None,
+            _ => {}
         }
     }
-    let mut o = input.as_object()?.clone();
+    let mut out = Vec::new();
     for (n, t) in &m.inputs {
-        if let Some(y) = o.get(n).and_then(|v| put(m, v, t, m.input_ranges.get(n).copied())) {
+        let mut at = vec![Step::Name(n.clone())];
+        walk(m, t, m.input_ranges.get(n).copied(), &mut at, &mut out);
+    }
+    out
+}
+
+/// `v` with `x` put at the end of the way `at`: None when the way goes through what `v` does not
+/// have (a record that is absent, a list that is empty). The last name is put whether `v` has it
+/// or not, as a request that leaves its zero values out goes without them.
+fn put_at(v: &Value, at: &[Step], x: &Value) -> Option<Value> {
+    match at.split_first() {
+        None => Some(x.clone()),
+        Some((Step::Name(n), rest)) => {
+            let mut o = v.as_object()?.clone();
+            let y = if rest.is_empty() { x.clone() } else { put_at(o.get(n)?, rest, x)? };
             o.insert(n.clone(), y);
-            return Some(Value::Object(o));
+            Some(Value::Object(o))
+        }
+        Some((Step::First, rest)) => {
+            let mut items = v.as_array()?.clone();
+            items[0] = put_at(items.first()?, rest, x)?;
+            Some(Value::Array(items))
         }
     }
-    None
 }
 
 /// Whether a value of type `t` holds a record with a `json` field, at any depth. (The items of a

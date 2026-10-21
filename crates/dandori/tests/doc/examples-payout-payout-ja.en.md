@@ -2,7 +2,7 @@
 
 売り手に売上を支払う。銀行の API が、売り手が登録している口座に送金し、モデルが知らせを下書きする。フローが運ぶのは口座の ID だけで、銀行の契約が秘密と印を付けた番号と名義は運ばない
 
-`examples/payout/payout.ja.flow`, drawn by `dandori doc`. Inputs: `売り手ID: string`, `口座ID: string`, `金額: money[円, incl_tax]`. Outputs: `送金ID: string`.
+`examples/payout/payout.ja.flow`, drawn by `dandori doc`. Inputs: `売り手ID: string`, `口座ID: string`, `金額: money[円, incl_tax] range >=1 <=10000000`. Outputs: `送金ID: string`.
 
 ## flow
 
