@@ -152,14 +152,14 @@ A few shapes are worth knowing before the first draft:
 - **A date input can range over koyomi's days.** `range from koyomi "<file.cal>" date <name>`, checked by
   `ritsu rulec check`; `ritsu check` then holds a workflow's calls to the rule's `constraint`s (ritsu's E201).
 
-When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from
-the workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first
-one by default; `rulec import csv <file.csv>` does the same from a CSV. The columns become
-inputs, the last column the output, the values an enum or a range, and each guess is marked
-`# guess` — which is then yours to correct: a numeric column is copied as equalities and is
-usually meant as thresholds, and no range, rounding or unit in it is decided. A date, a
-percentage and a unit that lived in the cell's number format are read back out of it. It
-saves the typing, not the reading.
+When the source is a spreadsheet, `rulec import xlsx <file.xlsx>` writes a first draft from the
+workbook as it is — no export step, `--sheet <name>` to pick the sheet, and the first one by
+default; `rulec import csv <file.csv>` does the same from a CSV. The columns become inputs, the last
+column the output, the values an enum or a range, and each guess is marked `# guess` — yours to
+correct: a numeric column is copied as equalities and is usually meant as thresholds, and no range,
+rounding or unit in it is decided. A date, a percentage and a unit from the cell's number format are
+read back out of it; a header or a value that cannot be a name (`Weight (kg)`, `<=2000g`) is named
+`c2` or `v1` for now, the word kept in its note. It saves the typing, not the reading.
 
 One habit pays for itself at the first revision:
 

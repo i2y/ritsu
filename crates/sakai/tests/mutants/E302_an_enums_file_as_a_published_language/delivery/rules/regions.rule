@@ -1,0 +1,4 @@
+enums regions v1
+description "The regions a parcel is delivered to, shared by the rules that read them"
+
+enum region = honshu | hokkaido | okinawa

@@ -1,0 +1,29 @@
+rule 案の選び方(plan_choice) v1
+description "記号だけ IME を入れたまま打った規則。比較の記号、足し算の記号、出力の印、集合の区切り、全角の空白は、字句が ASCII の記号と同じに読み、fmt が ASCII に直す。名前の中の ＋ と全角の数字は名前の字なので、そのまま残す"
+
+enum 地域(region) = 北(north) | 南(south) | 東(east) | 西(west)
+enum 案(plan) = 第１案(first_plan) | 第２案(second_plan) | 松＋竹(combined_plan)
+
+inputs
+  地域(region) : 地域
+  金額(amount) : money[円]  range ≧0円 ≦10万円
+  口数(units)　: number  range ＞0 ＜101
+
+outputs
+  選んだ案(chosen) : 案
+
+derive 合計(total) : money[円] = 金額 ＋ 1000円  range >=1000円 <=101000円
+
+table 選択(choice)
+policy unique
+| 地域   | 合計     | 口数 | → 選んだ案 : 案 |
+| 北・南 | ≦1万円   | -    | 第１案          |
+| 北，南 | ＞1万円  | -    | 第２案          |
+| 東、西 | -        | ≦10  | 第２案          |
+| 東、西 | -        | ＞10 | 松＋竹          |
+
+examples
+| 地域 | 金額   | 口数 | → 選んだ案 |
+| 北   | 5000円 | 1    | 第１案     |
+| 東   | 5000円 | 20   | 松＋竹     |
+| 南   | 9万円  | 1    | 第２案     |

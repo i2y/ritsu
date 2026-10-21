@@ -1,0 +1,6 @@
+error[E302]: contexts/配送.ctx:22:9: The published language rulec.delivery_regions.v1 lists delivery/rules/配送の地域.rule, from which no Connect service is generated
+    22 |   rulec "../delivery/rules/配送の地域.rule"
+  = A rule's published language is the rule called as a Connect service; an `enums` file is made into modules of types only, with nothing to call. To publish an enum to other contexts, put it in a `.proto` of the published language, for rules to take in with `import proto`; for two contexts to read one `enums` file, list it in their shared kernel.
+error[E301]: contexts/配送.ctx:23:21: The open host service DeliveryRegionsService is not the Connect service of delivery/rules/配送の地域.rule
+    23 |   open host service DeliveryRegionsService
+  = No Connect service is generated from delivery/rules/配送の地域.rule.

@@ -448,6 +448,26 @@ fn 規則のファイルが持つものと参照するもの() {
     }
 }
 
+/// An `enums` file is made into modules of types and nothing else (§15.212), and the port answers
+/// what is generated (§15.258): its enums, and no Connect service, as `rulec api` writes none. A
+/// rule that reads its enums keeps its own service.
+#[test]
+fn an_enums_file_has_no_connect_service() {
+    let e = Engine::new();
+    for (enums, rule) in [("tests/corpus/shared/catalog.rule", "tests/corpus/catalog_shipping.rule"), ("tests/corpus/shared/品目.rule", "tests/corpus/品目の送料.rule")] {
+        let facts = e.facts(Path::new(enums)).unwrap_or_else(|e| panic!("{enums}: {e:?}"));
+        assert!(facts.connect.is_none(), "{enums}: {:?}", facts.connect);
+        assert!(facts.inputs.is_empty() && facts.outputs.is_empty() && !facts.enums.is_empty(), "{enums}");
+        let src = std::fs::read_to_string(enums).unwrap();
+        let (f, c) = rulec::prepare(&src, enums).unwrap();
+        let api = json(&rulec::codegen::Gen::new(&f, &c, &src, enums).api());
+        assert!(api.get("connect").is_none() && api.get("enums").is_some(), "{enums}");
+        let reads = e.facts(Path::new(rule)).unwrap_or_else(|e| panic!("{rule}: {e:?}"));
+        let path = reads.connect.map(|c| c.path).unwrap_or_default();
+        assert!(path.starts_with("/rulec.") && path.ends_with("Service/Decide"), "{rule}: {path}");
+    }
+}
+
 /// `ritsu check` prints for a rule what `rulec check` prints for it, and a rule it has checked
 /// for that is not checked a second time when a workflow asks for its facts, under another
 /// spelling of its path (ritsu's DESIGN 6.1, 8.3).

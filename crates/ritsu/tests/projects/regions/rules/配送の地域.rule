@@ -1,0 +1,4 @@
+enums 配送の地域(delivery_regions) v1
+description "荷物を届ける地域。この地域を読む規則が分け合う"
+
+enum 地域(region) = 本州(honshu) | 北海道(hokkaido) | 沖縄(okinawa)

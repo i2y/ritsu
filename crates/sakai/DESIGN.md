@@ -385,7 +385,7 @@ published language rulec.urgency.v1
 **決定**：公表された言語は proto の package を単位にし、`published language <package>` の塊で書く。塊には、その package を宣言する proto のファイルか、rulec の規則を並べる。
 
 - `proto "…"`：そのファイルの `package` が見出しの package と同じであること（E302）。ファイルはそのコンテキストに属すること（E302）。
-- `rulec "…"`：`rulec gen` がその規則のために書く Connect のサービス（rulec の DESIGN 15.112）を、公表された言語にする。package は、rulec が口（`Rules`）で言う Connect のパス（`/rulec.urgency.v1.UrgencyService/Decide`）の package（`rulec.urgency.v1`）で、見出しと同じであること（E302）。規則はそのコンテキストに属すること。
+- `rulec "…"`：`rulec gen` がその規則のために書く Connect のサービス（rulec の DESIGN 15.112）を、公表された言語にする。package は、rulec が口（`Rules`）で言う Connect のパス（`/rulec.urgency.v1.UrgencyService/Decide`）の package（`rulec.urgency.v1`）で、見出しと同じであること（E302）。規則はそのコンテキストに属すること。`enums` のファイル（列挙だけを持つ `.rule`）からはサービスが生成されず、rulec の口も答えないので、並べると E302 になる（23 章）。
 - `open host service <サービス>`：公開ホストサービスにするサービスを、package の中の名前で並べる。そのサービスが塊の proto にあること（rulec なら、Connect のパスのサービスと同じこと）。無ければ E301。
 - `generated dir "…"`：その package の proto から生成したコードの置き場所。コードの import の検査で、ほかのコンテキストが import してよいところになる（7 章）。そのコンテキストに属するディレクトリであること（E302）。
 - `crate "…"`：Rust のクレート（その `Cargo.toml` のあるディレクトリ）を、公表された言語にする（7.7）。見出しは、コードが書くクレートの名前（クレートの名前の `-` を `_` にしたもの。`ritsu-ports` なら `ritsu_ports`）で、違えば E302。クレートはそのコンテキストに属し、地図の `code rust` のワークスペースのメンバーであること（E302）。クレートは境界の向こうから呼ぶサービスを持たないので、`open host service` は書けない（E301）。一つの塊に一つのクレートで、proto や規則とは混ぜない（E004）。
@@ -984,8 +984,8 @@ error[E201]: <ファイル>:<行>:<列>: <一行の見出し>
 | E209 | ワークフローが、境界の向こうのワークフローを子として走らせている（パートナーでなく、共有カーネルになく、子が相手の公開ホストサービスを実装していない） |
 | E210 | 文書が、境界の向こうの、相手の公開ホストサービスでないチャネルか HTTP の操作を使っている（15.5） |
 | E211 | `.gate` の action（か、`cedar "…"` と書いた Cedar のスキーマの `@guards`）が、ほかのコンテキストに属する契約の操作を守っている（17 章） |
-| E301 | 公開ホストサービスのサービスが、公表された言語に無い（Rust のクレートの公表された言語に `open host service` を書いたときも） |
-| E302 | 公表された言語の proto や規則やクレートや生成したコードの置き場所が、そのコンテキストのものでない、package やクレートの名前が見出しと違う、`crate` の先がワークスペースのクレートでない、地図に `code rust` が無いのにクレートを公表している |
+| E301 | 公開ホストサービスのサービスが、公表された言語に無い（Rust のクレートや `enums` のファイルの公表された言語に `open host service` を書いたときも） |
+| E302 | 公表された言語の proto や規則やクレートや生成したコードの置き場所が、そのコンテキストのものでない、package やクレートの名前が見出しと違う、`crate` の先がワークスペースのクレートでない、地図に `code rust` が無いのにクレートを公表している、`rulec` に Connect のサービスが生成されない `enums` のファイルを並べている（23 章） |
 | E303 | 顧客／供給者が片側だけ |
 | E304 | 順応者に対応か `layer` がある |
 | E305 | 腐敗防止層でないのに、対応か `layer` がある |
@@ -2429,7 +2429,7 @@ error[E202]: ordering/ship_window.rule:5:1: The file ordering/ship_window.rule o
 
 **見つけて直していないもの**：
 
-- `published language rulec.…` の塊に `enums` のファイルを並べても、E302 にならない。`enums` のファイルからは Connect のサービスが生成されない（`rulec gen` は型のモジュールしか書かない）のに、rulec の口（`Rules`）がほかの規則と同じ形の Connect のパスを答え、sakai は塊の package と `open host service` をそのパスで確かめるからである。生成されないサービスの名前（地域の `enums` のファイルなら `RegionsService`）を `open host service` に書いても通る。rulec の口が `enums` のファイルに Connect のパスを答えないようにするか、sakai が `enums` のファイルを見分けて E302 にするかで直せるが、前者は rulec の口を変えることになるので、この変更には入れていない。
+- `published language rulec.…` の塊に `enums` のファイルを並べても、E302 にならない。`enums` のファイルからは Connect のサービスが生成されない（`rulec gen` は型のモジュールしか書かない）のに、rulec の口（`Rules`）がほかの規則と同じ形の Connect のパスを答え、sakai は塊の package と `open host service` をそのパスで確かめるからである。生成されないサービスの名前（地域の `enums` のファイルなら `RegionsService`）を `open host service` に書いても通る。rulec の口が `enums` のファイルに Connect のパスを答えないようにするか、sakai が `enums` のファイルを見分けて E302 にするかで直せるが、前者は rulec の口を変えることになるので、この変更には入れていない。23 章で直した。
 
 ## 21. 直し方の行に書く上流の値（2026-10-21）
 
@@ -2501,3 +2501,56 @@ error[E202]: ordering/ship_window.rule:5:1: The file ordering/ship_window.rule o
 **見つけて直していないもの**：
 
 - `doc` の対応の表と `api` の JSON は、値を書いたとおりに見せる。表のセルと JSON の文字列は、`.ctx` の行に書く形ではないからである。
+
+## 23. 規則の公表された言語に並べた `enums` のファイル（2026-10-21）
+
+`published language rulec.…` の塊の `rulec "…"` に `enums` のファイルを並べると、その行を E302 にし、塊の `open host service` を一つずつ E301 にする。
+
+**きっかけ**：20 章の「見つけて直していないもの」。地域の `enums` のファイルを `published language rulec.regions.v1` に並べ、生成されないサービス `RegionsService` を `open host service` に書いても、地図は通った。
+
+**原因**：rulec の口（`Rules`）が、`enums` のファイルにも、ほかの規則と同じ形の Connect のパスを答えていた（rulec の DESIGN 15.258）。sakai は、塊の package と `open host service` をそのパスで確かめるので、`enums` のファイルの名前から作ったパッケージとサービスの名前を書けば通った。`enums` のファイルからは型のモジュールしか生成されず（rulec の DESIGN 15.212）、サービスはどこにも無い。
+
+**決定**：
+
+- rulec の口は、生成されるものだけを答え、`enums` のファイルには Connect のサービスを答えない（rulec の DESIGN 15.258）。
+- sakai は、塊の `rulec "…"` のファイルに rulec がサービスを答えないとき、その行を E302 にする。注は、規則の公表された言語が規則を Connect のサービスとして呼ぶ形であることと、`enums` のファイルには呼ぶものが無いこと、列挙をほかのコンテキストに見せる二つの形（公表された言語の proto に置いて規則から `import proto` で取り込む、共有カーネルに並べる）を言う。
+- 塊の `open host service` は、一つずつ E301 にする。注は、そのファイルからサービスが生成されないことを言う。Rust のクレートの塊に `open host service` を書いたときと同じく、サービスの無いところに書いたサービスを、行ごとに言う。
+- 理由：公表された言語は、相手が呼ぶ形を決める契約である（1.4）。`enums` のファイルには呼ぶものも package も無く、塊に並べても、`import enum` の参照を通さない（20 章）。
+- sakai は、口の答えに `enums` のファイルだと言うものが無いので、サービスを答えないことで見分ける。rulec がサービスを答えないのは、`enums` のファイルと、それに足す寄与のファイルだけである。
+
+**捨てたもの**：
+
+- **sakai が、入力も出力も無いことで `enums` のファイルを見分け、rulec の口は変えないこと。** 口が生成されないサービスを答え続け、口を読むほかの言語（dandori の `connect`）も同じ答えを読む。
+- **E302 だけにして、`open host service` には何も言わないこと。** 書いたサービスの名前も直すことになるので、行ごとに言う。
+
+**変わること**：
+
+- `enums` のファイルを `published language rulec.…` の塊に並べた地図は、E302 で落ちる。`open host service` を書いていれば、それぞれ E301 も出る。前は通っていた。
+- 台帳の E302 と E301 の「出るとき」に `enums` のファイルを足した（`sakai explain`、`docs/codes.md`、`docs/codes.ja.md`、スキルのコピー）。reference の公表された言語の段、1.4、5.2 の表も合わせた。README（英日）の変異の数は 178（日本語の名前のもの 87）になった。
+- 塊に `enums` のファイルを並べていない地図の出力は、一字も変わらない（下の突き合わせ）。
+
+**確かめたこと**：
+
+- 変異 `E302_an_enums_file_as_a_published_language`（`examples/shop` の配送に地域の `enums` のファイルを置き、`published language rulec.regions.v1` に並べて `open host service RegionsService` を書いたもの）と、日本語の版の `E302_公表された言語に並べた列挙のファイル`（`examples/shop.ja`）。どちらも E302 と E301 で、golden は英語と日本語。替える前は、どちらも `80 artifacts, each in one context; 9 crossings checked (proto 1, rulec 2, koyomi 1, dandori 5)` で通った。英語の出力：
+
+```
+error[E302]: contexts/delivery.ctx:22:9: The published language rulec.regions.v1 lists delivery/rules/regions.rule, from which no Connect service is generated
+    22 |   rulec "../delivery/rules/regions.rule"
+  = A rule's published language is the rule called as a Connect service; an `enums` file is made into modules of types only, with nothing to call. To publish an enum to other contexts, put it in a `.proto` of the published language, for rules to take in with `import proto`; for two contexts to read one `enums` file, list it in their shared kernel.
+error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService is not the Connect service of delivery/rules/regions.rule
+    23 |   open host service RegionsService
+  = No Connect service is generated from delivery/rules/regions.rule.
+```
+
+日本語の出力：
+
+```
+エラー[E302]: contexts/配送.ctx:22:9: 公表された言語 rulec.delivery_regions.v1 の delivery/rules/配送の地域.rule からは、Connect のサービスが生成されません
+    22 |   rulec "../delivery/rules/配送の地域.rule"
+  = 規則の公表された言語は、規則を Connect のサービスとして呼ぶ形です。`enums` のファイルからは列挙の型のモジュールだけが生成され、呼ぶものがありません。列挙をほかのコンテキストに公表するなら、公表された言語の proto に置いてください。規則は `import proto` で取り込めます。二つのコンテキストが同じ `enums` のファイルを読むなら、共有カーネルに並べてください。
+エラー[E301]: contexts/配送.ctx:23:21: 公開ホストサービス DeliveryRegionsService は、delivery/rules/配送の地域.rule の Connect のサービスではありません
+    23 |   open host service DeliveryRegionsService
+  = delivery/rules/配送の地域.rule からは、Connect のサービスが生成されません。
+```
+
+- 替える前と後の突き合わせ：例（四つ）、テストの地図（七つ）、ritsu のテストのプロジェクトの地図（二つ）、根の `ritsu.ctx` の `check`（英語と日本語、それぞれ JSON も）と `api`、変異（178）の `check`（英語と日本語、それぞれ JSON も。`command` のある四つはそのコマンドの英語と日本語）の 774 の出力を、替える前と後の `ritsu sakai` で比べ、違ったのは新しい変異二つの 8 だけだった。どの例とテストの地図も、公表された言語に `enums` のファイルを並べていない。

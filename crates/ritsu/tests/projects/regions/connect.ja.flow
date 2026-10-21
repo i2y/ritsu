@@ -1,0 +1,15 @@
+workflow 地域をサービスで呼ぶ v1
+description "enums のファイルを、規則として Connect のサービスで呼ぶ。rulec は enums のファイルのサービスを生成せず、口も答えない。connect.flow の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+  connect "https://rules.example.com"
+
+inputs
+  急ぎ : bool
+
+outputs
+  済み : bool
+
+flow
+  let r = 地域()
+  succeed 済み = true

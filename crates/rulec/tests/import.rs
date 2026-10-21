@@ -158,3 +158,96 @@ fn キーワードと同じ名前の下書きは作らない() {
         assert_eq!(c, 1, "{lang}: {o}");
     }
 }
+
+/// The materials of `tests/import/`, English first and the Japanese versions beside them: for each
+/// kind of word the lexer does not read as a name, a sheet that writes one in a header or in a
+/// cell. Each such word is named by its alias (`c2`, `v1`, set apart by `_` from a name the sheet
+/// already gives), the word is kept in the `# 推定` note, and `check` reads the draft back: every
+/// one of them is a complete table and passes (§15.259).
+const UNREAD: [(&str, &[(&str, &str)]); 18] = [
+    ("header_with_a_blank_and_brackets", &[("Weight (kg)", "c1")]),
+    ("空白と括弧のある見出し", &[("重量 (kg)", "c1")]),
+    ("header_with_a_separator", &[("Zone/Area", "c1")]),
+    ("区切りのある見出し", &[("地域・区分", "c1")]),
+    ("names_that_start_with_a_digit", &[("2nd Factor", "c1"), ("2FA", "v1")]),
+    ("数字で始まる名前", &[("2段階目", "c1"), ("2段階認証", "v1")]),
+    ("values_with_a_hyphen_or_a_dot", &[("re-quote", "v1"), ("v1.2", "v1"), ("No.5", "v2")]),
+    ("ハイフンと点のある値", &[("再-見積", "v1"), ("第1.2版", "v1"), ("第5.0版", "v2")]),
+    ("values_with_a_blank", &[("on hold", "v1")]),
+    ("空白のある値", &[("保留 中", "v1")]),
+    ("numbers_and_dates_among_words", &[("1200JPY", "v2"), ("2026-04-01", "v3")]),
+    ("語の中の数と日付", &[("1200円", "v2"), ("2026-04-01", "v3")]),
+    ("values_that_compare", &[("<=2000g", "v1"), (">2000g", "v2")]),
+    ("比べる値", &[("<=2000g", "v1"), (">2000g", "v2")]),
+    ("a_name_an_alias_would_take", &[("Zone/Area", "c2_"), ("v2.0", "v1_")]),
+    ("別名と同じ名前", &[("地域・区分", "c2_"), ("v2.0", "v1_")]),
+    ("headers_left_empty_or_broken", &[("", "c1"), ("Delivery zone", "c2")]),
+    ("空の見出しと改行のある見出し", &[("", "c1"), ("配送の 地域", "c2")]),
+];
+
+#[test]
+fn a_draft_is_read_back_by_check_whatever_the_sheet_writes() {
+    let (_tmp, d) = dir("read-back");
+    let mut materials: Vec<String> = std::fs::read_dir(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/import"))
+        .unwrap()
+        .map(|e| e.unwrap().path().file_stem().unwrap().to_string_lossy().into_owned())
+        .collect();
+    materials.sort();
+    let mut listed: Vec<String> = UNREAD.iter().map(|(m, _)| m.to_string()).collect();
+    listed.sort();
+    assert_eq!(materials, listed, "every material is listed with the words it writes");
+    for (m, words) in UNREAD {
+        let csv = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("tests/import/{m}.csv"));
+        for lang in ["en", "ja"] {
+            let (c, out, e) = run_lang(lang, &["import", "csv", csv.to_str().unwrap()]);
+            assert_eq!(c, 0, "{m} {lang}: {e}");
+            for (word, name) in words {
+                // the name takes the word's place: a column of the table's head, or a value of an enum
+                let named = out.lines().any(|l| l.trim().starts_with('|') && l.split('|').any(|cell| cell.trim() == *name || cell.trim().starts_with(&format!("{name} :"))));
+                assert!(named, "{m} {lang}: {name} is not in the table:\n{out}");
+                // and the word is kept in the note, on a comment
+                let kept = if word.is_empty() {
+                    if lang == "ja" { format!("見出しが空なので、仮に {name} と名付けた") } else { format!("the header is empty, so the column is named {name} for now") }
+                } else if lang == "ja" {
+                    format!("「{word}」")
+                } else {
+                    format!("\"{word}\"")
+                };
+                assert!(out.lines().any(|l| l.split_once('#').is_some_and(|(_, c)| c.contains(&kept) && c.contains(*name))), "{m} {lang}: {kept} is not kept beside {name}:\n{out}");
+            }
+            let rule = d.join(format!("{m}.{lang}.rule"));
+            std::fs::write(&rule, &out).unwrap();
+            let (c, o, e) = run_lang(lang, &["check", rule.to_str().unwrap(), "--format", "json"]);
+            assert_eq!((c, o.as_str()), (0, ""), "{m} {lang}: check does not read the draft back:\n{out}\n{e}");
+            let (c, o, _) = run_lang(lang, &["fmt", "--check", rule.to_str().unwrap()]);
+            assert_eq!(c, 0, "{m} {lang}: {o}");
+        }
+    }
+}
+
+/// The rule's name, from the file or from `--name`, is read the same way, and the file's name inside
+/// the draft's description string is written so that the string ends where it should.
+#[test]
+fn a_rule_name_not_read_as_a_name_is_named_for_now() {
+    let (_tmp, d) = dir("rule-name");
+    let csv = d.join("fees \"2026\".csv");
+    std::fs::copy(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/import/values_that_compare.csv"), &csv).unwrap();
+    for (lang, note) in [
+        ("en", "rule imported v1  # guess: the rule's name \"fees \"2026\"\" is not read as a name, so the rule is named imported for now\n"),
+        ("ja", "rule imported v1  # 推定: 規則の名前「fees \"2026\"」は名前として読めないので、仮に imported と名付けた\n"),
+    ] {
+        let (c, out, e) = run_lang(lang, &["import", "csv", csv.to_str().unwrap()]);
+        assert_eq!(c, 0, "{e}");
+        assert!(out.starts_with(note), "{lang}: {out}");
+        assert!(out.lines().nth(1).unwrap().starts_with("description \"") && out.contains("fees '2026'.csv"), "{lang}: {out}");
+        let rule = d.join(format!("named-{lang}.rule"));
+        std::fs::write(&rule, &out).unwrap();
+        let (c, o, _) = run_lang(lang, &["check", rule.to_str().unwrap(), "--format", "json"]);
+        assert_eq!((c, o.as_str()), (0, ""), "{lang}:\n{out}");
+    }
+    // `--name` too, and a name the lexer reads stays as it was
+    let (_, out, _) = run_lang("en", &["import", "csv", csv.to_str().unwrap(), "--name", "parcel fee"]);
+    assert!(out.starts_with("rule imported v1  # guess: the rule's name \"parcel fee\" is not read as a name"), "{out}");
+    let (_, out, _) = run_lang("en", &["import", "csv", csv.to_str().unwrap(), "--name", "parcel_fee"]);
+    assert!(out.starts_with("rule parcel_fee v1\n"), "{out}");
+}

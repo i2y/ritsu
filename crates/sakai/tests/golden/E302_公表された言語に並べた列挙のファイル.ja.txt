@@ -1,0 +1,6 @@
+エラー[E302]: contexts/配送.ctx:22:9: 公表された言語 rulec.delivery_regions.v1 の delivery/rules/配送の地域.rule からは、Connect のサービスが生成されません
+    22 |   rulec "../delivery/rules/配送の地域.rule"
+  = 規則の公表された言語は、規則を Connect のサービスとして呼ぶ形です。`enums` のファイルからは列挙の型のモジュールだけが生成され、呼ぶものがありません。列挙をほかのコンテキストに公表するなら、公表された言語の proto に置いてください。規則は `import proto` で取り込めます。二つのコンテキストが同じ `enums` のファイルを読むなら、共有カーネルに並べてください。
+エラー[E301]: contexts/配送.ctx:23:21: 公開ホストサービス DeliveryRegionsService は、delivery/rules/配送の地域.rule の Connect のサービスではありません
+    23 |   open host service DeliveryRegionsService
+  = delivery/rules/配送の地域.rule からは、Connect のサービスが生成されません。

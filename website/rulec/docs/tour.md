@@ -485,7 +485,8 @@ Seven kinds, and no others.
 
 The symbols are ASCII. `→`, `・` and `、` are still read, and `rulec fmt`
 rewrites them to `->` and `,`; outside names and cell values, no IME is
-needed.
+needed. It rewrites a symbol only where it stands as one: a name keeps
+every character it is written with, a fullwidth `＋` or digit too.
 
 **Range notation with `..` is a syntax error.** "Up to 2000g" does not
 say whether the endpoint is included; a comparison operator does. A

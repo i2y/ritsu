@@ -1,0 +1,29 @@
+rule plan_choice v1
+description "A rule typed with an IME left on: full-width digits, as well as the symbols. fmt writes the digits of a number in ASCII"
+
+enum region = north | south | east | west
+enum plan = first_plan | second_plan | combined_plan
+
+inputs
+  region : region
+  amount : money[USD]  range >=０USD <=１０００USD
+  units　: number  range ≧１ ≦１００
+
+outputs
+  chosen : plan
+
+derive total : money[USD] = amount ＋ １０USD  range >=１０USD <=１０１０USD
+
+table choice
+policy unique
+| region      | total       | units  | → chosen : plan |
+| north、south | ≦１００USD  | -      | first_plan      |
+| north、south | ＞１００USD | -      | second_plan     |
+| east、west  | -           | ≦１０  | second_plan     |
+| east、west  | -           | ＞１０ | combined_plan   |
+
+examples
+| region | amount   | units | → chosen      |
+| north  | ５０USD  | １    | first_plan    |
+| east   | ５０USD  | ２０  | combined_plan |
+| south  | ９００USD | １   | second_plan   |

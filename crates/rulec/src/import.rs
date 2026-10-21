@@ -204,30 +204,65 @@ fn ascii_ok(s: &str) -> bool {
     cs.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && cs.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// A declared name with an alias where one is needed.
-///
-/// A name cannot be one of the language's own words (E009), and the file decides these
-/// names: the draft used to call its own table `table` in English, so `rulec import csv`
-/// produced a draft that would not parse — and a column headed `count` or `source` did the
-/// same. A reserved word keeps its spelling as the alias, which is what the generated code
-/// calls the column, and the name gains the `_` that makes it a name.
-fn named(text: &str, alias: &str) -> String {
-    if !ascii_ok(text) {
-        return format!("{text}({alias})");
-    }
-    let n = name_only(text);
-    if n == text { n } else { format!("{n}({text})") }
+/// How a word of the sheet is declared, and what the draft refers to it by (§15.259).
+struct Named {
+    /// What its declaration writes: `重量(c2)`, `count_(count)`, `weight`, or a name of its own.
+    decl: String,
+    /// What a table's head and its cells write for it — the places that *refer* to a declaration
+    /// rather than make one. It has to agree with the declaration, or the draft refers to a column
+    /// it never declared.
+    name: String,
+    /// The word as the sheet wrote it, when the lexer does not read it as a name.
+    unread: Option<String>,
 }
 
-/// The name alone, for the places that *refer* to a declaration rather than make one — a
-/// table's column header, and a cell that names an enum value. It has to agree with what
-/// `named` declared, or the draft refers to a column it never declared.
-fn name_only(text: &str) -> String {
-    if ascii_ok(text) && crate::kw::RESERVED.contains(&text) {
-        format!("{text}_")
-    } else {
-        text.to_string()
+/// A word of the sheet as a declared name, with `alias` beside it where one is needed.
+///
+/// Whether the word can stand as a name is the lexer's to say (`lex::is_bare_word`): `Weight (kg)`,
+/// `re-quote`, `2FA` or `1200円` would be read as more than one word or as none, and `check` could
+/// not read the draft back (E057, E058, E063). Such a word is named by `alias` itself — the
+/// column's (`c2`) or the value's (`v1`) — and the word is kept in a `# 推定` note.
+///
+/// A name cannot be one of the language's own words (E009) either: the draft used to call its own
+/// table `table` in English, so `rulec import csv` produced a draft that would not parse — and a
+/// column headed `count` or `source` did the same. A reserved word keeps its spelling as the alias,
+/// which is what the generated code calls the column, and the name gains the `_` that makes it a
+/// name.
+fn named(text: &str, alias: &str) -> Named {
+    if !crate::lex::is_bare_word(text) {
+        return Named { decl: alias.to_string(), name: alias.to_string(), unread: Some(text.to_string()) };
     }
+    if !ascii_ok(text) {
+        return Named { decl: format!("{text}({alias})"), name: text.to_string(), unread: None };
+    }
+    if crate::kw::RESERVED.contains(&text) {
+        return Named { decl: format!("{text}_({text})"), name: format!("{text}_"), unread: None };
+    }
+    Named { decl: text.to_string(), name: text.to_string(), unread: None }
+}
+
+/// The words of one kind — the columns, or the values of one column — named together, each with
+/// its alias. A name made of an alias is set apart from the names of the others by `_`: a sheet may
+/// well head a column `c2`, or hold a value `v1`.
+fn named_all(words: &[(String, String)]) -> Vec<Named> {
+    let mut out: Vec<Named> = words.iter().map(|(w, a)| named(w, a)).collect();
+    for i in 0..out.len() {
+        if out[i].unread.is_none() {
+            continue;
+        }
+        while out.iter().enumerate().any(|(j, o)| j != i && o.name == out[i].name) {
+            out[i].name.push('_');
+        }
+        out[i].decl = out[i].name.clone();
+    }
+    out
+}
+
+/// A word of the sheet as a comment or a string of the draft writes it: a line break or another
+/// control character would end the line there, and what follows would be read as a line of the
+/// rule.
+fn one_line(s: &str) -> String {
+    s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect()
 }
 
 /// The draft, from a CSV. `outputs` is how many of the trailing columns are outputs.
@@ -271,29 +306,59 @@ pub fn draft_rows(
     let cols: Vec<Column> = (0..ncol).map(|k| column_kind(&data.iter().map(|r| r[k].clone()).collect::<Vec<_>>())).collect();
     let alias = |k: usize| if k < n_in { format!("c{}", k + 1) } else { format!("o{}", k + 1 - n_in) };
     let guess = tr!("推定", "guess");
+    // Every column by the name its header gives it, or by its alias where the lexer does not read
+    // the header as a name (§15.259).
+    let columns = named_all(&(0..ncol).map(|k| (header[k].trim().to_string(), alias(k))).collect::<Vec<_>>());
+    // The note a column named by its alias carries: the header as the sheet wrote it.
+    let header_note = |k: usize| {
+        columns[k].unread.as_ref().map(|w| {
+            let (w, n) = (one_line(w), &columns[k].name);
+            if w.is_empty() {
+                tr!("{guess}: 見出しが空なので、仮に {n} と名付けた", "{guess}: the header is empty, so the column is named {n} for now")
+            } else {
+                tr!("{guess}: 見出しの「{w}」は名前として読めないので、仮に {n} と名付けた", "{guess}: the header \"{w}\" is not read as a name, so the column is named {n} for now")
+            }
+        })
+    };
 
     let mut o = String::new();
-    o.push_str(&format!("rule {} v1\n", named(name, "imported")));
+    let rule = named(name, "imported");
+    o.push_str(&format!("rule {} v1", rule.decl));
+    if let Some(w) = &rule.unread {
+        let (w, n) = (one_line(w), &rule.name);
+        o.push_str(&format!("  # {}", tr!("{guess}: 規則の名前「{w}」は名前として読めないので、仮に {n} と名付けた", "{guess}: the rule's name \"{w}\" is not read as a name, so the rule is named {n} for now")));
+    }
+    o.push('\n');
+    // The file's name inside a string: a `"` would end the string there.
+    let source_said = one_line(source).replace('"', "'");
     o.push_str(&tr!(
-        "description \"{source} から rulec import が起こした下書き。「{guess}」と書いた行は全部、人が確かめること\"\n",
-        "description \"A draft that rulec import made from {source}. Every line marked {guess} is for a person to confirm\"\n"
+        "description \"{source_said} から rulec import が起こした下書き。「{guess}」と書いた行は全部、人が確かめること\"\n",
+        "description \"A draft that rulec import made from {source_said}. Every line marked {guess} is for a person to confirm\"\n"
     ));
 
-    // Enums, one per column of words.
+    // Enums, one per column of words: each value by its name, or by `v1`, `v2` … where the lexer
+    // does not read it as a name.
     let mut enum_of: Vec<Option<String>> = vec![None; ncol];
+    let mut values_of: Vec<Option<(Vec<String>, Vec<Named>)>> = (0..ncol).map(|_| None).collect();
     let mut enums = String::new();
     for (k, col) in cols.iter().enumerate() {
         if let Column::Enum(vals) = col {
-            let ename = tr!("{}の値", "{}_values", header[k].trim());
-            let ealias = format!("{}_kind", alias(k));
-            let members: Vec<String> = vals.iter().enumerate().map(|(i, v)| named(v, &format!("v{}", i + 1))).collect();
-            enums.push_str(&format!(
-                "enum {} = {}  # {}\n",
-                named(&ename, &ealias),
-                members.join(" | "),
-                tr!("{guess}: この列に現れた値をそのまま列挙にした。値が足りなければ足し、別名は付け直すこと", "{guess}: the values seen in this column, as an enum; add what is missing, and rename the aliases")
-            ));
-            enum_of[k] = Some(if ascii_ok(&ename) { ename } else { ename.clone() });
+            // named after the header as written, or after the column's name where it is not a name
+            let base = if columns[k].unread.is_some() { columns[k].name.clone() } else { header[k].trim().to_string() };
+            let e = named(&tr!("{}の値", "{}_values", base), &format!("{}_kind", alias(k)));
+            let members = named_all(&vals.iter().enumerate().map(|(i, v)| (v.clone(), format!("v{}", i + 1))).collect::<Vec<_>>());
+            let mut notes = vec![tr!("{guess}: この列に現れた値をそのまま列挙にした。値が足りなければ足し、別名は付け直すこと", "{guess}: the values seen in this column, as an enum; add what is missing, and rename the aliases")];
+            let unread: Vec<(String, String)> = members.iter().filter_map(|m| m.unread.as_ref().map(|w| (m.name.clone(), one_line(w)))).collect();
+            if !unread.is_empty() {
+                let ja: Vec<String> = unread.iter().map(|(n, w)| format!("{n} は「{w}」")).collect();
+                let en: Vec<String> = unread.iter().map(|(n, w)| format!("{n} is \"{w}\"")).collect();
+                let (ja, en) = (ja.join("、"), en.join(", "));
+                notes.push(tr!("{guess}: 名前として読めない値には仮の名前を付けた（{ja}）", "{guess}: a value not read as a name has a name for now ({en})"));
+            }
+            let decls: Vec<&str> = members.iter().map(|m| m.decl.as_str()).collect();
+            enums.push_str(&format!("enum {} = {}  # {}\n", e.decl, decls.join(" | "), join_notes(&notes)));
+            enum_of[k] = Some(e.name);
+            values_of[k] = Some((vals.clone(), members));
         }
     }
     if !enums.is_empty() {
@@ -316,8 +381,8 @@ pub fn draft_rows(
     o.push_str("\ninputs\n");
     for k in 0..n_in {
         let (ty, extra) = decl(k);
-        let mut line = format!("  {} : {ty}", named(header[k].trim(), &alias(k)));
-        let mut notes: Vec<String> = Vec::new();
+        let mut line = format!("  {} : {ty}", columns[k].decl);
+        let mut notes: Vec<String> = header_note(k).into_iter().collect();
         if let Column::Num { .. } = cols[k] {
             let parts: Vec<&str> = extra.split('|').collect();
             line.push_str(&format!("  range >={} <={}", parts[0], parts[1]));
@@ -341,8 +406,8 @@ pub fn draft_rows(
     o.push_str("\noutputs\n");
     for k in n_in..ncol {
         let (ty, extra) = decl(k);
-        let mut line = format!("  {} : {ty}", named(header[k].trim(), &alias(k)));
-        let mut notes: Vec<String> = Vec::new();
+        let mut line = format!("  {} : {ty}", columns[k].decl);
+        let mut notes: Vec<String> = header_note(k).into_iter().collect();
         if let Column::Num { unit, decimal, .. } = &cols[k] {
             // The grid a rate output can be rounded to is its step; anything coarser would
             // put the values seen off the grid (E106).
@@ -368,16 +433,17 @@ pub fn draft_rows(
     }
 
     // The table: one row per line of the file, every cell an equality.
+    let source_line = one_line(source);
     o.push_str(&format!(
         "\ntable {}  # {}\n",
-        named(&tr!("表", "decision"), "t"),
-        tr!("出典: {source}（{guess}: 出典の文書名と日付に書き換えること）", "source: {source} ({guess}: replace with the document's name and date)")
+        named(&tr!("表", "decision"), "t").decl,
+        tr!("出典: {source_line}（{guess}: 出典の文書名と日付に書き換えること）", "source: {source_line} ({guess}: replace with the document's name and date)")
     ));
     o.push_str("policy unique\n");
-    let mut head: Vec<String> = (0..n_in).map(|k| name_only(header[k].trim())).collect();
+    let mut head: Vec<String> = (0..n_in).map(|k| columns[k].name.clone()).collect();
     for k in n_in..ncol {
         let (ty, _) = decl(k);
-        head.push(format!("{}{} : {ty}", if k == n_in { "-> " } else { "" }, named(header[k].trim(), &alias(k))));
+        head.push(format!("{}{} : {ty}", if k == n_in { "-> " } else { "" }, columns[k].decl));
     }
     o.push_str(&format!("| {} |\n", head.join(" | ")));
     for (i, r) in data.iter().enumerate() {
@@ -393,9 +459,21 @@ pub fn draft_rows(
                     let u = canonical_unit(u);
                     if ty.starts_with("number") { v.clone() } else if ty.starts_with("rate") { format!("{v}%") } else { format!("{v}{u}") }
                 }
-                (Cell::Num(v, u), _) => format!("{v}{u}"),
-                (Cell::Date(d), _) => d.clone(),
-                (Cell::Word(w), _) => name_only(w),
+                (Cell::Date(d), Column::Date) => d.clone(),
+                // A cell of a column of words names the value, by the name its enum declares: a
+                // number or a date among words is one of the values too.
+                (c, _) => {
+                    let seen = match c {
+                        Cell::Num(v, u) => format!("{v}{u}"),
+                        Cell::Date(d) => d.clone(),
+                        Cell::Word(w) => w.clone(),
+                        Cell::Empty => unreachable!("an empty cell is `-` or refused above"),
+                    };
+                    match &values_of[k] {
+                        Some((vals, members)) => vals.iter().position(|v| *v == seen).map(|p| members[p].name.clone()).unwrap_or(seen),
+                        None => seen,
+                    }
+                }
             };
             cells.push(text);
         }

@@ -733,7 +733,7 @@ pub fn ledger() -> Ledger {
         e(
             "E301",
             tr!("公開ホストサービスが、公表された言語に無いサービスです", "An open host service is not in the published language"),
-            tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。OpenAPI と AsyncAPI の文書の公表された言語では、並べた名前が、文書の HTTP の操作（operationId）にもチャネルにも無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。", "A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service."),
+            tr!("`open host service` に並べたサービスが、その公表された言語の proto に無いとき。OpenAPI と AsyncAPI の文書の公表された言語では、並べた名前が、文書の HTTP の操作（operationId）にもチャネルにも無いとき。Rust のクレートの公表された言語に `open host service` を書いたときにも出ます（クレートはサービスを持ちません）。規則の代わりに `enums` のファイルを並べた公表された言語でも同じです（`enums` のファイルからは、サービスが生成されません）。", "A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service, or of an `enums` file in the place of a rule, from which no service is generated."),
             tr!(
                 "サービスの名前を直すか、proto にサービスを足してください。文書の公表された言語では、注に文書の HTTP の操作とチャネルが、`open host service` にそのまま書ける形で並びます（`\"GET /orders\"` のように空白などを含むものは `\"…\"` で囲んであります）。",
                 "Correct the service's name, or add the service to the proto. For a published language of documents, the note lists their HTTP operations and channels as `open host service` takes them, in quotes when they hold a blank or the like (`\"GET /orders\"`)."
@@ -753,8 +753,8 @@ pub fn ledger() -> Ledger {
             "E302",
             tr!("公表された言語のファイルが、そのコンテキストのものでないか、package が違います", "A file of a published language is not the context's, or has another package"),
             tr!(
-                "公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。",
-                "A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`."
+                "公表された言語の proto、規則、Rust のクレート、OpenAPI と AsyncAPI の文書、生成したコードの置き場所が、そのコンテキストに属さないとき。proto の package やクレートの名前（`-` を `_` にしたもの）が見出しと違うとき、`crate` の先が地図の `code rust` のワークスペースのクレートでないとき、地図に `code rust` が無いのにクレートを公表したときにも出ます。`rulec` に規則の代わりに `enums` のファイルを並べたときも同じです（`enums` のファイルからは Connect のサービスが生成されず、公表する package もありません）。",
+                "A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`; or a `rulec` line lists an `enums` file in the place of a rule, from which no Connect service is generated, so there is no package to publish."
             ),
             tr!("見出しの package を直すか、そのコンテキストのファイルを並べてください。", "Correct the heading's package, or list the context's own files."),
             &[(

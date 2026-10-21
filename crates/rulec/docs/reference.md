@@ -175,8 +175,12 @@ string holds every character up to the next `"`, a backslash included, so it can
 | `\|` | a table cell boundary |
 | `:` `( )` `[ ]` `?` | declarations |
 
-`→`, `・`, `、`, `，`, `≦`, `≧`, `×`, `÷`, `−`, and fullwidth digits are all read, and
-`rulec fmt` rewrites them to the ASCII forms. `..` is never read: see §7.
+`→`, `・`, `、`, `，`, `≦`, `≧`, `＜`, `＞`, `＋`, `×`, `÷` and `−` are read as the symbols
+above. `rulec fmt` writes the first nine in ASCII where the lexer reads them as a symbol of their
+own; `×`, `÷` and `−` stay as written. A fullwidth digit starts no word, and `rulec fmt` writes it
+in ASCII where a word would start, so that a number typed with an IME becomes one. Inside a name,
+a fullwidth digit and `＋` are characters of the name (`第１案`, `松＋竹`), and stay. `..` is never
+read: see §7.
 
 ## 3. Types
 
@@ -312,7 +316,10 @@ rows, not amounts, not another rule.
 > `rulec import csv` and `rulec import xlsx` are a different thing that shares the word: a
 > **command** that writes a first draft of a `.rule` from a spreadsheet, once. It leaves no
 > line in the file and nothing is read again afterwards. These two lines are read on every
-> `rulec check`.
+> `rulec check`. A header or a value of the sheet the lexer does not read as a name
+> (`Weight (kg)`, `re-quote`, `<=2000g`) is named for now by its column's alias (`c2`) or by
+> `v1`, `v2` …, and the word is kept in the `# guess` note on the line that declares it, so that
+> `check` reads the draft as it is written.
 
 ### Built-in enums
 
@@ -2473,12 +2480,17 @@ terminate; the fourth would take the replay of past records with it.
 - aligns the columns of every table by East Asian width — a CJK or fullwidth character, and
   ℃ and ℉, are two columns — so Japanese lines up in a terminal and in any face that draws
   Japanese twice as wide as Latin,
-- rewrites `→ ・ 、 ， ≦ ≧` and fullwidth digits to their ASCII forms,
+- rewrites `→ ・ 、 ， ≦ ≧ ＜ ＞ ＋` to their ASCII forms where the lexer reads them as symbols,
+  and fullwidth digits where a word starts. It changes no word the lexer reads: a name keeps every
+  character it was written with (`松＋竹`, `第１案`), and a symbol whose ASCII form would join its
+  neighbour into another token is set apart by a space (`-＞` becomes `- >`, not the output
+  marker `->`),
 - folds the `->` of the second and later output columns of `examples`,
 - indents the lines under `machine` by two spaces and lines their values up in one column,
 - indents the lines under `prerequisites` by two spaces and pads each value, and `start`, to the
   widest, so that `requires` and the start values line up in one column (§6.5),
-- leaves the inside of a comment alone.
+- leaves the inside of a string and of a comment alone (on a table row, the comment is what
+  follows the last `|`).
 
 `rulec fmt --check` names the files that are not in canonical form and exits 1, which is how
 it belongs in CI.

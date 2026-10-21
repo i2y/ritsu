@@ -2677,7 +2677,7 @@ See also: [E202](#e202)
 
 ## E301 — An open host service is not in the published language
 
-**When**: A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service.
+**When**: A service under `open host service` is not in the proto files of the published language; for a published language of OpenAPI and AsyncAPI documents, a name that is no HTTP operation (operationId) and no channel of its documents; also any under the published language of a Rust crate, which has no service, or of an `enums` file in the place of a rule, from which no service is generated.
 
 **Fix**: Correct the service's name, or add the service to the proto. For a published language of documents, the note lists their HTTP operations and channels as `open host service` takes them, in quotes when they hold a blank or the like (`"GET /orders"`).
 
@@ -2745,7 +2745,7 @@ See also: [E302](#e302)
 
 ## E302 — A file of a published language is not the context's, or has another package
 
-**When**: A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`.
+**When**: A proto, a rule, a Rust crate or the place of the generated code of a published language does not belong to the context; or a proto's package, or a crate's name (with `-` written `_`), is not what the heading names; or a `crate` is no crate of the workspace at the map's `code rust` place, or the map has no `code rust`; or a `rulec` line lists an `enums` file in the place of a rule, from which no Connect service is generated, so there is no package to publish.
 
 **Fix**: Correct the heading's package, or list the context's own files.
 

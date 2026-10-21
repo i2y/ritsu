@@ -1,0 +1,29 @@
+rule plan_choice v1
+description "A rule typed with an IME left on for the symbols: the comparison signs, the plus sign, the output marker, the set separators and an ideographic space. The lexer reads each as the ASCII one, and fmt writes it so"
+
+enum region = north | south | east | west
+enum plan = first_plan | second_plan | combined_plan
+
+inputs
+  region : region
+  amount : money[USD]  range ≧0USD ≦1000USD
+  units　: number  range ＞0 ＜101
+
+outputs
+  chosen : plan
+
+derive total : money[USD] = amount ＋ 10USD  range >=10USD <=1010USD
+
+table choice
+policy unique
+| region      | total     | units | → chosen : plan |
+| north・south | ≦100USD   | -     | first_plan      |
+| north，south | ＞100USD  | -     | second_plan     |
+| east、west  | -         | ≦10   | second_plan     |
+| east、west  | -         | ＞10  | combined_plan   |
+
+examples
+| region | amount | units | → chosen      |
+| north  | 50USD  | 1     | first_plan    |
+| east   | 50USD  | 20    | combined_plan |
+| south  | 900USD | 1     | second_plan   |

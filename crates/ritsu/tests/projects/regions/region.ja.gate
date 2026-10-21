@@ -1,0 +1,24 @@
+gate 地域を規則として読む(regions_as_a_rule_ja) v1
+description "enums のファイルの出力を、規則の出力のように読む。enums のファイルに出力は無い。region.gate の日本語の版"
+namespace ShopJa
+
+use rule 地域 from "rules/配送の地域.rule"
+
+role 係(clerk)
+  can 注文を見る
+
+principal 職員(User)
+  roles 係
+
+resource 注文(Order)
+
+action 注文を見る(view_order)
+  principal 職員
+  resource 注文
+  context
+    r = 地域().地域
+
+permit 本州の注文は係が見る(clerks_view_orders_in_honshu)
+  principal in 係
+  action 注文を見る
+  when r is 本州

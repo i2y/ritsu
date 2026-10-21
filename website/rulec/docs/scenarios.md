@@ -178,7 +178,7 @@ rule parcel_fee v1
 description "A draft that rulec import made from tariff.xlsx (sheet Base). Every line marked guess is for a person to confirm"
 
 enum dest_values = domestic | canada | overseas  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
-enum weight_values = <=2000g(v1) | >2000g(v2)  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases
+enum weight_values = v1 | v2  # guess: the values seen in this column, as an enum; add what is missing, and rename the aliases; a value not read as a name has a name for now (v1 is "<=2000g", v2 is ">2000g")
 
 inputs
   dest : dest_values
@@ -186,8 +186,16 @@ inputs
 
 outputs
   fee : money[USD]  round down(1USD)  # guess: the rounding's direction and grid come from the source; if it has none, write down that this is a placeholder
+
+table decision  # source: tariff.xlsx (sheet Base) (guess: replace with the document's name and date)
+policy unique
+| dest     | weight | -> fee : money[USD] |
+| domestic | v1     | 8USD                |
+| domestic | v2     | 12USD               |
 …
 ```
+
+A word of the sheet that cannot stand as a name, like `<=2000g` and `>2000g` here, is named `v1`, `v2` for now, and the word is kept in the note: `rulec check` reads the draft as it is written. Whether those values are really thresholds is for the person who confirms it.
 
 A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article). If all there is is the running code, hand that code to an agent to transcribe, and hold the table to the code in [2-3](#2-3-hold-it-to-the-code-that-runs-today). The running code is not touched.
 

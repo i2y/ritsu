@@ -315,7 +315,9 @@ impl Engine {
             enums: g.rule_enums(),
             machine,
             preconditions: preconditions(f, c),
-            connect: Some(g.connect_facts()),
+            // An `enums` file is made into modules of types and nothing else (§15.212): no service
+            // is generated from it, so none is answered (§15.258), as `rulec api` writes none.
+            connect: (f.kind != crate::ast::FileKind::Enums).then(|| g.connect_facts()),
             typescript,
             python,
             go,

@@ -1,60 +1,109 @@
 //! `rulec fmt` — the one and only formatter (§1.5).
 //!
 //! Columns are aligned to the widest content of each table, counting East Asian Width W and F
-//! as two columns. Full-width digits are normalized to ASCII, and the comparison signs
-//! ≦ ≧ ＜ ＞ to their ASCII forms. Formatting is confined to the table, so the diff of a
-//! realignment is confined to the table too.
+//! as two columns. The symbols written with an IME are written in ASCII where the lexer reads
+//! them as symbols, and full-width digits where it reads no word; a name keeps every character it
+//! was written with (§15.257). Formatting is confined to the table, so the diff of a realignment
+//! is confined to the table too.
 
 use crate::diag::width;
+use crate::lex::{self, Kind};
 
-/// Normalizes the spellings that need an IME or a full-width keyboard: full-width digits,
-/// `≦ ≧ ＜ ＞ ＋`, the output marker `→` (written `->`), and the set separators `・ 、 ，`
-/// (written `, `). String literals and `#` comments are left alone.
+/// Writes in ASCII the spellings that need an IME or a full-width keyboard, without changing a
+/// word the lexer reads (§15.257): first the full-width digits the lexer cannot read, then the
+/// symbols it reads as tokens of their own. String literals and `#` comments are left alone, and so
+/// is a name: `松＋竹` and `第１案` are names, and stay as written.
 fn normalize(line: &str) -> String {
-    let mut out = String::with_capacity(line.len());
-    let mut in_str = false;
-    let mut skip_ws = false;
-    for (i, c) in line.char_indices() {
-        if in_str {
-            out.push(c);
-            if c == '"' {
-                in_str = false;
+    symbols_in_ascii(&digits_in_ascii(line))
+}
+
+/// A full-width digit where the lexer reads no word — where a word would start, which stops the
+/// lexer at E002 — written in ASCII, one at a time, the line read again after each: `１０万円`
+/// becomes the number `10万円` it was meant to be. A digit inside a name (`第１案`) is the name's,
+/// and the lexer reads the name with it, so it stays.
+fn digits_in_ascii(line: &str) -> String {
+    let mut text = line.to_string();
+    loop {
+        let unread = lex::read_through(&text).into_iter().find_map(|(r, k)| {
+            let mut cs = text[r.clone()].chars();
+            match (k, cs.next(), cs.next()) {
+                (None, Some(c @ '０'..='９'), None) => Some((r, c)),
+                _ => None,
             }
-            continue;
-        }
-        if c == '"' {
-            in_str = true;
-            skip_ws = false;
-            out.push(c);
-            continue;
-        }
-        if c == '#' {
-            // A comment keeps its prose arrows and punctuation as written.
-            out.push_str(&line[i..]);
-            break;
-        }
-        if skip_ws && c.is_whitespace() {
-            continue;
-        }
-        skip_ws = false;
-        match c {
-            '０'..='９' => out.push((b'0' + (c as u32 - '０' as u32) as u8) as char),
-            '≦' => out.push_str("<="),
-            '≧' => out.push_str(">="),
-            '＜' => out.push('<'),
-            '＞' => out.push('>'),
-            '＋' => out.push('+'),
-            '　' => out.push(' '),
-            '→' => out.push_str("->"),
-            '・' | '、' | '，' => {
-                let kept = out.trim_end().len();
-                out.truncate(kept);
-                out.push_str(", ");
-                skip_ws = true;
-            }
-            _ => out.push(c),
-        }
+        });
+        let Some((r, c)) = unread else { return text };
+        text.replace_range(r, &((b'0' + (c as u32 - '０' as u32) as u8) as char).to_string());
     }
+}
+
+/// The ASCII spelling of a symbol the lexer read as a token of its own, written with an IME.
+fn ascii_symbol(written: &str, kind: &Kind) -> Option<&'static str> {
+    Some(match (written, kind) {
+        ("≦", Kind::Le) => "<=",
+        ("≧", Kind::Ge) => ">=",
+        ("＜", Kind::Lt) => "<",
+        ("＞", Kind::Gt) => ">",
+        ("＋", Kind::Plus) => "+",
+        ("→", Kind::Arrow) => "->",
+        ("・" | "、" | "，", Kind::Comma) => ",",
+        _ => return None,
+    })
+}
+
+/// The tokens of a line, in order: what the lexer reads of it.
+fn words(line: &str) -> Vec<Option<Kind>> {
+    lex::read_through(line).into_iter().map(|(_, k)| k).collect()
+}
+
+/// The symbols the lexer reads as tokens of their own — `≦ ≧ ＜ ＞ ＋`, the output marker `→`
+/// and the set separators `・ 、 ，` — written `<= >= < > +`, `->` and `, `, and the ideographic
+/// space between words as a space. Inside a word nothing moves: a `＋` the lexer reads as part of
+/// a name, or a `，` it reads as part of a number (E049), stays. An ASCII spelling that would join
+/// its neighbour into another token (`-＞` would be `->`, `＞=` would be `>=`) is set apart from it
+/// by a space, so the lexer still reads the two words it read before.
+fn symbols_in_ascii(line: &str) -> String {
+    let pieces = lex::read_through(line);
+    let read = words(line);
+    let mut out = String::with_capacity(line.len());
+    let mut end = 0;
+    // after a set separator, the blanks up to the next word are dropped: it is written `, `
+    let mut after_comma = false;
+    let blanks = |gap: &str, out: &mut String| out.extend(gap.chars().map(|c| if c == '　' { ' ' } else { c }));
+    for (r, k) in &pieces {
+        if !after_comma {
+            blanks(&line[end..r.start], &mut out);
+        }
+        after_comma = false;
+        let written = &line[r.clone()];
+        end = r.end;
+        let Some(ascii) = k.as_ref().and_then(|k| ascii_symbol(written, k)) else {
+            out.push_str(written);
+            continue;
+        };
+        if ascii == "," {
+            let kept = out.trim_end().len();
+            out.truncate(kept);
+            out.push_str(", ");
+            after_comma = true;
+            continue;
+        }
+        // The first spelling the lexer reads the line the same with: the symbol alone, or set
+        // apart by a space from the word before, the word after, or both. Else it stays.
+        let rest = &line[end..];
+        let spaced = |before: bool, after: bool| format!("{}{ascii}{}", if before { " " } else { "" }, if after { " " } else { "" });
+        let fits = [(false, false), (true, false), (false, true), (true, true)]
+            .into_iter()
+            .map(|(b, a)| spaced(b, a))
+            .find(|s| words(&format!("{out}{s}{rest}")) == read);
+        out.push_str(fits.as_deref().unwrap_or(written));
+    }
+    // The blanks after the last word, and the comment as it is written.
+    let tail = &line[end..];
+    let comment = tail.find('#').unwrap_or(tail.len());
+    if !after_comma {
+        blanks(&tail[..comment], &mut out);
+    }
+    out.push_str(&tail[comment..]);
     out
 }
 
@@ -116,11 +165,26 @@ fn is_pin(line: &str) -> bool {
     ws.len() == 2 && ws[1].starts_with("sha256:") && !line.trim_start().starts_with('|')
 }
 
+/// The cells of a row, cut at each bar outside a string: `starts_with "a|b"` is one cell, as the
+/// lexer reads the string whole (§15.257).
 fn cells(row: &str) -> Vec<String> {
     let t = row.trim();
     let inner = t.strip_prefix('|').unwrap_or(t);
     let inner = inner.strip_suffix('|').unwrap_or(inner);
-    inner.split('|').map(|c| c.trim().to_string()).collect()
+    let mut out = Vec::new();
+    let (mut start, mut in_str) = (0, false);
+    for (i, c) in inner.char_indices() {
+        match c {
+            '"' => in_str = !in_str,
+            '|' if !in_str => {
+                out.push(inner[start..i].trim().to_string());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(inner[start..].trim().to_string());
+    out
 }
 
 /// The body of a clause — `when`, `then`, `overrides` — is indented by two spaces and its

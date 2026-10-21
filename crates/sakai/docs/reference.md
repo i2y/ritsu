@@ -105,7 +105,7 @@ published language rulec.urgency.v1
 A published language is a protobuf package, written as a block `published language <package>`:
 
 - `proto "…"`: a file that declares the package and belongs to the context (else E302).
-- `rulec "…"`: a rule, whose Connect service (the one `rulec gen` writes for it) is the published language; its package is the one of the rule's Connect path (`rulec.urgency.v1`).
+- `rulec "…"`: a rule, whose Connect service (the one `rulec gen` writes for it) is the published language; its package is the one of the rule's Connect path (`rulec.urgency.v1`). An `enums` file is not one: no service is generated from it (E302, and E301 for each open host service under it).
 - `open host service <service>, …`: the services anyone may call; each must be in the block's files (else E301).
 - `generated dir "…"`: where the code generated from the package is kept; other contexts' code may import it (see [targets.md](targets.md)).
 - `crate "…"`: a Rust crate, whose name with `-` as `_` is the heading; a crate has no open host service.

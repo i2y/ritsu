@@ -1,0 +1,24 @@
+gate regions_as_a_rule v1
+description "Reads an output of an enums file as if it were a rule: an enums file has no output"
+namespace Shop
+
+use rule regions from "rules/regions.rule"
+
+role clerk
+  can view_order
+
+principal User
+  roles clerk
+
+resource Order
+
+action view_order
+  principal User
+  resource Order
+  context
+    r = regions().region
+
+permit clerks_view_orders_in_honshu
+  principal in clerk
+  action view_order
+  when r is honshu

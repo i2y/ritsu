@@ -33,7 +33,8 @@ pub struct RuleFacts {
     pub machine: Option<Machine>,
     /// What the generated code holds a caller to that the shape of an input cannot say.
     pub preconditions: Vec<Precondition>,
-    /// The rule's Connect service.
+    /// The rule's Connect service. None for an `enums` file (rulec's §15.212), which is made into
+    /// modules of types and nothing else: no service is generated from it (rulec's §15.258).
     pub connect: Option<Connect>,
     /// How the generated code is called in the three languages a workflow calls it from.
     pub typescript: Call,

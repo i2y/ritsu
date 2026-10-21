@@ -109,6 +109,21 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                 && read.facts.contains_key(f)
             {
                 let sf = paths::shown(f);
+                // A file rulec makes no service of — an `enums` file, made into modules of types
+                // only (DESIGN 22) — has no package to publish and no service to open.
+                if read.facts.get(f).is_some_and(|x| x.connect.is_none()) {
+                    p.at(ci, *at, "E302", tr!("公表された言語 {k} の {sf} からは、Connect のサービスが生成されません", "The published language {k} lists {sf}, from which no Connect service is generated"))
+                        .notes
+                        .push(tr!(
+                            "規則の公表された言語は、規則を Connect のサービスとして呼ぶ形です。`enums` のファイルからは列挙の型のモジュールだけが生成され、呼ぶものがありません。列挙をほかのコンテキストに公表するなら、公表された言語の proto に置いてください。規則は `import proto` で取り込めます。二つのコンテキストが同じ `enums` のファイルを読むなら、共有カーネルに並べてください。",
+                            "A rule's published language is the rule called as a Connect service; an `enums` file is made into modules of types only, with nothing to call. To publish an enum to other contexts, put it in a `.proto` of the published language, for rules to take in with `import proto`; for two contexts to read one `enums` file, list it in their shared kernel."
+                        ));
+                    for (s, at) in &pl.services {
+                        p.at(ci, *at, "E301", tr!("公開ホストサービス {s} は、{sf} の Connect のサービスではありません", "The open host service {s} is not the Connect service of {sf}"))
+                            .notes
+                            .push(tr!("{sf} からは、Connect のサービスが生成されません。", "No Connect service is generated from {sf}."));
+                    }
+                }
                 if let Some(got) = crate::refs::rule_package(read, f)
                     && got != *k
                 {

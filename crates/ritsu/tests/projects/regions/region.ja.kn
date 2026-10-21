@@ -1,0 +1,7 @@
+module 地域を規則として読む(regions_as_a_rule_ja) v1
+description "enums のファイルの出力を、規則の出力のように読む。enums のファイルに出力は無い。region.kn の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+
+fn 本州か(in_honshu)(急ぎ(urgent): bool) -> bool
+  地域().地域 = 本州

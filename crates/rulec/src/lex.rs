@@ -140,6 +140,48 @@ pub fn is_bare_word(s: &str) -> bool {
     }
 }
 
+/// One piece of a line as the lexer reads it ([`read_through`]): the bytes it covers, and the token
+/// read there, or None for a character the lexer cannot read (E002) and for a string with no end
+/// (E001), which runs to the end of the line.
+pub type Piece = (std::ops::Range<usize>, Option<Kind>);
+
+/// What the lexer reads of one line, piece by piece, going on past what stops it: each token as
+/// [`lex_line_soft`] reads it, and a character it cannot read as a piece of its own, after which
+/// it reads on as it would from the start of a line (no token looks back past where it starts).
+/// The comment is not a piece; it starts at the first `#` after the last one.
+///
+/// `rulec fmt` asks this which characters a name holds and which a symbol stands for alone, so
+/// that formatting never changes the words the lexer reads (§15.257).
+pub fn read_through(text: &str) -> Vec<Piece> {
+    let shifted = |ts: Vec<Token>, from: usize| ts.into_iter().map(move |t| (from + t.span.col..from + t.span.col + t.span.len, Some(t.kind)));
+    let mut out: Vec<Piece> = Vec::new();
+    let mut from = 0;
+    while from < text.len() {
+        match lex_line_soft(1, &text[from..]) {
+            Ok((ts, _)) => {
+                out.extend(shifted(ts, from));
+                break;
+            }
+            Err(d) => {
+                let at = from + d.marks.first().map(|m| m.span.col).unwrap_or(0);
+                // What stops the lexer stands where a token starts, so the text before it is read
+                // the same on its own.
+                if let Ok((ts, _)) = lex_line_soft(1, &text[from..at]) {
+                    out.extend(shifted(ts, from));
+                }
+                if d.code == "E001" {
+                    out.push((at..text.len(), None));
+                    break;
+                }
+                let len = text[at..].chars().next().map_or(1, char::len_utf8);
+                out.push((at..at + len, None));
+                from = at + len;
+            }
+        }
+    }
+    out
+}
+
 /// Unit suffixes a numeric literal may carry (§2.1). `万`/`億` are multipliers and
 /// are consumed before this.
 fn is_unit_char(c: char) -> bool {

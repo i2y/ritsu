@@ -1,0 +1,5 @@
+Zone,Weight,Fee
+north,<=2000g,800JPY
+north,>2000g,1100JPY
+south,<=2000g,900JPY
+south,>2000g,1200JPY
