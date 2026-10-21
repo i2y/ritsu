@@ -1,0 +1,7 @@
+ok rules/出発の可否.rule
+エラー[kaname E102]: departure.ja.kn:15:22: 規則 `出発` の入力 `温度` は temperature[℃] です。渡しているのは temperature[℉] です
+    15 |   出発(温度帯: 荷.温度帯, 温度: 荷.温度, 湿度: 荷.湿度).出してよい
+  = temperature[℉] と temperature[℃] は、同じ次元の違う単位です。黙って換算はしないので、`<値> in ℃` のように換算を書いてください。
+cold_chain.ja.flow: 検査を通りました
+cold_chain.ja.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 2、職務の分離 0
+ritsu check: ファイル 4 個（rulec 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

@@ -2656,6 +2656,9 @@ fn column_text(t: &ColumnType) -> String {
         ColumnType::Str => "string".into(),
         ColumnType::Date => "date".into(),
         ColumnType::Enum { name: e, .. } => e.clone(),
+        // the unit with a rate's step, which rulec's declaration of the input says and its type
+        // does not (`rate[step 1%]`, where rulec writes `rate`)
+        ColumnType::Num { unit: Some(u), .. } => u.to_string(),
         ColumnType::Num { written, .. } => written.clone(),
         ColumnType::Opt(x) => format!("{}?", column_text(x)),
     }

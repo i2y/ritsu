@@ -1,0 +1,33 @@
+rule 出発の可否(cold_chain_departure_ja) v1
+description "温度を管理して運ぶ荷を、倉庫から出してよいか。荷室の温度が温度帯の上限（冷凍 -18℃、冷蔵 8℃、定温 25℃）以下で、冷蔵の荷室は湿度も 95% 以下なら出してよい。テストのために書いた例で、どの基準の転記でもない。cold_chain_departure.rule の日本語の版"
+
+enum 温度帯(temperature_class) = 冷凍(frozen) | 冷蔵(chilled) | 定温(controlled_ambient)
+
+inputs
+  温度帯(temperature_class) : 温度帯
+  温度(temperature)         : temperature[℃]  range >=-40℃ <=40℃
+  湿度(humidity)            : rate[step 1%]  range >=0% <=100%
+
+outputs
+  出してよい(may_depart) : bool
+
+table 出発
+policy unique
+| 温度帯 | 温度    | 湿度  | -> 出してよい |
+| 冷凍   | <=-18℃ | -     | true          |
+| 冷凍   | >-18℃  | -     | false         |
+| 冷蔵   | <=8℃   | <=95% | true          |
+| 冷蔵   | <=8℃   | >95%  | false         |
+| 冷蔵   | >8℃    | -     | false         |
+| 定温   | <=25℃  | -     | true          |
+| 定温   | >25℃   | -     | false         |
+
+examples
+| 温度帯 | 温度  | 湿度 | -> 出してよい |
+| 冷凍   | -18℃ | 50%  | true          |
+| 冷凍   | -17℃ | 50%  | false         |
+| 冷蔵   | 8℃   | 95%  | true          |
+| 冷蔵   | 8℃   | 96%  | false         |
+| 冷蔵   | 9℃   | 40%  | false         |
+| 定温   | 25℃  | 100% | true          |
+| 定温   | 26℃  | 0%   | false         |

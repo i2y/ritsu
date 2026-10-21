@@ -1,0 +1,7 @@
+ok rules/出発の可否.rule
+ok departure.ja.kn: 関数 1 個、total
+cold_chain.ja.flow: 検査を通りました
+エラー[sekisho E102]: cold_chain.ja.gate:33:64: 入力 `温度` は temperature[℃] ですが、`resource.温度` は数（temperature[℉]）です
+    33 |     温度帯の内(within_band) = 出発の可否(温度帯: resource.温度帯, 温度: resource.温度, 湿度: resource.湿度).出してよい
+  = 数は単位まで同じでなければなりません（`JPY` と `円` は同じ、税込と税抜は別）。
+ritsu check: ファイル 4 個（rulec 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

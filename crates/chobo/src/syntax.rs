@@ -240,6 +240,27 @@ fn lex_line(chars: &[char], no: usize) -> Result<Option<Line>, Diag> {
             i = j;
             continue;
         }
+        // ℃ and ℉, which are no letters, are a unit's name where one goes: after `unit`, and after
+        // the `:` of an account or a parameter (`unit ℃`, `t: ℃`), as ritsu-units reads them
+        // (`ritsu_units::chars`). Never part of a name: the clients a build writes take the names
+        // of the accounts, the transfers and the parameters for their own
+        if ritsu_units::chars::is_word_sign(c) {
+            let unit_place = matches!(toks.as_slice(), [Token { tok: Tok::Word(w), .. }] if w == "unit") || matches!(toks.last(), Some(Token { tok: Tok::Colon, .. }));
+            if !unit_place {
+                return Err(diag::error(
+                    "E001",
+                    no,
+                    col,
+                    tr!(
+                        "`{c}` は、単位の名前を書く所（`unit {c}` と、勘定や引数の `:` のあと）にだけ書けます",
+                        "`{c}` is written only where the name of a unit goes: `unit {c}`, and after the `:` of an account or a parameter"
+                    ),
+                ));
+            }
+            toks.push(Token { tok: Tok::Word(c.to_string()), col, len: 1 });
+            i += 1;
+            continue;
+        }
         if name_start(c) {
             let mut j = i + 1;
             while j < chars.len() && name_rest(chars[j]) {

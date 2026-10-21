@@ -1,0 +1,2 @@
+error[E001]: tests/mutants/E001_百分率で書いた率の型.gate:16:25: `%` is written right after a number, as a rate (`5%`); the type of a rate writes its step, as in `rate[step 1%]`
+    16 |     湿度(humidity) : rate[%]  range >=0% <=100%

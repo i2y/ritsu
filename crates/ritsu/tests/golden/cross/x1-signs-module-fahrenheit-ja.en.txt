@@ -1,0 +1,7 @@
+ok rules/出発の可否.rule
+error[kaname E102]: departure.ja.kn:15:22: The input `温度` of the rule `出発` is temperature[℃]; this is temperature[℉]
+    15 |   出発(温度帯: 荷.温度帯, 温度: 荷.温度, 湿度: 荷.湿度).出してよい
+  = `<value> in ℃` converts it: temperature[℉] and temperature[℃] are two units of one dimension, and nothing converts one into the other unasked.
+cold_chain.ja.flow: ok
+cold_chain.ja.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 2 expectations, 0 separations
+ritsu check: 4 files (rulec 1, kaname 1, dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

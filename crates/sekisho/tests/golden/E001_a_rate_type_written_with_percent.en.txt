@@ -1,0 +1,2 @@
+error[E001]: tests/mutants/E001_a_rate_type_written_with_percent.gate:16:21: `%` is written right after a number, as a rate (`5%`); the type of a rate writes its step, as in `rate[step 1%]`
+    16 |     humidity : rate[%]  range >=0% <=100%

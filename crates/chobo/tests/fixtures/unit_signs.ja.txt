@@ -1,0 +1,5 @@
+エラー[E001]: unit_signs.book:7:6: 読めない文字 `%` があります
+     7 | unit %
+エラー[E001]: unit_signs.book:10:23: `℃` は、単位の名前を書く所（`unit ℃` と、勘定や引数の `:` のあと）にだけ書けます
+    10 | account probes_below_8℃ : ℃ outside
+unit_signs.book: エラー 2 件、警告 0 件

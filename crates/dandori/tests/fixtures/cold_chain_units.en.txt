@@ -1,0 +1,4 @@
+error[E003]: tests/fixtures/cold_chain_units.flow:13:78: expected `temperature[℃]` here, but this is `temperature[℉]`
+    13 |   let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)
+error[E003]: tests/fixtures/cold_chain_units.flow:13:101: expected `rate[step 1%]` here, but this is `rate[step 0.1%]`
+    13 |   let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)

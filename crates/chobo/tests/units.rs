@@ -42,6 +42,27 @@ fn a_unit_is_money_a_quantity_or_a_count() {
     assert_eq!(one("unit 席").dim, Dim::Count("席".into()));
 }
 
+/// ℃ and ℉ are no letters, and are the name of a unit where one goes (`unit ℃`, `: ℃`), as
+/// ritsu-units reads them (`ritsu_units::chars`). A temperature does not add up, so a unit of
+/// temperature is a count of its own name, as `dB` is, and a temperature a rule gives is no amount
+/// of it. Anywhere else a sign is E001 (`tests/fixtures/unit_signs.book`): it is never part of a name.
+#[test]
+fn a_sign_of_temperature_is_the_name_of_a_unit() {
+    assert_eq!(one("unit ℃"), Unit::count("℃"));
+    assert_eq!(one("unit ℉"), Unit::count("℉"));
+    assert_eq!(one("unit dB"), Unit::count("dB"));
+    assert!(!one("unit ℃").same(&Unit::parse("temperature[℃]").unwrap()));
+    for src in [
+        "book readings v1\nunit ℃\n\naccount sensors : ℃ outside\naccount probes(id: string) : ℃ outside\n\ntransfer read(slip: string, id: string, degrees: ℃)\n  key slip\n  move degrees from sensors to probes(id)\n",
+        "book 計測 v1\nunit ℉\n\naccount 計器 : ℉ outside\naccount 記録(番号: string) : ℉ outside\n\ntransfer 読む(伝票: string, 番号: string, 度: ℉)\n  key 伝票\n  move 度 from 計器 to 記録(番号)\n",
+    ] {
+        assert!(codes(src).iter().all(|c| !c.starts_with('E')), "{src}: {:?}", codes(src));
+    }
+    for src in ["book b v1\nunit ℃\n\naccount probe_8℃ : ℃ outside\n", "book b v1\nunit ℃x\n", "book b v1\n℃\n", "book b v1\nunit %\n"] {
+        assert!(codes(src).contains(&"E001"), "{src}: {:?}", codes(src));
+    }
+}
+
 /// What the units mean where an amount crosses into the book: a unit with tax is rulec's
 /// `money[円, incl_tax]` (and `JPY` is `円`); a unit that says neither takes an amount that says
 /// neither, not one with tax or without; seats are not items.

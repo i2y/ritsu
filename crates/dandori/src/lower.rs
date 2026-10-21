@@ -635,6 +635,14 @@ impl<'a> Lowerer<'a> {
             // incl_tax]`, `mass[kg]`, `rate[step 0.1%]`
             TypeExpr::Unit(u, sp) => match ritsu_units::Unit::parse(u) {
                 Ok(unit) if !matches!(unit.dim, ritsu_units::Dim::Number | ritsu_units::Dim::Count(_)) => Some(Ty::Num(unit)),
+                // `rate[%]`: a rate's brackets hold its step, not a unit
+                Err(ritsu_units::Problem::Shape(_)) if u.starts_with("rate[") => {
+                    self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(tr!(
+                        "率の型には、`rate[step 1%]` のように刻みを書いてください",
+                        "the type of a rate writes its step, as in `rate[step 1%]`"
+                    )));
+                    None
+                }
                 Ok(_) | Err(ritsu_units::Problem::Shape(_)) | Err(ritsu_units::Problem::Dimension(_)) => {
                     self.push(e("E002", *sp, tr!("型 `{u}` はありません", "there is no type `{u}`")).note(type_hint()));
                     None

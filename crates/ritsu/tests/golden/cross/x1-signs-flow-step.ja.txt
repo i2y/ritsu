@@ -1,0 +1,6 @@
+ok rules/cold_chain_departure.rule
+ok departure.kn: 関数 1 個、total
+エラー[dandori E003]: cold_chain.flow:21:101: ここには `rate[step 1%]` が要りますが、これは `rate[step 0.1%]` です
+    21 |   let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)
+cold_chain.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 2、職務の分離 0
+ritsu check: ファイル 4 個（rulec 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 1 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

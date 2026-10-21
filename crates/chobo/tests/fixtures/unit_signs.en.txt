@@ -1,0 +1,5 @@
+error[E001]: unit_signs.book:7:6: an unexpected character `%`
+     7 | unit %
+error[E001]: unit_signs.book:10:23: `℃` is written only where the name of a unit goes: `unit ℃`, and after the `:` of an account or a parameter
+    10 | account probes_below_8℃ : ℃ outside
+unit_signs.book: 2 error(s), 0 warning(s)

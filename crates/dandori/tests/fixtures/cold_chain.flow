@@ -1,0 +1,27 @@
+workflow cold_chain v1
+description "A shipment of the cold chain leaves the depot when the rule says its hold is within the band of its class: the temperature in ℃, whose range starts at -40℃, and the humidity in steps of 1%, given to the rule in the units it takes"
+
+use rule departure from "rules/cold_chain_departure.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:cold-chain-departure"
+
+inputs
+  shipment          : string
+  temperature_class : departure.temperature_class
+  temperature       : temperature[℃]  range >=-40℃ <=40℃
+  humidity          : rate[step 1%]  range >=0% <=100%
+
+outputs
+  departed : bool
+
+task dispatch(shipment: string, temperature: temperature[℃])
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:dispatch"
+  idempotent
+
+flow
+  let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)
+  match verdict.may_depart
+    true =>
+      dispatch(shipment: shipment, temperature: temperature)
+      succeed departed = true
+    false =>
+      succeed departed = false

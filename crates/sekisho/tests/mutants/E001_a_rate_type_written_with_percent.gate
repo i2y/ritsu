@@ -1,0 +1,27 @@
+gate cold_chain v1
+description "The type of a rate written with `%` in its brackets: a rate's type writes its step, `rate[step 1%]`"
+namespace Depot
+
+role dispatcher
+  description "Sends the shipments off"
+  can depart
+
+principal User
+  description "A member of the depot's staff, signed in"
+  roles dispatcher
+
+resource Shipment
+  description "A shipment waiting at the depot"
+  attributes
+    humidity : rate[%]  range >=0% <=100%
+
+action depart
+  description "Send a shipment off"
+  principal User
+  resource Shipment from shipmentId
+
+permit dispatchers_send_off_dry_shipments
+  description "A dispatcher sends off a shipment whose hold is at most 95% humid"
+  principal in dispatcher
+  action depart
+  when resource.humidity <= 95%

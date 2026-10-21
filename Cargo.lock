@@ -131,6 +131,7 @@ dependencies = [
  "ritsu-ports",
  "ritsu-project",
  "ritsu-testkit",
+ "ritsu-units",
  "ritsu-wasm",
  "rulec",
  "sakai",

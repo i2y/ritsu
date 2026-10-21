@@ -1,0 +1,61 @@
+gate 荷の送り出し(cold_chain_ja) v1
+description "記号で書く単位を使う例。-40℃ からの範囲を持つ温度と、1% 刻みの湿度を、同じ単位で受け取る規則に渡し、温度を ℉ の定数とも比べる。規則が荷室を温度帯の内と言えば配車係が、86℉ までの定温の荷なら責任者が送り出せる。cold_chain.gate の日本語の版"
+namespace DepotJa
+
+use rule 出発の可否 from "../gen/rules/出発の可否.rule"
+
+enum 温度帯(temperature_class) = 冷凍(frozen) | 冷蔵(chilled) | 定温(controlled_ambient)
+
+role 配車係(dispatcher)
+  description "荷を送り出す"
+  can 送り出す
+
+role 責任者(supervisor)
+  description "少し温かい定温の荷を送り出す"
+  can 送り出す
+
+principal 職員(User)
+  description "サインインした倉庫の職員"
+  roles 配車係, 責任者
+
+resource 荷(Shipment)
+  description "倉庫で待っている荷"
+  attributes
+    温度帯(temperature_class) : 温度帯
+    温度(temperature)         : temperature[℃]  range >=-40℃ <=40℃
+    湿度(humidity)            : rate[step 0.1%]  range >=0% <=100%
+
+action 送り出す(depart)
+  description "荷を送り出す"
+  principal 職員
+  resource 荷 from shipmentId
+  context
+    温度帯の内(within_band) = 出発の可否(温度帯: resource.温度帯, 温度: resource.温度, 湿度: resource.湿度).出してよい
+
+permit 配車係は温度帯の内の荷を送り出せる(dispatchers_send_off_shipments_within_band)
+  description "配車係は、荷室が温度帯の内にある荷を送り出せる"
+  principal in 配車係
+  action 送り出す
+  when 温度帯の内
+
+permit 責任者は少し温かい定温の荷を送り出せる(supervisors_send_off_warm_ambient_shipments)
+  description "責任者は、86℉（30℃）までの定温の荷を送り出せる"
+  principal in 責任者
+  action 送り出す
+  when resource.温度帯 is 定温
+  when resource.温度 <= 86℉
+
+expect deny 温かい冷凍の荷は出ない(nothing_frozen_leaves_above_5f)
+  description "冷凍の荷は、5℉（-15℃）より温かければだれも送り出せない"
+  action 送り出す
+  when resource.温度帯 is 冷凍
+  when resource.温度 > 5℉
+
+expect allow 配車係は冷えた冷蔵の荷を送り出せる(a_dispatcher_sends_off_a_cold_chilled_shipment)
+  description "配車係は、0℃ から 8℃ で湿度が 95% 以下の冷蔵の荷を送り出せる"
+  principal in 配車係
+  action 送り出す
+  when resource.温度帯 is 冷蔵
+  when resource.温度 >= 0℃
+  when resource.温度 <= 8℃
+  when resource.湿度 <= 95%

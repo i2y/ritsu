@@ -1,0 +1,5 @@
+ok rules/出発の可否.rule
+ok departure.ja.kn: 関数 1 個、total
+cold_chain.ja.flow: 検査を通りました
+cold_chain.ja.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 2、職務の分離 0
+ritsu check: ファイル 4 個（rulec 1、kaname 1、dandori 1、sekisho 1）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所

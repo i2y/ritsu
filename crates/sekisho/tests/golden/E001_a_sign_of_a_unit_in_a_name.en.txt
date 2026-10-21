@@ -1,0 +1,4 @@
+error[E001]: tests/mutants/E001_a_sign_of_a_unit_in_a_name.gate:16:12: `℃` is the sign of a unit: write it right after a number (`5℃`) or right after a type's `[` (`temperature[℃]`)
+    16 |     below_8℃ : bool
+error[E001]: tests/mutants/E001_a_sign_of_a_unit_in_a_name.gate:27:24: `℃` is the sign of a unit: write it right after a number (`5℃`) or right after a type's `[` (`temperature[℃]`)
+    27 |   when resource.below_8℃

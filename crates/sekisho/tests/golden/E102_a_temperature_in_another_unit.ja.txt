@@ -1,0 +1,3 @@
+エラー[E102]: tests/mutants/E102_a_temperature_in_another_unit.gate:33:109: 入力 `temperature` は temperature[℃] ですが、`resource.temperature` は数（temperature[℉]）です
+    33 |     within_band = cold_chain_departure(temperature_class: resource.temperature_class, temperature: resource.temperature, humidity: resource.humidity).may_depart
+  = 数は単位まで同じでなければなりません（`JPY` と `円` は同じ、税込と税抜は別）。

@@ -1,0 +1,4 @@
+error[E003]: tests/fixtures/cold_chain_units.ja.flow:13:29: expected `temperature[℃]` here, but this is `temperature[℉]`
+    13 |   let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)
+error[E003]: tests/fixtures/cold_chain_units.ja.flow:13:37: expected `rate[step 1%]` here, but this is `rate[step 0.1%]`
+    13 |   let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)

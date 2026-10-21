@@ -1,0 +1,19 @@
+# コールドチェーンのプロジェクトの kaname のモジュール（tests/cross.rs、tests/gen.rs）。規則に、荷室の温度を ℃ で、
+# 湿度を 1% 刻みで、規則が受け取る単位のまま渡す。departure.kn の日本語の版
+module 出発の判定(departure_ja) v1
+description "荷を倉庫から出してよいかを、荷室について規則に尋ねる。温度は ℃ のまま、湿度は 1% 刻みのまま、規則が受け取る単位で渡す。departure.kn の日本語の版"
+
+use rule 出発 from "rules/出発の可否.rule"
+
+record 荷室(Hold)
+  温度帯(band)      : 出発.温度帯
+  温度(temperature) : temperature[℃]  range >=-40℃ <=40℃
+  湿度(humidity)    : rate[step 1%]  range >=0% <=100%
+
+fn 出してよいか(may_depart)(荷(hold): 荷室) -> bool total
+  description "荷室についての規則の答え"
+  出発(温度帯: 荷.温度帯, 温度: 荷.温度, 湿度: 荷.湿度).出してよい
+
+examples
+  出してよいか(荷: 荷室 { 温度帯: 出発.温度帯.冷蔵, 温度: 5℃, 湿度: 90% }) = true
+  出してよいか(荷: 荷室 { 温度帯: 出発.温度帯.冷凍, 温度: 5℃, 湿度: 50% }) = false

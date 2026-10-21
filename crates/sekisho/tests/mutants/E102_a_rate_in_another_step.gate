@@ -1,0 +1,61 @@
+gate cold_chain v1
+description "The units written with a sign: a temperature in ℃ whose range starts at -40℃ and a humidity in steps of 1%, given to a rule that takes them in the same units, and the temperature compared with constants in ℉ too. A dispatcher sends off a shipment the rule says is within the band of its class; a supervisor, one at controlled ambient up to 86℉"
+namespace Depot
+
+use rule cold_chain_departure from "../gen/rules/cold_chain_departure.rule"
+
+enum temperature_class = frozen | chilled | controlled_ambient
+
+role dispatcher
+  description "Sends the shipments off"
+  can depart
+
+role supervisor
+  description "Sends off a shipment at controlled ambient that is a little warm"
+  can depart
+
+principal User
+  description "A member of the depot's staff, signed in"
+  roles dispatcher, supervisor
+
+resource Shipment
+  description "A shipment waiting at the depot"
+  attributes
+    temperature_class : temperature_class
+    temperature       : temperature[℃]  range >=-40℃ <=40℃
+    humidity          : rate[step 0.1%]  range >=0% <=100%
+
+action depart
+  description "Send a shipment off"
+  principal User
+  resource Shipment from shipmentId
+  context
+    within_band = cold_chain_departure(temperature_class: resource.temperature_class, temperature: resource.temperature, humidity: resource.humidity).may_depart
+
+permit dispatchers_send_off_shipments_within_band
+  description "A dispatcher sends off a shipment whose hold is within the temperature of its class"
+  principal in dispatcher
+  action depart
+  when within_band
+
+permit supervisors_send_off_warm_ambient_shipments
+  description "A supervisor sends off a shipment at controlled ambient up to 86℉ (30℃)"
+  principal in supervisor
+  action depart
+  when resource.temperature_class is controlled_ambient
+  when resource.temperature <= 86℉
+
+expect deny nothing_frozen_leaves_above_5f
+  description "No frozen shipment leaves warmer than 5℉ (-15℃)"
+  action depart
+  when resource.temperature_class is frozen
+  when resource.temperature > 5℉
+
+expect allow a_dispatcher_sends_off_a_cold_chilled_shipment
+  description "A dispatcher sends off a chilled shipment at 0℃ to 8℃ with the humidity at most 95%"
+  principal in dispatcher
+  action depart
+  when resource.temperature_class is chilled
+  when resource.temperature >= 0℃
+  when resource.temperature <= 8℃
+  when resource.humidity <= 95%

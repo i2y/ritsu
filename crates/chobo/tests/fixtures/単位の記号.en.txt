@@ -1,0 +1,5 @@
+error[E001]: 単位の記号.book:6:6: an unexpected character `%`
+     6 | unit %
+error[E001]: 単位の記号.book:9:12: `℃` is written only where the name of a unit goes: `unit ℃`, and after the `:` of an account or a parameter
+     9 | account 摂氏8℃以下の計器 : ℃ outside
+単位の記号.book: 2 error(s), 0 warning(s)

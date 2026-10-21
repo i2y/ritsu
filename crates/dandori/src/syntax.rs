@@ -457,13 +457,6 @@ fn is_ident_continue(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// The two units of temperature, which are no letters: a word of their own right after `[`
-/// (`temperature[℃]`), and the unit of a bound (`range >=41℉`), but never part of a name, which
-/// the code dandori writes could not spell.
-fn is_temperature(c: char) -> bool {
-    c == '℃' || c == '℉'
-}
-
 fn lex(src: &str) -> Result<Vec<Line>, Diag> {
     let mut out = Vec::new();
     for (i, raw) in src.lines().enumerate() {
@@ -539,8 +532,9 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                     }
                 }
                 let text: String = chars[start..j].iter().filter(|c| **c != '_').collect();
-                // a bound with its unit, as rulec writes one: `>=1kg`, `<=100万円`, `<=50%`
-                if bound && j < chars.len() && (is_ident_start(chars[j]) || is_temperature(chars[j]) || chars[j] == '%') {
+                // a bound with its unit, as rulec writes one: `>=1kg`, `<=100万円`, `<=50%`, `>=41℉`;
+                // the signs are ritsu-units' (`ritsu_units::chars`), and the full-width `％` is `%`
+                if bound && j < chars.len() && (is_ident_start(chars[j]) || ritsu_units::chars::is_sign(chars[j])) {
                     let mut k = j;
                     let mult: i128 = match chars[k] {
                         '万' => 10_000,
@@ -551,8 +545,7 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                         k += 1;
                     }
                     let unit: String = match chars.get(k) {
-                        Some('%') => "%".to_string(),
-                        Some(c) if is_temperature(*c) => c.to_string(),
+                        Some(c) if ritsu_units::chars::is_sign(*c) => ritsu_units::chars::table_spelling(&c.to_string()),
                         _ => chars[k..].iter().take_while(|c| is_ident_continue(**c)).collect(),
                     };
                     let end = k + unit.chars().count();
@@ -588,7 +581,10 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 toks.push(Token { tok: Tok::Ident(chars[start..j].iter().collect()), span });
                 continue;
             }
-            if is_temperature(c) && matches!(toks.last(), Some(Token { tok: Tok::Sym("["), .. })) {
+            // ℃ and ℉ are no letters: a word of their own right after `[` (`temperature[℃]`), and
+            // the unit of a bound (above), but never part of a name, which the code dandori writes
+            // could not spell
+            if ritsu_units::chars::is_word_sign(c) && matches!(toks.last(), Some(Token { tok: Tok::Sym("["), .. })) {
                 toks.push(Token { tok: Tok::Ident(c.to_string()), span });
                 j += 1;
                 continue;
@@ -620,8 +616,8 @@ fn lex(src: &str) -> Result<Vec<Line>, Diag> {
                 '{' => Some("{"),
                 '}' => Some("}"),
                 '?' => Some("?"),
-                // in a rate's step: rate[step 0.01%]
-                '%' => Some("%"),
+                // in a rate's step: rate[step 0.01%], the full-width `％` as `%`
+                '%' | '％' => Some("%"),
                 _ => None,
             };
             if let Some(s) = sym1 {

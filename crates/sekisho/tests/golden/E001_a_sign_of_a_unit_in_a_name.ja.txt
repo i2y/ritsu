@@ -1,0 +1,4 @@
+エラー[E001]: tests/mutants/E001_a_sign_of_a_unit_in_a_name.gate:16:12: `℃` は単位の記号です。数のすぐあと（`5℃`）か、型の `[` のすぐあと（`temperature[℃]`）に書いてください
+    16 |     below_8℃ : bool
+エラー[E001]: tests/mutants/E001_a_sign_of_a_unit_in_a_name.gate:27:24: `℃` は単位の記号です。数のすぐあと（`5℃`）か、型の `[` のすぐあと（`temperature[℃]`）に書いてください
+    27 |   when resource.below_8℃

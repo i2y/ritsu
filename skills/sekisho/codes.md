@@ -6,7 +6,7 @@ Written by `sekisho explain --all --format markdown`; do not edit.
 
 ## E001 — Something cannot be read as a word of the language
 
-**When**: A character the language does not have, a string not closed, a full-width space outside a string, a date of the wrong shape, or a number with a unit the table of units does not have. Cedar's `==`, `!=`, `&&`, `||` and `!` are not words of sekisho either.
+**When**: A character the language does not have, a string not closed, a full-width space outside a string, a date of the wrong shape, or a number with a unit the table of units does not have; or a sign of a unit (`%`, `℃`, `℉`) written anywhere but right after a number (`℃` and `℉` also right after a type's `[`). Cedar's `==`, `!=`, `&&`, `||` and `!` are not words of sekisho either.
 
 **Fix**: Correct it where it points. The same is `is`, not the same is `is not`, and the others are `and`, `or` and `not`.
 

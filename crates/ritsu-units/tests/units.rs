@@ -76,6 +76,39 @@ fn every_spelling_has_its_dimension_and_factor() {
     }
 }
 
+/// Every spelling of the table is read whole with the characters a unit is written with, which the
+/// lexers of the languages read a unit by: its first character starts a unit, and every other goes
+/// on with one. The signs are the characters of the spellings that are neither letters nor digits,
+/// and the full-width `％`, which is `%`; the ones that stand as a word, ℃ and ℉, are the units of
+/// temperature (a rate's `%` does not: the type of a rate writes its step, `rate[step 1%]`).
+#[test]
+fn every_spelling_is_written_with_the_characters_of_a_unit() {
+    use ritsu_units::chars;
+    let spelled = table::spellings();
+    for s in &spelled {
+        let mut cs = s.chars();
+        assert!(cs.next().is_some_and(chars::is_unit_char), "{s} starts a unit");
+        assert!(cs.all(chars::is_unit_tail), "{s} goes on as a unit");
+    }
+    let mut signs: Vec<char> = spelled.iter().flat_map(|s| s.chars().collect::<Vec<_>>()).filter(|c| !c.is_alphanumeric()).collect();
+    signs.sort();
+    signs.dedup();
+    assert_eq!(signs, ['%', '℃', '℉']);
+    assert!(signs.iter().all(|c| chars::is_sign(*c)));
+    assert!(chars::is_sign('％'));
+    assert_eq!(chars::table_spelling("％"), "%");
+    assert_eq!(chars::table_spelling("℃"), "℃");
+    let words: Vec<char> = ['%', '％', '℃', '℉'].into_iter().filter(|c| chars::is_word_sign(*c)).collect();
+    assert_eq!(words, ['℃', '℉']);
+    for c in words {
+        assert_eq!(table::unit(&c.to_string()).map(|(d, _)| d), Some(Dim::Temperature), "{c}");
+    }
+    // a digit goes on a unit but does not start one (the digits before it are the number's); of the
+    // letters of other scripts, only 円, 銭 and 坪 are a unit's
+    assert!(!chars::is_unit_char('2') && chars::is_unit_tail('2'));
+    assert!(chars::is_unit_char('坪') && !chars::is_unit_char('日') && !chars::is_unit_tail('日'));
+}
+
 #[test]
 fn jpy_is_another_spelling_of_yen() {
     let jpy = Unit::parse("money[JPY, incl_tax]").unwrap();

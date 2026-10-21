@@ -1,0 +1,8 @@
+ok rules/cold_chain_departure.rule
+ok departure.kn: 関数 1 個、total
+エラー[dandori E003]: cold_chain.flow:21:78: ここには `temperature[℃]` が要りますが、これは `temperature[℉]` です
+    21 |   let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)
+エラー[dandori E003]: cold_chain.flow:24:49: ここには `temperature[℃]` が要りますが、これは `temperature[℉]` です
+    24 |       dispatch(shipment: shipment, temperature: temperature)
+cold_chain.gate: ok — action 1、ポリシー 2（permit 2、forbid 0）、期待 2、職務の分離 0
+ritsu check: ファイル 4 個（rulec 1、kaname 1、dandori 1、sekisho 1）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所

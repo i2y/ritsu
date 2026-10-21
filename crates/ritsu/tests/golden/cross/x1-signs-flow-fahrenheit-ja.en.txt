@@ -1,0 +1,8 @@
+ok rules/出発の可否.rule
+ok departure.ja.kn: 1 function, total
+error[dandori E003]: cold_chain.ja.flow:21:29: expected `temperature[℃]` here, but this is `temperature[℉]`
+    21 |   let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)
+error[dandori E003]: cold_chain.ja.flow:24:22: expected `temperature[℃]` here, but this is `temperature[℉]`
+    24 |       送り出す(荷: 荷, 温度: 温度)
+cold_chain.ja.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 2 expectations, 0 separations
+ritsu check: 4 files (rulec 1, kaname 1, dandori 1, sekisho 1): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided

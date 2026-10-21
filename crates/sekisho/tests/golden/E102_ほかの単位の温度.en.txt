@@ -1,0 +1,3 @@
+error[E102]: tests/mutants/E102_ほかの単位の温度.gate:33:64: The input `温度` is temperature[℃], and `resource.温度` is a number (temperature[℉])
+    33 |     温度帯の内(within_band) = 出発の可否(温度帯: resource.温度帯, 温度: resource.温度, 湿度: resource.湿度).出してよい
+  = A number has to be of the same unit (`JPY` and `円` are the same; with tax and without are not).

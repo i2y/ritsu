@@ -1,0 +1,2 @@
+エラー[E001]: tests/mutants/E001_a_rate_type_written_with_percent.gate:16:21: `%` は、数のすぐあとに付けて率を書く記号です（`5%`）。率の型には、`rate[step 1%]` のように刻みを書いてください
+    16 |     humidity : rate[%]  range >=0% <=100%

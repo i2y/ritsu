@@ -1,0 +1,3 @@
+error[E102]: tests/mutants/E102_a_rate_in_another_step.gate:33:141: The input `humidity` is rate[step 1%], and `resource.humidity` is a number (rate[step 0.1%])
+    33 |     within_band = cold_chain_departure(temperature_class: resource.temperature_class, temperature: resource.temperature, humidity: resource.humidity).may_depart
+  = A number has to be of the same unit (`JPY` and `円` are the same; with tax and without are not).

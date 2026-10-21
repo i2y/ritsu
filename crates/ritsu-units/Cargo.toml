@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 license.workspace = true
 repository.workspace = true
-description = "The one type of units the languages of ritsu share: exact rationals, the closed table of currencies and units with their factors, and a unit with its dimension, its tax and its step"
+description = "The one type of units the languages of ritsu share: exact rationals, the closed table of currencies and units with their factors, the characters a unit is written with, and a unit with its dimension, its tax and its step"
 publish = false
 
 # ritsu-base and std (DESIGN 3.1).

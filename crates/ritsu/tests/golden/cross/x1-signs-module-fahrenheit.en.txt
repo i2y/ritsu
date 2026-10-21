@@ -1,0 +1,7 @@
+ok rules/cold_chain_departure.rule
+error[kaname E102]: departure.kn:15:67: The input `temperature` of the rule `cold_chain_departure` is temperature[℃]; this is temperature[℉]
+    15 |   cold_chain_departure(temperature_class: hold.band, temperature: hold.temperature, humidity: hold.humidity).may_depart
+  = `<value> in ℃` converts it: temperature[℉] and temperature[℃] are two units of one dimension, and nothing converts one into the other unasked.
+cold_chain.flow: ok
+cold_chain.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 2 expectations, 0 separations
+ritsu check: 4 files (rulec 1, kaname 1, dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

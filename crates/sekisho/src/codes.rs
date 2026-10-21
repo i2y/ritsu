@@ -78,8 +78,8 @@ pub fn ledger() -> Ledger {
             "E001",
             tr!("読めない字句があります", "Something cannot be read as a word of the language"),
             tr!(
-                "知らない文字、閉じていない文字列、文字列の外の全角の空白、形の崩れた日付、単位の表に無い単位の付いた数があるとき。Cedar の `==`、`!=`、`&&`、`||`、`!` も sekisho の字句にはありません。",
-                "A character the language does not have, a string not closed, a full-width space outside a string, a date of the wrong shape, or a number with a unit the table of units does not have. Cedar's `==`, `!=`, `&&`, `||` and `!` are not words of sekisho either."
+                "知らない文字、閉じていない文字列、文字列の外の全角の空白、形の崩れた日付、単位の表に無い単位の付いた数があるとき。単位の記号（`%`、`℃`、`℉`）を、書ける所のほかに書いたときも出ます。書けるのは数のすぐあとで、`℃` と `℉` は型の `[` のすぐあとにも書けます。Cedar の `==`、`!=`、`&&`、`||`、`!` も sekisho の字句にはありません。",
+                "A character the language does not have, a string not closed, a full-width space outside a string, a date of the wrong shape, or a number with a unit the table of units does not have; or a sign of a unit (`%`, `℃`, `℉`) written anywhere but right after a number (`℃` and `℉` also right after a type's `[`). Cedar's `==`, `!=`, `&&`, `||` and `!` are not words of sekisho either."
             ),
             tr!(
                 "示された位置を直してください。等しいことは `is`、等しくないことは `is not` で書き、「かつ」「または」「でない」は `and`、`or`、`not` で書きます。",

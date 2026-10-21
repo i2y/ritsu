@@ -181,7 +181,7 @@ Every attribute has finitely many values to count:
 |---|---|---|
 | `bool` | `Bool` | true and false |
 | an enum | `String`, the value's alias | every value |
-| a number: one of rulec's unit types (`money[GBP, incl_tax]`, `mass[kg]`, …), `number` or `rate`, with a `range` | `Long`, in whole units of the type | the stretches the constants the policies compare it with cut its range into |
+| a number: one of rulec's unit types (`money[GBP, incl_tax]`, `mass[kg]`, `temperature[℃]`, `rate[step 1%]`, …), `number` or `rate`, with a `range` | `Long`, in whole units of the type | the stretches the constants the policies compare it with cut its range into |
 | `date`, with a `range` | none | what the computed values that read it can be |
 | an entity type (`customer : Customer`) | that type | which entities of one type are the same entity (relations) |
 | `T?` | an optional attribute | its absence, as one more value |
@@ -513,6 +513,13 @@ guards.
 The symbols are `=` `:` `,` `.` `(` `)` `<` `<=` `>` `>=` `|` `?`, and `#` for a comment. Cedar's
 `==`, `!=`, `&&`, `||` and `!` are not sekisho's: E001 says what to write instead (`is`, `is not`,
 `and`, `or`, `not`).
+
+A number carries its unit right after it, as rulec writes one (`50GBP`, `100万円`, `5%`, `-40℃`),
+and the unit is one of the table of units (E001 if not); the full-width `％` is read as `%`. `℃` and
+`℉` are signs, not letters: besides right after a number, they are written right after a type's `[`
+(`temperature[℃]`) and nowhere else, so never in a name, which Cedar and the generated code could not
+spell (E001). A `%` with no number before it is E001 too: the type of a rate writes its step,
+`rate[step 1%]`.
 
 ## Commands
 

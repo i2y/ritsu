@@ -32,6 +32,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 
 [dev-dependencies]
 ritsu-testkit = { path = "../ritsu-testkit" }
+# the table of units, which tests/units.rs writes a file of each language in
+ritsu-units = { path = "../ritsu-units" }
 # The page in the browser, held to this binary by tests/playground.rs (a dev-dependency may close
 # the circle: ritsu-wasm runs this crate's library).
 ritsu-wasm = { path = "../ritsu-wasm" }

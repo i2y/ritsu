@@ -73,7 +73,7 @@ units rulec writes:
 | a currency's name (`円`, `JPY`, an ISO 4217 code, `銭`, `USDc`) with scale 0 | that money: `money[円]`, or with its tax `money[円, incl_tax]` |
 | a currency's name other than `円` and `JPY`, with scale 2 | its hundredth: `unit USD scale 2` is `money[USDc]` |
 | a unit of mass, length, area, volume or time (`g`, `kg`, `L`, `h`) with scale 0 | that unit: `mass[kg]` |
-| anything else (`pcs`, `seats`, `pt`, yen with scale 2) | a count with its name and nothing else, the same only as itself |
+| anything else (`pcs`, `seats`, `pt`, yen with scale 2, and the units of temperature and of sound, `℃`, `℉` and `dB`, which do not add up) | a count with its name and nothing else, the same only as itself |
 
 Only the money of the first two rows takes a tax (E014); the hundredth of a yen is `銭`.
 
@@ -249,7 +249,10 @@ write a transfer that moves the balance.
 
 A name starts with a letter or `_`, and goes on with letters, digits and `_`. Names are compared
 as they are written, without Unicode normalization; a name with a combining mark (a dakuten or
-an accent written as a character of its own) is refused (E001), to be written precomposed.
+an accent written as a character of its own) is refused (E001), to be written precomposed. `℃` and
+`℉`, which are signs and not letters, are a unit's name where one goes, `unit ℃` and the unit after
+the `:` of an account or a parameter, as the other languages read them; anywhere else, in a name
+too, they are E001.
 
 | Where | Keywords |
 |---|---|

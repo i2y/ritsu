@@ -1,0 +1,27 @@
+gate cold_chain v1
+description "A sign of a unit written in a name: ℃ is a unit's, and goes right after a number or a type's `[`"
+namespace Depot
+
+role dispatcher
+  description "Sends the shipments off"
+  can depart
+
+principal User
+  description "A member of the depot's staff, signed in"
+  roles dispatcher
+
+resource Shipment
+  description "A shipment waiting at the depot"
+  attributes
+    below_8℃ : bool
+
+action depart
+  description "Send a shipment off"
+  principal User
+  resource Shipment from shipmentId
+
+permit dispatchers_send_off_cold_shipments
+  description "A dispatcher sends off a shipment below 8℃"
+  principal in dispatcher
+  action depart
+  when resource.below_8℃

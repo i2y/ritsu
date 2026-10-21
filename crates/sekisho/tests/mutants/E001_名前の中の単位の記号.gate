@@ -1,0 +1,27 @@
+gate 荷の送り出し(cold_chain_ja) v1
+description "名前に単位の記号を書いたもの。℃ は単位の記号で、数のすぐあとか型の `[` のすぐあとに書く"
+namespace DepotJa
+
+role 配車係(dispatcher)
+  description "荷を送り出す"
+  can 送り出す
+
+principal 職員(User)
+  description "サインインした倉庫の職員"
+  roles 配車係
+
+resource 荷(Shipment)
+  description "倉庫で待っている荷"
+  attributes
+    摂氏8℃以下(below_8) : bool
+
+action 送り出す(depart)
+  description "荷を送り出す"
+  principal 職員
+  resource 荷 from shipmentId
+
+permit 配車係は冷たい荷を送り出せる(dispatchers_send_off_cold_shipments)
+  description "配車係は、8℃ より冷たい荷を送り出せる"
+  principal in 配車係
+  action 送り出す
+  when resource.摂氏8℃以下

@@ -1,0 +1,27 @@
+gate 荷の送り出し(cold_chain_ja) v1
+description "率の型の `[` の中に `%` を書いたもの。率の型には `rate[step 1%]` のように刻みを書く"
+namespace DepotJa
+
+role 配車係(dispatcher)
+  description "荷を送り出す"
+  can 送り出す
+
+principal 職員(User)
+  description "サインインした倉庫の職員"
+  roles 配車係
+
+resource 荷(Shipment)
+  description "倉庫で待っている荷"
+  attributes
+    湿度(humidity) : rate[%]  range >=0% <=100%
+
+action 送り出す(depart)
+  description "荷を送り出す"
+  principal 職員
+  resource 荷 from shipmentId
+
+permit 配車係は乾いた荷を送り出せる(dispatchers_send_off_dry_shipments)
+  description "配車係は、荷室の湿度が 95% 以下の荷を送り出せる"
+  principal in 配車係
+  action 送り出す
+  when resource.湿度 <= 95%

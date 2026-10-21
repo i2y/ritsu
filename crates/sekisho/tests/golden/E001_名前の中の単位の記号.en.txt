@@ -1,0 +1,4 @@
+error[E001]: tests/mutants/E001_名前の中の単位の記号.gate:16:8: `℃` is the sign of a unit: write it right after a number (`5℃`) or right after a type's `[` (`temperature[℃]`)
+    16 |     摂氏8℃以下(below_8) : bool
+error[E001]: tests/mutants/E001_名前の中の単位の記号.gate:27:20: `℃` is the sign of a unit: write it right after a number (`5℃`) or right after a type's `[` (`temperature[℃]`)
+    27 |   when resource.摂氏8℃以下

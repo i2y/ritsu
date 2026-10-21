@@ -5,6 +5,12 @@
 //! are small and English: the ledger's reproductions (`ritsu_cross::codes`) are laid out from the
 //! same files.
 //!
+//! - X1 (the unit where a value crosses, which each language holds itself; DESIGN 7.3), for the
+//!   units written with a sign (DESIGN 5.1): `cold_chain` — a rule takes the temperature of a hold
+//!   in ℃ and its humidity in steps of 1%, and a gate, a flow and a module of kaname give it each in
+//!   the rule's units (held); in ℉, from the gate (sekisho's E102), the flow (dandori's E003) or the
+//!   module (kaname's E102); in steps of 0.1%, from the gate or the flow. The same with Japanese
+//!   names, in ℃ (held) and in ℉ from each.
 //! - X2 (a rule's preconditions where a workflow calls it): `refund` — the amount asked is kept
 //!   below what was paid by the ranges (held), can pass it (E201), or comes from a task with no
 //!   range (W201). `quota` is the same with a sum on one side (`used + requested <= quota`).
@@ -105,6 +111,65 @@ fn run(name: &str, files: &[(&str, String)], want_code: i32, borders: (u64, u64,
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     let b = &v["borders"];
     assert_eq!((b["held"].as_u64(), b["failed"].as_u64(), b["undecided"].as_u64()), (Some(borders.0), Some(borders.1), Some(borders.2)), "{name}: {b}");
+}
+
+/// The project of the cold chain: a rule (its English version and its Japanese one), and a gate, a
+/// flow and a module of kaname of each that give it the hold's temperature and humidity. The rule and
+/// the gates are copies of sekisho's test material (`tests/gen`), the flows of dandori's
+/// (`tests/fixtures`), which their own tests hold; the modules are this project's.
+const COLD_CHAIN: &str = "tests/projects/cold_chain";
+
+/// `s` with `from` replaced by `to`, which it holds.
+fn swapped(s: &str, from: &str, to: &str) -> String {
+    assert!(s.contains(from), "{from}");
+    s.replace(from, to)
+}
+
+/// X1 for the units written with a sign (DESIGN 5.1, 7.3): the rule of the cold chain takes the
+/// temperature of a hold as `temperature[℃]`, from -40℃, and its humidity as `rate[step 1%]`. A gate,
+/// a flow and a module of kaname read ℃, ℉ and % with the characters ritsu-units reads a unit with,
+/// and hold what they give the rule to its unit as they hold a unit written with letters: given in
+/// the rule's units, every file passes; a temperature in ℉ is sekisho's E102, dandori's E003 and
+/// kaname's E102, and a humidity in steps of 0.1% sekisho's E102 and dandori's E003. The same runs
+/// with the Japanese versions.
+#[test]
+fn x1_the_units_written_with_a_sign_where_a_value_crosses() {
+    let mut failures = Vec::new();
+    let project = here().join(COLD_CHAIN);
+    let read = |p: std::path::PathBuf| std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
+    // the copies are the material sekisho's and dandori's tests hold
+    for (copy, original) in [
+        ("rules/cold_chain_departure.rule", "../sekisho/tests/gen/rules/cold_chain_departure.rule"),
+        ("rules/出発の可否.rule", "../sekisho/tests/gen/rules/出発の可否.rule"),
+        ("cold_chain.gate", "../sekisho/tests/gen/cold_chain.gate"),
+        ("cold_chain.ja.gate", "../sekisho/tests/gen/cold_chain.ja.gate"),
+        ("cold_chain.flow", "../dandori/tests/fixtures/cold_chain.flow"),
+        ("cold_chain.ja.flow", "../dandori/tests/fixtures/cold_chain.ja.flow"),
+    ] {
+        assert_eq!(read(project.join(copy)), read(here().join(original)), "{COLD_CHAIN}/{copy} is a copy of {original}");
+    }
+    let one = |name: &str| read(project.join(name));
+    let (rule, gate, flow, module) = (one("rules/cold_chain_departure.rule"), one("cold_chain.gate"), one("cold_chain.flow"), one("departure.kn"));
+    let files = |gate: &str, flow: &str, module: &str| vec![("rules/cold_chain_departure.rule", rule.clone()), ("cold_chain.gate", gate.to_string()), ("cold_chain.flow", flow.to_string()), ("departure.kn", module.to_string())];
+    run("x1-signs-held", &files(&gate, &flow, &module), 0, (0, 0, 0), &mut failures);
+    let (celsius, fahrenheit) = ("temperature[℃]  range >=-40℃ <=40℃", "temperature[℉]  range >=-40℉ <=104℉");
+    // the gate's attribute in ℉ (and its expectation's 8℃, which ℉ counts as no whole number, as 46℉)
+    let gate_f = swapped(&swapped(&gate, celsius, fahrenheit), "temperature <= 8℃", "temperature <= 46℉");
+    run("x1-signs-gate-fahrenheit", &files(&gate_f, &flow, &module), 1, (0, 0, 0), &mut failures);
+    run("x1-signs-flow-fahrenheit", &files(&gate, &swapped(&flow, celsius, fahrenheit), &module), 1, (0, 0, 0), &mut failures);
+    run("x1-signs-module-fahrenheit", &files(&gate, &flow, &swapped(&module, celsius, fahrenheit)), 1, (0, 0, 0), &mut failures);
+    let (step, finer) = ("rate[step 1%]  range >=0% <=100%", "rate[step 0.1%]  range >=0% <=100%");
+    run("x1-signs-gate-step", &files(&swapped(&gate, step, finer), &flow, &module), 1, (0, 0, 0), &mut failures);
+    run("x1-signs-flow-step", &files(&gate, &swapped(&flow, step, finer), &module), 1, (0, 0, 0), &mut failures);
+    // the Japanese versions
+    let (rule, gate, flow, module) = (one("rules/出発の可否.rule"), one("cold_chain.ja.gate"), one("cold_chain.ja.flow"), one("departure.ja.kn"));
+    let files = |gate: &str, flow: &str, module: &str| vec![("rules/出発の可否.rule", rule.clone()), ("cold_chain.ja.gate", gate.to_string()), ("cold_chain.ja.flow", flow.to_string()), ("departure.ja.kn", module.to_string())];
+    run("x1-signs-held-ja", &files(&gate, &flow, &module), 0, (0, 0, 0), &mut failures);
+    let gate_f = swapped(&swapped(&gate, celsius, fahrenheit), "温度 <= 8℃", "温度 <= 46℉");
+    run("x1-signs-gate-fahrenheit-ja", &files(&gate_f, &flow, &module), 1, (0, 0, 0), &mut failures);
+    run("x1-signs-flow-fahrenheit-ja", &files(&gate, &swapped(&flow, celsius, fahrenheit), &module), 1, (0, 0, 0), &mut failures);
+    run("x1-signs-module-fahrenheit-ja", &files(&gate, &flow, &swapped(&module, celsius, fahrenheit)), 1, (0, 0, 0), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]

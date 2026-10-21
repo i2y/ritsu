@@ -1,0 +1,8 @@
+ok rules/cold_chain_departure.rule
+ok departure.kn: 1 function, total
+error[dandori E003]: cold_chain.flow:21:78: expected `temperature[℃]` here, but this is `temperature[℉]`
+    21 |   let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)
+error[dandori E003]: cold_chain.flow:24:49: expected `temperature[℃]` here, but this is `temperature[℉]`
+    24 |       dispatch(shipment: shipment, temperature: temperature)
+cold_chain.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 2 expectations, 0 separations
+ritsu check: 4 files (rulec 1, kaname 1, dandori 1, sekisho 1): 1 fail (2 errors); borders between the languages: 0 checked, 0 undecided

@@ -1,0 +1,13 @@
+workflow 単位の違う荷の送り出し v1
+description "規則と違う記号の単位の値を、規則に渡したもの。規則が ℃ で受け取る温度に ℉ の温度を、1% 刻みで受け取る湿度に 0.1% 刻みの湿度を渡す。`kg` と `g` と同じく、同じ次元の二つの単位は別の単位で、dandori は渡すところで換算しない。cold_chain_units.flow の日本語の版"
+
+use rule 出発 from "rules/出発の可否.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:cold-chain-departure"
+
+inputs
+  温度帯 : 出発.温度帯
+  温度   : temperature[℉]  range >=-40℉ <=104℉
+  湿度   : rate[step 0.1%]  range >=0% <=100%
+
+flow
+  let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)

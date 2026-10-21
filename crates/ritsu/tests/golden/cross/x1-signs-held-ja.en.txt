@@ -1,0 +1,5 @@
+ok rules/出発の可否.rule
+ok departure.ja.kn: 1 function, total
+cold_chain.ja.flow: ok
+cold_chain.ja.gate: ok — 1 action, 2 policies (2 permits, 0 forbids), 2 expectations, 0 separations
+ritsu check: 4 files (rulec 1, kaname 1, dandori 1, sekisho 1): all pass; borders between the languages: 0 checked, 0 undecided

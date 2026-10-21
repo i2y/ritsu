@@ -1,0 +1,10 @@
+# The signs of the units: ℃ and ℉ are a unit's name where one goes (`unit ℃`, `: ℃`); a temperature
+# does not add up, so the unit is a count of its own name, as `dB` is. In a name, a sign is E001, and
+# `%` is no unit's name
+book unit_signs v1
+
+unit ℃
+unit %
+
+account sensors : ℃ outside
+account probes_below_8℃ : ℃ outside

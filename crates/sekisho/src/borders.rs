@@ -340,9 +340,9 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
         let mismatch = |what: Text| at("E102", g, line, tr!("規則 `{}` の入力 `{name}` に `{shown}` は渡せません。{}", "`{shown}` cannot be given to the input `{name}` of the rule `{}`: {}", facts.rule, what.ja; facts.rule, what.en));
         match (&ty, &gv) {
             (_, Given::Unknown) => {}
-            (ColumnType::Num { unit: Some(want), min, max, written }, Given::Num { unit: Some(have), lo, hi, .. }) => {
+            (ColumnType::Num { unit: Some(want), min, max, .. }, Given::Num { unit: Some(have), lo, hi, .. }) => {
                 if !want.same(have) {
-                    diags.push(mismatch(tr!("単位が {have} で、入力は {written} です", "it is {have}, and the input is {written}")));
+                    diags.push(mismatch(tr!("単位が {have} で、入力は {want} です", "it is {have}, and the input is {want}")));
                     continue;
                 }
                 inputs.push((col.name.clone(), Some(want.clone())));

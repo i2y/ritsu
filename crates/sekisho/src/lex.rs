@@ -3,12 +3,15 @@
 //! The language is written a line at a time, so the lexer keeps the lines: each has its
 //! indentation, its tokens, and its text without the comment. A word is cut out as a word and told
 //! apart from a keyword by the parser, by position. A number is cut out with the unit written
-//! right after it (`50GBP`, `100万円`, `5%`), as rulec and dandori write one; a run of digits that
-//! goes on in Japanese and is no unit is a name (`3日以内`).
+//! right after it (`50GBP`, `100万円`, `5%`, `-40℃`), as rulec and dandori write one, with the
+//! characters ritsu-units reads a unit with (`ritsu_units::chars`; the full-width `％` is `%`); a run
+//! of digits that goes on in Japanese and is no unit is a name (`3日以内`). ℃ and ℉, which are no
+//! letters, are a word of their own right after a type's `[` (`temperature[℃]`), and never part of
+//! a name, which Cedar and the code generated from the gate could not spell.
 //!
-//! What cannot be read is E001 (a character the language does not have, a string not closed, a
-//! full-width space, a date or a number of the wrong shape); a tab in the indentation is E004.
-//! One error a line: what comes after the first is noise.
+//! What cannot be read is E001 (a character the language does not have, a sign of a unit where no
+//! unit goes, a string not closed, a full-width space, a date or a number of the wrong shape); a
+//! tab in the indentation is E004. One error a line: what comes after the first is noise.
 
 use crate::ast::Num;
 use crate::diag::Diag;
@@ -87,11 +90,6 @@ fn digits_at(cs: &[char], i: usize, n: usize) -> bool {
 
 fn num(cs: &[char], i: usize, n: usize) -> i64 {
     cs[i..i + n].iter().collect::<String>().parse().unwrap_or(0)
-}
-
-/// The symbols a unit is written with that are not letters.
-fn is_unit_symbol(c: char) -> bool {
-    matches!(c, '%' | '℃' | '℉')
 }
 
 /// `10_000`, `1.5`: the digits as a rational; None past what the language holds.
@@ -229,6 +227,13 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
                     break;
                 }
                 Tok::Word(w)
+            } else if ritsu_units::chars::is_word_sign(c) && toks.last().is_some_and(|t| t.tok == Tok::LBracket) {
+                // `temperature[℃]`: the unit of a type, a word of its own
+                j += 1;
+                Tok::Word(c.to_string())
+            } else if ritsu_units::chars::is_sign(c) {
+                diags.push(err("E001", col, misplaced_sign(c)));
+                break;
             } else {
                 let next = cs.get(j + 1).copied();
                 let (t, n) = match (c, next) {
@@ -284,6 +289,22 @@ fn unknown_symbol(written: &str, next: Option<char>) -> ritsu_base::text::Text {
     }
 }
 
+/// What a sign of a unit is said with where no unit goes: after no number, and, for ℃ and ℉, not
+/// right after a type's `[`.
+fn misplaced_sign(c: char) -> ritsu_base::text::Text {
+    if ritsu_units::chars::is_word_sign(c) {
+        tr!(
+            "`{c}` は単位の記号です。数のすぐあと（`5{c}`）か、型の `[` のすぐあと（`temperature[{c}]`）に書いてください",
+            "`{c}` is the sign of a unit: write it right after a number (`5{c}`) or right after a type's `[` (`temperature[{c}]`)"
+        )
+    } else {
+        tr!(
+            "`{c}` は、数のすぐあとに付けて率を書く記号です（`5%`）。率の型には、`rate[step 1%]` のように刻みを書いてください",
+            "`{c}` is written right after a number, as a rate (`5%`); the type of a rate writes its step, as in `rate[step 1%]`"
+        )
+    }
+}
+
 /// A date, a number with its unit, or a name that starts with digits, from column `j`: the token
 /// and where the next one starts, or why it cannot be read (E001).
 fn number(cs: &[char], j: usize) -> Result<(Tok, usize), ritsu_base::text::Text> {
@@ -321,14 +342,14 @@ fn number(cs: &[char], j: usize) -> Result<(Tok, usize), ritsu_base::text::Text>
     let digits: String = cs[j..k].iter().collect();
     // what follows: a unit, or the rest of a name
     let mut e = k;
-    if e < cs.len() && is_unit_symbol(cs[e]) {
+    if e < cs.len() && ritsu_units::chars::is_sign(cs[e]) {
         e += 1;
     } else {
         while e < cs.len() && is_name_char(cs[e]) {
             e += 1;
         }
     }
-    let run: String = cs[k..e].iter().collect();
+    let run: String = ritsu_units::chars::table_spelling(&cs[k..e].iter().collect::<String>());
     let raw: String = cs[j..e].iter().collect();
     let too_large = || tr!("数 `{raw}` が大きすぎます", "The number `{raw}` is too large");
     if run.is_empty() {
@@ -369,11 +390,23 @@ mod tests {
         assert_eq!(toks("1.5kg"), vec![Tok::Num(Num { value: Rat::new(3, 2), unit: "kg".into(), raw: "1.5kg".into() })]);
         assert_eq!(toks("3日以内"), vec![Tok::Word("3日以内".into())]);
         assert_eq!(toks("2026-10-01"), vec![Tok::Date(crate::types::day(2026, 10, 1).unwrap())]);
+        // the signs of the table after a number, the full-width `％` as `%`
+        assert_eq!(toks("-40℃ 41℉ 5％"), vec![Tok::Minus, n(40, "℃", "40℃"), n(41, "℉", "41℉"), n(5, "%", "5％")]);
+    }
+
+    /// ℃ and ℉ are no letters, and stand as a word of their own right after a type's `[`, as rulec
+    /// reads them: `temperature[℃]` is a type, as `mass[kg]` is.
+    #[test]
+    fn a_sign_of_temperature_is_a_word_after_a_bracket() {
+        for (src, sign) in [("temperature[℃]", "℃"), ("temperature[ ℉ ]", "℉")] {
+            assert_eq!(toks(src), vec![Tok::Word("temperature".into()), Tok::LBracket, Tok::Word(sign.into()), Tok::RBracket], "{src}");
+        }
+        assert_eq!(toks("rate[step 1%]"), vec![Tok::Word("rate".into()), Tok::LBracket, Tok::Word("step".into()), n(1, "%", "1%"), Tok::RBracket]);
     }
 
     #[test]
     fn what_cannot_be_read() {
-        for (src, code) in [("x \"open", "E001"), ("50XYZ", "E001"), ("2026-02-30", "E001"), ("2026-1-1", "E001"), ("a == b", "E001"), ("\tx", "E004"), ("a\u{3000}b", "E001")] {
+        for (src, code) in [("x \"open", "E001"), ("50XYZ", "E001"), ("2026-02-30", "E001"), ("2026-1-1", "E001"), ("a == b", "E001"), ("\tx", "E004"), ("a\u{3000}b", "E001"), ("x℃ : bool", "E001"), ("rate[%]", "E001"), ("rate[％]", "E001"), ("℉", "E001")] {
             let (_, diags) = lex("t.gate", src);
             assert_eq!(diags.iter().map(|d| d.code).collect::<Vec<_>>(), vec![code], "{src}");
         }

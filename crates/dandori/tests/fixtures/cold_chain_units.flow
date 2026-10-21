@@ -1,0 +1,13 @@
+workflow cold_chain_units v1
+description "Units of the sign other than the rule's, given to it: a temperature in ℉ where the rule takes ℃, and a humidity in steps of 0.1% where it takes 1%. Two units of a dimension are two units, as `kg` and `g` are, and dandori converts nothing where a value goes"
+
+use rule departure from "rules/cold_chain_departure.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:cold-chain-departure"
+
+inputs
+  temperature_class : departure.temperature_class
+  temperature       : temperature[℉]  range >=-40℉ <=104℉
+  humidity          : rate[step 0.1%]  range >=0% <=100%
+
+flow
+  let verdict = departure(temperature_class: temperature_class, temperature: temperature, humidity: humidity)

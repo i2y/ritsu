@@ -74,6 +74,23 @@ fn a_bound_with_a_unit_is_counted_in_the_type() {
     assert!(matches!(&rec.fields[0].1, Ty::Num(u) if u.to_string() == "money[円, incl_tax]"));
 }
 
+/// The signs of the units are read as rulec reads them, with ritsu-units' characters
+/// (`ritsu_units::chars`): ℃ and ℉ are a word of their own right after `[`, and with `%` the unit
+/// of a bound; the full-width `％` is `%`. A `%` in a rate's brackets is no unit: the type of a rate
+/// writes its step.
+#[test]
+fn the_signs_of_the_units_are_read_as_rulec_reads_them() {
+    let c = check("signs.flow", "workflow signs v1\n\nrecord R\n  t : temperature[℉]  range >=-40℉ <=104℉\n  h : rate[step 0.1％]  range >=0％ <=100％\n\nflow\n  pass\n");
+    let m = c.model.as_ref().unwrap_or_else(|| panic!("{:?}", said(&c)));
+    let rec = m.records.iter().find(|r| r.name == "R").unwrap();
+    assert_eq!(rec.ranges["t"], Range { lo: Some(-40), hi: Some(104) });
+    assert_eq!(rec.ranges["h"], Range { lo: Some(0), hi: Some(1000) });
+    // the type is written in the table's spelling
+    assert_eq!(m.ty_name(&rec.fields.iter().find(|(n, _)| n == "h").unwrap().1), "rate[step 0.1%]");
+    let c = check("bad.flow", "workflow bad v1\n\ninputs\n  x : rate[%]  range >=0% <=100%\n\nflow\n  pass\n");
+    assert_eq!(said(&c), [("E002".to_string(), "there is no type `rate[%]`".to_string(), vec!["the type of a rate writes its step, as in `rate[step 1%]`".to_string()])]);
+}
+
 /// A spelling the table of units does not have is no type, and says why.
 #[test]
 fn a_unit_the_table_does_not_have_is_no_type() {

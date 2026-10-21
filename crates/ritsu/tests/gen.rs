@@ -1424,9 +1424,16 @@ fn the_code_of_the_modules_answers_as_the_reference_does() {
     let (without, without_across) = checked_places(&settlement_modules(false));
     assert!(with < without && with_across == 0 && without_across > 0, "with the verdicts {with} places ({with_across} across), without {without} ({without_across} across)");
     println!("the code checks {with} places with the verdicts of the checks across the borders, {without} without them ({without_across} of them across the borders)");
+    the_modules_answer_as_the_reference_does(&t, &out, &modules, "settlement");
+}
+
+/// The code of `modules`, in the package at `out` (`name` names the module of Go made under `t`),
+/// answers every vector of every function as the reference interpreter does, in each language, and
+/// each input outside what the parameters declare.
+fn the_modules_answer_as_the_reference_does(t: &TempDir, out: &Path, modules: &[std::rc::Rc<kaname::check::Checked>], name: &str) {
     let suite: kaname::suite::Suite = ritsu_project::Joined::new().ports().into();
-    let (mut cases, diverged) = kaname::r#gen::harness::cases(&modules, &suite, ritsu_base::text::Lang::En);
-    let more = kaname::r#gen::harness::outside_cases(&modules, &suite, ritsu_base::text::Lang::En);
+    let (mut cases, diverged) = kaname::r#gen::harness::cases(modules, &suite, ritsu_base::text::Lang::En);
+    let more = kaname::r#gen::harness::outside_cases(modules, &suite, ritsu_base::text::Lang::En);
     let (vectors, outside) = (cases.len() - diverged, more.len());
     cases.extend(more);
     let run = cases.len() - diverged;
@@ -1436,7 +1443,7 @@ fn the_code_of_the_modules_answers_as_the_reference_does() {
         assert!(wrong.is_empty(), "the {target} answers otherwise than the reference:\n{}", wrong.join("\n"));
         println!("{target}: {agree} of {run} cases agree with the reference: {vectors} vectors and {outside} inputs outside what the parameters declare");
     };
-    let program = |target: kaname::r#gen::Target| kaname::r#gen::harness::program(&modules, target, "generated", MODULE);
+    let program = |target: kaname::r#gen::Target| kaname::r#gen::harness::program(modules, target, "generated", MODULE);
     let tools = workspace().join("crates/kaname/tools");
     let tsc = tools.join("node_modules/.bin/tsc");
     if ritsu_testkit::need(Need::Node) {
@@ -1462,18 +1469,20 @@ fn the_code_of_the_modules_answers_as_the_reference_does() {
             ritsu_testkit::skip("tsc is not installed in crates/kaname/tools (npm ci --prefix crates/kaname/tools); the TypeScript of the modules is not run");
         }
     }
-    if ready(Need::Python, || Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success()), "python3 is not installed; the Python of the modules is not run") {
+    // a package with gates imports cedarpy where it is imported, which sekisho's runner of Python has
+    let python = if out.join("python/generated/authz").is_dir() { workspace().join("crates/sekisho/tools/runner-py/.venv/bin/python") } else { PathBuf::from("python3") };
+    if ready(Need::Python, || Command::new(&python).arg("--version").output().is_ok_and(|o| o.status.success()), &format!("{} is not installed; the Python of the modules is not run", python.display())) {
         let dir = out.join("python");
         std::fs::write(dir.join("harness.py"), program(kaname::r#gen::Target::Python)).unwrap();
         std::fs::write(dir.join("cases.json"), &json).unwrap();
-        let o = Command::new("python3").arg("harness.py").arg("cases.json").current_dir(&dir).output().unwrap();
+        let o = Command::new(&python).arg("harness.py").arg("cases.json").current_dir(&dir).output().unwrap();
         assert!(o.status.success(), "python3:\n{}", said(&o));
         held("Python", &String::from_utf8_lossy(&o.stdout));
     }
     if ready(Need::Go, have_go, "go is not installed; the Go of the modules is not run") {
         match go_module() {
             Some(gomod) => {
-                let dir = t.path().join("go-settlement");
+                let dir = t.path().join(format!("go-{name}"));
                 go_module_in(&dir, &out.join("go"), &gomod);
                 std::fs::create_dir_all(dir.join("harness")).unwrap();
                 std::fs::write(dir.join("harness/main.go"), program(kaname::r#gen::Target::Go)).unwrap();
@@ -1488,4 +1497,62 @@ fn the_code_of_the_modules_answers_as_the_reference_does() {
             None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the modules is not run"),
         }
     }
+}
+
+// ── the units written with a sign ────────────────────────────────────────────────────────────────
+
+/// The project of the cold chain (DESIGN 5.1): a rule that takes the temperature of a hold in ℃ and
+/// its humidity in steps of 1%, and a gate, a flow and a module of kaname that give it them, each in
+/// English and in Japanese (tests/cross.rs holds what `ritsu check` says of it).
+const COLD_CHAIN: &str = "tests/projects/cold_chain";
+
+/// The project's two modules of kaname, checked with the verdicts of the checks across the borders,
+/// as `ritsu gen` makes their code.
+fn cold_chain_modules() -> Vec<std::rc::Rc<kaname::check::Checked>> {
+    let joined = ritsu_project::Joined::new();
+    let v: std::rc::Rc<dyn ritsu_ports::Verdicts> = std::rc::Rc::new(ritsu_cross::ProgramVerdicts::new(&joined));
+    let suite: kaname::suite::Suite = kaname::suite::Suite::from(joined.ports()).with_verdicts(v);
+    let run = kaname::check::Run::new(suite);
+    ["departure.kn", "departure.ja.kn"]
+        .iter()
+        .map(|f| {
+            let path = format!("{COLD_CHAIN}/{f}");
+            run.file(&path).unwrap_or_else(|e| panic!("{path}: {e}")).checked.clone().unwrap_or_else(|| panic!("{path} does not pass"))
+        })
+        .collect()
+}
+
+/// A unit written with a sign goes into the package as any unit does (DESIGN 5.1, 9.3): ℃ is the
+/// type `Celsius` of the package's units, which the rules take, the modules of kaname give and the
+/// gates' code hands the rule. The packages pass tsc --strict and mypy --strict whole, and go vet the
+/// gates with the Cedar of sekisho's runner and the flows with Temporal's SDK; the code of the
+/// modules answers every vector as the reference interpreter does.
+#[test]
+fn the_units_written_with_a_sign_go_into_the_package() {
+    let t = TempDir::new("gen-signs");
+    let out = t.path().join("cold_chain");
+    let (code, _, err) = generate(&here().join(COLD_CHAIN), &out, &[]);
+    assert_eq!(code, 0, "ritsu gen of the cold chain:\n{err}");
+    assert_has(&out.join("typescript/units.ts"), "export type Celsius = bigint & { readonly __rulec: \"Celsius\" }; // temperature[℃]\n");
+    assert_has(&out.join("python/generated/units.py"), "Celsius = NewType(\"Celsius\", int)  # temperature[℃]\n");
+    assert_has(&out.join("go/units/units.go"), "// Celsius is an amount of temperature[℃].\ntype Celsius int64\n");
+    assert_has(&out.join("typescript/rules/cold_chain_departure.ts"), "export function cold_chain_departure(temperature_class: TemperatureClass, temperature: Celsius, humidity: Rate): boolean {");
+    assert_has(&out.join("typescript/glue/departure.ts"), "readonly temperature: units.Celsius;");
+    assert_has(&out.join("typescript/authz/cold_chain.ts"), "r_Shipment.temperature as rule_cold_chain_departure.Celsius");
+    type_check_the_gates(&t, &out);
+    if ready(Need::Go, have_go, "go is not installed; the Go of the flows is not vetted") {
+        match go_module() {
+            Some(gomod) => {
+                // the flows, the rules and the modules, without the gates, whose Cedar this module does not require
+                let dir = t.path().join("go-flows");
+                go_module_in(&dir, &out.join("go"), &gomod);
+                std::fs::remove_dir_all(dir.join("generated/authz")).unwrap();
+                let o = go_in(&dir).args(["vet", "./..."]).output().unwrap();
+                assert!(o.status.success(), "go vet finds fault with the Go of the flows:\n{}", said(&o));
+                println!("go vet passes the Go of the flows, with the rules and the modules");
+            }
+            None => ritsu_testkit::skip("the go.mod of crates/dandori/tools/temporal-go or crates/chobo/tools/runner/go is missing; the Go of the flows is not vetted"),
+        }
+    }
+    the_modules_answer_as_the_reference_does(&t, &out, &cold_chain_modules(), "cold_chain");
 }

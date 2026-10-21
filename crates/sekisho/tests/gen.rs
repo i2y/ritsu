@@ -3,7 +3,9 @@
 //! `tests/gen/` — every form of condition (`conditions.gate` and its Japanese version), a forbid
 //! read with `use gate` (`papers.gate`, which reads `people.gate`), an action that guards two
 //! operations (`guards.gate`), one attribute written by its name and by its alias
-//! (`two_spellings.gate` and its Japanese version) — as goldens, ritsu's version written
+//! (`two_spellings.gate` and its Japanese version), the units written with a sign, a temperature
+//! in ℃ compared with constants in ℉ and given to a rule (`cold_chain.gate` and its Japanese
+//! version) — as goldens, ritsu's version written
 //! `<version>`; and the two versions of a gate, which come to the same Cedar and the same vectors
 //! but for their names.
 //!
@@ -15,7 +17,7 @@ mod common;
 
 use ritsu_base::text::Lang;
 
-const GATES: [&str; 9] = [
+const GATES: [&str; 11] = [
     "examples/refunds/refunds.gate",
     "examples/refunds/refunds.ja.gate",
     "tests/gen/conditions.gate",
@@ -25,6 +27,8 @@ const GATES: [&str; 9] = [
     "tests/gen/guards.gate",
     "tests/gen/two_spellings.gate",
     "tests/gen/two_spellings.ja.gate",
+    "tests/gen/cold_chain.gate",
+    "tests/gen/cold_chain.ja.gate",
 ];
 
 /// The files `gen --target cedar` writes for the gate at `path`, in `lang`.
@@ -70,6 +74,7 @@ fn the_two_versions_come_to_the_same_cedar() {
         ("examples/refunds/refunds.gate", "examples/refunds/refunds.ja.gate", ("Shop", "ShopJa")),
         ("tests/gen/conditions.gate", "tests/gen/conditions.ja.gate", ("Lab", "LabJa")),
         ("tests/gen/two_spellings.gate", "tests/gen/two_spellings.ja.gate", ("Spell", "SpellJa")),
+        ("tests/gen/cold_chain.gate", "tests/gen/cold_chain.ja.gate", ("Depot", "DepotJa")),
     ];
     for (en, ja, ns) in twins {
         let (e, j) = (files(en, Lang::En), files(ja, Lang::En));

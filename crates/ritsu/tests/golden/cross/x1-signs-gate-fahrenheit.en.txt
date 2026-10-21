@@ -1,0 +1,7 @@
+ok rules/cold_chain_departure.rule
+ok departure.kn: 1 function, total
+cold_chain.flow: ok
+error[sekisho E102]: cold_chain.gate:33:109: The input `temperature` is temperature[℃], and `resource.temperature` is a number (temperature[℉])
+    33 |     within_band = cold_chain_departure(temperature_class: resource.temperature_class, temperature: resource.temperature, humidity: resource.humidity).may_depart
+  = A number has to be of the same unit (`JPY` and `円` are the same; with tax and without are not).
+ritsu check: 4 files (rulec 1, kaname 1, dandori 1, sekisho 1): 1 fail (1 error); borders between the languages: 0 checked, 0 undecided

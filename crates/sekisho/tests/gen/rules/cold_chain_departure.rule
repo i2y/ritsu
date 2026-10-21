@@ -1,0 +1,33 @@
+rule cold_chain_departure v1
+description "Whether a refrigerated shipment may leave the depot: the temperature of its hold at or below the threshold of its temperature class (frozen -18℃, chilled 8℃, controlled ambient 25℃), and the humidity of a chilled hold at most 95%. A sketch written for the tests, not taken from a standard"
+
+enum temperature_class = frozen | chilled | controlled_ambient
+
+inputs
+  temperature_class : temperature_class
+  temperature       : temperature[℃]  range >=-40℃ <=40℃
+  humidity          : rate[step 1%]  range >=0% <=100%
+
+outputs
+  may_depart : bool
+
+table departure
+policy unique
+| temperature_class  | temperature | humidity | -> may_depart |
+| frozen             | <=-18℃     | -        | true          |
+| frozen             | >-18℃      | -        | false         |
+| chilled            | <=8℃       | <=95%    | true          |
+| chilled            | <=8℃       | >95%     | false         |
+| chilled            | >8℃        | -        | false         |
+| controlled_ambient | <=25℃      | -        | true          |
+| controlled_ambient | >25℃       | -        | false         |
+
+examples
+| temperature_class  | temperature | humidity | -> may_depart |
+| frozen             | -18℃       | 50%      | true          |
+| frozen             | -17℃       | 50%      | false         |
+| chilled            | 8℃         | 95%      | true          |
+| chilled            | 8℃         | 96%      | false         |
+| chilled            | 9℃         | 40%      | false         |
+| controlled_ambient | 25℃        | 100%     | true          |
+| controlled_ambient | 26℃        | 0%       | false         |

@@ -1,0 +1,27 @@
+workflow 荷の送り出し v1
+description "温度を管理して運ぶ荷を、規則が荷室を温度帯の内と言えば倉庫から送り出す。-40℃ からの範囲を持つ ℃ の温度と、1% 刻みの湿度を、規則が受け取る単位のまま渡す。cold_chain.flow の日本語の版"
+
+use rule 出発 from "rules/出発の可否.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:cold-chain-departure"
+
+inputs
+  荷     : string
+  温度帯 : 出発.温度帯
+  温度   : temperature[℃]  range >=-40℃ <=40℃
+  湿度   : rate[step 1%]  range >=0% <=100%
+
+outputs
+  送り出した : bool
+
+task 送り出す(荷: string, 温度: temperature[℃])
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:dispatch"
+  idempotent
+
+flow
+  let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)
+  match 判定.出してよい
+    true =>
+      送り出す(荷: 荷, 温度: 温度)
+      succeed 送り出した = true
+    false =>
+      succeed 送り出した = false

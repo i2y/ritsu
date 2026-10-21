@@ -1,0 +1,4 @@
+エラー[E003]: tests/fixtures/cold_chain_units.ja.flow:13:29: ここには `temperature[℃]` が要りますが、これは `temperature[℉]` です
+    13 |   let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)
+エラー[E003]: tests/fixtures/cold_chain_units.ja.flow:13:37: ここには `rate[step 1%]` が要りますが、これは `rate[step 0.1%]` です
+    13 |   let 判定 = 出発(温度帯: 温度帯, 温度: 温度, 湿度: 湿度)

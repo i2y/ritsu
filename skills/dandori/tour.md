@@ -45,7 +45,7 @@ outputs
   ([API descriptions](tasks.md#api-descriptions)).
 - `inputs` and `outputs` are what a run starts with and ends with.
 
-The types are `int`, numbers with a unit such as `money[JPY, incl_tax]` (as rulec has them),
+The types are `int`, numbers with a unit such as `money[JPY, incl_tax]` or `temperature[℃]` (as rulec has them),
 `string`, `bool`, `timestamp`, enums, records, `list[T]`, `T?` for a value that may be absent, and
 `json` for a value passed along without being looked into. A message or an enum of a `.proto` read
 by `use proto` is a type too, written after the name `use` gave it (`warehouse.ReserveResponse`;
@@ -205,8 +205,9 @@ cancellation can stop, and wants the cases settled there too.
 A number can say what it may be, as a rulec rule's inputs do: `nights : int  range >=1 <=30`. A
 range goes on an input, an output, a field of a record, and a task's parameter or answer
 (`-> int  range >=0 <=10`); either end may be left out. The ends are whole numbers in the type's own
-unit (`>=0`), as the values travel in JSON, or written with a unit, as in a rule (`>=1kg`, `<=100万円`),
-and counted in the type's unit: `>=1kg` is 1000 of `mass[g]`.
+unit (`>=0`), as the values travel in JSON, or written with a unit, as in a rule (`>=1kg`, `<=100万円`,
+`>=41℉`), and counted in the type's unit: `>=1kg` is 1000 of `mass[g]`. A unit is written with the
+characters a rule writes one with, the signs `%`, `℃` and `℉` too, and the full-width `％` is `%`.
 
 - What comes in is checked when the workflow runs. An input, or a task's or a rule's answer, with a
   number outside its range fails the run with `Dandori.BadInput` or `Dandori.BadResponse`, on every

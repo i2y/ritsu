@@ -1,0 +1,19 @@
+# A module of kaname in the project of the cold chain (tests/cross.rs, tests/gen.rs): the rule is given the
+# hold's temperature in ℃ and its humidity in steps of 1%, the units it takes them in.
+module departure v1
+description "Whether a shipment may leave the depot: the rule's answer for its hold, given the temperature in ℃ and the humidity in steps of 1% as the rule takes them"
+
+use rule cold_chain_departure from "rules/cold_chain_departure.rule"
+
+record Hold
+  band        : cold_chain_departure.temperature_class
+  temperature : temperature[℃]  range >=-40℃ <=40℃
+  humidity    : rate[step 1%]  range >=0% <=100%
+
+fn may_depart(hold: Hold) -> bool total
+  description "The rule's answer for the hold"
+  cold_chain_departure(temperature_class: hold.band, temperature: hold.temperature, humidity: hold.humidity).may_depart
+
+examples
+  may_depart(hold: Hold { band: cold_chain_departure.temperature_class.chilled, temperature: 5℃, humidity: 90% }) = true
+  may_depart(hold: Hold { band: cold_chain_departure.temperature_class.frozen, temperature: 5℃, humidity: 50% }) = false
