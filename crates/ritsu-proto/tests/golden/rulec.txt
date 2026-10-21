@@ -1,3 +1,11 @@
+== ../rulec/tests/collection_path/orders.proto
+package Some("shop.v1") imports []
+message Order
+  customer string
+  lines Line repeated
+message Line
+  category string
+  quantity int64
 == ../rulec/tests/corpus/contracts/quote.proto
 package Some("shop.v1") imports ["buf/validate/validate.proto"]
 message QuoteRequest

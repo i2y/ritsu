@@ -1,3 +1,12 @@
+== ../rulec/tests/collection_path/orders.proto
+package shop.v1
+message shop.v1.Line
+  field category json=category ty=Scalar("string") repeated=false presence=false rules=null
+  field quantity json=quantity ty=Scalar("int64") repeated=false presence=false rules=null
+message shop.v1.Order
+  field customer json=customer ty=Scalar("string") repeated=false presence=false rules=null
+  field lines json=lines ty=Named("shop.v1.Line") repeated=true presence=false rules=null
+unread
 == ../rulec/tests/corpus/contracts/quote.proto
 package shop.v1
 message shop.v1.QuoteRequest

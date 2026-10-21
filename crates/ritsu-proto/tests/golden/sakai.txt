@@ -1,4 +1,13 @@
 #### ../rulec
+== tests/collection_path/orders.proto
+syntax proto3
+package shop.v1
+message Order 6
+  field customer 1 None Scalar("string") json=None oneof=None line=7
+  field lines 2 Repeated Named("Line") json=None oneof=None line=8
+message Line 11
+  field category 1 None Scalar("string") json=None oneof=None line=12
+  field quantity 2 None Scalar("int64") json=None oneof=None line=13
 == tests/corpus/contracts/quote.proto
 syntax proto3
 package shop.v1
@@ -44,6 +53,8 @@ message QuoteRequest 10
   field declared_jpy 3 None Scalar("int64") json=None oneof=None line=24
   field cover_jpy 4 None Scalar("int64") json=None oneof=None line=25
 == together
+tests/collection_path/orders.proto sees 
+  Order.lines: shop.v1.Line (tests/collection_path/orders.proto)
 tests/corpus/contracts/quote.proto sees 
 tests/corpus/contracts/shipment.proto sees 
   CreateShipmentRequest.destination: shop.v1.Destination (tests/corpus/contracts/shipment.proto)
