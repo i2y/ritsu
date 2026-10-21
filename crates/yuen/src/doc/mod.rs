@@ -130,15 +130,25 @@ fn period(v: &Value) -> String {
     format!("{}..{}", v["from"].as_str().unwrap_or(""), v["to"].as_str().unwrap_or(""))
 }
 
-/// `@民法 第141条, 第143条`, `@holidays`, or the requirement it is read from.
-fn from_words(f: &Value) -> String {
+/// The sources of OpenSpec specs, each as the file that declares it and its name: what is cited
+/// from one is a requirement, named as a `.req` writes it.
+fn spec_sources(api: &Value) -> Vec<(String, String)> {
+    api["sources"].as_array().map(|a| a.iter().filter(|x| x["kind"] == "openspec").map(|x| (s(&x["file"]), s(&x["name"]))).collect()).unwrap_or_default()
+}
+
+/// `@民法 第141条, 第143条`, `@greeting "Greeting by name"`, `@holidays`, or the requirement it is
+/// read from: a requirement of an OpenSpec spec as a `.req` writes it, in quotes when the lexer
+/// does not read it bare (DESIGN 21), an article as it has been shown (`sources::shown_fragment`).
+/// `file` is the file of the requirement, `specs` what [`spec_sources`] gives.
+fn from_words(f: &Value, file: &str, specs: &[(String, String)]) -> String {
     if !f["requirement"].is_null() {
         let r = &f["requirement"];
         return format!("{} v{}", s(&r["name"]), r["version"].as_u64().unwrap_or(1));
     }
     let srcs = f["sources"].as_array().cloned().unwrap_or_default();
     let name = srcs.first().map(|x| s(&x["source"])).unwrap_or_default();
-    let frags: Vec<String> = srcs.iter().filter_map(|x| x["fragment"].as_str().map(crate::names::word_or_quote)).collect();
+    let spec = specs.iter().any(|(fl, n)| fl == file && *n == name);
+    let frags: Vec<String> = srcs.iter().filter_map(|x| x["fragment"].as_str().map(|fr| if spec { crate::lex::spelled_name(fr) } else { crate::names::word_or_quote(fr) })).collect();
     if frags.is_empty() { format!("@{name}") } else { format!("@{name} {}", frags.join(", ")) }
 }
 
@@ -167,6 +177,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
     let p = ch.project.as_ref().unwrap();
     let m = ch.model.as_ref().unwrap();
     let api = crate::api::api(ch, label, lang).unwrap_or(Value::Null);
+    let specs = spec_sources(&api);
     let reqs = api["requirements"].as_array().cloned().unwrap_or_default();
     let names: Vec<String> = api["files"].as_array().map(|a| a.iter().map(|f| s(&f["name"])).collect()).unwrap_or_default();
     let many_versions = |name: &str| reqs.iter().filter(|r| r["name"].as_str() == Some(name)).count() > 1;
@@ -219,7 +230,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
             if !from.is_empty() {
                 from.push(t(say(tr!("、", "; "), lang)));
             }
-            from.push(c(from_words(&f)));
+            from.push(c(from_words(&f, &s(&r["file"]), &specs)));
         }
         for d in r["decided"].as_array().cloned().unwrap_or_default() {
             if !from.is_empty() {
@@ -417,7 +428,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         // where it comes from, with the articles quoted from the pinned copies
         let decl = p.decl(ri);
         for (i, f) in r["from"].as_array().cloned().unwrap_or_default().iter().enumerate() {
-            let mut line = vec![t(say(tr!("出どころ ", "Comes from "), lang)), c(from_words(f)), t(" — ")];
+            let mut line = vec![t(say(tr!("出どころ ", "Comes from "), lang)), c(from_words(f, &s(&r["file"]), &specs)), t(" — ")];
             line.extend(reviewed_words(&f["reviewed"], lang));
             line.push(t(say(tr!("。状態：", ". State: "), lang)));
             line.push(t(state_words(&s(&f["status"]), lang)));
@@ -429,7 +440,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                 for (frag, _) in fragments {
                     let Some(block) = pins.iter().find(|x| &x.name == frag).and_then(|x| x.block.clone()) else { continue };
                     let key = (fi, source.clone(), frag.clone());
-                    let n = crate::names::word_or_quote(frag);
+                    let n = crate::lex::spelled_name(frag);
                     if quoted.contains(&key) {
                         out.push(Block::P(vec![t(say(tr!("（{source} {n} の要件は、上に載せた）", "(The requirement {source} {n} is quoted above.)"), lang))]));
                         continue;
@@ -527,7 +538,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                 continue;
             }
             let ups: Vec<String> = rv["up"].as_array().cloned().unwrap_or_default().iter().map(|h| short(&s(h))).collect();
-            recs.push((s(&rv["date"]), ri, vec![vec![t(s(&rv["date"]))], vec![t(s(&rv["by"]))], vec![c(from_words(&f)), t(" → "), c(label.clone())], vec![c(format!("{} -> {}", ups.join(", "), short(&s(&rv["down"]))))]]));
+            recs.push((s(&rv["date"]), ri, vec![vec![t(s(&rv["date"]))], vec![t(s(&rv["by"]))], vec![c(from_words(&f, &s(&r["file"]), &specs)), t(" → "), c(label.clone())], vec![c(format!("{} -> {}", ups.join(", "), short(&s(&rv["down"]))))]]));
         }
         for l in r["links"].as_array().cloned().unwrap_or_default() {
             let rv = &l["reviewed"];

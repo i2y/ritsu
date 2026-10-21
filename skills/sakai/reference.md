@@ -222,7 +222,7 @@ A `use book` is not counted, of a workflow, a gate or a module: a book is used f
 ```
 
 `enum <upstream enum> -> <target>` maps each value of the upstream's enum, read from its `.proto`, to a value downstream or to `refuse` (with a reason).
-The upstream enum may be a schema with `enum` under `components/schemas` of the upstream's OpenAPI or AsyncAPI documents: its values are the strings as they are written (in any case, no prefix taken off; a value with a blank in it is written in quotes, `"in transit" -> …`), and a `null` among them marks that nothing is set (W402 if a line is written for it).
+The upstream enum may be a schema with `enum` under `components/schemas` of the upstream's OpenAPI or AsyncAPI documents: its values are the strings as they are written (in any case, no prefix taken off; a value that is not one word of a `.ctx`, with a blank, a `,`, a `->` or a `#` in it, is written in quotes, `"in transit" -> …`, `"hold,manual" -> …`, and the line E401 gives as its fix writes it so), and a `null` among them marks that nothing is set (W402 if a line is written for it).
 
 ```ctx
   enum ChargeStatus -> enum ShipmentGate

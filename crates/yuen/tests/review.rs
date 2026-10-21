@@ -153,3 +153,10 @@ fn a_comment_after_a_record_stays_and_the_last_line_gets_its_record() {
     assert!(after.ends_with("  not verified \"z\"\n    approved 2026-10-03 by 経理 sha256:fbdfb71af500ce5f"), "{after}");
     assert_eq!(yuen(t.path(), &["check", ".", "--root", "."]).code, 0);
 }
+
+/// The twin of `the_command_a_mark_gives_is_read_by_a_shell_in_english`, on the fixture `period`
+/// in a directory of a Japanese name with a blank and an apostrophe, in Japanese.
+#[test]
+fn the_command_a_mark_gives_is_read_by_a_shell() {
+    common::review_by_the_commands("period", "民法 の'期間'", common::change_142, "法務", "ja");
+}

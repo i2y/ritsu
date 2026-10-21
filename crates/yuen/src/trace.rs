@@ -119,7 +119,7 @@ fn article(p: &Project, m: &Model, fi: usize, e: &EndInfo) -> (Text, Vec<String>
             (head, vec![], j)
         }
         Some(Resolved::OpenSpec { name, .. }) => {
-            let (path, n) = (p.shown(&name.path), crate::names::word_or_quote(fragment));
+            let (path, n) = (p.shown(&name.path), crate::lex::spelled_name(fragment));
             let head = tr!("{source} {n}（OpenSpec の仕様 {path}）", "{source} {n} (the OpenSpec spec {path})");
             let quoted: Vec<String> = String::from_utf8_lossy(&e.end.bytes).lines().map(str::to_string).collect();
             let j = json!({"source": source, "fragment": fragment, "spec": name.path, "sha256": e.end.hash, "text": quoted});
@@ -203,7 +203,7 @@ fn requirement(p: &Project, m: &Model, r: usize, depth: usize, o: &mut Out, seen
                 let ends: Vec<EndInfo> = st.and_then(|s| s.up.clone()).unwrap_or_default();
                 if ends.is_empty() {
                     let FromWhat::Cite { source, fragments, .. } = &f.what else { unreachable!() };
-                    let frs: Vec<String> = fragments.iter().map(|x| crate::names::word_or_quote(&x.0)).collect();
+                    let frs: Vec<String> = fragments.iter().map(|x| crate::sources::shown_fragment(p, fi, source, &x.0)).collect();
                     let l = format!("{source} {}", frs.join(", "));
                     o.push(depth + 1, tr!("出どころ: {l}（コピーを読めない）", "comes from {l} (its copy cannot be read)"));
                 }

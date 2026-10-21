@@ -918,6 +918,8 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 OpenAPI と AsyncAPI の文書の要素は、2026-10-06 からツール名 `openapi`・`asyncapi` で指す（6.5）。sakai は `.ctx` の中で短い書き方（`schema Charge`）も使えるが、api と診断では参照の書き方で書く（sakai の DESIGN 15.10）。
 
 
+参照の外で名前を書く道具（固定の行、直し方の行、直し方のコマンド）は、読む側の字句に聞く。参照の中の名前は、この節の決まり（空白・`"`・`#` を含まなければ引用符なし）で書き、ritsu-base の `naming` が読む。参照の外の位置（yuen の固定の行の頭と `@<出典>` のあとの条と要件、sakai の値の行）は、その言語の字句が読むので、書く形は字句そのものに、その名前だけの行を読ませて決める（yuen の `lex::spelled_name`、sakai の `lex::spelled_word`、rulec の `lex::is_bare_word`）。シェルに渡すコマンドは、シェルが読み直せる形で書く（yuen の `check::shell_word`。dandori、kaname、sakai、sekisho にも同じ関数がある）。
+
 ### 6.3 種類を足す
 
 参照の書き方（6.2）では、dandori に種類が無かった（dandori が中のものを JSON で出していなかったため）。D の段階で、次を足す。

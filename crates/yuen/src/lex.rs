@@ -183,6 +183,24 @@ pub fn naming_tokens(s: &str) -> Result<Vec<Token>, (usize, Text)> {
     Ok(toks)
 }
 
+/// Whether `s` can stand bare where a `.req` takes a name outside a naming: the first word of a
+/// pin line, an article or a requirement after `@<source>`. The question is the lexer's, so it is
+/// asked of [`lex`] itself, on an indented line that holds `s` alone (DESIGN 21): the answer is
+/// whether it reads that line back as the one name `s`. `第142条`, `142条`, `Café` and `if` are
+/// names to it; `Re-quote`, `Re.quote`, `O'Brien`, `2FA`, `§1.7` and `2026-10-01` are not.
+pub fn is_bare_name(s: &str) -> bool {
+    let (lines, diags) = lex("", "", &format!("  {s}"));
+    diags.is_empty() && matches!(lines.as_slice(), [l] if matches!(l.tokens.as_slice(), [t] if t.tok == Tok::Word(s.to_string())))
+}
+
+/// A name as a `.req` writes it outside a naming: bare when the lexer reads it back as that name
+/// ([`is_bare_name`]), else in quotes. What a command writes into a `.req` (a pin line, the line a
+/// diagnostic gives as the fix) and what it shows of one are spelled by this; a name inside a
+/// naming is cut by the naming's own rule, and spelled by `names::word_or_quote`.
+pub fn spelled_name(s: &str) -> String {
+    if is_bare_name(s) { s.to_string() } else { crate::names::quote(s) }
+}
+
 /// The word that starts at `cs[j..]` after spaces, for looking ahead.
 fn word_ahead(cs: &[char], mut j: usize) -> String {
     while j < cs.len() && cs[j] == ' ' {
@@ -420,6 +438,20 @@ mod tests {
         assert_eq!(w[2], ["in", "force", "..", "2027-03-31"]);
         assert_eq!(w[3][5], ",");
         assert_eq!(w[3][7], "->");
+    }
+
+    #[test]
+    fn a_name_is_bare_when_the_lexer_reads_it_back() {
+        for s in ["dealer_kind", "Re_quote", "Café", "_private", "if", "v2", "sha256", "第142条", "142条", "２段階認証", "見積り_再", "顧客ー覧"] {
+            assert!(is_bare_name(s), "{s}");
+            assert_eq!(spelled_name(s), s);
+        }
+        for s in ["Re-quote", "e-mail", "kebab-case-name", "Re.quote", "O'Brien", "2FA", "Opt in", "Follow-up call", "A/B test", "v2.0 export", "Price (list)", "§1.7", "1910.157", "2026-10-01", "sha256:e880059021fbb67d", "a#b", "a->b", "見積-再", "見積.再", "見積・再", "見積（再）", "見積\u{3000}再", "", " a", "a\"b"] {
+            assert!(!is_bare_name(s), "{s}");
+            let (lines, diags) = lex("t.req", "t.req", &format!("  {} sha256:e880059021fbb67d\n", spelled_name(s)));
+            assert!(diags.is_empty(), "{s}");
+            assert_eq!(lines[0].tokens[0].tok, Tok::Str(s.to_string()), "{s} reads back from its quotes");
+        }
     }
 
     #[test]

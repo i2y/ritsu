@@ -153,6 +153,29 @@ pub fn change_cal_en(d: &Path) {
 }
 
 
+/// The fixture `fixture` copied as `dir` and changed by `change`; then each command its marked
+/// links give as their fix (`yuen review … --by <role>`), with `role` written in, run through
+/// `sh` as it is written. They write the records, and the check passes (DESIGN 21).
+pub fn review_by_the_commands(fixture: &str, dir: &str, change: fn(&Path), role: &str, lang: &str) {
+    let t = TempDir::new("review-by-the-commands");
+    copy_dir(&Path::new("tests/fixtures").join(fixture), &t.path().join(dir));
+    change(&t.path().join(dir));
+    let r = yuen(t.path(), &["check", dir, "--root", dir, "--format", "json", "--lang", lang]);
+    assert_eq!(r.code, 1, "{}{}", r.stdout, r.stderr);
+    let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
+    let cmds: Vec<String> = v["diagnostics"].as_array().unwrap().iter().filter_map(|d| d["fix"].as_str()).filter(|f| f.starts_with("yuen review ")).map(str::to_string).collect();
+    assert!(!cmds.is_empty(), "{}", r.stdout);
+    let placeholder = if lang == "ja" { "<役割>" } else { "<role>" };
+    let program = format!("'{}'", env!("CARGO_BIN_EXE_yuen").replace('\'', "'\\''"));
+    for c in &cmds {
+        let line = c.replacen("yuen", &program, 1).replace(placeholder, role);
+        let o = Command::new("sh").arg("-c").arg(&line).current_dir(t.path()).env_remove("YUEN_LANG").env_remove("RITSU_LANG").output().unwrap();
+        assert!(o.status.success(), "{c}\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    }
+    let r = yuen(t.path(), &["check", dir, "--root", dir]);
+    assert_eq!(r.code, 0, "{}{}", r.stdout, r.stderr);
+}
+
 // ── The outside tools the tests of stage C use (PLAN 0.1, C.10–C.12) ──
 
 /// Whether a program is on the PATH.

@@ -125,3 +125,68 @@ fn a_rule_as_the_target_is_read_from_rulec_in_english() {
     let d = os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == "E403").unwrap();
     assert!(d.message.en.contains("The mapping maps to taken, which is not a value of the enum order_status"), "{}", d.message.en);
 }
+
+/// An upstream value, and whether the line of a mapping writes it bare.
+type Spelled = (&'static str, bool);
+
+/// The values added to the enum `ChargeStatus` of the upstream's OpenAPI document. A `,`, a `->`, a
+/// blank and a `#` end a word of a `.ctx`, and a value with one of them is written in quotes; a
+/// `-`, a `.`, an apostrophe and digits first do not.
+const VALUES: &[Spelled] = &[
+    ("disputed", true),
+    ("in-transit", true),
+    ("Re.quote", true),
+    ("O'Brien", true),
+    ("2FA", true),
+    ("hold,manual", false),
+    ("a->b", false),
+    ("on hold", false),
+    ("#1", false),
+];
+
+/// The same shapes in Japanese, and a full-width space; a full-width `＃` is a character of a word.
+const VALUES_JA: &[Spelled] = &[
+    ("係争中", true),
+    ("再-審査", true),
+    ("2段階", true),
+    ("＃1", true),
+    ("保留,手動", false),
+    ("確認->出荷", false),
+    ("保留 中", false),
+    ("保留\u{3000}中", false),
+];
+
+/// The fix of E401 is a line the mapping takes (DESIGN 21): with the value written into the
+/// example's mapping as the fix gives it, the check reads the line and maps the value.
+fn the_fix_of_a_value_left_out(example: &str, ctx: &str, last: &str, values: &[Spelled]) {
+    for &(v, bare) in values {
+        let dir = common::TempDir::new("fix-of-e401");
+        common::copy_dir(std::path::Path::new(example), dir.path());
+        let yaml = dir.path().join("payments/api/payments.yaml");
+        let s = std::fs::read_to_string(&yaml).unwrap();
+        let list = "enum: [pending, succeeded, failed, refunded]";
+        assert!(s.contains(list));
+        std::fs::write(&yaml, s.replacen(list, &format!("enum: [pending, succeeded, failed, refunded, {}]", serde_json::to_string(v).unwrap()), 1)).unwrap();
+        let os = check_dir(dir.path());
+        assert_eq!(codes(&os), ["E401"], "{v}");
+        let fix = os.iter().flat_map(|o| o.diags.iter()).find(|d| d.code == "E401").and_then(|d| d.fixed_line()).unwrap().to_string();
+        let written = if bare { v.to_string() } else { sakai::naming::quote(v) };
+        assert_eq!(fix, format!("{written} -> refuse \"…\""), "{v}");
+        let file = dir.path().join("contexts").join(ctx);
+        let s = std::fs::read_to_string(&file).unwrap();
+        assert!(s.contains(last), "{ctx} has no {last:?}");
+        std::fs::write(&file, s.replacen(last, &format!("{last}    {fix}\n"), 1)).unwrap();
+        let os = check_dir(dir.path());
+        assert_eq!(codes(&os), Vec::<&str>::new(), "{v}: the line of the fix is read, and maps the value");
+    }
+}
+
+#[test]
+fn the_fix_of_a_value_left_out_is_a_line_the_check_reads() {
+    the_fix_of_a_value_left_out("examples/webshop", "shipping.ctx", "    refunded  -> refuse \"A refunded order is not shipped\"\n", VALUES);
+}
+
+#[test]
+fn the_fix_of_a_value_left_out_is_a_line_the_check_reads_in_japanese() {
+    the_fix_of_a_value_left_out("examples/webshop.ja", "配送.ctx", "    refunded  -> refuse \"返金した注文は出荷しない\"\n", VALUES_JA);
+}

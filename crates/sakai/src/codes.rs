@@ -945,7 +945,10 @@ pub fn ledger() -> Ledger {
             "E401",
             tr!("対応に、上流の列挙の値が抜けています", "A mapping leaves values of the upstream enum out"),
             tr!("腐敗防止層の `enum` の対応に、上流の列挙（proto の列挙か、OpenAPI と AsyncAPI の文書の `enum` のスキーマ）の値で、下流の値も refuse も書いていないものがあるとき。上流が値を足すと、これが出ます。値が無いことを表す値（proto の 0 番の `…_UNSPECIFIED`、文書の `null`）には、対応は要りません。", "An anticorruption layer's `enum` mapping gives neither a value nor refuse for some value of the upstream enum (a proto's enum, or a schema with `enum` of OpenAPI and AsyncAPI documents): what comes when the upstream adds a value. The value that says nothing is set (a proto's value 0 `…_UNSPECIFIED`, a document's `null`) needs none."),
-            tr!("値ごとに `<上流の値> -> <下流の値>` か `<上流の値> -> refuse \"<理由>\"` を書いてください。", "Write `<upstream value> -> <value>` or `<upstream value> -> refuse \"<why>\"` for each."),
+            tr!(
+                "値ごとに `<上流の値> -> <下流の値>` か `<上流の値> -> refuse \"<理由>\"` を書いてください。空白、`,`、`->`、`#` を含む値は `\"…\"` で囲んでください。診断が出す直した行も、そう書いています。",
+                "Write `<upstream value> -> <value>` or `<upstream value> -> refuse \"<why>\"` for each. A value with a blank, a `,`, a `->` or a `#` in it goes in quotes, `\"…\"`, as the fixed line of the diagnostic writes it."
+            ),
             &[("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\"\n\nupstream 乙 anticorruption layer\n  through b.v1\n  enum Kind -> 甲の種類\n    KIND_ONE -> 一つめ\n")],
             &["E402", "W402"],
         )

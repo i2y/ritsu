@@ -3701,7 +3701,7 @@ message A1 {}
 
 **When**: An anticorruption layer's `enum` mapping gives neither a value nor refuse for some value of the upstream enum (a proto's enum, or a schema with `enum` of OpenAPI and AsyncAPI documents): what comes when the upstream adds a value. The value that says nothing is set (a proto's value 0 `…_UNSPECIFIED`, a document's `null`) needs none.
 
-**Fix**: Write `<upstream value> -> <value>` or `<upstream value> -> refuse "<why>"` for each.
+**Fix**: Write `<upstream value> -> <value>` or `<upstream value> -> refuse "<why>"` for each. A value with a blank, a `,`, a `->` or a `#` in it goes in quotes, `"…"`, as the fixed line of the diagnostic writes it.
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 

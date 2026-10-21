@@ -362,9 +362,9 @@ fn ends_label(ends: &[&EndInfo]) -> Text {
     if let Some(src) = &source
         && ends.iter().all(|e| matches!(&e.thing, Thing::Source { source, fragment, .. } if source == src && !fragment.is_empty()))
     {
-        // a requirement of an OpenSpec spec is named in quotes when it is not a word
+        // a requirement of an OpenSpec spec is named in quotes when the lexer does not read it bare
         let frs: Vec<String> = ends.iter().filter_map(|e| match &e.thing {
-            Thing::Source { fragment, .. } if e.law.is_none() => Some(crate::names::word_or_quote(fragment)),
+            Thing::Source { fragment, .. } if e.law.is_none() => Some(crate::lex::spelled_name(fragment)),
             Thing::Source { fragment, .. } => Some(fragment.clone()),
             _ => None,
         }).collect();
@@ -374,14 +374,16 @@ fn ends_label(ends: &[&EndInfo]) -> Text {
     Text::new(ls.join("、"), ls.join(", "))
 }
 
+/// The command that writes the record of a marked link, each word as a shell reads it back
+/// (`check::shell_word`): a path with a blank or a quote in it is in single quotes (DESIGN 21).
 fn review_cmd(p: &Project, st: &LinkState) -> Text {
     let f = p.file_of(st.req);
-    let args: Vec<String> = p.args.iter().map(|a| if a.contains(' ') { crate::names::quote(a) } else { a.clone() }).collect();
+    let args: Vec<String> = p.args.iter().map(|a| crate::check::shell_word(a)).collect();
     let mut args = args.join(" ");
     if let Some(r) = &p.root_flag {
-        args.push_str(&format!(" --root {}", if r.contains(' ') { crate::names::quote(r) } else { r.clone() }));
+        args.push_str(&format!(" --root {}", crate::check::shell_word(r)));
     }
-    let at = format!("{}:{}", f.display, st.line);
+    let at = crate::check::shell_word(&format!("{}:{}", f.display, st.line));
     tr!("yuen review {args} --at {at} --by <役割>", "yuen review {args} --at {at} --by <role>")
 }
 

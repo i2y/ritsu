@@ -122,9 +122,12 @@ source greeting = openspec "openspec/specs/greeting/spec.md"
   [Ends](#ends-hashes-and-records)). The spec is read as OpenSpec 1.14 reads it: a line inside a
   fenced code block is never a header, CR LF is read as LF.
 
-A requirement cites a source with `from @<source> <article>[, <article>…]`; a name that is not a
-word is quoted (`@osha "§1910.157"`, `@greeting "Greeting by name"`), and a `file` source is cited
-whole (`@holidays`). An OpenSpec spec is cited a requirement at a time.
+A requirement cites a source with `from @<source> <article>[, <article>…]`. An article or a
+requirement that is not a [name](#names-and-aliases) (Unicode letters, digits and `_`, not ASCII
+that starts with a digit) is quoted: `@osha "§1910.157"`, `@greeting "Greeting by name"`,
+`@spec "Re-quote"`, `@spec "2FA"`; `第142条` and `142条` are not. A pin line writes its article or
+requirement the same way. A `file` source is cited whole (`@holidays`). An OpenSpec spec is cited a
+requirement at a time.
 
 The check never reads the network. A copy missing is E101 (`yuen source fetch`), an article cited
 without a pin E102 (`yuen source pin`), a copy that differs from its pin E103, a copy that does
@@ -391,7 +394,11 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 - `source fetch|pin|outdated <path>...`: fetch the copies of the sources a project copies itself,
   pin their hashes in the `.req`, or ask whether the originals moved on. Only `fetch` and
   `outdated` read the network (e-Gov's API v2, the eCFR's versioner API, and a `file` source's
-  `url`, through `curl`). For an OpenSpec spec, `fetch` has nothing to fetch, `pin` writes the
+  `url`, through `curl`). `pin` changes the 16 digits of each pin and nothing else, and for an
+  article or a requirement cited with no pin line adds one after the source's last pin line,
+  `<article> sha256:<16>`, the article or the requirement written as a citation writes it: bare
+  when it is a name, else in quotes (`"Re-quote" sha256:f1883abe36fb29fa`). The line E102 gives
+  as its fix is the same line, so what `pin` writes, or the fix, is read by the check after it. For an OpenSpec spec, `fetch` has nothing to fetch, `pin` writes the
   hashes of the requirements' blocks, and `outdated` reads the changes not yet archived under
   `openspec/changes/` (no network): what each modifies, removes, renames or adds, whom it reaches
   and how many links it will mark (exit 1 when one would change a requirement pinned).

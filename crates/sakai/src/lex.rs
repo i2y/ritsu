@@ -183,6 +183,20 @@ pub fn lex(file: &str, src: &str) -> (Vec<Line>, Vec<Diag>) {
     (lines, diags)
 }
 
+/// Whether `s` can stand bare as a word of a `.ctx`: whether this lexer reads an indented line that
+/// holds `s` alone back as that one word. The question is the lexer's, so it is asked of [`lex`]
+/// itself (DESIGN 21): `in-transit` and `保留中` are words to it; `hold,manual`, `a->b`, `on hold`
+/// and `#1` are not, and a line that writes one of them writes it in quotes.
+pub fn is_bare_word(s: &str) -> bool {
+    let (lines, diags) = lex("", &format!("  {s}"));
+    diags.is_empty() && matches!(lines.as_slice(), [l] if matches!(l.tokens.as_slice(), [t] if t.tok == Tok::Word(s.to_string())))
+}
+
+/// A word as a `.ctx` line writes it: bare when [`is_bare_word`], else in quotes.
+pub fn spelled_word(s: &str) -> String {
+    if is_bare_word(s) { s.to_string() } else { crate::naming::quote(s) }
+}
+
 /// A line and the lines indented under it.
 #[derive(Clone, Debug)]
 pub struct Node {
@@ -271,6 +285,21 @@ mod tests {
         let (ls, _) = lex("t.ctx", "A->B\n");
         let ts: Vec<&Tok> = ls[0].tokens.iter().map(|t| &t.tok).collect();
         assert_eq!(ts, vec![&Tok::Word("A".into()), &Tok::Arrow, &Tok::Word("B".into())]);
+    }
+
+    #[test]
+    fn a_word_is_bare_when_the_lexer_reads_it_back() {
+        for s in ["disputed", "in-transit", "ORDER_STATUS_PAID", "2FA", "Re.quote", "O'Brien", "保留中", "再-審査", "refuse"] {
+            assert!(is_bare_word(s), "{s}");
+            assert_eq!(spelled_word(s), s);
+        }
+        for s in ["hold,manual", "a->b", "on hold", "#1", "a\"b", "保留\u{3000}中", "保留,手動", "確認->出荷", ""] {
+            assert!(!is_bare_word(s), "{s}");
+            let (ls, ds) = lex("t.ctx", &format!("    {} -> refuse \"…\"\n", spelled_word(s)));
+            assert!(ds.is_empty(), "{s}");
+            assert_eq!(ls[0].tokens[0].tok, Tok::Str(s.to_string()), "{s} reads back from its quotes");
+            assert_eq!(ls[0].tokens[1].tok, Tok::Arrow, "{s}");
+        }
     }
 
     #[test]

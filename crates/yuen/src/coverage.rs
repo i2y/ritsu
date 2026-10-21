@@ -231,7 +231,7 @@ pub fn scenarios(p: &Project, s: &crate::sources::Sources) -> Vec<Diag> {
                 if missing.is_empty() {
                     continue;
                 }
-                let n = crate::names::word_or_quote(fr);
+                let n = crate::lex::spelled_name(fr);
                 let (ja, en) = (missing.join("、"), missing.join(", "));
                 let msg = if missing.len() == 1 {
                     tr!(

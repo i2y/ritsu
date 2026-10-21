@@ -133,7 +133,7 @@ impl Sources {
                         line: format!("from openspec {} {fr} sha256:{hash}", name.path),
                         hash,
                         bytes,
-                        label: format!("{source} {}", crate::names::word_or_quote(fr)),
+                        label: format!("{source} {}", crate::lex::spelled_name(fr)),
                         law: None,
                     });
                 }
@@ -216,6 +216,15 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
             Resolved::File { name: Name { tool: crate::names::Tool::File, path: rel, items: vec![] }, abs: copy, url: url.clone(), pin: pin.clone(), bytes, borrowed: Some(n.clone()) }
         }
     }
+}
+
+/// What is cited from a source of the file `fi`, as a command shows it (DESIGN 21): a requirement
+/// of an OpenSpec spec as a `.req` writes it, in quotes when the lexer does not read it bare
+/// (`"Greeting by name"`, `"Re-quote"`); an article of a law as it has been shown, as people read
+/// it (`第142条`, `§1.7`) and in quotes only when it holds a blank, a `"` or a `#`.
+pub fn shown_fragment(p: &Project, fi: usize, source: &str, fragment: &str) -> String {
+    let spec = p.files[fi].ast.sources.iter().any(|s| s.name == source && matches!(s.kind, SourceKind::OpenSpec { .. }));
+    if spec { crate::lex::spelled_name(fragment) } else { crate::names::word_or_quote(fragment) }
 }
 
 /// Check every source and every citation of the project.
@@ -377,7 +386,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                             if !pins.iter().any(|pl| &pl.fragment == fr) {
                                 let path = f.abs.parent().unwrap().join(copies::copy_dir(id, &asof.to_string())).join(&file);
                                 let indent = pins.first().map(|pl| " ".repeat(pl.span.col - 1)).unwrap_or_else(|| "  ".into());
-                                let shown = if fr.chars().all(|c| c.is_alphanumeric() || c == '_') { fr.clone() } else { crate::names::quote(fr) };
+                                let shown = crate::lex::spelled_name(fr);
                                 let fix = match ritsu_base::fs::read(&path) {
                                     Ok(b) => format!("{indent}{shown} sha256:{}", sha256::short(&b)),
                                     Err(_) => format!("{indent}{shown} sha256:<yuen source fetch, then yuen source pin>"),
@@ -410,7 +419,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                             if pins.iter().any(|pl| &pl.fragment == fr) {
                                 continue;
                             }
-                            let shown = crate::names::word_or_quote(fr);
+                            let shown = crate::lex::spelled_name(fr);
                             let indent = pins.first().map(|pl| " ".repeat(pl.span.col - 1)).unwrap_or_else(|| "  ".into());
                             match spec.map(|s| s.get(fr)) {
                                 Some(None) => {
@@ -480,7 +489,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
             let (SourceKind::Law { pins, .. } | SourceKind::OpenSpec { pins, .. }) = &s.kind else { continue };
             for pl in pins {
                 if !cited.iter().any(|(n, fr)| n == &s.name && fr == &pl.fragment) {
-                    let fr = &if matches!(s.kind, SourceKind::OpenSpec { .. }) { crate::names::word_or_quote(&pl.fragment) } else { pl.fragment.clone() };
+                    let fr = &if matches!(s.kind, SourceKind::OpenSpec { .. }) { crate::lex::spelled_name(&pl.fragment) } else { pl.fragment.clone() };
                     let name = &s.name;
                     diags.push(p.warn(fi, "W101", pl.span, tr!("{name} {fr} は固定されていますが、どの要件からも引かれていません", "{name} {fr} is pinned but no requirement cites it")).note(tr!(
                         "引用を消したあとの残りなら、固定の行を消してください。",
@@ -497,11 +506,11 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
 
 /// E108: a spec without a requirement of a name, with the near name or the names it has.
 fn no_such_requirement(p: &Project, fi: usize, at: Span, shown: &str, name: &str, spec: &openspec::Spec) -> Diag {
-    let n = crate::names::word_or_quote(name);
+    let n = crate::lex::spelled_name(name);
     let mut d = p.err(fi, "E108", at, tr!("仕様 {shown} に要件 {n} がありません", "The spec {shown} has no requirement {n}"));
     let near = spec.near(name);
     d = if let Some(m) = near.first() {
-        let m = crate::names::word_or_quote(m);
+        let m = crate::lex::spelled_name(m);
         d.note(tr!(
             "近い名前の要件 {m} があります。OpenSpec は名前を、大文字と小文字や空白も含めて、書いたとおりに比べます。",
             "The spec has a requirement of a near name, {m}; OpenSpec compares names as written, case and spaces included."
@@ -509,7 +518,7 @@ fn no_such_requirement(p: &Project, fi: usize, at: Span, shown: &str, name: &str
     } else if spec.requirements.is_empty() {
         d.note(tr!("この仕様には要件がありません。", "The spec has no requirement."))
     } else {
-        let names: Vec<String> = spec.requirements.iter().map(|r| crate::names::word_or_quote(&r.name)).collect();
+        let names: Vec<String> = spec.requirements.iter().map(|r| crate::lex::spelled_name(&r.name)).collect();
         d.note(tr!("仕様にある要件: {}", "The requirements of the spec: {}", names.join("、"); names.join(", ")))
     };
     d.note(tr!(
@@ -558,7 +567,7 @@ fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinL
     let mut out = Vec::new();
     for pl in pins {
         let rname = &pl.fragment;
-        let n = crate::names::word_or_quote(rname);
+        let n = crate::lex::spelled_name(rname);
         let mut sp = SpecPin { name: rname.clone(), pin: pl.pin.clone(), block: None, span: pl.span };
         match spec.get(rname) {
             None => diags.push(no_such_requirement(p, fi, pl.span, &shown, rname, &spec)),
@@ -617,7 +626,7 @@ fn unpinned(p: &Project, sources: &Sources) -> Vec<Diag> {
                     })
                 })
             };
-            let left: Vec<String> = spec.requirements.iter().filter(|q| !pinned(&q.name)).map(|q| crate::names::word_or_quote(&q.name)).collect();
+            let left: Vec<String> = spec.requirements.iter().filter(|q| !pinned(&q.name)).map(|q| crate::lex::spelled_name(&q.name)).collect();
             if left.is_empty() {
                 continue;
             }

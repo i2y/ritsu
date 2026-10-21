@@ -156,3 +156,11 @@ fn a_comment_after_a_record_stays_and_the_last_line_gets_its_record_in_english()
     assert!(after.ends_with("  not verified \"z\"\n    approved 2026-10-03 by accounting sha256:fbdfb71af500ce5f"), "{after}");
     assert_eq!(yuen(t.path(), &["check", ".", "--root", "."]).code, 0);
 }
+
+/// What a marked link gives as its fix is a command a shell reads as it is written (DESIGN 21):
+/// in a directory whose name has a blank and an apostrophe, each command, with the role written
+/// in, runs `yuen review` on the link, and the check passes once they have run.
+#[test]
+fn the_command_a_mark_gives_is_read_by_a_shell_in_english() {
+    common::review_by_the_commands("period_of_months", "O'Brien's terms", common::change_section, "legal", "en");
+}

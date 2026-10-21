@@ -241,7 +241,7 @@ pub fn graph<'a>(p: &'a Project, m: &'a Model) -> Graph<'a> {
                             continue;
                         }
                         let lines = x.block.as_deref().map(|b| b.lines().map(str::to_string).collect()).unwrap_or_default();
-                        sources.push(SourceNode { key, label: format!("{name} {}", crate::names::word_or_quote(&x.name)), revision: None, pin: x.pin.clone(), lines, url: None });
+                        sources.push(SourceNode { key, label: format!("{name} {}", crate::lex::spelled_name(&x.name)), revision: None, pin: x.pin.clone(), lines, url: None });
                     }
                 }
                 Resolved::NoPort { .. } | Resolved::Broken => {}

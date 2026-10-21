@@ -167,8 +167,8 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                         "上流の列挙の値ごとに、下流の値か refuse（拒否）を書いてください。上流が値を足すと、その値をどう扱うかを決めるまで、検査は通りません。",
                         "Every value of the upstream enum gets a value of the downstream or refuse; when the upstream adds a value, the check fails until someone decides what it becomes."
                     ));
-                    let first = names[0];
-                    let first = if crate::naming::is_word(first) { first.to_string() } else { crate::naming::quote(first) };
+                    // written as the line of the mapping takes it, in quotes when the lexer does not read it bare
+                    let first = crate::lex::spelled_word(names[0]);
                     d = d.fix_line(format!("{first} -> refuse \"…\""));
                     let counted = src.values.iter().filter(|v| !v.2).count();
                     let k = missing.len();

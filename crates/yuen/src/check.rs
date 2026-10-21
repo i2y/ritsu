@@ -55,7 +55,7 @@ thread_local! {
 }
 
 /// A word as a shell reads it back: as it is, or in single quotes.
-fn shell_word(w: &str) -> String {
+pub(crate) fn shell_word(w: &str) -> String {
     if !w.is_empty() && w.chars().all(|c| !c.is_whitespace() && !"'\"\\$`;&|<>()*?[]#~".contains(c)) {
         w.to_string()
     } else {

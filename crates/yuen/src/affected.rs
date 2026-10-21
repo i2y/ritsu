@@ -420,7 +420,7 @@ fn answer(c: &Checked, files: &[FileDiff], bytes: &[u8], diff_shown: &str, maps:
             };
             let label = match &in_blocks {
                 Some(t) if !t.is_empty() => {
-                    let names: Vec<String> = t.iter().map(|n| crate::names::word_or_quote(n)).collect();
+                    let names: Vec<String> = t.iter().map(|n| crate::lex::spelled_name(n)).collect();
                     Text::new(format!("{} {}", of.label, names.join("、")), format!("{} {}", of.label, names.join(", ")))
                 }
                 _ => Text::same(of.label.clone()),
@@ -715,9 +715,9 @@ fn render(p: &Project, a: &Answer, lang: Lang) -> String {
             let (c, delta, spec) = (&x.change, p.shown(&x.delta), p.shown(&x.spec));
             lines.push(tr!("  {c}（{delta}、仕様は {spec}）:", "  {c} ({delta}, for {spec}):"));
             for (op, name, to, cited) in &x.items {
-                let (w, n) = (op.word(), crate::names::word_or_quote(name));
+                let (w, n) = (op.word(), crate::lex::spelled_name(name));
                 let what = match to {
-                    Some(t) => format!("{w} {n} -> {}", crate::names::word_or_quote(t)),
+                    Some(t) => format!("{w} {n} -> {}", crate::lex::spelled_name(t)),
                     None => format!("{w} {n}"),
                 };
                 let who = if cited.is_empty() {
@@ -875,8 +875,8 @@ fn from_labels(p: &Project, r: usize) -> Vec<String> {
                 if fragments.is_empty() {
                     out.push(source.clone());
                 } else {
-                    // a name that is not a word (a requirement of an OpenSpec spec) in quotes
-                    let frs: Vec<String> = fragments.iter().map(|(x, _)| crate::names::word_or_quote(x)).collect();
+                    // a requirement of an OpenSpec spec as a `.req` writes it, an article as people read it
+                    let frs: Vec<String> = fragments.iter().map(|(x, _)| crate::sources::shown_fragment(p, p.reqs[r].file, source, x)).collect();
                     out.push(format!("{source} {}", frs.join(", ")));
                 }
             }

@@ -247,11 +247,6 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
 
 // ── pin ─────────────────────────────────────────────────────────────────────
 
-/// An article as a pin line writes it: bare when it is a name, else in quotes (`"§1910.157"`).
-fn fragment_word(fr: &str) -> String {
-    if fr.chars().all(|c| c.is_alphanumeric() || c == '_') { fr.to_string() } else { crate::names::quote(fr) }
-}
-
 /// `yuen source pin`: the new text of each `.req` that changes, and what was done.
 pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
     let mut out = Vec::new();
@@ -310,7 +305,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                     let said = report.len();
                     let hash_of = |rn: &str| spec.get(rn).map(|r| sha256::short(r.block.as_bytes()));
                     for pl in pins {
-                        let fr = crate::names::word_or_quote(&pl.fragment);
+                        let fr = crate::lex::spelled_name(&pl.fragment);
                         let Some(h) = hash_of(&pl.fragment) else {
                             report.push(tr!("{name}: 仕様に要件 {fr} が無いので固定できません（yuen check の E108 を見てください）", "{name}: the spec has no requirement {fr} to pin (see E108 in yuen check)"));
                             continue;
@@ -330,7 +325,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                         None => (s.span.line - 1, "  ".to_string()),
                     };
                     for rn in fragments(&f.ast, name, pins).into_iter().skip(pins.len()) {
-                        let fr = crate::names::word_or_quote(&rn);
+                        let fr = crate::lex::spelled_name(&rn);
                         let Some(h) = hash_of(&rn) else {
                             report.push(tr!("{name}: 仕様に要件 {fr} が無いので固定できません（yuen check の E108 を見てください）", "{name}: the spec has no requirement {fr} to pin (see E108 in yuen check)"));
                             continue;
@@ -385,7 +380,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                         let h = sha256::short(&bytes);
                         let (_, end) = split(&lines[anchor]);
                         let end = if end.is_empty() { "\n".to_string() } else { end };
-                        inserts.entry(anchor).or_default().push(format!("{indent}{} sha256:{h}{end}", fragment_word(&fr)));
+                        inserts.entry(anchor).or_default().push(format!("{indent}{} sha256:{h}{end}", crate::lex::spelled_name(&fr)));
                         report.push(tr!("{name}: 引いている {fr} の固定の行を足しました（sha256:{h}）", "{name}: added a pin line for the cited {fr} (sha256:{h})"));
                     }
                     if report.len() == said {
@@ -668,7 +663,7 @@ fn spec_outdated(p: &Project, fi: usize, name: &str, pins: &[PinLine], spec: &st
     let mut said = false;
     for t in &touches {
         let at = format!("{}:{}", p.shown(&t.delta), t.line);
-        let (c, fr) = (&t.change, crate::names::word_or_quote(&t.name));
+        let (c, fr) = (&t.change, crate::lex::spelled_name(&t.name));
         match t.op {
             Op::Added => {
                 said = true;
@@ -685,7 +680,7 @@ fn spec_outdated(p: &Project, fi: usize, name: &str, pins: &[PinLine], spec: &st
                     Op::Modified => tr!("{name}: まだ archive していない変更 {c} が、{fr} を変えます（{at}）", "{name}: the change {c}, not yet archived, modifies {fr} ({at})"),
                     Op::Removed => tr!("{name}: まだ archive していない変更 {c} が、{fr} を消します（{at}）", "{name}: the change {c}, not yet archived, removes {fr} ({at})"),
                     _ => {
-                        let to = crate::names::word_or_quote(t.to.as_deref().unwrap_or(""));
+                        let to = crate::lex::spelled_name(t.to.as_deref().unwrap_or(""));
                         tr!("{name}: まだ archive していない変更 {c} が、{fr} の名前を {to} に変えます（{at}）", "{name}: the change {c}, not yet archived, renames {fr} to {to} ({at})")
                     }
                 });
