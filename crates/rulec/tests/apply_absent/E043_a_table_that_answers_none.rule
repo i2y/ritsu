@@ -1,0 +1,22 @@
+rule table_that_answers_none v1
+description "A tier a table of this rule leaves absent for a basic member, passed to a rule whose tier is always there"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+# A basic member is lifted to no tier
+table lift_by_member
+policy unique
+| member | -> lift : tier? |
+| basic  | none            |
+| silver | gold            |
+| >=gold | gold            |
+
+apply tiered = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = lift
+  credit -> credit

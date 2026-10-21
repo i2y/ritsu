@@ -1,0 +1,8 @@
+error[E042]: A binding does not agree in type
+  --> tests/apply_absent/E042_with_none_where_the_callee_takes_it.rule:13 apply tiered
+   |
+13 |   tier = member with none -> basic
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ The callee's `tier` takes the absent value itself, which `with` does not read as another: leave `none` out of `with`.
+

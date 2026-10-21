@@ -156,7 +156,9 @@ with its terms read differently) is pinned to the applied rule's lines with the 
 (E040), has to substitute every input of the applied rule (E041) with agreeing types (E042), and
 has to keep what it passes inside the applied rule's ranges and constraints (E043, with a value
 outside them as the example; for an input of an ordered enum held to a range, every value the
-binding can pass, read through `with`, has to be one the range lets in). A rule that cannot be applied — the applies go round, through it or
+binding can pass, read through `with`, has to be one the range lets in). A value that may be
+absent passed to an input of the applied rule that is not optional is E043 as well, and
+`with none -> basic` reads the absent value as one of the applied rule's values. A rule that cannot be applied — the applies go round, through it or
 through others, or it fails check — is E044; a rule that applies another, walks a sequence or
 produces an enum of its own can be applied. The applied rule's tables and clauses are expanded into the rule and checked
 with it; the rows this rule never reaches stay silent, and only a whole table none of whose

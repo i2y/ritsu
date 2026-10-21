@@ -1,0 +1,14 @@
+rule 値の無いことがあるフィールド(field_that_may_be_absent) v1
+description "段階に値の無いことがある明細を、明細の段階がいつもある規則でたどる"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+elements 品目(items)
+  明細の段階(level) : 段階?
+
+outputs
+  大口の数(big_lines) : number  round down(1)
+
+apply 数えて(counted) = "明細のポイント.rule" meaning:9fc42af0907d5510
+  明細 = 品目
+  大口の数 -> 大口の数

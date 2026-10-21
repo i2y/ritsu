@@ -1,0 +1,9 @@
+error[E043]: The field `明細の段階` may be absent, and the callee's field `明細の段階` takes no absent value
+  --> tests/apply_absent/E043_値の無いことがあるフィールド.rule:12 apply 数えて
+   |
+12 | apply 数えて(counted) = "明細のポイント.rule" meaning:9fc42af0907d5510
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `明細の段階` is 段階?
+   |
+ The completeness of `明細のポイント.rule` was proved where the field `明細の段階` of an element has a value; its tables have no answer for the absent value.
+ If it always has a value, declare `明細の段階` as 段階. If it can be absent, the callee's field `明細の段階` has to take the absent value and answer it (段階? and a row for `none`), which is a change to the callee.
+

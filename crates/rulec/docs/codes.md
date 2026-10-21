@@ -1476,9 +1476,9 @@ Related codes: [E040](#e040), [E042](#e042), [E043](#e043)
 
 `error` — **A binding does not agree in type**
 
-**When.** The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type.
+**When.** The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type. `with none -> <value>` is written only where this rule's value may be absent and the callee's input takes no absent value; written anywhere else, it is this code.
 
-**Fix.** Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of "'retirement' is read as 'end of term'".
+**Fix.** Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of "'retirement' is read as 'end of term'". Write `with none` only where the value may be absent; where the callee takes the absent value, leave it out of `with` and pass it on as it is.
 
 **Smallest reproduction**:
 
@@ -1524,9 +1524,9 @@ Related codes: [E041](#e041), [E043](#e043)
 
 `error` — **A value passed leaves the callee's range or constraint**
 
-**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, and what the rows of a table write for its output (what a name can take, for a row that writes one). A value an expression decides is taken to be any value of its enum, since check does not work out which ones an expression comes to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
+**When.** The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, and what the rows of a table write for its output (what a name can take, for a row that writes one). A value an expression decides is taken to be any value of its enum, since check does not work out which ones an expression comes to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. It is also a value that may be absent — an input or a field of an element declared `T?`, the output of a table a row of which answers `none`, a definition that only names one — passed to an input or a field of the callee that is not optional: the callee's tables have no answer for the absent value. Where `with none -> <value>` reads it as a value of the callee's, there is nothing to say. There is no `fix.text`: adding a row to the callee belongs to another unit of approval.
 
-**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`.
+**Fix.** Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`. For the absent value, read it as a value of the callee's with `with none -> <value>` (an enum), give this rule's name a type that is not optional where it always has a value, or decide the value in a table of this rule that answers `none` too and pass that. A number or a field of an element that can be absent needs the callee to take the absent value, which is a change to the callee.
 
 **Smallest reproduction**:
 
@@ -1596,6 +1596,44 @@ outputs
 table t(t)
 policy unique
 | campaign | -> x |
+| basic    | 1    |
+| >=silver | 2    |
+```
+
+**A value that may be absent**:
+
+```rule
+rule t(t) v1
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  m(m) : tier?
+
+outputs
+  y(y) : number  round down(1)
+
+apply a(a) = "absent_callee.rule" meaning:38fa5f7ac6342966
+  t = m
+  x -> y
+```
+
+With `absent_callee.rule` beside it:
+
+```rule
+rule absent_callee(absent_callee) v1
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  t(t) : tier
+
+outputs
+  x(x) : number  round down(1)
+
+table t1(t1)
+policy unique
+| t        | -> x |
 | basic    | 1    |
 | >=silver | 2    |
 ```

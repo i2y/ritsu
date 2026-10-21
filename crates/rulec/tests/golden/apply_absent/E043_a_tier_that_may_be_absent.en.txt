@@ -1,0 +1,9 @@
+error[E043]: What is passed to `tier` may be absent, and the callee's `tier` takes no absent value
+  --> tests/apply_absent/E043_a_tier_that_may_be_absent.rule:13 apply tiered
+   |
+13 |   tier = member
+   |   ^^^^^^^^^^^^^ `member` is tier?
+   |
+ The completeness of `tier_credit.rule` was proved where `tier` has a value; its tables have no answer for the absent value.
+ `with` reads the absent value as a value of the callee's: `tier = member with none -> <value>`. If it always has a value, declare `member` as tier. A table of this rule that answers `none` too can also decide the value, and pass that.
+

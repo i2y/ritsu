@@ -1,0 +1,14 @@
+rule 元の規則が受け付ける_with_none(with_none_where_the_callee_takes_it) v1
+description "値の無いことをそのまま受け付ける規則への準用に with none を書く"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階?
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+apply 段階で(tiered) = "値の無いこともある段階の値引き.rule" meaning:64b045c53ed8ba95
+  段階 = 会員 with none -> 一般
+  値引き -> 値引き

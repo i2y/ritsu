@@ -1,0 +1,9 @@
+エラー[E043]: `tier` に渡す値には値の無いことがありますが、元の規則の `tier` は値の無いことを受け付けません
+  --> tests/apply_absent/E043_a_tier_that_may_be_absent.rule:13 準用 tiered
+   |
+13 |   tier = member
+   |   ^^^^^^^^^^^^^ `member` は tier? です
+   |
+ `tier_credit.rule` の完全性は、`tier` に値があるところでだけ証明されています。値が無いときの答えは、その表にありません。
+ `tier = member with none -> <値>` のように、`with` で、値の無いことを元の規則の値として読めます。値がいつもあるなら、`member` を tier と宣言してください。`none` にも答える表をこの規則に書いて値を決め、それを渡すこともできます。
+

@@ -1,0 +1,8 @@
+error[E042]: A binding does not agree in type
+  --> tests/apply_absent/E042_with_none_of_a_tier_always_there.rule:13 apply tiered
+   |
+13 |   tier = member with none -> basic
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ `member` is tier, which is never absent
+

@@ -1,0 +1,9 @@
+error[E043]: What is passed to `数量` may be absent, and the callee's `数量` takes no absent value
+  --> tests/apply_absent/E043_値の無いことがある数量.rule:11 apply 手数料で
+   |
+11 |   数量 = 個数
+   |   ^^^^^^^^^^^ `個数` is number?
+   |
+ The completeness of `数量の手数料.rule` was proved where `数量` has a value; its tables have no answer for the absent value.
+ If it always has a value, declare `個数` as number. If it can be absent, the callee's `数量` has to take the absent value and answer it (number? and a row for `none`), which is a change to the callee.
+

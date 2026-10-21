@@ -982,6 +982,26 @@ apply call(c) = "tier_callee.rule" meaning:137f2373042d3154
   campaign = k
   x -> y
 "##;
+/// A value that may be absent passed to an input of the callee that is not optional (§15.255).
+const X_E043_ABSENT: &str = r##"rule t(t) v1
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  m(m) : tier?
+
+outputs
+  y(y) : number  round down(1)
+
+apply a(a) = "absent_callee.rule" meaning:38fa5f7ac6342966
+  t = m
+  x -> y
+"##;
+/// The callee beside it: a tier that is always there.
+const ABSENT_CALLEE: &[(&str, &str)] = &[(
+    "absent_callee.rule",
+    "rule absent_callee(absent_callee) v1\n\nenum tier = basic < silver < gold < platinum\n\ninputs\n  t(t) : tier\n\noutputs\n  x(x) : number  round down(1)\n\ntable t1(t1)\npolicy unique\n| t        | -> x |\n| basic    | 1    |\n| >=silver | 2    |\n",
+)];
 const TIER_CALLEE: &[(&str, &str)] = &[(
     "tier_callee.rule",
     "rule tier_callee(tier_callee) v1\n\nenum tier = basic < silver < gold < platinum\n\ninputs\n  campaign(campaign) : tier  range >=basic <=gold\n\noutputs\n  x(x) : number  round down(1)\n\ntable t(t)\npolicy unique\n| campaign | -> x |\n| basic    | 1    |\n| >=silver | 2    |\n",
@@ -2682,12 +2702,12 @@ pub fn ledger() -> Vec<Entry> {
             "E042",
             tr!("読み替えの型が合いません", "A binding does not agree in type"),
             tr!(
-                "読み替えた値の型が、元の規則の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値にあたる元の規則の値が無いとき（同じ綴りの値はそのまま対応します）、`with` にどちらにも無い値を書いたとき、リテラルが元の規則の型の値でないときも同じです。",
-                "The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type."
+                "読み替えた値の型が、元の規則の入力の型と違うとき（単位・税区分・列挙と数）。列挙どうしでは、この規則の列挙の値にあたる元の規則の値が無いとき（同じ綴りの値はそのまま対応します）、`with` にどちらにも無い値を書いたとき、リテラルが元の規則の型の値でないときも同じです。`with none -> <値>` は、この規則の値に値の無いことがあり、元の規則の入力が値の無いことを受け付けないときだけ書けます。ほかで書くと、このエラーです。",
+                "The type of a bound value differs from the callee input's (unit, tax kind, an enum against a number). Between two enums: a value of this rule's enum stands for no value of the callee's (values spelled the same on both sides map by themselves), a `with` names a value neither side has, or a literal is not a value of the callee's type. `with none -> <value>` is written only where this rule's value may be absent and the callee's input takes no absent value; written anywhere else, it is this code."
             ),
             tr!(
-                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <元の規則の値>, …` の形で、この規則の列挙の値を全部対応づけてください。法令の「『退職』とあるのは『任期の終了』と読み替える」を、そのまま書く形です。",
-                "Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of \"'retirement' is read as 'end of term'\"."
+                "型を合わせてください。列挙は `<入力> = <値> with <この規則の値> -> <元の規則の値>, …` の形で、この規則の列挙の値を全部対応づけてください。法令の「『退職』とあるのは『任期の終了』と読み替える」を、そのまま書く形です。`with none` は、値の無いことがあるときだけ書いてください。元の規則が値の無いことを受け付けるなら、`with` から外して、そのまま渡してください。",
+                "Make the types agree. For enums, `<input> = <value> with <this rule's value> -> <callee's value>, …` maps every value of this rule's enum; that is the shape of \"'retirement' is read as 'end of term'\". Write `with none` only where the value may be absent; where the callee takes the absent value, leave it out of `with` and pass it on as it is."
             ),
             X_E042,
             &["E041", "E043"],
@@ -2698,19 +2718,20 @@ pub fn ledger() -> Vec<Entry> {
             "E043",
             tr!("渡す値が元の規則の範囲か制約に収まりません", "A value passed leaves the callee's range or constraint"),
             tr!(
-                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。順のある列挙の入力の `range`（`range >=basic <=gold`）では、渡す値が取りうる列挙の値を `with` で元の規則の値に読み替えて、範囲に入らない値があるときです。取りうる値は、入力ならその範囲（範囲が無ければ列挙の全部）、リテラルならその値、表の出力なら行が書く値（名前を書く行は、その名前が取りうる値）です。式で決まる値は、check がその値を求めないので列挙の全部とし、範囲の外の値があれば、渡す値の取りうる値が分からないと言います。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
-                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, and what the rows of a table write for its output (what a name can take, for a row that writes one). A value an expression decides is taken to be any value of its enum, since check does not work out which ones an expression comes to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
+                "読み替えた値の取りうる範囲が、元の規則の入力の `range` からはみ出すとき（注に、はみ出す値の例が一つ出ます）、または元の規則の `constraint` がこの規則の宣言から導けないとき。順のある列挙の入力の `range`（`range >=basic <=gold`）では、渡す値が取りうる列挙の値を `with` で元の規則の値に読み替えて、範囲に入らない値があるときです。取りうる値は、入力ならその範囲（範囲が無ければ列挙の全部）、リテラルならその値、表の出力なら行が書く値（名前を書く行は、その名前が取りうる値）です。式で決まる値は、check がその値を求めないので列挙の全部とし、範囲の外の値があれば、渡す値の取りうる値が分からないと言います。元の規則の完全性はその範囲と制約の上でしか証明されていないので、外の値には定義がありません。値の無いことがある値（`T?` の入力や要素のフィールド、`none` を書く行のある表の出力、それらを指すだけの定義）を、`?` の無い元の規則の入力やフィールドに渡すときにも出ます。元の規則の表には、値が無いときの答えがありません。`with none -> <値>` で値の無いことを元の規則の値に読み替えていれば出ません。`fix.text` は付けません。元の規則に行を足すのは、別の承認の話だからです。",
+                "The interval of a bound value reaches outside the callee input's `range` (the point outside is shown as the witness), or a `constraint` of the callee does not follow from this rule's declarations. For the `range` of an input of an ordered enum (`range >=basic <=gold`), it is a value the bound value can take, read as the callee's through `with`, that the range does not let in. What a value can take is an input's range (every value of its enum without one), a literal's value, and what the rows of a table write for its output (what a name can take, for a row that writes one). A value an expression decides is taken to be any value of its enum, since check does not work out which ones an expression comes to, and what is passed is then said to be not known. The callee's completeness was proved over that range and constraint; outside them there is no definition. It is also a value that may be absent — an input or a field of an element declared `T?`, the output of a table a row of which answers `none`, a definition that only names one — passed to an input or a field of the callee that is not optional: the callee's tables have no answer for the absent value. Where `with none -> <value>` reads it as a value of the callee's, there is nothing to say. There is no `fix.text`: adding a row to the callee belongs to another unit of approval."
             ),
             tr!(
-                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。列挙なら、この規則の入力に同じ `range` を書くか（順のある列挙のとき）、範囲の中の値だけを書く表で値を決めて渡すか、`with` で範囲の中の値に読み替えてください。制約なら、同じ関係を `constraint` で宣言してください。",
-                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`."
+                "この規則の入力の範囲を元の規則の範囲まで狭めるか、はみ出す部分をこの規則の節で定めてください。どちらにするかは業務の判断です。列挙なら、この規則の入力に同じ `range` を書くか（順のある列挙のとき）、範囲の中の値だけを書く表で値を決めて渡すか、`with` で範囲の中の値に読み替えてください。制約なら、同じ関係を `constraint` で宣言してください。値の無いことなら、`with none -> <値>` で元の規則の値に読み替えるか（列挙のとき）、値がいつもあるならこの規則の名前を `?` の無い型にするか、`none` にも答える表をこの規則に書いて値を決めて渡してください。数や要素のフィールドで値の無いことがあるなら、元の規則が値の無いことを受け付ける変更になります。",
+                "Narrow this rule's input range to the callee's, or define the region outside it in a clause of this rule; which is a business decision. For an enum, declare the same `range` on this rule's input (of an ordered enum), decide the value passed in a table that writes only values inside the range, or read the values outside it as values inside it with `with`. For a constraint, declare the same relation with `constraint`. For the absent value, read it as a value of the callee's with `with none -> <value>` (an enum), give this rule's name a type that is not optional where it always has a value, or decide the value in a table of this rule that answers `none` too and pass that. A number or a field of an element that can be absent needs the callee to take the absent value, which is a change to the callee."
             ),
             X_E043,
             &["E041", "E042", "E101"],
         )
         .with_files(CALLEE)
         .english_with_files(X_E043_EN, CALLEE_EN)
-        .also_with(tr!("順のある列挙の入力の範囲", "The range of an input of an ordered enum"), X_E043_ENUM, TIER_CALLEE),
+        .also_with(tr!("順のある列挙の入力の範囲", "The range of an input of an ordered enum"), X_E043_ENUM, TIER_CALLEE)
+        .also_with(tr!("値の無いことがある値", "A value that may be absent"), X_E043_ABSENT, ABSENT_CALLEE),
         err(
             "E044",
             tr!("その規則は準用できません", "That rule cannot be applied"),

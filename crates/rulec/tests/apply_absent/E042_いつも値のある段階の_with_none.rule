@@ -1,0 +1,14 @@
+rule いつも値のある段階の_with_none(with_none_of_a_tier_always_there) v1
+description "いつも値のある段階に with none を書く"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+apply 段階で(tiered) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 会員 with none -> 一般
+  値引き -> 値引き

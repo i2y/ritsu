@@ -1,0 +1,14 @@
+rule tier_that_may_be_absent v1
+description "A member's tier that may be absent, passed to a rule whose tier is always there"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier?
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+apply tiered = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member
+  credit -> credit

@@ -1,0 +1,9 @@
+エラー[E043]: フィールド `level` には値の無いことがありますが、元の規則の要素の `level` は値の無いことを受け付けません
+  --> tests/apply_absent/E043_a_field_that_may_be_absent.rule:12 準用 counted
+   |
+12 | apply counted = "line_points.rule" meaning:bcef40ed1bd7f9a4
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `level` は tier? です
+   |
+ `line_points.rule` の完全性は、要素の `level` に値があるところでだけ証明されています。値が無いときの答えは、その表にありません。
+ 値がいつもあるなら、`level` を tier と宣言してください。値の無いことがあるなら、元の規則の要素の `level` が値の無いことを受け付けて答えを決める（tier? と `none` の行）ことになり、それは元の規則の変更です。
+

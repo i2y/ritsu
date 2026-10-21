@@ -1,0 +1,9 @@
+エラー[E043]: `tier` に渡す値には値の無いことがありますが、元の規則の `tier` は値の無いことを受け付けません
+  --> tests/apply_absent/E043_a_table_that_answers_none.rule:21 準用 tiered
+   |
+21 |   tier = lift
+   |   ^^^^^^^^^^^ 表 lift_by_member の 行1 が none を書きます
+   |
+ `tier_credit.rule` の完全性は、`tier` に値があるところでだけ証明されています。値が無いときの答えは、その表にありません。
+ `tier = lift with none -> <値>` のように、`with` で、値の無いことを元の規則の値として読めます。表 lift_by_member の 行1 が、`none` ではなく値を書くようにしてください。`none` にも答える表をこの規則に書いて値を決め、それを渡すこともできます。
+

@@ -1,0 +1,22 @@
+rule none_を書く表(table_that_answers_none) v1
+description "この規則の表が一般の会員には値を無いままにする段階を、段階がいつもある規則に渡す"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+# 一般の会員は、どの段階にも引き上げない
+table 会員ごとの引き上げ(lift_by_member)
+policy unique
+| 会員       | -> 引き上げ先(lift) : 段階? |
+| 一般       | none                        |
+| シルバー   | ゴールド                    |
+| >=ゴールド | ゴールド                    |
+
+apply 段階で(tiered) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 引き上げ先
+  値引き -> 値引き

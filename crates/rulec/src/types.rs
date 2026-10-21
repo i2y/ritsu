@@ -2761,6 +2761,29 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             _ => None,
         })
         .collect();
+    // The values a cell of a callee's names, where an `apply` reads the absent value as one of the
+    // callee's (`with none -> …`, §15.255): no cell names `none` beside values, so the expansion
+    // writes a cell that takes both as `not:` the others, and the values it takes are the ones the
+    // callee's row named.
+    let mut named_by_callee: HashSet<(String, String)> = HashSet::new();
+    for it in &f.items {
+        let Item::Table(t) = it else { continue };
+        let Some(an) = &t.applied else { continue };
+        let Some(a) = f.applies.iter().find(|a| a.name.text == *an) else { continue };
+        for b in a.bindings.iter().filter(|b| b.map.iter().any(|(from, _)| from == crate::kw::NONE)) {
+            let crate::ast::BindValue::Name(col) = &b.value else { continue };
+            let Some(ci) = t.inputs.iter().position(|(n, _)| n == col) else { continue };
+            let Some(Ty::Enum(en)) = c.ty_of(col).map(|t| t.present().clone()) else { continue };
+            for row in &t.rows {
+                let Some(Cell::Not(ls)) = row.cells.get(ci) else { continue };
+                for v in c.enums.get(&en).cloned().unwrap_or_default() {
+                    if !ls.iter().any(|l| matches!(l, Lit::Word(w) if *w == v)) {
+                        named_by_callee.insert((en.clone(), v));
+                    }
+                }
+            }
+        }
+    }
     for e in &f.enums {
         let unnamed: Vec<&Name> = e
             .values
@@ -2769,7 +2792,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             .filter(|(i, v)| {
                 let key = (e.name.text.clone(), v.text.clone());
                 let carried = !tested.contains(&e.name.text) && c.carried_values.contains(&key);
-                !c.used_values.contains(&key) && !carried && !e.default_marks.get(*i).copied().unwrap_or(false)
+                !c.used_values.contains(&key) && !named_by_callee.contains(&key) && !carried && !e.default_marks.get(*i).copied().unwrap_or(false)
             })
             .map(|(_, v)| v)
             .collect();

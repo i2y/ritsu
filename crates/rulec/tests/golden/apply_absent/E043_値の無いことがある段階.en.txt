@@ -1,0 +1,9 @@
+error[E043]: What is passed to `段階` may be absent, and the callee's `段階` takes no absent value
+  --> tests/apply_absent/E043_値の無いことがある段階.rule:13 apply 段階で
+   |
+13 |   段階 = 会員
+   |   ^^^^^^^^^^^ `会員` is 段階?
+   |
+ The completeness of `段階の値引き.rule` was proved where `段階` has a value; its tables have no answer for the absent value.
+ `with` reads the absent value as a value of the callee's: `段階 = 会員 with none -> <value>`. If it always has a value, declare `会員` as 段階. A table of this rule that answers `none` too can also decide the value, and pass that.
+

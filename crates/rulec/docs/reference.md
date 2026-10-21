@@ -2194,7 +2194,12 @@ output of this rule, or a literal — every input, exactly once (E041). The type
 two enums are mapped with `with`, which covers every value of this rule's enum, values spelled
 the same on both sides mapping by themselves. What this rule passes has to stay inside the
 callee's declared ranges and satisfy its constraints (E043, never fixed by adding a row: the
-callee is another unit of approval). A number is held there by interval arithmetic. For an input
+callee is another unit of approval). Where the callee's input is not optional, what is passed has
+to have a value: one that may be absent — an input or a field of an element declared `T?`, the
+output of a table a row of which answers `none`, a definition that only names one — is E043 too.
+`with none -> <value>` reads this rule's absent value as a value of the callee's (`tier = member
+with none -> basic`), beside the values that stand for it already; it is written only where the
+value may be absent and the callee's input takes no absent value (E042 elsewhere). A number is held there by interval arithmetic. For an input
 the callee holds to a range of an ordered enum (`campaign : tier  range >=basic <=gold`), every
 value the binding can pass, read as the callee's through `with`, has to be one the range lets in:
 an input can pass its range (every value of its enum without one), a literal its value, a table's

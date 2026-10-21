@@ -45,6 +45,10 @@ struct Renamer<'a> {
     maps: HashMap<String, HashMap<String, Vec<String>>>,
     /// Callee groups, expanded to their members.
     groups: HashMap<String, Vec<String>>,
+    /// Callee enum input bound to a name of this rule → the values of that name's enum, in their
+    /// order: what a cell that takes the absent value besides some of them is written against
+    /// (§15.255).
+    own: HashMap<String, Vec<String>>,
     /// Callee input → the enum it has, when it is an enum.
     input_enum: HashMap<String, String>,
     /// The callee's enums and what they are called here (§15.230).
@@ -115,6 +119,45 @@ impl Renamer<'_> {
             }
         }
         out
+    }
+    /// The values of this rule's enum a callee's enum input is bound to, in their order.
+    fn own_values(&self, input: &str) -> Vec<String> {
+        self.own.get(input).cloned().unwrap_or_default()
+    }
+    /// The cell of this rule that takes `words` — this rule's values for a callee's cell, `none`
+    /// among them where `with none -> …` reads the absent value as one of the callee's (§15.255).
+    /// No cell names `none` beside values, and `not:` takes the absent value too, so a cell that
+    /// takes it and some values is `not:` the others. `None` where it takes nothing.
+    fn cell_of_words(&self, input: &str, words: Vec<String>) -> Option<Cell> {
+        if !words.iter().any(|w| w == crate::kw::NONE) {
+            return match words.len() {
+                0 => None,
+                1 => Some(Cell::Lit(Lit::Word(words[0].clone()))),
+                _ => Some(Cell::Set(words.into_iter().map(Lit::Word).collect())),
+            };
+        }
+        let values: Vec<&String> = words.iter().filter(|w| *w != crate::kw::NONE).collect();
+        if values.is_empty() {
+            return Some(Cell::Nothing);
+        }
+        let rest: Vec<Lit> = self.own_values(input).into_iter().filter(|v| !values.contains(&v)).map(Lit::Word).collect();
+        Some(if rest.is_empty() { Cell::DontCare } else { Cell::Not(rest) })
+    }
+    /// The cell of this rule for the callee's `not:` cell whose words stand for `words` here: every
+    /// value but those, and the absent value only where it is not among them (§15.255).
+    fn not_cell_of_words(&self, input: &str, words: Vec<String>) -> Option<Cell> {
+        if words.is_empty() {
+            return Some(Cell::DontCare);
+        }
+        if !words.iter().any(|w| w == crate::kw::NONE) {
+            return Some(Cell::Not(words.into_iter().map(Lit::Word).collect()));
+        }
+        let rest: Vec<String> = self.own_values(input).into_iter().filter(|v| !words.contains(v)).collect();
+        match rest.len() {
+            0 => None,
+            1 => Some(Cell::Lit(Lit::Word(rest[0].clone()))),
+            _ => Some(Cell::Set(rest.into_iter().map(Lit::Word).collect())),
+        }
     }
     /// A type the callee writes, its enum named as it is here.
     fn ty(&self, t: &TypeRef) -> TypeRef {
@@ -515,6 +558,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         // The renamer: subs, maps, groups.
         let mut subs: HashMap<String, Sub> = HashMap::new();
         let mut maps: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+        let mut own: HashMap<String, Vec<String>> = HashMap::new();
         let mut input_enum: HashMap<String, String> = HashMap::new();
         for cin in &cf.inputs {
             let b = a.bindings.iter().find(|b| b.input == cin.name.text).unwrap();
@@ -554,10 +598,28 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                         mp.entry(to.clone()).or_default().push(from.clone());
                     }
                     for v in &callee_vals {
-                        if !mp.contains_key(v) && caller_vals.as_ref().is_none_or(|vs| vs.contains(v)) && b.map.iter().all(|(from, _)| from != v) {
-                            mp.insert(v.clone(), vec![v.clone()]);
+                        // The absent value read as one of the callee's (`with none -> …`, §15.255) adds
+                        // to the values that stand for it, and takes none of them away.
+                        let taken = b.map.iter().any(|(from, to)| to == v && from != crate::kw::NONE);
+                        if !taken && caller_vals.as_ref().is_none_or(|vs| vs.contains(v)) && b.map.iter().all(|(from, _)| from != v) {
+                            mp.entry(v.clone()).or_default().push(v.clone());
                         }
                     }
+                    // This rule's values in their order: as its enum declares them, or, for a name
+                    // whose enum this reading does not find, as they stand for the callee's in the
+                    // callee's order. A rule that passes E042 has each stand for one.
+                    let ordered = caller_vals.unwrap_or_else(|| {
+                        let mut out: Vec<String> = Vec::new();
+                        for v in &callee_vals {
+                            for w in mp.get(v).into_iter().flatten() {
+                                if w != crate::kw::NONE && !out.contains(w) {
+                                    out.push(w.clone());
+                                }
+                            }
+                        }
+                        out
+                    });
+                    own.insert(cin.name.text.clone(), ordered);
                     maps.insert(cin.name.text.clone(), mp);
                 }
             }
@@ -572,6 +634,7 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
             subs,
             maps,
             groups: cc.groups.iter().map(|(g, (_, ms))| (g.clone(), ms.clone())).collect(),
+            own,
             input_enum,
             enum_names: enum_names.clone(),
         };
@@ -1125,20 +1188,12 @@ fn inline_table(rn: &Renamer, cc: &Checked, t: &Table, dropped_rows: &[(String, 
                                     Cell::Ranked { values, .. } => values.iter().map(|v| Lit::Word(v.clone())).collect(),
                                     _ => unreachable!(),
                                 };
-                                let words = rn.map_words(name, &ls);
-                                match words.len() {
-                                    0 => continue 'rows,
-                                    1 => Cell::Lit(Lit::Word(words[0].clone())),
-                                    _ => Cell::Set(words.into_iter().map(Lit::Word).collect()),
-                                }
+                                let Some(cell) = rn.cell_of_words(name, rn.map_words(name, &ls)) else { continue 'rows };
+                                cell
                             }
                             Cell::Not(ls) => {
-                                let words = rn.map_words(name, ls);
-                                if words.is_empty() {
-                                    Cell::DontCare
-                                } else {
-                                    Cell::Not(words.into_iter().map(Lit::Word).collect())
-                                }
+                                let Some(cell) = rn.not_cell_of_words(name, rn.map_words(name, ls)) else { continue 'rows };
+                                cell
                             }
                             other => other.clone(),
                         }
@@ -1286,7 +1341,24 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                                 let caller_vals = c.enums.get(ce).cloned().unwrap_or_default();
                                 let callee_vals = cal.enums.iter().find(|(e, _)| e == ke).map(|(_, v)| v.clone()).unwrap_or_default();
                                 for (from, to) in &b.map {
-                                    if !caller_vals.contains(from) {
+                                    // `with none -> <value>` reads the absent value as one of the callee's
+                                    // (§15.255): only where this rule's value may be absent and the callee's
+                                    // input takes no absent value of its own.
+                                    if from == crate::kw::NONE {
+                                        if !matches!(c.ty_of(n), Some(Ty::Opt(_))) {
+                                            out.push(bad_map(&at(b.span.line), &b.span, tr!("`{n}` は {ce} で、値の無いことがありません", "`{n}` is {ce}, which is never absent")));
+                                        } else if matches!(cin.ty, Ty::Opt(_)) {
+                                            out.push(bad_map(
+                                                &at(b.span.line),
+                                                &b.span,
+                                                tr!(
+                                                    "元の規則の `{}` は値の無いことをそのまま受け付けるので、`with` で読み替えません。`with` から `none` を外してください。",
+                                                    "The callee's `{}` takes the absent value itself, which `with` does not read as another: leave `none` out of `with`.",
+                                                    cin.name
+                                                ),
+                                            ));
+                                        }
+                                    } else if !caller_vals.contains(from) {
                                         out.push(bad_map(&at(b.span.line), &b.span, tr!("`{from}` は {ce} の値ではありません", "`{from}` is not a value of {ce}")));
                                     }
                                     if !callee_vals.contains(to) {
@@ -1332,6 +1404,15 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
                         out.push(bad_map(&at(b.span.line), &b.span, tr!("このリテラルは元の規則の `{}`（{cty}）の値ではありません", "This literal is not a value of the callee's `{}` ({cty})", cin.name)));
                     }
                 }
+            }
+            // The absent value (§15.255): what this rule passes may be absent where the callee's
+            // input is not optional, and `with` does not read it as one of the callee's values.
+            if !matches!(cin.ty, Ty::Opt(_))
+                && let BindValue::Name(n) = &value
+                && !b.map.iter().any(|(from, _)| from == crate::kw::NONE)
+                && let Some(src) = absent_from(f, c, n, &mut Vec::new())
+            {
+                out.push(absent_passed(c, a, cin, b, n, &src, &at(b.span.line)));
             }
             // Range: what this rule can pass has to stay inside what the callee proved over.
             let Some(r) = &cin.range else { continue };
@@ -1396,6 +1477,34 @@ pub fn check(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
             if !ty.unifies(&cty) && !cty.unifies(&ty) {
                 out.push(bad_map(&at(a.span.line), &a.span, tr!("`{ours}` は {ty} で、元の規則の要素の `{}` は {cty} です", "`{ours}` is {ty}; the callee's field `{}` is {cty}", cin.name)));
                 continue;
+            }
+            // The absent value (§15.255), as for an input: a field of this rule's elements that may
+            // be absent, under a field of the callee's that is not optional.
+            if !matches!(cin.ty, Ty::Opt(_)) && let Some(Absent::Declared { ty: fty, .. }) = absent_from(f, c, ours, &mut Vec::new()) {
+                out.push(
+                    Diag::error(
+                        "E043",
+                        tr!(
+                            "フィールド `{ours}` には値の無いことがありますが、元の規則の要素の `{}` は値の無いことを受け付けません",
+                            "The field `{ours}` may be absent, and the callee's field `{}` takes no absent value",
+                            cin.name
+                        ),
+                    )
+                    .at(at(a.span.line))
+                    .mark(a.span.clone(), tr!("`{ours}` は {fty} です", "`{ours}` is {fty}"))
+                    .note(tr!(
+                        "`{}` の完全性は、要素の `{}` に値があるところでだけ証明されています。値が無いときの答えは、その表にありません。",
+                        "The completeness of `{}` was proved where the field `{}` of an element has a value; its tables have no answer for the absent value.",
+                        a.path,
+                        cin.name
+                    ))
+                    .note(tr!(
+                        "値がいつもあるなら、`{ours}` を {} と宣言してください。値の無いことがあるなら、元の規則の要素の `{}` が値の無いことを受け付けて答えを決める（{cty}? と `none` の行）ことになり、それは元の規則の変更です。",
+                        "If it always has a value, declare `{ours}` as {}. If it can be absent, the callee's field `{}` has to take the absent value and answer it ({cty}? and a row for `none`), which is a change to the callee.",
+                        fty.present(),
+                        cin.name
+                    )),
+                );
             }
             let Some(r) = &cin.range else { continue };
             let Some((clo, chi)) = bounds_of(r, &cty) else { continue };
@@ -1630,15 +1739,123 @@ impl<'a> Holds<'a> {
 
 /// The callee's values a value of this rule stands for through a binding, as the expansion reads
 /// it: what `with` maps it to, or else the value spelled the same, unless `with` maps another value
-/// to that one.
+/// to that one. The absent value read as one of the callee's (`with none -> …`, §15.255) takes no
+/// value from the one spelled the same.
 fn stands_for(b: &Binding, v: &str, callee_vals: &[String]) -> Vec<String> {
     if b.map.iter().any(|(from, _)| from == v) {
         return b.map.iter().filter(|(from, to)| from == v && callee_vals.contains(to)).map(|(_, to)| to.clone()).collect();
     }
-    if callee_vals.iter().any(|x| x == v) && !b.map.iter().any(|(_, to)| to == v) {
+    if callee_vals.iter().any(|x| x == v) && !b.map.iter().any(|(from, to)| to == v && from != crate::kw::NONE) {
         return vec![v.to_string()];
     }
     Vec::new()
+}
+
+/// Where a name of this rule gets the absent value from (§15.255).
+enum Absent {
+    /// An input or a field of an element declared `T?`: the caller may leave it out.
+    Declared { name: String, ty: Ty },
+    /// A row of a table that answers `none`, by its number in the table.
+    Row { table: String, row: usize },
+}
+
+/// Whether a name of this rule can hold the absent value, and where it gets it: an input or a field
+/// of an element declared `T?` can; an output of a table can where a row answers `none` or passes
+/// on a name that can; a definition that only names another value can where that one can. An
+/// expression never holds it (§2.1), and a name whose type is not optional never does. A name met
+/// again on the way is read as one that can, the safe side.
+fn absent_from(f: &RuleFile, c: &Checked, name: &str, seen: &mut Vec<String>) -> Option<Absent> {
+    let ty = c.ty_of(name)?;
+    if !matches!(ty, Ty::Opt(_)) {
+        return None;
+    }
+    if f.inputs.iter().any(|i| i.name.text == name) || f.element_fields().any(|x| x.name.text == name) || seen.iter().any(|n| n == name) {
+        return Some(Absent::Declared { name: name.to_string(), ty });
+    }
+    seen.push(name.to_string());
+    let mut tabled = false;
+    for it in &f.items {
+        let Item::Table(t) = it else { continue };
+        let Some(oi) = t.outputs.iter().position(|o| o.name.text == name) else { continue };
+        tabled = true;
+        let table = t.name.as_ref().map(|n| n.text.clone()).unwrap_or_default();
+        for (ri, row) in t.rows.iter().enumerate() {
+            match row.outs.get(oi) {
+                Some(OutCell::Nothing) => return Some(Absent::Row { table, row: ri + 1 }),
+                Some(OutCell::Name(w)) if c.ty_of(w).is_some() => {
+                    if let Some(a) = absent_from(f, c, w, seen) {
+                        return Some(a);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if tabled {
+        return None;
+    }
+    let expr = f.items.iter().find_map(|it| match it {
+        Item::Define(d) if d.name.text == name => Some(&d.expr),
+        Item::Derived(d) if d.name.text == name => Some(&d.expr),
+        _ => None,
+    });
+    match expr {
+        Some(Expr::Name(w, _)) if c.ty_of(w).is_some() => absent_from(f, c, w, seen),
+        // Any other expression: it never comes to the absent value.
+        Some(_) => None,
+        // A name declared some other way (a fold's answer, what a walk leaves): it may.
+        None => Some(Absent::Declared { name: name.to_string(), ty }),
+    }
+}
+
+/// E043 for a value that may be absent, passed to an input of the callee that is not optional
+/// (§15.255). The callee's completeness was proved where the input has a value, and it has no
+/// answer for the absent one; E101 used to say so in a table of the callee's, and asked for a row
+/// there, which this rule cannot add. What this rule can write is said instead.
+fn absent_passed(c: &Checked, a: &ApplyDecl, cin: &CalleeInput, b: &Binding, n: &str, src: &Absent, at: &str) -> Diag {
+    let cty = &cin.ty;
+    let mark = match src {
+        Absent::Declared { name, ty } if name == n => tr!("`{name}` は {ty} です", "`{name}` is {ty}"),
+        Absent::Declared { name, ty } => tr!("`{n}` は `{name}`（{ty}）を指します", "`{n}` names `{name}`, which is {ty}"),
+        Absent::Row { table, row } => tr!("表 {table} の 行{row} が none を書きます", "row {row} of table {table} answers none"),
+    };
+    let mut d = Diag::error(
+        "E043",
+        tr!(
+            "`{}` に渡す値には値の無いことがありますが、元の規則の `{}` は値の無いことを受け付けません",
+            "What is passed to `{}` may be absent, and the callee's `{}` takes no absent value",
+            cin.name,
+            cin.name
+        ),
+    )
+    .at(at.to_string())
+    .mark(b.span.clone(), mark)
+    .note(tr!(
+        "`{}` の完全性は、`{}` に値があるところでだけ証明されています。値が無いときの答えは、その表にありません。",
+        "The completeness of `{}` was proved where `{}` has a value; its tables have no answer for the absent value.",
+        a.path,
+        cin.name
+    ));
+    // What this rule can write: read the absent value as a value of the callee's, give the name a
+    // value always, or decide one in a table of this rule that answers `none` too.
+    let always = match src {
+        Absent::Declared { name, ty } => tr!("値がいつもあるなら、`{name}` を {} と宣言してください。", "If it always has a value, declare `{name}` as {}.", ty.present()),
+        Absent::Row { table, row } => tr!("表 {table} の 行{row} が、`none` ではなく値を書くようにしてください。", "Have row {row} of table {table} answer a value rather than `none`."),
+    };
+    if matches!(cty, Ty::Enum(_)) && matches!(c.ty_of(n).as_ref().map(Ty::present), Some(Ty::Enum(_))) {
+        d = d.note(tr!(
+            "`{} = {n} with none -> <値>` のように、`with` で、値の無いことを元の規則の値として読めます。{always}`none` にも答える表をこの規則に書いて値を決め、それを渡すこともできます。",
+            "`with` reads the absent value as a value of the callee's: `{} = {n} with none -> <value>`. {always} A table of this rule that answers `none` too can also decide the value, and pass that.",
+            cin.name
+        ));
+    } else {
+        d = d.note(tr!(
+            "{always}値の無いことがあるなら、元の規則の `{}` が値の無いことを受け付けて答えを決める（{cty}? と `none` の行）ことになり、それは元の規則の変更です。",
+            "{always} If it can be absent, the callee's `{}` has to take the absent value and answer it ({cty}? and a row for `none`), which is a change to the callee.",
+            cin.name
+        ));
+    }
+    d
 }
 
 /// E043 for an input of the callee held to a range of its ordered enum (§15.252): the values the

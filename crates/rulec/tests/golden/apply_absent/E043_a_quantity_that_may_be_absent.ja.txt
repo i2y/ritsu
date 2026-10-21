@@ -1,0 +1,9 @@
+エラー[E043]: `quantity` に渡す値には値の無いことがありますが、元の規則の `quantity` は値の無いことを受け付けません
+  --> tests/apply_absent/E043_a_quantity_that_may_be_absent.rule:11 準用 charged
+   |
+11 |   quantity = pieces
+   |   ^^^^^^^^^^^^^^^^^ `pieces` は number? です
+   |
+ `quantity_fee.rule` の完全性は、`quantity` に値があるところでだけ証明されています。値が無いときの答えは、その表にありません。
+ 値がいつもあるなら、`pieces` を number と宣言してください。値の無いことがあるなら、元の規則の `quantity` が値の無いことを受け付けて答えを決める（number? と `none` の行）ことになり、それは元の規則の変更です。
+

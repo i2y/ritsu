@@ -1,0 +1,9 @@
+error[E043]: What is passed to `quantity` may be absent, and the callee's `quantity` takes no absent value
+  --> tests/apply_absent/E043_a_quantity_that_may_be_absent.rule:11 apply charged
+   |
+11 |   quantity = pieces
+   |   ^^^^^^^^^^^^^^^^^ `pieces` is number?
+   |
+ The completeness of `quantity_fee.rule` was proved where `quantity` has a value; its tables have no answer for the absent value.
+ If it always has a value, declare `pieces` as number. If it can be absent, the callee's `quantity` has to take the absent value and answer it (number? and a row for `none`), which is a change to the callee.
+

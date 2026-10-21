@@ -1,0 +1,17 @@
+rule 値の無いこともある段階の値引き(optional_tier_credit) v1
+description "値の無いことがある段階の値引き。値が無いときの行を持つ"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  段階(tier) : 段階?
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 段階ごとの値引き(credit_by_tier)
+policy unique
+| 段階       | -> 値引き |
+| none       | 1USD      |
+| 一般       | 0USD      |
+| >=シルバー | 5USD      |

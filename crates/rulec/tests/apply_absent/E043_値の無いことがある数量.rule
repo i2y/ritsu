@@ -1,0 +1,12 @@
+rule 値の無いことがある数量(quantity_that_may_be_absent) v1
+description "値の無いことがある数量を、数量がいつもある規則に渡す"
+
+inputs
+  個数(pieces) : number?  range >=0 <=100
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+apply 手数料で(charged) = "数量の手数料.rule" meaning:bb01c049401b6132
+  数量 = 個数
+  手数料 -> 手数料

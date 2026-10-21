@@ -1,0 +1,14 @@
+rule field_that_may_be_absent v1
+description "Lines whose tier may be absent, walked by a rule whose tier is always there"
+
+enum tier = basic < silver < gold < platinum
+
+elements items
+  level : tier?
+
+outputs
+  big_lines : number  round down(1)
+
+apply counted = "line_points.rule" meaning:bcef40ed1bd7f9a4
+  lines = items
+  big_lines -> big_lines

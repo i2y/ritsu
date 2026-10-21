@@ -1,0 +1,62 @@
+rule 値の無い段階を読む規則(absent_tiers_read) v1
+description "値の無いことがある段階と数量を、値がいつもある規則が受け取れるそれぞれの形で渡す"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member)     : 段階?
+  紹介者(referrer) : 段階?
+  個数(pieces)     : number  range >=0 <=100
+
+outputs
+  一般として読む値引き(basic_read_credit) : money[USD]  round down(1USD)
+  表で決めた値引き(decided_credit)        : money[USD]  round down(1USD)
+  引き上げた値引き(credit_from_lift)      : money[USD]  round down(1USD)
+  受け取る値引き(taken_credit)            : money[USD]  round down(1USD)
+  手数料(fee)                             : money[USD]  round down(1USD)
+
+# 値の無いことを一般として読む
+apply 読み替え(read) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 会員 with none -> 一般
+  値引き -> 一般として読む値引き
+
+# 値の無いことにも答える、この規則の表
+table 紹介者の段階(referrer_tier)
+policy unique
+| 紹介者   | -> 紹介の段階(referred) : 段階 |
+| none     | シルバー                       |
+| 一般     | 一般                           |
+| シルバー | シルバー                       |
+| ゴールド | ゴールド                       |
+| プラチナ | プラチナ                       |
+
+apply 紹介(referred) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 紹介の段階
+  値引き -> 表で決めた値引き
+
+# 型では値の無いことがあり、実際には値の無いことの無い表の出力
+table 紹介者ごとの引き上げ(lift_by_referrer)
+policy unique
+| 紹介者     | -> 引き上げ先(lift) : 段階? |
+| none       | 一般                        |
+| 一般       | シルバー                    |
+| >=シルバー | ゴールド                    |
+
+apply 引き上げ(lifted) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 引き上げ先
+  値引き -> 引き上げた値引き
+
+# 値の無いことをそのまま受け付ける規則
+apply そのまま(own) = "値の無いこともある段階の値引き.rule" meaning:64b045c53ed8ba95
+  段階 = 会員
+  値引き -> 受け取る値引き
+
+# いつも値のある数量
+apply 手数料で(charged) = "数量の手数料.rule" meaning:bb01c049401b6132
+  数量 = 個数
+  手数料 -> 手数料
+
+examples
+| 会員     | 紹介者 | 個数 | -> 一般として読む値引き | 表で決めた値引き | 引き上げた値引き | 受け取る値引き | 手数料 |
+| none     | none   | 3    | 0USD                    | 5USD             | 0USD             | 1USD           | 5USD   |
+| ゴールド | 一般   | 10   | 5USD                    | 0USD             | 5USD             | 5USD           | 0USD   |

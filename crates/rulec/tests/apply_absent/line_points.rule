@@ -1,0 +1,20 @@
+rule line_points v1
+description "How many lines of an order are of silver or above, by each line's tier, which is always there"
+
+enum tier = basic < silver < gold < platinum
+
+elements lines
+  level : tier
+
+outputs
+  big_lines : number  round down(1)
+
+table big_by_level
+policy unique
+| level    | -> big : bool |
+| basic    | false         |
+| >=silver | true          |
+
+count big_count over lines where big  range >=0 <=20
+
+define big_lines : number = big_count

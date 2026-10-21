@@ -1,0 +1,8 @@
+エラー[E042]: 読み替えの型が合いません
+  --> tests/apply_absent/E042_with_none_where_the_callee_takes_it.rule:13 準用 tiered
+   |
+13 |   tier = member with none -> basic
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ 元の規則の `tier` は値の無いことをそのまま受け付けるので、`with` で読み替えません。`with` から `none` を外してください。
+

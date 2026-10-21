@@ -1,0 +1,17 @@
+rule optional_tier_credit v1
+description "A credit for a tier that may be absent, with a row for the absent value"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  tier : tier?
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+table credit_by_tier
+policy unique
+| tier     | -> credit |
+| none     | 1USD      |
+| basic    | 0USD      |
+| >=silver | 5USD      |

@@ -1,0 +1,14 @@
+rule with_none_where_the_callee_takes_it v1
+description "with none where the rule applied takes the absent value itself"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier?
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+apply tiered = "optional_tier_credit.rule" meaning:6db1476446e79481
+  tier = member with none -> basic
+  credit -> credit

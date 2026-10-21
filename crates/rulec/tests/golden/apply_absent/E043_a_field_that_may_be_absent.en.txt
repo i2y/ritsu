@@ -1,0 +1,9 @@
+error[E043]: The field `level` may be absent, and the callee's field `level` takes no absent value
+  --> tests/apply_absent/E043_a_field_that_may_be_absent.rule:12 apply counted
+   |
+12 | apply counted = "line_points.rule" meaning:bcef40ed1bd7f9a4
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `level` is tier?
+   |
+ The completeness of `line_points.rule` was proved where the field `level` of an element has a value; its tables have no answer for the absent value.
+ If it always has a value, declare `level` as tier. If it can be absent, the callee's field `level` has to take the absent value and answer it (tier? and a row for `none`), which is a change to the callee.
+

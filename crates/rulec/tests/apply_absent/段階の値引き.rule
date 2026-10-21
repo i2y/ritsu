@@ -1,0 +1,16 @@
+rule 段階の値引き(tier_credit) v1
+description "段階ごとの値引き。段階はいつもある。変異と 値の無い段階を読む規則.rule が準用する規則"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  段階(tier) : 段階
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+table 段階ごとの値引き(credit_by_tier)
+policy unique
+| 段階       | -> 値引き |
+| 一般       | 0USD      |
+| >=シルバー | 5USD      |

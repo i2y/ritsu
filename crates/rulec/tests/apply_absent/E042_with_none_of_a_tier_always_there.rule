@@ -1,0 +1,14 @@
+rule with_none_of_a_tier_always_there v1
+description "with none for a tier that is always there"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member : tier
+
+outputs
+  credit : money[USD]  round down(1USD)
+
+apply tiered = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member with none -> basic
+  credit -> credit

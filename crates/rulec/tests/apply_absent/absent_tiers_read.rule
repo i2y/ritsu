@@ -1,0 +1,62 @@
+rule absent_tiers_read v1
+description "Tiers and a quantity that may be absent, passed in each way a rule whose values are always there can take them"
+
+enum tier = basic < silver < gold < platinum
+
+inputs
+  member   : tier?
+  referrer : tier?
+  pieces   : number  range >=0 <=100
+
+outputs
+  basic_read_credit : money[USD]  round down(1USD)
+  decided_credit    : money[USD]  round down(1USD)
+  credit_from_lift  : money[USD]  round down(1USD)
+  taken_credit      : money[USD]  round down(1USD)
+  fee               : money[USD]  round down(1USD)
+
+# The absent value read as basic
+apply read = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = member with none -> basic
+  credit -> basic_read_credit
+
+# A table of this rule that answers the absent value too
+table referrer_tier
+policy unique
+| referrer | -> referred : tier |
+| none     | silver             |
+| basic    | basic              |
+| silver   | silver             |
+| gold     | gold               |
+| platinum | platinum           |
+
+apply referred = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = referred
+  credit -> decided_credit
+
+# A table whose output may be absent by its type, and never is
+table lift_by_referrer
+policy unique
+| referrer | -> lift : tier? |
+| none     | basic           |
+| basic    | silver          |
+| >=silver | gold            |
+
+apply lifted = "tier_credit.rule" meaning:0952b859b9828c84
+  tier = lift
+  credit -> credit_from_lift
+
+# A rule that takes the absent value itself
+apply own = "optional_tier_credit.rule" meaning:6db1476446e79481
+  tier = member
+  credit -> taken_credit
+
+# A quantity that is always there
+apply charged = "quantity_fee.rule" meaning:ef5663c96fe556b5
+  quantity = pieces
+  fee -> fee
+
+examples
+| member | referrer | pieces | -> basic_read_credit | decided_credit | credit_from_lift | taken_credit | fee  |
+| none   | none     | 3      | 0USD                 | 5USD           | 0USD          | 1USD         | 5USD |
+| gold   | basic    | 10     | 5USD                 | 0USD           | 5USD          | 5USD         | 0USD |

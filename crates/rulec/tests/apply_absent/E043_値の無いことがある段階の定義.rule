@@ -1,0 +1,16 @@
+rule 値の無いことがある段階の定義(definition_of_a_tier_that_may_be_absent) v1
+description "値の無いことがある段階を指す定義を、段階がいつもある規則に渡す"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+inputs
+  会員(member) : 段階?
+
+outputs
+  値引き(credit) : money[USD]  round down(1USD)
+
+define 再訪の段階(repeat_tier) : 段階? = 会員
+
+apply 段階で(tiered) = "段階の値引き.rule" meaning:019f9f8fe0ff0cab
+  段階 = 再訪の段階
+  値引き -> 値引き

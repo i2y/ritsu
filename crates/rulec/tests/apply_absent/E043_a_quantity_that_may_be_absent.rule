@@ -1,0 +1,12 @@
+rule quantity_that_may_be_absent v1
+description "A quantity that may be absent, passed to a rule whose quantity is always there"
+
+inputs
+  pieces : number?  range >=0 <=100
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+apply charged = "quantity_fee.rule" meaning:ef5663c96fe556b5
+  quantity = pieces
+  fee -> fee

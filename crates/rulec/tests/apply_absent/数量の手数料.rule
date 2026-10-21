@@ -1,0 +1,14 @@
+rule 数量の手数料(quantity_fee) v1
+description "数量ごとの手数料。数量はいつもある"
+
+inputs
+  数量(quantity) : number  range >=0 <=100
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 数量ごとの手数料(fee_by_quantity)
+policy unique
+| 数量 | -> 手数料 |
+| <10  | 5USD      |
+| >=10 | 0USD      |

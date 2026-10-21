@@ -1,0 +1,8 @@
+error[E042]: A binding does not agree in type
+  --> tests/apply_absent/E042_いつも値のある段階の_with_none.rule:13 apply 段階で
+   |
+13 |   段階 = 会員 with none -> 一般
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ `会員` is 段階, which is never absent
+

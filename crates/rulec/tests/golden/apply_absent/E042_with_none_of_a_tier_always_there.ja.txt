@@ -1,0 +1,8 @@
+エラー[E042]: 読み替えの型が合いません
+  --> tests/apply_absent/E042_with_none_of_a_tier_always_there.rule:13 準用 tiered
+   |
+13 |   tier = member with none -> basic
+   |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ `member` は tier で、値の無いことがありません
+

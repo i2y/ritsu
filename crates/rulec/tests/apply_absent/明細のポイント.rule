@@ -1,0 +1,20 @@
+rule 明細のポイント(line_points) v1
+description "注文の明細のうち、段階がシルバー以上のものの数。明細の段階はいつもある"
+
+enum 段階(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+
+elements 明細(lines)
+  明細の段階(level) : 段階
+
+outputs
+  大口の数(big_lines) : number  round down(1)
+
+table 段階ごとの大口(big_by_level)
+policy unique
+| 明細の段階 | -> 大口(big) : bool |
+| 一般       | false               |
+| >=シルバー | true                |
+
+count 大口の件数(big_count) over 明細 where 大口  range >=0 <=20
+
+define 大口の数 : number = 大口の件数

@@ -1,0 +1,9 @@
+error[E043]: What is passed to `tier` may be absent, and the callee's `tier` takes no absent value
+  --> tests/apply_absent/E043_a_table_that_answers_none.rule:21 apply tiered
+   |
+21 |   tier = lift
+   |   ^^^^^^^^^^^ row 1 of table lift_by_member answers none
+   |
+ The completeness of `tier_credit.rule` was proved where `tier` has a value; its tables have no answer for the absent value.
+ `with` reads the absent value as a value of the callee's: `tier = lift with none -> <value>`. Have row 1 of table lift_by_member answer a value rather than `none`. A table of this rule that answers `none` too can also decide the value, and pass that.
+
