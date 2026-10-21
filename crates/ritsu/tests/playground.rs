@@ -1393,9 +1393,19 @@ fn playground_pages(more: Vec<(String, String)>) -> Vec<(String, String)> {
 /// given size, in the given scheme, goes to the page and takes its steps: `wait` until an
 /// expression is true (in real time: the playground answers from a worker), `run` a script, `get`
 /// a value (what comes back, in order), `key` press a key, `type` text, `click` the middle of what a
-/// selector names, `wheel` turn the mouse's wheel at a place in it, `sleep`, `shot` a picture. A step
-/// that
-/// fails ends the visit, and the errors, with what the page threw, come back with the values.
+/// selector names, `wheel` turn the mouse's wheel at a place in it until an expression is true,
+/// `shot` a picture. No step waits a set time: a step that waits for something waits until it is
+/// so, for 60 s at the most, however busy the machine is. A step that fails ends the visit, and the
+/// errors, with what the page threw, come back with the values.
+///
+/// Chrome sends a mouse event to the frame that it last drew at that place, not to what the page
+/// has there now. Right after the page changes, the two can differ: a click on the band under the
+/// page for people, at once after the band was shown or the tab was switched, can still land in
+/// the frame of the page for people (a process of its own, as its sandbox gives it an origin of its
+/// own), which was drawn there before; and a turn of the wheel over that frame, at once after it
+/// grew, can be lost. So `click` moves the mouse to the place until the page has it over what the
+/// selector names (`:hover`), and presses there only then; and `wheel` turns the wheel again, a
+/// second after the last turn, until the page shows what it turned.
 const CDP: &str = r#"
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -1431,6 +1441,17 @@ async function evaluate(s, expression) {
   if (r.exceptionDetails) throw new Error(`${expression.slice(0, 160)}: ${(r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text}`);
   return r.result.value;
 }
+// Until `expression` is true in the page, looked at every 40 ms for 60 s at the most; `before`, when
+// there is one, is done before each look.
+async function until(s, expression, before) {
+  const end = Date.now() + 60000;
+  while (Date.now() < end) {
+    if (before) await before();
+    try { if (await evaluate(s, expression)) return; } catch (e) {}
+    await sleep(40);
+  }
+  throw new Error(`waited 60 s for ${expression.slice(0, 200)}`);
+}
 const out = [];
 try {
   for (const visit of visits) {
@@ -1445,27 +1466,31 @@ try {
     try {
       await send("Page.navigate", { url: visit.url }, s);
       for (const step of visit.steps) {
-        if (step.wait) {
-          const until = Date.now() + 60000;
-          let ok = false;
-          while (Date.now() < until) {
-            try { if (await evaluate(s, step.wait)) { ok = true; break; } } catch (e) {}
-            await sleep(40);
-          }
-          if (!ok) throw new Error(`waited 60 s for ${step.wait.slice(0, 200)}`);
-        } else if (step.run) await evaluate(s, `(async () => { ${step.run} })()`);
+        if (step.wait) await until(s, step.wait);
+        else if (step.run) await evaluate(s, `(async () => { ${step.run} })()`);
         else if (step.get) got.values.push(await evaluate(s, step.get));
         else if (step.key) {
           for (const type of ["keyDown", "keyUp"]) await send("Input.dispatchKeyEvent", { type, key: step.key, code: step.key, windowsVirtualKeyCode: { ArrowRight: 39, ArrowLeft: 37, Home: 36, End: 35, Enter: 13 }[step.key] || 0 }, s);
         } else if (step.type) await send("Input.insertText", { text: step.type }, s);
         else if (step.click) {
-          const at = await evaluate(s, `(() => { const r = document.querySelector(${JSON.stringify(step.click)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
-          for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x: at[0], y: at[1], button: "left", clickCount: 1 }, s);
+          const target = `document.querySelector(${JSON.stringify(step.click)})`;
+          const at = await evaluate(s, `(() => { const r = ${target}.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+          // the mouse moved there, a pixel to and fro so that each time it moves, until the page has
+          // it over what the selector names; then pressed where it is
+          let x = at[0];
+          await until(s, `${target}.matches(":hover")`, () => send("Input.dispatchMouseEvent", { type: "mouseMoved", x: (x = x === at[0] ? at[0] + 1 : at[0]), y: at[1] }, s));
+          for (const type of ["mousePressed", "mouseReleased"]) await send("Input.dispatchMouseEvent", { type, x, y: at[1], button: "left", clickCount: 1 }, s);
         } else if (step.wheel) {
           const at = await evaluate(s, `(() => { const r = document.querySelector(${JSON.stringify(step.wheel)}).getBoundingClientRect(); return [r.left + r.width * ${step.at[0]}, r.top + r.height * ${step.at[1]}]; })()`);
-          await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: at[0], y: at[1], deltaX: 0, deltaY: step.dy }, s);
-        } else if (step.sleep) await sleep(step.sleep);
-        else if (step.shot) {
+          // turned until the page shows what it turned, and again a second after the last turn
+          // while it does not: a turn can be lost as a click can
+          let last = 0;
+          await until(s, step.until, async () => {
+            if (Date.now() - last < 1000) return;
+            last = Date.now();
+            await send("Input.dispatchMouseEvent", { type: "mouseWheel", x: at[0], y: at[1], deltaX: 0, deltaY: step.dy }, s);
+          });
+        } else if (step.shot) {
           const r = await send("Page.captureScreenshot", { format: "png" }, s);
           writeFileSync(step.shot, Buffer.from(r.data, "base64"));
         }
@@ -1592,17 +1617,16 @@ impl Visit {
     fn key(self, key: &str) -> Visit {
         self.step(json!({ "key": key }))
     }
-    /// A click, as a mouse makes it, in the middle of what `selector` names.
+    /// A click, as a mouse makes it, in the middle of what `selector` names, once the page has the
+    /// mouse over it ([`CDP`] says why).
     fn click(self, selector: &str) -> Visit {
         self.step(json!({ "click": selector }))
     }
     /// The mouse's wheel turned `dy` down, at `(x, y)` of what `selector` names (from its top left,
-    /// as fractions of its width and height).
-    fn wheel(self, selector: &str, at: (f64, f64), dy: i64) -> Visit {
-        self.step(json!({ "wheel": selector, "at": [at.0, at.1], "dy": dy }))
-    }
-    fn sleep(self, ms: u64) -> Visit {
-        self.step(json!({ "sleep": ms }))
+    /// as fractions of its width and height), until `until` is true: turned again a second after
+    /// the last turn while it is not ([`CDP`] says why).
+    fn wheel(self, selector: &str, at: (f64, f64), dy: i64, until: &str) -> Visit {
+        self.step(json!({ "wheel": selector, "at": [at.0, at.1], "dy": dy, "until": until }))
     }
     /// An edit of the open file, and the playground's answer to it.
     fn edited(self, from: &str, to: &str) -> Visit {
@@ -1624,8 +1648,14 @@ fn drive(chrome: &Path, visits: Vec<Visit>) -> Vec<Vec<Value>> {
     let plan: Vec<Value> = visits.iter().map(|v| json!({ "url": v.url, "width": v.width, "height": v.height, "dark": v.dark, "steps": v.steps })).collect();
     std::fs::write(dir.join("visits.json"), serde_json::to_string(&plan).unwrap()).unwrap();
     std::fs::create_dir_all(dir.join("profile")).unwrap();
+    // Chrome's temporary directory is the driver's too (macOS's Chrome reads MAC_CHROMIUM_TMPDIR,
+    // not TMPDIR): the directory of the singleton socket a stopped Chrome leaves there
+    // (`com.google.Chrome.*`) goes with it, as ritsu-testkit's Chrome does.
+    let tmp = ritsu_testkit::tmp::tmpdir_in(dir);
     let o = Command::new("node")
         .current_dir(dir)
+        .env("MAC_CHROMIUM_TMPDIR", &tmp)
+        .env("TMPDIR", &tmp)
         .args(["cdp.mjs", chrome.to_str().unwrap(), dir.join("profile").to_str().unwrap(), "visits.json", "out.json"])
         .output()
         .expect("could not run node");
@@ -1916,8 +1946,10 @@ fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
                 // put right again
                 .run(&format!("{}\n", edit_into_end(row))).ready().state()
                 // the reader scrolls the page for people (rulec's scrolls its side, on the left of
-                // it), and edits: the page drawn again starts where the reader left it
-                .wheel(".pg-panel[data-view=\"doc\"] .pg-stage", (0.15, 0.6), 800).sleep(400).edited(from_fee(tag).0, from_fee(tag).1).state().edited(from_fee(tag).1, from_fee(tag).0)
+                // it), which its frame tells the playground, and edits: the page drawn again starts
+                // where the reader left it
+                .run(HEAR_SCROLLING).wheel(".pg-panel[data-view=\"doc\"] .pg-stage", (0.15, 0.6), 800, &told_scrolled())
+                .edited(from_fee(tag).0, from_fee(tag).1).state().edited(from_fee(tag).1, from_fee(tag).0)
                 // the tabs on the right, by the keys
                 .run("document.querySelector('.pg-tab[aria-selected=\"true\"]').focus();").key("ArrowRight").ready().state()
                 // the rule as it was, its rows and its other lines in the editor
@@ -1953,7 +1985,7 @@ fn the_page_alone_opens_on_a_rule_and_keeps_the_last_page_drawn() {
         let drawn = text_of(scrolled, "page");
         let at: Value = drawn.split("const at = ").nth(1).and_then(|r| r.split(';').next()).and_then(|r| serde_json::from_str(r).ok()).unwrap_or_else(|| panic!("{page}: the page drawn again does not say where to start"));
         let y = at.as_array().unwrap().iter().filter_map(|p| p[2].as_i64()).max().unwrap_or(0);
-        assert!(y > 200, "{page}: the page drawn again starts at {at}, not where the reader scrolled to");
+        assert!(y > SCROLLED, "{page}: the page drawn again starts at {at}, not where the reader scrolled to");
         assert!(unframed(drawn) == playground::doc(&ask(&rule.replacen(from_fee(tag).0, from_fee(tag).1, 1)))["html"]["out"].as_str().unwrap(), "{page}: the page drawn again is not the page of the rule edited");
         // the arrow key moved the selection to the next tab, and the focus with it
         assert_eq!((text_of(keyed, "view"), text_of(keyed, "focused")), ("markdown", "markdown"), "{page}: the arrow key does not move from the page for people to the Markdown");
@@ -2027,7 +2059,9 @@ fn the_page_for_people_reads_in_a_narrow_frame() {
     let mut visits = Vec::new();
     for (path, _) in &pages {
         for (width, height) in sizes {
-            visits.push(Visit { width, height, ..Visit::to(format!("{base}{path}")) }.sleep(500).get(LAID_OUT));
+            // once the page at the address has loaded: its script, which lays it out, has run
+            let loaded = format!("location.pathname === {} && document.readyState === \"complete\"", json!(path));
+            visits.push(Visit { width, height, ..Visit::to(format!("{base}{path}")) }.wait(&loaded).get(LAID_OUT));
         }
     }
     let got = drive(&chrome, visits);
@@ -2075,6 +2109,22 @@ const LAID_OUT: &str = r##"(() => {
     side: document.querySelector(".app .side").getBoundingClientRect().width,
   };
 })()"##;
+
+/// A script that keeps, from now on, each place the frame of the page for people tells the
+/// playground the reader has scrolled to (in `window.pgScrolledTo`), as the playground keeps it to
+/// draw the page again there. The playground's own listener came first, so it has a place this
+/// one has.
+const HEAR_SCROLLING: &str = r#"window.pgScrolledTo = []; addEventListener("message", (e) => { if (e.data && Array.isArray(e.data.ritsuScroll)) window.pgScrolledTo.push(e.data.ritsuScroll); });"#;
+
+/// How far down the reader of the page alone scrolls the page for people, at least: the frame has
+/// said so before the edit ([`told_scrolled`]), and the page drawn after it starts further down.
+const SCROLLED: i64 = 200;
+
+/// Until the frame of the page for people has told the playground that the reader is further down
+/// than [`SCROLLED`], however long the frame takes to say so on a busy machine.
+fn told_scrolled() -> String {
+    format!("window.pgScrolledTo.some((at) => at.some((p) => p[2] > {SCROLLED}))")
+}
 
 /// A small edit of the rule the page alone opens on, which it passes after: a fee of its table.
 fn from_fee(tag: &str) -> (&'static str, &'static str) {

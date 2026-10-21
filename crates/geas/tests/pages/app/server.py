@@ -1,7 +1,8 @@
 # The service behind the test page (tests/pages/app/index.html): the page at `/`,
 # a shopping list at `/api/items` that the page and the claims both call (GET
-# reads it, POST adds the body as an item), `/slow`, which never answers, and
-# `/broken`, which Chrome refuses to load.
+# reads it, POST adds the body as an item), `/slow`, which never answers (and
+# leaves `slow.asked` beside this file once it is asked for, so that a test knows
+# the page has begun to load), and `/broken`, which Chrome refuses to load.
 import json
 import sys
 import time
@@ -26,6 +27,7 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/items":
             self.send(200, "application/json", json.dumps(items).encode())
         elif self.path == "/slow":
+            (Path(__file__).parent / "slow.asked").touch()
             time.sleep(60)
         elif self.path == "/broken":
             # two lengths for one body, which Chrome refuses to load

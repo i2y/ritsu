@@ -1,7 +1,8 @@
 //! A headless Chrome for a test (dandori's, koyomi's, chobo's and geas's): found in the order
 //! the five crates looked, run with a profile and a temporary directory of its own in a
 //! [`TempDir`], and stopped as soon as its page or picture is out — headless Chrome can take a
-//! long while to end by itself.
+//! long while to end by itself. Nothing here waits a set time: a page Chrome prints short is
+//! asked for again, and the check that no Chrome is left waits for those just stopped to go.
 
 use crate::tmp::TempDir;
 use crate::tools;
@@ -47,7 +48,30 @@ fn command(chrome: &Path, work: &TempDir) -> Command {
 
 /// The DOM of a page after its scripts ran (up to `budget_ms` of virtual time), as headless
 /// Chrome dumps it. Chrome is stopped as soon as the page is out, or after `limit`.
+///
+/// On a busy machine, what Chrome prints can end before the page does: the pipe closes after its
+/// first 16 KiB while Chrome is still running, and the rest never comes. A dump that does not reach
+/// `</html>` is asked for again, of a new Chrome, [`DUMPS`] times at the most and within `limit`;
+/// when none does, the last one is the answer.
 pub fn dump_dom(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> String {
+    let end = Instant::now() + limit;
+    let mut asked = 0;
+    loop {
+        let (got, whole) = dump_once(chrome, url, budget_ms, end.saturating_duration_since(Instant::now()));
+        asked += 1;
+        if whole || asked == DUMPS || Instant::now() >= end {
+            return String::from_utf8_lossy(&got).into_owned();
+        }
+        eprintln!("ritsu-testkit: Chrome's DOM of {url} stopped after {} bytes, before </html>; asking a new Chrome", got.len());
+    }
+}
+
+/// How many Chromes [`dump_dom`] asks for a page, at the most.
+pub const DUMPS: usize = 3;
+
+/// One Chrome's dump of a page, read until `</html>` or until Chrome stops printing, for `limit` at
+/// the most, and whether it reached `</html>`.
+fn dump_once(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> (Vec<u8>, bool) {
     let profile = TempDir::new("chrome-profile");
     let mut child = command(chrome, &profile)
         .arg(format!("--virtual-time-budget={budget_ms}"))
@@ -62,23 +86,25 @@ pub fn dump_dom(chrome: &Path, url: &str, budget_ms: u32, limit: Duration) -> St
     std::thread::spawn(move || {
         let mut all = Vec::new();
         let mut buf = [0u8; 65536];
+        let mut whole = false;
         loop {
             match out.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
                     all.extend_from_slice(&buf[..n]);
                     if all.windows(7).any(|w| w == b"</html>") {
+                        whole = true;
                         break;
                     }
                 }
             }
         }
-        let _ = tx.send(all);
+        let _ = tx.send((all, whole));
     });
     let got = rx.recv_timeout(limit).unwrap_or_default();
     let _ = child.kill();
     let _ = child.wait();
-    String::from_utf8_lossy(&got).into_owned()
+    got
 }
 
 /// A picture of a page, `width` by `height`, written to `png`. Chrome is stopped once the
@@ -124,9 +150,20 @@ pub fn png_size(b: &[u8]) -> Option<(u32, u32)> {
     Some((u32::from_be_bytes(b[16..20].try_into().ok()?), u32::from_be_bytes(b[20..24].try_into().ok()?)))
 }
 
-/// After a run: no process whose command line holds `dir` (a profile is under it).
+/// After a run: no process whose command line holds `dir` (a profile is under it). A Chrome that
+/// has just been stopped can take a while to go, longer on a busy machine, so the processes are
+/// looked for until none is left, for 60 s at the most.
 pub fn none_left(dir: &Path) -> Result<(), String> {
-    let out = Command::new("pgrep").args(["-f", &dir.to_string_lossy()]).output().map_err(|e| e.to_string())?;
-    let pids = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if pids.is_empty() { Ok(()) } else { Err(format!("processes still name {}: {pids}", dir.display())) }
+    let end = Instant::now() + Duration::from_secs(60);
+    loop {
+        let out = Command::new("pgrep").args(["-f", &dir.to_string_lossy()]).output().map_err(|e| e.to_string())?;
+        let pids = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if pids.is_empty() {
+            return Ok(());
+        }
+        if Instant::now() >= end {
+            return Err(format!("processes still name {}: {pids}", dir.display()));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
 }

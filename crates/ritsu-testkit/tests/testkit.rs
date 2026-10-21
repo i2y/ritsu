@@ -472,8 +472,31 @@ fn chrome_dumps_a_page_and_draws_it() {
     chrome::screenshot(&c, &url, &png, 400, 300, Duration::from_secs(60)).unwrap();
     assert_eq!(chrome::png_size(&std::fs::read(&png).unwrap()), Some((400, 300)));
     assert!(chrome::png_size(b"not a png").is_none());
-    std::thread::sleep(Duration::from_millis(300));
     chrome::none_left(t.path()).unwrap();
+}
+
+/// A dump that stops before `</html>` is asked for again, of a new Chrome, and no more than
+/// `chrome::DUMPS` times. Two stand-ins for Chrome: one prints half a page the first time it runs
+/// and the whole page the second, the other half a page every time.
+#[cfg(unix)]
+#[test]
+fn a_dump_that_stops_short_is_asked_for_again() {
+    use std::os::unix::fs::PermissionsExt;
+    let t = TempDir::new("chrome-dump");
+    let half = "<!doctype html><html><body><p>half";
+    let whole = "<!doctype html><html><body><p>whole</p></body></html>";
+    // each run of a stand-in writes a line into `<stand-in>.runs`
+    let stand_in = |name: &str, body: &str| {
+        let p = t.write(name, format!("#!/bin/sh\necho run >> \"$0.runs\"\n{body}\n"));
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    };
+    let then_whole = stand_in("then-whole", &format!("if [ -e \"$0.once\" ]; then printf '%s\\n' '{whole}'; else touch \"$0.once\"; printf '%s' '{half}'; fi"));
+    assert_eq!(chrome::dump_dom(&then_whole, "file:///page.html", 1000, Duration::from_secs(60)), format!("{whole}\n"));
+    assert_eq!(t.read("then-whole.runs").lines().count(), 2, "a second Chrome is asked for the page");
+    let always_half = stand_in("always-half", &format!("printf '%s' '{half}'"));
+    assert_eq!(chrome::dump_dom(&always_half, "file:///page.html", 1000, Duration::from_secs(60)), half, "what the last Chrome printed");
+    assert_eq!(t.read("always-half.runs").lines().count(), chrome::DUMPS);
 }
 
 #[test]

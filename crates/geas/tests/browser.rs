@@ -153,13 +153,18 @@ fn interrupted_while_a_page_loads() {
     let tmp = ChromeTmp::new();
     cmd.envs(tmp.vars());
     let mut child = cmd.spawn().expect("start geas");
-    // wait until Chrome runs and the page has begun to load
+    // wait until Chrome runs, and then until the page has begun to load: the service has been
+    // asked for it (server.py leaves `slow.asked` then), however long that takes on a busy machine
     let deadline = Instant::now() + Duration::from_secs(20);
     while !std::fs::read_to_string(&log).unwrap_or_default().contains(" chrome\n") {
         assert!(Instant::now() < deadline, "geas never started Chrome");
         std::thread::sleep(Duration::from_millis(20));
     }
-    std::thread::sleep(Duration::from_millis(500));
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !s.path().join("w/slow.asked").exists() {
+        assert!(Instant::now() < deadline, "the page never began to load");
+        std::thread::sleep(Duration::from_millis(20));
+    }
     // SAFETY: SIGINT to the geas this test started.
     unsafe {
         kill(child.id() as i32, 2);
