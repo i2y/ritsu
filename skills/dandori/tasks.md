@@ -330,6 +330,9 @@ only when value 0 says that nothing was set.
 A rule that walks a list of elements (`elements` in the rule) is not called at all, at its service or by
 its code: dandori does not pass a rule a list yet (E005). Nor is a rule with an input or an output that
 may be none (`T?`): the code dandori writes passes a rule no null, and reads none from it, yet (E005).
+An `enums` file of rulec's has no outputs, and nothing is generated from it to call. A flow can use
+its enums as types (`<rule>.<enum>`); only a call of it stops, where it is made, whatever way of
+calling `use rule` writes (E005).
 
 The order example for AWS calls its urgency rule this way
 ([order.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/order/aws/order.flow)), and the tests

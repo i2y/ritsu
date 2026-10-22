@@ -1,0 +1,15 @@
+error[E005]: tests/fixtures/enums_files.flow:22:17: the rule `regions` has no outputs, so it cannot be called
+    22 |   let bundled = regions()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `regions.region`
+error[E005]: tests/fixtures/enums_files.flow:23:19: the rule `regions_by_lambda` has no outputs, so it cannot be called
+    23 |   let by_lambda = regions_by_lambda()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `regions_by_lambda.region`
+error[E005]: tests/fixtures/enums_files.flow:24:19: the rule `regions_in_worker` has no outputs, so it cannot be called
+    24 |   let in_worker = regions_in_worker()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `regions_in_worker.region`
+error[E005]: tests/fixtures/enums_files.flow:25:20: the rule `regions_at_service` has no outputs, so it cannot be called
+    25 |   let at_service = regions_at_service()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `regions_at_service.region`
+error[E005]: tests/fixtures/enums_files.flow:26:3: the rule `regions` has no outputs, so it cannot be called
+    26 |   regions()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `regions.region`

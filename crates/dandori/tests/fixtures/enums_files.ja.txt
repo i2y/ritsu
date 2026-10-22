@@ -1,0 +1,15 @@
+エラー[E005]: tests/fixtures/enums_files.flow:22:17: 規則 `regions` には出力が無いので、呼べません
+    22 |   let bundled = regions()
+  = 出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません。列挙は `regions.region` のように型として使ってください
+エラー[E005]: tests/fixtures/enums_files.flow:23:19: 規則 `regions_by_lambda` には出力が無いので、呼べません
+    23 |   let by_lambda = regions_by_lambda()
+  = 出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません。列挙は `regions_by_lambda.region` のように型として使ってください
+エラー[E005]: tests/fixtures/enums_files.flow:24:19: 規則 `regions_in_worker` には出力が無いので、呼べません
+    24 |   let in_worker = regions_in_worker()
+  = 出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません。列挙は `regions_in_worker.region` のように型として使ってください
+エラー[E005]: tests/fixtures/enums_files.flow:25:20: 規則 `regions_at_service` には出力が無いので、呼べません
+    25 |   let at_service = regions_at_service()
+  = 出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません。列挙は `regions_at_service.region` のように型として使ってください
+エラー[E005]: tests/fixtures/enums_files.flow:26:3: 規則 `regions` には出力が無いので、呼べません
+    26 |   regions()
+  = 出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません。列挙は `regions.region` のように型として使ってください

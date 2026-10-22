@@ -332,6 +332,13 @@ impl RuleUse {
     pub fn is_rule(&self) -> bool {
         self.kind == RuleKind::Rule
     }
+
+    /// Whether this is a rule of rulec's with no outputs: an `enums` file, which declares enums for
+    /// rules to read and has nothing generated to call. Its enums are types in the flow, and a call
+    /// of it is E005 (DESIGN 10).
+    pub fn answers_nothing(&self) -> bool {
+        self.is_rule() && self.info.outputs.is_empty()
+    }
 }
 
 /// A book of chobo's that the tasks call (`use book stock from "inventory.book"`).

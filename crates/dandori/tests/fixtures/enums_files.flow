@@ -1,0 +1,27 @@
+workflow enums_files v1
+description "An enums file holds only enums for rules to read, and nothing is generated to call: each call of it stops where it is made (E005), whether its code would go with the workflow or it is called by Lambda, as a local activity or at a service, and with or without let. Reading the answer after it says nothing more"
+
+use rule regions from "rules/regions.rule"
+
+use rule regions_by_lambda from "rules/regions.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:regions"
+
+use rule regions_in_worker from "rules/regions.rule"
+  local
+
+use rule regions_at_service from "rules/regions.rule"
+  connect "https://rules.example.com"
+
+inputs
+  urgent : bool
+
+outputs
+  region : regions.region
+
+flow
+  let bundled = regions()
+  let by_lambda = regions_by_lambda()
+  let in_worker = regions_in_worker()
+  let at_service = regions_at_service()
+  regions()
+  succeed region = bundled.region

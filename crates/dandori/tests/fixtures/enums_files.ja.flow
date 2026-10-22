@@ -1,0 +1,27 @@
+workflow 列挙のファイルを呼ぶ v1
+description "enums のファイルには規則が読む列挙しかなく、呼べるものは生成されない。規則のコードを同梱しても、Lambda で呼んでも、ローカルアクティビティでも、サービスで呼んでも、let を付けずに呼んでも、呼ぶところで止まる（E005）。そのあとで結果を読むところには何も出ない。enums_files.flow の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+
+use rule ラムダの地域 from "rules/配送の地域.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:regions"
+
+use rule ワーカーの地域 from "rules/配送の地域.rule"
+  local
+
+use rule サービスの地域 from "rules/配送の地域.rule"
+  connect "https://rules.example.com"
+
+inputs
+  急ぎ : bool
+
+outputs
+  届け先 : 地域.地域
+
+flow
+  let 同梱 = 地域()
+  let ラムダ = ラムダの地域()
+  let ワーカー = ワーカーの地域()
+  let サービス = サービスの地域()
+  地域()
+  succeed 届け先 = 同梱.地域

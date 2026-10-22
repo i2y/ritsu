@@ -1,0 +1,38 @@
+workflow 列挙のファイルの型 v1
+description "enums のファイルの列挙は、use rule にどの呼び出し方を書いても、レコードのフィールド、入力と出力、リストの要素、値が無いことがある入力、タスクの引数と結果の型になり、match で分けられる。ファイルを呼ぶところは無く、どのプラットフォーム向けに生成したコードも、このファイルのものを何も読み込まない。enums_file_types.flow の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+
+use rule ラムダの地域 from "rules/配送の地域.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:regions"
+
+use rule ワーカーの地域 from "rules/配送の地域.rule"
+  local
+
+use rule サービスの地域 from "rules/配送の地域.rule"
+  connect "https://rules.example.com"
+
+record 荷物
+  番号 : string
+  地域 : 地域.地域
+
+inputs
+  届ける荷物 : 荷物
+  経由地     : list[ラムダの地域.地域]
+  最後       : ワーカーの地域.地域?
+
+outputs
+  届け先 : サービスの地域.地域
+
+task 経路を決める(荷物: 荷物) -> 地域.地域
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:route"
+
+flow
+  let 経路 = 経路を決める(荷物: 届ける荷物)
+  match 経路
+    本州 =>
+      succeed 届け先 = 本州
+    北海道 =>
+      succeed 届け先 = 北海道
+    沖縄 =>
+      succeed 届け先 = 沖縄

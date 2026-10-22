@@ -1,0 +1,14 @@
+workflow regions_bundled v1
+description "Calls an enums file as a rule whose code goes with the workflow: rulec generates no function from an enums file, so the call stops where it is made"
+
+use rule regions from "rules/regions.rule"
+
+inputs
+  urgent : bool
+
+outputs
+  done : bool
+
+flow
+  let r = regions()
+  succeed done = true

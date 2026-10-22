@@ -1,0 +1,38 @@
+workflow enums_file_types v1
+description "The enums of an enums file are types in a workflow, whatever way of calling use rule writes: of a record's field, an input and an output, a list's items, an input that may be absent, a task's parameter and answer, and a match branches on them. Nothing calls the file, and the code generated for each platform imports nothing of it"
+
+use rule regions from "rules/regions.rule"
+
+use rule regions_by_lambda from "rules/regions.rule"
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:regions"
+
+use rule regions_in_worker from "rules/regions.rule"
+  local
+
+use rule regions_at_service from "rules/regions.rule"
+  connect "https://rules.example.com"
+
+record Parcel
+  id     : string
+  region : regions.region
+
+inputs
+  parcel : Parcel
+  stops  : list[regions_by_lambda.region]
+  last   : regions_in_worker.region?
+
+outputs
+  region : regions_at_service.region
+
+task route(parcel: Parcel) -> regions.region
+  lambda "arn:aws:lambda:eu-west-2:123456789012:function:route"
+
+flow
+  let r = route(parcel: parcel)
+  match r
+    honshu =>
+      succeed region = honshu
+    hokkaido =>
+      succeed region = hokkaido
+    okinawa =>
+      succeed region = okinawa

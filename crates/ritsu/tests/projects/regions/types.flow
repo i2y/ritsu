@@ -1,0 +1,17 @@
+workflow regions_as_types v1
+description "Uses the enums of an enums file as types and calls nothing of it: the workflow passes, and the code generated for it imports nothing of the file"
+
+use rule regions from "rules/regions.rule"
+
+record Parcel
+  id     : string
+  region : regions.region
+
+inputs
+  parcel : Parcel
+
+outputs
+  region : regions.region
+
+flow
+  succeed region = parcel.region

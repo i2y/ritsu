@@ -72,6 +72,24 @@ fn plain_call(at: Span, said: Text, under: Text) -> Diag {
         .note(tr!("https:// にしてください。ほかの仕組み（サービスメッシュ、プライベートな接続など）で守っているなら、{ja}に `plaintext \"<理由>\"` と書いてください。", "Use https://. If the connection is protected another way (a service mesh, a private link), say so {en} with `plaintext \"<why>\"`."))
 }
 
+/// E005 at a call of a rule without outputs (DESIGN 10), at the name called: rulec's `enums` file,
+/// which declares enums for rules to read, and from which nothing is generated to call. The note
+/// says so, and names one of its enums as the type it can be.
+fn nothing_to_call(r: &RuleUse, at: Span) -> Diag {
+    let name = &r.name;
+    let d = e("E005", at, tr!("規則 `{name}` には出力が無いので、呼べません", "the rule `{name}` has no outputs, so it cannot be called"));
+    match r.info.enums.first() {
+        Some((enum_name, _)) => d.note(tr!(
+            "出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません。列挙は `{name}.{enum_name}` のように型として使ってください",
+            "a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `{name}.{enum_name}`"
+        )),
+        None => d.note(tr!(
+            "出力の無い規則は `enums` のファイルで、中にあるのは規則が読む列挙だけです。rulec は、このファイルから呼べる関数を生成しません",
+            "a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call"
+        )),
+    }
+}
+
 /// The zero values protobuf's JSON leaves out of a rule's response: each field the rule always
 /// answers, by its JSON key (`apis::fill` reads this form). A number is the string `"0"`, as the
 /// 64-bit integer it is; an enum is the `.proto`'s name for its value 0: `<ENUM>_UNSPECIFIED`, which
@@ -503,7 +521,8 @@ impl<'a> Lowerer<'a> {
 
     /// What `connect` under `use rule` says: the service's URL, and what rulec says of its request
     /// and its response. The ways of calling that do not go together are E007, each at the second
-    /// to say it.
+    /// to say it. A rule without outputs (an `enums` file) has no service: nothing calls it, since a
+    /// call of it is E005 where it is called, as it is for every other way of calling (DESIGN 10).
     fn rule_connect(&mut self, u: &syntax::UseRule, info: &rulec::RuleInfo) -> Option<RuleConnect> {
         if let (Some((_, lsp)), Some((_, csp))) = (&u.lambda, &u.connect) {
             let (first, second) = if (lsp.line, lsp.col) < (csp.line, csp.col) { (lsp, csp) } else { (csp, lsp) };
@@ -527,6 +546,9 @@ impl<'a> Lowerer<'a> {
                 *csp,
                 tr!("`connect` には、規則のサービスの場所を http:// か https:// で書いてください", "`connect` says where the rule's service is, with http:// or https://"),
             ));
+            return None;
+        }
+        if info.outputs.is_empty() {
             return None;
         }
         match rulec::connect_shape(info) {
@@ -3441,6 +3463,13 @@ impl<'a> Lowerer<'a> {
             (Callee::Task(*t), self.m.tasks[*t].params.clone())
         } else if let Some(r) = self.rule_ix.get(name) {
             let r = *r;
+            // a rule without outputs answers nothing, and nothing is generated to call, however
+            // `use rule` says to call it; its enums are types all the same (DESIGN 10)
+            if self.m.rules[r].answers_nothing() {
+                let d = nothing_to_call(&self.m.rules[r], *sp);
+                self.push(d);
+                return None;
+            }
             let rn = self.m.rules[r].name.clone();
             let ps = self.m.rules[r].info.inputs.iter().map(|col| (col.name.clone(), self.rty(&rn, &col.ty))).collect();
             (Callee::Rule(r), ps)
@@ -3695,6 +3724,13 @@ impl<'a> Lowerer<'a> {
                             fields.push(f.clone());
                         }
                         None => {
+                            // the answer of a rule without outputs, whose call is E005 already: that
+                            // says what is wrong, and a field of nothing would say it again (DESIGN 10)
+                            if let RecordOrigin::RuleOutputs(r) = self.m.records[rec].origin {
+                                if self.m.rules[r].answers_nothing() {
+                                    return None;
+                                }
+                            }
                             let rn = self.m.records[rec].name.clone();
                             let list: Vec<String> = self.m.records[rec].fields.iter().map(|(n, _)| n.clone()).collect();
                             self.push(e("E002", *fsp2, tr!("`{rn}` にフィールド `{f}` はありません（あるのは {}）", "`{rn}` has no field `{f}` ({})", list.join("・"); list.join(", "))));

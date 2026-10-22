@@ -296,6 +296,7 @@ fn rulec_proto(rule: &Path) -> String {
 /// contract's prefix and whose value 0 says it is not set (`delivery_fee.rule`, `MEMBER_TIER_GOLD`),
 /// and one whose values have no prefix and whose value 0 is a state of its own (`account_fee.rule`,
 /// `ACTIVE = 0`). The rule there that walks a list is not among them: dandori does not call one (E005).
+/// Nor are the `enums` files there, which have no outputs and no service: nothing calls them (E005).
 fn rule_files() -> Vec<PathBuf> {
     let mut out = Vec::new();
     for ex in std::fs::read_dir(root().join("examples")).unwrap().flatten() {
@@ -304,7 +305,7 @@ fn rule_files() -> Vec<PathBuf> {
         }
     }
     out.extend(std::fs::read_dir(root().join("tests/fixtures/rules")).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "rule")));
-    out.retain(|p| with_rules(|| dandori::rulec::load(p)).is_ok_and(|info| info.walks.is_none()));
+    out.retain(|p| with_rules(|| dandori::rulec::load(p)).is_ok_and(|info| info.walks.is_none() && !info.outputs.is_empty()));
     out.sort();
     out
 }

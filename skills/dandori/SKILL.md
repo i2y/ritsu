@@ -164,7 +164,9 @@ use rule <name> from "<file.rule>"        a rulec rule, read by rulec; under it,
                                           connection "<EventBridge connection>"),
                                           and local (a local activity on Temporal). A rule that
                                           walks a list cannot be used (E005), nor one with an
-                                          input or an output that may be none (T?)
+                                          input or an output that may be none (T?). An enums
+                                          file has no outputs: its enums are types
+                                          (<name>.<enum>), and a call of it is E005
 use openapi|smithy|proto <name> from "<file>"   an API description; under it, url "<base>"
                                           (a proto needs one to `connect` to it)
 use dates <name> from "<file.cal>"        a dates file of koyomi's; each date is called like a

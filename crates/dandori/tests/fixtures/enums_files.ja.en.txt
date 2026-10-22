@@ -1,0 +1,15 @@
+error[E005]: tests/fixtures/enums_files.ja.flow:22:12: the rule `地域` has no outputs, so it cannot be called
+    22 |   let 同梱 = 地域()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `地域.地域`
+error[E005]: tests/fixtures/enums_files.ja.flow:23:13: the rule `ラムダの地域` has no outputs, so it cannot be called
+    23 |   let ラムダ = ラムダの地域()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `ラムダの地域.地域`
+error[E005]: tests/fixtures/enums_files.ja.flow:24:14: the rule `ワーカーの地域` has no outputs, so it cannot be called
+    24 |   let ワーカー = ワーカーの地域()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `ワーカーの地域.地域`
+error[E005]: tests/fixtures/enums_files.ja.flow:25:14: the rule `サービスの地域` has no outputs, so it cannot be called
+    25 |   let サービス = サービスの地域()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `サービスの地域.地域`
+error[E005]: tests/fixtures/enums_files.ja.flow:26:3: the rule `地域` has no outputs, so it cannot be called
+    26 |   地域()
+  = a rule with no outputs is an `enums` file, which holds only enums for rules to read, and rulec generates no function from it to call; use its enums as types, as in `地域.地域`

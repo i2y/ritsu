@@ -112,7 +112,9 @@ pub struct RuleInfo {
     pub preconditions: Vec<Precondition>,
     /// the rule's Connect service, as rulec says it: what `connect` calls (`connect_shape`)
     pub connect: Option<ritsu_ports::Connect>,
-    /// how the generated code is called in the three languages the code dandori writes calls it from
+    /// how the generated code is called in the three languages the code dandori writes calls it from;
+    /// for a rule without outputs (an `enums` file), a function rulec does not generate, which
+    /// nothing reads, since a call of such a rule is E005 (lower, `RuleUse::answers_nothing`)
     pub typescript: Call,
     pub python: Call,
     pub go: Call,

@@ -74,12 +74,15 @@ pub fn ledger() -> Ledger {
         ),
         e(
             "E005",
-            tr!("規則、日付のファイル、帳簿を読めません", "A rule, a dates file or a book that could not be read"),
+            tr!("規則、日付のファイル、帳簿を読めないか、規則を呼べません", "A rule, a dates file or a book that could not be read, or a rule that cannot be called"),
             tr!(
-                "rulec の検査を通らない規則、要素の並び（`elements`）をたどる規則（dandori は規則に並びを渡せません）、無いことがある入力か出力（`T?`）を持つ規則を使うとき。`connect` で呼ぶ規則では、Connect のサービスの情報や、サービスが列挙の値を何と呼ぶかを、rulec から得られないときにも出ます。koyomi の検査を通らない日付のファイル、chobo の検査を通らない帳簿、無いファイルでも出ます。規則・日付のファイル・帳簿を読めない `dandori` のコマンドだけで走らせたときは、E018 になります。",
-                "A rule that does not pass rulec's check, one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum. A dates file that does not pass koyomi's check, and a book that does not pass chobo's, too (or one that is not there). Run with the `dandori` binary alone, which reads no rule, dates file or book, it is E018."
+                "rulec の検査を通らない規則、要素の並び（`elements`）をたどる規則（dandori は規則に並びを渡せません）、無いことがある入力か出力（`T?`）を持つ規則を使うとき。`connect` で呼ぶ規則では、Connect のサービスの情報や、サービスが列挙の値を何と呼ぶかを、rulec から得られないときにも出ます。出力の無い規則（rulec の `enums` のファイル）を呼ぶところでも出ます。その列挙はフローの型として使えますが、呼べる関数は生成されません。koyomi の検査を通らない日付のファイル、chobo の検査を通らない帳簿、無いファイルでも出ます。規則・日付のファイル・帳簿を読めない `dandori` のコマンドだけで走らせたときは、E018 になります。",
+                "A rule that does not pass rulec's check, one that walks a list of elements (`elements`), which dandori does not pass a rule, or one with an input or an output that may be none (`T?`); for `connect`, one whose Connect service rulec says nothing of, or does not say what the service calls the values of an enum. A call of a rule with no outputs, an `enums` file of rulec's, too: its enums are types in the flow, and nothing is generated from it to call. A dates file that does not pass koyomi's check, and a book that does not pass chobo's, too (or one that is not there). Run with the `dandori` binary alone, which reads no rule, dates file or book, it is E018."
             ),
-            tr!("注に出る rulec・koyomi・chobo の診断に従って、そのファイルを直してください。", "Correct the file as the notes, rulec's, koyomi's or chobo's diagnostics, say."),
+            tr!(
+                "注に出る rulec・koyomi・chobo の診断に従って、そのファイルを直してください。`enums` のファイルは呼ばずに、列挙を型として使ってください。",
+                "Correct the file as the notes, rulec's, koyomi's or chobo's diagnostics, say. Do not call an `enums` file; use its enums as types."
+            ),
             "workflow w v1\n\nuse rule fee from \"fee.rule\"\n\nflow\n  pass\n",
             &["E002", "E018"],
         ),

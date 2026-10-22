@@ -1,0 +1,14 @@
+workflow 地域を同梱で呼ぶ v1
+description "enums のファイルを、規則のコードを同梱する規則として呼ぶ。rulec は enums のファイルから関数を生成しないので、呼ぶところで止まる。bundled.flow の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+
+inputs
+  急ぎ : bool
+
+outputs
+  済み : bool
+
+flow
+  let r = 地域()
+  succeed 済み = true

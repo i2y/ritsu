@@ -1,0 +1,17 @@
+workflow 地域を型に使う v1
+description "enums のファイルの列挙を型に使い、ファイルのものは何も呼ばない。ワークフローは検査を通り、生成したコードはこのファイルのものを何も読み込まない。types.flow の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+
+record 荷物
+  番号 : string
+  地域 : 地域.地域
+
+inputs
+  届ける荷物 : 荷物
+
+outputs
+  届け先 : 地域.地域
+
+flow
+  succeed 届け先 = 届ける荷物.地域
