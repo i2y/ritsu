@@ -122,7 +122,9 @@ the 1,617 runs that fail fails in a way the function's effect says.
 
 kaname's evaluation and its analysis of ranges are written again in Lean (`proofs/KanameCore`, in
 ritsu's one Lean package), with proofs that the analysis is sound and that a function it infers
-`total` fails on no input in the ranges it declares. No proof rests on `sorry` or an axiom of its
+`total` fails on no input in the ranges it declares, for every function that takes no function as a
+parameter; a function that does is held to the model by the comparison below, with no proof of its own
+yet. No proof rests on `sorry` or an axiom of its
 own. `cargo test -p ritsu-model` holds the model to the reference interpreter and the analysis on
 14,092 runs of 59 modules, place by place and expression by expression, with no difference; and
 the model broken in any one of 42 places, the comparison fails each time.
