@@ -1,0 +1,6 @@
+Garden / Hand Tools / Spade
+Garden / Hand Tools / Trowel
+Garden / Hoses / Hose reel
+kept: Garden, Hand Tools, Hoses
+slugs: garden, hand-tools, seeds, bulbs, hoses
+cheapest: Trowel, 899 cents

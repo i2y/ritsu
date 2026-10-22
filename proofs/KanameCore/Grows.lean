@@ -16,11 +16,18 @@ namespace KanameCore
 
 mutual
 theorem Slot.eq_of_beq : ∀ {a b : Slot}, Slot.beq a b = true → a = b
-  | .mk l c r u rc fs, .mk l' c' r' u' rc' fs', h => by
+  | .mk l c r u rc fs vs ks rf, .mk l' c' r' u' rc' fs' vs' ks' rf', h => by
     simp only [Slot.beq, Bool.and_eq_true, beq_iff_eq] at h
-    obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩ := h
-    subst h1 h2 h3 h4 h5
-    rw [Slot.eq_of_beqFields h6]
+    obtain ⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h9⟩, h6⟩, h7⟩, h8⟩ := h
+    subst h1 h2 h3 h4 h5 h9
+    rw [Slot.eq_of_beqFields h6, Slot.eq_of_beqValues h7, Slot.eq_of_beqKeys h8]
+theorem Slot.eq_of_beqKeys : ∀ {a b : Option Slot}, Slot.beqKeys a b = true → a = b
+  | none, none, _ => rfl
+  | some a, some b, h => by
+    simp only [Slot.beqKeys] at h
+    rw [Slot.eq_of_beq h]
+  | none, some _, h => by simp [Slot.beqKeys] at h
+  | some _, none, h => by simp [Slot.beqKeys] at h
 theorem Slot.eq_of_beqFields : ∀ {xs ys : List (String × Slot)}, Slot.beqFields xs ys = true → xs = ys
   | [], [], _ => rfl
   | (n, s) :: xs, (m, t) :: ys, h => by
@@ -29,6 +36,14 @@ theorem Slot.eq_of_beqFields : ∀ {xs ys : List (String × Slot)}, Slot.beqFiel
     rw [h1, Slot.eq_of_beq h2, Slot.eq_of_beqFields h3]
   | [], _ :: _, h => by simp [Slot.beqFields] at h
   | _ :: _, [], h => by simp [Slot.beqFields] at h
+theorem Slot.eq_of_beqValues : ∀ {xs ys : List (String × List (String × Slot))}, Slot.beqValues xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | (n, s) :: xs, (m, t) :: ys, h => by
+    simp only [Slot.beqValues, Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨h1, h2⟩, h3⟩ := h
+    rw [h1, Slot.eq_of_beqFields h2, Slot.eq_of_beqValues h3]
+  | [], _ :: _, h => by simp [Slot.beqValues] at h
+  | _ :: _, [], h => by simp [Slot.beqValues] at h
 end
 
 theorem What.eq_of_beq {a b : What} (h : a.beq b = true) : a = b := by
@@ -78,12 +93,25 @@ theorem keep_calls (o : Out) (e : Nat) (rels : List (String × Rel × String)) :
 theorem keep_widened (o : Out) (e : Nat) (rels : List (String × Rel × String)) : (o.keep e rels).widened = o.widened := by
   unfold Out.keep; split <;> rfl
 
+theorem grows_keepL {o₀ o : Out} (h : Grows o₀ o) (e : Nat) (rels : List (String × Rel × String)) :
+    Grows o₀ (o.keepL e rels) := by
+  refine h.trans ⟨fun p hp => ⟨p, ?_, PlaceLE.refl p⟩, fun g hg => ?_, fun hw => ?_, fun hk => ?_⟩ <;>
+    unfold Out.keepL <;> split <;> assumption
+
 theorem grows_keep {o₀ o : Out} (h : Grows o₀ o) (e : Nat) (rels : List (String × Rel × String)) :
     Grows o₀ (o.keep e rels) where
   places p hp := by rw [keep_places]; exact h.places p hp
   calls g hg := by rw [keep_calls]; exact h.calls g hg
   widened hw := by rw [keep_widened]; exact h.widened hw
   kinds hk := fun p hp => h.kinds hk p (by rw [keep_places] at hp; exact hp)
+
+/-- The relations a call of a rule keeps, apart where it is in the body of a lambda the function
+    itself made (kaname's DESIGN 27.4). -/
+theorem grows_keepIf {o₀ o : Out} (h : Grows o₀ o) (b : Bool) (e : Nat) (rels : List (String × Rel × String)) :
+    Grows o₀ ((if b = true then o.keepL else o.keep) e rels) := by
+  split
+  · exact grows_keepL h e rels
+  · exact grows_keep h e rels
 
 theorem place_same {p : Place} {e : Nat} {key : String} {kind : Kind} {what : What} (h : p.same e key kind what = true) :
     p.kind = kind ∧ p.what = what := by
@@ -163,6 +191,22 @@ theorem grows_calls {o o₁ : Out} (h : Grows o o₁) {f : Nat} : Grows o { o₁
   h.trans ⟨fun p hp => ⟨p, hp, PlaceLE.refl p⟩, fun _ hg => List.mem_append_left _ hg, fun hw => hw, fun hk => hk⟩
 
 theorem grows_widen {o o₁ : Out} (h : Grows o o₁) : Grows o { o₁ with widened := true } :=
+  h.trans ⟨fun p hp => ⟨p, hp, PlaceLE.refl p⟩, fun _ hg => hg, fun _ => rfl, fun hk => hk⟩
+
+/-- A value of the body of a lambda the function itself made, kept apart (kaname's DESIGN 27.4). -/
+theorem grows_recordL {o o₁ : Out} (h : Grows o o₁) {e : Nat} {v : Abs} : Grows o (o₁.recordL e v) := by
+  refine h.trans ⟨fun p hp => ⟨p, ?_, PlaceLE.refl p⟩, fun g hg => ?_, fun hw => ?_, fun hk => ?_⟩ <;>
+    unfold Out.recordL <;> split <;> assumption
+
+theorem grows_recordIf {o o₁ : Out} (h : Grows o o₁) (b : Bool) (e : Nat) (v : Abs) :
+    Grows o (if b = true then o₁.recordL e v else o₁.record e v) := by
+  split
+  · exact grows_recordL h
+  · exact grows_record h
+
+/-- A call of a function value the analysis does not see (kaname's DESIGN 27.4). -/
+theorem grows_unseen {o o₁ : Out} (h : Grows o o₁) {t : List (List Kind × Bool)} :
+    Grows o { o₁ with unseen := true, widened := true, thru := t } :=
   h.trans ⟨fun p hp => ⟨p, hp, PlaceLE.refl p⟩, fun _ hg => hg, fun _ => rfl, fun hk => hk⟩
 
 -- ── The scope keeps its module ───────────────────────────────────────────────
@@ -280,6 +324,40 @@ theorem callAbs_ok {o₀ o : Out} {A₀ A : ACtx} (ho : Grows o₀ o) (hA : Same
       (args.zip vals) (o, A) ⟨ho, hA⟩
     exact ⟨grows_calls this.1, this.2⟩
 
+/-- The arguments of a call kept as places, one by one (`callStep`). -/
+theorem callFold_grows {o₀ o : Out} {A : ACtx} (ho : Grows o₀ o) {fn : Fn} {args : List (Nat × Expr × Option Conv)}
+    {vals : List Abs} : Grows o₀ ((args.zip vals).foldl (callStep fn) (o, A)).1 :=
+  (foldl_inv (fun (acc : Out × ACtx) => Grows o₀ acc.1 ∧ Same A acc.2) (callStep fn) callStep_ok
+    (args.zip vals) (o, A) ⟨ho, Same.refl A⟩).1
+
+theorem callFold_same {A₀ A : ACtx} (hA : Same A₀ A) {o : Out} {fn : Fn} {args : List (Nat × Expr × Option Conv)}
+    {vals : List Abs} : Same A₀ ((args.zip vals).foldl (callStep fn) (o, A)).2 :=
+  (foldl_inv (fun (acc : Out × ACtx) => Grows o acc.1 ∧ Same A₀ acc.2) (callStep fn) callStep_ok
+    (args.zip vals) (o, A) ⟨Grows.refl o, hA⟩).2
+
+/-- What is kept of an analysis with its values and the relations of its rules' calls put back: its
+    places, its calls and whether it widened are what they were. -/
+theorem grows_reset {o₀ o : Out} (h : Grows o₀ o) {vals : List (Nat × Abs)} {kept : List (Nat × List (String × Rel × String))} :
+    Grows o₀ { o with vals := vals, kept := kept } :=
+  ⟨h.places, h.calls, h.widened, h.kinds⟩
+
+/-- What the bodies of the lambdas a function made gave, put with the rest at the end of its
+    analysis, changes no place, no call, nothing widened (kaname's DESIGN 27.4). -/
+theorem grows_merged {o₀ o : Out} (h : Grows o₀ o) : Grows o₀ o.merged := by
+  unfold Out.merged
+  have h1 : Grows o₀ (o.lvals.foldl (fun o (i, a) => o.record i a) { o with lvals := [] }) :=
+    foldl_inv (fun o' => Grows o₀ o') _ (fun _ x h => by obtain ⟨_, _⟩ := x; exact grows_record h) _ _
+      ⟨h.places, h.calls, h.widened, h.kinds⟩
+  exact foldl_inv (fun o' => Grows o₀ o') _ (fun _ x h => by obtain ⟨_, _⟩ := x; exact grows_keep h _ _) _ _
+    ⟨h1.places, h1.calls, h1.widened, h1.kinds⟩
+
+/-- **A call read again** keeps what its reading kept (kaname's DESIGN 26.5). -/
+theorem rereadEnd_grows {o₀ : Out} {fn : Fn} {o : Out} {r : AR} (h : Grows o₀ r.out) : Grows o₀ (rereadEnd fn o r).2 := by
+  simp only [rereadEnd]
+  split
+  · exact grows_reset (grows_place (grows_convA h))
+  · exact grows_reset (grows_convA h)
+
 theorem grows_enumPlace {o₀ o : Out} (h : Grows o₀ o) {x : Expr} {inp : RuleInput} {v : Abs} :
     Grows o₀ (enumPlace x inp v o) := by
   unfold enumPlace
@@ -319,7 +397,10 @@ theorem ruleAbs_ok {o₀ o : Out} {A₀ A : ACtx} (ho : Grows o₀ o) (hA : Same
   · rename_i rd _
     have := foldl_inv (fun (acc : Out × ACtx) => Grows o₀ acc.1 ∧ Same A₀ acc.2) (ruleStep rd) ruleStep_ok
       (args.zip vals) (o, A) ⟨ho, hA⟩
-    exact ⟨grows_keep (foldl_inv (fun o' => Grows o₀ o') _ (fun o' _ h => grows_place h) _ _ this.1) _ _, this.2⟩
+    refine ⟨?_, this.2⟩
+    split
+    · exact grows_keepL (foldl_inv (fun o' => Grows o₀ o') _ (fun o' _ h => grows_place h) _ _ this.1) _ _
+    · exact grows_keep (foldl_inv (fun o' => Grows o₀ o') _ (fun o' _ h => grows_place h) _ _ this.1) _ _
 
 theorem dateStep_ok {o₀ : Out} {A₀ : ACtx} {fd : DatesD} {reads : List String} :
     ∀ (acc : Out × ACtx × Option Abs) arg, Grows o₀ acc.1 ∧ Same A₀ acc.2.1 →
@@ -352,9 +433,10 @@ theorem transferAbs_ok {o₀ o : Out} (ho : Grows o₀ o) {args : List (String �
   · exact grows_place (grows_convA h1)
   · exact grows_convA h1
 
-theorem fieldStep_ok {o₀ : Out} {A₀ : ACtx} {module : Bool} {given : List (Nat × Abs × Expr × Option Conv)} :
+theorem fieldStep_ok {o₀ : Out} {A₀ : ACtx} {module : Bool} {given : List (Nat × Abs × Expr × Option Conv)}
+    {src : Option (Abs × Nat)} :
     ∀ (acc : List (String × Abs) × Out × ACtx) fk, Grows o₀ acc.2.1 ∧ Same A₀ acc.2.2 →
-      Grows o₀ (fieldStep module given acc fk).2.1 ∧ Same A₀ (fieldStep module given acc fk).2.2 := by
+      Grows o₀ (fieldStep module given src acc fk).2.1 ∧ Same A₀ (fieldStep module given src acc fk).2.2 := by
   rintro ⟨out, o1, A1⟩ ⟨⟨f, slot, scalar⟩, k⟩ ⟨g1, g2⟩
   dsimp only at g1 g2
   simp only [fieldStep]
@@ -367,11 +449,17 @@ theorem fieldStep_ok {o₀ : Out} {A₀ : ACtx} {module : Bool} {given : List (N
         · exact g2
       · exact g2
     · exact ⟨g1, g2⟩
-  · exact ⟨g1, g2⟩
+  · split
+    · split
+      · exact ⟨grows_place g1, g2⟩
+      · exact ⟨g1, g2⟩
+    · exact ⟨g1, g2⟩
 
 theorem recordAbs_ok {o₀ o : Out} {A₀ A : ACtx} (ho : Grows o₀ o) (hA : Same A₀ A) {module : Bool}
-    {fields : List (String × Slot × Bool)} {inits : List (Nat × Expr × Option Conv × Nat)} {vals : List Abs} :
-    Grows o₀ (recordAbs A o module fields inits vals).2.1 ∧ Same A₀ (recordAbs A o module fields inits vals).2.2 := by
+    {fields : List (String × Slot × Bool)} {inits : List (Nat × Expr × Option Conv × Nat)} {vals : List Abs}
+    {tag : Option String} {src : Option (Abs × Nat)} :
+    Grows o₀ (recordAbs A o module fields inits vals tag src).2.1 ∧
+      Same A₀ (recordAbs A o module fields inits vals tag src).2.2 := by
   simp only [recordAbs]
   have h1 := foldl_inv (fun (acc : List (Nat × Abs × Expr × Option Conv) × Out) => Grows o₀ acc.2) initStep
     (fun ⟨given, o1⟩ ⟨⟨k, x, c, l⟩, v⟩ g => by simp only [initStep]; exact grows_convA g) (inits.zip vals) ([], o) ho
@@ -394,11 +482,11 @@ theorem dateAbs_same {A₀ A : ACtx} (hA : Same A₀ A) {o : Out} {file : Nat} {
     {args : List (Nat × Expr × Option Conv)} {vals : List Abs} : Same A₀ (dateAbs A o file date args vals).2.2 :=
   (dateAbs_ok (Grows.refl o) hA).2
 theorem recordAbs_grows {o₀ o : Out} (ho : Grows o₀ o) {A : ACtx} {module : Bool} {fields : List (String × Slot × Bool)}
-    {inits : List (Nat × Expr × Option Conv × Nat)} {vals : List Abs} :
-    Grows o₀ (recordAbs A o module fields inits vals).2.1 := (recordAbs_ok ho (Same.refl A)).1
+    {inits : List (Nat × Expr × Option Conv × Nat)} {vals : List Abs} {tag : Option String} {src : Option (Abs × Nat)} :
+    Grows o₀ (recordAbs A o module fields inits vals tag src).2.1 := (recordAbs_ok ho (Same.refl A)).1
 theorem recordAbs_same {A₀ A : ACtx} (hA : Same A₀ A) {o : Out} {module : Bool} {fields : List (String × Slot × Bool)}
-    {inits : List (Nat × Expr × Option Conv × Nat)} {vals : List Abs} :
-    Same A₀ (recordAbs A o module fields inits vals).2.2 := (recordAbs_ok (Grows.refl o) hA).2
+    {inits : List (Nat × Expr × Option Conv × Nat)} {vals : List Abs} {tag : Option String} {src : Option (Abs × Nat)} :
+    Same A₀ (recordAbs A o module fields inits vals tag src).2.2 := (recordAbs_ok (Grows.refl o) hA).2
 
 theorem lamResult_grows {o₀ o : Out} (h : Grows o₀ o) {id : Nat} {w : Walk} {count : Iv} {elem v : Abs}
     {step : Option Rat} : Grows o₀ (lamResult o id w count elem v step).2 := by
@@ -410,6 +498,23 @@ theorem lamResult_grows {o₀ o : Out} (h : Grows o₀ o) {id : Nat} {w : Walk} 
   · exact grows_heldA (grows_place h)
   · exact grows_place h
 
+theorem primAbs_grows {o₀ o : Out} (h : Grows o₀ o) {id : Nat} {op : Prim} {vals : List Abs} :
+    Grows o₀ (primAbs o id op vals).2 := by
+  unfold primAbs
+  cases op <;> simp only []
+  all_goals first
+    | exact h
+    | (split <;> exact h)
+    | (split <;> exact grows_place h)
+
+theorem convAll_grows {o₀ : Out} : ∀ {o : Out} (args : List (Expr × Option Conv)) (vals : List Abs), Grows o₀ o →
+    Grows o₀ (convAll o args vals).2
+  | _, [], _, h => by simp only [convAll]; exact h
+  | _, _ :: _, [], h => by simp only [convAll]; exact h
+  | _, (_, _) :: rest, _ :: as, h => by
+    simp only [convAll]
+    exact convAll_grows rest as (grows_convA h)
+
 -- ── Every function of the analysis ───────────────────────────────────────────
 
 /-- What every function of the analysis keeps, at one number of steps. -/
@@ -418,12 +523,13 @@ structure SAt (m : Nat) : Prop where
   evI : ∀ A e o, Grows o (evI A m e o).out ∧ Same A (evI A m e o).ctx
   branch : ∀ A b c o, Grows o (branch A m b c o).2
   andOr : ∀ A isAnd a b o, Grows o (andOr A m isAnd a b o).out ∧ Same A (andOr A m isAnd a b o).ctx
-  arms : ∀ A sy sv arms out o, Grows o (matchArms A m sy sv arms out o).2
+  arms : ∀ A sy sv prev arms out o, Grows o (matchArms A m sy sv prev arms out o).2
   args : ∀ A args o, Grows o (evArgs A m args o).2.1 ∧ Same A (evArgs A m args o).2.2
   args5 : ∀ A args o, Grows o (evArgs5 A m args o).2.1 ∧ Same A (evArgs5 A m args o).2.2
   inits : ∀ A inits o, Grows o (evInits A m inits o).2.1 ∧ Same A (evInits A m inits o).2.2
   list : ∀ A args o, Grows o (evList A m args o).2.1 ∧ Same A (evList A m args o).2.2
   elems : ∀ A elems elem k o, Grows o (listAbs A m elems elem k o).out ∧ Same A (listAbs A m elems elem k o).ctx
+  pairs : ∀ A pairs ks vs k o, Grows o (pairsAbs A m pairs ks vs k o).out ∧ Same A (pairsAbs A m pairs ks vs k o).ctx
   lam1 : ∀ A x elem body c o, Grows o (lam1 A m x elem body c o).2
   cond : ∀ A x elem body c o, Grows o (condition A m x elem body c o).2
   walk : ∀ A id w list x body c ord step o,
@@ -432,24 +538,31 @@ structure SAt (m : Nat) : Prop where
     Grows o (reduceAbs A m list first acc x body c out o).out ∧ Same A (reduceAbs A m list first acc x body c out o).ctx
   rounds : ∀ A acc x body c elem k a o, Grows o (reduceRounds A m acc x body c elem k a o).2
   lam2 : ∀ A acc x a elem body c o, Grows o (lam2 A m acc x a elem body c o).2
+  lams : ∀ A fs args acc o, Grows o (lamsAbs A m fs args acc o).2
+  callV : ∀ A fa args top o, Grows o (callVAbs A m fa args top o).2
+  once : ∀ A vs o, Grows o (onceAll A m vs o)
 
 theorem sat_zero : SAt 0 where
   ev A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   evI A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   branch _ _ _ o := grows_fuel (Grows.refl o)
   andOr A _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
-  arms _ _ _ _ _ o := grows_fuel (Grows.refl o)
+  arms _ _ _ _ _ _ o := grows_fuel (Grows.refl o)
   args A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   args5 A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   inits A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   list A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   elems A _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
+  pairs A _ _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   lam1 _ _ _ _ _ o := grows_fuel (Grows.refl o)
   cond _ _ _ _ _ o := grows_fuel (Grows.refl o)
   walk A _ _ _ _ _ _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   reduce A _ _ _ _ _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   rounds _ _ _ _ _ _ _ _ o := grows_fuel (Grows.refl o)
   lam2 _ _ _ _ _ _ _ o := grows_fuel (Grows.refl o)
+  lams _ _ _ _ o := grows_fuel (Grows.refl o)
+  callV _ _ _ _ o := grows_fuel (Grows.refl o)
+  once _ _ o := grows_fuel (Grows.refl o)
 
 set_option hygiene false in
 /-- Closes `Grows o X` and `Same A X` where `X` is what the analysis goes on with, step by step back
@@ -465,7 +578,12 @@ macro "gclose" : tactic => `(tactic| (repeat (first
   | with_reducible apply grows_convA
   | with_reducible apply grows_calls
   | with_reducible apply grows_widen
+  | with_reducible apply grows_unseen
+  | with_reducible apply grows_recordL
   | with_reducible apply callAbs_grows
+  | with_reducible apply callFold_grows
+  | with_reducible apply rereadEnd_grows
+  | with_reducible apply callFold_same
   | with_reducible apply ruleAbs_grows
   | with_reducible apply dateAbs_grows
   | with_reducible apply transferAbs_ok
@@ -475,6 +593,8 @@ macro "gclose" : tactic => `(tactic| (repeat (first
   | with_reducible apply dateAbs_same
   | with_reducible apply recordAbs_same
   | with_reducible apply lamResult_grows
+  | with_reducible apply primAbs_grows
+  | with_reducible apply convAll_grows
   | with_reducible apply same_assume
   | with_reducible apply same_bindNew
   | with_reducible apply same_apply
@@ -483,8 +603,9 @@ macro "gclose" : tactic => `(tactic| (repeat (first
   | refine hev ?_ | refine hevS ?_ | refine hevI ?_ | refine hevIS ?_ | refine hbr ?_ | refine hao ?_ | refine haoS ?_
   | refine harms ?_ | refine hargs ?_ | refine hargsS ?_ | refine hargs5 ?_ | refine hargs5S ?_ | refine hinits ?_
   | refine hinitsS ?_ | refine hlist ?_ | refine hlistS ?_ | refine helems ?_ | refine helemsS ?_ | refine hlam1 ?_
+  | refine hpairs ?_ | refine hpairsS ?_
   | refine hcond ?_ | refine hwalk ?_ | refine hwalkS ?_ | refine hred ?_ | refine hredS ?_ | refine hrounds ?_
-  | refine hlam2 ?_)))
+  | refine hlam2 ?_ | refine hlams ?_ | refine hcallV ?_ | refine honce ?_)))
 
 set_option maxHeartbeats 4000000 in
 theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
@@ -495,8 +616,8 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
   have hbr : ∀ {o₀ o A b c}, Grows o₀ o → Grows o₀ (branch A m b c o).2 := fun h => h.trans (S.branch _ _ _ _)
   have hao : ∀ {o₀ o A isAnd a b}, Grows o₀ o → Grows o₀ (andOr A m isAnd a b o).out := fun h => h.trans (S.andOr _ _ _ _ _).1
   have haoS : ∀ {A₀ A isAnd a b o}, Same A₀ A → Same A₀ (andOr A m isAnd a b o).ctx := fun h => h.trans (S.andOr _ _ _ _ _).2
-  have harms : ∀ {o₀ o A sy sv arms out}, Grows o₀ o → Grows o₀ (matchArms A m sy sv arms out o).2 :=
-    fun h => h.trans (S.arms _ _ _ _ _ _)
+  have harms : ∀ {o₀ o A sy sv prev arms out}, Grows o₀ o → Grows o₀ (matchArms A m sy sv prev arms out o).2 :=
+    fun h => h.trans (S.arms _ _ _ _ _ _ _)
   have hargs : ∀ {o₀ o A args}, Grows o₀ o → Grows o₀ (evArgs A m args o).2.1 := fun h => h.trans (S.args _ _ _).1
   have hargsS : ∀ {A₀ A args o}, Same A₀ A → Same A₀ (evArgs A m args o).2.2 := fun h => h.trans (S.args _ _ _).2
   have hargs5 : ∀ {o₀ o A args}, Grows o₀ o → Grows o₀ (evArgs5 A m args o).2.1 := fun h => h.trans (S.args5 _ _ _).1
@@ -509,6 +630,10 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
     fun h => h.trans (S.elems _ _ _ _ _).1
   have helemsS : ∀ {A₀ A elems elem k o}, Same A₀ A → Same A₀ (listAbs A m elems elem k o).ctx :=
     fun h => h.trans (S.elems _ _ _ _ _).2
+  have hpairs : ∀ {o₀ o A pairs ks vs k}, Grows o₀ o → Grows o₀ (pairsAbs A m pairs ks vs k o).out :=
+    fun h => h.trans (S.pairs _ _ _ _ _ _).1
+  have hpairsS : ∀ {A₀ A pairs ks vs k o}, Same A₀ A → Same A₀ (pairsAbs A m pairs ks vs k o).ctx :=
+    fun h => h.trans (S.pairs _ _ _ _ _ _).2
   have hlam1 : ∀ {o₀ o A x elem body c}, Grows o₀ o → Grows o₀ (lam1 A m x elem body c o).2 :=
     fun h => h.trans (S.lam1 _ _ _ _ _ _)
   have hcond : ∀ {o₀ o A x elem body c}, Grows o₀ o → Grows o₀ (condition A m x elem body c o).2 :=
@@ -525,13 +650,19 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
     fun h => h.trans (S.rounds _ _ _ _ _ _ _ _ _)
   have hlam2 : ∀ {o₀ o A acc x a elem body c}, Grows o₀ o → Grows o₀ (lam2 A m acc x a elem body c o).2 :=
     fun h => h.trans (S.lam2 _ _ _ _ _ _ _ _)
+  have hlams : ∀ {o₀ o A fs args acc}, Grows o₀ o → Grows o₀ (lamsAbs A m fs args acc o).2 :=
+    fun h => h.trans (S.lams _ _ _ _ _)
+  have hcallV : ∀ {o₀ o A fa args top}, Grows o₀ o → Grows o₀ (callVAbs A m fa args top o).2 :=
+    fun h => h.trans (S.callV _ _ _ _ _)
+  have honce : ∀ {o₀ o A vs}, Grows o₀ o → Grows o₀ (onceAll A m vs o) :=
+    fun h => h.trans (S.once _ _ _)
   constructor
   · -- ev
     intro A e o
     cases e <;> simp only [ev]
     case letIn x v c body =>
       split <;> simp only [AR.of] <;> refine ⟨?_, ?_⟩ <;> gclose
-    all_goals exact ⟨grows_record (S.evI _ _ _).1, (S.evI _ _ _).2⟩
+    all_goals exact ⟨grows_recordIf (S.evI _ _ _).1 _ _ _, (S.evI _ _ _).2⟩
   · -- evI
     intro A e o
     cases e <;> simp only [evI] <;> (repeat' split) <;> (try simp only [AR.of]) <;> refine ⟨?_, ?_⟩ <;> gclose
@@ -546,7 +677,7 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
     all_goals (try simp only [])
     all_goals refine ⟨?_, ?_⟩ <;> gclose
   · -- matchArms
-    intro A sy sv arms out o
+    intro A sy sv prev arms out o
     cases arms with
     | nil => simp only [matchArms]; gclose
     | cons arm rest =>
@@ -599,6 +730,16 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
       repeat' split
       all_goals (try simp only [AR.of])
       all_goals refine ⟨?_, ?_⟩ <;> gclose
+  · -- pairsAbs
+    intro A pairs ks vs k o
+    cases pairs with
+    | nil => simp only [pairsAbs, AR.of]; exact ⟨Grows.refl o, Same.refl A⟩
+    | cons p rest =>
+      obtain ⟨x, cx, y, cy⟩ := p
+      simp only [pairsAbs]
+      repeat' split
+      all_goals (try simp only [AR.of])
+      all_goals refine ⟨?_, ?_⟩ <;> gclose
   · -- lam1
     intro A x elem body c o
     simp only [lam1]
@@ -631,6 +772,28 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
     intro A acc x a elem body c o
     simp only [lam2]
     gclose
+  · -- lamsAbs
+    intro A fs args acc o
+    cases fs with
+    | nil => simp only [lamsAbs]; gclose
+    | cons l rest =>
+      obtain ⟨i, ae, own⟩ := l
+      simp only [lamsAbs]
+      repeat' split
+      all_goals gclose
+  · -- callVAbs
+    intro A fa args top o
+    simp only [callVAbs]
+    repeat' split
+    all_goals gclose
+  · -- onceAll
+    intro A vs o
+    cases vs with
+    | nil => simp only [onceAll]; gclose
+    | cons v vs =>
+      simp only [onceAll]
+      repeat' split
+      all_goals gclose
 
 theorem sat (m : Nat) : SAt m := by
   induction m with

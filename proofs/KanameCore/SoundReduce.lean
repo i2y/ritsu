@@ -7,48 +7,6 @@ import KanameCore.SoundApply
 
 namespace KanameCore
 
-mutual
-theorem Abs.eq_of_beq : ∀ {a b : Abs}, Abs.beq a b = true → a = b
-  | .never, b, h => by cases b <;> simp_all [Abs.beq]
-  | .any, b, h => by cases b <;> simp_all [Abs.beq]
-  | .num i, b, h => by cases b <;> simp_all [Abs.beq]
-  | .date i, b, h => by cases b <;> simp_all [Abs.beq]
-  | .set s, b, h => by cases b <;> simp_all [Abs.beq]
-  | .str, b, h => by cases b <;> simp_all [Abs.beq]
-  | .opt n a, b, h => by
-    cases b with
-    | opt m b' =>
-      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
-      rw [h.1, Abs.eq_of_beq h.2]
-    | _ => simp [Abs.beq] at h
-  | .list c a, b, h => by
-    cases b with
-    | list d b' =>
-      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
-      rw [h.1, Abs.eq_of_beq h.2]
-    | _ => simp [Abs.beq] at h
-  | .record f r, b, h => by
-    cases b with
-    | record g s =>
-      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
-      rw [Abs.eq_of_beqFields h.1, h.2]
-    | _ => simp [Abs.beq] at h
-  | .transfer f, b, h => by
-    cases b with
-    | transfer g =>
-      simp only [Abs.beq] at h
-      rw [Abs.eq_of_beqFields h]
-    | _ => simp [Abs.beq] at h
-theorem Abs.eq_of_beqFields : ∀ {xs ys : List (String × Abs)}, Abs.beqFields xs ys = true → xs = ys
-  | [], [], _ => rfl
-  | (n, x) :: xs, (m, y) :: ys, h => by
-    simp only [Abs.beqFields, Bool.and_eq_true, beq_iff_eq] at h
-    obtain ⟨⟨h1, h2⟩, h3⟩ := h
-    rw [h1, Abs.eq_of_beq h2, Abs.eq_of_beqFields h3]
-  | [], _ :: _, h => by simp [Abs.beqFields] at h
-  | _ :: _, [], h => by simp [Abs.beqFields] at h
-end
-
 theorem convA_widened {o : Out} {c : Option Conv} {a : Abs} : (convA o c a).2.widened = o.widened := by
   cases c with
   | none => rfl

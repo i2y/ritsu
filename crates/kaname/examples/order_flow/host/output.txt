@@ -1,0 +1,7 @@
+add: cart
+add: cart
+place: placed
+pay: refused: the amount is not the total
+pay: paid
+ship: shipped
+cancel: refused: the order is closed

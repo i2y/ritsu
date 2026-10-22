@@ -1,9 +1,10 @@
 # The kaname agent skill
 
-`kaname/` is an [Agent Skill](https://agentskills.io) for **using kaname**: writing a `.kn` module
-that joins rules, dates and books, getting it past `kaname check` and the checks `ritsu check` adds
-across the languages, generating its code with `ritsu gen`, showing the page to the people who
-approve the decisions, and knowing what to ask a person. It is not about working on kaname itself.
+`kaname/` is an [Agent Skill](https://agentskills.io) for **using kaname**: writing a `.kn` module of
+a functional core (the code around rules, dates and books among them), getting it past `kaname check`
+and the checks `ritsu check` adds across the languages, generating its code with `ritsu gen` for a
+host to call, showing the page to the people who approve the decisions, and knowing what to ask a
+person. It is not about working on kaname itself.
 
 ## Install
 

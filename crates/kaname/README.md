@@ -1,15 +1,135 @@
 # kaname
 
-A small language for writing the functional core of a program — the part that only computes and decides — in ritsu's types: functions, records, enums and lists, with no input or output of its own.
-The rest of the program — reading a request, the clock or a database, and carrying out what the core decides — stays in the host, the imperative shell that calls it.
+A small general-purpose language for writing a Functional Core: the part of a program that only computes and decides, with no input or output of its own.
+A state moved by events, input checked and made the form a service keeps, counts kept and compared, a tree reshaped, and the code around business rules are written in it as functions over records, enums with fields on their values, lists, dicts, sets and strings, with generics, `result` and function values.
+The rest of the program — reading a request, the clock or a database, keeping state, and carrying out what the core decides — stays in the host, the imperative shell that calls it.
 kaname checks the core by the rules ritsu's languages are checked by — units, currencies and tax, the steps of rates, ranges, rounding and int64 — and works out what each function can do (`total`, `fails …`, `diverges`).
-Today it is shaped for the core around business rules: it calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types. Extensions that would make it more general are being considered.
-kaname is one of the nine languages of [ritsu](../../README.md): it reads the rules, the dates files and the books through ritsu, and `ritsu gen` writes it as TypeScript, Python and Go beside their code.
+It also calls the rules of rulec, the dates of koyomi and the transfers of chobo's books in ritsu's types, and `ritsu gen` writes it as TypeScript, Python and Go, with no dependency, beside their code.
+kaname is one of the nine languages of [ritsu](../../README.md).
+On ritsu's site, **[the pages of kaname](https://i2y.github.io/ritsu/kaname/)** go through how a module is written, the four functional cores below with their hosts in TypeScript, Python and Go, what the check guarantees, and the calls of rules, dates and books.
+
+## A functional core
+
+An order moves from state to state as events come in.
+Each state has the fields it needs, so the states are the values of an enum with fields under them, and the next state, or why an event is refused, is a `match` on the state and the event:
+
+```kn
+enum Order
+  cart
+    lines : list[Line]  count <=50
+  placed
+    lines : list[Line]  count >=1 <=50
+    total : money[USDc]
+    on    : date
+  paid
+    lines : list[Line]  count >=1 <=50
+    on    : date
+  shipped
+    lines    : list[Line]  count >=1 <=50
+    tracking : string
+  cancelled
+    reason : string
+
+# the order an event moves it to, or why the event is refused
+fn next(order: Order, event: Event) -> result[Order, string]
+  match order
+    cart c =>
+      match event
+        add a =>
+          if c.lines.count() < 50
+            ok(Order.cart { lines: c.lines.append(a.line) })
+          else
+            err("a cart holds 50 lines")
+        remove r => ok(Order.cart { lines: c.lines.filter(l => l.sku != r.sku) })
+        place p =>
+          if c.lines.count() = 0
+            err("an empty cart is not placed")
+          else
+            ok(Order.placed { lines: c.lines, total: total(lines: c.lines), on: p.on })
+        cancel x => ok(Order.cancelled { reason: x.reason })
+        else => err("a cart is placed first")
+    placed p =>
+      match event
+        pay y =>
+          if y.amount = p.total
+            ok(Order.paid { lines: p.lines, on: p.on })
+          else
+            err("the amount is not the total")
+        cancel x => ok(Order.cancelled { reason: x.reason })
+        else => err("a placed order is paid or cancelled")
+    paid d =>
+      match event
+        ship s => ok(Order.shipped { lines: d.lines, tracking: s.tracking })
+        else => err("a paid order is shipped")
+    shipped, cancelled => err("the order is closed")
+```
+
+kaname holds the `match` to every value of the order and of the event once (E106).
+It finds that the lines a cart holds stay within the 50 its state declares, since a line is added only where `c.lines.count() < 50`, that a placed order has a line at least, and that the total of 50 lines of 100 at 1,000,000 cents stays inside int64, so every function answers every input it takes:
+
+```console
+$ ritsu check examples/order_flow --root examples/order_flow
+ok examples/order_flow/order_flow.ja.kn: 5 functions, total
+ok examples/order_flow/order_flow.kn: 5 functions, total
+ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+The host keeps the order, takes the events, and calls the code `ritsu gen` writes of the module.
+In TypeScript (`examples/order_flow/host/main.ts`; the Python and the Go beside it print the same):
+
+```ts
+import { next, type Event, type Order } from "./glue/order_flow";
+import type { USDc } from "./units";
+
+const events: Event[] = [
+  { kind: "add", line: { sku: "pen", qty: 2n, price: 150n as USDc } },
+  { kind: "add", line: { sku: "ink", qty: 1n, price: 400n as USDc } },
+  { kind: "place", on: "2026-10-22" },
+  { kind: "pay", amount: 650n as USDc },
+  { kind: "pay", amount: 700n as USDc },
+  { kind: "ship", tracking: "1Z-42" },
+  { kind: "cancel", reason: "too late" },
+];
+
+let order: Order = { kind: "cart", lines: [] };
+for (const event of events) {
+  const r = next(order, event);
+  if (r.kind === "err") {
+    console.log(`${event.kind}: refused: ${r.error}`);
+    continue;
+  }
+  order = r.value;
+  console.log(`${event.kind}: ${order.kind}`);
+}
+```
+
+```text
+add: cart
+add: cart
+place: placed
+pay: refused: the amount is not the total
+pay: paid
+ship: shipped
+cancel: refused: the order is closed
+```
+
+A value whose range is not written takes the whole of its type: all of int64 for a number.
+The code generated checks where such a value can leave int64, and the function's effect says so; written `total`, it is an error:
+
+```console
+$ ritsu kaname check tests/docs/ids.kn
+error[E401]: tests/docs/ids.kn:4:1: `next_id` is written `total`, but it can fail with `overflow`
+     4 | fn next_id(last: number) -> number total
+  = Line 5: the value of `last + 1` can leave int64, as it comes from a value whose range is not written (`overflow`)
+  = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
+```
+
+## Rules, dates and books in ritsu's types
 
 A rule decides, a dates file computes a day, a book moves an amount, and each is checked by its own language.
-The code that joins them is host code: it puts a rule's inputs together from a cart, carries one answer into the next call and hands an amount to a book.
-The package `ritsu gen` writes gives each unit one type, so the host's type checker stops a fee in dollars handed to a book of cents; but nothing checks what that code computes: a rounding left out, a sum outside the range a rule takes, running totals that break a rule's precondition, a product past int64.
-kaname is that code — the functional core between them — written in ritsu's types and held to their rules:
+The code that joins them puts a rule's inputs together from a cart, carries one answer into the next call and hands an amount to a book.
+Written in the host's language, the package `ritsu gen` writes gives each unit one type, so the host's type checker stops a fee in dollars handed to a book of cents; but nothing checks what that code computes: a rounding left out, a sum outside the range a rule takes, running totals that break a rule's precondition, a product past int64.
+Written in kaname, it calls the rules, the dates and the books in their own types, and is held to their rules:
 
 ```kn
 module late_payment v1
@@ -109,8 +229,8 @@ ritsu check: 3 files (rulec 1, chobo 1, kaname 1): 1 fail (2 errors); borders be
 Each function's type says how far it was checked.
 A **total** one answers every input in the ranges it declares, as a rule and a date of koyomi do.
 One that **fails** has places the checks could not show, and says with what: `rule`, `date`, `range`, `overflow`, `zero`.
-One that **diverges** recurses.
-kaname infers the effect and holds a function to the one its head writes (E401); a call carries the callee's effect to the caller.
+One that **diverges** recurses, as a walk of a tree does ([examples/catalog](examples/catalog)); kaname does not check that it stops.
+kaname infers the effect and holds a function to the one its head writes (E401); a call carries the callee's effect to the caller, and a function given to another carries its own to the caller that gives it.
 The effect shapes the code: in Go only a function that can fail returns `(T, error)`, and in TypeScript and Python each has the union of what it can fail with.
 
 ## Decisions belong in tables
@@ -132,11 +252,25 @@ warning[W501]: tests/doc/decisions.kn:25:3: This `if` chooses a constant of the 
 ok tests/doc/decisions.kn: 3 functions: 2 total; 1 fails rule
 ```
 
+## The language
+
+- **Values**: numbers, money and quantities in their units, rates with their steps, dates, bools, strings (sequences of code points), records, enums and enums whose values have fields of their own, lists, dicts and sets, values that may be none, and `result[T, E]` for a failure the business answers with.
+- **Ranges**: a parameter or a field may write a range or a count (`qty : number range >=1 <=100`), and a value whose range is not written takes the whole of its type.
+- **Expressions**: `let`, `if`, `match` (with `else` and with literals), a record made from another (`Category { ..c, children: kept }`), `=` on values of any type, and `let x = try e`, which answers an `err` or a `none` as the function's answer.
+- **Builtins**, written as functions or after a value: `xs.sort_by(x => x.due)`, `stock.get(sku)`, `a.union(b)`, `name.trim()`, `text.parse_number()`; dicts and sets go round in the order of their keys, and strings are counted, cut and ordered by their code points, the same in every target.
+- **Functions**: generic over type parameters (`K: key` for one that can be a key), taking functions (lambdas, and functions by their names), recursive, and `private` to their module.
+- **Calls** of rulec's rules, koyomi's dates and chobo's transfers, in ritsu's types.
+- **Not in it**: input and output, mutable variables and loops, floating point, functions that answer functions, regular expressions ([DESIGN 29](DESIGN.md)).
+
+[docs/reference.md](docs/reference.md) has the whole language.
+
 ## The code it generates
 
-`ritsu gen` writes each module under `glue/` in the package it writes for each of TypeScript, Python and Go, with a helper module of exact fractions, int64 and the five roundings, and no dependency.
-Amounts travel in the package's one type of each unit, as the rules and the books take them; a function the host calls checks its arguments against what they declare, and the code checks the places the analysis did not show, failing with `KanameError` of the kind the reference interpreter fails with.
+`ritsu gen` writes each module under `glue/` in the package it writes for each of TypeScript, Python and Go, with a helper module of exact fractions, int64, the five roundings, strings by their code points and dicts and sets in the order of their keys, and no dependency.
+A value of a sum is an object with `kind` in TypeScript, a frozen data class in Python and a struct of an interface in Go, and a `result` is the helper module's `Ok` and `Err`; amounts travel in the package's one type of each unit, as the rules and the books take them.
+A function the host calls checks its arguments against what they declare, and the code checks the places the analysis did not show, failing with `KanameError` of the kind the reference interpreter fails with.
 A transfer is a value whose type carries the reasons the book can refuse it with, and a function of the book makes it through chobo's client.
+The four examples of a functional core each have a host in TypeScript, Python and Go under `host/`, which call the package `ritsu gen` writes and print the same.
 
 ## The page for people
 
@@ -164,9 +298,9 @@ The binary of kaname's own crate joins no other language: it stops with E202 at 
 ## Commands
 
 ```console
-$ ritsu kaname check examples/late_payment/late_payment.kn
-$ ritsu kaname run examples/late_payment/late_payment.kn claim --input claim.json --trace
-$ ritsu kaname vectors examples/late_payment/late_payment.kn --function claim
+$ ritsu kaname check examples/order_flow/order_flow.kn
+$ ritsu kaname run examples/order_flow/order_flow.kn replay --input events.json --trace
+$ ritsu kaname vectors examples/order_flow/order_flow.kn --function next
 $ ritsu kaname doc examples/late_payment/late_payment.kn --root examples/late_payment --format html
 $ ritsu kaname api examples/late_payment/late_payment.kn --root examples/late_payment
 $ ritsu kaname explain E301
@@ -179,8 +313,15 @@ The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file 
 
 ## Examples
 
-Each is in English, and in Japanese beside it as `<name>.ja.kn` reading the Japanese versions of its files.
-The rules cite the documents they transcribe, from copies beside them that they pin.
+Each is in English, and in Japanese beside it as `<name>.ja.kn`.
+The first four are functional cores that read no other language, each with a host in TypeScript, Python and Go under `host/`:
+
+- [examples/order_flow](examples/order_flow): an order moved from state to state by events, its states the values of an enum with fields, and the next state or why an event is refused a `result`.
+- [examples/stock_diff](examples/stock_diff): two counts of a stockroom, dicts from a code to how many are on the shelf, compared code by code; the moves of a day netted for each code and laid on a count; the codes to reorder, a set.
+- [examples/handles](examples/handles): a handle a person types made the one a service keeps (white space, case), held to what a handle is, every reason it is not said; and a tag read from text with `try`.
+- [examples/catalog](examples/catalog): a tree of categories, a record that holds itself: the path of every item, the tree with its empty categories taken out, its names made by a function the caller gives, and what a generic function picks from every category.
+
+The other four call rules, dates and books, which read the Japanese versions of their files; the rules cite the documents they transcribe, from copies beside them that they pin:
 
 - [examples/payout](examples/payout): a card payment taken for a seller of a marketplace, with the processor's fee from a rule of rulec, as two transfers of a chobo book that the host makes. From a card processor's published merchant fees.
 - [examples/late_payment](examples/late_payment): what a supplier claims for an invoice paid late: the day it fell due from a dates file of koyomi, the days late, and the fixed sum and the interest from a rule. From the UK's Late Payment of Commercial Debts (Interest) Act 1998 and GOV.UK's guide.
@@ -193,16 +334,17 @@ The rules cite the documents they transcribe, from copies beside them that they 
 
 - Its rounding is held to rulec's on 360,600 values and steps, and its dates to ritsu-ports', koyomi's and rulec's on every one of 3,652,059 days.
 - Every `derive` and `define` of rulec's corpus, 143 lines in 85 files, reads as kaname with rulec's type and gives rulec's value on rulec's 20,033 vectors.
-- The analysis of ranges is held to the reference interpreter: 513,899 values of 361 expressions, seen on 24,135 runs of every function of the examples and the test modules (its vectors, and 200 inputs drawn from what its parameters declare), are inside what it says, and each of the 1,455 runs that fail fails in a way the function's effect says.
-- Its evaluation and its analysis of ranges are written again in Lean (`proofs/KanameCore`, in ritsu's one Lean package), with proofs that the analysis is sound and that a function it finds total does not fail; `cargo test -p ritsu-model` holds the model to the reference interpreter and the analysis on 804 runs of 32 modules.
-- The code generated in TypeScript, Python and Go answers every vector of 24 modules and every input outside what their parameters declare as the reference interpreter does, 1,111 of 1,111 in English and in Japanese, and passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt and `go vet`.
+- The analysis of ranges is held to the reference interpreter: 3,452,025 values of 5,009 expressions, seen on 139,754 runs of every function of the examples and the test modules (its vectors, and 200 inputs drawn from what its parameters declare), are inside what it says, and each of the 1,617 runs that fail fails in a way the function's effect says.
+- Its evaluation and its analysis of ranges are written again in Lean (`proofs/KanameCore`, in ritsu's one Lean package), with proofs that the analysis is sound and that a function it finds total does not fail; `cargo test -p ritsu-model` holds the model to the reference interpreter and the analysis on 14,092 runs of 59 modules.
+- The code generated in TypeScript, Python and Go answers every vector of 52 modules, every input outside what their parameters declare, and values of types that hold themselves nested as deep as a host may give one and one deeper, as the reference interpreter does, in English and in Japanese (all 16,717 cases in TypeScript, 16,633 in Python and 16,613 in Go: an input past the whole of a type runs where the language can hold it), and passes `tsc --strict --erasableSyntaxOnly`, `mypy --strict`, gofmt and `go vet`.
 - Every diagnostic code has the smallest module that prints it, in English and in Japanese; the pages of `doc` are golden files, the pages of the rules and dates in them are what rulec and koyomi draw, and Chrome opens the HTML.
-- The outputs, diagnostics and lines of `.kn` in this README, `docs/` and the skill are real: `tests/docs.rs` compares them, and ritsu's `tests/kaname.rs` runs the commands.
+- The hosts of the four functional cores, in TypeScript, Python and Go, call the package `ritsu gen` writes of each and print what `host/output.txt` holds (ritsu's `tests/kaname.rs`).
+- The outputs, diagnostics and lines of `.kn` and of the hosts in this README, `docs/` and the skill are real: `tests/docs.rs` compares them, and ritsu's `tests/kaname.rs` runs the commands. ritsu's `tests/website.rs` holds the pages of kaname on the site the same way.
 
 ## Status
 
 The language, `check`, `run`, `vectors`, `doc`, `api`, `explain`, and the code `ritsu gen` writes are done, as [DESIGN.md](DESIGN.md) says.
-Not yet: calls from dandori's flows, a calendar of koyomi and the time of a date, and the narrowing of a rule's outputs to the inputs given (DESIGN 19).
+Not yet: calls from dandori's flows, a calendar of koyomi and the time of a date, the narrowing of a rule's outputs to the inputs given, and modules in the playground on the site (DESIGN 19).
 
 ## License
 

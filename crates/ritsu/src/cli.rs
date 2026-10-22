@@ -42,8 +42,8 @@ fn language(name: &'static str) -> Cmd {
             "sekisho's commands (who may do what), reading in the same process the rules, dates files and calendars a gate takes as conditions, and the flows of its workflows"
         ),
         _ => tr!(
-            "kaname のコマンド（規則と日付と帳簿をつなぐコード）。モジュールが呼ぶ規則、日付のファイル、帳簿を、同じプロセスの中で読む",
-            "kaname's commands (the code that joins rules, dates and books), reading in the same process the rules, dates files and books a module calls"
+            "kaname のコマンド（Functional Core を書く汎用の言語）。モジュールが呼ぶ規則、日付のファイル、帳簿を、同じプロセスの中で読む",
+            "kaname's commands (a general-purpose language for a functional core), reading in the same process the rules, dates files and books a module calls"
         ),
     };
     Cmd {
@@ -156,8 +156,8 @@ pub fn commands() -> Vec<Cmd> {
         name: "gen",
         args: "[<path>...]",
         purpose: tr!(
-            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、つなぐコード、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローとつなぐコードとゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
-            "write the rules, the dates, the clients of the books, the workflows, the code that joins them and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows, joining code and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units); the gates' Cedar goes once into <out>/cedar/"
+            "プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、Functional Core（kaname のモジュール）、ゲートに尋ねるコードを、TypeScript、Python、Go のそれぞれ一つのパッケージにする。ワークフローと Functional Core とゲートのコードは同じパッケージの規則と期日と帳簿を読み、規則と帳簿はお金と量の額を単位ごとに一つの型（units）で受け渡す。ゲートの Cedar は <out>/cedar/ に一度だけ書く",
+            "write the rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project as one package for each of TypeScript, Python and Go, whose workflows, functional cores and gates read the package's own rules, dates and books, and whose rules and books take amounts of money and quantities in one type of each unit (units); the gates' Cedar goes once into <out>/cedar/"
         ),
         params: vec![(
             "<path>...",

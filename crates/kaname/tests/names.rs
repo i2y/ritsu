@@ -49,6 +49,71 @@ fn the_files_a_module_reads() {
     assert_eq!(codes(&o), ["E201"]);
 }
 
+/// A rule with no outputs (an `enums` file) is read for its enums (DESIGN 2.7): a module that writes
+/// its enum as a type passes, and its generated code reads the rule's module of types alone. Nothing
+/// to call is generated from it (rulec's §15.258), so a call of it, or its outputs written as a type,
+/// stop with E201 where they are written, and once. English first, the Japanese version beside it.
+#[test]
+fn a_rule_with_no_outputs_is_read_for_its_enums_and_not_called() {
+    let t = TempDir::new("kaname-enums-file");
+    t.write("rules/regions.rule", "enums regions v1\ndescription \"The regions a parcel is delivered to\"\n\nenum region = honshu | hokkaido | okinawa\n");
+    t.write("rules/配送の地域.rule", "enums 配送の地域(delivery_regions) v1\ndescription \"荷物を届ける地域\"\n\nenum 地域(region) = 本州(honshu) | 北海道(hokkaido) | 沖縄(okinawa)\n");
+    // its enum as a type: the module passes
+    for main in [
+        "module probe v1\n\nuse rule regions from \"rules/regions.rule\"\n\nfn far_away(r: regions.region) -> bool\n  r != honshu\n",
+        "module 試し(probe) v1\n\nuse rule 地域 from \"rules/配送の地域.rule\"\n\nfn 遠いか(far_away)(r: 地域.地域) -> bool\n  r != 本州\n",
+    ] {
+        let o = check_in(&t, main, common::joined());
+        assert_eq!(codes(&o), Vec::<&str>::new(), "{main}\n{}", text(&o));
+    }
+    // a call of it, an output of it, its outputs as a type: E201 where each is written
+    let modules = [
+        ("module probe v1\n\nuse rule regions from \"rules/regions.rule\"\n\nfn f(x: bool) -> bool\n  let r = regions()\n  x\n", "regions", (6, 11)),
+        ("module probe v1\n\nuse rule regions from \"rules/regions.rule\"\n\nfn in_honshu(urgent: bool) -> bool\n  regions().region = honshu\n", "regions", (6, 3)),
+        ("module probe v1\n\nuse rule regions from \"rules/regions.rule\"\n\nfn g(x: regions.outputs) -> bool\n  true\n", "regions", (5, 9)),
+        ("module 試し(probe) v1\n\nuse rule 地域 from \"rules/配送の地域.rule\"\n\nfn 判定(f)(x: bool) -> bool\n  let r = 地域()\n  x\n", "地域", (6, 11)),
+        ("module 試し(probe) v1\n\nuse rule 地域 from \"rules/配送の地域.rule\"\n\nfn 本州か(in_honshu)(急ぎ(urgent): bool) -> bool\n  地域().地域 = 本州\n", "地域", (6, 3)),
+    ];
+    for (main, rule, (line, col)) in modules {
+        let o = check_in(&t, main, common::joined());
+        assert_eq!(codes(&o), ["E201"], "{main}\n{}", text(&o));
+        let d = &o.diags[0];
+        assert_eq!((d.line, d.col), (Some(line), Some(col)), "{main}");
+        let en = d.render(ritsu_base::text::Lang::En);
+        assert!(en.contains(&format!("The rule `{rule}` has no outputs, and is not called")), "{en}");
+        assert!(en.contains(&format!("= Nothing to call is generated from a rule with no outputs (an `enums` file). What a module reads it for is its enums, written `{rule}.<enum>` where a type goes.")), "{en}");
+        let ja = d.render(ritsu_base::text::Lang::Ja);
+        assert!(ja.contains(&format!("規則 `{rule}` には出力が無いので、呼べません")), "{ja}");
+        assert!(ja.contains(&format!("= 出力の無い規則（`enums` のファイル）からは、呼ぶためのコードが生成されません。読めるのはその列挙で、`{rule}.<列挙>` と書いて型として使います。")), "{ja}");
+    }
+}
+
+/// E101 for a field a value of a sum with no fields does not have says it has none, rather than
+/// listing nothing.
+#[test]
+fn a_value_with_no_fields_says_it_has_none() {
+    for (src, lang, note) in [
+        (
+            "module m v1\n\nenum Order\n  placed\n    on : date\n  cancelled\n\nfn why(c: Order.cancelled) -> string\n  c.reason\n",
+            ritsu_base::text::Lang::En,
+            "  = Order.cancelled has no fields.\n",
+        ),
+        (
+            "module 例(m) v1\n\nenum 注文(Order)\n  受付(placed)\n    日(on) : date\n  取消(cancelled)\n\nfn 理由(why)(c: 注文.取消) -> string\n  c.理由\n",
+            ritsu_base::text::Lang::Ja,
+            "  = 注文.取消 にはフィールドがありません。\n",
+        ),
+    ] {
+        let o = common::check_text("t.kn", src);
+        assert_eq!(codes(&o), ["E101"], "{}", text(&o));
+        let said = o.diags[0].render(lang);
+        assert!(said.contains(note), "{said}");
+    }
+    // a record's fields are still listed
+    let o = common::check_text("t.kn", "module m v1\n\nrecord Line\n  sku : string\n  qty : number\n\nfn f(l: Line) -> number\n  l.price\n");
+    assert!(text(&o).contains("  = The fields of Line are `sku`, `qty`.\n"), "{}", text(&o));
+}
+
 #[test]
 fn the_binary_of_the_crate_reads_no_other_language() {
     let t = TempDir::new("kaname-unjoined");
@@ -133,39 +198,34 @@ fn names_given_twice_or_not_ascii() {
 }
 
 #[test]
-fn what_a_parameter_reaches_declares_its_range() {
+fn a_range_and_a_count_may_be_left_out_and_a_rate_declares_its_step() {
     let check = |src: &str| -> Vec<&'static str> { codes(&common::check_text("t.kn", src)) };
-    // a parameter's numbers and dates, its list, its rate
-    assert_eq!(check("module m v1\nfn f(n: number) -> number\n  n\n"), ["E108"]);
-    assert_eq!(check("module m v1\nfn f(d: date) -> date\n  d\n"), ["E108"]);
-    assert_eq!(check("module m v1\nfn f(xs: list[string]) -> number\n  count(xs)\n"), ["E108"]);
-    assert_eq!(check("module m v1\nfn f(xs: list[string] count >=1) -> number\n  count(xs)\n"), ["E108"]);
-    assert_eq!(check("module m v1\nfn f(r: rate) -> number\n  0\n"), ["E108"]);
-    // a rate that goes out of a function declares its step too: its answer, a field of a record
+    // a parameter's numbers, dates and lists, and what they reach, take the whole of their types
+    // where no range and no count are written (DESIGN 22.1)
+    assert_eq!(check("module m v1\nfn f(n: number) -> number\n  n\n"), Vec::<&str>::new());
+    assert_eq!(check("module m v1\nfn f(d: date) -> date\n  d\n"), Vec::<&str>::new());
+    assert_eq!(check("module m v1\nfn f(xs: list[string]) -> list[string]\n  xs\n"), Vec::<&str>::new());
+    assert_eq!(check("module m v1\nfn f(xs: list[string] count >=1) -> list[string]\n  xs\n"), Vec::<&str>::new());
+    assert_eq!(check("module m v1\nfn f(n: number?) -> number?\n  n\n"), Vec::<&str>::new());
+    assert_eq!(check("module m v1\nfn f(xss: list[list[number]]) -> list[list[number]]\n  xss\n"), Vec::<&str>::new());
+    assert_eq!(check("module m v1\nrecord Inner\n  qty : number\nrecord Outer\n  inner : Inner?\nfn f(o: list[Outer] count <=3) -> number\n  1\n"), Vec::<&str>::new());
+    let t = TempDir::new("kaname-reach");
+    t.write("types.kn", "module types v1\nrecord Line\n  qty : number\n");
+    let o = check_in(&t, "module m v1\nuse module types from \"types.kn\"\nfn f(l: types.Line) -> number\n  1\n", common::joined());
+    assert_eq!(codes(&o), Vec::<&str>::new());
+    // a rate declares its step where it comes in and goes out: a parameter, an answer, a field
+    let o = common::check_text("t.kn", "module m v1\nfn f(r: rate) -> number\n  0\n");
+    assert_eq!(codes(&o), ["E108"]);
+    assert!(text(&o).contains("The parameter `r` of `f` declares no step of the rate (`rate[step 0.01%]`)"), "{}", text(&o));
     assert_eq!(check("module m v1\nfn f(r: rate[step 1%]) -> rate\n  r\n"), ["E108"]);
     assert_eq!(check("module m v1\nrecord R\n  share : rate\nfn f(r: rate[step 1%]) -> R\n  R { share: r }\n"), ["E108"]);
     // a rate with its step may leave its range out, as rulec's inputs may
     assert_eq!(check("module m v1\nfn f(r: rate[step 1%]) -> rate[step 1%]\n  r\n"), Vec::<&str>::new());
-    // through optionals, lists and records
-    assert_eq!(check("module m v1\nfn f(n: number?) -> number?\n  n\n"), ["E108"]);
-    assert_eq!(check("module m v1\nrecord Inner\n  qty : number\nrecord Outer\n  inner : Inner?\nfn f(o: list[Outer] count <=3) -> number\n  1\n"), ["E108"]);
-    // a record only answered with may leave its ranges out (DESIGN 3.9)
+    // a record only answered with leaves its ranges out as it did
     assert_eq!(
         check("module m v1\nrecord Claim\n  days : number\n  due  : date\nfn f(n: number range >=1 <=9, d: date range >=2026-01-01 <=2026-12-31) -> Claim\n  Claim { days: n, due: d }\n"),
         Vec::<&str>::new()
     );
-    // one diagnostic for a field, however many parameters reach it, at the field, naming the parameter
-    let o = common::check_text("t.kn", "module m v1\nrecord Line\n  qty : number\nfn f(a: Line, b: Line) -> number\n  1\n");
-    assert_eq!(codes(&o), ["E108"]);
-    assert_eq!(o.diags[0].line, Some(3));
-    assert!(text(&o).contains("The parameter `a` of `f` (line 4) reaches this field."), "{}", text(&o));
-    // the field of another module's record: said at the parameter, naming the field
-    let t = TempDir::new("kaname-reach");
-    t.write("types.kn", "module types v1\nrecord Line\n  qty : number\n");
-    let o = check_in(&t, "module m v1\nuse module types from \"types.kn\"\nfn f(l: types.Line) -> number\n  1\n", common::joined());
-    assert_eq!(codes(&o), ["E108"]);
-    assert_eq!(o.diags[0].line, Some(3));
-    assert!(text(&o).contains("types.kn:3."), "{}", text(&o));
 }
 
 #[test]
@@ -175,7 +235,10 @@ fn ranges_that_cannot_hold() {
     assert_eq!(check("module m v1\nfn f(n: number range >=1 >=2) -> number\n  n\n"), ["E108"]);
     assert_eq!(check("module m v1\nfn f(s: string range >=1) -> string\n  s\n"), ["E108"]);
     assert_eq!(check("module m v1\nfn f(n: number count <=3 range >=0 <=1) -> number\n  n\n"), ["E108"]);
-    assert_eq!(check("module m v1\nrecord Node\n  kids : list[Node] count <=3\n"), ["E108"]);
+    // a record that holds itself through a list that cannot be empty: no value of it can be made
+    // (DESIGN 28.1); one whose list may be empty can
+    assert_eq!(check("module m v1\nrecord Node\n  kids : list[Node] count >=1 <=3\n"), ["E108"]);
+    assert_eq!(check("module m v1\nrecord Node\n  kids : list[Node] count <=3\n"), Vec::<&str>::new());
     // an end that is not a value of the type
     assert_eq!(check("module m v1\nfn f(n: number range >=1USD <=2USD) -> number\n  n\n"), ["E102"]);
     assert_eq!(check("module m v1\nfn f(w: mass[g] range >=0g <=1lb) -> mass[g]\n  w\n"), ["E104"]);
@@ -201,4 +264,26 @@ fn the_ends_are_read_in_the_unit_of_the_place() {
     assert_eq!(range(2).min, Some(Rat::int(20_455)));
     assert_eq!(fields[3].slot.count, Some(Range { min: None, max: Some(Rat::int(3)) }));
     assert!(matches!(&fields[3].slot.ty, Ty::List(_)));
+}
+
+/// What is `private` (DESIGN 28.2): used in its own module, and from another module nowhere (E101,
+/// with a note that says it is `private`); what is not `private` of the same module is used.
+#[test]
+fn what_is_private_is_its_modules_alone() {
+    let t = TempDir::new("kaname-private");
+    t.write(
+        "pricing.kn",
+        "module pricing v1\n\nprivate record Bounds\n  low : number  range >=0 <=9\n\nprivate enum side = below | above\n\nprivate fn base(n: number range >=0 <=9) -> number\n  n + 1\n\nprivate fn side_of(b: Bounds) -> side\n  if b.low < 5 then side.below else side.above\n\nfn price(n: number range >=0 <=9) -> number\n  base(n: n)\n",
+    );
+    let o = check_in(&t, "module m v1\n\nuse module pricing from \"pricing.kn\"\n\nfn f(n: number range >=0 <=9) -> number\n  pricing.price(n: n)\n", common::joined());
+    assert!(o.diags.is_empty(), "{}", text(&o));
+    for body in [
+        "fn f(n: number range >=0 <=9) -> number\n  pricing.base(n: n)\n",
+        "fn f(b: pricing.Bounds) -> number\n  1\n",
+        "fn f(s: pricing.side) -> number\n  1\n",
+    ] {
+        let o = check_in(&t, &format!("module m v1\n\nuse module pricing from \"pricing.kn\"\n\n{body}"), common::joined());
+        assert_eq!(codes(&o), ["E101"], "{body}");
+        assert!(text(&o).contains("`private`"), "{}", text(&o));
+    }
 }

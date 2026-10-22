@@ -107,7 +107,7 @@ pub fn sh(links: &Path, dir: &Path, command: &str) -> String {
     let path = format!("{}:{}", links.display(), std::env::var("PATH").unwrap_or_default());
     let mut c = Command::new("sh");
     c.arg("-c").arg(format!("{command} 2>&1")).current_dir(dir).env("PATH", path);
-    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG"] {
+    for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
         c.env_remove(var);
     }
     String::from_utf8_lossy(&c.output().expect("could not run sh").stdout).into_owned()
@@ -344,6 +344,89 @@ pub fn code_from_files(pages: &[Page]) -> (usize, Vec<String>) {
         }
     }
     (seen, wrong)
+}
+
+// ---- the hosts of kaname's examples
+
+/// The words after the fence of a block that holds lines of a host of kaname's examples, and the
+/// extension of the host's file.
+pub const HOSTS: [(&str, &str); 3] = [("ts", "ts"), ("python", "py"), ("go", "go")];
+
+/// A host of one of kaname's examples (`crates/kaname/examples/<example>/host/main.<ext>`): a program
+/// that calls the package `ritsu gen` writes of the example, which ritsu's `tests/kaname.rs` runs.
+pub struct Host {
+    pub example: String,
+    pub ext: &'static str,
+    /// Its lines, as `trimmed` makes them.
+    pub lines: Vec<String>,
+    /// What the hosts of the example print, `host/output.txt`, as `lines_of` makes it.
+    pub prints: Vec<String>,
+}
+
+/// Every host of kaname's examples.
+pub fn kaname_hosts() -> Vec<Host> {
+    let examples = root().join("crates/kaname/examples");
+    let mut out = Vec::new();
+    for e in fs::read_dir(&examples).unwrap().flatten() {
+        let dir = e.path().join("host");
+        let Ok(prints) = fs::read_to_string(dir.join("output.txt")) else { continue };
+        for (_, ext) in HOSTS {
+            let text = fs::read_to_string(dir.join(format!("main.{ext}"))).unwrap_or_else(|e| panic!("{}/main.{ext}: {e}", dir.display()));
+            out.push(Host { example: e.file_name().to_string_lossy().into_owned(), ext, lines: trimmed(&text), prints: lines_of(&prints) });
+        }
+    }
+    out.sort_by(|a, b| (&a.example, a.ext).cmp(&(&b.example, b.ext)));
+    out
+}
+
+/// The lines of a block without the indentation they share (a block in a tab of the site is
+/// indented under it).
+fn dedented(lines: &[String]) -> String {
+    let indent = lines.iter().filter(|l| !l.trim().is_empty()).map(|l| l.len() - l.trim_start().len()).min().unwrap_or(0);
+    lines.iter().map(|l| l.get(indent..).unwrap_or("").to_string()).collect::<Vec<_>>().join("\n")
+}
+
+/// The blocks of a host on the pages (fenced `ts`, `python` or `go`) are the lines of a host of
+/// kaname's examples in that language, in order, a line `…` standing for any number of lines; and a
+/// ```text block is what the hosts in the blocks right before it print, the `host/output.txt` of
+/// their example. How many blocks of hosts there were, the hosts they show (an example and the
+/// extension of its host), and what is wrong.
+pub fn hosts_from_files(pages: &[Page]) -> (usize, std::collections::BTreeSet<(String, &'static str)>, Vec<String>) {
+    let hosts = kaname_hosts();
+    let mut wrong = Vec::new();
+    let mut shown = std::collections::BTreeSet::new();
+    let mut seen = 0;
+    for p in pages {
+        // the hosts each block of a row of blocks of hosts is lines of; a block that is no host's
+        // ends the row
+        let mut row: Vec<Vec<&Host>> = Vec::new();
+        for b in &p.blocks {
+            if let Some((_, ext)) = HOSTS.iter().find(|(info, _)| *info == b.info) {
+                seen += 1;
+                let lines = shown_lines(b);
+                let of: Vec<&Host> = hosts.iter().filter(|h| h.ext == *ext && lines_in_order(&lines, &h.lines)).collect();
+                if of.is_empty() {
+                    wrong.push(format!("{}:{}: a ```{} block that is the lines of no host of kaname's examples (crates/kaname/examples/*/host/main.{ext}), in order", p.name, b.at, b.info));
+                }
+                shown.extend(of.iter().map(|h| (h.example.clone(), h.ext)));
+                row.push(of);
+                continue;
+            }
+            if b.info == "text" {
+                // the examples every block of the row is a host of
+                let examples: Vec<&Host> = row.first().map(|first| first.iter().copied().filter(|h| row.iter().all(|of| of.iter().any(|o| o.example == h.example))).collect()).unwrap_or_default();
+                let said = lines_of(&dedented(&b.lines));
+                if row.is_empty() {
+                    wrong.push(format!("{}:{}: a ```text block after no block of a host: what does it show the output of?", p.name, b.at));
+                } else if !examples.iter().any(|h| h.prints == said) {
+                    let names: std::collections::BTreeSet<&str> = examples.iter().map(|h| h.example.as_str()).collect();
+                    wrong.push(format!("{}:{}: a ```text block that is not what the hosts above it print (the host/output.txt of {names:?})", p.name, b.at));
+                }
+            }
+            row.clear();
+        }
+    }
+    (seen, shown, wrong)
 }
 
 // ---- the links

@@ -21,7 +21,7 @@ theorem outside_none {d : Nat} {s : Slot} {reached : Bool} : s.outsideD d reache
 theorem outside_inRange {s : Slot} {r : Range} (hr : s.range? = some r) {reached : Bool} {v : Val}
     (h : s.outside reached v = false) : InRange r v := by
   intro p hp
-  obtain ⟨list, count, range, unit01, record, fields⟩ := s
+  obtain ⟨list, count, range, unit01, record, fields, values, keys, ref⟩ := s
   simp only [Slot.range?] at hr
   subst hr
   unfold Slot.outside at h
@@ -29,11 +29,13 @@ theorem outside_inRange {s : Slot} {r : Range} (hr : s.range? = some r) {reached
   have key : pointOut (rangeOf (some r) unit01 reached) v = false := by
     cases v with
     | num q =>
-      simp only [Slot.outsideD, elemsOf, List.any_cons, List.any_nil, Bool.or_false, Bool.or_eq_false_iff] at h
-      exact h.1
+      simp only [Slot.outsideD, keysOut, Bool.and_false, Bool.false_or, elemsOf, List.any_cons, List.any_nil,
+        Bool.or_false, Bool.or_eq_false_iff] at h
+      exact h.1.1
     | date d =>
-      simp only [Slot.outsideD, elemsOf, List.any_cons, List.any_nil, Bool.or_false, Bool.or_eq_false_iff] at h
-      exact h.1
+      simp only [Slot.outsideD, keysOut, Bool.and_false, Bool.false_or, elemsOf, List.any_cons, List.any_nil,
+        Bool.or_false, Bool.or_eq_false_iff] at h
+      exact h.1.1
     | _ => simp [Val.point] at hp
   simp only [pointOut, rangeOf, hp] at key
   unfold outRange at key
@@ -245,7 +247,12 @@ theorem call_case {C : Ctx} {res : List (Option Abs)} (hR : ResultsOK C res) {A 
         refine ⟨?_, callFold_sat args avs vals o A hall hsyms hS given hg hout⟩
         split
         · exact callFn_declared hfn0 hv
-        · have hsame := (foldl_inv (fun (b : Out × ACtx) => Grows o b.1 ∧ Same A b.2) (callStep fn0) callStep_ok
+        · rename_i hne
+          have htf : fn0.takesFn = false := by
+            cases h : fn0.takesFn
+            · rfl
+            · simp [h] at hne
+          have hsame := (foldl_inv (fun (b : Out × ACtx) => Grows o b.1 ∧ Same A b.2) (callStep fn0) callStep_ok
             (args.zip avs) (o, A) ⟨Grows.refl _, Same.refl _⟩).2
           rw [hsame.2.1]
           rcases hres : (A.results[f]?).join with _ | a
@@ -253,7 +260,7 @@ theorem call_case {C : Ctx} {res : List (Option Abs)} (hR : ResultsOK C res) {A 
           · have : res[f]? = some (some a) := by
               rw [← hG.2]; simpa [Option.join_eq_some_iff] using hres
             simp only [Option.getD_some]
-            exact hR f a this fn0 hfn0 _ _ _ _ (valid_place hout hhas) hv
+            exact hR f a this fn0 hfn0 htf _ _ _ _ (valid_place hout hhas) hv
       · simp [failK] at hps
   · intro k l hv hk
     rcases bind_err hv with hv | ⟨given, hg, hv⟩
@@ -558,7 +565,8 @@ theorem rule_case {C : Ctx} {res : List (Option Abs)} (hO : OracleOK C) {A : ACt
   have hrd : A.M.rules[r]? = some rd0 := by rw [hG.1]; exact hrd0
   simp only [ruleAbs, hrd]
   obtain ⟨hg1, hg2⟩ := fold_given (ruleStep rd0) ruleStep_grows args avs vals (o, A) hall
-  have hpre := grows_keep (preFold_grows (id := id) rd0.pres ((args.zip avs).foldl (ruleStep rd0) (o, A)).1) id
+  have hpre := grows_keepIf (preFold_grows (id := id) rd0.pres ((args.zip avs).foldl (ruleStep rd0) (o, A)).1)
+    ((args.zip avs).foldl (ruleStep rd0) (o, A)).2.lam id
     (callRels ((args.zip avs).foldl (ruleStep rd0) (o, A)).2 rd0 args)
   constructor
   · intro v hv
@@ -633,7 +641,7 @@ theorem rule_case {C : Ctx} {res : List (Option Abs)} (hO : OracleOK C) {A : ACt
                     simpa using this
                 obtain ⟨outs, ho⟩ := hO.ruleAnswers r rd0 _ hrd0 hp (by simp [place]) hd' hnr
                 rw [ho] at hnone; simp at hnone
-            · exact Wit.grow (preFold_wit rd0.pres _ hp) (grows_keep (Grows.refl _) _ _)
+            · exact Wit.grow (preFold_wit rd0.pres _ hp) (grows_keepIf (Grows.refl _) _ _ _)
           · rename_i outs hout
             split at hv
             · have := failK_err hv; subst this; simp [Kind.ofEffect] at hk
@@ -1216,18 +1224,16 @@ theorem initFold {C : Ctx} {ρ : Env} :
   | (k, x, c, line) :: rest, a :: as, [], g0, o, gv0, hall, _, _ => by simp [AllMem] at hall
 
 theorem outside_noRange {s : Slot} (h1 : s.range? = none) (h2 : s.count? = none) {v : Val} : s.outside false v = false := by
-  obtain ⟨list, count, range, unit01, record, fields⟩ := s
+  obtain ⟨list, count, range, unit01, record, fields, values, keys, ref⟩ := s
   simp only [Slot.range?, Slot.count?] at h1 h2
   subst h1 h2
   unfold Slot.outside
   rw [show D = 999 + 1 from rfl]
-  simp only [Slot.outsideD]
+  simp only [Slot.outsideD, Bool.false_and, Bool.false_or]
   split
   · rfl
   · have he : ∃ xs, elemsOf list none v = some xs := by
-      unfold elemsOf; split
-      · exact ⟨_, rfl⟩
-      · exact ⟨_, rfl⟩
+      unfold elemsOf; split <;> exact ⟨_, rfl⟩
     obtain ⟨xs, hxs⟩ := he
     rw [hxs]
     simp only
@@ -1235,7 +1241,8 @@ theorem outside_noRange {s : Slot} (h1 : s.range? = none) (h2 : s.count? = none)
     intro x _
     split
     · simp
-    · simp [pointOut, rangeOf]
+    · simp [pointOut, rangeOf, strOut]
+      cases x <;> simp
 
 theorem fold_step {α β : Type} (out : β → Out) (f : β → α → β) (hf : ∀ b a, Grows (out b) (out (f b a))) :
     ∀ (L : List α) (b : β) (a : α), a ∈ L → ∃ b', Grows (out (f b' a)) (out (L.foldl f b))
@@ -1248,9 +1255,10 @@ theorem fold_step {α β : Type} (out : β → Out) (f : β → α → β) (hf :
     · exact ⟨b, hg _⟩
     · exact fold_step out f hf L (f b x) a h
 
-theorem fieldFold_out {module : Bool} {given : List (Nat × Abs × Expr × Option Conv)} :
+theorem fieldFold_out {module : Bool} {given : List (Nat × Abs × Expr × Option Conv)} {src : Option (Abs × Nat)} :
     ∀ (L : List ((String × Slot × Bool) × Nat)) (acc : List (String × Abs) × Out × ACtx),
-      (L.foldl (fieldStep module given) acc).1 = acc.1 ++ L.map (fun e => (e.1.1, fieldAbs module e.1.2.1 given e.2))
+      (L.foldl (fieldStep module given src) acc).1 =
+        acc.1 ++ L.map (fun e => (e.1.1, fieldAbs module e.1.2.1 given src e.1.1 e.2))
   | [], acc => by simp
   | e :: L, acc => by
     simp only [List.foldl_cons, List.map_cons]
@@ -1259,8 +1267,8 @@ theorem fieldFold_out {module : Bool} {given : List (Nat × Abs × Expr × Optio
     obtain ⟨⟨f, slot, sc⟩, k⟩ := e
     simp only [fieldStep, List.append_assoc, List.singleton_append]
 
-theorem fieldStep_grows {module : Bool} {given : List (Nat × Abs × Expr × Option Conv)} :
-    ∀ (acc : List (String × Abs) × Out × ACtx) fk, Grows acc.2.1 (fieldStep module given acc fk).2.1 :=
+theorem fieldStep_grows {module : Bool} {given : List (Nat × Abs × Expr × Option Conv)} {src : Option (Abs × Nat)} :
+    ∀ (acc : List (String × Abs) × Out × ACtx) fk, Grows acc.2.1 (fieldStep module given src acc fk).2.1 :=
   fun acc fk => (fieldStep_ok (o₀ := acc.2.1) (A₀ := acc.2.2) acc fk ⟨Grows.refl _, Same.refl _⟩).1
 
 /-- The first field of a name in two lists made from the same fields. -/
@@ -1293,14 +1301,40 @@ theorem Mem_cutTo {a : Abs} {v : Val} {r : Option Range} {module : Bool} (hm : M
       obtain ⟨b1, b2⟩ := hr r' rfl rfl q rfl
       exact Mem.date (In_cut hq b1 b2)
 
-/-- **A record built.** -/
+/-- A field of a name in one of two lists made from the same fields, where it is in the other. -/
+theorem fieldOf_map_isSome {α : Type} {L : List α} {key : α → String} {g1 : α → Abs} {g2 : α → Val} {n : String}
+    {x : Val} (hx : fieldV (L.map fun e => (key e, g2 e)) n = some x) :
+    (Abs.fieldOf (L.map fun e => (key e, g1 e)) n).isSome = true := by
+  induction L with
+  | nil => simp [fieldV] at hx
+  | cons e L ih =>
+    by_cases hk : key e = n
+    · simp [Abs.fieldOf, hk]
+    · have h1 : (key e == n) = false := by simp [hk]
+      simp only [Abs.fieldOf, fieldV, List.map_cons, List.find?, h1] at hx ⊢
+      exact ih hx
+
+/-- What the value a record is made from gives: where the record is made from one (`..x`), the
+    evaluation's value of it is among what the analysis says it is. -/
+def SrcOK : Option (Abs × Nat) → Option Val → Prop
+  | some (fa, _), some w => Mem fa w
+  | none, none => True
+  | _, _ => False
+
+theorem find_none_reverse {α : Type} {l : List α} {p : α → Bool} (h : l.reverse.find? p = none) : l.find? p = none := by
+  rw [List.find?_eq_none] at h ⊢
+  intro x hx; exact h x (List.mem_reverse.mpr hx)
+
+/-- **A record built**, or a value of an enum, from the values of its fields as written and the
+    value it is made from. -/
 theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {module : Bool}
     {fields : List (String × Slot × Bool)} {inits : List (Nat × Expr × Option Conv × Nat)} {avs : List Abs}
-    {vals : List Val} (hS : Sat A ρ) (hall : AllMem avs vals) (hsyms : ArgSyms ρ (inits.map (·.2.1)) vals) :
-    (∀ v, (convInits inits vals >>= fun given => recordVal line module fields given) = .ok v →
-      Mem (recordAbs A o module fields inits avs).1 v ∧ Sat (recordAbs A o module fields inits avs).2.2 ρ) ∧
-    (∀ k l, (convInits inits vals >>= fun given => recordVal line module fields given) = .error (.failed k l) →
-      k.ofEffect = true → Wit C (recordAbs A o module fields inits avs).2.1) := by
+    {vals : List Val} {tag : Option String} {src : Option (Abs × Nat)} {srcV : Option Val}
+    (hS : Sat A ρ) (hall : AllMem avs vals) (hsyms : ArgSyms ρ (inits.map (·.2.1)) vals) (hsrc : SrcOK src srcV) :
+    (∀ v, (convInits inits vals >>= fun given => recordVal line module fields given srcV tag) = .ok v →
+      Mem (recordAbs A o module fields inits avs tag src).1 v ∧ Sat (recordAbs A o module fields inits avs tag src).2.2 ρ) ∧
+    (∀ k l, (convInits inits vals >>= fun given => recordVal line module fields given srcV tag) = .error (.failed k l) →
+      k.ofEffect = true → Wit C (recordAbs A o module fields inits avs tag src).2.1) := by
   simp only [recordAbs]
   obtain ⟨hgi, hgi1, hgi2⟩ := initFold (C := C) inits avs vals [] o [] hall hsyms trivial
   generalize ((inits.zip avs).foldl initStep ([], o)) = GI at hgi hgi1 hgi2 ⊢
@@ -1310,10 +1344,10 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
   generalize hL : fields.zipIdx = L
   have hF : fields = L.map Prod.fst := by rw [← hL, List.zipIdx_map_fst]
   -- the fold over the fields: what it keeps, and the places it makes
-  have hgf : ∀ (acc : List (String × Abs) × Out × ACtx), Grows acc.2.1 (L.foldl (fieldStep module gA) acc).2.1 :=
-    fun acc => foldl_inv (fun b => Grows acc.2.1 b.2.1) (fieldStep module gA)
+  have hgf : ∀ (acc : List (String × Abs) × Out × ACtx), Grows acc.2.1 (L.foldl (fieldStep module gA src) acc).2.1 :=
+    fun acc => foldl_inv (fun b => Grows acc.2.1 b.2.1) (fieldStep module gA src)
       (fun b a h => h.trans (fieldStep_grows b a)) L acc (Grows.refl _)
-  have hout := fieldFold_out (module := module) (given := gA) L ([], oI, A)
+  have hout := fieldFold_out (module := module) (given := gA) (src := src) L ([], oI, A)
   simp only [List.nil_append] at hout
   -- the value of each field, as the evaluation and the analysis read it
   have hval : ∀ given, RecAlign ρ gA given → ∀ k,
@@ -1322,19 +1356,56 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
         Mem a v ∧ (c = none → ∀ s, sym x = some s → symVal ρ s = some v) := by
     intro given hal k
     exact (RecAlign.reverse hal).find
+  -- a field not written: the field of the value it is made from, where there is one
+  have hbase : ∀ given, baseMissing fields given srcV = false → ∀ e ∈ L, given.reverse.find? (·.1 == e.2) = none →
+      (src = none ∧ srcV = none) ∨
+        ∃ fa b w x, src = some (fa, b) ∧ srcV = some w ∧ w.field? e.1.1 = some x ∧ Mem (fa.field e.1.1) x := by
+    intro given hbm e he hnw
+    cases src with
+    | none =>
+      cases srcV with
+      | none => exact Or.inl ⟨rfl, rfl⟩
+      | some _ => exact absurd hsrc (by simp [SrcOK])
+    | some fb =>
+      obtain ⟨fa, b⟩ := fb
+      cases srcV with
+      | none => exact absurd hsrc (by simp [SrcOK])
+      | some w =>
+        simp only [SrcOK] at hsrc
+        have hnw' := find_none_reverse hnw
+        unfold baseMissing at hbm
+        rw [hL] at hbm
+        have := (List.any_eq_false.mp hbm) e he
+        simp only [hnw', Option.isNone_none, Bool.true_and, Bool.not_eq_true] at this
+        rcases hx : w.field? e.1.1 with _ | x
+        · rw [hx] at this; simp at this
+        · exact Or.inr ⟨fa, b, w, x, rfl, rfl, hx, Mem_field hsrc hx⟩
   -- every field's place for a value given that is outside what the field declares
-  have hwit : ∀ given, RecAlign ρ gA given → ∀ e ∈ L, ∀ v, ((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD .none = v →
-      module = true → e.1.2.1.outside false v = true → Wit C (L.foldl (fieldStep module gA) ([], oI, A)).2.1 := by
-    intro given hal e he v hv hmod hout'
+  have hwit : ∀ given, RecAlign ρ gA given → baseMissing fields given srcV = false → ∀ e ∈ L, ∀ v,
+      ((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD ((srcV.bind (·.field? e.1.1)).getD .none) = v →
+      module = true → e.1.2.1.outside false v = true → Wit C (L.foldl (fieldStep module gA src) ([], oI, A)).2.1 := by
+    intro given hal hbm e he v hv hmod hout'
     obtain ⟨⟨f, slot, sc⟩, k⟩ := e
     simp only at hv hout'
-    obtain ⟨acc', hacc'⟩ := fold_step (fun b : List (String × Abs) × Out × ACtx => b.2.1) (fieldStep module gA)
+    obtain ⟨acc', hacc'⟩ := fold_step (fun b : List (String × Abs) × Out × ACtx => b.2.1) (fieldStep module gA src)
       fieldStep_grows L ([], oI, A) _ he
     refine Wit.grow ?_ hacc'
     rcases hval given hal k with ⟨h1, h2⟩ | ⟨a, x, c, w, l, h1, h2, hm, _⟩
-    · rw [h2] at hv; simp at hv; subst hv
-      unfold Slot.outside at hout'
-      rw [outside_none] at hout'; simp at hout'
+    · rw [h2] at hv; simp only [Option.map_none, Option.getD_none] at hv
+      rcases hbase given hbm _ he h2 with ⟨hs1, hs2⟩ | ⟨fa, b, w, x, hs1, hs2, hx, hmx⟩
+      · subst hs2; simp at hv; subst hv
+        unfold Slot.outside at hout'
+        rw [outside_none] at hout'; simp at hout'
+      · subst hs1; subst hs2
+        simp only [Option.bind_some, hx, Option.getD_some] at hv
+        subst hv
+        obtain ⟨out', o', A'⟩ := acc'
+        simp only [fieldStep, h1, hmod, Bool.true_and]
+        split
+        · exact wit_place hmx hout'
+        · rename_i hno
+          simp only [Bool.or_eq_true, Option.isSome_iff_ne_none, not_or, ne_eq, Decidable.not_not] at hno
+          rw [outside_noRange hno.1 hno.2] at hout'; simp at hout'
     · rw [h2] at hv; simp at hv; subst hv
       obtain ⟨out', o', A'⟩ := acc'
       simp only [fieldStep, h1, hmod, Bool.true_and]
@@ -1345,9 +1416,10 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
         rw [outside_noRange hno.1 hno.2] at hout'; simp at hout'
   -- the scope after the fields: each name keeps the range of its field
   have hsat : ∀ given, RecAlign ρ gA given →
-      (∀ e ∈ L, module = true → e.1.2.1.outside false (((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD .none) = false) →
+      (∀ e ∈ L, module = true → e.1.2.1.outside false
+        (((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD ((srcV.bind (·.field? e.1.1)).getD .none)) = false) →
       ∀ (L' : List ((String × Slot × Bool) × Nat)) (acc : List (String × Abs) × Out × ACtx), (∀ e ∈ L', e ∈ L) →
-        Sat acc.2.2 ρ → Sat (L'.foldl (fieldStep module gA) acc).2.2 ρ := by
+        Sat acc.2.2 ρ → Sat (L'.foldl (fieldStep module gA src) acc).2.2 ρ := by
     intro given hal hok L'
     induction L' with
     | nil => intro acc _ h; exact h
@@ -1379,7 +1451,7 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
             · exact hS'
           · exact hS'
         · exact hS'
-      · exact hS'
+      · split <;> exact hS'
   -- the record the evaluation builds, field by field
   have hlist : ∀ (g1 : (String × Slot × Bool) × Nat → Val) (g2 : (String × Slot × Bool) × Nat → Nat),
       (fields.zip (L.map g1)).zip (L.map g2) = L.map (fun e => ((e.1, g1 e), g2 e)) := by
@@ -1394,26 +1466,29 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
     obtain ⟨given, hg, hv⟩ := bind_ok hv
     have hal := hgi1 given hg
     simp only [List.nil_append] at hal
+    unfold recordVal at hv
+    split at hv
+    · simp [failK] at hv
+    rename_i hbm
+    simp only [Bool.not_eq_true] at hbm
     -- every field keeps what it declares, where the record is a module's
-    have hok : ∀ e ∈ L, module = true →
-        e.1.2.1.outside false (((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD .none) = false := by
+    have hok : ∀ e ∈ L, module = true → e.1.2.1.outside false
+        (((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD ((srcV.bind (·.field? e.1.1)).getD .none)) = false := by
       intro e he hmod
       subst hmod
-      unfold recordVal at hv
-      cases hol : outsideLine ((fields.zip (recordVals fields given)).zip (recordLines line fields given)) with
+      cases hol : outsideLine ((fields.zip (recordVals fields given srcV)).zip (recordLines line fields given)) with
       | some l => rw [hol] at hv; simp [failK] at hv
       | none =>
         unfold outsideLine at hol
         simp only [Option.map_eq_none_iff] at hol
         rw [List.find?_eq_none] at hol
-        have hmem : ((e.1, ((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD .none),
+        have hmem : ((e.1, ((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD ((srcV.bind (·.field? e.1.1)).getD .none)),
             ((given.reverse.find? (·.1 == e.2)).map (·.2.2)).getD line) ∈
-            (fields.zip (recordVals fields given)).zip (recordLines line fields given) := by
+            (fields.zip (recordVals fields given srcV)).zip (recordLines line fields given) := by
           unfold recordVals recordLines; rw [hL, hlist]; exact List.mem_map_of_mem he
         have := hol _ hmem
         simpa using this
-    have hv' : v = .record ((fields.map (·.1)).zip (recordVals fields given)) := by
-      unfold recordVal at hv
+    have hv' : v = built tag ((fields.map (·.1)).zip (recordVals fields given srcV)) := by
       split at hv
       · simp [failK] at hv
       · cases hv; rfl
@@ -1422,30 +1497,58 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
     rw [hout]
     unfold recordVals
     rw [hL, hnames]
-    refine Mem.record ?_ (fun _ _ _ h => by simp at h)
-    intro n x hx b hb
-    obtain ⟨e, he, rfl, rfl⟩ := find_map_pair hb hx
-    obtain ⟨⟨f, slot, sc⟩, k⟩ := e
-    simp only
-    rcases hval given hal k with ⟨h1, h2⟩ | ⟨a, x, c, w, l, h1, h2, hm, _⟩
-    · simp only [fieldAbs, h1, h2, Option.map_none, Option.getD_none]; exact Mem_none'
-    · simp only [fieldAbs, h1, h2, Option.map_some, Option.getD_some]
-      refine Mem_cutTo hm ?_
-      intro r hr hmod
-      exact outside_inRange hr (by have := hok _ he hmod; simpa [h2] using this)
+    -- each field of the value among what the analysis says of it
+    have hfield : ∀ n x b, fieldV (L.map fun e => (e.1.1, ((given.reverse.find? (·.1 == e.2)).map (·.2.1)).getD
+          ((srcV.bind (·.field? e.1.1)).getD .none))) n = some x →
+        Abs.fieldOf (L.map fun e => (e.1.1, fieldAbs module e.1.2.1 gA src e.1.1 e.2)) n = some b → Mem b x := by
+      intro n x b hx hb
+      obtain ⟨e, he, rfl, rfl⟩ := find_map_pair hb hx
+      obtain ⟨⟨f, slot, sc⟩, k⟩ := e
+      simp only
+      rcases hval given hal k with ⟨h1, h2⟩ | ⟨a, x, c, w, l, h1, h2, hm, _⟩
+      · rcases hbase given hbm _ he h2 with ⟨hs1, hs2⟩ | ⟨fa, b', w, x', hs1, hs2, hfx, hmx⟩
+        · subst hs1; subst hs2
+          simp only [fieldAbs, h1, h2, Option.map_none, Option.getD_none, Option.bind_none]; exact Mem_none'
+        · subst hs1; subst hs2
+          simp only at hfx hmx
+          simp only [fieldAbs, h1, h2, Option.map_none, Option.getD_none, Option.bind_some]
+          rw [hfx, Option.getD_some]
+          refine Mem_cutTo hmx ?_
+          intro r hr hmod
+          exact outside_inRange hr (by have := hok _ he hmod; simpa [h2, hfx] using this)
+      · simp only [fieldAbs, h1, h2, Option.map_some, Option.getD_some]
+        refine Mem_cutTo hm ?_
+        intro r hr hmod
+        exact outside_inRange hr (by have := hok _ he hmod; simpa [h2] using this)
+    cases tag with
+    | none =>
+      simp only [built]
+      exact Mem.record (fun n x hx b hb => hfield n x b hx hb) (fun _ _ _ h => by simp at h)
+    | some t =>
+      simp only [built]
+      split
+      · exact Mem.variantEnum (by simp [Abs.recOf])
+      · rename_i hne
+        refine Mem.variant (by simp [Abs.recOf]) (by simpa using hne) (fun n x hx => fieldOf_map_isSome hx)
+          (fun n x hx b hb => hfield n x b hx hb)
   · intro k l hv hk
     rcases bind_err hv with hv | ⟨given, hg, hv⟩
     · exact Wit.grow (hgi2 _ hv).2 (hgf ([], oI, A))
     · have hal := hgi1 given hg
       simp only [List.nil_append] at hal
       unfold recordVal at hv
+      split at hv
+      · simp only [failK, Except.error.injEq, Stop.failed.injEq] at hv
+        rw [← hv.1] at hk; simp [Kind.ofEffect] at hk
+      rename_i hbm
+      simp only [Bool.not_eq_true] at hbm
       cases hmod : module
       · rw [hmod] at hv; simp at hv
-      · cases hol : outsideLine ((fields.zip (recordVals fields given)).zip (recordLines line fields given)) with
+      · cases hol : outsideLine ((fields.zip (recordVals fields given srcV)).zip (recordLines line fields given)) with
         | none => rw [hmod, hol] at hv; simp at hv
         | some l' =>
           unfold outsideLine at hol
-          rcases hfind : ((fields.zip (recordVals fields given)).zip (recordLines line fields given)).find?
+          rcases hfind : ((fields.zip (recordVals fields given srcV)).zip (recordLines line fields given)).find?
               (fun (((_, s, _), v), _) => s.outside false v) with _ | ⟨⟨fsv, v⟩, ln⟩ <;> rw [hfind] at hol <;> simp at hol
           have hpred := List.find?_some hfind
           have hmem := List.mem_of_find?_eq_some hfind
@@ -1454,7 +1557,7 @@ theorem record_case {C : Ctx} {A : ACtx} {o : Out} {ρ : Env} {line : Nat} {modu
           obtain ⟨e, he, heq⟩ := List.mem_map.mp hmem
           simp only [Prod.mk.injEq] at heq
           obtain ⟨⟨rfl, rfl⟩, rfl⟩ := heq
-          have := hwit given hal e he _ rfl hmod (by simpa using hpred)
+          have := hwit given hal hbm e he _ rfl hmod (by simpa using hpred)
           rw [hmod] at this; exact this
 
 end KanameCore

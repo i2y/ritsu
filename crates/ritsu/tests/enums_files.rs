@@ -2,8 +2,9 @@
 //! rulec's port answers only what is generated: no Connect service for it (rulec's DESIGN 15.258).
 //! Every language that reads the port stops a file that calls an `enums` file as a rule or reads an
 //! output of it, with its own diagnostic: dandori's call of it, however `use rule` says to call it
-//! (E005), a gate's and a module's output of it (E101). A workflow that uses its enums as types
-//! alone passes. sakai's published language is E302 (sakai's own mutants).
+//! (E005), a gate's output of it (E101), kaname's call of it (E201, kaname's DESIGN 2.7). A
+//! workflow that uses its enums as types alone passes, and so does a module that reads it for its
+//! enums alone. sakai's published language is E302 (sakai's own mutants).
 //!
 //! The materials are `tests/projects/regions`, English first, the Japanese versions beside them.
 
@@ -87,10 +88,11 @@ fn a_workflow_uses_the_enums_of_an_enums_file_as_types() {
     }
 }
 
-/// A gate and a module read an output of an `enums` file as if it were a rule's: it has none, and
-/// sekisho and kaname stop at E101.
+/// A gate reads an output of an `enums` file as if it were a rule's: it has none, and sekisho stops at
+/// E101. A module calls one as a rule: kaname stops the call (E201), for nothing to call is generated
+/// from it; a module that writes its enum as a type passes.
 #[test]
-fn a_gate_and_a_module_find_no_output_in_an_enums_file() {
+fn a_gate_finds_no_output_in_an_enums_file_and_a_module_cannot_call_one() {
     for (gate, name, output) in [("region.gate", "regions", "region"), ("region.ja.gate", "地域", "地域")] {
         let (code, out) = ritsu_in(&project(), &["sekisho", "check", gate]);
         assert_eq!(code, 1, "{gate}: {out}");
@@ -98,12 +100,19 @@ fn a_gate_and_a_module_find_no_output_in_an_enums_file() {
         assert!(out.contains("  = No outputs are declared."), "{gate}: {out}");
         assert_eq!(out.matches("error[").count(), 1, "{gate}: {out}");
     }
-    for (module, name, field) in [("region.kn", "regions", "region"), ("region.ja.kn", "地域", "地域")] {
+    for (module, rule) in [("region.kn", "regions"), ("region.ja.kn", "地域")] {
         let (code, out) = ritsu_in(&project(), &["kaname", "check", module]);
         assert_eq!(code, 1, "{module}: {out}");
-        assert!(out.contains(&format!("error[E101]: {module}:7:")) && out.contains(&format!("There is no field `{field}` in {name}.outputs")), "{module}: {out}");
-        // and the enum's value the module compares with, which no rule it reads has
-        let codes: Vec<&str> = out.lines().filter_map(|l| l.strip_prefix("error[")).filter_map(|l| l.split(']').next()).collect();
-        assert!(!codes.is_empty() && codes.iter().all(|c| *c == "E101"), "{module}: {out}");
+        assert!(out.starts_with(&format!("error[E201]: {module}:7:3: The rule `{rule}` has no outputs, and is not called\n")), "{module}: {out}");
+        assert!(out.contains("  = Nothing to call is generated from a rule with no outputs (an `enums` file)."), "{module}: {out}");
+        assert_eq!(out.matches("error[").count(), 1, "{module}: {out}");
+        let (code, ja) = ritsu_in(&project(), &["kaname", "check", module, "--lang", "ja"]);
+        assert_eq!(code, 1, "{module}: {ja}");
+        assert!(ja.contains(&format!("エラー[E201]: {module}:7:3: 規則 `{rule}` には出力が無いので、呼べません\n")), "{module}: {ja}");
+    }
+    for module in ["region_kinds.kn", "region_kinds.ja.kn"] {
+        let (code, out) = ritsu_in(&project(), &["kaname", "check", module]);
+        assert_eq!(code, 0, "{module}: {out}");
+        assert_eq!(out, format!("ok {module}: 2 functions, total\n"), "{module}");
     }
 }

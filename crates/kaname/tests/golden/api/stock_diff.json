@@ -1,0 +1,400 @@
+{
+  "kaname": "<version>",
+  "file": "stock_diff.kn",
+  "module": {
+    "name": "stock_diff",
+    "alias": "stock_diff",
+    "version": "v1",
+    "description": "Two counts of a stockroom compared, code by code: what was added, what went and what changed, the moves of a day netted for each code and laid on a count, and the codes to reorder; a count is a dict from a code to how many are on the shelf, and the codes of two counts a set",
+    "sha256": "5f00de5a9ca9066b93758e317693f3ea6908e8716b49d0655a98dbbaece902db"
+  },
+  "generated": {
+    "typescript": "glue/stock_diff.ts",
+    "python": "glue/stock_diff.py",
+    "go": "glue/stockdiff/stockdiff.go"
+  },
+  "uses": [],
+  "enums": [
+    {
+      "name": "Change",
+      "alias": "Change",
+      "ordered": false,
+      "values": [
+        {
+          "name": "added",
+          "alias": "added",
+          "label": null,
+          "fields": [
+            {
+              "name": "sku",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 10
+            },
+            {
+              "name": "qty",
+              "alias": "qty",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 11
+            }
+          ],
+          "generated": {
+            "typescript": "ChangeAdded",
+            "python": "ChangeAdded",
+            "go": "ChangeAdded"
+          }
+        },
+        {
+          "name": "removed",
+          "alias": "removed",
+          "label": null,
+          "fields": [
+            {
+              "name": "sku",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 13
+            },
+            {
+              "name": "qty",
+              "alias": "qty",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 14
+            }
+          ],
+          "generated": {
+            "typescript": "ChangeRemoved",
+            "python": "ChangeRemoved",
+            "go": "ChangeRemoved"
+          }
+        },
+        {
+          "name": "changed",
+          "alias": "changed",
+          "label": null,
+          "fields": [
+            {
+              "name": "sku",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 16
+            },
+            {
+              "name": "was",
+              "alias": "was",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 17
+            },
+            {
+              "name": "now",
+              "alias": "now",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 18
+            }
+          ],
+          "generated": {
+            "typescript": "ChangeChanged",
+            "python": "ChangeChanged",
+            "go": "ChangeChanged"
+          }
+        }
+      ],
+      "line": 8,
+      "generated": {
+        "typescript": "Change",
+        "python": "Change",
+        "go": "Change"
+      }
+    }
+  ],
+  "records": [
+    {
+      "name": "Move",
+      "alias": "Move",
+      "fields": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": ">=1 <=20",
+          "line": 5
+        },
+        {
+          "name": "qty",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=-10000 <=10000",
+          "count": null,
+          "line": 6
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Move",
+        "python": "Move",
+        "go": "Move"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "change",
+      "alias": "change",
+      "line": 21,
+      "description": null,
+      "params": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "before",
+          "alias": "before",
+          "type": "number?",
+          "range": ">=0 <=1000000",
+          "count": null
+        },
+        {
+          "name": "after",
+          "alias": "after",
+          "type": "number?",
+          "range": ">=0 <=1000000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Change?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "change",
+        "python": "change",
+        "go": "ChangeFn"
+      }
+    },
+    {
+      "name": "changes",
+      "alias": "changes",
+      "line": 33,
+      "description": null,
+      "params": [
+        {
+          "name": "before",
+          "alias": "before",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": null
+        },
+        {
+          "name": "after",
+          "alias": "after",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[Change]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 35,
+          "function": "change"
+        }
+      ],
+      "generated": {
+        "typescript": "changes",
+        "python": "changes",
+        "go": "Changes"
+      }
+    },
+    {
+      "name": "net",
+      "alias": "net",
+      "line": 38,
+      "description": null,
+      "params": [
+        {
+          "name": "moves",
+          "alias": "moves",
+          "type": "list[Move]",
+          "range": null,
+          "count": "<=1000"
+        }
+      ],
+      "result": {
+        "type": "dict[string, number]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "net",
+        "python": "net",
+        "go": "Net"
+      }
+    },
+    {
+      "name": "moved",
+      "alias": "moved",
+      "line": 42,
+      "description": null,
+      "params": [
+        {
+          "name": "stock",
+          "alias": "stock",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": "<=10000"
+        },
+        {
+          "name": "moves",
+          "alias": "moves",
+          "type": "list[Move]",
+          "range": null,
+          "count": "<=1000"
+        }
+      ],
+      "result": {
+        "type": "dict[string, number]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 43,
+          "function": "net"
+        }
+      ],
+      "generated": {
+        "typescript": "moved",
+        "python": "moved",
+        "go": "Moved"
+      }
+    },
+    {
+      "name": "to_reorder",
+      "alias": "to_reorder",
+      "line": 46,
+      "description": null,
+      "params": [
+        {
+          "name": "stock",
+          "alias": "stock",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": null
+        },
+        {
+          "name": "floor",
+          "alias": "floor",
+          "type": "number",
+          "range": ">=0 <=1000000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "set[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "to_reorder",
+        "python": "to_reorder",
+        "go": "ToReorder"
+      }
+    },
+    {
+      "name": "units",
+      "alias": "units",
+      "line": 50,
+      "description": null,
+      "params": [
+        {
+          "name": "stock",
+          "alias": "stock",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": "<=10000"
+        }
+      ],
+      "result": {
+        "type": "number",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "units",
+        "python": "units",
+        "go": "Units"
+      }
+    }
+  ],
+  "transfers": []
+}

@@ -113,10 +113,29 @@ fn materials(tmp: &TempDir) -> Vec<(String, PathBuf)> {
 /// exactly, a call of a function that goes round from another ring, a `reduce` whose running value
 /// settles on its third round, a difference of two names known to be equal), `bounds` the places
 /// where `ranges.rs` once was not an estimate from above, `lift` (English and Japanese) a rule's
-/// input of an enum held to a range over its values, and `temps` (English and Japanese) temperatures
-/// read in the other unit with that unit's zero (kaname's DESIGN 3.10). `calls` is left out: it calls
-/// the functions of another module, and the model reads one module (kaname's DESIGN 15.4).
-const EXAMPLES: [&str; 8] = [
+/// input of an enum held to a range over its values, `open` (English and Japanese) values whose
+/// ranges are not written, each the whole of its type (kaname's DESIGN 22), `sums` (English and
+/// Japanese) the values of enums that have fields, the `match`es that name them, `else` and literals,
+/// records made from another and values compared whole (kaname's DESIGN 23), `temps` (English and
+/// Japanese) temperatures read in the other unit with that unit's zero, and constants below zero of
+/// every unit (kaname's DESIGN 3.10), `dicts` and `lists2` (English and Japanese) dicts, sets and
+/// the builtins of lists, written after a value (kaname's DESIGN 24), and `texts` (English and
+/// Japanese) strings as their code points, counted, cut, found, read and compared (kaname's DESIGN
+/// 25), `generic` and `results` (English and Japanese) generic functions, records and enums read
+/// again where they are called, results, and `try` (kaname's DESIGN 26), `glib`, the generic
+/// functions `gcalls` calls, and `hof` (English and Japanese) functions that take functions,
+/// lambdas made values and called, and what is `private` (kaname's DESIGN 27, 28.2). `calls` and
+/// `gcalls` are left out: they call the functions of another module, and the model reads one module
+/// (kaname's DESIGN 15.4).
+const EXAMPLES: [&str; 16] = [
+    "examples/order_flow/order_flow.kn",
+    "examples/order_flow/order_flow.ja.kn",
+    "examples/stock_diff/stock_diff.kn",
+    "examples/stock_diff/stock_diff.ja.kn",
+    "examples/handles/handles.kn",
+    "examples/handles/handles.ja.kn",
+    "examples/catalog/catalog.kn",
+    "examples/catalog/catalog.ja.kn",
     "examples/payout/payout.kn",
     "examples/payout/payout.ja.kn",
     "examples/late_payment/late_payment.kn",
@@ -126,7 +145,10 @@ const EXAMPLES: [&str; 8] = [
     "examples/discount_split/discount_split.kn",
     "examples/discount_split/discount_split.ja.kn",
 ];
-const MODULES: [&str; 15] = ["calc", "places", "lists", "inner", "rec", "ranges", "walks", "names", "lib", "corners", "bounds", "lift", "lift.ja", "temps", "temps.ja"];
+const MODULES: [&str; 34] = [
+    "calc", "places", "lists", "inner", "rec", "ranges", "walks", "names", "lib", "corners", "bounds", "lift", "lift.ja", "open", "open.ja", "sums", "sums.ja", "temps", "temps.ja", "dicts",
+    "dicts.ja", "lists2", "lists2.ja", "texts", "texts.ja", "generic", "generic.ja", "results", "results.ja", "glib", "hof", "hof.ja", "trees", "trees.ja",
+];
 
 // ── Types, as kaname's analysis reads them ──────────────────────────────────
 
@@ -170,9 +192,10 @@ fn factor_of(from: &Ty, to: &Ty) -> Option<(Rat, Rat)> {
     }
 }
 
-/// The type two numbers are read in to be compared: the one that is not a constant, else the first.
+/// The type two numbers are read in to be compared: the one that is not a constant, else the first;
+/// through the lists and the optionals that hold them (`interp::common`).
 fn common<'t>(a: &'t Ty, b: &'t Ty) -> &'t Ty {
-    match (a, b) {
+    match (strip(a), strip(b)) {
         (Ty::Num(x), Ty::Num(y)) if x.konst.is_some() && y.konst.is_none() => b,
         _ => a,
     }
@@ -216,7 +239,7 @@ fn abs(a: &Abs) -> J {
     match a {
         Abs::Never => json!("never"),
         Abs::Any => json!("any"),
-        Abs::Str => json!("str"),
+        Abs::Str(c) => json!({"str": iv(c)}),
         Abs::Num(i) => json!({"num": iv(i)}),
         Abs::Date(i) => json!({"date": iv(i)}),
         Abs::Set(None) => json!({"set": null}),
@@ -228,6 +251,27 @@ fn abs(a: &Abs) -> J {
             r.rels.iter().map(|(x, r, y)| json!([x, rel(*r), y])).collect::<Vec<_>>(),
         ]}),
         Abs::Transfer(args) => json!({"tr": args.iter().map(|(n, x)| json!([n, abs(x)])).collect::<Vec<_>>()}),
+        // a value of an enum that has fields keeps no relation between its fields (kaname's DESIGN 23.7)
+        Abs::Variants(vs) => json!({"variants": vs.iter().map(|(v, r)| {
+            assert!(r.rels.is_empty(), "a value of an enum with relations between its fields: {v}");
+            json!([v, r.fields.iter().map(|(n, x)| json!([n, abs(x)])).collect::<Vec<_>>()])
+        }).collect::<Vec<_>>()}),
+        Abs::Dict(c, k, x) => json!({"dict": [iv(c), abs(k), abs(x)]}),
+        Abs::Members(c, x) => json!({"members": [iv(c), abs(x)]}),
+        // a function value (kaname's DESIGN 27.4): the lambdas it can be, by their ids, each once from
+        // the least (what each caught is the analysis's to follow, and is held to the model through the
+        // values of the expressions of the lambdas' bodies); and what the analysis does not see of it
+        Abs::Fns(ls, unseen) => {
+            let mut ids: Vec<usize> = ls.iter().map(|l| l.expr).collect();
+            ids.sort_unstable();
+            ids.dedup();
+            let u = match unseen {
+                None => J::Null,
+                Some(None) => json!("any"),
+                Some(Some(e)) => json!([e.fails.iter().map(|k| k.word()).collect::<Vec<_>>(), e.diverges]),
+            };
+            json!({"fns": [ids, u]})
+        }
     }
 }
 
@@ -246,6 +290,11 @@ fn val(v: &Value) -> J {
         Value::List(xs) => json!({"l": xs.iter().map(val).collect::<Vec<_>>()}),
         Value::None => J::Null,
         Value::Transfer(t) => json!({"t": [tid(&t.id), t.args.iter().map(|(n, x)| json!([n, val(x)])).collect::<Vec<_>>()]}),
+        Value::Variant(v, fs) => json!({"v": [v, fs.iter().map(|(n, x)| json!([n, val(x)])).collect::<Vec<_>>()]}),
+        Value::Dict(ps) => json!({"dict": ps.iter().map(|(k, x)| json!([val(k), val(x)])).collect::<Vec<_>>()}),
+        Value::Set(xs) => json!({"set": xs.iter().map(val).collect::<Vec<_>>()}),
+        // a function value is no input and no answer of a run (kaname's DESIGN 27.1)
+        Value::Closure(c) => json!({"clo": c.expr}),
     }
 }
 
@@ -289,11 +338,33 @@ struct Ex<'a> {
     /// them): the rule's index; the dates file's index and the date.
     rule_calls: RefCell<BTreeMap<(usize, String), usize>>,
     date_calls: RefCell<BTreeMap<(usize, String), (usize, String)>>,
+    /// The names `ok x` and `err e` give in the arms written now (kaname's DESIGN 26.3), each with the
+    /// name the model gives the result it takes and the field that holds the value: the model's
+    /// pattern names the value an arm takes, and the arm reads the value it holds from it.
+    payloads: RefCell<Vec<(String, String, &'static str)>>,
+    /// The next id of an expression the model is given that the module does not have (the name of a
+    /// result an arm takes), past every id of the module's.
+    fresh: std::cell::Cell<usize>,
+    /// The places of the records and the enums that hold themselves the module's places reach, each by
+    /// the type its values are counted as (kaname's DESIGN 28.1): the model's `slots`.
+    slots: RefCell<Vec<(Ty, J)>>,
 }
 
 impl<'a> Ex<'a> {
     fn new(c: &'a Checked, p: &'a Program, suite: &'a Suite) -> Ex<'a> {
-        Ex { c, p, suite, an: Analyzer::new(c, p, suite), rules: RefCell::default(), dates: RefCell::default(), rule_calls: RefCell::default(), date_calls: RefCell::default() }
+        Ex {
+            c,
+            p,
+            suite,
+            an: Analyzer::new(c, p, suite),
+            rules: RefCell::default(),
+            dates: RefCell::default(),
+            rule_calls: RefCell::default(),
+            date_calls: RefCell::default(),
+            payloads: RefCell::default(),
+            fresh: std::cell::Cell::new(c.module.exprs),
+            slots: RefCell::default(),
+        }
     }
 
     fn ty(&self, e: &Expr) -> &'a Ty {
@@ -312,29 +383,149 @@ impl<'a> Ex<'a> {
         }
     }
 
-    fn slot(&self, s: &Slot) -> J {
+    /// What a place declares. `reached`: a parameter's, where an end not written is the type's (all
+    /// of int64 for a number, 0001-01-01 to 9999-12-31 for a date, 0 to 2⁶³ − 1 elements for a list;
+    /// kaname's DESIGN 22.1, 22.6), as the interpreter holds an argument to it and the analysis a value
+    /// given to it.
+    fn slot(&self, s: &Slot, reached: bool) -> J {
+        self.slot_in(s, reached, false)
+    }
+
+    /// The number of a record or an enum that holds itself in the module's table (`slots`, kaname's
+    /// DESIGN 28.1), its place written there once, as a parameter reaches it; None for any other type.
+    fn table(&self, t: &Ty) -> Option<usize> {
+        let k = self.p.nest_key(t)?;
+        if let Some(i) = self.slots.borrow().iter().position(|(x, _)| *x == k) {
+            return Some(i);
+        }
+        let i = self.slots.borrow().len();
+        self.slots.borrow_mut().push((k.clone(), J::Null));
+        let j = self.slot_in(&Slot::of(k), true, true);
+        self.slots.borrow_mut()[i].1 = j;
+        Some(i)
+    }
+
+    /// What a place declares; `own`: the place of a record or an enum that holds itself in the table,
+    /// the type itself written out, the values of such types inside it by their numbers.
+    fn slot_in(&self, s: &Slot, reached: bool, own: bool) -> J {
+        if !own && let Some(j) = self.nested_slot(s, reached) {
+            return j;
+        }
         let t = strip_opt(&s.ty);
-        let (list, elem) = match t {
-            Ty::List(x) => (true, strip_opt(x)),
-            _ => (false, t),
+        // a list's elements, a set's members, a dict's values: what the count counts and the range
+        // holds; a dict's keys, each its own place (kaname's DESIGN 24.4)
+        let (list, elem, keys) = match t {
+            Ty::List(x) | Ty::Set(x) => (true, strip_opt(x), None),
+            Ty::Dict(k, x) => (true, strip_opt(x), Some((**k).clone())),
+            _ => (false, t, None),
         };
+        let keys = keys.map(|k| self.slot(&Slot::of(k), reached)).unwrap_or(J::Null);
         let unit01 = matches!(elem, Ty::Num(n) if n.is_rate() && n.step.is_some());
         let (record, fields): (bool, Vec<J>) = match elem {
-            Ty::Record(id @ RecId::Module { .. }) => (true, self.p.fields(id).iter().map(|(n, fs)| json!([n.text, self.slot(fs)])).collect()),
+            Ty::Record(id @ RecId::Module { .. }) => (true, self.p.fields(id).iter().map(|(n, fs)| json!([n.text, self.slot(fs, reached)])).collect()),
             _ => (false, Vec::new()),
         };
-        json!({"list": list, "count": range(&s.count), "range": range(&s.range), "unit01": unit01, "record": record, "fields": fields})
+        // the fields of each value of an enum that has fields (the one value, for the type of a value)
+        let sum = match elem {
+            Ty::Enum(id) if self.p.is_sum(id) => Some((id.clone(), None)),
+            Ty::Record(r @ RecId::Variant { value, .. }) => r.sum().map(|id| (id, Some(value.clone()))),
+            _ => None,
+        };
+        // a result: `ok` holding `value`, `err` holding `error` (kaname's DESIGN 26.3)
+        let result = match elem {
+            Ty::Result(a, e) => Some(vec![json!(["ok", [["value", self.slot(&Slot::of((**a).clone()), reached)]]]), json!(["err", [["error", self.slot(&Slot::of((**e).clone()), reached)]]])]),
+            _ => None,
+        };
+        let values: Vec<J> = match sum {
+            _ if result.is_some() => result.unwrap_or_default(),
+            Some((id, only)) => self
+                .p
+                .values(&id)
+                .0
+                .iter()
+                .filter(|v| only.as_ref().is_none_or(|o| *o == v.text))
+                .map(|v| json!([v.text, self.p.value_fields(&id, &v.text).iter().map(|(n, fs)| json!([n.text, self.slot(fs, reached)])).collect::<Vec<_>>()]))
+                .collect(),
+            None => Vec::new(),
+        };
+        let (count, ends) = if reached {
+            (if list { filled(s.count.as_ref(), Some(whole_count())) } else { s.count.clone() }, filled(s.range.as_ref(), whole_range(elem)))
+        } else {
+            (s.count.clone(), s.range.clone())
+        };
+        json!({"list": list, "count": range(&count), "range": range(&ends), "unit01": unit01, "record": record, "fields": fields, "values": values, "keys": keys})
+    }
+
+    /// What a place declares, where it holds the values of a record or an enum that holds itself
+    /// (kaname's DESIGN 28.1): its count, the keys of a dict, and the type's number in the table.
+    fn nested_slot(&self, s: &Slot, reached: bool) -> Option<J> {
+        let t = strip_opt(&s.ty);
+        let (list, elem, keys) = match t {
+            Ty::List(x) | Ty::Set(x) => (true, strip_opt(x), None),
+            Ty::Dict(k, x) => (true, strip_opt(x), Some((**k).clone())),
+            _ => (false, t, None),
+        };
+        let n = self.table(elem)?;
+        let keys = keys.map(|k| self.slot(&Slot::of(k), reached)).unwrap_or(J::Null);
+        let count = if reached && list { filled(s.count.as_ref(), Some(whole_count())) } else { s.count.clone() };
+        Some(json!({"list": list, "count": range(&count), "range": null, "unit01": false, "record": false, "fields": [], "values": [], "keys": keys, "ref": n}))
     }
 
     /// How the interpreter compares two values of a type: by their places in an ordered enum, else as
     /// equal or not (numbers and dates it compares as such whatever this says).
     fn order(&self, t: &Ty) -> J {
         match t.present() {
+            // a type parameter held to keys: what is compared is a number, a date, a string or a bool,
+            // which the model compares by their values, or a value of an enum, by its place among the
+            // values of the module's enums (`param_order`)
+            Ty::Param(_) => json!({"enum": self.param_order()}),
             Ty::Num(_) => json!("num"),
             Ty::Date => json!("date"),
+            // by their code points (kaname's DESIGN 25.1)
+            Ty::Str => json!("str"),
             Ty::Enum(id) => json!({"enum": self.p.values(id).0.iter().map(|n| n.text.clone()).collect::<Vec<_>>()}),
             _ => json!("eq"),
         }
+    }
+
+    /// The order kaname puts the keys of a type in (kaname's DESIGN 24.1; `value.rs`'s `key_cmp`).
+    fn key(&self, t: &Ty) -> J {
+        match t.present() {
+            Ty::Param(_) => json!({"enum": self.param_order()}),
+            Ty::Num(_) => json!("num"),
+            Ty::Date => json!("date"),
+            Ty::Str => json!("str"),
+            Ty::Bool => json!("bool"),
+            Ty::Enum(id) => json!({"enum": self.p.values(id).0.iter().map(|n| n.text.clone()).collect::<Vec<_>>()}),
+            Ty::Record(id) => json!({"record": self.p.fields(id).iter().map(|(_, s)| self.key(&s.ty)).collect::<Vec<_>>()}),
+            _ => json!("num"),
+        }
+    }
+
+    /// The values of every enum of the module and of the rules it reads, each enum's in its order: the
+    /// order a value of a type parameter held to keys is in, where it is a value of an enum (the
+    /// interpreter orders it by the type the call gives, kaname's DESIGN 26.4; the model has no types).
+    /// Two enums with a value of one name in other orders would make it no order of either.
+    fn param_order(&self) -> Vec<String> {
+        let mut lists: Vec<Vec<String>> = self.c.decls.enums.iter().filter(|e| !e.is_sum()).map(|e| e.values.iter().map(|v| v.text.clone()).collect()).collect();
+        for facts in self.p.rules.values() {
+            for e in &facts.enums {
+                lists.push(e.values.iter().map(|v| v.name.clone()).collect());
+            }
+        }
+        let mut all: Vec<String> = Vec::new();
+        for l in &lists {
+            for v in l {
+                if !all.contains(v) {
+                    all.push(v.clone());
+                }
+            }
+        }
+        for l in &lists {
+            let ranks: Vec<usize> = l.iter().map(|v| all.iter().position(|w| w == v).unwrap()).collect();
+            assert!(ranks.windows(2).all(|w| w[0] < w[1]), "two enums of the module order the values {l:?} otherwise: no order a type parameter takes");
+        }
+        all
     }
 
     fn block(&self, b: &Block) -> J {
@@ -363,23 +554,38 @@ impl<'a> Ex<'a> {
             ExprKind::Bool(b) => json!({"bool": [id, b]}),
             ExprKind::None => json!({"none": id}),
             ExprKind::Var(w) => match self.rf(e) {
-                Ref::EnumValue(_, v) => json!({"enum": [id, v]}),
+                Ref::EnumValue(eid, v) => self.enum_value(e, eid, v),
+                // the value `ok x` or `err e` names: the field of the result the arm takes
+                Ref::Local if self.payloads.borrow().iter().any(|(x, _, _)| x == w) => {
+                    let (tmp, field) = self.payloads.borrow().iter().rev().find(|(x, _, _)| x == w).map(|(_, t, f)| (t.clone(), *f)).unwrap();
+                    let at = self.fresh.get();
+                    self.fresh.set(at + 1);
+                    json!({"field": [id, line, {"var": [at, line, tmp]}, field]})
+                }
                 Ref::Local => json!({"var": [id, line, w]}),
                 _ => self.bad(e, &[]),
             },
             ExprKind::Field(base, _, _) => match self.rf(e) {
-                Ref::EnumValue(_, v) => json!({"enum": [id, v]}),
+                Ref::EnumValue(eid, v) => self.enum_value(e, eid, v),
                 Ref::Field(name) => json!({"field": [id, line, self.expr(base), name]}),
                 _ => self.bad(e, &[]),
             },
             ExprKind::Call(callee, args) => self.call(e, callee, args),
-            ExprKind::Record(_, inits) => self.record(e, inits),
+            ExprKind::Record(_, base, inits) => self.record(e, base.as_deref(), inits),
             ExprKind::List(xs) => {
                 let et = match self.ty(e) {
                     Ty::List(t) => (**t).clone(),
                     _ => Ty::Error,
                 };
                 json!({"list": [id, xs.iter().map(|x| json!([self.expr(x), self.conv(self.ty(x), &et, x)])).collect::<Vec<_>>()]})
+            }
+            ExprKind::Dict(pairs) => {
+                let (kt, vt) = match self.ty(e) {
+                    Ty::Dict(k, v) => ((**k).clone(), (**v).clone()),
+                    _ => (Ty::Error, Ty::Error),
+                };
+                let pairs: Vec<J> = pairs.iter().map(|(k, v)| json!([self.expr(k), self.conv(self.ty(k), &kt, k), self.expr(v), self.conv(self.ty(v), &vt, v)])).collect();
+                json!({"dict": [id, self.key(&kt), pairs]})
             }
             ExprKind::Neg(x) => json!({"neg": [id, line, self.expr(x)]}),
             ExprKind::Not(x) => json!({"not": [id, line, self.expr(x)]}),
@@ -395,31 +601,55 @@ impl<'a> Ex<'a> {
             ]}),
             ExprKind::Match(s, arms) => {
                 let st = self.ty(s);
+                let result = matches!(st.present(), Ty::Result(..));
                 let arms: Vec<J> = arms
                     .iter()
                     .map(|arm| {
+                        let mark = self.payloads.borrow().len();
                         let pats: Vec<J> = arm
                             .patterns
                             .iter()
                             .map(|p| match p {
+                                // `ok x` and `err e`: the result the arm takes, named apart, the
+                                // value it holds read from it where the arm names it (kaname's
+                                // DESIGN 26.3)
+                                Pattern::Value(path, bind, _) if result => {
+                                    let word = path[path.len() - 1].0.clone();
+                                    let field = if word == "ok" { "value" } else { "error" };
+                                    let tmp = bind.as_ref().map(|(b, _)| {
+                                        let tmp = format!("{b}#{word}");
+                                        self.payloads.borrow_mut().push((b.clone(), tmp.clone(), field));
+                                        tmp
+                                    });
+                                    json!({"value": [word, tmp]})
+                                }
                                 Pattern::None(_) => json!("none"),
                                 Pattern::Some(x, _) => json!({"some": x}),
                                 Pattern::Bool(b, _) => json!({"bool": b}),
-                                Pattern::Value(path, _) => {
+                                Pattern::Value(path, bind, _) => {
                                     let word = &path[path.len() - 1].0;
-                                    let name = match st.present() {
-                                        Ty::Enum(id) => self.p.values(id).0.iter().find(|n| n.is(word)).map(|n| n.text.clone()),
-                                        _ => None,
+                                    let (name, sum) = match st.present() {
+                                        Ty::Enum(id) => (self.p.values(id).0.iter().find(|n| n.is(word)).map(|n| n.text.clone()), self.p.is_sum(id)),
+                                        _ => (None, false),
                                     };
-                                    json!({"enum": name})
+                                    // a value of an enum that has fields, and the name the arm gives it
+                                    if sum { json!({"value": [name, bind.as_ref().map(|(b, _)| b.clone())]}) } else { json!({"enum": name}) }
                                 }
+                                // a literal, as the value it is in the unit of what the `match` splits
+                                Pattern::Lit(x) => json!({"lit": kaname::interp::literal(self.c, x, st).map(|v| val(&v)).unwrap_or(J::Null)}),
+                                Pattern::Else(_) => json!("else"),
                             })
                             .collect();
-                        json!([pats, self.block(&arm.body), self.conv(self.ty(&arm.body.answer), self.ty(e), &arm.body.answer)])
+                        let body = self.block(&arm.body);
+                        self.payloads.borrow_mut().truncate(mark);
+                        json!([pats, body, self.conv(self.ty(&arm.body.answer), self.ty(e), &arm.body.answer)])
                     })
                     .collect();
                 json!({"match": [id, line, self.expr(s), arms]})
             }
+            // a lambda made a value (kaname's DESIGN 27.1): the module's lambda (`lams`); a builtin's own
+            // lambda is the builtin's, read where it is
+            ExprKind::Lambda(..) if matches!(self.ty(e), Ty::Fn(..)) => json!({"lam": id}),
             ExprKind::Lambda(..) => self.bad(e, &[]),
             ExprKind::Block(b) => json!({"block": [id, self.block(b), self.conv(self.ty(&b.answer), self.ty(e), &b.answer)]}),
         }
@@ -498,17 +728,32 @@ impl<'a> Ex<'a> {
 
     fn call(&self, e: &Expr, callee: &Expr, args: &[Arg]) -> J {
         let (id, line) = (e.id, e.span.line);
+        // a function value called (kaname's DESIGN 27.3): each argument read in its parameter's unit,
+        // and every value of the type of its answer, marked as the type's (kaname's DESIGN 27.4)
+        if let Ref::CallValue = self.rf(e) {
+            let ps = match self.ty(callee) {
+                Ty::Fn(ps, _, _) => ps.clone(),
+                _ => Vec::new(),
+            };
+            let a: Vec<J> = args.iter().enumerate().map(|(i, a)| json!([self.expr(a.expr()), self.conv(self.ty(a.expr()), ps.get(i).unwrap_or(&Ty::Error), a.expr())])).collect();
+            let top = abs(&self.an.slot(&Slot::of(self.ty(e).clone()), true));
+            return json!({"callv": [id, line, self.expr(callee), a, top]});
+        }
         match self.rf(callee) {
             Ref::Fn(canon, name) => {
                 assert_eq!(canon, &self.c.canon, "a call of a function of another module");
                 let g = self.c.decls.fns.iter().position(|f| f.name.text == *name).unwrap();
                 let info = &self.c.decls.fns[g];
+                // a generic function's parameters with the types the call gives (kaname's DESIGN 26.2)
+                let names = kaname::names::tnames(&info.tparams);
+                let targs = self.c.typed.inst.get(&e.id).cloned().unwrap_or_default();
                 let a: Vec<J> = args
                     .iter()
                     .filter_map(|a| {
                         let (n, x) = named(a)?;
                         let k = info.params.iter().position(|p| p.name.is(n))?;
-                        Some(json!([k, self.expr(x), self.conv(self.ty(x), &info.params[k].slot.ty, x)]))
+                        let pt = subst(&info.params[k].slot.ty, &names, &targs);
+                        Some(json!([k, self.expr(x), self.conv(self.ty(x), &pt, x)]))
                     })
                     .collect();
                 json!({"call": [id, line, g, a]})
@@ -559,16 +804,35 @@ impl<'a> Ex<'a> {
                     .collect();
                 json!({"transfer": [id, tid(t), params.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>(), a]})
             }
-            Ref::Builtin(name) => self.builtin(e, name, args),
+            Ref::Builtin(name) => self.builtin(e, name, &args.iter().map(Arg::expr).collect::<Vec<_>>()),
+            // a builtin written after a value: the value is its first argument (kaname's DESIGN 21.4)
+            Ref::Method(name) => match &callee.kind {
+                ExprKind::Field(base, _, _) => {
+                    let mut xs: Vec<&Expr> = vec![&**base];
+                    xs.extend(args.iter().map(Arg::expr));
+                    self.builtin(e, name, &xs)
+                }
+                _ => self.bad(e, &args.iter().map(Arg::expr).collect::<Vec<_>>()),
+            },
             _ => self.bad(e, &args.iter().map(Arg::expr).collect::<Vec<_>>()),
         }
     }
 
-    fn record(&self, e: &Expr, inits: &[FieldInit]) -> J {
+    /// A value of an enum written by its name: of an enum that has fields, a value with none, built
+    /// as a record of no field with its name (kaname's DESIGN 23.6); else a value of the enum.
+    fn enum_value(&self, e: &Expr, id: &EnumId, v: &str) -> J {
+        if self.p.is_sum(id) { json!({"record": [e.id, e.span.line, true, [], [], v, null]}) } else { json!({"enum": [e.id, v]}) }
+    }
+
+    fn record(&self, e: &Expr, base: Option<&Expr>, inits: &[FieldInit]) -> J {
         let Ref::Record(id) = self.rf(e) else { return self.bad(e, &[]) };
         let fields = self.p.fields(id);
-        let module = matches!(id, RecId::Module { .. });
-        let decl: Vec<J> = fields.iter().map(|(n, s)| json!([n.text, self.slot(s), matches!(s.ty, Ty::Num(_) | Ty::Date)])).collect();
+        let module = matches!(id, RecId::Module { .. } | RecId::Variant { .. });
+        let tag = match id {
+            RecId::Variant { value, .. } => json!(value),
+            _ => J::Null,
+        };
+        let decl: Vec<J> = fields.iter().map(|(n, s)| json!([n.text, self.slot(s, false), matches!(s.ty, Ty::Num(_) | Ty::Date)])).collect();
         let given: Vec<J> = inits
             .iter()
             .filter_map(|fi| {
@@ -576,14 +840,27 @@ impl<'a> Ex<'a> {
                 Some(json!([k, self.expr(&fi.value), self.conv(self.ty(&fi.value), &fields[k].1.ty, &fi.value), fi.span.line]))
             })
             .collect();
-        json!({"record": [e.id, e.span.line, module, decl, given]})
+        json!({"record": [e.id, e.span.line, module, decl, given, tag, base.map(|b| self.expr(b)).unwrap_or(J::Null)]})
     }
 
-    fn builtin(&self, e: &Expr, name: &str, args: &[Arg]) -> J {
+    fn builtin(&self, e: &Expr, name: &str, xs: &[&Expr]) -> J {
         let (id, line) = (e.id, e.span.line);
         let me = self.ty(e);
-        let xs: Vec<&Expr> = args.iter().map(Arg::expr).collect();
+        let xs: Vec<&Expr> = xs.to_vec();
+        let on_dict = matches!(self.ty(xs[0]).present(), Ty::Dict(..));
         match (name, xs.len()) {
+            ("filter", 2) if on_dict => self.walk_k(e, "filter", &xs, None),
+            ("last" | "sort_by" | "sort_by_desc" | "max_by" | "min_by" | "flat_map" | "filter_map" | "group_by" | "map_values", 2) => self.walk_k(e, name, &xs, None),
+            ("to_dict", 3) => {
+                let (Some((kp, kb)), Some((vp, vb))) = (lam(xs[1]), lam(xs[2])) else { return self.bad(e, &xs) };
+                let (kt, vt) = dict_tys(me);
+                json!({"to_dict": [id, line, self.key(&kt), self.expr(xs[0]), kp[0].0, self.expr(kb), self.conv(self.ty(xs[1]), &kt, xs[1]), vp[0].0, self.expr(vb), self.conv(self.ty(xs[2]), &vt, xs[2])]})
+            }
+            ("merge_with", 3) => {
+                let Some((ps, body)) = lam(xs[2]) else { return self.bad(e, &xs) };
+                let (kt, vt) = dict_tys(me);
+                json!({"merge_with": [id, line, self.key(&kt), self.expr(xs[0]), self.expr(xs[1]), ps[0].0, ps[1].0, self.expr(body), self.conv(self.ty(xs[2]), &vt, xs[2])]})
+            }
             ("count" | "sum" | "any" | "all" | "map" | "filter" | "first" | "max_of" | "min_of" | "running_totals", 2) => {
                 let Some((ps, body)) = lam(xs[1]) else { return self.bad(e, &xs) };
                 let w_ty = match me {
@@ -627,7 +904,7 @@ impl<'a> Ex<'a> {
                 json!({"reduce": [id, line, self.expr(xs[0]), self.expr(xs[1]), ps[0].0, ps[1].0, self.expr(body), self.conv(self.ty(xs[2]), ft, xs[2]), self.conv(ft, me, xs[1])]})
             }
             ("min" | "max", 2) => json!({"minmax": [id, line, name == "min", self.expr(xs[0]), self.expr(xs[1]), self.conv(self.ty(xs[0]), me, xs[0]), self.conv(self.ty(xs[1]), me, xs[1]), self.order(me)]}),
-            ("mod", 2) => json!({"mod": [id, self.expr(xs[0]), self.expr(xs[1])]}),
+            ("mod", 2) => json!({"mod": [id, line, self.expr(xs[0]), self.expr(xs[1])]}),
             ("isqrt", 1) => json!({"isqrt": [id, line, self.expr(xs[0])]}),
             ("allocate", 3) => {
                 let (tc, ts) = (self.ty(xs[1]), self.ty(xs[2]));
@@ -639,8 +916,27 @@ impl<'a> Ex<'a> {
                 json!({"round": [id, line, name, self.expr(xs[0]), self.expr(xs[1]), self.conv(self.ty(xs[1]), tx, xs[1]), self.conv(tx, me, e), abs(&self.an.top(me))]})
             }
             ("count", 1) => json!({"count1": [id, self.expr(xs[0])]}),
+            // a result made: the value of the one field it holds (kaname's DESIGN 26.3)
+            ("ok" | "err", 1) => {
+                let Ty::Result(a, er) = me else { return self.bad(e, &xs) };
+                let (field, inner) = if name == "ok" { ("value", (**a).clone()) } else { ("error", (**er).clone()) };
+                let decl = json!([[field, self.slot(&Slot::of(inner.clone()), false), matches!(inner, Ty::Num(_) | Ty::Date)]]);
+                let given = json!([[0, self.expr(xs[0]), self.conv(self.ty(xs[0]), &inner, xs[0]), line]]);
+                json!({"record": [id, line, true, decl, given, name, null]})
+            }
+            // `char(n)`: the string of a constant code point (kaname's DESIGN 25.2)
+            ("char", 1) => json!({"prim": [id, line, "char", "num", [[self.expr(xs[0]), null]], null]}),
             ("starts_with", 2) => json!({"starts_with": [id, self.expr(xs[0]), self.expr(xs[1])]}),
+            // lists one after another, each read in the type of the answer
+            ("concat", _) if matches!(me, Ty::List(_) | Ty::Empty) => {
+                let args: Vec<J> = xs.iter().map(|x| json!([self.expr(x), self.conv(self.ty(x), me, x)])).collect();
+                json!({"prim": [id, line, "concat", "num", args, null]})
+            }
             ("concat", _) => json!({"concat": [id, xs.iter().map(|x| self.expr(x)).collect::<Vec<_>>()]}),
+            ("numbers" | "join", 2) => {
+                let args: Vec<J> = xs.iter().map(|x| json!([self.expr(x), null])).collect();
+                json!({"prim": [id, line, name, "num", args, null]})
+            }
             ("text", 1) => {
                 let fmt = match self.ty(xs[0]) {
                     Ty::Num(nt) => match &nt.unit.dim {
@@ -652,8 +948,103 @@ impl<'a> Ex<'a> {
                 };
                 json!({"text": [id, self.expr(xs[0]), fmt]})
             }
-            _ => self.bad(e, &xs),
+            _ => self.prim(e, name, &xs),
         }
+    }
+
+    /// A builtin of kaname's DESIGN 24.3 that applies a function to each element of a list, or to each
+    /// entry or value of a dict: the function's answer read where the interpreter reads it, and the
+    /// order of the keys it orders or holds.
+    fn walk_k(&self, e: &Expr, name: &str, xs: &[&Expr], _: Option<()>) -> J {
+        let (id, line) = (e.id, e.span.line);
+        let me = self.ty(e);
+        let Some((ps, body)) = lam(xs[1]) else { return self.bad(e, xs) };
+        let lt = self.ty(xs[1]);
+        let (c, key) = match name {
+            "flat_map" => (self.conv(lt, me, xs[1]), json!("num")),
+            "filter_map" => match me {
+                Ty::List(t) => (self.conv(lt, &Ty::Opt(t.clone()), xs[1]), json!("num")),
+                _ => (J::Null, json!("num")),
+            },
+            "group_by" => {
+                let (kt, _) = dict_tys(me);
+                (self.conv(lt, &kt, xs[1]), self.key(&kt))
+            }
+            "map_values" => {
+                let (kt, vt) = dict_tys(me);
+                (self.conv(lt, &vt, xs[1]), self.key(&kt))
+            }
+            "filter" => (J::Null, self.key(&dict_tys(me).0)),
+            "sort_by" | "sort_by_desc" | "max_by" | "min_by" => (J::Null, self.key(lt)),
+            _ => (J::Null, json!("num")),
+        };
+        json!({"walkk": [id, line, name, self.expr(xs[0]), ps[0].0, self.expr(body), c, key]})
+    }
+
+    /// A builtin of kaname's DESIGN 24.3 that takes no function: its arguments, the dict, the set or the
+    /// list first, each read where `ranges.rs` and the interpreter read it; on what is no dict, set or
+    /// list, every value of its answer's type.
+    fn prim(&self, e: &Expr, name: &str, xs: &[&Expr]) -> J {
+        let (id, line) = (e.id, e.span.line);
+        let me = self.ty(e);
+        let t0 = self.ty(xs[0]).clone();
+        let raw = |x: &Expr| json!([self.expr(x), null]);
+        let to = |x: &Expr, t: &Ty| json!([self.expr(x), self.conv(self.ty(x), t, x)]);
+        let number = Ty::Num(NumTy::number());
+        let (op, key, args): (&str, J, Vec<J>) = match &t0 {
+            Ty::Dict(kt, vt) => {
+                let op = match name {
+                    "has" => "has_dict",
+                    "remove" => "remove_dict",
+                    x => x,
+                };
+                let args = match name {
+                    "get" | "has" | "remove" => vec![raw(xs[0]), to(xs[1], kt)],
+                    "put" => vec![raw(xs[0]), to(xs[1], kt), to(xs[2], vt)],
+                    "merge" => vec![raw(xs[0]), to(xs[1], &t0)],
+                    _ => vec![raw(xs[0])],
+                };
+                (op, self.key(kt), args)
+            }
+            Ty::Set(et) => {
+                let op = match name {
+                    "has" => "has_set",
+                    "remove" => "remove_set",
+                    x => x,
+                };
+                let args = match name {
+                    "has" | "add" | "remove" => vec![raw(xs[0]), to(xs[1], et)],
+                    "union" | "intersect" | "difference" => vec![raw(xs[0]), to(xs[1], &t0)],
+                    _ => vec![raw(xs[0])],
+                };
+                (op, self.key(et), args)
+            }
+            Ty::List(et) => {
+                let args = match name {
+                    "at" => vec![raw(xs[0]), to(xs[1], &number)],
+                    "append" | "contains" => vec![raw(xs[0]), to(xs[1], et)],
+                    _ => xs.iter().map(|x| raw(x)).collect(),
+                };
+                (name, self.key(et), args)
+            }
+            // the builtins of a string (kaname's DESIGN 25.2): those a list has too by their own names
+            Ty::Str => {
+                let op = match name {
+                    "slice" => "slice_text",
+                    "take" => "take_text",
+                    "drop" => "drop_text",
+                    "contains" => "contains_text",
+                    x => x,
+                };
+                (op, json!("str"), xs.iter().map(|x| raw(x)).collect())
+            }
+            _ => {
+                // what is called on no dict, set or list the analysis follows: every value of its type
+                let args: Vec<J> = xs.iter().map(|x| raw(x)).collect();
+                return json!({"prim": [id, line, name, "num", args, abs(&self.an.top(me))]});
+            }
+        };
+        json!({"prim": [id, line, op, key, args, null]})
     }
 
     /// The values of a numeric output of a rule over every input it takes (rulec's `output_values`),
@@ -756,26 +1147,49 @@ impl<'a> Ex<'a> {
             "line": info.line,
             "params": info.params.iter().map(|prm| json!({
                 "name": prm.name.text,
-                "slot": self.slot(&prm.slot),
+                "slot": self.slot(&prm.slot, true),
                 "scalar": matches!(prm.slot.ty, Ty::Num(_) | Ty::Date),
                 "abs": abs(&self.an.slot(&prm.slot, true)),
             })).collect::<Vec<_>>(),
-            "ret": self.slot(&info.ret),
+            "ret": self.slot(&info.ret, false),
             "ranged": info.ret.range.is_some() || info.ret.count.is_some(),
             "declared": abs(&self.an.slot(&info.ret, false)),
             "body": self.block(&decl.body),
             "answer": decl.body.answer.id,
             "answer_line": decl.body.answer.span.line,
             "conv": self.conv(self.ty(&decl.body.answer), &info.ret.ty, &decl.body.answer),
+            "reread": info.reread(),
+            "takes_fn": info.takes_fn(),
         })
+    }
+
+    /// The lambdas the module makes values of (kaname's DESIGN 27.1): each its id, the function it is
+    /// written in, its parameters with every value of their types (marked as the types'), its body,
+    /// and its body's answer read in the type of its answer.
+    fn lams(&self) -> Vec<J> {
+        let mut out = Vec::new();
+        for (f, decl) in self.c.module.fns.iter().enumerate() {
+            let mut es = Vec::new();
+            decl.body.walk(&mut es);
+            for e in es {
+                let ExprKind::Lambda(ps, body) = &e.kind else { continue };
+                let Ty::Fn(pts, r, _) = self.ty(e) else { continue };
+                let params: Vec<J> = ps.iter().zip(pts).map(|((p, _), t)| json!([p, abs(&self.an.slot(&Slot::of(t.clone()), true))])).collect();
+                out.push(json!({"id": e.id, "fn": f, "params": params, "body": self.expr(body), "conv": self.conv(self.ty(body), r, body)}));
+            }
+        }
+        out
     }
 
     fn module(&self) -> J {
         let fns: Vec<J> = (0..self.c.decls.fns.len()).map(|f| self.function(f)).collect();
+        let lams = self.lams();
         let rules: Vec<J> = self.rules.borrow().clone().iter().map(|r| self.rule_json(r)).collect();
         let dates: Vec<J> = self.dates.borrow().clone().iter().map(|d| self.dates_json(d)).collect();
         let rings: Vec<J> = kaname::effects::rings(self.c).into_iter().map(|(r, round)| json!([r, round])).collect();
-        json!({"fns": fns, "rules": rules, "dates": dates, "rings": rings})
+        // the table of the types that hold themselves, last: every place above has asked for its own
+        let slots: Vec<J> = self.slots.borrow().iter().map(|(_, j)| j.clone()).collect();
+        json!({"fns": fns, "rules": rules, "dates": dates, "rings": rings, "lams": lams, "slots": slots})
     }
 
     // ── A run's calls, as the oracle of the model ───────────────────────────
@@ -852,11 +1266,28 @@ fn named(a: &Arg) -> Option<(&str, &Expr)> {
     }
 }
 
+/// The types of a dict's keys and of its values.
+fn dict_tys(t: &Ty) -> (Ty, Ty) {
+    match t.present() {
+        Ty::Dict(k, v) => ((**k).clone(), (**v).clone()),
+        _ => (Ty::Error, Ty::Error),
+    }
+}
+
 /// A function given to a builtin: its parameters and its body.
 fn lam(x: &Expr) -> Option<(&[(String, Span)], &Expr)> {
     match &x.kind {
         ExprKind::Lambda(ps, body) => Some((ps.as_slice(), &**body)),
         _ => None,
+    }
+}
+
+/// How deep JSON nests its arrays and objects.
+fn depth_of(j: &J) -> usize {
+    match j {
+        J::Array(xs) => 1 + xs.iter().map(depth_of).max().unwrap_or(0),
+        J::Object(fs) => 1 + fs.values().map(depth_of).max().unwrap_or(0),
+        _ => 0,
     }
 }
 
@@ -891,9 +1322,12 @@ fn analysis_json(c: &Checked) -> (Vec<J>, Vec<J>) {
         .fns
         .iter()
         .map(|ff| {
+            // the places of the function, and those the readings again of its calls found (kaname's
+            // DESIGN 26.5), which the model keeps with the function's own
             let mut places: Vec<J> = ff
                 .places
                 .iter()
+                .chain(ff.rplaces.iter().filter(|r| r.module == c.canon).map(|r| &r.place))
                 .map(|pl| json!([pl.expr, key_of(&pl.what), pl.kind.word(), abs(&pl.value), pl.outcome == Outcome::Shown, pl.outcome == Outcome::Pending]))
                 .collect();
             places.sort_by_key(|p| (p[0].as_u64(), p[1].as_str().map(str::to_string)));
@@ -933,6 +1367,8 @@ fn verdicts_json(c: &Checked) -> (J, usize) {
 struct Prepared {
     name: String,
     module: String,
+    /// The first id of an expression the model is given that the module does not have.
+    made: usize,
     fns: Vec<J>,
     names: Vec<String>,
     vals: Vec<J>,
@@ -953,7 +1389,20 @@ fn prepare(name: &str, c: &Rc<Checked>, suite: &Suite) -> Prepared {
     let a = c.analysis.get().unwrap();
     let (mut runs, mut seen, mut outside) = (Vec::new(), 0usize, Vec::new());
     for (f, fname) in names.iter().enumerate() {
-        let (vs, _) = kaname::vectors::choose(&p, c, f);
+        let (mut vs, _) = kaname::vectors::choose(&p, c, f);
+        // a value of a type that holds itself nested as deep as a host may give one, and one deeper,
+        // which the entry fails (kaname's DESIGN 28.1): the model's entry follows the table
+        if !c.decls.fns[f].inner() {
+            for (i, prm) in c.decls.fns[f].params.iter().enumerate() {
+                for n in [kaname::interp::NESTED, kaname::interp::NESTED + 1] {
+                    if let Some(v) = kaname::vectors::nested_value(&p, &prm.slot.ty, n) {
+                        let mut input = kaname::vectors::base_input(&p, c, f);
+                        input[i] = v;
+                        vs.push(kaname::vectors::Vector { input, why: None });
+                    }
+                }
+            }
+        }
         for v in &vs {
             let mut it = Interp::new(&p, suite);
             let out = match it.check_entry(c, f, &v.input) {
@@ -975,10 +1424,16 @@ fn prepare(name: &str, c: &Rc<Checked>, suite: &Suite) -> Prepared {
             }
             let (rules, dates) = ex.oracle(&it);
             let line = json!({"run": f, "input": v.input.iter().map(val).collect::<Vec<_>>(), "rules": rules, "dates": dates});
-            runs.push((line.to_string(), answer(out).to_string()));
+            let said = answer(out);
+            // an answer nested deeper than the comparison reads JSON is not compared: a value of a type
+            // that holds itself, answered as deep as it came in
+            if depth_of(&said) > 100 {
+                continue;
+            }
+            runs.push((line.to_string(), said.to_string()));
         }
     }
-    Prepared { name: name.to_string(), module: module.to_string(), fns, names, vals, runs, seen, outside, verdicts: nv }
+    Prepared { name: name.to_string(), module: module.to_string(), made: c.module.exprs, fns, names, vals, runs, seen, outside, verdicts: nv }
 }
 
 /// Run `f` on a stack as deep as the recursions of the test modules need.
@@ -1026,6 +1481,9 @@ fn differences(pr: &Prepared, model: &J) -> Vec<String> {
         }
     }
     let mut mv: Vec<J> = model.get("vals").and_then(J::as_array).cloned().unwrap_or_default();
+    // an expression the model is given that the module does not have: the name of a result an arm
+    // takes (`payloads`), whose value the field read from it is
+    mv.retain(|v| v[0].as_u64().is_some_and(|i| (i as usize) < pr.made));
     mv.sort_by_key(|v| v[0].as_u64());
     for v in &pr.vals {
         match mv.iter().find(|w| w[0] == v[0]) {

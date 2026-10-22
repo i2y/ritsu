@@ -100,11 +100,13 @@ fn said(kind: &ErrorKind, rest: &[base::Word]) -> Text {
             let t = tool.word();
             tr!("{t} の種類は入れ子にできません", "the tool {t} has no nested kinds")
         }
-        ErrorKind::NothingUnder(parent) | ErrorKind::WrongChild { parent, .. } => {
+        ErrorKind::NothingUnder(parent) => {
             // The kind that cannot come under the parent is the second of the pairs.
             let k1 = rest.get(2).map(|w| w.text.as_str()).unwrap_or("");
             tr!("`{k1}` は `{parent}` の下に書けません", "`{k1}` cannot come under `{parent}`")
         }
+        // the kind the error is about: the second pair's, or a third's under a value of kaname
+        ErrorKind::WrongChild { kind, parent, .. } => tr!("`{kind}` は `{parent}` の下に書けません", "`{kind}` cannot come under `{parent}`"),
         ErrorKind::TooManyPairs(_) => tr!("子の組は一つまでです", "a name has one child at most"),
         ErrorKind::MissingName(k) => tr!("種類 `{k}` のあとに名前がありません", "the kind `{k}` has no name after it"),
     }

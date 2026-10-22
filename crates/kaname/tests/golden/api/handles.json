@@ -1,0 +1,197 @@
+{
+  "kaname": "<version>",
+  "file": "handles.kn",
+  "module": {
+    "name": "handles",
+    "alias": "handles",
+    "version": "v1",
+    "description": "A handle a person types, made the one a service keeps: the white space at its ends dropped, each run of it inside made a hyphen and the letters made lower case, then held to what a handle is, each reason it is not said; and a tag, a handle and a number, read from text",
+    "sha256": "6cfc93aa573f2eca7b4d09aa613c7d0efd4dfcb0d0a8f4d10b78431f3cb857c1"
+  },
+  "generated": {
+    "typescript": "glue/handles.ts",
+    "python": "glue/handles.py",
+    "go": "glue/handles/handles.go"
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "Tag",
+      "alias": "Tag",
+      "fields": [
+        {
+          "name": "handle",
+          "alias": "handle",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5
+        },
+        {
+          "name": "number",
+          "alias": "number",
+          "type": "number",
+          "range": ">=1 <=9999",
+          "count": null,
+          "line": 6
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Tag",
+        "python": "Tag",
+        "go": "Tag"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "normalized",
+      "alias": "normalized",
+      "line": 9,
+      "description": null,
+      "params": [
+        {
+          "name": "raw",
+          "alias": "raw",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "string",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "normalized",
+        "python": "normalized",
+        "go": "Normalized"
+      }
+    },
+    {
+      "name": "problems",
+      "alias": "problems",
+      "line": 13,
+      "description": null,
+      "params": [
+        {
+          "name": "handle",
+          "alias": "handle",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "problems",
+        "python": "problems",
+        "go": "Problems"
+      }
+    },
+    {
+      "name": "handle",
+      "alias": "handle",
+      "line": 23,
+      "description": null,
+      "params": [
+        {
+          "name": "raw",
+          "alias": "raw",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[string, list[string]]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 24,
+          "function": "normalized"
+        },
+        {
+          "line": 25,
+          "function": "problems"
+        }
+      ],
+      "generated": {
+        "typescript": "handle",
+        "python": "handle",
+        "go": "Handle"
+      }
+    },
+    {
+      "name": "tag",
+      "alias": "tag",
+      "line": 29,
+      "description": null,
+      "params": [
+        {
+          "name": "text",
+          "alias": "text",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[Tag, list[string]]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 33,
+          "function": "handle"
+        }
+      ],
+      "generated": {
+        "typescript": "tag",
+        "python": "tag",
+        "go": "TagFn"
+      }
+    }
+  ],
+  "transfers": []
+}

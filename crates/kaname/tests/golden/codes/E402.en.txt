@@ -1,0 +1,4 @@
+error[E402]: example.kn:7:28: The parameter `test` of `all_within` writes `total` on its type, and the function given does more
+     7 |   all_within(xs: xs, test: x => x + 1 > x)
+  = The function given is `fails overflow`.
+  = Make the places of the function given shown (narrow the values with an `if` in the lambda), or widen the effect written on the parameter's type.

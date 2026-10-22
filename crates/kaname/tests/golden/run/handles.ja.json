@@ -1,0 +1,16 @@
+{
+  "kaname": "<version>",
+  "file": "handles.ja.kn",
+  "module": "ハンドル",
+  "function": "タグを読む",
+  "input": {
+    "テキスト": "Ada Lovelace#42"
+  },
+  "calls": [],
+  "result": {
+    "ok": {
+      "ハンドル": "ada-lovelace",
+      "番号": 42
+    }
+  }
+}

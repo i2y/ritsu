@@ -19,6 +19,13 @@ nav = [
   { Home = "index.md" },
   { "Try it in the browser" = "playground.md" },
   { sekisho = "sekisho.md" },
+  { kaname = [
+    { kaname = "kaname/index.md" },
+    { "Writing kaname" = "kaname/language.md" },
+    { "Four functional cores" = "kaname/examples.md" },
+    { "What the check guarantees" = "kaname/checks.md" },
+    { "Rules, dates and books" = "kaname/together.md" },
+  ] },
   { "ritsu in Node" = "node.md" },
 ]
 
@@ -40,10 +47,12 @@ icon.repo = "fontawesome/brands/github"
 # navigation.footer     previous / next at the foot of every page
 # navigation.top        a back-to-top button on long pages
 # content.code.copy     a copy button on every code block
+# content.tabs.link     a tab chosen on a page (TypeScript, Python, Go) is chosen in every set of tabs
 features = [
   "navigation.footer",
   "navigation.top",
   "content.code.copy",
+  "content.tabs.link",
 ]
 
 [[project.theme.palette]]
@@ -77,3 +86,7 @@ line_spans = "__span"
 pygments_lang_class = true
 
 [project.markdown_extensions.pymdownx.superfences]
+
+# Tabs, one for each language a host of kaname's examples is written in.
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true

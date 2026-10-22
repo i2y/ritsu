@@ -1303,9 +1303,9 @@ fn a_rules_module_is_the_rule_merged_with_the_projects_contributions() {
     }
 }
 
-// ── the code that joins them ─────────────────────────────────────────────────────────────────────
+// ── the functional cores (kaname's modules) ──────────────────────────────────────────────────────
 
-/// A project with modules of kaname (kaname's examples, its DESIGN 17.1 and 17.2): `payout`
+/// A project with modules of kaname (kaname's examples, its DESIGN 17.6 and 17.7): `payout`
 /// builds the two transfers of a ledger with the fee a card's rule gives, and `late_payment` calls a
 /// dates file and a rule of late charges.
 const SETTLEMENT: &str = "tests/projects/settlement";
@@ -1313,7 +1313,8 @@ const SETTLEMENT: &str = "tests/projects/settlement";
 /// The modules of kaname go into each package under glue/, beside the rules, the dates and the books
 /// they call, with kaname's helper and the types of the transfers the modules build (kaname's DESIGN
 /// 10): every file says what wrote it and what it is made from, the package's index and description
-/// say glue/, and the packages pass `tsc --strict`, `mypy --strict`, `go vet` and gofmt.
+/// say glue/ and call the modules the functional cores, and the packages pass `tsc --strict`,
+/// `mypy --strict`, `go vet` and gofmt.
 #[test]
 fn the_modules_of_kaname_go_into_the_package() {
     let t = TempDir::new("gen-kaname");
@@ -1322,9 +1323,11 @@ fn the_modules_of_kaname_go_into_the_package() {
     assert_eq!(code, 0, "ritsu gen of the settlement:\n{err}");
     golden(here().join("tests/golden/gen/settlement.txt"), &shape(&out, &here().join(SETTLEMENT)));
     let index = read(&out.join("typescript/index.ts"));
-    assert!(index.contains("export * as glue from \"./glue/index\";") && index.contains("the workflows of a project and the code that joins them, as one package"), "{index}");
+    assert!(index.contains("export * as glue from \"./glue/index\";") && index.contains("the workflows and the functional cores (kaname's modules) of a project, as one package"), "{index}");
     assert!(read(&out.join("python/generated/__init__.py")).contains("from . import glue as glue"));
-    assert!(read(&out.join("go/doc.go")).contains("rules/, dates/, books/, flows/ and glue/ under the"));
+    // the comment of doc.go, its lines joined
+    let doc = read(&out.join("go/doc.go")).lines().map(|l| l.trim_start_matches("//").trim()).collect::<Vec<_>>().join(" ");
+    assert!(doc.contains("the workflows and the functional cores (kaname's modules) of a project") && doc.contains("rules/, dates/, books/, flows/ and glue/ under the import path"), "{doc}");
     if ritsu_testkit::need(Need::Node) {
         match tsc() {
             Some((tsc, modules)) => {

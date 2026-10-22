@@ -1,0 +1,58 @@
+── E114
+error[E114]: example.kn:8:14: The key of `sort_by` is list[number], which cannot be a key
+     8 |   xs.sort_by(x => x.lines)
+  = A key is a number, an amount, a quantity, a rate with a step, a date, a string, a bool, or a value of an enum whose values have no fields: kaname puts keys in the order it gives each such type, so that a dict and a set go round in one order in every target.
+  = A key of an order may be a record whose fields can all be keys too: it is compared field by field, in the order they are declared.
+
+── E114
+error[E114]: example.kn:8:3: A member of a set is Order, which cannot be a key
+     8 |   xs.to_set().count()
+  = A key is a number, an amount, a quantity, a rate with a step, a date, a string, a bool, or a value of an enum whose values have no fields: kaname puts keys in the order it gives each such type, so that a dict and a set go round in one order in every target.
+
+── E101
+error[E101]: example.kn:4:3: There is no function `keys`
+     4 |   keys(prices)
+  = `keys` is a builtin written after a value, with a `.`: `<value>.keys(…)`.
+
+── E101
+error[E101]: example.kn:4:9: There is no builtin `numbers` to write after a value
+     4 |   start.numbers(31)
+  = `numbers` is a builtin called as a function, not written after a value: `numbers(…)`.
+
+── E107
+error[E107]: example.kn:4:20: The key `"tea"` is written twice in the dict
+     4 |   ["tea": 300USDc, "tea": 350USDc]
+  = A dict holds one value for a key: take one of the two pairs out.
+
+── E107
+error[E107]: example.kn:4:3: `take` takes 1 argument after the value, and is given 0
+     4 |   xs.take()
+
+── E103
+error[E103]: example.kn:4:21: An unrounded value of money[USDc] goes into a value of the dict `map_values` answers
+     4 |   prices.map_values(p => p * 8%)
+  = A dict and a set hold their values as they travel, as a field of a record does: write the way of rounding and the step first, as in `half_up(x, 1USDc)`.
+
+── E109
+error[E109]: example.kn:4:10: The divisor of `mod` is a whole number; this is money[USDc]
+     4 |   mod(n, size)
+
+── E006
+error[E006]: example.kn:3:4: `numbers` is the name of a builtin function
+     3 | fn numbers() -> number
+  = A reader of `numbers(…)` could not tell which one it calls; choose another name.
+
+── E108
+error[E108]: example.kn:3:20: A `count` is declared on a list, a dict, a set and a string only
+     3 | fn total(n: number count >=1) -> number
+  = `count` bounds the number of the elements of a list, the pairs of a dict, the members of a set, the code points of a string (`list[Line] count >=1 <=30`, `string count <=40`).
+
+── E102
+error[E102]: example.kn:4:11: The type of `let d` cannot be told
+     4 |   let d = [:]
+  = `[:]` alone says no type: write it, as in `let d : <type> = …`.
+
+── E102
+error[E102]: example.kn:4:3: `keys` is called on a dict; this is number
+     4 |   n.keys()
+

@@ -4,8 +4,13 @@
   `Mem a v` says the value `v` is among what `a` says: a number in its interval, a value of an enum
   or a bool in its set, `none` where the value may be none, a list whose count is in the interval
   and whose every element is among what each element can be, a record whose every field is among
-  what that field can be and whose fields keep the relations the record says. The evaluation's own
-  test (`Abs.has`) says no more than `Mem`: `has_sound`.
+  what that field can be and whose fields keep the relations the record says, a value of an enum
+  that has fields one of the values it can be, each of its fields one the value has and among what
+  that field can be (DESIGN 23.7), a dict whose count of pairs is in the interval and whose every key
+  and value is among what each can be, a set likewise of its members (DESIGN 24.5), a function value
+  one of the lambdas it can be, each name it caught with a value among what the lambda caught of it,
+  or any where it can be one the analysis does not see (DESIGN 27.4). The evaluation's own test
+  (`Abs.has`) says no more than `Mem`: `has_sound`.
 
   The operations keep a value in: `join` holds what either holds; the field of a record holds the
   field of every value; a number read in another unit is in what its values read so are; a value
@@ -38,7 +43,8 @@ inductive Mem : Abs → Val → Prop where
   | boolAll {b : Bool} : Mem (.set none) (.bool b)
   | enum {s : List String} {x : String} : x ∈ s → Mem (.set (some s)) (.enum x)
   | bool {s : List String} {b : Bool} : (if b then "true" else "false") ∈ s → Mem (.set (some s)) (.bool b)
-  | str {s : String} : Mem .str (.str s)
+  /-- A string: its count of code points in the interval (DESIGN 25.6). -/
+  | str {c : Iv} {s : String} : c.In s.length → Mem (.str c) (.str s)
   | optNone {x : Abs} : Mem (.opt true x) .none
   | optSome {n : Bool} {x : Abs} {v : Val} : v ≠ .none → Mem x v → Mem (.opt n x) v
   | list {c : Iv} {e : Abs} {xs : List Val} : c.In xs.length → (∀ x ∈ xs, Mem e x) → Mem (.list c e) (.list xs)
@@ -47,6 +53,223 @@ inductive Mem : Abs → Val → Prop where
       Mem (.record fs rels) (.record vs)
   | transfer {as : List (String × Abs)} {id : String} {vs : List (String × Val)} :
       (∀ n x, fieldV vs n = some x → ∀ a, Abs.fieldOf as n = some a → Mem a x) → Mem (.transfer as) (.transfer id vs)
+  /-- A value of an enum by its name alone, one of the values it can be. -/
+  | variantEnum {vs : List (String × List (String × Abs))} {x : String} :
+      (Abs.recOf vs x).isSome = true → Mem (.variants vs) (.enum x)
+  /-- A value of an enum with its fields (some), one of the values it can be: each field one that
+      value has, and among what it can be. -/
+  | variant {vs : List (String × List (String × Abs))} {x : String} {r : List (String × Abs)} {fs : List (String × Val)} :
+      Abs.recOf vs x = some r → fs ≠ [] →
+      (∀ n y, fieldV fs n = some y → (Abs.fieldOf r n).isSome = true) →
+      (∀ n y, fieldV fs n = some y → ∀ a, Abs.fieldOf r n = some a → Mem a y) →
+      Mem (.variants vs) (.variant x fs)
+  /-- A dict: its count of pairs in the interval, each key and each value among what they can be. -/
+  | dict {c : Iv} {k v : Abs} {ps : List (Val × Val)} : c.In ps.length → (∀ p ∈ ps, Mem k p.1) →
+      (∀ p ∈ ps, Mem v p.2) → (ps.map (·.1)).Nodup → Mem (.dict c k v) (.dict ps)
+  /-- A set: its count of members in the interval, each among what a member can be, each once. -/
+  | members {c : Iv} {e : Abs} {xs : List Val} : c.In xs.length → (∀ x ∈ xs, Mem e x) → xs.Nodup →
+      Mem (.members c e) (.set xs)
+  /-- A function value where one the analysis does not see is said: any (DESIGN 27.4). -/
+  | closAny {fs : List (Nat × List (String × Abs) × Bool)} {w : Option (List Kind × Bool)} {i : Nat}
+      {env : List (String × Val)} : Mem (.fns fs (some w)) (.closure i env)
+  /-- A lambda the function value can be: each name it caught, as the analysis read it where the
+      lambda was made, has a value, among what it read (`Sat`'s environment, kept with the lambda). -/
+  | clos {fs : List (Nat × List (String × Abs) × Bool)} {u : Option (Option (List Kind × Bool))} {i : Nat}
+      {ae : List (String × Abs)} {own : Bool} {env : List (String × Val)} : (i, ae, own) ∈ fs →
+      (∀ x a, (ae.find? (·.1 == x)).map (·.2) = some a → (Env.get? env x).isSome = true) →
+      (∀ x a v, (ae.find? (·.1 == x)).map (·.2) = some a → Env.get? env x = some v → Mem a v) →
+      Mem (.fns fs u) (.closure i env)
+
+-- ── Two values that are one ────────────────────────────────────────────────
+
+mutual
+theorem Val.beq_refl : ∀ (a : Val), Val.beq a a = true
+  | .num r => by simp [Val.beq]
+  | .bool b => by simp [Val.beq]
+  | .str s => by simp [Val.beq]
+  | .date d => by simp [Val.beq]
+  | .enum v => by simp [Val.beq]
+  | .record fs => by simp only [Val.beq]; exact Val.beqFields_refl fs
+  | .list xs => by simp only [Val.beq]; exact Val.beqList_refl xs
+  | .none => by simp [Val.beq]
+  | .transfer id args => by simp only [Val.beq, beq_self_eq_true, Bool.true_and]; exact Val.beqFields_refl args
+  | .variant t fs => by simp only [Val.beq, beq_self_eq_true, Bool.true_and]; exact Val.beqFields_refl fs
+  | .dict ps => by simp only [Val.beq]; exact Val.beqPairs_refl ps
+  | .set xs => by simp only [Val.beq]; exact Val.beqList_refl xs
+  | .closure i env => by simp only [Val.beq, beq_self_eq_true, Bool.true_and]; exact Val.beqFields_refl env
+theorem Val.beqFields_refl : ∀ (xs : List (String × Val)), Val.beqFields xs xs = true
+  | [] => by simp [Val.beqFields]
+  | (n, x) :: xs => by
+    simp only [Val.beqFields, beq_self_eq_true, Bool.true_and]
+    rw [Val.beq_refl x, Val.beqFields_refl xs]; rfl
+theorem Val.beqList_refl : ∀ (xs : List Val), Val.beqList xs xs = true
+  | [] => by simp [Val.beqList]
+  | x :: xs => by simp only [Val.beqList]; rw [Val.beq_refl x, Val.beqList_refl xs]; rfl
+theorem Val.beqPairs_refl : ∀ (ps : List (Val × Val)), Val.beqPairs ps ps = true
+  | [] => by simp [Val.beqPairs]
+  | (k, x) :: ps => by simp only [Val.beqPairs]; rw [Val.beq_refl k, Val.beq_refl x, Val.beqPairs_refl ps]; rfl
+end
+
+mutual
+theorem Val.eq_of_beq : ∀ {a b : Val}, Val.beq a b = true → a = b
+  | .num r, b, h => by cases b <;> simp_all [Val.beq]
+  | .bool x, b, h => by cases b <;> simp_all [Val.beq]
+  | .str x, b, h => by cases b <;> simp_all [Val.beq]
+  | .date x, b, h => by cases b <;> simp_all [Val.beq]
+  | .enum x, b, h => by cases b <;> simp_all [Val.beq]
+  | .none, b, h => by cases b <;> simp_all [Val.beq]
+  | .record fs, b, h => by
+    cases b with
+    | record gs => simp only [Val.beq] at h; rw [Val.eq_of_beqFields h]
+    | _ => simp [Val.beq] at h
+  | .list xs, b, h => by
+    cases b with
+    | list ys => simp only [Val.beq] at h; rw [Val.eq_of_beqList h]
+    | _ => simp [Val.beq] at h
+  | .transfer i a, b, h => by
+    cases b with
+    | transfer j c =>
+      simp only [Val.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1, Val.eq_of_beqFields h.2]
+    | _ => simp [Val.beq] at h
+  | .variant t a, b, h => by
+    cases b with
+    | variant u c =>
+      simp only [Val.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1, Val.eq_of_beqFields h.2]
+    | _ => simp [Val.beq] at h
+  | .dict ps, b, h => by
+    cases b with
+    | dict qs => simp only [Val.beq] at h; rw [Val.eq_of_beqPairs h]
+    | _ => simp [Val.beq] at h
+  | .set xs, b, h => by
+    cases b with
+    | set ys => simp only [Val.beq] at h; rw [Val.eq_of_beqList h]
+    | _ => simp [Val.beq] at h
+  | .closure i a, b, h => by
+    cases b with
+    | closure j c =>
+      simp only [Val.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1, Val.eq_of_beqFields h.2]
+    | _ => simp [Val.beq] at h
+theorem Val.eq_of_beqFields : ∀ {xs ys : List (String × Val)}, Val.beqFields xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | (n, x) :: xs, (m, y) :: ys, h => by
+    simp only [Val.beqFields, Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨h1, h2⟩, h3⟩ := h
+    rw [h1, Val.eq_of_beq h2, Val.eq_of_beqFields h3]
+  | [], _ :: _, h => by simp [Val.beqFields] at h
+  | _ :: _, [], h => by simp [Val.beqFields] at h
+theorem Val.eq_of_beqList : ∀ {xs ys : List Val}, Val.beqList xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | x :: xs, y :: ys, h => by
+    simp only [Val.beqList, Bool.and_eq_true] at h
+    rw [Val.eq_of_beq h.1, Val.eq_of_beqList h.2]
+  | [], _ :: _, h => by simp [Val.beqList] at h
+  | _ :: _, [], h => by simp [Val.beqList] at h
+theorem Val.eq_of_beqPairs : ∀ {xs ys : List (Val × Val)}, Val.beqPairs xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | (k, x) :: xs, (l, y) :: ys, h => by
+    simp only [Val.beqPairs, Bool.and_eq_true] at h
+    obtain ⟨⟨h1, h2⟩, h3⟩ := h
+    rw [Val.eq_of_beq h1, Val.eq_of_beq h2, Val.eq_of_beqPairs h3]
+  | [], _ :: _, h => by simp [Val.beqPairs] at h
+  | _ :: _, [], h => by simp [Val.beqPairs] at h
+end
+
+/-- `==` on values is their equality. -/
+theorem Val.beq_iff {a b : Val} : (a == b) = true ↔ a = b :=
+  ⟨Val.eq_of_beq, fun h => h ▸ Val.beq_refl a⟩
+
+mutual
+theorem Abs.eq_of_beq : ∀ {a b : Abs}, Abs.beq a b = true → a = b
+  | .never, b, h => by cases b <;> simp_all [Abs.beq]
+  | .any, b, h => by cases b <;> simp_all [Abs.beq]
+  | .num i, b, h => by cases b <;> simp_all [Abs.beq]
+  | .date i, b, h => by cases b <;> simp_all [Abs.beq]
+  | .set s, b, h => by cases b <;> simp_all [Abs.beq]
+  | .str i, b, h => by cases b <;> simp_all [Abs.beq]
+  | .opt n a, b, h => by
+    cases b with
+    | opt m b' =>
+      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1, Abs.eq_of_beq h.2]
+    | _ => simp [Abs.beq] at h
+  | .list c a, b, h => by
+    cases b with
+    | list d b' =>
+      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1, Abs.eq_of_beq h.2]
+    | _ => simp [Abs.beq] at h
+  | .record f r, b, h => by
+    cases b with
+    | record g s =>
+      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [Abs.eq_of_beqFields h.1, h.2]
+    | _ => simp [Abs.beq] at h
+  | .transfer f, b, h => by
+    cases b with
+    | transfer g =>
+      simp only [Abs.beq] at h
+      rw [Abs.eq_of_beqFields h]
+    | _ => simp [Abs.beq] at h
+  | .variants f, b, h => by
+    cases b with
+    | variants g =>
+      simp only [Abs.beq] at h
+      rw [Abs.eq_of_beqVariants h]
+    | _ => simp [Abs.beq] at h
+  | .dict c k a, b, h => by
+    cases b with
+    | dict d l b' =>
+      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1.1, Abs.eq_of_beq h.1.2, Abs.eq_of_beq h.2]
+    | _ => simp [Abs.beq] at h
+  | .members c a, b, h => by
+    cases b with
+    | members d b' =>
+      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [h.1, Abs.eq_of_beq h.2]
+    | _ => simp [Abs.beq] at h
+  | .fns a u, b, h => by
+    cases b with
+    | fns b' w =>
+      simp only [Abs.beq, Bool.and_eq_true, beq_iff_eq] at h
+      rw [Abs.eq_of_beqLams h.1, h.2]
+    | _ => simp [Abs.beq] at h
+theorem Abs.eq_of_beqLams : ∀ {xs ys : List (Nat × List (String × Abs) × Bool)}, Abs.beqLams xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | (i, e, o) :: xs, (j, f, p) :: ys, h => by
+    simp only [Abs.beqLams, Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+    rw [h1, Abs.eq_of_beqFields h2, h3, Abs.eq_of_beqLams h4]
+  | [], _ :: _, h => by simp [Abs.beqLams] at h
+  | _ :: _, [], h => by simp [Abs.beqLams] at h
+theorem Abs.eq_of_beqFields : ∀ {xs ys : List (String × Abs)}, Abs.beqFields xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | (n, x) :: xs, (m, y) :: ys, h => by
+    simp only [Abs.beqFields, Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨h1, h2⟩, h3⟩ := h
+    rw [h1, Abs.eq_of_beq h2, Abs.eq_of_beqFields h3]
+  | [], _ :: _, h => by simp [Abs.beqFields] at h
+  | _ :: _, [], h => by simp [Abs.beqFields] at h
+theorem Abs.eq_of_beqVariants : ∀ {xs ys : List (String × List (String × Abs))}, Abs.beqVariants xs ys = true → xs = ys
+  | [], [], _ => rfl
+  | (t, f) :: xs, (u, g) :: ys, h => by
+    simp only [Abs.beqVariants, Bool.and_eq_true, beq_iff_eq] at h
+    obtain ⟨⟨h1, h2⟩, h3⟩ := h
+    rw [h1, Abs.eq_of_beqFields h2, Abs.eq_of_beqVariants h3]
+  | [], _ :: _, h => by simp [Abs.beqVariants] at h
+  | _ :: _, [], h => by simp [Abs.beqVariants] at h
+end
+
+theorem nodupB_sound : ∀ {xs : List Val}, nodupB xs = true → xs.Nodup
+  | [], _ => List.nodup_nil
+  | x :: rest, h => by
+    simp only [nodupB, Bool.and_eq_true, Bool.not_eq_true', List.any_eq_false] at h
+    refine List.nodup_cons.mpr ⟨fun hx => ?_, nodupB_sound h.2⟩
+    have := h.1 x hx
+    exact this (Val.beq_iff.mpr rfl)
 
 theorem fieldV_mem {vs : List (String × Val)} {n : String} {x : Val} (h : fieldV vs n = some x) : (n, x) ∈ vs := by
   unfold fieldV at h
@@ -79,6 +302,13 @@ theorem rels_of_has {rels : List (String × Rel × String)} {vs : List (String �
     exact ⟨_, _, hx, hy, this⟩
   · simp at this
 
+/-- A function value where one the analysis does not see is said. -/
+theorem mem_closAny {fs : List (Nat × List (String × Abs) × Bool)} {u : Option (Option (List Kind × Bool))} {i : Nat}
+    {env : List (String × Val)} (h : u.isSome = true) : Mem (.fns fs u) (.closure i env) := by
+  cases u with
+  | none => simp at h
+  | some w => exact Mem.closAny
+
 /-- **What `has` says is so.** -/
 theorem has_sound : ∀ (d : Nat) (a : Abs) (v : Val), Abs.hasD d a v = true → Mem a v
   | 0, _, _, h => by simp [Abs.hasD] at h
@@ -108,7 +338,9 @@ theorem has_sound : ∀ (d : Nat) (a : Abs) (v : Val), Abs.hasD d a v = true →
         cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
         · exact Mem.bool (List.contains_iff_mem.mp h)
         · exact Mem.enum (List.contains_iff_mem.mp h)
-    | str => cases v <;> simp only [Abs.hasD] at h <;> (try contradiction); exact Mem.str
+    | str c =>
+      cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
+      exact Mem.str ((Iv.has_iff _ _).mp h)
     | list c e =>
       cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
       rename_i xs
@@ -133,6 +365,46 @@ theorem has_sound : ∀ (d : Nat) (a : Abs) (v : Val), Abs.hasD d a v = true →
       have := List.all_eq_true.mp h (n, x) (fieldV_mem hx)
       simp only [ha] at this
       exact has_sound d a x this
+    | variants vs =>
+      cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
+      · exact Mem.variantEnum h
+      · rename_i x fs
+        rcases hr : Abs.recOf vs x with _ | r <;> rw [hr] at h
+        · simp at h
+        · simp only [Bool.and_eq_true, Bool.not_eq_true', List.isEmpty_eq_false_iff] at h
+          obtain ⟨hne, hall⟩ := h
+          have each : ∀ n y, fieldV fs n = some y → ∃ a, Abs.fieldOf r n = some a ∧ Mem a y := by
+            intro n y hy
+            have := List.all_eq_true.mp hall (n, y) (fieldV_mem hy)
+            simp only at this
+            rcases ha : Abs.fieldOf r n with _ | a <;> rw [ha] at this
+            · simp at this
+            · exact ⟨a, rfl, has_sound d a y this⟩
+          refine Mem.variant hr hne (fun n y hy => ?_) (fun n y hy a ha => ?_)
+          · obtain ⟨a, ha, _⟩ := each n y hy; rw [ha]; rfl
+          · obtain ⟨a', ha', hm⟩ := each n y hy; rw [ha'] at ha; cases ha; exact hm
+    | dict c k x =>
+      cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
+      rename_i ps
+      simp only [Bool.and_eq_true] at h
+      obtain ⟨⟨h1, h2⟩, h3⟩ := h
+      refine Mem.dict ((Iv.has_iff _ _).mp h1) (fun p hp => ?_) (fun p hp => ?_) (nodupB_sound h3)
+      · have := List.all_eq_true.mp h2 p hp
+        simp only [Bool.and_eq_true] at this
+        exact has_sound d k _ this.1
+      · have := List.all_eq_true.mp h2 p hp
+        simp only [Bool.and_eq_true] at this
+        exact has_sound d x _ this.2
+    | members c e =>
+      cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
+      rename_i xs
+      simp only [Bool.and_eq_true] at h
+      obtain ⟨⟨h1, h2⟩, h3⟩ := h
+      exact Mem.members ((Iv.has_iff _ _).mp h1) (fun x hx => has_sound d _ x (List.all_eq_true.mp h2 x hx))
+        (nodupB_sound h3)
+    | fns fs u =>
+      cases v <;> simp only [Abs.hasD] at h <;> (try contradiction)
+      exact mem_closAny h
 
 theorem has_sound' {a : Abs} {v : Val} (h : a.has v = true) : Mem a v := has_sound D a v h
 
@@ -227,6 +499,286 @@ theorem mem_setUnion_right {a b : Option (List String)} {v : Val} (h : Mem (.set
     | none => exact Mem.boolAll
     | some y => exact Mem.bool ((mem_union _ _).mpr (Or.inr hx))
 
+-- ── The values of an enum that has fields ────────────────────────────────────
+
+theorem recOf_mem {vs : List (String × List (String × Abs))} {t : String} {r : List (String × Abs)}
+    (h : Abs.recOf vs t = some r) : (t, r) ∈ vs := by
+  unfold Abs.recOf at h
+  rcases hf : vs.find? (·.1 == t) with _ | ⟨k, s⟩ <;> rw [hf] at h <;> simp at h
+  subst h
+  have hm := List.mem_of_find?_eq_some hf
+  have hk := List.find?_some hf
+  simp at hk; subst hk; exact hm
+
+theorem fieldOf_append (l1 l2 : List (String × Abs)) (n : String) :
+    Abs.fieldOf (l1 ++ l2) n = (Abs.fieldOf l1 n).or (Abs.fieldOf l2 n) := by
+  unfold Abs.fieldOf
+  rw [List.find?_append]
+  cases List.find? (fun p => p.1 == n) l1 <;> simp
+
+theorem fieldOf_filter_none {s : List (String × Abs)} {n : String} (hs : Abs.fieldOf s n = none) :
+    ∀ (r : List (String × Abs)), Abs.fieldOf (r.filter (fun p => (Abs.fieldOf s p.1).isNone)) n = Abs.fieldOf r n
+  | [] => rfl
+  | (m, a) :: rest => by
+    by_cases hm : m = n
+    · subst hm
+      rw [List.filter_cons_of_pos (by simp [hs])]
+      simp [Abs.fieldOf, List.find?]
+    · have hmn : (m == n) = false := by simp [hm]
+      have ih := fieldOf_filter_none hs rest
+      unfold Abs.fieldOf at ih ⊢
+      simp only [List.filter]
+      split <;> simp only [List.find?, hmn] <;> exact ih
+
+theorem fieldOf_joinRecV_left {g : Abs → Abs → Abs} {s r : List (String × Abs)} {n : String} {a : Abs}
+    (h : Abs.fieldOf s n = some a) : Abs.fieldOf (Abs.joinRecV g s r) n = some (Abs.joinField g r n a) := by
+  unfold Abs.joinRecV
+  rw [fieldOf_append, fieldOf_joinFields, h]
+  rfl
+
+theorem fieldOf_joinRecV_right {g : Abs → Abs → Abs} {s r : List (String × Abs)} {n : String} {b : Abs}
+    (h : Abs.fieldOf r n = some b) :
+    Abs.fieldOf (Abs.joinRecV g s r) n = some b ∨ ∃ a, Abs.fieldOf (Abs.joinRecV g s r) n = some (g a b) := by
+  unfold Abs.joinRecV
+  rw [fieldOf_append, fieldOf_joinFields]
+  rcases hs : Abs.fieldOf s n with _ | a
+  · left
+    simp only [Option.map_none, Option.none_or]
+    rw [fieldOf_filter_none hs, h]
+  · right
+    refine ⟨a, ?_⟩
+    simp only [Option.map_some, Option.some_or]
+    unfold Abs.joinField
+    rw [h]
+
+theorem recOf_vIns {v : String} {r : List (String × Abs)} :
+    ∀ (out : List (String × List (String × Abs))), out.any (·.1 == v) = false → ∀ t,
+      Abs.recOf (Abs.vIns v r out) t = if t = v then some r else Abs.recOf out t
+  | [], _, t => by
+    by_cases ht : t = v
+    · subst ht; simp [Abs.vIns, Abs.recOf]
+    · have : (v == t) = false := by simp; exact fun e => ht e.symm
+      simp [Abs.vIns, Abs.recOf, List.find?, this, ht]
+  | (w, s) :: rest, hno, t => by
+    simp only [List.any_cons, Bool.or_eq_false_iff] at hno
+    obtain ⟨hw, hrest⟩ := hno
+    have hwv : w ≠ v := by simpa using hw
+    unfold Abs.vIns
+    split
+    · by_cases ht : t = v
+      · subst ht; simp [Abs.recOf, List.find?]
+      · have : (v == t) = false := by simp; exact fun e => ht e.symm
+        simp only [Abs.recOf, List.find?, this, ht, ite_false]
+    · have ih := recOf_vIns (v := v) (r := r) rest hrest t
+      by_cases htw : t = w
+      · subst htw
+        have : t ≠ v := hwv
+        simp [Abs.recOf, List.find?, this]
+      · have hwt : (w == t) = false := by simp; exact fun e => htw e.symm
+        unfold Abs.recOf at ih ⊢
+        simp only [List.find?, hwt]
+        exact ih
+
+theorem recOf_map_put {g : Abs → Abs → Abs} {v : String} {r : List (String × Abs)} :
+    ∀ (out : List (String × List (String × Abs))) (t : String),
+      Abs.recOf (out.map (fun (w, s) => if w == v then (w, Abs.joinRecV g s r) else (w, s))) t =
+        (Abs.recOf out t).map (fun s => if t = v then Abs.joinRecV g s r else s)
+  | [], _ => rfl
+  | (w, s) :: rest, t => by
+    have ih := recOf_map_put (g := g) (v := v) (r := r) rest t
+    by_cases htw : w = t
+    · subst htw
+      by_cases hv : w = v
+      · subst hv; simp [Abs.recOf, List.find?]
+      · simp [Abs.recOf, List.find?, hv]
+    · have hwt : (w == t) = false := by simp [htw]
+      by_cases hv : w = v
+      · subst hv
+        unfold Abs.recOf at ih ⊢
+        simp only [List.map_cons, beq_self_eq_true, ite_true, List.find?, hwt]
+        exact ih
+      · have hwv : (w == v) = false := by simp [hv]
+        unfold Abs.recOf at ih ⊢
+        simp only [List.map_cons, hwv, Bool.false_eq_true, ite_false, List.find?, hwt]
+        exact ih
+
+/-- Where one value of an enum is put, the values it can be: that one, joined with the same value
+    where it was there; the others as they were. -/
+theorem recOf_vPut {g : Abs → Abs → Abs} {v : String} {r : List (String × Abs)}
+    (out : List (String × List (String × Abs))) (t : String) :
+    Abs.recOf (Abs.vPut g v r out) t =
+      if t = v then some (match Abs.recOf out v with | some s => Abs.joinRecV g s r | none => r)
+      else Abs.recOf out t := by
+  unfold Abs.vPut
+  split
+  · rename_i hany
+    rw [recOf_map_put]
+    by_cases ht : t = v
+    · subst ht
+      rcases hr : Abs.recOf out t with _ | s
+      · exfalso
+        obtain ⟨⟨w, s⟩, hm, hw⟩ := List.any_eq_true.mp hany
+        simp at hw; subst hw
+        unfold Abs.recOf at hr
+        have hn : List.find? (fun x => x.1 == w) out = none := by simpa using hr
+        rw [List.find?_eq_none] at hn
+        exact absurd (by simp) (hn _ hm)
+      · simp
+    · simp only [ht, ite_false]
+      cases Abs.recOf out t <;> simp
+  · rename_i hany
+    rw [recOf_vIns out (Bool.eq_false_iff.mpr hany) t]
+    by_cases ht : t = v
+    · subst ht
+      have : Abs.recOf out t = none := by
+        unfold Abs.recOf
+        have : List.find? (fun x => x.1 == t) out = none := by
+          rw [List.find?_eq_none]
+          intro x hx hxt
+          exact hany (List.any_eq_true.mpr ⟨x, hx, hxt⟩)
+        simp [this]
+      simp [this]
+    · simp [ht]
+
+/-- What a value of an enum keeps of the values it can be, where one more is put among them: the
+    same, where the value put joins what the value's fields are with more. -/
+theorem mem_vPut_left {g : Abs → Abs → Abs} (hg : ∀ a b v, Mem a v → Mem (g a b) v)
+    {v : String} {r : List (String × Abs)} {out : List (String × List (String × Abs))} {x : Val}
+    (h : Mem (.variants out) x) : Mem (.variants (Abs.vPut g v r out)) x := by
+  cases h with
+  | variantEnum hs =>
+    rename_i t
+    apply Mem.variantEnum
+    rw [recOf_vPut]
+    split <;> simp_all
+  | variant hr hne hsome hmem =>
+    rename_i t s fs
+    by_cases ht : t = v
+    · subst ht
+      refine Mem.variant (by rw [recOf_vPut, ite_eq_left_of_eq_true _ _ (eq_self t), hr]) hne (fun n y hy => ?_) (fun n y hy a ha => ?_)
+      · obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (hsome n y hy)
+        rw [fieldOf_joinRecV_left hb]; rfl
+      · obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (hsome n y hy)
+        rw [fieldOf_joinRecV_left hb] at ha
+        cases ha
+        have hm := hmem n y hy b hb
+        unfold Abs.joinField
+        split
+        · exact hg _ _ _ hm
+        · exact Mem.any _
+    · exact Mem.variant (by rw [recOf_vPut]; simp only [ht, ↓reduceIte, hr]) hne hsome hmem
+
+theorem mem_fold_left {g : Abs → Abs → Abs} (hg : ∀ a b v, Mem a v → Mem (g a b) v) {x : Val} :
+    ∀ (b : List (String × List (String × Abs))) (out : List (String × List (String × Abs))),
+      Mem (.variants out) x → Mem (.variants (b.foldl (fun out (v, r) => Abs.vPut g v r out) out)) x
+  | [], _, h => h
+  | (v, r) :: rest, out, h => by
+    simp only [List.foldl_cons]
+    exact mem_fold_left hg rest _ (mem_vPut_left hg h)
+
+theorem recOf_cons_ne {t w : String} {r : List (String × Abs)} {rest : List (String × List (String × Abs))}
+    (h : t ≠ w) : Abs.recOf ((w, r) :: rest) t = Abs.recOf rest t := by
+  have : (w == t) = false := by simp; exact fun e => h e.symm
+  simp [Abs.recOf, List.find?, this]
+
+theorem recOf_cons_eq {t : String} {r : List (String × Abs)} {rest : List (String × List (String × Abs))} :
+    Abs.recOf ((t, r) :: rest) t = some r := by
+  simp [Abs.recOf, List.find?]
+
+/-- A value of an enum that one side can be, the other side's values put among it: still one it
+    can be. -/
+theorem mem_fold_right {g : Abs → Abs → Abs} (hgl : ∀ a b v, Mem a v → Mem (g a b) v)
+    (hgr : ∀ a b v, Mem b v → Mem (g a b) v) {x : Val} :
+    ∀ (b : List (String × List (String × Abs))) (out : List (String × List (String × Abs))),
+      Mem (.variants b) x → Mem (.variants (b.foldl (fun out (v, r) => Abs.vPut g v r out) out)) x
+  | [], _, h => by cases h <;> simp_all [Abs.recOf]
+  | (w, r) :: rest, out, h => by
+    simp only [List.foldl_cons]
+    cases h with
+    | variantEnum hs =>
+      rename_i t
+      by_cases ht : t = w
+      · subst ht
+        apply mem_fold_left hgl
+        apply Mem.variantEnum
+        rw [recOf_vPut]; simp
+      · rw [recOf_cons_ne ht] at hs
+        exact mem_fold_right hgl hgr rest _ (Mem.variantEnum hs)
+    | variant hr hne hsome hmem =>
+      rename_i t s fs
+      by_cases ht : t = w
+      · subst ht
+        rw [recOf_cons_eq] at hr; cases hr
+        apply mem_fold_left hgl
+        refine Mem.variant (by rw [recOf_vPut, ite_eq_left_of_eq_true _ _ (eq_self t)]) hne (fun n y hy => ?_) (fun n y hy a ha => ?_)
+        · obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (hsome n y hy)
+          split
+          · rename_i s0 _
+            rcases fieldOf_joinRecV_right (g := g) (s := s0) hb with e | ⟨a, e⟩ <;> rw [e] <;> rfl
+          · rw [hb]; rfl
+        · obtain ⟨b, hb⟩ := Option.isSome_iff_exists.mp (hsome n y hy)
+          have hm := hmem n y hy b hb
+          split at ha
+          · rename_i s0 _
+            rcases fieldOf_joinRecV_right (g := g) (s := s0) hb with e | ⟨a', e⟩ <;> rw [e] at ha <;> cases ha
+            · exact hm
+            · exact hgr _ _ _ hm
+          · rw [hb] at ha; cases ha; exact hm
+      · rw [recOf_cons_ne ht] at hr
+        exact mem_fold_right hgl hgr rest _ (Mem.variant hr hne hsome hmem)
+
+/-- Two lambdas `lamBeq` says are one are one. -/
+theorem lamBeq_eq {x y : Nat × List (String × Abs) × Bool} (h : Abs.lamBeq x y = true) : x = y := by
+  obtain ⟨i, e, o⟩ := x
+  obtain ⟨j, f, p⟩ := y
+  simp only [Abs.lamBeq, Bool.and_eq_true, beq_iff_eq] at h
+  obtain ⟨⟨h1, h2⟩, h3⟩ := h
+  rw [h1, Abs.eq_of_beqFields h2, h3]
+
+theorem unionStep_keeps : ∀ (b acc : List (Nat × List (String × Abs) × Bool)) (x : Nat × List (String × Abs) × Bool),
+    x ∈ acc → x ∈ b.foldl (fun acc x => if acc.any (Abs.lamBeq x) then acc else acc ++ [x]) acc
+  | [], _, _, h => h
+  | _ :: b, acc, x, h => by
+    simp only [List.foldl_cons]
+    apply unionStep_keeps b
+    split
+    · exact h
+    · exact List.mem_append_left _ h
+
+theorem unionStep_has : ∀ (b acc : List (Nat × List (String × Abs) × Bool)) (x : Nat × List (String × Abs) × Bool),
+    x ∈ b → x ∈ b.foldl (fun acc x => if acc.any (Abs.lamBeq x) then acc else acc ++ [x]) acc
+  | [], _, _, h => by cases h
+  | y :: b, acc, x, h => by
+    simp only [List.foldl_cons]
+    rcases List.mem_cons.mp h with rfl | h
+    · apply unionStep_keeps b
+      split
+      · rename_i ha
+        obtain ⟨z, hz, hb⟩ := List.any_eq_true.mp ha
+        rw [lamBeq_eq hb]; exact hz
+      · exact List.mem_append_right _ (List.mem_singleton_self _)
+    · exact unionStep_has b _ x h
+
+/-- The lambdas of either are among the lambdas of both. -/
+theorem mem_unionLams_left {a b : List (Nat × List (String × Abs) × Bool)} {x : Nat × List (String × Abs) × Bool}
+    (h : x ∈ a) : x ∈ Abs.unionLams a b := unionStep_keeps b a x h
+
+theorem mem_unionLams_right {a b : List (Nat × List (String × Abs) × Bool)} {x : Nat × List (String × Abs) × Bool}
+    (h : x ∈ b) : x ∈ Abs.unionLams a b := unionStep_has b a x h
+
+/-- A function the analysis does not see, joined with anything, is one. -/
+theorem joinUnseen_left {u w : Option (Option (List Kind × Bool))} (h : u.isSome = true) : (Abs.joinUnseen u w).isSome = true := by
+  rcases u with _ | _ | ⟨ka, da⟩
+  · simp at h
+  · rcases w with _ | _ | ⟨kb, db⟩ <;> simp [Abs.joinUnseen]
+  · rcases w with _ | _ | ⟨kb, db⟩ <;> simp [Abs.joinUnseen]
+
+theorem joinUnseen_right {u w : Option (Option (List Kind × Bool))} (h : w.isSome = true) : (Abs.joinUnseen u w).isSome = true := by
+  rcases w with _ | _ | ⟨kb, db⟩
+  · simp at h
+  · rcases u with _ | _ | ⟨ka, da⟩ <;> simp [Abs.joinUnseen]
+  · rcases u with _ | _ | ⟨ka, da⟩ <;> simp [Abs.joinUnseen]
+
 /-- **The join holds what either side holds.** -/
 theorem join_mem : ∀ d, (∀ a b v, Mem a v → Mem (Abs.joinD d a b) v) ∧ (∀ a b v, Mem b v → Mem (Abs.joinD d a b) v)
   | 0 => ⟨fun _ _ v _ => by simp [Abs.joinD]; exact Mem.any v, fun _ _ v _ => by simp [Abs.joinD]; exact Mem.any v⟩
@@ -257,16 +809,23 @@ theorem join_mem : ∀ d, (∀ a b v, Mem a v → Mem (Abs.joinD d a b) v) ∧ (
       · exact Mem.any _
     constructor
     · intro a b v h
-      cases b <;> cases h <;> simp only [Abs.joinD]
+      cases b <;> cases h <;> simp only [Abs.joinD, Abs.joinVariants]
       all_goals first
         | exact Mem.any _
+        | exact Mem.variantEnum (by assumption)
+        | exact Mem.variant (by assumption) (by assumption) (by assumption) (by assumption)
+        | exact mem_fold_left ihl _ _ (Mem.variantEnum (by assumption))
+        | exact mem_fold_left ihl _ _ (Mem.variant (by assumption) (by assumption) (by assumption) (by assumption))
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.variantEnum (by assumption)))
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.variant (by assumption) (by assumption) (by assumption) (by assumption)))
         | exact Mem.num (In_hull_left (by assumption))
         | exact Mem.date (In_hull_left (by assumption))
         | exact Mem.num (by assumption)
         | exact Mem.date (by assumption)
         | exact Mem.enumAll
         | exact Mem.boolAll
-        | exact Mem.str
+        | exact Mem.str (In_hull_left (by assumption))
+        | exact Mem.str (by assumption)
         | exact Mem.optNone
         | (simp only [Bool.true_or]; exact Mem.optNone)
         | exact Mem.optSome (by assumption) (by assumption)
@@ -279,6 +838,14 @@ theorem join_mem : ∀ d, (∀ a b v, Mem a v → Mem (Abs.joinD d a b) v) ∧ (
         | exact Mem.bool (by assumption)
         | exact Mem.list (In_hull_left (by assumption)) (fun x hx => ihl _ _ _ ((by assumption : ∀ x ∈ _, Mem _ x) x hx))
         | exact Mem.list (by assumption) (by assumption)
+        | exact Mem.dict (In_hull_left (by assumption)) (fun p hp => ihl _ _ _ ((by assumption : ∀ p ∈ _, Mem _ p.1) p hp))
+            (fun p hp => ihl _ _ _ ((by assumption : ∀ p ∈ _, Mem _ p.2) p hp)) (by assumption)
+        | exact Mem.dict (by assumption) (by assumption) (by assumption) (by assumption)
+        | exact Mem.members (In_hull_left (by assumption)) (fun x hx => ihl _ _ _ ((by assumption : ∀ x ∈ _, Mem _ x) x hx))
+            (by assumption)
+        | exact Mem.members (by assumption) (by assumption) (by assumption)
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.dict (by assumption) (by assumption) (by assumption) (by assumption)))
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.members (by assumption) (by assumption) (by assumption)))
         | exact Mem.record (recL _ _ _ (by assumption)) (relsHold_filter (by assumption))
         | exact Mem.record (by assumption) (by assumption)
         | exact Mem.transfer (recL _ _ _ (by assumption))
@@ -289,21 +856,36 @@ theorem join_mem : ∀ d, (∀ a b v, Mem a v → Mem (Abs.joinD d a b) v) ∧ (
         | exact Mem.optSome (by simp) (ihr _ _ _ Mem.boolAll)
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.enum (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.bool (by assumption)))
-        | exact Mem.optSome (by simp) (ihr _ _ _ Mem.str)
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.str (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.list (by assumption) (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.record (by assumption) (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.transfer (by assumption)))
+        | exact Mem.closAny
+        | exact Mem.clos (by assumption) (by assumption) (by assumption)
+        | exact mem_closAny (joinUnseen_left rfl)
+        | exact Mem.clos (mem_unionLams_left (by assumption)) (by assumption) (by assumption)
+        | exact Mem.optSome (by simp) (ihr _ _ _ Mem.closAny)
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.clos (by assumption) (by assumption) (by assumption)))
     · intro a b v h
-      cases a <;> cases h <;> simp only [Abs.joinD]
+      cases a <;> cases h <;> simp only [Abs.joinD, Abs.joinVariants]
       all_goals first
         | exact Mem.any _
+        | exact Mem.variantEnum (by assumption)
+        | exact Mem.variant (by assumption) (by assumption) (by assumption) (by assumption)
+        | exact mem_fold_right ihl ihr _ _ (Mem.variantEnum (by assumption))
+        | exact mem_fold_right ihl ihr _ _ (Mem.variant (by assumption) (by assumption) (by assumption) (by assumption))
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.variantEnum (by assumption)))
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.variant (by assumption) (by assumption) (by assumption) (by assumption)))
+        | exact Mem.optSome (by assumption) (ihl _ _ _ (Mem.variantEnum (by assumption)))
+        | exact Mem.optSome (by assumption) (ihl _ _ _ (Mem.variant (by assumption) (by assumption) (by assumption) (by assumption)))
         | exact Mem.num (In_hull_right (by assumption))
         | exact Mem.date (In_hull_right (by assumption))
         | exact Mem.num (by assumption)
         | exact Mem.date (by assumption)
         | exact Mem.enumAll
         | exact Mem.boolAll
-        | exact Mem.str
+        | exact Mem.str (In_hull_right (by assumption))
+        | exact Mem.str (by assumption)
         | exact Mem.optNone
         | (simp only [Bool.or_true]; exact Mem.optNone)
         | exact Mem.optSome (by assumption) (by assumption)
@@ -317,6 +899,14 @@ theorem join_mem : ∀ d, (∀ a b v, Mem a v → Mem (Abs.joinD d a b) v) ∧ (
         | exact Mem.bool (by assumption)
         | exact Mem.list (In_hull_right (by assumption)) (fun x hx => ihr _ _ _ ((by assumption : ∀ x ∈ _, Mem _ x) x hx))
         | exact Mem.list (by assumption) (by assumption)
+        | exact Mem.dict (In_hull_right (by assumption)) (fun p hp => ihr _ _ _ ((by assumption : ∀ p ∈ _, Mem _ p.1) p hp))
+            (fun p hp => ihr _ _ _ ((by assumption : ∀ p ∈ _, Mem _ p.2) p hp)) (by assumption)
+        | exact Mem.dict (by assumption) (by assumption) (by assumption) (by assumption)
+        | exact Mem.members (In_hull_right (by assumption)) (fun x hx => ihr _ _ _ ((by assumption : ∀ x ∈ _, Mem _ x) x hx))
+            (by assumption)
+        | exact Mem.members (by assumption) (by assumption) (by assumption)
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.dict (by assumption) (by assumption) (by assumption) (by assumption)))
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.members (by assumption) (by assumption) (by assumption)))
         | exact Mem.record (recR _ _ _ (by assumption)) (relsHold_of_mem (by assumption))
         | exact Mem.record (by assumption) (by assumption)
         | exact Mem.transfer (recR _ _ _ (by assumption))
@@ -327,15 +917,49 @@ theorem join_mem : ∀ d, (∀ a b v, Mem a v → Mem (Abs.joinD d a b) v) ∧ (
         | exact Mem.optSome (by simp) (ihr _ _ _ Mem.boolAll)
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.enum (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.bool (by assumption)))
-        | exact Mem.optSome (by simp) (ihr _ _ _ Mem.str)
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.str (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.list (by assumption) (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.record (by assumption) (by assumption)))
         | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.transfer (by assumption)))
+        | exact Mem.closAny
+        | exact Mem.clos (by assumption) (by assumption) (by assumption)
+        | exact mem_closAny (joinUnseen_right rfl)
+        | exact Mem.clos (mem_unionLams_right (by assumption)) (by assumption) (by assumption)
+        | exact Mem.optSome (by simp) (ihr _ _ _ Mem.closAny)
+        | exact Mem.optSome (by simp) (ihr _ _ _ (Mem.clos (by assumption) (by assumption) (by assumption)))
 
 theorem mem_join_left {a b : Abs} {v : Val} (h : Mem a v) : Mem (a.join b) v := (join_mem D).1 a b v h
 theorem mem_join_right {a b : Abs} {v : Val} (h : Mem b v) : Mem (a.join b) v := (join_mem D).2 a b v h
 
 -- ── Fields, intervals, optionals ─────────────────────────────────────────────
+
+/-- The field `f` of every value of an enum that has it, joined: a value of the field of one of them
+    is in it. -/
+theorem mem_variantField_acc {f : String} {w : Val} : ∀ (vs : List (String × List (String × Abs))) (acc : Abs),
+    (Mem acc w ∨ ∃ t r a, (t, r) ∈ vs ∧ Abs.fieldOf r f = some a ∧ Mem a w) →
+    Mem (vs.foldl (fun acc (_, fs) => match Abs.fieldOf fs f with
+      | some a => acc.join a
+      | Option.none => acc) acc) w
+  | [], acc, h => by
+    rcases h with h | ⟨_, _, _, hm, _⟩
+    · exact h
+    · simp at hm
+  | (t, r) :: rest, acc, h => by
+    simp only [List.foldl_cons]
+    apply mem_variantField_acc rest
+    rcases h with h | ⟨t', r', a, hm, ha, hw⟩
+    · left
+      split
+      · exact mem_join_left h
+      · exact h
+    · simp only [List.mem_cons] at hm
+      rcases hm with e | hm
+      · simp only [Prod.mk.injEq] at e
+        obtain ⟨rfl, rfl⟩ := e
+        left
+        rw [ha]
+        exact mem_join_right hw
+      · right; exact ⟨t', r', a, hm, ha, hw⟩
 
 /-- **The field of a record holds the field of every value.** -/
 theorem Mem_field {a : Abs} {v : Val} (h : Mem a v) : ∀ {f : String} {w : Val}, v.field? f = some w → Mem (a.field f) w := by
@@ -351,6 +975,12 @@ theorem Mem_field {a : Abs} {v : Val} (h : Mem a v) : ∀ {f : String} {w : Val}
       simp only [hfind]
       exact hf f w hw b this
   | optSome _ _ ih => intro f w hw; simp only [Abs.field]; exact ih hw
+  | @variant vs x r fs hr _ hsome hmem _ =>
+    intro f w hw
+    have hw' : fieldV fs f = some w := by simpa [Val.field?, fieldV] using hw
+    obtain ⟨a, ha⟩ := Option.isSome_iff_exists.mp (hsome f w hw')
+    simp only [Abs.field, Abs.variantField]
+    exact mem_variantField_acc vs .never (Or.inr ⟨x, r, a, recOf_mem hr, ha, hmem f w hw' a ha⟩)
   | _ => intro f w hw; simp [Val.field?] at hw
 
 theorem Mem_iv_num {a : Abs} {r : Rat} (h : Mem a (.num r)) : ∀ {i : Iv}, a.iv = some i → i.In r := by
@@ -586,7 +1216,7 @@ theorem ivDeep_numPart : ∀ {b : Abs} {r : Rat}, Mem (numPart b) (.num r) → �
   | .never, r, h, i, hi => by simp [ivDeep] at hi
   | .any, r, h, i, hi => by simp [ivDeep] at hi
   | .set _, r, h, i, hi => by simp [ivDeep] at hi
-  | .str, r, h, i, hi => by simp [ivDeep] at hi
+  | .str _, r, h, i, hi => by simp [ivDeep] at hi
   | .record _ _, r, h, i, hi => by simp [ivDeep] at hi
   | .transfer _, r, h, i, hi => by simp [ivDeep] at hi
 
@@ -602,7 +1232,7 @@ theorem hasAny_numPart : ∀ {b : Abs} {r : Rat}, Mem (numPart b) (.num r) → i
   | .any, r, h, hb => rfl
   | .never, r, h, hb => by simp only [numPart] at h; cases h
   | .set _, r, h, hb => by simp only [numPart] at h; cases h
-  | .str, r, h, hb => by simp only [numPart] at h; cases h
+  | .str _, r, h, hb => by simp only [numPart] at h; cases h
   | .record _ _, r, h, hb => by simp only [numPart] at h; cases h
   | .transfer _, r, h, hb => by simp only [numPart] at h; cases h
 
@@ -742,6 +1372,34 @@ theorem cutD_sound : ∀ (d : Nat) (a b : Abs) (v : Val), Mem a v → Mem b v �
         exact Mem.list hin (fun x hx => cutD_sound d _ _ x (he x hx) (he' x hx))
       | any => simp only [cutD]; exact Mem.list hc he
       | optSome _ hy => simp only [cutD]; exact Mem.list hc he
+    | dict hc hk hv hnd =>
+      cases hb with
+      | dict hc' hk' hv' _ =>
+        simp only [cutD]
+        obtain ⟨m, hm, hin⟩ := In_meet hc hc'
+        rw [hm]; simp only [Option.getD_some]
+        exact Mem.dict hin (fun p hp => cutD_sound d _ _ _ (hk p hp) (hk' p hp))
+          (fun p hp => cutD_sound d _ _ _ (hv p hp) (hv' p hp)) hnd
+      | any => simp only [cutD]; exact Mem.dict hc hk hv hnd
+      | optSome _ hy => simp only [cutD]; exact Mem.dict hc hk hv hnd
+    | members hc he hnd =>
+      cases hb with
+      | members hc' he' _ =>
+        simp only [cutD]
+        obtain ⟨m, hm, hin⟩ := In_meet hc hc'
+        rw [hm]; simp only [Option.getD_some]
+        exact Mem.members hin (fun x hx => cutD_sound d _ _ x (he x hx) (he' x hx)) hnd
+      | any => simp only [cutD]; exact Mem.members hc he hnd
+      | optSome _ hy => simp only [cutD]; exact Mem.members hc he hnd
+    | str hc =>
+      cases hb with
+      | str hc' =>
+        simp only [cutD]
+        obtain ⟨m, hm, hin⟩ := In_meet hc hc'
+        rw [hm]; simp only [Option.getD_some]
+        exact Mem.str hin
+      | any => simp only [cutD]; exact Mem.str hc
+      | optSome _ hy => simp only [cutD]; exact Mem.str hc
     | _ => simp only [cutD]; first | (constructor <;> assumption) | constructor | assumption
 
 -- ── Bools ────────────────────────────────────────────────────────────────────

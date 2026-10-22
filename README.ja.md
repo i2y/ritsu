@@ -20,7 +20,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | [yuen](#yuen要件の出どころ) | `.req` | 要件の出どころと、それを満たすもの | ReqIF、W3C PROV |
 | [sakai](#sakai境界づけられたコンテキストの地図) | `.ctx` | 境界づけられたコンテキストの地図 | import を確かめるツールの設定、Context Mapper |
 | [sekisho](#sekishoだれが何をしてよいか) | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | Cedar と、Cedar に尋ねる TypeScript、Python、Go |
-| [kaname](#kaname規則と日付と帳簿をつなぐコード) | `.kn` | Functional Core。ritsu の型で書き、規則と日付と帳簿を呼ぶ | `ritsu gen` が書くパッケージの中の TypeScript、Python、Go |
+| [kaname](#kanamefunctional-core) | `.kn` | Functional Core。入出力を持たない汎用のコードを ritsu の型で書き、規則と日付と帳簿も呼べる | `ritsu gen` が書くパッケージの中の TypeScript、Python、Go |
 
 どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
 
@@ -309,9 +309,69 @@ refunds.gate: ok — action 3、ポリシー 10（permit 7、forbid 3）、期�
 
 この例は、[サイトのページ](https://i2y.github.io/ritsu/ja/sekisho/)で、検査が規則に何を尋ねるか、生成する Cedar とコード、人が読むページまで、順に見られます。
 
-### kaname：規則と日付と帳簿をつなぐコード
+### kaname：Functional Core
 
-規則は判断を、日付のファイルは日付を、帳簿は額の動きを受け持ち、それぞれの言語の検査を受けています。そのあいだのコードは、規則の入力を組み立て、一つの答えを次の呼び出しに渡し、額を帳簿に渡します。モジュール（`.kn` のファイル）はそのコードを ritsu の型で書いたもので、自分では入出力を持ちません。`kaname check` は、モジュールをほかの言語と同じ決まり（単位とお金、丸め、int64）で確かめ、渡す値がどれも相手の範囲に入るかも確かめます。`total` と書いた関数が、宣言した範囲のどの入力にも答えることも示します。表ではなくコードに書いた判断は、警告になります。`ritsu gen` は、呼ぶ規則と日付と帳簿のコードの横に、TypeScript、Python、Go のコードを書きます。
+kaname は、プログラムのうち、入出力を持たずに値を受け取って値を返す部分（Functional Core）を書く、小さな汎用の言語です。モジュール（`.kn` のファイル）には、イベントで注文の状態を進める、人が入力した文字列を確かめて形を整える、倉庫の二回の棚卸しを辞書と集合で比べる、木を作り替える、といった計算を、ritsu の型（レコード、直和型、リスト、辞書、集合、文字列、ジェネリクス、`result`、関数の値）で書きます。規則、日付、帳簿もそれぞれの型のまま呼べ、規則の入力を組み立て、一つの答えを次の呼び出しに渡し、額を帳簿に渡すコードも書けます。`kaname check` は、モジュールをほかの言語と同じ決まり（単位とお金、丸め、int64）で確かめ、渡す値がどれも相手の範囲に入るかも確かめます。`total` と書いた関数が、宣言した範囲のどの入力にも答えることも示します。表ではなくコードに書いた判断は、警告になります。`ritsu gen` は、ホストが呼ぶ TypeScript、Python、Go のコードを、呼ぶ規則と日付と帳簿のコードの横に書きます。
+
+イベントで進む注文は、それだけで閉じた Functional Core です。状態を、値の下にフィールドを書いた列挙の値にし、次の状態か、イベントを拒む理由を、状態とイベントの `match` で決めます。
+
+```kn
+enum Order
+  cart
+    lines : list[Line]  count <=50
+  placed
+    lines : list[Line]  count >=1 <=50
+    total : money[USDc]
+    on    : date
+…
+fn next(order: Order, event: Event) -> result[Order, string]
+  match order
+    cart c =>
+      match event
+        add a =>
+          if c.lines.count() < 50
+            ok(Order.cart { lines: c.lines.append(a.line) })
+          else
+            err("a cart holds 50 lines")
+…
+    shipped, cancelled => err("the order is closed")
+```
+
+検査は、どの `match` も状態とイベントのどの値にも答えることを確かめ、カートの明細が 50 件に収まること、その合計が int64 に収まることを示します。そのため、どの関数も total です。
+
+```console
+$ cd crates/kaname/examples/order_flow
+$ ritsu check --lang ja
+ok order_flow.ja.kn: 関数 5 個、total
+ok order_flow.kn: 関数 5 個、total
+ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
+注文を持ち、イベントが来るたびに `ritsu gen` がモジュールから書いたコードを呼ぶのは、ホストです。TypeScript のホスト（`crates/kaname/examples/order_flow/host/main.ts`。横にある Python と Go のホストも同じものを出力します）は、合計 700 セントの注文に 650 セントの支払いを含む七つのイベントを、生成したコードに順に渡します。
+
+```ts
+for (const event of events) {
+  const r = next(order, event);
+  if (r.kind === "err") {
+    console.log(`${event.kind}: refused: ${r.error}`);
+    continue;
+  }
+  order = r.value;
+  console.log(`${event.kind}: ${order.kind}`);
+}
+```
+
+```text
+add: cart
+add: cart
+place: placed
+pay: refused: the amount is not the total
+pay: paid
+ship: shipped
+cancel: refused: the order is closed
+```
+
+次は、モジュールがほかの言語をつなぐ例です。
 
 ```kn
 module late_payment v1
@@ -342,7 +402,7 @@ fn claim(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, refere
     none
 ```
 
-請求書の期日は koyomi が、遅れた日数に対して請求できる額は規則が言い、そのあいだの日数は kaname が数えます。`paid_on - due` は −758 日から 1,431 日で、`late >= 1` の枝では 1 から 1,431 になり、規則の範囲（1 から 1,500）に入ります。`ritsu check` は、三つの言語を一度に読みます。
+請求書の期日は koyomi が、遅れた日数に対して請求できる額は規則が言い、そのあいだの日数は kaname が数えます。`paid_on - due` は −758 日から 1,431 日で、`late >= 1` の分岐の中では 1 から 1,431 になり、規則の範囲（1 から 1,500）に入ります。`ritsu check` は、三つの言語を一度に読みます。
 
 ```console
 $ cd crates/kaname/examples/late_payment
@@ -351,6 +411,8 @@ $ ritsu check --lang ja
 ok late_payment.kn: 関数 1 個、total
 ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
+
+モジュールの書き方、ホストと一緒の Functional Core の四つの例、検査が保証することは、[サイトのページ](https://i2y.github.io/ritsu/ja/kaname/)で順に見られます。そのほかは [kaname の README](crates/kaname/README.ja.md) にあります。
 
 ## 言語が出会うところ
 

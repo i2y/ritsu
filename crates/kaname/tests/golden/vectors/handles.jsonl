@@ -1,0 +1,64 @@
+{"function":"normalized","in":{"raw":"a"},"out":"a","why":"the base values"}
+{"function":"normalized","in":{"raw":""},"out":"","why":"raw: the empty string"}
+{"function":"normalized","in":{"raw":" a "},"out":"a","why":"raw: white space at both ends"}
+{"function":"normalized","in":{"raw":"a  b"},"out":"a-b","why":"raw: two spaces inside"}
+{"function":"normalized","in":{"raw":"É"},"out":"É","why":"raw: a letter outside ASCII"}
+{"function":"normalized","in":{"raw":"é"},"out":"é","why":"raw: a letter and the accent put on it"}
+{"function":"normalized","in":{"raw":"👍🏽"},"out":"👍🏽","why":"raw: two code points of two UTF-16 units each"}
+{"function":"normalized","in":{"raw":"a"},"out":"a","why":"raw: U+0085, white space"}
+{"function":"normalized","in":{"raw":"﻿a"},"out":"﻿a","why":"raw: U+FEFF, which is no white space"}
+{"function":"normalized","in":{"raw":" a"},"out":"a","why":"raw: U+00A0, white space"}
+{"function":"normalized","in":{"raw":"Ａ１"},"out":"Ａ１","why":"raw: a full-width letter and digit"}
+{"function":"normalized","in":{"raw":"-12"},"out":"-12","why":"raw: a number below zero"}
+{"function":"normalized","in":{"raw":"+12"},"out":"+12","why":"raw: a number with `+`"}
+{"function":"normalized","in":{"raw":"9223372036854775808"},"out":"9223372036854775808","why":"raw: a number past int64"}
+{"function":"normalized","in":{"raw":"2024-02-29"},"out":"2024-02-29","why":"raw: the 29th of February of a leap year"}
+{"function":"normalized","in":{"raw":"2026-02-29"},"out":"2026-02-29","why":"raw: a day no calendar has"}
+{"function":"problems","in":{"handle":"a"},"out":["shorter than 3 characters"],"why":"the base values"}
+{"function":"problems","in":{"handle":""},"out":["shorter than 3 characters"],"why":"handle: the empty string"}
+{"function":"problems","in":{"handle":" a "},"out":["a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: white space at both ends"}
+{"function":"problems","in":{"handle":"a  b"},"out":["a character other than a to z, 0 to 9 and -"],"why":"handle: two spaces inside"}
+{"function":"problems","in":{"handle":"É"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: a letter outside ASCII"}
+{"function":"problems","in":{"handle":"é"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -"],"why":"handle: a letter and the accent put on it"}
+{"function":"problems","in":{"handle":"👍🏽"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: two code points of two UTF-16 units each"}
+{"function":"problems","in":{"handle":"a"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: U+0085, white space"}
+{"function":"problems","in":{"handle":"﻿a"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: U+FEFF, which is no white space"}
+{"function":"problems","in":{"handle":" a"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: U+00A0, white space"}
+{"function":"problems","in":{"handle":"Ａ１"},"out":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: a full-width letter and digit"}
+{"function":"problems","in":{"handle":"-12"},"out":["not starting with a letter"],"why":"handle: a number below zero"}
+{"function":"problems","in":{"handle":"+12"},"out":["a character other than a to z, 0 to 9 and -","not starting with a letter"],"why":"handle: a number with `+`"}
+{"function":"problems","in":{"handle":"9223372036854775808"},"out":["not starting with a letter"],"why":"handle: a number past int64"}
+{"function":"problems","in":{"handle":"2024-02-29"},"out":["not starting with a letter"],"why":"handle: the 29th of February of a leap year"}
+{"function":"problems","in":{"handle":"2026-02-29"},"out":["not starting with a letter"],"why":"handle: a day no calendar has"}
+{"function":"handle","in":{"raw":"a"},"out":{"err":["shorter than 3 characters"]},"why":"the base values"}
+{"function":"handle","in":{"raw":""},"out":{"err":["shorter than 3 characters"]},"why":"raw: the empty string"}
+{"function":"handle","in":{"raw":" a "},"out":{"err":["shorter than 3 characters"]},"why":"raw: white space at both ends"}
+{"function":"handle","in":{"raw":"a  b"},"out":{"ok":"a-b"},"why":"raw: two spaces inside"}
+{"function":"handle","in":{"raw":"É"},"out":{"err":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"]},"why":"raw: a letter outside ASCII"}
+{"function":"handle","in":{"raw":"é"},"out":{"err":["shorter than 3 characters","a character other than a to z, 0 to 9 and -"]},"why":"raw: a letter and the accent put on it"}
+{"function":"handle","in":{"raw":"👍🏽"},"out":{"err":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"]},"why":"raw: two code points of two UTF-16 units each"}
+{"function":"handle","in":{"raw":"a"},"out":{"err":["shorter than 3 characters"]},"why":"raw: U+0085, white space"}
+{"function":"handle","in":{"raw":"﻿a"},"out":{"err":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"]},"why":"raw: U+FEFF, which is no white space"}
+{"function":"handle","in":{"raw":" a"},"out":{"err":["shorter than 3 characters"]},"why":"raw: U+00A0, white space"}
+{"function":"handle","in":{"raw":"Ａ１"},"out":{"err":["shorter than 3 characters","a character other than a to z, 0 to 9 and -","not starting with a letter"]},"why":"raw: a full-width letter and digit"}
+{"function":"handle","in":{"raw":"-12"},"out":{"err":["not starting with a letter"]},"why":"raw: a number below zero"}
+{"function":"handle","in":{"raw":"+12"},"out":{"err":["a character other than a to z, 0 to 9 and -","not starting with a letter"]},"why":"raw: a number with `+`"}
+{"function":"handle","in":{"raw":"9223372036854775808"},"out":{"err":["not starting with a letter"]},"why":"raw: a number past int64"}
+{"function":"handle","in":{"raw":"2024-02-29"},"out":{"err":["not starting with a letter"]},"why":"raw: the 29th of February of a leap year"}
+{"function":"handle","in":{"raw":"2026-02-29"},"out":{"err":["not starting with a letter"]},"why":"raw: a day no calendar has"}
+{"function":"tag","in":{"text":"a"},"out":{"err":["no # between the handle and the number"]},"why":"the base values"}
+{"function":"tag","in":{"text":""},"out":{"err":["no # between the handle and the number"]},"why":"text: the empty string"}
+{"function":"tag","in":{"text":" a "},"out":{"err":["no # between the handle and the number"]},"why":"text: white space at both ends"}
+{"function":"tag","in":{"text":"a  b"},"out":{"err":["no # between the handle and the number"]},"why":"text: two spaces inside"}
+{"function":"tag","in":{"text":"É"},"out":{"err":["no # between the handle and the number"]},"why":"text: a letter outside ASCII"}
+{"function":"tag","in":{"text":"é"},"out":{"err":["no # between the handle and the number"]},"why":"text: a letter and the accent put on it"}
+{"function":"tag","in":{"text":"👍🏽"},"out":{"err":["no # between the handle and the number"]},"why":"text: two code points of two UTF-16 units each"}
+{"function":"tag","in":{"text":"a"},"out":{"err":["no # between the handle and the number"]},"why":"text: U+0085, white space"}
+{"function":"tag","in":{"text":"﻿a"},"out":{"err":["no # between the handle and the number"]},"why":"text: U+FEFF, which is no white space"}
+{"function":"tag","in":{"text":" a"},"out":{"err":["no # between the handle and the number"]},"why":"text: U+00A0, white space"}
+{"function":"tag","in":{"text":"Ａ１"},"out":{"err":["no # between the handle and the number"]},"why":"text: a full-width letter and digit"}
+{"function":"tag","in":{"text":"-12"},"out":{"err":["no # between the handle and the number"]},"why":"text: a number below zero"}
+{"function":"tag","in":{"text":"+12"},"out":{"err":["no # between the handle and the number"]},"why":"text: a number with `+`"}
+{"function":"tag","in":{"text":"9223372036854775808"},"out":{"err":["no # between the handle and the number"]},"why":"text: a number past int64"}
+{"function":"tag","in":{"text":"2024-02-29"},"out":{"err":["no # between the handle and the number"]},"why":"text: the 29th of February of a leap year"}
+{"function":"tag","in":{"text":"2026-02-29"},"out":{"err":["no # between the handle and the number"]},"why":"text: a day no calendar has"}

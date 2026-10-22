@@ -1,6 +1,7 @@
-//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books, the workflows, the code
-//! that joins them and the code that asks the gates of a project, as one package for each of
-//! TypeScript, Python and Go, with the gates' Cedar beside them, written once.
+//! `ritsu gen` (DESIGN 9.3): the rules, the dates, the clients of the books, the workflows, the
+//! functional cores (kaname's modules) and the code that asks the gates of a project, as one package
+//! for each of TypeScript, Python and Go, with the gates' Cedar beside them, written once. kaname's
+//! modules go under glue/, a name kept because a host's code imports them by that path.
 //!
 //! ```text
 //! generated/typescript/          generated/python/              generated/go/
@@ -616,8 +617,8 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
     let what = match (glue, authz) {
         (false, false) => "The rules, the dates, the clients of the books and the workflows of a project, as one package (ritsu gen).",
         (false, true) => "The rules, the dates, the clients of the books, the workflows and the code that asks the gates of a project, as one package (ritsu gen).",
-        (true, false) => "The rules, the dates, the clients of the books, the workflows of a project and the code that joins them, as one package (ritsu gen).",
-        (true, true) => "The rules, the dates, the clients of the books, the workflows of a project, the code that joins them and the code that asks its gates, as one package (ritsu gen).",
+        (true, false) => "The rules, the dates, the clients of the books, the workflows and the functional cores (kaname's modules) of a project, as one package (ritsu gen).",
+        (true, true) => "The rules, the dates, the clients of the books, the workflows, the functional cores (kaname's modules) and the code that asks the gates of a project, as one package (ritsu gen).",
     };
     let generated = ritsu_emit::header::generated("ritsu");
     let mut out = Vec::new();
@@ -741,8 +742,8 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             let mut doc = match (glue, authz) {
                 (false, true) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the code that\n// asks the gates of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and authz/ under\n// the import path {}.\n", head(Comment::Slashes), o.module),
                 (false, false) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module),
-                (true, false) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows of a project and the\n// code that joins them, as one package (ritsu gen): rules/, dates/, books/, flows/ and glue/ under the\n// import path {}.\n", head(Comment::Slashes), o.module),
-                (true, true) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows of a project, the code\n// that joins them and the code that asks its gates, as one package (ritsu gen): rules/, dates/, books/,\n// flows/, glue/ and authz/ under the import path {}.\n", head(Comment::Slashes), o.module),
+                (true, false) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the functional\n// cores (kaname's modules) of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and\n// glue/ under the import path {}.\n", head(Comment::Slashes), o.module),
+                (true, true) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows, the functional cores\n// (kaname's modules) and the code that asks the gates of a project, as one package (ritsu gen): rules/,\n// dates/, books/, flows/, glue/ and authz/ under the import path {}.\n", head(Comment::Slashes), o.module),
             };
             if files.iter().any(|(p, _, _)| p == "units/units.go") {
                 doc.push_str("//\n// The types of the units its rules and books take amounts in are in units/, one of each unit.\n");

@@ -4,6 +4,7 @@ import KanameCore.Iv
 import KanameCore.IvSound
 import KanameCore.Value
 import KanameCore.Syntax
+import KanameCore.Text
 import KanameCore.Eval
 import KanameCore.Analysis
 import KanameCore.Json
@@ -16,9 +17,14 @@ import KanameCore.SoundCalls
 import KanameCore.SoundWalk
 import KanameCore.SoundStep
 import KanameCore.SoundFlow
+import KanameCore.SoundReread
 import KanameCore.SoundApply
 import KanameCore.SoundReduce
 import KanameCore.SoundArith
+import KanameCore.SoundPrim
+import KanameCore.SoundText
+import KanameCore.SoundDict
+import KanameCore.SoundFns
 import KanameCore.SoundAll
 import KanameCore.Total
 import KanameCore.Verdicts

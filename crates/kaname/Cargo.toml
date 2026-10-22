@@ -3,7 +3,7 @@ name = "kaname"
 version.workspace = true
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "A small language for the code that joins rules, dates and books: functions, records and lists in ritsu's types, which call rulec's rules, koyomi's dates and chobo's transfers and are checked by the same rules of units and rounding"
+description = "A small general-purpose language for writing a functional core, with no input or output: functions over records, enums with fields, lists, dicts, sets and strings in ritsu's types, checked for ranges, rounding and int64, which call rulec's rules, koyomi's dates and chobo's transfers in those types too"
 repository.workspace = true
 
 # ritsu's base layer, and nothing from outside (ritsu's DESIGN 3.1): JSON is ritsu-base's, as

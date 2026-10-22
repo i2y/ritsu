@@ -57,7 +57,7 @@ theorem map_decided_nil : ∀ (l : List FnFacts), l.map (FnFacts.decided []) = l
     inferred from them, the values of the expressions as they were. -/
 theorem analyzeWith_parts (M : Module) :
     (analyzeWith M).1 = (analyzeModule M).1.map (FnFacts.decided M.verdicts) ∧
-    (analyzeWith M).2.1 = M.rings.foldl (effectsStep (analyzeWith M).1) (List.replicate M.fns.length ⟨[], [], true⟩) ∧
+    (analyzeWith M).2.1 = M.rings.foldl (effectsStep (analyzeWith M).1) (List.replicate M.fns.length ⟨[], [], true, false⟩) ∧
     (analyzeWith M).2.2 = (analyzeModule M).2.2 := by
   unfold analyzeWith
   generalize analyzeModule M = t
@@ -65,7 +65,7 @@ theorem analyzeWith_parts (M : Module) :
   exact ⟨rfl, rfl, rfl⟩
 
 theorem analyzeModule_effects (M : Module) :
-    (analyzeModule M).2.1 = M.rings.foldl (effectsStep (analyzeModule M).1) (List.replicate M.fns.length ⟨[], [], true⟩) :=
+    (analyzeModule M).2.1 = M.rings.foldl (effectsStep (analyzeModule M).1) (List.replicate M.fns.length ⟨[], [], true, false⟩) :=
   rfl
 
 /-- **With no verdicts, the analysis is `analyzeModule`**, which the theorems of `Total.lean` are
@@ -79,14 +79,15 @@ theorem analyzeWith_nil {M : Module} (h : M.verdicts = []) : analyzeWith M = ana
 /-- **A function the effects inferred with the verdicts call total does not fail**, for any values
     its parameters take, where the facts with the verdicts taken are sound: what each verdict that
     holds says of its place is so (for an analysis that let no running value go, as `module_sound`
-    is). With no verdicts that is `module_sound` itself (`analyzeWith_nil`). -/
+    is), where the effect of no function it is given goes on to it (kaname's DESIGN 27.5). With no
+    verdicts that is `module_sound` itself (`analyzeWith_nil`). -/
 theorem total_with_sound {C : Ctx}
     (hV : ∀ x ∈ C.M.rings, ∀ f ∈ x.1, f < C.M.fns.length → FnSound C f (((analyzeWith C.M).1)[f]?.getD default)) :
-    ∀ f e, (analyzeWith C.M).2.1[f]? = some e → e.total = true → NoFail C f := by
-  intro f e hf ht
-  have hok := effects_ok (C := C) (analyzeWith C.M).1 C.M.rings (List.replicate C.M.fns.length ⟨[], [], true⟩) hV effOK_start
+    ∀ f e, (analyzeWith C.M).2.1[f]? = some e → e.total = true → e.through = false → NoFail C f := by
+  intro f e hf ht hth
+  have hok := effects_ok (C := C) (analyzeWith C.M).1 C.M.rings (List.replicate C.M.fns.length ⟨[], [], true, false⟩) hV effOK_start
   rw [(analyzeWith_parts C.M).2.1] at hf
-  exact hok.2.2 f e hf (total_clean.mp ht)
+  exact hok.2.2 f e hf (total_clean ht hth)
 
 -- ── What a call of a rule keeps between its inputs ──────────────────────────
 

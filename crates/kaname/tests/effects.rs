@@ -46,6 +46,36 @@ fn what_a_function_can_fail_with_and_what_its_callers_take() {
     assert!(e.diverges && e.fails.is_empty() && !e.total());
 }
 
+/// A value of an enum built with fields that declare ranges is a place of the kind `range`, as a
+/// record built is; so is one made from another (DESIGN 23.4, 23.10). A `match` that splits a value
+/// of the enum and builds none is total.
+#[test]
+fn a_value_with_fields_is_built_as_a_record_is() {
+    let t = TempDir::new("kaname-effects-sums");
+    let order = "enum Order\n  draft\n  placed\n    on : date  range >=2026-01-01 <=2026-12-31\n\n";
+    let o = check(
+        &t,
+        &format!("{HEAD}{order}fn place(d: date range >=2026-01-01 <=2027-12-31) -> Order\n  Order.placed {{ on: d }}\n\nfn later(p: Order.placed, d: date range >=2026-01-01 <=2027-12-31) -> Order\n  Order.placed {{ ..p, on: d }}\n\nfn kept(p: Order.placed) -> Order\n  Order.placed {{ ..p }}\n\nfn on(o: Order) -> date?\n  match o\n    placed p => p.on\n    else => none\n"),
+    );
+    assert_eq!(common::codes(&o), ["E301", "E301"]);
+    assert_eq!(effects(&o), ["fails range", "fails range", "total", "total"]);
+}
+
+/// The builtins of dicts, sets and lists fail nothing (DESIGN 24.7): a place past a list's ends cuts
+/// it or answers none. The two that have places are `mod` by a value that may be 0 (`zero`) and the
+/// count of `numbers` (`overflow`, where it may pass int64).
+#[test]
+fn the_builtins_of_collections_fail_nothing_but_mod_and_numbers() {
+    let t = TempDir::new("kaname-effects-collections");
+    let o = check(
+        &t,
+        &format!(
+            "{HEAD}fn walk(xs: list[number] count <=9 range >=0 <=9, d: dict[string, number] count <=9, i: number range >=-9 <=9) -> number\n  xs.sort().distinct().slice(i, i + 3).take(i).drop(i).reverse().concat(d.values()).append(1).count() + d.put(\"a\", 1).remove(\"b\").count()\n\nfn at(xs: list[number] count <=9 range >=0 <=9, i: number range >=-9 <=9) -> number?\n  xs.at(i)\n\nfn rem(x: number range >=0 <=9, n: number range >=1 <=3) -> number\n  mod(x, n)\n\nfn rem0(x: number range >=0 <=9, n: number range >=0 <=3) -> number\n  mod(x, n)\n\nfn some_numbers(a: number range >=1 <=9, b: number range >=0 <=9) -> number\n  numbers(a, b).count()\n\nfn all_numbers(a: number, b: number) -> number\n  numbers(a, b).count()\n"
+        ),
+    );
+    assert_eq!(effects(&o), ["total", "total", "total", "fails zero", "total", "fails overflow"]);
+}
+
 #[test]
 fn what_is_written_holds_what_is_inferred() {
     let t = TempDir::new("kaname-effects-written");
@@ -73,6 +103,42 @@ fn what_is_written_holds_what_is_inferred() {
     assert!(common::shown(&o, Lang::En).contains("  = Line 7: it calls `area`, whose effect is `fails range`\n"), "{}", common::shown(&o, Lang::En));
     let ja = common::shown(&o, Lang::Ja);
     assert!(ja.contains("エラー[E401]: ") && ja.contains("関数 `twice` には `total` と書いてありますが、`range` で失敗することがあります\n"), "{ja}");
+}
+
+/// An overflow that comes from the end of a type, a value whose range is not written (DESIGN 22.2,
+/// 22.3): nothing is said, the effect has `overflow`, and `total` written on the function is E401 with
+/// the place in a note; one narrowed by a branch is shown, and one from a range written, even all of
+/// int64, is said as it was.
+#[test]
+fn an_overflow_from_the_end_of_a_type_is_in_the_effect() {
+    let t = TempDir::new("kaname-effects-open");
+    let o = check(&t, &format!("{HEAD}fn next_id(last: number) -> number\n  last + 1\n\nfn caller(n: number) -> number\n  next_id(last: n)\n"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    assert_eq!(effects(&o), ["fails overflow", "fails overflow"]);
+    let c = o.analysed.as_ref().unwrap();
+    assert_eq!(c.analysis.get().unwrap().fns[0].places[0].outcome, kaname::ranges::Outcome::Unbounded);
+    // written `total`: E401, the place in its note
+    let o = check(&t, &format!("{HEAD}fn doubled(n: number) -> number total\n  n * 2\n"));
+    assert_eq!(common::codes(&o), ["E401"]);
+    let en = common::shown(&o, Lang::En);
+    assert!(en.contains("  = Line 4: the value of `n * 2` can leave int64, as it comes from a value whose range is not written (`overflow`)\n"), "{en}");
+    let ja = common::shown(&o, Lang::Ja);
+    assert!(ja.contains("  = 4 行目: `n * 2` の値は、範囲を書かない値から来るので、int64 を超えることがあります（`overflow`）\n"), "{ja}");
+    // narrowed by a branch: shown, and total holds
+    let o = check(&t, &format!("{HEAD}fn doubled(n: number) -> number total\n  if n >= 0 and n <= 1_000\n    n * 2\n  else\n    0\n"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    // the whole of int64 written is a promise, and an input of it takes the product past int64
+    let o = check(&t, &format!("{HEAD}fn doubled(n: number range >=-9_223_372_036_854_775_808 <=9_223_372_036_854_775_807) -> number\n  n * 2\n"));
+    assert_eq!(common::codes(&o), ["E302"]);
+    // a function in a ring with no range on its answer answers the whole of its type: one more
+    // leaves int64 at its end, said by nothing, and the effect is as it was
+    let o = check(&t, &format!("{HEAD}fn countdown(n: number range >=0 <=100) -> number\n  if n <= 0 then 0 else countdown(n: n - 1) + 1\n"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    assert_eq!(effects(&o), ["fails overflow diverges"]);
+    // a sum over a list whose count is not written
+    let o = check(&t, &format!("{HEAD}fn total(xs: list[money[USDc]] range >=0USDc <=100USDc) -> money[USDc]\n  sum(xs, x => x)\n"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    assert_eq!(effects(&o), ["fails overflow"]);
 }
 
 /// A function of another module brings its effect with it.
@@ -180,7 +246,7 @@ fn a_place_that_waits_is_counted_and_not_held_against_what_is_written() {
 
 /// DESIGN 12's materials: the late payment with its branch taken away (E301, with an input that
 /// gives the rule days it does not take), and the weight of a cart that may have no lines, which
-/// makes `quote`'s `total` E401 (DESIGN 17.3).
+/// makes `quote`'s `total` E401 (DESIGN 17.8).
 #[test]
 fn the_materials_of_design_12() {
     let t = TempDir::new("kaname-effects-design");
@@ -205,4 +271,114 @@ fn the_materials_of_design_12() {
     let text = common::shown(&o, Lang::En);
     assert!(text.contains(":15:1: `quote` is written `total`, but it can fail with `rule`\n"), "{text}");
     assert!(text.contains("  = The analysis of ranges finds the value in >=0oz <=240oz, and no input among the function's vectors takes it out.\n"), "{text}");
+}
+
+/// A generic function's own effect is that of the analysis made once, from the types declared: a sum
+/// of a number whose range is not written may overflow. A call that is read again with the values it
+/// gives takes the effect of that reading: the same function called with a number of 0 to 5 is total
+/// there (DESIGN 26.5, 26.6). A call past four readings, and a call in a ring, take the function's own
+/// effect; and E401 says which call of which reading brings a kind in.
+#[test]
+fn a_call_read_again_takes_the_effect_of_that_reading() {
+    let t = TempDir::new("kaname-effects-generic");
+    let hops = "fn hop1[T](x: T, n: number) -> number\n  hop2(x: x, n: n)\n\nfn hop2[T](x: T, n: number) -> number\n  hop3(x: x, n: n)\n\nfn hop3[T](x: T, n: number) -> number\n  hop4(x: x, n: n)\n\nfn hop4[T](x: T, n: number) -> number\n  bump(x: x, n: n)\n\nfn bump[T](x: T, n: number) -> number\n  n + 1\n\n";
+    let o = check(&t, &format!("{HEAD}{hops}fn near(n: number range >=0 <=5) -> number\n  hop3(x: \"a\", n: n)\n\nfn far(n: number range >=0 <=5) -> number\n  hop1(x: \"a\", n: n)\n\nfn own(n: number) -> number\n  bump(x: true, n: n)\n"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    assert_eq!(effects(&o), ["fails overflow", "fails overflow", "fails overflow", "fails overflow", "fails overflow", "total", "fails overflow", "fails overflow"]);
+    // a ring of generic calls is read as declared, and may not stop
+    let o = check(&t, &format!("{HEAD}fn count_down[T](x: T, n: number range >=0 <=10) -> number range >=0 <=10\n  if n = 0 then 0 else count_down(x: x, n: n - 1)\n\nfn ring(n: number range >=0 <=10) -> number range >=0 <=10\n  count_down(x: true, n: n)\n"));
+    assert_eq!(effects(&o), ["diverges", "diverges"]);
+    // `total` written of a call past four readings: E401, with the call that brings `overflow` in
+    let o = check(&t, &format!("{HEAD}{hops}fn far(n: number range >=0 <=5) -> number total\n  hop1(x: \"a\", n: n)\n"));
+    assert_eq!(common::codes(&o), ["E401"]);
+    let said = o.diags[0].render(Lang::En);
+    assert!(said.contains("overflow"), "{said}");
+}
+
+/// Function values (DESIGN 27.5): the places of a lambda's body are the places of the function that
+/// wrote it, wherever the lambda is read; a function given by its name is called by the function that
+/// gives it, and naming a function is calling it, for the rings too; a call of a parameter of a
+/// function type takes the effect written on the type, none where none is written, and that
+/// parameter's effect goes on to the callers (`through`); and an effect written on a function type is
+/// held to the function given (E402).
+#[test]
+fn the_effects_of_function_values() {
+    let t = TempDir::new("kaname-effects-hof");
+    let o = check(&t, include_str!("modules/hof.kn"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    let c = o.analysed.as_ref().unwrap();
+    let a = c.analysis.get().unwrap();
+    let of = |name: &str| {
+        let f = c.decls.fns.iter().position(|x| x.name.text == name).unwrap();
+        a.fns[f].effect.written()
+    };
+    // what takes functions has no place of its own but those it writes: a sum nothing bounds overflows
+    assert_eq!(of("total_by"), "fails overflow");
+    assert_eq!(of("apply_all"), "total");
+    assert_eq!(of("apply_each"), "total");
+    // read again where it is called, the lines and the lambda bound the sum
+    assert_eq!(of("order_total"), "total");
+    // a lambda that can overflow is the caller's, not the function's that calls it
+    assert_eq!(of("bumped"), "fails overflow");
+    assert_eq!(of("shifted"), "total");
+    // a function given by its name that can overflow: its effect is the effect of the one that gives it
+    assert_eq!(of("doubled"), "fails overflow");
+    assert_eq!(of("all_doubled"), "fails overflow");
+    // the effect written on a function type is taken where it is called
+    assert_eq!(of("sum_with"), "fails overflow");
+    assert_eq!(of("squares"), "total");
+    assert_eq!(of("all_within"), "total");
+    // a function given itself is in a ring, and may not stop
+    assert_eq!(of("steps_down"), "fails overflow diverges");
+    assert_eq!(of("via"), "total");
+    // past four readings, the lambda is read once with every value, and overflows
+    assert_eq!(of("deep"), "fails overflow");
+    // `through`: the parameters of a function type with no effect written on them
+    let fns: Vec<String> = c.decls.fns.iter().map(|f| f.name.text.clone()).collect();
+    let info = |name: &str| &c.decls.fns[fns.iter().position(|x| x == name).unwrap()];
+    assert_eq!(kaname::effects::through(info("total_by")), ["amount"]);
+    assert_eq!(kaname::effects::through(info("all_within")), Vec::<String>::new());
+    assert_eq!(kaname::effects::through(info("sum_with")), Vec::<String>::new());
+    // `total` written on a function that gives a lambda that can overflow: E401; on a function type
+    // given one: E402
+    let head = "module main v1\n\nfn apply_each[T](xs: list[T], f: (T) -> T) -> list[T]\n  xs.map(x => f(x))\n\nfn all_within(xs: list[number] count <=9, test: (number) -> bool total) -> bool\n  xs.all(x => test(x))\n\n";
+    let o = check(&t, &format!("{head}fn bumped(xs: list[number] count <=9) -> list[number] total\n  apply_each(xs: xs, f: x => x + 1)\n"));
+    assert_eq!(common::codes(&o), ["E401"]);
+    let o = check(&t, &format!("{head}fn grows(xs: list[number] count <=9) -> bool\n  all_within(xs: xs, test: x => x + 1 > x)\n"));
+    assert_eq!(common::codes(&o), ["E402"]);
+    let said = o.diags[0].render(Lang::En);
+    assert!(said.contains("fails overflow"), "{said}");
+    let o = check(&t, &format!("{head}fn grows(xs: list[number] count <=9 range >=0 <=9) -> bool\n  all_within(xs: xs, test: x => x + 1 > x)\n"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new());
+    // a function given by its name that can overflow, to a type written `total`: E402
+    let o = check(&t, &format!("{head}fn next(n: number) -> bool\n  n + 1 > n\n\nfn grows(xs: list[number] count <=9) -> bool\n  all_within(xs: xs, test: next)\n"));
+    assert_eq!(common::codes(&o), ["E402"]);
+}
+
+/// The functions over values of types that hold themselves (DESIGN 28.1): a function that walks one
+/// recurses, and may not stop; giving such a value to a function is no place of `range` (a call holds
+/// nothing inside it), wherever it comes from, three steps under the parameter too; a sum of what a
+/// recursion answers, its range not written, is an overflow from the end of a type.
+#[test]
+fn the_effects_of_functions_over_values_that_hold_themselves() {
+    let t = TempDir::new("kaname-effects-trees");
+    let o = check(&t, include_str!("modules/trees.kn"));
+    assert_eq!(common::codes(&o), ["W302"]);
+    let c = o.analysed.as_ref().unwrap();
+    let a = c.analysis.get().unwrap();
+    let effect = |name: &str| a.fns[kaname::interp::function(c, name).unwrap()].effect.written();
+    assert_eq!(effect("size"), "fails overflow diverges");
+    assert_eq!(effect("names"), "diverges");
+    assert_eq!(effect("chain"), "diverges");
+    assert_eq!(effect("same"), "total");
+    assert_eq!(effect("named"), "total");
+    assert_eq!(effect("literal"), "total");
+    assert_eq!(effect("wide_shares"), "fails overflow diverges");
+    assert_eq!(effect("grand"), "fails overflow diverges");
+    // no place of a parameter that takes a value of a type that holds itself is left to the code
+    for f in &a.fns {
+        for pl in &f.places {
+            assert!(!(pl.kind == FailKind::Range && pl.outcome != kaname::ranges::Outcome::Shown), "{:?}", pl);
+        }
+    }
 }

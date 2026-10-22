@@ -1,0 +1,162 @@
+module texts v1
+description "Strings as sequences of code points: names made tidy, commands checked, numbers and dates read from text, strings cut, padded and compared, and the strings the generated languages read differently"
+
+record Command
+  name   : string  count <=40
+  email  : string  count <=60
+  amount : string  count <=20
+
+record Entry
+  code  : string  count <=8
+  label : string  count >=1 <=24
+
+# a name made tidy: the white space taken off, one space between the words, A to Z made a to z
+fn handle(name: string) -> string
+  name.trim().words().join(" ").lower_ascii()
+
+fn initials(name: string count <=60) -> string
+  name.words().map(w => w.take(1)).join("").upper_ascii()
+
+fn slug(title: string count <=80) -> string
+  title.trim().lower_ascii().replace(" ", "-")
+
+fn tidy_ends(s: string count <=12) -> list[string]
+  [s.trim_start(), s.trim_end(), s.trim()]
+
+# a command checked: what is wrong with it, in the order of its fields
+fn email_problem(email: string count <=60) -> string?
+  match email.index_of("@")
+    none => "no @"
+    some at =>
+      if at = 0
+        "nothing before @"
+      else if email.ends_with("@") or email.ends_with(".")
+        "nothing after @"
+      else
+        none
+
+fn amount_problem(amount: string count <=20) -> string?
+  match amount.trim().parse_number()
+    none => "no whole number"
+    some n => if n <= 0 then "not above zero" else none
+
+fn problems(c: Command) -> list[string]
+  let name = c.name.trim()
+  let named : string? = if name.count() = 0 then "no name" else none
+  [named, email_problem(email: c.email), amount_problem(amount: c.amount)].filter_map(x => x)
+
+# numbers and dates read from text, one way in every language
+fn amount(text: string count <=20) -> number?
+  text.parse_number()
+
+fn day(text: string count <=12) -> date?
+  text.parse_date()
+
+fn days_between(a: string count <=10, b: string count <=10) -> number?
+  match a.parse_date()
+    none => none
+    some x =>
+      match b.parse_date()
+        none => none
+        some y => y - x
+
+# counted, cut and found in code points
+fn lengths(s: string) -> list[number]
+  [s.count(), count(s), s.chars().count(), s.code_points().count()]
+
+fn middle(s: string count <=10, start: number range >=-1 <=12, stop: number range >=-1 <=12) -> string
+  s.slice(start, stop)
+
+fn head_and_tail(s: string count <=10, n: number range >=-1 <=12) -> string
+  concat(s.take(n), "|", s.drop(n))
+
+fn place(s: string count <=12, t: string count <=3) -> number?
+  s.index_of(t)
+
+fn kind(s: string count <=12) -> string
+  if s.contains("@")
+    "email"
+  else if starts_with(s, "+") or s.starts_with("-")
+    "signed"
+  else
+    "other"
+
+fn reversed(s: string count <=8) -> string
+  s.chars().reverse().join("")
+
+fn shifted(s: string count <=6, by: number range >=-2 <=2) -> string?
+  s.code_points().map(c => c + by).to_text()
+
+fn fields(line: string count <=20, sep: string count <=2) -> list[string]
+  line.split(sep)
+
+fn lines(xs: list[string] count <=3) -> string
+  xs.join(char(10))
+
+# padded to a width: the fill repeated and cut, nothing where the string is that long already
+fn padded(n: number range >=0 <=99_999, width: number range >=0 <=8) -> string
+  text(n).pad_start(width, "0")
+
+fn label(s: string count <=10, width: number range >=-1 <=12, fill: string count <=2) -> string
+  s.pad_end(width, fill)
+
+# a count written, kept by the answer: what the analysis shows
+fn short(s: string) -> string count <=5
+  s.take(5)
+
+fn entry(code: string, label: string count <=30) -> Entry?
+  if code.count() <= 8 and label.count() >= 1 and label.count() <= 24
+    Entry { code: code, label: label }
+  else
+    none
+
+# compared and ordered by their code points
+fn before(a: string, b: string) -> bool
+  a < b
+
+fn compared(a: string count <=4, b: string count <=4) -> list[bool]
+  [a < b, a <= b, a > b, a >= b, a = b, a != b]
+
+fn earliest(a: string, b: string) -> list[string]
+  [min(a, b), max(a, b)]
+
+fn ordered(xs: list[string] count <=4) -> list[string]
+  xs.sort()
+
+fn by_code(es: list[Entry] count <=3) -> list[string]
+  es.sort_by_desc(e => e.code).map(e => e.label)
+
+fn tally(words: list[string] count <=5) -> dict[string, number]
+  words.group_by(w => w.lower_ascii()).map_values(ws => ws.count())
+
+examples
+  handle(name: "  Ada   LOVELACE ") = "ada lovelace"
+  initials(name: "ada  lovelace") = "AL"
+  slug(title: " Hello World ") = "hello-world"
+  email_problem(email: "a@b.org") = none
+  email_problem(email: "@b") = "nothing before @"
+  problems(c: Command { name: "  ", email: "ab", amount: " 12 " }) = ["no name", "no @"]
+  amount(text: "+12") = 12
+  amount(text: " 12 ") = none
+  amount(text: "1_000") = none
+  amount(text: "９") = none
+  amount(text: "9223372036854775808") = none
+  day(text: "2024-02-29") = 2024-02-29
+  day(text: "2026-02-29") = none
+  days_between(a: "2026-01-01", b: "2026-03-01") = 59
+  lengths(s: "👍🏽") = [2, 2, 2, 2]
+  lengths(s: concat("e", char(769))) = [2, 2, 2, 2]
+  middle(s: "a👍b", start: 1, stop: 2) = "👍"
+  head_and_tail(s: "😀x", n: 1) = "😀|x"
+  place(s: "a👍b", t: "b") = 2
+  place(s: "ab", t: "") = 0
+  reversed(s: "ab👍") = "👍ba"
+  shifted(s: "ab", by: 1) = "bc"
+  fields(line: ",a,,b,", sep: ",") = ["", "a", "", "b", ""]
+  fields(line: "ab", sep: "") = ["a", "b"]
+  padded(n: 42, width: 5) = "00042"
+  label(s: "ab", width: 5, fill: "xy") = "abxyx"
+  before(a: "｡", b: "😀") = true
+  earliest(a: "b", b: "a") = ["a", "b"]
+  ordered(xs: ["b", "😀", "｡", "a"]) = ["a", "b", "｡", "😀"]
+  tally(words: ["A", "a", "b"]) = ["a": 2, "b": 1]

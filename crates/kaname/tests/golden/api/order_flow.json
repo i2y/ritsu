@@ -1,0 +1,536 @@
+{
+  "kaname": "<version>",
+  "file": "order_flow.kn",
+  "module": {
+    "name": "order_flow",
+    "alias": "order_flow",
+    "version": "v1",
+    "description": "An order moved from state to state by the events its host hands it: each state is a value of a sum with the fields it has, and the next state, or why an event is refused, is a match on the state and the event",
+    "sha256": "813333749bfc58617ca637bda99056cad3661b190f77e9189c97f4802c7cd09f"
+  },
+  "generated": {
+    "typescript": "glue/order_flow.ts",
+    "python": "glue/order_flow.py",
+    "go": "glue/orderflow/orderflow.go"
+  },
+  "uses": [],
+  "enums": [
+    {
+      "name": "Order",
+      "alias": "Order",
+      "ordered": false,
+      "values": [
+        {
+          "name": "cart",
+          "alias": "cart",
+          "label": null,
+          "fields": [
+            {
+              "name": "lines",
+              "alias": "lines",
+              "type": "list[Line]",
+              "range": null,
+              "count": "<=50",
+              "line": 11
+            }
+          ],
+          "generated": {
+            "typescript": "OrderCart",
+            "python": "OrderCart",
+            "go": "OrderCart"
+          }
+        },
+        {
+          "name": "placed",
+          "alias": "placed",
+          "label": null,
+          "fields": [
+            {
+              "name": "lines",
+              "alias": "lines",
+              "type": "list[Line]",
+              "range": null,
+              "count": ">=1 <=50",
+              "line": 13
+            },
+            {
+              "name": "total",
+              "alias": "total",
+              "type": "money[USDc]",
+              "range": null,
+              "count": null,
+              "line": 14
+            },
+            {
+              "name": "on",
+              "alias": "on",
+              "type": "date",
+              "range": null,
+              "count": null,
+              "line": 15
+            }
+          ],
+          "generated": {
+            "typescript": "OrderPlaced",
+            "python": "OrderPlaced",
+            "go": "OrderPlaced"
+          }
+        },
+        {
+          "name": "paid",
+          "alias": "paid",
+          "label": null,
+          "fields": [
+            {
+              "name": "lines",
+              "alias": "lines",
+              "type": "list[Line]",
+              "range": null,
+              "count": ">=1 <=50",
+              "line": 17
+            },
+            {
+              "name": "on",
+              "alias": "on",
+              "type": "date",
+              "range": null,
+              "count": null,
+              "line": 18
+            }
+          ],
+          "generated": {
+            "typescript": "OrderPaid",
+            "python": "OrderPaid",
+            "go": "OrderPaid"
+          }
+        },
+        {
+          "name": "shipped",
+          "alias": "shipped",
+          "label": null,
+          "fields": [
+            {
+              "name": "lines",
+              "alias": "lines",
+              "type": "list[Line]",
+              "range": null,
+              "count": ">=1 <=50",
+              "line": 20
+            },
+            {
+              "name": "tracking",
+              "alias": "tracking",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 21
+            }
+          ],
+          "generated": {
+            "typescript": "OrderShipped",
+            "python": "OrderShipped",
+            "go": "OrderShipped"
+          }
+        },
+        {
+          "name": "cancelled",
+          "alias": "cancelled",
+          "label": null,
+          "fields": [
+            {
+              "name": "reason",
+              "alias": "reason",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 23
+            }
+          ],
+          "generated": {
+            "typescript": "OrderCancelled",
+            "python": "OrderCancelled",
+            "go": "OrderCancelled"
+          }
+        }
+      ],
+      "line": 9,
+      "generated": {
+        "typescript": "Order",
+        "python": "Order",
+        "go": "Order"
+      }
+    },
+    {
+      "name": "Event",
+      "alias": "Event",
+      "ordered": false,
+      "values": [
+        {
+          "name": "add",
+          "alias": "add",
+          "label": null,
+          "fields": [
+            {
+              "name": "line",
+              "alias": "line",
+              "type": "Line",
+              "range": null,
+              "count": null,
+              "line": 27
+            }
+          ],
+          "generated": {
+            "typescript": "EventAdd",
+            "python": "EventAdd",
+            "go": "EventAdd"
+          }
+        },
+        {
+          "name": "remove",
+          "alias": "remove",
+          "label": null,
+          "fields": [
+            {
+              "name": "sku",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 29
+            }
+          ],
+          "generated": {
+            "typescript": "EventRemove",
+            "python": "EventRemove",
+            "go": "EventRemove"
+          }
+        },
+        {
+          "name": "place",
+          "alias": "place",
+          "label": null,
+          "fields": [
+            {
+              "name": "on",
+              "alias": "on",
+              "type": "date",
+              "range": null,
+              "count": null,
+              "line": 31
+            }
+          ],
+          "generated": {
+            "typescript": "EventPlace",
+            "python": "EventPlace",
+            "go": "EventPlace"
+          }
+        },
+        {
+          "name": "pay",
+          "alias": "pay",
+          "label": null,
+          "fields": [
+            {
+              "name": "amount",
+              "alias": "amount",
+              "type": "money[USDc]",
+              "range": null,
+              "count": null,
+              "line": 33
+            }
+          ],
+          "generated": {
+            "typescript": "EventPay",
+            "python": "EventPay",
+            "go": "EventPay"
+          }
+        },
+        {
+          "name": "ship",
+          "alias": "ship",
+          "label": null,
+          "fields": [
+            {
+              "name": "tracking",
+              "alias": "tracking",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 35
+            }
+          ],
+          "generated": {
+            "typescript": "EventShip",
+            "python": "EventShip",
+            "go": "EventShip"
+          }
+        },
+        {
+          "name": "cancel",
+          "alias": "cancel",
+          "label": null,
+          "fields": [
+            {
+              "name": "reason",
+              "alias": "reason",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 37
+            }
+          ],
+          "generated": {
+            "typescript": "EventCancel",
+            "python": "EventCancel",
+            "go": "EventCancel"
+          }
+        }
+      ],
+      "line": 25,
+      "generated": {
+        "typescript": "Event",
+        "python": "Event",
+        "go": "Event"
+      }
+    }
+  ],
+  "records": [
+    {
+      "name": "Line",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": ">=1 <=20",
+          "line": 5
+        },
+        {
+          "name": "qty",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=1 <=100",
+          "count": null,
+          "line": 6
+        },
+        {
+          "name": "price",
+          "alias": "price",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000000USDc",
+          "count": null,
+          "line": 7
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "total",
+      "alias": "total",
+      "line": 40,
+      "description": null,
+      "params": [
+        {
+          "name": "lines",
+          "alias": "lines",
+          "type": "list[Line]",
+          "range": null,
+          "count": "<=50"
+        }
+      ],
+      "result": {
+        "type": "money[USDc]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "total",
+        "python": "total",
+        "go": "Total"
+      }
+    },
+    {
+      "name": "next",
+      "alias": "next",
+      "line": 44,
+      "description": null,
+      "params": [
+        {
+          "name": "order",
+          "alias": "order",
+          "type": "Order",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "event",
+          "alias": "event",
+          "type": "Event",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[Order, string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 58,
+          "function": "total"
+        }
+      ],
+      "generated": {
+        "typescript": "next",
+        "python": "next",
+        "go": "Next"
+      }
+    },
+    {
+      "name": "replay",
+      "alias": "replay",
+      "line": 77,
+      "description": null,
+      "params": [
+        {
+          "name": "events",
+          "alias": "events",
+          "type": "list[Event]",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[Order, string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 79,
+          "function": "after"
+        },
+        {
+          "line": 79,
+          "function": "after"
+        }
+      ],
+      "generated": {
+        "typescript": "replay",
+        "python": "replay",
+        "go": "Replay"
+      }
+    },
+    {
+      "name": "after",
+      "alias": "after",
+      "line": 81,
+      "description": null,
+      "params": [
+        {
+          "name": "r",
+          "alias": "r",
+          "type": "result[Order, string]",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "event",
+          "alias": "event",
+          "type": "Event",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[Order, string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 83,
+          "function": "next"
+        }
+      ],
+      "generated": {
+        "typescript": "after",
+        "python": "after",
+        "go": "After"
+      }
+    },
+    {
+      "name": "open",
+      "alias": "open",
+      "line": 87,
+      "description": null,
+      "params": [
+        {
+          "name": "order",
+          "alias": "order",
+          "type": "Order",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "bool",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "open",
+        "python": "open",
+        "go": "Open"
+      }
+    }
+  ],
+  "transfers": []
+}

@@ -1,0 +1,190 @@
+module 総称(generic_ja) v1
+description "総称のレコード、列挙、関数：何でも入る頁、見つかった値か見つからない理由、リストの先頭か代わりの値、鍵のリストの最大と鍵ごとの数、二つの頁の比べ、鍵のレコードの並べ替え。総称の関数は呼ぶところで読み直し、四段まで深く読み、呼び出しの輪の中では読み直さず、型の引数をそのまま、入れ替えて、または型の引数を含まない型で渡す。generic.kn の日本語の版"
+
+record 頁(Page)[T]
+  項目(items) : list[T]  count <=100
+  次(next)    : string?
+
+enum 探索(Found)[T]
+  あり(hit)
+    値(value)   : T
+    位置(at)    : number  range >=0 <=99
+  なし(miss)
+    理由(why) : string
+
+enum 段階(tier) = 一般(basic) < 銀(silver) < 金(gold)
+
+record 明細(Line)
+  品番(sku)     : string       count >=1 <=12
+  数量(qty)     : number       range >=1 <=99
+  手数料(fee)   : money[USDc]  range >=0USDc <=5000USDc
+
+record 組(Pair)[K]
+  鍵(key)    : K
+  順位(rank) : number  range >=0 <=9
+
+# リストの先頭か、代わりの値。呼ぶところで読み直すと、答えは呼び出しが渡す値になる
+fn 先頭か(first_or)[T](一覧(xs): list[T], 代わり(fallback): T) -> T
+  match 一覧.first()
+    none => 代わり
+    some x => x
+
+fn 頁にする(page_of)[T](項目(items): list[T] count <=100) -> 頁[T]
+  頁 { 項目: 項目, 次: none }
+
+fn 空の頁(empty_page)[T]() -> 頁[T]
+  頁 { 項目: [], 次: none }
+
+# 値がリストのどこにあるか、無ければその理由。値は中身で比べる
+fn 探す(find)[T](一覧(xs): list[T] count <=99, 値(x): T) -> 探索[T]
+  match 一覧.indexed().first(p => p.item = 値)
+    none => 探索.なし { 理由: "リストにありません" }
+    some p => 探索.あり { 値: p.item, 位置: p.index }
+
+# 鍵に限った型の引数：並べ、比べ、辞書の鍵にする
+fn 最大(largest)[K: key](一覧(xs): list[K]) -> K?
+  一覧.sort().last()
+
+fn 小さい方(least)[K: key](左(a): K, 右(b): K) -> K
+  min(左, 右)
+
+fn 数える(tally)[K: key](一覧(xs): list[K]) -> dict[K, number]
+  一覧.group_by(x => x).map_values(g => g.count())
+
+# 渡した関数が選ぶ鍵での、リストの辞書。鍵の型の引数は、渡した関数の答えから決まる
+fn 鍵で引く(index_by)[K: key, T](一覧(xs): list[T], 鍵(by): (T) -> K) -> dict[K, T]
+  一覧.to_dict(鍵, x => x)
+
+fn 同じ頁か(same_pages)[T](左(a): 頁[T], 右(b): 頁[T]) -> bool
+  左 = 右
+
+# 鍵にできるフィールドだけのレコードは、鍵に限った型の引数のフィールドがあっても、並べ替えの鍵になる
+fn 組を並べる(sorted_pairs)[K: key](一覧(xs): list[組[K]] count <=10) -> list[組[K]]
+  一覧.sort_by(p => p)
+
+fn 最上の組(best_pair)[K: key](一覧(xs): list[組[K]] count <=10) -> 組[K]?
+  一覧.max_by(p => p)
+
+fn 逆に並べる(ranked)[K: key](一覧(xs): list[K] count <=10) -> list[indexed[K]]
+  一覧.indexed().sort_by_desc(p => p)
+
+# 一つ以上ある手数料のうち最も安いもの。読み直すと、答えはそのどれかになる
+fn 最安(cheapest)(手数料(fees): list[money[USDc]] count >=1 <=5 range >=49USDc <=5000USDc) -> money[USDc] range >=49USDc <=5000USDc total
+  先頭か(一覧: 手数料.sort(), 代わり: 0USDc)
+
+fn 最初の頁(first_page)(品番(skus): list[string] count <=100) -> 頁[string]
+  頁にする(項目: 品番)
+
+fn 品番なし(no_skus)() -> 頁[string]
+  空の頁[string]()
+
+fn 場所(where_is)(品番の一覧(skus): list[string] count <=10, 品番(sku): string) -> 探索[string]
+  探す(一覧: 品番の一覧, 値: 品番)
+
+fn 明細を探す(line_of)(明細の一覧(lines): list[明細] count <=10, 品番(sku): string) -> 探索[明細]
+  match 明細の一覧.first(l => l.品番 = 品番)
+    none => 探索.なし { 理由: "その明細はありません" }
+    some l => 探索.あり { 値: l, 位置: 0 }
+
+fn 数量(qty_of)(明細の一覧(lines): list[明細] count <=10, 品番(sku): string) -> number range >=0 <=99 total
+  match 明細を探す(明細の一覧: 明細の一覧, 品番: 品番)
+    あり h => h.値.数量
+    else => 0
+
+# ホストが渡す総称のレコードと列挙は、渡す型で確かめる
+fn 頁の大きさ(page_size)(頁の値(p): 頁[明細]) -> number range >=0 <=100 total
+  頁の値.項目.count()
+
+fn 見つかった数量(found_qty)(結果(f): 探索[明細]) -> number range >=0 <=99 total
+  match 結果
+    あり h => h.値.数量
+    なし m => 0
+
+fn 最上の段階(top_tier)(段階の一覧(tiers): list[段階] count <=5) -> 段階?
+  最大(一覧: 段階の一覧)
+
+fn 安い手数料(lower_fee)(左(a): money[USDc] range >=0USDc <=500USDc, 右(b): money[USDc] range >=0USDc <=900USDc) -> money[USDc] range >=0USDc <=500USDc total
+  小さい方(左: 左, 右: 右)
+
+fn 品番ごとの数(sku_counts)(品番(skus): list[string] count <=20) -> dict[string, number]
+  数える(一覧: 品番)
+
+fn 段階ごとの数(tier_counts)(段階の一覧(tiers): list[段階] count <=10) -> dict[段階, number]
+  数える(一覧: 段階の一覧)
+
+fn 品番ごとの明細(lines_by_sku)(明細の一覧(lines): list[明細] count <=10) -> dict[string, 明細]
+  鍵で引く(一覧: 明細の一覧, 鍵: 一件 => 一件.品番)
+
+fn 同じ明細か(same_lines)(左(a): list[明細] count <=3, 右(b): list[明細] count <=3) -> bool
+  同じ頁か(左: 頁にする(項目: 左), 右: 頁にする(項目: 右))
+
+fn 段階の組を並べる(pairs_by_tier)(一覧(xs): list[組[段階]] count <=5) -> list[組[段階]]
+  組を並べる(一覧: 一覧)
+
+fn 品番の最上の組(best_by_sku)(一覧(xs): list[組[string]] count <=5) -> 組[string]?
+  最上の組(一覧: 一覧)
+
+fn 段階を逆に並べる(ranked_tiers)(段階の一覧(tiers): list[段階] count <=5) -> list[段階]
+  逆に並べる(一覧: 段階の一覧).map(p => p.item)
+
+# 答えは結果に書いた範囲に重ねる。解析は `辺 * (10 - 辺)` を 0 から 100 と読み、読み直した呼び出しの答えは、
+# 結果に書いた 0 から 25 になる
+fn 面積(area)[T](値(x): T, 辺(side): number range >=0 <=10) -> number range >=0 <=25
+  辺 * (10 - 辺)
+
+fn 描く(plot)(辺(side): number range >=0 <=10) -> number
+  面積(値: "a", 辺: 辺)
+
+# 四段まで読み直す。`近い` は三回の呼び出しで `足す` に届き、そこで 0 から 5 の数に足す。`遠い` は五回で
+# 届き、四段を越えるので `足す` を宣言のとおりに読む。あふれることがある
+fn 経由1(hop1)[T](値(x): T, 数(n): number) -> number
+  経由2(値: 値, 数: 数)
+
+fn 経由2(hop2)[T](値(x): T, 数(n): number) -> number
+  経由3(値: 値, 数: 数)
+
+fn 経由3(hop3)[T](値(x): T, 数(n): number) -> number
+  経由4(値: 値, 数: 数)
+
+fn 経由4(hop4)[T](値(x): T, 数(n): number) -> number
+  足す(値: 値, 数: 数)
+
+fn 足す(bump)[T](値(x): T, 数(n): number) -> number
+  数 + 1
+
+fn 近い(near)(数(n): number range >=0 <=5) -> number total
+  経由3(値: "a", 数: 数)
+
+fn 遠い(far)(数(n): number range >=0 <=5) -> number
+  経由1(値: "a", 数: 数)
+
+# 呼び出しの輪の中では読み直さない
+fn 数え下げ(count_down)[T](値(x): T, 数(n): number range >=0 <=10) -> number range >=0 <=10
+  if 数 = 0 then 0 else 数え下げ(値: 値, 数: 数 - 1)
+
+fn 輪(ring)(数(n): number range >=0 <=10) -> number range >=0 <=10
+  数え下げ(値: true, 数: 数)
+
+# 呼び出しの輪の中の総称の関数には、型の引数をそのまま渡すか、入れ替えて渡すか、型の引数を含まない型を渡す
+# （型の引数から作った型は E112）。生成した Go が書ける形
+fn 入れ替えて数え下げ(swap_down)[A, B](左(a): A, 右(b): B, 数(n): number range >=0 <=10) -> number range >=0 <=10
+  if 数 = 0 then 0 else 入れ替えて数え下げ(左: 右, 右: 左, 数: 数 - 1)
+
+fn 数を渡して数え下げ(settle_down)[T](値(x): T, 数(n): number range >=0 <=10) -> number range >=0 <=10
+  if 数 = 0 then 0 else 数を渡して数え下げ(値: 数, 数: 数 - 1)
+
+fn 二つの輪(rings)(数(n): number range >=0 <=10) -> number range >=0 <=20
+  入れ替えて数え下げ(左: "a", 右: true, 数: 数) + 数を渡して数え下げ(値: "a", 数: 数)
+
+examples
+  最安(手数料: [300USDc, 120USDc]) = 120USDc
+  最上の段階(段階の一覧: [銀, 金, 一般]) = 金
+  先頭か(一覧: [1, 2], 代わり: 5) = 1
+  先頭か(一覧: [], 代わり: "なし") = "なし"
+  近い(数: 5) = 6
+  安い手数料(左: 400USDc, 右: 120USDc) = 120USDc
+  段階の組を並べる(一覧: [組 { 鍵: 金, 順位: 1 }, 組 { 鍵: 一般, 順位: 2 }, 組 { 鍵: 金, 順位: 0 }]) = [組 { 鍵: 一般, 順位: 2 }, 組 { 鍵: 金, 順位: 0 }, 組 { 鍵: 金, 順位: 1 }]
+  品番の最上の組(一覧: [組 { 鍵: "b", 順位: 1 }, 組 { 鍵: "a", 順位: 9 }, 組 { 鍵: "b", 順位: 3 }]) = 組 { 鍵: "b", 順位: 3 }
+  段階を逆に並べる(段階の一覧: [銀, 一般, 金]) = [金, 一般, 銀]
+  品番ごとの明細(明細の一覧: [明細 { 品番: "b", 数量: 1, 手数料: 0USDc }, 明細 { 品番: "a", 数量: 2, 手数料: 5USDc }]) = ["a": 明細 { 品番: "a", 数量: 2, 手数料: 5USDc }, "b": 明細 { 品番: "b", 数量: 1, 手数料: 0USDc }]
+  二つの輪(数: 3) = 0

@@ -1,0 +1,76 @@
+── E113
+error[E113]: example.kn:3:38: The answer of a function cannot be of a function type
+     3 | fn adder(n: number range >=0 <=9) -> (number) -> number
+  = A function value is given as an argument of a function or a builtin, named by a `let`, and called, and goes nowhere else: not to a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, nor `=` and `!=`. Instead of a function that answers a function, write one that takes the argument too, or write `x => f(x: x, n: n)` where it is called.
+
+── E113
+error[E113]: example.kn:4:9: A field cannot be of a function type
+     4 |   run : (number) -> number
+  = A function value is given as an argument of a function or a builtin, named by a `let`, and called, and goes nowhere else: not to a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, nor `=` and `!=`. Instead of a function that answers a function, write one that takes the argument too, or write `x => f(x: x, n: n)` where it is called.
+
+── E113
+error[E113]: example.kn:4:13: A function value is put where it cannot go
+     4 |   let fs = [(y: number) => y + 1]
+  = A function value is given as an argument of a function or a builtin, named by a `let`, and called, and goes nowhere else: not to a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, nor `=` and `!=`. Instead of a function that answers a function, write one that takes the argument too, or write `x => f(x: x, n: n)` where it is called.
+
+── E113
+error[E113]: example.kn:4:3: A function value is put where it cannot go
+     4 |   f = g
+  = A function value is given as an argument of a function or a builtin, named by a `let`, and called, and goes nowhere else: not to a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, nor `=` and `!=`. Instead of a function that answers a function, write one that takes the argument too, or write `x => f(x: x, n: n)` where it is called.
+
+── E113
+error[E113]: example.kn:7:11: `apply_each` takes a function, and is no value
+     7 |   let g = apply_each
+  = A function value takes no function and answers none: write a lambda that calls `apply_each` (`x => apply_each(…)`).
+
+── E112
+error[E112]: example.kn:4:15: The type of the parameter `x` of the lambda cannot be worked out
+     4 |   let twice = x => x * 2
+  = The types of a lambda's parameters come from the function type of the place it is put in; where none says them (a `let` with no type), write them: `(x: Line) => …`.
+
+── E112
+error[E112]: example.kn:7:11: The type parameter `T` of `id` is given the function type (number) -> number
+     7 |   let g = id(x: (y: number) => y + 1)
+  = A value of a type parameter is held and compared, and a function value is only passed and called, so no type parameter takes a function type.
+
+── E102
+error[E102]: example.kn:7:13: The parameter `s` of the lambda is of string, and the function type of the place says number
+     7 |   twice(f: (s: string) => 1, x: 1)
+  = Two function types are one where their parameters are as many and of the same types, and their answers of one type (amounts and quantities in one unit). A function given by its name goes where each parameter of the place goes into its own, and its answer into the place's.
+
+── E102
+error[E102]: example.kn:7:12: The argument `f` of the function `twice` is a function ((number) -> number); this is number
+     7 |   twice(f: 3, x: 1)
+  = A parameter of a function type takes a lambda (`x => …`), the name of a function, or a function value.
+
+── E107
+error[E107]: example.kn:4:5: A function value is given its arguments in order, with no names (`x:` is not written)
+     4 |   f(x: x)
+  = A function type has no names for its parameters, so a function value is called with its arguments in order, as in `f(x)`; arguments are named in a call of a declared function or a rule.
+
+── E107
+error[E107]: example.kn:4:3: The function value ((number) -> number) takes 1 argument, and is given 2
+     4 |   f(x, x)
+
+── E109
+error[E109]: example.kn:4:10: The builtin `isqrt` is no value
+     4 |   xs.map(isqrt)
+  = Call a builtin (`isqrt(…)`), or give it wrapped in a lambda (`x => isqrt(x)`).
+
+── E402
+error[E402]: example.kn:7:28: The parameter `test` of `all_within` writes `total` on its type, and the function given does more
+     7 |   all_within(xs: xs, test: x => x + 1 > x)
+  = The function given is `fails overflow`.
+  = Make the places of the function given shown (narrow the values with an `if` in the lambda), or widen the effect written on the parameter's type.
+
+── E402
+error[E402]: example.kn:10:28: The parameter `test` of `all_within` writes `total` on its type, and the function given does more
+    10 |   all_within(xs: xs, test: next)
+  = The function given is `fails overflow`.
+  = Make the places of the function given shown (narrow the values with an `if` in the lambda), or widen the effect written on the parameter's type.
+
+── E108
+error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`, is of the `private` record `Bounds`
+     6 | fn low(b: Bounds) -> number
+  = A `private` record or enum is used in its module alone: no other module and no host can make a value of it. Make what uses it `private` too, or take the `private` off the type.
+

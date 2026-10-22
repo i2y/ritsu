@@ -6,16 +6,26 @@
 //!   (ritsu-cross's X2, X3, X4, X6), which is counted as undecided until its answer comes.
 //! - A function takes the effect of each function it calls, and the functions of a ring of calls
 //!   (a strongly connected component of the calls, or a function that calls itself) share the kinds
-//!   of all of them and may not stop (DESIGN 4.3).
+//!   of all of them and may not stop (DESIGN 4.3). A call the analysis read the called function's
+//!   body again for (a generic function, DESIGN 26.5) takes what that reading found instead: the
+//!   kinds of its places that are not shown, and the effects of the calls it makes.
+//! - A function value (DESIGN 27.5): the places of a lambda's body are the places of the function
+//!   that wrote it, wherever the lambda is read, and a function written as a value is called by the
+//!   lambda that wraps it, so both are in the effect of the function that passes them. A function
+//!   that calls a parameter of a function type takes the effect written on the type, and none where
+//!   none is written: that parameter's effect goes on to the callers (`through`). Naming a function is
+//!   calling it, for the rings.
 //! - An effect written on a function is held to the one inferred (E401): `total` to none at all,
 //!   `fails <kinds>` to kinds among those written, a ring to `diverges`. A place that waits for an
 //!   answer of the checks across the languages is not yet one that cannot be shown, so what is
-//!   written is held to the places decided.
+//!   written is held to the places decided. An effect written on a function type is held to the
+//!   effect of each function given to it (E402).
 
-use crate::ast::{FailKind, FnDecl};
+use crate::ast::{Arg, ExprKind, FailKind, FnDecl};
 use crate::check::Checked;
 use crate::diag::Diag;
-use crate::ranges::{FnFacts, Outcome};
+use crate::ranges::{Abs, FnFacts, Outcome};
+use crate::ty::Ty;
 use crate::types::Ref;
 use ritsu_base::json::Json;
 use ritsu_base::text::{Text, plural};
@@ -137,7 +147,8 @@ pub fn infer(c: &Checked, facts: &mut [FnFacts], rings: &[(Vec<usize>, bool)]) {
     for (ring, round) in rings {
         let mut e = Effect { diverges: *round, ..Effect::default() };
         for &f in ring {
-            for p in &facts[f].places {
+            // its own places, and those its calls' readings again found (DESIGN 26.6)
+            for p in facts[f].places.iter().chain(facts[f].rplaces.iter().map(|r| &r.place)) {
                 match p.outcome {
                     Outcome::Shown => {}
                     Outcome::Pending => {
@@ -149,13 +160,20 @@ pub fn infer(c: &Checked, facts: &mut [FnFacts], rings: &[(Vec<usize>, bool)]) {
                     }
                 }
             }
-            for call in &facts[f].calls {
+            // the calls not read again, and those the readings made
+            for call in facts[f].calls.iter().filter(|x| !x.reread).chain(facts[f].rcalls.iter()) {
                 let other = callee_effect(c, facts, ring, call);
                 if let Some(o) = other {
                     e.fails.extend(o.fails.iter().copied());
                     e.decided.extend(o.decided.iter().copied());
                     e.diverges |= o.diverges;
                 }
+            }
+            // the calls of function values whose type writes an effect (DESIGN 27.5)
+            for t in &facts[f].thru {
+                e.fails.extend(t.effect.fails.iter().copied());
+                e.decided.extend(t.effect.fails.iter().copied());
+                e.diverges |= t.effect.diverges;
             }
         }
         for &f in ring {
@@ -225,10 +243,27 @@ pub fn written_holds(c: &Checked, facts: &[FnFacts], rings: &[(Vec<usize>, bool)
                 d = d.note(tr!("{line} 行目: {}（{code}）", "Line {line}: {} ({code})", what.ja; en));
             }
         }
+        // the places the readings again of its calls found that go past it (DESIGN 26.6)
+        let mut read: BTreeSet<(String, usize, &'static str)> = BTreeSet::new();
+        for r in &facts[f].rplaces {
+            let p = &r.place;
+            if !extra.contains(&p.kind) || matches!(p.outcome, Outcome::Shown | Outcome::Pending) {
+                continue;
+            }
+            if read.insert((r.function.clone(), p.span.line, p.kind.word())) {
+                let (g, gl, k) = (&r.function, p.span.line, p.kind.word());
+                let lines: Vec<usize> = facts[f].calls.iter().filter(|x| x.reread && x.function == *g).map(|x| x.line).collect();
+                let at = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join(", ");
+                d = d.note(tr!(
+                    "{at} 行目: `{g}` を呼んでいます。この呼び出しが渡す値で `{g}` を読み直すと、その {gl} 行目で `{k}` で失敗することがあります",
+                    "Line {at}: it calls `{g}`, which, read again with the values the call gives, can fail with `{k}` at its line {gl}"
+                ));
+            }
+        }
         // the calls that bring it
         let ring = rings.iter().find(|(r, _)| r.contains(&f)).map(|(r, _)| r.clone()).unwrap_or_default();
         let mut named = BTreeSet::new();
-        for call in &facts[f].calls {
+        for call in facts[f].calls.iter().filter(|x| !x.reread) {
             let g = &call.function;
             let line = call.line;
             let same = call.module == c.canon;
@@ -244,6 +279,30 @@ pub fn written_holds(c: &Checked, facts: &[FnFacts], rings: &[(Vec<usize>, bool)
             if (!theirs.is_empty() || (loops && o.diverges)) && named.insert((line, g.clone())) {
                 let eff = written(&o.fails, o.diverges);
                 d = d.note(tr!("{line} 行目: `{g}` を呼んでいます。`{g}` のエフェクトは `{eff}` です", "Line {line}: it calls `{g}`, whose effect is `{eff}`"));
+            }
+        }
+        // the calls of function values whose type writes an effect (DESIGN 27.5)
+        let mut typed: BTreeSet<(usize, String)> = BTreeSet::new();
+        for t in &facts[f].thru {
+            let theirs = t.effect.fails.iter().any(|k| extra.contains(k)) || (loops && t.effect.diverges);
+            let eff = t.effect.shown();
+            if theirs && typed.insert((t.line, eff.clone())) {
+                let line = t.line;
+                d = d.note(tr!("{line} 行目: 関数の型に `{eff}` と書いた関数の値を呼んでいます", "Line {line}: it calls a function value whose type writes `{eff}`"));
+            }
+        }
+        // the calls the readings again made: their effects come with the call read again
+        let mut through: BTreeSet<String> = BTreeSet::new();
+        for call in &facts[f].rcalls {
+            let Some(o) = callee_effect(c, facts, &ring, call) else { continue };
+            let theirs: BTreeSet<FailKind> = o.decided.iter().filter(|k| extra.contains(k)).copied().collect();
+            let g = &call.function;
+            if (!theirs.is_empty() || (loops && o.diverges)) && through.insert(g.clone()) {
+                let eff = written(&o.fails, o.diverges);
+                d = d.note(tr!(
+                    "読み直した関数の中で `{g}` を呼んでいます。`{g}` のエフェクトは `{eff}` です",
+                    "A function read again calls `{g}`, whose effect is `{eff}`"
+                ));
             }
         }
         if !extra.is_empty() {
@@ -302,6 +361,7 @@ pub fn to_json(c: &Checked) -> Json {
             let outcome = match p.outcome {
                 Outcome::Example(_) => "example",
                 Outcome::Undecided => "undecided",
+                Outcome::Unbounded => "unbounded",
                 Outcome::Pending => "waiting",
                 Outcome::Shown => "shown",
             };
@@ -314,14 +374,132 @@ pub fn to_json(c: &Checked) -> Json {
             ])
         });
         let calls = facts.calls.iter().map(|x| Json::obj([("line", Json::int(x.line as i128)), ("function", Json::str(x.function.clone()))]));
-        Json::obj([
-            ("function", Json::str(info.name.text.clone())),
-            ("effect", facts.effect.to_json()),
-            ("written", written.unwrap_or(Json::Null)),
-            ("places", Json::arr(places)),
-            ("calls", Json::arr(calls)),
-        ])
+        let mut o: Vec<(String, Json)> = vec![("function".into(), Json::str(info.name.text.clone()))];
+        // an inner function, which no host calls (DESIGN 21.3)
+        if info.inner() {
+            o.push(("inner".into(), Json::from(true)));
+        }
+        o.extend([("effect".into(), effect_json(info, &facts.effect)), ("written".into(), written.unwrap_or(Json::Null)), ("places".into(), Json::arr(places)), ("calls".into(), Json::arr(calls))]);
+        Json::Obj(o)
     }))
+}
+
+/// The parameters of a function type with no effect written on it (DESIGN 27.5): the effect of what is
+/// given to them goes on to the function's callers.
+pub fn through(info: &crate::names::FnInfo) -> Vec<String> {
+    info.params.iter().filter(|p| matches!(p.slot.ty, Ty::Fn(_, _, None))).map(|p| p.name.text.clone()).collect()
+}
+
+/// A function's effect for `--format json` and `api`: with `through`, the parameters whose functions'
+/// effects go on to the callers, for a function that takes functions (DESIGN 27.5).
+pub fn effect_json(info: &crate::names::FnInfo, e: &Effect) -> Json {
+    let Json::Obj(mut o) = e.to_json() else { return e.to_json() };
+    if info.takes_fn() {
+        o.push(("through".into(), Json::arr(through(info).into_iter().map(Json::str))));
+    }
+    Json::Obj(o)
+}
+
+/// E402 for each function given to a parameter whose function type writes an effect, whose own effect
+/// goes past it (DESIGN 27.2, 27.5): a lambda's is the kinds of its body's places that are not shown and
+/// the effects of the functions it calls; a function value the analysis does not see (a parameter) has
+/// the effect its type writes, and any where it writes none.
+pub fn passed_hold(c: &Checked, facts: &[FnFacts], at: &[Option<Abs>], rings: &[(Vec<usize>, bool)]) -> Vec<Diag> {
+    let mut out = Vec::new();
+    for (f, decl) in c.module.fns.iter().enumerate() {
+        let ring = rings.iter().find(|(r, _)| r.contains(&f)).map(|(r, _)| r.clone()).unwrap_or_default();
+        let mut all = Vec::new();
+        decl.body.walk(&mut all);
+        for e in all {
+            let ExprKind::Call(callee, args) = &e.kind else { continue };
+            let Some(Ref::Fn(canon, name)) = c.typed.refs.get(callee.id) else { continue };
+            let owner = if *canon == c.canon { Some(&c.decls) } else { c.world.modules.get(canon).map(|m| &m.decls) };
+            let Some(info) = owner.and_then(|d| d.fns.iter().find(|x| x.name.text == *name)) else { continue };
+            for a in args {
+                let Arg::Named(n, _, x) = a else { continue };
+                let Some(p) = info.params.iter().find(|p| p.name.is(n)) else { continue };
+                let Ty::Fn(_, _, Some(w)) = &p.slot.ty else { continue };
+                let Some(Some(Abs::Fns(lams, unseen))) = at.get(x.id) else { continue };
+                let mut fails: BTreeSet<FailKind> = BTreeSet::new();
+                let mut diverges = false;
+                let mut any = false;
+                match unseen {
+                    Some(Some(u)) => {
+                        fails.extend(u.fails.iter().copied());
+                        diverges |= u.diverges;
+                    }
+                    Some(None) => any = true,
+                    None => {}
+                }
+                for l in lams.iter().filter(|l| l.module == c.canon) {
+                    let (k, d) = lambda_effect(c, facts, &ring, f, l.expr);
+                    fails.extend(k);
+                    diverges |= d;
+                }
+                let allowed: BTreeSet<FailKind> = w.fails.iter().copied().collect();
+                let extra: BTreeSet<FailKind> = fails.iter().filter(|k| !allowed.contains(k)).copied().collect();
+                let loops = diverges && !w.diverges;
+                if extra.is_empty() && !loops && !any {
+                    continue;
+                }
+                let (pn, fun, ws) = (&p.name.text, &info.name.text, w.shown());
+                let mut d = Diag::at("E402", &c.path, x.span.line, x.span.col, tr!(
+                    "`{fun}` の引数 `{pn}` の型には `{ws}` と書いてありますが、渡した関数はそれに収まりません",
+                    "The parameter `{pn}` of `{fun}` writes `{ws}` on its type, and the function given does more"
+                ))
+                .source(&c.src);
+                if any {
+                    d = d.note(tr!(
+                        "渡しているのは、エフェクトを型に書いていない関数の型の引数です。その関数のエフェクトは、呼ぶ側が渡すものによります。引数の型にも `{ws}` のようにエフェクトを書いてください。",
+                        "What is given is a parameter of a function type with no effect written on it, whose effect is what its callers give: write the effect on its type too, as `{ws}`."
+                    ));
+                } else {
+                    let eff = written(&fails, diverges);
+                    d = d.note(tr!("渡した関数のエフェクトは `{eff}` です。", "The function given is `{eff}`."));
+                }
+                d = d.note(tr!(
+                    "失敗しうる場所を示せるようにする（ラムダの中で値を `if` で範囲に狭める）か、引数の型に書いたエフェクトを広げてください。",
+                    "Make the places of the function given shown (narrow the values with an `if` in the lambda), or widen the effect written on the parameter's type."
+                ));
+                out.push(d);
+            }
+        }
+    }
+    out
+}
+
+/// The effect of the lambda `id` written in the function `f` (DESIGN 27.5): the kinds of the places of
+/// its body that are not shown (decided or waiting), those of the functions its body calls and of the
+/// function values it calls whose type writes one, and whether it may not stop (a call in the ring of
+/// `f`, or of a function that may not stop).
+fn lambda_effect(c: &Checked, facts: &[FnFacts], ring: &[usize], f: usize, id: usize) -> (BTreeSet<FailKind>, bool) {
+    let mut fails = BTreeSet::new();
+    let mut diverges = false;
+    let Some((_, lam)) = c.lambda(id) else { return (fails, diverges) };
+    let mut es = Vec::new();
+    lam.walk(&mut es);
+    let ids: BTreeSet<usize> = es.iter().map(|e| e.id).collect();
+    for p in facts[f].places.iter() {
+        if ids.contains(&p.expr) && !matches!(p.outcome, Outcome::Shown) {
+            fails.insert(p.kind);
+        }
+    }
+    for call in facts[f].calls.iter().filter(|x| ids.contains(&x.expr)) {
+        let in_ring = call.module == c.canon && c.decls.fns.iter().position(|x| x.name.text == call.function).is_some_and(|g| ring.contains(&g));
+        if in_ring {
+            diverges = true;
+            continue;
+        }
+        if let Some(o) = callee_effect(c, facts, ring, call) {
+            fails.extend(o.fails.iter().copied());
+            diverges |= o.diverges;
+        }
+    }
+    for t in facts[f].thru.iter().filter(|t| ids.contains(&t.expr)) {
+        fails.extend(t.effect.fails.iter().copied());
+        diverges |= t.effect.diverges;
+    }
+    (fails, diverges)
 }
 
 /// An English sentence put after a colon: its first word lowercased, unless it is a name (`isqrt`)

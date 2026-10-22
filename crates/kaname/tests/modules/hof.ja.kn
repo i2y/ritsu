@@ -1,0 +1,149 @@
+module 高階(hof_ja) v1
+description "関数を取る関数：渡す関数で額を合計すること、手順を順に当てること、名前で渡す関数、関数の型に書いたエフェクト、失敗しうる関数を失敗しない関数に渡すこと、組み込みの関数に渡す関数、自分を渡す関数、このモジュールだけが使うもの。hof.kn の日本語の版"
+
+record 明細(Line)
+  品番(sku)   : string       count >=1 <=8
+  単価(unit)  : money[USDc]  range >=0USDc <=10_000USDc
+  数量(qty)   : number       range >=0 <=100
+
+enum 価格の調整(Adjustment)
+  値引き(discount)
+    額(off) : money[USDc]  range >=0USDc <=1_000USDc
+  上乗せ(surcharge)
+    額(add) : money[USDc]  range >=0USDc <=1_000USDc
+
+private record 帯(Bounds)
+  下限(low)  : number  range >=0 <=99
+  上限(high) : number  range >=0 <=99
+
+private enum 側(side) = 下(below) | 中(inside) | 上(above)
+
+# 渡す関数での合計。それだけでは、範囲の無い額の和があふれうる。呼ぶところで読み直すと、明細と渡した関数で抑えられる
+fn 合計(total_by)[T](一覧(xs): list[T], 額(amount): (T) -> money[USDc]) -> money[USDc]
+  一覧.sum(x => 額(x))
+
+# 手順を順に当てる。自身の場所が無いので、どの関数を渡しても `total` が成り立つ
+fn 順に当てる(apply_all)[T](値(x): T, 手順(steps): list[価格の調整] count <=10, 当てる(adjust): (T, 価格の調整) -> T) -> T total
+  手順.reduce(値, (途中, 一段) => 当てる(途中, 一段))
+
+fn それぞれに(apply_each)[T](一覧(xs): list[T], 関数(f): (T) -> T) -> list[T]
+  一覧.map(x => 関数(x))
+
+fn 注文の合計(order_total)(明細の一覧(lines): list[明細] count <=50) -> money[USDc]
+  let 明細の額 = (一件: 明細) => 一件.単価 * 一件.数量
+  合計(一覧: 明細の一覧, 額: 明細の額)
+
+# 名前で渡す関数。関数にも、組み込みの関数にも渡す
+fn 明細の費用(line_cost)(一件(line): 明細) -> money[USDc]
+  一件.単価 * 一件.数量
+
+fn 注文の費用(order_cost)(明細の一覧(lines): list[明細] count <=50) -> money[USDc]
+  合計(一覧: 明細の一覧, 額: 明細の費用)
+
+fn 費用の一覧(costs)(明細の一覧(lines): list[明細] count <=50) -> list[money[USDc]]
+  明細の一覧.map(明細の費用)
+
+# 名前で渡す、失敗しうる関数。そのエフェクトは、渡す関数のエフェクトに入る
+fn 二倍(doubled)(数(x): number) -> number
+  数 * 2
+
+fn すべて二倍(all_doubled)(数の一覧(xs): list[number] count <=10) -> list[number]
+  それぞれに(一覧: 数の一覧, 関数: 二倍)
+
+fn 価格を調整(adjust_price)(価格(price): money[USDc] range >=0USDc <=100_000USDc, 調整(a): 価格の調整) -> money[USDc] range >=0USDc <=100_000USDc
+  match 調整
+    値引き 引き => max(価格 - 引き.額, 0USDc)
+    上乗せ 足し => min(価格 + 足し.額, 100_000USDc)
+
+fn 調整後(adjusted)(価格(price): money[USDc] range >=0USDc <=100_000USDc, 手順(steps): list[価格の調整] count <=10) -> money[USDc]
+  順に当てる(値: 価格, 手順: 手順, 当てる: 価格を調整)
+
+# 呼び出しが渡す値で読む。0 から 9 に 10¹⁸ を掛けても int64 に収まる。範囲の無い数に 1 を足すとあふれうるが、その場所はラムダを書いた関数のもの
+fn ずらす(shifted)(数の一覧(xs): list[number] count <=5 range >=0 <=9) -> list[number]
+  それぞれに(一覧: 数の一覧, 関数: x => x * 1_000_000_000_000_000_000)
+
+fn 一つ足す(bumped)(数の一覧(xs): list[number] count <=10) -> list[number]
+  それぞれに(一覧: 数の一覧, 関数: x => x + 1)
+
+# 関数の型に書いたエフェクト。total の条件と、あふれうる関数
+fn すべて満たす(all_within)(数の一覧(xs): list[number] count <=10, 条件(test): (number) -> bool total) -> bool total
+  数の一覧.all(x => 条件(x))
+
+fn 帯の中か(in_band)(数の一覧(xs): list[number] count <=10 range >=0 <=99, 下限(low): number range >=0 <=99, 上限(high): number range >=0 <=99) -> bool total
+  すべて満たす(数の一覧: 数の一覧, 条件: x => x >= 下限 and x <= 上限)
+
+fn 当てて合計(sum_with)(数の一覧(xs): list[number] count <=5 range >=0 <=1000, 関数(f): (number) -> number fails overflow) -> number fails overflow
+  数の一覧.sum(x => 関数(x))
+
+fn 二乗の合計(squares)(数の一覧(xs): list[number] count <=5 range >=0 <=1000) -> number fails overflow
+  当てて合計(数の一覧: 数の一覧, 関数: x => x * x)
+
+# ラムダは、書いたところで見える名前を読み、ほかの本体と同じように狭める
+fn 一人分(per_person)(額の一覧(amounts): list[money[USDc]] count <=5 range >=0USDc <=1_000USDc, 人数(people): number range >=0 <=10) -> list[money[USDc]] total
+  それぞれに(一覧: 額の一覧, 関数: 額 => if 人数 = 0 then 額 else down(額 / 人数, 1USDc))
+
+# `let` で名前を付け、`if` で選んで呼ぶ関数の値。名前で組み込みの関数に渡す関数の値
+fn 選ぶ(pick)(上げる(up): bool, 数(x): number range >=0 <=9) -> number
+  let 関数 = if 上げる then (y: number) => y + 1 else (y: number) => y - 1
+  関数(関数(数))
+
+fn 倍にする(scaled)(数の一覧(xs): list[number] count <=5 range >=0 <=9, 倍率(k): number range >=0 <=9) -> list[number]
+  let 掛ける = (x: number) => x * 倍率
+  数の一覧.map(掛ける)
+
+# 自分を渡す関数。名前で渡すことは呼ぶことなので、呼び出しの輪の中にあり、止まらないことがある
+fn 経由(via)(数(n): number range >=1 <=1000, 次(next): (number) -> number) -> number
+  次(数 - 1)
+
+fn 段を下りる(steps_down)(数(n): number range >=0 <=1000) -> number
+  if 数 <= 0 then 0 else 経由(数: 数, 次: 段を下りる) + 1
+
+# 五段の呼び出し。四段を越えると、ラムダをどの数でも一度読み、あふれうる
+fn 経由1(hop1)[T](値(x): T, 関数(f): (T) -> T) -> T
+  経由2(値: 値, 関数: 関数)
+
+fn 経由2(hop2)[T](値(x): T, 関数(f): (T) -> T) -> T
+  経由3(値: 値, 関数: 関数)
+
+fn 経由3(hop3)[T](値(x): T, 関数(f): (T) -> T) -> T
+  経由4(値: 値, 関数: 関数)
+
+fn 経由4(hop4)[T](値(x): T, 関数(f): (T) -> T) -> T
+  経由5(値: 値, 関数: 関数)
+
+fn 経由5(hop5)[T](値(x): T, 関数(f): (T) -> T) -> T
+  関数(値)
+
+fn 深く(deep)(数(x): number range >=0 <=9) -> number
+  経由1(値: 数, 関数: y => y * 2)
+
+# このモジュールだけが使うもの。`private` と書いたレコード、列挙、関数
+private fn 位置の番号(place_of)(数(x): number range >=0 <=99, 区間(b): 帯) -> number
+  if 数 < 区間.下限 then 0 else if 数 > 区間.上限 then 2 else 1
+
+private fn どの側か(side_of)(数(x): number range >=0 <=99, 区間(b): 帯) -> 側
+  match 位置の番号(数: 数, 区間: 区間)
+    0 => 側.下
+    1 => 側.中
+    else => 側.上
+
+private fn 側の名前(side_name)(数(x): number range >=0 <=99, 区間(b): 帯) -> string
+  match どの側か(数: 数, 区間: 区間)
+    下 => "下"
+    中 => "中"
+    上 => "上"
+
+fn 側の一覧(sides)(数の一覧(xs): list[number] count <=10 range >=0 <=99, 下限(low): number range >=0 <=99, 上限(high): number range >=0 <=99) -> list[string]
+  let 区間 = 帯 { 下限: 下限, 上限: 上限 }
+  数の一覧.map(x => 側の名前(数: x, 区間: 区間))
+
+examples
+  注文の合計(明細の一覧: [明細 { 品番: "a", 単価: 250USDc, 数量: 2 }, 明細 { 品番: "b", 単価: 100USDc, 数量: 3 }]) = 800USDc
+  調整後(価格: 1_000USDc, 手順: [価格の調整.値引き { 額: 300USDc }, 価格の調整.上乗せ { 額: 50USDc }]) = 750USDc
+  すべて二倍(数の一覧: [1, 2]) = [2, 4]
+  選ぶ(上げる: true, 数: 3) = 5
+  選ぶ(上げる: false, 数: 3) = 1
+  段を下りる(数: 3) = 3
+  深く(数: 4) = 8
+  側の一覧(数の一覧: [1, 50, 99], 下限: 10, 上限: 60) = ["下", "中", "上"]
+  一人分(額の一覧: [1_000USDc, 7USDc], 人数: 3) = [333USDc, 2USDc]

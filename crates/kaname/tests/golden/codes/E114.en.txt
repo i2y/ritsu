@@ -1,0 +1,3 @@
+error[E114]: example.kn:7:24: Line cannot be a key
+     7 | fn lines(by_line: dict[Line, number]) -> number
+  = A key is a number, an amount, a quantity, a rate with a step, a date, a string, a bool, or a value of an enum whose values have no fields: kaname puts keys in the order it gives each such type, so that a dict and a set go round in one order in every target.

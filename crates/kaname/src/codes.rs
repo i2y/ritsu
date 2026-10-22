@@ -58,8 +58,8 @@ pub fn ledger() -> Ledger {
             "E002",
             tr!("予約語は名前にできません", "A keyword cannot be a name"),
             tr!(
-                "名前を書くところに、式と文の中で別の意味に読める 13 語（`let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in`）のどれかを書いたとき。ほかのキーワードは、その位置でしか読まないので名前にできます（`total`、`count`、`description` など）。",
-                "One of the thirteen words an expression or a line reads as something else (`let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in`) is written where a name goes. The other keywords are read only where they stand, and may be names (`total`, `count`, `description`)."
+                "名前を書くところに、式と文の中で別の意味に読める 14 語（`let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` `try`）のどれかを書いたとき。ほかのキーワードは、その位置でしか読まないので名前にできます（`total`、`count`、`description`、`key`、`result` など）。",
+                "One of the fourteen words an expression or a line reads as something else (`let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` `try`) is written where a name goes. The other keywords are read only where they stand, and may be names (`total`, `count`, `description`, `key`, `result`)."
             ),
             tr!("別の名前にしてください。", "Choose another name."),
             "module example v1\n\nfn f() -> number\n  let then = 3\n  3\n",
@@ -70,8 +70,8 @@ pub fn ledger() -> Ledger {
             "E003",
             tr!("モジュールの組み立てが違います", "The module is not put together as kaname reads it"),
             tr!(
-                "一行目が `module <名前> v1` でないとき、左端の行が決まった順（`module`、`description`、`use`、宣言（`enum`、`record`、`fn`）、`examples`）にないとき、一度だけの行（`module`、`description`、`examples`）を二度書いたとき、左端の行が知らない語で始まるとき、列挙に `default` や `open` を書いたとき、`use` の行の形が違うとき。",
-                "The first line is not `module <name> v1`; the lines at the left margin are out of their order (`module`, `description`, `use`, the declarations (`enum`, `record`, `fn`), `examples`); a line written once (`module`, `description`, `examples`) is written twice; a line at the left margin starts with a word kaname does not know; an enum has `default` or `open`; or a `use` line is not of its form."
+                "一行目が `module <名前> v1` でないとき、左端の行が決まった順（`module`、`description`、`use`、宣言（`enum`、`record`、`fn`）、`examples`）にないとき、一度だけの行（`module`、`description`、`examples`）を二度書いたとき、左端の行が知らない語で始まるとき、列挙に `default` や `open` を書いたとき、下に値を並べる列挙に値が一つも無いとき、`use` の行の形が違うとき。",
+                "The first line is not `module <name> v1`; the lines at the left margin are out of their order (`module`, `description`, `use`, the declarations (`enum`, `record`, `fn`), `examples`); a line written once (`module`, `description`, `examples`) is written twice; a line at the left margin starts with a word kaname does not know; an enum has `default` or `open`, or is written with its values under it and has none; or a `use` line is not of its form."
             ),
             tr!(
                 "モジュールは、`module`、`description`、`use` の行、宣言、`examples` の順に書いてください。`enum`、`record`、`fn` は互いに好きな順に並べられます。",
@@ -109,8 +109,8 @@ pub fn ledger() -> Ledger {
             "E006",
             tr!("同じ名前が二度あります", "The same name is given twice"),
             tr!(
-                "モジュールの中で、`use` の名前と宣言（`enum`、`record`、`fn`）の名前か別名が重なるとき。一つのレコードのフィールド、一つの関数の引数、一つの列挙の値が重なるときも出ます。関数か `use` に組み込みの関数の名前（`sum`、`map` など）を付けたとき、`let` や `some` の名前がその場でもう名前になっているときも出ます。",
-                "In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given a builtin's name (`sum`, `map`), and a `let` or a `some` whose name is taken where it stands."
+                "モジュールの中で、`use` の名前と宣言（`enum`、`record`、`fn`）の名前か別名が重なるとき。一つのレコードのフィールド、一つの関数の引数、一つの列挙の値が重なるときも出ます。関数か `use` に、関数の形で呼ぶ組み込みの関数の名前（`sum`、`map`、`numbers`、`char`、`ok`、`err` など）を付けたとき（`get`、`sort_by`、`trim` のように、値のあとに書いて呼ぶ組み込みの関数の名前は付けられます）、`let` や `some` の名前がその場でもう名前になっているときも出ます。フィールドを持つ値のある列挙では、生成するコードが値ごとの型に列挙と値の名前をつなげた名前を付けます（`Order.placed` は `OrderPlaced`）。その名前がレコードや列挙、ほかの値の型の名前と重なるときも出ます。型の引数は、宣言のほかの型の引数とも、モジュールのレコードと列挙の名前とも重なれません。",
+                "In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given the name of a builtin called as a function (`sum`, `map`, `numbers`, `char`, `ok`, `err`; the name of one written after a value, such as `get`, `sort_by` or `trim`, is free to take), and a `let` or a `some` whose name is taken where it stands; and, for an enum whose values have fields, the name the generated code gives the type of a value, the enum's and the value's joined (`Order.placed` is `OrderPlaced`), where it is the name of a record, an enum or another value's type. A type parameter shares its name with no other of its declaration, and with no record or enum of the module."
             ),
             tr!("どちらかの名前を替えてください。", "Rename one of them."),
             "module example v1\n\nfn quote() -> number\n  1\n\nfn quote() -> number\n  2\n",
@@ -121,8 +121,8 @@ pub fn ledger() -> Ledger {
             "E007",
             tr!("生成するコードが使えない名前です", "A name the generated code cannot take"),
             tr!(
-                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。",
-                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`)."
+                "生成するコードに出る名前（別名、別名が無ければ名前）が、TypeScript、Python、Go のどれかの予約語（`class`、`def`、`func` など）か、kaname の補助のモジュールの名前（`kaname`、`KanameError` など）のとき。フィールドを持つ値のある列挙の値に、`kind` という名前のフィールドを付けたときも出ます。生成する TypeScript は、値を `kind` で見分けます。",
+                "A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart."
             ),
             tr!("別の名前か別名にしてください。", "Choose another name or alias."),
             "module example v1\n\nrecord Seat\n  class : string\n",
@@ -134,10 +134,13 @@ pub fn ledger() -> Ledger {
             "E101",
             tr!("この名前のものはありません", "Nothing has this name"),
             tr!(
-                "式の名前、型の名前、関数、規則の出力、レコードのフィールド、列挙の値、日付のファイルの日付が、どれも指すものを持たないとき。列挙の値は、型の決まらないところでは `<列挙>.<値>` と書きます。",
-                "A name in an expression, a type, a function, an output of a rule, a field of a record, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum."
+                "式の名前、型の名前（値の型 `Order.placed` も）、関数、規則の出力、レコードと値のフィールド、列挙の値、日付のファイルの日付が、どれも指すものを持たないとき。列挙の値は、型の決まらないところでは `<列挙>.<値>` と書きます。値のあとに書いて呼ぶ組み込みの関数（`get`、`sort_by`、`trim` など）を関数の形で書いたときと、関数の形で呼ぶ組み込みの関数（`numbers`、`char`）を値のあとに書いたときも出ます。このときは、注に書き方を出します。ほかのモジュールの `private` の関数、レコード、列挙を使ったときも出て、注にそう書きます。",
+                "A name in an expression, a type (the type of a value too, `Order.placed`), a function, an output of a rule, a field of a record or of a value, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum. So does a builtin written after a value (`get`, `sort_by`, `trim`) that is called as a function, and one called as a function (`numbers`, `char`) that is written after a value; the note shows how it is written. So does a `private` function, record or enum of another module, and the note says it is `private`."
             ),
-            tr!("綴りを確かめてください。`use` で読んだものは `<use の名前>.<名前>` で書きます。", "Check the spelling. What a `use` reads is written `<use name>.<name>`."),
+            tr!(
+                "綴りを確かめてください。`use` で読んだものは `<use の名前>.<名前>` で書きます。値のあとに書く組み込みの関数は `xs.sort_by(x => x.due)` のように、値と `.` のあとに書きます。`private` のものは、そのモジュールの中でだけ使えます。",
+                "Check the spelling. What a `use` reads is written `<use name>.<name>`; a builtin written after a value goes after the value and a `.`, as in `xs.sort_by(x => x.due)`. What is `private` is used in its own module alone."
+            ),
             "module example v1\n\nfn total(price: money[USDc] range >=0USDc <=10_000USDc) -> money[USDc]\n  price + shipping\n",
             "module 例(example) v1\n\nfn 合計(total)(値段(price): money[USDc] range >=0USDc <=10_000USDc) -> money[USDc]\n  値段 + 送料\n",
             &["E110"],
@@ -146,8 +149,8 @@ pub fn ledger() -> Ledger {
             "E102",
             tr!("型が合いません", "The types do not agree"),
             tr!(
-                "値の型が、渡す先（関数の引数と答え、レコードのフィールド、規則と日付の入力、振替の引数）の型と違うとき。単位と税区分も型で、同じ次元の違う単位（`money[USD]` と `money[USDc]`）や、税込と税抜は合いません。足し引きと比べの両辺、`if` と `match` の答えどうし、リストの要素どうしが合わないときも出ます。",
-                "A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types."
+                "値の型が、渡す先（関数の引数と答え、レコードのフィールド、規則と日付の入力、振替の引数）の型と違うとき。単位と税区分も型で、同じ次元の違う単位（`money[USD]` と `money[USDc]`）や、税込と税抜は合いません。足し引きと比べの両辺、`if` と `match` の答えどうし、リストの要素どうしが合わないとき、一部を替えたレコードの `..` のあとの値が、作るレコードや値の型でないときも出ます。関数の型（`(T) -> U`）どうしで、引数の数か型、答えの型が違うとき（お金や量は、単位も同じでなければ合いません）、関数の型の引数に関数でないものを渡したときも出ます。",
+                "A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types, and the value after `..` in a record made from another that is not of the type built. So do two function types (`(T) -> U`) whose parameters differ in number or in type, or whose answers differ (an amount or a quantity in another unit too), and what is no function given to a parameter of a function type."
             ),
             tr!(
                 "同じ型にしてください。単位の換算は `fee in USDc` のように書きます（kaname は黙って換算しません）。",
@@ -161,8 +164,8 @@ pub fn ledger() -> Ledger {
             "E103",
             tr!("丸めた値を受け取るところに、丸めていない値を渡しています", "An unrounded value is given where a rounded one goes"),
             tr!(
-                "金額と率の積、量を定数で割った値、値で割った値のような丸めていない値を、関数の引数と答え、レコードのフィールド、規則と日付の入力、振替の引数、`running_totals` の重み（重みは、答えのレコードのフィールドに入ります）に渡したとき。そこが受け取るのは、単位の整数か、率の刻みの上の値です。重みが率なら、その型の刻みのまま受け取るので、丸めていない値になるのは、値で割って刻みが分からなくなったときだけです。`let` には丸めていない値を入れられます。",
-                "An unrounded value — an amount times a rate, a quantity divided by a constant, anything divided by a value — is given to a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer, or a weight of `running_totals` (the weights go into the fields of the records it answers). These take a whole number of their unit, or a rate on its step; a weight that is a rate is taken on the step its type says, and is unrounded only once a division by a value has left that step unknown. A `let` takes an unrounded value."
+                "金額と率の積、量を定数で割った値、値で割った値のような丸めていない値を、関数の引数と答え、レコードのフィールド、規則と日付の入力、振替の引数、`running_totals` の重み（重みは、答えのレコードのフィールドに入ります）、辞書の鍵と値、集合の要素、`distinct` が見分ける要素、`indexed` の `item`、総称の関数の型の引数に渡したとき（辞書と集合と組み込みのレコードは、レコードのフィールドと同じく、受け渡す形で値を持ちます）。そこが受け取るのは、単位の整数か、率の刻みの上の値です。重みが率なら、その型の刻みのまま受け取るので、丸めていない値になるのは、値で割って刻みが分からなくなったときだけです。`let` には丸めていない値を入れられます。",
+                "An unrounded value — an amount times a rate, a quantity divided by a constant, anything divided by a value — is given to a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer, a weight of `running_totals` (the weights go into the fields of the records it answers), a key or a value of a dict, a member of a set, an element `distinct` tells apart, the `item` of `indexed`, or a type parameter of a generic function (a dict, a set and a builtin record hold their values as they travel, as a field of a record does). These take a whole number of their unit, or a rate on its step; a weight that is a rate is taken on the step its type says, and is unrounded only once a division by a value has left that step unknown. A `let` takes an unrounded value."
             ),
             tr!(
                 "丸め方と刻みを書いてください（`half_up(amount * 3%, 1USDc)`）。丸め方は `up`、`down`、`half_up`、`half_down`、`half_even` の五つです。",
@@ -176,8 +179,8 @@ pub fn ledger() -> Ledger {
             "E104",
             tr!("丸めの刻み、率の刻み、単位の換算が合いません", "A grid, a step or a conversion does not fit"),
             tr!(
-                "リテラルが書いた単位の整数でないとき（`0.5USD`、単位の無い `0.4`）、リテラルを読む先の単位で整数にならないとき（`mass[g]` と比べる `1lb`）、`in` で違う通貨や次元に換算しようとしたとき、率の刻みや丸めの刻みが正の値でないとき、範囲の端や値が率の刻みの上にないとき。",
-                "A literal is no whole number of the unit it is written in (`0.5USD`, a bare `0.4`), or of the unit it is read in (`1lb` compared with a `mass[g]`); `in` is asked to convert across currencies or dimensions; a step of a rate or of a rounding is not positive; or an end of a range or a value is not on a rate's step."
+                "リテラルが書いた単位の整数でないとき（`0.5USD`、単位の無い `0.4`）、リテラルを読む先の単位で整数にならないとき（`mass[g]` と比べる `1lb`）、`in` で違う通貨や次元に換算しようとしたとき、率の刻みや丸めの刻みが正の値でないとき、範囲の端や値が率の刻みの上にないとき、`match` の分岐のリテラルが int64 に収まらないとき。",
+                "A literal is no whole number of the unit it is written in (`0.5USD`, a bare `0.4`), or of the unit it is read in (`1lb` compared with a `mass[g]`); `in` is asked to convert across currencies or dimensions; a step of a rate or of a rounding is not positive; an end of a range or a value is not on a rate's step; or a literal of an arm of a `match` does not fit in int64."
             ),
             tr!(
                 "小さな単位で書くか（`50USDc`）、割合なら率で書いてください（`40%`）。違う通貨のあいだに為替の率は無いので、換算は表に書いてください。",
@@ -191,12 +194,12 @@ pub fn ledger() -> Ledger {
             "E105",
             tr!("その型にない演算です", "The type has no such operation"),
             tr!(
-                "型が持たない演算を書いたとき。日付の足し算（`paid_on + 30`。kaname が日付でできるのは二つの日付の差だけ）、金額どうしや重さと長さの掛け算、文字列の大小の比べや `+`、順序の無い列挙の大小、値が無いことがある値の算術と比べ、値を呼ぶこと、`match` で数を分けることなど。",
-                "An operation the type does not have: adding to a date (`paid_on + 30`: the one computation kaname does with dates is the difference of two), multiplying two amounts or a weight by a length, ordering strings or adding them, ordering the values of an enum with no order, arithmetic on or comparing a value that may be none, calling a value, splitting numbers with `match`."
+                "型が持たない演算を書いたとき。日付の足し算（`paid_on + 30`。kaname が日付でできるのは二つの日付の差だけ）、金額どうしや重さと長さの掛け算、温度の値の算術と `-`（`-18℃` のような定数は書けます）、文字列の `+`、真偽と順序の無い列挙の大小、レコード・リスト・値が無いことがある値の大小と算術、関数の値でない値を呼ぶこと、`match` で分けられない値（レコード、リスト）を分けること、フィールドを持つ値のある列挙の値のフィールドを `.` で読むこと、フィールドの無い値を `{{ … }}` で作ること、型の引数の値の算術、`match`、フィールドを読むことなど（型の引数の値にできるのは、渡すこと、入れること、`=` と `!=` で比べることです）。",
+                "An operation the type does not have: adding to a date (`paid_on + 30`: the one computation kaname does with dates is the difference of two), multiplying two amounts or a weight by a length, adding strings, arithmetic or a `-` on a value of a temperature (a constant such as `-18℃` is written), ordering bools or the values of an enum with no order, ordering records, lists and values that may be none or doing arithmetic on them, calling a value that is no function, splitting with `match` what it does not split (a record, a list), reading a field of a value of an enum whose values have fields with `.`, building a value with no fields with `{{ … }}`, and arithmetic, a `match` or a field on a value of a type parameter (which is passed on, held, and compared with `=` and `!=`)."
             ),
             tr!(
-                "日付の足し算は koyomi に書いて、その日付の関数を呼んでください。値が無いことがある値は `match` で分け、文字列は `concat` でつなぎます。",
-                "Write the addition to a date in koyomi and call its date; split a value that may be none with `match`; join strings with `concat`."
+                "日付の足し算は koyomi に書いて、その日付の関数を呼んでください。値が無いことがある値は `match` で分け、文字列は `concat` でつなぎます。フィールドを持つ値のフィールドは、`match` で分けて名前を付けた値から読みます（`placed p => p.on`）。",
+                "Write the addition to a date in koyomi and call its date; split a value that may be none with `match`; join strings with `concat`; read the fields of a value that has them from the value a `match` names (`placed p => p.on`)."
             ),
             "module example v1\n\nfn due(invoiced: date range >=2026-01-01 <=2026-12-31) -> date\n  invoiced + 30\n",
             "module 例(example) v1\n\nfn 期日(due)(請求日(invoiced): date range >=2026-01-01 <=2026-12-31) -> date\n  請求日 + 30\n",
@@ -206,10 +209,13 @@ pub fn ledger() -> Ledger {
             "E106",
             tr!("`match` が取りこぼす値があります", "The match leaves values out"),
             tr!(
-                "`match` の分岐が、列挙の値、`true` と `false`、`none` と `some x` のどれかを受けないとき。上の分岐がもう受けた値を、下の分岐にもう一度書いたときも出ます。",
-                "The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`; or an arm repeats a value an arm above takes."
+                "`match` の分岐が、列挙の値、`true` と `false`、`none` と `some x` のどれかを受けず、`else` も無いとき。上の分岐がもう受けた値やリテラルを、下の分岐にもう一度書いたときも出ます。リテラル（数、お金、量、日付、文字列）で分ける `match` に `else` が無いとき、`else` が最後の分岐でないとき、`else` が受ける値が残っていないとき、`else` をほかの値と一つの分岐に並べたとき、フィールドの無い値に名前を付けたとき、名前を付けた値をほかの値と一つの分岐に並べたときも出ます。",
+                "The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`, and there is no `else`; or an arm repeats a value or a literal an arm above takes. So does a `match` by literals (numbers, amounts, quantities, dates, strings) with no `else`, an `else` that is not the last arm, takes no value or shares its arm, a name given to a value with no fields, and a value given a name that shares its arm."
             ),
-            tr!("受けない値の分岐を足すか、重なった値を一つの分岐にまとめてください。", "Add an arm for each value left out, or keep each value in one arm."),
+            tr!(
+                "受けない値の分岐を足すか、残りを `else =>` で受け、重なった値は一つの分岐にまとめてください。`else` は最後の分岐に、ほかの値と並べずに書きます。",
+                "Add an arm for each value left out, or take the rest with `else =>`, and keep each value in one arm. `else` is the last arm, with no other value in it."
+            ),
             "module example v1\n\nenum tier = basic | silver | gold\n\nfn points(t: tier) -> number\n  match t\n    basic => 1\n    silver => 2\n",
             "module 例(example) v1\n\nenum 区分(tier) = 一般(basic) | 銀(silver) | 金(gold)\n\nfn 点数(points)(区分(t): 区分) -> number\n  match 区分\n    一般 => 1\n    銀 => 2\n",
             &["E105"],
@@ -218,12 +224,12 @@ pub fn ledger() -> Ledger {
             "E107",
             tr!("呼び出しの引数が合いません", "The call does not give what it takes"),
             tr!(
-                "関数、規則、日付の呼び出しで、引数が足りないとき、取らない引数を渡したとき、同じ引数を二度書いたとき、名前を付けずに渡したとき。組み込みの関数に名前を付けた引数を渡したとき、引数の数が違うとき、レコードを作るのにフィールドが足りないか二度書いたとき、関数や規則を呼ばずに値として書いたときも出ます。",
-                "A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record is built with a field missing or given twice; a function or a rule is written as a value and not called."
+                "関数、規則、日付の呼び出しで、引数が足りないとき、取らない引数を渡したとき、同じ引数を二度書いたとき、名前を付けずに渡したとき。組み込みの関数に名前を付けた引数を渡したとき、引数の数が違うとき、レコードやフィールドを持つ値（`Order.placed {{ … }}`）を作るのにフィールドが足りないか二度書いたとき、フィールドを持つ値をフィールドを書かずに書いたとき（`Order.placed`）、規則、日付のファイル、帳簿、モジュールの名前を値として書いたとき、辞書のリテラルに同じ定数の鍵を二度書いたとき（`[\"a\": 1, \"a\": 2]`）、関数の値に名前を付けて引数を渡したとき、取る数と違う数の引数を渡したときも出ます。",
+                "A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record or a value with fields (`Order.placed {{ … }}`) is built with a field missing or given twice, or a value with fields is written without them (`Order.placed`); the name of a rule, a dates file, a book or a module is written as a value; a dict literal gives one constant key twice (`[\"a\": 1, \"a\": 2]`); a function value is given named arguments, or a number of them it does not take."
             ),
             tr!(
-                "引数を全部、名前を付けて一度ずつ書いてください（`charges(debt: d, days_late: n)`）。組み込みの関数には名前を付けずに順に渡します。",
-                "Give every argument once, by name (`charges(debt: d, days_late: n)`); a builtin takes its arguments in order, with no names."
+                "引数を全部、名前を付けて一度ずつ書いてください（`charges(debt: d, days_late: n)`）。組み込みの関数と関数の値には、名前を付けずに順に渡します（`amount(x)`）。",
+                "Give every argument once, by name (`charges(debt: d, days_late: n)`); a builtin and a function value take their arguments in order, with no names (`amount(x)`)."
             ),
             "module example v1\n\nfn double(n: number range >=0 <=9) -> number\n  n * 2\n\nfn four() -> number\n  double()\n",
             "module 例(example) v1\n\nfn 倍(double)(数(n): number range >=0 <=9) -> number\n  数 * 2\n\nfn 四(four)() -> number\n  倍()\n",
@@ -233,38 +239,38 @@ pub fn ledger() -> Ledger {
             "E108",
             tr!("宣言が足りないか、成り立ちません", "A declaration is missing or cannot hold"),
             tr!(
-                "数と日付の引数に範囲（`range`）が無いとき、リストの引数に要素の数の上限（`count`）が無いとき、率の引数に刻み（`rate[step 0.01%]`）が無いとき。引数の型から（リスト、オプショナル、ほかのレコードを通して）届くレコードのフィールドにも要ります。答えにだけ使うレコードのフィールドは範囲を省けます。率の刻みは、関数の答えとどのレコードのフィールドにも要ります（省けるのは `let` だけです）。範囲に値が一つも無いとき、端を二度書いたとき、数と日付でないものに `range` を、リストでないものに `count` を書いたとき、レコードが自分自身を含むときも出ます。",
-                "A number or a date of a function's parameters declares no range (`range`), a list no most elements (`count`), a rate no step (`rate[step 0.01%]`); so must every field of a record a parameter's type reaches (through lists, optionals and other records), while a record only answered with may leave its ranges out. The rate of a function's answer and of any field of a record declares its step too (only a `let` may leave it out). Also a range that holds no value, an end written twice, a `range` on what is no number or date, a `count` on what is no list, and a record that holds itself."
+                "率に刻み（`rate[step 0.01%]`）が無いとき。率の刻みは、関数の引数と答え、どのレコードのフィールドにも、列挙の値のフィールドにも要ります（省けるのは `let` だけです）。範囲に値が一つも無いとき、端を二度書いたとき、数と日付でないものに `range` を（型の引数の値にも）、リスト・辞書・集合・文字列でないものに `count` を書いたとき、自分を含むレコードやフィールドを持つ値のある列挙に、自分を含まない値が一つも無いとき（どの値も別の自分を含むので、一つも作れません）、自分を含む型が、自分を含むところで、型の引数から作った型を渡すとき（`Wrap[list[T]]`）、`private` でない関数の引数と答え、`private` でないレコードのフィールド、`private` でない列挙の値のフィールドに `private` のレコードや列挙を書いたとき（ほかのモジュールやホストは、その型の値を作れません）も出ます。範囲（`range`）と要素の数（`count`）は省けて、省いた値は型の全体をとります（数、お金、量はその単位で数えた int64 の全体、日付は 0001-01-01 から 9999-12-31、リスト・辞書・集合の要素の数と文字列のコードポイントの数は 0 から 2⁶³ − 1）。",
+                "A rate declares no step (`rate[step 0.01%]`): the rate of a function's parameter and answer, and of any field of a record or of a value of an enum, declares its step (only a `let` may leave it out). Also a range that holds no value, an end written twice, a `range` on what is no number or date (a value of a type parameter too), a `count` on what is no list, dict, set or string, a record or an enum whose values have fields that holds itself and has no value that does not (none of it can be made), a type that, where it holds itself, gives a type argument made from a type parameter (`Wrap[list[T]]`), and a `private` record or enum in a parameter or the answer of a function, a field of a record or a field of a value of an enum, that is not `private` (no other module and no host can make a value of it). A range (`range`) and a count (`count`) may be left out, and a value with none takes the whole of its type (all of int64 in its unit for a number, an amount or a quantity, 0001-01-01 to 9999-12-31 for a date, 0 to 2⁶³ − 1 elements for a list, a dict or a set, and code points for a string)."
             ),
             tr!(
-                "範囲を書いてください（`qty : number range >=1 <=20`、`lines : list[Line] count >=1 <=30`）。範囲はホストとの約束で、生成したコードは入口でそれを確かめます。",
-                "Declare the range (`qty : number range >=1 <=20`, `lines : list[Line] count >=1 <=30`): it is the promise to the host, which the generated code holds the arguments to."
+                "率には刻みを書いてください（`rate[step 0.01%]`）。成り立たない範囲は、下の端と上の端を一つずつ、値のある範囲に書き直してください。自分を含む型には、自分を含まない値を作れるようにしてください（自分を含むフィールドをオプショナルか空にできるリストにするか、自分を含まない値を列挙に足します）。`private` の型を使うものは、それも `private` にするか、型の `private` を外します。",
+                "Give the rate its step (`rate[step 0.01%]`); write a range with values in it, each end once. Give a type that holds itself a value that does not (make a field that holds it optional or a list that may be empty, or give the enum a value that does not hold it). Make what uses a `private` type `private` too, or take the `private` off the type."
             ),
-            "module example v1\n\nfn double(n: number) -> number\n  n * 2\n",
-            "module 例(example) v1\n\nfn 倍(double)(数(n): number) -> number\n  数 * 2\n",
+            "module example v1\n\nfn half() -> rate\n  50%\n",
+            "module 例(example) v1\n\nfn 半分(half)() -> rate\n  50%\n",
             &["E104"],
         ),
         e(
             "E109",
             tr!("組み込みの関数の使い方が違います", "A builtin function is used in a way it has not"),
             tr!(
-                "組み込みの関数の引数でないところに関数（`x => …`）を書いたとき、組み込みの関数が関数を取る引数に関数でないものを渡したとき、その関数の引数の数が違うとき、`text` に率や丸めていない値を渡したとき、`mod` の割る数が正の整数の定数でないとき、組み込みの関数を呼ばずに値として書いたとき。",
-                "A function (`x => …`) is written where no builtin takes it; a builtin is given something that is no function where it takes one, or a function of the wrong number of parameters; `text` is given a rate or an unrounded value; the divisor of `mod` is no positive whole constant; or a builtin is written as a value and not called."
+                "組み込みの関数が関数を取る引数に関数でないものを渡したとき、その関数の引数の数が違うとき、`text` に率や丸めていない値を渡したとき、`mod`、`numbers`、`at`、`take`、`drop`、`slice`、`pad_start`、`pad_end` に整数でない値を渡したとき（`mod` の割る数は、定数でも値でも、整数の number です）、`char` に整数の定数でないものか、Unicode のスカラー値でない数を渡したとき、組み込みの関数を値として書いたとき（関数の型の引数にも渡せません）。",
+                "A builtin is given something that is no function where it takes one, or a function of the wrong number of parameters; `text` is given a rate or an unrounded value; `mod`, `numbers`, `at`, `take`, `drop`, `slice`, `pad_start` or `pad_end` is given what is no whole number (the divisor of `mod`, a constant or a value, is a whole number); `char` is given what is no whole number written as a constant, or a number that is no Unicode scalar value; or a builtin is written as a value (it is given to no parameter of a function type either)."
             ),
             tr!(
-                "関数は `sum(xs, x => …)` のように組み込みの関数に渡すときだけ書き、ほかで使う計算は `fn` で名前を付けてください。",
-                "Write a function only where a builtin takes it, as in `sum(xs, x => …)`; a computation used elsewhere is a `fn` with a name."
+                "組み込みの関数は呼ぶか、ラムダで包んで渡してください（`xs.map(x => isqrt(x))`）。",
+                "Call a builtin, or give it wrapped in a lambda (`xs.map(x => isqrt(x))`)."
             ),
-            "module example v1\n\nfn f() -> number\n  let twice = x => x * 2\n  1\n",
-            "module 例(example) v1\n\nfn 一(one)() -> number\n  let 倍 = x => x * 2\n  1\n",
-            &["E107"],
+            "module example v1\n\nfn roots(xs: list[number] count <=9 range >=0 <=99) -> list[number]\n  xs.map(isqrt)\n",
+            "module 例(example) v1\n\nfn 平方根(roots)(数の一覧(xs): list[number] count <=9 range >=0 <=99) -> list[number]\n  数の一覧.map(isqrt)\n",
+            &["E107", "E113"],
         ),
         e(
             "E110",
             tr!("二通りに読める語です", "A word reads two ways"),
             tr!(
-                "列挙の値を書くところで、その語が値の名前としても、引数や `let` の名前としても読めるとき。",
-                "Where a value of an enum goes, a word reads both as the value and as the name of a parameter or a `let`."
+                "列挙の値を書くところで、その語が値の名前としても、引数や `let` の名前としても読めるとき。`{{ … }}` の前の語が、レコードの名前としても、フィールドを持つ値の名前としても読めるときも出ます。",
+                "Where a value of an enum goes, a word reads both as the value and as the name of a parameter or a `let`; or, before `{{ … }}`, both as a record and as a value of the enum that has fields."
             ),
             tr!("どちらかの名前を替えるか、値を `<列挙>.<値>` と書いてください。", "Rename one of them, or write the value `<enum>.<value>`."),
             "module example v1\n\nenum tier = basic | gold\n\nfn is_gold(t: tier, gold: bool) -> bool\n  t = gold\n",
@@ -286,17 +292,77 @@ pub fn ledger() -> Ledger {
             "module 例(example) v1\n\nfn 遅れ(late)(日数(days): number range >=0 <=9) -> number?\n  if 日数 >= 1\n    日数\n",
             &["E004"],
         ),
+        e(
+            "E112",
+            tr!("型の引数が決まらないか、合いません", "A type argument cannot be worked out, or does not fit"),
+            tr!(
+                "総称の関数を呼ぶところで、型の引数が、引数の型からも置かれた場所の型からも決まらないとき（`[]` や `none` だけを渡したとき）、二つの引数が一つの型の引数に違う型を言うとき（ドルのリストとセントの値を一つの `T` に渡す）。総称のレコード、列挙、関数の名前のあとに書いた型の引数の数が、型の引数の数と違うとき、値の無いことがある型（`number?`）か関数の型を型の引数に当てたとき、ラムダの引数の型が、置かれた場所の関数の型から決まらないとき（型を書かない `let` に置いたラムダ）、呼び出しの輪の中の総称の関数に、型の引数から作った型を渡すとき（`wrap_deep[T]` が自分を `wrap_deep(x: [x], …)` と呼んで `list[T]` を渡す）も出ます。",
+                "Where a generic function is called, a type parameter takes no type from the arguments nor from the place the call is put in (only `[]` or `none` is given), or two arguments say two types for one (a list of dollars and a value of cents for one `T`). So does a generic record, enum or function given a number of type arguments that is not the number of its type parameters, a type argument whose values may be none (`number?`) or that is a function type, a parameter of a lambda whose type the function type of its place does not say (a lambda a `let` with no type names), and a generic function of a ring of calls given a type argument made from a type parameter (`wrap_deep[T]` calling itself as `wrap_deep(x: [x], …)` gives `list[T]`)."
+            ),
+            tr!(
+                "型を書いた `let` に置くか（`let p : Page[number] = …`）、関数の名前のあとに型を書いてください（`empty_page[number]()`）。単位の違うお金や量は `in` で換算してそろえます。値の無いことがあるところは、`?` の無い型を当てて、引数を `T?` と書きます。ラムダの引数には型を書きます（`(l: Line) => …`）。呼び出しの輪の中では、型の引数をそのまま渡すか、型の引数を含まない型を渡してください。",
+                "Put the call where a type is written (`let p : Page[number] = …`), or write the types after the function's name (`empty_page[number]()`); convert an amount or a quantity of another unit with `in`. Where a value may be none, give the type with no `?` and write the parameter `T?`. Write the types of a lambda's parameters (`(l: Line) => …`). In a ring of calls, give the type parameters as they are, or types that name none."
+            ),
+            "module example v1\n\nfn first_or[T](xs: list[T], fallback: T) -> T\n  match xs.first()\n    none => fallback\n    some x => x\n\nfn cheapest(dollars: list[money[USD]], cents: money[USDc]) -> money[USD]\n  first_or(xs: dollars, fallback: cents)\n",
+            "module 例(example) v1\n\nfn 先頭か(first_or)[T](一覧(xs): list[T], 代わり(fallback): T) -> T\n  match 一覧.first()\n    none => 代わり\n    some x => x\n\nfn 最安(cheapest)(ドル(dollars): list[money[USD]], セント(cents): money[USDc]) -> money[USD]\n  先頭か(一覧: ドル, 代わり: セント)\n",
+            &["E103", "E114"],
+        ),
+        e(
+            "E113",
+            tr!("関数の値を、置けないところに置いています", "A function value is put where it cannot go"),
+            tr!(
+                "関数の型か関数の値を、関数の答え、レコードのフィールド、列挙の値のフィールド、リスト・辞書・集合の要素、値の無いことがある値、`=` と `!=` の両辺に書いたとき。関数の値を置けるのは、関数と組み込みの関数の、関数の型の引数と、`let` の値（`if` と `match` の答えとして選んだものも）と、呼び出される位置だけです。関数を取る関数を値として書いたとき、関数を呼ばずに、値の置けないところに名前だけ書いたときも出ます。",
+                "A function type or a function value is written as a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, or a side of `=` or `!=`. A function value goes to a parameter of a function type of a function or a builtin, to a `let` (one an `if` or a `match` chooses too), and to where it is called, and nowhere else. So does a function that takes a function written as a value, and the name of a function written alone where no function value goes."
+            ),
+            tr!(
+                "関数を答える関数の代わりに、その引数も取る関数を書くか、呼ぶところで `x => add(x: x, n: n)` と書いてください。関数のリストの代わりに、関数を順に呼んで答えをリストにします。関数を呼ぶなら、引数を渡して `f(…)` と書きます。",
+                "Instead of a function that answers a function, write one that takes its argument too, or write `x => add(x: x, n: n)` where it is called; instead of a list of functions, call them in turn and make a list of their answers. To call a function, give it its arguments: `f(…)`."
+            ),
+            "module example v1\n\nfn adder(n: number range >=0 <=9) -> (number) -> number\n  x => x + n\n",
+            "module 例(example) v1\n\nfn 足す関数(adder)(数(n): number range >=0 <=9) -> (number) -> number\n  x => x + 数\n",
+            &["E109", "E112"],
+        ),
+        e(
+            "E114",
+            tr!("この型は鍵にできません", "This type cannot be a key"),
+            tr!(
+                "辞書の鍵、集合の要素、並べ替え（`sort`、`sort_by`、`sort_by_desc`）と `distinct`、`max_by`、`min_by`、`to_dict`、`group_by` の鍵の型が、鍵にできる型でないとき。鍵にできるのは、数、お金、量、刻みのある率、日付、文字列、bool、値がフィールドを持たない列挙（規則の列挙も）です。レコード、リスト、辞書、集合、値が無いことがある値、フィールドを持つ値のある列挙は鍵にできません。並べ替えと `max_by`、`min_by` の鍵には、鍵にできる型のフィールドだけを持つレコードも書けて、フィールドを宣言の順に比べます。型の引数の値を鍵にするか、大小で比べるか、並べ替えるときも、型の引数に `key` が無ければ出ます。",
+                "The type of a key of a dict, of a member of a set, or of the key of an order (`sort`, `sort_by`, `sort_by_desc`), `distinct`, `max_by`, `min_by`, `to_dict` or `group_by` is no type a key can be. A key is a number, an amount, a quantity, a rate with a step, a date, a string, a bool, or a value of an enum whose values have no fields (a rule's enum too); a record, a list, a dict, a set, a value that may be none and an enum whose values have fields are not. The key of an order, `max_by` and `min_by` may also be a record whose fields can all be keys, compared field by field in the order they are declared. So does a value of a type parameter not held to keys made a key, ordered or sorted."
+            ),
+            tr!(
+                "鍵にできる値を鍵にしてください。レコードなら、見分けるフィールド（`line.sku`）を鍵にします。kaname は鍵を型ごとに一つの順に並べるので、辞書と集合は、どの出力先でも同じ順に回ります。型の引数は `[K: key]` と書くと、鍵にできる型だけを受け取ります。",
+                "Make the key a value that can be one: of a record, the field that tells it apart (`line.sku`). kaname puts keys in one order for each type, so a dict and a set go round in that order in every target. A type parameter written `[K: key]` takes only the types that can be keys."
+            ),
+            "module example v1\n\nrecord Line\n  sku : string\n  qty : number\n\nfn lines(by_line: dict[Line, number]) -> number\n  by_line.count()\n",
+            "module 例(example) v1\n\nrecord 明細(Line)\n  品番(sku) : string\n  数量(qty) : number\n\nfn 明細の数(lines)(明細ごと(by_line): dict[明細, number]) -> number\n  明細ごと.count()\n",
+            &["E102", "E103"],
+        ),
+        e(
+            "E115",
+            tr!("ここには `try` を書けません", "`try` cannot be written here"),
+            tr!(
+                "`let x = try e` を、関数の答えに続くブロックでないところに書いたとき（`let y =` の下のブロック、組み込みの関数に渡す関数の中）。答えに続くブロックは、関数の本体と、そこから答えにつながる `if` と `match` の分岐のブロックです。`e` が `result` でも値の無いことがある値でもないとき、関数の答えの型が `result` でも値の無いことがある型でもないとき、`result` の失敗の型が関数の答えの失敗の型と違うときも出ます。",
+                "`let x = try e` is written in a block that does not lead to the function's answer (a block under `let y =`, a function given to a builtin): the body of a function, and the blocks of the `if` and `match` arms that lead from it to its answer, do. So does an `e` that is neither a `result` nor a value that may be none, a function whose answer is neither a `result` nor a value that may be none, and a `result` whose error is not of the type of the error of the function's answer."
+            ),
+            tr!(
+                "`try` は、答えに続くブロックの `let` に書いてください。`let y =` の下の計算なら、それを `fn` にして、その答えを `try` で受けます。失敗の型は、関数の答えの失敗の型にそろえます。",
+                "Write `try` in a `let` of a block that leads to the answer; a computation under `let y =` is a `fn` whose answer `try` takes. Give the error the type of the error of the function's answer."
+            ),
+            "module example v1\n\nfn half(n: number range >=0 <=98) -> result[number, string]\n  if n = 0 then err(\"zero\") else ok(n + 1)\n\nfn next(n: number range >=0 <=98) -> number\n  let h = try half(n: n)\n  h\n",
+            "module 例(example) v1\n\nfn 半分(half)(数(n): number range >=0 <=98) -> result[number, string]\n  if 数 = 0 then err(\"ゼロ\") else ok(数 + 1)\n\nfn 次(next)(数(n): number range >=0 <=98) -> number\n  let h = try 半分(数: 数)\n  h\n",
+            &["E102"],
+        ),
         // ── Files a module reads ──
         e(
             "E201",
             tr!("読むファイルを読めません", "A file this module uses cannot be read"),
             tr!(
-                "`use` で読むファイルが無いとき、拡張子が種類に合わないとき（`use rule` は `.rule`、`use dates` は `.cal`、`use book` は `.book`、`use module` は `.kn`）、その言語の検査を通らないとき（rulec、koyomi、chobo、kaname が言うことを注に挙げます）。",
-                "A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it)."
+                "`use` で読むファイルが無いとき、拡張子が種類に合わないとき（`use rule` は `.rule`、`use dates` は `.cal`、`use book` は `.book`、`use module` は `.kn`）、その言語の検査を通らないとき（rulec、koyomi、chobo、kaname が言うことを注に挙げます）。出力の無い規則（`enums` のファイル）を呼んだときと、その出力を型に書いたときも出ます。出力の無い規則からは呼ぶためのコードが生成されません。読めるのはその列挙で、`<規則>.<列挙>` と書いて型として使えます。",
+                "A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it). So does a call of a rule with no outputs (an `enums` file), and its outputs written as a type: nothing to call is generated from it. What a module reads it for is its enums, written `<rule>.<enum>` where a type goes."
             ),
             tr!(
-                "パスを確かめてください（パスは、このモジュールのファイルのあるディレクトリから書きます）。検査を通らないファイルは、その言語の検査が通るように直してください。",
-                "Check the path (it is written from the directory of the module's file); correct a file that does not pass until its language's check passes it."
+                "パスを確かめてください（パスは、このモジュールのファイルのあるディレクトリから書きます）。検査を通らないファイルは、その言語の検査が通るように直してください。`enums` のファイルは呼ばずに、その列挙を型に書いてください。",
+                "Check the path (it is written from the directory of the module's file); correct a file that does not pass until its language's check passes it. Do not call an `enums` file: write its enums as types."
             ),
             "module example v1\n\nuse module pricing from \"pricing.kn\"\n",
             "module 例(example) v1\n\nuse module 価格 from \"価格.kn\"\n",
@@ -379,8 +445,8 @@ pub fn ledger() -> Ledger {
             "E302",
             tr!("途中の値が int64 を超えることがあります", "A value can leave int64"),
             tr!(
-                "途中の値を既約分数にした分子か分母が int64 に収まらない、関数の実際の入力を見つけたとき。注に、その入力を書きます。",
-                "An input of the function is found for which a value on the way, as a fraction in lowest terms, has a numerator or a denominator outside int64; the notes give the input."
+                "途中の値を既約分数にした分子か分母が int64 に収まらない、関数の実際の入力を見つけたとき。注に、その入力を書きます。範囲を書かない値の、型の端から来るあふれは言いません。生成したコードがその場所で確かめ、関数のエフェクトに `overflow` が入ります。",
+                "An input of the function is found for which a value on the way, as a fraction in lowest terms, has a numerator or a denominator outside int64; the notes give the input. An overflow that comes from the end of a type, of a value whose range is not written, is not said: the generated code checks it there, and the function's effect has `overflow`."
             ),
             tr!("入力の範囲を狭めるか、先に丸めてください。", "Narrow the ranges of the inputs, or round sooner."),
             "module example v1\n\nfn double(n: number range >=0 <=5_000_000_000_000_000_000) -> number\n  n * 2\n",
@@ -391,12 +457,12 @@ pub fn ledger() -> Ledger {
             "W302",
             tr!("途中の値が int64 に収まるかを決められません", "Whether a value stays in int64 cannot be decided"),
             tr!(
-                "範囲の解析が、途中の値が int64 に収まると示せず、関数のベクタにも超える入力が無かったとき。範囲の解析は、範囲を書かない再帰の答えを、どの値にもなりうるものとして数えます。生成したコードが、走らせたときに確かめます。",
-                "The analysis of ranges cannot show that a value on the way stays in int64, and no vector of the function takes it out; the answer of a recursion with no range written is counted as any value. The generated code checks it when it runs."
+                "範囲の解析が、途中の値が int64 に収まると示せず、関数のベクタにも超える入力が無かったとき。`reduce` が要素を一つずつ追わずに広げた値（要素の数の上限が 16 を超えるリスト）が、この形になります。範囲を書かない値の、型の端から来るあふれは言いません（関数のエフェクトに `overflow` が入ります）。生成したコードが、走らせたときに確かめます。",
+                "The analysis of ranges cannot show that a value on the way stays in int64, and no vector of the function takes it out; a value `reduce` widens instead of following each element (of a list of more than 16 elements at most) is one. An overflow that comes from the end of a type, of a value whose range is not written, is not said (the function's effect has `overflow`). The generated code checks it when it runs."
             ),
-            tr!("入力の範囲を狭めるか、先に丸めてください。再帰の関数には、答えの範囲を書いてください。", "Narrow the ranges of the inputs, or round sooner; give a recursive function the range of its answer."),
-            "module example v1\n\nfn steps(n: number range >=0 <=100) -> number\n  if n <= 0 then 0 else steps(n: n - 1) + 1\n",
-            "module 例(example) v1\n\nfn 段数(steps)(数(n): number range >=0 <=100) -> number\n  if 数 <= 0 then 0 else 段数(数: 数 - 1) + 1\n",
+            tr!("入力の範囲を狭めるか、先に丸めてください。", "Narrow the ranges of the inputs, or round sooner."),
+            "module example v1\n\nfn product(xs: list[number] count <=20 range >=1 <=9) -> number\n  reduce(xs, 1, (acc, x) => acc * x)\n",
+            "module 例(example) v1\n\nfn 積(product)(数の並び(xs): list[number] count <=20 range >=1 <=9) -> number\n  reduce(数の並び, 1, (acc, x) => acc * x)\n",
             &["E302"],
         ),
         e(
@@ -428,24 +494,39 @@ pub fn ledger() -> Ledger {
             "E401",
             tr!("関数のエフェクトが、書いたエフェクトに収まりません", "The function does more than the effect written on it"),
             tr!(
-                "`total` と書いた関数に、実行時に失敗しうる場所か、輪になる呼び出し（再帰）があるとき。`fails` に書いていない種類の失敗が起きうるとき、`diverges` と書かずに再帰があるときも出ます。呼んだ関数のエフェクトも、呼んだ側のエフェクトに入ります。言語をまたぐ判定（ritsu の X2・X3・X4・X6）が決める場所は、その答えで数えます。示せなかった場所と例のある場所は、ほかの場所と同じく、実行時に失敗しうる場所です。答えを受け取らない実行では、その場所は答えを待つ場所で、この確かめに使いません。",
-                "A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. The effects of the functions it calls count. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count."
+                "`total` と書いた関数に、実行時に失敗しうる場所か、輪になる呼び出し（再帰）があるとき。`fails` に書いていない種類の失敗が起きうるとき、`diverges` と書かずに再帰があるときも出ます。範囲を書かない値の、型の端から来るあふれも、`overflow` で失敗しうる場所です。呼んだ関数のエフェクトも、呼んだ側のエフェクトに入ります。関数の値を呼ぶところは、その関数の型に書いたエフェクトを数えます。書いていなければ数えず、渡した関数のエフェクトは、それを渡した関数に入ります。言語をまたぐ判定（ritsu の X2・X3・X4・X6）が決める場所は、その答えで数えます。示せなかった場所と例のある場所は、ほかの場所と同じく、実行時に失敗しうる場所です。答えを受け取らない実行では、その場所は答えを待つ場所で、この確かめに使いません。",
+                "A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. An overflow that comes from the end of a type, of a value whose range is not written, is a place that can fail with `overflow` too. The effects of the functions it calls count. A call of a function value counts the effect written on its function type; with none written it counts nothing, and the effect of the function given is in the function that gives it. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count."
             ),
             tr!(
-                "注に挙げた場所を示せるようにする（範囲を狭める分岐を書く）か、書いたエフェクトを広げてください。再帰する関数には `diverges` と書きます。",
-                "Make the places the notes give shown (write the branch that narrows the value), or widen the effect written; a recursive function is written `diverges`."
+                "注に挙げた場所を示せるようにする（範囲を狭める分岐を書くか、範囲を書かない値に範囲を書く）か、書いたエフェクトを広げてください。再帰する関数には `diverges` と書きます。",
+                "Make the places the notes give shown (write the branch that narrows the value, or the range of a value with none), or widen the effect written; a recursive function is written `diverges`."
             ),
-            "module example v1\n\nfn steps(n: number range >=0 <=100) -> number range >=0 <=100 total\n  if n <= 0 then 0 else min(steps(n: n - 1) + 1, 100)\n",
-            "module 例(example) v1\n\nfn 段数(steps)(数(n): number range >=0 <=100) -> number range >=0 <=100 total\n  if 数 <= 0 then 0 else min(段数(数: 数 - 1) + 1, 100)\n",
-            &["W301", "W302", "W303"],
+            "module example v1\n\nfn steps(n: number range >=0 <=100) -> number total\n  if n <= 0 then 0 else steps(n: n - 1) + 1\n",
+            "module 例(example) v1\n\nfn 段数(steps)(数(n): number range >=0 <=100) -> number total\n  if 数 <= 0 then 0 else 段数(数: 数 - 1) + 1\n",
+            &["W301", "W302", "W303", "E402"],
+        ),
+        e(
+            "E402",
+            tr!("渡した関数のエフェクトが、引数の型に書いたエフェクトに収まりません", "The function given does more than the effect its parameter writes"),
+            tr!(
+                "関数の型にエフェクトを書いた引数（`(number) -> bool total`、`(T) -> U fails range`）に、そのエフェクトに収まらない関数を渡したとき。ラムダのエフェクトは、本体の示せない場所と、本体が呼ぶ関数のエフェクトです。名前で渡した関数のエフェクトは、その関数のエフェクトです。",
+                "A parameter whose function type writes an effect (`(number) -> bool total`, `(T) -> U fails range`) is given a function that does more. The effect of a lambda is that of the places of its body that are not shown and of the functions its body calls; the effect of a function given by its name is its own."
+            ),
+            tr!(
+                "渡す関数の場所を示せるようにする（ラムダの中で `if` を書いて値を狭める）か、引数の型に書いたエフェクトを広げてください。",
+                "Make the places of the function given shown (narrow the values with an `if` in the lambda), or widen the effect written on the parameter's type."
+            ),
+            "module example v1\n\nfn all_within(xs: list[number] count <=9, test: (number) -> bool total) -> bool\n  xs.all(x => test(x))\n\nfn grows(xs: list[number] count <=9) -> bool\n  all_within(xs: xs, test: x => x + 1 > x)\n",
+            "module 例(example) v1\n\nfn すべて満たす(all_within)(数の一覧(xs): list[number] count <=9, 条件(test): (number) -> bool total) -> bool\n  数の一覧.all(x => 条件(x))\n\nfn 増える(grows)(数の一覧(xs): list[number] count <=9) -> bool\n  すべて満たす(数の一覧: 数の一覧, 条件: x => x + 1 > x)\n",
+            &["E401"],
         ),
         // ── A decision in code ──
         e(
             "W501",
             tr!("表に書くべき判断が、コードにあります", "A decision is written in code; a table should hold it"),
             tr!(
-                "`if` か `match` が、業務の定数（金額、量、率、日付、列挙の値、`true` と `false`、それだけでできたレコード。`match` では数も）を答えにするとき。業務の値と 0 でないしきい値（金額、量、率、日付、数のリテラル）の比べを、`if` の条件と `match` で分ける値のほかで値にするときも出ます。答えが `none` の分岐、`none` と `some x` に分けるだけの `match`、別の列挙の同じ名前の値に対応づけるだけの `match`、0 との比べは、警告になりません。",
-                "An `if` or a `match` answers a constant of the business (an amount, a quantity, a rate, a date, a value of an enum, `true` or `false`, a record of those; in a `match`, a number too); or a comparison of a value of the business with a threshold that is not 0 (a literal amount, quantity, rate, date or number) is made a value elsewhere than in the condition of an `if` or what a `match` splits. A branch that answers `none`, a `match` that only splits `none` from `some x`, one that maps the values of an enum to those of the same names of another, and a comparison with 0 are not warned of."
+                "`if` が、業務の定数（金額、量、率、日付、列挙の値、`true` と `false`、それだけでできたレコード）を答えにするとき。`match` が、金額、量、率、日付か、それだけでできたレコード（フィールドを持つ値も）を答えにするときも出ます。業務の値と 0 でないしきい値（金額、量、率、日付、数のリテラル）の比べを、`if` の条件と `match` で分ける値のほかで値にするときも出ます。答えが `none` の分岐、`none` と `some x` に分けるだけの `match`、列挙の値や `true` と `false` や数を答える `match`、0 との比べは、警告になりません。どの値にも一度だけ答えることは、`match` では kaname が確かめます（E106）。",
+                "An `if` answers a constant of the business (an amount, a quantity, a rate, a date, a value of an enum, `true` or `false`, a record of those); a `match` answers an amount, a quantity, a rate, a date, or a record of those (a value with fields too); or a comparison of a value of the business with a threshold that is not 0 (a literal amount, quantity, rate, date or number) is made a value elsewhere than in the condition of an `if` or what a `match` splits. A branch that answers `none`, a `match` that only splits `none` from `some x`, a `match` that answers values of an enum, `true` or `false`, or numbers, and a comparison with 0 are not warned of: that a `match` answers every value once, kaname checks itself (E106)."
             ),
             tr!(
                 "判断を rulec の表に書いて、規則を呼んでください。表に書けば、完全性と重なりを rulec が確かめ、承認する人がページで読めます。",

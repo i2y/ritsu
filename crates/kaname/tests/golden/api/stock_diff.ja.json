@@ -1,0 +1,400 @@
+{
+  "kaname": "<version>",
+  "file": "stock_diff.ja.kn",
+  "module": {
+    "name": "在庫の差",
+    "alias": "stock_diff_ja",
+    "version": "v1",
+    "description": "倉庫の二回の棚卸しを、品番ごとに比べる。増えた品番、無くなった品番、数が変わった品番と、一日の入出庫を品番ごとにまとめて棚卸しの数に足したもの、発注する品番。棚卸しの数は品番から棚にある数への辞書で、二回の棚卸しの品番は集合にする。stock_diff.kn の日本語の版",
+    "sha256": "881db3c4932baa6c63f03015f1bf5ba81650e9548067f693c798e8011e7d6e99"
+  },
+  "generated": {
+    "typescript": "glue/stock_diff_ja.ts",
+    "python": "glue/stock_diff_ja.py",
+    "go": "glue/stockdiffja/stockdiffja.go"
+  },
+  "uses": [],
+  "enums": [
+    {
+      "name": "変化",
+      "alias": "Change",
+      "ordered": false,
+      "values": [
+        {
+          "name": "増えた",
+          "alias": "added",
+          "label": null,
+          "fields": [
+            {
+              "name": "品番",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 10
+            },
+            {
+              "name": "数量",
+              "alias": "qty",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 11
+            }
+          ],
+          "generated": {
+            "typescript": "ChangeAdded",
+            "python": "ChangeAdded",
+            "go": "ChangeAdded"
+          }
+        },
+        {
+          "name": "無くなった",
+          "alias": "removed",
+          "label": null,
+          "fields": [
+            {
+              "name": "品番",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 13
+            },
+            {
+              "name": "数量",
+              "alias": "qty",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 14
+            }
+          ],
+          "generated": {
+            "typescript": "ChangeRemoved",
+            "python": "ChangeRemoved",
+            "go": "ChangeRemoved"
+          }
+        },
+        {
+          "name": "変わった",
+          "alias": "changed",
+          "label": null,
+          "fields": [
+            {
+              "name": "品番",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 16
+            },
+            {
+              "name": "前",
+              "alias": "was",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 17
+            },
+            {
+              "name": "今",
+              "alias": "now",
+              "type": "number",
+              "range": null,
+              "count": null,
+              "line": 18
+            }
+          ],
+          "generated": {
+            "typescript": "ChangeChanged",
+            "python": "ChangeChanged",
+            "go": "ChangeChanged"
+          }
+        }
+      ],
+      "line": 8,
+      "generated": {
+        "typescript": "Change",
+        "python": "Change",
+        "go": "Change"
+      }
+    }
+  ],
+  "records": [
+    {
+      "name": "入出庫",
+      "alias": "Move",
+      "fields": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": ">=1 <=20",
+          "line": 5
+        },
+        {
+          "name": "数量",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=-10000 <=10000",
+          "count": null,
+          "line": 6
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Move",
+        "python": "Move",
+        "go": "Move"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "違い",
+      "alias": "change",
+      "line": 21,
+      "description": null,
+      "params": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "前",
+          "alias": "before",
+          "type": "number?",
+          "range": ">=0 <=1000000",
+          "count": null
+        },
+        {
+          "name": "後",
+          "alias": "after",
+          "type": "number?",
+          "range": ">=0 <=1000000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "変化?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "change",
+        "python": "change",
+        "go": "ChangeFn"
+      }
+    },
+    {
+      "name": "違いの一覧",
+      "alias": "changes",
+      "line": 33,
+      "description": null,
+      "params": [
+        {
+          "name": "前",
+          "alias": "before",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": null
+        },
+        {
+          "name": "後",
+          "alias": "after",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[変化]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 35,
+          "function": "違い"
+        }
+      ],
+      "generated": {
+        "typescript": "changes",
+        "python": "changes",
+        "go": "Changes"
+      }
+    },
+    {
+      "name": "正味",
+      "alias": "net",
+      "line": 38,
+      "description": null,
+      "params": [
+        {
+          "name": "入出庫",
+          "alias": "moves",
+          "type": "list[入出庫]",
+          "range": null,
+          "count": "<=1000"
+        }
+      ],
+      "result": {
+        "type": "dict[string, number]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "net",
+        "python": "net",
+        "go": "Net"
+      }
+    },
+    {
+      "name": "入出庫の後",
+      "alias": "moved",
+      "line": 42,
+      "description": null,
+      "params": [
+        {
+          "name": "在庫",
+          "alias": "stock",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": "<=10000"
+        },
+        {
+          "name": "入出庫",
+          "alias": "moves",
+          "type": "list[入出庫]",
+          "range": null,
+          "count": "<=1000"
+        }
+      ],
+      "result": {
+        "type": "dict[string, number]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 43,
+          "function": "正味"
+        }
+      ],
+      "generated": {
+        "typescript": "moved",
+        "python": "moved",
+        "go": "Moved"
+      }
+    },
+    {
+      "name": "発注する品番",
+      "alias": "to_reorder",
+      "line": 46,
+      "description": null,
+      "params": [
+        {
+          "name": "在庫",
+          "alias": "stock",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": null
+        },
+        {
+          "name": "下限",
+          "alias": "floor",
+          "type": "number",
+          "range": ">=0 <=1000000",
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "set[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "to_reorder",
+        "python": "to_reorder",
+        "go": "ToReorder"
+      }
+    },
+    {
+      "name": "総数",
+      "alias": "units",
+      "line": 50,
+      "description": null,
+      "params": [
+        {
+          "name": "在庫",
+          "alias": "stock",
+          "type": "dict[string, number]",
+          "range": ">=0 <=1000000",
+          "count": "<=10000"
+        }
+      ],
+      "result": {
+        "type": "number",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "units",
+        "python": "units",
+        "go": "Units"
+      }
+    }
+  ],
+  "transfers": []
+}

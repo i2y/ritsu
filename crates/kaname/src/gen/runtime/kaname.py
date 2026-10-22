@@ -6,9 +6,10 @@ and the error the modules raise. It imports the standard library alone."""
 from __future__ import annotations
 
 import datetime
+import re
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Generic, Literal, NoReturn, TypeVar
+from typing import AbstractSet, Any, Callable, Generic, Iterable, Literal, Mapping, NoReturn, Sequence, TypeVar, Union
 
 # The language the messages are written in: the `--lang` of `ritsu gen`.
 LANG = "@LANG@"
@@ -250,9 +251,136 @@ def date_text(d: datetime.date) -> str:
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}"
 
 
-def itoa(n: int) -> str:
+def eq(a: object, b: object) -> bool:
+    """Whether two values of an enum that has fields are the same, compared whole (what `==` of their
+    data classes does): an `isinstance` that splits one of them can leave the two of types that do not
+    meet, which `mypy --strict` does not let `==` compare."""
+    return a == b
+
+
+# ── Orders, dicts, sets and lists (kaname's DESIGN 24) ───────────────────
+
+K = TypeVar("K")
+V = TypeVar("V")
+E = TypeVar("E")
+T = TypeVar("T")
+W = TypeVar("W")
+
+
+def natural(x: Any) -> Any:
+    """The key of a value in its own order: a number, a date, a string by its code points, `False`
+    before `True`."""
+    return x
+
+
+def dict_of(pairs: Iterable[tuple[K, V]], key: Callable[[K], Any]) -> dict[K, V]:
+    """A dict of these pairs, the later of two of one key kept, in the order of its keys: a `dict`
+    goes round in the order its keys are put in."""
+    d = dict(pairs)
+    return {k: d[k] for k in sorted(d, key=key)}
+
+
+def keys_of(d: Mapping[K, Any] | AbstractSet[K], key: Callable[[K], Any]) -> list[K]:
+    """The keys of a dict or the members of a set, in their order."""
+    return sorted(d, key=key)
+
+
+def values_of(d: Mapping[K, V], key: Callable[[K], Any]) -> list[V]:
+    """The values of a dict, in the order of their keys."""
+    return [d[k] for k in sorted(d, key=key)]
+
+
+def entries_of(d: Mapping[K, V], key: Callable[[K], Any]) -> "list[Entry[K, V]]":
+    """The pairs of a dict as entries, in the order of their keys."""
+    return [Entry(k, d[k]) for k in sorted(d, key=key)]
+
+
+def put(d: Mapping[K, V], k: K, v: V, key: Callable[[K], Any]) -> dict[K, V]:
+    return dict_of([*d.items(), (k, v)], key)
+
+
+def remove(d: Mapping[K, V], k: K) -> dict[K, V]:
+    return {x: y for x, y in d.items() if x != k}
+
+
+def merge(a: Mapping[K, V], b: Mapping[K, V], key: Callable[[K], Any]) -> dict[K, V]:
+    """The pairs of both, `b`'s value for a key of both."""
+    return dict_of([*a.items(), *b.items()], key)
+
+
+def remap(d: Mapping[K, V], fk: Callable[[K], E], fv: Callable[[V], T]) -> dict[E, T]:
+    """A dict with each key and each value read anew."""
+    return {fk(k): fv(v) for k, v in d.items()}
+
+
+def _cut(i: int, n: int) -> int:
+    """A whole number cut to 0 and to `n`: where a list is cut (kaname's DESIGN 24.3)."""
+    return 0 if i < 0 else n if i > n else i
+
+
+def at(xs: Sequence[T], i: int) -> T | None:
+    """The element at `i` (from 0); None past either end."""
+    return xs[i] if 0 <= i < len(xs) else None
+
+
+def first(xs: Sequence[T]) -> T | None:
+    return xs[0] if xs else None
+
+
+def last(xs: Sequence[T]) -> T | None:
+    return xs[-1] if xs else None
+
+
+def slice_of(xs: Sequence[T], a: int, b: int) -> list[T]:
+    """The elements from `a` up to before `b`, both cut to the list."""
+    i, j = _cut(a, len(xs)), _cut(b, len(xs))
+    return list(xs[i:j]) if i < j else []
+
+
+def take(xs: Sequence[T], n: int) -> list[T]:
+    return list(xs[: _cut(n, len(xs))])
+
+
+def drop(xs: Sequence[T], n: int) -> list[T]:
+    return list(xs[_cut(n, len(xs)) :])
+
+
+def flatten(xss: Sequence[Sequence[T]]) -> list[T]:
+    return [x for xs in xss for x in xs]
+
+
+def by_key(ps: Sequence[tuple[K, T]], key: Callable[[K], Any], desc: bool) -> list[T]:
+    """The elements in the order of their keys, from the greatest where `desc`, two of one key in the
+    order of the list either way (`sorted` keeps them so, `reverse` too)."""
+    return [p[1] for p in sorted(ps, key=lambda p: key(p[0]), reverse=desc)]
+
+
+def distinct(xs: Sequence[T]) -> list[T]:
+    """The first of each key, in the order of the list."""
+    return list(dict.fromkeys(xs))
+
+
+def numbers(a: int, b: int, over: At | None) -> list[int]:
+    """`numbers(a, b)`: `a` to `b`, both in; none where `b` is before `a`; the count held to int64
+    where `over` says."""
+    if b < a:
+        return []
+    if over is not None and b - a + 1 > _MAX:
+        fail("overflow", *over)
+    return list(range(a, b + 1))
+
+
+def mod_of(x: Fraction, n: int, zero: At | None) -> int:
+    """`mod(x, n)` of a divisor that is a value: the whole part of `x` (toward −∞) modulo `n`, from 0
+    to |n| − 1 (Euclid's, kaname's DESIGN 24.3); the error `zero` where `zero` says and `n` is 0."""
+    if zero is not None and n == 0:
+        fail("zero", *zero)
+    return (x.numerator // x.denominator) % abs(n)
+
+
+def itoa(n: int | None) -> str:
     """A whole number in decimal: what a message says a count is, where a parameter of the function
-    may have the name of Python's `str`."""
+    may have the name of Python's `str`. The check that finds a count outside sets it."""
     return str(n)
 
 
@@ -266,10 +394,26 @@ class Outside:
     shown: str
     range: str
     count: int | None
+    # Whether the count is of a string's code points (kaname's DESIGN 25.1).
+    chars: bool = False
+    # Whether the value is a string that is not well formed: a lone surrogate.
+    bad: bool = False
 
 
-T = TypeVar("T")
-W = TypeVar("W")
+@dataclass(frozen=True)
+class Entry(Generic[K, V]):
+    """An entry of a dict: an element of what `entries` answers (kaname's DESIGN 24.3)."""
+
+    key: K
+    value: V
+
+
+@dataclass(frozen=True)
+class Indexed(Generic[T]):
+    """An element of what `indexed` answers: the index from 0, and the element."""
+
+    index: int
+    item: T
 
 
 @dataclass(frozen=True)
@@ -280,3 +424,150 @@ class Running(Generic[T, W]):
     before: W
     upto: W
     total: W
+
+
+@dataclass(frozen=True)
+class Ok(Generic[T]):
+    """The value `ok` of a result (kaname's DESIGN 26.3): what it holds."""
+
+    value: T
+
+
+@dataclass(frozen=True)
+class Err(Generic[E]):
+    """The value `err` of a result: why it is no `ok`."""
+
+    error: E
+
+
+# A value of `result[T, E]` (kaname's DESIGN 26.3): `Ok` with its value, or `Err` with its error.
+Result = Union[Ok[T], Err[E]]
+
+
+# ── Strings (kaname's DESIGN 25) ──────────────────────────────────────────
+
+# A `str` is a sequence of code points already: its length, cuts, places and order are kaname's. The
+# white space, the cases and what is read as a number or a date are kaname's own, here: `str.strip`,
+# `str.lower` and `int` take more than they do.
+
+# The code points of Unicode's White_Space, which `trim` and `words` take for white space.
+_SPACES = "".join(
+    chr(c)
+    for c in (0x9, 0xA, 0xB, 0xC, 0xD, 0x20, 0x85, 0xA0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000)
+)
+_LOWER = {c: c + 32 for c in range(ord("A"), ord("Z") + 1)}
+_UPPER = {c: c - 32 for c in range(ord("a"), ord("z") + 1)}
+_NUMBER = re.compile(r"[+-]?[0-9]+")
+_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
+
+def is_text(s: str) -> bool:
+    """Whether a string is well formed: no surrogate, which a host may give."""
+    try:
+        s.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def text_slice(s: str, a: int, b: int) -> str:
+    """The code points from `a` up to before `b`, both cut to the string."""
+    i, j = _cut(a, len(s)), _cut(b, len(s))
+    return s[i:j] if i < j else ""
+
+
+def text_take(s: str, n: int) -> str:
+    return s[: _cut(n, len(s))]
+
+
+def text_drop(s: str, n: int) -> str:
+    return s[_cut(n, len(s)) :]
+
+
+def index_of(s: str, t: str) -> int | None:
+    """Where `t` first stands in `s`; 0 for an empty `t`, None where it is not there."""
+    i = s.find(t)
+    return None if i < 0 else i
+
+
+def to_text(ns: Sequence[int]) -> str | None:
+    """The string of these code points; None where one is no Unicode scalar value."""
+    if any(n < 0 or n > 0x10FFFF or 0xD800 <= n <= 0xDFFF for n in ns):
+        return None
+    return "".join(chr(n) for n in ns)
+
+
+def split(s: str, sep: str) -> list[str]:
+    """`s` cut at each `sep`, the empty strings at the ends kept; each code point where `sep` is empty."""
+    return list(s) if sep == "" else s.split(sep)
+
+
+def words(s: str) -> list[str]:
+    """The runs of what is not white space."""
+    out: list[str] = []
+    w: list[str] = []
+    for c in s:
+        if c in _SPACES:
+            if w:
+                out.append("".join(w))
+            w = []
+        else:
+            w.append(c)
+    if w:
+        out.append("".join(w))
+    return out
+
+
+def replace(s: str, old: str, new: str) -> str:
+    """Every `old` from the left made `new`; `s` as it is where `old` is empty."""
+    return s if old == "" else s.replace(old, new)
+
+
+def trim(s: str) -> str:
+    return s.strip(_SPACES)
+
+
+def trim_start(s: str) -> str:
+    return s.lstrip(_SPACES)
+
+
+def trim_end(s: str) -> str:
+    return s.rstrip(_SPACES)
+
+
+def lower_ascii(s: str) -> str:
+    """A to Z made a to z, nothing else changed."""
+    return s.translate(_LOWER)
+
+
+def upper_ascii(s: str) -> str:
+    """a to z made A to Z, nothing else changed."""
+    return s.translate(_UPPER)
+
+
+def pad(s: str, width: int, fill: str, at_end: bool) -> str:
+    """`fill` repeated before `s` (after it, with `at_end`) to make it `width` code points long, the
+    last repetition cut; `s` as it is where `fill` is empty or `s` is that long already."""
+    if fill == "" or len(s) >= width:
+        return s
+    k = width - len(s)
+    added = (fill * (k // len(fill) + 1))[:k]
+    return s + added if at_end else added + s
+
+
+def parse_number(s: str) -> int | None:
+    """The number `s` writes: one `+` or `-` at most, then ASCII digits, nothing else, within int64."""
+    if _NUMBER.fullmatch(s) is None:
+        return None
+    v = int(s)
+    return v if _MIN <= v <= _MAX else None
+
+
+def parse_date(s: str) -> datetime.date | None:
+    """The date `s` writes: `YYYY-MM-DD` alone, a day of 0001-01-01 to 9999-12-31."""
+    if _DATE.fullmatch(s) is None:
+        return None
+    try:
+        return datetime.date(int(s[0:4]), int(s[5:7]), int(s[8:10]))
+    except ValueError:
+        return None

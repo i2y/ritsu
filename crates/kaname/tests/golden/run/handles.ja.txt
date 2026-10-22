@@ -1,0 +1,10 @@
+タグを読む(テキスト: "Ada Lovelace#42")
+  24 行目: let 形 = "ada-lovelace"
+  14 行目: let 長さ = 12
+  15 行目: let 短い = none
+  16 行目: let 長い = none
+  17 行目: let ほかの文字 = none
+  18 行目: let 始まり = none
+  19 行目: let 予約 = none
+  25 行目: let 理由 = []
+= ok(タグ { ハンドル: "ada-lovelace", 番号: 42 })

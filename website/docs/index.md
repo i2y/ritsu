@@ -33,7 +33,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
 | sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
 | sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [the sekisho page](sekisho.md) |
-| kaname | `.kn` | a functional core in ritsu's types, which calls rules, dates and books | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.md) |
+| kaname | `.kn` | a small general-purpose language for a functional core: code with no input or output in ritsu's types, which calls rules, dates and books too | [the kaname pages](kaname/index.md) |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -69,11 +69,17 @@ people.
   does; only a gate that passes compiles, into Cedar's schema and policies, and into TypeScript,
   Python and Go that compute the conditions from the service's own data and ask Cedar.
   [The sekisho page](sekisho.md) follows the answer of a rule from a gate to Cedar.
-- **kaname** is the code that joins them: a module (a `.kn` file) puts a rule's inputs together,
-  carries one answer into the next call and hands an amount to a book, in ritsu's types and with
-  no input or output of its own. `kaname check` holds it to units, money, rounding and int64 and to
-  the range of every value it passes, and shows that a function marked `total` answers every input
-  of its ranges; `ritsu gen` writes it as TypeScript, Python and Go beside the code it calls.
+- **kaname** is a small general-purpose language for the functional core of a program, the part
+  with no input or output: a module (a `.kn` file) moves a state by events, checks and normalizes
+  input, keeps counts in dicts and sets, reshapes trees, and puts a rule's inputs together, carries
+  one answer into the next call and hands an amount to a book, in ritsu's types. `kaname check`
+  holds it to units, money, rounding and int64 and to the range of every value it passes, and shows
+  that a function marked `total` answers every input of its ranges; `ritsu gen` writes it as
+  TypeScript, Python and Go for the host to call, beside the code it calls.
+  [The kaname pages](kaname/index.md) show [how a module is written](kaname/language.md),
+  [four functional cores called from TypeScript, Python and Go](kaname/examples.md),
+  [what the check guarantees](kaname/checks.md) and
+  [how a module calls rules, dates and books](kaname/together.md).
 
 ## Where the languages meet
 

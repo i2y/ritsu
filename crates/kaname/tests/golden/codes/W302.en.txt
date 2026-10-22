@@ -1,6 +1,6 @@
-warning[W302]: example.kn:4:25: Whether the value of `steps(n: n - 1) + 1` stays in int64 cannot be decided
-     4 |   if n <= 0 then 0 else steps(n: n - 1) + 1
-  = The analysis of ranges finds no bound on the value, and no input among the function's vectors takes it out.
+warning[W302]: example.kn:4:29: Whether the value of `acc * x` stays in int64 cannot be decided
+     4 |   reduce(xs, 1, (acc, x) => acc * x)
+  = The analysis of ranges finds the value in >=1, and no input among the function's vectors takes it out.
   = The generated code checks it there when it runs.
   = Narrow the ranges of the inputs, or round sooner, and it is shown.
-ok example.kn: 1 function, fails overflow diverges
+ok example.kn: 1 function, fails overflow

@@ -71,6 +71,17 @@ fn what_is_not_warned_of() {
     assert_eq!(w("fn total(xs: list[money[USD]] count >=0 <=9 range >=0USD <=9USD) -> money[USD]\n  if count(xs) = 0 then 0 else sum(xs, x => x)\n"), none);
     // the answers of a rule chosen by its own output
     assert_eq!(w("fn fee(order: Order, free: bool) -> money[USD]?\n  let s = shipping(total: order.total, free: free)\n  if free then s.fee else none\n"), none);
+    // a `match` that answers the values of an enum, `true` and `false`, numbers, a value with no
+    // fields: kaname holds it to every value once (E106), and it is no table of amounts (DESIGN
+    // 23.9)
+    assert_eq!(w("fn points(t: tier) -> number\n  match t\n    basic => 1\n    silver => 2\n    gold => 3\n"), none);
+    assert_eq!(w("fn to_level(t: tier) -> level\n  match t\n    basic => level.low\n    silver, gold => level.high\n"), none);
+    assert_eq!(w("fn top(t: tier) -> bool\n  match t\n    gold => true\n    else => false\n"), none);
+    assert_eq!(w("fn grade(code: string) -> number\n  match code\n    \"A\" => 3\n    else => 0\n"), none);
+    let steps = "enum State\n  draft\n  sent\n    to : string\n  closed\n\nenum Event\n  send\n    to : string\n  close\n\n";
+    assert_eq!(w(&format!("{steps}fn next(s: State, e: Event) -> State\n  match s\n    draft =>\n      match e\n        send x => State.sent {{ to: x.to }}\n        close => State.closed\n    sent => State.closed\n    closed => State.closed\n")), none);
+    // a value with fields of no constant: a value moved from one state to the next
+    assert_eq!(w(&format!("{steps}fn resend(s: State) -> State\n  match s\n    sent x => State.sent {{ ..x, to: \"again\" }}\n    else => s\n")), none);
 }
 
 #[test]
@@ -79,10 +90,12 @@ fn the_shapes_at_the_edges() {
     let w = |body: &str| warned(&t, body);
     // `true` and `false` chosen by a comparison: the same decision as the comparison made a value
     assert_eq!(w("fn eligible(total: money[USD] range >=0USD <=10_000USD) -> bool\n  if total >= 35USD then true else false\n"), [("W501", 2)]);
-    // numbers answered for the values of an enum: a table of points
-    assert_eq!(w("fn points(t: tier) -> number\n  match t\n    basic => 1\n    silver => 2\n    gold => 3\n"), [("W501", 2)]);
-    // an enum's values to another's that are not of the same names
-    assert_eq!(w("fn to_level(t: tier) -> level\n  match t\n    basic => level.low\n    silver, gold => level.high\n"), [("W501", 2)]);
+    // a `match` that answers an amount, a date, a record of constants, a value with fields of
+    // constants (DESIGN 23.9)
+    assert_eq!(w("fn cutoff(t: tier) -> date\n  match t\n    gold => 2026-12-31\n    else => 2026-06-30\n"), [("W501", 2)]);
+    assert_eq!(w("fn fees(t: tier) -> Fee\n  match t\n    gold => Fee { a: 0USD, b: 0USD }\n    else => Fee { a: 1USD, b: 2USD }\n"), [("W501", 2)]);
+    assert_eq!(w("enum Charge\n  flat\n    fee : money[USD]\n  none_due\n\nfn charge(t: tier) -> Charge\n  match t\n    gold => Charge.none_due\n    else => Charge.flat { fee: 3USD }\n"), [("W501", 7)]);
+    assert_eq!(w("fn by_code(code: string) -> money[USD]\n  match code\n    \"A\" => 1USD\n    else => 2USD\n"), [("W501", 2)]);
     // a chain of `else if`, warned of once
     assert_eq!(w("fn chain(x: money[USD] range >=0USD <=100USD) -> money[USD]\n  if x > 50USD\n    1USD\n  else if x > 20USD\n    2USD\n  else\n    3USD\n"), [("W501", 2)]);
     // a threshold in a condition given to a builtin, a negative threshold

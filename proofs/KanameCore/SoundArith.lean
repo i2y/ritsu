@@ -427,27 +427,52 @@ theorem cmpVals_bool {line : Nat} {op : CmpOp} {ca cb : Option Conv} {ord : Orde
     obtain ⟨q', _, h2⟩ := bind_ok h1
     cases h2; exact ⟨_, rfl⟩
   · cases h; exact ⟨_, rfl⟩
+  · cases h; exact ⟨_, rfl⟩
   · split at h <;> (cases h; exact ⟨_, rfl⟩)
   · exact absurd h failK_ne_ok
   · exact absurd h failK_ne_ok
-  · cases h; exact ⟨_, rfl⟩
+  · split at h
+    · obtain ⟨_, _, h1⟩ := bind_ok h
+      obtain ⟨_, _, h2⟩ := bind_ok h1
+      cases h2; exact ⟨_, rfl⟩
+    · obtain ⟨_, _, h1⟩ := bind_ok h
+      obtain ⟨_, _, h2⟩ := bind_ok h1
+      cases h2; exact ⟨_, rfl⟩
+    · cases h; exact ⟨_, rfl⟩
+
+theorem convN_err_coerce {c : Option Conv} {p : Rat} {e : Stop} (h : convN c p = .error e) :
+    coerce c (.num p) = .error e := by
+  cases c with
+  | none => simp [convN] at h
+  | some c => simp only [coerce, coerceV, Functor.map, Except.map, h]
 
 theorem cmpVals_err {line : Nat} {op : CmpOp} {ca cb : Option Conv} {ord : Order} {x y : Val} {k : Kind} {l : Nat}
     (h : cmpVals line op ca cb ord x y = .error (.failed k l)) (hk : k.ofEffect = true) :
-    ∃ p q, x = .num p ∧ y = .num q ∧ (convN ca p = .error (.failed k l) ∨
-      ∃ p', convN ca p = .ok p' ∧ convN cb q = .error (.failed k l)) := by
+    coerce ca x = .error (.failed k l) ∨ ∃ x', coerce ca x = .ok x' ∧ coerce cb y = .error (.failed k l) := by
   unfold cmpVals at h
   split at h
   · rcases bind_err h with h1 | ⟨p', hp', h1⟩
-    · exact ⟨_, _, rfl, rfl, Or.inl h1⟩
+    · exact Or.inl (convN_err_coerce h1)
     · rcases bind_err h1 with h2 | ⟨q', _, h2⟩
-      · exact ⟨_, _, rfl, rfl, Or.inr ⟨p', hp', h2⟩⟩
+      · exact Or.inr ⟨_, convN_coerce hp', convN_err_coerce h2⟩
       · cases h2
+  · cases h
   · cases h
   · split at h <;> cases h
   · rw [fail_type h] at hk; cases hk
   · rw [fail_type h] at hk; cases hk
-  · cases h
+  · split at h
+    · rcases bind_err h with h1 | ⟨x', hx', h1⟩
+      · exact Or.inl h1
+      · rcases bind_err h1 with h2 | ⟨_, _, h2⟩
+        · exact Or.inr ⟨x', hx', h2⟩
+        · cases h2
+    · rcases bind_err h with h1 | ⟨x', hx', h1⟩
+      · exact Or.inl h1
+      · rcases bind_err h1 with h2 | ⟨_, _, h2⟩
+        · exact Or.inr ⟨x', hx', h2⟩
+        · cases h2
+    · cases h
 
 /-- **Two values of enums or bools compared for equality**, as the sets they are in decide. -/
 theorem decideSet_sound {xs ys : List String} {v1 v2 : Val} {op : CmpOp} {t d : Bool} {line : Nat}
@@ -503,6 +528,104 @@ theorem decideSet_sound {xs ys : List String} {v1 v2 : Val} {op : CmpOp} {t d : 
         · exact absurd (same_of heq) hns
         · exact absurd (same_of heq) hns
         · rfl
+      · cases hd
+  · cases hd
+
+/-- A value of an enum that has fields is one with a value of an enum with no fields there: its name
+    alone. -/
+theorem Mem_variants_nofields {t : String} {v : Val} (h : Mem (.variants [(t, [])]) v) : v = .enum t := by
+  cases h with
+  | variantEnum hs =>
+    rename_i x
+    by_cases hx : t = x
+    · subst hx; rfl
+    · have : (t == x) = false := by simp [hx]
+      simp [Abs.recOf, List.find?, this] at hs
+  | @variant _ x r fs hr hne hsome _ =>
+    exfalso
+    cases fs with
+    | nil => exact hne rfl
+    | cons p rest =>
+      obtain ⟨n, y⟩ := p
+      have hfy : fieldV ((n, y) :: rest) n = some y := by simp [fieldV]
+      have hs := hsome n y hfy
+      by_cases hx : t = x
+      · subst hx
+        simp [Abs.recOf, List.find?] at hr
+        subst hr
+        simp [Abs.fieldOf] at hs
+      · have : (t == x) = false := by simp [hx]
+        simp [Abs.recOf, List.find?, this] at hr
+
+theorem coerce_enum (cv : Option Conv) (x : String) : coerce cv (.enum x) = .ok (.enum x) := by
+  cases cv <;> rfl
+
+theorem coerce_variant (cv : Option Conv) (x : String) (fs : List (String × Val)) :
+    coerce cv (.variant x fs) = .ok (.variant x fs) := by
+  cases cv <;> rfl
+
+/-- Two values of an enum compared for equality: whether they are the same, by `==`. -/
+theorem cmp_tags {line : Nat} {op : CmpOp} {ca cb : Option Conv} {ord : Order} {x y : Val} {t : Bool}
+    (hx : ∃ a, x.tag? = some a) (hy : ∃ b, y.tag? = some b) (hop : op = .eq ∨ op = .ne)
+    (h : cmpVals line op ca cb ord x y = .ok (.bool t)) : t = (if op = .eq then (x == y) else !(x == y)) := by
+  obtain ⟨a, ha⟩ := hx
+  obtain ⟨b, hb⟩ := hy
+  cases x <;> simp [Val.tag?] at ha <;> cases y <;> simp [Val.tag?] at hb <;>
+    rcases hop with rfl | rfl <;>
+    simp only [cmpVals, coerce_enum, coerce_variant, bind, Except.bind, Except.ok.injEq, Val.bool.injEq] at h <;>
+    subst h <;> simp [BEq.beq, Val.beq, bne]
+
+/-- **Two values of an enum that has fields compared for equality**, as the values they can be
+    decide. -/
+theorem decideVariants_sound {xs ys : List (String × List (String × Abs))} {v1 v2 : Val} {op : CmpOp} {t d : Bool}
+    {line : Nat} {ca cb : Option Conv} {ord : Order} (h1 : Mem (.variants xs) v1) (h2 : Mem (.variants ys) v2)
+    (hc : cmpVals line op ca cb ord v1 v2 = .ok (.bool t))
+    (hd : (if (op == .eq || op == .ne) = true then
+            if (xs.all fun k => !(ys.any (·.1 == k.1))) = true then some (op == .ne)
+            else if (xs.length == 1 && xs.map (·.1) == ys.map (·.1) && (xs ++ ys).all (fun r => r.2.isEmpty)) = true then
+              some (op == .eq)
+            else none
+          else none) = some d) : t = d := by
+  obtain ⟨t1, ht1, hs1⟩ := Mem_variants_tag h1
+  obtain ⟨t2, ht2, hs2⟩ := Mem_variants_tag h2
+  split at hd
+  · rename_i hop
+    simp only [Bool.or_eq_true, beq_iff_eq] at hop
+    have hct := cmp_tags ⟨_, ht1⟩ ⟨_, ht2⟩ hop hc
+    split at hd
+    · -- no value the same
+      rename_i hdis
+      cases hd
+      have hne : t1 ≠ t2 := by
+        intro e; subst e
+        obtain ⟨r, hr⟩ := Option.isSome_iff_exists.mp hs1
+        have := List.all_eq_true.mp hdis _ (recOf_mem hr)
+        obtain ⟨r2, hr2⟩ := Option.isSome_iff_exists.mp hs2
+        simp only [Bool.not_eq_true', List.any_eq_false, beq_iff_eq] at this
+        exact this _ (recOf_mem hr2) rfl
+      have hbeq : (v1 == v2) = false := by
+        cases v1 <;> simp [Val.tag?] at ht1 <;> cases v2 <;> simp [Val.tag?] at ht2 <;>
+          subst ht1 ht2 <;> simp [BEq.beq, Val.beq, hne]
+      rcases hop with rfl | rfl <;> simp [hct, hbeq]
+    · split at hd
+      · -- one value, with no fields, on both sides
+        rename_i _ hone
+        cases hd
+        simp only [Bool.and_eq_true, beq_iff_eq, List.length_eq_one_iff, List.all_eq_true] at hone
+        obtain ⟨⟨⟨⟨k, r⟩, rfl⟩, hmap⟩, hemp⟩ := hone
+        have hr : r = [] := by simpa using hemp (k, r) (by simp)
+        subst hr
+        obtain ⟨⟨k', r'⟩, rfl⟩ : ∃ q, ys = [q] := by
+          cases ys with
+          | nil => simp at hmap
+          | cons q rest => cases rest with
+            | nil => exact ⟨q, rfl⟩
+            | cons _ _ => simp at hmap
+        simp at hmap; subst hmap
+        have hr' : r' = [] := by simpa using hemp (k, r') (by simp)
+        subst hr'
+        rw [Mem_variants_nofields h1, Mem_variants_nofields h2] at hct
+        rcases hop with rfl | rfl <;> simp [hct, BEq.beq, Val.beq]
       · cases hd
   · cases hd
 
@@ -568,6 +691,11 @@ theorem case_cmp (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Out
               have hj0 := scaleBy_set (convA_fst ▸ hj)
               rw [hi0] at hma; rw [hj0] at hmb
               exact decideSet_sound hma hmb hc hd
+            · rename_i xs ys hi hj
+              have hi0 := scaleBy_variants (convA_fst ▸ hi)
+              have hj0 := scaleBy_variants (convA_fst ▸ hj)
+              rw [hi0] at hma; rw [hj0] at hmb
+              exact decideVariants_sound hma hmb hc hd
             · cases hd
           subst hdt
           exact Mem_bools (fun h => h) (fun h => by simp [h])
@@ -586,10 +714,9 @@ theorem case_cmp (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Out
             · rw [type_noEffect (stepped_err h4)] at hk; cases hk
             · obtain ⟨hma, _, _⟩ := ha1 x hx
               obtain ⟨hmb, _, _⟩ := (HB x hx).1 y hy
-              obtain ⟨p, q, rfl, rfl, hcv⟩ := cmpVals_err h4 hk
-              rcases hcv with h5 | ⟨p', _, h5⟩
-              · exact Wit.grow (convN_wit hma h5).2 (grows_convA (Grows.refl _))
-              · exact (convN_wit hmb h5).2
+              rcases cmpVals_err h4 hk with h5 | ⟨x', _, h5⟩
+              · exact Wit.grow (coerce_wit hma h5).2 (grows_convA (Grows.refl _))
+              · exact (coerce_wit hmb h5).2
 
 
 -- ── `min` and `max` ──────────────────────────────────────────────────────────
@@ -777,104 +904,216 @@ theorem modN_small {x l h : Rat} {k : Int} (hl : l ≤ x) (hh : x ≤ h) (hl0 : 
   apply In_ints h0
   exact Rat.le_floor_iff.mpr (Rat.le_trans hfx hh)
 
-theorem case_modOp (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Out} {dep id : Nat} {x k : Expr}
-    (hG : Good C res A) (hS : Sat A ρ) (hw : (evI A m (.modOp id x k) o).out.widened = false) :
-    Concl C ρ (eval C (n + 1) dep ρ (.modOp id x k)) (evI A m (.modOp id x k) o) := by
+/-- The size of a number as the analysis writes it is its magnitude. -/
+theorem magN_eq (v : Rat) : (if v.num < 0 then -v else v) = mag v := by
+  unfold mag
+  by_cases h : v < 0
+  · have : v.num < 0 := (num_neg_iff v).mpr h
+    simp [h, this]
+  · have : ¬ v.num < 0 := fun h' => h ((num_neg_iff v).mp h')
+    simp [h, this]
+
+theorem rat_of_den_one {r : Rat} (h : r.den = 1) : r = (r.num : Rat) := by
+  have := rat_eq_num_div_den r
+  rw [h] at this
+  calc r = (r.num : Rat) / ((1 : Nat) : Rat) := this
+    _ = (r.num : Rat) := by rw [show ((1 : Nat) : Rat) = 1 from rfl]; grind
+
+/-- The remainder by a whole number that is not 0, at most one less than the size of the ends the
+    number is between (Euclid's: whatever the signs). -/
+theorem modN_le_size {x l h : Rat} {z : Int} (hz : z ≠ 0) (hl : l ≤ (z : Rat)) (hh : (z : Rat) ≤ h) :
+    ((x.floor % z : Int) : Rat) ≤ (if mag h < mag l then mag l else mag h) - 1 := by
+  have hs1 : mag l ≤ (if mag h < mag l then mag l else mag h) := by split <;> grind
+  have hs2 : mag h ≤ (if mag h < mag l then mag l else mag h) := by split <;> grind
+  rcases Int.lt_or_gt_of_ne hz with hneg | hpos
+  · have h1 : x.floor % (-z) = x.floor % z := Int.emod_neg _ _
+    have h2 : x.floor % (-z) < -z := Int.emod_lt_of_pos _ (by omega)
+    have h3 : x.floor % z ≤ -z - 1 := by omega
+    have h4 : ((x.floor % z : Int) : Rat) ≤ ((-z - 1 : Int) : Rat) := Rat.intCast_le_intCast.mpr h3
+    have hzr : (z : Rat) < 0 := by exact_mod_cast hneg
+    have hl0 : l < 0 := by grind
+    have hml : mag l = -l := by unfold mag; simp [hl0]
+    have h5 : ((-z - 1 : Int) : Rat) = -(z : Rat) - 1 := by push_cast; rfl
+    grind
+  · have h2 : x.floor % z < z := Int.emod_lt_of_pos _ hpos
+    have h3 : x.floor % z ≤ z - 1 := by omega
+    have h4 : ((x.floor % z : Int) : Rat) ≤ ((z - 1 : Int) : Rat) := Rat.intCast_le_intCast.mpr h3
+    have hzr : (0 : Rat) < (z : Rat) := by exact_mod_cast hpos
+    have hh0 : 0 < h := by grind
+    have hmh : mag h = h := by unfold mag; simp [show ¬ h < 0 by grind]
+    have h5 : ((z - 1 : Int) : Rat) = (z : Rat) - 1 := by push_cast; rfl
+    grind
+
+theorem case_modOp (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Out} {dep id line : Nat} {x k : Expr}
+    (hG : Good C res A) (hS : Sat A ρ) (hw : (evI A m (.modOp id line x k) o).out.widened = false) :
+    Concl C ρ (eval C (n + 1) dep ρ (.modOp id line x k)) (evI A m (.modOp id line x k) o) := by
   cases m with
   | zero => exact concl_fuel hS
   | succ m =>
     have hGk : Good C res (ev A m x o).ctx := hG.same ((sat m).ev A x o).2
+    -- what the evaluation answers: the remainder by a whole number that is not 0
+    have hval : ∀ v, eval C (n + 1) dep ρ (.modOp id line x k) = .ok v → ∃ xv kv p r,
+        eval C n dep ρ x = .ok xv ∧ eval C n dep ρ k = .ok kv ∧ xv = .num p ∧ kv = .num r ∧ r ≠ 0 ∧
+          r.den = 1 ∧ v = .num (modN p r.floor) := by
+      intro v hv
+      simp only [eval] at hv
+      obtain ⟨xv, hxv, h3⟩ := bind_ok hv
+      obtain ⟨kv, hkv, h4⟩ := bind_ok h3
+      obtain ⟨p, hp, h5⟩ := bind_ok h4
+      obtain ⟨r, hr, h6⟩ := bind_ok h5
+      split at h6
+      · exact absurd h6 failK_ne_ok
+      · split at h6
+        · exact absurd h6 failK_ne_ok
+        · rename_i h0 hd
+          cases h6
+          exact ⟨xv, kv, p, r, hxv, hkv, numOf_ok hp, numOf_ok hr, h0, by simpa using hd, rfl⟩
     simp only [evI] at hw ⊢
     split at hw
     · rename_i hn
       simp only [AR.of] at hw ⊢
       obtain ⟨h1, h2⟩ := IH.expr m A ρ x o dep hG hS hw
       refine ⟨fun v hv => ?_, fun k l hv hk => ?_⟩
-      · simp only [eval] at hv
-        obtain ⟨xv, hxv, _⟩ := bind_ok hv
+      · obtain ⟨xv, _, _, _, hxv, _⟩ := hval v hv
         have := (h1 xv hxv).1; rw [hn] at this; exact absurd this Mem.not_never
       · simp only [eval] at hv
         rcases bind_err hv with hv | ⟨xv, hxv, _⟩
         · exact h2 k l hv hk
         · have := (h1 xv hxv).1; rw [hn] at this; exact absurd this Mem.not_never
     · rename_i hne
+      -- what the analysis keeps grows from the divisor's in every branch
       have wk : (ev (ev A m x o).ctx m k (ev A m x o).out).out.widened = false := by
-        split at hw <;> simp only [AR.of] at hw <;> exact hw
+        split at hw
+        · simp only [AR.of] at hw; exact hw
+        · split at hw
+          · simp only [AR.of] at hw; exact hw
+          · split at hw <;> simp only [AR.of] at hw <;> exact grows_not_widened (grows_place (Grows.refl _)) hw
       obtain ⟨h1, h2⟩ := IH.expr m A ρ x o dep hG hS (grows_not_widened (gEv (Grows.refl _)) wk)
       have HK : ∀ xv, eval C n dep ρ x = .ok xv →
           Concl C ρ (eval C n dep ρ k) (ev (ev A m x o).ctx m k (ev A m x o).out) :=
         fun xv hx => IH.expr m _ ρ k _ dep hGk (h1 xv hx).2.1 wk
       have hgx : Grows (ev A m x o).out (ev (ev A m x o).ctx m k (ev A m x o).out).out := gEv (Grows.refl _)
-      -- the failures are the two sides'
-      have herr : ∀ k' l, eval C (n + 1) dep ρ (.modOp id x k) = .error (.failed k' l) → k'.ofEffect = true →
-          Wit C (ev (ev A m x o).ctx m k (ev A m x o).out).out := by
+      -- the failures: the two sides', or a divisor that is 0
+      have herr : ∀ k' l, eval C (n + 1) dep ρ (.modOp id line x k) = .error (.failed k' l) → k'.ofEffect = true →
+          Wit C (ev (ev A m x o).ctx m k (ev A m x o).out).out ∨
+            ∃ xv, eval C n dep ρ x = .ok xv ∧ eval C n dep ρ k = .ok (.num 0) := by
         intro k' l hv hk
         simp only [eval] at hv
         rcases bind_err hv with hv | ⟨xv, hxv, h3⟩
-        · exact Wit.grow (h2 k' l hv hk) hgx
-        · rcases bind_err h3 with h4 | ⟨kv, _, h4⟩
-          · exact (HK xv hxv).2 k' l h4 hk
-          · rcases bind_err h4 with h5 | ⟨_, _, h5⟩
+        · exact Or.inl (Wit.grow (h2 k' l hv hk) hgx)
+        · rcases bind_err h3 with h4 | ⟨kv, hkv, h4⟩
+          · exact Or.inl ((HK xv hxv).2 k' l h4 hk)
+          · rcases bind_err h4 with h5 | ⟨p, _, h5⟩
             · rw [type_noEffect (numOf_err h5)] at hk; cases hk
-            · rcases bind_err h5 with h6 | ⟨_, _, h6⟩
+            · rcases bind_err h5 with h6 | ⟨r, hr, h6⟩
               · rw [type_noEffect (numOf_err h6)] at hk; cases hk
-              · cases h6
+              · split at h6
+                · rename_i h0
+                  subst h0
+                  exact Or.inr ⟨xv, hxv, by rw [hkv, numOf_ok hr]⟩
+                · split at h6
+                  · rw [fail_type h6] at hk; cases hk
+                  · cases h6
       split at hw
       · rename_i hn
         simp only [AR.of] at hw ⊢
-        refine ⟨fun v hv => ?_, herr⟩
-        simp only [eval] at hv
-        obtain ⟨xv, hxv, h3⟩ := bind_ok hv
-        obtain ⟨kv, hkv, _⟩ := bind_ok h3
-        have := ((HK xv hxv).1 kv hkv).1; rw [hn] at this; exact absurd this Mem.not_never
-      · simp only [AR.of] at hw ⊢
-        refine ⟨fun v hv => ?_, herr⟩
-        simp only [eval] at hv
-        obtain ⟨xv, hxv, h3⟩ := bind_ok hv
-        obtain ⟨kv, hkv, h4⟩ := bind_ok h3
-        obtain ⟨p, hp, h5⟩ := bind_ok h4
-        obtain ⟨r, hr, h6⟩ := bind_ok h5
-        cases h6
-        obtain rfl := numOf_ok hp
-        obtain rfl := numOf_ok hr
-        obtain ⟨hmx, _, _⟩ := h1 _ hxv
-        obtain ⟨hmk, hsk, _⟩ := (HK _ hxv).1 _ hkv
-        refine ⟨?_, hsk, fun _ h => by cases h⟩
-        have hpx := In_ivD hmx
-        have hrk := In_ivD hmk
-        -- the divisor known to be one positive whole number
-        split
-        · rename_i M hM
-          split at hM
-          · rename_i q hq
+        refine ⟨fun v hv => ?_, fun k' l hv hk => ?_⟩
+        · obtain ⟨xv, kv, _, _, hxv, hkv, _⟩ := hval v hv
+          have := ((HK xv hxv).1 kv hkv).1; rw [hn] at this; exact absurd this Mem.not_never
+        · rcases herr k' l hv hk with hw' | ⟨xv, hxv, hkv⟩
+          · exact hw'
+          · have := ((HK xv hxv).1 _ hkv).1; rw [hn] at this; exact absurd this Mem.not_never
+      · rename_i hnk
+        split at hw
+        · -- the divisor known to be one positive whole number
+          rename_i M hM
+          simp only [AR.of] at hw ⊢
+          -- what the analysis knows of the divisor
+          have hq : ∃ q, ((ev (ev A m x o).ctx m k (ev A m x o).out).abs.iv.getD Iv.top).isExact = some q ∧
+              q.den = 1 ∧ 0 < q.num ∧ M = q.num := by
             split at hM
-            · rename_i hqc
-              cases hM
-              have hrq := isExact_sound hrk hq
-              subst hrq
-              simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hqc
-              have hc : (r.den = 1 && decide (r.num > 0)) = true := by simp [hqc.1, hqc.2]
-              simp only [hc, ite_true]
-              apply Mem.num
-              split
-              · rename_i l h hl hh
-                split
-                · rename_i hcond
-                  simp only [Bool.and_eq_true, decide_eq_true_eq] at hcond
-                  have hl' := hpx.lo; have hh' := hpx.hi
-                  rw [hl] at hl'; rw [hh] at hh'
-                  exact modN_small hl' hh' ((Rat.num_nonneg).mp hcond.1) hcond.2
-                · exact modN_ints hqc.2
-              · exact modN_ints hqc.2
+            · rename_i q hq
+              split at hM
+              · rename_i hqc
+                cases hM
+                simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hqc
+                exact ⟨q, hq, hqc.1, hqc.2, rfl⟩
+              · cases hM
             · cases hM
-          · cases hM
-        · -- a whole number, nothing more known
-          apply Mem.num
-          refine ⟨trivial, trivial, ?_⟩
-          show (if (r.den = 1 && decide (r.num > 0)) = true then modN p r.num else 0).den ≤ 1
+          obtain ⟨q, hqe, hqd, hqp, rfl⟩ := hq
+          refine ⟨fun v hv => ?_, fun k' l hv hk => ?_⟩
+          · obtain ⟨xv, kv, p, r, hxv, hkv, rfl, rfl, hr0, hrd, rfl⟩ := hval v hv
+            obtain ⟨hmx, _, _⟩ := h1 _ hxv
+            obtain ⟨hmk, hsk, _⟩ := (HK _ hxv).1 _ hkv
+            refine ⟨?_, hsk, fun _ h => by cases h⟩
+            have hpx := In_ivD hmx
+            have hrq := isExact_sound (In_ivD hmk) hqe
+            subst hrq
+            have hfl : r.floor = r.num := by rw [Rat.floor_def, hqd]; simp
+            rw [hfl]
+            apply Mem.num
+            split
+            · rename_i l h hl hh
+              split
+              · rename_i hcond
+                simp only [Bool.and_eq_true, decide_eq_true_eq] at hcond
+                have hl' := hpx.lo; have hh' := hpx.hi
+                rw [hl] at hl'; rw [hh] at hh'
+                exact modN_small hl' hh' ((Rat.num_nonneg).mp hcond.1) hcond.2
+              · exact modN_ints hqp
+            · exact modN_ints hqp
+          · rcases herr k' l hv hk with hw' | ⟨xv, hxv, hkv⟩
+            · exact hw'
+            · obtain ⟨hmk, _, _⟩ := (HK _ hxv).1 _ hkv
+              have h0 := isExact_sound (In_ivD hmk) hqe
+              rw [← h0] at hqp; exact absurd hqp (by decide)
+        · -- a divisor that is a value: the place `zero`, and the remainder from 0 to one less than
+          -- its greatest size
           split
-          · simp [modN]
-          · simp
+          · rename_i hz0
+            rw [ite_eq_left hz0] at hw
+            simp only [AR.of] at hw ⊢
+            refine ⟨fun v hv => ?_, fun k' l hv hk => ?_⟩
+            · obtain ⟨xv, kv, p, r, hxv, hkv, rfl, rfl, hr0, hrd, rfl⟩ := hval v hv
+              obtain ⟨hmk, _, _⟩ := (HK _ hxv).1 _ hkv
+              have := isExact_sound (In_ivD hmk) (by simpa using hz0)
+              exact absurd this hr0
+            · rcases herr k' l hv hk with hw' | ⟨xv, hxv, hkv⟩
+              · exact Wit.grow hw' (grows_place (Grows.refl _))
+              · obtain ⟨hmk, _, _⟩ := (HK _ hxv).1 _ hkv
+                exact wit_place hmk rfl
+          · rename_i hz0
+            rw [ite_eq_right hz0] at hw
+            simp only [AR.of] at hw ⊢
+            refine ⟨fun v hv => ?_, fun k' l hv hk => ?_⟩
+            · obtain ⟨xv, kv, p, r, hxv, hkv, rfl, rfl, hr0, hrd, rfl⟩ := hval v hv
+              obtain ⟨hmk, hsk, _⟩ := (HK _ hxv).1 _ hkv
+              refine ⟨?_, hsk, fun _ h => by cases h⟩
+              have hrk := In_ivD hmk
+              have hrn := rat_of_den_one hrd
+              have hfl : r.floor = r.num := by rw [Rat.floor_def, hrd]; simp
+              have hz : r.num ≠ 0 := fun h => hr0 (by rw [hrn, h]; rfl)
+              apply Mem.num
+              refine In_mk' ?_ ?_ ?_
+              · show (0 : Rat) ≤ modN p r.floor
+                unfold modN; rw [hfl]; exact_mod_cast Int.emod_nonneg _ hz
+              · split
+                · rename_i l h hl hh
+                  show modN p r.floor ≤ (if (if h.num < 0 then -h else h) < (if l.num < 0 then -l else l) then
+                    (if l.num < 0 then -l else l) else (if h.num < 0 then -h else h)) - 1
+                  rw [magN_eq, magN_eq]
+                  have hl' := hrk.lo; have hh' := hrk.hi
+                  rw [hl] at hl'; rw [hh] at hh'
+                  rw [hrn] at hl' hh'
+                  unfold modN; rw [hfl]
+                  exact modN_le_size hz hl' hh'
+                · trivial
+              · show (modN p r.floor).den ≤ 1
+                simp [modN]
+            · rcases herr k' l hv hk with hw' | ⟨xv, hxv, hkv⟩
+              · exact Wit.grow hw' (grows_place (Grows.refl _))
+              · obtain ⟨hmk, _, _⟩ := (HK _ hxv).1 _ hkv
+                exact wit_place hmk rfl
 
 -- ── `isqrt` ──────────────────────────────────────────────────────────────────
 

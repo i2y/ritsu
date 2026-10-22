@@ -1,0 +1,3 @@
+error[E115]: example.kn:7:11: For `try` to answer an `err`, the function answers a `result`; this one answers number
+     7 |   let h = try half(n: n)
+  = `try` is written as `let x = try <value>`, in a `let` of a block the function answers with (its body, and the arms of an `if` or a `match` that answer for it): an `err` or a `none` of the value is then the function's answer.

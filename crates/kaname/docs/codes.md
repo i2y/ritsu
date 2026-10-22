@@ -25,7 +25,7 @@ See also: [E002](#e002)
 
 ## E002 — A keyword cannot be a name
 
-**When**: One of the thirteen words an expression or a line reads as something else (`let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in`) is written where a name goes. The other keywords are read only where they stand, and may be names (`total`, `count`, `description`).
+**When**: One of the fourteen words an expression or a line reads as something else (`let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` `try`) is written where a name goes. The other keywords are read only where they stand, and may be names (`total`, `count`, `description`, `key`, `result`).
 
 **Fix**: Choose another name.
 
@@ -45,7 +45,7 @@ See also: [E001](#e001), [E006](#e006)
 
 ## E003 — The module is not put together as kaname reads it
 
-**When**: The first line is not `module <name> v1`; the lines at the left margin are out of their order (`module`, `description`, `use`, the declarations (`enum`, `record`, `fn`), `examples`); a line written once (`module`, `description`, `examples`) is written twice; a line at the left margin starts with a word kaname does not know; an enum has `default` or `open`; or a `use` line is not of its form.
+**When**: The first line is not `module <name> v1`; the lines at the left margin are out of their order (`module`, `description`, `use`, the declarations (`enum`, `record`, `fn`), `examples`); a line written once (`module`, `description`, `examples`) is written twice; a line at the left margin starts with a word kaname does not know; an enum has `default` or `open`, or is written with its values under it and has none; or a `use` line is not of its form.
 
 **Fix**: Write the module in its order: `module`, `description`, the `use` lines, the declarations, `examples`. The `enum`, `record` and `fn` declarations may come in any order among themselves.
 
@@ -105,7 +105,7 @@ See also: [E007](#e007)
 
 ## E006 — The same name is given twice
 
-**When**: In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given a builtin's name (`sum`, `map`), and a `let` or a `some` whose name is taken where it stands.
+**When**: In a module, two of the `use` names and the declarations (`enum`, `record`, `fn`) share a name or an alias; or two fields of a record, two parameters of a function or two values of an enum do. So does a function or a `use` given the name of a builtin called as a function (`sum`, `map`, `numbers`, `char`, `ok`, `err`; the name of one written after a value, such as `get`, `sort_by` or `trim`, is free to take), and a `let` or a `some` whose name is taken where it stands; and, for an enum whose values have fields, the name the generated code gives the type of a value, the enum's and the value's joined (`Order.placed` is `OrderPlaced`), where it is the name of a record, an enum or another value's type. A type parameter shares its name with no other of its declaration, and with no record or enum of the module.
 
 **Fix**: Rename one of them.
 
@@ -127,7 +127,7 @@ See also: [E005](#e005), [E110](#e110)
 
 ## E007 — A name the generated code cannot take
 
-**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`).
+**When**: A name the generated code takes (the alias, or the name with none) is a reserved word of TypeScript, Python or Go (`class`, `def`, `func`), or a name of kaname's helper module (`kaname`, `KanameError`); or a field of a value of an enum whose values have fields is named `kind`, by which the generated TypeScript tells the values apart.
 
 **Fix**: Choose another name or alias.
 
@@ -146,9 +146,9 @@ See also: [E005](#e005)
 
 ## E101 — Nothing has this name
 
-**When**: A name in an expression, a type, a function, an output of a rule, a field of a record, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum.
+**When**: A name in an expression, a type (the type of a value too, `Order.placed`), a function, an output of a rule, a field of a record or of a value, a value of an enum or a date of a dates file names nothing. A value of an enum is written `<enum>.<value>` where no type says which enum. So does a builtin written after a value (`get`, `sort_by`, `trim`) that is called as a function, and one called as a function (`numbers`, `char`) that is written after a value; the note shows how it is written. So does a `private` function, record or enum of another module, and the note says it is `private`.
 
-**Fix**: Check the spelling. What a `use` reads is written `<use name>.<name>`.
+**Fix**: Check the spelling. What a `use` reads is written `<use name>.<name>`; a builtin written after a value goes after the value and a `.`, as in `xs.sort_by(x => x.due)`. What is `private` is used in its own module alone.
 
 **Example**:
 
@@ -165,7 +165,7 @@ See also: [E110](#e110)
 
 ## E102 — The types do not agree
 
-**When**: A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types.
+**When**: A value is not of the type of where it goes (a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer). A unit and a tax are part of the type: two units of one dimension (`money[USD]` and `money[USDc]`) do not agree, nor do with tax and without. So do the two sides of a sum or a comparison, the answers of an `if` or a `match`, and the elements of a list, that are of two types, and the value after `..` in a record made from another that is not of the type built. So do two function types (`(T) -> U`) whose parameters differ in number or in type, or whose answers differ (an amount or a quantity in another unit too), and what is no function given to a parameter of a function type.
 
 **Fix**: Give a value of the type; a conversion is written, as in `fee in USDc` (kaname converts nothing unasked).
 
@@ -184,7 +184,7 @@ See also: [E103](#e103), [E104](#e104)
 
 ## E103 — An unrounded value is given where a rounded one goes
 
-**When**: An unrounded value — an amount times a rate, a quantity divided by a constant, anything divided by a value — is given to a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer, or a weight of `running_totals` (the weights go into the fields of the records it answers). These take a whole number of their unit, or a rate on its step; a weight that is a rate is taken on the step its type says, and is unrounded only once a division by a value has left that step unknown. A `let` takes an unrounded value.
+**When**: An unrounded value — an amount times a rate, a quantity divided by a constant, anything divided by a value — is given to a function's parameter or answer, a field of a record, an input of a rule or a date, an argument of a transfer, a weight of `running_totals` (the weights go into the fields of the records it answers), a key or a value of a dict, a member of a set, an element `distinct` tells apart, the `item` of `indexed`, or a type parameter of a generic function (a dict, a set and a builtin record hold their values as they travel, as a field of a record does). These take a whole number of their unit, or a rate on its step; a weight that is a rate is taken on the step its type says, and is unrounded only once a division by a value has left that step unknown. A `let` takes an unrounded value.
 
 **Fix**: Write the way of rounding and the step (`half_up(amount * 3%, 1USDc)`); the five ways are `up`, `down`, `half_up`, `half_down` and `half_even`.
 
@@ -203,7 +203,7 @@ See also: [E102](#e102), [E104](#e104)
 
 ## E104 — A grid, a step or a conversion does not fit
 
-**When**: A literal is no whole number of the unit it is written in (`0.5USD`, a bare `0.4`), or of the unit it is read in (`1lb` compared with a `mass[g]`); `in` is asked to convert across currencies or dimensions; a step of a rate or of a rounding is not positive; or an end of a range or a value is not on a rate's step.
+**When**: A literal is no whole number of the unit it is written in (`0.5USD`, a bare `0.4`), or of the unit it is read in (`1lb` compared with a `mass[g]`); `in` is asked to convert across currencies or dimensions; a step of a rate or of a rounding is not positive; an end of a range or a value is not on a rate's step; or a literal of an arm of a `match` does not fit in int64.
 
 **Fix**: Write it in a smaller unit (`50USDc`), or a fraction as the rate it is (`40%`); two currencies have no exchange rate here, so a conversion between them belongs in a table.
 
@@ -222,9 +222,9 @@ See also: [E102](#e102), [E103](#e103)
 
 ## E105 — The type has no such operation
 
-**When**: An operation the type does not have: adding to a date (`paid_on + 30`: the one computation kaname does with dates is the difference of two), multiplying two amounts or a weight by a length, ordering strings or adding them, ordering the values of an enum with no order, arithmetic on or comparing a value that may be none, calling a value, splitting numbers with `match`.
+**When**: An operation the type does not have: adding to a date (`paid_on + 30`: the one computation kaname does with dates is the difference of two), multiplying two amounts or a weight by a length, adding strings, arithmetic or a `-` on a value of a temperature (a constant such as `-18℃` is written), ordering bools or the values of an enum with no order, ordering records, lists and values that may be none or doing arithmetic on them, calling a value that is no function, splitting with `match` what it does not split (a record, a list), reading a field of a value of an enum whose values have fields with `.`, building a value with no fields with `{ … }`, and arithmetic, a `match` or a field on a value of a type parameter (which is passed on, held, and compared with `=` and `!=`).
 
-**Fix**: Write the addition to a date in koyomi and call its date; split a value that may be none with `match`; join strings with `concat`.
+**Fix**: Write the addition to a date in koyomi and call its date; split a value that may be none with `match`; join strings with `concat`; read the fields of a value that has them from the value a `match` names (`placed p => p.on`).
 
 **Example**:
 
@@ -241,9 +241,9 @@ See also: [E102](#e102)
 
 ## E106 — The match leaves values out
 
-**When**: The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`; or an arm repeats a value an arm above takes.
+**When**: The arms of a `match` leave out a value of the enum, `true` or `false`, or `none` or `some x`, and there is no `else`; or an arm repeats a value or a literal an arm above takes. So does a `match` by literals (numbers, amounts, quantities, dates, strings) with no `else`, an `else` that is not the last arm, takes no value or shares its arm, a name given to a value with no fields, and a value given a name that shares its arm.
 
-**Fix**: Add an arm for each value left out, or keep each value in one arm.
+**Fix**: Add an arm for each value left out, or take the rest with `else =>`, and keep each value in one arm. `else` is the last arm, with no other value in it.
 
 **Example**:
 
@@ -264,9 +264,9 @@ See also: [E105](#e105)
 
 ## E107 — The call does not give what it takes
 
-**When**: A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record is built with a field missing or given twice; a function or a rule is written as a value and not called.
+**When**: A call of a function, a rule or a date misses an argument, gives one it does not take, gives one twice, or gives one with no name; a builtin is given a named argument or the wrong number of them; a record or a value with fields (`Order.placed { … }`) is built with a field missing or given twice, or a value with fields is written without them (`Order.placed`); the name of a rule, a dates file, a book or a module is written as a value; a dict literal gives one constant key twice (`["a": 1, "a": 2]`); a function value is given named arguments, or a number of them it does not take.
 
-**Fix**: Give every argument once, by name (`charges(debt: d, days_late: n)`); a builtin takes its arguments in order, with no names.
+**Fix**: Give every argument once, by name (`charges(debt: d, days_late: n)`); a builtin and a function value take their arguments in order, with no names (`amount(x)`).
 
 **Example**:
 
@@ -286,17 +286,17 @@ See also: [E204](#e204)
 
 ## E108 — A declaration is missing or cannot hold
 
-**When**: A number or a date of a function's parameters declares no range (`range`), a list no most elements (`count`), a rate no step (`rate[step 0.01%]`); so must every field of a record a parameter's type reaches (through lists, optionals and other records), while a record only answered with may leave its ranges out. The rate of a function's answer and of any field of a record declares its step too (only a `let` may leave it out). Also a range that holds no value, an end written twice, a `range` on what is no number or date, a `count` on what is no list, and a record that holds itself.
+**When**: A rate declares no step (`rate[step 0.01%]`): the rate of a function's parameter and answer, and of any field of a record or of a value of an enum, declares its step (only a `let` may leave it out). Also a range that holds no value, an end written twice, a `range` on what is no number or date (a value of a type parameter too), a `count` on what is no list, dict, set or string, a record or an enum whose values have fields that holds itself and has no value that does not (none of it can be made), a type that, where it holds itself, gives a type argument made from a type parameter (`Wrap[list[T]]`), and a `private` record or enum in a parameter or the answer of a function, a field of a record or a field of a value of an enum, that is not `private` (no other module and no host can make a value of it). A range (`range`) and a count (`count`) may be left out, and a value with none takes the whole of its type (all of int64 in its unit for a number, an amount or a quantity, 0001-01-01 to 9999-12-31 for a date, 0 to 2⁶³ − 1 elements for a list, a dict or a set, and code points for a string).
 
-**Fix**: Declare the range (`qty : number range >=1 <=20`, `lines : list[Line] count >=1 <=30`): it is the promise to the host, which the generated code holds the arguments to.
+**Fix**: Give the rate its step (`rate[step 0.01%]`); write a range with values in it, each end once. Give a type that holds itself a value that does not (make a field that holds it optional or a list that may be empty, or give the enum a value that does not hold it). Make what uses a `private` type `private` too, or take the `private` off the type.
 
 **Example**:
 
 ```kn
 module example v1
 
-fn double(n: number) -> number
-  n * 2
+fn half() -> rate
+  50%
 ```
 
 See also: [E104](#e104)
@@ -305,27 +305,26 @@ See also: [E104](#e104)
 
 ## E109 — A builtin function is used in a way it has not
 
-**When**: A function (`x => …`) is written where no builtin takes it; a builtin is given something that is no function where it takes one, or a function of the wrong number of parameters; `text` is given a rate or an unrounded value; the divisor of `mod` is no positive whole constant; or a builtin is written as a value and not called.
+**When**: A builtin is given something that is no function where it takes one, or a function of the wrong number of parameters; `text` is given a rate or an unrounded value; `mod`, `numbers`, `at`, `take`, `drop`, `slice`, `pad_start` or `pad_end` is given what is no whole number (the divisor of `mod`, a constant or a value, is a whole number); `char` is given what is no whole number written as a constant, or a number that is no Unicode scalar value; or a builtin is written as a value (it is given to no parameter of a function type either).
 
-**Fix**: Write a function only where a builtin takes it, as in `sum(xs, x => …)`; a computation used elsewhere is a `fn` with a name.
+**Fix**: Call a builtin, or give it wrapped in a lambda (`xs.map(x => isqrt(x))`).
 
 **Example**:
 
 ```kn
 module example v1
 
-fn f() -> number
-  let twice = x => x * 2
-  1
+fn roots(xs: list[number] count <=9 range >=0 <=99) -> list[number]
+  xs.map(isqrt)
 ```
 
-See also: [E107](#e107)
+See also: [E107](#e107), [E113](#e113)
 
 <a id="e110"></a>
 
 ## E110 — A word reads two ways
 
-**When**: Where a value of an enum goes, a word reads both as the value and as the name of a parameter or a `let`.
+**When**: Where a value of an enum goes, a word reads both as the value and as the name of a parameter or a `let`; or, before `{ … }`, both as a record and as a value of the enum that has fields.
 
 **Fix**: Rename one of them, or write the value `<enum>.<value>`.
 
@@ -362,13 +361,102 @@ fn late(days: number range >=0 <=9) -> number?
 
 See also: [E004](#e004)
 
+<a id="e112"></a>
+
+## E112 — A type argument cannot be worked out, or does not fit
+
+**When**: Where a generic function is called, a type parameter takes no type from the arguments nor from the place the call is put in (only `[]` or `none` is given), or two arguments say two types for one (a list of dollars and a value of cents for one `T`). So does a generic record, enum or function given a number of type arguments that is not the number of its type parameters, a type argument whose values may be none (`number?`) or that is a function type, a parameter of a lambda whose type the function type of its place does not say (a lambda a `let` with no type names), and a generic function of a ring of calls given a type argument made from a type parameter (`wrap_deep[T]` calling itself as `wrap_deep(x: [x], …)` gives `list[T]`).
+
+**Fix**: Put the call where a type is written (`let p : Page[number] = …`), or write the types after the function's name (`empty_page[number]()`); convert an amount or a quantity of another unit with `in`. Where a value may be none, give the type with no `?` and write the parameter `T?`. Write the types of a lambda's parameters (`(l: Line) => …`). In a ring of calls, give the type parameters as they are, or types that name none.
+
+**Example**:
+
+```kn
+module example v1
+
+fn first_or[T](xs: list[T], fallback: T) -> T
+  match xs.first()
+    none => fallback
+    some x => x
+
+fn cheapest(dollars: list[money[USD]], cents: money[USDc]) -> money[USD]
+  first_or(xs: dollars, fallback: cents)
+```
+
+See also: [E103](#e103), [E114](#e114)
+
+<a id="e113"></a>
+
+## E113 — A function value is put where it cannot go
+
+**When**: A function type or a function value is written as a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, or a side of `=` or `!=`. A function value goes to a parameter of a function type of a function or a builtin, to a `let` (one an `if` or a `match` chooses too), and to where it is called, and nowhere else. So does a function that takes a function written as a value, and the name of a function written alone where no function value goes.
+
+**Fix**: Instead of a function that answers a function, write one that takes its argument too, or write `x => add(x: x, n: n)` where it is called; instead of a list of functions, call them in turn and make a list of their answers. To call a function, give it its arguments: `f(…)`.
+
+**Example**:
+
+```kn
+module example v1
+
+fn adder(n: number range >=0 <=9) -> (number) -> number
+  x => x + n
+```
+
+See also: [E109](#e109), [E112](#e112)
+
+<a id="e114"></a>
+
+## E114 — This type cannot be a key
+
+**When**: The type of a key of a dict, of a member of a set, or of the key of an order (`sort`, `sort_by`, `sort_by_desc`), `distinct`, `max_by`, `min_by`, `to_dict` or `group_by` is no type a key can be. A key is a number, an amount, a quantity, a rate with a step, a date, a string, a bool, or a value of an enum whose values have no fields (a rule's enum too); a record, a list, a dict, a set, a value that may be none and an enum whose values have fields are not. The key of an order, `max_by` and `min_by` may also be a record whose fields can all be keys, compared field by field in the order they are declared. So does a value of a type parameter not held to keys made a key, ordered or sorted.
+
+**Fix**: Make the key a value that can be one: of a record, the field that tells it apart (`line.sku`). kaname puts keys in one order for each type, so a dict and a set go round in that order in every target. A type parameter written `[K: key]` takes only the types that can be keys.
+
+**Example**:
+
+```kn
+module example v1
+
+record Line
+  sku : string
+  qty : number
+
+fn lines(by_line: dict[Line, number]) -> number
+  by_line.count()
+```
+
+See also: [E102](#e102), [E103](#e103)
+
+<a id="e115"></a>
+
+## E115 — `try` cannot be written here
+
+**When**: `let x = try e` is written in a block that does not lead to the function's answer (a block under `let y =`, a function given to a builtin): the body of a function, and the blocks of the `if` and `match` arms that lead from it to its answer, do. So does an `e` that is neither a `result` nor a value that may be none, a function whose answer is neither a `result` nor a value that may be none, and a `result` whose error is not of the type of the error of the function's answer.
+
+**Fix**: Write `try` in a `let` of a block that leads to the answer; a computation under `let y =` is a `fn` whose answer `try` takes. Give the error the type of the error of the function's answer.
+
+**Example**:
+
+```kn
+module example v1
+
+fn half(n: number range >=0 <=98) -> result[number, string]
+  if n = 0 then err("zero") else ok(n + 1)
+
+fn next(n: number range >=0 <=98) -> number
+  let h = try half(n: n)
+  h
+```
+
+See also: [E102](#e102)
+
 <a id="e201"></a>
 
 ## E201 — A file this module uses cannot be read
 
-**When**: A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it).
+**When**: A file a `use` reads is not there, its extension is not its kind's (`use rule` reads a `.rule`, `use dates` a `.cal`, `use book` a `.book`, `use module` a `.kn`), or it does not pass its language's check (the notes give what rulec, koyomi, chobo or kaname says of it). So does a call of a rule with no outputs (an `enums` file), and its outputs written as a type: nothing to call is generated from it. What a module reads it for is its enums, written `<rule>.<enum>` where a type goes.
 
-**Fix**: Check the path (it is written from the directory of the module's file); correct a file that does not pass until its language's check passes it.
+**Fix**: Check the path (it is written from the directory of the module's file); correct a file that does not pass until its language's check passes it. Do not call an `enums` file: write its enums as types.
 
 **Example**:
 
@@ -507,7 +595,7 @@ See also: [E301](#e301)
 
 ## E302 — A value can leave int64
 
-**When**: An input of the function is found for which a value on the way, as a fraction in lowest terms, has a numerator or a denominator outside int64; the notes give the input.
+**When**: An input of the function is found for which a value on the way, as a fraction in lowest terms, has a numerator or a denominator outside int64; the notes give the input. An overflow that comes from the end of a type, of a value whose range is not written, is not said: the generated code checks it there, and the function's effect has `overflow`.
 
 **Fix**: Narrow the ranges of the inputs, or round sooner.
 
@@ -526,17 +614,17 @@ See also: [W302](#w302)
 
 ## W302 — Whether a value stays in int64 cannot be decided
 
-**When**: The analysis of ranges cannot show that a value on the way stays in int64, and no vector of the function takes it out; the answer of a recursion with no range written is counted as any value. The generated code checks it when it runs.
+**When**: The analysis of ranges cannot show that a value on the way stays in int64, and no vector of the function takes it out; a value `reduce` widens instead of following each element (of a list of more than 16 elements at most) is one. An overflow that comes from the end of a type, of a value whose range is not written, is not said (the function's effect has `overflow`). The generated code checks it when it runs.
 
-**Fix**: Narrow the ranges of the inputs, or round sooner; give a recursive function the range of its answer.
+**Fix**: Narrow the ranges of the inputs, or round sooner.
 
 **Example**:
 
 ```kn
 module example v1
 
-fn steps(n: number range >=0 <=100) -> number
-  if n <= 0 then 0 else steps(n: n - 1) + 1
+fn product(xs: list[number] count <=20 range >=1 <=9) -> number
+  reduce(xs, 1, (acc, x) => acc * x)
 ```
 
 See also: [E302](#e302)
@@ -590,26 +678,48 @@ See also: [E303](#e303)
 
 ## E401 — The function does more than the effect written on it
 
-**When**: A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. The effects of the functions it calls count. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count.
+**When**: A function written `total` has a place that can fail when it runs, or calls that go round (a recursion); or a function can fail with a kind its `fails` does not list, or recurs with no `diverges`. An overflow that comes from the end of a type, of a value whose range is not written, is a place that can fail with `overflow` too. The effects of the functions it calls count. A call of a function value counts the effect written on its function type; with none written it counts nothing, and the effect of the function given is in the function that gives it. A place the checks across the languages decide (ritsu's X2, X3, X4 and X6) counts by their answer: one they do not show, or find an example for, can fail when it runs, as any other place; where the run has no answer, the place waits for one and does not count.
 
-**Fix**: Make the places the notes give shown (write the branch that narrows the value), or widen the effect written; a recursive function is written `diverges`.
+**Fix**: Make the places the notes give shown (write the branch that narrows the value, or the range of a value with none), or widen the effect written; a recursive function is written `diverges`.
 
 **Example**:
 
 ```kn
 module example v1
 
-fn steps(n: number range >=0 <=100) -> number range >=0 <=100 total
-  if n <= 0 then 0 else min(steps(n: n - 1) + 1, 100)
+fn steps(n: number range >=0 <=100) -> number total
+  if n <= 0 then 0 else steps(n: n - 1) + 1
 ```
 
-See also: [W301](#w301), [W302](#w302), [W303](#w303)
+See also: [W301](#w301), [W302](#w302), [W303](#w303), [E402](#e402)
+
+<a id="e402"></a>
+
+## E402 — The function given does more than the effect its parameter writes
+
+**When**: A parameter whose function type writes an effect (`(number) -> bool total`, `(T) -> U fails range`) is given a function that does more. The effect of a lambda is that of the places of its body that are not shown and of the functions its body calls; the effect of a function given by its name is its own.
+
+**Fix**: Make the places of the function given shown (narrow the values with an `if` in the lambda), or widen the effect written on the parameter's type.
+
+**Example**:
+
+```kn
+module example v1
+
+fn all_within(xs: list[number] count <=9, test: (number) -> bool total) -> bool
+  xs.all(x => test(x))
+
+fn grows(xs: list[number] count <=9) -> bool
+  all_within(xs: xs, test: x => x + 1 > x)
+```
+
+See also: [E401](#e401)
 
 <a id="w501"></a>
 
 ## W501 — A decision is written in code; a table should hold it
 
-**When**: An `if` or a `match` answers a constant of the business (an amount, a quantity, a rate, a date, a value of an enum, `true` or `false`, a record of those; in a `match`, a number too); or a comparison of a value of the business with a threshold that is not 0 (a literal amount, quantity, rate, date or number) is made a value elsewhere than in the condition of an `if` or what a `match` splits. A branch that answers `none`, a `match` that only splits `none` from `some x`, one that maps the values of an enum to those of the same names of another, and a comparison with 0 are not warned of.
+**When**: An `if` answers a constant of the business (an amount, a quantity, a rate, a date, a value of an enum, `true` or `false`, a record of those); a `match` answers an amount, a quantity, a rate, a date, or a record of those (a value with fields too); or a comparison of a value of the business with a threshold that is not 0 (a literal amount, quantity, rate, date or number) is made a value elsewhere than in the condition of an `if` or what a `match` splits. A branch that answers `none`, a `match` that only splits `none` from `some x`, a `match` that answers values of an enum, `true` or `false`, or numbers, and a comparison with 0 are not warned of: that a `match` answers every value once, kaname checks itself (E106).
 
 **Fix**: Write the decision in a rulec table and call the rule: there, rulec checks it is complete and without overlap, and the person who approves it reads it on its page.
 

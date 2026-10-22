@@ -14,9 +14,9 @@ theorem gEvI {o₀ o : Out} {A : ACtx} {m : Nat} {e : Expr} (h : Grows o₀ o) :
   h.trans ((sat m).evI _ _ _).1
 theorem gBranch {o₀ o : Out} {A : ACtx} {m : Nat} {b : Expr} {c : Option Conv} (h : Grows o₀ o) :
     Grows o₀ (branch A m b c o).2 := h.trans ((sat m).branch _ _ _ _)
-theorem gArms {o₀ o : Out} {A : ACtx} {m : Nat} {sy : Option Sym} {sv : Abs}
+theorem gArms {o₀ o : Out} {A : ACtx} {m : Nat} {sy : Option Sym} {sv : Abs} {prev : List Pat}
     {arms : List (List Pat × Expr × Option Conv)} {out : Abs} (h : Grows o₀ o) :
-    Grows o₀ (matchArms A m sy sv arms out o).2 := h.trans ((sat m).arms _ _ _ _ _ _)
+    Grows o₀ (matchArms A m sy sv prev arms out o).2 := h.trans ((sat m).arms _ _ _ _ _ _ _)
 theorem gArgs {o₀ o : Out} {A : ACtx} {m : Nat} {args : List (Nat × Expr × Option Conv)} (h : Grows o₀ o) :
     Grows o₀ (evArgs A m args o).2.1 := h.trans ((sat m).args _ _ _).1
 theorem gArgs5 {o₀ o : Out} {A : ACtx} {m : Nat} {args : List (String × Expr × Option Conv × Nat × Bool)}
@@ -223,68 +223,97 @@ theorem same_armFold {A₀ : ACtx} {sy : Option Sym} {sv : Abs} :
     repeat' split
     all_goals first | exact h | exact same_narrowTo h | exact same_bindNew h
 
-theorem same_armScope {A : ACtx} {sy : Option Sym} {sv : Abs} {ps : List Pat} : Same A (armScope A sy sv ps).1 := by
-  have h := same_armFold (A₀ := A) (sy := sy) (sv := sv) ps (A, false) (Same.refl A)
-  unfold armScope
+theorem same_narrowOpt {A₀ A : ACtx} {sy : Option Sym} {a : Abs} (h : Same A₀ A) : Same A₀ (A.narrowOpt sy a) := by
+  cases sy <;> simp only [ACtx.narrowOpt] <;> first | exact h | exact same_narrowTo h
+
+theorem same_restScope {A₀ : ACtx} {sy : Option Sym} {sv : Abs} {prev ps : List Pat} {acc : ACtx × Bool}
+    (h : Same A₀ acc.1) : Same A₀ (restScope sy sv prev ps acc).1 := by
+  unfold restScope
+  repeat' split
+  all_goals first | exact h | exact same_narrowOpt h
+
+theorem same_litScope {A₀ : ACtx} {sy : Option Sym} {sv : Abs} {ps : List Pat} {acc : ACtx × Bool}
+    (h : Same A₀ acc.1) : Same A₀ (litScope sy sv ps acc).1 := by
+  unfold litScope
+  simp only
+  split
+  all_goals first | exact h | exact same_narrowOpt h
+
+theorem same_nameScope {A₀ : ACtx} {sy : Option Sym} {sv : Abs} {ps : List Pat} {acc : ACtx × Bool}
+    (h : Same A₀ acc.1) : Same A₀ (nameScope sy sv ps acc).1 := by
+  unfold nameScope
   simp only
   repeat' split
-  all_goals first | exact h | exact same_narrowTo h
+  all_goals first | exact h | exact same_narrowOpt h | exact same_bindNew (same_narrowOpt h) | exact same_bindNew h
+
+theorem same_armScope {A : ACtx} {sy : Option Sym} {sv : Abs} {prev ps : List Pat} :
+    Same A (armScope A sy sv prev ps).1 := by
+  unfold armScope
+  exact same_nameScope (same_litScope (same_restScope (same_armFold ps (A, false) (Same.refl A))))
+
+/-- What the arms of a `match` answer only grows. -/
+theorem arms_mono : ∀ (arms : List (List Pat × Expr × Option Conv)) (m : Nat) (A : ACtx) (sy : Option Sym) (sv : Abs)
+    (prev : List Pat) (out : Abs) (o : Out) (x : Val), Mem out x → Mem (matchArms A m sy sv prev arms out o).1 x
+  | [], m, A, sy, sv, prev, out, o, x, h => by
+    cases m with
+    | zero => simp only [matchArms]; exact mem_join_left h
+    | succ m => simp only [matchArms]; exact h
+  | (ps, body, c) :: rest, m, A, sy, sv, prev, out, o, x, h => by
+    cases m with
+    | zero => simp only [matchArms]; exact mem_join_left h
+    | succ m =>
+      simp only [matchArms]
+      split
+      · exact arms_mono rest m A sy sv _ _ _ x (mem_join_left h)
+      · exact arms_mono rest m A sy sv _ _ _ x h
 
 /-- **The arms of a `match`**: the arm that takes the value is reached, its answer among what the
-    arms answer; what the arms answer only grows. -/
+    arms answer. `prev` are the patterns of the arms above, none of which takes the value. -/
 theorem arms_sound (IH : SoundAt C res n) {ρ : Env} {dep : Nat} {sy : Option Sym} {sv : Abs} {v : Val}
     (hm : Mem sv v) (hsy : ∀ s, sy = some s → symVal ρ s = some v) :
-    ∀ (arms : List (List Pat × Expr × Option Conv)) (m : Nat) (A : ACtx) (out : Abs) (o : Out),
-    Good C res A → Sat A ρ → (matchArms A m sy sv arms out o).2.widened = false →
-    (∀ x, Mem out x → Mem (matchArms A m sy sv arms out o).1 x) ∧
-    (∀ body c bnd, pick v arms = some (body, c, bnd) →
+    ∀ (arms : List (List Pat × Expr × Option Conv)) (m : Nat) (A : ACtx) (prev : List Pat) (out : Abs) (o : Out),
+    Good C res A → Sat A ρ → (∀ p ∈ prev, p.takes v = none) → (matchArms A m sy sv prev arms out o).2.widened = false →
+    ∀ body c bnd, pick v arms = some (body, c, bnd) →
       (∀ r, (eval C n dep (match bnd with | some x => (x, v) :: ρ | none => ρ) body >>= coerce c) = .ok r →
-        Mem (matchArms A m sy sv arms out o).1 r) ∧
+        Mem (matchArms A m sy sv prev arms out o).1 r) ∧
       (∀ k l, (eval C n dep (match bnd with | some x => (x, v) :: ρ | none => ρ) body >>= coerce c) =
-        .error (.failed k l) → k.ofEffect = true → Wit C (matchArms A m sy sv arms out o).2))
-  | [], m, A, out, o, _, _, _ => by
-    cases m with
-    | zero => simp only [matchArms]; exact ⟨fun x h => mem_join_left h, fun _ _ _ h => by simp [pick] at h⟩
-    | succ m => simp only [matchArms]; exact ⟨fun x h => h, fun _ _ _ h => by simp [pick] at h⟩
-  | (ps, body, c) :: rest, m, A, out, o, hG, hS, hw => by
+        .error (.failed k l) → k.ofEffect = true → Wit C (matchArms A m sy sv prev arms out o).2)
+  | [], m, A, prev, out, o, _, _, _, _, _, _, _, hp => by simp [pick] at hp
+  | (ps, body, c) :: rest, m, A, prev, out, o, hG, hS, hno, hw, body', c', bnd, hp => by
     cases m with
     | zero =>
       simp only [matchArms]
-      exact ⟨fun x h => mem_join_left h, fun _ _ _ _ => ⟨fun r _ => mem_join_right (Mem.any r), fun _ _ _ _ => wit_fuel⟩⟩
+      exact ⟨fun r _ => mem_join_right (Mem.any r), fun _ _ _ _ => wit_fuel⟩
     | succ m =>
-      have hGA : Good C res (armScope A sy sv ps).1 := hG.same same_armScope
+      have hGA : Good C res (armScope A sy sv prev ps).1 := hG.same same_armScope
       simp only [matchArms] at hw ⊢
-      cases hr : (armScope A sy sv ps).2 <;> simp only [hr, Bool.false_eq_true, ite_true, ite_false] at hw ⊢
-      · -- nothing reaches the arm
-        obtain ⟨p1, p2⟩ := arms_sound IH hm hsy rest m A out o hG hS hw
-        refine ⟨p1, fun body' c' bnd hp => ?_⟩
-        simp only [pick] at hp
-        split at hp
-        · cases hp
-        · rename_i hok
-          split at hp
-          · rename_i b hb
-            have := (armScope_sound hS (by simpa using hok) hb hm hsy).1
-            rw [hr] at this; cases this
-          · exact p2 body' c' bnd hp
-      · -- the arm is reached
-        obtain ⟨p1, p2⟩ := arms_sound IH hm hsy rest m A _ _ hG hS hw
-        refine ⟨fun x hx => p1 x (mem_join_left hx), fun body' c' bnd hp => ?_⟩
-        simp only [pick] at hp
-        split at hp
-        · cases hp
-        · rename_i hok
-          split at hp
-          · rename_i b hb
-            simp only [Option.some.injEq, Prod.mk.injEq] at hp
-            obtain ⟨rfl, rfl, rfl⟩ := hp
-            have hsc := (armScope_sound hS (by simpa using hok) hb hm hsy).2
-            have hwb : (branch (armScope A sy sv ps).1 m body c o).2.widened = false :=
-              grows_not_widened (gArms (Grows.refl _)) hw
-            refine ⟨fun r hr' => p1 r (mem_join_right ?_), fun k l he hk => Wit.grow ?_ (gArms (Grows.refl _))⟩
-            · cases b <;> exact (branch_sound (dep := dep) IH hGA hsc hwb).1 r hr'
-            · cases b <;> exact (branch_sound (dep := dep) IH hGA hsc hwb).2 k l he hk
-          · exact p2 body' c' bnd hp
+      simp only [pick] at hp
+      split at hp
+      · cases hp
+      rename_i hok
+      split at hp
+      · -- this arm takes the value
+        rename_i b hb
+        simp only [Option.some.injEq, Prod.mk.injEq] at hp
+        obtain ⟨rfl, rfl, rfl⟩ := hp
+        obtain ⟨hreach, hsc⟩ := armScope_sound hS (by simpa using hok) hb hm hsy hno
+        rw [hreach] at hw ⊢
+        simp only [ite_true] at hw ⊢
+        have hwb : (branch (armScope A sy sv prev ps).1 m body c o).2.widened = false :=
+          grows_not_widened (gArms (Grows.refl _)) hw
+        refine ⟨fun r hr' => arms_mono _ _ _ _ _ _ _ _ r (mem_join_right ?_), fun k l he hk => Wit.grow ?_ (gArms (Grows.refl _))⟩
+        · cases b <;> exact (branch_sound (dep := dep) IH hGA hsc hwb).1 r hr'
+        · cases b <;> exact (branch_sound (dep := dep) IH hGA hsc hwb).2 k l he hk
+      · -- an arm below takes it: this one is one more arm above for them
+        rename_i htn
+        have hno' : ∀ p ∈ prev ++ ps, p.takes v = none := by
+          intro p hp'
+          rcases List.mem_append.mp hp' with hp' | hp'
+          · exact hno p hp'
+          · exact takesAny_none htn p hp'
+        cases hr : (armScope A sy sv prev ps).2 <;> simp only [hr, Bool.false_eq_true, ite_true, ite_false] at hw ⊢
+        · exact arms_sound IH hm hsy rest m A (prev ++ ps) out o hG hS hno' hw _ _ _ hp
+        · exact arms_sound IH hm hsy rest m A (prev ++ ps) _ _ hG hS hno' hw _ _ _ hp
 
 theorem case_mtch (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Out} {dep id line : Nat} {s : Expr}
     {arms : List (List Pat × Expr × Option Conv)} (hG : Good C res A) (hS : Sat A ρ)
@@ -315,7 +344,7 @@ theorem case_mtch (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Ou
           obtain ⟨sv, hsv, hv⟩ := bind_ok hv
           obtain ⟨hm, hs, _⟩ := h1 sv hsv
           have hsy : ∀ s', sym s = some s' → symVal ρ s' = some sv := fun s' h => sym_eval h hsv
-          obtain ⟨_, p2⟩ := arms_sound (dep := dep) IH hm hsy arms m _ Abs.never _ hGs hs hw
+          have p2 := arms_sound (dep := dep) IH hm hsy arms m _ [] Abs.never _ hGs hs (fun _ h => by simp at h) hw
           split at hv
           · rename_i body c bnd hp
             refine ⟨?_, hs, fun _ _ => trivial⟩
@@ -326,7 +355,7 @@ theorem case_mtch (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Ou
           · exact Wit.grow (h2 k l hv hk) (gArms (Grows.refl _))
           · obtain ⟨hm, hs, _⟩ := h1 sv hsv
             have hsy : ∀ s', sym s = some s' → symVal ρ s' = some sv := fun s' h => sym_eval h hsv
-            obtain ⟨_, p2⟩ := arms_sound (dep := dep) IH hm hsy arms m _ Abs.never _ hGs hs hw
+            have p2 := arms_sound (dep := dep) IH hm hsy arms m _ [] Abs.never _ hGs hs (fun _ h => by simp at h) hw
             split at hv
             · rename_i body c bnd hp
               cases bnd <;> exact (p2 body c _ hp).2 k l hv hk

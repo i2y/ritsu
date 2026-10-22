@@ -1,0 +1,3 @@
+changes(before: ["ink": 4, "pad": 2, "pen": 10], after: ["pad": 2, "pen": 7, "tape": 3])
+  line 34: let skus = ["ink", "pad", "pen", "tape"].to_set()
+= [Change.removed { sku: "ink", qty: 4 }, Change.changed { sku: "pen", was: 10, now: 7 }, Change.added { sku: "tape", qty: 3 }]

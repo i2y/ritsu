@@ -136,6 +136,36 @@ export function rate(k: bigint, step: Q): Q {
   return mul(q(k), step);
 }
 
+/** Whether two values of one type are the same (kaname's DESIGN 23.5): a record and a value of a sum
+ * field by field, a list element by element, a dict pair by pair, a set member by member, a fraction
+ * by its numerator and denominator (each in lowest terms), anything else as `===` compares it. */
+export function eq(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  // a dict by its pairs, a set by its members (kaname's DESIGN 24.2): their keys are compared by value
+  if (a instanceof Map || b instanceof Map) {
+    if (!(a instanceof Map) || !(b instanceof Map) || a.size !== b.size) return false;
+    for (const [k, v] of a) if (!b.has(k) || !eq(v, b.get(k))) return false;
+    return true;
+  }
+  if (a instanceof Set || b instanceof Set) {
+    if (!(a instanceof Set) || !(b instanceof Set) || a.size !== b.size) return false;
+    for (const x of a) if (!b.has(x)) return false;
+    return true;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!eq(a[i], b[i])) return false;
+    return true;
+  }
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  const kx = Object.keys(x);
+  if (kx.length !== Object.keys(y).length) return false;
+  for (const k of kx) if (!Object.prototype.hasOwnProperty.call(y, k) || !eq(x[k], y[k])) return false;
+  return true;
+}
+
 // ── The rule of int64 (kaname's DESIGN 5.6) ───────────────────────────────
 
 /** A whole number held to int64: the error `overflow` when it is outside. */
@@ -262,6 +292,13 @@ export function dateOf(z: number): string {
   return String(yy).padStart(4, "0") + "-" + String(m).padStart(2, "0") + "-" + String(d).padStart(2, "0");
 }
 
+/** Whether `s` is a day of the calendar written `YYYY-MM-DD`, from 0001-01-01 to 9999-12-31: what a
+ * date whose range is not written takes (kaname's DESIGN 22.5). */
+export function isDate(s: string): boolean {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(s) || s < "0001-01-01") return false;
+  return dateOf(dayOf(s)) === s;
+}
+
 /** `b - a`: the days from the date `a` to the date `b`. */
 export function between(b: string, a: string): bigint {
   return BigInt(dayOf(b) - dayOf(a));
@@ -310,6 +347,250 @@ export interface Outside {
   readonly shown: string;
   readonly range: string;
   readonly count: number | null;
+  /** Whether the count is of a string's code points (kaname's DESIGN 25.1). */
+  readonly chars?: boolean;
+  /** Whether the value is a string that is not well formed: a lone surrogate. */
+  readonly bad?: boolean;
+}
+
+// ── Orders, dicts, sets and lists (kaname's DESIGN 24) ───────────────────
+
+/** How two values compare: below 0, 0 or above 0, as `a` is before, with or after `b`. */
+export type Order<T> = (a: T, b: T) => number;
+
+/** The order of two whole numbers. */
+export function cmpInt(a: bigint, b: bigint): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** The order of two strings by their code points (kaname's DESIGN 24.1): JavaScript's `<` compares
+ * UTF-16 units, which puts a character past U+FFFF before U+E000 to U+FFFF. A date written
+ * `YYYY-MM-DD` is in its order too. */
+export function cmpStr(a: string, b: string): number {
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    const x = a.codePointAt(i) ?? 0;
+    const y = b.codePointAt(j) ?? 0;
+    if (x !== y) return x < y ? -1 : 1;
+    i += x > 0xffff ? 2 : 1;
+    j += y > 0xffff ? 2 : 1;
+  }
+  return i < a.length ? 1 : j < b.length ? -1 : 0;
+}
+
+/** `false` before `true`. */
+export function cmpBool(a: boolean, b: boolean): number {
+  return a === b ? 0 : a ? 1 : -1;
+}
+
+/** The order of the values of an enum: the order they are declared in. */
+export function byRank<T>(rank: (v: T) => number): Order<T> {
+  return (a: T, b: T) => rank(a) - rank(b);
+}
+
+/** A fraction as a key a `Set` tells apart by its value: its numerator and denominator. */
+export function qKey(a: Q): string {
+  return `${a.n}/${a.d}`;
+}
+
+/** A value as the key a `Set` tells apart: itself. */
+export function same<T>(a: T): T {
+  return a;
+}
+
+/** The keys of a dict or the members of a set, in their order. */
+export function sortedKeys<K>(m: ReadonlyMap<K, unknown> | ReadonlySet<K>, cmp: Order<K>): K[] {
+  return [...m.keys()].sort(cmp);
+}
+
+/** The values of a dict, in the order of their keys. */
+export function valuesOf<K, V>(m: ReadonlyMap<K, V>, cmp: Order<K>): V[] {
+  return sortedKeys(m, cmp).map((k: K) => m.get(k) as V);
+}
+
+/** The pairs of a dict as entries, in the order of their keys. */
+export function entriesOf<K, V>(m: ReadonlyMap<K, V>, cmp: Order<K>): Entry<K, V>[] {
+  return sortedKeys(m, cmp).map((k: K) => ({ key: k, value: m.get(k) as V }));
+}
+
+/** A dict of these pairs, the later of two of one key kept, in the order of its keys: a `Map` goes
+ * round in the order its keys are put in. */
+export function mapOf<K, V>(pairs: Iterable<readonly [K, V]>, cmp: Order<K>): ReadonlyMap<K, V> {
+  const m = new Map<K, V>(pairs);
+  return new Map<K, V>([...m.entries()].sort((a: [K, V], b: [K, V]) => cmp(a[0], b[0])));
+}
+
+/** A set of these members, each once, in their order. */
+export function setOf<T>(xs: Iterable<T>, cmp: Order<T>): ReadonlySet<T> {
+  return new Set<T>([...new Set<T>(xs)].sort(cmp));
+}
+
+/** The value of a key; null where the dict has none. */
+export function get<K, V>(m: ReadonlyMap<K, V>, k: K): V | null {
+  const v = m.get(k);
+  return v === undefined ? null : v;
+}
+
+export function put<K, V>(m: ReadonlyMap<K, V>, k: K, v: V, cmp: Order<K>): ReadonlyMap<K, V> {
+  return mapOf<K, V>([...m.entries(), [k, v]], cmp);
+}
+
+export function remove<K, V>(m: ReadonlyMap<K, V>, k: K, cmp: Order<K>): ReadonlyMap<K, V> {
+  return mapOf<K, V>([...m.entries()].filter((p: [K, V]) => p[0] !== k), cmp);
+}
+
+/** The pairs of both, `b`'s value for a key of both. */
+export function merge<K, V>(a: ReadonlyMap<K, V>, b: ReadonlyMap<K, V>, cmp: Order<K>): ReadonlyMap<K, V> {
+  return mapOf<K, V>([...a.entries(), ...b.entries()], cmp);
+}
+
+export function insert<T>(s: ReadonlySet<T>, x: T, cmp: Order<T>): ReadonlySet<T> {
+  return setOf<T>([...s, x], cmp);
+}
+
+export function without<T>(s: ReadonlySet<T>, x: T, cmp: Order<T>): ReadonlySet<T> {
+  return setOf<T>([...s].filter((y: T) => y !== x), cmp);
+}
+
+export function union<T>(a: ReadonlySet<T>, b: ReadonlySet<T>, cmp: Order<T>): ReadonlySet<T> {
+  return setOf<T>([...a, ...b], cmp);
+}
+
+export function intersect<T>(a: ReadonlySet<T>, b: ReadonlySet<T>, cmp: Order<T>): ReadonlySet<T> {
+  return setOf<T>([...a].filter((x: T) => b.has(x)), cmp);
+}
+
+export function difference<T>(a: ReadonlySet<T>, b: ReadonlySet<T>, cmp: Order<T>): ReadonlySet<T> {
+  return setOf<T>([...a].filter((x: T) => !b.has(x)), cmp);
+}
+
+/** A dict with each key and each value read anew: a key in another step of its rate, … */
+export function remap<K, V, L, W>(m: ReadonlyMap<K, V>, fk: (k: K) => L, fv: (v: V) => W): ReadonlyMap<L, W> {
+  return new Map<L, W>([...m.entries()].map((p: [K, V]): [L, W] => [fk(p[0]), fv(p[1])]));
+}
+
+/** A set with each member read anew. */
+export function remapSet<T, U>(s: ReadonlySet<T>, f: (x: T) => U): ReadonlySet<U> {
+  return new Set<U>([...s].map(f));
+}
+
+/** An element put among those of its key: what `group_by` makes, the elements in the order of the
+ * list. */
+export function groupPush<K, T>(g: Map<K, T[]>, k: K, x: T): void {
+  const l = g.get(k);
+  if (l === undefined) g.set(k, [x]);
+  else l.push(x);
+}
+
+/** A whole number cut to 0 and to `n`: where a list is cut (kaname's DESIGN 24.3). */
+function cut(i: bigint, n: number): number {
+  return i < 0n ? 0 : i > BigInt(n) ? n : Number(i);
+}
+
+/** The element at `i` (from 0); null past either end. */
+export function at<T>(xs: readonly T[], i: bigint): T | null {
+  return i >= 0n && i < BigInt(xs.length) ? xs[Number(i)] : null;
+}
+
+export function first<T>(xs: readonly T[]): T | null {
+  return xs.length > 0 ? xs[0] : null;
+}
+
+export function last<T>(xs: readonly T[]): T | null {
+  return xs.length > 0 ? xs[xs.length - 1] : null;
+}
+
+/** The elements from `a` up to before `b`, both cut to the list. */
+export function slice<T>(xs: readonly T[], a: bigint, b: bigint): T[] {
+  const i = cut(a, xs.length);
+  const j = cut(b, xs.length);
+  return i < j ? xs.slice(i, j) : [];
+}
+
+export function take<T>(xs: readonly T[], n: bigint): T[] {
+  return xs.slice(0, cut(n, xs.length));
+}
+
+export function drop<T>(xs: readonly T[], n: bigint): T[] {
+  return xs.slice(cut(n, xs.length));
+}
+
+export function reverse<T>(xs: readonly T[]): T[] {
+  return [...xs].reverse();
+}
+
+export function append<T>(xs: readonly T[], x: T): T[] {
+  return [...xs, x];
+}
+
+/** Lists one after another. */
+export function concat<T>(...xss: (readonly T[])[]): T[] {
+  const out: T[] = [];
+  for (const xs of xss) out.push(...xs);
+  return out;
+}
+
+export function flatten<T>(xss: readonly (readonly T[])[]): T[] {
+  return concat<T>(...xss);
+}
+
+/** The elements in their order: `sort` keeps two of one key in the order of the list. */
+export function sorted<T>(xs: readonly T[], cmp: Order<T>): T[] {
+  return [...xs].sort(cmp);
+}
+
+/** The elements in the order of their keys, from the greatest where `desc`, two of one key in the
+ * order of the list either way. */
+export function byKey<K, T>(ps: [K, T][], cmp: Order<K>, desc: boolean): T[] {
+  return ps.sort((a: [K, T], b: [K, T]) => (desc ? cmp(b[0], a[0]) : cmp(a[0], b[0]))).map((p: [K, T]) => p[1]);
+}
+
+/** The first of each key, in the order of the list. */
+export function distinct<T>(xs: readonly T[], key: (x: T) => unknown): T[] {
+  const seen = new Set<unknown>();
+  const out: T[] = [];
+  for (const x of xs) {
+    const k = key(x);
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(x);
+    }
+  }
+  return out;
+}
+
+/** `numbers(a, b)`: `a` to `b`, both in; none where `b` is before `a`; the count held to int64
+ * where `over` says. */
+export function numbers(a: bigint, b: bigint, over: At | null): bigint[] {
+  if (b < a) return [];
+  if (over !== null && b - a + 1n > MAX) fail("overflow", ...over);
+  const out: bigint[] = [];
+  for (let i = a; i <= b; i++) out.push(i);
+  return out;
+}
+
+/** `mod(x, n)` of a divisor that is a value: the whole part of `x` (toward −∞) modulo `n`, from 0
+ * to |n| − 1 (Euclid's, kaname's DESIGN 24.3); the error `zero` where `zero` says and `n` is 0. */
+export function modOf(x: Q, n: bigint, zero: At | null): bigint {
+  if (zero !== null && n === 0n) fail("zero", ...zero);
+  let w = x.n / x.d;
+  if (x.n % x.d !== 0n && x.n < 0n) w -= 1n;
+  const m = n < 0n ? -n : n;
+  const r = w % m;
+  return r < 0n ? r + m : r;
+}
+
+/** An entry of a dict: an element of what `entries` answers (kaname's DESIGN 24.3). */
+export interface Entry<K, V> {
+  readonly key: K;
+  readonly value: V;
+}
+
+/** An element of what `indexed` answers: the index from 0, and the element. */
+export interface Indexed<T> {
+  readonly index: bigint;
+  readonly item: T;
 }
 
 /** An element of what `running_totals` answers (kaname's DESIGN 3.6). */
@@ -318,4 +599,178 @@ export interface Running<T, W> {
   readonly before: W;
   readonly upto: W;
   readonly total: W;
+}
+
+/** A value of `result[T, E]` (kaname's DESIGN 26.3): `ok` with its value, or `err` with its error. */
+export type Result<T, E> = Ok<T> | Err<E>;
+
+/** The value `ok` of a result: what it holds. */
+export interface Ok<T> {
+  readonly kind: "ok";
+  readonly value: T;
+}
+
+/** The value `err` of a result: why it is no `ok`. */
+export interface Err<E> {
+  readonly kind: "err";
+  readonly error: E;
+}
+
+// ── Strings (kaname's DESIGN 25) ──────────────────────────────────────────
+
+// A string is a sequence of code points: JavaScript counts UTF-16 units, so the length, the cuts and
+// the places are counted here with `for … of` and `Array.from`, which go a code point at a time. A
+// search for a string in a well-formed string (`indexOf`, `includes`, `endsWith`, `split`) finds it
+// at the start of a code point, and is used as it is.
+
+/** The code points of Unicode's White_Space, which `trim` and `words` take for white space. */
+const SPACES: ReadonlySet<number> = new Set([
+  0x9, 0xa, 0xb, 0xc, 0xd, 0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007,
+  0x2008, 0x2009, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000,
+]);
+
+function isSpace(c: string): boolean {
+  return SPACES.has(c.codePointAt(0) ?? 0);
+}
+
+/** Whether a string is well formed: no surrogate without its pair. A host may give one that is not. */
+export function isText(s: string): boolean {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const d = s.charCodeAt(i + 1);
+      if (!(d >= 0xdc00 && d <= 0xdfff)) return false;
+      i++;
+    } else if (c >= 0xdc00 && c <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** The number of code points. */
+export function cpCount(s: string): bigint {
+  let n = 0;
+  for (const _ of s) n++;
+  return BigInt(n);
+}
+
+/** The code points from `a` up to before `b`, both cut to the string. */
+export function cpSlice(s: string, a: bigint, b: bigint): string {
+  const cs = Array.from(s);
+  const i = cut(a, cs.length);
+  const j = cut(b, cs.length);
+  return i < j ? cs.slice(i, j).join("") : "";
+}
+
+export function cpTake(s: string, n: bigint): string {
+  return cpSlice(s, 0n, n);
+}
+
+export function cpDrop(s: string, n: bigint): string {
+  const cs = Array.from(s);
+  return cs.slice(cut(n, cs.length)).join("");
+}
+
+/** Where `t` first stands in `s`, in code points; 0 for an empty `t`, null where it is not there. */
+export function cpIndexOf(s: string, t: string): bigint | null {
+  const i = s.indexOf(t);
+  return i < 0 ? null : cpCount(s.slice(0, i));
+}
+
+export function chars(s: string): string[] {
+  return Array.from(s);
+}
+
+export function codePoints(s: string): bigint[] {
+  return Array.from(s, (c) => BigInt(c.codePointAt(0) ?? 0));
+}
+
+/** The string of these code points; null where one is no Unicode scalar value. */
+export function toText(ns: readonly bigint[]): string | null {
+  let out = "";
+  for (const n of ns) {
+    if (n < 0n || n > 0x10ffffn || (n >= 0xd800n && n <= 0xdfffn)) return null;
+    out += String.fromCodePoint(Number(n));
+  }
+  return out;
+}
+
+/** `s` cut at each `sep`, the empty strings at the ends kept; each code point where `sep` is empty. */
+export function split(s: string, sep: string): string[] {
+  return sep === "" ? Array.from(s) : s.split(sep);
+}
+
+/** The runs of what is not white space. */
+export function words(s: string): string[] {
+  const out: string[] = [];
+  let w = "";
+  for (const c of s) {
+    if (isSpace(c)) {
+      if (w !== "") out.push(w);
+      w = "";
+    } else {
+      w += c;
+    }
+  }
+  if (w !== "") out.push(w);
+  return out;
+}
+
+/** Every `old` from the left made `nw`; `s` as it is where `old` is empty. Not `replaceAll`, which
+ * reads `$&` and the like in what it puts. */
+export function replace(s: string, old: string, nw: string): string {
+  return old === "" ? s : s.split(old).join(nw);
+}
+
+export function trimStart(s: string): string {
+  const cs = Array.from(s);
+  let i = 0;
+  while (i < cs.length && isSpace(cs[i])) i++;
+  return cs.slice(i).join("");
+}
+
+export function trimEnd(s: string): string {
+  const cs = Array.from(s);
+  let j = cs.length;
+  while (j > 0 && isSpace(cs[j - 1])) j--;
+  return cs.slice(0, j).join("");
+}
+
+export function trim(s: string): string {
+  return trimEnd(trimStart(s));
+}
+
+/** A to Z made a to z, nothing else changed. */
+export function lowerAscii(s: string): string {
+  return s.replace(/[A-Z]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 32));
+}
+
+/** a to z made A to Z, nothing else changed. */
+export function upperAscii(s: string): string {
+  return s.replace(/[a-z]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 32));
+}
+
+/** `fill` repeated before `s` (after it, with `atEnd`) to make it `width` code points long, the last
+ * repetition cut; `s` as it is where `fill` is empty or `s` is that long already. */
+export function pad(s: string, width: bigint, fill: string, atEnd: boolean): string {
+  const n = cpCount(s);
+  if (fill === "" || n >= width) return s;
+  const fs = Array.from(fill);
+  const k = Number(width - n);
+  let added = "";
+  for (let i = 0; i < k; i++) added += fs[i % fs.length];
+  return atEnd ? s + added : added + s;
+}
+
+/** The number `s` writes: one `+` or `-` at most, then ASCII digits, nothing else, within int64. */
+export function parseNumber(s: string): bigint | null {
+  if (!/^[+-]?[0-9]+$/.test(s)) return null;
+  const v = BigInt(s);
+  return v < MIN || v > MAX ? null : v;
+}
+
+/** The date `s` writes: `YYYY-MM-DD` alone, a day of 0001-01-01 to 9999-12-31. */
+export function parseDate(s: string): string | null {
+  return isDate(s) ? s : null;
 }

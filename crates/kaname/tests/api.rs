@@ -19,7 +19,7 @@ fn run(args: &[&str], suite: Suite) -> (u8, String, String) {
     (code, String::from_utf8(out).unwrap(), String::from_utf8(err).unwrap())
 }
 
-const EXAMPLES: [&str; 4] = ["payout", "late_payment", "media_mail", "discount_split"];
+const EXAMPLES: [&str; 8] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split"];
 
 #[test]
 fn each_example_reads_as_the_golden_files_hold() {
@@ -57,6 +57,20 @@ fn what_the_api_says_and_what_stops_it() {
     let (code, json, _) = run(&["api", f.to_str().unwrap()], common::joined());
     assert_eq!(code, 0, "{json}");
     assert!(json.contains("\"code\": \"W301\"") && json.contains("\"outcome\": \"undecided\""), "{json}");
+    // the values of an enum that have fields: each value's fields, and the type the generated code
+    // names for it (DESIGN 23.8); an enum whose values have none keeps its form
+    let (code, json, _) = run(&["api", "tests/modules/sums.kn"], common::joined());
+    assert_eq!(code, 0, "{json}");
+    let v = ritsu_base::json::parse(&json).unwrap();
+    let enums = v.get("enums").and_then(|e| e.as_arr()).unwrap();
+    let placed = enums[0].get("values").and_then(|vs| vs.as_arr()).map(|vs| vs[1].clone()).unwrap();
+    assert_eq!(placed.get("generated").map(|g| g.compact()).as_deref(), Some(r#"{"typescript":"OrderPlaced","python":"OrderPlaced","go":"OrderPlaced"}"#));
+    let on = placed.get("fields").and_then(|f| f.as_arr()).map(|f| f[1].compact()).unwrap();
+    assert_eq!(on, r#"{"name":"on","alias":"on","type":"date","range":">=2026-01-01 <=2027-12-31","count":null,"line":14}"#);
+    let f = t.write("tiers.kn", "module tiers v1\n\nenum tier = basic < gold\n\nfn top(t: tier) -> bool\n  t = tier.gold\n");
+    let (code, json, _) = run(&["api", f.to_str().unwrap()], common::joined());
+    assert_eq!(code, 0, "{json}");
+    assert!(json.contains("\"name\": \"gold\"") && !json.contains("\"fields\""), "{json}");
     // the binary of kaname's own crate reads no rule: E202, exit 2
     let (code, out, _) = run(&["api", "examples/payout/payout.kn"], Suite::default());
     assert_eq!(code, 2);

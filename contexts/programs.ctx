@@ -1,5 +1,5 @@
 context Programs(kaname) v1
-description "The code that joins rules, dates and books, in ritsu's types: functions, records and lists that call rulec's rules, koyomi's dates and chobo's transfers, checked by the same rules of units and rounding (kaname)"
+description "Functional cores, general code with no input or output, in ritsu's types: functions, records, sums, lists, dicts, sets and strings that may call rulec's rules, koyomi's dates and chobo's transfers, checked by the same rules of units and rounding (kaname)"
 
 owns
   dir "../crates/kaname"

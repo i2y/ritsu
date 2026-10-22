@@ -1,0 +1,75 @@
+module 範囲を書かない値(open_ja) v1
+description "範囲を書かない値は、どれも型の全体をとる。型の端から来るあふれは診断を出さずにエフェクトに入り、書いた範囲から来るあふれはエラーか警告になる。規則に渡す値には規則の範囲があり、分岐で狭められる。輪の中の関数は型の全体を答える。open.kn の日本語の版"
+
+use rule クーポン from "tests/rules/coupon.rule"
+
+record 明細(Line)
+  品番(sku)     : string
+  数量(qty)     : number
+  価格(price)   : money[USDc]
+  注文日(placed) : date
+
+# 2⁶³ − 1 に 1 を足すと int64 を超える。型の端から来るので何も言わず、生成したコードが確かめ、
+# エフェクトは `fails overflow` になる
+fn 次の番号(next_id)(最後(last): number) -> number
+  最後 + 1
+
+# 積と和は、範囲を書かないリストとそのフィールドの、型の端から来る
+fn 合計(total)(明細(lines): list[明細]) -> money[USDc]
+  sum(明細, l => l.価格 * l.数量)
+
+# ドルをセントで読む。型の端の 100 倍
+fn セント(cents)(ドル(d): money[USD]) -> money[USDc]
+  ドル in USDc
+
+# 0001-01-01 から 9999-12-31 までの二つの日の差は int64 に収まる。total
+fn 日数(days)(最初の日(first): date, 最後の日(last): date) -> number total
+  最後の日 - 最初の日
+
+fn 経った日数(since)(日(d): date) -> number
+  if 日 >= 2026-01-01
+    日 - 2026-01-01
+  else
+    0
+
+# レコードの文字列と数。どれにも範囲は無い
+fn 見出し(label)(明細(l): 明細) -> string total
+  concat(明細.品番, ": ", text(明細.数量))
+
+# 分岐で数を狭めるので、その半分は収まると示せる
+fn 半分(halved)(数(n): number) -> number total
+  if 数 >= 0 and 数 <= 1_000_000
+    down(数 / 2, 1)
+  else
+    0
+
+# リストのリスト。要素の数も書かない
+fn ます目の数(cells)(行(rows): list[list[number]]) -> number
+  sum(行, r => count(r))
+
+# 範囲を書いたもの。int64 を超える積はエラーで、その入力を挙げる
+fn 倍(doubled)(数(n): number range >=0 <=5_000_000_000_000_000_000) -> number
+  数 * 2
+
+# 範囲の解析が一つずつ追うより多くの要素に重ねる積。int64 に収まるかを決められない
+fn 積(product)(数の並び(xs): list[number] count <=20 range >=1 <=9) -> number
+  reduce(数の並び, 1, (acc, x) => acc * x)
+
+# 範囲の解析が手放した積を、範囲を書かない引数に渡す。引数がとる int64 の全体に収まるかを決められない
+fn 積の次の番号(next_of)(数の並び(xs): list[number] count <=20 range >=1 <=9) -> number
+  次の番号(最後: reduce(数の並び, 1, (acc, x) => acc * x))
+
+# 規則は 0 から 10,000 セントを受け取る。型の端は外れるので、例がある
+fn 割引(discount)(クーポン額(c): money[USDc]?) -> money[USDc]?
+  クーポン(coupon: クーポン額, member: true).discount
+
+# 渡す前に規則の範囲に狭める。示せる
+fn 狭めた割引(narrowed)(クーポン額(c): money[USDc]) -> money[USDc]?
+  if クーポン額 >= 0USDc and クーポン額 <= 10_000USDc
+    クーポン(coupon: クーポン額, member: true).discount
+  else
+    none
+
+# 輪の中の関数は型の全体を答える。その端に 1 を足すと int64 を超えるが、何も言わない
+fn 段数(steps)(数(n): number) -> number
+  if 数 <= 0 then 0 else 段数(数: 数 - 1) + 1

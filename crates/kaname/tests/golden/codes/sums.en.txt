@@ -1,0 +1,74 @@
+── E106
+error[E106]: example.kn:8:5: `else` takes no value: the arms above take every value
+     8 |     else => 2
+  = Take the `else` arm out.
+
+── E106
+error[E106]: example.kn:8:5: No value comes to an arm after `else`
+     8 |     gold => 2
+  = `else` takes every value the arms above leave: make it the last arm.
+
+── E106
+error[E106]: example.kn:4:3: A `match` that splits by literals needs `else`
+     4 |   match code
+  = Numbers, amounts, quantities, dates and strings have too many values to list: take the ones no literal takes with `else =>`. A split by ranges is written with `if`.
+
+── E106
+error[E106]: example.kn:7:10: A value of the enum `tier` has no fields, and takes no name
+     7 |     gold g => 1
+  = A name is given to a value of an enum whose values have fields (`placed p`).
+
+── E105
+error[E105]: example.kn:9:5: A field of a value of Order is not read before a `match` names the value (`.on`)
+     9 |   o.on
+  = Its fields depend on its value: split it with a `match`, and read the field of the value an arm names, as in `placed p => p.on`.
+
+── E105
+error[E105]: example.kn:9:3: Order.draft is a value with no fields, which `{ … }` does not build
+     9 |   Order.draft { on: 2026-01-01 }
+  = A value with no fields is written `Order.draft` alone.
+
+── E107
+error[E107]: example.kn:9:3: `Order.placed` is a value with fields, and is not written by its name alone
+     9 |   Order.placed
+  = Write every field, as in `Order.placed { on: … }`.
+
+── E101
+error[E101]: example.kn:8:11: There is no type `Order.shipped`
+     8 | fn day(p: Order.shipped) -> number
+  = The enum `Order` has no value `shipped`; its values are `draft`, `placed`.
+
+── E102
+error[E102]: example.kn:9:20: After `..` goes a value of Order.placed; this one is of Order
+     9 |   Order.placed { ..o, on: 2026-03-01 }
+  = To take the fields of a value of the enum, split it with a `match`, and write the value the arm names (the `p` of `placed p`) as `..p`.
+
+── E104
+error[E104]: example.kn:5:5: `9_223_372_036_854_775_808` does not fit in int64
+     5 |     9_223_372_036_854_775_808 => "big"
+
+── E108
+error[E108]: example.kn:5:13: The field `share` of `Fee.flat` declares no step of the rate (`rate[step 0.01%]`)
+     5 |     share : rate
+  = A rate travels as a count of its step, and whether a value is rounded is told against the step; so the rate of a field of a value of an enum declares its step too. Only a `let` may leave it out.
+
+── E108
+error[E108]: example.kn:3:6: Every value of the enum `Tree` holds another `Tree` (through `Tree.node.left`), so none can be made
+     3 | enum Tree
+  = A type that holds itself needs a value that does not: make a field that holds it optional (`T?`) or a list that may be empty, or give the enum a value that does not hold it.
+
+── E006
+error[E006]: example.kn:5:3: The generated code would name two types `OrderPlaced` (the record `OrderPlaced` and the value `Order.placed`)
+     5 |   placed
+  = The type of a value of an enum whose values have fields is named by the enum's name and the value's, joined (`Order.placed` is `OrderPlaced`); rename one of them, or give it another alias.
+
+── E007
+error[E007]: example.kn:5:5: The generated code cannot take `kind` as the name of a field of `Order.draft`
+     5 |     kind : string
+  = The generated TypeScript tells the values of an enum whose values have fields apart by the field `kind`; choose another name or alias.
+
+── E110
+error[E110]: example.kn:12:3: `placed` reads both as a record and as a value of the enum `Order`
+    12 |   placed { on: 2026-03-01 }
+  = Rename one of them; written `Order.placed { … }`, the value no longer meets the record.
+

@@ -1,0 +1,58 @@
+module stock_diff v1
+description "Two counts of a stockroom compared, code by code: what was added, what went and what changed, the moves of a day netted for each code and laid on a count, and the codes to reorder; a count is a dict from a code to how many are on the shelf, and the codes of two counts a set"
+
+record Move
+  sku : string  count >=1 <=20
+  qty : number  range >=-10_000 <=10_000
+
+enum Change
+  added
+    sku : string
+    qty : number
+  removed
+    sku : string
+    qty : number
+  changed
+    sku  : string
+    was : number
+    now : number
+
+# how one code differs between two counts, if it does
+fn change(sku: string, before: number? range >=0 <=1_000_000, after: number? range >=0 <=1_000_000) -> Change?
+  match before
+    none =>
+      match after
+        none => none
+        some a => Change.added { sku: sku, qty: a }
+    some b =>
+      match after
+        none => Change.removed { sku: sku, qty: b }
+        some a => if a = b then none else Change.changed { sku: sku, was: b, now: a }
+
+# every code that differs, in the order of the codes: a dict and a set go round in their keys' order
+fn changes(before: dict[string, number] range >=0 <=1_000_000, after: dict[string, number] range >=0 <=1_000_000) -> list[Change]
+  let skus = before.keys().to_set().union(after.keys().to_set())
+  skus.to_list().filter_map(sku => change(sku: sku, before: before.get(sku), after: after.get(sku)))
+
+# the moves of a day, netted for each code
+fn net(moves: list[Move] count <=1_000) -> dict[string, number]
+  moves.group_by(m => m.sku).map_values(ms => ms.sum(m => m.qty))
+
+# a count with the moves of a day laid on it; a code that comes to none is left out
+fn moved(stock: dict[string, number] count <=10_000 range >=0 <=1_000_000, moves: list[Move] count <=1_000) -> dict[string, number]
+  stock.merge_with(net(moves: moves), (a, b) => a + b).filter(e => e.value != 0)
+
+# the codes on the shelf below what is kept of them
+fn to_reorder(stock: dict[string, number] range >=0 <=1_000_000, floor: number range >=0 <=1_000_000) -> set[string]
+  stock.filter(e => e.value < floor).keys().to_set()
+
+# how many units a count holds
+fn units(stock: dict[string, number] count <=10_000 range >=0 <=1_000_000) -> number
+  stock.values().sum(q => q)
+
+examples
+  changes(before: ["ink": 4, "pen": 10], after: ["pen": 7, "pad": 3]) = [Change.removed { sku: "ink", qty: 4 }, Change.added { sku: "pad", qty: 3 }, Change.changed { sku: "pen", was: 10, now: 7 }]
+  net(moves: [Move { sku: "pen", qty: -3 }, Move { sku: "ink", qty: 5 }, Move { sku: "pen", qty: 1 }]) = ["ink": 5, "pen": -2]
+  moved(stock: ["ink": 4, "pen": 2], moves: [Move { sku: "pen", qty: -2 }, Move { sku: "pad", qty: 6 }]) = ["ink": 4, "pad": 6]
+  to_reorder(stock: ["ink": 4, "pen": 10, "pad": 0], floor: 5) = ["ink", "pad"].to_set()
+  units(stock: ["ink": 4, "pen": 10]) = 14

@@ -181,7 +181,13 @@ fn expr_bare(x: &Ex, t: Target) -> String {
     match x {
         Ex::Atom(s) => s.clone(),
         Ex::Call(f, args) => format!("{}({})", expr(f, t, PRIMARY), args.iter().map(|a| expr(a, t, 0)).collect::<Vec<_>>().join(", ")),
-        Ex::CallKw(f, args) => format!("{}({})", expr(f, t, PRIMARY), args.iter().map(|(k, a)| format!("{k}={}", expr(a, t, 0))).collect::<Vec<_>>().join(", ")),
+        // an argument with no keyword goes by its place: the order a generic function is given first
+        // (DESIGN 26.7)
+        Ex::CallKw(f, args) => format!(
+            "{}({})",
+            expr(f, t, PRIMARY),
+            args.iter().map(|(k, a)| if k.is_empty() { expr(a, t, 0) } else { format!("{k}={}", expr(a, t, 0)) }).collect::<Vec<_>>().join(", ")
+        ),
         Ex::Bin(op, a, b) => {
             let p = op.prec(t);
             // left-associative: the right operand of the same precedence goes in parentheses; and a
@@ -209,7 +215,8 @@ fn expr_bare(x: &Ex, t: Target) -> String {
         Ex::Record(ty, fields) => match t {
             Target::Python => format!("{ty}({})", fields.iter().map(|(k, v)| format!("{k}={}", expr(v, t, 0))).collect::<Vec<_>>().join(", ")),
             _ if fields.is_empty() => "{}".to_string(),
-            _ => format!("{{ {} }}", fields.iter().map(|(k, v)| format!("{k}: {}", expr(v, t, 0))).collect::<Vec<_>>().join(", ")),
+            // a field named `...` is the spread of a value whose fields the others replace
+            _ => format!("{{ {} }}", fields.iter().map(|(k, v)| if k == "..." { format!("...{}", expr(v, t, UNARY)) } else { format!("{k}: {}", expr(v, t, 0)) }).collect::<Vec<_>>().join(", ")),
         },
         Ex::List(_, xs) => format!("[{}]", xs.iter().map(|a| expr(a, t, 0)).collect::<Vec<_>>().join(", ")),
         Ex::Cast(a, ty) => match t {
@@ -335,6 +342,9 @@ pub enum Node {
     Block(String, Vec<Node>, Vec<(String, Vec<Node>)>),
     /// A blank line.
     Blank,
+    /// Go's `switch x := v.(type) {` (the head, written without the brace), each `case` with its
+    /// types and its body, and the body of `default`.
+    Switch(String, Vec<(String, Vec<Node>)>, Vec<Node>),
 }
 
 /// The statements, written by `t` at `depth` levels of indentation.
@@ -377,6 +387,24 @@ pub fn print(nodes: &[Node], t: Target, depth: usize, out: &mut String) {
                     out.push_str(&pad(depth));
                     out.push_str("}\n");
                 }
+            }
+            Node::Switch(head, cases, default) => {
+                out.push_str(&pad(depth));
+                out.push_str(head);
+                out.push_str(" {\n");
+                for (label, body) in cases {
+                    out.push_str(&pad(depth));
+                    out.push_str(&format!("case {label}:\n"));
+                    print(body, t, depth + 1, out);
+                }
+                // no `default` where nothing is done for the other values
+                if !default.is_empty() {
+                    out.push_str(&pad(depth));
+                    out.push_str("default:\n");
+                    print(default, t, depth + 1, out);
+                }
+                out.push_str(&pad(depth));
+                out.push_str("}\n");
             }
             Node::Block(head, body, clauses) => {
                 out.push_str(&pad(depth));

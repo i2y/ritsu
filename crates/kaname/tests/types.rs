@@ -205,7 +205,9 @@ fn operations_a_type_does_not_have() {
     let t = project();
     assert_eq!(codes(&t, "fn f(a: money[USDc] range >=1USDc <=9USDc, b: money[USDc] range >=1USDc <=9USDc) -> money[USDc]\n  a * b\n"), ["E105"]);
     assert_eq!(codes(&t, "fn f(c: temperature[℃] range >=0℃ <=9℃) -> temperature[℃]\n  c + 1℃\n"), ["E105"]);
-    assert_eq!(codes(&t, "fn f(a: string, b: string) -> bool\n  a < b\n"), ["E105"]);
+    // strings compare in the order of their code points (DESIGN 25.1), and take no `+`
+    assert_eq!(codes(&t, "fn f(a: string, b: string) -> bool\n  a < b\n"), none());
+    assert_eq!(codes(&t, "fn f(a: bool, b: bool) -> bool\n  a < b\n"), ["E105"]);
     assert_eq!(codes(&t, "fn f(a: string, b: string) -> string\n  a + b\n"), ["E105"]);
     assert_eq!(codes(&t, "enum e = x | y\nfn f(a: e, b: e) -> bool\n  a < b\n"), ["E105"]);
     assert_eq!(codes(&t, "enum e = x < y\nfn f(a: e, b: e) -> bool\n  a < b and max(a, b) = y\n"), none());
@@ -231,9 +233,146 @@ fn matches_cover_every_value() {
     assert_eq!(codes(&t, "fn f(a: money[USDc]? range >=0USDc <=9USDc) -> money[USDc]\n  match a\n    none => 0USDc\n    some x => x + 1USDc\n"), none());
     assert_eq!(codes(&t, "fn f(a: money[USDc]? range >=0USDc <=9USDc) -> money[USDc]\n  match a\n    some x => x\n"), ["E106"]);
     assert_eq!(codes(&t, "fn f(a: bool) -> number\n  match a\n    true => 1\n    false => 0\n"), none());
-    assert_eq!(codes(&t, "fn f(a: number range >=0 <=9) -> number\n  match a\n    true => 1\n    false => 0\n"), ["E105"]);
+    // a number is split by its literals: `true` is none of them
+    assert_eq!(codes(&t, "fn f(a: number range >=0 <=9) -> number\n  match a\n    true => 1\n    false => 0\n"), ["E102", "E102"]);
     // a rule's enum, by its values
     assert_eq!(codes(&t, &format!("{tier}fn f(t: tier) -> number\n  match t\n    basic => 1\n    silver => 2\n    gold => true\n")), ["E102"]);
+}
+
+/// The values of an enum that have fields, the type of each value, and building them (DESIGN 23.1,
+/// 23.2).
+#[test]
+fn values_with_fields_and_their_types() {
+    let t = project();
+    let order = "enum Order\n  draft\n    items : number  range >=0 <=9\n  placed\n    items : number  range >=1 <=9\n    on    : date    range >=2026-01-01 <=2026-12-31\n  cancelled\n\n";
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  Order.placed {{ items: 1, on: 2026-02-01 }}\n")), none());
+    // the value by its name alone, where the place wants the enum
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  placed {{ items: 1, on: 2026-02-01 }}\n")), none());
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  cancelled\n")), none());
+    // a value with fields is built with them; one with none is written alone
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  Order.placed\n")), ["E107"]);
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  Order.placed {{ items: 1 }}\n")), ["E107"]);
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  Order.cancelled {{ items: 1 }}\n")), ["E105"]);
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  Order.placed {{ items: 1, on: 2026-02-01, items: 2 }}\n")), ["E107"]);
+    assert_eq!(codes(&t, &format!("{order}fn f() -> Order\n  Order.placed {{ items: 1, on: 2026-02-01, paid: 2 }}\n")), ["E101"]);
+    // the type of a value: a parameter, an answer, a field; it goes where the enum goes
+    assert_eq!(codes(&t, &format!("{order}fn on(p: Order.placed) -> date\n  p.on\nfn g(p: Order.placed) -> Order\n  p\n")), none());
+    assert_eq!(codes(&t, &format!("{order}record Box\n  p : Order.placed\n\nfn f(b: Box) -> number\n  b.p.items\n")), none());
+    assert_eq!(codes(&t, &format!("{order}fn f(p: Order.shipped) -> number\n  1\n")), ["E101"]);
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> Order.placed\n  o\n")), ["E102"]);
+    // a field of a value of the enum is read once a `match` names it
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> date\n  o.on\n")), ["E105"]);
+    // the listed form has no order; `default` and `open` are not written
+    assert_eq!(codes(&t, &format!("{order}fn f(a: Order, b: Order) -> bool\n  a < b\n")), ["E105"]);
+    assert_eq!(codes(&t, "enum Order\n  draft\n  placed\n    on : date  range >=2026-01-01 <=2026-12-31\n  default draft\n"), ["E003"]);
+    // the names the generated code gives the values' types, and the field it tells them apart by
+    assert_eq!(codes(&t, &format!("{order}record OrderPlaced\n  x : number  range >=0 <=9\n")), ["E006"]);
+    assert_eq!(codes(&t, "enum Order\n  draft\n    kind : number  range >=0 <=9\n  cancelled\n"), ["E007"]);
+    // a value that holds the enum it is a value of, with no way to stop
+    assert_eq!(codes(&t, "enum Tree\n  node\n    left : Tree\n"), ["E108"]);
+    // a record and a value of the same name, where the place wants the enum
+    assert_eq!(codes(&t, &format!("{order}record placed\n  on : date  range >=2026-01-01 <=2026-12-31\n\nfn f() -> Order\n  placed {{ on: 2026-02-01 }}\n")), ["E110"]);
+}
+
+/// Types that hold themselves (DESIGN 28.1): a record through a list, an optional, a dict or a result,
+/// an enum through its values' fields, two types through each other, a type through a type argument of
+/// a generic one, a generic enum with its own type parameters, in another order, and a cycle that gives
+/// a generic type a type with none. E108 where no value can be made, and where a type of the cycle is
+/// given a type argument made from a type parameter.
+#[test]
+fn types_that_hold_themselves() {
+    let t = project();
+    assert_eq!(codes(&t, "record Category\n  name     : string\n  children : list[Category]\n"), none());
+    assert_eq!(codes(&t, "record Node\n  value : number  range >=0 <=9\n  next  : Node?\n"), none());
+    assert_eq!(codes(&t, "record Dir\n  entries : dict[string, Dir]\n"), none());
+    assert_eq!(codes(&t, "record Step\n  next : result[Step, string]\n"), none());
+    assert_eq!(codes(&t, "enum Expr\n  num\n    value : number  range >=0 <=9\n  add\n    left  : Expr\n    right : Expr\n"), none());
+    assert_eq!(codes(&t, "enum Doc\n  words\n    s : string\n  object\n    members : list[Member]\n\nrecord Member\n  key   : string\n  value : Doc\n"), none());
+    assert_eq!(codes(&t, "record Box[T]\n  value : T\n\nrecord Nest\n  inner : Box[Nest]?\n"), none());
+    assert_eq!(codes(&t, "enum Tree[T]\n  leaf\n    value : T\n  node\n    children : list[Tree[T]]\n"), none());
+    assert_eq!(codes(&t, "record Swap[T, U]\n  first : T\n  next  : Swap[U, T]?\n"), none());
+    assert_eq!(codes(&t, "record A\n  b : B[number]?\n\nrecord B[T]\n  a : A?\n  t : T\n"), none());
+    // no value can be made: the record alone, the two that hold each other each, through a list that
+    // cannot be empty, through a type argument
+    assert_eq!(codes(&t, "record Node\n  next : Node\n"), ["E108"]);
+    assert_eq!(codes(&t, "record A\n  b : B\n\nrecord B\n  a : A\n"), ["E108", "E108"]);
+    assert_eq!(codes(&t, "record Category\n  children : list[Category]  count >=1\n"), ["E108"]);
+    assert_eq!(codes(&t, "record Box[T]\n  value : T\n\nrecord Nest\n  inner : Box[Nest]\n"), ["E108"]);
+    // through the type of a value of an enum that can be made by another of its values
+    assert_eq!(codes(&t, "enum E\n  leaf\n  node\n    r : R\n\nrecord R\n  e : E.node\n"), ["E108"]);
+    // a type argument made from a type parameter, given in the cycle
+    assert_eq!(codes(&t, "record Wrap[T]\n  inner : Wrap[list[T]]?\n"), ["E108"]);
+    assert_eq!(codes(&t, "record A[T]\n  b : B[Box[T]]?\n\nrecord B[T]\n  a : A[T]?\n\nrecord Box[T]\n  value : T\n"), ["E108"]);
+}
+
+/// A `match` that names the value it takes, `else`, and literals (DESIGN 23.3).
+#[test]
+fn matches_name_values_and_split_by_literals() {
+    let t = project();
+    let order = "enum Order\n  draft\n    items : number  range >=0 <=9\n  placed\n    items : number  range >=1 <=9\n    on    : date    range >=2026-01-01 <=2026-12-31\n  cancelled\n\n";
+    let tier = "enum tier = basic | silver | gold\n";
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> date\n  match o\n    placed p => p.on\n    draft, cancelled => 2026-01-01\n")), none());
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> number\n  match o\n    placed p => p.items\n    draft d => d.items\n    else => 0\n")), none());
+    // every value has an arm, or `else` takes the rest
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> number\n  match o\n    placed p => p.items\n")), ["E106"]);
+    // a name for a value of an enum with no fields, a name shared with another value
+    assert_eq!(codes(&t, &format!("{tier}fn f(t: tier) -> number\n  match t\n    basic b => 1\n    else => 2\n")), ["E106"]);
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> number\n  match o\n    placed p, draft => 1\n    cancelled => 2\n")), ["E106"]);
+    // `else` is the last arm, takes an arm of its own, and takes some value
+    assert_eq!(codes(&t, &format!("{tier}fn f(t: tier) -> number\n  match t\n    else => 1\n    basic => 2\n")), ["E106"]);
+    assert_eq!(codes(&t, &format!("{tier}fn f(t: tier) -> number\n  match t\n    basic, else => 1\n")), ["E106"]);
+    assert_eq!(codes(&t, &format!("{tier}fn f(t: tier) -> number\n  match t\n    basic, silver, gold => 1\n    else => 2\n")), ["E106"]);
+    // literals: numbers, amounts in the unit split, dates, strings; `else` is needed, and each
+    // literal is taken once
+    assert_eq!(codes(&t, "fn f(n: number range >=-9 <=9) -> string\n  match n\n    -1 => \"a\"\n    0, 1 => \"b\"\n    else => \"c\"\n"), none());
+    assert_eq!(codes(&t, "fn f(c: money[USDc] range >=0USDc <=900USDc) -> string\n  match c\n    1USD => \"a\"\n    else => \"b\"\n"), none());
+    assert_eq!(codes(&t, "fn f(c: money[USDc] range >=0USDc <=900USDc) -> string\n  match c\n    1USD, 100USDc => \"a\"\n    else => \"b\"\n"), ["E106"]);
+    assert_eq!(codes(&t, "fn f(d: date range >=2026-01-01 <=2026-12-31) -> bool\n  match d\n    2026-01-01 => true\n    else => false\n"), none());
+    assert_eq!(codes(&t, "fn f(s: string) -> number\n  match s\n    \"A\" => 1\n    \"A\" => 2\n    else => 3\n"), ["E106"]);
+    assert_eq!(codes(&t, "fn f(n: number range >=0 <=9) -> string\n  match n\n    1 => \"a\"\n    2 => \"b\"\n"), ["E106"]);
+    assert_eq!(codes(&t, "fn f(s: string) -> number\n  match s\n    1 => 1\n    else => 2\n"), ["E102"]);
+    assert_eq!(codes(&t, "fn f(c: money[USDc] range >=0USDc <=900USDc) -> string\n  match c\n    1kg => \"a\"\n    else => \"b\"\n"), ["E102"]);
+    assert_eq!(codes(&t, "fn f(c: money[USDc] range >=0USDc <=900USDc) -> string\n  match c\n    1USDc => \"a\"\n    9_223_372_036_854_775_808USDc => \"b\"\n    else => \"c\"\n"), ["E104"]);
+}
+
+/// A record made from another with some fields replaced (DESIGN 23.4), and `=` and `!=` of every
+/// type (DESIGN 23.5).
+#[test]
+fn records_made_from_another_and_values_compared_whole() {
+    let t = project();
+    let item = "record Item\n  sku   : string\n  price : money[USDc]  range >=1USDc <=100USDc\n\n";
+    let order = "enum Order\n  draft\n    items : number  range >=0 <=9\n  placed\n    items : number  range >=1 <=9\n    on    : date    range >=2026-01-01 <=2026-12-31\n  cancelled\n\n";
+    assert_eq!(codes(&t, &format!("{item}fn f(i: Item) -> Item\n  Item {{ ..i, price: 2USDc }}\n")), none());
+    assert_eq!(codes(&t, &format!("{order}fn f(p: Order.placed) -> Order\n  Order.placed {{ ..p, on: 2026-03-01 }}\n")), none());
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> Order\n  match o\n    placed p => placed {{ ..p, items: 2 }}\n    else => o\n")), none());
+    // the value after `..` is of the type built, and each field is written once
+    assert_eq!(codes(&t, &format!("{item}{order}fn f(i: Item, p: Order.placed) -> Item\n  Item {{ ..p, price: 2USDc }}\n")), ["E102"]);
+    assert_eq!(codes(&t, &format!("{order}fn f(o: Order) -> Order\n  Order.placed {{ ..o, on: 2026-03-01 }}\n")), ["E102"]);
+    assert_eq!(codes(&t, &format!("{item}fn f(i: Item) -> Item\n  Item {{ ..i, price: 2USDc, price: 3USDc }}\n")), ["E107"]);
+    assert_eq!(codes(&t, &format!("{item}fn f(i: Item) -> Item\n  Item {{ price: 2USDc, ..i }}\n")), ["E001"]);
+    // records, values of an enum with fields, lists, values that may be none: compared whole
+    assert_eq!(codes(&t, &format!("{item}fn f(a: Item, b: Item) -> bool\n  a = b\n")), none());
+    assert_eq!(codes(&t, &format!("{order}fn f(a: Order, p: Order.placed) -> bool\n  a != p and a != Order.cancelled\n")), none());
+    assert_eq!(codes(&t, &format!("{item}fn f(a: list[Item] count <=3, b: list[Item] count <=3) -> bool\n  a = b or a = []\n")), none());
+    assert_eq!(codes(&t, "fn f(a: number? range >=0 <=9, b: number? range >=0 <=9) -> bool\n  a = b or a = none or b = 2\n"), none());
+    assert_eq!(codes(&t, &format!("{item}fn f(a: Item) -> bool\n  a = 1\n")), ["E102"]);
+    // order is for what has one
+    assert_eq!(codes(&t, &format!("{item}fn f(a: Item, b: Item) -> bool\n  a < b\n")), ["E105"]);
+}
+
+/// A `-` before a constant of a unit: a constant below zero, of every unit (DESIGN 3.10).
+#[test]
+fn constants_below_zero_of_every_unit() {
+    let t = project();
+    assert_eq!(codes(&t, "fn f(t: temperature[℃] range >=-40℃ <=40℃) -> bool\n  if t <= -18℃ then true else false\n"), none());
+    assert_eq!(codes(&t, "fn f() -> temperature[℃]\n  -18℃\n"), none());
+    // read in the other unit with its zero: -20℃ is -4℉; -18℃ is no whole number of ℉
+    assert_eq!(codes(&t, "fn f(t: temperature[℉] range >=-40℉ <=104℉) -> bool\n  if t <= -20℃ then true else false\n"), none());
+    assert_eq!(codes(&t, "fn f(t: temperature[℉] range >=-40℉ <=104℉) -> bool\n  if t <= -18℃ then true else false\n"), ["E104"]);
+    assert_eq!(codes(&t, "fn f(s: sound[dB] range >=-20dB <=140dB) -> bool\n  if s < -10dB then true else false\n"), none());
+    // a value of a temperature takes no `-`: it has no arithmetic
+    assert_eq!(codes(&t, "fn f(t: temperature[℃] range >=-40℃ <=40℃) -> temperature[℃]\n  -t\n"), ["E105"]);
+    assert_eq!(codes(&t, "fn f(s: sound[dB] range >=-20dB <=140dB) -> sound[dB]\n  -s\n"), ["E105"]);
 }
 
 #[test]
@@ -245,7 +384,8 @@ fn calls_of_functions_rules_and_dates() {
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(2)\n")), ["E107"]);
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(n: 1, n: 2)\n")), ["E107"]);
     assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double(m: 2)\n")), ["E107", "E107"]);
-    assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double\n")), ["E107"]);
+    // a function written where its value cannot go: a function's answer (DESIGN 27.1)
+    assert_eq!(codes(&t, &format!("{double}fn f() -> number\n  double\n")), ["E113"]);
     assert_eq!(codes(&t, "fn f() -> number\n  nothing(n: 2)\n"), ["E101"]);
     // a parameter written by its alias, as a name may be
     assert_eq!(codes(&t, "fn 倍(double)(数(n): number range >=0 <=9) -> number\n  数 * 2\nfn f() -> number\n  倍(n: 2)\n"), none());
@@ -280,7 +420,7 @@ fn transfers_of_a_book() {
     assert_eq!(codes(&t, "fn f(q: number range >=1 <=9) -> stock.reserve.post\n  stock.reserve.post(order: \"o\", sku: \"s\", qty: q)\n"), none());
     assert_eq!(codes(&t, "fn f() -> stock.reserve.void\n  stock.reserve.void(order: \"o\", sku: \"s\")\n"), none());
     assert_eq!(codes(&t, "fn f() -> stock.reserve.do\n  stock.reserve.do(order: \"o\", sku: \"s\", qty: 1)\n"), ["E101", "E204"]);
-    // the amount in dollars where the book counts cents (DESIGN 17.1)
+    // the amount in dollars where the book counts cents (DESIGN 17.6)
     let head = "module m v1\n\nuse book ledger from \"books/ledger.book\"\n\n";
     let o = check_in(&t, &format!("{head}fn f(fee: money[USD] range >=0USD <=9USD) -> ledger.processing_fee.do\n  ledger.processing_fee.do(payment: \"p\", seller: \"s\", fee: fee)\n"));
     assert_eq!(common::codes(&o), ["E102"]);
@@ -344,7 +484,7 @@ fn builtins() {
         ("count(xs: lines)", "number", "E107"),
         ("text(3%)", "string", "E109"),
         ("text(sum(lines, l => l.amount * 3%))", "string", "E109"),
-        ("mod(3, 0)", "number", "E109"),
+        ("mod(3, 2USDc)", "number", "E109"),
         ("concat(\"a\", 1)", "string", "E102"),
         ("sum(3, l => 1)", "number", "E102"),
         ("reduce(lines, 0, (acc, l) => l.sku)", "number", "E102"),
@@ -352,6 +492,95 @@ fn builtins() {
     ] {
         assert_eq!(codes(&t, &format!("{line}fn f({lines}) -> {want}\n  {body}\n")), [code], "{body}");
     }
+}
+
+/// Dicts, sets and the builtins written after a value (DESIGN 21.4, 24): the type of each, a key of
+/// a type that cannot be one (E114), a builtin in the form it does not take (E101), a dict literal's
+/// key given twice (E107), an unrounded value a dict or a set holds (E103), the whole numbers the
+/// builtins of lists take (E109).
+#[test]
+fn dicts_sets_and_the_builtins_written_after_a_value() {
+    let t = project();
+    let line = "record Line\n  sku    : string\n  qty    : number  range >=1 <=9\n  amount : money[USDc]  range >=1USDc <=99USDc\n";
+    let params = "lines: list[Line] count >=1 <=9, prices: dict[string, money[USDc]] count <=9, skus: set[string]";
+    for (body, want) in [
+        ("prices.get(\"tea\")", "money[USDc]?"),
+        ("prices.put(\"tea\", 3USDc).remove(\"cake\")", "dict[string, money[USDc]]"),
+        ("prices.has(\"tea\") and skus.has(\"tea\")", "bool"),
+        ("prices.keys().concat(skus.to_list())", "list[string]"),
+        ("prices.values()", "list[money[USDc]]"),
+        ("prices.entries()", "list[entry[string, money[USDc]]]"),
+        ("prices.entries().map(e => e.key)", "list[string]"),
+        ("prices.count() + skus.count() + count(prices)", "number"),
+        ("prices.map_values(p => p * 2)", "dict[string, money[USDc]]"),
+        ("prices.filter(e => e.value > 1USDc).merge(prices)", "dict[string, money[USDc]]"),
+        ("prices.merge_with(prices, (a, b) => a + b)", "dict[string, money[USDc]]"),
+        ("skus.add(\"a\").union(skus).intersect(skus).difference(skus).remove(\"b\")", "set[string]"),
+        ("[\"a\": 1, \"b\": 2]", "dict[string, number]"),
+        ("[:]", "dict[string, number]"),
+        ("[:].put(\"a\", 1USDc)", "dict[string, money[USDc]]"),
+        ("[\"a\"].to_set()", "set[string]"),
+        ("[].to_set()", "set[string]"),
+        ("lines.reverse().take(2).drop(1).slice(0, 1).concat(lines).append(Line { sku: \"a\", qty: 1, amount: 5USDc })", "list[Line]"),
+        ("lines.at(0)", "Line?"),
+        ("lines.first()", "Line?"),
+        ("lines.last(l => l.qty > 1)", "Line?"),
+        ("lines.sort_by(l => l.amount).sort_by_desc(l => l.sku)", "list[Line]"),
+        ("lines.sort_by(l => l)", "list[Line]"),
+        ("lines.map(l => l.qty).sort().distinct()", "list[number]"),
+        ("lines.max_by(l => l.qty)", "Line?"),
+        ("lines.min_by(l => l.sku)", "Line?"),
+        ("lines.map(l => l.sku).contains(\"a\")", "bool"),
+        ("lines.map(l => [l.qty]).flatten()", "list[number]"),
+        ("lines.flat_map(l => [l.qty, l.qty])", "list[number]"),
+        ("lines.filter_map(l => if l.qty > 1 then l.sku else none)", "list[string]"),
+        ("lines.indexed().map(i => i.index + i.item.qty)", "list[number]"),
+        ("lines.map(l => l.sku).to_set()", "set[string]"),
+        ("lines.to_dict(l => l.sku, l => l.amount)", "dict[string, money[USDc]]"),
+        ("lines.group_by(l => l.sku)", "dict[string, list[Line]]"),
+        ("lines.map(l => l.sku).join(\", \")", "string"),
+        ("lines.sum(l => l.amount)", "money[USDc]"),
+        ("numbers(1, count(lines))", "list[number]"),
+        ("mod(count(lines), -7) + mod(count(lines), count(lines))", "number"),
+    ] {
+        assert_eq!(codes(&t, &format!("{line}fn f({params}) -> {want}\n  {body}\n")), none(), "{body}");
+    }
+    for (body, want, code) in [
+        // a key of a type that cannot be one
+        ("lines.sort()", "list[Line]", "E114"),
+        ("lines.map(l => [l.qty]).to_set().count()", "number", "E114"),
+        ("lines.group_by(l => l.sku = \"a\" or l.qty > 1).count() + lines.sort_by(l => [l.qty]).count()", "number", "E114"),
+        // a key or a value a dict holds that is not rounded
+        ("lines.group_by(l => l.amount / 3).count()", "number", "E103"),
+        ("lines.to_dict(l => l.sku, l => l.amount * 8%)", "dict[string, money[USDc]]", "E103"),
+        // the form a builtin does not take
+        ("keys(prices)", "list[string]", "E101"),
+        ("lines.numbers(3)", "list[number]", "E101"),
+        ("lines.explode(\",\")", "list[string]", "E101"),
+        ("lines.split(\",\")", "list[string]", "E102"),
+        // a dict literal's key twice, the arguments after a value
+        ("[\"a\": 1, \"a\": 2]", "dict[string, number]", "E107"),
+        ("prices.put(\"a\")", "dict[string, money[USDc]]", "E107"),
+        ("lines.sort_by(l => l.sku, 1)", "list[Line]", "E107"),
+        // the types the builtins take
+        ("prices.get(1)", "money[USDc]?", "E102"),
+        ("skus.get(\"a\")", "string?", "E102"),
+        ("prices.union(prices)", "dict[string, money[USDc]]", "E102"),
+        ("[\"a\": 1, 2: 2]", "dict[string, number]", "E102"),
+        ("lines.take(1USDc)", "list[Line]", "E109"),
+        ("numbers(1, 2USDc)", "list[number]", "E109"),
+        ("mod(3USDc, 2)", "number", "E109"),
+        ("lines.sort_by(1)", "list[Line]", "E109"),
+    ] {
+        assert_eq!(codes(&t, &format!("{line}fn f({params}) -> {want}\n  {body}\n")), [code], "{body}");
+    }
+    // the types written: a key a dict or a set cannot have, a count on them
+    assert_eq!(codes(&t, &format!("{line}fn f(d: dict[Line, number]) -> number\n  d.count()\n")), ["E114"]);
+    assert_eq!(codes(&t, "fn f(s: set[number?]) -> number\n  s.count()\n"), ["E114"]);
+    assert_eq!(codes(&t, "fn f(s: set[number] range >=0 <=9 count >=1 <=3, d: dict[string, date] range >=2026-01-01 <=2026-12-31 count <=3) -> number\n  s.count() + d.count()\n"), none());
+    // `numbers` is a builtin's name; the names of the builtins written after a value are free
+    assert_eq!(codes(&t, "fn numbers() -> number\n  1\n"), ["E006"]);
+    assert_eq!(codes(&t, "fn get(n: number range >=0 <=9) -> number\n  n\n\nfn sort_by() -> number\n  get(n: 1)\n"), none());
 }
 
 /// The weights of `running_totals` fill the fields `before`, `upto` and `total` of the records it
@@ -491,4 +720,207 @@ fn an_optional_of_an_optional_is_one() {
     let c = o.analysed.clone().unwrap();
     let ExprKind::Match(s, _) = &c.module.fns[0].body.answer.kind else { panic!() };
     assert_eq!(c.typed.types[s.id], Ty::Opt(Box::new(Ty::Num(NumTy::number()))));
+}
+
+/// The builtins of strings (DESIGN 25.2): written after a string (after a list of code points,
+/// `to_text`), `count`, `starts_with`, `concat` and `text` in either form, `char` as a function of a
+/// constant scalar value; a string's count of code points declared with `count`.
+#[test]
+fn the_builtins_of_strings() {
+    let t = project();
+    let params = "s: string count <=20, t: string, n: number range >=0 <=9, ns: list[number] count <=3";
+    for (body, want) in [
+        ("s.count() + count(s) + s.chars().count() + s.code_points().count()", "number"),
+        ("ns.to_text()", "string?"),
+        ("[char(10), char(128077)].join(\"\")", "string"),
+        ("concat(s.slice(n, 3), s.take(n), s.drop(1))", "string"),
+        ("s.index_of(t)", "number?"),
+        ("s.contains(t) and starts_with(s, t) and s.starts_with(t) and s.ends_with(t)", "bool"),
+        ("s.split(\",\").concat(s.words())", "list[string]"),
+        ("s.replace(t, \"-\").trim().trim_start().trim_end().lower_ascii().upper_ascii()", "string"),
+        ("s.pad_start(n, \"0\").pad_end(8, t)", "string"),
+        ("s.parse_number()", "number?"),
+        ("s.parse_date()", "date?"),
+        ("[s < t, s <= t, s > t, s >= t, s = t, s != t]", "list[bool]"),
+        ("[min(s, t), max(s, \"a\")]", "list[string]"),
+        ("[s, t].sort()", "list[string]"),
+        ("s.concat(t, text(n))", "string"),
+    ] {
+        assert_eq!(codes(&t, &format!("fn f({params}) -> {want}\n  {body}\n")), none(), "{body}");
+    }
+    for (body, want, code) in [
+        // a builtin of strings written as a function, `char` after a value
+        ("trim(s)", "string", "E101"),
+        ("split(s, \",\")", "list[string]", "E101"),
+        ("n.char()", "string", "E101"),
+        // what a builtin of strings is not called on, and is not given
+        ("n.trim()", "string", "E102"),
+        ("ns.words()", "list[string]", "E102"),
+        ("s.to_text()", "string?", "E102"),
+        ("[s].to_text()", "string?", "E102"),
+        ("s.index_of(n)", "number?", "E102"),
+        ("s.slice(\"a\", 2)", "string", "E109"),
+        ("s.pad_start(1USDc, \"0\")", "string", "E109"),
+        ("count(s, c => true)", "number", "E102"),
+        ("min(s, n)", "string", "E102"),
+        // `char` of a constant scalar value only
+        ("char(n)", "string", "E109"),
+        ("char(55296)", "string", "E109"),
+        ("char(1114112)", "string", "E109"),
+        ("char(\"a\")", "string", "E109"),
+        // the arguments after the string
+        ("s.replace(t)", "string", "E107"),
+        ("s.trim(t)", "string", "E107"),
+    ] {
+        assert_eq!(codes(&t, &format!("fn f({params}) -> {want}\n  {body}\n")), [code], "{body}");
+    }
+    // a count of code points on a string, its fields and its answer; not on a number
+    assert_eq!(codes(&t, "record R\n  name : string  count >=1 <=40\n\nfn f(r: R, s: string? count <=3) -> string count <=40\n  r.name\n"), none());
+    assert_eq!(codes(&t, "fn f(n: number count <=3) -> number\n  n\n"), ["E108"]);
+    // a module's function may take the name of a builtin written after a value, not of `char`
+    assert_eq!(codes(&t, "fn split(s: string) -> list[string]\n  s.split(\",\")\n\nfn g() -> list[string]\n  split(s: \"a,b\")\n"), none());
+    assert_eq!(codes(&t, "fn char(n: number range >=0 <=9) -> number\n  n\n"), ["E006"]);
+}
+
+/// Generic functions, records and enums, `result` and `try` (DESIGN 26): the type arguments worked
+/// out from the arguments, then from the place, or written after the name; `K: key` for what orders
+/// or keys a value of a type parameter; a ring of calls of generic functions, which gives them their
+/// type parameters as they are, swapped, or types that name none; E112 for a type argument that
+/// cannot be worked out, given in the wrong number, of two types or of a type whose values may be
+/// none, and for a type argument made from a type parameter given in a ring of calls; E114, E105 and
+/// E108 for what a value of a type parameter cannot be or take; E115 for `try` where it cannot go.
+#[test]
+fn generics_results_and_try() {
+    let t = project();
+    let decls = "record Page[T]\n  items : list[T]  count <=100\n  next  : string?\n\nenum Found[T]\n  hit\n    value : T\n  miss\n\nfn first_or[T](xs: list[T], fallback: T) -> T\n  match xs.first()\n    none => fallback\n    some x => x\n\nfn empty_page[T]() -> Page[T]\n  Page { items: [], next: none }\n\nfn largest[K: key](xs: list[K]) -> K?\n  xs.sort().last()\n\nfn half(n: number range >=0 <=9) -> result[number, string]\n  if n = 0 then err(\"zero\") else ok(n)\n\n";
+    for body in [
+        // worked out from the arguments, from the place, written after the name
+        "fn f(xs: list[money[USDc]]) -> money[USDc]\n  first_or(xs: xs, fallback: 0USDc)\n",
+        "fn f() -> Page[string]\n  empty_page()\n",
+        "fn f() -> number\n  let p = empty_page[string]()\n  p.items.count()\n",
+        "fn f() -> number\n  let p : Page[number] = empty_page()\n  p.items.count()\n",
+        "fn f(xs: list[string]) -> Found[string]\n  match xs.first()\n    none => Found.miss\n    some x => Found.hit { value: x }\n",
+        "fn f(p: Page[Page[number]]) -> number\n  p.items.count()\n",
+        // a type parameter held to keys, given keys
+        "fn f(xs: list[date]) -> date?\n  largest(xs: xs)\n",
+        "fn smaller[K: key](a: K, b: K) -> K\n  if a < b then a else b\n\nfn g(a: string, b: string) -> string\n  smaller(a: a, b: b)\n",
+        "fn count_of[K: key](xs: list[K]) -> dict[K, number]\n  xs.group_by(x => x).map_values(g => g.count())\n",
+        // values of a type parameter passed on, held, compared with `=`
+        "fn has[T](xs: list[T], x: T) -> bool\n  xs.contains(x) or xs.first() = x\n",
+        "fn wrap[T](x: T) -> result[list[T], string]\n  ok([x])\n",
+        // results made, matched, passed on with `try`, in a branch the answer comes from
+        "fn f(n: number range >=0 <=9) -> result[number, string]\n  let h = try half(n: n)\n  ok(h + 1)\n",
+        "fn f(n: number range >=0 <=9, strict: bool) -> result[number, string]\n  if strict\n    let h = try half(n: n)\n    ok(h)\n  else\n    ok(0)\n",
+        "fn f(xs: list[number]) -> number?\n  let x = try xs.first()\n  x + 1\n",
+        "fn f(r: result[number, string]) -> string\n  match r\n    ok n => text(n)\n    err e => e\n",
+        "fn f(a: result[number, string], b: result[number, string]) -> bool\n  a = b\n",
+        // a ring of calls gives its generic functions their type parameters as they are, swapped, or
+        // types that name none, directly, through another function and as a value
+        "fn dive[T](x: T, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else dive(x: x, n: n - 1)\n",
+        "fn spin[A, B](a: A, b: B, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else spin(a: b, b: a, n: n - 1)\n",
+        "fn settle[T](x: T, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else settle(x: n, n: n - 1)\n",
+        "fn ping[T](x: T, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else pong(x: x, n: n - 1)\n\nfn pong[U](x: U, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else ping(x: [1], n: n - 1)\n",
+        "fn sizes[T](xs: list[T]) -> list[number]\n  [xs].map(lengths)\n\nfn lengths[T](xs: list[T]) -> number\n  sizes(xs: xs).count()\n",
+        // outside a ring, a type made from a type parameter goes anywhere
+        "fn wrapped[T](x: T) -> number\n  first_or(xs: [[x]], fallback: []).count()\n",
+    ] {
+        assert_eq!(codes(&t, &format!("{decls}{body}")), none(), "{body}");
+    }
+    // a type argument made from a type parameter, given in a ring of calls: directly, through another
+    // function, as a value (one E112 at each call that gives one)
+    for (body, n) in [
+        ("fn wrap_deep[T](x: T, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else wrap_deep(x: [x], n: n - 1)\n", 1),
+        ("fn ping[T](x: T, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else pong(x: [x], n: n - 1)\n\nfn pong[U](x: U, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else ping(x: x, n: n - 1)\n", 1),
+        ("fn sizes[T](xs: list[T]) -> list[number]\n  [[xs]].map(lengths)\n\nfn lengths[T](xs: list[T]) -> number\n  sizes(xs: xs).count()\n", 1),
+        ("fn boxes[T](x: T, n: number range >=0 <=3) -> number\n  if n = 0 then 0 else boxes(x: Page { items: [x], next: none }, n: n - 1) + boxes(x: Found.hit { value: x }, n: n - 1)\n", 2),
+    ] {
+        assert_eq!(codes(&t, &format!("{decls}{body}")), vec!["E112"; n], "{body}");
+    }
+    for (body, code) in [
+        // a type parameter no argument and no place says, two types for one, the wrong number, `T?`
+        ("fn f() -> number\n  let p = empty_page()\n  1\n", "E112"),
+        ("fn f(d: list[money[USD]], c: money[USDc]) -> money[USD]\n  first_or(xs: d, fallback: c)\n", "E112"),
+        ("fn f() -> number\n  let p = empty_page[number, string]()\n  1\n", "E112"),
+        ("fn f(p: Page) -> number\n  1\n", "E112"),
+        ("fn f(xs: list[number?]) -> number?\n  first_or(xs: xs, fallback: none)\n", "E112"),
+        ("fn f(p: Page[number?]) -> number\n  1\n", "E112"),
+        ("fn f() -> string\n  ok(\"a\")\n", "E112"),
+        // what a value of a type parameter cannot be or take
+        ("fn f[T](a: T, b: T) -> bool\n  a < b\n", "E114"),
+        ("fn f[T](xs: list[T]) -> list[T]\n  xs.sort()\n", "E114"),
+        ("fn f(xs: list[Page[number]]) -> Page[number]?\n  largest(xs: xs)\n", "E114"),
+        ("fn f[T](x: T) -> T\n  x + x\n", "E105"),
+        ("fn f[T](x: T range >=1) -> T\n  x\n", "E108"),
+        // `try` where it cannot go
+        ("fn f(n: number range >=0 <=9) -> result[number, string]\n  let b =\n    let h = try half(n: n)\n    h\n  ok(b)\n", "E115"),
+        ("fn f(n: number range >=0 <=9) -> number\n  let h = try half(n: n)\n  h\n", "E115"),
+        ("fn f(n: number range >=0 <=9) -> result[number, list[string]]\n  let h = try half(n: n)\n  ok(h)\n", "E115"),
+        ("fn f(n: number range >=0 <=9) -> number?\n  let m = try n\n  m\n", "E115"),
+        ("fn f(xs: list[number]) -> list[number]\n  xs.map(x => try half(n: x))\n", "E115"),
+    ] {
+        assert_eq!(codes(&t, &format!("{decls}{body}")), [code], "{body}");
+    }
+}
+
+/// Function values (DESIGN 27): lambdas whose parameters take their types from the place or are
+/// written, functions given by their names, function values named by a `let`, chosen by an `if`,
+/// passed on and called; where a function value goes (E113), and how its types are held (E102, E105,
+/// E107, E109, E112); `private` (DESIGN 28.2) and the types what is not `private` names (E108).
+#[test]
+fn function_values_and_what_is_private() {
+    let t = project();
+    let decls = "record Line\n  sku  : string  count >=1 <=8\n  unit : money[USDc]  range >=0USDc <=10_000USDc\n  qty  : number  range >=0 <=100\n\nfn total_by[T](xs: list[T], amount: (T) -> money[USDc]) -> money[USDc]\n  xs.sum(x => amount(x))\n\nfn apply_each[T](xs: list[T], step: (T) -> T) -> list[T]\n  xs.map(x => step(x))\n\nfn twice(step: (number) -> number, x: number range >=0 <=9) -> number\n  step(step(x))\n\nfn line_cost(l: Line) -> money[USDc]\n  l.unit * l.qty\n\nfn id[T](x: T) -> T\n  x\n\n";
+    for body in [
+        // a lambda given, its parameters' types from the place; a function given by its name
+        "fn f(lines: list[Line] count <=9) -> money[USDc]\n  total_by(xs: lines, amount: l => l.unit * l.qty)\n",
+        "fn f(lines: list[Line] count <=9) -> money[USDc]\n  total_by(xs: lines, amount: line_cost)\n",
+        "fn f(lines: list[Line] count <=9) -> list[money[USDc]]\n  lines.map(line_cost)\n",
+        "fn f(xs: list[number] count <=9 range >=0 <=9) -> list[number]\n  apply_each(xs: xs, step: x => x + 1)\n",
+        // a lambda a `let` names, with its parameters' types written, chosen by an `if`, called, given
+        "fn f(up: bool, x: number range >=0 <=9) -> number\n  let g = if up then (y: number) => y + 1 else (y: number) => y - 1\n  g(g(x))\n",
+        "fn f(xs: list[number] count <=9 range >=0 <=9) -> list[number]\n  let g = (y: number) => y * 2\n  xs.map(g)\n",
+        "fn f(x: number range >=0 <=9) -> number\n  let g = (y: number) => y * 2\n  twice(step: g, x: x)\n",
+        // a function value passed on, and named by a `let`
+        "fn f(g: (number) -> number, x: number range >=0 <=9) -> number\n  twice(step: g, x: x)\n",
+        "fn f(g: (number) -> number) -> number\n  let h = g\n  h(1)\n",
+        // effects written on function types
+        "fn f(xs: list[number] count <=9, test: (number) -> bool total) -> bool\n  xs.all(x => test(x))\n",
+        "fn f(g: (number) -> number fails overflow, x: number range >=0 <=9) -> number\n  g(x)\n",
+        // what only the module uses
+        "private record Bounds\n  low : number  range >=0 <=9\n\nprivate enum side = below | above\n\nprivate fn low(b: Bounds) -> side\n  if b.low < 5 then side.below else side.above\n\nfn f() -> bool\n  low(b: Bounds { low: 1 }) = side.below\n",
+    ] {
+        assert_eq!(codes(&t, &format!("{decls}{body}")), none(), "{body}");
+    }
+    for (body, code) in [
+        // where a function value cannot go
+        ("fn f(n: number range >=0 <=9) -> (number) -> number\n  x => x + n\n", "E113"),
+        ("record Step\n  run : (number) -> number\n", "E113"),
+        ("fn f(g: (number) -> number, h: (number) -> number) -> bool\n  g = h\n", "E113"),
+        ("fn f() -> number\n  let gs = [(y: number) => y + 1]\n  1\n", "E113"),
+        ("fn f(up: bool) -> number\n  let g = if up then (y: number) => y + 1 else none\n  1\n", "E113"),
+        ("fn f() -> number\n  let g = apply_each\n  1\n", "E113"),
+        ("fn f(l: Line) -> money[USDc]\n  line_cost + l.unit\n", "E113"),
+        // the types of a lambda's parameters that nothing says; a function type as a type argument
+        ("fn f() -> number\n  let g = x => x * 2\n  1\n", "E112"),
+        ("fn f() -> number\n  let g = id(x: (y: number) => y + 1)\n  1\n", "E112"),
+        ("fn f() -> number\n  let g = id(x: line_cost)\n  1\n", "E112"),
+        // function types that do not agree, and what is no function given to one
+        ("fn f() -> number\n  twice(step: (s: string) => 1, x: 1)\n", "E102"),
+        ("fn f() -> number\n  twice(step: 3, x: 1)\n", "E102"),
+        ("fn f(lines: list[Line] count <=9) -> money[USDc]\n  total_by(xs: lines, amount: (l: Line) => l.qty)\n", "E102"),
+        ("fn f() -> number\n  twice(step: (a, b) => a, x: 1)\n", "E102"),
+        // a function value called with names, with the wrong number of arguments; a value that is no
+        // function called
+        ("fn f(g: (number) -> number) -> number\n  g(x: 1)\n", "E107"),
+        ("fn f(g: (number) -> number) -> number\n  g(1, 2)\n", "E107"),
+        ("fn f(n: number range >=0 <=9) -> number\n  n(2)\n", "E105"),
+        // a builtin as a value
+        ("fn f(xs: list[number] count <=9 range >=0 <=99) -> list[number]\n  xs.map(isqrt)\n", "E109"),
+        // a `private` type in what is not `private`
+        ("private record Bounds\n  low : number  range >=0 <=9\n\nfn f(b: Bounds) -> number\n  b.low\n", "E108"),
+        ("private enum side = below | above\n\nfn f() -> side\n  side.below\n", "E108"),
+        ("private enum side = below | above\n\nrecord Mark\n  at : side\n", "E108"),
+    ] {
+        assert_eq!(codes(&t, &format!("{decls}{body}")), [code], "{body}");
+    }
 }

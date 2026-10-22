@@ -1,15 +1,18 @@
-//! kaname (要): a small language for the code that joins rules, dates and books. A `.kn` module
-//! calls rulec's rules, koyomi's dates and chobo's transfers in ritsu's types, and the computation
-//! between them — putting inputs together, adding up, spreading an amount, putting outputs together,
-//! building transfers — is checked by the same rules of types, units and rounding. It has no input
-//! or output: what it is given, it computes from. The design is DESIGN.md.
+//! kaname (要): a small general-purpose language for writing a functional core, the part of a program
+//! that only computes and decides. A `.kn` module is functions over records, enums with fields, lists,
+//! dicts, sets and strings, with generics, `result` and function values; it calls rulec's rules,
+//! koyomi's dates and chobo's transfers in ritsu's types too, and every computation is checked by the
+//! same rules of types, units, ranges, rounding and int64. It has no input or output: what it is
+//! given, it computes from. The design is DESIGN.md.
 //!
 //! The parts, in the order a file goes through them:
 //!
 //! - [`lex`] and [`parse`]: a `.kn` into its syntax tree ([`ast`]), with the words of [`kw`].
 //! - [`names`]: the files its `use` lines read, through the ports of [`suite`] (rules, dates files,
 //!   books) or as modules of their own, and its declarations with their types ([`ty`]).
-//! - [`types`]: every expression's type, and whether each value fits where it goes.
+//! - [`types`]: every expression's type, and whether each value fits where it goes; [`tried`], each
+//!   `let … = try …` read as the `match` it means once the types pass; [`wrapped`], each function
+//!   written as a value read as the lambda that calls it.
 //! - [`check`]: a file from its text to its diagnostics ([`diag`], the codes of [`codes`]), its
 //!   `examples` run last ([`examples`]), and a key written in the file looked for in its whole text
 //!   ([`security`]).
@@ -18,8 +21,9 @@
 //!   input that breaks a place that is not shown; [`effects`], what each function can end in; and
 //!   [`hatch`], the warning of a decision written in code.
 //! - [`interp`]: the reference interpreter, which says what a module means: its values
-//!   ([`value`]), its numbers ([`num`]: exact, held to int64, rounded rulec's five ways) and its
-//!   dates ([`date`]); and [`vectors`], the inputs a function is tried with and its answers.
+//!   ([`value`]), its numbers ([`num`]: exact, held to int64, rounded rulec's five ways), its
+//!   dates ([`date`]) and its strings ([`text`]: code points); and [`vectors`], the inputs a function
+//!   is tried with and its answers.
 //! - [`cli`] and [`run`]: the `kaname` command, which the binary runs and so does `ritsu kaname`;
 //!   [`api`], the module as the tools outside read it; [`doc`], the page for people.
 //! - [`ports`]: kaname as `ritsu check` joins it, and as ritsu's checks across the borders ask it
@@ -57,8 +61,11 @@ pub mod ranges;
 pub mod run;
 pub mod security;
 pub mod suite;
+pub mod text;
+pub mod tried;
 pub mod ty;
 pub mod types;
 pub mod value;
 pub mod vectors;
 pub mod witness;
+pub mod wrapped;

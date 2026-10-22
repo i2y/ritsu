@@ -1,0 +1,192 @@
+module generic v1
+description "Generic records, enums and functions: a page of anything, a value found or why not, the first of a list or a fallback, the greatest of a list of keys and the count of each, two pages compared, records of keys sorted; each generic function read again where it is called, four calls deep, and not in a ring, where they are given their type parameters as they are, swapped, or types that name none"
+
+record Page[T]
+  items : list[T]  count <=100
+  next  : string?
+
+enum Found[T]
+  hit
+    value : T
+    at    : number  range >=0 <=99
+  miss
+    why : string
+
+enum tier = basic < silver < gold
+
+record Line
+  sku : string       count >=1 <=12
+  qty : number       range >=1 <=99
+  fee : money[USDc]  range >=0USDc <=5000USDc
+
+record Pair[K]
+  key  : K
+  rank : number  range >=0 <=9
+
+# the first of a list, or a fallback: read where it is called, its answer is what the call gives it
+fn first_or[T](xs: list[T], fallback: T) -> T
+  match xs.first()
+    none => fallback
+    some x => x
+
+fn page_of[T](items: list[T] count <=100) -> Page[T]
+  Page { items: items, next: none }
+
+fn empty_page[T]() -> Page[T]
+  Page { items: [], next: none }
+
+# where a value is in a list, or why it is not: the values compared by their contents
+fn find[T](xs: list[T] count <=99, x: T) -> Found[T]
+  match xs.indexed().first(p => p.item = x)
+    none => Found.miss { why: "not in the list" }
+    some p => Found.hit { value: p.item, at: p.index }
+
+# a type parameter held to keys: sorted, compared, the keys of a dict
+fn largest[K: key](xs: list[K]) -> K?
+  xs.sort().last()
+
+fn least[K: key](a: K, b: K) -> K
+  min(a, b)
+
+fn tally[K: key](xs: list[K]) -> dict[K, number]
+  xs.group_by(x => x).map_values(g => g.count())
+
+# a dict of a list by the key a function given picks (DESIGN 27.1): the type parameter of the keys
+# worked out from what the function given answers
+fn index_by[K: key, T](xs: list[T], by: (T) -> K) -> dict[K, T]
+  xs.to_dict(by, x => x)
+
+fn same_pages[T](a: Page[T], b: Page[T]) -> bool
+  a = b
+
+# a record of keys, a field of a type parameter held to keys among them, is a key of an order too
+fn sorted_pairs[K: key](xs: list[Pair[K]] count <=10) -> list[Pair[K]]
+  xs.sort_by(p => p)
+
+fn best_pair[K: key](xs: list[Pair[K]] count <=10) -> Pair[K]?
+  xs.max_by(p => p)
+
+fn ranked[K: key](xs: list[K] count <=10) -> list[indexed[K]]
+  xs.indexed().sort_by_desc(p => p)
+
+# the fee of a list of fees no shorter than 1: read again, the answer is one of them
+fn cheapest(fees: list[money[USDc]] count >=1 <=5 range >=49USDc <=5000USDc) -> money[USDc] range >=49USDc <=5000USDc total
+  first_or(xs: fees.sort(), fallback: 0USDc)
+
+fn first_page(skus: list[string] count <=100) -> Page[string]
+  page_of(items: skus)
+
+fn no_skus() -> Page[string]
+  empty_page[string]()
+
+fn where_is(skus: list[string] count <=10, sku: string) -> Found[string]
+  find(xs: skus, x: sku)
+
+fn line_of(lines: list[Line] count <=10, sku: string) -> Found[Line]
+  match lines.first(l => l.sku = sku)
+    none => Found.miss { why: "no such line" }
+    some l => Found.hit { value: l, at: 0 }
+
+fn qty_of(lines: list[Line] count <=10, sku: string) -> number range >=0 <=99 total
+  match line_of(lines: lines, sku: sku)
+    hit h => h.value.qty
+    else => 0
+
+# a generic record and a generic enum a host gives: checked by the types it gives them
+fn page_size(p: Page[Line]) -> number range >=0 <=100 total
+  p.items.count()
+
+fn found_qty(f: Found[Line]) -> number range >=0 <=99 total
+  match f
+    hit h => h.value.qty
+    miss m => 0
+
+fn top_tier(tiers: list[tier] count <=5) -> tier?
+  largest(xs: tiers)
+
+fn lower_fee(a: money[USDc] range >=0USDc <=500USDc, b: money[USDc] range >=0USDc <=900USDc) -> money[USDc] range >=0USDc <=500USDc total
+  least(a: a, b: b)
+
+fn sku_counts(skus: list[string] count <=20) -> dict[string, number]
+  tally(xs: skus)
+
+fn tier_counts(tiers: list[tier] count <=10) -> dict[tier, number]
+  tally(xs: tiers)
+
+fn lines_by_sku(lines: list[Line] count <=10) -> dict[string, Line]
+  index_by(xs: lines, by: l => l.sku)
+
+fn same_lines(a: list[Line] count <=3, b: list[Line] count <=3) -> bool
+  same_pages(a: page_of(items: a), b: page_of(items: b))
+
+fn pairs_by_tier(xs: list[Pair[tier]] count <=5) -> list[Pair[tier]]
+  sorted_pairs(xs: xs)
+
+fn best_by_sku(xs: list[Pair[string]] count <=5) -> Pair[string]?
+  best_pair(xs: xs)
+
+fn ranked_tiers(tiers: list[tier] count <=5) -> list[tier]
+  ranked(xs: tiers).map(p => p.item)
+
+# the answer held to what the result declares: the analysis takes `side * (10 - side)` to be 0 to
+# 100, and the call, read again, answers 0 to 25, what the result declares
+fn area[T](x: T, side: number range >=0 <=10) -> number range >=0 <=25
+  side * (10 - side)
+
+fn plot(side: number range >=0 <=10) -> number
+  area(x: "a", side: side)
+
+# read again four calls deep: `near` reaches `bump` in three calls, and the call there adds to a
+# number of 0 to 5; `far` reaches it in five, past four, where `bump` is read as declared, and may
+# overflow
+fn hop1[T](x: T, n: number) -> number
+  hop2(x: x, n: n)
+
+fn hop2[T](x: T, n: number) -> number
+  hop3(x: x, n: n)
+
+fn hop3[T](x: T, n: number) -> number
+  hop4(x: x, n: n)
+
+fn hop4[T](x: T, n: number) -> number
+  bump(x: x, n: n)
+
+fn bump[T](x: T, n: number) -> number
+  n + 1
+
+fn near(n: number range >=0 <=5) -> number total
+  hop3(x: "a", n: n)
+
+fn far(n: number range >=0 <=5) -> number
+  hop1(x: "a", n: n)
+
+# a ring of calls: not read again inside it
+fn count_down[T](x: T, n: number range >=0 <=10) -> number range >=0 <=10
+  if n = 0 then 0 else count_down(x: x, n: n - 1)
+
+fn ring(n: number range >=0 <=10) -> number range >=0 <=10
+  count_down(x: true, n: n)
+
+# a ring of calls gives its generic functions their type parameters as they are, swapped, or a type
+# that names none (one made from a type parameter is E112): the generated Go instantiates them
+fn swap_down[A, B](a: A, b: B, n: number range >=0 <=10) -> number range >=0 <=10
+  if n = 0 then 0 else swap_down(a: b, b: a, n: n - 1)
+
+fn settle_down[T](x: T, n: number range >=0 <=10) -> number range >=0 <=10
+  if n = 0 then 0 else settle_down(x: n, n: n - 1)
+
+fn rings(n: number range >=0 <=10) -> number range >=0 <=20
+  swap_down(a: "a", b: true, n: n) + settle_down(x: "a", n: n)
+
+examples
+  cheapest(fees: [300USDc, 120USDc]) = 120USDc
+  top_tier(tiers: [silver, gold, basic]) = gold
+  first_or(xs: [1, 2], fallback: 5) = 1
+  first_or(xs: [], fallback: "none") = "none"
+  near(n: 5) = 6
+  lower_fee(a: 400USDc, b: 120USDc) = 120USDc
+  pairs_by_tier(xs: [Pair { key: gold, rank: 1 }, Pair { key: basic, rank: 2 }, Pair { key: gold, rank: 0 }]) = [Pair { key: basic, rank: 2 }, Pair { key: gold, rank: 0 }, Pair { key: gold, rank: 1 }]
+  best_by_sku(xs: [Pair { key: "b", rank: 1 }, Pair { key: "a", rank: 9 }, Pair { key: "b", rank: 3 }]) = Pair { key: "b", rank: 3 }
+  ranked_tiers(tiers: [silver, basic, gold]) = [gold, basic, silver]
+  lines_by_sku(lines: [Line { sku: "b", qty: 1, fee: 0USDc }, Line { sku: "a", qty: 2, fee: 5USDc }]) = ["a": Line { sku: "a", qty: 2, fee: 5USDc }, "b": Line { sku: "b", qty: 1, fee: 0USDc }]
+  rings(n: 3) = 0

@@ -1,0 +1,7 @@
+paths(c: Category { name: "Garden", items: [], children: [Category { name: "Hand Tools", items: [Item { sku: "sp-1", name: "Spade", price: 1999USDc }, Item { sku: "tr-2", name: "Trowel", price: 899USDc }], children: [] }, Category { name: "Seeds", items: [], children: [Category { name: "Bulbs", items: [], children: [] }] }, Category { name: "Hoses", items: [Item { sku: "hr-1", name: "Hose reel", price: 4500USDc }], children: [] }] })
+  line 19: let here = ["Garden"]
+  line 19: let here = ["Garden", "Hand Tools"]
+  line 19: let here = ["Garden", "Seeds"]
+  line 19: let here = ["Garden", "Seeds", "Bulbs"]
+  line 19: let here = ["Garden", "Hoses"]
+= ["Garden / Hand Tools / Spade", "Garden / Hand Tools / Trowel", "Garden / Hoses / Hose reel"]

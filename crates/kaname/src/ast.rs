@@ -62,6 +62,21 @@ pub struct Module {
     pub examples: Vec<Example>,
     /// How many expressions the parser made: the ids are below it.
     pub exprs: usize,
+    /// The type arguments written after the name a call calls (`empty_page[Invoice]()`, DESIGN 26.1),
+    /// by the id of the call.
+    pub targs: std::collections::BTreeMap<usize, Vec<TypeRef>>,
+    /// The types written on the parameters of a lambda (`(l: Line) => …`, DESIGN 27.1), one for each
+    /// parameter (None where none is written), by the id of the lambda; a lambda with no type written
+    /// on any of its parameters is not here.
+    pub ltypes: std::collections::BTreeMap<usize, Vec<Option<TypeRef>>>,
+}
+
+/// A type parameter of a generic function, record or enum (DESIGN 26.1): `T`, `K: key`, `要素(T)`. Its
+/// name and alias, and whether it is held to the types that can be keys (`key`, DESIGN 24.1).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypeParam {
+    pub name: Name,
+    pub key: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -105,12 +120,19 @@ pub struct Use {
     pub line: usize,
 }
 
-/// `enum tier = basic < silver < gold`.
+/// `enum tier = basic < silver < gold` on one line, or `enum Order` with its values under it, a line
+/// each, a value's fields under the value (DESIGN 23.1).
 #[derive(Clone, Debug)]
 pub struct EnumDecl {
     pub name: Name,
+    /// Written with `private` before it (DESIGN 28.2): only this module uses it.
+    pub private: bool,
+    /// The type parameters after the name (`enum Outcome[T]`, DESIGN 26.1).
+    pub tparams: Vec<TypeParam>,
     /// Written with `<`: its values are in order.
     pub ordered: bool,
+    /// Written with its values under it, a line each: what can give a value fields.
+    pub listed: bool,
     pub values: Vec<EnumValueDecl>,
     pub line: usize,
 }
@@ -120,12 +142,21 @@ pub struct EnumValueDecl {
     pub name: Name,
     /// The display name, `gold "Gold"`.
     pub label: Option<String>,
+    /// The fields written under the value, as a record's are (DESIGN 23.1); none for a value
+    /// without them.
+    pub fields: Vec<FieldDecl>,
+    /// The line it is written on: the enum's, for one written on one line.
+    pub line: usize,
 }
 
 /// `record Invoice` and its fields.
 #[derive(Clone, Debug)]
 pub struct RecordDecl {
     pub name: Name,
+    /// Written with `private` before it (DESIGN 28.2).
+    pub private: bool,
+    /// The type parameters after the name (`record Page[T]`, DESIGN 26.1).
+    pub tparams: Vec<TypeParam>,
     pub fields: Vec<FieldDecl>,
     pub line: usize,
 }
@@ -166,8 +197,22 @@ pub enum TypeKind {
     List(Box<TypeRef>),
     /// `running[Line, money[USDc]]`
     Running(Box<TypeRef>, Box<TypeRef>),
-    /// `Invoice`, `charges.band`, `ledger.capture.do`, `pricing.Quote`.
-    Named(Vec<(String, Span)>),
+    /// `dict[string, number]` (DESIGN 24.2)
+    Dict(Box<TypeRef>, Box<TypeRef>),
+    /// `set[string]`
+    Set(Box<TypeRef>),
+    /// `entry[string, number]`: an element of what `d.entries()` answers (DESIGN 24.3)
+    Entry(Box<TypeRef>, Box<TypeRef>),
+    /// `indexed[Line]`: an element of what `xs.indexed()` answers
+    Indexed(Box<TypeRef>),
+    /// `result[Order, list[string]]`: a value or why there is none (DESIGN 26.3)
+    Result(Box<TypeRef>, Box<TypeRef>),
+    /// `Invoice`, `charges.band`, `ledger.capture.do`, `pricing.Quote`, a type parameter `T`; and the
+    /// type arguments of a generic record or enum written after it (`Page[Invoice]`, DESIGN 26.1).
+    Named(Vec<(String, Span)>, Vec<TypeRef>),
+    /// A function type, `(T, Adjustment) -> T` (DESIGN 27.1): the types of the parameters, the type of
+    /// the answer, and the effect written after it (`(T) -> U total`).
+    Fn(Vec<TypeRef>, Box<TypeRef>, Option<Effect>),
 }
 
 /// `range >=1 <=1500` and `count >=1 <=30`, as written after a type.
@@ -258,6 +303,10 @@ impl FailKind {
 #[derive(Clone, Debug)]
 pub struct FnDecl {
     pub name: Name,
+    /// Written with `private` before it (DESIGN 28.2): only this module calls it, and no host does.
+    pub private: bool,
+    /// The type parameters after the name (`fn first_or[T](…)`, DESIGN 26.1).
+    pub tparams: Vec<TypeParam>,
     pub params: Vec<Param>,
     pub ret: TypeRef,
     pub ret_bounds: Bounds,
@@ -283,13 +332,16 @@ pub struct Block {
     pub answer: Expr,
 }
 
-/// `let late = paid_on - due`, `let x : money[GBP] = …`.
+/// `let late = paid_on - due`, `let x : money[GBP] = …`, `let items = try parse(…)`.
 #[derive(Clone, Debug)]
 pub struct Let {
     pub name: String,
     pub span: Span,
     pub ty: Option<TypeRef>,
     pub value: Expr,
+    /// Where `try` is written before the value (DESIGN 26.3): an `err` or a `none` of it is the
+    /// function's answer.
+    pub tried: Option<Span>,
 }
 
 #[derive(Clone, Debug)]
@@ -354,10 +406,14 @@ pub enum ExprKind {
     /// `charges(debt: …)`, `terms.due(invoiced: …)`, `sum(xs, x => …)`: what is called, as written
     /// (a word, or words with dots between them), and the arguments.
     Call(Box<Expr>, Vec<Arg>),
-    /// `Claim { due: …, … }`, `shipping.lines { … }`: the type's words and the fields.
-    Record(Vec<(String, Span)>, Vec<FieldInit>),
+    /// `Claim { due: …, … }`, `shipping.lines { … }`, `Order.placed { items: … }`: the words of the
+    /// type or of a value of an enum, the value whose fields the others are taken from (`..p`,
+    /// DESIGN 23.4), and the fields.
+    Record(Vec<(String, Span)>, Option<Box<Expr>>, Vec<FieldInit>),
     /// `[a, b]`
     List(Vec<Expr>),
+    /// `["a": 1, "b": 2]`, and `[:]` with no pairs (DESIGN 24.2): each key and its value.
+    Dict(Vec<(Expr, Expr)>),
     /// `-x`
     Neg(Box<Expr>),
     /// `not x`
@@ -368,7 +424,8 @@ pub enum ExprKind {
     /// `if … then … else …` on one line, or the block form with `else if`.
     If(Box<Expr>, Box<Block>, Box<Block>),
     Match(Box<Expr>, Vec<Arm>),
-    /// `x => …`, `(acc, x) => …`: only as an argument of a builtin (DESIGN 3.7).
+    /// `x => …`, `(acc, x) => …`, `(l: Line) => …` (DESIGN 27.1): the parameters and the body. The types
+    /// written on the parameters are the module's (`Module::ltypes`).
     Lambda(Vec<(String, Span)>, Box<Expr>),
     /// The block indented under `let x =`, when it names values of its own.
     Block(Box<Block>),
@@ -404,20 +461,26 @@ pub struct Arm {
     pub span: Span,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Pattern {
     None(Span),
     /// `some x`: the name the value is given in the arm.
     Some(String, Span),
     Bool(bool, Span),
-    /// A value of an enum, by its name or its alias: `gold`, `tier.gold`.
-    Value(Vec<(String, Span)>, Span),
+    /// A value of an enum, by its name or its alias: `gold`, `tier.gold`; and the name it is given
+    /// in the arm, for a value with fields (`placed p`, DESIGN 23.3).
+    Value(Vec<(String, Span)>, Option<(String, Span)>, Span),
+    /// `else`: every value the arms above do not take.
+    Else(Span),
+    /// A number (a minus before it too), a date or a string, written as a literal.
+    Lit(Box<Expr>),
 }
 
 impl Pattern {
     pub fn span(&self) -> Span {
         match self {
-            Pattern::None(s) | Pattern::Some(_, s) | Pattern::Bool(_, s) | Pattern::Value(_, s) => *s,
+            Pattern::None(s) | Pattern::Some(_, s) | Pattern::Bool(_, s) | Pattern::Value(_, _, s) | Pattern::Else(s) => *s,
+            Pattern::Lit(e) => e.span,
         }
     }
 }
@@ -463,7 +526,10 @@ impl Expr {
                     a.expr().walk(out);
                 }
             }
-            ExprKind::Record(_, fs) => {
+            ExprKind::Record(_, base, fs) => {
+                if let Some(b) = base {
+                    b.walk(out);
+                }
                 for f in fs {
                     f.value.walk(out);
                 }
@@ -471,6 +537,12 @@ impl Expr {
             ExprKind::List(xs) => {
                 for x in xs {
                     x.walk(out);
+                }
+            }
+            ExprKind::Dict(pairs) => {
+                for (k, v) in pairs {
+                    k.walk(out);
+                    v.walk(out);
                 }
             }
             ExprKind::Bin(a, _, b) => {
@@ -485,6 +557,11 @@ impl Expr {
             ExprKind::Match(s, arms) => {
                 s.walk(out);
                 for a in arms {
+                    for p in &a.patterns {
+                        if let Pattern::Lit(x) = p {
+                            x.walk(out);
+                        }
+                    }
                     a.body.walk(out);
                 }
             }

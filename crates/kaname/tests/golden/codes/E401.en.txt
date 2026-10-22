@@ -1,4 +1,6 @@
-error[E401]: example.kn:3:1: `steps` is written `total`, but it may not stop
-     3 | fn steps(n: number range >=0 <=100) -> number range >=0 <=100 total
+error[E401]: example.kn:3:1: `steps` is written `total`, but it can fail with `overflow` and may not stop
+     3 | fn steps(n: number range >=0 <=100) -> number total
+  = Line 4: the value of `steps(n: n - 1) + 1` can leave int64, as it comes from a value whose range is not written (`overflow`)
   = Line 4: it calls `steps`, and the calls go round
+  = Make the places shown (narrow the values with an `if` before they go there), or write a wider effect.
   = Write `diverges` on a function whose calls go round: kaname does not check that a recursion stops.

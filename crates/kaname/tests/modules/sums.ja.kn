@@ -1,0 +1,169 @@
+module 直和型(sums_ja) v1
+description "フィールドを持つ列挙の値：注文と、注文の状態を移すイベント。分けた値に名前を付け、else とリテラルで分ける match。ほかの値の一部を替えて作るレコード。値の全体での比べ。sums.kn の日本語の版"
+
+record 品目(Item)
+  品番(sku)   : string
+  数量(qty)   : number       range >=1 <=100
+  単価(price) : money[USDc]  range >=1USDc <=100_000USDc
+
+enum 注文(Order)
+  下書き(draft)
+    明細(items) : list[品目]  count <=20
+  確定(placed)
+    明細(items) : list[品目]  count >=1 <=20
+    日(on)      : date        range >=2026-01-01 <=2027-12-31
+  支払い済み(paid)
+    明細(items) : list[品目]   count >=1 <=20
+    金額(paid)  : money[USDc]  range >=1USDc <=2_000_000USDc
+  取り消し(cancelled)
+    理由(reason) : string
+
+enum イベント(Event)
+  確定する(place)
+    日(on) : date  range >=2026-01-01 <=2027-12-31
+  支払う(pay)
+    金額(cents) : money[USDc]  range >=1USDc <=2_000_000USDc
+  取り消す(cancel)
+    理由(reason) : string
+  戻す(reopen)
+
+enum 遷移(Step)
+  移った(moved)
+    注文(order) : 注文
+  受け付けない(refused)
+    理由(why) : string
+
+fn 合計(total)(明細(items): list[品目] count <=20) -> money[USDc]
+  sum(明細, i => i.単価 * i.数量)
+
+# 注文にイベントが届いたときの次の状態か、受け付けない理由。match の中の match、名前を付けた値、else、
+# 分岐で名前を付けた値から作る値
+fn 次(next)(現在の注文(o): 注文, 届いたイベント(e): イベント) -> 遷移
+  match 現在の注文
+    下書き d =>
+      match 届いたイベント
+        確定する p =>
+          if count(d.明細) = 0
+            遷移.受け付けない { 理由: "空の注文は確定できない" }
+          else
+            遷移.移った { 注文: 注文.確定 { 明細: d.明細, 日: p.日 } }
+        取り消す c => 遷移.移った { 注文: 注文.取り消し { 理由: c.理由 } }
+        else => 遷移.受け付けない { 理由: "下書きは先に確定する" }
+    確定 p =>
+      match 届いたイベント
+        支払う y =>
+          if y.金額 = 合計(明細: p.明細)
+            遷移.移った { 注文: 注文.支払い済み { 明細: p.明細, 金額: y.金額 } }
+          else
+            遷移.受け付けない { 理由: "金額が合計と違う" }
+        確定する q => 遷移.移った { 注文: 注文.確定 { ..p, 日: q.日 } }
+        取り消す c => 遷移.移った { 注文: 注文.取り消し { 理由: c.理由 } }
+        戻す => 遷移.移った { 注文: 注文.下書き { 明細: p.明細 } }
+    支払い済み, 取り消し => 遷移.受け付けない { 理由: "終わった注文" }
+
+# イベントが注文をそのままにするか：直和型の二つの値を全体で比べる
+fn 変わらない(stays)(現在の注文(o): 注文, 届いたイベント(e): イベント) -> bool
+  match 次(現在の注文: 現在の注文, 届いたイベント: 届いたイベント)
+    移った m => m.注文 = 現在の注文
+    受け付けない => true
+
+# else は、上の分岐が受けない値を受ける。ここでは下書きか取り消しの注文
+fn 下書きに戻す(reset)(現在の注文(o): 注文) -> 注文
+  match 現在の注文
+    確定 p => 注文.下書き { 明細: p.明細 }
+    支払い済み y => 注文.下書き { 明細: y.明細 }
+    else => 現在の注文
+
+# 真偽を答える match。業務の決めごとではない
+fn 終わった(closed)(現在の注文(o): 注文) -> bool
+  match 現在の注文
+    支払い済み, 取り消し => true
+    else => false
+
+# 値の型：分岐で名前を付けた値を、関数に渡す
+fn 確定日(placed_on)(確定した注文(p): 注文.確定) -> date
+  確定した注文.日
+
+fn 日付(day)(現在の注文(o): 注文) -> date?
+  match 現在の注文
+    確定 p => 確定日(確定した注文: p)
+    else => none
+
+# ほかの値の一つのフィールドを替えて作る値。替えたフィールドは、その範囲で確かめる
+fn 単価の変更(repriced)(元の品目(i): 品目, 単価(price): money[USDc] range >=1USDc <=100_000USDc) -> 品目
+  品目 { ..元の品目, 単価: 単価 }
+
+fn 日の変更(moved_to)(確定した注文(p): 注文.確定, 日(on): date range >=2026-01-01 <=2027-12-31) -> 注文
+  注文.確定 { ..確定した注文, 日: 日 }
+
+# 分岐や引数が名前を付けた値から作る、フィールドを持つ値。金額はフィールドの範囲で確かめる
+fn 支払い(paid_for)(確定した注文(p): 注文.確定, 金額(cents): money[USDc] range >=1USDc <=2_000_000USDc) -> 注文
+  注文.支払い済み { 明細: 確定した注文.明細, 金額: 金額 }
+
+# リテラルで分ける match と else
+fn 大きさ(size)(数(n): number range >=-5 <=1000) -> string
+  match 数
+    -1 => "マイナス 1"
+    0 => "ゼロ"
+    1 => "1"
+    else => "それ以外"
+
+# 一つの分岐のリテラルは、値をそのどれかに狭める
+fn 一つ進める(bumped)(数(n): number range >=-5 <=1000) -> number
+  match 数
+    -1, 0 => 数 + 1
+    else => 数
+
+fn 区分(label)(金額(c): money[USDc] range >=0USDc <=100USDc) -> string
+  match 金額
+    0USDc => "無料"
+    else => "有料"
+
+fn 点数(grade)(評価(code): string) -> number
+  match 評価
+    "A" => 3
+    "B" => 2
+    else => 0
+
+fn 休み(holiday)(日(d): date range >=2026-01-01 <=2026-12-31) -> bool
+  match 日
+    2026-01-01, 2026-12-25 => true
+    else => false
+
+# 全体で比べる値：リスト、無いことがある値、レコード
+fn 同じ明細(same_items)(一方(a): list[品目] count <=3, 他方(b): list[品目] count <=3) -> bool
+  一方 = 他方
+
+fn 無い(missing)(数(x): number? range >=0 <=9) -> bool
+  数 = none
+
+fn 同じ数(same_count)(一方(a): number? range >=0 <=9, 他方(b): number? range >=0 <=9) -> bool
+  一方 = 他方
+
+fn 二か(two)(数(x): number? range >=0 <=9) -> string
+  if 数 = 2
+    "二"
+  else
+    "二でない"
+
+fn 違う(differ)(一方(a): 品目, 他方(b): 品目) -> bool
+  一方 != 他方
+
+# 列挙の値どうしの比べ。同じにしかならないときと、同じにならないときは、答えが決まる
+fn 戻したか(reopened)(届いたイベント(e): イベント) -> bool
+  match 届いたイベント
+    戻す => 届いたイベント = イベント.戻す
+    else => 届いたイベント = イベント.戻す
+
+examples
+  次(現在の注文: 注文.下書き { 明細: [] }, 届いたイベント: イベント.戻す) = 遷移.受け付けない { 理由: "下書きは先に確定する" }
+  終わった(現在の注文: 注文.取り消し { 理由: "遅れた" }) = true
+  大きさ(数: -1) = "マイナス 1"
+  点数(評価: "B") = 2
+  休み(日: 2026-12-25) = true
+  無い(数: none) = true
+  同じ数(一方: none, 他方: 2) = false
+  二か(数: 2) = "二"
+  区分(金額: 0USDc) = "無料"
+  一つ進める(数: -1) = 0
+  戻したか(届いたイベント: イベント.戻す) = true

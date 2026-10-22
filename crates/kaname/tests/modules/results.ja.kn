@@ -1,0 +1,111 @@
+module 結果(results_ja) v1
+description "result：コマンドを一段ずつ確かめ、各段の result の err を次の `try` が答えに渡す。失敗がリストのもの。値の無いことがある値を `try` で渡すもの。result を分け、リストに入れ、比べる。results.kn の日本語の版"
+
+record 生の行(Raw)
+  品番(sku)   : string  count <=12
+  数量(qty)   : string  count <=20
+
+record コマンド(Command)
+  行(lines)   : list[生の行]  count <=5
+  日付(on)    : string        count <=20
+
+record 品目(Item)
+  品番(sku)   : string  count >=1 <=12
+  数量(qty)   : number  range >=1 <=99
+
+record 注文(Order)
+  品目(items) : list[品目]  count >=1 <=5
+  日付(on)    : date        range >=2026-01-01 <=2027-12-31
+
+fn 数量を読む(parse_qty)(文(text): string count <=20) -> result[number, string]
+  match 文.trim().parse_number()
+    none => err("数ではありません")
+    some n =>
+      if n >= 1 and n <= 99
+        ok(n)
+      else
+        err("範囲の外です")
+
+# 段のあとの段：前の段の err が答えになり、次の段には進まない
+fn 品目を読む(parse_item)(品番(sku): string count <=12, 数量(qty): string count <=20) -> result[品目, string]
+  let n = try 数量を読む(文: 数量)
+  if 品番.count() = 0
+    err("品番がありません")
+  else
+    ok(品目 { 品番: 品番, 数量: n })
+
+fn 日付を読む(parse_day)(文(text): string count <=20) -> result[date, list[string]]
+  match 文.trim().parse_date()
+    none => err(["日付ではありません"])
+    some d =>
+      if d >= 2026-01-01 and d <= 2027-12-31
+        ok(d)
+      else
+        err(["2026 年か 2027 年ではありません"])
+
+# result が持つ値か、none。二つの型について総称
+fn 成功の値(ok_of)[T, E](結果(r): result[T, E]) -> T?
+  match 結果
+    ok x => x
+    err e => none
+
+fn 失敗の値(err_of)[T, E](結果(r): result[T, E]) -> E?
+  match 結果
+    ok x => none
+    err e => e
+
+# どの行も読み、問題は一度に全部言う
+fn 行を読む(parse_lines)(行(lines): list[生の行] count <=5) -> result[list[品目], list[string]]
+  let rs = 行.map(l => 品目を読む(品番: l.品番, 数量: l.数量))
+  let 問題 = rs.filter_map(r => 失敗の値(結果: r))
+  if 問題.count() > 0
+    err(問題)
+  else
+    ok(rs.filter_map(r => 成功の値(結果: r)))
+
+fn 注文を読む(parse_order)(c: コマンド) -> result[注文, list[string]]
+  let 品目の一覧 = try 行を読む(行: c.行)
+  let 日 = try 日付を読む(文: c.日付)
+  if 品目の一覧.count() = 0
+    err(["品目がありません"])
+  else
+    ok(注文 { 品目: 品目の一覧, 日付: 日 })
+
+# 答えにつながる分岐の中の `try`
+fn 確かめた数量(checked_qty)(文(text): string count <=20, 厳しく(strict): bool) -> result[number, string]
+  if 厳しく
+    let n = try 数量を読む(文: 文)
+    if n > 50 then err("50 を超えます") else ok(n)
+  else
+    ok(1)
+
+# 値の無いことがある値を `try` で渡す
+fn 最初の数量(first_qty)(行(lines): list[string] count <=5) -> number?
+  let 最初 = try 行.first()
+  let n = try 最初.trim().parse_number()
+  if n >= 0 and n <= 1000 then n else none
+
+fn 説明(describe)(結果(r): result[number, string]) -> string
+  match 結果
+    ok n => concat("成功: ", text(n))
+    err e => concat("失敗: ", e)
+
+fn 二つ(both)(左(a): string count <=20, 右(b): string count <=20) -> list[result[number, string]]
+  [数量を読む(文: 左), 数量を読む(文: 右)]
+
+fn 同じ答えか(same_answer)(左(a): result[number, string], 右(b): result[number, string]) -> bool
+  左 = 右
+
+fn 注文の大きさ(order_size)(結果(r): result[注文, list[string]]) -> number range >=0 <=5 total
+  match 結果
+    ok o => o.品目.count()
+    err e => 0
+
+examples
+  品目を読む(品番: "a1", 数量: "5") = ok(品目 { 品番: "a1", 数量: 5 })
+  品目を読む(品番: "a1", 数量: "x") = err("数ではありません")
+  品目を読む(品番: "", 数量: "7") = err("品番がありません")
+  最初の数量(行: ["12", "x"]) = 12
+  最初の数量(行: []) = none
+  確かめた数量(文: "70", 厳しく: true) = err("50 を超えます")
+  説明(結果: err("boom")) = "失敗: boom"

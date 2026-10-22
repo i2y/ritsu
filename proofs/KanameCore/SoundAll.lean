@@ -2,7 +2,7 @@
   **The analysis of ranges is sound** (kaname's DESIGN 15.2.2): every evaluation, at any number of
   steps, keeps what the analysis of the same expression says (`SoundAt`), by induction on the steps.
 -/
-import KanameCore.SoundArith
+import KanameCore.SoundFns
 
 namespace KanameCore
 
@@ -66,12 +66,13 @@ theorem allMem_any {α : Type} : ∀ (args : List α) (vs : List Val), vs.length
 
 -- ── One more step ────────────────────────────────────────────────────────────
 
-theorem concl_record {ρ : Env} {res' : R Val} {r : AR} {id : Nat} (h : Concl C ρ res' r) :
-    Concl C ρ res' { r with out := r.out.record id r.abs } :=
-  ⟨h.1, fun k l hv hk => Wit.grow (h.2 k l hv hk) (grows_record (Grows.refl _))⟩
+theorem concl_record {ρ : Env} {res' : R Val} {r : AR} {id : Nat} (b : Bool) (h : Concl C ρ res' r) :
+    Concl C ρ res' { r with out := if b = true then r.out.recordL id r.abs else r.out.record id r.abs } :=
+  ⟨h.1, fun k l hv hk => Wit.grow (h.2 k l hv hk) (grows_recordIf (Grows.refl _) b id r.abs)⟩
 
 /-- Every form but `let`, one more step. -/
-theorem evI_succ (IH : SoundAt C res n) (hR : ResultsOK C res) (hO : OracleOK C) (m : Nat) (A : ACtx) (ρ : Env)
+theorem evI_succ (IH : SoundAt C res n) (IHs : ∀ k, k < n → SoundAt C res k) (hR : ResultsOK C res) (hO : OracleOK C)
+    (m : Nat) (A : ACtx) (ρ : Env)
     (e : Expr) (o : Out) (dep : Nat) (hG : Good C res A) (hS : Sat A ρ) (hw : (evI A m e o).out.widened = false) :
     Concl C ρ (eval C (n + 1) dep ρ e) (evI A m e o) := by
   cases e with
@@ -98,7 +99,7 @@ theorem evI_succ (IH : SoundAt C res n) (hR : ResultsOK C res) (hO : OracleOK C)
     | zero => exact concl_fuel hS
     | succ m => simp only [evI] at hw ⊢; exact case_letIn IH hG hS hw
   | block => exact case_block IH hG hS hw
-  | call => exact case_call IH hR hG hS hw
+  | call => exact case_call IH IHs hR hG hS hw
   | rule => exact case_rule IH hO hG hS hw
   | dateCall => exact case_dateCall IH hO hG hS hw
   | transfer => exact case_transfer IH hG hS hw
@@ -115,9 +116,17 @@ theorem evI_succ (IH : SoundAt C res n) (hR : ResultsOK C res) (hO : OracleOK C)
   | startsWith => exact case_startsWith IH hG hS hw
   | concat => exact case_concat IH hG hS hw
   | text => exact case_text IH hG hS hw
+  | dict => exact case_dict IH hG hS hw
+  | prim => exact case_prim IH hG hS hw
+  | walkK => exact case_walkK IH hG hS hw
+  | toDict => exact case_toDict IH hG hS hw
+  | mergeWith => exact case_mergeWith IH hG hS hw
+  | lam => exact case_lam hS
+  | callV => exact case_callV IH hG hS hw
   | bad => exact case_bad hS
 
-theorem ev_succ (IH : SoundAt C res n) (hR : ResultsOK C res) (hO : OracleOK C) (m : Nat) (A : ACtx) (ρ : Env)
+theorem ev_succ (IH : SoundAt C res n) (IHs : ∀ k, k < n → SoundAt C res k) (hR : ResultsOK C res) (hO : OracleOK C)
+    (m : Nat) (A : ACtx) (ρ : Env)
     (e : Expr) (o : Out) (dep : Nat) (hG : Good C res A) (hS : Sat A ρ) (hw : (ev A m e o).out.widened = false) :
     Concl C ρ (eval C (n + 1) dep ρ e) (ev A m e o) := by
   cases e
@@ -127,7 +136,8 @@ theorem ev_succ (IH : SoundAt C res n) (hR : ResultsOK C res) (hO : OracleOK C) 
     | zero => exact concl_fuel hS
     | succ m =>
       simp only [ev, Expr.id?] at hw ⊢
-      exact concl_record (evI_succ IH hR hO m A ρ _ o dep hG hS (grows_not_widened (grows_record (Grows.refl _)) hw))
+      exact concl_record _ (evI_succ IH IHs hR hO m A ρ _ o dep hG hS
+        (grows_not_widened (grows_recordIf (Grows.refl _) _ _ _) hw))
 
 theorem args_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (args : List (Nat × Expr × Option Conv))
     (o : Out) (dep : Nat) (hG : Good C res A) (hS : Sat A ρ) (hw : (evArgs A m args o).2.1.widened = false) :
@@ -452,21 +462,34 @@ theorem each_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (x : St
 
 -- ── Every step ───────────────────────────────────────────────────────────────
 
-theorem sound_succ (IH : SoundAt C res n) (hR : ResultsOK C res) (hO : OracleOK C) : SoundAt C res (n + 1) where
-  expr := ev_succ IH hR hO
+theorem sound_succ (IH : SoundAt C res n) (IHs : ∀ k, k < n → SoundAt C res k) (hR : ResultsOK C res) (hO : OracleOK C) :
+    SoundAt C res (n + 1) where
+  expr := ev_succ IH IHs hR hO
   args := args_succ IH
   args5 := args5_succ IH
   inits := inits_succ IH
   list := list_succ IH
   elems := elems_succ IH
   each := each_succ IH
+  pairs := pairs_succ IH
+  each2 := each2_succ IH
+  merge := merge_succ IH
   fix := fix_succ IH
   rounds := rounds_succ IH
 
+/-- What the analysis says of every evaluation at `n` steps and fewer: a call read again takes what
+    it says of its body, a step shorter than the call (DESIGN 26.5). -/
+theorem sound_upto (hR : ResultsOK C res) (hO : OracleOK C) : ∀ n, ∀ k, k ≤ n → SoundAt C res k
+  | 0 => fun k hk => by rw [Nat.le_zero.mp hk]; exact sound_zero
+  | n + 1 => fun k hk => by
+    rcases Nat.lt_or_eq_of_le hk with h | h
+    · exact sound_upto hR hO n k (by omega)
+    · subst h
+      exact sound_succ (sound_upto hR hO n n (Nat.le_refl n)) (fun j hj => sound_upto hR hO n j (by omega)) hR hO
+
 /-- **What the analysis says of every evaluation**, at any number of steps. -/
-theorem sound_all (hR : ResultsOK C res) (hO : OracleOK C) : ∀ n, SoundAt C res n
-  | 0 => sound_zero
-  | n + 1 => sound_succ (sound_all hR hO n) hR hO
+theorem sound_all (hR : ResultsOK C res) (hO : OracleOK C) : ∀ n, SoundAt C res n :=
+  fun n => sound_upto hR hO n n (Nat.le_refl n)
 
 end
 

@@ -1,0 +1,63 @@
+{
+  "kaname": "<version>",
+  "file": "order_flow.kn",
+  "module": "order_flow",
+  "function": "replay",
+  "input": {
+    "events": [
+      {
+        "add": {
+          "line": {
+            "sku": "pen",
+            "qty": 2,
+            "price": 150
+          }
+        }
+      },
+      {
+        "add": {
+          "line": {
+            "sku": "ink",
+            "qty": 1,
+            "price": 400
+          }
+        }
+      },
+      {
+        "place": {
+          "on": "2026-10-22"
+        }
+      },
+      {
+        "pay": {
+          "amount": 700
+        }
+      },
+      {
+        "ship": {
+          "tracking": "1Z-42"
+        }
+      }
+    ]
+  },
+  "calls": [],
+  "result": {
+    "ok": {
+      "shipped": {
+        "lines": [
+          {
+            "sku": "pen",
+            "qty": 2,
+            "price": 150
+          },
+          {
+            "sku": "ink",
+            "qty": 1,
+            "price": 400
+          }
+        ],
+        "tracking": "1Z-42"
+      }
+    }
+  }
+}

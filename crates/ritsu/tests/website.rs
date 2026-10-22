@@ -20,6 +20,13 @@
 //!   and the count of combinations it says, and what `sekisho check` says of each edit a ```diff
 //!   shows; the two show the same kinds of blocks and tables, as many of each; and sekisho's
 //!   READMEs link to them;
+//! - the pages of kaname (website/docs/kaname/ and website/docs-ja/kaname/) show its examples and the
+//!   materials of its tests as the tools have them: the lines of the `.kn` files, what the commands
+//!   print (a `gen` into a scratch directory), and the lines of the hosts of its examples in
+//!   TypeScript, Python and Go with what they print (`host/output.txt`), the page of the examples
+//!   showing every host of the four functional cores; a page in English and the same page in
+//!   Japanese show the same kinds of blocks and tables, as many of each; and kaname's READMEs and the
+//!   READMEs at the root link to them;
 //! - every link into ritsu's repository, on ritsu's pages and on the pages of every language's
 //!   site, names a file or a directory that is there, and no page links to the repository of one
 //!   language by itself, its releases included (ritsu's releases hand out every language);
@@ -43,18 +50,20 @@
 //!   command prints;
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
-//!   playground, the pages of sekisho, the pages the languages' playgrounds had, each with nothing
-//!   beside it and its link and the nav of its site leading to the playground in the tree, the
-//!   marketplace of Claude Code as it is written, and a file of the tree for every relative link of
-//!   ritsu's built pages, none of which climbs out of /ritsu/. Without Zensical the test says SKIP.
+//!   playground, the pages of sekisho, the pages of kaname (with a set of tabs for the hosts of each
+//!   functional core on the page of the examples), the pages the languages' playgrounds had, each
+//!   with nothing beside it and its link and the nav of its site leading to the playground in the
+//!   tree, the marketplace of Claude Code as it is written, and a file of the tree for every
+//!   relative link of ritsu's built pages, none of which climbs out of /ritsu/. Without Zensical the
+//!   test says SKIP.
 //!
 //! (tests/common/mod.rs holds what this file shares with tests/readme.rs.)
 
 mod common;
 
 use common::{
-    Block, Page, code_from_files, commands_named, inline_code, lines_in_order, lines_of, link_targets, links, page, root, run_the_consoles, sh, shown_lines,
-    trimmed,
+    Block, Page, code_from_files, commands_named, hosts_from_files, inline_code, kaname_hosts, lines_in_order, lines_of, link_targets, links, page, root,
+    run_the_consoles, sh, shown_lines, trimmed,
 };
 use ritsu_testkit::{Need, TempDir, ready};
 use std::collections::BTreeSet;
@@ -756,6 +765,7 @@ fn the_two_languages_have_the_same_pages_and_the_navs_list_them() {
     let want: BTreeSet<String> = en.iter().filter(|p| !OFF_THE_NAV.contains(&p.as_str())).cloned().collect();
     assert_eq!(listed, want, "the nav lists other pages than website/docs holds, leaving out {OFF_THE_NAV:?}");
     assert!(listed.contains("sekisho.md"), "the nav lists no page of sekisho");
+    assert!(KANAME_PAGES.iter().all(|p| listed.contains(&format!("kaname/{p}"))), "the nav lists not every page of kaname");
     for (index, nav) in [("website/docs/index.md", &nav_en), ("website/docs-ja/index.md", &nav_ja)] {
         let links: BTreeSet<String> = link_targets(&read(&root().join(index))).into_iter().map(|(_, t)| t.split('#').next().unwrap().to_string()).collect();
         for p in nav.iter().filter(|p| *p != "index.md") {
@@ -980,6 +990,91 @@ fn the_readmes_of_sekisho_link_to_its_pages() {
     }
 }
 
+/// The pages of kaname, in each language's directory `kaname/`: what kaname is, how a module is
+/// written, the four functional cores of its examples with their hosts, what the check guarantees,
+/// and the calls of rules, dates and books. They show kaname's examples and the materials of its
+/// tests, the English versions on the English pages and the Japanese versions on the Japanese ones;
+/// the hosts, which call the code of the English versions, on both.
+const KANAME_PAGES: [&str; 5] = ["index.md", "language.md", "examples.md", "checks.md", "together.md"];
+
+/// The pages of kaname in a language, as paths from the root of the repository.
+fn kaname_pages(ja: bool) -> Vec<String> {
+    KANAME_PAGES.iter().map(|p| format!("website/{}/kaname/{p}", if ja { "docs-ja" } else { "docs" })).collect()
+}
+
+#[test]
+fn the_pages_of_kaname_show_the_files_and_what_the_commands_print() {
+    let pages: Vec<Page> = kaname_pages(false).iter().chain(kaname_pages(true).iter()).map(|n| page(n)).collect();
+    let (seen, wrong) = code_from_files(&pages);
+    // on each language's pages: the order and `next`; the lines of an order, its events, `open`, the
+    // counts compared, the handle and the tag, the functions given and the tree; what the hosts of
+    // the four examples call; `next_id` and the days late left unnarrowed; the late payment
+    assert!(seen >= 2 * 15, "{seen} blocks of code on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (ran, wrong) = run_the_consoles(&pages);
+    // `ritsu check` of the order, a `run` of the counts, `ritsu gen` of the order, three `kaname
+    // check`s, and the late payment's `ritsu check` and `run`, the dollars and the net payout, on each
+    // language's pages
+    assert!(ran >= 2 * 10, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (named, wrong) = commands_named(&pages);
+    assert!(named >= 2 * 6, "{named} commands named in the prose: were they changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The code of a host on the pages of kaname is the lines of a host of its examples, and what a
+/// ```text block shows is what the hosts above it print; the page of the examples shows every host
+/// of every functional core. (ritsu's `tests/kaname.rs` runs the hosts on the package `ritsu gen`
+/// writes, and holds what they print to `host/output.txt`.)
+#[test]
+fn the_hosts_on_the_pages_of_kaname_are_its_examples_and_print_what_they_show() {
+    let every: BTreeSet<(String, &str)> = kaname_hosts().into_iter().map(|h| (h.example, h.ext)).collect();
+    assert_eq!(every.len(), 4 * 3, "the hosts of kaname's examples: {every:?}");
+    for ja in [false, true] {
+        let names = kaname_pages(ja);
+        let pages: Vec<Page> = names.iter().map(|n| page(n)).collect();
+        let (seen, _, wrong) = hosts_from_files(&pages);
+        // one on the first page, and twelve on the page of the examples
+        assert!(seen >= 13, "{seen} blocks of hosts on the pages: were the fences changed?");
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+        let examples = names.iter().find(|n| n.ends_with("/examples.md")).unwrap();
+        let (_, shown, _) = hosts_from_files(&[page(examples)]);
+        assert_eq!(shown, every, "{examples} does not show every host of the four functional cores");
+    }
+}
+
+/// A page of kaname in English and the same page in Japanese show the same things, the Japanese one
+/// with the Japanese versions of the examples and in its own words: as many blocks of each kind, and
+/// as many tables.
+#[test]
+fn the_two_languages_of_the_pages_of_kaname_show_the_same_things() {
+    let shown = |name: &str| {
+        let p = page(name);
+        let mut kinds: Vec<String> = p.blocks.iter().map(|b| b.info.clone()).collect();
+        kinds.sort();
+        (kinds, tables(&p.text).len())
+    };
+    for (en, ja) in kaname_pages(false).iter().zip(kaname_pages(true).iter()) {
+        assert_eq!(shown(en), shown(ja), "{en} and {ja} show other kinds of blocks, or other numbers of blocks or tables");
+    }
+}
+
+/// kaname's READMEs and the READMEs at the root lead to the pages of kaname on the site, each to the
+/// pages in its own language.
+#[test]
+fn the_readmes_of_kaname_link_to_its_pages() {
+    for (readme, under, page) in [
+        ("crates/kaname/README.md", "", "docs/kaname/index.md"),
+        ("crates/kaname/README.ja.md", "ja/", "docs-ja/kaname/index.md"),
+        ("README.md", "", "docs/kaname/index.md"),
+        ("README.ja.md", "ja/", "docs-ja/kaname/index.md"),
+    ] {
+        let url = format!("{PUBLISHED}{under}kaname/");
+        assert!(read(&root().join(readme)).contains(&url), "{readme} does not link to {url}");
+        assert_eq!(source_of(&format!("/{under}kaname/"), &sites()), Some(website().join(page)), "{url} is no page of the site");
+    }
+}
+
 /// `from` copied to `to`, without what a build, Zensical's cache or the virtual environment left.
 fn copy_tree(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
@@ -1042,6 +1137,16 @@ fn build_sh_builds_the_tree_that_is_published() {
         "ja/play/index.html",
         "sekisho/index.html",
         "ja/sekisho/index.html",
+        "kaname/index.html",
+        "kaname/language/index.html",
+        "kaname/examples/index.html",
+        "kaname/checks/index.html",
+        "kaname/together/index.html",
+        "ja/kaname/index.html",
+        "ja/kaname/language/index.html",
+        "ja/kaname/examples/index.html",
+        "ja/kaname/checks/index.html",
+        "ja/kaname/together/index.html",
         "ns/yuen/index.html",
         "ja/ns/yuen/index.html",
     ]
@@ -1079,6 +1184,14 @@ fn build_sh_builds_the_tree_that_is_published() {
     let missing: Vec<&String> = want.iter().filter(|w| !built.join(w).is_file()).collect();
     assert!(missing.is_empty(), "build.sh built no {missing:?}");
     assert!(fs::read(built.join("marketplace.json")).unwrap() == fs::read(website().join("docs/marketplace.json")).unwrap(), "the site publishes another marketplace.json than website/docs/marketplace.json");
+
+    // The page of kaname's examples is built with a set of three tabs for the hosts of each of the four
+    // functional cores, TypeScript, Python and Go (pymdownx.tabbed in the configurations).
+    for file in ["kaname/examples/index.html", "ja/kaname/examples/index.html"] {
+        let html = read(&built.join(file));
+        let sets: Vec<&str> = html.split("<div class=\"tabbed-set").skip(1).map(|r| r.split('>').next().unwrap_or("")).collect();
+        assert!(sets.len() == 4 && sets.iter().all(|s| s.ends_with(":3\"")), "{file}: built with {} sets of tabs ({sets:?}), not four of three tabs", sets.len());
+    }
 
     // The page of yuen's namespace is built with an element for every word, the id of which is the
     // word as it follows the `#` of its IRI: `…/ns/yuen#Requirement`, which the server sends on to

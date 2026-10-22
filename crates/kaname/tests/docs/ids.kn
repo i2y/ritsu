@@ -1,0 +1,5 @@
+module ids v1
+description "The next id after the last one, written total: an id whose range is not written takes all of int64, and one more than the largest is past int64"
+
+fn next_id(last: number) -> number total
+  last + 1

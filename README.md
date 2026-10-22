@@ -29,7 +29,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
 | [sakai](#sakai--the-map-of-bounded-contexts) | `.ctx` | the map of bounded contexts | settings for import linters; Context Mapper |
 | [sekisho](#sekisho--who-may-do-what) | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | Cedar, and the TypeScript, Python and Go that ask it |
-| [kaname](#kaname--the-code-that-joins-them) | `.kn` | a functional core in ritsu's types, which calls rules, dates and books | TypeScript, Python and Go, in the package `ritsu gen` writes |
+| [kaname](#kaname--a-functional-core) | `.kn` | a functional core: general code with no input or output, which can call rules, dates and books in their types | TypeScript, Python and Go, in the package `ritsu gen` writes |
 
 Each language stands on its own: you can use rulec without writing a `.flow`. A file never mixes
 two languages, because a tariff, a calendar, a ledger and a workflow are read by different
@@ -360,16 +360,85 @@ refunds.gate: ok — 3 actions, 10 policies (7 permits, 3 forbids), 3 expectatio
 The [page on the site](https://i2y.github.io/ritsu/sekisho/) follows this example through: what the
 check asks the rule, the Cedar and the code it writes, and the page for people.
 
-### kaname — the code that joins them
+### kaname — a functional core
 
-A rule decides, a dates file computes a day, a book moves an amount, and each is checked by its own
-language. The code between them puts a rule's inputs together, carries one answer into the next
-call and hands an amount to a book. A module (a `.kn` file) is that code, written in ritsu's types,
-with no input or output of its own. `kaname check` holds it to the rules the other languages are
-held to — units and money, rounding, int64 — and to the range of every value it passes: a
-function marked `total` answers every input of the ranges it declares, and a decision written in
-code rather than in a table is a warning. `ritsu gen` writes it as TypeScript, Python and Go,
+kaname is a small general-purpose language for the functional core of a program: the part with
+no input or output, which takes values and answers values. A module (a `.kn` file) moves an order
+from state to state by events, checks and normalizes what a person typed, compares two counts of a
+stockroom in dicts and sets, or reshapes a tree, in ritsu's types: records, sums, lists, dicts,
+sets, strings, generics, `result` and function values. It calls a rule, a date and a book in their
+own types too, and puts a rule's inputs together, carries one answer into the next call and hands
+an amount to a book. `kaname check` holds a module to the rules the other languages are held to —
+units and money, rounding, int64 — and to the range of every value it passes: a function marked
+`total` answers every input of the ranges it declares, and a decision written in code rather than
+in a table is a warning. `ritsu gen` writes it as TypeScript, Python and Go for a host to call,
 beside the code of the rules, dates and books it calls.
+
+An order moved by events is a functional core of its own. The states are the values of an enum
+with fields under them, and the next state, or why an event is refused, is a `match` on the state
+and the event:
+
+```kn
+enum Order
+  cart
+    lines : list[Line]  count <=50
+  placed
+    lines : list[Line]  count >=1 <=50
+    total : money[USDc]
+    on    : date
+…
+fn next(order: Order, event: Event) -> result[Order, string]
+  match order
+    cart c =>
+      match event
+        add a =>
+          if c.lines.count() < 50
+            ok(Order.cart { lines: c.lines.append(a.line) })
+          else
+            err("a cart holds 50 lines")
+…
+    shipped, cancelled => err("the order is closed")
+```
+
+The check holds each `match` to every value of the state and of the event, and finds that the
+lines of a cart stay within its 50 and that their total stays inside int64, so every function is
+total:
+
+```console
+$ cd crates/kaname/examples/order_flow
+$ ritsu check
+ok order_flow.ja.kn: 5 functions, total
+ok order_flow.kn: 5 functions, total
+ritsu check: 2 files (kaname 2): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+The host keeps the order and calls the code `ritsu gen` writes of the module for each event. The
+TypeScript host (`crates/kaname/examples/order_flow/host/main.ts`, beside a Python and a Go one that
+print the same) goes through seven events, among them a payment of 650 cents for a total of 700:
+
+```ts
+for (const event of events) {
+  const r = next(order, event);
+  if (r.kind === "err") {
+    console.log(`${event.kind}: refused: ${r.error}`);
+    continue;
+  }
+  order = r.value;
+  console.log(`${event.kind}: ${order.kind}`);
+}
+```
+
+```text
+add: cart
+add: cart
+place: placed
+pay: refused: the amount is not the total
+pay: paid
+ship: shipped
+cancel: refused: the order is closed
+```
+
+Here a module joins the other languages:
 
 ```kn
 module late_payment v1
@@ -412,6 +481,10 @@ $ ritsu check
 ok late_payment.kn: 1 function, total
 ritsu check: 6 files (rulec 2, koyomi 2, kaname 2): all pass; borders between the languages: 2 checked, 0 undecided
 ```
+
+The [pages on the site](https://i2y.github.io/ritsu/kaname/) go through how a module is written, the
+four functional cores with their hosts in TypeScript, Python and Go, and what the check guarantees;
+[kaname's README](crates/kaname/README.md) has the rest.
 
 ## Where the languages meet
 

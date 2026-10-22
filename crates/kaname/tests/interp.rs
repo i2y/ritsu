@@ -91,12 +91,14 @@ fn a_temperature_is_read_with_its_zero() {
 /// A temperature read in the other unit with that unit's zero, wherever it is read there: a constant
 /// compared with a value (as a literal and kept in a `let`), given as an argument, held in a field,
 /// taken by `max`, converted with `in`; and a value converted with `in` (DESIGN 3.2, 3.10). Both
-/// versions of the module pass `check` with nothing said, so their `examples` hold.
+/// versions of the module pass `check` with nothing said but the W501 of `frozen`, which makes a
+/// value of a comparison with a threshold (DESIGN 7), so their `examples` hold.
 #[test]
 fn a_temperature_read_in_the_other_unit() {
-    for (name, src) in [("temps", include_str!("modules/temps.kn")), ("temps.ja", include_str!("modules/temps.ja.kn"))] {
+    for (name, src, frozen) in [("temps", include_str!("modules/temps.kn"), 72), ("temps.ja", include_str!("modules/temps.ja.kn"), 71)] {
         let o = common::check_text("t.kn", src);
-        assert!(o.diags.is_empty(), "{name}: {}", common::shown(&o, Lang::En));
+        let said: Vec<_> = o.diags.iter().map(|d| (d.code, d.line.unwrap_or(0))).collect();
+        assert_eq!(said, [("W501", frozen)], "{name}: {}", common::shown(&o, Lang::En));
     }
     let c = module(include_str!("modules/temps.kn"));
     // 30℃ beside a ℉ is 86℉, written there and kept in a let; 50℉ beside a ℃ is 10℃
@@ -127,6 +129,85 @@ fn a_temperature_read_in_the_other_unit() {
     assert_eq!(ok(&c, "reading", "{}"), r#"{"at":25,"where":"porch"}"#);
     assert_eq!(ok(&c, "floor_of", r#"{"r": {"at": -20, "where": "freezer"}}"#), "-10");
     assert_eq!(ok(&c, "floor_of", r#"{"r": {"at": -9, "where": "freezer"}}"#), "-9");
+}
+
+/// A constant below zero of a temperature, read in the other unit with that unit's zero, and a
+/// value read in the other unit with `in` (DESIGN 3.2, 3.10).
+#[test]
+fn a_temperature_below_zero() {
+    let c = module(include_str!("modules/temps.kn"));
+    assert_eq!(ok(&c, "frozen", r#"{"t": -18}"#), "true");
+    assert_eq!(ok(&c, "frozen", r#"{"t": -17}"#), "false");
+    // -20℃ beside a ℉ is -4℉
+    assert_eq!(ok(&c, "deep_frozen", r#"{"t": -4}"#), r#""deep frozen""#);
+    assert_eq!(ok(&c, "deep_frozen", r#"{"t": -3}"#), r#""above""#);
+    // -4℉ beside a ℃ is -20℃
+    assert_eq!(ok(&c, "below", r#"{"t": -21}"#), r#""below""#);
+    assert_eq!(ok(&c, "below", r#"{"t": -20}"#), r#""at or above""#);
+    // 0℃ is 32℉, -40℃ is -40℉; -18℃ is -0.4℉, half up to 0℉
+    assert_eq!(ok(&c, "in_fahrenheit", r#"{"t": 0}"#), "32");
+    assert_eq!(ok(&c, "in_fahrenheit", r#"{"t": -40}"#), "-40");
+    assert_eq!(ok(&c, "in_fahrenheit", r#"{"t": -18}"#), "0");
+    assert_eq!(ok(&c, "freezer_limit", "{}"), "-4");
+    assert_eq!(ok(&c, "mark", r#"{"t": -40}"#), r#""the floor""#);
+    assert_eq!(ok(&c, "owed", r#"{"balance": -100}"#), r#""owed""#);
+    assert_eq!(ok(&c, "owed", r#"{"balance": -99}"#), r#""settled""#);
+}
+
+/// The values of an enum that have fields on the wire, a `match` that names the value it takes,
+/// `else` and literals, a record made from another, and values compared whole (DESIGN 23.3–23.6).
+#[test]
+fn values_with_fields() {
+    let c = module(include_str!("modules/sums.kn"));
+    let draft = r#"{"draft": {"items": [{"sku": "a", "qty": 2, "price": 150}]}}"#;
+    let placed = r#"{"placed": {"items": [{"sku": "a", "qty": 2, "price": 150}], "on": "2026-03-01"}}"#;
+    // a value with fields is an object of one key, its name; a value with none, its name
+    assert_eq!(ok(&c, "next", &format!(r#"{{"o": {draft}, "e": {{"place": {{"on": "2026-03-01"}}}}}}"#)), format!(r#"{{"moved":{{"order":{}}}}}"#, placed.replace(' ', "")));
+    assert_eq!(ok(&c, "next", &format!(r#"{{"o": {draft}, "e": "reopen"}}"#)), r#"{"refused":{"why":"a draft is placed first"}}"#);
+    assert_eq!(ok(&c, "next", &format!(r#"{{"o": {placed}, "e": "reopen"}}"#)), r#"{"moved":{"order":{"draft":{"items":[{"sku":"a","qty":2,"price":150}]}}}}"#);
+    assert_eq!(ok(&c, "next", r#"{"o": {"cancelled": {"reason": "late"}}, "e": "reopen"}"#), r#"{"refused":{"why":"the order is closed"}}"#);
+    // the amount paid is the total: 300 cents
+    assert_eq!(ok(&c, "next", &format!(r#"{{"o": {placed}, "e": {{"pay": {{"cents": 300}}}}}}"#)), r#"{"moved":{"order":{"paid":{"items":[{"sku":"a","qty":2,"price":150}],"paid":300}}}}"#);
+    assert_eq!(ok(&c, "next", &format!(r#"{{"o": {placed}, "e": {{"pay": {{"cents": 299}}}}}}"#)), r#"{"refused":{"why":"the amount is not the total"}}"#);
+    // two values of the sum compared whole: placed again on the same day stays as it is
+    assert_eq!(ok(&c, "stays", &format!(r#"{{"o": {placed}, "e": {{"place": {{"on": "2026-03-01"}}}}}}"#)), "true");
+    assert_eq!(ok(&c, "stays", &format!(r#"{{"o": {placed}, "e": {{"place": {{"on": "2026-03-02"}}}}}}"#)), "false");
+    // the type of a value: what a host gives is the value, on the wire as the sum's
+    assert_eq!(ok(&c, "placed_on", &format!(r#"{{"p": {placed}}}"#)), r#""2026-03-01""#);
+    assert_eq!(ok(&c, "moved_to", &format!(r#"{{"p": {placed}, "on": "2027-01-02"}}"#)), r#"{"placed":{"items":[{"sku":"a","qty":2,"price":150}],"on":"2027-01-02"}}"#);
+    // literals, read in the unit split: `-1`, `0USDc`, a date, a string, and `else`
+    assert_eq!(ok(&c, "size", r#"{"n": -1}"#), r#""minus one""#);
+    assert_eq!(ok(&c, "size", r#"{"n": 7}"#), r#""more""#);
+    assert_eq!(ok(&c, "label", r#"{"c": 0}"#), r#""free""#);
+    assert_eq!(ok(&c, "holiday", r#"{"d": "2026-12-25"}"#), "true");
+    assert_eq!(ok(&c, "grade", r#"{"code": "C"}"#), "0");
+    // lists, values that may be none, records: compared whole
+    assert_eq!(ok(&c, "same_items", r#"{"a": [{"sku": "a", "qty": 1, "price": 1}], "b": [{"sku": "a", "qty": 1, "price": 1}]}"#), "true");
+    assert_eq!(ok(&c, "same_items", r#"{"a": [{"sku": "a", "qty": 1, "price": 1}], "b": []}"#), "false");
+    assert_eq!(ok(&c, "same_count", r#"{"a": null, "b": null}"#), "true");
+    assert_eq!(ok(&c, "same_count", r#"{"a": 2, "b": null}"#), "false");
+    assert_eq!(ok(&c, "differ", r#"{"a": {"sku": "a", "qty": 1, "price": 1}, "b": {"sku": "a", "qty": 1, "price": 2}}"#), "true");
+    // what a host gives is held to the value's fields: the day placed, the value's name, its shape
+    let (k, line, msg) = run(&c, "next", r#"{"o": {"placed": {"items": [{"sku": "a", "qty": 1, "price": 1}], "on": "2028-01-01"}}, "e": "reopen"}"#).unwrap_err();
+    assert_eq!((k, line, msg.as_str()), (Kind::Input, 41, "The argument `o.placed.on` of `next` is 2028-01-01, outside its range >=2026-01-01 <=2027-12-31"));
+    let (k, _, msg) = run(&c, "next", r#"{"o": "placed", "e": "reopen"}"#).unwrap_err();
+    assert_eq!((k, msg.as_str()), (Kind::Input, "An argument of `next`: `o` is \"placed\", a value of the enum `Order` that has fields, given as `{\"placed\": {…}}`"));
+    let (k, _, _) = run(&c, "next", r#"{"o": {"shipped": {}}, "e": "reopen"}"#).unwrap_err();
+    assert_eq!(k, Kind::Input);
+    let (k, _, _) = run(&c, "placed_on", r#"{"p": {"draft": {"items": []}}}"#).unwrap_err();
+    assert_eq!(k, Kind::Input);
+}
+
+/// A record made from another: the value after `..` first, then the fields written; each field
+/// that declares a range is held to it, the ones taken as well (DESIGN 23.4, 23.6).
+#[test]
+fn a_record_made_from_another() {
+    let c = module(
+        "module upd v1\n\nrecord Item\n  sku   : string\n  price : money[USDc]  range >=1USDc <=100USDc\n\nfn repriced(i: Item, by: money[USDc] range >=0USDc <=100USDc) -> Item\n  Item { ..i, price: i.price + by }\n\nfn renamed(i: Item) -> Item\n  Item { ..i, sku: \"b\" }\n",
+    );
+    assert_eq!(ok(&c, "repriced", r#"{"i": {"sku": "a", "price": 50}, "by": 10}"#), r#"{"sku":"a","price":60}"#);
+    assert_eq!(fails(&c, "repriced", r#"{"i": {"sku": "a", "price": 50}, "by": 51}"#), (Kind::Range, 8));
+    assert_eq!(ok(&c, "renamed", r#"{"i": {"sku": "a", "price": 50}}"#), r#"{"sku":"b","price":50}"#);
 }
 
 #[test]
@@ -220,6 +301,98 @@ fn the_builtins_walk_lists() {
     assert_eq!(ok(&c, "product", r#"{"xs": []}"#), "1");
     assert_eq!(ok(&c, "smallest", r#"{"xs": ["2026-05-01", "2026-02-01", "2026-03-01"]}"#), "\"2026-02-01\"");
     assert_eq!(ok(&c, "smallest", r#"{"xs": []}"#), "null");
+}
+
+const DICTS: &str = include_str!("modules/dicts.kn");
+const LISTS2: &str = include_str!("modules/lists2.kn");
+
+/// Dicts and sets (DESIGN 24.2, 24.4): on the wire, a dict is the array of its pairs and a set the
+/// array of its members, both in the order of their keys; an input in another order is put in that
+/// order, and a key or a member given twice is the failure `input`. Keys go in the order their type
+/// gives: numbers from the least, strings by their code points, dates from the earliest, the values
+/// of an enum in the order they are declared, a record field by field.
+#[test]
+fn dicts_and_sets_go_in_the_order_of_their_keys() {
+    let c = module(DICTS);
+    assert_eq!(
+        ok(&c, "diff", r#"{"before": [["b", 2], ["a", 1]], "after": [["c", 4], ["b", 3]]}"#),
+        r#"[{"removed":{"sku":"a","qty":1}},{"changed":{"sku":"b","was":2,"now":3}},{"added":{"sku":"c","qty":4}}]"#
+    );
+    assert_eq!(fails(&c, "diff", r#"{"before": [["a", 1], ["a", 2]], "after": []}"#), (Kind::Input, 45));
+    assert_eq!(fails(&c, "both", r#"{"a": ["a", "a"], "b": []}"#).0, Kind::Input);
+    let (_, _, msg) = run(&c, "diff", r#"{"before": [["a", 1], ["a", 2]], "after": []}"#).unwrap_err();
+    assert_eq!(msg, "An argument of `diff`: `before` has the key \"a\" twice");
+    // the orders of the keys' types
+    assert_eq!(ok(&c, "marks", "{}"), r#"["z","｡","😀"]"#);
+    assert_eq!(ok(&c, "days", r#"{"ds": ["2026-05-01", "2026-02-01", "2026-05-01"]}"#), r#"["2026-02-01","2026-05-01"]"#);
+    assert_eq!(ok(&c, "rates", r#"{"rs": [5, 3, 5]}"#), "[3,5]");
+    let tasks = r#"{"tasks": [{"name": "x", "priority": 2, "tier": "gold"}, {"name": "y", "priority": 1, "tier": "gold"}, {"name": "z", "priority": 3, "tier": "basic"}]}"#;
+    assert_eq!(ok(&c, "per_tier", tasks), r#"[["basic",1],["gold",2]]"#);
+    assert_eq!(ok(&c, "tiers", tasks), r#"["basic","gold"]"#);
+    assert_eq!(ok(&c, "names_by_priority", tasks), r#"[[1,["y"]],[2,["x"]],[3,["z"]]]"#);
+    assert_eq!(ok(&c, "ranked", tasks), r#"["z","y","x"]"#);
+    // what a dict answers is in the order of its keys, a later pair wins
+    assert_eq!(ok(&c, "table", "{}"), r#"[["a",100],["b",200]]"#);
+    assert_eq!(ok(&c, "combined", r#"{"a": [["b", 2], ["a", 1]], "b": [["b", 3], ["c", 9]]}"#), r#"[["a",1],["b",5],["c",9]]"#);
+    assert_eq!(ok(&c, "later", r#"{"a": [["b", 2], ["a", 1]], "b": [["b", 3]]}"#), r#"[["a",1],["b",3]]"#);
+    assert_eq!(ok(&c, "restock", r#"{"stock": [["a", 1]], "sku": "a", "qty": 2}"#), r#"[["a",3]]"#);
+    assert_eq!(ok(&c, "restock", r#"{"stock": [["b", 1]], "sku": "a", "qty": 2}"#), r#"[["a",2],["b",1]]"#);
+    assert_eq!(ok(&c, "without", r#"{"stock": [["a", 1], ["b", 2]], "sku": "c"}"#), r#"[["a",1],["b",2]]"#);
+    assert_eq!(ok(&c, "in_stock", r#"{"stock": [["a", 0], ["b", 2]]}"#), r#"[["b",2]]"#);
+    assert_eq!(ok(&c, "shown", r#"{"stock": [["b", 0], ["a", 2]]}"#), r#"["a=2","b=0"]"#);
+    assert_eq!(ok(&c, "quantities", r#"{"lines": [{"sku": "b", "qty": 1, "price": 0}, {"sku": "a", "qty": 2, "price": 0}, {"sku": "b", "qty": 3, "price": 0}]}"#), r#"[["a",2],["b",3]]"#);
+    // two dicts or two sets are equal when they hold the same, whatever order they came in
+    assert_eq!(ok(&c, "same_stock", r#"{"a": [["b", 2], ["a", 1]], "b": [["a", 1], ["b", 2]]}"#), "true");
+    assert_eq!(ok(&c, "same_stock", r#"{"a": [["a", 1]], "b": [["a", 2]]}"#), "false");
+    assert_eq!(ok(&c, "same_tiers", r#"{"a": ["gold", "basic"], "b": ["basic", "gold"]}"#), "true");
+    assert_eq!(ok(&c, "both", r#"{"a": ["c", "a", "b"], "b": ["b", "c"]}"#), r#"["b","c"]"#);
+}
+
+/// `mod` by a value answers from 0 to one less than the size of the divisor, whatever the signs
+/// (DESIGN 24.3), and fails `zero` where the divisor is 0; `numbers` counts from the first to the last,
+/// none where the last is before the first.
+#[test]
+fn a_remainder_by_a_value_and_the_numbers_between_two() {
+    let c = module(DICTS);
+    for (day, players, want) in [(-3, 4, "1"), (3, 4, "3"), (-8, 4, "0"), (10, 1, "0")] {
+        assert_eq!(ok(&c, "turn", &format!(r#"{{"day": {day}, "players": {players}}}"#)), want, "mod({day}, {players})");
+    }
+    for (x, n, want) in [(7, -3, "1"), (-7, -3, "2"), (-1, -1, "0")] {
+        assert_eq!(ok(&c, "wrapped", &format!(r#"{{"x": {x}, "n": {n}}}"#)), want, "mod({x}, {n})");
+    }
+    assert_eq!(ok(&c, "spread", r#"{"n": 5}"#), "[2,4,1,3,0]");
+    assert_eq!(ok(&c, "spread", r#"{"n": 0}"#), "[]");
+    assert_eq!(ok(&c, "between", r#"{"first": 2, "last": 4}"#), "9");
+    assert_eq!(ok(&c, "between", r#"{"first": 3, "last": 1}"#), "0");
+    let z = module("module z v1\n\nfn rem(x: number range >=0 <=9, n: number range >=0 <=3) -> number\n  mod(x, n)\n");
+    assert_eq!(ok(&z, "rem", r#"{"x": 7, "n": 3}"#), "1");
+    assert_eq!(fails(&z, "rem", r#"{"x": 7, "n": 0}"#), (Kind::Zero, 4));
+}
+
+/// The builtins of a list (DESIGN 24.3): an order keeps two elements of one key in the order of the
+/// list, the places past a list's ends cut it and fail nothing, `last` finds from the end.
+#[test]
+fn the_builtins_of_lists_keep_their_order_and_cut_where_they_end() {
+    let c = module(LISTS2);
+    let items = r#"{"items": [{"name": "b", "price": 5, "qty": 1}, {"name": "a", "price": 2, "qty": 1}, {"name": "c", "price": 2, "qty": 1}, {"name": "d", "price": 5, "qty": 0}]}"#;
+    assert_eq!(ok(&c, "by_price", items), r#"["a","c","b","d"]"#);
+    assert_eq!(ok(&c, "cheapest", items), r#"{"name":"a","price":2,"qty":1}"#);
+    assert_eq!(ok(&c, "dearest", items), r#""b""#);
+    assert_eq!(ok(&c, "dearest", r#"{"items": []}"#), "null");
+    assert_eq!(ok(&c, "ordered", r#"{"xs": [3, -5, 0, 3]}"#), "[-5,0,3,3]");
+    assert_eq!(ok(&c, "unique", r#"{"xs": ["b", "a", "b", "c"]}"#), r#"["b","a","c"]"#);
+    for (start, stop, want) in [(-1, 2, "[1,2]"), (3, 1, "[]"), (2, 5, "[3,4]"), (-1, 5, "[1,2,3,4]")] {
+        assert_eq!(ok(&c, "cut", &format!(r#"{{"xs": [1, 2, 3, 4], "start": {start}, "stop": {stop}}}"#)), want, "slice({start}, {stop})");
+    }
+    assert_eq!(ok(&c, "turned", r#"{"xs": [1, 2, 3, 4], "n": -1}"#), "[4,3,2,1]");
+    assert_eq!(ok(&c, "turned", r#"{"xs": [1, 2, 3, 4], "n": 5}"#), "[1,2,3,4]");
+    assert_eq!(ok(&c, "picked", r#"{"xs": ["a", "b"], "i": -1}"#), "null");
+    assert_eq!(ok(&c, "picked", r#"{"xs": ["a", "b"], "i": 1}"#), r#""b""#);
+    assert_eq!(ok(&c, "last_above", r#"{"xs": [7, 1, 9, 2], "limit": 5}"#), "9");
+    assert_eq!(ok(&c, "last_above", r#"{"xs": [7, 1, 9, 2], "limit": 9}"#), "null");
+    assert_eq!(ok(&c, "ends", r#"{"xs": []}"#), "-1");
+    assert_eq!(ok(&c, "flat", r#"{"xss": [[1], [], [2, 3]]}"#), "[1,2,3]");
+    assert_eq!(ok(&c, "has", r#"{"xs": [{"name": "b", "price": 2, "qty": 1}], "x": {"name": "b", "price": 2, "qty": 2}}"#), "false");
 }
 
 const INNER: &str = include_str!("modules/inner.kn");
@@ -343,4 +516,58 @@ fn a_function_of_another_module() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+/// Values of types that hold themselves (DESIGN 28.1): a host's argument nests them 200 deep at most,
+/// one 201 deep failing `input` with the type named, before what follows walks it; a call of kaname
+/// holds nothing inside such a value (a rate with no range past 100%, built here, is given on), and a
+/// host's argument is held inside it at every depth.
+#[test]
+fn values_that_hold_themselves() {
+    // on a stack as deep as 200 calls need (DESIGN 8)
+    std::thread::Builder::new().stack_size(256 << 20).spawn(values_that_hold_themselves_deep).unwrap().join().unwrap();
+}
+
+fn values_that_hold_themselves_deep() {
+    let c = module(include_str!("modules/trees.kn"));
+    let p = Program::of(&c);
+    let suite = common::joined();
+    let size = kaname::interp::function(&c, "size").unwrap();
+    let t = c.decls.fns[size].params[0].slot.ty.clone();
+    let deep = |n: usize| kaname::vectors::nested_value(&p, &t, n).unwrap();
+    assert_eq!((p.nesting(&deep(200), &t), p.nesting(&deep(201), &t)), (200, 201));
+    let mut it = Interp::new(&p, &suite);
+    assert!(it.check_entry(&c, size, &[deep(200)]).is_ok());
+    let fl = it.check_entry(&c, size, &[deep(201)]).unwrap_err();
+    assert_eq!((fl.kind, fl.line), (Kind::Input, c.decls.fns[size].line));
+    assert_eq!(fl.message.en, "The argument `c` of `size` nests `Category` more than 200 deep");
+    assert_eq!(fl.message.ja, "関数 `size` の引数 `c` は、`Category` の入れ子が 200 段を超えています");
+    // 200 calls deep, as deep as the interpreter goes (DESIGN 8)
+    match it.call(&c, size, vec![deep(200)], 0) {
+        Ok(v) => assert_eq!(p.to_json(&v, &c.decls.fns[size].ret.ty).compact(), "200"),
+        other => panic!("{other:?}"),
+    }
+    // a value of an enum and of two types that hold each other, nested as deep
+    for (name, ty) in [("value_of", "Expr"), ("values_in", "Doc")] {
+        let f = kaname::interp::function(&c, name).unwrap();
+        let t = c.decls.fns[f].params[0].slot.ty.clone();
+        let v = kaname::vectors::nested_value(&p, &t, 201).unwrap();
+        let fl = Interp::new(&p, &suite).check_entry(&c, f, &[v]).unwrap_err();
+        assert!(fl.message.en.contains(&format!("nests `{ty}` more than 200 deep")), "{}", fl.message.en);
+    }
+    // a call of kaname gives a share of 500% on; a host's share past 100% fails, inside the value too
+    assert_eq!(ok(&c, "wide_shares", r#"{"p": 500}"#), "2");
+    let shares = c.decls.fns[kaname::interp::function(&c, "shares").unwrap()].line;
+    assert_eq!(fails(&c, "shares", r#"{"s": {"part": 101, "under": []}}"#), (Kind::Input, shares));
+    match run(&c, "shares", r#"{"s": {"part": 1, "under": [{"part": 150, "under": []}]}}"#) {
+        Err((Kind::Input, line, msg)) => {
+            assert_eq!(line, shares);
+            assert_eq!(msg, "The argument `s.under[0].part` of `shares` is 150%, outside its range >=0% <=100%");
+        }
+        other => panic!("{other:?}"),
+    }
+    // a tree built, compared and counted
+    assert_eq!(ok(&c, "size", r#"{"c": {"name": "a", "children": [{"name": "b", "children": [{"name": "c", "children": []}]}]}}"#), "3");
+    assert_eq!(ok(&c, "same", r#"{"a": {"name": "a", "children": []}, "b": {"name": "a", "children": []}}"#), "true");
+    assert_eq!(ok(&c, "length", r#"{"n": {"value": 1, "next": {"value": 2, "next": {"value": 3, "next": null}}}}"#), "3");
 }

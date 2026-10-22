@@ -35,6 +35,29 @@ pub struct Checked {
     pub typed: Typed,
     /// What the analysis of ranges finds of it (DESIGN 4, 5): set once the module's types pass.
     pub analysis: std::cell::OnceCell<crate::ranges::Analysis>,
+    /// Every lambda of its functions, by its id, with the function it is written in: what a function
+    /// value is called with (DESIGN 27.3), made the first time one is looked up.
+    pub lambdas: std::cell::OnceCell<BTreeMap<usize, (usize, crate::ast::Expr)>>,
+}
+
+impl Checked {
+    /// The lambda of the expression `id`, and the function it is written in (DESIGN 27.3).
+    pub fn lambda(&self, id: usize) -> Option<(usize, &crate::ast::Expr)> {
+        let all = self.lambdas.get_or_init(|| {
+            let mut out = BTreeMap::new();
+            for (f, decl) in self.module.fns.iter().enumerate() {
+                let mut es = Vec::new();
+                decl.body.walk(&mut es);
+                for e in es {
+                    if let crate::ast::ExprKind::Lambda(..) = e.kind {
+                        out.insert(e.id, (f, e.clone()));
+                    }
+                }
+            }
+            out
+        });
+        all.get(&id).map(|(f, e)| (*f, e))
+    }
 }
 
 /// What the check of one file comes to.
@@ -143,7 +166,7 @@ impl Run {
                 by_name.entry(u.name.clone()).or_insert((i, t.clone()));
             }
         }
-        let mut dc = Dc { path, src, canon: &canon, module: &module, uses: &by_name, world: &world, diags: Vec::new() };
+        let mut dc = Dc { path, src, canon: &canon, module: &module, uses: &by_name, world: &world, diags: Vec::new(), scope: Vec::new() };
         dc.names();
         let decls = dc.declarations();
         let n = module.exprs;
@@ -152,13 +175,32 @@ impl Run {
         } else {
             // the names inside the functions would name what could not be read: that is said once, at
             // its `use` line
-            (Typed { types: vec![crate::ty::Ty::Error; n], refs: vec![types::Ref::None; n], bound: BTreeMap::new() }, dc.diags)
+            (Typed { types: vec![crate::ty::Ty::Error; n], refs: vec![types::Ref::None; n], bound: BTreeMap::new(), inst: BTreeMap::new(), named: BTreeMap::new() }, dc.diags)
         };
         diags.extend(more);
+        // `let … = try …` is read as the `match` it means, once the types pass (DESIGN 26.3)
+        let (mut module, mut typed) = (module, typed);
+        if !diag::has_errors(&diags) {
+            let rets: Vec<crate::ty::Ty> = decls.fns.iter().map(|f| f.ret.ty.clone()).collect();
+            crate::tried::desugar(&mut module, &mut typed, &rets);
+            // a function written as a value is read as the lambda that calls it (DESIGN 27.1)
+            crate::wrapped::desugar(&mut module, &mut typed);
+        }
         let mut checked = if diag::has_errors(&diags) {
             None
         } else {
-            Some(Rc::new(Checked { path: path.to_string(), canon, src: src.to_string(), module, uses: uses.into_iter().flatten().collect(), world, decls, typed, analysis: std::cell::OnceCell::new() }))
+            Some(Rc::new(Checked {
+                path: path.to_string(),
+                canon,
+                src: src.to_string(),
+                module,
+                uses: uses.into_iter().flatten().collect(),
+                world,
+                decls,
+                typed,
+                analysis: std::cell::OnceCell::new(),
+                lambdas: std::cell::OnceCell::new(),
+            }))
         };
         // the analysis of ranges, the effects and the decisions written in code, once the types hold
         // (DESIGN 4, 5, 7)
@@ -248,6 +290,8 @@ impl Run {
                 d.note(tr!("そのファイルを、{tool} の検査が通るように直してください。", "Correct that file until {tool}'s check passes it."))
             };
             let t = match u.kind {
+                // a rule with no outputs (an `enums` file) is read for its enums: a call of it, and its
+                // outputs, stop where they are written (E201, DESIGN 2.7)
                 UseKind::Rule => match self.suite.rules.as_ref().map(|r| r.facts(&target)) {
                     Some(Ok(f)) => Some(Target::Rule { file: target.clone(), canon, facts: Rc::new(f) }),
                     Some(Err(said)) => {

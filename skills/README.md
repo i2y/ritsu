@@ -17,7 +17,7 @@ on this repository.
 | [yuen](yuen/SKILL.md) | where requirements come from, and what meets and checks them (`.req`) |
 | [sakai](sakai/SKILL.md) | maps of bounded contexts, held to the rules, workflows and code they name (`.ctx`) |
 | [sekisho](sekisho/SKILL.md) | who may do what (`.gate`), checked on every combination and compiled to Cedar, with the code that asks it |
-| [kaname](kaname/SKILL.md) | the code that joins rules, dates and books (`.kn`), held to their types, ranges and rounding, and generated beside their code |
+| [kaname](kaname/SKILL.md) | functional cores (`.kn`): general code with no input or output, and the code around rules, dates and books, held to ritsu's types, ranges and rounding, and generated for a host to call |
 
 Each skill runs ritsu, so `ritsu` has to be on PATH; the [README](../README.md#install) says how to
 install it. Under the name of a language (a link named `rulec`, say) ritsu is that language, and
@@ -58,7 +58,7 @@ geas     claims a person has read, held over the code (.geas)
 yuen     where requirements come from (.req)
 sakai    maps of bounded contexts (.ctx)
 sekisho  who may do what, compiled to Cedar (.gate)
-kaname   the code that joins rules, dates and books (.kn)
+kaname   functional cores: general code with no input or output (.kn)
 $ ritsu skills install
 $ ritsu skills install --user
 $ ritsu skills install rulec dandori

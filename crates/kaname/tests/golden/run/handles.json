@@ -1,0 +1,16 @@
+{
+  "kaname": "<version>",
+  "file": "handles.kn",
+  "module": "handles",
+  "function": "tag",
+  "input": {
+    "text": "Ada Lovelace#42"
+  },
+  "calls": [],
+  "result": {
+    "ok": {
+      "handle": "ada-lovelace",
+      "number": 42
+    }
+  }
+}

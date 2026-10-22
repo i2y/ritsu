@@ -1,0 +1,58 @@
+{
+  "kaname": "<version>",
+  "file": "stock_diff.kn",
+  "module": "stock_diff",
+  "function": "changes",
+  "input": {
+    "before": [
+      [
+        "ink",
+        4
+      ],
+      [
+        "pen",
+        10
+      ],
+      [
+        "pad",
+        2
+      ]
+    ],
+    "after": [
+      [
+        "pen",
+        7
+      ],
+      [
+        "pad",
+        2
+      ],
+      [
+        "tape",
+        3
+      ]
+    ]
+  },
+  "calls": [],
+  "result": [
+    {
+      "removed": {
+        "sku": "ink",
+        "qty": 4
+      }
+    },
+    {
+      "changed": {
+        "sku": "pen",
+        "was": 10,
+        "now": 7
+      }
+    },
+    {
+      "added": {
+        "sku": "tape",
+        "qty": 3
+      }
+    }
+  ]
+}

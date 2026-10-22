@@ -1,0 +1,197 @@
+{
+  "kaname": "<version>",
+  "file": "handles.ja.kn",
+  "module": {
+    "name": "ハンドル",
+    "alias": "handles_ja",
+    "version": "v1",
+    "description": "人が入力したハンドルを、サービスが持つ形にする。両端の空白を除き、中の空白の続きをハイフン一つにし、英字を小文字にしてから、ハンドルの決まりに合うかを確かめ、合わない理由を全部言う。テキストから、ハンドルと番号の組（タグ）も読む。handles.kn の日本語の版",
+    "sha256": "5371def987ac5eeae7d37b38368274943b92079db70e5d002bd63a607fec28e6"
+  },
+  "generated": {
+    "typescript": "glue/handles_ja.ts",
+    "python": "glue/handles_ja.py",
+    "go": "glue/handlesja/handlesja.go"
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "タグ",
+      "alias": "Tag",
+      "fields": [
+        {
+          "name": "ハンドル",
+          "alias": "handle",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5
+        },
+        {
+          "name": "番号",
+          "alias": "number",
+          "type": "number",
+          "range": ">=1 <=9999",
+          "count": null,
+          "line": 6
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Tag",
+        "python": "Tag",
+        "go": "Tag"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "正規化",
+      "alias": "normalized",
+      "line": 9,
+      "description": null,
+      "params": [
+        {
+          "name": "入力",
+          "alias": "raw",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "string",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "normalized",
+        "python": "normalized",
+        "go": "Normalized"
+      }
+    },
+    {
+      "name": "問題",
+      "alias": "problems",
+      "line": 13,
+      "description": null,
+      "params": [
+        {
+          "name": "ハンドル",
+          "alias": "handle",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "problems",
+        "python": "problems",
+        "go": "Problems"
+      }
+    },
+    {
+      "name": "ハンドルにする",
+      "alias": "handle",
+      "line": 23,
+      "description": null,
+      "params": [
+        {
+          "name": "入力",
+          "alias": "raw",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[string, list[string]]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 24,
+          "function": "正規化"
+        },
+        {
+          "line": 25,
+          "function": "問題"
+        }
+      ],
+      "generated": {
+        "typescript": "handle",
+        "python": "handle",
+        "go": "Handle"
+      }
+    },
+    {
+      "name": "タグを読む",
+      "alias": "tag",
+      "line": 29,
+      "description": null,
+      "params": [
+        {
+          "name": "テキスト",
+          "alias": "text",
+          "type": "string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[タグ, list[string]]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 33,
+          "function": "ハンドルにする"
+        }
+      ],
+      "generated": {
+        "typescript": "tag",
+        "python": "tag",
+        "go": "TagFn"
+      }
+    }
+  ],
+  "transfers": []
+}

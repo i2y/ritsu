@@ -26,20 +26,23 @@ pub fn run_one<'p>(p: &'p Program, suite: &'p Suite, c: &'p Checked, x: &'p Exam
     let Ref::Fn(_, name) = c.typed.refs.get(callee.id)? else { return None };
     let f = c.decls.fns.iter().position(|i| i.name.text == *name)?;
     let info = &c.decls.fns[f];
+    // the types a generic function's type parameters take in the example (DESIGN 26.4)
+    let targs: Vec<crate::ty::Ty> = c.typed.inst.get(&x.call.id).cloned().unwrap_or_default();
+    let names = crate::names::tnames(&info.tparams);
     let mut it = Interp::new(p, suite);
     let mut vals = vec![Value::None; info.params.len()];
     for a in args {
         let Arg::Named(n, _, e) = a else { continue };
         let Some(k) = info.params.iter().position(|q| q.name.is(n)) else { continue };
-        match it.constant(c, e, &info.params[k].slot.ty) {
+        match it.constant(c, e, &crate::ty::subst(&info.params[k].slot.ty, &names, &targs)) {
             Ok(v) => vals[k] = v,
             Err(s) => return Some((f, vals, Came::Stopped(s))),
         }
     }
-    if let Err(fail) = it.check_entry(c, f, &vals) {
+    if let Err(fail) = it.check_entry_with(c, f, &vals, &targs) {
         return Some((f, vals, Came::Stopped(Stop::Failed(fail))));
     }
-    let came = match it.call(c, f, vals.clone(), 0) {
+    let came = match it.call_with(c, f, vals.clone(), 0, targs) {
         Ok(v) => Came::Answer(v),
         Err(s) => Came::Stopped(s),
     };
@@ -80,7 +83,9 @@ pub fn check(c: &Rc<Checked>, suite: &Suite) -> Vec<Diag> {
     let mut diags = Vec::new();
     for x in &c.module.examples {
         let Some((f, _, came)) = run_one(&p, suite, c, x) else { continue };
-        let ret = &c.decls.fns[f].ret.ty;
+        let _ = f;
+        // the answer's type, the types of a generic function's type parameters put in
+        let ret = c.typed.types.get(x.call.id).unwrap_or(&c.decls.fns[f].ret.ty);
         let mut it = Interp::new(&p, suite);
         let at = |msg: Text| Diag::at("E601", &c.path, x.line, x.call.span.col, msg).source(&c.src);
         let d = match (&x.expect, came) {

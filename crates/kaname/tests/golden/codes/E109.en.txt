@@ -1,3 +1,3 @@
-error[E109]: example.kn:4:15: A function is a value only as an argument of a builtin
-     4 |   let twice = x => x * 2
-  = `x => …` is written only where a builtin takes it, as in `sum(xs, x => …)`; a computation used elsewhere is a `fn` with a name.
+error[E109]: example.kn:4:10: The builtin `isqrt` is no value
+     4 |   xs.map(isqrt)
+  = Call a builtin (`isqrt(…)`), or give it wrapped in a lambda (`x => isqrt(x)`).

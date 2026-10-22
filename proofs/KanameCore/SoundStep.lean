@@ -49,7 +49,8 @@ theorem case_str {m : Nat} {A : ACtx} {ρ : Env} {o : Out} {dep id : Nat} {t : S
   | zero => exact concl_fuel hS
   | succ m =>
     simp only [evI, eval]
-    exact concl_of hS (fun v hv => by cases hv; exact Mem.str) (fun k l hv => by cases hv)
+    exact concl_of hS (fun v hv => by cases hv; exact Mem.str (In_ints_nat (Int.le_refl _) (Int.le_refl _)))
+      (fun k l hv => by cases hv)
 
 theorem case_bool {m : Nat} {A : ACtx} {ρ : Env} {o : Out} {dep id : Nat} {b : Bool} (hS : Sat A ρ) :
     Concl C ρ (eval C (n + 1) dep ρ (.bool id b)) (evI A m (.bool id b) o) := by

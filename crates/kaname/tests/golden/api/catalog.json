@@ -1,0 +1,473 @@
+{
+  "kaname": "<version>",
+  "file": "catalog.kn",
+  "module": {
+    "name": "catalog",
+    "alias": "catalog",
+    "version": "v1",
+    "description": "A catalog's tree of categories, each with its items and the categories under it: the path of every item, the tree with the categories that hold no item taken out, the tree with its names made by a function the caller gives, and what a function picks from every category, from the top down",
+    "sha256": "8070a98d0a7cbd7cd753fbd13ab1643704259f74154629c66b880ee9660c3ae9"
+  },
+  "generated": {
+    "typescript": "glue/catalog.ts",
+    "python": "glue/catalog.py",
+    "go": "glue/catalog/catalog.go"
+  },
+  "uses": [],
+  "enums": [],
+  "records": [
+    {
+      "name": "Item",
+      "alias": "Item",
+      "fields": [
+        {
+          "name": "sku",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 5
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 6
+        },
+        {
+          "name": "price",
+          "alias": "price",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000000USDc",
+          "count": null,
+          "line": 7
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Item",
+        "python": "Item",
+        "go": "Item"
+      }
+    },
+    {
+      "name": "Category",
+      "alias": "Category",
+      "fields": [
+        {
+          "name": "name",
+          "alias": "name",
+          "type": "string",
+          "range": null,
+          "count": null,
+          "line": 10
+        },
+        {
+          "name": "items",
+          "alias": "items",
+          "type": "list[Item]",
+          "range": null,
+          "count": null,
+          "line": 11
+        },
+        {
+          "name": "children",
+          "alias": "children",
+          "type": "list[Category]",
+          "range": null,
+          "count": null,
+          "line": 12
+        }
+      ],
+      "line": 9,
+      "generated": {
+        "typescript": "Category",
+        "python": "Category",
+        "go": "Category"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "paths",
+      "alias": "paths",
+      "line": 15,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 16,
+          "function": "paths_under"
+        }
+      ],
+      "generated": {
+        "typescript": "paths",
+        "python": "paths",
+        "go": "Paths"
+      }
+    },
+    {
+      "name": "paths_under",
+      "alias": "paths_under",
+      "line": 18,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "above",
+          "alias": "above",
+          "type": "list[string]",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 20,
+          "function": "paths_under"
+        }
+      ],
+      "generated": {
+        "typescript": "paths_under",
+        "python": "paths_under",
+        "go": "PathsUnder"
+      }
+    },
+    {
+      "name": "pruned",
+      "alias": "pruned",
+      "line": 23,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Category?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 24,
+          "function": "pruned"
+        }
+      ],
+      "generated": {
+        "typescript": "pruned",
+        "python": "pruned",
+        "go": "Pruned"
+      }
+    },
+    {
+      "name": "relabel",
+      "alias": "relabel",
+      "inner": true,
+      "line": 28,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "label",
+          "alias": "label",
+          "type": "(string) -> string",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Category",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true,
+        "through": [
+          "label"
+        ]
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 29,
+          "function": "relabel"
+        }
+      ],
+      "generated": {
+        "typescript": "_relabel",
+        "python": "_relabel",
+        "go": "Relabel"
+      }
+    },
+    {
+      "name": "slugged",
+      "alias": "slugged",
+      "line": 32,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Category",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 33,
+          "function": "relabel"
+        }
+      ],
+      "generated": {
+        "typescript": "slugged",
+        "python": "slugged",
+        "go": "Slugged"
+      }
+    },
+    {
+      "name": "collect",
+      "alias": "collect",
+      "type_params": [
+        {
+          "name": "T",
+          "alias": "T",
+          "key": false
+        }
+      ],
+      "inner": true,
+      "line": 36,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "pick",
+          "alias": "pick",
+          "type": "(Category) -> list[T]",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[T]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true,
+        "through": [
+          "pick"
+        ]
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 37,
+          "function": "collect"
+        }
+      ],
+      "generated": {
+        "typescript": "_collect",
+        "python": "_collect",
+        "go": "Collect"
+      }
+    },
+    {
+      "name": "items",
+      "alias": "items",
+      "line": 39,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[Item]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 40,
+          "function": "collect"
+        }
+      ],
+      "generated": {
+        "typescript": "items",
+        "python": "items",
+        "go": "Items"
+      }
+    },
+    {
+      "name": "names",
+      "alias": "names",
+      "line": 42,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "list[string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 43,
+          "function": "collect"
+        }
+      ],
+      "generated": {
+        "typescript": "names",
+        "python": "names",
+        "go": "Names"
+      }
+    },
+    {
+      "name": "cheapest",
+      "alias": "cheapest",
+      "line": 46,
+      "description": null,
+      "params": [
+        {
+          "name": "c",
+          "alias": "c",
+          "type": "Category",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "Item?",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": true
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 47,
+          "function": "items"
+        }
+      ],
+      "generated": {
+        "typescript": "cheapest",
+        "python": "cheapest",
+        "go": "Cheapest"
+      }
+    }
+  ],
+  "transfers": []
+}

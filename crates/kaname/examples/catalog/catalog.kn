@@ -1,0 +1,53 @@
+module catalog v1
+description "A catalog's tree of categories, each with its items and the categories under it: the path of every item, the tree with the categories that hold no item taken out, the tree with its names made by a function the caller gives, and what a function picks from every category, from the top down"
+
+record Item
+  sku   : string
+  name  : string
+  price : money[USDc]  range >=1USDc <=1_000_000USDc
+
+record Category
+  name     : string
+  items    : list[Item]
+  children : list[Category]
+
+# every item with the names of the categories it is under: `Garden / Tools / Spade`
+fn paths(c: Category) -> list[string]
+  paths_under(c: c, above: [])
+
+fn paths_under(c: Category, above: list[string]) -> list[string]
+  let here = above.append(c.name)
+  c.items.map(i => here.append(i.name).join(" / ")).concat(c.children.flat_map(x => paths_under(c: x, above: here)))
+
+# the tree with every category that holds no item, under it or in it, taken out
+fn pruned(c: Category) -> Category?
+  let kept = c.children.filter_map(x => pruned(c: x))
+  if c.items.count() = 0 and kept.count() = 0 then none else Category { ..c, children: kept }
+
+# the tree with each category's name made by the function given
+fn relabel(c: Category, label: (string) -> string) -> Category
+  Category { ..c, name: label(c.name), children: c.children.map(x => relabel(c: x, label: label)) }
+
+# the names as the parts of a web address take them: words joined by hyphens, in lower case
+fn slugged(c: Category) -> Category
+  relabel(c: c, label: n => n.words().join("-").lower_ascii())
+
+# what the function given picks from each category, from the top down
+fn collect[T](c: Category, pick: (Category) -> list[T]) -> list[T]
+  pick(c).concat(c.children.flat_map(x => collect(c: x, pick: pick)))
+
+fn items(c: Category) -> list[Item]
+  collect(c: c, pick: x => x.items)
+
+fn names(c: Category) -> list[string]
+  collect(c: c, pick: x => [x.name])
+
+# the cheapest item of the tree, the first of those of one price
+fn cheapest(c: Category) -> Item?
+  items(c: c).min_by(i => i.price)
+
+examples
+  paths(c: Category { name: "Garden", items: [], children: [Category { name: "Tools", items: [Item { sku: "sp-1", name: "Spade", price: 1999USDc }], children: [] }] }) = ["Garden / Tools / Spade"]
+  pruned(c: Category { name: "Garden", items: [], children: [Category { name: "Seeds", items: [], children: [] }] }) = none
+  slugged(c: Category { name: "Garden Tools", items: [], children: [Category { name: "Hand Trowels", items: [], children: [] }] }) = Category { name: "garden-tools", items: [], children: [Category { name: "hand-trowels", items: [], children: [] }] }
+  names(c: Category { name: "Garden", items: [], children: [Category { name: "Tools", items: [], children: [] }, Category { name: "Seeds", items: [], children: [] }] }) = ["Garden", "Tools", "Seeds"]

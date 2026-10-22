@@ -143,7 +143,7 @@ pub fn purpose(name: &str) -> Text {
         "yuen" => tr!("要件の来歴（.req）", "where requirements come from (.req)"),
         "sakai" => tr!("境界づけられたコンテキストの地図（.ctx）", "maps of bounded contexts (.ctx)"),
         "sekisho" => tr!("だれが何をしてよいかを書き、Cedar を生成する（.gate）", "who may do what, compiled to Cedar (.gate)"),
-        _ => tr!("規則と日付と帳簿をつなぐコード（.kn）", "the code that joins rules, dates and books (.kn)"),
+        _ => tr!("Functional Core。入出力を持たない汎用のコード（.kn）", "functional cores: general code with no input or output (.kn)"),
     }
 }
 

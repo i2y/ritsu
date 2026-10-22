@@ -25,7 +25,7 @@ fn version_and_help() {
     assert_eq!((code, out), (0, format!("kaname {}\n", env!("CARGO_PKG_VERSION"))));
     let (code, out, _) = joined(&["--help"]);
     assert_eq!(code, 0);
-    assert!(out.starts_with(&format!("kaname {}\n\nA small language for the code that joins rules, dates and books", env!("CARGO_PKG_VERSION"))), "{out}");
+    assert!(out.starts_with(&format!("kaname {}\n\nA small general-purpose language for writing a functional core", env!("CARGO_PKG_VERSION"))), "{out}");
     assert!(out.contains("  kaname check <file.kn>...") && out.contains("  kaname explain <code>"), "{out}");
     assert!(out.contains("  kaname run <file.kn> <function>") && out.contains("  kaname vectors <file.kn>"), "{out}");
     let (code, out, _) = joined(&["help", "run", "--lang", "ja"]);
@@ -91,14 +91,14 @@ fn check_in_json() {
         r#"{"function":"claim","effect":{"fails":["date"],"diverges":false},"written":{"total":true,"fails":[],"diverges":false},"places":[{"line":20,"kind":"date","check":"X6","code":null,"outcome":"waiting"}],"calls":[]}"#
     );
     let t = TempDir::new("kaname-json");
-    let bad = t.write("bad.kn", "module bad v1\n\nfn f(n: number) -> number\n  n\n");
+    let bad = t.write("bad.kn", "module bad v1\n\nfn f(r: rate) -> number\n  0\n");
     let (code, out, _) = joined(&["check", bad.to_str().unwrap(), "--format", "json", "--root", t.path().to_str().unwrap(), "--lang", "ja"]);
     assert_eq!(code, 1);
     let v = ritsu_base::json::parse(&out).unwrap();
     let d = &v.get("diagnostics").unwrap().as_arr().unwrap()[0];
     assert_eq!(d.get("code").and_then(|c| c.as_str()), Some("E108"));
     assert_eq!(d.get("file").and_then(|c| c.as_str()), Some("bad.kn"));
-    assert_eq!(d.get("message").and_then(|c| c.as_str()), Some("関数 `f` の引数 `n` に、範囲（`range`）がありません"));
+    assert_eq!(d.get("message").and_then(|c| c.as_str()), Some("関数 `f` の引数 `r` に、率の刻み（`rate[step 0.01%]`）がありません"));
     assert!(v.get("summary").unwrap().is_null());
     assert!(v.get("functions").unwrap().is_null());
 }
@@ -115,7 +115,7 @@ fn explain() {
     assert!(out.contains("    module 例(example) v1\n"), "{out}");
     let (code, out, _) = joined(&["explain", "--all", "--format", "json"]);
     assert_eq!(code, 0);
-    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 33);
+    assert_eq!(ritsu_base::json::parse(&out).unwrap().as_arr().unwrap().len(), 38);
     let (code, out, _) = joined(&["explain", "W501"]);
     assert_eq!(code, 0);
     assert!(out.starts_with("W501 (warning) — A decision is written in code; a table should hold it\n"), "{out}");

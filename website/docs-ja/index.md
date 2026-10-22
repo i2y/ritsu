@@ -24,7 +24,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 | yuen | `.req` | 要件の出どころと、それを満たすもの | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.ja.md) |
 | sakai | `.ctx` | 境界づけられたコンテキストの地図 | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.ja.md) |
 | sekisho | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | [sekisho のページ](sekisho.md) |
-| kaname | `.kn` | Functional Core。ritsu の型で書き、規則と日付と帳簿を呼ぶ | [README](https://github.com/i2y/ritsu/blob/main/crates/kaname/README.ja.md) |
+| kaname | `.kn` | Functional Core を書く小さな汎用の言語。入出力を持たないコードを ritsu の型で書き、規則と日付と帳簿も呼べる | [kaname のページ](kaname/index.md) |
 
 どの言語も、それだけで使えます。`.flow` を書かずに rulec だけを使うこともできます。一つのファイルに二つの言語を混ぜることはしません。運賃、暦、帳簿、ワークフローを読む人は、それぞれ違うからです。
 
@@ -36,7 +36,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 - **yuen** では、要件ごとに、どこから来たか、誰が受け持つか、何が満たし何が確かめるかを書きます。どのリンクも両端のハッシュで固定されます。OpenSpec の仕様の要件も、同じように固定します。
 - **sakai** では、どのコンテキストがどのファイルを持ち、誰が誰に依存してよいかを地図に書きます。コンテキストのあいだをまたぐ参照を、ここにあるすべての言語のファイルと、サービスが契約として持つ OpenAPI と AsyncAPI の文書と、コードについて確かめます。帳簿の `use book` は数えません。ほかのコンテキストからは、帳簿の前に立つサービスを通して使うからです。
 - **sekisho** では、どの principal がどの resource にどの action をしてよいかを、ゲート（`.gate` のファイル）に書きます。条件には、役割、属性、関係のほかに、規則の答えと日付の答えを使えます。`sekisho check` は起こりうる組み合わせを全部たどり、どれも Cedar と同じ決まりで答えを決めます。検査を通ったゲートだけが、Cedar のスキーマとポリシーと、条件の値をサービス自身のデータから計算して Cedar に尋ねる TypeScript、Python、Go のコードになります。規則の答えがゲートから Cedar に届くまでを、[sekisho のページ](sekisho.md)で例に沿って読めます。
-- **kaname** では、それらをつなぐコードを書きます。モジュール（`.kn` のファイル）は、規則の入力を組み立て、一つの答えを次の呼び出しに渡し、額を帳簿に渡すコードを ritsu の型で書いたもので、自分では入出力を持ちません。`kaname check` は、単位とお金、丸め、int64 を確かめ、渡す値がどれも相手の範囲に入るかを確かめます。`total` と書いた関数が、宣言した範囲のどの入力にも答えることも示します。`ritsu gen` は、呼ぶもののコードの横に、TypeScript、Python、Go のコードを書きます。
+- **kaname** は、プログラムのうち入出力を持たない部分（Functional Core）を書く、小さな汎用の言語です。モジュール（`.kn` のファイル）には、イベントで状態を進める、入力を確かめて形を整える、辞書と集合で数を集めて比べる、木を作り替える、といった計算と、規則の入力を組み立て、一つの答えを次の呼び出しに渡し、額を帳簿に渡すコードを、ritsu の型で書きます。`kaname check` は、単位とお金、丸め、int64 を確かめ、渡す値がどれも相手の範囲に入るかを確かめます。`total` と書いた関数が、宣言した範囲のどの入力にも答えることも示します。`ritsu gen` は、ホストが呼ぶ TypeScript、Python、Go のコードを、呼ぶもののコードの横に書きます。[kaname のページ](kaname/index.md)では、[書き方](kaname/language.md)、TypeScript、Python、Go から呼ぶ [Functional Core の四つの例](kaname/examples.md)、[検査が保証すること](kaname/checks.md)、[規則・日付・帳簿を呼ぶこと](kaname/together.md)を読めます。
 
 ## 言語が出会うところ
 

@@ -1,0 +1,112 @@
+module リスト二(lists2_ja) v1
+description "リストの組み込みの関数：要素を足すことと探すこと、切り出すことと逆にすること、鍵の順に並べること、鍵ごとに初めの一つを残すこと、リストのリストを一つにすること、要素に番号を付けること、鍵のいちばん大きいもの、文字列をつなぐこと、これまでの組み込みの関数を値のあとに書くこと。lists2.kn の日本語の版"
+
+record 品物(Item)
+  名前(name)  : string
+  単価(price) : money[USDc]  range >=0USDc <=1_000USDc
+  数量(qty)   : number       range >=0 <=10
+
+# 要素を足す、位置で取り出す、両端を取り出す
+fn 足す(added)(並び(xs): list[number] count <=3 range >=0 <=9, 値(x): number range >=0 <=9) -> list[number]
+  並び.append(値)
+
+fn つなぐ(joined)(甲(a): list[number] count <=2 range >=0 <=9, 乙(b): list[number] count <=2 range >=0 <=9) -> list[number]
+  甲.concat(乙, [7])
+
+fn 取り出す(picked)(並び(xs): list[string] count <=3, 位置(i): number range >=-1 <=4) -> string?
+  並び.at(位置)
+
+fn 両端(ends)(並び(xs): list[number] count <=3 range >=0 <=9) -> number
+  match 並び.first()
+    none => -1
+    some a =>
+      match 並び.last()
+        none => -1
+        some b => a * 10 + b
+
+# 条件を満たす最後の要素。終わりから探す
+fn 最後の大きい値(last_above)(並び(xs): list[number] count <=4 range >=0 <=9, 下限(limit): number range >=0 <=9) -> number?
+  並び.last(x => x > 下限)
+
+# 位置が両端の外なら、リストの中に切り詰める
+fn 切り出す(cut)(並び(xs): list[number] count <=4 range >=0 <=9, 初め(start): number range >=-1 <=5, 終わり(stop): number range >=-1 <=5) -> list[number]
+  並び.slice(初め, 終わり)
+
+fn 折り返す(turned)(並び(xs): list[number] count <=4 range >=0 <=9, 個数(n): number range >=-1 <=5) -> list[number]
+  並び.take(個数).concat(並び.drop(個数).reverse())
+
+# 鍵の順。鍵の同じ二つはリストの順のまま
+fn 並べる(ordered)(並び(xs): list[number] count <=4 range >=-5 <=5) -> list[number]
+  並び.sort()
+
+fn 安い順(by_price)(品物(items): list[品物] count <=4) -> list[string]
+  品物.sort_by(i => i.単価).map(i => i.名前)
+
+fn 重なりを除く(unique)(並び(xs): list[string] count <=4) -> list[string]
+  並び.distinct()
+
+# 同じ値で探す。レコードは全体で比べる
+fn 含む(has)(並び(xs): list[品物] count <=3, 値(x): 品物) -> bool
+  並び.contains(値)
+
+# リストのリストを一つにする
+fn 平らにする(flat)(並び(xss): list[list[number]] count <=3) -> list[number]
+  並び.flatten()
+
+fn 数え上げる(counted_out)(並び(xs): list[number] count <=3 range >=0 <=3) -> list[number]
+  並び.flat_map(x => numbers(1, x))
+
+# 値のあるものだけ
+fn 名前(named)(品物(items): list[品物] count <=4) -> list[string]
+  品物.filter_map(i => if i.数量 > 0 then i.名前 else none)
+
+# 要素ごとに 0 からの位置を付ける
+fn 番号を付ける(numbered)(並び(xs): list[string] count <=3) -> list[string]
+  並び.indexed().map(x => concat(text(x.index), ":", x.item))
+
+# 鍵のいちばん大きいものと小さいもの。同じ鍵なら初めのもの
+fn いちばん高い(dearest)(品物(items): list[品物] count <=4) -> string?
+  match 品物.max_by(i => i.単価 * i.数量)
+    none => none
+    some i => i.名前
+
+fn いちばん安い(cheapest)(品物(items): list[品物] count <=4) -> 品物?
+  品物.min_by(i => i.単価)
+
+fn 一行(line)(並び(xs): list[string] count <=3) -> string
+  並び.join(", ")
+
+# これまでの組み込みの関数を、値のあとに書く
+fn まとめ(summary)(品物(items): list[品物] count <=4) -> number
+  品物.filter(i => i.数量 > 0).map(i => i.数量).sum(q => q) + 品物.count(i => i.数量 = 0) + 品物.count()
+
+fn ただがある(any_free)(品物(items): list[品物] count <=4, 上限(most): number range >=0 <=10) -> bool
+  品物.any(i => i.単価 = 0USDc) or 品物.all(i => i.数量 > 上限)
+
+fn いちばん大きい値(top)(並び(xs): list[number] count <=4 range >=0 <=9) -> number?
+  並び.max_of(x => x)
+
+fn 途中までの合計(running)(品物(items): list[品物] count <=3) -> list[money[USDc]]
+  品物.running_totals(i => i.単価).map(r => r.upto)
+
+fn 掛け合わせる(folded)(並び(xs): list[number] count <=4 range >=1 <=9) -> number
+  並び.reduce(1, (acc, x) => acc * x)
+
+fn 半分(halved)(額(x): money[USDc] range >=0USDc <=1_000USDc) -> money[USDc]
+  (額 / 2).half_up(1USDc)
+
+examples
+  足す(並び: [1, 2], 値: 3) = [1, 2, 3]
+  取り出す(並び: ["a", "b"], 位置: 2) = none
+  両端(並び: [1, 2, 3]) = 13
+  最後の大きい値(並び: [7, 1, 9, 2], 下限: 5) = 9
+  切り出す(並び: [1, 2, 3, 4], 初め: -1, 終わり: 2) = [1, 2]
+  折り返す(並び: [1, 2, 3, 4], 個数: 1) = [1, 4, 3, 2]
+  安い順(品物: [品物 { 名前: "b", 単価: 5USDc, 数量: 1 }, 品物 { 名前: "a", 単価: 2USDc, 数量: 1 }, 品物 { 名前: "c", 単価: 2USDc, 数量: 1 }]) = ["a", "c", "b"]
+  重なりを除く(並び: ["b", "a", "b"]) = ["b", "a"]
+  数え上げる(並び: [2, 0, 1]) = [1, 2, 1]
+  番号を付ける(並び: ["x", "y"]) = ["0:x", "1:y"]
+  いちばん高い(品物: [品物 { 名前: "a", 単価: 5USDc, 数量: 2 }, 品物 { 名前: "b", 単価: 10USDc, 数量: 1 }]) = "a"
+  一行(並び: ["a", "b"]) = "a, b"
+  掛け合わせる(並び: [2, 3]) = 6
+  半分(額: 5USDc) = 3USDc

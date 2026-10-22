@@ -1,0 +1,70 @@
+── E112
+error[E112]: example.kn:10:11: The type parameter `T` of `empty_page` cannot be worked out
+    10 |   let p = empty_page()
+  = A type parameter takes the type of the values given, else the type of the place the value is put in; `none` or `[]` alone says none. Put it where a type is written (`let x : …[number] = …`), or write the type after a function's name (`f[number](…)`).
+
+── E112
+error[E112]: example.kn:9:12: `Page` takes 1 type argument, and is given 2
+     9 | fn size(p: Page[number, string]) -> number
+  = Write the types its type parameters (`T`) take, in their order: `Page[…]`.
+
+── E112
+error[E112]: example.kn:9:3: The type parameter `T` of `first_or` is given number?, a type whose values may be none
+     9 |   first_or(xs: xs, fallback: none)
+  = A type parameter takes no type whose values may be none (its `T?` would hold two kinds of none): give it the type with no `?`, and write `T?` where the value may be none.
+
+── E112
+error[E112]: example.kn:4:24: Where `wrap_deep` calls `wrap_deep` in a ring of calls, it gives `list[T]`, a type argument made from a type parameter
+     4 |   if n = 0 then 0 else wrap_deep(x: [x], n: n - 1)
+  = Each time the calls go round, the type argument grows one deeper (`list[list[T]]`, …), and the types it is called with never end; nor can the generated Go write them. In a ring of calls, give the type parameters as they are, or types that name none.
+
+── E112
+error[E112]: example.kn:4:14: Where `sizes` calls `lengths` in a ring of calls, it gives `list[T]`, a type argument made from a type parameter
+     4 |   [[xs]].map(lengths)
+  = Each time the calls go round, the type argument grows one deeper (`list[list[T]]`, …), and the types it is called with never end; nor can the generated Go write them. In a ring of calls, give the type parameters as they are, or types that name none.
+
+── E114
+error[E114]: example.kn:4:3: A value of the type parameter `T` is compared with `<` only where it is held to keys
+     4 |   a < b
+  = To make a value of a type parameter a key, to compare it by `<` or to sort by it, hold the parameter to keys: `[T: key]`. Only the types that can be keys are then given to it.
+
+── E105
+error[E105]: example.kn:4:3: There is no `+` between T and T
+     4 |   x + x
+  = What type a value of a type parameter is of is said where the function is called, so a generic function only passes it on, puts it in a record, a list, a dict's values, an optional or a `result`, and compares it with `=` and `!=`; compute with it and split it where its type is one, at the caller.
+
+── E108
+error[E108]: example.kn:3:17: A value of the type parameter `T` declares no range
+     3 | fn same[T](x: T range >=1) -> T
+  = What type a value of a type parameter is of is said where the function is called, so it takes no range: write the range where the type is one, at the caller. A list of a type parameter takes a `count`.
+
+── E115
+error[E115]: example.kn:8:13: `try` cannot be written here
+     8 |     let h = try half(n: n)
+  = `try` is written as `let x = try <value>`, in a `let` of a block the function answers with (its body, and the arms of an `if` or a `match` that answer for it): an `err` or a `none` of the value is then the function's answer.
+
+── E115
+error[E115]: example.kn:7:11: The `err` of the `try` holds string, and the `err` the function answers holds list[string]
+     7 |   let h = try half(n: n)
+  = `try` makes the `err` the function's answer as it is, so the two `err`s hold values of one type: split it with a `match`, and make the `err` of the function's type.
+
+── E115
+error[E115]: example.kn:4:11: `try` takes a `result` or a value that may be none; this is number
+     4 |   let m = try n
+  = `try` is written as `let x = try <value>`, in a `let` of a block the function answers with (its body, and the arms of an `if` or a `match` that answer for it): an `err` or a `none` of the value is then the function's answer.
+
+── E002
+error[E002]: example.kn:3:6: `try` is a keyword and cannot be a name
+     3 | fn f(try: number) -> number
+  = The fourteen words an expression reads as something else cannot be names: `let` `try` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in`. Choose another word.
+
+── E006
+error[E006]: example.kn:3:4: `ok` is the name of a builtin function
+     3 | fn ok(x: number) -> number
+  = A reader of `ok(…)` could not tell which one it calls; choose another name.
+
+── E103
+error[E103]: example.kn:9:16: An unrounded value goes to the type parameter `T`
+     9 |   first_or(xs: [a * 3%], fallback: a)
+  = A type parameter takes the type of rounded values only: write the way of rounding and the step first, as in `half_up(x, 1USDc)`.
+

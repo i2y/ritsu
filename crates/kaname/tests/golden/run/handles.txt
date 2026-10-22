@@ -1,0 +1,10 @@
+tag(text: "Ada Lovelace#42")
+  line 24: let h = "ada-lovelace"
+  line 14: let n = 12
+  line 15: let short = none
+  line 16: let long = none
+  line 17: let odd = none
+  line 18: let start = none
+  line 19: let taken = none
+  line 25: let why = []
+= ok(Tag { handle: "ada-lovelace", number: 42 })

@@ -12,6 +12,10 @@
 
   A block is a chain: `letIn x v c body` names the value of `v`, read by `c`, and goes on to
   `body`, the rest of the block; the last expression of a chain answers.
+
+  A lambda made a value (`lam`) is one of the module's (`Lam`): its parameters, its body, and the
+  function it is written in (kaname's DESIGN 27.1). A function written as a value, and a function value
+  a builtin is given by its name, are such lambdas (`wrapped.rs`): the lambda that calls it.
 -/
 import KanameCore.Value
 
@@ -33,22 +37,42 @@ structure Range where
   deriving Repr, Inhabited, DecidableEq
 
 /-- What a place declares of the values it takes (kaname's `Slot`, as `interp::outside` and
-    `ranges::keeps` read it): whether it holds a list (under its optionals), the count of the list,
-    the range of its numbers and dates (of the elements, for a list), whether it is a rate with a
-    step and no range (held to 0% to 100% where a parameter reaches it), and the fields of the
-    record of a module it holds, each its own place. -/
+    `ranges::keeps` read it): whether it holds a list, a set or a dict (under its optionals), the
+    count of its elements, members or pairs, the range of its numbers and dates (of the elements, the
+    members, the values of a dict), whether it is a rate with a step and no range (held to 0% to 100%
+    where a parameter reaches it), the fields of the record of a module it holds, each its own place,
+    the fields of each value of an enum that has fields it holds (the one value, for the type of a
+    value; DESIGN 23.2), each its own place, the place of the keys of a dict (DESIGN 24.4); and, where
+    what it holds (an element, a member, a value of a dict) is a value of a record or an enum that
+    holds itself, that type's number in the module's table (`Module.slots`, DESIGN 28.1): a call of
+    kaname holds nothing of such a value, its fields held where it was built or came in, and a host's
+    argument is held to the table's place, one deeper (`Slot.enterD`). -/
 inductive Slot where
   | mk (list : Bool) (count : Option Range) (range : Option Range) (unit01 : Bool) (record : Bool)
-      (fields : List (String × Slot))
+      (fields : List (String × Slot)) (values : List (String × List (String × Slot))) (keys : Option Slot)
+      (ref : Option Nat)
   deriving Repr, Inhabited
 
-/-- How two values are compared: as numbers, as dates, as values of an ordered enum (by their
-    places in its order), or as equal or not. -/
+/-- How two values are compared: as numbers, as dates, as strings (by their code points, DESIGN
+    25.1), as values of an ordered enum (by their places in its order), or as equal or not. -/
 inductive Order where
   | num
   | date
+  | str
   | enum (values : List String)
   | eq
+  deriving Repr, Inhabited
+
+/-- The order kaname puts the keys of a type in (DESIGN 24.1): numbers from the least, dates from
+    the earliest, strings by their code points, `false` before `true`, the values of an enum in the
+    order they are declared, a record field by field in the order they are declared. -/
+inductive Key where
+  | num
+  | date
+  | str
+  | bool
+  | enum (values : List String)
+  | record (fields : List Key)
   deriving Repr, Inhabited
 
 inductive CmpOp where
@@ -59,18 +83,48 @@ inductive ArOp where
   | add | sub | mul | div
   deriving DecidableEq, Repr, Inhabited
 
-/-- A pattern of a `match` arm. An enum value is named by its declared name; none where the word
-    names no value of the enum. -/
+/-- A pattern of a `match` arm (DESIGN 23.3). A value of an enum is named by its declared name; none
+    where the word names no value of the enum. -/
 inductive Pat where
   | none
   | some (x : String)
   | bool (b : Bool)
   | enum (v : Option String)
+  /-- A value of an enum that has fields, by its declared name, and the name the arm gives the value
+      (`placed p`). -/
+  | value (v : Option String) (bind : Option String)
+  /-- A literal: a number in the unit of what the `match` splits, a date, a string. -/
+  | lit (v : Val)
+  /-- `else`: every value the arms above do not take. -/
+  | rest
   deriving Repr, Inhabited
 
 /-- The builtins that apply a function to each element of a list. -/
 inductive Walk where
   | count | sum | any | all | map | filter | first | maxOf | minOf | running
+  deriving DecidableEq, Repr, Inhabited
+
+/-- The builtins of DESIGN 24.3 that apply a function to each element of a list (`last` from the
+    end), or to each entry or value of a dict, in the order of the keys. -/
+inductive WalkK where
+  | last | sortBy | sortByDesc | maxBy | minBy | flatMap | filterMap | groupBy
+  /-- `d.filter(e => …)`: each entry of a dict. -/
+  | filterD
+  /-- `d.map_values(v => …)`: each value of a dict. -/
+  | mapValues
+  deriving DecidableEq, Repr, Inhabited
+
+/-- The builtins of DESIGN 24.3 that take no function: of a dict, of a set, of a list; `concat` of
+    lists, `join` of strings and `numbers`; and the builtins of a string (DESIGN 25.2), and `to_text`
+    of a list of code points. -/
+inductive Prim where
+  | get | put | removeD | hasD | keys | values | entries | merge
+  | add | removeS | hasS | union | intersect | difference | toList
+  | first | last | at | append | take | drop | slice | reverse | sort | distinct | contains | flatten
+  | indexed | toSet | join | concat | numbers
+  | chars | codePoints | toText | sliceT | takeT | dropT | indexOf | containsT | endsWith | split | words
+  | replace | trim | trimStart | trimEnd | lowerAscii | upperAscii | padStart | padEnd | parseNumber | parseDate
+  | charOf
   deriving DecidableEq, Repr, Inhabited
 
 /-- How `text` writes a value: a number with its unit's spelling (a rate as a percentage, a
@@ -125,9 +179,12 @@ inductive Expr where
   | transfer (id : Nat) (tid : String) (params : List String)
       (args : List (String × Expr × Option Conv × Nat × Bool))
   /-- A record built: its fields in the order declared (each its place and whether it holds a
-      number or a date), whether it is a record of a module, and the fields as written. -/
+      number or a date), whether it is a record of a module (or a value of an enum), the fields as
+      written; for a value of an enum that has fields, its name (a value with no fields is built with
+      none: its name alone); and the value the fields not written are taken from (`..x`, DESIGN
+      23.4). -/
   | record (id line : Nat) (module : Bool) (fields : List (String × Slot × Bool))
-      (inits : List (Nat × Expr × Option Conv × Nat))
+      (inits : List (Nat × Expr × Option Conv × Nat)) (tag : Option String) (base : Option Expr)
   | list (id : Nat) (elems : List (Expr × Option Conv))
   /-- `count`, `sum`, `any`, `all`, `map`, `filter`, `first`, `max_of`, `min_of`, `running_totals`:
       the list, the function given (its parameter and body), its answers read as the builtin reads
@@ -139,7 +196,8 @@ inductive Expr where
   | reduce (id line : Nat) (list first : Expr) (acc x : String) (body : Expr) (c : Option Conv)
       (out : Option Conv)
   | minmax (id line : Nat) (isMin : Bool) (a b : Expr) (ca cb : Option Conv) (ord : Order)
-  | modOp (id : Nat) (x n : Expr)
+  /-- `mod(x, n)`: the divisor a value or a constant, `zero` at `line` where it is 0 (DESIGN 24.3). -/
+  | modOp (id line : Nat) (x n : Expr)
   | isqrt (id line : Nat) (x : Expr)
   /-- `allocate(t, c, s)`: `c` and `s` read in one unit, the answer in the type of `allocate`. -/
   | allocate (id line : Nat) (t c s : Expr) (cc cs : Option Conv) (out : Option Conv)
@@ -150,6 +208,30 @@ inductive Expr where
   | startsWith (id : Nat) (s p : Expr)
   | concat (id : Nat) (args : List Expr)
   | text (id : Nat) (x : Expr) (fmt : TextFmt)
+  /-- A dict written out (DESIGN 24.2): each key and then its value, from the left, each read in the
+      dict's type of keys or of values as it comes; the keys put in their order by `key`. -/
+  | dict (id : Nat) (key : Key) (pairs : List (Expr × Option Conv × Expr × Option Conv))
+  /-- A builtin that takes no function (DESIGN 24.3): its arguments, the dict, the set or the list it
+      is written after first, each read in its place; the order of the keys it holds or orders; and,
+      where what it is called on is no dict, set or list the analysis follows, every value of its
+      answer's type (what the analysis says there). -/
+  | prim (id line : Nat) (op : Prim) (key : Key) (args : List (Expr × Option Conv)) (top : Option Abs)
+  /-- A builtin of DESIGN 24.3 that applies a function to each element of a list or to each entry or
+      value of a dict: the function given (its parameter and body), its answers read as the builtin
+      reads them, and the order of the keys it orders or holds. -/
+  | walkK (id line : Nat) (w : WalkK) (coll : Expr) (x : String) (body : Expr) (c : Option Conv) (key : Key)
+  /-- `xs.to_dict(x => key, y => value)`: for each element its key, then its value, each read in the
+      dict's types. -/
+  | toDict (id line : Nat) (key : Key) (list : Expr) (x : String) (kb : Expr) (kc : Option Conv)
+      (y : String) (vb : Expr) (vc : Option Conv)
+  /-- `d.merge_with(o, (a, b) => …)`: the two dicts, and the function given a key of both. -/
+  | mergeWith (id line : Nat) (key : Key) (a b : Expr) (x y : String) (body : Expr) (c : Option Conv)
+  /-- A lambda made a value (DESIGN 27.1): the lambda of the module by its id. -/
+  | lam (id : Nat)
+  /-- A function value called (DESIGN 27.3): what is called, and the arguments in order, each read in
+      its parameter's unit; and every value of the type of its answer, marked as the type's (what a
+      function the analysis does not see answers, DESIGN 27.4). -/
+  | callV (id line : Nat) (f : Expr) (args : List (Expr × Option Conv)) (top : Abs)
   /-- What the check of types does not let through: never in a module that passes it. -/
   | bad (id line : Nat) (args : List Expr)
   deriving Repr, Inhabited
@@ -213,7 +295,9 @@ structure Param where
   deriving Repr, Inhabited
 
 /-- A function: its parameters; the place of its answer; every value its result's type can be,
-    cut to its range (`declared`); its body, and the answer's conversion to the result's type. -/
+    cut to its range (`declared`); its body, and the answer's conversion to the result's type; and
+    whether a call reads its body again with the values it gives (a generic function, kaname's
+    DESIGN 26.5). -/
 structure Fn where
   name : String
   line : Nat
@@ -224,6 +308,22 @@ structure Fn where
   body : Expr
   answer : Nat
   answerLine : Nat
+  conv : Option Conv
+  reread : Bool := false
+  /-- Whether a parameter is of a function type (kaname's DESIGN 27.1): a call that does not read its
+      body again takes what it declares (DESIGN 27.4). -/
+  takesFn : Bool := false
+  deriving Repr, Inhabited
+
+/-- A lambda of the module made a value (kaname's DESIGN 27.1): its id, the function it is written in,
+    its parameters each with every value of its type (marked as the type's: what its body is read with
+    once where no call reads it with the values it is given, DESIGN 27.4), its body, and its body's
+    answer read in the type of its answer. -/
+structure Lam where
+  id : Nat
+  fn : Nat
+  params : List (String × Abs)
+  body : Expr
   conv : Option Conv
   deriving Repr, Inhabited
 
@@ -239,6 +339,12 @@ structure Module where
   dates : List DatesD
   rings : List (List Nat × Bool)
   verdicts : List (Nat × String × Bool) := []
+  /-- The lambdas the module makes values of (kaname's DESIGN 27.1). -/
+  lams : List Lam := []
+  /-- The places of the records and the enums that hold themselves its parameters reach, by their
+      numbers (`Slot.mk`'s `ref`, kaname's DESIGN 28.1): what a host's argument is held to inside a
+      value of one. -/
+  slots : List Slot := []
   deriving Repr, Inhabited
 
 /-- What the layers kaname calls answer (kaname's DESIGN 15.1): a rule, its outputs for the values

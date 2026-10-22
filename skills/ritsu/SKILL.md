@@ -1,6 +1,6 @@
 ---
 name: ritsu
-description: Work on a project with files of two or more of ritsu's nine small languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai), who may do what (`.gate`, sekisho) and the code that joins them (`.kn`, kaname). `ritsu check` checks each file with its own language and then across them, which shows that a call keeps a rule's preconditions, that a date's days fit a rule's range, that a ledger takes the amounts it is given, and that a hold has not always expired when it is posted. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E206, W201-W206, W901, E905-W909), when a workflow has to be run with its rules, dates and books computed, or when one package of TypeScript, Python or Go is to be generated for the whole project. To write one language's files, read that language's skill.
+description: Work on a project with files of two or more of ritsu's nine small languages, rules (`.rule`, rulec), workflows (`.flow`, dandori), dates (`.cal`, koyomi), ledgers (`.book`, chobo), claims about code (`.geas`, geas), requirements (`.req`, yuen), maps of bounded contexts (`.ctx`, sakai), who may do what (`.gate`, sekisho) and functional cores (`.kn`, kaname). `ritsu check` checks each file with its own language and then across them, which shows that a call keeps a rule's preconditions, that a date's days fit a rule's range, that a ledger takes the amounts it is given, and that a hold has not always expired when it is posted. Use when a project has files of two or more of these languages, when `ritsu check` prints a diagnostic of ritsu's own (E101, E201-E206, W201-W206, W901, E905-W909), when a workflow has to be run with its rules, dates and books computed, or when one package of TypeScript, Python or Go is to be generated for the whole project. To write one language's files, read that language's skill.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`), which runs each language as `ritsu <language> …`; a link to ritsu named for a language (`rulec`, `dandori`, …), as a release archive holds, runs the same. `ritsu skills install` writes the ten skills into a project's `.claude/skills/`.
 license: MIT OR Apache-2.0
 ---
@@ -10,7 +10,7 @@ license: MIT OR Apache-2.0
 The job is a **project of more than one language**: a workflow that calls rules, a rule over the
 days of a calendar, a ledger whose amounts come from a rule, requirements that point at all of
 them, a map of which part may depend on which, a gate that says who may call each operation, a
-module that joins rules, dates and ledgers. Each language checks its own files over every
+functional core that calls rules, dates and ledgers. Each language checks its own files over every
 input, every day and every path it can reach. ritsu adds the checks **between** them, which no
 language can make alone, because what one has shown (a rule's preconditions, the days a date comes
 to, the bounds of an account) is what the next is held to.
@@ -18,8 +18,8 @@ to, the bounds of an account) is what the next is held to.
 It also applies when the project holds the files of one language only and a diagnostic names
 `ritsu`, or when a command of one language has to read another (`ritsu dandori`, `ritsu yuen`,
 `ritsu sakai`, `ritsu sekisho`, `ritsu kaname`, §6). It does not replace the language skills: to
-write a rule, a workflow, a date, a ledger, a claim, a requirement, a map, a gate or a module that
-joins them, read the skill of that language (§5).
+write a rule, a workflow, a date, a ledger, a claim, a requirement, a map, a gate or a functional
+core, read the skill of that language (§5).
 
 A file never mixes two languages. A tariff, a calendar, a ledger and a workflow are read by
 different people, so each is a file of its own, and the files meet by name: a workflow's `use rule`,
@@ -185,8 +185,8 @@ cancelled), 1 the flow has errors or the run could not go on (the scenario ran o
 
 **`ritsu gen [<path>...] [--target <language>] [--out <dir>]`** writes one package for each of
 TypeScript, Python and Go (`<out>/<language>/`, `generated` by default): the rules, the dates, the
-clients of the books, the workflows, the code that asks the gates and the code of the modules of
-kaname (`glue/`) of the project, where a workflow and a module read their rules, dates and books,
+clients of the books, the workflows, the code that asks the gates and the functional cores
+(kaname's modules, under `glue/`) of the project, where a workflow and a module read their rules, dates and books,
 and a gate's code its rules and dates, from the package itself; the gates' Cedar goes once into `<out>/cedar/`. An amount of money or of a quantity is of
 the package's one type of its unit, declared in `units` and taken and returned in it by the rules
 and the clients of the books alike, so code written by hand that gives a book what a rule returns,
@@ -219,7 +219,7 @@ repository at the paths below, to copy beside this one.
 | yuen | `.req` | `skills/yuen/` | write requirements and what they come from |
 | sakai | `.ctx` | `skills/sakai/` | write a map of bounded contexts |
 | sekisho | `.gate` | `skills/sekisho/` | write who may do what, fix sekisho's diagnostics, generate Cedar and the code that asks it |
-| kaname | `.kn` | `skills/kaname/` | write the code that joins rules, dates and ledgers, fix kaname's diagnostics, show which functions are total |
+| kaname | `.kn` | `skills/kaname/` | write a functional core, general code with no input or output that may call rules, dates and ledgers, fix kaname's diagnostics, show which functions are total |
 
 ## 6. A language that reads another
 

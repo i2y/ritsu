@@ -1,7 +1,8 @@
 //! The READMEs, `docs/reference.md` and the agent skill show what kaname does (DESIGN 16.1), as
 //! sekisho's do:
 //!
-//! - Every line of `.kn` on the pages is a line of a `.kn` under `examples/` or `tests/`.
+//! - Every line of `.kn` on the pages is a line of a `.kn` under `examples/` or `tests/`, and every line
+//!   of a host (TypeScript, Python, Go) in the READMEs a line of a host of the examples.
 //! - Every command shown without its output is a command of kaname's table. The ones shown with what
 //!   they print are run by ritsu's `tests/kaname.rs`, as `ritsu` runs them: a module's effects, and
 //!   ritsu's diagnostics across the languages, need the verdicts of ritsu-cross, which this crate
@@ -91,6 +92,36 @@ fn the_kn_on_the_pages_is_from_the_files() {
     assert!(wrong.is_empty(), "not a line of any .kn under examples/ or tests/:\n{}", wrong.join("\n"));
 }
 
+/// The code of a host in the READMEs (fenced `ts`, `python` or `go`) is lines of the hosts of the
+/// examples (`examples/*/host/main.*`), which ritsu's `tests/kaname.rs` runs on the package `ritsu gen`
+/// writes. (`docs/reference.md` shows the code generated, held to the generator by its own tests.)
+#[test]
+fn the_hosts_on_the_pages_are_from_the_files() {
+    let mut real = BTreeSet::new();
+    for ext in ["ts", "py", "go"] {
+        for f in files(Path::new("examples"), ext) {
+            real.extend(read(&f).lines().map(|l| l.trim().to_string()));
+        }
+    }
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    for f in ["README.md", "README.ja.md"].map(PathBuf::from) {
+        for (info, lines) in fenced(&read(&f)) {
+            if !["ts", "python", "go"].contains(&info.as_str()) {
+                continue;
+            }
+            seen += 1;
+            for l in lines.iter().map(|l| l.trim()).filter(|l| !l.is_empty()) {
+                if !real.contains(l) {
+                    wrong.push(format!("{}: {l}", f.display()));
+                }
+            }
+        }
+    }
+    assert!(seen >= 2, "{seen} blocks of a host on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "not a line of any host under examples/:\n{}", wrong.join("\n"));
+}
+
 #[test]
 fn the_commands_listed_are_commands() {
     let table = kaname::cli::table();
@@ -129,13 +160,42 @@ fn the_reference_lists_every_keyword() {
     assert!(missing.is_empty(), "docs/reference.md does not list {missing:?}");
     let builtins: Vec<&str> = kaname::kw::BUILTINS.iter().copied().filter(|w| !page.contains(&format!("`{w}")) && !page.contains(&format!(" {w}("))).collect();
     assert!(builtins.is_empty(), "docs/reference.md does not list the builtins {builtins:?}");
+    // a builtin written after a value, as it is written: `d.get(k)`, `xs.sort_by(x => …)`
+    let methods: Vec<&str> = kaname::kw::METHODS.iter().copied().filter(|w| !page.contains(&format!(".{w}("))).collect();
+    assert!(methods.is_empty(), "docs/reference.md does not list the builtins written after a value {methods:?}");
+}
+
+/// A page with its code left out: the blocks between fences, and the spans between backticks.
+fn prose(text: &str) -> String {
+    let mut out = String::new();
+    let mut fenced = false;
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        let mut code = false;
+        for c in line.chars() {
+            if c == '`' {
+                code = !code;
+            } else if !code {
+                out.push(c);
+            }
+        }
+        out.push('\n');
+    }
+    out
 }
 
 #[test]
 fn the_pages_link_to_files_that_are_there() {
     let mut wrong = Vec::new();
     for f in pages().into_iter().chain([PathBuf::from("DESIGN.md")]) {
-        let text = read(&f);
+        // the prose alone: a generic function written in code (`first_or[T](xs: …)`) is no link
+        let text = prose(&read(&f));
         let dir = f.parent().unwrap().to_path_buf();
         let mut rest = text.as_str();
         while let Some(i) = rest.find("](") {

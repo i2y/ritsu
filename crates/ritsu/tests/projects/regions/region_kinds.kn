@@ -1,0 +1,10 @@
+module region_kinds v1
+description "Reads an enums file for its enum: the region a parcel goes to, as a type"
+
+use rule regions from "rules/regions.rule"
+
+fn far_away(r: regions.region) -> bool
+  r != honshu
+
+fn regions_of(urgent: bool) -> list[regions.region]
+  if urgent then [honshu] else [honshu, hokkaido, okinawa]

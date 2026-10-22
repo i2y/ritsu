@@ -1,0 +1,175 @@
+module dicts v1
+description "Dicts and sets: the difference of two stocks, a table of prices, groups and dicts made from a list, sets put together and taken apart, elements of one key kept in order, keys in the order of their type, a remainder by a value and the numbers between two"
+
+record Line
+  sku   : string
+  qty   : number       range >=0 <=1000
+  price : money[USDc]  range >=0USDc <=100_000USDc
+
+enum Change
+  added
+    sku : string
+    qty : number
+  removed
+    sku : string
+    qty : number
+  changed
+    sku : string
+    was : number
+    now : number
+
+enum tier = basic < silver < gold
+
+record Task
+  name     : string
+  priority : number  range >=1 <=3
+  tier     : tier
+
+record Rank
+  tier     : tier
+  priority : number  range >=1 <=3
+
+# the change of one sku between two stocks
+fn change(sku: string, before: number?, after: number?) -> Change?
+  match before
+    none =>
+      match after
+        none => none
+        some b => Change.added { sku: sku, qty: b }
+    some a =>
+      match after
+        none => Change.removed { sku: sku, qty: a }
+        some b => if a = b then none else Change.changed { sku: sku, was: a, now: b }
+
+# the difference of two stocks, in the order of their skus
+fn diff(before: dict[string, number] count <=4, after: dict[string, number] count <=4) -> list[Change]
+  let skus = before.keys().to_set().union(after.keys().to_set()).to_list()
+  skus.filter_map(sku => change(sku: sku, before: before.get(sku), after: after.get(sku)))
+
+# a price from a table, none for a sku it does not have
+fn price(table: dict[string, money[USDc]] count <=3 range >=1USDc <=10_000USDc, sku: string) -> money[USDc]?
+  table.get(sku)
+
+fn unit_price(line: Line, table: dict[string, money[USDc]] count <=3 range >=1USDc <=10_000USDc) -> money[USDc]
+  match table.get(line.sku)
+    none => line.price
+    some p => p
+
+# the total of lines, each priced by the table where it has the sku
+fn total(lines: list[Line] count <=4, table: dict[string, money[USDc]] count <=3 range >=1USDc <=10_000USDc) -> money[USDc]
+  lines.sum(l => l.qty * unit_price(line: l, table: table))
+
+# a dict from a list: the later line of a sku wins
+fn quantities(lines: list[Line] count <=4) -> dict[string, number]
+  lines.to_dict(l => l.sku, l => l.qty)
+
+# groups of a list, each in the order of the list, the keys in their order
+fn names_by_priority(tasks: list[Task] count <=5) -> dict[number, list[string]]
+  tasks.group_by(t => t.priority).map_values(ts => ts.map(x => x.name))
+
+# the values of an enum as keys: in the order declared
+fn per_tier(tasks: list[Task] count <=5) -> dict[tier, number]
+  tasks.group_by(t => t.tier).map_values(ts => ts.count())
+
+fn tiers(tasks: list[Task] count <=5) -> set[tier]
+  tasks.map(t => t.tier).to_set()
+
+# sets put together and taken apart
+fn both(a: set[string] count <=3, b: set[string] count <=3) -> set[string]
+  a.intersect(b)
+
+fn either(a: set[string] count <=3, b: set[string] count <=3) -> list[string]
+  a.union(b).to_list()
+
+fn only_first(a: set[string] count <=3, b: set[string] count <=3) -> number
+  a.difference(b).count()
+
+fn grown(a: set[number] count <=3 range >=0 <=9, x: number range >=0 <=9) -> set[number]
+  if a.has(x) then a.remove(x) else a.add(x)
+
+# the elements of one key keep their order, from the least and from the greatest
+fn by_priority(tasks: list[Task] count <=5) -> list[string]
+  tasks.sort_by(t => t.priority).map(t => t.name)
+
+fn by_priority_desc(tasks: list[Task] count <=5) -> list[string]
+  tasks.sort_by_desc(t => t.priority).map(t => t.name)
+
+# a record as a key of an order: its fields in the order declared
+fn ranked(tasks: list[Task] count <=5) -> list[string]
+  tasks.sort_by(t => Rank { tier: t.tier, priority: t.priority }).map(t => t.name)
+
+# strings by their code points, dates from the earliest, rates from the least
+fn marks() -> list[string]
+  ["😀": 1, "｡": 2, "z": 3].keys()
+
+fn days(ds: list[date] count <=3 range >=2026-01-01 <=2026-12-31) -> list[date]
+  ds.to_set().to_list()
+
+fn rates(rs: list[rate[step 1%]] count <=3) -> list[rate[step 1%]]
+  rs.distinct().sort()
+
+# put a key in, take one out, two dicts put together
+fn restock(stock: dict[string, number] count <=3 range >=0 <=100, sku: string, qty: number range >=0 <=100) -> dict[string, number]
+  match stock.get(sku)
+    none => stock.put(sku, qty)
+    some q => stock.put(sku, q + qty)
+
+fn without(stock: dict[string, number] count <=3, sku: string) -> dict[string, number]
+  stock.remove(sku)
+
+fn combined(a: dict[string, number] count <=3 range >=0 <=100, b: dict[string, number] count <=3 range >=0 <=100) -> dict[string, number]
+  a.merge_with(b, (x, y) => x + y)
+
+fn later(a: dict[string, number] count <=3, b: dict[string, number] count <=3) -> dict[string, number]
+  a.merge(b)
+
+# a dict put over another of other values: the values of both
+fn overlay(base: dict[string, number] count <=2 range >=0 <=5, top: dict[string, number] count <=2 range >=10 <=20) -> dict[string, number]
+  base.merge(top)
+
+fn in_stock(stock: dict[string, number] count <=3 range >=0 <=100) -> dict[string, number]
+  stock.filter(e => e.value > 0)
+
+fn shown(stock: dict[string, number] count <=3) -> list[string]
+  stock.entries().map(e => concat(e.key, "=", text(e.value)))
+
+fn amounts(stock: dict[string, number] count <=3 range >=0 <=100) -> number
+  stock.values().sum(q => q) + stock.count()
+
+# a dict written out, and dicts and sets compared whole
+fn table() -> dict[string, money[USDc]]
+  ["b": 200USDc, "a": 100USDc]
+
+fn same_stock(a: dict[string, number] count <=2, b: dict[string, number] count <=2) -> bool
+  a = b
+
+fn same_tiers(a: set[tier], b: set[tier]) -> bool
+  a = b
+
+# a remainder by a value, from 0 to one less than the divisor's size, and the numbers between two
+fn turn(day: number range >=-10 <=10, players: number range >=1 <=4) -> number
+  mod(day, players)
+
+fn wrapped(x: number range >=-7 <=7, n: number range >=-3 <=-1) -> number
+  mod(x, n)
+
+fn spread(n: number range >=0 <=5) -> list[number]
+  numbers(1, n).map(i => mod(i * 7, 5))
+
+fn between(first: number range >=1 <=3, last: number range >=0 <=5) -> number
+  numbers(first, last).sum(i => i)
+
+examples
+  diff(before: ["a": 1, "b": 2], after: ["b": 3, "c": 4]) = [Change.removed { sku: "a", qty: 1 }, Change.changed { sku: "b", was: 2, now: 3 }, Change.added { sku: "c", qty: 4 }]
+  price(table: ["a": 5USDc], sku: "b") = none
+  quantities(lines: [Line { sku: "a", qty: 1, price: 0USDc }, Line { sku: "a", qty: 2, price: 0USDc }]) = ["a": 2]
+  per_tier(tasks: [Task { name: "x", priority: 1, tier: gold }, Task { name: "y", priority: 2, tier: basic }]) = [basic: 1, gold: 1]
+  either(a: ["b", "a"].to_set(), b: ["c"].to_set()) = ["a", "b", "c"]
+  by_priority_desc(tasks: [Task { name: "x", priority: 1, tier: gold }, Task { name: "y", priority: 3, tier: basic }, Task { name: "z", priority: 1, tier: basic }]) = ["y", "x", "z"]
+  marks() = ["z", "｡", "😀"]
+  combined(a: ["a": 1, "b": 2], b: ["b": 3]) = ["a": 1, "b": 5]
+  table() = ["a": 100USDc, "b": 200USDc]
+  turn(day: -3, players: 4) = 1
+  wrapped(x: 7, n: -3) = 1
+  between(first: 2, last: 4) = 9
+  between(first: 3, last: 1) = 0

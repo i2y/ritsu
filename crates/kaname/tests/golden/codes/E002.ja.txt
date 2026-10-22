@@ -1,3 +1,3 @@
 エラー[E002]: example.kn:4:7: `then` は予約語なので、名前にできません
      4 |   let then = 3
-  = 名前にできない語は、式の中で別の意味に読める `let` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` の 13 語です。ほかの語に替えてください。
+  = 名前にできない語は、式の中で別の意味に読める `let` `try` `if` `then` `else` `match` `some` `none` `true` `false` `and` `or` `not` `in` の 14 語です。ほかの語に替えてください。

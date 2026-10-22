@@ -23,15 +23,26 @@ fn type_text(p: &Program, c: &Checked, t: &Ty) -> String {
             None => "rate".into(),
         },
         Ty::List(x) => format!("list[{}]", type_text(p, c, x)),
+        Ty::Dict(k, v) => format!("dict[{}, {}]", type_text(p, c, k), type_text(p, c, v)),
+        Ty::Set(x) => format!("set[{}]", type_text(p, c, x)),
         Ty::Opt(x) => format!("{}?", type_text(p, c, x)),
+        Ty::Fn(ps, r, eff) => crate::ty::fn_text(&ps.iter().map(|x| type_text(p, c, x)).collect::<Vec<_>>(), &type_text(p, c, r), eff.as_ref()),
         t => p.show_ty(c, t),
     }
 }
 
-/// A range as the module writes it, in its type's unit: `>=1GBPc <=100000000GBPc`; null for none.
+/// `"private": true` for what is written `private` (DESIGN 28.2); nothing else.
+fn private(o: &mut Vec<(String, Json)>, private: bool) {
+    if private {
+        o.push(("private".into(), Json::from(true)));
+    }
+}
+
+/// A range as the module writes it, in its type's unit: `>=1GBPc <=100000000GBPc`; null for none. The
+/// range of a list or a set is its elements', of a dict its values'.
 fn range_json(r: &Option<Range>, t: &Ty) -> Json {
     let mut t = t;
-    while let Ty::Opt(x) | Ty::List(x) = t {
+    while let Ty::Opt(x) | Ty::List(x) | Ty::Set(x) | Ty::Dict(_, x) = t {
         t = x;
     }
     match r {
@@ -66,6 +77,7 @@ fn outcome_word(o: &Outcome) -> &'static str {
         Outcome::Shown => "shown",
         Outcome::Example(_) => "example",
         Outcome::Undecided => "undecided",
+        Outcome::Unbounded => "unbounded",
         Outcome::Pending => "waiting",
     }
 }
@@ -97,23 +109,43 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         let reached = ritsu_base::paths::from_root(root, t.canon()).unwrap_or_else(|| u.path.clone());
         Json::obj([("kind", Json::str(u.kind.word())), ("name", Json::str(u.name.clone())), ("path", Json::str(u.path.clone())), ("file", Json::str(reached)), ("line", Json::int(u.line as i128))])
     });
-    let enums = m.enums.iter().map(|e| {
+    let enums = m.enums.iter().enumerate().map(|(ei, e)| {
+        let info = &c.decls.enums[ei];
+        let sum = info.is_sum();
         let mut o = named(&e.name);
+        private(&mut o, e.private);
+        type_params(&mut o, &info.tparams);
         o.push(("ordered".into(), Json::from(e.ordered)));
         o.push((
             "values".into(),
-            Json::arr(e.values.iter().map(|v| {
+            Json::arr(e.values.iter().zip(&info.fields).map(|(v, fs)| {
                 let mut x = named(&v.name);
                 x.push(("label".into(), Json::opt_str(v.label.clone())));
+                // a value of an enum whose values have fields: its fields, and its type in the
+                // generated code (DESIGN 23.8)
+                if sum {
+                    x.push((
+                        "fields".into(),
+                        Json::arr(fs.iter().map(|f| {
+                            let mut y = named(&f.name);
+                            y.extend(slot_json(&p, c, &f.slot));
+                            y.push(("line".into(), Json::int(f.line as i128)));
+                            Json::Obj(y)
+                        })),
+                    ));
+                    x.push(("generated".into(), generated_value_type(&alias(&e.name), &alias(&v.name), e.private)));
+                }
                 Json::Obj(x)
             })),
         ));
         o.push(("line".into(), Json::int(e.line as i128)));
-        o.push(("generated".into(), generated_type(&alias(&e.name))));
+        o.push(("generated".into(), generated_type(&alias(&e.name), e.private)));
         Json::Obj(o)
     });
     let records = c.decls.records.iter().map(|r| {
         let mut o = named(&r.name);
+        private(&mut o, r.private);
+        type_params(&mut o, &r.tparams);
         o.push((
             "fields".into(),
             Json::arr(r.fields.iter().map(|f| {
@@ -124,13 +156,20 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
             })),
         ));
         o.push(("line".into(), Json::int(r.line as i128)));
-        o.push(("generated".into(), generated_type(&alias(&r.name))));
+        o.push(("generated".into(), generated_type(&alias(&r.name), r.private)));
         Json::Obj(o)
     });
     let functions = c.decls.fns.iter().enumerate().map(|(f, info)| {
         let decl = &m.fns[f];
         let facts = analysis.and_then(|a| a.fns.get(f));
         let mut o = named(&info.name);
+        // a function no host calls (DESIGN 21.3): a generic one with its type parameters, one that takes
+        // a function, one written `private`
+        private(&mut o, info.private);
+        type_params(&mut o, &info.tparams);
+        if info.inner() {
+            o.push(("inner".into(), Json::from(true)));
+        }
         o.push(("line".into(), Json::int(info.line as i128)));
         o.push(("description".into(), Json::opt_str(decl.description.as_ref().map(|(d, _)| d.clone()))));
         o.push((
@@ -142,7 +181,7 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
             })),
         ));
         o.push(("result".into(), Json::Obj(slot_json(&p, c, &info.ret))));
-        o.push(("effect".into(), facts.map(|x| x.effect.to_json()).unwrap_or(Json::Null)));
+        o.push(("effect".into(), facts.map(|x| crate::effects::effect_json(info, &x.effect)).unwrap_or(Json::Null)));
         let written = decl.effect.as_ref().map(|w| {
             let ks: std::collections::BTreeSet<crate::ast::FailKind> = w.fails.iter().map(|(k, _)| *k).collect();
             Json::obj([("total", Json::from(w.total)), ("fails", Json::arr(ks.iter().map(|k| Json::str(k.word())))), ("diverges", Json::from(w.diverges))])
@@ -182,8 +221,9 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
         o.push(("places".into(), places.unwrap_or(Json::Null)));
         let calls = facts.map(|x| Json::arr(x.calls.iter().map(|k| Json::obj([("line", Json::int(k.line as i128)), ("function", Json::str(k.function.clone()))]))));
         o.push(("calls".into(), calls.unwrap_or(Json::Null)));
-        let a = alias(&info.name);
-        let go = crate::r#gen::plan::fn_name(crate::r#gen::Target::Go, c, f);
+        // an inner function's one function, which the generated code calls (DESIGN 21.3, 26.7)
+        let a = if info.inner() { crate::r#gen::plan::inner_name(crate::r#gen::Target::TypeScript, c, f) } else { alias(&info.name) };
+        let go = if info.inner() { crate::r#gen::plan::generic_name(crate::r#gen::Target::Go, c, f) } else { crate::r#gen::plan::fn_name(crate::r#gen::Target::Go, c, f) };
         o.push(("generated".into(), Json::obj([("typescript", Json::str(a.clone())), ("python", Json::str(a)), ("go", Json::str(go))])));
         Json::Obj(o)
     });
@@ -246,8 +286,31 @@ pub fn json(c: &std::rc::Rc<Checked>, root: &Path) -> Json {
 /// that builds it does not know them).
 type Op = (String, std::path::PathBuf, String, String, Option<Vec<String>>);
 
+/// The type parameters of a generic declaration (DESIGN 26.1), each its name and alias and whether it
+/// is held to keys; nothing for a declaration that has none.
+fn type_params(o: &mut Vec<(String, Json)>, ps: &[crate::names::TParamInfo]) {
+    if ps.is_empty() {
+        return;
+    }
+    o.push((
+        "type_params".into(),
+        Json::arr(ps.iter().map(|p| {
+            let mut x = named(&p.name);
+            x.push(("key".into(), Json::from(p.key)));
+            Json::Obj(x)
+        })),
+    ));
+}
+
+/// The names the type of a value of an enum whose values have fields has in the generated code
+/// (`OrderPlaced`, DESIGN 23.8), with `_` before them for a `private` enum (DESIGN 28.2).
+fn generated_value_type(enum_alias: &str, value_alias: &str, private: bool) -> Json {
+    Json::obj(crate::r#gen::Target::ALL.iter().map(|t| (t.key(), Json::str(crate::r#gen::plan::hidden(crate::r#gen::plan::variant_name(*t, enum_alias, value_alias), private)))))
+}
+
 /// The names a record's or an enum's type has in the generated code.
-fn generated_type(alias: &str) -> Json {
+fn generated_type(alias: &str, private: bool) -> Json {
     let t = ritsu_emit::ident::pascal(alias);
-    Json::obj([("typescript", Json::str(t.clone())), ("python", Json::str(t.clone())), ("go", Json::str(ritsu_emit::ident::go_exported(&t)))])
+    let h = |n: String| crate::r#gen::plan::hidden(n, private);
+    Json::obj([("typescript", Json::str(h(t.clone()))), ("python", Json::str(h(t.clone()))), ("go", Json::str(h(ritsu_emit::ident::go_exported(&t))))])
 }

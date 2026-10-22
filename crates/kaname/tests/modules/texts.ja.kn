@@ -1,0 +1,162 @@
+module 文字列(texts_ja) v1
+description "コードポイントの並びとしての文字列：名前をそろえること、コマンドを確かめること、文字列から数と日付を読むこと、文字列を切り出し、詰め、比べること、生成する言語ごとに扱いの違う文字列。texts.kn の日本語の版"
+
+record コマンド(Command)
+  名前(name)     : string  count <=40
+  メール(email)  : string  count <=60
+  金額(amount)   : string  count <=20
+
+record 項目(Entry)
+  コード(code)  : string  count <=8
+  見出し(label) : string  count >=1 <=24
+
+# 名前をそろえる。前後の空白を除き、語のあいだを空白一つにし、A〜Z を a〜z にする
+fn ハンドル(handle)(名前(name): string) -> string
+  名前.trim().words().join(" ").lower_ascii()
+
+fn 頭文字(initials)(名前(name): string count <=60) -> string
+  名前.words().map(w => w.take(1)).join("").upper_ascii()
+
+fn スラッグ(slug)(題(title): string count <=80) -> string
+  題.trim().lower_ascii().replace(" ", "-")
+
+fn 端をそろえる(tidy_ends)(文(s): string count <=12) -> list[string]
+  [文.trim_start(), 文.trim_end(), 文.trim()]
+
+# コマンドを確かめる。どこが違うかを、フィールドの順に並べる
+fn メールの問題(email_problem)(メール(email): string count <=60) -> string?
+  match メール.index_of("@")
+    none => "@ がありません"
+    some 位置 =>
+      if 位置 = 0
+        "@ の前がありません"
+      else if メール.ends_with("@") or メール.ends_with(".")
+        "@ の後ろがありません"
+      else
+        none
+
+fn 金額の問題(amount_problem)(金額(amount): string count <=20) -> string?
+  match 金額.trim().parse_number()
+    none => "整数ではありません"
+    some n => if n <= 0 then "0 より大きくありません" else none
+
+fn 問題(problems)(c: コマンド) -> list[string]
+  let 名前 = c.名前.trim()
+  let 名前なし : string? = if 名前.count() = 0 then "名前がありません" else none
+  [名前なし, メールの問題(メール: c.メール), 金額の問題(金額: c.金額)].filter_map(x => x)
+
+# 文字列から数と日付を読む。どの言語でも同じに読む
+fn 金額(amount)(文(text): string count <=20) -> number?
+  文.parse_number()
+
+fn 日(day)(文(text): string count <=12) -> date?
+  文.parse_date()
+
+fn 日数(days_between)(甲(a): string count <=10, 乙(b): string count <=10) -> number?
+  match 甲.parse_date()
+    none => none
+    some x =>
+      match 乙.parse_date()
+        none => none
+        some y => y - x
+
+# コードポイントで数え、切り出し、探す
+fn 長さ(lengths)(文(s): string) -> list[number]
+  [文.count(), count(文), 文.chars().count(), 文.code_points().count()]
+
+fn 中ほど(middle)(文(s): string count <=10, 初め(start): number range >=-1 <=12, 終わり(stop): number range >=-1 <=12) -> string
+  文.slice(初め, 終わり)
+
+fn 頭と残り(head_and_tail)(文(s): string count <=10, 個数(n): number range >=-1 <=12) -> string
+  concat(文.take(個数), "|", 文.drop(個数))
+
+fn 位置(place)(文(s): string count <=12, 探す文字列(t): string count <=3) -> number?
+  文.index_of(探す文字列)
+
+fn 種類(kind)(文(s): string count <=12) -> string
+  if 文.contains("@")
+    "メール"
+  else if starts_with(文, "+") or 文.starts_with("-")
+    "符号つき"
+  else
+    "ほか"
+
+fn 逆さ(reversed)(文(s): string count <=8) -> string
+  文.chars().reverse().join("")
+
+fn ずらす(shifted)(文(s): string count <=6, 幅(by): number range >=-2 <=2) -> string?
+  文.code_points().map(c => c + 幅).to_text()
+
+fn 区切る(fields)(行(line): string count <=20, 区切り(sep): string count <=2) -> list[string]
+  行.split(区切り)
+
+fn 行にする(lines)(並び(xs): list[string] count <=3) -> string
+  並び.join(char(10))
+
+# 幅まで詰める。詰める文字列を繰り返して切り、もう幅のある文字列はそのまま
+fn ゼロ詰め(padded)(数(n): number range >=0 <=99_999, 幅(width): number range >=0 <=8) -> string
+  text(数).pad_start(幅, "0")
+
+fn 見出し(label)(文(s): string count <=10, 幅(width): number range >=-1 <=12, 詰め(fill): string count <=2) -> string
+  文.pad_end(幅, 詰め)
+
+# 書いた数の範囲を答えが守ることを、範囲の解析が示す
+fn 短く(short)(文(s): string) -> string count <=5
+  文.take(5)
+
+fn 項目にする(entry)(コード(code): string, 見出し(label): string count <=30) -> 項目?
+  if コード.count() <= 8 and 見出し.count() >= 1 and 見出し.count() <= 24
+    項目 { コード: コード, 見出し: 見出し }
+  else
+    none
+
+# コードポイントの順に比べ、並べる
+fn 前か(before)(甲(a): string, 乙(b): string) -> bool
+  甲 < 乙
+
+fn 比べる(compared)(甲(a): string count <=4, 乙(b): string count <=4) -> list[bool]
+  [甲 < 乙, 甲 <= 乙, 甲 > 乙, 甲 >= 乙, 甲 = 乙, 甲 != 乙]
+
+fn 先と後(earliest)(甲(a): string, 乙(b): string) -> list[string]
+  [min(甲, 乙), max(甲, 乙)]
+
+fn 並べる(ordered)(並び(xs): list[string] count <=4) -> list[string]
+  並び.sort()
+
+fn コードの順(by_code)(項目の並び(es): list[項目] count <=3) -> list[string]
+  項目の並び.sort_by_desc(e => e.コード).map(e => e.見出し)
+
+fn 数える(tally)(語(words): list[string] count <=5) -> dict[string, number]
+  語.group_by(w => w.lower_ascii()).map_values(ws => ws.count())
+
+examples
+  ハンドル(名前: "  Ada   LOVELACE ") = "ada lovelace"
+  頭文字(名前: "ada  lovelace") = "AL"
+  スラッグ(題: " Hello World ") = "hello-world"
+  メールの問題(メール: "a@b.org") = none
+  メールの問題(メール: "@b") = "@ の前がありません"
+  問題(c: コマンド { 名前: "  ", メール: "ab", 金額: " 12 " }) = ["名前がありません", "@ がありません"]
+  金額(文: "+12") = 12
+  金額(文: " 12 ") = none
+  金額(文: "1_000") = none
+  金額(文: "９") = none
+  金額(文: "9223372036854775808") = none
+  日(文: "2024-02-29") = 2024-02-29
+  日(文: "2026-02-29") = none
+  日数(甲: "2026-01-01", 乙: "2026-03-01") = 59
+  長さ(文: "👍🏽") = [2, 2, 2, 2]
+  長さ(文: concat("e", char(769))) = [2, 2, 2, 2]
+  中ほど(文: "a👍b", 初め: 1, 終わり: 2) = "👍"
+  頭と残り(文: "😀x", 個数: 1) = "😀|x"
+  位置(文: "a👍b", 探す文字列: "b") = 2
+  位置(文: "ab", 探す文字列: "") = 0
+  逆さ(文: "ab👍") = "👍ba"
+  ずらす(文: "ab", 幅: 1) = "bc"
+  区切る(行: ",a,,b,", 区切り: ",") = ["", "a", "", "b", ""]
+  区切る(行: "ab", 区切り: "") = ["a", "b"]
+  ゼロ詰め(数: 42, 幅: 5) = "00042"
+  見出し(文: "ab", 幅: 5, 詰め: "xy") = "abxyx"
+  前か(甲: "｡", 乙: "😀") = true
+  先と後(甲: "b", 乙: "a") = ["a", "b"]
+  並べる(並び: ["b", "😀", "｡", "a"]) = ["a", "b", "｡", "😀"]
+  数える(語: ["A", "a", "b"]) = ["a": 2, "b": 1]

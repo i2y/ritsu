@@ -62,11 +62,20 @@ structure Place where
 
 mutual
 def Slot.beq : Slot → Slot → Bool
-  | .mk l c r u rc fs, .mk l' c' r' u' rc' fs' =>
-    l == l' && c == c' && r == r' && u == u' && rc == rc' && Slot.beqFields fs fs'
+  | .mk l c r u rc fs vs ks rf, .mk l' c' r' u' rc' fs' vs' ks' rf' =>
+    l == l' && c == c' && r == r' && u == u' && rc == rc' && rf == rf' && Slot.beqFields fs fs' &&
+      Slot.beqValues vs vs' && Slot.beqKeys ks ks'
+def Slot.beqKeys : Option Slot → Option Slot → Bool
+  | none, none => true
+  | some a, some b => Slot.beq a b
+  | _, _ => false
 def Slot.beqFields : List (String × Slot) → List (String × Slot) → Bool
   | [], [] => true
   | (n, s) :: xs, (m, t) :: ys => n == m && Slot.beq s t && Slot.beqFields xs ys
+  | _, _ => false
+def Slot.beqValues : List (String × List (String × Slot)) → List (String × List (String × Slot)) → Bool
+  | [], [] => true
+  | (t, f) :: xs, (u, g) :: ys => t == u && Slot.beqFields f g && Slot.beqValues xs ys
   | _, _ => false
 end
 
@@ -89,13 +98,24 @@ structure Out where
   places : List Place
   vals : List (Nat × Abs)
   calls : List Nat
-  /-- Whether a `reduce` let the ends of its running value go (DESIGN 5.5): what the theorems leave
-      out (DESIGN 15.4). -/
+  /-- Whether a `reduce` let the ends of its running value go (DESIGN 5.5), or the analysis called a
+      function value it does not see (kaname's DESIGN 27.4): what the theorems leave out (DESIGN
+      15.4). -/
   widened : Bool
   kept : List (Nat × List (String × Rel × String))
+  /-- The values of the expressions of the bodies of lambdas the function itself made, and the
+      relations their calls of rules keep (kaname's DESIGN 27.4): kept apart, so that a reading
+      again that reads one does not take them away with its own. -/
+  lvals : List (Nat × Abs) := []
+  lkept : List (Nat × List (String × Rel × String)) := []
+  /-- The effects written on the types of the function values called that the analysis does not see
+      (DESIGN 27.5): the kinds, and whether it may not stop. -/
+  thru : List (List Kind × Bool) := []
+  /-- Whether the analysis called a function value it does not see (DESIGN 27.4). -/
+  unseen : Bool := false
   deriving Repr, Inhabited
 
-def Out.empty : Out := ⟨[], [], [], false, []⟩
+def Out.empty : Out := { places := [], vals := [], calls := [], widened := false, kept := [] }
 
 /-- The relations a call of a rule keeps between its inputs, by the call's expression, joined with
     those of the times before: a call reached more than once (in a function given to `reduce`)
@@ -123,18 +143,42 @@ def Out.record (o : Out) (e : Nat) (v : Abs) : Out :=
     { o with vals := o.vals.map fun (i, x) => if i == e then (i, x.join v) else (i, x) }
   else { o with vals := o.vals ++ [(e, v)] }
 
+/-- The same, of an expression of the body of a lambda the function itself made: kept apart. -/
+def Out.recordL (o : Out) (e : Nat) (v : Abs) : Out :=
+  if o.lvals.any (·.1 == e) then
+    { o with lvals := o.lvals.map fun (i, x) => if i == e then (i, x.join v) else (i, x) }
+  else { o with lvals := o.lvals ++ [(e, v)] }
+
+/-- The relations a call of a rule in the body of a lambda the function itself made keeps: apart. -/
+def Out.keepL (o : Out) (e : Nat) (rels : List (String × Rel × String)) : Out :=
+  if o.lkept.any (·.1 == e) then
+    { o with lkept := o.lkept.map fun (i, rs) => if i == e then (i, rs.filter (fun r => rels.contains r)) else (i, rs) }
+  else { o with lkept := o.lkept ++ [(e, rels)] }
+
+/-- What the bodies of the lambdas the function itself made gave, put with the rest. -/
+def Out.merged (o : Out) : Out :=
+  let o' := o.lvals.foldl (fun o (i, a) => o.record i a) { o with lvals := [] }
+  o.lkept.foldl (fun o (i, rels) => o.keep i rels) { o' with lkept := [] }
+
 /-- A name and the fields under it, that a branch narrows: `invoice.amount`. -/
 abbrev Sym := String × List String
 
 /-- The scope of the analysis of one function: the module and what its functions answer once they
-    are analysed, the ring of the function, the names in scope with their values, and what the
-    conditions in force say of how two names compare. -/
+    are analysed, the ring of the function, the names in scope with their values, what the
+    conditions in force say of how two names compare, and how many readings again of a body the
+    analysis is in (kaname's DESIGN 26.5; none in a function's own analysis). -/
 structure ACtx where
   M : Module
   results : List (Option Abs)
   ring : List Nat
   env : List (String × Abs)
   facts : List (Sym × Rel × Sym)
+  depth : Nat
+  /-- Whether the analysis is of the function itself, not a reading again of another (what the
+      lambdas it makes say they were made in), and whether it reads the body of a lambda the function
+      itself made (kaname's DESIGN 27.4). -/
+  own : Bool := true
+  lam : Bool := false
   deriving Inhabited
 
 namespace ACtx
@@ -165,12 +209,15 @@ def counted : Expr → Option Sym
   | .count1 _ l => sym l
   | _ => none
 
-/-- The values with the field at `path` put to `to` (through optionals). -/
+/-- The values with the field at `path` put to `to` (through optionals, and in each value of an enum
+    that has the field). -/
 def putD : Nat → Abs → List String → Abs → Abs
   | 0, a, _, _ => a
   | _ + 1, _, [], to => to
   | d + 1, .record fs rels, f :: rest, to =>
     .record (fs.map fun (n, x) => (n, if n == f then putD d x rest to else x)) rels
+  | d + 1, .variants vs, f :: rest, to =>
+    .variants (vs.map fun (t, fs) => (t, fs.map fun (n, x) => (n, if n == f then putD d x rest to else x)))
   | d + 1, .opt n x, path, to => .opt n (putD d x path to)
   | _ + 1, x, _, _ => x
 
@@ -354,10 +401,21 @@ def widenD : Nat → Abs → Abs → Abs
     | .date s, .date a => .date ⟨if a.lo == s.lo then a.lo else none, if a.hi == s.hi then a.hi else none, a.den⟩
     | .opt _ s, .opt n a => .opt n (widenD d s a)
     | .list sc se, .list ac ae => .list { ac with hi := if ac.hi == sc.hi then ac.hi else none } (widenD d se ae)
+    | .members sc se, .members ac ae => .members { ac with hi := if ac.hi == sc.hi then ac.hi else none } (widenD d se ae)
+    | .str sc, .str ac => .str { ac with hi := if ac.hi == sc.hi then ac.hi else none }
+    | .dict sc sk se, .dict ac ak ae =>
+      .dict { ac with hi := if ac.hi == sc.hi then ac.hi else none } (widenD d sk ak) (widenD d se ae)
     | .record s _, .record fs rels =>
       .record (fs.map fun (n, x) => (n, match Abs.fieldOf s n with
         | some y => widenD d y x
         | none => .any)) rels
+    -- each value of an enum, its fields as a record's; a value the start was not, every field let go
+    | .variants s, .variants a =>
+      .variants (a.map fun (v, r) => (v, match Abs.recOf s v with
+        | some sr => r.map fun (n, x) => (n, match Abs.fieldOf sr n with
+          | some y => widenD d y x
+          | none => .any)
+        | none => r.map fun (n, _) => (n, .any)))
     | _, a => a
 
 /-- A value cut to what is declared of it: the intervals met, field by field. -/
@@ -369,6 +427,9 @@ def cutD : Nat → Abs → Abs → Abs
     | .date x, .date y => .date ((x.meet y).getD x)
     | .opt n x, .opt _ y => .opt n (cutD d x y)
     | .list c x, .list e y => .list ((c.meet e).getD c) (cutD d x y)
+    | .members c x, .members e y => .members ((c.meet e).getD c) (cutD d x y)
+    | .dict c k x, .dict e l y => .dict ((c.meet e).getD c) (cutD d k l) (cutD d x y)
+    | .str c, .str e => .str ((c.meet e).getD c)
     | x, _ => x
 
 /-- How deep `keeps` follows the fields of records (`ranges::keeps_in`): to a depth of 8. -/
@@ -379,14 +440,28 @@ def stripOpt : Abs → Abs
   | .opt _ x => x
   | x => x
 
-/-- What each value a place holds to its range can be: an element of a list, none where its count
-    can be outside the place's, or the value itself. -/
+/-- What each value a place holds to its range can be: an element of a list, a member of a set, a
+    value of a dict, none where their count can be outside the place's, or the value itself. -/
+def countedAbs (count : Option Range) (c : Iv) (e : Abs) : Option Abs :=
+  if count.any (fun r => !c.within r.min r.max) then none else some (stripOpt e)
+
 def elemAbs (list : Bool) (count : Option Range) (a : Abs) : Option Abs :=
   if list then
     match a with
-    | .list c e => if count.any (fun r => !c.within r.min r.max) then none else some (stripOpt e)
+    | .list c e => countedAbs count c e
+    | .members c e => countedAbs count c e
+    | .dict c _ e => countedAbs count c e
     | _ => none
   else some a
+
+/-- Whether a string a place holds itself (no list) keeps the count of code points it declares
+    (`ranges::keeps_in`): every string where it declares none. -/
+def strOK (list : Bool) (count : Option Range) (elem : Abs) : Bool :=
+  match list, count with
+  | false, some c => match elem with
+    | .str i => i.within c.min c.max
+    | _ => false
+  | _, _ => true
 
 /-- Whether every number or date of `elem` is in a range. -/
 def rangeOK (r : Option Range) (elem : Abs) : Bool :=
@@ -394,21 +469,43 @@ def rangeOK (r : Option Range) (elem : Abs) : Bool :=
   | some r => (elem.iv.map fun i => i.within r.min r.max).getD false
   | none => true
 
+/-- Whether the fields of each value of an enum a place holds keep what they declare, each by its
+    place (`keep`): the fields of each value it can be (of every value, where the analysis knows
+    none of them). -/
+def variantsKeep (keep : Abs → Slot → Bool) (elem : Abs) (values : List (String × List (String × Slot))) : Bool :=
+  values.all fun x => match elem with
+    | .variants vs => match Abs.recOf vs x.1 with
+      | some r => x.2.all fun y => keep ((Abs.fieldOf r y.1).getD .any) y.2
+      | none => true
+    | _ => x.2.all fun y => keep .any y.2
+
+/-- Whether the keys of a dict a place reaches keep what their place declares (`keep`): none where the
+    place is of a dict and the value is not one the analysis follows. -/
+def keysOK (keep : Abs → Slot → Bool) (keys : Option Slot) (a : Abs) : Bool :=
+  match keys, a with
+  | some ks, .dict _ ka _ => keep ka ks
+  | some _, _ => false
+  | none, _ => true
+
 /-- Whether every value keeps what a place declares, as the interpreter holds a value to it
     (`ranges::keeps`): the range of its numbers and dates, the count of a list, and with `reached`
-    the fields of the records of a module it reaches. -/
+    the fields of the records of a module it reaches and of the values of an enum it holds (each
+    value it can be; any field of a value the analysis does not know). -/
 def keepsD : Nat → Abs → Slot → Bool → Bool
   | 0, _, _, _ => false
-  | k + 1, a, .mk list count range unit01 record fields, reached =>
+  | k + 1, a, .mk list count range unit01 record fields values keys _, reached =>
     match stripOpt a with
     | .never => true
     | a =>
+      -- the keys of a dict where a parameter reaches them, each to the whole of its type
+      (!reached || keysOK (fun a s => keepsD k a s true) keys a) &&
       match elemAbs list count a with
       | none => false
       | some .never => true
       | some elem =>
-        rangeOK (rangeOf range unit01 reached) elem &&
-          (!(reached && record) || fields.all fun (f, fs) => keepsD k (elem.field f) fs true)
+        rangeOK (rangeOf range unit01 reached) elem && strOK list count elem &&
+          (!(reached && record) || fields.all fun (f, fs) => keepsD k (elem.field f) fs true) &&
+          (!reached || variantsKeep (fun a s => keepsD k a s true) elem values)
 
 def keeps (a : Abs) (s : Slot) (reached : Bool) : Bool := keepsD KEEPS a s reached
 
@@ -512,14 +609,29 @@ def Expr.id? : Expr → Option Nat
   | .dateCall id .. | .transfer id .. | .record id .. | .list id .. | .walk id .. | .reduce id ..
   | .minmax id .. | .modOp id .. | .isqrt id .. | .allocate id .. | .round id .. | .count1 id ..
   | .startsWith id .. | .concat id .. | .text id .. | .bad id .. => some id
+  | .dict id .. | .prim id .. | .walkK id .. | .toDict id .. | .mergeWith id .. => some id
+  | .lam id | .callV id .. => some id
   | .letIn .. => Option.none
 
 /-- The value of a number or a date literal, in the abstract. -/
 def litAbs (v : Rat) : Abs := .num (Iv.exact v)
 
-/-- What a match arm's patterns say: whether one can take the value, the names it binds, and the
-    enum values and bools it names. -/
+/-- The values of an enum and the bools a match arm's patterns name. -/
 def armValues (ps : List Pat) : List String :=
+  ps.filterMap fun p => match p with
+    | .bool b => some (if b then "true" else "false")
+    | .enum (some v) => some v
+    | .value (some v) _ => some v
+    | _ => none
+
+/-- The values of an enum that has fields an arm's patterns name. -/
+def valueNames (ps : List Pat) : List String :=
+  ps.filterMap fun p => match p with
+    | .value (some v) _ => some v
+    | _ => none
+
+/-- The values of an enum with no fields and the bools an arm's patterns name. -/
+def setNames (ps : List Pat) : List String :=
   ps.filterMap fun p => match p with
     | .bool b => some (if b then "true" else "false")
     | .enum (some v) => some v
@@ -531,10 +643,10 @@ def EXACT : Nat := 16
 
 
 def Slot.range? : Slot → Option Range
-  | .mk _ _ r _ _ _ => r
+  | .mk _ _ r _ _ _ _ _ _ => r
 
 def Slot.count? : Slot → Option Range
-  | .mk _ c _ _ _ _ => c
+  | .mk _ c _ _ _ _ _ _ _ => c
 
 /-- A value the analysis knows nothing of, where the evaluation can fail: a place that is never
     shown. The check of types lets no module reach one (the operands of `-` and of arithmetic are
@@ -563,6 +675,17 @@ def narrowCount (A : ACtx) (x : Expr) (vy : Abs) (op : CmpOp) : ACtx :=
   | some list => match A.symAbs list, vy with
     | some (.list c el), .num other => match narrowIv c op other (some 1) with
       | some n => A.narrowTo list (.list n el)
+      | none => A
+    -- the count of the pairs of a dict and of the members of a set (DESIGN 24.5)
+    | some (.dict c k el), .num other => match narrowIv c op other (some 1) with
+      | some n => A.narrowTo list (.dict n k el)
+      | none => A
+    | some (.members c el), .num other => match narrowIv c op other (some 1) with
+      | some n => A.narrowTo list (.members n el)
+      | none => A
+    -- the count of the code points of a string (DESIGN 25.6)
+    | some (.str c), .num other => match narrowIv c op other (some 1) with
+      | some n => A.narrowTo list (.str n)
       | none => A
     | _, _ => A
   | none => A
@@ -683,16 +806,126 @@ def canValues (sv : Abs) (named : List String) : List String :=
   | .set (some vs) => named.filter (vs.contains ·)
   | _ => named
 
-/-- The scope of a `match` arm: what its patterns narrow the value to and the name `some` gives
-    it, and whether anything reaches it. -/
-def armScope (A : ACtx) (sy : Option Sym) (sv : Abs) (ps : List Pat) : ACtx × Bool :=
-  let (A, reached) := ps.foldl (armStep sy sv) (A, false)
+/-- `else`. -/
+def Pat.isRest : Pat → Bool
+  | .rest => true
+  | _ => false
+
+/-- `none`. -/
+def Pat.isNone : Pat → Bool
+  | .none => true
+  | _ => false
+
+/-- `some x`. -/
+def Pat.isSome : Pat → Bool
+  | .some _ => true
+  | _ => false
+
+/-- Whether a value can be anything at all. -/
+def notNever : Abs → Bool
+  | .never => false
+  | _ => true
+
+/-- Whether a value is a number or a date. -/
+def isNumDate : Abs → Bool
+  | .num _ | .date _ => true
+  | _ => false
+
+/-- What `else` takes of a value, the arms above it having the patterns `prev` (`ranges::rest_of`):
+    none where nothing is left (the arm is never reached); with what the value is narrowed to there,
+    where that is said (the values of an enum, with fields or not, and of a bool left). -/
+def restOf (prev : List Pat) : Abs → Option (Option Abs)
+  | .never => none
+  | .variants vs =>
+    let left := vs.filter fun x => !(valueNames prev).contains x.1
+    if left.isEmpty then none else some (some (.variants left))
+  | .set (some vs) =>
+    let left := vs.filter fun x => !(setNames prev).contains x
+    if left.isEmpty then none else some (some (.set (some left)))
+  | .opt n x =>
+    let noneLeft := n && !prev.any Pat.isNone
+    let someLeft := notNever x && !prev.any Pat.isSome
+    if noneLeft || someLeft then some none else none
+  | _ => some none
+
+/-- What one literal of an arm takes of the value: the one number or day it is, where the value can
+    be it (none where it cannot); the value as it is, where it is no number or date. -/
+def litTake (sv : Abs) (l : Val) : Option Abs :=
+  match sv, l with
+  | .num i, .num r => if i.has r then some (.num (Iv.exact r)) else none
+  | .date i, .date d => if i.has d then some (.date (Iv.ints d d)) else none
+  | .never, _ => none
+  | _, _ => some sv
+
+/-- One literal of an arm, with what the literals before it came to: whether one can take the
+    value, the numbers and days they take joined, and whether one takes a value that is no number or
+    date. -/
+def litStep (sv : Abs) (acc : Bool × Option Abs × Bool) (p : Pat) : Bool × Option Abs × Bool :=
+  match p with
+  | .lit l => match litTake sv l with
+    | some a =>
+      if isNumDate a then (true, some (match acc.2.1 with | some b => b.join a | none => a), acc.2.2)
+      else (true, acc.2.1, true)
+    | none => acc
+  | _ => acc
+
+/-- The literals of an arm: whether one can take the value, and what they narrow it to (the numbers
+    and days they take, joined; nothing where one takes a value that is no number or date). -/
+def litsOf (sv : Abs) (ps : List Pat) : Bool × Option Abs :=
+  let (reached, lits, other) := ps.foldl (litStep sv) (false, none, false)
+  (reached, if other then none else lits)
+
+/-- The name an arm gives a value of an enum that has fields, alone in its arm (`placed p`). -/
+def boundName : List Pat → Option String
+  | [.value _ (some x)] => some x
+  | _ => none
+
+/-- A name narrowed to `a`, where the value split is one. -/
+def ACtx.narrowOpt (A : ACtx) : Option Sym → Abs → ACtx
+  | some s, a => A.narrowTo s a
+  | none, _ => A
+
+/-- `else`: the values the arms above (their patterns `prev`) leave. -/
+def restScope (sy : Option Sym) (sv : Abs) (prev ps : List Pat) (acc : ACtx × Bool) : ACtx × Bool :=
+  if ps.any Pat.isRest then
+    match restOf prev sv with
+    | none => acc
+    | some none => (acc.1, true)
+    | some (some a) => (acc.1.narrowOpt sy a, true)
+  else acc
+
+/-- Literals: the numbers and days they take, joined. -/
+def litScope (sy : Option Sym) (sv : Abs) (ps : List Pat) (acc : ACtx × Bool) : ACtx × Bool :=
+  let lr := litsOf sv ps
+  ((match lr.2 with
+    | some a => acc.1.narrowOpt sy a
+    | none => acc.1), acc.2 || lr.1)
+
+/-- Values of an enum and bools the arm names: what the value can be of them, each with its fields,
+    and the name the arm gives a value of an enum that has fields. -/
+def nameScope (sy : Option Sym) (sv : Abs) (ps : List Pat) (acc : ACtx × Bool) : ACtx × Bool :=
   let named := armValues ps
-  if named.isEmpty then (A, reached)
+  if named.isEmpty then acc
   else
-    let can := canValues sv named
-    if can.isEmpty then (A, reached)
-    else ((match sy with | some s => A.narrowTo s (.set (some (setOf can))) | none => A), true)
+    match sv with
+    -- the values of an enum that has fields the arm names, each with its fields
+    | .variants vs =>
+      let can := vs.filter fun x => named.contains x.1
+      if can.isEmpty then acc
+      else
+        let A := acc.1.narrowOpt sy (.variants can)
+        ((match boundName ps with | some x => A.bindNew x (.variants can) | none => A), true)
+    | _ =>
+      if (valueNames ps).isEmpty then
+        let can := canValues sv named
+        if can.isEmpty then acc
+        else (acc.1.narrowOpt sy (.set (some (setOf can))), true)
+      else ((match boundName ps with | some x => acc.1.bindNew x .any | none => acc.1), true)
+
+/-- The scope of a `match` arm, the arms above it having the patterns `prev` (DESIGN 23.7): what its
+    patterns narrow the value to and the names they give it, and whether anything reaches it. -/
+def armScope (A : ACtx) (sy : Option Sym) (sv : Abs) (prev ps : List Pat) : ACtx × Bool :=
+  nameScope sy sv ps (litScope sy sv ps (restScope sy sv prev ps (ps.foldl (armStep sy sv) (A, false))))
 
 def exprId (x : Expr) : Nat := x.id?.getD 0
 
@@ -720,7 +953,9 @@ def callAbs (A : ACtx) (o : Out) (f : Nat) (args : List (Nat × Expr × Option C
   | some fn =>
     let (o, A) := (args.zip vals).foldl (callStep fn) (o, A)
     let o := { o with calls := o.calls ++ [f] }
-    let result : Option Abs := if A.ring.contains f then none else (A.results[f]?).join
+    -- one that takes functions takes what it declares: its own analysis answered for functions it
+    -- does not see (kaname's DESIGN 27.4)
+    let result : Option Abs := if A.ring.contains f || fn.takesFn then none else (A.results[f]?).join
     (result.getD fn.declared, o, A)
 
 /-- What an element of a list can be (anything where the value is not one list). -/
@@ -795,7 +1030,7 @@ def ruleAbs (A : ACtx) (o : Out) (id : Nat) (r : Nat) (args : List (Nat × Expr 
   | some rd =>
     let (o, A) := (args.zip vals).foldl (ruleStep rd) (o, A)
     let o := rd.pres.foldl (fun o said => o.place id ("pre:" ++ said) .rule .pending .any) o
-    (.record rd.outputs [], o.keep id (callRels A rd args), A)
+    (.record rd.outputs [], (if A.lam then o.keepL else o.keep) id (callRels A rd args), A)
 
 /-- One argument of a call of a date: the date it reads, where it is the one the date's days are
     counted from. -/
@@ -870,36 +1105,47 @@ def cutTo (a : Abs) (r : Option Range) (module : Bool) : Abs :=
   | .date i, some r, true => .date (i.cut r.min r.max)
   | a, _, _ => a
 
-/-- What a field of a record is: the value written last for it (none where none is), cut to what
-    it declares where the record is a module's. -/
-def fieldAbs (module : Bool) (slot : Slot) (given : List (Nat × Abs × Expr × Option Conv)) (k : Nat) : Abs :=
+/-- What a field of a record is: the value written last for it (where none is, the field of the
+    value it is made from, or none), cut to what it declares where the record is a module's. -/
+def fieldAbs (module : Bool) (slot : Slot) (given : List (Nat × Abs × Expr × Option Conv)) (src : Option (Abs × Nat))
+    (f : String) (k : Nat) : Abs :=
   match given.reverse.find? (·.1 == k) with
   | some (_, a, _, _) => cutTo a slot.range? module
-  | none => Abs.none'
+  | none => match src with
+    | some (fa, _) => cutTo (fa.field f) slot.range? module
+    | none => Abs.none'
 
-/-- One field of a record in the order declared: its value as written (the last written), held
-    to what it declares where the record is a module's. -/
-def fieldStep (module : Bool) (given : List (Nat × Abs × Expr × Option Conv)) (acc : List (String × Abs) × Out × ACtx)
-    (fk : (String × Slot × Bool) × Nat) : List (String × Abs) × Out × ACtx :=
+/-- One field of a record in the order declared: its value as written (the last written), or the
+    field of the value it is made from (its place at that value: `..x`), held to what it declares
+    where the record is a module's. -/
+def fieldStep (module : Bool) (given : List (Nat × Abs × Expr × Option Conv)) (src : Option (Abs × Nat))
+    (acc : List (String × Abs) × Out × ACtx) (fk : (String × Slot × Bool) × Nat) : List (String × Abs) × Out × ACtx :=
   let (out, o, A) := acc
   let ((f, slot, scalar), k) := fk
+  let held := module && (slot.range?.isSome || slot.count?.isSome)
   let (o, A) := match given.reverse.find? (·.1 == k) with
     | some (_, a, x, c) =>
-      if module && (slot.range?.isSome || slot.count?.isSome) then
+      if held then
         (o.place (exprId x) ("field:" ++ f) .range (.slot slot) a,
           if scalar then (match slot.range? with
             | some r => assume A x r c
             | none => A) else A)
       else (o, A)
-    | none => (o, A)
-  (out ++ [(f, fieldAbs module slot given k)], o, A)
+    | none => match src with
+      | some (fa, b) => (if held then o.place b ("field:" ++ f) .range (.slot slot) (fa.field f) else o, A)
+      | none => (o, A)
+  (out ++ [(f, fieldAbs module slot given src f k)], o, A)
 
-/-- A record built, from the values of its fields as written (`ranges::record`). -/
+/-- A record built, or a value of an enum (DESIGN 23.7), from the values of its fields as written
+    and the value it is made from (`ranges::record`). -/
 def recordAbs (A : ACtx) (o : Out) (module : Bool) (fields : List (String × Slot × Bool))
-    (inits : List (Nat × Expr × Option Conv × Nat)) (vals : List Abs) : Abs × Out × ACtx :=
+    (inits : List (Nat × Expr × Option Conv × Nat)) (vals : List Abs) (tag : Option String)
+    (src : Option (Abs × Nat)) : Abs × Out × ACtx :=
   let (given, o) := (inits.zip vals).foldl initStep ([], o)
-  let (out, o, A) := fields.zipIdx.foldl (fieldStep module given) ([], o, A)
-  (.record out [], o, A)
+  let (out, o, A) := fields.zipIdx.foldl (fieldStep module given src) ([], o, A)
+  ((match tag with
+    | some t => .variants [(t, out)]
+    | none => .record out []), o, A)
 
 /-- The list a builtin walks: its count, and an element (a count below 0 for one that never comes). -/
 def walked : Abs → Iv × Abs
@@ -978,6 +1224,333 @@ def exactRounds (count : Iv) : Option Nat :=
   | some h => if h.num ≤ (EXACT : Int) then some (max h.num 0).toNat else Option.none
   | Option.none => Option.none
 
+-- ── Dicts, sets and the builtins of lists (DESIGN 24.5) ────────────────────────
+
+/-- What is not below 0. -/
+def nonNeg (v : Rat) : Rat := if v.num < 0 then 0 else v
+
+/-- A count held to 0 and above, and to 2⁶³ − 1 at most (`ranges::count_iv`). -/
+def capCount (v : Rat) : Rat := if v.num < 0 then 0 else if (i64max : Rat) < v then (i64max : Rat) else v
+
+/-- A count from `lo` to `hi`, each held to 0 and above and to 2⁶³ − 1 at most; no upper end where
+    none is said. -/
+def countIv (lo hi : End) : Iv :=
+  let l := (lo.map capCount).getD 0
+  let h := (hi.map capCount).map fun h => if h < l then l else h
+  Iv.mk' (some l) h (some 1)
+
+/-- From one to the count, where it can be one or more (`ranges::one_up`). -/
+def oneUp (c : Iv) : Iv := countIv (c.lo.map fun l => if l.num > 1 then 1 else l) c.hi
+
+/-- From none to the count (`ranges::up_to`). -/
+def upTo (c : Iv) : Iv := Iv.mk' (some 0) c.hi (some 1)
+
+/-- The count of two dicts or two sets put together: at least the more of their least, at most the
+    sum of their most (`ranges::merged`). -/
+def mergedC (a b : Iv) : Iv :=
+  let lo := match a.lo, b.lo with
+    | some x, some y => some (if y ≤ x then x else y)
+    | x, y => x.or y
+  let hi := match a.hi, b.hi with
+    | some x, some y => some (x + y)
+    | _, _ => none
+  countIv lo hi
+
+/-- Two counts added: lists one after another (`ranges::add_counts`). -/
+def addCounts (a b : Iv) : Iv :=
+  let lo := match a.lo, b.lo with | some x, some y => some (x + y) | _, _ => none
+  let hi := match a.hi, b.hi with | some x, some y => some (x + y) | _, _ => none
+  countIv lo hi
+
+/-- A count times a count: the lists of a list one after another (`ranges::times_count`), the lower
+    ends taken from 0. -/
+def timesCount (outer inner : Iv) : Iv :=
+  let lo := match outer.lo, inner.lo with | some x, some y => some (nonNeg x * nonNeg y) | _, _ => none
+  let hi := match outer.hi, inner.hi with | some x, some y => some (x * y) | _, _ => none
+  countIv lo hi
+
+/-- A value that is none where `may` says or where it may be none itself, anything among them
+    (`ranges::opt_of`). -/
+def optOf (may : Bool) : Abs → Abs
+  | .opt n x => .opt (may || n) x
+  | .any => .any
+  | x => .opt may x
+
+/-- Any count: from 0, no upper end. -/
+def anyCount : Iv := Iv.mk' (some 0) none (some 1)
+
+/-- A list's count and elements; any count and anything for what is no list the analysis follows. -/
+def listParts : Abs → Iv × Abs
+  | .list c x => (c, x)
+  | .opt _ x => listParts x
+  | .never => (Iv.ints 0 0, .never)
+  | _ => (anyCount, .any)
+
+/-- A dict's count, keys and values. -/
+def dictParts : Abs → Iv × Abs × Abs
+  | .dict c k x => (c, k, x)
+  | .opt _ x => dictParts x
+  | .never => (Iv.ints 0 0, .never, .never)
+  | _ => (anyCount, .any, .any)
+
+/-- A set's count and members. -/
+def membersParts : Abs → Iv × Abs
+  | .members c x => (c, x)
+  | .opt _ x => membersParts x
+  | .never => (Iv.ints 0 0, .never)
+  | _ => (anyCount, .any)
+
+/-- An entry of a dict: a record of its key and its value. -/
+def entryAbs (k v : Abs) : Abs := .record [("key", k), ("value", v)] []
+
+/-- One more where it is said (a count put one more in). -/
+def plusOne (e : End) : End := e.map (· + 1)
+
+/-- At least one (a count put one in). -/
+def atLeastOne (e : End) : End := e.map fun l => if l.num < 1 then 1 else l
+
+/-- The interval of a string's count of code points (`ranges::str_count`): from 0 for what is no
+    string the analysis follows. -/
+def strCount : Abs → Iv
+  | .str c => c
+  | .opt _ x => strCount x
+  | .never => Iv.ints 0 0
+  | _ => anyCount
+
+/-- The count of the code points `text` writes (`ranges::text_count`, DESIGN 25.6): a whole number of
+    int64 from 1 to 20, with the spelling of its unit after it; a date 10; a value of an enum and a
+    bool its name; a string itself. -/
+def textCount (fmt : TextFmt) (a : Abs) : Iv :=
+  match fmt with
+  | .rate => anyCount
+  | .number => Iv.ints 1 20
+  | .unit u => Iv.ints (1 + u.length) (20 + u.length)
+  | .plain => match a with
+    | .date _ => Iv.ints 10 10
+    | .set (some s) => match (s.map String.length).min?, (s.map String.length).max? with
+      | some lo, some hi => Iv.ints lo hi
+      | _, _ => Iv.ints 0 0
+    | .str c => c
+    | .never => Iv.ints 0 0
+    | _ => anyCount
+
+/-- The count of the code points of strings put together, `sep` between two (`join`): the count
+    times each and the gaps times `sep`, end by end (the lower ends held to 0 and above). -/
+def joinedEnd (count each between : End) : End :=
+  match count, each, between with
+  | some c, some e, some b => some (c * e + (if c.num > 0 then c - 1 else 0) * b)
+  | _, _, _ => none
+
+/-- The builtins of a dict, a set and a list that take no function (`ranges.rs`'s `collection` and
+    `scalar`), from what their arguments can be, each read in its place, the dict, the set or the list
+    first: the place of `numbers`' count. -/
+def primAbs (o : Out) (id : Nat) (op : Prim) (vals : List Abs) : Abs × Out :=
+  let first := vals.headD .any
+  let arg := fun (i : Nat) => vals.getD (i + 1) .any
+  let ivA := fun (i : Nat) => (arg i).iv.getD Iv.top
+  match op with
+  -- a dict
+  | .get => (optOf true (dictParts first).2.2, o)
+  | .hasD | .hasS | .contains => (Abs.bools, o)
+  | .put =>
+    let (c, k, v) := dictParts first
+    (.dict (countIv (atLeastOne c.lo) (plusOne c.hi)) (k.join (arg 0)) (v.join (arg 1)), o)
+  | .removeD =>
+    let (c, k, v) := dictParts first
+    (.dict (countIv (c.lo.map (· - 1)) c.hi) k v, o)
+  | .keys => let (c, k, _) := dictParts first; (.list c k, o)
+  | .values => let (c, _, v) := dictParts first; (.list c v, o)
+  | .entries => let (c, k, v) := dictParts first; (.list c (entryAbs k v), o)
+  | .merge =>
+    let (c, k, v) := dictParts first
+    let (cb, kb, vb) := dictParts (arg 0)
+    (.dict (mergedC c cb) (k.join kb) (v.join vb), o)
+  -- a set
+  | .add =>
+    let (c, x) := membersParts first
+    (.members (countIv (atLeastOne c.lo) (plusOne c.hi)) (x.join (arg 0)), o)
+  | .removeS =>
+    let (c, x) := membersParts first
+    (.members (countIv (c.lo.map (· - 1)) c.hi) x, o)
+  | .union =>
+    let (c, x) := membersParts first
+    let (cb, xb) := membersParts (arg 0)
+    (.members (mergedC c cb) (x.join xb), o)
+  | .intersect =>
+    let (c, x) := membersParts first
+    let (cb, _) := membersParts (arg 0)
+    (.members (countIv (some 0) (minHi c.hi cb.hi)) x, o)
+  | .difference =>
+    let (c, x) := membersParts first
+    let (cb, _) := membersParts (arg 0)
+    let lo := match c.lo, cb.hi with
+      | some l, some h => some (l - h)
+      | _, _ => some 0
+    (.members (countIv lo c.hi) x, o)
+  | .toList => let (c, x) := membersParts first; (.list c x, o)
+  -- a list
+  | .first | .last =>
+    let (c, el) := listParts first
+    (optOf (decide (((c.lo.map (·.num)).getD 0) ≤ 0)) el, o)
+  | .at => (optOf true (listParts first).2, o)
+  | .append =>
+    let (c, el) := listParts first
+    (.list (countIv (plusOne c.lo) (plusOne c.hi)) (el.join (arg 0)), o)
+  | .take =>
+    let (c, el) := listParts first
+    let n := ivA 0
+    let lo := minLo c.lo ((n.lo.map nonNeg).or (some 0))
+    (.list (countIv lo (minHi c.hi (n.hi.map nonNeg))) el, o)
+  | .drop =>
+    let (c, el) := listParts first
+    let n := ivA 0
+    let most := n.hi.map nonNeg
+    let least := (n.lo.map nonNeg).getD 0
+    let lo := match c.lo, most with
+      | some l, some h => some (l - h)
+      | _, _ => some 0
+    (.list (countIv lo (c.hi.map (· - least))) el, o)
+  | .slice =>
+    let (c, el) := listParts first
+    let (a, b) := (ivA 0, ivA 1)
+    let start := (a.lo.map nonNeg).getD 0
+    let most := b.hi.map fun h => nonNeg h - start
+    (.list (countIv (some 0) (minHi c.hi most)) el, o)
+  | .reverse | .sort => let (c, el) := listParts first; (.list c el, o)
+  | .distinct => let (c, el) := listParts first; (.list (oneUp c) el, o)
+  | .toSet => let (c, el) := listParts first; (.members (oneUp c) el, o)
+  | .flatten =>
+    let (c, el) := listParts first
+    let (ci, ei) := listParts el
+    (.list (timesCount c ci) ei, o)
+  | .indexed =>
+    let (c, el) := listParts first
+    let index := Iv.mk' (some 0) (c.hi.map (· - 1)) (some 1)
+    let index := if index.hi.any (·.num < 0) then Iv.ints 0 0 else index
+    (.list c (.record [("index", .num index), ("item", el)] []), o)
+  -- strings put together: their counts and the separators' (DESIGN 25.6)
+  | .join =>
+    let (c, el) := listParts first
+    let (e, sep) := (strCount el, strCount (arg 0))
+    let lo := joinedEnd (c.lo.map nonNeg) (e.lo.map nonNeg) (sep.lo.map nonNeg)
+    let hi := joinedEnd (c.hi.map nonNeg) e.hi sep.hi
+    (.str (countIv (lo.or (some 0)) hi), o)
+  -- lists one after another
+  | .concat =>
+    let (count, elem) := vals.foldl (fun (acc : Iv × Abs) v =>
+      let (c, el) := listParts v
+      (addCounts acc.1 c, acc.2.join el)) (Iv.ints 0 0, .never)
+    (.list count elem, o)
+  -- the numbers from the least `a` to the greatest `b`: the count, b − a + 1 where it is above 0,
+  -- held to int64
+  | .numbers =>
+    let (a, b) := (first.iv.getD Iv.top, (arg 0).iv.getD Iv.top)
+    let raw := (b.minus a).plus (Iv.exact 1)
+    let count : Iv := { raw with lo := raw.lo.map nonNeg }
+    let o := o.place id "overflow" .overflow .overflow (.num count)
+    let count := countIv count.lo count.hi
+    if count.hi.any (·.num ≤ 0) then (.list (Iv.ints 0 0) .never, o)
+    else (.list count (.num (Iv.mk' a.lo b.hi (some 1))), o)
+  -- a string (`ranges.rs`'s `string`, DESIGN 25.6): what it can be is its count of code points
+  | .chars => (.list (strCount first) (.str (Iv.ints 1 1)), o)
+  | .codePoints => (.list (strCount first) (.num (Iv.ints 0 1114111)), o)
+  | .toText => (optOf true (.str (listParts first).1), o)
+  | .takeT =>
+    let n := strCount first
+    let k := ivA 0
+    let lo := minLo n.lo ((k.lo.map nonNeg).or (some 0))
+    (.str (countIv lo (minHi n.hi (k.hi.map nonNeg))), o)
+  | .dropT =>
+    let n := strCount first
+    let k := ivA 0
+    let most := k.hi.map nonNeg
+    let least := (k.lo.map nonNeg).getD 0
+    let lo := match n.lo, most with
+      | some l, some h => some (l - h)
+      | _, _ => some 0
+    (.str (countIv lo (n.hi.map (· - least))), o)
+  | .sliceT =>
+    let n := strCount first
+    let (a, b) := (ivA 0, ivA 1)
+    let start := (a.lo.map nonNeg).getD 0
+    let most := b.hi.map fun h => nonNeg h - start
+    (.str (countIv (some 0) (minHi n.hi most)), o)
+  -- where it is found: from 0 to the count less the count of what is looked for; or none
+  | .indexOf =>
+    let n := strCount first
+    let t := strCount (arg 0)
+    let hi := n.hi.map (· - (t.lo.map nonNeg).getD 0)
+    if hi.any (·.num < 0) then (Abs.none', o) else (.opt true (.num (Iv.mk' (some 0) hi (some 1))), o)
+  | .containsT | .endsWith => (Abs.bools, o)
+  | .split =>
+    let n := strCount first
+    let sep := strCount (arg 0)
+    let lo := if sep.lo.any (·.num ≥ 1) then some 1 else minLo n.lo (some 1)
+    (.list (countIv lo (plusOne n.hi)) (.str (countIv (some 0) n.hi)), o)
+  | .words =>
+    let n := strCount first
+    (.list (countIv (some 0) (plusOne n.hi)) (.str (countIv (some 0) n.hi)), o)
+  | .replace => (.str (countIv (some 0) (some (i64max : Rat))), o)
+  | .trim | .trimStart | .trimEnd => (.str (countIv (some 0) (strCount first).hi), o)
+  | .lowerAscii | .upperAscii => (.str (strCount first), o)
+  -- as long as the string, or as the width where the fill is not empty
+  | .padStart | .padEnd =>
+    let n := strCount first
+    let (w, fill) := (ivA 0, strCount (arg 1))
+    let lo := if fill.lo.any (·.num ≥ 1) then maxLo n.lo w.lo else n.lo
+    (.str (countIv lo (maxHi n.hi w.hi)), o)
+  | .charOf => (.str (Iv.ints 1 1), o)
+  | .parseNumber => (.opt true (.num (Iv.mk' (some (i64min : Rat)) (some (i64max : Rat)) (some 1))), o)
+  | .parseDate => (.opt true (.date (Iv.mk' (some (Text.DAY_MIN : Rat)) (some (Text.DAY_MAX : Rat)) (some 1))), o)
+
+-- ── A call read again (kaname's DESIGN 26.5) ────────────────────────────────
+
+/-- How many readings again of a body go in one another: a call past them, and a call in the ring of
+    the function analysed now, take what the function answers analysed once. -/
+def REREAD : Nat := 4
+
+/-- The function a call reads again with the values it gives: a generic one, within `REREAD`
+    readings, out of the ring of the function analysed now. -/
+def rereads (A : ACtx) (f : Nat) : Option Fn :=
+  match A.M.fns[f]? with
+  | some fn => if fn.reread && decide (A.depth < REREAD) && !A.ring.contains f then some fn else none
+  | none => none
+
+/-- The ring of a function: the functions of the module that call each other with it, or itself. -/
+def ringOf (M : Module) (f : Nat) : List Nat := ((M.rings.find? (·.1.contains f)).map (·.1)).getD [f]
+
+/-- The value a call gives a parameter, read in its unit (the first argument that goes to it), or
+    every value it declares where none goes. -/
+def givenOne (args : List (Nat × Expr × Option Conv)) (vals : List Abs) (k : Nat) (p : Param) : Abs :=
+  match (args.zip vals).find? (fun a => a.1.1 == k) with
+  | some ((_, _, c), v) => scaleBy c v
+  | none => p.abs
+
+/-- The scope a call reads the body of `fn` again in: its parameters given the values of the call,
+    in the ring of `fn`, one reading deeper. -/
+def rereadCtx (A : ACtx) (fn : Fn) (f : Nat) (args : List (Nat × Expr × Option Conv)) (vals : List Abs) : ACtx :=
+  { M := A.M, results := A.results, ring := ringOf A.M f,
+    env := ((fn.params.zipIdx).map fun pk => (pk.1.name, givenOne args vals pk.2 pk.1)).reverse, facts := [],
+    depth := A.depth + 1, own := false, lam := false }
+
+/-- What a reading again comes to, as a function's analysis takes it (`analyzeFn`): the answer read
+    in the result's unit and kept as the place of the answer where the result declares a range or a
+    count, cut to what the result declares. The places the reading found, and the calls it made, are
+    the call's own (they say its effect); the values of the body's expressions, and the relations its
+    calls of rules keep, are not (nothing of the reading goes to the body's own analysis). -/
+def rereadEnd (fn : Fn) (o : Out) (r : AR) : Abs × Out :=
+  let (v, o') := convA r.out fn.conv r.abs
+  let o' := if fn.ret.range?.isSome || fn.ret.count?.isSome then o'.place fn.answer "answer" .range (.slot fn.ret) v else o'
+  (cutD D v fn.declared, { o' with vals := o.vals, kept := o.kept })
+
+/-- The arguments of a builtin, each read in its place (the places `overflow` of the readings). -/
+def convAll (o : Out) : List (Expr × Option Conv) → List Abs → List Abs × Out
+  | (_, c) :: rest, a :: as =>
+    let (b, o) := convA o c a
+    let (bs, o) := convAll o rest as
+    (b :: bs, o)
+  | _, _ => ([], o)
+
 mutual
 /-- An expression's values, kept by its id, and the scope from here on. -/
 def ev (A : ACtx) : Nat → Expr → Out → AR
@@ -996,8 +1569,9 @@ def ev (A : ACtx) : Nat → Expr → Out → AR
     | _ =>
       let r := evI A n e o
       match e.id? with
-      | some id => { r with out := r.out.record id r.abs }
+      | some id => { r with out := if A.lam then r.out.recordL id r.abs else r.out.record id r.abs }
       | Option.none => r
+termination_by structural fuel _ _ => fuel
 
 /-- A block that answers for an expression: its answer read in the expression's unit. What the
     block narrows stays in it. -/
@@ -1006,6 +1580,7 @@ def branch (A : ACtx) : Nat → Expr → Option Conv → Out → Abs × Out
   | n + 1, b, c, o =>
     let r := ev A n b o
     convA r.out c r.abs
+termination_by structural fuel _ _ _ => fuel
 
 def evI (A : ACtx) : Nat → Expr → Out → AR
   | 0, _, o => AR.of .any (outOfFuel o) A
@@ -1015,7 +1590,7 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       let a := litAbs v
       AR.of a (if fits v then o else o.place id "overflow" .overflow .overflow a) A
     | .date _ d => AR.of (.date (Iv.ints d d)) o A
-    | .str _ _ => AR.of .str o A
+    | .str _ s => AR.of (.str (Iv.ints s.length s.length)) o A
     | .bool _ b => AR.of (boolAbs b) o A
     | .none _ => AR.of Abs.none' o A
     | .enum _ v => AR.of (.set (some [v])) o A
@@ -1103,6 +1678,14 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
             if x.length == 1 && y.length == 1 then some ((x == y) == (op == .eq))
             else if x.all (fun v => !y.contains v) then some (op == .ne) else Option.none
           else Option.none
+        -- two values of an enum that has fields: no value the same, or the one value with no fields
+        | .variants x, .variants y =>
+          if op == .eq || op == .ne then
+            if x.all (fun k => !(y.any (·.1 == k.1))) then some (op == .ne)
+            else if x.length == 1 && x.map (·.1) == y.map (·.1) && (x ++ y).all (fun r => r.2.isEmpty) then
+              some (op == .eq)
+            else Option.none
+          else Option.none
         | _, _ => Option.none
       ⟨match decided with | some v => bools v (!v) | Option.none => Abs.bools, o, rb.ctx,
         .cmp op a b ca cb sa sb ra.abs rb.abs⟩
@@ -1126,7 +1709,7 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       match rs.abs with
       | .never => AR.of .never rs.out rs.ctx
       | _ =>
-        let (out, o) := matchArms rs.ctx n (sym s) rs.abs arms .never rs.out
+        let (out, o) := matchArms rs.ctx n (sym s) rs.abs [] arms .never rs.out
         AR.of out o rs.ctx
     | .letIn _ _ _ _ => ev A n e o
     | .block _ b c => let (v, o) := branch A n b c o; AR.of v o A
@@ -1134,7 +1717,18 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       let (vals, o, A') := evArgs A n args o
       match vals with
       | Option.none => AR.of .never o A'
-      | some vals => let (a, o, A'') := callAbs A' o f args vals; AR.of a o A''
+      | some vals =>
+        match rereads A' f with
+        -- a generic function: its body read again with the values the call gives (DESIGN 26.5)
+        | some fn =>
+          let (o1, A1) := (args.zip vals).foldl (callStep fn) (o, A')
+          let (a, o2) := rereadEnd fn o1 (ev (rereadCtx A1 fn f args vals) n fn.body o1)
+          AR.of a o2 A1
+        | Option.none =>
+          let (a, o, A'') := callAbs A' o f args vals
+          -- each lambda given, read once with every value of its parameters' types, so that its
+          -- places are the caller's (kaname's DESIGN 27.4)
+          AR.of a (onceAll A'' n vals o) A''
     | .rule id _ r args =>
       let (vals, o, A') := evArgs A n args o
       match vals with
@@ -1150,11 +1744,23 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       match vals with
       | Option.none => AR.of .never o A'
       | some vals => let (a, o) := transferAbs o args vals; AR.of a o A'
-    | .record _ _ module fields inits =>
-      let (vals, o, A') := evInits A n inits o
-      match vals with
-      | Option.none => AR.of .never o A'
-      | some vals => let (a, o, A'') := recordAbs A' o module fields inits vals; AR.of a o A''
+    | .record _ _ module fields inits tag base =>
+      match base with
+      -- the value the fields not written are taken from, first
+      | some b =>
+        let rb := ev A n b o
+        match rb.abs with
+        | .never => AR.of .never rb.out rb.ctx
+        | fa =>
+          let (vals, o, A') := evInits rb.ctx n inits rb.out
+          match vals with
+          | Option.none => AR.of .never o A'
+          | some vals => let (a, o, A'') := recordAbs A' o module fields inits vals tag (some (fa, exprId b)); AR.of a o A''
+      | Option.none =>
+        let (vals, o, A') := evInits A n inits o
+        match vals with
+        | Option.none => AR.of .never o A'
+        | some vals => let (a, o, A'') := recordAbs A' o module fields inits vals tag none; AR.of a o A''
     | .list _ elems => listAbs A n elems .never 0 o
     | .walk id _ w list x body c ord step => walkAbs A n id w list x body c ord step o
     | .reduce _ _ list first acc x body c out => reduceAbs A n list first acc x body c out o
@@ -1174,7 +1780,7 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
             | .date x, .date y => Abs.date (minMaxIv isMin x y)
             | _, _ => pa.join pb
           AR.of a o rb.ctx
-    | .modOp _ x k =>
+    | .modOp id _ x k =>
       let rx := ev A n x o
       match rx.abs with
       | .never => AR.of .never rx.out rx.ctx
@@ -1184,17 +1790,27 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
         | .never => AR.of .never rk.out rk.ctx
         | _ =>
           let ivx := rx.abs.iv.getD Iv.top
-          let m : Option Int := match (rk.abs.iv.getD Iv.top).isExact with
+          let ivk := rk.abs.iv.getD Iv.top
+          let m : Option Int := match ivk.isExact with
             | some q => if q.den == 1 && q.num > 0 then some q.num else Option.none
             | Option.none => Option.none
-          let a := match m with
-            | some m =>
-              let hi : Int := match ivx.lo, ivx.hi with
-                | some l, some h => if l.num ≥ 0 && h < (m : Rat) then h.floor else m - 1
-                | _, _ => m - 1
-              Abs.num (Iv.ints 0 hi)
-            | Option.none => Abs.num { Iv.top with den := some 1 }
-          AR.of a rk.out rk.ctx
+          match m with
+          | some m =>
+            let hi : Int := match ivx.lo, ivx.hi with
+              | some l, some h => if l.num ≥ 0 && h < (m : Rat) then h.floor else m - 1
+              | _, _ => m - 1
+            AR.of (.num (Iv.ints 0 hi)) rk.out rk.ctx
+          | Option.none =>
+            -- a divisor that is a value: `zero` where it can be 0; the remainder from 0 to one less
+            -- than its greatest size (Euclid's, DESIGN 24.5)
+            let o := rk.out.place id "zero" .zero .zero rk.abs
+            if ivk.isExact == some 0 then AR.of .never o rk.ctx
+            else
+              let mag := fun (r : Rat) => if r.num < 0 then -r else r
+              let size : End := match ivk.lo, ivk.hi with
+                | some l, some h => some (if mag h < mag l then mag l else mag h)
+                | _, _ => Option.none
+              AR.of (.num (Iv.mk' (some 0) (size.map (· - 1)) (some 1))) o rk.ctx
     | .isqrt _ _ x =>
       let rx := ev A n x o
       match rx.abs with
@@ -1262,6 +1878,9 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       let a := match r.abs with
         | .never => Abs.never
         | .list c _ => Abs.num c
+        | .dict c _ _ => Abs.num c
+        | .members c _ => Abs.num c
+        | .str c => Abs.num c
         | _ => Abs.num (Iv.mk' (some 0) Option.none (some 1))
       AR.of a r.out r.ctx
     | .startsWith _ s p =>
@@ -1277,17 +1896,124 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       let (vals, o, A') := evList A n args o
       match vals with
       | Option.none => AR.of .never o A'
-      | some _ => AR.of .str o A'
-    | .text _ x _ =>
+      | some vs => AR.of (.str (vs.foldl (fun acc v => addCounts acc (strCount v)) (Iv.ints 0 0))) o A'
+    | .text _ x fmt =>
       let r := ev A n x o
       match r.abs with
       | .never => AR.of .never r.out r.ctx
-      | _ => AR.of .str r.out r.ctx
+      | a => AR.of (.str (textCount fmt a)) r.out r.ctx
     | .bad _ _ args =>
       let (vals, o, A') := evList A n args o
       match vals with
       | Option.none => AR.of .never o A'
       | some _ => AR.of .any o A'
+    -- a lambda made a value, with what the names in scope are now (kaname's DESIGN 27.4)
+    | .lam id => AR.of (.fns [(id, A.env, A.own)] Option.none) o A
+    -- a function value called: what it is, then its arguments, each read in its parameter's unit
+    | .callV _ _ f args top =>
+      let rf := ev A n f o
+      match rf.abs with
+      | .never => AR.of .never rf.out rf.ctx
+      | fa =>
+        let (vals, o, A') := evList rf.ctx n (args.map (·.1)) rf.out
+        match vals with
+        | Option.none => AR.of .never o A'
+        | some vals =>
+          let (cvals, o) := convAll o args vals
+          let (a, o) := callVAbs A' n fa cvals top o
+          AR.of a o A'
+    | .dict _ _ pairs => pairsAbs A n pairs .never .never 0 o
+    | .prim id _ op _ args top =>
+      let (vals, o, A') := evList A n (args.map (·.1)) o
+      match vals with
+      | Option.none => AR.of .never o A'
+      | some vals =>
+        -- each argument read in its place, and the builtin's places, whatever it is called on
+        let (cvals, o) := convAll o args vals
+        let (a, o) := primAbs o id op cvals
+        AR.of (top.getD a) o A'
+    | .walkK _ _ w coll x body c _ =>
+      let r := ev A n coll o
+      match w with
+      -- the entries of a dict, each given to the condition: the pairs it can keep
+      | .filterD =>
+        match r.abs with
+        | .never => AR.of .never r.out r.ctx
+        | d =>
+          let (cnt, k, v) := match d with
+            | .dict cnt k v => (cnt, k, v)
+            | _ => (anyCount, Abs.any, Abs.any)
+          let ((_, _, held), o) := condition r.ctx n x (entryAbs k v) body c r.out
+          AR.of (.dict (upTo cnt) (held.field "key") (held.field "value")) o r.ctx
+      -- the values of a dict, each given to the function: the same count and keys
+      | .mapValues =>
+        match r.abs with
+        | .never => AR.of .never r.out r.ctx
+        | d =>
+          let (cnt, k, v) := match d with
+            | .dict cnt k v => (cnt, k, v)
+            | _ => (anyCount, Abs.any, Abs.any)
+          let (u, o) := lam1 r.ctx n x v body c r.out
+          let none' := cnt.hi.any (·.num ≤ 0) || (match v with | .never => true | _ => false)
+          AR.of (.dict cnt k (if none' then .never else u)) o r.ctx
+      | _ =>
+        let (count, elem) := walked r.abs
+        if count.hi.any (fun h => h.num < 0) then AR.of .never r.out r.ctx
+        else
+          let noneAll := noneAtAll count elem
+          match w with
+          | .last =>
+            let ((_, _, held), o) := condition r.ctx n x elem body c r.out
+            AR.of (.opt true (stripOpt held)) o r.ctx
+          -- the same elements in another order: the keys are worked out for their places
+          | .sortBy | .sortByDesc =>
+            let (_, o) := lam1 r.ctx n x elem body c r.out
+            AR.of (.list count (if noneAll then .never else elem)) o r.ctx
+          | .maxBy | .minBy =>
+            let (_, o) := lam1 r.ctx n x elem body c r.out
+            AR.of (optOf (count.lo.all fun l => l.num ≤ 0) (if noneAll then .never else elem)) o r.ctx
+          | .flatMap =>
+            let (v, o) := lam1 r.ctx n x elem body c r.out
+            let (ci, ei) := match v with
+              | .list ci ei => (ci, ei)
+              | _ => (anyCount, Abs.any)
+            if noneAll then AR.of (.list (Iv.ints 0 0) .never) o r.ctx
+            else AR.of (.list (timesCount count ci) ei) o r.ctx
+          | .filterMap =>
+            let (v, o) := lam1 r.ctx n x elem body c r.out
+            let kept := match v with
+              | .opt _ y => y
+              | y => y
+            AR.of (.list (upTo count) (if noneAll then .never else kept)) o r.ctx
+          -- a pair for each key, the elements of a key from one to as many as the list has
+          | .groupBy =>
+            let (kv, o) := lam1 r.ctx n x elem body c r.out
+            if noneAll then AR.of (.dict (Iv.ints 0 0) .never .never) o r.ctx
+            else AR.of (.dict (oneUp count) kv (.list (countIv (some 1) count.hi) elem)) o r.ctx
+          | _ => AR.of .any r.out r.ctx
+    | .toDict _ _ _ list x kb kc y vb vc =>
+      let r := ev A n list o
+      let (count, elem) := walked r.abs
+      if count.hi.any (fun h => h.num < 0) then AR.of .never r.out r.ctx
+      else
+        let (ka, o) := lam1 r.ctx n x elem kb kc r.out
+        let (va, o) := lam1 r.ctx n y elem vb vc o
+        if noneAtAll count elem then AR.of (.dict (Iv.ints 0 0) .never .never) o r.ctx
+        else AR.of (.dict (oneUp count) ka va) o r.ctx
+    | .mergeWith _ _ _ a b x y body c =>
+      let ra := ev A n a o
+      match ra.abs with
+      | .never => AR.of .never ra.out ra.ctx
+      | _ =>
+        let rb := ev ra.ctx n b ra.out
+        match rb.abs with
+        | .never => AR.of .never rb.out rb.ctx
+        | _ =>
+          let (ca, ka, va) := dictParts ra.abs
+          let (cb, kb, vb) := dictParts rb.abs
+          let (u, o) := lam2 rb.ctx n x y va vb body c rb.out
+          AR.of (.dict (mergedC ca cb) (ka.join kb) ((va.join vb).join u)) o rb.ctx
+termination_by structural fuel _ _ => fuel
 
 /-- `and` and `or`: the right is analysed only where the left does not decide, with the left
     narrowed to what lets the right be evaluated; what the right narrows stays in it. -/
@@ -1304,19 +2030,21 @@ def andOr (A : ACtx) : Nat → Bool → Expr → Expr → Out → AR
       else (false, false, ra.out, Nar.none)
     let (t, f) := if isAnd then (lt && rt, lf || rf) else (lt || rt, lf && rf)
     ⟨bools t f, o, ra.ctx, if isAnd then .and ra.nar nb else .or ra.nar nb⟩
+termination_by structural fuel _ _ _ _ => fuel
 
 /-- The arms of a `match`, each reached by what its patterns take, its block in the scope its
-    patterns narrow. -/
-def matchArms (A : ACtx) : Nat → Option Sym → Abs → List (List Pat × Expr × Option Conv) → Abs → Out → Abs × Out
-  | 0, _, _, _, out, o => (out.join .any, outOfFuel o)
-  | _ + 1, _, _, [], out, o => (out, o)
-  | n + 1, sy, sv, (ps, body, c) :: rest, out, o =>
-    let (A', reached) := armScope A sy sv ps
+    patterns narrow; `prev` the patterns of the arms above. -/
+def matchArms (A : ACtx) : Nat → Option Sym → Abs → List Pat → List (List Pat × Expr × Option Conv) → Abs → Out → Abs × Out
+  | 0, _, _, _, _, out, o => (out.join .any, outOfFuel o)
+  | _ + 1, _, _, _, [], out, o => (out, o)
+  | n + 1, sy, sv, prev, (ps, body, c) :: rest, out, o =>
+    let (A', reached) := armScope A sy sv prev ps
     let (out, o) := if reached then
         let (v, o) := branch A' n body c o
         (out.join v, o)
       else (out, o)
-    matchArms A n sy sv rest out o
+    matchArms A n sy sv (prev ++ ps) rest out o
+termination_by structural fuel _ _ _ _ _ _ => fuel
 
 def evArgs (A : ACtx) : Nat → List (Nat × Expr × Option Conv) → Out → Option (List Abs) × Out × ACtx
   | 0, args, o => (some (args.map fun _ => .any), outOfFuel o, A)
@@ -1328,6 +2056,7 @@ def evArgs (A : ACtx) : Nat → List (Nat × Expr × Option Conv) → Out → Op
     | _ =>
       let (vs, o, A') := evArgs r.ctx n rest r.out
       (vs.map (r.abs :: ·), o, A')
+termination_by structural fuel _ _ => fuel
 
 def evArgs5 (A : ACtx) : Nat → List (String × Expr × Option Conv × Nat × Bool) → Out → Option (List Abs) × Out × ACtx
   | 0, args, o => (some (args.map fun _ => .any), outOfFuel o, A)
@@ -1339,6 +2068,7 @@ def evArgs5 (A : ACtx) : Nat → List (String × Expr × Option Conv × Nat × B
     | _ =>
       let (vs, o, A') := evArgs5 r.ctx n rest r.out
       (vs.map (r.abs :: ·), o, A')
+termination_by structural fuel _ _ => fuel
 
 def evInits (A : ACtx) : Nat → List (Nat × Expr × Option Conv × Nat) → Out → Option (List Abs) × Out × ACtx
   | 0, args, o => (some (args.map fun _ => .any), outOfFuel o, A)
@@ -1350,6 +2080,7 @@ def evInits (A : ACtx) : Nat → List (Nat × Expr × Option Conv × Nat) → Ou
     | _ =>
       let (vs, o, A') := evInits r.ctx n rest r.out
       (vs.map (r.abs :: ·), o, A')
+termination_by structural fuel _ _ => fuel
 
 def evList (A : ACtx) : Nat → List Expr → Out → Option (List Abs) × Out × ACtx
   | 0, args, o => (some (args.map fun _ => .any), outOfFuel o, A)
@@ -1361,6 +2092,26 @@ def evList (A : ACtx) : Nat → List Expr → Out → Option (List Abs) × Out �
     | _ =>
       let (vs, o, A') := evList r.ctx n rest r.out
       (vs.map (r.abs :: ·), o, A')
+termination_by structural fuel _ _ => fuel
+
+/-- A dict written out: each key and then its value read in its type as it comes, the keys joined
+    and the values joined; from one pair to as many as are written (two keys of a value may be one). -/
+def pairsAbs (A : ACtx) : Nat → List (Expr × Option Conv × Expr × Option Conv) → Abs → Abs → Nat → Out → AR
+  | 0, _, _, _, _, o => AR.of .any (outOfFuel o) A
+  | _ + 1, [], ks, vs, k, o => AR.of (.dict (Iv.ints ((min k 1 : Nat) : Int) (k : Int)) ks vs) o A
+  | n + 1, (x, cx, y, cy) :: rest, ks, vs, k, o =>
+    let r := ev A n x o
+    match r.abs with
+    | .never => AR.of .never r.out r.ctx
+    | _ =>
+      let (a, o) := convA r.out cx r.abs
+      let r2 := ev r.ctx n y o
+      match r2.abs with
+      | .never => AR.of .never r2.out r2.ctx
+      | _ =>
+        let (b, o) := convA r2.out cy r2.abs
+        pairsAbs r2.ctx n rest (ks.join a) (vs.join b) (k + 1) o
+termination_by structural fuel _ _ _ _ _ => fuel
 
 /-- A list written out: its count, and every element read in the list's element type. -/
 def listAbs (A : ACtx) : Nat → List (Expr × Option Conv) → Abs → Nat → Out → AR
@@ -1373,6 +2124,7 @@ def listAbs (A : ACtx) : Nat → List (Expr × Option Conv) → Abs → Nat → 
     | _ =>
       let (v, o) := convA r.out c r.abs
       listAbs r.ctx n rest (elem.join v) (k + 1) o
+termination_by structural fuel _ _ _ _ => fuel
 
 /-- A function given to a builtin, analysed with its parameter bound to `elem`: its answer read in
     its place. -/
@@ -1381,6 +2133,7 @@ def lam1 (A : ACtx) : Nat → String → Abs → Expr → Option Conv → Out �
   | n + 1, x, elem, body, c, o =>
     let r := ev (A.bindNew x elem) n body o
     convA r.out c r.abs
+termination_by structural fuel _ _ _ _ _ => fuel
 
 /-- A condition given to a builtin, analysed on an element: whether it can hold and fail, and the
     element where it holds. Its answer is read in its place as the evaluation reads it (a bool is
@@ -1393,6 +2146,7 @@ def condition (A : ACtx) : Nat → String → Abs → Expr → Option Conv → O
     let (t, f) := truths v
     let held := ((r.nar.apply true r.ctx).lookup x).getD elem
     ((t, f, held), o)
+termination_by structural fuel _ _ _ _ _ => fuel
 
 def walkAbs (A : ACtx) : Nat → Nat → Walk → Expr → String → Expr → Option Conv → Order → Option Rat → Out → AR
   | 0, _, _, _, _, _, _, _, _, o => AR.of .any (outOfFuel o) A
@@ -1409,6 +2163,7 @@ def walkAbs (A : ACtx) : Nat → Nat → Walk → Expr → String → Expr → O
       let (v, o) := lam1 A n x elem body c o
       let (r, o) := lamResult o id w count elem v step
       AR.of r o A
+termination_by structural fuel _ _ _ _ _ _ _ _ _ => fuel
 
 /-- `reduce(xs, first, (acc, x) => …)` (DESIGN 5.5): the function laid over the running value as
     many times as the list can have elements; where that is more than 16 or not known, three times,
@@ -1434,6 +2189,7 @@ def reduceAbs (A : ACtx) : Nat → Expr → Expr → String → String → Expr 
           else (accA, o)
         let (a, o) := convA o out accA
         AR.of a o r0.ctx
+termination_by structural fuel _ _ _ _ _ _ _ _ => fuel
 
 def reduceRounds (A : ACtx) : Nat → String → String → Expr → Option Conv → Abs → Nat → Abs → Out → (Abs × Bool) × Out
   | 0, _, _, _, _, _, _, a, o => ((a.join .any, false), outOfFuel o)
@@ -1443,6 +2199,7 @@ def reduceRounds (A : ACtx) : Nat → String → String → Expr → Option Conv
     let next := a.join out
     if next == a then ((a, true), o)
     else reduceRounds A n acc x body c elem k next o
+termination_by structural fuel _ _ _ _ _ _ _ _ => fuel
 
 /-- `reduce`'s function, analysed with its two parameters bound. -/
 def lam2 (A : ACtx) : Nat → String → String → Abs → Abs → Expr → Option Conv → Out → Abs × Out
@@ -1450,6 +2207,59 @@ def lam2 (A : ACtx) : Nat → String → String → Abs → Abs → Expr → Opt
   | n + 1, acc, x, a, elem, body, c, o =>
     let r := ev ((A.bindNew acc a).bindNew x elem) n body o
     convA r.out c r.abs
+termination_by structural fuel _ _ _ _ _ _ _ => fuel
+
+/-- The bodies of lambdas read, each with what it caught and its parameters given `args` (where
+    `args` says none, every value of its parameters' types), in the ring of the function it is written
+    in, with no condition in force (kaname's DESIGN 27.4); the answers, each read in the type of the
+    lambda's answer, joined with `acc`. -/
+def lamsAbs (A : ACtx) : Nat → List (Nat × List (String × Abs) × Bool) → Option (List Abs) → Abs → Out → Abs × Out
+  | 0, _, _, _, o => (.any, outOfFuel o)
+  | _ + 1, [], _, acc, o => (acc, o)
+  | n + 1, (i, ae, own) :: rest, args, acc, o =>
+    match A.M.lams.find? (·.id == i) with
+    | Option.none => lamsAbs A n rest args (acc.join .any) o
+    | some lam =>
+      let given := args.getD (lam.params.map (·.2))
+      let B : ACtx := { A with ring := ringOf A.M lam.fn, env := ((lam.params.map (·.1)).zip given).reverse ++ ae,
+                               facts := [], own := own, lam := own }
+      let r := ev B n lam.body o
+      let (a, o) := convA r.out lam.conv r.abs
+      lamsAbs A n rest args (acc.join a) o
+termination_by structural fuel _ _ _ _ => fuel
+
+/-- A function value called with `args` (kaname's DESIGN 27.4): each lambda it can be read with them,
+    the answers joined; one the analysis does not see answers every value of the type of the answer
+    (`top`), makes no place, and gives the function the effect its type writes. -/
+def callVAbs (A : ACtx) : Nat → Abs → List Abs → Abs → Out → Abs × Out
+  | 0, _, _, _, o => (.any, outOfFuel o)
+  | n + 1, fa, args, top, o =>
+    let (fs, unseen) : List (Nat × List (String × Abs) × Bool) × Option (Option (List Kind × Bool)) :=
+      match fa with
+      | .fns fs u => (fs, u)
+      | _ => ([], some Option.none)
+    let (a, o) := lamsAbs A n fs (some args) .never o
+    match unseen with
+    | Option.none => (a, o)
+    | some w =>
+      -- what the theorems leave out, as a running value let go (`widened`)
+      let o := { o with unseen := true, widened := true, thru := match w with
+        | some k => o.thru ++ [k]
+        | Option.none => o.thru }
+      (a.join top, o)
+termination_by structural fuel _ _ _ _ => fuel
+
+/-- The lambdas given to a call that does not read the called function's body again, each read once
+    with every value of its parameters' types (kaname's DESIGN 27.4). -/
+def onceAll (A : ACtx) : Nat → List Abs → Out → Out
+  | 0, _, o => outOfFuel o
+  | _ + 1, [], o => o
+  | n + 1, v :: vs, o =>
+    let o := match v with
+      | .fns fs _ => (lamsAbs A n fs Option.none .never o).2
+      | _ => o
+    onceAll A n vs o
+termination_by structural fuel _ _ => fuel
 end
 
 -- ── A module ────────────────────────────────────────────────────────────────
@@ -1463,6 +2273,11 @@ structure FnFacts where
   calls : List Nat
   widened : Bool
   kept : List (Nat × List (String × Rel × String)) := []
+  /-- The effects written on the types of the function values it calls that the analysis does not
+      see, and whether it takes functions or calls such a value (kaname's DESIGN 27.4, 27.5): what
+      the theorems leave out. -/
+  thru : List (List Kind × Bool) := []
+  unseen : Bool := false
   deriving Inhabited
 
 /-- What a function is inferred to do (DESIGN 4.1): the kinds it can fail with (the places that
@@ -1471,6 +2286,10 @@ structure Effect where
   fails : List Kind
   decided : List Kind
   diverges : Bool
+  /-- Whether the effect of a function it is given goes on to its callers (kaname's DESIGN 27.5): it
+      takes functions, or calls one that does without reading it again. What `total_sound` leaves
+      out. -/
+  through : Bool := false
   deriving Inhabited, Repr
 
 def Effect.total (e : Effect) : Bool := e.fails.isEmpty && !e.diverges
@@ -1491,13 +2310,16 @@ def analyzeFn (M : Module) (results : List (Option Abs)) (ring : List Nat) (f : 
   match M.fns[f]? with
   | none => (default, vals)
   | some fn =>
-    let A : ACtx := ⟨M, results, ring, fn.params.foldl (fun env p => (p.name, p.abs) :: env) [], []⟩
-    let r := ev A FUEL fn.body ⟨[], vals, [], false, []⟩
+    let A : ACtx := { M, results, ring, env := fn.params.foldl (fun env p => (p.name, p.abs) :: env) [], facts := [], depth := 0 }
+    let r := ev A FUEL fn.body ⟨[], vals, [], false, [], [], [], [], false⟩
     let (v, o) := convA r.out fn.conv r.abs
     -- the answer is held to what the result declares where it declares a range or a count (what
     -- `fn.retRanged` says)
     let o := if fn.ret.range?.isSome || fn.ret.count?.isSome then o.place fn.answer "answer" .range (.slot fn.ret) v else o
-    ({ result := cutD D v fn.declared, places := o.places, calls := o.calls, widened := o.widened, kept := o.kept }, o.vals)
+    -- what the bodies of the lambdas it made gave, wherever they were read (kaname's DESIGN 27.4)
+    let o := o.merged
+    ({ result := cutD D v fn.declared, places := o.places, calls := o.calls, widened := o.widened, kept := o.kept,
+       thru := o.thru, unseen := o.unseen || fn.takesFn }, o.vals)
 
 /-- One function of a ring analysed, once (each is in one ring): its facts kept, its answer given to
     the functions analysed after it. -/
@@ -1521,17 +2343,24 @@ def callEffect (ring : List Nat) (effs : List Effect) (e : Effect) (g : Nat) : E
   if ring.contains g then { e with diverges := true }
   else match effs[g]? with
     | some o => { fails := o.fails.foldl addKind e.fails, decided := o.decided.foldl addKind e.decided,
-                  diverges := e.diverges || o.diverges }
+                  diverges := e.diverges || o.diverges, through := e.through || o.through }
     | none => e
 
-/-- What one function of a ring brings to the ring's effect: its places, then its calls. -/
+/-- What a call of a function value the analysis does not see brings: the effect its type writes
+    (kaname's DESIGN 27.5). -/
+def thruEffect (e : Effect) (k : List Kind × Bool) : Effect :=
+  { e with fails := k.1.foldl addKind e.fails, decided := k.1.foldl addKind e.decided, diverges := e.diverges || k.2 }
+
+/-- What one function of a ring brings to the ring's effect: its places, then its calls, then the
+    effects written on the function values it calls that the analysis does not see. -/
 def fnEffect (facts : List FnFacts) (ring : List Nat) (effs : List Effect) (e : Effect) (f : Nat) : Effect :=
   let ff := facts[f]?.getD default
-  ff.calls.foldl (callEffect ring effs) (ff.places.foldl placeEffect e)
+  let e := ff.thru.foldl thruEffect (ff.calls.foldl (callEffect ring effs) (ff.places.foldl placeEffect e))
+  { e with through := e.through || ff.unseen }
 
 /-- The effect of a ring, every function of it the same. -/
 def ringEffect (facts : List FnFacts) (effs : List Effect) (ring : List Nat) (round : Bool) : Effect :=
-  ring.foldl (fnEffect facts ring effs) ⟨[], [], round⟩
+  ring.foldl (fnEffect facts ring effs) { fails := [], decided := [], diverges := round }
 
 /-- The effects so far, with every function of a ring given the ring's. -/
 def effectsStep (facts : List FnFacts) (effs : List Effect) (x : List Nat × Bool) : List Effect :=
@@ -1544,7 +2373,7 @@ def analyzeModule (M : Module) : List FnFacts × List Effect × List (Nat × Abs
   let n := M.fns.length
   let acc := M.rings.foldl (fun acc x => x.1.foldl (analyzeStep M x.1) acc)
     (List.replicate n default, List.replicate n none, [])
-  let effects := M.rings.foldl (effectsStep acc.1) (List.replicate n ⟨[], [], true⟩)
+  let effects := M.rings.foldl (effectsStep acc.1) (List.replicate n { fails := [], decided := [], diverges := true })
   (acc.1, effects, acc.2.2)
 
 -- ── The verdicts of the checks across the languages ─────────────────────────
@@ -1571,7 +2400,7 @@ def FnFacts.decided (vs : List (Nat × String × Bool)) (ff : FnFacts) : FnFacts
 def analyzeWith (M : Module) : List FnFacts × List Effect × List (Nat × Abs) :=
   let (facts, _, vals) := analyzeModule M
   let facts := facts.map (FnFacts.decided M.verdicts)
-  let effects := M.rings.foldl (effectsStep facts) (List.replicate M.fns.length ⟨[], [], true⟩)
+  let effects := M.rings.foldl (effectsStep facts) (List.replicate M.fns.length { fails := [], decided := [], diverges := true })
   (facts, effects, vals)
 
 end KanameCore

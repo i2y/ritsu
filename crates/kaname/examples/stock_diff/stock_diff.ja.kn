@@ -1,0 +1,58 @@
+module 在庫の差(stock_diff_ja) v1
+description "倉庫の二回の棚卸しを、品番ごとに比べる。増えた品番、無くなった品番、数が変わった品番と、一日の入出庫を品番ごとにまとめて棚卸しの数に足したもの、発注する品番。棚卸しの数は品番から棚にある数への辞書で、二回の棚卸しの品番は集合にする。stock_diff.kn の日本語の版"
+
+record 入出庫(Move)
+  品番(sku) : string  count >=1 <=20
+  数量(qty) : number  range >=-10_000 <=10_000
+
+enum 変化(Change)
+  増えた(added)
+    品番(sku) : string
+    数量(qty) : number
+  無くなった(removed)
+    品番(sku) : string
+    数量(qty) : number
+  変わった(changed)
+    品番(sku) : string
+    前(was)   : number
+    今(now)   : number
+
+# 一つの品番が、二回の棚卸しでどう違うか。違わなければ none
+fn 違い(change)(品番(sku): string, 前(before): number? range >=0 <=1_000_000, 後(after): number? range >=0 <=1_000_000) -> 変化?
+  match 前
+    none =>
+      match 後
+        none => none
+        some a => 変化.増えた { 品番: 品番, 数量: a }
+    some b =>
+      match 後
+        none => 変化.無くなった { 品番: 品番, 数量: b }
+        some a => if a = b then none else 変化.変わった { 品番: 品番, 前: b, 今: a }
+
+# 違う品番の全部を、品番の順に。辞書と集合は鍵の順に回る
+fn 違いの一覧(changes)(前(before): dict[string, number] range >=0 <=1_000_000, 後(after): dict[string, number] range >=0 <=1_000_000) -> list[変化]
+  let 品番の集合 = 前.keys().to_set().union(後.keys().to_set())
+  品番の集合.to_list().filter_map(一つ => 違い(品番: 一つ, 前: 前.get(一つ), 後: 後.get(一つ)))
+
+# 一日の入出庫を、品番ごとにまとめた数
+fn 正味(net)(入出庫(moves): list[入出庫] count <=1_000) -> dict[string, number]
+  入出庫.group_by(一件 => 一件.品番).map_values(同じ品番 => 同じ品番.sum(一件 => 一件.数量))
+
+# 棚卸しの数に、一日の入出庫を足したもの。0 になった品番は除く
+fn 入出庫の後(moved)(在庫(stock): dict[string, number] count <=10_000 range >=0 <=1_000_000, 入出庫(moves): list[入出庫] count <=1_000) -> dict[string, number]
+  在庫.merge_with(正味(入出庫: 入出庫), (a, b) => a + b).filter(組 => 組.value != 0)
+
+# 棚にある数が、置いておく数より少ない品番
+fn 発注する品番(to_reorder)(在庫(stock): dict[string, number] range >=0 <=1_000_000, 下限(floor): number range >=0 <=1_000_000) -> set[string]
+  在庫.filter(組 => 組.value < 下限).keys().to_set()
+
+# 棚卸しの数の合計
+fn 総数(units)(在庫(stock): dict[string, number] count <=10_000 range >=0 <=1_000_000) -> number
+  在庫.values().sum(数 => 数)
+
+examples
+  違いの一覧(前: ["ink": 4, "pen": 10], 後: ["pen": 7, "pad": 3]) = [変化.無くなった { 品番: "ink", 数量: 4 }, 変化.増えた { 品番: "pad", 数量: 3 }, 変化.変わった { 品番: "pen", 前: 10, 今: 7 }]
+  正味(入出庫: [入出庫 { 品番: "pen", 数量: -3 }, 入出庫 { 品番: "ink", 数量: 5 }, 入出庫 { 品番: "pen", 数量: 1 }]) = ["ink": 5, "pen": -2]
+  入出庫の後(在庫: ["ink": 4, "pen": 2], 入出庫: [入出庫 { 品番: "pen", 数量: -2 }, 入出庫 { 品番: "pad", 数量: 6 }]) = ["ink": 4, "pad": 6]
+  発注する品番(在庫: ["ink": 4, "pen": 10, "pad": 0], 下限: 5) = ["ink", "pad"].to_set()
+  総数(在庫: ["ink": 4, "pen": 10]) = 14

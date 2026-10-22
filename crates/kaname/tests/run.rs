@@ -18,7 +18,16 @@ fn joined(args: &[&str]) -> (u8, String, String) {
 }
 
 /// The examples, each with the function run and its Japanese version's.
-const RUNS: [(&str, &str, &str); 4] = [("payout", "settle", "精算する"), ("late_payment", "claim", "遅れの請求"), ("media_mail", "quote", "見積もる"), ("discount_split", "split", "按分する")];
+const RUNS: [(&str, &str, &str); 8] = [
+    ("order_flow", "replay", "順に進める"),
+    ("stock_diff", "changes", "違いの一覧"),
+    ("handles", "tag", "タグを読む"),
+    ("catalog", "paths", "パス"),
+    ("payout", "settle", "精算する"),
+    ("late_payment", "claim", "遅れの請求"),
+    ("media_mail", "quote", "見積もる"),
+    ("discount_split", "split", "按分する"),
+];
 
 #[test]
 fn each_example_runs_as_the_golden_files_hold() {
@@ -106,4 +115,57 @@ fn a_run_that_does_not_stop_exits_1() {
         .unwrap();
     assert_eq!(code, 1);
     assert!(out.ends_with(&format!("does not stop: the calls of functions go deeper than {} (`countdown`, called on line 4)\n", kaname::interp::DEPTH)), "{out}");
+}
+
+/// A value of a type that holds itself, nested as deep as a host may give one (200), is read from the
+/// input and answered, and one nested deeper fails at the entry with `input`, the type named (DESIGN
+/// 28.1): `run` reads the input as deep as the arguments' JSON can nest with their values of such types
+/// one deeper than that, a level of JSON for a record and a list, two for a value of a sum with fields
+/// (DESIGN 11.1). A value deeper still is no JSON it reads. The binary of kaname's own crate runs on a
+/// main thread of half the 8 MiB a process is given (`ulimit -s 4096`): the reading, the entry and a
+/// walk of 200 calls stay inside it.
+#[test]
+fn a_value_nested_as_deep_as_a_host_may_give_one_is_read() {
+    let t = ritsu_testkit::TempDir::new("kaname-run-nested");
+    let kn = t.write("trees.kn", include_str!("modules/trees.kn"));
+    let nest = |n: usize, leaf: &str, wrap: &dyn Fn(&str) -> String| (1..n).fold(leaf.to_string(), |s, _| wrap(&s));
+    let category = |n| format!(r#"{{"c": {}}}"#, nest(n, r#"{"name": "a", "children": []}"#, &|s| format!(r#"{{"name": "a", "children": [{s}]}}"#)));
+    let expr = |n| format!(r#"{{"e": {}}}"#, nest(n, r#"{"num": {"value": 1}}"#, &|s| format!(r#"{{"neg": {{"inner": {s}}}}}"#)));
+    let node = |n| format!(r#"{{"n": {}}}"#, nest(n, r#"{"value": 1}"#, &|s| format!(r#"{{"value": 1, "next": {s}}}"#)));
+    let run = |function: &str, input: String, lang: &str| -> (i32, String, String) {
+        let at = t.write("in.json", input);
+        let o = std::process::Command::new("sh")
+            .args(["-c", "ulimit -s 4096 && exec \"$@\"", "sh", env!("CARGO_BIN_EXE_kaname"), "run", kn.to_str().unwrap(), function, "--input", at.to_str().unwrap(), "--lang", lang])
+            .env_remove("KANAME_LANG")
+            .env_remove("RITSU_LANG")
+            .output()
+            .unwrap();
+        (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).lines().last().unwrap_or("").to_string(), String::from_utf8_lossy(&o.stderr).into_owned())
+    };
+    for (function, input, said) in [
+        ("size", category(200), "= 200".to_string()),
+        ("value_of", expr(200), "= -1".to_string()),
+        ("length", node(200), "= 200".to_string()),
+        ("size", category(201), "fails: input (line 55): The argument `c` of `size` nests `Category` more than 200 deep".to_string()),
+        ("value_of", expr(201), "fails: input (line 95): The argument `e` of `value_of` nests `Expr` more than 200 deep".to_string()),
+        ("length", node(201), "fails: input (line 157): The argument `n` of `length` nests `Node` more than 200 deep".to_string()),
+    ] {
+        assert_eq!(run(function, input, "en"), (0, said, String::new()), "{function}");
+    }
+    assert_eq!(run("size", category(201), "ja").1, "失敗: input（55 行目）: 関数 `size` の引数 `c` は、`Category` の入れ子が 200 段を超えています");
+    // a category is two levels of JSON, and the input one more: 1 + 2 × 201 = 403
+    let (code, out, err) = run("size", category(260), "en");
+    assert_eq!((code, out.as_str()), (2, ""));
+    assert!(err.starts_with("error: ") && err.ends_with(" is not JSON: byte 5434: nested deeper than 403 levels\n"), "{err}");
+    // five levels of JSON a step (a value of a sum, its fields, a dict, a pair, a list): 1 + 5 × 201 =
+    // 1,006, within the 1,024 `run` reads at most
+    let wide = t.write("wide.kn", "module wide v1\n\nenum Deep\n  leaf\n  node\n    kids : dict[string, list[Deep]]\n\nfn height(d: Deep) -> number\n  match d\n    node n => 1 + n.kids.values().flatten().sum(x => height(d: x))\n    else => 0\n");
+    let deep = |n| format!(r#"{{"d": {}}}"#, nest(n, r#""leaf""#, &|s| format!(r#"{{"node": {{"kids": [["k", [{s}]]]}}}}"#)));
+    let run_wide = |input: String| -> String {
+        let at = t.write("in.json", input);
+        let o = std::process::Command::new("sh").args(["-c", "ulimit -s 4096 && exec \"$@\"", "sh", env!("CARGO_BIN_EXE_kaname"), "run", wide.to_str().unwrap(), "height", "--input", at.to_str().unwrap()]).env_remove("KANAME_LANG").env_remove("RITSU_LANG").output().unwrap();
+        String::from_utf8_lossy(&o.stdout).lines().last().unwrap_or("").to_string() + &String::from_utf8_lossy(&o.stderr)
+    };
+    assert_eq!(run_wide(deep(200)), "= 199");
+    assert_eq!(run_wide(deep(201)), "fails: input (line 8): The argument `d` of `height` nests `Deep` more than 200 deep");
 }

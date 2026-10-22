@@ -52,8 +52,8 @@ fn types_as_written() {
     assert!(matches!(kinds[0], TypeKind::Unit { dim, unit, tax: Some(t), .. } if dim == "money" && unit == "USD" && t == "incl_tax"));
     assert!(matches!(kinds[1], TypeKind::Rate(Some(n)) if n.raw == "0.01%"));
     assert!(matches!(kinds[2], TypeKind::Unit { dim, unit, .. } if dim == "mass" && unit == "oz") && m.records[0].fields[2].ty.optional);
-    assert!(matches!(kinds[3], TypeKind::Named(p) if p.len() == 2));
-    assert!(matches!(kinds[4], TypeKind::Named(p) if p.iter().map(|(w, _)| w.as_str()).collect::<Vec<_>>() == ["ledger", "capture", "do"]));
+    assert!(matches!(kinds[3], TypeKind::Named(p, _) if p.len() == 2));
+    assert!(matches!(kinds[4], TypeKind::Named(p, _) if p.iter().map(|(w, _)| w.as_str()).collect::<Vec<_>>() == ["ledger", "capture", "do"]));
     assert!(matches!(kinds[5], TypeKind::Running(..)));
     assert!(matches!(kinds[6], TypeKind::List(t) if t.optional));
 }
@@ -95,6 +95,43 @@ fn blocks_lets_ifs_and_matches() {
     assert!(matches!(e.answer.kind, ExprKind::If(..)));
 }
 
+/// An enum with its values listed under it, values with fields, a `match` that names the value it
+/// takes, `else` and literals, and a record made from another (DESIGN 23.1, 23.3, 23.4).
+#[test]
+fn values_with_fields_else_literals_and_records_made_from_another() {
+    let m = module(
+        "module m v1\nenum Order\n  draft \"Draft\"\n    items : list[Item]  count <=20\n  placed\n    items : list[Item]\n    on    : date  range >=2026-01-01 <=2027-12-31\n  cancelled\nenum tier = basic | gold\n",
+    );
+    let e = &m.enums[0];
+    assert!(e.listed && !e.ordered);
+    assert_eq!(e.values.iter().map(|v| (v.name.text.as_str(), v.fields.len())).collect::<Vec<_>>(), [("draft", 1), ("placed", 2), ("cancelled", 0)]);
+    assert_eq!(e.values[0].label.as_deref(), Some("Draft"));
+    assert!(e.values[1].fields[1].bounds.range.is_some() && e.values[0].fields[0].bounds.count.is_some());
+    assert_eq!(e.values.iter().map(|v| v.line).collect::<Vec<_>>(), [3, 5, 8]);
+    assert!(!m.enums[1].listed);
+    let m = module(
+        "module m v1\nfn f(o: Order, n: number range >=-9 <=9) -> number\n  match o\n    placed p => 1\n    Order.draft d => 2\n    cancelled => 3\n    else =>\n      match n\n        -1, 0 => 4\n        2026-01-01 => 5\n        \"A\" => 6\n        else => 7\n",
+    );
+    let ExprKind::Match(_, arms) = &answer(&m).kind else { panic!("a match") };
+    assert!(matches!(&arms[0].patterns[0], Pattern::Value(p, Some((b, _)), _) if p.len() == 1 && b == "p"));
+    assert!(matches!(&arms[1].patterns[0], Pattern::Value(p, Some((b, _)), _) if p.len() == 2 && b == "d"));
+    assert!(matches!(&arms[2].patterns[0], Pattern::Value(_, None, _)));
+    assert!(matches!(&arms[3].patterns[0], Pattern::Else(_)));
+    let ExprKind::Match(_, inner) = &arms[3].body.answer.kind else { panic!("a match in the arm") };
+    assert!(matches!(&inner[0].patterns[0], Pattern::Lit(x) if matches!(x.kind, ExprKind::Neg(_))));
+    assert!(matches!(&inner[0].patterns[1], Pattern::Lit(x) if matches!(x.kind, ExprKind::Num(_))));
+    assert!(matches!(&inner[1].patterns[0], Pattern::Lit(x) if matches!(x.kind, ExprKind::Date(_))));
+    assert!(matches!(&inner[2].patterns[0], Pattern::Lit(x) if matches!(x.kind, ExprKind::Str(_))));
+    // `..x` first in the braces
+    let m = module("module m v1\nfn f(p: Order.placed) -> Order\n  Order.placed { ..p, on: 2026-03-01 }\n");
+    let ExprKind::Record(path, Some(base), fields) = &answer(&m).kind else { panic!("a record made from another") };
+    assert_eq!(path.iter().map(|(w, _)| w.as_str()).collect::<Vec<_>>(), ["Order", "placed"]);
+    assert!(matches!(&base.kind, ExprKind::Var(w) if w == "p"));
+    assert_eq!(fields.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["on"]);
+    // the type of a value, as a parameter's
+    assert!(matches!(&m.fns[0].params[0].ty.kind, TypeKind::Named(p, _) if p.len() == 2));
+}
+
 #[test]
 fn the_precedence_of_the_operators() {
     let m = module("module m v1\nfn f(a: bool, b: bool, x: number range >=0 <=9) -> bool\n  not a or b and x + 2 * 3 >= -x in kg\n");
@@ -118,8 +155,9 @@ fn calls_records_lists_and_functions_given_to_builtins() {
     let Arg::Pos(lam) = &args[1] else { panic!("positional") };
     let ExprKind::Lambda(ps, body) = &lam.kind else { panic!("a function") };
     assert_eq!(ps[0].0, "r");
-    let ExprKind::Record(path, fields) = &body.kind else { panic!("a record") };
+    let ExprKind::Record(path, base, fields) = &body.kind else { panic!("a record") };
     assert_eq!(path[0].0, "Share");
+    assert!(base.is_none());
     assert_eq!(fields.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(), ["label", "share"]);
     assert!(matches!(&fields[1].value.kind, ExprKind::Call(_, a) if a.len() == 2 && matches!(a[0], Arg::Named(..))));
     let m = module("module m v1\nfn f() -> number\n  reduce([1, 2, 3], 0, (acc, x) => acc + x)\n");
@@ -130,6 +168,43 @@ fn calls_records_lists_and_functions_given_to_builtins() {
     let m = module("module m v1\nfn f() -> number\n  ledger.capture.do(payment: \"p\")\n");
     let ExprKind::Call(callee, _) = &answer(&m).kind else { panic!("a call") };
     assert_eq!(callee.path().unwrap().iter().map(|(w, _)| w.as_str()).collect::<Vec<_>>(), ["ledger", "capture", "do"]);
+}
+
+/// The types of dicts, sets and the builtin records (their words are types only before `[`, so a
+/// record may be called `set`), a dict literal and `[:]`, and a builtin written after a value: a call
+/// of what is after the dot (DESIGN 21.4, 24.2).
+#[test]
+fn dicts_sets_and_builtins_written_after_a_value() {
+    let m = module(
+        "module m v1\nrecord R\n  a : dict[string, list[number]] count <=9\n  b : set[date]\n  c : entry[string, number]\n  d : indexed[R]\n  e : set\nrecord set\n  dict : number\n",
+    );
+    let kinds: Vec<&TypeKind> = m.records[0].fields.iter().map(|f| &f.ty.kind).collect();
+    assert!(matches!(kinds[0], TypeKind::Dict(k, v) if matches!(k.kind, TypeKind::Str) && matches!(v.kind, TypeKind::List(_))));
+    assert!(m.records[0].fields[0].bounds.count.is_some());
+    assert!(matches!(kinds[1], TypeKind::Set(t) if matches!(t.kind, TypeKind::Date)));
+    assert!(matches!(kinds[2], TypeKind::Entry(..)));
+    assert!(matches!(kinds[3], TypeKind::Indexed(_)));
+    assert!(matches!(kinds[4], TypeKind::Named(p, _) if p[0].0 == "set"));
+    assert_eq!(m.records[1].name.text, "set");
+    assert_eq!(m.records[1].fields[0].name.text, "dict");
+    // a dict literal: each key and its value; `[:]` has none
+    let m = module("module m v1\nfn f(k: string) -> dict[string, number]\n  [\"a\": 1, k: 2 + 3]\n");
+    let ExprKind::Dict(pairs) = &answer(&m).kind else { panic!("a dict") };
+    assert_eq!(pairs.len(), 2);
+    assert!(matches!(&pairs[0].0.kind, ExprKind::Str(s) if s == "a"));
+    assert!(matches!(&pairs[1].0.kind, ExprKind::Var(w) if w == "k") && matches!(pairs[1].1.kind, ExprKind::Bin(..)));
+    let m = module("module m v1\nfn f() -> dict[string, number]\n  [:]\n");
+    assert!(matches!(&answer(&m).kind, ExprKind::Dict(p) if p.is_empty()));
+    // `xs.sort_by(x => x.due).take(3)`: a call of `take` on the call of `sort_by` on `xs`
+    let m = module("module m v1\nfn f(xs: list[Line]) -> list[Line]\n  xs.sort_by(x => x.due).take(3)\n");
+    let ExprKind::Call(callee, args) = &answer(&m).kind else { panic!("a call") };
+    let ExprKind::Field(base, f, _) = &callee.kind else { panic!("after a value") };
+    assert_eq!((f.as_str(), args.len()), ("take", 1));
+    let ExprKind::Call(inner, args) = &base.kind else { panic!("a call") };
+    assert!(matches!(&inner.kind, ExprKind::Field(x, f, _) if f == "sort_by" && matches!(&x.kind, ExprKind::Var(w) if w == "xs")));
+    assert!(matches!(&args[0], Arg::Pos(x) if matches!(x.kind, ExprKind::Lambda(..))));
+    // a key with no value after it: the `:` is looked for where the key ends
+    assert_eq!(said("module m v1\nfn f() -> dict[string, number]\n  [\"a\": 1, 2]\n"), [("E001", 3, 13)]);
 }
 
 #[test]
@@ -172,6 +247,12 @@ fn what_cannot_be_read_and_where() {
     assert_eq!(said("module m v1\nfn f() -> number\n"), [("E111", 2, 1)]);
     assert_eq!(said("module m v1\nfn f() -> number\n  1\n  2\n"), [("E111", 4, 3)]);
     assert_eq!(said("module m v1\nfn f(a: bool) -> number\n  if a then 1\n"), [("E111", 3, 14)]);
+    // a listed enum with no value, a value under nothing, a field that does not line up, `..` twice
+    // or late, `default` among the values
+    assert_eq!(said("module m v1\nenum Order\nfn f() -> number\n  1\n"), [("E003", 2, 6)]);
+    assert_eq!(said("module m v1\nenum Order\n  draft\n    items : number\n      more : number\n"), [("E004", 5, 7)]);
+    assert_eq!(said("module m v1\nfn f(i: Item) -> Item\n  Item { a: 1, ..i }\n"), [("E001", 3, 16)]);
+    assert_eq!(said("module m v1\nenum Order\n  draft\n  default draft\n"), [("E003", 4, 3)]);
     // E602: an example that is no call, or has no answer
     assert_eq!(said("module m v1\nfn f() -> number\n  1\nexamples\n  f()\n"), [("E602", 5, 6)]);
 }
@@ -195,4 +276,42 @@ fn the_examples_read_as_kaname() {
         let m = p.module.unwrap();
         assert!(!m.fns.is_empty() && !m.examples.is_empty(), "{f}");
     }
+}
+
+/// Function types with the effect written on them, lambdas whose parameters have their types written,
+/// lambdas anywhere an expression goes, and `private` before `fn`, `record` and `enum` (DESIGN 27.1,
+/// 28.2): a word read only where it stands.
+#[test]
+fn function_types_lambdas_and_private() {
+    let m = module(
+        "module m v1\nfn total_by[T](xs: list[T], amount: (T) -> money[USDc], test: (T, number) -> bool total, f: () -> number fails range, overflow) -> money[USDc]\n  xs.sum(x => amount(x))\n",
+    );
+    let ps = &m.fns[0].params;
+    let TypeKind::Fn(args, ret, eff) = &ps[1].ty.kind else { panic!("a function type") };
+    assert_eq!(args.len(), 1);
+    assert!(matches!(&ret.kind, TypeKind::Unit { dim, unit, .. } if dim == "money" && unit == "USDc"));
+    assert!(eff.is_none());
+    let TypeKind::Fn(args, _, eff) = &ps[2].ty.kind else { panic!("a function type") };
+    assert_eq!(args.len(), 2);
+    assert!(eff.as_ref().is_some_and(|e| e.total && e.fails.is_empty()));
+    let TypeKind::Fn(args, _, eff) = &ps[3].ty.kind else { panic!("a function type") };
+    assert!(args.is_empty());
+    assert_eq!(eff.as_ref().unwrap().fails.iter().map(|(k, _)| *k).collect::<Vec<_>>(), [FailKind::Range, FailKind::Overflow]);
+    // a lambda a `let` names, its parameters' types written, and called
+    let m = module("module m v1\nfn f(up: bool) -> number\n  let g = if up then (l: Line, n: number) => l.qty + n else (l: Line, n: number) => n\n  g(x, 1)\n");
+    let l = &m.fns[0].body.lets[0];
+    let ExprKind::If(_, t, _) = &l.value.kind else { panic!("an if") };
+    let ExprKind::Lambda(ps, _) = &t.answer.kind else { panic!("a lambda") };
+    assert_eq!(ps.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["l", "n"]);
+    let written = &m.ltypes[&t.answer.id];
+    assert!(written.iter().all(|w| w.is_some()));
+    assert!(matches!(&answer(&m).kind, ExprKind::Call(callee, args) if matches!(&callee.kind, ExprKind::Var(w) if w == "g") && args.len() == 2));
+    // `private`, and the word as a name where it is no keyword
+    let m = module("module m v1\nprivate record Bounds\n  low : number\nprivate enum side = below | above\nprivate fn place(private: number) -> number\n  private\n");
+    assert!(m.records[0].private && m.enums[0].private && m.fns[0].private);
+    assert_eq!(m.fns[0].params[0].name.text, "private");
+    let m = module("module m v1\nfn place(n: number) -> number\n  n\n");
+    assert!(!m.fns[0].private);
+    // `private` before what is neither a function nor a type
+    assert_eq!(said("module m v1\nprivate use module p from \"p.kn\"\n").first().map(|x| x.0), Some("E003"));
 }

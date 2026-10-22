@@ -21,7 +21,7 @@ pub const GO_PACKAGE: &str = "kanametest/pkg";
 
 /// The test modules of `tests/modules/`, checked as the file `t.kn` beside the crate (where they read
 /// the examples' rules by their paths), and the ones only these tests run.
-pub const MODULES: [(&str, &str); 15] = [
+pub const MODULES: [(&str, &str); 34] = [
     ("calc", include_str!("../modules/calc.kn")),
     ("places", include_str!("../modules/places.kn")),
     ("lists", include_str!("../modules/lists.kn")),
@@ -35,8 +35,27 @@ pub const MODULES: [(&str, &str); 15] = [
     ("bounds", include_str!("../modules/bounds.kn")),
     ("lift", include_str!("../modules/lift.kn")),
     ("lift.ja", include_str!("../modules/lift.ja.kn")),
+    ("open", include_str!("../modules/open.kn")),
+    ("open.ja", include_str!("../modules/open.ja.kn")),
+    ("sums", include_str!("../modules/sums.kn")),
+    ("sums.ja", include_str!("../modules/sums.ja.kn")),
     ("temps", include_str!("../modules/temps.kn")),
     ("temps.ja", include_str!("../modules/temps.ja.kn")),
+    ("dicts", include_str!("../modules/dicts.kn")),
+    ("dicts.ja", include_str!("../modules/dicts.ja.kn")),
+    ("lists2", include_str!("../modules/lists2.kn")),
+    ("lists2.ja", include_str!("../modules/lists2.ja.kn")),
+    ("texts", include_str!("../modules/texts.kn")),
+    ("texts.ja", include_str!("../modules/texts.ja.kn")),
+    ("generic", include_str!("../modules/generic.kn")),
+    ("generic.ja", include_str!("../modules/generic.ja.kn")),
+    ("results", include_str!("../modules/results.kn")),
+    ("results.ja", include_str!("../modules/results.ja.kn")),
+    ("gcalls", include_str!("../modules/gcalls.kn")),
+    ("hof", include_str!("../modules/hof.kn")),
+    ("hof.ja", include_str!("../modules/hof.ja.kn")),
+    ("trees", include_str!("../modules/trees.kn")),
+    ("trees.ja", include_str!("../modules/trees.ja.kn")),
 ];
 
 /// Every module the tests generate: the examples, and the test modules, with the path the head
@@ -175,18 +194,50 @@ pub fn write_package(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>
     written.into_keys().collect()
 }
 
+/// How many cases of each kind a target runs, and how many of them it does not, for they do not stop.
+pub struct Counts {
+    /// The vectors run, and those that do not stop.
+    pub vectors: usize,
+    pub vectors_not: usize,
+    /// The inputs outside what the parameters declare.
+    pub outside: usize,
+    /// The values of types that hold themselves nested 200 and 201 deep run, and those that do not
+    /// stop (DESIGN 28.1).
+    pub nested: usize,
+    pub nested_not: usize,
+}
+
+impl Counts {
+    /// The line a test of a target prints of its cases, `agree` of them agreeing with the reference.
+    pub fn line(&self, lang: Lang, agree: usize, modules: usize) -> String {
+        let run = self.vectors + self.outside + self.nested;
+        format!(
+            "{lang:?}: {agree} of {run} cases agree with the reference: {} vectors ({} that do not stop are not run), {} inputs outside what the parameters declare and {} values of types that hold themselves nested 200 and 201 deep ({} that do not stop are not run), in {modules} modules",
+            self.vectors, self.vectors_not, self.outside, self.nested, self.nested_not
+        )
+    }
+}
+
 /// Every vector of every function of the modules, run in the reference interpreter with every
 /// language joined and the messages in `lang` (DESIGN 9), then the inputs outside what the
-/// parameters declare (the entry's failure `input`): the cases, how many vectors do not stop, and how
-/// many of the cases are outside.
-pub fn cases(modules: &[(Rc<Checked>, String)], lang: Lang) -> (Vec<Case>, usize, usize) {
+/// parameters declare (the entry's failure `input`), those the target `t` runs (DESIGN 22.4: Go's
+/// `int64` holds no number past int64, Python's date no day past 9999-12-31), then the values of
+/// types that hold themselves nested as deep as a host may give one and one deeper (DESIGN 28.1): the
+/// cases, and how many of each kind it runs and does not.
+pub fn cases(modules: &[(Rc<Checked>, String)], lang: Lang, t: Target) -> (Vec<Case>, Counts) {
     let checked: Vec<Rc<Checked>> = modules.iter().map(|(c, _)| c.clone()).collect();
     let suite = super::joined();
-    let (mut cases, diverged) = kaname::r#gen::harness::cases(&checked, &suite, lang);
-    let outside = kaname::r#gen::harness::outside_cases(&checked, &suite, lang);
+    let (cases, diverged) = kaname::r#gen::harness::cases(&checked, &suite, lang);
+    let mut cases = kaname::r#gen::harness::of_target(&cases, t);
+    let vectors = cases.len() - diverged;
+    let outside = kaname::r#gen::harness::of_target(&kaname::r#gen::harness::outside_cases(&checked, &suite, lang), t);
     let n = outside.len();
     cases.extend(outside);
-    (cases, diverged, n)
+    let nested = kaname::r#gen::harness::of_target(&kaname::r#gen::harness::nested_cases(&checked, &suite, lang), t);
+    let nested_not = nested.iter().filter(|c| c.expected.is_none()).count();
+    let nested_run = nested.len() - nested_not;
+    cases.extend(nested);
+    (cases, Counts { vectors, vectors_not: diverged, outside: n, nested: nested_run, nested_not })
 }
 
 /// The cases as the harness reads them: those the interpreter answers.

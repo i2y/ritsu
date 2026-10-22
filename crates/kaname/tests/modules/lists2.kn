@@ -1,0 +1,112 @@
+module lists2 v1
+description "The builtins of a list: elements put on and found, lists cut and turned round, elements ordered by their keys, the first of each kept, lists of lists made one, elements numbered, the greatest by a key, strings joined, and the builtins of before written after a value"
+
+record Item
+  name  : string
+  price : money[USDc]  range >=0USDc <=1_000USDc
+  qty   : number       range >=0 <=10
+
+# elements put on, at a place, and at the ends
+fn added(xs: list[number] count <=3 range >=0 <=9, x: number range >=0 <=9) -> list[number]
+  xs.append(x)
+
+fn joined(a: list[number] count <=2 range >=0 <=9, b: list[number] count <=2 range >=0 <=9) -> list[number]
+  a.concat(b, [7])
+
+fn picked(xs: list[string] count <=3, i: number range >=-1 <=4) -> string?
+  xs.at(i)
+
+fn ends(xs: list[number] count <=3 range >=0 <=9) -> number
+  match xs.first()
+    none => -1
+    some a =>
+      match xs.last()
+        none => -1
+        some b => a * 10 + b
+
+# the last element that holds, found from the end
+fn last_above(xs: list[number] count <=4 range >=0 <=9, limit: number range >=0 <=9) -> number?
+  xs.last(x => x > limit)
+
+# cut to the list where the places are past its ends
+fn cut(xs: list[number] count <=4 range >=0 <=9, start: number range >=-1 <=5, stop: number range >=-1 <=5) -> list[number]
+  xs.slice(start, stop)
+
+fn turned(xs: list[number] count <=4 range >=0 <=9, n: number range >=-1 <=5) -> list[number]
+  xs.take(n).concat(xs.drop(n).reverse())
+
+# in the order of their keys, two of one key in the order of the list
+fn ordered(xs: list[number] count <=4 range >=-5 <=5) -> list[number]
+  xs.sort()
+
+fn by_price(items: list[Item] count <=4) -> list[string]
+  items.sort_by(i => i.price).map(i => i.name)
+
+fn unique(xs: list[string] count <=4) -> list[string]
+  xs.distinct()
+
+# found by the same value, a record compared whole
+fn has(xs: list[Item] count <=3, x: Item) -> bool
+  xs.contains(x)
+
+# lists of lists made one
+fn flat(xss: list[list[number]] count <=3) -> list[number]
+  xss.flatten()
+
+fn counted_out(xs: list[number] count <=3 range >=0 <=3) -> list[number]
+  xs.flat_map(x => numbers(1, x))
+
+# the values that are there
+fn named(items: list[Item] count <=4) -> list[string]
+  items.filter_map(i => if i.qty > 0 then i.name else none)
+
+# each element with its place, from 0
+fn numbered(xs: list[string] count <=3) -> list[string]
+  xs.indexed().map(x => concat(text(x.index), ":", x.item))
+
+# the greatest by a key and the least, the first of a key
+fn dearest(items: list[Item] count <=4) -> string?
+  match items.max_by(i => i.price * i.qty)
+    none => none
+    some i => i.name
+
+fn cheapest(items: list[Item] count <=4) -> Item?
+  items.min_by(i => i.price)
+
+fn line(xs: list[string] count <=3) -> string
+  xs.join(", ")
+
+# the builtins of before, written after a value
+fn summary(items: list[Item] count <=4) -> number
+  items.filter(i => i.qty > 0).map(i => i.qty).sum(q => q) + items.count(i => i.qty = 0) + items.count()
+
+fn any_free(items: list[Item] count <=4, most: number range >=0 <=10) -> bool
+  items.any(i => i.price = 0USDc) or items.all(i => i.qty > most)
+
+fn top(xs: list[number] count <=4 range >=0 <=9) -> number?
+  xs.max_of(x => x)
+
+fn running(items: list[Item] count <=3) -> list[money[USDc]]
+  items.running_totals(i => i.price).map(r => r.upto)
+
+fn folded(xs: list[number] count <=4 range >=1 <=9) -> number
+  xs.reduce(1, (acc, x) => acc * x)
+
+fn halved(x: money[USDc] range >=0USDc <=1_000USDc) -> money[USDc]
+  (x / 2).half_up(1USDc)
+
+examples
+  added(xs: [1, 2], x: 3) = [1, 2, 3]
+  picked(xs: ["a", "b"], i: 2) = none
+  ends(xs: [1, 2, 3]) = 13
+  last_above(xs: [7, 1, 9, 2], limit: 5) = 9
+  cut(xs: [1, 2, 3, 4], start: -1, stop: 2) = [1, 2]
+  turned(xs: [1, 2, 3, 4], n: 1) = [1, 4, 3, 2]
+  by_price(items: [Item { name: "b", price: 5USDc, qty: 1 }, Item { name: "a", price: 2USDc, qty: 1 }, Item { name: "c", price: 2USDc, qty: 1 }]) = ["a", "c", "b"]
+  unique(xs: ["b", "a", "b"]) = ["b", "a"]
+  counted_out(xs: [2, 0, 1]) = [1, 2, 1]
+  numbered(xs: ["x", "y"]) = ["0:x", "1:y"]
+  dearest(items: [Item { name: "a", price: 5USDc, qty: 2 }, Item { name: "b", price: 10USDc, qty: 1 }]) = "a"
+  line(xs: ["a", "b"]) = "a, b"
+  folded(xs: [2, 3]) = 6
+  halved(x: 5USDc) = 3USDc

@@ -83,9 +83,9 @@ theorem not_outRange {r : Range} {p : Rat} (h1 : EndLe r.min p) (h2 : EndGe r.ma
   · rw [hmin] at h1; rw [hmax] at h2; simp only [EndLe, EndGe] at h1 h2
     simp [Rat.not_lt.mpr h1, Rat.not_lt.mpr h2]
 
-theorem Mem_stripOpt {a : Abs} {v : Val} (h : Mem a v) (hv : v ≠ .none) : Mem (stripOpt a) v := by
+theorem Mem_stripOpt {a : Abs} {v : Val} (h : Mem a v) (hnn : v ≠ .none) : Mem (stripOpt a) v := by
   cases h with
-  | optNone => exact absurd rfl hv
+  | optNone => exact absurd rfl hnn
   | optSome _ hx => exact hx
   | any => exact Mem.any _
   | num hi => exact Mem.num hi
@@ -94,10 +94,16 @@ theorem Mem_stripOpt {a : Abs} {v : Val} (h : Mem a v) (hv : v ≠ .none) : Mem 
   | boolAll => exact Mem.boolAll
   | enum hx => exact Mem.enum hx
   | bool hx => exact Mem.bool hx
-  | str => exact Mem.str
+  | str hc => exact Mem.str hc
   | list hc he => exact Mem.list hc he
   | record hf hr => exact Mem.record hf hr
   | transfer hf => exact Mem.transfer hf
+  | variantEnum h => exact Mem.variantEnum h
+  | variant h1 h2 h3 h4 => exact Mem.variant h1 h2 h3 h4
+  | dict hc hk hv hnd => exact Mem.dict hc hk hv hnd
+  | members hc he hnd => exact Mem.members hc he hnd
+  | closAny => exact Mem.closAny
+  | clos h1 h2 h3 => exact Mem.clos h1 h2 h3
 
 theorem point_in {a : Abs} {c : Val} {p : Rat} {i : Iv} (hm : Mem a c) (hp : c.point = some p) (hi : a.iv = some i) :
     i.In p := by
@@ -118,7 +124,48 @@ theorem range_ok {elem : Abs} {x : Val} {r : Option Range} (hm : Mem elem x) (hi
     exact not_outRange this.1 this.2
   · rfl
 
-/-- The values of a place where its count is not outside, each among what an element can be. -/
+/-- A string whose count of code points `strOK` finds within what a place declares is not outside it. -/
+theorem str_ok {elem : Abs} {x : Val} {list : Bool} {count : Option Range} (hm : Mem elem x)
+    (hin : strOK list count elem = true) : strOut list count x = false := by
+  cases x with
+  | str s =>
+    cases list with
+    | true => simp [strOut]
+    | false =>
+      cases count with
+      | none => simp [strOut]
+      | some c =>
+        simp only [strOK] at hin
+        split at hin
+        · rename_i i
+          cases hm with
+          | str hi =>
+            have := within_sound hi hin
+            simp only [strOut, Bool.not_false, Bool.true_and, Option.any_some]
+            exact not_outRange this.1 this.2
+        · simp at hin
+  | _ => simp [strOut]
+
+/-- A count within what a place declares is not outside it. -/
+theorem counted_ok {count : Option Range} {cnt : Iv} {e elem : Abs} {n : Nat} {ys : List Val} (hcl : cnt.In (n : Rat))
+    (he : countedAbs count cnt e = some elem) : countedIn count n ys = some ys ∧ elem = stripOpt e := by
+  unfold countedAbs at he
+  split at he
+  · simp at he
+  · rename_i hcnt
+    simp only [Option.some.injEq] at he
+    refine ⟨?_, he.symm⟩
+    unfold countedIn
+    split
+    · rename_i cr
+      simp only [Option.any_some, Bool.not_eq_true', Bool.not_eq_false] at hcnt
+      have hw : cnt.within cr.min cr.max = true := by simpa using hcnt
+      have := within_sound hcl hw
+      rw [not_outRange this.1 this.2]; rfl
+    · rfl
+
+/-- The values of a place where its count is not outside, each among what an element can be: a
+    list's elements, a set's members, a dict's values. -/
 theorem elems_ok {list : Bool} {count : Option Range} {a : Abs} {c : Val} {elem : Abs}
     (hm : Mem a c) (hc : c ≠ .none) (he : elemAbs list count a = some elem) :
     ∃ xs, elemsOf list count c = some xs ∧ ∀ x ∈ xs, x ≠ .none → Mem elem x := by
@@ -130,24 +177,83 @@ theorem elems_ok {list : Bool} {count : Option Range} {a : Abs} {c : Val} {elem 
   | true =>
     simp only [ite_true] at he
     split at he
-    · rename_i cnt e
-      split at he
-      · simp at he
-      · rename_i hcnt
-        simp only [Option.some.injEq] at he
-        subst he
-        cases hm with
-        | @list _ _ ys hcl hys =>
-          refine ⟨ys, ?_, fun x hx hxn => Mem_stripOpt (hys x hx) hxn⟩
-          simp only [elemsOf]
-          split
-          · rename_i cr
-            simp only [Option.any_some, Bool.not_eq_true', Bool.not_eq_false] at hcnt
-            have hw : cnt.within cr.min cr.max = true := by simpa using hcnt
-            have := within_sound hcl hw
-            rw [not_outRange this.1 this.2]; rfl
-          · rfl
+    · cases hm with
+      | @list _ _ ys hcl hys =>
+        obtain ⟨h1, rfl⟩ := counted_ok (ys := ys) hcl he
+        exact ⟨ys, by simp only [elemsOf]; exact h1, fun x hx hxn => Mem_stripOpt (hys x hx) hxn⟩
+    · cases hm with
+      | @members _ _ ys hcl hys _ =>
+        obtain ⟨h1, rfl⟩ := counted_ok (ys := ys) hcl he
+        exact ⟨ys, by simp only [elemsOf]; exact h1, fun x hx hxn => Mem_stripOpt (hys x hx) hxn⟩
+    · cases hm with
+      | @dict _ _ _ ps hcl _ hv _ =>
+        obtain ⟨h1, rfl⟩ := counted_ok (ys := ps.map (·.2)) hcl he
+        refine ⟨ps.map (·.2), by simp only [elemsOf]; exact h1, fun x hx hxn => ?_⟩
+        obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hx
+        exact Mem_stripOpt (hv p hp) hxn
     · simp at he
+
+/-- The fields of a value of an enum a place reaches keep what they declare, where `keeps` says they
+    do: the field of the value it is, among what that field can be. -/
+theorem variant_fields_ok {elem : Abs} {x : Val} {values : List (String × List (String × Slot))}
+    {out : Slot → Val → Bool} {keep : Abs → Slot → Bool}
+    (ih : ∀ a s c, keep a s = true → Mem a c → out s c = false)
+    (hm : Mem elem x) (hall : variantsKeep keep elem values = true) :
+    variantOutside out values x = false := by
+  cases x with
+  | variant t fs =>
+    simp only [variantOutside]
+    rcases hf : values.find? (·.1 == t) with _ | ⟨t', fss⟩
+    · rw [hf]; rfl
+    · rw [hf]
+      simp only [Option.map_some]
+      have hmem := List.mem_of_find?_eq_some hf
+      have ht' : t' = t := by have := List.find?_some hf; simpa using this
+      subst ht'
+      have hv := List.all_eq_true.mp hall _ hmem
+      rw [List.any_eq_false]
+      intro y hy
+      split
+      · rename_i fv hfv
+        have hfvV : fieldV fs y.1 = some fv := by
+          unfold fieldV; rw [hfv]; rfl
+        cases elem with
+        | variants vs =>
+          cases hm with
+          | @variant _ _ r _ hr _ hsome hmem' =>
+            simp only [hr] at hv
+            have hk := List.all_eq_true.mp hv _ hy
+            obtain ⟨a, ha⟩ := Option.isSome_iff_exists.mp (hsome y.1 fv hfvV)
+            rw [ha] at hk
+            simp only [Option.getD_some] at hk
+            rw [ih a y.2 fv hk (hmem' y.1 fv hfvV a ha)]
+            simp
+        | _ =>
+          have hk := List.all_eq_true.mp hv _ hy
+          rw [ih .any y.2 fv hk (Mem.any fv)]
+          simp
+      · simp
+  | _ => rfl
+
+/-- The keys of a dict a place reaches keep what their place declares, where `keysOK` says they do. -/
+theorem keys_ok {keep : Abs → Slot → Bool} {out : Slot → Val → Bool} {keys : Option Slot} {sa : Abs} {c : Val}
+    (ih : ∀ a s c, keep a s = true → Mem a c → out s c = false) (hm : Mem sa c) (hk : keysOK keep keys sa = true) :
+    keysOut out keys c = false := by
+  cases c with
+  | dict ps =>
+    simp only [keysOut]
+    cases keys with
+    | none => rfl
+    | some ks =>
+      simp only
+      cases hm with
+      | @dict _ ka _ _ _ hk' _ _ =>
+        simp only [keysOK] at hk
+        rw [List.any_eq_false]
+        intro p hp
+        simp [ih ka ks p.1 hk (hk' p hp)]
+      | _ => simp [keysOK] at hk
+  | _ => simp [keysOut]
 
 /-- **What `keeps` says is so**: a value among those of a place that keeps what it declares is not
     outside it. -/
@@ -155,7 +261,7 @@ theorem keeps_sound : ∀ (k d : Nat) (a : Abs) (s : Slot) (reached : Bool) (c :
     keepsD k a s reached = true → Mem a c → s.outsideD d reached c = false
   | 0, _, _, _, _, _, h, _ => by simp [keepsD] at h
   | _, 0, _, _, _, _, _, _ => by simp [Slot.outsideD]
-  | k + 1, d + 1, a, .mk list count range unit01 record fields, reached, c, hk, hm => by
+  | k + 1, d + 1, a, .mk list count range unit01 record fields values keys _, reached, c, hk, hm => by
     simp only [Slot.outsideD]
     split
     · rfl
@@ -164,7 +270,18 @@ theorem keeps_sound : ∀ (k d : Nat) (a : Abs) (s : Slot) (reached : Bool) (c :
       simp only [keepsD] at hk
       split at hk
       · rename_i hnv; rw [hnv] at hm'; exact absurd hm' Mem.not_never
-      · split at hk
+      · rw [Bool.and_eq_true] at hk
+        obtain ⟨hkeys, hk⟩ := hk
+        -- the keys of a dict, where a parameter reaches them
+        have hko : (reached && keysOut (fun s v => Slot.outsideD d s true v) keys c) = false := by
+          cases reached with
+          | false => rfl
+          | true =>
+            simp only [Bool.not_true, Bool.false_or] at hkeys
+            simp only [Bool.true_and]
+            exact keys_ok (fun a s c h1 h2 => keeps_sound k d a s true c h1 h2) hm' hkeys
+        rw [hko, Bool.false_or]
+        split at hk
         · simp at hk
         · rename_i hel
           obtain ⟨xs, hxs, hmx⟩ := elems_ok hm' hcn hel
@@ -180,7 +297,7 @@ theorem keeps_sound : ∀ (k d : Nat) (a : Abs) (s : Slot) (reached : Bool) (c :
           rw [hxs]
           simp only
           simp only [Bool.and_eq_true, Bool.or_eq_true, Bool.not_eq_true'] at hk
-          obtain ⟨hin, hrec⟩ := hk
+          obtain ⟨⟨⟨hin, hstr⟩, hrec⟩, hval⟩ := hk
           rw [List.any_eq_false]
           intro x hx
           split
@@ -188,24 +305,28 @@ theorem keeps_sound : ∀ (k d : Nat) (a : Abs) (s : Slot) (reached : Bool) (c :
           · rename_i hxn
             have hmx' := hmx x hx hxn
             simp only [Bool.not_eq_true, Bool.or_eq_false_iff, Bool.and_eq_false_imp]
-            refine ⟨range_ok hmx' hin, ?_⟩
-            intro hrr
-            split
-            · rename_i fs
-              rcases hrec with hrec | hrec
+            refine ⟨⟨⟨range_ok hmx' hin, str_ok hmx' hstr⟩, ?_⟩, ?_⟩
+            · intro hrr
+              split
+              · rename_i fs
+                rcases hrec with hrec | hrec
+                · exact absurd hrr (by simp_all)
+                · rw [List.any_eq_false]
+                  intro ⟨f, s'⟩ hf
+                  split
+                  · rename_i fv hfv
+                    have hall := List.all_eq_true.mp hrec ⟨f, s'⟩ hf
+                    simp only at hall
+                    have hfield : (Val.record fs).field? f = some fv := by
+                      simp only [Val.field?, hfv, Option.map_some]
+                    have := keeps_sound k d _ s' true fv hall (Mem_field hmx' hfield)
+                    simp only [this]; simp
+                  · simp
+              · simp
+            · intro hrr
+              rcases hval with hval | hval
               · exact absurd hrr (by simp_all)
-              · rw [List.any_eq_false]
-                intro ⟨f, s'⟩ hf
-                split
-                · rename_i fv hfv
-                  have hall := List.all_eq_true.mp hrec ⟨f, s'⟩ hf
-                  simp only at hall
-                  have hfield : (Val.record fs).field? f = some fv := by
-                    simp only [Val.field?, hfv, Option.map_some]
-                  have := keeps_sound k d _ s' true fv hall (Mem_field hmx' hfield)
-                  simp only [this]; simp
-                · simp
-            · simp
+              · exact variant_fields_ok (fun a s c h1 h2 => keeps_sound k d a s true c h1 h2) hmx' hval
 
 /-- A value of an enum among those an abstract value `enumWithin` finds within `vs` is one of them. -/
 theorem enumWithin_sound {vs : List String} {a : Abs} {x : String} (h : enumWithin vs a = true) (hm : Mem a (.enum x)) :

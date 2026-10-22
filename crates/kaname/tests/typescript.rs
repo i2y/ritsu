@@ -5,10 +5,11 @@
 //!
 //! - `tsc --strict --erasableSyntaxOnly` (TypeScript 7.0.2, `tools/`) passes the package, which Node
 //!   could run by stripping its types;
-//! - the package, compiled by tsc, runs every vector of every function in Node, and the inputs
-//!   outside what the parameters declare, and every answer is the reference interpreter's: the value,
-//!   or the kind, the module, the line and the message of the failure (a vector that does not stop in
-//!   the interpreter, past its 200 calls, is not run).
+//! - the package, compiled by tsc, runs every vector of every function in Node, the inputs outside
+//!   what the parameters declare, and the values of types that hold themselves nested as deep as a
+//!   host may give one and one deeper (DESIGN 28.1), and every answer is the reference interpreter's:
+//!   the value, or the kind, the module, the line and the message of the failure (a case that does
+//!   not stop in the interpreter, past its 200 calls, is not run).
 //!
 //! Without Node or the tools (`npm ci --prefix tools`), the test says SKIP and passes.
 
@@ -52,7 +53,7 @@ fn the_generated_typescript_answers_as_the_reference_does() {
             let dir = root.join(format!("ts-{}", if lang == Lang::Ja { "ja" } else { "en" }));
             write_package(&dir, Target::TypeScript, lang, &modules);
             std::fs::write(dir.join("harness.ts"), kaname::r#gen::harness::program(&checked, Target::TypeScript, PY_NAME, GO_PACKAGE)).unwrap();
-            let (cases, diverged, outside) = cases(&modules, lang);
+            let (cases, counts) = cases(&modules, lang, Target::TypeScript);
             std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
             let types = tools().join("node_modules/@types");
             let tsconfig = format!(
@@ -66,7 +67,7 @@ fn the_generated_typescript_answers_as_the_reference_does() {
             assert!(r.ok, "node failed ({lang:?}):\n{}", r.both());
             let (agree, wrong) = compare(&cases, &r.stdout);
             assert!(wrong.is_empty(), "the TypeScript ({lang:?}) answers otherwise than the reference:\n{}", wrong.join("\n"));
-            out.push(format!("{lang:?}: {agree} of {} cases agree with the reference: {} vectors ({diverged} that do not stop are not run) and {outside} inputs outside what the parameters declare, in {} modules", cases.len() - diverged, cases.len() - diverged - outside, modules.len()));
+            out.push(counts.line(lang, agree, modules.len()));
         }
         out
     });
@@ -74,4 +75,32 @@ fn the_generated_typescript_answers_as_the_reference_does() {
     for line in report {
         println!("{line}");
     }
+}
+
+/// What is `private` (DESIGN 28.2) is no part of what a host calls: the TypeScript of a `private`
+/// function, record or enum is not exported, Python starts its name with `_`, and Go with `_`, which
+/// no other package reads.
+#[test]
+fn what_is_private_is_hidden_from_the_host() {
+    let o = common::check_text("hof.kn", include_str!("modules/hof.kn"));
+    let c = o.analysed.clone().unwrap();
+    let text = |t: Target| {
+        let made = kaname::r#gen::package(&[(c.clone(), "tests/modules/hof.kn".to_string())], t, Lang::En, "kanametest");
+        made.files.into_iter().find(|f| f.2.is_some()).map(|f| f.1).unwrap()
+    };
+    let ts = text(Target::TypeScript);
+    for (hidden, shown) in [("function _place_of(", "export function _place_of("), ("interface _Bounds {", "export interface _Bounds"), ("const _Side = {", "export const _Side")] {
+        assert!(ts.contains(hidden) && !ts.contains(shown), "{hidden}");
+    }
+    assert!(ts.contains("export function sides("));
+    let py = text(Target::Python);
+    for hidden in ["def _place_of(", "class _Bounds:", "class _Side(enum.Enum):"] {
+        assert!(py.contains(hidden), "{hidden}");
+    }
+    assert!(py.contains("def sides("));
+    let go = text(Target::Go);
+    for hidden in ["func _placeOf(", "type _Bounds struct", "type _Side string"] {
+        assert!(go.contains(hidden), "{hidden}");
+    }
+    assert!(go.contains("func Sides("));
 }

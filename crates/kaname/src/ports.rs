@@ -318,13 +318,24 @@ impl ritsu_ports::Items for Engine {
         let one = |naming: Name, (from, to): (usize, usize)| Item { naming, lines: (from, to), text: ritsu_base::definition::block(&lines, from, to) };
         let mut out = Vec::new();
         for e in &m.enums {
-            out.push(one(naming("enum", &e.name.text), (e.line, e.line)));
+            // an enum with its values under it, a line each, is its lines; one on a line, that line
+            let end = if e.listed { ritsu_base::definition::block_end(&lines, e.line) } else { e.line };
+            out.push(one(naming("enum", &e.name.text), (e.line, end)));
             for v in &e.values {
-                let written = match &v.name.alias {
-                    Some((a, _)) => format!("{}({a})", v.name.text),
-                    None => v.name.text.clone(),
-                };
-                out.push(Item { naming: naming("enum", &e.name.text).with("value", &v.name.text), lines: (e.line, e.line), text: written });
+                let value = naming("enum", &e.name.text).with("value", &v.name.text);
+                if v.fields.is_empty() {
+                    let written = match &v.name.alias {
+                        Some((a, _)) => format!("{}({a})", v.name.text),
+                        None => v.name.text.clone(),
+                    };
+                    out.push(Item { naming: value, lines: (v.line, v.line), text: written });
+                    continue;
+                }
+                // a value with fields is its line and its fields' (DESIGN 23.1), each field a line
+                out.push(one(value.clone(), (v.line, ritsu_base::definition::block_end(&lines, v.line))));
+                for f in &v.fields {
+                    out.push(one(value.clone().with("field", &f.name.text), (f.line, f.line)));
+                }
             }
         }
         for r in &m.records {

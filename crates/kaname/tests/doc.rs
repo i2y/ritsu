@@ -1,9 +1,11 @@
 //! `kaname doc` (DESIGN 13): the pages of the materials that show what a page holds — a function
 //! checked when it runs and a decision written in code (`tests/doc/decisions.kn`, in English and in
 //! Japanese as Markdown and in English as HTML), a module that does not pass, with the inputs that
-//! break it (`tests/modules/places.kn`), a function that may not stop (`tests/modules/rec.kn`), and
-//! an example drawn without the verdicts of the checks across the borders, whose places wait for
-//! them (`examples/payout`) — are the golden files in `tests/golden/doc/`, but for the pages of the
+//! break it (`tests/modules/places.kn`), a function that may not stop (`tests/modules/rec.kn`), the
+//! values of enums that have fields and the `match`es that split them, which the page counts no
+//! decision of (`tests/modules/sums.kn`, in English and in Japanese), and an example drawn without the
+//! verdicts of the checks across the borders, whose places wait for them (`examples/payout`) — are
+//! the golden files in `tests/golden/doc/`, but for the pages of the
 //! rules and the dates files the page holds, which are what rulec's and koyomi's own `doc` draw now,
 //! word for word, and stand in the golden files as one line each. The pages of the examples as
 //! `ritsu kaname doc` draws them, with the verdicts, are ritsu's (its `tests/kaname.rs`). The HTML
@@ -23,7 +25,7 @@ use std::path::Path;
 use std::time::Duration;
 
 /// Each page held to a golden file: the `.kn`, the language, the form, and the file's name.
-const PAGES: [(&str, Lang, Format, &str); 8] = [
+const PAGES: [(&str, Lang, Format, &str); 10] = [
     ("tests/doc/decisions.kn", Lang::En, Format::Markdown, "decisions.en.md"),
     ("tests/doc/decisions.kn", Lang::Ja, Format::Markdown, "decisions.ja.md"),
     ("tests/doc/decisions.kn", Lang::En, Format::Html, "decisions.html"),
@@ -32,6 +34,8 @@ const PAGES: [(&str, Lang, Format, &str); 8] = [
     ("tests/modules/rec.kn", Lang::En, Format::Markdown, "rec.en.md"),
     ("examples/payout/payout.kn", Lang::En, Format::Markdown, "payout.waiting.en.md"),
     ("examples/payout/payout.ja.kn", Lang::Ja, Format::Markdown, "payout.waiting.ja.md"),
+    ("tests/modules/sums.kn", Lang::En, Format::Markdown, "sums.en.md"),
+    ("tests/modules/sums.ja.kn", Lang::Ja, Format::Markdown, "sums.ja.md"),
 ];
 
 /// The page of a file, with every language joined and no verdicts: as the crate's tests join them.

@@ -1,0 +1,3 @@
+error[E112]: example.kn:9:3: The type parameter `T` of `first_or` is given two types, money[USD] and money[USDc]
+     9 |   first_or(xs: dollars, fallback: cents)
+  = A type parameter takes one type: amounts or quantities of two units are of two types too, and `in` converts one to the other.

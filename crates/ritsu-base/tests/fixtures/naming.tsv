@@ -48,6 +48,7 @@ kaname "late_payment.kn" record Claim field days_late	{"text":"kaname \"late_pay
 kaname "pricing.kn" enum tier value gold	{"text":"kaname \"pricing.kn\" enum tier value gold","tool":"kaname","path":"pricing.kn","items":[["enum","tier"],["value","gold"]]}
 kaname "glue/late_payment.ja.kn" function 遅れの請求	{"text":"kaname \"glue/late_payment.ja.kn\" function 遅れの請求","tool":"kaname","path":"glue/late_payment.ja.kn","items":[["function","遅れの請求"]]}
 kaname "glue/late_payment.ja.kn" record 請求 field 遅れた日数	{"text":"kaname \"glue/late_payment.ja.kn\" record 請求 field 遅れた日数","tool":"kaname","path":"glue/late_payment.ja.kn","items":[["record","請求"],["field","遅れた日数"]]}
+kaname "orders.kn" enum Order value placed field on	{"text":"kaname \"orders.kn\" enum Order value placed field on","tool":"kaname","path":"orders.kn","items":[["enum","Order"],["value","placed"],["field","on"]]}
 dandori "hotel.flow" value awaiting_review	ERROR: value only right after enum
 dandori "order.flow" task reserve case payment	ERROR: nothing under task
 dandori "order.flow" record Delivery task reserve	ERROR: only field under record
@@ -70,9 +71,10 @@ cedar "policies/refunds.cedar" policy p action a	ERROR: cedar has no nested kind
 sekisho "refunds.gate" attribute suspended	ERROR: attribute only right after principal or resource
 sekisho "refunds.gate" policy p action a	ERROR: nothing under policy
 sekisho "refunds.gate" action refund_order role clerk	ERROR: only input or context under action
-kaname "payout.kn" field amount	ERROR: field only right after record
+kaname "payout.kn" field amount	ERROR: field only right after record or value
 kaname "payout.kn" function settle record Settlement	ERROR: nothing under function
 kaname "payout.kn" record Settlement function settle	ERROR: only field under record (function)
+kaname "orders.kn" enum Order value placed field on field items	ERROR: one child at most (field)
 koyomi "支払条件.cal" claim "受領から　60日"	{"text":"koyomi \"支払条件.cal\" claim \"受領から　60日\"","tool":"koyomi","path":"支払条件.cal","items":[["claim","受領から　60日"]]}
 file "."	{"text":"file \".\"","tool":"file","path":".","items":[]}
 file "src/"	{"text":"file \"src\"","tool":"file","path":"src","items":[]}

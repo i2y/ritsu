@@ -16,11 +16,20 @@ fn ritsu_in(dir: &Path, args: &[&str]) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
 }
 
-/// The examples, English first (kaname's DESIGN 17), and what the line that
-/// says each passes says of its functions: `ritsu kaname` hands kaname the verdicts of ritsu's checks
-/// across the borders at their calls (kaname's DESIGN 4.3, 14.5), which show every one of them, and
-/// every function is total.
-const EXAMPLES: [(&str, &str); 8] = [
+/// The examples, English first (kaname's DESIGN 17), and what the line that says each passes says of
+/// its functions. The four that join no other language are total, but the tree of a catalog, whose
+/// functions recurse; for the four that call rules, dates and books, `ritsu kaname` hands kaname the
+/// verdicts of ritsu's checks across the borders at their calls (kaname's DESIGN 4.3, 14.5), which
+/// show every one of them, and every function is total.
+const EXAMPLES: [(&str, &str); 16] = [
+    ("examples/order_flow/order_flow.kn", "5 functions, total"),
+    ("examples/order_flow/order_flow.ja.kn", "5 functions, total"),
+    ("examples/stock_diff/stock_diff.kn", "6 functions, total"),
+    ("examples/stock_diff/stock_diff.ja.kn", "6 functions, total"),
+    ("examples/handles/handles.kn", "4 functions, total"),
+    ("examples/handles/handles.ja.kn", "4 functions, total"),
+    ("examples/catalog/catalog.kn", "9 functions, diverges"),
+    ("examples/catalog/catalog.ja.kn", "9 functions, diverges"),
     ("examples/payout/payout.kn", "1 function, total"),
     ("examples/payout/payout.ja.kn", "1 function, total"),
     ("examples/late_payment/late_payment.kn", "1 function, total"),
@@ -316,4 +325,68 @@ fn the_commands_on_kanames_pages_print_what_they_show() {
     }
     assert!(ran >= 12, "{ran} commands run: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The examples of kaname that join no other language (its DESIGN 17.1 to 17.5) each have a host in
+/// TypeScript, Python and Go (`host/`), written as a program of the language calls the code `ritsu gen`
+/// writes: `ritsu gen` writes the example's package (`--module example.com/<example>`), and each host,
+/// put beside it, prints what `host/output.txt` holds. The TypeScript is compiled by tsc
+/// (`--strict --erasableSyntaxOnly`) and run by Node, the Python passes `mypy --strict` and runs, and
+/// the Go passes `go vet` and gofmt and runs in a module of the package. kaname's tools (tsc, mypy) are
+/// the ones its own tests type-check the generated code with.
+#[test]
+fn the_hosts_of_the_examples_call_the_generated_code() {
+    let tools = kaname_dir().join("tools");
+    let tsc = tools.join("node_modules/.bin/tsc");
+    let mypy = tools.join(".venv/bin/mypy");
+    let t = TempDir::new("ritsu-kaname-hosts");
+    let mut ran = Vec::new();
+    for name in ["order_flow", "stock_diff", "handles", "catalog"] {
+        let example = kaname_dir().join("examples").join(name);
+        let want = std::fs::read_to_string(example.join("host/output.txt")).unwrap();
+        let out = t.path().join(name);
+        let (code, _, err) = ritsu_in(&example, &["gen", "--root", ".", "--out", out.to_str().unwrap(), "--module", &format!("example.com/{name}")]);
+        assert_eq!(code, 0, "ritsu gen of {name}: {err}");
+        let said = |o: std::process::Output, what: &str| -> String {
+            assert!(o.status.success(), "{name}: {what}:\n{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+            String::from_utf8_lossy(&o.stdout).into_owned()
+        };
+        if ritsu_testkit::ready(ritsu_testkit::Need::Node, || tsc.exists(), "tsc is not installed in crates/kaname/tools (npm ci --prefix crates/kaname/tools); the TypeScript hosts are not run") {
+            let dir = out.join("typescript");
+            std::fs::copy(example.join("host/main.ts"), dir.join("main.ts")).unwrap();
+            let types = tools.join("node_modules/@types");
+            std::fs::write(
+                dir.join("tsconfig.json"),
+                format!(
+                    "{{\"compilerOptions\": {{\"strict\": true, \"erasableSyntaxOnly\": true, \"module\": \"commonjs\", \"target\": \"es2022\", \"rootDir\": \".\", \"outDir\": \"dist\", \"skipLibCheck\": true, \"types\": [\"node\"], \"typeRoots\": [{}]}}, \"include\": [\"**/*.ts\"], \"exclude\": [\"dist\"]}}\n",
+                    ritsu_base::json::quote(&types.to_string_lossy())
+                ),
+            )
+            .unwrap();
+            said(Command::new(&tsc).args(["-p", "tsconfig.json"]).current_dir(&dir).output().unwrap(), "tsc");
+            assert_eq!(said(Command::new("node").arg("dist/main.js").current_dir(&dir).output().unwrap(), "node"), want, "{name}: the TypeScript host");
+            ran.push(format!("{name} (TypeScript)"));
+        }
+        if ritsu_testkit::ready(ritsu_testkit::Need::Python, || mypy.exists(), "mypy is not installed in crates/kaname/tools/.venv; the Python hosts are not run") {
+            let dir = out.join("python");
+            std::fs::copy(example.join("host/main.py"), dir.join("main.py")).unwrap();
+            let python = tools.join(".venv/bin/python");
+            said(Command::new(&mypy).args(["--strict", "--no-incremental", "--cache-dir"]).arg(t.path().join(format!("mypy-{name}"))).arg("main.py").current_dir(&dir).output().unwrap(), "mypy --strict");
+            assert_eq!(said(Command::new(&python).arg("main.py").current_dir(&dir).output().unwrap(), "python"), want, "{name}: the Python host");
+            ran.push(format!("{name} (Python)"));
+        }
+        if ritsu_testkit::ready(ritsu_testkit::Need::Go, || Command::new("go").arg("version").output().is_ok_and(|o| o.status.success()), "go is not installed; the Go hosts are not run") {
+            let dir = t.path().join(format!("go-{name}"));
+            ritsu_testkit::tmp::copy_dir(&out.join("go"), &dir);
+            std::fs::write(dir.join("go.mod"), format!("module example.com/{name}\n\ngo 1.25\n")).unwrap();
+            std::fs::create_dir_all(dir.join("host")).unwrap();
+            std::fs::copy(example.join("host/main.go"), dir.join("host/main.go")).unwrap();
+            let go = |args: &[&str]| Command::new("go").args(args).current_dir(&dir).env("GOWORK", "off").env("GOFLAGS", "-mod=mod").env("GOPROXY", "off").output().unwrap();
+            said(go(&["vet", "./..."]), "go vet");
+            assert_eq!(said(Command::new("gofmt").args(["-l", "host"]).current_dir(&dir).output().unwrap(), "gofmt"), "", "{name}: gofmt would write host/main.go otherwise");
+            assert_eq!(said(go(&["run", "./host"]), "go run"), want, "{name}: the Go host");
+            ran.push(format!("{name} (Go)"));
+        }
+    }
+    println!("the hosts print what host/output.txt holds: {}", ran.join(", "));
 }

@@ -799,7 +799,7 @@ requirement clerks_refund
 
 ### 3.8 kaname の `.kn`（2026-10-18）
 
-**決定**：kaname のモジュール（`.kn`。規則と日付と帳簿をつなぐコード）の中のもの（関数、レコードとそのフィールド、列挙とその値）を、リンクの端にする。ツール名は `kaname` で、種類は 2.3 の表のとおりである（kaname の DESIGN 14.6）。読むのは kaname の口 `Items` で、ほかの言語と同じく索引で引く。
+**決定**：kaname のモジュール（`.kn`。Functional Core を書く小さな汎用の言語のファイル）の中のもの（関数、レコードとそのフィールド、列挙とその値）を、リンクの端にする。ツール名は `kaname` で、種類は 2.3 の表のとおりである（kaname の DESIGN 14.6）。読むのは kaname の口 `Items` で、ほかの言語と同じく索引で引く。
 
 ```req
 requirement fee_from_seller

@@ -4,18 +4,20 @@
 //!
 //! Two shapes are warned of:
 //!
-//! 1. An `if` or a `match` that answers a constant of the business in one of its branches: an
-//!    amount, a quantity, a rate, a date, a value of an enum, `true` or `false`, a record of only
-//!    those; and in a `match`, a number too. An `if` that answers numbers is left alone: the end of
-//!    a recursion and the case of an empty list answer them.
+//! 1. An `if` that answers a constant of the business in one of its branches: an amount, a
+//!    quantity, a rate, a date, a value of an enum, `true` or `false`, a record of only those. A
+//!    `match` that answers an amount, a quantity, a rate or a date, or a record (a value with fields
+//!    too) of only those (DESIGN 23.9): which value of an enum comes next, `true` or `false`, and a
+//!    number are what a `match` answers of itself, and kaname holds it to every value once (E106).
+//!    An `if` that answers numbers is left alone: the end of a recursion and the case of an empty list
+//!    answer them.
 //! 2. A comparison of a value with a literal of the business that is not 0 (an amount, a quantity,
 //!    a rate, a date, a number), made a value anywhere but in the condition of an `if` or the value
 //!    a `match` splits: in a `let`, an argument, an answer, a condition given to a builtin.
 //!
 //! What is not warned of: a branch that answers `none`, a `match` that only splits `none` from
-//! `some x`, a `match` that maps each value of one enum to the value of another of the same name, a
-//! comparison with 0 made a value. A branch that narrows a value to the range of the rule it calls
-//! answers the rule's outputs and `none`, which is no constant: it is not warned of.
+//! `some x`, a comparison with 0 made a value. A branch that narrows a value to the range of the rule
+//! it calls answers the rule's outputs and `none`, which is no constant: it is not warned of.
 //!
 //! A chain of `else if` is one decision, warned of once, at its first `if`.
 
@@ -94,7 +96,7 @@ impl Hatch<'_> {
                 for a in arms {
                     self.block(&a.body);
                 }
-                self.decision_match(e, s, arms);
+                self.decision_match(e, arms);
             }
             ExprKind::Bin(a, BinOp::And | BinOp::Or, b) => {
                 self.expr(a, cond);
@@ -116,7 +118,10 @@ impl Hatch<'_> {
             }
             ExprKind::Lambda(_, body) => self.expr(body, false),
             ExprKind::Field(b, _, _) | ExprKind::Neg(b) | ExprKind::In(b, _, _) => self.expr(b, false),
-            ExprKind::Record(_, fs) => {
+            ExprKind::Record(_, base, fs) => {
+                if let Some(b) = base {
+                    self.expr(b, false);
+                }
                 for f in fs {
                     self.expr(&f.value, false);
                 }
@@ -124,6 +129,12 @@ impl Hatch<'_> {
             ExprKind::List(xs) => {
                 for x in xs {
                     self.expr(x, false);
+                }
+            }
+            ExprKind::Dict(pairs) => {
+                for (k, v) in pairs {
+                    self.expr(k, false);
+                    self.expr(v, false);
                 }
             }
             ExprKind::Block(b) => self.block(b),
@@ -170,9 +181,10 @@ impl Hatch<'_> {
     }
 
     /// What a branch answers: its block's answer, through a block of `let` lines; a branch that
-    /// answers no constant and calls a rule or a date anywhere hands the decision to it.
-    fn answer(&self, b: &Block, numbers: bool) -> Answer {
-        match self.classify(&b.answer, numbers) {
+    /// answers no constant and calls a rule or a date anywhere hands the decision to it. `in_match`:
+    /// the branch is an arm of a `match`, which counts fewer constants (DESIGN 23.9).
+    fn answer(&self, b: &Block, in_match: bool) -> Answer {
+        match self.classify(&b.answer, in_match) {
             Answer::Other => {
                 let mut all = Vec::new();
                 b.walk(&mut all);
@@ -183,23 +195,26 @@ impl Hatch<'_> {
         }
     }
 
-    fn classify(&self, e: &Expr, numbers: bool) -> Answer {
+    /// A constant of the business, as the branch of an `if` (or an arm of a `match`, `in_match`)
+    /// counts one: an amount, a quantity, a rate, a date, and a record of only those; in an `if`, a
+    /// value of an enum and `true` and `false` too.
+    fn classify(&self, e: &Expr, in_match: bool) -> Answer {
         match &e.kind {
             ExprKind::Num(n) => {
-                let unit = !n.unit.is_empty();
-                if unit || numbers { Answer::Constant(self.src(e.span)) } else { Answer::Other }
+                if !n.unit.is_empty() { Answer::Constant(self.src(e.span)) } else { Answer::Other }
             }
-            ExprKind::Neg(x) => match self.classify(x, numbers) {
+            ExprKind::Neg(x) => match self.classify(x, in_match) {
                 Answer::Constant(_) => Answer::Constant(self.src(e.span)),
                 other => other,
             },
-            ExprKind::Date(_) | ExprKind::Bool(_) => Answer::Constant(self.src(e.span)),
-            ExprKind::Var(_) | ExprKind::Field(..) if matches!(self.rf(e), Ref::EnumValue(..)) => Answer::Constant(self.src(e.span)),
-            ExprKind::Record(_, fs) if !fs.is_empty() && fs.iter().all(|f| matches!(self.classify(&f.value, numbers), Answer::Constant(_)) || matches!(f.value.kind, ExprKind::None)) => {
+            ExprKind::Date(_) => Answer::Constant(self.src(e.span)),
+            ExprKind::Bool(_) if !in_match => Answer::Constant(self.src(e.span)),
+            ExprKind::Var(_) | ExprKind::Field(..) if !in_match && matches!(self.rf(e), Ref::EnumValue(..)) => Answer::Constant(self.src(e.span)),
+            ExprKind::Record(_, None, fs) if !fs.is_empty() && fs.iter().all(|f| matches!(self.classify(&f.value, in_match), Answer::Constant(_)) || matches!(f.value.kind, ExprKind::None)) => {
                 Answer::Constant(self.src(e.span))
             }
-            ExprKind::Block(b) => self.answer(b, numbers),
-            ExprKind::Field(base, _, _) => match self.classify(base, numbers) {
+            ExprKind::Block(b) => self.answer(b, in_match),
+            ExprKind::Field(base, _, _) => match self.classify(base, in_match) {
                 Answer::Rule => Answer::Rule,
                 _ => Answer::Other,
             },
@@ -230,37 +245,13 @@ impl Hatch<'_> {
         self.decision(e, answers, tr!("`if`", "`if`"));
     }
 
-    /// The first shape, for a `match`: not for one that only splits `none` from `some x`, nor for one
-    /// that maps each value of an enum to the value of the same name of another.
-    fn decision_match(&mut self, e: &Expr, s: &Expr, arms: &[Arm]) {
+    /// The first shape, for a `match`: not for one that only splits `none` from `some x`.
+    fn decision_match(&mut self, e: &Expr, arms: &[Arm]) {
         if arms.iter().all(|a| a.patterns.iter().all(|p| matches!(p, Pattern::None(_) | Pattern::Some(..)))) {
-            return;
-        }
-        if self.same_names(s, arms) {
             return;
         }
         let answers: Vec<Answer> = arms.iter().map(|a| self.answer(&a.body, true)).collect();
         self.decision(e, answers, tr!("`match`", "`match`"));
-    }
-
-    /// Whether each arm takes one value of an enum and answers the value of the same name (or alias)
-    /// of another enum.
-    fn same_names(&self, s: &Expr, arms: &[Arm]) -> bool {
-        let Ty::Enum(from) = self.ty(s).present() else { return false };
-        arms.iter().all(|a| {
-            let [Pattern::Value(path, _)] = a.patterns.as_slice() else { return false };
-            let word = &path[path.len() - 1].0;
-            let Some(taken) = values(self.c, from).into_iter().find(|n| n.is(word)) else { return false };
-            let ans = &a.body.answer;
-            match self.rf(ans) {
-                Ref::EnumValue(to, v) if to != from && a.body.lets.is_empty() => {
-                    let names = |n: &Name| -> Vec<String> { std::iter::once(n.text.clone()).chain(n.alias.as_ref().map(|(x, _)| x.clone())).collect() };
-                    let given = values(self.c, to).into_iter().find(|n| n.text == *v);
-                    given.is_some_and(|g| names(&g).iter().any(|x| names(&taken).contains(x)))
-                }
-                _ => false,
-            }
-        })
     }
 
     fn decision(&mut self, e: &Expr, answers: Vec<Answer>, word: Text) {
@@ -310,31 +301,5 @@ impl Hatch<'_> {
             ));
         }
         self.out.push(d);
-    }
-}
-
-/// The values of an enum, by their names and aliases: one of the module, of a module it reads, or
-/// of a rule.
-fn values(c: &Checked, id: &crate::ty::EnumId) -> Vec<Name> {
-    use crate::ty::Owner;
-    match &id.owner {
-        Owner::Module(file) => {
-            let decls = if *file == c.canon {
-                &c.decls
-            } else {
-                match c.world.modules.get(file) {
-                    Some(m) => &m.decls,
-                    None => return Vec::new(),
-                }
-            };
-            decls.enums.iter().find(|e| e.name.text == id.name).map(|e| e.values.clone()).unwrap_or_default()
-        }
-        Owner::Rule(file) => c
-            .world
-            .rules
-            .get(file)
-            .and_then(|f| f.enums.iter().find(|e| e.name == id.name))
-            .map(|e| e.values.iter().map(|v| Name { text: v.name.clone(), alias: (v.public != v.name).then(|| (v.public.clone(), Span::default())), span: Span::default() }).collect())
-            .unwrap_or_default(),
     }
 }

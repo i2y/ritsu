@@ -10,6 +10,9 @@
 //! - Every line of `.rule`, `.flow`, `.cal`, `.book`, `.geas`, `.req`, `.ctx`, `.gate` and `.kn` on the pages
 //!   is a line of a file of that language in the repository, or of a reproduction in the ledger; the
 //!   lines of one block come from one file, in its order, and `…` cuts a line short.
+//! - The code of a host of kaname's examples (fenced `ts`, `python` or `go`) is lines of that host, in
+//!   order, and the `text` block after it is what the host prints (`host/output.txt`, which ritsu's
+//!   tests/kaname.rs runs the hosts to print).
 //! - A command the prose names as `rulec doc` or `ritsu check` is one.
 //! - Every relative link leads to a file, and every `#anchor` to a heading of the page it is on.
 //! - The table lists the languages as `ritsu` has them, the page names a link for each, the
@@ -21,7 +24,7 @@
 
 mod common;
 
-use common::{Page, commands_named, link_targets, page, root, run_the_consoles, code_from_files, CODE};
+use common::{Page, commands_named, hosts_from_files, link_targets, page, root, run_the_consoles, code_from_files, CODE};
 use ritsu::cli::LANGUAGES;
 use ritsu_testkit::TempDir;
 use std::fs;
@@ -44,6 +47,14 @@ fn the_code_on_the_pages_is_from_the_files() {
     let (seen, wrong) = code_from_files(&pages());
     // The languages and the refund rule and flow, on two pages.
     assert!(seen >= 2 * (CODE.len() + 2), "{seen} blocks of code on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn the_hosts_on_the_pages_are_kanames_and_print_what_they_show() {
+    let (seen, _, wrong) = hosts_from_files(&pages());
+    // the TypeScript host of the order, on each of the two pages
+    assert!(seen >= 2, "{seen} blocks of hosts on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 

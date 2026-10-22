@@ -1,5 +1,5 @@
 module temps v1
-description "Temperatures read in the other unit, with that unit's zero: constants compared in their own unit and in the other, kept in a let, read in the other unit with `in`, given as arguments and held in fields; values read in the other unit with `in`, then compared and rounded there"
+description "Temperatures read in the other unit, with that unit's zero, and constants below zero of every unit: constants compared in their own unit and in the other, kept in a let, read in the other unit with `in`, given as arguments, held in fields and split by a `match`; values read in the other unit with `in`, then compared and rounded there; levels of sound, amounts and lengths below zero beside them"
 
 record Reading
   at    : temperature[℃]  range >=-60℃ <=60℃
@@ -67,6 +67,65 @@ fn reading() -> Reading
 fn floor_of(r: Reading) -> temperature[℃]
   max(r.at, 14℉)
 
+# a threshold below zero, in the value's own unit
+fn frozen(t: temperature[℃] range >=-40℃ <=40℃) -> bool
+  t <= -18℃
+
+# a constant below zero read in the other unit, with that unit's zero: -20℃ is -4℉, and -4℉ is
+# -20℃
+fn deep_frozen(t: temperature[℉] range >=-40℉ <=104℉) -> string
+  if t <= -20℃
+    "deep frozen"
+  else
+    "above"
+
+fn below(t: temperature[℃] range >=-40℃ <=40℃) -> string
+  if t < -4℉
+    "below"
+  else
+    "at or above"
+
+# a constant below zero read in the other unit with `in`
+fn freezer_limit() -> temperature[℉]
+  -20℃ in ℉
+
+# a constant below zero given as an argument, held in a field, and the larger of two values
+fn coldest() -> bool
+  frozen(t: -40℃)
+
+fn freezer_reading() -> Reading
+  Reading { at: -25℃, where: "freezer" }
+
+fn floor_below_zero(r: Reading) -> temperature[℃]
+  max(r.at, -40℃)
+
+# literals below zero in a `match`
+fn mark(t: temperature[℃] range >=-40℃ <=40℃) -> string
+  match t
+    -18℃ => "the line"
+    -40℃ => "the floor"
+    else => "elsewhere"
+
+# a level of sound below zero, an amount below zero read in cents, a length below zero read in
+# centimetres
+fn quiet(level: sound[dB] range >=-20dB <=140dB) -> string
+  if level < -10dB
+    "below hearing"
+  else
+    "heard"
+
+fn owed(balance: money[USDc] range >=-1_000_000USDc <=1_000_000USDc) -> string
+  if balance <= -1USD
+    "owed"
+  else
+    "settled"
+
+fn sunk(depth: length[cm] range >=-10_000cm <=10_000cm) -> string
+  if depth < -2m
+    "under"
+  else
+    "near the top"
+
 examples
   hot(t: 86℉) = "hot"
   hot(t: 85℉) = "not hot"
@@ -76,8 +135,11 @@ examples
   hot_by_line(t: 85℉) = "not hot"
   in_fahrenheit(t: 0℃) = 32℉
   in_fahrenheit(t: 37℃) = 99℉
+  in_fahrenheit(t: -40℃) = -40℉
+  in_fahrenheit(t: -18℃) = 0℉
   in_celsius(t: 32℉) = 0℃
   in_celsius(t: 100℉) = 38℃
+  in_celsius(t: -4℉) = -20℃
   feverish(t: 38℃) = "fever"
   feverish(t: 37℃) = "no fever"
   boiling() = 212℉
@@ -86,3 +148,17 @@ examples
   fever_line() = 37℃
   fridge() = "cool"
   floor_of(r: Reading { at: 5℃, where: "fridge" }) = 5℃
+  frozen(t: -20℃) = true
+  frozen(t: -18℃) = true
+  frozen(t: -17℃) = false
+  deep_frozen(t: -4℉) = "deep frozen"
+  deep_frozen(t: -3℉) = "above"
+  below(t: -21℃) = "below"
+  below(t: -20℃) = "at or above"
+  freezer_limit() = -4℉
+  coldest() = true
+  floor_below_zero(r: Reading { at: -50℃, where: "outside" }) = -40℃
+  mark(t: -18℃) = "the line"
+  quiet(level: -15dB) = "below hearing"
+  owed(balance: -100USDc) = "owed"
+  sunk(depth: -201cm) = "under"

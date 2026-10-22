@@ -1,0 +1,193 @@
+module trees v1
+description "Values of types that hold themselves: a tree of categories and its size, its depth and its names, an expression and its value, a bill of materials and its cost, a generic tree and its leaves, a document of nested values, a list linked through optional values, shares of shares, and trees built, compared, checked and kept in a dict"
+
+record Category
+  name     : string
+  children : list[Category]
+
+enum Expr
+  num
+    value : number  range >=-1000 <=1000
+  add
+    left  : Expr
+    right : Expr
+  mul
+    left  : Expr
+    right : Expr
+  neg
+    inner : Expr
+
+record Part
+  sku       : string       count >=1 <=12
+  qty       : number       range >=1 <=1000
+  unit_cost : money[USDc]  range >=0USDc <=100_000USDc
+  parts     : list[Part]   count <=20
+
+enum Tree[T]
+  leaf
+    value : T
+  node
+    children : list[Tree[T]]
+
+enum Doc
+  words
+    s : string
+  amount
+    n : number  range >=-100 <=100
+  array
+    items : list[Doc]
+  object
+    members : list[Member]
+
+record Member
+  key   : string
+  value : Doc
+
+record Node
+  value : number  range >=0 <=9
+  next  : Node?
+
+record Share
+  part  : rate[step 1%]
+  under : list[Share]  count <=5
+
+# how many categories a tree has: itself and every one under it
+fn size(c: Category) -> number
+  1 + c.children.sum(x => size(c: x))
+
+# the most categories on a path from the top to a leaf
+fn depth(c: Category) -> number
+  match c.children.max_of(x => depth(c: x))
+    none => 1
+    some d => d + 1
+
+# the names of a tree, each category before those under it
+fn names(c: Category) -> list[string]
+  [c.name].concat(c.children.flat_map(x => names(c: x)))
+
+# whether a category of the tree has the name
+fn has(c: Category, name: string) -> bool
+  c.name = name or c.children.any(x => has(c: x, name: name))
+
+# a chain of categories, each under the one before
+fn chain(n: number range >=1 <=50) -> Category
+  if n = 1
+    Category { name: "leaf", children: [] }
+  else
+    Category { name: text(n), children: [chain(n: n - 1)] }
+
+# two trees compared whole
+fn same(a: Category, b: Category) -> bool
+  a = b
+
+# the size of each tree of a dict, by its key
+fn sizes(trees: dict[string, Category] count <=5) -> dict[string, number]
+  trees.map_values(c => size(c: c))
+
+# a tree whose top has a name, or why not
+fn named(c: Category) -> result[Category, string]
+  if c.name.trim() = ""
+    err("the top category has no name")
+  else
+    ok(c)
+
+# the value of an expression: a sum or a product past int64 fails
+fn value_of(e: Expr) -> number
+  match e
+    num n => n.value
+    add a => value_of(e: a.left) + value_of(e: a.right)
+    mul m => value_of(e: m.left) * value_of(e: m.right)
+    neg g => 0 - value_of(e: g.inner)
+
+# the expression with every `neg` of a `neg` taken out
+fn simplify(e: Expr) -> Expr
+  match e
+    neg g =>
+      match g.inner
+        neg h => simplify(e: h.inner)
+        else => Expr.neg { inner: simplify(e: g.inner) }
+    add a => Expr.add { left: simplify(e: a.left), right: simplify(e: a.right) }
+    mul m => Expr.mul { left: simplify(e: m.left), right: simplify(e: m.right) }
+    num n => n
+
+# a number made an expression, kept within the range of a literal
+fn literal(n: number range >=0 <=1000) -> Expr
+  Expr.num { value: n }
+
+# the cost of a part: its own units, and the parts it is made of
+fn cost(p: Part) -> money[USDc]
+  p.unit_cost * p.qty + p.parts.sum(x => cost(p: x))
+
+# how many parts of the bill have no parts of their own
+fn pieces(p: Part) -> number
+  if p.parts.count() = 0
+    1
+  else
+    p.parts.sum(x => pieces(p: x))
+
+# the leaves of a generic tree, from the left
+fn leaves[T](t: Tree[T]) -> list[T]
+  match t
+    leaf l => [l.value]
+    node n => n.children.flat_map(c => leaves(t: c))
+
+# the sum of the numbers at the leaves of a tree
+fn leaf_sum(t: Tree[number]) -> number
+  leaves(t: t).sum(x => x)
+
+# a tree of the numbers from 1 to n, each a leaf under one node
+fn spread(n: number range >=0 <=20) -> Tree[number]
+  Tree.node { children: numbers(1, n).map(i => Tree.leaf { value: i }) }
+
+# how many values a document holds, itself too
+fn values_in(d: Doc) -> number
+  match d
+    array a => 1 + a.items.sum(x => values_in(d: x))
+    object o => 1 + o.members.sum(m => values_in(d: m.value))
+    else => 1
+
+# the keys of a document's objects, at every depth, in order
+fn keys_in(d: Doc) -> list[string]
+  match d
+    array a => a.items.flat_map(x => keys_in(d: x))
+    object o => o.members.flat_map(m => [m.key].concat(keys_in(d: m.value)))
+    else => []
+
+# how long a list linked through `next` is
+fn length(n: Node) -> number
+  match n.next
+    none => 1
+    some m => 1 + length(n: m)
+
+# the values of a linked list added up
+fn node_sum(n: Node) -> number
+  match n.next
+    none => n.value
+    some m => n.value + node_sum(n: m)
+
+# how many shares a share is made of, itself too
+fn shares(s: Share) -> number
+  1 + s.under.sum(x => shares(s: x))
+
+# a share made here of a part past 100%, counted: a call does not hold a value of a type that holds
+# itself to what a host is held to (a rate with no range from 0% to 100%), only where it is built
+fn wide_shares(p: rate[step 1%] range >=0% <=500%) -> number
+  shares(s: Share { part: 100%, under: [Share { part: p, under: [] }] })
+
+# the categories two steps under the top, each counted with those under it
+fn grand(c: Category) -> number
+  c.children.sum(x => x.children.sum(y => size(c: y)))
+
+examples
+  size(c: Category { name: "a", children: [Category { name: "b", children: [] }, Category { name: "c", children: [] }] }) = 3
+  depth(c: Category { name: "a", children: [Category { name: "b", children: [Category { name: "c", children: [] }] }] }) = 3
+  names(c: Category { name: "a", children: [Category { name: "b", children: [] }, Category { name: "c", children: [] }] }) = ["a", "b", "c"]
+  size(c: chain(n: 4)) = 4
+  value_of(e: Expr.add { left: Expr.num { value: 2 }, right: Expr.mul { left: Expr.num { value: 3 }, right: Expr.num { value: 4 } } }) = 14
+  value_of(e: simplify(e: Expr.neg { inner: Expr.neg { inner: Expr.num { value: 5 } } })) = 5
+  cost(p: Part { sku: "kit", qty: 2, unit_cost: 100USDc, parts: [Part { sku: "bolt", qty: 4, unit_cost: 10USDc, parts: [] }] }) = 240USDc
+  leaf_sum(t: spread(n: 4)) = 10
+  length(n: Node { value: 1, next: Node { value: 2, next: none } }) = 2
+  values_in(d: Doc.array { items: [Doc.amount { n: 1 }, Doc.object { members: [Member { key: "k", value: Doc.words { s: "v" } }] }] }) = 4
+  wide_shares(p: 500%) = 2
+  size(c: chain(n: 50)) = 50

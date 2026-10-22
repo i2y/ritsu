@@ -112,3 +112,25 @@ fn values_are_looked_into() {
     assert_eq!(Json::Bool(true).as_bool(), Some(true));
     assert_eq!(Json::Arr(vec![]).kind().en, "an array");
 }
+
+/// A reader told how deep what it reads goes (kaname's `run` reads an argument as deep as its type can
+/// nest, up to 1,024 levels) reads that deep and no deeper, and says the depth it was told; `parse` is
+/// the one told [`json::MAX_DEPTH`]. A thousand levels are read, written and dropped on half the stack
+/// a process's main thread is given (4 MiB of 8).
+#[test]
+fn a_reader_told_a_depth_reads_to_it() {
+    std::thread::Builder::new().stack_size(4 << 20).spawn(a_reader_told_a_depth_reads_to_it_on_a_thread).unwrap().join().unwrap();
+}
+
+fn a_reader_told_a_depth_reads_to_it_on_a_thread() {
+    use ritsu_base::json::Problem as P;
+    let nested = |n: usize| "[".repeat(n) + &"]".repeat(n);
+    let v = json::parse_nested(&nested(1000), 1000).unwrap_or_else(|e| panic!("{}", e.message.en));
+    assert_eq!(v.compact(), nested(1000));
+    let e = json::parse_nested(&nested(1001), 1000).expect_err("one deeper");
+    assert_eq!((e.what, e.at), (P::TooDeep, 1000));
+    assert_eq!((e.message.en.as_str(), e.message.ja.as_str()), ("byte 1001: nested deeper than 1000 levels", "1001 バイト目: 入れ子が 1000 段を超えています"));
+    let deep = nested(json::MAX_DEPTH + 1);
+    assert_eq!(json::parse(&deep), json::parse_nested(&deep, json::MAX_DEPTH));
+    assert!(json::parse_nested(&deep, json::MAX_DEPTH + 1).is_ok());
+}

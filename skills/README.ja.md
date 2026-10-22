@@ -13,7 +13,7 @@
 | [yuen](yuen/SKILL.md) | 要件の来歴と、それを満たすもの、確かめるもの（`.req`） |
 | [sakai](sakai/SKILL.md) | 境界づけられたコンテキストの地図。地図が指す規則、ワークフロー、コードと突き合わせる（`.ctx`） |
 | [sekisho](sekisho/SKILL.md) | だれが何をしてよいか（`.gate`）。すべての組み合わせで確かめ、Cedar と、Cedar に尋ねるコードを生成する |
-| [kaname](kaname/SKILL.md) | 規則と日付と帳簿をつなぐコード（`.kn`）。それらの型、範囲、丸めで確かめ、それらのコードの隣に生成する |
+| [kaname](kaname/SKILL.md) | Functional Core（`.kn`）。入出力を持たない汎用のコードと、規則・日付・帳簿のまわりのコードを、ritsu の型、範囲、丸めで確かめ、ホストが呼ぶコードを生成する |
 
 どのスキルも ritsu を動かすので、PATH に `ritsu` が要ります。入れ方は [README](../README.ja.md#入れ方) にあります。言語の名前で呼ぶと（`rulec` という名前のリンクなど）ritsu はその言語として動き、`ritsu <言語> …` でも同じです。
 
@@ -47,7 +47,7 @@ geas     人が読んだ主張に、コードを従わせる（.geas）
 yuen     要件の来歴（.req）
 sakai    境界づけられたコンテキストの地図（.ctx）
 sekisho  だれが何をしてよいかを書き、Cedar を生成する（.gate）
-kaname   規則と日付と帳簿をつなぐコード（.kn）
+kaname   Functional Core。入出力を持たない汎用のコード（.kn）
 $ ritsu skills install
 $ ritsu skills install --user
 $ ritsu skills install rulec dandori

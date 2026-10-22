@@ -1,0 +1,3 @@
+replay(events: [Event.add { line: Line { sku: "pen", qty: 2, price: 150USDc } }, Event.add { line: Line { sku: "ink", qty: 1, price: 400USDc } }, Event.place { on: 2026-10-22 }, Event.pay { amount: 700USDc }, Event.ship { tracking: "1Z-42" }])
+  line 78: let start = ok(Order.cart { lines: [] })
+= ok(Order.shipped { lines: [Line { sku: "pen", qty: 2, price: 150USDc }, Line { sku: "ink", qty: 1, price: 400USDc }], tracking: "1Z-42" })

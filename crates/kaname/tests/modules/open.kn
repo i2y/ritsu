@@ -1,0 +1,79 @@
+module open v1
+description "Values whose ranges are not written, each the whole of its type: an overflow that comes from the end of a type is not said and is in the effect, one that comes from a range written is an error or a warning, a value given to a rule takes the rule's range, a branch narrows it, and a function in a ring answers the whole of its type"
+
+use rule coupon from "tests/rules/coupon.rule"
+
+record Line
+  sku    : string
+  qty    : number
+  price  : money[USDc]
+  placed : date
+
+# 2⁶³ − 1 plus 1 leaves int64: the end of the type, so nothing is said, the generated code checks it
+# and the effect is `fails overflow`
+fn next_id(last: number) -> number
+  last + 1
+
+# the product and the sum come from the ends of the types of a list and its fields, whose ranges
+# are not written
+fn total(lines: list[Line]) -> money[USDc]
+  sum(lines, l => l.price * l.qty)
+
+# dollars read in cents: a hundred times the end of the type
+fn cents(d: money[USD]) -> money[USDc]
+  d in USDc
+
+# the difference of two days of 0001-01-01 to 9999-12-31 stays in int64: total
+fn days(first: date, last: date) -> number total
+  last - first
+
+fn since(d: date) -> number
+  if d >= 2026-01-01
+    d - 2026-01-01
+  else
+    0
+
+# a string and a number of a record, none of them with a range
+fn label(l: Line) -> string total
+  concat(l.sku, ": ", text(l.qty))
+
+# the branch narrows the number, and its half is shown to fit
+fn halved(n: number) -> number total
+  if n >= 0 and n <= 1_000_000
+    down(n / 2, 1)
+  else
+    0
+
+# a list of lists, whose counts are not written either
+fn cells(rows: list[list[number]]) -> number
+  sum(rows, r => count(r))
+
+# a range written: the product past int64 is an error, with the input
+fn doubled(n: number range >=0 <=5_000_000_000_000_000_000) -> number
+  n * 2
+
+# a product laid over more elements than the analysis follows one by one: whether it leaves int64
+# cannot be decided
+fn product(xs: list[number] count <=20 range >=1 <=9) -> number
+  reduce(xs, 1, (acc, x) => acc * x)
+
+# a product the analysis lets go of, given to a parameter whose range is not written: whether it
+# stays in the whole of int64, what the parameter takes, cannot be decided
+fn next_of(xs: list[number] count <=20 range >=1 <=9) -> number
+  next_id(last: reduce(xs, 1, (acc, x) => acc * x))
+
+# the rule takes 0 to 10,000 cents: the end of the type is outside, an example
+fn discount(c: money[USDc]?) -> money[USDc]?
+  coupon(coupon: c, member: true).discount
+
+# narrowed to the rule's range before it goes there: shown
+fn narrowed(c: money[USDc]) -> money[USDc]?
+  if c >= 0USDc and c <= 10_000USDc
+    coupon(coupon: c, member: true).discount
+  else
+    none
+
+# a function in a ring answers the whole of its type: one more leaves int64 at its end, and nothing
+# is said
+fn steps(n: number) -> number
+  if n <= 0 then 0 else steps(n: n - 1) + 1

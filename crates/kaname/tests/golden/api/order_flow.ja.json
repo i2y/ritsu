@@ -1,0 +1,536 @@
+{
+  "kaname": "<version>",
+  "file": "order_flow.ja.kn",
+  "module": {
+    "name": "注文の流れ",
+    "alias": "order_flow_ja",
+    "version": "v1",
+    "description": "ホストが渡すイベントで、注文を状態から状態へ進める。状態はそれぞれのフィールドを持つ直和型の値で、次の状態か、イベントを拒む理由を、状態とイベントの match で決める。order_flow.kn の日本語の版",
+    "sha256": "563b9534b5ac6c12c9e520a6adcc5a66a1e8a96921e0ac5ff02aea3ec2148633"
+  },
+  "generated": {
+    "typescript": "glue/order_flow_ja.ts",
+    "python": "glue/order_flow_ja.py",
+    "go": "glue/orderflowja/orderflowja.go"
+  },
+  "uses": [],
+  "enums": [
+    {
+      "name": "注文",
+      "alias": "Order",
+      "ordered": false,
+      "values": [
+        {
+          "name": "カート",
+          "alias": "cart",
+          "label": null,
+          "fields": [
+            {
+              "name": "明細",
+              "alias": "lines",
+              "type": "list[明細]",
+              "range": null,
+              "count": "<=50",
+              "line": 11
+            }
+          ],
+          "generated": {
+            "typescript": "OrderCart",
+            "python": "OrderCart",
+            "go": "OrderCart"
+          }
+        },
+        {
+          "name": "確定済み",
+          "alias": "placed",
+          "label": null,
+          "fields": [
+            {
+              "name": "明細",
+              "alias": "lines",
+              "type": "list[明細]",
+              "range": null,
+              "count": ">=1 <=50",
+              "line": 13
+            },
+            {
+              "name": "合計",
+              "alias": "total",
+              "type": "money[USDc]",
+              "range": null,
+              "count": null,
+              "line": 14
+            },
+            {
+              "name": "日付",
+              "alias": "on",
+              "type": "date",
+              "range": null,
+              "count": null,
+              "line": 15
+            }
+          ],
+          "generated": {
+            "typescript": "OrderPlaced",
+            "python": "OrderPlaced",
+            "go": "OrderPlaced"
+          }
+        },
+        {
+          "name": "支払い済み",
+          "alias": "paid",
+          "label": null,
+          "fields": [
+            {
+              "name": "明細",
+              "alias": "lines",
+              "type": "list[明細]",
+              "range": null,
+              "count": ">=1 <=50",
+              "line": 17
+            },
+            {
+              "name": "日付",
+              "alias": "on",
+              "type": "date",
+              "range": null,
+              "count": null,
+              "line": 18
+            }
+          ],
+          "generated": {
+            "typescript": "OrderPaid",
+            "python": "OrderPaid",
+            "go": "OrderPaid"
+          }
+        },
+        {
+          "name": "発送済み",
+          "alias": "shipped",
+          "label": null,
+          "fields": [
+            {
+              "name": "明細",
+              "alias": "lines",
+              "type": "list[明細]",
+              "range": null,
+              "count": ">=1 <=50",
+              "line": 20
+            },
+            {
+              "name": "追跡番号",
+              "alias": "tracking",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 21
+            }
+          ],
+          "generated": {
+            "typescript": "OrderShipped",
+            "python": "OrderShipped",
+            "go": "OrderShipped"
+          }
+        },
+        {
+          "name": "取り消し済み",
+          "alias": "cancelled",
+          "label": null,
+          "fields": [
+            {
+              "name": "理由",
+              "alias": "reason",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 23
+            }
+          ],
+          "generated": {
+            "typescript": "OrderCancelled",
+            "python": "OrderCancelled",
+            "go": "OrderCancelled"
+          }
+        }
+      ],
+      "line": 9,
+      "generated": {
+        "typescript": "Order",
+        "python": "Order",
+        "go": "Order"
+      }
+    },
+    {
+      "name": "イベント",
+      "alias": "Event",
+      "ordered": false,
+      "values": [
+        {
+          "name": "追加",
+          "alias": "add",
+          "label": null,
+          "fields": [
+            {
+              "name": "明細",
+              "alias": "line",
+              "type": "明細",
+              "range": null,
+              "count": null,
+              "line": 27
+            }
+          ],
+          "generated": {
+            "typescript": "EventAdd",
+            "python": "EventAdd",
+            "go": "EventAdd"
+          }
+        },
+        {
+          "name": "削除",
+          "alias": "remove",
+          "label": null,
+          "fields": [
+            {
+              "name": "品番",
+              "alias": "sku",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 29
+            }
+          ],
+          "generated": {
+            "typescript": "EventRemove",
+            "python": "EventRemove",
+            "go": "EventRemove"
+          }
+        },
+        {
+          "name": "確定",
+          "alias": "place",
+          "label": null,
+          "fields": [
+            {
+              "name": "日付",
+              "alias": "on",
+              "type": "date",
+              "range": null,
+              "count": null,
+              "line": 31
+            }
+          ],
+          "generated": {
+            "typescript": "EventPlace",
+            "python": "EventPlace",
+            "go": "EventPlace"
+          }
+        },
+        {
+          "name": "支払い",
+          "alias": "pay",
+          "label": null,
+          "fields": [
+            {
+              "name": "金額",
+              "alias": "amount",
+              "type": "money[USDc]",
+              "range": null,
+              "count": null,
+              "line": 33
+            }
+          ],
+          "generated": {
+            "typescript": "EventPay",
+            "python": "EventPay",
+            "go": "EventPay"
+          }
+        },
+        {
+          "name": "発送",
+          "alias": "ship",
+          "label": null,
+          "fields": [
+            {
+              "name": "追跡番号",
+              "alias": "tracking",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 35
+            }
+          ],
+          "generated": {
+            "typescript": "EventShip",
+            "python": "EventShip",
+            "go": "EventShip"
+          }
+        },
+        {
+          "name": "取り消し",
+          "alias": "cancel",
+          "label": null,
+          "fields": [
+            {
+              "name": "理由",
+              "alias": "reason",
+              "type": "string",
+              "range": null,
+              "count": null,
+              "line": 37
+            }
+          ],
+          "generated": {
+            "typescript": "EventCancel",
+            "python": "EventCancel",
+            "go": "EventCancel"
+          }
+        }
+      ],
+      "line": 25,
+      "generated": {
+        "typescript": "Event",
+        "python": "Event",
+        "go": "Event"
+      }
+    }
+  ],
+  "records": [
+    {
+      "name": "明細",
+      "alias": "Line",
+      "fields": [
+        {
+          "name": "品番",
+          "alias": "sku",
+          "type": "string",
+          "range": null,
+          "count": ">=1 <=20",
+          "line": 5
+        },
+        {
+          "name": "数量",
+          "alias": "qty",
+          "type": "number",
+          "range": ">=1 <=100",
+          "count": null,
+          "line": 6
+        },
+        {
+          "name": "単価",
+          "alias": "price",
+          "type": "money[USDc]",
+          "range": ">=1USDc <=1000000USDc",
+          "count": null,
+          "line": 7
+        }
+      ],
+      "line": 4,
+      "generated": {
+        "typescript": "Line",
+        "python": "Line",
+        "go": "Line"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "name": "合計",
+      "alias": "total",
+      "line": 40,
+      "description": null,
+      "params": [
+        {
+          "name": "明細",
+          "alias": "lines",
+          "type": "list[明細]",
+          "range": null,
+          "count": "<=50"
+        }
+      ],
+      "result": {
+        "type": "money[USDc]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "total",
+        "python": "total",
+        "go": "Total"
+      }
+    },
+    {
+      "name": "次",
+      "alias": "next",
+      "line": 44,
+      "description": null,
+      "params": [
+        {
+          "name": "注文",
+          "alias": "order",
+          "type": "注文",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "イベント",
+          "alias": "event",
+          "type": "イベント",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[注文, string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 58,
+          "function": "合計"
+        }
+      ],
+      "generated": {
+        "typescript": "next",
+        "python": "next",
+        "go": "Next"
+      }
+    },
+    {
+      "name": "順に進める",
+      "alias": "replay",
+      "line": 77,
+      "description": null,
+      "params": [
+        {
+          "name": "イベント",
+          "alias": "events",
+          "type": "list[イベント]",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[注文, string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 79,
+          "function": "続けて"
+        },
+        {
+          "line": 79,
+          "function": "続けて"
+        }
+      ],
+      "generated": {
+        "typescript": "replay",
+        "python": "replay",
+        "go": "Replay"
+      }
+    },
+    {
+      "name": "続けて",
+      "alias": "after",
+      "line": 81,
+      "description": null,
+      "params": [
+        {
+          "name": "途中",
+          "alias": "r",
+          "type": "result[注文, string]",
+          "range": null,
+          "count": null
+        },
+        {
+          "name": "イベント",
+          "alias": "event",
+          "type": "イベント",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "result[注文, string]",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [
+        {
+          "line": 83,
+          "function": "次"
+        }
+      ],
+      "generated": {
+        "typescript": "after",
+        "python": "after",
+        "go": "After"
+      }
+    },
+    {
+      "name": "受け付けるか",
+      "alias": "open",
+      "line": 87,
+      "description": null,
+      "params": [
+        {
+          "name": "注文",
+          "alias": "order",
+          "type": "注文",
+          "range": null,
+          "count": null
+        }
+      ],
+      "result": {
+        "type": "bool",
+        "range": null,
+        "count": null
+      },
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "crossings": [],
+      "places": [],
+      "calls": [],
+      "generated": {
+        "typescript": "open",
+        "python": "open",
+        "go": "Open"
+      }
+    }
+  ],
+  "transfers": []
+}

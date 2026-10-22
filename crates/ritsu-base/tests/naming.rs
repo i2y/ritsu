@@ -36,7 +36,8 @@ fn reason(why: &str) -> ErrorKind {
         "attribute only right after principal or resource" => ErrorKind::ChildFirst { kind: "attribute".into(), parents: vec!["principal", "resource"] },
         "nothing under policy" => ErrorKind::NothingUnder("policy".into()),
         "only input or context under action" => ErrorKind::WrongChild { kind: "role".into(), parent: "action".into(), allowed: &["input", "context"] },
-        "field only right after record" => ErrorKind::ChildFirst { kind: "field".into(), parents: vec!["record"] },
+        "field only right after record or value" => ErrorKind::ChildFirst { kind: "field".into(), parents: vec!["record", "value"] },
+        "one child at most (field)" => ErrorKind::TooManyPairs("field".into()),
         "nothing under function" => ErrorKind::NothingUnder("function".into()),
         "only field under record (function)" => ErrorKind::WrongChild { kind: "function".into(), parent: "record".into(), allowed: &["field"] },
         other => panic!("the reason `{other}` is new to this test; say which error it is"),
@@ -77,7 +78,7 @@ fn every_line_of_the_table_gives_its_json_or_is_refused_for_its_reason() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert_eq!((ok, refused), (53, 31), "the table has 53 namings and 31 refusals");
+    assert_eq!((ok, refused), (54, 32), "the table has 54 namings and 32 refusals");
 }
 
 #[test]

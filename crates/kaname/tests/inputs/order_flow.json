@@ -1,0 +1,1 @@
+{"events": [{"add": {"line": {"sku": "pen", "qty": 2, "price": 150}}}, {"add": {"line": {"sku": "ink", "qty": 1, "price": 400}}}, {"place": {"on": "2026-10-22"}}, {"pay": {"amount": 700}}, {"ship": {"tracking": "1Z-42"}}]}

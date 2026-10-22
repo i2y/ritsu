@@ -13,12 +13,13 @@ website/
 ├── build.sh            # all of it, in the one order that works
 ├── sync.sh             # copies the playground's files into docs-ja/
 ├── serve.sh            # previews build/ under /ritsu/, with caching off
-├── docs/               # the English pages: index.md, playground.md, sekisho.md
+├── docs/               # the English pages: index.md, playground.md, sekisho.md, node.md
+│   ├── kaname/         # kaname's pages: index.md, language.md, examples.md, checks.md, together.md
 │   ├── ns/             # what a namespace IRI opens: yuen.md (see below)
 │   ├── play/           # index.html: the playground alone, filling the window (published as it is)
 │   └── playground/     # the playground: playground.js and .css, worker.js, libraries.js, ritsu.wasm,
 │                       #   projects.json, words.json
-├── docs-ja/            # the Japanese pages (ns/yuen.md and play/index.html too)
+├── docs-ja/            # the Japanese pages (kaname/, ns/yuen.md and play/index.html too)
 ├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
 │   ├── make_wasm.sh    # builds docs/playground/ritsu.wasm
@@ -39,11 +40,14 @@ took them over, with every example they opened and the links they gave, and thei
 is kept only to send a link to it on. The nav of each site links to ritsu's page itself, on a
 project of the site's language, as chobo's does on its examples.
 
-A language with no site of its own can have a page among ritsu's. sekisho's, `sekisho.md`, follows
+A language with no site of its own can have pages among ritsu's. sekisho's, `sekisho.md`, follows
 its example from the answer of a rule a gate reads to the Cedar and the code generated from it,
 with the dates, the contract, the workflow and the map around it; the nav lists it after the
-playground, and the home page's table of the languages links to it. The table links the languages
-with neither a site nor a page to their READMEs.
+playground, and the home page's table of the languages links to it. kaname's are five, in
+`kaname/`: what it is, how a module is written, the four functional cores of its examples with
+their hosts in TypeScript, Python and Go (in tabs, `pymdownx.tabbed`), what the check guarantees,
+and the calls of rules, dates and books; the nav lists them after sekisho's, and the home page
+links to each. The table links the languages with neither a site nor a page to their READMEs.
 
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
 two languages say the same things but not always in the same order. A change to one goes to the
@@ -116,7 +120,12 @@ tools have it: the lines of its files, what each command prints (a `gen` writes 
 directory in place of its `--out`), the Cedar and the code `ritsu gen` writes, the table
 `sekisho doc` draws and its count of combinations, and what `sekisho check` says of the example
 with the edit a `diff` block shows, the two pages showing as many blocks of each kind and as many
-tables (sekisho's READMEs link to the pages); the pages of yuen's
+tables (sekisho's READMEs link to the pages); the pages of kaname show its examples and the
+materials of its tests in the same way, the code of the hosts being the lines of the hosts of its
+examples and a `text` block after them what they print (`host/output.txt`), the page of the
+examples showing all twelve hosts, and a page in English and the same page in Japanese showing as
+many blocks of each kind and as many tables (kaname's READMEs and the READMEs at the root link to
+them); the pages of yuen's
 namespace have every word yuen's exporter writes (its list `TERMS`, which yuen's own tests hold to
 what it writes) and no other, and their example is what the command prints; the two
 configurations name ritsu's URLs; `.github/workflows/docs.yml` runs on a push to main that changes
@@ -125,9 +134,10 @@ the playground in the site's language, on a project the playground lists in it; 
 rulec's and dandori's sites had for its playground sends a reader on to the same place; and
 the page of the playground alone leads to the page that explains it and to the playground's files,
 and nowhere else. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
-looks at the tree it builds, down to an element for every word whose id is the word, to where the
-link of each page that sends a reader on leads, and to the pages of the playground alone, as they
-are. `crates/ritsu/tests/playground.rs` holds the playground, as its page says: it drives Chrome
+looks at the tree it builds, down to an element for every word whose id is the word, to the four
+sets of three tabs on the page of kaname's examples, to where the link of each page that sends a
+reader on leads, and to the pages of the playground alone, as they are.
+`crates/ritsu/tests/playground.rs` holds the playground, as its page says: it drives Chrome
 through both pages in both languages (an edit, the answer, the page kept while a file does not
 pass, a link from one page to the other) and follows the links the pages before gave, sent on to
 it; each language's own tests hold its site (the READMEs of rulec's, dandori's and chobo's sites say

@@ -45,9 +45,10 @@ structure OracleOK (C : Ctx) : Prop where
     ∃ d, C.O.date file date ints = some d
 
 /-- A function the analysis read the answer of answers within it, called with values its
-    parameters take. -/
+    parameters take. A function that takes functions is not read so: a call takes what it declares
+    (kaname's DESIGN 27.4). -/
 def ResultsOK (C : Ctx) (res : List (Option Abs)) : Prop :=
-  ∀ f a, res[f]? = some (some a) → ∀ fn, C.M.fns[f]? = some fn → ∀ n dep args v, Valid fn args →
+  ∀ f a, res[f]? = some (some a) → ∀ fn, C.M.fns[f]? = some fn → fn.takesFn = false → ∀ n dep args v, Valid fn args →
     callFn C n dep f args = .ok v → Mem a v
 
 /-- A scope of the analysis of a function of the module, with the answers of the functions
@@ -276,6 +277,27 @@ structure SoundAt (C : Ctx) (res : List (Option Abs)) (n : Nat) : Prop where
       ∀ el a, (el, a) ∈ xs.zip as → AnsOK ρ x (ev (A.bindNew x elem) m body o) c el a) ∧
     (∀ k l, evalEach C n dep ρ x body c w xs = .error (.failed k l) → k.ofEffect = true →
       Wit C (convA (ev (A.bindNew x elem) m body o).out c (ev (A.bindNew x elem) m body o).abs).2)
+  pairs : ∀ (m : Nat) (A : ACtx) (ρ : Env) (pairs : List (Expr × Option Conv × Expr × Option Conv)) (ks vs : Abs)
+      (k : Nat) (o : Out) (dep : Nat) (pre : List (Val × Val)) (key : Key), Good C res A → Sat A ρ →
+    (pairsAbs A m pairs ks vs k o).out.widened = false → (∀ p ∈ pre, Mem ks p.1 ∧ Mem vs p.2) → pre.length = k →
+    (∀ ps, evalPairs C n dep ρ pairs = .ok ps →
+        Mem (pairsAbs A m pairs ks vs k o).abs (.dict (dictFrom key (pre ++ ps))) ∧ Sat (pairsAbs A m pairs ks vs k o).ctx ρ) ∧
+    (∀ k' l, evalPairs C n dep ρ pairs = .error (.failed k' l) → k'.ofEffect = true →
+      Wit C (pairsAbs A m pairs ks vs k o).out)
+  each2 : ∀ (m : Nat) (A : ACtx) (ρ : Env) (x : String) (kb : Expr) (kc : Option Conv) (y : String) (vb : Expr)
+      (vc : Option Conv) (xs : List Val) (elem : Abs) (o : Out) (dep : Nat), Good C res A → Sat A ρ →
+    (∀ el ∈ xs, Mem elem el) → (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2.widened = false →
+    (∀ ps, evalEach2 C n dep ρ x kb kc y vb vc xs = .ok ps → ps.length = xs.length ∧
+      ∀ p ∈ ps, Mem (lam1 A m x elem kb kc o).1 p.1 ∧ Mem (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).1 p.2) ∧
+    (∀ k l, evalEach2 C n dep ρ x kb kc y vb vc xs = .error (.failed k l) → k.ofEffect = true →
+      Wit C (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2)
+  merge : ∀ (m : Nat) (A : ACtx) (ρ : Env) (key : Key) (ps : List (Val × Val)) (x y : String) (body : Expr)
+      (c : Option Conv) (va vb : Abs) (qs : List (Val × Val)) (o : Out) (dep : Nat), Good C res A → Sat A ρ →
+    (∀ p ∈ ps, Mem va p.2) → (∀ q ∈ qs, Mem vb q.2) → (lam2 A m x y va vb body c o).2.widened = false →
+    (∀ more, evalMerge C n dep ρ key ps x y body c qs = .ok more → more.map (·.1) = qs.map (·.1) ∧
+      ∀ q ∈ more, Mem vb q.2 ∨ Mem (lam2 A m x y va vb body c o).1 q.2) ∧
+    (∀ k l, evalMerge C n dep ρ key ps x y body c qs = .error (.failed k l) → k.ofEffect = true →
+      Wit C (lam2 A m x y va vb body c o).2)
   fix : ∀ (m : Nat) (A : ACtx) (ρ : Env) (acc x : String) (body : Expr) (c : Option Conv) (S elem : Abs)
       (xs : List Val) (a : Val) (o : Out) (dep : Nat), Good C res A → Sat A ρ → (∀ el ∈ xs, Mem elem el) → Mem S a →
     (S.join (lam2 A m acc x S elem body c o).1 == S) = true → (lam2 A m acc x S elem body c o).2.widened = false →
@@ -300,6 +322,12 @@ theorem sound_zero {C : Ctx} {res : List (Option Abs)} : SoundAt C res 0 where
     ⟨fun v h => by simp [evalElems] at h, fun k l h => by simp [evalElems] at h⟩
   each m A ρ x body c w xs elem o dep _ _ _ _ :=
     ⟨fun v h => by simp [evalEach] at h, fun k l h => by simp [evalEach] at h⟩
+  pairs m A ρ pairs ks vs k o dep pre key _ _ _ _ _ :=
+    ⟨fun v h => by simp [evalPairs] at h, fun k l h => by simp [evalPairs] at h⟩
+  each2 m A ρ x kb kc y vb vc xs elem o dep _ _ _ _ :=
+    ⟨fun v h => by simp [evalEach2] at h, fun k l h => by simp [evalEach2] at h⟩
+  merge m A ρ key ps x y body c va vb qs o dep _ _ _ _ _ :=
+    ⟨fun v h => by simp [evalMerge] at h, fun k l h => by simp [evalMerge] at h⟩
   fix m A ρ acc x body c S elem xs a o dep _ _ _ _ _ _ :=
     ⟨fun v h => by simp [evalFold] at h, fun k l h => by simp [evalFold] at h⟩
   rounds m A ρ acc x body c elem K S xs a o dep _ _ _ _ _ _ :=

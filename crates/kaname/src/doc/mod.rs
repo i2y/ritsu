@@ -579,6 +579,42 @@ impl<'a> Builder<'a> {
             }
             (None, _) => said.push(self.t(tr!("見出しにエフェクトは書いてありません。kaname が推論したものです。", "Its head writes no effect: this is what kaname infers."))),
         }
+        // an inner function (DESIGN 21.3): a generic one, one that takes functions (26.5, 27.5), a
+        // `private` one (28.2)
+        let (generic, takes) = (!info.tparams.is_empty(), info.takes_fn());
+        if generic {
+            said.push(self.t(tr!(
+                "総称の関数で、ホストは呼ばず、モジュールの関数が呼びます。呼び出しの答えとエフェクトは、呼ぶところで、渡す値で読み直して決まります。",
+                "A generic function: no host calls it, the functions of the modules do, and what a call answers and its effect are read again with the values the call gives."
+            )));
+        }
+        if takes && generic {
+            said.push(self.t(tr!("関数を取ります。", "It takes functions.")));
+        } else if takes {
+            said.push(self.t(tr!(
+                "関数を取る関数で、ホストは呼ばず、モジュールの関数が呼びます。呼び出しの答えとエフェクトは、呼ぶところで、渡す値と関数で読み直して決まります。",
+                "A function that takes functions: no host calls it, the functions of the modules do, and what a call answers and its effect are read again with the values and the functions the call gives."
+            )));
+        }
+        // what the function given does (DESIGN 27.5): the effect of one given where the type writes none
+        // goes on to the caller; one given where it writes one keeps within it
+        if takes {
+            let through = crate::effects::through(info);
+            if through.is_empty() {
+                said.push(self.t(tr!("渡す関数は、引数の型に書いたエフェクトに収まります。", "A function given keeps within the effect its parameter's type writes.")));
+            } else {
+                let names: Vec<Text> = through.iter().map(|n| Text::same(format!("`{n}`"))).collect();
+                let shown = Text::list(&names);
+                said.push(self.t(tr!("{} に渡した関数のエフェクトは、呼ぶ側に伝わります。", "The effect of a function given to {} goes on to the caller.", shown.ja; shown.en)));
+            }
+        }
+        if info.private {
+            said.push(self.t(if generic || takes {
+                tr!("`private` で、このモジュールの関数だけが呼びます。", "It is `private`: only the functions of its module call it.")
+            } else {
+                tr!("`private` の関数で、ホストは呼ばず、このモジュールの関数だけが呼びます。", "A `private` function: no host calls it, only the functions of its module do.")
+            }));
+        }
         self.push(Block::Para(self.sentences(&said)));
         if let Some((d, _)) = &decl.description {
             self.push(Block::Para(self.sentence(d)));
@@ -632,6 +668,12 @@ impl<'a> Builder<'a> {
                 self.t(tr!("この実行では、ritsu の {x} の答えがありません。", "ritsu's check {x} has not answered in this run."))
             }
             (_, Some((c, headline))) => self.coded(headline, &format!("ritsu {c}")),
+            // no code says it (DESIGN 22.3): what it is, and that the code checks it
+            (Came::Unbounded, _) => {
+                let head = crate::ranges::unbounded_head(&crate::ranges::place_src(self.c, p.span));
+                let parts = vec![self.sentence_of(&head), self.t(tr!("生成したコードが、走らせたときにこの場所で確かめます。", "The generated code checks it there when it runs."))];
+                self.sentences(&parts)
+            }
             _ => match self.diag_at(p) {
                 Some(d) => {
                     let mut parts = vec![self.coded(&d.message, d.code)];

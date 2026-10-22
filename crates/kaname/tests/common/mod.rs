@@ -54,8 +54,17 @@ pub fn shown(o: &Outcome, lang: Lang) -> String {
     kaname::check::render(o, lang)
 }
 
-/// The examples, English first (DESIGN 17).
-pub const EXAMPLES: [&str; 8] = [
+/// The examples, English first (DESIGN 17): the four that join no other language, then the four that
+/// call rules, dates and books.
+pub const EXAMPLES: [&str; 16] = [
+    "examples/order_flow/order_flow.kn",
+    "examples/order_flow/order_flow.ja.kn",
+    "examples/stock_diff/stock_diff.kn",
+    "examples/stock_diff/stock_diff.ja.kn",
+    "examples/handles/handles.kn",
+    "examples/handles/handles.ja.kn",
+    "examples/catalog/catalog.kn",
+    "examples/catalog/catalog.ja.kn",
     "examples/payout/payout.kn",
     "examples/payout/payout.ja.kn",
     "examples/late_payment/late_payment.kn",

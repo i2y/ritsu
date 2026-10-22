@@ -6,7 +6,11 @@
   (`fn_noFail`); a function the module's analysis infers total does not fail (`total_sound`).
 
   The theorems of the module are for an analysis that let no running value of a `reduce` go
-  (DESIGN 15.4): every function's facts say `widened` is false.
+  (DESIGN 15.4): every function's facts say `widened` is false. A function that takes functions is
+  left out (kaname's DESIGN 27.4): its own analysis answers for functions it does not see, and a call
+  of it is read again with the functions it is given, or takes what it declares. A function whose
+  effect goes on to its callers (`through`, kaname's DESIGN 27.5) is left out of `total_sound`: what
+  it does depends on the functions it is given.
 -/
 import KanameCore.SoundAll
 
@@ -14,150 +18,56 @@ namespace KanameCore
 
 -- ── The scope a function starts in ──────────────────────────────────────────
 
-/-- The names of the scope of the analysis and the environment of the evaluation, one by one: the
-    same name, the value among what the analysis says. -/
-def Paired : List (String × Abs) → List (String × Val) → Prop
-  | [], [] => True
-  | (x, a) :: as, (y, v) :: vs => x = y ∧ Mem a v ∧ Paired as vs
-  | _, _ => False
-
-theorem Paired.append : ∀ {a b : List (String × Abs)} {c d : List (String × Val)},
-    Paired a c → Paired b d → Paired (a ++ b) (c ++ d)
-  | [], b, [], d, _, h => h
-  | (_, _) :: _, _, (_, _) :: _, _, ⟨h1, h2, h3⟩, h => ⟨h1, h2, Paired.append h3 h⟩
-  | [], _, _ :: _, _, h, _ => by simp [Paired] at h
-  | _ :: _, _, [], _, h, _ => by simp [Paired] at h
-
-theorem Paired.reverse : ∀ {a : List (String × Abs)} {c : List (String × Val)}, Paired a c → Paired a.reverse c.reverse
-  | [], [], _ => trivial
-  | (x, a) :: as, (y, v) :: vs, ⟨h1, h2, h3⟩ => by
-    simp only [List.reverse_cons]
-    exact Paired.append (Paired.reverse h3) ⟨h1, h2, trivial⟩
-  | [], _ :: _, h => by simp [Paired] at h
-  | _ :: _, [], h => by simp [Paired] at h
-
-theorem paired_params : ∀ (ps : List Param) (args : List Val), args.length = ps.length →
-    (∀ p v, (p, v) ∈ ps.zip args → Mem p.abs v) →
-    Paired (ps.map fun p => (p.name, p.abs)) ((ps.map (·.name)).zip args)
-  | [], [], _, _ => trivial
-  | p :: ps, v :: vs, hl, hm => by
-    refine ⟨rfl, hm p v (by simp), paired_params ps vs (by simpa using hl) fun q w h => hm q w ?_⟩
-    simp only [List.zip_cons_cons, List.mem_cons]; exact Or.inr h
-  | [], _ :: _, hl, _ => by simp at hl
-  | _ :: _, [], hl, _ => by simp at hl
-
-theorem foldl_params (ps : List Param) (acc : List (String × Abs)) :
-    ps.foldl (fun env p => (p.name, p.abs) :: env) acc = (ps.map fun p => (p.name, p.abs)).reverse ++ acc := by
-  induction ps generalizing acc with
-  | nil => rfl
-  | cons p ps ih => simp [ih]
-
-theorem sat_paired {M : Module} {R : List (Option Abs)} {ring : List Nat} :
-    ∀ (env : List (String × Abs)) (ρ : Env), Paired env ρ → Sat ⟨M, R, ring, env, []⟩ ρ
-  | [], [], _ => Sat.nil M R ring
-  | (x, a) :: env, (y, v) :: ρ, ⟨hxy, hm, hp⟩ => by
-    subst hxy
-    have ih := sat_paired (M := M) (R := R) (ring := ring) env ρ hp
-    constructor
-    · intro z b hz
-      have hl := lookup_cons ⟨M, R, ring, env, []⟩ x a z
-      rw [show (⟨M, R, ring, (x, a) :: env, []⟩ : ACtx) = { (⟨M, R, ring, env, []⟩ : ACtx) with env := (x, a) :: env }
-        from rfl, hl] at hz
-      rw [get_cons]
-      by_cases hxz : x = z
-      · simp only [hxz, ite_true] at hz ⊢; cases hz; exact ⟨v, rfl, hm⟩
-      · simp only [hxz, ite_false] at hz ⊢; exact ih.env z b hz
-    · intro p r q h; simp at h
-  | [], _ :: _, h => by simp [Paired] at h
-  | _ :: _, [], h => by simp [Paired] at h
-
 /-- **The scope a function starts in holds the values its parameters take.** -/
 theorem sat_start {M : Module} {R : List (Option Abs)} {ring : List Nat} {fn : Fn} {args : List Val}
     (h : Valid fn args) :
-    Sat ⟨M, R, ring, fn.params.foldl (fun env p => (p.name, p.abs) :: env) [], []⟩
+    Sat ⟨M, R, ring, fn.params.foldl (fun env p => (p.name, p.abs) :: env) [], [], 0, true, false⟩
       ((fn.params.map (·.name)).zip args).reverse := by
   rw [foldl_params, List.append_nil]
   exact sat_paired _ _ (Paired.reverse (paired_params fn.params args h.1 fun p v hpv => (h.2 p v hpv).1))
 
 -- ── A call of a function ─────────────────────────────────────────────────────
 
-theorem callFn_ok {C : Ctx} {n dep f : Nat} {args : List Val} {v : Val} {fn : Fn} (hf : C.M.fns[f]? = some fn)
-    (h : callFn C n dep f args = .ok v) :
-    ∃ n' raw, n = n' + 1 ∧ eval C n' (dep + 1) ((fn.params.map (·.name)).zip args).reverse fn.body = .ok raw ∧
-      coerce fn.conv raw = .ok v ∧ fn.ret.outside false v = false ∧ fn.declared.has v = true := by
-  cases n with
-  | zero => simp [callFn] at h
-  | succ n' =>
-    simp only [callFn, hf] at h
-    split at h
-    · cases h
-    · obtain ⟨raw, hraw, h1⟩ := bind_ok h
-      obtain ⟨v', hv', h2⟩ := bind_ok h1
-      split at h2
-      · exact absurd h2 failK_ne_ok
-      · rename_i hout
-        split at h2
-        · rename_i hhas
-          cases h2
-          exact ⟨n', raw, rfl, hraw, hv', by simpa using hout, hhas⟩
-        · exact absurd h2 failK_ne_ok
-
-theorem callFn_err {C : Ctx} {n dep f : Nat} {args : List Val} {k : Kind} {l : Nat} {fn : Fn}
-    (hf : C.M.fns[f]? = some fn) (h : callFn C n dep f args = .error (.failed k l)) (hk : k.ofEffect = true) :
-    ∃ n', n = n' + 1 ∧
-      (eval C n' (dep + 1) ((fn.params.map (·.name)).zip args).reverse fn.body = .error (.failed k l) ∨
-       (∃ raw, eval C n' (dep + 1) ((fn.params.map (·.name)).zip args).reverse fn.body = .ok raw ∧
-          coerce fn.conv raw = .error (.failed k l)) ∨
-       (∃ raw v, eval C n' (dep + 1) ((fn.params.map (·.name)).zip args).reverse fn.body = .ok raw ∧
-          coerce fn.conv raw = .ok v ∧ fn.ret.outside false v = true)) := by
-  cases n with
-  | zero => simp [callFn] at h
-  | succ n' =>
-    refine ⟨n', rfl, ?_⟩
-    simp only [callFn, hf] at h
-    split at h
-    · cases h
-    · rcases bind_err h with h1 | ⟨raw, hraw, h1⟩
-      · exact Or.inl h1
-      · rcases bind_err h1 with h2 | ⟨v, hv, h2⟩
-        · exact Or.inr (Or.inl ⟨raw, hraw, h2⟩)
-        · split at h2
-          · rename_i hout; exact Or.inr (Or.inr ⟨raw, v, hraw, hv, hout⟩)
-          · split at h2
-            · cases h2
-            · rw [fail_type h2] at hk; cases hk
-
-/-- What the analysis of a function says of every call of it with values its parameters take: its
-    answer among the function's result, a failure of one of the five kinds one of its places or
-    one of a function it calls; every place of one of the five kinds. -/
+/-- What the analysis of a function that takes no function says of every call of it with values its
+    parameters take: its answer among the function's result, a failure of one of the five kinds one
+    of its places or one of a function it calls; every place of one of the five kinds. Facts that
+    say the function takes no function and calls none it does not see (`unseen`) are of such a
+    function. -/
 def FnSound (C : Ctx) (f : Nat) (ff : FnFacts) : Prop :=
-  ∀ fn, C.M.fns[f]? = some fn →
+  ∀ fn, C.M.fns[f]? = some fn → (ff.unseen = false → fn.takesFn = false) ∧ (fn.takesFn = false →
     (∀ n dep args v, Valid fn args → callFn C n dep f args = .ok v → Mem ff.result v) ∧
     (∀ n dep args k l, Valid fn args → callFn C n dep f args = .error (.failed k l) → k.ofEffect = true →
-      Wit C ⟨ff.places, [], ff.calls, false, []⟩) ∧
-    (∀ p ∈ ff.places, p.kind ∈ kindOrder)
+      Wit C ⟨ff.places, [], ff.calls, false, [], [], [], [], false⟩) ∧
+    (∀ p ∈ ff.places, p.kind ∈ kindOrder))
 
-theorem wit_facts {C : Ctx} {o : Out} (h : Wit C o) : Wit C ⟨o.places, [], o.calls, false, []⟩ := h
+theorem wit_facts {C : Ctx} {o : Out} (h : Wit C o) : Wit C ⟨o.places, [], o.calls, false, [], [], [], [], false⟩ := h
 
-theorem kinds_start {vals : List (Nat × Abs)} : KindsOK ⟨[], vals, [], false, []⟩ := fun _ h => by cases h
+theorem kinds_start {vals : List (Nat × Abs)} : KindsOK ⟨[], vals, [], false, [], [], [], [], false⟩ := fun _ h => by cases h
 
 /-- **The analysis of a function is sound** (DESIGN 15.2.2 for a function's answer and places),
-    for an analysis that let no running value go. -/
+    for an analysis that let no running value go, of a function that takes no function. -/
 theorem analyzeFn_sound {C : Ctx} {res : List (Option Abs)} (hR : ResultsOK C res) (hO : OracleOK C)
-    {ring : List Nat} {f : Nat} {vals : List (Nat × Abs)} (hw : (analyzeFn C.M res ring f vals).1.widened = false) :
+    {ring : List Nat} {f : Nat} {vals : List (Nat × Abs)}
+    (hw : ∀ fn, C.M.fns[f]? = some fn → fn.takesFn = false → (analyzeFn C.M res ring f vals).1.widened = false) :
     FnSound C f (analyzeFn C.M res ring f vals).1 := by
   intro fn hf
+  have hw := hw fn hf
   simp only [analyzeFn, hf] at hw ⊢
-  generalize hA : (⟨C.M, res, ring, fn.params.foldl (fun env p => (p.name, p.abs) :: env) [], []⟩ : ACtx) = A0 at hw ⊢
+  refine ⟨fun hu => by simp only [Bool.or_eq_false_iff] at hu; exact hu.2, fun htf => ?_⟩
+  have hw := hw htf
+  generalize hA : (⟨C.M, res, ring, fn.params.foldl (fun env p => (p.name, p.abs) :: env) [], [], 0, true, false⟩ : ACtx)
+    = A0 at hw ⊢
+  generalize hO0 : (⟨[], vals, [], false, [], [], [], [], false⟩ : Out) = O0 at hw ⊢
   have hG : Good C res A0 := by rw [← hA]; exact ⟨rfl, rfl⟩
-  have g0 : Grows ⟨[], vals, [], false, []⟩ (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).out := ((sat FUEL).ev _ _ _).1
+  have g0 : Grows O0 (ev A0 FUEL fn.body O0).out := ((sat FUEL).ev _ _ _).1
   -- the out at the end grows from the body's
-  have gend : Grows (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).out
+  have gend : Grows (ev A0 FUEL fn.body O0).out
       (if (fn.ret.range?.isSome || fn.ret.count?.isSome) = true then
-        (convA (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).out fn.conv (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).abs).2.place
+        (convA (ev A0 FUEL fn.body O0).out fn.conv (ev A0 FUEL fn.body O0).abs).2.place
           fn.answer "answer" .range (.slot fn.ret)
-          (convA (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).out fn.conv (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).abs).1
-      else (convA (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).out fn.conv (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).abs).2) := by
+          (convA (ev A0 FUEL fn.body O0).out fn.conv (ev A0 FUEL fn.body O0).abs).1
+      else (convA (ev A0 FUEL fn.body O0).out fn.conv (ev A0 FUEL fn.body O0).abs).2).merged := by
+    apply grows_merged
     split
     · exact grows_place (grows_convA (Grows.refl _))
     · exact grows_convA (Grows.refl _)
@@ -172,25 +82,31 @@ theorem analyzeFn_sound {C : Ctx} {res : List (Option Abs)} (hR : ResultsOK C re
     all_goals have R := ranges_sound (n := n') (dep := dep + 1) hR hO hG hS hwb
     all_goals apply wit_facts
     · exact Wit.grow (R.2 k l h1 hk) gend
-    · exact Wit.grow (coerce_wit (R.1 raw hraw).1 h1).2 (by split; exact grows_place (Grows.refl _); exact Grows.refl _)
-    · have hm := convA_mem (o := (ev A0 FUEL fn.body ⟨[], vals, [], false, []⟩).out) (R.1 raw hraw).1 hc
+    · refine Wit.grow (coerce_wit (o := (ev A0 FUEL fn.body O0).out) (R.1 raw hraw).1 h1).2 (grows_merged ?_)
+      split
+      · exact grows_place (Grows.refl _)
+      · exact Grows.refl _
+    · have hm := convA_mem (o := (ev A0 FUEL fn.body O0).out) (R.1 raw hraw).1 hc
+      refine Wit.grow ?_ (grows_merged (Grows.refl _))
       split
       · exact wit_place hm hout
       · rename_i hno
         simp only [Bool.or_eq_true, not_or, Option.isSome_iff_ne_none, ne_eq, Decidable.not_not] at hno
         rw [outside_noRange hno.1 hno.2] at hout; cases hout
-  · exact (gend.kinds (g0.kinds kinds_start))
+  · have k0 : KindsOK O0 := by rw [← hO0]; exact kinds_start
+    exact gend.kinds (g0.kinds k0)
 
 -- ── Where a function does not fail ──────────────────────────────────────────
 
 /-- **A function whose places are all shown, and which calls only functions that do not fail,
     does not fail** for any values its parameters take (DESIGN 15.2.3). -/
-theorem fn_noFail {C : Ctx} {f : Nat} {ff : FnFacts} (hf : FnSound C f ff) (hs : ∀ p ∈ ff.places, p.shown = true)
-    (hc : ∀ g ∈ ff.calls, NoFail C g) : NoFail C f := by
+theorem fn_noFail {C : Ctx} {f : Nat} {ff : FnFacts} (hf : FnSound C f ff) (hu : ff.unseen = false)
+    (hs : ∀ p ∈ ff.places, p.shown = true) (hc : ∀ g ∈ ff.calls, NoFail C g) : NoFail C f := by
   intro fn hfn n dep args hv k l h
   cases hk : k.ofEffect
   · rfl
-  · exact absurd ((hf fn hfn).2.1 n dep args k l hv h hk) (no_wit hs hc)
+  · exact absurd (((hf fn hfn).2 ((hf fn hfn).1 hu)).2.1 n dep args k l hv h hk)
+      (no_wit (o := ⟨ff.places, [], ff.calls, false, [], [], [], [], false⟩) hs hc)
 
 /-- **An expression whose places are all shown, and which calls only functions that do not fail,
     does not fail** in any environment the scope of its analysis says (DESIGN 15.2.3). -/
@@ -217,9 +133,9 @@ def FoldOK (C : Ctx) (acc : AState) : Prop :=
     ∀ g a, acc.2.1[g]? = some (some a) → ∃ ff, acc.1[g]? = some ff ∧ ff.result = a ∧ FnSound C g ff
 
 theorem FoldOK.results {C : Ctx} {acc : AState} (h : FoldOK C acc) : ResultsOK C acc.2.1 := by
-  intro f a hf fn hfn n dep args v hv hc
+  intro f a hf fn hfn htf n dep args v hv hc
   obtain ⟨ff, _, rfl, hs⟩ := h.2 f a hf
-  exact (hs fn hfn).1 n dep args v hv hc
+  exact ((hs fn hfn).2 htf).1 n dep args v hv hc
 
 theorem analyzeStep_keep {M : Module} {ring : List Nat} {acc : AState} {f g : Nat}
     (hg : (acc.2.1[g]?).join.isSome = true) :
@@ -256,7 +172,7 @@ theorem fold_length {M : Module} : ∀ (L : List (List Nat × Nat)) (acc : AStat
   | y :: L, acc => by simp only [List.foldl_cons]; rw [fold_length L _, flatStep, analyzeStep_length.2]
 
 theorem analyzeStep_ok {C : Ctx} (hO : OracleOK C) {ring : List Nat} {acc : AState} {f : Nat} (h : FoldOK C acc)
-    (hw : f < acc.2.1.length → (acc.2.1[f]?).join.isSome = false →
+    (hw : f < acc.2.1.length → (acc.2.1[f]?).join.isSome = false → ∀ fn, C.M.fns[f]? = some fn → fn.takesFn = false →
       (analyzeFn C.M acc.2.1 ring f acc.2.2).1.widened = false) :
     FoldOK C (analyzeStep C.M ring acc f) := by
   unfold analyzeStep
@@ -280,21 +196,22 @@ theorem analyzeStep_ok {C : Ctx} (hO : OracleOK C) {ring : List Nat} {acc : ASta
       exact h.2 g a hg
 
 theorem fold_ok {C : Ctx} (hO : OracleOK C) : ∀ (L : List (List Nat × Nat)) (acc : AState), FoldOK C acc →
-    (∀ (g : Nat), (((L.foldl (flatStep C.M) acc).1)[g]?.getD (default : FnFacts)).widened = false) →
+    (∀ (g : Nat) fn, C.M.fns[g]? = some fn → fn.takesFn = false →
+      (((L.foldl (flatStep C.M) acc).1)[g]?.getD (default : FnFacts)).widened = false) →
     FoldOK C (L.foldl (flatStep C.M) acc)
   | [], _, h, _ => h
   | y :: L, acc, h, hw => by
     simp only [List.foldl_cons] at hw ⊢
     apply fold_ok hO L _ _ hw
     apply analyzeStep_ok hO h
-    intro hlt hf
+    intro hlt hf fn hfn htf
     -- the facts the function is given here are its facts at the end
     have hsome : ((flatStep C.M acc y).2.1[y.2]?).join.isSome = true := by
       unfold flatStep analyzeStep
       rw [ite_eq_right (by simp [hf])]
       simp [List.getElem?_set_self hlt]
     have hk := (fold_keep (M := C.M) L _ y.2 hsome).1
-    have := hw y.2
+    have := hw y.2 fn hfn htf
     rw [hk] at this
     unfold flatStep analyzeStep at this
     rw [ite_eq_right (by simp [hf])] at this
@@ -333,15 +250,16 @@ theorem fold_flatten {M : Module} : ∀ (rings : List (List Nat × Bool)) (acc :
 
 -- ── The effects, ring by ring ───────────────────────────────────────────────
 
-/-- An effect with no kind and that does not go round. -/
-def Clean (e : Effect) : Prop := e.fails = [] ∧ e.diverges = false
+/-- An effect with no kind, that does not go round, and that does not take on the effect of a
+    function its function is given (kaname's DESIGN 27.5). -/
+def Clean (e : Effect) : Prop := e.fails = [] ∧ e.diverges = false ∧ e.through = false
 
 /-- The kinds of an effect are among the five. -/
 def SubK (e : Effect) : Prop := ∀ k ∈ e.fails, k ∈ kindOrder
 
-theorem total_clean {e : Effect} : e.total = true ↔ Clean e := by
-  unfold Effect.total Clean
-  cases e.diverges <;> simp [List.isEmpty_iff]
+theorem total_clean {e : Effect} (ht : e.total = true) (hth : e.through = false) : Clean e := by
+  simp only [Effect.total, Bool.and_eq_true, Bool.not_eq_true', List.isEmpty_iff] at ht
+  exact ⟨ht.1, ht.2, hth⟩
 
 theorem addKind_sub {ks : List Kind} {k : Kind} : ∀ x ∈ addKind ks k, x ∈ kindOrder := by
   intro x hx; unfold addKind at hx; exact (List.mem_filter.mp hx).1
@@ -434,39 +352,58 @@ theorem callEffect_clean {ring : List Nat} {effs : List Effect} (heffs : ∀ (g 
         have := foldl_addKind_keep o.fails e.fails x hxe hx; rw [h1] at this; cases this
       have hoo : o.fails = [] := nil_of_sub (heffs g o ho) fun x hx hxo => by
         have := foldl_addKind_has o.fails e.fails x hxo hx; rw [h1] at this; cases this
-      refine ⟨⟨he, h2.1⟩, by simpa using hr, fun o' ho' => ?_⟩
+      obtain ⟨⟨hd1, hd2⟩, ht1, ht2⟩ := h2
+      refine ⟨⟨he, hd1, ht1⟩, by simpa using hr, fun o' ho' => ?_⟩
       rw [ho] at ho'; cases ho'
-      exact ⟨hoo, h2.2⟩
+      exact ⟨hoo, hd2, ht2⟩
     · rename_i hn
       refine ⟨hc, by simpa using hr, fun o ho => ?_⟩
       rw [ho] at hn; cases hn
 
+theorem thruEffect_sub (e : Effect) (k : List Kind × Bool) (h : SubK e) : SubK (thruEffect e k) :=
+  fun x hx => foldl_addKind_sub _ _ h x hx
+
+theorem thruEffect_clean (e : Effect) (k : List Kind × Bool) (h : SubK e) (hc : Clean (thruEffect e k)) :
+    Clean e ∧ True := by
+  obtain ⟨h1, h2, h3⟩ := hc
+  simp only [thruEffect, Bool.or_eq_false_iff] at h1 h2 h3
+  refine ⟨⟨nil_of_sub h fun x hx hxe => ?_, h2.1, h3⟩, trivial⟩
+  have := foldl_addKind_keep k.1 e.fails x hxe hx; rw [h1] at this; cases this
+
 /-- **A ring whose effect is clean**: every place of its functions of one of the five kinds is
-    shown, and every function they call is outside the ring, with a clean effect. -/
+    shown, every function they call is outside the ring, with a clean effect, and none of them takes
+    a function or calls one the analysis does not see. -/
 theorem ringEffect_clean {facts : List FnFacts} {effs : List Effect} {ring : List Nat} {round : Bool}
     (heffs : ∀ (g : Nat) (o : Effect), effs[g]? = some o → SubK o) :
     SubK (ringEffect facts effs ring round) ∧
     (Clean (ringEffect facts effs ring round) → round = false ∧ ∀ f ∈ ring,
       (∀ p ∈ (facts[f]?.getD (default : FnFacts)).places, p.kind ∈ kindOrder → p.shown = true) ∧
-      (∀ g ∈ (facts[f]?.getD (default : FnFacts)).calls, ring.contains g = false ∧ ∀ o, effs[g]? = some o → Clean o)) := by
+      (∀ g ∈ (facts[f]?.getD (default : FnFacts)).calls, ring.contains g = false ∧ ∀ o, effs[g]? = some o → Clean o) ∧
+      (facts[f]?.getD (default : FnFacts)).unseen = false) := by
   have hfn : ∀ e f, SubK e → SubK (fnEffect facts ring effs e f) ∧ (Clean (fnEffect facts ring effs e f) → Clean e ∧
       ((∀ p ∈ (facts[f]?.getD (default : FnFacts)).places, p.kind ∈ kindOrder → p.shown = true) ∧
-      (∀ g ∈ (facts[f]?.getD (default : FnFacts)).calls, ring.contains g = false ∧ ∀ o, effs[g]? = some o → Clean o))) := by
+      (∀ g ∈ (facts[f]?.getD (default : FnFacts)).calls, ring.contains g = false ∧ ∀ o, effs[g]? = some o → Clean o) ∧
+      (facts[f]?.getD (default : FnFacts)).unseen = false)) := by
     intro e f h
     unfold fnEffect
     obtain ⟨p1, p2⟩ := foldl_clean (cond := fun p : Place => p.kind ∈ kindOrder → p.shown = true)
       placeEffect_sub placeEffect_clean (facts[f]?.getD (default : FnFacts)).places e h
     obtain ⟨c1, c2⟩ := foldl_clean (cond := fun g => ring.contains g = false ∧ ∀ o, effs[g]? = some o → Clean o)
       callEffect_sub (callEffect_clean heffs) (facts[f]?.getD (default : FnFacts)).calls _ p1
-    refine ⟨c1, fun hc => ?_⟩
-    obtain ⟨hc1, hcalls⟩ := c2 hc
-    obtain ⟨hc2, hplaces⟩ := p2 hc1
-    exact ⟨hc2, hplaces, hcalls⟩
+    obtain ⟨t1, t2⟩ := foldl_clean (cond := fun _ => True) thruEffect_sub thruEffect_clean
+      (facts[f]?.getD (default : FnFacts)).thru _ c1
+    refine ⟨t1, fun hc => ?_⟩
+    obtain ⟨hc1, hc2, hc3⟩ := hc
+    simp only [Bool.or_eq_false_iff] at hc3
+    obtain ⟨hct, _⟩ := t2 ⟨hc1, hc2, hc3.1⟩
+    obtain ⟨hcc, hcalls⟩ := c2 hct
+    obtain ⟨hcp, hplaces⟩ := p2 hcc
+    exact ⟨hcp, hplaces, hcalls, hc3.2⟩
   unfold ringEffect
   obtain ⟨r1, r2⟩ := foldl_clean (s := fnEffect facts ring effs) (fun e f h => (hfn e f h).1)
-    (fun e f h hc => (hfn e f h).2 hc) ring ⟨[], [], round⟩ (fun _ h => by cases h)
+    (fun e f h hc => (hfn e f h).2 hc) ring ⟨[], [], round, false⟩ (fun _ h => by cases h)
   refine ⟨r1, fun hc => ?_⟩
-  obtain ⟨⟨_, hr⟩, hall⟩ := r2 hc
+  obtain ⟨⟨_, hr, _⟩, hall⟩ := r2 hc
   exact ⟨hr, hall⟩
 
 theorem foldl_set_get {α : Type} (e : α) : ∀ (ring : List Nat) (l : List α) (g : Nat),
@@ -515,10 +452,12 @@ theorem effects_ok {C : Ctx} (facts : List FnFacts) :
         rename_i hg
         cases ho
         obtain ⟨_, hall⟩ := e2 hc
-        obtain ⟨hplaces, hcalls⟩ := hall g hg.1
+        obtain ⟨hplaces, hcalls, hunseen⟩ := hall g hg.1
         have hgl : g < C.M.fns.length := by rw [← hlen]; exact hg.2
-        refine fn_noFail (hs x (List.mem_cons_self ..) g hg.1 hgl) (fun p hp => hplaces p hp ?_) (fun g' hg' => ?_)
-        · exact ((hs x (List.mem_cons_self ..) g hg.1 hgl) _ (List.getElem?_eq_getElem hgl)).2.2 p hp
+        have hsg := hs x (List.mem_cons_self ..) g hg.1 hgl
+        refine fn_noFail hsg hunseen (fun p hp => hplaces p hp ?_) (fun g' hg' => ?_)
+        · have hfn := List.getElem?_eq_getElem hgl
+          exact ((hsg _ hfn).2 ((hsg _ hfn).1 hunseen)).2.2 p hp
         · obtain ⟨_, hgo⟩ := hcalls g' hg'
           cases hg'' : effs[g']? with
           | some o' => exact hno g' o' hg'' (hgo o' hg'')
@@ -535,7 +474,7 @@ theorem foldOK_start {C : Ctx} {n : Nat} : FoldOK C (List.replicate n default, L
   rw [List.getElem?_replicate] at h
   split at h <;> cases h
 
-theorem effOK_start {C : Ctx} : EffOK C (List.replicate C.M.fns.length ⟨[], [], true⟩) := by
+theorem effOK_start {C : Ctx} : EffOK C (List.replicate C.M.fns.length ⟨[], [], true, false⟩) := by
   refine ⟨by simp, fun g o h => ?_, fun g o h hc => ?_⟩
   · rw [List.getElem?_replicate] at h
     split at h
@@ -543,13 +482,15 @@ theorem effOK_start {C : Ctx} : EffOK C (List.replicate C.M.fns.length ⟨[], []
     · cases h
   · rw [List.getElem?_replicate] at h
     split at h
-    · cases h; exact absurd hc.2 (by simp)
+    · cases h; exact absurd hc.2.1 (by simp)
     · cases h
 
 /-- **The functions of a module are sound** (DESIGN 15.2.2): the answer the analysis gives each
-    function analysed holds of every call of it, for an analysis that let no running value go. -/
+    function analysed that takes no function holds of every call of it, for an analysis that let no
+    running value go. -/
 theorem module_sound {C : Ctx} (hO : OracleOK C)
-    (hw : ∀ (g : Nat), (((analyzeModule C.M).1)[g]?.getD (default : FnFacts)).widened = false) :
+    (hw : ∀ (g : Nat) fn, C.M.fns[g]? = some fn → fn.takesFn = false →
+      (((analyzeModule C.M).1)[g]?.getD (default : FnFacts)).widened = false) :
     ∀ x ∈ C.M.rings, ∀ f ∈ x.1, f < C.M.fns.length → FnSound C f (((analyzeModule C.M).1)[f]?.getD default) := by
   intro x hx f hf hlt
   have hflat := fold_flatten (M := C.M) C.M.rings (List.replicate C.M.fns.length default, List.replicate C.M.fns.length none, [])
@@ -572,13 +513,15 @@ theorem module_sound {C : Ctx} (hO : OracleOK C)
       rw [hff]; exact hs
 
 /-- **A function the module's analysis infers total does not fail** for any values its parameters
-    take (DESIGN 4.5, 15.2.3), for an analysis that let no running value go. -/
+    take (DESIGN 4.5, 15.2.3), for an analysis that let no running value go, where the effect of no
+    function it is given goes on to it (kaname's DESIGN 27.5): a function the host calls. -/
 theorem total_sound {C : Ctx} (hO : OracleOK C)
-    (hw : ∀ (g : Nat), (((analyzeModule C.M).1)[g]?.getD (default : FnFacts)).widened = false) :
-    ∀ f e, (analyzeModule C.M).2.1[f]? = some e → e.total = true → NoFail C f := by
-  intro f e hf ht
-  have hok := effects_ok (C := C) (analyzeModule C.M).1 C.M.rings (List.replicate C.M.fns.length ⟨[], [], true⟩)
+    (hw : ∀ (g : Nat) fn, C.M.fns[g]? = some fn → fn.takesFn = false →
+      (((analyzeModule C.M).1)[g]?.getD (default : FnFacts)).widened = false) :
+    ∀ f e, (analyzeModule C.M).2.1[f]? = some e → e.total = true → e.through = false → NoFail C f := by
+  intro f e hf ht hth
+  have hok := effects_ok (C := C) (analyzeModule C.M).1 C.M.rings (List.replicate C.M.fns.length ⟨[], [], true, false⟩)
     (module_sound hO hw) effOK_start
-  exact hok.2.2 f e hf (total_clean.mp ht)
+  exact hok.2.2 f e hf (total_clean ht hth)
 
 end KanameCore

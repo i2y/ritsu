@@ -39,7 +39,7 @@ fn countdown(n: number range >=0 <=100000) -> number
 
 Where it can fail:
 
-- Line 3 (`overflow`): Whether the value of `countdown(n: n - 1) + 1` stays in int64 cannot be decided (W302). The analysis of ranges finds no bound on the value, and no input among the function's vectors takes it out.
+- Line 3 (`overflow`): The value of `countdown(n: n - 1) + 1` can leave int64, as it comes from a value whose range is not written. The generated code checks it there when it runs.
 
 ## Decisions in code
 

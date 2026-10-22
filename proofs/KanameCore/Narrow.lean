@@ -96,7 +96,8 @@ theorem Sat.bindNew {A : ACtx} {ρ : Env} (h : Sat A ρ) {x : String} {a : Abs} 
     exact ⟨x', y', by rw [symVal_cons_ne hp]; exact h1, by rw [symVal_cons_ne hq]; exact h2, h3⟩
 
 /-- The scope where a function starts: its parameters, each with what it takes. -/
-theorem Sat.nil (M : Module) (results : List (Option Abs)) (ring : List Nat) : Sat ⟨M, results, ring, [], []⟩ [] where
+theorem Sat.nil (M : Module) (results : List (Option Abs)) (ring : List Nat) (d : Nat := 0) (own : Bool := true)
+    (lam : Bool := false) : Sat ⟨M, results, ring, [], [], d, own, lam⟩ [] where
   env x a h := by simp [ACtx.lookup] at h
   facts p r q h := by simp at h
 
@@ -184,6 +185,19 @@ theorem fieldOf_putMap {fs : List (String × Abs)} {f n : String} {g : Abs → A
       simp only [Abs.fieldOf, List.map_cons, List.find?, hk'] at ih ⊢
       exact ih
 
+theorem recOf_map {g : List (String × Abs) → List (String × Abs)} :
+    ∀ (vs : List (String × List (String × Abs))) (t : String),
+      Abs.recOf (vs.map fun x => (x.1, g x.2)) t = (Abs.recOf vs t).map g
+  | [], _ => rfl
+  | (w, r) :: rest, t => by
+    by_cases hw : w = t
+    · subst hw; simp [Abs.recOf, List.find?]
+    · have hwt : (w == t) = false := by simp [hw]
+      have ih := recOf_map (g := g) rest t
+      unfold Abs.recOf at ih ⊢
+      simp only [List.map_cons, List.find?, hwt]
+      exact ih
+
 /-- **Putting a field to what it is narrowed to keeps every value in.** -/
 theorem putD_sound : ∀ (d : Nat) (v : Abs) (w : Val) (path : List String) (a : Abs),
     Mem v w → (∀ u, pathVal w path = some u → Mem a u) → Mem (putD d v path a) w
@@ -222,9 +236,38 @@ theorem putD_sound : ∀ (d : Nat) (v : Abs) (w : Val) (path : List String) (a :
     | boolAll => simp only [putD]; exact Mem.boolAll
     | enum hx => simp only [putD]; exact Mem.enum hx
     | bool hx => simp only [putD]; exact Mem.bool hx
-    | str => simp only [putD]; exact Mem.str
+    | str hc => simp only [putD]; exact Mem.str hc
     | list hc he => simp only [putD]; exact Mem.list hc he
     | transfer hf => simp only [putD]; exact Mem.transfer hf
+    | dict hc hk hv hnd => simp only [putD]; exact Mem.dict hc hk hv hnd
+    | members hc he hnd => simp only [putD]; exact Mem.members hc he hnd
+    | closAny => simp only [putD]; exact Mem.closAny
+    | clos h1 h2 h3 => simp only [putD]; exact Mem.clos h1 h2 h3
+    | @variantEnum vs t hs =>
+      simp only [putD]
+      exact Mem.variantEnum (by rw [recOf_map]; simpa using hs)
+    | @variant vs t r fs hr hne hsome hmem =>
+      simp only [putD]
+      refine Mem.variant (by rw [recOf_map, hr]; rfl) hne (fun n x hx => ?_) (fun n x hx b hb => ?_)
+      · rw [fieldOf_putMap (g := fun y => putD d y rest a)]
+        obtain ⟨b0, hb0⟩ := Option.isSome_iff_exists.mp (hsome n x hx)
+        rw [hb0]; rfl
+      · rw [fieldOf_putMap (g := fun y => putD d y rest a)] at hb
+        rcases hfo : Abs.fieldOf r n with _ | b0 <;> rw [hfo] at hb <;> simp at hb
+        subst hb
+        have hm := hmem n x hx b0 hfo
+        split
+        · rename_i hn
+          have hn : n = f := by simpa using hn
+          subst hn
+          refine putD_sound d b0 x rest a hm ?_
+          intro u hu
+          apply ha u
+          rw [pathVal_cons]
+          simp only [Val.field?]
+          unfold fieldV at hx
+          rw [hx]; exact hu
+        · exact hm
 
 /-- **A name narrowed to what its value is in.** -/
 theorem Sat.narrowTo {A : ACtx} {ρ : Env} (h : Sat A ρ) {s : Sym} {a : Abs}
@@ -535,7 +578,12 @@ theorem narrowIv_sound {x y : Iv} {op : CmpOp} {step : Option Rat} {p q : Rat} (
 structure SymOK (ρ : Env) (e : Expr) (x : Val) : Prop where
   sym : ∀ s, sym e = some s → symVal ρ s = some x
   count : ∀ l, counted e = some l → ∀ w, symVal ρ l = some w →
-    x = .num (match w with | .list xs => (xs.length : Rat) | _ => 0)
+    x = .num (match w with
+      | .list xs => (xs.length : Rat)
+      | .dict ps => (ps.length : Rat)
+      | .set xs => (xs.length : Rat)
+      | .str s => (s.length : Rat)
+      | _ => 0)
 
 /-- A value on the step its type says. -/
 def StepOK (s : Option Rat) (x : Val) : Prop := ∀ st r, s = some st → x = .num r → onStep st r = true
@@ -600,7 +648,9 @@ theorem cmp_set {line : Nat} {op : CmpOp} {ca cb : Option Conv} {ord : Order} {x
   · simp [cmpVals, failK] at h
   · simp [cmpVals, failK] at h
   · simp only [cmpVals] at h
-    cases op <;> cases t <;> simp [CmpOp.negate, BEq.beq, Val.beq] at h ⊢ <;> simp_all
+    have hc : ∀ (cv : Option Conv) (b : Bool), coerce cv (Val.bool b) = .ok (.bool b) := by
+      intro cv b; cases cv <;> rfl
+    cases op <;> cases t <;> simp [CmpOp.negate, BEq.beq, Val.beq, hc, bind, Except.bind] at h ⊢ <;> simp_all
 
 theorem opRel_flip {op : CmpOp} {p q : Rat} (h : OpRel op p q) : OpRel op.flip q p := by
   cases op <;> simp_all [OpRel, CmpOp.flip] <;> exact Ne.symm h
@@ -635,12 +685,7 @@ theorem onStep_one_nat (k : Nat) : onStep 1 (k : Rat) = true := by
 
 -- ── Narrowing one side ──────────────────────────────────────────────────────
 
-/-- The word a value of an enum or a bool is in a set. -/
-def strOf : Val → Option String
-  | .enum e => some e
-  | .bool b => some (if b then "true" else "false")
-  | _ => none
-
+/-- The word a value a set holds is among the set's words. -/
 theorem Mem_set_str {xs : Option (List String)} {w : Val} (h : Mem (.set xs) w) :
     ∃ str, strOf w = some str ∧ ∀ l, xs = some l → str ∈ l := by
   cases h with
@@ -736,6 +781,61 @@ theorem Sat.narrowCount {A : ACtx} {ρ : Env} (h : Sat A ρ) {x : Expr} {vy : Ab
             rw [hn] at hn'; cases hn'
             exact Mem.list hin he
       · exact h
+    · rename_i _ c k el other hs
+      split
+      · rename_i n hn
+        refine h.narrowTo ?_
+        intro w hw
+        have hm := h.symAbs hs hw
+        cases hm with
+        | @dict _ _ _ ps hc hk hv hnd =>
+          have hxv := hx.count list hlist _ hw
+          simp only at hxv
+          cases hy with
+          | @num _ q hq =>
+            have := hop _ _ hxv rfl
+            obtain ⟨n', hn', hin⟩ := narrowIv_sound (step := some 1) hc hq this
+              (fun s hs _ => by simp at hs; subst hs; exact onStep_one_nat _)
+            rw [hn] at hn'; cases hn'
+            exact Mem.dict hin hk hv hnd
+      · exact h
+    · rename_i _ c el other hs
+      split
+      · rename_i n hn
+        refine h.narrowTo ?_
+        intro w hw
+        have hm := h.symAbs hs hw
+        cases hm with
+        | @members _ _ xs hc he hnd =>
+          have hxv := hx.count list hlist _ hw
+          simp only at hxv
+          cases hy with
+          | @num _ q hq =>
+            have := hop _ _ hxv rfl
+            obtain ⟨n', hn', hin⟩ := narrowIv_sound (step := some 1) hc hq this
+              (fun s hs _ => by simp at hs; subst hs; exact onStep_one_nat _)
+            rw [hn] at hn'; cases hn'
+            exact Mem.members hin he hnd
+      · exact h
+    -- the count of the code points of a string (DESIGN 25.6)
+    · rename_i _ c other hs
+      split
+      · rename_i n hn
+        refine h.narrowTo ?_
+        intro w hw
+        have hm := h.symAbs hs hw
+        cases hm with
+        | @str _ str hc =>
+          have hxv := hx.count list hlist _ hw
+          simp only at hxv
+          cases hy with
+          | @num _ q hq =>
+            have := hop _ _ hxv rfl
+            obtain ⟨n', hn', hin⟩ := narrowIv_sound (step := some 1) hc hq this
+              (fun s hs _ => by simp at hs; subst hs; exact onStep_one_nat _)
+            rw [hn] at hn'; cases hn'
+            exact Mem.str hin
+      · exact h
     · exact h
   · exact h
 
@@ -819,6 +919,12 @@ theorem scaleBy_date {c : Option Conv} {a : Abs} {j : Iv} (h : scaleBy c a = .da
   | some c => cases a <;> simp [scaleBy, Abs.scaled] at h ⊢; exact h
 
 theorem scaleBy_set {c : Option Conv} {a : Abs} {xs : Option (List String)} (h : scaleBy c a = .set xs) : a = .set xs := by
+  cases c with
+  | none => exact h
+  | some c => cases a <;> simp [scaleBy, Abs.scaled] at h ⊢; exact h
+
+theorem scaleBy_variants {c : Option Conv} {a : Abs} {xs : List (String × List (String × Abs))}
+    (h : scaleBy c a = .variants xs) : a = .variants xs := by
   cases c with
   | none => exact h
   | some c => cases a <;> simp [scaleBy, Abs.scaled] at h ⊢; exact h
@@ -1277,9 +1383,9 @@ theorem subRel_sound {A : ACtx} {ρ : Env} (h : Sat A ρ) {a b : Expr} {p q : Ra
 
 -- ── An arm of a `match` ─────────────────────────────────────────────────────
 
-/-- The patterns of values of an enum or bools keep the scope as it is. -/
-theorem armFold_values {sy : Option Sym} {sv : Abs} :
-    ∀ (ps : List Pat), (ps.all fun p => match p with | .bool _ | .enum _ => true | _ => false) = true →
+/-- The patterns that are no `none` or `some x` keep the scope as it is. -/
+theorem armFold_keep {sy : Option Sym} {sv : Abs} :
+    ∀ (ps : List Pat), (ps.all fun p => !p.isNone && !p.isSome) = true →
       ∀ (acc : ACtx × Bool), ps.foldl (armStep sy sv) acc = acc
   | [], _, acc => rfl
   | p :: rest, h, acc => by
@@ -1288,47 +1394,80 @@ theorem armFold_values {sy : Option Sym} {sv : Abs} :
     simp only [List.foldl_cons]
     have : armStep sy sv acc p = acc := by
       cases p with
-      | bool b => rfl
-      | enum v => rfl
-      | none => simp at hp
-      | some x => simp at hp
+      | none => simp [Pat.isNone] at hp
+      | some x => simp [Pat.isNone, Pat.isSome] at hp
+      | _ => rfl
     rw [this]
-    exact armFold_values rest hrest acc
+    exact armFold_keep rest hrest acc
 
-theorem takes_value {v : Val} : ∀ {ps : List Pat} {bnd : Option String},
-    (ps.all fun p => match p with | .bool _ | .enum _ => true | _ => false) = true →
-    takesAny v ps = some bnd → bnd = none ∧ ∃ s, strOf v = some s ∧ s ∈ armValues ps
-  | [], _, _, ht => by simp [takesAny] at ht
-  | p :: rest, bnd, h, ht => by
-    simp only [List.all_cons, Bool.and_eq_true] at h
-    obtain ⟨hp, hrest⟩ := h
-    simp only [takesAny] at ht
-    split at ht
-    · rename_i b hb
-      cases ht
-      cases p with
-      | bool c =>
-        cases v <;> simp [Pat.takes] at hb
-        obtain ⟨rfl, rfl⟩ := hb
-        exact ⟨rfl, _, rfl, by simp [armValues]⟩
-      | enum n =>
-        cases n with
-        | none => simp [Pat.takes] at hb
-        | some n =>
-          cases v <;> simp [Pat.takes] at hb
-          obtain ⟨rfl, rfl⟩ := hb
-          exact ⟨rfl, _, rfl, by simp [armValues]⟩
-      | none => simp at hp
-      | some x => simp at hp
-    · obtain ⟨h1, s, hs, hm⟩ := takes_value hrest ht
-      refine ⟨h1, s, hs, ?_⟩
-      unfold armValues at hm ⊢
-      simp only [List.filterMap_cons]
-      split <;> simp_all
+theorem takesAny_none {v : Val} : ∀ {ps : List Pat}, takesAny v ps = none → ∀ p ∈ ps, p.takes v = none
+  | [], _, p, hp => by simp at hp
+  | q :: rest, h, p, hp => by
+    simp only [takesAny] at h
+    split at h
+    · cases h
+    · rename_i hq
+      simp only [List.mem_cons] at hp
+      rcases hp with rfl | hp
+      · exact hq
+      · exact takesAny_none h p hp
 
-theorem Mem_innerOf {sv : Abs} {v : Val} (hm : Mem sv v) (hv : v ≠ .none) : Mem (innerOf sv) v := by
+theorem takesAny_some {v : Val} : ∀ {ps : List Pat} {b : Option String}, takesAny v ps = some b → ∃ p ∈ ps, p.takes v = some b
+  | [], _, h => by simp [takesAny] at h
+  | q :: rest, b, h => by
+    simp only [takesAny] at h
+    split at h
+    · rename_i b' hq; cases h; exact ⟨q, by simp, hq⟩
+    · obtain ⟨p, hp, ht⟩ := takesAny_some h
+      exact ⟨p, by simp [hp], ht⟩
+
+/-- The values of an enum an arm names: one is the value it takes, by its word, or by its name as a
+    value of an enum that has fields. -/
+theorem takes_named {v : Val} {p : Pat} {b : Option String} (hp : p.isName = true)
+    (ht : p.takes v = some b) :
+    b = none ∧ ∃ s, s ∈ armValues [p] ∧ (strOf v = some s ∨ (v.tag? = some s ∧ s ∈ valueNames [p])) := by
+  cases p with
+  | bool c =>
+    by_cases hc : (strOf v == some (if c then "true" else "false")) = true
+    · simp only [Pat.takes, hc, ite_true, Option.some.injEq] at ht
+      exact ⟨ht.symm, if c then "true" else "false", by simp [armValues], Or.inl (by simpa using hc)⟩
+    · simp [Pat.takes, hc] at ht
+  | enum n =>
+    cases n with
+    | none => simp [Pat.takes] at ht
+    | some n =>
+      by_cases hc : (strOf v == some n) = true
+      · simp only [Pat.takes, hc, ite_true, Option.some.injEq] at ht
+        exact ⟨ht.symm, n, by simp [armValues], Or.inl (by simpa using hc)⟩
+      · simp [Pat.takes, hc] at ht
+  | value n bnd =>
+    cases bnd with
+    | some _ => simp [Pat.isName] at hp
+    | none =>
+      cases n with
+      | none => simp [Pat.takes] at ht
+      | some n =>
+        by_cases hc : (v.tag? == some n) = true
+        · simp only [Pat.takes, hc, ite_true, Option.some.injEq] at ht
+          exact ⟨ht.symm, n, by simp [armValues], Or.inr ⟨by simpa using hc, by simp [valueNames]⟩⟩
+        · simp [Pat.takes, hc] at ht
+  | _ => simp [Pat.isName] at hp
+
+theorem armValues_sub {p : Pat} {ps : List Pat} {s : String} (hp : p ∈ ps) (hs : s ∈ armValues [p]) : s ∈ armValues ps := by
+  unfold armValues at hs ⊢
+  obtain ⟨q, hq, hqs⟩ := List.mem_filterMap.mp hs
+  simp only [List.mem_singleton] at hq; subst hq
+  exact List.mem_filterMap.mpr ⟨_, hp, hqs⟩
+
+theorem valueNames_sub {p : Pat} {ps : List Pat} {s : String} (hp : p ∈ ps) (hs : s ∈ valueNames [p]) : s ∈ valueNames ps := by
+  unfold valueNames at hs ⊢
+  obtain ⟨q, hq, hqs⟩ := List.mem_filterMap.mp hs
+  simp only [List.mem_singleton] at hq; subst hq
+  exact List.mem_filterMap.mpr ⟨_, hp, hqs⟩
+
+theorem Mem_innerOf {sv : Abs} {v : Val} (hm : Mem sv v) (hnn : v ≠ .none) : Mem (innerOf sv) v := by
   cases hm with
-  | optNone => exact absurd rfl hv
+  | optNone => exact absurd rfl hnn
   | optSome _ hx => exact hx
   | any => exact Mem.any _
   | num hi => exact Mem.num hi
@@ -1337,80 +1476,568 @@ theorem Mem_innerOf {sv : Abs} {v : Val} (hm : Mem sv v) (hv : v ≠ .none) : Me
   | boolAll => exact Mem.boolAll
   | enum hx => exact Mem.enum hx
   | bool hx => exact Mem.bool hx
-  | str => exact Mem.str
+  | str hc => exact Mem.str hc
   | list hc he => exact Mem.list hc he
   | record hf hr => exact Mem.record hf hr
   | transfer hf => exact Mem.transfer hf
+  | variantEnum h => exact Mem.variantEnum h
+  | variant h1 h2 h3 h4 => exact Mem.variant h1 h2 h3 h4
+  | dict hc hk hv hnd => exact Mem.dict hc hk hv hnd
+  | members hc he hnd => exact Mem.members hc he hnd
+  | closAny => exact Mem.closAny
+  | clos h1 h2 h3 => exact Mem.clos h1 h2 h3
 
+/-- What the check of types lets through as an arm: one of five shapes. -/
 theorem armOK_cases {ps : List Pat} (h : armOK ps = true) :
-    ps = [.none] ∨ (∃ x, ps = [.some x]) ∨
-      (ps.all fun p => match p with | .bool _ | .enum _ => true | _ => false) = true := by
+    ps = [.none] ∨ (∃ x, ps = [.some x]) ∨ ps = [.rest] ∨ (∃ n x, ps = [.value n (some x)]) ∨
+      ps.all Pat.isName = true ∨ ps.all Pat.isLit = true := by
   unfold armOK at h
   split at h
   · exact Or.inl rfl
   · exact Or.inr (Or.inl ⟨_, rfl⟩)
-  · exact Or.inr (Or.inr h)
+  · exact Or.inr (Or.inr (Or.inl rfl))
+  · exact Or.inr (Or.inr (Or.inr (Or.inl ⟨_, _, rfl⟩)))
+  · simp only [Bool.or_eq_true] at h
+    rcases h with h | h
+    · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inl h))))
+    · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h))))
 
-/-- **The arm the evaluation takes is reached, in a scope its environment is in.** -/
-theorem armScope_sound {A : ACtx} {ρ : Env} (h : Sat A ρ) {sy : Option Sym} {sv : Abs} {ps : List Pat} {v : Val}
+-- what is left for `else`
+
+/-- The values of an enum kept by a filter of their names: the one named, where the filter keeps it. -/
+theorem recOf_filter {q : String → Bool} {t : String} (hq : q t = true) :
+    ∀ (vs : List (String × List (String × Abs))), Abs.recOf (vs.filter fun x => q x.1) t = Abs.recOf vs t
+  | [] => rfl
+  | (w, r) :: rest => by
+    have ih := recOf_filter hq rest
+    by_cases hw : w = t
+    · subst hw
+      rw [List.filter_cons_of_pos (by simpa using hq)]
+      simp [Abs.recOf, List.find?]
+    · have hwt : (w == t) = false := by simp [hw]
+      unfold Abs.recOf at ih ⊢
+      by_cases hqw : q w = true
+      · rw [List.filter_cons_of_pos (by simpa using hqw)]
+        simp only [List.find?, hwt]; exact ih
+      · rw [List.filter_cons_of_neg (by simpa using hqw)]
+        simp only [List.find?, hwt]; exact ih
+
+theorem Mem_variants_filter {q : String → Bool} {vs : List (String × List (String × Abs))} {v : Val}
+    (hm : Mem (.variants vs) v) (hq : ∀ t, v.tag? = some t → q t = true) :
+    Mem (.variants (vs.filter fun x => q x.1)) v := by
+  cases hm with
+  | variantEnum h =>
+    rename_i t
+    exact Mem.variantEnum (by rw [recOf_filter (hq t rfl)]; exact h)
+  | variant h1 h2 h3 h4 =>
+    rename_i t r fs
+    exact Mem.variant (by rw [recOf_filter (hq t rfl)]; exact h1) h2 h3 h4
+
+theorem Mem_variants_tag {vs : List (String × List (String × Abs))} {v : Val} (hm : Mem (.variants vs) v) :
+    ∃ t, v.tag? = some t ∧ (Abs.recOf vs t).isSome = true := by
+  cases hm with
+  | variantEnum h => exact ⟨_, rfl, h⟩
+  | variant h1 _ _ _ => exact ⟨_, rfl, by rw [h1]; rfl⟩
+
+theorem filter_ne_nil_of_recOf {q : String → Bool} {vs : List (String × List (String × Abs))} {t : String}
+    (h : (Abs.recOf (vs.filter fun x => q x.1) t).isSome = true) : (vs.filter fun x => q x.1).isEmpty = false := by
+  cases hf : (vs.filter fun x => q x.1) with
+  | nil => rw [hf] at h; simp [Abs.recOf] at h
+  | cons _ _ => rfl
+
+theorem not_mem_setNames {v : Val} {s : String} (hs : strOf v = some s) {prev : List Pat}
+    (hno : ∀ p ∈ prev, p.takes v = none) : s ∉ setNames prev := by
+  intro h
+  unfold setNames at h
+  obtain ⟨p, hp, hps⟩ := List.mem_filterMap.mp h
+  have ht := hno p hp
+  cases p with
+  | bool b =>
+    simp only [Option.some.injEq] at hps; subst hps
+    simp [Pat.takes, hs] at ht
+  | enum n =>
+    cases n with
+    | none => simp at hps
+    | some n =>
+      simp only [Option.some.injEq] at hps; subst hps
+      simp [Pat.takes, hs] at ht
+  | _ => simp at hps
+
+theorem not_mem_valueNames {v : Val} {t : String} (ht : v.tag? = some t) {prev : List Pat}
+    (hno : ∀ p ∈ prev, p.takes v = none) : t ∉ valueNames prev := by
+  intro h
+  unfold valueNames at h
+  obtain ⟨p, hp, hps⟩ := List.mem_filterMap.mp h
+  have hpt := hno p hp
+  cases p with
+  | value n b =>
+    cases n with
+    | none => simp at hps
+    | some n =>
+      simp only [Option.some.injEq] at hps; subst hps
+      simp [Pat.takes, ht] at hpt
+  | _ => simp at hps
+
+theorem restOf_opt {prev : List Pat} {n : Bool} {x : Abs} {v : Val} (hm : Mem (.opt n x) v)
+    (hno : ∀ p ∈ prev, p.takes v = none) : restOf prev (.opt n x) = some none := by
+  have key : ((n && !prev.any Pat.isNone) || (notNever x && !prev.any Pat.isSome)) = true := by
+    by_cases hv : v = .none
+    · subst hv
+      have hn : n = true := by
+        cases hm with
+        | optNone => rfl
+        | optSome hne _ => exact absurd rfl hne
+      have hany : prev.any Pat.isNone = false := by
+        rw [Bool.eq_false_iff]; intro hh
+        obtain ⟨p, hp, hpn⟩ := List.any_eq_true.mp hh
+        have := hno p hp
+        cases p with
+        | none => simp [Pat.takes] at this
+        | _ => simp [Pat.isNone] at hpn
+      rw [hn, hany]; rfl
+    · have hx : Mem x v := by
+        cases hm with
+        | optNone => exact absurd rfl hv
+        | optSome _ hx => exact hx
+      have hxn : notNever x = true := by
+        cases x <;> first | rfl | exact absurd hx Mem.not_never
+      have hany : prev.any Pat.isSome = false := by
+        rw [Bool.eq_false_iff]; intro hh
+        obtain ⟨p, hp, hps⟩ := List.any_eq_true.mp hh
+        have := hno p hp
+        cases p with
+        | some y => cases v <;> simp_all [Pat.takes]
+        | _ => simp [Pat.isSome] at hps
+      rw [hxn, hany]; simp
+  simp only [restOf, key, ↓reduceIte]
+
+theorem restOf_variants {prev : List Pat} {vs : List (String × List (String × Abs))} {v : Val}
+    (hm : Mem (.variants vs) v) (hno : ∀ p ∈ prev, p.takes v = none) :
+    ∃ a, restOf prev (.variants vs) = some (some a) ∧ Mem a v := by
+  obtain ⟨t, htg, _⟩ := Mem_variants_tag hm
+  have hq : ∀ u, v.tag? = some u → (fun y => !(valueNames prev).contains y) u = true := by
+    intro u hu; rw [htg] at hu; cases hu
+    simpa using not_mem_valueNames htg hno
+  have hm' := Mem_variants_filter hm hq
+  obtain ⟨t', _, hs⟩ := Mem_variants_tag hm'
+  have hne := filter_ne_nil_of_recOf (q := fun y => !(valueNames prev).contains y) hs
+  refine ⟨_, ?_, hm'⟩
+  unfold restOf
+  simp only at hne ⊢
+  rw [hne]
+  rfl
+
+theorem restOf_set {prev : List Pat} {s : List String} {v : Val}
+    (hm : Mem (.set (some s)) v) (hno : ∀ p ∈ prev, p.takes v = none) :
+    ∃ a, restOf prev (.set (some s)) = some (some a) ∧ Mem a v := by
+  obtain ⟨str, hstr, hl⟩ := Mem_set_str hm
+  have hn : str ∉ setNames prev := not_mem_setNames hstr hno
+  have hin : str ∈ s.filter (fun y => !(setNames prev).contains y) := by simp [hl s rfl, hn]
+  have hne : (s.filter (fun y => !(setNames prev).contains y)).isEmpty = false := by
+    cases hf : s.filter (fun y => !(setNames prev).contains y) with
+    | nil => rw [hf] at hin; simp at hin
+    | cons _ _ => rfl
+  refine ⟨_, ?_, Mem_set_of_str hstr hin⟩
+  unfold restOf
+  simp only at hne ⊢
+  rw [hne]
+  rfl
+
+/-- **What `else` takes holds the value no arm above takes.** -/
+theorem restOf_sound {prev : List Pat} {sv : Abs} {v : Val} (hm : Mem sv v)
+    (hno : ∀ p ∈ prev, p.takes v = none) : ∃ r, restOf prev sv = some r ∧ ∀ a, r = some a → Mem a v := by
+  cases sv with
+  | never => exact absurd hm Mem.not_never
+  | variants vs =>
+    obtain ⟨a, ha, hma⟩ := restOf_variants hm hno
+    exact ⟨_, ha, fun b hb => by cases hb; exact hma⟩
+  | set s =>
+    cases s with
+    | none => exact ⟨none, by simp [restOf], fun a ha => by cases ha⟩
+    | some s =>
+      obtain ⟨a, ha, hma⟩ := restOf_set hm hno
+      exact ⟨_, ha, fun b hb => by cases hb; exact hma⟩
+  | opt n x => exact ⟨none, restOf_opt hm hno, fun a ha => by cases ha⟩
+  | _ => exact ⟨none, by simp [restOf], fun a ha => by cases ha⟩
+
+-- the literals of an arm
+
+theorem litStep_reached {sv : Abs} : ∀ (ps : List Pat) (acc : Bool × Option Abs × Bool), acc.1 = true →
+    (ps.foldl (litStep sv) acc).1 = true
+  | [], _, h => h
+  | p :: rest, acc, h => by
+    simp only [List.foldl_cons]
+    apply litStep_reached rest
+    unfold litStep
+    split
+    · split
+      · split <;> rfl
+      · exact h
+    · exact h
+
+/-- The literals of an arm keep what they took: once one took the value (with no value that is no
+    number or date), their join holds it. -/
+def LitsHold (v : Val) (acc : Bool × Option Abs × Bool) : Prop :=
+  acc.2.2 = true ∨ ∃ a, acc.2.1 = some a ∧ Mem a v
+
+theorem litStep_holds {sv : Abs} {v : Val} : ∀ (ps : List Pat) (acc : Bool × Option Abs × Bool), LitsHold v acc →
+    LitsHold v (ps.foldl (litStep sv) acc)
+  | [], _, h => h
+  | p :: rest, acc, h => by
+    simp only [List.foldl_cons]
+    apply litStep_holds rest
+    unfold litStep
+    split
+    · split
+      · split
+        · rcases h with h | ⟨b, hb, hm⟩
+          · exact Or.inl h
+          · right; rw [hb]; exact ⟨_, rfl, mem_join_left hm⟩
+        · exact Or.inl rfl
+      · exact h
+    · exact h
+
+theorem beq_num {r : Rat} {v : Val} (h : (Val.num r == v) = true) : v = .num r := by
+  cases v <;> simp [BEq.beq, Val.beq] at h ⊢; exact h.symm
+
+theorem beq_date {d : Int} {v : Val} (h : (Val.date d == v) = true) : v = .date d := by
+  cases v <;> simp [BEq.beq, Val.beq] at h ⊢; exact h.symm
+
+theorem litTake_sound {sv : Abs} {v l : Val} (hm : Mem sv v) (hl : (l == v) = true) :
+    ∃ a, litTake sv l = some a ∧ Mem a v := by
+  unfold litTake
+  split
+  · rename_i i r
+    have hv := beq_num hl; subst hv
+    cases hm with
+    | num hi => exact ⟨_, by simp only [(Iv.has_iff _ _).mpr hi, ↓reduceIte], Mem.num (In_exact r)⟩
+  · rename_i i d
+    have hv := beq_date hl; subst hv
+    cases hm with
+    | date hi => exact ⟨_, by simp only [(Iv.has_iff _ _).mpr hi, ↓reduceIte], Mem.date (In_ints (Int.le_refl d) (Int.le_refl d))⟩
+  · exact absurd hm Mem.not_never
+  · exact ⟨sv, rfl, hm⟩
+
+theorem litStep_take {sv : Abs} {v l : Val} (hm : Mem sv v) (hl : (l == v) = true) (acc : Bool × Option Abs × Bool) :
+    (litStep sv acc (.lit l)).1 = true ∧ LitsHold v (litStep sv acc (.lit l)) := by
+  obtain ⟨a, ha, hma⟩ := litTake_sound hm hl
+  unfold litStep
+  simp only [ha]
+  split
+  · refine ⟨rfl, Or.inr ⟨_, rfl, ?_⟩⟩
+    split
+    · exact mem_join_right hma
+    · exact hma
+  · exact ⟨rfl, Or.inl rfl⟩
+
+/-- **The literals of an arm reach the value they take, and narrow it to what holds it.** -/
+theorem litsOf_sound {sv : Abs} {v : Val} (hm : Mem sv v) :
+    ∀ {ps : List Pat} {bnd : Option String}, ps.all Pat.isLit = true → takesAny v ps = some bnd →
+    bnd = none ∧ (litsOf sv ps).1 = true ∧ ∀ a, (litsOf sv ps).2 = some a → Mem a v := by
+  intro ps bnd hall ht
+  obtain ⟨p, hp, hpt⟩ := takesAny_some ht
+  have hlit := List.all_eq_true.mp hall p hp
+  cases p with
+  | lit l =>
+    simp only [Pat.takes] at hpt
+    split at hpt
+    · rename_i hl
+      cases hpt
+      -- the fold reaches the pattern that takes the value
+      obtain ⟨pre, post, rfl⟩ := List.append_of_mem hp
+      unfold litsOf
+      simp only [List.foldl_append, List.foldl_cons]
+      have ⟨h1, h2⟩ := litStep_take hm hl (pre.foldl (litStep sv) (false, none, false))
+      have hr := litStep_reached (sv := sv) post _ h1
+      have hh := litStep_holds (sv := sv) post _ h2
+      refine ⟨by first | rfl | trivial, hr, fun a ha => ?_⟩
+      rcases hh with hh | ⟨b, hb, hmb⟩
+      · simp only [hh, ite_true] at ha; cases ha
+      · split at ha
+        · cases ha
+        · rw [hb] at ha; cases ha; exact hmb
+    · cases hpt
+  | _ => simp [Pat.isLit] at hlit
+
+/-- No literal: nothing reached, nothing narrowed. -/
+theorem litsOf_nolits {sv : Abs} : ∀ (ps : List Pat), (ps.all fun p => !p.isLit) = true →
+    litsOf sv ps = (false, none)
+  | ps, h => by
+    unfold litsOf
+    have : ∀ (qs : List Pat) acc, (qs.all fun p => !p.isLit) = true →
+        qs.foldl (litStep sv) acc = acc := by
+      intro qs
+      induction qs with
+      | nil => intro acc _; rfl
+      | cons q rest ih =>
+        intro acc hq
+        simp only [List.all_cons, Bool.and_eq_true] at hq
+        simp only [List.foldl_cons]
+        have : litStep sv acc q = acc := by
+          cases q with
+          | lit _ => simp [Pat.isLit] at hq
+          | _ => rfl
+        rw [this]; exact ih acc hq.2
+    rw [this ps _ h]
+    rfl
+
+theorem armStep_some {sy : Option Sym} {sv : Abs} {acc : ACtx × Bool} {x : String} (h : innerOf sv ≠ .never) :
+    armStep sy sv acc (.some x) = (acc.1.bindNew x (innerOf sv), true) := by
+  cases hi : innerOf sv with
+  | never => exact absurd hi h
+  | _ => simp only [armStep, hi]
+
+/-- A name narrowed, where there is one, to what its value is in. -/
+theorem Sat.narrowSy {A : ACtx} {ρ : Env} {sy : Option Sym} {v : Val} {a : Abs} (h : Sat A ρ) :
+    (∀ s, sy = some s → symVal ρ s = some v) → Mem a v →
+      Sat (match sy with | some s => A.narrowTo s a | none => A) ρ := by
+  intro hsy ha
+  cases sy with
+  | none => exact h
+  | some s => exact h.narrowTo (fun w hw => by rw [hsy s rfl] at hw; cases hw; exact ha)
+
+theorem Sat.narrowOpt {A : ACtx} {ρ : Env} {sy : Option Sym} {v : Val} {a : Abs} (h : Sat A ρ) :
+    (∀ s, sy = some s → symVal ρ s = some v) → Mem a v → Sat (A.narrowOpt sy a) ρ := by
+  intro hsy ha
+  cases sy with
+  | none => exact h
+  | some s => exact h.narrowTo (fun w hw => by rw [hsy s rfl] at hw; cases hw; exact ha)
+
+theorem restScope_norest {sy : Option Sym} {sv : Abs} {prev ps : List Pat} {acc : ACtx × Bool}
+    (h : ps.any Pat.isRest = false) : restScope sy sv prev ps acc = acc := by
+  simp [restScope, h]
+
+theorem litScope_nolits {sy : Option Sym} {sv : Abs} {ps : List Pat} {acc : ACtx × Bool}
+    (h : (ps.all fun p => !p.isLit) = true) : litScope sy sv ps acc = acc := by
+  simp [litScope, litsOf_nolits ps h]
+
+theorem nameScope_nonames {sy : Option Sym} {sv : Abs} {ps : List Pat} {acc : ACtx × Bool}
+    (h : armValues ps = []) : nameScope sy sv ps acc = acc := by
+  simp [nameScope, h]
+
+/-- **The arm the evaluation takes is reached, in a scope its environment is in**, no arm above it
+    having taken the value. -/
+theorem armScope_sound {A : ACtx} {ρ : Env} (h : Sat A ρ) {sy : Option Sym} {sv : Abs} {prev ps : List Pat} {v : Val}
     {bnd : Option String} (hok : armOK ps = true) (ht : takesAny v ps = some bnd) (hm : Mem sv v)
-    (hsy : ∀ s, sy = some s → symVal ρ s = some v) :
-    (armScope A sy sv ps).2 = true ∧
-      Sat (armScope A sy sv ps).1 (match bnd with | some x => (x, v) :: ρ | none => ρ) := by
+    (hsy : ∀ s, sy = some s → symVal ρ s = some v) (hno : ∀ p ∈ prev, p.takes v = none) :
+    (armScope A sy sv prev ps).2 = true ∧
+      Sat (armScope A sy sv prev ps).1 (match bnd with | some x => (x, v) :: ρ | none => ρ) := by
   unfold armScope
-  simp only
-  rcases armOK_cases hok with rfl | ⟨x, rfl⟩ | hall
-  · simp only [takesAny, Pat.takes] at ht
+  rcases armOK_cases hok with rfl | ⟨x, rfl⟩ | rfl | ⟨n, x, rfl⟩ | hall | hall
+  · -- `none`
+    simp only [takesAny, Pat.takes] at ht
     cases v with
     | none =>
       simp at ht; subst ht
       have hc : (sv.mayBeNone || sv.isAny) = true := by
         rcases hm.none_cases with rfl | ⟨x, rfl⟩ <;> simp [Abs.mayBeNone, Abs.isAny]
-      simp only [List.foldl_cons, List.foldl_nil, armStep, hc, ite_true, armValues, List.filterMap_cons,
-        List.filterMap_nil, List.isEmpty_nil]
-      refine ⟨trivial, ?_⟩
-      cases sy with
-      | none => exact h
-      | some s => exact h.narrowTo (fun w hw => by rw [hsy s rfl] at hw; cases hw; exact Mem_none')
+      rw [nameScope_nonames (by rfl), litScope_nolits (by rfl), restScope_norest (by rfl)]
+      simp only [List.foldl_cons, List.foldl_nil, armStep, hc, ↓reduceIte]
+      exact ⟨by first | rfl | trivial, h.narrowSy hsy Mem_none'⟩
     | _ => simp at ht
-  · simp only [takesAny, Pat.takes] at ht
+  · -- `some x`
+    simp only [takesAny, Pat.takes] at ht
     have hv : v ≠ .none := by intro e; subst e; simp at ht
     have hb : bnd = some x := by cases v <;> simp_all
     subst hb
     have hin := Mem_innerOf hm hv
     have hnn : innerOf sv ≠ .never := by
       intro e; rw [e] at hin; exact Mem.not_never hin
-    simp only [List.foldl_cons, List.foldl_nil, armStep, armValues, List.filterMap_cons, List.filterMap_nil,
-      List.isEmpty_nil, ite_true]
-    exact ⟨trivial, h.bindNew hin⟩
-  · obtain ⟨hb, str, hstr, hin⟩ := takes_value hall ht
+    rw [nameScope_nonames (by rfl), litScope_nolits (by rfl), restScope_norest (by rfl)]
+    simp only [List.foldl_cons, List.foldl_nil, armStep_some hnn]
+    exact ⟨by first | rfl | trivial, h.bindNew hin⟩
+  · -- `else`
+    simp only [takesAny, Pat.takes] at ht
+    cases ht
+    obtain ⟨r, hr, hra⟩ := restOf_sound hm hno
+    rw [nameScope_nonames (by rfl), litScope_nolits (by rfl)]
+    simp only [List.foldl_cons, List.foldl_nil, armStep, restScope, List.any_cons, List.any_nil, Pat.isRest,
+      Bool.or_false, ↓reduceIte, hr]
+    cases r with
+    | none => exact ⟨by first | rfl | trivial, h⟩
+    | some a => exact ⟨by first | rfl | trivial, h.narrowOpt hsy (hra a rfl)⟩
+  · -- a value of an enum, given a name
+    cases n with
+    | none => simp [takesAny, Pat.takes] at ht
+    | some n =>
+      have htag : v.tag? = some n := by
+        by_cases hc : (v.tag? == some n) = true
+        · simpa using hc
+        · simp [takesAny, Pat.takes, hc] at ht
+      have hb : bnd = some x := by
+        simp [takesAny, Pat.takes, htag] at ht; exact ht.symm
+      subst hb
+      rw [litScope_nolits (by rfl), restScope_norest (by rfl)]
+      simp only [List.foldl_cons, List.foldl_nil, armStep, nameScope, armValues, valueNames, boundName,
+        List.filterMap_cons, List.filterMap_nil, List.isEmpty_cons, Bool.false_eq_true, ↓reduceIte]
+      split
+      · rename_i vs
+        have hq : ∀ t, v.tag? = some t → (fun t => [n].contains t) t = true := by
+          intro t ht'; rw [htag] at ht'; cases ht'; simp
+        have hm' := Mem_variants_filter hm hq
+        have hne : (vs.filter fun x => [n].contains x.1).isEmpty = false := by
+          obtain ⟨t, htg, hs⟩ := Mem_variants_tag hm'
+          exact filter_ne_nil_of_recOf (q := fun t => [n].contains t) hs
+        simp only [hne, Bool.false_eq_true, ↓reduceIte]
+        exact ⟨by first | rfl | trivial, (h.narrowOpt hsy hm').bindNew hm'⟩
+      · exact ⟨by first | rfl | trivial, h.bindNew (Mem.any _)⟩
+  · -- values of an enum and bools
+    obtain ⟨p, hp, hpt⟩ := takesAny_some ht
+    have hpk := List.all_eq_true.mp hall p hp
+    obtain ⟨hb, str, hin1, hv⟩ := takes_named hpk hpt
     subst hb
-    rw [armFold_values ps hall (A, false)]
+    have hin := armValues_sub hp hin1
+    have hkeep : (ps.all fun p => !p.isNone && !p.isSome) = true := by
+      apply List.all_eq_true.mpr; intro q hq
+      have := List.all_eq_true.mp hall q hq
+      cases q <;> simp_all [Pat.isName, Pat.isNone, Pat.isSome]
+    have hnorest : ps.any Pat.isRest = false := by
+      rw [Bool.eq_false_iff]; intro hh
+      obtain ⟨q, hq, hqr⟩ := List.any_eq_true.mp hh
+      have := List.all_eq_true.mp hall q hq
+      cases q <;> simp_all [Pat.isName, Pat.isRest]
+    have hnolit : (ps.all fun p => !p.isLit) = true := by
+      apply List.all_eq_true.mpr; intro q hq
+      have := List.all_eq_true.mp hall q hq
+      cases q <;> simp_all [Pat.isName, Pat.isLit]
+    rw [litScope_nolits hnolit, restScope_norest hnorest, armFold_keep ps hkeep (A, false)]
     have hne : (armValues ps).isEmpty = false := by
       cases hav : armValues ps with
       | nil => rw [hav] at hin; simp at hin
       | cons _ _ => rfl
-    simp only [hne, Bool.false_eq_true, ite_false]
-    -- the value's word is among those the arm names and the value can be
-    have hcan : str ∈ canValues sv (armValues ps) := by
-      unfold canValues
-      split
-      · rename_i vs
-        obtain ⟨s', hs', hl⟩ := Mem_set_str hm
-        rw [hstr] at hs'; cases hs'
-        simp [List.mem_filter, hin, hl vs rfl]
-      · exact hin
-    have hne2 : (canValues sv (armValues ps)).isEmpty = false := by
-      cases hc : canValues sv (armValues ps) with
-      | nil => rw [hc] at hcan; simp at hcan
-      | cons _ _ => rfl
-    simp only [hne2, Bool.false_eq_true, ite_false]
-    refine ⟨trivial, ?_⟩
-    cases sy with
+    have hbound : boundName ps = none := by
+      unfold boundName; split
+      · simp [Pat.isName] at hall
+      · rfl
+    simp only [nameScope, hne, Bool.false_eq_true, ↓reduceIte, hbound]
+    split
+    · rename_i vs
+      -- a value of an enum that has fields: the values the arm names
+      obtain ⟨t, htg, _⟩ := Mem_variants_tag hm
+      have hq : ∀ u, v.tag? = some u → (fun u => (armValues ps).contains u) u = true := by
+        intro u hu
+        rw [htg] at hu; cases hu
+        rcases hv with hv | ⟨hv, _⟩
+        · cases v with
+          | enum e =>
+            simp only [strOf, Option.some.injEq] at hv
+            simp only [Val.tag?, Option.some.injEq] at htg
+            subst hv; subst htg; simpa using hin
+          | variant _ _ => simp [strOf] at hv
+          | _ => simp [Val.tag?] at htg
+        · rw [htg] at hv; cases hv; simpa using hin
+      have hm' := Mem_variants_filter hm hq
+      have hne2 : (vs.filter fun x => (armValues ps).contains x.1).isEmpty = false := by
+        obtain ⟨t', _, hs⟩ := Mem_variants_tag hm'
+        exact filter_ne_nil_of_recOf (q := fun u => (armValues ps).contains u) hs
+      simp only [hne2, Bool.false_eq_true, ↓reduceIte]
+      exact ⟨by first | rfl | trivial, h.narrowOpt hsy hm'⟩
+    · split
+      · -- values of an enum with no fields and bools
+        rename_i hvn
+        have hstr : strOf v = some str := by
+          rcases hv with hv | ⟨_, hvn1⟩
+          · exact hv
+          · have := valueNames_sub hp hvn1
+            rw [List.isEmpty_iff] at hvn
+            rw [hvn] at this; simp at this
+        have hcan : str ∈ canValues sv (armValues ps) := by
+          unfold canValues
+          split
+          · obtain ⟨s', hs', hl⟩ := Mem_set_str hm
+            rw [hstr] at hs'; cases hs'
+            simp [List.mem_filter, hin, hl _ rfl]
+          · exact hin
+        have hne2 : (canValues sv (armValues ps)).isEmpty = false := by
+          cases hc : canValues sv (armValues ps) with
+          | nil => rw [hc] at hcan; simp at hcan
+          | cons _ _ => rfl
+        simp only [hne2, Bool.false_eq_true, ↓reduceIte]
+        exact ⟨by first | rfl | trivial, h.narrowOpt hsy (Mem_set_of_str hstr (mem_setOf.mpr hcan))⟩
+      · exact ⟨by first | rfl | trivial, h⟩
+  · -- literals
+    obtain ⟨hb, hreach, hlits⟩ := litsOf_sound hm hall ht
+    subst hb
+    have hkeep : (ps.all fun p => !p.isNone && !p.isSome) = true := by
+      apply List.all_eq_true.mpr; intro p hp
+      have := List.all_eq_true.mp hall p hp
+      cases p <;> simp_all [Pat.isLit, Pat.isNone, Pat.isSome]
+    have hnorest : ps.any Pat.isRest = false := by
+      rw [Bool.eq_false_iff]; intro hh
+      obtain ⟨p, hp, hpr⟩ := List.any_eq_true.mp hh
+      have := List.all_eq_true.mp hall p hp
+      cases p <;> simp_all [Pat.isLit, Pat.isRest]
+    have hnames : armValues ps = [] := by
+      unfold armValues
+      rw [List.filterMap_eq_nil_iff]
+      intro p hp
+      have := List.all_eq_true.mp hall p hp
+      cases p <;> simp_all [Pat.isLit]
+    rw [nameScope_nonames hnames, restScope_norest hnorest, armFold_keep ps hkeep (A, false)]
+    simp only [litScope]
+    refine ⟨by simp [hreach], ?_⟩
+    cases hl : (litsOf sv ps).2 with
     | none => exact h
-    | some s =>
-      refine h.narrowTo (fun w hw => ?_)
-      rw [hsy s rfl] at hw; cases hw
-      exact Mem_set_of_str hstr (mem_setOf.mpr hcan)
+    | some a => exact h.narrowOpt hsy (hlits a hl)
+
+-- ── The scope a function starts in (moved here from `Total.lean`: a call read again starts one) ──
+
+/-- The names of the scope of the analysis and the environment of the evaluation, one by one: the
+    same name, the value among what the analysis says. -/
+def Paired : List (String × Abs) → List (String × Val) → Prop
+  | [], [] => True
+  | (x, a) :: as, (y, v) :: vs => x = y ∧ Mem a v ∧ Paired as vs
+  | _, _ => False
+
+theorem Paired.append : ∀ {a b : List (String × Abs)} {c d : List (String × Val)},
+    Paired a c → Paired b d → Paired (a ++ b) (c ++ d)
+  | [], b, [], d, _, h => h
+  | (_, _) :: _, _, (_, _) :: _, _, ⟨h1, h2, h3⟩, h => ⟨h1, h2, Paired.append h3 h⟩
+  | [], _, _ :: _, _, h, _ => by simp [Paired] at h
+  | _ :: _, _, [], _, h, _ => by simp [Paired] at h
+
+theorem Paired.reverse : ∀ {a : List (String × Abs)} {c : List (String × Val)}, Paired a c → Paired a.reverse c.reverse
+  | [], [], _ => trivial
+  | (x, a) :: as, (y, v) :: vs, ⟨h1, h2, h3⟩ => by
+    simp only [List.reverse_cons]
+    exact Paired.append (Paired.reverse h3) ⟨h1, h2, trivial⟩
+  | [], _ :: _, h => by simp [Paired] at h
+  | _ :: _, [], h => by simp [Paired] at h
+
+theorem paired_params : ∀ (ps : List Param) (args : List Val), args.length = ps.length →
+    (∀ p v, (p, v) ∈ ps.zip args → Mem p.abs v) →
+    Paired (ps.map fun p => (p.name, p.abs)) ((ps.map (·.name)).zip args)
+  | [], [], _, _ => trivial
+  | p :: ps, v :: vs, hl, hm => by
+    refine ⟨rfl, hm p v (by simp), paired_params ps vs (by simpa using hl) fun q w h => hm q w ?_⟩
+    simp only [List.zip_cons_cons, List.mem_cons]; exact Or.inr h
+  | [], _ :: _, hl, _ => by simp at hl
+  | _ :: _, [], hl, _ => by simp at hl
+
+theorem foldl_params (ps : List Param) (acc : List (String × Abs)) :
+    ps.foldl (fun env p => (p.name, p.abs) :: env) acc = (ps.map fun p => (p.name, p.abs)).reverse ++ acc := by
+  induction ps generalizing acc with
+  | nil => rfl
+  | cons p ps ih => simp [ih]
+
+theorem sat_paired {M : Module} {R : List (Option Abs)} {ring : List Nat} {d : Nat} {own lam : Bool} :
+    ∀ (env : List (String × Abs)) (ρ : Env), Paired env ρ → Sat ⟨M, R, ring, env, [], d, own, lam⟩ ρ
+  | [], [], _ => Sat.nil M R ring d own lam
+  | (x, a) :: env, (y, v) :: ρ, ⟨hxy, hm, hp⟩ => by
+    subst hxy
+    have ih := sat_paired (M := M) (R := R) (ring := ring) (d := d) (own := own) (lam := lam) env ρ hp
+    constructor
+    · intro z b hz
+      have hl := lookup_cons ⟨M, R, ring, env, [], d, own, lam⟩ x a z
+      rw [show (⟨M, R, ring, (x, a) :: env, [], d, own, lam⟩ : ACtx) =
+          { (⟨M, R, ring, env, [], d, own, lam⟩ : ACtx) with env := (x, a) :: env }
+        from rfl, hl] at hz
+      rw [get_cons]
+      by_cases hxz : x = z
+      · simp only [hxz, ite_true] at hz ⊢; cases hz; exact ⟨v, rfl, hm⟩
+      · simp only [hxz, ite_false] at hz ⊢; exact ih.env z b hz
+    · intro p r q h; simp at h
+  | [], _ :: _, h => by simp [Paired] at h
+  | _ :: _, [], h => by simp [Paired] at h
 
 end KanameCore

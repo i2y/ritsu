@@ -1,0 +1,97 @@
+module order_flow v1
+description "An order moved from state to state by the events its host hands it: each state is a value of a sum with the fields it has, and the next state, or why an event is refused, is a match on the state and the event"
+
+record Line
+  sku   : string       count >=1 <=20
+  qty   : number       range >=1 <=100
+  price : money[USDc]  range >=1USDc <=1_000_000USDc
+
+enum Order
+  cart
+    lines : list[Line]  count <=50
+  placed
+    lines : list[Line]  count >=1 <=50
+    total : money[USDc]
+    on    : date
+  paid
+    lines : list[Line]  count >=1 <=50
+    on    : date
+  shipped
+    lines    : list[Line]  count >=1 <=50
+    tracking : string
+  cancelled
+    reason : string
+
+enum Event
+  add
+    line : Line
+  remove
+    sku : string
+  place
+    on : date
+  pay
+    amount : money[USDc]
+  ship
+    tracking : string
+  cancel
+    reason : string
+
+# what the lines come to
+fn total(lines: list[Line] count <=50) -> money[USDc]
+  lines.sum(l => l.price * l.qty)
+
+# the order an event moves it to, or why the event is refused
+fn next(order: Order, event: Event) -> result[Order, string]
+  match order
+    cart c =>
+      match event
+        add a =>
+          if c.lines.count() < 50
+            ok(Order.cart { lines: c.lines.append(a.line) })
+          else
+            err("a cart holds 50 lines")
+        remove r => ok(Order.cart { lines: c.lines.filter(l => l.sku != r.sku) })
+        place p =>
+          if c.lines.count() = 0
+            err("an empty cart is not placed")
+          else
+            ok(Order.placed { lines: c.lines, total: total(lines: c.lines), on: p.on })
+        cancel x => ok(Order.cancelled { reason: x.reason })
+        else => err("a cart is placed first")
+    placed p =>
+      match event
+        pay y =>
+          if y.amount = p.total
+            ok(Order.paid { lines: p.lines, on: p.on })
+          else
+            err("the amount is not the total")
+        cancel x => ok(Order.cancelled { reason: x.reason })
+        else => err("a placed order is paid or cancelled")
+    paid d =>
+      match event
+        ship s => ok(Order.shipped { lines: d.lines, tracking: s.tracking })
+        else => err("a paid order is shipped")
+    shipped, cancelled => err("the order is closed")
+
+# the events in turn, from an empty cart: the first refusal stops them
+fn replay(events: list[Event]) -> result[Order, string]
+  let start : result[Order, string] = ok(Order.cart { lines: [] })
+  events.reduce(start, (r, e) => after(r: r, event: e))
+
+fn after(r: result[Order, string], event: Event) -> result[Order, string]
+  match r
+    ok o => next(order: o, event: event)
+    err why => err(why)
+
+# whether an order takes more events
+fn open(order: Order) -> bool
+  match order
+    shipped, cancelled => false
+    else => true
+
+examples
+  total(lines: [Line { sku: "pen", qty: 2, price: 150USDc }, Line { sku: "ink", qty: 1, price: 400USDc }]) = 700USDc
+  next(order: Order.cart { lines: [] }, event: Event.place { on: 2026-10-22 }) = err("an empty cart is not placed")
+  next(order: Order.placed { lines: [Line { sku: "pen", qty: 2, price: 150USDc }], total: 300USDc, on: 2026-10-22 }, event: Event.pay { amount: 300USDc }) = ok(Order.paid { lines: [Line { sku: "pen", qty: 2, price: 150USDc }], on: 2026-10-22 })
+  replay(events: [Event.add { line: Line { sku: "pen", qty: 2, price: 150USDc } }, Event.place { on: 2026-10-22 }, Event.pay { amount: 250USDc }]) = err("the amount is not the total")
+  open(order: Order.cancelled { reason: "late" }) = false

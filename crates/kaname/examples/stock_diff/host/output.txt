@@ -1,0 +1,5 @@
+removed ink: 4
+changed pen: 10 -> 7
+added tape: 3
+after the day: glue 12, pad 2, tape 3
+to reorder: pad, tape

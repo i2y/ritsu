@@ -1,0 +1,97 @@
+module 注文の流れ(order_flow_ja) v1
+description "ホストが渡すイベントで、注文を状態から状態へ進める。状態はそれぞれのフィールドを持つ直和型の値で、次の状態か、イベントを拒む理由を、状態とイベントの match で決める。order_flow.kn の日本語の版"
+
+record 明細(Line)
+  品番(sku)   : string       count >=1 <=20
+  数量(qty)   : number       range >=1 <=100
+  単価(price) : money[USDc]  range >=1USDc <=1_000_000USDc
+
+enum 注文(Order)
+  カート(cart)
+    明細(lines) : list[明細]  count <=50
+  確定済み(placed)
+    明細(lines) : list[明細]  count >=1 <=50
+    合計(total) : money[USDc]
+    日付(on)    : date
+  支払い済み(paid)
+    明細(lines) : list[明細]  count >=1 <=50
+    日付(on)    : date
+  発送済み(shipped)
+    明細(lines)        : list[明細]  count >=1 <=50
+    追跡番号(tracking) : string
+  取り消し済み(cancelled)
+    理由(reason) : string
+
+enum イベント(Event)
+  追加(add)
+    明細(line) : 明細
+  削除(remove)
+    品番(sku) : string
+  確定(place)
+    日付(on) : date
+  支払い(pay)
+    金額(amount) : money[USDc]
+  発送(ship)
+    追跡番号(tracking) : string
+  取り消し(cancel)
+    理由(reason) : string
+
+# 明細の合計
+fn 合計(total)(明細(lines): list[明細] count <=50) -> money[USDc]
+  明細.sum(一件 => 一件.単価 * 一件.数量)
+
+# イベントで進んだ注文か、イベントを拒む理由
+fn 次(next)(注文(order): 注文, イベント(event): イベント) -> result[注文, string]
+  match 注文
+    カート c =>
+      match イベント
+        追加 a =>
+          if c.明細.count() < 50
+            ok(注文.カート { 明細: c.明細.append(a.明細) })
+          else
+            err("カートに入る明細は 50 件までです")
+        削除 r => ok(注文.カート { 明細: c.明細.filter(一件 => 一件.品番 != r.品番) })
+        確定 p =>
+          if c.明細.count() = 0
+            err("空のカートは確定できません")
+          else
+            ok(注文.確定済み { 明細: c.明細, 合計: 合計(明細: c.明細), 日付: p.日付 })
+        取り消し x => ok(注文.取り消し済み { 理由: x.理由 })
+        else => err("カートは先に確定します")
+    確定済み p =>
+      match イベント
+        支払い y =>
+          if y.金額 = p.合計
+            ok(注文.支払い済み { 明細: p.明細, 日付: p.日付 })
+          else
+            err("金額が合計と違います")
+        取り消し x => ok(注文.取り消し済み { 理由: x.理由 })
+        else => err("確定済みの注文は、支払うか取り消します")
+    支払い済み d =>
+      match イベント
+        発送 s => ok(注文.発送済み { 明細: d.明細, 追跡番号: s.追跡番号 })
+        else => err("支払い済みの注文は発送します")
+    発送済み, 取り消し済み => err("注文はもう閉じています")
+
+# 空のカートから、イベントを順に当てる。最初に拒まれたところで止まる
+fn 順に進める(replay)(イベント(events): list[イベント]) -> result[注文, string]
+  let 初め : result[注文, string] = ok(注文.カート { 明細: [] })
+  イベント.reduce(初め, (途中, 一件) => 続けて(途中: 途中, イベント: 一件))
+
+fn 続けて(after)(途中(r): result[注文, string], イベント(event): イベント) -> result[注文, string]
+  match 途中
+    ok 注文 => 次(注文: 注文, イベント: イベント)
+    err 理由 => err(理由)
+
+# 注文が、まだイベントを受け付けるか
+fn 受け付けるか(open)(注文(order): 注文) -> bool
+  match 注文
+    発送済み, 取り消し済み => false
+    else => true
+
+examples
+  合計(明細: [明細 { 品番: "pen", 数量: 2, 単価: 150USDc }, 明細 { 品番: "ink", 数量: 1, 単価: 400USDc }]) = 700USDc
+  次(注文: 注文.カート { 明細: [] }, イベント: イベント.確定 { 日付: 2026-10-22 }) = err("空のカートは確定できません")
+  次(注文: 注文.確定済み { 明細: [明細 { 品番: "pen", 数量: 2, 単価: 150USDc }], 合計: 300USDc, 日付: 2026-10-22 }, イベント: イベント.支払い { 金額: 300USDc }) = ok(注文.支払い済み { 明細: [明細 { 品番: "pen", 数量: 2, 単価: 150USDc }], 日付: 2026-10-22 })
+  順に進める(イベント: [イベント.追加 { 明細: 明細 { 品番: "pen", 数量: 2, 単価: 150USDc } }, イベント.確定 { 日付: 2026-10-22 }, イベント.支払い { 金額: 250USDc }]) = err("金額が合計と違います")
+  受け付けるか(注文: 注文.取り消し済み { 理由: "遅れ" }) = false

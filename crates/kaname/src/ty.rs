@@ -11,7 +11,9 @@
 //!
 //! An enum, a record and a transfer are told apart by where they are declared (DESIGN 3.5, 6.3):
 //! the file, by its path on the disk, and the name. Two modules that read one book have one type of
-//! each of its transfers.
+//! each of its transfers. An enum whose values have fields is a sum (DESIGN 23.1): its type is the
+//! enum's, and each of its values has a type of its own, the record of the value's fields
+//! ([`RecId::Variant`]), whose values go where the enum's go.
 
 use ritsu_units::{Dim, Rat, Unit};
 use std::path::PathBuf;
@@ -66,22 +68,69 @@ pub enum Owner {
     Rule(PathBuf),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// An enum, by where it is declared and its name; and, for a generic enum (DESIGN 26.1), the types its
+/// type parameters take in this type (`Outcome[number]`), in their order.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct EnumId {
     pub owner: Owner,
     pub name: String,
+    pub args: Vec<Ty>,
+}
+
+impl EnumId {
+    /// An enum that takes no type arguments.
+    pub fn plain(owner: Owner, name: impl Into<String>) -> EnumId {
+        EnumId { owner, name: name.into(), args: Vec::new() }
+    }
+
+    /// The same declaration, whatever its type arguments.
+    pub fn same_decl(&self, o: &EnumId) -> bool {
+        self.owner == o.owner && self.name == o.name
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RecId {
-    /// A record a module declares.
-    Module { file: PathBuf, name: String },
+    /// A record a module declares, and the types its type parameters take in it (DESIGN 26.1).
+    Module { file: PathBuf, name: String, args: Vec<Ty> },
+    /// The type of a value of an enum a module declares whose values have fields (`Order.placed`,
+    /// DESIGN 23.2): the record of the value's fields, a value of which is a value of the enum. By the
+    /// module's file, the enum and the value, as they are declared, and the enum's type arguments.
+    Variant { file: PathBuf, name: String, value: String, args: Vec<Ty> },
     /// The outputs of a rule (`charges.outputs`).
     Outputs(PathBuf),
     /// An element of a list a rule walks (`shipping.lines`).
     Element(PathBuf, String),
     /// An element of what `running_totals` answers: the item, and the weight (DESIGN 3.6).
     Running(Box<Ty>, Box<Ty>),
+    /// An element of what `d.entries()` answers, and what `d.filter` gives its function: the key and
+    /// the value (`entry[K, V]`, DESIGN 24.3).
+    Entry(Box<Ty>, Box<Ty>),
+    /// An element of what `xs.indexed()` answers: the index from 0, and the item (`indexed[T]`).
+    Indexed(Box<Ty>),
+}
+
+impl RecId {
+    /// The enum the type of a value of a sum is of (`Order.placed` is of `Order`); None for a record.
+    pub fn sum(&self) -> Option<EnumId> {
+        match self {
+            RecId::Variant { file, name, args, .. } => Some(EnumId { owner: Owner::Module(file.clone()), name: name.clone(), args: args.clone() }),
+            _ => None,
+        }
+    }
+
+    /// A record of a module that takes no type arguments.
+    pub fn record(file: PathBuf, name: impl Into<String>) -> RecId {
+        RecId::Module { file, name: name.into(), args: Vec::new() }
+    }
+
+    /// The type of the value `value` of the enum `id` (its type arguments too).
+    pub fn variant(id: &EnumId, value: impl Into<String>) -> Option<RecId> {
+        match &id.owner {
+            Owner::Module(file) => Some(RecId::Variant { file: file.clone(), name: id.name.clone(), value: value.into(), args: id.args.clone() }),
+            Owner::Rule(_) => None,
+        }
+    }
 }
 
 /// An operation of a transfer of a book: `ledger.capture.do`.
@@ -101,15 +150,59 @@ pub enum Ty {
     Enum(EnumId),
     Record(RecId),
     List(Box<Ty>),
+    /// `dict[K, V]` (DESIGN 24.2): its keys of a type that can be a key ([`is_key`]).
+    Dict(Box<Ty>, Box<Ty>),
+    /// `set[T]`: its members of a type that can be a key.
+    Set(Box<Ty>),
     Opt(Box<Ty>),
     Transfer(TransferId),
     /// The literal `none`, before it meets a `T?`.
     None,
     /// The literal `[]`, before it meets a list.
     Empty,
+    /// The literal `[:]`, before it meets a dict.
+    EmptyDict,
+    /// A type parameter of the generic function, record or enum it is written in (DESIGN 26.1), by its
+    /// declared name: a value of it is passed on, held and compared with `=`, and nothing more.
+    Param(String),
+    /// `result[T, E]` (DESIGN 26.3): `ok` with a value of `T`, or `err` with a value of `E`.
+    Result(Box<Ty>, Box<Ty>),
+    /// A function type, `(T, Adjustment) -> T` (DESIGN 27.1): the types of the parameters, the type of
+    /// the answer, and the effect written on it, which a function given there keeps within (E402). A
+    /// value of it is passed, named by a `let` and called, and goes nowhere else (E113).
+    Fn(Vec<Ty>, Box<Ty>, Option<FnEffect>),
     /// What a check has said is wrong already: it agrees with everything, so that one mistake is
     /// said once.
     Error,
+}
+
+/// The effect written on a function type (`(T) -> U total`, `(T) -> U fails range`, DESIGN 27.1): the
+/// kinds of failure it may have, in their order, and whether it may not stop. `total` has neither.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FnEffect {
+    pub fails: Vec<crate::ast::FailKind>,
+    pub diverges: bool,
+}
+
+impl FnEffect {
+    /// The effect as written on a function's head or a function type.
+    pub fn of(e: &crate::ast::Effect) -> FnEffect {
+        let mut fails: Vec<crate::ast::FailKind> = e.fails.iter().map(|(k, _)| *k).collect();
+        fails.sort();
+        fails.dedup();
+        FnEffect { fails, diverges: e.diverges }
+    }
+
+    /// As kaname writes it after a type: `total`, `fails range, overflow`, `diverges`.
+    pub fn shown(&self) -> String {
+        let kinds = self.fails.iter().map(|k| k.word()).collect::<Vec<_>>().join(", ");
+        match (kinds.is_empty(), self.diverges) {
+            (true, false) => "total".into(),
+            (true, true) => "diverges".into(),
+            (false, false) => format!("fails {kinds}"),
+            (false, true) => format!("fails {kinds} diverges"),
+        }
+    }
 }
 
 impl Ty {
@@ -131,6 +224,86 @@ impl Ty {
             _ => None,
         }
     }
+
+    /// Whether a function type is in the type, at any depth: what holds a function value (DESIGN 27.1).
+    pub fn has_fn(&self) -> bool {
+        match self {
+            Ty::Fn(..) => true,
+            Ty::List(x) | Ty::Set(x) | Ty::Opt(x) => x.has_fn(),
+            Ty::Dict(a, b) | Ty::Result(a, b) => a.has_fn() || b.has_fn(),
+            Ty::Enum(id) => id.args.iter().any(Ty::has_fn),
+            Ty::Record(r) => match r {
+                RecId::Module { args, .. } | RecId::Variant { args, .. } => args.iter().any(Ty::has_fn),
+                RecId::Running(a, b) | RecId::Entry(a, b) => a.has_fn() || b.has_fn(),
+                RecId::Indexed(x) => x.has_fn(),
+                RecId::Outputs(_) | RecId::Element(..) => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// Whether a type parameter is in the type.
+    pub fn has_param(&self) -> bool {
+        match self {
+            Ty::Param(_) => true,
+            Ty::List(x) | Ty::Set(x) | Ty::Opt(x) => x.has_param(),
+            Ty::Dict(a, b) | Ty::Result(a, b) => a.has_param() || b.has_param(),
+            Ty::Fn(ps, r, _) => ps.iter().any(Ty::has_param) || r.has_param(),
+            Ty::Enum(id) => id.args.iter().any(Ty::has_param),
+            Ty::Record(r) => match r {
+                RecId::Module { args, .. } | RecId::Variant { args, .. } => args.iter().any(Ty::has_param),
+                RecId::Running(a, b) | RecId::Entry(a, b) => a.has_param() || b.has_param(),
+                RecId::Indexed(x) => x.has_param(),
+                RecId::Outputs(_) | RecId::Element(..) => false,
+            },
+            _ => false,
+        }
+    }
+}
+
+/// The type with each type parameter named in `params` put to the type at the same place in `args`
+/// (DESIGN 26.2): the fields of `Page[Invoice]` are those of `Page` with `T` put to `Invoice`. Every
+/// parameter is put at once, so a parameter of the same name in an argument is not put again.
+pub fn subst(t: &Ty, params: &[String], args: &[Ty]) -> Ty {
+    if params.is_empty() || !t.has_param() {
+        return t.clone();
+    }
+    let s = |x: &Ty| subst(x, params, args);
+    let b = |x: &Ty| Box::new(subst(x, params, args));
+    match t {
+        Ty::Param(n) => match params.iter().position(|p| p == n) {
+            Some(i) => args.get(i).cloned().unwrap_or(Ty::Error),
+            None => t.clone(),
+        },
+        Ty::List(x) => Ty::List(b(x)),
+        Ty::Set(x) => Ty::Set(b(x)),
+        Ty::Opt(x) => Ty::Opt(b(x)),
+        Ty::Dict(k, v) => Ty::Dict(b(k), b(v)),
+        Ty::Result(a, e) => Ty::Result(b(a), b(e)),
+        Ty::Fn(ps, r, eff) => Ty::Fn(ps.iter().map(s).collect(), b(r), eff.clone()),
+        Ty::Enum(id) => Ty::Enum(EnumId { args: id.args.iter().map(s).collect(), ..id.clone() }),
+        Ty::Record(r) => Ty::Record(match r {
+            RecId::Module { file, name, args: a } => RecId::Module { file: file.clone(), name: name.clone(), args: a.iter().map(s).collect() },
+            RecId::Variant { file, name, value, args: a } => RecId::Variant { file: file.clone(), name: name.clone(), value: value.clone(), args: a.iter().map(s).collect() },
+            RecId::Running(a, w) => RecId::Running(b(a), b(w)),
+            RecId::Entry(k, v) => RecId::Entry(b(k), b(v)),
+            RecId::Indexed(x) => RecId::Indexed(b(x)),
+            other => other.clone(),
+        }),
+        other => other.clone(),
+    }
+}
+
+/// A function type as kaname writes it (DESIGN 27.1): `(Line, number) -> money[USDc] total`, from the
+/// types of its parameters and its answer as written.
+pub fn fn_text(params: &[String], ret: &str, eff: Option<&FnEffect>) -> String {
+    let eff = eff.map(|e| format!(" {}", e.shown())).unwrap_or_default();
+    format!("({}) -> {ret}{eff}", params.join(", "))
+}
+
+/// The same, a slot's type put so; its range and its count are kept.
+pub fn subst_slot(s: &Slot, params: &[String], args: &[Ty]) -> Slot {
+    Slot { ty: subst(&s.ty, params, args), ..s.clone() }
 }
 
 /// The ends of a declared range or count, both in, in the unit of what it holds (a date as its day
@@ -155,6 +328,53 @@ pub struct Slot {
 impl Slot {
     pub fn of(ty: Ty) -> Slot {
         Slot { ty, range: None, count: None }
+    }
+}
+
+// ── The whole of a type ──────────────────────────────────────────────────────
+
+/// The least value of int64 and the greatest: what a number, an amount or a quantity whose range is
+/// not written takes, counted in its unit (DESIGN 22.1).
+pub const INT_MIN: i128 = i64::MIN as i128;
+pub const INT_MAX: i128 = i64::MAX as i128;
+
+/// The range a value of `t` takes where none is written (DESIGN 22.1): the whole of int64, in its
+/// unit, for a number, an amount and a quantity; every day from 0001-01-01 to 9999-12-31 for a date.
+/// None for a rate, whose step is its range's grid (a rate with a step takes 0% to 100% where a
+/// parameter reaches it, DESIGN 3.9), and for what holds no number.
+pub fn whole_range(t: &Ty) -> Option<Range> {
+    match t {
+        Ty::Num(n) if !n.is_rate() => Some(Range { min: Some(Rat::int(INT_MIN)), max: Some(Rat::int(INT_MAX)) }),
+        Ty::Date => Some(Range { min: Some(Rat::int(crate::date::MIN as i128)), max: Some(Rat::int(crate::date::MAX as i128)) }),
+        _ => None,
+    }
+}
+
+/// Whether values of `t` can be keys (DESIGN 24.1): of a dict, of a set, of an order. A number,
+/// an amount, a quantity, a rate, a date, a string, a bool, a value of an enum whose values have no
+/// fields (a rule's too). What a key is held to besides (a number rounded to its step) is the check's.
+pub fn is_key(t: &Ty, sum: impl Fn(&EnumId) -> bool) -> bool {
+    match t {
+        Ty::Num(_) | Ty::Date | Ty::Str | Ty::Bool => true,
+        Ty::Enum(id) => !sum(id),
+        Ty::Error => true,
+        _ => false,
+    }
+}
+
+/// The count a list takes where none is written: 0 to 2⁶³ − 1 elements (DESIGN 22.1).
+pub fn whole_count() -> Range {
+    Range { min: Some(Rat::zero()), max: Some(Rat::int(INT_MAX)) }
+}
+
+/// A range as a place holds a value to it where a parameter reaches the value (DESIGN 22.1): the
+/// ends written, and the type's where an end is not written; None where the type has no whole (a rate,
+/// what holds no number) and nothing is written.
+pub fn filled(written: Option<&Range>, whole: Option<Range>) -> Option<Range> {
+    match (written, whole) {
+        (Some(r), Some(w)) => Some(Range { min: r.min.or(w.min), max: r.max.or(w.max) }),
+        (Some(r), None) => Some(r.clone()),
+        (None, w) => w,
     }
 }
 

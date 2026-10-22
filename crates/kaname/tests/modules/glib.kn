@@ -1,0 +1,25 @@
+module glib v1
+description "A module another reads for its generic record, enum and functions"
+
+record Box[T]
+  items : list[T]  count <=10
+  label : string
+
+enum Pick[T]
+  one
+    value : T
+  none_left
+
+fn box_of[T](items: list[T] count <=10, label: string) -> Box[T]
+  Box { items: items, label: label }
+
+fn first_of[T](b: Box[T]) -> Pick[T]
+  match b.items.first()
+    none => Pick.none_left
+    some x => Pick.one { value: x }
+
+fn biggest[K: key](b: Box[K]) -> K?
+  b.items.sort().last()
+
+fn checked[T](x: T, accept: bool) -> result[T, string]
+  if accept then ok(x) else err("refused")

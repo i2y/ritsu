@@ -151,6 +151,11 @@ theorem In_exact (v : Rat) : (Iv.exact v).In v :=
 theorem In_ints {lo hi : Int} {v : Int} (h1 : lo ≤ v) (h2 : v ≤ hi) : (Iv.ints lo hi).In (v : Rat) :=
   In_mk' (Rat.intCast_le_intCast.mpr h1) (Rat.intCast_le_intCast.mpr h2) (by simp [DenLe, Rat.den_intCast])
 
+/-- A count between two whole numbers, as a count is (the code points of a string). -/
+theorem In_ints_nat {lo hi : Int} {n : Nat} (h1 : lo ≤ n) (h2 : (n : Int) ≤ hi) : (Iv.ints lo hi).In (n : Rat) := by
+  have := In_ints (v := (n : Int)) h1 h2
+  rwa [Rat.intCast_natCast] at this
+
 theorem In_withDen {i : Iv} {d : Option Nat} {v : Rat} (h : i.In v) (hd : DenLe d v) : (i.withDen d).In v := by
   refine ⟨h.lo, h.hi, ?_⟩
   unfold Iv.withDen

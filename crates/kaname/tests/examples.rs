@@ -1,10 +1,12 @@
-//! The examples (DESIGN 17): `examples/` holds four, each in English (`<name>.kn`) and in Japanese
-//! (`<name>.ja.kn`), beside the rules, the dates files and the books they read. Every module passes
-//! `check` with every language joined and says nothing, not even a warning, and the `examples` it
-//! writes hold. Every rule it reads cites the documents it transcribes, from copies beside it that
-//! the rule pins (DESIGN 17.6), and a dates file, which can pin only a law of e-Gov, names the copy
-//! the rule pins for it. The two versions answer alike on their vectors (`tests/vectors.rs`, DESIGN
-//! 16.6), and with the verdicts of the checks across the languages every function is total
+//! The examples (DESIGN 17): `examples/` holds eight, each in English (`<name>.kn`) and in Japanese
+//! (`<name>.ja.kn`). Four join no other language and carry a host in TypeScript, Python and Go that
+//! calls the code `ritsu gen` writes of them (`host/`, which ritsu's `tests/kaname.rs` runs); four call
+//! the rules, the dates files and the books beside them. Every module passes `check` with every
+//! language joined and says nothing, not even a warning, and the `examples` it writes hold. Every rule
+//! cites the documents it transcribes, from copies beside it that the rule pins (DESIGN 17.11), and a
+//! dates file, which can pin only a law of e-Gov, names the copy the rule pins for it. The two
+//! versions answer alike on their vectors (`tests/vectors.rs`, DESIGN 16.6), and with the verdicts of
+//! the checks across the languages every function of the four that call the other languages is total
 //! (ritsu's `tests/kaname.rs`).
 
 mod common;
@@ -12,8 +14,12 @@ mod common;
 use ritsu_base::text::Lang;
 use std::path::{Path, PathBuf};
 
-/// The examples, in the order DESIGN 17 gives them.
-const NAMES: [&str; 4] = ["payout", "late_payment", "media_mail", "discount_split"];
+/// The examples, in the order DESIGN 17 gives them: the four that join no other language, then the
+/// four that call rules, dates and books.
+const NAMES: [&str; 8] = ["order_flow", "stock_diff", "handles", "catalog", "payout", "late_payment", "media_mail", "discount_split"];
+
+/// The examples that join no other language, each with its host.
+const HOSTED: [&str; 4] = ["order_flow", "stock_diff", "handles", "catalog"];
 
 /// The names of the files of `dir` whose extension is `ext`, in order.
 fn files(dir: &Path, ext: &str) -> Vec<String> {
@@ -32,7 +38,7 @@ fn every_example_is_in_english_and_in_japanese() {
     dirs.sort();
     let mut want: Vec<String> = NAMES.iter().map(|s| s.to_string()).collect();
     want.sort();
-    assert_eq!(dirs, want, "examples/ holds the four of DESIGN 17");
+    assert_eq!(dirs, want, "examples/ holds the eight of DESIGN 17");
     for name in NAMES {
         assert_eq!(files(&Path::new("examples").join(name), "kn"), [format!("{name}.ja.kn"), format!("{name}.kn")]);
     }
@@ -69,6 +75,9 @@ fn every_rule_cites_its_documents_from_pinned_copies() {
     let mut cited = 0;
     for name in NAMES {
         let rules: PathBuf = Path::new("examples").join(name).join("rules");
+        if !rules.exists() {
+            continue;
+        }
         for f in files(&rules, "rule") {
             let src = std::fs::read_to_string(rules.join(&f)).unwrap();
             let said = sources(&src);
@@ -108,5 +117,26 @@ fn a_dates_file_names_the_copy_the_rule_pins() {
                 assert!(Path::new("examples").join(name).join(copy).exists(), "{name}/dates/{f}: {copy}");
             }
         }
+    }
+}
+
+/// The four that join no other language read nothing with `use`, and each has its host: a program in
+/// TypeScript, in Python and in Go that calls the module's generated code, and what the three print
+/// (ritsu's `tests/kaname.rs` runs them on the package `ritsu gen` writes).
+#[test]
+fn the_examples_of_a_functional_core_have_hosts() {
+    for name in HOSTED {
+        for kn in [format!("{name}.kn"), format!("{name}.ja.kn")] {
+            let src = std::fs::read_to_string(Path::new("examples").join(name).join(&kn)).unwrap();
+            assert!(!src.lines().any(|l| l.starts_with("use ")), "{name}/{kn} reads another file");
+        }
+        let host = Path::new("examples").join(name).join("host");
+        let mut got: Vec<String> = std::fs::read_dir(&host).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        got.sort();
+        assert_eq!(got, ["main.go", "main.py", "main.ts", "output.txt"], "{name}/host");
+        assert!(!std::fs::read_to_string(host.join("output.txt")).unwrap().is_empty(), "{name}/host/output.txt");
+    }
+    for name in NAMES.iter().filter(|n| !HOSTED.contains(n)) {
+        assert!(!Path::new("examples").join(name).join("host").exists(), "{name}: the code that calls other languages is held by ritsu's tests of `ritsu gen`");
     }
 }

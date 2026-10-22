@@ -29,7 +29,7 @@ pub fn parse(file: &str, src: &str) -> Parsed {
     if !diags.is_empty() {
         return Parsed { module: None, diags };
     }
-    let mut p = P { file, src, lines, i: 0, diags: Vec::new(), ids: 0 };
+    let mut p = P { file, src, lines, i: 0, diags: Vec::new(), ids: 0, targs: Default::default(), ltypes: Default::default() };
     let m = p.module();
     let module = if p.diags.is_empty() { m } else { None };
     Parsed { module, diags: p.diags }
@@ -42,6 +42,10 @@ struct P<'a> {
     i: usize,
     diags: Vec<Diag>,
     ids: usize,
+    /// The type arguments written after the name a call calls, by the call's id (DESIGN 26.1).
+    targs: std::collections::BTreeMap<usize, Vec<TypeRef>>,
+    /// The types written on a lambda's parameters, by the lambda's id (DESIGN 27.1).
+    ltypes: std::collections::BTreeMap<usize, Vec<Option<TypeRef>>>,
 }
 
 /// The tokens of one line, read from the left.
@@ -213,7 +217,7 @@ impl<'a> P<'a> {
             }
         };
         self.line_end(&c)?;
-        let mut m = Module { name, version, description: None, uses: Vec::new(), enums: Vec::new(), records: Vec::new(), fns: Vec::new(), examples: Vec::new(), exprs: 0 };
+        let mut m = Module { name, version, description: None, uses: Vec::new(), enums: Vec::new(), records: Vec::new(), fns: Vec::new(), examples: Vec::new(), exprs: 0, targs: Default::default(), ltypes: Default::default() };
         let mut stage = Stage::Head;
         let mut examples_at: Option<usize> = None;
         while self.i < self.lines.len() {
@@ -221,8 +225,8 @@ impl<'a> P<'a> {
                 self.stray();
                 continue;
             }
-            let line = self.lines[self.i].clone();
-            let head = match &line.tokens[0].tok {
+            let mut line = self.lines[self.i].clone();
+            let mut head = match &line.tokens[0].tok {
                 Tok::Word(w) => w.clone(),
                 t => {
                     let (at, t) = (line.tokens[0].span, t.shown());
@@ -233,6 +237,25 @@ impl<'a> P<'a> {
                 }
             };
             let at = line.tokens[0].span;
+            // `private fn …`, `private record …`, `private enum …` (DESIGN 28.2): the declaration after the
+            // word, which only this module uses
+            let mut private = false;
+            if head == kw::PRIVATE {
+                match line.tokens.get(1).map(|t| &t.tok) {
+                    Some(Tok::Word(w)) if w == kw::FN || w == kw::RECORD || w == kw::ENUM => {
+                        head = w.clone();
+                        line.tokens.remove(0);
+                        private = true;
+                    }
+                    _ => {
+                        let at = line.tokens.get(1).map(|t| t.span).unwrap_or(at);
+                        self.err("E003", at, tr!("`private` のあとには `fn`、`record`、`enum` を書きます", "`private` is followed by `fn`, `record` or `enum`"));
+                        self.i += 1;
+                        self.skip_body();
+                        continue;
+                    }
+                }
+            }
             let want = match head.as_str() {
                 kw::DESCRIPTION => Stage::Description,
                 kw::USE => Stage::Uses,
@@ -287,21 +310,21 @@ impl<'a> P<'a> {
                 }
                 kw::ENUM => {
                     self.i += 1;
-                    if let Some(e) = self.enum_line(&line) {
-                        m.enums.push(e);
+                    if let Some(e) = self.enum_decl(&line) {
+                        m.enums.push(EnumDecl { private, ..e });
                     }
                     self.stray();
                 }
                 kw::RECORD => {
                     self.i += 1;
                     if let Some(r) = self.record(&line) {
-                        m.records.push(r);
+                        m.records.push(RecordDecl { private, ..r });
                     }
                 }
                 kw::FN => {
                     self.i += 1;
                     if let Some(f) = self.function(&line) {
-                        m.fns.push(f);
+                        m.fns.push(FnDecl { private, ..f });
                     }
                 }
                 _ => {
@@ -322,6 +345,8 @@ impl<'a> P<'a> {
             }
         }
         m.exprs = self.ids;
+        m.targs = std::mem::take(&mut self.targs);
+        m.ltypes = std::mem::take(&mut self.ltypes);
         Some(m)
     }
 
@@ -377,6 +402,35 @@ impl<'a> P<'a> {
         Some(name)
     }
 
+    /// The type parameters after a declared name, when `[` comes there (DESIGN 26.1): `[T]`, `[K: key,
+    /// V]`, `[要素(T)]`.
+    fn type_params(&mut self, c: &mut Cur) -> R<Vec<TypeParam>> {
+        let mut out = Vec::new();
+        if !c.eat(&Tok::LBracket) {
+            return Some(out);
+        }
+        loop {
+            let name = self.decl_name(c, tr!("型の引数の名前", "the name of a type parameter"))?;
+            let mut key = false;
+            if c.eat(&Tok::Colon) {
+                if !c.eat_word(kw::KEY) {
+                    self.expected(c, tr!("`key`（鍵にできる型だけをとる型の引数）", "`key` (a type parameter of the types that can be keys)"));
+                    return None;
+                }
+                key = true;
+            }
+            out.push(TypeParam { name, key });
+            if c.eat(&Tok::Comma) {
+                continue;
+            }
+            if c.eat(&Tok::RBracket) {
+                return Some(out);
+            }
+            self.expected(c, tr!("`,` か `]`", "`,` or `]`"));
+            return None;
+        }
+    }
+
     fn use_line(&mut self, line: &Line) -> R<Use> {
         let mut c = Cur::new(&line.tokens, line.no);
         c.next();
@@ -428,12 +482,18 @@ impl<'a> P<'a> {
         Some(Use { kind, name, name_span, path, path_span, line: line.no })
     }
 
-    fn enum_line(&mut self, line: &Line) -> R<EnumDecl> {
+    /// An enum: on one line (`enum tier = basic < silver < gold`), or with its values under it, a line
+    /// each, a value's fields under the value (DESIGN 23.1).
+    fn enum_decl(&mut self, line: &Line) -> R<EnumDecl> {
         let mut c = Cur::new(&line.tokens, line.no);
         c.next();
         let name = self.decl_name(&mut c, tr!("列挙の名前", "the enum's name"))?;
+        let tparams = self.type_params(&mut c)?;
+        if c.at_end() {
+            return self.enum_listed(name, tparams, line);
+        }
         if !c.eat(&Tok::Eq) {
-            self.expected(&c, tr!("`=` と値", "`=` and the values"));
+            self.expected(&c, tr!("`=` と値か、行の終わり（値を下に一行ずつ書くとき）", "`=` and the values, or the end of the line (for the values written under it, a line each)"));
             return None;
         }
         let mut values = Vec::new();
@@ -458,7 +518,7 @@ impl<'a> P<'a> {
                 }
                 _ => None,
             };
-            values.push(EnumValueDecl { name: v, label });
+            values.push(EnumValueDecl { name: v, label, fields: Vec::new(), line: line.no });
             match c.peek() {
                 None => break,
                 Some(Tok::Pipe) => seps.push((false, c.span())),
@@ -479,7 +539,104 @@ impl<'a> P<'a> {
             ));
             return None;
         }
-        Some(EnumDecl { name, ordered, values, line: line.no })
+        Some(EnumDecl { name, private: false, tparams, ordered, listed: false, values, line: line.no })
+    }
+
+    /// The values of an enum written under it, a line each, and the fields under each value: the
+    /// lines from `self.i` up to the next line at the left margin.
+    fn enum_listed(&mut self, name: Name, tparams: Vec<TypeParam>, line: &Line) -> R<EnumDecl> {
+        let end = self.body_end();
+        if self.i == end {
+            let at = name.span;
+            self.err("E003", at, tr!("列挙に、値が一つもありません", "The enum has no value")).notes.push(tr!(
+                "値は、`enum` の行に `= a | b` と書くか、`enum` の行の下に字下げして一行に一つずつ書きます。",
+                "Write its values on the `enum` line (`= a | b`), or indented under it, one a line."
+            ));
+            return None;
+        }
+        let indent = self.lines[self.i].indent;
+        let mut values: Vec<EnumValueDecl> = Vec::new();
+        let mut failed = false;
+        while self.i < end {
+            let l = self.lines[self.i].clone();
+            self.i += 1;
+            if l.indent != indent {
+                let at = self.line_span(self.i - 1);
+                self.err("E004", at, tr!("列挙の値の字下げがそろっていません（{indent} 文字のはずが {} 文字）", "The values of the enum are not indented alike ({} spaces where the first has {indent})", l.indent));
+                failed = true;
+                continue;
+            }
+            let mut c = Cur::new(&l.tokens, l.no);
+            if let Some(Tok::Word(w)) = c.peek()
+                && (w == "default" || w == "open")
+            {
+                let (at, w) = (c.span(), w.clone());
+                self.err("E003", at, tr!("列挙に `{w}` は書けません", "An enum of kaname takes no `{w}`")).notes.push(tr!(
+                    "`default` と `open` は rulec の表と寄与のための印です。kaname には表も寄与も無いので、意味を持ちません。",
+                    "`default` and `open` are marks for rulec's tables and contributions; kaname has neither, so they would mean nothing."
+                ));
+                self.skip_rest(indent, end);
+                failed = true;
+                continue;
+            }
+            let Some(v) = self.decl_name(&mut c, tr!("値の名前", "a value's name")) else {
+                self.skip_rest(indent, end);
+                failed = true;
+                continue;
+            };
+            let label = match c.peek() {
+                Some(Tok::Str(x)) => {
+                    let x = x.clone();
+                    c.next();
+                    Some(x)
+                }
+                _ => None,
+            };
+            if self.line_end(&c).is_none() {
+                self.skip_rest(indent, end);
+                failed = true;
+                continue;
+            }
+            // the fields under the value, as a record's
+            let mut fields = Vec::new();
+            let field_indent = self.lines.get(self.i).filter(|x| self.i < end && x.indent > indent).map(|x| x.indent);
+            while let Some(fi) = field_indent
+                && self.i < end
+                && self.lines[self.i].indent > indent
+            {
+                let fl = self.lines[self.i].clone();
+                self.i += 1;
+                if fl.indent != fi {
+                    let at = self.line_span(self.i - 1);
+                    self.err("E004", at, tr!("フィールドの字下げがそろっていません（{fi} 文字のはずが {} 文字）", "The fields are not indented alike ({} spaces where the first has {fi})", fl.indent));
+                    failed = true;
+                    continue;
+                }
+                match self.field_line(&fl) {
+                    Some(f) => fields.push(f),
+                    None => failed = true,
+                }
+            }
+            values.push(EnumValueDecl { name: v, label, fields, line: l.no });
+        }
+        if failed {
+            return None;
+        }
+        Some(EnumDecl { name, private: false, tparams, ordered: false, listed: true, values, line: line.no })
+    }
+
+    /// A field: `<name> : <type>`, with its range and its count.
+    fn field_line(&mut self, l: &Line) -> R<FieldDecl> {
+        let mut c = Cur::new(&l.tokens, l.no);
+        let n = self.decl_name(&mut c, tr!("フィールドの名前", "the field's name"))?;
+        if !c.eat(&Tok::Colon) {
+            self.expected(&c, tr!("`:` と型", "`:` and the type"));
+            return None;
+        }
+        let ty = self.ty(&mut c)?;
+        let bounds = self.bounds(&mut c)?;
+        self.line_end(&c)?;
+        Some(FieldDecl { name: n, ty, bounds, line: l.no })
     }
 
     /// The lines under a head line at the left margin: from `self.i` up to the next line there.
@@ -495,7 +652,8 @@ impl<'a> P<'a> {
         let mut c = Cur::new(&line.tokens, line.no);
         c.next();
         let name = self.decl_name(&mut c, tr!("レコードの名前", "the record's name"));
-        let end_ok = name.is_some() && self.line_end(&c).is_some();
+        let tparams = if name.is_some() { self.type_params(&mut c) } else { None };
+        let end_ok = name.is_some() && tparams.is_some() && self.line_end(&c).is_some();
         let end = self.body_end();
         let mut fields = Vec::new();
         if self.i == end && end_ok {
@@ -518,26 +676,20 @@ impl<'a> P<'a> {
                 );
                 continue;
             }
-            let mut c = Cur::new(&l.tokens, l.no);
-            let Some(n) = self.decl_name(&mut c, tr!("フィールドの名前", "the field's name")) else { continue };
-            if !c.eat(&Tok::Colon) {
-                self.expected(&c, tr!("`:` と型", "`:` and the type"));
-                continue;
+            if let Some(f) = self.field_line(&l) {
+                fields.push(f);
             }
-            let Some(ty) = self.ty(&mut c) else { continue };
-            let Some(bounds) = self.bounds(&mut c) else { continue };
-            if self.line_end(&c).is_none() {
-                continue;
-            }
-            fields.push(FieldDecl { name: n, ty, bounds, line: l.no });
         }
-        Some(RecordDecl { name: name?, fields, line: line.no })
+        Some(RecordDecl { name: name?, private: false, tparams: tparams?, fields, line: line.no })
     }
 
     // ── Types ───────────────────────────────────────────────────────────────────
 
     fn ty(&mut self, c: &mut Cur) -> R<TypeRef> {
         let start = c.span();
+        if c.peek() == Some(&Tok::LParen) {
+            return self.fn_type(c);
+        }
         let Some(Token { tok: Tok::Word(w), span }) = c.next() else {
             c.k = c.k.saturating_sub(1);
             self.expected(c, tr!("型", "a type"));
@@ -593,6 +745,37 @@ impl<'a> P<'a> {
                 close(self, c)?;
                 TypeKind::List(Box::new(inner))
             }
+            // `dict[K, V]`, `set[T]`, `entry[K, V]`, `indexed[T]`: types where `[` comes after them, else
+            // the name of a record or an enum (DESIGN 24.2)
+            kw::DICT | kw::ENTRY if c.peek() == Some(&Tok::LBracket) => {
+                open(self, c)?;
+                let k = self.ty(c)?;
+                if !c.eat(&Tok::Comma) {
+                    self.expected(c, tr!("`,` と値の型（`{w}[string, number]`）", "`,` and the type of the values (`{w}[string, number]`)"));
+                    return None;
+                }
+                let v = self.ty(c)?;
+                close(self, c)?;
+                if w == kw::DICT { TypeKind::Dict(Box::new(k), Box::new(v)) } else { TypeKind::Entry(Box::new(k), Box::new(v)) }
+            }
+            // `result[T, E]` (DESIGN 26.3), a type where `[` comes after it
+            kw::RESULT if c.peek() == Some(&Tok::LBracket) => {
+                open(self, c)?;
+                let t = self.ty(c)?;
+                if !c.eat(&Tok::Comma) {
+                    self.expected(c, tr!("`,` と、値が無い理由の型（`result[Order, string]`）", "`,` and the type of why there is no value (`result[Order, string]`)"));
+                    return None;
+                }
+                let e = self.ty(c)?;
+                close(self, c)?;
+                TypeKind::Result(Box::new(t), Box::new(e))
+            }
+            kw::SET | kw::INDEXED if c.peek() == Some(&Tok::LBracket) => {
+                open(self, c)?;
+                let inner = self.ty(c)?;
+                close(self, c)?;
+                if w == kw::SET { TypeKind::Set(Box::new(inner)) } else { TypeKind::Indexed(Box::new(inner)) }
+            }
             kw::RUNNING => {
                 open(self, c)?;
                 let item = self.ty(c)?;
@@ -646,11 +829,55 @@ impl<'a> P<'a> {
                         }
                     }
                 }
-                TypeKind::Named(path)
+                // the type arguments of a generic record or enum (DESIGN 26.1)
+                let mut args = Vec::new();
+                if c.eat(&Tok::LBracket) {
+                    loop {
+                        args.push(self.ty(c)?);
+                        if c.eat(&Tok::Comma) {
+                            continue;
+                        }
+                        if c.eat(&Tok::RBracket) {
+                            break;
+                        }
+                        self.expected(c, tr!("`,` か `]`", "`,` or `]`"));
+                        return None;
+                    }
+                }
+                TypeKind::Named(path, args)
             }
         };
         let optional = c.eat(&Tok::Question);
         Some(TypeRef { kind, optional, span: start.to(c.prev_span()) })
+    }
+
+    /// A function type, `(T, Adjustment) -> T`, and the effect written after it (`(T) -> U total`,
+    /// DESIGN 27.1); `?` after the effect makes it optional (E113 says it cannot be).
+    fn fn_type(&mut self, c: &mut Cur) -> R<TypeRef> {
+        let start = c.span();
+        c.next();
+        let mut params = Vec::new();
+        if !c.eat(&Tok::RParen) {
+            loop {
+                params.push(self.ty(c)?);
+                if c.eat(&Tok::Comma) {
+                    continue;
+                }
+                if c.eat(&Tok::RParen) {
+                    break;
+                }
+                self.expected(c, tr!("`,` か `)`", "`,` or `)`"));
+                return None;
+            }
+        }
+        if !c.eat(&Tok::Arrow) {
+            self.expected(c, tr!("`->` と答えの型（`(number) -> number`）", "`->` and the type of the answer (`(number) -> number`)"));
+            return None;
+        }
+        let ret = self.ty(c)?;
+        let effect = self.effect_in(c, true)?;
+        let optional = c.eat(&Tok::Question);
+        Some(TypeRef { kind: TypeKind::Fn(params, Box::new(ret), effect), optional, span: start.to(c.prev_span()) })
     }
 
     /// `range …` and `count …`, each at most once, after a type.
@@ -711,18 +938,18 @@ impl<'a> P<'a> {
         };
         // whatever was not read of the body is its errors'
         self.i = end;
-        let (name, params, ret, ret_bounds, effect) = f?;
+        let (name, tparams, params, ret, ret_bounds, effect) = f?;
         let (description, body) = body?;
         let last = self.lines[..end].last().map(|l| l.no).unwrap_or(line.no);
-        Some(FnDecl { name, params, ret, ret_bounds, effect, description, body, line: line.no, last })
+        Some(FnDecl { name, private: false, tparams, params, ret, ret_bounds, effect, description, body, line: line.no, last })
     }
 
     #[allow(clippy::type_complexity)]
-    fn fn_head(&mut self, line: &Line) -> R<(Name, Vec<Param>, TypeRef, Bounds, Option<Effect>)> {
+    fn fn_head(&mut self, line: &Line) -> R<(Name, Vec<TypeParam>, Vec<Param>, TypeRef, Bounds, Option<Effect>)> {
         let mut c = Cur::new(&line.tokens, line.no);
         c.next();
         // `fn 遅れの請求(claim)(請求書(invoice): …)`: an alias is a word alone in parentheses with
-        // the parameters' parentheses after it
+        // the parameters' parentheses after it, or the type parameters' brackets (DESIGN 26.1)
         let name = {
             let (text, span) = match c.next() {
                 Some(Token { tok: Tok::Word(w), span }) => (w.clone(), *span),
@@ -737,7 +964,7 @@ impl<'a> P<'a> {
                 return None;
             }
             let mut n = Name { text, alias: None, span };
-            if c.peek() == Some(&Tok::LParen) && matches!(c.peek_at(1), Some(Tok::Word(_))) && c.peek_at(2) == Some(&Tok::RParen) && c.peek_at(3) == Some(&Tok::LParen) {
+            if c.peek() == Some(&Tok::LParen) && matches!(c.peek_at(1), Some(Tok::Word(_))) && c.peek_at(2) == Some(&Tok::RParen) && matches!(c.peek_at(3), Some(Tok::LParen | Tok::LBracket)) {
                 c.next();
                 let t = c.next().expect("a word");
                 let Tok::Word(a) = &t.tok else { unreachable!() };
@@ -746,6 +973,7 @@ impl<'a> P<'a> {
             }
             n
         };
+        let tparams = self.type_params(&mut c)?;
         if !c.eat(&Tok::LParen) {
             self.expected(&c, tr!("`(` と引数", "`(` and the parameters"));
             return None;
@@ -782,11 +1010,18 @@ impl<'a> P<'a> {
         let ret_bounds = self.bounds(&mut c)?;
         let effect = self.effect(&mut c)?;
         self.line_end(&c)?;
-        Some((name, params, ret, ret_bounds, effect))
+        Some((name, tparams, params, ret, ret_bounds, effect))
     }
 
     /// `total`, `fails rule, overflow`, `fails zero diverges`, `diverges` (DESIGN 4).
     fn effect(&mut self, c: &mut Cur) -> R<Option<Effect>> {
+        self.effect_in(c, false)
+    }
+
+    /// The same, after a function type when `in_type` (DESIGN 27.1): there a `,` after a kind goes on to
+    /// the next parameter unless a kind follows it that is no parameter's name (`f: (T) -> U fails
+    /// rule, zero: number` gives `f` the kind `rule`).
+    fn effect_in(&mut self, c: &mut Cur, in_type: bool) -> R<Option<Effect>> {
         let start = c.span();
         match c.peek() {
             Some(Tok::Word(w)) if w == kw::TOTAL => {
@@ -809,9 +1044,11 @@ impl<'a> P<'a> {
                             return None;
                         }
                     }
-                    if !c.eat(&Tok::Comma) {
+                    let kind_next = matches!(c.peek_at(1), Some(Tok::Word(k)) if FailKind::parse(k).is_some()) && !matches!(c.peek_at(2), Some(Tok::Colon | Tok::LParen));
+                    if c.peek() != Some(&Tok::Comma) || (in_type && !kind_next) {
                         break;
                     }
+                    c.next();
                 }
                 let diverges = c.eat_word(kw::DIVERGES);
                 Some(Some(Effect { total: false, fails, diverges, span: start.to(c.prev_span()) }))
@@ -967,6 +1204,19 @@ impl<'a> P<'a> {
             self.skip_rest(indent, end);
             return None;
         }
+        // `let x = try e` (DESIGN 26.3)
+        let tried = if c.peek().is_some_and(|t| t.is_word(kw::TRY)) {
+            let at = c.span();
+            c.next();
+            if c.at_end() {
+                self.expected(&c, tr!("`try` のあとの値", "the value after `try`"));
+                self.skip_rest(indent, end);
+                return None;
+            }
+            Some(at)
+        } else {
+            None
+        };
         let value = if c.at_end() {
             let b = self.nested(indent, end, l.no, tr!("`let {name} =`", "`let {name} =`"))?;
             let sp = b.answer.span;
@@ -979,7 +1229,7 @@ impl<'a> P<'a> {
             }
             e?
         };
-        Some(Let { name, span, ty, value })
+        Some(Let { name, span, ty, value, tried })
     }
 
     /// Pass over the lines under the line just read.
@@ -1122,10 +1372,45 @@ impl<'a> P<'a> {
         let mut patterns = Vec::new();
         loop {
             let at = c.span();
+            // a literal: a number (a minus before it too), a date, a string
+            if matches!(c.peek(), Some(Tok::Num(_) | Tok::Date(_) | Tok::Str(_) | Tok::Minus)) {
+                let neg = c.eat(&Tok::Minus);
+                let lit = match c.next() {
+                    Some(Token { tok: Tok::Num(n), span }) => {
+                        let (n, sp) = (n.clone(), *span);
+                        self.mk(sp, ExprKind::Num(n))
+                    }
+                    Some(Token { tok: Tok::Date(d), span }) if !neg => {
+                        let (d, sp) = (*d, *span);
+                        self.mk(sp, ExprKind::Date(d))
+                    }
+                    Some(Token { tok: Tok::Str(x), span }) if !neg => {
+                        let (x, sp) = (x.clone(), *span);
+                        self.mk(sp, ExprKind::Str(x))
+                    }
+                    _ => {
+                        c.k = c.k.saturating_sub(1);
+                        self.expected(&c, tr!("`-` のあとの数", "a number after `-`"));
+                        return None;
+                    }
+                };
+                let lit = if neg {
+                    let sp = at.to(lit.span);
+                    self.mk(sp, ExprKind::Neg(Box::new(lit)))
+                } else {
+                    lit
+                };
+                patterns.push(Pattern::Lit(Box::new(lit)));
+                if !c.eat(&Tok::Comma) {
+                    break;
+                }
+                continue;
+            }
             let p = match c.next().map(|t| &t.tok) {
                 Some(Tok::Word(w)) if w == kw::NONE => Pattern::None(at),
                 Some(Tok::Word(w)) if w == kw::TRUE => Pattern::Bool(true, at),
                 Some(Tok::Word(w)) if w == kw::FALSE => Pattern::Bool(false, at),
+                Some(Tok::Word(w)) if w == kw::ELSE => Pattern::Else(at),
                 Some(Tok::Word(w)) if w == kw::SOME => match c.next() {
                     Some(Token { tok: Tok::Word(x), span }) if !kw::is_reserved(x) => Pattern::Some(x.clone(), *span),
                     _ => {
@@ -1148,11 +1433,26 @@ impl<'a> P<'a> {
                         }
                     }
                     let sp = at.to(c.prev_span());
-                    Pattern::Value(path, sp)
+                    // the name the value is given in the arm: `placed p`
+                    let bind = match c.peek() {
+                        Some(Tok::Word(x)) if !kw::is_reserved(x) => {
+                            let b = (x.clone(), c.span());
+                            c.next();
+                            Some(b)
+                        }
+                        _ => None,
+                    };
+                    Pattern::Value(path, bind, sp)
                 }
                 _ => {
                     c.k = c.k.saturating_sub(1);
-                    self.expected(&c, tr!("分岐の値（列挙の値、`true`、`false`、`none`、`some <名前>`）", "the value of the arm (an enum's value, `true`, `false`, `none`, `some <name>`)"));
+                    self.expected(
+                        &c,
+                        tr!(
+                            "分岐の値（列挙の値、`true`、`false`、`none`、`some <名前>`、数・日付・文字列のリテラル、`else`）",
+                            "the value of the arm (an enum's value, `true`, `false`, `none`, `some <name>`, a literal number, date or string, `else`)"
+                        ),
+                    );
                     return None;
                 }
             };
@@ -1387,12 +1687,37 @@ impl<'a> P<'a> {
                     let sp = e.span.to(c.prev_span());
                     e = self.mk(sp, ExprKind::Call(Box::new(e), args));
                 }
+                // the type arguments of a call, after the name it calls: `empty_page[Invoice]()` (DESIGN
+                // 26.1)
+                Some(Tok::LBracket) if e.path().is_some() => {
+                    c.next();
+                    let mut targs = Vec::new();
+                    loop {
+                        targs.push(self.ty(c)?);
+                        if c.eat(&Tok::Comma) {
+                            continue;
+                        }
+                        if c.eat(&Tok::RBracket) {
+                            break;
+                        }
+                        self.expected(c, tr!("`,` か `]`", "`,` or `]`"));
+                        return None;
+                    }
+                    if !c.eat(&Tok::LParen) {
+                        self.expected(c, tr!("型の引数のあとに、`(` と引数", "`(` and the arguments, after the type arguments"));
+                        return None;
+                    }
+                    let args = self.args(c)?;
+                    let sp = e.span.to(c.prev_span());
+                    e = self.mk(sp, ExprKind::Call(Box::new(e), args));
+                    self.targs.insert(e.id, targs);
+                }
                 Some(Tok::LBrace) if e.path().is_some() => {
                     c.next();
                     let path = e.path().expect("a path");
-                    let fields = self.field_inits(c)?;
+                    let (base, fields) = self.field_inits(c)?;
                     let sp = e.span.to(c.prev_span());
-                    e = self.mk(sp, ExprKind::Record(path, fields));
+                    e = self.mk(sp, ExprKind::Record(path, base.map(Box::new), fields));
                 }
                 _ => return Some(e),
             }
@@ -1430,13 +1755,36 @@ impl<'a> P<'a> {
         }
     }
 
-    /// The fields after `{`, up to the `}`: each `name: value`.
-    fn field_inits(&mut self, c: &mut Cur) -> R<Vec<FieldInit>> {
+    /// The fields after `{`, up to the `}`: the value the others are taken from (`..p`, first), then
+    /// each `name: value`.
+    fn field_inits(&mut self, c: &mut Cur) -> R<(Option<Expr>, Vec<FieldInit>)> {
         let mut out = Vec::new();
         if c.eat(&Tok::RBrace) {
-            return Some(out);
+            return Some((None, out));
+        }
+        let mut base = None;
+        if c.eat(&Tok::DotDot) {
+            base = Some(self.expr(c)?);
+            if c.eat(&Tok::RBrace) {
+                return Some((base, out));
+            }
+            if !c.eat(&Tok::Comma) {
+                self.expected(c, tr!("`,` か `}}`", "`,` or `}}`"));
+                return None;
+            }
+            if c.eat(&Tok::RBrace) {
+                return Some((base, out));
+            }
         }
         loop {
+            if c.peek() == Some(&Tok::DotDot) {
+                let at = c.span();
+                self.err("E001", at, tr!("`..` は `{{` のすぐあとに、一度だけ書いてください", "`..` comes once, right after `{{`")).notes.push(tr!(
+                    "`Order.placed {{ ..p, on: later }}` のように、元にする値を初めに書き、替えるフィールドをそのあとに並べます。",
+                    "Write the value the fields are taken from first, then the fields that change: `Order.placed {{ ..p, on: later }}`."
+                ));
+                return None;
+            }
             let (name, span) = match (c.peek(), c.peek_at(1)) {
                 (Some(Tok::Word(w)), Some(Tok::Colon)) => (w.clone(), c.span()),
                 _ => {
@@ -1450,12 +1798,12 @@ impl<'a> P<'a> {
             out.push(FieldInit { name, span, value });
             if c.eat(&Tok::Comma) {
                 if c.eat(&Tok::RBrace) {
-                    return Some(out);
+                    return Some((base, out));
                 }
                 continue;
             }
             if c.eat(&Tok::RBrace) {
-                return Some(out);
+                return Some((base, out));
             }
             self.expected(c, tr!("`,` か `}}`", "`,` or `}}`"));
             return None;
@@ -1486,14 +1834,49 @@ impl<'a> P<'a> {
             }
             Tok::LBracket => {
                 c.next();
+                // `[:]`, the dict with no pairs (DESIGN 24.2)
+                if c.peek() == Some(&Tok::Colon) && c.peek_at(1) == Some(&Tok::RBracket) {
+                    c.next();
+                    c.next();
+                    let sp = at.to(c.prev_span());
+                    return Some(self.mk(sp, ExprKind::Dict(Vec::new())));
+                }
                 let mut xs = Vec::new();
                 if !c.eat(&Tok::RBracket) {
+                    let first = self.expr(c)?;
+                    // a key and `:`: a dict, its pairs each a key and a value
+                    if c.eat(&Tok::Colon) {
+                        let mut pairs = vec![(first, self.expr(c)?)];
+                        loop {
+                            if c.eat(&Tok::Comma) {
+                                if c.eat(&Tok::RBracket) {
+                                    break;
+                                }
+                                let k = self.expr(c)?;
+                                if !c.eat(&Tok::Colon) {
+                                    self.expected(c, tr!("`:` と値（`[\"a\": 1]`）", "`:` and the value (`[\"a\": 1]`)"));
+                                    return None;
+                                }
+                                let v = self.expr(c)?;
+                                pairs.push((k, v));
+                                continue;
+                            }
+                            if c.eat(&Tok::RBracket) {
+                                break;
+                            }
+                            self.expected(c, tr!("`,` か `]`", "`,` or `]`"));
+                            return None;
+                        }
+                        let sp = at.to(c.prev_span());
+                        return Some(self.mk(sp, ExprKind::Dict(pairs)));
+                    }
+                    xs.push(first);
                     loop {
-                        xs.push(self.expr(c)?);
                         if c.eat(&Tok::Comma) {
                             if c.eat(&Tok::RBracket) {
                                 break;
                             }
+                            xs.push(self.expr(c)?);
                             continue;
                         }
                         if c.eat(&Tok::RBracket) {
@@ -1507,23 +1890,32 @@ impl<'a> P<'a> {
                 Some(self.mk(sp, ExprKind::List(xs)))
             }
             Tok::LParen => {
-                // `(acc, x) => …`
-                let mut n = 1;
-                let mut words = Vec::new();
-                while let Some(Tok::Word(w)) = c.peek_at(n) {
-                    words.push((w.clone(), c.toks[c.k + n].span));
-                    n += 1;
-                    if c.peek_at(n) == Some(&Tok::Comma) {
-                        n += 1;
-                        continue;
+                // `(acc, x) => …`, `(l: Line) => …`, `() => …`: a `(` whose `)` has `=>` after it (DESIGN
+                // 27.1), which no value in parentheses has
+                let mut depth = 0i32;
+                let mut close = None;
+                for (i, t) in c.toks[c.k..].iter().enumerate() {
+                    match t.tok {
+                        Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
+                        Tok::RParen | Tok::RBracket | Tok::RBrace => {
+                            depth -= 1;
+                            if depth == 0 {
+                                close = Some(c.k + i);
+                                break;
+                            }
+                        }
+                        _ => {}
                     }
-                    break;
                 }
-                if !words.is_empty() && c.peek_at(n) == Some(&Tok::RParen) && c.peek_at(n + 1) == Some(&Tok::FatArrow) {
-                    c.k += n + 2;
+                if close.is_some_and(|k| c.toks.get(k + 1).map(|t| &t.tok) == Some(&Tok::FatArrow)) {
+                    let (words, tys) = self.lambda_params(c)?;
                     let body = self.expr(c)?;
                     let sp = at.to(body.span);
-                    return Some(self.mk(sp, ExprKind::Lambda(words, Box::new(body))));
+                    let e = self.mk(sp, ExprKind::Lambda(words, Box::new(body)));
+                    if tys.iter().any(Option::is_some) {
+                        self.ltypes.insert(e.id, tys);
+                    }
+                    return Some(e);
                 }
                 c.next();
                 let e = self.expr(c)?;
@@ -1565,6 +1957,10 @@ impl<'a> P<'a> {
                         let (ta, tb) = (Block { lets: vec![], answer: a }, Block { lets: vec![], answer: b });
                         Some(self.mk(sp, ExprKind::If(Box::new(cond), Box::new(ta), Box::new(tb))))
                     }
+                    kw::TRY => {
+                        self.err("E115", at, tr!("ここには `try` を書けません", "`try` cannot be written here")).notes.push(try_note());
+                        None
+                    }
                     w if kw::is_reserved(w) => {
                         let w = w.to_string();
                         self.err("E001", at, tr!("`{w}` を読めません。ここには値が要ります", "`{w}` cannot be read here: a value is needed"));
@@ -1590,11 +1986,59 @@ impl<'a> P<'a> {
     }
 }
 
+impl P<'_> {
+    /// The parameters of a lambda in parentheses, each a name and the type written after it, up to the
+    /// `=>` after the `)` (DESIGN 27.1).
+    #[allow(clippy::type_complexity)]
+    fn lambda_params(&mut self, c: &mut Cur) -> R<(Vec<(String, Span)>, Vec<Option<TypeRef>>)> {
+        c.next();
+        let (mut words, mut tys) = (Vec::new(), Vec::new());
+        if !c.eat(&Tok::RParen) {
+            loop {
+                let (w, sp) = match c.peek() {
+                    Some(Tok::Word(w)) => (w.clone(), c.span()),
+                    _ => {
+                        self.expected(c, tr!("ラムダの引数の名前", "the name of a parameter of the lambda"));
+                        return None;
+                    }
+                };
+                c.next();
+                if kw::is_reserved(&w) {
+                    self.err("E002", sp, tr!("`{w}` は予約語なので、名前にできません", "`{w}` is a keyword and cannot be a name")).notes.push(reserved_note());
+                    return None;
+                }
+                let t = if c.eat(&Tok::Colon) { Some(self.ty(c)?) } else { None };
+                words.push((w, sp));
+                tys.push(t);
+                if c.eat(&Tok::Comma) {
+                    continue;
+                }
+                if c.eat(&Tok::RParen) {
+                    break;
+                }
+                self.expected(c, tr!("`,` か `)`", "`,` or `)`"));
+                return None;
+            }
+        }
+        // the `=>` the `)` was found to have after it
+        c.next();
+        Some((words, tys))
+    }
+}
+
 fn reserved_note() -> Text {
     let words = kw::RESERVED.iter().map(|w| format!("`{w}`")).collect::<Vec<_>>().join(" ");
     tr!(
-        "名前にできない語は、式の中で別の意味に読める {words} の 13 語です。ほかの語に替えてください。",
-        "The thirteen words an expression reads as something else cannot be names: {words}. Choose another word."
+        "名前にできない語は、式の中で別の意味に読める {words} の 14 語です。ほかの語に替えてください。",
+        "The fourteen words an expression reads as something else cannot be names: {words}. Choose another word."
+    )
+}
+
+/// Where `try` is written (E115, DESIGN 26.3).
+pub fn try_note() -> Text {
+    tr!(
+        "`try` は `let x = try <値>` の形で、関数の答えに続くブロック（関数の本体と、そこから答えにつながる `if` と `match` の分岐）の `let` にだけ書けます。`err` か `none` なら、それが関数の答えになります。",
+        "`try` is written as `let x = try <value>`, in a `let` of a block the function answers with (its body, and the arms of an `if` or a `match` that answer for it): an `err` or a `none` of the value is then the function's answer."
     )
 }
 

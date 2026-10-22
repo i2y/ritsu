@@ -1,0 +1,44 @@
+module ハンドル(handles_ja) v1
+description "人が入力したハンドルを、サービスが持つ形にする。両端の空白を除き、中の空白の続きをハイフン一つにし、英字を小文字にしてから、ハンドルの決まりに合うかを確かめ、合わない理由を全部言う。テキストから、ハンドルと番号の組（タグ）も読む。handles.kn の日本語の版"
+
+record タグ(Tag)
+  ハンドル(handle) : string
+  番号(number)     : number  range >=1 <=9999
+
+# サービスが持つ形のハンドル。両端の空白を除き、中の空白の続きをハイフン一つにし、A〜Z を a〜z にする
+fn 正規化(normalized)(入力(raw): string) -> string
+  入力.words().join("-").lower_ascii()
+
+# ハンドルがサービスの決まりに合わない理由を、順に全部
+fn 問題(problems)(ハンドル(handle): string) -> list[string]
+  let 長さ = ハンドル.count()
+  let 短い = if 長さ < 3 then "3 文字より短い" else none
+  let 長い = if 長さ > 20 then "20 文字より長い" else none
+  let ほかの文字 = if ハンドル.chars().all(一字 => "abcdefghijklmnopqrstuvwxyz0123456789-".contains(一字)) then none else "a〜z、0〜9、- のほかの文字がある"
+  let 始まり = if "abcdefghijklmnopqrstuvwxyz".contains(ハンドル.take(1)) then none else "英字で始まっていない"
+  let 予約 = if ["admin", "help", "root", "support"].contains(ハンドル) then "サービスが使う語" else none
+  [短い, 長い, ほかの文字, 始まり, 予約].filter_map(x => x)
+
+# 入力したハンドルを、サービスが持つ形にしたもの。できなければ、その理由の全部
+fn ハンドルにする(handle)(入力(raw): string) -> result[string, list[string]]
+  let 形 = 正規化(入力: 入力)
+  let 理由 = 問題(ハンドル: 形)
+  if 理由.count() = 0 then ok(形) else err(理由)
+
+# `<ハンドル>#<番号>` と書いたタグ。ハンドルは `ハンドルにする` と同じ形にし、番号は 1 から 9999
+fn タグを読む(tag)(テキスト(text): string) -> result[タグ, list[string]]
+  match テキスト.index_of("#")
+    none => err(["ハンドルと番号のあいだに # がない"])
+    some 位置 =>
+      let ハンドル = try ハンドルにする(入力: テキスト.take(位置))
+      match テキスト.drop(位置 + 1).parse_number()
+        none => err(["番号が数字で書かれていない"])
+        some 番号 => if 番号 >= 1 and 番号 <= 9999 then ok(タグ { ハンドル: ハンドル, 番号: 番号 }) else err(["番号が 1 から 9999 のあいだにない"])
+
+examples
+  正規化(入力: "  Ada   Lovelace ") = "ada-lovelace"
+  ハンドルにする(入力: " Grace Hopper") = ok("grace-hopper")
+  ハンドルにする(入力: "9") = err(["3 文字より短い", "英字で始まっていない"])
+  ハンドルにする(入力: "Root") = err(["サービスが使う語"])
+  タグを読む(テキスト: "Ada Lovelace#42") = ok(タグ { ハンドル: "ada-lovelace", 番号: 42 })
+  タグを読む(テキスト: "ada#0") = err(["番号が 1 から 9999 のあいだにない"])

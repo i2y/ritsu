@@ -48,8 +48,8 @@ pub fn table() -> Table {
         tool: "kaname",
         version: env!("CARGO_PKG_VERSION"),
         summary: tr!(
-            "規則・日付・帳簿をつなぐコードを書く小さな言語。rulec の規則、koyomi の日付、chobo の帳簿の振替を、ritsu の型（単位、通貨と税区分、率の刻み、範囲、列挙、日付）のまま呼び、そのあいだの計算を同じ型と丸めの決まりで確かめる",
-            "A small language for the code that joins rules, dates and books: it calls rulec's rules, koyomi's dates and chobo's transfers in ritsu's types (units, currencies and tax, the steps of rates, ranges, enums, dates), and checks the computation between them by the same rules of types and rounding"
+            "Functional Core を書くための小さな汎用の言語。入出力を持たない計算を ritsu の型（単位、通貨と税区分、率の刻み、範囲、列挙、日付）で書き、範囲、丸め、int64 を確かめる。rulec の規則、koyomi の日付、chobo の帳簿の振替も、その型のまま呼べる",
+            "A small general-purpose language for writing a functional core: computation with no input or output, in ritsu's types (units, currencies and tax, the steps of rates, ranges, enums, dates), checked for ranges, rounding and int64; it calls rulec's rules, koyomi's dates and chobo's transfers in those types too"
         ),
         globals: vec![lang_flag("KANAME_LANG"), help_flag()],
         commands: vec![
@@ -445,6 +445,21 @@ fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         Ok(i) => i,
         Err(code) => return code,
     };
+    // an inner function is called by the module's functions, not by a host (DESIGN 21.3)
+    if c.decls.fns[fi].inner() {
+        let fun = &c.decls.fns[fi].name.text;
+        let why = c.decls.fns[fi].inner_why();
+        return refuse(
+            err,
+            tr!(
+                "`{fun}` は{}で、ホストからは呼ばないので、流しません。それを呼ぶ関数を流してください",
+                "`{fun}` {} no host calls, so it is not run: run a function that calls it",
+                why.ja;
+                why.en
+            ),
+            lang,
+        );
+    }
     let text = if input_at == "-" {
         let mut s = String::new();
         match std::io::Read::read_to_string(&mut std::io::stdin(), &mut s) {
@@ -457,14 +472,18 @@ fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
             Err(e) => return refuse(err, tr!("`{input_at}` を読めません: {e}", "cannot read `{input_at}`: {e}"), lang),
         }
     };
-    let input = match ritsu_base::json::parse(&text) {
+    // the input is read as deep as the arguments' JSON can nest, their values of types that hold
+    // themselves one deeper than a host may give them, which the entry then says (DESIGN 11.1, 28.1);
+    // never less deep than ritsu's reader reads, nor deeper than READ_DEPTH
+    let p = crate::value::Program::of(&c);
+    let deep = c.decls.fns[fi].params.iter().map(|prm| p.json_depth(&prm.slot.ty, crate::interp::NESTED + 1)).max().unwrap_or(0) + 1;
+    let input = match ritsu_base::json::parse_nested(&text, deep.clamp(ritsu_base::json::MAX_DEPTH, crate::interp::READ_DEPTH)) {
         Ok(j) => j,
         Err(e) => {
             let shown = if input_at == "-" { tr!("標準入力", "standard input") } else { Text::same(input_at) };
             return refuse(err, tr!("{} は JSON として読めません: {}", "{} is not JSON: {}", shown.ja, e.message.ja; shown.en, e.message.en), lang);
         }
     };
-    let p = crate::value::Program::of(&c);
     let mut it = Interp::new(&p, suite);
     it.lets = a.has("--trace");
     let info = &c.decls.fns[fi];
@@ -570,6 +589,13 @@ fn vectors_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &m
     for fi in 0..c.decls.fns.len() {
         if only.is_some_and(|o| o != fi) {
             continue;
+        }
+        if only.is_some() && c.decls.fns[fi].inner() {
+            let fun = &c.decls.fns[fi].name.text;
+            let head = if lang == Lang::Ja { "注意" } else { "note" };
+            let why = c.decls.fns[fi].inner_why();
+            let msg = tr!("`{fun}` は{}なので、ベクタを持ちません。それを呼ぶ関数のベクタで確かめます", "`{fun}` {}, which has no vectors: the vectors of the functions that call it try it", why.ja; why.en);
+            let _ = writeln!(err, "{head}: {}", msg.get(lang));
         }
         let (vs, cut) = crate::vectors::choose(&p, &c, fi);
         for v in &vs {

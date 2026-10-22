@@ -1,0 +1,30 @@
+module gcalls v1
+description "Calls of another module's generic functions: its generic record and enum given a record of this module, a type parameter held to keys given an enum of this module, a result passed on with try"
+
+use module glib from "tests/modules/glib.kn"
+
+enum size = small < medium < large
+
+record Item
+  sku  : string  count >=1 <=8
+  size : size
+
+fn boxed(items: list[Item] count <=10) -> glib.Box[Item]
+  glib.box_of(items: items, label: "items")
+
+fn first_sku(items: list[Item] count <=10) -> string
+  match glib.first_of(b: glib.box_of(items: items, label: "x"))
+    one o => o.value.sku
+    else => "none"
+
+fn largest_size(sizes: list[size] count <=10) -> size?
+  glib.biggest(b: glib.box_of(items: sizes, label: "sizes"))
+
+fn accepted(n: number range >=0 <=9, yes: bool) -> result[number, string]
+  let v = try glib.checked(x: n, accept: yes)
+  ok(v + 1)
+
+examples
+  largest_size(sizes: [medium, large, small]) = large
+  accepted(n: 3, yes: true) = ok(4)
+  accepted(n: 3, yes: false) = err("refused")

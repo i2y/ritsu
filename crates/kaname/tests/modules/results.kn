@@ -1,0 +1,111 @@
+module results v1
+description "Results: a command checked step by step, each step a result whose err the next `try` passes on; an error that is a list; a value that may be none passed on with `try`; results matched, put in a list and compared"
+
+record Raw
+  sku : string  count <=12
+  qty : string  count <=20
+
+record Command
+  lines : list[Raw]  count <=5
+  on    : string     count <=20
+
+record Item
+  sku : string  count >=1 <=12
+  qty : number  range >=1 <=99
+
+record Order
+  items : list[Item]  count >=1 <=5
+  on    : date        range >=2026-01-01 <=2027-12-31
+
+fn parse_qty(text: string count <=20) -> result[number, string]
+  match text.trim().parse_number()
+    none => err("not a number")
+    some n =>
+      if n >= 1 and n <= 99
+        ok(n)
+      else
+        err("out of range")
+
+# a step after a step: the err of the first is the answer, and the second is not taken
+fn parse_item(sku: string count <=12, qty: string count <=20) -> result[Item, string]
+  let n = try parse_qty(text: qty)
+  if sku.count() = 0
+    err("no sku")
+  else
+    ok(Item { sku: sku, qty: n })
+
+fn parse_day(text: string count <=20) -> result[date, list[string]]
+  match text.trim().parse_date()
+    none => err(["not a date"])
+    some d =>
+      if d >= 2026-01-01 and d <= 2027-12-31
+        ok(d)
+      else
+        err(["not in 2026 or 2027"])
+
+# what a result holds, or none: generic in its two types
+fn ok_of[T, E](r: result[T, E]) -> T?
+  match r
+    ok x => x
+    err e => none
+
+fn err_of[T, E](r: result[T, E]) -> E?
+  match r
+    ok x => none
+    err e => e
+
+# every line read, and every problem said at once
+fn parse_lines(lines: list[Raw] count <=5) -> result[list[Item], list[string]]
+  let rs = lines.map(l => parse_item(sku: l.sku, qty: l.qty))
+  let bad = rs.filter_map(r => err_of(r: r))
+  if bad.count() > 0
+    err(bad)
+  else
+    ok(rs.filter_map(r => ok_of(r: r)))
+
+fn parse_order(c: Command) -> result[Order, list[string]]
+  let items = try parse_lines(lines: c.lines)
+  let on = try parse_day(text: c.on)
+  if items.count() = 0
+    err(["no item"])
+  else
+    ok(Order { items: items, on: on })
+
+# `try` in a branch the answer comes from
+fn checked_qty(text: string count <=20, strict: bool) -> result[number, string]
+  if strict
+    let n = try parse_qty(text: text)
+    if n > 50 then err("more than 50") else ok(n)
+  else
+    ok(1)
+
+# a value that may be none, passed on with `try`
+fn first_qty(lines: list[string] count <=5) -> number?
+  let first = try lines.first()
+  let n = try first.trim().parse_number()
+  if n >= 0 and n <= 1000 then n else none
+
+fn describe(r: result[number, string]) -> string
+  match r
+    ok n => concat("ok: ", text(n))
+    err e => concat("failed: ", e)
+
+fn both(a: string count <=20, b: string count <=20) -> list[result[number, string]]
+  [parse_qty(text: a), parse_qty(text: b)]
+
+fn same_answer(a: result[number, string], b: result[number, string]) -> bool
+  a = b
+
+fn order_size(r: result[Order, list[string]]) -> number range >=0 <=5 total
+  match r
+    ok o => o.items.count()
+    err e => 0
+
+examples
+  parse_item(sku: "a1", qty: "5") = ok(Item { sku: "a1", qty: 5 })
+  parse_item(sku: "a1", qty: "x") = err("not a number")
+  parse_item(sku: "", qty: "7") = err("no sku")
+  first_qty(lines: ["12", "x"]) = 12
+  first_qty(lines: []) = none
+  checked_qty(text: "70", strict: true) = err("more than 50")
+  describe(r: err("boom")) = "failed: boom"

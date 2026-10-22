@@ -1,6 +1,6 @@
 # ritsu 設計文書
 
-九つの小さな言語（rulec、dandori、koyomi、chobo、geas、yuen、sakai、sekisho、kaname）を、一つのリポジトリの一つの処理系にまとめる。言語は分けたまま残し、土台（診断、二つの言語の文、出典、参照、doc のページの枠、テストの共通部分）、単位の型、プロジェクトの読み込み、CLI、バージョン、Lean の層を一つにする。目的は、ある言語が確かめたことを、隣の言語が型の付いたまま受け取れるようにすることである。2026-10-06 に八つ目の言語 sekisho（認可。`.gate`）を、2026-10-18 に九つ目の言語 kaname（規則と日付と帳簿をつなぐコード。`.kn`）を足した。どちらも ritsu の中で新しく書いた言語で、設計は `crates/sekisho/DESIGN.md` と `crates/kaname/DESIGN.md` にある。
+九つの小さな言語（rulec、dandori、koyomi、chobo、geas、yuen、sakai、sekisho、kaname）を、一つのリポジトリの一つの処理系にまとめる。言語は分けたまま残し、土台（診断、二つの言語の文、出典、参照、doc のページの枠、テストの共通部分）、単位の型、プロジェクトの読み込み、CLI、バージョン、Lean の層を一つにする。目的は、ある言語が確かめたことを、隣の言語が型の付いたまま受け取れるようにすることである。2026-10-06 に八つ目の言語 sekisho（認可。`.gate`）を、2026-10-18 に九つ目の言語 kaname（Functional Core を書く小さな汎用の言語。`.kn`）を足した。どちらも ritsu の中で新しく書いた言語で、設計は `crates/sekisho/DESIGN.md` と `crates/kaname/DESIGN.md` にある。
 
 名前は律（りつ）から取った。
 
@@ -24,7 +24,7 @@ ritsu（バイナリ。CLI。ritsu-wasm はブラウザで動かすもの。LSP 
 
 ### 0.1 芯：言語の境目で、証明を切らない
 
-九つの言語は、それぞれ小さいから確かめられる。rulec は表の完全性と重なりを、koyomi は範囲のすべての日の計算を、chobo は勘定の境界がどの振替でも一度の書き込みの中で守られることを、dandori はワークフローが終わるときの案件の状態と、外部のデータを二度変えうるリトライを確かめる。sekisho は、宣言した範囲のすべての組み合わせで、だれが何を許されるかを Cedar と同じ決まりで数える。kaname は、規則と日付と帳簿をつなぐコード（入力の組み立てと集約、按分、出力の組み合わせ、振替の組み立て）を、呼ぶ言語と同じ型と丸めの決まりで確かめ、関数ごとに、宣言した範囲のどの入力にも答えるか（total）を言う。kaname 自身は入出力を持たない。
+九つの言語は、それぞれ小さいから確かめられる。rulec は表の完全性と重なりを、koyomi は範囲のすべての日の計算を、chobo は勘定の境界がどの振替でも一度の書き込みの中で守られることを、dandori はワークフローが終わるときの案件の状態と、外部のデータを二度変えうるリトライを確かめる。sekisho は、宣言した範囲のすべての組み合わせで、だれが何を許されるかを Cedar と同じ決まりで数える。kaname は、Functional Core（プログラムのうち入出力を持たない部分。状態とイベント、入力の確かめ、集計、木の作り替えと、規則と日付と帳簿のまわりの入力の組み立てと集約、按分、出力の組み合わせ、振替の組み立て）を書く小さな汎用の言語で、呼ぶ言語と同じ型と丸めの決まりで確かめ、関数ごとに、宣言した範囲のどの入力にも答えるか（total）を言う。kaname 自身は入出力を持たない。
 
 ところが、いまは言語の境目で、確かめたことが途切れる。境目は各ツールの CLI が出す JSON で、受け取る側は JSON の中の文字列と数しか見ない。rulec は `JPY` と `円` が同じ単位だと知っているが、dandori は二つを別の文字列として比べてエラーにする。rulec は率の刻みを知っているが、dandori はそれを JSON Schema の説明の文から読み取っている（どちらも 1.4 に実際の出力を載せた）。koyomi は関数がとりうる値を全部数えられるのに、その集合を rulec の表の検査に渡す口が無い。
 
@@ -39,7 +39,7 @@ ritsu は、境目を JSON から型の付いた呼び出しに替える。あ�
 
 ### 0.2 前提
 
-- **P1**：言語は九つのまま。構文、検査、ページを読んで理解し確かめる人に見せるページ（`doc`）、名前、拡張子は言語ごとに別々に保ち、一つのファイルに二つの言語を混ぜない。規則、期日、帳簿、ワークフロー、主張、要件、地図、認可、つなぐコードは、書く人も、ページを読んで理解し確かめる人も違うからである。どれか一つの言語だけでも成り立つ（`.flow` を書かずに rulec だけを使える）。
+- **P1**：言語は九つのまま。構文、検査、ページを読んで理解し確かめる人に見せるページ（`doc`）、名前、拡張子は言語ごとに別々に保ち、一つのファイルに二つの言語を混ぜない。規則、期日、帳簿、ワークフロー、主張、要件、地図、認可、Functional Core は、書く人も、ページを読んで理解し確かめる人も違うからである。どれか一つの言語だけでも成り立つ（`.flow` を書かずに rulec だけを使える）。
 - **P2**：一つにする理由は、言語の境目で証明を切らないこと。便利さは設計の判断の基準にしない。
 - **P3**：小ささは、プロセスの境目ではなく、クレートの依存の決まりで守る（3 章）。言語のクレートは、土台の層にだけ依存する。言語をまたぐ検査は別の層に置き、口だけを通す。この決まりは、sakai でこの処理系そのものの地図を書いて確かめる（7.13）。
 - **P4**：言語の意味は、それぞれの言語の参照インタプリタと検査が決める。言語をまたぐ層は、各言語に問いを渡して答えを受け取るだけで、ある言語の意味をもう一度書かない。たとえば ritsu-cross は rulec の表の完全性を自分で解き直さず、rulec に「入力をこの集合に限ったとき、表は完全か」を尋ねる。
@@ -905,12 +905,12 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 `ritsu-base` の参照の書き方は、yuen と sakai の DESIGN.md の 2 章で決め、二つのリポジトリの `tests/fixtures/naming.tsv`（36 行の試しの表）で確かめているものを、そのまま処理系全体の決まりにする。決まりは次のとおり。
 
-1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）、sekisho の `principal P [attribute a]` と `resource R [attribute a]`、`enum E [value V]`、`action A [input i]` と `action A [context c]`、kaname の `record R [field f]` と `enum E [value V]` だけで、ほかのツールの組は一つまで。子の種類は、親の種類のすぐあとにしか書けない。sekisho の `attribute` は、二つの親（`principal` と `resource`）のどちらのすぐあとにも書ける（土台の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」になる）。
+1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）、sekisho の `principal P [attribute a]` と `resource R [attribute a]`、`enum E [value V]`、`action A [input i]` と `action A [context c]`、kaname の `record R [field f]` と `enum E [value V [field f]]` だけで、ほかのツールの組は一つまで。組が三つになるのは、kaname のフィールドを持つ列挙の値の下のフィールドだけである（`kaname "orders.kn" enum Order value placed field on`。土台の `Tool::grandchildren`。kaname の DESIGN 23.1）。子の種類は、親の種類のすぐあとにしか書けない。sekisho の `attribute` は、二つの親（`principal` と `resource`）のどちらのすぐあとにも書ける（土台の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」になる）。
 2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`sekisho` は同じ日に、sekisho の段階 D で、口 `Items` と一緒に足した。`kaname` は 2026-10-18 に、kaname の段階 C3 で足した。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。
 3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ渡したディレクトリ）からの相対で、ルートの外に出るパスはエラー。
-4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）、sekisho は `principal`（下に `attribute`）・`resource`（下に `attribute`）・`role`・`workflow`・`enum`（下に `value`）・`action`（下に `input`・`context`）・`policy`・`expect`・`separate`、kaname は `function`・`record`（下に `field`）・`enum`（下に `value`）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
+4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）、sekisho は `principal`（下に `attribute`）・`resource`（下に `attribute`）・`role`・`workflow`・`enum`（下に `value`）・`action`（下に `input`・`context`）・`policy`・`expect`・`separate`、kaname は `function`・`record`（下に `field`）・`enum`（下に `value`、その下に `field`）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
 5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文書と Cedar の名前は 6.5。文字列の外の全角の空白、`"…"` で書いた種類やツール名、名前の無い種類はエラー。
-6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`、sekisho の `principal`・`resource`・`enum`・`action`、kaname の `record`・`enum`）は子を全部含む。
+6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`、sekisho の `principal`・`resource`・`enum`・`action`、kaname の `record`・`enum`・`value`）は子を全部含む。
 7. **JSON の形**：`{"text": …, "tool": …, "path": …, "items": [[種類, 名前], …]}`（キーはこの順）。`text` は、パスをルートからの相対に直し、名前を語で書けるなら引用符なしで書いた形。空白を入れない詰めた書き方で、ASCII でない文字はそのまま出す。
 8. **文の中の書き方**：診断などの文に書くファイルの場所（`<パス>:<行>:<列>`、コピーのパス）は、走らせたディレクトリから、渡されたとおりに書く。文の中の参照は、JSON と同じくルートからの相対で書く（読み直すと同じ参照になり、`.req` や `.ctx` にそのまま貼れる）。
 9. **JSON の中のファイルの場所**：診断の `file` なども、参照と同じくルートからの相対にし、JSON の外側に `root`（走らせたディレクトリから見たルート）を添える。取り込んだときは、yuen がルートからの相対、sakai が走らせたディレクトリからの相対で食い違っていた。土台で一つにするときにそろえる（4.2）とし、C.8 で sakai をルートからの相対にした。
@@ -938,6 +938,8 @@ D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dan
 
 2026-10-18 に、ツール名 `kaname` の行（参照 6 行で、そのうち日本語の名前が 2 行。誤り 3 行。`record` のすぐあとでない `field`、`function` の下の組、`record` の下の `field` でない組）を足し、表は 84 行（参照 53、誤り 31）になった（kaname の DESIGN 14.6）。
 
+2026-10-21 に、kaname のフィールドを持つ列挙の値の下のフィールドの行（参照 1 行。誤り 1 行で、その下にもう一つ組を書いた行）を足し、`value` のすぐあとにも置ける `field` の誤りの行の理由を「`record` か `value` のすぐあと」に替えて、表は 86 行（参照 54、誤り 32）になった（kaname の DESIGN 14.6、23.1）。
+
 ### 6.4 索引：中のものと参照
 
 各言語は、`Items` と `References` の口（3.2）で、自分の中のものと参照を出す。`ritsu-project` は、それをプロジェクト全体の索引にする。
@@ -953,7 +955,7 @@ D の二つ目の部分で、これを足した（PLAN の D.6）。表は、dan
 | geas | `claim` | 主張の塊の行 |
 | proto | `service`、`method`、`message`、`field`、`enum`、`value` | yuen の DESIGN 3.4 の決まった形の文 |
 | sekisho | `principal`、`resource`、`role`、`workflow`、`enum`、`action`、`policy`、`expect`、`separate` と下の `attribute`、`value`、`input`、`context` | 宣言の塊の行（dandori と同じ作り方。土台の `definition`、4.22） |
-| kaname | `function`、`record`（下に `field`）、`enum`（下に `value`） | 関数は見出しから本体の最後の行まで、レコードは宣言の塊の行、フィールドと列挙はその行、列挙の値は名前と別名（dandori と同じ作り方。土台の `definition`、4.22） |
+| kaname | `function`、`record`（下に `field`）、`enum`（下に `value`、その下に `field`） | 関数は見出しから本体の最後の行まで、レコードは宣言の塊の行、フィールドと列挙はその行（値を下に並べる列挙は、その行の塊）、列挙の値は名前と別名、フィールドを持つ値は値の行とフィールドの行の塊（dandori と同じ作り方。土台の `definition`、4.22） |
 
 openapi、asyncapi、cedar の要素は、どの言語の `Items` にも入らない。yuen が自分で読み、端の中身は yuen の DESIGN 3.6 で決める（proto の要素を yuen が 3.4 で決めるのと同じ）。
 
@@ -1737,7 +1739,7 @@ WASI で組んだ `realpath` は、パスを含むいちばん深い preopen か
 
 ### 9.3 一つの生成パッケージ（E）
 
-`ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード（2026-10-06 から）、規則と日付と帳簿をつなぐコード（kaname のモジュール。2026-10-18 から）を、言語ごとに一つのパッケージにする。対象は、六つの言語（rulec、koyomi、chobo、dandori、sekisho、kaname）が共に生成している TypeScript、Python、Go。E.7 で作り、sekisho の段階 C で `authz/` を、kaname の段階 D で `glue/` を足した形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
+`ritsu gen` は、プロジェクトの規則、期日、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード（2026-10-06 から）、Functional Core（kaname のモジュール。2026-10-18 から）を、言語ごとに一つのパッケージにする。対象は、六つの言語（rulec、koyomi、chobo、dandori、sekisho、kaname）が共に生成している TypeScript、Python、Go。E.7 で作り、sekisho の段階 C で `authz/` を、kaname の段階 D で `glue/` を足した形は次のとおりである（A の段階の形は、Go と Python のディレクトリと、依存を書くファイルを持たなかった）。
 
 ```
 generated/typescript/          generated/python/              generated/go/
@@ -1754,9 +1756,9 @@ generated/typescript/          generated/python/              generated/go/
 
 ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6）。
 
-`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、つなぐコードを、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。
+`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。
 
-`glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「つなぐコード」を言う。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
+`glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「Functional Core（kaname のモジュール）」（英語では the functional cores (kaname's modules)）を言う。kaname は規則と日付と帳簿をつなぐコードに限らない汎用の言語なので、そう呼ぶ。置き場の名前は `glue/` のままである。ホストのコードはこのパスでモジュールを読むので、名前を変えるとホストのビルドが壊れる。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
 
 - ワークフローは、規則と期日と帳簿を、同じパッケージの `rules/`・`dates/`・`books/` から読む。import はパッケージのモジュールを指し、帳簿のトランスポートが受け取るクライアントは、パッケージの `books/` のクライアントの型である（TypeScript の `Books`、Python の `TypedDict` の `Books`、Go の `Books` と `Map()`）。渡すクライアントが帳簿と違えば、その言語の型の検査が言う。dandori のモデルに `package`（`InPackage`）があるときだけ、Temporal の三つの SDK のビルドが読み込む先を替える。`package` が無い `dandori build` の生成物は前と同じである（dandori の DESIGN 4.2）。
 - **単位の型（2026-10-18）。** パッケージの中では、お金と量の額は、パッケージの単位のモジュール（TypeScript の `units.ts`、Python の `<name>/units.py`、Go の `<module>/units`）が宣言する、単位ごとに一つの型である。規則のモジュールは、その単位のブランド（rulec の §8.2）を自分では宣言せず、単位のモジュールから同じ名前で読んで公開する（rulec の §15.248）。帳簿のクライアントは、振替の操作が受け取る額をその型にする（chobo の DESIGN 4.3）。そのため、ワークフローを通さずに手で書いたコードが、規則の出力を帳簿の振替に渡しても、その言語の型の検査が単位を突き合わせる。7 章の検査は、ワークフローが規則と帳簿を呼ぶ場所しか見られない。手で書いたコードの中の境目は ritsu には見えないので、そこはパッケージの型で、その言語の型の検査に任せる。テストのプロジェクト `crates/ritsu/tests/projects/marketplace` がその形で、規則がセントで出す手数料と店の取り分を、`service/` の決済のコード（三つの言語）が帳簿の `sale.do` に渡す。規則をドル（`money[USD]`）で数えるように変えると、tsc、mypy、go vet のどれもが、決済のコードのそこで止める。

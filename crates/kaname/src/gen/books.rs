@@ -54,7 +54,7 @@ pub fn optional_amounts(book: &BookFacts, transfer: &str, op: &str) -> Vec<Strin
 
 /// The parameters an operation takes, by their places among the transfer's: every one for `do` and
 /// `hold`, the key's and the amounts (which may be left out) for `post`, the key's for `void`.
-fn op_params(book: &BookFacts, transfer: &str, op: &str) -> Vec<(usize, bool)> {
+pub(crate) fn op_params(book: &BookFacts, transfer: &str, op: &str) -> Vec<(usize, bool)> {
     let Some(tr) = book.transfers.iter().find(|x| x.name == transfer) else { return Vec::new() };
     tr.params
         .iter()

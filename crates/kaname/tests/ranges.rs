@@ -35,13 +35,54 @@ fn modules() -> Vec<(String, Rc<Checked>)> {
         ("bounds", include_str!("modules/bounds.kn")),
         ("lift", include_str!("modules/lift.kn")),
         ("lift.ja", include_str!("modules/lift.ja.kn")),
+        ("open", include_str!("modules/open.kn")),
+        ("open.ja", include_str!("modules/open.ja.kn")),
+        ("sums", include_str!("modules/sums.kn")),
+        ("sums.ja", include_str!("modules/sums.ja.kn")),
         ("temps", include_str!("modules/temps.kn")),
         ("temps.ja", include_str!("modules/temps.ja.kn")),
+        ("dicts", include_str!("modules/dicts.kn")),
+        ("dicts.ja", include_str!("modules/dicts.ja.kn")),
+        ("lists2", include_str!("modules/lists2.kn")),
+        ("lists2.ja", include_str!("modules/lists2.ja.kn")),
+        ("texts", include_str!("modules/texts.kn")),
+        ("texts.ja", include_str!("modules/texts.ja.kn")),
+        ("generic", include_str!("modules/generic.kn")),
+        ("generic.ja", include_str!("modules/generic.ja.kn")),
+        ("results", include_str!("modules/results.kn")),
+        ("results.ja", include_str!("modules/results.ja.kn")),
+        ("gcalls", include_str!("modules/gcalls.kn")),
+        ("hof", include_str!("modules/hof.kn")),
+        ("hof.ja", include_str!("modules/hof.ja.kn")),
+        ("trees", include_str!("modules/trees.kn")),
+        ("trees.ja", include_str!("modules/trees.ja.kn")),
     ] {
         let o = common::check_text("t.kn", src);
         out.push((name.to_string(), o.analysed.clone().unwrap_or_else(|| panic!("{name}: {}", common::shown(&o, Lang::En)))));
     }
     out
+}
+
+/// The ends of an abstract value marked as its type's (DESIGN 22.2), each with which end it is.
+fn marked(a: &Abs) -> Vec<(&'static str, ritsu_units::Rat)> {
+    match a {
+        Abs::Num(i) | Abs::Date(i) => {
+            let mut out = Vec::new();
+            if i.open_lo
+                && let Some(l) = i.lo
+            {
+                out.push(("lo", l));
+            }
+            if i.open_hi
+                && let Some(h) = i.hi
+            {
+                out.push(("hi", h));
+            }
+            out
+        }
+        Abs::Opt(_, x) => marked(x),
+        _ => Vec::new(),
+    }
 }
 
 /// Run `f` on a stack as deep as the recursions of the test modules need (`interp::DEPTH` calls).
@@ -50,8 +91,10 @@ fn deep<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
 }
 
 /// A value of what a place declares, drawn from a sequence of numbers that is the same every run:
-/// a number or a date in its range and on its step, a list of up to six elements, a record field by
-/// field, `none` one time in four.
+/// a number or a date in its range and on its step, a list of up to six elements, a record and a value
+/// with fields field by field, a result `ok` or `err`, `none` one time in four. Four records deep, the
+/// base value of the place: a list as few elements as it may have, so that a value of a type that
+/// holds itself ends (DESIGN 28.1).
 fn sample(p: &Program, slot: &kaname::ty::Slot, rng: &mut u64, depth: usize) -> Value {
     use kaname::ty::Ty;
     use ritsu_units::Rat;
@@ -69,9 +112,27 @@ fn sample(p: &Program, slot: &kaname::ty::Slot, rng: &mut u64, depth: usize) -> 
         }
         Ty::List(x) => {
             let (lo, hi) = slot.count.as_ref().map(|c| (c.min.map(|v| v.num).unwrap_or(0), c.max.map(|v| v.num).unwrap_or(6))).unwrap_or((0, 6));
+            if depth >= 4 {
+                return kaname::vectors::base_of(p, &kaname::ty::Slot { count: Some(kaname::ty::Range { min: Some(Rat::int(lo)), max: Some(Rat::int(lo)) }), ..slot.clone() });
+            }
             let n = lo + next().rem_euclid((hi.min(lo + 6) - lo + 1).max(1));
             let elem = kaname::ty::Slot { ty: (**x).clone(), range: slot.range.clone(), count: None };
             Value::List((0..n).map(|_| sample(p, &elem, rng, depth + 1)).collect())
+        }
+        // a dict and a set: up to six keys drawn, each one key once (DESIGN 24.4)
+        Ty::Dict(k, x) => {
+            let (lo, hi) = slot.count.as_ref().map(|c| (c.min.map(|v| v.num).unwrap_or(0), c.max.map(|v| v.num).unwrap_or(6))).unwrap_or((0, 6));
+            let n = lo + next().rem_euclid((hi.min(lo + 6) - lo + 1).max(1));
+            let (ks, vs) = (kaname::ty::Slot::of((**k).clone()), kaname::ty::Slot { ty: (**x).clone(), range: slot.range.clone(), count: None });
+            let pairs = (0..n).map(|_| (sample(p, &ks, rng, depth + 1), sample(p, &vs, rng, depth + 1))).collect();
+            Value::Dict(p.dict_of(k, pairs))
+        }
+        Ty::Set(x) => {
+            let (lo, hi) = slot.count.as_ref().map(|c| (c.min.map(|v| v.num).unwrap_or(0), c.max.map(|v| v.num).unwrap_or(6))).unwrap_or((0, 6));
+            let n = lo + next().rem_euclid((hi.min(lo + 6) - lo + 1).max(1));
+            let es = kaname::ty::Slot { ty: (**x).clone(), range: slot.range.clone(), count: None };
+            let members = (0..n).map(|_| sample(p, &es, rng, depth + 1)).collect();
+            Value::Set(p.set_of(x, members))
         }
         Ty::Num(nt) => {
             let step = if nt.is_rate() { nt.step.unwrap_or(Rat::new(1, 100)) } else { Rat::int(1) };
@@ -91,9 +152,26 @@ fn sample(p: &Program, slot: &kaname::ty::Slot, rng: &mut u64, depth: usize) -> 
         Ty::Str => Value::Str(if next() % 2 == 0 { "a".into() } else { "b".into() }),
         Ty::Enum(id) => {
             let vs = p.values(id).0;
-            Value::Enum(vs[(next() as usize) % vs.len().max(1)].text.clone())
+            let v = vs[(next() as usize) % vs.len().max(1)].text.clone();
+            // a value with fields, field by field (DESIGN 23.6)
+            let fs = p.value_fields(id, &v);
+            match (fs.is_empty(), depth < 4) {
+                (true, _) => Value::Enum(v),
+                (false, true) => Value::Variant(v, fs.iter().map(|(f, s)| (f.text.clone(), sample(p, s, rng, depth + 1))).collect()),
+                (false, false) => kaname::vectors::base_of(p, slot),
+            }
         }
+        Ty::Record(id @ kaname::ty::RecId::Variant { value, .. }) if depth < 4 => Value::Variant(value.clone(), p.fields(id).iter().map(|(f, s)| (f.text.clone(), sample(p, s, rng, depth + 1))).collect()),
         Ty::Record(id) if depth < 4 => Value::Record(p.fields(id).iter().map(|(f, s)| (f.text.clone(), sample(p, s, rng, depth + 1))).collect()),
+        Ty::Record(_) => kaname::vectors::base_of(p, slot),
+        // a result, `ok` or `err` with its value (DESIGN 26.4)
+        Ty::Result(a, e) => {
+            let (tag, field, inner) = if next() % 2 == 0 { ("ok", "value", a) } else { ("err", "error", e) };
+            Value::Variant(tag.into(), vec![(field.into(), sample(p, &kaname::ty::Slot::of((**inner).clone()), rng, depth + 1))])
+        }
+        // a value of a type parameter, given to a generic function called alone: a number (its
+        // analysis takes any value there, DESIGN 26.5)
+        Ty::Param(_) => Value::Num(Rat::int(next().rem_euclid(100))),
         _ => Value::None,
     }
 }
@@ -104,15 +182,30 @@ fn sample(p: &Program, slot: &kaname::ty::Slot, rng: &mut u64, depth: usize) -> 
 /// effect says it can fail with (a place that can fail is never missing: DESIGN 4.3, 15.2.3).
 #[test]
 fn every_value_seen_is_in_what_the_analysis_says() {
-    let (exprs, values, vectors, outside, failed, unsaid) = deep(|| {
+    let (exprs, values, vectors, outside, failed, unsaid, (taken, marked)) = deep(|| {
         let suite = common::joined();
-        let mut seen_exprs: BTreeSet<(std::path::PathBuf, usize)> = BTreeSet::new();
+        // each module's expressions apart: the test modules are all checked as `t.kn`
+        let mut seen_exprs: BTreeSet<(String, std::path::PathBuf, usize)> = BTreeSet::new();
+        // the ends marked as the type's (DESIGN 22.2) of each module's own expressions, and those a run
+        // takes
+        let mut marked_ends: BTreeSet<(String, usize, &'static str)> = BTreeSet::new();
+        let mut taken_ends: BTreeSet<(String, usize, &'static str)> = BTreeSet::new();
         let (mut values, mut vectors, mut failed) = (0usize, 0usize, 0usize);
         let mut outside: Vec<String> = Vec::new();
         let mut unsaid: Vec<String> = Vec::new();
         for (name, c) in modules() {
             let p = Program::of(&c);
+            for (id, a) in c.analysis.get().unwrap().at.iter().enumerate() {
+                for (which, _) in a.as_ref().map(marked).unwrap_or_default() {
+                    marked_ends.insert((name.clone(), id, which));
+                }
+            }
             for f in 0..c.decls.fns.len() {
+                // a function that takes functions is run through the functions that call it: no value
+                // drawn is a function (DESIGN 27.1)
+                if c.decls.fns[f].takes_fn() {
+                    continue;
+                }
                 let (mut vs, _) = kaname::vectors::choose(&p, &c, f);
                 let mut rng = 0x5eed_u64 + f as u64;
                 for _ in 0..200 {
@@ -137,7 +230,19 @@ fn every_value_seen_is_in_what_the_analysis_says() {
                         let m = p.module(&file);
                         let at = m.analysis.get().and_then(|a| a.at.get(id).cloned().flatten());
                         values += 1;
-                        seen_exprs.insert((file.clone(), id));
+                        seen_exprs.insert((name.clone(), file.clone(), id));
+                        let v = match &value {
+                            Value::Num(r) => Some(*r),
+                            Value::Date(d) => Some(ritsu_units::Rat::int(*d as i128)),
+                            _ => None,
+                        };
+                        if file == c.canon {
+                            for (which, end) in at.as_ref().map(marked).unwrap_or_default() {
+                                if v == Some(end) {
+                                    taken_ends.insert((name.clone(), id, which));
+                                }
+                            }
+                        }
                         match at {
                             Some(abs) if abs.has(&value) => {}
                             other => outside.push(format!("{name}, {}: expression {id} is {value:?}, and the analysis says {other:?}", c.decls.fns[f].name.text)),
@@ -146,8 +251,10 @@ fn every_value_seen_is_in_what_the_analysis_says() {
                 }
             }
         }
-        (seen_exprs.len(), values, vectors, outside, failed, unsaid)
+        (seen_exprs.len(), values, vectors, outside, failed, unsaid, (taken_ends.len(), marked_ends.len()))
     });
+    eprintln!("ranges: {taken} of the {marked} ends marked as a type's are taken by a run (a vector at the end of a type)");
+    assert!(taken > 0 && marked > 0, "no end marked as a type's is taken: {taken} of {marked}");
     eprintln!("ranges: {values} values of {exprs} expressions seen on {vectors} vectors; {} outside what the analysis says", outside.len());
     eprintln!("ranges: {failed} of the runs fail; {} with a kind the function's effect does not say", unsaid.len());
     // each function the values outside and the failures unsaid are of, with how many and the first
@@ -250,8 +357,33 @@ fn the_examples_found_fail_where_they_are_said_to() {
                 }
             }
         }
-        assert_eq!(found, ["calc:27:E303", "calc:33:E302", "calc:42:E303", "calc:45:E302", "calc:45:E303", "places:12:E301", "places:15:E301", "places:18:E301", "places:21:E301", "inner:9:E301", "ranges:85:E301", "bounds:12:E302", "bounds:17:E302", "bounds:32:E301", "lift:8:E301", "lift.ja:8:E301"]);
+        assert_eq!(found, ["calc:27:E303", "calc:33:E302", "calc:42:E303", "calc:45:E302", "calc:45:E303", "places:12:E301", "places:15:E301", "places:18:E301", "places:21:E301", "inner:9:E301", "ranges:85:E301", "bounds:12:E302", "bounds:17:E302", "bounds:32:E301", "lift:8:E301", "lift.ja:8:E301", "open:53:E302", "open:67:E301", "open.ja:52:E302", "open.ja:64:E301"]);
     });
+}
+
+/// What the arms of a `match` narrow (DESIGN 23.7): a value of an enum with fields to the values an
+/// arm names, with its fields, the name the arm gives it; `else` to the values left; the literals
+/// of an arm to what they are, joined; and a record made from another keeps what its fields
+/// declare, the fields taken too.
+#[test]
+fn what_the_arms_of_a_match_narrow() {
+    let t = ritsu_testkit::TempDir::new("kaname-ranges-arms");
+    let codes = |src: &str| -> Vec<&'static str> {
+        let f = t.write("m.kn", src);
+        common::codes(&common::check(f.to_str().unwrap()))
+    };
+    let order = "module m v1\n\nenum Order\n  draft\n    n : number  range >=0 <=5\n  placed\n    n : number  range >=10 <=20\n  cancelled\n\n";
+    // the arm's value: its fields are its own, not the other values'
+    assert_eq!(codes(&format!("{order}fn f(o: Order) -> number range >=10 <=20\n  match o\n    placed p => p.n\n    else => 10\n")), Vec::<&str>::new());
+    // `else` takes what is left: here `draft` and `cancelled`, so `placed` reaches no `else`
+    assert_eq!(codes(&format!("{order}fn f(o: Order) -> number range >=0 <=5\n  match o\n    placed => 5\n    else =>\n      match o\n        draft d => d.n\n        else => 0\n")), Vec::<&str>::new());
+    // two literals in one arm: the value is either, not the last
+    assert_eq!(codes("module m v1\n\nfn g(n: number range >=0 <=9) -> number range >=5 <=5\n  match n\n    0, 1 => n + 5\n    else => 5\n"), ["E301"]);
+    assert_eq!(codes("module m v1\n\nfn g(n: number range >=0 <=9) -> number range >=5 <=6\n  match n\n    0, 1 => n + 5\n    else => 5\n"), Vec::<&str>::new());
+    // a field taken by `..x` is held to the range of the record it goes to
+    let wide = "module m v1\n\nrecord Wide\n  n : number  range >=0 <=100\n\nrecord Narrow\n  n : number  range >=0 <=10\n  m : number  range >=0 <=10\n\n";
+    assert_eq!(codes(&format!("{wide}fn f(x: Narrow, k: number range >=0 <=10) -> Narrow\n  Narrow {{ ..x, m: k }}\n")), Vec::<&str>::new());
+    assert_eq!(codes(&format!("{wide}fn f(x: Narrow, k: number range >=0 <=100) -> Narrow\n  Narrow {{ ..x, m: k }}\n")), ["E301"]);
 }
 
 /// What a branch narrows and what is known after a call answers (DESIGN 5.3): the days given a rule

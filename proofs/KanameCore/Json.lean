@@ -14,8 +14,8 @@
     effect, and the values of every expression.
 
   A rational is written `"p/q"` or `"p"`; an interval `[lo, hi, den]` with `null` for an end or a
-  bound that is not there; a value tagged by its kind (`{"n": …}`, `{"d": …}`, `{"r": …}`, `null`
-  for none).
+  bound that is not there; a value tagged by its kind (`{"n": …}`, `{"d": …}`, `{"r": …}`, a value
+  of an enum that has fields `{"v": [name, fields]}`, `null` for none).
 -/
 import Lean.Data.Json
 import KanameCore.Analysis
@@ -66,13 +66,27 @@ def readRel (s : String) : Except String Rel :=
   | "eq" => pure .eq
   | _ => throw s!"no relation: {s}"
 
+def readKind (s : String) : Except String Kind :=
+  match s with
+  | "rule" => pure .rule | "date" => pure .date | "range" => pure .range | "overflow" => pure .overflow
+  | "zero" => pure .zero
+  | _ => throw s!"no kind: {s}"
+
+/-- What the analysis does not see of a function value: `null` for nothing, `"any"` for a function
+    whose type writes no effect, `[kinds, diverges]` for one whose type writes one. -/
+def readUnseen (j : Json) : Except String (Option (Option (List Kind × Bool))) := do
+  if j.isNull then return none
+  if j == Json.str "any" then return some none
+  let xs ← jarr j
+  return some (some (← (← jarr (jat xs 0)).mapM fun k => do readKind (← k.getStr?), ← (jat xs 1).getBool?))
+
 partial def readAbs (j : Json) : Except String Abs := do
   match j with
   | .str "never" => return .never
   | .str "any" => return .any
-  | .str "str" => return .str
   | _ =>
     if let .ok x := j.getObjVal? "num" then return .num (← readIv x)
+    if let .ok x := j.getObjVal? "str" then return .str (← readIv x)
     if let .ok x := j.getObjVal? "date" then return .date (← readIv x)
     if let .ok x := j.getObjVal? "set" then
       if x.isNull then return .set none
@@ -97,14 +111,47 @@ partial def readAbs (j : Json) : Except String Abs := do
         let p ← jarr f
         return ((← (jat p 0).getStr?), ← readAbs (jat p 1))
       return .transfer fs
+    if let .ok x := j.getObjVal? "variants" then
+      let vs ← (← jarr x).mapM fun v => do
+        let p ← jarr v
+        let fs ← (← jarr (jat p 1)).mapM fun f => do
+          let q ← jarr f
+          return ((← (jat q 0).getStr?), ← readAbs (jat q 1))
+        return ((← (jat p 0).getStr?), fs)
+      return .variants vs
+    if let .ok x := j.getObjVal? "dict" then
+      let xs ← jarr x
+      return .dict (← readIv (jat xs 0)) (← readAbs (jat xs 1)) (← readAbs (jat xs 2))
+    if let .ok x := j.getObjVal? "members" then
+      let xs ← jarr x
+      return .members (← readIv (jat xs 0)) (← readAbs (jat xs 1))
+    -- a function value: the lambdas it can be (none, as a module writes one: a parameter's), and
+    -- what the analysis does not see of it (kaname's DESIGN 27.4)
+    if let .ok x := j.getObjVal? "fns" then
+      let xs ← jarr x
+      return .fns [] (← readUnseen (jat xs 1))
     throw s!"no abstract value: {j.compress}"
 
 partial def readSlot (j : Json) : Except String Slot := do
   let fields ← (← jarr (← jget j "fields")).mapM fun f => do
     let p ← jarr f
     return ((← (jat p 0).getStr?), ← readSlot (jat p 1))
+  -- the fields of each value of an enum that has fields it holds (none where the module says none)
+  let vals := (j.getObjVal? "values").toOption.getD (Json.arr #[])
+  let values ← (← jarr vals).mapM fun v => do
+    let p ← jarr v
+    let fs ← (← jarr (jat p 1)).mapM fun f => do
+      let q ← jarr f
+      return ((← (jat q 0).getStr?), ← readSlot (jat q 1))
+    return ((← (jat p 0).getStr?), fs)
+  -- the place of the keys of a dict (none where the module says none)
+  let keys := (j.getObjVal? "keys").toOption.getD Json.null
+  -- the number of the type that holds itself in the module's table (none where the module says none)
+  let ref := (j.getObjVal? "ref").toOption.getD Json.null
   return .mk (← (← jget j "list").getBool?) (← readOptRange (← jget j "count")) (← readOptRange (← jget j "range"))
-    (← (← jget j "unit01").getBool?) (← (← jget j "record").getBool?) fields
+    (← (← jget j "unit01").getBool?) (← (← jget j "record").getBool?) fields values
+    (← if keys.isNull then pure none else some <$> readSlot keys)
+    (← if ref.isNull then pure none else some <$> ref.getNat?)
 
 def readConv (j : Json) : Except String (Option Conv) := do
   if j.isNull then return none
@@ -115,6 +162,7 @@ def readOrder (j : Json) : Except String Order := do
   match j with
   | .str "num" => return .num
   | .str "date" => return .date
+  | .str "str" => return .str
   | .str "eq" => return .eq
   | _ => return .enum (← (← jarr (← jget j "enum")).mapM (·.getStr?))
 
@@ -141,15 +189,91 @@ def readWalk (s : String) : Except String Walk :=
   | "running_totals" => pure .running
   | _ => throw s!"no builtin: {s}"
 
+partial def readKey (j : Json) : Except String Key := do
+  match j with
+  | .str "num" => return .num
+  | .str "date" => return .date
+  | .str "str" => return .str
+  | .str "bool" => return .bool
+  | _ =>
+    if let .ok x := j.getObjVal? "enum" then return .enum (← (← jarr x).mapM (·.getStr?))
+    if let .ok x := j.getObjVal? "record" then return .record (← (← jarr x).mapM readKey)
+    throw s!"no key: {j.compress}"
+
+def readWalkK (s : String) : Except String WalkK :=
+  match s with
+  | "last" => pure .last | "sort_by" => pure .sortBy | "sort_by_desc" => pure .sortByDesc
+  | "max_by" => pure .maxBy | "min_by" => pure .minBy | "flat_map" => pure .flatMap
+  | "filter_map" => pure .filterMap | "group_by" => pure .groupBy | "filter" => pure .filterD
+  | "map_values" => pure .mapValues
+  | _ => throw s!"no builtin: {s}"
+
+def readPrim (s : String) : Except String Prim :=
+  match s with
+  | "get" => pure .get | "put" => pure .put | "remove_dict" => pure .removeD | "has_dict" => pure .hasD
+  | "keys" => pure .keys | "values" => pure .values | "entries" => pure .entries | "merge" => pure .merge
+  | "add" => pure .add | "remove_set" => pure .removeS | "has_set" => pure .hasS | "union" => pure .union
+  | "intersect" => pure .intersect | "difference" => pure .difference | "to_list" => pure .toList
+  | "first" => pure .first | "last" => pure .last | "at" => pure .at | "append" => pure .append
+  | "take" => pure .take | "drop" => pure .drop | "slice" => pure .slice | "reverse" => pure .reverse
+  | "sort" => pure .sort | "distinct" => pure .distinct | "contains" => pure .contains
+  | "flatten" => pure .flatten | "indexed" => pure .indexed | "to_set" => pure .toSet | "join" => pure .join
+  | "concat" => pure .concat | "numbers" => pure .numbers
+  | "chars" => pure .chars | "code_points" => pure .codePoints | "to_text" => pure .toText
+  | "slice_text" => pure .sliceT | "take_text" => pure .takeT | "drop_text" => pure .dropT
+  | "index_of" => pure .indexOf | "contains_text" => pure .containsT | "ends_with" => pure .endsWith
+  | "split" => pure .split | "words" => pure .words | "replace" => pure .replace | "trim" => pure .trim
+  | "trim_start" => pure .trimStart | "trim_end" => pure .trimEnd | "lower_ascii" => pure .lowerAscii
+  | "upper_ascii" => pure .upperAscii | "pad_start" => pure .padStart | "pad_end" => pure .padEnd
+  | "parse_number" => pure .parseNumber | "parse_date" => pure .parseDate | "char" => pure .charOf
+  | _ => throw s!"no builtin: {s}"
+
+partial def readVal (j : Json) : Except String Val := do
+  if j.isNull then return .none
+  if let .ok x := j.getObjVal? "n" then return .num (← readRat x)
+  if let .ok x := j.getObjVal? "b" then return .bool (← x.getBool?)
+  if let .ok x := j.getObjVal? "s" then return .str (← x.getStr?)
+  if let .ok x := j.getObjVal? "d" then return .date (← x.getInt?)
+  if let .ok x := j.getObjVal? "e" then return .enum (← x.getStr?)
+  if let .ok x := j.getObjVal? "r" then
+    return .record (← (← jarr x).mapM fun f => do
+      let p ← jarr f
+      return ((← (jat p 0).getStr?), ← readVal (jat p 1)))
+  if let .ok x := j.getObjVal? "l" then return .list (← (← jarr x).mapM readVal)
+  if let .ok x := j.getObjVal? "t" then
+    let p ← jarr x
+    return .transfer (← (jat p 0).getStr?) (← (← jarr (jat p 1)).mapM fun f => do
+      let q ← jarr f
+      return ((← (jat q 0).getStr?), ← readVal (jat q 1)))
+  if let .ok x := j.getObjVal? "v" then
+    let p ← jarr x
+    return .variant (← (jat p 0).getStr?) (← (← jarr (jat p 1)).mapM fun f => do
+      let q ← jarr f
+      return ((← (jat q 0).getStr?), ← readVal (jat q 1)))
+  if let .ok x := j.getObjVal? "dict" then
+    return .dict (← (← jarr x).mapM fun p => do
+      let q ← jarr p
+      return ((← readVal (jat q 0)), ← readVal (jat q 1)))
+  if let .ok x := j.getObjVal? "set" then return .set (← (← jarr x).mapM readVal)
+  throw s!"no value: {j.compress}"
+
+def readOptStr (j : Json) : Except String (Option String) :=
+  if j.isNull then return none else some <$> j.getStr?
+
 def readPat (j : Json) : Except String Pat := do
   match j with
   | .str "none" => return .none
+  | .str "else" => return .rest
   | _ =>
     if let .ok x := j.getObjVal? "some" then return .some (← x.getStr?)
     if let .ok x := j.getObjVal? "bool" then return .bool (← x.getBool?)
     if let .ok x := j.getObjVal? "enum" then
       if x.isNull then return .enum none
       return .enum (some (← x.getStr?))
+    if let .ok x := j.getObjVal? "value" then
+      let p ← jarr x
+      return .value (← readOptStr (jat p 0)) (← readOptStr (jat p 1))
+    if let .ok x := j.getObjVal? "lit" then return .lit (← readVal x)
     throw s!"no pattern: {j.compress}"
 
 def readFmt (j : Json) : Except String TextFmt := do
@@ -221,7 +345,9 @@ partial def readExpr (j : Json) : Except String Expr := do
     let inits ← (← jarr (jat xs 4)).mapM fun a => do
       let p ← jarr a
       return ((← (jat p 0).getNat?), ← readExpr (jat p 1), ← readConv (jat p 2), ← (jat p 3).getNat?)
-    return .record (← nat xs 0) (← nat xs 1) (← (jat xs 2).getBool?) fields inits
+    let base := jat xs 6
+    return .record (← nat xs 0) (← nat xs 1) (← (jat xs 2).getBool?) fields inits (← readOptStr (jat xs 5))
+      (← if base.isNull then pure none else some <$> readExpr base)
   | "list" =>
     let elems ← (← jarr (jat xs 1)).mapM fun a => do
       let p ← jarr a
@@ -233,7 +359,7 @@ partial def readExpr (j : Json) : Except String Expr := do
       (← readConv (jat xs 7)) (← readConv (jat xs 8)))
   | "minmax" => return (.minmax (← nat xs 0) (← nat xs 1) (← (jat xs 2).getBool?) (← e 3) (← e 4)
       (← readConv (jat xs 5)) (← readConv (jat xs 6)) (← readOrder (jat xs 7)))
-  | "mod" => return .modOp (← nat xs 0) (← e 1) (← e 2)
+  | "mod" => return .modOp (← nat xs 0) (← nat xs 1) (← e 2) (← e 3)
   | "isqrt" => return .isqrt (← nat xs 0) (← nat xs 1) (← e 2)
   | "allocate" => return (.allocate (← nat xs 0) (← nat xs 1) (← e 2) (← e 3) (← e 4) (← readConv (jat xs 5))
       (← readConv (jat xs 6)) (← readConv (jat xs 7)))
@@ -244,6 +370,30 @@ partial def readExpr (j : Json) : Except String Expr := do
   | "concat" => return .concat (← nat xs 0) (← (← jarr (jat xs 1)).mapM readExpr)
   | "text" => return .text (← nat xs 0) (← e 1) (← readFmt (jat xs 2))
   | "bad" => return .bad (← nat xs 0) (← nat xs 1) (← (← jarr (jat xs 2)).mapM readExpr)
+  | "lam" => return .lam (← nat xs 0)
+  | "callv" =>
+    let args ← (← jarr (jat xs 3)).mapM fun a => do
+      let p ← jarr a
+      return ((← readExpr (jat p 0)), ← readConv (jat p 1))
+    return .callV (← nat xs 0) (← nat xs 1) (← e 2) args (← readAbs (jat xs 4))
+  | "dict" =>
+    let pairs ← (← jarr (jat xs 2)).mapM fun a => do
+      let p ← jarr a
+      return ((← readExpr (jat p 0)), ← readConv (jat p 1), ← readExpr (jat p 2), ← readConv (jat p 3))
+    return .dict (← nat xs 0) (← readKey (jat xs 1)) pairs
+  | "prim" =>
+    let args ← (← jarr (jat xs 4)).mapM fun a => do
+      let p ← jarr a
+      return ((← readExpr (jat p 0)), ← readConv (jat p 1))
+    let top := jat xs 5
+    return .prim (← nat xs 0) (← nat xs 1) (← readPrim (← str xs 2)) (← readKey (jat xs 3)) args
+      (← if top.isNull then pure none else some <$> readAbs top)
+  | "walkk" => return (.walkK (← nat xs 0) (← nat xs 1) (← readWalkK (← str xs 2)) (← e 3) (← str xs 4) (← e 5)
+      (← readConv (jat xs 6)) (← readKey (jat xs 7)))
+  | "to_dict" => return (.toDict (← nat xs 0) (← nat xs 1) (← readKey (jat xs 2)) (← e 3) (← str xs 4) (← e 5)
+      (← readConv (jat xs 6)) (← str xs 7) (← e 8) (← readConv (jat xs 9)))
+  | "merge_with" => return (.mergeWith (← nat xs 0) (← nat xs 1) (← readKey (jat xs 2)) (← e 3) (← e 4)
+      (← str xs 5) (← str xs 6) (← e 7) (← readConv (jat xs 8)))
   | _ => throw s!"no expression: {tag}"
 
 def readParam (j : Json) : Except String Param := do
@@ -255,7 +405,21 @@ def readFn (j : Json) : Except String Fn := do
            params := ← (← jarr (← jget j "params")).mapM readParam, ret := ← readSlot (← jget j "ret"),
            retRanged := ← (← jget j "ranged").getBool?, declared := ← readAbs (← jget j "declared"),
            body := ← readExpr (← jget j "body"), answer := ← (← jget j "answer").getNat?,
-           answerLine := ← (← jget j "answer_line").getNat?, conv := ← readConv (← jget j "conv") }
+           answerLine := ← (← jget j "answer_line").getNat?, conv := ← readConv (← jget j "conv"),
+           reread := ← match j.getObjVal? "reread" with
+             | .ok x => x.getBool?
+             | .error _ => pure false,
+           takesFn := ← match j.getObjVal? "takes_fn" with
+             | .ok x => x.getBool?
+             | .error _ => pure false }
+
+/-- A lambda of the module made a value (kaname's DESIGN 27.1). -/
+def readLam (j : Json) : Except String Lam := do
+  return { id := ← (← jget j "id").getNat?, fn := ← (← jget j "fn").getNat?,
+           params := ← (← jarr (← jget j "params")).mapM fun p => do
+             let q ← jarr p
+             return ((← (jat q 0).getStr?), ← readAbs (jat q 1)),
+           body := ← readExpr (← jget j "body"), conv := ← readConv (← jget j "conv") }
 
 def readRuleInput (j : Json) : Except String RuleInput := do
   let els ← jget j "elements"
@@ -306,26 +470,13 @@ def readModule (j : Json) : Except String Module := do
            rings := ← (← jarr (← jget j "rings")).mapM fun r => do
              let p ← jarr r
              return ((← (← jarr (jat p 0)).mapM (·.getNat?)), ← (jat p 1).getBool?),
-           verdicts := ← readVerdicts j }
-
-partial def readVal (j : Json) : Except String Val := do
-  if j.isNull then return .none
-  if let .ok x := j.getObjVal? "n" then return .num (← readRat x)
-  if let .ok x := j.getObjVal? "b" then return .bool (← x.getBool?)
-  if let .ok x := j.getObjVal? "s" then return .str (← x.getStr?)
-  if let .ok x := j.getObjVal? "d" then return .date (← x.getInt?)
-  if let .ok x := j.getObjVal? "e" then return .enum (← x.getStr?)
-  if let .ok x := j.getObjVal? "r" then
-    return .record (← (← jarr x).mapM fun f => do
-      let p ← jarr f
-      return ((← (jat p 0).getStr?), ← readVal (jat p 1)))
-  if let .ok x := j.getObjVal? "l" then return .list (← (← jarr x).mapM readVal)
-  if let .ok x := j.getObjVal? "t" then
-    let p ← jarr x
-    return .transfer (← (jat p 0).getStr?) (← (← jarr (jat p 1)).mapM fun f => do
-      let q ← jarr f
-      return ((← (jat q 0).getStr?), ← readVal (jat q 1)))
-  throw s!"no value: {j.compress}"
+           verdicts := ← readVerdicts j,
+           lams := ← match j.getObjVal? "lams" with
+             | .ok ls => do (← jarr ls).mapM readLam
+             | .error _ => pure [],
+           slots := ← match j.getObjVal? "slots" with
+             | .ok ss => do (← jarr ss).mapM readSlot
+             | .error _ => pure [] }
 
 -- ── Writing ─────────────────────────────────────────────────────────────────
 
@@ -340,10 +491,12 @@ def ivJ (i : Iv) : Json := Json.arr #[endJ i.lo, endJ i.hi, match i.den with | s
 def relJ : Rel → Json
   | .lt => "lt" | .le => "le" | .eq => "eq"
 
+def kindsJ (ks : List Kind) : Json := Json.arr (ks.map fun k => Json.str k.word).toArray
+
 partial def absJ : Abs → Json
   | .never => "never"
   | .any => "any"
-  | .str => "str"
+  | .str c => Json.mkObj [("str", ivJ c)]
   | .num i => Json.mkObj [("num", ivJ i)]
   | .date i => Json.mkObj [("date", ivJ i)]
   | .set none => Json.mkObj [("set", Json.null)]
@@ -354,6 +507,18 @@ partial def absJ : Abs → Json
       Json.arr (fs.map fun (n, a) => Json.arr #[Json.str n, absJ a]).toArray,
       Json.arr (rels.map fun (x, r, y) => Json.arr #[Json.str x, relJ r, Json.str y]).toArray])]
   | .transfer fs => Json.mkObj [("tr", Json.arr (fs.map fun (n, a) => Json.arr #[Json.str n, absJ a]).toArray)]
+  | .variants vs => Json.mkObj [("variants", Json.arr (vs.map fun (t, fs) => Json.arr #[Json.str t,
+      Json.arr (fs.map fun (n, a) => Json.arr #[Json.str n, absJ a]).toArray]).toArray)]
+  | .dict c k v => Json.mkObj [("dict", Json.arr #[ivJ c, absJ k, absJ v])]
+  | .members c e => Json.mkObj [("members", Json.arr #[ivJ c, absJ e])]
+  -- the lambdas by their ids, each once, from the least; and what the analysis does not see
+  | .fns fs u => Json.mkObj [("fns", Json.arr #[
+      Json.arr ((((fs.map (·.1)).foldl (fun (acc : List Nat) i => if acc.contains i then acc else acc ++ [i]) ([] : List Nat)).mergeSort
+        (fun a b => decide (a ≤ b))).map (fun (i : Nat) => Json.num (i : Int))).toArray,
+      match u with
+      | none => Json.null
+      | some none => Json.str "any"
+      | some (some (ks, d)) => Json.arr #[kindsJ ks, Json.bool d]])]
 
 partial def valJ : Val → Json
   | .num r => Json.mkObj [("n", ratJ r)]
@@ -366,8 +531,11 @@ partial def valJ : Val → Json
   | .none => Json.null
   | .transfer id args => Json.mkObj [("t", Json.arr #[Json.str id,
       Json.arr (args.map fun (n, v) => Json.arr #[Json.str n, valJ v]).toArray])]
-
-def kindsJ (ks : List Kind) : Json := Json.arr (ks.map fun k => Json.str k.word).toArray
+  | .variant t fs => Json.mkObj [("v", Json.arr #[Json.str t,
+      Json.arr (fs.map fun (n, v) => Json.arr #[Json.str n, valJ v]).toArray])]
+  | .dict ps => Json.mkObj [("dict", Json.arr (ps.map fun (k, v) => Json.arr #[valJ k, valJ v]).toArray)]
+  | .set xs => Json.mkObj [("set", Json.arr (xs.map valJ).toArray)]
+  | .closure i _ => Json.mkObj [("clo", Json.num i)]
 
 -- ── Answering ───────────────────────────────────────────────────────────────
 
@@ -401,7 +569,7 @@ def runLine (M : Module) (j : Json) : Except String Json := do
   let C : Ctx := ⟨M, O⟩
   let fn := M.fns[f]?.getD default
   let r : R Val :=
-    if (fn.params.zip input).any (fun (p, v) => p.slot.outside true v) then failK .input fn.line
+    if (fn.params.zip input).any (fun (p, v) => p.slot.enter M.slots v) then failK .input fn.line
     else callFn C RUNFUEL 0 f input
   return match r with
   | .ok v => Json.mkObj [("value", valJ v)]

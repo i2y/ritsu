@@ -2237,7 +2237,7 @@ error[E211]: ordering/charges.gate:18:1: The file ordering/charges.gate of Order
 
 ## 18. kaname のモジュール（2026-10-18）
 
-kaname（規則と日付と帳簿をつなぐコードの言語、`.kn`）のモジュールを、地図の成果物として扱う。kaname の DESIGN 14.6 の決まりを、sakai の側で確かめる。
+kaname（Functional Core を書く小さな汎用の言語、`.kn`）のモジュールを、地図の成果物として扱う。kaname の DESIGN 14.6 の決まりを、sakai の側で確かめる。
 
 ### 18.1 属し方
 

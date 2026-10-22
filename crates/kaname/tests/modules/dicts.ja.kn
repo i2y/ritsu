@@ -1,0 +1,175 @@
+module 辞書と集合(dicts_ja) v1
+description "辞書と集合：二つの在庫の差分、価格の表、リストから作るグループと辞書、集合の和と積と差、鍵の同じ要素の順、型ごとの鍵の順、値で割る余りと、二つの数のあいだの数。dicts.kn の日本語の版"
+
+record 明細(Line)
+  品番(sku)   : string
+  数量(qty)   : number       range >=0 <=1000
+  単価(price) : money[USDc]  range >=0USDc <=100_000USDc
+
+enum 変化(Change)
+  追加(added)
+    品番(sku) : string
+    数量(qty) : number
+  削除(removed)
+    品番(sku) : string
+    数量(qty) : number
+  変更(changed)
+    品番(sku) : string
+    前(was)   : number
+    後(now)   : number
+
+enum 段階(tier) = 一般(basic) < 銀(silver) < 金(gold)
+
+record 作業(Task)
+  名前(name)         : string
+  優先度(priority)   : number  range >=1 <=3
+  段階(tier)         : 段階
+
+record 順位(Rank)
+  段階(tier)       : 段階
+  優先度(priority) : number  range >=1 <=3
+
+# 一つの品番の、二つの在庫のあいだの変化
+fn 品番の変化(change)(品番(sku): string, 前(before): number?, 後(after): number?) -> 変化?
+  match 前
+    none =>
+      match 後
+        none => none
+        some b => 変化.追加 { 品番: 品番, 数量: b }
+    some a =>
+      match 後
+        none => 変化.削除 { 品番: 品番, 数量: a }
+        some b => if a = b then none else 変化.変更 { 品番: 品番, 前: a, 後: b }
+
+# 二つの在庫の差分を、品番の順に
+fn 差分(diff)(前の在庫(before): dict[string, number] count <=4, 後の在庫(after): dict[string, number] count <=4) -> list[変化]
+  let 品番 = 前の在庫.keys().to_set().union(後の在庫.keys().to_set()).to_list()
+  品番.filter_map(s => 品番の変化(品番: s, 前: 前の在庫.get(s), 後: 後の在庫.get(s)))
+
+# 表から引く価格。表に無い品番は none
+fn 価格(price)(表(table): dict[string, money[USDc]] count <=3 range >=1USDc <=10_000USDc, 品番(sku): string) -> money[USDc]?
+  表.get(品番)
+
+fn 単価を引く(unit_price)(明細(line): 明細, 表(table): dict[string, money[USDc]] count <=3 range >=1USDc <=10_000USDc) -> money[USDc]
+  match 表.get(明細.品番)
+    none => 明細.単価
+    some p => p
+
+# 明細の合計。表にある品番は表の価格で
+fn 合計(total)(明細(lines): list[明細] count <=4, 表(table): dict[string, money[USDc]] count <=3 range >=1USDc <=10_000USDc) -> money[USDc]
+  明細.sum(l => l.数量 * 単価を引く(明細: l, 表: 表))
+
+# リストから作る辞書。同じ品番はあとの明細が勝つ
+fn 数量(quantities)(明細(lines): list[明細] count <=4) -> dict[string, number]
+  明細.to_dict(l => l.品番, l => l.数量)
+
+# リストのグループ。どのグループもリストの順のまま、鍵は鍵の順
+fn 優先度ごとの名前(names_by_priority)(作業(tasks): list[作業] count <=5) -> dict[number, list[string]]
+  作業.group_by(t => t.優先度).map_values(ts => ts.map(x => x.名前))
+
+# 列挙の値の鍵は、宣言の順
+fn 段階ごとの数(per_tier)(作業(tasks): list[作業] count <=5) -> dict[段階, number]
+  作業.group_by(t => t.段階).map_values(ts => ts.count())
+
+fn 段階の集合(tiers)(作業(tasks): list[作業] count <=5) -> set[段階]
+  作業.map(t => t.段階).to_set()
+
+# 集合の和と積と差
+fn 両方(both)(甲(a): set[string] count <=3, 乙(b): set[string] count <=3) -> set[string]
+  甲.intersect(乙)
+
+fn どちらか(either)(甲(a): set[string] count <=3, 乙(b): set[string] count <=3) -> list[string]
+  甲.union(乙).to_list()
+
+fn 甲だけ(only_first)(甲(a): set[string] count <=3, 乙(b): set[string] count <=3) -> number
+  甲.difference(乙).count()
+
+fn 入れ替え(grown)(甲(a): set[number] count <=3 range >=0 <=9, 値(x): number range >=0 <=9) -> set[number]
+  if 甲.has(値) then 甲.remove(値) else 甲.add(値)
+
+# 鍵の同じ要素は元の順のまま。小さい順と大きい順
+fn 優先度の順(by_priority)(作業(tasks): list[作業] count <=5) -> list[string]
+  作業.sort_by(t => t.優先度).map(t => t.名前)
+
+fn 優先度の高い順(by_priority_desc)(作業(tasks): list[作業] count <=5) -> list[string]
+  作業.sort_by_desc(t => t.優先度).map(t => t.名前)
+
+# レコードの鍵は、フィールドを宣言の順に比べる
+fn 順位の順(ranked)(作業(tasks): list[作業] count <=5) -> list[string]
+  作業.sort_by(t => 順位 { 段階: t.段階, 優先度: t.優先度 }).map(t => t.名前)
+
+# 文字列はコードポイントの順、日付は早い順、率は小さい順
+fn 記号(marks)() -> list[string]
+  ["😀": 1, "｡": 2, "z": 3].keys()
+
+fn 日付(days)(日(ds): list[date] count <=3 range >=2026-01-01 <=2026-12-31) -> list[date]
+  日.to_set().to_list()
+
+fn 率(rates)(率の並び(rs): list[rate[step 1%]] count <=3) -> list[rate[step 1%]]
+  率の並び.distinct().sort()
+
+# 鍵を入れる、取り除く、二つの辞書を合わせる
+fn 入荷(restock)(在庫(stock): dict[string, number] count <=3 range >=0 <=100, 品番(sku): string, 数量(qty): number range >=0 <=100) -> dict[string, number]
+  match 在庫.get(品番)
+    none => 在庫.put(品番, 数量)
+    some q => 在庫.put(品番, q + 数量)
+
+fn 取り除く(without)(在庫(stock): dict[string, number] count <=3, 品番(sku): string) -> dict[string, number]
+  在庫.remove(品番)
+
+fn 足し合わせ(combined)(甲(a): dict[string, number] count <=3 range >=0 <=100, 乙(b): dict[string, number] count <=3 range >=0 <=100) -> dict[string, number]
+  甲.merge_with(乙, (x, y) => x + y)
+
+fn あとが勝つ(later)(甲(a): dict[string, number] count <=3, 乙(b): dict[string, number] count <=3) -> dict[string, number]
+  甲.merge(乙)
+
+# 値の違う辞書を上に重ねる：両方の値
+fn 重ねる(overlay)(下(base): dict[string, number] count <=2 range >=0 <=5, 上(top): dict[string, number] count <=2 range >=10 <=20) -> dict[string, number]
+  下.merge(上)
+
+fn 在庫あり(in_stock)(在庫(stock): dict[string, number] count <=3 range >=0 <=100) -> dict[string, number]
+  在庫.filter(e => e.value > 0)
+
+fn 書き出し(shown)(在庫(stock): dict[string, number] count <=3) -> list[string]
+  在庫.entries().map(e => concat(e.key, "=", text(e.value)))
+
+fn 総数(amounts)(在庫(stock): dict[string, number] count <=3 range >=0 <=100) -> number
+  在庫.values().sum(q => q) + 在庫.count()
+
+# 書いた辞書と、辞書と集合の全体での比べ
+fn 表(table)() -> dict[string, money[USDc]]
+  ["b": 200USDc, "a": 100USDc]
+
+fn 同じ在庫(same_stock)(甲(a): dict[string, number] count <=2, 乙(b): dict[string, number] count <=2) -> bool
+  甲 = 乙
+
+fn 同じ段階(same_tiers)(甲(a): set[段階], 乙(b): set[段階]) -> bool
+  甲 = 乙
+
+# 値で割る余りは 0 から割る数の大きさの一つ手前まで。二つの数のあいだの数
+fn 順番(turn)(日(day): number range >=-10 <=10, 人数(players): number range >=1 <=4) -> number
+  mod(日, 人数)
+
+fn 負で割る(wrapped)(値(x): number range >=-7 <=7, 割る数(n): number range >=-3 <=-1) -> number
+  mod(値, 割る数)
+
+fn 散らす(spread)(個数(n): number range >=0 <=5) -> list[number]
+  numbers(1, 個数).map(i => mod(i * 7, 5))
+
+fn あいだの和(between)(初め(first): number range >=1 <=3, 終わり(last): number range >=0 <=5) -> number
+  numbers(初め, 終わり).sum(i => i)
+
+examples
+  差分(前の在庫: ["a": 1, "b": 2], 後の在庫: ["b": 3, "c": 4]) = [変化.削除 { 品番: "a", 数量: 1 }, 変化.変更 { 品番: "b", 前: 2, 後: 3 }, 変化.追加 { 品番: "c", 数量: 4 }]
+  価格(表: ["a": 5USDc], 品番: "b") = none
+  数量(明細: [明細 { 品番: "a", 数量: 1, 単価: 0USDc }, 明細 { 品番: "a", 数量: 2, 単価: 0USDc }]) = ["a": 2]
+  段階ごとの数(作業: [作業 { 名前: "x", 優先度: 1, 段階: 金 }, 作業 { 名前: "y", 優先度: 2, 段階: 一般 }]) = [一般: 1, 金: 1]
+  どちらか(甲: ["b", "a"].to_set(), 乙: ["c"].to_set()) = ["a", "b", "c"]
+  優先度の高い順(作業: [作業 { 名前: "x", 優先度: 1, 段階: 金 }, 作業 { 名前: "y", 優先度: 3, 段階: 一般 }, 作業 { 名前: "z", 優先度: 1, 段階: 一般 }]) = ["y", "x", "z"]
+  記号() = ["z", "｡", "😀"]
+  足し合わせ(甲: ["a": 1, "b": 2], 乙: ["b": 3]) = ["a": 1, "b": 5]
+  表() = ["a": 100USDc, "b": 200USDc]
+  順番(日: -3, 人数: 4) = 1
+  負で割る(値: 7, 割る数: -3) = 1
+  あいだの和(初め: 2, 終わり: 4) = 9
+  あいだの和(初め: 3, 終わり: 1) = 0

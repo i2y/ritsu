@@ -1,0 +1,151 @@
+module hof v1
+description "Functions that take functions: an amount summed by a function given, steps applied in turn, a function given by its name, effects written on function types, a function that can fail given to one that cannot, functions given to builtins, a function given to itself, and what only this module uses"
+
+record Line
+  sku  : string       count >=1 <=8
+  unit : money[USDc]  range >=0USDc <=10_000USDc
+  qty  : number       range >=0 <=100
+
+enum Adjustment
+  discount
+    off : money[USDc]  range >=0USDc <=1_000USDc
+  surcharge
+    add : money[USDc]  range >=0USDc <=1_000USDc
+
+private record Bounds
+  low  : number  range >=0 <=99
+  high : number  range >=0 <=99
+
+private enum side = below | inside | above
+
+# a sum by a function given: alone, the sum of amounts nothing bounds can overflow; read again where
+# it is called, the lines and the function given bound it
+fn total_by[T](xs: list[T], amount: (T) -> money[USDc]) -> money[USDc]
+  xs.sum(x => amount(x))
+
+# steps applied in turn: no place of its own, so `total` holds whatever function is given
+fn apply_all[T](x: T, steps: list[Adjustment] count <=10, adjust: (T, Adjustment) -> T) -> T total
+  steps.reduce(x, (acc, s) => adjust(acc, s))
+
+fn apply_each[T](xs: list[T], f: (T) -> T) -> list[T]
+  xs.map(x => f(x))
+
+fn order_total(lines: list[Line] count <=50) -> money[USDc]
+  let line_total = (l: Line) => l.unit * l.qty
+  total_by(xs: lines, amount: line_total)
+
+# a function given by its name, to a function and to a builtin
+fn line_cost(line: Line) -> money[USDc]
+  line.unit * line.qty
+
+fn order_cost(lines: list[Line] count <=50) -> money[USDc]
+  total_by(xs: lines, amount: line_cost)
+
+fn costs(lines: list[Line] count <=50) -> list[money[USDc]]
+  lines.map(line_cost)
+
+# a function that can fail, given by its name: its effect is in the effect of the function that gives it
+fn doubled(x: number) -> number
+  x * 2
+
+fn all_doubled(xs: list[number] count <=10) -> list[number]
+  apply_each(xs: xs, f: doubled)
+
+fn adjust_price(price: money[USDc] range >=0USDc <=100_000USDc, a: Adjustment) -> money[USDc] range >=0USDc <=100_000USDc
+  match a
+    discount d => max(price - d.off, 0USDc)
+    surcharge s => min(price + s.add, 100_000USDc)
+
+fn adjusted(price: money[USDc] range >=0USDc <=100_000USDc, steps: list[Adjustment] count <=10) -> money[USDc]
+  apply_all(x: price, steps: steps, adjust: adjust_price)
+
+# the values the call gives: 0 to 9 times 10¹⁸ fits in int64; a number nothing bounds plus 1 can
+# overflow, in the function that wrote the lambda
+fn shifted(xs: list[number] count <=5 range >=0 <=9) -> list[number]
+  apply_each(xs: xs, f: x => x * 1_000_000_000_000_000_000)
+
+fn bumped(xs: list[number] count <=10) -> list[number]
+  apply_each(xs: xs, f: x => x + 1)
+
+# effects written on function types: a test that is total, a function that may overflow
+fn all_within(xs: list[number] count <=10, test: (number) -> bool total) -> bool total
+  xs.all(x => test(x))
+
+fn in_band(xs: list[number] count <=10 range >=0 <=99, low: number range >=0 <=99, high: number range >=0 <=99) -> bool total
+  all_within(xs: xs, test: x => x >= low and x <= high)
+
+fn sum_with(xs: list[number] count <=5 range >=0 <=1000, f: (number) -> number fails overflow) -> number fails overflow
+  xs.sum(x => f(x))
+
+fn squares(xs: list[number] count <=5 range >=0 <=1000) -> number fails overflow
+  sum_with(xs: xs, f: x => x * x)
+
+# a lambda reads the names in scope where it is written, and narrows them as any body does
+fn per_person(amounts: list[money[USDc]] count <=5 range >=0USDc <=1_000USDc, people: number range >=0 <=10) -> list[money[USDc]] total
+  apply_each(xs: amounts, f: a => if people = 0 then a else down(a / people, 1USDc))
+
+# a function value a `let` names, chosen by an `if`, called; and given to a builtin by its name
+fn pick(up: bool, x: number range >=0 <=9) -> number
+  let f = if up then (y: number) => y + 1 else (y: number) => y - 1
+  f(f(x))
+
+fn scaled(xs: list[number] count <=5 range >=0 <=9, k: number range >=0 <=9) -> list[number]
+  let times = (x: number) => x * k
+  xs.map(times)
+
+# a function given itself: naming it is calling it, so it is in a ring, and may not stop
+fn via(n: number range >=1 <=1000, next: (number) -> number) -> number
+  next(n - 1)
+
+fn steps_down(n: number range >=0 <=1000) -> number
+  if n <= 0 then 0 else via(n: n, next: steps_down) + 1
+
+# five calls deep: past four, the lambda is read once with every number, and may overflow
+fn hop1[T](x: T, f: (T) -> T) -> T
+  hop2(x: x, f: f)
+
+fn hop2[T](x: T, f: (T) -> T) -> T
+  hop3(x: x, f: f)
+
+fn hop3[T](x: T, f: (T) -> T) -> T
+  hop4(x: x, f: f)
+
+fn hop4[T](x: T, f: (T) -> T) -> T
+  hop5(x: x, f: f)
+
+fn hop5[T](x: T, f: (T) -> T) -> T
+  f(x)
+
+fn deep(x: number range >=0 <=9) -> number
+  hop1(x: x, f: y => y * 2)
+
+# what only this module uses: a record, an enum and functions written `private`
+private fn place_of(x: number range >=0 <=99, b: Bounds) -> number
+  if x < b.low then 0 else if x > b.high then 2 else 1
+
+private fn side_of(x: number range >=0 <=99, b: Bounds) -> side
+  match place_of(x: x, b: b)
+    0 => side.below
+    1 => side.inside
+    else => side.above
+
+private fn side_name(x: number range >=0 <=99, b: Bounds) -> string
+  match side_of(x: x, b: b)
+    below => "below"
+    inside => "inside"
+    above => "above"
+
+fn sides(xs: list[number] count <=10 range >=0 <=99, low: number range >=0 <=99, high: number range >=0 <=99) -> list[string]
+  let b = Bounds { low: low, high: high }
+  xs.map(x => side_name(x: x, b: b))
+
+examples
+  order_total(lines: [Line { sku: "a", unit: 250USDc, qty: 2 }, Line { sku: "b", unit: 100USDc, qty: 3 }]) = 800USDc
+  adjusted(price: 1_000USDc, steps: [Adjustment.discount { off: 300USDc }, Adjustment.surcharge { add: 50USDc }]) = 750USDc
+  all_doubled(xs: [1, 2]) = [2, 4]
+  pick(up: true, x: 3) = 5
+  pick(up: false, x: 3) = 1
+  steps_down(n: 3) = 3
+  deep(x: 4) = 8
+  sides(xs: [1, 50, 99], low: 10, high: 60) = ["below", "inside", "above"]
+  per_person(amounts: [1_000USDc, 7USDc], people: 3) = [333USDc, 2USDc]

@@ -1,0 +1,44 @@
+module handles v1
+description "A handle a person types, made the one a service keeps: the white space at its ends dropped, each run of it inside made a hyphen and the letters made lower case, then held to what a handle is, each reason it is not said; and a tag, a handle and a number, read from text"
+
+record Tag
+  handle : string
+  number : number  range >=1 <=9999
+
+# the handle as it is kept: trimmed, each run of white space inside one hyphen, A to Z as a to z
+fn normalized(raw: string) -> string
+  raw.words().join("-").lower_ascii()
+
+# each reason a handle is not one the service takes, in order
+fn problems(handle: string) -> list[string]
+  let n = handle.count()
+  let short = if n < 3 then "shorter than 3 characters" else none
+  let long = if n > 20 then "longer than 20 characters" else none
+  let odd = if handle.chars().all(c => "abcdefghijklmnopqrstuvwxyz0123456789-".contains(c)) then none else "a character other than a to z, 0 to 9 and -"
+  let start = if "abcdefghijklmnopqrstuvwxyz".contains(handle.take(1)) then none else "not starting with a letter"
+  let taken = if ["admin", "help", "root", "support"].contains(handle) then "a word the service keeps" else none
+  [short, long, odd, start, taken].filter_map(x => x)
+
+# the handle a person typed, as it is kept, or every reason it cannot be
+fn handle(raw: string) -> result[string, list[string]]
+  let h = normalized(raw: raw)
+  let why = problems(handle: h)
+  if why.count() = 0 then ok(h) else err(why)
+
+# a tag written `<handle>#<number>`: the handle made as `handle` makes it, the number from 1 to 9999
+fn tag(text: string) -> result[Tag, list[string]]
+  match text.index_of("#")
+    none => err(["no # between the handle and the number"])
+    some i =>
+      let h = try handle(raw: text.take(i))
+      match text.drop(i + 1).parse_number()
+        none => err(["the number is not written in digits"])
+        some n => if n >= 1 and n <= 9999 then ok(Tag { handle: h, number: n }) else err(["the number is not from 1 to 9999"])
+
+examples
+  normalized(raw: "  Ada   Lovelace ") = "ada-lovelace"
+  handle(raw: " Grace Hopper") = ok("grace-hopper")
+  handle(raw: "9") = err(["shorter than 3 characters", "not starting with a letter"])
+  handle(raw: "Root") = err(["a word the service keeps"])
+  tag(text: "Ada Lovelace#42") = ok(Tag { handle: "ada-lovelace", number: 42 })
+  tag(text: "ada#0") = err(["the number is not from 1 to 9999"])

@@ -1,17 +1,136 @@
 # kaname
 
-Functional Core を書くための小さな言語です。
-プログラムのうち、計算して決めるだけの部分を、ritsu の型のまま、関数、レコード、列挙、リストで書きます。kaname 自身は入出力を持ちません。
-リクエストや時刻やデータベースを読み、決めたことを行うほかの部分は、kaname を呼ぶホストの言語（Imperative Shell）に残ります。
+Functional Core を書くための、小さな汎用の言語です。
+プログラムのうち、入出力を持たずに計算して決める部分を書きます。イベントで状態を進めること、入力を確かめてサービスが持つ形にすること、数を集めて比べること、木の形のデータを作り替えること、業務の規則のまわりの計算を、レコード、フィールドを持つ値のある列挙、リスト、辞書、集合、文字列の上の関数として書き、ジェネリクス、`result`、関数の値も使えます。
+リクエストや時刻やデータベースを読み、状態を持ち、決めたことを行うほかの部分は、kaname を呼ぶホストの言語（Imperative Shell）に残ります。
 コアは、ritsu の言語と同じ決まり（単位、通貨と税区分、率の刻み、範囲、丸め、int64）で確かめられ、関数ごとに何が起こりうるか（`total`、`fails …`、`diverges`）も検査が推し量ります。
-いまの kaname は、業務の決まりのまわりのコアに向けた形で、rulec の規則、koyomi の日付、chobo の帳簿の振替を ritsu の型のまま呼べます。より汎用に使えるようにする機能の拡張も検討しています。
-kaname は [ritsu](../../README.ja.md) の九つの言語の一つです。規則と日付のファイルと帳簿を ritsu を通して読み、`ritsu gen` がそれらのコードの隣に TypeScript、Python、Go のコードを書きます。
+rulec の規則、koyomi の日付、chobo の帳簿の振替も ritsu の型のまま呼べ、`ritsu gen` が、それらのコードの隣に、何にも依存しない TypeScript、Python、Go のコードを書きます。
+kaname は [ritsu](../../README.ja.md) の九つの言語の一つです。
+ritsu のサイトの **[kaname のページ](https://i2y.github.io/ritsu/ja/kaname/)** では、モジュールの書き方、下の Functional Core の四つの例と TypeScript、Python、Go のホスト、検査が保証すること、規則・日付・帳簿の呼び方を順に読めます。
+
+## Functional Core
+
+注文は、イベントが来るたびに状態から状態へ進みます。
+状態ごとに持つフィールドが違うので、状態を、値の下にフィールドを書いた列挙（直和型）の値にし、次の状態か、イベントを拒む理由を、状態とイベントの `match` で答えます。
+
+```kn
+enum 注文(Order)
+  カート(cart)
+    明細(lines) : list[明細]  count <=50
+  確定済み(placed)
+    明細(lines) : list[明細]  count >=1 <=50
+    合計(total) : money[USDc]
+    日付(on)    : date
+  支払い済み(paid)
+    明細(lines) : list[明細]  count >=1 <=50
+    日付(on)    : date
+  発送済み(shipped)
+    明細(lines)        : list[明細]  count >=1 <=50
+    追跡番号(tracking) : string
+  取り消し済み(cancelled)
+    理由(reason) : string
+
+# イベントで進んだ注文か、イベントを拒む理由
+fn 次(next)(注文(order): 注文, イベント(event): イベント) -> result[注文, string]
+  match 注文
+    カート c =>
+      match イベント
+        追加 a =>
+          if c.明細.count() < 50
+            ok(注文.カート { 明細: c.明細.append(a.明細) })
+          else
+            err("カートに入る明細は 50 件までです")
+        削除 r => ok(注文.カート { 明細: c.明細.filter(一件 => 一件.品番 != r.品番) })
+        確定 p =>
+          if c.明細.count() = 0
+            err("空のカートは確定できません")
+          else
+            ok(注文.確定済み { 明細: c.明細, 合計: 合計(明細: c.明細), 日付: p.日付 })
+        取り消し x => ok(注文.取り消し済み { 理由: x.理由 })
+        else => err("カートは先に確定します")
+    確定済み p =>
+      match イベント
+        支払い y =>
+          if y.金額 = p.合計
+            ok(注文.支払い済み { 明細: p.明細, 日付: p.日付 })
+          else
+            err("金額が合計と違います")
+        取り消し x => ok(注文.取り消し済み { 理由: x.理由 })
+        else => err("確定済みの注文は、支払うか取り消します")
+    支払い済み d =>
+      match イベント
+        発送 s => ok(注文.発送済み { 明細: d.明細, 追跡番号: s.追跡番号 })
+        else => err("支払い済みの注文は発送します")
+    発送済み, 取り消し済み => err("注文はもう閉じています")
+```
+
+`match` が注文のどの値にもイベントのどの値にも一度だけ答えることは、kaname が確かめます（E106）。
+明細を足すのは `c.明細.count() < 50` の中だけなので、カートの明細は状態の宣言する 50 件に収まります。確定済みの注文は明細を 1 件以上持ち、明細 50 件、数量 100、単価 1,000,000 セントの合計も int64 に収まります。kaname はこれを示し、どの関数も、受け取るどの入力にも答えます。
+
+```console
+$ ritsu check examples/order_flow --root examples/order_flow --lang ja
+ok examples/order_flow/order_flow.ja.kn: 関数 5 個、total
+ok examples/order_flow/order_flow.kn: 関数 5 個、total
+ritsu check: ファイル 2 個（kaname 2）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
+注文を持ち、イベントを受け取り、`ritsu gen` がこのモジュールから書いたコードを呼ぶのはホストです。
+TypeScript のホスト（`examples/order_flow/host/main.ts`。横にある Python と Go のホストも、同じものを出力します）：
+
+```ts
+import { next, type Event, type Order } from "./glue/order_flow";
+import type { USDc } from "./units";
+
+const events: Event[] = [
+  { kind: "add", line: { sku: "pen", qty: 2n, price: 150n as USDc } },
+  { kind: "add", line: { sku: "ink", qty: 1n, price: 400n as USDc } },
+  { kind: "place", on: "2026-10-22" },
+  { kind: "pay", amount: 650n as USDc },
+  { kind: "pay", amount: 700n as USDc },
+  { kind: "ship", tracking: "1Z-42" },
+  { kind: "cancel", reason: "too late" },
+];
+
+let order: Order = { kind: "cart", lines: [] };
+for (const event of events) {
+  const r = next(order, event);
+  if (r.kind === "err") {
+    console.log(`${event.kind}: refused: ${r.error}`);
+    continue;
+  }
+  order = r.value;
+  console.log(`${event.kind}: ${order.kind}`);
+}
+```
+
+```text
+add: cart
+add: cart
+place: placed
+pay: refused: the amount is not the total
+pay: paid
+ship: shipped
+cancel: refused: the order is closed
+```
+
+範囲を書かない値は、型の全体をとります。数なら int64 の全体です。
+そういう値が int64 を超えうる場所は、生成したコードが確かめ、関数のエフェクトがそう言います。`total` と書いてあれば、エラーになります。
+
+```console
+$ ritsu kaname check tests/docs/ids.kn --lang ja
+エラー[E401]: tests/docs/ids.kn:4:1: 関数 `next_id` には `total` と書いてありますが、`overflow` で失敗することがあります
+     4 | fn next_id(last: number) -> number total
+  = 5 行目: `last + 1` の値は、範囲を書かない値から来るので、int64 を超えることがあります（`overflow`）
+  = 書いたエフェクトに収まるよう、失敗しうる場所を示せるようにする（渡す値を `if` で範囲に狭める）か、エフェクトを広げて書いてください。
+```
+
+## 規則・日付・帳簿を ritsu の型のまま呼ぶ
 
 規則は判断を、日付のファイルは日付を、帳簿は額の動きを受け持ち、それぞれの言語の検査を受けています。
-ところが、それらをつなぐコードは、ふつうはホストの言語で書きます。カートから規則の入力を組み立てる、規則の答えを次の呼び出しに渡す、額を帳簿に渡す、といったコードです。
-`ritsu gen` が書くパッケージは単位ごとに一つの型を持つので、ドルで数えた手数料をセントの帳簿に渡せば、ホストの言語の型の検査が止めます。
+それらをつなぐのは、カートから規則の入力を組み立てる、規則の答えを次の呼び出しに渡す、額を帳簿に渡す、といったコードです。
+ホストの言語で書くと、`ritsu gen` が書くパッケージが単位ごとに一つの型を持つので、ドルで数えた手数料をセントの帳簿に渡せば、ホストの言語の型の検査が止めます。
 それでも、そのコードが計算するものはどの検査も読みません。丸めの書き忘れ、規則が受け取る範囲を外れる合計、規則の前提を破る途中までの合計、int64 を超える積がそうです。
-kaname では、そのコードを、それらのあいだの Functional Core として ritsu の型で書き、同じ決まりで確かめます。
+kaname で書くと、規則と日付と帳簿をそれぞれの型のまま呼び、同じ決まりで確かめられます。
 
 ```kn
 module 支払いの遅れ(late_payment_ja) v1
@@ -113,8 +232,8 @@ ritsu check: ファイル 3 個（rulec 1、chobo 1、kaname 1）。検査を通
 関数の型には、どこまで確かめたかが載ります。
 **total** な関数は、規則や koyomi の日付と同じく、宣言した範囲のどの入力にも答えます。
 **fails** の関数には、検査が示せなかった場所があり、`rule`、`date`、`range`、`overflow`、`zero` のどれで失敗しうるかも型に載ります。
-**diverges** の関数は再帰を持ちます。
-エフェクトは kaname が推論し、見出しに書いてあれば、それに収まるかを確かめます（E401）。呼んだ関数のエフェクトは、呼んだ側に伝わります。
+**diverges** の関数は、木をたどる関数（[examples/catalog](examples/catalog)）のように再帰を持ちます。止まることは確かめません。
+エフェクトは kaname が推論し、見出しに書いてあれば、それに収まるかを確かめます（E401）。呼んだ関数のエフェクトは、呼んだ側に伝わります。ほかの関数に渡した関数のエフェクトは、渡した側に伝わります。
 生成するコードの形もエフェクトで決まります。Go では失敗しうる関数だけが `(T, error)` を返し、TypeScript と Python では、関数ごとに失敗の種類の型が付きます。
 
 ## 判断は表に書く
@@ -136,11 +255,25 @@ $ ritsu kaname check tests/doc/decisions.kn --lang ja
 ok tests/doc/decisions.kn: 関数 3 個: total 2 個、fails rule 1 個
 ```
 
+## 言語
+
+- **値**：単位付きの数、お金、量、刻みのある率、日付、真偽、文字列（コードポイントの並び）、レコード、列挙と、値の下にフィールドを持つ列挙（直和型）、リスト、辞書、集合、値の無いことがある値、業務として拒むことを値で返す `result[T, E]`。
+- **範囲**：引数とフィールドに範囲や要素の数を書けます（`数量(qty) : number range >=1 <=100`）。書かない値は、型の全体をとります。
+- **式**：`let`、`if`、`match`（`else` とリテラルの分岐も）、ほかのレコードの一部を替えたレコード（`分類 { ..分類, 下の分類: 残す }`）、どの型の値も比べられる `=`、`err` か `none` をそのまま関数の答えにする `let x = try e`。
+- **組み込みの関数**は、関数の形でも、値のあとに書く形でも書けます（`xs.sort_by(x => x.due)`、`在庫.get(品番)`、`a.union(b)`、`入力.trim()`、`テキスト.parse_number()`）。辞書と集合は鍵の順に回り、文字列はコードポイントで数え、切り、並べます。どの出力先でも同じです。
+- **関数**：型の引数を持つ総称の関数（鍵にできる型には `K: key`）、関数を受け取る関数（ラムダも、名前で渡す関数も）、再帰、モジュールの中だけで使う `private`。
+- rulec の規則、koyomi の日付、chobo の振替を、ritsu の型のまま**呼べます**。
+- **持たないもの**：入出力、書き換えられる変数とループ、浮動小数点、関数を答える関数、正規表現（[DESIGN の 29 章](DESIGN.md)）。
+
+言語の全部は [docs/reference.md](docs/reference.md)（英語）にあります。
+
 ## 生成するコード
 
-`ritsu gen` は、TypeScript、Python、Go のパッケージごとに、モジュールのコードを `glue/` の下に書きます。正確な分数、int64 の確かめ、五つの丸めを持つ補助のモジュールも一緒に書き、ほかには何にも依存しません。
-お金と量は、規則と帳簿と同じく、パッケージの単位ごとの型で受け渡します。ホストが呼ぶ関数は、引数が宣言に収まるかを最初に確かめます。範囲の解析が示せなかった場所は、生成したコードがそこで確かめ、参照インタプリタと同じ種類の `KanameError` で失敗します。
+`ritsu gen` は、TypeScript、Python、Go のパッケージごとに、モジュールのコードを `glue/` の下に書きます。正確な分数、int64 の確かめ、五つの丸め、コードポイントで扱う文字列、鍵の順に回す辞書と集合を持つ補助のモジュールも一緒に書き、ほかには何にも依存しません。
+直和型の値は、TypeScript では `kind` を持つオブジェクト、Python では凍結したデータクラス、Go ではインターフェースを満たす構造体で、`result` は補助のモジュールの `Ok` と `Err` です。お金と量は、規則と帳簿と同じく、パッケージの単位ごとの型で受け渡します。
+ホストが呼ぶ関数は、引数が宣言に収まるかを最初に確かめます。範囲の解析が示せなかった場所は、生成したコードがそこで確かめ、参照インタプリタと同じ種類の `KanameError` で失敗します。
 振替は値で、その型には、帳簿がそれを拒否しうる理由が載ります。帳簿ごとの関数が、chobo のクライアントでその振替を当てます。
+Functional Core の四つの例は、`host/` の下に TypeScript、Python、Go のホストを持ちます。どれも `ritsu gen` が書くパッケージを呼び、同じものを出力します。
 
 ## 人が読むページ
 
@@ -169,9 +302,9 @@ kaname のクレートのバイナリはほかの言語を持たないので、�
 ## コマンド
 
 ```console
-$ ritsu kaname check examples/late_payment/late_payment.ja.kn --lang ja
-$ ritsu kaname run examples/late_payment/late_payment.ja.kn 遅れの請求 --input claim.ja.json --trace --lang ja
-$ ritsu kaname vectors examples/late_payment/late_payment.ja.kn --function 遅れの請求 --lang ja
+$ ritsu kaname check examples/order_flow/order_flow.ja.kn --lang ja
+$ ritsu kaname run examples/order_flow/order_flow.ja.kn 順に進める --input events.ja.json --trace --lang ja
+$ ritsu kaname vectors examples/order_flow/order_flow.ja.kn --function 次 --lang ja
 $ ritsu kaname doc examples/late_payment/late_payment.ja.kn --root examples/late_payment --format html --lang ja
 $ ritsu kaname api examples/late_payment/late_payment.ja.kn --root examples/late_payment
 $ ritsu kaname explain E301 --lang ja
@@ -184,8 +317,15 @@ $ ritsu kaname explain E301 --lang ja
 
 ## 例
 
-どの例も英語の版があり、その隣に日本語の版（`<名前>.ja.kn`。日本語の版の内側のファイルを読む）があります。
-規則は、転記した文書を、隣に置いて固定したコピーから引いています。
+どの例も英語の版があり、その隣に日本語の版（`<名前>.ja.kn`）があります。
+初めの四つは、ほかの言語を読まない Functional Core の例で、`host/` の下に TypeScript、Python、Go のホストを持ちます。
+
+- [examples/order_flow](examples/order_flow)：イベントで注文を状態から状態へ進める例です。状態はフィールドを持つ列挙の値で、次の状態か、イベントを拒む理由を `result` で返します。
+- [examples/stock_diff](examples/stock_diff)：品番から棚にある数への辞書で、倉庫の二回の棚卸しを品番ごとに比べる例です。一日の入出庫を品番ごとにまとめて棚卸しの数に足すこと、発注する品番の集合も求めます。
+- [examples/handles](examples/handles)：人が入力したハンドルを、サービスが持つ形（空白、大文字と小文字）にしてから、決まりに合うかを確かめ、合わない理由を全部返す例です。テキストからハンドルと番号の組を `try` で読みます。
+- [examples/catalog](examples/catalog)：自分を含むレコードで書いた、カタログの分類の木の例です。品物ごとのパス、空の分類を除いた木、呼ぶ側が渡す関数で名前を替えた木、総称の関数が分類ごとに選んだものを求めます。
+
+あとの四つは、規則・日付・帳簿を呼ぶ例で、日本語の版は日本語の版の内側のファイルを読みます。規則は、転記した文書を、隣に置いて固定したコピーから引いています。
 
 - [examples/payout](examples/payout)：マーケットプレイスが売り手のためにカードの支払いを受ける例です。決済の事業者の手数料を rulec の規則で出し、chobo の帳簿の振替を二つ組み立てて返します。振替を当てるのはホストです。手数料は、カードの決済の事業者が公開している加盟店の手数料から転記しました。
 - [examples/late_payment](examples/late_payment)：遅れて払われた請求書について、売り手が請求できるものを出す例です。期日を koyomi の日付のファイルで、定額と利息を規則で決め、kaname が遅れた日数を数えます。英国の Late Payment of Commercial Debts (Interest) Act 1998 と、GOV.UK の手引きから転記しました。
@@ -198,16 +338,17 @@ $ ritsu kaname explain E301 --lang ja
 
 - 丸めは rulec の丸めと 360,600 通りの値と刻みで、日付は ritsu-ports、koyomi、rulec と 3,652,059 日のすべてで、同じ答えになることを確かめます。
 - rulec のコーパスの `derive` と `define` の全部（85 のファイルの 143 行）を kaname の式として読み、rulec と同じ型になり、rulec のベクタ 20,033 件で同じ値になることを確かめます。
-- 範囲の解析を参照インタプリタと突き合わせます。例とテストのモジュールのすべての関数で、ベクタと、引数の宣言から選んだ 200 件の入力を流し（24,135 回の評価）、361 の式に来た値 513,899 個が、どれも解析の言う範囲に入り、失敗した 1,455 回が、どれも関数のエフェクトの言う種類で失敗することを確かめます。
-- 評価と範囲の解析を Lean で書き直し（ritsu の一つの Lean のパッケージの `proofs/KanameCore`）、範囲の解析が健全であることと、total と推論した関数が失敗しないことを証明しています。`cargo test -p ritsu-model` が、32 のモジュールの 804 の評価で、モデルを参照インタプリタと範囲の解析に突き合わせます。
-- TypeScript、Python、Go に生成したコードが、24 のモジュールのすべてのベクタと、引数の宣言の外の入力に、参照インタプリタと同じ答えを返すことを、英語と日本語の両方で確かめます（1,111 件のすべてが一致）。生成したコードは `tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt と `go vet` を通ります。
+- 範囲の解析を参照インタプリタと突き合わせます。例とテストのモジュールのすべての関数で、ベクタと、引数の宣言から選んだ 200 件の入力を流し（139,754 回の評価）、5,009 の式に来た値 3,452,025 個が、どれも解析の言う範囲に入り、失敗した 1,617 回が、どれも関数のエフェクトの言う種類で失敗することを確かめます。
+- 評価と範囲の解析を Lean で書き直し（ritsu の一つの Lean のパッケージの `proofs/KanameCore`）、範囲の解析が健全であることと、total と推論した関数が失敗しないことを証明しています。`cargo test -p ritsu-model` が、59 のモジュールの 14,092 の評価で、モデルを参照インタプリタと範囲の解析に突き合わせます。
+- TypeScript、Python、Go に生成したコードが、52 のモジュールのすべてのベクタと、引数の宣言の外の入力と、自分を含む型の値をホストが渡せるいちばん深くまで入れ子にした値とその一段深い値に、参照インタプリタと同じ答えを返すことを、英語と日本語の両方で確かめます（TypeScript は 16,717 件、Python は 16,633 件、Go は 16,613 件のすべてが一致。型の全体の外の入力は、その値を持てる言語で流します）。生成したコードは `tsc --strict --erasableSyntaxOnly`、`mypy --strict`、gofmt と `go vet` を通ります。
 - どの診断のコードにも、それを出す一番小さなモジュールが英語と日本語の両方であります。`doc` のページは golden で、中の規則と日付のページは rulec と koyomi が描いたものです。HTML は Chrome で開いて確かめます。
-- この README と `docs/` とスキルに載せた出力、診断、`.kn` の行は本物です。`tests/docs.rs` が突き合わせ、コマンドは ritsu の `tests/kaname.rs` が走らせます。
+- Functional Core の四つの例のホスト（TypeScript、Python、Go）が、`ritsu gen` が書くパッケージを呼び、`host/output.txt` のとおりに出力することを確かめます（ritsu の `tests/kaname.rs`）。
+- この README と `docs/` とスキルに載せた出力、診断、`.kn` とホストの行は本物です。`tests/docs.rs` が突き合わせ、コマンドは ritsu の `tests/kaname.rs` が走らせます。サイトの kaname のページも、ritsu の `tests/website.rs` が同じように確かめます。
 
 ## 状態
 
 言語、`check`、`run`、`vectors`、`doc`、`api`、`explain`、`ritsu gen` が書くコードはできています（[DESIGN.md](DESIGN.md)）。
-まだ作っていないもの：dandori のフローから kaname の関数を呼ぶこと、koyomi のカレンダーと日付の時刻、渡す入力に合わせて規則の出力の範囲を細かくすること（DESIGN の 19 章）。
+まだ作っていないもの：dandori のフローから kaname の関数を呼ぶこと、koyomi のカレンダーと日付の時刻、渡す入力に合わせて規則の出力の範囲を細かくすること、サイトのブラウザで試すページでモジュールを扱うこと（DESIGN の 19 章）。
 
 ## ライセンス
 

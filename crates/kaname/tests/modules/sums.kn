@@ -1,0 +1,170 @@
+module sums v1
+description "Values of enums that have fields: an order and the events that move it from state to state, a match that names the value it takes and has else and literals, a record made from another, and values compared whole"
+
+record Item
+  sku   : string
+  qty   : number       range >=1 <=100
+  price : money[USDc]  range >=1USDc <=100_000USDc
+
+enum Order
+  draft
+    items : list[Item]  count <=20
+  placed
+    items : list[Item]  count >=1 <=20
+    on    : date        range >=2026-01-01 <=2027-12-31
+  paid
+    items : list[Item]  count >=1 <=20
+    paid  : money[USDc] range >=1USDc <=2_000_000USDc
+  cancelled
+    reason : string
+
+enum Event
+  place
+    on : date  range >=2026-01-01 <=2027-12-31
+  pay
+    cents : money[USDc]  range >=1USDc <=2_000_000USDc
+  cancel
+    reason : string
+  reopen
+
+enum Step
+  moved
+    order : Order
+  refused
+    why : string
+
+fn total(items: list[Item] count <=20) -> money[USDc]
+  sum(items, i => i.price * i.qty)
+
+# the next state of an order for an event, or why the event is refused: a match in a match, the
+# values named, else, and a value made from the one the arm names
+fn next(o: Order, e: Event) -> Step
+  match o
+    draft d =>
+      match e
+        place p =>
+          if count(d.items) = 0
+            Step.refused { why: "an empty order is not placed" }
+          else
+            Step.moved { order: Order.placed { items: d.items, on: p.on } }
+        cancel c => Step.moved { order: Order.cancelled { reason: c.reason } }
+        else => Step.refused { why: "a draft is placed first" }
+    placed p =>
+      match e
+        pay y =>
+          if y.cents = total(items: p.items)
+            Step.moved { order: Order.paid { items: p.items, paid: y.cents } }
+          else
+            Step.refused { why: "the amount is not the total" }
+        place q => Step.moved { order: Order.placed { ..p, on: q.on } }
+        cancel c => Step.moved { order: Order.cancelled { reason: c.reason } }
+        reopen => Step.moved { order: Order.draft { items: p.items } }
+    paid, cancelled => Step.refused { why: "the order is closed" }
+
+# whether an event leaves the order as it is: two values of a sum compared whole
+fn stays(o: Order, e: Event) -> bool
+  match next(o: o, e: e)
+    moved m => m.order = o
+    refused => true
+
+# else takes what the arms above leave: here a draft or a cancelled order
+fn reset(o: Order) -> Order
+  match o
+    placed p => Order.draft { items: p.items }
+    paid y => Order.draft { items: y.items }
+    else => o
+
+# a match that answers a bool: no decision of the business
+fn closed(o: Order) -> bool
+  match o
+    paid, cancelled => true
+    else => false
+
+# the type of a value: what an arm names, given to a function
+fn placed_on(p: Order.placed) -> date
+  p.on
+
+fn day(o: Order) -> date?
+  match o
+    placed p => placed_on(p: p)
+    else => none
+
+# a value made from another with one field changed, held to the field's range
+fn repriced(i: Item, price: money[USDc] range >=1USDc <=100_000USDc) -> Item
+  Item { ..i, price: price }
+
+fn moved_to(p: Order.placed, on: date range >=2026-01-01 <=2027-12-31) -> Order
+  Order.placed { ..p, on: on }
+
+# a value with fields built from the value an arm or a parameter names, its amount held to the
+# field's range
+fn paid_for(p: Order.placed, cents: money[USDc] range >=1USDc <=2_000_000USDc) -> Order
+  Order.paid { items: p.items, paid: cents }
+
+# literals in a match, with else
+fn size(n: number range >=-5 <=1000) -> string
+  match n
+    -1 => "minus one"
+    0 => "none"
+    1 => "one"
+    else => "more"
+
+# the literals of one arm narrow the value to them, together
+fn bumped(n: number range >=-5 <=1000) -> number
+  match n
+    -1, 0 => n + 1
+    else => n
+
+fn label(c: money[USDc] range >=0USDc <=100USDc) -> string
+  match c
+    0USDc => "free"
+    else => "paid"
+
+fn grade(code: string) -> number
+  match code
+    "A" => 3
+    "B" => 2
+    else => 0
+
+fn holiday(d: date range >=2026-01-01 <=2026-12-31) -> bool
+  match d
+    2026-01-01, 2026-12-25 => true
+    else => false
+
+# values compared whole: lists, values that may be none, records
+fn same_items(a: list[Item] count <=3, b: list[Item] count <=3) -> bool
+  a = b
+
+fn missing(x: number? range >=0 <=9) -> bool
+  x = none
+
+fn same_count(a: number? range >=0 <=9, b: number? range >=0 <=9) -> bool
+  a = b
+
+fn two(x: number? range >=0 <=9) -> string
+  if x = 2
+    "two"
+  else
+    "not two"
+
+fn differ(a: Item, b: Item) -> bool
+  a != b
+
+# two values of an enum compared, decided where they can only be the same, or never
+fn reopened(e: Event) -> bool
+  match e
+    reopen => e = Event.reopen
+    else => e = Event.reopen
+
+examples
+  next(o: Order.draft { items: [] }, e: Event.reopen) = Step.refused { why: "a draft is placed first" }
+  closed(o: Order.cancelled { reason: "late" }) = true
+  size(n: -1) = "minus one"
+  grade(code: "B") = 2
+  holiday(d: 2026-12-25) = true
+  missing(x: none) = true
+  same_count(a: none, b: 2) = false
+  two(x: 2) = "two"
+  label(c: 0USDc) = "free"
+  bumped(n: -1) = 0
+  reopened(e: Event.reopen) = true

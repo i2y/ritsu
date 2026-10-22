@@ -5,10 +5,11 @@
 //! `tools/go`'s go.mod and go.sum (pgx, which the books' clients on PostgreSQL import):
 //!
 //! - `gofmt -l` lists none of kaname's files, and `go vet ./...` passes the package and the harness;
-//! - the harness, built by go, runs every vector of every function, and the inputs outside what the
-//!   parameters declare, and every answer is the reference interpreter's: the value, or the kind, the
-//!   module, the line and the message of the failure (a vector that does not stop in the interpreter,
-//!   past its 200 calls, is not run).
+//! - the harness, built by go, runs every vector of every function, the inputs outside what the
+//!   parameters declare, and the values of types that hold themselves nested as deep as a host may
+//!   give one and one deeper (DESIGN 28.1), and every answer is the reference interpreter's: the
+//!   value, or the kind, the module, the line and the message of the failure (a case that does not
+//!   stop in the interpreter, past its 200 calls, is not run).
 //!
 //! Without go or gofmt, the test says SKIP and passes.
 
@@ -55,7 +56,7 @@ fn the_generated_go_answers_as_the_reference_does() {
             }
             std::fs::create_dir_all(dir.join("harness")).unwrap();
             std::fs::write(dir.join("harness/main.go"), kaname::r#gen::harness::program(&checked, Target::Go, PY_NAME, GO_PACKAGE)).unwrap();
-            let (cases, diverged, outside) = cases(&modules, lang);
+            let (cases, counts) = cases(&modules, lang, Target::Go);
             std::fs::write(dir.join("cases.json"), cases_json(&cases)).unwrap();
             let r = ritsu_testkit::run(Command::new("gofmt").arg("-l").arg(Path::new(PY_NAME).join("glue")).arg("harness").current_dir(&dir), LIMIT);
             assert!(r.ok && r.stdout.trim().is_empty(), "gofmt -l lists files of kaname it would change ({lang:?}):\n{}", r.both());
@@ -68,7 +69,7 @@ fn the_generated_go_answers_as_the_reference_does() {
             assert!(r.ok, "the harness failed ({lang:?}):\n{}", r.both());
             let (agree, wrong) = compare(&cases, &r.stdout);
             assert!(wrong.is_empty(), "the Go ({lang:?}) answers otherwise than the reference:\n{}", wrong.join("\n"));
-            out.push(format!("{lang:?}: {agree} of {} cases agree with the reference: {} vectors ({diverged} that do not stop are not run) and {outside} inputs outside what the parameters declare, in {} modules", cases.len() - diverged, cases.len() - diverged - outside, modules.len()));
+            out.push(counts.line(lang, agree, modules.len()));
             let _ = std::fs::remove_file(&bin);
             if lang == Lang::En {
                 // the go that go.mod asks for, as it runs in the module

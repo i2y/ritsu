@@ -1,0 +1,6 @@
+" Grace Hopper" -> grace-hopper
+"9" -> refused: shorter than 3 characters; not starting with a letter
+"Root" -> refused: a word the service keeps
+"ünïcode" -> refused: a character other than a to z, 0 to 9 and -; not starting with a letter
+"Ada Lovelace#42" -> ada-lovelace #42
+"ada#0" -> refused: the number is not from 1 to 9999

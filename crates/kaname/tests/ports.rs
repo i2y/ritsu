@@ -130,6 +130,30 @@ fn what_a_module_holds() {
     // the Japanese version names its things in Japanese
     let items = Engine.items(Path::new("examples/late_payment"), "late_payment.ja.kn").unwrap();
     assert!(items.iter().any(|i| i.naming.text() == "kaname \"late_payment.ja.kn\" function 遅れの請求"), "{:?}", items.iter().map(|i| i.naming.text()).collect::<Vec<_>>());
+    // an enum whose values have fields: the enum is its lines, a value with fields its line and its
+    // fields', each field its line (DESIGN 23.1)
+    let items = Engine.items(Path::new("tests/modules"), "sums.kn").unwrap();
+    let of_order: Vec<(String, (usize, usize))> = items.iter().filter(|i| i.naming.text().contains(" enum Order")).map(|i| (i.naming.text(), i.lines)).collect();
+    assert_eq!(
+        of_order,
+        [
+            ("kaname \"sums.kn\" enum Order".to_string(), (9, 19)),
+            ("kaname \"sums.kn\" enum Order value draft".to_string(), (10, 11)),
+            ("kaname \"sums.kn\" enum Order value draft field items".to_string(), (11, 11)),
+            ("kaname \"sums.kn\" enum Order value placed".to_string(), (12, 14)),
+            ("kaname \"sums.kn\" enum Order value placed field items".to_string(), (13, 13)),
+            ("kaname \"sums.kn\" enum Order value placed field on".to_string(), (14, 14)),
+            ("kaname \"sums.kn\" enum Order value paid".to_string(), (15, 17)),
+            ("kaname \"sums.kn\" enum Order value paid field items".to_string(), (16, 16)),
+            ("kaname \"sums.kn\" enum Order value paid field paid".to_string(), (17, 17)),
+            ("kaname \"sums.kn\" enum Order value cancelled".to_string(), (18, 19)),
+            ("kaname \"sums.kn\" enum Order value cancelled field reason".to_string(), (19, 19)),
+        ]
+    );
+    let on = items.iter().find(|i| i.naming.text().ends_with("value placed field on")).unwrap();
+    assert_eq!(on.text, "on : date range >=2026-01-01 <=2027-12-31");
+    let reopen = items.iter().find(|i| i.naming.text().ends_with("enum Event value reopen")).unwrap();
+    assert_eq!((reopen.lines, reopen.text.as_str()), ((28, 28), "reopen"));
 }
 
 #[test]

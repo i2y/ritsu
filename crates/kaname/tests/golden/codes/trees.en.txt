@@ -1,0 +1,20 @@
+── E108
+error[E108]: example.kn:3:8: Every value of the record `Node` holds another `Node` (through `Node.next`), so none can be made
+     3 | record Node
+  = A type that holds itself needs a value that does not: make a field that holds it optional (`T?`) or a list that may be empty, or give the enum a value that does not hold it.
+
+── E108
+error[E108]: example.kn:3:8: Every value of the record `Category` holds another `Category` (through `Category.children`), so none can be made
+     3 | record Category
+  = A type that holds itself needs a value that does not: make a field that holds it optional (`T?`) or a list that may be empty, or give the enum a value that does not hold it.
+
+── E108
+error[E108]: example.kn:3:6: Every value of the enum `Expr` holds another `Expr` (through `Expr.add.left`), so none can be made
+     3 | enum Expr
+  = A type that holds itself needs a value that does not: make a field that holds it optional (`T?`) or a list that may be empty, or give the enum a value that does not hold it.
+
+── E108
+error[E108]: example.kn:5:11: Where `Wrap` holds itself (`Wrap[list[T]]`), it gives `list[T]`, a type argument made from a type parameter
+     5 |   inner : Wrap[list[T]]?
+  = Each time the types go round, the type argument grows one deeper (`list[list[T]]`, …), and the types never end; nor can the generated Go write them. Where a type holds itself, give it the type parameters as they are, or types that name none.
+

@@ -3,7 +3,7 @@
 [ritsu](https://i2y.github.io/ritsu/) is nine small languages for the rules a system has to keep —
 business rules (rulec), workflows (dandori), dates (koyomi), ledgers (chobo), claims about the code
 (geas), where requirements come from (yuen), bounded contexts (sakai), who may do what (sekisho) and
-the code that joins rules, dates and ledgers (kaname) —
+functional cores, general code with no input or output (kaname) —
 and one command that checks each file with its language and then the places where the languages
 meet. From the checked files it generates code, pages for people, and the inputs to test with.
 

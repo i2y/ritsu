@@ -1,0 +1,10 @@
+module 地域の種類(region_kinds_ja) v1
+description "enums のファイルを、その列挙のために読む。荷物を届ける地域を型として使う。region_kinds.kn の日本語の版"
+
+use rule 地域 from "rules/配送の地域.rule"
+
+fn 遠いか(far_away)(r: 地域.地域) -> bool
+  r != 本州
+
+fn 届け先(regions_of)(急ぎ(urgent): bool) -> list[地域.地域]
+  if 急ぎ then [本州] else [本州, 北海道, 沖縄]

@@ -5,7 +5,8 @@
 //!
 //! The reader is rulec's (`src/json.rs`): it refuses an exponent, keeps a number with a
 //! fractional part as the digits that were written (never through a float), refuses a key that
-//! appears twice in one object, and stops at a nesting of [`MAX_DEPTH`].
+//! appears twice in one object, and stops at a nesting of [`MAX_DEPTH`], or of the depth
+//! [`parse_nested`] is given.
 
 use crate::text::Text;
 use crate::tr;
@@ -276,7 +277,7 @@ pub enum Problem {
     Expected(char),
     /// No value where one has to be.
     MissingValue,
-    /// Nested deeper than [`MAX_DEPTH`].
+    /// Nested deeper than the reader reads: [`MAX_DEPTH`], or the depth [`parse_nested`] is given.
     TooDeep,
     /// A word that is not `true`, `false` or `null`, or a number with no digit.
     Unreadable,
@@ -316,7 +317,14 @@ pub const MAX_DEPTH: usize = 256;
 
 /// One value, and nothing after it but whitespace.
 pub fn parse(src: &str) -> Result<Json, Error> {
-    let mut p = P { b: src.as_bytes(), i: 0, depth: 0 };
+    parse_nested(src, MAX_DEPTH)
+}
+
+/// One value nested at most `depth` deep, and nothing after it but whitespace: [`parse`] for a reader
+/// that knows how deep what it reads can go (kaname's `run` reads an argument as deep as its type can
+/// nest, DESIGN 4.9). [`Problem::TooDeep`] past it, and the message says `depth`.
+pub fn parse_nested(src: &str, depth: usize) -> Result<Json, Error> {
+    let mut p = P { b: src.as_bytes(), i: 0, depth: 0, max: depth };
     let v = p.value()?;
     p.ws();
     if p.i != p.b.len() {
@@ -330,6 +338,8 @@ struct P<'a> {
     b: &'a [u8],
     i: usize,
     depth: usize,
+    /// The deepest nesting read.
+    max: usize,
 }
 
 impl P<'_> {
@@ -360,9 +370,9 @@ impl P<'_> {
         };
         match c {
             b'{' | b'[' => {
-                if self.depth == MAX_DEPTH {
-                    let n = self.i + 1;
-                    return Err(self.err(Problem::TooDeep, tr!("{n} バイト目: 入れ子が {MAX_DEPTH} 段を超えています", "byte {n}: nested deeper than {MAX_DEPTH} levels")));
+                if self.depth == self.max {
+                    let (n, max) = (self.i + 1, self.max);
+                    return Err(self.err(Problem::TooDeep, tr!("{n} バイト目: 入れ子が {max} 段を超えています", "byte {n}: nested deeper than {max} levels")));
                 }
                 self.depth += 1;
                 let v = if c == b'{' { self.obj() } else { self.arr() };

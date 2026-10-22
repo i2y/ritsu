@@ -1,0 +1,3 @@
+error[E113]: example.kn:3:38: The answer of a function cannot be of a function type
+     3 | fn adder(n: number range >=0 <=9) -> (number) -> number
+  = A function value is given as an argument of a function or a builtin, named by a `let`, and called, and goes nowhere else: not to a function's answer, a field of a record or of a value of an enum, an element of a list, a dict or a set, a value that may be none, nor `=` and `!=`. Instead of a function that answers a function, write one that takes the argument too, or write `x => f(x: x, n: n)` where it is called.

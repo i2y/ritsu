@@ -39,8 +39,8 @@ pub enum Tool {
     /// with their attributes, its roles, workflows and enums, its actions with their inputs and
     /// computed values, its policies, expectations and separations.
     Sekisho,
-    /// The language of `.kn` files, the code that joins rules, dates and books (kaname's DESIGN
-    /// 14.6): a module's functions, its records with their fields and its enums with their values.
+    /// The language of `.kn` files, a small general-purpose language for a functional core (kaname's
+    /// DESIGN 14.6): a module's functions, its records with their fields and its enums with their values.
     Kaname,
 }
 
@@ -160,8 +160,20 @@ impl Tool {
                 ("expect", &[]),
                 ("separate", &[]),
             ],
-            // kaname's DESIGN 14.6: a field under a record, a value under an enum
+            // kaname's DESIGN 14.6: a field under a record, a value under an enum, and a field under a
+            // value that has fields ([`Tool::grandchildren`])
             Tool::Kaname => &[("function", &[]), ("record", &["field"]), ("enum", &["value"])],
+        }
+    }
+
+    /// The kinds that come right after a child kind, as a third pair: a field under a value of an
+    /// enum whose values have fields (`kaname "orders.kn" enum Order value placed field on`, kaname's
+    /// DESIGN 23.1). Empty for any other kind, and for the other tools: their namings have two pairs at
+    /// most.
+    pub fn grandchildren(self, child: &str) -> &'static [&'static str] {
+        match (self, child) {
+            (Tool::Kaname, "value") => &["field"],
+            _ => &[],
         }
     }
 
@@ -181,9 +193,18 @@ impl Tool {
         self.parents(child).first().copied()
     }
 
-    /// Every kind a child kind can come right after, in the order of the kinds.
+    /// Every kind a child kind can come right after, in the order of the kinds, then the child kinds
+    /// it comes right after as a third pair (kaname's `field`: `record`, then `value`).
     pub fn parents(self, child: &str) -> Vec<&'static str> {
-        self.kinds().iter().filter(|(_, cs)| cs.contains(&child)).map(|(k, _)| *k).collect()
+        let mut out: Vec<&'static str> = self.kinds().iter().filter(|(_, cs)| cs.contains(&child)).map(|(k, _)| *k).collect();
+        for (_, cs) in self.kinds() {
+            for c in cs.iter() {
+                if self.grandchildren(c).contains(&child) && !out.contains(c) {
+                    out.push(c);
+                }
+            }
+        }
+        out
     }
 
     /// Whether a naming of the tool can have a pair under a pair (proto, rulec, dandori, chobo,
@@ -562,6 +583,17 @@ fn check_kind(tool: Tool, items: &[(String, String)], k: &Word) -> Result<(), Er
                 return Err(err(ErrorKind::NothingUnder(parent.to_string()), k.at));
             }
             Err(err(ErrorKind::WrongChild { kind: kt.to_string(), parent: parent.to_string(), allowed: children }, k.at))
+        }
+        2 => {
+            let parent = items[1].0.as_str();
+            let grand = tool.grandchildren(parent);
+            if grand.contains(&kt) {
+                return Ok(());
+            }
+            if grand.is_empty() {
+                return Err(err(ErrorKind::TooManyPairs(kt.to_string()), k.at));
+            }
+            Err(err(ErrorKind::WrongChild { kind: kt.to_string(), parent: parent.to_string(), allowed: grand }, k.at))
         }
         _ => Err(err(ErrorKind::TooManyPairs(kt.to_string()), k.at)),
     }

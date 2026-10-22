@@ -1,0 +1,58 @@
+{
+  "kaname": "<version>",
+  "file": "catalog.kn",
+  "module": "catalog",
+  "function": "paths",
+  "input": {
+    "c": {
+      "name": "Garden",
+      "items": [],
+      "children": [
+        {
+          "name": "Hand Tools",
+          "items": [
+            {
+              "sku": "sp-1",
+              "name": "Spade",
+              "price": 1999
+            },
+            {
+              "sku": "tr-2",
+              "name": "Trowel",
+              "price": 899
+            }
+          ],
+          "children": []
+        },
+        {
+          "name": "Seeds",
+          "items": [],
+          "children": [
+            {
+              "name": "Bulbs",
+              "items": [],
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "Hoses",
+          "items": [
+            {
+              "sku": "hr-1",
+              "name": "Hose reel",
+              "price": 4500
+            }
+          ],
+          "children": []
+        }
+      ]
+    }
+  },
+  "calls": [],
+  "result": [
+    "Garden / Hand Tools / Spade",
+    "Garden / Hand Tools / Trowel",
+    "Garden / Hoses / Hose reel"
+  ]
+}
