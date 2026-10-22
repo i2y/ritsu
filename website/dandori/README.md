@@ -19,7 +19,7 @@ website/dandori/
 ├── docs-ja/            # the Japanese pages
 │   └── doc/            # the Japanese versions of the examples, drawn with `--lang ja`
 └── tools/
-    ├── flowlexer.py    # colours the ```flow blocks
+    ├── flowlexer.py    # colours the ```flow blocks, here and on ritsu's pages
     └── make_overview.py  # draws the overview on the home page
 ```
 

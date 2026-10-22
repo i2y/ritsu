@@ -8,6 +8,8 @@
 //!   ritsu's diagnostics across the languages, need the verdicts of ritsu-cross, which this crate
 //!   does not have.
 //! - The reference lists every keyword of `kw.rs`, and every relative link leads to a file.
+//! - The lexer that colours `kn` on ritsu's site (`website/tools/knlexer.py`) keeps the lists of
+//!   `kw.rs` and the characters of a number of `lex.rs`, each as the one it copies.
 //!
 //! (`docs/codes.md` and `docs/codes.ja.md` are held to `explain --all` by `tests/codes.rs`.)
 
@@ -163,6 +165,75 @@ fn the_reference_lists_every_keyword() {
     // a builtin written after a value, as it is written: `d.get(k)`, `xs.sort_by(x => …)`
     let methods: Vec<&str> = kaname::kw::METHODS.iter().copied().filter(|w| !page.contains(&format!(".{w}("))).collect();
     assert!(methods.is_empty(), "docs/reference.md does not list the builtins written after a value {methods:?}");
+}
+
+/// The text of `text` from `start` to the first `end` after it.
+fn between<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
+    let from = text.find(start).unwrap_or_else(|| panic!("no {start:?}")) + start.len();
+    &text[from..from + text[from..].find(end).unwrap_or_else(|| panic!("no {end:?} after {start:?}"))]
+}
+
+/// The quoted strings of a text, in order.
+fn quoted(text: &str) -> Vec<String> {
+    text.split('"').skip(1).step_by(2).map(String::from).collect()
+}
+
+/// The characters a Rust function writes between single quotes outside its comments, in order
+/// (`'円' | '銭'`).
+fn chars_of(lex: &str, head: &str) -> String {
+    let code: Vec<&str> = between(lex, head, "\n}\n").lines().filter(|l| !l.trim_start().starts_with("//")).collect();
+    code.join("\n").split('\'').skip(1).step_by(2).filter(|c| c.chars().count() == 1).collect()
+}
+
+/// The site colours a `kn` fence with `website/tools/knlexer.py`, which keeps the words of the
+/// language a second time, in Python, and colours each by where the parser reads it. Its `TABLE` is
+/// `kw.rs`'s, place by place and word for word; its `RESERVED`, `KINDS`, `BUILTINS` and `METHODS` are
+/// `kw.rs`'s lists in their order; and the characters it reads a number and a word with are `lex.rs`'s:
+/// the unit's (`is_unit_char`), the multipliers (`number`) and the ones that are a word by themselves
+/// (`starts_name`, beside a letter and `_`). A word the language gains and the lexer does not fails
+/// here, rather than going uncoloured on the site.
+#[test]
+fn the_site_colours_the_words_of_the_language() {
+    let py = read(Path::new("../../website/tools/knlexer.py"));
+    // TABLE = (("line", ("module", …)), …): a place at the first depth, its words at the second
+    let mut table: Vec<(String, Vec<String>)> = Vec::new();
+    let mut depth = 0;
+    let mut chars = between(&py, "\nTABLE = (", "\n)\n").chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            '"' => {
+                let s: String = chars.by_ref().take_while(|c| *c != '"').collect();
+                match depth {
+                    1 => table.push((s, Vec::new())),
+                    2 => table.last_mut().expect("knlexer.py's TABLE has a word before its place").1.push(s),
+                    _ => panic!("knlexer.py's TABLE has `{s}` outside a place"),
+                }
+            }
+            _ => {}
+        }
+    }
+    let ours: Vec<(String, Vec<String>)> = kaname::kw::TABLE.iter().map(|(p, ws)| (p.to_string(), ws.iter().map(|w| w.to_string()).collect())).collect();
+    assert_eq!(table, ours, "website/tools/knlexer.py's TABLE must be src/kw.rs's TABLE, place by place and word for word");
+    for (name, ours) in [
+        ("RESERVED", kaname::kw::RESERVED.to_vec()),
+        ("KINDS", kaname::kw::KINDS.to_vec()),
+        ("BUILTINS", kaname::kw::BUILTINS.to_vec()),
+        ("METHODS", kaname::kw::METHODS.to_vec()),
+    ] {
+        assert_eq!(quoted(between(&py, &format!("\n{name} = ("), ")")), ours, "website/tools/knlexer.py's {name} must be src/kw.rs's {name}, word for word and in its order");
+    }
+    let lex = read(Path::new("src/lex.rs"));
+    let multipliers: String = between(&lex, "\nfn number(", "\n}\n").split("Some('").skip(1).filter_map(|r| r.split_once("') =>").map(|(c, _)| c)).collect();
+    for (name, ours, from) in [
+        ("UNIT_CHARS", chars_of(&lex, "\nfn is_unit_char("), "is_unit_char"),
+        ("MULTIPLIERS", multipliers, "number"),
+        ("WORD_CHARS", chars_of(&lex, "\nfn starts_name(").replace('_', ""), "starts_name"),
+    ] {
+        assert!(!ours.is_empty(), "src/lex.rs's {from} names no characters: was it rewritten?");
+        assert_eq!(between(&py, &format!("\n{name} = \""), "\""), ours, "website/tools/knlexer.py's {name} must be the characters of src/lex.rs's {from}");
+    }
 }
 
 /// A page with its code left out: the blocks between fences, and the spans between backticks.

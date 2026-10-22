@@ -22,7 +22,8 @@ website/rulec/
 ├── build.sh          # both languages, in the one order that works
 ├── docs/             # English pages
 ├── docs-ja/          # Japanese pages
-└── tools/            # the diagrams, the screenshots, the examples page
+└── tools/            # the diagrams, the screenshots, the examples page, and rulelexer.py,
+                      #   which colours the ```rule blocks here and on ritsu's pages
 ```
 
 ## One source of truth

@@ -1478,7 +1478,7 @@ fails: input (line 18): The argument `invoice.amount` of `claim` is 0GBPc, outsi
 - **`ritsu check`**：プロジェクトの `.kn` を読む順は、rulec、koyomi、chobo、geas、`.proto` のあと、dandori の前（`ritsu-project` の `ORDER`）。kaname は rulec・koyomi・chobo を受け取り、いまは何も出さない。dandori のフローから kaname を呼ぶようになれば、dandori の前にあることが要る（19 章）。言語をまたぐ検査の境目の数には、kaname の呼び出しの場所の X2・X3 の (a)・X4・X6 が入る。`ritsu check` は ritsu-cross の `ProgramVerdicts` を一つ作り、kaname の検査（`Project::check_with`）と言語をまたぐ検査（`ritsu_cross::check_with`）の両方に渡す。一つのモジュールの判定は一回の実行で一度だけ行い、kaname のエフェクトと ritsu の診断は同じ判定から出る（14.5）。
 - **`ritsu gen`**：10.7。**`ritsu explain`**：ritsu の台帳のコード（E201 など）は、dandori と kaname の両方の呼び出しを言うように文を広げる（14.4）。kaname の台帳は `ritsu kaname explain` で引く。
 - **`ritsu --help`**：言語の一覧の九つ目が `kaname` である（`ritsu kaname <command> ...` の行）。README、サイトの頭のページ、リリース、スキルにも、九つ目の言語として載っている。`ritsu check --help` の拡張子の文にも `.kn` がある。
-- **サイト**：ritsu のサイト（`website/`）に、kaname のページが英語と日本語で五つずつある（`docs/kaname/` と `docs-ja/kaname/`。ナビゲーションでは sekisho のページの次）。kaname が何か（`order_flow` のモジュールと、ホストから呼ぶこと）、書き方（範囲を書く値と書かない値、直和型と `match`、辞書と集合、文字列と `result`、ジェネリクスと関数の値、自分を含む型、持たないもの）、Functional Core の四つの例（ホストが呼ぶ宣言、TypeScript・Python・Go のホストをタブに並べたもの、出力）、検査が保証すること（エフェクト、範囲を書かない値、渡す先の範囲、出力先の突き合わせ、範囲の解析の健全性、Lean）、規則・日付・帳簿を呼ぶこと（`late_payment`、それぞれの型、言語の境目）の五つである。日本語のページはモジュールを日本語の版で見せ、ホストとその出力は英語の版のものを見せる（ホストは英語の版のモジュールを呼ぶ）。ritsu の `tests/website.rs` が、`kn` の塊が例とテストの `.kn` の行であること、コマンドが見せるとおりに出力すること、ホストの塊が例のホストの行で、続く出力が `host/output.txt` であること、例のページが四つの例の 12 のホストを全部見せること、英日のページが同じ種類と数の塊と表を見せること、kaname の README と根の README がページへリンクすること、組んだページの例のページに三つのタブの組が四つあることを確かめる。サイトの頭のページの言語の一覧と kaname の段落も、ここへリンクする。
+- **サイト**：ritsu のサイト（`website/`）に、kaname のページが英語と日本語で五つずつある（`docs/kaname/` と `docs-ja/kaname/`。ナビゲーションでは sekisho のページの次）。kaname が何か（`order_flow` のモジュールと、ホストから呼ぶこと）、書き方（範囲を書く値と書かない値、直和型と `match`、辞書と集合、文字列と `result`、ジェネリクスと関数の値、自分を含む型、持たないもの）、Functional Core の四つの例（ホストが呼ぶ宣言、TypeScript・Python・Go のホストをタブに並べたもの、出力）、検査が保証すること（エフェクト、範囲を書かない値、渡す先の範囲、出力先の突き合わせ、範囲の解析の健全性、Lean）、規則・日付・帳簿を呼ぶこと（`late_payment`、それぞれの型、言語の境目）の五つである。日本語のページはモジュールを日本語の版で見せ、ホストとその出力は英語の版のものを見せる（ホストは英語の版のモジュールを呼ぶ）。`kn` の塊には、サイトを組むときに `website/tools/knlexer.py` が色を付ける（31 章）。ritsu の `tests/website.rs` が、`kn` の塊が例とテストの `.kn` の行であること、コマンドが見せるとおりに出力すること、ホストの塊が例のホストの行で、続く出力が `host/output.txt` であること、例のページが四つの例の 12 のホストを全部見せること、英日のページが同じ種類と数の塊と表を見せること、kaname の README と根の README がページへリンクすること、組んだページの例のページに三つのタブの組が四つあること、組んだページの `kn` の塊に色が付くことを確かめる。サイトの頭のページの言語の一覧と kaname の段落も、ここへリンクする。
 
 ### 11.3 kaname のクレートのバイナリと、`kaname` という名前のリンク
 
@@ -1912,9 +1912,9 @@ kaname の呼び出しでの X2 は、`crates/ritsu-model/tests/cross.rs` が確
 | ベクタ、run、doc、api | `tests/vectors.rs`、`tests/run.rs`、`tests/cli.rs`、`tests/doc.rs`、`tests/api.rs` | golden（`tests/golden/vectors/`、`tests/golden/run/`、`tests/golden/doc/`、`tests/golden/api/`）。英語と日本語の版のベクタ（16.6）。ページが中に置く規則と日付のページが、rulec と koyomi の `doc` が描くものと一字も違わないこと、HTML が外から何も読まないこと、Chrome でページが描け、中のページがボタンと `#page=<n>` で開くこと（13 章）。コマンドと終了コード |
 | 口 | `tests/ports.rs` | `Programs` の答え（区間、出どころ、関係、並びの長さ、見た値）、`Items`、`References` |
 | 出力先の突き合わせ | `tests/typescript.rs`、`tests/python.rs`、`tests/go.rs` | 16.4 |
-| 文書とスキル | `tests/docs.rs`、`tests/skill.rs`、`tests/design.rs` | README と `docs/reference.md` とスキルの `kn` の行が、例かテストの `.kn` の行であること、見せるコマンドが kaname のコマンドであること（出力を添えたものは ritsu の `tests/kaname.rs` が走らせる）、リファレンスが全部のキーワードを挙げること、リンクの先があること。スキルのコピーが `skills/sync.sh` の写したものと同じで、スキルの外へのリンクが無いこと。この文書の `kn` の塊が構文として通ること |
+| 文書とスキル | `tests/docs.rs`、`tests/skill.rs`、`tests/design.rs` | README と `docs/reference.md` とスキルの `kn` の行が、例かテストの `.kn` の行であること、見せるコマンドが kaname のコマンドであること（出力を添えたものは ritsu の `tests/kaname.rs` が走らせる）、リファレンスが全部のキーワードを挙げること、リンクの先があること、サイトで `kn` に色を付ける字句の定義（`website/tools/knlexer.py`）の語の一覧と数の文字が `kw.rs` と `lex.rs` のものと同じであること（31 章）。スキルのコピーが `skills/sync.sh` の写したものと同じで、スキルの外へのリンクが無いこと。この文書の `kn` の塊が構文として通ること |
 | 言語をまたぐ判定 | `crates/ritsu-cross/tests/programs.rs` | 14.3 の判定（関係、見た値での確かめ、日付の区間、どこから来た額も）。16.5 |
-| ritsu の入口 | `crates/ritsu/tests/kaname.rs`、`check.rs`、`cross.rs`、`gen.rs`、`codes.rs`、`readme.rs`、`website.rs` | `ritsu kaname` のコマンド（`api` と `doc` も）、`ritsu check` のテキストが `ritsu kaname check` を並べたものと同じこと、言語をまたぐ判定の診断と境目の数、sakai と yuen が中のものと参照を読むこと、`ritsu gen` の `glue/`、台帳の再現（八つにモジュールがあること）、例のページ（`tests/golden/kaname-doc/`）、例のホストのプログラムが `ritsu gen` のパッケージを呼んで `output.txt` のとおりに出力すること（17.5）、kaname の README とリファレンスとスキルが出力を添えて見せるコマンド、根の README の kaname の節（`order_flow` のホストの行と出力も）、サイトの頭のページと kaname のページ（11.2） |
+| ritsu の入口 | `crates/ritsu/tests/kaname.rs`、`check.rs`、`cross.rs`、`gen.rs`、`codes.rs`、`readme.rs`、`website.rs` | `ritsu kaname` のコマンド（`api` と `doc` も）、`ritsu check` のテキストが `ritsu kaname check` を並べたものと同じこと、言語をまたぐ判定の診断と境目の数、sakai と yuen が中のものと参照を読むこと、`ritsu gen` の `glue/`、台帳の再現（八つにモジュールがあること）、例のページ（`tests/golden/kaname-doc/`）、例のホストのプログラムが `ritsu gen` のパッケージを呼んで `output.txt` のとおりに出力すること（17.5）、kaname の README とリファレンスとスキルが出力を添えて見せるコマンド、根の README の kaname の節（`order_flow` のホストの行と出力も）、サイトの頭のページと kaname のページ（11.2。組んだページの `kn` の塊の色は 31 章） |
 | Lean との突き合わせ | `crates/ritsu-model/tests/kaname.rs`、`cross.rs`（kaname の呼び出しでの X2）、`proofs.rs`（どの宣言も三つの公理のほかに立たないこと） | 15.3 |
 
 ### 16.2 rulec のスーパーセットのテスト
@@ -4011,3 +4011,36 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 - **層は三つである。** 内側の層（rulec の表、koyomi の日付、chobo の勘定。それぞれの言語の検査のまま）、純粋な層（kaname。入出力を持たない汎用の言語）、外側の層（ホスト。入出力）。内側の層から純粋な層は呼べず、純粋な層から外側の層は呼べない。
 - **規則に渡すところは、ほかの値と同じ決まりで確かめる。** 範囲を書かない値、直和型、辞書、関数の値は、そのまま規則に渡せない。規則の型の値に直し、規則の入力の範囲に狭めてから渡す（E301・W301 と、言語をまたぐ判定。6 章、14 章）。
 - **rulec の `shape` と `from` との境目は 1.2 のとおりである。** 契約の一つのコレクションの一つのフィールドを数えて足す形は rulec に書き、kaname が受け持つのは、その外の計算である。
+
+## 31. サイトのコードの色（2026-10-22）
+
+**きっかけ**：ritsu のサイトの kaname のページ（`website/docs/kaname/` と `docs-ja/kaname/`）で、`kn` の塊に色が付いていなかった。rulec・dandori・chobo のサイトは、それぞれの言語の字句の定義（Pygments の `RegexLexer`）をつないで色を付けている。ritsu のサイトの本体の二つの設定（`website/zensical.toml` と `zensical.ja.toml`）は字句の定義を一つもつないでおらず、kaname には字句の定義そのものが無かった。Pygments は字句の定義を知らない塊を `text` として組むので、この直しの前に組んだ kaname のページでは、`kn` の塊が英日それぞれ 15 個とも `language-text` のブロックで、全体が一色だった。頭のページと sekisho のページの規則とフローの塊も同じだった。
+
+**原因**：kaname の字句の定義が無かった。サイトの本体の設定と `website/build.sh` も、どの言語の字句の定義も読み込んでいなかった。
+
+**決定**：
+
+- `website/tools/knlexer.py` を足す。三つのサイトの字句の定義と同じ書き方で、モジュールを Markdown の拡張として設定に挙げると読み込まれ、読み込まれると Pygments の表に自分を載せる。サイトの本体の二つの設定は、`knlexer` と、三つのサイトの `rulelexer`・`flowlexer`・`booklexer` を挙げる。三つはコピーせず、それぞれのサイトのものを使う。`website/build.sh` は、四つのディレクトリを `PYTHONPATH` に置いて本体を組む（根の DESIGN 13.2）。
+- 語には、パーサーがその位置で読むとおりの色を付ける（2.2）。行頭の語、`use` のあとの語、本体の語（`let` `try` `if` `then` `else` `match` `some`）、範囲（`range` `count`）、エフェクト（`total` `fails` `diverges`）はキーワードにする。型の語は型、`true` `false` `none` は定数、`and` `or` `not` `in` は演算子と同じトークンの種類にする。宣言が付ける名前（モジュール、レコード、列挙、関数、`use`）、`fails` のあとの失敗の種類、呼んだ組み込みの関数、名前の ASCII の別名、単位の付いた数と日付、文字列、コメント、演算子も、それぞれ種類を分ける。色そのものは、テーマの明るい配色と暗い配色が種類ごとに決める。
+- 名前にもなる語は、置かれた場所で読む。`count` は型のあとでは範囲、呼び出しでは組み込みの関数である。`total` は関数の答えの型のあとでだけエフェクトで、フィールドや引数の名前（`total: total(lines: …)`）では名前である。`dict` `set` `entry` `indexed` `result` は、すぐあとに `[` があるときだけ型にする（24.2）。`money` と量の型、`list`、`running` も、`[` があるときだけ型にする。パーサーがそこに `[` を求めるので、検査を通るコードでは同じことになる。`:` の前の語は、つづりによらず、フィールド・引数・名前で渡す値の名前として読む。組み込みの関数は、呼ぶところ（`sum(…)`、`xs.map(…)`）でだけ組み込みの関数の種類にし、メソッドの形だけで書くもの（`get`、`sort_by` など）は `.` のあとでだけそう読む。
+- 字句の定義が持つ語の一覧は `kw.rs` のコピーで、`TABLE`（位置ごとの語）、`RESERVED`、`KINDS`、`BUILTINS`、`METHODS` を、同じ名前で、語も順も同じに持つ。数と語を読む文字（単位を始める文字、桁の語 `万` `億` `兆`、それだけで語になる `℃` `℉`）は `lex.rs` のコピーである。`tests/docs.rs` の `the_site_colours_the_words_of_the_language` が、どれも元と一字も違わないことを確かめる。言語に語を足して字句の定義に足し忘れれば、そこで落ちる。
+
+**捨てたもの**：
+
+- 組み込みの関数に色を付けないこと。モジュールの関数（`change(…)`）と組み込みの関数（`.filter_map(…)`）が同じ色になり、言語のものを呼んでいるのか、モジュールのものを呼んでいるのかが、色からは分からない。
+- 字句の定義を `kw.rs` から生成すること。生成には Rust のビルドか、サイトを組む前の手順が要る。サイトは Zensical だけで組める形にしてあり（作ったものはコミットする）、三つのサイトの字句の定義も、手で書いてテストで元に合わせている。
+- `pymdownx.superfences` の `custom_fences` に `kn` を足すこと。`custom_fences` は、Mermaid の図のように Pygments を通さずに組む塊のための仕組みである。三つのサイトと同じく、字句の定義を Pygments の表に載せ、ほかの言語の塊と同じく `pymdownx.highlight` に組ませる。
+
+**変わること**：kaname のページの `kn` の塊（英日それぞれ 15 個）に色が付く。この直しの前と後に `website/build.sh` で組んだ木を突き合わせると、変わったのは ritsu のページのうち `kn`・`rule`・`flow` の塊を持つ 14 ページ（kaname の十、頭の二つ、sekisho の二つ）だけで、変わったところはその塊の中だけ、塊の文字は一字も変わらない。言語のサイトの木は、この直しでは変わらない。
+
+**確かめたこと**：
+
+- kaname の `tests/docs.rs` の `the_site_colours_the_words_of_the_language`。字句の定義の `METHODS` から語を一つ消す、`TABLE` の位置の名前を変える、`TABLE` のエフェクトの位置から失敗の種類を一つ消す、`UNIT_CHARS` から文字を一つ消す、`MULTIPLIERS` から桁の語を一つ消す、の五つで、それぞれ落ちることを確かめた（字句の定義は元に戻した）。
+- ritsu の `tests/website.rs` の `build_sh_builds_the_tree_that_is_published`（Zensical が `website/.venv` にあるとき）。組んだ木で、ritsu のページの `kn`・`rule`・`flow`・`book` の塊が、どれもフェンスと同じ数だけその言語のブロックとして組まれ、空白・区切り・ただの名前のほかの種類の語を持ち、字句の定義が読めなかった文字（`err`）を持たないこと。頭のページ（英日）に規則とフローのブロックがあること。kaname のページが英日それぞれで、キーワード（`fn`）、型（`money`）、単位の付いた数、日付、コメント、文字列、演算子（`>=`）を、それぞれの種類の `span` で見せること。日本語の設定から `knlexer` を外すと、日本語の kaname の五つのページで落ちることも確かめた。
+- 木の `.kn`（kaname の例とテストの 57 と、ritsu の試験のプロジェクトの 8、あわせて 65 ファイル）を字句の定義に通し、読めない文字が 0 であること。フィールドや引数や変数の名前として書いた `total`、`count`、`number`、`text` などが名前になり、答えの型のあとのエフェクトと、関数の型に書いたエフェクト（`(number) -> number fails overflow`）がキーワードと失敗の種類になることを、語ごとの種類を並べて確かめた。
+- 組んだページを Chrome（headless）で開き、kaname のページ（英日）と頭のページの塊に色が付くことを目で確かめた。
+
+**見つけて直していないもの**：
+
+- ブラウザで試すページのエディターは、kaname の語の一覧を持たない。kaname はまだそこで開けないためである（19 章）。開けるようにするときは、ritsu の `tests/playground.rs` の `language_words` と `words.json` に `kn` を足す。
+- 型の語と同じつづりの名前（`tests/modules/names.kn` の変数 `string`）は、`:` の前と `.` のあとのほかでは型の種類になる。字句の定義は、モジュールが宣言した名前を知らないためである。

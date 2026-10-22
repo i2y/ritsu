@@ -85,6 +85,15 @@ anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
 
+# Colour the code of the languages: ```kn with tools/knlexer.py, and ```rule, ```flow and ```book with
+# the lexers of rulec's, dandori's and chobo's sites. Naming a module here is how it gets imported,
+# and importing it is what registers its lexer with Pygments; build.sh puts tools/ and the tools/ of
+# the three sites on PYTHONPATH.
+[project.markdown_extensions.knlexer]
+[project.markdown_extensions.rulelexer]
+[project.markdown_extensions.flowlexer]
+[project.markdown_extensions.booklexer]
+
 [project.markdown_extensions.pymdownx.superfences]
 
 # Tabs, one for each language a host of kaname's examples is written in.

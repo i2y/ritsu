@@ -23,7 +23,7 @@ website/chobo/
 ├── docs-ja/            # the Japanese pages
 │   └── doc/            # the Japanese versions of the examples, drawn with `--lang ja`
 └── tools/
-    ├── booklexer.py    # colours the ```book blocks
+    ├── booklexer.py    # colours the ```book blocks, here and on ritsu's pages
     └── make_chart.py   # cuts the chart on the home pages out of what `chobo doc` draws
 ```
 

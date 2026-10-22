@@ -22,6 +22,7 @@ website/
 ├── docs-ja/            # the Japanese pages (kaname/, ns/yuen.md and play/index.html too)
 ├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
+│   ├── knlexer.py      # colours the ```kn blocks (see below)
 │   ├── make_wasm.sh    # builds docs/playground/ritsu.wasm
 │   ├── make_libraries.sh  # bundles docs/playground/libraries.js from libraries/
 │   └── libraries/      # what libraries.js holds: package.json, package-lock.json, entry.js, bundle.mjs
@@ -52,6 +53,25 @@ links to each. The table links the languages with neither a site nor a page to t
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
 two languages say the same things but not always in the same order. A change to one goes to the
 other by hand.
+
+## The colours of the code
+
+Pygments colours the code of the languages when the site is built, as it colours every other block:
+the theme's light and dark palettes are written against Pygments' classes, so nothing runs in the
+browser. `tools/knlexer.py` reads the `kn` fences, and ritsu's pages use the lexers of the languages'
+sites as they are, not copies of them: `rulec/tools/rulelexer.py` for `rule`,
+`dandori/tools/flowlexer.py` for `flow` and `chobo/tools/booklexer.py` for `book`. A lexer is imported
+only by being named as a Markdown extension, so both configurations name the four, and `build.sh`
+puts the four directories on `PYTHONPATH`; it also clears Zensical's page cache, which is keyed on the
+Markdown and would keep a page as it was after a change to a lexer. A fence of a language with no
+lexer (`gate`, `cedar`) is built as plain text.
+
+Each lexer keeps the words of its language a second time, in Python, and the language's tests hold
+them to the language's own lists: kaname's `tests/docs.rs` holds `knlexer.py` to `src/kw.rs`, and
+the characters it reads a number with to `src/lex.rs`, as rulec's `tests/website.rs` and the
+`tests/docs.rs` of dandori and chobo hold theirs. `knlexer.py` colours a word by where kaname's parser
+reads it: `count` is a bound after a type and a builtin in a call, `total` an effect after a
+function's answer and a name anywhere else, and a word before `:` a name, whatever its spelling.
 
 ## What a namespace IRI opens
 
@@ -136,7 +156,10 @@ the page of the playground alone leads to the page that explains it and to the p
 and nowhere else. When Zensical is in `.venv`, it runs `build.sh` into a copy of `website/` and
 looks at the tree it builds, down to an element for every word whose id is the word, to the four
 sets of three tabs on the page of kaname's examples, to where the link of each page that sends a
-reader on leads, and to the pages of the playground alone, as they are.
+reader on leads, to the pages of the playground alone, as they are, and to the colours of the code:
+every `kn`, `rule`, `flow` and `book` fence of ritsu's pages is built by its lexer, with Pygments'
+classes on its words and nothing the lexer could not read, and the pages of kaname show a keyword, a
+type, a number with its unit, a date, a comment, a string and an operator, each in its class.
 `crates/ritsu/tests/playground.rs` holds the playground, as its page says: it drives Chrome
 through both pages in both languages (an edit, the answer, the page kept while a file does not
 pass, a link from one page to the other) and follows the links the pages before gave, sent on to

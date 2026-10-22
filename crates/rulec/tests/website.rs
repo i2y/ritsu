@@ -574,6 +574,28 @@ fn 色づけの語彙はkwと同じ() {
     }
 }
 
+/// The lexer reads a number as `src/lex.rs` does (§2.1), so that a number and its unit are one
+/// literal on the site as they are in the checker (`5USD`, `10_000GBPc`, `100m2`): besides the
+/// ASCII letters, a unit starts with one of the characters of `is_unit_char`, and each multiplier
+/// the lexer knows is one `lex_number` multiplies by.
+#[test]
+fn 色づけの数の文字はlexと同じ() {
+    let py = read("website/rulec/tools/rulelexer.py");
+    let chars = |name: &str| -> String {
+        py.split(&format!("\n{name} = \"")).nth(1).and_then(|r| r.split('"').next()).unwrap_or_else(|| panic!("rulelexer.py に {name} が無い")).to_string()
+    };
+    let lex = read("src/lex.rs");
+    let body = lex.split("\nfn is_unit_char(").nth(1).and_then(|r| r.split("\n}\n").next()).expect("src/lex.rs に is_unit_char が無い");
+    let code: Vec<&str> = body.lines().filter(|l| !l.trim_start().starts_with("//")).collect();
+    let want: String = code.join("\n").split('\'').skip(1).step_by(2).filter(|c| c.chars().count() == 1).collect();
+    assert!(!want.is_empty(), "src/lex.rs の is_unit_char が文字を挙げていません（書き換えられましたか）");
+    assert_eq!(chars("UNIT_CHARS"), want, "レクサの UNIT_CHARS が src/lex.rs の is_unit_char と違います");
+    for m in chars("MULTIPLIERS").chars() {
+        let (n, _) = rulec::lex::number(&format!("1{m}")).unwrap_or_else(|| panic!("1{m} を数として読めません"));
+        assert!(n.mult > 1, "レクサの MULTIPLIERS の {m} を、src/lex.rs は桁の語として読みません");
+    }
+}
+
 /// A `.rule` fence without its `rule` tag is not coloured, and nothing else goes wrong, so
 /// a forgotten tag would never be noticed. Every fenced block that holds rule source — in
 /// the pages, in the README, and in what the tool itself writes — carries the tag.

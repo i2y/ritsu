@@ -11,10 +11,16 @@ cd "$(dirname "$0")"
 # into <directory>/build and published at /ritsu/<directory>/.
 sites=(rulec dandori chobo)
 ./sync.sh
-# The page cache is keyed on the Markdown, not on what renders it.
+# The page cache is keyed on the Markdown, not on what renders it, so a change to a lexer would leave
+# every cached page as it was.
 rm -rf .cache
-.venv/bin/zensical build
-.venv/bin/zensical build -f zensical.ja.toml
+# Pygments colours the code with four lexers: tools/knlexer.py the ```kn fences, and the ones in the
+# tools/ of rulec's, dandori's and chobo's sites, which colour those sites too, the ```rule, ```flow
+# and ```book fences. Each is imported only by being named as a Markdown extension in the
+# configurations, so each has to be importable; the sites' own builds below keep their PYTHONPATH.
+lexers="$PWD/tools:$PWD/rulec/tools:$PWD/dandori/tools:$PWD/chobo/tools"
+PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build
+PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build -f zensical.ja.toml
 for site in "${sites[@]}"; do
   "$site/build.sh"
   rm -rf "build/$site"

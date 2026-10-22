@@ -22,7 +22,8 @@ What the colours are trying to say, in the order a reader needs them:
 
 The vocabulary is `src/kw.rs` and nothing else (PLAN §0). The lists below are a second copy
 of it in another language, which is exactly how a vocabulary rots, so `tests/website.rs`
-reads this file and holds every list to `rulec::kw`.
+reads this file and holds every list to `rulec::kw`, and the characters a number is written
+with to `src/lex.rs`.
 """
 
 from pygments.lexer import RegexLexer, bygroups, words
@@ -65,9 +66,15 @@ ARMS = ("over", "where", "of", "next", "stop", "with", "take_unique", "take_firs
 FUNCTIONS = ("min", "max", "allocate")
 NAMESPACE = "std"
 
-# The units a literal may carry (§2.1). Longest first, so `kg` is not read as `g` and `cm`
-# is not read as `m`; `万` and `億` are the spoken groupings that 1000万円 is written with.
-UNITS = r"(?:\s*(?:万|億))?(?:円|銭|kg|g|cm|m|%)"
+# A literal as src/lex.rs reads it (§2.1): digits that `_` may group, a fraction, one of
+# MULTIPLIERS (the spoken groupings 1000万円 is written with), and the unit written right after
+# it: a run that starts with an ASCII letter or one of UNIT_CHARS (`is_unit_char`), digits
+# allowed after its first character, so that a currency code is one token with its number
+# (`5USD`, `10_000GBPc`) and so is `100m2`.
+UNIT_CHARS = "円銭坪℃℉%％"
+MULTIPLIERS = "万億"
+UNIT = rf"[A-Za-z{UNIT_CHARS}][A-Za-z0-9{UNIT_CHARS}]*"
+NUMBER = rf"\d[\d_,]*(?:\.\d[\d_]*)?[{MULTIPLIERS}]?(?:{UNIT})?"
 
 
 class RuleLexer(RegexLexer):
@@ -109,7 +116,7 @@ class RuleLexer(RegexLexer):
             # A date is a literal like any other, and has to be tried before the number
             # rule or `2026` would be taken on its own.
             (r"\d{4}-\d{2}-\d{2}", Number.Integer),
-            (rf"\d[\d,]*(?:\.\d+)?{UNITS}?", Number.Integer),
+            (NUMBER, Number.Integer),
             # The table's own furniture, kept quiet so that a table reads as a table.
             (r"->|→", Punctuation),
             (r"[|\[\]:,()]", Punctuation),

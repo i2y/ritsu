@@ -54,8 +54,12 @@
 //!   functional core on the page of the examples), the pages the languages' playgrounds had, each
 //!   with nothing beside it and its link and the nav of its site leading to the playground in the
 //!   tree, the marketplace of Claude Code as it is written, and a file of the tree for every
-//!   relative link of ritsu's built pages, none of which climbs out of /ritsu/. Without Zensical the
-//!   test says SKIP.
+//!   relative link of ritsu's built pages, none of which climbs out of /ritsu/; and the code of the
+//!   languages on ritsu's pages is coloured by their lexers (website/tools/knlexer.py and the
+//!   lexers of rulec's, dandori's and chobo's sites): every block of `kn`, `rule`, `flow` and `book`
+//!   is built as its language, with Pygments' classes on its words and none the lexer could not
+//!   read, and the pages of kaname show a keyword, a type, a number with its unit, a date, a
+//!   comment, a string and an operator, each in its class. Without Zensical the test says SKIP.
 //!
 //! (tests/common/mod.rs holds what this file shares with tests/readme.rs.)
 
@@ -66,7 +70,7 @@ use common::{
     run_the_consoles, sh, shown_lines, trimmed,
 };
 use ritsu_testkit::{Need, TempDir, ready};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1091,6 +1095,34 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
+/// The fences ritsu's site colours, each with its lexer: `kn` with website/tools/knlexer.py, and
+/// `rule`, `flow` and `book` with the lexers of rulec's, dandori's and chobo's sites, which build.sh
+/// puts on PYTHONPATH and the two configurations name as Markdown extensions.
+const COLOURED: [&str; 4] = ["kn", "rule", "flow", "book"];
+
+/// Text as an HTML page escapes it, unescaped.
+fn unescaped(text: &str) -> String {
+    text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+}
+
+/// The blocks of code of a built page, in order: the language Pygments built each as (`text` for a
+/// fence it has no lexer for), and its tokens, each the class of its span and its text.
+fn built_blocks(html: &str) -> Vec<(String, Vec<(String, String)>)> {
+    let mut out = Vec::new();
+    for rest in html.split("<div class=\"language-").skip(1) {
+        let Some((lang, after)) = rest.split_once(" highlight\">") else { continue };
+        let code = after.split("</code></pre></div>").next().unwrap();
+        let tokens = code
+            .split("<span class=\"")
+            .skip(1)
+            .filter_map(|span| span.split_once("\">"))
+            .map(|(class, text)| (class.to_string(), unescaped(text.split('<').next().unwrap())))
+            .collect();
+        out.push((lang.to_string(), tokens));
+    }
+    out
+}
+
 /// The values of the `href` and `src` attributes of an HTML page.
 fn targets_in(html: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -1205,6 +1237,75 @@ fn build_sh_builds_the_tree_that_is_published() {
             assert!(ids.contains(id), "{file}: built with no element whose id is {id}");
         }
     }
+
+    // The code of the languages on ritsu's pages is coloured as the site is built: every fence of a
+    // language the site colours is built as a block of that language (a fence Pygments has no lexer
+    // for is built as `text`), with a word in a class of its own (more than whitespace, punctuation
+    // and plain names) and nothing the lexer could not read (`err`).
+    let mut wrong = Vec::new();
+    let mut coloured: BTreeMap<(String, &str), usize> = BTreeMap::new();
+    for (p, url) in pages() {
+        let file = format!("{}index.html", url.trim_start_matches('/'));
+        let blocks = built_blocks(&read(&built.join(&file)));
+        for lang in COLOURED {
+            let fences = p.blocks.iter().filter(|b| b.info == lang).count();
+            let of_lang: Vec<&Vec<(String, String)>> = blocks.iter().filter(|(l, _)| l == lang).map(|(_, tokens)| tokens).collect();
+            if of_lang.len() != fences {
+                wrong.push(format!("{file} (from {}): {fences} ```{lang} fences built as {} blocks of {lang}", p.name, of_lang.len()));
+            }
+            for tokens in &of_lang {
+                if let Some((_, t)) = tokens.iter().find(|(c, _)| c == "err") {
+                    wrong.push(format!("{file} (from {}): a block of {lang} has `{t}`, which its lexer could not read", p.name));
+                }
+                if !tokens.iter().any(|(c, _)| !["w", "p", "n"].contains(&c.as_str())) {
+                    wrong.push(format!("{file} (from {}): a block of {lang} with no word coloured", p.name));
+                }
+            }
+            *coloured.entry((file.clone(), lang)).or_default() += of_lang.len();
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // the rule and the flow on each home page
+    for file in ["index.html", "ja/index.html"] {
+        for lang in ["rule", "flow"] {
+            assert!(coloured.get(&(file.to_string(), lang)).is_some_and(|n| *n >= 1), "{file}: built with no block of {lang}: were the fences changed?");
+        }
+    }
+    // The pages of kaname show each kind of word in its class, in each language.
+    let is_date = |t: &str| t.len() == 10 && t.char_indices().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() });
+    let kinds: [(&str, &str, fn(&str) -> bool); 7] = [
+        ("a keyword", "k", |t| t == "fn"),
+        ("a type", "kt", |t| t == "money"),
+        ("a number with its unit", "m", |t| t.starts_with(|c: char| c.is_ascii_digit()) && t.ends_with(|c: char| c.is_ascii_alphabetic() || c == '%')),
+        ("a date", "m", is_date),
+        ("a comment", "c1", |t| t.starts_with('#')),
+        ("a string", "s2", |t| t.starts_with('"') && t.ends_with('"')),
+        ("an operator", "o", |t| t == ">="),
+    ];
+    for ja in [false, true] {
+        let mut tokens = Vec::new();
+        let mut blocks = 0;
+        for p in KANAME_PAGES {
+            let page = p.trim_end_matches(".md");
+            let file = format!("{}kaname/{}index.html", if ja { "ja/" } else { "" }, if page == "index" { String::new() } else { format!("{page}/") });
+            for (lang, t) in built_blocks(&read(&built.join(&file))) {
+                if lang == "kn" {
+                    blocks += 1;
+                    tokens.extend(t);
+                }
+            }
+        }
+        let lang = if ja { "Japanese" } else { "English" };
+        assert!(blocks >= 15, "the {lang} pages of kaname are built with {blocks} blocks of kn: were the fences changed?");
+        for (kind, class, is) in kinds {
+            assert!(tokens.iter().any(|(c, t)| c == class && is(t)), "the {lang} pages of kaname show {kind} in no span of the class `{class}`");
+        }
+    }
+    let mut by_lang: BTreeMap<&str, usize> = BTreeMap::new();
+    for ((_, lang), n) in &coloured {
+        *by_lang.entry(lang).or_default() += n;
+    }
+    eprintln!("compared: the coloured blocks of ritsu's built pages with their fences, by language {by_lang:?}");
 
     // Every link of ritsu's built pages that stays in the site leads to a file of the tree.
     let mut wrong = Vec::new();
