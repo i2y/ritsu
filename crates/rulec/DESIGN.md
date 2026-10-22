@@ -1928,7 +1928,7 @@ rule compiler がそのまま読め、小文字 5 字で打ちやすく、既存
 
 ### 15.51 規則のサーバは、URL でも呼べる（2026-09-17）
 
-**決定**：生成する MCP サーバ（§15.44）に、MCP の Streamable HTTP を足す。`--http [<host>:]<port>` で待ち、外の Origin は、`--origin` に書いたものだけを通す。stdio と HTTP は**同じ `handle()` を通る**。メッセージ一つを受けてメッセージ一つを返す関数で、運びだけが違う。だから `rulec test` は**両方の運びでベクタを全件流す**（結果の `via` が `mcp` と `mcp-http`）。運び方で答えが変わればそれは食い違いである。
+**決定**：生成する MCP サーバ（§15.44）に、MCP の Streamable HTTP を足す。`--http [<host>:]<port>` で待ち、外の Origin は、`--origin` に書いたものだけを通す。stdio と HTTP は**同じ `handle()` を通る**。メッセージ一つを受けてメッセージ一つを返す関数で、運びだけが違う。だから `rulec test` は**両方の運びでベクタを全件流す**（結果の `via` が `mcp` と `mcp-http`）。運び方で答えが変わればそれは食い違いである。生成する Python のサーバは、レスポンスのヘッダーと本文を分けて書くので、ハンドラーに `disable_nagle_algorithm = True` を付けて、すぐに送らせる（2026-10-23。付けないと、ACK を遅らせる Linux の呼び手には、呼び出しごとに 40 ミリ秒ほど遅れて届いた）。`rulec test` のほうも、リクエストをヘッダーと本文に分けずに一度で書き、ソケットの Nagle アルゴリズムを切る（2026-10-23）。
 
 理由。規則を呼ぶ側にいる相手——チャットのカスタムコネクタ、エージェントを組み立てる画面、ワークフロー製品の MCP ノード——は、**URL しか受け付けない**。stdio で届くのは同じ機械の上のエージェントだけで、そこから先に一歩も出ない。§15.44 で「呼ぶエージェントには規則そのものを渡す」と決めたのに、渡せる相手が手元だけに限られていた。
 
@@ -6460,7 +6460,7 @@ rows = [m.Element(m.Yen(int(e["金額"])),) for e in d["明細"]]
 
 ### 15.112 規則を、エージェントでない呼び手に渡す（2026-09-21）
 
-**決定**：規則を Connect のサービスとして出す。`gen` が書くのは五つ——`proto/rulec/<別名>/v<版>/<別名>.proto`（契約）、`proto/buf.yaml` と `proto/buf.gen.yaml`（出たディレクトリがそのまま buf のモジュールで、stub の作り方は connect-py の文書がすすめるとおり）、`python/<別名>_service.py`（その後ろに立つ実装。ASGI と WSGI の両方）、`python/<別名>_connect_runner.py`（同じベクタをワイヤ越しに通す runner）。`rulec test` は全ベクタを、二つのアプリそれぞれに POST と GET で四回通し、記録をバイトで突き合わせる。逆向きに、いま動いているほうが Connect のサービスなら `rulec adapter --template connect-python` がアダプタのテンプレートを出す。
+**決定**：規則を Connect のサービスとして出す。`gen` が書くのは五つ——`proto/rulec/<別名>/v<版>/<別名>.proto`（契約）、`proto/buf.yaml` と `proto/buf.gen.yaml`（出たディレクトリがそのまま buf のモジュールで、stub の作り方は connect-py の文書がすすめるとおり）、`python/<別名>_service.py`（その後ろに立つ実装。ASGI と WSGI の両方）、`python/<別名>_connect_runner.py`（同じベクタをワイヤ越しに通す runner）。`rulec test` は全ベクタを、二つのアプリそれぞれに POST と GET で四回通し、記録をバイトで突き合わせる。runner が uvicorn に渡すソケットは、プロトコルに `IPPROTO_TCP` を書いて作る（2026-10-23。asyncio が Nagle アルゴリズムを切るのはそう作ったソケットだけで、`socket.socket()` のままでは、Linux で呼び出しごとに 40 ミリ秒ほど待った）。逆向きに、いま動いているほうが Connect のサービスなら `rulec adapter --template connect-python` がアダプタのテンプレートを出す。
 
 **きっかけ**：§15.44 で規則を MCP のツールにしたとき、呼び手として想定したのはエージェントだった。呼び手はもう一つある。別のリポジトリにある、たいてい別の言語で書かれた、すでに何かの呼び出し規約を持っているコードである。そちらに渡す口を、この道具は持っていなかった。`rulec api` を読んで自分で包むか、SQL の関数（§15.80）を PostgREST の後ろに置くかの二つしかない。
 

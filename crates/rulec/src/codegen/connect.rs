@@ -1388,7 +1388,7 @@ impl<'a> Gen<'a> {
             .replace("@MTAIL@", &mtail)
             .replace("@D_REQUEST@", &tr!("ベクタ一行を、リクエストのメッセージにする。", "One line of the vectors as the request message."))
             .replace("@D_SERVE@", &tr!("WSGI の側を、標準ライブラリのサーバで、この同じプロセスの空いている番号に立てる。", "The WSGI side, on a free port in this same process, served by the standard library."))
-            .replace("@D_ASGI@", &tr!("ASGI の側を uvicorn で立てる。ソケットはこちらで作って渡すので、どの番号になったかが分かる。", "The ASGI side, under uvicorn. The socket is bound here and handed over, so which port it took is known."))
+            .replace("@D_ASGI@", &tr!("ASGI の側を uvicorn で立てる。ソケットはこちらで作って渡すので、どの番号になったかが分かる。\n    プロトコルに IPPROTO_TCP を書いて作るのは、asyncio が Nagle アルゴリズムを切るのが、そう作ったソケットだけだからである。", "The ASGI side, under uvicorn. The socket is bound here and handed over, so which port it took is known;\n    it is made with IPPROTO_TCP written in, as asyncio turns Nagle's algorithm off only on such a socket."))
     }
 }
 
@@ -1427,7 +1427,7 @@ def _serve_asgi() -> str:
 
     import uvicorn
 
-    sock = socket.socket()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
     sock.bind(("127.0.0.1", 0))
     port = int(sock.getsockname()[1])
     srv = uvicorn.Server(uvicorn.Config(app, log_level="error"))

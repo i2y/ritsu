@@ -956,6 +956,11 @@ impl Wire for StdioWire {
 
 /// MCP's Streamable HTTP, written out: one POST per message, the answer's length stated, so
 /// the same connection carries the whole conversation.
+///
+/// Each request goes out in one write, on a socket with Nagle's algorithm off. Written as two
+/// writes, the headers and then the body, the body waited for the server to acknowledge the
+/// headers, and a server that holds its acknowledgement back (Linux, for 40 ms) answered every
+/// call that much later: a rule of 8,686 cases spent half an hour on CI waiting so.
 struct HttpWire {
     out: TcpStream,
     inn: BufReader<TcpStream>,
@@ -966,24 +971,26 @@ struct HttpWire {
 impl HttpWire {
     fn connect(at: &str) -> Result<HttpWire, Failure> {
         let out = TcpStream::connect(at).map_err(|e| broken(tr!("{at} につなげません: {e}", "cannot connect to {at}: {e}")))?;
+        // Only the time it takes is at stake, so a socket that will not take it is used as it is.
+        let _ = out.set_nodelay(true);
         let inn = BufReader::new(out.try_clone().map_err(|e| broken(e.to_string()))?);
         Ok(HttpWire { out, inn, at: at.to_string(), session: None })
     }
 
     fn post(&mut self, body: &str) -> Result<(u16, String), Failure> {
-        let mut head = format!(
+        let mut req = format!(
             "POST /mcp HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nMCP-Protocol-Version: 2025-06-18\r\nContent-Length: {}\r\n",
             self.at,
             body.len()
         );
         // The session the server handed out at initialize goes back on every later message.
         if let Some(s) = &self.session {
-            head.push_str(&format!("Mcp-Session-Id: {s}\r\n"));
+            req.push_str(&format!("Mcp-Session-Id: {s}\r\n"));
         }
-        head.push_str("\r\n");
+        req.push_str("\r\n");
+        req.push_str(body);
         self.out
-            .write_all(head.as_bytes())
-            .and_then(|()| self.out.write_all(body.as_bytes()))
+            .write_all(req.as_bytes())
             .and_then(|()| self.out.flush())
             .map_err(|e| broken(tr!("送れません: {e}", "cannot send: {e}")))?;
 
