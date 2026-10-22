@@ -96,6 +96,19 @@ fn main() -> ExitCode {
         }
         eprintln!("ritsu: a bug in ritsu, please report it: {info}");
     }));
+    // The command runs on a thread of its own with room for 256 MiB of stack, as `kaname`'s does:
+    // `ritsu kaname run` reads and runs values a host may give nested 200 deep (kaname's DESIGN
+    // 28.1), which overflows the stack of a main thread in a debug build on x86_64 Linux. WASI has
+    // no threads; its stack is the module's own.
+    #[cfg(not(target_os = "wasi"))]
+    {
+        let worker = std::thread::Builder::new().stack_size(256 << 20).spawn(|| std::panic::catch_unwind(run));
+        match worker.map(|w| w.join()) {
+            Ok(Ok(Ok(code))) => code,
+            _ => ExitCode::from(2),
+        }
+    }
+    #[cfg(target_os = "wasi")]
     match std::panic::catch_unwind(run) {
         Ok(code) => code,
         Err(_) => ExitCode::from(2),
