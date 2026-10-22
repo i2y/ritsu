@@ -87,6 +87,10 @@ golden!(e011_別名, "E011", "tests/mutants/m_e011.rule", "E011");
 
 // Labels and tables that share an output (§15.66).
 golden!(e034_ラベル重複, "E034", "tests/mutants/m_e034.rule", "E034");
+// One name, one declaration (§15.262).
+golden!(e034_入力の二度の宣言, "E034-input", "tests/mutants/m_e034inputja.rule", "E034");
+golden!(e034_列挙の値の二度書き, "E034-value", "tests/mutants/m_e034valueja.rule", "E034");
+golden!(e034_同じ識別子の二つの名前, "E034-alias", "tests/mutants/m_e034aliasja.rule", "E034");
 golden!(e035_指す先が無い, "E035", "tests/mutants/m_e035.rule", "E035");
 golden!(w117_効かない例外, "W117", "tests/mutants/m_w117.rule", "W117");
 golden!(e046_節の形, "E046", "tests/mutants/m_e046.rule", "E046");

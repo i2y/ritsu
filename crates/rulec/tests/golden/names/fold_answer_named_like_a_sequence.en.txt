@@ -1,0 +1,10 @@
+error[E021]: `lines` is already a sequence
+  --> tests/names/fold_answer_named_like_a_sequence.rule:19 fold
+   |
+ 6 | elements lines
+   |          ^^^^^ the first declaration
+19 | fold verdict over lines -> lines : number
+   |                            ^^^^^ this is the name of the fold's answer
+   |
+ Give a fold's answer the name of an output, or a name not yet used; a new one takes its type too: `-> <name>(<alias>) : <type>`.
+

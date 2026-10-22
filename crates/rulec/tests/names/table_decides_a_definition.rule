@@ -1,0 +1,22 @@
+rule heavy_parcel v1
+description "A table that decides the name of a definition above it"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  fee : number  round down(1)
+
+define heavy : bool = weight >= 5
+
+table by_weight
+policy unique
+| weight | -> heavy : bool |
+| <=7    | false           |
+| >7     | true            |
+
+table by_heavy
+policy unique
+| heavy | -> fee |
+| true  | 10     |
+| false | 5      |

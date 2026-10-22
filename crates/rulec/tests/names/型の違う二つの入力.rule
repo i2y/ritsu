@@ -1,0 +1,15 @@
+rule 重さの印(weight_flag) v1
+description "重さを数で宣言し、もう一度真偽で宣言している"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  重さ(weight) : bool
+
+outputs
+  重い(heavy) : bool
+
+table 区分(band)
+policy unique
+| 重さ | -> 重い |
+| <=5  | false   |
+| >5   | true    |

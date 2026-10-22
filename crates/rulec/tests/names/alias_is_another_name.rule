@@ -1,0 +1,16 @@
+rule size_check v1
+description "An input whose alias is the name of another input"
+
+inputs
+  weight(width) : number  range >=0 <=9
+  width         : number  range >=0 <=9
+
+outputs
+  large : bool
+
+table decide
+policy first
+| weight | width | -> large |
+| >5     | -     | true     |
+| -      | >5    | true     |
+| -      | -     | false    |

@@ -1,0 +1,17 @@
+rule 急ぎの料金(rush_fee) v1
+description "一つの shape を、二つの契約で二度宣言している"
+
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Return"
+
+inputs
+  急ぎ(rush) : bool  from 注文.rush
+
+outputs
+  料金(fee) : number  round down(1)
+
+table 急ぎごと(by_rush)
+policy unique
+| 急ぎ  | -> 料金 |
+| true  | 10      |
+| false | 5       |

@@ -1,0 +1,14 @@
+rule 重さの判定(weight_check) v1
+description "表の見出しに一つの列を二度書いていて、一行目はどの入力にも当たらない"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  重い(heavy) : bool
+
+table 判定(decide)
+policy first
+| 重さ | 重さ | -> 重い |
+| <=5  | >5   | true    |
+| -    | -    | false   |

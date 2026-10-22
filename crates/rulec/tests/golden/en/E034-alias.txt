@@ -1,0 +1,9 @@
+error[E034]: `girth` and `weight` become the one identifier `girth` in the generated code
+  --> tests/mutants/m_e034alias.rule:18
+   |
+17 |   girth  : length[cm]  range >=1cm <=170cm
+   |   ^^^^^ girth, a name with no alias
+18 |   weight(girth) : mass[g]  range >=1g <=25kg  contract_only
+   |   ^^^^^^ the alias girth of weight
+   |
+ A value's identifier names a parameter or a variable of the generated code. With two values of one identifier, the code declares one name twice and does not compile, or one value overwrites the other. The generated code takes the alias as the identifier, or the name itself where there is none. Give one of the two another alias.

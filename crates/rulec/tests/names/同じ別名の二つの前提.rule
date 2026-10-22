@@ -1,0 +1,14 @@
+enums 履修の道筋(course_paths) v1
+description "二つの前提のつながりに、同じ別名を書いている"
+
+enum 科目(course) = 入門(intro) | 発展(advanced) | 総まとめ(capstone)
+
+prerequisites 本筋(path) over 科目
+  start    入門
+  発展     requires 入門
+  総まとめ requires 発展
+
+prerequisites 近道(path) over 科目
+  start    入門
+  発展     requires 入門
+  総まとめ requires 入門

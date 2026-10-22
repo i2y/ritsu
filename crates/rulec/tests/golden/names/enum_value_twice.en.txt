@@ -1,0 +1,10 @@
+error[E034]: Enum `tier` has the value `basic` twice
+  --> tests/names/enum_value_twice.rule:4
+  |
+4 | enum tier = basic | gold | basic
+  |             ^^^^^ the first
+4 | enum tier = basic | gold | basic
+  |                            ^^^^^ the second
+  |
+ Write each value of an enum once. With one written twice, the generated code's enum declares it twice, which most languages do not compile.
+

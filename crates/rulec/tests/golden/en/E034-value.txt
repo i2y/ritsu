@@ -1,0 +1,9 @@
+error[E034]: Enum `size_class` has the value `S160` twice
+  --> tests/mutants/m_e034value.rule:6
+  |
+6 | enum size_class = S60 | S80 | S100 | S120 | S140 | S160 | S170 | S160
+  |                                                    ^^^^ the first
+6 | enum size_class = S60 | S80 | S100 | S120 | S140 | S160 | S170 | S160
+  |                                                                  ^^^^ the second
+  |
+ Write each value of an enum once. With one written twice, the generated code's enum declares it twice, which most languages do not compile.

@@ -539,6 +539,29 @@ fn locals(c: &RuleFile, outer: &dyn Fn(&str) -> bool) -> Vec<String> {
     out
 }
 
+/// What a rule declares under `name` that is a value and not an input, and where (§15.262): an
+/// output, a sequence or a field of its elements, an open value, or what an item decides. An input
+/// a contribution adds under such a name would be one name for two values of the merged rule.
+fn value_named(f: &RuleFile, name: &str) -> Option<(String, Span)> {
+    let named = |n: &Name| (n.text == name).then(|| n.span.clone());
+    let what = |ja: &str, en: &str| if crate::i18n::ja() { ja.to_string() } else { en.to_string() };
+    f.outputs
+        .iter()
+        .find_map(|o| named(&o.name).map(|s| (what("出力", "an output"), s)))
+        .or_else(|| f.elements.iter().find_map(|el| named(&el.name).map(|s| (what("たどる並び", "a sequence"), s))))
+        .or_else(|| f.elements.iter().flat_map(|el| el.fields.iter()).find_map(|fd| named(&fd.name).map(|s| (what("要素のフィールド", "a field of an element"), s))))
+        .or_else(|| f.opens.iter().find_map(|o| named(&o.name).map(|s| (what("開いた値", "an open value"), s))))
+        .or_else(|| {
+            f.items.iter().find_map(|it| match it {
+                Item::Derived(d) => named(&d.name).map(|s| (what("導出", "a derive"), s)),
+                Item::Define(d) => named(&d.name).map(|s| (what("定義", "a definition"), s)),
+                Item::Agg(d) => named(&d.name).map(|s| (tr!("`{}` の値", "a `{}`", d.kind.word()), s)),
+                Item::Fold(d) => d.answer.as_ref().and_then(|a| named(&a.name)).map(|s| (what("畳み込みの答え", "a fold's answer"), s)),
+                Item::Table(t) => t.outputs.iter().find_map(|o| named(&o.name)).map(|s| (if t.clause { what("節の出力", "a clause's output") } else { what("表の出力", "a table's output") }, s)),
+            })
+        })
+}
+
 /// The names a rule declares: inputs, outputs, element fields and sequences, what its items bind,
 /// its tables and clauses, its open values.
 fn declared_names(f: &RuleFile) -> Vec<String> {
@@ -969,6 +992,21 @@ fn merge_into(f: &mut RuleFile, path: &str, cs: Vec<Contrib>, main: Option<usize
                     }
                 }
                 None => {
+                    // A name the rule declares as another value: the rule's tables and expressions
+                    // would read one of the two, and the caller would pass the other (§15.262).
+                    if let Some((what, sp)) = value_named(f, &i.name.text) {
+                        out.push(
+                            Diag::error("E034", tr!("寄与の入力 `{}` は、足す先の規則の{what}と同じ名前です", "The contribution's input `{}` has the name of {what} of the rule it adds to", i.name.text))
+                                .at(where_(&i.span))
+                                .mark(i.name.span.clone(), "")
+                                .note(tr!(
+                                    "足す先の規則は、{} 行目でこの名前を宣言しています。一つの名前は、合わせた規則の中で一つの値を指すので、入力の名前を変えてください。",
+                                    "The rule declares the name at line {}. A name names one value in the merged rule: rename the input.",
+                                    sp.line
+                                )),
+                        );
+                        continue;
+                    }
                     // The days of a date it adds come from a koyomi file named from its own
                     // directory, whichever file the merged rule is checked as (§15.235).
                     let mut i = i.clone();

@@ -39,7 +39,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E031](#e031) | error | One item reads the elements of two sequences |
 | [E032](#e032) | error | The declared enum and the imported one disagree |
 | [E033](#e033) | error | A value that came from elsewhere has neither a row nor `default` |
-| [E034](#e034) | error | A row label appears twice |
+| [E034](#e034) | error | A name appears twice |
 | [E035](#e035) | error | The target of `overrides` does not exist |
 | [E036](#e036) | error | The target of `overrides` does not define the same output |
 | [E037](#e037) | error | A cited fragment is not pinned |
@@ -639,7 +639,7 @@ Related codes: [E028](#e028), [E021](#e021), [E031](#e031)
 
 `error` — **The `fold` is not written correctly**
 
-**When.** The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
+**When.** The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element, a sequence or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only.
 
 **Fix.** Correct the heading and the arms. A bare `take` cannot be written: whether **one and only one** element may be taken, or the first of several, is for the author to choose. To answer with a value of an element, take it with `take_unique`, `take_first` or `keep_max`, and answer `exhausted -> held`. Name the answer with `-> <name>` for the items below to read it; a verdict that needs a fold's answer goes in another fold, which reads it on a second walk.
 
@@ -831,7 +831,7 @@ Related codes: [E026](#e026), [E027](#e027)
 
 `error` — **The `sequence` is not written correctly**
 
-**When.** The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`).
+**When.** The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, one field's column twice, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`).
 
 **Fix.** Make the header the fields of `elements` as they are, and write one element's values per row. This is not a table: it is the list of values as they would really be passed.
 
@@ -1173,13 +1173,90 @@ Related codes: [E032](#e032), [W111](#w111), [E101](#e101), [E067](#e067)
 
 ## E034
 
-`error` — **A row label appears twice**
+`error` — **A name appears twice**
 
-**When.** Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name; when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads; and when an input, a sequence and a field of an element (the fields of two sequences included) share a name.
+**When.** A file writes one name twice among the names of one kind, and it is said at the second. The kinds are the values (the inputs, the sequences and the fields of their elements, the outputs, and what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and clauses decide), the tables and clauses, the enums, the values of one enum, the groups and the values one lists, the shapes, the sources, the applies, the prerequisites blocks, the labels of the rows of one table, and the columns of the heading of a table or of the examples. An output shares its name with what decides it, and several tables and clauses may decide one name; any other two values of one name stop here, an output named like an input among them. A group named like a value of an enum is one word read two ways, and stops here too. So do two names of one list that come to one identifier in the generated code (the alias of one is the alias or the name of the other), one name given two aliases, and, in an `enums` file, an enum's name that is another enum's alias (`import enum` finds an enum by either). An enum read with `import enum`, and a group that comes with it, is held to the names of this rule and of the other `import enum` lines, and an input a contribution adds to the names of the rule it adds to. A fold's answer is held by E021, and the name an `apply` gives a callee output by E041.
 
-**Fix.** Change one of the two labels (names). An enum read with `import enum` can be read under another name with `-> <another name>`.
+**Fix.** Remove one of the two, or rename one (a row label and a column of a heading alike). Of two names that come to one identifier, give one another alias. An enum read with `import enum` can be read under another name with `-> <another name>`.
 
 **Smallest reproduction**:
+
+```rule
+rule weight_check v1
+
+inputs
+  weight : number  range >=0 <=9
+  weight : number  range >=0 <=99
+
+outputs
+  heavy : bool
+
+table decide
+policy unique
+| weight | -> heavy |
+| <=5    | false    |
+| >5     | true     |
+```
+
+**One value written twice in an enum**:
+
+```rule
+rule free_shipping v1
+
+enum member_kind = basic | gold | basic
+
+inputs
+  member : member_kind
+
+outputs
+  free : bool
+
+table decide
+policy unique
+| member | -> free |
+| basic  | false   |
+| gold   | true    |
+```
+
+**Two names that come to one identifier**:
+
+```rule
+rule size_check v1
+
+inputs
+  weight(w) : number  range >=0 <=9
+  width(w)  : number  range >=0 <=9
+
+outputs
+  large : bool
+
+table decide
+policy first
+| weight | width | -> large |
+| >5     | -     | true     |
+| -      | >5    | true     |
+| -      | -     | false    |
+```
+
+**One column twice in a table's heading**:
+
+```rule
+rule weight_check v1
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  heavy : bool
+
+table decide
+policy first
+| weight | weight | -> heavy |
+| <=5    | >5     | true     |
+| -      | -      | false    |
+```
+
+**One label on two rows of a table**:
 
 ```rule
 rule t(t) v1
@@ -1196,7 +1273,7 @@ r1 | true  | true  |
 r1 | false | false |
 ```
 
-Related codes: [E009](#e009), [E035](#e035)
+Related codes: [E009](#e009), [E035](#e035), [E021](#e021), [E041](#e041), [E075](#e075)
 
 ## E035
 
@@ -1432,7 +1509,7 @@ Related codes: [E037](#e037), [E038](#e038), [E044](#e044), [E067](#e067)
 
 `error` — **The bindings of an apply do not match the callee**
 
-**When.** A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten.
+**When.** A callee input is left unbound or bound twice, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, one callee output is given two names, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten.
 
 **Fix.** Bind each callee input with one `<callee input> = <value>` line, and rename an output with `<callee output> -> <name>`. The callee's input and output names are listed in the message.
 
@@ -2069,7 +2146,7 @@ Related codes: [E050](#e050), [E028](#e028)
 
 `error` — **A `scenario` is not shaped right**
 
-**When.** A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for a carried input (the state, or another carried value); or it lacks a column for another input. The first call starts from the `initial` values and every later one from what the call before it answered, so a carried input has no column.
+**When.** A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; its heading has one column twice; it has a column for a carried input (the state, or another carried value); or it lacks a column for another input. The first call starts from the `initial` values and every later one from what the call before it answered, so a carried input has no column.
 
 **Fix.** Write the table right under `scenario <name>(<ascii>)`. The header is every input but the carried one, then `->`, then every output. With no state carried from one call to the next, write the rows as `examples`.
 

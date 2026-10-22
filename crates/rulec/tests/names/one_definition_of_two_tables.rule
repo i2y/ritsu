@@ -1,0 +1,27 @@
+rule parcel_fee v1
+description "Two tables that decide one output: one definition, its alias written once"
+
+inputs
+  weight : number  range >=0 <=9
+  member : bool
+
+outputs
+  fee(charge) : number  round down(1)
+
+table base
+policy unique
+| weight | -> fee(charge) |
+| <=5    | 5              |
+| >5     | 10             |
+
+table member_rate
+policy unique
+overrides base
+| member | -> fee |
+| true   | 3      |
+
+examples
+| weight | member | -> fee |
+| 3      | false  | 5      |
+| 7      | false  | 10     |
+| 7      | true   | 3      |

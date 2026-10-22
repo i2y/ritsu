@@ -1,0 +1,10 @@
+error[E026]: The heading has the column `amount` twice
+  --> tests/names/sequence_column_twice.rule:15 a named sequence
+   |
+15 | | amount | amount |
+   |   ^^^^^^ the first
+15 | | amount | amount |
+   |            ^^^^^^ the second
+   |
+ A sequence's heading has one column per field of an element. With two columns of one field, which value an element takes is not decided.
+

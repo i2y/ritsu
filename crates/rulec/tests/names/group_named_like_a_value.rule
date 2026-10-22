@@ -1,0 +1,17 @@
+rule region_fee v1
+description "A group named like one of the values it holds"
+
+enum region = north | south | islands | capital
+group north = north, islands
+
+inputs
+  dest : region
+
+outputs
+  fee : number  round down(1)
+
+table by_region
+policy unique
+| dest           | -> fee |
+| north          | 10     |
+| south, capital | 5      |

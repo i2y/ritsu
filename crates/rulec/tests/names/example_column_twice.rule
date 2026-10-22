@@ -1,0 +1,18 @@
+rule weight_check v1
+description "An example that writes one expected value twice, and says two things"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  heavy : bool
+
+table decide
+policy unique
+| weight | -> heavy |
+| <=5    | false    |
+| >5     | true     |
+
+examples
+| weight | -> heavy | heavy |
+| 3      | false    | true  |

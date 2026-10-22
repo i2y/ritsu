@@ -1,0 +1,15 @@
+rule 二度の料金(fee_twice) v1
+description "一つの出力を、丸めを変えて二度宣言している"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  料金(fee) : number  round down(1)
+  料金(fee) : number  round up(10)
+
+table 重さごと(by_weight)
+policy unique
+| 重さ | -> 料金 |
+| <=5  | 5       |
+| >5   | 10      |

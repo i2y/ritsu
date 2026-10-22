@@ -1,0 +1,19 @@
+{
+  "$defs": {
+    "Order": {
+      "type": "object",
+      "properties": {
+        "rush": { "type": "boolean" },
+        "gift": { "type": "boolean" }
+      },
+      "required": ["rush", "gift"]
+    },
+    "Return": {
+      "type": "object",
+      "properties": {
+        "rush": { "type": "boolean" }
+      },
+      "required": ["rush"]
+    }
+  }
+}

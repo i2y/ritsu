@@ -1,0 +1,17 @@
+rule 速達料金(express_fee) v1
+description "入力と同じ名前の定義。下の表は、入力ではなく定義を読む"
+
+inputs
+  速達(express) : bool
+  重さ(weight)  : number  range >=0 <=9
+
+outputs
+  料金(fee) : number  round down(1)
+
+define 速達 : bool = 重さ >= 5
+
+table 速達ごと(by_express)
+policy unique
+| 速達  | -> 料金 |
+| true  | 10      |
+| false | 5       |

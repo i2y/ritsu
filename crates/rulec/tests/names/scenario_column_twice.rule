@@ -1,0 +1,28 @@
+rule door v1
+description "A scenario whose heading writes one input twice"
+
+enum state = shut | ajar
+enum motion = tug | shove
+
+inputs
+  current : state
+  action  : motion
+
+outputs
+  after_move : state
+
+table step
+policy unique
+| current | action | -> after_move |
+| shut    | shove  | ajar          |
+| shut    | tug    | shut          |
+| ajar    | shove  | ajar          |
+| ajar    | tug    | shut          |
+
+machine door over step
+  carry   current -> after_move
+  initial shut
+
+scenario shove_then_tug
+| action | action | -> after_move |
+| shove  | tug    | ajar          |

@@ -1,0 +1,10 @@
+error[E034]: The name `express` is declared twice
+  --> tests/names/definition_named_like_an_input.rule:11
+   |
+ 5 |   express : bool
+   |   ^^^^^^^ the first declaration (an input)
+11 | define express : bool = weight >= 5
+   |        ^^^^^^^ the same name (a definition)
+   |
+ A name names one value in a rule. With two declarations, which of the two the check and the generated code read is not decided (the generated code may not even compile). Remove one of them, or rename it.
+

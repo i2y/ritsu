@@ -1,0 +1,21 @@
+rule 値引きの合計(discount_total) v1
+description "上の定義と同じ名前の開いた値"
+
+inputs
+  会員(member) : bool
+
+outputs
+  値引き(discount) : number  round down(1)
+
+table 会員の値引き(member_off)
+policy unique
+| 会員  | -> 会員の分 : number |
+| true  | 5                    |
+| false | 0                    |
+
+define 重ねた値引き : number = 会員の分
+
+open 重ねた値引き : number  combine sum  range >=0 <=100
+  会員の分
+
+define 値引き : number = 重ねた値引き

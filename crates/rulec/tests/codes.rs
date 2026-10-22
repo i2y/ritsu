@@ -139,9 +139,11 @@ fn 台帳の別の形の再現はその形を出す() {
     // that go round (§15.228, §15.230); E103 with a table's heading that writes a type other than
     // the output's (§15.247), and with `none` under an output that is not optional (§15.249); E043
     // with a value outside the range of an input of an ordered enum (§15.252), and with a value that
-    // may be absent (§15.255); E121 with a path that goes on through a collection (§15.254)
+    // may be absent (§15.255); E121 with a path that goes on through a collection (§15.254); E034
+    // with an enum's value written twice, two names of one identifier, a column twice in a table's
+    // heading, and the label of two rows (§15.262)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E022", "E031", "E033", "E040", "E043", "E044", "E102", "E103", "E108", "E121"]);
+    assert_eq!(with, ["E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121"]);
     // Each by its place among the entry's other forms; `None` is the last.
     for (code, form, says) in [
         ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
@@ -152,6 +154,10 @@ fn 台帳の別の形の再現はその形を出す() {
         ("E121", None, [(Lang::En, "The path `order.lines.category` goes on through the collection `order.lines`"), (Lang::Ja, "パス `order.lines.category` は、並び `order.lines` の先へ続いています")]),
         ("E103", Some(0), [(Lang::En, "Output r is money[JPY, excl_tax], but money[JPY, incl_tax] is written here"), (Lang::Ja, "出力 r は money[円, excl_tax] ですが、ここには money[円, incl_tax] と書かれています")]),
         ("E103", Some(1), [(Lang::En, "This column is money[JPY, incl_tax], but `none` is written here"), (Lang::Ja, "この列は money[円, incl_tax] ですが `none` が書かれています")]),
+        ("E034", Some(0), [(Lang::En, "Enum `member_kind` has the value `basic` twice"), (Lang::Ja, "列挙 `会員区分` の値 `一般` が二度書かれています")]),
+        ("E034", Some(1), [(Lang::En, "`weight` and `width` become the one identifier `w` in the generated code"), (Lang::Ja, "`重さ` と `長さ` が、生成するコードで同じ識別子 `weight` になります")]),
+        ("E034", Some(2), [(Lang::En, "The heading has the column `weight` twice"), (Lang::Ja, "見出しに列 `重さ` が二度あります")]),
+        ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
     ] {
         let e = rulec::codes::find(code).unwrap();
         let a = match form {

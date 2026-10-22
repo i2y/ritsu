@@ -1,0 +1,10 @@
+error[E034]: Group `far` lists the value `north` twice
+  --> tests/names/group_lists_a_value_twice.rule:5
+  |
+5 | group far = north, islands, north
+  |             ^^^^^ the first
+5 | group far = north, islands, north
+  |                             ^^^^^ the second
+  |
+ List each value of a group once. With one listed twice, the generated Go compares it twice, and does not compile.
+

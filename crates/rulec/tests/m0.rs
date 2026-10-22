@@ -91,6 +91,14 @@ fn 変異は決めたコードだけを出す() {
         ("m_w105.rule", &[("W105", 3)], "上からの表で出力の食い違う重なりを作った"),
         ("m_w111.rule", &[("W111", 1)], "contract_only の印を消した"),
         ("m_e034.rule", &[("E034", 1)], "同じ表の二つの行に同じラベルを付けた"),
+        // §15.262: a name declared twice, an enum's value written twice, and one identifier for two
+        // names. The English rule, and its Japanese version beside it.
+        ("m_e034input.rule", &[("E034", 1)], "重量の宣言を、上限を上げた二行目と一緒に残した"),
+        ("m_e034inputja.rule", &[("E034", 1)], "上と同じ規則の日本語の版"),
+        ("m_e034value.rule", &[("E034", 1)], "サイズ区分の値 S160 を二度書いた"),
+        ("m_e034valueja.rule", &[("E034", 1)], "上と同じ規則の日本語の版"),
+        ("m_e034alias.rule", &[("E034", 1)], "重量の識別子を、三辺合計の名前と同じ girth にした"),
+        ("m_e034aliasja.rule", &[("E034", 1)], "上と同じ規則の日本語の版"),
         ("m_e035.rule", &[("E035", 1)], "overrides で無い表を指した"),
         ("m_w117.rule", &[("W117", 1)], "交わらない行への overrides を足した"),
         ("m_e046.rule", &[("E046", 1)], "節の when の行を消した"),

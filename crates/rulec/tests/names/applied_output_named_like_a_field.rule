@@ -1,0 +1,19 @@
+rule big_lines v1
+description "How many lines are flagged, with an applied output named like a field of a line"
+
+inputs
+  weight : number  range >=0 <=9
+
+elements lines
+  flagged : bool
+
+outputs
+  flagged_lines : number  round down(1)
+
+apply size = "weight_is_big.rule" meaning:954028fd5d3e48ad
+  weight = weight
+  big -> flagged
+
+count n over lines where flagged  range >=0 <=20
+
+define flagged_lines : number = n

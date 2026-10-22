@@ -1,0 +1,25 @@
+rule first_flagged v1
+description "A fold whose answer is named like the sequence it walks"
+
+enum mark = skip | pick
+
+elements lines
+  amount  : number  range >=0 <=9
+  flagged : bool
+
+outputs
+  chosen : number  round down(1)
+
+table mark_by_flag
+policy unique
+| flagged | -> verdict : mark |
+| true    | pick              |
+| false   | skip              |
+
+fold verdict over lines -> lines : number
+  pick      -> take_first amount
+  skip      -> next
+  empty     -> 0
+  exhausted -> held
+
+define chosen : number = lines

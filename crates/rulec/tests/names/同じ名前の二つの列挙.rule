@@ -1,0 +1,17 @@
+rule 地帯の料金(zone_fee) v1
+description "一つの列挙を、違う値でもう一度宣言している"
+
+enum 地帯(zone) = 近い(near) | 遠い(far)
+enum 地帯(zone) = 市内(local) | 遠方(remote)
+
+inputs
+  届け先(dest) : 地帯
+
+outputs
+  料金(fee) : number  round down(1)
+
+table 地帯ごと(by_zone)
+policy unique
+| 届け先 | -> 料金 |
+| 近い   | 5       |
+| 遠い   | 10      |

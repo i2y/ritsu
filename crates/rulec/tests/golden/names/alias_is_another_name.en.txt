@@ -1,0 +1,10 @@
+error[E034]: `weight` and `width` become the one identifier `width` in the generated code
+  --> tests/names/alias_is_another_name.rule:6
+  |
+5 |   weight(width) : number  range >=0 <=9
+  |   ^^^^^^ the alias width of weight
+6 |   width         : number  range >=0 <=9
+  |   ^^^^^ width, a name with no alias
+  |
+ A value's identifier names a parameter or a variable of the generated code. With two values of one identifier, the code declares one name twice and does not compile, or one value overwrites the other. The generated code takes the alias as the identifier, or the name itself where there is none. Give one of the two another alias.
+

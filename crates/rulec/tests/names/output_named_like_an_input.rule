@@ -1,0 +1,16 @@
+rule pass_member v1
+description "An output named like an input, to hand the input back as it is"
+
+inputs
+  member : bool
+  weight : number  range >=0 <=9
+
+outputs
+  member : bool
+  fee    : number  round down(1)
+
+table by_weight
+policy unique
+| weight | -> fee |
+| <=5    | 5      |
+| >5     | 10     |

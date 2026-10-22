@@ -1,0 +1,10 @@
+rule fee_aliases v1
+description "An output and the definition that decides it, each with an alias of its own"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  fee(charge) : number  round down(1)
+
+define fee(price) : number = weight * 2

@@ -1,0 +1,19 @@
+rule 重い荷物(heavy_parcel) v1
+description "準用した規則の一つの出力に名前を二度付け、表が二つ目の名前を読んでいる"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  割増(surcharge) : bool
+
+apply 大きさ(size) = "重さが大きい.rule" meaning:dd5e7128cb9259f4
+  重さ = 重さ
+  大きい -> 重い
+  大きい -> かさばる
+
+table かさばるかどうか(by_bulk)
+policy unique
+| かさばる | -> 割増 |
+| true     | true    |
+| false    | false   |

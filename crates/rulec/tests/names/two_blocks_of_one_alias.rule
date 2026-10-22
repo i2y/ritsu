@@ -1,0 +1,14 @@
+enums course_paths v1
+description "Two prerequisites blocks given one alias"
+
+enum course = intro | advanced | capstone
+
+prerequisites core(path) over course
+  start    intro
+  advanced requires intro
+  capstone requires advanced
+
+prerequisites fast(path) over course
+  start    intro
+  advanced requires intro
+  capstone requires intro

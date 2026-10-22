@@ -1,0 +1,13 @@
+rule order_total v1
+description "Two summaries of one walk given one name"
+
+elements lines
+  amount : number  range >=0 <=100
+
+outputs
+  total : number  round down(1)
+
+sum subtotal over lines of amount  range >=0 <=10000
+max subtotal over lines of amount empty 0  range >=0 <=100
+
+define total : number = subtotal

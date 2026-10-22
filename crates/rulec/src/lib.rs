@@ -65,6 +65,8 @@ pub mod lex;
 /// Merging contributions into the rules they add to (§15.227–§15.231).
 pub mod link;
 pub mod machine;
+/// One name, one declaration: what a file declares twice stops the check (§15.262).
+pub mod names;
 pub mod num;
 pub mod ooxml;
 /// What an output comes to with some inputs held to part of their range (ritsu's port
@@ -213,6 +215,12 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
     let mut nodes = 0i64;
     let adds_to = (f.kind == ast::FileKind::Contribution).then(|| f.contrib.as_ref().and_then(|h| h.to.as_ref()).map(|t| link::join(path, &t.file))).flatten();
     let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone() };
+    // A name the file's lines declare twice, or two names given one identifier (§15.262): whatever
+    // reads the name below would read one of the two, so the check stops before anything does.
+    diags.extend(names::check(f, path));
+    if has_error(&diags) {
+        return done(diags, quiet, shadow, nodes);
+    }
     // The enums it reads from an `enums` file come first (§15.212): everything below, the
     // rule an `apply` brings in included, is checked over them as over the rule's own.
     diags.extend(enums::read_imports(f, path));
@@ -594,6 +602,12 @@ fn prepare_with(src: &str, path: &str, tolerate_pin: bool) -> Result<(ast::RuleF
         return Err(parsed.diags);
     }
     let Some(mut f) = parsed.file else { return Err(Vec::new()) };
+    // What `schema`, `api` and `gen` write from a file that declares a name twice would hold both
+    // declarations, or one of the two (§15.262).
+    let ds = names::check(&f, path);
+    if has_error(&ds) {
+        return Err(ds);
+    }
     let ds = enums::read_imports(&mut f, path);
     if has_error(&ds) {
         return Err(ds);

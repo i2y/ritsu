@@ -1,0 +1,9 @@
+error[E034]: The name `weight` is declared twice
+  --> tests/mutants/m_e034input.rule:19
+   |
+18 |   weight : mass[g]  range >=1g <=25kg  contract_only
+   |   ^^^^^^ the first declaration (an input)
+19 |   weight : mass[g]  range >=1g <=30kg  contract_only
+   |   ^^^^^^ the same name (an input)
+   |
+ A name names one value in a rule. With two declarations, which of the two the check and the generated code read is not decided (the generated code may not even compile). Remove one of them, or rename it.

@@ -120,9 +120,10 @@ calls the value: `derive 残余(margin)` becomes `margin`, `group 遠隔地(remo
 alias out and the declared name is used as it stands — every target language accepts a
 Japanese identifier for something that does not have to be exported.
 
-The alias on a **`table`** is the one exception: it is accepted and currently unused, because
-a table is inlined into the one generated function rather than becoming a function of its
-own. It is kept for SQL generation, where a table will need a name of its own.
+The alias on a **`table`** names no function, since a table is inlined into the one generated
+function rather than becoming a function of its own; it names the column of the SQL query that
+holds the number of the row that matched (`<alias>_row`), and the harness of the Rust proof that
+counts the table's rows.
 
 An alias that is **a word one of the targets has taken** is W121. A builtin is the quiet case:
 the rule's alias names the generated function and an enum's alias names a type, so `sum` or
@@ -144,6 +145,30 @@ column), or cut to the 63 bytes PostgreSQL keeps of a name. Where it would be, i
 of `_2`, `_3`, … that is not. The names the rule declares keep theirs. A parameter or a local hides nothing outside its own
 body, so the warning is raised for those only when the word is a keyword. It is a warning
 because a target you do not generate cannot hurt you.
+
+**One name, one declaration.** A name a file declares names one thing, and `check` stops at the
+second declaration of a name, with the first one marked (E034): an input declared again with
+another range, an enum with a value written twice, two tables, two groups or two shapes of one
+name. The values — the inputs, the sequences and the fields of their elements, the outputs, and
+what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and
+clauses decide — are one list of names. An output shares its name with what decides it, and
+several tables and clauses may decide one name (§7); any other two values of one name stop the
+check, an output named like an input among them (to return an input as it is, an output of its own
+name is decided by `define <output> : <type> = <input>`). A group named like a value of an enum
+stops it too, as does an input a contribution adds under a name the rule declares as another value
+(§6.7). A heading names each of its columns once (E034 in a table or the examples, E055 in a
+scenario, E026 in a named sequence). A fold's answer is held the same way by E021, and the name an
+`apply` gives a callee output by E041.
+
+The identifiers are held the same way, within each list whose names the generated code writes:
+the values, the tables and clauses, the enums, the values of one enum, the groups, the shapes and
+the prerequisites blocks. Two names of one list with one identifier — the alias of one is the
+alias or the name of the other — stop the check, and so does one name given two aliases (an output
+and the definition that decides it: writing the alias on the output's line is enough). An alias
+that is the name of another value which has an alias of its own passes: `weight(size)` beside
+`size(extent)` is the value `size` to the rule and `extent` to the generated code, and nothing reads
+it two ways. In an `enums` file, an enum named like another enum's alias is E034, since `import
+enum` finds an enum by its name or by its alias.
 
 **Numbers** are digits, optionally with `_` as a separator, optionally preceded by `-`,
 optionally followed by a multiplier and then a unit:
@@ -1099,7 +1124,7 @@ define balance : money[USD] = subtotal - discount - paid
 A name that is an output is that output, and the answer is of its type. A name that is not one
 is a value of the rule's own, and takes its type after a colon: `fold flag over items ->
 any_flagged : bool`. Every arm's value is read in that type. It is E021 when the name is already
-an input, a field of an element or a value declared above, when a name that is no output has no
+an input, a field of an element, a sequence or a value declared above, when a name that is no output has no
 type, when an output's name is given another type, and when another item decides the same name —
 a fold with no `->` answers the first output, so a table or a `sum` that decides that output
 too leaves two answers for one name. A numeric answer that the items below read takes the hull
@@ -2228,7 +2253,9 @@ passed is not known. `except` leaves a table, a clause or
 a labelled row (`table:row`) of the callee out; a hole that leaves in the main rule is this
 rule's E101 to fill. The callee's outputs become definitions of this rule, under their
 own names or renamed with `->`, rounded as the callee declares and then, if one is an output
-here, rounded once more as this rule declares. An optional output of the callee that is not a
+here, rounded once more as this rule declares. A name this rule declares already — an input, a
+sequence or a field of its elements, an open value, or what an item decides — is E041 there, with
+where it is declared, and so is a second name for one output. An optional output of the callee that is not a
 number hands the absent value on, through `with` as well; an optional number would be a
 definition that rounds a value that may be absent, and is E044.
 

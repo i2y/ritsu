@@ -1,0 +1,15 @@
+rule weight_flag v1
+description "The weight declared as a number, then again as a truth value"
+
+inputs
+  weight : number  range >=0 <=9
+  weight : bool
+
+outputs
+  heavy : bool
+
+table band
+policy unique
+| weight | -> heavy |
+| <=5    | false    |
+| >5     | true     |

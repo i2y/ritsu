@@ -1,0 +1,14 @@
+rule weight_is_big v1
+description "Whether a weight is big: what the rules beside it apply"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  big : bool
+
+table decide
+policy unique
+| weight | -> big |
+| <=5    | false  |
+| >5     | true   |

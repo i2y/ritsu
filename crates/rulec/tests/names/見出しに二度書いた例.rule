@@ -1,0 +1,18 @@
+rule 重さの判定(weight_check) v1
+description "例の見出しに一つの出力を二度書いていて、例が二つのことを言っている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  重い(heavy) : bool
+
+table 判定(decide)
+policy unique
+| 重さ | -> 重い |
+| <=5  | false   |
+| >5   | true    |
+
+examples
+| 重さ | -> 重い | 重い |
+| 3    | false   | true |

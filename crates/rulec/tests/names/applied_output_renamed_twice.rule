@@ -1,0 +1,19 @@
+rule heavy_parcel v1
+description "One output of an applied rule given two names, the second of which a table reads"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  surcharge : bool
+
+apply size = "weight_is_big.rule" meaning:954028fd5d3e48ad
+  weight = weight
+  big -> heavy
+  big -> bulky
+
+table by_bulk
+policy unique
+| bulky | -> surcharge |
+| true  | true         |
+| false | false        |

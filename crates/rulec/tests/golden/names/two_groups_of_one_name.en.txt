@@ -1,0 +1,10 @@
+error[E034]: The group name `far` appears twice
+  --> tests/names/two_groups_of_one_name.rule:6
+  |
+5 | group far = north, islands
+  |       ^^^ the first declaration
+6 | group far = south
+  |       ^^^ the same name
+  |
+ A group's name is what a cell writes for its values. With two groups of one name, which values a cell means is not decided. Remove one of them, or rename it.
+

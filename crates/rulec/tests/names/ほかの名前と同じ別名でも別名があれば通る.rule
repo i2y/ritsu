@@ -1,0 +1,22 @@
+rule 大きさの判定(size_check) v1
+description "入力の別名が、別名を持つほかの入力の名前と同じ。名前も識別子も二つずつ"
+
+inputs
+  重さ(size)   : number  range >=0 <=9
+  size(extent) : number  range >=0 <=9
+
+outputs
+  大きい(large) : bool
+
+table 判定(decide)
+policy first
+| 重さ | size | -> 大きい |
+| >5   | -    | true      |
+| -    | >5   | true      |
+| -    | -    | false     |
+
+examples
+| 重さ | size | -> 大きい |
+| 6    | 0    | true      |
+| 0    | 6    | true      |
+| 0    | 0    | false     |

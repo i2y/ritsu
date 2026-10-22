@@ -1,0 +1,16 @@
+rule size_check v1
+description "Two inputs given one alias"
+
+inputs
+  weight(w) : number  range >=0 <=9
+  width(w)  : number  range >=0 <=9
+
+outputs
+  large : bool
+
+table decide
+policy first
+| weight | width | -> large |
+| >5     | -     | true     |
+| -      | >5    | true     |
+| -      | -     | false    |

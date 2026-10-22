@@ -1,0 +1,15 @@
+rule weight_band v1
+description "Whether a parcel is heavy, with its weight declared again under a wider range"
+
+inputs
+  weight : number  range >=0 <=9
+  weight : number  range >=0 <=99
+
+outputs
+  heavy : bool
+
+table band
+policy unique
+| weight | -> heavy |
+| <=5    | false    |
+| >5     | true     |

@@ -1,0 +1,10 @@
+error[E034]: The heading has the column `heavy` twice
+  --> tests/names/example_column_twice.rule:17 examples
+   |
+17 | | weight | -> heavy | heavy |
+   |               ^^^^^ the first
+17 | | weight | -> heavy | heavy |
+   |                       ^^^^^ the second
+   |
+ An example's heading has one column per input and per output. Two columns of one input leave which value the rule is called with undecided, and two of one output which expected value is held to it.
+

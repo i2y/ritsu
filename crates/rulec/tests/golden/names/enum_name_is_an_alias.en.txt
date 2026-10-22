@@ -1,0 +1,10 @@
+error[E034]: The name of enum `band` is the alias of enum `zone`
+  --> tests/names/enum_name_is_an_alias.rule:5
+  |
+4 | enum zone(band) = near | far
+  |      ^^^^ the alias band of zone
+5 | enum band(ring) = inner | outer
+  |      ^^^^ the name band
+  |
+ `import enum … from` finds an enum by its name or by its alias, so which of the two a rule that writes this name reads is not decided. Change one of the two.
+

@@ -1,0 +1,10 @@
+error[E034]: The group name `north` is a value of enum region too
+  --> tests/names/group_named_like_a_value.rule:5
+  |
+4 | enum region = north | south | islands | capital
+  |               ^^^^^ a value of enum region
+5 | group north = north, islands
+  |       ^^^^^ the group's name
+  |
+ A cell that writes `north` reads as the group and as the enum's value, and which is meant is not decided. Rename the group or the value.
+

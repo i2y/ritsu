@@ -1,0 +1,10 @@
+エラー[E034]: `shape` の名前 `注文` が二度あります
+  --> tests/names/同じ名前の二つのshape.rule:5
+  |
+4 | shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Order"
+  |       ^^^^ 最初の宣言
+5 | shape 注文(order) = jsonschema "orders.schema.json" "#/$defs/Return"
+  |       ^^^^ 同じ名前
+  |
+ 入力の `from` は、`shape` の名前で呼ぶ側のオブジェクトを指します。同じ名前の `shape` が二つあると、どちらの契約から読むかが決まりません。どちらかを消すか、名前を変えてください。
+

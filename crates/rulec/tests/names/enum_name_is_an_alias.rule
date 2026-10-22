@@ -1,0 +1,5 @@
+enums shipping_zones v1
+description "Two enums, the name of the second the alias of the first"
+
+enum zone(band) = near | far
+enum band(ring) = inner | outer

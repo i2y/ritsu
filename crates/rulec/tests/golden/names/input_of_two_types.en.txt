@@ -1,0 +1,10 @@
+error[E034]: The name `weight` is declared twice
+  --> tests/names/input_of_two_types.rule:6
+  |
+5 |   weight : number  range >=0 <=9
+  |   ^^^^^^ the first declaration (an input)
+6 |   weight : bool
+  |   ^^^^^^ the same name (an input)
+  |
+ A name names one value in a rule. With two declarations, which of the two the check and the generated code read is not decided (the generated code may not even compile). Remove one of them, or rename it.
+

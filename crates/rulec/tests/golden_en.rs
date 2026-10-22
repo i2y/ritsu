@@ -153,6 +153,9 @@ golden!(e011_alias, "E011", "tests/mutants/m_e011.rule", "E011");
 
 // Labels and tables that share an output (§15.66).
 golden!(e034_duplicate_label, "E034", "tests/mutants/m_e034.rule", "E034");
+golden!(e034_input_declared_twice, "E034-input", "tests/mutants/m_e034input.rule", "E034");
+golden!(e034_value_written_twice, "E034-value", "tests/mutants/m_e034value.rule", "E034");
+golden!(e034_two_names_of_one_identifier, "E034-alias", "tests/mutants/m_e034alias.rule", "E034");
 golden!(e035_missing_target, "E035", "tests/mutants/m_e035.rule", "E035");
 golden!(w117_idle_exception, "W117", "tests/mutants/m_w117.rule", "W117");
 golden!(e046_clause_shape, "E046", "tests/mutants/m_e046.rule", "E046");

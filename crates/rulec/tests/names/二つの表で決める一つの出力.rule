@@ -1,0 +1,27 @@
+rule 荷物の料金(parcel_fee) v1
+description "二つの表が一つの出力を決める。一つの定義なので、別名は一度書けば足りる"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  会員(member) : bool
+
+outputs
+  料金(charge) : number  round down(1)
+
+table 基本(base)
+policy unique
+| 重さ | -> 料金(charge) |
+| <=5  | 5               |
+| >5   | 10              |
+
+table 会員料金(member_rate)
+policy unique
+overrides 基本
+| 会員 | -> 料金 |
+| true | 3       |
+
+examples
+| 重さ | 会員  | -> 料金 |
+| 3    | false | 5       |
+| 7    | false | 10      |
+| 7    | true  | 3       |

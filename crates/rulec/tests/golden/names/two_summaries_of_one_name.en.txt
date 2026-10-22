@@ -1,0 +1,10 @@
+error[E034]: The name `subtotal` is declared twice
+  --> tests/names/two_summaries_of_one_name.rule:11
+   |
+10 | sum subtotal over lines of amount  range >=0 <=10000
+   |     ^^^^^^^^ the first declaration (a `sum`)
+11 | max subtotal over lines of amount empty 0  range >=0 <=100
+   |     ^^^^^^^^ the same name (a `max`)
+   |
+ A name names one value in a rule. With two declarations, which of the two the check and the generated code read is not decided (the generated code may not even compile). Remove one of them, or rename it.
+

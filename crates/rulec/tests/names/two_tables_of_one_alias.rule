@@ -1,0 +1,22 @@
+rule two_bands v1
+description "Two tables given one alias"
+
+inputs
+  weight : number  range >=0 <=9
+  width  : number  range >=0 <=9
+
+outputs
+  heavy : bool
+  wide  : bool
+
+table by_weight(band)
+policy unique
+| weight | -> heavy |
+| <=5    | false    |
+| >5     | true     |
+
+table by_width(band)
+policy unique
+| width | -> wide |
+| <=5   | false   |
+| >5    | true    |

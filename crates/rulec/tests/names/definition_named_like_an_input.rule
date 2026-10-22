@@ -1,0 +1,17 @@
+rule express_fee v1
+description "A definition named like an input, which every table below reads in its place"
+
+inputs
+  express : bool
+  weight  : number  range >=0 <=9
+
+outputs
+  fee : number  round down(1)
+
+define express : bool = weight >= 5
+
+table by_express
+policy unique
+| express | -> fee |
+| true    | 10     |
+| false   | 5      |

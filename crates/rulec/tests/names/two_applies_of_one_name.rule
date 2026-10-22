@@ -1,0 +1,18 @@
+rule two_sizes v1
+description "Two applies given one name"
+
+inputs
+  weight : number  range >=0 <=9
+  width  : number  range >=0 <=9
+
+outputs
+  heavy : bool
+  wide  : bool
+
+apply size = "weight_is_big.rule" meaning:954028fd5d3e48ad
+  weight = weight
+  big -> heavy
+
+apply size = "weight_is_big.rule" meaning:954028fd5d3e48ad
+  weight = width
+  big -> wide

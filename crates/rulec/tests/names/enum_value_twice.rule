@@ -1,0 +1,16 @@
+rule member_discount v1
+description "A discount by the member's tier, with one tier written twice"
+
+enum tier = basic | gold | basic
+
+inputs
+  member : tier
+
+outputs
+  discount : bool
+
+table by_tier
+policy unique
+| member | -> discount |
+| basic  | false       |
+| gold   | true        |

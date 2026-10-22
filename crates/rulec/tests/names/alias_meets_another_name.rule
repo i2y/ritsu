@@ -1,0 +1,22 @@
+rule size_check v1
+description "An alias that is the name of another input which has an alias of its own: two names, two identifiers"
+
+inputs
+  weight(size) : number  range >=0 <=9
+  size(extent) : number  range >=0 <=9
+
+outputs
+  large : bool
+
+table decide
+policy first
+| weight | size | -> large |
+| >5     | -    | true     |
+| -      | >5   | true     |
+| -      | -    | false    |
+
+examples
+| weight | size | -> large |
+| 6      | 0    | true     |
+| 0      | 6    | true     |
+| 0      | 0    | false    |

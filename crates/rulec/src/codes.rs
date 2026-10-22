@@ -512,9 +512,131 @@ examples
 | xs   | -> r |
 | nope | 0JPY |
 "##;
-const X_E034: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
+const X_E034: &str = r##"rule 重さの判定(weight_check) v1
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  重さ(weight) : number  range >=0 <=99
+
+outputs
+  重い(heavy) : bool
+
+table 判定(decide)
+policy unique
+| 重さ | -> 重い |
+| <=5  | false   |
+| >5   | true    |
+"##;
+const X_E034_EN: &str = r##"rule weight_check v1
+
+inputs
+  weight : number  range >=0 <=9
+  weight : number  range >=0 <=99
+
+outputs
+  heavy : bool
+
+table decide
+policy unique
+| weight | -> heavy |
+| <=5    | false    |
+| >5     | true     |
+"##;
+const X_E034_VALUE: &str = r##"rule 送料無料(free_shipping) v1
+
+enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | 一般(basic)
+
+inputs
+  会員(member) : 会員区分
+
+outputs
+  無料(free) : bool
+
+table 判定(decide)
+policy unique
+| 会員     | -> 無料 |
+| 一般     | false   |
+| ゴールド | true    |
+"##;
+const X_E034_VALUE_EN: &str = r##"rule free_shipping v1
+
+enum member_kind = basic | gold | basic
+
+inputs
+  member : member_kind
+
+outputs
+  free : bool
+
+table decide
+policy unique
+| member | -> free |
+| basic  | false   |
+| gold   | true    |
+"##;
+const X_E034_ALIAS: &str = r##"rule 大きさの判定(size_check) v1
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  長さ(weight) : number  range >=0 <=9
+
+outputs
+  大きい(large) : bool
+
+table 判定(decide)
+policy first
+| 重さ | 長さ | -> 大きい |
+| >5   | -    | true      |
+| -    | >5   | true      |
+| -    | -    | false     |
+"##;
+const X_E034_ALIAS_EN: &str = r##"rule size_check v1
+
+inputs
+  weight(w) : number  range >=0 <=9
+  width(w)  : number  range >=0 <=9
+
+outputs
+  large : bool
+
+table decide
+policy first
+| weight | width | -> large |
+| >5     | -     | true     |
+| -      | >5    | true     |
+| -      | -     | false    |
+"##;
+const X_E034_COLUMN: &str = r##"rule 重さの判定(weight_check) v1
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  重い(heavy) : bool
+
+table 判定(decide)
+policy first
+| 重さ | 重さ | -> 重い |
+| <=5  | >5   | true    |
+| -    | -    | false   |
+"##;
+const X_E034_COLUMN_EN: &str = r##"rule weight_check v1
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  heavy : bool
+
+table decide
+policy first
+| weight | weight | -> heavy |
+| <=5    | >5     | true     |
+| -      | -      | false    |
+"##;
+const X_E034_LABEL: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)\n   | a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
-const X_E034_EN: &str = r##"rule t(t) v1
+const X_E034_LABEL_EN: &str = r##"rule t(t) v1
 
 inputs
   a(a) : bool
@@ -2387,8 +2509,8 @@ pub fn ledger() -> Vec<Entry> {
             "E021",
             tr!("`fold` の書き方が正しくありません", "The `fold` is not written correctly"),
             tr!(
-                "`fold <判定の列> over <並びの名前> [-> <名前> [: <型>]]` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` `take_weighted <値> by <重み>` のどれでもないか、畳もうとしている列が列挙でないとき。答えの名前が、入力や要素のフィールドや上で宣言した値と同じとき、出力でない名前に型が無いとき、出力の名前に出力と違う型を書いたとき、畳み込みとほかの項目が同じ名前を決めるときも、これです。畳み込みの値が、その値を決める時点に無い値を読むときもこれです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません（要素の判定がその答えを読むと、答えを出す前に答えが要ります）。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
-                "The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
+                "`fold <判定の列> over <並びの名前> [-> <名前> [: <型>]]` になっていないか、判定の行き先が `next` `stop` `stop with <値>` `take_unique <値>` `take_first <値>` `keep_max <値> by <鍵>` `take_weighted <値> by <重み>` のどれでもないか、畳もうとしている列が列挙でないとき。答えの名前が、入力、要素のフィールド、たどる並び、上で宣言した値と同じとき、出力でない名前に型が無いとき、出力の名前に出力と違う型を書いたとき、畳み込みとほかの項目が同じ名前を決めるときも、これです。畳み込みの値が、その値を決める時点に無い値を読むときもこれです。`empty` と `exhausted` の値は要素を見ていないところで決まるので、要素の値を読めません。どの値も、この畳み込みの答えから計算する値を読めません（要素の判定がその答えを読むと、答えを出す前に答えが要ります）。`held` は最後まで見終えたときの値なので、`exhausted` の値にだけ書けます。",
+                "The heading is not `fold <verdict column> over <sequence> [-> <name> [: <type>]]`, or an arm is not one of `next`, `stop`, `stop with <value>`, `take_unique <value>`, `take_first <value>`, `keep_max <value> by <key>`, `take_weighted <value> by <weight>`, or the column being folded is not an enum. So is an answer named after an input, a field of an element, a sequence or a value declared above; a name that is no output given no type; an output's name given a type other than the output's; and a name that the fold and another item both decide. So, too, is a value of the fold that reads what is not there when it is decided: `empty` and `exhausted` are decided where no element is being looked at and cannot read an element's value; no value can read what is computed from the fold's own answer (a verdict that read it would need the answer before there is one); and `held`, what the walk holds once it has seen every element, belongs in `exhausted` only."
             ),
             tr!(
                 "見出しと行き先を上の形に直してください。`take` とだけ書くことはできません。**一件だけ採るのか、最初の一件を採るのか**は、書く人が選ぶことだからです。要素の値を答えにするなら、`take_unique`・`take_first`・`keep_max` で採ってから、`exhausted -> held` で返してください。後ろの項目が答えを読むなら `-> <名前>` で名前を付けます。自分の答えを読む判定は、別の畳み込みにすれば二回目の歩きで読めます。",
@@ -2462,8 +2584,8 @@ pub fn ledger() -> Vec<Entry> {
             "E026",
             tr!("`sequence` の書き方が正しくありません", "The `sequence` is not written correctly"),
             tr!(
-                "`sequence` のフィールドが `elements` のフィールドとそろっていないとき。余分なフィールドがある、フィールドが足りない、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）、のどれかです。",
-                "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
+                "`sequence` のフィールドが `elements` のフィールドとそろっていないとき。余分なフィールドがある、フィールドが足りない、見出しに同じフィールドの列が二つある、`->` がある、たどる並びそのものが無い、同じ名前が二つある、セルが値でない（範囲や `-` が書いてある）、のどれかです。",
+                "The columns of a `sequence` do not line up with the fields of `elements`: a column that is not a field, a field left out, one field's column twice, a `->`, no sequence to be a list of, two blocks with the same name, or a cell that is not a value (a range or a `-`)."
             ),
             tr!(
                 "`elements` のフィールドをそのまま見出しにして、一行に一件ぶんの値を書いてください。これは表ではなく、実際に渡す値の並びです。",
@@ -2578,19 +2700,23 @@ pub fn ledger() -> Vec<Entry> {
         .also_with(tr!("寄与が足した値（`extend`）", "A value a contribution adds (`extend`)"), X_E033_ADDED, E033_BASE),
         err(
             "E034",
-            tr!("行ラベルが二度あります", "A row label appears twice"),
+            tr!("同じ名前が二度あります", "A name appears twice"),
             tr!(
-                "同じ表の二つの行が、最初の `|` の前に同じラベルを書いているとき。ラベルは、`overrides` の行や記録の trace、後の版が行を指すための名前なので、一つの表の中で一意でなければなりません。一つのものを指す名前はどれも同じで、二つの表か節、二つの出典が同じ名前のとき、`import enum` で読んだ列挙か一緒に来たグループが、この規則が宣言するものや別の `import enum` が読んだものと同じ名前のとき、入力・たどる並び・要素のフィールド（二つの並びのフィールドどうしも）が同じ名前のときにも出ます。",
-                "Two rows of one table carry the same label before their first `|`. A label is how an `overrides` line, a record's trace and a later version name the row, so it is unique within its table. Every name that names one thing is held the same way: it also appears when two tables or clauses, or two sources, share a name; when an enum read with `import enum`, or a group that comes with it, has the name of one this rule declares or another `import enum` reads; and when an input, a sequence and a field of an element (the fields of two sequences included) share a name."
+                "一つのファイルが同じ種類の名前を二度書いたとき、二つ目のところで出ます。種類は、値（入力、たどる並びとその要素のフィールド、出力、`derive`・`define`・`count`・`sum`・`max`・`min`・`open` と、表や節が決める出力の列）、表と節、列挙、一つの列挙の値、グループと一つのグループに書いた値、`shape`、出典、準用、前提のつながり、一つの表の行ラベル、表と例の見出しの列です。出力はそれを決めるものと同じ名前で、一つの名前をいくつかの表や節で決めることもできます。値のそれ以外の重なりは、入力と同じ名前の出力も含めて、一つの名前に二つの値があることになるので止まります。列挙の値と同じ名前のグループも、一つの語に二つの読み方があるので止まります。一つの並びの二つの名前が生成するコードで同じ識別子になるとき（一方の別名が、他方の別名か名前と同じ）、一つの名前に二つの別名を書いたとき、`enums` のファイルで列挙の名前がほかの列挙の別名と同じとき（`import enum` は名前でも別名でも列挙を探します）にも出ます。`import enum` で読んだ列挙と一緒に来たグループはこの規則の名前やほかの `import enum` が読んだものと、寄与が足す入力は足す先の規則の名前と比べます。畳み込みの答えの名前は E021、準用の出力に付けた名前は E041 で止まります。",
+                "A file writes one name twice among the names of one kind, and it is said at the second. The kinds are the values (the inputs, the sequences and the fields of their elements, the outputs, and what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and clauses decide), the tables and clauses, the enums, the values of one enum, the groups and the values one lists, the shapes, the sources, the applies, the prerequisites blocks, the labels of the rows of one table, and the columns of the heading of a table or of the examples. An output shares its name with what decides it, and several tables and clauses may decide one name; any other two values of one name stop here, an output named like an input among them. A group named like a value of an enum is one word read two ways, and stops here too. So do two names of one list that come to one identifier in the generated code (the alias of one is the alias or the name of the other), one name given two aliases, and, in an `enums` file, an enum's name that is another enum's alias (`import enum` finds an enum by either). An enum read with `import enum`, and a group that comes with it, is held to the names of this rule and of the other `import enum` lines, and an input a contribution adds to the names of the rule it adds to. A fold's answer is held by E021, and the name an `apply` gives a callee output by E041."
             ),
             tr!(
-                "どちらかのラベル（名前）を変えてください。`import enum` で読んだ列挙なら、`-> <別の名前>` で読めます。",
-                "Change one of the two labels (names). An enum read with `import enum` can be read under another name with `-> <another name>`."
+                "どちらかを消すか、名前を変えてください（行ラベルと見出しの列も同じです）。同じ識別子になる二つの名前は、どちらかに別の別名を付けてください。`import enum` で読んだ列挙なら、`-> <別の名前>` で読めます。",
+                "Remove one of the two, or rename one (a row label and a column of a heading alike). Of two names that come to one identifier, give one another alias. An enum read with `import enum` can be read under another name with `-> <another name>`."
             ),
             X_E034,
-            &["E009", "E035"],
+            &["E009", "E035", "E021", "E041", "E075"],
         )
-        .english(X_E034_EN),
+        .english(X_E034_EN)
+        .also(tr!("一つの列挙に同じ値が二つ", "One value written twice in an enum"), X_E034_VALUE, X_E034_VALUE_EN)
+        .also(tr!("同じ識別子になる二つの名前", "Two names that come to one identifier"), X_E034_ALIAS, X_E034_ALIAS_EN)
+        .also(tr!("表の見出しに同じ列が二つ", "One column twice in a table's heading"), X_E034_COLUMN, X_E034_COLUMN_EN)
+        .also(tr!("一つの表の二つの行に同じラベル", "One label on two rows of a table"), X_E034_LABEL, X_E034_LABEL_EN),
         err(
             "E035",
             tr!("`overrides` の指す先がありません", "The target of `overrides` does not exist"),
@@ -2686,8 +2812,8 @@ pub fn ledger() -> Vec<Entry> {
             "E041",
             tr!("準用の読み替えが元の規則と合いません", "The bindings of an apply do not match the callee"),
             tr!(
-                "元の規則の入力に読み替えの無いものがあるとき、元の規則に無い入力や出力を書いたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、一つでも足りなければ、読み替えを書いていないのと同じです。",
-                "A callee input is left unbound, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten."
+                "元の規則の入力に、読み替えの無いものか、二度読み替えたものがあるとき、元の規則に無い入力や出力を書いたとき、元の規則の出力に付けた名前がこの規則に既にあるとき、一つの出力に名前を二度付けたとき、`apply` の下の行の形が読めないとき。読み替えは元の規則の入力を一つ残らず書くものなので、一つでも足りなければ、読み替えを書いていないのと同じです。",
+                "A callee input is left unbound or bound twice, a binding or an output line names something the callee does not have, the name given to a callee output is already declared in this rule, one callee output is given two names, or the `apply` block is not shaped as one. Substitution is written by binding every input explicitly, so a missing binding is a substitution left unwritten."
             ),
             tr!(
                 "元の規則の入力を一つずつ `<元の規則の入力> = <この規則の値>` で読み替え、出力は `<元の規則の出力> -> <名前>` で名前を付けてください。元の規則の入力と出力の名前は、診断の注に並びます。",
@@ -2896,8 +3022,8 @@ pub fn ledger() -> Vec<Entry> {
             "E055",
             tr!("`scenario` の形が違います", "A `scenario` is not shaped right"),
             tr!(
-                "`machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、持ち越す入力（状態とほかの持ち越す値）の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の値から、二行目からは一つ前の呼び出しが返した値から始まるので、持ち越す入力には列がありません。",
-                "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; it has a column for a carried input (the state, or another carried value); or it lacks a column for another input. The first call starts from the `initial` values and every later one from what the call before it answered, so a carried input has no column."
+                "`machine` の無い規則に `scenario` を書いたとき、名前が無いか二つが同じ名前のとき、行が無いとき、見出しに同じ列が二つあるとき、持ち越す入力（状態とほかの持ち越す値）の列があるとき、ほかの入力の列が足りないとき。一行目の呼び出しは `initial` の値から、二行目からは一つ前の呼び出しが返した値から始まるので、持ち越す入力には列がありません。",
+                "A `scenario` is written in a rule without a `machine`; it has no name, or two share one; it has no rows; its heading has one column twice; it has a column for a carried input (the state, or another carried value); or it lacks a column for another input. The first call starts from the `initial` values and every later one from what the call before it answered, so a carried input has no column."
             ),
             tr!(
                 "`scenario <名前>(<ascii>)` の直下に表を書いてください。見出しは、持ち越す入力のほかのすべての入力、`->`、すべての出力です。持ち越す状態が無いなら、一行ずつの `examples` で書けます。",

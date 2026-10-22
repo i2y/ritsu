@@ -1,0 +1,10 @@
+error[E034]: `by_weight` and `by_width` become the one identifier `band` in the generated code
+  --> tests/names/two_tables_of_one_alias.rule:18
+   |
+12 | table by_weight(band)
+   |       ^^^^^^^^^ the alias band of by_weight
+18 | table by_width(band)
+   |       ^^^^^^^^ the alias band of by_width
+   |
+ The identifier of a table or a clause names the SQL query's column of its row numbers (`<identifier>_row`) and the Rust proof's rows. The generated code takes the alias as the identifier, or the name itself where there is none. Give one of the two another alias.
+

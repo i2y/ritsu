@@ -1,0 +1,18 @@
+rule 地方の料金(region_fee) v1
+description "一つのグループを二度宣言している"
+
+enum 地方(region) = 北部(north) | 南部(south) | 離島(islands) | 首都(capital)
+group 遠方(far) = 北部, 離島
+group 遠方(far) = 南部
+
+inputs
+  届け先(dest) : 地方
+
+outputs
+  料金(fee) : number  round down(1)
+
+table 地方ごと(by_region)
+policy unique
+| 届け先     | -> 料金 |
+| 遠方       | 10      |
+| 南部, 首都 | 5       |

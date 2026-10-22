@@ -1,0 +1,10 @@
+error[E034]: The name `fee` is declared twice
+  --> tests/names/two_outputs_of_one_name.rule:9
+  |
+8 |   fee : number  round down(1)
+  |   ^^^ the first declaration (an output)
+9 |   fee : number  round up(10)
+  |   ^^^ the same name (an output)
+  |
+ An output names a value returned to the caller. With two outputs of one name, `rulec schema` and the generated code write both, and which type and rounding the value is returned in is not decided. Remove one of them, or rename it.
+

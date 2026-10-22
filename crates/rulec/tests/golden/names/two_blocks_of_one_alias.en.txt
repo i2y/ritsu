@@ -1,0 +1,10 @@
+error[E034]: `core` and `fast` become the one identifier `path` in the generated code
+  --> tests/names/two_blocks_of_one_alias.rule:11
+   |
+ 6 | prerequisites core(path) over course
+   |               ^^^^ the alias path of core
+11 | prerequisites fast(path) over course
+   |               ^^^^ the alias path of fast
+   |
+ A prerequisites block's identifier names the functions generated from it (`<identifier>_requires`, `<identifier>_available`). The generated code takes the alias as the identifier, or the name itself where there is none. Give one of the two another alias.
+

@@ -1442,6 +1442,28 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             (owner, g.members.iter().map(|m| m.text.clone()).collect()),
         );
     }
+    // A cell writes a group as it writes a value, so a group named like a value of an enum is one
+    // word read two ways: a cell of that enum took it as the group, and the value could not be
+    // written at all (§15.262). Every enum is known here, those read from other files and the
+    // built-in divisions too.
+    for g in &f.groups {
+        let Some(e) = c.enum_order.iter().find(|e| c.enums.get(*e).is_some_and(|vs| vs.contains(&g.name.text))) else { continue };
+        let value = f.enums.iter().find(|d| d.name.text == *e).and_then(|d| d.values.iter().find(|v| v.text == g.name.text));
+        let mut d = Diag::error("E034", tr!("グループの名前 `{}` は、列挙 {e} の値でもあります", "The group name `{}` is a value of enum {e} too", g.name.text)).at(at(g.name.span.line));
+        if let Some(v) = value {
+            d = d.mark(v.span.clone(), tr!("列挙 {e} の値", "a value of enum {e}"));
+        }
+        c.diags.push(
+            d.mark(g.name.span.clone(), tr!("グループの名前", "the group's name")).note(tr!(
+                "セルに書いた `{}` は、グループとしても列挙の値としても読めるので、どちらの意味か決まりません。グループか値のどちらかの名前を変えてください。",
+                "A cell that writes `{}` reads as the group and as the enum's value, and which is meant is not decided. Rename the group or the value.",
+                g.name.text
+            )),
+        );
+        // A cell that writes the word may have meant the value, so the value is not also said to be
+        // in no row (W111).
+        c.used_values.insert((e.clone(), g.name.text.clone()));
+    }
 
     for i in &f.inputs {
         let ty = c.resolve(&i.ty);
@@ -1638,33 +1660,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             );
         }
     }
-    // A sequence and each field of an element are one name each, beside the inputs: a field
-    // spelled as an input, or as a field of another sequence, would be read as whichever was
-    // declared last, and a walk would read the wrong value in silence (§15.219).
-    {
-        let mut seen: HashMap<&str, &Span> = HashMap::new();
-        for i in &f.inputs {
-            seen.insert(i.name.text.as_str(), &i.name.span);
-        }
-        let names = f.elements.iter().flat_map(|el| std::iter::once(&el.name).chain(el.fields.iter().map(|fd| &fd.name)));
-        for n in names {
-            match seen.get(n.text.as_str()) {
-                Some(first) => c.diags.push(
-                    Diag::error("E034", tr!("名前 `{}` が二度宣言されています", "The name `{}` is declared twice", n.text))
-                        .at(at(n.span.line))
-                        .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
-                        .mark(n.span.clone(), tr!("同じ名前", "the same name"))
-                        .note(tr!(
-                            "入力、たどる並び、要素のフィールドは、規則の中でそれぞれ一つの値を指します。同じ名前が二つあると、表や式がどちらを読むかが決まりません。どちらかの名前を変えてください。",
-                            "An input, a sequence and a field of an element each name one value in the rule. With two of one name, a table or an expression cannot say which it reads. Change one of the two."
-                        )),
-                ),
-                None => {
-                    seen.insert(n.text.as_str(), &n.span);
-                }
-            }
-        }
-    }
+    // A sequence and each field of an element are one name each, beside the inputs (§15.219):
+    // the file's own lines are held to that before anything is typed (`names`, §15.262), and an
+    // input a contribution adds when it is merged (`link::merge`).
 
     // A file of enums declares no function, so it has nothing to return (§15.212).
     if f.outputs.is_empty() && f.kind == FileKind::Rule {
@@ -2163,49 +2161,9 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     }
 
     // A table's or a clause's name is what the trace, an `overrides` line and a later version
-    // refer to, so two cannot share one (E034, the same rule as for row labels).
-    {
-        let mut seen: HashMap<&str, &Span> = HashMap::new();
-        for it in &f.items {
-            let Item::Table(t) = it else { continue };
-            let Some(n) = &t.name else { continue };
-            match seen.get(n.text.as_str()) {
-                Some(first) => c.diags.push(
-                    Diag::error("E034", tr!("表か節の名前 `{}` が二度あります", "The table or clause name `{}` appears twice", n.text))
-                        .at(at(n.span.line))
-                        .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
-                        .mark(n.span.clone(), tr!("同じ名前", "the same name"))
-                        .note(tr!(
-                            "表と節は同じ名前空間に入ります。記録の trace と `{}` の行は、その名前で表や節を指します。どちらかの名前を変えてください。",
-                            "Tables and clauses share one namespace: the trace and `{}` lines refer to them by name. Change one of the two.",
-                            crate::kw::OVERRIDES
-                        )),
-                ),
-                None => {
-                    seen.insert(&n.text, &n.span);
-                }
-            }
-        }
-    }
-
-    // Two sources cannot share a name either: a citation names one of them (E034).
-    {
-        let mut seen: HashMap<&str, &Span> = HashMap::new();
-        for s in &f.sources {
-            match seen.get(s.name.text.as_str()) {
-                Some(first) => c.diags.push(
-                    Diag::error("E034", tr!("出典の名前 `{}` が二度あります", "The source name `{}` appears twice", s.name.text))
-                        .at(at(s.name.span.line))
-                        .mark((*first).clone(), tr!("最初の宣言", "the first declaration"))
-                        .mark(s.name.span.clone(), tr!("同じ名前", "the same name"))
-                        .note(tr!("引用 `@名前` は、この名前で出典を指します。どちらかの名前を変えてください。", "A citation `@name` refers to the source by this name. Change one of the two.")),
-                ),
-                None => {
-                    seen.insert(&s.name.text, &s.name.span);
-                }
-            }
-        }
-    }
+    // refer to, and a source's is what a citation names, so two cannot share one (E034): the file's
+    // own lines are held to that before anything is typed (`names`, §15.262). What an `apply` or a
+    // contribution brings in comes under its own name (`<apply>:<name>`), which nothing shares.
 
     // §5.1: items are a define-before-use pipeline, so a single forward pass is enough.
     for it in &f.items {
@@ -4250,7 +4208,27 @@ impl Checked {
         let fold_bad = |s: &mut Self, sp: &Span, title: String, mark: String, note: String| {
             s.diags.push(Diag::error("E021", title).at(at_fold.clone()).mark(sp.clone(), mark).note(note));
         };
-        // Where the answer goes.
+        // Where the answer goes. A name already declared is said with where it was declared
+        // (§15.262): an input, a field of an element or a value above, or a sequence, which is not
+        // a value of its own and so is not among `syms`.
+        let taken_note = || {
+            tr!(
+                "畳み込みの答えには、出力の名前か、まだ使っていない名前を付けてください。新しい名前なら `-> <名前>(<別名>) : <型>` と型も書きます。",
+                "Give a fold's answer the name of an output, or a name not yet used; a new one takes its type too: `-> <name>(<alias>) : <type>`."
+            )
+        };
+        // The answer is still declared below, so that what reads it is not also said to read a
+        // name nobody declared.
+        let sequence = fold.answer.as_ref().and_then(|a| f.sequence_named(&a.name.text));
+        if let (Some(FoldAnswer { name, .. }), Some(el)) = (&fold.answer, sequence) {
+            self.diags.push(
+                Diag::error("E021", tr!("`{}` はすでにたどる並びです", "`{}` is already a sequence", name.text))
+                    .at(at_fold.clone())
+                    .mark(el.name.span.clone(), tr!("最初の宣言", "the first declaration"))
+                    .mark(name.span.clone(), tr!("この畳み込みの答えの名前です", "this is the name of the fold's answer"))
+                    .note(taken_note()),
+            );
+        }
         if let Some(FoldAnswer { name, ty }) = &fold.answer {
             let output = f.outputs.iter().any(|o| o.name.text == name.text);
             match (self.syms.get(&name.text).cloned(), ty) {
@@ -4278,15 +4256,12 @@ impl Checked {
                         SymKind::TableOut => tr!("表の出力", "a table's output"),
                         SymKind::Output => tr!("出力", "an output"),
                     };
-                    fold_bad(
-                        self,
-                        &name.span,
-                        tr!("`{}` はすでに{what}です", "`{}` is already {what}", name.text),
-                        tr!("この畳み込みの答えの名前です", "this is the name of the fold's answer"),
-                        tr!(
-                            "畳み込みの答えには、出力の名前か、まだ使っていない名前を付けてください。新しい名前なら `-> <名前>(<別名>) : <型>` と型も書きます。",
-                            "Give a fold's answer the name of an output, or a name not yet used; a new one takes its type too: `-> <name>(<alias>) : <type>`."
-                        ),
+                    self.diags.push(
+                        Diag::error("E021", tr!("`{}` はすでに{what}です", "`{}` is already {what}", name.text))
+                            .at(at_fold.clone())
+                            .mark(sym.span.clone(), tr!("最初の宣言", "the first declaration"))
+                            .mark(name.span.clone(), tr!("この畳み込みの答えの名前です", "this is the name of the fold's answer"))
+                            .note(taken_note()),
                     );
                 }
                 (None, None) => fold_bad(
@@ -5109,7 +5084,12 @@ impl Checked {
                         Item::Define(d) => d.name.span.clone(),
                         Item::Agg(d) => d.name.span.clone(),
                     };
+                    // A fold whose `->` names something above that is no output was said where the
+                    // fold is read, with where that is (`fold_decl`): said here too, it was said
+                    // twice.
+                    let said = matches!(it, Item::Fold(d) if d.answer.is_some()) && !f.outputs.iter().any(|o| o.name.text == b);
                     match by.get(&b) {
+                        Some(_) if said => {}
                         // Tables that define one output are one definition set (§15.66).
                         Some((j, _)) if matches!((&f.items[*j], it), (Item::Table(_), Item::Table(_))) => {}
                         Some((j, first)) if matches!(it, Item::Fold(_)) || matches!(f.items[*j], Item::Fold(_)) => {

@@ -1,0 +1,10 @@
+error[E055]: The heading has the column `action` twice
+  --> tests/names/scenario_column_twice.rule:27 scenario shove_then_tug
+   |
+27 | | action | action | -> after_move |
+   |   ^^^^^^ the first
+27 | | action | action | -> after_move |
+   |            ^^^^^^ the second
+   |
+ A scenario's heading has one column per input and per output. Two columns of one input leave which value a call passes undecided, and two of one output which answer is held to it.
+

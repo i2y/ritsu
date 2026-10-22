@@ -1,0 +1,14 @@
+rule 重さが大きい(weight_is_big) v1
+description "重さが大きいかどうか。横の規則が準用する"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  大きい(big) : bool
+
+table 判定(decide)
+policy unique
+| 重さ | -> 大きい |
+| <=5  | false     |
+| >5   | true      |

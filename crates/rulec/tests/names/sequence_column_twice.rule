@@ -1,0 +1,20 @@
+rule order_total v1
+description "A named sequence whose heading writes one field twice"
+
+elements lines
+  amount : number  range >=0 <=100
+
+outputs
+  total : number  round down(1)
+
+sum subtotal over lines of amount  range >=0 <=10000
+
+define total : number = subtotal
+
+sequence two_lines
+| amount | amount |
+| 10     | 20     |
+
+examples
+| lines     | -> total |
+| two_lines | 30       |

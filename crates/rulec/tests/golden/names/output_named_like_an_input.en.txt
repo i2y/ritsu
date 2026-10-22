@@ -1,0 +1,10 @@
+error[E034]: The name `member` is declared twice
+  --> tests/names/output_named_like_an_input.rule:9
+  |
+5 |   member : bool
+  |   ^^^^^^ the first declaration (an input)
+9 |   member : bool
+  |   ^^^^^^ the same name (an output)
+  |
+ An output returns the value the definition of its name decides (a `define`, a table's or a clause's output, …). To return an input as it is, give the output a name of its own and write `define <output> : <type> = member`.
+

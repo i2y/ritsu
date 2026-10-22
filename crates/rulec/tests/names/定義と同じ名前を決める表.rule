@@ -1,0 +1,22 @@
+rule 重い荷物(heavy_parcel) v1
+description "上の定義と同じ名前を、表がもう一度決めている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  料金(fee) : number  round down(1)
+
+define 重い : bool = 重さ >= 5
+
+table 重さごと(by_weight)
+policy unique
+| 重さ | -> 重い : bool |
+| <=7  | false          |
+| >7   | true           |
+
+table 重いかどうか(by_heavy)
+policy unique
+| 重い  | -> 料金 |
+| true  | 10      |
+| false | 5       |

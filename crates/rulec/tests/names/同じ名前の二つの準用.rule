@@ -1,0 +1,18 @@
+rule 二つの大きさ(two_sizes) v1
+description "二つの準用に同じ名前を付けている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  幅(width)    : number  range >=0 <=9
+
+outputs
+  重い(heavy) : bool
+  広い(wide)  : bool
+
+apply 大きさ(size) = "重さが大きい.rule" meaning:dd5e7128cb9259f4
+  重さ = 重さ
+  大きい -> 重い
+
+apply 大きさ(size) = "重さが大きい.rule" meaning:dd5e7128cb9259f4
+  重さ = 幅
+  大きい -> 広い

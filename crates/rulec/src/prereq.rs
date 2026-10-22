@@ -453,23 +453,14 @@ fn needs_alias(n: &crate::ast::Name) -> bool {
     !(first_ok && cs.all(|c| c.is_ascii_alphanumeric() || c == '_'))
 }
 
-/// What is wrong with the shape of each block (E071), and with its name (E011, E034). Said with
-/// the type check: nothing below it is worth reading about a block that does not read.
+/// What is wrong with the shape of each block (E071), and with its name (E011). Said with the type
+/// check: nothing below it is worth reading about a block that does not read. Two blocks of one name
+/// were said before anything was typed (E034, `names`).
 pub fn check_shape(f: &RuleFile, c: &Checked, path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
-    let mut names: Vec<&str> = Vec::new();
     for d in &f.prerequisites {
         let name = d.name.text.as_str();
         let here = |line: usize| at(path, line, name);
-        if names.contains(&name) {
-            out.push(
-                Diag::error("E034", tr!("前提のつながりの名前 `{name}` が二度あります", "The prerequisites name `{name}` appears twice"))
-                    .at(here(d.span.line))
-                    .mark(d.name.span.clone(), tr!("二つ目です", "this is the second"))
-                    .note(tr!("名前は生成する関数の名前になるので、ファイルの中で一つずつ別にしてください。", "The name names the functions generated from it, so give each block of the file its own.")),
-            );
-        }
-        names.push(name);
         if needs_alias(&d.name) {
             out.push(
                 Diag::error("E011", tr!("公開される名前に ASCII の別名がありません", "A public name has no ASCII alias"))

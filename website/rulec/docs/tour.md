@@ -159,9 +159,15 @@ column `-> サイズ(size)` becomes `size`. Leave it out and the declared
 name is the identifier — every target language takes a Japanese one for
 something that is not exported.
 
-The alias on a `table` is the exception: accepted, and currently unused,
-because a table is inlined into the one generated function instead of
-becoming a function of its own. It is kept for SQL generation.
+The alias on a `table` names no function, since a table is inlined into
+the one generated function; it names the SQL query's column of the row
+that matched (`<alias>_row`) and the Rust proof's harness for the
+table's rows.
+
+A name is declared once, and an alias belongs to one value: `rulec check`
+stops at the second declaration of a name — an input declared again with
+another range, a value written twice in an enum — and at two names that
+would be one identifier in the generated code (E034).
 
 ## Types
 

@@ -1,0 +1,10 @@
+error[E034]: The shape name `order` appears twice
+  --> tests/names/two_shapes_of_one_name.rule:5
+  |
+4 | shape order = jsonschema "orders.schema.json" "#/$defs/Order"
+  |       ^^^^^ the first declaration
+5 | shape order = jsonschema "orders.schema.json" "#/$defs/Return"
+  |       ^^^^^ the same name
+  |
+ An input's `from` names the caller's object by its shape's name. With two shapes of one name, which contract it is read from is not decided. Remove one of them, or rename it.
+

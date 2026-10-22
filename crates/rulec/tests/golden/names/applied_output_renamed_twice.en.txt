@@ -1,0 +1,10 @@
+error[E041]: The callee output `big` is renamed twice
+  --> tests/names/applied_output_renamed_twice.rule:13 apply size
+   |
+12 |   big -> heavy
+   |   ^^^^^^^^^^^^ the first
+13 |   big -> bulky
+   |   ^^^^^^^^^^^^ the second
+   |
+ A callee output takes one name in this rule. Remove one of the two lines.
+

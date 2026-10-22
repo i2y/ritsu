@@ -87,6 +87,17 @@ awk '/^overrides 本則$/ { sub(/本則/, "本則, 本則:記載なし") } { pri
 # A clause without its `when` line
 awk '!/^  when 注文金額/ { print }'                                      "$C/送料のただし書.rule" > "$M/m_e046.rule"
 
+# --- One name, one declaration (§15.262): the weight declared again with a higher limit and the
+# first line left in, a size class written twice, and the weight given the girth's identifier.
+# The English rule, and its Japanese version beside it.
+ye="$C/yupack_base_fee.rule"
+awk '{ print } /^  weight : mass\[g\]  range >=1g <=25kg  contract_only$/ { print "  weight : mass[g]  range >=1g <=30kg  contract_only" }'                  "$ye" > "$M/m_e034input.rule"
+awk '{ print } /^  重量\(weight\) +: mass\[g\] +range >=1g <=25kg  contract_only$/ { print "  重量(weight) : mass[g]  range >=1g <=30kg  contract_only" }'     "$y"  > "$M/m_e034inputja.rule"
+awk '/^enum size_class = / { sub(/ \| S170$/, " | S170 | S160") } { print }'                                     "$ye" > "$M/m_e034value.rule"
+awk '/^enum サイズ区分\(size_class\) = / { sub(/ \| S170\(s170\)$/, " | S170(s170) | S160(s160)") } { print }'   "$y"  > "$M/m_e034valueja.rule"
+awk '{ sub(/^  weight : mass\[g\]/, "  weight(girth) : mass[g]"); print }'                                         "$ye" > "$M/m_e034alias.rule"
+awk '{ sub(/^  重量\(weight\)/, "  重量(girth)"); print }'                                                         "$y"  > "$M/m_e034aliasja.rule"
+
 # --- Sources (§15.68). The copies live beside the corpus, so the mutants sit there too.
 # A cited fragment with its pin line removed
 awk '!/^  第91条 sha256:/ { print }'                                     "$s" > "$M/m_e037.rule"

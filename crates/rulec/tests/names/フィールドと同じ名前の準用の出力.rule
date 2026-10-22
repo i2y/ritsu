@@ -1,0 +1,19 @@
+rule 印の付いた明細(big_lines) v1
+description "印の付いた明細の数。準用した出力に、明細のフィールドと同じ名前を付けている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+elements 明細(lines)
+  印付き(flagged) : bool
+
+outputs
+  印付きの数(flagged_lines) : number  round down(1)
+
+apply 大きさ(size) = "重さが大きい.rule" meaning:dd5e7128cb9259f4
+  重さ = 重さ
+  大きい -> 印付き
+
+count 件数(n) over 明細 where 印付き  range >=0 <=20
+
+define 印付きの数 : number = 件数

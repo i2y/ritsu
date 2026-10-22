@@ -1,0 +1,10 @@
+error[E034]: The name `heavy` is declared twice
+  --> tests/names/table_decides_a_definition.rule:14
+   |
+10 | define heavy : bool = weight >= 5
+   |        ^^^^^ the first declaration (a definition)
+14 | | weight | -> heavy : bool |
+   |               ^^^^^ the same name (a table's output)
+   |
+ A name names one value in a rule. With two declarations, which of the two the check and the generated code read is not decided (the generated code may not even compile). Remove one of them, or rename it.
+

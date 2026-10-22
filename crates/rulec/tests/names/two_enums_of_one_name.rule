@@ -1,0 +1,17 @@
+rule zone_fee v1
+description "One enum declared twice, with other values the second time"
+
+enum zone = near | far
+enum zone = local | remote
+
+inputs
+  dest : zone
+
+outputs
+  fee : number  round down(1)
+
+table by_zone
+policy unique
+| dest | -> fee |
+| near | 5      |
+| far  | 10     |

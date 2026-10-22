@@ -1,0 +1,10 @@
+error[E034]: The apply name `size` appears twice
+  --> tests/names/two_applies_of_one_name.rule:16
+   |
+12 | apply size = "weight_is_big.rule" meaning:954028fd5d3e48ad
+   |       ^^^^ the first declaration
+16 | apply size = "weight_is_big.rule" meaning:954028fd5d3e48ad
+   |       ^^^^ the same name
+   |
+ What an apply brings in is written `<apply>:<name>`. With two applies of one name, which apply's tables and values those are is not decided. Rename one of the two.
+

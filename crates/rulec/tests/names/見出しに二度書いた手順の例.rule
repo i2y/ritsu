@@ -1,0 +1,28 @@
+rule 扉(door) v1
+description "手順の例の見出しに、一つの入力を二度書いている"
+
+enum 状態(state) = 閉(shut) | 半開き(ajar)
+enum 動き(motion) = 引く(tug) | 押す(shove)
+
+inputs
+  今(current) : 状態
+  動作(action) : 動き
+
+outputs
+  動いた後(after_move) : 状態
+
+table 一歩(step)
+policy unique
+| 今     | 動作 | -> 動いた後 |
+| 閉     | 押す | 半開き      |
+| 閉     | 引く | 閉          |
+| 半開き | 押す | 半開き      |
+| 半開き | 引く | 閉          |
+
+machine 扉(door) over 一歩
+  carry   今 -> 動いた後
+  initial 閉
+
+scenario 押して引く(shove_then_tug)
+| 動作 | 動作 | -> 動いた後 |
+| 押す | 引く | 半開き      |

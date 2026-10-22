@@ -1,0 +1,25 @@
+rule 印の付いた最初の明細(first_flagged) v1
+description "畳み込みの答えに、たどる並びと同じ名前を付けている"
+
+enum 印(mark) = 飛ばす(skip) | 採る(pick)
+
+elements 明細(lines)
+  金額(amount)   : number  range >=0 <=9
+  印付き(flagged) : bool
+
+outputs
+  選んだ額(chosen) : number  round down(1)
+
+table 印ごと(mark_by_flag)
+policy unique
+| 印付き | -> 判定 : 印 |
+| true   | 採る         |
+| false  | 飛ばす       |
+
+fold 判定 over 明細 -> 明細 : number
+  採る      -> take_first 金額
+  飛ばす    -> next
+  empty     -> 0
+  exhausted -> held
+
+define 選んだ額 : number = 明細

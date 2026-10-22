@@ -1,0 +1,10 @@
+error[E034]: `fee` is given two aliases, `charge` and `price`
+  --> tests/names/one_name_two_aliases.rule:10
+   |
+ 8 |   fee(charge) : number  round down(1)
+   |   ^^^ charge (an output)
+10 | define fee(price) : number = weight * 2
+   |        ^^^ price (a definition)
+   |
+ An alias is the identifier the generated code gives the value, and a value has one. Make the two the same; for an output and what decides it, writing it on the output's line is enough.
+

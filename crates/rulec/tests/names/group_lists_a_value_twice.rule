@@ -1,0 +1,17 @@
+rule region_fee v1
+description "A group that lists one value twice"
+
+enum region = north | south | islands | capital
+group far = north, islands, north
+
+inputs
+  dest : region
+
+outputs
+  fee : number  round down(1)
+
+table by_region
+policy unique
+| dest           | -> fee |
+| far            | 10     |
+| south, capital | 5      |

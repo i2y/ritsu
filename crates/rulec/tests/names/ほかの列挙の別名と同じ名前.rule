@@ -1,0 +1,5 @@
+enums 配送の地帯(shipping_zones) v1
+description "二つの列挙。二つ目の名前が、一つ目の別名と同じ"
+
+enum 地帯(band) = 近い(near) | 遠い(far)
+enum band(ring) = 内側(inner) | 外側(outer)

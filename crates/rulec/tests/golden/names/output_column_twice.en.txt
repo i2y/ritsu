@@ -1,0 +1,10 @@
+error[E034]: The heading has the column `heavy` twice
+  --> tests/names/output_column_twice.rule:12 table decide
+   |
+12 | | weight | -> heavy | heavy |
+   |               ^^^^^ the first
+12 | | weight | -> heavy | heavy |
+   |                       ^^^^^ the second
+   |
+ A table's heading names each column once. With two columns of one input, the checks take them as two inputs, so a row whose two conditions never hold together is not found unreachable. Two conditions on one input go in one cell (`>=3 <=5`). With two columns of one output, which of a row's two values is the answer is not decided.
+

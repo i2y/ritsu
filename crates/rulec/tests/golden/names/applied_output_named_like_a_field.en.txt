@@ -1,0 +1,10 @@
+error[E041]: The name `flagged` for the callee output `big` is already declared in this rule
+  --> tests/names/applied_output_named_like_a_field.rule:15 apply size
+   |
+ 8 |   flagged : bool
+   |   ^^^^^^^ the first declaration
+15 |   big -> flagged
+   |          ^^^^^^^ the name of the applied output
+   |
+ Rename it with `big -> <another name>`.
+

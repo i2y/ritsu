@@ -618,6 +618,15 @@ impl P {
                     // A block with no rows is the empty sequence, which is a case of its own
                     // (`empty ->`), so the header alone is a complete declaration.
                     let (cols, outs, rows) = self.grid(false, false).unwrap_or_default();
+                    self.twice_in_heading(
+                        &cols,
+                        &[],
+                        "E026",
+                        tr!(
+                            "並びの見出しには、要素のフィールドを一列ずつ書いてください。同じフィールドの列が二つあると、要素がどちらの値をとるかが決まりません。",
+                            "A sequence's heading has one column per field of an element. With two columns of one field, which value an element takes is not decided."
+                        ),
+                    );
                     self.ctx.clear();
                     if let Some(o) = outs.first() {
                         self.err(
@@ -731,6 +740,17 @@ impl P {
                         None => tr!("手順の例", "a scenario"),
                     };
                     let grid = self.grid(false, false);
+                    if let Some((inputs, outputs, _)) = &grid {
+                        self.twice_in_heading(
+                            inputs,
+                            outputs,
+                            "E055",
+                            tr!(
+                                "手順の例の見出しには、入力と出力を一列ずつ書いてください。同じ入力の列が二つあると、どちらの値で呼ぶかが決まらず、同じ出力の列が二つあると、どちらの答えを確かめるかが決まりません。",
+                                "A scenario's heading has one column per input and per output. Two columns of one input leave which value a call passes undecided, and two of one output which answer is held to it."
+                            ),
+                        );
+                    }
                     self.ctx.clear();
                     match (named, grid) {
                         (Some(name), Some((inputs, outputs, rows))) => f.scenarios.push(ScenarioDecl {
@@ -2867,6 +2887,15 @@ impl P {
             None => String::new(),
         };
         let (inputs, outputs, rows) = self.grid(true, false)?;
+        self.twice_in_heading(
+            &inputs,
+            &outputs,
+            "E034",
+            tr!(
+                "表の見出しには、一つの名前を一列だけ書いてください。同じ入力の列が二つあると、検査は二つの列を別々の入力として扱うので、二つの条件を同時には満たせない行も、当たらない行として見つかりません。一つの入力に二つの条件を書くなら、一つのセルに `>=3 <=5` のように並べてください。同じ出力の列が二つあると、行の二つの値のどちらを答えるかが決まりません。",
+                "A table's heading names each column once. With two columns of one input, the checks take them as two inputs, so a row whose two conditions never hold together is not found unreachable. Two conditions on one input go in one cell (`>=3 <=5`). With two columns of one output, which of a row's two values is the answer is not decided."
+            ),
+        );
         self.ctx.clear();
         // A table is named, and nothing else stands on its line. One with no name was read as
         // an anonymous table, the word after `table` dropped, and the code generated for it
@@ -3124,9 +3153,44 @@ impl P {
         out
     }
 
+    /// A heading that names one column twice (§15.262), said at the second with the first marked:
+    /// two columns of one input take a row's two conditions as two inputs, and two of one output
+    /// leave which of a row's two values is meant undecided. The code is the heading's: E034 for a
+    /// table's and the examples', E055 for a scenario's, E026 for a named sequence's. A clause's
+    /// `when` (E046) and the heading of `chances` (E070) are held where they are read.
+    fn twice_in_heading(&mut self, inputs: &[(String, Span)], outputs: &[OutCol], code: &'static str, note: String) {
+        let cols = inputs.iter().map(|(n, sp)| (n.as_str(), sp)).chain(outputs.iter().map(|o| (o.name.text.as_str(), &o.name.span)));
+        let mut seen: Vec<(&str, &Span)> = Vec::new();
+        let mut said: Vec<Diag> = Vec::new();
+        for (n, sp) in cols {
+            match seen.iter().find(|(x, _)| *x == n) {
+                Some((_, first)) => said.push(
+                    Diag::error(code, tr!("見出しに列 `{n}` が二度あります", "The heading has the column `{n}` twice"))
+                        .at(self.at(sp.line))
+                        .mark((*first).clone(), tr!("一つ目", "the first"))
+                        .mark(sp.clone(), tr!("二つ目", "the second"))
+                        .note(note.clone()),
+                ),
+                None => seen.push((n, sp)),
+            }
+        }
+        for d in said {
+            self.err(d);
+        }
+    }
+
     fn example_table(&mut self) -> Option<Table> {
         self.ctx = tr!("例", "examples");
         let (inputs, outputs, rows) = self.grid(false, true)?;
+        self.twice_in_heading(
+            &inputs,
+            &outputs,
+            "E034",
+            tr!(
+                "例の見出しには、入力と出力を一列ずつ書いてください。同じ入力の列が二つあると、どちらの値で規則を呼ぶかが決まらず、同じ出力の列が二つあると、どちらの期待値を確かめるかが決まりません。",
+                "An example's heading has one column per input and per output. Two columns of one input leave which value the rule is called with undecided, and two of one output which expected value is held to it."
+            ),
+        );
         self.ctx.clear();
         Some(Table {
             name: None,

@@ -1,0 +1,14 @@
+rule weight_check v1
+description "A table that writes one output column twice"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  heavy : bool
+
+table decide
+policy unique
+| weight | -> heavy | heavy |
+| <=5    | false    | true  |
+| >5     | true     | false |

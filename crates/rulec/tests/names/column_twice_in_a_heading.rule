@@ -1,0 +1,14 @@
+rule weight_check v1
+description "A table that writes one column twice, so that its first row never matches"
+
+inputs
+  weight : number  range >=0 <=9
+
+outputs
+  heavy : bool
+
+table decide
+policy first
+| weight | weight | -> heavy |
+| <=5    | >5     | true     |
+| -      | -      | false    |

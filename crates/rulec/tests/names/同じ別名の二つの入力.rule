@@ -1,0 +1,16 @@
+rule 大きさの判定(size_check) v1
+description "二つの入力に同じ別名を書いている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  幅(weight)   : number  range >=0 <=9
+
+outputs
+  大きい(large) : bool
+
+table 判定(decide)
+policy first
+| 重さ | 幅 | -> 大きい |
+| >5   | -  | true      |
+| -    | >5 | true      |
+| -    | -  | false     |

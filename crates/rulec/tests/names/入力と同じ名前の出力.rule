@@ -1,0 +1,16 @@
+rule 会員を返す(pass_member) v1
+description "入力をそのまま返そうとして、出力に入力と同じ名前を付けている"
+
+inputs
+  会員(member) : bool
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  会員(member) : bool
+  料金(fee)    : number  round down(1)
+
+table 重さごと(by_weight)
+policy unique
+| 重さ | -> 料金 |
+| <=5  | 5       |
+| >5   | 10      |

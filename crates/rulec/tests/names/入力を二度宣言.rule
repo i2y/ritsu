@@ -1,0 +1,15 @@
+rule 重さの区分(weight_band) v1
+description "荷物が重いかどうか。重さを、広い範囲でもう一度宣言している"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  重さ(weight) : number  range >=0 <=99
+
+outputs
+  重い(heavy) : bool
+
+table 区分(band)
+policy unique
+| 重さ | -> 重い |
+| <=5  | false   |
+| >5   | true    |

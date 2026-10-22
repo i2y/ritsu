@@ -1,0 +1,10 @@
+error[E034]: The name `stacked` is declared twice
+  --> tests/names/open_named_like_a_definition.rule:18
+   |
+16 | define stacked : number = member_part
+   |        ^^^^^^^ the first declaration (a definition)
+18 | open stacked : number  combine sum  range >=0 <=100
+   |      ^^^^^^^ the same name (an open value)
+   |
+ A name names one value in a rule. With two declarations, which of the two the check and the generated code read is not decided (the generated code may not even compile). Remove one of them, or rename it.
+

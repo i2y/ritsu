@@ -1,0 +1,20 @@
+rule 注文の合計(order_total) v1
+description "名前を付けた並びの見出しに、一つのフィールドを二度書いている"
+
+elements 明細(lines)
+  金額(amount) : number  range >=0 <=100
+
+outputs
+  合計(total) : number  round down(1)
+
+sum 小計(subtotal) over 明細 of 金額  range >=0 <=10000
+
+define 合計 : number = 小計
+
+sequence 二行(two_lines)
+| 金額 | 金額 |
+| 10   | 20   |
+
+examples
+| 明細 | -> 合計 |
+| 二行 | 30      |

@@ -1,0 +1,10 @@
+rule 料金の別名(fee_aliases) v1
+description "出力と、それを決める定義に、別々の別名を書いている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+
+outputs
+  料金(charge) : number  round down(1)
+
+define 料金(price) : number = 重さ * 2

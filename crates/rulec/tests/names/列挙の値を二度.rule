@@ -1,0 +1,16 @@
+rule 会員の値引き(member_discount) v1
+description "会員の段階で決める値引き。段階を一つ二度書いている"
+
+enum 段階(tier) = 一般(basic) | ゴールド(gold) | 一般(basic)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  値引き(discount) : bool
+
+table 段階ごと(by_tier)
+policy unique
+| 会員     | -> 値引き |
+| 一般     | false     |
+| ゴールド | true      |

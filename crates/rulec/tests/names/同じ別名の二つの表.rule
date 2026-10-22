@@ -1,0 +1,22 @@
+rule 二つの区分(two_bands) v1
+description "二つの表に同じ別名を書いている"
+
+inputs
+  重さ(weight) : number  range >=0 <=9
+  幅(width)    : number  range >=0 <=9
+
+outputs
+  重い(heavy) : bool
+  広い(wide)  : bool
+
+table 重さの区分(band)
+policy unique
+| 重さ | -> 重い |
+| <=5  | false   |
+| >5   | true    |
+
+table 幅の区分(band)
+policy unique
+| 幅  | -> 広い |
+| <=5 | false   |
+| >5  | true    |

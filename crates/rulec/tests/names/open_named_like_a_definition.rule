@@ -1,0 +1,21 @@
+rule discount_total v1
+description "An open value named like a definition above it"
+
+inputs
+  member : bool
+
+outputs
+  discount : number  round down(1)
+
+table member_off
+policy unique
+| member | -> member_part : number |
+| true   | 5                       |
+| false  | 0                       |
+
+define stacked : number = member_part
+
+open stacked : number  combine sum  range >=0 <=100
+  member_part
+
+define discount : number = stacked

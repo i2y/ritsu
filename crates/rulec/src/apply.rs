@@ -478,6 +478,23 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 bad = true;
             }
         }
+        // One callee output, one name here (§15.262): the second `<output> -> <name>` of one output
+        // was dropped in silence, and what read the second name was told it was declared nowhere.
+        for (i, ob) in a.outputs.iter().enumerate() {
+            if let Some(first) = a.outputs[..i].iter().find(|o| o.output == ob.output) {
+                out.push(
+                    Diag::error("E041", tr!("元の規則の出力 `{}` に名前を二度付けています", "The callee output `{}` is renamed twice", ob.output))
+                        .at(at(ob.span.line))
+                        .mark(first.span.clone(), tr!("一つ目", "the first"))
+                        .mark(ob.span.clone(), tr!("二つ目", "the second"))
+                        .note(tr!(
+                            "元の規則の出力一つには、この規則での名前を一つだけ付けられます。どちらかの行を消してください。",
+                            "A callee output takes one name in this rule. Remove one of the two lines."
+                        )),
+                );
+                bad = true;
+            }
+        }
         // The callee's definitions an `except` names.
         let mut dropped_tables: Vec<String> = Vec::new();
         let mut dropped_rows: Vec<(String, String)> = Vec::new();
@@ -772,19 +789,30 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
                 Some(ob) => ob.name.clone(),
                 None => Name { text: od.name.text.clone(), ascii: od.name.ascii.clone(), span: a.span.clone() },
             };
-            let taken = f.inputs.iter().any(|i| i.name.text == target.text)
-                || f.items.iter().any(|it| match it {
-                    Item::Derived(d) => d.name.text == target.text,
-                    Item::Define(d) => d.name.text == target.text,
-                    Item::Agg(d) => d.name.text == target.text,
-                    Item::Fold(d) => d.answer.as_ref().is_some_and(|a| a.name.text == target.text),
-                    Item::Table(t) => t.name.as_ref().is_some_and(|n| n.text == target.text) || t.outputs.iter().any(|o| o.name.text == target.text),
+            // Where this rule declares the name already: an input, a sequence or a field of its
+            // elements, an open value, or what an item decides (§15.262).
+            let named = |n: &Name| (n.text == target.text).then(|| n.span.clone());
+            let taken = f
+                .inputs
+                .iter()
+                .find_map(|i| named(&i.name))
+                .or_else(|| f.elements.iter().find_map(|el| named(&el.name).or_else(|| el.fields.iter().find_map(|fd| named(&fd.name)))))
+                .or_else(|| f.opens.iter().find_map(|o| named(&o.name)))
+                .or_else(|| {
+                    f.items.iter().find_map(|it| match it {
+                        Item::Derived(d) => named(&d.name),
+                        Item::Define(d) => named(&d.name),
+                        Item::Agg(d) => named(&d.name),
+                        Item::Fold(d) => d.answer.as_ref().and_then(|a| named(&a.name)),
+                        Item::Table(t) => t.name.as_ref().and_then(named).or_else(|| t.outputs.iter().find_map(|o| named(&o.name))),
+                    })
                 });
-            if taken {
+            if let Some(first) = taken {
                 out.push(
-                    Diag::error("E041", tr!("元の規則の出力 `{}` に付けた名前 `{}` は、この規則に既にあります", "The name `{}` for the callee output `{}` is already declared in this rule", od.name.text, target.text))
-                        .at(at(a.span.line))
-                        .mark(a.span.clone(), "")
+                    Diag::error("E041", tr!("元の規則の出力 `{0}` に付けた名前 `{1}` は、この規則に既にあります", "The name `{1}` for the callee output `{0}` is already declared in this rule", od.name.text, target.text))
+                        .at(at(target.span.line))
+                        .mark(first, tr!("最初の宣言", "the first declaration"))
+                        .mark(target.span.clone(), tr!("準用した出力の名前", "the name of the applied output"))
                         .note(tr!("`{} -> <別の名前>` で改名してください。", "Rename it with `{} -> <another name>`.", od.name.text)),
                 );
                 continue;

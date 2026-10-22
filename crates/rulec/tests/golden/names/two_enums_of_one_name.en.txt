@@ -1,0 +1,10 @@
+error[E034]: The enum name `zone` appears twice
+  --> tests/names/two_enums_of_one_name.rule:5
+  |
+4 | enum zone = near | far
+  |      ^^^^ the first declaration
+5 | enum zone = local | remote
+  |      ^^^^ the same name
+  |
+ An enum's name is what an input or a column writes as its type. With two enums of one name, which values the type takes is not decided. Remove one of them, or rename it.
+
