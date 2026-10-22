@@ -1,5 +1,5 @@
 {
-  "yuen": "0.34.0",
+  "yuen": "0.34.1",
   "root": "tests/fixtures/refunds_book",
   "files": [
     {

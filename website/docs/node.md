@@ -17,11 +17,11 @@ SHA-256 in the release's `SHA256SUMS`, on the
 [releases page](https://github.com/i2y/ritsu/releases). Install it from there:
 
 ```console
-$ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.34.0/i2y-ritsu-0.34.0.tgz
+$ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.34.1/i2y-ritsu-0.34.1.tgz
 ```
 
 Or download the file, check it against `SHA256SUMS`, and install the file itself
-(`npm install --save-dev ./i2y-ritsu-0.34.0.tgz`), which works with `--ignore-scripts` and with no
+(`npm install --save-dev ./i2y-ritsu-0.34.1.tgz`), which works with `--ignore-scripts` and with no
 network (`--offline`). It needs Node 22 or later, on Linux or macOS; 22, 24 and 26 are tested.
 
 On Node 22, loading the package turns off V8's fast API calls for the whole process

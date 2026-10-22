@@ -52,7 +52,7 @@ flowchart TD
 <details>
 <summary><code>check_quota</code> · quota_check v1 · <code>rules/quota_check.rule</code></summary>
 
-<!-- rulec 0.34.0 が quota_check.rule (sha256:2855314707e7) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.34.1 が quota_check.rule (sha256:2855314707e7) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 quota_check v1
 
 Whether a request for part of a quota is granted at once or reviewed. What was used and what is asked never come to more than the quota, which the rule takes for granted: a precondition dandori cannot show where the two come from tasks with no range, so the workflow checks it when it runs (tests/flows/quota.flow)
