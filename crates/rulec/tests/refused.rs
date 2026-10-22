@@ -18,7 +18,7 @@
 //! (`tests/days/settlement.rule`).
 
 use ritsu_testkit::tmp::tmpdir_in;
-use ritsu_testkit::{Need, TempDir, need, skip};
+use ritsu_testkit::{Need, TempDir, need, side_by_side, skip};
 use rulec::json::Json;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -155,14 +155,15 @@ fn gen_writes_an_input_for_every_reason_the_door_has() {
 }
 
 /// Every way the rules are reached refuses every input of the files, each with the kind and the
-/// sentence the file gives, and the vectors keep their answers.
+/// sentence the file gives, and the vectors keep their answers. The English rules and the Japanese
+/// versions run side by side.
 #[test]
 fn every_way_refuses_each_one_for_the_reason_the_evaluator_gives() {
     // Every language there is a toolchain for, the tools level's (ritsu's DESIGN 10.2).
     if !need(Need::Python) {
         return;
     }
-    for (rules, lang) in [(&ENGLISH, "en"), (&JAPANESE, "ja")] {
+    side_by_side(&[(&ENGLISH, "en"), (&JAPANESE, "ja")], |&(rules, lang)| {
         let (_t, out) = generate(rules, lang);
         let counts: BTreeMap<String, usize> = refused(&out).into_iter().map(|(a, l)| (a, l.len())).collect();
         let (code, j) = rulec_test(&out);
@@ -183,7 +184,7 @@ fn every_way_refuses_each_one_for_the_reason_the_evaluator_gives() {
             assert!(ways.contains_key(way), "[{lang}] {way} did not run: {ways:?}");
         }
         println!("refused [{lang}]: {} ways: {}", ways.len(), ways.keys().cloned().collect::<Vec<_>>().join(", "));
-    }
+    });
 }
 
 /// The days of a koyomi date are a reason of their own: `gen`, with koyomi joined as `ritsu rulec`

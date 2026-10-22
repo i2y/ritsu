@@ -7,6 +7,8 @@
 //! - [`tools`]: finding a program: `RITSU_<TOOL>`, the crate's own variable, a place in the
 //!   crate, the PATH.
 //! - [`run`]: running a program with a time limit (macOS has no `timeout`).
+//! - [`side`]: running the parts of a test side by side, on threads named after the test, as many
+//!   at once as the machine has cores.
 //! - [`golden`]: comparing with a golden file, or writing it under `RITSU_BLESS` or the crate's
 //!   own `<NAME>_BLESS`.
 //! - [`skip`] and [`level`]: the `SKIP: <crate>: <reason>` line, `RITSU_SKIP_LOG`, and the three
@@ -29,6 +31,7 @@ pub mod mermaid;
 pub mod mysql;
 pub mod pg;
 pub mod run;
+pub mod side;
 pub mod skip;
 pub mod tigerbeetle;
 pub mod tmp;
@@ -37,6 +40,7 @@ pub mod tools;
 pub use golden::golden;
 pub use level::{Level, Need, need, ready};
 pub use run::{Ran, run};
+pub use side::side_by_side;
 pub use skip::skip;
 pub use tmp::TempDir;
 

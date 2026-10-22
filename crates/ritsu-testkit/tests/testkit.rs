@@ -7,7 +7,7 @@
 //! What reads an environment variable (`RITSU_SKIP_LOG`, `RITSU_TEST_LEVEL`, `RITSU_BLESS`) is
 //! tried in a child: this test binary run again on one test, with the variable set for it alone.
 
-use ritsu_testkit::{TempDir, cedar, chrome, golden, level, mermaid, mysql, pg, run, skip, tigerbeetle, tmp, tools};
+use ritsu_testkit::{TempDir, cedar, chrome, golden, level, mermaid, mysql, pg, run, side, skip, tigerbeetle, tmp, tools};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -148,6 +148,35 @@ fn a_program_runs_to_its_end_or_its_time_limit() {
     assert!(r.ok, "{}", r.stderr);
     assert_eq!(seen, ["<0>", "<1>", "<2>"]);
     assert_eq!(r.stderr, "done");
+}
+
+/// The parts of a test run side by side, each once, on threads named after the test, so that a
+/// SKIP line said in one is the test's. A part that fails does not stop the others: the test fails
+/// once every part has run, with what each failed part said, in the order of the parts.
+#[test]
+fn the_parts_of_a_test_run_side_by_side() {
+    use std::sync::Mutex;
+    let seen = Mutex::new(Vec::new());
+    side::side_by_side(&[1, 2, 3, 4, 5], |n| seen.lock().unwrap().push((*n, skip::test_name())));
+    let mut seen = seen.into_inner().unwrap();
+    seen.sort();
+    assert_eq!(seen, (1..=5).map(|n| (n, "the_parts_of_a_test_run_side_by_side".to_string())).collect::<Vec<_>>());
+    let ran = Mutex::new(Vec::new());
+    let failed = std::panic::catch_unwind(|| {
+        side::side_by_side(&["a", "b", "c", "d"], |part| {
+            ran.lock().unwrap().push(part.to_string());
+            assert_ne!(*part, "d", "d failed");
+            if *part == "b" {
+                panic!("b failed");
+            }
+        })
+    });
+    let mut ran = ran.into_inner().unwrap();
+    ran.sort();
+    assert_eq!(ran, ["a", "b", "c", "d"], "every part ran");
+    let said = failed.expect_err("the test fails").downcast::<String>().map(|s| *s).unwrap_or_default();
+    assert!(said.starts_with("b failed\n\n") && said.contains("d failed"), "{said}");
+    side::side_by_side(&[] as &[u8], |_| unreachable!());
 }
 
 #[test]

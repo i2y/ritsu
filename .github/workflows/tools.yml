@@ -8,11 +8,11 @@ name: tools
 # where this began). A test of the platforms level says so in a SKIP line of the level and
 # passes; those run in platforms.yml and kani.yml.
 #
-# The crates run in three groups side by side, each on a runner of its own with what it needs:
-# rulec (the twelve languages it writes, a PostgreSQL server, Lean), dandori (the SDKs and
-# runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and run
-# the books its examples call on chobo's clients) with ritsu, and the other seven languages with
-# the base layer, the test kit and xtask. The tests of the npm package (ritsu's tests/npm.rs)
+# The crates run in three groups side by side, each with what it needs: rulec (the twelve
+# languages it writes, a PostgreSQL server, Lean), whose tests take two runners, dandori (the SDKs
+# and runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and
+# run the books its examples call on chobo's clients) with ritsu, and the other seven languages
+# with the base layer, the test kit and xtask. The tests of the npm package (ritsu's tests/npm.rs)
 # run in a job of their own, once for each Node the package is for (DESIGN 8.8).
 
 on:
@@ -39,18 +39,25 @@ env:
 
 jobs:
   tools:
-    name: tools (${{ matrix.group }})
+    name: tools (${{ matrix.group }}${{ matrix.part && format(', {0}', matrix.part) || '' }})
     runs-on: ubuntu-latest
-    # rulec's job runs every rule of the tree that applies another in all twelve languages, about
-    # an hour of its own on a runner
+    # rulec's two jobs are the longest: they run the generated code of many rules in every way
+    # `rulec test` reaches it (DESIGN 10.5)
     timeout-minutes: 200
 
     strategy:
       fail-fast: false
       matrix:
         include:
+          # rulec's tests in two jobs side by side, with the same tools: the second runs the tests
+          # RULEC_LONG_TESTS names (in the env of the step that runs the tests), the first every
+          # other. The two read the one list, with `--exact` and with `--skip`, so each test runs in
+          # one of them, and a test the list does not name runs in the first.
           - group: rulec
-            crates: -p rulec
+            crates: -p rulec -- --exact $(printf -- '--skip %s ' $RULEC_LONG_TESTS)
+          - group: rulec
+            part: long tests
+            crates: -p rulec -- --exact $RULEC_LONG_TESTS
           - group: dandori
             # the npm package's tests are the job `npm`'s
             crates: "-p dandori -p ritsu -- --skip npm::"
@@ -446,9 +453,17 @@ jobs:
         run: cargo build --workspace --locked
 
       - name: The tests of the tools level
+        env:
+          # The tests of rulec that run the generated code of many rules in every way `rulec test`
+          # reaches it, the longest of its suite: they take a runner of their own (the matrix).
+          RULEC_LONG_TESTS: >-
+            every_rule_of_the_tree_that_applies_another_runs_alike
+            every_language_answers_alike
+            every_way_answers_a_whole_number_in_any_spelling_as_the_integer
+            評価器と生成コードが全言語で一致する
         run: cargo xtask test --level tools ${{ matrix.crates }}
 
-      # --- What rulec's ci.yml ran beside `cargo test`.
+      # --- What rulec's ci.yml ran beside `cargo test`, in the first of rulec's two jobs.
       # The suite skips a language whose toolchain is missing; here that is a failure, not a
       # note. `--require-all` counts the twelve languages. The PostgreSQL function beside the
       # query and the rule as a Connect service are each skipped with a warning of their own
@@ -456,7 +471,7 @@ jobs:
       # read here as well (rulec's DESIGN §15.94). The model checker's pass (`--proofs`) is
       # kani.yml's.
       - name: "rulec: the generated code runs in every language, none skipped"
-        if: matrix.group == 'rulec'
+        if: matrix.group == 'rulec' && !matrix.part
         env:
           RULEC_LANG: ja
         run: |
@@ -473,7 +488,7 @@ jobs:
       # The certificate is evidence only if something other than rulec can read it, so the
       # re-checker reads every one, held to the text it is about (rulec's DESIGN §15.96, §15.97).
       - name: "rulec: the certificates re-check, without rulec"
-        if: matrix.group == 'rulec'
+        if: matrix.group == 'rulec' && !matrix.part
         env:
           RULEC_LANG: ja
         run: |
@@ -488,7 +503,7 @@ jobs:
           echo "$n certificates re-checked, each against its own text"
 
       - name: "rulec: fmt and the committed output are current"
-        if: matrix.group == 'rulec'
+        if: matrix.group == 'rulec' && !matrix.part
         env:
           RULEC_LANG: ja
         run: |

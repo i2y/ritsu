@@ -28,10 +28,11 @@
 //! this rule's, names PostgreSQL cuts to one, and a keyword's `_` that is another name already.
 //! What `rulec check` prints for the keyword's rule is its golden file in `tests/golden/apply_names`
 //! (`RULEC_BLESS=1 cargo test --test apply_names` writes them again). Every rule of the tree that
-//! applies another is generated and run in every language here too.
+//! applies another is generated and run in every language here too: the rules of this directory
+//! once, with the rest dealt into a few directories that run side by side.
 
 use ritsu_testkit::tmp::tmpdir_in;
-use ritsu_testkit::{Need, TempDir, ready, skip};
+use ritsu_testkit::{Need, TempDir, ready, side_by_side, skip};
 use rulec::ast::{Item, Name, RuleFile};
 use rulec::i18n::{self, Lang};
 use rulec::json::Json;
@@ -375,9 +376,15 @@ fn have_python() -> bool {
     Command::new("python3").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
+/// The rules `every_language_answers_alike` runs, by their path from the workspace's root: every
+/// rule of `SHAPES`, in both versions.
+fn shape_rules() -> Vec<String> {
+    SHAPES.iter().flat_map(|(en, ja, _)| [*en, *ja]).map(|stem| format!("crates/rulec/tests/apply_names/{stem}.rule")).collect()
+}
+
 /// The generated code of every rule here compiles and answers as the reference evaluator does, in
 /// every language that is here: the English rules in one directory, the Japanese versions, which
-/// share their aliases, in another.
+/// share their aliases, in another. The test of the tree's rules below leaves these to this one.
 #[test]
 fn every_language_answers_alike() {
     if !ready(Need::Python, have_python, "python3 is not here") {
@@ -391,16 +398,45 @@ fn every_language_answers_alike() {
     }
 }
 
+/// How many directories the rules of the tree that apply another are dealt into: the cores of the
+/// runners CI has. The rule that takes longest is one directory's work on its own, so more would
+/// not make the test shorter, and each directory runs the rounding helpers and asks for the
+/// toolchains once more.
+const DIRECTORIES: usize = 4;
+
+/// The rules, each as its path, its alias and the bytes of its file, dealt into the directories:
+/// the largest first, each to the directory with the fewest bytes so far among those that have no
+/// rule of its alias, so that no two rules of a directory write the same files. A rule whose alias
+/// every directory has opens one more.
+fn deal(mut rules: Vec<(String, String, usize)>) -> Vec<Vec<String>> {
+    rules.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| a.0.cmp(&b.0)));
+    let mut dirs: Vec<(Vec<String>, Vec<String>, usize)> = vec![(Vec::new(), Vec::new(), 0); DIRECTORIES];
+    for (rel, alias, bytes) in rules {
+        match dirs.iter_mut().filter(|(_, aliases, _)| !aliases.contains(&alias)).min_by_key(|(_, _, size)| *size) {
+            Some((rels, aliases, size)) => {
+                rels.push(rel);
+                aliases.push(alias);
+                *size += bytes;
+            }
+            None => dirs.push((vec![rel], vec![alias], bytes)),
+        }
+    }
+    dirs.into_iter().map(|(rels, _, _)| rels).filter(|rels| !rels.is_empty()).collect()
+}
+
 /// Every rule of the tree that applies another and passes `check` — the English ones and the
 /// Japanese versions — runs in every language that is here, each answering as the reference
-/// evaluator does. Rules whose aliases would write the same files go to different directories.
+/// evaluator does. The rules of `every_language_answers_alike` are run there, in the same way;
+/// the others are generated into a few directories run side by side, as many at once as the
+/// machine has cores, and rules whose aliases would write the same files go to different ones.
 #[test]
 fn every_rule_of_the_tree_that_applies_another_runs_alike() {
     if !ready(Need::Python, have_python, "python3 is not here") {
         return;
     }
     let base = root().join("../..").canonicalize().unwrap();
-    let mut batches: Vec<(Vec<String>, Vec<String>)> = Vec::new();
+    let there = shape_rules();
+    let (mut here, mut elsewhere) = (Vec::new(), 0usize);
     for rel in tree_rules() {
         let path = base.join(&rel);
         let Ok(src) = std::fs::read_to_string(&path) else { continue };
@@ -408,19 +444,21 @@ fn every_rule_of_the_tree_that_applies_another_runs_alike() {
             continue;
         }
         let Ok((f, _)) = i18n::with(Lang::En, || rulec::prepare(&src, &path.to_string_lossy())) else { continue };
-        let alias = ident(&f.name);
-        match batches.iter_mut().find(|(_, aliases)| !aliases.contains(&alias)) {
-            Some((rels, aliases)) => {
-                rels.push(rel);
-                aliases.push(alias);
-            }
-            None => batches.push((vec![rel], vec![alias])),
+        if there.contains(&rel) {
+            elsewhere += 1;
+        } else {
+            here.push((rel, ident(&f.name), src.len()));
         }
     }
-    let rules: usize = batches.iter().map(|(r, _)| r.len()).sum();
+    let rules = here.len() + elsewhere;
     assert!(rules >= 24, "fewer rules of the tree apply another than there were: {rules}");
-    for (rels, _) in &batches {
+    let dirs = deal(here);
+    side_by_side(&dirs, |rels| {
         runs_alike(&base, rels, &rels.join(", "));
-    }
-    println!("apply_names: {rules} rules of the tree that apply another ran alike, in {} directories", batches.len());
+    });
+    println!(
+        "apply_names: {rules} rules of the tree that apply another ran alike: {} here, in {} directories side by side, and {elsewhere} in every_language_answers_alike",
+        rules - elsewhere,
+        dirs.len()
+    );
 }

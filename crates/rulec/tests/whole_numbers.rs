@@ -16,7 +16,7 @@
 //! `買物かごの送料`).
 
 use ritsu_testkit::tmp::tmpdir_in;
-use ritsu_testkit::{Need, TempDir, need, ready, skip};
+use ritsu_testkit::{Need, TempDir, need, ready, side_by_side, skip};
 use rulec::json::Json;
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
@@ -165,14 +165,15 @@ fn rulec_test(out: &Path) -> (i32, Json) {
 /// Every way `rulec test` reaches the rules — the runners of the twelve languages, Rust's WASI
 /// module, the Connect service, the query and the function — reads every integer of the vectors
 /// written as `1000.0`, `1e3`, `1.5e3` or `-0.0` as the integer it is, and answers each case as it
-/// answers the integer: the same record, byte for byte, the inputs in it written as integers.
+/// answers the integer: the same record, byte for byte, the inputs in it written as integers. The
+/// English rules and the Japanese versions run side by side.
 #[test]
 fn every_way_answers_a_whole_number_in_any_spelling_as_the_integer() {
     // Every language there is a toolchain for, the tools level's (ritsu's DESIGN 10.2).
     if !need(Need::Python) {
         return;
     }
-    for (rules, lang) in [(&ENGLISH, "en"), (&JAPANESE, "ja")] {
+    side_by_side(&[(&ENGLISH, "en"), (&JAPANESE, "ja")], |&(rules, lang)| {
         let (_t, out) = generate(rules, lang);
         let used = respell_vectors(&out);
         for kind in ["point", "exponent", "point and exponent", "minus zero"] {
@@ -194,7 +195,7 @@ fn every_way_answers_a_whole_number_in_any_spelling_as_the_integer() {
             assert!(ways.contains_key(way), "[{lang}] {way} did not run: {ways:?}");
         }
         println!("whole numbers [{lang}]: {used:?} through {} ways: {}", ways.len(), ways.keys().cloned().collect::<Vec<_>>().join(", "));
-    }
+    });
 }
 
 /// Send the requests one line at a time and collect one answer per request that has an id.
