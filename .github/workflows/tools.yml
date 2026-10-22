@@ -125,7 +125,10 @@ jobs:
       # generated code is held to, the rule as a Connect service, PostgreSQL, and Lean.
       - name: "rulec: NumPy, the checkers of the generated Python, and the Connect runtime"
         if: matrix.group == 'rulec'
-        run: python3 -m pip install --upgrade numpy mypy ruff connectrpc protoc-gen-connectrpc protoc-gen-py uvicorn
+        # The Connect runtime and its two plugins are pinned as dandori's tools/connect pins them:
+        # protoc-gen-py 0.7.0 moved MethodOptions out of protobuf.wkt, which protoc-gen-connectrpc
+        # 0.12.1 imports.
+        run: python3 -m pip install --upgrade numpy mypy ruff uvicorn connectrpc==0.12.1 protoc-gen-connectrpc==0.12.1 protoc-gen-py==0.6.0 protobuf-py==0.6.0 protobuf-py-ext==0.6.0
 
       - uses: ruby/setup-ruby@v1
         if: matrix.group == 'rulec'
