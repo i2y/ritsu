@@ -41,9 +41,8 @@ jobs:
   tools:
     name: tools (${{ matrix.group }}${{ matrix.part && format(', {0}', matrix.part) || '' }})
     runs-on: ubuntu-latest
-    # rulec's two jobs are the longest: they run the generated code of many rules in every way
-    # `rulec test` reaches it (DESIGN 10.5)
-    timeout-minutes: 200
+    # The longest of these, rulec's first job and the others', take about 50 minutes (DESIGN 10.5)
+    timeout-minutes: 120
 
     strategy:
       fail-fast: false
@@ -523,7 +522,8 @@ jobs:
   npm:
     name: npm (node ${{ matrix.node }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    # The tests of the package take 46 to 89 minutes on the runners, more than any job of tools
+    timeout-minutes: 120
 
     strategy:
       fail-fast: false
