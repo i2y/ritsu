@@ -1,0 +1,19 @@
+rule 返金の窓口(refund_desk_ja) v1
+description "店のどの窓口が売上を返金するか。開封したものはサービスカウンター、ほかは、ベビー＆キッズの売り場が売ったものはキッズの窓口、それ以外は売り場の窓口。二つの売り場の名前には gate が名前に書けない字（＆）があり、どちらにも gate が書ける別名がある。テストのために書いた例で、refund_desk.rule の日本語の版"
+
+enum 売り場(section) = 紳士服(mens) | 婦人服(womens) | ホーム＆ガーデン(home) | ベビー＆キッズ(baby_and_kids)
+enum 窓口の種類(desk_kind) = 売り場の窓口(floor) | キッズの窓口(kids_counter) | サービスカウンター(service_desk)
+
+inputs
+  売った売り場(sold_in) : 売り場
+  開封済み(opened)      : bool
+
+outputs
+  窓口(desk) : 窓口の種類
+
+table 窓口の表(desks)
+policy unique
+| 売った売り場                     | 開封済み | -> 窓口            |
+| 紳士服, 婦人服, ホーム＆ガーデン | false    | 売り場の窓口       |
+| ベビー＆キッズ                   | false    | キッズの窓口       |
+| -                                | true     | サービスカウンター |

@@ -297,6 +297,12 @@ fn is_rule_value(v: &ritsu_ports::EnumValue, word: &str) -> bool {
     v.name == word || v.alias == word || v.public == word
 }
 
+/// The spellings a `.gate` may name each value of a rule's enum by, as [`foreign_notes`] takes them:
+/// the rule's name for it, the alias the `.rule` writes, the member of the generated code.
+pub(crate) fn value_spellings(values: &[ritsu_ports::EnumValue]) -> Vec<Vec<&str>> {
+    values.iter().map(|v| vec![v.name.as_str(), v.public.as_str(), v.alias.as_str()]).collect()
+}
+
 /// The values of a rule's enum, by rulec's name and alias.
 fn rule_values(facts: &RuleFacts, name: &str) -> Vec<(String, String)> {
     facts.enums.iter().find(|e| e.name == name || e.alias == name).map(|e| e.values.iter().map(|v| (v.name.clone(), v.alias.clone())).collect()).unwrap_or_default()
@@ -1553,9 +1559,10 @@ impl<'a> Ck<'a> {
                 }
                 let o = &output.word;
                 let Some(out) = facts.outputs.iter().find(|x| x.name == *o || x.alias == *o) else {
-                    let known: Vec<String> = facts.outputs.iter().map(|x| x.name.clone()).collect();
+                    let names: Vec<Vec<&str>> = facts.outputs.iter().map(|x| vec![x.name.as_str(), x.alias.as_str()]).collect();
+                    let notes = foreign_notes(&tr!("出力", "outputs"), &of_the_rule(), &names, Spot::Name);
                     let r = &rule.word;
-                    self.err("E101", output.span, tr!("規則 `{r}` に出力 `{o}` はありません", "The rule `{r}` has no output `{o}`")).notes.push(known_note(&tr!("出力", "outputs"), &known));
+                    self.err("E101", output.span, tr!("規則 `{r}` に出力 `{o}` はありません", "The rule `{r}` has no output `{o}`")).notes.extend(notes);
                     return None;
                 };
                 let ty = match unopt(&out.ty) {
@@ -1571,7 +1578,7 @@ impl<'a> Ck<'a> {
                     }
                 };
                 let inputs: Vec<(String, String, ColumnType)> = facts.inputs.iter().map(|i| (i.name.clone(), i.alias.clone(), i.ty.clone())).collect();
-                self.call_args(a, args, rule.span, &rule.word, &inputs, facts, &name);
+                self.call_args(a, args, rule.span, &rule.word, &inputs, facts, &name, &of_the_rule());
                 Some(ty)
             }
             Computation::Date { op: _, date } => {
@@ -1593,9 +1600,10 @@ impl<'a> Ck<'a> {
                         let facts = read.facts.clone();
                         let d = &date.word;
                         let Some(func) = facts.functions.iter().find(|x| x.name == *d || x.alias == *d) else {
-                            let known: Vec<String> = facts.functions.iter().map(|x| x.name.clone()).collect();
+                            let names: Vec<Vec<&str>> = facts.functions.iter().map(|x| vec![x.name.as_str(), x.alias.as_str()]).collect();
+                            let notes = foreign_notes(&tr!("日付", "dates"), &of_the_dates_file(), &names, Spot::Name);
                             let n = &dates.word;
-                            self.err("E101", date.span, tr!("日付のファイル `{n}` に日付 `{d}` はありません", "The dates file `{n}` has no date `{d}`")).notes.push(known_note(&tr!("日付", "dates"), &known));
+                            self.err("E101", date.span, tr!("日付のファイル `{n}` に日付 `{d}` はありません", "The dates file `{n}` has no date `{d}`")).notes.extend(notes);
                             return None;
                         };
                         let inputs: Vec<(String, String, ColumnType)> = func
@@ -1605,7 +1613,7 @@ impl<'a> Ck<'a> {
                             .map(|i| (i.name.clone(), i.alias.clone(), if i.kind == DateKind::Date { ColumnType::Date } else { ColumnType::Num { written: "int".into(), unit: Some(Unit::number()), min: Some(i.min as i128), max: Some(i.max as i128) } }))
                             .collect();
                         let empty = RuleFacts { rule: String::new(), alias: String::new(), version: String::new(), sha256: String::new(), rulec: String::new(), inputs: vec![], outputs: vec![], elements: vec![], enums: vec![], machine: None, preconditions: vec![], connect: None, typescript: dummy_call(), python: dummy_call(), go: dummy_call() };
-                        self.call_args(a, args, date.span, &date.word, &inputs, &empty, "");
+                        self.call_args(a, args, date.span, &date.word, &inputs, &empty, "", &of_the_dates_file());
                     }
                 }
                 Some(Ty::Bool)
@@ -1645,15 +1653,16 @@ impl<'a> Ck<'a> {
     }
 
     /// The inputs given to a rule or a date function (E006, E101, E105), each held to its input by
-    /// `fits`.
+    /// `fits`; `whose` is the file the inputs are of, as the note of E101 names it.
     #[allow(clippy::too_many_arguments)]
-    fn call_args(&mut self, a: &'a ActionDecl, args: &'a [Arg], at: Span, callee: &str, inputs: &[(String, String, ColumnType)], facts: &RuleFacts, rule: &str) {
+    fn call_args(&mut self, a: &'a ActionDecl, args: &'a [Arg], at: Span, callee: &str, inputs: &[(String, String, ColumnType)], facts: &RuleFacts, rule: &str, whose: &Text) {
         let mut given: Vec<usize> = Vec::new();
         for arg in args {
             let w = &arg.name.word;
             let Some(k) = inputs.iter().position(|(n, al, _)| n == w || al == w) else {
-                let known: Vec<String> = inputs.iter().map(|(n, ..)| n.clone()).collect();
-                self.err("E101", arg.name.span, tr!("`{callee}` に入力 `{w}` はありません", "`{callee}` has no input `{w}`")).notes.push(known_note(&tr!("入力", "inputs"), &known));
+                let names: Vec<Vec<&str>> = inputs.iter().map(|(n, al, _)| vec![n.as_str(), al.as_str()]).collect();
+                let notes = foreign_notes(&tr!("入力", "inputs"), whose, &names, Spot::Name);
+                self.err("E101", arg.name.span, tr!("`{callee}` に入力 `{w}` はありません", "`{callee}` has no input `{w}`")).notes.extend(notes);
                 continue;
             };
             if given.contains(&k) {
@@ -1709,9 +1718,9 @@ impl<'a> Ck<'a> {
                 {
                     let values = rule_enum_values(facts, e);
                     if !values.iter().any(|v| is_rule_value(v, &r.word)) {
-                        let known: Vec<String> = values.iter().map(|v| v.name.clone()).collect();
+                        let notes = foreign_notes(&tr!("列挙の値", "values"), &of_the_rule(), &value_spellings(values), Spot::Value);
                         let w = &r.word;
-                        self.err("E101", r.span, tr!("`{w}` は、action の入力でも、規則 `{rule}` の列挙 `{e}` の値でもありません", "`{w}` is neither an input of the action nor a value of the enum `{e}` of the rule `{rule}`")).notes.push(known_note(&tr!("列挙の値", "values"), &known));
+                        self.err("E101", r.span, tr!("`{w}` は、action の入力でも、規則 `{rule}` の列挙 `{e}` の値でもありません", "`{w}` is neither an input of the action nor a value of the enum `{e}` of the rule `{rule}`")).notes.extend(notes);
                     }
                     return;
                 }
@@ -2490,9 +2499,9 @@ impl<'a> Ck<'a> {
                 let Some(read) = self.scope.rules.get(rule) else { return };
                 let values = rule_enum_values(&read.facts, e);
                 if !values.iter().any(|v| is_rule_value(v, &w.word)) {
-                    let known: Vec<String> = values.iter().map(|v| v.name.clone()).collect();
+                    let notes = foreign_notes(&tr!("値", "values"), &of_the_rule(), &value_spellings(values), Spot::Value);
                     let x = &w.word;
-                    self.err("E101", w.span, tr!("規則 `{rule}` の列挙 `{e}` に値 `{x}` はありません", "The enum `{e}` of the rule `{rule}` has no value `{x}`")).notes.push(known_note(&tr!("値", "values"), &known));
+                    self.err("E101", w.span, tr!("規則 `{rule}` の列挙 `{e}` に値 `{x}` はありません", "The enum `{e}` of the rule `{rule}` has no value `{x}`")).notes.extend(notes);
                 }
             }
             (Ty::Enum(e), Rhs::Path(p)) => {
@@ -2652,6 +2661,71 @@ fn known_note(what: &Text, known: &[String]) -> Text {
     tr!("書ける{}は {} です。", "The {} there are {}.", what.ja, list.ja; what.en, list.en)
 }
 
+/// Where a name of another language's file is written on a `.gate` line (DESIGN 20). Where a name
+/// goes (an input of a rule or of a date, a rule's output, a date of a dates file), the parser takes
+/// any word; where a value goes (one given to an input, the right side of `is`), any word but the
+/// reserved ones, which it reads as something else there (`kw::RESERVED`).
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum Spot {
+    Name,
+    Value,
+}
+
+/// The first of the spellings of a name of another language's file — its name there, the alias the
+/// file writes in parentheses, the member of the code generated from it — that a `.gate` can write
+/// where `spot` says (DESIGN 20): one the lexer reads back as that one word (`lex::is_bare_word`),
+/// and, where a value goes, not a reserved word. None when it can write none of them there; no
+/// quotes help, as the place takes a word and no string.
+pub(crate) fn writable<'s>(spellings: &[&'s str], spot: Spot) -> Option<&'s str> {
+    spellings.iter().copied().find(|s| crate::lex::is_bare_word(s) && (spot == Spot::Name || !kw::is_reserved(s)))
+}
+
+/// The notes of an E101 that lists the names of another language's file (`whose`: the rule, the
+/// dates file), each name given by its spellings, the file's own name for it first (DESIGN 20): the
+/// names there are, each as the `.gate` writes it where `spot` says, and a note for those it can
+/// write by none of their spellings, which says to give them an alias in that file.
+pub(crate) fn foreign_notes(what: &Text, whose: &Text, names: &[Vec<&str>], spot: Spot) -> Vec<Text> {
+    let (mut known, mut unwritten) = (Vec::new(), Vec::new());
+    for spellings in names {
+        match writable(spellings, spot) {
+            Some(w) => known.push(w.to_string()),
+            None => unwritten.push(spellings.first().copied().unwrap_or_default().to_string()),
+        }
+    }
+    let mut notes = Vec::new();
+    if !known.is_empty() || unwritten.is_empty() {
+        notes.push(known_note(what, &known));
+    }
+    if let Some(first) = unwritten.first() {
+        let quoted: Vec<Text> = unwritten.iter().map(|n| Text::same(format!("`{n}`"))).collect();
+        let list = Text::list(&quoted);
+        notes.push(if unwritten.len() == 1 {
+            tr!(
+                "{} は、{}での名前でも別名でも、ここには書けません。{}の側で、`{first}(<別名>)` のように、英字・数字・`_` だけの別名を付けてください。",
+                "{} cannot be written here, neither by its name in {} nor by an alias. In {}, give it an alias of letters, digits and `_` only, as `{first}(<alias>)`.",
+                list.ja, whose.ja, whose.ja; list.en, whose.en, whose.en
+            )
+        } else {
+            tr!(
+                "{} は、{}での名前でも別名でも、ここには書けません。{}の側で、`{first}(<別名>)` のように、それぞれに英字・数字・`_` だけの別名を付けてください。",
+                "{} cannot be written here, neither by their names in {} nor by an alias. In {}, give each an alias of letters, digits and `_` only, as `{first}(<alias>)`.",
+                list.ja, whose.ja, whose.ja; list.en, whose.en, whose.en
+            )
+        });
+    }
+    notes
+}
+
+/// The file a rule's names are of, as [`foreign_notes`] names it.
+pub(crate) fn of_the_rule() -> Text {
+    tr!("規則", "the rule")
+}
+
+/// The file a date's names are of, as [`foreign_notes`] names it.
+pub(crate) fn of_the_dates_file() -> Text {
+    tr!("日付のファイル", "the dates file")
+}
+
 fn lit_text(l: &Lit) -> String {
     match l {
         Lit::Num(n) => n.raw.clone(),
@@ -2702,5 +2776,47 @@ fn asked_in(e: &Expr, f: &mut dyn FnMut(&Ref, Span)) {
         Expr::Not(x, _) => asked_in(x, f),
         Expr::Atom(Atom::Allowed { action, .. }, s) => f(action, *s),
         Expr::Atom(..) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A name of another language's file is written by the first of its spellings the place takes
+    /// (DESIGN 20): where a name goes, any word the lexer reads back, a word of the conditions too;
+    /// where a value goes, not one of those.
+    #[test]
+    fn a_name_is_written_by_its_first_spelling_the_place_takes() {
+        assert_eq!(writable(&["上限まで", "within_limit", "WithinLimit"], Spot::Value), Some("上限まで"));
+        assert_eq!(writable(&["Men's", "mens", "Mens"], Spot::Value), Some("mens"));
+        assert_eq!(writable(&["today", "today", "Today"], Spot::Value), Some("Today"));
+        assert_eq!(writable(&["in", "in"], Spot::Name), Some("in"));
+        assert_eq!(writable(&["Ma'am", "ma'am", "Ma'am"], Spot::Value), None);
+        // koyomi reads `5坪` as a name, digits that go on in Japanese; a `.gate` reads it as a number
+        // of the unit 坪, and writes the date by its alias
+        assert_eq!(writable(&["5坪", "five_tsubo"], Spot::Name), Some("five_tsubo"));
+        assert_eq!(writable(&["40営業日以内", "within_40"], Spot::Name), Some("40営業日以内"));
+    }
+
+    /// The note of the names there are lists those the `.gate` writes; the names it can write by
+    /// none of their spellings have a note of their own, which says what to do in the other file.
+    #[test]
+    fn a_name_the_gate_cannot_write_is_said_apart() {
+        let names = |n: &[&[&'static str]]| n.iter().map(|s| s.to_vec()).collect::<Vec<_>>();
+        let notes = foreign_notes(&tr!("値", "values"), &of_the_rule(), &names(&[&["Home", "Home", "Home"], &["Men's", "mens", "Mens"], &["Children's", "Children's", "Children's"]]), Spot::Value);
+        assert_eq!(notes.iter().map(|n| n.en.as_str()).collect::<Vec<_>>(), [
+            "The values there are `Home` and `mens`.",
+            "`Children's` cannot be written here, neither by its name in the rule nor by an alias. In the rule, give it an alias of letters, digits and `_` only, as `Children's(<alias>)`."
+        ]);
+        assert_eq!(notes[1].ja, "`Children's` は、規則での名前でも別名でも、ここには書けません。規則の側で、`Children's(<別名>)` のように、英字・数字・`_` だけの別名を付けてください。");
+        // none it can write: the note of those alone
+        let notes = foreign_notes(&tr!("日付", "dates"), &of_the_dates_file(), &names(&[&["5坪", "5坪"], &["3円", "3円"]]), Spot::Name);
+        assert_eq!(notes.iter().map(|n| n.en.as_str()).collect::<Vec<_>>(), [
+            "`5坪` and `3円` cannot be written here, neither by their names in the dates file nor by an alias. In the dates file, give each an alias of letters, digits and `_` only, as `5坪(<alias>)`."
+        ]);
+        // none at all
+        let notes = foreign_notes(&tr!("出力", "outputs"), &of_the_rule(), &[], Spot::Name);
+        assert_eq!(notes.iter().map(|n| n.en.as_str()).collect::<Vec<_>>(), ["No outputs are declared."]);
     }
 }

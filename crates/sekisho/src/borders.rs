@@ -22,6 +22,7 @@
 
 use crate::diag::Diag;
 use crate::model::*;
+use crate::names::{Spot, foreign_notes, of_the_dates_file, of_the_rule};
 use crate::walk::{Domain, Kn, Known};
 use ritsu_base::text::Text;
 use ritsu_ports::{Answer, ColumnType, DateKind, Dates, Flows, Ports, Precondition, RuleFacts, Rules, Said, Value};
@@ -51,6 +52,11 @@ fn outside_the_root(code: &'static str, g: &Gate, line: usize, written: &str) ->
         "gate が読むファイルは、生成する Cedar の `@doc` でも、ほかの言語からも、ルートからのパスで参照します。",
         "A file a gate reads is named by a reference whose path is from the root, in the `@doc` of the generated Cedar and by the other languages."
     )))
+}
+
+/// `d` with `notes`, in order.
+fn with_notes(d: Diag, notes: Vec<Text>) -> Diag {
+    notes.into_iter().fold(d, Diag::note)
 }
 
 /// What a language said of a file, one note a finding.
@@ -296,9 +302,9 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
     // the output: an enum or a bool of the rule
     let domain = match column(&facts.outputs, output) {
         None => {
-            let outs: Vec<Text> = facts.outputs.iter().map(|o| Text::same(o.name.clone())).collect();
-            let l = Text::list(&outs);
-            diags.push(at("E101", g, line, tr!("規則 `{}` に出力 `{output}` はありません", "The rule `{}` has no output `{output}`", facts.rule; facts.rule)).note(tr!("出力は {} です。", "Its outputs are {}.", l.ja; l.en)));
+            let names: Vec<Vec<&str>> = facts.outputs.iter().map(|o| vec![o.name.as_str(), o.alias.as_str()]).collect();
+            let d = at("E101", g, line, tr!("規則 `{}` に出力 `{output}` はありません", "The rule `{}` has no output `{output}`", facts.rule; facts.rule));
+            diags.push(with_notes(d, foreign_notes(&tr!("出力", "outputs"), &of_the_rule(), &names, Spot::Name)));
             None
         }
         Some(col) => match &col.ty {
@@ -325,9 +331,9 @@ fn rule_value(g: &Gate, a: &Action, c: &Computed, rule: usize, facts: &RuleFacts
     let mut inputs: Vec<(String, Option<ritsu_units::Unit>)> = Vec::new();
     for (name, src) in args {
         let Some(col) = column(&facts.inputs, name) else {
-            let ins: Vec<Text> = facts.inputs.iter().map(|i| Text::same(i.name.clone())).collect();
-            let l = Text::list(&ins);
-            diags.push(at("E101", g, line, tr!("規則 `{}` に入力 `{name}` はありません", "The rule `{}` has no input `{name}`", facts.rule; facts.rule)).note(tr!("入力は {} です。", "Its inputs are {}.", l.ja; l.en)));
+            let names: Vec<Vec<&str>> = facts.inputs.iter().map(|i| vec![i.name.as_str(), i.alias.as_str()]).collect();
+            let d = at("E101", g, line, tr!("規則 `{}` に入力 `{name}` はありません", "The rule `{}` has no input `{name}`", facts.rule; facts.rule));
+            diags.push(with_notes(d, foreign_notes(&tr!("入力", "inputs"), &of_the_rule(), &names, Spot::Name)));
             continue;
         };
         let (ty, optional) = match &col.ty {
@@ -567,17 +573,18 @@ fn date_value(g: &Gate, a: &Action, c: &Computed, du: usize, facts: &ritsu_ports
     let line = c.named.line;
     let before = diags.len();
     let Some(func) = facts.functions.iter().find(|f| f.name == function || f.alias == function) else {
-        let fs: Vec<Text> = facts.functions.iter().map(|f| Text::same(f.name.clone())).collect();
-        let l = Text::list(&fs);
-        diags.push(at("E101", g, line, tr!("日付のファイル `{}` に日付 `{function}` はありません", "The dates file `{}` has no date `{function}`", u.path; u.path)).note(tr!("日付は {} です。", "Its dates are {}.", l.ja; l.en)));
+        let names: Vec<Vec<&str>> = facts.functions.iter().map(|f| vec![f.name.as_str(), f.alias.as_str()]).collect();
+        let d = at("E101", g, line, tr!("日付のファイル `{}` に日付 `{function}` はありません", "The dates file `{}` has no date `{function}`", u.path; u.path));
+        diags.push(with_notes(d, foreign_notes(&tr!("日付", "dates"), &of_the_dates_file(), &names, Spot::Name)));
         return None;
     };
     let mut inputs: Vec<(String, bool)> = Vec::new();
     for (name, src) in args {
         let Some(inp) = facts.inputs.iter().find(|i| i.name == *name || i.alias == *name) else {
-            let ins: Vec<Text> = func.params.iter().map(|p| Text::same(p.clone())).collect();
-            let l = Text::list(&ins);
-            diags.push(at("E101", g, line, tr!("日付 `{}` に入力 `{name}` はありません", "The date `{}` has no input `{name}`", func.name; func.name)).note(tr!("入力は {} です。", "Its inputs are {}.", l.ja; l.en)));
+            // each input the date reads, by its name and its alias
+            let names: Vec<Vec<&str>> = func.params.iter().map(|p| std::iter::once(p.as_str()).chain(facts.inputs.iter().filter(|i| i.name == *p).map(|i| i.alias.as_str())).collect()).collect();
+            let d = at("E101", g, line, tr!("日付 `{}` に入力 `{name}` はありません", "The date `{}` has no input `{name}`", func.name; func.name));
+            diags.push(with_notes(d, foreign_notes(&tr!("入力", "inputs"), &of_the_dates_file(), &names, Spot::Name)));
             continue;
         };
         let shown = source_text(src);

@@ -187,7 +187,10 @@ pub fn ledger() -> Ledger {
                 "参照した役割、型、属性、列挙の値、action、入力、計算した値、`use` の名前、規則の出力と入力、日付の関数、単位が無いとき。ポリシーと期待が、ほかのファイルの action を書いたときも出ます。",
                 "A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; or a policy or an expectation names an action of another file."
             ),
-            tr!("書き違いを直すか、宣言を足してください。注に、書ける名前が並びます。", "Correct the spelling, or declare it; the note lists the names there are."),
+            tr!(
+                "書き違いを直すか、宣言を足してください。注に、書ける名前が並びます。規則と日付のファイルの名前は、`.gate` に書ける形で並びます（名前を書けないときは別名で）。名前でも別名でも書けないものには、そのファイルの側で別名を付けてください。",
+                "Correct the spelling, or declare it; the note lists the names there are. The names of a rule or a dates file are listed as a `.gate` writes them, by the alias where the name cannot be written; one that can be written by neither needs an alias in that file."
+            ),
             "gate t v1\n\nrole clerk\n\nprincipal User\n  roles clerk\n\nresource Order\n\naction view\n  principal User\n  resource Order\n\npermit clerks_view\n  principal in clerck\n  action view\n",
             "gate t v1\n\nrole 係(clerk)\n\nprincipal 職員(User)\n  roles 係\n\nresource 注文(Order)\n\naction 見る(view)\n  principal 職員\n  resource 注文\n\npermit 係は見られる(clerks_view)\n  principal in 系\n  action 見る\n",
             &["E006"],

@@ -276,3 +276,192 @@ fn a_rate_with_no_step_is_told_to_write_one() {
     let d = o.diags.iter().find(|d| d.code == "E103").unwrap();
     assert_eq!(d.notes.len(), 1, "{:?}", d.notes);
 }
+
+/// A rule whose names a `.gate` cannot all write as the rule spells them: an apostrophe in a name
+/// or in an alias, a value with no alias, a value named like a word of sekisho's conditions
+/// (`today`, `in`, `any`). Its enum input comes first and its inputs of `bool` after it; its enum
+/// output comes first.
+const RULE_OF_HARD_NAMES: &str = "rule t v1
+
+enum section = Home | Men's(mens) | today | in(in_store) | Children's | Ma'am(ma'am)
+enum desk_kind = floor | any | Customer's(customers) | Staff's
+
+inputs
+  sold_in                       : section
+  seller's_desk(desk_of_seller) : bool
+  in                            : bool
+
+outputs
+  desk                           : desk_kind
+  refunder's_desk(refunder_desk) : bool
+  staff's_note(staff's)          : bool
+
+table t
+policy unique
+| sold_in    | seller's_desk | in | -> desk    | refunder's_desk | staff's_note |
+| Home       | -             | -  | floor      | true            | true         |
+| Men's      | -             | -  | any        | true            | true         |
+| today      | -             | -  | Customer's | true            | false        |
+| in         | -             | -  | Staff's    | false           | false        |
+| Children's | -             | -  | floor      | false           | false        |
+| Ma'am      | -             | -  | floor      | false           | true         |
+";
+
+/// The Japanese version: names with `＆`, `＋` and full-width parentheses, which a `.gate` does not
+/// write in a name. No Japanese name is a word of sekisho's conditions, so that case is the English
+/// version's alone.
+const RULE_OF_HARD_NAMES_JA: &str = "rule 窓口(t) v1
+
+enum 売り場(section) = 紳士服(mens) | ホーム＆ガーデン(home) | ベビー＆キッズ | 松＋竹(松＋竹)
+enum 窓口の種類(desk_kind) = 売り場の窓口(floor) | サービス＆カウンター(service) | 係（応援）
+
+inputs
+  売った売り場(sold_in)  : 売り場
+  売った人（係）(seller) : bool
+
+outputs
+  窓口(desk)                 : 窓口の種類
+  返金する人（係）(refunder) : bool
+  メモ（係）(メモ（係）)     : bool
+
+table 表(t)
+policy unique
+| 売った売り場     | 売った人（係） | -> 窓口              | 返金する人（係） | メモ（係） |
+| 紳士服           | -              | 売り場の窓口         | true             | true       |
+| ホーム＆ガーデン | -              | サービス＆カウンター | true             | true       |
+| ベビー＆キッズ   | -              | 係（応援）           | false            | true       |
+| 松＋竹           | -              | 売り場の窓口         | false            | false      |
+";
+
+/// A gate that reads the rule `name` from `t.rule` beside it and computes `x = <call>` for its one
+/// action, with a permit that compares `x is <is>` when `is` is given.
+fn gate_calling(name: &str, call: &str, is: Option<&str>) -> String {
+    let permit = is.map(|v| format!("\npermit p\n  principal is User\n  action refund\n  when x is {v}\n")).unwrap_or_default();
+    format!("gate g v1\n\nuse rule {name} from \"t.rule\"\n\nprincipal User\n\nresource Sale\n\naction refund\n  principal User\n  resource Sale\n  context\n    x = {call}\n{permit}")
+}
+
+/// What the notes of an E101 list, in `lang`: the names in backquotes in the note of the names there
+/// are, and the names the other note says cannot be written, before it says so.
+fn listed_in(notes: &[ritsu_base::text::Text], lang: Lang) -> (Vec<String>, Vec<String>) {
+    let quoted = |s: &str| s.split('`').skip(1).step_by(2).map(str::to_string).collect::<Vec<_>>();
+    let stop = if lang == Lang::Ja { " は、" } else { " cannot be written" };
+    let (mut there, mut unwritten) = (Vec::new(), Vec::new());
+    for n in notes {
+        match n.get(lang).split_once(stop) {
+            Some((names, _)) => unwritten = quoted(names),
+            None => there = quoted(n.get(lang)),
+        }
+    }
+    (there, unwritten)
+}
+
+/// The notes of E101 list the names of a rule as a `.gate` writes them where they go (DESIGN 20), in
+/// the four places a `.gate` writes them: a value given to the rule's enum input, a value of its enum
+/// output on the right of `is`, its inputs, and its outputs. `want` is, for each place in that order,
+/// the names the note lists and those it says cannot be written. Each name listed, written where it is
+/// listed, is the name it stands for: the names of the file hold.
+fn rule_names_listed_as_written(name: &str, rule: &str, want: [(&[&str], &[&str]); 4]) {
+    let dir = ritsu_testkit::TempDir::new("e101-names");
+    std::fs::write(dir.path().join("t.rule"), rule).unwrap();
+    let path = dir.path().join("g.gate");
+    let said = |call: &str, is: Option<&str>| {
+        std::fs::write(&path, gate_calling(name, call, is)).unwrap();
+        let o = sekisho::check::check_file(path.to_str().unwrap(), &common::joined(), &Options::default()).unwrap();
+        o.diags.into_iter().filter(|d| of_names(d.code)).map(|d| (d.code, d.notes.clone(), d.render(Lang::En))).collect::<Vec<_>>()
+    };
+    // the notes of the one E101, which list the same names in both languages
+    let lists = |ds: &[(&str, Vec<ritsu_base::text::Text>, String)]| {
+        let e101: Vec<_> = ds.iter().filter(|(c, ..)| *c == "E101").collect();
+        assert_eq!(e101.len(), 1, "{ds:?}");
+        let (en, ja) = (listed_in(&e101[0].1, Lang::En), listed_in(&e101[0].1, Lang::Ja));
+        assert_eq!(en, ja, "{}", e101[0].2);
+        en
+    };
+    let owned = |(there, unwritten): (&[&str], &[&str])| (there.iter().map(|s| s.to_string()).collect::<Vec<_>>(), unwritten.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    let [values, outs, inputs, outputs] = want;
+    // every input given, by the names the note lists: the value to the enum input, true to the others
+    let call = |value: &str, ins: &[&str], output: &str| {
+        let args: Vec<String> = ins.iter().enumerate().map(|(i, n)| format!("{n}: {}", if i == 0 { value } else { "true" })).collect();
+        format!("{name}({}).{output}", args.join(", "))
+    };
+    let (v0, o0) = (values.0[0], outputs.0[0]);
+    // a value given to the enum input that is not one of its values
+    assert_eq!(lists(&said(&call("nowhere", inputs.0, o0), None)), owned(values), "the values given");
+    for v in values.0 {
+        let ds = said(&call(v, inputs.0, o0), None);
+        assert!(ds.is_empty(), "{v}: {ds:?}");
+    }
+    // a value of the enum output the rule does not answer, on the right of `is`
+    assert_eq!(lists(&said(&call(v0, inputs.0, o0), Some("nowhere"))), owned(outs), "the values compared");
+    for v in outs.0 {
+        let ds = said(&call(v0, inputs.0, o0), Some(v));
+        assert!(ds.is_empty(), "{v}: {ds:?}");
+    }
+    // an input the rule does not have, in place of the first (which is then given nothing, E105)
+    let mut misspelt = inputs.0.to_vec();
+    misspelt[0] = "nowhere";
+    assert_eq!(lists(&said(&call(v0, &misspelt, o0), None)), owned(inputs), "the inputs");
+    // an output the rule does not have
+    assert_eq!(lists(&said(&call(v0, inputs.0, "nowhere"), None)), owned(outputs), "the outputs");
+    for o in outputs.0 {
+        let ds = said(&call(v0, inputs.0, o), None);
+        assert!(ds.is_empty(), "{o}: {ds:?}");
+    }
+}
+
+#[test]
+fn the_names_of_a_rule_a_note_lists_are_written_as_the_gate_takes_them() {
+    rule_names_listed_as_written(
+        "t",
+        RULE_OF_HARD_NAMES,
+        [
+            // by the name, by the alias, by the member of the generated code where the name is a word
+            // of the conditions, and by the alias where it is; neither by the name nor by an alias
+            (&["Home", "mens", "Today", "in_store"], &["Children's", "Ma'am"]),
+            (&["floor", "Any", "customers"], &["Staff's"]),
+            // where a name goes, a word of the conditions is written as it is
+            (&["sold_in", "desk_of_seller", "in"], &[]),
+            (&["desk", "refunder_desk"], &["staff's_note"]),
+        ],
+    );
+}
+
+/// An input a `.gate` can write by neither its name nor its alias can be given nothing, and the note
+/// of E101 says so of it, beside the inputs it can write (DESIGN 20). The English version's alias
+/// holds an apostrophe, the Japanese version's full-width parentheses.
+#[test]
+fn an_input_the_gate_cannot_write_is_said_to_be_one() {
+    for (name, rule, listed, unwritten) in [
+        ("t", "rule t v1\n\ninputs\n  sold_in        : bool\n  o'clock(o'clk) : bool\n\noutputs\n  floor : bool\n\ntable t\npolicy unique\n| sold_in | o'clock | -> floor |\n| true    | -       | true     |\n| false   | -       | false    |\n", "sold_in", "o'clock"),
+        (
+            "窓口",
+            "rule 窓口(t) v1\n\ninputs\n  売った(sold)                       : bool\n  受付時刻（任意）(受付時刻（任意）) : bool\n\noutputs\n  売り場(floor) : bool\n\ntable 表(t)\npolicy unique\n| 売った | 受付時刻（任意） | -> 売り場 |\n| true   | -                | true      |\n| false  | -                | false     |\n",
+            "売った",
+            "受付時刻（任意）",
+        ),
+    ] {
+        let dir = ritsu_testkit::TempDir::new("e101-input");
+        std::fs::write(dir.path().join("t.rule"), rule).unwrap();
+        let path = dir.path().join("g.gate");
+        std::fs::write(&path, gate_calling(name, &format!("{name}(nowhere: true).floor"), None)).unwrap();
+        let o = sekisho::check::check_file(path.to_str().unwrap(), &common::joined(), &Options::default()).unwrap();
+        let d = o.diags.iter().find(|d| d.code == "E101").unwrap_or_else(|| panic!("{}", sekisho::check::render(&o, Lang::En)));
+        for lang in [Lang::En, Lang::Ja] {
+            assert_eq!(listed_in(&d.notes, lang), (vec![listed.to_string()], vec![unwritten.to_string()]), "{lang:?}: {:?}", d.notes);
+        }
+    }
+}
+
+#[test]
+fn the_names_of_a_rule_a_note_lists_are_written_as_the_gate_takes_them_in_japanese() {
+    rule_names_listed_as_written(
+        "窓口",
+        RULE_OF_HARD_NAMES_JA,
+        [
+            (&["紳士服", "home"], &["ベビー＆キッズ", "松＋竹"]),
+            (&["売り場の窓口", "service"], &["係（応援）"]),
+            (&["売った売り場", "seller"], &[]),
+            (&["窓口", "refunder"], &["メモ（係）"]),
+        ],
+    );
+}

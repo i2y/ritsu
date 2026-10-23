@@ -1,0 +1,31 @@
+gate store v1
+description "Who may refund a sale of the store. The rule that says which desk refunds it names three sections with an apostrophe, which a gate writes by their aliases"
+namespace Store
+
+use rule refund_desk from "read/refund_desk.rule"
+
+role clerk
+  description "Sells and refunds on the floor"
+  can refund
+
+principal User
+  description "A member of the staff"
+  roles clerk
+
+resource Sale
+  description "A sale of the store"
+  attributes
+    opened : bool
+
+action refund
+  description "Refund a sale"
+  principal User
+  resource Sale
+  context
+    desk = refund_desk(sold_in: men, opened: resource.opened).desk
+
+permit clerks_refund_what_is_not_opened
+  description "A clerk refunds a sale that was not opened, which the floor or the kids' counter refunds"
+  principal in clerk
+  action refund
+  unless desk is service_desk

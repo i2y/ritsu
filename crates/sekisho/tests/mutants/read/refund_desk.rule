@@ -1,0 +1,19 @@
+rule refund_desk v1
+description "Which desk of a store refunds a sale: the service desk for what was opened; for the rest, the kids' counter for what the children's section sold, and the floor for the others. Three sections are named with an apostrophe, which a gate cannot write in a name, and each has an alias, which a gate writes. A sketch written for the tests"
+
+enum section = Home | Men's(mens) | Women's(womens) | Children's(childrens)
+enum desk_kind = floor | kids_counter | service_desk
+
+inputs
+  sold_in : section
+  opened  : bool
+
+outputs
+  desk : desk_kind
+
+table desks
+policy unique
+| sold_in              | opened | -> desk      |
+| Home, Men's, Women's | false  | floor        |
+| Children's           | false  | kids_counter |
+| -                    | true   | service_desk |

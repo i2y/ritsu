@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_別名で書く値.gate:25:30: `紳士` is neither an input of the action nor a value of the enum `売り場` of the rule `返金の窓口`
+    25 |     窓口(desk) = 返金の窓口(売った売り場: 紳士, 開封済み: resource.開封済み).窓口
+  = The values there are `紳士服`, `婦人服`, `home` and `baby_and_kids`.

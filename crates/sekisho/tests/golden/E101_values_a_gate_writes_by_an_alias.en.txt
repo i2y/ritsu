@@ -1,0 +1,3 @@
+error[E101]: tests/mutants/E101_values_a_gate_writes_by_an_alias.gate:25:33: `men` is neither an input of the action nor a value of the enum `section` of the rule `refund_desk`
+    25 |     desk = refund_desk(sold_in: men, opened: resource.opened).desk
+  = The values there are `Home`, `mens`, `womens` and `childrens`.

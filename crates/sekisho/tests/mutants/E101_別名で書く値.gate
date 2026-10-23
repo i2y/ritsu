@@ -1,0 +1,31 @@
+gate 店(store_ja) v1
+description "店の売上をだれが返金してよいか。どの窓口が返金するかを決める規則は、二つの売り場を gate が名前に書けない字（＆）で名付けていて、gate はそれを別名で書く。E101_values_a_gate_writes_by_an_alias.gate の日本語の版"
+namespace StoreJa
+
+use rule 返金の窓口 from "read/返金の窓口.rule"
+
+role 係(clerk)
+  description "売り場で売り、返金する"
+  can 返金
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 売上(Sale)
+  description "店の売上"
+  attributes
+    開封済み(opened) : bool
+
+action 返金(refund)
+  description "売上を返金する"
+  principal 職員
+  resource 売上
+  context
+    窓口(desk) = 返金の窓口(売った売り場: 紳士, 開封済み: resource.開封済み).窓口
+
+permit 係は未開封の品を返金できる(clerks_refund_what_is_not_opened)
+  description "開封していない品の売上は、売り場の窓口かキッズの窓口が受け付け、係が返金できる"
+  principal in 係
+  action 返金
+  unless 窓口 is サービスカウンター

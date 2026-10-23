@@ -156,7 +156,7 @@ See also: [E007](#e007)
 
 **When**: A role, a type, an attribute, a value of an enum, an action, an input, a computed value, the name of a `use`, a rule's output or input, a date function or a unit that is referred to is not there; or a policy or an expectation names an action of another file.
 
-**Fix**: Correct the spelling, or declare it; the note lists the names there are.
+**Fix**: Correct the spelling, or declare it; the note lists the names there are. The names of a rule or a dates file are listed as a `.gate` writes them, by the alias where the name cannot be written; one that can be written by neither needs an alias in that file.
 
 **Example**:
 
