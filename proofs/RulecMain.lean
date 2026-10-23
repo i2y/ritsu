@@ -592,12 +592,21 @@ def checkSteps (t : ReadTable) (stepOf : String → Option Rat) (r : Report) : R
             r := r.fail s!"{t.name}: {col} has a coordinate ending off its step of {ratText step}"
   return r
 
-/-- The byte ranges a table row's `|` separators cut the line into, each trimmed. What
-    follows the last `|` is a comment, not a cell. -/
+/-- The byte ranges a table row's `|` separators cut the line into, each trimmed, read as
+    rulec's lexer reads the line: a `|` inside a string (`"…"`, which has no escapes) is the
+    string's, and a `#` outside one starts the comment, which runs to the end of the line, so a
+    `|` after it is the comment's. What follows the last `|` is a comment or a citation, not a
+    cell. -/
 def fieldsOf (line : ByteArray) : Array (Nat × Nat) := Id.run do
   let mut bars : Array Nat := #[]
-  for i in [0 : line.size] do
-    if line[i]! == 124 then bars := bars.push i
+  let mut inString := false
+  let mut i := 0
+  while i < line.size do
+    let c := line[i]!
+    if c == 34 then inString := !inString
+    else if !inString && c == 35 then i := line.size
+    else if !inString && c == 124 then bars := bars.push i
+    i := i + 1
   let mut out : Array (Nat × Nat) := #[]
   for k in [0 : bars.size - 1] do
     let mut a := bars[k]! + 1
@@ -653,7 +662,8 @@ def answerWords (t : ReadTable) (row : ReadRow) : List (Option String) :=
 /-- **The certificate quotes the file.** Every cell is read back out of the `.rule` text at
     the byte span the certificate names — and the span has to be that cell's place, not
     somewhere else on the page that happens to read the same. A row is one line; its cells
-    are that line's own `|`-separated fields, all of them; the rows of one table are
+    are that line's own `|`-separated fields, all of them, as rulec's lexer reads the line
+    (`fieldsOf`: not a `|` of a string or of the comment); the rows of one table are
     written one under another with no other table's rows between them; and a column no row
     is written with is a column this table does not have. -/
 def checkSpans (t : ReadTable) (linesOf : String → Array ByteArray) (r : Report)

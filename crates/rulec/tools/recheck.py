@@ -2556,9 +2556,20 @@ def boundary_values(axis):
 
 
 def fields_of(line):
-    """The byte ranges a table row's `|` separators cut the line into, each trimmed. The
-    text after the last `|` is a comment, not a cell, so it is not one of them."""
-    bars = [i for i, b in enumerate(line) if b == ord("|")]
+    """The byte ranges a table row's `|` separators cut the line into, each trimmed, read as
+    rulec's lexer reads the line: a `|` inside a string (`"…"`, which has no escapes) is the
+    string's, and a `#` outside one starts the comment, which runs to the end of the line, so a
+    `|` after it is the comment's. The text after the last `|` is a comment or a citation, not a
+    cell, so it is not one of them."""
+    bars = []
+    in_string = False
+    for i, b in enumerate(line):
+        if b == ord('"'):
+            in_string = not in_string
+        elif not in_string and b == ord("#"):
+            break
+        elif not in_string and b == ord("|"):
+            bars.append(i)
     out = []
     for k in range(len(bars) - 1):
         a, b = bars[k] + 1, bars[k + 1]
