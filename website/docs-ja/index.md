@@ -16,13 +16,13 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 
 | | ファイル | 何のための言語か | 詳しくは |
 |---|---|---|---|
-| rulec | `.rule` | 業務の規則：運賃、手数料、資格、税 | [rulec のサイト](../rulec/ja/) |
-| dandori | `.flow` | ワークフローの骨組み | [dandori のサイト](../dandori/ja/) |
-| koyomi | `.cal` | 期日：締め日と支払日、営業日、法令の期間 | [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.ja.md) |
-| chobo | `.book` | 帳簿：勘定、その上限と下限、振替、仮押さえ | [chobo のサイト](../chobo/ja/) |
-| geas | `.geas` | エージェントが書いたコードについての主張 | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.ja.md) |
-| yuen | `.req` | 要件の出どころと、それを満たすもの | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.ja.md) |
-| sakai | `.ctx` | 境界づけられたコンテキストの地図 | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.ja.md) |
+| [rulec](languages/rulec.md) | `.rule` | 業務の規則：運賃、手数料、資格、税 | [rulec のサイト](../rulec/ja/) |
+| [dandori](languages/dandori.md) | `.flow` | ワークフローの骨組み | [dandori のサイト](../dandori/ja/) |
+| [koyomi](languages/koyomi.md) | `.cal` | 期日：締め日と支払日、営業日、法令の期間 | [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.ja.md) |
+| [chobo](languages/chobo.md) | `.book` | 帳簿：勘定、その上限と下限、振替、仮押さえ | [chobo のサイト](../chobo/ja/) |
+| [geas](languages/geas.md) | `.geas` | エージェントが書いたコードについての主張 | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.ja.md) |
+| [yuen](languages/yuen.md) | `.req` | 要件の出どころと、それを満たすもの | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.ja.md) |
+| [sakai](languages/sakai.md) | `.ctx` | 境界づけられたコンテキストの地図 | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.ja.md) |
 | sekisho | `.gate` | だれが何をしてよいか：役割、属性、関係。規則と日付を条件に使える | [sekisho のページ](sekisho.md) |
 | kaname | `.kn` | Functional Core を書く小さな汎用の言語。入出力を持たないコードを ritsu の型で書き、規則と日付と帳簿も呼べる | [kaname のページ](kaname/index.md) |
 

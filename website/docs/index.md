@@ -25,13 +25,13 @@ Agents write the glue. ritsu holds what it all has to carry out.
 
 | | File | What it is for | Read more |
 |---|---|---|---|
-| rulec | `.rule` | business rules: tariffs, fees, eligibility, tax | [the rulec site](rulec/) |
-| dandori | `.flow` | the skeleton of a workflow | [the dandori site](dandori/) |
-| koyomi | `.cal` | dates: closing and payment days, business days, legal periods | [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.md) |
-| chobo | `.book` | ledgers: accounts, their bounds, transfers, holds | [the chobo site](chobo/) |
-| geas | `.geas` | claims about the code an agent wrote | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.md) |
-| yuen | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
-| sakai | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
+| [rulec](languages/rulec.md) | `.rule` | business rules: tariffs, fees, eligibility, tax | [the rulec site](rulec/) |
+| [dandori](languages/dandori.md) | `.flow` | the skeleton of a workflow | [the dandori site](dandori/) |
+| [koyomi](languages/koyomi.md) | `.cal` | dates: closing and payment days, business days, legal periods | [README](https://github.com/i2y/ritsu/blob/main/crates/koyomi/README.md) |
+| [chobo](languages/chobo.md) | `.book` | ledgers: accounts, their bounds, transfers, holds | [the chobo site](chobo/) |
+| [geas](languages/geas.md) | `.geas` | claims about the code an agent wrote | [README](https://github.com/i2y/ritsu/blob/main/crates/geas/README.md) |
+| [yuen](languages/yuen.md) | `.req` | where requirements come from, and what satisfies them | [README](https://github.com/i2y/ritsu/blob/main/crates/yuen/README.md) |
+| [sakai](languages/sakai.md) | `.ctx` | the map of bounded contexts | [README](https://github.com/i2y/ritsu/blob/main/crates/sakai/README.md) |
 | sekisho | `.gate` | who may do what: roles, attributes, relations, with rules and dates as conditions | [the sekisho page](sekisho.md) |
 | kaname | `.kn` | a small general-purpose language for a functional core: code with no input or output in ritsu's types, which calls rules, dates and books too | [the kaname pages](kaname/index.md) |
 

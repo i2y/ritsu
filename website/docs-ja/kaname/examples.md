@@ -1,8 +1,8 @@
 # Functional Core の四つの例
 
-kaname の例の初めの四つは、ほかの言語を読みません。どれも `crates/kaname/examples/` にあり、英語の版の隣に日本語の版（`<名前>.ja.kn`）があります。どの例も `host/` の下に、`ritsu gen` がモジュールから書いたコードを呼ぶホストのプログラムを、TypeScript、Python、Go で一つずつ持ち、三つとも `host/output.txt` と同じものを出力します。ritsu のテストは、例ごとにパッケージを作り、12 のプログラムを、TypeScript は `tsc --strict` に、Python は `mypy --strict` に、Go は `go vet` に通してから走らせます。
+kaname の例の初めの四つは、ほかの言語を読みません。どれも `crates/kaname/examples/` にあり、英語の版の隣に日本語の版（`<name>.ja.kn`）があります。どの例も `host/` の下に、`ritsu gen` がモジュールから書いたコードを呼ぶホストのプログラムを、TypeScript、Python、Go で一つずつ持ち、三つとも `host/output.txt` と同じものを出力します。ritsu のテストは、例ごとにパッケージを作り、12 のプログラムを、TypeScript は `tsc --strict` に、Python は `mypy --strict` に、Go は `go vet` に通してから走らせます。
 
-このページのモジュールは日本語の版ですが、ホストは英語の版のモジュールから生成したコードを呼びます。ホストのコードと出力は、英語の版のものです。
+このページのモジュール、ホストのコード、出力は、どれも英語の版のものです。
 
 ## ホストが呼ぶパッケージ
 
@@ -37,16 +37,16 @@ $ ritsu gen --root . --out gen --module example.com/order_flow --lang ja
 
 ## 注文とイベント
 
-`order_flow` は、注文を五つの状態のあいだで進めます（モジュールは[最初のページ](index.md)にあります）。ホストは注文を持ち、イベントが来るたびに `next`（日本語の版の `次`）を呼びます。答えが次の注文ならそれに置き換え、拒まれたら理由を出力します。
+`order_flow` は、注文を五つの状態のあいだで進めます（モジュールは[最初のページ](index.md)にあります）。ホストは注文を持ち、イベントが来るたびに `next` を呼びます。答えが次の注文ならそれに置き換え、拒まれたら理由を出力します。
 
 ```kn
-# イベントで進んだ注文か、イベントを拒む理由
-fn 次(next)(注文(order): 注文, イベント(event): イベント) -> result[注文, string]
+# the order an event moves it to, or why the event is refused
+fn next(order: Order, event: Event) -> result[Order, string]
 …
-# 空のカートから、イベントを順に当てる。最初に拒まれたところで止まる
-fn 順に進める(replay)(イベント(events): list[イベント]) -> result[注文, string]
-  let 初め : result[注文, string] = ok(注文.カート { 明細: [] })
-  イベント.reduce(初め, (途中, 一件) => 続けて(途中: 途中, イベント: 一件))
+# the events in turn, from an empty cart: the first refusal stops them
+fn replay(events: list[Event]) -> result[Order, string]
+  let start : result[Order, string] = ok(Order.cart { lines: [] })
+  events.reduce(start, (r, e) => after(r: r, event: e))
 ```
 
 === "TypeScript"
@@ -158,38 +158,38 @@ ship: shipped
 cancel: refused: the order is closed
 ```
 
-フィールドを持つ列挙の値は、TypeScript では `kind` で、Python では `isinstance` で、Go では型の switch で分けます。`result` も同じです。`順に進める` は、イベントのリストをモジュールの中で順に `次` に渡し、最初に拒まれたところで止まります。ホストのほうは、拒まれても次のイベントへ進みます。
+フィールドを持つ列挙の値は、TypeScript では `kind` で、Python では `isinstance` で、Go では型の switch で分けます。`result` も同じです。`replay` は、イベントのリストをモジュールの中で順に `next` に渡し、最初に拒まれたところで止まります。ホストのほうは、拒まれても次のイベントへ進みます。
 
 ## 倉庫の二回の棚卸し
 
 `stock_diff` は、棚卸しの数を、品番から棚にある数への辞書で持ち、二回の棚卸しを品番ごとに比べます。一日の入出庫を棚卸しの数に足すことと、発注する品番を集合で返すこともします。
 
 ```kn
-record 入出庫(Move)
-  品番(sku) : string  count >=1 <=20
-  数量(qty) : number  range >=-10_000 <=10_000
+record Move
+  sku : string  count >=1 <=20
+  qty : number  range >=-10_000 <=10_000
 
-enum 変化(Change)
-  増えた(added)
-    品番(sku) : string
-    数量(qty) : number
-  無くなった(removed)
-    品番(sku) : string
-    数量(qty) : number
-  変わった(changed)
-    品番(sku) : string
-    前(was)   : number
-    今(now)   : number
+enum Change
+  added
+    sku : string
+    qty : number
+  removed
+    sku : string
+    qty : number
+  changed
+    sku  : string
+    was : number
+    now : number
 …
-fn 違いの一覧(changes)(前(before): dict[string, number] range >=0 <=1_000_000, 後(after): dict[string, number] range >=0 <=1_000_000) -> list[変化]
+fn changes(before: dict[string, number] range >=0 <=1_000_000, after: dict[string, number] range >=0 <=1_000_000) -> list[Change]
 …
-# 棚卸しの数に、一日の入出庫を足したもの。0 になった品番は除く
-fn 入出庫の後(moved)(在庫(stock): dict[string, number] count <=10_000 range >=0 <=1_000_000, 入出庫(moves): list[入出庫] count <=1_000) -> dict[string, number]
-  在庫.merge_with(正味(入出庫: 入出庫), (a, b) => a + b).filter(組 => 組.value != 0)
+# a count with the moves of a day laid on it; a code that comes to none is left out
+fn moved(stock: dict[string, number] count <=10_000 range >=0 <=1_000_000, moves: list[Move] count <=1_000) -> dict[string, number]
+  stock.merge_with(net(moves: moves), (a, b) => a + b).filter(e => e.value != 0)
 
-# 棚にある数が、置いておく数より少ない品番
-fn 発注する品番(to_reorder)(在庫(stock): dict[string, number] range >=0 <=1_000_000, 下限(floor): number range >=0 <=1_000_000) -> set[string]
-  在庫.filter(組 => 組.value < 下限).keys().to_set()
+# the codes on the shelf below what is kept of them
+fn to_reorder(stock: dict[string, number] range >=0 <=1_000_000, floor: number range >=0 <=1_000_000) -> set[string]
+  stock.filter(e => e.value < floor).keys().to_set()
 ```
 
 === "TypeScript"
@@ -288,27 +288,27 @@ to reorder: pad, tape
 `handles` は、人が入力したハンドルをサービスが持つ形にしてから、ハンドルの決まりに合うかを確かめます。決まりは、長さが 3 文字から 20 文字で、使える文字は a〜z、0〜9、`-` だけ、英字で始まり、サービスが使う語ではないことです。合わない理由は全部返します。ハンドルと番号の組（タグ）も読みます。
 
 ```kn
-record タグ(Tag)
-  ハンドル(handle) : string
-  番号(number)     : number  range >=1 <=9999
+record Tag
+  handle : string
+  number : number  range >=1 <=9999
 …
-# ハンドルがサービスの決まりに合わない理由を、順に全部
-fn 問題(problems)(ハンドル(handle): string) -> list[string]
-  let 長さ = ハンドル.count()
-  let 短い = if 長さ < 3 then "3 文字より短い" else none
-  let 長い = if 長さ > 20 then "20 文字より長い" else none
-  let ほかの文字 = if ハンドル.chars().all(一字 => "abcdefghijklmnopqrstuvwxyz0123456789-".contains(一字)) then none else "a〜z、0〜9、- のほかの文字がある"
-  let 始まり = if "abcdefghijklmnopqrstuvwxyz".contains(ハンドル.take(1)) then none else "英字で始まっていない"
-  let 予約 = if ["admin", "help", "root", "support"].contains(ハンドル) then "サービスが使う語" else none
-  [短い, 長い, ほかの文字, 始まり, 予約].filter_map(x => x)
+# each reason a handle is not one the service takes, in order
+fn problems(handle: string) -> list[string]
+  let n = handle.count()
+  let short = if n < 3 then "shorter than 3 characters" else none
+  let long = if n > 20 then "longer than 20 characters" else none
+  let odd = if handle.chars().all(c => "abcdefghijklmnopqrstuvwxyz0123456789-".contains(c)) then none else "a character other than a to z, 0 to 9 and -"
+  let start = if "abcdefghijklmnopqrstuvwxyz".contains(handle.take(1)) then none else "not starting with a letter"
+  let taken = if ["admin", "help", "root", "support"].contains(handle) then "a word the service keeps" else none
+  [short, long, odd, start, taken].filter_map(x => x)
 
-# 入力したハンドルを、サービスが持つ形にしたもの。できなければ、その理由の全部
-fn ハンドルにする(handle)(入力(raw): string) -> result[string, list[string]]
-  let 形 = 正規化(入力: 入力)
-  let 理由 = 問題(ハンドル: 形)
-  if 理由.count() = 0 then ok(形) else err(理由)
+# the handle a person typed, as it is kept, or every reason it cannot be
+fn handle(raw: string) -> result[string, list[string]]
+  let h = normalized(raw: raw)
+  let why = problems(handle: h)
+  if why.count() = 0 then ok(h) else err(why)
 …
-fn タグを読む(tag)(テキスト(text): string) -> result[タグ, list[string]]
+fn tag(text: string) -> result[Tag, list[string]]
 ```
 
 === "TypeScript"
@@ -388,22 +388,27 @@ fn タグを読む(tag)(テキスト(text): string) -> result[タグ, list[strin
 `catalog` は、カタログを木の形で持ちます。分類はそれぞれ、品物と下の分類を持ちます。モジュールは、品物ごとのパス、空の分類を除いた木、名前をウェブのアドレスに使う形にした木、名前の一覧、いちばん安い品物を返します。
 
 ```kn
-record 品物(Item)
-  品番(sku)   : string
-  名前(name)  : string
-  価格(price) : money[USDc]  range >=1USDc <=1_000_000USDc
-…
-# 品物ごとに、上からの分類の名前を並べたパス（`庭 / 道具 / スコップ`）
-fn パス(paths)(分類(c): 分類) -> list[string]
-  下のパス(分類: 分類, 上: [])
+record Item
+  sku   : string
+  name  : string
+  price : money[USDc]  range >=1USDc <=1_000_000USDc
 
-fn 下のパス(paths_under)(分類(c): 分類, 上(above): list[string]) -> list[string]
-  let ここまで = 上.append(分類.名前)
-  分類.品物.map(一品 => ここまで.append(一品.名前).join(" / ")).concat(分類.下の分類.flat_map(子 => 下のパス(分類: 子, 上: ここまで)))
+record Category
+  name     : string
+  items    : list[Item]
+  children : list[Category]
+
+# every item with the names of the categories it is under: `Garden / Tools / Spade`
+fn paths(c: Category) -> list[string]
+  paths_under(c: c, above: [])
+
+fn paths_under(c: Category, above: list[string]) -> list[string]
+  let here = above.append(c.name)
+  c.items.map(i => here.append(i.name).join(" / ")).concat(c.children.flat_map(x => paths_under(c: x, above: here)))
 …
-# 木の中でいちばん安い品物。同じ価格なら先のもの
-fn いちばん安い品物(cheapest)(分類(c): 分類) -> 品物?
-  品物の一覧(分類: 分類).min_by(一品 => 一品.価格)
+# the cheapest item of the tree, the first of those of one price
+fn cheapest(c: Category) -> Item?
+  items(c: c).min_by(i => i.price)
 ```
 
 === "TypeScript"
@@ -507,4 +512,4 @@ slugs: garden, hand-tools, seeds, bulbs, hoses
 cheapest: Trowel, 899 cents
 ```
 
-どの関数も木をたどって再帰するので、エフェクトは `diverges` です。たどることが止まるかを kaname は確かめず、検査もそう言います（`関数 9 個、diverges`）。関数を受け取る `名前を替える` と `集める` は、ホストが呼ぶものではありません。ホストが呼ぶのは、それを呼ぶ `slugged`、`names`、`cheapest`（日本語の版の `スラッグにする`、`名前の一覧`、`いちばん安い品物`）です（[書き方](language.md)）。値が無いことは、TypeScript では `null`、Python では `None`、Go では `nil` のポインタで表します。
+どの関数も木をたどって再帰するので、エフェクトは `diverges` です。たどることが止まるかを kaname は確かめず、検査もそう言います（`関数 9 個、diverges`）。関数を受け取る `relabel` と `collect` は、ホストが呼ぶものではありません。ホストが呼ぶのは、それを呼ぶ `slugged`、`names`、`cheapest`です（[書き方](language.md)）。値が無いことは、TypeScript では `null`、Python では `None`、Go では `nil` のポインタで表します。

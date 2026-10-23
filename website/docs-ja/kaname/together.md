@@ -7,30 +7,30 @@
 遅れて払われた請求書について、売り手が請求できるものを出す例です（`crates/kaname/examples/late_payment`）。英国の Late Payment of Commercial Debts (Interest) Act 1998 と、GOV.UK のその手引きから転記しました。
 
 ```kn
-module 支払いの遅れ(late_payment_ja) v1
-description "遅れて払われた請求書について、売り手が請求するもの。期日、何日遅れて払われたか、規則がそれに付ける定額と利息。late_payment.kn の日本語の版"
+module late_payment v1
+description "What a supplier claims for an invoice paid late: the day it fell due, how many days late it was paid, and the fixed sum and the interest the rule gives for them"
 
-use dates 期限 from "dates/支払期限.cal"
-use rule 請求額 from "rules/遅延の請求額.rule"
+use dates terms from "dates/payment_terms.cal"
+use rule charges from "rules/late_payment_charges.rule"
 
-record 請求書(Invoice)
-  番号(id)         : string
-  請求日(invoiced) : date  range >=2026-01-01 <=2027-12-31
-  金額(amount)     : money[GBPc]  range >=1GBPc <=100_000_000GBPc
+record Invoice
+  id       : string
+  invoiced : date  range >=2026-01-01 <=2027-12-31
+  amount   : money[GBPc]  range >=1GBPc <=100_000_000GBPc
 
-record 請求(Claim)
-  期日(due)                : date
-  遅れた日数(days_late)    : number  range >=1 <=1500
-  定額の補償(compensation) : money[GBP]
-  利息(interest)           : money[GBPc]
+record Claim
+  due          : date
+  days_late    : number  range >=1 <=1500
+  compensation : money[GBP]
+  interest     : money[GBPc]
 
-fn 遅れの請求(claim)(請求書(invoice): 請求書, 支払日(paid_on): date range >=2026-01-01 <=2029-12-31, 基準金利(reference_rate): rate[step 0.01%] range >=0% <=15%) -> 請求? total
-  description "期日までに払われていれば none"
-  let 期日 = 期限.期日(請求日: 請求書.請求日)
-  let 遅れ = 支払日 - 期日
-  if 遅れ >= 1
-    let 額 = 請求額(債権額: 請求書.金額, 遅れた日数: 遅れ, 基準金利: 基準金利)
-    請求 { 期日: 期日, 遅れた日数: 遅れ, 定額の補償: 額.定額の補償, 利息: 額.利息 }
+fn claim(invoice: Invoice, paid_on: date range >=2026-01-01 <=2029-12-31, reference_rate: rate[step 0.01%] range >=0% <=15%) -> Claim? total
+  description "None when the invoice was paid by the day it fell due"
+  let due = terms.due(invoiced: invoice.invoiced)
+  let late = paid_on - due
+  if late >= 1
+    let c = charges(debt: invoice.amount, days_late: late, reference_rate: reference_rate)
+    Claim { due: due, days_late: late, compensation: c.compensation, interest: c.interest }
   else
     none
 ```
@@ -49,17 +49,17 @@ ok late_payment.kn: 関数 1 個、total
 ritsu check: ファイル 6 個（rulec 2、koyomi 2、kaname 2）。どれも検査を通りました。言語の境目: 確かめた 2 か所、決められない 0 か所
 ```
 
-`支払日 - 期日` は −758 日から 1,431 日で、`遅れ >= 1` の分岐の中では 1 日から 1,431 日になり、規則の入力の範囲（1 から 1,500）に収まります。規則に渡す債権額と基準金利も、それぞれの範囲に収まります。それぞれのモジュールが koyomi に渡す請求日が koyomi の範囲に収まることは ritsu が確かめ、最後の行の「確かめた 2 か所」はこの二つです。そのため `遅れの請求` は、宣言した範囲のどの入力にも答えます。見出しの `total` は、そのことを書いたものです。分岐を外すと、日数が規則の範囲の外になる入力を検査が挙げます（[検査が保証すること](checks.md)）。
+`paid_on - due` は −758 日から 1,431 日で、`遅れ >= 1` の分岐の中では 1 日から 1,431 日になり、規則の入力の範囲（1 から 1,500）に収まります。規則に渡す債権額と基準金利も、それぞれの範囲に収まります。それぞれのモジュールが koyomi に渡す請求日が koyomi の範囲に収まることは ritsu が確かめ、最後の行の「確かめた 2 か所」はこの二つです。そのため `claim` は、宣言した範囲のどの入力にも答えます。見出しの `total` は、そのことを書いたものです。分岐を外すと、日数が規則の範囲の外になる入力を検査が挙げます（[検査が保証すること](checks.md)）。
 
 `ritsu kaname run` は、規則と日付のファイルをつないで関数を走らせ、呼んだところごとに答えを出します。GOV.UK の手引きの例は、1,000 ポンドを 50 日遅れて払ったもので、基準金利は 0.5% です。
 
 ```console
 $ cd crates/kaname
-$ ritsu kaname run examples/late_payment/late_payment.ja.kn 遅れの請求 --input tests/inputs/late_payment.ja.json --lang ja
-遅れの請求(請求書: 請求書 { 番号: "inv_1", 請求日: 2026-03-02, 金額: 100000GBPc }, 支払日: 2026-05-20, 基準金利: 0.5%)
-  20 行目: 期限.期日(請求日: 2026-03-02) = 2026-03-31
-  23 行目: 請求額(債権額: 100000GBPc, 遅れた日数: 50, 基準金利: 0.5%) = { 定額の補償: 70GBP, 利息: 1150GBPc }
-= 請求 { 期日: 2026-03-31, 遅れた日数: 50, 定額の補償: 70GBP, 利息: 1150GBPc }
+$ ritsu kaname run examples/late_payment/late_payment.kn claim --input tests/inputs/late_payment.json --lang ja
+claim(invoice: Invoice { id: "inv_1", invoiced: 2026-03-02, amount: 100000GBPc }, paid_on: 2026-05-20, reference_rate: 0.5%)
+  20 行目: terms.due(invoiced: 2026-03-02) = 2026-03-31
+  23 行目: charges(debt: 100000GBPc, days_late: 50, reference_rate: 0.5%) = { compensation: 70GBP, interest: 1150GBPc }
+= Claim { due: 2026-03-31, days_late: 50, compensation: 70GBP, interest: 1150GBPc }
 ```
 
 ## それぞれの型のまま

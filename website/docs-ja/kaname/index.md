@@ -9,60 +9,60 @@ hide:
 
 プログラムは、リクエストや時刻やデータベースを読み、状態を持ち、決めたことを行います。けれども、決めることそのものには、そのどれも要りません。注文の次の状態、人が入力した文字列がハンドルとして使えるか、倉庫の二回の棚卸しで何が変わったかは、渡された値だけで決まります。kaname のモジュール（`.kn` のファイル）に書くのは、この部分です。残りはホストが受け持ちます。ホストは TypeScript、Python、Go のプログラムで、読み書きをし、状態を持ち、`ritsu gen` がモジュールから書いたコードを呼びます。
 
-最初の例は、イベントで注文を状態から状態へ進めるものです（`crates/kaname/examples/order_flow`）。状態ごとに持つフィールドが違うので、状態を、値の下にフィールドを書いた列挙（直和型）の値にします。次の状態か、イベントを拒む理由は、状態とイベントの `match` で決めます。ここでは日本語の版（`order_flow.ja.kn`）を見せます。
+最初の例は、イベントで注文を状態から状態へ進めるものです（`crates/kaname/examples/order_flow`）。状態ごとに持つフィールドが違うので、状態を、値の下にフィールドを書いた列挙（直和型）の値にします。次の状態か、イベントを拒む理由は、状態とイベントの `match` で決めます。コードは英語の版（`order_flow.kn`）を見せます。日本語の名前で書いた版（`order_flow.ja.kn`）も隣にあります。
 
 ```kn
-enum 注文(Order)
-  カート(cart)
-    明細(lines) : list[明細]  count <=50
-  確定済み(placed)
-    明細(lines) : list[明細]  count >=1 <=50
-    合計(total) : money[USDc]
-    日付(on)    : date
-  支払い済み(paid)
-    明細(lines) : list[明細]  count >=1 <=50
-    日付(on)    : date
-  発送済み(shipped)
-    明細(lines)        : list[明細]  count >=1 <=50
-    追跡番号(tracking) : string
-  取り消し済み(cancelled)
-    理由(reason) : string
+enum Order
+  cart
+    lines : list[Line]  count <=50
+  placed
+    lines : list[Line]  count >=1 <=50
+    total : money[USDc]
+    on    : date
+  paid
+    lines : list[Line]  count >=1 <=50
+    on    : date
+  shipped
+    lines    : list[Line]  count >=1 <=50
+    tracking : string
+  cancelled
+    reason : string
 …
-# イベントで進んだ注文か、イベントを拒む理由
-fn 次(next)(注文(order): 注文, イベント(event): イベント) -> result[注文, string]
-  match 注文
-    カート c =>
-      match イベント
-        追加 a =>
-          if c.明細.count() < 50
-            ok(注文.カート { 明細: c.明細.append(a.明細) })
+# the order an event moves it to, or why the event is refused
+fn next(order: Order, event: Event) -> result[Order, string]
+  match order
+    cart c =>
+      match event
+        add a =>
+          if c.lines.count() < 50
+            ok(Order.cart { lines: c.lines.append(a.line) })
           else
-            err("カートに入る明細は 50 件までです")
-        削除 r => ok(注文.カート { 明細: c.明細.filter(一件 => 一件.品番 != r.品番) })
-        確定 p =>
-          if c.明細.count() = 0
-            err("空のカートは確定できません")
+            err("a cart holds 50 lines")
+        remove r => ok(Order.cart { lines: c.lines.filter(l => l.sku != r.sku) })
+        place p =>
+          if c.lines.count() = 0
+            err("an empty cart is not placed")
           else
-            ok(注文.確定済み { 明細: c.明細, 合計: 合計(明細: c.明細), 日付: p.日付 })
-        取り消し x => ok(注文.取り消し済み { 理由: x.理由 })
-        else => err("カートは先に確定します")
-    確定済み p =>
-      match イベント
-        支払い y =>
-          if y.金額 = p.合計
-            ok(注文.支払い済み { 明細: p.明細, 日付: p.日付 })
+            ok(Order.placed { lines: c.lines, total: total(lines: c.lines), on: p.on })
+        cancel x => ok(Order.cancelled { reason: x.reason })
+        else => err("a cart is placed first")
+    placed p =>
+      match event
+        pay y =>
+          if y.amount = p.total
+            ok(Order.paid { lines: p.lines, on: p.on })
           else
-            err("金額が合計と違います")
-        取り消し x => ok(注文.取り消し済み { 理由: x.理由 })
-        else => err("確定済みの注文は、支払うか取り消します")
-    支払い済み d =>
-      match イベント
-        発送 s => ok(注文.発送済み { 明細: d.明細, 追跡番号: s.追跡番号 })
-        else => err("支払い済みの注文は発送します")
-    発送済み, 取り消し済み => err("注文はもう閉じています")
+            err("the amount is not the total")
+        cancel x => ok(Order.cancelled { reason: x.reason })
+        else => err("a placed order is paid or cancelled")
+    paid d =>
+      match event
+        ship s => ok(Order.shipped { lines: d.lines, tracking: s.tracking })
+        else => err("a paid order is shipped")
+    shipped, cancelled => err("the order is closed")
 ```
 
-`match` が、注文のどの値にもイベントのどの値にも一度ずつ答えることは、kaname が確かめます（E106）。明細を足すのは `c.明細.count() < 50` の中だけなので、カートの明細は、状態が宣言する 50 件に収まります。確定済みの注文は明細を 1 件以上持ち、明細 50 件、数量 100、単価 1,000,000 セントの合計も int64 に収まります。kaname はこれを示すので、どの関数も、受け取るどの入力にも答えます。`total` はそのことを言っています。
+`match` が、注文のどの値にもイベントのどの値にも一度ずつ答えることは、kaname が確かめます（E106）。明細を足すのは `c.lines.count() < 50` の中だけなので、カートの明細は、状態が宣言する 50 件に収まります。確定済みの注文は明細を 1 件以上持ち、明細 50 件、数量 100、単価 1,000,000 セントの合計も int64 に収まります。kaname はこれを示すので、どの関数も、受け取るどの入力にも答えます。`total` はそのことを言っています。
 
 ```console
 $ cd crates/kaname/examples/order_flow

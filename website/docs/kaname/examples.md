@@ -420,7 +420,12 @@ record Item
   sku   : string
   name  : string
   price : money[USDc]  range >=1USDc <=1_000_000USDc
-…
+
+record Category
+  name     : string
+  items    : list[Item]
+  children : list[Category]
+
 # every item with the names of the categories it is under: `Garden / Tools / Spade`
 fn paths(c: Category) -> list[string]
   paths_under(c: c, above: [])

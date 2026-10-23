@@ -16,9 +16,9 @@
 
 ```console
 $ cd crates/kaname
-$ ritsu kaname check examples/order_flow/order_flow.ja.kn examples/catalog/catalog.ja.kn tests/doc/decisions.kn --lang ja
-ok examples/order_flow/order_flow.ja.kn: 関数 5 個、total
-ok examples/catalog/catalog.ja.kn: 関数 9 個、diverges
+$ ritsu kaname check examples/order_flow/order_flow.kn examples/catalog/catalog.kn tests/doc/decisions.kn --lang ja
+ok examples/order_flow/order_flow.kn: 関数 5 個、total
+ok examples/catalog/catalog.kn: 関数 9 個、diverges
 警告[W301]: tests/doc/decisions.kn:20:24: `weight` が、規則 `media_mail` の入力 `weight` の範囲 >=1oz <=240oz に収まるかを決められません
     20 |     media_mail(weight: weight, media_only: all(lines, l => l.media)).price
   = 範囲の解析では、値は >=0oz <=240oz です。関数のベクタにも、外れる入力はありませんでした。

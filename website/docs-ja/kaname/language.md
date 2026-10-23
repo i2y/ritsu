@@ -7,10 +7,10 @@
 型は ritsu のものです。数、単位の付いたお金と量、刻みのある率、日付、真偽、文字列があります。フィールドと引数には値の範囲（`range`）を、リストと文字列には要素の数（`count`）を書けます。書かなくてもかまいません。注文の明細には書いてあります。
 
 ```kn
-record 明細(Line)
-  品番(sku)   : string       count >=1 <=20
-  数量(qty)   : number       range >=1 <=100
-  単価(price) : money[USDc]  range >=1USDc <=1_000_000USDc
+record Line
+  sku   : string       count >=1 <=20
+  qty   : number       range >=1 <=100
+  price : money[USDc]  range >=1USDc <=1_000_000USDc
 ```
 
 書いた範囲は、ホストとの約束です。ホストが呼ぶ関数のコードは、計算を始める前に引数をその範囲で確かめ、外れていれば `input` で失敗します。範囲を書かない値は、型の全体をとります。数、お金、量ならその単位で数えた int64 の全体、日付なら 0001-01-01 から 9999-12-31 です。確定済みの注文の合計と日付、発送済みの注文の追跡番号には、範囲を書いていません。そういう値から計算した値も、ほかの値と同じく int64 に収まるかを確かめます。収まると示せないところは、コードが実行時に確かめます（[検査が保証すること](checks.md)）。
@@ -20,56 +20,56 @@ record 明細(Line)
 列挙は、値をその下に並べます。値ごとに、自分のフィールドを持てます。注文のイベントがそうです。
 
 ```kn
-enum イベント(Event)
-  追加(add)
-    明細(line) : 明細
-  削除(remove)
-    品番(sku) : string
-  確定(place)
-    日付(on) : date
-  支払い(pay)
-    金額(amount) : money[USDc]
-  発送(ship)
-    追跡番号(tracking) : string
-  取り消し(cancel)
-    理由(reason) : string
+enum Event
+  add
+    line : Line
+  remove
+    sku : string
+  place
+    on : date
+  pay
+    amount : money[USDc]
+  ship
+    tracking : string
+  cancel
+    reason : string
 ```
 
-値はフィールドと一緒に作り（`注文.確定済み { 明細: c.明細, 合計: …, 日付: p.日付 }`）、`match` で分けます。分岐は一行に一つで、受けた値に名前を付けると、そのフィールドを読めます（`確定済み p` と書いて `p.合計`）。一つの分岐で二つ以上の値を受けてもよく、`else` は、上の分岐が受けなかった値を全部受けます。
+値はフィールドと一緒に作り（`Order.placed { lines: c.lines, total: …, on: p.on }`）、`match` で分けます。分岐は一行に一つで、受けた値に名前を付けると、そのフィールドを読めます（`placed p` と書いて `p.total`）。一つの分岐で二つ以上の値を受けてもよく、`else` は、上の分岐が受けなかった値を全部受けます。
 
 ```kn
-# 注文が、まだイベントを受け付けるか
-fn 受け付けるか(open)(注文(order): 注文) -> bool
-  match 注文
-    発送済み, 取り消し済み => false
+# whether an order takes more events
+fn open(order: Order) -> bool
+  match order
+    shipped, cancelled => false
     else => true
 ```
 
-どの分岐も受けない値があるとき、上の分岐がすでに受けた値をもう一度受けるとき、受ける値の残っていない `else` を書いたときは、E106 です。数、お金、日付、文字列は、リテラルの分岐と `else` で分けられます。`=` と `!=` は、同じ型の二つの値を中身で比べます。レコードはフィールドごとに、リストは要素ごとに、列挙の値は値とフィールドで比べます。`{ ..分類, 下の分類: 残す }` は、ほかのレコードのフィールドの一部を替えて作ったレコードです。
+どの分岐も受けない値があるとき、上の分岐がすでに受けた値をもう一度受けるとき、受ける値の残っていない `else` を書いたときは、E106 です。数、お金、日付、文字列は、リテラルの分岐と `else` で分けられます。`=` と `!=` は、同じ型の二つの値を中身で比べます。レコードはフィールドごとに、リストは要素ごとに、列挙の値は値とフィールドで比べます。`{ ..c, children: kept }` は、ほかのレコードのフィールドの一部を替えて作ったレコードです。
 
 ## 辞書と集合
 
 `dict[K, V]` は鍵ごとに値を一つ持ち、`set[T]` は同じ要素を一つだけ持ちます。鍵にできるのは、数、お金、量、刻みのある率、日付、文字列、真偽と、フィールドを持たない列挙の値です。辞書と集合は、作った順にかかわらず、鍵の順に回ります。組み込みの関数は、初めの引数のあとに `.` で続けて書けます。
 
 ```kn
-# 違う品番の全部を、品番の順に。辞書と集合は鍵の順に回る
-fn 違いの一覧(changes)(前(before): dict[string, number] range >=0 <=1_000_000, 後(after): dict[string, number] range >=0 <=1_000_000) -> list[変化]
-  let 品番の集合 = 前.keys().to_set().union(後.keys().to_set())
-  品番の集合.to_list().filter_map(一つ => 違い(品番: 一つ, 前: 前.get(一つ), 後: 後.get(一つ)))
+# every code that differs, in the order of the codes: a dict and a set go round in their keys' order
+fn changes(before: dict[string, number] range >=0 <=1_000_000, after: dict[string, number] range >=0 <=1_000_000) -> list[Change]
+  let skus = before.keys().to_set().union(after.keys().to_set())
+  skus.to_list().filter_map(sku => change(sku: sku, before: before.get(sku), after: after.get(sku)))
 
-# 一日の入出庫を、品番ごとにまとめた数
-fn 正味(net)(入出庫(moves): list[入出庫] count <=1_000) -> dict[string, number]
-  入出庫.group_by(一件 => 一件.品番).map_values(同じ品番 => 同じ品番.sum(一件 => 一件.数量))
+# the moves of a day, netted for each code
+fn net(moves: list[Move] count <=1_000) -> dict[string, number]
+  moves.group_by(m => m.sku).map_values(ms => ms.sum(m => m.qty))
 ```
 
 辞書に書いた範囲は、その値の範囲です。ここでは、どの棚卸しの数も 0 から 1,000,000 です。`ritsu kaname run` は、JSON で渡した入力で、関数を参照インタプリタに流します。この入力は棚卸しの数を組で書き、品番の順とは違う順に並べています（`[["ink", 4], ["pen", 10], ["pad", 2]]`）。`--trace` を付けると、`let` ごとの値も出ます。
 
 ```console
 $ cd crates/kaname
-$ ritsu kaname run examples/stock_diff/stock_diff.ja.kn 違いの一覧 --input tests/inputs/stock_diff.ja.json --trace --lang ja
-違いの一覧(前: ["ink": 4, "pad": 2, "pen": 10], 後: ["pad": 2, "pen": 7, "tape": 3])
-  34 行目: let 品番の集合 = ["ink", "pad", "pen", "tape"].to_set()
-= [変化.無くなった { 品番: "ink", 数量: 4 }, 変化.変わった { 品番: "pen", 前: 10, 今: 7 }, 変化.増えた { 品番: "tape", 数量: 3 }]
+$ ritsu kaname run examples/stock_diff/stock_diff.kn changes --input tests/inputs/stock_diff.json --trace --lang ja
+changes(before: ["ink": 4, "pad": 2, "pen": 10], after: ["pad": 2, "pen": 7, "tape": 3])
+  34 行目: let skus = ["ink", "pad", "pen", "tape"].to_set()
+= [Change.removed { sku: "ink", qty: 4 }, Change.changed { sku: "pen", was: 10, now: 7 }, Change.added { sku: "tape", qty: 3 }]
 ```
 
 生成したコードも、TypeScript の `Map`、Python の `dict`、Go の `map` を同じ順に回します。どの出力先でも、答えは同じ並びのリストです。
@@ -81,63 +81,63 @@ $ ritsu kaname run examples/stock_diff/stock_diff.ja.kn 違いの一覧 --input 
 `result[T, E]` は、値（`ok`）か、業務としてそれを受け付けない理由（`err`）を返す型です。`let x = try e` は、`e` が `ok` なら値を取り出し、`err` ならそれをそのまま関数の答えにします。
 
 ```kn
-# サービスが持つ形のハンドル。両端の空白を除き、中の空白の続きをハイフン一つにし、A〜Z を a〜z にする
-fn 正規化(normalized)(入力(raw): string) -> string
-  入力.words().join("-").lower_ascii()
+# the handle as it is kept: trimmed, each run of white space inside one hyphen, A to Z as a to z
+fn normalized(raw: string) -> string
+  raw.words().join("-").lower_ascii()
 …
-# `<ハンドル>#<番号>` と書いたタグ。ハンドルは `ハンドルにする` と同じ形にし、番号は 1 から 9999
-fn タグを読む(tag)(テキスト(text): string) -> result[タグ, list[string]]
-  match テキスト.index_of("#")
-    none => err(["ハンドルと番号のあいだに # がない"])
-    some 位置 =>
-      let ハンドル = try ハンドルにする(入力: テキスト.take(位置))
-      match テキスト.drop(位置 + 1).parse_number()
-        none => err(["番号が数字で書かれていない"])
-        some 番号 => if 番号 >= 1 and 番号 <= 9999 then ok(タグ { ハンドル: ハンドル, 番号: 番号 }) else err(["番号が 1 から 9999 のあいだにない"])
+# a tag written `<handle>#<number>`: the handle made as `handle` makes it, the number from 1 to 9999
+fn tag(text: string) -> result[Tag, list[string]]
+  match text.index_of("#")
+    none => err(["no # between the handle and the number"])
+    some i =>
+      let h = try handle(raw: text.take(i))
+      match text.drop(i + 1).parse_number()
+        none => err(["the number is not written in digits"])
+        some n => if n >= 1 and n <= 9999 then ok(Tag { handle: h, number: n }) else err(["the number is not from 1 to 9999"])
 ```
 
-`err` は答えの一つで、失敗ではありません。`タグを読む` も total です。kaname が失敗と呼ぶのは、検査が示せなかった場所で起きることです。それは関数のエフェクトに載り、言語の中で受け止める書き方はありません。
+`err` は答えの一つで、失敗ではありません。`tag` も total です。kaname が失敗と呼ぶのは、検査が示せなかった場所で起きることです。それは関数のエフェクトに載り、言語の中で受け止める書き方はありません。
 
 ## ジェネリクスと関数の値
 
-関数、レコード、列挙は、型の引数を持てます（`集める[T]`。鍵にできる型に限るなら `K: key`）。引数には関数も渡せます。ラムダでも、名前で書いた関数でもかまいません。
+関数、レコード、列挙は、型の引数を持てます（`collect[T]`。鍵にできる型に限るなら `K: key`）。引数には関数も渡せます。ラムダでも、名前で書いた関数でもかまいません。
 
 ```kn
-# 分類ごとの名前を、渡す関数で替えた木
-fn 名前を替える(relabel)(分類(c): 分類, 名付け(label): (string) -> string) -> 分類
-  分類 { ..分類, 名前: 名付け(分類.名前), 下の分類: 分類.下の分類.map(子 => 名前を替える(分類: 子, 名付け: 名付け)) }
+# the tree with each category's name made by the function given
+fn relabel(c: Category, label: (string) -> string) -> Category
+  Category { ..c, name: label(c.name), children: c.children.map(x => relabel(c: x, label: label)) }
 
-# ウェブのアドレスに使う形の名前。語をハイフンでつなぎ、小文字にする
-fn スラッグにする(slugged)(分類(c): 分類) -> 分類
-  名前を替える(分類: 分類, 名付け: 名前 => 名前.words().join("-").lower_ascii())
+# the names as the parts of a web address take them: words joined by hyphens, in lower case
+fn slugged(c: Category) -> Category
+  relabel(c: c, label: n => n.words().join("-").lower_ascii())
 
-# 渡す関数が分類ごとに選んだものを、上から順に集めたもの
-fn 集める(collect)[T](分類(c): 分類, 選ぶ(pick): (分類) -> list[T]) -> list[T]
-  選ぶ(分類).concat(分類.下の分類.flat_map(子 => 集める(分類: 子, 選ぶ: 選ぶ)))
+# what the function given picks from each category, from the top down
+fn collect[T](c: Category, pick: (Category) -> list[T]) -> list[T]
+  pick(c).concat(c.children.flat_map(x => collect(c: x, pick: pick)))
 
-fn 品物の一覧(items)(分類(c): 分類) -> list[品物]
-  集める(分類: 分類, 選ぶ: 一つ => 一つ.品物)
+fn items(c: Category) -> list[Item]
+  collect(c: c, pick: x => x.items)
 
-fn 名前の一覧(names)(分類(c): 分類) -> list[string]
-  集める(分類: 分類, 選ぶ: 一つ => [一つ.名前])
+fn names(c: Category) -> list[string]
+  collect(c: c, pick: x => [x.name])
 ```
 
-型の引数を持つ関数と、関数を受け取る関数は、モジュールの関数から呼ぶもので、ホストからは呼びません。ホストが呼ぶのは、型がすべて決まっている `スラッグにする`、`品物の一覧`、`名前の一覧` です。検査は、そうした関数を呼ぶところごとに、渡した値と関数で本体を読み直します。渡した関数のエフェクトは、それを渡した関数に伝わります。関数の型に、許すエフェクトを書くこともでき（`(string) -> string total`）、それを超える関数を渡すと E402 です。関数を返す関数や、関数を入れたレコード、リスト、辞書は書けません。
+型の引数を持つ関数と、関数を受け取る関数は、モジュールの関数から呼ぶもので、ホストからは呼びません。ホストが呼ぶのは、型がすべて決まっている `slugged`、`items`、`names` です。検査は、そうした関数を呼ぶところごとに、渡した値と関数で本体を読み直します。渡した関数のエフェクトは、それを渡した関数に伝わります。関数の型に、許すエフェクトを書くこともでき（`(string) -> string total`）、それを超える関数を渡すと E402 です。関数を返す関数や、関数を入れたレコード、リスト、辞書は書けません。
 
 ## 自分を含む型
 
 レコードと列挙は、リスト、辞書、集合、オプショナルな値、`result`、ほかの型を通して、自分自身を含められます。カタログの分類は、下の分類を持ちます。
 
 ```kn
-record 分類(Category)
-  名前(name)         : string
-  品物(items)        : list[品物]
-  下の分類(children) : list[分類]
+record Category
+  name     : string
+  items    : list[Item]
+  children : list[Category]
 …
-# 品物を、その分類にもその下にも一つも持たない分類を除いた木
-fn 空を除く(pruned)(分類(c): 分類) -> 分類?
-  let 残す = 分類.下の分類.filter_map(子 => 空を除く(分類: 子))
-  if 分類.品物.count() = 0 and 残す.count() = 0 then none else 分類 { ..分類, 下の分類: 残す }
+# the tree with every category that holds no item, under it or in it, taken out
+fn pruned(c: Category) -> Category?
+  let kept = c.children.filter_map(x => pruned(c: x))
+  if c.items.count() = 0 and kept.count() = 0 then none else Category { ..c, children: kept }
 ```
 
 どの値も同じ型の値をもう一つ持つことになる型（オプショナルでもリストでもない、自分の型のフィールドを持つレコードなど）は、E108 です。自分を含む値をたどる関数は再帰するので、エフェクトは `diverges` になります。止まることを、kaname は確かめません。ホストが渡せる値は 200 段までです。引数からたどれるどのパスでも、自分を含む型の値を一つ通るたびに一段と数え、それより深い値は、関数が始まる前に `input` で失敗します。
