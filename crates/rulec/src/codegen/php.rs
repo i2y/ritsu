@@ -166,7 +166,7 @@ fn php_div(s: &str) -> String {
 
 /// The shared expression text as PHP.
 fn php_expr(s: &str) -> String {
-    php_div(&s.replace("True", "true").replace("False", "false"))
+    php_div(&super::truths(s, "true", "false"))
 }
 
 /// The five modes of §7.3 and the two comparisons, at the top level of the file. The

@@ -1301,6 +1301,23 @@ pub(crate) struct Expr2 {
     scale: i128,
 }
 
+/// The truth values in the text [`Gen::expr`] writes: marks no identifier can hold, which each
+/// language's spelling of the text turns into its own words (§15.264). The text used to carry
+/// Python's `True` and `False`, and the other languages turned every `True` in it into `true`,
+/// inside an identifier as well: `isTrueFee` was written `istrueFee`, and `True_` `true_`.
+pub(crate) const TRUE_MARK: &str = "\u{1d}true\u{1d}";
+pub(crate) const FALSE_MARK: &str = "\u{1d}false\u{1d}";
+
+/// The text [`Gen::expr`] wrote, its truth values spelled `t` and `f`.
+pub(crate) fn truths(s: &str, t: &str, f: &str) -> String {
+    s.replace(TRUE_MARK, t).replace(FALSE_MARK, f)
+}
+
+/// The text [`Gen::expr`] wrote, as Python: the truth values are `True` and `False`.
+fn py_truths(s: &str) -> String {
+    truths(s, "True", "False")
+}
+
 impl<'a> Gen<'a> {
     /// The ordered enum an expression's value belongs to (§15.210): a name of one, or `min` or
     /// `max` of such names.
@@ -1508,7 +1525,7 @@ impl<'a> Gen<'a> {
                 Expr2 { text: format!("{}", v.num * (s / den)), scale: s }
             }
             Expr::Lit(Lit::Word(w), _) if w == crate::kw::TRUE || w == crate::kw::FALSE => {
-                Expr2 { text: (if w == crate::kw::TRUE { "True" } else { "False" }).into(), scale: 1 }
+                Expr2 { text: (if w == crate::kw::TRUE { TRUE_MARK } else { FALSE_MARK }).into(), scale: 1 }
             }
             // A date in an expression is its day number, the same integer the cells use. It
             // used to fall through to `0` with the other literals, so a definition such as
@@ -2469,11 +2486,11 @@ impl<'a> Gen<'a> {
             match it {
                 Item::Derived(d) => {
                     let e = self.expr(&d.expr, local);
-                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("導出", "derived value")));
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&py_truths(&e.text)), tr!("導出", "derived value")));
                 }
                 Item::Define(d) => {
                     let e = self.expr(&d.expr, local);
-                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&e.text), tr!("定義", "definition")));
+                    o.push_str(&format!("    {} = {}  # {}\n", self.ident(&d.name.text), unparen(&py_truths(&e.text)), tr!("定義", "definition")));
                 }
                 Item::Agg(_) | Item::Fold(_) => {}
                 Item::Table(t) => {
@@ -2638,7 +2655,7 @@ impl<'a> Gen<'a> {
         let val = |x: &Expr, l: &dyn Fn(&str) -> String| -> String {
             match x {
                 Expr::Lit(Lit::Word(w), _) if w != crate::kw::TRUE && w != crate::kw::FALSE => self.py_value(w, &out_ty),
-                _ => unparen(&self.expr(x, l).text).to_string(),
+                _ => unparen(&py_truths(&self.expr(x, l).text)).to_string(),
             }
         };
         let text = |x: &Option<Expr>| -> String { x.as_ref().map(|x| val(x, &with_held)).unwrap_or_else(|| "0".to_string()) };
@@ -2704,7 +2721,7 @@ impl<'a> Gen<'a> {
                     }
                 }
                 Arm::KeepMax { expr, key: k } => {
-                    arms.push_str(&format!("        {key} = {}\n", unparen(&self.expr(k, local).text)));
+                    arms.push_str(&format!("        {key} = {}\n", unparen(&py_truths(&self.expr(k, local).text))));
                     arms.push_str(&format!("        if {best} is None or {key} > {best}:\n"));
                     arms.push_str(&format!("            {best} = {key}\n"));
                     arms.push_str(&format!("            {kept} = {}\n", val(expr, local)));
@@ -2713,7 +2730,7 @@ impl<'a> Gen<'a> {
                 // value is below the total for the first time (§15.226).
                 Arm::TakeWeighted { expr, weight } => {
                     let (w, t) = (&names.weight, &names.total);
-                    arms.push_str(&format!("        {w} = {}\n", unparen(&self.expr(weight, local).text)));
+                    arms.push_str(&format!("        {w} = {}\n", unparen(&py_truths(&self.expr(weight, local).text))));
                     arms.push_str(&format!("        {t} += {w}\n"));
                     arms.push_str(&format!("        {}.append({t})\n", names.cuts));
                     arms.push_str(&format!("        if {taken} is None and {draw} < {t}:\n"));
@@ -2984,6 +3001,7 @@ impl<'a> Gen<'a> {
             };
             let os = self.out_scale(out_name);
             let res = self.onto_wire(res, os, od);
+            let res = Expr2 { text: py_truths(&res.text), scale: res.scale };
             let ty = self.ty_of(out_name);
             let body = match &od.rounding {
                 Some(rd) => {
@@ -4469,10 +4487,8 @@ fn go_typed(s: &str) -> String {
 }
 
 fn go_expr(s: &str) -> String {
-    let t = arith::go_expr(s)
+    let t = arith::go_expr(&truths(s, "true", "false"))
         .replace(" // ", " / ")
-        .replace("True", "true")
-        .replace("False", "false")
         .replace("_round_down(", "roundDown(")
         .replace("_round_up(", "roundUp(")
         .replace("_round_half_down(", "roundHalfDown(")
@@ -5424,10 +5440,8 @@ impl<'a> Gen<'a> {
 /// a JavaScript `number` is exact only to 2^53, so using one would put a silent wrong answer
 /// above nine quadrillion into a tool whose whole claim is that it does not do that.
 fn ts_expr(s: &str) -> String {
-    let t = arith::ts_expr(s)
+    let t = arith::ts_expr(&truths(s, "true", "false"))
         .replace(" // ", " / ")
-        .replace("True", "true")
-        .replace("False", "false")
         .replace("_round_down(", "_roundDown(")
         .replace("_round_up(", "_roundUp(")
         .replace("_round_half_down(", "_roundHalfDown(")
@@ -6885,10 +6899,8 @@ impl<'a> Gen<'a> {
 /// and `ts_expr`. Integer division truncates toward zero here, exactly as it does in Go and
 /// on a JavaScript bigint, so the rounding helpers are the Go ones transliterated.
 fn rs_expr(s: &str) -> String {
-    arith::rs_expr(s)
+    arith::rs_expr(&truths(s, "true", "false"))
         .replace(" // ", " / ")
-        .replace("True", "true")
-        .replace("False", "false")
         .replace("_round_down(", "round_down(")
         .replace("_round_up(", "round_up(")
         .replace("_round_half_down(", "round_half_down(")
@@ -11038,9 +11050,7 @@ fn rb_const(n: &str) -> String {
 
 fn rb_expr(s: &str) -> String {
     // `//` becomes `/`: Ruby's integer division already floors toward −∞.
-    s.replace(" // ", " / ")
-        .replace("True", "true")
-        .replace("False", "false")
+    truths(s, "true", "false").replace(" // ", " / ")
 }
 
 /// The five modes of §7.3, and the two comparisons. Nothing is left to Ruby's own
@@ -12580,10 +12590,8 @@ fn sw_typed(s: &str) -> String {
 }
 
 fn sw_expr(s: &str) -> String {
-    arith::sw_expr(s)
+    arith::sw_expr(&truths(s, "true", "false"))
         .replace(" // ", " / ")
-        .replace("True", "true")
-        .replace("False", "false")
         .replace("_round_down(", "_roundDown(")
         .replace("_round_up(", "_roundUp(")
         .replace("_round_half_down(", "_roundHalfDown(")

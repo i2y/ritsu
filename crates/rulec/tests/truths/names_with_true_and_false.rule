@@ -1,0 +1,35 @@
+rule names_with_true_and_false v1
+description "Names with True and False inside them, beside two applies that pass the truth values as they are. A sketch written for rulec's tests"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee   : money[USD]  round down(1USD)
+  extra : money[USD]  round down(1USD)
+
+define isTrueFee : money[USD] = 3USD
+define hasFalseStart : bool = qty > 5
+define feeIfTrue : money[USD] = isTrueFee + 1USD
+
+# The callee's fee for an order marked special, and for one that is not
+apply marked = "special_fee.rule" sha256:36b934751e2c9813
+  special = true
+  fee -> marked_fee
+
+apply unmarked = "special_fee.rule" sha256:36b934751e2c9813
+  special = false
+  fee -> unmarked_fee
+
+table fee_by_start
+policy unique
+| hasFalseStart | -> fee    |
+| true          | feeIfTrue |
+| false         | isTrueFee |
+
+define extra : money[USD] = marked_fee + unmarked_fee - isTrueFee
+
+examples
+| qty | -> fee | extra |
+| 0   | 3USD   | 4USD  |
+| 9   | 4USD   | 4USD  |

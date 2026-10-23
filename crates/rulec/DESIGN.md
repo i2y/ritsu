@@ -5417,7 +5417,42 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 - **ASCII でなく別名も無い並びと要素のフィールドを、Go の構造体と `.proto` が書けない。** Go のフィールドとして公開されず、`.proto` のフィールドの名前にもならない（`elements lines` の `金額 : money[USD]` で、Go と Connect が組めない）。E011 は、規則と入力と出力だけを見る。直すなら E011 を並びと要素のフィールドに広げることになり、通っていた規則が止まる。
 - **`.proto` の列挙の値の名前（`<列挙の UPPER_SNAKE>_<値の大文字>`）が、二つの列挙のあいだで同じになる形。** 列挙の名前の UPPER_SNAKE が同じ二つの列挙（`url_path` と `URLPath`）に同じ値があるときで、確かめていない。
 - **`enums` のファイルから読む列挙の値とグループの、綴りでだけ重なる形は、読む規則の `check` では言わない。** そのファイルの `check` が言う。
-- **名前に `True` か `False` を含む値を、いくつかの生成器が式の中で書き換える。** 式を Python の綴りで組んでから `True` と `False` を `true` と `false` に置き換えるので、`define isTrueFee` は、宣言では `isTrueFee`、式では `istrueFee` になる。TypeScript・JavaScript・Rust・Wasm・Ruby・PHP・Swift・Java で組めないか答えを違え、`check` は何も言わない。予約語なので rulec が `_` を付ける `define True` も、TypeScript・JavaScript・Rust・Wasm・Ruby・PHP で同じように落ち、W121 は `True_` と書くと言うだけである。綴りのぶつかりではなく生成器の誤りなので、この節では直していない。予約語で `_` が付く大文字で始まる名前（`True`、`None`、`Self`）は、Ruby が定数として読むことも言わない。
+- **予約語なので rulec が `_` を付ける、大文字で始まる名前（`True`、`None`、`Self`）を、Ruby が定数として読むことを W121 が言わない。** `define True` は `True_` と書かれ、Ruby のほかのどの生成先でも組める（§15.264）が、Ruby では組めない。
+
+### 15.264 式の真偽の値を、言語ごとの語で書く。名前の中の `True` と `False` を書き換えない（2026-10-23）
+
+**きっかけ**：§15.263 の見つけて直していないもの。名前に `True` か `False` を含む値を、いくつかの生成器が式の中で書き換えた。`define isTrueFee` は、宣言では `isTrueFee`、表のセルが読むところでは `istrueFee` と書かれ、TypeScript・JavaScript・Rust・Wasm・Ruby・PHP・Swift・Java で組めないか答えを違えた。式の中で読むと Go も落ちた。予約語なので rulec が `_` を付ける `define True` も、`True_` が `true_` になり、TypeScript・JavaScript・Rust・Wasm・Ruby・PHP で落ちた。`check` は何も言わなかった。
+
+**原因**：式は `Gen::expr` が一つの文法で文字列に組み、真偽の値を Python の `True` と `False` で書く。ほかの言語は、その文字列を自分の綴りに直す関数（`go_expr`、`ts_expr`、`rs_expr`、`rb_expr`、`sw_expr`、`java_expr`、`php_expr`）で、文字列の中の `True` と `False` を全部 `true` と `false` に置き換えていた。識別子は、`Gen::expr` が組むときに、言語ごとの綴りで文字列に入っている。置き換えは識別子の中の `True` と `False` にも及んだ。表のセルが名前を書くところも、同じ関数を通る。SQL は文字列を字句に分けて読むので、識別子の中は書き換えなかったが、識別子がちょうど `True` なら真の値 `TRUE` として読んだ。
+
+**決定**：
+
+1. **式の真偽の値は、識別子に現れない印で書く**（`codegen::TRUE_MARK` と `FALSE_MARK`。制御文字 U+001D で囲んだ語）。言語ごとの関数が文字列を自分の綴りに直すときに、印をその言語の語にする（`codegen::truths`）。Python は `True` と `False`、SQL は `TRUE` と `FALSE`、ほかの言語は `true` と `false` である。識別子の中の字は、どの言語でも書き換えない。
+2. 真偽の値が式に入るのは、準用の引数に `true` か `false` を書いたときである（`特例 = false`）。表のセルや畳み込みの真偽の値は、言語ごとの生成器が自分の語で書いていて、この節では変わらない。
+
+**捨てたもの**：
+
+- **置き換えを字句の単位にすること**（前後が識別子の字でない `True` だけを置き換える）。識別子の中の `True` は守れるが、識別子がちょうど `True` か `False` のとき（別名 `three(True)`）は、真偽の値と区別できない。TypeScript・JavaScript・Rust・Wasm と Go の局所変数では、その値を読むところが真偽の値になる。
+- **式を言語ごとに組むこと。** 式の算術（尺度のそろえ方、丸め、割り算）を一か所で組み、全部の言語に同じものを渡すために、`Gen::expr` は一つにしてある。言語で違うのは真偽の値の語だけなので、そこだけを印にした。
+
+**変わること**：
+
+- 名前に `True` か `False` を含む値の生成したコードが、どの言語でも組めて、参照の評価器と同じ答えを返す。
+- `define True`（rulec は `True_` と書く）は、Ruby のほかのどの言語でも組める。Ruby は `True_` を定数として読む（§15.263 の見つけて直していないもの）。
+- 別名がちょうど `True` の値を、SQL の問い合わせが、真の値 `TRUE` ではなく列 `"True"` として書く。PostgreSQL はその列を読み、SQLite は読めない（見つけて直していないもの）。
+- 木の規則の生成したものは変わらない（下の突き合わせ）。
+
+**確かめたこと**：
+
+- `tests/truths.rs`（新しい、三つ）と、材料の `tests/truths/`（英語を先に、日本語の版を横に）。名前に `True` と `False` を含む三つの定義（`isTrueFee`、`hasFalseStart`、`feeIfTrue`）と、真偽の値をそのまま書く二つの準用（`special = true` と `special = false`）を持つ規則と、それが準用する規則である。
+  - どの言語の生成したファイルにも、三つの名前がそのまま書かれ、真偽の値の印は残らない。
+  - 生成したコードは、どの言語でも参照の評価器と同じ答えを返す。替える前のバイナリでは、英日どちらの版も、TypeScript・JavaScript・Rust・Wasm・Ruby・PHP・Go・Swift・Java の九つの言語の 15 の走らせ方が、組めないか答えを違えた。
+- 再現の二つ（表のセルが `isTrueFee` を読む規則と、`define True` の規則）。前者は、替える前は八つの言語（TypeScript・JavaScript・Rust・Wasm・Ruby・PHP・Swift・Java）で落ち、替えた後はどの言語でも答えが一致する。後者は、替える前は六つの言語（TypeScript・JavaScript・Rust・Wasm・Ruby・PHP）で落ち、替えた後は Ruby でだけ落ちる。
+- 替える前と後の突き合わせ：木の 857 本の `.rule`（追跡している全部）の `rulec check --format json`（英日、終了コードつき）は一字も変わらない。同じ 857 本の `rulec gen` では、生成できた 506 本の生成物が一字も変わらない（351 本はどちらのバイナリでも生成しない）。
+
+**見つけて直していないもの**：
+
+- **SQLite は、問い合わせの式の別名 `AS "True"` を列の名前にしない。** `true` と `false` は、大文字と小文字を問わず、引用符で囲んでも、列の名前にならず（`column2` のような名前になる）、`"True"` と書いて読むと文字列になる。別名がちょうど `True` か `False` の値は、SQL（SQLite）で答えを違える。PostgreSQL は列として読む。`check` は何も言わない。
 
 ### 15.266 `import` は、生成先が書いたままでは使えない名前に、`check` が何も言わない綴りを付ける（2026-10-23）
 

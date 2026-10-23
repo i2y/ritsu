@@ -1,0 +1,14 @@
+rule 特別の手数料(special_fee_ja) v1
+description "呼ぶ側が特別と印を付けた注文かどうかで決まる手数料。ほかの規則が真偽の値をそのまま書いて準用する規則"
+
+inputs
+  特別(special) : bool
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 印ごとの手数料(fee_by_flag)
+policy unique
+| 特別  | -> 手数料 |
+| true  | 5USD      |
+| false | 2USD      |

@@ -136,10 +136,8 @@ fn long_literals(s: &str) -> String {
 /// what `//` means everywhere the generator emits it (§15.13), and `Math.min` / `Math.max`
 /// are already in the language.
 fn java_expr(s: &str) -> String {
-    let t = super::arith::java_expr(s)
+    let t = super::arith::java_expr(&super::truths(s, "true", "false"))
         .replace(" // ", " / ")
-        .replace("True", "true")
-        .replace("False", "false")
         .replace("_round_down(", "roundDown(")
         .replace("_round_up(", "roundUp(")
         .replace("_round_half_down(", "roundHalfDown(")

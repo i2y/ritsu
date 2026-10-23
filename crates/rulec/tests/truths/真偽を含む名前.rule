@@ -1,0 +1,35 @@
+rule 真偽を含む名前(names_with_true_and_false_ja) v1
+description "別名に True と False を含む名前と、真偽の値をそのまま渡す二つの準用。rulec の試験のために書いた例"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee)     : money[USD]  round down(1USD)
+  上乗せ(extra)   : money[USD]  round down(1USD)
+
+define 真のときの額(isTrueFee) : money[USD] = 3USD
+define 偽で始まる(hasFalseStart) : bool = 数量 > 5
+define 真なら足す額(feeIfTrue) : money[USD] = 真のときの額 + 1USD
+
+# 特別と印を付けた注文の手数料と、付けない注文の手数料
+apply 印あり(marked) = "特別の手数料.rule" sha256:3a8bc45520801279
+  特別 = true
+  手数料 -> 印ありの手数料(marked_fee)
+
+apply 印なし(unmarked) = "特別の手数料.rule" sha256:3a8bc45520801279
+  特別 = false
+  手数料 -> 印なしの手数料(unmarked_fee)
+
+table 始まりごとの手数料(fee_by_start)
+policy unique
+| 偽で始まる | -> 手数料     |
+| true       | 真なら足す額 |
+| false      | 真のときの額 |
+
+define 上乗せ : money[USD] = 印ありの手数料 + 印なしの手数料 - 真のときの額
+
+examples
+| 数量 | -> 手数料 | 上乗せ |
+| 0    | 3USD      | 4USD   |
+| 9    | 4USD      | 4USD   |

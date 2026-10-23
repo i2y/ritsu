@@ -227,9 +227,11 @@ impl Sql {
         if tok.parse::<i128>().is_ok() {
             return tok;
         }
+        // The truth values are marks no column's name can be (§15.264): a value named `True`
+        // is a column like any other.
         match tok.as_str() {
-            "True" => "TRUE".into(),
-            "False" => "FALSE".into(),
+            super::TRUE_MARK => "TRUE".into(),
+            super::FALSE_MARK => "FALSE".into(),
             _ => q(&tok),
         }
     }
