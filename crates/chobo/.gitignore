@@ -7,6 +7,8 @@
 # what the runners install: `npm ci --prefix tools/runner`, and the venv of tools/runner/requirements.txt
 /tools/runner/node_modules/
 /tools/runner/.venv/
+# a build of the Rust runner made in its own directory (the tests build it in the target directory)
+/tools/runner/rust/target/
 # Mermaid, for tests/doc.rs: `npm ci --prefix tools/mermaid`
 /tools/mermaid/node_modules/
 __pycache__/

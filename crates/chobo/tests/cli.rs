@@ -174,9 +174,12 @@ fn build_writes_each_target() {
         ("postgres-typescript", &["在庫.ts"]),
         ("postgres-python", &["在庫.py"]),
         ("postgres-go", &["book/book.go", "book/runtime.go"]),
+        ("postgres-rust", &["book.rs"]),
         ("tigerbeetle-typescript", &["在庫.ts"]),
         ("tigerbeetle-python", &["在庫.py"]),
         ("tigerbeetle-go", &["book/book.go", "book/runtime.go"]),
+        ("tigerbeetle-rust", &["book.rs"]),
+        ("mysql-rust", &["book.rs"]),
     ];
     for (target, files) in wants {
         let out = tmp.path().join(target);
@@ -373,15 +376,18 @@ fn build_writes_each_target_in_english() {
     let tmp = TempDir::new("cli-build-en");
     let book = root().join("tests/books/stock_reservation.book");
     let b = book.to_str().unwrap();
-    // an ASCII book's Go package is named after it; a Japanese book's is `book`
+    // an ASCII book's Go package and Rust module are named after it; a Japanese book's are `book`
     let wants: &[(&str, &[&str])] = &[
         ("postgres", &["stock_reservation.sql"]),
         ("postgres-typescript", &["stock_reservation.ts"]),
         ("postgres-python", &["stock_reservation.py"]),
         ("postgres-go", &["stock_reservation/book.go", "stock_reservation/runtime.go"]),
+        ("postgres-rust", &["stock_reservation.rs"]),
         ("tigerbeetle-typescript", &["stock_reservation.ts"]),
         ("tigerbeetle-python", &["stock_reservation.py"]),
         ("tigerbeetle-go", &["stock_reservation/book.go", "stock_reservation/runtime.go"]),
+        ("tigerbeetle-rust", &["stock_reservation.rs"]),
+        ("mysql-rust", &["stock_reservation.rs"]),
     ];
     for (target, files) in wants {
         let out = tmp.path().join(target);

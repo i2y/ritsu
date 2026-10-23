@@ -1,0 +1,17 @@
+# E063：Rust の識別子には上付きの数字を使えない。`増築` と `入居` の引数 `面積m²` は、Rust のクライアントでは構造体のフィールドの名前になる
+book 部屋 v1
+
+unit 平米
+
+account 床(建物: string) : 平米
+  at least 0 refused as 空きなし
+account 施工 : 平米 outside
+account 入居者 : 平米 outside
+
+transfer 増築(許可: string, 建物: string, 面積m²: 平米)
+  key 許可, 建物
+  move 面積m² from 施工 to 床(建物)
+
+transfer 入居(契約: string, 建物: string, 面積m²: 平米)
+  key 契約, 建物
+  move 面積m² from 床(建物) to 入居者

@@ -2,7 +2,7 @@
 
 **勘定に下限と上限を書く。どの振替も、一度の書き込みの中でそれを守る。**
 
-在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語です。帳簿（`.book`）には、勘定と、勘定ごとの下限や上限と、勘定のあいだで動かす振替の種類を書きます。振替には、同じ呼び出しを一度しか通さないためのキーと、確定か取消を待つ仮押さえも書けます。chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けにビルドします。呼び出すクライアントは TypeScript、Python、Go で出します。
+在庫、お金、ポイント、予約の枠のように、数で持っていて勘定から勘定へ動かすものを書く、小さな言語です。帳簿（`.book`）には、勘定と、勘定ごとの下限や上限と、勘定のあいだで動かす振替の種類を書きます。振替には、同じ呼び出しを一度しか通さないためのキーと、確定か取消を待つ仮押さえも書けます。chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けにビルドします。呼び出すクライアントは TypeScript、Python、Go、Rust で出します。
 
 帳簿に書ける条件は、一つの勘定の下限と上限だけです。これはわざとそうしています。一つの勘定の境界なら、その勘定を書き換える書き込みの中で確かめられ、あいだに別の読み取りが入りません。PostgreSQL では勘定の行をロックする関数が、TigerBeetle では勘定のフラグと、全部通るか一つも通らないかのどちらかになる振替のチェーンが、MySQL の系統では勘定の行をロックしながら読むトランザクションが、それを受け持ちます。二つの勘定にまたがる条件は、こうはいきません。同時に来た二つの呼び出しが、どちらも、もう一方が書き込む前の残高を読めてしまうからです。そこで、またがる条件は、勘定を一つ足して、その勘定の境界として書きます。「返金は売上を超えない」なら、注文ごとに「返金できる残り」の勘定を立て、売上で増やし、返金で減らし、0 を下回らないようにします。
 
@@ -60,7 +60,7 @@ examples/refunds/refunds.ja.book: ok
   ヒント: 店の売上(店) へ入れる移動を先に書いてください
 ```
 
-診断のコードは全部で 31 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
+診断のコードは全部で 32 種類あり、[docs/codes.ja.md](docs/codes.ja.md) に `chobo explain --all` の出力をそのまま置いてあります。
 
 ## 二つの返金が同時に来る
 
@@ -107,12 +107,12 @@ $ chobo build examples/refunds/refunds.ja.book --target postgres --out db
 | ターゲット | `build` が書くもの |
 |---|---|
 | `postgres` | スキーマ、テーブルと制約、操作ごとの関数（SQL） |
-| `postgres-typescript`、`postgres-python`、`postgres-go` | その関数を呼ぶクライアント |
-| `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
+| `postgres-typescript`、`postgres-python`、`postgres-go`、`postgres-rust` | その関数を呼ぶクライアント |
+| `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go`、`tigerbeetle-rust` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
 | `mysql` | MySQL、TiDB、Vitess 向けの、帳簿のテーブルと制約（SQL） |
-| `mysql-typescript`、`mysql-python`、`mysql-go` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
+| `mysql-typescript`、`mysql-python`、`mysql-go`、`mysql-rust` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
 
-どの出力先のクライアントも、名前も引数も結果も同じです。拒否されたことは例外ではなく、`{ result: "refused", reason: "返金超過" }` という結果で返ります。同じ呼び出しの二度目は `done_before` を返すので、リトライで二重に動くことはありません。PostgreSQL では、関数が呼ぶ側のトランザクションの中で動くので、注文の行と在庫の仮押さえを一緒にコミットできます。TigerBeetle は利用者のコードを中で動かせないので、クライアントがチェーンを組み立てます。下限 0 は勘定のフラグで守り、ほかの境界は、chobo が同じチェーンに足す振替で守ります。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、その読み取りで、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、呼び出しもそのトランザクションに入ります。出力先ごとに何を書き、三つの言語からどう呼ぶかは [docs/targets.md](docs/targets.md)（英語）にあります。
+どの出力先のクライアントも、名前も引数も結果も同じです。拒否されたことは例外ではなく、`{ result: "refused", reason: "返金超過" }` という結果で返ります。同じ呼び出しの二度目は `done_before` を返すので、リトライで二重に動くことはありません。PostgreSQL では、関数が呼ぶ側のトランザクションの中で動くので、注文の行と在庫の仮押さえを一緒にコミットできます。TigerBeetle は利用者のコードを中で動かせないので、クライアントがチェーンを組み立てます。下限 0 は勘定のフラグで守り、ほかの境界は、chobo が同じチェーンに足す振替で守ります。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、その読み取りで、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、呼び出しもそのトランザクションに入ります。Rust のクライアントは非同期で、sqlx と TigerBeetle のクレートを通して呼び、拒否は `Outcome::Refused(Reason::返金超過)` で返ります。出力先ごとに何を書き、四つの言語からどう呼ぶかは [docs/targets.md](docs/targets.md)（英語）にあります。
 
 ## 経理や運用の人に見せる
 
@@ -158,13 +158,13 @@ chobo explain <code> | --all [--format markdown]
 
 ## 確かめ方
 
-帳簿の意味を決めるのは参照インタプリタです。テストは、例とテスト用の帳簿の全部からシナリオを作り（手で書いたものを含めて 468 本、そのうち 38 本は呼び出し元が同時に来るもの）、どれもすべてのクライアントで流します。SQL そのもの（psql から関数を呼ぶ）、PostgreSQL を呼ぶ三つの言語のクライアント、TigerBeetle を呼ぶ三つの言語のクライアント、MySQL と TiDB と Vitess の上の、MySQL の系統の三つの言語のクライアントです。Vitess では、シャード一つのキースペースと、テナントで二つのシャードに分け、シャードをまたぐトランザクションを誤りにしたキースペースの両方で流します。MySQL の系統のクライアントは、SQL 文を一つずつ送る形と、まとめて送る形の両方で流します。操作ごとの結果、終わりの残高、仮押さえの状態が、参照インタプリタと同じ（同時に来るシナリオなら、とりうる結果のどれか）でなければなりません。クライアントが一つずつ送ったものは、`chobo run --show` と一字ずつ比べるので、どの言語も同じ ID を作ることも確かめられます。PostgreSQL、MySQL、TiDB、Vitess では、四つの呼び出し元から同じ勘定に逆の向きの移し替えを流し、デッドロックが起きないことも見ます。生成した TypeScript は `tsc --strict`、Python は `py_compile`、Go は `gofmt` と `go vet` を通します。`chobo doc` のページはテストが期待する出力として固定し、Mermaid の図は Mermaid 11 と 12 で描けることを、HTML のページは Chrome で、各ステップのあとに参照インタプリタと同じ残高が出ることを確かめます。
+帳簿の意味を決めるのは参照インタプリタです。テストは、例とテスト用の帳簿の全部からシナリオを作り（手で書いたものを含めて 468 本、そのうち 38 本は呼び出し元が同時に来るもの）、どれもすべてのクライアントで流します。SQL そのもの（psql から関数を呼ぶ）、PostgreSQL を呼ぶ四つの言語のクライアント、TigerBeetle を呼ぶ四つの言語のクライアント、MySQL と TiDB と Vitess の上の、MySQL の系統の四つの言語のクライアントです。Vitess では、シャード一つのキースペースと、テナントで二つのシャードに分け、シャードをまたぐトランザクションを誤りにしたキースペースの両方で流します。MySQL の系統のクライアントは、SQL 文を一つずつ送る形と、まとめて送る形の両方で流します。操作ごとの結果、終わりの残高、仮押さえの状態が、参照インタプリタと同じ（同時に来るシナリオなら、とりうる結果のどれか）でなければなりません。クライアントが一つずつ送ったものは、`chobo run --show` と一字ずつ比べるので、どの言語も同じ ID を作ることも確かめられます。PostgreSQL、MySQL、TiDB、Vitess では、四つの呼び出し元から同じ勘定に逆の向きの移し替えを流し、デッドロックが起きないことも見ます。生成した TypeScript は `tsc --strict`、Python は `py_compile`、Go は `gofmt` と `go vet` を通し、Rust はエディション 2021 と 2024 の両方で、clippy の lint も含めて警告なしで組めます。`chobo doc` のページはテストが期待する出力として固定し、Mermaid の図は Mermaid 11 と 12 で描けることを、HTML のページは Chrome で、各ステップのあとに参照インタプリタと同じ残高が出ることを確かめます。
 
 ```console
 $ cargo test
 ```
 
-PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch.sh` か `CHOBO_TIGERBEETLE`）、MySQL（`tools/mysql/fetch.sh` か `RITSU_MYSQL_BIN`）、TiDB のクラスタ（`RITSU_TIDB` に `host:port`）、Vitess（`RITSU_VITESS_BIN` に、Vitess のソースから組んだ vttestserver・vtcombo・mysqlctl の `bin` のディレクトリ）、Node.js と Python と `tools/runner` に書いた依存、Go、Chrome（`CHOBO_CHROME`）、Mermaid（`npm ci --prefix tools/mermaid`）のうち、見つかったものを使います。見つからないものは、それぞれ `SKIP:` の行を出して飛ばします。
+PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch.sh` か `CHOBO_TIGERBEETLE`）、MySQL（`tools/mysql/fetch.sh` か `RITSU_MYSQL_BIN`）、TiDB のクラスタ（`RITSU_TIDB` に `host:port`）、Vitess（`RITSU_VITESS_BIN` に、Vitess のソースから組んだ vttestserver・vtcombo・mysqlctl の `bin` のディレクトリ）、Node.js と Python と `tools/runner` に書いた依存、Go、`tools/runner/rust` のクレート（cargo が Cargo.lock の版で取ってきます）、clippy、Chrome（`CHOBO_CHROME`）、Mermaid（`npm ci --prefix tools/mermaid`）のうち、見つかったものを使います。見つからないものは、それぞれ `SKIP:` の行を出して飛ばします。
 
 ## いまの状態
 
@@ -181,4 +181,4 @@ PostgreSQL（PATH か `CHOBO_PG_BIN`）、TigerBeetle（`tools/tigerbeetle/fetch
 
 ## ライセンス
 
-[Apache License, Version 2.0](LICENSE-APACHE) と [MIT License](LICENSE-MIT) のどちらかを選んで使えます。
+[Apache License, Version 2.0](LICENSE-APACHE) と [MIT License](LICENSE-MIT) のどちらかを選んで使えます。Rust の名前に使えない字の表（`src/client/xid.rs`）は Unicode Character Database から作ったもので、Unicode License V3 に従います（[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)）。

@@ -1,4 +1,4 @@
-//! `chobo build --target …`: the eleven targets (DESIGN 4.3, 4.5) and the files each one writes.
+//! `chobo build --target …`: the fourteen targets (DESIGN 4.3, 4.5, 14) and the files each one writes.
 
 use crate::client;
 use crate::diag::Diag;
@@ -12,13 +12,16 @@ pub enum Target {
     PostgresTypeScript,
     PostgresPython,
     PostgresGo,
+    PostgresRust,
     TigerBeetleTypeScript,
     TigerBeetlePython,
     TigerBeetleGo,
+    TigerBeetleRust,
     MySql,
     MySqlTypeScript,
     MySqlPython,
     MySqlGo,
+    MySqlRust,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,21 +38,25 @@ pub enum Lang {
     TypeScript,
     Python,
     Go,
+    Rust,
 }
 
 impl Target {
-    pub const ALL: [Target; 11] = [
+    pub const ALL: [Target; 14] = [
         Target::Postgres,
         Target::PostgresTypeScript,
         Target::PostgresPython,
         Target::PostgresGo,
+        Target::PostgresRust,
         Target::TigerBeetleTypeScript,
         Target::TigerBeetlePython,
         Target::TigerBeetleGo,
+        Target::TigerBeetleRust,
         Target::MySql,
         Target::MySqlTypeScript,
         Target::MySqlPython,
         Target::MySqlGo,
+        Target::MySqlRust,
     ];
 
     pub fn name(self) -> &'static str {
@@ -58,13 +65,16 @@ impl Target {
             Target::PostgresTypeScript => "postgres-typescript",
             Target::PostgresPython => "postgres-python",
             Target::PostgresGo => "postgres-go",
+            Target::PostgresRust => "postgres-rust",
             Target::TigerBeetleTypeScript => "tigerbeetle-typescript",
             Target::TigerBeetlePython => "tigerbeetle-python",
             Target::TigerBeetleGo => "tigerbeetle-go",
+            Target::TigerBeetleRust => "tigerbeetle-rust",
             Target::MySql => "mysql",
             Target::MySqlTypeScript => "mysql-typescript",
             Target::MySqlPython => "mysql-python",
             Target::MySqlGo => "mysql-go",
+            Target::MySqlRust => "mysql-rust",
         }
     }
 
@@ -74,8 +84,8 @@ impl Target {
 
     pub fn backend(self) -> Backend {
         match self {
-            Target::Postgres | Target::PostgresTypeScript | Target::PostgresPython | Target::PostgresGo => Backend::Postgres,
-            Target::MySql | Target::MySqlTypeScript | Target::MySqlPython | Target::MySqlGo => Backend::MySql,
+            Target::Postgres | Target::PostgresTypeScript | Target::PostgresPython | Target::PostgresGo | Target::PostgresRust => Backend::Postgres,
+            Target::MySql | Target::MySqlTypeScript | Target::MySqlPython | Target::MySqlGo | Target::MySqlRust => Backend::MySql,
             _ => Backend::TigerBeetle,
         }
     }
@@ -86,19 +96,26 @@ impl Target {
             Target::PostgresTypeScript | Target::TigerBeetleTypeScript | Target::MySqlTypeScript => Lang::TypeScript,
             Target::PostgresPython | Target::TigerBeetlePython | Target::MySqlPython => Lang::Python,
             Target::PostgresGo | Target::TigerBeetleGo | Target::MySqlGo => Lang::Go,
+            Target::PostgresRust | Target::TigerBeetleRust | Target::MySqlRust => Lang::Rust,
         }
     }
 }
 
 /// What a target needs of the book before it writes anything: the names PostgreSQL would cut
-/// short (E061), an operation that does not fit one TigerBeetle request (E060), or the names MySQL
-/// cannot hold as written (E062).
+/// short (E061), an operation that does not fit one TigerBeetle request (E060), the names MySQL
+/// cannot hold as written (E062), and for a client in Rust, the names Rust takes as no identifier
+/// (E063).
 pub fn check(book: &Book, target: Target) -> Vec<Diag> {
-    match target.backend() {
+    let mut d = match target.backend() {
         Backend::Postgres => postgres::check_names(book),
         Backend::TigerBeetle => client::check_requests(book),
         Backend::MySql => mysql::check_names(book),
+    };
+    if target.lang() == Lang::Rust {
+        d.extend(client::rust::check_names(book));
+        crate::model::sort(&mut d);
     }
+    d
 }
 
 /// The files a target writes, by their path under `--out`, or the diagnostics that stop it.
@@ -128,6 +145,9 @@ pub fn build_in(book: &Book, stem: &str, target: Target, origin: &Origin, in_pkg
         Target::MySqlTypeScript => vec![(format!("{}.ts", book.name), client::typescript::mysql(book, origin, in_pkg))],
         Target::MySqlPython => vec![(format!("{}.py", book.name), client::python::mysql(book, origin, in_pkg))],
         Target::MySqlGo => client::go::mysql(book, stem, origin, in_pkg),
+        Target::PostgresRust => client::rust::postgres(book, stem, origin, in_pkg),
+        Target::TigerBeetleRust => client::rust::tigerbeetle(book, stem, origin, in_pkg),
+        Target::MySqlRust => client::rust::mysql(book, stem, origin, in_pkg),
     })
 }
 

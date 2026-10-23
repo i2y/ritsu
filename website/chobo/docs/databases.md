@@ -1,15 +1,15 @@
 # Build for a database
 
 `chobo build` writes a book for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB and
-Vitess), and a client that calls it from TypeScript, Python or Go:
+Vitess), and a client that calls it from TypeScript, Python, Go or Rust:
 
 | Target | What it writes |
 |---|---|
 | `postgres` | `<book>.sql`: a schema, its tables and constraints, and a function for each operation |
-| `postgres-typescript`, `postgres-python`, `postgres-go` | a client that calls those functions |
-| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go` | a client that sends TigerBeetle one chain of transfers for each operation |
+| `postgres-typescript`, `postgres-python`, `postgres-go`, `postgres-rust` | a client that calls those functions |
+| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go`, `tigerbeetle-rust` | a client that sends TigerBeetle one chain of transfers for each operation |
 | `mysql` | `<book>.sql`: the book's three tables and their constraints, for MySQL, TiDB and Vitess |
-| `mysql-typescript`, `mysql-python`, `mysql-go` | a client that makes each operation one transaction on those tables |
+| `mysql-typescript`, `mysql-python`, `mysql-go`, `mysql-rust` | a client that makes each operation one transaction on those tables |
 
 ```console
 $ chobo build examples/inventory/inventory.book --target postgres --out db
@@ -17,12 +17,13 @@ $ chobo build examples/inventory/inventory.book --target postgres-typescript --o
 $ chobo build examples/inventory/inventory.book --target tigerbeetle-go --out db
 $ chobo build examples/inventory/inventory.book --target mysql --out db
 $ chobo build examples/inventory/inventory.book --target mysql-python --out db
+$ chobo build examples/inventory/inventory.book --target tigerbeetle-rust --out db
 ```
 
 Whichever the target, an operation is one write: it checks every move against the bounds and makes
 them all, or refuses and makes none, with nothing read in between that another call could change.
 That is what the bound of one account makes possible, since it looks at nothing but the account a
-move changes. [Targets](targets.md) has each target in full, with calls from all three languages and
+move changes. [Targets](targets.md) has each target in full, with calls from all four languages and
 what they printed.
 
 ## PostgreSQL
@@ -194,34 +195,52 @@ export type Reason = "out_of_stock" | "key_conflict" | "already_refused" | "same
 export type Result = { result: "done" } | { result: "done_before" } | { result: "refused"; reason: Reason };
 ```
 
+In Rust the reasons are an enum, and the answer is another, a refusal one of its variants:
+
+<!-- chobo build examples/inventory/inventory.book --target postgres-rust -->
+```rust
+/// What a call answers. A refusal is an answer, not an error: nothing has changed, and the reason
+/// says why.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Outcome {
+    Done,
+    DoneBefore,
+    Refused(Reason),
+}
+```
+
 - **A refusal is an answer, not an exception.** There is no stock: the caller handles
   `out_of_stock` as it handles any other answer. A failure is something else, an exception (an
-  `error` in Go): a database that cannot be reached, an argument of the wrong type, an amount out
-  of range.
+  `error` in Go, an `Err` in Rust): a database that cannot be reached, an argument of the wrong
+  type, an amount out of range.
 - **A retry is safe.** The key is the book's, made of the transfer's own arguments, so the same call
   again answers `done_before` and moves nothing, whichever service or language sends it.
 - **The book value.** In TypeScript, `postgres(db, { tenant })`, `tigerbeetle(client, { tenant })`
   and `mysql(db, { tenant, batch })` make it; in Python, `postgres(conn, tenant="")`,
   `tigerbeetle(client, tenant="")` and `mysql(conn, tenant="", batch=False)`, with the arguments
   as keyword arguments; in Go, `Postgres(q, tenant)`, `TigerBeetle(c, tenant)` and
-  `MySQL(q, tenant, batch)`, with a `context.Context` first in every call. An amount is a `bigint`,
-  an `int` or an `int64`.
+  `MySQL(q, tenant, batch)`, with a `context.Context` first in every call; in Rust,
+  `postgres(db, tenant)`, `tigerbeetle(client, tenant)` and `mysql(db, tenant, batch)`, every
+  call an `async fn` (`book.reserve().hold(ReserveArgs { order: "o-1", sku: "A-1", qty: 2 })`). An
+  amount is a `bigint`, an `int`, an `int64` or an `i64`.
 - **Holds.** A transfer that holds has `hold`, `post` (all of it, or the amounts given), `void` and
   `status`; every account has a `balance`. On PostgreSQL and the MySQL family, the book value also
   has `expire()`.
 
 A client imports the language's standard library and the database's own client library (pgx and
-go-sql-driver/mysql in Go, and TigerBeetle's in the three languages), and nothing else: in
-TypeScript and Python, the clients of PostgreSQL and the MySQL family work through the connection
-they are given. The TypeScript runs on Node.js as it is written and compiles under `tsc --strict`;
-the Python passes `mypy --strict`; the Go passes `gofmt` and `go vet`.
+go-sql-driver/mysql in Go, sqlx and tokio in Rust, and TigerBeetle's in the four languages), and
+nothing else: in TypeScript and Python, the clients of PostgreSQL and the MySQL family work through
+the connection they are given. The TypeScript runs on Node.js as it is written and compiles under
+`tsc --strict`; the Python passes `mypy --strict`; the Go passes `gofmt` and `go vet`; the Rust
+builds on the 2021 and the 2024 editions with no warning, clippy's lints among them, and its head
+says the lines of Cargo.toml it needs.
 
 ## IDs
 
 On TigerBeetle, every ID is made from what the book says, hashed with SHA-256: an account's from the
 book's name, the tenant, the account's kind and its arguments, and a transfer's from the book's
 name, the tenant, the transfer's kind, the operation, the values of its key and its place in the
-chain. So a retry sends the same IDs, and TigerBeetle answers that the transfer exists. The three
+chain. So a retry sends the same IDs, and TigerBeetle answers that the transfer exists. The four
 languages and the reference interpreter make the same IDs, and the tests see that they do, on every
 operation of every scenario. On PostgreSQL and the MySQL family the accounts and holds carry the same
 IDs; on the MySQL family a call and a tenant have IDs made the same way, so that keys and tenants

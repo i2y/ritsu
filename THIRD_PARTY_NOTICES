@@ -8,23 +8,24 @@ the module loaded by the page that runs ritsu in the browser, and the `ritsu.was
 package @i2y/ritsu, which is `ritsu` built for WASI, also hold the work of others; and the page
 loads, beside its module, the libraries its editor and its Markdown are made of:
 
-  Unicode CLDR 48.2             the names of rulec's built-in divisions  Unicode-3.0
-  The WHATWG Encoding Standard  koyomi's Shift_JIS table                 BSD-3-Clause
-  Laws from e-Gov and the eCFR  the examples of explain                  PDL1.0; US government work
-  equivalent 1.0.2              a crate from crates.io                   Apache-2.0 OR MIT
-  hashbrown 0.17.1              a crate from crates.io                   MIT OR Apache-2.0
-  indexmap 2.14.2               a crate from crates.io                   Apache-2.0 OR MIT
-  itoa 1.0.18                   a crate from crates.io                   MIT OR Apache-2.0
-  memchr 2.8.3                  a crate from crates.io                   Unlicense OR MIT
-  serde_core 1.0.229            a crate from crates.io                   MIT OR Apache-2.0
-  serde_json 1.0.151            a crate from crates.io                   MIT OR Apache-2.0
-  zmij 1.0.23                   a crate from crates.io                   MIT
-  Żmij, by Victor Zverovich     the code zmij is a port of               MIT
-  wasi-libc of wasi-sdk 29.0    the C library of WASI, in the npm module (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND MIT AND CC0-1.0
-  CodeMirror 6 and marked       the editor and the Markdown of the page in the browser  MIT
+  Unicode CLDR 48.2                the names of rulec's built-in divisions  Unicode-3.0
+  Unicode Character Database 17.0  chobo's table of Rust's name characters  Unicode-3.0
+  The WHATWG Encoding Standard     koyomi's Shift_JIS table                 BSD-3-Clause
+  Laws from e-Gov and the eCFR     the examples of explain                  PDL1.0; US government work
+  equivalent 1.0.2                 a crate from crates.io                   Apache-2.0 OR MIT
+  hashbrown 0.17.1                 a crate from crates.io                   MIT OR Apache-2.0
+  indexmap 2.14.2                  a crate from crates.io                   Apache-2.0 OR MIT
+  itoa 1.0.18                      a crate from crates.io                   MIT OR Apache-2.0
+  memchr 2.8.3                     a crate from crates.io                   Unlicense OR MIT
+  serde_core 1.0.229               a crate from crates.io                   MIT OR Apache-2.0
+  serde_json 1.0.151               a crate from crates.io                   MIT OR Apache-2.0
+  zmij 1.0.23                      a crate from crates.io                   MIT
+  Żmij, by Victor Zverovich        the code zmij is a port of               MIT
+  wasi-libc of wasi-sdk 29.0       the C library of WASI, in the npm module (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND BSD-2-Clause AND MIT AND CC0-1.0
+  CodeMirror 6 and marked          the editor and the Markdown of the page in the browser  MIT
 
 Each has a section below that says where it comes from and gives the text of its license, or its
-terms, as its source gives it. ritsu's own code and the names and the table above are under
+terms, as its source gives it. ritsu's own code and the names and the tables above are under
 (MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause, the license Cargo.toml, the .deb, the .rpm,
 the Homebrew formula and the npm package give. The copies of laws are left out of it: e-Gov's terms, PDL1.0,
 which has no SPDX identifier, ask that the source be given, which their section does, and the
@@ -107,6 +108,69 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 
 SPDX-License-Identifier: Unicode-3.0
+
+--------------------------------------------------------------------------------
+Unicode Character Database 17.0
+--------------------------------------------------------------------------------
+
+In chobo, and so in `ritsu` and `ritsu.wasm`. The text is crates/chobo/THIRD_PARTY_NOTICES
+without its title; its paths are under crates/chobo.
+
+chobo's table of the characters a name of chobo's may hold and a Rust name may not
+(src/client/xid.rs, DESIGN.md 14), which E063 and the Rust clients read, is made from two files
+of the Unicode Character Database:
+
+  Unicode Character Database 17.0.0, https://www.unicode.org/Public/17.0.0/ucd/
+    DerivedCoreProperties.txt        the properties Alphabetic, XID_Start and XID_Continue
+    extracted/DerivedGeneralCategory.txt
+                                     the general categories of the numbers (Nd, Nl and No)
+
+tools/xid/make_table.py writes the table from the two files, and the head of the table gives
+each file's date and SHA-256. The table is two lists of ranges of code points; chobo reads
+nothing at run time. The files say that their terms of use and license are at
+https://www.unicode.org/terms_of_use.html, which puts the Unicode data files under the Unicode
+License v3, https://www.unicode.org/license.txt (SPDX-License-Identifier: Unicode-3.0). Its
+text, as that page gives it:
+
+UNICODE LICENSE V3
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 1991-2026 Unicode, Inc.
+
+NOTICE TO USER: Carefully read the following legal agreement. BY
+DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING DATA FILES, AND/OR
+SOFTWARE, YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT. IF YOU DO NOT AGREE, DO NOT
+DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE THE DATA FILES OR SOFTWARE.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of data files and any associated documentation (the "Data Files") or
+software and any associated documentation (the "Software") to deal in the
+Data Files or Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, and/or sell
+copies of the Data Files or Software, and to permit persons to whom the
+Data Files or Software are furnished to do so, provided that either (a)
+this copyright and permission notice appear with all copies of the Data
+Files or Software, or (b) this copyright and permission notice appear in
+associated Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+THIRD PARTY RIGHTS.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS NOTICE
+BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL DAMAGES,
+OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
+ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THE DATA
+FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder shall
+not be used in advertising or otherwise to promote the sale, use or other
+dealings in these Data Files or Software without prior written
+authorization of the copyright holder.
 
 --------------------------------------------------------------------------------
 The WHATWG Encoding Standard

@@ -304,8 +304,10 @@ $ chobo api examples/refunds/refunds.book
 - `ids` says how an ID is made, for a tool that works one out itself; `targets` says what each
   target names: the PostgreSQL schema, functions and parameters; the MySQL family's tables, the
   names of their checks and the `begin` a call starts its transaction with; the members and types
-  of the TypeScript, Python and Go clients, with the function that makes the book value for each
-  database (`factories`); and the chain TigerBeetle is sent for each operation.
+  of the TypeScript, Python, Go and Rust clients, with the function that makes the book value for
+  each database (`factories`), and for Rust the module, the method of each operation (`do` is
+  `r#do`), the variants of the enum of the reasons (`reasons`) and the crates the client needs at
+  the versions its tests run (`crates`); and the chain TigerBeetle is sent for each operation.
 
 ## What a client sends
 
@@ -313,7 +315,7 @@ $ chobo api examples/refunds/refunds.book
 a scenario, what the clients `chobo build` writes send that target: the SQL and its arguments for
 PostgreSQL; for TigerBeetle, the hold read before a post or a void, the accounts made, the opening
 transfers, and the chain, field by field; for the MySQL family, the accounts a book value makes
-sure of and the statements, with the values in place. The tests hold the clients of all three
+sure of and the statements, with the values in place. The tests hold the clients of all four
 languages to it, on every scenario. [targets.md](targets.md) says what the clients do, and shows
 what `--show mysql` prints.
 

@@ -1285,6 +1285,131 @@
         }
       ]
     },
+    "rust": {
+      "module": "credit",
+      "file": "credit.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "pay_later",
+          "member": "pay_later",
+          "args": "PayLaterArgs",
+          "calls": "PayLaterCalls",
+          "fields": {
+            "order": "order",
+            "member": "member",
+            "amount": "amount"
+          },
+          "key": "PayLaterKey",
+          "amounts": "PayLaterAmounts",
+          "operations": {
+            "hold": "hold",
+            "post": "post",
+            "void": "void",
+            "status": "status"
+          }
+        },
+        {
+          "kind": "repayment",
+          "member": "repayment",
+          "args": "RepaymentArgs",
+          "calls": "RepaymentCalls",
+          "fields": {
+            "repayment_id": "repayment_id",
+            "member": "member",
+            "amount": "amount"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "credit",
+          "method": "credit",
+          "args": "CreditAccount",
+          "fields": {
+            "member": "member"
+          }
+        },
+        {
+          "account": "shop",
+          "method": "shop"
+        },
+        {
+          "account": "bank",
+          "method": "bank"
+        }
+      ],
+      "reasons": {
+        "over_the_credit_line": "OverTheCreditLine",
+        "over_prepayment": "OverPrepayment",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

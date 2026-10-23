@@ -1517,6 +1517,145 @@
         }
       ]
     },
+    "rust": {
+      "module": "wallet",
+      "file": "wallet.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "deposit",
+          "member": "deposit",
+          "args": "DepositArgs",
+          "calls": "DepositCalls",
+          "fields": {
+            "deposit_id": "deposit_id",
+            "member": "member",
+            "amount": "amount"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "payment",
+          "member": "payment",
+          "args": "PaymentArgs",
+          "calls": "PaymentCalls",
+          "fields": {
+            "order": "order",
+            "member": "member",
+            "amount": "amount"
+          },
+          "key": "PaymentKey",
+          "amounts": "PaymentAmounts",
+          "operations": {
+            "hold": "hold",
+            "post": "post",
+            "void": "void",
+            "status": "status"
+          }
+        },
+        {
+          "kind": "refund",
+          "member": "refund",
+          "args": "RefundArgs",
+          "calls": "RefundCalls",
+          "fields": {
+            "refund_id": "refund_id",
+            "member": "member",
+            "amount": "amount"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "wallet",
+          "method": "wallet",
+          "args": "WalletAccount",
+          "fields": {
+            "member": "member"
+          }
+        },
+        {
+          "account": "bank",
+          "method": "bank"
+        },
+        {
+          "account": "shop",
+          "method": "shop"
+        }
+      ],
+      "reasons": {
+        "insufficient_balance": "InsufficientBalance",
+        "over_the_limit": "OverTheLimit",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

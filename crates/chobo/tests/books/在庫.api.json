@@ -1414,6 +1414,144 @@
         }
       ]
     },
+    "rust": {
+      "module": "book",
+      "file": "book.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "入荷",
+          "member": "入荷",
+          "args": "入荷Args",
+          "calls": "入荷Calls",
+          "fields": {
+            "納品書": "納品書",
+            "sku": "sku",
+            "数": "数"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "引当",
+          "member": "引当",
+          "args": "引当Args",
+          "calls": "引当Calls",
+          "fields": {
+            "注文": "注文",
+            "sku": "sku",
+            "数": "数"
+          },
+          "key": "引当Key",
+          "amounts": "引当Amounts",
+          "operations": {
+            "hold": "hold",
+            "post": "post",
+            "void": "void",
+            "status": "status"
+          }
+        },
+        {
+          "kind": "返品",
+          "member": "返品",
+          "args": "返品Args",
+          "calls": "返品Calls",
+          "fields": {
+            "返品伝票": "返品伝票",
+            "sku": "sku",
+            "数": "数"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "在庫",
+          "method": "在庫",
+          "args": "在庫Account",
+          "fields": {
+            "sku": "sku"
+          }
+        },
+        {
+          "account": "仕入先",
+          "method": "仕入先"
+        },
+        {
+          "account": "客",
+          "method": "客"
+        }
+      ],
+      "reasons": {
+        "在庫切れ": "在庫切れ",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

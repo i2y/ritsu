@@ -360,9 +360,102 @@ func main() {{
         }
         Err(why) => skip(&format!("{why}; the Go client is not tried under REPEATABLE READ")),
     }
-    if node().is_ok() || python().is_ok() || go().is_ok() {
+    if let Some(out) = rr_rust(pg, work, "在庫", "入荷", "rr-rust", WORKERS, CALLS) {
+        conflicts += check("rr-rust", &out);
+    }
+    if node().is_ok() || python().is_ok() || go().is_ok() || rust().is_ok() {
         assert!(conflicts > 0, "no call met a serialization failure: the clients' tries again were not tried");
     }
+}
+
+/// The Rust client under REPEATABLE READ: a binary of the runner's crate with the PostgreSQL client
+/// of `stem`, whose `transfer` (a `do` of a delivery, a sku and a quantity) `workers` callers make
+/// `calls` times each, `A` for the sku, on one pool whose connections are under REPEATABLE READ; its
+/// `Database` counts the serialization failures. What it prints, or None when Rust is not here.
+fn rr_rust(pg: &Postgres, work: &Path, stem: &str, transfer: &str, tenant: &str, workers: usize, calls: usize) -> Option<String> {
+    use chobo::client::rust::{fields, members, transfer_types};
+    if !need(Need::Rustc) {
+        return None;
+    }
+    if let Err(why) = rust() {
+        skip(&format!("{why}; the Rust client is not tried under REPEATABLE READ"));
+        return None;
+    }
+    let c = &cases_of(&[stem])[0];
+    let k = c.copy.transfers.iter().position(|t| t.name == transfer).unwrap();
+    let t = &c.copy.transfers[k];
+    let (m, base) = (members(&c.copy)[k].clone(), transfer_types(&c.copy)[k].clone());
+    let fs = fields(t, &(0..t.params.len()).collect::<Vec<_>>());
+    let module = chobo::target::build(&c.copy, &c.stem, Target::PostgresRust, &c.origin).unwrap().remove(0).1;
+    let conn = pg.connection();
+    let (host, port, user) = (conn["host"].as_str().unwrap().to_string(), conn["port"].as_u64().unwrap(), conn["user"].as_str().unwrap().to_string());
+    let main = format!(
+        r#"#![deny(warnings)]
+
+#[allow(dead_code)]
+mod harness;
+
+#[path = "books/book.rs"]
+mod book;
+
+use std::sync::atomic::{{AtomicU64, Ordering}};
+
+static CONFLICTS: AtomicU64 = AtomicU64::new(0);
+
+/// The pool, counting the serialization failures it answers.
+struct Counting(sqlx::PgPool);
+
+impl book::Database for Counting {{
+    async fn row<'a>(&'a self, sql: &'static str, params: &'a [book::Param]) -> Result<sqlx::postgres::PgRow, sqlx::Error> {{
+        let r = book::Database::row(&self.0, sql, params).await;
+        if r.as_ref().err().and_then(|e| e.as_database_error()).and_then(|d| d.code()).as_deref() == Some("40001") {{
+            CONFLICTS.fetch_add(1, Ordering::SeqCst);
+        }}
+        r
+    }}
+}}
+
+fn main() {{
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    rt.block_on(async {{
+        let options = sqlx::postgres::PgConnectOptions::new()
+            .socket({host:?})
+            .port({port})
+            .username({user:?})
+            .database("postgres")
+            .options([("default_transaction_isolation", "repeatable read")]);
+        let pool = sqlx::postgres::PgPoolOptions::new().max_connections({workers}).connect_with(options).await.unwrap();
+        let b = std::sync::Arc::new(book::postgres(Counting(pool), {tenant:?}));
+        let mut handles = Vec::new();
+        for w in 0..{workers} {{
+            let b = b.clone();
+            handles.push(tokio::spawn(async move {{
+                let mut out = Vec::new();
+                for i in 0..{calls} {{
+                    let d = format!("w{{w}}-{{i}}");
+                    let r = b.{m}().r#do(book::{base}Args {{ {f0}: &d, {f1}: "A", {f2}: 1 }}).await.unwrap();
+                    out.push(r.result().to_string());
+                }}
+                out
+            }}));
+        }}
+        let mut results = Vec::new();
+        for h in handles {{
+            results.extend(h.await.unwrap());
+        }}
+        println!("{{}}", serde_json::json!({{"results": results, "conflicts": CONFLICTS.load(Ordering::SeqCst)}}));
+    }});
+}}
+"#,
+        f0 = fs[0],
+        f1 = fs[1],
+        f2 = fs[2]
+    );
+    let name = if stem.is_ascii() { format!("rr-{stem}") } else { "rr-ja".to_string() };
+    let bin = build_rust_with(work, &name, &[("book".to_string(), module)], &main).unwrap_or_else(|e| panic!("{e}"));
+    let out = Command::new(&bin).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    Some(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
 /// The cases of the named books of tests/books.
@@ -722,7 +815,10 @@ func main() {{
         }
         Err(why) => skip(&format!("{why}; the Go client is not tried under REPEATABLE READ")),
     }
-    if node().is_ok() || python().is_ok() || go().is_ok() {
+    if let Some(out) = rr_rust(pg, work, "stock_reservation", "receive", "rr-rust", WORKERS, CALLS) {
+        conflicts += check("rr-rust", &out);
+    }
+    if node().is_ok() || python().is_ok() || go().is_ok() || rust().is_ok() {
         assert!(conflicts > 0, "no call met a serialization failure: the clients' tries again were not tried");
     }
 }

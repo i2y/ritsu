@@ -3,8 +3,8 @@
 //! have is answered no_such_hold without sending it, so that the hold can still be made and
 //! posted with the same key; and an operation too big for one request stops the build (E060).
 //!
-//! One replica serves the whole test; it is stopped, and its data file removed, when the test
-//! ends, failing too.
+//! Each is tried in the four languages. One replica serves the whole test; it is stopped, and its
+//! data file removed, when the test ends, failing too.
 
 mod common;
 use chobo::scenario;
@@ -22,8 +22,15 @@ fn case_of(path: &Path, scenarios: Value) -> Case {
     c
 }
 
+/// The runners of the compiled languages a step runs its cases through.
+#[derive(Clone, Copy)]
+struct Built<'a> {
+    go: Option<&'a GoRunner>,
+    rust: Option<&'a RustRunner>,
+}
+
 /// Run the cases through one language's TigerBeetle client; what the runner printed.
-fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, go: Option<&GoRunner>) -> Option<Value> {
+fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, built: Built) -> Option<Value> {
     let combo = format!("tigerbeetle-{lang}");
     let (cmd, clients): (Command, Vec<String>) = match lang {
         "typescript" => {
@@ -51,8 +58,15 @@ fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, go: Option<&Go
             cmd.arg(runner_dir().join("runner.py"));
             (cmd, clients)
         }
+        "rust" => {
+            let Some(r) = built.rust else {
+                skip("the Rust runner is not built; the Rust client is not tried");
+                return None;
+            };
+            (Command::new(&r.bin), cases.iter().map(|c| r.keys[&(c.stem.clone(), "tigerbeetle")].clone()).collect())
+        }
         _ => {
-            let Some(g) = go else {
+            let Some(g) = built.go else {
                 skip("the Go runner is not built; the Go client is not tried");
                 return None;
             };
@@ -67,7 +81,7 @@ fn run(tb: &TigerBeetle, lang: &str, cases: &[Case], work: &Path, go: Option<&Go
 /// 引当.post of a hold that is not there: refused with no_such_hold, and only the hold's first
 /// transfer is read; nothing is sent, so the post's ID is still free, and once the hold is made
 /// the same post goes through.
-fn post_before_hold(tb: &TigerBeetle, lang: &str, work: &Path, go: Option<&GoRunner>) {
+fn post_before_hold(tb: &TigerBeetle, lang: &str, work: &Path, built: Built) {
     let c = case_of(
         &root().join("tests/books/在庫.book"),
         json!([{"name": "post before hold", "steps": [
@@ -77,7 +91,7 @@ fn post_before_hold(tb: &TigerBeetle, lang: &str, work: &Path, go: Option<&GoRun
             {"op": "post", "kind": "引当", "args": {"注文": "注文-3", "sku": "sku-2"}}
         ]}]),
     );
-    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, go) else { return };
+    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, built) else { return };
     let got = &out["books"][0]["scenarios"][0];
     assert!(got["error"].is_null(), "{lang}: {}", got["error"]);
     let answers: Vec<String> = got["result"]["steps"].as_array().unwrap().iter().map(|s| format!("{}{}", s["result"].as_str().unwrap(), s["reason"].as_str().map(|r| format!(" {r}")).unwrap_or_default())).collect();
@@ -91,11 +105,11 @@ fn post_before_hold(tb: &TigerBeetle, lang: &str, work: &Path, go: Option<&GoRun
 
 /// 与信 opened with an upper bound of 10000, then called with a book that says 20000: the room
 /// account's opening is there with another amount, and the client stops with an error.
-fn bounds_changed(tb: &TigerBeetle, lang: &str, work: &Path, v1: &Case, v2: &Case, go: (Option<&GoRunner>, Option<&GoRunner>)) {
-    let Some(out) = run(tb, lang, std::slice::from_ref(v1), work, go.0) else { return };
+fn bounds_changed(tb: &TigerBeetle, lang: &str, work: &Path, v1: &Case, v2: &Case, built: (Built, Built)) {
+    let Some(out) = run(tb, lang, std::slice::from_ref(v1), work, built.0) else { return };
     let got = &out["books"][0]["scenarios"][0];
     assert!(got["error"].is_null() && got["result"]["steps"][0]["result"] == "done", "{lang}: {got}");
-    let Some(out) = run(tb, lang, std::slice::from_ref(v2), &work.join("v2"), go.1) else { return };
+    let Some(out) = run(tb, lang, std::slice::from_ref(v2), &work.join("v2"), built.1) else { return };
     let got = &out["books"][0]["scenarios"][0];
     let err = got["error"].as_str().unwrap_or("");
     assert!(err.contains("opened with another bound"), "{lang}: the book with other bounds answered {got}");
@@ -133,9 +147,10 @@ fn what_only_tigerbeetle_has() {
     std::fs::write(v2_dir.join("与信.book"), changed).unwrap();
     let v2 = case_of(&v2_dir.join("与信.book"), one);
     let zaiko = case_of(&root().join("tests/books/在庫.book"), json!([]));
+    let first = [zaiko, case_of(&root().join("tests/books/与信.book"), json!([]))];
     let (go1, go2) = match go() {
         Ok(()) => (
-            Some(build_go(&[zaiko, case_of(&root().join("tests/books/与信.book"), json!([]))], &work.path().join("go1")).unwrap_or_else(|e| panic!("{e}"))),
+            Some(build_go(&first, &work.path().join("go1")).unwrap_or_else(|e| panic!("{e}"))),
             Some(build_go(std::slice::from_ref(&v2), &work.path().join("go2")).unwrap_or_else(|e| panic!("{e}"))),
         ),
         Err(why) => {
@@ -143,11 +158,14 @@ fn what_only_tigerbeetle_has() {
             (None, None)
         }
     };
-    for lang in ["typescript", "python", "go"] {
+    let rust1 = rust_runner(&first, work.path(), "tb-only-1");
+    let rust2 = rust1.as_ref().and_then(|_| rust_runner(std::slice::from_ref(&v2), work.path(), "tb-only-2"));
+    let built = (Built { go: go1.as_ref(), rust: rust1.as_ref() }, Built { go: go2.as_ref(), rust: rust2.as_ref() });
+    for lang in ["typescript", "python", "go", "rust"] {
         let w = work.path().join(lang);
         std::fs::create_dir_all(w.join("v2")).unwrap();
-        post_before_hold(&tb, lang, &w, go1.as_ref());
-        bounds_changed(&tb, lang, &w, &v1, &v2, (go1.as_ref(), go2.as_ref()));
+        post_before_hold(&tb, lang, &w, built.0);
+        bounds_changed(&tb, lang, &w, &v1, &v2, built);
     }
 }
 
@@ -166,7 +184,7 @@ fn an_operation_too_big_for_one_request_in_english() {
 }
 
 /// reserve.post of a hold that is not there, with the English book (`post_before_hold`'s twin).
-fn post_before_hold_in_english(tb: &TigerBeetle, lang: &str, work: &Path, go: Option<&GoRunner>) {
+fn post_before_hold_in_english(tb: &TigerBeetle, lang: &str, work: &Path, built: Built) {
     let c = case_of(
         &root().join("tests/books/stock_reservation.book"),
         json!([{"name": "post before hold", "steps": [
@@ -176,7 +194,7 @@ fn post_before_hold_in_english(tb: &TigerBeetle, lang: &str, work: &Path, go: Op
             {"op": "post", "kind": "reserve", "args": {"order": "order-3", "sku": "sku-2"}}
         ]}]),
     );
-    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, go) else { return };
+    let Some(out) = run(tb, lang, std::slice::from_ref(&c), work, built) else { return };
     let got = &out["books"][0]["scenarios"][0];
     assert!(got["error"].is_null(), "{lang}: {}", got["error"]);
     let answers: Vec<String> = got["result"]["steps"].as_array().unwrap().iter().map(|s| format!("{}{}", s["result"].as_str().unwrap(), s["reason"].as_str().map(|r| format!(" {r}")).unwrap_or_default())).collect();
@@ -213,9 +231,10 @@ fn what_only_tigerbeetle_has_in_english() {
     std::fs::write(v2_dir.join("credit.book"), changed).unwrap();
     let v2 = case_of(&v2_dir.join("credit.book"), one);
     let stock_reservation = case_of(&root().join("tests/books/stock_reservation.book"), json!([]));
+    let first = [stock_reservation, case_of(&root().join("tests/books/credit.book"), json!([]))];
     let (go1, go2) = match go() {
         Ok(()) => (
-            Some(build_go(&[stock_reservation, case_of(&root().join("tests/books/credit.book"), json!([]))], &work.path().join("go1")).unwrap_or_else(|e| panic!("{e}"))),
+            Some(build_go(&first, &work.path().join("go1")).unwrap_or_else(|e| panic!("{e}"))),
             Some(build_go(std::slice::from_ref(&v2), &work.path().join("go2")).unwrap_or_else(|e| panic!("{e}"))),
         ),
         Err(why) => {
@@ -223,10 +242,13 @@ fn what_only_tigerbeetle_has_in_english() {
             (None, None)
         }
     };
-    for lang in ["typescript", "python", "go"] {
+    let rust1 = rust_runner(&first, work.path(), "tb-only-en-1");
+    let rust2 = rust1.as_ref().and_then(|_| rust_runner(std::slice::from_ref(&v2), work.path(), "tb-only-en-2"));
+    let built = (Built { go: go1.as_ref(), rust: rust1.as_ref() }, Built { go: go2.as_ref(), rust: rust2.as_ref() });
+    for lang in ["typescript", "python", "go", "rust"] {
         let w = work.path().join(lang);
         std::fs::create_dir_all(w.join("v2")).unwrap();
-        post_before_hold_in_english(&tb, lang, &w, go1.as_ref());
-        bounds_changed(&tb, lang, &w, &v1, &v2, (go1.as_ref(), go2.as_ref()));
+        post_before_hold_in_english(&tb, lang, &w, built.0);
+        bounds_changed(&tb, lang, &w, &v1, &v2, built);
     }
 }

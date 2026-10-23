@@ -1,7 +1,7 @@
 # How it is checked
 
 The reference interpreter says what a book means: `chobo run` is it. Everything else chobo makes,
-the SQL and the nine clients, is held to it by running the same scenarios on the real databases,
+the SQL and the twelve clients, is held to it by running the same scenarios on the real databases,
 and what the checker and the page for people say of a book is what it found by running the
 reference interpreter.
 
@@ -13,15 +13,15 @@ written by hand, 38 with callers at the same time, and run each one through ever
 | Target | How it is run |
 |---|---|
 | the SQL itself | each operation as a call of its function, through psql |
-| the PostgreSQL clients in TypeScript, Python and Go | each through its driver: `pg`, psycopg, pgx |
-| the TigerBeetle clients in TypeScript, Python and Go | each through TigerBeetle's own client |
-| the clients of the MySQL family in TypeScript, Python and Go | each through its driver (mysql2, PyMySQL, go-sql-driver/mysql), on MySQL, on TiDB and on Vitess in one shard and in two, one statement at a time and then in batches |
+| the PostgreSQL clients in TypeScript, Python, Go and Rust | each through its driver: `pg`, psycopg, pgx, sqlx |
+| the TigerBeetle clients in TypeScript, Python, Go and Rust | each through TigerBeetle's own client |
+| the clients of the MySQL family in TypeScript, Python, Go and Rust | each through its driver (mysql2, PyMySQL, go-sql-driver/mysql, sqlx), on MySQL, on TiDB and on Vitess in one shard and in two, one statement at a time and then in batches |
 
 Each answer, each balance at the end and the state of each hold must be the reference
 interpreter's; with callers at the same time, one of the ways it can come out. The callers of a
 `together` are sent at the same moment, from connections (and on TigerBeetle, clients) of their
 own. Every client must send what `chobo run --show` says, field by field and statement by
-statement, so that the three languages make the same calls and the same IDs; batches are held to
+statement, so that the four languages make the same calls and the same IDs; batches are held to
 the answers alone, as a request of them also carries the statements an error keeps from running.
 
 The databases are real ones: a PostgreSQL cluster listening on a socket alone, one TigerBeetle
@@ -50,7 +50,7 @@ when it is late and differs again.
 - **TigerBeetle**: a book whose upper bound was changed, called with the same tenant, fails on the
   opening transfer of the bound. A post of a hold that is not there answers `no_such_hold` without
   sending anything, and the hold can be made and posted with the same key after it. Both in all
-  three languages.
+  four languages.
 - **MySQL, TiDB and Vitess** (in two shards), through the TypeScript client, with a book in English
   and one in Japanese,
   whose tables have Japanese names: four callers move between the same accounts in opposite
@@ -63,20 +63,27 @@ when it is late and differs again.
   connection in the caller's transaction commits and rolls back with it; in TypeScript, Python and
   Go, a call on a connection in no transaction is a transaction of its own, and one in a
   transaction the caller began, or with autocommit off, goes with its rollback, an account row it
-  made too, which the next call makes again. A batch answers as one statement at a time does, in
+  made too, which the next call makes again; in Rust, a call on a connection of the pool in no
+  transaction is a transaction of its own, and one on a `Transaction` of sqlx's goes with its
+  rollback, with the caller's own row. A batch answers as one statement at a time does, in
   fewer requests. Keys that differ only in case, in spaces at the end or in a dakuten are other
   calls, and tenants that differ only in case are other balances; keys with quotes and backslashes
   go through under the `sql_mode`s `ANSI_QUOTES` and `NO_BACKSLASH_ESCAPES` (Vitess lets no session
   set them: there they go through under the mode it keeps).
 - A book too large for one TigerBeetle request does not build (E060), nor one with a name too long
-  for PostgreSQL (E061), nor one whose name MySQL cannot hold (E062).
+  for PostgreSQL (E061), nor one whose name MySQL cannot hold (E062), nor, for a Rust target, one
+  with a name Rust cannot write (E063).
 
 ## The code it writes
 
 The generated TypeScript passes `tsc --strict`, with `erasableSyntaxOnly` and `noUnusedLocals`; the
 Python `py_compile`, and ritsu's tests put it through `mypy --strict`; the Go `gofmt` and `go vet`.
-The tests run them with Node.js 23.11, Python 3.13 and Go 1.26, on PostgreSQL 18.0, TigerBeetle
-0.17.9, MySQL 8.4.11, TiDB 8.5.8 and Vitess 24.0.5.
+The Rust builds on the 2021 and the 2024 editions with no warning, clippy's lints among them, and
+in a package of ritsu's too, where it takes the types of its units; the crates its head names are
+the versions the tests lock, and each character E063 keeps out of a name is one rustc keeps out,
+of every character a name of chobo's can hold. The tests run them with Node.js 23.11, Python 3.13,
+Go 1.26 and Rust 1.94, on PostgreSQL 18.0, TigerBeetle 0.17.9, MySQL 8.4.11, TiDB 8.5.8 and
+Vitess 24.0.5.
 
 ## The diagnostics
 
@@ -115,7 +122,7 @@ the proofs rests on `sorry` or on an axiom of its own.
 The README, the reference, the agent skill and the pages of this site are held to the tool: every
 diagnostic shown is in a golden file, every line of a book is a line of a real book, every `chobo`
 command shown with its output prints that output now, every relative link leads somewhere, and
-the counts they give, such as the 468 scenarios above and the 31 codes, are the counts.
+the counts they give, such as the 468 scenarios above and the 32 codes, are the counts.
 
 ## Running them
 
@@ -126,6 +133,7 @@ $ cargo test -p chobo
 in ritsu's repository uses what it finds of PostgreSQL (on the path, or `CHOBO_PG_BIN`),
 TigerBeetle (`crates/chobo/tools/tigerbeetle/fetch.sh`, or `CHOBO_TIGERBEETLE`), MySQL
 (`crates/chobo/tools/mysql/fetch.sh`, or `RITSU_MYSQL_BIN`), a TiDB cluster (`RITSU_TIDB`, its
-`host:port`), Node.js and Python with what `crates/chobo/tools/runner` lists, Go, Chrome
+`host:port`), Node.js and Python with what `crates/chobo/tools/runner` lists, Go, Rust with
+clippy and the crates of `crates/chobo/tools/runner/rust` (cargo fetches them), Chrome
 (`CHOBO_CHROME`) and Mermaid (`npm ci --prefix crates/chobo/tools/mermaid`), and prints a `SKIP:`
 line for each it does not find.

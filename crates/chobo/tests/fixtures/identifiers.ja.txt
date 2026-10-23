@@ -1,0 +1,7 @@
+エラー[E063]: identifiers.book:11:46: 引数の名前 `area_m²` に ²（U+00B2）があります。Rust の識別子には、この字を使えません
+    11 | transfer build(permit: string, site: string, area_m²: sqm)
+  ヒント: 名前からその字を外すか、ほかの字に替えてください。Rust の識別子は、文字か `_` で始まり、そのあとに文字と十進の数字と `_` が続きます（たとえば `²` は `2` にしてください）
+エラー[E063]: identifiers.book:15:48: 引数の名前 `area_m²` に ²（U+00B2）があります。Rust の識別子には、この字を使えません
+    15 | transfer lease(contract: string, site: string, area_m²: sqm)
+  ヒント: 名前からその字を外すか、ほかの字に替えてください。Rust の識別子は、文字か `_` で始まり、そのあとに文字と十進の数字と `_` が続きます（たとえば `²` は `2` にしてください）
+identifiers.book: エラー 2 件、警告 0 件

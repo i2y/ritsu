@@ -43,6 +43,21 @@ fn the_facts_are_what_chobo_api_says() {
                 assert_eq!(b.as_ref().map(|b| (b.value, b.refusal.clone())), want, "{path} {}", a.name);
             }
         }
+        // the Rust client's names, as `targets.rust` gives them
+        let rust = &api["targets"]["rust"];
+        assert_eq!(f.rust.module, rust["module"].as_str().unwrap(), "{path}");
+        for ((t, c), j) in f.transfers.iter().zip(&f.rust.transfers).zip(rust["transfers"].as_array().unwrap()) {
+            assert_eq!((t.name.as_str(), c.member.as_str()), (j["kind"].as_str().unwrap(), j["member"].as_str().unwrap()), "{path}");
+            let fields: Vec<&str> = t.params.iter().map(|p| j["fields"][p.name.as_str()].as_str().unwrap()).collect();
+            assert_eq!(c.params.iter().map(String::as_str).collect::<Vec<_>>(), fields, "{path} {}", t.name);
+            assert_eq!(format!("{}Args", c.type_name), j["args"].as_str().unwrap(), "{path} {}", t.name);
+            assert_eq!(format!("{}Calls", c.type_name), j["calls"].as_str().unwrap(), "{path} {}", t.name);
+            for (k, end) in [("key", "Key"), ("amounts", "Amounts")] {
+                if let Some(n) = j[k].as_str() {
+                    assert_eq!(format!("{}{end}", c.type_name), n, "{path} {}", t.name);
+                }
+            }
+        }
         let machines = api["machines"].as_array().unwrap();
         for (t, j) in f.transfers.iter().zip(api["transfers"].as_array().unwrap()) {
             assert_eq!(t.name, j["name"].as_str().unwrap(), "{path}");

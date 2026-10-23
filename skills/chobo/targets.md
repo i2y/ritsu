@@ -1,7 +1,7 @@
 # What `chobo build` writes
 
 A book becomes code for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB and
-Vitess), and a client that calls it from TypeScript, Python or Go. Every target answers every
+Vitess), and a client that calls it from TypeScript, Python, Go or Rust. Every target answers every
 scenario as the reference interpreter does: the tests run each scenario of the examples and the
 test books through every client, on PostgreSQL, TigerBeetle, MySQL, TiDB and Vitess, and compare
 what each client sent with `chobo run --show`.
@@ -12,13 +12,16 @@ what each client sent with `chobo run --show`.
 | `postgres-typescript` | `<book>.ts`: a client that calls those functions through `pg` |
 | `postgres-python` | `<book>.py`: the same, through a DB-API connection (psycopg 3 or psycopg2) |
 | `postgres-go` | `<package>/book.go` and `runtime.go`: the same, through pgx |
+| `postgres-rust` | `<module>.rs`: the same, an async client through sqlx |
 | `tigerbeetle-typescript` | `<book>.ts`: a client that sends TigerBeetle one chain of transfers for each operation, through `tigerbeetle-node` |
 | `tigerbeetle-python` | `<book>.py`: the same, through `tigerbeetle` (`ClientSync`) |
 | `tigerbeetle-go` | `<package>/book.go` and `runtime.go`: the same, through `tigerbeetle-go` |
+| `tigerbeetle-rust` | `<module>.rs`: the same, an async client through the `tigerbeetle` crate |
 | `mysql` | `<book>.sql`: the book's three tables and their constraints, for MySQL, TiDB and Vitess |
 | `mysql-typescript` | `<book>.ts`: a client that makes each operation one transaction on those tables, through `mysql2` |
 | `mysql-python` | `<book>.py`: the same, through a DB-API connection (PyMySQL or mysqlclient) |
 | `mysql-go` | `<package>/book.go` and `runtime.go`: the same, through database/sql and go-sql-driver/mysql |
+| `mysql-rust` | `<module>.rs`: the same, an async client through sqlx |
 
 The clients of every target have the same names, arguments and answers, so changing the database
 changes how the book value is made, and nothing else. `chobo api` lists the names each target
@@ -257,7 +260,7 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
   run every scenario on Vitess 24.0.5 (vttestserver), in one shard and in two by the tenant, where
   a transaction across shards fails.
 
-## Calling it from TypeScript, Python and Go
+## Calling it from TypeScript, Python, Go and Rust
 
 `postgres(db, { tenant })`, `tigerbeetle(client, { tenant })` and `mysql(db, { tenant, batch })`
 make the book value in TypeScript; in Python, `postgres(conn, tenant="")`,
@@ -407,12 +410,107 @@ posted <nil>
 0 <nil>
 ```
 
+Rust's clients are async, and every call is an `async fn`: `postgres(db, tenant)`,
+`tigerbeetle(client, tenant)` and `mysql(db, tenant, batch)` make the book value, whose method for
+each transfer kind gives its operations (`book.reserve().hold(…)`; `do` is written `r#do`, a
+keyword of Rust's). An argument is a struct of the transfer's parameters, the strings borrowed
+(`ReserveArgs { order: "o-1", sku: "A-1", qty: 2 }`), and an amount is an `i64`. A call answers
+`Result<Outcome, Error>`: `Outcome::Done`, `Outcome::DoneBefore`, or `Outcome::Refused(Reason)`,
+where `Reason` is an enum of the book's reasons and chobo's own (`Reason::OutOfStock`,
+`Reason::KeyConflict`, …; `as_str()` gives the name as the book writes it), and `Error` is a
+failure, no answer. Rust on PostgreSQL (`--target postgres-rust`), with a pool of sqlx, and in a
+transaction of the caller's:
+
+```rust
+mod inventory;
+
+use inventory::{ReceiveArgs, ReserveAmounts, ReserveArgs, ReserveKey, StockAccount};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let pool = sqlx::PgPool::connect("postgres://localhost/shop").await?;
+    let book = inventory::postgres(pool.clone(), "shop-6");
+    println!("{:?}", book.receive().r#do(ReceiveArgs { delivery: "d-1", sku: "A-1", qty: 3 }).await?);
+    println!("{:?}", book.reserve().hold(ReserveArgs { order: "o-1", sku: "A-1", qty: 2 }).await?);
+    println!("{:?}", book.reserve().hold(ReserveArgs { order: "o-2", sku: "A-1", qty: 2 }).await?);
+    println!("{:?}", book.reserve().post(ReserveKey { order: "o-1", sku: "A-1" }, Some(ReserveAmounts { qty: 1 })).await?);
+    println!("{:?}", book.reserve().status(ReserveKey { order: "o-1", sku: "A-1" }).await?);
+    println!("{:?}", book.balance().stock(StockAccount { sku: "A-1" }).await?);
+
+    // in a transaction of the caller's: the hold goes with its rollback
+    let mut tx = pool.begin().await?;
+    let in_tx = inventory::postgres(tokio::sync::Mutex::new(&mut *tx), "shop-6");
+    println!("{:?}", in_tx.reserve().hold(ReserveArgs { order: "o-3", sku: "A-1", qty: 1 }).await?);
+    drop(in_tx);
+    tx.rollback().await?;
+    println!("{:?}", book.reserve().status(ReserveKey { order: "o-3", sku: "A-1" }).await?);
+    println!("{:?}", book.expire().await?);
+    Ok(())
+}
+```
+
+```text
+Done
+Done
+Refused(OutOfStock)
+Done
+Some(Posted)
+Balance { posted: 2, held_in: 0, held_out: 0 }
+Done
+None
+0
+```
+
+A book value takes the pool itself, or one connection or transaction of sqlx's behind a
+`tokio::sync::Mutex`, through which its calls go one at a time: what a call is given is a trait of
+the client's (`Database`), which these implement, and which a type of yours can implement too, to
+count or log what is sent. On TigerBeetle (`--target tigerbeetle-rust`), the book value takes the
+crate's `Client`, a reference to it, or an `Arc` of it:
+
+```rust
+let client = tigerbeetle::Client::new(0, "127.0.0.1:3399")?;
+let book = inventory::tigerbeetle(&client, "");
+println!("{:?}", book.receive().r#do(ReceiveArgs { delivery: "d-1", sku: "A-1", qty: 3 }).await?);
+println!("{:?}", book.reserve().hold(ReserveArgs { order: "o-1", sku: "A-1", qty: 2 }).await?);
+println!("{:?}", book.reserve().hold(ReserveArgs { order: "o-2", sku: "A-1", qty: 2 }).await?);
+println!("{:?}", book.reserve().void(ReserveKey { order: "o-1", sku: "A-1" }).await?);
+println!("{:?}", book.reserve().status(ReserveKey { order: "o-1", sku: "A-1" }).await?);
+println!("{:?}", book.balance().stock(StockAccount { sku: "A-1" }).await?);
+```
+
+```text
+Done
+Done
+Refused(OutOfStock)
+Done
+Some(Voided)
+Balance { posted: 3, held_in: 0, held_out: 0 }
+```
+
+On the MySQL family (`--target mysql-rust`), the book value takes sqlx's `MySqlPool`, each call a
+transaction of its own on a connection of the pool, or a connection behind a `tokio::sync::Mutex`:
+a call on a `Transaction` of sqlx's is part of it, and the caller commits it; on a connection in no
+transaction of sqlx's, a call is a transaction of its own there. sqlx does not say whether the
+server has a transaction open, so a transaction begun with a `begin` of your own, or with
+autocommit set off, is not told apart: begin it with sqlx (`pool.begin()`). sqlx asks MySQL for
+`PIPES_AS_CONCAT` when it connects, which Vitess's vtgate does not let a session set; on Vitess,
+connect with `.pipes_as_concat(false)` (the statements of chobo read the same either way). sqlx
+always lets a request hold more than one statement, so `batch` needs nothing of the connection.
+
 The outputs are what these printed, against a throwaway PostgreSQL cluster, a TigerBeetle replica
 started with `--development`, a MySQL 8.4.11 server, and a TiDB 8.5.8 cluster whose tables were
-made with `tidb_enable_check_constraint` ON; the connection string of psycopg stands for the one
-they ran with. A name of the book that is Japanese is exported in Go with an `X` in front
-(`b.X引当.Hold`), and a name that is a keyword of Python gets a `_` after it. No transfer kind is
-called `balance` or `expire` in a client, whatever the book calls it.
+made with `tidb_enable_check_constraint` ON; the connection strings of psycopg and sqlx stand for
+the ones they ran with. A name of the book that is Japanese is exported in Go with an `X` in front
+(`b.X引当.Hold`), a name that is a keyword of Python gets a `_` after it, and one that is a keyword
+of Rust is written as a raw identifier (`r#type`; `self_` for the four it cannot be). No transfer
+kind is called `balance` or `expire` in a client, whatever the book calls it. A Rust client is one
+module: it holds what every book shares beside the book's own part, as the TypeScript and Python
+files do, and its head says the crates it needs, at the versions its tests run. The module is the
+book's name in lower case when that is an ASCII identifier, else the file's name, else `book`, as
+Go's package: a module named in Japanese would take a `#[path]` attribute in Rust. rustc warns of a
+name with a character NFKC would change, such as a full-width letter or a half-width kana
+(`uncommon_codepoints`), and the warning is turned off only at the root of the crate the module is
+in (`#![allow(uncommon_codepoints)]`), not in the module.
 
 ## The clients' own needs
 
@@ -427,9 +525,15 @@ called `balance` or `expire` in a client, whatever the book calls it.
 | `mysql-typescript` | a pool or a connection of `mysql2`'s promise API (`mysql2/promise`); for `batch`, one made with `multipleStatements` |
 | `mysql-python` | a DB-API connection of PyMySQL or mysqlclient; for `batch`, one made with `CLIENT.MULTI_STATEMENTS` |
 | `mysql-go` | database/sql's `*sql.DB`, `*sql.Conn` or `*sql.Tx` through `github.com/go-sql-driver/mysql`, which the client imports to read the error numbers; for `batch`, `multiStatements=true` in the DSN |
+| `postgres-rust` | sqlx's `PgPool`, or a `tokio::sync::Mutex` of a `&mut PgConnection`, a `Transaction` or a `PoolConnection` of sqlx's; in the crate's Cargo.toml, `sqlx` 0.9.0 with `runtime-tokio` and `postgres`, and `tokio` with `sync` and `time` |
+| `tigerbeetle-rust` | the `Client` of the `tigerbeetle` crate 0.17.9, a reference to one, or an `Arc` of one; in Cargo.toml, `tigerbeetle = "=0.17.9"` |
+| `mysql-rust` | sqlx's `MySqlPool`, or a `tokio::sync::Mutex` of a `&mut MySqlConnection`, a `Transaction` or a `PoolConnection`; in Cargo.toml, `sqlx` 0.9.0 with `runtime-tokio` and `mysql`, and `tokio` with `sync` and `time` |
 
 The TypeScript clients use only types that can be stripped as they are, so Node.js runs them as
-written, and `tsc --strict` compiles them. The tests run them with Node.js 23.11, Python 3.13 and
-Go 1.26, on PostgreSQL 18.0, TigerBeetle 0.17.9, MySQL 8.4.11, TiDB 8.5.8 and Vitess 24.0.5, with
-`pg` 8.23.1, psycopg 3.3.6, pgx 5.11.0, `mysql2` 3.24.5, PyMySQL 1.2.3 and go-sql-driver/mysql
-1.10.1; mysqlclient 2.3.0 answered as PyMySQL does in a run by hand.
+written, and `tsc --strict` compiles them. The Rust clients build on the 2021 and the 2024
+editions with no warning, clippy's lints among them; TigerBeetle's client does not depend on an
+async runtime, sqlx's runs on tokio. The tests run them with Node.js 23.11, Python 3.13, Go 1.26
+and Rust 1.94, on PostgreSQL 18.0, TigerBeetle 0.17.9, MySQL 8.4.11, TiDB 8.5.8 and Vitess 24.0.5,
+with `pg` 8.23.1, psycopg 3.3.6, pgx 5.11.0, `mysql2` 3.24.5, PyMySQL 1.2.3, go-sql-driver/mysql
+1.10.1, sqlx 0.9.0, tokio 1.54.1 and the `tigerbeetle` crate 0.17.9; mysqlclient 2.3.0 answered as
+PyMySQL does in a run by hand.

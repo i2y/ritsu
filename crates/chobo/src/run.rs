@@ -107,8 +107,8 @@ fn commands() -> Vec<Cmd> {
             usage: Some("chobo build <file.book> --target <target> [--out <dir>]"),
             args: "",
             purpose: tr!(
-                "帳簿を、PostgreSQL のスキーマと関数の SQL、MySQL の系統のテーブルの SQL、TypeScript・Python・Go のクライアント（PostgreSQL、TigerBeetle、MySQL の系統を呼ぶもの）にする",
-                "build the book into PostgreSQL's schema and functions or the MySQL family's tables, as SQL, or into a client in TypeScript, Python or Go that calls PostgreSQL, TigerBeetle or the MySQL family"
+                "帳簿を、PostgreSQL のスキーマと関数の SQL、MySQL の系統のテーブルの SQL、TypeScript・Python・Go・Rust のクライアント（PostgreSQL、TigerBeetle、MySQL の系統を呼ぶもの）にする",
+                "build the book into PostgreSQL's schema and functions or the MySQL family's tables, as SQL, or into a client in TypeScript, Python, Go or Rust that calls PostgreSQL, TigerBeetle or the MySQL family"
             ),
             params: vec![book(false)],
             flags: vec![
@@ -117,11 +117,11 @@ fn commands() -> Vec<Cmd> {
             ],
             exits: vec![
                 (0, tr!("書いた", "written")),
-                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061、E062）", "the book has errors, or the target cannot take it (E060, E061, E062)")),
+                (1, tr!("帳簿にエラーがある、またはその出力先が帳簿を受け取れない（E060、E061、E062、E063）", "the book has errors, or the target cannot take it (E060, E061, E062, E063)")),
                 (2, usage_exit.clone()),
             ],
             examples: vec!["chobo build inventory.book --target postgres --out db/", "chobo build inventory.book --target tigerbeetle-go --out internal/"],
-            codes: vec!["E060", "E061", "E062"],
+            codes: vec!["E060", "E061", "E062", "E063"],
         },
         Cmd {
             name: "doc",
@@ -192,18 +192,21 @@ fn table() -> Table {
 }
 
 /// The values of `--target`: crate::target::Target's names, in its order.
-const TARGETS: [&str; 11] = [
+const TARGETS: [&str; 14] = [
     "postgres",
     "postgres-typescript",
     "postgres-python",
     "postgres-go",
+    "postgres-rust",
     "tigerbeetle-typescript",
     "tigerbeetle-python",
     "tigerbeetle-go",
+    "tigerbeetle-rust",
     "mysql",
     "mysql-typescript",
     "mysql-python",
     "mysql-go",
+    "mysql-rust",
 ];
 
 fn top_help(lang: Lang) -> String {

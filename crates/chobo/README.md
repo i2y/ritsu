@@ -7,7 +7,7 @@ points, seats. A book (`.book`) declares the accounts, a lower or an upper bound
 kinds of transfer that move things between them, with the key that makes each call once only and
 the holds that wait to be posted or voided. chobo checks the book, runs it in a reference
 interpreter, and builds it for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB
-and Vitess), with a client in TypeScript, Python or Go.
+and Vitess), with a client in TypeScript, Python, Go or Rust.
 
 The bound of one account is the only condition a book can write, and that is on purpose. A
 bound looks at one account, so the write that changes the account can check it, with nothing to
@@ -83,7 +83,7 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
   hint: write the move that puts into shop_balance(shop) first
 ```
 
-[docs/codes.md](docs/codes.md) has all 31 codes, as `chobo explain --all` prints them.
+[docs/codes.md](docs/codes.md) has all 32 codes, as `chobo explain --all` prints them.
 
 ## Two refunds at the same time
 
@@ -141,10 +141,10 @@ $ chobo build examples/refunds/refunds.book --target postgres --out db
 | Target | What `build` writes |
 |---|---|
 | `postgres` | a schema, its tables and constraints, and a function for each operation, in SQL |
-| `postgres-typescript`, `postgres-python`, `postgres-go` | a client that calls those functions |
-| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go` | a client that sends TigerBeetle one chain of transfers for each operation |
+| `postgres-typescript`, `postgres-python`, `postgres-go`, `postgres-rust` | a client that calls those functions |
+| `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go`, `tigerbeetle-rust` | a client that sends TigerBeetle one chain of transfers for each operation |
 | `mysql` | the tables and constraints of the book for MySQL, TiDB and Vitess, in SQL |
-| `mysql-typescript`, `mysql-python`, `mysql-go` | a client that makes each operation one transaction on those tables |
+| `mysql-typescript`, `mysql-python`, `mysql-go`, `mysql-rust` | a client that makes each operation one transaction on those tables |
 
 The clients of every target have the same names, arguments and answers. A refusal is an answer,
 `{ result: "refused", reason: "refund_exceeds_sale" }`, not an exception; the same call again
@@ -155,8 +155,10 @@ account, and any other bound is kept by transfers chobo adds to the same chain. 
 and Vitess, the client sends the statements chobo wrote, in one transaction: a locking read of
 the accounts says which move would break a bound, and the writes follow; given a connection in
 the caller's transaction, the call is part of it.
+The clients in Rust are async, through sqlx and TigerBeetle's own crate, and a refusal is
+`Outcome::Refused(Reason::RefundExceedsSale)`.
 [docs/targets.md](docs/targets.md) has what each target writes and how to call it, from all
-three languages.
+four languages.
 
 ## For the people who keep the accounts
 
@@ -227,15 +229,16 @@ none. The whole language is on [docs/reference.md](docs/reference.md).
 The reference interpreter defines what a book means. The tests make the scenarios of every
 example and every test book, 468 of them with the ones written by hand, 38 with callers at the
 same time, and run each one through every client: the SQL itself through psql, the PostgreSQL
-clients in TypeScript, Python and Go, the TigerBeetle clients in the three, and the clients of
-the MySQL family in the three on MySQL, on TiDB and on Vitess (in one shard, and in two by the
+clients in TypeScript, Python, Go and Rust, the TigerBeetle clients in the four, and the clients
+of the MySQL family in the four on MySQL, on TiDB and on Vitess (in one shard, and in two by the
 tenant, where a transaction across shards fails), a statement at a time and in batches. Each
 answer, each balance at the end and the state of each hold must be the reference interpreter's
 (one of its outcomes, when callers come at the same time), and what each client sends one at a
-time must be what `chobo run --show` says, field by field, so the three languages make the same
+time must be what `chobo run --show` says, field by field, so the four languages make the same
 IDs. PostgreSQL, MySQL, TiDB and Vitess are also run with four callers crossing the same
 accounts, to see that no deadlock comes. The generated TypeScript passes `tsc --strict`, the Python `py_compile`,
-and the Go `gofmt` and `go vet`. The pages `chobo doc` writes are golden files; their Mermaid
+the Go `gofmt` and `go vet`, and the Rust builds on the 2021 and the 2024 editions with no
+warning, clippy's lints among them. The pages `chobo doc` writes are golden files; their Mermaid
 charts draw in Mermaid 11 and 12, and in Chrome an HTML page shows the balances the reference
 interpreter left after each step.
 
@@ -247,7 +250,8 @@ uses what it finds of PostgreSQL (on the PATH, or `CHOBO_PG_BIN`), TigerBeetle
 (`tools/tigerbeetle/fetch.sh`, or `CHOBO_TIGERBEETLE`), MySQL (`tools/mysql/fetch.sh`, or
 `RITSU_MYSQL_BIN`), a TiDB cluster (`RITSU_TIDB`, its `host:port`), Vitess (`RITSU_VITESS_BIN`,
 the `bin` directory of vttestserver, vtcombo and mysqlctl built from Vitess's source), Node.js and
-Python with what `tools/runner` lists, Go, Chrome (`CHOBO_CHROME`) and Mermaid
+Python with what `tools/runner` lists, Go, the crates of `tools/runner/rust` (cargo fetches them
+at its Cargo.lock's versions), clippy, Chrome (`CHOBO_CHROME`) and Mermaid
 (`npm ci --prefix tools/mermaid`), and prints a `SKIP:` line for each it does not find.
 
 ## Status
@@ -265,4 +269,6 @@ decisions and what is left are in [DESIGN.md](DESIGN.md), in Japanese.
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
-[MIT license](LICENSE-MIT), at your option.
+[MIT license](LICENSE-MIT), at your option. The table of the characters a Rust name cannot hold
+(`src/client/xid.rs`) is made from the Unicode Character Database, under the Unicode License V3
+([THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)).

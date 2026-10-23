@@ -1300,6 +1300,170 @@
         }
       ]
     },
+    "rust": {
+      "module": "book",
+      "file": "book.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "売上",
+          "member": "売上",
+          "args": "売上Args",
+          "calls": "売上Calls",
+          "fields": {
+            "注文": "注文",
+            "店": "店",
+            "代金": "代金",
+            "手数料": "手数料"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "ドル払い",
+          "member": "ドル払い",
+          "args": "ドル払いArgs",
+          "calls": "ドル払いCalls",
+          "fields": {
+            "払出番号": "払出番号",
+            "店": "店",
+            "円額": "円額",
+            "ドル額": "ドル額"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "ドル送金",
+          "member": "ドル送金",
+          "args": "ドル送金Args",
+          "calls": "ドル送金Calls",
+          "fields": {
+            "送金番号": "送金番号",
+            "店": "店",
+            "額": "額"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "買い手",
+          "method": "買い手"
+        },
+        {
+          "account": "手数料収入",
+          "method": "手数料収入"
+        },
+        {
+          "account": "送料",
+          "method": "送料"
+        },
+        {
+          "account": "店の売上",
+          "method": "店の売上",
+          "args": "店の売上Account",
+          "fields": {
+            "店": "店"
+          }
+        },
+        {
+          "account": "円の両替口",
+          "method": "円の両替口"
+        },
+        {
+          "account": "ドルの両替口",
+          "method": "ドルの両替口"
+        },
+        {
+          "account": "ドル口座",
+          "method": "ドル口座",
+          "args": "ドル口座Account",
+          "fields": {
+            "店": "店"
+          }
+        },
+        {
+          "account": "海外の銀行",
+          "method": "海外の銀行"
+        },
+        {
+          "account": "送金手数料",
+          "method": "送金手数料"
+        }
+      ],
+      "reasons": {
+        "売上不足": "売上不足",
+        "ドル残高不足": "ドル残高不足",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

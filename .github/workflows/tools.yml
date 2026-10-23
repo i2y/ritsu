@@ -86,9 +86,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           # rulec writes Rust for the browser and for WASI, and koyomi a Wasm module for any host;
-          # geas reads coverage with llvm-tools
+          # geas reads coverage with llvm-tools, and chobo holds its Rust clients to clippy's lints
           targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || matrix.group == 'the others' && 'wasm32-unknown-unknown' || '' }}
-          components: ${{ matrix.group == 'the others' && 'llvm-tools' || '' }}
+          components: ${{ matrix.group == 'the others' && 'llvm-tools, clippy' || '' }}
 
       - uses: actions/cache@v6
         with:
@@ -319,6 +319,8 @@ jobs:
           uv venv --python 3.13 crates/kaname/tools/.venv
           uv pip install --python crates/kaname/tools/.venv/bin/python --require-hashes -r crates/kaname/tools/requirements.txt
 
+      # The Rust runner's crates (sqlx, tokio, tigerbeetle) at its Cargo.lock's versions: the tests build
+      # it, with the generated modules, in the target directory's tmp, held to the lock (--locked).
       - name: "chobo: the runners, Mermaid and TigerBeetle"
         if: matrix.group == 'the others'
         run: |
@@ -326,6 +328,7 @@ jobs:
           npm ci --prefix crates/chobo/tools/runner
           uv venv --python 3.13 crates/chobo/tools/runner/.venv
           uv pip install --python crates/chobo/tools/runner/.venv/bin/python --require-hashes -r crates/chobo/tools/runner/requirements.txt
+          cargo fetch --locked --manifest-path crates/chobo/tools/runner/rust/Cargo.toml
           npm ci --prefix crates/chobo/tools/mermaid
           sh crates/chobo/tools/tigerbeetle/fetch.sh
           echo "RITSU_TIGERBEETLE=$GITHUB_WORKSPACE/crates/chobo/tools/tigerbeetle/tigerbeetle" >> "$GITHUB_ENV"

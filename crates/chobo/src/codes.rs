@@ -386,6 +386,17 @@ transfer ship(order: string, sku: string, qty: pcs)
   move qty from stock(sku) to customers
 ";
 
+const X_E063: &str = "book rooms v1
+unit sqm
+account floor(site: string) : sqm
+  at least 0 refused as no_room
+account builders : sqm outside
+account tenants : sqm outside
+transfer build(permit: string, site: string, area_m²: sqm)
+  key permit, site
+  move area_m² from builders to floor(site)
+";
+
 /// The one fake key the reproduction of W901 holds (ritsu's DESIGN 16.10): a Google API key that
 /// reads as a fake. It is put together from two pieces, so that no file of the source holds a key
 /// in one run; the pages of codes that `explain` writes hold it whole.
@@ -700,7 +711,7 @@ pub fn ledger() -> Vec<Entry> {
                     "Split the transfer kind into kinds with fewer moves. Each kind is a write of its own, so keep together the moves that have to go through all or none."
                 ),
                 X_E060,
-                &["E061", "E062"],
+                &["E061", "E062", "E063"],
             )
         },
         Entry {
@@ -714,7 +725,7 @@ pub fn ledger() -> Vec<Entry> {
                 ),
                 tr!("名前を短くしてください。ASCII なら 63 字、日本語なら 21 字までです（関数の名前では、後ろに付く `_hold` などの分を引いた字数です）。", "Make the name shorter: 63 ASCII letters, or 21 Japanese characters, less what follows it in a function's name (`_hold`, …)."),
                 X_E061,
-                &["E060", "E062"],
+                &["E060", "E062", "E063"],
             )
         },
         Entry {
@@ -731,7 +742,24 @@ pub fn ledger() -> Vec<Entry> {
                     "Make the book's name at most 51 characters (`_within_lower` follows it), and take out any character beyond the Basic Multilingual Plane."
                 ),
                 X_E062,
-                &["E060", "E061"],
+                &["E060", "E061", "E063"],
+            )
+        },
+        Entry {
+            target: Some("postgres-rust"),
+            ..e(
+                "E063",
+                tr!("名前を Rust が識別子にできません", "A name Rust takes as no identifier"),
+                tr!(
+                    "`chobo build` の Rust のターゲット（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）で、振替、勘定、引数の名前か拒否の理由に、Rust の識別子には使えない字があるときに出ます。Rust のクライアントは、これらの名前をそのまま、メソッド、構造体のフィールド、型、列挙の値の名前にします。chobo の名前には Unicode の文字と数字を使えますが、Rust の識別子は XID_Start の字で始まり、XID_Continue の字が続くもの（Unicode 17.0。rustc 1.94〜1.97 が読む版）なので、十進でない数字（`²`、`½`、`①` など）も丸で囲んだ文字（`Ⓐ`）も使えず、結合文字などは先頭に置けません。",
+                    "With a Rust target of `chobo build` (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the name of a transfer, an account or a parameter, or a reason, has a character no Rust identifier holds where the name has it. The Rust client writes those names as they are, as methods, fields of structs, and names of types and of an enum's variants. A name of chobo may hold any letter and digit of Unicode; a Rust identifier begins with a character of XID_Start and goes on with those of XID_Continue (Unicode 17.0, which rustc 1.94 to 1.97 read), so it holds no digit that is not decimal (`²`, `½`, `①`, …) and no circled letter (`Ⓐ`), and begins with no combining mark."
+                ),
+                tr!(
+                    "名前からその字を外すか、ほかの字に替えてください（たとえば `area_m²` は `area_m2` に）。同じ名前はどの言語のクライアントにも出るので、替えると、どの言語の呼び出しも新しい名前で書くことになります。",
+                    "Take the character out of the name, or write another in its place (`area_m²` as `area_m2`, for one). The same name is in the clients of every language, so a call in any of them is then written with the new name."
+                ),
+                X_E063,
+                &["E061", "E062"],
             )
         },
         e(

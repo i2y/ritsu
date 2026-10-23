@@ -581,3 +581,36 @@ ritsu-testkit に `mysql`（`RITSU_MYSQL_BIN` の使い捨てのサーバー、`
 4. DESIGN 4.5 に、段階 A の結果と、測った速さを実物で貼ってある。
 
 段階 E の結果（2026-10-17）：1 から 4 を満たした。20 冊の 468 本のシナリオが、MySQL 8.4.11 と TiDB v8.5.8 で、三つの言語のクライアントの二つの形のどれでも一致した（`tests/backends.rs` の MySQL の系統の分は 63 秒）。`tests/mysql.rs` では、反対の向きの 400 回の移し替えで、デッドロックも呼び直しも 0 回だった。接続を渡したときに誰のトランザクションになるかを三つの言語で確かめ（mysqlclient 2.3.0 は手で一度）、呼ぶ側のトランザクションで作った勘定の行を確かめ済みにしないことを、それを外すと残高が 0 になって落ちることで確かめた。dandori の帳簿の試験では、MySQL 8.4.11 の上でも、`io.ts`・`io.py`・Go の `Transport`・Step Functions の Lambda 関数の四通りのどれでも、170 件の帳簿の操作が参照インタプリタと同じ答えだった。ritsu の npm のパッケージ（WASI）とブラウザで試すページも、MySQL の系統の四つの出力先と `--show mysql` で、元のバイナリと同じ答えを返した。Vitess 24.0.5（ソースから組んだ vttestserver）では、シャード一つと、テナントで二つに分けてシャードをまたぐトランザクションを誤りにしたものの両方で、468 本のシナリオが一致し、`tests/mysql.rs` の段も通った（四つのサーバーで 188 秒）。そこへ届くまでに、SQL のコメントの `;`、二つのテーブルを結んだ UPDATE、聞く文の `do 0` の三つを直した（DESIGN 4.5）。Vitess を動かすサービスの上では確かめていない（DESIGN 11.4）。
+
+## 5. 段階 F：Rust のクライアント
+
+PostgreSQL、TigerBeetle、MySQL の系統を呼ぶ Rust のクライアントを出す（DESIGN 14）。Wasm は作らない。名前、引数、結果はほかの言語のクライアントと同じで、意味を書く場所は Rust の生成器のまま増やさない。
+
+### F1 形を決める
+
+ドライバ（sqlx 0.9.0、公式の `tigerbeetle` 0.17.9）、非同期、受け取るもののトレイト、帳簿ごとのモジュール、名前と答えと誤りの型を、Go のクライアントの形と Rust の慣わしから決める。TigerBeetle の 0.17.9 に公式の Rust のクライアントがあることを、クレートとレプリカで確かめる。
+
+### F2 生成（client/rust.rs と runtime/*.rs）
+
+三つのターゲット、どの帳簿でも同じ部分の三つ（`runtime/postgres.rs`、`tigerbeetle.rs`、`mysql.rs`。Go の runtime を写し、ID とチェーンと文は Rust の生成器と同じもの）、モジュールの頭のクレートの行、ritsu のパッケージの中の単位の型。`chobo api` の `targets.rust` と、口の帳簿の事実の `rust`。
+
+### F3 検査（E063）
+
+Rust の識別子にならない名前を、Rust のターゲットのビルドで止める。字の表は Unicode Character Database から作り（`tools/xid/make_table.py`）、外のクレートは足さない。
+
+### F4 道具と突き合わせ
+
+試験のランナー `tools/runner/rust`（Cargo.toml、Cargo.lock、`src/harness.rs`）。`tests/backends.rs` の Rust の組み合わせ（PostgreSQL、TigerBeetle、MySQL の系統の一文ずつとまとめて）、`tests/postgres.rs` の REPEATABLE READ、`tests/tigerbeetle.rs` の二つ、`tests/mysql.rs` の誰のトランザクションか、`tests/generated.rs` の組み立て（二つのエディションと clippy、パッケージの中、クレートの版、E063 の表と rustc）。ritsu の CI の tools と platforms の段に clippy と、ランナーのクレートの fetch。
+
+### F5 ritsu
+
+`tests/npm.rs` と `tests/playground.rs` の出力先の一覧、`ritsu.wasm` の作り直し、npm のパッケージの試験、`tests/audit.rs` の Cargo.lock、THIRD_PARTY_NOTICES。
+
+### 段階 F の終わりの条件
+
+1. テストの帳簿 12 冊と例の 8 冊の全部のシナリオが、PostgreSQL と TigerBeetle の Rust のクライアントで参照インタプリタと一致し、送ったものが `chobo run --show` と同じになる。MySQL の系統の組み合わせは CI で流れる。
+2. 生成したクライアントが、エディション 2021 と 2024 で clippy の `-D warnings` を通る。
+3. E063 が止める字と rustc が止める字が、chobo の名前に書ける全部の字で同じになる。
+4. 替える前と後のバイナリで、ほかの出力先の生成物と検査の答えが変わらない。
+
+段階 F の結果（2026-10-24）：1 から 4 を満たした（1 の MySQL の系統は、手元ではランナーを組むまでで、サーバーの上では CI の段で流れる）。20 冊の 468 本のシナリオが、`postgres-rust` と `tigerbeetle-rust` で一致した。60 のモジュールが二つのエディションの clippy を通り、E063 が通す延べ 293,930 字と止める 2,569 字が rustc と同じだった。替える前と後で、木の `.book` の全部（103）の 1,885 の出力は、`api` の `targets.rust`、`explain --all` の E063、`--help` の Rust と E063 のほかは変わらなかった（DESIGN 14.5）。

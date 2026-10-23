@@ -71,14 +71,17 @@ for.
   another tool through `chobo api`; chobo knows neither.
 - **A client for each database, in each language.** The clients of every database have the same
   names, arguments and answers, so that changing the database changes how the book value is made and
-  nothing else; and one runner in each language carries the tests through all of them.
+  nothing else; and one runner in each language carries the tests through all of them. The Rust
+  clients are async, as TigerBeetle's own client for Rust and sqlx are, and take what they call
+  through a trait the drivers' pools, connections and transactions implement.
 - **On the MySQL family, the client sends the statements.** TiDB has no stored procedures, and a
   service that runs Vitess may allow neither stored routines nor making a database, so there is no
   function to call: the client runs each call as one transaction of statements chobo wrote, in
   which the checks are, and fills in nothing but the values.
 - **The build stops where its database would.** A chain longer than one TigerBeetle request of a
   replica chobo can be tested on (253 transfers), a name longer than PostgreSQL's 63 bytes, and a
-  name MySQL cannot hold stop the build for that database, and no other.
+  name MySQL cannot hold stop the build for that database, and no other; a name with a character
+  no Rust identifier holds stops the builds for Rust.
 
 ## Dropped
 

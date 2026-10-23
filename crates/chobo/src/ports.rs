@@ -33,7 +33,7 @@ fn checked(file: &Path) -> Result<(String, Book, Checked), Vec<Said>> {
 fn clients(book: &Book, module: &str, members: Vec<String>, param: impl Fn(&TransferKind, &TParam) -> String) -> ritsu_ports::BookClient {
     ritsu_ports::BookClient {
         module: module.to_string(),
-        transfers: book.transfers.iter().zip(members).map(|(t, member)| ritsu_ports::ClientTransfer { member, params: t.params.iter().map(|p| param(t, p)).collect() }).collect(),
+        transfers: book.transfers.iter().zip(members).map(|(t, member)| ritsu_ports::ClientTransfer { member, params: t.params.iter().map(|p| param(t, p)).collect(), type_name: String::new() }).collect(),
     }
 }
 
@@ -173,6 +173,16 @@ impl ritsu_ports::Books for Engine {
                 for (ct, t) in c.transfers.iter_mut().zip(&book.transfers) {
                     let all: Vec<usize> = (0..t.params.len()).collect();
                     ct.params = crate::client::go::fields(t, &all);
+                }
+                c
+            },
+            rust: {
+                let stem = file.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+                let mut c = clients(&book, &crate::client::rust::module(&book, &stem), crate::client::rust::members(&book), |_, _| String::new());
+                for ((ct, t), ty) in c.transfers.iter_mut().zip(&book.transfers).zip(crate::client::rust::transfer_types(&book)) {
+                    let all: Vec<usize> = (0..t.params.len()).collect();
+                    ct.params = crate::client::rust::fields(t, &all);
+                    ct.type_name = ty;
                 }
                 c
             },

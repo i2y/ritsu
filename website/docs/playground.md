@@ -195,7 +195,8 @@ opens. The links dandori's playground gave, such as
 
 The module this page loads, `playground/ritsu.wasm`, is built from ritsu's code (MIT OR
 Apache-2.0) and, like the `ritsu` binary, holds the work of others: names from Unicode CLDR
-(Unicode-3.0), a table made from the WHATWG Encoding Standard (BSD-3-Clause), eight crates from
+(Unicode-3.0), a table made from the Unicode Character Database (Unicode-3.0), a table made from
+the WHATWG Encoding Standard (BSD-3-Clause), eight crates from
 crates.io, and copies of laws for the examples of `explain`. The editor and the rendering of the
 Markdown come from `playground/libraries.js`, which bundles CodeMirror 6 and marked from npm; each
 package is under the MIT License, and the file carries the text of each license at its head.

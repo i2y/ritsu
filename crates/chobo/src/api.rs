@@ -161,7 +161,7 @@ fn ids_json() -> Value {
     })
 }
 
-/// How each target names what it writes (DESIGN 4.3, 4.5, 5): for a tool that calls a book through a
+/// How each target names what it writes (DESIGN 4.3, 4.5, 5, 14): for a tool that calls a book through a
 /// client chobo built, or through the SQL, without reading the code. `stem` is the book's file
 /// name without `.book`, which the Go package falls back on.
 pub fn targets(book: &Book, stem: &str) -> Value {
@@ -263,6 +263,58 @@ pub fn targets(book: &Book, stem: &str) -> Value {
             v
         })
         .collect();
+    // the Rust clients: a module, whose book value has a method per transfer kind, which gives the
+    // operations of the kind (`do` is `r#do`, a keyword of Rust's)
+    let rs_types = client::rust::transfer_types(book);
+    let rs: Vec<Value> = book
+        .transfers
+        .iter()
+        .zip(client::rust::members(book))
+        .zip(&rs_types)
+        .map(|((t, m), base)| {
+            let all: Vec<usize> = (0..t.params.len()).collect();
+            let fields: serde_json::Map<String, Value> = key_names(t, &all).into_iter().zip(client::rust::fields(t, &all)).map(|(n, f)| (n, json!(f))).collect();
+            let mut v = json!({"kind": t.name, "member": m, "args": format!("{base}Args"), "calls": format!("{base}Calls"), "fields": fields});
+            if t.is_pending() {
+                v["key"] = json!(format!("{base}Key"));
+                if !t.amount_params().is_empty() {
+                    v["amounts"] = json!(format!("{base}Amounts"));
+                }
+                v["operations"] = json!({"hold": "hold", "post": "post", "void": "void", "status": "status"});
+            } else {
+                v["operations"] = json!({"do": "r#do"});
+            }
+            v
+        })
+        .collect();
+    let rs_balances: Vec<Value> = book
+        .accounts
+        .iter()
+        .zip(client::rust::balance_methods(book))
+        .zip(client::rust::account_types(book))
+        .map(|((a, m), base)| {
+            let mut v = json!({"account": a.name, "method": m});
+            if !a.params.is_empty() {
+                let fields: serde_json::Map<String, Value> = a.params.iter().cloned().zip(client::rust::account_fields(a)).map(|(n, f)| (n, json!(f))).collect();
+                v["args"] = json!(format!("{base}Account"));
+                v["fields"] = Value::Object(fields);
+            }
+            v
+        })
+        .collect();
+    let reasons: serde_json::Map<String, Value> = client::rust::reason_variants(book).into_iter().map(|(r, v)| (r, json!(v))).collect();
+    let crates = |b: crate::target::Backend| -> Vec<Value> { client::rust::crates(b).iter().map(|c| json!({"name": c.name, "version": c.version, "default_features": c.default_features, "features": c.features})).collect() };
+    let module = client::rust::module(book, stem);
+    let rust = json!({
+        "module": module,
+        "file": format!("{module}.rs"),
+        "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle", "mysql": "mysql"},
+        "transfers": rs,
+        "balance": "balance",
+        "balances": rs_balances,
+        "reasons": reasons,
+        "crates": {"postgres": crates(crate::target::Backend::Postgres), "tigerbeetle": crates(crate::target::Backend::TigerBeetle), "mysql": crates(crate::target::Backend::MySql)},
+    });
     // the chains
     let mut chains = Vec::new();
     for t in &book.transfers {
@@ -289,6 +341,7 @@ pub fn targets(book: &Book, stem: &str) -> Value {
         "typescript": {"file": format!("{}.ts", book.name), "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle", "mysql": "mysql"}, "transfers": ts, "balance": "balance"},
         "python": {"module": book.name, "factories": {"postgres": "postgres", "tigerbeetle": "tigerbeetle", "mysql": "mysql"}, "transfers": py, "balance": "balance"},
         "go": {"package": go::package(book, stem), "factories": {"postgres": "Postgres", "tigerbeetle": "TigerBeetle", "mysql": "MySQL"}, "transfers": gos, "balances": go_balances},
+        "rust": rust,
         "tigerbeetle": {"request_max": client::REQUEST_MAX, "chains": chains},
     })
 }

@@ -159,14 +159,22 @@ warning[W104]: hold_order.book:14:3: in a hold, what move 1 puts into held(order
 | W107 | with `--diff-base`, an account or a transfer gone since the revision compared with (below) |
 | W901 | a key written in the file, in a string or a comment: the diagnostic gives its kind, its prefix and its length, never the key |
 
-Three errors belong to a target, and `chobo build` gives them: a chain of transfers too long for
+Four errors belong to a target, and `chobo build` gives them: a chain of transfers too long for
 one TigerBeetle request (E060, at 253); a name longer than PostgreSQL's 63 bytes (E061), which
-PostgreSQL would cut short without a word; and a book's name the MySQL family's tables and checks
+PostgreSQL would cut short without a word; a book's name the MySQL family's tables and checks
 cannot be named after (E062), longer than 51 characters or with a character beyond the Basic
-Multilingual Plane, which MySQL would write as `?` with only a warning. A book is held only to the
-limits of the target it is built for.
+Multilingual Plane, which MySQL would write as `?` with only a warning; and, for the Rust targets,
+a name with a character no Rust identifier holds where the name has it (E063), such as a digit that
+is not decimal, which the Rust client would write as it is, as a field of a struct:
 
-[Diagnostics](codes.md) has all 31 codes, each with when it appears, how to fix it and the smallest
+```text
+error[E063]: identifiers.book:11:46: The parameter's name `area_m²` has ² (U+00B2), which no Rust identifier holds
+    11 | transfer build(permit: string, site: string, area_m²: sqm)
+```
+
+A book is held only to the limits of the target it is built for.
+
+[Diagnostics](codes.md) has all 32 codes, each with when it appears, how to fix it and the smallest
 book that shows it, as `chobo explain --all` prints them; `chobo explain <code>` prints one. Every
 diagnostic of chobo's on this site is taken from a golden file of chobo's tests, which hold the
 diagnostics of each test book, in English and in Japanese, to what the checker prints.

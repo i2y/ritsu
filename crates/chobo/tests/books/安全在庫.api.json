@@ -583,6 +583,125 @@
         }
       ]
     },
+    "rust": {
+      "module": "book",
+      "file": "book.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "補充",
+          "member": "補充",
+          "args": "補充Args",
+          "calls": "補充Calls",
+          "fields": {
+            "伝票": "伝票",
+            "sku": "sku",
+            "数": "数"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "出荷",
+          "member": "出荷",
+          "args": "出荷Args",
+          "calls": "出荷Calls",
+          "fields": {
+            "注文": "注文",
+            "sku": "sku",
+            "数": "数"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "棚",
+          "method": "棚",
+          "args": "棚Account",
+          "fields": {
+            "sku": "sku"
+          }
+        },
+        {
+          "account": "仕入先",
+          "method": "仕入先"
+        },
+        {
+          "account": "客",
+          "method": "客"
+        }
+      ],
+      "reasons": {
+        "安全在庫割れ": "安全在庫割れ",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

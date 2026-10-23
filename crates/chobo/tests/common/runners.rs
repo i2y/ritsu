@@ -147,6 +147,36 @@ pub fn go() -> Result<(), String> {
     Ok(())
 }
 
+/// The runner of the Rust clients, and cargo to build it with (the cargo that runs the tests).
+pub fn rust() -> Result<(), String> {
+    if !runner_dir().join("rust/Cargo.lock").is_file() || !runner_dir().join("rust/src/harness.rs").is_file() {
+        return Err("tools/runner/rust is missing".into());
+    }
+    if !ritsu_testkit::tools::runs(cargo_bin(), &["--version"]) {
+        return Err("cargo does not run".into());
+    }
+    Ok(())
+}
+
+/// The cargo that runs the tests: cargo gives the test process `CARGO`.
+fn cargo_bin() -> std::ffi::OsString {
+    std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())
+}
+
+/// cargo, run in `dir`, with the target directory every build of the Rust clients shares: the
+/// tests' own temporary directory in the target directory (cargo gives it as
+/// `CARGO_TARGET_TMPDIR`), so that the crates the clients need are built once, and a build is
+/// held to the runner's Cargo.lock (`--locked`).
+pub fn cargo_in(dir: &Path) -> Command {
+    let mut c = Command::new(cargo_bin());
+    c.current_dir(dir).env("CARGO_TARGET_DIR", rust_target()).env_remove("RUSTFLAGS").env_remove("CARGO_ENCODED_RUSTFLAGS");
+    c
+}
+
+pub fn rust_target() -> PathBuf {
+    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("chobo-rust")
+}
+
 /// `go`, run in `dir`, as every Go command here runs: outside any workspace, and with -trimpath
 /// (Go's build cache keys a package by its directory otherwise, and grows by the same packages
 /// at every run).
@@ -312,6 +342,183 @@ pub fn build_go(cases: &[Case], work: &Path) -> Result<GoRunner, String> {
     }
     eprintln!("built the Go runner of {} package(s) in {:.0} s", keys.len(), started.elapsed().as_secs_f64());
     Ok(GoRunner { bin, keys })
+}
+
+/// The Rust runner: one binary of tools/runner/rust and the Rust clients of every book, for the
+/// three databases, each module known by a key, as the Go runner.
+pub struct RustRunner {
+    pub bin: PathBuf,
+    pub keys: BTreeMap<(String, &'static str), String>,
+}
+
+/// What main.rs of the Rust runner says of one generated module: its traits for the harness's
+/// values that write down what is sent, and an adapter of its typed calls to the harness's `Book`.
+fn rust_adapter(key: &str, book: &Book, backend: &str) -> String {
+    use chobo::client::rust::{account_fields, account_types, balance_methods, fields, members, transfer_types};
+    use chobo::model::Ty;
+    let mut o = match backend {
+        "postgres" => format!(
+            "impl {key}::Database for harness::PgRec {{\n    fn row<'a>(&'a self, sql: &'static str, params: &'a [{key}::Param]) -> impl std::future::Future<Output = Result<sqlx::postgres::PgRow, sqlx::Error>> + Send + 'a {{\n        let ps = params\n            .iter()\n            .map(|p| match p {{\n                {key}::Param::Text(s) => harness::P::Text(s.clone()),\n                {key}::Param::Int(n) => harness::P::Int(*n),\n                {key}::Param::Null => harness::P::Null,\n            }})\n            .collect();\n        harness::PgRec::row(self, sql, ps)\n    }}\n}}\n\n"
+        ),
+        "tigerbeetle" => {
+            let mut o = format!("impl {key}::TigerBeetleClient for harness::TbRec {{\n");
+            for (f, arg, out) in [
+                ("create_accounts", "&[tigerbeetle::Account]", "Vec<tigerbeetle::CreateAccountResult>"),
+                ("create_transfers", "&[tigerbeetle::Transfer]", "Vec<tigerbeetle::CreateTransferResult>"),
+                ("lookup_accounts", "&[u128]", "Vec<tigerbeetle::Account>"),
+                ("lookup_transfers", "&[u128]", "Vec<tigerbeetle::Transfer>"),
+            ] {
+                o.push_str(&format!("    fn {f}(&self, xs: {arg}) -> impl std::future::Future<Output = Result<{out}, tigerbeetle::Error>> + Send {{\n        harness::TbRec::{f}(self, xs)\n    }}\n"));
+            }
+            o.push_str("}\n\n");
+            o
+        }
+        _ => format!(
+            "impl {key}::Database for harness::MyRec {{\n    type Conn<'c> = harness::MyConn;\n    fn connection(&self) -> impl std::future::Future<Output = Result<harness::MyConn, sqlx::Error>> + Send {{\n        harness::MyRec::connection(self)\n    }}\n}}\n\nimpl {key}::Connection for harness::MyConn {{\n    fn exec<'a>(&'a mut self, sql: &'a str) -> impl std::future::Future<Output = Result<Vec<Vec<{key}::Values>>, sqlx::Error>> + Send + 'a {{\n        harness::MyConn::exec(self, sql)\n    }}\n    fn in_transaction(&self) -> bool {{\n        harness::MyConn::in_transaction(self)\n    }}\n}}\n\n"
+        ),
+    };
+    let rec = match backend {
+        "postgres" => "harness::PgRec",
+        "tigerbeetle" => "harness::TbRec",
+        _ => "harness::MyRec",
+    };
+    let ty = format!("A{key}");
+    o.push_str(&format!("struct {ty}({key}::Book<{rec}>);\n\nimpl Book for {ty} {{\n"));
+    // a struct of the parameters `which` of `t`, each read from the JSON object `obj`
+    let lit = |t: &chobo::model::TransferKind, which: &[usize], name: &str, obj: &str| -> String {
+        let fs: Vec<String> = fields(t, which)
+            .iter()
+            .zip(which)
+            .map(|(f, i)| {
+                let p = &t.params[*i];
+                let read = if matches!(p.ty, Ty::Amount(_)) { "a" } else { "s" };
+                format!("{f}: harness::{read}({obj}, {:?})", p.name)
+            })
+            .collect();
+        format!("{key}::{name} {{ {} }}", fs.join(", "))
+    };
+    let mut calls = String::new();
+    let mut states = String::new();
+    for ((t, m), base) in book.transfers.iter().zip(members(book)).zip(transfer_types(book)) {
+        let all: Vec<usize> = (0..t.params.len()).collect();
+        let keys = chobo::postgres::key_params(t);
+        let k = |op: &str| format!("({:?}, {:?})", t.name, op);
+        if t.is_pending() {
+            calls.push_str(&format!("                {} => self.0.{m}().hold({}).await,\n", k("hold"), lit(t, &all, &format!("{base}Args"), "args")));
+            if t.amount_params().is_empty() {
+                calls.push_str(&format!("                {} => self.0.{m}().post({}).await,\n", k("post"), lit(t, &keys, &format!("{base}Key"), "args")));
+            } else {
+                calls.push_str(&format!(
+                    "                {} => self.0.{m}().post({}, amounts.map(|m| {})).await,\n",
+                    k("post"),
+                    lit(t, &keys, &format!("{base}Key"), "args"),
+                    lit(t, &t.amount_params(), &format!("{base}Amounts"), "m")
+                ));
+            }
+            calls.push_str(&format!("                {} => self.0.{m}().void({}).await,\n", k("void"), lit(t, &keys, &format!("{base}Key"), "args")));
+            states.push_str(&format!("                {:?} => self.0.{m}().status({}).await,\n", t.name, lit(t, &keys, &format!("{base}Key"), "args")));
+        } else {
+            calls.push_str(&format!("                {} => self.0.{m}().r#do({}).await,\n", k("do"), lit(t, &all, &format!("{base}Args"), "args")));
+        }
+    }
+    o.push_str(&format!(
+        "    fn call<'a>(&'a self, kind: &'a str, op: &'a str, args: &'a Args, amounts: Option<&'a Args>) -> Fut<'a, (String, String)> {{\n        Box::pin(async move {{\n            let _ = amounts;\n            let r = match (kind, op) {{\n{calls}                _ => return Err(format!(\"no {{kind}}.{{op}}\")),\n            }};\n            let o = r.map_err(|e| e.to_string())?;\n            Ok((o.result().to_string(), o.reason().map(|r| r.as_str().to_string()).unwrap_or_default()))\n        }})\n    }}\n\n"
+    ));
+    let mut balances = String::new();
+    for ((a, m), base) in book.accounts.iter().zip(balance_methods(book)).zip(account_types(book)) {
+        if a.params.is_empty() {
+            balances.push_str(&format!("                {:?} => self.0.balance().{m}().await,\n", a.name));
+        } else {
+            let fs: Vec<String> = account_fields(a).iter().zip(&a.params).map(|(f, p)| format!("{f}: harness::s(args, {p:?})")).collect();
+            balances.push_str(&format!("                {:?} => self.0.balance().{m}({key}::{base}Account {{ {} }}).await,\n", a.name, fs.join(", ")));
+        }
+    }
+    o.push_str(&format!(
+        "    fn balance<'a>(&'a self, account: &'a str, args: &'a Args) -> Fut<'a, (i64, i64, i64)> {{\n        Box::pin(async move {{\n            let _ = args;\n            let b = match account {{\n{balances}                _ => return Err(format!(\"no account {{account}}\")),\n            }};\n            let b = b.map_err(|e| e.to_string())?;\n            Ok((b.posted, b.held_in, b.held_out))\n        }})\n    }}\n\n"
+    ));
+    if states.is_empty() {
+        o.push_str("    fn status<'a>(&'a self, kind: &'a str, args: &'a Args) -> Fut<'a, String> {\n        Box::pin(async move {\n            let _ = args;\n            Err(format!(\"no {kind}\"))\n        })\n    }\n\n");
+    } else {
+        o.push_str(&format!(
+            "    fn status<'a>(&'a self, kind: &'a str, args: &'a Args) -> Fut<'a, String> {{\n        Box::pin(async move {{\n            let s = match kind {{\n{states}                _ => return Err(format!(\"no {{kind}}\")),\n            }};\n            Ok(s.map_err(|e| e.to_string())?.map(|h| h.as_str().to_string()).unwrap_or_default())\n        }})\n    }}\n\n"
+        ));
+    }
+    if backend == "tigerbeetle" {
+        o.push_str("    fn expire(&self) -> Fut<'_, ()> {\n        Box::pin(async { Ok(()) })\n    }\n}\n\n");
+    } else {
+        o.push_str("    fn expire(&self) -> Fut<'_, ()> {\n        Box::pin(async move { self.0.expire().await.map(|_| ()).map_err(|e| e.to_string()) })\n    }\n}\n\n");
+    }
+    o
+}
+
+/// Build a binary of the runner's crate in `work`, `runner-<name>` (each build names its own, so
+/// that builds that share the target directory do not write one file): the harness, `modules` by
+/// their keys under src/books, and `main` as main.rs. The crates are the runner's, at the versions
+/// of its Cargo.lock. The binary's path.
+pub fn build_rust_with(work: &Path, name: &str, modules: &[(String, String)], main: &str) -> Result<PathBuf, String> {
+    let dir = work.join(format!("rust-{name}"));
+    let toml = std::fs::read_to_string(runner_dir().join("rust/Cargo.toml")).map_err(|e| e.to_string())?;
+    let toml = toml.replace("name = \"chobo-runner\"\npath", &format!("name = \"runner-{name}\"\npath"));
+    write(&dir.join("Cargo.toml"), &toml);
+    std::fs::copy(runner_dir().join("rust/Cargo.lock"), dir.join("Cargo.lock")).map_err(|e| e.to_string())?;
+    write(&dir.join("src/harness.rs"), &std::fs::read_to_string(runner_dir().join("rust/src/harness.rs")).map_err(|e| e.to_string())?);
+    for (key, text) in modules {
+        write(&dir.join("src/books").join(format!("{key}.rs")), text);
+    }
+    write(&dir.join("src/main.rs"), main);
+    let out = cargo_in(&dir).args(["build", "--locked", "--quiet"]).output().map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(format!("the Rust of {name} did not build:\n{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+    }
+    let bin = work.join(format!("runner-{name}"));
+    std::fs::copy(rust_target().join("debug").join(format!("runner-{name}")), &bin).map_err(|e| format!("the Rust of {name}: {e}"))?;
+    Ok(bin)
+}
+
+/// Build the Rust runner of `cases` in `work` ([`build_rust_with`]). Every generated module is held
+/// to no warning (`#![deny(warnings)]`), the lints of its own aside.
+pub fn build_rust(cases: &[Case], work: &Path, name: &str) -> Result<RustRunner, String> {
+    let mut modules = Vec::new();
+    let mut mods = String::new();
+    let mut adapters = String::new();
+    let mut entries = String::new();
+    let mut keys = BTreeMap::new();
+    for (i, c) in cases.iter().enumerate() {
+        for (backend, target, prefix) in [("postgres", Target::PostgresRust, "pg"), ("tigerbeetle", Target::TigerBeetleRust, "tb"), ("mysql", Target::MySqlRust, "my")] {
+            let key = format!("{prefix}{i}");
+            let files = target::build(&c.copy, &c.stem, target, &c.origin).map_err(|d| format!("{}: {target:?}: {}", c.stem, d[0].message.en))?;
+            let [(_, text)] = files.as_slice() else { return Err(format!("{}: {target:?} wrote {} files", c.stem, files.len())) };
+            modules.push((key.clone(), text.clone()));
+            mods.push_str(&format!("#[path = \"books/{key}.rs\"]\nmod {key};\n"));
+            adapters.push_str(&rust_adapter(&key, &c.copy, backend));
+            let make = match backend {
+                "postgres" => format!("harness::Entry::Postgres(|db, tenant| Box::new(A{key}({key}::postgres(db, tenant))))"),
+                "tigerbeetle" => format!("harness::Entry::TigerBeetle(|c, tenant| Box::new(A{key}({key}::tigerbeetle(c, tenant))))"),
+                _ => format!("harness::Entry::MySql(|db, tenant, batch| Box::new(A{key}({key}::mysql(db, tenant, batch))))"),
+            };
+            entries.push_str(&format!("        ({key:?}, {make}),\n"));
+            keys.insert((c.stem.clone(), backend), key);
+        }
+    }
+    let main = format!("//! The runner of the Rust clients of {} book(s).\n#![deny(warnings)]\n\n#[allow(dead_code)]\nmod harness;\n\n{mods}\nuse harness::{{Args, Book, Fut}};\n\n{adapters}fn main() {{\n    harness::main(vec![\n{entries}    ]);\n}}\n", cases.len());
+    let started = Instant::now();
+    let bin = build_rust_with(work, name, &modules, &main)?;
+    eprintln!("built the Rust runner of {} module(s) in {:.0} s", keys.len(), started.elapsed().as_secs_f64());
+    Ok(RustRunner { bin, keys })
+}
+
+/// The Rust runner of `cases`, or None when it cannot be built here (a SKIP line says why).
+pub fn rust_runner(cases: &[Case], work: &Path, name: &str) -> Option<RustRunner> {
+    if !need(Need::Rustc) {
+        return None;
+    }
+    match rust() {
+        Ok(()) => Some(build_rust(cases, work, name).unwrap_or_else(|e| panic!("{e}"))),
+        Err(why) => {
+            skip(&format!("{why}; the Rust clients are not run"));
+            None
+        }
+    }
 }
 
 // ── the runners ───────────────────────────────────────────────────────────

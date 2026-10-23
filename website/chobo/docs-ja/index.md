@@ -22,7 +22,7 @@ hide:
 </p>
 
 <p class="cb-hero__lede">
-<strong>どの出力先でも、帳簿の意味は一つです。</strong>chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けにビルドします。呼び出すクライアントは TypeScript、Python、Go で出します。テストはどのシナリオもすべてのクライアントで流し、どのクライアントも、参照インタプリタと同じ結果を返さなければなりません。
+<strong>どの出力先でも、帳簿の意味は一つです。</strong>chobo は帳簿を検査し、参照インタプリタで動かし、PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けにビルドします。呼び出すクライアントは TypeScript、Python、Go、Rust で出します。テストはどのシナリオもすべてのクライアントで流し、どのクライアントも、参照インタプリタと同じ結果を返さなければなりません。
 </p>
 
 <div class="cb-hero__cta" markdown>
@@ -138,14 +138,15 @@ $ chobo build examples/refunds/refunds.ja.book --target postgres-typescript --ou
 $ chobo build examples/refunds/refunds.ja.book --target tigerbeetle-python --out db
 $ chobo build examples/refunds/refunds.ja.book --target mysql --out db
 $ chobo build examples/refunds/refunds.ja.book --target mysql-go --out db
+$ chobo build examples/refunds/refunds.ja.book --target postgres-rust --out db
 ```
 
 </div>
 <div markdown>
 
-### 一つの帳簿から、三種類のデータベースと三つの言語へ
+### 一つの帳簿から、三種類のデータベースと四つの言語へ
 
-PostgreSQL では、操作ごとに関数を一つ作ります。関数は勘定の行をロックし、移動を全部確かめてから、一つのトランザクションの中で書き込みます。呼ぶ側がトランザクションを開いていれば、そのトランザクションの中で動きます。TigerBeetle では、クライアントが操作ごとに振替のチェーンを一つ送り、TigerBeetle はそれを全部通すか、一つも通さないかのどちらかにします。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、そのトランザクションの中で動きます。どのデータベースのクライアントも、名前と引数と結果が同じで、拒否は例外ではなく、結果の一つとして返ります。[データベース向けのビルド](databases.md)
+PostgreSQL では、操作ごとに関数を一つ作ります。関数は勘定の行をロックし、移動を全部確かめてから、一つのトランザクションの中で書き込みます。呼ぶ側がトランザクションを開いていれば、そのトランザクションの中で動きます。TigerBeetle では、クライアントが操作ごとに振替のチェーンを一つ送り、TigerBeetle はそれを全部通すか、一つも通さないかのどちらかにします。MySQL、TiDB、Vitess では、chobo が書いた SQL 文を、クライアントが一つのトランザクションの中で送ります。勘定の行をロックしながら読み、どの移動が境界を破るかを確かめてから書き込みます。呼ぶ側のトランザクションの中にある接続を渡せば、そのトランザクションの中で動きます。どのデータベースのクライアントも、どの言語でも、名前と引数と結果が同じで、拒否は例外ではなく、結果の一つとして返ります。[データベース向けのビルド](databases.md)
 
 </div>
 </div>
@@ -203,7 +204,7 @@ dandori のワークフローは、帳簿の操作をタスクとして呼び、
 - 勘定が受けた記録や振替を読む操作。
 - TigerBeetle の結果が参照インタプリタと違う二つの場合を、そろえること（[出力先](targets.md#tigerbeetle)に書いてあります）。
 
-設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md) にあり、主な決めごとは[設計](design.md)にまとめています。chobo は [ritsu](../../ja/) の言語の一つで、ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。
+設計の理由、決めたこと、残っていることは [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md) にあり、主な決めごとは[設計](design.md)にまとめています。chobo は [ritsu](../../ja/) の言語の一つで、ライセンスは Apache License 2.0 と MIT ライセンスのどちらかを選べます。Rust の名前に使えない字の表は Unicode Character Database から作ったもので、Unicode License V3 に従います（[THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/crates/chobo/THIRD_PARTY_NOTICES)）。
 
 ## 次に読むページ
 

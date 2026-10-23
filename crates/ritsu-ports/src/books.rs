@@ -16,18 +16,21 @@ pub struct BookFacts {
     pub accounts: Vec<Account>,
     pub transfers: Vec<Transfer>,
     /// How the clients chobo writes for the book name what a caller reaches, in TypeScript,
-    /// Python and Go (`chobo api`'s `targets`), so that code that calls them is written without
-    /// reading them.
+    /// Python, Go and Rust (`chobo api`'s `targets`), so that code that calls them is written
+    /// without reading them.
     pub typescript: BookClient,
     pub python: BookClient,
     pub go: BookClient,
+    /// Rust's: the module, the method of the book value each transfer kind is reached by
+    /// (`book.reserve()`), and the fields of the structs of its arguments.
+    pub rust: BookClient,
 }
 
 /// How the clients of one language name a book's transfers and their parameters: both of the
 /// language's clients (PostgreSQL's and TigerBeetle's) name them alike.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BookClient {
-    /// The module each client is (`inventory` for `inventory.ts`), or Go's package.
+    /// The module each client is (`inventory` for `inventory.ts`), Go's package, or Rust's module.
     pub module: String,
     /// One for each transfer, in the book's order.
     pub transfers: Vec<ClientTransfer>,
@@ -40,6 +43,10 @@ pub struct BookClient {
 pub struct ClientTransfer {
     pub member: String,
     pub params: Vec<String>,
+    /// The name Rust's types of the transfer begin with (`Reserve`: `ReserveArgs`, `ReserveKey`,
+    /// `ReserveAmounts`, `ReserveCalls`), which code that calls the client builds its arguments
+    /// with; empty in TypeScript, Python and Go.
+    pub type_name: String,
 }
 
 impl BookFacts {

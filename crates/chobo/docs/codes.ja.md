@@ -29,6 +29,7 @@ chobo が出すコードの全部について、いつ出るかと、どう直�
 | [E060](#e060) | エラー | 一つの操作が TigerBeetle の一つのリクエストに入りません |
 | [E061](#e061) | エラー | 名前が PostgreSQL の識別子に収まりません |
 | [E062](#e062) | エラー | 名前を MySQL がそのままでは持てません |
+| [E063](#e063) | エラー | 名前を Rust が識別子にできません |
 | [W101](#w101) | 警告 | 残高がたまる一方の勘定 |
 | [W102](#w102) | 警告 | いつも拒否される振替 |
 | [W103](#w103) | 警告 | 移動の順序のせいで拒否される振替 |
@@ -576,7 +577,7 @@ transfer spread(note: string, a: string, b: string, amount: yen)
   move amount from pool(a) to credit(b)
 ```
 
-関係するコード: [E061](#e061), [E062](#e062)
+関係するコード: [E061](#e061), [E062](#e062), [E063](#e063)
 
 ## E061
 
@@ -605,7 +606,7 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ```
 
-関係するコード: [E060](#e060), [E062](#e062)
+関係するコード: [E060](#e060), [E062](#e062), [E063](#e063)
 
 ## E062
 
@@ -634,7 +635,33 @@ transfer ship(order: string, sku: string, qty: pcs)
   move qty from stock(sku) to customers
 ```
 
-関係するコード: [E060](#e060), [E061](#e061)
+関係するコード: [E060](#e060), [E061](#e061), [E063](#e063)
+
+## E063
+
+`エラー` — **名前を Rust が識別子にできません**
+
+**いつ出るか。** `chobo build` の Rust のターゲット（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）で、振替、勘定、引数の名前か拒否の理由に、Rust の識別子には使えない字があるときに出ます。Rust のクライアントは、これらの名前をそのまま、メソッド、構造体のフィールド、型、列挙の値の名前にします。chobo の名前には Unicode の文字と数字を使えますが、Rust の識別子は XID_Start の字で始まり、XID_Continue の字が続くもの（Unicode 17.0。rustc 1.94〜1.97 が読む版）なので、十進でない数字（`²`、`½`、`①` など）も丸で囲んだ文字（`Ⓐ`）も使えず、結合文字などは先頭に置けません。
+
+**直し方。** 名前からその字を外すか、ほかの字に替えてください（たとえば `area_m²` は `area_m2` に）。同じ名前はどの言語のクライアントにも出るので、替えると、どの言語の呼び出しも新しい名前で書くことになります。
+
+**どのコマンドで出るか**: `chobo build <file.book> --target postgres-rust`
+
+**最小の再現**:
+
+```book
+book rooms v1
+unit sqm
+account floor(site: string) : sqm
+  at least 0 refused as no_room
+account builders : sqm outside
+account tenants : sqm outside
+transfer build(permit: string, site: string, area_m²: sqm)
+  key permit, site
+  move area_m² from builders to floor(site)
+```
+
+関係するコード: [E061](#e061), [E062](#e062)
 
 ## W101
 

@@ -29,6 +29,7 @@ Every code chobo prints, when it appears, and how to fix it. For one of them: `c
 | [E060](#e060) | error | An operation that does not fit one TigerBeetle request |
 | [E061](#e061) | error | A name too long for PostgreSQL |
 | [E062](#e062) | error | A name MySQL cannot hold as written |
+| [E063](#e063) | error | A name Rust takes as no identifier |
 | [W101](#w101) | warning | An account that only fills |
 | [W102](#w102) | warning | A transfer that is always refused |
 | [W103](#w103) | warning | A transfer refused for the order of its moves |
@@ -576,7 +577,7 @@ transfer spread(note: string, a: string, b: string, amount: yen)
   move amount from pool(a) to credit(b)
 ```
 
-Related codes: [E061](#e061), [E062](#e062)
+Related codes: [E061](#e061), [E062](#e062), [E063](#e063)
 
 ## E061
 
@@ -605,7 +606,7 @@ transfer ship_the_goods_to_the_customers_who_have_ordered_and_paid_for_them(orde
   move qty from stock(sku) to customers
 ```
 
-Related codes: [E060](#e060), [E062](#e062)
+Related codes: [E060](#e060), [E062](#e062), [E063](#e063)
 
 ## E062
 
@@ -634,7 +635,33 @@ transfer ship(order: string, sku: string, qty: pcs)
   move qty from stock(sku) to customers
 ```
 
-Related codes: [E060](#e060), [E061](#e061)
+Related codes: [E060](#e060), [E061](#e061), [E063](#e063)
+
+## E063
+
+`error` — **A name Rust takes as no identifier**
+
+**When.** With a Rust target of `chobo build` (`postgres-rust`, `tigerbeetle-rust`, `mysql-rust`): the name of a transfer, an account or a parameter, or a reason, has a character no Rust identifier holds where the name has it. The Rust client writes those names as they are, as methods, fields of structs, and names of types and of an enum's variants. A name of chobo may hold any letter and digit of Unicode; a Rust identifier begins with a character of XID_Start and goes on with those of XID_Continue (Unicode 17.0, which rustc 1.94 to 1.97 read), so it holds no digit that is not decimal (`²`, `½`, `①`, …) and no circled letter (`Ⓐ`), and begins with no combining mark.
+
+**Fix.** Take the character out of the name, or write another in its place (`area_m²` as `area_m2`, for one). The same name is in the clients of every language, so a call in any of them is then written with the new name.
+
+**The command that shows it**: `chobo build <file.book> --target postgres-rust`
+
+**Smallest reproduction**:
+
+```book
+book rooms v1
+unit sqm
+account floor(site: string) : sqm
+  at least 0 refused as no_room
+account builders : sqm outside
+account tenants : sqm outside
+transfer build(permit: string, site: string, area_m²: sqm)
+  key permit, site
+  move area_m² from builders to floor(site)
+```
+
+Related codes: [E061](#e061), [E062](#e062)
 
 ## W101
 

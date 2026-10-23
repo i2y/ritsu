@@ -1300,6 +1300,170 @@
         }
       ]
     },
+    "rust": {
+      "module": "allocation",
+      "file": "allocation.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "sale",
+          "member": "sale",
+          "args": "SaleArgs",
+          "calls": "SaleCalls",
+          "fields": {
+            "order": "order",
+            "shop": "shop",
+            "price": "price",
+            "fee": "fee"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "usd_payout",
+          "member": "usd_payout",
+          "args": "UsdPayoutArgs",
+          "calls": "UsdPayoutCalls",
+          "fields": {
+            "payout_id": "payout_id",
+            "shop": "shop",
+            "jpy_amount": "jpy_amount",
+            "usd_amount": "usd_amount"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "usd_transfer",
+          "member": "usd_transfer",
+          "args": "UsdTransferArgs",
+          "calls": "UsdTransferCalls",
+          "fields": {
+            "transfer_id": "transfer_id",
+            "shop": "shop",
+            "amount": "amount"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "buyers",
+          "method": "buyers"
+        },
+        {
+          "account": "fee_income",
+          "method": "fee_income"
+        },
+        {
+          "account": "shipping",
+          "method": "shipping"
+        },
+        {
+          "account": "shop_sales",
+          "method": "shop_sales",
+          "args": "ShopSalesAccount",
+          "fields": {
+            "shop": "shop"
+          }
+        },
+        {
+          "account": "jpy_exchange",
+          "method": "jpy_exchange"
+        },
+        {
+          "account": "usd_exchange",
+          "method": "usd_exchange"
+        },
+        {
+          "account": "usd_account",
+          "method": "usd_account",
+          "args": "UsdAccountAccount",
+          "fields": {
+            "shop": "shop"
+          }
+        },
+        {
+          "account": "overseas_bank",
+          "method": "overseas_bank"
+        },
+        {
+          "account": "remittance_fee",
+          "method": "remittance_fee"
+        }
+      ],
+      "reasons": {
+        "insufficient_sales": "InsufficientSales",
+        "insufficient_usd": "InsufficientUsd",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

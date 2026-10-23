@@ -1,0 +1,22 @@
+# The runner of the Rust clients, which tests/common/runners.rs builds with the modules chobo
+# generates and a main.rs of its own. The crates are at the versions the clients are tested with
+# (src/client/rust.rs, `crates`), pinned here and in Cargo.lock.
+[package]
+name = "chobo-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "mysql"] }
+tigerbeetle = "=0.17.9"
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "sync", "time"] }
+serde_json = "1"
+
+# The test names the binary of each build after what it runs (`runner-<name>`), so that builds that
+# share a target directory do not write one file.
+[[bin]]
+name = "chobo-runner"
+path = "src/main.rs"

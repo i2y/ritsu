@@ -1285,6 +1285,131 @@
         }
       ]
     },
+    "rust": {
+      "module": "book",
+      "file": "book.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "後払い",
+          "member": "後払い",
+          "args": "後払いArgs",
+          "calls": "後払いCalls",
+          "fields": {
+            "注文": "注文",
+            "会員": "会員",
+            "額": "額"
+          },
+          "key": "後払いKey",
+          "amounts": "後払いAmounts",
+          "operations": {
+            "hold": "hold",
+            "post": "post",
+            "void": "void",
+            "status": "status"
+          }
+        },
+        {
+          "kind": "返済",
+          "member": "返済",
+          "args": "返済Args",
+          "calls": "返済Calls",
+          "fields": {
+            "返済番号": "返済番号",
+            "会員": "会員",
+            "額": "額"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "与信",
+          "method": "与信",
+          "args": "与信Account",
+          "fields": {
+            "会員": "会員"
+          }
+        },
+        {
+          "account": "店",
+          "method": "店"
+        },
+        {
+          "account": "銀行",
+          "method": "銀行"
+        }
+      ],
+      "reasons": {
+        "与信枠超え": "与信枠超え",
+        "前払い超過": "前払い超過",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

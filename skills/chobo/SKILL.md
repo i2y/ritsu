@@ -1,6 +1,6 @@
 ---
 name: chobo
-description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL, TigerBeetle or a database of the MySQL family (MySQL, TiDB, Vitess). Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E062, W101-W107, W901) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL, TigerBeetle or the MySQL family and its client (TypeScript, Python or Go) called.
+description: Write, check and build chobo books (`.book` files), a small language for the things counted and moved between accounts (stock, money, points, seats), whose only conditions are the lower and upper bounds of accounts, each kept in one write on PostgreSQL, TigerBeetle or a database of the MySQL family (MySQL, TiDB, Vitess). Use when stock has to be reserved without selling more than there is, a wallet or points kept from going below 0, refunds kept within the sale, a payment split between parties all or none, or a hold that must be posted or voided; when a chobo diagnostic (E001-E063, W101-W107, W901) has to be fixed; when a book has to be shown to the people who keep the accounts; or when a book has to be built for PostgreSQL, TigerBeetle or the MySQL family and its client (TypeScript, Python, Go or Rust) called.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run chobo as `ritsu chobo <command>`, or as `chobo <command>` through a link to ritsu named for it. The code it builds needs PostgreSQL, TigerBeetle with its official client 0.17.9, or MySQL 8.4, TiDB 8.5 or Vitess, in the program that calls it.
 license: MIT OR Apache-2.0
 ---
@@ -62,7 +62,7 @@ data (§6).
    life of a hold, and every scenario with the balances after each step. `--format html` writes
    one page whose scenarios can be stepped through; `--lang ja` writes it in Japanese.
 7. **Build it:** `ritsu chobo build <file.book> --target <target> --out <dir>` (§7). A build stops when
-   a target cannot take the book (E060, E061, E062).
+   a target cannot take the book (E060, E061, E062, E063).
 8. **Call it:** a refusal is an answer, not an exception: handle each reason the check listed. A
    retry with the same arguments is safe; the key makes it `done_before`. On PostgreSQL and the
    MySQL family, call `expire()` from a job, one at a time.
@@ -188,6 +188,7 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | E060 | one operation's chain is too long for one TigerBeetle request | split the transfer into kinds with fewer moves |
 | E061 | a name past PostgreSQL's 63 bytes | a shorter name |
 | E062 | a name MySQL cannot hold: a book's name past 51 characters, or with a character beyond the Basic Multilingual Plane (𠮷 and the like) | a shorter name, without such a character |
+| E063 | with a Rust target, a name with a character no Rust identifier holds where the name has it (`²`, `½`, `①`, `Ⓐ`, a combining mark first) | the name without it (`area_m²` as `area_m2`) |
 | W101 | an account that only ever fills | a transfer that takes from it, or `outside` |
 | W102 | a transfer always refused: nothing fills what it takes from | a transfer that fills it |
 | W103 | a transfer refused because of the order of its moves | the move that puts in first (the one that takes out first, for an upper bound) |
@@ -221,11 +222,13 @@ warning[W103]: split.book:13:3: move 1 takes from shop_balance(shop) before move
 | `tigerbeetle-typescript`, `tigerbeetle-python`, `tigerbeetle-go` | a client that sends one chain of transfers for each operation | pass it the official client 0.17.9; a chain fits 253 transfers (E060) |
 | `mysql` | the book's three tables and their checks, for MySQL, TiDB and Vitess, in SQL | runs any number of times, in the caller's database; on TiDB, run it with `tidb_enable_check_constraint` ON |
 | `mysql-typescript`, `mysql-python`, `mysql-go` | a client that makes each operation one transaction on those tables | pass it a pool or a connection of mysql2, PyMySQL or mysqlclient, or database/sql with go-sql-driver/mysql: a call is part of the transaction its connection is in, else a transaction of its own (on mysqlclient, a transaction of yours is one with autocommit off); call `expire()` from a job; `batch` sends a call's statements in fewer requests |
+| `postgres-rust`, `tigerbeetle-rust`, `mysql-rust` | an async client, one module of Rust | pass it sqlx's pool, a connection or a transaction of sqlx's in a `tokio::sync::Mutex`, or a `Client` of the crate `tigerbeetle` 0.17.9; add to Cargo.toml the lines its head names; on the MySQL family, a call on a `Transaction` of sqlx's is part of it, and on Vitess connect with `.pipes_as_concat(false)` |
 
 The clients of every database have the same names, arguments and answers. A name of the book
-that is Japanese is exported in Go with an `X` in front. [targets.md](targets.md) has what each
-target writes, how to call it from the three languages, and where TigerBeetle answers otherwise
-than the reference interpreter.
+that is Japanese is exported in Go with an `X` in front, and a name that is a keyword of Rust is
+written `r#` in Rust (`r#do`). [targets.md](targets.md) has what each target writes, how to call
+it from the four languages, and where TigerBeetle answers otherwise than the reference
+interpreter.
 
 ## 8. The files bundled with this skill
 

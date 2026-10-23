@@ -30,7 +30,7 @@ account of its own.
 <p class="cb-hero__lede">
 <strong>Every target, one meaning.</strong> chobo checks a book, runs it in a reference
 interpreter, and builds it for PostgreSQL, for TigerBeetle or for the MySQL family (MySQL, TiDB
-and Vitess), with a client in TypeScript, Python or Go. The tests run every scenario through every
+and Vitess), with a client in TypeScript, Python, Go or Rust. The tests run every scenario through every
 client, and each must answer as the reference interpreter does.
 </p>
 
@@ -160,19 +160,21 @@ $ chobo build examples/refunds/refunds.book --target postgres-typescript --out d
 $ chobo build examples/refunds/refunds.book --target tigerbeetle-python --out db
 $ chobo build examples/refunds/refunds.book --target mysql --out db
 $ chobo build examples/refunds/refunds.book --target mysql-go --out db
+$ chobo build examples/refunds/refunds.book --target postgres-rust --out db
 ```
 
 </div>
 <div markdown>
 
-### One book, three kinds of database, three languages
+### One book, three kinds of database, four languages
 
 On PostgreSQL, each operation is a function that locks the rows of its accounts, checks every
 move and writes them in one transaction, the caller's if there is one. On TigerBeetle, the client
 sends one chain of transfers that is applied whole or not at all. On MySQL, TiDB and Vitess, the
 client sends the statements chobo wrote in one transaction, the caller's if it is given one, and a
 locking read of the accounts says which move would break a bound. The clients of all three have
-the same names, arguments and answers, and a refusal is an answer, not an exception.
+the same names, arguments and answers in every language, and a refusal is an answer, not an
+exception.
 [Build for a database](databases.md)
 
 </div>
@@ -242,7 +244,9 @@ interpreter, which [Targets](targets.md#tigerbeetle) describes. The design, the 
 is left are in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/crates/chobo/DESIGN.md), in
 Japanese; its main decisions are on [Design](design.md). chobo is one of the languages of
 [ritsu](../), and is licensed under either of the Apache License 2.0 or the MIT license, at your
-option.
+option; its table of the characters a Rust name cannot hold is made from the Unicode Character
+Database, under the Unicode License V3
+([THIRD_PARTY_NOTICES](https://github.com/i2y/ritsu/blob/main/crates/chobo/THIRD_PARTY_NOTICES)).
 
 ## Where to read next
 

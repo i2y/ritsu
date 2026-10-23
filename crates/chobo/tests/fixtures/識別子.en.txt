@@ -1,0 +1,7 @@
+error[E063]: 識別子.book:11:37: The parameter's name `面積m²` has ² (U+00B2), which no Rust identifier holds
+    11 | transfer 増築(許可: string, 建物: string, 面積m²: 平米)
+  hint: Take the character out of the name, or write another in its place: a Rust identifier is a letter or `_`, then letters, decimal digits and `_` (write `²` as `2`, for one)
+error[E063]: 識別子.book:15:37: The parameter's name `面積m²` has ² (U+00B2), which no Rust identifier holds
+    15 | transfer 入居(契約: string, 建物: string, 面積m²: 平米)
+  hint: Take the character out of the name, or write another in its place: a Rust identifier is a letter or `_`, then letters, decimal digits and `_` (write `²` as `2`, for one)
+識別子.book: 2 error(s), 0 warning(s)

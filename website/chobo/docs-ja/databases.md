@@ -1,14 +1,14 @@
 # データベース向けのビルド
 
-`chobo build` は、帳簿を PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けに書き、それを TypeScript、Python、Go から呼ぶクライアントを書きます。
+`chobo build` は、帳簿を PostgreSQL、TigerBeetle、MySQL の系統（MySQL、TiDB、Vitess）のどれか向けに書き、それを TypeScript、Python、Go、Rust から呼ぶクライアントを書きます。
 
 | ターゲット | 書くもの |
 |---|---|
 | `postgres` | `<帳簿>.sql`。スキーマ、テーブルと制約、操作ごとの関数 |
-| `postgres-typescript`、`postgres-python`、`postgres-go` | その関数を呼ぶクライアント |
-| `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
+| `postgres-typescript`、`postgres-python`、`postgres-go`、`postgres-rust` | その関数を呼ぶクライアント |
+| `tigerbeetle-typescript`、`tigerbeetle-python`、`tigerbeetle-go`、`tigerbeetle-rust` | 操作ごとに、振替のチェーンを一つ TigerBeetle に送るクライアント |
 | `mysql` | `<帳簿>.sql`。MySQL、TiDB、Vitess 向けの、帳簿の三つのテーブルと制約 |
-| `mysql-typescript`、`mysql-python`、`mysql-go` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
+| `mysql-typescript`、`mysql-python`、`mysql-go`、`mysql-rust` | 操作ごとに、そのテーブルの上で一つのトランザクションを行うクライアント |
 
 ```console
 $ chobo build examples/inventory/inventory.ja.book --target postgres --out db
@@ -16,9 +16,10 @@ $ chobo build examples/inventory/inventory.ja.book --target postgres-typescript 
 $ chobo build examples/inventory/inventory.ja.book --target tigerbeetle-go --out db
 $ chobo build examples/inventory/inventory.ja.book --target mysql --out db
 $ chobo build examples/inventory/inventory.ja.book --target mysql-python --out db
+$ chobo build examples/inventory/inventory.ja.book --target tigerbeetle-rust --out db
 ```
 
-どの出力先でも、一つの操作は一度の書き込みです。全部の移動を境界で確かめて全部を書くか、拒否して何も書かないかのどちらかです。確かめてから書くまでのあいだに、ほかの呼び出しが変えうるものは読みません。これができるのは、境界が一つの勘定の条件で、移動が書き換える勘定しか見ないからです。出力先ごとのくわしいことは、三つの言語から呼んだ例とその出力と一緒に、[出力先](targets.md)（英語）にあります。
+どの出力先でも、一つの操作は一度の書き込みです。全部の移動を境界で確かめて全部を書くか、拒否して何も書かないかのどちらかです。確かめてから書くまでのあいだに、ほかの呼び出しが変えうるものは読みません。これができるのは、境界が一つの勘定の条件で、移動が書き換える勘定しか見ないからです。出力先ごとのくわしいことは、四つの言語から呼んだ例とその出力と一緒に、[出力先](targets.md)（英語）にあります。
 
 ## PostgreSQL
 
@@ -131,13 +132,32 @@ export type Reason = "在庫切れ" | "key_conflict" | "already_refused" | "same
 export type Result = { result: "done" } | { result: "done_before" } | { result: "refused"; reason: Reason };
 ```
 
-- **拒否は例外ではなく、結果です。** 在庫が無いのは業務として起こりうる結果なので、呼ぶ側は `在庫切れ` を、ほかの結果と同じように扱います。失敗はそれとは別のもので、例外（Go では `error`）になります。データベースにつながらない、引数の型が違う、額が範囲の外にある、といった場合です。
+Rust では理由が列挙になり、帳簿の名前はそのまま値や構造体のフィールドの名前になります。
+
+<!-- chobo build examples/inventory/inventory.ja.book --target postgres-rust -->
+```rust
+/// Why a call of 在庫の引当 can be refused: the bounds' own reasons, then the ones chobo gives itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Reason {
+    /// `在庫切れ`
+    在庫切れ,
+    /// `key_conflict`
+    KeyConflict,
+…
+pub struct 引当Args<'a> {
+    pub 注文: &'a str,
+    pub sku: &'a str,
+    pub 数: i64,
+}
+```
+
+- **拒否は例外ではなく、結果です。** 在庫が無いのは業務として起こりうる結果なので、呼ぶ側は `在庫切れ` を、ほかの結果と同じように扱います。失敗はそれとは別のもので、例外（Go では `error`、Rust では `Err`）になります。データベースにつながらない、引数の型が違う、額が範囲の外にある、といった場合です。
 - **リトライしても安全です。** キーは振替の引数から作る帳簿のものなので、同じ呼び出しをもう一度すると、`done_before` を返して何も動かしません。どのサービスから、どの言語で送っても同じです。
-- **帳簿の値。** TypeScript では `postgres(db, { tenant })`、`tigerbeetle(client, { tenant })`、`mysql(db, { tenant, batch })` で作ります。Python では `postgres(conn, tenant="")`、`tigerbeetle(client, tenant="")`、`mysql(conn, tenant="", batch=False)` で作り、引数はキーワード引数で渡します。Go では `Postgres(q, tenant)`、`TigerBeetle(c, tenant)`、`MySQL(q, tenant, batch)` で作り、どの呼び出しも最初の引数に `context.Context` を取ります。額の型は、`bigint`、`int`、`int64` です。
+- **帳簿の値。** TypeScript では `postgres(db, { tenant })`、`tigerbeetle(client, { tenant })`、`mysql(db, { tenant, batch })` で作ります。Python では `postgres(conn, tenant="")`、`tigerbeetle(client, tenant="")`、`mysql(conn, tenant="", batch=False)` で作り、引数はキーワード引数で渡します。Go では `Postgres(q, tenant)`、`TigerBeetle(c, tenant)`、`MySQL(q, tenant, batch)` で作り、どの呼び出しも最初の引数に `context.Context` を取ります。Rust では `postgres(db, tenant)`、`tigerbeetle(client, tenant)`、`mysql(db, tenant, batch)` で作り、どの呼び出しも `async fn` です（`book.引当().hold(引当Args { 注文: "o-1", sku: "A-1", 数: 2 })`）。額の型は、`bigint`、`int`、`int64`、`i64` です。
 - **仮押さえ。** 先に押さえる振替には `hold`、`post`（全額か、渡した額）、`void`、`status` があり、どの勘定にも `balance` があります。PostgreSQL と MySQL の系統では、帳簿の値に `expire()` もあります。
 
-クライアントが import するのは、その言語の標準ライブラリと、データベースのクライアントのライブラリ（Go の pgx と go-sql-driver/mysql、三つの言語の TigerBeetle のもの）だけです。TypeScript と Python の、PostgreSQL と MySQL の系統のクライアントは、渡された接続を通して動きます。TypeScript は書いたまま Node.js で動き、`tsc --strict` を通ります。Python は `mypy --strict` を、Go は `gofmt` と `go vet` を通ります。
+クライアントが import するのは、その言語の標準ライブラリと、データベースのクライアントのライブラリ（Go の pgx と go-sql-driver/mysql、Rust の sqlx と tokio、四つの言語の TigerBeetle のもの）だけです。TypeScript と Python の、PostgreSQL と MySQL の系統のクライアントは、渡された接続を通して動きます。TypeScript は書いたまま Node.js で動き、`tsc --strict` を通ります。Python は `mypy --strict` を、Go は `gofmt` と `go vet` を通ります。Rust はエディション 2021 と 2024 の両方で、clippy の lint も含めて警告なしで組め、頭に Cargo.toml に要る行を書きます。
 
 ## ID
 
-TigerBeetle では、どの ID も、帳簿に書いてあることから SHA-256 のハッシュで作ります。勘定の ID は、帳簿の名前、テナント、勘定の種類と、その引数から作ります。振替の ID は、帳簿の名前、テナント、振替の種類、操作、キーの値、チェーンの中の位置から作ります。だからリトライでは同じ ID が送られ、TigerBeetle はその振替がすでにあるという結果を返します。三つの言語と参照インタプリタは同じ ID を作り、テストは、どのシナリオのどの操作でもそれを確かめています。PostgreSQL と MySQL の系統でも、勘定と仮押さえは同じ ID を持ちます。MySQL の系統では、呼び出しとテナントにも同じ作り方の ID を付け、キーとテナントをバイト列として比べます。ID を自分で求めるツールのために、`chobo api` が作り方を出します（[形式](formats.md#the-api-of-a-book)、英語）。
+TigerBeetle では、どの ID も、帳簿に書いてあることから SHA-256 のハッシュで作ります。勘定の ID は、帳簿の名前、テナント、勘定の種類と、その引数から作ります。振替の ID は、帳簿の名前、テナント、振替の種類、操作、キーの値、チェーンの中の位置から作ります。だからリトライでは同じ ID が送られ、TigerBeetle はその振替がすでにあるという結果を返します。四つの言語と参照インタプリタは同じ ID を作り、テストは、どのシナリオのどの操作でもそれを確かめています。PostgreSQL と MySQL の系統でも、勘定と仮押さえは同じ ID を持ちます。MySQL の系統では、呼び出しとテナントにも同じ作り方の ID を付け、キーとテナントをバイト列として比べます。ID を自分で求めるツールのために、`chobo api` が作り方を出します（[形式](formats.md#the-api-of-a-book)、英語）。

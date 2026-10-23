@@ -567,6 +567,80 @@ print(json.dumps({\"own\": own, \"begun\": begun, \"off\": off, \"after\": after
         }
         Err(why) => skip(&format!("{why}; whose transaction a call of the Go client is, is not tried on {}", my.label)),
     }
+
+    if need(Need::Rustc) {
+        match rust() {
+            Ok(()) => {
+                let bin = whose_rust(work, &place.db, &my.host, my.port, &my.user, &tenant_of("stock_reservation", "whose-rust"));
+                let out = Command::new(&bin).output().unwrap();
+                assert!(out.status.success(), "the Rust of the steps on {}:\n{}{}", my.label, String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                let v: Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&out.stdout)));
+                assert_eq!(v, json!({"conn": "done", "seen": 3, "tx": "done", "unseen": 0, "again": "done", "b": 5, "orders": 0}), "{} Rust", my.label);
+                eprintln!("whose transaction on {}, Rust: on a connection in no transaction, a call is its own; on a Transaction of sqlx's, part of the caller's", my.label);
+            }
+            Err(why) => skip(&format!("{why}; whose transaction a call of the Rust client is, is not tried on {}", my.label)),
+        }
+    }
+}
+
+/// Build the Rust of the steps of whose transaction a call is, on `db` of the server at
+/// `host:port`: a call on a connection of the pool that is in no transaction is a transaction of
+/// its own, seen at once from another connection; a call on a `Transaction` of sqlx's is part of
+/// it, unseen until it commits, and gone with its rollback, the caller's own row too. `tenant` is
+/// the tenant's ID as SQL. The binary prints one JSON object.
+fn whose_rust(work: &Path, db: &str, host: &str, port: u16, user: &str, tenant: &str) -> PathBuf {
+    let c = case(&root().join("tests/books/stock_reservation.book"));
+    let module = chobo::target::build(&c.copy, &c.stem, Target::MySqlRust, &c.origin).unwrap_or_else(|d| panic!("{}", d[0].message.en)).remove(0).1;
+    let main = format!(
+        r#"#![deny(warnings)]
+
+#[allow(dead_code)]
+mod harness;
+
+#[path = "books/book.rs"]
+mod book;
+
+fn main() {{
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    rt.block_on(async {{
+        let options = sqlx::mysql::MySqlConnectOptions::new().host({host:?}).port({port}).username({user:?}).database({db:?}).pipes_as_concat(false);
+        let pool = sqlx::mysql::MySqlPoolOptions::new().max_connections(4).connect_with(options).await.unwrap();
+        let mut conn = pool.acquire().await.unwrap();
+        let r = book::mysql(tokio::sync::Mutex::new(&mut *conn), "whose-rust", false).receive().r#do(book::ReceiveArgs {{ delivery: "r-1", sku: "A", qty: 3 }}).await.unwrap();
+        drop(conn);
+        let other = book::mysql(pool.clone(), "whose-rust", false);
+        let seen = other.balance().stock(book::StockAccount {{ sku: "A" }}).await.unwrap().posted;
+        let mut tx = pool.begin().await.unwrap();
+        sqlx::raw_sql(sqlx::AssertSqlSafe("insert into `orders` (`tenant`, `id`) values ({tenant}, 'r-o1')")).execute(&mut *tx).await.unwrap();
+        let in_tx = book::mysql(tokio::sync::Mutex::new(&mut *tx), "whose-rust", false).receive().r#do(book::ReceiveArgs {{ delivery: "r-2", sku: "B", qty: 5 }}).await.unwrap();
+        let unseen = other.balance().stock(book::StockAccount {{ sku: "B" }}).await.unwrap().posted;
+        tx.rollback().await.unwrap();
+        let again = other.receive().r#do(book::ReceiveArgs {{ delivery: "r-2", sku: "B", qty: 5 }}).await.unwrap();
+        let b = other.balance().stock(book::StockAccount {{ sku: "B" }}).await.unwrap().posted;
+        let orders: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe("select count(*) from `orders` where `tenant` = {tenant} and `id` = 'r-o1'")).fetch_one(&pool).await.unwrap();
+        println!("{{}}", serde_json::json!({{"conn": r.result(), "seen": seen, "tx": in_tx.result(), "unseen": unseen, "again": again.result(), "b": b, "orders": orders}}));
+        pool.close().await;
+    }});
+}}
+"#
+    );
+    build_rust_with(work, "whose", &[("book".to_string(), module)], &main).unwrap_or_else(|e| panic!("{e}"))
+}
+
+/// The Rust of whose transaction a call is builds, held to no warning, when there is no server of
+/// the MySQL family to run it on.
+#[test]
+fn the_rust_of_whose_transaction_builds() {
+    if !need(Need::Rustc) {
+        return;
+    }
+    if let Err(why) = rust() {
+        skip(&format!("{why}; the Rust of whose transaction a call is, is not built"));
+        return;
+    }
+    let work = TempDir::new("whose-rust");
+    let bin = whose_rust(work.path(), "chobo", "127.0.0.1", 3306, "root", "X'00000000000000000000000000000001'");
+    assert!(bin.is_file());
 }
 
 /// With `batch`, a call sends what it sends in a row in one request: two requests a call, against

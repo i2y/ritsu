@@ -467,7 +467,7 @@ mod npm {
                 for args in [&["check", p][..], &["check", p, "--format", "json"], &["doc", p], &["doc", p, "--format", "html"], &["api", p], &["scenarios", p]] {
                     reads.push(case("chobo", ".", both("chobo", args).to_vec()));
                 }
-                for t in ["postgres", "postgres-typescript", "postgres-python", "postgres-go", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "mysql", "mysql-typescript", "mysql-python", "mysql-go"] {
+                for t in ["postgres", "postgres-typescript", "postgres-python", "postgres-go", "postgres-rust", "tigerbeetle-typescript", "tigerbeetle-python", "tigerbeetle-go", "tigerbeetle-rust", "mysql", "mysql-typescript", "mysql-python", "mysql-go", "mysql-rust"] {
                     writes.push(case("chobo", ".", vec![en("chobo", &["build", p, "--target", t, "--out", "db"])]));
                 }
                 writes.push(case("chobo", ".", vec![ja("chobo", &["build", p, "--target", "postgres-typescript", "--out", "db"])]));

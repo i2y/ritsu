@@ -3,8 +3,9 @@
 //! the repository in OSV (osv-scanner); both need the network, so they run in CI. The tests here
 //! hold, without it, what makes their answer the right one:
 //!
-//! - Every manifest the tests install from has its lockfile, and every requirements.txt pins each
-//!   package it installs to one version, so the scan (`--no-resolve`) reads the versions CI installs.
+//! - Every manifest the tests install from has its lockfile (chobo's Rust runner's Cargo.toml its
+//!   Cargo.lock), and every requirements.txt pins each package it installs to one version, so the
+//!   scan (`--no-resolve`) reads the versions CI installs.
 //! - The versions `ritsu gen` writes into a package, and those the generated code names, are the
 //!   ones the tools lock: a scan of the tools is a scan of what a package asks for (DESIGN 9.3),
 //!   the Cedar a gate's code asks among them (sekisho's runners).
@@ -103,6 +104,12 @@ fn every_manifest_the_tests_install_from_is_locked() {
     for p in tools("go.mod") {
         if !go_requires(&read(&p)).is_empty() && !p.with_file_name("go.sum").exists() {
             wrong.push(format!("{}: no go.sum beside it", shown(&p)));
+        }
+    }
+    // chobo's runner of the Rust clients, which the tests build --locked
+    for p in tools("Cargo.toml") {
+        if !p.with_file_name("Cargo.lock").exists() {
+            wrong.push(format!("{}: no Cargo.lock beside it", shown(&p)));
         }
     }
     let reqs = tools("requirements.txt");

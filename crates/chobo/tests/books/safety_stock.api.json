@@ -583,6 +583,125 @@
         }
       ]
     },
+    "rust": {
+      "module": "safety_stock",
+      "file": "safety_stock.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "replenish",
+          "member": "replenish",
+          "args": "ReplenishArgs",
+          "calls": "ReplenishCalls",
+          "fields": {
+            "slip": "slip",
+            "sku": "sku",
+            "qty": "qty"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "ship",
+          "member": "ship",
+          "args": "ShipArgs",
+          "calls": "ShipCalls",
+          "fields": {
+            "order": "order",
+            "sku": "sku",
+            "qty": "qty"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "shelf",
+          "method": "shelf",
+          "args": "ShelfAccount",
+          "fields": {
+            "sku": "sku"
+          }
+        },
+        {
+          "account": "suppliers",
+          "method": "suppliers"
+        },
+        {
+          "account": "customers",
+          "method": "customers"
+        }
+      ],
+      "reasons": {
+        "below_safety_stock": "BelowSafetyStock",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [

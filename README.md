@@ -194,7 +194,7 @@ net30.cal: ok — 3 claims hold on all 1,064 days of invoice_date (2026-01-01..2
 A book declares accounts and the bounds each must keep, and the transfers between them. chobo
 checks that no sequence of transfers, holds and expiries can take an account past a bound, and
 generates clients in which every transfer is one write that keeps them, on PostgreSQL, on
-TigerBeetle or on the MySQL family (MySQL, TiDB and Vitess), in TypeScript, Python and Go.
+TigerBeetle or on the MySQL family (MySQL, TiDB and Vitess), in TypeScript, Python, Go and Rust.
 
 ```book
 # A refund never exceeds the sale: what is left to refund on each order is an account of its own.
@@ -732,10 +732,11 @@ native binary.
 
 ## License
 
-MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Two of the
+MIT OR Apache-2.0 ([LICENSE-MIT](LICENSE-MIT), [LICENSE-APACHE](LICENSE-APACHE)). Three of the
 languages hold data from others: rulec the names of its built-in divisions, from Unicode CLDR
-(Unicode-3.0), and koyomi a Shift_JIS table made from the WHATWG Encoding Standard
-(BSD-3-Clause). So the `ritsu` binary is under
+(Unicode-3.0), chobo a table of the characters a Rust name cannot hold, made from the Unicode
+Character Database (Unicode-3.0), and koyomi a Shift_JIS table made from the WHATWG Encoding
+Standard (BSD-3-Clause). So the `ritsu` binary is under
 `(MIT OR Apache-2.0) AND Unicode-3.0 AND BSD-3-Clause`. It also holds eight crates from
 crates.io, under their own licenses, and, for the examples of `explain`, copies of an article of
 Japan's Civil Code from e-Gov (PDL1.0) and of two sections of the US Code of Federal Regulations.

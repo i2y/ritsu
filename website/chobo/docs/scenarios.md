@@ -172,6 +172,6 @@ examples/refunds/refunds.book (more: two refunds of 20.00 at the same time on a 
        select * from "refunds"."refund_hold"('', 'R-3', 'A-100', 1000)
 ```
 
-The tests hold the clients of all three languages to it on every scenario, so the three send the
+The tests hold the clients of all four languages to it on every scenario, so the four send the
 same calls, and on TigerBeetle the same IDs, which are made from the keys. [Formats](formats.md) has
 the JSON of a scenario, of its result (`--format json`) and of what is sent.

@@ -1,6 +1,6 @@
 # chobo 設計文書
 
-在庫、お金、ポイント、予約の枠のように、数で持っていて、勘定から勘定へ動かすものを書く小さな言語。書いた帳簿（`.book`）を検査し、参照インタプリタで動かし、PostgreSQL のテーブルと関数、TigerBeetle を呼ぶクライアント（TypeScript・Python・Go）へ出す。PostgreSQL を呼ぶクライアントも、同じ三つの言語で出す。MySQL の系統（MySQL・TiDB・Vitess）には、テーブルと、その上で呼び出しを行う三つの言語のクライアントを出す（4.5）。
+在庫、お金、ポイント、予約の枠のように、数で持っていて、勘定から勘定へ動かすものを書く小さな言語。書いた帳簿（`.book`）を検査し、参照インタプリタで動かし、PostgreSQL のテーブルと関数、TigerBeetle を呼ぶクライアント（TypeScript・Python・Go・Rust）へ出す。PostgreSQL を呼ぶクライアントも、同じ四つの言語で出す。MySQL の系統（MySQL・TiDB・Vitess）には、テーブルと、その上で呼び出しを行う四つの言語のクライアントを出す（4.5）。Rust のクライアントは 14 章に書く。
 
 名前は帳簿から取った。ファイルの拡張子は `.book`。
 
@@ -16,7 +16,7 @@
                                        ├── 参照インタプリタ ── シナリオの自動生成と、同時の操作の順序の数え上げ
                                        ├── PostgreSQL（スキーマ、テーブル、制約、関数）
                                        ├── MySQL の系統（テーブルと制約）
-                                       ├── クライアント（TypeScript・Python・Go）：PostgreSQL を呼ぶもの、TigerBeetle を呼ぶもの、MySQL の系統で呼び出しを行うもの
+                                       ├── クライアント（TypeScript・Python・Go・Rust）：PostgreSQL を呼ぶもの、TigerBeetle を呼ぶもの、MySQL の系統で呼び出しを行うもの
                                        ├── `chobo api`：呼び方、拒否されうる理由、仮押さえのステートマシン（JSON）
                                        └── `chobo doc`：経理や運用の人が読むページ（Markdown と HTML）
 ```
@@ -726,16 +726,16 @@ chain: A->B 3, A->C 2                            created, created
 | ターゲット | 書くもの |
 |---|---|
 | `postgres` | スキーマ、テーブル、制約、関数の SQL |
-| `postgres-typescript`・`postgres-python`・`postgres-go` | その SQL の関数を呼ぶクライアント |
-| `tigerbeetle-typescript`・`tigerbeetle-python`・`tigerbeetle-go` | チェーンを組み立てて送るクライアント |
+| `postgres-typescript`・`postgres-python`・`postgres-go`・`postgres-rust` | その SQL の関数を呼ぶクライアント |
+| `tigerbeetle-typescript`・`tigerbeetle-python`・`tigerbeetle-go`・`tigerbeetle-rust` | チェーンを組み立てて送るクライアント |
 | `mysql` | MySQL の系統のテーブルと制約の SQL |
-| `mysql-typescript`・`mysql-python`・`mysql-go` | そのテーブルの上で、呼び出しを一つのトランザクションで行うクライアント（4.5） |
+| `mysql-typescript`・`mysql-python`・`mysql-go`・`mysql-rust` | そのテーブルの上で、呼び出しを一つのトランザクションで行うクライアント（4.5） |
 
 **決定（PostgreSQL を呼ぶクライアントも出す）**：出す。理由は三つ。一つ、どの出力先のクライアントも、名前も引数も結果も同じにするので、出力先を替えても呼ぶ側のコードは変わらない。二つ、突き合わせのテスト（6 章）を、どちらの出力先でも同じクライアントを通して流せる。三つ、PostgreSQL を呼ぶ側にも誤りの起きる所がある（シリアライズの失敗のリトライ、結果の読み方）。SQL の関数は契約として残るので、ほかの言語からは関数を直接呼べる。
 
-**決定（出力先と言語ごとに一つのターゲット）**：TypeScript と Python は、使うドライバを呼ぶ側から受け取れるので、一つのクライアントに二つの出力先を入れられる。Go は import をあとに延ばせず、使わない出力先のモジュール（tigerbeetle-go は cgo を使う）も go.mod に要ることになるので、分けた。三つの言語をそろえるため、どれも分ける。
+**決定（出力先と言語ごとに一つのターゲット）**：TypeScript と Python は、使うドライバを呼ぶ側から受け取れるので、一つのクライアントに二つの出力先を入れられる。Go は import をあとに延ばせず、使わない出力先のモジュール（tigerbeetle-go は cgo を使う）も go.mod に要ることになるので、分けた。Rust も同じで、一つのクライアントに二つの出力先を入れると、使わない出力先のクレートも Cargo.toml に要る（14 章）。言語をそろえるため、どれも分ける。
 
-- **ファイル**：TypeScript は `<帳簿の名前>.ts` を一つ、Python は `<帳簿の名前>.py` を一つ、Go は `<パッケージ>/book.go` と `<パッケージ>/runtime.go` を書く。どれも、帳簿ごとに違う部分（型、呼び方、帳簿の定義の表）と、どの帳簿でも同じ部分（ID、チェーン、TigerBeetle の答えの読み方。`src/client/runtime/` のファイルを一字も変えずに入れる）でできている。TypeScript は Node が型を剥がすだけで走る書き方にし（`enum`、実行時のコードを含む `namespace`、コンストラクタの引数でのプロパティ宣言を使わない）、`tsc --strict --erasableSyntaxOnly` を通す。
+- **ファイル**：TypeScript は `<帳簿の名前>.ts` を一つ、Python は `<帳簿の名前>.py` を一つ、Go は `<パッケージ>/book.go` と `<パッケージ>/runtime.go` を、Rust は `<モジュール>.rs` を一つ書く（14 章）。どれも、帳簿ごとに違う部分（型、呼び方、帳簿の定義の表）と、どの帳簿でも同じ部分（ID、チェーン、TigerBeetle の答えの読み方。`src/client/runtime/` のファイルを一字も変えずに入れる）でできている。TypeScript は Node が型を剥がすだけで走る書き方にし（`enum`、実行時のコードを含む `namespace`、コンストラクタの引数でのプロパティ宣言を使わない）、`tsc --strict --erasableSyntaxOnly` を通す。
 - **形**：TypeScript では `tigerbeetle(client, { tenant })`、`postgres(db, { tenant })`、`mysql(db, { tenant, batch })` が帳簿の値を返す。
 
   ```ts
@@ -762,11 +762,11 @@ chain: A->B 3, A->C 2                            created, created
   { result: 'refused', reason: '在庫切れ' }
   ```
 
-  結果は `{ result: "done" } | { result: "done_before" } | { result: "refused"; reason: Reason }` で、`Reason` は帳簿の境界の理由と chobo の理由（2.7）を並べた型である。Python は同じ名前をキーワード引数で受け取る（帳簿の値は `tigerbeetle(client, tenant=…)`、`postgres(conn, tenant=…)`、`mysql(conn, tenant=…, batch=…)`。`book.引当.hold(注文="o-1", sku="A-1", 数=3)` が `Result("done")`、`book.引当.post(注文="o-1", sku="A-1", 数=2)`、`status` は `str` か `None`、`balance.在庫(sku="A-1")` は `Balance(posted, held_in, held_out)`）。Go は（パッケージが `book` のとき）`book.TigerBeetle(c, tenant)`、`book.Postgres(q, tenant)`、`book.MySQL(q, tenant, batch)` が `*Book` を返し、どのメソッドも `context.Context` を最初に受け取る（`b.X引当.Hold(ctx, book.X引当Args{X注文: "o-1", Sku: "A-1", X数: 3})` が `(Result{Outcome, Reason}, error)`、`Post(ctx, key, *X引当Amounts)` は `nil` で全額、`Status` は `HoldState`（無ければ `""`）、`b.Balance.X在庫(ctx, book.X在庫Account{Sku: "A-1"})`）。外から見える名前で日本語の名前には、dandori と同じく前に `X` を付ける。額は TypeScript では `bigint`、Python では `int`、Go では `int64`。PostgreSQL と MySQL の系統の帳簿の値には、期限の切れた仮押さえを戻す `expire()` が足される。どの言語でも、振替の種類の名前は `balance` と `expire`（Go では `Balance` と `Expire`）を避けて付け、どの出力先でも同じ名前になる。名前が言語のキーワードなら、Python は後ろに `_` を付ける。同じ名前になる二つは、後の方に `_2` を付ける。
-- **ドライバ**：PostgreSQL は、呼ぶ側の接続を受け取り、SQL の関数を一つ呼ぶ。TypeScript は `query(text, values)` を持つもの（`pg` の `Client`、`Pool`、`PoolClient`）、Python は DB-API の接続（psycopg 3 か psycopg2。プレースホルダーは `%s`）、Go は `QueryRow` を持つもの（pgx の `*pgx.Conn`、`*pgxpool.Pool`、`pgx.Tx`）。クライアントはコミットもロールバックもしない。TigerBeetle は公式のクライアント（tigerbeetle-node 0.17.9、Python の tigerbeetle 0.17.9 の `ClientSync`、tigerbeetle-go v0.17.9）を受け取る。MySQL の系統は、TypeScript では mysql2 のプールか接続（`getConnection` があればプール）、Python では PyMySQL か mysqlclient の DB-API の接続（試験は PyMySQL 1.2.3 で回し、mysqlclient 2.3.0 は手で一度確かめた。4.5）、Go では database/sql の `*sql.DB`、`*sql.Conn`、`*sql.Tx` を受け取り、ドライバは go-sql-driver/mysql である（誤りの番号を読むために import する）。呼び出しは、接続がトランザクションの中にいればその一部になり、いなければ自分のトランザクションを持つ（4.5）。Go は、受け取るものをインターフェース（`Querier`、`TigerBeetleClient`）にして、テストが包めるようにした。
+  結果は `{ result: "done" } | { result: "done_before" } | { result: "refused"; reason: Reason }` で、`Reason` は帳簿の境界の理由と chobo の理由（2.7）を並べた型である。Python は同じ名前をキーワード引数で受け取る（帳簿の値は `tigerbeetle(client, tenant=…)`、`postgres(conn, tenant=…)`、`mysql(conn, tenant=…, batch=…)`。`book.引当.hold(注文="o-1", sku="A-1", 数=3)` が `Result("done")`、`book.引当.post(注文="o-1", sku="A-1", 数=2)`、`status` は `str` か `None`、`balance.在庫(sku="A-1")` は `Balance(posted, held_in, held_out)`）。Go は（パッケージが `book` のとき）`book.TigerBeetle(c, tenant)`、`book.Postgres(q, tenant)`、`book.MySQL(q, tenant, batch)` が `*Book` を返し、どのメソッドも `context.Context` を最初に受け取る（`b.X引当.Hold(ctx, book.X引当Args{X注文: "o-1", Sku: "A-1", X数: 3})` が `(Result{Outcome, Reason}, error)`、`Post(ctx, key, *X引当Amounts)` は `nil` で全額、`Status` は `HoldState`（無ければ `""`）、`b.Balance.X在庫(ctx, book.X在庫Account{Sku: "A-1"})`）。外から見える名前で日本語の名前には、dandori と同じく前に `X` を付ける。Rust は（モジュールが `inventory` のとき）`inventory::postgres(db, tenant)`、`inventory::tigerbeetle(client, tenant)`、`inventory::mysql(db, tenant, batch)` が `Book` を返し、どの操作も `async fn` で、`Result<Outcome, Error>` を返す（`book.reserve().hold(ReserveArgs { order: "o-1", sku: "A-1", qty: 3 })`、`post(key, Some(ReserveAmounts { qty: 2 }))`、`status` は `Option<HoldState>`、`book.balance().stock(StockAccount { sku: "A-1" })`。14 章）。額は TypeScript では `bigint`、Python では `int`、Go と Rust では `int64` と `i64`。PostgreSQL と MySQL の系統の帳簿の値には、期限の切れた仮押さえを戻す `expire()` が足される。どの言語でも、振替の種類の名前は `balance` と `expire`（Go では `Balance` と `Expire`）を避けて付け、どの出力先でも同じ名前になる。名前が言語のキーワードなら、Python は後ろに `_` を付け、Rust は `r#` を前に付ける（`r#` にできない `self`・`Self`・`super`・`crate` と `_` は、後ろに `_`）。同じ名前になる二つは、後の方に `_2` を付ける。
+- **ドライバ**：PostgreSQL は、呼ぶ側の接続を受け取り、SQL の関数を一つ呼ぶ。TypeScript は `query(text, values)` を持つもの（`pg` の `Client`、`Pool`、`PoolClient`）、Python は DB-API の接続（psycopg 3 か psycopg2。プレースホルダーは `%s`）、Go は `QueryRow` を持つもの（pgx の `*pgx.Conn`、`*pgxpool.Pool`、`pgx.Tx`）。クライアントはコミットもロールバックもしない。TigerBeetle は公式のクライアント（tigerbeetle-node 0.17.9、Python の tigerbeetle 0.17.9 の `ClientSync`、tigerbeetle-go v0.17.9）を受け取る。MySQL の系統は、TypeScript では mysql2 のプールか接続（`getConnection` があればプール）、Python では PyMySQL か mysqlclient の DB-API の接続（試験は PyMySQL 1.2.3 で回し、mysqlclient 2.3.0 は手で一度確かめた。4.5）、Go では database/sql の `*sql.DB`、`*sql.Conn`、`*sql.Tx` を受け取り、ドライバは go-sql-driver/mysql である（誤りの番号を読むために import する）。呼び出しは、接続がトランザクションの中にいればその一部になり、いなければ自分のトランザクションを持つ（4.5）。Go は、受け取るものをインターフェース（`Querier`、`TigerBeetleClient`）にして、テストが包めるようにした。Rust は、PostgreSQL と MySQL の系統では sqlx 0.9.0 のプールか、`tokio::sync::Mutex` に入れた接続かトランザクションを、TigerBeetle では公式のクレート（tigerbeetle 0.17.9）の `Client` を受け取り、受け取るものをトレイト（`Database`、`TigerBeetleClient`）にした（14 章）。
 - **Go のランナーのモジュール**：`tools/runner/go/go.mod` は、pgx v5.11.0 が求める golang.org/x/text v0.29.0 を、v0.42.0（と、それが求める golang.org/x/sync v0.23.0）に上げてある（2026-10-06 に v0.41.0 と v0.22.0 に、2026-10-09 に今のバージョンに。v0.42.0 は Go 1.26 を求めるので、`go` の行は 1.26.0）。v0.29.0 には、正規化が不正な UTF-8 で止まらなくなる既知の脆弱性（GO-2026-5970、v0.39.0 で直った）があり、pgx の SCRAM の認証（パスワードの正規化）から関数の単位で届く（govulncheck v1.7.0 で確かめた）。バージョンは dandori の `tools/temporal-go` と同じで、`ritsu gen` は、pgx を import する Go のパッケージの `doc.go` に、x/text を上げるよう書く（ritsu の DESIGN 3.6、9.3）。Go のモジュールは最小のバージョンを選ぶので、利用者のモジュールでも、何かが上げないかぎり v0.29.0 のままになるからである。
 - **テナント**：一つの帳簿を、いくつかの独立した残高の組として使うための名前。ID と PostgreSQL のキーに入り、MySQL の系統ではテナントの ID がどのテーブルでも最初の列になる。既定は空の文字列。テストでは、シナリオごとに別のテナントを使い、一つのデータベースで全部のシナリオを同時に流す。
-- **ritsu のパッケージの中のクライアント（2026-10-18）**：`ritsu gen` がパッケージに書くクライアント（`target::build_in` に `InPackage` を渡したもの）は、振替の操作が受け取る額のうち、お金と量の額を、パッケージの単位のモジュールの型にする（ritsu の DESIGN 9.3）。`unit USD scale 2` の帳簿の `sale` は、TypeScript では `{ order: string; shop: string; to_shop: units.USDc; fee: units.USDc }` を、Python では `to_shop: units.USDc` の引数を、Go では `To_shop units.USDc` の構造体を受け取る。規則のモジュールが返す額も同じ型なので、手で書いたコードが規則の出力を振替に渡せば、その言語の型の検査が単位を突き合わせる。型の名前は ritsu-units が単位から作る（`Unit::type_name`）。数え方の単位（`個`、`席`）の額は、これまでどおり素の整数である。Go のクライアントは、額を共通の部分（runtime）に `int64` に直して渡す（`int64(args.Fee)`）。runtime は `[]any` から額を `int64` として取り出すからで、runtime の中身は変えていない。単位のモジュールの読み込み（TypeScript の `import type * as units from "../units"`、Python の `from .. import units`、Go の `<module>/units`）は、お金か量の額を受け取る帳簿にだけ書く。`chobo build` が書くクライアントは変わらない。残高（`balance`）は、パッケージの中でも素の整数で返す（11.3）。
+- **ritsu のパッケージの中のクライアント（2026-10-18）**：`ritsu gen` がパッケージに書くクライアント（`target::build_in` に `InPackage` を渡したもの）は、振替の操作が受け取る額のうち、お金と量の額を、パッケージの単位のモジュールの型にする（ritsu の DESIGN 9.3）。`unit USD scale 2` の帳簿の `sale` は、TypeScript では `{ order: string; shop: string; to_shop: units.USDc; fee: units.USDc }` を、Python では `to_shop: units.USDc` の引数を、Go では `To_shop units.USDc` の構造体を受け取る。Rust では `to_shop: crate::units::USDc` のフィールドを受け取り、runtime には `i64::from` で直して渡す（14 章）。規則のモジュールが返す額も同じ型なので、手で書いたコードが規則の出力を振替に渡せば、その言語の型の検査が単位を突き合わせる。型の名前は ritsu-units が単位から作る（`Unit::type_name`）。数え方の単位（`個`、`席`）の額は、これまでどおり素の整数である。Go のクライアントは、額を共通の部分（runtime）に `int64` に直して渡す（`int64(args.Fee)`）。runtime は `[]any` から額を `int64` として取り出すからで、runtime の中身は変えていない。単位のモジュールの読み込み（TypeScript の `import type * as units from "../units"`、Python の `from .. import units`、Go の `<module>/units`）は、お金か量の額を受け取る帳簿にだけ書く。`chobo build` が書くクライアントは変わらない。残高（`balance`）は、パッケージの中でも素の整数で返す（11.3）。
 
 **ID の決め方**：
 
@@ -789,7 +789,7 @@ enc(s) = s の UTF-8 のバイト長（ビッグエンディアンの 32 ビッ�
 | `ledger` | 単位、`scale`（先頭 4 バイトを 32 ビットに。0 なら 1） |
 | `code` | 帳簿、`account`・`transfer`・`sink` のどれか、種類の名前（受け皿なら単位の名前）（先頭 2 バイトを 16 ビットに。0 なら 1） |
 
-長さを前に付けるので、`("a:b", "c")` と `("a", "b:c")` は別の ID になる。0 と 2¹²⁸ − 1 は TigerBeetle が ID に使わせないので、0 になったら 1 に、2¹²⁸ − 1 になったら 2¹²⁸ − 2 にする。SHA-256 は、Rust では自分で書き（依存を足さない）、生成するクライアントでは各言語の標準ライブラリを使う。三つの言語と Rust が同じ ID を出すことを、テストで全シナリオの全操作について確かめる（6 章）。ID が言語ごとに違えば、別の言語のサービスが同じキーで送った振替が二重に動く。
+長さを前に付けるので、`("a:b", "c")` と `("a", "b:c")` は別の ID になる。0 と 2¹²⁸ − 1 は TigerBeetle が ID に使わせないので、0 になったら 1 に、2¹²⁸ − 1 になったら 2¹²⁸ − 2 にする。SHA-256 は、chobo と生成する Rust のクライアントでは自分で書き（依存を足さない。Rust の標準ライブラリには無い）、ほかの言語のクライアントでは各言語の標準ライブラリを使う。四つの言語のクライアントが chobo と同じ ID を出すことを、テストで全シナリオの全操作について確かめる（6 章）。ID が言語ごとに違えば、別の言語のサービスが同じキーで送った振替が二重に動く。
 
 **捨てたもの（TigerBeetle の勧める時刻つきの ID）**：TigerBeetle は、上位 48 ビットを時刻にした ID を勧めている。ID が増える順に並ぶと LSM 木が速いからで、文書はランダムな ID を「スループットがかなり落ちる」と書いている。chobo の ID はキーのハッシュなので、ランダムに並ぶ。リトライで同じ ID を出すには、時刻を入れられない（入れるなら、呼ぶ側が ID を保存してリトライに渡すことになり、キーを帳簿に書く意味が無くなる）。どれだけ遅くなるかは測っていない（11 章）。
 
@@ -814,7 +814,7 @@ enc(s) = s の UTF-8 のバイト長（ビッグエンディアンの 32 ビッ�
 
 ### 4.5 MySQL の系統（MySQL・TiDB・Vitess）
 
-`chobo build --target mysql` は帳簿のテーブルの SQL を一つ書き（`<帳簿の名前>.sql`）、`mysql-typescript`・`mysql-python`・`mysql-go` は、そのテーブルの上で呼び出しを行うクライアントを書く。相手は MySQL 8.4 以降、TiDB 8.5 以降、Vitess の三つである。どれも MySQL の通信の形で話し、同じ SQL が同じ意味で通る。クライアントの名前、引数、結果は、PostgreSQL と TigerBeetle のクライアントと同じにした（4.3）。
+`chobo build --target mysql` は帳簿のテーブルの SQL を一つ書き（`<帳簿の名前>.sql`）、`mysql-typescript`・`mysql-python`・`mysql-go`・`mysql-rust` は、そのテーブルの上で呼び出しを行うクライアントを書く。相手は MySQL 8.4 以降、TiDB 8.5 以降、Vitess の三つである。どれも MySQL の通信の形で話し、同じ SQL が同じ意味で通る。クライアントの名前、引数、結果は、PostgreSQL と TigerBeetle のクライアントと同じにした（4.3）。
 
 **決定（データベースの中に関数を置かず、クライアントが文を送る）**：PostgreSQL では、呼び出しを関数一つにした（4.1）。MySQL の系統でそうしないのは、三つに共通する、データベースの中で走るコードが無いからである。TiDB はストアドプロシージャを持たない。Vitess を動かすサービスには、ストアドルーチンも、データベースを作ることも許さないものがある。Vitess 自身も、ストアドプロシージャを呼べるのはシャードされていないキースペースに限り、そのとき結果を返せない。MySQL のプロシージャも、autocommit のもとでは中の文が一つずつコミットされ、呼び出しが全部か無しにならない。どのみち、トランザクションはクライアントが持つことになる。
 
@@ -829,7 +829,7 @@ select hex(`id`), case when `id` = X'396213c27529b522708ee6da1d0d03f7' and `post
 update `在庫_accounts` set `held_out` = `held_out` + (case when `id` = X'396213c27529b522708ee6da1d0d03f7' then 2 else 0 end) where `tenant` = X'04cb42245ad8f59c5de836594f6b0ff8' and `id` in (X'396213c27529b522708ee6da1d0d03f7')
 ```
 
-前の移動の分は、勘定の種類が同じ移動についてだけ `(case when `id` = … then 額 else 0 end)` を足し引きする（ID は勘定の種類を含むので、種類の違う勘定は同じ行にならない）。足し引きの順は 4.1 の関数と同じで、移動ごとに元から引いてから先に足す。64 ビットを超える計算は、MySQL も TiDB も BIGINT の範囲外のエラー（1690）にして文ごと戻すので、PostgreSQL と同じく操作が失敗する（段階 A で確かめた）。クライアントは三つの言語で、ID と値を求めて文に入れ、返った番号で次の文を選ぶ。残高の計算はしない。意味を書く場所は、Rust の生成器の一か所のままである。
+前の移動の分は、勘定の種類が同じ移動についてだけ `(case when `id` = … then 額 else 0 end)` を足し引きする（ID は勘定の種類を含むので、種類の違う勘定は同じ行にならない）。足し引きの順は 4.1 の関数と同じで、移動ごとに元から引いてから先に足す。64 ビットを超える計算は、MySQL も TiDB も BIGINT の範囲外のエラー（1690）にして文ごと戻すので、PostgreSQL と同じく操作が失敗する（段階 A で確かめた）。クライアントは四つの言語で、ID と値を求めて文に入れ、返った番号で次の文を選ぶ。残高の計算はしない。意味を書く場所は、Rust の生成器の一か所のままである。
 
 確かめる移動が一つも無い振替もある。下限しかない勘定へ入れるだけの振替（入荷）がそうで、境界を割りうるのは取り出す側の下限と入れる側の上限だけだからである。こういう振替は読みを送らない。UPDATE そのものが、行を ID の順にロックしながら書く。
 
@@ -871,11 +871,12 @@ update `在庫_accounts` set `held_out` = `held_out` + (case when `id` = X'39621
 - **プール**（TypeScript では mysql2 の `Pool`、Go では `*sql.DB`）と Go の `*sql.Conn` では、呼び出しごとに自分のトランザクションを持つ。デッドロック（1213）、ロックの待ちの時間切れ（1205）、TiDB の書き込みの衝突（9007、8022、8028）では、ロールバックして、同じ引数で 30 回まで呼び直す（キーが二重に動かさない）。待ちは 4.1 と同じである。Go の `*sql.Tx` は呼ぶ側のトランザクションである。
 - **TypeScript の mysql2 の接続**は、呼び出しのたびに先に `set @chobo = 0` を送り、その答えのサーバーの状態（`SERVER_STATUS_IN_TRANS` と `SERVER_STATUS_AUTOCOMMIT`）で決める。mysql2 は OK パケットの答えにしか状態を見せないので、一往復かかる。初めは `do 0` で聞いていたが、Vitess では、呼ぶ側のトランザクションの中の `do 0` を vtgate がどれかのシャードに送り、トランザクションがそのシャードにも結びついて、テナントのシャードと合わせて二つにまたがった（`--transaction-mode SINGLE` で「multi-db transaction attempted」）。利用者の変数の `set` は vtgate が自分で答え、シャードに送らない。状態や残高を読むだけの呼び出しは文一つなので、聞かずにそのまま送る。答えに状態が無ければ（mysql2 でない接続）、どちらとも決めずにエラーにする。MySQL 8.4.11、TiDB 8.5.8、Vitess 24.0.5 で、`begin` のあと、autocommit を切ったあと、戻したあとの `set` の答えが、どれも正しい状態を返すのを確かめた。
 - **Python の DB-API の接続**は、autocommit が切れていれば呼ぶ側のトランザクション、入っていれば自分のトランザクションである。PyMySQL は最後の答えのサーバーの状態を `server_status` に持つので、autocommit のまま `begin()` で始めたトランザクションも見分ける（往復は増えない）。mysqlclient は状態を見せないので、その接続では、autocommit を切ったトランザクションだけが呼ぶ側のものになる。mysqlclient 2.3.0 は手で一度確かめた（2026-10-17、MySQL 8.4.11）。在庫の英語のテストの帳簿で、自分のトランザクションの一文ずつとまとめて送る形の十の呼び出しと、autocommit を切ってロールバックしてからコミットする四つが、PyMySQL 1.2.3 と同じ答えを返した。試験は PyMySQL で回す。
+- **Rust の sqlx の接続**は、sqlx が数えるトランザクションの深さ（`Connection::is_in_transaction`）で決める。sqlx の `Transaction`（`pool.begin()` か `conn.begin()`）の中なら呼ぶ側のトランザクション、そうでなければ自分のトランザクションを持つ。sqlx はサーバーの状態を見せないので、`begin` の文を自分で送ったトランザクションと、autocommit を切ったものは見分けない（`docs/targets.md` に、sqlx の `begin` で始めるよう書く）。プール（`MySqlPool`）は、呼び出しごとに自分のトランザクションを持つ。
 - **呼ぶ側のトランザクション**では、`begin` も `commit` も送らず、エラーはそのまま返す。1213 のあと MySQL は呼ぶ側のトランザクションを戻しており、1205 のあとは文だけを戻しているので、どちらも呼ぶ側がロールバックする。注文の行と仮押さえを一緒にコミットでき、一緒に取り消せる。呼び出しのたびに勘定を読み直し、そこで作った勘定の行は確かめ済みにしない。呼ぶ側のロールバックで消えうるからである。確かめ済みにするのは、自分のトランザクションの前に作り、すぐにコミットした行だけである。そうしないと、同じ接続で、ロールバックされた呼ぶ側のトランザクションの呼び出しのあとに自分のトランザクションの呼び出しが来たとき、消えた行を作らずに飛ばす。境界のある勘定なら書き込みが一行も変えず、境界の無い勘定なら行の無いまま記録が増え、`expire()` の足し込みで額が消える（`tests/mysql.rs` の `whose_transaction` が、この直しを外すと残高が 0 になって落ちることを確かめた）。
-- **一つの接続は、一度に一つの呼び出しに使う**：二つの呼び出しが同時に一つの接続（mysql2 の接続、DB-API の接続、Go の `*sql.Conn` と `*sql.Tx`）を使うと、文が混ざり、片方の `begin` の中にもう片方の文が入る。同じトランザクションの中でも、片方の読みのあとにもう片方が書けば、確かめは古い行を見る。クライアントは呼び出しを並べ替えない。接続を一度に一人が使うのは、ドライバの接続のもともとの決まりだからで、同時に呼ぶならプールを渡す（文書にそう書く）。PostgreSQL の関数は文一つなので、この制約が無い。
+- **一つの接続は、一度に一つの呼び出しに使う**：二つの呼び出しが同時に一つの接続（mysql2 の接続、DB-API の接続、Go の `*sql.Conn` と `*sql.Tx`）を使うと、文が混ざり、片方の `begin` の中にもう片方の文が入る。同じトランザクションの中でも、片方の読みのあとにもう片方が書けば、確かめは古い行を見る。クライアントは呼び出しを並べ替えない。接続を一度に一人が使うのは、ドライバの接続のもともとの決まりだからで、同時に呼ぶならプールを渡す（文書にそう書く）。Rust では、接続は `tokio::sync::Mutex` に入れて渡し、呼び出しは終わるまでロックを持つので、同時の呼び出しは一つずつになる。PostgreSQL の関数は文一つなので、この制約が無い。
 - `begin /*T! pessimistic */` は、TiDB では `tidb_txn_mode` にかかわらず悲観的なトランザクションを始め、MySQL と Vitess ではコメントとして読まれる。
 
-**決定（まとめて送る：`batch`）**：帳簿の値を `batch` で作ると、続けて送る文を一つのリクエストにまとめる（プールか接続が複数の文を許していること。mysql2 の `multipleStatements`、PyMySQL の `CLIENT.MULTI_STATEMENTS`、go-sql-driver/mysql の `multiStatements=true`）。`do` と `hold` は `begin`・呼び出しの行・読みを一つに、書き込みと `commit` をもう一つにする。MySQL はリクエストの中で最初のエラーのところで止まる（段階 A に確かめた）ので、主キーが重なれば読みは走らない。値は 16 進と数字なので、複数の文をまとめてもエスケープの漏れが無い。go-sql-driver/mysql は列のある結果（select の結果）しか見せないので、Go のクライアントは、結果を select の文に順に当てる。
+**決定（まとめて送る：`batch`）**：帳簿の値を `batch` で作ると、続けて送る文を一つのリクエストにまとめる（プールか接続が複数の文を許していること。mysql2 の `multipleStatements`、PyMySQL の `CLIENT.MULTI_STATEMENTS`、go-sql-driver/mysql の `multiStatements=true`。sqlx はいつも許す）。`do` と `hold` は `begin`・呼び出しの行・読みを一つに、書き込みと `commit` をもう一つにする。MySQL はリクエストの中で最初のエラーのところで止まる（段階 A に確かめた）ので、主キーが重なれば読みは走らない。値は 16 進と数字なので、複数の文をまとめてもエスケープの漏れが無い。go-sql-driver/mysql は列のある結果（select の結果）しか見せないので、Go のクライアントは、結果を select の文に順に当てる。
 
 在庫の英語のテストの帳簿で、帳簿の値を作ってから最初の六つの呼び出しが送ったリクエストの数（`tests/mysql.rs` の `batch`）：
 
@@ -907,6 +908,7 @@ Vitess 24.0.5 をソースから組み、試験用の vttestserver（vtcombo と
 - 呼ぶ側のトランザクションの中の `do 0` を、vtgate はテナントと関係の無いシャードに送った。聞く文は `set @chobo = 0` にした（上）。
 - vtgate は、文の読み方を変える `sql_mode`（`ANSI_QUOTES`、`NO_BACKSLASH_ESCAPES`、`PIPES_AS_CONCAT`）をセッションに設定させない。chobo の文はこれらによらないので、`sql_mode` の段は、Vitess では設定を変えずに、引用符とバックスラッシュの入ったキーを流す。
 - シャードしたキースペースでは、列を書かない `insert … values` を vtgate が受け付けない（VT09004）。chobo の文はどれも列を書く。
+- sqlx は、接続するときに `sql_mode` に `PIPES_AS_CONCAT` を足す。vtgate はこれをセッションに設定させないので、Rust のクライアントで Vitess につなぐときは `.pipes_as_concat(false)` を付ける（chobo の文は `||` を使わないので、どちらでも同じに読まれる）。試験のランナーは、MySQL と TiDB でもこれを付けて流す。Vitess の上の Rust のクライアントは、platforms の段で流す（14 章）。
 
 **速さ**：同じ一台の機械（Apple M4 Max、macOS）で、ネットワークを通さずに測った。設定は既定のまま（MySQL 8.4.11 はバイナリログあり、`sync_binlog=1`、`innodb_flush_log_at_trx_commit=1`。TiDB 8.5.8 は TiUP の playground で TiDB・TiKV・PD が一つずつ。PostgreSQL 18.0 は `fsync` あり）。英語の在庫のテストの帳簿の `reserve.hold` を、八つの呼び出し元から 50 回ずつ呼び、三回の真ん中の値を取った。
 
@@ -940,7 +942,7 @@ Vitess 24.0.5 をソースから組み、試験用の vttestserver（vtcombo と
 
 - **ストアドプロシージャで PostgreSQL と同じ形にする**：TiDB に無く、Vitess のサービスには作れないものがある。MySQL でも、プロシージャの呼び出しは autocommit のもとで全部か無しにならないので、トランザクションはどのみちクライアントが持つ。
 - **帳簿ごとにデータベースを作る**：データベースを作れない Vitess のサービスがある。
-- **確かめをクライアントの言語で書く**：TigerBeetle の出力先と同じ形だが、意味が TypeScript・Python・Go の三か所に増える。
+- **確かめをクライアントの言語で書く**：TigerBeetle の出力先と同じ形だが、意味が TypeScript・Python・Go・Rust の四か所に増える。
 - **移動ごとに条件つきの UPDATE を送り、影響行数で拒否を知る**：影響行数は接続の CLIENT_FOUND_ROWS で変わり、額が 0 の移動では行が変わらない。移動の数だけ往復も増える。
 - **境界の無い勘定もロックする（PostgreSQL の形）**：外の勘定がテナントに一行なので、テナントの中の呼び出しが一列に並ぶ。
 - **READ COMMITTED を求める**：トランザクションごとに分離レベルを設定する文が増え、呼ぶ側のトランザクションでは変えられない。読みを全部ロックつきにすれば要らない。
@@ -950,7 +952,7 @@ Vitess 24.0.5 をソースから組み、試験用の vttestserver（vtcombo と
 `chobo api <file.book>` は、呼び方と拒否されうる理由と仮押さえのステートマシンを JSON で出す。ritsu の外のツールが、生成したコードも帳簿も読まずに、帳簿を呼ぶコードを組み立てられるようにするためのものである。ritsu の中の言語には、同じことを ritsu の口で、型の付いた値として渡す（下）。
 
 - **振替の種類ごと**：引数（名前、型、単位）、キー、仮押さえかどうかと有効期限、移動、操作ごとの拒否されうる理由（名前、どの境界か、キーを使ったことになるか、そうなる操作の列）、`code` と定義のハッシュ。
-- **出力先ごと**（`targets`）：PostgreSQL のスキーマ、操作ごとの関数の名前と引数の名前（`default null` の引数も）、勘定ごとの `balance_…`、`expire`。TypeScript と Python のファイル、帳簿の値を作る関数、振替の種類ごとのメンバーの名前（TypeScript は引数の型の名前も、Python は引数のキーワードの名前も）。Go のパッケージ、帳簿の値を作る関数、振替の種類ごとのフィールドと型とフィールドの名前、勘定ごとのメソッドの名前。TigerBeetle の一つのリクエストに入る件数と、操作ごとのチェーンの並び（移動と役目）。生成したコードを読まずに、ほかのツールが呼び方を組み立てられるように。
+- **出力先ごと**（`targets`）：PostgreSQL のスキーマ、操作ごとの関数の名前と引数の名前（`default null` の引数も）、勘定ごとの `balance_…`、`expire`。TypeScript と Python のファイル、帳簿の値を作る関数、振替の種類ごとのメンバーの名前（TypeScript は引数の型の名前も、Python は引数のキーワードの名前も）。Go のパッケージ、帳簿の値を作る関数、振替の種類ごとのフィールドと型とフィールドの名前、勘定ごとのメソッドの名前。Rust のモジュールとファイル、帳簿の値を作る関数、振替の種類ごとのメソッドと引数の構造体とフィールドの名前と操作の名前（`do` は `r#do`）、勘定ごとのメソッドと構造体、拒否の理由の列挙の値、出力先ごとに要るクレートと版（`targets.rust`。14 章）。TigerBeetle の一つのリクエストに入る件数と、操作ごとのチェーンの並び（移動と役目）。生成したコードを読まずに、ほかのツールが呼び方を組み立てられるように。
 - **単位ごと**：名前、`scale`、TigerBeetle の ledger（4.3）。税込か税抜を書いた単位には、その語（`tax`。書かない単位には、このキーを出さない）。
 - **勘定の種類ごと**：引数、単位、境界と理由の名前、外の勘定か。
 - **ID の決め方**（4.3 の表）。ほかのツールが自分で ID を求められるように。
@@ -1016,24 +1018,24 @@ case 押さえ : 在庫.引当 follows 在庫.引当
   - 名前は英語で、名前に入る数は単位の桁で書く（7 章）。`chobo doc --lang ja` のために、同じ中身の日本語の題も一緒に作る（`scenarios::generate_titled`）。
 
   テストの帳簿 6 冊から 125 本、例の 8 冊から 208 本のシナリオを作る。テストの帳簿については、参照インタプリタの結果を `tests/books/<帳簿>.runs.json` に、TigerBeetle に送る 340 の操作のチェーンを `<帳簿>.chains.json` に固定してある（例の帳簿の結果は、7 章のページが固定している）。手で書いたシナリオ（`<帳簿>.more.json`）の結果は `<帳簿>.more.runs.json` に固定する。
-- **突き合わせ**（`tests/backends.rs`）：全部の帳簿（テストの帳簿 12 冊と例の 8 冊）の全部のシナリオを、PostgreSQL と TigerBeetle の七つの組み合わせと、MySQL の系統の組み合わせで流し、参照インタプリタと比べる。七つは、SQL そのもの（psql から関数を呼ぶ）、PostgreSQL × 三つの言語のクライアント、TigerBeetle × 三つの言語のクライアントである。MySQL の系統は、MySQL、TiDB、Vitess（シャード一つと二つ）のそれぞれで、三つの言語のクライアントを一文ずつ送る形とまとめて送る形で流す（4.5。下の項）。操作ごとの結果と、終わりの残高と仮押さえの状態が一致すること、`together` のシナリオでは参照インタプリタの出す集まりに入ることを確かめる。生成したシナリオのほかに、帳簿の横に置いた `<帳簿>.more.json` の、手で書いたシナリオも流す。いまは 6 本で、在庫のテストの帳簿の 4 本（押さえた額を超える確定を、取消、期限切れ、確定のあとに送るものと、0 を確定するもの）と、返金の例の英語と日本語の版の 1 本ずつ（30.00 の売上に 20.00 の返金が二つ同時に来るもの）である。
+- **突き合わせ**（`tests/backends.rs`）：全部の帳簿（テストの帳簿 12 冊と例の 8 冊）の全部のシナリオを、PostgreSQL と TigerBeetle の九つの組み合わせと、MySQL の系統の組み合わせで流し、参照インタプリタと比べる。九つは、SQL そのもの（psql から関数を呼ぶ）、PostgreSQL × 四つの言語のクライアント、TigerBeetle × 四つの言語のクライアントである。MySQL の系統は、MySQL、TiDB、Vitess（シャード一つと二つ）のそれぞれで、四つの言語のクライアントを一文ずつ送る形とまとめて送る形で流す（4.5。下の項）。操作ごとの結果と、終わりの残高と仮押さえの状態が一致すること、`together` のシナリオでは参照インタプリタの出す集まりに入ることを確かめる。生成したシナリオのほかに、帳簿の横に置いた `<帳簿>.more.json` の、手で書いたシナリオも流す。いまは 6 本で、在庫のテストの帳簿の 4 本（押さえた額を超える確定を、取消、期限切れ、確定のあとに送るものと、0 を確定するもの）と、返金の例の英語と日本語の版の 1 本ずつ（30.00 の売上に 20.00 の返金が二つ同時に来るもの）である。
   - PostgreSQL は、テストのたびに使い捨てのクラスタ（`initdb`、ソケットだけで待ち受け、`fsync=off`）を立て、帳簿ごとのスキーマに SQL を入れる。バイナリは PATH か `CHOBO_PG_BIN` から、ソケットは `CHOBO_PG_SOCKET_DIR`（無ければ `/tmp`）の下に置く（ソケットのパスは 103 バイトまで）。TigerBeetle は、テストのたびにデータファイル（1.1 GB）を作り、レプリカを一つ立てる（`tools/tigerbeetle/tigerbeetle` か `CHOBO_TIGERBEETLE`）。TigerBeetle は自分のコピー（一つ 256 MB）を一時ディレクトリに置いて動くので、テストの一時ディレクトリを `TMPDIR` として渡す。どちらも、終わったら（失敗しても）止めて消す。テストのプロセスが殺されて残ったものは、次のテストのプロセスが、記録しておいたプロセス ID で止めてから消す。
   - テストのコピーとして、帳簿の `pending expires after …` を全部 3 秒に書き換えた帳簿から、SQL とクライアントを作る（書き換える場所が見つからなければ失敗）。生成するシナリオの `pass` は、作った仮押さえの期限をどれも越えるので、コピーでも参照インタプリタの答えは変わらない（テストが全シナリオで確かめる）。ランナーは、そのシナリオで作った仮押さえの期限をどれも 0.3 秒越えるまで本当に待つ。そのあと PostgreSQL では `expire()` を呼び（一つのランナーの中では一度に一つずつ。4.1）、TigerBeetle では、勘定の出ていく仮押さえが、期限の無い仮押さえの分だけになるまで読み直す（10 秒で打ち切る）。
-  - 組み合わせごとにランナーのプロセス（`tools/runner` の `runner.ts` と `runner.py`、Go はテストが組み立てる一つのバイナリ）を一つ起こし、全部の帳簿の全部のシナリオを同時に流す。シナリオごとに別のテナントを使う。PostgreSQL へは 20 本の接続を、TigerBeetle へは四つのクライアントを使い回す（TigerBeetle のクラスタが覚えるクライアントは 64 まで）。`together` は、呼び出し元ごとに別の帳簿の値と別の接続（TigerBeetle では別のクライアント）から、本当に同時に送る。
-  - 参照インタプリタは `pass` のところでしか時間を進めないが、コピーの仮押さえは本当の時間の 3 秒で切れる。全部のシナリオを同時に流すので、遅い機械では、`pass` の無いシナリオでも、仮押さえのあとのステップや終わりの読み取りが 3 秒より後になることがある。ritsu の CI を初めて回したとき、与信の `together`（二つの呼び出し元が残りの 50000 を同時に押さえる）で、TigerBeetle の TypeScript のクライアントの読み取りが仮押さえの期限より後になった。仮押さえは `expired` になり、勘定の `held_out` は 0 になった。順序は参照の数えた二通りの片方どおりで、TigerBeetle の答えも時刻のとおりに正しかった。そこでランナー（四つとも。SQL を流すのはテストの中の Rust）は、最後の `pass` のあとで最初に通った仮押さえを頼んだ時刻を覚え、そこから期限の秒数が過ぎたあとにステップか読み取りをしたシナリオに `late` を付ける。`late` が付いて参照と食い違ったシナリオは、失敗にせず、別のテナントで、遅れたものだけを集めてもう一度流す（`run again:` の行に名前を出す）。二度目も遅れて食い違えば、`late again` と書いて失敗にする。遅れずに食い違ったものは、一度目で失敗にする。期限を延ばす形は取らなかった。`pass` のたびの本当の待ちが延びてテスト全体が遅くなり、それでも遅い機械では同じことが起こりうるからである。食い違ったときに期限切れの結果も受け入れる形も取らなかった。遅れたかどうかはステップごとに違い、受け入れる結果を数え直すことになるうえ、確かめることが減るからである。
-  - PostgreSQL の四つの組み合わせを順に流し、それと並べて、TigerBeetle の三つを順に流す。最後に、PostgreSQL のどの勘定の残高も、`entries` を足し合わせたものと等しいことを確かめる。
+  - 組み合わせごとにランナーのプロセス（`tools/runner` の `runner.ts` と `runner.py`、Go と Rust はテストが組み立てる一つのバイナリ）を一つ起こし、全部の帳簿の全部のシナリオを同時に流す。シナリオごとに別のテナントを使う。PostgreSQL へは 20 本の接続を、TigerBeetle へは四つのクライアントを使い回す（TigerBeetle のクラスタが覚えるクライアントは 64 まで）。`together` は、呼び出し元ごとに別の帳簿の値と別の接続（TigerBeetle では別のクライアント）から、本当に同時に送る。
+  - 参照インタプリタは `pass` のところでしか時間を進めないが、コピーの仮押さえは本当の時間の 3 秒で切れる。全部のシナリオを同時に流すので、遅い機械では、`pass` の無いシナリオでも、仮押さえのあとのステップや終わりの読み取りが 3 秒より後になることがある。ritsu の CI を初めて回したとき、与信の `together`（二つの呼び出し元が残りの 50000 を同時に押さえる）で、TigerBeetle の TypeScript のクライアントの読み取りが仮押さえの期限より後になった。仮押さえは `expired` になり、勘定の `held_out` は 0 になった。順序は参照の数えた二通りの片方どおりで、TigerBeetle の答えも時刻のとおりに正しかった。そこでランナー（五つとも。SQL を流すのはテストの中の Rust）は、最後の `pass` のあとで最初に通った仮押さえを頼んだ時刻を覚え、そこから期限の秒数が過ぎたあとにステップか読み取りをしたシナリオに `late` を付ける。`late` が付いて参照と食い違ったシナリオは、失敗にせず、別のテナントで、遅れたものだけを集めてもう一度流す（`run again:` の行に名前を出す）。二度目も遅れて食い違えば、`late again` と書いて失敗にする。遅れずに食い違ったものは、一度目で失敗にする。期限を延ばす形は取らなかった。`pass` のたびの本当の待ちが延びてテスト全体が遅くなり、それでも遅い機械では同じことが起こりうるからである。食い違ったときに期限切れの結果も受け入れる形も取らなかった。遅れたかどうかはステップごとに違い、受け入れる結果を数え直すことになるうえ、確かめることが減るからである。
+  - PostgreSQL の五つの組み合わせを順に流し、それと並べて、TigerBeetle の四つを順に流す。最後に、PostgreSQL のどの勘定の残高も、`entries` を足し合わせたものと等しいことを確かめる。
   - MySQL の系統は別のテスト（`every_scenario_matches_on_the_mysql_family`）で、使い捨ての MySQL のサーバー（`RITSU_MYSQL_BIN` の `mysqld` を `--initialize-insecure` で立てる）、機械の TiDB（`RITSU_TIDB` に `host:port`）、使い捨ての Vitess の二つ（`RITSU_VITESS_BIN` の vttestserver を、キースペースがシャード一つのものと、テナントの `xxhash` で二つに分けたもので立て、どちらもシャードをまたぐトランザクションを誤りにする）の上で流す。サーバーごとにデータベースを一つ作り（Vitess ではキースペースを使い）、全部の帳簿のテーブルを入れる（二つのシャードの Vitess では、テーブルごとにテナントの vindex を足す）。三つの言語のクライアントを一文ずつ送る形で流して、結果と送った文を比べ、まとめて送る形でもう一度流して結果を比べる（まとめたリクエストには、エラーで走らなかった文も入るので、送ったものは比べない）。最後に、どの勘定の行も、足し込んだ記録（`folded` が 1）を足し合わせたものと等しいことを確かめる。MySQL のサーバーは `fsync` を間引く設定（`innodb_flush_log_at_trx_commit=2`、バイナリログなし）で立てる。MySQL と TiDB と二つの Vitess の四つで、Go のランナーのビルドと Vitess を立てるのを含めて 188 秒ほどかかった（MySQL と TiDB だけなら 63 秒ほど）。
 - **段階 C の結果**：テストの帳簿 6 冊の 125 本と、手で書いた 4 本の計 129 本が、七つの組み合わせのどれでも参照インタプリタと一致した（`together` の 11 本は、とりうる結果のどれかに入った）。最後の二回の実行で、`tests/backends.rs` は 21.7 秒と 22.0 秒（組み合わせごとに 3.4〜5.4 秒）、`cargo test` の全体は 43.9 秒と 50.9 秒だった（`tests/tigerbeetle.rs` が 15.6 秒と 16.2 秒、`tests/postgres.rs` が 5.4 秒と 5.7 秒。どれも Go のビルドのキャッシュが温まっているとき）。テストのあいだ、TigerBeetle のレプリカが 1.5 GB ほどのメモリを取る（段階 A に測った）。
 - **段階 D の結果**：例を足して 14 冊になり、生成した 333 本と手で書いた 6 本の計 339 本が、七つの組み合わせのどれでも参照インタプリタと一致した（`together` の 27 本は、とりうる結果のどれかに入った）。最後の二回の実行で、`tests/backends.rs` は 25.3 秒と 24.7 秒（組み合わせごとに 3.6〜6.7 秒で、TigerBeetle の三つが 5.9〜6.7 秒）、`cargo test` の全体は 58.5 秒と 56.7 秒だった（`tests/tigerbeetle.rs` が 15.8 秒と 15.2 秒、`tests/postgres.rs` が 5.9 秒と 5.5 秒、`tests/doc.rs` が 4.3 秒と 4.4 秒。どれも Go のビルドのキャッシュが温まっているとき）。
-- **送ったもの**：三つの言語のクライアントが送ったものを、ランナーが操作ごとに書き留め、`chobo run --show` と比べる。PostgreSQL では呼んだ SQL と引数（Python の `%s` は `$1`、`$2` … に直して比べる）、TigerBeetle では、確定と取消の前に読む仮押さえの ID、作った勘定と開始の振替、チェーンの全部のフィールド、MySQL の系統では文の一字一句である。MySQL の系統で勘定を読んで作る二つの文は、帳簿の値が初めて名指すときだけ送るので、文としては比べず、`--show` に出てくる勘定がどれも一度は読まれたことを見る。`together` の操作は、前の状態から決まる初めの二つ（`begin` と呼び出しの行）を比べ、残りが `--show` の挙げる道のどれかであることを見る。勘定と開始の振替は帳簿の値ごとに初めて要るときだけ送るので、`--show` の並びの一部であることと、`--show` に出てくる勘定がどれも一度は送られたことを見る。状態を読むチェーン（4.2）の ID はランダムなので、`--show` では `random` と書き、ほかのフィールドを比べる。これで、三つの言語が Rust と同じ ID とチェーンを送ることを、全シナリオの全操作について確かめる。
-- **PostgreSQL だけのもの**（`tests/postgres.rs`）：反対の向きの移し替えを四つのセッションから百回ずつ同時に流してデッドロックが起きないこと。REPEATABLE READ の接続で、四つの呼び出し元が 50 回ずつ同じ勘定に入れ、三つの言語のクライアントがどれもシリアライズの失敗をリトライして、200 回の呼び出しが全部 `done` になること（シリアライズの失敗は、一回の実行で言語ごとに 12〜17 回起きた。四回の実行から）。関数を通らない UPDATE を CHECK が止めること。境界を書き換えた行で `CB001` になること。`expire()` が戻した数と、残高と `entries`。PLAN 0.3 の ID の表を `chobo_id` で求めて一致すること。長い名前の帳簿が E061 でビルドされないこと。
-- **MySQL の系統だけのもの**（`tests/mysql.rs`）：MySQL、TiDB、二つのシャードの Vitess のそれぞれで、英語のテストの帳簿と、日本語の名前のテーブルになる日本語の帳簿で、TypeScript のクライアントを通して確かめる（誰のトランザクションかは三つの言語で）。試験が自分で流す文（CHECK を試す UPDATE、行と記録の突き合わせ、呼ぶ側の `orders`）は、どれもテナントの ID で行を名指し、Vitess ではテナントのシャードに届く。反対の向きの移し替えを四つの呼び出し元から百回ずつ同時に流してデッドロックも呼び直しも起きないこと。クライアントを通らない UPDATE を CHECK が止めること（TiDB では `tidb_enable_check_constraint` を ON にして作ったテーブルで。OFF で作ったテーブルに CHECK が無いことも）。境界を書き換えた行で `CB001` になること。`expire()` が戻した数と、境界の無い勘定の記録の足し込みと、行と記録。最後の 100 個を八つの呼び出し元が 50 回ずつ取りに来て、ちょうど 100 回が `done` になること（一文ずつとまとめての両方で、かかった時間を出す）。接続を渡したときに呼ぶ側のトランザクションに入り、コミットとロールバックに従うこと。誰のトランザクションか（`whose_transaction`）：TypeScript では、トランザクションの中にいない接続で、呼び出しが `set @chobo = 0` で聞いてから `begin` と `commit` を送り、呼ぶ側が始めたトランザクションでも、autocommit を切った接続でも、どちらも送らずにロールバックで消えること。Python（PyMySQL）では、autocommit の接続で自分のトランザクションになり、`begin()` のあとと autocommit を切ったあとは呼ぶ側のものになること。Go では、`*sql.Conn` の呼び出しがすぐにほかの接続から見え、`*sql.Tx` の呼び出しはコミットまで見えず、ロールバックで消えること。TypeScript と Python では、ロールバックで消えた勘定の行を、次の自分のトランザクションの呼び出しが作り直し、残高が残ること。まとめて送ったときの答えが一文ずつと同じで、リクエストが減ること。大文字、末尾の空白、濁点だけが違うキーが別の呼び出しになり、大文字だけが違うテナントが別の残高になること。`ANSI_QUOTES` と `NO_BACKSLASH_ESCAPES` の `sql_mode` で、引用符とバックスラッシュの入ったキーが通ること（Vitess はこの二つを設定させないので、設定を変えずに流す）。名前が MySQL に持てない帳簿が E062 でビルドされないこと（これはサーバー無しで）。
-- **TigerBeetle だけのもの**（`tests/tigerbeetle.rs`）：上限を変えた帳簿を同じテナントで呼ぶと、開始の振替の額が違ってエラーになること。無い仮押さえの確定が、読むだけで何も送らずに `no_such_hold` になり、そのあと仮押さえを作れば同じキーで確定できること。どちらも三つの言語で確かめる。ほかに、移動の多い帳簿が E060 でビルドされないこと。
-- **生成したコード**（`tests/generated.rs`）：三つの出力先のクライアントの、TypeScript を `tsc --strict`（typescript 7.0.2、`erasableSyntaxOnly` と `noUnusedLocals` も）に、Python を `py_compile` に、Go を `gofmt -l`（何も言わないこと）と `go vet` に通す。ritsu の `tests/gen.rs` は、`ritsu gen --books mysql` のパッケージも `tsc --strict`、`mypy --strict`、`go vet` に通す。
-- **診断**：テストの帳簿の診断を、英語と日本語の両方で golden に固定する（`CHOBO_BLESS=1` で書き直す）。どの診断コードにも走る最小の再現を `chobo explain` に持たせ、テストがそのコードが出ることを確かめる。E060、E061、E062 は、`tests/fixtures` の帳簿の横の `<名前>.target` に書いたターゲットでビルドしたときの出力を golden にする。診断の帳簿は日本語の名前の 26 冊と、同じ帳簿を英語の名前で書いた 26 冊と、README が見せる英語の名前の W103 の帳簿 `split.book`、MySQL の名前の長さの帳簿 `mysql_name_length.book` で、31 のコード全部が両方の言語で golden に出る。英語の名前の帳簿が、対になる日本語の名前の帳簿と同じコードを出し、同じくエラーで止まるか通ることを、`tests/check.rs` の `every_japanese_fixture_has_an_english_one` が確かめる（10.1）。
+- **送ったもの**：四つの言語のクライアントが送ったものを、ランナーが操作ごとに書き留め、`chobo run --show` と比べる。PostgreSQL では呼んだ SQL と引数（Python の `%s` は `$1`、`$2` … に直して比べる）、TigerBeetle では、確定と取消の前に読む仮押さえの ID、作った勘定と開始の振替、チェーンの全部のフィールド、MySQL の系統では文の一字一句である。MySQL の系統で勘定を読んで作る二つの文は、帳簿の値が初めて名指すときだけ送るので、文としては比べず、`--show` に出てくる勘定がどれも一度は読まれたことを見る。`together` の操作は、前の状態から決まる初めの二つ（`begin` と呼び出しの行）を比べ、残りが `--show` の挙げる道のどれかであることを見る。勘定と開始の振替は帳簿の値ごとに初めて要るときだけ送るので、`--show` の並びの一部であることと、`--show` に出てくる勘定がどれも一度は送られたことを見る。状態を読むチェーン（4.2）の ID はランダムなので、`--show` では `random` と書き、ほかのフィールドを比べる。これで、四つの言語のクライアントが chobo と同じ ID とチェーンを送ることを、全シナリオの全操作について確かめる。
+- **PostgreSQL だけのもの**（`tests/postgres.rs`）：反対の向きの移し替えを四つのセッションから百回ずつ同時に流してデッドロックが起きないこと。REPEATABLE READ の接続で、四つの呼び出し元が 50 回ずつ同じ勘定に入れ、四つの言語のクライアントがどれもシリアライズの失敗をリトライして、200 回の呼び出しが全部 `done` になること（シリアライズの失敗は、一回の実行で言語ごとに 12〜17 回起きた。四回の実行から）。関数を通らない UPDATE を CHECK が止めること。境界を書き換えた行で `CB001` になること。`expire()` が戻した数と、残高と `entries`。PLAN 0.3 の ID の表を `chobo_id` で求めて一致すること。長い名前の帳簿が E061 でビルドされないこと。
+- **MySQL の系統だけのもの**（`tests/mysql.rs`）：MySQL、TiDB、二つのシャードの Vitess のそれぞれで、英語のテストの帳簿と、日本語の名前のテーブルになる日本語の帳簿で、TypeScript のクライアントを通して確かめる（誰のトランザクションかは四つの言語で）。試験が自分で流す文（CHECK を試す UPDATE、行と記録の突き合わせ、呼ぶ側の `orders`）は、どれもテナントの ID で行を名指し、Vitess ではテナントのシャードに届く。反対の向きの移し替えを四つの呼び出し元から百回ずつ同時に流してデッドロックも呼び直しも起きないこと。クライアントを通らない UPDATE を CHECK が止めること（TiDB では `tidb_enable_check_constraint` を ON にして作ったテーブルで。OFF で作ったテーブルに CHECK が無いことも）。境界を書き換えた行で `CB001` になること。`expire()` が戻した数と、境界の無い勘定の記録の足し込みと、行と記録。最後の 100 個を八つの呼び出し元が 50 回ずつ取りに来て、ちょうど 100 回が `done` になること（一文ずつとまとめての両方で、かかった時間を出す）。接続を渡したときに呼ぶ側のトランザクションに入り、コミットとロールバックに従うこと。誰のトランザクションか（`whose_transaction`）：TypeScript では、トランザクションの中にいない接続で、呼び出しが `set @chobo = 0` で聞いてから `begin` と `commit` を送り、呼ぶ側が始めたトランザクションでも、autocommit を切った接続でも、どちらも送らずにロールバックで消えること。Python（PyMySQL）では、autocommit の接続で自分のトランザクションになり、`begin()` のあとと autocommit を切ったあとは呼ぶ側のものになること。Go では、`*sql.Conn` の呼び出しがすぐにほかの接続から見え、`*sql.Tx` の呼び出しはコミットまで見えず、ロールバックで消えること。Rust では、トランザクションの中にいないプールの接続の呼び出しがすぐにほかの接続から見え、sqlx の `Transaction` の呼び出しはコミットまで見えず、呼ぶ側の行と一緒にロールバックで消え、そのあと同じキーで呼べば通ること（サーバーが無いときも、この段の Rust は組み立てて、警告が無いことを確かめる。`the_rust_of_whose_transaction_builds`）。TypeScript と Python では、ロールバックで消えた勘定の行を、次の自分のトランザクションの呼び出しが作り直し、残高が残ること。まとめて送ったときの答えが一文ずつと同じで、リクエストが減ること。大文字、末尾の空白、濁点だけが違うキーが別の呼び出しになり、大文字だけが違うテナントが別の残高になること。`ANSI_QUOTES` と `NO_BACKSLASH_ESCAPES` の `sql_mode` で、引用符とバックスラッシュの入ったキーが通ること（Vitess はこの二つを設定させないので、設定を変えずに流す）。名前が MySQL に持てない帳簿が E062 でビルドされないこと（これはサーバー無しで）。
+- **TigerBeetle だけのもの**（`tests/tigerbeetle.rs`）：上限を変えた帳簿を同じテナントで呼ぶと、開始の振替の額が違ってエラーになること。無い仮押さえの確定が、読むだけで何も送らずに `no_such_hold` になり、そのあと仮押さえを作れば同じキーで確定できること。どちらも四つの言語で確かめる。ほかに、移動の多い帳簿が E060 でビルドされないこと。
+- **生成したコード**（`tests/generated.rs`）：三つの出力先のクライアントの、TypeScript を `tsc --strict`（typescript 7.0.2、`erasableSyntaxOnly` と `noUnusedLocals` も）に、Python を `py_compile` に、Go を `gofmt -l`（何も言わないこと）と `go vet` に通す。Rust は、全部の帳簿の三つの出力先のモジュールを一つのクレートに入れ、エディション 2024 と 2021 の両方で `cargo clippy -- -D warnings` に通す（clippy が無ければ `cargo check` の警告だけで）。ritsu のパッケージの中のクライアント（単位の型を受け取るもの）も組む。クライアントの頭と `chobo api` が書くクレートの版がランナーの Cargo.lock の版であること、E063 の表が rustc の読み方と同じであること（14 章）も確かめる。ritsu の `tests/gen.rs` は、`ritsu gen --books mysql` のパッケージも `tsc --strict`、`mypy --strict`、`go vet` に通す。
+- **診断**：テストの帳簿の診断を、英語と日本語の両方で golden に固定する（`CHOBO_BLESS=1` で書き直す）。どの診断コードにも走る最小の再現を `chobo explain` に持たせ、テストがそのコードが出ることを確かめる。E060、E061、E062、E063 は、`tests/fixtures` の帳簿の横の `<名前>.target` に書いたターゲットでビルドしたときの出力を golden にする。診断の帳簿は日本語の名前の 28 冊と、同じ帳簿を英語の名前で書いた 28 冊と、README が見せる英語の名前の W103 の帳簿 `split.book`、MySQL の名前の長さの帳簿 `mysql_name_length.book` で（`--diff-base` で比べる前の版 `<名前>.before.book` は数えない）、32 のコード全部が両方の言語で golden に出る。英語の名前の帳簿が、対になる日本語の名前の帳簿と同じコードを出し、同じくエラーで止まるか通ることを、`tests/check.rs` の `every_japanese_fixture_has_an_english_one` が確かめる（10.1）。
 - **ページ**（`tests/doc.rs`）：`chobo doc` のページを golden に固定し、残高を参照インタプリタと、図を Mermaid と、HTML を Chrome で確かめる（7 章）。
 - **文書**（`tests/docs.rs`、`tests/skill.rs`）：README.md、README.ja.md、`docs/`、`skills/` の診断の抜粋が `tests/fixtures` の golden にそのまま含まれること。` ```book ` のブロックのどの行も、例かテストの帳簿か `chobo explain` の再現の帳簿の行であること。` ```console ` のブロックに出力つきで書いた `chobo` のコマンドを、リポジトリの根で実際に走らせ、書いた行が書いた順に出ること（`…` の行は、省いた行を表す）。文書の中の相対リンクの先があること。`docs/codes.md` と `codes.ja.md` が `chobo explain --all --format markdown` の出力と同じであること。README に書いたコードの数とシナリオの数が実際の数であること。`docs/reference.md` のキーワードの表が `src/syntax.rs` の `KEYWORDS` と同じ順で同じであること。スキルの中のページのコピーが `skills/sync.sh` の作るものと同じで、スキルの中のリンクがスキルの外を指さず、`SKILL.md` の frontmatter が Agent Skills の形に合うこと。
-- **外の道具**：PostgreSQL、TigerBeetle、MySQL、TiDB、Vitess、node、python、go、Chrome、`tools/mermaid` の Mermaid、それぞれの依存が無ければ、`SKIP: <理由>` の行を出して通す。MySQL は ritsu の tools の段、TiDB と Vitess は platforms の段に入る（ritsu の DESIGN 10.2）。
+- **外の道具**：PostgreSQL、TigerBeetle、MySQL、TiDB、Vitess、node、python、go、cargo（`tools/runner/rust` のクレートを Cargo.lock の版で使う）と clippy、Chrome、`tools/mermaid` の Mermaid、それぞれの依存が無ければ、`SKIP: <理由>` の行を出して通す。MySQL は ritsu の tools の段、TiDB と Vitess は platforms の段に入る（ritsu の DESIGN 10.2）。
 
 ## 7. `chobo doc`
 
@@ -1093,13 +1095,13 @@ HTML は、明るい配色と暗い配色（`prefers-color-scheme`）を持つ�
 chobo check <file.book>... [--format json] [--diff-base <リビジョン>]
 chobo run <file.book> --scenario <file.json> [--show postgres|tigerbeetle|mysql] [--format json]
 chobo scenarios <file.book> [--out <dir>]
-chobo build <file.book> --target postgres|postgres-typescript|postgres-python|postgres-go|tigerbeetle-typescript|tigerbeetle-python|tigerbeetle-go|mysql|mysql-typescript|mysql-python|mysql-go [--out <dir>]
+chobo build <file.book> --target postgres|postgres-typescript|postgres-python|postgres-go|postgres-rust|tigerbeetle-typescript|tigerbeetle-python|tigerbeetle-go|tigerbeetle-rust|mysql|mysql-typescript|mysql-python|mysql-go|mysql-rust [--out <dir>]
 chobo doc <file.book> [--format html] [--out <dir>]
 chobo api <file.book>
 chobo explain <コード> | --all [--format markdown]
 ```
 
-段階 B で `check`、`run`、`scenarios`、`api`、`explain` と `--help`、`--version` を、段階 C で `build` と `run --show` を、段階 D で `doc` を作った。`doc` は標準出力に書き、`--out <dir>` があれば、帳簿のファイル名から `<名前>.md` か `<名前>.html` を書く（`build` と違い、帳簿の名前ではなくファイル名を使う。英語の版と日本語の版が同じディレクトリにあっても、ぶつからない）。`run` の `--scenario` には、シナリオを一つ書いたファイルか、`chobo scenarios` が出す配列をそのまま渡せる。`build` は、書いたファイルのパスを一つずつ標準エラーに出す。帳簿にエラーがあるとき、出力先が帳簿を受け取れないとき（E060、E061、E062）は何も書かずに exit 1 で終わる。
+段階 B で `check`、`run`、`scenarios`、`api`、`explain` と `--help`、`--version` を、段階 C で `build` と `run --show` を、段階 D で `doc` を作った。`doc` は標準出力に書き、`--out <dir>` があれば、帳簿のファイル名から `<名前>.md` か `<名前>.html` を書く（`build` と違い、帳簿の名前ではなくファイル名を使う。英語の版と日本語の版が同じディレクトリにあっても、ぶつからない）。`run` の `--scenario` には、シナリオを一つ書いたファイルか、`chobo scenarios` が出す配列をそのまま渡せる。`build` は、書いたファイルのパスを一つずつ標準エラーに出す。帳簿にエラーがあるとき、出力先が帳簿を受け取れないとき（E060、E061、E062、E063）は何も書かずに exit 1 で終わる。
 
 どのコマンドにも `--lang ja` を付けられ、無ければ環境変数 `CHOBO_LANG`、次に ritsu のどの言語も読む `RITSU_LANG`、どちらも無ければ英語（rulec と同じ。システムのロケールは見ない）。exit code は、0（問題なし、警告だけ）、1（エラー）、2（使い方の誤り、内部の異常）。`--format json` の診断のキーは、`--lang` にかかわらず英語で固定する。`chobo run --show` は、参照インタプリタの結果の代わりに、操作ごとにその出力先へ送るものを出す（テナントは空の文字列）。PostgreSQL では呼ぶ SQL と引数、TigerBeetle では、確定と取消の前に読む仮押さえの ID、作る勘定、開始の振替、チェーン、MySQL の系統では、確かめる勘定と、一文ずつ送るときの文の並び（値を入れた形）である。`--format json` では、クライアントが送るものと一字ずつ比べられる形で、テキストでは TigerBeetle の勘定を帳簿の名前で書いた表で出す。
 
@@ -1256,3 +1258,98 @@ sekisho で、属性の型に `temperature[℃]` を書けないことがわか�
 ### 13.7 見つけて直していないもの
 
 - 無い。
+
+## 14. Rust のクライアント（2026-10-24）
+
+### 14.1 きっかけ
+
+ritsu の言語の生成物が Rust でも書かれるようになり（kaname の生成するコードと `ritsu gen` のパッケージ）、そこから帳簿を呼ぶ口が要る。chobo のクライアントは TypeScript・Python・Go の三つで、Rust には無かった。範囲は、三つの出力先（PostgreSQL、TigerBeetle、MySQL の系統）を呼ぶ Rust のクライアントで、Wasm には出さない。
+
+### 14.2 決定
+
+**決定（非同期のクライアントで、ドライバは sqlx と、TigerBeetle の公式のクレート）**：PostgreSQL と MySQL の系統は sqlx 0.9.0（tokio の上で動かす。`runtime-tokio`）を、TigerBeetle は crates.io の `tigerbeetle` 0.17.9 を通す。どの操作も `async fn` である。
+
+- TigerBeetle の 0.17.9 には、Rust の公式のクライアントがある。crates.io の `tigerbeetle`（2026-10-09 に 0.17.9。TigerBeetle のリポジトリの `src/clients/rust` で、クレートの文書が「The official TigerBeetle client for Rust」と書く）で、版はレプリカと同じ番号になる。API は非同期だけで、実行環境（tokio など）に依存しない。0.17.9 のレプリカと話せることを確かめた（14.5）。ほかに `tigerbeetle-unofficial` があるが、0.16 の系統までである。
+- sqlx は、一つのクレートで PostgreSQL と MySQL の両方を持つ。Rust のデータベースのドライバでいちばん使われている（crates.io の通算のダウンロード数は、2026-10-24 に sqlx が 1 億 7,169 万、tokio-postgres が 7,879 万、mysql_async が 826 万）。0.9.0 は Rust 1.94 を求める。
+- 非同期にするのは、二つのドライバがどちらも非同期の API しか持たないからである。同期のクライアントにすると、クライアントの中で実行環境を回すことになり、呼ぶ側が tokio の中にいれば使えない（実行環境の中で `block_on` すると止まる）。
+- 実行環境は tokio にする。sqlx が tokio の上で動くからで、どの帳簿でも同じ部分が tokio から使うのは、`sync`（接続を入れる `Mutex`）と `time`（リトライの待ち）だけである。TigerBeetle のクライアントは tokio に依存しない。
+- 同時の操作は、Go と同じく、データベースの一度の書き込みに任せる。帳簿の値のメソッドは `&self` を取るので、`Arc` に入れて、いくつものタスクから呼べる。
+
+**決定（受け取るものはトレイト）**：クライアントが受け取るものは、どの帳簿でも同じ部分のトレイトにした。ドライバの型がそれを実装し、呼ぶ側は自分のプール、接続、トランザクションをそのまま渡す。Go のクライアントがインターフェースを受け取るのと同じ理由で、試験が包んで送ったものを書き留められ、利用者も包んで数えたり記録したりできる。
+
+| 出力先 | トレイト | 実装するもの |
+|---|---|---|
+| PostgreSQL | `Database`（文を一つ、引数を順に結んで、返る一行） | sqlx の `PgPool`、`tokio::sync::Mutex` に入れた接続（`&mut PgConnection`、`Transaction`、`PoolConnection`）、それらの参照と `Arc` |
+| MySQL の系統 | `Database`（呼び出しが使う接続）と `Connection`（文を並べたリクエストを一つ送り、文ごとの行を返す。いまトランザクションの中か） | sqlx の `MySqlPool`、`tokio::sync::Mutex` に入れた接続（`&mut MySqlConnection`、`Transaction`、`PoolConnection`）、それらの参照と `Arc` |
+| TigerBeetle | `TigerBeetleClient`（勘定と振替を作る、読む） | `tigerbeetle::Client`、その参照と `Arc` |
+
+- トレイトのメソッドは `impl Future<Output = …> + Send` を返す（Rust 1.75 から書ける）。`async-trait` のクレートが要らず、返る future を tokio のマルチスレッドの実行環境で `spawn` できる。
+- 接続を `Mutex` に入れるのは、帳簿の値が `&self` で呼ばれるからである。呼び出しは終わるまでロックを持つので、一つの接続への同時の呼び出しは一つずつになる（4.5 の「一つの接続は、一度に一つの呼び出しに使う」が型で守られる）。
+- 誰のトランザクションか（4.5）は、PostgreSQL ではクライアントが決めない。関数を一つ呼ぶだけなので、接続がトランザクションの中にいればその中で、いなければ一つの文のトランザクションで動く。MySQL の系統では、sqlx が数えるトランザクションの深さで決める。sqlx はサーバーの状態を見せないので、`begin` の文を自分で送ったものと autocommit を切ったものは、呼ぶ側のトランザクションとして見分けない。`docs/targets.md` に、sqlx の `begin` で始めるよう書いた。
+
+**決定（帳簿ごとにモジュールを一つ）**：`<モジュール>.rs` を一つ書き、帳簿の部分と、どの帳簿でも同じ部分（`src/client/runtime/*.rs` を一字も変えずに入れる）を一緒に入れる。TypeScript と Python のファイルと同じ形で、使うクレートは `mod` の一行と、モジュールの頭に書いたクレートの行を自分の Cargo.toml に足せばよい。
+
+- Cargo.toml は書かない。クライアントは利用者のクレートかワークスペースに入るもので、クレートの版と features は利用者のものに合わせることになるからである。モジュールの頭の doc コメントに、要るクレートの行を TOML で書く（`sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "postgres"] }`、`tokio = { version = "1.54.1", features = ["sync", "time"] }`、`tigerbeetle = "=0.17.9"`）。版は試験が流す版で、試験のランナーの Cargo.lock と同じであることを試験が確かめる。`chobo api` の `targets.rust.crates` にも同じものを出す。TigerBeetle のクレートは `=` で固定する。クレートの版はクラスタの版と組になっていて、クラスタは版の合わないクライアントを断る（クレートの誤りの `ClientReleaseTooLow` と `ClientReleaseTooHigh`）からである。
+- モジュールの名前は、帳簿の名前の小文字が ASCII の識別子ならそれ、でなければファイルの名前（`.` と `-` は `_`）、どちらでもなければ `book` にする（Go のパッケージと同じ）。キーワードと、クライアントが使うクレートの名前（`std`、`core`、`alloc`、`sqlx`、`tokio`、`tigerbeetle`）は避ける。日本語の名前のモジュールを Rust で読むには `#[path]` が要る（ASCII でない名前のファイルは、`mod` の一行では読めない。E0754）ので、日本語の名前のモジュールは作らない。
+- いくつもの帳簿を一つのクレートに入れると、どの帳簿でも同じ部分は帳簿ごとに入り、型も帳簿ごとに別になる（`inventory::Outcome` と `refunds::Outcome`）。TypeScript と Python と同じである。
+
+**決定（名前と形）**：
+
+- 帳簿の値は `postgres(db, tenant)`、`tigerbeetle(client, tenant)`、`mysql(db, tenant, batch)` が返す `Book`。振替の種類ごとのメソッド（`book.reserve()`）が操作を持つ値を返し、操作は `hold`・`post`・`void`・`status`、押さえない振替は `r#do`（`do` は Rust のキーワード）である。残高は `book.balance().stock(StockAccount { sku: "A-1" })`、PostgreSQL と MySQL の系統の帳簿の値には `expire()` がある。
+- 引数は振替ごとの構造体で、文字列は借りる（`ReserveArgs { order: "o-1", sku: "A-1", qty: 2 }`）。確定と取消と状態は仮押さえのキーの構造体（`ReserveKey`）を受け取り、一部の確定の額は `Option<ReserveAmounts>`（`None` で全額）。額は `i64` で、負の額は `Error::Argument` になる。
+- 名前は帳簿の名前をそのまま使う（日本語の名前もそのまま。Rust の識別子は Unicode の字を持てる）。キーワードは前に `r#` を付け、`r#` にできない `self`・`Self`・`super`・`crate` と `_` は後ろに `_` を付ける。型の名前は、帳簿の名前の語の頭を大文字にしたもの（`take_back` は `TakeBack`、`引当` は `引当`）。帳簿の名前は Rust の名前の慣習（snake_case と CamelCase）に合わないことがあるので、モジュールの頭で `non_snake_case` と `non_camel_case_types` を許す。使わない定義の警告（`dead_code`）も許す。
+- 拒否の理由は列挙 `Reason` で、帳簿の境界の理由を先に、chobo の理由（2.7）をあとに並べる。chobo の理由の値の名前（`KeyConflict`、`NoSuchHold` …）は決まった名前で、帳簿の理由の値はそれとぶつからないように付ける。`as_str()` が帳簿と chobo の書く名前を返す。
+
+**決定（答えと誤り）**：操作は `Result<Outcome, Error>` を返す。`Outcome` は `Done`、`DoneBefore`、`Refused(Reason)` で、拒否は答えであって誤りではない（2.7、4.3）。`Error` は答えの無いもので、出力先ごとの型にした。PostgreSQL は `Argument`、`Database(sqlx::Error)`、`Answer` で、`code()` が SQLSTATE を返す（境界を書き換えた行は `CB001`）。MySQL の系統は `Database` に加えて `Book { code: "CB001", … }` を持ち、`number()` が MySQL の誤りの番号を返す。TigerBeetle は `TigerBeetle(tigerbeetle::Error)` を持つ。どれも `#[non_exhaustive]` で、`std::error::Error` を実装する。状態は `Option<HoldState>`（無ければ `None`）、残高は `Balance { posted, held_in, held_out }`。
+
+**決定（SHA-256 は自分で書く）**：ID（4.3）の SHA-256 は、chobo と同じく、どの帳簿でも同じ部分に書いた。Rust の標準ライブラリには無く、`sha2` のクレートに頼ると、利用者のクレートの依存が一つ増えるからである。
+
+**決定（Rust が名前にできない字は E063）**：Rust の識別子は XID_Start か `_` で始まり、XID_Continue が続く。chobo の名前（1.6）は文字か `_` で始まり、文字と数字と `_` が続くので、chobo には書けて Rust には書けない名前がある（`area_m²`、`①番`、頭が結合文字の名前）。Rust のターゲットのビルドは、振替、勘定、引数の名前と拒否の理由を確かめ、そういう字があれば E063 で止める。E060、E061、E062 と同じく、出力先が帳簿を受け取れないときの診断なので、`chobo check` は言わない。
+
+- どの字かは、`src/client/xid.rs` の表が決める。Unicode Character Database 17.0.0 の二つのファイル（`DerivedCoreProperties.txt` の Alphabetic、XID_Start、XID_Continue と、`extracted/DerivedGeneralCategory.txt` の数の一般カテゴリ Nd、Nl、No）から、`tools/xid/make_table.py` が書く。17.0 は、rustc 1.94 から 1.97 の識別子と、その `char`（`is_alphabetic`、`is_alphanumeric`）の版である（rustc 1.94.1 と 1.97.1 で、17.0 で足された字を名前に取り、18.0 で足された字を取らないことを確かめた）。
+- 表は、chobo の名前に書けて Rust の名前に書けない字だけを持つ。先頭に置けない字が 265 の範囲の 1,516 字、二字目から後に置けない字が 86 の範囲の 1,053 字である。XID_Start と XID_Continue の表を丸ごと持つ（1,491 の範囲）より小さい。また、新しい Unicode で足された文字は、chobo が `char` で名前に受け付け、この表が止めないので、古い表のまま新しい rustc を使っても、Rust が書ける名前を止めることはない。逆に、新しい版で足された、chobo に書けて Rust に書けない字は止まらない。試験（14.5）がそれを見つける。
+- ritsu の DESIGN 3.1 の決まり 4 で、外のクレートは serde_json だけなので、`unicode-ident` は使わない。表は Unicode のデータから作ったものなので、chobo のライセンスは `(MIT OR Apache-2.0) AND Unicode-3.0` になり、`THIRD_PARTY_NOTICES`（chobo のものと ritsu のもの）に出どころとライセンスの文を書いた。ritsu のバイナリのライセンスは、もとから Unicode-3.0 を含む（rulec の CLDR）ので変わらない。
+
+**決定（ritsu のパッケージの中のクライアント）**：`target::build_in` に `InPackage` を渡したクライアントは、お金と量の額を、パッケージの単位のモジュールの型（`crate::units::USDc`）で受け取り、どの帳簿でも同じ部分には `i64::from` で直して渡す（4.3。TypeScript、Python、Go と同じ）。単位の型には `From<型> for i64` を求める。数え方の単位の額と、残高は、これまでどおり `i64` である。単位のモジュールを `crate::units` に置くのは、ritsu の生成器がまだ Rust のパッケージを書かないので、ほかの言語のパッケージ（単位のモジュールがパッケージの根にある）にならった置き場である。生成器が Rust のパッケージを書くときに、置き場をこれに合わせるか、この名前を変える。
+
+**決定（試験のランナー）**：Rust のクライアントの試験は、`tools/runner/rust` のクレート（Cargo.toml と Cargo.lock を持つ、ritsu のワークスペースの外のクレート）を使う。`src/harness.rs` が、ランナーの JSON（`runner.ts` と Go の `harness.go` と同じ形）を読み、シナリオを流し、送ったものを書き留める。試験は、帳簿ごとのモジュールと、それをハーネスにつなぐ部分を書き、一つのバイナリに組む（`cargo build --locked`）。組む先は試験の一時ディレクトリの `chobo-rust`（`CARGO_TARGET_TMPDIR` の下）で、どの組み立ても共にするので、依存のクレートは一度だけ組まれる。ritsu の CI では、tools の段と platforms の段（MySQL の系統の段）が、ランナーのクレートを `cargo fetch --locked` で先に取ってくる。tools の段には clippy も入れる。ritsu の `tests/audit.rs` は、tools の下の Cargo.toml には Cargo.lock があることを求める。
+
+### 14.3 捨てたもの
+
+- **tokio-postgres と mysql_async**（出力先ごとに別のドライバ）：sqlx 一つで PostgreSQL と MySQL の両方を持て、誤りの型と非同期の形が出力先のあいだでそろう。どちらも sqlx より使われていない（14.2）。
+- **同期のクライアント**：14.2。
+- **`sha2` のクレート**：14.2。
+- **Cargo.toml を持つクレートを書く**：14.2。帳簿ごとのクレートは、利用者のワークスペースに帳簿の数だけクレートを足すことにもなる。
+- **Wasm に出す**：範囲の外にした。帳簿の呼び出しはデータベースのドライバを通るので、Wasm のモジュールにしても、ドライバを呼ぶのはホストの側になる。
+- **接続の文字列を受け取って、クライアントが自分でプールを作る**：呼ぶ側のトランザクションに入れなくなり、プールの設定（大きさ、TLS、待ちの時間）も呼ぶ側が決められない。
+- **`unicode-ident` のクレートで XID を見る**：14.2（ritsu の DESIGN 3.1）。
+- **XID_Start と XID_Continue の表を丸ごと持つ**：14.2。
+
+### 14.4 変わること
+
+- `chobo build --target` の選び肢が 14 になる（`postgres-rust`、`tigerbeetle-rust`、`mysql-rust`）。`--help` と、知らないターゲットの誤りの文の並びが変わる。
+- `chobo api` の `targets` に `rust` が足される。
+- 診断のコード E063 が足される（Rust のターゲットのビルドだけ）。`chobo explain --all` と `docs/codes.md` に載り、E060、E061、E062 の関係するコードにも載る。
+- ritsu の口の帳簿の事実（`BookFacts`）に、Rust のクライアントの名前（`rust`。モジュール、振替の種類ごとのメソッド、引数の構造体のフィールド）が足される。振替ごとの名前（`ClientTransfer`）には、Rust の型の名前の頭（`type_name`。`Reserve` なら `ReserveArgs`、`ReserveKey`、`ReserveAmounts`）が足される。型の名前は、帳簿の名前から作ったあとで同じ名前を避けて付けるので、読む側（kaname の生成器）が自分で作り直さずに済むよう、事実として渡す。ほかの言語では空である。帳簿の事実を作るのは chobo だけである（`tests/ports.rs` が、`chobo api` の `targets.rust` と同じであることを確かめる）。
+- chobo のライセンスが `(MIT OR Apache-2.0) AND Unicode-3.0` になる。
+- 前に検査を通った帳簿は、検査の答えも、ほかの出力先の生成物も変わらない（14.5）。
+
+### 14.5 確かめたこと
+
+- **突き合わせ**（`tests/backends.rs`）：テストの帳簿 12 冊と例の 8 冊の 468 本のシナリオが、`postgres-rust` と `tigerbeetle-rust` のどちらでも参照インタプリタと一致し（`together` の 38 本は、とりうる結果のどれかに入った）、送ったもの（PostgreSQL の SQL と引数、TigerBeetle のチェーンの全部のフィールド）が `chobo run --show` と同じだった。ランナーは 60 のモジュール（20 冊の三つの出力先）を一つのバイナリに組み（依存のクレートを組んだあとで 7 秒）、`postgres-rust` は 4.3 秒、`tigerbeetle-rust` は 6.3 秒で流れた（同じ実行で、ほかの言語の組み合わせは 3.8〜7.3 秒）。MySQL の系統の組み合わせ（`mysql-rust` と、まとめて送る `mysql-rust-batch`）は、サーバーの無いところではランナーを組むまでで、サーバーの要る部分は SKIP する。MySQL は CI の tools の段で、TiDB と Vitess は platforms の段で流れ、tools の段は MySQL の SKIP を許さない（`ci/skips/tools.txt` に足していない）。この章を書いた時点では、MySQL の系統の上の Rust のクライアントは、まだサーバーの上で流していない（14.6）。
+- **PostgreSQL だけのもの**：REPEATABLE READ の四つの呼び出し元の 200 回の呼び出しが、Rust のクライアントでも全部 `done` になった。シリアライズの失敗のリトライは、日本語と英語の帳簿で 40 回と 44 回だった（同じ実行で、ほかの言語は 12〜18 回）。
+- **TigerBeetle だけのもの**：無い仮押さえの確定が何も送らずに `no_such_hold` になり、そのあと同じキーで確定できることと、上限を変えた帳簿が開始の振替の額の違いでエラーになることを、英日の帳簿の Rust のクライアントで確かめた。
+- **MySQL の系統だけのもの**：誰のトランザクションか（プールの接続と sqlx の `Transaction`）の段を Rust で書き、サーバーの無いところでも、組み立てて警告が無いことを確かめる（`the_rust_of_whose_transaction_builds`）。
+- **生成したコード**：60 のモジュールを一つのクレートにして、エディション 2024 と 2021 で `cargo clippy -- -D warnings` に通した。ritsu のパッケージの中のクライアント 6 つ（`marketplace` と `allocation` の三つの出力先。単位の型は `USDc` と `JPY`）が、i64 の newtype の単位のモジュールで組めた。クライアントの頭と `chobo api` のクレートの版が、ランナーの Cargo.lock の版（sqlx 0.9.0、tokio 1.54.1、tigerbeetle 0.17.9）と同じだった。
+- **E063 の表と rustc**：chobo の名前に書ける全部の字について、E063 が通す延べ 293,930 字（先頭に置ける字と、二字目から後に置ける字）を rustc が名前として通し、E063 が止める延べ 2,569 字を rustc がどれも誤りにした（`e063_keeps_out_what_rustc_keeps_out`。rustc 1.94.1 で。表を作るとき、rustc 1.97.1 でも同じだった）。表を作るときには、`unicode-ident` 1.0.24（Unicode 17.0）の XID とも比べ、rustc 1.94.1、1.97.1、nightly のどの `char` でも、chobo の名前に書ける全部の字で一致した（この比べは試験に入れていない。外のクレートを使うため）。
+- **診断**：E063 の材料 `tests/fixtures/identifiers.book` と日本語の版 `識別子.book`（引数の `area_m²`、`面積m²`）の英日の golden。対は `tests/check.rs` の `TWINS` にある。
+- **ドライバと脆弱性**：TigerBeetle の公式のクレート 0.17.9 は、0.17.9 のレプリカと話せた（突き合わせそのもの）。ランナーの Cargo.lock のクレート（ランナー自身を除いて 133）を OSV に問い、既知の脆弱性は無かった（2026-10-24）。
+- **文書の例**：`docs/targets.md` の Rust の二つの例（PostgreSQL のプールと呼ぶ側のトランザクション、TigerBeetle）は、使い捨ての PostgreSQL と `--development` のレプリカに対して走らせた出力である。
+- **替える前と後の突き合わせ**：この章の前の木で組んだバイナリと後のバイナリで、木の `.book` の全部（103。足した 2 を含む）の `check`（英語と日本語と JSON）、検査を通る 74 冊の `api`、`doc`（Markdown、HTML、日本語）、`scenarios`、生成したシナリオの `run`（テキスト、JSON、三つの `--show`）、11 の生成先の `build`（書いたファイルの中身まで）と、`explain --all`（テキストと Markdown の英日）、`--help`（全体と七つのコマンドの英日）、`--version` を比べた。1,885 の出力のうち、変わったのは、`api` の 74（`targets.rust` が足されたほかは同じ）と、`explain --all` の四つ（E063 と、E060〜E062 の関係するコード）と、`--help` の六つ（全体と `check` と `build` の英日。`build` の説明に Rust が、`build` の終わり方と、`build` と `check` の出しうる診断に E063 が入った）だけだった。
+
+### 14.6 見つけて直していないもの
+
+- chobo の名前に書けて、ほかの言語の識別子にもならない字（`²` など）は、TypeScript・Python・Go のターゲットでは止まらず、生成したクライアントが組めない。`tests/fixtures/identifiers.book` の三つの言語のクライアントで、tsc は `Invalid character`、go vet は `illegal character U+00B2 '²'`、Python は `SyntaxError: invalid character '²' (U+00B2)` で止まった。E063 は Rust のターゲットだけを止める。三つの言語の識別子の決まりは、Rust とも互いとも少しずつ違う（TypeScript は ID_Start と ID_Continue、Python は NFKC にしてからの XID、Go は文字と十進の数字）ので、止めるなら言語ごとの表になる。
+- Rust は識別子を NFC にしてから比べる。NFC で同じになる二つの名前（ハングルの字母を並べたものと、合わせた音節）は、chobo では別の名前で、Rust のクライアントでは同じ名前になって組めない。chobo は名前を正規化しない（1.6）ので、これは確かめていない。Python の NFKC（11.3）と同じ形の穴である。
+- 名前に NFKC で変わる字（全角の英字、半角のカナ、ハングルの互換の字母、`ǅ`、合字の `ﬁ`）があると、rustc は、クライアントを入れたクレートに `uncommon_codepoints` の警告（`identifier contains a non normalized (NFKC) character`）を出す。この lint はクレートの根でしか切れないので、モジュールの頭の `#![allow]` では止められない。`#![deny(warnings)]` のクレートでは組めない。`docs/targets.md` に、クレートの根で許すよう書いた。
+- Vitess が sqlx の既定の接続（`sql_mode` に `PIPES_AS_CONCAT` を足す）を断ることは、4.5 の vtgate の振る舞いから決めたもので、Rust のクライアントで確かめてはいない。Vitess の上の Rust のクライアントは、platforms の段で `.pipes_as_concat(false)` を付けて流す。

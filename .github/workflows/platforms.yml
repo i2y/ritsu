@@ -130,13 +130,14 @@ jobs:
       # 2, held to the checksum taken when this was written; TiUP checks the roots that follow it,
       # and the components against them), runs the playground of TiDB 8.5.8: one TiDB, TiKV and PD.
       # MySQL 8.4's client loads the tables there, and its server is the one the same tests start
-      # for MySQL.
+      # for MySQL. The Rust runner's crates are fetched at its Cargo.lock's versions.
       - name: "chobo: the runners, MySQL 8.4 and TiDB 8.5.8 on TiUP's playground"
         run: |
           set -eu
           npm ci --prefix crates/chobo/tools/runner
           uv venv --python 3.13 crates/chobo/tools/runner/.venv
           uv pip install --python crates/chobo/tools/runner/.venv/bin/python --require-hashes -r crates/chobo/tools/runner/requirements.txt
+          cargo fetch --locked --manifest-path crates/chobo/tools/runner/rust/Cargo.toml
           sudo apt-get install -y -q libaio1t64 libnuma1
           [ -e /usr/lib/x86_64-linux-gnu/libaio.so.1 ] || sudo ln -s /usr/lib/x86_64-linux-gnu/libaio.so.1t64 /usr/lib/x86_64-linux-gnu/libaio.so.1
           sh crates/chobo/tools/mysql/fetch.sh

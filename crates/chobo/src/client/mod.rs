@@ -1,7 +1,8 @@
-//! The clients chobo writes (DESIGN 4.3): for each of TypeScript, Python and Go, one that calls
-//! the SQL functions of `chobo build --target postgres`, and one that sends TigerBeetle the
-//! chains of PLAN 0.3. The two of a language have the same names, arguments and results, so
-//! that a caller moves from one database to the other without changing its code.
+//! The clients chobo writes (DESIGN 4.3, 4.5, 14): for each of TypeScript, Python, Go and Rust,
+//! one that calls the SQL functions of `chobo build --target postgres`, one that sends TigerBeetle
+//! the chains of PLAN 0.3, and one that makes the calls on the tables of the MySQL family. The
+//! three of a language have the same names, arguments and results, so that a caller moves from
+//! one database to another without changing its code.
 //!
 //! The book's part of a client is written here, a language at a time; what every book shares
 //! (IDs, chains, reading TigerBeetle's answers) is the runtime under `runtime/`, which each
@@ -9,7 +10,9 @@
 
 pub mod go;
 pub mod python;
+pub mod rust;
 pub mod typescript;
+pub mod xid;
 
 use crate::diag::{self, DiagExt, Diag, OpLine};
 use crate::ids;

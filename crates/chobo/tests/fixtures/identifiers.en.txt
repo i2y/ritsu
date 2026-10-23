@@ -1,0 +1,7 @@
+error[E063]: identifiers.book:11:46: The parameter's name `area_m²` has ² (U+00B2), which no Rust identifier holds
+    11 | transfer build(permit: string, site: string, area_m²: sqm)
+  hint: Take the character out of the name, or write another in its place: a Rust identifier is a letter or `_`, then letters, decimal digits and `_` (write `²` as `2`, for one)
+error[E063]: identifiers.book:15:48: The parameter's name `area_m²` has ² (U+00B2), which no Rust identifier holds
+    15 | transfer lease(contract: string, site: string, area_m²: sqm)
+  hint: Take the character out of the name, or write another in its place: a Rust identifier is a letter or `_`, then letters, decimal digits and `_` (write `²` as `2`, for one)
+identifiers.book: 2 error(s), 0 warning(s)

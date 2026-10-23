@@ -1,0 +1,17 @@
+# E063: a Rust identifier holds no superscript digit; the parameter `area_m²` of `build` and `lease` would be a field of a struct of the Rust client
+book rooms v1
+
+unit sqm
+
+account floor(site: string) : sqm
+  at least 0 refused as no_room
+account builders : sqm outside
+account tenants : sqm outside
+
+transfer build(permit: string, site: string, area_m²: sqm)
+  key permit, site
+  move area_m² from builders to floor(site)
+
+transfer lease(contract: string, site: string, area_m²: sqm)
+  key contract, site
+  move area_m² from floor(site) to tenants

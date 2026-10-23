@@ -1517,6 +1517,145 @@
         }
       ]
     },
+    "rust": {
+      "module": "book",
+      "file": "book.rs",
+      "factories": {
+        "postgres": "postgres",
+        "tigerbeetle": "tigerbeetle",
+        "mysql": "mysql"
+      },
+      "transfers": [
+        {
+          "kind": "入金",
+          "member": "入金",
+          "args": "入金Args",
+          "calls": "入金Calls",
+          "fields": {
+            "入金番号": "入金番号",
+            "会員": "会員",
+            "額": "額"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        },
+        {
+          "kind": "支払",
+          "member": "支払",
+          "args": "支払Args",
+          "calls": "支払Calls",
+          "fields": {
+            "注文": "注文",
+            "会員": "会員",
+            "額": "額"
+          },
+          "key": "支払Key",
+          "amounts": "支払Amounts",
+          "operations": {
+            "hold": "hold",
+            "post": "post",
+            "void": "void",
+            "status": "status"
+          }
+        },
+        {
+          "kind": "払い戻し",
+          "member": "払い戻し",
+          "args": "払い戻しArgs",
+          "calls": "払い戻しCalls",
+          "fields": {
+            "払戻番号": "払戻番号",
+            "会員": "会員",
+            "額": "額"
+          },
+          "operations": {
+            "do": "r#do"
+          }
+        }
+      ],
+      "balance": "balance",
+      "balances": [
+        {
+          "account": "ウォレット",
+          "method": "ウォレット",
+          "args": "ウォレットAccount",
+          "fields": {
+            "会員": "会員"
+          }
+        },
+        {
+          "account": "銀行",
+          "method": "銀行"
+        },
+        {
+          "account": "店",
+          "method": "店"
+        }
+      ],
+      "reasons": {
+        "残高不足": "残高不足",
+        "上限超え": "上限超え",
+        "key_conflict": "KeyConflict",
+        "already_refused": "AlreadyRefused",
+        "same_account": "SameAccount",
+        "no_such_hold": "NoSuchHold",
+        "already_posted": "AlreadyPosted",
+        "already_voided": "AlreadyVoided",
+        "expired": "Expired",
+        "over_hold": "OverHold"
+      },
+      "crates": {
+        "postgres": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "postgres"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ],
+        "tigerbeetle": [
+          {
+            "name": "tigerbeetle",
+            "version": "=0.17.9",
+            "default_features": true,
+            "features": []
+          }
+        ],
+        "mysql": [
+          {
+            "name": "sqlx",
+            "version": "0.9.0",
+            "default_features": false,
+            "features": [
+              "runtime-tokio",
+              "mysql"
+            ]
+          },
+          {
+            "name": "tokio",
+            "version": "1.54.1",
+            "default_features": true,
+            "features": [
+              "sync",
+              "time"
+            ]
+          }
+        ]
+      }
+    },
     "tigerbeetle": {
       "request_max": 253,
       "chains": [
