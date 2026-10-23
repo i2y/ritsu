@@ -145,10 +145,68 @@ test("no temporary file is left, whatever the run came to", { skip }, async () =
   await Promise.all([run(["check", "/no/such/place"]), run(["explain", "E201"]), run(["nonsense"])]);
   assert.throws(() => runSync(["check"], { cwd: "/no/such/place" }));
   assert.deepEqual(leftovers(), before);
-  // a process that ends while runs go on removes theirs on its way out
-  const child = spawnSync(process.execPath, ["--input-type=module", "-e", `import { run } from ${JSON.stringify(pathToFileURL(join(pkg, "lib/index.js")).href)}; run(["explain", "--all"]); setTimeout(() => process.exit(0), 50);`]);
-  assert.equal(child.status, 0, child.stderr.toString());
-  assert.deepEqual(leftovers(), before);
+  // nothing of a run is on the disk while it goes on: its files are open, and gone from there
+  let ended = false;
+  const going = Promise.all(Array.from({ length: 4 }, () => run(["explain", "--all", "--format", "markdown"]))).finally(() => (ended = true));
+  const seen = new Set();
+  while (!ended) {
+    for (const n of leftovers()) {
+      if (!before.includes(n)) seen.add(n);
+    }
+    await new Promise((r) => setTimeout(r, 1));
+  }
+  for (const r of await going) assert.equal(r.code, 0);
+  assert.deepEqual([...seen], [], "the system's temporary directory held a run's files while it went on");
+  const index = JSON.stringify(pathToFileURL(join(pkg, "lib/index.js")).href);
+  // a process that ends while a run goes on, at any point of its way: before the module is
+  // compiled, as the worker starts, while it runs (a worker that opened its files by their paths
+  // made them again as the process removed them on its way out, and the directory stayed)
+  for (const ms of [0, 10, 20, 30, 40, 50, 60, 70, 80, 100, 150]) {
+    const child = spawnSync(process.execPath, ["--input-type=module", "-e", `import { run } from ${index}; run(["explain", "--all"]); setTimeout(() => process.exit(0), ${ms});`]);
+    assert.equal(child.status, 0, child.stderr.toString());
+    assert.equal(child.stderr.toString(), "", `the process ended ${ms} ms in`);
+    assert.deepEqual(leftovers(), before, `the process ended ${ms} ms in`);
+  }
+  // and one that is killed while runs go on in workers (by its own thread, which is never in the
+  // middle of making a run's files when it kills)
+  const killed = spawnSync(process.execPath, [
+    "--input-type=module",
+    "-e",
+    `import { run } from ${index}; setTimeout(() => process.kill(process.pid, "SIGKILL"), 300); for (;;) await Promise.all([run(["explain", "--all"]), run(["explain", "--all"])]);`,
+  ]);
+  assert.equal(killed.signal, "SIGKILL", killed.stderr.toString());
+  assert.deepEqual(leftovers(), before, "killed while runs went on");
+  // where no directory can be made for a run's files, both throw why; the bins need none
+  const version = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8")).version;
+  const s = scratch("tmpdir");
+  try {
+    const nowhere = { ...process.env, TMPDIR: join(s.dir, "not-there") };
+    const tried = spawnSync(process.execPath, ["--input-type=module", "-e", `import { run, runSync } from ${index}; for (const f of [() => runSync(["--version"]), () => run(["--version"])]) { try { await f(); console.log("ran"); } catch (e) { console.log(e.code); } }`], { env: nowhere, encoding: "utf8" });
+    assert.equal(tried.stdout, "ENOENT\nENOENT\n", tried.stderr);
+    const bin = spawnSync(process.execPath, [join(pkg, "bin/ritsu.js"), "--version"], { env: nowhere, encoding: "utf8" });
+    assert.equal(bin.stdout, `ritsu ${version}\n`, bin.stderr);
+  } finally {
+    s.done();
+  }
+  // where the directory cannot be removed while its files are open (NFS keeps them as .nfs files),
+  // a run still answers, and removes it after the command; here, on macOS, an ACL lets nothing in
+  // the system's temporary directory be removed, so each run's directory stays, with nothing in it
+  if (process.platform === "darwin") {
+    const held = scratch("held");
+    try {
+      const acl = spawnSync("chmod", ["+a", "everyone deny delete_child", held.dir]);
+      assert.equal(acl.status, 0, acl.stderr.toString());
+      const ran = spawnSync(process.execPath, ["--input-type=module", "-e", `import { run, runSync } from ${index}; console.log(JSON.stringify([runSync(["--version"]), await run(["--version"])]));`], { env: { ...process.env, TMPDIR: held.dir }, encoding: "utf8" });
+      const answered = { code: 0, stdout: `ritsu ${version}\n`, stderr: "" };
+      assert.deepEqual(JSON.parse(ran.stdout), [answered, answered], ran.stderr);
+      const stayed = readdirSync(held.dir);
+      assert.equal(stayed.length, 2, stayed.join(", "));
+      for (const n of stayed) assert.deepEqual(readdirSync(join(held.dir, n)), [], `${n} holds nothing`);
+    } finally {
+      spawnSync("chmod", ["-a", "everyone deny delete_child", held.dir]);
+      held.done();
+    }
+  }
 });
 
 const modules = {

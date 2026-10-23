@@ -4,10 +4,11 @@
 //   const { code, stdout, stderr } = await run(["check", ".", "--format", "json"], { cwd: repo });
 //
 // `run` works in a worker thread and leaves the event loop free; `runSync` works on the thread
-// that calls it. Both write what the command reads and prints to temporary files of their own,
-// which they remove before they answer.
+// that calls it. Both hand the command temporary files of their own for its standard input, output
+// and error, which are gone from the disk before the command starts: the run holds them open and
+// reads what was printed from them.
 
-import { mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { fstatSync, mkdtempSync, openSync, readFileSync, readSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Worker } from "node:worker_threads";
@@ -28,36 +29,65 @@ function prepare(args, options = {}) {
   return { args, cwd, env, stdin, preopens };
 }
 
-/** The directories of the runs going on, removed when a run ends, or when the process does first. */
-const open = new Set();
-let watching = false;
-
-/** A directory of its own for one run's standard input, output and error. */
+/**
+ * The files of one run's standard input (holding `stdin`), output and error, open: `fds`. They are
+ * in a directory of their own, which is removed as soon as they are open, before the command
+ * starts: nothing of the run is on the disk while it goes on, and a process that ends or is killed
+ * while the command runs leaves nothing of it. A worker is handed the descriptors, never a path: one
+ * that opened its files by their paths, as the process ended, made them again in the directory
+ * being removed, and the directory stayed. Where the system cannot remove a directory while files
+ * in it are open (NFS keeps them as `.nfs…` files), it is `left`, for `close` to remove after the
+ * command.
+ */
 function files(stdin) {
-  if (!watching) {
-    watching = true;
-    process.on("exit", () => {
-      for (const dir of open) {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  }
   const dir = mkdtempSync(join(tmpdir(), "ritsu-npm-"));
-  open.add(dir);
-  const paths = { dir, stdin: join(dir, "stdin"), stdout: join(dir, "stdout"), stderr: join(dir, "stderr") };
-  writeFileSync(paths.stdin, stdin);
-  writeFileSync(paths.stdout, "");
-  writeFileSync(paths.stderr, "");
-  return paths;
+  const fds = [];
+  try {
+    const input = join(dir, "stdin");
+    writeFileSync(input, stdin);
+    fds.push(openSync(input, "r"), openSync(join(dir, "stdout"), "w+"), openSync(join(dir, "stderr"), "w+"));
+  } catch (e) {
+    closeAll(fds);
+    removed(dir);
+    throw e;
+  }
+  return { fds, left: removed(dir) ? null : dir };
 }
 
-function remove(paths) {
-  rmSync(paths.dir, { recursive: true, force: true });
-  open.delete(paths.dir);
+/** Whether the directory `dir` is gone, with all in it. */
+function removed(dir) {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-function answer(code, paths) {
-  return { code, stdout: readFileSync(paths.stdout, "utf8"), stderr: readFileSync(paths.stderr, "utf8") };
+/** The end of a run's files: closed, and their directory removed if it was left. */
+function close(f) {
+  closeAll(f.fds);
+  if (f.left) {
+    removed(f.left);
+  }
+}
+
+/** What was written to the descriptor `fd`: its file from the start, as UTF-8. */
+function written(fd) {
+  const bytes = Buffer.allocUnsafe(fstatSync(fd).size);
+  let at = 0;
+  while (at < bytes.length) {
+    const n = readSync(fd, bytes, at, bytes.length - at, at);
+    if (n === 0) {
+      break;
+    }
+    at += n;
+  }
+  return bytes.toString("utf8", 0, at);
+}
+
+function answer(code, fds) {
+  return { code, stdout: written(fds[1]), stderr: written(fds[2]) };
 }
 
 /**
@@ -68,18 +98,12 @@ function answer(code, paths) {
  */
 export function runSync(args, options) {
   const o = prepare(args, options);
-  const paths = files(o.stdin);
+  const f = files(o.stdin);
   try {
-    const fds = [openSync(paths.stdin, "r"), openSync(paths.stdout, "w"), openSync(paths.stderr, "w")];
-    let code;
-    try {
-      code = start({ args: o.args, env: o.env, preopens: o.preopens, stdin: fds[0], stdout: fds[1], stderr: fds[2] });
-    } finally {
-      closeAll(fds);
-    }
-    return answer(code, paths);
+    const code = start({ args: o.args, env: o.env, preopens: o.preopens, stdin: f.fds[0], stdout: f.fds[1], stderr: f.fds[2] });
+    return answer(code, f.fds);
   } finally {
-    remove(paths);
+    close(f);
   }
 }
 
@@ -100,11 +124,11 @@ function compiled() {
 export async function run(args, options) {
   const o = prepare(args, options);
   const mod = await compiled();
-  const paths = files(o.stdin);
+  const f = files(o.stdin);
   try {
     const code = await new Promise((resolve, reject) => {
       const worker = new Worker(new URL("./worker.js", import.meta.url), {
-        workerData: { mod, args: o.args, env: o.env, preopens: o.preopens, paths },
+        workerData: { mod, args: o.args, env: o.env, preopens: o.preopens, fds: f.fds },
         // not the flags the caller's Node was started with: some are not for a worker
         // (`--input-type`), and the run needs none
         execArgv: [],
@@ -112,13 +136,20 @@ export async function run(args, options) {
         resourceLimits: { stackSizeMb: 8 },
       });
       let said;
+      let failed;
       worker.once("message", (m) => {
         said = m;
       });
-      worker.once("error", reject);
+      worker.once("error", (e) => {
+        failed = e;
+      });
+      // only once the thread has ended: the descriptors are closed after this, and a number closed
+      // while the thread still wrote to it could be another file's by then
       worker.once("exit", (exit) => {
         if (said && typeof said.code === "number") {
           resolve(said.code);
+        } else if (failed) {
+          reject(failed);
         } else if (said && said.error) {
           reject(new Error(said.error));
         } else {
@@ -126,8 +157,8 @@ export async function run(args, options) {
         }
       });
     });
-    return answer(code, paths);
+    return answer(code, f.fds);
   } finally {
-    remove(paths);
+    close(f);
   }
 }

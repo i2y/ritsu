@@ -125,7 +125,13 @@ through a symbolic link (to a file, or to a directory on the way), can then be n
 written; the command says it cannot read it, and nothing of what is outside comes into a diagnostic.
 It narrows what ritsu, which you trust, reads; it does not make Node's WASI a sandbox for code you
 do not trust, which Node's documentation says not to rely on it for. `version` is the version of
-ritsu the module was built from, and `wasmPath` the module's path. In the same project:
+ritsu the module was built from, and `wasmPath` the module's path. A run hands the command files of
+its own for its standard input, output and error, in a new directory under the system's temporary
+directory (`os.tmpdir()`), and removes that directory as soon as the files are open, before the
+command starts: nothing of a run is on the disk while it goes on, and a process that ends or is
+killed while runs go on leaves nothing of them (where the filesystem cannot remove a directory while
+files in it are open, as on NFS, the run removes it once the command has ended). Where no directory
+can be made there, `run` and `runSync` throw that error. In the same project:
 
 ```js
 import { run } from "@i2y/ritsu";

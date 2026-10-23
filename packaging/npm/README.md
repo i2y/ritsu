@@ -123,8 +123,15 @@ import { run, runSync, version, wasmPath } from "@i2y/ritsu";
   not to rely on it for.
 - `version` is the version of ritsu the module was built from, and `wasmPath` the path of the module.
 
-A run writes its standard input, output and error to temporary files of its own, which it removes
-before it answers. The same project, its package changed by hand as above:
+A run hands the command files of its own for its standard input, output and error, in a new
+directory under the system's temporary directory (`os.tmpdir()`), and removes that directory as
+soon as the files are open, before the command starts; it reads what the command printed from the
+open files. Nothing of a run is on the disk while it goes on, and a process that ends or is killed
+while runs go on leaves nothing of them. (Where the filesystem cannot remove a directory while
+files in it are open, as on NFS, the run removes it once the command has ended.) Where no directory
+can be made there (it is not there, or cannot be written to), `run` and `runSync` throw that error;
+the commands of `node_modules/.bin` need none. The same project, its package changed by hand as
+above:
 
 ```js
 import { run } from "@i2y/ritsu";

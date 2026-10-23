@@ -35,7 +35,7 @@ export function copy(from, dir, name) {
   return join(dir, name);
 }
 
-/** The run's own temporary directories left in the system's. */
+/** The runs' own temporary directories in the system's: a run removes its own before it starts. */
 export function leftovers() {
   return readdirSync(tmpdir()).filter((n) => n.startsWith("ritsu-npm-") && !n.startsWith("ritsu-npm-test-")).sort();
 }
