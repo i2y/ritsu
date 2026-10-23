@@ -441,7 +441,8 @@ impl<'a> Gen<'a> {
 
     /// A test that `x` is a well-formed value of `t`, and in `rg` when it is a number (or its
     /// numbers, when it is a `?` or a list); for an enum held to a range, one of the values the
-    /// range lets in.
+    /// range lets in. The test comes out true or false for any JSON value, and never fails the
+    /// template that evaluates it.
     fn check(&self, x: &str, t: &Ty, rg: Option<Range>) -> String {
         let m = self.m;
         match t {
@@ -454,8 +455,10 @@ impl<'a> Gen<'a> {
                 format!("({})", parts.join(" && "))
             }
             Ty::Bool => format!("type({x}) == \"bool\""),
-            // for a place that holds the enum to a range, the values the range lets in
-            Ty::Enum(e) => format!("{x} in [{}]", m.values_in(*e, rg).iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
+            // for a place that holds the enum to a range, the values the range lets in; a string first,
+            // since expr-lang looks a value up in a list of strings as a key of a map, and fails the
+            // template for a map, a list, a number or a bool
+            Ty::Enum(e) => format!("(type({x}) == \"string\" && {x} in [{}])", m.values_in(*e, rg).iter().map(|v| q(v)).collect::<Vec<_>>().join(", ")),
             Ty::Json => "true".into(),
             Ty::Opt(inner) => format!("({x} == nil || {})", self.check(x, inner, rg)),
             Ty::List(inner) => format!("(type({x}) == \"array\" && all({x}, {{{}}}))", self.check("#", inner, rg)),
@@ -1020,13 +1023,19 @@ impl<'a> Gen<'a> {
             }]));
         }
         // how the call came out, bound once at the head of each output's expression: the kind of
-        // the error ("ok" when there is none), the answer, its checks, and the handler that takes it
+        // the error ("ok" when there is none), the answer, its checks, and the handler that takes it.
+        // What comes from outside (the error file, a callback's answer) is read so that a value of
+        // another shape never fails the template: the error file and a callback's answer are read
+        // only when they are objects, and an error's name only when it is a string, since
+        // expr-lang fails on a field of what is not a map, on `in` over a string, and on a value that
+        // is not a string looked up in a list of strings. An error file of another shape is no
+        // declared error (a failure); a callback's answer of another shape has no `ok`.
         let decl = format!("[{}]", declared.iter().map(|d| q(d)).collect::<Vec<_>>().join(", "));
         let mut pre = String::from("let killed = inputs.parameters.code in [\"143\", \"137\"]; let e = inputs.parameters.error != \"null\" ? sprig.fromJson(inputs.parameters.error) : nil; ");
         let cause = if callback {
             pre.push_str(&format!("let w = inputs.parameters.waited; let wv = w != \"\" && w != {t} ? sprig.fromJson(w) : nil; ", t = q(TIMEOUT)));
             pre.push_str(&format!(
-                "let k = inputs.parameters.status != \"Succeeded\" ? (killed ? \"timeout\" : \"failure\") : (w == {t} ? \"timeout\" : (\"error\" in wv ? (wv.error in {decl} ? wv.error : \"failure\") : \"ok\")); ",
+                "let k = inputs.parameters.status != \"Succeeded\" ? (killed ? \"timeout\" : \"failure\") : (w == {t} ? \"timeout\" : (type(wv) == \"map\" && \"error\" in wv ? (type(wv.error) == \"string\" && wv.error in {decl} ? wv.error : \"failure\") : \"ok\")); ",
                 t = q(TIMEOUT)
             ));
             // the answer that a method of the service the workflow implements sends, read as protobuf reads it
@@ -1034,12 +1043,12 @@ impl<'a> Gen<'a> {
                 Callee::Task(t) => m.tasks[*t].answer_zeros.as_ref().map(|z| fill_expr("wv.ok", z)).unwrap_or_else(|| "wv.ok".into()),
                 Callee::Rule(_) => "wv.ok".into(),
             };
-            pre.push_str(&format!("let a = k == \"ok\" ? {answered} : nil; "));
-            format!("w == {} ? \"no answer in time\" : (wv != nil ? (wv.message ?? \"\") : (killed ? \"ran past its timeout\" : (e != nil ? (e.message ?? \"\") : \"\")))", q(TIMEOUT))
+            pre.push_str(&format!("let a = k == \"ok\" && type(wv) == \"map\" ? {answered} : nil; "));
+            format!("w == {} ? \"no answer in time\" : (type(wv) == \"map\" ? (wv.message ?? \"\") : (killed ? \"ran past its timeout\" : (type(e) == \"map\" ? (e.message ?? \"\") : \"\")))", q(TIMEOUT))
         } else {
-            pre.push_str(&format!("let k = inputs.parameters.status == \"Succeeded\" ? \"ok\" : (inputs.parameters.code == \"3\" && e != nil && e.error in {decl} ? e.error : (killed ? \"timeout\" : \"failure\")); "));
+            pre.push_str(&format!("let k = inputs.parameters.status == \"Succeeded\" ? \"ok\" : (inputs.parameters.code == \"3\" && type(e) == \"map\" && type(e.error) == \"string\" && e.error in {decl} ? e.error : (killed ? \"timeout\" : \"failure\")); "));
             pre.push_str("let a = k == \"ok\" ? sprig.fromJson(inputs.parameters.answer) : nil; ");
-            "killed ? \"ran past its timeout\" : (e != nil ? (e.message ?? \"\") : \"\")".to_string()
+            "killed ? \"ran past its timeout\" : (type(e) == \"map\" ? (e.message ?? \"\") : \"\")".to_string()
         };
         // the answer's checks: its type, and for a case the states it may carry
         let (typed, stated) = match (target, &result_ty) {
