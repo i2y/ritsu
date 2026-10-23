@@ -1,0 +1,10 @@
+warning[W121]: `Base` starts with a capital letter, which the code generated for Ruby cannot take
+  --> tests/spellings/ruby_constant.rule:10
+   |
+10 | define Base : money[USD] = 3USD
+   |        ^^^^ the definition's name
+   |
+ Ruby: a name that starts with a capital letter is read as a constant, which can be neither a parameter nor a variable, so the generated Ruby file does not load.
+ For a target you do not generate, leave it. For one you do, give it an alias that starts with a small letter (`Base(<alias>)`).
+
+ok tests/spellings/ruby_constant.rule

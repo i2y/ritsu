@@ -1,0 +1,17 @@
+rule 水準ごとの料金(level_fee) v1
+description "大文字の並びの書き方だけ違う、列挙の二つの値"
+
+enum 水準(level) = 最低(LOW) | 低い(low) | 高い(gold)
+
+inputs
+  会員(member) : 水準
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 会員ごとの料金(fee_by_member)
+policy unique
+| 会員 | -> 料金 |
+| 最低 | 1USD    |
+| 低い | 2USD    |
+| 高い | 3USD    |

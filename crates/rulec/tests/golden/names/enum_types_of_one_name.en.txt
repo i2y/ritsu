@@ -1,0 +1,10 @@
+error[E034]: The types of enums `tier_level` and `tierLevel` take the one name `TierLevel` in the generated code
+  --> tests/names/enum_types_of_one_name.rule:5
+  |
+4 | enum tier_level = basic | gold
+  |      ^^^^^^^^^^ tier_level, a name with no alias
+5 | enum tierLevel = low | high
+  |      ^^^^^^^^^ tierLevel, a name with no alias
+  |
+ An enum's type is named by its identifier (the alias, or the name where there is none) in PascalCase, the same in every language, so the generated code declares one type twice: in every language that writes types (all but SQL and NumPy) it does not compile, or one hides the other. Give one of the two another alias.
+

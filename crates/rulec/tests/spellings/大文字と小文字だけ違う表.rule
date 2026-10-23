@@ -1,0 +1,21 @@
+rule 数量ごとの料金とチップ(fee_and_tip_by_qty) v1
+description "SQLite が行の番号の列を一つとして読む二つの表"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+  チップ(tip) : money[USD]  round down(1USD)
+
+table 料金の表(by_qty)
+policy unique
+| 数量 | -> 料金 |
+| <=5  | 1USD    |
+| >5   | 2USD    |
+
+table チップの表(By_qty)
+policy unique
+| 数量 | -> チップ |
+| >5   | 4USD      |
+| <=5  | 3USD      |

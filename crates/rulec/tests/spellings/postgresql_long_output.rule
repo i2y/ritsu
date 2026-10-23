@@ -1,0 +1,14 @@
+rule spring_campaign_fee v1
+description "An output whose name is longer than PostgreSQL keeps"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began : money[USD]  round down(1USD)
+
+table by_qty
+policy unique
+| qty | -> the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began |
+| <=5 | 1USD                                                                    |
+| >5  | 2USD                                                                    |

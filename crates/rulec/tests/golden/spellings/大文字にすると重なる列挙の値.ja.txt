@@ -1,0 +1,15 @@
+警告[W121]: `ゴールドプラス` と `ゴールド上位` は、Python・TypeScript・JavaScript・Ruby・PHP・Java・Connect の生成コードで同じ識別子になります
+  --> tests/spellings/大文字にすると重なる列挙の値.rule:4
+  |
+4 | enum 段階(tier) = ゴールドプラス(gold_plus) | ゴールド上位(goldplus) | 一般(basic)
+  |                   ^^^^^^^^^^^^^^ 列挙の値の別名
+4 | enum 段階(tier) = ゴールドプラス(gold_plus) | ゴールド上位(goldplus) | 一般(basic)
+  |                                               ^^^^^^^^^^^^ 列挙の値の別名
+  |
+ Python・TypeScript・JavaScript・Java: 列挙の値の名前を大文字で書くので、どちらも `GOLDPLUS` です。一つの列挙に同じ名前の値が二つになり、読み込めないか、片方がもう片方を隠します。
+ Ruby: 列挙の値の名前を定数として大文字で書くので、どちらも `GOLDPLUS` です。一つのモジュールに同じ名前の定数が二つになり、片方がもう片方を上書きします。
+ PHP: 列挙の値の名前を大文字で書くので、どちらも `GOLDPLUS` です。一つの列挙に同じ名前の値は置けないので、読み込めません。
+ Connect: `.proto` の列挙の値の名前は、列挙の名前と値の名前を大文字にしてつないだもので、どちらも `TIER_GOLDPLUS` です。buf と protoc は、同じ名前の値をエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/大文字にすると重なる列挙の値.rule

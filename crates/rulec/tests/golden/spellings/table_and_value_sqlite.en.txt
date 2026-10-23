@@ -1,0 +1,12 @@
+warning[W121]: `fee_by_qty_ROW` and `fee_by_qty` are one identifier in the code generated for SQL (SQLite)
+  --> tests/spellings/table_and_value_sqlite.rule:12
+   |
+10 | define fee_by_qty_ROW : money[USD] = 7USD
+   |        ^^^^^^^^^^^^^^ the definition's name
+12 | table fee_by_qty
+   |       ^^^^^^^^^^ the table's name
+   |
+ SQL (SQLite): the query holds the values and, for each table, the number of the row that matched (a column `<identifier>_row`) as columns, and SQLite reads the name of a column with case set aside, so the columns `fee_by_qty_ROW` and `fee_by_qty_row` are one, and the query answers with one of the two.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`fee_by_qty(<alias>)`).
+
+ok tests/spellings/table_and_value_sqlite.rule

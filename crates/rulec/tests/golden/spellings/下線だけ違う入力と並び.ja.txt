@@ -1,0 +1,13 @@
+警告[W121]: `送料` と `明細` は、Go・Connect の生成コードで同じ識別子になります
+  --> tests/spellings/下線だけ違う入力と並び.rule:7
+  |
+5 |   送料(lines_) : money[USD]  range >=0USD <=10USD
+  |   ^^^^ 入力の別名
+7 | elements 明細(lines)
+  |          ^^^^ 並びの別名
+  |
+ Go: 入力と並びは `Input` 構造体のフィールドになり、名前を PascalCase で書くので、どちらも `Lines` です。一つの構造体に同じ名前のフィールドは置けないので、コンパイルできません。
+ Connect: 入力と並びは `.proto` の `DecideRequest` のフィールドになります。フィールドの JSON の名前は、`_` を除いてその次の字を大文字にしたもので、どちらも `lines` です。buf と protoc は、JSON の名前が同じ二つのフィールドをエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/下線だけ違う入力と並び.rule

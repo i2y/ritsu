@@ -1,0 +1,10 @@
+警告[W121]: `the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began` は 63 バイトより長いので、PostgreSQL では列の名前が切られます
+  --> tests/spellings/63バイトより長い出力.rule:8
+  |
+8 |   春の料金(the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began) : money[USD]  round down(1USD)
+  |   ^^^^^^^^ 出力の別名
+  |
+ SQL（PostgreSQL）: PostgreSQL は名前の先頭の 63 バイトしか残さないので、問い合わせと関数が返す列 `the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began` の名前は `the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_` になります。生成したファイルの先頭のコメントや `rulec api` に書いた名前では読めません。
+ 使わない生成先なら、このままで構いません。使うなら、列の名前が 63 バイト以下になるよう、別名を縮めてください。
+
+ok tests/spellings/63バイトより長い出力.rule

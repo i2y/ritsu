@@ -1,0 +1,14 @@
+rule 春の表の料金(spring_table_fee) v1
+description "行の番号の列の名前が PostgreSQL の残す長さより長い表"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 春のキャンペーンが始まる前に受けた注文の料金の表
+policy unique
+| 数量 | -> 料金 |
+| <=5  | 1USD    |
+| >5   | 2USD    |

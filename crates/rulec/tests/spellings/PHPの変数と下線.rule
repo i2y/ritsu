@@ -1,0 +1,17 @@
+rule 問い合わせの料金(query_fee) v1
+description "PHP が一つの変数として書く二つの定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+define 受け取り(_GET) : money[USD] = 3USD
+define 受け取りの控え(_GET_) : money[USD] = 2USD
+
+table 数量ごとの料金(fee_by_qty)
+policy unique
+| 数量 | -> 料金        |
+| <=5  | 受け取り       |
+| >5   | 受け取りの控え |

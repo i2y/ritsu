@@ -1,0 +1,17 @@
+rule 定額の送料(flat_fee) v1
+description "Swift と Java が同じに綴る二つの定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 基本料金(base_fee) : money[USD] = 3USD
+define 追加料金(baseFee) : money[USD] = 2USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料  |
+| <=5  | 基本料金 |
+| >5   | 追加料金 |

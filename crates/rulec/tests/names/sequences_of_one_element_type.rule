@@ -1,0 +1,16 @@
+rule spent_and_back v1
+description "Two sequences whose element types take one name"
+
+elements order_lines
+  amount : money[USD]  range >=0USD <=100USD
+
+elements orderLines
+  credit : money[USD]  range >=0USD <=100USD
+
+outputs
+  total : money[USD]  round down(1USD)
+
+sum spent over order_lines of amount  range >=0USD <=1000USD
+sum back over orderLines of credit  range >=0USD <=1000USD
+
+define total : money[USD] = spent + back

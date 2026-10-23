@@ -1,0 +1,12 @@
+rule lines_total v1
+description "A field of an element that starts with an underscore"
+
+elements lines
+  _amount : money[USD]  range >=0USD <=100USD
+
+outputs
+  total : money[USD]  round down(1USD)
+
+sum spent over lines of _amount  range >=0USD <=1000USD
+
+define total : money[USD] = spent

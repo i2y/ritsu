@@ -1,0 +1,12 @@
+warning[W121]: `base_fee` and `baseFee` are one identifier in the code generated for Swift and Java
+  --> tests/spellings/values_in_camel_case.rule:11
+   |
+10 | define base_fee : money[USD] = 3USD
+   |        ^^^^^^^^ the definition's name
+11 | define baseFee : money[USD] = 2USD
+   |        ^^^^^^^ the definition's name
+   |
+ Swift and Java: a value is written in lowerCamelCase, so both are `baseFee`: one function declares one name twice, which does not compile, or one hides the other.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`baseFee(<alias>)`).
+
+ok tests/spellings/values_in_camel_case.rule

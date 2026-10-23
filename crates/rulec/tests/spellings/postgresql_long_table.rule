@@ -1,0 +1,14 @@
+rule spring_table_fee v1
+description "A table whose row column is longer than PostgreSQL keeps"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table the_fee_of_an_order_placed_before_the_spring_campaign_of_2026
+policy unique
+| qty | -> fee |
+| <=5 | 1USD   |
+| >5  | 2USD   |

@@ -1,0 +1,10 @@
+warning[W121]: `_amount` starts with `_`, which the code generated for Python cannot take
+  --> tests/spellings/python_underscore_field.rule:5
+  |
+5 |   _amount : money[USD]  range >=0USD <=100USD
+  |   ^^^^^^^ the element field's name
+  |
+ Python: the fields of an element are the fields of `Element`, a `NamedTuple`, and a `NamedTuple` takes no field whose name starts with `_`, so the generated Python file does not load.
+ For a target you do not generate, leave it. For one you do, give it an alias that does not start with `_` (`_amount(<alias>)`).
+
+ok tests/spellings/python_underscore_field.rule

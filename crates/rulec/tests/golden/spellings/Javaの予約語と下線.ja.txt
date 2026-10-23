@@ -1,0 +1,12 @@
+警告[W121]: `記録` と `記録の控え` は、Java の生成コードで同じ識別子になります
+  --> tests/spellings/Javaの予約語と下線.rule:11
+   |
+10 | define 記録(record) : money[USD] = 3USD
+   |        ^^^^ 定義の別名
+11 | define 記録の控え(record_) : money[USD] = 2USD
+   |        ^^^^^^^^^^ 定義の別名
+   |
+ Java: Java の予約語と同じ名前には `_` を付けて書くので、どちらも `record_` です。一つの関数に同じ名前の引数や変数が二つになり、組めません。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/Javaの予約語と下線.rule

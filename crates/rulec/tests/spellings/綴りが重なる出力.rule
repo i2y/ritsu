@@ -1,0 +1,15 @@
+rule 料金とチップ(fee_and_tip) v1
+description "Go・Swift・Java と .proto が同じに綴る二つの出力"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  基本料金(base_fee) : money[USD]  round down(1USD)
+  追加料金(baseFee)  : money[USD]  round down(1USD)
+
+table 数量ごとの料金(fee_by_qty)
+policy unique
+| 数量 | -> 基本料金 | 追加料金 |
+| <=5  | 1USD        | 2USD     |
+| >5   | 3USD        | 4USD     |

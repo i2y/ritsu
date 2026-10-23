@@ -333,6 +333,25 @@ awk '{ sub(/^  区分\(kind\)/, "  区分(type)"); print }' "$C/ポイント付�
 awk '/^rule member_tier_shipping v1$/ { $0 = "rule tier v1" } { print }' "$C/member_tier_shipping.rule" > "$M/m_w121rule.rule"
 awk '/^rule 会員段階の送料\(tier_shipping\) v1$/ { sub(/\(tier_shipping\)/, "(tier)") } { print }' "$C/会員段階の送料.rule" > "$M/m_w121ruleja.rule"
 
+# --- Two names some language spells as one identifier, and a name a language cannot take
+# (§15.263): the margin given an alias Swift and Java spell as they spell `rate_off`, one SQLite reads
+# as its column, the two given long aliases PostgreSQL cuts to one, and the margin given an alias
+# Ruby reads as a constant. And a kind of coupon given an alias every language writes as the member
+# of another kind (E034). The English rule, and its Japanese version beside it.
+sc="$C/single_coupon.rule"
+scj="$C/クーポン一枚.rule"
+long="the_part_of_the_order_left_once_the_discounts_already_taken_are_off"
+awk '{ sub(/^derive margin :/, "derive margin(rateOff) :"); print }'                                 "$sc"  > "$M/m_w121camel.rule"
+awk '{ sub(/^derive 残余\(margin\)/, "derive 残余(rateOff)"); print }'                                "$scj" > "$M/m_w121camelja.rule"
+awk '{ sub(/^derive margin :/, "derive margin(rate_OFF) :"); print }'                                "$sc"  > "$M/m_w121case.rule"
+awk '{ sub(/^derive 残余\(margin\)/, "derive 残余(rate_OFF)"); print }'                               "$scj" > "$M/m_w121caseja.rule"
+awk -v l="$long" '{ sub(/^derive margin :/, "derive margin(" l "_margin) :"); sub(/^define rate_off :/, "define rate_off(" l "_rate) :"); print }' "$sc" > "$M/m_w121long.rule"
+awk -v l="$long" '{ sub(/^derive 残余\(margin\)/, "derive 残余(" l "_margin)"); sub(/^define 率割引\(rate_off\)/, "define 率割引(" l "_rate)"); print }' "$scj" > "$M/m_w121longja.rule"
+awk '{ sub(/^derive margin :/, "derive margin(Margin) :"); print }'                                  "$sc"  > "$M/m_w121ruby.rule"
+awk '{ sub(/^derive 残余\(margin\)/, "derive 残余(Margin)"); print }'                                 "$scj" > "$M/m_w121rubyja.rule"
+awk '/^enum coupon_kind = / { sub(/ fixed /, " fixed(Percent) ") } { print }'                       "$sc"  > "$M/m_e034member.rule"
+awk '/^enum クーポン種別\(coupon_kind\) = / { sub(/額引き\(fixed\)/, "額引き(Percent)") } { print }' "$scj" > "$M/m_e034memberja.rule"
+
 # --- A rule that is one step of a state machine (§15.148). The section's own shape errors
 # first, then the claims about every sequence of calls, each broken the way a revision of the
 # table would break it.

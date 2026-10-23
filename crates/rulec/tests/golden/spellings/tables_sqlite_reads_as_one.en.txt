@@ -1,0 +1,12 @@
+warning[W121]: `by_qty` and `By_qty` are one identifier in the code generated for SQL (SQLite)
+  --> tests/spellings/tables_sqlite_reads_as_one.rule:17
+   |
+11 | table by_qty
+   |       ^^^^^^ the table's name
+17 | table By_qty
+   |       ^^^^^^ the table's name
+   |
+ SQL (SQLite): the query holds the values and, for each table, the number of the row that matched (a column `<identifier>_row`) as columns, and SQLite reads the name of a column with case set aside, so the columns `by_qty_row` and `By_qty_row` are one, and the query answers with one of the two.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`By_qty(<alias>)`).
+
+ok tests/spellings/tables_sqlite_reads_as_one.rule

@@ -1,0 +1,12 @@
+warning[W121]: `gold_plus` and `plus` are one identifier in the code generated for Go
+  --> tests/spellings/go_members_across_enums.rule:5
+  |
+4 | enum plan = gold_plus | basic
+  |             ^^^^^^^^^ the enum value's name
+5 | enum plan_gold = plus | minus
+  |                  ^^^^ the enum value's name
+  |
+ Go: a value of an enum is a constant named by the enum's type and the value's name in PascalCase, joined, and stands in the rule's package beside the types and the functions that read a value (`Parse<Type>`): the enum value `gold_plus` and the enum value `plus` are both `PlanGoldPlus`, and a package holds one thing of a name, so it does not compile.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`plus(<alias>)`).
+
+ok tests/spellings/go_members_across_enums.rule

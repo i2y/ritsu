@@ -1,0 +1,12 @@
+warning[W121]: `afee` and `aFee` are one identifier in the code generated for SQL (SQLite)
+  --> tests/spellings/values_sqlite_reads_as_one.rule:11
+   |
+10 | define afee : money[USD] = 3USD
+   |        ^^^^ the definition's name
+11 | define aFee : money[USD] = 2USD
+   |        ^^^^ the definition's name
+   |
+ SQL (SQLite): a value is a column of the query, and SQLite reads the name of a column with case set aside, so `afee` and `aFee` are one column, and the query answers with one of the two values.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`aFee(<alias>)`).
+
+ok tests/spellings/values_sqlite_reads_as_one.rule

@@ -169,6 +169,17 @@ stops at the second declaration of a name — an input declared again with
 another range, a value written twice in an enum — and at two names that
 would be one identifier in the generated code (E034).
 
+Each language also writes an identifier its own way, so two names that
+differ as written can be one identifier in one of them: `base_fee` and
+`baseFee` are both `baseFee` in Swift and Java, and SQLite reads `afee`
+and `aFee` as one column.
+
+A language can refuse a name, too: Ruby reads `READ_CREDIT` as a
+constant. `rulec check` warns of either (W121) and says which languages;
+an alias on one of the two settles it. Where every language that writes
+the name spells the two alike — the types of the enums `tier_level` and
+`tierLevel` are `TierLevel` in all of them — it stops (E034).
+
 ## Types
 
 Ten, and no others.

@@ -1,0 +1,15 @@
+rule fee_and_tip v1
+description "Two outputs Go, Swift, Java and the .proto spell alike"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  base_fee : money[USD]  round down(1USD)
+  baseFee  : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> base_fee | baseFee |
+| <=5 | 1USD        | 2USD    |
+| >5  | 3USD        | 4USD    |

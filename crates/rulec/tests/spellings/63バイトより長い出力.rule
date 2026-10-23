@@ -1,0 +1,14 @@
+rule 春のキャンペーンの料金(spring_campaign_fee) v1
+description "PostgreSQL が残す長さより長い名前の出力"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  春の料金(the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began) : money[USD]  round down(1USD)
+
+table 数量ごとの料金(by_qty)
+policy unique
+| 数量 | -> 春の料金 |
+| <=5  | 1USD        |
+| >5   | 2USD        |

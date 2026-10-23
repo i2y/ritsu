@@ -1,0 +1,17 @@
+rule flat_fee v1
+description "Two definitions Swift and Java spell alike"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define base_fee : money[USD] = 3USD
+define baseFee : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee   |
+| <=5 | base_fee |
+| >5  | baseFee  |

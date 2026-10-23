@@ -1,0 +1,21 @@
+rule fee_and_tip_by_qty v1
+description "Two tables whose row columns SQLite reads as one"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+  tip : money[USD]  round down(1USD)
+
+table by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 1USD   |
+| >5  | 2USD   |
+
+table By_qty
+policy unique
+| qty | -> tip |
+| >5  | 4USD   |
+| <=5 | 3USD   |

@@ -1,0 +1,16 @@
+warning[W121]: `LOW` and `low` are one identifier in the code generated for Python, TypeScript, JavaScript, Ruby, PHP, Swift, Java and Connect
+  --> tests/spellings/enum_values_in_swift.rule:4
+  |
+4 | enum level = LOW | low | gold
+  |              ^^^ the enum value's name
+4 | enum level = LOW | low | gold
+  |                    ^^^ the enum value's name
+  |
+ Python, TypeScript, JavaScript and Java: an enum's values are written in upper case, so both are `LOW`: one enum declares one name twice, which does not load, or one hides the other.
+ Ruby: an enum's values are constants in upper case, so both are `LOW`: one module assigns one constant twice, and one overwrites the other.
+ PHP: an enum's values are written in upper case, so both are `LOW`, and an enum cannot hold two cases of one name: the file does not load.
+ Swift: an enum's values are written in lowerCamelCase, so both are `low`, and an enum cannot hold two cases of one name: it does not compile.
+ Connect: a value of an enum in the `.proto` is named by the enum's name and the value's in upper case, so both are `LEVEL_LOW`, and buf and protoc refuse two values of one name.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`low(<alias>)`).
+
+ok tests/spellings/enum_values_in_swift.rule

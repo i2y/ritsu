@@ -1,0 +1,10 @@
+警告[W121]: `Order` は大文字で始まるので、Ruby の生成コードでは使えません
+  --> tests/spellings/大文字で始まるshape.rule:4
+  |
+4 | shape 注文(Order) = jsonschema "orders.schema.json" "#/$defs/Order"
+  |       ^^^^ `shape`の別名
+  |
+ Ruby: 大文字で始まる名前は定数として読まれ、引数にも変数にもなりません。生成した Ruby のファイルは読み込めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を小文字で始まるものに変えてください。
+
+ok tests/spellings/大文字で始まるshape.rule

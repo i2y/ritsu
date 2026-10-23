@@ -634,6 +634,44 @@ policy first
 | <=5    | >5     | true     |
 | -      | -      | false    |
 "##;
+const X_E034_TYPE: &str = r##"rule 段階ごとの料金(tier_fee) v1
+
+enum 会員の段階(tier_level) = 一般(basic) | ゴールド(gold)
+enum 地域の段階(tierLevel) = 近い(low) | 遠い(high)
+
+inputs
+  会員(member) : 会員の段階
+  地域(band)   : 地域の段階
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 会員ごとの料金(fee_by_member)
+policy unique
+| 会員     | 地域 | -> 料金 |
+| 一般     | -    | 1USD    |
+| ゴールド | 近い | 2USD    |
+| ゴールド | 遠い | 3USD    |
+"##;
+const X_E034_TYPE_EN: &str = r##"rule tier_fee v1
+
+enum tier_level = basic | gold
+enum tierLevel = low | high
+
+inputs
+  member : tier_level
+  band   : tierLevel
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | band | -> fee |
+| basic  | -    | 1USD   |
+| gold   | low  | 2USD   |
+| gold   | high | 3USD   |
+"##;
 const X_E034_LABEL: &str = "rule t(t) v1\n\ninputs\n  a(a) : bool\n\noutputs\n  x(x) : bool\n\n\
 table 表(t1)\n   | a     | -> x  |\nr1 | true  | true  |\nr1 | false | false |\n";
 const X_E034_LABEL_EN: &str = r##"rule t(t) v1
@@ -1792,6 +1830,141 @@ policy first
 | -    | 0                |
 "##;
 
+const X_W121_CAMEL: &str = r##"rule 定額の送料(flat_fee) v1
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 基本料金(base_fee) : money[USD] = 3USD
+define 追加料金(baseFee) : money[USD] = 2USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料  |
+| <=5  | 基本料金 |
+| >5   | 追加料金 |
+"##;
+const X_W121_CAMEL_EN: &str = r##"rule flat_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define base_fee : money[USD] = 3USD
+define baseFee : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee   |
+| <=5 | base_fee |
+| >5  | baseFee  |
+"##;
+const X_W121_CASE: &str = r##"rule 少額の送料(small_fee) v1
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 基本料金(afee) : money[USD] = 3USD
+define 追加料金(aFee) : money[USD] = 2USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料  |
+| <=5  | 基本料金 |
+| >5   | 追加料金 |
+"##;
+const X_W121_CASE_EN: &str = r##"rule small_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define afee : money[USD] = 3USD
+define aFee : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | afee   |
+| >5  | aFee   |
+"##;
+const X_W121_LONG: &str = r##"rule 春の送料(spring_fee) v1
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 春のキャンペーンが始まる前に受けた少ない注文の送料その一 : money[USD] = 3USD
+define 春のキャンペーンが始まる前に受けた少ない注文の送料その二 : money[USD] = 2USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料                                                  |
+| <=5  | 春のキャンペーンが始まる前に受けた少ない注文の送料その一 |
+| >5   | 春のキャンペーンが始まる前に受けた少ない注文の送料その二 |
+"##;
+const X_W121_LONG_EN: &str = r##"rule spring_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began : money[USD] = 3USD
+define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee                                                                    |
+| <=5 | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began |
+| >5  | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended |
+"##;
+const X_W121_RUBY: &str = r##"rule 基本の送料(base_fee) v1
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 基本料金(Base) : money[USD] = 3USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料  |
+| <=5  | 基本料金 |
+| >5   | 2USD     |
+"##;
+const X_W121_RUBY_EN: &str = r##"rule base_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define Base : money[USD] = 3USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | Base   |
+| >5  | 2USD   |
+"##;
+
 const X_W105: &str = "rule t(t) v1\n\nenum k(k) = a(a) | b(b)\n\n\
                       inputs\n  x(x) : k\n  y(y) : bool\n\n\
                       outputs\n  r(r) : money[円, incl_tax]  round down(1円)\n\n\
@@ -2702,20 +2875,21 @@ pub fn ledger() -> Vec<Entry> {
             "E034",
             tr!("同じ名前が二度あります", "A name appears twice"),
             tr!(
-                "一つのファイルが同じ種類の名前を二度書いたとき、二つ目のところで出ます。種類は、値（入力、たどる並びとその要素のフィールド、出力、`derive`・`define`・`count`・`sum`・`max`・`min`・`open` と、表や節が決める出力の列）、表と節、列挙、一つの列挙の値、グループと一つのグループに書いた値、`shape`、出典、準用、前提のつながり、一つの表の行ラベル、表と例の見出しの列です。出力はそれを決めるものと同じ名前で、一つの名前をいくつかの表や節で決めることもできます。値のそれ以外の重なりは、入力と同じ名前の出力も含めて、一つの名前に二つの値があることになるので止まります。列挙の値と同じ名前のグループも、一つの語に二つの読み方があるので止まります。一つの並びの二つの名前が生成するコードで同じ識別子になるとき（一方の別名が、他方の別名か名前と同じ）、一つの名前に二つの別名を書いたとき、`enums` のファイルで列挙の名前がほかの列挙の別名と同じとき（`import enum` は名前でも別名でも列挙を探します）にも出ます。`import enum` で読んだ列挙と一緒に来たグループはこの規則の名前やほかの `import enum` が読んだものと、寄与が足す入力は足す先の規則の名前と比べます。畳み込みの答えの名前は E021、準用の出力に付けた名前は E041 で止まります。",
-                "A file writes one name twice among the names of one kind, and it is said at the second. The kinds are the values (the inputs, the sequences and the fields of their elements, the outputs, and what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and clauses decide), the tables and clauses, the enums, the values of one enum, the groups and the values one lists, the shapes, the sources, the applies, the prerequisites blocks, the labels of the rows of one table, and the columns of the heading of a table or of the examples. An output shares its name with what decides it, and several tables and clauses may decide one name; any other two values of one name stop here, an output named like an input among them. A group named like a value of an enum is one word read two ways, and stops here too. So do two names of one list that come to one identifier in the generated code (the alias of one is the alias or the name of the other), one name given two aliases, and, in an `enums` file, an enum's name that is another enum's alias (`import enum` finds an enum by either). An enum read with `import enum`, and a group that comes with it, is held to the names of this rule and of the other `import enum` lines, and an input a contribution adds to the names of the rule it adds to. A fold's answer is held by E021, and the name an `apply` gives a callee output by E041."
+                "一つのファイルが同じ種類の名前を二度書いたとき、二つ目のところで出ます。種類は、値（入力、たどる並びとその要素のフィールド、出力、`derive`・`define`・`count`・`sum`・`max`・`min`・`open` と、表や節が決める出力の列）、表と節、列挙、一つの列挙の値、グループと一つのグループに書いた値、`shape`、出典、準用、前提のつながり、一つの表の行ラベル、表と例の見出しの列です。出力はそれを決めるものと同じ名前で、一つの名前をいくつかの表や節で決めることもできます。値のそれ以外の重なりは、入力と同じ名前の出力も含めて、一つの名前に二つの値があることになるので止まります。列挙の値と同じ名前のグループも、一つの語に二つの読み方があるので止まります。一つの並びの二つの名前が生成するコードで同じ識別子になるとき（一方の別名が、他方の別名か名前と同じ）、一つの名前に二つの別名を書いたとき、`enums` のファイルで列挙の名前がほかの列挙の別名と同じとき（`import enum` は名前でも別名でも列挙を探します）にも出ます。二つの名前の識別子が違っても、それを書くどの言語でも同じに綴るときにも出ます。二つの列挙の型と一つの列挙の二つの値（どちらも PascalCase で書きます）、二つの前提のつながりの関数（snake_case）、並びが二つ以上ある規則の要素の型、呼ぶ側のオブジェクトから入力を読む関数の引数として並ぶ `shape` と入力や並びです。いくつかの言語だけが同じに綴るものは W121 です。`import enum` で読んだ列挙と一緒に来たグループはこの規則の名前やほかの `import enum` が読んだものと、寄与が足す入力は足す先の規則の名前と比べます。畳み込みの答えの名前は E021、準用の出力に付けた名前は E041 で止まります。",
+                "A file writes one name twice among the names of one kind, and it is said at the second. The kinds are the values (the inputs, the sequences and the fields of their elements, the outputs, and what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and clauses decide), the tables and clauses, the enums, the values of one enum, the groups and the values one lists, the shapes, the sources, the applies, the prerequisites blocks, the labels of the rows of one table, and the columns of the heading of a table or of the examples. An output shares its name with what decides it, and several tables and clauses may decide one name; any other two values of one name stop here, an output named like an input among them. A group named like a value of an enum is one word read two ways, and stops here too. So do two names of one list that come to one identifier in the generated code (the alias of one is the alias or the name of the other), one name given two aliases, and, in an `enums` file, an enum's name that is another enum's alias (`import enum` finds an enum by either). So do two names whose identifiers differ but which every language that writes them spells as one: the types of two enums and two values of one enum (both written in PascalCase), the functions of two prerequisites blocks (in snake_case), the element types of a rule's two sequences, and a shape beside an input or a sequence among the parameters of the function that reads the caller's objects. Two that only some languages spell as one are W121. An enum read with `import enum`, and a group that comes with it, is held to the names of this rule and of the other `import enum` lines, and an input a contribution adds to the names of the rule it adds to. A fold's answer is held by E021, and the name an `apply` gives a callee output by E041."
             ),
             tr!(
                 "どちらかを消すか、名前を変えてください（行ラベルと見出しの列も同じです）。同じ識別子になる二つの名前は、どちらかに別の別名を付けてください。`import enum` で読んだ列挙なら、`-> <別の名前>` で読めます。",
                 "Remove one of the two, or rename one (a row label and a column of a heading alike). Of two names that come to one identifier, give one another alias. An enum read with `import enum` can be read under another name with `-> <another name>`."
             ),
             X_E034,
-            &["E009", "E035", "E021", "E041", "E075"],
+            &["E009", "E035", "E021", "E041", "E075", "W121"],
         )
         .english(X_E034_EN)
         .also(tr!("一つの列挙に同じ値が二つ", "One value written twice in an enum"), X_E034_VALUE, X_E034_VALUE_EN)
         .also(tr!("同じ識別子になる二つの名前", "Two names that come to one identifier"), X_E034_ALIAS, X_E034_ALIAS_EN)
         .also(tr!("表の見出しに同じ列が二つ", "One column twice in a table's heading"), X_E034_COLUMN, X_E034_COLUMN_EN)
+        .also(tr!("型の名前が一つになる二つの列挙", "Two enums whose types take one name"), X_E034_TYPE, X_E034_TYPE_EN)
         .also(tr!("一つの表の二つの行に同じラベル", "One label on two rows of a table"), X_E034_LABEL, X_E034_LABEL_EN),
         err(
             "E035",
@@ -4063,19 +4237,23 @@ pub fn ledger() -> Vec<Entry> {
         .english(X_W117_EN),
         warn(
             "W121",
-            tr!("別名が生成先の言葉とぶつかります", "An alias collides with a word in a target language"),
+            tr!("生成先の言語で、識別子がぶつかるか使えません", "An identifier collides, or cannot be used, in a target language"),
             tr!(
-                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります。また、規則と、規則が宣言する列挙の型の名前が同じになるとき。Go は規則の関数と列挙の型を一つのパッケージに並べ、Java は列挙を規則のクラスの中に置くので、どちらもコンパイルできません（`enums` のファイルから読む列挙は、そのファイルのパッケージやクラスの名前で書くので、ぶつかりません）。別名の無い名前が予約語のときも出ます。そのときは生成コードがどの言語でも名前の後ろに `_` を付けて書き（`class_`）、それがこの規則のほかの名前の識別子でもあれば、さらに番号を付けます（`class_2`）。",
-                "An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`)."
+                "ASCII の別名が、生成先のどれかの予約語か、その言語がすでに使っている名前と同じとき。別名はそのまま関数・引数・型・メンバの名前になります。規則の別名は、モジュールやパッケージの名前にもなります。そこで標準ライブラリと同じ名前だと、生成したモジュールがぶつかります。また、規則と、規則が宣言する列挙の型の名前が同じになるとき。Go は規則の関数と列挙の型を一つのパッケージに並べ、Java は列挙を規則のクラスの中に置くので、どちらもコンパイルできません（`enums` のファイルから読む列挙は、そのファイルのパッケージやクラスの名前で書くので、ぶつかりません）。別名の無い名前が予約語のときも出ます。そのときは生成コードがどの言語でも名前の後ろに `_` を付けて書き（`class_`）、それがこの規則のほかの名前の識別子でもあれば、さらに番号を付けます（`class_2`）。書いた二つの名前の識別子（別名、無ければ名前）が違っても、どれかの生成先の綴りで一つになるときにも出ます。綴りは、値を書く lowerCamelCase、構造体のフィールドの PascalCase、`.proto` のフィールドの JSON の名前、列挙の値の大文字、予約語や言語が使う変数の名前に付ける `_`、大文字と小文字を区別しない列の名前（SQLite）、名前の先頭の 63 バイト（PostgreSQL）です。識別子をその生成先が使えないときも出ます。大文字で始まる名前を定数として読む言語、`_` で始まるフィールドを受け付けない `NamedTuple`、63 バイトより長い列の名前を切る PostgreSQL です。どの生成先でそうなるかは、警告の注記が言います。どの言語でも一つに綴る二つの名前（二つの列挙の型など）は、E034 で止まります。",
+                "An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, and PostgreSQL, which cuts a column's name longer than 63 bytes. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034."
             ),
             tr!(
-                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記に出ます。引数やローカル変数の名前は、その本体の外までは隠しません。そのため、引数やローカル変数の名前でこの警告が出るのは、予約語のときだけです。使わない生成先なら、このままで構いません。",
-                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it."
+                "予約語なら、その言語の生成コードはコンパイルが通りません（`type` を入力の別名にすると Rust が落ちます）。すでにある名前なら、規則の関数や列挙の型がそれを隠します（`sum` を規則の別名にすると Python の組み込みが隠れます）。モジュールの名前なら、`time` を規則の別名にすると、生成した `time` のモジュールが標準ライブラリの `time` とぶつかります。どの生成先でどうぶつかるかは、警告の注記に出ます。引数やローカル変数の名前は、その本体の外までは隠しません。そのため、引数やローカル変数の名前でこの警告が出るのは、予約語のときだけです。二つの名前がある生成先で一つの識別子になるなら、その生成先を使うときは、どちらかに別名を付けてください。生成先が使えない識別子なら、使える別名を付けてください（大文字で始まらない、`_` で始まらない、63 バイト以下の別名）。使わない生成先なら、このままで構いません。",
+                "A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, give an alias it takes (one that starts with neither a capital nor `_`, and is 63 bytes or fewer). For a target you do not generate, leave it."
             ),
             X_W121,
-            &["E009", "E011"],
+            &["E009", "E011", "E034"],
         )
-        .english(X_W121_EN),
+        .english(X_W121_EN)
+        .also(tr!("Swift と Java が同じに綴る二つの名前", "Two names Swift and Java spell alike"), X_W121_CAMEL, X_W121_CAMEL_EN)
+        .also(tr!("SQLite が一つの列として読む二つの名前", "Two names SQLite reads as one column"), X_W121_CASE, X_W121_CASE_EN)
+        .also(tr!("PostgreSQL が一つの名前に切る二つの長い名前", "Two long names PostgreSQL cuts to one"), X_W121_LONG, X_W121_LONG_EN)
+        .also(tr!("Ruby が定数として読む名前", "A name Ruby reads as a constant"), X_W121_RUBY, X_W121_RUBY_EN),
         warn(
             "W115",
             tr!("どの要素もこの判定にはなりません", "No element can land on this verdict"),

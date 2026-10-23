@@ -1,0 +1,16 @@
+rule rush_fee v1
+description "A shape Ruby reads as a constant"
+
+shape Order = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  rush : bool  from Order.rush
+
+outputs
+  fee : number  round down(1)
+
+table by_rush
+policy unique
+| rush  | -> fee |
+| true  | 10     |
+| false | 5      |

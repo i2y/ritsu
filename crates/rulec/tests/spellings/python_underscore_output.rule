@@ -1,0 +1,15 @@
+rule fee_and_tip_split v1
+description "An output that starts with an underscore"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  _fee : money[USD]  round down(1USD)
+  tip  : money[USD]  round down(1USD)
+
+table by_qty
+policy unique
+| qty | -> _fee | tip  |
+| <=5 | 1USD    | 3USD |
+| >5  | 2USD    | 4USD |

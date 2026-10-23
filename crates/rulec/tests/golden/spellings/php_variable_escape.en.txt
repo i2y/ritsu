@@ -1,0 +1,12 @@
+warning[W121]: `_GET` and `_GET_` are one identifier in the code generated for PHP
+  --> tests/spellings/php_variable_escape.rule:11
+   |
+10 | define _GET : money[USD] = 3USD
+   |        ^^^^ the definition's name
+11 | define _GET_ : money[USD] = 2USD
+   |        ^^^^^ the definition's name
+   |
+ PHP: a name PHP keeps for a variable of its own (`$this` and the superglobals) is written with `_` after it, so both are `$_GET_`: they are one variable, and one overwrites the other.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`_GET_(<alias>)`).
+
+ok tests/spellings/php_variable_escape.rule

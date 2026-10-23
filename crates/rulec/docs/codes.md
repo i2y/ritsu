@@ -129,7 +129,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [W120](#w120) | warning | The copy states a value no row uses |
 | [W118](#w118) | warning | No row of an applied table is reached in this apply |
 | [W117](#w117) | warning | An exception with no effect |
-| [W121](#w121) | warning | An alias collides with a word in a target language |
+| [W121](#w121) | warning | An identifier collides, or cannot be used, in a target language |
 | [W115](#w115) | warning | No element can land on this verdict |
 | [W114](#w114) | warning | Unconfirmed overlap: an input may match both rows |
 | [W901](#w901) | warning | A key is written in the file |
@@ -1175,7 +1175,7 @@ Related codes: [E032](#e032), [W111](#w111), [E101](#e101), [E067](#e067)
 
 `error` — **A name appears twice**
 
-**When.** A file writes one name twice among the names of one kind, and it is said at the second. The kinds are the values (the inputs, the sequences and the fields of their elements, the outputs, and what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and clauses decide), the tables and clauses, the enums, the values of one enum, the groups and the values one lists, the shapes, the sources, the applies, the prerequisites blocks, the labels of the rows of one table, and the columns of the heading of a table or of the examples. An output shares its name with what decides it, and several tables and clauses may decide one name; any other two values of one name stop here, an output named like an input among them. A group named like a value of an enum is one word read two ways, and stops here too. So do two names of one list that come to one identifier in the generated code (the alias of one is the alias or the name of the other), one name given two aliases, and, in an `enums` file, an enum's name that is another enum's alias (`import enum` finds an enum by either). An enum read with `import enum`, and a group that comes with it, is held to the names of this rule and of the other `import enum` lines, and an input a contribution adds to the names of the rule it adds to. A fold's answer is held by E021, and the name an `apply` gives a callee output by E041.
+**When.** A file writes one name twice among the names of one kind, and it is said at the second. The kinds are the values (the inputs, the sequences and the fields of their elements, the outputs, and what `derive`, `define`, `count`, `sum`, `max`, `min`, `open` and the output columns of tables and clauses decide), the tables and clauses, the enums, the values of one enum, the groups and the values one lists, the shapes, the sources, the applies, the prerequisites blocks, the labels of the rows of one table, and the columns of the heading of a table or of the examples. An output shares its name with what decides it, and several tables and clauses may decide one name; any other two values of one name stop here, an output named like an input among them. A group named like a value of an enum is one word read two ways, and stops here too. So do two names of one list that come to one identifier in the generated code (the alias of one is the alias or the name of the other), one name given two aliases, and, in an `enums` file, an enum's name that is another enum's alias (`import enum` finds an enum by either). So do two names whose identifiers differ but which every language that writes them spells as one: the types of two enums and two values of one enum (both written in PascalCase), the functions of two prerequisites blocks (in snake_case), the element types of a rule's two sequences, and a shape beside an input or a sequence among the parameters of the function that reads the caller's objects. Two that only some languages spell as one are W121. An enum read with `import enum`, and a group that comes with it, is held to the names of this rule and of the other `import enum` lines, and an input a contribution adds to the names of the rule it adds to. A fold's answer is held by E021, and the name an `apply` gives a callee output by E041.
 
 **Fix.** Remove one of the two, or rename one (a row label and a column of a heading alike). Of two names that come to one identifier, give one another alias. An enum read with `import enum` can be read under another name with `-> <another name>`.
 
@@ -1256,6 +1256,29 @@ policy first
 | -      | -      | false    |
 ```
 
+**Two enums whose types take one name**:
+
+```rule
+rule tier_fee v1
+
+enum tier_level = basic | gold
+enum tierLevel = low | high
+
+inputs
+  member : tier_level
+  band   : tierLevel
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | band | -> fee |
+| basic  | -    | 1USD   |
+| gold   | low  | 2USD   |
+| gold   | high | 3USD   |
+```
+
 **One label on two rows of a table**:
 
 ```rule
@@ -1273,7 +1296,7 @@ r1 | true  | true  |
 r1 | false | false |
 ```
 
-Related codes: [E009](#e009), [E035](#e035), [E021](#e021), [E041](#e041), [E075](#e075)
+Related codes: [E009](#e009), [E035](#e035), [E021](#e021), [E041](#e041), [E075](#e075), [W121](#w121)
 
 ## E035
 
@@ -4675,11 +4698,11 @@ Related codes: [E035](#e035), [E105](#e105)
 
 ## W121
 
-`warning` — **An alias collides with a word in a target language**
+`warning` — **An identifier collides, or cannot be used, in a target language**
 
-**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`).
+**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, and PostgreSQL, which cuts a column's name longer than 63 bytes. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034.
 
-**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. For a target you do not generate, leave it.
+**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, give an alias it takes (one that starts with neither a capital nor `_`, and is 63 bytes or fewer). For a target you do not generate, leave it.
 
 **Smallest reproduction**:
 
@@ -4699,7 +4722,90 @@ policy first
 | -    | 0                |
 ```
 
-Related codes: [E009](#e009), [E011](#e011)
+**Two names Swift and Java spell alike**:
+
+```rule
+rule flat_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define base_fee : money[USD] = 3USD
+define baseFee : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee   |
+| <=5 | base_fee |
+| >5  | baseFee  |
+```
+
+**Two names SQLite reads as one column**:
+
+```rule
+rule small_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define afee : money[USD] = 3USD
+define aFee : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | afee   |
+| >5  | aFee   |
+```
+
+**Two long names PostgreSQL cuts to one**:
+
+```rule
+rule spring_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began : money[USD] = 3USD
+define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee                                                                    |
+| <=5 | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began |
+| >5  | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended |
+```
+
+**A name Ruby reads as a constant**:
+
+```rule
+rule base_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define Base : money[USD] = 3USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | Base   |
+| >5  | 2USD   |
+```
+
+Related codes: [E009](#e009), [E011](#e011), [E034](#e034)
 
 ## W115
 

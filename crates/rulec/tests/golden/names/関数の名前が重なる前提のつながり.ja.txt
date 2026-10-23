@@ -1,0 +1,10 @@
+エラー[E034]: 前提のつながり `基本の順` と `近道` の関数が、生成するコードで同じ名前になります
+  --> tests/names/関数の名前が重なる前提のつながり.rule:24
+   |
+19 | prerequisites 基本の順(core_path) over 科目
+   |               ^^^^^^^^ 基本の順 の別名 core_path
+24 | prerequisites 近道(corePath) over 科目
+   |               ^^^^ 近道 の別名 corePath
+   |
+ 前提のつながりの関数の名前は、識別子（別名、無ければ名前）を snake_case にしたもの（どちらも `core_path`）に `_requires` と `_available` を付けたもので、言語によってはそれを lowerCamelCase か PascalCase にします。同じ名前の関数が二つになり、関数を書くどの言語でも組めないか、片方がもう片方を隠します。どちらかに別の別名を付けてください。
+

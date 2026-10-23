@@ -1,0 +1,14 @@
+rule line_total v1
+description "Two fields of one element Go, Swift, Java and the .proto spell alike"
+
+elements lines
+  unit_fee : money[USD]  range >=0USD <=100USD
+  unitFee  : money[USD]  range >=0USD <=100USD
+
+outputs
+  total : money[USD]  round down(1USD)
+
+sum spent over lines of unit_fee  range >=0USD <=1000USD
+sum back over lines of unitFee  range >=0USD <=1000USD
+
+define total : money[USD] = spent + back

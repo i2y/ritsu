@@ -13,7 +13,12 @@
 //! (`names::check`): the second of two is E034, with the first marked, and the check stops there.
 //! So are the identifiers the generated code writes, the columns of a heading, a group named like a
 //! value of an enum, and an input a contribution adds; a fold's answer and the name an `apply`
-//! gives a callee output are held under their own codes (E021, E041).
+//! gives a callee output are held under their own codes (E021, E041). Two names whose identifiers
+//! differ but which every language that writes them spells as one stop it too (§15.263): the types
+//! of two enums and two values of one enum in PascalCase, the functions of two prerequisites blocks
+//! in snake_case, the element types of two sequences, and a shape and an input the caller passes,
+//! which are parameters of one function. Two that only some languages spell as one are W121's
+//! (`tests/spellings.rs`).
 //!
 //! The materials are in `tests/names`, English first, with a Japanese version beside each: one
 //! rule for each way a name is written twice, the files two of them need (a callee, a contract),
@@ -57,6 +62,12 @@ const TWICE: &[(&str, &str, &str)] = &[
     ("two_shapes_of_one_name", "同じ名前の二つのshape", "E034"),
     ("two_applies_of_one_name", "同じ名前の二つの準用", "E034"),
     ("two_tables_of_one_alias", "同じ別名の二つの表", "E034"),
+    // the identifiers every language spells as one (§15.263)
+    ("enum_types_of_one_name", "型の名前が重なる二つの列挙", "E034"),
+    ("enum_values_of_one_name", "名前が重なる列挙の値", "E034"),
+    ("blocks_of_one_name", "関数の名前が重なる前提のつながり", "E034"),
+    ("sequences_of_one_element_type", "要素の型が重なる二つの並び", "E034"),
+    ("shape_named_like_an_input", "入力と同じ名前のshape", "E034"),
     // the `enums` files
     ("enum_name_is_an_alias", "ほかの列挙の別名と同じ名前", "E034"),
     ("two_blocks_of_one_alias", "同じ別名の二つの前提", "E034"),

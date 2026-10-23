@@ -1,0 +1,13 @@
+警告[W121]: `会員の段階` と `地域の段階` は、PHP・Java の生成コードで同じ識別子になります
+  --> tests/spellings/大文字と小文字だけ違う列挙.rule:5
+  |
+4 | enum 会員の段階(Tierlevel) = 一般(basic) | ゴールド(gold)
+  |      ^^^^^^^^^^ 列挙の別名
+5 | enum 地域の段階(TierLevel) = 近い(low) | 遠い(high)
+  |      ^^^^^^^^^^ 列挙の別名
+  |
+ PHP: 列挙の型は `Tierlevel` と `TierLevel` ですが、PHP はクラスや列挙の名前の大文字と小文字を区別しないので、同じ列挙を二度宣言することになり、読み込めません。
+ Java: 列挙の型は規則のクラスの中に置かれ、javac は二つを `BandFee$Tierlevel.class` と `BandFee$TierLevel.class` に書きます。大文字と小文字を区別しないファイルシステム（macOS と Windows の既定）では二つのファイルが一つになり、片方の型が読み込めません。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/大文字と小文字だけ違う列挙.rule

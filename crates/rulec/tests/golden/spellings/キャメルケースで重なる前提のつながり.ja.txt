@@ -1,0 +1,13 @@
+警告[W121]: `基本の順` と `近道` は、TypeScript・JavaScript・Go・Swift・Java の生成コードで同じ識別子になります
+  --> tests/spellings/キャメルケースで重なる前提のつながり.rule:24
+   |
+19 | prerequisites 基本の順(core__path) over 科目
+   |               ^^^^^^^^ 前提のつながりの別名
+24 | prerequisites 近道(corePath) over 科目
+   |               ^^^^ 前提のつながりの別名
+   |
+ TypeScript・JavaScript・Swift・Java: 前提のつながりの関数（`<名前>Requires` と `<名前>Available`）の名前を lowerCamelCase で書くので、どちらも `corePathRequires` です。同じ名前の関数を二度宣言することになり、組めません。
+ Go: 前提のつながりの関数（`<Name>Requires` と `<Name>Available`）の名前を PascalCase で書くので、どちらも `CorePathRequires` です。同じ名前の関数を二度宣言することになり、コンパイルできません。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/キャメルケースで重なる前提のつながり.rule

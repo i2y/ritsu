@@ -22,6 +22,12 @@
 //!   enums, the values of each enum, the groups, the shapes and the prerequisites blocks — the names
 //!   the generated code writes as their identifiers are. In an `enums` file an enum's name is not
 //!   another's alias either: `import enum` finds an enum by its name or its alias.
+//! - **the spelled identifiers** (§15.263): two names whose identifiers differ, but which every
+//!   language that writes them spells as one — the types of two enums and two values of one enum in
+//!   PascalCase, the functions of two prerequisites blocks in snake_case, the element types of two
+//!   sequences — and a shape whose identifier is that of an input or a sequence the function that
+//!   reads the caller's objects takes as it is. Where only some languages spell two names as one,
+//!   `codegen::spellings` says it with W121.
 //!
 //! What another file brings in is held elsewhere: an enum `import enum` reads and the groups that
 //! come with it (`enums::read_imports`), an input a contribution adds (`link::merge`). A heading that
@@ -145,6 +151,19 @@ pub fn check(f: &RuleFile, path: &str) -> Vec<Diag> {
         &mut out,
         id_note(tr!("列挙の識別子は、生成するコードの型の名前になります。", "An enum's identifier names its type in the generated code.")),
     );
+    spelled(
+        &enums,
+        crate::codegen::spellings::enum_type,
+        &at,
+        &mut out,
+        |a, b, t| tr!("列挙 `{}` と `{}` の型が、生成するコードで同じ名前 `{t}` になります", "The types of enums `{}` and `{}` take the one name `{t}` in the generated code", a.text, b.text),
+        |_| {
+            tr!(
+                "列挙の型の名前は、識別子（別名、無ければ名前）を PascalCase にしたもので、どの言語でも同じです。同じ名前の型が二つになり、型を書く言語（SQL と NumPy のほかの全部）で組めないか、片方がもう片方を隠します。どちらかに別の別名を付けてください。",
+                "An enum's type is named by its identifier (the alias, or the name where there is none) in PascalCase, the same in every language, so the generated code declares one type twice: in every language that writes types (all but SQL and NumPy) it does not compile, or one hides the other. Give one of the two another alias."
+            )
+        },
+    );
     // `import enum <enum> from "<file>"` finds the enum by its name or its alias, the first that has
     // either: a name that is another enum's alias leaves which one a rule reads to their order.
     if f.kind == FileKind::Enums {
@@ -192,6 +211,19 @@ pub fn check(f: &RuleFile, path: &str) -> Vec<Diag> {
             &at,
             &mut out,
             id_note(tr!("列挙の値の識別子は、生成するコードの列挙の値の名前になります。", "A value's identifier names it in the generated code's enum.")),
+        );
+        spelled(
+            &vs,
+            crate::codegen::spellings::member,
+            &at,
+            &mut out,
+            |a, b, _| tr!("列挙 `{0}` の値 `{1}` と `{2}` が、生成するコードで同じ名前になります", "The values `{1}` and `{2}` of enum `{0}` take one name in the generated code", e.name.text, a.text, b.text),
+            |m| {
+                tr!(
+                    "列挙の値は、識別子（別名、無ければ名前）を PascalCase にした名前（どちらも `{m}`）で書き、言語によってはそれを大文字か lowerCamelCase にします。一つの列挙に同じ名前の値が二つになり、値を名前で書く言語（SQL と NumPy のほかの全部）で組めないか、片方がもう片方を隠します。どちらかに別の別名を付けてください。",
+                    "A value of an enum is written by its identifier (the alias, or the name where there is none) in PascalCase (both are `{m}`), which some languages then put in upper case or in lowerCamelCase, so one enum declares one value twice: in every language that writes the values by name (all but SQL and NumPy) it does not compile, or one hides the other. Give one of the two another alias."
+                )
+            },
         );
     }
 
@@ -255,6 +287,38 @@ pub fn check(f: &RuleFile, path: &str) -> Vec<Diag> {
             "A shape's identifier names a parameter of the function that takes the caller's objects (`<rule>_from`)."
         )),
     );
+    // That function also takes the inputs and the sequences no `from` reads, as they are.
+    let read = crate::codegen::spellings::shapes_read(f);
+    if !read.is_empty() {
+        let mut args: Vec<&Name> = read.clone();
+        args.extend(f.inputs.iter().filter(|i| i.from.is_none()).map(|i| &i.name));
+        args.extend(f.elements.iter().filter(|el| el.from.is_none()).map(|el| &el.name));
+        args.retain(|n| !n.text.contains(':'));
+        let mut seen: HashMap<String, &Name> = HashMap::new();
+        for n in args {
+            let Some(id) = author_identifier(n) else { continue };
+            let shape = |m: &Name| read.iter().any(|r| std::ptr::eq(*r, m));
+            match seen.get(&id) {
+                // A shape and an input or a sequence: two shapes were said above, and two values with
+                // the values.
+                Some(first) if shape(first) != shape(n) => out.push(shape_meets(
+                    first,
+                    n,
+                    &id,
+                    &at,
+                    f,
+                    tr!(
+                        "`shape` の識別子は、呼ぶ側のオブジェクトから入力を読む関数（`<規則>_from`）の引数の名前になり、契約から読まない入力と並びも、同じ関数の引数です。同じ名前の引数が二つになり、その関数を書く言語（Python・TypeScript・JavaScript・Ruby・PHP）で組めません。どちらかに別の別名を付けてください。",
+                        "A shape's identifier names a parameter of the function that reads the inputs out of the caller's objects (`<rule>_from`), and the inputs and the sequences no contract is read for are its parameters too, so the function takes one parameter twice: in the languages that write it (Python, TypeScript, JavaScript, Ruby and PHP) it does not compile. Give one of the two another alias."
+                    ),
+                )),
+                Some(_) => {}
+                None => {
+                    seen.insert(id, n);
+                }
+            }
+        }
+    }
 
     // The sources: a citation `@<name>` names one.
     let sources: Vec<&Name> = f.sources.iter().map(|s| &s.name).collect();
@@ -305,6 +369,38 @@ pub fn check(f: &RuleFile, path: &str) -> Vec<Diag> {
             "A prerequisites block's identifier names the functions generated from it (`<identifier>_requires`, `<identifier>_available`)."
         )),
     );
+    spelled(
+        &blocks,
+        crate::codegen::spellings::block,
+        &at,
+        &mut out,
+        |a, b, _| tr!("前提のつながり `{}` と `{}` の関数が、生成するコードで同じ名前になります", "The functions of the prerequisites `{}` and `{}` take one name in the generated code", a.text, b.text),
+        |s| {
+            tr!(
+                "前提のつながりの関数の名前は、識別子（別名、無ければ名前）を snake_case にしたもの（どちらも `{s}`）に `_requires` と `_available` を付けたもので、言語によってはそれを lowerCamelCase か PascalCase にします。同じ名前の関数が二つになり、関数を書くどの言語でも組めないか、片方がもう片方を隠します。どちらかに別の別名を付けてください。",
+                "The functions of a prerequisites block are named by its identifier (the alias, or the name where there is none) in snake_case (both are `{s}`) with `_requires` and `_available` after it, which some languages then write in lowerCamelCase or PascalCase, so the generated code declares one function twice: in every language that writes them it does not compile, or one hides the other. Give one of the two another alias."
+            )
+        },
+    );
+
+    // The sequences of a rule that walks two or more: each element's type is named after its
+    // sequence.
+    if f.elements.len() >= 2 {
+        let seqs: Vec<&Name> = f.elements.iter().map(|el| &el.name).filter(|n| !n.text.contains(':')).collect();
+        spelled(
+            &seqs,
+            crate::codegen::spellings::element_type,
+            &at,
+            &mut out,
+            |a, b, t| tr!("並び `{}` と `{}` の要素の型が、生成するコードで同じ名前 `{t}` になります", "The element types of the sequences `{}` and `{}` take the one name `{t}` in the generated code", a.text, b.text),
+            |_| {
+                tr!(
+                    "並びが二つ以上ある規則では、要素の型の名前は、並びの識別子（別名、無ければ名前）を PascalCase にして `Element` を付けたものです。同じ名前の型が二つになり、型を書く言語で組めないか、片方がもう片方を隠します（TypeScript は二つを一つの型にまとめます）。どちらかに別の別名を付けてください。",
+                    "In a rule that walks two sequences or more, the type of an element is named by its sequence's identifier (the alias, or the name where there is none) in PascalCase with `Element` after it, so the generated code declares one type twice: in the languages that write types it does not compile, or one hides the other (TypeScript makes the two one type). Give one of the two another alias."
+                )
+            },
+        );
+    }
     out
 }
 
@@ -361,6 +457,62 @@ fn same_identifier(first: &Name, second: &Name, id: &str, at: &impl Fn(usize) ->
         .mark(first.span.clone(), label(first))
         .mark(second.span.clone(), label(second))
         .note(note)
+}
+
+/// The finding of a shape and an input or a sequence of one identifier, the one declared first
+/// before the other: what each is is said, since the two may have one name.
+fn shape_meets(first: &Name, second: &Name, id: &str, at: &impl Fn(usize) -> String, f: &RuleFile, note: String) -> Diag {
+    let what = |n: &Name| {
+        if f.shapes.iter().any(|s| std::ptr::eq(&s.name, n)) {
+            tr!("`shape` の `{}`", "the shape `{}`", n.text)
+        } else if f.elements.iter().any(|el| std::ptr::eq(&el.name, n)) {
+            tr!("並び `{}`", "the sequence `{}`", n.text)
+        } else {
+            tr!("入力 `{}`", "the input `{}`", n.text)
+        }
+    };
+    let label = |n: &Name| match &n.ascii {
+        Some(a) => tr!("{} の別名 {a}", "the alias {a} of {}", n.text),
+        None => tr!("別名の無い名前 {}", "{}, a name with no alias", n.text),
+    };
+    let (a, b) = (what(first), what(second));
+    let a_up = {
+        let mut cs = a.chars();
+        cs.next().map(|c| c.to_uppercase().collect::<String>() + cs.as_str()).unwrap_or_default()
+    };
+    Diag::error("E034", tr!("{a} と{b} が、生成するコードで同じ識別子 `{id}` になります", "{a_up} and {b} become the one identifier `{id}` in the generated code"))
+        .at(at(second.span.line))
+        .mark(first.span.clone(), label(first))
+        .mark(second.span.clone(), label(second))
+        .note(note)
+}
+
+/// Two names of one list whose identifiers differ as written but which every language that writes
+/// them spells as one (§15.263), each said at the later of the two against the first of its
+/// spelling. `spell` is that spelling of an identifier: the alias, else the name, as these lists are
+/// written, none of them renamed for a keyword. Two names of one identifier, or of one name, were
+/// said above.
+fn spelled(names: &[&Name], spell: fn(&str) -> String, at: &impl Fn(usize) -> String, out: &mut Vec<Diag>, title: impl Fn(&Name, &Name, &str) -> String, note: impl Fn(&str) -> String) {
+    let id = |n: &Name| n.ascii.clone().unwrap_or_else(|| n.text.clone());
+    let label = |n: &Name| match &n.ascii {
+        Some(a) => tr!("{} の別名 {a}", "the alias {a} of {}", n.text),
+        None => tr!("別名の無い名前 {}", "{}, a name with no alias", n.text),
+    };
+    let mut seen: Vec<(String, &Name)> = Vec::new();
+    for n in names {
+        let s = spell(&id(n));
+        match seen.iter().find(|(k, _)| *k == s) {
+            Some((_, first)) if id(first) != id(n) && first.text != n.text => out.push(
+                Diag::error("E034", title(first, n, &s))
+                    .at(at(n.span.line))
+                    .mark(first.span.clone(), label(first))
+                    .mark(n.span.clone(), label(n))
+                    .note(note(&s)),
+            ),
+            Some(_) => {}
+            None => seen.push((s, n)),
+        }
+    }
 }
 
 /// The values: their names, and the identifiers the generated code writes for them.

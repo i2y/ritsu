@@ -1,0 +1,10 @@
+error[E034]: The shape `rush` and the input `rush` become the one identifier `rush` in the generated code
+  --> tests/names/shape_named_like_an_input.rule:8
+  |
+4 | shape rush = jsonschema "orders.schema.json" "#/$defs/Order"
+  |       ^^^^ rush, a name with no alias
+8 |   rush : bool
+  |   ^^^^ rush, a name with no alias
+  |
+ A shape's identifier names a parameter of the function that reads the inputs out of the caller's objects (`<rule>_from`), and the inputs and the sequences no contract is read for are its parameters too, so the function takes one parameter twice: in the languages that write it (Python, TypeScript, JavaScript, Ruby and PHP) it does not compile. Give one of the two another alias.
+

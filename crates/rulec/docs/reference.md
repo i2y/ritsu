@@ -136,15 +136,16 @@ languages that write a name as it is — is written with `_` after it in every l
 (`class_`), `rulec api` names it so, and the name a value travels under — the keys of the input
 JSON, the records — stays the one declared. Where `class_` is already the identifier of another
 name of the rule, a number goes after it (`class_2`). W121 says which languages took the word,
-and an alias chooses the identifier instead.
+and an alias chooses the identifier instead. A parameter or a local hides nothing outside its own
+body, so the warning is raised for those only when the word is a keyword. It is a warning
+because a target you do not generate cannot hurt you.
 
 An identifier rulec makes — that `_`, and those of everything an `apply` or a contribution brings
 in (below) — is never one the rule has already, in any language's spelling of it: as it is, in
 camelCase or PascalCase, with case set aside (SQLite reads `"Credit"` and `"credit"` as one
 column), or cut to the 63 bytes PostgreSQL keeps of a name. Where it would be, it takes the first
-of `_2`, `_3`, … that is not. The names the rule declares keep theirs. A parameter or a local hides nothing outside its own
-body, so the warning is raised for those only when the word is a keyword. It is a warning
-because a target you do not generate cannot hurt you.
+of `_2`, `_3`, … that is not. The names the rule declares keep theirs, and are held to those
+spellings below.
 
 **One name, one declaration.** A name a file declares names one thing, and `check` stops at the
 second declaration of a name, with the first one marked (E034): an input declared again with
@@ -168,7 +169,35 @@ and the definition that decides it: writing the alias on the output's line is en
 that is the name of another value which has an alias of its own passes: `weight(size)` beside
 `size(extent)` is the value `size` to the rule and `extent` to the generated code, and nothing reads
 it two ways. In an `enums` file, an enum named like another enum's alias is E034, since `import
-enum` finds an enum by its name or by its alias.
+enum` finds an enum by its name or by its alias. Two names whose identifiers differ stop the check
+too where every language that writes them spells them as one: the types of two enums and two values
+of one enum, which are written in PascalCase (`tier_level` and `tierLevel` are both `TierLevel`,
+`basic` and `Basic` both `Basic`), the functions of two prerequisites blocks, named in snake_case
+(`core_path` and `corePath`), the element types of a rule's two sequences (`OrderLinesElement`), and
+a shape and an input or a sequence the caller passes as it is, which are parameters of one function,
+the one that reads the caller's objects.
+
+**Two names one language spells alike.** Each language writes an identifier its own way, and
+`check` holds the identifiers the rule declares to all of them. Two names whose identifiers differ
+as written but are one in some language's spelling are W121, which names the languages, the
+identifier each writes and why. The identifiers stay as the author wrote them, the generated code
+is written for every language, and an alias on one of the two sets them apart.
+
+`base_fee` and `baseFee`, for one, are both `baseFee` in Swift and Java.
+
+Two inputs whose fields are one in Go's `Input` struct (`fee` and `fee_`, both `Fee`), or whose
+fields in the `.proto` have one JSON name, meet there.
+
+`afee` and `aFee` are one column of the query to SQLite, and two long names that agree for the 63
+bytes PostgreSQL keeps of a name are one name to PostgreSQL. Two values of an enum that upper case
+makes one (`gold_plus` and `goldplus`, both `GOLDPLUS`) meet wherever the values are written in
+upper case.
+
+A name a language cannot take where its code puts it is W121 too: one that starts with a capital,
+which Ruby reads as a constant; an output of a rule with two or more, or a field of an element,
+that starts with `_`, which Python's `NamedTuple` does not take; an output or a table's row column
+longer than 63 bytes, whose column PostgreSQL returns under a cut name. An alias makes the name one
+the language takes.
 
 **Numbers** are digits, optionally with `_` as a separator, optionally preceded by `-`,
 optionally followed by a multiplier and then a unit:

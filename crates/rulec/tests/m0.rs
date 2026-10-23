@@ -251,6 +251,18 @@ fn 変異は決めたコードだけを出す() {
         ("m_w121.rule", &[("W121", 1)], "生成先の予約語と同じ別名（§15.103）"),
         ("m_w121rule.rule", &[("W121", 1)], "規則の名前を、自分の列挙と同じにした（Go の関数と型、Java のクラスと列挙がぶつかる。§15.239）"),
         ("m_w121ruleja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        // §15.263: two names some language spells as one identifier, and a name a language cannot
+        // take. The English rule, and its Japanese version beside it.
+        ("m_w121camel.rule", &[("W121", 1)], "残余に、Swift と Java が rate_off と同じに綴る別名 rateOff を付けた"),
+        ("m_w121camelja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121case.rule", &[("W121", 1)], "残余に、SQLite が rate_off と同じ列として読む別名 rate_OFF を付けた"),
+        ("m_w121caseja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121long.rule", &[("W121", 1)], "残余と率割引に、PostgreSQL が先頭の 63 バイトで同じ名前に切る長い別名を付けた"),
+        ("m_w121longja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121ruby.rule", &[("W121", 1)], "残余に、Ruby が定数として読む大文字で始まる別名 Margin を付けた"),
+        ("m_w121rubyja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_e034member.rule", &[("E034", 1)], "額引きに、どの言語でも率引きと同じ名前の値になる別名 Percent を付けた"),
+        ("m_e034memberja.rule", &[("E034", 1)], "上と同じ規則の日本語の版"),
         // §15.92. Five more codes that had no mutant. The syntax errors keep their minimal
         // example in the ledger — a misplaced character has no amount attached — but these
         // change what a real table answers, or what it is allowed to claim.

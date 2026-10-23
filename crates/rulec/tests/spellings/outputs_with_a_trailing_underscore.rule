@@ -1,0 +1,15 @@
+rule list_price v1
+description "Two outputs Go and the .proto spell alike, one a keyword of PHP"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  list  : money[USD]  round down(1USD)
+  list_ : money[USD]  round down(1USD)
+
+table price_by_qty
+policy unique
+| qty | -> list | list_ |
+| <=5 | 1USD    | 2USD  |
+| >5  | 3USD    | 4USD  |

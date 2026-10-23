@@ -1,0 +1,13 @@
+warning[W121]: `list` and `list_` are one identifier in the code generated for Go and Connect
+  --> tests/spellings/outputs_with_a_trailing_underscore.rule:9
+  |
+8 |   list  : money[USD]  round down(1USD)
+  |   ^^^^ the output's name
+9 |   list_ : money[USD]  round down(1USD)
+  |   ^^^^^ the output's name
+  |
+ Go: the outputs are the fields of the `Output` struct, in PascalCase, so both are `List`, and a struct cannot hold two fields of one name: it does not compile.
+ Connect: the outputs are the fields of `DecideResponse` in the `.proto`, and a field's JSON name drops each `_` and capitalizes the letter after it, so both are `list`: buf and protoc refuse two fields of one JSON name.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`list_(<alias>)`).
+
+ok tests/spellings/outputs_with_a_trailing_underscore.rule

@@ -1,0 +1,17 @@
+rule 一般会員の料金(basic_fee) v1
+description "名前が一つになる、一つの列挙の二つの値"
+
+enum 段階(tier) = 一般(basic) | 一般の家族(Basic) | ゴールド(gold)
+
+inputs
+  会員(member) : 段階
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 会員ごとの料金(fee_by_member)
+policy unique
+| 会員       | -> 料金 |
+| 一般       | 1USD    |
+| 一般の家族 | 2USD    |
+| ゴールド   | 3USD    |

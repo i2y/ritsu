@@ -1,0 +1,13 @@
+警告[W121]: `表示価格` と `表示価格の控え` は、Go・Connect の生成コードで同じ識別子になります
+  --> tests/spellings/下線だけ違う二つの出力.rule:9
+  |
+8 |   表示価格(list)   : money[USD]  round down(1USD)
+  |   ^^^^^^^^ 出力の別名
+9 |   表示価格の控え(list_) : money[USD]  round down(1USD)
+  |   ^^^^^^^^^^^^^^ 出力の別名
+  |
+ Go: 出力は `Output` 構造体のフィールドになり、名前を PascalCase で書くので、どちらも `List` です。一つの構造体に同じ名前のフィールドは置けないので、コンパイルできません。
+ Connect: 出力は `.proto` の `DecideResponse` のフィールドになります。フィールドの JSON の名前は、`_` を除いてその次の字を大文字にしたもので、どちらも `list` です。buf と protoc は、JSON の名前が同じ二つのフィールドをエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/下線だけ違う二つの出力.rule

@@ -1,0 +1,17 @@
+rule plus_fee v1
+description "Two values of an enum upper case makes one"
+
+enum tier = gold_plus | goldplus | basic
+
+inputs
+  member : tier
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member    | -> fee |
+| gold_plus | 1USD   |
+| goldplus  | 2USD   |
+| basic     | 3USD   |

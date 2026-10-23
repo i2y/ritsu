@@ -1,0 +1,15 @@
+rule 料金とチップの内訳(fee_and_tip_split) v1
+description "下線で始まる出力"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(_fee) : money[USD]  round down(1USD)
+  チップ(tip) : money[USD]  round down(1USD)
+
+table 数量ごとの内訳(by_qty)
+policy unique
+| 数量 | -> 料金 | チップ |
+| <=5  | 1USD    | 3USD   |
+| >5   | 2USD    | 4USD   |

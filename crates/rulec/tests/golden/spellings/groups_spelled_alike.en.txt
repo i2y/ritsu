@@ -1,0 +1,13 @@
+warning[W121]: `far_zone` and `farZone` are one identifier in the code generated for Go and Swift
+  --> tests/spellings/groups_spelled_alike.rule:6
+  |
+5 | group far_zone = north, south
+  |       ^^^^^^^^ the group's name
+6 | group farZone = east
+  |       ^^^^^^^ the group's name
+  |
+ Go: a group is a function that asks whether a value is in it, named `is` followed by the group's name in PascalCase, so both are `isFarZone`: one function is declared twice, which does not compile.
+ Swift: a group is a set of values, named `_` followed by the group's name in lowerCamelCase, so both are `_farZone`: one constant is declared twice, which does not compile.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`farZone(<alias>)`).
+
+ok tests/spellings/groups_spelled_alike.rule

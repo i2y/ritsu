@@ -340,8 +340,9 @@ impl Gen<'_> {
 
     /// One projected value in Python: an input's, or a field's of an element read from `_e`.
     pub(super) fn py_obj_read(&self, p: &Proj) -> String {
-        let root = self.ident(&p.root);
-        let root = if p.root == "_e" { "_e".to_string() } else { root };
+        // The shape's identifier, as the function's parameter is named (`Gen::proj_params`): not
+        // looked up among the values', which a value of the shape's name would answer (§15.263).
+        let root = p.root.clone();
         let pb = p.proto.is_some();
         match p.kind {
             ProjKind::Field => {
@@ -707,7 +708,7 @@ impl Gen<'_> {
 
     /// One projected value in TypeScript: an input's, or a field's of an element read from `_e`.
     pub(super) fn ts_obj_read(&self, p: &Proj) -> String {
-        let root = if p.root == "_e" { "_e".to_string() } else { self.ident(&p.root) };
+        let root = p.root.clone();
         let pb = p.proto.is_some();
         match p.kind {
             ProjKind::Field => {
@@ -1057,7 +1058,7 @@ impl Gen<'_> {
 
     /// One projected value in Ruby: an input's, or a field's of an element read from `e`.
     pub(super) fn rb_obj_read(&self, p: &Proj) -> String {
-        let root = if p.root == "e" { "e".to_string() } else { self.ident(&p.root) };
+        let root = p.root.clone();
         let pb = p.proto.is_some();
         match p.kind {
             ProjKind::Field => {

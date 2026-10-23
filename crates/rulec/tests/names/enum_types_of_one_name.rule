@@ -1,0 +1,19 @@
+rule tier_fee v1
+description "Two enums whose types take one name"
+
+enum tier_level = basic | gold
+enum tierLevel = low | high
+
+inputs
+  member : tier_level
+  band   : tierLevel
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | band | -> fee |
+| basic  | -    | 1USD   |
+| gold   | low  | 2USD   |
+| gold   | high | 3USD   |

@@ -1,0 +1,19 @@
+rule 地域ごとの料金(zone_fee) v1
+description "Go と Swift が同じに綴る二つのグループ"
+
+enum 地域(zone) = 北(north) | 南(south) | 東(east) | 西(west)
+group 遠い地域(far_zone) = 北, 南
+group 遠い東(farZone) = 東
+
+inputs
+  行き先(place) : 地域
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 地域ごとの料金(fee_by_zone)
+policy unique
+| 行き先   | -> 料金 |
+| 遠い地域 | 1USD    |
+| 遠い東   | 2USD    |
+| 西       | 3USD    |

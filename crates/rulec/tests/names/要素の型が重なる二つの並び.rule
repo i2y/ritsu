@@ -1,0 +1,16 @@
+rule 支払いと戻り(spent_and_back) v1
+description "要素の型の名前が一つになる二つの並び"
+
+elements 注文の明細(order_lines)
+  金額(amount) : money[USD]  range >=0USD <=100USD
+
+elements 返品の明細(orderLines)
+  戻り額(credit) : money[USD]  range >=0USD <=100USD
+
+outputs
+  合計(total) : money[USD]  round down(1USD)
+
+sum 支払い(spent) over 注文の明細 of 金額  range >=0USD <=1000USD
+sum 戻り(back) over 返品の明細 of 戻り額  range >=0USD <=1000USD
+
+define 合計 : money[USD] = 支払い + 戻り

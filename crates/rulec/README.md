@@ -283,9 +283,9 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              58 modules, and 10 more under codegen/
+src/              58 modules, and 11 more under codegen/
 tests/corpus/     143 rules, and the copies of the documents they cite
-tests/mutants/    198 files, each with one mistake planted in it
+tests/mutants/    208 files, each with one mistake planted in it
 tests/golden/     the diagnostic prose snapshot by snapshot: 95 in Japanese, 84 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```

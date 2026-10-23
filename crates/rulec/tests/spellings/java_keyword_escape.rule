@@ -1,0 +1,17 @@
+rule record_fee v1
+description "Two definitions Java spells alike, the first a keyword of Java"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define record : money[USD] = 3USD
+define record_ : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee  |
+| <=5 | record  |
+| >5  | record_ |

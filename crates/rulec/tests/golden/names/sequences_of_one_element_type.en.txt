@@ -1,0 +1,10 @@
+error[E034]: The element types of the sequences `order_lines` and `orderLines` take the one name `OrderLinesElement` in the generated code
+  --> tests/names/sequences_of_one_element_type.rule:7
+  |
+4 | elements order_lines
+  |          ^^^^^^^^^^^ order_lines, a name with no alias
+7 | elements orderLines
+  |          ^^^^^^^^^^ orderLines, a name with no alias
+  |
+ In a rule that walks two sequences or more, the type of an element is named by its sequence's identifier (the alias, or the name where there is none) in PascalCase with `Element` after it, so the generated code declares one type twice: in the languages that write types it does not compile, or one hides the other (TypeScript makes the two one type). Give one of the two another alias.
+

@@ -1,0 +1,17 @@
+rule 春の送料(spring_fee) v1
+description "PostgreSQL が一つの名前に切る二つの定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 春のキャンペーンが始まる前に受けた少ない注文の送料その一 : money[USD] = 3USD
+define 春のキャンペーンが始まる前に受けた少ない注文の送料その二 : money[USD] = 2USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料                                                  |
+| <=5  | 春のキャンペーンが始まる前に受けた少ない注文の送料その一 |
+| >5   | 春のキャンペーンが始まる前に受けた少ない注文の送料その二 |

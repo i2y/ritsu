@@ -1,0 +1,19 @@
+rule 段階ごとの料金(band_fee) v1
+description "型の名前が大文字と小文字だけ違う二つの列挙"
+
+enum 会員の段階(Tierlevel) = 一般(basic) | ゴールド(gold)
+enum 地域の段階(TierLevel) = 近い(low) | 遠い(high)
+
+inputs
+  会員(member) : 会員の段階
+  地域(band)   : 地域の段階
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 会員ごとの料金(fee_by_member)
+policy unique
+| 会員     | 地域 | -> 料金 |
+| 一般     | -    | 1USD    |
+| ゴールド | 近い | 2USD    |
+| ゴールド | 遠い | 3USD    |

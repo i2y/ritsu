@@ -1,0 +1,15 @@
+warning[W121]: `gold_plus` and `goldplus` are one identifier in the code generated for Python, TypeScript, JavaScript, Ruby, PHP, Java and Connect
+  --> tests/spellings/enum_values_in_upper_case.rule:4
+  |
+4 | enum tier = gold_plus | goldplus | basic
+  |             ^^^^^^^^^ the enum value's name
+4 | enum tier = gold_plus | goldplus | basic
+  |                         ^^^^^^^^ the enum value's name
+  |
+ Python, TypeScript, JavaScript and Java: an enum's values are written in upper case, so both are `GOLDPLUS`: one enum declares one name twice, which does not load, or one hides the other.
+ Ruby: an enum's values are constants in upper case, so both are `GOLDPLUS`: one module assigns one constant twice, and one overwrites the other.
+ PHP: an enum's values are written in upper case, so both are `GOLDPLUS`, and an enum cannot hold two cases of one name: the file does not load.
+ Connect: a value of an enum in the `.proto` is named by the enum's name and the value's in upper case, so both are `TIER_GOLDPLUS`, and buf and protoc refuse two values of one name.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`goldplus(<alias>)`).
+
+ok tests/spellings/enum_values_in_upper_case.rule

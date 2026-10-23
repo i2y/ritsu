@@ -1,0 +1,10 @@
+warning[W121]: `the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began` is longer than 63 bytes, and PostgreSQL cuts the name of its column
+  --> tests/spellings/postgresql_long_output.rule:8
+  |
+8 |   the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began : money[USD]  round down(1USD)
+  |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the output's name
+  |
+ SQL (PostgreSQL): PostgreSQL keeps the first 63 bytes of a name, so the column `the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began` the query and the function return is named `the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_`, and is not found under the name the generated file's header and `rulec api` give.
+ For a target you do not generate, leave it. For one you do, give it an alias that makes the column's name 63 bytes or fewer (`the_fee_for_an_order_placed_before_the_spring_campaign_of_2026_began(<alias>)`).
+
+ok tests/spellings/postgresql_long_output.rule

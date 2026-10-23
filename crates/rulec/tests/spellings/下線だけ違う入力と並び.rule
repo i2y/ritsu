@@ -1,0 +1,15 @@
+rule 注文の合計(order_total) v1
+description "Go と .proto が同じに綴る入力と並び"
+
+inputs
+  送料(lines_) : money[USD]  range >=0USD <=10USD
+
+elements 明細(lines)
+  金額(amount) : money[USD]  range >=0USD <=100USD
+
+outputs
+  合計(total) : money[USD]  round down(1USD)
+
+sum 支払い(spent) over 明細 of 金額  range >=0USD <=1000USD
+
+define 合計 : money[USD] = 支払い + 送料

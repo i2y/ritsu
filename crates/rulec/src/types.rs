@@ -2160,6 +2160,13 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         )));
     }
 
+    // Two names the author wrote that the generated code of some language spells as one
+    // identifier, and a name some language cannot take where its code puts it (§15.263): said for
+    // the languages where they meet, as an alias that is a keyword there is. Those every language
+    // spells as one stopped the check before it got here (E034, `names`).
+    let spelled = crate::codegen::spellings::warnings(f, &c, path);
+    c.diags.extend(spelled);
+
     // A table's or a clause's name is what the trace, an `overrides` line and a later version
     // refer to, and a source's is what a citation names, so two cannot share one (E034): the file's
     // own lines are held to that before anything is typed (`names`, §15.262). What an `apply` or a

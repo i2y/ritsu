@@ -1,0 +1,12 @@
+警告[W121]: `基本料金` と `追加料金` は、Swift・Java の生成コードで同じ識別子になります
+  --> tests/spellings/キャメルケースで重なる定義.rule:11
+   |
+10 | define 基本料金(base_fee) : money[USD] = 3USD
+   |        ^^^^^^^^ 定義の別名
+11 | define 追加料金(baseFee) : money[USD] = 2USD
+   |        ^^^^^^^^ 定義の別名
+   |
+ Swift・Java: 値の名前を lowerCamelCase で書くので、どちらも `baseFee` です。一つの関数に同じ名前の引数や変数が二つになり、組めないか、片方がもう片方を隠します。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/キャメルケースで重なる定義.rule

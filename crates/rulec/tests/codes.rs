@@ -141,9 +141,11 @@ fn 台帳の別の形の再現はその形を出す() {
     // with a value outside the range of an input of an ordered enum (§15.252), and with a value that
     // may be absent (§15.255); E121 with a path that goes on through a collection (§15.254); E034
     // with an enum's value written twice, two names of one identifier, a column twice in a table's
-    // heading, and the label of two rows (§15.262)
+    // heading, and the label of two rows (§15.262), and two enums whose types take one name; W121 with
+    // two names Swift and Java spell alike, two SQLite reads as one column, two PostgreSQL cuts to
+    // one, and a name Ruby reads as a constant (§15.263)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121"]);
+    assert_eq!(with, ["E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121", "W121"]);
     // Each by its place among the entry's other forms; `None` is the last.
     for (code, form, says) in [
         ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
@@ -157,6 +159,11 @@ fn 台帳の別の形の再現はその形を出す() {
         ("E034", Some(0), [(Lang::En, "Enum `member_kind` has the value `basic` twice"), (Lang::Ja, "列挙 `会員区分` の値 `一般` が二度書かれています")]),
         ("E034", Some(1), [(Lang::En, "`weight` and `width` become the one identifier `w` in the generated code"), (Lang::Ja, "`重さ` と `長さ` が、生成するコードで同じ識別子 `weight` になります")]),
         ("E034", Some(2), [(Lang::En, "The heading has the column `weight` twice"), (Lang::Ja, "見出しに列 `重さ` が二度あります")]),
+        ("E034", Some(3), [(Lang::En, "The types of enums `tier_level` and `tierLevel` take the one name `TierLevel`"), (Lang::Ja, "列挙 `会員の段階` と `地域の段階` の型が、生成するコードで同じ名前 `TierLevel` になります")]),
+        ("W121", Some(0), [(Lang::En, "`base_fee` and `baseFee` are one identifier in the code generated for Swift and Java"), (Lang::Ja, "`基本料金` と `追加料金` は、Swift・Java の生成コードで同じ識別子になります")]),
+        ("W121", Some(1), [(Lang::En, "`afee` and `aFee` are one identifier in the code generated for SQL (SQLite)"), (Lang::Ja, "`基本料金` と `追加料金` は、SQL（SQLite）の生成コードで同じ識別子になります")]),
+        ("W121", Some(2), [(Lang::En, "are one identifier in the code generated for SQL (PostgreSQL)"), (Lang::Ja, "は、SQL（PostgreSQL）の生成コードで同じ識別子になります")]),
+        ("W121", None, [(Lang::En, "`Base` starts with a capital letter, which the code generated for Ruby cannot take"), (Lang::Ja, "`Base` は大文字で始まるので、Ruby の生成コードでは使えません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
     ] {
         let e = rulec::codes::find(code).unwrap();

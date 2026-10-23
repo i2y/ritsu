@@ -1,0 +1,16 @@
+rule 件数ごとの料金(fee_by_count) v1
+description "SQLite が表の行の番号の列と同じに読む定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+define 割増の料金(fee_by_qty_ROW) : money[USD] = 7USD
+
+table 数量ごとの料金(fee_by_qty)
+policy unique
+| 数量 | -> 料金    |
+| <=5  | 割増の料金 |
+| >5   | 2USD       |

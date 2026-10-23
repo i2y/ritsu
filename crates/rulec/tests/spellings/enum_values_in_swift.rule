@@ -1,0 +1,17 @@
+rule level_fee v1
+description "Two values of an enum that differ only in the case of a run of capitals"
+
+enum level = LOW | low | gold
+
+inputs
+  member : level
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | -> fee |
+| LOW    | 1USD   |
+| low    | 2USD   |
+| gold   | 3USD   |

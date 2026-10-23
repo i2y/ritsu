@@ -1,0 +1,13 @@
+warning[W121]: `Tierlevel` and `TierLevel` are one identifier in the code generated for PHP and Java
+  --> tests/spellings/enum_types_differ_in_case.rule:5
+  |
+4 | enum Tierlevel = basic | gold
+  |      ^^^^^^^^^ the enum's name
+5 | enum TierLevel = low | high
+  |      ^^^^^^^^^ the enum's name
+  |
+ PHP: the enums' types are `Tierlevel` and `TierLevel`, and PHP reads the names of classes and enums with case set aside, so one enum is declared twice: the file does not load.
+ Java: an enum's type is nested in the rule's class, and javac writes the two to `BandFee$Tierlevel.class` and `BandFee$TierLevel.class`: on a file system that sets case aside (the default of macOS and Windows) the two files are one, and one of the types does not load.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`TierLevel(<alias>)`).
+
+ok tests/spellings/enum_types_differ_in_case.rule

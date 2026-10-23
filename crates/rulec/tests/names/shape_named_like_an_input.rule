@@ -1,0 +1,17 @@
+rule rush_gift_fee v1
+description "A shape named as an input the caller passes as it is"
+
+shape rush = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  gift : bool  from rush.gift
+  rush : bool
+
+outputs
+  fee : number  round down(1)
+
+table by_rush
+policy unique
+| rush  | gift | -> fee |
+| true  | -    | 10     |
+| false | -    | 5      |

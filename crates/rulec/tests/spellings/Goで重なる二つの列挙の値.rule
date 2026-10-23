@@ -1,0 +1,19 @@
+rule プランの料金(plan_fee) v1
+description "Go の定数の名前が一つになる、二つの列挙の値"
+
+enum プラン(plan) = ゴールドプラス(gold_plus) | 一般(basic)
+enum ゴールドの区分(plan_gold) = 上乗せ(plus) | 割引(minus)
+
+inputs
+  会員(member) : プラン
+  追加(extra)  : ゴールドの区分
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table プランごとの料金(fee_by_plan)
+policy unique
+| 会員           | 追加   | -> 料金 |
+| ゴールドプラス | -      | 1USD    |
+| 一般           | 上乗せ | 2USD    |
+| 一般           | 割引   | 3USD    |

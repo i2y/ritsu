@@ -1,0 +1,10 @@
+エラー[E034]: `shape` の `注文` と入力 `急ぎ` が、生成するコードで同じ識別子 `rush` になります
+  --> tests/names/入力と同じ名前のshape.rule:8
+  |
+4 | shape 注文(rush) = jsonschema "orders.schema.json" "#/$defs/Order"
+  |       ^^^^ 注文 の別名 rush
+8 |   急ぎ(rush)   : bool
+  |   ^^^^ 急ぎ の別名 rush
+  |
+ `shape` の識別子は、呼ぶ側のオブジェクトから入力を読む関数（`<規則>_from`）の引数の名前になり、契約から読まない入力と並びも、同じ関数の引数です。同じ名前の引数が二つになり、その関数を書く言語（Python・TypeScript・JavaScript・Ruby・PHP）で組めません。どちらかに別の別名を付けてください。
+

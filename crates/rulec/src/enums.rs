@@ -8,7 +8,7 @@
 //! can be derived from the other, so what is checked is that they agree (E032), and that no
 //! value arrived without anyone deciding what the table does with it (E033).
 
-use crate::ast::{EnumFrom, EnumImport, EnumOwner, EnumSource, FileKind, Name, RuleFile};
+use crate::ast::{EnumDecl, EnumFrom, EnumImport, EnumOwner, EnumSource, FileKind, Name, RuleFile};
 use crate::diag::{Diag, Severity, Span};
 use crate::jsonschema::{self, Found};
 use crate::types::Checked;
@@ -207,6 +207,33 @@ pub fn read_imports(f: &mut RuleFile, rule_path: &str) -> Vec<Diag> {
             );
         } else {
             seen.push((e.name.text.clone(), e.name.span.clone()));
+        }
+    }
+    // Two enums whose types take one name in the generated code (§15.263): the type of one read with
+    // `import enum` is its file's, whatever this rule calls it, and the rule's module names it so.
+    let type_of = |e: &EnumDecl| match &e.from {
+        Some(o) => crate::codegen::spellings::enum_type(&o.name.ascii.clone().unwrap_or_else(|| o.name.text.clone())),
+        None => crate::codegen::spellings::enum_type(&e.name.ascii.clone().unwrap_or_else(|| e.name.text.clone())),
+    };
+    // One enum of one file is one type, however many lines read it.
+    let whose = |e: &EnumDecl| e.from.as_ref().map(|o| (o.path.clone(), o.name.text.clone()));
+    let mut tseen: Vec<(String, &EnumDecl)> = Vec::new();
+    for e in taken.iter().chain(f.enums.iter()) {
+        let t = type_of(e);
+        match tseen.iter().find(|(k, _)| *k == t) {
+            Some((_, first)) if first.name.text != e.name.text && (whose(first).is_none() || whose(first) != whose(e)) => out.push(
+                Diag::error("E034", tr!("列挙 `{}` と `{}` の型が、生成するコードで同じ名前 `{t}` になります", "The types of enums `{}` and `{}` take the one name `{t}` in the generated code", first.name.text, e.name.text))
+                    .at(format!("{rule_path}:{}", e.span.line))
+                    .mark(first.name.span.clone(), "")
+                    .mark(e.name.span.clone(), "")
+                    .note(tr!(
+                        "`import {} … from` で読んだ列挙は、そのファイルの型の名前で生成するコードに入り、この規則の列挙の型と同じ名前になります。規則のモジュールに同じ名前の型が二つになり、組めないか、片方がもう片方を隠します（SQL と NumPy は型を書かず、Java は読んだ列挙をそのファイルのクラスの名前で書きます）。この規則の列挙に別の別名を付けてください。",
+                        "An enum read with `import {} … from` comes into the generated code under its file's type, which is the name of this rule's enum's type too, so the rule's module holds two types of one name: it does not compile, or one hides the other (SQL and NumPy write no types, and Java writes the enum it reads by its file's class). Give this rule's enum another alias.",
+                        crate::kw::ENUM
+                    )),
+            ),
+            Some(_) => {}
+            None => tseen.push((t, e)),
         }
     }
     let mut gseen: Vec<String> = f.groups.iter().map(|g| g.name.text.clone()).collect();

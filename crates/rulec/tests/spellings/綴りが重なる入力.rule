@@ -1,0 +1,11 @@
+rule 二つの料金(two_fees) v1
+description "Go・Swift・Java と .proto が同じに綴る二つの入力"
+
+inputs
+  基本料金(base_fee) : money[USD]  range >=0USD <=10USD
+  追加料金(baseFee)  : money[USD]  range >=0USD <=10USD
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+define 料金 : money[USD] = 基本料金 + 追加料金

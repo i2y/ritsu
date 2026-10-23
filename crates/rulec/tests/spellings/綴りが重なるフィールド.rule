@@ -1,0 +1,14 @@
+rule 明細の合計(line_total) v1
+description "Go・Swift・Java と .proto が同じに綴る、一つの要素の二つのフィールド"
+
+elements 明細(lines)
+  単価(unit_fee) : money[USD]  range >=0USD <=100USD
+  返金(unitFee)  : money[USD]  range >=0USD <=100USD
+
+outputs
+  合計(total) : money[USD]  round down(1USD)
+
+sum 支払い(spent) over 明細 of 単価  range >=0USD <=1000USD
+sum 戻り(back) over 明細 of 返金  range >=0USD <=1000USD
+
+define 合計 : money[USD] = 支払い + 戻り

@@ -1,0 +1,19 @@
+rule zone_fee v1
+description "Two groups Go and Swift spell alike"
+
+enum zone = north | south | east | west
+group far_zone = north, south
+group farZone = east
+
+inputs
+  place : zone
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_zone
+policy unique
+| place    | -> fee |
+| far_zone | 1USD   |
+| farZone  | 2USD   |
+| west     | 3USD   |

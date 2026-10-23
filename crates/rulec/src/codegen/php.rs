@@ -88,6 +88,13 @@ pub(super) fn php_var_pub(s: &str) -> String {
     php_var(s)
 }
 
+/// A property of `Output` or of an element: the promoted parameter of its constructor, so the
+/// variable's name without its `$`, read as it is declared (§15.263). A keyword is a property's name
+/// as it stands (`$out->list`); `$this` and the superglobals are not a parameter's, and take `_`.
+pub(super) fn php_prop(s: &str) -> String {
+    php_var(s).trim_start_matches('$').to_string()
+}
+
 /// A string literal. Single quotes, so that a `$` inside a table name or a label is a
 /// dollar sign and not the start of an interpolation.
 pub(super) fn php_str(s: &str) -> String {
@@ -620,7 +627,7 @@ impl<'a> Gen<'a> {
     fn php_walk(&self, s: usize, body_items: &[usize], sums: &[usize], outer: &dyn Fn(&str) -> String, trace: &str) -> String {
         let el = &self.f.elements[s];
         let seq = php_var(&pub_name(&el.name));
-        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), php_name(&pub_name(&fd.name)))).collect();
+        let fields: BTreeMap<String, String> = el.fields.iter().map(|fd| (fd.name.text.clone(), php_prop(&pub_name(&fd.name)))).collect();
         let e = php_var(&self.elem_var(s));
         let local = |n: &str| -> String {
             match fields.get(n) {
@@ -1158,7 +1165,7 @@ impl<'a> Gen<'a> {
         let (v_out, v_trace, v_tag) = (php_var(&out), php_var(&trace), php_var(&tag));
         let (ins, obs) = self.record_fields(
             |a, _| php_var(a),
-            |_, a, _| if single { v_out.clone() } else { format!("{v_out}->{}", php_name(a)) },
+            |_, a, _| if single { v_out.clone() } else { format!("{v_out}->{}", php_prop(a)) },
         );
         let ret = if single {
             self.php_ty(&self.ty_of(&self.f.outputs[0].name.text))
@@ -1220,7 +1227,7 @@ impl<'a> Gen<'a> {
                     format!(
                         "'\"{}\":' . {}",
                         fd.name.text,
-                        Self::php_wire(&format!("{e}->{}", php_name(&pub_name(&fd.name))), &wire_of(&ty))
+                        Self::php_wire(&format!("{e}->{}", php_prop(&pub_name(&fd.name))), &wire_of(&ty))
                     )
                 })
                 .collect();

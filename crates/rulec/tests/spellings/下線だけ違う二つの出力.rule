@@ -1,0 +1,15 @@
+rule 表示価格(list_price) v1
+description "Go と .proto が同じに綴る二つの出力。一つは PHP の予約語"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  表示価格(list)   : money[USD]  round down(1USD)
+  表示価格の控え(list_) : money[USD]  round down(1USD)
+
+table 数量ごとの価格(price_by_qty)
+policy unique
+| 数量 | -> 表示価格 | 表示価格の控え |
+| <=5  | 1USD        | 2USD           |
+| >5   | 3USD        | 4USD           |

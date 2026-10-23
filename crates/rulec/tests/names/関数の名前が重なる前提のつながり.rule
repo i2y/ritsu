@@ -1,0 +1,27 @@
+rule 科目の順ごとの料金(course_path_fee) v1
+description "関数の名前が一つになる二つの前提のつながり"
+
+enum 科目(course) = 入門(intro) | 発展(advanced) | 総まとめ(capstone)
+
+inputs
+  受講(taking) : 科目
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 科目ごとの料金(fee_by_course)
+policy unique
+| 受講     | -> 料金 |
+| 入門     | 1USD    |
+| 発展     | 2USD    |
+| 総まとめ | 3USD    |
+
+prerequisites 基本の順(core_path) over 科目
+  start    入門
+  発展     requires 入門
+  総まとめ requires 発展
+
+prerequisites 近道(corePath) over 科目
+  start    入門
+  発展     requires 入門
+  総まとめ requires 入門

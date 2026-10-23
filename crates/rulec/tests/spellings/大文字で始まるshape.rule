@@ -1,0 +1,16 @@
+rule 急ぎの料金(rush_fee) v1
+description "Ruby が定数として読む shape"
+
+shape 注文(Order) = jsonschema "orders.schema.json" "#/$defs/Order"
+
+inputs
+  急ぎ(rush) : bool  from 注文.rush
+
+outputs
+  料金(fee) : number  round down(1)
+
+table 急ぎかどうか(by_rush)
+policy unique
+| 急ぎ  | -> 料金 |
+| true  | 10      |
+| false | 5       |

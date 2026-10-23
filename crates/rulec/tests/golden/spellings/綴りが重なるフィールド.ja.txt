@@ -1,0 +1,14 @@
+警告[W121]: `単価` と `返金` は、Go・Swift・Java・Connect の生成コードで同じ識別子になります
+  --> tests/spellings/綴りが重なるフィールド.rule:6
+  |
+5 |   単価(unit_fee) : money[USD]  range >=0USD <=100USD
+  |   ^^^^ 要素のフィールドの別名
+6 |   返金(unitFee)  : money[USD]  range >=0USD <=100USD
+  |   ^^^^ 要素のフィールドの別名
+  |
+ Go: 要素のフィールドは `Element` 構造体のフィールドになり、名前を PascalCase で書くので、どちらも `UnitFee` です。一つの構造体に同じ名前のフィールドは置けないので、コンパイルできません。
+ Swift・Java: 要素のフィールドは `Element` のフィールドになり、名前を lowerCamelCase で書くので、どちらも `unitFee` です。一つの型に同じ名前のフィールドは置けないので、組めません。
+ Connect: 要素のフィールドは `.proto` の `Element` のフィールドになります。フィールドの JSON の名前は、`_` を除いてその次の字を大文字にしたもので、どちらも `unitFee` です。buf と protoc は、JSON の名前が同じ二つのフィールドをエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/綴りが重なるフィールド.rule

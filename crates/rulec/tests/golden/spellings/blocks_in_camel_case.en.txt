@@ -1,0 +1,13 @@
+warning[W121]: `core__path` and `corePath` are one identifier in the code generated for TypeScript, JavaScript, Go, Swift and Java
+  --> tests/spellings/blocks_in_camel_case.rule:24
+   |
+19 | prerequisites core__path over course
+   |               ^^^^^^^^^^ the prerequisites's name
+24 | prerequisites corePath over course
+   |               ^^^^^^^^ the prerequisites's name
+   |
+ TypeScript, JavaScript, Swift and Java: the functions of a prerequisites block (`<name>Requires` and `<name>Available`) are written in lowerCamelCase, so both are `corePathRequires`: one function is declared twice, which does not compile.
+ Go: the functions of a prerequisites block (`<Name>Requires` and `<Name>Available`) are written in PascalCase, so both are `CorePathRequires`: one function is declared twice, which does not compile.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`corePath(<alias>)`).
+
+ok tests/spellings/blocks_in_camel_case.rule

@@ -1,0 +1,17 @@
+rule 記録の料金(record_fee) v1
+description "Java が同じに綴る二つの定義。一つ目は Java の予約語"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+define 記録(record) : money[USD] = 3USD
+define 記録の控え(record_) : money[USD] = 2USD
+
+table 数量ごとの料金(fee_by_qty)
+policy unique
+| 数量 | -> 料金    |
+| <=5  | 記録       |
+| >5   | 記録の控え |

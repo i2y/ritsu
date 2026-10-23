@@ -1,0 +1,17 @@
+rule 少額の送料(small_fee) v1
+description "SQLite が一つの列として読む二つの定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+define 基本料金(afee) : money[USD] = 3USD
+define 追加料金(aFee) : money[USD] = 2USD
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料  |
+| <=5  | 基本料金 |
+| >5   | 追加料金 |

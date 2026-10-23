@@ -1,0 +1,10 @@
+warning[W121]: The column `the_fee_of_an_order_placed_before_the_spring_campaign_of_2026_row` of the row number of table `the_fee_of_an_order_placed_before_the_spring_campaign_of_2026` is longer than 63 bytes, and PostgreSQL cuts its name
+  --> tests/spellings/postgresql_long_table.rule:10
+   |
+10 | table the_fee_of_an_order_placed_before_the_spring_campaign_of_2026
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the table's name
+   |
+ SQL (PostgreSQL): the query and the function return the number of the row the table matched in the column `the_fee_of_an_order_placed_before_the_spring_campaign_of_2026_row`, and PostgreSQL keeps the first 63 bytes of a name, so the column is named `the_fee_of_an_order_placed_before_the_spring_campaign_of_2026_r`, and is not found under the name the generated file's header and `rulec api` give.
+ For a target you do not generate, leave it. For one you do, give it an alias that makes the column's name 63 bytes or fewer (`the_fee_of_an_order_placed_before_the_spring_campaign_of_2026(<alias>)`).
+
+ok tests/spellings/postgresql_long_table.rule

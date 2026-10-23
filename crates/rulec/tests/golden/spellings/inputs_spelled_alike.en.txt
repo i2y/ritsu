@@ -1,0 +1,14 @@
+warning[W121]: `base_fee` and `baseFee` are one identifier in the code generated for Go, Swift, Java and Connect
+  --> tests/spellings/inputs_spelled_alike.rule:6
+  |
+5 |   base_fee : money[USD]  range >=0USD <=10USD
+  |   ^^^^^^^^ the input's name
+6 |   baseFee  : money[USD]  range >=0USD <=10USD
+  |   ^^^^^^^ the input's name
+  |
+ Go: the inputs and the sequences are the fields of the `Input` struct, in PascalCase, so both are `BaseFee`, and a struct cannot hold two fields of one name: it does not compile.
+ Swift and Java: a value is written in lowerCamelCase, so both are `baseFee`: one function declares one name twice, which does not compile, or one hides the other.
+ Connect: the inputs and the sequences are the fields of `DecideRequest` in the `.proto`, and a field's JSON name drops each `_` and capitalizes the letter after it, so both are `baseFee`: buf and protoc refuse two fields of one JSON name.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`baseFee(<alias>)`).
+
+ok tests/spellings/inputs_spelled_alike.rule

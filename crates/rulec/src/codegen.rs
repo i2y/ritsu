@@ -304,6 +304,8 @@ pub use prereq::prereq_fn_names;
 mod chances;
 /// How the projection function reads the caller's object (§15.234).
 mod from;
+/// The ways the generators spell the author's names, held against one another (§15.263).
+pub mod spellings;
 pub use chances::chances_fn_name;
 pub use connect::template as connect_template;
 pub use connect::{buf_gen_yaml, buf_lock, buf_yaml, BufDeps, Contracts};
@@ -12425,7 +12427,7 @@ impl<'a> Gen<'a> {
         // signature says what the method takes without naming the object's own type, which
         // is the whole of the line this tool draws there.
         if self.projects() {
-            let mut from: Vec<String> = self.proj_params().iter().map(|r| format!("Hash[String, untyped] {}", self.ident(r))).collect();
+            let mut from: Vec<String> = self.proj_params().iter().map(|r| format!("Hash[String, untyped] {r}")).collect();
             from.extend(
                 self.proj_rest()
                     .iter()
@@ -14901,7 +14903,7 @@ impl<'a> Gen<'a> {
     /// The parameters of the Python projection function, with their types: the objects, the
     /// inputs no `from` reaches, and the sequences no `from` takes out of an object (§15.223).
     fn py_from_params(&self) -> Vec<String> {
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{}: dict[str, Any]", self.ident(r))).collect();
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{r}: dict[str, Any]")).collect();
         params.extend(self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.py_ty(&self.ty_of(&i.name.text)))));
         for s in self.proj_seq_rest() {
             params.push(format!("{}: list[{}]", pub_name(&self.f.elements[s].name), self.element_type(s)));
@@ -14928,7 +14930,7 @@ impl<'a> Gen<'a> {
     /// The parameters of the TypeScript projection function, with their types, in the order
     /// `py_from_params` gives them (§15.223).
     fn ts_from_params(&self) -> Vec<String> {
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{}: _Obj", self.ident(r))).collect();
+        let mut params: Vec<String> = self.proj_params().iter().map(|r| format!("{r}: _Obj")).collect();
         params.extend(self.proj_rest().iter().map(|i| format!("{}: {}", pub_name(&i.name), self.ts_ty(&self.ty_of(&i.name.text)))));
         for s in self.proj_seq_rest() {
             params.push(format!("{}: {}[]", pub_name(&self.f.elements[s].name), self.element_type(s)));
@@ -14938,7 +14940,7 @@ impl<'a> Gen<'a> {
 
     /// The parameters with no types, as JavaScript and Ruby write them.
     fn plain_from_params(&self) -> Vec<String> {
-        let mut params: Vec<String> = self.proj_params().iter().map(|r| self.ident(r)).collect();
+        let mut params: Vec<String> = self.proj_params();
         params.extend(self.proj_rest().iter().map(|i| pub_name(&i.name)));
         params.extend(self.proj_seq_rest().into_iter().map(|s| pub_name(&self.f.elements[s].name)));
         params

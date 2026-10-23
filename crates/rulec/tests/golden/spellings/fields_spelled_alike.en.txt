@@ -1,0 +1,14 @@
+warning[W121]: `unit_fee` and `unitFee` are one identifier in the code generated for Go, Swift, Java and Connect
+  --> tests/spellings/fields_spelled_alike.rule:6
+  |
+5 |   unit_fee : money[USD]  range >=0USD <=100USD
+  |   ^^^^^^^^ the element field's name
+6 |   unitFee  : money[USD]  range >=0USD <=100USD
+  |   ^^^^^^^ the element field's name
+  |
+ Go: the fields of an element are the fields of the `Element` struct, in PascalCase, so both are `UnitFee`, and a struct cannot hold two fields of one name: it does not compile.
+ Swift and Java: the fields of an element are the fields of `Element`, in lowerCamelCase, so both are `unitFee`, and a type cannot hold two fields of one name: it does not compile.
+ Connect: the fields of an element are the fields of `Element` in the `.proto`, and a field's JSON name drops each `_` and capitalizes the letter after it, so both are `unitFee`: buf and protoc refuse two fields of one JSON name.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`unitFee(<alias>)`).
+
+ok tests/spellings/fields_spelled_alike.rule

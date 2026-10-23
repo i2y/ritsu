@@ -1309,6 +1309,28 @@ fn extend(f: &mut RuleFile, path: &str, e: &ExtendDecl, cname: &str, shown: &str
                 .note(tr!("足すのは、まだ無い値です。綴りを確かめてください。", "What is added is a value the enum does not have; check the spelling.")),
         ];
     }
+    // A value every language writes as one of the enum's (§15.263): `Web` beside `web` is `Web` in
+    // Rust and Go and `WEB` where the members are in upper case.
+    let id = |n: &Name| n.ascii.clone().unwrap_or_else(|| n.text.clone());
+    let member = crate::codegen::spellings::member(&id(&e.value));
+    if let Some(v) = d.values.iter().find(|v| crate::codegen::spellings::member(&id(v)) == member) {
+        let (added, enum_name, value) = (&e.value.text, &e.enum_name.text, &v.text);
+        return vec![
+            Diag::error(
+                "E034",
+                tr!(
+                    "寄与が足す値 `{added}` は、列挙 {enum_name} の値 `{value}` と、生成するコードで同じ名前になります",
+                    "The value `{added}` the contribution adds takes the name of the value `{value}` of the enum {enum_name} in the generated code"
+                ),
+            )
+            .at(at)
+            .mark(e.value.span.clone(), "")
+            .note(tr!(
+                "列挙の値は、識別子（別名、無ければ名前）を PascalCase にした名前（どちらも `{member}`）で書き、言語によってはそれを大文字か lowerCamelCase にします。合わせた規則の列挙に同じ名前の値が二つになるので、足す値に別の名前か別名を付けてください。",
+                "A value of an enum is written by its identifier (the alias, or the name where there is none) in PascalCase (both are `{member}`), which some languages then put in upper case or in lowerCamelCase, so the merged rule's enum would declare one value twice. Give the value it adds another name or an alias."
+            )),
+        ];
+    }
     let pos = match (&e.after, d.ordered) {
         (Some(a), true) => match d.values.iter().position(|v| v.text == a.text) {
             Some(p) => p + 1,

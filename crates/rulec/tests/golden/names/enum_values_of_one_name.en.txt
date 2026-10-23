@@ -1,0 +1,10 @@
+error[E034]: The values `basic` and `Basic` of enum `tier` take one name in the generated code
+  --> tests/names/enum_values_of_one_name.rule:4
+  |
+4 | enum tier = basic | Basic | gold
+  |             ^^^^^ basic, a name with no alias
+4 | enum tier = basic | Basic | gold
+  |                     ^^^^^ Basic, a name with no alias
+  |
+ A value of an enum is written by its identifier (the alias, or the name where there is none) in PascalCase (both are `Basic`), which some languages then put in upper case or in lowerCamelCase, so one enum declares one value twice: in every language that writes the values by name (all but SQL and NumPy) it does not compile, or one hides the other. Give one of the two another alias.
+

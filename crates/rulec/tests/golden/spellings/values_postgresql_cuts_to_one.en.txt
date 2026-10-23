@@ -1,0 +1,12 @@
+warning[W121]: `the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began` and `the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended` are one identifier in the code generated for SQL (PostgreSQL)
+  --> tests/spellings/values_postgresql_cuts_to_one.rule:11
+   |
+10 | define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began : money[USD] = 3USD
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the definition's name
+11 | define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended : money[USD] = 2USD
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the definition's name
+   |
+ SQL (PostgreSQL): a value is a column of the query and of the function, and PostgreSQL keeps the first 63 bytes of a name, so both are `the_fee_for_a_small_order_placed_before_the_spring_campaign_of_`: on PostgreSQL the query and the function stop at a column they cannot tell apart.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended(<alias>)`).
+
+ok tests/spellings/values_postgresql_cuts_to_one.rule

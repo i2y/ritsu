@@ -1,0 +1,16 @@
+rule fee_by_count v1
+description "A definition SQLite reads as the row column of a table"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define fee_by_qty_ROW : money[USD] = 7USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee         |
+| <=5 | fee_by_qty_ROW |
+| >5  | 2USD           |

@@ -1,0 +1,10 @@
+error[E034]: The functions of the prerequisites `core_path` and `corePath` take one name in the generated code
+  --> tests/names/blocks_of_one_name.rule:24
+   |
+19 | prerequisites core_path over course
+   |               ^^^^^^^^^ core_path, a name with no alias
+24 | prerequisites corePath over course
+   |               ^^^^^^^^ corePath, a name with no alias
+   |
+ The functions of a prerequisites block are named by its identifier (the alias, or the name where there is none) in snake_case (both are `core_path`) with `_requires` and `_available` after it, which some languages then write in lowerCamelCase or PascalCase, so the generated code declares one function twice: in every language that writes them it does not compile, or one hides the other. Give one of the two another alias.
+

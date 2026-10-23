@@ -1,0 +1,17 @@
+rule basic_fee v1
+description "Two values of one enum whose members take one name"
+
+enum tier = basic | Basic | gold
+
+inputs
+  member : tier
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_member
+policy unique
+| member | -> fee |
+| basic  | 1USD   |
+| Basic  | 2USD   |
+| gold   | 3USD   |

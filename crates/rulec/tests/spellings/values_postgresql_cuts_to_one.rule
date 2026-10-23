@@ -1,0 +1,17 @@
+rule spring_fee v1
+description "Two definitions PostgreSQL cuts to one name"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began : money[USD] = 3USD
+define the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended : money[USD] = 2USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee                                                                    |
+| <=5 | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_began |
+| >5  | the_fee_for_a_small_order_placed_before_the_spring_campaign_of_2026_ended |

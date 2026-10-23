@@ -1,0 +1,14 @@
+警告[W121]: `基本料金` と `追加料金` は、Go・Swift・Java・Connect の生成コードで同じ識別子になります
+  --> tests/spellings/綴りが重なる入力.rule:6
+  |
+5 |   基本料金(base_fee) : money[USD]  range >=0USD <=10USD
+  |   ^^^^^^^^ 入力の別名
+6 |   追加料金(baseFee)  : money[USD]  range >=0USD <=10USD
+  |   ^^^^^^^^ 入力の別名
+  |
+ Go: 入力と並びは `Input` 構造体のフィールドになり、名前を PascalCase で書くので、どちらも `BaseFee` です。一つの構造体に同じ名前のフィールドは置けないので、コンパイルできません。
+ Swift・Java: 値の名前を lowerCamelCase で書くので、どちらも `baseFee` です。一つの関数に同じ名前の引数や変数が二つになり、組めないか、片方がもう片方を隠します。
+ Connect: 入力と並びは `.proto` の `DecideRequest` のフィールドになります。フィールドの JSON の名前は、`_` を除いてその次の字を大文字にしたもので、どちらも `baseFee` です。buf と protoc は、JSON の名前が同じ二つのフィールドをエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/綴りが重なる入力.rule

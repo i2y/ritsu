@@ -1,0 +1,12 @@
+warning[W121]: `record` and `record_` are one identifier in the code generated for Java
+  --> tests/spellings/java_keyword_escape.rule:11
+   |
+10 | define record : money[USD] = 3USD
+   |        ^^^^^^ the definition's name
+11 | define record_ : money[USD] = 2USD
+   |        ^^^^^^^ the definition's name
+   |
+ Java: a name that is a keyword of Java is written with `_` after it, so both are `record_`: one function declares one name twice, which does not compile.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`record_(<alias>)`).
+
+ok tests/spellings/java_keyword_escape.rule

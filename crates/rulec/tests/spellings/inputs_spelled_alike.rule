@@ -1,0 +1,11 @@
+rule two_fees v1
+description "Two inputs Go, Swift, Java and the .proto spell alike"
+
+inputs
+  base_fee : money[USD]  range >=0USD <=10USD
+  baseFee  : money[USD]  range >=0USD <=10USD
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define fee : money[USD] = base_fee + baseFee
