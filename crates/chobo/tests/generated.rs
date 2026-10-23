@@ -308,7 +308,9 @@ fn e063_keeps_out_what_rustc_keeps_out() {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("Cargo.toml"), format!("[package]\nname = \"{name}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[lib]\npath = \"lib.rs\"\n\n[workspace]\n")).unwrap();
         std::fs::write(dir.join("lib.rs"), text).unwrap();
-        cargo_in(&dir).args(["check", "--offline", "--quiet", "--lib"]).output().unwrap()
+        // rustc's errors are read below by their words, so they come with no colour, whatever
+        // CARGO_TERM_COLOR the run has (CI sets `always`)
+        cargo_in(&dir).args(["check", "--offline", "--quiet", "--lib", "--color", "never"]).output().unwrap()
     };
     let out = check("xid-let-in", &good);
     assert!(out.status.success(), "rustc keeps out a character E063 lets in:\n{}", String::from_utf8_lossy(&out.stderr).lines().take(40).collect::<Vec<_>>().join("\n"));
