@@ -1,6 +1,8 @@
-//! The words the five targets will not take as an identifier (E009, PLAN B.4). Every ASCII
+//! The words the targets will not take as an identifier (E009, PLAN B.4). Every ASCII
 //! alias becomes an identifier in each of them: a function, a parameter, a schema. An alias
-//! that one of them refuses would stop that target's build, so `check` refuses it first.
+//! that one of them refuses would stop that target's build, so `check` refuses it first. The
+//! Wasm target is the Rust module behind a door whose own names all start with `_` (DESIGN 13),
+//! so Rust's words are its words.
 //!
 //! The words are ritsu's (`ritsu_emit::words`), each list from the standard that gives it:
 //! TypeScript's are ECMAScript 2025's reserved words, the strict-mode reserved words, and the

@@ -1,13 +1,14 @@
 # The generated code
 
-`koyomi gen` turns a file that passes `koyomi check` into code in five languages: TypeScript,
-Python, Go, Rust and SQL for PostgreSQL. Each target gets one file, or one Go package, and a
-runner beside it. There is nothing else to install: the file holds the small functions it calls
-and the calendar's table of holidays, and it uses no date library of its language, because those
-disagree about months (the one-month-after of 2023-01-31 is 2023-02-28 in most and 2023-03-03 in
-Go). Every function computes on day numbers, days since 1970-01-01, with the same steps as
-koyomi's reference interpreter, and the tests hold every target to it on every input of the range
-(the end of this page).
+`koyomi gen` turns a file that passes `koyomi check` into code in five languages, TypeScript,
+Python, Go, Rust and SQL for PostgreSQL, and into a Wasm module that any host calls with one JSON
+object. Each language gets one file, or one Go package, and a runner beside it; the Wasm module is
+the Rust one behind a door of one function. There is nothing else to install: the file holds the
+small functions it calls and the calendar's table of holidays, and it uses no date library of its
+language, because those disagree about months (the one-month-after of 2023-01-31 is 2023-02-28 in
+most and 2023-03-03 in Go). Every function computes on day numbers, days since 1970-01-01, with the
+same steps as koyomi's reference interpreter, and the tests hold every target to it on every input
+of the range (the end of this page).
 
 The examples on this page are what `koyomi gen examples/payment_20th_close_next_10th.cal`
 writes: closing on the 20th and paying on the 10th of the next month, on Tokyo's business days,
@@ -22,6 +23,7 @@ whose offset gives the payment a time too.
 | Go | `go/<package>/<package>.go` | `go/<package>/<package>_runner_test.go` | the package's `Date{Year, Month, Day int}` |
 | Rust | `rust/<alias>.rs` | `rust/<alias>_runner.rs` | the module's `Date { year, month, day }` |
 | SQL | `sql/<alias>.sql` | `sql/<alias>_runner.sql` | a `date` |
+| Wasm | `wasm/<alias>_wasm.rs`, the crate root, with the Rust module `wasm/<alias>.rs` and the world `wasm/<alias>.wit` | `wasm/<alias>_runner.mjs` | a `"YYYY-MM-DD"` string of JSON |
 
 The alias is the file's (`dates net30 v1` writes `net30.ts`, and the Japanese version
 `dates 支払条件(payment_terms) v1` writes `payment_terms.ts`), and the Go package is the alias
@@ -161,7 +163,9 @@ $$;
 
 ## Errors
 
-Every target raises one kind of error, and the error says which of four things went wrong:
+Every language raises one kind of error, and the error says which of four things went wrong; the
+Wasm module raises nothing, and its answer says it refused, with the same four kinds
+([below](#the-wasm-module)):
 
 | Kind | When | In the check |
 |---|---|---|
@@ -251,6 +255,110 @@ In SQL, an error is SQLSTATE 22023, and its message starts with the kind:
 CREATE SCHEMA IF NOT EXISTS payment_20th_close_next_10th;
 ```
 
+## The Wasm module
+
+The Wasm target is the Rust module behind a door of one function, the way rulec's Wasm target
+puts a rule:
+
+```
+wasm/
+├── payment_20th_close_next_10th_wasm.rs      the crate root: the module behind the canonical ABI
+├── payment_20th_close_next_10th.rs           the module rust/ gets, byte for byte
+├── payment_20th_close_next_10th.wit          the world, for the component model
+└── payment_20th_close_next_10th_runner.mjs   the runner Node runs
+```
+
+One file to build, with `rustc` alone; `koyomi api` prints this line under `wasm.build`, to run in
+`wasm/`:
+
+```console
+$ rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols \
+    --target wasm32-unknown-unknown --crate-type cdylib payment_20th_close_next_10th_wasm.rs -o payment_20th_close_next_10th.wasm
+```
+
+The module imports nothing, not even WASI, so it instantiates with an empty import object
+anywhere WebAssembly runs; this one is 45 kilobytes, with Tokyo's table of holidays in it. It
+exports the canonical ABI of one function, `call: func(input: string) -> string`: `cabi_realloc`
+to put the input in the module's memory, `call(ptr, len)`, which returns a pointer to the pointer
+and the length of the answer, and `cabi_post_call(ret)` to free it. A rule's Wasm module exports
+the same three, so one host calls both. The runner beside it calls it so:
+
+```js
+function call(text) {
+  const bytes = enc.encode(text);
+  const ptr = ex.cabi_realloc(0, 0, 1, bytes.length);
+  new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+  const ret = ex.call(ptr, bytes.length);
+  const [p, n] = new Uint32Array(ex.memory.buffer, ret, 2);
+  const out = dec.decode(new Uint8Array(ex.memory.buffer, p, n));
+  ex.cabi_post_call(ret);
+  return out;
+}
+```
+
+The input is a JSON object with the inputs by name, a date as a `"YYYY-MM-DD"` string and an
+integer as a JSON number. A whole number in any spelling (`20`, `20.0`, `2e1`) is that integer, and
+a key may come with `\u` escapes, as Python's `json.dumps` writes a Japanese name unless told
+otherwise. A line of `koyomi vectors`, with the inputs under `"in"`, is read the same way. The
+answer is the line `koyomi vectors` writes for that input: every date by name, in the order the
+file declares them, each followed by its time when it has `at`, with `in` holding the inputs the
+dates take.
+
+```jsonl
+{"in":{"received":"2026-04-01"},"out":{"closing":"2026-04-20","payment":"2026-05-08","payment.at":"2026-05-08T00:00:00Z"}}
+```
+
+`{"date": "YYYY-MM-DD"}` asks the calendar instead whether the day is a business day, as the
+calendar's own vectors ask it, and the answer's `out` holds `open`. `date` is a word of koyomi, so
+no input has that name. A calendar file's module answers that question alone.
+
+For an input outside the contract, the answer is a refusal in the place of the dates; the module
+never traps.
+
+```text
+{"refused":"range","error":"received 2025-12-31 is outside its range 2026-01-01..2027-11-20"}
+{"refused":"date","error":"2026-02-30 is not a date of 0001-01-01..9999-12-31 written YYYY-MM-DD"}
+{"refused":"input","error":"received is missing"}
+{"refused":"data","error":"whether 2028-01-01 is a business day is outside what the calendar knows, 1955-01-01..2027-12-31"}
+```
+
+`refused` is one of the four kinds of [the errors](#errors), with the message the error carries,
+or `input`, for an object that does not carry the inputs: an input missing or `null`, a date that
+is not a string, an integer that is not a whole number, or a text that is not one JSON object in
+UTF-8. A string that is not a date is `date`, as it is in TypeScript. `koyomi api` lists the two
+shapes of the answer under `wasm.answers`, with the values `refused` takes.
+
+The `.wit` names the same function as the export of a world, with what to send and what comes back
+in its comments:
+
+```wit
+package koyomi:payment-20th-close-next-10th@1.0.0;
+…
+world payment-20th-close-next-10th {
+…
+    /// Inputs:
+    ///   received: a date (YYYY-MM-DD), 2026-01-01..2027-11-20
+    /// Out:
+    ///   closing: a date (YYYY-MM-DD)
+    ///   payment: a date (YYYY-MM-DD)
+    ///   payment.at: a time, RFC 3339 in UTC, ending in Z
+    export call: func(input: string) -> string;
+}
+```
+
+so the module becomes a component with no change to it, which a component host calls like any
+other:
+
+```console
+$ wasm-tools component embed payment_20th_close_next_10th.wit payment_20th_close_next_10th.wasm -o payment_20th_close_next_10th.embedded.wasm
+$ wasm-tools component new payment_20th_close_next_10th.embedded.wasm -o payment_20th_close_next_10th.component.wasm
+$ wasmtime run --invoke 'call("{\"received\":\"2026-04-01\"}")' payment_20th_close_next_10th.component.wasm
+"{\"in\":{\"received\":\"2026-04-01\"},\"out\":{\"closing\":\"2026-04-20\",\"payment\":\"2026-05-08\",\"payment.at\":\"2026-05-08T00:00:00Z\"}}"
+```
+
+The world is named by the alias, its words joined by `-`, with `%` before it when that is a word
+of WIT (`result` gives `%result`), so every alias koyomi takes makes a world that WIT reads.
+
 ## The runners
 
 A runner reads the lines of `koyomi vectors` on its standard input and writes, for each, what the
@@ -264,6 +372,7 @@ koyomi vectors examples/payment_20th_close_next_10th.cal | python3 generated/pyt
 go test -c -trimpath -o runner ./generated/go/payment20thclosenext10th && koyomi vectors examples/payment_20th_close_next_10th.cal | KOYOMI_RUNNER=1 ./runner
 rustc --edition 2024 -O generated/rust/payment_20th_close_next_10th_runner.rs -o runner && koyomi vectors examples/payment_20th_close_next_10th.cal | ./runner
 psql -f generated/sql/payment_20th_close_next_10th.sql && koyomi vectors examples/payment_20th_close_next_10th.cal | psql -X -q -f generated/sql/payment_20th_close_next_10th_runner.sql
+(cd generated/wasm && rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib payment_20th_close_next_10th_wasm.rs -o payment_20th_close_next_10th.wasm) && koyomi vectors examples/payment_20th_close_next_10th.cal | node generated/wasm/payment_20th_close_next_10th_runner.mjs
 ```
 
 The Go runner is a test file of the package, so it needs no import path and works wherever the
@@ -308,9 +417,12 @@ if (buf.length > 0) process.stdout.write(buf.join("\n") + "\n");
 `tests/fixtures/` that use every operation, every way of handling a missing day, the four
 conventions, `if closed` and `at` over 1900–2100, for each target. The target's own tools look at
 the code first: `tsc --strict --erasableSyntaxOnly` for TypeScript, `mypy --strict` for Python,
-`gofmt`, `go vet` and `go test -c` for Go, `rustc -D warnings` under both editions for Rust, and a
-PostgreSQL made for the test for SQL. Then every line of the vectors, every input of every range
-and the inputs just outside, goes through the runner and is compared with what the reference
-interpreter gives; none is skipped. The code written with `--lang ja` is checked the same way, and
-two of the files are run through it too. A tool that is missing prints a `SKIP:` line and the test
-passes; the numbers of the last run are in the README.
+`gofmt`, `go vet` and `go test -c` for Go, `rustc -D warnings` under both editions for Rust, a
+PostgreSQL made for the test for SQL, and for Wasm `rustc -D warnings` for wasm32-unknown-unknown
+under both editions, the module then run in Node. Then every line of the vectors, every input of
+every range and the inputs just outside, goes through the runner and is compared with what the
+reference interpreter gives; none is skipped. The code written with `--lang ja` is checked the same
+way, and two of the files are run through it too. `tests/wasm.rs` holds the Wasm module's answers
+to the lines of the vectors as JSON, byte for byte, gives it inputs outside the contract, and has
+wasmtime call the component its `.wit` makes. A tool that is missing prints a `SKIP:` line and the
+test passes; the numbers of the last run are in the README.

@@ -246,6 +246,14 @@ fn gen_writes_and_checks() {
             "typescript/payment_terms_runner.ts",
             "typescript/tokyo.ts",
             "typescript/tokyo_runner.ts",
+            "wasm/payment_terms.rs",
+            "wasm/payment_terms.wit",
+            "wasm/payment_terms_runner.mjs",
+            "wasm/payment_terms_wasm.rs",
+            "wasm/tokyo.rs",
+            "wasm/tokyo.wit",
+            "wasm/tokyo_runner.mjs",
+            "wasm/tokyo_wasm.rs",
         ]
     );
     // What the command writes is what the library generates.
@@ -282,6 +290,12 @@ fn gen_writes_and_checks() {
     let py = std::fs::read_to_string(t3.path().join("python/net30.py")).unwrap();
     assert!(py.contains("# もと: net30.cal（dates net30 v1、sha256:"), "{py}");
     assert!(py.contains("受け取る範囲は invoice_date 2026-01-01〜2028-11-29 で、"), "{py}");
+    // The Wasm target alone: the crate root, the module rust/ gets, the world and the runner.
+    let t4 = TempDir::new("gen-wasm");
+    let o = koyomi(&["gen", "examples/net30.cal", "--target", "wasm", "--out", &t4.path().to_string_lossy()]);
+    assert_eq!(code(&o), 0, "{}", err(&o));
+    let names: Vec<String> = tree(t4.path()).into_iter().map(|(p, _)| p).collect();
+    assert_eq!(names, ["wasm/net30.rs", "wasm/net30.wit", "wasm/net30_runner.mjs", "wasm/net30_wasm.rs"]);
 }
 
 #[test]
@@ -296,6 +310,26 @@ fn gen_refuses_two_files_with_one_alias() {
     assert_eq!(code(&o), 2, "{}{}", out(&o), err(&o));
     assert!(err(&o).contains("both write typescript/same.ts"), "{}", err(&o));
     assert!(!t.path().join("out").exists(), "nothing is written");
+}
+
+/// Two aliases that only the Wasm target writes to one path: `same`'s crate root and the module
+/// of `same_wasm` are both `wasm/same_wasm.rs`. The check that two files write one path stops the
+/// run, as it does for any target.
+#[test]
+fn gen_refuses_two_files_whose_wasm_files_meet() {
+    let t = TempDir::new("gen-alias-wasm");
+    let a = t.path().join("a.cal");
+    let b = t.path().join("b.cal");
+    let body = |alias: &str| format!("dates {alias} v1\n\ninputs\n  d : date  range >=2026-01-01 <=2026-12-31\n\ndate later = d\n  + 1 day\n");
+    std::fs::write(&a, body("same")).unwrap();
+    std::fs::write(&b, body("same_wasm")).unwrap();
+    let o = koyomi(&["gen", &a.to_string_lossy(), &b.to_string_lossy(), "--out", &t.path().join("out").to_string_lossy()]);
+    assert_eq!(code(&o), 2, "{}{}", out(&o), err(&o));
+    assert!(err(&o).contains("both write wasm/same_wasm.rs"), "{}", err(&o));
+    assert!(!t.path().join("out").exists(), "nothing is written");
+    // Each by itself is written whole.
+    let o = koyomi(&["gen", &b.to_string_lossy(), "--target", "wasm", "--out", &t.path().join("b").to_string_lossy()]);
+    assert_eq!(code(&o), 0, "{}{}", out(&o), err(&o));
 }
 
 // ── The same, on the English versions of the Japanese examples and on England and Wales ──────
@@ -425,6 +459,14 @@ fn gen_writes_and_checks_in_english() {
             "typescript/england_and_wales_runner.ts",
             "typescript/payment_20th_close_next_10th.ts",
             "typescript/payment_20th_close_next_10th_runner.ts",
+            "wasm/england_and_wales.rs",
+            "wasm/england_and_wales.wit",
+            "wasm/england_and_wales_runner.mjs",
+            "wasm/england_and_wales_wasm.rs",
+            "wasm/payment_20th_close_next_10th.rs",
+            "wasm/payment_20th_close_next_10th.wit",
+            "wasm/payment_20th_close_next_10th_runner.mjs",
+            "wasm/payment_20th_close_next_10th_wasm.rs",
         ]
     );
     let mut o = koyomi::check::check(good[0]).unwrap();

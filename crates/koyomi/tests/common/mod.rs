@@ -1,5 +1,5 @@
 //! What koyomi's tests share besides ritsu-testkit (DESIGN 10.8): the files the generated code
-//! is held to.
+//! is held to, and whether rustc can build for a target.
 
 #![allow(dead_code)]
 
@@ -38,3 +38,13 @@ pub const TARGET_FILES: &[&str] = &[
     "tests/fixtures/helpers_エラーにする.cal",
     "tests/fixtures/helpers_日付が一つも無い.cal",
 ];
+
+/// Whether rustc has the standard library of `target` installed (`rustup target add <target>`).
+pub fn rust_target(target: &str) -> bool {
+    let Ok(o) = std::process::Command::new("rustc").args(["--print", "sysroot"]).output() else { return false };
+    if !o.status.success() {
+        return false;
+    }
+    let root = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    std::path::Path::new(&root).join("lib/rustlib").join(target).join("lib").is_dir()
+}

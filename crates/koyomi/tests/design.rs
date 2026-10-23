@@ -70,9 +70,9 @@ fn blocks_of(text: &str, langs: &[&str]) -> Vec<(String, String)> {
 
 #[test]
 fn the_code_design_shows_is_the_code_gen_writes() {
-    // Every ```ts, ```python, ```go, ```rust and ```sql block of DESIGN.md is an excerpt of
-    // what gen writes for an example, and every line of a ```jsonl block is a line of the
-    // vectors of one: DESIGN quotes real output, not a sketch.
+    // Every ```ts, ```python, ```go, ```rust, ```sql, ```wit and ```js block of DESIGN.md is an
+    // excerpt of a file of that language gen writes for an example, and every line of a ```jsonl
+    // block is a line of the vectors of one: DESIGN quotes real output, not a sketch.
     let text = std::fs::read_to_string("DESIGN.md").unwrap();
     let examples = [
         "examples/calendars/england_and_wales.cal",
@@ -99,8 +99,9 @@ fn the_code_design_shows_is_the_code_gen_writes() {
         for lang in [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja] {
             let u = koyomi::codegen::unit_of(&checked, lang);
             for t in koyomi::naming::TARGETS {
-                for (_, body) in koyomi::codegen::files(&u, t) {
-                    generated.push((t.key().to_string(), body));
+                for (rel, body) in koyomi::codegen::files(&u, t) {
+                    let ext = std::path::Path::new(&rel).extension().unwrap().to_string_lossy().to_string();
+                    generated.push((ext, body));
                 }
             }
         }
@@ -112,9 +113,11 @@ fn the_code_design_shows_is_the_code_gen_writes() {
         }
     }
     let mut n = 0;
-    for (lang, body) in blocks_of(&text, &["ts", "python", "go", "rust", "sql"]) {
+    for (lang, body) in blocks_of(&text, &["ts", "python", "go", "rust", "sql", "wit", "js"]) {
         let key = match lang.as_str() {
-            "ts" => "typescript",
+            "python" => "py",
+            "rust" => "rs",
+            "js" => "mjs",
             l => l,
         };
         let found = generated.iter().any(|(k, g)| k == key && g.contains(&body));

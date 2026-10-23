@@ -85,8 +85,9 @@ jobs:
       - name: Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          # rulec writes Rust for the browser and for WASI; geas reads coverage with llvm-tools
-          targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || '' }}
+          # rulec writes Rust for the browser and for WASI, and koyomi a Wasm module for any host;
+          # geas reads coverage with llvm-tools
+          targets: ${{ matrix.group == 'rulec' && 'wasm32-unknown-unknown, wasm32-wasip1' || matrix.group == 'the others' && 'wasm32-unknown-unknown' || '' }}
           components: ${{ matrix.group == 'the others' && 'llvm-tools' || '' }}
 
       - uses: actions/cache@v6
@@ -161,16 +162,18 @@ jobs:
         with:
           swift-version: "6.1"
 
-      - name: "rulec: wasmtime, for the WASI pass"
-        if: matrix.group == 'rulec'
+      # wasmtime runs rulec's runners built for WASI, and calls the components of rulec's and
+      # koyomi's Wasm targets (koyomi's in the group of the others).
+      - name: "rulec and koyomi: wasmtime, for the WASI pass and the components of the Wasm targets"
+        if: matrix.group == 'rulec' || matrix.group == 'the others'
         uses: bytecodealliance/actions/wasmtime/setup@v1
 
       # The Wasm target's module and .wit are made into a component, which wasmtime then calls
-      # (tests/wasm_target.rs). The release's archive, at the version the test was written with,
-      # held to the checksum it had when this was written; a download of a few megabytes, so it
-      # is not cached.
-      - name: "rulec: wasm-tools 1.245.1, for the component of the Wasm target"
-        if: matrix.group == 'rulec'
+      # (rulec's tests/wasm_target.rs, koyomi's tests/wasm.rs). The release's archive, at the
+      # version the tests were written with, held to the checksum it had when this was written; a
+      # download of a few megabytes, so it is not cached.
+      - name: "rulec and koyomi: wasm-tools 1.245.1, for the components of the Wasm targets"
+        if: matrix.group == 'rulec' || matrix.group == 'the others'
         run: |
           set -eu
           d="$RUNNER_TEMP/wasm-tools"
@@ -436,6 +439,7 @@ jobs:
           fi
           if [ "${{ matrix.group }}" = "the others" ]; then
             "$RITSU_PG_BIN/postgres" --version && "$RITSU_TIGERBEETLE" version && xmllint --version
+            wasmtime --version && wasm-tools --version
             "$RITSU_CEDAR" --version
             crates/sekisho/tools/runner-ts/node_modules/.bin/tsc --version
             crates/kaname/tools/node_modules/.bin/tsc --version && crates/kaname/tools/.venv/bin/mypy --version

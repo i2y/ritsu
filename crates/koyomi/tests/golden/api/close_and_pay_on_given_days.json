@@ -406,5 +406,92 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/close_and_pay_on_given_days_wasm.rs",
+    "module": "close_and_pay_on_given_days.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib close_and_pay_on_given_days_wasm.rs -o close_and_pay_on_given_days.wasm",
+    "wit": "close_and_pay_on_given_days.wit",
+    "package": "koyomi:close-and-pay-on-given-days@1.0.0",
+    "world": "close-and-pay-on-given-days",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "close_and_pay_on_given_days_runner.mjs",
+    "component": "wasm-tools component embed close_and_pay_on_given_days.wit close_and_pay_on_given_days.wasm -o close_and_pay_on_given_days.embedded.wasm && wasm-tools component new close_and_pay_on_given_days.embedded.wasm -o close_and_pay_on_given_days.component.wasm",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "closing",
+        "key": "closing",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "key": "payment",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          },
+          {
+            "name": "closing_day",
+            "alias": "closing_day",
+            "type": "number"
+          },
+          {
+            "name": "payment_month",
+            "alias": "payment_month",
+            "type": "number"
+          },
+          {
+            "name": "payment_day",
+            "alias": "payment_day",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

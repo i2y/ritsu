@@ -11,8 +11,9 @@ What a file claims (the payment falls on a business day, no more than 60 days af
 never earlier for a later receipt) is checked on every day of the range it declares. Nothing is
 sampled: a century is fewer than 37,000 days, so koyomi computes them all, and lists every day a
 claim fails on, with the first one computed step by step. Only a file that passes compiles, into
-TypeScript, Python, Go, Rust and SQL, with no runtime, no dependency, and no date library of the
-target language, since that is where implementations disagree.
+TypeScript, Python, Go, Rust and SQL, and into a Wasm module that any host calls with one JSON
+object, with no runtime, no dependency, and no date library of the target language, since that is
+where implementations disagree.
 
 ```cal
 dates close_20th_pay_10th v1
@@ -174,7 +175,7 @@ koyomi's one dependency is serde_json. `koyomi source fetch` and `koyomi source 
 ```console
 $ koyomi check examples/                         # every .cal under it; --format json, --budget <n>
 $ koyomi eval examples/net30.cal invoice_date=2026-03-04   # one input, step by step
-$ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql, --check
+$ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql|wasm, --check
 $ koyomi vectors examples/net30.cal              # the result for every input, as JSON Lines
 $ koyomi doc examples/net30.cal --format html    # the page for people
 $ koyomi api examples/net30.cal                  # how to call the generated code, as JSON
@@ -230,22 +231,25 @@ the files fail on purpose.
 The reference interpreter defines what a `.cal` means; `check`, `eval`, `vectors` and `doc` all
 compute through it. The tests generate every example that passes, and fourteen files that use
 every operation over 1900–2100 (seven in English and the same seven in Japanese), for each of the
-five targets, look at the code with the target's own tools, and run every line of
+six targets, look at the code with the target's own tools, and run every line of
 `koyomi vectors` through it: every input of every range, and the inputs just outside, none
 skipped. On one run of `cargo test -- --nocapture` on macOS on Apple
-silicon (156 tests, 77 seconds):
+silicon (167 tests, 76 seconds):
 
 | Target | Tools | Lines compared | Time |
 |---|---|---|---|
-| TypeScript | Node v23.11.0, tsc 7.0.2 | 11,554,942 | 13.7 s |
-| Python | Python 3.14.6, mypy 2.4.0 | 11,554,942 | 28.8 s |
-| Go | go 1.25.5 | 11,554,942 | 14.5 s |
-| Rust | rustc 1.94.1 | 11,554,942 | 14.9 s |
-| SQL | PostgreSQL 18.0 | 11,554,942 | 46.9 s |
+| TypeScript | Node v24.21.0, tsc 7.0.2 | 11,554,942 | 10.3 s |
+| Python | Python 3.13.11, mypy 2.4.0 | 11,554,942 | 30.3 s |
+| Go | go 1.25.5 | 11,554,942 | 17.9 s |
+| Rust | rustc 1.94.1 | 11,554,942 | 16.1 s |
+| SQL | PostgreSQL 18.0 | 11,554,942 | 49.5 s |
+| Wasm | rustc 1.94.1 (wasm32-unknown-unknown), Node v24.21.0 | 11,554,942 | 14.8 s |
 
 A tool that is missing prints `SKIP:` and its test passes; `KOYOMI_TSC`, `KOYOMI_MYPY`,
 `KOYOMI_PG_BIN`, `KOYOMI_PG_SOCKET_DIR` and `KOYOMI_CHROME` say where the tools are (tsc and mypy
-install into `tools/`, as `tools/package.json` and `tools/requirements.txt` say). The diagnostics,
+install into `tools/`, as `tools/package.json` and `tools/requirements.txt` say), and the tests of
+the Wasm module look for rustc's wasm32-unknown-unknown target, node, wasm-tools and wasmtime on the
+PATH. The diagnostics,
 the pages and the API of every example are golden files, and the code, the diagnostics and the
 outputs on this page, the reference and the skill are held to what the tool prints.
 

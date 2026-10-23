@@ -275,5 +275,72 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/close_20th_pay_10th_wasm.rs",
+    "module": "close_20th_pay_10th.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib close_20th_pay_10th_wasm.rs -o close_20th_pay_10th.wasm",
+    "wit": "close_20th_pay_10th.wit",
+    "package": "koyomi:close-20th-pay-10th@1.0.0",
+    "world": "close-20th-pay-10th",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "close_20th_pay_10th_runner.mjs",
+    "component": "wasm-tools component embed close_20th_pay_10th.wit close_20th_pay_10th.wasm -o close_20th_pay_10th.embedded.wasm && wasm-tools component new close_20th_pay_10th.embedded.wasm -o close_20th_pay_10th.component.wasm",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "closing",
+        "key": "closing",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "payment",
+        "key": "payment",
+        "params": [
+          {
+            "name": "received",
+            "alias": "received",
+            "type": "string"
+          }
+        ]
+      }
+    ],
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

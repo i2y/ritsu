@@ -38,9 +38,12 @@ pub enum Target {
     Go,
     Rust,
     Sql,
+    /// The Rust module behind the canonical ABI of one function, `call`, which takes a JSON object
+    /// and answers one (DESIGN 13).
+    Wasm,
 }
 
-pub const TARGETS: [Target; 5] = [Target::TypeScript, Target::Python, Target::Go, Target::Rust, Target::Sql];
+pub const TARGETS: [Target; 6] = [Target::TypeScript, Target::Python, Target::Go, Target::Rust, Target::Sql, Target::Wasm];
 
 impl Target {
     /// The key in `api`'s JSON and the value of `gen --target`.
@@ -51,10 +54,12 @@ impl Target {
             Target::Go => "go",
             Target::Rust => "rust",
             Target::Sql => "sql",
+            Target::Wasm => "wasm",
         }
     }
 
-    /// The file `gen` writes for a `.cal` with this alias, under the output directory.
+    /// The file `gen` writes for a `.cal` with this alias, under the output directory: for Wasm,
+    /// the crate root the module is built from.
     pub fn file(self, alias: &str) -> String {
         match self {
             Target::TypeScript => format!("typescript/{alias}.ts"),
@@ -62,31 +67,37 @@ impl Target {
             Target::Go => format!("go/{0}/{0}.go", go_package(alias)),
             Target::Rust => format!("rust/{alias}.rs"),
             Target::Sql => format!("sql/{alias}.sql"),
+            Target::Wasm => format!("wasm/{alias}_wasm.rs"),
         }
     }
 
-    /// What the generated code is imported or called by: the module, package or schema.
+    /// What the generated code is imported or called by: the module, package or schema; for Wasm,
+    /// the module file a host instantiates.
     pub fn module(self, alias: &str) -> String {
         match self {
             Target::Go => go_package(alias),
+            Target::Wasm => format!("{alias}.wasm"),
             _ => alias.to_string(),
         }
     }
 
     pub fn date_type(self) -> &'static str {
         match self {
-            Target::TypeScript => "string",
+            Target::TypeScript | Target::Wasm => "string",
             Target::Python => "datetime.date",
             Target::Go | Target::Rust => "Date",
             Target::Sql => "date",
         }
     }
 
+    /// What the generated code fails with. The Wasm module raises nothing: its answer says it
+    /// refused, under `refused`.
     pub fn errors(self) -> &'static str {
         match self {
             Target::TypeScript | Target::Python | Target::Rust => "KoyomiError",
             Target::Go => "*KoyomiError",
             Target::Sql => "SQLSTATE 22023",
+            Target::Wasm => "refused",
         }
     }
 
@@ -102,6 +113,8 @@ impl Target {
             (Target::Rust, Ty::Int) => "i64",
             (Target::Sql, Ty::Date) => "date",
             (Target::Sql, Ty::Int) => "integer",
+            (Target::Wasm, Ty::Date) => "string",
+            (Target::Wasm, Ty::Int) => "number",
         }
     }
 
@@ -138,6 +151,8 @@ impl Target {
                 let ps: Vec<String> = params.iter().map(|(a, t)| format!("{a} {}", self.ty(*t))).collect();
                 format!("{module}.{f}({}) RETURNS {}", ps.join(", "), if at { "timestamptz" } else { "date" })
             }
+            // Every date comes back from the one function the module exports.
+            Target::Wasm => CALL_SIGNATURE.into(),
         }
     }
 
@@ -149,6 +164,10 @@ impl Target {
             Target::Go => "func IsOpen(day Date) (bool, error)".into(),
             Target::Rust => "pub fn is_open(day: Date) -> Result<bool, KoyomiError>".into(),
             Target::Sql => format!("{module}.is_open(day date) RETURNS boolean"),
+            Target::Wasm => CALL_SIGNATURE.into(),
         }
     }
 }
+
+/// The one function the Wasm module exports, as its world declares it (rulec's too).
+pub const CALL_SIGNATURE: &str = "call: func(input: string) -> string";

@@ -49,7 +49,8 @@ people.
   Temporal, Step Functions, Argo Workflows, Lambda durable functions or pydantic-graph.
 - **koyomi** writes a date as a contract or a law says it: thirty days after the invoice, moved to
   the next business day. `koyomi check` computes it on every day of the declared range and checks
-  each claim on every one of them.
+  each claim on every one of them; only a file that passes compiles, into TypeScript, Python, Go,
+  Rust and SQL, and into a Wasm module that any host calls with one JSON object.
 - **chobo** declares accounts, the bounds each must keep, and the transfers between them, checks
   that no sequence of transfers, holds and expiries can take an account past a bound, and generates
   clients for PostgreSQL, TigerBeetle and the MySQL family (MySQL, TiDB and Vitess).

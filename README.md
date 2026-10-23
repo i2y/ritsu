@@ -23,7 +23,7 @@ Agents write the glue. ritsu holds what it all has to carry out.
 |---|---|---|---|
 | [rulec](#rulec--business-rules) | `.rule` | business rules: tariffs, fees, eligibility, tax | functions in twelve languages |
 | [dandori](#dandori--the-skeleton-of-a-workflow) | `.flow` | the skeleton of a workflow | Temporal, Step Functions, Argo and more |
-| [koyomi](#koyomi--dates) | `.cal` | dates: closing and payment days, business days, legal periods | TypeScript, Python, Go, Rust, SQL |
+| [koyomi](#koyomi--dates) | `.cal` | dates: closing and payment days, business days, legal periods | TypeScript, Python, Go, Rust, SQL, Wasm |
 | [chobo](#chobo--ledgers) | `.book` | ledgers: accounts, their bounds, transfers, holds | clients for PostgreSQL, TigerBeetle, MySQL, TiDB and Vitess |
 | [geas](#geas--claims-about-the-code-an-agent-wrote) | `.geas` | claims about the code an agent wrote | — |
 | [yuen](#yuen--where-requirements-come-from) | `.req` | where requirements come from, and what satisfies them | ReqIF, W3C PROV |
@@ -162,7 +162,8 @@ flow
 A date is written as it is said in a contract or a law: thirty days after the invoice, moved to
 the next business day. `koyomi check` computes it on every day of the declared range and checks
 each claim on every one of them. The calendar comes from a pinned source — here GOV.UK's bank
-holidays for England and Wales. It generates TypeScript, Python, Go, Rust and SQL.
+holidays for England and Wales. It generates TypeScript, Python, Go, Rust and SQL, and a Wasm
+module that any host calls with one JSON object.
 
 ```cal
 dates net30 v1

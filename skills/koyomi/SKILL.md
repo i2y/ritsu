@@ -1,6 +1,6 @@
 ---
 name: koyomi
-description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust and PostgreSQL. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202, W901) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
+description: Write, check and compile koyomi files (`.cal`), the rules of due dates — closing days, payment days, business days and month arithmetic, such as closing on the 20th and paying on the 10th of the next month or on the business day before when that is a holiday — with calendars of closed days read from published tables of holidays, claims checked on every day of a declared range, and code generated for TypeScript, Python, Go, Rust, PostgreSQL and Wasm. Use when payment terms, a deadline or a calendar of business days has to be written or changed as a `.cal`; when a koyomi diagnostic (E001-E305, W101-W202, W901) has to be fixed; when such a rule has to be shown to the people who read it; or when its generated code has to be called.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run koyomi as `ritsu koyomi <command>`, or as `koyomi <command>` through a link to ritsu named for it. `ritsu koyomi source fetch` and `source outdated` also need `curl`.
 license: MIT OR Apache-2.0
 ---
@@ -12,7 +12,7 @@ days or months, taking a day of a month, and moving off closed days. Payment ter
 20th, pays on the 10th of the next month, on the business day before when that day is closed"),
 Net 30, a deadline counted in business days, the end of a period under a statute. koyomi writes
 it once as a `.cal`, checks it on every input of a range, shows it to the people who read it,
-and generates the same function for five languages.
+and generates the same function for five languages and a Wasm module.
 
 It does not apply to decisions made from tables of conditions (a fee schedule, an eligibility
 test): those are rulec rules. Nor to times of day in a zone with daylight saving time: koyomi
@@ -60,7 +60,7 @@ have to read koyomi's source.
    least room, the edge cases, the months with the holidays named and the failing input days
    marked. A file whose claims fail still gets its page; the failing days are the point of it.
 7. **Generate the code:** `ritsu koyomi gen <file.cal> --out generated` writes TypeScript, Python, Go,
-   Rust and SQL, each with a runner. `ritsu koyomi gen --check` in CI says when the code is stale.
+   Rust, SQL and Wasm, each with a runner. `ritsu koyomi gen --check` in CI says when the code is stale.
    `ritsu koyomi api <file.cal>` gives the functions, their inputs and ranges, and the signatures in each
    language, without reading the code. [generated-code.md](generated-code.md) says how to call it.
 8. **In a project with rules or workflows**, `ritsu check` checks the `.cal` files with the rest,
@@ -215,12 +215,17 @@ error[E201]: tests/mutants/E201_no_way_for_a_missing_day.cal:7:3: `+ 1 month` ca
 | `go` | `go/<package>/<package>.go`, one package, no go.mod | the package's `Date` |
 | `rust` | `rust/<alias>.rs`, a module for the 2021 and the 2024 editions | the module's `Date` |
 | `sql` | `sql/<alias>.sql`, a schema of PL/pgSQL functions, PostgreSQL 14 and later | a `date` |
+| `wasm` | `wasm/<alias>_wasm.rs` beside the Rust module, built by `rustc` alone into a module that imports nothing | a `"YYYY-MM-DD"` string of JSON |
 
 Each date is a function named by its alias, taking only the inputs it uses; a date with `at` has
 `<alias>_at`, giving its time in RFC 3339 UTC; a file with a calendar has `is_open`. An error has a
 kind: `range` (an input outside its range), `data` (a day the calendar does not know), `reject`,
-`date`. The runner beside each file reads `ritsu koyomi vectors` and prints what the functions give, so
-the code can be held to the reference interpreter wherever it is copied.
+`date`. The Wasm module exports one function, `call`: in goes a JSON object of the inputs by name
+(or `{"date": …}` for the calendar), out comes the line `ritsu koyomi vectors` writes for it, or
+`{"refused":"<kind>","error":"…"}`, the kind being one of the four or `input`; `ritsu koyomi api`
+gives its build line and its exports under `wasm`. The runner beside each file reads
+`ritsu koyomi vectors` and prints what the functions give, so the code can be held to the reference
+interpreter wherever it is copied.
 
 ## 7. The files bundled with this skill
 

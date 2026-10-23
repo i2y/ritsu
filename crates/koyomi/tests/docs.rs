@@ -5,8 +5,9 @@
 //! - Every line of `.cal` on the pages is a line of a `.cal` under `examples/` or `tests/`.
 //! - Every `$ koyomi …` that shows what it prints prints that, and every diagnostic shown is in
 //!   what `koyomi check` prints for its file.
-//! - Every block of TypeScript, Python, Go, Rust and SQL is cut from what `koyomi gen` writes for
-//!   an example, and every line of JSON Lines is a line of an example's vectors.
+//! - Every block of TypeScript, Python, Go, Rust, SQL, WIT and JavaScript is cut from a file of
+//!   that language `koyomi gen` writes for an example, and every line of JSON Lines is a line of
+//!   an example's vectors.
 //! - The number of lines the READMEs say each target is compared on is the number of lines of
 //!   the vectors the tests run through it, and the reference lists every keyword of `kw.rs`.
 
@@ -203,8 +204,23 @@ fn the_diagnostics_on_the_pages_are_what_check_prints() {
     assert!(wrong.is_empty(), "not what `koyomi check` prints for its file:\n{}", wrong.join("\n"));
 }
 
-/// Every example that passes check, generated in every target and both languages, and the
-/// lines of the vectors of the smaller ones.
+/// The extension of the generated files a fenced block of a page is cut from, by the word after
+/// its fence; none for a block that is not generated code.
+fn extension(info: &str) -> Option<&'static str> {
+    Some(match info {
+        "ts" => "ts",
+        "python" => "py",
+        "go" => "go",
+        "rust" => "rs",
+        "sql" => "sql",
+        "wit" => "wit",
+        "js" => "mjs",
+        _ => return None,
+    })
+}
+
+/// Every example that passes check, generated in every target and both languages, each file by
+/// its extension, and the lines of the vectors of the smaller ones.
 fn generated() -> (Vec<(String, String)>, BTreeSet<String>) {
     let mut code = Vec::new();
     let mut vectors = BTreeSet::new();
@@ -218,8 +234,9 @@ fn generated() -> (Vec<(String, String)>, BTreeSet<String>) {
         for lang in [Lang::En, Lang::Ja] {
             let u = koyomi::codegen::unit_of(&checked, lang);
             for t in koyomi::naming::TARGETS {
-                for (_, body) in koyomi::codegen::files(&u, t) {
-                    code.push((t.key().to_string(), body));
+                for (rel, body) in koyomi::codegen::files(&u, t) {
+                    let ext = Path::new(&rel).extension().unwrap().to_string_lossy().to_string();
+                    code.push((ext, body));
                 }
             }
         }
@@ -240,20 +257,16 @@ fn the_code_on_the_pages_is_what_gen_writes() {
     let mut seen = 0;
     for f in pages() {
         for (info, lines) in fenced(&fs::read_to_string(&f).unwrap()) {
-            let key = match info.as_str() {
-                "ts" => "typescript",
-                "python" | "go" | "rust" | "sql" => info.as_str(),
-                "jsonl" => {
-                    for l in &lines {
-                        seen += 1;
-                        if !vectors.contains(l) {
-                            wrong.push(format!("{}: {l} is not a line of an example's vectors", shown(&f)));
-                        }
+            if info == "jsonl" {
+                for l in &lines {
+                    seen += 1;
+                    if !vectors.contains(l) {
+                        wrong.push(format!("{}: {l} is not a line of an example's vectors", shown(&f)));
                     }
-                    continue;
                 }
-                _ => continue,
-            };
+                continue;
+            }
+            let Some(key) = extension(&info) else { continue };
             seen += 1;
             // A line `…` cuts the block; the pieces come in this order in one generated file.
             let mut pieces: Vec<String> = vec![String::new()];
@@ -310,7 +323,7 @@ fn the_readmes_count_the_lines_the_targets_are_held_to() {
     let n = with_commas(lines);
     for page in ["README.md", "README.ja.md"] {
         let text = fs::read_to_string(root().join(page)).unwrap();
-        assert!(text.matches(&format!("| {n} |")).count() == 5, "{page} must say each of the five targets is compared on {n} lines");
+        assert!(text.matches(&format!("| {n} |")).count() == 6, "{page} must say each of the six targets is compared on {n} lines");
     }
 }
 

@@ -366,7 +366,7 @@ A small language for closing days, payment days, business days and month arithme
 Usage:
   koyomi check <file.cal>...                   compute on every input of the range, and hold the claims and the examples to it
   koyomi eval <file.cal> <name>=<value>...     compute every date on one input and show each step; for a calendar, whether a day is open or closed
-  koyomi gen <file.cal>...                     generate TypeScript, Python, Go, Rust and SQL, each with a runner; nothing is generated from a file that does not pass check
+  koyomi gen <file.cal>...                     generate TypeScript, Python, Go, Rust, SQL and Wasm, each with a runner; nothing is generated from a file that does not pass check
   koyomi vectors <file.cal>                    print the reference interpreter's result for every input of the range as JSON Lines, with the inputs just outside it
   koyomi doc <file.cal>                        print the page for people (accounting, legal, whoever keeps the calendar, the developers reviewing the code): Markdown, or one HTML file
   koyomi api <file.cal>                        print the functions, their inputs, the calendar, the data range and the sources' digests as JSON, for other tools
@@ -382,7 +382,7 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 |---|---|
 | `koyomi check <file.cal>...` | `--format json`, `--budget <n>`; a directory stands for every `.cal` under it |
 | `koyomi eval <file.cal> <name>=<value>...` | `--format json`; a name or its alias; for a calendar, one date (`koyomi eval examples/calendars/england_and_wales.cal 2026-04-03`) |
-| `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql` (all five without it), `--out <dir>` (`generated`), `--check` |
+| `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm` (every target without it), `--out <dir>` (`generated`), `--check` |
 | `koyomi vectors <file.cal>` | |
 | `koyomi doc <file.cal>` | `--format markdown\|html`, `--months <YYYY-MM>..<YYYY-MM>` |
 | `koyomi api <file.cal>` | |
@@ -481,6 +481,17 @@ range), the laws, and for each target the file, the module and the signatures. T
 rulec's `api`, so a tool that reads one can read the other. `wire.errors` lists the kinds of error
 the generated code raises: `range` (an input outside its range), `data` (a day the calendar does
 not know), `reject` (a missing day under `else reject`) and `date` (outside 0001–9999).
+
+The Wasm entry has the shape of rulec's: `build` (the line that builds the module, run in the
+directory of `file`), `wit`, `package` and `world` (as the `.wit` writes them), `call`,
+`call_signature`, `post_return`, `realloc` and `memory` (the exports a host needs), `runner`, and
+`component` (the two lines that make a component of the module and the `.wit`); with `file`,
+`module` (the `.wasm` a host instantiates) and `date_type`. In the place of the signatures,
+`functions` gives each date the key of `out` it comes under (`key`, and `at_key` for its time) with
+its inputs, and `is_open` the question a calendar takes, `{"in": "date", "out": "open"}`. `answers`
+gives the two shapes `call` answers with: the record, `{"in", "out"}`, the line `koyomi vectors`
+writes for that input, and the refusal, `{"refused", "error"}`, `refused` being `input` (the object
+does not carry the inputs) or one of `wire.errors`. It has no `errors`: the module raises nothing.
 
 ## Environment
 

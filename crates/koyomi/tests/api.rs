@@ -68,6 +68,17 @@ fn what_the_api_says_of_the_payment_terms() {
     assert_eq!(v["sql"]["functions"][1]["signature"], "payment_terms.payment(received date) RETURNS date");
     assert_eq!(v["sql"]["functions"][1]["at_signature"], "payment_terms.payment_at(received date) RETURNS timestamptz");
     assert_eq!(v["wire"]["at"], "RFC 3339 in UTC, ending in Z, as dandori's timestamp");
+    // The Wasm module: one function, the dates under the keys of out, by their names.
+    assert_eq!(v["wasm"]["file"], "wasm/payment_terms_wasm.rs");
+    assert_eq!(v["wasm"]["module"], "payment_terms.wasm");
+    assert_eq!(v["wasm"]["package"], "koyomi:payment-terms@1.0.0");
+    assert_eq!(v["wasm"]["world"], "payment-terms");
+    assert_eq!(v["wasm"]["call_signature"], "call: func(input: string) -> string");
+    assert_eq!(v["wasm"]["functions"][1]["key"], "支払日");
+    assert_eq!(v["wasm"]["functions"][1]["at_key"], "支払日.at");
+    assert_eq!(v["wasm"]["functions"][1]["params"][0]["name"], "受領日");
+    assert_eq!(v["wasm"]["is_open"]["in"], "date");
+    assert_eq!(v["wasm"]["answers"][1]["refused"], serde_json::json!(["input", "range", "data", "reject", "date"]));
 }
 
 #[test]
@@ -98,6 +109,35 @@ fn every_signature_is_in_the_generated_code() {
             let files = koyomi::codegen::files(&u, t);
             let (path, module) = &files[0];
             assert_eq!(entry["file"].as_str().unwrap(), path, "{p} {}", t.key());
+            if t == koyomi::naming::Target::Wasm {
+                // The world declares the one function; the crate root writes each key of out, and
+                // reads {"date": …} when the file has a calendar.
+                let wit = &files.iter().find(|(r, _)| r.ends_with(".wit")).unwrap().1;
+                let sig = entry["call_signature"].as_str().unwrap();
+                assert!(wit.contains(&format!("export {sig};")), "{p}: the .wit does not export `{sig}`");
+                for (k, w) in [("wit", ".wit"), ("runner", "_runner.mjs")] {
+                    let name = entry[k].as_str().unwrap();
+                    assert!(name.ends_with(w) && files.iter().any(|(r, _)| r == &format!("wasm/{name}")), "{p}: {k} = {name} is not a file gen writes");
+                }
+                let mut keys: Vec<String> = Vec::new();
+                for f in entry["functions"].as_array().into_iter().flatten() {
+                    keys.push(f["key"].as_str().unwrap().to_string());
+                    if let Some(s) = f["at_key"].as_str() {
+                        keys.push(s.to_string());
+                    }
+                }
+                if entry["is_open"].is_object() {
+                    keys.push("date".into());
+                    keys.push("open".into());
+                }
+                assert!(!keys.is_empty(), "{p} wasm");
+                for k in keys {
+                    let lit = serde_json::to_string(&k).unwrap();
+                    assert!(module.contains(&lit), "{p}: the Wasm crate root has no {lit}");
+                    n += 1;
+                }
+                continue;
+            }
             let mut sigs: Vec<String> = Vec::new();
             for f in entry["functions"].as_array().into_iter().flatten() {
                 sigs.push(f["signature"].as_str().unwrap().to_string());
@@ -143,6 +183,11 @@ fn what_the_api_says_of_the_payment_terms_in_english() {
     assert_eq!(v["sql"]["functions"][1]["signature"], "payment_20th_close_next_10th.payment(received date) RETURNS date");
     assert_eq!(v["sql"]["functions"][1]["at_signature"], "payment_20th_close_next_10th.payment_at(received date) RETURNS timestamptz");
     assert_eq!(v["wire"]["at"], "RFC 3339 in UTC, ending in Z, as dandori's timestamp");
+    assert_eq!(v["wasm"]["file"], "wasm/payment_20th_close_next_10th_wasm.rs");
+    assert_eq!(v["wasm"]["package"], "koyomi:payment-20th-close-next-10th@1.0.0");
+    assert_eq!(v["wasm"]["build"], "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib payment_20th_close_next_10th_wasm.rs -o payment_20th_close_next_10th.wasm");
+    assert_eq!(v["wasm"]["functions"][1]["key"], "payment");
+    assert_eq!(v["wasm"]["functions"][1]["at_key"], "payment.at");
 }
 
 /// The terms on England and Wales, a calendar with no offset: its functions give dates only.
@@ -161,6 +206,12 @@ fn what_the_api_says_of_terms_in_england_and_wales() {
     assert!(v["typescript"]["functions"][1]["at_signature"].is_null());
     assert_eq!(v["go"]["module"], "close20thpay10th");
     assert_eq!(v["sql"]["functions"][1]["signature"], "close_20th_pay_10th.payment(received date) RETURNS date");
+    assert!(v["wasm"]["functions"][1]["at_key"].is_null());
+    // A calendar file's Wasm module answers {"date": …} alone.
+    let c = api("examples/calendars/england_and_wales.cal");
+    assert_eq!(c["wasm"]["file"], "wasm/england_and_wales_wasm.rs");
+    assert_eq!(c["wasm"]["is_open"]["out"], "open");
+    assert!(c["wasm"]["functions"].is_null());
 }
 
 #[test]

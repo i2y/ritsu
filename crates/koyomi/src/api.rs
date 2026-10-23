@@ -1,7 +1,9 @@
 //! `koyomi api` (DESIGN 8): what calling the generated code needs, as JSON, without reading
 //! it. The shape follows rulec's `api`, with an entry per target, so that a tool that reads
 //! rulec's (dandori's `src/rulec.rs`) can read this one the same way. The names and the
-//! signatures come from `naming.rs`, which stage C's generators use too.
+//! signatures come from `naming.rs`, which stage C's generators use too. The Wasm entry has
+//! the shape of rulec's: the files, the build line, the exports a host needs and the shapes of
+//! the answer (DESIGN 13), with the keys of `out` in the place of the signatures.
 
 use crate::ast::{At, Ty};
 use crate::calendar::{Calendar, Info};
@@ -122,8 +124,77 @@ fn wire() -> Value {
     })
 }
 
+/// What `call` answers (DESIGN 13): the record, the line `koyomi vectors` writes, and the refusal
+/// in its place, with the values `refused` takes: `input` for an object that does not carry the
+/// inputs, and the kinds of `wire.errors`.
+fn wasm_answers() -> Value {
+    json!([
+        {"kind": "record", "keys": ["in", "out"]},
+        {"kind": "refusal", "keys": ["refused", "error"], "refused": ["input", "range", "data", "reject", "date"]},
+    ])
+}
+
+/// The Wasm entry: the files and the build, as rulec's `api` gives its Wasm entry, then the keys
+/// of `out` for each date (`functions`), the question the calendar takes (`is_open`), and the
+/// answers. The paths but `file` are in `wasm/`, where `build` and `component` run.
+fn wasm_json(alias: &str, version: &str, functions: Option<Vec<Value>>, calendar: bool) -> Value {
+    use crate::codegen::wasm;
+    let t = Target::Wasm;
+    let mut v = json!({
+        "file": t.file(alias),
+        "module": t.module(alias),
+        "build": wasm::build_line(alias),
+        "wit": format!("{alias}.wit"),
+        "package": wasm::package(alias, version),
+        "world": wasm::world(alias),
+        "call": "call",
+        "call_signature": naming::CALL_SIGNATURE,
+        "post_return": "cabi_post_call",
+        "realloc": "cabi_realloc",
+        "memory": "memory",
+        "runner": format!("{alias}_runner.mjs"),
+        "component": wasm::component_line(alias),
+        "date_type": t.date_type(),
+    });
+    let o = v.as_object_mut().unwrap();
+    if let Some(f) = functions {
+        o.insert("functions".into(), Value::Array(f));
+    }
+    if calendar {
+        o.insert("is_open".into(), json!({"in": "date", "out": "open"}));
+    }
+    o.insert("answers".into(), wasm_answers());
+    v
+}
+
+/// The Wasm entry of a dates file: each date by the key of `out` it comes under, and its time's.
+fn wasm_dates_json(m: &Model) -> Value {
+    let alias = m.file.name.ascii().unwrap_or("");
+    let t = Target::Wasm;
+    let functions = m
+        .dates
+        .iter()
+        .map(|d| {
+            let mut f = json!({"name": d.name, "key": d.name});
+            let o = f.as_object_mut().unwrap();
+            if d.at.is_some() {
+                o.insert("at_key".into(), json!(format!("{}.at", d.name)));
+            }
+            o.insert(
+                "params".into(),
+                Value::Array(d.params.iter().map(|k| json!({"name": m.inputs[*k].name, "alias": m.inputs[*k].alias, "type": t.ty(m.inputs[*k].ty)})).collect()),
+            );
+            f
+        })
+        .collect();
+    wasm_json(alias, &m.file.version, Some(functions), m.cal.is_some())
+}
+
 /// A target's entry for a dates file.
 fn target_json(t: Target, m: &Model) -> Value {
+    if t == Target::Wasm {
+        return wasm_dates_json(m);
+    }
     let alias = m.file.name.ascii().unwrap_or("");
     let module = t.module(alias);
     let functions: Vec<Value> = m
@@ -237,6 +308,10 @@ pub fn calendar_file_json(c: &Calendar) -> Value {
     o.insert("calendar".into(), calendar_json(c, &base));
     o.insert("wire".into(), wire());
     for t in TARGETS {
+        if t == Target::Wasm {
+            o.insert(t.key().into(), wasm_json(&alias, &c.info.version, None, true));
+            continue;
+        }
         let module = t.module(&alias);
         o.insert(
             t.key().into(),

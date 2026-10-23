@@ -6,7 +6,7 @@ koyomi は、締め日や支払日、営業日、月の足し算を書くため�
 
 ファイルには、計算した日付が満たすべき条件も書きます。支払日は営業日である、受領から 60 日以内に払う、受領が遅くなっても支払日は早くならない、といった条件です。koyomi は、これを宣言した範囲のすべての日について確かめます。100 年分でも 3 万 7 千日に満たないので、一部の日を選んで試すのではなく、全部の日を計算できます。成り立たない日があれば全部挙げ、最初の日がどう計算されたかを一段ずつ見せます。
 
-検査を通ったファイルだけを、TypeScript、Python、Go、Rust、SQL のコードにします。生成したコードを動かすのに、ほかのライブラリは要りません。言語の日付ライブラリも使いません。月の足し算の結果がライブラリによって違うからです。
+検査を通ったファイルだけを、TypeScript、Python、Go、Rust、SQL のコードと、どのホストからも JSON のオブジェクト一つで呼べる Wasm のモジュールにします。生成したコードを動かすのに、ほかのライブラリは要りません。言語の日付ライブラリも使いません。月の足し算の結果がライブラリによって違うからです。
 
 ```cal
 dates 支払条件(payment_terms) v1
@@ -154,7 +154,7 @@ $ cargo install --git https://github.com/i2y/ritsu --locked koyomi
 ```console
 $ koyomi check examples/                         # 下の .cal を全部。--format json、--budget <n>
 $ koyomi eval examples/net30.cal invoice_date=2026-03-04   # 一つの入力の計算を一段ずつ
-$ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql、--check
+$ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go|rust|sql|wasm、--check
 $ koyomi vectors examples/net30.cal              # すべての入力の結果を JSON Lines で
 $ koyomi doc examples/net30.cal --format html    # 人が読むページ
 $ koyomi api examples/net30.cal                  # 生成したコードの呼び方を JSON で
@@ -193,17 +193,18 @@ England and Wales のカレンダー（GOV.UK の bank holidays を読む [`cale
 
 ## どう確かめているか
 
-`.cal` の意味を決めるのは参照インタプリタで、`check`、`eval`、`vectors`、`doc` はどれもそれを通して計算します。テストは、検査を通る例と、すべての操作を 1900〜2100 年に使う十四のファイル（英語の七つと、同じものを日本語で書いた七つ）を、五つの出力先それぞれで生成し、出力先の言語のツールで確かめてから、`koyomi vectors` のすべての行をランナーに流して一行ずつ比べます。範囲のすべての入力と、範囲のすぐ外の入力で、行を間引いていません。macOS（Apple シリコン）で `cargo test -- --nocapture` を一度走らせた結果（テスト 156 件、77 秒）は次のとおりです。時間は、五つの出力先を同時に走らせたときのものです。
+`.cal` の意味を決めるのは参照インタプリタで、`check`、`eval`、`vectors`、`doc` はどれもそれを通して計算します。テストは、検査を通る例と、すべての操作を 1900〜2100 年に使う十四のファイル（英語の七つと、同じものを日本語で書いた七つ）を、六つの出力先それぞれで生成し、出力先の言語のツールで確かめてから、`koyomi vectors` のすべての行をランナーに流して一行ずつ比べます。範囲のすべての入力と、範囲のすぐ外の入力で、行を間引いていません。macOS（Apple シリコン）で `cargo test -- --nocapture` を一度走らせた結果（テスト 167 件、76 秒）は次のとおりです。時間は、六つの出力先を同時に走らせたときのものです。
 
 | 出力先 | ツール | 比べた行 | 時間 |
 |---|---|---|---|
-| TypeScript | Node v23.11.0、tsc 7.0.2 | 11,554,942 | 13.7 秒 |
-| Python | Python 3.14.6、mypy 2.4.0 | 11,554,942 | 28.8 秒 |
-| Go | go 1.25.5 | 11,554,942 | 14.5 秒 |
-| Rust | rustc 1.94.1 | 11,554,942 | 14.9 秒 |
-| SQL | PostgreSQL 18.0 | 11,554,942 | 46.9 秒 |
+| TypeScript | Node v24.21.0、tsc 7.0.2 | 11,554,942 | 10.3 秒 |
+| Python | Python 3.13.11、mypy 2.4.0 | 11,554,942 | 30.3 秒 |
+| Go | go 1.25.5 | 11,554,942 | 17.9 秒 |
+| Rust | rustc 1.94.1 | 11,554,942 | 16.1 秒 |
+| SQL | PostgreSQL 18.0 | 11,554,942 | 49.5 秒 |
+| Wasm | rustc 1.94.1（wasm32-unknown-unknown）、Node v24.21.0 | 11,554,942 | 14.8 秒 |
 
-ツールが無ければ、そのテストは `SKIP:` の行を出して通ります。ツールの場所は `KOYOMI_TSC`、`KOYOMI_MYPY`、`KOYOMI_PG_BIN`、`KOYOMI_PG_SOCKET_DIR`、`KOYOMI_CHROME` で渡せます（tsc と mypy は `tools/` に入れます。入れ方は `tools/package.json` と `tools/requirements.txt` にあります）。例ごとの診断、ページ、api は golden のファイルと比べ、このページと docs とスキルに載せたコード、診断、出力は、ツールが実際に出すものと同じかをテストで確かめています。
+ツールが無ければ、そのテストは `SKIP:` の行を出して通ります。ツールの場所は `KOYOMI_TSC`、`KOYOMI_MYPY`、`KOYOMI_PG_BIN`、`KOYOMI_PG_SOCKET_DIR`、`KOYOMI_CHROME` で渡せます（tsc と mypy は `tools/` に入れます。入れ方は `tools/package.json` と `tools/requirements.txt` にあります）。Wasm のモジュールのテストは、rustc の wasm32-unknown-unknown のターゲット、node、wasm-tools、wasmtime を PATH から探します。例ごとの診断、ページ、api は golden のファイルと比べ、このページと docs とスキルに載せたコード、診断、出力は、ツールが実際に出すものと同じかをテストで確かめています。
 
 ## AI エージェント向けのスキル
 

@@ -14,7 +14,7 @@ ritsu は、そのそれぞれに小さな言語を一つずつ与えます。�
 |---|---|---|---|
 | [rulec](#rulec業務の規則) | `.rule` | 業務の規則：運賃、手数料、資格、税 | 12 の言語の関数 |
 | [dandori](#dandoriワークフローの骨組み) | `.flow` | ワークフローの骨組み | Temporal、Step Functions、Argo ほか |
-| [koyomi](#koyomi期日) | `.cal` | 期日：締め日と支払日、営業日、法令の期間 | TypeScript、Python、Go、Rust、SQL |
+| [koyomi](#koyomi期日) | `.cal` | 期日：締め日と支払日、営業日、法令の期間 | TypeScript、Python、Go、Rust、SQL、Wasm |
 | [chobo](#chobo帳簿) | `.book` | 帳簿：勘定、その上限と下限、振替、仮押さえ | PostgreSQL、TigerBeetle、MySQL、TiDB、Vitess を使うクライアント |
 | [geas](#geasエージェントが書いたコードについての主張) | `.geas` | エージェントが書いたコードについての主張 | — |
 | [yuen](#yuen要件の出どころ) | `.req` | 要件の出どころと、それを満たすもの | ReqIF、W3C PROV |
@@ -136,7 +136,7 @@ flow
 
 ### koyomi：期日
 
-期日は、契約や法令の言い方のまま書きます。請求日から 30 日後、休みなら次の営業日、というふうにです。`koyomi check` は、宣言した範囲のすべての日について日付を計算し、書いた条件をその一日ずつで確かめます。暦は固定した出典から読みます（ここでは GOV.UK が出しているイングランドとウェールズの祝日）。TypeScript、Python、Go、Rust、SQL のコードを生成します。
+期日は、契約や法令の言い方のまま書きます。請求日から 30 日後、休みなら次の営業日、というふうにです。`koyomi check` は、宣言した範囲のすべての日について日付を計算し、書いた条件をその一日ずつで確かめます。暦は固定した出典から読みます（ここでは GOV.UK が出しているイングランドとウェールズの祝日）。TypeScript、Python、Go、Rust、SQL のコードと、どのホストからも JSON のオブジェクト一つで呼べる Wasm のモジュールを生成します。
 
 ```cal
 dates net30 v1

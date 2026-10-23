@@ -105,5 +105,48 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/tokyo_wasm.rs",
+    "module": "tokyo.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib tokyo_wasm.rs -o tokyo.wasm",
+    "wit": "tokyo.wit",
+    "package": "koyomi:tokyo@1.0.0",
+    "world": "tokyo",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "tokyo_runner.mjs",
+    "component": "wasm-tools component embed tokyo.wit tokyo.wasm -o tokyo.embedded.wasm && wasm-tools component new tokyo.embedded.wasm -o tokyo.component.wasm",
+    "date_type": "string",
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

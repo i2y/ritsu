@@ -407,5 +407,93 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/period_of_months_wasm.rs",
+    "module": "period_of_months.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib period_of_months_wasm.rs -o period_of_months.wasm",
+    "wit": "period_of_months.wit",
+    "package": "koyomi:period-of-months@1.0.0",
+    "world": "period-of-months",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "period_of_months_runner.mjs",
+    "component": "wasm-tools component embed period_of_months.wit period_of_months.wasm -o period_of_months.embedded.wasm && wasm-tools component new period_of_months.embedded.wasm -o period_of_months.component.wasm",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "first_day",
+        "key": "first_day",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "last_day",
+        "key": "last_day",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "last_day_moved",
+        "key": "last_day_moved",
+        "params": [
+          {
+            "name": "origin",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "month_count",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

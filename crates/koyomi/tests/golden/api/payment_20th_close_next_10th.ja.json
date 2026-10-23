@@ -292,5 +292,73 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/payment_terms_wasm.rs",
+    "module": "payment_terms.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib payment_terms_wasm.rs -o payment_terms.wasm",
+    "wit": "payment_terms.wit",
+    "package": "koyomi:payment-terms@1.0.0",
+    "world": "payment-terms",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "payment_terms_runner.mjs",
+    "component": "wasm-tools component embed payment_terms.wit payment_terms.wasm -o payment_terms.embedded.wasm && wasm-tools component new payment_terms.embedded.wasm -o payment_terms.component.wasm",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "締め日",
+        "key": "締め日",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "支払日",
+        "key": "支払日",
+        "at_key": "支払日.at",
+        "params": [
+          {
+            "name": "受領日",
+            "alias": "received",
+            "type": "string"
+          }
+        ]
+      }
+    ],
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

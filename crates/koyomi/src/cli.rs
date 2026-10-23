@@ -84,13 +84,13 @@ pub fn commands() -> Vec<Cmd> {
             name: "gen",
             args: "<file.cal>...",
             purpose: tr!(
-                "TypeScript・Python・Go・Rust・SQL のコードとランナーを生成する。検査を通らないファイルからは生成しない",
-                "generate TypeScript, Python, Go, Rust and SQL, each with a runner; nothing is generated from a file that does not pass check"
+                "TypeScript・Python・Go・Rust・SQL・Wasm のコードとランナーを生成する。検査を通らないファイルからは生成しない",
+                "generate TypeScript, Python, Go, Rust, SQL and Wasm, each with a runner; nothing is generated from a file that does not pass check"
             ),
             params: vec![("<file.cal>...", tr!(".cal のファイル。ディレクトリなら下の .cal を全部（パスの順）", ".cal files; a directory stands for every .cal under it, in path order"))],
             flags: vec![
-                flag("--target", Some("typescript|python|go|rust|sql"), tr!("この出力先だけを生成する。無ければ五つ全部", "generate this target only; all five without it"))
-                    .choices(&["typescript", "python", "go", "rust", "sql"]),
+                flag("--target", Some("typescript|python|go|rust|sql|wasm"), tr!("この出力先だけを生成する。無ければ全部", "generate this target only; every target without it"))
+                    .choices(&["typescript", "python", "go", "rust", "sql", "wasm"]),
                 flag("--out", Some("<dir>"), tr!("生成物を書くディレクトリ", "the directory the generated files go to")).default("generated"),
                 flag("--check", None, tr!("書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）", "write nothing; exit 1 if a file on disk differs from what gen would write (for CI)")),
             ],
@@ -102,6 +102,7 @@ pub fn commands() -> Vec<Cmd> {
             examples: vec![
                 "koyomi gen examples/close_20th_pay_10th.cal --out generated",
                 "koyomi gen examples/net30.cal --target python --lang ja",
+                "koyomi gen examples/net30.cal --target wasm",
                 "koyomi gen examples/net30.cal --check",
             ],
             codes: vec![],

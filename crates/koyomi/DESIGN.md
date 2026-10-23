@@ -1,6 +1,6 @@
 # koyomi 設計文書
 
-締めと支払、営業日、月の足し算を書く小さな言語。ファイルは `.cal`、コマンドは `koyomi`。書いた条件を範囲のすべての日について総当たりで確かめ、条件を満たさない日付をそのまま出す。検査を通ったものだけを、TypeScript・Python・Go・Rust・SQL（PostgreSQL）のコードにする。
+締めと支払、営業日、月の足し算を書く小さな言語。ファイルは `.cal`、コマンドは `koyomi`。書いた条件を範囲のすべての日について総当たりで確かめ、条件を満たさない日付をそのまま出す。検査を通ったものだけを、TypeScript・Python・Go・Rust・SQL（PostgreSQL）のコードと、どのホストからも呼べる Wasm のモジュールにする。
 
 名前は暦（こよみ）から取った。
 
@@ -19,7 +19,7 @@
                                       │     ├── vectors：範囲のすべての入力の結果
                                       │     └── doc：人が読むページ（月の表、言い直し、エッジケース）
                                       ├── api：関数・引数・カレンダー・データの範囲・出典のハッシュ（JSON）
-                                      └── gen：TypeScript・Python・Go・Rust・SQL（祝日の表を埋め込む）
+                                      └── gen：TypeScript・Python・Go・Rust・SQL・Wasm（祝日の表を埋め込む）
 ```
 
 ### 0.1 芯にする主張
@@ -914,7 +914,7 @@ $ koyomi check tests/mutants/E201_無い日の扱いが無い.cal --lang ja
 |---|---|
 | `koyomi check <file.cal>... [--format json] [--budget <n>]` | 検査（3 章）。ディレクトリを渡すと、下の `.cal` を全部（パスの順に） |
 | `koyomi eval <file.cal> <名前>=<値>... [--format json]` | 一つの入力ですべての日付を計算し、計算の段を見せる。入力は名前でも別名でも渡せる。条件も、その入力で成り立つかを一つずつ言う。calendar のファイルなら `koyomi eval <file.cal> <日付>` で、営業日か休みか（休みの理由つき） |
-| `koyomi gen <file.cal>... [--target typescript\|python\|go\|rust\|sql] [--out <dir>] [--check]` | コードとランナーを生成する（6 章）。検査を通らないファイルからは生成しない。`--target` が無ければ五つ全部。`--out` の既定は `generated`。`--check` は、書き出す代わりに、いまの生成物が最新かを確かめる |
+| `koyomi gen <file.cal>... [--target typescript\|python\|go\|rust\|sql\|wasm] [--out <dir>] [--check]` | コードとランナーを生成する（6 章）。検査を通らないファイルからは生成しない。`--target` が無ければ全部の出力先。`--out` の既定は `generated`。`--check` は、書き出す代わりに、いまの生成物が最新かを確かめる |
 | `koyomi vectors <file.cal>` | 範囲のすべての入力の結果を JSON Lines で出す（6.3） |
 | `koyomi doc <file.cal> [--format markdown\|html] [--months <YYYY-MM>..<YYYY-MM>]` | 人が読むページ（7 章）を標準出力に。既定は Markdown。条件が成り立たなくてもページを出して 0、ページを作れないエラーなら診断を標準エラーに出して 1 |
 | `koyomi api <file.cal>` | 関数・引数・カレンダー・データの範囲・出典のハッシュを JSON で出す（8 章） |
@@ -984,6 +984,7 @@ $ koyomi eval examples/calendars/東京の営業日.cal 2026-05-04 --lang ja
 | Go | `go/<パッケージ名>/<パッケージ名>.go` | `go/<パッケージ名>/<パッケージ名>_runner_test.go` |
 | Rust | `rust/<別名>.rs` | `rust/<別名>_runner.rs` |
 | SQL（PostgreSQL） | `sql/<別名>.sql` | `sql/<別名>_runner.sql` |
+| Wasm | `wasm/<別名>_wasm.rs`（crate root）と、それが読む `wasm/<別名>.rs`（Rust と同じモジュール）、`wasm/<別名>.wit` | `wasm/<別名>_runner.mjs` |
 
 書き出す先は `--out`（既定は `generated`）。calendar のファイルからは `is_open` だけの生成物を、dates のファイルからは日付ごとの関数と、カレンダーを読んでいれば `is_open` を書く。中身が変わらないファイルは書き直さない。`--check` は書かずに比べ、違うファイルと無いファイルを挙げて exit 1 にする（CI 用）。二つの `.cal` が同じ別名で同じ場所に書こうとしたら、何も書かずに exit 2 で止める。
 
@@ -1015,11 +1016,11 @@ $ koyomi eval examples/calendars/東京の営業日.cal 2026-05-04 --lang ja
 // Calendar: calendars/weekdays.cal (calendar weekdays v1, sha256:dbf95c1f04262520)
 ```
 
-日付の計算は、通算日（1970-01-01 からの日数）の整数の上で、生成物の中に書いた小さな関数で行う。どの関数も `src/date.rs` と `src/calendar.rs` の同じ名前の手順を移植したもので、五つの出力先に同じ手順を書く。言語の日付のライブラリは使わない（1.7 の表のとおり、言語ごとに結果が違うから）。言語の日付の型に触れるのは、入力を受け取るときと結果を返すときだけである。Python の `date` は年・月・日の値を読み書きするだけで、SQL の `date` は `d - DATE '1970-01-01'` と `DATE '1970-01-01' + z` で日数に直すだけである。
+日付の計算は、通算日（1970-01-01 からの日数）の整数の上で、生成物の中に書いた小さな関数で行う。どの関数も `src/date.rs` と `src/calendar.rs` の同じ名前の手順を移植したもので、TypeScript・Python・Go・Rust・SQL の五つの言語に同じ手順を書く（Wasm は Rust のモジュールをそのまま持つ）。言語の日付のライブラリは使わない（1.7 の表のとおり、言語ごとに結果が違うから）。言語の日付の型に触れるのは、入力を受け取るときと結果を返すときだけである。Python の `date` は年・月・日の値を読み書きするだけで、SQL の `date` は `d - DATE '1970-01-01'` と `DATE '1970-01-01' + z` で日数に直すだけである。
 
 小さな関数の名前は `_` で始め、言語の書き方に合わせる（TypeScript と Go は `_closeDay`、ほかは `_close_day`）。書くのは、そのファイルの操作が使う関数と、それが呼ぶ関数だけである（`net30.cal` の生成物に `_closeDay` は無い）。無い日の扱いと営業日の慣行は、`.cal` の語を文字列のまま渡す（`"end_of_month"`、`"preceding"`）。無い日に当たりえない操作（日が 28 以下の `day N of month` と `close day N`、月初と月末）には `"none"` を渡す。`"none"` で無い日に当たるのは koyomi の不具合なので、`KoyomiError` ではない例外（Go と Rust は panic、SQL は SQLSTATE XX000）にする。
 
-公開する関数は、日付ごとに一つ（名前は別名。Go はパスカルケース）と、`at` のある日付の時刻の関数（`<別名>_at`）と、カレンダーを読んでいれば `is_open` である。名前と署名は `src/naming.rs` が決めていて、`koyomi api` が出すものと一字一句同じになる（生成物の中に api の署名がそのままあることを `tests/api.rs` が確かめる）。日付の関数は、始まりの日付から自分までの操作を順に並べ、ほかの日付の関数を呼ばない。`<別名>_at` だけは、自分の日付の関数を呼んでから時刻にする。関数の中の変数は `day` 一つで、これは koyomi のキーワードなので、どの別名ともぶつからない。
+公開する関数は、日付ごとに一つ（名前は別名。Go はパスカルケース）と、`at` のある日付の時刻の関数（`<別名>_at`）と、カレンダーを読んでいれば `is_open` である。名前と署名は `src/naming.rs` が決めていて、`koyomi api` が出すものと一字一句同じになる（生成物の中に api の署名がそのままあることを `tests/api.rs` が確かめる）。日付の関数は、始まりの日付から自分までの操作を順に並べ、ほかの日付の関数を呼ばない。`<別名>_at` だけは、自分の日付の関数を呼んでから時刻にする。関数の中の変数は `day` 一つで、これは koyomi のキーワードなので、どの別名ともぶつからない。Wasm のモジュールが export する関数は `call` 一つで、日付の関数と `is_open` の結果を JSON で返す（13 章）。
 
 同じファイルの TypeScript から、payment の二つの関数（実際の出力）：
 
@@ -1065,18 +1066,18 @@ export function payment_at(received: string): string {
 
 行末のコメントは、その操作の `.cal` の行である。始まりの日付の操作には、一行目にその日付の名前を添える（`(締め日)`）。
 
-**エラー**：どの言語でも、エラーから種類が取れる（TypeScript・Python・Rust は `kind`、Go は `Kind`、SQL はメッセージの頭の `koyomi <種類>:`）。種類は四つある。
+**エラー**：どの言語でも、エラーから種類が取れる（TypeScript・Python・Rust は `kind`、Go は `Kind`、SQL はメッセージの頭の `koyomi <種類>:`、Wasm は答えの `refused`）。種類は四つある。
 
 | 種類 | いつ起きるか | 参照インタプリタでは |
 |---|---|---|
 | `range` | 入力が `range` の外（入口のガード） | 範囲の外の入力 |
 | `data` | カレンダーが知らない日が営業日かを問うた | `OpFail::Outside`（E203） |
 | `reject` | `else reject` の操作が無い日に当たった | `OpFail::Missing`（E202） |
-| `date` | 日付が 0001-01-01〜9999-12-31 の外に出た。または、入力が日付として読めない（TypeScript の文字列、Go と Rust の `Date` の値） | `OpFail::OutOfRange`（E204） |
+| `date` | 日付が 0001-01-01〜9999-12-31 の外に出た。または、入力が日付として読めない（TypeScript の文字列、Go と Rust の `Date` の値、Wasm に渡す JSON の文字列） | `OpFail::OutOfRange`（E204） |
 
-検査を通ったファイルでは、範囲の中のどの入力でも `data`・`reject`・`date` は起きない。検査がすべての入力で確かめたからである。したがって公開する関数から実際に出るのは、範囲の外の入力の `range`、`is_open` にデータの範囲の外の日を渡したときの `data`、読めない日付の `date` の三つで、ほかは起きないはずのことへの備えである。
+検査を通ったファイルでは、範囲の中のどの入力でも `data`・`reject`・`date` は起きない。検査がすべての入力で確かめたからである。したがって公開する関数から実際に出るのは、範囲の外の入力の `range`、`is_open` にデータの範囲の外の日を渡したときの `data`、読めない日付の `date` の三つで、ほかは起きないはずのことへの備えである。Wasm のモジュールは、このほかに、渡された JSON が入力を持たないとき（入力が無い、日付が文字列でない、整数が整数の数でない、一つの JSON のオブジェクトでない）に種類 `input` で拒否する（13 章）。
 
-**生成物が使う名前**：生成物とぶつかる別名は、生成する前に E009 でエラーにする（`src/naming.rs` の `GENERATED` と `src/reserved.rs`。予約語の表そのものは C.10 から ritsu-emit のもの。11.1）。生成物が置く `is_open`・`Date`・`KoyomiError`・`ParseDate`、Python が読み込む `date`・`datetime`・`timedelta`、Go の関数が使う `err`、Python の生成物が呼ぶ組み込みの関数（`range`・`str`・`int`・`bool`・`tuple`・`isinstance`・`frozenset`・`super`）、PostgreSQL の予約語と PL/pgSQL の予約語（`begin`・`declare`・`execute`・`foreach` など）である。ファイルの別名は Python と Rust のモジュール、PostgreSQL のスキーマの名前になるので、生成物が読み込むモジュール（Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`）と PostgreSQL のスキーマ（`pg_catalog` など）の名前もエラーにする（`src/naming.rs` の `MODULES`）。`err`、Python の組み込みの関数、PL/pgSQL の予約語、モジュールとスキーマの名前は、C の段階で足した。生成物を書いてみて、引数や関数がその名前だとコードが動かなくなることが分かったからである（Python で日付の別名を `range` にすると、`_close_day` の中の `range(...)` がその関数を呼ぶ）。
+**生成物が使う名前**：生成物とぶつかる別名は、生成する前に E009 でエラーにする（`src/naming.rs` の `GENERATED` と `src/reserved.rs`。予約語の表そのものは C.10 から ritsu-emit のもの。11.1）。生成物が置く `is_open`・`Date`・`KoyomiError`・`ParseDate`、Python が読み込む `date`・`datetime`・`timedelta`、Go の関数が使う `err`、Python の生成物が呼ぶ組み込みの関数（`range`・`str`・`int`・`bool`・`tuple`・`isinstance`・`frozenset`・`super`）、PostgreSQL の予約語と PL/pgSQL の予約語（`begin`・`declare`・`execute`・`foreach` など）である。ファイルの別名は Python と Rust のモジュール、PostgreSQL のスキーマの名前になるので、生成物が読み込むモジュール（Python の `datetime`・`json`・`sys`・`typing`、Rust の `std`・`core`・`alloc`）と PostgreSQL のスキーマ（`pg_catalog` など）の名前もエラーにする（`src/naming.rs` の `MODULES`）。`err`、Python の組み込みの関数、PL/pgSQL の予約語、モジュールとスキーマの名前は、C の段階で足した。生成物を書いてみて、引数や関数がその名前だとコードが動かなくなることが分かったからである（Python で日付の別名を `range` にすると、`_close_day` の中の `range(...)` がその関数を呼ぶ）。Wasm の出力先で増える名前は無い。crate root が置く名前は、canonical ABI の三つ（`cabi_realloc`、`call`、`cabi_post_call`）とモジュールの `k` のほかは `_` で始まり、別名はモジュールの中の名前（`k::payment`）にしかならない。world の名前は別名から作り、WIT が読めない形にならないようにする（13.2）。
 
 `--lang ja` を付けると、頭の二行目から下、関数の説明、エラーのメッセージが日本語になる。
 
@@ -1095,6 +1096,7 @@ export function payment_at(received: string): string {
 | Go | パッケージの `Date{Year, Month, Day int}`、`ParseDate`、`String()` | `error` を返す（中身は `*KoyomiError`、`Kind`） | `gofmt -l` が何も出さない、`go vet`、`go test -c` |
 | Rust | モジュールの `Date { year, month, day }`（`FromStr`、`Display`、`Copy`、`Ord`） | `Result<_, KoyomiError>`（`kind`） | `rustc -D warnings` をエディション 2021 と 2024 で |
 | SQL（PostgreSQL 14 以降） | `date` | `RAISE EXCEPTION 'koyomi <種類>: …' USING ERRCODE = '22023'` | 使い捨てのクラスタの PostgreSQL |
+| Wasm | JSON の `"YYYY-MM-DD"` の文字列 | 例外を上げず、答えに拒否の行 `{"refused":"<種類>","error":"…"}` を返す | `rustc --target wasm32-unknown-unknown -D warnings` をエディション 2021 と 2024 で、Node、wasm-tools と wasmtime |
 
 - TypeScript は Node が型を剥がすだけで走る形にする（`enum`、実行時のコードを含む `namespace`、コンストラクタの引数でのプロパティ宣言を書かない。dandori の生成物と同じ制約）。テストは `tsc --erasableSyntaxOnly` で、その形から外れていないことも確かめる。日付を `string` にしたのは、日付だけの型が標準に無く（`Date` はタイムゾーンを持ち、Temporal は Node 23 に無い）、JSON でそのまま運べるからである。ランナーは生成物を名前空間として読み込む（`import * as m`）ので、日付の別名がランナーの名前とぶつからない。
 - Python は標準の `datetime.date` で受け取り、返す。範囲は Python の `date` と同じなので、変換で溢れない。どの関数にも型注釈を付け、`mypy --strict` を通す。
@@ -1102,6 +1104,7 @@ export function payment_at(received: string): string {
 - Go の関数は、失敗しうるものは小さな関数も含めて `(int, error)` を返し、呼ぶたびに `err` を見る。gofmt が揃える行末のコメント（祝日の表）は、gofmt と同じ揃え方（いちばん長い行の一つ後ろ。幅は文字数）で書く。ランナーは同じパッケージのテストのファイル（`TestMain`）にした。環境変数 `KOYOMI_RUNNER` があれば、テストを走らせる代わりに vectors を読む。`go test -c` で作ったプログラムを走らせる。同じパッケージなので import のパスが要らず、生成したディレクトリをどのモジュールに置いても動く。
 - Rust の生成物はモジュール（`main` を持たない）で、エディション 2021 でも 2024 でも通る書き方にする（let チェーンを使わない、など）。利用者のクレートのエディションに依らないようにするためである。小さな関数は `_` で始まるので、使わないものがあっても警告にならない。ランナーは `#[path]` でモジュールを読み、`#[allow(dead_code)]` をその読み込みにだけ付ける。標準のライブラリに JSON が無いので、ランナーは vectors の `in` を自分で読む（名前にエスケープは無く、値は引用符の中の日付か数）。
 - SQL は、ファイルの別名のスキーマ（`CREATE SCHEMA IF NOT EXISTS <別名>`）に関数を作る。公開する関数と、ループや分岐のある小さな関数は PL/pgSQL で、式一つで書ける小さな関数（曜日、うるう年、月の日数、表の日か、切り捨ての割り算、年月日の文字列）は SQL 標準の関数本体（`RETURN 式`、PostgreSQL 14 以降）にした。後者には `STRICT` を付けない。`STRICT` の関数の本体に `CASE` や `AND` があると、PostgreSQL はその関数を呼ぶ側の式に展開しないからである。展開されるようにしたことで、SQL の突き合わせ（この出力先だけを走らせたとき）は 33.7 秒から 22.5 秒になった。祝日の表は `_is_holiday` の中の `= ANY (ARRAY[…])` に一行一日で埋める。年・月・日のように値を二つ以上返す関数は、整数の配列を返す。公開する関数は `STRICT` で、`NULL` を渡すと `NULL` が返る。スキーマで分けたのは、一つのファイルが関数をいくつも持つので、名前を `<別名>_<日付>` とつなぐと別のファイルの名前とぶつかりうるからである（`a_b` の `c` と `a` の `b_c`）。ランナーは psql のスクリプトで、vectors を `\copy … FROM pstdin` で一時テーブルに入れ、一行ずつ `pg_temp` の関数で計算して `COPY … TO STDOUT` で出す。その関数は SQLSTATE 22023 を受け止めて `error <種類>` にする。
+- Wasm は、Rust のモジュールを canonical ABI の関数一つ（`call: func(input: string) -> string`）の後ろに置き、`rustc` だけで依存の無いモジュールに組む。受け渡しは rulec の Wasm と同じく、JSON のオブジェクトを一つ渡して一つ受け取る形で、答えは koyomi vectors の行と同じ形になる。決めたことと理由は 13 章にある。
 
 **捨てたもの**：
 
@@ -1148,7 +1151,8 @@ calendar のファイルの vectors は、データの範囲のすべての日�
 
 - ランナーは vectors の行を標準入力から読み、一行ごとに生成した関数を呼んで、結果を一行に書く。日付の値と時刻を `out` と同じ順に空白で区切って並べ（calendar なら `true` か `false`）、例外が出たら、最初に出た例外の種類で `error <種類>` と書く。
 - `tests/targets.rs` は、出力先ごとに、`examples/` の検査を通るファイル全部（英語を先にした段階から、calendar の五つと dates の十。England and Wales の例、日本の暦の例の英語の版と日本語の版）と `tests/fixtures/` の十四のファイル（英語の七つと、同じものを日本語で書いた七つ）を生成し、その出力先のツールで生成物を確かめてから（6.2 の表の右の列）、ランナーに vectors の全部の行を流して一行ずつ比べる。vectors はテストの中で作りながらパイプで流し、ディスクには書かない。合わない行があれば、最初の五行の入力と、参照インタプリタの結果と、生成したコードの結果を出して落ちる。合えば `compared <出力先> <ファイル>: <行数> lines` を一行出す。ツールが無ければ `SKIP: <理由>` の行を出して通す。
-- `--lang ja` の生成物も、同じツールで確かめる（型の検査、gofmt と go vet、二つのエディションの rustc、PostgreSQL への読み込み）。日本語の生成物が英語と違うのはコメントとエラーのメッセージだけだが、メッセージの文字列がその言語の構文を壊していないことと、エラーのときに実際に組み立てられることを確かめるため、`payment_20th_close_next_10th.ja.cal` と英語の版 `payment_20th_close_next_10th.cal`（範囲の外の行で `range`）、`東京の営業日.cal` と `england_and_wales.cal`（データの範囲の外の行で `data`）は、日本語の生成物でも全部の行を突き合わせる。
+- `--lang ja` の生成物も、同じツールで確かめる（型の検査、gofmt と go vet、二つのエディションの rustc、PostgreSQL への読み込み、wasm32-unknown-unknown への rustc）。日本語の生成物が英語と違うのはコメントとエラーのメッセージだけだが、メッセージの文字列がその言語の構文を壊していないことと、エラーのときに実際に組み立てられることを確かめるため、`payment_20th_close_next_10th.ja.cal` と英語の版 `payment_20th_close_next_10th.cal`（範囲の外の行で `range`）、`東京の営業日.cal` と `england_and_wales.cal`（データの範囲の外の行で `data`）は、日本語の生成物でも全部の行を突き合わせる。
+- Wasm のモジュールは、ランナーの突き合わせのほかに、`tests/wasm.rs` が JSON の答えそのものを確かめる。全部のファイルについて（大きなファイルは最初の 2,000 行と範囲のすぐ外の行、カレンダーを読む日付のファイルはカレンダーの行も）、答えが koyomi vectors の行と一字一句同じであること、契約の外の入力に拒否の行で答えること、`.wit` から作った component を wasmtime が呼べることである（13.5）。
 - `tests/fixtures/` のファイルは、表の無いカレンダー `calendars/休みの書き方を全部使う.cal`（休みの曜日、年をまたぐ毎年の休み、一日だけの毎年の休み、2 月 29 日の毎年の休み、特定の日、例外の営業日を全部使い、オフセットは +05:45）と、それを使う、または使わない六つの dates のファイルである。月の足し算と引き算をそれぞれ月数 0〜24 で（`helpers_月を足す`、`helpers_月を引く`、各 1,835,350 通り）、k か月後の N 日・N 日締め・月初と月末・年の足し引きを日 27〜31 で（`helpers_月の日と締め`、367,070 通り）、営業日の数え方・四つの慣行・`if closed`・`at 09:00` と `at end of day` を日数 0〜3 で（`helpers_営業日`、293,656 通り）、どれも 1900〜2100 年のすべての日に使う（英語を先にした段階で、同じものを英語の名前で書いた `calendars/every_way_to_close.cal`、`helpers_add_months`、`helpers_subtract_months`、`helpers_days_of_months`、`helpers_business_days`、`helpers_reject`、`helpers_no_dates` を足した。vectors は名前のほかは一行も違わない）。`else reject` は 2 月 29 日を含む範囲では検査が止めるので、無い日に当たらない 2001-03-01〜2003-12-31 で使う（`helpers_エラーにする`）。`date` を一つも宣言しないファイル（`helpers_日付が一つも無い`）も検査を通るので、生成したコードが動くことを確かめる。PLAN C.8 は helpers を Python のランナーで一つ 60 秒以内に収まる大きさに分けることにしていたが、いちばん大きいファイルでも 11 秒ほどだった。
 
 D の段階の終わりに、この機械（macOS、Apple シリコン、14 コア）で `cargo test -- --nocapture` を走らせた結果（C の段階の終わりから、英語の版の例 `payment_20th_close_next_10th.cal` の 691 行が増えた）：
@@ -1383,6 +1387,8 @@ D の段階の実際の出力から、`koyomi doc examples/eom_close_two_months_
 
 calendar のファイルの `api` は、`calendar` の項と出力先ごとの `is_open` だけを出す。
 
+Wasm の項は形が違う。rulec の `api` の Wasm の項と同じ鍵（`build`、`wit`、`package`、`world`、`call`、`call_signature`、`post_return`、`realloc`、`memory`、`runner`、`component`）と、ほかの出力先の項の鍵のうち意味を持つもの（`file`、`module`、`date_type`）を持つ。関数の署名の代わりに、日付ごとに `out` の鍵（`key`、時刻があれば `at_key`）と引数を書き、カレンダーを読むファイルなら `is_open` に問い方（`{"in": "date", "out": "open"}`）を、`answers` に答えの二つの形を書く。`errors` は持たない（13.2）。
+
 将来 dandori がこれを読むなら、dandori の Temporal のワークフローの中で、koyomi が生成した関数を（純関数なので）アクティビティにせずに呼び、`wait until` の時刻を決められる。その形は dandori の側で決めることで、今回は `api` に必要なこと（関数、引数の型と範囲、`at` の関数と時刻の形）を出しておくところまでにする。
 
 ## 9. 出典のコマンド
@@ -1505,8 +1511,8 @@ England and Wales の例（英語）：
 - SHA-256 は ritsu-base のものを使う（依存を足さずに書いたもので、FIPS 180-4 の既知の値でテストしている）。
 - Shift_JIS は自前で読む。変換表は WHATWG の `index-jis0208.txt` から作った `src/sjis_table.rs`（作る手順は `tools/sjis/`。表の頭に、元の索引の Identifier、日付、SHA-256 を書く）。テストは、python3 があれば、全符号を Python の `cp932` と比べる（無ければ SKIP）。
 - 通信は `curl` を子プロセスで呼ぶ（`source fetch` と `source outdated` だけ。`src/fetch.rs` が、ritsu-base の `sources` の e-Gov への問い合わせを呼ぶ）。
-- 生成器は `src/codegen/`（共通の部分と、出力先ごとに一つのファイル）。PLAN は `src/gen/` としていたが、`gen` は Rust 2024 の予約語なので、rulec と同じ `codegen` にした。
-- 突き合わせのテストが使う型の検査器は、版を固定して `tools/` に置く。TypeScript は `tools/package.json` と `tools/package-lock.json`（`npm ci --prefix tools`。`tools/node_modules` は git に入れない）、mypy は `tools/requirements.txt`（`uv venv --python 3.13 tools/.venv` に入れる。venv は git に入れない。2026-10-06 から、`tools/requirements.in` の mypy 2.4.0 から `uv pip compile --generate-hashes` で作った、依存までバージョンとハッシュを固定したロックファイルにした。ritsu の脆弱性の検査が、入れるバージョンのとおりに読めるように。ritsu の DESIGN 3.6）。テストは環境変数 `KOYOMI_TSC` と `KOYOMI_MYPY` でほかの場所のものも使える。PostgreSQL は `KOYOMI_PG_BIN`（`initdb`・`pg_ctl`・`psql` のあるディレクトリ）と `KOYOMI_PG_SOCKET_DIR`（ソケットのディレクトリ。パスは 103 バイトまで）で受け取る。
+- 生成器は `src/codegen/`（共通の部分と、出力先ごとに一つのファイル。Wasm の `wasm.rs` は、Rust のモジュールを `rust.rs` のものそのままで書く）。PLAN は `src/gen/` としていたが、`gen` は Rust 2024 の予約語なので、rulec と同じ `codegen` にした。
+- 突き合わせのテストが使う型の検査器は、版を固定して `tools/` に置く。TypeScript は `tools/package.json` と `tools/package-lock.json`（`npm ci --prefix tools`。`tools/node_modules` は git に入れない）、mypy は `tools/requirements.txt`（`uv venv --python 3.13 tools/.venv` に入れる。venv は git に入れない。2026-10-06 から、`tools/requirements.in` の mypy 2.4.0 から `uv pip compile --generate-hashes` で作った、依存までバージョンとハッシュを固定したロックファイルにした。ritsu の脆弱性の検査が、入れるバージョンのとおりに読めるように。ritsu の DESIGN 3.6）。テストは環境変数 `KOYOMI_TSC` と `KOYOMI_MYPY` でほかの場所のものも使える。Wasm のテストは、rustc の wasm32-unknown-unknown の標準ライブラリ（`rustup target add wasm32-unknown-unknown`）、Node、wasm-tools、wasmtime を PATH から探す。PostgreSQL は `KOYOMI_PG_BIN`（`initdb`・`pg_ctl`・`psql` のあるディレクトリ）と `KOYOMI_PG_SOCKET_DIR`（ソケットのディレクトリ。パスは 103 バイトまで）で受け取る。
 - 診断の文面は `tr!` で英語と日本語を隣に書く。二つの文の引数が違うときは `;` で分ける（`tr!("{}曜", "{}", ja; en)`）。`tr!` と、診断の共通の部分、台帳の書き出し、コマンドの表の読み方は ritsu-base のもので、台帳の中身（`src/codes.rs`）とコマンドの表（`src/cli.rs`）と計算の段（`src/diag.rs` の `Example`）が koyomi のものである（11.1）。
 - 人が読むページは `src/doc/`。`mod.rs` がページを組み、`edges.rs` が範囲をもう一度計算してエッジケースと無い日の扱いの数を集め、`months.rs` が月の表を作り、`markdown.rs` と `html.rs` がそれぞれの形で出す（7 章）。
 - 文書は `docs/`（英語の `reference.md` と `generated-code.md`、`koyomi explain --all --format markdown` の出力そのものの `codes.md` と `codes.ja.md`）、README.md、README.ja.md、`skills/koyomi`（`SKILL.md` は手で書き、ほかは `skills/sync.sh` が `docs/` からコピーする）。`tests/docs.rs` が、README と `docs/` とスキルに載せた `.cal` の行、コマンドの出力、診断、生成したコード、vectors の行、比べた行の数が、実際のものと同じかを確かめ、`tests/skill.rs` が、スキルにコピーしたページとリンクと frontmatter を確かめる。
@@ -1574,6 +1580,10 @@ koyomi は ritsu（七つの言語を一つにまとめる処理系）に取り�
 - tz データベースと夏時間（1.9）。
 - 法令の附則と別表を引くこと（1.5）。
 
+生成するコード：
+
+- Wasm の型付きの WIT（日付ごとの関数と、`result` のエラー）と、Rust のランナーを WASI のコマンドにすること（13.3）。
+
 ページと文書：
 
 - 人が読むページの中で、入力を変えて計算を試すこと（7.5）。
@@ -1584,3 +1594,80 @@ koyomi は ritsu（七つの言語を一つにまとめる処理系）に取り�
 
 - リリースとバイナリ、crates.io。今の入れ方は、リポジトリを clone して `cargo install --path .` である。
 - dandori が `koyomi api` を読んで、ワークフローの中で koyomi が生成した関数を呼ぶこと（8 章）。dandori の側で決めることなので、koyomi は `api` を出すところまでにした。
+
+## 13. 出力先の Wasm（2026-10-24）
+
+### 13.1 きっかけ
+
+ritsu の生成物に、Rust と Wasm の出力先をそろえる。koyomi、kaname、chobo、`ritsu gen` の順に足し、この章はその最初の段である。Wasm のモジュールは、ブラウザでも、Node でも、エッジの実行環境でも、Wasm のプラグインを読むホストでも、ホストの言語を問わずに動く。rulec はすでに規則を Wasm のモジュールにしていて（rulec の DESIGN §15.64）、ホストは JSON のオブジェクトを一つ渡して一つ受け取る。期日も同じ口で呼べれば、一つのホストのコードで規則と日付の両方を呼べる。koyomi の Rust の生成物は標準ライブラリの外を何も読まないので（6.2）、そのまま wasm32-unknown-unknown に組める。
+
+### 13.2 決定
+
+1. **出力先 `wasm` を足す。** `koyomi gen --target wasm` は、`wasm/` に四つのファイルを書く。`--target` が無ければ、ほかの五つと一緒に書く。
+   - `<別名>_wasm.rs`：crate root。canonical ABI のアロケーター（`cabi_realloc`）、`call`、`cabi_post_call` と、JSON のオブジェクトを一つ読む小さな読み手と、入力を読んでモジュールの関数を呼び、答えを書く入口を持つ。
+   - `<別名>.rs`：`rust/` に書くものと一字一句同じモジュール。
+   - `<別名>.wit`：`call` を export する world。
+   - `<別名>_runner.mjs`：Node で走るランナー。
+
+   組むのは `rustc` だけで、cargo も Cargo.toml も要らない。`rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib <別名>_wasm.rs -o <別名>.wasm` の一行で、フラグは rulec と同じである。できるモジュールは何も import しない（WASI も読まない）。例のモジュールは 32〜48 KB で、`payment_20th_close_next_10th.wasm` は祝日の表を入れて 45 KB だった。crate root は、エディション 2021 でも 2024 でも `-D warnings` で通るように書く（`#[unsafe(no_mangle)]` と書き、unsafe の関数の中でも `unsafe` のブロックを使う）。そのため rustc 1.82 以降が要る。
+
+2. **口は `call: func(input: string) -> string` の一つにする（★）。** 日付のファイルは日付の関数をいくつも持ち、カレンダーを読むなら `is_open` も持つが、export するのは `call` だけにした。理由は二つある。
+   - rulec の Wasm と同じ口になる。canonical ABI で文字列を渡して受け取る二十行ほどのホストのコードで、規則のモジュールも日付のモジュールも呼べる。
+   - 関数ごとに export すると、日付の別名が export の名前と WIT の名前になる。WIT には予約語（`result`、`list` など）と名前の形の決まりがあり、モジュールの export には `memory` もある。それに当たる別名を、新しく E009 で止めることになる。`call` 一つなら、別名はモジュールの中の名前（`k::payment`）にしかならず、Rust の予約語の検査（6.1）がそのまま効く。
+
+   `call` は日付を全部計算して返す。日付を一つだけ使うホストは、`out` から一つ読めばよい。日付の計算は一つの入力で数マイクロ秒なので（13.5。871,604 行を、Node から呼んで 3.3 秒）、全部を計算しても困らない。
+
+   どの関数を呼ぶかは、渡すオブジェクトの形で決まる。入力の名前のオブジェクトなら日付で、`{"date": "YYYY-MM-DD"}` ならカレンダー（`is_open`）である。`date` は koyomi のキーワードなので入力の名前にはなれず、二つを取り違えることはない。カレンダーのファイルの vectors の行も `{"in":{"date":…}}` なので、カレンダーのファイルのモジュールも、そのカレンダーを読む日付のファイルのモジュールも、同じオブジェクトに同じ答えを返す。
+
+3. **入力と答えは koyomi vectors の形にする（★）。** 入力は、入力の名前（別名ではない）をキーにした JSON のオブジェクトで、日付は `"YYYY-MM-DD"` の文字列、整数は JSON の数で書く。koyomi vectors の行のように `"in"` の下に入力を置いたものも同じに読むので、vectors の行をそのまま渡せる。答えは、koyomi vectors がその入力に書く行と同じ `{"in":…,"out":…}` で、`out` には日付を宣言の順に置き、`at` のある日付ならその後ろに時刻を置く。`in` に書くのは、日付が受け取る入力だけである。モジュールはそれ以外の入力を読まない（条件だけが使う整数は、ほかの出力先でも関数の引数にならない）。
+
+   どの JSON のエンコーダーが書いたものも読めるようにした。キーの `\u` のエスケープ（Python の `json.dumps` は、既定で日本語の名前をそう書く）、空白、整数の値のいろいろな書き方（`20`、`20.0`、`2e1`。rulec の §15.205 と同じ）を読む。同じキーが二度あれば、後の値を読む（JavaScript の `JSON.parse` と同じ）。
+
+4. **拒否の行は rulec の形にする（★）。** 契約の外の入力には、日付の代わりに `{"refused":"<種類>","error":"<文>"}` を返す。トラップはしない。
+   - 種類は、ほかの出力先のエラーの四つ（`range`、`data`、`reject`、`date`）に、Wasm の入口が拒む `input` を足した五つである。四つの種類の文は、ほかの出力先のエラーのメッセージと同じで、`--lang ja` なら日本語になる。
+   - `input` は、渡されたものが入力を持たないときの種類である。一つの JSON のオブジェクトでない、UTF-8 でない、入力が無い（`null` も無いものとみなす）、日付の入力が文字列でない、整数の入力が整数の数でない（文字列の `"20"`、`20.5`、`true`、64 ビットを超える数）のどれかである。文は rulec の入口と同じ言い方にした（`received is missing`、`received がありません`）。
+   - 文字列だが日付でない値（`2026-02-30`、`2026-4-1`）は `date` にした。TypeScript の出力先が、日付でない文字列を `date` のエラーにするのと同じである。
+   - rulec の `refused` の値は `input` と `contradiction` で、koyomi の値とは違う。どちらも「何を拒んだか」を言う鍵で、行の形は同じなので、ホストは `refused` があるかで答えを分けられる。
+
+5. **world と package の名前。** package は `koyomi:<名前>@<バージョン>`、world はその `<名前>` で、`<名前>` は別名の語を `-` でつないだものにする（`payment_20th_close_next_10th` は `payment-20th-close-next-10th`）。WIT の決まりに合わせて、二つのことをする。`_` が続くところと端の `_` は、一つの `-` にまとめるか、落とす（`a__b` は `a-b`。WIT は `-` の両側に文字か数字を求める）。WIT の予約語になる名前には `%` を付ける（`result` は `%result`）。予約語の表は、WIT.md の予約語を wasm-tools 1.245.1 が読むとおりに写した四十三語である。バージョンは `v1` なら `1.0.0` で、semver の数（64 ビット）に収まらなければ書かない。これで、検査を通るどの別名からも、wasm-tools が読める world ができる。Wasm でだけ使えない別名は無いので、新しい診断は足していない（13.5）。world の doc コメントには、送るもの（入力の名前、型、範囲）と返るもの（`out` の鍵）を書く。
+
+6. **`koyomi api` の `wasm` の項。** rulec の `api` の Wasm の項と同じ鍵に、ほかの出力先の項の `file`・`module`・`date_type` を足した（8 章）。Wasm には関数の署名が無いので、日付ごとに `out` の鍵を書く。`errors` は持たない。rulec と同じく、モジュールは例外を上げず、捕まえるものが無いからである。拒否の形は `answers` が言う。
+
+7. **ランナーは Node の `.mjs` にする。** ほかのランナーと同じく、vectors の行を標準入力から読み、答えを一行ずつ書く（`out` の値を空白で区切り、拒否なら `error <種類>`）。rulec も Wasm を Node で走らせて確かめている。
+
+### 13.3 捨てたもの
+
+- 日付ごとに関数を export すること。JSON の口を関数ごとに置く形も、型付きの関数も、13.2 の 2 の理由で採らなかった。
+- 型付きの WIT（`payment: func(received: string) -> result<string, koyomi-error>`）。読みやすいが、canonical ABI の `result` や record の配置を、生成するコードが自前で書くことになる。rulec が JSON の口を選んだ理由（rulec の §15.64）と同じである。
+- 答えから `in` を外すこと。答えを koyomi vectors の行と同じ形にしておけば、ホストは答えを vectors と同じに読め、テストも答えを vectors の行と一字一句比べられる。
+- 拒否を、koyomi vectors の誤りの行（`{"in":…,"error":"range"}`）の形にすること。rulec の Wasm の拒否の行と形が分かれ、両方を呼ぶホストが二通りに読むことになる。`error` の鍵に、rulec では文が、koyomi では種類が入ることにもなる。
+- `wasm32-wasip1` を対象にすること。WASI の import が付き、ブラウザや WASI を持たないホストでは動かない。Rust のランナーを WASI のコマンドにすること（rulec の §15.63）もしていない。日付のモジュールを標準入出力で呼ぶ実行環境の例が、まだ無いからである。
+- cargo のプロジェクトを書くこと。`rustc` 一つで組めることは、Rust の出力先と同じ約束である（rulec の §15.64 と同じ）。
+- Wasm の口のコードを rulec と分け合うこと。koyomi は rulec を読まない（P7）。ABI の三つの関数と JSON の整数の読み方は rulec と同じ手順で、分け合うなら、ritsu の生成器が共に使う ritsu-emit に置くことになる（11.1）。この段では koyomi の中に書いた。
+
+### 13.4 変わること
+
+- `koyomi gen` は、`--target` が無ければ `wasm/` の四つのファイルも書く。前のバージョンで生成したディレクトリに `koyomi gen --check` をかけると、`wasm/` のファイルが無い（`missing:`）と言って 1 で終わる。`koyomi gen` を一度かけ直すか、`--target` で出力先を選べばよい。
+- 二つのファイルの別名が、Wasm の出力先でだけ同じパスを書くことがある（別名 `same` の crate root と、別名 `same_wasm` のモジュールは、どちらも `wasm/same_wasm.rs`）。ほかの出力先で同じパスを書くときと同じく、`koyomi gen` は何も書かずに 2 で止まる。
+- `--target` が `wasm` を受け付ける。`koyomi --help` と `koyomi gen --help` の文が変わる（`TypeScript, Python, Go, Rust, SQL and Wasm`、`every target without it`、例の `--target wasm`）。
+- `koyomi api` の出力に `wasm` の項が足される。ほかの鍵は変わらない。
+- E010（別名の形が違う）の注は、「五つの出力先のどれでも使える形」が「どの出力先でも使える形」になる（英語は `all five targets accept` が `every target accepts`）。
+- ほかの出力先の生成物と、`check`・`doc`・`vectors` の出力は変わらない（13.5）。
+
+### 13.5 確かめたこと
+
+- `tests/targets.rs` の `wasm`。突き合わせの 29 のファイル（6.4）の crate root を、`koyomi api` の組み立ての行（エディション 2021）と、エディション 2024 の型の検査で、どちらも `-D warnings` で通す。Node のランナーに vectors の全部の行（11,554,942 行）を流し、一行ずつ参照インタプリタの結果と比べる。`--lang ja` の生成物も、6.4 の四つのファイルで全部の行を比べる。この機械で、Wasm だけを走らせると、突き合わせは 13.4 秒（ランナーを四つずつ同時に）、試験は組み立てを含めて 19 秒だった。koyomi の試験の全部（167 件、SKIP なし。`cargo xtask test --level tools -p koyomi`）と並べて走らせたときは、突き合わせが 14.8 秒だった（README の表）。
+- `tests/wasm.rs` の五つのテスト。
+  - `gen` が四つのファイルを書き、`wasm/` のモジュールが `rust/` のものと一字一句同じこと。world に、送るものと返るものが英語と日本語で書かれること。
+  - 29 のファイルの答えが、koyomi vectors の行と一字一句同じこと（`in` は、日付が受け取る入力だけにして比べる）。行が 100,000 に満たないファイルは全部の行、大きなファイルは最初の 2,000 行と範囲のすぐ外の行、カレンダーを読む日付のファイルはカレンダーの最初の 400 日とデータの範囲のすぐ外の日で、合わせて 303,558 行。ホストはモジュールの import が空であることも確かめる。
+  - 契約の外の入力への答え（英語と日本語、整数を受け取るファイル、カレンダーのファイル）。範囲の外、日付でない文字列、文字列でない日付、無い入力と `null`、整数でない値、`\u` のエスケープのキー、同じキーが二度、`"in"` の下、JSON でないもの、UTF-8 でないもの、百段の入れ子。どれもトラップせずに、決まった行で答える。同じ入力で二万回呼んでも、メモリが大きくならない（答えを解放している）。
+  - `koyomi api` の `wasm.component` の二行で component を作り、`wasm-tools validate` が通り、world が `call` を export し、wasmtime が `--invoke` で呼ぶと、答えが同じ行になること（英語の日付、日本語の範囲の外、カレンダー）。
+  - WIT の予約語の四十三語と、数字の語、`__`、端の `_` を別名にしたファイル。ほかの出力先が別名として受け付けない 17 語（E009）を除いた 32 の別名で、日付のファイルとカレンダーのファイルの world を wasm-tools が読み、名前と package のバージョン（`v007` は `7.0.0`、21 桁のバージョンは書かない）が上のとおりであること。
+- `tests/cli.rs`。`gen` が書くファイルの一覧に `wasm/` の四つが入ること、`--target wasm` が四つだけを書くこと、Wasm の出力先でだけ同じパスになる二つの別名を `gen` が止めること。
+- `tests/api.rs`。例の api の golden を取り直し、差分が `wasm` の項を足しただけであること（15 のファイルで 999 行の追加、削除は 0）。`wasm` の項の `file` が `gen` の書く crate root で、`call_signature` が `.wit` にあり、`out` の鍵がどれも crate root にあること。
+- `tests/docs.rs` と `tests/design.rs`。ページの ```wit と ```js のコードも、`gen` の書くファイルから切り出したものであること（コードの塊は、出力先ではなくファイルの拡張子で照らし合わせるようにした）。README には、比べた行の数を六つの出力先のそれぞれについて書く（`tests/docs.rs` が数える）。
+- 替える前と後の突き合わせ。替える前のバイナリ（ブランチの起点 830e32df のまま組んだもの）と後のバイナリで、木の `.cal` の全部（228。koyomi の 137、yuen の 51、ritsu の 13、dandori の 11、sakai の 6、ブラウザで試すページの 4、sekisho の 3、kaname の 2、rulec の 1）について、`check`（英語、日本語、JSON）、`doc`（英語、日本語）、`vectors`、`api`、`gen` の五つの出力先（英語と日本語）と `--target` なしの `gen` を比べた。4,104 回の出力は、`api` の `wasm` の項と、`--target` なしの `gen` が書く `wasm/` のファイル（検査を通る 103 のファイルで 412）のほかは一字も変わらない。五つの出力先の生成物 2,060 個も一バイトも変わらない。変わったのは `koyomi --help` と `koyomi gen --help` の文（英語と日本語）だけである。
+
+### 13.6 見つけて直していないもの
+
+- rulec の `.wit` は、規則の名前によっては wasm-tools が読めない形になる。rulec の `wit_name` は別名の `_` を `-` に替えるだけなので、`__` を含む名前（`a__b` は `a--b`）、`_` で終わる名前（`trailing_` は `trailing-`）、WIT の予約語の名前（`list`、`record`、`world`、`type`、`use` など。四十三語のうち、rulec の検査は 39 語を規則の名前として受け付け、その 39 の `.wit` はどれも wasm-tools が読めなかった）では、`wasm-tools component embed` が `.wit` を読めずに止まる。モジュールそのもの（`call`）は動き、component にするところだけが止まる。直すには、13.2 の 5 の作り方がそのまま使える。

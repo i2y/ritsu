@@ -5,16 +5,18 @@
 //!
 //! This module turns a checked file into [`Unit`]: what every target writes, already decided
 //! — the header, the calendar's data, each date's function as the operations of its chain in
-//! order, and the helpers those operations need. The five targets (`typescript.rs`,
-//! `python.rs`, `go.rs`, `rust.rs`, `sql.rs`) only spell it. The helpers are the procedures of
-//! `date.rs` and `calendar.rs`, written out once per target on day numbers; no target calls
-//! its language's date library for the arithmetic (DESIGN 1.7).
+//! order, and the helpers those operations need. The five languages (`typescript.rs`,
+//! `python.rs`, `go.rs`, `rust.rs`, `sql.rs`) only spell it, and the Wasm target (`wasm.rs`)
+//! puts the Rust module behind the canonical ABI of one function (DESIGN 13). The helpers are
+//! the procedures of `date.rs` and `calendar.rs`, written out once per language on day numbers;
+//! no target calls its language's date library for the arithmetic (DESIGN 1.7).
 
 pub mod go;
 pub mod python;
 pub mod rust;
 pub mod sql;
 pub mod typescript;
+pub mod wasm;
 
 use crate::api::relative;
 use crate::ast::{At, Conv, Kind, Ty};
@@ -289,6 +291,8 @@ pub struct Unit {
     /// The file's name and its alias (the module, package or schema).
     pub name: String,
     pub alias: String,
+    /// The version of the heading, `1` for `v1`.
+    pub version: String,
     pub description: Option<String>,
     /// The header's lines, without the comment marker.
     pub header: Vec<String>,
@@ -492,6 +496,7 @@ pub fn dates_unit(m: &Model, lang: Lang, shown: Option<&str>) -> Unit {
         kind: Kind::Dates,
         name: m.file.name.text.clone(),
         alias: m.file.name.ascii().unwrap_or("").to_string(),
+        version: m.file.version.clone(),
         description: m.file.description.clone(),
         header,
         cal,
@@ -514,6 +519,7 @@ pub fn calendar_unit(c: &Calendar, lang: Lang, shown: Option<&str>) -> Unit {
         kind: Kind::Calendar,
         name: c.info.name.clone(),
         alias: c.info.alias.clone().unwrap_or_default(),
+        version: c.info.version.clone(),
         description: None,
         header,
         cal: Some(data),
@@ -523,7 +529,9 @@ pub fn calendar_unit(c: &Calendar, lang: Lang, shown: Option<&str>) -> Unit {
     }
 }
 
-/// The files a target writes for a unit, as paths under the output directory and contents.
+/// The files a target writes for a unit, as paths under the output directory and contents: the
+/// file `api` names first. Wasm writes its crate root, the Rust module it holds, the `.wit` and
+/// the runner (DESIGN 13).
 pub fn files(u: &Unit, t: Target) -> Vec<(String, String)> {
     let (module, runner) = match t {
         Target::TypeScript => (typescript::module(u), typescript::runner(u)),
@@ -531,6 +539,15 @@ pub fn files(u: &Unit, t: Target) -> Vec<(String, String)> {
         Target::Go => (go::module(u), go::runner(u)),
         Target::Rust => (rust::module(u), rust::runner(u)),
         Target::Sql => (sql::module(u), sql::runner(u)),
+        Target::Wasm => {
+            let a = &u.alias;
+            return vec![
+                (t.file(a), wasm::root(u)),
+                (format!("wasm/{a}.rs"), wasm::module(u)),
+                (format!("wasm/{a}.wit"), wasm::wit(u)),
+                (runner_file(t, a), wasm::runner(u)),
+            ];
+        }
     };
     vec![(t.file(&u.alias), module), (runner_file(t, &u.alias), runner)]
 }
@@ -547,6 +564,7 @@ pub fn runner_file(t: Target, alias: &str) -> String {
         }
         Target::Rust => format!("rust/{alias}_runner.rs"),
         Target::Sql => format!("sql/{alias}_runner.sql"),
+        Target::Wasm => format!("wasm/{alias}_runner.mjs"),
     }
 }
 

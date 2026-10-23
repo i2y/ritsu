@@ -432,5 +432,93 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/civil_code_period_wasm.rs",
+    "module": "civil_code_period.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib civil_code_period_wasm.rs -o civil_code_period.wasm",
+    "wit": "civil_code_period.wit",
+    "package": "koyomi:civil-code-period@1.0.0",
+    "world": "civil-code-period",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "civil_code_period_runner.mjs",
+    "component": "wasm-tools component embed civil_code_period.wit civil_code_period.wasm -o civil_code_period.embedded.wasm && wasm-tools component new civil_code_period.embedded.wasm -o civil_code_period.component.wasm",
+    "date_type": "string",
+    "functions": [
+      {
+        "name": "起算日",
+        "key": "起算日",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "満了日",
+        "key": "満了日",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      },
+      {
+        "name": "満了日_142条",
+        "key": "満了日_142条",
+        "params": [
+          {
+            "name": "起点",
+            "alias": "origin",
+            "type": "string"
+          },
+          {
+            "name": "月数",
+            "alias": "month_count",
+            "type": "number"
+          }
+        ]
+      }
+    ],
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

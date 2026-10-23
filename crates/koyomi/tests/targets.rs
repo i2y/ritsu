@@ -1,8 +1,10 @@
 //! The generated code, held to the reference interpreter (PLAN C.8, DESIGN 6.4). For each of
-//! the five targets, every example that passes check and every `tests/fixtures/helpers_*`
+//! the six targets, every example that passes check and every `tests/fixtures/helpers_*`
 //! file is generated, the target's own tools look at it (tsc, mypy, gofmt and go vet, rustc on
-//! two editions, PostgreSQL), and its runner is given every line of `koyomi vectors`. Every
-//! line it prints is compared with what the reference interpreter gives.
+//! two editions, PostgreSQL, rustc for wasm32-unknown-unknown), and its runner is given every
+//! line of `koyomi vectors`. Every line it prints is compared with what the reference
+//! interpreter gives. What the Wasm module answers as JSON, and the component the `.wit` makes
+//! of it, are tests/wasm.rs's.
 //!
 //! The vectors are made in this process and piped to the runner as they are made; nothing as
 //! large as them is written to disk. A tool that is missing prints `SKIP:` and the test passes
@@ -16,7 +18,7 @@ use ritsu_testkit::run::{Ran, pipe, run};
 use ritsu_testkit::tools::{find, on_path, runs, version};
 use ritsu_testkit::{Need, TempDir, need, skip};
 use koyomi::check::{Checked, check};
-use koyomi::codegen;
+use koyomi::codegen::{self, wasm};
 use ritsu_base::text::Lang;
 use koyomi::naming::{Target, go_package};
 use koyomi::vectors::{self, Expect, Row};
@@ -392,4 +394,59 @@ fn sql() {
     };
     compare_all("sql", &ss, |s| runner(&dir, "postgres", s));
     compare_ja("sql", &ss, |s| runner(&ja, "ja", s));
+}
+
+#[test]
+fn wasm() {
+    if !need(Need::Rustc) || !need(Need::Node) {
+        return;
+    }
+    if !runs("rustc", &["--version"]) || !common::rust_target("wasm32-unknown-unknown") {
+        skip("rustc or its wasm32-unknown-unknown target is missing (rustup target add wasm32-unknown-unknown); the Wasm target is not run");
+        return;
+    }
+    if !runs("node", &["--version"]) {
+        skip("node is not on the PATH; the Wasm target is not run");
+        return;
+    }
+    let ss = subjects();
+    let (dir, ja) = (TempDir::new("wasm"), TempDir::new("wasm-ja"));
+    println!("wasm: {}, node {}", version("rustc", "--version"), version("node", "--version"));
+    for (d, lang) in [(&dir, Lang::En), (&ja, Lang::Ja)] {
+        generate(d.path(), Target::Wasm, &ss, lang);
+        let w = d.path().join("wasm");
+        // Every crate root checked on the 2024 edition, and built by the line koyomi api gives
+        // (the 2021 edition), both with -D warnings; the Japanese modules are built only for the
+        // files they are run on.
+        let queue: Mutex<Vec<&Subject>> = Mutex::new(ss.iter().collect());
+        std::thread::scope(|sc| {
+            for _ in 0..AT_ONCE {
+                sc.spawn(|| {
+                    loop {
+                        let Some(s) = queue.lock().unwrap().pop() else { break };
+                        let root = format!("{}_wasm.rs", s.alias);
+                        let mut c = Command::new("rustc");
+                        c.current_dir(&w).args(["--edition", "2024", "-D", "warnings", "--target", "wasm32-unknown-unknown", "--crate-type", "cdylib", "--emit=metadata", "--out-dir", "meta"]).arg(&root);
+                        ok_or_fail(&format!("rustc --edition 2024 {root}"), &run(&mut c, LIMIT));
+                        if lang == Lang::Ja && !JA_FILES.contains(&s.path) {
+                            continue;
+                        }
+                        let line = wasm::build_line(&s.alias);
+                        let words: Vec<&str> = line.split(' ').collect();
+                        let mut c = Command::new(words[0]);
+                        c.current_dir(&w).args(["-D", "warnings"]).args(&words[1..]);
+                        ok_or_fail(&format!("{line} (-D warnings)"), &run(&mut c, LIMIT));
+                    }
+                });
+            }
+        });
+    }
+    println!("wasm: every crate root builds as koyomi api says and checks on the 2024 edition, with -D warnings, in English and in Japanese");
+    let runner = |d: &TempDir, s: &Subject| {
+        let mut c = Command::new("node");
+        c.arg(d.path().join(format!("wasm/{}_runner.mjs", s.alias)));
+        c
+    };
+    compare_all("wasm", &ss, |s| runner(&dir, s));
+    compare_ja("wasm", &ss, |s| runner(&ja, s));
 }

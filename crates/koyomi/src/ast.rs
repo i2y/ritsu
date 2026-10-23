@@ -36,7 +36,7 @@ impl Name {
 }
 
 /// `[a-z][a-z0-9_]*`: the form an alias takes, because it becomes an identifier in five
-/// languages (DESIGN 1.2).
+/// languages, and the name of the Wasm target's world (DESIGN 1.2, 13).
 pub fn is_alias(s: &str) -> bool {
     let mut cs = s.chars();
     matches!(cs.next(), Some('a'..='z')) && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')

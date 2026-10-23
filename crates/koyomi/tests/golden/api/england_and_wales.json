@@ -102,5 +102,48 @@
     "errors": [
       "SQLSTATE 22023"
     ]
+  },
+  "wasm": {
+    "file": "wasm/england_and_wales_wasm.rs",
+    "module": "england_and_wales.wasm",
+    "build": "rustc --edition 2021 -C opt-level=s -C lto -C panic=abort -C strip=symbols --target wasm32-unknown-unknown --crate-type cdylib england_and_wales_wasm.rs -o england_and_wales.wasm",
+    "wit": "england_and_wales.wit",
+    "package": "koyomi:england-and-wales@1.0.0",
+    "world": "england-and-wales",
+    "call": "call",
+    "call_signature": "call: func(input: string) -> string",
+    "post_return": "cabi_post_call",
+    "realloc": "cabi_realloc",
+    "memory": "memory",
+    "runner": "england_and_wales_runner.mjs",
+    "component": "wasm-tools component embed england_and_wales.wit england_and_wales.wasm -o england_and_wales.embedded.wasm && wasm-tools component new england_and_wales.embedded.wasm -o england_and_wales.component.wasm",
+    "date_type": "string",
+    "is_open": {
+      "in": "date",
+      "out": "open"
+    },
+    "answers": [
+      {
+        "kind": "record",
+        "keys": [
+          "in",
+          "out"
+        ]
+      },
+      {
+        "kind": "refusal",
+        "keys": [
+          "refused",
+          "error"
+        ],
+        "refused": [
+          "input",
+          "range",
+          "data",
+          "reject",
+          "date"
+        ]
+      }
+    ]
   }
 }

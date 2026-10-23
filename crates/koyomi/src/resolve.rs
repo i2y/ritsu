@@ -215,8 +215,8 @@ fn alias_checks(c: &mut Ctx, n: &Name, what: &Text, module: bool) {
             c.err("E010", *s, tr!("別名 {a} の形が違います。別名は `[a-z][a-z0-9_]*` です", "The alias {a} is not of the form `[a-z][a-z0-9_]*`"))
                 .notes
                 .push(tr!(
-                    "別名は、生成したコードの識別子になります。koyomi は、五つの出力先のどれでも使える形に限っています。",
-                    "An alias becomes an identifier in the generated code, so it takes a form all five targets accept."
+                    "別名は、生成したコードの識別子になります。koyomi は、どの出力先でも使える形に限っています。",
+                    "An alias becomes an identifier in the generated code, so it takes a form every target accepts."
                 ));
             return;
         }
