@@ -8,7 +8,8 @@
 //!   bin/<name>.js`) in the same copy of the files: standard output, standard error, exit code, and
 //!   every file the command wrote, byte for byte.
 //! - `the_api_in_the_dirs_of_a_project_answers_as_the_binary_does`: the same commands (but `explain`)
-//!   through the API with `dirs`, the module opening the copy of the project alone.
+//!   through the API with `dirs`, the module opening the copy of the project alone, command after
+//!   command in one Node process for each thread, as a service runs them.
 //! - `what_needs_another_program_says_so`: a command that starts another program or reaches the
 //!   network stops in the package with the language's own head and exit code, saying why and what
 //!   to run instead (ritsu-base's `wasi`).
@@ -23,13 +24,16 @@
 //!
 //! The package is the one `packaging/npm/build.sh <dir>` wrote: `RITSU_NPM` names the .tgz, else
 //! `<target>/npm/i2y-ritsu-<version>.tgz`. Without node, or without that file, a test says SKIP
-//! and passes; these are tests of the tools level.
+//! and passes; these are tests of the tools level. `RITSU_NPM_PART=<k>/<n>` has the two
+//! comparisons take a part of their units (a copy that cases only read, or a case that writes),
+//! every n-th from the k-th (tools.yml runs them in two parts side by side); without it they take
+//! all.
 
 mod common;
 
 /// In a module of their own, so that a run picks them by name: `cargo xtask test --level tools -p
-/// ritsu -- npm::` (tools.yml runs them so, with each Node, and the job of the other tests of ritsu
-/// passes them over with `--skip npm::`).
+/// ritsu -- npm::` (tools.yml runs them so, in two jobs with each Node, and the job of the other
+/// tests of ritsu passes them over with `--skip npm::`).
 mod npm {
     use super::common;
     use ritsu_testkit::{Need, TempDir, ready};
@@ -689,10 +693,23 @@ mod npm {
         Writes { from: &'a str, into: &'a str, case: &'a Case },
     }
 
+    /// The part of a comparison's jobs (its units: a copy that cases only read, or a case that
+    /// writes) this run takes, from `RITSU_NPM_PART` (`<k>/<n>`: every n-th job from the k-th, so
+    /// that n runs, one with each k, hold every job between them; tools.yml's npm jobs take the
+    /// comparisons in two parts, side by side), else all of them: `(k, n)`.
+    fn part() -> (usize, usize) {
+        let Some(v) = std::env::var("RITSU_NPM_PART").ok().filter(|v| !v.is_empty()) else { return (1, 1) };
+        let parsed = v.split_once('/').and_then(|(k, n)| Some((k.trim().parse::<usize>().ok()?, n.trim().parse::<usize>().ok()?)));
+        match parsed {
+            Some((k, n)) if (1..=n).contains(&k) => (k, n),
+            _ => panic!("RITSU_NPM_PART is {v:?}, not <k>/<n> with k from 1 to n"),
+        }
+    }
+
     /// Every case of `gs` that `keep` keeps, run by one side (the native binary) and by the other
     /// (the package) in the same copy of its files: the commands counted by language, the
-    /// differences, and the seconds it took.
-    fn compare(gs: &[Group], keep: &(dyn Fn(&Case) -> bool + Sync), one: &Side, two: &Side) -> (BTreeMap<&'static str, usize>, Vec<String>, u64) {
+    /// differences, the seconds it took, and which part of the jobs ran (`part`; empty for all).
+    fn compare(gs: &[Group], keep: &(dyn Fn(&Case) -> bool + Sync), one: &Side, two: &Side) -> (BTreeMap<&'static str, usize>, Vec<String>, u64, String) {
         let mut jobs: Vec<Job> = Vec::new();
         for g in gs {
             let reads: Vec<Case> = g.reads.iter().filter(|c| keep(c)).cloned().collect();
@@ -703,6 +720,10 @@ mod npm {
                 jobs.push(Job::Writes { from: &g.from, into: &g.into, case: c });
             }
         }
+        let (k, n) = part();
+        let all = jobs.len();
+        let jobs: Vec<Job> = jobs.into_iter().enumerate().filter(|(i, _)| i % n == k - 1).map(|(_, j)| j).collect();
+        let share = if n == 1 { String::new() } else { format!(" (part {k} of {n}: {} of its {all} units)", jobs.len()) };
         let queue = Mutex::new(jobs.into_iter().collect::<std::collections::VecDeque<_>>());
         let counts: Mutex<BTreeMap<&'static str, usize>> = Mutex::new(BTreeMap::new());
         let failures: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -762,14 +783,14 @@ mod npm {
                 });
             }
         });
-        (counts.into_inner().unwrap(), failures.into_inner().unwrap(), started.elapsed().as_secs())
+        (counts.into_inner().unwrap(), failures.into_inner().unwrap(), started.elapsed().as_secs(), share)
     }
 
     /// What `compare` came to, said and held: no difference.
-    fn report(what: &str, counts: &BTreeMap<&'static str, usize>, failures: &[String], secs: u64) {
+    fn report(what: &str, counts: &BTreeMap<&'static str, usize>, failures: &[String], secs: u64, share: &str) {
         let total: usize = counts.values().sum();
         let by: Vec<String> = counts.iter().map(|(k, v)| format!("{k} {v}")).collect();
-        println!("npm: {total} commands run by the native binary and by {what}, each held to the other ({}), in {secs} s", by.join(", "));
+        println!("npm: {total} commands run by the native binary and by {what}, each held to the other ({}), in {secs} s{share}", by.join(", "));
         assert!(failures.is_empty(), "{} of {total} differ:\n{}", failures.len(), failures.iter().take(40).cloned().collect::<Vec<_>>().join("\n"));
     }
 
@@ -782,8 +803,8 @@ mod npm {
         let gs = groups(&links);
         let n = |s: &Step, at: &Path, _: &Path| native(&links, s.name, &s.args, at, s.stdin.as_deref());
         let w = |s: &Step, at: &Path, _: &Path| npm(&pkg, s.name, &s.args, at, s.stdin.as_deref());
-        let (counts, failures, secs) = compare(&gs, &|_| true, &n, &w);
-        report("the package", &counts, &failures, secs);
+        let (counts, failures, secs, share) = compare(&gs, &|_| true, &n, &w);
+        report("the package", &counts, &failures, secs, &share);
     }
 
     /// `<args>` of a step as `ritsu` takes them: a language's command after its name.
@@ -791,12 +812,157 @@ mod npm {
         if s.name == "ritsu" { s.args.clone() } else { std::iter::once(s.name.to_string()).chain(s.args.iter().cloned()).collect() }
     }
 
+    /// A Node process that runs the API's `runSync` command after command, as a service that
+    /// checks the repositories it is handed runs it: each line of its standard input is a run (the
+    /// directory it works in, the one directory the module may open, the arguments, the standard
+    /// input in hex), and it answers each with a line, what `runSync` answered or what it threw.
+    const IN_DIRS: &str = r#"import { readSync, writeSync } from "node:fs";
+const { runSync } = await import(process.argv[2]);
+const wait = new Int32Array(new SharedArrayBuffer(4));
+const chunk = Buffer.alloc(1 << 16);
+let held = Buffer.alloc(0);
+function line() {
+  for (;;) {
+    const nl = held.indexOf(10);
+    if (nl >= 0) {
+      const l = held.subarray(0, nl).toString("utf8");
+      held = held.subarray(nl + 1);
+      return l;
+    }
+    let n;
+    try {
+      n = readSync(0, chunk, 0, chunk.length, null);
+    } catch (e) {
+      if (e.code !== "EAGAIN") throw e;
+      Atomics.wait(wait, 0, 0, 2);
+      continue;
+    }
+    if (n === 0) return null;
+    held = Buffer.concat([held, chunk.subarray(0, n)]);
+  }
+}
+for (let l = line(); l !== null; l = line()) {
+  const q = JSON.parse(l);
+  let a;
+  try {
+    const r = runSync(q.args, { cwd: q.cwd, dirs: [q.dir], stdin: Buffer.from(q.stdin, "hex") });
+    a = { code: r.code, stdout: r.stdout, stderr: r.stderr };
+  } catch (e) {
+    a = { error: String(e?.stack ?? e) };
+  }
+  const out = Buffer.from(`${JSON.stringify(a)}\n`);
+  for (let at = 0; at < out.length; ) {
+    try {
+      at += writeSync(1, out, at);
+    } catch (e) {
+      if (e.code !== "EAGAIN") throw e;
+      Atomics.wait(wait, 0, 0, 2);
+    }
+  }
+}
+"#;
+
+    /// One process of `IN_DIRS`: its standard input, and the lines of its standard output and
+    /// what it said on its standard error, each read by a thread of its own.
+    struct InDirs {
+        child: std::process::Child,
+        stdin: Option<std::process::ChildStdin>,
+        lines: std::sync::mpsc::Receiver<String>,
+        stderr: std::sync::Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl InDirs {
+        fn start(helper: &Path, index: &str) -> InDirs {
+            use std::io::{BufRead, Read};
+            use std::process::Stdio;
+            let mut c = Command::new("node");
+            c.arg(helper).arg(index).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+            quiet(&mut c);
+            let mut child = c.spawn().unwrap_or_else(|e| panic!("cannot run node {}: {e}", helper.display()));
+            let stdin = child.stdin.take();
+            let out = std::io::BufReader::new(child.stdout.take().unwrap());
+            let (tx, lines) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                for l in out.lines() {
+                    let Ok(l) = l else { break };
+                    if tx.send(l).is_err() {
+                        break;
+                    }
+                }
+            });
+            let stderr = std::sync::Arc::new(Mutex::new(Vec::new()));
+            let (mut err, kept) = (child.stderr.take().unwrap(), std::sync::Arc::clone(&stderr));
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 8192];
+                while let Ok(n) = err.read(&mut buf) {
+                    if n == 0 {
+                        break;
+                    }
+                    kept.lock().unwrap().extend_from_slice(&buf[..n]);
+                }
+            });
+            InDirs { child, stdin, lines, stderr }
+        }
+
+        /// `ritsu <args>` in `at`, the module opening `root` alone; Err when the process ran past
+        /// the limit (it is killed), or stopped (with what it said).
+        fn run(&mut self, args: &[String], at: &Path, root: &Path, input: &[u8]) -> Result<Said, String> {
+            use std::io::Write;
+            let hex: String = input.iter().map(|b| format!("{b:02x}")).collect();
+            let q = serde_json::json!({ "cwd": at, "dir": root, "args": args, "stdin": hex });
+            let sent = self.stdin.as_mut().map(|i| writeln!(i, "{q}").and_then(|_| i.flush()));
+            let stopped = |me: &mut InDirs| {
+                let _ = me.child.wait();
+                std::thread::sleep(Duration::from_millis(100));
+                format!("the process of the API stopped: {}", String::from_utf8_lossy(&me.stderr.lock().unwrap()))
+            };
+            if !matches!(sent, Some(Ok(()))) {
+                return Err(stopped(self));
+            }
+            match self.lines.recv_timeout(LIMIT) {
+                Ok(l) => {
+                    let v: serde_json::Value = serde_json::from_str(&l).unwrap_or_else(|e| panic!("the process of the API answered {l:?}: {e}"));
+                    match v["error"].as_str() {
+                        Some(e) => Ok(Said { code: None, stdout: String::new(), stderr: format!("runSync threw: {e}") }),
+                        None => Ok(Said { code: v["code"].as_i64().map(|c| c as i32), stdout: v["stdout"].as_str().unwrap_or_default().to_string(), stderr: v["stderr"].as_str().unwrap_or_default().to_string() }),
+                    }
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    let _ = self.child.kill();
+                    Err("ran past the limit".to_string())
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(stopped(self)),
+            }
+        }
+    }
+
+    impl Drop for InDirs {
+        /// The end of its standard input ends it.
+        fn drop(&mut self) {
+            drop(self.stdin.take());
+            let started = std::time::Instant::now();
+            while matches!(self.child.try_wait(), Ok(None)) && started.elapsed() < Duration::from_secs(30) {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    thread_local! {
+        /// The process of the API that a thread of `compare` runs its commands in, started at its first.
+        static API: std::cell::RefCell<Option<InDirs>> = const { std::cell::RefCell::new(None) };
+    }
+
     /// The API with `dirs` (DESIGN 8.8): the module opens the copy of the project alone, works in
     /// it, and answers every command a person runs there as the native binary does, the same output,
     /// exit code and files written; the paths it reads, and the root it finds, are inside the copy
     /// (macOS's temporary directory is under /var, a link to /private/var, so the directories above
     /// the copy are ones the module cannot see). Both sides call a language as `ritsu <language> …`,
-    /// since the API names no program; `explain`, which reads no file, is left out.
+    /// since the API names no program; `explain`, which reads no file, is left out. The API runs in
+    /// one Node process for each thread of the comparison, command after command, as a service runs
+    /// it (`IN_DIRS`): each run is one of its own, with nothing of the one before but the compiled
+    /// module.
     #[test]
     fn the_api_in_the_dirs_of_a_project_answers_as_the_binary_does() {
         let t = TempDir::new("npm-package");
@@ -804,24 +970,26 @@ mod npm {
         let bins = TempDir::new("npm-links");
         let links = links(&bins);
         let gs = groups(&links);
-        // runSync, opening the directory it is given alone, printing what it answered as a command would
-        let helper = bins.write(
-            "in-dirs.mjs",
-            "import { readFileSync } from \"node:fs\";\nconst [index, dir, ...args] = process.argv.slice(2);\nconst { runSync } = await import(index);\nconst r = runSync(args, { cwd: process.cwd(), dirs: [dir], stdin: readFileSync(0) });\nprocess.stdout.write(r.stdout);\nprocess.stderr.write(r.stderr);\nprocess.exitCode = r.code;\n",
-        );
+        let helper = bins.write("in-dirs.mjs", IN_DIRS);
         let index = format!("file://{}", pkg.join("lib/index.js").display());
         let n = |s: &Step, at: &Path, _: &Path| native(&links, "ritsu", &after_ritsu(s), at, s.stdin.as_deref());
         let w = |s: &Step, at: &Path, root: &Path| {
-            let mut c = Command::new("node");
-            c.arg(&helper).arg(&index).arg(root).args(after_ritsu(s)).current_dir(at);
-            quiet(&mut c);
-            let r = ritsu_testkit::run::run_with_input(&mut c, s.stdin.as_deref(), LIMIT);
-            assert!(!r.timed_out, "`{}` in {} ran past the limit", s.shown(), at.display());
-            Said { code: r.code, stdout: r.stdout, stderr: r.stderr }
+            API.with_borrow_mut(|api| {
+                let running = api.get_or_insert_with(|| InDirs::start(&helper, &index));
+                match running.run(&after_ritsu(s), at, root, s.stdin.as_deref().unwrap_or_default()) {
+                    Ok(said) => said,
+                    Err(why) => {
+                        // the next command starts a process of its own
+                        *api = None;
+                        assert!(why != "ran past the limit", "`{}` in {} ran past the limit", s.shown(), at.display());
+                        Said { code: None, stdout: String::new(), stderr: why }
+                    }
+                }
+            })
         };
         let keep = |c: &Case| !c.steps.iter().any(|s| s.args.iter().any(|a| a == "explain"));
-        let (counts, failures, secs) = compare(&gs, &keep, &n, &w);
-        report("the API opening the project's directory alone", &counts, &failures, secs);
+        let (counts, failures, secs, share) = compare(&gs, &keep, &n, &w);
+        report("the API opening the project's directory alone", &counts, &failures, secs, &share);
     }
 
     /// What a command that starts another program or reaches the network says in the package, and

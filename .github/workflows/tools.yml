@@ -13,7 +13,7 @@ name: tools
 # and runners under its tools/; its tests read the rules through rulec's library, PLAN D.3, and
 # run the books its examples call on chobo's clients) with ritsu, and the other seven languages
 # with the base layer, the test kit and xtask. The tests of the npm package (ritsu's tests/npm.rs)
-# run in a job of their own, once for each Node the package is for (DESIGN 8.8).
+# run in jobs of their own, two side by side for each Node the package is for (DESIGN 8.8).
 
 on:
   push:
@@ -521,21 +521,30 @@ jobs:
   # them: from the .tgz, --ignore-scripts, offline, the standard input closed, with the network
   # taken away. Node's WASI is part of Node, and has differed between its versions (DESIGN 8.8), so
   # every Node the package is for runs it: 22 (maintenance), 24 (active) and 26 (current) on Linux,
-  # and 24 on macOS, whose directories Node's WASI read otherwise before.
+  # and 24 on macOS, whose directories Node's WASI read otherwise before. Each Node has two jobs
+  # side by side, each holding half the units of the two comparisons of tests/npm.rs (a copy the
+  # commands only read, or a command that writes; RITSU_NPM_PART): the comparisons keep a runner's
+  # every core busy, and two runners take half the time.
   npm:
-    name: npm (node ${{ matrix.node }}, ${{ matrix.os }})
+    name: npm (node ${{ matrix.node }}, ${{ matrix.os }}, part ${{ matrix.part }} of 2)
     runs-on: ${{ matrix.os }}
-    # The tests of the package take 46 to 89 minutes on the runners, more than any job of tools
-    timeout-minutes: 120
+    # The four jobs took 74 to 85 minutes with every Node holding both comparisons whole; a part
+    # takes a third of that CPU, measured (DESIGN 10.5), about 32 minutes of a job
+    timeout-minutes: 60
 
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
         node: ["22", "24", "26"]
+        part: [1, 2]
         include:
           - os: macos-latest
             node: "24"
+            part: 1
+          - os: macos-latest
+            node: "24"
+            part: 2
 
     steps:
       - uses: actions/checkout@v7
@@ -591,5 +600,16 @@ jobs:
       - name: The package
         run: bash packaging/npm/build.sh target/npm
 
+      # The first part runs every test of the package, the second the two comparisons alone; each
+      # comparison takes the units of its part (tests/npm.rs's `part`), so that the two parts hold
+      # every command between them, each once.
       - name: The tests of the package
-        run: "cargo xtask test --level tools -p ritsu -- npm::"
+        env:
+          RITSU_NPM_PART: ${{ matrix.part }}/2
+        run: |
+          set -eu
+          if [ "${{ matrix.part }}" = 1 ]; then
+            cargo xtask test --level tools -p ritsu -- npm::
+          else
+            cargo xtask test --level tools -p ritsu -- --exact npm::the_package_answers_as_the_binary_does npm::the_api_in_the_dirs_of_a_project_answers_as_the_binary_does
+          fi
