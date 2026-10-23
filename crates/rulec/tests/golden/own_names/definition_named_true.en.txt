@@ -1,0 +1,19 @@
+warning[W121]: `True` is a keyword in a target language, so the generated code writes it as `True_`
+  --> tests/own_names/definition_named_true.rule:10
+   |
+10 | define True : money[USD] = 3USD
+   |        ^^^^ the definition's name
+   |
+ Python: it is a keyword there. Every language's generated code writes this name as `True_`, and `rulec api` names it so; the name a value travels under (the keys of the input JSON, the records) stays the one declared.
+ To choose the name the generated code uses yourself, give it an alias (`True(<alias>)`).
+
+warning[W121]: `True_` is a name the code generated for Ruby cannot take
+  --> tests/own_names/definition_named_true.rule:10
+   |
+10 | define True : money[USD] = 3USD
+   |        ^^^^ the definition's name
+   |
+ Ruby: rulec writes this name as `True_` to keep it apart from a keyword, and a name that starts with a capital letter is read as a constant, which can be neither a parameter nor a variable, so the generated Ruby file does not load.
+ For a target you do not generate, leave it. For one you do, give it an alias (`True(<alias>)`).
+
+ok tests/own_names/definition_named_true.rule

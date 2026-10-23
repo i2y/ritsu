@@ -1,0 +1,10 @@
+警告[W121]: `乳脂肪` は、Connect の生成コードでは使えません
+  --> tests/own_names/ASCIIでない名前の列挙.rule:4
+  |
+4 | enum 乳脂肪 = 低(light) | 高(heavy)
+  |      ^^^^^^ 列挙の名前
+  |
+ Connect: `.proto` の名前は ASCII の英字と数字と `_` だけで、この名前の列挙の型や値は書けません。buf と protoc がエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、別名を付けてください（`乳脂肪(<別名>)`）。
+
+ok tests/own_names/ASCIIでない名前の列挙.rule

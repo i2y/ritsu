@@ -1,0 +1,16 @@
+rule 依頼の手数料(request_fee) v1
+description ".proto のメッセージと同じ名前の、やりとりする列挙"
+
+enum 依頼の種類(decide_request) = 急ぎ(urgent) | 通常(routine)
+
+inputs
+  種類(kind) : 依頼の種類
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 種類ごとの手数料(fee_by_kind)
+policy unique
+| 種類 | -> 手数料 |
+| 急ぎ | 5USD      |
+| 通常 | 1USD      |

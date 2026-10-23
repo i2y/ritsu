@@ -1,0 +1,14 @@
+warning[W121]: `http_code` and `HTTPCode` are one identifier in the code generated for PHP, Java and Connect
+  --> tests/spellings/wire_enum_types_in_upper_snake.rule:5
+  |
+4 | enum http_code = ok | missing
+  |      ^^^^^^^^^ the enum's name
+5 | enum HTTPCode = fast | slow
+  |      ^^^^^^^^ the enum's name
+  |
+ PHP: the enums' types are `HttpCode` and `HTTPCode`, and PHP reads the names of classes and enums with case set aside, so one enum is declared twice: the file does not load.
+ Java: an enum's type is nested in the rule's class, and javac writes the two to `StatusFee$HttpCode.class` and `StatusFee$HTTPCode.class`: on a file system that sets case aside (the default of macOS and Windows) the two files are one, and one of the types does not load.
+ Connect: the `.proto` names the values of an enum after its type in UPPER_SNAKE_CASE, and puts the values of every enum of the package in one place: both are `HTTP_CODE`, so the zero value `HTTP_CODE_UNSPECIFIED`, which a field that is not set holds, is declared twice, which buf and protoc refuse.
+ For a target you do not generate, leave it. For one you do, give one of the two an alias (`HTTPCode(<alias>)`).
+
+ok tests/spellings/wire_enum_types_in_upper_snake.rule

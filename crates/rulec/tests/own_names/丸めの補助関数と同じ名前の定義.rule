@@ -1,0 +1,16 @@
+rule 丸めた手数料(rounded_fee) v1
+description "Rust が出力を丸める補助関数と同じ名前の定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+define 基本額(round_down) : money[USD] = 3USD
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 |
+| <=5  | 基本額    |
+| >5   | 2USD      |

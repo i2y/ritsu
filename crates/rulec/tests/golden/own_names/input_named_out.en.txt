@@ -1,0 +1,10 @@
+warning[W121]: `out` takes a name the code generated for Python uses itself
+  --> tests/own_names/input_named_out.rule:5
+  |
+5 |   out : bool
+  |   ^^^ the input's name
+  |
+ Python: the rule's functions keep a local variable of their own, `out`, and the input `out` is that name there as well: the two are one variable, and the type check (mypy) does not pass.
+ For a target you do not generate, leave it. For one you do, give it an alias (`out(<alias>)`).
+
+ok tests/own_names/input_named_out.rule

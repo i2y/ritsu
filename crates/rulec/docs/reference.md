@@ -104,8 +104,9 @@ don't-care cell). Anything else at the start of a name is E002.
 identifiers the generated code uses.
 
 An alias is **required** wherever a **non-ASCII** name reaches the public surface — the rule
-name, an input, an output — because a kanji has no uppercase and so cannot begin an exported
-Go identifier. A missing one is E011. **A name that is already ASCII needs no alias**: it is
+name, an input, an output, a sequence and a field of its elements, which the caller passes and
+fills in as it does an input — because a kanji has no uppercase and so cannot begin an exported
+Go identifier, and the name of a field of the `.proto` is ASCII alone. A missing one is E011. **A name that is already ASCII needs no alias**: it is
 its own identifier, so a rule written entirely in ASCII carries no parentheses at all.
 
 ```rule
@@ -196,8 +197,26 @@ upper case.
 A name a language cannot take where its code puts it is W121 too: one that starts with a capital,
 which Ruby reads as a constant; an output of a rule with two or more, or a field of an element,
 that starts with `_`, which Python's `NamedTuple` does not take; an output or a table's row column
-longer than 63 bytes, whose column PostgreSQL returns under a cut name. An alias makes the name one
-the language takes.
+longer than 63 bytes, whose column PostgreSQL returns under a cut name; a name of `_` alone, which
+four of the languages take for no variable and no field; a name rulec writes with `_` after it
+that starts with a capital (`True_`), a constant there as well; a value whose
+alias is `true` or `false` in any case (`True`), which SQLite gives no column; and an enum on the
+wire whose name is not in ASCII, which the `.proto` cannot write. An alias makes the name one the
+language takes.
+
+**A name the generated code uses itself.** The code each language writes declares names of its
+own beside the rule's: the types of the rows that matched (`Fired`), of the answer of a rule of two
+outputs or more (`Output`) and of one element, the errors, the brands of the units, the helpers
+that round and that write a record, the locals it keeps, and the names the language has built in
+that it reads; and the `.proto` declares its messages, its service, the field `trace` of
+`DecideResponse` that carries the rows that matched, and the zero value `<TYPE>_UNSPECIFIED` of
+every enum. A name of the rule's that a language writes as one of these is W121, which names the
+languages and what the name meets there: an output called `trace` and a value of an enum on the
+wire called `unspecified` (Connect), an enum called `output` in a rule of two outputs (ten
+languages), a definition called `round_down` (the helper one language rounds an output with), and
+a rule called `main` (a package name the go command keeps, and the file a program starts in). The
+generated code keeps its own names for every rule, and an alias on the rule's name sets the two
+apart.
 
 **Numbers** are digits, optionally with `_` as a separator, optionally preceded by `-`,
 optionally followed by a multiplier and then a unit:

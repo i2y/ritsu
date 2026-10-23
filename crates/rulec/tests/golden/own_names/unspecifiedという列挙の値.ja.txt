@@ -1,0 +1,10 @@
+警告[W121]: `未定` は、Connect の生成コードが自分で使う名前と同じになります
+  --> tests/own_names/unspecifiedという列挙の値.rule:4
+  |
+4 | enum 状態(state) = 受付中(active) | 締切(closed) | 未定(unspecified)
+  |                                                    ^^^^ 列挙の値の別名
+  |
+ Connect: `.proto` の列挙は、値が設定されていないフィールドが持つ値 `STATE_UNSPECIFIED` を自分で持ちます。この値も `STATE_UNSPECIFIED` になるので、buf と protoc がエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、別名を変えてください。
+
+ok tests/own_names/unspecifiedという列挙の値.rule

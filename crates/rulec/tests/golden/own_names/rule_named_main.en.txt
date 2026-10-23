@@ -1,0 +1,11 @@
+warning[W121]: `main` takes a name the code generated for Go and Swift uses itself
+  --> tests/own_names/rule_named_main.rule:1
+  |
+1 | rule main v1
+  |      ^^^^ the rule's name
+  |
+ Go: the rule's package is `main`, a name the go command keeps for itself (`go help packages`), so the runner cannot import it.
+ Swift: the rule's file is `main.swift`, which swiftc reads as the program's top-level code, so the runner's `@main` cannot stand beside it: it does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`main(<alias>)`).
+
+ok tests/own_names/rule_named_main.rule

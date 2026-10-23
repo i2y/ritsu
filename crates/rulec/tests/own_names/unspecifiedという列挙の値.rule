@@ -1,0 +1,17 @@
+rule 状態ごとの手数料(fee_by_state) v1
+description "値が設定されていないフィールドのために .proto が持つ値と同じ名前の、列挙の値"
+
+enum 状態(state) = 受付中(active) | 締切(closed) | 未定(unspecified)
+
+inputs
+  時点(at) : 状態
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 時点ごとの手数料(fee_by_at)
+policy unique
+| 時点   | -> 手数料 |
+| 受付中 | 1USD      |
+| 締切   | 2USD      |
+| 未定   | 3USD      |

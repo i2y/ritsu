@@ -1,0 +1,12 @@
+rule pieces_total v1
+description "A sequence whose name is not in ASCII, with no alias"
+
+elements pièces
+  price : money[USD]  range >=0USD <=100USD
+
+outputs
+  total : money[USD]  round down(1USD)
+
+sum spent over pièces of price  range >=0USD <=1000USD
+
+define total : money[USD] = spent

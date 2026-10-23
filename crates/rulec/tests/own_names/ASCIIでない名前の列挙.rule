@@ -1,0 +1,16 @@
+rule 乳脂肪の料金(cream_fee) v1
+description "名前が ASCII でない、やりとりする列挙"
+
+enum 乳脂肪 = 低(light) | 高(heavy)
+
+inputs
+  種類(kind) : 乳脂肪
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 種類ごとの料金(fee_by_kind)
+policy unique
+| 種類 | -> 料金 |
+| 低   | 1USD    |
+| 高   | 2USD    |

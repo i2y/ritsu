@@ -1,0 +1,10 @@
+警告[W121]: `記録` は、Connect の生成コードが自分で使う名前と同じになります
+  --> tests/own_names/traceという出力.rule:9
+  |
+9 |   記録(trace) : number  round down(1)
+  |   ^^^^ 出力の別名
+  |
+ Connect: 答えのメッセージ `DecideResponse` は、当てはまった行を自分のフィールド `trace` で返します。この出力のフィールドも `trace` なので、buf と protoc がエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、別名を変えてください。
+
+ok tests/own_names/traceという出力.rule

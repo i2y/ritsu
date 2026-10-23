@@ -1,0 +1,10 @@
+warning[W121]: `decide_request` takes a name the code generated for Connect uses itself
+  --> tests/own_names/enum_named_like_a_message.rule:4
+  |
+4 | enum decide_request = urgent | routine
+  |      ^^^^^^^^^^^^^^ the enum's name
+  |
+ Connect: the `.proto` declares `DecideRequest`, a message, and the enum's type is `DecideRequest` as well, which buf and protoc refuse.
+ For a target you do not generate, leave it. For one you do, give it an alias (`decide_request(<alias>)`).
+
+ok tests/own_names/enum_named_like_a_message.rule

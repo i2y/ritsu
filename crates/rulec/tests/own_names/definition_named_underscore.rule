@@ -1,0 +1,16 @@
+rule underscore_fee v1
+description "A definition named by an underscore alone"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define _ : money[USD] = 3USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | _      |
+| >5  | 2USD   |

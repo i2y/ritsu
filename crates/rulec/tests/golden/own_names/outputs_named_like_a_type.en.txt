@@ -1,0 +1,11 @@
+warning[W121]: `bool` takes a name the code generated for Python and Go uses itself
+  --> tests/own_names/outputs_named_like_a_type.rule:8
+  |
+8 |   bool : bool
+  |   ^^^^ the output's name
+  |
+ Python: `Output` is a `NamedTuple` a later field of which is of the type `bool`, and the output is `bool` there as well, so mypy reads that type as this field: the code does not pass the type check.
+ Go: the rule's functions read `bool`, a name the language has built in, and the output `bool` is that name there as well, which hides it: the code does not build, or answers otherwise.
+ For a target you do not generate, leave it. For one you do, give it an alias (`bool(<alias>)`).
+
+ok tests/own_names/outputs_named_like_a_type.rule

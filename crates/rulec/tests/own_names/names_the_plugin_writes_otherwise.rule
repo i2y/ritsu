@@ -1,0 +1,25 @@
+rule order_pb v1
+description "Names the Python plugin of protobuf writes otherwise in its stubs"
+
+inputs
+  _rate   : number  range >=0 <=10
+  desc    : bool
+  to_json : bool
+
+elements lines
+  ext_qty : number  range >=0 <=5
+
+outputs
+  fee   : money[USD]  round down(1USD)
+  list_ : number  round down(1)
+
+sum spent over lines of ext_qty  range >=0 <=500
+
+table fee_by_flags
+policy unique
+| desc  | to_json | -> fee |
+| true  | -       | 3USD   |
+| false | true    | 2USD   |
+| false | false   | 1USD   |
+
+define list_ : number = _rate + spent

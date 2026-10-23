@@ -1,0 +1,16 @@
+rule 下線の手数料(underscore_fee) v1
+description "下線だけの名前の定義"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+define _ : money[USD] = 3USD
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 |
+| <=5  | _         |
+| >5   | 2USD      |

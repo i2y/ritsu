@@ -1,0 +1,19 @@
+rule 応答の手数料(status_fee) v1
+description ".proto が値の名前に同じ頭を付ける、やりとりする二つの列挙"
+
+enum 応答の符号(http_code) = 成功(ok) | 不在(missing)
+enum 応答の速さ(HTTPCode) = 速い(fast) | 遅い(slow)
+
+inputs
+  応答(answer) : 応答の符号
+  速さ(speed)  : 応答の速さ
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 応答ごとの手数料(fee_by_answer)
+policy unique
+| 応答 | 速さ | -> 手数料 |
+| 成功 | 速い | 1USD      |
+| 成功 | 遅い | 2USD      |
+| 不在 | -    | 3USD      |

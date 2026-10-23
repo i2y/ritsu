@@ -1,0 +1,10 @@
+警告[W121]: `小さめ` は、TypeScript・JavaScript の生成コードが自分で使う名前と同じになります
+  --> tests/own_names/補助関数と同じ名前のグループ.rule:6
+  |
+6 | group 小さめ(roundDown) = 小
+  |       ^^^^^^ グループの別名
+  |
+ TypeScript・JavaScript: グループの定数は `_roundDown` ですが、生成コードは同じ名前の補助関数を宣言します。同じ名前を二度宣言することになり、組めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を変えてください。
+
+ok tests/own_names/補助関数と同じ名前のグループ.rule

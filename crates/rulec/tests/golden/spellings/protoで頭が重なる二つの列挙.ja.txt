@@ -1,0 +1,14 @@
+警告[W121]: `応答の符号` と `応答の速さ` は、PHP・Java・Connect の生成コードで同じ識別子になります
+  --> tests/spellings/protoで頭が重なる二つの列挙.rule:5
+  |
+4 | enum 応答の符号(http_code) = 成功(ok) | 不在(missing)
+  |      ^^^^^^^^^^ 列挙の別名
+5 | enum 応答の速さ(HTTPCode) = 速い(fast) | 遅い(slow)
+  |      ^^^^^^^^^^ 列挙の別名
+  |
+ PHP: 列挙の型は `HttpCode` と `HTTPCode` ですが、PHP はクラスや列挙の名前の大文字と小文字を区別しないので、同じ列挙を二度宣言することになり、読み込めません。
+ Java: 列挙の型は規則のクラスの中に置かれ、javac は二つを `StatusFee$HttpCode.class` と `StatusFee$HTTPCode.class` に書きます。大文字と小文字を区別しないファイルシステム（macOS と Windows の既定）では二つのファイルが一つになり、片方の型が読み込めません。
+ Connect: `.proto` は列挙の値を、型の名前を UPPER_SNAKE_CASE にしたものを頭に付けて書き、パッケージのどの列挙の値も一つの場所に並べます。二つの頭はどちらも `HTTP_CODE` なので、値が設定されていないことを表す `HTTP_CODE_UNSPECIFIED` が二度になり、buf と protoc がエラーにします。
+ 使わない生成先なら、このままで構いません。使うなら、どちらかの別名を変えてください。
+
+ok tests/spellings/protoで頭が重なる二つの列挙.rule

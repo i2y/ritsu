@@ -673,7 +673,8 @@ impl<'a> Gen<'a> {
     /// it generates — and an `__init__.py` over rulec's own flat modules would make the
     /// directory a package, which is not what it is.
     fn stub_pkg(&self) -> String {
-        format!("stubs.{}", self.proto_package())
+        let parts: Vec<String> = self.proto_package().split('.').map(pb_module).collect();
+        format!("stubs.{}", parts.join("."))
     }
 
     /// The dict that turns one proto enum value into the module's own, and its reverse when
@@ -885,6 +886,7 @@ impl<'a> Gen<'a> {
             .replace("@CLASS@", &pascal(&alias))
             .replace("@SVC@", &svc)
             .replace("@PKG@", &self.stub_pkg())
+            .replace("@PBMOD@", &pb_module(&alias))
             .replace("@EXT@", &ext.concat())
             .replace("@SHA@", &self.src_hash)
             .replace(
@@ -964,7 +966,8 @@ enum Dir {
 /// to itself, so the two are one module; imported by the bare name, it could only be found
 /// with `stubs/` added to the path, and was then a second copy of the same file.
 fn stub_module(import: &str) -> (String, String) {
-    let dotted = import.trim_end_matches(".proto").replace(['/', '\\'], ".") + "_pb";
+    let parts: Vec<String> = import.trim_end_matches(".proto").split(['/', '\\']).map(pb_module).collect();
+    let dotted = parts.join(".") + "_pb";
     match dotted.rsplit_once('.') {
         Some((pkg, base)) => {
             let flat = dotted.replace('.', "_");
@@ -1030,8 +1033,8 @@ from connectrpc.codec import proto_binary_codec, proto_json_codec
 from connectrpc.errors import ConnectError
 
 import @ALIAS@ as m
-@EXT@from @PKG@ import @ALIAS@_pb as pb
-from @PKG@.@ALIAS@_connect import (
+@EXT@from @PKG@ import @PBMOD@_pb as pb
+from @PKG@.@PBMOD@_connect import (
     @SVC@,
     @SVC@ASGIApplication,
     @SVC@Sync,
@@ -1359,6 +1362,7 @@ impl<'a> Gen<'a> {
             .replace("@ALIAS@", &alias)
             .replace("@SVC@", &svc)
             .replace("@PKG@", &self.stub_pkg())
+            .replace("@PBMOD@", &pb_module(&alias))
             .replace("@IMPORTS@", &imports)
             // Whatever these two blocks hold, what stands before `def _request` is two blank
             // lines and no more: an empty placeholder used to leave four.
@@ -1409,8 +1413,8 @@ from connectrpc.code import Code
 from connectrpc.errors import ConnectError
 
 import @ALIAS@ as m
-from @PKG@ import @ALIAS@_pb as pb
-from @PKG@.@ALIAS@_connect import @SVC@ClientSync
+from @PKG@ import @PBMOD@_pb as pb
+from @PKG@.@PBMOD@_connect import @SVC@ClientSync
 @IMPORTS@
 @PRE@
 
@@ -1765,14 +1769,52 @@ pub fn template(f: &crate::ast::RuleFile) -> String {
     )
 }
 
-/// The attribute protobuf-py gives a field of a message: its name, with `_` after it where the
-/// name without its trailing `_`s is a keyword of Python's. A name the rule's own generated code
-/// already writes with `_` (§15.210) takes a second one there, as protoc-gen-py writes it.
+/// The attribute protobuf-py gives a field of a message (`escape_message_attr`): its name, with
+/// `_` after it where the name without its trailing `_`s is a keyword of Python's or a name a
+/// message keeps for itself (`has_field`, `to_json`, `desc`, `self`, …), and `pb_` before it where
+/// it starts with `_` or `pb_`. A name that then ends in `_` after `int`, `str`, `bytes`, `float`,
+/// `bool`, `list` or `dict` takes one more, and one that starts with `ext_` takes `pb_` before it.
+/// A name the rule's own generated code already writes with `_` (§15.210) takes a second one
+/// there, as protoc-gen-py writes it.
 fn pb_attr(field: &str) -> String {
-    const PY: &[&str] = &[
-        "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else",
-        "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise",
-        "return", "try", "while", "with", "yield",
-    ];
-    if PY.contains(&field.trim_end_matches('_')) { format!("{field}_") } else { field.to_string() }
+    const MESSAGE: &[&str] = &["has_field", "clear_field", "to_binary", "to_json", "from_binary", "from_json", "desc", "self"];
+    const CLASSES: &[&str] = &["int", "str", "bytes", "float", "bool", "list", "dict"];
+    let base = field.trim_end_matches('_');
+    let mut name = if PY_KEYWORDS.contains(&base) || MESSAGE.contains(&base) { format!("{field}_") } else { field.to_string() };
+    if name.starts_with('_') || name.starts_with("pb_") {
+        name = format!("pb_{name}");
+    }
+    if name.ends_with('_') && CLASSES.contains(&name.trim_end_matches('_')) {
+        return format!("{name}_");
+    }
+    if name.starts_with("ext_") {
+        return format!("pb_{name}");
+    }
+    name
 }
+
+/// One part of the dotted path of the module protobuf-py's plugin writes for a `.proto`
+/// (`escape_proto_module_component`): a part that starts with a digit takes `_` before it, a
+/// keyword of Python's `_` after it, one that then starts with `_` or `pb_` takes `pb_` before
+/// it, and one that ends in `_pb`, which the plugin keeps for the modules it writes, `_` after it.
+/// `rulec/int_pb/v1/int_pb.proto` is the module `rulec.int_pb_.v1.int_pb__pb`.
+fn pb_module(part: &str) -> String {
+    let mut name = if part.starts_with(|c: char| c.is_ascii_digit()) { format!("_{part}") } else { part.to_string() };
+    if PY_KEYWORDS.contains(&name.trim_end_matches('_')) {
+        name.push('_');
+    }
+    if name.starts_with('_') || name.starts_with("pb_") {
+        name = format!("pb_{name}");
+    }
+    if name.trim_end_matches('_').ends_with("_pb") {
+        name.push('_');
+    }
+    name
+}
+
+/// Python's keywords, as protobuf-py's plugin escapes them.
+const PY_KEYWORDS: &[&str] = &[
+    "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except",
+    "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+    "while", "with", "yield",
+];

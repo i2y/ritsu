@@ -1,0 +1,17 @@
+rule output_fee v1
+description "An enum named like the type of the answer of a rule of two outputs"
+
+enum output = paper | screen
+
+inputs
+  via : output
+
+outputs
+  fee   : money[USD]  round down(1USD)
+  pages : number  round down(1)
+
+table fee_by_via
+policy unique
+| via    | -> fee | pages |
+| paper  | 2USD   | 3     |
+| screen | 0USD   | 0     |

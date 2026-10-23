@@ -1,0 +1,19 @@
+rule size_fee v1
+description "A group named like a helper of TypeScript and JavaScript"
+
+enum size = small | medium | large
+
+group roundDown = small
+
+inputs
+  parcel : size
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_parcel
+policy unique
+| parcel    | -> fee |
+| roundDown | 1USD   |
+| medium    | 2USD   |
+| large     | 3USD   |

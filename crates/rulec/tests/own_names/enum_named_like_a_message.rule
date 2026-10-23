@@ -1,0 +1,16 @@
+rule request_fee v1
+description "An enum on the wire named like a message of the .proto"
+
+enum decide_request = urgent | routine
+
+inputs
+  kind : decide_request
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_kind
+policy unique
+| kind    | -> fee |
+| urgent  | 5USD   |
+| routine | 1USD   |

@@ -1,0 +1,19 @@
+rule status_fee v1
+description "Two enums on the wire whose values the .proto names after one prefix"
+
+enum http_code = ok | missing
+enum HTTPCode = fast | slow
+
+inputs
+  answer : http_code
+  speed  : HTTPCode
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_answer
+policy unique
+| answer  | speed | -> fee |
+| ok      | fast  | 1USD   |
+| ok      | slow  | 2USD   |
+| missing | -     | 3USD   |

@@ -1,0 +1,12 @@
+rule lines_fee v1
+description "A field of an element named by an underscore alone"
+
+elements lines
+  _ : money[USD]  range >=0USD <=100USD
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+sum spent over lines of _  range >=0USD <=1000USD
+
+define fee : money[USD] = spent

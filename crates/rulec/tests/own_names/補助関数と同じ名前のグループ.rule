@@ -1,0 +1,19 @@
+rule 大きさごとの料金(size_fee) v1
+description "TypeScript と JavaScript の補助関数と同じ名前のグループ"
+
+enum 大きさ(size) = 小(small) | 中(medium) | 大(large)
+
+group 小さめ(roundDown) = 小
+
+inputs
+  荷物(parcel) : 大きさ
+
+outputs
+  料金(fee) : money[USD]  round down(1USD)
+
+table 荷物ごとの料金(fee_by_parcel)
+policy unique
+| 荷物   | -> 料金 |
+| 小さめ | 1USD    |
+| 中     | 2USD    |
+| 大     | 3USD    |

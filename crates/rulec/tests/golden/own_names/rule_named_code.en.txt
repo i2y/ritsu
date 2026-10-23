@@ -1,0 +1,11 @@
+warning[W121]: `code` takes a name the code generated for Python and Connect uses itself
+  --> tests/own_names/rule_named_code.rule:1
+  |
+1 | rule code v1
+  |      ^^^^ the rule's name
+  |
+ Python: the standard library has a module `code`, and the module written for the rule is read in its place, or the two cannot be told apart.
+ Connect: the generated code imports `Code`, and the rule's class is `Code` as well, which takes its place: the code does not build, or answers otherwise.
+ For a target you do not generate, leave it. For one you do, give it an alias (`code(<alias>)`).
+
+ok tests/own_names/rule_named_code.rule

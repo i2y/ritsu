@@ -1,0 +1,14 @@
+rule 外部の手数料(out_fee) v1
+description "ふつうの関数が答えを受ける局所変数と同じ名前の入力"
+
+inputs
+  外部(out) : bool
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+table 外部かどうかの手数料(fee_by_out)
+policy unique
+| 外部  | -> 手数料 |
+| true  | 1USD      |
+| false | 2USD      |

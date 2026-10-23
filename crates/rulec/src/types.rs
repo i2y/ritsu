@@ -1904,6 +1904,20 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             missing.push(tr!("出力 {}", "output {}", o.name.text));
         }
     }
+    // A sequence is an input the caller passes, a field of Go's `Input` and of the `.proto`'s
+    // request, and the fields of one element are the fields of the element's struct and message,
+    // which the caller fills in: public names as much as an input's (§15.265). One an `apply`
+    // brings in is the callee's, which its own check holds to this.
+    for el in f.elements.iter().filter(|el| !el.name.text.contains(':')) {
+        if needs_alias(&el.name) {
+            missing.push(tr!("並び {}", "sequence {}", el.name.text));
+        }
+        for fd in el.fields.iter().filter(|fd| !fd.name.text.contains(':')) {
+            if needs_alias(&fd.name) {
+                missing.push(tr!("要素のフィールド {}", "element field {}", fd.name.text));
+            }
+        }
+    }
     if !missing.is_empty() {
         c.diags.push(
             Diag::error("E011", tr!("公開される名前に ASCII の別名がありません", "A public name has no ASCII alias"))
@@ -2075,57 +2089,6 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 "使わない生成先なら、このままで構いません。使うなら別名を変えてください（公開名はそのままで構いません）。",
                 "For a target you do not generate, leave it. For one you do, change the alias; the public name can stay as it is."
             )));
-        }
-    }
-
-    // The `.proto` of the rule as a Connect service takes four names of its own, and they are
-    // not in any language's keyword list (§15.112). An output aliased `trace` would be a
-    // second field of that name in the answer, and an enum aliased `fired` would be a second
-    // message called `Fired` in the package; protoc refuses either, which is late and about a
-    // file the writer of the rule never asked for.
-    {
-        let taken = |a: &str, names: &[&str]| names.iter().any(|w| w.eq_ignore_ascii_case(a));
-        let mut hit: Vec<(&Name, String)> = Vec::new();
-        for o in &f.outputs {
-            if o.name.ascii.as_deref().is_some_and(|a| taken(a, &["trace"])) {
-                hit.push((&o.name, tr!("答えには、出力と並んで `trace` が入ります", "the answer carries `trace` beside the outputs")));
-            }
-        }
-        // A rule that walks more than one sequence names each element's message after its
-        // sequence (`<sequence>_element`, §15.219).
-        let elements: Vec<String> = if f.elements.len() > 1 {
-            f.elements.iter().map(|el| format!("{}_element", el.name.ascii.clone().unwrap_or_else(|| el.name.text.clone()))).collect()
-        } else {
-            Vec::new()
-        };
-        for e in &f.enums {
-            let mut names: Vec<&str> = vec!["fired", "element", "decide_request", "decide_response"];
-            names.extend(elements.iter().map(|s| s.as_str()));
-            if e.name.ascii.as_deref().is_some_and(|a| taken(a, &names)) {
-                hit.push((&e.name, tr!("同じ名前のメッセージが既にあります", "a message of that name is already there")));
-            }
-        }
-        for (n, why) in hit {
-            c.diags.push(
-                Diag::warning(
-                    "W121",
-                    tr!(
-                        "別名 `{}` は生成先の言葉とぶつかります",
-                        "The alias `{}` collides with a word in a target language",
-                        n.ascii.as_deref().unwrap_or("")
-                    ),
-                )
-                .at(at(n.span.line))
-                .mark(n.span.clone(), tr!("別名", "the alias"))
-                .note(tr!(
-                    "Connect: {why}。`.proto` がその名前を二度書くので、protoc がエラーにします。",
-                    "Connect: {why}, so the `.proto` would write that name twice and protoc refuses it."
-                ))
-                .note(tr!(
-                    "使わない生成先なら、このままで構いません。使うなら別名を変えてください（公開名はそのままで構いません）。",
-                    "For a target you do not generate, leave it. For one you do, change the alias; the public name can stay as it is."
-                )),
-            );
         }
     }
 
@@ -2852,6 +2815,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
     c.set_of = set_of;
     c.diags.extend(ds);
     c.output_steps(f, path);
+    // A name of the rule's that its generated code writes as one it gives itself, or that a
+    // language cannot take (§15.265): what the generated code reads is worked out from the types
+    // and the tables, which are all there now.
+    let own = crate::codegen::spellings::own_warnings(f, &c, path);
+    c.diags.extend(own);
     c
 }
 

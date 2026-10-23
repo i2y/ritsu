@@ -1,0 +1,10 @@
+warning[W121]: `trace` takes a name the code generated for Connect uses itself
+  --> tests/own_names/output_named_trace.rule:9
+  |
+9 |   trace : number  round down(1)
+  |   ^^^^^ the output's name
+  |
+ Connect: the answer's message `DecideResponse` returns the rows that matched in a field of its own, `trace`, and this output's field is `trace` as well, which buf and protoc refuse.
+ For a target you do not generate, leave it. For one you do, give it an alias (`trace(<alias>)`).
+
+ok tests/own_names/output_named_trace.rule

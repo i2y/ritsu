@@ -355,7 +355,7 @@ Related codes: [E105](#e105), [E101](#e101)
 
 `error` — **A public name has no ASCII alias**
 
-**When.** The rule name, an input or an output has a **non-ASCII name** and no alias in parentheses. The alias becomes the public name in the generated code (a kanji has no uppercase and cannot begin an exported Go identifier). A name that is already ASCII is its own public name and needs no alias.
+**When.** The rule name, an input, an output, a sequence or a field of one element has a **non-ASCII name** and no alias in parentheses. The alias becomes the public name in the generated code (a kanji has no uppercase and cannot begin an exported Go identifier, and the name of a field of the `.proto` is ASCII alone). A sequence is an input the caller passes, and the fields of one element are what the caller fills in, so they are as public as an input. A name that is already ASCII is its own public name and needs no alias.
 
 **Fix.** Add the alias in parentheses (`重量 : bool` becomes `重量(weight) : bool`). On a derived value, a definition, a group or a table the alias is optional: write one and the generated code uses it, leave it out and the declared name is used as it stands.
 
@@ -374,6 +374,22 @@ table j(j)
 policy unique
 | 重量 | -> r(r) : bool |
 | -    | true           |
+```
+
+**A sequence with no ASCII alias**:
+
+```rule
+rule pieces_total v1
+
+elements pièces
+  amount : money[USD]  range >=0USD <=100USD
+
+outputs
+  total : money[USD]  round down(1USD)
+
+sum spent over pièces of amount  range >=0USD <=1000USD
+
+define total : money[USD] = spent
 ```
 
 Related codes: [E009](#e009), [E012](#e012)
@@ -4700,9 +4716,9 @@ Related codes: [E035](#e035), [E105](#e105)
 
 `warning` — **An identifier collides, or cannot be used, in a target language**
 
-**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, and PostgreSQL, which cuts a column's name longer than 63 bytes. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034.
+**When.** An ASCII alias is a keyword of one of the targets, or a name that language already uses. An alias becomes a function, a parameter, a type or a member there. The rule's alias also names a module or a package, and the standard library's own names are held against it there. Or a rule and an enum it declares take one type name: Go declares the rule's function and the enum's type in one package, and Java nests the enum in the class the rule is, so neither compiles (an enum read from an `enums` file is written by that file's package or class, and does not clash). It is raised too for a name with no alias that is a keyword: the generated code of every language then writes the name with `_` after it (`class_`), and with a number after that where `class_` is the identifier of another name of the rule (`class_2`). It is raised as well where two names the author wrote, whose identifiers (the alias, else the name) differ, are one identifier in the spelling of some target: the lowerCamelCase values are written in, the PascalCase of a struct's fields, the JSON name of a field of the `.proto`, the upper case of an enum's values, the `_` put after a keyword or after the name of a variable a language keeps, a column's name read with case set aside (SQLite), and the first 63 bytes of a name (PostgreSQL). And where a target cannot take an identifier: a language that reads a name starting with a capital as a constant, a `NamedTuple`, which takes no field starting with `_`, PostgreSQL, which cuts a column's name longer than 63 bytes, the languages in which a name of `_` alone is neither a variable nor a field, SQLite, which gives a column no name of `true` or `false`, and the `.proto`, which takes no name that is not in ASCII. And where a name the author wrote is one the generated code uses itself: the types of the rows that matched, of the answer and of one element, the errors, the helpers that round and the rest, its locals, the names the language has built in, the messages and the fields of the `.proto` (the `trace` of `DecideResponse`), the `<TYPE>_UNSPECIFIED` of an enum's values, the names the service of Connect imports, the package names a language's command keeps, and the name of the file a program starts in. The warning's notes say which targets. Two names every language spells as one (the types of two enums, say) stop the check with E034.
 
-**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, give an alias it takes (one that starts with neither a capital nor `_`, and is 63 bytes or fewer). For a target you do not generate, leave it.
+**Fix.** A keyword means the generated code for that language does not compile (`type` as an input's alias breaks Rust). A name that is taken means the rule's function or an enum's type hides it (`sum` as the rule's alias hides Python's builtin). A module's name means, with `time` as the rule's alias, that the module generated as `time` collides with the standard library's `time`; the warning's notes say where and how. A parameter or a local shadows nothing outside its own body, so there the warning is raised only for a keyword. Of two names that are one identifier in a target you generate, give one an alias; to an identifier a target cannot take, or a name its generated code uses itself, give an alias it takes (one that starts with neither a capital nor `_`, is 63 bytes or fewer, and is no name the generated code uses). For a target you do not generate, leave it.
 
 **Smallest reproduction**:
 
@@ -4802,6 +4818,45 @@ table fee_by_qty
 policy unique
 | qty | -> fee |
 | <=5 | Base   |
+| >5  | 2USD   |
+```
+
+**A name the generated code uses itself**:
+
+```rule
+rule fee_and_trace v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee   : money[USD]  round down(1USD)
+  trace : number  round down(1)
+
+table fee_by_qty
+policy unique
+| qty | -> fee | trace |
+| <=5 | 3USD   | 1     |
+| >5  | 2USD   | 2     |
+```
+
+**A name of `_` alone**:
+
+```rule
+rule underscore_fee v1
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+define _ : money[USD] = 3USD
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | _      |
 | >5  | 2USD   |
 ```
 

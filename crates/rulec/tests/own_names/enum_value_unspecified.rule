@@ -1,0 +1,17 @@
+rule fee_by_state v1
+description "A value of an enum named like the value the .proto keeps for a field that is not set"
+
+enum state = active | closed | unspecified
+
+inputs
+  at : state
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_at
+policy unique
+| at          | -> fee |
+| active      | 1USD   |
+| closed      | 2USD   |
+| unspecified | 3USD   |

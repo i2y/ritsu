@@ -1,0 +1,14 @@
+rule fired v1
+description "A rule named like the type of a row that matched"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 3USD   |
+| >5  | 2USD   |

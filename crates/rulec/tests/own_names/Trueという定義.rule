@@ -1,0 +1,16 @@
+rule 真の手数料(true_fee) v1
+description "True という名前の定義。rulec は後ろに下線を付けて書く"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+define True : money[USD] = 3USD
+
+table 数量ごとの手数料(fee_by_qty)
+policy unique
+| 数量 | -> 手数料 |
+| <=5  | True      |
+| >5   | 2USD      |

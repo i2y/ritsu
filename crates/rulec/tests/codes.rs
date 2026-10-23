@@ -143,9 +143,10 @@ fn 台帳の別の形の再現はその形を出す() {
     // with an enum's value written twice, two names of one identifier, a column twice in a table's
     // heading, and the label of two rows (§15.262), and two enums whose types take one name; W121 with
     // two names Swift and Java spell alike, two SQLite reads as one column, two PostgreSQL cuts to
-    // one, and a name Ruby reads as a constant (§15.263)
+    // one, and a name Ruby reads as a constant (§15.263), a name the generated code uses itself and a
+    // name of `_` alone (§15.265); E011 with a sequence that has no ASCII alias (§15.265)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121", "W121"]);
+    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121", "W121"]);
     // Each by its place among the entry's other forms; `None` is the last.
     for (code, form, says) in [
         ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
@@ -163,7 +164,10 @@ fn 台帳の別の形の再現はその形を出す() {
         ("W121", Some(0), [(Lang::En, "`base_fee` and `baseFee` are one identifier in the code generated for Swift and Java"), (Lang::Ja, "`基本料金` と `追加料金` は、Swift・Java の生成コードで同じ識別子になります")]),
         ("W121", Some(1), [(Lang::En, "`afee` and `aFee` are one identifier in the code generated for SQL (SQLite)"), (Lang::Ja, "`基本料金` と `追加料金` は、SQL（SQLite）の生成コードで同じ識別子になります")]),
         ("W121", Some(2), [(Lang::En, "are one identifier in the code generated for SQL (PostgreSQL)"), (Lang::Ja, "は、SQL（PostgreSQL）の生成コードで同じ識別子になります")]),
-        ("W121", None, [(Lang::En, "`Base` starts with a capital letter, which the code generated for Ruby cannot take"), (Lang::Ja, "`Base` は大文字で始まるので、Ruby の生成コードでは使えません")]),
+        ("W121", Some(3), [(Lang::En, "`Base` starts with a capital letter, which the code generated for Ruby cannot take"), (Lang::Ja, "`Base` は大文字で始まるので、Ruby の生成コードでは使えません")]),
+        ("W121", Some(4), [(Lang::En, "`trace` takes a name the code generated for Connect uses itself"), (Lang::Ja, "`記録` は、Connect の生成コードが自分で使う名前と同じになります")]),
+        ("W121", None, [(Lang::En, "`_` is a name the code generated for Rust, Go, Swift, Java and Wasm cannot take"), (Lang::Ja, "`_` は、Rust・Go・Swift・Java・Wasm の生成コードでは使えません")]),
+        ("E011", None, [(Lang::En, "A public name has no ASCII alias"), (Lang::Ja, "公開される名前に ASCII の別名がありません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
     ] {
         let e = rulec::codes::find(code).unwrap();

@@ -1,0 +1,10 @@
+warning[W121]: `top_price_set` takes a name the code generated for Swift and Java uses itself
+  --> tests/own_names/summary_flag_in_camel_case.rule:12
+   |
+12 | define top_price_set : money[USD] = top_price + 1USD
+   |        ^^^^^^^^^^^^^ the definition's name
+   |
+ Swift and Java: the rule's functions keep a local variable of their own, `topPriceSet`, and the definition `top_price_set` is written `topPriceSet` there: the two are one variable, and the code does not build, or answers otherwise.
+ For a target you do not generate, leave it. For one you do, give it an alias (`top_price_set(<alias>)`).
+
+ok tests/own_names/summary_flag_in_camel_case.rule

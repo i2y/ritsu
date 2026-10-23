@@ -144,8 +144,10 @@ enum 会員区分(member_kind) = 一般(basic) | ゴールド(gold) | プラチ�
 ```
 
 An alias is required only where a **non-ASCII** name reaches the public
-surface — the rule name, the inputs, the outputs — because a kanji has
-no uppercase and cannot begin an exported Go identifier. **A name that
+surface — the rule name, the inputs, the outputs, a sequence and the
+fields of its elements — because a kanji has no uppercase and cannot
+begin an exported Go identifier, and the `.proto` takes ASCII names
+alone. **A name that
 is already ASCII needs none**: write the whole rule in English and there
 are no parentheses anywhere — as in the rule above, and in
 [Article 7 of Regulation (EC) No
@@ -175,10 +177,14 @@ differ as written can be one identifier in one of them: `base_fee` and
 and `aFee` as one column.
 
 A language can refuse a name, too: Ruby reads `READ_CREDIT` as a
-constant. `rulec check` warns of either (W121) and says which languages;
-an alias on one of the two settles it. Where every language that writes
-the name spells the two alike — the types of the enums `tier_level` and
-`tierLevel` are `TierLevel` in all of them — it stops (E034).
+constant. And the generated code has names of its own: an output called
+`trace` is the field of the `.proto`'s answer that carries the rows that
+matched, and an enum called `output` is the type of the answer of a rule
+of two outputs. `rulec check` warns of each (W121) and says which
+languages; an alias on the name, or on one of the two, settles it. Where
+every language that writes the name spells the two alike — the types of
+the enums `tier_level` and `tierLevel` are `TierLevel` in all of them —
+it stops (E034).
 
 ## Types
 

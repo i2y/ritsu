@@ -1,0 +1,15 @@
+rule fee_and_trace v1
+description "An output named like the field the answer's rows travel in"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee   : money[USD]  round down(1USD)
+  trace : number  round down(1)
+
+table fee_by_qty
+policy unique
+| qty | -> fee | trace |
+| <=5 | 3USD   | 1     |
+| >5  | 2USD   | 2     |

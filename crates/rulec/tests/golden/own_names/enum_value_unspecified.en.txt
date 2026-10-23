@@ -1,0 +1,10 @@
+warning[W121]: `unspecified` takes a name the code generated for Connect uses itself
+  --> tests/own_names/enum_value_unspecified.rule:4
+  |
+4 | enum state = active | closed | unspecified
+  |                                ^^^^^^^^^^^ the enum value's name
+  |
+ Connect: an enum of the `.proto` has a value of its own, `STATE_UNSPECIFIED`, which a field that is not set holds, and this value is `STATE_UNSPECIFIED` as well, which buf and protoc refuse.
+ For a target you do not generate, leave it. For one you do, give it an alias (`unspecified(<alias>)`).
+
+ok tests/own_names/enum_value_unspecified.rule

@@ -54,6 +54,7 @@ const FORMS: &[(&str, &str, &str)] = &[
     ("values_postgresql_cuts_to_one", "先頭の63バイトが同じ二つの定義", "SQL (PostgreSQL)"),
     // the enums, the groups and the prerequisites blocks
     ("enum_types_differ_in_case", "大文字と小文字だけ違う列挙", "PHP and Java"),
+    ("wire_enum_types_in_upper_snake", "protoで頭が重なる二つの列挙", "PHP, Java and Connect"),
     ("enum_values_in_upper_case", "大文字にすると重なる列挙の値", "Python, TypeScript, JavaScript, Ruby, PHP, Java and Connect"),
     ("enum_values_in_swift", "大文字の並びだけ違う列挙の値", "Python, TypeScript, JavaScript, Ruby, PHP, Swift, Java and Connect"),
     ("go_members_across_enums", "Goで重なる二つの列挙の値", "Go"),
@@ -62,8 +63,8 @@ const FORMS: &[(&str, &str, &str)] = &[
     // a name a language cannot take
     ("ruby_constant", "大文字で始まる定義", "Ruby"),
     ("ruby_constant_shape", "大文字で始まるshape", "Ruby"),
-    ("python_underscore_output", "下線で始まる出力", "Python"),
-    ("python_underscore_field", "下線で始まるフィールド", "Python"),
+    ("python_underscore_output", "下線で始まる出力", "Python and Connect"),
+    ("python_underscore_field", "下線で始まるフィールド", "Python and Connect"),
     ("postgresql_long_output", "63バイトより長い出力", "SQL (PostgreSQL)"),
     ("postgresql_long_table", "63バイトより長い表", "SQL (PostgreSQL)"),
 ];

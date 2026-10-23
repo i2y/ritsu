@@ -1,0 +1,13 @@
+rule top_price_fee v1
+description "A definition named like the flag Swift and Java keep beside the largest of a column"
+
+elements lines
+  price : money[USD]  range >=0USD <=100USD
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+max top_price over lines of price empty 0USD
+
+define top_price_set : money[USD] = top_price + 1USD
+define fee : money[USD] = top_price_set

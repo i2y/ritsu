@@ -1,10 +1,11 @@
-警告[W121]: `_amount` は `_` で始まるので、Python の生成コードでは使えません
+警告[W121]: `_amount` は `_` で始まるので、Python・Connect の生成コードでは使えません
   --> tests/spellings/下線で始まるフィールド.rule:5
   |
 5 |   金額(_amount) : money[USD]  range >=0USD <=100USD
   |   ^^^^ 要素のフィールドの別名
   |
  Python: 要素のフィールドは `NamedTuple` の `Element` のフィールドになり、`NamedTuple` のフィールドの名前は `_` で始められません。生成した Python のファイルは読み込めません。
+ Connect: サービスは Python のモジュールを動かすので、読み込めません。
  使わない生成先なら、このままで構いません。使うなら、別名を `_` で始まらないものに変えてください。
 
 ok tests/spellings/下線で始まるフィールド.rule

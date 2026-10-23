@@ -1,0 +1,10 @@
+warning[W121]: `roundDown` takes a name the code generated for TypeScript and JavaScript uses itself
+  --> tests/own_names/group_named_like_a_helper.rule:6
+  |
+6 | group roundDown = small
+  |       ^^^^^^^^^ the group's name
+  |
+ TypeScript and JavaScript: the group's constant is `_roundDown`, and the generated code declares a helper function of that name: one name is declared twice, which does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`roundDown(<alias>)`).
+
+ok tests/own_names/group_named_like_a_helper.rule

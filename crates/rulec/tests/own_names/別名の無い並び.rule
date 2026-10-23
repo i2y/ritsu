@@ -1,0 +1,12 @@
+rule 明細の合計(pieces_total) v1
+description "名前が ASCII でなく、別名も無い並び"
+
+elements 明細
+  価格(price) : money[USD]  range >=0USD <=100USD
+
+outputs
+  合計(total) : money[USD]  round down(1USD)
+
+sum 支払い(spent) over 明細 of 価格  range >=0USD <=1000USD
+
+define 合計 : money[USD] = 支払い

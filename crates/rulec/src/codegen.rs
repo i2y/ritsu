@@ -304,8 +304,11 @@ pub use prereq::prereq_fn_names;
 mod chances;
 /// How the projection function reads the caller's object (§15.234).
 mod from;
-/// The ways the generators spell the author's names, held against one another (§15.263).
+/// The ways the generators spell the author's names, held against one another (§15.263) and
+/// against the names the generated code gives itself (§15.265).
 pub mod spellings;
+/// The names the generated code of each target gives itself (§15.265).
+mod own;
 pub use chances::chances_fn_name;
 pub use connect::template as connect_template;
 pub use connect::{buf_gen_yaml, buf_lock, buf_yaml, BufDeps, Contracts};
@@ -600,6 +603,24 @@ impl<'a> Gen<'a> {
     /// out of — are found from the rule's directory, and a generator left to look from the
     /// working directory wrote different code depending on where it was run.
     pub fn new(f: &'a RuleFile, c: &'a Checked, src: &str, path: &str) -> Self {
+        let mut g = Gen::bare(f, c, src, path);
+        for set in &c.sets {
+            let r = crate::region::check_set(set, c, f, "", crate::region::DEFAULT_BUDGET);
+            if !r.w114.is_empty() {
+                g.w114.insert(set.key.clone(), r.w114);
+            }
+        }
+        g
+    }
+
+    /// The generator with no guards of W114 worked out: what the check asks of it, which is how
+    /// the code it writes names things and which of its own names it reads (§15.265), and never
+    /// the code itself.
+    pub(crate) fn for_names(f: &'a RuleFile, c: &'a Checked) -> Self {
+        Gen::bare(f, c, "", "")
+    }
+
+    fn bare(f: &'a RuleFile, c: &'a Checked, src: &str, path: &str) -> Self {
         let mut enum_names = BTreeMap::new();
         let mut value_names = BTreeMap::new();
         for e in &f.enums {
@@ -621,13 +642,7 @@ impl<'a> Gen<'a> {
                 value_names.insert((im.ty.to_string(), im.value(d).to_string()), (im.ns.generated.to_string(), d.member.to_string()));
             }
         }
-        let mut w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
-        for set in &c.sets {
-            let r = crate::region::check_set(set, c, f, "", crate::region::DEFAULT_BUDGET);
-            if !r.w114.is_empty() {
-                w114.insert(set.key.clone(), r.w114);
-            }
-        }
+        let w114: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
         // §1.3: a name that declared an ASCII alias is written out under that alias, inside
         // the function as well as on the public face.
         let mut idents: BTreeMap<String, String> = BTreeMap::new();

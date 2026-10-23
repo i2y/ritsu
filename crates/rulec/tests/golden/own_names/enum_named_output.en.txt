@@ -1,0 +1,10 @@
+warning[W121]: `output` takes a name the code generated for Python, TypeScript, Rust, Ruby, PHP, Go, Swift, Java, Wasm and Connect uses itself
+  --> tests/own_names/enum_named_output.rule:4
+  |
+4 | enum output = paper | screen
+  |      ^^^^^^ the enum's name
+  |
+ Python, TypeScript, Rust, Ruby, PHP, Go, Swift, Java, Wasm and Connect: the generated code declares `Output`, a type, and the enum's type is `Output` as well: one name is declared twice, which does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`output(<alias>)`).
+
+ok tests/own_names/enum_named_output.rule

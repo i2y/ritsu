@@ -1,0 +1,14 @@
+rule code v1
+description "A rule named like what the service of Connect imports"
+
+inputs
+  qty : number  range >=0 <=10
+
+outputs
+  fee : money[USD]  round down(1USD)
+
+table fee_by_qty
+policy unique
+| qty | -> fee |
+| <=5 | 3USD   |
+| >5  | 2USD   |

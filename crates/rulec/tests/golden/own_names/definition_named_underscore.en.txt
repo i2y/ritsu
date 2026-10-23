@@ -1,0 +1,12 @@
+warning[W121]: `_` is a name the code generated for Rust, Go, Swift, Java and Wasm cannot take
+  --> tests/own_names/definition_named_underscore.rule:10
+   |
+10 | define _ : money[USD] = 3USD
+   |        ^ the definition's name
+   |
+ Rust, Swift and Wasm: `_` is the pattern that binds nothing, and names no variable.
+ Go: `_` is the blank identifier, which names no variable and no field.
+ Java: `_` is a keyword.
+ For a target you do not generate, leave it. For one you do, give it an alias (`_(<alias>)`).
+
+ok tests/own_names/definition_named_underscore.rule

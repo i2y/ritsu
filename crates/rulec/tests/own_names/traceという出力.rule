@@ -1,0 +1,15 @@
+rule 送料と記録(fee_and_trace) v1
+description "答えの当てはまった行を運ぶフィールドと同じ名前の出力"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee)   : money[USD]  round down(1USD)
+  記録(trace) : number  round down(1)
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料 | 記録 |
+| <=5  | 3USD    | 1    |
+| >5   | 2USD    | 2    |

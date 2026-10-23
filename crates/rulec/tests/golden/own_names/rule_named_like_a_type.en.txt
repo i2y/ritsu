@@ -1,0 +1,11 @@
+warning[W121]: `fired` takes a name the code generated for Go and Java uses itself
+  --> tests/own_names/rule_named_like_a_type.rule:1
+  |
+1 | rule fired v1
+  |      ^^^^^ the rule's name
+  |
+ Go: the generated code declares `Fired`, a type, and the rule's function is `Fired` as well: one name is declared twice, which does not build.
+ Java: the generated code declares `Fired`, a type, and the rule's class is `Fired` as well: one name is declared twice, which does not build.
+ For a target you do not generate, leave it. For one you do, give it an alias (`fired(<alias>)`).
+
+ok tests/own_names/rule_named_like_a_type.rule

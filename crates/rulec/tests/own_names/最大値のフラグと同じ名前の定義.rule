@@ -1,0 +1,13 @@
+rule 最高値の手数料(top_price_fee) v1
+description "列の最大値の横に Swift と Java が持つフラグと同じ名前の定義"
+
+elements 明細(lines)
+  価格(price) : money[USD]  range >=0USD <=100USD
+
+outputs
+  手数料(fee) : money[USD]  round down(1USD)
+
+max 最高値(top_price) over 明細 of 価格 empty 0USD
+
+define 最高値の次(top_price_set) : money[USD] = 最高値 + 1USD
+define 手数料 : money[USD] = 最高値の次

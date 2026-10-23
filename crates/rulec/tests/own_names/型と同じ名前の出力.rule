@@ -1,0 +1,15 @@
+rule 数えた料金(counted_fee) v1
+description "あとの出力の型と同じ名前の出力"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  真偽(bool) : bool
+  上客(vip)  : bool
+
+table 数量ごとの印(flags_by_qty)
+policy unique
+| 数量 | -> 真偽 | 上客  |
+| <=5  | true    | false |
+| >5   | false   | true  |

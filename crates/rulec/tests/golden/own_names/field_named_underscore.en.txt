@@ -1,0 +1,14 @@
+warning[W121]: `_` is a name the code generated for Python, Rust, Go, Swift, Java, Wasm and Connect cannot take
+  --> tests/own_names/field_named_underscore.rule:5
+  |
+5 |   _ : money[USD]  range >=0USD <=100USD
+  |   ^ the element field's name
+  |
+ Python: the fields of an element are the fields of `Element`, a `NamedTuple`, and a `NamedTuple` takes no field whose name starts with `_`, so the generated Python file does not load.
+ Rust, Swift and Wasm: `_` is the pattern that binds nothing, and names no field.
+ Go: `_` is the blank identifier: a field of that name can be neither written nor read.
+ Java: `_` is a keyword.
+ Connect: the service runs the Python module, which does not load.
+ For a target you do not generate, leave it. For one you do, give it an alias (`_(<alias>)`).
+
+ok tests/own_names/field_named_underscore.rule

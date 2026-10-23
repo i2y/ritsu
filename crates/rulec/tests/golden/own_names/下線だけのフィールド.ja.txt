@@ -1,0 +1,14 @@
+警告[W121]: `_` は、Python・Rust・Go・Swift・Java・Wasm・Connect の生成コードでは使えません
+  --> tests/own_names/下線だけのフィールド.rule:5
+  |
+5 |   _ : money[USD]  range >=0USD <=100USD
+  |   ^ 要素のフィールドの名前
+  |
+ Python: 要素のフィールドは `NamedTuple` の `Element` のフィールドになり、`NamedTuple` のフィールドの名前は `_` で始められません。生成した Python のファイルは読み込めません。
+ Rust・Swift・Wasm: `_` は値を捨てるパターンで、フィールドの名前になりません。
+ Go: `_` は空白の識別子で、その名前のフィールドには値を書くことも読むこともできません。
+ Java: `_` は予約語です。
+ Connect: サービスは Python のモジュールを動かすので、読み込めません。
+ 使わない生成先なら、このままで構いません。使うなら、別名を付けてください（`_(<別名>)`）。
+
+ok tests/own_names/下線だけのフィールド.rule

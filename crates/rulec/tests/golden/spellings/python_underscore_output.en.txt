@@ -1,10 +1,11 @@
-warning[W121]: `_fee` starts with `_`, which the code generated for Python cannot take
+warning[W121]: `_fee` starts with `_`, which the code generated for Python and Connect cannot take
   --> tests/spellings/python_underscore_output.rule:8
   |
 8 |   _fee : money[USD]  round down(1USD)
   |   ^^^^ the output's name
   |
  Python: the outputs of a rule with two or more are the fields of `Output`, a `NamedTuple`, and a `NamedTuple` takes no field whose name starts with `_`, so the generated Python file does not load.
+ Connect: the service runs the Python module, which does not load.
  For a target you do not generate, leave it. For one you do, give it an alias that does not start with `_` (`_fee(<alias>)`).
 
 ok tests/spellings/python_underscore_output.rule

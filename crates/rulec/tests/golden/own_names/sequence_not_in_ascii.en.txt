@@ -1,0 +1,10 @@
+error[E011]: A public name has no ASCII alias
+  --> tests/own_names/sequence_not_in_ascii.rule:1
+  |
+1 | rule pieces_total v1
+  |      ^^^^^^^^^^^^
+  |
+ Missing: sequence pièces
+ An exported Go identifier must start with an uppercase letter, and kanji and kana have no uppercase. A name that is already ASCII needs no alias.
+ Write it in parentheses at the declaration, e.g. 届け先(dest)
+

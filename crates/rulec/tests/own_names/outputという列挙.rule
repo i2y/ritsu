@@ -1,0 +1,17 @@
+rule 出力先ごとの料金(output_fee) v1
+description "出力が二つある規則の答えの型と同じ名前の列挙"
+
+enum 出力先(output) = 紙(paper) | 画面(screen)
+
+inputs
+  経路(via) : 出力先
+
+outputs
+  料金(fee)   : money[USD]  round down(1USD)
+  枚数(pages) : number  round down(1)
+
+table 経路ごとの料金(fee_by_via)
+policy unique
+| 経路 | -> 料金 | 枚数 |
+| 紙   | 2USD    | 3    |
+| 画面 | 0USD    | 0    |

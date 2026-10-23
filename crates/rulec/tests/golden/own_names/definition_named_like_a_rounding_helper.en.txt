@@ -1,0 +1,10 @@
+warning[W121]: `round_down` takes a name the code generated for Rust and Wasm uses itself
+  --> tests/own_names/definition_named_like_a_rounding_helper.rule:10
+   |
+10 | define round_down : money[USD] = 3USD
+   |        ^^^^^^^^^^ the definition's name
+   |
+ Rust and Wasm: the rule's functions read `round_down`, a helper function, and the definition `round_down` is that name there as well, which hides it: the code does not build, or answers otherwise.
+ For a target you do not generate, leave it. For one you do, give it an alias (`round_down(<alias>)`).
+
+ok tests/own_names/definition_named_like_a_rounding_helper.rule

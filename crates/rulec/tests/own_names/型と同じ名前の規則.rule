@@ -1,0 +1,14 @@
+rule fired v1
+description "当てはまった行の型と同じ名前の規則"
+
+inputs
+  数量(qty) : number  range >=0 <=10
+
+outputs
+  送料(fee) : money[USD]  round down(1USD)
+
+table 数量ごとの送料(fee_by_qty)
+policy unique
+| 数量 | -> 送料 |
+| <=5  | 3USD    |
+| >5   | 2USD    |

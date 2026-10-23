@@ -465,6 +465,17 @@ impl<'a> Gen<'a> {
     /// binds its arguments into a one-row input relation that way, so **the chain below is
     /// the same text in both files** and a mistake cannot creep in between the two shapes.
     fn sql_query(&self, prelude: Option<&str>) -> String {
+        self.sql_query_bound(prelude).0
+    }
+
+    /// How many operands the query binds to a column of their own (`_r1`, `_r2`, …), which a value
+    /// of one of those names would stand beside (§15.265).
+    pub(crate) fn sql_bound(&self) -> usize {
+        self.sql_query_bound(None).1
+    }
+
+    /// The query, and how many operands it binds.
+    fn sql_query_bound(&self, prelude: Option<&str>) -> (String, usize) {
         let input_rel = format!("{}_input", pub_name(&self.f.name));
         let local = |n: &str| -> String { self.ident(n) };
         let mut o = String::from("WITH\n");
@@ -797,7 +808,7 @@ impl<'a> Gen<'a> {
             select.push(format!("CASE {} ELSE NULL END AS {}", contra.join(" "), q("_contradiction")));
         }
         o.push_str(&format!("\nSELECT\n  {}\nFROM {prev}\nORDER BY {}", select.join(",\n  "), q("_id")));
-        o
+        (o, sql.n)
     }
 
     /// `sql/<alias>_function.sql`: the same rule as a function, for the other door — one

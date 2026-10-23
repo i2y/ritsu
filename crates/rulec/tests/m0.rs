@@ -263,6 +263,14 @@ fn 変異は決めたコードだけを出す() {
         ("m_w121rubyja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
         ("m_e034member.rule", &[("E034", 1)], "額引きに、どの言語でも率引きと同じ名前の値になる別名 Percent を付けた"),
         ("m_e034memberja.rule", &[("E034", 1)], "上と同じ規則の日本語の版"),
+        // §15.265: a name the generated code of some language uses itself, and a sequence and a
+        // field of one element whose alias fell off. The English rule, and its Japanese version.
+        ("m_w121own.rule", &[("W121", 1)], "クーポンの種別に、出力が二つある規則の答えの型と同じになる別名 output を付けた"),
+        ("m_w121ownja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_w121owntrace.rule", &[("W121", 1)], "素の割引に、`.proto` の答えが当てはまった行を運ぶフィールドと同じ別名 trace を付けた"),
+        ("m_w121owntraceja.rule", &[("W121", 1)], "上と同じ規則の日本語の版"),
+        ("m_e011seq.rule", &[("E011", 1)], "並びの別名が落ちた（Go の構造体と `.proto` のフィールドが書けない）"),
+        ("m_e011seqfield.rule", &[("E011", 1)], "要素のフィールドの別名が落ちた"),
         // §15.92. Five more codes that had no mutant. The syntax errors keep their minimal
         // example in the ledger — a misplaced character has no amount attached — but these
         // change what a real table answers, or what it is allowed to claim.

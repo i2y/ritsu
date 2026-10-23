@@ -1,0 +1,10 @@
+warning[W121]: `crème` is a name the code generated for Connect cannot take
+  --> tests/own_names/enum_not_in_ascii_on_the_wire.rule:4
+  |
+4 | enum crème = light | heavy
+  |      ^^^^^ the enum's name
+  |
+ Connect: the names of the `.proto` take ASCII letters, digits and `_` alone, and an enum's type or value of this name cannot be written there, which buf and protoc refuse.
+ For a target you do not generate, leave it. For one you do, give it an alias (`crème(<alias>)`).
+
+ok tests/own_names/enum_not_in_ascii_on_the_wire.rule

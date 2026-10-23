@@ -203,6 +203,30 @@ fn call(c: &Case, name: &dyn Fn(&Case) -> String, lit: &dyn Fn(i64) -> String) -
     }
 }
 
+/// The names of the helpers `u` calls, as the generated code of `lang` writes them (`py` for
+/// Python, Ruby and PHP, `ts` for TypeScript and JavaScript, `go`, `rs`, `sw`, `java`): what a
+/// value of the rule's of the same identifier hides inside the rule's functions (§15.265). Java
+/// writes `mod` as `Math.floorMod`, which no value can hide.
+pub(super) fn helper_names(u: &Uses, lang: &str) -> Vec<String> {
+    let name = |c: &Case| match lang {
+        "ts" => ts_name(c),
+        "go" => go_name(c),
+        "rs" => rs_name(c),
+        "sw" => sw_name(c),
+        "java" => java_name(c),
+        _ => py_name(c),
+    };
+    let mut out: Vec<String> = u.div.iter().map(|m| name(&Case::Div(*m, 0, 0, 0))).collect();
+    if u.modulo {
+        out.push(name(&Case::Mod(0, 0, 0)));
+    }
+    if u.root {
+        out.push(name(&Case::Root(0, 0)));
+    }
+    out.retain(|n| !n.contains('.'));
+    out
+}
+
 /// The helper a case calls, in the Python spelling.
 fn py_name(c: &Case) -> String {
     match c {

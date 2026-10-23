@@ -1,10 +1,11 @@
-警告[W121]: `_fee` は `_` で始まるので、Python の生成コードでは使えません
+警告[W121]: `_fee` は `_` で始まるので、Python・Connect の生成コードでは使えません
   --> tests/spellings/下線で始まる出力.rule:8
   |
 8 |   料金(_fee) : money[USD]  round down(1USD)
   |   ^^^^ 出力の別名
   |
  Python: 出力が二つ以上ある規則の出力は `NamedTuple` の `Output` のフィールドになり、`NamedTuple` のフィールドの名前は `_` で始められません。生成した Python のファイルは読み込めません。
+ Connect: サービスは Python のモジュールを動かすので、読み込めません。
  使わない生成先なら、このままで構いません。使うなら、別名を `_` で始まらないものに変えてください。
 
 ok tests/spellings/下線で始まる出力.rule

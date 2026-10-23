@@ -352,6 +352,18 @@ awk '{ sub(/^derive 残余\(margin\)/, "derive 残余(Margin)"); print }'       
 awk '/^enum coupon_kind = / { sub(/ fixed /, " fixed(Percent) ") } { print }'                       "$sc"  > "$M/m_e034member.rule"
 awk '/^enum クーポン種別\(coupon_kind\) = / { sub(/額引き\(fixed\)/, "額引き(Percent)") } { print }' "$scj" > "$M/m_e034memberja.rule"
 
+# --- A name the generated code of some language uses itself (§15.265): the kind of coupon given an
+# alias nine languages and the `.proto` declare the answer of a rule of two outputs as (`Output`),
+# and the raw discount given the alias of the field the `.proto`'s answer carries the rows that
+# matched in (`trace`). And a sequence, and a field of one element, whose alias fell off (E011). The
+# English rule, and its Japanese version beside it.
+awk '{ sub(/^enum coupon_kind =/, "enum coupon_kind(output) ="); print }'                            "$sc"  > "$M/m_w121own.rule"
+awk '{ sub(/^enum クーポン種別\(coupon_kind\) =/, "enum クーポン種別(output) ="); print }'          "$scj" > "$M/m_w121ownja.rule"
+awk '{ sub(/^  raw : /, "  raw(trace) : "); print }'                                                "$sc"  > "$M/m_w121owntrace.rule"
+awk '{ gsub(/素割引\(raw\)/, "素割引(trace)"); print }'                                         "$scj" > "$M/m_w121owntraceja.rule"
+awk '{ sub(/^elements 明細\(lines\)$/, "elements 明細"); print }'                                   "$C/買物かごの送料.rule" > "$M/m_e011seq.rule"
+awk '{ sub(/^  金額\(amount\) :/, "  金額 :"); print }'                                             "$C/買物かごの送料.rule" > "$M/m_e011seqfield.rule"
+
 # --- A rule that is one step of a state machine (§15.148). The section's own shape errors
 # first, then the claims about every sequence of calls, each broken the way a revision of the
 # table would break it.

@@ -1,0 +1,25 @@
+rule 注文の料金(order_pb) v1
+description "protobuf の Python のプラグインが stub で別に書く名前"
+
+inputs
+  率(_rate)        : number  range >=0 <=10
+  降順(desc)       : bool
+  書き出し(to_json) : bool
+
+elements 明細(lines)
+  数量(ext_qty) : number  range >=0 <=5
+
+outputs
+  料金(fee)   : money[USD]  round down(1USD)
+  一覧(list_) : number  round down(1)
+
+sum 合計数量(spent) over 明細 of 数量  range >=0 <=500
+
+table 印ごとの料金(fee_by_flags)
+policy unique
+| 降順  | 書き出し | -> 料金 |
+| true  | -        | 3USD    |
+| false | true     | 2USD    |
+| false | false    | 1USD    |
+
+define 一覧 : number = 率 + 合計数量
