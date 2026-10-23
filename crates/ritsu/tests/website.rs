@@ -55,11 +55,20 @@
 //!   with nothing beside it and its link and the nav of its site leading to the playground in the
 //!   tree, the marketplace of Claude Code as it is written, and a file of the tree for every
 //!   relative link of ritsu's built pages, none of which climbs out of /ritsu/; and the code of the
-//!   languages on ritsu's pages is coloured by their lexers (website/tools/knlexer.py and the
-//!   lexers of rulec's, dandori's and chobo's sites): every block of `kn`, `rule`, `flow` and `book`
-//!   is built as its language, with Pygments' classes on its words and none the lexer could not
-//!   read, and the pages of kaname show a keyword, a type, a number with its unit, a date, a
-//!   comment, a string and an operator, each in its class. Without Zensical the test says SKIP.
+//!   languages on ritsu's pages is coloured by their lexers (website/tools/knlexer.py,
+//!   gatelexer.py and cedarlexer.py, and the lexers of rulec's, dandori's and chobo's sites): every
+//!   block of `kn`, `rule`, `flow`, `book`, `gate`, `cedar` and `cedarschema` is built as its
+//!   language, with Pygments' classes on its words and none the lexer could not read, and so is
+//!   every block of a gate or of Cedar on the pages of a language's site; the pages of kaname show
+//!   a keyword, a type, a number with its unit, a date, a comment, a string and an operator, each in
+//!   its class, and the pages of sekisho the kinds of words of a gate, of Cedar's policies and of a
+//!   schema, each in its class. Without Zensical the test says SKIP;
+//! - and the lexers of a gate and of Cedar read every `.gate` of the repository that sekisho's lexer
+//!   reads, every policy and schema the official Cedar CLI reads among the materials of the tests,
+//!   what it wrote for them (`cedar format`), and the Cedar sekisho writes for its examples, with
+//!   nothing they could not read; and of the policies and schemas the CLI does not read, they mark
+//!   what it could not read in each it says has an invalid token, and nothing in the others, whose
+//!   tokens it read. Without Pygments in website/.venv the test says SKIP.
 //!
 //! (tests/common/mod.rs holds what this file shares with tests/readme.rs.)
 
@@ -72,8 +81,9 @@ use common::{
 use ritsu_testkit::{Need, TempDir, ready};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use yuen::export::prov::{Kind, TERMS, YUEN_NS};
 
 /// Where the site is published.
@@ -1095,10 +1105,18 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// The fences ritsu's site colours, each with its lexer: `kn` with website/tools/knlexer.py, and
-/// `rule`, `flow` and `book` with the lexers of rulec's, dandori's and chobo's sites, which build.sh
-/// puts on PYTHONPATH and the two configurations name as Markdown extensions.
-const COLOURED: [&str; 4] = ["kn", "rule", "flow", "book"];
+/// The fences ritsu's site colours, each with its lexer: `kn` with website/tools/knlexer.py, `gate`
+/// with website/tools/gatelexer.py, Cedar's `cedar` and `cedarschema` with
+/// website/tools/cedarlexer.py, and `rule`, `flow` and `book` with the lexers of rulec's, dandori's
+/// and chobo's sites, which build.sh puts on PYTHONPATH and the two configurations name as Markdown
+/// extensions.
+const COLOURED: [&str; 7] = ["kn", "rule", "flow", "book", "gate", "cedar", "cedarschema"];
+
+/// The fences of ritsu's lexers that a language's site may show too, and colours with them: a gate
+/// and the Cedar it compiles to (chobo's site shows the gate that guards the operations of a book).
+/// A site that shows one names the lexer in its configurations, and its build.sh puts website/tools
+/// on PYTHONPATH.
+const COLOURED_ON_THE_SITES: [&str; 3] = ["gate", "cedar", "cedarschema"];
 
 /// Text as an HTML page escapes it, unescaped.
 fn unescaped(text: &str) -> String {
@@ -1301,11 +1319,98 @@ fn build_sh_builds_the_tree_that_is_published() {
             assert!(tokens.iter().any(|(c, t)| c == class && is(t)), "the {lang} pages of kaname show {kind} in no span of the class `{class}`");
         }
     }
+    // The pages of sekisho show each kind of word of a gate, of Cedar's policies and of a schema in
+    // its class, in each language; the alias of a name, which the Japanese version of the example
+    // gives what Cedar writes, on the Japanese page.
+    type Kind = (&'static str, &'static str, &'static str, fn(&str) -> bool);
+    let sekisho_kinds: [Kind; 19] = [
+        ("gate", "a keyword", "k", |t| t == "permit"),
+        ("gate", "a type", "kt", |t| t == "money"),
+        ("gate", "a tax", "kt", |t| t == "incl_tax"),
+        ("gate", "a number with its unit", "m", |t| t == "10_000GBP"),
+        ("gate", "a date", "m", |t| t == "2026-10-01"),
+        ("gate", "a string", "s2", |t| t.starts_with('"') && t.ends_with('"')),
+        ("gate", "a name a declaration gives", "nc", |t| !t.is_empty()),
+        ("gate", "the name a use gives", "nn", |t| !t.is_empty()),
+        ("gate", "an operator word", "ow", |t| t == "is"),
+        ("gate", "a comparison", "o", |t| t == "<="),
+        ("cedar", "a keyword", "k", |t| t == "permit"),
+        ("cedar", "an operator word", "ow", |t| t == "has"),
+        ("cedar", "an operator", "o", |t| t == "&&"),
+        ("cedar", "an entity type", "nc", |t| t == "Role"),
+        ("cedar", "a namespace", "nn", |t| t.starts_with("Shop")),
+        ("cedar", "an entity's id", "s2", |t| t == "\"clerk\""),
+        ("cedar", "an annotation", "nd", |t| t == "@id"),
+        ("cedarschema", "a type", "kt", |t| t == "String"),
+        ("cedarschema", "an annotation", "nd", |t| t == "@doc"),
+    ];
+    for (ja, file) in [(false, "sekisho/index.html"), (true, "ja/sekisho/index.html")] {
+        let blocks = built_blocks(&read(&built.join(file)));
+        let mut kinds: Vec<Kind> = sekisho_kinds.to_vec();
+        if ja {
+            kinds.push(("gate", "an alias", "na", |t| t == "refund_order"));
+        }
+        for (lang, kind, class, is) in kinds {
+            let shown = blocks.iter().filter(|(l, _)| l == lang).flat_map(|(_, t)| t).any(|(c, t)| c == class && is(t));
+            assert!(shown, "{file}: the blocks of {lang} show {kind} in no span of the class `{class}`");
+        }
+    }
+    // The pages of a language's site are built with their blocks of a gate and of Cedar coloured as
+    // ritsu's are: as many blocks of the language as the page has fences, each with a word coloured
+    // and nothing the lexer could not read. The pages are read as the site's build.sh left them in the
+    // copy (chobo's sync.sh copies some in), and published a directory deeper (`together.md` at
+    // `together/`).
+    for site in sites() {
+        for (docs, under) in [("docs", ""), ("docs-ja", "ja/")] {
+            let base = copy.join(&site).join(docs);
+            let mut todo = vec![base.clone()];
+            while let Some(d) = todo.pop() {
+                for e in fs::read_dir(&d).unwrap().flatten() {
+                    let p = e.path();
+                    if e.file_type().unwrap().is_dir() {
+                        todo.push(p);
+                        continue;
+                    }
+                    let Some(rel) = p.strip_prefix(&base).unwrap().to_str().and_then(|r| r.strip_suffix(".md")) else { continue };
+                    let fences: Vec<String> = read(&p).lines().filter_map(|l| l.trim_start().strip_prefix("```")).map(|i| i.trim().to_string()).collect();
+                    let dir = match rel.strip_suffix("index") {
+                        Some(d) if d.is_empty() || d.ends_with('/') => d.to_string(),
+                        _ => format!("{rel}/"),
+                    };
+                    let file = format!("{site}/{under}{dir}index.html");
+                    let html = built.join(&file);
+                    let blocks = if html.is_file() { built_blocks(&read(&html)) } else { Vec::new() };
+                    for lang in COLOURED_ON_THE_SITES {
+                        // an opening fence is followed by a closing one, which names no language
+                        let n = fences.iter().filter(|i| *i == lang).count();
+                        let of_lang: Vec<&Vec<(String, String)>> = blocks.iter().filter(|(l, _)| l == lang).map(|(_, t)| t).collect();
+                        if of_lang.len() != n {
+                            wrong.push(format!("{file} (from website/{site}/{docs}/{rel}.md): {n} ```{lang} fences built as {} blocks of {lang}", of_lang.len()));
+                        }
+                        for tokens in &of_lang {
+                            if let Some((_, t)) = tokens.iter().find(|(c, _)| c == "err") {
+                                wrong.push(format!("{file}: a block of {lang} has `{t}`, which its lexer could not read"));
+                            }
+                            if !tokens.iter().any(|(c, _)| !["w", "p", "n"].contains(&c.as_str())) {
+                                wrong.push(format!("{file}: a block of {lang} with no word coloured"));
+                            }
+                        }
+                        *coloured.entry((file.clone(), lang)).or_default() += of_lang.len();
+                    }
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // the gate that guards the operations of a book, on chobo's pages in each language
+    for file in ["chobo/together/index.html", "chobo/ja/together/index.html"] {
+        assert!(coloured.get(&(file.to_string(), "gate")).is_some_and(|n| *n >= 1), "{file}: built with no block of gate: were the fences changed?");
+    }
     let mut by_lang: BTreeMap<&str, usize> = BTreeMap::new();
     for ((_, lang), n) in &coloured {
         *by_lang.entry(lang).or_default() += n;
     }
-    eprintln!("compared: the coloured blocks of ritsu's built pages with their fences, by language {by_lang:?}");
+    eprintln!("compared: the coloured blocks of the built pages with their fences, by language {by_lang:?} (ritsu's pages, and the gates and Cedar of the languages' sites)");
 
     // Every link of ritsu's built pages that stays in the site leads to a file of the tree.
     let mut wrong = Vec::new();
@@ -1356,4 +1461,146 @@ fn build_sh_builds_the_tree_that_is_published() {
     assert!(seen >= 20, "{seen} links on ritsu's built pages: was the tree built?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     eprintln!("compared: {} files of the tree build.sh built, and {seen} links of ritsu's built pages", want.len());
+}
+
+/// The files under a directory of the repository whose names end in one of `exts`, past what a build,
+/// an install or a virtual environment left there, and past links (the tools a worktree links in).
+fn files_under(dir: &Path, exts: &[&str]) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(d) = todo.pop() {
+        for e in fs::read_dir(&d).unwrap().flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let kind = e.file_type().unwrap();
+            if kind.is_dir() {
+                if ![".venv", ".cache", "build", "target", "node_modules", "__pycache__", ".lake"].contains(&name.as_str()) {
+                    todo.push(e.path());
+                }
+            } else if kind.is_file() && exts.iter().any(|x| name.ends_with(x)) {
+                out.push(e.path());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// What the lexers of the site make of files: given a line `<alias>\t<path>` for each on standard
+/// input, it prints `<n>\t<path>`, `n` the tokens of the class `err`, the ones the lexer could not
+/// read. The lexers are imported from the directory its argument names, as the site's build imports
+/// them.
+const LEX: &str = r#"
+import sys
+sys.path.insert(0, sys.argv[1])
+import gatelexer, cedarlexer
+from pygments.lexers import get_lexer_by_name
+from pygments.token import Error
+lexers = {}
+for line in sys.stdin:
+    alias, path = line.rstrip("\n").split("\t", 1)
+    lexer = lexers.setdefault(alias, get_lexer_by_name(alias))
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    print(f"{sum(1 for t, _ in lexer.get_tokens(text) if t in Error)}\t{path}")
+"#;
+
+/// The site's lexers of a gate and of Cedar read what the tools read, and mark what they do not.
+///
+/// - Every `.gate` of the repository is read whole, but the mutants of E001, which sekisho's lexer
+///   does not read either.
+/// - Every policy and schema among the materials of ritsu-base's tests of Cedar that the official
+///   CLI reads, what it wrote for the policies (`cedar format`, in 80 and in 40 columns), the Cedar
+///   of sekisho's golden files and of the other languages' tests, and the Cedar `sekisho gen`
+///   writes for each version of sekisho's examples, are read whole.
+/// - Of the policies and schemas the CLI does not read (`invalid/`, `invalid-schemas/`), the ones
+///   it says have an invalid token have something the lexer could not read, and the others, whose
+///   tokens the CLI read, nothing. A byte order mark is the one invalid token left out: Pygments
+///   drops it from the start of a text before a lexer reads it, so no fence can show one.
+#[test]
+fn the_lexers_of_gate_and_cedar_read_what_the_tools_read() {
+    let python = website().join(".venv/bin/python");
+    if !ready(Need::Python, || python.is_file(), "Pygments is not in website/.venv; install Zensical as website/README.md says, to colour the code") {
+        return;
+    }
+    let crates = root().join("crates");
+    let fixtures = crates.join("ritsu-base/tests/fixtures/cedar");
+    let invalid = |p: &Path| p.starts_with(fixtures.join("invalid")) || p.starts_with(fixtures.join("invalid-schemas"));
+    // What sekisho writes for its examples, in English and in Japanese.
+    let links = links();
+    let t = TempDir::new("site-lexers");
+    let mut generated = 0;
+    for dir in fs::read_dir(crates.join("sekisho/examples")).unwrap().flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
+        for gate in files_under(&dir, &[".gate"]).iter().filter(|g| g.parent() == Some(dir.as_path())) {
+            let name = gate.file_name().unwrap().to_string_lossy().into_owned();
+            let out = t.path().join(dir.file_name().unwrap()).join(&name);
+            let lang = if name.ends_with(".ja.gate") { " --lang ja" } else { "" };
+            let said = sh(links.path(), &dir, &format!("sekisho gen {name} --target cedar --out {}{lang}", out.display()));
+            assert!(out.join("cedar").is_dir(), "sekisho gen {name} wrote no Cedar:\n{said}");
+            generated += 1;
+        }
+    }
+    // (alias, file, what the tools make of it): the tools read it, or they read its tokens and not
+    // the whole, or it has a token they cannot read; only the last is to have one the lexer cannot
+    let (read_whole, tokens_only, invalid_token) = ("read", "its tokens read", "an invalid token");
+    let mut asked: Vec<(&str, PathBuf, &str)> = Vec::new();
+    for g in files_under(&crates, &[".gate"]).into_iter().chain(files_under(&website().join("playground"), &[".gate"])) {
+        let e001 = g.file_name().is_some_and(|n| n.to_string_lossy().starts_with("E001_")) && g.parent().is_some_and(|d| d.ends_with("tests/mutants"));
+        if !e001 {
+            asked.push(("gate", g, read_whole));
+        }
+    }
+    for under in [crates.clone(), t.path().to_path_buf()] {
+        for f in files_under(&under, &[".cedar", ".cedarschema", ".fmt", ".fmt40"]) {
+            let name = f.file_name().unwrap().to_string_lossy().into_owned();
+            if name.ends_with(".fmt") || name.ends_with(".fmt40") {
+                // what `cedar format` wrote, beside the policies it formatted
+                if f.starts_with(&fixtures) && !invalid(&f) {
+                    asked.push(("cedar", f, read_whole));
+                }
+                continue;
+            }
+            let alias = if name.ends_with(".cedarschema") { "cedarschema" } else { "cedar" };
+            if !invalid(&f) {
+                asked.push((alias, f, read_whole));
+                continue;
+            }
+            if name.contains("byte-order-mark") {
+                continue;
+            }
+            let err = if alias == "cedar" { f.with_extension("err") } else { PathBuf::from(format!("{}.err", f.display())) };
+            let said = read(&err);
+            asked.push((alias, f, if said.contains("invalid token") { invalid_token } else { tokens_only }));
+        }
+    }
+    let mut child = Command::new(&python).args(["-I", "-B", "-c", LEX]).arg(website().join("tools")).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("could not run website/.venv/bin/python");
+    let input: String = asked.iter().map(|(alias, f, _)| format!("{alias}\t{}\n", f.display())).collect();
+    child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert!(o.status.success(), "the lexers did not read the files:\n{}", String::from_utf8_lossy(&o.stderr));
+    let found: BTreeMap<String, usize> = String::from_utf8(o.stdout).unwrap().lines().filter_map(|l| l.split_once('\t')).map(|(n, p)| (p.to_string(), n.parse().unwrap())).collect();
+    let mut wrong = Vec::new();
+    let mut counted: BTreeMap<(&str, &str), usize> = BTreeMap::new();
+    for (alias, f, made) in &asked {
+        let shown = f.strip_prefix(root()).or_else(|_| f.strip_prefix(t.path())).unwrap_or(f).display().to_string();
+        let Some(n) = found.get(&f.display().to_string()) else {
+            wrong.push(format!("{shown}: the lexer of {alias} said nothing of it"));
+            continue;
+        };
+        match (*n > 0, *made == invalid_token) {
+            (true, false) => wrong.push(format!("{shown}: the lexer of {alias} could not read {n} of its tokens, which the tools read")),
+            (false, true) => wrong.push(format!("{shown}: the official Cedar CLI says it has an invalid token, and the lexer of {alias} reads every token of it")),
+            _ => {}
+        }
+        *counted.entry((alias, made)).or_default() += 1;
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // 3 examples of sekisho in two versions; the gates of sekisho's examples, tests and mutants, the
+    // playground's and the other languages' tests'; the policies, schemas and formatted policies of
+    // the materials and of the golden files; the invalid ones
+    assert!(generated >= 6, "{generated} versions of sekisho's examples: were they moved?");
+    for (key, least) in [(("gate", read_whole), 150), (("cedar", read_whole), 200), (("cedarschema", read_whole), 40), (("cedar", tokens_only), 50), (("cedar", invalid_token), 4)] {
+        let n = counted.get(&key).copied().unwrap_or(0);
+        assert!(n >= least, "{n} files of {:?}: were the materials moved?", key);
+    }
+    eprintln!("compared: what the lexers of gate and Cedar read of {} files with what the tools make of them, by language {counted:?}", asked.len());
 }

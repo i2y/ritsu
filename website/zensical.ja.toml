@@ -86,11 +86,14 @@ anchor_linenums = true
 line_spans = "__span"
 pygments_lang_class = true
 
-# Colour the code of the languages: ```kn with tools/knlexer.py, and ```rule, ```flow and ```book with
+# Colour the code of the languages: ```kn with tools/knlexer.py, ```gate with tools/gatelexer.py,
+# Cedar's ```cedar and ```cedarschema with tools/cedarlexer.py, and ```rule, ```flow and ```book with
 # the lexers of rulec's, dandori's and chobo's sites. Naming a module here is how it gets imported,
-# and importing it is what registers its lexer with Pygments; build.sh puts tools/ and the tools/ of
+# and importing it is what registers its lexers with Pygments; build.sh puts tools/ and the tools/ of
 # the three sites on PYTHONPATH.
 [project.markdown_extensions.knlexer]
+[project.markdown_extensions.gatelexer]
+[project.markdown_extensions.cedarlexer]
 [project.markdown_extensions.rulelexer]
 [project.markdown_extensions.flowlexer]
 [project.markdown_extensions.booklexer]

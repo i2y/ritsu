@@ -23,6 +23,8 @@ website/
 ├── playground/         # the shop the playground opens; projects.json is written from it, rulec's corpus and dandori's examples
 ├── tools/
 │   ├── knlexer.py      # colours the ```kn blocks (see below)
+│   ├── gatelexer.py    # colours the ```gate blocks
+│   ├── cedarlexer.py   # colours Cedar's ```cedar and ```cedarschema blocks
 │   ├── make_wasm.sh    # builds docs/playground/ritsu.wasm
 │   ├── make_libraries.sh  # bundles docs/playground/libraries.js from libraries/
 │   └── libraries/      # what libraries.js holds: package.json, package-lock.json, entry.js, bundle.mjs
@@ -58,20 +60,30 @@ other by hand.
 
 Pygments colours the code of the languages when the site is built, as it colours every other block:
 the theme's light and dark palettes are written against Pygments' classes, so nothing runs in the
-browser. `tools/knlexer.py` reads the `kn` fences, and ritsu's pages use the lexers of the languages'
-sites as they are, not copies of them: `rulec/tools/rulelexer.py` for `rule`,
-`dandori/tools/flowlexer.py` for `flow` and `chobo/tools/booklexer.py` for `book`. A lexer is imported
-only by being named as a Markdown extension, so both configurations name the four, and `build.sh`
-puts the four directories on `PYTHONPATH`; it also clears Zensical's page cache, which is keyed on the
-Markdown and would keep a page as it was after a change to a lexer. A fence of a language with no
-lexer (`gate`, `cedar`) is built as plain text.
+browser. Three lexers are in `tools/`: `knlexer.py` reads the `kn` fences, `gatelexer.py` the `gate`
+fences, and `cedarlexer.py` Cedar's, `cedar` for policies and `cedarschema` for a schema (Pygments
+has no lexer of Cedar's). ritsu's pages use the lexers of the languages' sites as they are, not
+copies of them: `rulec/tools/rulelexer.py` for `rule`, `dandori/tools/flowlexer.py` for `flow` and
+`chobo/tools/booklexer.py` for `book`. A lexer is imported only by being named as a Markdown
+extension, so both configurations name the six, and `build.sh` puts the four directories on
+`PYTHONPATH`; it also clears Zensical's page cache, which is keyed on the Markdown and would keep a
+page as it was after a change to a lexer. A language's site is built by its own `build.sh`, with its
+own `tools/` on `PYTHONPATH`; chobo's, whose pages show a gate, names `gatelexer` too, and its
+`build.sh` puts `../tools` there as well. A fence of a language the site names no lexer for is built
+as plain text: chobo's site names none for `flow`, and yuen's `req` has none.
 
-Each lexer keeps the words of its language a second time, in Python, and the language's tests hold
-them to the language's own lists: kaname's `tests/docs.rs` holds `knlexer.py` to `src/kw.rs`, and
-the characters it reads a number with to `src/lex.rs`, as rulec's `tests/website.rs` and the
-`tests/docs.rs` of dandori and chobo hold theirs. `knlexer.py` colours a word by where kaname's parser
-reads it: `count` is a bound after a type and a builtin in a call, `total` an effect after a
-function's answer and a name anywhere else, and a word before `:` a name, whatever its spelling.
+Each lexer keeps the words of its language a second time, in Python, and the tests of what it copies
+hold them to the lists they copy: kaname's `tests/docs.rs` holds `knlexer.py` to `src/kw.rs`, and the
+characters it reads a number with to `src/lex.rs`; sekisho's `tests/docs.rs` holds `gatelexer.py` to
+`src/kw.rs`, to the characters `src/lex.rs` reads a number with and to the words of ritsu-units in a
+type's brackets; ritsu-base's `tests/cedar.rs` holds `cedarlexer.py` to the words, the reserved words
+and the punctuation `ritsu_base::cedar` reads, which are those of Cedar 4.13.0; and rulec's
+`tests/website.rs` and the `tests/docs.rs` of dandori and chobo hold theirs. A lexer colours a word
+by where the language's parser reads it: in kaname, `count` is a bound after a type and a builtin in
+a call, and `total` an effect after a function's answer and a name anywhere else; in a gate, a word
+that starts a line or a block's line is a keyword there only, so an enum's value `open` and an
+attribute `description` stay names; and in both, and in Cedar, a word before `:` is a name, whatever
+its spelling.
 
 ## What a namespace IRI opens
 
@@ -157,9 +169,16 @@ and nowhere else. When Zensical is in `.venv`, it runs `build.sh` into a copy of
 looks at the tree it builds, down to an element for every word whose id is the word, to the four
 sets of three tabs on the page of kaname's examples, to where the link of each page that sends a
 reader on leads, to the pages of the playground alone, as they are, and to the colours of the code:
-every `kn`, `rule`, `flow` and `book` fence of ritsu's pages is built by its lexer, with Pygments'
-classes on its words and nothing the lexer could not read, and the pages of kaname show a keyword, a
-type, a number with its unit, a date, a comment, a string and an operator, each in its class.
+every `kn`, `rule`, `flow`, `book`, `gate`, `cedar` and `cedarschema` fence of ritsu's pages, and
+every fence of a gate or of Cedar on a language's site, is built by its lexer, with Pygments' classes
+on its words and nothing the lexer could not read, the pages of kaname show a keyword, a type, a
+number with its unit, a date, a comment, a string and an operator, each in its class, and the pages
+of sekisho the kinds of words of a gate, of Cedar's policies and of a schema. And with Pygments in
+`.venv`, it holds the lexers of a gate and of Cedar to what the tools read: every `.gate` of the
+repository but the mutants sekisho's lexer cannot read, every policy and schema the official Cedar
+CLI reads among the materials of ritsu-base's tests and what it formatted of them, and the Cedar
+sekisho writes, are read with nothing the lexers could not read, and of the materials the CLI does
+not read, the ones it says have an invalid token are the ones the lexers mark.
 `crates/ritsu/tests/playground.rs` holds the playground, as its page says: it drives Chrome
 through both pages in both languages (an edit, the answer, the page kept while a file does not
 pass, a link from one page to the other) and follows the links the pages before gave, sent on to

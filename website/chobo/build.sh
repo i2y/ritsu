@@ -9,12 +9,13 @@
 set -eu
 cd "$(dirname "$0")"
 ./sync.sh
-# The page cache is keyed on the Markdown, not on what renders it, so a change to
-# tools/booklexer.py would leave every cached page as it was.
+# The page cache is keyed on the Markdown, not on what renders it, so a change to a lexer would
+# leave every cached page as it was.
 rm -rf .cache
-# tools/booklexer.py colours the ```book fences, and it is imported only by being named as a
-# Markdown extension, so it has to be importable.
-export PYTHONPATH="$PWD/tools${PYTHONPATH:+:$PYTHONPATH}"
+# tools/booklexer.py colours the ```book fences, and the lexer of ritsu's pages,
+# ../tools/gatelexer.py, the ```gate fences; each is imported only by being named as a Markdown
+# extension, so each has to be importable.
+export PYTHONPATH="$PWD/tools:$PWD/../tools${PYTHONPATH:+:$PYTHONPATH}"
 ../.venv/bin/zensical build
 ../.venv/bin/zensical build -f zensical.ja.toml
 echo "chobo's site: website/chobo/build/ (en) + build/ja (ja)"

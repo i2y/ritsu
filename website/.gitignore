@@ -8,5 +8,5 @@ docs-ja/playground/
 # What npm installs for tools/make_libraries.sh to bundle docs/playground/libraries.js from.
 tools/libraries/node_modules/
 
-# Left behind by the build importing tools/knlexer.py.
+# Left behind by the build importing the lexers of tools/.
 tools/__pycache__/

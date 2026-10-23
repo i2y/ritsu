@@ -240,7 +240,8 @@ jobs:
         run: cd crates/dandori/tools/temporal-go && go mod download
 
       # ritsu's tests/website.rs builds the site (ritsu's pages and dandori's) with website/build.sh,
-      # which runs the Zensical of website/.venv.
+      # which runs the Zensical of website/.venv, and reads the repository's gates and Cedar with the
+      # site's lexers and the Pygments of the same environment.
       - name: "ritsu: Zensical, for the site"
         if: matrix.group == 'dandori'
         run: |

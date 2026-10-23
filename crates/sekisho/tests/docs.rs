@@ -12,6 +12,9 @@
 //!   (`tests/mutants.rs` holds the golden files to the runs).
 //! - The numbers of mutants the READMEs say are counted again here, the reference lists every
 //!   keyword of `kw.rs`, and every relative link leads to a file.
+//! - The lexer that colours `gate` on ritsu's site (`website/tools/gatelexer.py`) keeps the lists of
+//!   `kw.rs`, the words of ritsu-units it reads in a type's brackets, and the characters `lex.rs`
+//!   reads a number with, each as the one it copies.
 //!
 //! (`docs/codes.md` and `docs/codes.ja.md` are held to `explain --all` by `tests/codes.rs`.)
 
@@ -246,6 +249,85 @@ fn the_reference_lists_every_keyword() {
     let page = read(Path::new("docs/reference.md"));
     let missing: Vec<&str> = sekisho::kw::TABLE.iter().flat_map(|(_, ws)| ws.iter().copied()).filter(|w| !page.contains(&format!("`{w}`"))).collect();
     assert!(missing.is_empty(), "docs/reference.md does not list {missing:?}");
+}
+
+/// The text of `text` from `start` to the first `end` after it.
+fn between<'a>(text: &'a str, start: &str, end: &str) -> &'a str {
+    let from = text.find(start).unwrap_or_else(|| panic!("no {start:?}")) + start.len();
+    &text[from..from + text[from..].find(end).unwrap_or_else(|| panic!("no {end:?} after {start:?}"))]
+}
+
+/// The quoted strings of a text, in order.
+fn quoted(text: &str) -> Vec<String> {
+    text.split('"').skip(1).step_by(2).map(String::from).collect()
+}
+
+/// The site colours a ```gate fence with `website/tools/gatelexer.py`, which keeps the words of the
+/// language a second time, in Python, and colours each by where the parser reads it. Its `TABLE` is
+/// `kw.rs`'s, place by place and word for word, and its `RESERVED` is `kw.rs`'s, in its order. The
+/// words it reads in a type's brackets are ritsu-units': `TAX` is `Tax`'s, and `STEP` the word a
+/// rate's type writes its step with, as `Unit` writes it and reads it back. And the characters it
+/// reads a number with are the ones `lex.rs` reads: the letters of other scripts a unit is written
+/// with (`UNIT_LETTERS`, the ones `ritsu_units::chars::is_unit_char` takes beside the ASCII letters
+/// and the signs), the signs (`is_sign`), the ones that are a word after a type's `[`
+/// (`is_word_sign`) and the multipliers (`unit_after`). The lexer reads a unit as ASCII letters and
+/// digits or as one letter of `UNIT_LETTERS`, so every spelling of the table of units is written so,
+/// or is a sign. A word the language gains and the lexer does not fails here, rather than going
+/// uncoloured on the site.
+#[test]
+fn the_site_colours_the_words_of_the_language() {
+    use ritsu_units::{Tax, Unit, chars, table};
+    let py = read(Path::new("../../website/tools/gatelexer.py"));
+    // TABLE = (("line", ("gate", …)), …): a place at the first depth, its words at the second
+    let mut listed: Vec<(String, Vec<String>)> = Vec::new();
+    let mut depth = 0;
+    let mut cs = between(&py, "\nTABLE = (", "\n)\n").chars();
+    while let Some(c) = cs.next() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            '"' => {
+                let s: String = cs.by_ref().take_while(|c| *c != '"').collect();
+                match depth {
+                    1 => listed.push((s, Vec::new())),
+                    2 => listed.last_mut().expect("gatelexer.py's TABLE has a word before its place").1.push(s),
+                    _ => panic!("gatelexer.py's TABLE has `{s}` outside a place"),
+                }
+            }
+            _ => {}
+        }
+    }
+    let ours: Vec<(String, Vec<String>)> = sekisho::kw::TABLE.iter().map(|(p, ws)| (p.to_string(), ws.iter().map(|w| w.to_string()).collect())).collect();
+    assert_eq!(listed, ours, "website/tools/gatelexer.py's TABLE must be src/kw.rs's TABLE, place by place and word for word");
+    assert_eq!(quoted(between(&py, "\nRESERVED = (", ")")), sekisho::kw::RESERVED, "website/tools/gatelexer.py's RESERVED must be src/kw.rs's RESERVED, word for word and in its order");
+    // the words of ritsu-units in a type's brackets
+    assert_eq!(quoted(between(&py, "\nTAX = (", ")")), [Tax::Incl.word(), Tax::Excl.word()], "website/tools/gatelexer.py's TAX must be the words of ritsu_units::Tax");
+    let rate = Unit::parse("rate[step 1%]").expect("a rate with a step").to_string();
+    let step = rate.strip_prefix("rate[").and_then(|r| r.split_whitespace().next()).unwrap_or_else(|| panic!("a rate's type written as {rate}"));
+    assert_eq!(Unit::parse(&rate).map(|u| u.to_string()).as_deref(), Ok(rate.as_str()), "{rate} reads back as itself");
+    assert_eq!(quoted(between(&py, "\nSTEP = (", ")")), [step], "website/tools/gatelexer.py's STEP must be the word ritsu_units::Unit writes a rate's step with");
+    // the characters of a number
+    let every = || (0..=0x10FFFF_u32).filter_map(char::from_u32);
+    for (name, ours, from) in [
+        ("UNIT_LETTERS", every().filter(|c| chars::is_unit_char(*c) && !c.is_ascii_alphabetic() && !chars::is_sign(*c)).collect::<BTreeSet<char>>(), "is_unit_char"),
+        ("SIGNS", every().filter(|c| chars::is_sign(*c)).collect(), "is_sign"),
+        ("WORD_SIGNS", every().filter(|c| chars::is_word_sign(*c)).collect(), "is_word_sign"),
+    ] {
+        assert!(!ours.is_empty(), "ritsu_units::chars::{from} takes no character: was it rewritten?");
+        let got: BTreeSet<char> = between(&py, &format!("\n{name} = \""), "\"").chars().collect();
+        assert_eq!(got, ours, "website/tools/gatelexer.py's {name} must be the characters ritsu_units::chars::{from} takes");
+    }
+    let letters = between(&py, "\nUNIT_LETTERS = \"", "\"");
+    for s in table::spellings() {
+        let mut c = s.chars();
+        let ascii = c.next().is_some_and(|f| f.is_ascii_alphabetic()) && c.all(|x| x.is_ascii_alphanumeric());
+        let one = s.chars().count() == 1 && s.chars().all(|x| letters.contains(x) || chars::is_sign(x));
+        assert!(ascii || one, "`{s}`, a unit of the table, is neither ASCII letters and digits nor one letter or sign: gatelexer.py's NUMBER reads no such unit");
+    }
+    let lex = read(Path::new("src/lex.rs"));
+    let multipliers: String = between(&lex, "\nfn unit_after(", "\n}\n").split("Some('").skip(1).filter_map(|r| r.split_once("') =>").map(|(c, _)| c)).collect();
+    assert!(!multipliers.is_empty(), "src/lex.rs's unit_after names no multiplier: was it rewritten?");
+    assert_eq!(between(&py, "\nMULTIPLIERS = \"", "\""), multipliers, "website/tools/gatelexer.py's MULTIPLIERS must be the characters of src/lex.rs's unit_after");
 }
 
 #[test]

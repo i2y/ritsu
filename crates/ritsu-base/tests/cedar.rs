@@ -282,3 +282,77 @@ fn policies_made_in_code_are_written_as_cedar_reads_them() {
     bad.action = cedar::ActionScope::Eq(cedar::EntityUid::new(Name::new("User"), "read"));
     assert!(cedar::write_policy(&bad).is_err());
 }
+
+/// The quoted strings of a list written from `start` on, up to the `close` that ends it outside a
+/// quote (a list of punctuation quotes its brackets): a tuple of Python's, an array of Rust's.
+fn quoted_list(text: &str, start: &str, close: char) -> Vec<String> {
+    let from = text.find(start).unwrap_or_else(|| panic!("no {start:?}")) + start.len();
+    let (mut out, mut word, mut open) = (Vec::new(), String::new(), false);
+    for c in text[from..].chars() {
+        match (c, open) {
+            ('"', true) => out.push(std::mem::take(&mut word)),
+            (c, true) => word.push(c),
+            (c, false) if c == close => return out,
+            _ => {}
+        }
+        if c == '"' {
+            open = !open;
+        }
+    }
+    panic!("{start:?} is not closed with {close:?}")
+}
+
+/// The strings of the array a Rust source declares as `const <name>: [&str; N] = [...]`.
+fn rust_array(src: &str, name: &str) -> Vec<String> {
+    let at = src.find(&format!("\nconst {name}: [&str; ")).unwrap_or_else(|| panic!("no const {name}"));
+    quoted_list(&src[at..], "] = [", ']')
+}
+
+/// The site colours Cedar's policies and schemas with `website/tools/cedarlexer.py`, which keeps the
+/// words of Cedar a second time, in Python, and says they are those of the Cedar these readers read.
+/// They are: the words of the policy grammar are the ones `cst.rs` reads as keywords
+/// (`Ident::from_word`); the words of the schema grammar the ones `schema.rs` reads by name
+/// (`is_word`) and the primitive types its writer of the Cedar format names (`type_text`); the
+/// reserved words are `schema.rs`'s `RESERVED`, in its order; the punctuation of each grammar is what
+/// `lexer.rs` reads in it (`POLICY_PUNCT`, `SCHEMA_PUNCT`), in its order; and the version is the one
+/// these readers say they read. A word they come to read and the site's lexer does not fails here,
+/// rather than going uncoloured on the site.
+#[test]
+fn the_site_colours_the_words_these_readers_read() {
+    use std::collections::BTreeSet;
+    let file = |rel: &str| read(&Path::new(env!("CARGO_MANIFEST_DIR")).join(rel));
+    let py = file("../../website/tools/cedarlexer.py");
+    let (cst, schema, lexer, module) = (file("src/cedar/cst.rs"), file("src/cedar/schema.rs"), file("src/cedar/lexer.rs"), file("src/cedar/mod.rs"));
+    let set = |v: Vec<String>| v.into_iter().collect::<BTreeSet<String>>();
+    // the keywords of the policy grammar: the arms `"principal" => Ident::Principal` of from_word
+    let from_word = cst.split("pub fn from_word(w: &str) -> Ident {").nth(1).and_then(|r| r.split("\n    }\n").next()).expect("cst.rs reads its keywords in Ident::from_word");
+    let keywords: BTreeSet<String> = from_word.lines().filter_map(|l| l.trim().strip_prefix('"')?.split_once("\" => Ident::").map(|(w, _)| w.to_string())).collect();
+    assert!(keywords.len() >= 17, "{keywords:?}: was Ident::from_word rewritten?");
+    assert_eq!(set(quoted_list(&py, "\nPOLICY_WORDS = (", ')')), keywords, "website/tools/cedarlexer.py's POLICY_WORDS must be the keywords src/cedar/cst.rs reads (Ident::from_word)");
+    // the words of the schema grammar: what the reader reads by name, and the primitive types
+    let mut words: BTreeSet<String> = schema.split("is_word(\"").skip(1).filter_map(|r| r.split_once('"').map(|(w, _)| w.to_string())).collect();
+    let type_text = schema.split("\nfn type_text(").nth(1).and_then(|r| r.split("\n}\n").next()).expect("schema.rs writes a type in type_text");
+    let primitive: Vec<String> = type_text
+        .lines()
+        .filter(|l| ["Type::Bool", "Type::Long", "Type::String"].iter().any(|t| l.trim_start().starts_with(t)))
+        .filter_map(|l| l.split_once("\"__cedar::").and_then(|(_, r)| r.split_once('"')).map(|(w, _)| w.to_string()))
+        .collect();
+    assert_eq!(primitive.len(), 3, "{primitive:?}: was type_text rewritten?");
+    words.extend(primitive);
+    assert_eq!(set(quoted_list(&py, "\nSCHEMA_WORDS = (", ')')), words, "website/tools/cedarlexer.py's SCHEMA_WORDS must be the words src/cedar/schema.rs reads by name (is_word) and the primitive types it writes (type_text)");
+    // the reserved words and the punctuation, in their order
+    for (name, ours, rust) in [
+        ("RESERVED", rust_array(&schema, "RESERVED"), "src/cedar/schema.rs's RESERVED"),
+        ("POLICY_PUNCTUATION", rust_array(&lexer, "POLICY_PUNCT"), "src/cedar/lexer.rs's POLICY_PUNCT"),
+        ("SCHEMA_PUNCTUATION", rust_array(&lexer, "SCHEMA_PUNCT"), "src/cedar/lexer.rs's SCHEMA_PUNCT"),
+    ] {
+        assert!(!ours.is_empty(), "{rust} lists nothing: was it rewritten?");
+        assert_eq!(quoted_list(&py, &format!("\n{name} = ("), ')'), ours, "website/tools/cedarlexer.py's {name} must be {rust}, in its order");
+    }
+    // the version of Cedar the lists are of
+    let version = quoted_list(&py, "\nCEDAR = ", '\n');
+    let [version] = version.as_slice() else { panic!("cedarlexer.py names no version of Cedar: {version:?}") };
+    for (rel, text, said) in [("src/cedar/mod.rs", &module, format!("as Cedar {version} reads and writes")), ("src/cedar/lexer.rs", &lexer, format!("the grammars of Cedar {version}"))] {
+        assert!(text.replace("\n//! ", " ").contains(&said), "website/tools/cedarlexer.py says its words are Cedar {version}'s, and {rel} does not say `{said}`");
+    }
+}

@@ -14,10 +14,12 @@ sites=(rulec dandori chobo)
 # The page cache is keyed on the Markdown, not on what renders it, so a change to a lexer would leave
 # every cached page as it was.
 rm -rf .cache
-# Pygments colours the code with four lexers: tools/knlexer.py the ```kn fences, and the ones in the
-# tools/ of rulec's, dandori's and chobo's sites, which colour those sites too, the ```rule, ```flow
-# and ```book fences. Each is imported only by being named as a Markdown extension in the
-# configurations, so each has to be importable; the sites' own builds below keep their PYTHONPATH.
+# Pygments colours the code with the lexers of tools/ (knlexer.py the ```kn fences, gatelexer.py the
+# ```gate fences, cedarlexer.py Cedar's ```cedar and ```cedarschema) and the ones in the tools/ of
+# rulec's, dandori's and chobo's sites, which colour those sites too, the ```rule, ```flow and ```book
+# fences. Each is imported only by being named as a Markdown extension in the configurations, so each
+# has to be importable; the sites' own builds below keep their PYTHONPATH (chobo's puts ../tools on
+# it for gatelexer.py).
 lexers="$PWD/tools:$PWD/rulec/tools:$PWD/dandori/tools:$PWD/chobo/tools"
 PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build
 PYTHONPATH="$lexers${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/zensical build -f zensical.ja.toml

@@ -27,6 +27,10 @@ website/chobo/
     └── make_chart.py   # cuts the chart on the home pages out of what `chobo doc` draws
 ```
 
+The ```gate blocks of `together` are coloured by the lexer of ritsu's pages, `../tools/gatelexer.py`,
+which both configurations name beside `booklexer`, and which `build.sh` puts on `PYTHONPATH` beside
+`tools/`.
+
 ## One source of truth
 
 The pages of the tour are **written here**: `index`, `install`, `tour`, `checks`, `scenarios`,
@@ -78,14 +82,16 @@ nothing but the repository) reads every page written here, in both languages, an
 - the English site and the Japanese one have the same pages, which both navs list in the same
   order, and each home page leads to every page written for its site.
 - the counts the pages give (the scenarios, the codes) are the counts, and `tools/booklexer.py`'s
-  `KEYWORDS` are `src/syntax.rs`'s, word for word and in their order.
+  `KEYWORDS` are `src/syntax.rs`'s, word for word and in their order (sekisho's `tests/docs.rs` holds
+`../tools/gatelexer.py` to sekisho's lists the same way).
 
 `tests/doc.rs` holds `docs/doc` and `docs-ja/doc` to what `chobo doc --format html` writes for the
 examples now, and the charts of `docs/images` to what it draws; after a change to `doc`,
 `CHOBO_BLESS=1 cargo test -p chobo --test doc` writes the pages anew, and `tools/make_chart.py` the
 charts (below). ritsu's `crates/ritsu/tests/website.rs` holds what ritsu's site says of this one:
 `build.sh` builds it, the home pages link to it, both navs and both home pages lead to the
-playground in their language, and the configurations name the URLs.
+playground in their language, the configurations name the URLs, and its blocks of a gate are
+coloured.
 
 ## Build and preview
 
@@ -103,7 +109,7 @@ $ ./serve.sh      # http://localhost:8003/ritsu/chobo/ (./serve.sh <port> for an
 copies what it built into place. The English build cleans `build/`, so building only English
 silently drops `build/ja`: always go through `build.sh`, which runs `sync.sh` first. It also clears
 Zensical's page cache, which is keyed on the Markdown and would keep a page as it was after a change
-to `tools/booklexer.py`.
+to a lexer.
 
 The pages link to `/ritsu/chobo/` absolutely (the language switch), where GitHub Pages serves them,
 so `website/serve.sh` serves the site under `/ritsu/`; `python3 -m http.server -d build` would break

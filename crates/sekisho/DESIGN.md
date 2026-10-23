@@ -2032,3 +2032,56 @@ E103 の文と注は、どの単位にも同じものだった。刻みの無い
 - 値の無いことがある規則の入力（`bool?`）は、名前の検査では渡さなくてよい（E105 にならない）が、境の検査は、渡していないことを E105 と言う（「The rule `t` is not given its input opened」）。替える前から同じである。どちらに合わせるかは、規則の参照の評価が渡されない入力をどう扱うかを決めることになるので、この変更には入れていない。
 - 規則の入力に値を渡していないときの E105 の文と、順序のある列挙の範囲の外になりうる値の E206 の文は、規則での名前をそのまま書く（「The input `o'clock` of `t` is given nothing」、「… of the rule `t` (Sir..Lord's)」）。どちらも、並びではなく、どの入力かと、規則が書く範囲を指す名前なので、この変更では変えていない。E206 の注は範囲の中の値を定数で書くよう言うが、範囲の端の `Lord's` は、そのままでは書けない。
 - rulec は、`'` を含み別名の無い列挙の値（`Children's`）にも、`'` を含む別名（`o'clock(o'clk)`）にも、何も言わない。生成したコードは、値のメンバーを `SectionChildren's`（Go）、`CHILDREN'S`（Python と TypeScript）と、入力を `O'clk`（Go）、`o'clk`（Python）と書き、組めない。ASCII でない名前なら、Connect の W121 が言う形である。rulec の検査の穴で、sekisho の変更ではないので、ここでは直していない。
+
+## 21. サイトのコードの色（2026-10-24）
+
+### 21.1 きっかけ
+
+ritsu のサイトの sekisho のページ（`website/docs/sekisho.md` と `docs-ja/sekisho.md`）は、`gate` の塊を五つずつと、sekisho が書き出す Cedar のポリシーとスキーマの塊を一つずつ見せるが、どれにも色が付いていなかった。chobo のサイトで帳簿をほかの言語と使うページ（`together`、英日）の `gate` の塊も同じだった。ほかの言語の塊（`kn`、`rule`、`flow`、`book`）には、組むときに Pygments が色を付ける（ritsu の DESIGN 13.2）。
+
+### 21.2 原因
+
+sekisho の字句の定義が無かった。Pygments（2.21.0）にも Cedar の字句の定義は無い。Pygments は字句の定義を知らない塊を `text` として組むので、二つのページの 14 の塊と、chobo の二つのページの二つの塊は、全体が一色だった。
+
+### 21.3 決定
+
+- kaname の `knlexer.py` と同じ書き方で、`website/tools/gatelexer.py`（`gate`）と `website/tools/cedarlexer.py`（`cedar` と `cedarschema`）を足す。モジュールを Markdown の拡張として設定に挙げると読み込まれ、読み込まれると Pygments の表に自分を載せる。ritsu のサイトの本体の二つの設定は二つを挙げる。chobo のサイトの二つの設定は `gatelexer` を挙げ、chobo の `build.sh` は `website/tools` を `PYTHONPATH` に置く。rulec と dandori のサイトはゲートも Cedar も見せないので、つながない。
+- ゲートの語には、構文解析がその位置で読むとおりの色を付ける（9 章）。
+  - 行の頭の語と、ブロックの行の頭の語は、キーワードにする。行の頭でだけキーワードなので、同じつづりの名前（列挙の値 `open`、属性 `description`、入力 `range`）は、ほかの位置では名前のままである。`use` のあとの種類と `from`、ワークフローの行と action の `resource` の行の `from`、`range` と `offset`、`expect` のあとの `allow` と `deny`、`today is open in` の `open`、率の型の `step` も、その位置でだけキーワードにする。
+  - 予約語（`kw::RESERVED`）は名前にならない（E002）ので、どこでも同じ色にする。`bool` `date` `number` `rate` は型、`true` `false` は定数、`and` `or` `not` `in` `is` は演算子と同じ種類にし、残りはキーワードにする。`[` が続く `money` と量の語、型の角括弧の中の `incl_tax` と `excl_tax` も型にする。
+  - 宣言が付ける名前（列挙、役割、principal、ワークフロー、resource、action、ポリシー、期待、職務の分離）、ファイルの名前と名前空間と `use` が付ける名前、名前の ASCII の別名、単位の付いた数と日付と `offset` のあとのオフセット、文字列、コメント、演算子、区切りも、それぞれ種類を分ける。色そのものは、テーマの明るい配色と暗い配色が種類ごとに決める。
+  - `:` の前の語は、フィールド、属性、入力、引数の名前である。字下げした行の頭で `=` の前にある語は、計算した値の名前である。`.` のあとの語は属性である。`guards` の行の語、列挙の値、action の `resource` の行が並べる型と `from` のあとの引数も、名前である。どれも、つづりがキーワードと同じでも名前にする。構文解析は、`attributes`・`input`・`context` の下の行を字下げの深さで見分けるが、字句の定義は行の形で見分ける（頭の語のあとが `:` ならフィールド、`=` なら計算した値）。ブロックの行は頭の語のあとに `:` も `=` も書かないので、検査を通るファイルでは同じになる。
+  - 数は `lex.rs` のとおりに読む。数字（あいだを `_` で区切ってよく、`.` のあとに小数を書ける）のすぐあとに、単位の記号を一つか、単位を書く。単位は、桁の語（`万` `億`）のあとの、ASCII の英字と数字の並びか、ほかの文字の単位（`円` `銭` `坪`）一字で、そのあとに名前の字が続かないものである。続けば、数字で始まる名前（`3日以内`、`100万`）として読む。`lex.rs` が読まない Cedar の `==` と `||` は、読めない字にする（E001）。
+- Cedar の語は、ritsu が読む Cedar 4.13.0 のものにする（ritsu の DESIGN 4.18）。`v4.13.0` のタグの二つの文法（`cedar-policy-core/src/parser/grammar.lalrpop` と `cedar-policy-core/src/validator/cedar_schema/grammar.lalrpop`）の `match` が挙げる語と区切りで、Cedar の文法の文書（Policy grammar と Cedar schema grammar）が終端記号として書くものでもある。
+  - ポリシーでは、`permit` と `forbid`、`when` と `unless`、`if` `then` `else`、四つの変数（`principal` `action` `resource` `context`）をキーワードにし、`true` `false` は定数、`in` `has` `like` `is` は演算子と同じ種類にする。エンティティ型（`Shop::Role::"clerk"` の `Role`、`is` のあとの型）、名前空間、拡張の関数、注釈（`@id`）、テンプレートのスロット（`?principal`）も、それぞれ種類を分ける。
+  - スキーマでは、宣言の語（`namespace` `entity` `action` `type` `in` `appliesTo` `tags` `enum` `attributes` と、`appliesTo` の中の `principal` `resource` `context`）をキーワードにし、組み込みの型（`Long` `String` `Bool`）と `Set` は型、宣言する名前と、宣言や属性の型の名前はエンティティ型と同じ種類にする。
+  - `.` と `has` のあとの語と、`:` の前の語（レコードのキー、スキーマの属性）は、つづりによらず名前にする。
+- 字句の定義が持つ語の一覧は、元の一覧のコピーにし、元を持つクレートの試験で、一字も違わないことを確かめる。
+  - `gatelexer.py` は、`kw.rs` の `TABLE`（位置ごとの語）と `RESERVED` を、同じ名前で、語も順も同じに持つ。ほかに、ritsu-units の語（`Tax` の二つと、率の刻みの `step`）、単位の字（`ritsu_units::chars` の `is_unit_char` が ASCII の英字と記号のほかに取る字、`is_sign`、`is_word_sign`）、`lex.rs` の `unit_after` の桁の語を持つ。sekisho の `tests/docs.rs` の `the_site_colours_the_words_of_the_language` が、どれも元と一字も違わないことと、単位の表のどのつづりも、字句の定義が単位として読む形であることを確かめる。
+  - `cedarlexer.py` は、二つの文法の語、予約語、区切りと、Cedar のバージョンを持つ。ritsu-base の `tests/cedar.rs` の `the_site_colours_the_words_these_readers_read` が、どれも `ritsu_base::cedar` に合わせる。ポリシーの語は `Ident::from_word` がキーワードとして読む語、スキーマの語は `is_word` で読む語と、スキーマを Cedar の形で書くときの組み込みの型、予約語は `RESERVED`、区切りは字句が文法ごとに読むもの（`POLICY_PUNCT`、`SCHEMA_PUNCT`）、バージョンは `ritsu_base::cedar` が自分の説明に書く版である。
+  - 言語に語を足して字句の定義に足し忘れれば、そこで落ちる。ritsu が新しい版の Cedar を読むようにして、字句の定義を直し忘れたときも落ちる。
+
+### 21.4 捨てたもの
+
+- 字句の定義を `kw.rs` から生成すること。サイトは Zensical だけで組める形にしてあり、ほかの四つの字句の定義も、手で書いて試験で元に合わせている（kaname の DESIGN 31 章と同じ）。
+- 単位の表を字句の定義に持つこと。数のあとの並びが単位かどうかは表で決まるが、表のコピーは百を超えるつづりになる。ASCII の並びは、表に無ければ E001 なので、検査を通るファイルでは単位である。ほかの文字の単位は一字ずつなので、そのあとに名前の字が続かないことで、`5円` と名前の `5円引き` を分けられる。
+- Cedar の語を、いま公開されている文法の文書から取ること。スキーマの文法の文書には、4.13.0 の文法に無い `external` がある。ritsu が読まない語に色を付けると、ritsu が読めない Cedar が、読めるように見える。
+- Cedar の拡張の関数（`ip`、`decimal` など）と拡張の型の名前を、一覧に持つこと。文法ではなく拡張が決めるもので、関数は `(` の前にあることで分かる。sekisho が書く Cedar は拡張を使わない（3.7）。
+- `cedar` と `cedarschema` を一つの字句の定義にすること。二つの文法は、語も区切りも違う（スキーマには `?` があり、`==` などの演算子が無い）。
+
+### 21.5 変わること
+
+ritsu のサイトの sekisho のページ（英日）の `gate` の塊五つずつと Cedar の塊二つずつ、chobo のサイトの `together` のページ（英日）の `gate` の塊一つずつに色が付く。この変更の前と後に `website/build.sh` で組んだ木を突き合わせると、405 のファイルのうち変わったのはこの四つのページだけで、変わったところは 16 の塊の中だけ、塊の文字は一字も変わらない。
+
+### 21.6 確かめたこと
+
+- sekisho の `tests/docs.rs` の `the_site_colours_the_words_of_the_language`。字句の定義の `TABLE` から語を一つ消す、位置の名前を変える、`RESERVED` から語を一つ消す、`TAX` から語を一つ消す、`STEP` の語を変える、`UNIT_LETTERS`・`SIGNS`・`WORD_SIGNS`・`MULTIPLIERS` から字を一つ消す、の九つで、それぞれ落ちることを確かめた（字句の定義は元に戻した）。
+- ritsu-base の `tests/cedar.rs` の `the_site_colours_the_words_these_readers_read`。ポリシーの語を一つ変える、スキーマのキーワードと組み込みの型を一つずつ消す、予約語の順を変える、ポリシーの区切りの順を変える、スキーマの区切りを一つ消す、Cedar のバージョンを変える、の七つで、それぞれ落ちることを確かめた。
+- ritsu の `tests/website.rs` の `build_sh_builds_the_tree_that_is_published`（Zensical が `website/.venv` にあるとき）。組んだ木で、ritsu のページの `gate`・`cedar`・`cedarschema` の塊がフェンスと同じ数だけその言語のブロックとして組まれ、空白・区切り・ただの名前のほかの種類の語を持ち、読めなかった文字（`err`）を持たないこと。言語のサイトのページのゲートと Cedar の塊も同じであること。sekisho のページが英日それぞれで、ゲートのキーワード（`permit`）、型（`money`）、税（`incl_tax`）、単位の付いた数（`10_000GBP`）、日付、文字列、宣言の名前、`use` の名前、演算子と同じ種類の語（`is`）、比較（`<=`）を、Cedar のキーワード（`permit`）、演算子と同じ種類の語（`has`）、演算子（`&&`）、エンティティ型（`Role`）、名前空間、エンティティの ID（`"clerk"`）、注釈（`@id`）を、スキーマの型（`String`）と注釈（`@doc`）を、それぞれの種類で見せること。日本語のページは別名（`refund_order`）も見せる。日本語の設定から `gatelexer` を外す、英語の設定から `cedarlexer` を外す、chobo の日本語の設定から `gatelexer` を外す、字句の定義の別名から `gate` を外す、`cedarschema` を外す、の五つで、それぞれ落ちることを確かめた。
+- ritsu の `tests/website.rs` の `the_lexers_of_gate_and_cedar_read_what_the_tools_read`（Pygments が `website/.venv` にあるとき）。木の `.gate`（E001 の変異 8 を除く 180）、ritsu-base の試験の材料のうち公式の CLI が読むポリシーとスキーマ、CLI がポリシーを整形したもの（`cedar format` の 80 桁と 40 桁）、sekisho の golden と yuen の材料の Cedar、`sekisho gen` が例の英日の六つに書き出す Cedar（ポリシーは整形したものを含めて 218、スキーマは 49）を、字句の定義が読めない字なしに読むこと。CLI が読まない材料（`invalid/` と `invalid-schemas/`）のうち、CLI が invalid token と言う 6 には読めない字があり、ほかの 118（CLI は字句を読み、構文で止まる）には無いこと。バイトオーダーマークの二つは、Pygments が字句の定義に渡す前に取るので除いた。E001 の変異 8 には、どれも字句の定義でも読めない字がある。
+- 木の文書（README、リファレンス、診断の一覧、DESIGN、スキル。golden は除く）の `gate` の囲み 169 と、`cedar` と `cedarschema` の囲み 18 を字句の定義に通した。読めない字があるのは、閉じていない文字列を見せる E001 の再現の三つ（英日の診断の一覧と、スキルのコピー）だけである。
+- 組んだ塊を、サイトのスタイルシートの明るい配色と暗い配色で Chrome（headless）に開き、色が付くことを目で確かめた。
+
+### 21.7 見つけて直していないもの
+
+- 字句の定義は、検査を通るファイルを正しく読む。E001 のうち、単位の表に無い単位（`50XYZ`）、無い日付（`2026-02-30`）、大きすぎる数は、字句の定義には数に見える。単位の表と暦を持たないためである。サイトに載るゲートは検査を通るものなので、ページの色は変わらない。
