@@ -377,10 +377,14 @@ rows, not amounts, not another rule.
 > `rulec import csv` and `rulec import xlsx` are a different thing that shares the word: a
 > **command** that writes a first draft of a `.rule` from a spreadsheet, once. It leaves no
 > line in the file and nothing is read again afterwards. These two lines are read on every
-> `rulec check`. A header or a value of the sheet the lexer does not read as a name
-> (`Weight (kg)`, `re-quote`, `<=2000g`) is named for now by its column's alias (`c2`) or by
-> `v1`, `v2` …, and the word is kept in the `# guess` note on the line that declares it, so that
-> `check` reads the draft as it is written.
+> `rulec check`. A header or a value the lexer does not read as a name (`Weight (kg)`,
+> `re-quote`, `<=2000g`) is named for now by its column's alias (`c2`) or by `v1`, `v2` …, and so
+> is a second column headed alike. A name the code generated for some language cannot take as
+> written, or would make one identifier with another (`Zone`, which Ruby reads as a constant;
+> `North` beside `north`), is given an alias: the importer checks the draft as `rulec check`
+> does, and spells such a name otherwise until the check says nothing of it (`Zone(zone)`,
+> `North(v2)`). Each word is kept in the `# guess` note on the line that declares it, and `check`
+> reads the draft as it is written.
 
 ### Built-in enums
 

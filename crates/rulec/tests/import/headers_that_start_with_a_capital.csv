@@ -1,0 +1,5 @@
+Zone,Weight,Fee
+north,1kg,800JPY
+south,1kg,900JPY
+north,2kg,1000JPY
+south,2kg,1100JPY

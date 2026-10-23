@@ -1,0 +1,5 @@
+zone,zone,fee
+north,north,800JPY
+north,south,900JPY
+south,north,1000JPY
+south,south,1100JPY

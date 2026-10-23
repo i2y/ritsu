@@ -1,0 +1,5 @@
+ship_zone,shipZone,fee
+north,near,800JPY
+north,far,900JPY
+south,near,1000JPY
+south,far,1100JPY

@@ -158,8 +158,8 @@ default; `rulec import csv <file.csv>` does the same from a CSV. The columns bec
 column the output, the values an enum or a range, and each guess is marked `# guess` — yours to
 correct: a numeric column is copied as equalities and is usually meant as thresholds, and no range,
 rounding or unit in it is decided. A date, a percentage and a unit from the cell's number format are
-read back out of it; a header or a value that cannot be a name (`Weight (kg)`, `<=2000g`) is named
-`c2` or `v1` for now, the word kept in its note. It saves the typing, not the reading.
+read back out of it; a word that cannot be a name, or that a target language cannot take, is named
+for now (`c2`, `v1`, `Zone(zone)`), the word kept in its note. It saves the typing, not the reading.
 
 One habit pays for itself at the first revision:
 

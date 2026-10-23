@@ -462,6 +462,7 @@ jobs:
             評価器と生成コードが全言語で一致する
             the_generated_code_agrees_in_every_language_the_warning_does_not_name
             an_alias_where_the_finding_says_makes_every_language_agree
+            the_code_generated_from_every_draft_answers_alike_in_every_language
         run: cargo xtask test --level tools ${{ matrix.crates }}
 
       # --- What rulec's ci.yml ran beside `cargo test`, in the first of rulec's two jobs.

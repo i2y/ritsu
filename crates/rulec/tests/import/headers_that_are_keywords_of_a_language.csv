@@ -1,0 +1,9 @@
+type,class,import,fee
+parcel,first,yes,800JPY
+parcel,first,no,700JPY
+parcel,second,yes,600JPY
+parcel,second,no,500JPY
+letter,first,yes,300JPY
+letter,first,no,250JPY
+letter,second,yes,200JPY
+letter,second,no,150JPY

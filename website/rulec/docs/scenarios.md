@@ -195,7 +195,7 @@ policy unique
 …
 ```
 
-A word of the sheet that cannot stand as a name, like `<=2000g` and `>2000g` here, is named `v1`, `v2` for now, and the word is kept in the note: `rulec check` reads the draft as it is written. Whether those values are really thresholds is for the person who confirms it.
+A word of the sheet that cannot stand as a name, like `<=2000g` and `>2000g` here, is named `v1`, `v2` for now, and the word is kept in the note; whether those values are really thresholds is for the person who confirms it. A header the code generated for some language cannot take as written gets an alias it can, with a note too: `Zone`, which Ruby reads as a constant, is declared `Zone(zone)`. Either way, `rulec check` reads the draft as it is written and says nothing of its names.
 
 A policy document is transcribed as in [1-1](#1-1-transcribe-citing-the-article). If all there is is the running code, hand that code to an agent to transcribe, and hold the table to the code in [2-3](#2-3-hold-it-to-the-code-that-runs-today). The running code is not touched.
 

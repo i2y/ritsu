@@ -594,7 +594,7 @@ fn commands() -> Vec<Cmd> {
                 flag("--sheet", Some(if crate::i18n::ja() { "<名前>" } else { "<name>" }), tr!("xlsx のどのシートを読むか。既定は最初のシート", "which sheet of an xlsx to read; the default is the first")),
             ],
             exits: vec![
-                (0, tr!("下書きを書き出した。check はまだ通していない", "the draft was written; it has not been through check")),
+                (0, tr!("下書きを書き出した。名前のほかは、まだ check を通していない", "the draft was written; but for its names, it has not been through check")),
                 (2, tr!("読めないファイル、または表の形をしていないシート", "a file that cannot be read, or a sheet that is not a table")),
             ],
             examples: vec![

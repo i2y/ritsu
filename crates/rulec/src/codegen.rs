@@ -12490,7 +12490,8 @@ const SWIFT_KEYWORDS: &[&str] = &[
 
 /// Lower the leading run of capitals: all of it, unless the run is longer than one and the
 /// character after it is lowercase, in which case that last capital begins the next word.
-fn lower_lead(w: &str) -> String {
+/// `rulec import` spells an alias for a word of the sheet so too (`Zone(zone)`, §15.266).
+pub(crate) fn lower_lead(w: &str) -> String {
     let cs: Vec<char> = w.chars().collect();
     let run = cs.iter().take_while(|c| c.is_uppercase()).count();
     let keep = if run > 1 && cs.get(run).is_some_and(|c| c.is_lowercase()) { run - 1 } else { run };
