@@ -2580,8 +2580,10 @@ terminate; the fourth would take the replay of past records with it.
 - indents the lines under `machine` by two spaces and lines their values up in one column,
 - indents the lines under `prerequisites` by two spaces and pads each value, and `start`, to the
   widest, so that `requires` and the start values line up in one column (§6.5),
-- leaves the inside of a string and of a comment alone (on a table row, the comment is what
-  follows the last `|`).
+- leaves the inside of a string and of a comment alone. A comment starts where the lexer starts
+  one, at the first `#` outside a string, so a `|`, `#` or `,` in a string or in a comment is that
+  string's or that comment's and cuts nothing; on a table row, the comment follows the last `|`
+  the lexer reads.
 
 `rulec fmt --check` names the files that are not in canonical form and exits 1, which is how
 it belongs in CI.

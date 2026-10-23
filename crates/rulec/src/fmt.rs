@@ -107,56 +107,48 @@ fn symbols_in_ascii(line: &str) -> String {
     out
 }
 
+/// Where the lexer reads the comment of a line to start: the first `#` after the last word it reads.
+/// A `#` it reads in a string is the string's, and a `|` or a `,` in the comment is the comment's
+/// (§1.5, §15.267).
+fn comment_at(line: &str) -> Option<usize> {
+    let end = lex::read_through(line).last().map_or(0, |(r, _)| r.end);
+    line[end..].find('#').map(|h| end + h)
+}
+
+/// The bars of a line, where the lexer reads them: a `|` in a string or in the comment is none.
+fn bars(line: &str) -> Vec<std::ops::Range<usize>> {
+    lex::read_through(line).into_iter().filter(|(_, k)| matches!(k, Some(Kind::Pipe))).map(|(r, _)| r).collect()
+}
+
 /// A row is a `|` line, or a label followed by a `|` line: `r1 | 北海道 | S60 | 1150円 |`.
 /// The label is one word — anything with a space before the first bar is a statement whose
-/// string or expression happens to contain a bar.
+/// string or expression happens to contain a bar. The bar is one the lexer reads, so a `|` in a
+/// string or in the comment makes no row (§15.267).
 fn is_row(line: &str) -> bool {
-    let t = line.trim_start();
-    if t.starts_with('|') {
-        return true;
-    }
-    match t.find('|') {
-        Some(p) => {
-            let head = t[..p].trim_end();
-            !head.is_empty() && !head.contains(char::is_whitespace) && !head.starts_with('#')
+    match bars(line).first() {
+        Some(bar) => {
+            let head = line[..bar.start].trim();
+            head.is_empty() || !head.contains(char::is_whitespace)
         }
         None => false,
     }
 }
 
-/// The label written before the first `|`, if any, and the rest of the row.
-fn split_label(row: &str) -> (String, &str) {
-    let t = row.trim();
-    match t.find('|') {
-        Some(p) if p > 0 => (t[..p].trim().to_string(), &t[p..]),
-        _ => (String::new(), t),
-    }
-}
-
-/// Splits off the trailing comment. In a table row, only what follows the last `|` counts.
-fn split_comment(line: &str) -> (String, Option<String>) {
-    let Some(bar) = line.rfind('|') else {
-        return (line.to_string(), None);
-    };
-    let tail = &line[bar + 1..];
-    match tail.find('#') {
-        Some(h) => (
-            line[..bar + 1 + h].trim_end().to_string(),
-            Some(tail[h..].trim_end().to_string()),
-        ),
-        None => (line.trim_end().to_string(), None),
-    }
-}
-
-/// The citation after the last bar of a row (`|  @法 第20条`), split off so the cells end
-/// at the bar as they should.
-fn split_cite_row(body: &str) -> (String, Option<String>) {
-    let Some(bar) = body.rfind('|') else { return (body.to_string(), None) };
-    let tail = &body[bar + 1..];
-    match tail.find('@') {
-        Some(a) => (body[..bar + 1].to_string(), Some(tail[a..].trim().to_string())),
-        None => (body.to_string(), None),
-    }
+/// A row cut where the lexer cuts it (§1.5, §15.267): the label before the first bar, the text of
+/// the cells from the first bar on, the citation from the first `@` after the last bar, and the
+/// comment from the first `#` after the last word. A `|`, `@` or `#` the lexer reads in a string or
+/// in the comment cuts nothing, so a comment stays as written (`| a |  # x|y`), and so does a
+/// citation of a fragment in quotes (`@osha "§1910.157"`).
+fn split_row(line: &str) -> (String, &str, Option<String>, Option<String>) {
+    let pieces = lex::read_through(line);
+    let end = pieces.last().map_or(0, |(r, _)| r.end);
+    let comment = line[end..].find('#').map(|h| line[end + h..].trim_end().to_string());
+    let bars: Vec<&std::ops::Range<usize>> = pieces.iter().filter(|(_, k)| matches!(k, Some(Kind::Pipe))).map(|(r, _)| r).collect();
+    let (first, last) = (bars.first().map_or(0, |r| r.start), bars.last().map_or(0, |r| r.end));
+    let cite = pieces.iter().find(|(r, k)| r.start >= last && matches!(k, Some(Kind::At))).map(|(r, _)| r.start);
+    let label = line[..first].trim().to_string();
+    let cells = &line[first..cite.unwrap_or(end).max(first)];
+    (label, cells, cite.map(|a| line[a..end].trim().to_string()), comment)
 }
 
 /// A pinned fragment under a `source` line: one word and one digest.
@@ -318,10 +310,11 @@ fn machine_body(line: &str) -> String {
         None => (t, ""),
     };
     let w = MACHINE_LINES.iter().map(|k| k.len()).max().unwrap_or(0);
-    // A list is written `配達済, 取消`: the comma against the word before it.
-    let (words, comment) = match rest.find('#') {
-        Some(h) => (rest[..h].trim_end().replace(" ,", ","), format!("  {}", &rest[h..])),
-        None => (rest.replace(" ,", ","), String::new()),
+    // A list is written `配達済, 取消`: the comma against the word before it. The comment and the
+    // commas are where the lexer reads them, so a `#` or a ` ,` in a string stays (§15.267).
+    let (words, comment) = match comment_at(rest) {
+        Some(h) => (commas_against(rest[..h].trim_end()), format!("  {}", &rest[h..])),
+        None => (commas_against(rest), String::new()),
     };
     let rest = format!("{words}{comment}");
     let rest = rest.trim_start();
@@ -332,6 +325,25 @@ fn machine_body(line: &str) -> String {
     } else {
         format!("  {word:<w$} {rest}")
     }
+}
+
+/// Each comma the lexer reads, against the word before it: the blanks before it go, unless the line
+/// would then read other words (`1 ,000` would be the one number `1,000`, E049). A `,` in a string is
+/// the string's, and stays where it is (§15.267).
+fn commas_against(text: &str) -> String {
+    let read = words(text);
+    let mut out = String::with_capacity(text.len());
+    let mut end = 0;
+    for (r, k) in lex::read_through(text) {
+        let against = matches!(k, Some(Kind::Comma)) && words(&format!("{out}{}", &text[r.start..])) == read;
+        if !against {
+            out.push_str(&text[end..r.start]);
+        }
+        out.push_str(&text[r.clone()]);
+        end = r.end;
+    }
+    out.push_str(&text[end..]);
+    out
 }
 
 /// The words that start a line under `machine`.
@@ -434,9 +446,7 @@ pub fn format(src: &str) -> String {
         let block: Vec<(String, Vec<String>, Option<String>, Option<String>)> = lines[start..i]
             .iter()
             .map(|l| {
-                let (body, com) = split_comment(l);
-                let (body, cite) = split_cite_row(&body);
-                let (label, body) = split_label(&body);
+                let (label, body, cite, com) = split_row(l);
                 (label, cells(body), cite, com)
             })
             .collect();

@@ -1,0 +1,32 @@
+rule refund_record(refund_record) v1
+description "What the record of a refund says, and whether the refund is paid: a refund paid by card is recorded as `paid #<n>`, one paid in cash as `paid in cash , at the till`. Written for the tests of fmt: its comments hold bars, quotes and arrows, and its strings a `#`, a bar and a blank before a comma, which fmt leaves as they are written"
+
+enum state(state) = waiting(waiting) | paid(paid)
+enum happening(happening) = pay_by_card(pay_by_card) | pay_in_cash(pay_in_cash) | wait(wait)
+
+inputs
+  status(status) : state
+  event(event)   : happening
+
+outputs
+  next_state(next_state) : state
+  note(note)             : string
+
+table step(step)
+policy unique
+   | status  | event       | -> next_state | note                         |  # status|event -> next_state|note
+r1 | waiting | pay_by_card | paid          | "paid #1"                    |  # card|cash: "paid #<n>" by card
+r2 | waiting | pay_in_cash | paid          | "paid in cash , at the till" |  # a blank|no blank before the comma
+r3 | waiting | wait        | status        | "waiting|pending"            |  # the string's bar is the string's
+r4 | paid    | -           | status        | "done"                       |  # paid|done
+
+machine refund(refund) over step
+  carry   status -> next_state
+  initial waiting
+  final   paid
+  once    note starts_with "paid #"  # once|twice
+  once    note starts_with "paid in cash , at"
+
+examples
+| status  | event       | -> next_state | note      |
+| waiting | pay_by_card | paid          | "paid #1" |  # card|cash

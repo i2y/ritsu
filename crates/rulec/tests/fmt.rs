@@ -5,8 +5,9 @@
 //! reads no word (where a word would start, which stops it at E002).
 //!
 //! What is held is what the lexer reads, line by line: every `.rule` of the tree, formatted, reads
-//! as it read before; the same file typed with an IME formats to the words of the file; and the
-//! materials in `tests/fmt` — English first, the Japanese versions beside them with full-width
+//! as it read before and keeps its comments as they are written (where a comment starts is the
+//! lexer's to say, §15.267); the same file typed with an IME formats to the words of the file; and
+//! the materials in `tests/fmt` — English first, the Japanese versions beside them with full-width
 //! characters in their names — format to files that pass `check`.
 
 use rulec::lex::{self, Kind};
@@ -65,6 +66,13 @@ fn names_read(line: &str) -> Vec<String> {
         .collect()
 }
 
+/// The comment of a line as the lexer reads it: from the first `#` after the last word it reads, to
+/// the end of the line (§15.267).
+fn comment(line: &str) -> Option<&str> {
+    let end = lex::read_through(line).last().map_or(0, |(r, _)| r.end);
+    line[end..].find('#').map(|h| line[end + h..].trim_end())
+}
+
 /// Whether `part` stands in `whole` in the same order.
 fn in_order(part: &[String], whole: &[String]) -> bool {
     let mut it = whole.iter();
@@ -113,7 +121,8 @@ fn tree() -> Vec<PathBuf> {
 }
 
 /// Where the lines of `got` read otherwise than the lines of `want`: a line the lexer reads whole
-/// is read the same, and on any other line, the names it reads are still names, in order.
+/// is read the same, and on any other line, the names it reads are still names, in order; and every
+/// line keeps its comment as it is written.
 fn differences(file: &str, want: &str, got: &str) -> Vec<String> {
     let (w, g): (Vec<&str>, Vec<&str>) = (want.lines().collect(), got.lines().collect());
     if w.len() != g.len() {
@@ -122,7 +131,7 @@ fn differences(file: &str, want: &str, got: &str) -> Vec<String> {
     w.iter()
         .zip(&g)
         .enumerate()
-        .filter(|(_, (a, b))| if read_whole(a) { line_words(a) != line_words(b) } else { !in_order(&names_read(a), &names(b)) })
+        .filter(|(_, (a, b))| comment(a) != comment(b) || if read_whole(a) { line_words(a) != line_words(b) } else { !in_order(&names_read(a), &names(b)) })
         .map(|(i, (a, b))| format!("{file}:{}: `{a}` became `{b}`", i + 1))
         .collect()
 }
@@ -305,4 +314,101 @@ fn a_string_and_a_comment_are_left_alone() {
     let src = "| starts_with \"a|b\" | ≦１ |  # 行1→行2 ・ そのまま\n";
     let got = rulec::fmt::format(src);
     assert_eq!(got, "| starts_with \"a|b\" | <=1 |  # 行1→行2 ・ そのまま\n");
+}
+
+/// The material with the padding of its rows squeezed out: one blank before each bar the lexer
+/// reads after the first, as a table typed without lining it up.
+fn squeezed(src: &str) -> String {
+    let mut out = String::new();
+    for line in src.lines() {
+        let mut end = 0;
+        for (r, k) in lex::read_through(line) {
+            let gap = &line[end..r.start];
+            out.push_str(if end > 0 && matches!(k, Some(Kind::Pipe)) && !gap.is_empty() { " " } else { gap });
+            out.push_str(&line[r.clone()]);
+            end = r.end;
+        }
+        out.push_str(&line[end..]);
+        out.push('\n');
+    }
+    out
+}
+
+/// Where a row ends and its comment starts is the lexer's to say (§1.5, §15.267): a comment stays as
+/// it is written, the `|` in it included, at the end of a table's head, of a row with a label and of a
+/// row of `examples`; and so does a line under `machine`, its comment and its strings, a `#` and a
+/// blank before a comma in them included. The materials are written formatted: their rows typed
+/// without lining them up format to them, and they pass check as they do.
+#[test]
+fn a_comment_and_a_string_stay_as_written() {
+    for name in ["comments_and_strings_kept_as_written.rule", "書いたまま残るコメントと文字列.rule"] {
+        let src = material(name);
+        assert!(src.lines().any(|l| comment(l).is_some_and(|c| c.contains('|'))), "{name} has a comment with a bar");
+        assert_eq!(formats_and_passes(name), src, "{name} is written formatted");
+        let typed = squeezed(&src);
+        assert_ne!(typed, src, "{name}: its rows are lined up");
+        let d = differences(name, &src, &typed);
+        assert!(d.is_empty(), "{}", d.join("\n"));
+        assert_eq!(rulec::fmt::format(&typed), src, "{name} typed without lining up the rows");
+        let codes = |t: &str| rulec::check_source(t, name).iter().map(|d| d.code).collect::<Vec<_>>();
+        assert_eq!(codes(&typed), codes(&src), "{name}: check answers the same");
+    }
+}
+
+/// A `|` the lexer reads in a comment or a string cuts no cell and makes no row, an `@` in a string
+/// starts no citation, and a `#` in a string starts no comment (§15.267). Each line reads the words it
+/// read and keeps its comment, and formatted again it stays.
+#[test]
+fn a_row_is_cut_where_the_lexer_cuts_it() {
+    let cases = [
+        ("| a |  # x|y", "| a |  # x|y"),
+        ("| a | -> b : bool |  # old|-> c", "| a | -> b : bool |  # old|-> c"),
+        ("r1 | a |  # x|y", "r1 | a |  # x|y"),
+        ("| \"a|b\" |  # c|d", "| \"a|b\" |  # c|d"),
+        ("| a |  # it's \"x|y", "| a |  # it's \"x|y"),
+        ("| a |  @act 第20条  # x|y", "| a |  @act 第20条  # x|y"),
+        ("| a |  @osha \"x|y\"", "| a |  @osha \"x|y\""),
+        ("| a |  @osha \"x#y\"", "| a |  @osha \"x#y\""),
+        // the rest of a row after a `#` is its comment (§1.5)
+        ("| a | # b | c |", "| a |  # b | c |"),
+        // no row: the bar is in a comment or in a string
+        ("examples#x|y", "examples#x|y"),
+        ("description\"a|b\"", "description\"a|b\""),
+        ("r1#x | a |", "r1#x | a |"),
+        // a row whose label is a string, with the bar in it
+        ("\"a|b\" | c |", "\"a|b\" | c |"),
+    ];
+    for (written, want) in cases {
+        let got = rulec::fmt::format(written);
+        assert_eq!(got.trim_end(), want, "{written}");
+        let d = differences(written, written, &got);
+        assert!(d.is_empty(), "{}", d.join("\n"));
+        assert_eq!(rulec::fmt::format(&got), got, "{written}: fmt is not idempotent");
+    }
+    // a cell between the last bar and a citation stays, and the row is closed as one without a
+    // citation is
+    let got = rulec::fmt::format("| a | b @x");
+    assert_eq!(got, "| a | b |  @x\n");
+    assert_eq!(names(&got), ["a", "b", "x"]);
+}
+
+/// Under `machine`, the comment starts where the lexer reads it, and a comma goes against the word
+/// before it where the lexer reads a comma, when the line reads the same words so (§15.267): a `#`
+/// and a blank before a comma in a string stay, and so does `1 ,000`, which against the `1` would be
+/// one number written with a separator (E049).
+#[test]
+fn a_line_under_machine_keeps_its_strings() {
+    for (written, want) in [
+        ("once note starts_with \"paid #\"  # once|twice", "once    note starts_with \"paid #\"  # once|twice"),
+        ("once note starts_with \"paid , at\"", "once    note starts_with \"paid , at\""),
+        ("final 配達済 , 取消", "final   配達済, 取消"),
+        ("always x 1 ,000", "always  x 1 ,000"),
+    ] {
+        let src = format!("machine m over t\n  {written}\n");
+        let got = rulec::fmt::format(&src);
+        assert_eq!(got, format!("machine m over t\n  {want}\n"), "{written}");
+        let d = differences(written, &src, &got);
+        assert!(d.is_empty(), "{}", d.join("\n"));
+        assert_eq!(rulec::fmt::format(&got), got, "{written}: fmt is not idempotent");
+    }
 }
