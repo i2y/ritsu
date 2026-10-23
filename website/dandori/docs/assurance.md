@@ -89,12 +89,16 @@ The controller runs the generated WorkflowTemplate, but the runner plays the pod
 a scheduler the cluster does not have, and the runner does what its container and Argo's executor
 would do. It runs the generated caller (with the stand-in `Transport`) or a stand-in for the other
 tasks, reports the outputs the template declares, and ends the pod with the exit code and the
-termination message the container would leave. No container starts, so every run of every flow goes
-at once. One run of each flow is played again with real pods, the caller and the stand-ins in
-node:24-alpine answered by a mock in the cluster, so that the containers' side is run too. When the
-platform could not run one of a real run's pods (it ended in Error, or Unknown with exit code 255, as
-containerd in the node image of kind 0.29.0 made them now and then under load), the runner plays the
-run again, at most twice, and the test says so.
+termination message the container would leave. No container starts, so every run of a flow goes at
+once, and as many flows go at once as the machine has cores, fourteen at most. One run of each flow
+is played again with real pods, the caller and the stand-ins in node:24-alpine answered by a mock in
+the cluster, so that the containers' side is run too. When the platform could not run one of a real
+run's pods (it ended in Error, or Unknown with exit code 255, as containerd in the node image of kind
+0.29.0 made them now and then under load), the runner plays the run again, at most twice, and the
+test says so. When a pod has ended but its node has not a minute later, the runner annotates the pod,
+and the controller, taking that as a change of the pod, reads the workflow again and writes the
+node's end: Argo does not try again a write of the workflow that failed, as one can on a busy API
+server, and would look at the workflow again only twenty minutes later. The test says so too.
 
 ## Agents, decision models and the default Transport
 

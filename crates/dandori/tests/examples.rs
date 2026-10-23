@@ -1032,8 +1032,9 @@ fn temporal_activities_run_in_the_other_language() {
 
 /// How many runs of `temporal_activities_run_in_the_other_language` go at once, each with a worker
 /// in each of two languages: as many as the machine has cores, or `DANDORI_AT_ONCE`; `temporal_all`
-/// runs twice as many flows, each with one worker. Starting every flow at once on the four cores of
-/// a GitHub runner left the first activities of some runs past their StartToClose timeouts, and
+/// runs twice as many flows, each with one worker, and `argo_runs_as_the_reference_says` as many
+/// flows' runners, at most fourteen (`argo_at_once`). Starting every flow at once on the four cores
+/// of a GitHub runner left the first activities of some runs past their StartToClose timeouts, and
 /// some events past their waits (DESIGN 10.6).
 fn at_once() -> usize {
     std::env::var("DANDORI_AT_ONCE").ok().and_then(|n| n.parse().ok()).filter(|n| *n > 0).unwrap_or_else(|| std::thread::available_parallelism().map_or(4, |n| n.get()))
@@ -3698,16 +3699,23 @@ struct ArgoFlow {
     runner: std::process::Output,
 }
 
-/// How many flows' runners go at once on Argo. Every run of a flow goes at the same time, and the
-/// kind cluster's API server began to time requests out when the runners of more than twenty flows
-/// did; fourteen went through together.
-const ARGO_AT_ONCE: usize = 14;
+/// How many flows' runners go at once on Argo: as many as the machine has cores (`DANDORI_AT_ONCE`
+/// changes it, as for Temporal's runs), and at most fourteen. Every run of a flow goes at the same
+/// time. The kind cluster's API server began to time requests out when the runners of more than
+/// twenty flows did, and fourteen went through together on a machine of fourteen cores. On the four
+/// cores of a GitHub runner, the runs of fourteen flows at once kept the API server so busy that a
+/// run waited tens of seconds at each step, and the controller's writes of workflows could time out
+/// (dandori's DESIGN 12).
+fn argo_at_once() -> usize {
+    at_once().min(14)
+}
 static ARGO_SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) = (std::sync::Mutex::new(0), std::sync::Condvar::new());
 
 /// Wait for a slot among the flows going at once on Argo, and hold it while `f` runs.
 fn with_argo_slot<T>(f: impl FnOnce() -> T) -> T {
+    let at_once = argo_at_once();
     let (lock, freed) = &ARGO_SLOTS;
-    let mut going = freed.wait_while(lock.lock().unwrap_or_else(|e| e.into_inner()), |n| *n >= ARGO_AT_ONCE).unwrap_or_else(|e| e.into_inner());
+    let mut going = freed.wait_while(lock.lock().unwrap_or_else(|e| e.into_inner()), |n| *n >= at_once).unwrap_or_else(|e| e.into_inner());
     *going += 1;
     drop(going);
     let out = f();
@@ -3787,7 +3795,7 @@ fn argo_runs_as_the_reference_says() {
     }
     // every flow's runs go at the same time: the runner plays the pods (tools/argo/run.mjs), and
     // runs one of them again with real pods; each flow is made ready and run on a thread of its own,
-    // ARGO_AT_ONCE of them at a time, and every runner ends, and takes its workflows away, before
+    // argo_at_once() of them at a time, and every runner ends, and takes its workflows away, before
     // any is looked at
     let going: Vec<ArgoFlow> = std::thread::scope(|scope| {
         let ready: Vec<_> = runnable_on(Platform::Argo).into_iter().map(|f| scope.spawn(move || ready_on_argo(f))).collect();
@@ -3798,13 +3806,19 @@ fn argo_runs_as_the_reference_says() {
         let out = &flow.runner;
         assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(f), String::from_utf8_lossy(&out.stderr));
         let got: Value = serde_json::from_str(&std::fs::read_to_string(&flow.results).unwrap()).unwrap();
-        // the nodes each run made, against what E040 reckons with
+        // the nodes each run made, against what E040 reckons with, and how long the longest took
         let mut most = 0;
+        let mut longest = 0;
         let mut take = |g: &Value, what: &str| -> Value {
             let mut g = g.clone();
             let o = g.as_object_mut().unwrap();
             let nodes = o.remove("nodes").and_then(|n| n.as_u64()).expect("the runner counts the nodes");
             most = most.max(nodes);
+            longest = longest.max(o.remove("seconds").and_then(|s| s.as_u64()).expect("the runner times the runs"));
+            // a pod whose end the controller lost: the runner nudged it (tools/argo/run.mjs)
+            for e in o.remove("nudged").and_then(|p| p.as_array().cloned()).unwrap_or_default() {
+                eprintln!("{} {what}: nudged the controller, since {}", rel(f), e.as_str().unwrap_or_default());
+            }
             // a pod the platform could not run: the runner played the run again
             for e in o.remove("platform").and_then(|p| p.as_array().cloned()).unwrap_or_default() {
                 eprintln!("{} {what}: played again, since the platform could not run a pod ({})", rel(f), e.as_str().unwrap_or_default());
@@ -3817,7 +3831,7 @@ fn argo_runs_as_the_reference_says() {
         compare("the Argo workflow", f, &flow.references, &runs);
         compare(&format!("the Argo workflow with real pods (run {})", flow.real + 1), f, &flow.references[flow.real..flow.real + 1], &real);
         eprintln!(
-            "{}: compared {} run(s) on Argo Workflows, and run {} again with real pods; left out {} with a task's timeout; at most {most} nodes in a run, where E040 reckons with {}",
+            "{}: compared {} run(s) on Argo Workflows, and run {} again with real pods; left out {} with a task's timeout; at most {most} nodes in a run, where E040 reckons with {}; the last run ended {longest} seconds after the runner started",
             rel(f),
             flow.references.len(),
             flow.real + 1,

@@ -10,7 +10,7 @@
 //              "http": [...], "aws": [...],
 //              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ],
 //              "real": [index of a run to play again with real pods] }
-// results.json: { "runs": [ { steps, end, nodes, platform } ], "real": [ the same, for "real" ] }
+// results.json: { "runs": [ { steps, end, nodes, platform, nudged, seconds } ], "real": [ the same, for "real" ] }
 //
 // The Argo controller runs the generated WorkflowTemplate as it is, but this runner plays the
 // pods of the runs. Their pods wait for a scheduler that does not exist, and the runner does what
@@ -39,10 +39,25 @@
 // runs.json holds none of those. The rounds of `for … in parallel` run one at a time here, so
 // that the calls come in the order the reference interpreter makes them.
 //
+// When the controller's write of a workflow fails (a busy API server times it out), Argo does not
+// try again, and a workflow no other change comes to is looked at again only after 20 minutes: a
+// node whose pod's end was in that write stays Pending or Running beside its ended pod. So a pod
+// whose end has not reached its node a minute after the pod ended is nudged: the runner annotates
+// it, and the controller, taking that as a change of the pod, reads the workflow again and writes
+// the node's end. A played run whose last played pod's node has not ended
+// DANDORI_ARGO_STUCK_SECONDS (300) after it was played, nudges and all, is played again under
+// another name, at most twice. The results say which runs were nudged and played again.
+//
+// The runner gives up on the runs when one of them has stood still for DANDORI_ARGO_MINUTES (10
+// minutes): none of its nodes has started or ended in that time, and none of its pods is being
+// played; and when they have taken three times that in all. A cluster that is slow, as it is on a
+// machine of four cores with the runs of many flows at once, moves every run on, a step every few
+// tens of seconds; a run that stands still is stuck. Each run's result says how many seconds after
+// the runner started it ended.
+//
 // The argo command is DANDORI_ARGO, else `argo` on the PATH. DANDORI_ARGO_KEEP=1 keeps the
-// workflows, to look at them; DANDORI_ARGO_MINUTES bounds the runs (10 minutes);
-// DANDORI_ARGO_DUMP=<directory> writes, for every run with real pods, what the cluster says of its
-// pods and nodes when it ends, and the logs of the pods that failed.
+// workflows, to look at them; DANDORI_ARGO_DUMP=<directory> writes, for every run with real pods,
+// what the cluster says of its pods and nodes when it ends, and the logs of the pods that failed.
 
 import fs from "node:fs";
 import http from "node:http";
@@ -179,8 +194,13 @@ const wt = JSON.parse(JSON.stringify(spec.template).replaceAll(JSON.stringify(AR
 const name = wt.metadata.name;
 // seconds added to the deadline of every pod of a template under test, for the pod to start in (see below)
 const DEADLINE_ROOM = 120;
-// how long a pod the runner played may stay un-noticed by the controller before its run is played again
-const STUCK_MS = Number(process.env.DANDORI_ARGO_STUCK_SECONDS ?? 90) * 1000;
+// how long a pod's end may stay unwritten in its node before the runner nudges the controller (a
+// minute: on a busy machine the controller takes up to that to write a node's end), how many times a
+// pod is nudged, and how long a pod the runner played may stay un-noticed by the controller, nudges
+// and all, before its run is played again
+const NUDGE_MS = 60 * 1000;
+const NUDGES = 3;
+const STUCK_MS = Number(process.env.DANDORI_ARGO_STUCK_SECONDS ?? 300) * 1000;
 const suffix = Math.random().toString(36).slice(2, 7);
 const work = workDir("dandori-argo-");
 
@@ -209,12 +229,14 @@ fs.writeFileSync(
 
 // The runs: each one played, and the ones in `real` again with real pods.
 const plays = [];
-spec.runs.forEach((r, i) => plays.push({ i, real: false, base: `dd-${name}-${suffix}-${i + 1}`, name: `dd-${name}-${suffix}-${i + 1}`.slice(0, 60), platform: [] }));
-for (const i of spec.real ?? []) plays.push({ i, real: true, base: `dd-${name}-${suffix}-real${i + 1}`, name: `dd-${name}-${suffix}-real${i + 1}`.slice(0, 60), platform: [] });
+spec.runs.forEach((r, i) => plays.push({ i, real: false, base: `dd-${name}-${suffix}-${i + 1}`, name: `dd-${name}-${suffix}-${i + 1}`.slice(0, 60), platform: [], nudged: [] }));
+for (const i of spec.real ?? []) plays.push({ i, real: true, base: `dd-${name}-${suffix}-real${i + 1}`, name: `dd-${name}-${suffix}-real${i + 1}`.slice(0, 60), platform: [], nudged: [] });
 const byName = new Map(plays.map((p) => [p.name, p]));
 // the names of the runs that were played again under another: what is left of them is not played
 const replaced = new Set();
 const made = plays.map((p) => p.name);
+// the workflow that started each workflow a resource step made
+const parentOf = new Map();
 
 // the mock the played pods take their answers from, on this machine
 const local = makeMock();
@@ -364,6 +386,7 @@ async function submit(p) {
   };
   await request(workflows, { method: "POST", headers: JSON_BODY, body: JSON.stringify(w) });
   p.running = true;
+  p.submitted = Date.now();
 }
 
 // A played pod runs a program of ours on this machine: the caller or a stand-in. At most so
@@ -410,7 +433,7 @@ function program(file, args, env) {
 
 // A resource step: the workflow it creates (its pods played too), and its end by the success
 // and failure conditions dandori writes, which read the workflow's phase.
-async function resource(tmpl) {
+async function resource(tmpl, parent) {
   const r = tmpl.resource;
   if (r.action !== "create" || r.successCondition !== "status.phase == Succeeded" || r.failureCondition !== "status.phase in (Failed, Error)") {
     throw new Error(`the runner does not play this resource step: ${JSON.stringify(r).slice(0, 200)}`);
@@ -422,6 +445,7 @@ async function resource(tmpl) {
   const got = await request(workflows, { method: "POST", headers: JSON_BODY, body: JSON.stringify(child) });
   const childName = got.metadata.name;
   made.push(childName);
+  parentOf.set(childName, parent);
   for (;;) {
     const w = await request(`${workflows}/${childName}`);
     const phase = w.status?.phase;
@@ -439,10 +463,28 @@ async function resource(tmpl) {
 }
 
 // Play one pod: what its container would do, the outputs Argo's executor would report from it,
-// and the pod's end.
+// and the pod's end (playPod). The run counts the pods of its that are being played: a resource
+// step's pod is played for as long as the workflow it starts runs, and meanwhile the run moves in
+// that workflow's nodes, not in its own.
 async function play(pod) {
   const wf = pod.metadata.labels["workflows.argoproj.io/workflow"];
   const nodeId = pod.metadata.annotations["workflows.argoproj.io/node-id"];
+  const run = byName.get(wf);
+  if (run) run.playing = (run.playing ?? 0) + 1;
+  try {
+    await playPod(pod, wf, nodeId);
+  } finally {
+    if (run) run.playing--;
+  }
+  // the run, unless it has been played again under another name meanwhile
+  const now = byName.get(wf);
+  if (now) {
+    now.lastPlayed = Date.now();
+    now.lastNode = nodeId;
+  }
+}
+
+async function playPod(pod, wf, nodeId) {
   const containers = [...(pod.spec.initContainers ?? []), ...pod.spec.containers];
   const tmpl = JSON.parse(containers.flatMap((c) => c.env ?? []).find((e) => e.name === "ARGO_TEMPLATE").value);
   const main = pod.spec.containers.find((c) => c.name === "main");
@@ -450,7 +492,7 @@ async function play(pod) {
   const cmd = [...(main.command ?? []), ...(main.args ?? [])];
   const argv = cmd.includes("--") ? cmd.slice(cmd.indexOf("--") + 1) : cmd;
   let result;
-  if (tmpl.resource) result = await resource(tmpl);
+  if (tmpl.resource) result = await resource(tmpl, wf);
   else if (argv[0] === "node" && argv[1] === "/app/call.ts") result = await program(path.join(played, "call.ts"), argv.slice(2), env);
   else if (argv[0] === "node" && argv[1] === "/app/stand-in.mjs") result = await program(path.join(played, "stand-in.mjs"), argv.slice(2), env);
   else if (env.DD_ERROR !== undefined) result = { code: 1, message: env.DD_ERROR, files: {} };
@@ -497,11 +539,6 @@ async function play(pod) {
     body: JSON.stringify({ status }),
     missingIsFine: true,
   });
-  const run = byName.get(wf);
-  if (run) {
-    run.lastPlayed = Date.now();
-    run.lastNode = nodeId;
-  }
 }
 
 async function answer(p, callbackId, ans) {
@@ -552,33 +589,101 @@ async function clean() {
 
 // Start them all, then play the pods, answer the callbacks, and read the ends as they come.
 const results = { runs: [], real: [] };
+const started = Date.now();
 try {
   await Promise.all(plays.map((p) => submit(p)));
   const failures = [];
   const handled = new Set();
   const answering = new Set();
   const selector = encodeURIComponent(`dandori-batch=${suffix}`);
-  const started = Date.now();
-  const limit = Number(process.env.DANDORI_ARGO_MINUTES ?? 10);
+  const limit = Number(process.env.DANDORI_ARGO_MINUTES ?? 10) * 60 * 1000;
+  let looked = 0;
+  // the pods seen ended and not labelled completed, since when; the pods nudged, how many times and
+  // when last; and when each workflow's nodes were last read for them
+  const endedAt = new Map();
+  const nudgedPods = new Map();
+  const nodesRead = new Map();
+  let nudgeLooked = 0;
+  async function nudge() {
+    const ended = await request(`/api/v1/namespaces/${ns}/pods?resourceVersion=0&labelSelector=${encodeURIComponent(`dandori-batch=${suffix},workflows.argoproj.io/completed=false`)}&fieldSelector=${encodeURIComponent("status.phase!=Pending,status.phase!=Running")}`);
+    const now = Date.now();
+    const listed = new Set();
+    const due = new Map();
+    for (const pod of ended.items ?? []) {
+      const uid = pod.metadata.uid;
+      listed.add(uid);
+      if (!endedAt.has(uid)) endedAt.set(uid, now);
+      const wf = pod.metadata.labels["workflows.argoproj.io/workflow"];
+      const run = byName.get(wf) ?? byName.get(parentOf.get(wf));
+      const n = nudgedPods.get(uid) ?? { times: 0, at: 0 };
+      if (!run?.running || now - endedAt.get(uid) < NUDGE_MS || n.times >= NUDGES || now - n.at < NUDGE_MS || now - (nodesRead.get(wf) ?? 0) < NUDGE_MS) continue;
+      if (!due.has(wf)) due.set(wf, []);
+      due.get(wf).push(pod);
+    }
+    for (const uid of endedAt.keys()) if (!listed.has(uid)) endedAt.delete(uid);
+    for (const [wf, pods] of due) {
+      nodesRead.set(wf, Date.now());
+      const w = await request(`${workflows}/${wf}`, { missingIsFine: true });
+      const run = byName.get(wf) ?? byName.get(parentOf.get(wf));
+      if (w === null || !run?.running) continue;
+      const nodes = nodesOf(w);
+      for (const pod of pods) {
+        const node = nodes[pod.metadata.annotations["workflows.argoproj.io/node-id"]];
+        if (!node || !["Pending", "Running"].includes(node.phase)) continue;
+        const n = nudgedPods.get(pod.metadata.uid) ?? { times: 0, at: 0 };
+        n.times++;
+        n.at = Date.now();
+        nudgedPods.set(pod.metadata.uid, n);
+        await request(`/api/v1/namespaces/${ns}/pods/${pod.metadata.name}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/merge-patch+json" },
+          body: JSON.stringify({ metadata: { annotations: { "dandori-nudged": String(n.times) } } }),
+          missingIsFine: true,
+        });
+        const whose = wf === run.name ? "" : " of the workflow a step started";
+        run.nudged.push(`the node ${node.displayName}${whose} stayed ${node.phase} ${Math.round((n.at - endedAt.get(pod.metadata.uid)) / 1000)} seconds after its pod ended`);
+      }
+    }
+  }
   let pass = 0;
   while (plays.some((p) => p.running)) {
     if (failures.length > 0) throw failures[0];
-    if (Date.now() - started > limit * 60 * 1000) {
-      // what the runs that did not end were waiting for: their nodes that are not done, and their pods
-      const lines = [];
+    // Past the limit, every half a minute: when each run that has not ended last moved (a node of
+    // its started or ended, or the runner submitted it or played a pod of it). The runner gives up
+    // when one of them has stood still for the limit with none of its pods being played, or when
+    // the runs have taken three times the limit in all, and says what the runs that did not end
+    // were waiting for: their nodes that are not done, and their pods.
+    if (Date.now() - started > limit && Date.now() - looked > 30000) {
+      looked = Date.now();
+      const going = [];
+      let still = false;
       for (const p of plays.filter((p) => p.running)) {
         try {
           const w = await request(`${workflows}/${p.name}`);
-          const waiting = Object.values(nodesOf(w))
-            .filter((n) => !["Succeeded", "Skipped"].includes(n.phase))
-            .map((n) => `${n.displayName} (${n.type}) ${n.phase}${n.message ? `: ${n.message}` : ""}`);
-          const pods = (await kubectl(["get", "pods", "-l", `workflows.argoproj.io/workflow=${p.name}`, "--no-headers", "-o", "custom-columns=NAME:.metadata.name,PHASE:.status.phase,SCHEDULER:.spec.schedulerName,REASON:.status.reason"])).trim().split("\n").join("; ");
-          lines.push(`${p.name}: ${w.status?.phase} ${w.status?.message ?? ""}\n  not done: ${waiting.join("; ")}\n  pods: ${pods || "none"}`);
+          const nodes = Object.values(nodesOf(w));
+          const times = nodes.flatMap((n) => [n.startedAt, n.finishedAt]).filter(Boolean).map((t) => Date.parse(t));
+          const moved = Math.max(p.submitted ?? 0, p.lastPlayed ?? 0, ...times);
+          if (Date.now() - moved > limit && !(p.playing > 0)) still = true;
+          going.push({ p, w, nodes, ago: Math.round((Date.now() - moved) / 1000) });
         } catch (e) {
-          lines.push(`${p.name}: ${String(e?.message ?? e).slice(0, 200)}`);
+          going.push({ p, error: String(e?.message ?? e).slice(0, 200) });
         }
       }
-      throw new Error(`the runs took more than ${limit} minutes:\n${lines.join("\n")}`);
+      if (still || Date.now() - started > 3 * limit) {
+        const lines = [];
+        for (const { p, w, nodes, ago, error } of going) {
+          if (error !== undefined) {
+            lines.push(`${p.name}: ${error}`);
+            continue;
+          }
+          const waiting = nodes.filter((n) => !["Succeeded", "Skipped"].includes(n.phase)).map((n) => `${n.displayName} (${n.type}) ${n.phase}${n.message ? `: ${n.message}` : ""}`);
+          const pods = await kubectl(["get", "pods", "-l", `workflows.argoproj.io/workflow=${p.name}`, "--no-headers", "-o", "custom-columns=NAME:.metadata.name,PHASE:.status.phase,SCHEDULER:.spec.schedulerName,REASON:.status.reason"])
+            .then((out) => out.trim().split("\n").join("; "))
+            .catch((e) => String(e?.message ?? e).slice(0, 200));
+          lines.push(`${p.name}: ${w.status?.phase} ${w.status?.message ?? ""}; last moved ${ago} seconds ago${p.playing > 0 ? ", with a pod being played" : ""}\n  not done: ${waiting.join("; ")}\n  pods: ${pods || "none"}`);
+        }
+        throw new Error(`${still ? `a run stood still for more than ${limit / 60000} minutes` : `the runs took more than ${(3 * limit) / 60000} minutes`}:\n${lines.join("\n")}`);
+      }
     }
     // the pods waiting for the played node: from the API server's cache, which is cheap, and once in a while from
     // the store itself, in case the cache is behind
@@ -589,10 +694,23 @@ try {
       handled.add(pod.metadata.uid);
       play(pod).catch((e) => failures.push(e));
     }
-    // A run whose last played pod the controller has not seen end for a while: in the whole test it has now and
-    // then left the node Pending beside a pod that is done, and the run stood still for the 10 minutes it is given
-    // (the nodes and the pod of such a run were what the run's error said). The run is played again under a new
-    // name, once or twice, and the test says so.
+    // Pods whose end the controller has not written: every 15 seconds, the pods of the batch (the
+    // runs' and the workflows their resource steps made, played or real) that have ended but are not
+    // labelled completed, which the controller does once it has written their nodes' ends. The label
+    // lags on a busy cluster, so for a pod that ended a minute ago, the node itself is read, from its
+    // workflow (one read a workflow a minute). A node still not done has lost its pod's end: when the
+    // controller's write of the workflow fails (a busy API server times it out), Argo does not try
+    // again, and when no other change comes to the workflow, it looks at it again only after 20
+    // minutes. The runner annotates the pod, a change of the pod, on which the controller reads the
+    // workflow again and writes the node's end; at most three times a pod, a minute apart, and the
+    // test says so.
+    if (Date.now() - nudgeLooked > 15000) {
+      nudgeLooked = Date.now();
+      // a request the busy API server does not answer leaves the nudges to the next round
+      await nudge().catch(() => {});
+    }
+    // A run whose last played pod the controller has not seen end in the end, nudges and all: the run is
+    // played again under a new name, once or twice, and the test says so.
     for (const p of plays) {
       if (!p.running || p.lastPlayed === undefined || p.checking || Date.now() - p.lastPlayed < STUCK_MS) continue;
       p.checking = true;
@@ -665,6 +783,7 @@ try {
         }
         await dump(p, w);
         p.running = false;
+        p.seconds = Math.round((Date.now() - started) / 1000);
         p.nodes = Object.keys(nodesOf(w)).length;
         const params = Object.fromEntries((w.status.outputs?.parameters ?? []).map((q) => [q.name, q.value]));
         if (w.status.phase === "Succeeded") p.end = { succeed: JSON.parse(params.dd_output ?? "null") };
@@ -681,7 +800,7 @@ try {
     const state = await stateOf(p, true);
     // the keys carry the workflow's name; the reference names the execution "test"
     const steps = JSON.parse(JSON.stringify(state.steps).split(`"${p.name}/`).join('"test/'));
-    return { steps, end: p.end, nodes: p.nodes, platform: p.platform };
+    return { steps, end: p.end, nodes: p.nodes, platform: p.platform, nudged: p.nudged, seconds: p.seconds };
   }
   for (const p of plays) (p.real ? results.real : results.runs).push(await result(p));
 } catch (e) {
