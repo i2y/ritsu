@@ -1338,7 +1338,7 @@ ArchUnit は、`that()` に当たるクラスが一つも無い規則を、既�
 
 ### 7.5 Go：go-arch-lint（depguard と比べて）
 
-**決定**：go-arch-lint にする。まとまりごとにコンポーネント（`in:` にディレクトリの `**`）を書き、`deps` の `mayDependOn` に 7.1 の表で import してよいコンポーネントを並べる。設定は `.go-arch-lint.yml`（version 3）で、`code go` の置き場所（`go.mod` のあるディレクトリ。無ければ E501）に書く。`except` で外したファイルは `excludeFiles` に入れる。
+**決定**：go-arch-lint にする。まとまりごとにコンポーネント（`in:` にディレクトリの `**`）を書き、`deps` の `mayDependOn` に 7.1 の表で import してよいコンポーネントを並べる。設定は `.go-arch-lint.yml`（version 3）で、`code go` の置き場所（`go.mod` のあるディレクトリ。無ければ E501）に書く。`except` で外したディレクトリは `exclude` に書く。Go のファイルを一つだけ指す `except` と、ほかのコードのパスがその名前で始まる `except` のディレクトリは、go-arch-lint に書けないので E501（24 章）。
 
 go-arch-lint v1.19.0（2026-09-07）は、同じコンポーネントの中のパッケージどうしの import（在庫の `inventory` から `inventory/ledger` へ）も、`mayDependOn` に自分を並べないと止めた。中身の無い `mayDependOn` の項も受け付けない。そこで、どのコンポーネントも自分を並べる。例の `.go-arch-lint.yml` から、配送の層のコンポーネントを抜き出す。
 
@@ -2554,3 +2554,41 @@ error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService i
 ```
 
 - 替える前と後の突き合わせ：例（四つ）、テストの地図（七つ）、ritsu のテストのプロジェクトの地図（二つ）、根の `ritsu.ctx` の `check`（英語と日本語、それぞれ JSON も）と `api`、変異（178）の `check`（英語と日本語、それぞれ JSON も。`command` のある四つはそのコマンドの英語と日本語）の 774 の出力を、替える前と後の `ritsu sakai` で比べ、違ったのは新しい変異二つの 8 だけだった。どの例とテストの地図も、公表された言語に `enums` のファイルを並べていない。
+
+## 24. go-arch-lint の設定の `except`（2026-10-28）
+
+地図の `except` で外したディレクトリを、go-arch-lint の設定の `exclude` に書く。go-arch-lint が書いたとおりに外せない `except` は E501 にする。
+
+**きっかけ**：Go のコードの置き場所の下のディレクトリを `except` で外した地図で、sakai の書いた設定のまま go-arch-lint を走らせると、外したはずのファイルを「どのコンポーネントにも入らない」と言い、終了コード 1 で落ちた。
+
+**原因**：sakai は、`except` のパスを `^<パス>(/|$)` の正規表現にして `excludeFiles` に書いていた。go-arch-lint v1.19.0 は、`excludeFiles` の正規表現をファイルの絶対パスに当てる。`^legacy(/|$)` はどのファイルにも当たらず、外したはずのファイルは走査に残り、どのコンポーネントにも入らないので `ArchWarningsNotMatched` に出た。走らせて確かめると、`^legacy(/|$)` と `^/legacy/` は当たらず、`^/private/tmp/.*/legacy/` は当たった。テストの地図にも例にも、Go の置き場所の下を `except` で外すものが無かった。
+
+**決定**：
+
+- `except` のうち、Go の置き場所の下のディレクトリを、`exclude` に置き場所からのパスで書く（`- "legacy"`）。go-arch-lint は `workdir` からのパスとして読み、絶対パスにして外す。ファイルを指す `except` は書かない。go-arch-lint は `exclude` のディレクトリしか読まず（ファイルは黙って捨てる）、`.go` でないファイルはもともと読まない。
+- Go のファイルを一つだけ指す `except` は E501 にする。`exclude` には書けず、`excludeFiles` は絶対パスに当たるので、リポジトリがどこに置かれても同じ一つのファイルだけを外す正規表現が無い。直し方は、外すファイルをディレクトリにまとめて、そのディレクトリを `except` に書くことである。
+- ほかのコードのパスがその名前で始まる `except` のディレクトリも E501 にする。go-arch-lint v1.19.0 は、ディレクトリをたどるときは `/` まで比べるが、ファイルを外すかどうかは、`exclude` の絶対パスで始まるかを文字だけで比べる。`exclude` に `inv` を書くと `inventory/service.go` も外れ、在庫の内側から受注の内側への import が報告されなくなった（`inv/` と書いても、go-arch-lint は末尾の `/` を落とすので同じだった）。検査するはずのファイルが黙って外れるので、書けないものとして止める。
+- 文はどちらも `except` の行に出す。E501 にするのは go-arch-lint の設定だけで、ほかの三つの設定は前と同じに書ける。
+
+**捨てたもの**：
+
+- **`excludeFiles` の正規表現を、`^` で始めずに書くこと**（`/legacy/` や `/legacy/old\.go$`）。リポジトリの絶対パスの途中に同じ名前のディレクトリがあれば、全部のファイルに当たる。置き場所の中の別のディレクトリ（`internal/legacy/old.go`）にも当たる。
+- **E501 にせず、注で言うだけにすること。** 外せないファイルを残すと go-arch-lint は落ち、外しすぎると検査が黙って減る。どちらも設定が地図のとおりでない。
+
+**変わること**：
+
+- Go の置き場所の下のディレクトリを `except` で外した地図の `.go-arch-lint.yml` は、`excludeFiles` の代わりに `exclude` を持ち、go-arch-lint が通る。前は落ちていた。
+- Go のファイルを一つだけ指す `except`、ほかのコードのパスがその名前で始まる `except` のディレクトリのある地図は、`build --target go-arch-lint` が E501 で止まる。前は設定を書き、go-arch-lint が落ちるか、検査が黙って減った。
+- `docs/targets.md` の Go の段とスキルの写し、7.5 を合わせた。台帳の E501 の文は変えていない（「設定に書けない地図」のままで、当てはまる）。
+- Go の置き場所の下に `except` の無い地図の設定は、一字も変わらない（下の突き合わせ）。
+
+**確かめたこと**：
+
+- `tests/imports.rs` の `go_arch_lint_leaves_out_what_the_map_excepts`。英語の例に、どのコンテキストも持たず在庫の台帳を import する `go/legacy/old.go` を足し、地図に `except "go/legacy"` を書く。sakai の書いた設定は `exclude` に `"legacy"` を持ち、go-arch-lint は通って、どのコンポーネントにも入らないファイルは無い。`exclude` を消した設定では、go-arch-lint は `/legacy/old.go` をどのコンポーネントにも入らないと言って落ちる。替える前の sakai が書いた設定（`excludeFiles: ["^legacy(/|$)"]`）でも、同じように落ちた。
+- `tests/build.rs` の `what_cannot_be_written` と英語の版。例（英日）に `except "go/legacy/old.go"` を書くと「The `except` go/legacy/old.go names one Go file」、`except "go/inv"` を書くと「so it would leave out go/inventory/ledger/ledger.go too」の E501 が一つずつ出て、ほかの三つの設定は書ける。
+- 替える前（0.36.0）と後の突き合わせ：`code go` のある地図の六つ（例の英日、テストの地図の二つ、ritsu のテストのプロジェクトの二つ）の `build --target go-arch-lint`（英語と日本語）の 12 の設定は、一字も変わらない。どれも Go の置き場所の下に `except` が無い。
+
+**見つけて直していないもの**：
+
+- import-linter の設定は、グループのパッケージの中にある `except` のディレクトリを、そのグループの一部として調べる。英語の例に `except "py/inventory/legacy"` を書き、その下の `old.py` に受注の内側を import させると、`lint-imports` は「Illegal imports of protected package ordering: inventory.legacy.old -> ordering.fulfill」で落ちた。地図ではそのファイルは範囲の外で、dependency-cruiser と go-arch-lint の設定は外す。グループの外のディレクトリ（`py/legacy`）なら、`root_packages` に入らないので調べない。ArchUnit は確かめていない。
+- go-arch-lint の `in:` と `exclude` のパスは、glob として読まれる。ディレクトリの名前に `*`、`?`、`[` があると、ほかのディレクトリにも当たる。sakai はどちらもそのまま書く。

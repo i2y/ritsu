@@ -191,6 +191,13 @@ pub fn run_with(root: &Path, map: &str, target: Target, suite: &crate::suite::Su
         )));
         return Ok(Built { outcome: o, done: None });
     }
+    if target == Target::GoArchLint {
+        let ds = go_arch_lint::unwritable(c, &a);
+        if !ds.is_empty() {
+            o.diags.extend(ds);
+            return Ok(Built { outcome: o, done: None });
+        }
+    }
     let dir: PathBuf = match out {
         Some(d) => paths::absolute(d),
         None => match default_dir(c, &a, target) {

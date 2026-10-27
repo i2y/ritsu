@@ -1944,3 +1944,11 @@ ritsu のサイトの sekisho のページ（英日）は、`gate` の塊を五�
 X5 は、呼び出しのハンドラーの中の確定や取消を、呼び出しが終わったところから数え、最小を 0 秒にしていた。イベントを待つタスク（`event`）はワークフローのタイマーでしか時間切れにならないので、その `on timeout` は `timeout`（書かなければ一日）が過ぎてから動く。15 日待つ承認の `on timeout` で 14 日の仮押さえを取り消すフローは、どの実行でも期限のあとに取り消すのに、W206 だった。イベントを待つタスクの、`timeout` だけを書いたハンドラーでは、最小にその長さを足して注に書くようにした（E206）。ほかのタスクでは足さない。Temporal のハートビート（30 秒）や、コールバックの ID を渡すアクティビティ（60 秒）で、`timeout` より早く時間切れになりうるからである。E206 の説明、DESIGN 7.7、dandori の DESIGN（ritsu への取り込みの節と 15 章）に書き、W206 と E206 の日本語の注の「0 秒から8 日」に空きを入れた。
 
 確かめたこと：`tests/cross.rs` の X5 の試験に、イベントで待つ形（E206）とタスクで待つ形（W206）を足し、golden の英日を書いた。cross の 12 件と、ritsu-cross の `codes` の試験（`docs/codes.md` と `codes.ja.md` を書き直した）が通った。
+
+### 7.62 sakai は、go-arch-lint の設定で `except` のディレクトリを `exclude` に書く（2026-10-28）
+
+sakai は地図の `except` をパスの正規表現にして `excludeFiles` に書いていたが、go-arch-lint v1.19.0 は `excludeFiles` をファイルの絶対パスに当てるので、どのファイルにも当たらなかった。外したはずのファイルは「どのコンポーネントにも入らない」とされ、go-arch-lint が落ちていた。`except` のディレクトリを、`workdir` からのパスで `exclude` に書くようにした。go-arch-lint は `exclude` をディレクトリとしてしか読まず、パスの頭の文字だけで比べるので、Go のファイルを一つだけ指す `except` と、ほかのファイルのパスがその名前で始まるディレクトリ（`inv` と `inventory/`）は E501 にした（sakai の DESIGN 24 章）。
+
+確かめたこと：`tests/imports.rs` の `go_arch_lint_leaves_out_what_the_map_excepts` で、`except "go/legacy"` を書いた英語の例の設定が `exclude` に `"legacy"` を持ち、go-arch-lint が通ること、`exclude` を消すと落ちることを確かめた。`tests/build.rs` に E501 の二つを英日の例で足した。例の 6 つの地図の 12 の設定は変わらない。
+
+見つけて直していないもの：import-linter は、まとまりのパッケージの中にある `except` のディレクトリも検査する。ArchUnit は確かめていない。`in:` と `exclude` の glob の記号はエスケープしていない。

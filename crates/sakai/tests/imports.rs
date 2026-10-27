@@ -290,31 +290,42 @@ fn collect(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
     }
 }
 
-#[test]
-fn go_arch_lint_keeps_the_map() {
-    if !common::linters() {
-        return;
+/// go-arch-lint, run in a case's `go`.
+struct GoArchLint {
+    gal: String,
+    /// go-arch-lint finds go on the PATH: the go named by SAKAI_GO goes first.
+    path: String,
+    /// go-arch-lint runs `go list`; go's caches go in a directory of the test.
+    cache: TempDir,
+}
+
+impl GoArchLint {
+    /// None when the linters are not asked for, or (said with `SKIP:`) when go or go-arch-lint is
+    /// not there.
+    fn find() -> Option<GoArchLint> {
+        if !common::linters() {
+            return None;
+        }
+        let (Some(gal), Some(go)) = (common::go_arch_lint(), common::go()) else {
+            common::skip("go or go-arch-lint is not there (SAKAI_GO and SAKAI_GO_ARCH_LINT, or tools/go/bin: tools/go/install.sh)");
+            return None;
+        };
+        let path = match Path::new(&go).parent().filter(|d| !d.as_os_str().is_empty()) {
+            Some(d) => format!("{}:{}", d.display(), std::env::var("PATH").unwrap_or_default()),
+            None => std::env::var("PATH").unwrap_or_default(),
+        };
+        Some(GoArchLint { gal, path, cache: TempDir::new("go-cache") })
     }
-    let (Some(gal), Some(go)) = (common::go_arch_lint(), common::go()) else {
-        common::skip("go or go-arch-lint is not there (SAKAI_GO and SAKAI_GO_ARCH_LINT, or tools/go/bin: tools/go/install.sh)");
-        return;
-    };
-    // go-arch-lint runs `go list`; go's caches go in a directory of the test.
-    let cache = TempDir::new("go-cache");
-    // go-arch-lint finds go on the PATH: the go named by SAKAI_GO goes first.
-    let path = match Path::new(&go).parent().filter(|d| !d.as_os_str().is_empty()) {
-        Some(d) => format!("{}:{}", d.display(), std::env::var("PATH").unwrap_or_default()),
-        None => std::env::var("PATH").unwrap_or_default(),
-    };
-    let run = |dir: &Path| {
+
+    fn run(&self, dir: &Path) -> Said {
         let r = common::run(
-            Command::new(&gal)
+            Command::new(&self.gal)
                 .args(["check", "--json"])
                 .current_dir(dir.join("go"))
-                .env("PATH", &path)
-                .env("GOCACHE", cache.path().join("build"))
-                .env("GOMODCACHE", cache.path().join("mod"))
-                .env("GOPATH", cache.path().join("gopath"))
+                .env("PATH", &self.path)
+                .env("GOCACHE", self.cache.path().join("build"))
+                .env("GOMODCACHE", self.cache.path().join("mod"))
+                .env("GOPATH", self.cache.path().join("gopath"))
                 .env("GOTOOLCHAIN", "local")
                 .env("GOFLAGS", "-trimpath")
                 .env("GOWORK", "off"),
@@ -334,6 +345,36 @@ fn go_arch_lint_keeps_the_map() {
         // A file no component holds is not checked; every file is held, or the run is a failure.
         let read = if unmatched == 0 && p.is_object() { usize::MAX } else { 0 };
         Said { ok: r.ok, lines, read, raw: format!("{}{}", r.stdout, r.stderr) }
-    };
-    each(Target::GoArchLint, &run, &|n, _| n);
+    }
+}
+
+#[test]
+fn go_arch_lint_keeps_the_map() {
+    let Some(g) = GoArchLint::find() else { return };
+    each(Target::GoArchLint, &|dir| g.run(dir), &|n, _| n);
+}
+
+/// What the map's `except` leaves out, go-arch-lint leaves out too (`exclude`): Go code under it,
+/// which no context owns and which reaches into Inventory's ledger, does not stop the run. Without
+/// the setting, go-arch-lint finds the file in no component, and the run fails.
+#[test]
+fn go_arch_lint_leaves_out_what_the_map_excepts() {
+    let Some(g) = GoArchLint::find() else { return };
+    let dir = TempDir::new("except");
+    common::copy_dir(Path::new(common::EXAMPLE_EN), dir.path());
+    let map = dir.path().join("shop.ctx");
+    std::fs::write(&map, std::fs::read_to_string(&map).unwrap().replacen("covers \".\"\n", "covers \".\"\nexcept \"go/legacy\"\n", 1)).unwrap();
+    dir.write("go/legacy/old.go", "// Old code the map leaves out: it reaches into Inventory's ledger.\npackage legacy\n\nimport \"example.com/shop/inventory/ledger\"\n\nvar Held = ledger.Hold(\"order\", \"sku\", 1)\n");
+    let b = build::run_with(dir.path(), "shop.ctx", Target::GoArchLint, &common::suite(), None, false, Lang::En).unwrap();
+    let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
+    assert!(!b.outcome.has_errors() && b.done.is_some(), "{text}");
+    let settings = dir.path().join("go/.go-arch-lint.yml");
+    let written = std::fs::read_to_string(&settings).unwrap();
+    let exclude = "\nexclude:\n  - \"legacy\"\n";
+    assert!(written.contains(exclude), "{written}");
+    let said = g.run(dir.path());
+    assert!(said.ok && said.lines.is_empty() && said.read > 0, "{}", said.raw);
+    std::fs::write(&settings, written.replacen(exclude, "", 1)).unwrap();
+    let said = g.run(dir.path());
+    assert!(!said.ok && said.read == 0, "{}", said.raw);
 }

@@ -678,7 +678,7 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 
 **作った（C の段階）**：go-arch-lint v1.19.0 は、同じコンポーネントの中のパッケージどうしの import も、`mayDependOn` に自分を並べないと止め、中身の無い項を受け付けないので、どのコンポーネントも自分を並べる。go.mod の無い置き場所は E501。テストは go のキャッシュをテストの一時ディレクトリに置く。
 
-- `.go-arch-lint.yml`（`version: 3`、`workdir: .`、`allow: {depOnAnyVendor: true}`、`excludeFiles` に `except` のパスの正規表現）。まとまりごとにコンポーネント（`in:` にディレクトリの `/**`）、`deps` の `mayDependOn` に import してよいコンポーネント。頭のコメントに元の地図とハッシュ。
+- `.go-arch-lint.yml`（`version: 3`、`workdir: .`、`allow: {depOnAnyVendor: true}`、`excludeFiles` に `except` のパスの正規表現。2026-10-28 から、`except` のディレクトリは `exclude` に書く。DESIGN 24 章）。まとまりごとにコンポーネント（`in:` にディレクトリの `/**`）、`deps` の `mayDependOn` に import してよいコンポーネント。頭のコメントに元の地図とハッシュ。
 - テスト：例の Go で `go-arch-lint check --json` が警告 0（`ArchWarningsDeps` と `ArchWarningsNotMatched` が空）で exit 0。四つの変異のそれぞれで exit 1、`ArchWarningsDeps` に足したファイルと行。`go` と `go-arch-lint` は `-trimpath` と、`tools/go/` の下のキャッシュで動かす。
 
 ### C.11 build と --check（`src/build/mod.rs`）

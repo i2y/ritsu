@@ -110,7 +110,8 @@ The tests run ArchUnit 1.5.1 with JUnit 5 (`tools/java/fetch.sh`).
 
 A component for each group (`in:` its directories with `**`), and `mayDependOn` listing the components it may import, itself among them: go-arch-lint stops an import between two packages of one component unless the component lists itself.
 The settings are `.go-arch-lint.yml` (version 3), written where `code go` says (where `go.mod` is; E501 without it).
-Files left out by `except` go in `excludeFiles`.
+The directories `except` leaves out go in `exclude`.
+go-arch-lint reads only directories there, and leaves out every Go file whose path starts with one, without looking for a `/` after it, so an `except` that names one Go file, and an `except` directory that the path of other code starts with (`go/inv` beside `go/inventory`), are E501.
 
 ```yaml
   sakai-delivery-layer-inventory:

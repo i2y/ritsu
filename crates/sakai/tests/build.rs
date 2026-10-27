@@ -182,6 +182,7 @@ fn what_cannot_be_written() {
         let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
     }
+    excepts_go_arch_lint_cannot_hold(&example(), "通販.ctx");
 }
 
 // ── The English twins: the same groups and settings, written from the English example and map ──
@@ -295,6 +296,27 @@ fn what_cannot_be_written_in_english() {
         let b = build::run_with(dir.path(), "shop.ctx", t, &common::suite(), None, false, Lang::En).unwrap();
         let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
+    }
+    excepts_go_arch_lint_cannot_hold(&example_en(), "shop.ctx");
+}
+
+/// An `except` go-arch-lint cannot hold (E501): one Go file, and a directory that the path of other
+/// code starts with (`go/inv`, as `go/inventory/…` does).
+fn excepts_go_arch_lint_cannot_hold(example: &Path, map: &str) {
+    for (written, file, says) in [
+        ("go/legacy/old.go", "go/legacy/old.go", "The `except` go/legacy/old.go names one Go file"),
+        ("go/inv", "go/inv/old.go", "so it would leave out go/inventory/ledger/ledger.go too"),
+    ] {
+        let dir = example_variant_of(example, &[(map, "covers \".\"\n", &format!("covers \".\"\nexcept \"{written}\"\n"))]);
+        dir.write(file, "package old\n");
+        let b = build::run_with(dir.path(), map, Target::GoArchLint, &common::suite(), None, false, Lang::En).unwrap();
+        let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
+        let codes: Vec<&str> = b.outcome.diags.iter().map(|d| d.code).collect();
+        assert!(codes == ["E501"] && text.contains(says) && b.done.is_none(), "{text}");
+        // the settings of the other tools leave it out as they did
+        for t in [Target::ImportLinter, Target::DependencyCruiser, Target::ArchUnit] {
+            assert!(build::run_with(dir.path(), map, t, &common::suite(), None, false, Lang::En).unwrap().done.is_some(), "{}", t.word());
+        }
     }
 }
 
