@@ -68,7 +68,7 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                         Ok(most) => {
                             let most = seconds_text(*most);
                             tr!(
-                                "`{task}` は仮押さえを作ってから（{made} 行目）{}から{}のあいだに来ます。仮押さえは作ってから {}で期限が切れます",
+                                "`{task}` は仮押さえを作ってから（{made} 行目）{}から {}のあいだに来ます。仮押さえは作ってから {}で期限が切れます",
                                 "`{task}` comes {} to {} after the hold is made (line {made}), and the hold expires {} after it is made",
                                 least.ja, most.ja, after.ja; least.en, most.en, after.en
                             )

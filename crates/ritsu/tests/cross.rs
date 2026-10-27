@@ -35,7 +35,9 @@
 //! - X6 (the day given to a koyomi date): `reminding` — the payment day given to a reminder whose
 //!   range holds every payment day (held), ends before the last (E205), or the day received (W205).
 //! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
-//!   the payment day at 09:00 when the hold lasts 14 days (E206), or 60 days (W206).
+//!   the payment day at 09:00 when the hold lasts 14 days (E206), or 60 days (W206). The hold
+//!   voided when an approval does not come in 15 days: an event, which only its own timer times
+//!   out (E206), or a task, whose timeout can come sooner (W206).
 //!
 //! - X15 (the operations a context opens, against the actions that guard them; sekisho's DESIGN
 //!   4.6): `orders` — a map whose one context opens two operations of its OpenAPI document: both
@@ -349,6 +351,30 @@ fn x5_a_hold_against_its_expiry() {
     run("x5-held", &held, 0, (1, 0, 0), &mut failures);
     run("x5-E206", &changed("E206", &[]), 1, (0, 1, 1), &mut failures);
     run("x5-W206", &changed("W206", &[]), 0, (0, 0, 2), &mut failures);
+    // the hold voided when an approval does not come in 15 days: waited for as an event, which only
+    // its own timer times out, the void comes 15 days or more after the hold; a task's timeout can
+    // come sooner (on Temporal, as its heartbeats stop), and the void at any time
+    let approval = |event: &str| {
+        changed(
+            "E206",
+            &[
+                ("invoice.flow", "use dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\n", ""),
+                ("invoice.flow", "  errors out_of_stock\n", "  errors out_of_stock\n  timeout 30 seconds\n"),
+                (
+                    "invoice.flow",
+                    "case goods",
+                    &format!("task approval()\n{event}  timeout 15 days\n\ntask put_back(order: string, sku: string) -> stock.reserve\n  book stock.reserve.void\n  sends void\n  errors expired\n  timeout 30 seconds\n\ncase goods"),
+                ),
+                (
+                    "invoice.flow",
+                    "  let due = terms.payment(received: now)\n  wait until due.at\n",
+                    "  approval()\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n      fail NotApproved \"no one approved the order in time\"\n",
+                ),
+            ],
+        )
+    };
+    run("x5-event-E206", &approval("  event\n"), 1, (0, 1, 1), &mut failures);
+    run("x5-task-W206", &approval(""), 0, (0, 0, 2), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

@@ -216,7 +216,7 @@ pub fn held_until(least: u64, most: &Result<u64, Text>, expiry: u64) -> Answer<u
     match most {
         Ok(m) if *m < expiry => Answer::Holds,
         Ok(m) => Answer::Undecided(tr!(
-            "呼び出しは仮押さえを作ってから {}から{}のあいだに来ます。仮押さえは作ってから {}で期限が切れます",
+            "呼び出しは仮押さえを作ってから {}から {}のあいだに来ます。仮押さえは作ってから {}で期限が切れます",
             "the call comes {} to {} after the hold is made, and the hold expires {} after it is made",
             ritsu_ports::seconds_text(least).ja, ritsu_ports::seconds_text(*m).ja, ritsu_ports::seconds_text(expiry).ja;
             ritsu_ports::seconds_text(least).en, ritsu_ports::seconds_text(*m).en, ritsu_ports::seconds_text(expiry).en

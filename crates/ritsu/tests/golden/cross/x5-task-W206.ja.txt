@@ -1,0 +1,24 @@
+payment_terms.cal: ok — received 2026-01-01〜2026-12-20 の 354 日のすべてで、どの日付も計算できます
+weekdays.cal: ok — カレンダー weekdays。表を使わないので、データの範囲は 0001-01-01〜9999-12-31 です
+stock.book: ok
+  receive.do    拒否されうる理由: key_conflict
+  reserve.hold  拒否されうる理由: out_of_stock（shelf(sku) at least 0）、key_conflict、already_refused
+  reserve.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  reserve.void  拒否されうる理由: already_posted、expired、no_such_hold
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: reserve は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+警告[dandori W101]: invoice.flow:37:1: `approval` が失敗すると、案件 `goods` が held のままワークフローが失敗します。そうなる呼び出しは 3 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
+    37 |   approval()
+  そうなる例:
+      35  reserve: goods が held で始まる
+      37  approval が失敗する（failure）
+invoice.flow: 検査を通りました（警告 1 件）
+警告[ritsu W206]: invoice.flow:39:1: `put_back` が案件 `goods` の仮押さえを取り消すときに期限が切れているかを決められません
+    39 |       goods <- put_back(order: order, sku: sku)
+  = `put_back` は仮押さえを作ってから（35 行目）0 秒から 15 日 1 分のあいだに来ます。仮押さえは作ってから 14 日で期限が切れます
+  = 期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で拒否します。フローはここでそれを処理しています。
+警告[ritsu W206]: invoice.flow:42:1: `ship` が案件 `goods` の仮押さえを確定するときに期限が切れているかを決められません
+    42 |   goods <- ship(order: order, sku: sku)
+  = `ship` は仮押さえを作ってから（35 行目）すぐに来ることもあり、遅いほうには上限がありません（42 行目の `ship` には `timeout` がありません）。仮押さえは作ってから 14 日で期限が切れます
+  = 期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で拒否します。フローはここでそれを処理しています。
+ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。どれも検査を通りました（警告 3 件）。言語の境目: 確かめた 2 か所、決められない 2 か所

@@ -27,6 +27,12 @@
 //! - The arms of a `match` and the handlers of a call are joined: the fewest of the fewest, the
 //!   most of the most. A loop takes 0 seconds at the fewest, and at the most each round as long as
 //!   its longest way, as many rounds as it can run.
+//! - A handler of `timeout` alone, under a task that waits for an event, starts when the event's
+//!   timer runs out: its `timeout` (a day without one) after the call starts, at the fewest. Any
+//!   other task's timeout can come sooner (on Temporal, an activity the workflow's own worker
+//!   serves times out when its heartbeats stop for 30 seconds, and a callback when the activity
+//!   that hands its id on times out), so its handlers start as the call ends, 0 seconds at the
+//!   fewest.
 //! - `on failure` and `on cancel` start where a failure or a cancellation can stop the run: the
 //!   hold is 0 seconds old at the fewest, and at the most as old as it can be at any call or wait.
 //!
@@ -438,6 +444,7 @@ impl<'a> Spans<'a> {
             TK::Call { target, callee, args, handlers } => {
                 let dur = self.duration(callee, s.line);
                 let at_start = st.cases.clone();
+                let before: Vec<bool> = at_start.iter().map(Option::is_some).collect();
                 if let (Some(Target::Case(c)), Callee::Task(t)) = (target, callee) {
                     // a post or a void, which the hold's expiry can refuse
                     if let (true, Some(TaskMachine::Sends { event, .. }), Some(since)) = (self.expiring[*c].is_some(), &self.m.tasks[*t].machine, st.cases[*c].clone()) {
@@ -475,9 +482,29 @@ impl<'a> Spans<'a> {
                         }
                     }
                 }
+                // a task that waits for an event times out only when its own timer runs out: its
+                // `timeout`, or a day without one
+                let timer = match callee {
+                    Callee::Task(t) if self.m.tasks[*t].event => Some((self.m.tasks[*t].timeout.unwrap_or(86_400), &self.m.tasks[*t].name)),
+                    _ => None,
+                };
                 let mut out = Some(st.clone());
                 for h in handlers {
-                    let hs = self.block(&h.body, st.clone());
+                    let mut entry = st.clone();
+                    if let (Some((secs, task)), [HErr::Timeout]) = (timer, h.errors.as_slice()) {
+                        let line = s.line;
+                        let why = tr!(
+                            "{line} 行目の `{task}` は、イベントを {}待ってから `on timeout` に進みます",
+                            "`{task}` (line {line}) waits {} for its event before `on timeout` runs",
+                            seconds_text(secs).ja; seconds_text(secs).en
+                        );
+                        for (c, was) in entry.cases.iter_mut().zip(&before) {
+                            if let (Some(c), true) = (c, *was) {
+                                c.add(secs, &Ok(0), Some(why.clone()));
+                            }
+                        }
+                    }
+                    let hs = self.block(&h.body, entry);
                     out = join_states(out, hs);
                 }
                 out

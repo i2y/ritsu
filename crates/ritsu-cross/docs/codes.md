@@ -884,7 +884,7 @@ See also: [E205](#e205)
 
 ## E206 — A hold has always expired when a call on it comes
 
-**When**: Where a workflow follows a chobo hold as a case (`case … follows <book>.<transfer>`) and posts or voids it, the fewest seconds from making the hold to the call are at least the hold's expiry (the transfer's `pending expires after`). The book refuses the call with `expired` on every run, and what follows it going through never runs. dandori counts the time from the statements of the flow: a `wait` of a fixed time takes that time, and a `wait until` the time of a koyomi date, whose date input was given `now` read after the hold, takes from the fewest to the most days koyomi counts from the input to the date, at the date's time. The notes give the fewest and the statements that make them up.
+**When**: Where a workflow follows a chobo hold as a case (`case … follows <book>.<transfer>`) and posts or voids it, the fewest seconds from making the hold to the call are at least the hold's expiry (the transfer's `pending expires after`). The book refuses the call with `expired` on every run, and what follows it going through never runs. dandori counts the time from the statements of the flow: a `wait` of a fixed time takes that time; a `wait until` the time of a koyomi date, whose date input was given `now` read after the hold, takes from the fewest to the most days koyomi counts from the input to the date, at the date's time; and the `on timeout` of a task that waits for an event runs once the task's `timeout` (a day without one) has passed. The notes give the fewest and the statements that make them up.
 
 **Fix**: Make the hold last longer (the transfer's `pending expires after`), or make the call sooner.
 

@@ -1,0 +1,24 @@
+payment_terms.cal: ok — every date computes on all 354 days of received (2026-01-01..2026-12-20)
+weekdays.cal: ok — calendar weekdays: no table, so the data range is 0001-01-01..9999-12-31
+stock.book: ok
+  receive.do    may be refused: key_conflict
+  reserve.hold  may be refused: out_of_stock (shelf(sku) at least 0), key_conflict, already_refused
+  reserve.post  may be refused: key_conflict, already_voided, expired, over_hold, no_such_hold
+  reserve.void  may be refused: already_posted, expired, no_such_hold
+  key: receive once per delivery, sku; a second call that differs only in qty is refused with key_conflict
+  key: reserve once per order, sku; a second call that differs only in qty is refused with key_conflict; holding again with the same key after the hold has ended answers done_before and holds nothing
+warning[dandori W101]: invoice.flow:37:1: if `approval` fails, the workflow fails with the case `goods` in held; 3 call(s) can fail like this. Handle the error at the call, or add `on failure` to settle the case
+    37 |   approval()
+  the run that gets there:
+      35  reserve: goods starts in held
+      37  approval fails (failure)
+invoice.flow: ok (1 warning(s))
+warning[ritsu W206]: invoice.flow:39:1: Whether the hold of the case `goods` has expired when `put_back` voids it cannot be decided
+    39 |       goods <- put_back(order: order, sku: sku)
+  = `put_back` comes 0 seconds to 15 days 1 minute after the hold is made (line 35), and the hold expires 14 days after it is made
+  = The book refuses a call on an expired hold with `expired`, which the flow handles here.
+warning[ritsu W206]: invoice.flow:42:1: Whether the hold of the case `goods` has expired when `ship` posts it cannot be decided
+    42 |   goods <- ship(order: order, sku: sku)
+  = `ship` can come right after the hold is made (line 35), and nothing bounds how long after: `ship` (line 42) has no `timeout`; the hold expires 14 days after it is made
+  = The book refuses a call on an expired hold with `expired`, which the flow handles here.
+ritsu check: 4 files (koyomi 2, chobo 1, dandori 1): all pass (3 warnings); borders between the languages: 2 checked, 2 undecided

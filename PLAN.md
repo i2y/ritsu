@@ -1938,3 +1938,9 @@ ritsu のサイトの sekisho のページ（英日）は、`gate` の塊を五�
 確かめたこと：`tests/flows/paths.flow`（英語）を足した。決まった文字列、値を埋めた文字列、数、`string?` を URL に入れる 5 本の実行が、Step Functions（asl-run.mjs と LocalStack 4.14.0）、Temporal の三つの言語と言語をまたぐ四つの組、durable functions、Argo Workflows（kind）、pydantic-graph で参照インタプリタと同じ URL を送り、既定の Transport の三つは、エスケープしたパスのまま届けた。dandori の試験の全体が通った（SKIP は MySQL と Ollama の三つ）。木の 231 本の `.flow` を 0.36.0 と直したあとの `ritsu dandori` にかけ、16 の出力を比べると、11,913 ファイルのうち変わったのは `build` の出力の 1,120 だけだった（URL に `{…}` を持つ 27 本のタスクのコードと Step Functions の 9 本、TypeScript と Python の io、それに伴う Temporal の `BUILD_ID`）。
 
 見つけて直していないもの：本物の Step Functions の HTTP Task が、エスケープした `ApiEndpoint` をそのまま送るかは確かめていない。AWS の文書は、`QueryParameters` を URL エンコードするとしか書いていない。
+
+### 7.61 仮押さえの期限の検査（X5）で、イベントを待つタスクの `on timeout` を、待ちが終わってから数える（2026-10-28）
+
+X5 は、呼び出しのハンドラーの中の確定や取消を、呼び出しが終わったところから数え、最小を 0 秒にしていた。イベントを待つタスク（`event`）はワークフローのタイマーでしか時間切れにならないので、その `on timeout` は `timeout`（書かなければ一日）が過ぎてから動く。15 日待つ承認の `on timeout` で 14 日の仮押さえを取り消すフローは、どの実行でも期限のあとに取り消すのに、W206 だった。イベントを待つタスクの、`timeout` だけを書いたハンドラーでは、最小にその長さを足して注に書くようにした（E206）。ほかのタスクでは足さない。Temporal のハートビート（30 秒）や、コールバックの ID を渡すアクティビティ（60 秒）で、`timeout` より早く時間切れになりうるからである。E206 の説明、DESIGN 7.7、dandori の DESIGN（ritsu への取り込みの節と 15 章）に書き、W206 と E206 の日本語の注の「0 秒から8 日」に空きを入れた。
+
+確かめたこと：`tests/cross.rs` の X5 の試験に、イベントで待つ形（E206）とタスクで待つ形（W206）を足し、golden の英日を書いた。cross の 12 件と、ritsu-cross の `codes` の試験（`docs/codes.md` と `codes.ja.md` を書き直した）が通った。
