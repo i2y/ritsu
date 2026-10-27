@@ -47,3 +47,16 @@ reason = "JSONata 2.0.6 in crates/dandori/tools plays Step Functions, which eval
 id = "GHSA-238p-pmpm-9mq7"
 ignoreUntil = 2027-01-06
 reason = "KaTeX 0.16.47 in the Mermaid of crates/*/tools/mermaid draws only the diagrams the tests write, with no math; Mermaid asks for ^0.16.47 and the fix is 0.18.2 (osv-scanner.toml)"
+
+# block-buffer 0.10.4, in the runner of chobo's Rust clients (crates/chobo/tools/runner/rust):
+# sqlx-core 0.9.0, the latest sqlx and the one the clients are tested with, asks for sha2 ^0.10,
+# which asks for it through digest 0.10.7. The advisory (2026-08-19; the daily scan first named it
+# on 2026-10-27) is about a cursor kept inside the block, which a panic in the compression leaves
+# overwritten, so that a caller who catches the panic and goes on reads and writes out of bounds.
+# block-buffer 0.10.4 keeps the cursor in a field of its own, which digest_blocks writes only after
+# the compression returns, and has no ReadBuffer; SHA-256's compression does not panic either. The
+# fix, 0.12.1, is for digest 0.11. Move when sqlx asks for sha2 0.11.
+[[IgnoredVulns]]
+id = "GHSA-qwgh-2vcv-g2f7"
+ignoreUntil = 2027-01-28
+reason = "block-buffer 0.10.4 in crates/chobo/tools/runner/rust, which sqlx 0.9.0 asks for through sha2 0.10, keeps its cursor in a field of its own, not in the block the advisory's panic overwrites; the fix 0.12.1 is for digest 0.11 (osv-scanner.toml)"
