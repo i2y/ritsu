@@ -1,8 +1,8 @@
 //! The process and service adapters: starting a target's program with the
 //! environment it is given, reading its output by a deadline, waiting for a
-//! service's port, and stopping a service. `check`, `snap` and `drift` kill a
-//! service at once, since nothing needs writing; `map` asks it to stop with SIGTERM
-//! first, so that its runtime writes what it ran (DESIGN §7.3).
+//! service's port, and stopping a service. A service is asked to stop with SIGTERM
+//! first, so that it cleans up as it does whenever it is stopped, and in `map` its
+//! runtime writes what it ran (DESIGN §7.3, §10.1).
 //!
 //! Every program starts in a process group of its own, and is stopped as a group:
 //! what it starts in turn (the server behind `sh -c`, `npm start` or `uv run`) gets
@@ -30,7 +30,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 pub const STEP_TIMEOUT: Duration = Duration::from_secs(5);
-/// How long a service has, after SIGTERM, to exit by itself in `map`.
+/// How long a service has, after SIGTERM, to exit by itself.
 pub const TERM_GRACE: Duration = Duration::from_secs(5);
 /// How long geas waits for a group it killed to be gone.
 const KILL_GRACE: Duration = Duration::from_secs(5);
@@ -732,10 +732,10 @@ pub fn start_server(
 }
 
 /// Stops a service, its whole process group, and returns its stderr, and whether
-/// it had to be killed after SIGTERM. With `term`, the group is asked first and
-/// given 5 s to be gone; without, it is killed at once.
-pub fn stop_server(mut s: Server, term: bool) -> (String, bool) {
-    let killed = stop(&mut s.child, &s.group, term);
+/// it had to be killed after SIGTERM: the group is asked first and given 5 s to be
+/// gone.
+pub fn stop_server(mut s: Server) -> (String, bool) {
+    let killed = stop(&mut s.child, &s.group, true);
     pid_log(format!("stop {}\n", s.child.id()));
     (s.stderr.take(Instant::now() + Duration::from_secs(1)), killed)
 }

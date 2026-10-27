@@ -185,8 +185,7 @@ fn slow_pids(log: &str) -> Vec<i32> {
 }
 
 /// A server a shell starts is in the shell's process group, so it is stopped with
-/// it: by `check` at once, and by `map` with SIGTERM, which reaches the server and
-/// lets it write what it ran.
+/// it: the SIGTERM reaches the server, and in `map` lets it write what it ran.
 #[test]
 fn a_server_behind_a_shell_is_stopped_with_it() {
     if !python3("the slow service") {
@@ -211,6 +210,26 @@ fn a_server_behind_a_shell_is_stopped_with_it() {
     for pid in slow_pids(&s.read("slow/slow.log")) {
         assert!(!alive(pid), "the server behind the shell ({pid}) is still alive");
     }
+}
+
+const TIDY: &str = "# A service that makes `tidy.lock` beside it as it starts and removes it on SIGTERM,\n# as a service removes what it made for itself (a database for one run, a socket) when\n# it is stopped, and writes each to `tidy.log`. Run as `python3 tidy.py <port>`.\nimport os\nimport signal\nimport sys\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\n\nHERE = os.path.dirname(os.path.abspath(__file__))\nLOCK = os.path.join(HERE, \"tidy.lock\")\n\n\ndef log(what):\n    with open(os.path.join(HERE, \"tidy.log\"), \"a\") as f:\n        f.write(what + \"\\n\")\n\n\ndef stop(signum, frame):\n    os.remove(LOCK)\n    log(\"removed\")\n    sys.exit(0)\n\n\nclass Handler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        self.send_response(200)\n        self.send_header(\"Content-Length\", \"0\")\n        self.end_headers()\n\n    def log_message(self, *args):\n        pass\n\n\nopen(LOCK, \"w\").close()\nlog(\"made\")\nsignal.signal(signal.SIGTERM, stop)\nHTTPServer((\"127.0.0.1\", int(sys.argv[1])), Handler).serve_forever()\n";
+
+/// `check` asks a service to stop with SIGTERM too, so that the service cleans up as it
+/// does whenever it is stopped: here it removes the file it made as it started.
+#[test]
+fn check_lets_a_service_clean_up_as_it_stops() {
+    if !python3("the service that cleans up") {
+        return;
+    }
+    let s = Scratch::new("parallel-tidy");
+    s.write("tidy/tidy.py", TIDY);
+    s.write("tidy/tidy.geas", "target tidy {\n  serve \"python3 tidy.py {port}\"\n  port auto\n}\n\nclaim \"answers\" {\n  when tidy.get(\"/\")\n  then status is 200\n}\n");
+    let log = pid_log(&s);
+    let (out, err, code) = run(s.path(), &["check", "tidy/tidy.geas"], &[("GEAS_PID_LOG", log.to_str().expect("a UTF-8 path"))]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    no_process_left(&log);
+    assert_eq!(s.read("tidy/tidy.log"), "made\nremoved\n");
+    assert!(!s.path().join("tidy/tidy.lock").exists(), "the service did not remove what it made");
 }
 
 /// Interrupted while a claim runs, geas kills the groups of the programs it

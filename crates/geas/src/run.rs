@@ -330,15 +330,16 @@ pub fn run_claim(spec: &Spec, claim: &Claim, claim_no: usize, dir: &Path, opts: 
         }
     }
 
-    // A claim ends with its GUIs, then its services: killed at once, or in `map`
-    // asked to stop with SIGTERM first, so that their runtimes write what they ran.
+    // A claim ends with its GUIs, then its services, each asked to stop with SIGTERM
+    // first: a service cleans up as it does whenever it is stopped, and in `map` its
+    // runtime writes what it ran.
     gui.close();
     let mut server_stderr: HashMap<String, String> = HashMap::new();
     let mut names: Vec<String> = servers.keys().cloned().collect();
     names.sort();
     for name in names {
         let inst = servers.remove(&name).expect("a started service");
-        let (stderr, killed) = proc::stop_server(inst.server, term);
+        let (stderr, killed) = proc::stop_server(inst.server);
         started[inst.index].killed = killed;
         server_stderr.insert(name, stderr);
         // an auto port goes back to the registry once its service is gone

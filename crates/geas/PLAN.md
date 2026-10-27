@@ -347,7 +347,9 @@ Tests:
 - `proc.rs`: in `map`, a service is stopped with SIGTERM (an
   `unsafe extern "C" { fn kill(pid: i32, sig: i32) -> i32; }` block,
   SIGTERM = 15), waited for up to 5 s, then killed; killed is E066.
-  `check`, `snap` and `drift` keep killing at once.
+  `check`, `snap` and `drift` keep killing at once. (From 2026-10-28 they
+  stop a service the same way, so that it cleans up; killed is E066 in
+  `map` alone. DESIGN §10.1.)
 - The readers' tests: recorded raw output of one small program per
   language under `tests/cover/<lang>/`, with the sources, and the expected
   lines as goldens. Record them once (with the commands of Appendix C) and

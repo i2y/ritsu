@@ -50,9 +50,10 @@ A target has one of `run`, `serve`, `pixie` and `driver`. Commands run in the sp
 target may hold pins (below), which then apply to it alone.
 
 Each claim gets a fresh instance of every service it touches, started when the claim first needs
-it and stopped at the claim's end, with its process group. So a claim builds its own state with its
-own `when`s, and claims can run in any order, one at a time or side by side. A claim cannot rely on
-another: that would hide from the reader the setup that makes it true.
+it and stopped at the claim's end, with its process group: SIGTERM first, so that the service cleans
+up as it does whenever it is stopped, and SIGKILL if it is still running 5 s later. So a claim builds
+its own state with its own `when`s, and claims can run in any order, one at a time or side by side.
+A claim cannot rely on another: that would hide from the reader the setup that makes it true.
 
 ## Commands
 

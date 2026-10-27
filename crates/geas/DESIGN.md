@@ -428,14 +428,13 @@ binary `llvm-cov` would need (W061). A target whose processes reported no
 line under the root, in any claim, is W060, unless W061, E065 or E066
 already says why.
 
-In `map`, a service is stopped with SIGTERM, given 5 s to exit, then
-killed, its process group with it (§10.1); the runtimes write on a normal
-exit. (`check` still kills at once,
-as in v0: nothing needs writing there.) SIGTERM goes through the C
-library's `kill`, declared in an `extern` block, so geas stays without
-dependencies. A service that has to be killed after the 5 s, or a Go
-service that leaves metadata without counters, may have stopped without
-writing its record, and the claim's slice cannot be trusted: E066.
+A service is stopped with SIGTERM, given 5 s to exit, then killed, its
+process group with it, in `map` as in every command (§10.1); the runtimes
+write on a normal exit. SIGTERM goes through the C library's `kill`,
+declared in an `extern` block, so geas stays without dependencies. A
+service that has to be killed after the 5 s, or a Go service that leaves
+metadata without counters, may have stopped without writing its record,
+and the claim's slice cannot be trusted: E066.
 
 Startup code (imports, route tables, the `def` lines Python runs on
 import) runs in every claim that starts the target. `affected` shows a
@@ -1104,13 +1103,17 @@ As built:
 ### 10.1 Process groups
 
 Every program geas starts runs in a process group of its own, and is
-stopped as a group: killed in `check`, `snap` and `drift`; in `map`, sent
-SIGTERM, given 5 s, then killed; and geas waits until no process of the
-group is left. So a server behind a wrapper (`sh -c 'python3 server.py
-{port}; true'`, `npm start`, `uv run`) is stopped with it, and in `map` it
-gets the SIGTERM it needs to write what it ran. Before, only the wrapper
-got the signal: the server went on running after geas, holding its port,
-and gave no record. A `run` command that leaves a program running in the
+stopped as a group, and geas waits until no process of the group is left.
+A service is sent SIGTERM, given 5 s, then killed, in every command: it
+cleans up as it does whenever it is stopped (drops the database it made
+for one run, removes its socket file), and in `map` it writes what it
+ran. A `run` command that overruns its 5 s is killed at once (E031), and
+what a finished one leaves running in its group is killed at once too,
+but in `map`, where it is sent SIGTERM first. So a server behind a wrapper
+(`sh -c 'python3 server.py {port}; true'`, `npm start`, `uv run`) is
+stopped with it and gets the SIGTERM. Before, only the wrapper got the
+signal: the server went on running after geas, holding its port, and gave
+no record. A `run` command that leaves a program running in the
 background has it stopped when the command ends, as soon as the command
 ends rather than when the 5 s run out, since the program held the
 command's output open. A program that leaves its group (a daemon calling
@@ -1124,9 +1127,15 @@ stays without dependencies. `tests/parallel.rs` interrupts a claim and
 finds neither the shell, nor the server behind it, nor a `sleep` alive.
 
 Discarded: leaving a wrapper's children to the wrapper, which most shells
-do not signal; and walking the process table to find a program's
-children, which differs from system to system and races with programs
-that start more.
+do not signal; walking the process table to find a program's children,
+which differs from system to system and races with programs that start
+more; and killing a service at once outside `map`, as `check`, `snap`
+and `drift` did until 2026-10-28 since they need nothing written. That
+saves the 5 s only for a service that ignores SIGTERM, and leaves behind,
+claim after claim, what a service removes as it stops: a service that
+makes a database for each run and drops it on the way out left one per
+claim. `tests/parallel.rs` has `check` stop a service that removes, on
+SIGTERM, the file it made as it started.
 
 ## 11. Command strings
 

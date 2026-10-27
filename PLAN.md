@@ -1952,3 +1952,9 @@ sakai は地図の `except` をパスの正規表現にして `excludeFiles` に
 確かめたこと：`tests/imports.rs` の `go_arch_lint_leaves_out_what_the_map_excepts` で、`except "go/legacy"` を書いた英語の例の設定が `exclude` に `"legacy"` を持ち、go-arch-lint が通ること、`exclude` を消すと落ちることを確かめた。`tests/build.rs` に E501 の二つを英日の例で足した。例の 6 つの地図の 12 の設定は変わらない。
 
 見つけて直していないもの：import-linter は、まとまりのパッケージの中にある `except` のディレクトリも検査する。ArchUnit は確かめていない。`in:` と `exclude` の glob の記号はエスケープしていない。
+
+### 7.63 geas は、どのコマンドでも、サービスを SIGTERM で止めてから強制終了する（2026-10-28）
+
+`check`・`snap`・`drift` は、主張が終わるとサービスのプロセスグループをすぐ SIGKILL で止めていた（`map` だけが SIGTERM を送って 5 秒待つ）。止まるときに後片づけをするサービス（一回の実行のために作ったデータベースを消す、ソケットのファイルを消す）は、主張のたびにそれを残していた。どのコマンドでも SIGTERM を送り、5 秒たっても残っていれば SIGKILL で止めるようにした。E066 は前と同じに `map` だけが言う。SIGTERM を無視するサービスでは、主張ごとに 5 秒長くなる（geas の DESIGN 7.3、10.1）。スキルの言語の説明にも書いた。
+
+確かめたこと：`tests/parallel.rs` に `check_lets_a_service_clean_up_as_it_stops` を足した。始まるときに作ったファイルを SIGTERM で消すサービスを `check` で動かし、消したことを確かめる。直す前の geas では、ファイルが残った（同じサービスを手で動かして確かめた）。geas の試験の全体が通った。
