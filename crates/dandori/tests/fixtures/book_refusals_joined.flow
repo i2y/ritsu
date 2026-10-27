@@ -1,0 +1,50 @@
+workflow book_refusals_joined v1
+description "Refusals handled by one `on` that names them both: putting the goods back, the book may refuse the void as expired or as already posted, and one handler that names the two runs on those refusals alone, as two handlers would. A handler that names timeout beside a refusal runs when the void may not have gone through too, and the goods can still be held at the end"
+
+use book stock from "books/stock.book"
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:stock"
+
+inputs
+  order  : string
+  sku    : string
+  urgent : bool
+
+task reserve(order: string, sku: string, qty: int) -> stock.reserve
+  book stock.reserve.hold
+  starts stock.reserve
+  errors out_of_stock
+  timeout 30 seconds
+
+task ship(order: string, sku: string) -> stock.reserve
+  book stock.reserve.post
+  sends post
+  errors expired
+  timeout 30 seconds
+
+task put_back(order: string, sku: string) -> stock.reserve
+  book stock.reserve.void
+  sends void
+  errors expired, already_posted
+  timeout 30 seconds
+
+case goods : stock.reserve follows stock.reserve
+
+flow
+  goods <- reserve(order: order, sku: sku, qty: 1)
+    on out_of_stock => fail OutOfStock
+  match urgent
+    true =>
+      goods <- ship(order: order, sku: sku)
+        on expired => succeed
+    false =>
+      goods <- put_back(order: order, sku: sku)
+        on expired, timeout => pass
+  succeed
+
+on failure
+  match goods.state
+    none => pass
+    held =>
+      goods <- put_back(order: order, sku: sku)
+        on expired, already_posted => pass
+        on failure => fail NotPutBack leaving goods

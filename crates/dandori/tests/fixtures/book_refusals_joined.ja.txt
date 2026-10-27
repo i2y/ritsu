@@ -1,0 +1,7 @@
+エラー[E020]: tests/fixtures/book_refusals_joined.flow:42:1: 案件 `goods` が held のまま、ここでワークフローが終わることがあります（終わりの状態は posted・voided・expired）
+    42 |   succeed
+  そうなる例:
+      33  reserve: goods が held で始まる
+      39  match urgent: false
+      41  put_back が失敗する: on expired, timeout
+      42  succeed

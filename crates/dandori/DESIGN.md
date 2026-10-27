@@ -2008,3 +2008,42 @@ CI がスケジュールで回す platforms の段で、Argo の突き合わせ�
 - Argo のコントローラーが、失敗した Workflow の書き込みをやり直さないこと。ランナーは試験の中で補うだけで、生成したワークフローを本物のクラスタで動かすときは、混んだ API サーバーで同じことが起きうる。コントローラーの決まりで、dandori が書く WorkflowTemplate では避けられない。
 - 本物の Pod の実行は、コントローラーの最初の検証で、テンプレートを解決するたびに WorkflowTemplate を API サーバーから読み直す（5 章）。CPU 4 つの回でも、コントローラーが decisions.flow の本物の Pod の実行を初めて処理するのに 53 秒かかり、一回の処理の上限（30 秒）を超えて `Deadline exceeded` を出した。本物の Pod の実行が、フローでいちばん遅くなることが多い理由の一つである。
 - CPU 1 つの回では、コントローラーが一度、リーダーのリースを更新できずに立ち上がり直した（etcd の遅れ。7 章）。
+
+## 13. 拒否のエラーだけを並べた `on` に、ほかの失敗のあとの状態を渡さない（2026-10-28）
+
+### 13.1 きっかけ
+
+帳簿の仮押さえを取り消すタスクは、取消を断られる理由を二つ宣言できる（`errors expired, already_posted`。期限が切れているとき、もう確定したとき）。`on failure` で `held` のまま残った仮押さえをこのタスクで取り消し、二つの拒否を一つの `on` で受けると（`on expired, already_posted => pass`）、`check` は、案件が `held` のままワークフローが失敗しうると言った（E020）。拒否ごとに `on` を分けて書くと（`on expired => pass` と `on already_posted => pass`）言わない。二つの書き方は同じ意味である。足した `tests/fixtures/book_refusals_joined.flow` を 0.36.0 で検査すると、49 行目の `on` について次の E020 が出る。
+
+```text
+error[E020]: tests/fixtures/book_refusals_joined.flow:45:1: the workflow can fail here with the case `goods` in held, which is not final (posted, voided, expired are); settle it first, or write `leaving goods` to hand it over as it is
+    45 |   match goods.state
+  the run that gets there:
+      33  reserve: goods starts in held
+      36  match urgent: true
+      37  ship fails (timeout, failure)
+      45  on failure
+      47  match goods.state: held
+      49  put_back fails: on expired, already_posted
+      45  `on failure` ends and the workflow fails
+```
+
+### 13.2 原因
+
+- 検査は、呼び出しのあとの `on` ごとに、その `on` に入るときの案件の状態を決める。拒否のエラーだけを受ける `on` は、呼び出しがその拒否で返ったときにしか動かないので、拒否が残す状態（`expired` で断られたなら期限切れ、`already_posted` なら確定済み）だけを受け取る。ほかの `on` は、拒否でないエラーで呼び出しが失敗したときの状態も受け取る。そこには、取消が届いたかどうか分からない失敗（タイムアウトなど）のあとの `held` も入る。
+- Lean のモデル（`proofs/DandoriCore/Check.lean` の `handlerIn` と `takesOnly`。根の DESIGN 11.2）は、拒否をいくつ並べても、拒否だけを受ける `on` を拒否の状態だけで始める。`flow.rs` は、拒否を一つだけ書いた `on` しか、拒否だけを受ける `on` として扱っていなかった。二つ以上並べた `on` には、拒否でないエラーのあとの状態も渡し、その `pass` のあとに `held` が残った。
+
+### 13.3 決定
+
+- 拒否のエラーだけを並べた `on` は、並べた拒否のどれかで返ったときの状態だけを受け取る（拒否ごとの状態を合わせたもの）。並べた拒否のどれも返りえない呼び出しなら、その `on` には入らない。拒否を一つだけ書いた `on` の扱いは前と同じで、どちらも Lean のモデルと同じ決め方になる。
+- 拒否と、拒否でないエラー（`timeout` や `failure`）を並べた `on` の扱いは変えない。`book_refusals_joined.flow` の 41 行目の `on expired, timeout => pass` は、取消がタイムアウトしたときに仮押さえが `held` のままかもしれないので、42 行目の `succeed` で E020 になる。golden の英日にはこの E020 だけが残る。
+
+### 13.4 変わること
+
+- 拒否のエラーを二つ以上並べた `on` のあとの、案件の状態についての診断（E020 など）が、拒否ごとに `on` を分けて書いたときと同じになる。
+- 木の 231 本の `.flow` の `check` の出力（英日のテキストと JSON）は、一字も変わらない（14.5 の突き合わせ）。拒否を二つ以上並べた `on` を持つフローが、足したもののほかに無いからである。
+
+### 13.5 確かめたこと
+
+- `tests/fixtures/book_refusals_joined.flow`（帳簿は `tests/fixtures/books/stock.book`）を足し、`diagnostics_match_the_golden_files` の golden（英日）を書いた。0.36.0 では、上の 45 行目の E020 も出る。
+- dandori の試験の全体（14.6）。

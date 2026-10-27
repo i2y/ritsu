@@ -1082,10 +1082,13 @@ impl<'a> Flow<'a> {
                     HErr::Failure => "failure".into(),
                 })
                 .collect();
-            let is_refusal = names.len() == 1 && refusals.contains(&names[0]);
-            let entry = if is_refusal {
-                match refused.iter().find(|(e, _)| *e == names[0]) {
-                    Some((_, r)) => r.clone(),
+            // a handler that names refusals and nothing else, one or several, runs only when the call
+            // is refused with one of them (the model's `takesOnly`), and never if none can come
+            let only_refusals = !h.errors.is_empty() && h.errors.iter().all(|e| matches!(e, HErr::Declared(n) if refusals.contains(n)));
+            let entry = if only_refusals {
+                let mut taken = refused.iter().filter(|(e, _)| names.contains(e)).map(|(_, r)| r);
+                match taken.next() {
+                    Some(r) => taken.fold(r.clone(), |en, r| join(&en, r)),
                     None => continue,
                 }
             } else {

@@ -1,0 +1,7 @@
+error[E020]: tests/fixtures/book_refusals_joined.flow:42:1: the workflow can end here with the case `goods` in held, which is not final (posted, voided, expired are)
+    42 |   succeed
+  the run that gets there:
+      33  reserve: goods starts in held
+      39  match urgent: false
+      41  put_back fails: on expired, timeout
+      42  succeed

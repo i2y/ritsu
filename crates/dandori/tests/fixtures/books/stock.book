@@ -1,0 +1,18 @@
+book stock v1
+description "Stock per SKU, held for 7 days at most"
+
+unit pcs
+
+account shelf(sku: string) : pcs
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to shelf(sku)
+
+transfer reserve(order: string, sku: string, qty: pcs)
+  key order, sku
+  pending expires after 7 days
+  move qty from shelf(sku) to customers
