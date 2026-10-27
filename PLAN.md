@@ -1930,3 +1930,11 @@ ritsu のサイトの sekisho のページ（英日）は、`gate` の塊を五�
 帳簿の取消を断られる二つの理由を一つの `on` で受けると（`on expired, already_posted => pass`）、dandori の `check` は、拒否でないエラー（タイムアウトなど）のあとの状態もその `on` に渡し、案件が `held` のまま残りうるとして E020 を出していた。拒否ごとに `on` を分けると出ない。Lean のモデル（`handlerIn` と `takesOnly`。DESIGN 11.2）は、拒否だけを受ける `on` に拒否の状態だけを渡すが、`flow.rs` は、拒否を一つだけ書いた `on` しかそう扱っていなかった。並べた拒否の状態を合わせて渡すようにし、モデルと同じ決め方にした（dandori の DESIGN 13 章）。
 
 確かめたこと：`tests/fixtures/book_refusals_joined.flow`（英語。帳簿は `tests/fixtures/books/stock.book`）と golden の英日を足した。0.36.0 で出ていた 45 行目の E020 が消え、タイムアウトと並べた `on` のあとの 42 行目の E020 は残る。木の 231 本の `.flow` の `check` の出力は変わらない（7.60 の突き合わせ）。
+
+### 7.60 dandori の `http` のタスクは、URL に入れる値をエスケープする（2026-10-28）
+
+`http` のタスクの URL の `{id}` に、参照インタプリタも生成先も値をそのまま入れていた。`/`・`?`・`#`・`%`・空白を含む値では URL の形が変わり、`fetch` と urllib は `#` から後ろを落として送り、Go の `net/http` は `%` のあとが 16 進でないと送らなかった。値を前と同じ決まりで文字列にしてから、JavaScript の `encodeURIComponent` と同じにエスケープするようにした。参照インタプリタは `render::url_segment`、TypeScript（Temporal、durable functions、Argo）は io.ts の `segment`、Python（Temporal、pydantic-graph）は io.py の `segment`、Go は io.go の `ddEscape`、Step Functions は JSONata の `$encodeUrlComponent` である。あわせて、`T?` の none を TypeScript と JSONata が `null` という文字で入れていたのを、ほかと同じ空の文字列にした。本物の HTTP で送る試験は、届いたパスのエスケープを戻さずに比べるようにした。サイトのタスクのページ（英日）と dandori のスキルにも書いた（dandori の DESIGN 14 章）。
+
+確かめたこと：`tests/flows/paths.flow`（英語）を足した。決まった文字列、値を埋めた文字列、数、`string?` を URL に入れる 5 本の実行が、Step Functions（asl-run.mjs と LocalStack 4.14.0）、Temporal の三つの言語と言語をまたぐ四つの組、durable functions、Argo Workflows（kind）、pydantic-graph で参照インタプリタと同じ URL を送り、既定の Transport の三つは、エスケープしたパスのまま届けた。dandori の試験の全体が通った（SKIP は MySQL と Ollama の三つ）。木の 231 本の `.flow` を 0.36.0 と直したあとの `ritsu dandori` にかけ、16 の出力を比べると、11,913 ファイルのうち変わったのは `build` の出力の 1,120 だけだった（URL に `{…}` を持つ 27 本のタスクのコードと Step Functions の 9 本、TypeScript と Python の io、それに伴う Temporal の `BUILD_ID`）。
+
+見つけて直していないもの：本物の Step Functions の HTTP Task が、エスケープした `ApiEndpoint` をそのまま送るかは確かめていない。AWS の文書は、`QueryParameters` を URL エンコードするとしか書いていない。

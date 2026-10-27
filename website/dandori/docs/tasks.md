@@ -31,6 +31,11 @@ The calls dandori writes go through a `Transport` (`io.ts`, `io.py`, `io.go`), w
 are yours to set: the headers of an HTTP API, the AWS SDK's clients, an agent's API key, TypeSafe's
 key for Jev and OpenAI's for its Decisions API, the clients of the books a flow runs operations on. In tests it is where a stand-in goes.
 
+- An `http` task's URL takes its arguments by name: `{id}` is the argument `id` as text (a number, a
+  bool or a record as JSON, nothing for none), escaped as JavaScript's `encodeURIComponent` escapes
+  it, so a `/`, `?`, `#`, `%` or space in a value is not read as the end of a segment or the start
+  of the query. The arguments the URL does not take go in the query of a `GET` or a `DELETE`, and
+  in the body of the others.
 - `queue "<name>"` sends a Temporal activity or child workflow to that task queue, where workers in
   any of the three languages can serve it.
 - `local` under `use rule` has Temporal call the rule as a local activity, in the worker that runs

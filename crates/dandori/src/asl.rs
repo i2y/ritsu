@@ -1218,7 +1218,7 @@ pub fn retriers(m: &Model, callee: &Callee, task: &TaskDef, r: &Retry) -> Value 
     Value::Array(out)
 }
 
-/// The URL with its `{placeholders}` put in, as a JSONata string when it has any.
+/// The URL with its `{placeholders}` put in, escaped, as a JSONata string when it has any.
 fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
     let used = crate::lower::placeholders(url);
     if used.is_empty() {
@@ -1236,10 +1236,7 @@ fn url_value(url: &str, args: &[(String, TExpr)]) -> Value {
         }
         let p = &rest[i + 1..j];
         match args.iter().find(|(a, _)| a == p) {
-            Some((_, e)) => parts.push(match render::literal(e) {
-                Some(v) => jsonata_string(&render::value_text(&v)),
-                None => jsonata_expr(e),
-            }),
+            Some((_, e)) => parts.push(render::jsonata_segment(e)),
             None => parts.push(jsonata_string("")),
         }
         rest = &rest[j + 1..];

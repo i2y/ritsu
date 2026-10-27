@@ -912,7 +912,7 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
                     if i > 0 {
                         url_parts.push(q(&rest[..i]));
                     }
-                    url_parts.push(format!("String(args[{}])", q(&rest[i + 1..j])));
+                    url_parts.push(format!("io.segment(args[{}])", q(&rest[i + 1..j])));
                     rest = &rest[j + 1..];
                 }
                 if !rest.is_empty() || url_parts.is_empty() {
@@ -1692,6 +1692,11 @@ export function transport(options: Options = {}): Transport {
 /** Temporal: the workflow a callback's answer goes to, from the id the callback task was given. */
 export function workflowOf(callbackId: string): string {
   return JSON.parse(callbackId)[0];
+}
+
+/** An argument put into a URL: text as it is, nothing for none, anything else as JSON, escaped by encodeURIComponent. */
+export function segment(v: unknown): string {
+  return encodeURIComponent(typeof v === "string" ? v : v === null || v === undefined ? "" : JSON.stringify(v));
 }
 
 /** The value of an answer, or the declared error it names (`names`: the other side's name → the error). */

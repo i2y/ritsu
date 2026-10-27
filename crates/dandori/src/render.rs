@@ -861,10 +861,37 @@ pub fn fill_url(url: &str, args: &Map<String, Value>) -> (String, Map<String, Va
     let mut out = url.to_string();
     for p in &used {
         let v = args.get(p).map(value_text).unwrap_or_default();
-        out = out.replace(&format!("{{{p}}}"), &v);
+        out = out.replace(&format!("{{{p}}}"), &url_segment(&v));
     }
     let rest = args.iter().filter(|(k, _)| !used.contains(k)).map(|(k, v)| (k.clone(), v.clone())).collect();
     (out, rest)
+}
+
+/// A value's text as it goes into a URL, as JavaScript's `encodeURIComponent` writes it: letters,
+/// digits and `-_.!~*'()` as they are, every other byte of the UTF-8 as `%` and two capital hex
+/// digits. A `/`, a `?` or a `#` in an argument stays inside its part of the URL.
+pub fn url_segment(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// An argument put into a URL, in JSONata: its text as [`value_text`] has it, escaped as
+/// [`url_segment`] escapes it.
+pub fn jsonata_segment(e: &TExpr) -> String {
+    if let Some(v) = literal(e) {
+        return jsonata_string(&url_segment(&value_text(&v)));
+    }
+    match e.ty() {
+        Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => format!("$encodeUrlComponent({})", jsonata_expr(e)),
+        _ => format!("($dd_v := {}; $encodeUrlComponent($type($dd_v) = \"string\" ? $dd_v : $type($dd_v) = \"null\" ? \"\" : $string($dd_v)))", jsonata_expr(e)),
+    }
 }
 
 pub fn rule_activity(rule: &str) -> String {
@@ -1473,5 +1500,14 @@ mod tests {
         // the table is asked only for the names it has of its own (not `constructor`, `toString`, `__proto__`)
         assert!(read.contains("$dd_t := {\"CARRIER_STANDARD\":\"standard\",\"CARRIER_NEXTDAY\":\"next_day\"}; $type($dd_v) = \"string\" and $dd_v in $keys($dd_t) ? $lookup($dd_t, $dd_v) : $dd_v"), "{read}");
         assert!(read.contains("\"急ぎ\": $lookup($dd_b, \"urgent\")"), "{read}");
+    }
+
+    #[test]
+    fn an_argument_stays_inside_its_part_of_the_url() {
+        let (url, rest) = fill_url("https://items.example.com/v1/items/{item}/tags/{tag}", &args(json!({ "item": "a/b c?d#e%f&g=h+i'(j)*!~é品", "tag": null, "n": 7 })));
+        assert_eq!(url, "https://items.example.com/v1/items/a%2Fb%20c%3Fd%23e%25f%26g%3Dh%2Bi'(j)*!~%C3%A9%E5%93%81/tags/");
+        assert_eq!(Value::Object(rest), json!({ "n": 7 }));
+        let (url, _) = fill_url("https://items.example.com/v1/counts/{n}", &args(json!({ "n": 7 })));
+        assert_eq!(url, "https://items.example.com/v1/counts/7");
     }
 }

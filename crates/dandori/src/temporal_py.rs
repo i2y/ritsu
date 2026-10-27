@@ -498,7 +498,7 @@ pub(crate) fn task_impl(m: &Model, task: &TaskDef, p: Platform) -> Vec<String> {
                 if i > 0 {
                     url_parts.push(q(&rest[..i]));
                 }
-                url_parts.push(format!("io.text(args.get({}))", q(&rest[i + 1..j])));
+                url_parts.push(format!("io.segment(args.get({}))", q(&rest[i + 1..j])));
                 rest = &rest[j + 1..];
             }
             if !rest.is_empty() || url_parts.is_empty() {
@@ -1140,6 +1140,11 @@ def text(v: Any) -> str:
     if v is None:
         return ""
     return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+
+def segment(v: Any) -> str:
+    """An argument put into a URL: its text, escaped as JavaScript's encodeURIComponent escapes it."""
+    return urllib.parse.quote(text(v), safe="!*'()")
 
 
 def json_text(v: Any) -> str:

@@ -2215,7 +2215,7 @@ fn task_body(m: &Model, task: &TaskDef) -> Vec<String> {
                 if i > 0 {
                     url_parts.push(q(&rest[..i]));
                 }
-                url_parts.push(format!("ddText(args[{}])", q(&rest[i + 1..j])));
+                url_parts.push(format!("ddEscape(ddText(args[{}]))", q(&rest[i + 1..j])));
                 rest = &rest[j + 1..];
             }
             if !rest.is_empty() || url_parts.is_empty() {

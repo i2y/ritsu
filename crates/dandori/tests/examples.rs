@@ -1653,19 +1653,12 @@ fn default_transports_send_what_the_calls_say() {
                             assert_eq!(got["method"], req["http"], "{}: the method", at());
                             let url = req["url"].as_str().unwrap();
                             let path = url.splitn(4, '/').nth(3).map(|p| format!("/{}", p.split('?').next().unwrap())).unwrap();
-                            // the path arrives as the URL has it, percent-encoded where it is not ASCII
+                            // the path arrives as the URL has it: the arguments escaped by the code dandori
+                            // writes, so that a `%2F` stays one, and what is not ASCII in the URL's own text
+                            // percent-encoded by the Transport
                             let arrived = got["path"].as_str().unwrap();
-                            let decoded = String::from_utf8(arrived.split('%').enumerate().fold(Vec::new(), |mut b, (i, s)| {
-                                if i == 0 {
-                                    b.extend(s.bytes());
-                                } else {
-                                    b.push(u8::from_str_radix(&s[..2], 16).unwrap());
-                                    b.extend(s[2..].bytes());
-                                }
-                                b
-                            }))
-                            .unwrap();
-                            assert_eq!(decoded, path, "{}: the path", at());
+                            let sent: String = path.bytes().map(|b| if b.is_ascii() { (b as char).to_string() } else { format!("%{b:02X}") }).collect();
+                            assert_eq!(arrived, sent, "{}: the path", at());
                             let mut want_query = Vec::new();
                             if !req["query"].is_null() {
                                 form_pairs(&req["query"], "", &mut want_query);

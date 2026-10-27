@@ -2047,3 +2047,63 @@ error[E020]: tests/fixtures/book_refusals_joined.flow:45:1: the workflow can fai
 
 - `tests/fixtures/book_refusals_joined.flow`（帳簿は `tests/fixtures/books/stock.book`）を足し、`diagnostics_match_the_golden_files` の golden（英日）を書いた。0.36.0 では、上の 45 行目の E020 も出る。
 - dandori の試験の全体（14.6）。
+
+## 14. `http` のタスクの URL に入れる値を、`encodeURIComponent` と同じにエスケープする（2026-10-28）
+
+### 14.1 きっかけ
+
+`http` のタスクは、URL の `{id}` に引数の値をそのまま入れていた。値に `/`・`?`・`#`・`%`・空白があると、URL の形が変わる。足した `tests/flows/paths.flow` の最初の呼び出しで、0.36.0 の参照インタプリタ（`dandori run`）が出す URL は次のとおりで、生成したコードもこれをそのまま送る。
+
+```text
+https://items.example.com/v1/items/a/b c?d#e%f&g=h+i'(j)*!~é品/counts/1002/tags/
+```
+
+TypeScript の `fetch` と Python の urllib（生成した Transport の書き方のまま）は、`#` から後ろを送らず、パス `/v1/items/a/b%20c` とクエリ `d` を送る。パスの区切りが一つ増え、`/counts/1002/tags/` は消える。Go の `net/http` は、`%f&` を読めずに送らない（`invalid URL escape "%f&"`）。Step Functions の `ApiEndpoint` も、同じ文字列を作っていた。
+
+### 14.2 原因
+
+- 参照インタプリタ（`render.rs` の `fill_url`）と、URL を組み立てるどの生成先（TypeScript、Python、Go、JSONata）も、値を文字列にしてそのまま URL につないでいた。突き合わせの試験は、参照インタプリタの URL と生成したコードの URL を文字列で比べるので、どちらもエスケープしないことは見つからない。
+- シナリオが作る文字列は `<名前>-<番号>` で、エスケープの要る文字は日本語の名前しか無かった（`tests/flows/timeouts.flow` の品番）。本物の HTTP で送る試験（`default_transports_send_what_the_calls_say`）は、届いたパスのエスケープを戻してから URL と比べていたので、`fetch` と urllib が送るときに日本語を UTF-8 でエスケープしても通っていた。
+- 無い値（`T?` の none）を入れたときも、生成先によって違った。参照インタプリタと Python と Go は空の文字列を入れ、TypeScript（`String(args[…])`）と JSONata（`&` が `null` を `$string` で文字にする）は `null` という文字を入れていた。URL に `T?` の引数を入れるフローが木に無く、試験に出なかった。
+
+### 14.3 決定
+
+- URL に入れる値は、前と同じ決まりで文字列にしてから（文字列はそのまま、無い値は空の文字列、ほかは JSON）、JavaScript の `encodeURIComponent` と同じにエスケープする。英字・数字と `-_.!~*'()` はそのまま、ほかは UTF-8 のバイトごとに `%` と大文字の 16 進 2 桁にする。`/`・`?`・`#` を含む値も、その値を書いた区切りの中にとどまる。
+- 生成先ごとの書き方は次のとおり。どれも、参照インタプリタ（`render::url_segment`）と同じ文字列を作る。
+
+| 生成先 | 書き方 |
+|---|---|
+| Step Functions | JSONata の `$encodeUrlComponent`。文字列でない値は `$type` で見て、`null` を空の文字列に、ほかを `$string` で文字にしてから渡す。決まった値は dandori がエスケープして書く |
+| Temporal（TypeScript）、Lambda durable functions、Argo Workflows | io.ts の `segment`（`encodeURIComponent`） |
+| Temporal（Python）、pydantic-graph | io.py の `segment`（`urllib.parse.quote(…, safe="!*'()")`） |
+| Temporal（Go） | io.go の `ddEscape`（前からクエリと URL エンコードの本文に使っていた関数） |
+
+- 本物の HTTP で送る試験は、届いたパスが URL の文字列のとおりであることを確かめる。エスケープを戻してから比べるのをやめ、URL そのものに書いた日本語だけを、送る側が UTF-8 でエスケープしたものとして比べる。`%2F` が `/` に戻って届けば落ちる。
+
+### 14.4 捨てたもの
+
+- **エスケープしない書き方を足すこと**（OpenAPI の `allowReserved` のように、値の `/` を区切りとして送る）。値で区切りを増やすフローは例にもテストにも無く、URL に `{a}/{b}` と二つ書けば同じことができる。
+- **Transport でエスケープすること。** Transport は組み立てた URL を受け取るので、どこまでが値か分からない。参照インタプリタの URL とも比べられなくなる。
+
+### 14.5 変わること
+
+- `{…}` を書いた URL に、英字・数字と `-_.!~*'()` のほかの文字を含む値を入れると、送る URL が変わる。それだけの値なら、前と同じ URL を送る。`T?` の none は、どの生成先も空の文字列を入れる。
+- 生成するコード。木の 231 本の `.flow` を 0.36.0 と直したあとのバイナリの `ritsu dandori` にかけ、16 の出力（`check` の英日のテキストと JSON、七つの生成先の `build`、`doc` の英日の Markdown と HTML、`scenarios`）を比べた。11,913 ファイルのうち 1,120 が変わり、どれも `build` の出力だった。
+  - URL に `{…}` を持つ 27 本の、タスクの URL の組み立て（Temporal の三つの言語の activities、durable functions と Argo の `tasks.ts`、pydantic-graph の `tasks.py`）と、Step Functions の 9 本の `ApiEndpoint`。
+  - TypeScript と Python のすべての build の io（`segment` を足した）。
+  - Temporal の 150 本の build の `BUILD_ID`。生成したコードから作る値なので、io が変われば変わる。ワーカーのバージョニングでは、新しいビルドとして扱われる。
+- `dandori run` が出す呼び出しの URL（参照インタプリタ）。
+- `check`、`doc`、`scenarios` の出力は変わらない。
+
+### 14.6 確かめたこと
+
+- `tests/flows/paths.flow`（英語）を足した。URL `https://items.example.com/v1/items/{item}/counts/{count}/tags/{tag}` に、決まった文字列（`a/b c?d#e%f&g=h+i'(j)*!~é品`）、値を埋めた文字列（`"{item}/{a} 100%"`）、数、`string?` を入れる。参照インタプリタの URL は `https://items.example.com/v1/items/a%2Fb%20c%3Fd%23e%25f%26g%3Dh%2Bi'(j)*!~%C3%A9%E5%93%81/counts/1002/tags/` になる。
+- 5 本の実行が、どの生成先でも参照インタプリタと同じ URL を送った。Step Functions は `tools/asl-run.mjs`（JSONata 2.0.6）と LocalStack 4.14.0 の二つで確かめた。LocalStack は HTTP Task を知らないので、別のリソースに置き換えて引数を評価させる。ほかは、Temporal の三つの言語と、アクティビティをほかの言語で動かす四つの組、Lambda durable functions、Argo Workflows（kind の上の v4.1.4。本物の Pod で 2 本走らせ直す）、pydantic-graph である。本物の HTTP で送る試験では、TypeScript・Python・Go の既定の Transport が、6 件の呼び出しをエスケープしたパスのまま届けた。
+- `render.rs` の単体の試験 `an_argument_stays_inside_its_part_of_the_url`。
+- dandori の試験の全体を回した。`examples` の 27 件（言語をまたぐ一件は別に回した。358 秒と 127 秒）と、ほかの 13 ファイルである。SKIP の行は三つで、MySQL が無いことと、Ollama が答えないことの二つだった。どれも URL のエスケープとは関わらない。
+- 0.36.0 の生成コードが送るものは、生成した Transport と同じ読み方で URL を読ませて確かめた（Node の `URL`、Python の `urllib.parse.quote` と `urlsplit`、Go の `url.Parse`）。JSONata の `"…" & $tag` は、`tag` が `null` のとき `…/tags/null` になる（jsonata 2.0.6）。
+
+### 14.7 見つけて直していないもの
+
+- 本物の Step Functions の HTTP Task が、`ApiEndpoint` のエスケープをそのまま送るかは確かめていない。AWS の文書は `QueryParameters` を URL エンコードすると書くが、`ApiEndpoint` については書いていない。LocalStack 4.14.0 は HTTP Task を動かさないので、Step Functions で確かめたのは、JSONata が作る URL の文字列までである。
+- URL のホストの部分に `{…}` を書いても（`https://{tenant}.example.com/`）、同じにエスケープする。ホスト名に使える文字（英字・数字・`-`・`.`）だけの値なら変わらない。
