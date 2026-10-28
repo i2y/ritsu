@@ -761,7 +761,7 @@ fn a_walk_outside_a_module_passes_over_a_module_and_says_so() {
     assert_eq!((code, out.as_str()), (2, ""));
     assert_eq!(
         err,
-        "error: there is no file of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .proto) in loose\nnote: `loose/tax` has a `ritsu.mod` of its own: it is another module, and was not read; run `ritsu check loose/tax` to read it\n"
+        "error: there is no file of ritsu's languages (.rule, .flow, .cal, .book, .geas, .req, .ctx, .gate, .kn, .proto) in loose\nnote: `loose/tax` has a `ritsu.mod` of its own: it is another module, and was not read; run `ritsu check loose/tax` to read it\n"
     );
 }
 
