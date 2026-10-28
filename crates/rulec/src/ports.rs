@@ -524,9 +524,10 @@ impl ritsu_ports::Rules for Engine {
         })
     }
 
-    /// The output's range is the interval rulec holds it to (a table's rows, a derive's
-    /// arithmetic); where every row that decides it writes a number, those numbers, each with an
-    /// input from the rule's vectors (which take every row) that comes to it.
+    /// The output's range is the interval rulec holds it to (a range written on its line, a
+    /// table's rows, a `define`'s arithmetic, what its `result` comes to, §15.268); where every row
+    /// that decides it writes a number, those numbers, each with an input from the rule's vectors
+    /// (which take every row) that comes to it.
     fn output_values(&self, rule: &Path, output: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
         use crate::ast::{Lit, OutCell};
         let (_, _, got) = self.rule(rule)?;
@@ -543,7 +544,7 @@ impl ritsu_ports::Rules for Engine {
             return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!("`{output}` は、この規則の数の出力ではありません", "`{output}` is not a numeric output of this rule")));
         }
         let sc = c.wire_scale(output);
-        let (lo, hi) = c.ranges.get(output).copied().unwrap_or((None, None));
+        let (lo, hi) = c.output_range(output).unwrap_or((None, None));
         // every number the rows that decide the output write, if each writes one
         let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
         let mut literal: Option<Vec<i128>> = Some(Vec::new());

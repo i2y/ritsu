@@ -12,7 +12,7 @@ constraint before <= upto
 constraint upto <= base
 
 outputs
-  share : money[JPY]  round down(1JPY)
+  share : money[JPY]  round down(1JPY)  range >=0JPY <=1_000_000JPY
 
 derive to_before : money[JPY] = allocate(total_off, before, base)  range >=0JPY <=1_000_000JPY
 derive to_upto   : money[JPY] = allocate(total_off, upto, base)    range >=0JPY <=1_000_000JPY

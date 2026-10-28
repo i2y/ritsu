@@ -211,8 +211,8 @@ def single_coupon(subtotal: JPYInclTax, applied: JPYInclTax, kind: CouponKind, r
 ```
 
 One JSON object: module and function names, the parameters in order with
-their brands, units and ranges, the outputs with their rounding, the
-enum members **under the spelling each language gives them**
+their brands, units and ranges, the outputs with their rounding and the
+range written on them or given by their tables, the enum members **under the spelling each language gives them**
 (`CouponKind.PERCENT` in Python, `singlecoupon.CouponKindPercent` in Go),
 and the errors that can come out: which one is the caller's mistake and
 which one the rule's own, and what each carries.

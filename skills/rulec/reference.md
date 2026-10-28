@@ -975,6 +975,36 @@ An optional number (`price : money[USD]?  round down(1USD)`) declares its roundi
 way, written in the unit of the type it wraps. It applies where the output has a value; where a
 row answers `none`, the output has none and there is nothing to round.
 
+### `range` on an output — the range other languages read it in
+
+An output's line may write a range after its rounding:
+
+```rule
+outputs
+  share : money[JPY]  round down(1JPY)  range >=0JPY <=1_000_000JPY
+```
+
+It is held to what the output comes to: the cells of the rows that decide it, a `define` of its
+name, or what the `result` reaches under the inputs' ranges and the `constraint` lines, put out to
+the grid of its rounding. A range that leaves out a value the output can come to is E140, and the
+message states the range to widen to (`fix.text` holds it). A range that cannot be checked is
+E140 too: the output reads an input with no range, or is no number. A range with one end written
+takes the other end from what the output comes to.
+
+The range written is then the output's range wherever an input's or a derive's is said: the
+certificate's `ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the comments
+of the SQL and of the `.proto`, the page for people (beside the output), and ritsu's port, through
+which kaname and the other languages read what a rule answers. `rulec diff` tells a range that
+moved as a change of what the rule answers (`output_range`). The range is checked, so the
+generated code checks nothing more when it runs.
+
+Where no range is written, a numeric output still has the range of what it comes to where the
+other languages read it, the certificate's `ranges` and the port: what the rows of the tables that
+decide it write, or what its `result` reaches. The schema, `api` and the generated code carry a
+table's range and not a `result`'s. `range from koyomi` (E065) and `random` (E070) are an input's
+alone. A word an output's line does not read, anything but `range` and `round`, is E047, as on
+every declaration line.
+
 ## 5. derive
 
 A linear combination of inputs, which **can be used as a table column while still being a
@@ -2457,6 +2487,12 @@ running total never passes the whole. The last one is not decoration — without
 could exceed the amount being handed out, and the interval E108 is proved against would be
 the product of two ranges rather than the amount. Chains count: two `constraint` lines that
 meet in the middle say what a single one would.
+
+What the subtraction comes to is read as what it is. Two shares of one amount over one whole,
+the one taken away at a running total the `constraint` lines keep at or below the other's, never
+pass each other, since `floor(T × C ÷ S)` rises with C: the difference is never below zero, and
+never above the amount. Above, `share` comes to 0JPY to 1,000,000JPY rather than −1,000,000JPY to
+1,000,000JPY, and an output range written on it, or a language that reads it, is held to that.
 
 One call decides one line. The loop stays with the caller, as everything else here does.
 

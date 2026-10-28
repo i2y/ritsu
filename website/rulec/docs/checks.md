@@ -267,7 +267,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 214 deliberately broken
+   and that implementation has not been proved correct. The evidence is 216 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**
@@ -464,6 +464,24 @@ not optional is E103. A table that reads an optional column is asked
 for a row for `none` wherever a table above can write it or pass on an
 input that has none (E101). The generated code answers no value the way
 its language writes one: `None`, `null`, `nil`, `NULL`.
+
+## The range an answer stays in
+
+An output may write a range after its rounding:
+`share : money[JPY]  round down(1JPY)  range >=0JPY <=1_000_000JPY`.
+The checker holds it to what the output can come to: the cells of the
+rows that decide it, or what its `result` reaches over the inputs'
+ranges and the `constraint` lines. A range that leaves out an answer
+the rule can give is E140, and the message gives the range to widen it
+to. A range on an output that reads an input with no range cannot be
+checked, and is E140 too. A share taken as the difference of two
+`allocate` calls, at running totals the constraints put in order, is
+read as never below zero and never above the amount handed out
+([the example](examples.md#apportioning-by-ratio)). The range is then
+the answer's wherever an input's range is said: the certificate,
+`rulec schema` and `rulec api`, the page for people, and ritsu's port,
+through which the other languages read the answer. See
+[the reference](reference.md#range-on-an-output--the-range-other-languages-read-it-in).
 
 ## Showing it to people
 

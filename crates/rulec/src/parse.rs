@@ -155,6 +155,61 @@ fn named_like_head(line: &[Token]) -> bool {
         && line.get(1).is_some_and(|t| t.is(&Kind::LParen) || t.is(&Kind::Colon) || t.is(&Kind::Eq) || t.is(&Kind::Arrow))
 }
 
+/// The kind of line whose tail `tail_junk` reads (§15.268): each reads its own words, and a word of
+/// another kind of line is as extra as any other.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tail {
+    Input,
+    /// A field of an element.
+    Field,
+    Output,
+    Derive,
+    /// A `count`, `sum`, `max` or `min` line.
+    Walk,
+    Shape,
+    /// What follows the path of an input's `from`.
+    From,
+}
+
+impl Tail {
+    /// The words the line reads.
+    fn takes(self) -> &'static [&'static str] {
+        match self {
+            Tail::Input => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM],
+            Tail::Field => &[crate::kw::RANGE, crate::kw::CONTRACT_ONLY],
+            Tail::Output => &[crate::kw::RANGE, crate::kw::ROUND],
+            Tail::Derive | Tail::Walk => &[crate::kw::RANGE],
+            Tail::Shape | Tail::From => &[],
+        }
+    }
+
+    /// The words another check says the line cannot hold, with a reason of its own: `random` on an
+    /// output or a field of an element, and after a `from` (E070).
+    fn elsewhere(self) -> &'static [&'static str] {
+        match self {
+            Tail::Field | Tail::Output | Tail::From => &[crate::kw::RANDOM],
+            _ => &[],
+        }
+    }
+
+    /// What E047 says the line holds.
+    fn holds(self) -> String {
+        let (r, c, d, o) = (crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND);
+        match self {
+            Tail::Input => tr!("入力の行に置けるのは `{r}`、`{c}`、`{d}` だけです。", "An input's line holds `{r}`, `{c}` and `{d}`, and nothing else."),
+            Tail::Field => tr!("要素のフィールドの行に置けるのは `{r}` と `{c}` だけです。", "A field of an element holds `{r}` and `{c}`, and nothing else."),
+            Tail::Output => tr!("出力の行に置けるのは `{r}` と `{o}` だけです。", "An output's line holds `{r}` and `{o}`, and nothing else."),
+            Tail::Derive => tr!("`derive` の行に置けるのは `{r}` だけです。", "A `derive` line holds `{r}`, and nothing else."),
+            Tail::Walk => tr!("`count`、`sum`、`max`、`min` の行に置けるのは `{r}` だけです。", "A `count`, `sum`, `max` or `min` line holds `{r}`, and nothing else."),
+            Tail::Shape => tr!("`shape` の行には、宣言の後ろに何も置けません。", "A `shape` line holds nothing after its declaration."),
+            Tail::From => tr!(
+                "`from` の後ろに置けるのは、パスと `of`、`where`、`empty` だけです。入力の範囲と印は `from` の前に書きます。",
+                "What follows `from` is its path, then `of`, `where` or `empty`, and nothing else; an input's range and marks go before `from`."
+            ),
+        }
+    }
+}
+
 /// Where the `random` mark is in a declaration's tail (§15.224), when it is written: the word on its
 /// own, not a bound of a range (`range >=random` names a value of an ordered enum).
 fn tail_random(ts: &[Token], k: usize) -> Option<Span> {
@@ -1174,7 +1229,7 @@ impl P {
             };
             let (range, contract_only) = self.tail_range(head, k);
             let random = tail_random(head, k).or_else(|| trailing_random(&line[cut..]));
-            self.tail_junk(head, k);
+            self.tail_junk(head, k, if section == crate::kw::ELEMENTS { Tail::Field } else { Tail::Input });
             v.push(VarDecl { name, ty, range, contract_only, from, random, span: span_of(&line) });
         }
         v
@@ -1231,7 +1286,7 @@ impl P {
                 }
             },
         };
-        self.tail_junk(line, end);
+        self.tail_junk(line, end, Tail::Shape);
         Some(ShapeDecl { name, source, file, at, span: span_of(line), base: None })
     }
 
@@ -1340,7 +1395,7 @@ impl P {
             let c = self.cell(&ts[j..end])?;
             Some((field, c))
         } else {
-            self.tail_junk(&ts[..end], k);
+            self.tail_junk(&ts[..end], k, Tail::From);
             None
         };
         // `empty <value>`: what `max` and `min` give when no element passes, and nothing after it.
@@ -1524,8 +1579,14 @@ impl P {
                         )),
                 );
             }
-            self.tail_junk(&line, k);
-            v.push(OutDecl { name, ty, rounding, span: span_of(&line) });
+            // The range an output is held to (§15.268). One that names a koyomi date was said above,
+            // and is no range of the output's.
+            let range = match line.windows(2).any(|w| w[0].ident() == Some(crate::kw::RANGE) && w[1].ident() == Some(crate::kw::FROM)) {
+                true => None,
+                false => self.tail_range(&line, k).0,
+            };
+            self.tail_junk(&line, k, Tail::Output);
+            v.push(OutDecl { name, ty, rounding, span: span_of(&line), range });
         }
         v
     }
@@ -1569,20 +1630,31 @@ impl P {
         Some((TypeRef { base, args, optional, span }, k))
     }
 
-    /// Everything a declaration's tail may hold: `range <bounds>`, `contract_only`, and
-    /// `round <mode>(<grid>)`. The readers above walk the line looking for the word they
-    /// want and step over everything else, so a token belonging to none of them used to
-    /// vanish — a tax flag written after the range (`range >=0円 <=10000円 incl_tax`), or
-    /// what is left of a bound whose unit did not lex as one. The range is the universe the
-    /// completeness proof quantifies over and the entry guard of the generated code, so a
-    /// bound lost this way was answered "complete" with one side missing. E047 stops at the
-    /// first such token. A citation ends the tail, so `@…` is where the scan gives up.
-    fn tail_junk(&mut self, ts: &[Token], mut k: usize) {
+    /// Everything a declaration's tail may hold, which is what the line's kind reads
+    /// ([`Tail::takes`]): `range <bounds>`, `contract_only`, `random`, `round <mode>(<grid>)`.
+    /// The readers above walk the line looking for the word they want and step over everything
+    /// else, so a token belonging to none of them used to vanish — a tax flag written after the
+    /// range (`range >=0円 <=10000円 incl_tax`), or what is left of a bound whose unit did not lex
+    /// as one. The range is the universe the completeness proof quantifies over and the entry
+    /// guard of the generated code, so a bound lost this way was answered "complete" with one side
+    /// missing. And a word of one kind of line written on another was stepped over the same way:
+    /// a `range` on an output, a `round` on an input or a `derive`, a `contract_only` on anything
+    /// but an input (§15.268). E047 stops at the first such token. A citation ends the tail, so
+    /// `@…` is where the scan gives up.
+    fn tail_junk(&mut self, ts: &[Token], mut k: usize, kind: Tail) {
         while k < ts.len() {
             if ts[k].is(&Kind::At) {
                 return;
             }
-            match ts[k].ident() {
+            let w = ts[k].ident();
+            if let Some(w) = w.filter(|w| [crate::kw::RANGE, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM, crate::kw::ROUND].contains(w))
+                && !kind.takes().contains(&w)
+                && !kind.elsewhere().contains(&w)
+            {
+                self.junk(ts[k].span.clone(), kind);
+                return;
+            }
+            match w {
                 Some(crate::kw::RANGE) => {
                     k += 1;
                     // `range from koyomi "<file>" date <name>` is read by `tail_range`, which
@@ -1611,26 +1683,28 @@ impl P {
                     k += if full { 5 } else { 1 };
                 }
                 _ => {
-                    let sp = ts[k].span.clone();
-                    self.err(
-                        Diag::error("E047", tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"))
-                            .at(self.at(sp.line))
-                            .mark(sp, tr!("この語は宣言の一部として読まれません", "this is not read as part of the declaration"))
-                            .note(tr!(
-                                "宣言の行に置けるのは `{}`、`{}`、`{}`、`{}` だけです。ほかの語はいままで黙って捨てられていました。",
-                                "A declaration line holds `{}`, `{}`, `{}` and `{}`, and nothing else. Anything else used to be dropped in silence.",
-                                crate::kw::RANGE, crate::kw::ROUND, crate::kw::CONTRACT_ONLY, crate::kw::RANDOM
-                            ))
-                            .note(tr!(
-                                "範囲は `{} >=<値> <=<値>` の形で、比較の記号と値の対だけが読まれます。単位の綴りが違っていると対として読めなくなり、余った分がここに出ます。",
-                                "A range is `{} >=<value> <=<value>`: only pairs of a comparison and a value are read. A misspelled unit stops a pair from being read as one, and what is left over lands here.",
-                                crate::kw::RANGE
-                            )),
-                    );
+                    self.junk(ts[k].span.clone(), kind);
                     return;
                 }
             }
         }
+    }
+
+    /// E047 at a word the tail of a line of this kind does not read.
+    fn junk(&mut self, sp: Span, kind: Tail) {
+        let holds = kind.holds();
+        let mut d = Diag::error("E047", tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"))
+            .at(self.at(sp.line))
+            .mark(sp, tr!("この語は宣言の一部として読まれません", "this is not read as part of the declaration"))
+            .note(tr!("{holds}ほかの語はいままで黙って捨てられていました。", "{holds} Anything else used to be dropped in silence."));
+        if kind.takes().contains(&crate::kw::RANGE) {
+            d = d.note(tr!(
+                "範囲は `{} >=<値> <=<値>` の形で、比較の記号と値の対だけが読まれます。単位の綴りが違っていると対として読めなくなり、余った分がここに出ます。",
+                "A range is `{} >=<value> <=<value>`: only pairs of a comparison and a value are read. A misspelled unit stops a pair from being read as one, and what is left over lands here.",
+                crate::kw::RANGE
+            ));
+        }
+        self.err(d);
     }
 
     /// `range >=1g <=40kg` and the `contract_only` marker (§11 W111).
@@ -1730,9 +1804,10 @@ impl P {
             .unwrap_or(line.len());
         let expr = self.expr_of(line, eq, &line[eq + 1..stop])?;
         let (mut range, _) = self.tail_range(line, k.max(eq));
-        self.tail_junk(line, stop);
+        self.tail_junk(line, stop, Tail::Derive);
         if let Some(c) = cont {
             range = self.tail_range(&c, 0).0;
+            self.tail_junk(&c, 0, Tail::Derive);
         }
         Some(DerivedDecl { cite: None, name, ty, expr, range, span: span_of(line) })
     }
@@ -1874,7 +1949,7 @@ impl P {
             }
         }
         let (range, _) = self.tail_range(line, j);
-        self.tail_junk(line, j);
+        self.tail_junk(line, j, Tail::Walk);
         Some(AggDecl { kind, name, over, column, value, filter, empty, range, span })
     }
 

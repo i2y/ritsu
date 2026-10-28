@@ -14,9 +14,10 @@ $ rulec api rules/single_coupon.rule
 ```
 
 One JSON object with the module and function names, the parameters in order with their
-brands, units and ranges, the outputs with their rounding, the enum members under the
-spelling each language gives them, and the errors the code can raise. The shape is defined in
-[formats.md](formats.md), and a test holds every name in it to the file the generator wrote.
+brands, units and ranges, the outputs with their rounding and the range written on them or given
+by their tables, the enum members under the spelling each language gives them, and the errors the
+code can raise. The shape is defined in [formats.md](formats.md), and a test holds every name in
+it to the file the generator wrote.
 
 ---
 

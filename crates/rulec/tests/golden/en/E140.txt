@@ -1,0 +1,8 @@
+error[E140]: The range of the output share does not hold the values it can take
+  --> tests/mutants/m_e140.rule:15 output share
+   |
+15 |   share : money[JPY]  round down(1JPY)  range >=0JPY <=100_000JPY
+   |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^ it can take >=0JPY <=1_000_000JPY
+   |
+ share is decided by the `result`, and takes what its expression reaches under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding.
+ An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns.

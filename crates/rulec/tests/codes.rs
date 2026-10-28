@@ -144,9 +144,10 @@ fn 台帳の別の形の再現はその形を出す() {
     // heading, and the label of two rows (§15.262), and two enums whose types take one name; W121 with
     // two names Swift and Java spell alike, two SQLite reads as one column, two PostgreSQL cuts to
     // one, and a name Ruby reads as a constant (§15.263), a name the generated code uses itself and a
-    // name of `_` alone (§15.265); E011 with a sequence that has no ASCII alias (§15.265)
+    // name of `_` alone (§15.265); E011 with a sequence that has no ASCII alias (§15.265); E140
+    // with an output's range that cannot be checked (§15.268)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121", "W121"]);
+    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121", "E140", "W121"]);
     // Each by its place among the entry's other forms; `None` is the last.
     for (code, form, says) in [
         ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
@@ -169,6 +170,7 @@ fn 台帳の別の形の再現はその形を出す() {
         ("W121", None, [(Lang::En, "`_` is a name the code generated for Rust, Go, Swift, Java and Wasm cannot take"), (Lang::Ja, "`_` は、Rust・Go・Swift・Java・Wasm の生成コードでは使えません")]),
         ("E011", None, [(Lang::En, "A public name has no ASCII alias"), (Lang::Ja, "公開される名前に ASCII の別名がありません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
+        ("E140", None, [(Lang::En, "The range of the output fee cannot be checked"), (Lang::Ja, "出力 手数料 の範囲を確かめられません")]),
     ] {
         let e = rulec::codes::find(code).unwrap();
         let a = match form {
@@ -217,8 +219,8 @@ fn 英語の再現は日本語の再現と同じ診断を同じ行に出す() {
     // reproduction misspells `std/都道府県` and whose English one misspells `std/us/states`
     // (DESIGN §15.182); and W901, written with both from the start (ritsu's DESIGN 16.3). E075 and
     // W128 came with their twins (§15.208, §15.209), and so did E066 and E069 (§15.210, §15.212) and
-    // E132 and E139 (§15.213, §15.215), and E074 (§15.223).
-    assert_eq!(twins, 64, "英語の再現を持つ項目の数が変わった: {twins}");
+    // E132 and E139 (§15.213, §15.215), and E074 (§15.223), and E140 (§15.268).
+    assert_eq!(twins, 65, "英語の再現を持つ項目の数が変わった: {twins}");
 }
 
 /// Japanese is left in a reproduction shown in English only where being Japanese is the point of
@@ -265,9 +267,9 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // W901 (ritsu's DESIGN 16.3) made it 113, E075 and W128 (§15.208, §15.209) 115, E066 and E069
     // (§15.210, §15.212) 117, E132 and E139 (§15.213, §15.215) 119, E072, E134 and E135
     // (§15.217) 122, E071, E136, E137, E138 and W130 (§15.222) 127, E074 (§15.223) 128, E070,
-    // E073, E133, W129 and W131 (§15.224–§15.226) 133, and E067, E068, E131 and W132 (§15.227)
-    // 137.
-    assert_eq!(all.len(), 137, "台帳の件数が変わった: {}", all.len());
+    // E073, E133, W129 and W131 (§15.224–§15.226) 133, E067, E068, E131 and W132 (§15.227)
+    // 137, and E140 (§15.268) 138.
+    assert_eq!(all.len(), 138, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

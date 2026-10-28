@@ -1807,6 +1807,48 @@ const X_E139_EN: &str = "rule root_of_gap v1\n\n\
                       outputs\n  root : number  round down(1)\n\n\
                       define whole_root : number = isqrt(gap)\n\n\
                       result root = whole_root\n";
+// E140 (§15.268): a range written on an output's line that leaves out what the output comes to,
+// and one that cannot be checked, the output reading an input with no range.
+const X_E140: &str = r##"rule 手数料(fee) v1
+
+inputs
+  金額(amount) : money[円]  range >=0円 <=10_000円
+
+outputs
+  手数料(fee) : money[円]  round down(1円)  range >=0円 <=500円
+
+result 手数料 = 金額 × 10%
+"##;
+const X_E140_EN: &str = r##"rule fee v1
+
+inputs
+  amount : money[USDc]  range >=0USDc <=10_000USDc
+
+outputs
+  fee : money[USDc]  round down(1USDc)  range >=0USDc <=500USDc
+
+result fee = amount × 10%
+"##;
+const X_E140_UNKNOWN: &str = r##"rule 手数料(fee) v1
+
+inputs
+  金額(amount) : money[円]
+
+outputs
+  手数料(fee) : money[円]  round down(1円)  range >=0円 <=500円
+
+result 手数料 = 金額 × 10%
+"##;
+const X_E140_UNKNOWN_EN: &str = r##"rule fee v1
+
+inputs
+  amount : money[USDc]
+
+outputs
+  fee : money[USDc]  round down(1USDc)  range >=0USDc <=500USDc
+
+result fee = amount × 10%
+"##;
 
 const X_E117: &str = "rule t(t) v1\n\ninputs\n  \u{5024}\u{5f15}\u{304d}(off) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
                       \u{3053}\u{3053}\u{307e}\u{3067}(upto) : money[\u{5186}]  range >=0\u{5186} <=1000\u{5186}\n  \
@@ -3167,12 +3209,12 @@ pub fn ledger() -> Vec<Entry> {
             "E047",
             tr!("宣言の後ろに余分な語があります", "Extra token after the declaration"),
             tr!(
-                "入力・出力・`derive`・`count` の宣言の行に、`range`・`round`・`contract_only` のどれにも属さない語が残っているとき。rulec のパーサーは行から欲しい語を探して残りを読み飛ばすので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、どちらも通っていました。範囲は完全性の検査が調べる値の全体で、生成コードの入口のガードでもあるので、境界が一つ落ちると、片側が欠けた範囲のまま「完全」と答えることになります。",
-                "A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
+                "宣言の行に、その行が読まない語が残っているとき。行ごとに読む語は決まっていて、入力の行は `range`・`contract_only`・`random`、要素のフィールドの行は `range` と `contract_only`、出力の行は `range` と `round`、`derive` の行と `count`・`sum`・`max`・`min` の行は `range` だけです。`shape` の行と、入力の `from` のパスの後ろ（`where`・`empty` のほか）には何も置けません。rulec のパーサーは行から欲しい語を探して残りを読み飛ばすので、こうした語はいままで黙って捨てられていました。範囲の後ろに書いた税区分（`range >=0円 <=10000円 incl_tax`）も、単位が単位として読めずに余った分も、`derive` の `round` も、`from` の後ろの `range` も、どれも通っていました。範囲は完全性の検査が調べる値の全体で、生成コードの入口のガードでもあるので、境界が一つ落ちると、片側が欠けた範囲のまま「完全」と答えることになります。",
+                "A declaration line holds a word the line does not read. Each kind of line reads its own words: an input's `range`, `contract_only` and `random`; a field of an element's `range` and `contract_only`; an output's `range` and `round`; a `derive` and a `count`, `sum`, `max` or `min` line `range` alone. A `shape` line holds nothing after its declaration, and an input's `from` nothing after its path but `where` and `empty`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, what is left of a bound whose unit did not lex as one, a `round` on a `derive`, a `range` after a `from`. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered \"complete\" with one side missing."
             ),
             tr!(
-                "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中に（`money[円, incl_tax]`、`rate[step 0.1%]`）、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<刻み>)` の形で書いてください。",
-                "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`."
+                "その語を消すか、宣言の一部として正しい形に直してください。税区分や刻みは型の括弧の中に（`money[円, incl_tax]`、`rate[step 0.1%]`）、範囲は `range >=<値> <=<値>`、丸めは `round <向き>(<刻み>)` の形で書いてください。入力の範囲と印は `from` の前に書きます。導出の値を丸めるなら、式の中で `down(<式>, 1円)` のように丸めます。",
+                "Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`. An input's range and marks go before its `from`; a derived value is rounded inside its expression, as `down(<expression>, 1JPY)`."
             ),
             X_E047,
             &["E011", "E103", "E104"],
@@ -4068,6 +4110,22 @@ pub fn ledger() -> Vec<Entry> {
             &["E108", "E103"],
         )
         .english(X_E139_EN),
+        err(
+            "E140",
+            tr!("出力の範囲が、出力のとる値を含んでいません", "An output's range does not hold the values it takes"),
+            tr!(
+                "出力の行に書いた `range` が、その出力のとりうる値を含まないとき。とりうる値は、出力を決めるもの（表の行のセルの値と式、同じ名前の `define`、`result` の式）が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。rulec がその値を求められないとき（範囲の無い入力を読む、数でない出力）も、書いた範囲を確かめられないので、これです。出力の範囲は、ほかの言語（kaname、dandori など）が規則の答えを読む範囲なので、狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
+                "The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns."
+            ),
+            tr!(
+                "範囲を、文面の示すとりうる値まで広げてください（`fix.text` に `range >=0円 <=1000円` の形で入っています）。確かめられないときは、出力が読む入力に範囲を書くか、出力の範囲を外してください。範囲を書かない出力にも、rulec が求めた範囲が付き、ほかの言語はそれを読みます。",
+                "Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where it cannot be checked, give the inputs the output reads a range, or take the output's range off: an output with none written has the range rulec works out, and the other languages read that."
+            ),
+            X_E140,
+            &["E112", "E061", "E103"],
+        )
+        .english(X_E140_EN)
+        .also(tr!("確かめられない範囲", "A range that cannot be checked"), X_E140_UNKNOWN, X_E140_UNKNOWN_EN),
         err(
             "E134",
             tr!("持ち越す数が範囲を出る呼び出しがあります", "A call answers a carried number outside its range"),

@@ -60,6 +60,7 @@ A few shapes are worth knowing before the first draft:
   called `fee` is what the output `fee` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
 - **An output may be `T?`**: a row answers `none` for no value, the others a value of `T`.
+- **An output may write a `range` after its `round`**; one that leaves out an answer is E140.
 - **Combinations that cannot happen are said once.** `constraint <input> <= <input>` states a
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
   witness becomes a case somebody could really send, and the generated code refuses a
@@ -392,8 +393,7 @@ in the way makes the next reader believe something untrue.
 
 **Do not add a row with a made-up amount.** `fix.text` for E101 gives you the row's *shape*,
 with output values copied from the first row so that it parses. The amount has to come from
-the source. If you do not have it, that is a question for a person (§6), not a value to
-invent.
+the source. If you do not have it, that is a question for a person (§6), not a value to invent.
 
 **Do not paper over E107 by changing the expected value.** Half the time the table is wrong.
 Decide from the source which side is.

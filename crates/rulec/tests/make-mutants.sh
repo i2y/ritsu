@@ -507,6 +507,10 @@ awk '/^\| >=60 <=70 +\| >=30 <=40 +\| 挑む側 +\| >1\/2 +\|$/ { $0 = "| - | - 
 # The number drawn for each claim widened to ten million values, the shares of the plan set aside
 awk '/^# The shares of the audit plan/ { skip = 1 } skip && /^examples$/ { skip = 0 } !skip { sub(/range >=0 <=99 +random/, "range >=0 <=9_999_999  random"); print }' "$s"  > "$M/m_w131.rule"
 awk '/^# 監査の計画が決めた割合/ { skip = 1 } skip && /^examples$/ { skip = 0 } !skip { sub(/range >=0 <=99 +random/, "range >=0 <=9_999_999  random"); print }'   "$sj" > "$M/m_w131ja.rule"
+# --- The range written on an output's line (§15.268). The English rule, and its Japanese version
+# beside it. The share held to a tenth of the discount: a bill of one line takes all of it.
+awk '{ sub(/^  share : money\[JPY\]  round down\(1JPY\)  range >=0JPY <=1_000_000JPY$/, "  share : money[JPY]  round down(1JPY)  range >=0JPY <=100_000JPY"); print }' "$C/pro_rata_allocation.rule" > "$M/m_e140.rule"
+awk '{ sub(/^  配分額\(share\) : money\[円\]  round down\(1円\)  range >=0円 <=100万円$/, "  配分額(share) : money[円]  round down(1円)  range >=0円 <=10万円"); print }' "$C/比例配分.rule" > "$M/m_e140ja.rule"
 
 for m in "$M"/m_*.rule; do "$RULEC" fmt "$m" >/dev/null; done
 

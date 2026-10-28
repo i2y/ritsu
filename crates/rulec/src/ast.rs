@@ -472,6 +472,9 @@ pub struct OutDecl {
     pub ty: TypeRef,
     pub rounding: Option<Rounding>,
     pub span: Span,
+    /// The range written on the line (§15.268): held to the values the output takes, then the
+    /// range other languages read it in.
+    pub range: Option<Range>,
 }
 
 #[derive(Debug, Clone)]

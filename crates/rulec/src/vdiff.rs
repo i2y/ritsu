@@ -1556,7 +1556,7 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
     for b in &n.0.outputs {
         match o.0.outputs.iter().find(|a| a.name.text == b.name.text) {
             None => out.push(DomainChange { what: "output_added", name: b.name.text.clone(), old: None, new: None }),
-            Some(_) => {
+            Some(a) => {
                 // Answers are compared as values (§15.199), so a version that counts an output in
                 // another unit or at another step moves no answer; what its callers receive does
                 // change, and this is where that is said.
@@ -1572,6 +1572,19 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                 let (ra, rb) = (r(o.1), r(n.1));
                 if ra != rb {
                     out.push(DomainChange { what: "output_rounding", name: b.name.text.clone(), old: ra, new: rb });
+                }
+                // The range written on an output's line is what its callers are told it comes to
+                // (§15.268), as an input's is what it takes; where either version writes one, the
+                // two versions' ranges of the output are compared.
+                if a.range.is_some() || b.range.is_some() {
+                    let shown = |c: &Checked| match c.output_range(name) {
+                        Some((lo, hi)) => format!("{}..{}", lo.map(|x| x.to_string()).unwrap_or_default(), hi.map(|x| x.to_string()).unwrap_or_default()),
+                        None => String::new(),
+                    };
+                    let (ra, rb) = (shown(o.1), shown(n.1));
+                    if ra != rb {
+                        out.push(DomainChange { what: "output_range", name: name.clone(), old: Some(ra), new: Some(rb) });
+                    }
                 }
             }
         }
@@ -2466,6 +2479,7 @@ fn domain_word(what: &str) -> String {
         "output_rounding" => tr!("出力の丸めが変わった", "an output changed rounding"),
         "output_type" => tr!("出力の型が変わった", "an output changed type"),
         "output_step" => tr!("出力の刻みが変わった", "an output changed step"),
+        "output_range" => tr!("出力の範囲が変わった", "an output changed range"),
         other => other.to_string(),
     }
 }

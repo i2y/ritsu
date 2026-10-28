@@ -152,6 +152,27 @@ def writtenCols (cert : Json) (types : String → Option Ty) :
       outs := outs ++ [(col, ws)]
   return (outs, unstated, insides, bad)
 
+/-- A share read through the name of the value that computes it (rulec's §15.268). -/
+def throughShare (defs : String → Option RulecCert.Expr) : RulecCert.Expr → RulecCert.Expr
+  | .name n => (defs n).getD (.name n)
+  | e => e
+
+/-- Each name a difference takes, read as the share its value computes, where it computes one
+    (rulec's §15.268): the two calls then reach `interval`, which knows a share less a share
+    before it is never below zero (`sharesInOrder`). Every other name stays as it is. -/
+def expandShares (defs : String → Option RulecCert.Expr) : RulecCert.Expr → RulecCert.Expr
+  | .sub a b => .sub (throughShare defs (expandShares defs a)) (throughShare defs (expandShares defs b))
+  | .add a b => .add (expandShares defs a) (expandShares defs b)
+  | .mul a b => .mul (expandShares defs a) (expandShares defs b)
+  | .divc a k t => .divc (expandShares defs a) k t
+  | .minOf a b => .minOf (expandShares defs a) (expandShares defs b)
+  | .maxOf a b => .maxOf (expandShares defs a) (expandShares defs b)
+  | .roundTo a g => .roundTo (expandShares defs a) g
+  | .divRound a b g t => .divRound (expandShares defs a) (expandShares defs b) g t
+  | .modc a n => .modc (expandShares defs a) n
+  | .isqrt a => .isqrt (expandShares defs a)
+  | e => e
+
 /-- What `checkValues` works out: each value's interval, the hull of each column a table writes
     numbers into, and what bounds a name — the one of those that applies, and otherwise the range
     the rule declares, never the stated range of a column a table writes. -/
@@ -183,6 +204,13 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
     | .name x, .name y => le.any (fun p => p.1 == x && p.2 == y)
     | _, _ => false
   let vals := fieldArr cert "values"
+  -- The shares the values compute (rulec's §15.268): a `derive` or a `define` of one call of
+  -- `allocate`, by its name.
+  let shareDefs : String → Option RulecCert.Expr := fun n =>
+    (vals.toList.find? (fun v => fieldStr v "name" == n && (fieldStr v "of" == "derive" || fieldStr v "of" == "define"))).bind
+      (fun v => match field v "expr" >>= exprOfJson with
+        | some e@(.alloc (.name _) (.name _) (.name _)) => some e
+        | _ => none)
   let (outs, unstated, insides, badWrites) := writtenCols cert types
   let isOut : String → Bool := fun n => outs.any (fun o => o.1 == n)
   -- What bounds a name: the interval this program computed for it where there is one, and the
@@ -208,7 +236,7 @@ def checkValues (cert : Json) (r : Report) : Report × Worked := Id.run do
         | none => match (wroteNow.find? (fun p => p.1 == n)).map (fun p => p.2) with
           | some I => some I
           | none => if isOut n then none else declared n
-      match interval ranges within e with
+      match interval ranges within (expandShares shareDefs e) with
       | some I => got := got ++ [(name, I)]; moved := true
       | none => pure ()
     for (col, es) in outs do

@@ -450,6 +450,15 @@ pub struct Checked {
     /// `define`, and read like an input: its declared range is its range, nothing ties it to its
     /// terms in the elimination, and its column's points are not held to what the terms reach.
     pub opens: HashMap<String, (Option<Rat>, Option<Rat>)>,
+    /// What each `derive` and each `define` computes, but an open value (§15.268): the difference
+    /// of two shares is read through the names the shares are given.
+    pub defs: HashMap<String, Expr>,
+    /// The output `result` decides, with the range of what it comes to, when its line writes no
+    /// range (§15.268): what the `result` reaches under the inputs' ranges and the constraints,
+    /// put out to the grid of its rounding. The certificate's `ranges` and the port the other
+    /// languages read an output's range through carry it; `ranges` above does not, so nothing
+    /// the code generators read from it moves.
+    pub result_range: Option<(String, (Rat, Rat))>,
 }
 
 /// One expression E132 or E139 was said about (see [`Checked::arith_witness`]).
@@ -1297,6 +1306,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         arith_witness: Vec::new(),
         narrowed: HashSet::new(),
         opens: HashMap::new(),
+        defs: HashMap::new(),
+        result_range: None,
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
     // order of declarations in the file should not change what is accepted. Whether both
@@ -1801,7 +1812,15 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
         }
         for (r, ty) in ranged {
-            if let Some(d) = empty_range(r, &ty, at(r.span.line)) {
+            if let Some(d) = empty_range(r, &ty, at(r.span.line), false) {
+                c.diags.push(d);
+            }
+        }
+        // An output's range (§15.268) is read in the type it holds when it has a value.
+        for o in &f.outputs {
+            if let Some(r) = &o.range
+                && let Some(d) = empty_range(r, c.resolve(&o.ty).present(), at(r.span.line), true)
+            {
                 c.diags.push(d);
             }
         }
@@ -2146,6 +2165,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 c.derived_range(d, &ty, path);
                 c.overflow(&d.expr, &ty, &d.span, path, &d.name.text);
                 c.record_value(&d.name.text, &d.expr, &ty);
+                c.defs.insert(d.name.text.clone(), d.expr.clone());
                 let mut deps = Vec::new();
                 collect_names(&d.expr, &mut deps);
                 c.derived_deps.insert(d.name.text.clone(), deps);
@@ -2165,6 +2185,8 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
                 // the rest of the rule reads, and what they reach together has to stay inside it.
                 if let Some(o) = f.open_value(&d.name.text) {
                     c.open_value(o, &d.expr, &ty, path);
+                } else {
+                    c.defs.insert(d.name.text.clone(), d.expr.clone());
                 }
                 c.syms.insert(
                     d.name.text.clone(),
@@ -2576,6 +2598,11 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
             }
         }
     }
+
+    // The ranges of the outputs (§15.268): a range written on an output's line is held to what
+    // the output comes to, and becomes its range; the output `result` decides has the range of
+    // what it comes to when its line writes none.
+    c.output_ranges(f, path);
 
     // `machine` and `scenario` (§15.148): do the names fit what they are said to be.
     c.machine_decl(f, path);
@@ -6689,6 +6716,175 @@ impl Checked {
         }
     }
 
+    /// The parts of a share (§15.102) — its amount, its running total and its whole, each a
+    /// name, which E117 holds them to — written as the call or as the name of a `derive` or a
+    /// `define` that computes one.
+    fn share_parts<'e>(&'e self, e: &'e Expr) -> Option<(&'e str, &'e str, &'e str)> {
+        let call = match e {
+            Expr::Name(n, _) => self.defs.get(n)?,
+            e => e,
+        };
+        let Expr::Call(f, args, _) = call else { return None };
+        let [Expr::Name(t, _), Expr::Name(c, _), Expr::Name(s, _)] = args.as_slice() else { return None };
+        (f == crate::kw::ALLOCATE).then_some((t.as_str(), c.as_str(), s.as_str()))
+    }
+
+    /// Whether the share `low` never passes the share `high` (§15.268): one amount and one whole,
+    /// the amount never below zero and the whole above it, and the running total of `low` never
+    /// past the one of `high` — the same name, or a `constraint` that says so. `floor(T × C ÷ S)`
+    /// rises with C, so the order of the running totals is the order of the shares.
+    fn shares_in_order(&self, low: &Expr, high: &Expr) -> bool {
+        let (Some((t1, c1, s1)), Some((t2, c2, s2))) = (self.share_parts(low), self.share_parts(high)) else { return false };
+        let lo_of = |n: &str| self.ranges.get(n).and_then(|r| r.0);
+        t1 == t2
+            && s1 == s2
+            && (c1 == c2 || self.at_most.contains(&(c1.to_string(), c2.to_string())))
+            && lo_of(t1).is_some_and(|v| v.num >= 0)
+            && lo_of(s1).is_some_and(|v| v.num > 0)
+    }
+
+    /// The range an output carries to the other languages (§15.268): the one `ranges` holds — a
+    /// range written on its line, the rows of the tables that decide it, a `define` of its name —
+    /// or, for the output `result` decides with no range written, what the `result` comes to.
+    pub fn output_range(&self, name: &str) -> Option<(Option<Rat>, Option<Rat>)> {
+        if let Some(r) = self.ranges.get(name) {
+            return Some(*r);
+        }
+        match &self.result_range {
+            Some((n, (lo, hi))) if n == name => Some((Some(*lo), Some(*hi))),
+            _ => None,
+        }
+    }
+
+    /// E140 and the ranges of the outputs (§15.268). What an output comes to is what decides it —
+    /// the values of the rows of its tables, a `define` of its name, or what its `result` reaches
+    /// under the inputs' ranges and the constraints — put out to the grid of its rounding, as a
+    /// rounded value's interval is, whichever way the mode rounds. A range written on the output's
+    /// line has to hold that, and is then the output's range, its ends where it writes them and
+    /// that interval's where it does not, as a written range of a `max` is (§15.219). Where nothing
+    /// says what the output comes to, the range cannot be checked, and is not taken on trust. The
+    /// output `result` decides keeps the interval as its range when its line writes none.
+    fn output_ranges(&mut self, f: &RuleFile, path: &str) {
+        for o in &f.outputs {
+            let name = o.name.text.clone();
+            let ty = self.resolve(&o.ty);
+            let inner = ty.present().clone();
+            let by_result = f.result.as_ref().filter(|r| r.name == name);
+            let decided = match by_result {
+                Some(r) => self.interval(&r.expr, &inner),
+                None => match self.ranges.get(&name) {
+                    Some((Some(a), Some(b))) => Some((*a, *b)),
+                    _ => None,
+                },
+            };
+            let reach = decided.map(|(lo, hi)| match self.roundings.get(&name) {
+                Some((_, g)) if g.num > 0 => {
+                    let floor = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, *g);
+                    let ceil = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, *g);
+                    (floor(lo), ceil(hi))
+                }
+                _ => (lo, hi),
+            });
+            let numeric = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number);
+            let Some(rg) = &o.range else {
+                if by_result.is_some() && numeric && !matches!(ty, Ty::Opt(_)) {
+                    self.result_range = reach.map(|r| (name.clone(), r));
+                }
+                continue;
+            };
+            let at = tr!("{path}:{} 出力 {name}", "{path}:{} output {name}", rg.span.line);
+            let ((dl, dh), bad) = bounds_of(rg, &inner);
+            for n in &bad {
+                self.diags.push(
+                    Diag::error("E103", tr!("範囲の `{}` は {inner} の値ではありません", "The bound `{}` is not a value of {inner}", n.raw))
+                        .at(at.clone())
+                        .mark(o.name.span.clone(), tr!("この宣言の範囲", "the range on this declaration"))
+                        .maybe_note(unit_note(n)),
+                );
+            }
+            // A bound that cannot be read is E103's, and a range with no value in it E061's.
+            if !bad.is_empty() || empty_range(rg, &inner, String::new(), true).is_some() {
+                continue;
+            }
+            let Some((lo, hi)) = reach.filter(|_| numeric) else {
+                // Another error can be why what the output comes to is not known (an `allocate`
+                // E117 turns away has no interval): that one is to be fixed first, and this one
+                // would only repeat it.
+                if numeric && self.diags.iter().any(|d| matches!(d.severity, crate::diag::Severity::Error)) {
+                    continue;
+                }
+                let (why, fix) = if numeric {
+                    let what = if by_result.is_some() { tr!("`result` の式", "its `result`") } else { tr!("それを決める表の行", "the rows that decide it") };
+                    (
+                        tr!(
+                            "rulec は、{what}から {name} のとる値の範囲を求められませんでした。範囲の無い入力か、範囲の分からない値を読んでいます。",
+                            "rulec cannot work out what {name} takes from {what}: it reads an input with no range, or a value whose range is not known."
+                        ),
+                        tr!("読む入力に範囲を書くか、この範囲を外してください。", "Give the inputs it reads a range, or take this range off."),
+                    )
+                } else {
+                    (
+                        tr!(
+                            "範囲を確かめられるのは、数、お金、量、率の出力だけです。{name} は {ty} です。",
+                            "Only an output of numbers, money, quantities or rates has its range checked, and {name} is {ty}."
+                        ),
+                        tr!("この範囲を外してください。", "Take this range off."),
+                    )
+                };
+                self.diags.push(
+                    Diag::error("E140", tr!("出力 {name} の範囲を確かめられません", "The range of the output {name} cannot be checked"))
+                        .at(at)
+                        .mark(rg.span.clone(), tr!("{name} のとる値が分かりません", "what {name} takes is not known"))
+                        .note(why)
+                        .note(tr!(
+                            "出力の範囲は、ほかの言語が規則の答えを読む範囲です。確かめられない範囲は、そのまま渡せません。{fix}",
+                            "An output's range is the range other languages read the rule's answer in, and one that cannot be checked is not passed on as it stands. {fix}"
+                        )),
+                );
+                continue;
+            };
+            let holds = rg.bounds.iter().all(|(op, l)| {
+                let v = match l {
+                    Lit::Num(n) => lit_value_in(n, &inner),
+                    _ => None,
+                };
+                let Some(v) = v else { return true };
+                match op {
+                    CmpOp::Ge => lo.cmp_to(v) != std::cmp::Ordering::Less,
+                    CmpOp::Gt => lo.cmp_to(v) == std::cmp::Ordering::Greater,
+                    CmpOp::Le => hi.cmp_to(v) != std::cmp::Ordering::Greater,
+                    CmpOp::Lt => hi.cmp_to(v) == std::cmp::Ordering::Less,
+                }
+            });
+            if holds {
+                self.ranges.insert(name, (dl.or(Some(lo)), dh.or(Some(hi))));
+                continue;
+            }
+            let how = if by_result.is_some() {
+                tr!(
+                    "{name} は `result` が決めます。とる値は、その式が入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたものです。",
+                    "{name} is decided by the `result`, and takes what its expression reaches under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding."
+                )
+            } else {
+                tr!(
+                    "{name} がとる値は、それを決めるもの（表の行のセルの値と式、同じ名前の `define`、並びをたどる行）の値を、丸めの刻みへ外向きに広げたものです。",
+                    "{name} takes the values of what decides it — the cells of a table's rows, a `define` of its name, a line that walks a sequence — put out to the grid of its rounding."
+                )
+            };
+            self.diags.push(
+                Diag::error("E140", tr!("出力 {name} の範囲が、とりうる値を含んでいません", "The range of the output {name} does not hold the values it can take"))
+                    .at(at)
+                    .fix(crate::diag::FixKind::WidenRange, format!("{} >={} <={}", crate::kw::RANGE, fmt_val_fixed(lo, &inner), fmt_val_fixed(hi, &inner)))
+                    .mark(rg.span.clone(), tr!("とりうる値は >={} <={} です", "it can take >={} <={}", fmt_val(lo, &inner), fmt_val(hi, &inner)))
+                    .note(how)
+                    .note(tr!(
+                        "出力の範囲は、ほかの言語が規則の答えを読む範囲です。狭いと、そこで行う範囲の検査が、規則が実際に返す値を見落とします。",
+                        "An output's range is the range other languages read the rule's answer in. One too narrow would let their checks of ranges pass over values the rule really returns."
+                    )),
+            );
+        }
+    }
+
     /// E112: the declared range must contain the reachable interval obtained by interval
     /// arithmetic over the input ranges. Otherwise the completeness check answers "complete"
     /// without ever seeing the values that actually occur.
@@ -6776,6 +6972,10 @@ impl Checked {
                 let (bl, bh) = self.interval(r, ty)?;
                 match op {
                     BinOp::Add => Some((al.add(bl), ah.add(bh))),
+                    // Two shares of one amount over one whole, the one taken away at a running
+                    // total the other never falls below: the first never passes the second, so
+                    // what is left is never below zero (§15.268). The ranges alone say it can be.
+                    BinOp::Sub if self.shares_in_order(r, l) => Some((crate::grid::max_rat(al.sub(bh), Rat::zero()), ah.sub(bl))),
                     BinOp::Sub => Some((al.sub(bh), ah.sub(bl))),
                     BinOp::Mul | BinOp::Div => {
                         // A divisor that can be zero has no interval, and `Rat::div` asserts
@@ -7091,7 +7291,7 @@ fn missing_step(name: &crate::ast::Name, tr: &TypeRef, ty: &Ty, line: usize, pat
 
 /// E061 when no value satisfies the range: the lower end above the upper, or the two equal
 /// with one of them strict. A bound that cannot be read is E103's, and is not looked at here.
-fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String) -> Option<Diag> {
+fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String, output: bool) -> Option<Diag> {
     let (mut lo, mut hi) = (None, None);
     for (op, l) in &r.bounds {
         let v = match l {
@@ -7116,10 +7316,14 @@ fn empty_range(r: &crate::ast::Range, ty: &Ty, at: String) -> Option<Diag> {
         Diag::error("E061", tr!("範囲が空です", "The range is empty"))
             .at(at)
             .mark(r.span.clone(), tr!("この範囲に入る値は一つもありません", "no value lies in this range"))
-            .note(tr!(
-                "下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも受け付けません。",
-                "The lower end is past the upper one. With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
-            ))
+            .note(if output {
+                tr!("下限が上限を超えています。出力のどの値も、この範囲に入りません。", "The lower end is past the upper one: no value of the output lies in it.")
+            } else {
+                tr!(
+                    "下限が上限を超えています。取りうる値が無いと、完全性の証明は空の集合について「漏れなし」と判定し、生成コードの入口はどの呼び出しも受け付けません。",
+                    "The lower end is past the upper one. With no value to take, the completeness proof answers \"complete\" over nothing, and the generated code's entry refuses every call."
+                )
+            })
     })
 }
 

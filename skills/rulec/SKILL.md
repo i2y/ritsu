@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E075, E101-E139, W105, W110, W111, W114-W132, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E075, E101-E140, W105, W110, W111, W114-W132, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -89,6 +89,7 @@ A few shapes are worth knowing before the first draft:
   called `fee` is what the output `fee` returns. `result` is sugar for the **first** output
   only: naming a later one is E015, and a second `result` line is E016.
 - **An output may be `T?`**: a row answers `none` for no value, the others a value of `T`.
+- **An output may write a `range` after its `round`**; one that leaves out an answer is E140.
 - **Combinations that cannot happen are said once.** `constraint <input> <= <input>` states a
   relation the caller guarantees. Completeness then demands no row for what it excludes, every
   witness becomes a case somebody could really send, and the generated code refuses a
@@ -421,8 +422,7 @@ in the way makes the next reader believe something untrue.
 
 **Do not add a row with a made-up amount.** `fix.text` for E101 gives you the row's *shape*,
 with output values copied from the first row so that it parses. The amount has to come from
-the source. If you do not have it, that is a question for a person (§6), not a value to
-invent.
+the source. If you do not have it, that is a question for a person (§6), not a value to invent.
 
 **Do not paper over E107 by changing the expected value.** Half the time the table is wrong.
 Decide from the source which side is.

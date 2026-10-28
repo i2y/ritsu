@@ -933,7 +933,7 @@ constraint before <= upto
 constraint upto <= base
 
 outputs
-  share : money[JPY]  round down(1JPY)
+  share : money[JPY]  round down(1JPY)  range >=0JPY <=1_000_000JPY
 
 derive to_before : money[JPY] = allocate(total_off, before, base)  range >=0JPY <=1_000_000JPY
 derive to_upto   : money[JPY] = allocate(total_off, upto, base)    range >=0JPY <=1_000_000JPY
@@ -964,6 +964,7 @@ examples
 - **`allocate(<amount>, <running total>, <whole>)` divides by a value**, which a rule may otherwise do only as the outermost division inside a rounding. The answer is `<amount> × <running total> ÷ <whole>` rounded down to a whole unit.
 - **Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).
 - **A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.
+- **The `range` on the output's line is checked.** `range >=0JPY <=1_000_000JPY` promises that no line's share is below zero or above the total discount, and `rulec check` holds it to what `share` can come to, stopping at E140 where it cannot. The two `allocate` calls hand out the same amount over the same whole, at running totals the constraints put in order, so their difference is read as never below zero and never above the amount.
 
 ## Inputs taken from the caller's order (JSON Schema)
 

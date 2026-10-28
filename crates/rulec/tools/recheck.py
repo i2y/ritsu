@@ -141,13 +141,26 @@ def side_text(x):
     return " + ".join(side(x))
 
 
+class Guarantees(set):
+    """The `a <= b` pairs, and the shares the rule's values compute (rulec's §15.268): each
+    `derive` or `define` whose expression is `allocate(T, C, S)`, by its three names. The
+    difference of two shares is read through those names."""
+    shares = {}
+
+
 def guarantees(cert):
     """The `a <= b` pairs the `constraint` lines promise, closed under chains: two lines
     saying a running total never passes the next, and that one never passes the whole,
     together say the first never passes the whole. rulec reads them that way, so a
     re-checker that did not would refuse an honest certificate. A line with a sum on a side
-    says nothing of one name against another, and is left out."""
-    le = set()
+    says nothing of one name against another, and is left out. The shares the values compute
+    come with them (`Guarantees`)."""
+    le = Guarantees()
+    le.shares = {}
+    for v in cert.get("values", []) or []:
+        parts = share_parts(v.get("expr") or {}, le)
+        if v.get("of") in ("derive", "define") and parts is not None:
+            le.shares[v["name"]] = parts
     for k in cert.get("constraints", []) or []:
         if isinstance(k.get("left"), list) or isinstance(k.get("right"), list):
             continue
@@ -161,6 +174,32 @@ def guarantees(cert):
         if more <= le:
             return le
         le |= more
+
+
+def share_parts(e, le):
+    """The three names of a share (§15.102) — its amount, its running total and its whole — written
+    as the call or as the name of a value that computes one (rulec's §15.268). None for anything
+    else."""
+    if "name" in e:
+        return getattr(le, "shares", {}).get(e["name"])
+    args = e.get("args") or []
+    if e.get("call") == "allocate" and len(args) == 3 and all("name" in a for a in args):
+        return tuple(a["name"] for a in args)
+    return None
+
+
+def shares_in_order(low, high, ranges, le):
+    """Whether the share `low` never passes the share `high` (rulec's §15.268): one amount and one
+    whole, the amount never below zero and the whole above it, and the running total of `low`
+    never past the one of `high` — the same name, or a guaranteed pair. `floor(T x C / S)` rises
+    with C."""
+    a, b = share_parts(low, le), share_parts(high, le)
+    if a is None or b is None or a[0] != b[0] or a[2] != b[2]:
+        return False
+    if a[1] != b[1] and (a[1], b[1]) not in le:
+        return False
+    t, s = ranges.get(a[0], (None, None))[0], ranges.get(a[2], (None, None))[0]
+    return t is not None and num(t) >= 0 and s is not None and num(s) > 0
 
 
 def interval(e, ranges, le=frozenset()):
@@ -194,6 +233,10 @@ def interval(e, ranges, le=frozenset()):
         if e["op"] == "+":
             return (al + bl, ah + bh)
         if e["op"] == "-":
+            # Two shares of one amount over one whole, in the order of their running totals:
+            # what is left is never below zero (rulec's §15.268).
+            if al - bh < 0 and shares_in_order(e["r"], e["l"], ranges, le):
+                return (Fraction(0), ah - bl)
             return (al - bh, ah - bl)
         if e["op"] in ("*", "/"):
             # Both ends on one side of zero: an interval written upside down has no quotient.

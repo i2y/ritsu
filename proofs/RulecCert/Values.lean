@@ -735,6 +735,19 @@ abbrev Span2 := Rat × Rat
 
 def inSpan (I : Span2) (v : Rat) : Prop := I.1 ≤ v ∧ v ≤ I.2
 
+/-- **Two shares in the order of their running totals** (rulec's §15.268): `floor(T × C ÷ S)` of
+    one amount and one whole, the running total of the first never past the second's — the same
+    name, or a guarantee that says so. The amount is not negative and the whole is positive, which
+    their ranges say. The share rises with its running total, so the first never passes the
+    second (`sharesInOrder_le`). -/
+def sharesInOrder (ranges : String → Option Span2) (within : Expr → Expr → Bool) : Expr → Expr → Bool
+  | .alloc (.name t) (.name p) (.name s), .alloc (.name t') (.name u) (.name s') =>
+      t == t' && s == s' && (p == u || within (.name p) (.name u)) &&
+        (match ranges t, ranges s with
+         | some x, some z => decide (0 ≤ x.1) && decide (0 < z.1)
+         | _, _ => false)
+  | _, _ => false
+
 /-- **The interval an expression is forced into**, recomputed from the declared ranges and
     the guarantees. A `none` says this program does not know — an unbounded name, a zero
     divisor, a grid that is not positive, a share with nothing to say the running total
@@ -750,8 +763,10 @@ def interval (ranges : String → Option Span2) (within : Expr → Expr → Bool
   | .add a b => match interval ranges within a, interval ranges within b with
                 | some x, some y => some (x.1 + y.1, x.2 + y.2)
                 | _, _ => none
+  -- What is left of a share by a share before it is never below zero (rulec's §15.268).
   | .sub a b => match interval ranges within a, interval ranges within b with
-                | some x, some y => some (x.1 - y.2, x.2 - y.1)
+                | some x, some y =>
+                  some (if sharesInOrder ranges within b a then rmax (x.1 - y.2) 0 else x.1 - y.2, x.2 - y.1)
                 | _, _ => none
   | .mul a b => match interval ranges within a, interval ranges within b with
                 | some x, some y =>
@@ -817,6 +832,52 @@ def interval (ranges : String → Option Span2) (within : Expr → Expr → Bool
   | .typed _ => none
   | .unread => none
 
+/-- **A share rises with its running total** (rulec's §15.268): of one amount that is not negative
+    and one whole that is positive, the share at a smaller running total is no larger. Where
+    `sharesInOrder` says two shares are in order, their values are. -/
+theorem sharesInOrder_le {ranges : String → Option Span2} {env : String → Option UVal}
+    {within : Expr → Expr → Bool} {rnd : Rat → Rat → Rat}
+    (henv : ∀ n I w t, ranges n = some I → env n = some (w, t) → inSpan I w)
+    (hwithin : ∀ a b va vb ta tb, within a b = true →
+      eval rnd env a = some (va, ta) → eval rnd env b = some (vb, tb) → va ≤ vb)
+    {lo hi : Expr} {vl vh : Rat} {tl th : Ty}
+    (h : sharesInOrder ranges within lo hi = true)
+    (hl : eval rnd env lo = some (vl, tl)) (hh : eval rnd env hi = some (vh, th)) : vl ≤ vh := by
+  match lo, hi, h, hl, hh with
+  | .alloc (.name t) (.name p) (.name s), .alloc (.name t') (.name u) (.name s'), h, hl, hh =>
+    simp only [sharesInOrder, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at h
+    obtain ⟨⟨⟨ht, hs⟩, hpu⟩, hr⟩ := h
+    subst ht; subst hs
+    split at hr
+    case _ x z hx hz =>
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hr
+      obtain ⟨hx0, hz0⟩ := hr
+      simp only [eval] at hl hh
+      split at hl
+      case _ a b c ha hb hc =>
+        split at hh
+        case _ a' b' c' ha' hb' hc' =>
+          rw [ha] at ha'; cases ha'
+          rw [hc] at hc'; cases hc'
+          simp only [ushare, Option.map_eq_some_iff] at hl hh
+          obtain ⟨_, _, hl⟩ := hl
+          obtain ⟨_, _, hh⟩ := hh
+          simp only [Prod.mk.injEq] at hl hh
+          rw [← hl.1, ← hh.1]
+          -- the amount is not negative and the whole is positive where the call stands
+          have hT : (0:Rat) ≤ a.1 := Rat.le_trans hx0 (henv t x a.1 a.2 hx (by rw [ha])).1
+          have hS : (0:Rat) < c.1 := Std.lt_of_lt_of_le hz0 (henv s z c.1 c.2 hz (by rw [hc])).1
+          -- and the running total of the first is no more than the second's
+          have hbu : b.1 ≤ b'.1 := by
+            rcases hpu with hpu | hpu
+            · subst hpu; rw [hb] at hb'; cases hb'; exact Rat.le_refl
+            · exact hwithin (.name p) (.name u) b.1 b'.1 b.2 b'.2 hpu (by simp [eval, hb]) (by simp [eval, hb'])
+          exact Rat.intCast_le_intCast.2
+            (Rat.floor_monotone (div_le_div_right (Rat.mul_le_mul_of_nonneg_left hbu hT) hS))
+        case _ => exact absurd hh (by simp)
+      case _ => exact absurd hl (by simp)
+    case _ => exact absurd hr (by simp)
+
 /-- **E108 rests on this.** Where the checker states an interval, the value really is
     inside it, whatever the inputs and whichever way each rounding breaks its ties. -/
 theorem eval_mem_interval {ranges : String → Option Span2} {env : String → Option UVal}
@@ -868,8 +929,19 @@ theorem eval_mem_interval {ranges : String → Option Span2} {env : String → O
         obtain ⟨u, _, hu⟩ := hv
         simp only [Option.some.injEq, Prod.mk.injEq] at hI hu
         subst hI
-        rw [← hu.1, Rat.sub_eq_add_neg, Rat.sub_eq_add_neg, Rat.sub_eq_add_neg]
-        exact ⟨add_le_add hp1 (Rat.neg_le_neg hq2), add_le_add hp2 (Rat.neg_le_neg hq1)⟩
+        rw [← hu.1]
+        have hlo : x.1 - y.2 ≤ p.1 - q.1 := by
+          rw [Rat.sub_eq_add_neg, Rat.sub_eq_add_neg]; exact add_le_add hp1 (Rat.neg_le_neg hq2)
+        have hhi : p.1 - q.1 ≤ x.2 - y.1 := by
+          rw [Rat.sub_eq_add_neg, Rat.sub_eq_add_neg]; exact add_le_add hp2 (Rat.neg_le_neg hq1)
+        refine ⟨?_, hhi⟩
+        show (if sharesInOrder ranges within b a = true then rmax (x.1 - y.2) 0 else x.1 - y.2) ≤ p.1 - q.1
+        split
+        · rename_i hs
+          -- a share less a share before it (§15.268)
+          have hqp : q.1 ≤ p.1 := sharesInOrder_le henv hwithin hs (by rw [hq]) (by rw [hp])
+          exact rmax_le hlo ((Rat.le_iff_sub_nonneg _ _).mp hqp)
+        · exact hlo
       case _ => exact absurd hv (by simp)
     case _ => exact absurd hI (by simp)
   | mul a b iha ihb =>

@@ -219,11 +219,14 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
     let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src, rule_path))).collect();
     let contracts: Vec<String> = crate::projection::contract_certificates(f, c, rule_path).iter().map(contract_json).collect();
     let mut ranges = Obj::new();
-    let mut names: Vec<&String> = c.ranges.keys().collect();
+    // The output `result` decides is stated with what it comes to, as an output a table decides
+    // is (§15.268).
+    let mut names: Vec<&String> = c.ranges.keys().chain(c.result_range.iter().map(|(n, _)| n)).collect();
     names.sort();
+    names.dedup();
     for n in names {
-        let (lo, hi) = &c.ranges[n];
-        ranges = ranges.raw(n, format!("[{},{}]", end(lo), end(hi)));
+        let Some((lo, hi)) = c.output_range(n) else { continue };
+        ranges = ranges.raw(n, format!("[{},{}]", end(&lo), end(&hi)));
     }
     // The days a date input takes from a koyomi file (§15.174): where they come from — the file
     // and its date as the rule names them, and the file's SHA-256 — and the days, on the scale

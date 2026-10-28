@@ -497,7 +497,14 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
         let r = od.rounding.as_ref().map(|r| format!("{}({})", r.mode, r.grid.raw)).unwrap_or_default();
         // The origin of a provisional rounding reaches a reader's eyes only here
         // (§7.2, §16 item three).
-        let note = trailing_comment(&lines, od.name.span.line).unwrap_or_default();
+        // A range written on the output's line, checked to hold what it comes to (§15.268), is
+        // what the other languages read it in, and is said here as an input's is.
+        let mut note: Vec<String> = Vec::new();
+        if od.range.is_some() {
+            note.push(tr!("範囲 {}", "range {}", range_text(c, n)));
+        }
+        note.extend(trailing_comment(&lines, od.name.span.line));
+        let note = note.join(" / ");
         o.push_str(&format!(
             "| {} | {} | {} | {} |\n",
             md_esc(n),

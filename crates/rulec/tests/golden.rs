@@ -167,6 +167,8 @@ golden!(e022_最大の空, "E022-max", "tests/mutants/m_e022maxja.rule", "E022")
 // Arithmetic (§15.213 to §15.216).
 golden!(e132_割る数が0になりうる, "E132", "tests/mutants/m_e132ja.rule", "E132");
 golden!(e139_平方根の引数が負になりうる, "E139", "tests/mutants/m_e139ja.rule", "E139");
+// The range written on an output's line (§15.268).
+golden!(e140_出力の範囲, "E140", "tests/mutants/m_e140ja.rule", "E140");
 golden!(e115_丸めの外の割り算, "E115-div", "tests/mutants/m_e115divja.rule", "E115");
 golden!(e115_余りの割る数, "E115-mod", "tests/mutants/m_e115modja.rule", "E115");
 

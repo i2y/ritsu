@@ -111,6 +111,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E130](#e130) | error | The days of the koyomi date cannot be read |
 | [E132](#e132) | error | The divisor can be zero |
 | [E139](#e139) | error | The argument of `isqrt` can be below zero |
+| [E140](#e140) | error | An output's range does not hold the values it takes |
 | [E134](#e134) | error | A call answers a carried number outside its range |
 | [E135](#e135) | error | An `always` line is broken |
 | [E136](#e136) | error | The prerequisites go round in a cycle |
@@ -1892,9 +1893,9 @@ Related codes: [E008](#e008), [E035](#e035), [E045](#e045)
 
 `error` — **Extra token after the declaration**
 
-**When.** A declaration line — an input, an output, a `derive` or a `count` — holds a word that belongs to none of `range`, `round` and `contract_only`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, or what is left of a bound whose unit did not lex as one. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
+**When.** A declaration line holds a word the line does not read. Each kind of line reads its own words: an input's `range`, `contract_only` and `random`; a field of an element's `range` and `contract_only`; an output's `range` and `round`; a `derive` and a `count`, `sum`, `max` or `min` line `range` alone. A `shape` line holds nothing after its declaration, and an input's `from` nothing after its path but `where` and `empty`. The readers look along the line for the word they want and step over everything else, so such a word used to be dropped in silence: a tax flag written after the range, as in `range >=0JPY <=10_000JPY incl_tax`, what is left of a bound whose unit did not lex as one, a `round` on a `derive`, a `range` after a `from`. A range is the universe the completeness proof quantifies over and the entry guard of the generated code, so a bound lost this way is answered "complete" with one side missing.
 
-**Fix.** Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`.
+**Fix.** Remove the word, or write it in the form the declaration takes. A tax flag or a step goes inside the type's brackets (`money[JPY, incl_tax]`, `rate[step 0.1%]`); a range is `range >=<value> <=<value>`; a rounding is `round <mode>(<grid>)`. An input's range and marks go before its `from`; a derived value is rounded inside its expression, as `down(<expression>, 1JPY)`.
 
 **Smallest reproduction**:
 
@@ -4039,6 +4040,44 @@ result root = whole_root
 ```
 
 Related codes: [E108](#e108), [E103](#e103)
+
+## E140
+
+`error` — **An output's range does not hold the values it takes**
+
+**When.** The `range` written on an output's line leaves out values the output can take. What it can take is what decides it — the cells of a table's rows, a `define` of its name, the expression of the `result` — under the inputs' ranges and the `constraint` lines, put out to the grid of its rounding. Where rulec cannot work that out (the output reads an input with no range, or is no number), the range cannot be checked, and is this too. An output's range is the range other languages (kaname, dandori, …) read the rule's answer in, so one too narrow would let their checks of ranges pass over values the rule really returns.
+
+**Fix.** Widen the range to the values the message states (`fix.text` holds it, as `range >=0USDc <=1000USDc`). Where it cannot be checked, give the inputs the output reads a range, or take the output's range off: an output with none written has the range rulec works out, and the other languages read that.
+
+**Smallest reproduction**:
+
+```rule
+rule fee v1
+
+inputs
+  amount : money[USDc]  range >=0USDc <=10_000USDc
+
+outputs
+  fee : money[USDc]  round down(1USDc)  range >=0USDc <=500USDc
+
+result fee = amount × 10%
+```
+
+**A range that cannot be checked**:
+
+```rule
+rule fee v1
+
+inputs
+  amount : money[USDc]
+
+outputs
+  fee : money[USDc]  round down(1USDc)  range >=0USDc <=500USDc
+
+result fee = amount × 10%
+```
+
+Related codes: [E112](#e112), [E061](#e061), [E103](#e103)
 
 ## E134
 

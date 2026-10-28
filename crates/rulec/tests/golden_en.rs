@@ -213,6 +213,8 @@ golden!(e022_max_without_empty, "E022-max", "tests/mutants/m_e022max.rule", "E02
 // Arithmetic (§15.213 to §15.216).
 golden!(e132_divisor_can_be_zero, "E132", "tests/mutants/m_e132.rule", "E132");
 golden!(e139_isqrt_below_zero, "E139", "tests/mutants/m_e139.rule", "E139");
+// The range written on an output's line (§15.268).
+golden!(e140_output_range, "E140", "tests/mutants/m_e140.rule", "E140");
 golden!(e115_division_outside_rounding, "E115-div", "tests/mutants/m_e115div.rule", "E115");
 golden!(e115_mod_divisor, "E115-mod", "tests/mutants/m_e115mod.rule", "E115");
 

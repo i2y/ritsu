@@ -320,6 +320,7 @@ EXAMPLES = [
             "**`allocate(配る額, 累計, 全体)` は、値で割ります。** 答えは `配る額 × 累計 ÷ 全体` を下に丸めた値で、単位の整数になります。ほかに値で割れるのは、丸めの中のいちばん外側の割り算だけです。",
             "**差にすると、配った合計が総額にぴったり一致します。** 隣り合う行で同じ値が足されて引かれるので、端数は最後の行に寄ります。`proofs/` に定理があります（`runTotal_exact`）。",
             "**`constraint 累計 <= 全体` が要ります**（E117）。これが無いと配る分が配る額を超えることがあり、区間も二つの範囲の積になってしまいます。制約は二行に分けて書いても、つながって効きます。",
+            "**出力の行に書いた `range` を、検査が確かめます。** `range >=0円 <=100万円` は、どの明細の配分額も 0 円を下回らず、値引き総額を超えないという約束です。`rulec check` は、配分額がとりうる値がこの範囲に収まることを確かめ、収まらなければ E140 で止まります。二つの `allocate` は同じ額を同じ全体で配り、累計の順は制約が決めているので、差は 0 以上で配る額以下だと読めます。",
         ],
         "Apportioning by ratio",
         "One discount spread over the lines of an order in the ratio of their list prices. Where \"one line at a time\" above fills each line in turn, this one **splits by ratio**: a line's share is the share up to it minus the share up to the line before.",
@@ -327,6 +328,7 @@ EXAMPLES = [
             "**`allocate(<amount>, <running total>, <whole>)` divides by a value**, which a rule may otherwise do only as the outermost division inside a rounding. The answer is `<amount> × <running total> ÷ <whole>` rounded down to a whole unit.",
             "**Taking the difference makes the parts add up to the amount exactly.** Neighbouring lines add and subtract the same value, so the odd yen lands on the last line. `proofs/` states and proves it (`runTotal_exact`).",
             "**A `constraint` that the running total stays within the whole is required** (E117). Without it a share can exceed the amount being handed out, and the interval becomes the product of two ranges. Chains count, so it can be written as two lines.",
+            "**The `range` on the output's line is checked.** `range >=0JPY <=1_000_000JPY` promises that no line's share is below zero or above the total discount, and `rulec check` holds it to what `share` can come to, stopping at E140 where it cannot. The two `allocate` calls hand out the same amount over the same whole, at running totals the constraints put in order, so their difference is read as never below zero and never above the amount.",
         ],
     ),
     (
