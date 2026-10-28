@@ -710,10 +710,11 @@ pub fn optional_modules_dts(head: &str, names: &BTreeSet<String>) -> String {
 /// the head of a generated file; npm passes the key over, and ritsu reads it as the head), then its
 /// name, version, description (the module's `description` line, which npm's page shows to the
 /// people who use the library, else `what`) and license, the module's `source` as its
-/// `repository` (npm's provenance checks it against the repository the package is built in),
-/// CommonJS built into `dist/` (the `exports` of every module of the package), the runtime it
-/// imports as ranges from the versions tested (`runtime`), the libraries it imports as
-/// `peerDependencies` (`peers`), and the TypeScript that builds it.
+/// `repository` (npm's provenance checks it against the repository the package is built in), in
+/// the form npm gives it ([`npm_repository_url`]), CommonJS built into `dist/` (the `exports` of
+/// every module of the package), the runtime it imports as ranges from the versions tested
+/// (`runtime`), the libraries it imports as `peerDependencies` (`peers`), and the TypeScript that
+/// builds it.
 pub fn package_json(l: &Library, what: &str, generated: &str, runtime: &BTreeMap<String, &str>, peers: &BTreeMap<String, String>) -> String {
     let j = ritsu_emit::lit::json;
     let about = l.description.as_ref().map_or_else(|| what.to_string(), |d| one_line(d));
@@ -722,7 +723,7 @@ pub fn package_json(l: &Library, what: &str, generated: &str, runtime: &BTreeMap
         o.push_str(&format!(",\n  \"license\": {}", j(license)));
     }
     if let Some(source) = &l.source {
-        o.push_str(&format!(",\n  \"repository\": {{\n    \"type\": \"git\",\n    \"url\": {}\n  }}", j(source)));
+        o.push_str(&format!(",\n  \"repository\": {{\n    \"type\": \"git\",\n    \"url\": {}\n  }}", j(&npm_repository_url(source))));
     }
     o.push_str(",\n  \"type\": \"commonjs\",\n  \"exports\": {\n    \".\": {\n      \"types\": \"./dist/index.d.ts\",\n      \"default\": \"./dist/index.js\"\n    },\n    \"./*\": {\n      \"types\": \"./dist/*.d.ts\",\n      \"default\": \"./dist/*.js\"\n    }\n  },\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"prepare\": \"tsc -p tsconfig.json\"\n  }");
     let block = |o: &mut String, key: &str, items: Vec<(String, String)>| {
@@ -768,6 +769,219 @@ pub fn pyproject(l: &Library, head: &str, what: &str, deps: &[(String, String)])
 /// A description on one line, as the registries show it (PEP 621's `description` is one line).
 fn one_line(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The `url` of a library's `repository`: the module's `source` as npm writes it when it publishes
+/// (DESIGN 17.16). npm reads the URL of a repository on GitHub, GitLab, Bitbucket or sourcehut, or
+/// of a gist, with hosted-git-info and writes it in its own form (`git+https://<host>/<path>.git`
+/// for the first three, a gist by its id alone, sourcehut's with no `.git`; the fragment after);
+/// `npm publish` warns that it corrected the package.json, and the `npm pkg fix` it asks for would
+/// change a file ritsu generated. So ritsu writes that form itself, and corrects it as npm would
+/// again until npm changes nothing: an escape in the owner, the project or the committish that
+/// decodes to a character a URL reads otherwise (`/`, `?`, `#`, `%`, a tab, a space at the end)
+/// makes npm's form read another way the next time, and npm would warn of that one. Any other URL
+/// is written as it is, as npm leaves it, and so is a URL of those hosts that hosted-git-info does
+/// not take for a repository (the page of a file, a GitLab URL ending in `/`). A `source` has no
+/// user, no password and no query (E302), and npm's forms have none of the first two.
+pub fn npm_repository_url(source: &str) -> String {
+    let mut url = source.to_string();
+    // npm's correction of its own form decodes the escapes the last one left, and parts the path
+    // where a decoded `/`, `?` or `#` falls: one or two corrections for a URL whose escapes are not
+    // themselves escaped. The bound only stops a URL escaped over and over.
+    for _ in 0..16 {
+        match npm_hosted(&url) {
+            Some(next) if next != url => url = next,
+            _ => break,
+        }
+    }
+    url
+}
+
+/// What npm 11's hosted-git-info (9) makes of an https URL of a repository on GitHub, GitLab,
+/// Bitbucket or sourcehut, or of a gist, or of the URL it writes for one, as npm's
+/// `fixRepositoryField` writes it; None where it takes the URL for none of them, or for no
+/// repository. hosted-git-info reads the URL with Node's `new URL`, and once more with a `:` made
+/// a `/` where that fails ([`colon_to_slash`]); it takes the owner and the project from the path,
+/// and decodes them and the committish with `decodeURIComponent`.
+fn npm_hosted(source: &str) -> Option<String> {
+    let url = WebUrl::parse(source).or_else(|| WebUrl::parse(&colon_to_slash(source)))?;
+    let segment = |i: usize| url.path.get(i).map(String::as_str);
+    // the owner and the project with no `.git` at its end, where neither is empty
+    let repository = |user: &str, project: &str| {
+        let project = project.strip_suffix(".git").unwrap_or(project);
+        (!user.is_empty() && !project.is_empty()).then(|| (user.to_string(), project.to_string()))
+    };
+    let fragment = url.fragment.as_str();
+    let (domain, (user, project), committish) = match url.host.strip_prefix("www.").unwrap_or(&url.host) {
+        // the owner and the project, then nothing or `tree/<committish>`: any other page is no repository
+        "github.com" => {
+            let committish = match segment(2).unwrap_or("") {
+                "" => fragment,
+                // `decodeURIComponent(undefined)` is "undefined"
+                "tree" => segment(3).unwrap_or("undefined"),
+                _ => return None,
+            };
+            ("github.com", repository(segment(0)?, segment(1)?)?, committish)
+        }
+        "bitbucket.org" => {
+            if segment(2) == Some("get") {
+                return None;
+            }
+            ("bitbucket.org", repository(segment(0)?, segment(1)?)?, fragment)
+        }
+        // the group and its subgroups, then the project: a path with `/-/` in it is a page of the project
+        "gitlab.com" => {
+            let path = url.path.join("/");
+            if path.contains("/-/") || path.contains("/archive.tar.gz") {
+                return None;
+            }
+            let (user, project) = path.rsplit_once('/')?;
+            ("gitlab.com", repository(user, project)?, fragment)
+        }
+        // the id of a gist, after its owner or alone; npm's form leaves the owner out (an owner that
+        // does not decode is still no repository), and takes an id that is empty once its `.git` is
+        // dropped. `raw` after them is a file of the gist
+        "gist.github.com" => {
+            if segment(2) == Some("raw") {
+                return None;
+            }
+            let (user, id) = match (segment(0).unwrap_or(""), segment(1).unwrap_or("")) {
+                ("", "") => return None,
+                (id, "") => ("", id),
+                pair => pair,
+            };
+            ("gist.github.com", (user.to_string(), id.strip_suffix(".git").unwrap_or(id).to_string()), fragment)
+        }
+        "git.sr.ht" => {
+            if segment(2) == Some("archive") {
+                return None;
+            }
+            ("git.sr.ht", repository(segment(0)?, segment(1)?)?, fragment)
+        }
+        _ => return None,
+    };
+    let (user, project, committish) = (decode_uri_component(&user)?, decode_uri_component(&project)?, decode_uri_component(committish)?);
+    let hash = if committish.is_empty() { String::new() } else { format!("#{committish}") };
+    Some(match domain {
+        "gist.github.com" => format!("git+https://{domain}/{project}.git{hash}"),
+        "git.sr.ht" => format!("https://{domain}/{user}/{project}{hash}"),
+        _ => format!("git+https://{domain}/{user}/{project}.git{hash}"),
+    })
+}
+
+/// An https or `git+https` URL as WHATWG's URL parser (Node's `new URL`) reads it, as far as
+/// hosted-git-info looks at it: the host; the segments of the path, after `.` and `..`; the
+/// fragment. The segments and the fragment are kept as written, as hosted-git-info decodes what
+/// the parser encodes in them.
+struct WebUrl {
+    host: String,
+    path: Vec<String>,
+    fragment: String,
+}
+
+impl WebUrl {
+    /// None where the parser fails, or the URL is neither https nor `git+https`. `https` is a
+    /// scheme the parser knows (a special one), which reads a `\` as a `/` and the host as a
+    /// domain, in small letters; `git+https` is not, and its host is kept as written. A host of
+    /// letters other than ASCII is kept as it is, not mapped as the parser maps it (IDNA): it is
+    /// none of the hosts npm knows. A user or a password is not read: with one, the `@` before the
+    /// host stays in the host, and the URL is None. No `source` has one (E302), nor does npm's form.
+    fn parse(text: &str) -> Option<WebUrl> {
+        let text: String = text.trim_matches(|c: char| c <= ' ').chars().filter(|c| !matches!(c, '\t' | '\n' | '\r')).collect();
+        let scheme = |s: &str| text.get(..s.len()).is_some_and(|t| t.eq_ignore_ascii_case(s));
+        let (special, rest) = if scheme("https:") {
+            (true, text[6..].trim_start_matches(['/', '\\']))
+        } else if scheme("git+https://") {
+            (false, &text[12..])
+        } else {
+            return None;
+        };
+        let slash = |c: char| c == '/' || (special && c == '\\');
+        let (hostport, rest) = rest.split_at(rest.find(|c| slash(c) || c == '?' || c == '#').unwrap_or(rest.len()));
+        // an IPv6 address is no host of a repository npm knows
+        if hostport.starts_with('[') {
+            return None;
+        }
+        let (host, port) = hostport.split_once(':').unwrap_or((hostport, "0"));
+        let digits = port.trim_start_matches('0');
+        if !port.bytes().all(|b| b.is_ascii_digit()) || digits.len() > 5 || digits.parse::<u32>().is_ok_and(|n| n > 65_535) {
+            return None;
+        }
+        let host = if special { String::from_utf8_lossy(&percent_decoded(host)).to_ascii_lowercase() } else { host.to_string() };
+        if host.is_empty() || host.chars().any(|c| c.is_ascii_control() || " #%/:<>?@[\\]^|".contains(c)) {
+            return None;
+        }
+        let (path_text, rest) = rest.split_at(rest.find(['?', '#']).unwrap_or(rest.len()));
+        let segments: Vec<&str> = path_text.get(1..).map_or_else(|| vec![""], |p| p.split(slash).collect());
+        let mut path: Vec<String> = Vec::new();
+        for (i, s) in segments.iter().enumerate() {
+            let end = i + 1 == segments.len();
+            if ["..", ".%2e", "%2e.", "%2e%2e"].iter().any(|d| s.eq_ignore_ascii_case(d)) {
+                path.pop();
+                if end {
+                    path.push(String::new());
+                }
+            } else if *s == "." || s.eq_ignore_ascii_case("%2e") {
+                if end {
+                    path.push(String::new());
+                }
+            } else {
+                path.push(s.to_string());
+            }
+        }
+        let fragment = rest.split_once('#').map_or("", |(_, f)| f).to_string();
+        Some(WebUrl { host, path, fragment })
+    }
+}
+
+/// hosted-git-info's second reading of a URL that `new URL` does not take (its `correctUrl`): the
+/// last `:` before the first `#`, when it comes after the last `@` before that, made a `/`.
+fn colon_to_slash(s: &str) -> String {
+    let before = &s[..s.find('#').unwrap_or(s.len())];
+    match before.rfind(':') {
+        Some(c) if before.rfind('@').is_none_or(|at| c > at) => format!("{}/{}", &s[..c], &s[c + 1..]),
+        _ => s.to_string(),
+    }
+}
+
+/// A host's bytes, each `%` with two hex digits after it read as the byte they name.
+fn percent_decoded(s: &str) -> Vec<u8> {
+    let b = s.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        match (b[i], b.get(i + 1..i + 3)) {
+            (b'%', Some(h)) if h.iter().all(u8::is_ascii_hexdigit) => {
+                out.push(u8::from_str_radix(std::str::from_utf8(h).unwrap_or("0"), 16).unwrap_or(0));
+                i += 3;
+            }
+            (c, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// What JavaScript's `decodeURIComponent` makes of a text: each run of `%XX` read as UTF-8; None
+/// where it throws (a `%` without two hex digits after it, or bytes that are not UTF-8).
+fn decode_uri_component(s: &str) -> Option<String> {
+    let (mut out, mut run, mut rest) = (String::new(), Vec::new(), s);
+    while let Some(c) = rest.chars().next() {
+        if c == '%' {
+            let hex = rest.get(1..3).filter(|h| h.bytes().all(|b| b.is_ascii_hexdigit()))?;
+            run.push(u8::from_str_radix(hex, 16).ok()?);
+            rest = &rest[3..];
+        } else {
+            out.push_str(std::str::from_utf8(&run).ok()?);
+            run.clear();
+            out.push(c);
+            rest = &rest[c.len_utf8()..];
+        }
+    }
+    out.push_str(std::str::from_utf8(&run).ok()?);
+    Some(out)
 }
 
 /// The `go` line of a library's go.mod: the higher of the oldest Go release supported (`floor`) and
@@ -897,5 +1111,193 @@ mod tests {
     fn the_typescript_is_dandoris_tools() {
         let manifest = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../dandori/tools/temporal/package.json")).unwrap();
         assert!(manifest.contains(&format!("\"typescript\": \"{TYPESCRIPT}\"")), "dandori's tools/temporal/package.json builds with another TypeScript than {TYPESCRIPT}:\n{manifest}");
+    }
+
+    /// `source` lines and the `url` of the `repository` ritsu writes for each, which is what npm
+    /// 11.19.0 writes when it publishes (the tools level's `npm_writes_the_repository_as_ritsu_does`
+    /// asks npm again). The URL of a repository on GitHub, GitLab, Bitbucket or sourcehut, or of a
+    /// gist, takes npm's form; any other URL, and a page of those hosts that is not a repository, is
+    /// kept as it is. The last three take two corrections: npm's first form of each reads otherwise
+    /// once it is decoded.
+    const REPOSITORIES: [(&str, &str); 37] = [
+        ("https://github.com/acme/pricing", "git+https://github.com/acme/pricing.git"),
+        ("https://github.com/acme/pricing.git", "git+https://github.com/acme/pricing.git"),
+        ("https://github.com/acme/pricing/", "git+https://github.com/acme/pricing.git"),
+        ("https://GitHub.com/Acme/Pricing", "git+https://github.com/Acme/Pricing.git"),
+        ("https://www.github.com/acme/pricing", "git+https://github.com/acme/pricing.git"),
+        ("https://github.com/acme/pricing/tree/main/packages/x", "git+https://github.com/acme/pricing.git#main"),
+        ("https://github.com/acme/pricing#v1.2.0", "git+https://github.com/acme/pricing.git#v1.2.0"),
+        ("https://github.com:443/acme/pricing", "git+https://github.com/acme/pricing.git"),
+        ("https://github.com/acme/pricing/blob/main/README.md", "https://github.com/acme/pricing/blob/main/README.md"),
+        ("https://github.com/acme", "https://github.com/acme"),
+        ("https://gitlab.com/acme/pricing", "git+https://gitlab.com/acme/pricing.git"),
+        ("https://gitlab.com/acme/tools/pricing", "git+https://gitlab.com/acme/tools/pricing.git"),
+        ("https://gitlab.com/acme/tools/pricing.git", "git+https://gitlab.com/acme/tools/pricing.git"),
+        ("https://GitLab.com/Acme/Tools/Pricing", "git+https://gitlab.com/Acme/Tools/Pricing.git"),
+        ("https://gitlab.com/acme/tools/pricing/", "https://gitlab.com/acme/tools/pricing/"),
+        ("https://gitlab.com/acme/pricing/-/tree/main", "https://gitlab.com/acme/pricing/-/tree/main"),
+        ("https://bitbucket.org/acme/pricing", "git+https://bitbucket.org/acme/pricing.git"),
+        ("https://bitbucket.org/acme/pricing.git/", "git+https://bitbucket.org/acme/pricing.git"),
+        ("https://bitbucket.org/acme/pricing/src/main/", "git+https://bitbucket.org/acme/pricing.git"),
+        ("https://github.com/acme/pri%63ing", "git+https://github.com/acme/pricing.git"),
+        ("https://github.com/acme/pricing%zz", "https://github.com/acme/pricing%zz"),
+        ("https://github.com/acme/../acme/pricing", "git+https://github.com/acme/pricing.git"),
+        ("https://github.com:99999/acme", "git+https://github.com/99999/acme.git"),
+        ("https://github.com/acme/pricing/tree", "git+https://github.com/acme/pricing.git#undefined"),
+        ("https://gist.github.com/0123456789abcdef", "git+https://gist.github.com/0123456789abcdef.git"),
+        ("https://gist.github.com/acme/0123456789abcdef#v1", "git+https://gist.github.com/0123456789abcdef.git#v1"),
+        ("https://gist.github.com/acme/0123456789abcdef.git", "git+https://gist.github.com/0123456789abcdef.git"),
+        ("https://gist.github.com/acme/0123456789abcdef/raw/x.json", "https://gist.github.com/acme/0123456789abcdef/raw/x.json"),
+        ("https://git.sr.ht/~acme/pricing", "https://git.sr.ht/~acme/pricing"),
+        ("https://git.sr.ht/~acme/pricing.git", "https://git.sr.ht/~acme/pricing"),
+        ("https://git.sr.ht/~acme/pricing#v1.2.0", "https://git.sr.ht/~acme/pricing#v1.2.0"),
+        ("https://git.sr.ht/~acme/pricing/archive/v1.tar.gz", "https://git.sr.ht/~acme/pricing/archive/v1.tar.gz"),
+        ("https://git.sr.ht/~acme", "https://git.sr.ht/~acme"),
+        ("https://example.com/acme/pricing.git", "https://example.com/acme/pricing.git"),
+        ("https://bitbucket.org/acme/pricing%2Fx", "git+https://bitbucket.org/acme/pricing.git"),
+        ("https://gitlab.com/acme/pri%3Fce", "git+https://gitlab.com/acme/pri.git"),
+        ("https://github.com/acme/pricing#a%2541", "git+https://github.com/acme/pricing.git#aA"),
+    ];
+
+    #[test]
+    fn the_repository_is_written_as_npm_writes_it() {
+        for (source, url) in REPOSITORIES {
+            assert_eq!(npm_repository_url(source), url, "{source}");
+        }
+    }
+
+    /// URLs of the five hosts and of others, put together from the parts a `source` line may have
+    /// (it has no user, no password and no query: E302): the host in capitals or with `www.`, a
+    /// port, the paths of a repository and of its pages (`.git`, `/`, subgroups, `.` and `..`, `%`
+    /// escapes, among them those of characters a URL reads otherwise, characters the parser
+    /// encodes) and a fragment. Hosts of letters other than ASCII are left out: ritsu does not map
+    /// them as the parser does (IDNA).
+    fn urls() -> Vec<String> {
+        // the hosts and the paths, each a text of them parted by commas, which none of them has
+        let hosts = "github.com,GitHub.com,www.github.com,gitlab.com,WWW.GitLab.com,bitbucket.org,gist.github.com,git.sr.ht,example.com,github.com.,github%2Ecom,github.example.com";
+        let paths = concat!(
+            ",/,/acme,/acme/,/acme/pricing,/acme/pricing/,/acme/pricing.git,/acme/pricing.git/,/acme/pricing//,/Acme/Pricing.GIT,/acme/tools/pricing,/acme/tools/pricing.git,",
+            "/acme/tools/pricing/,/acme/tools/sub/pricing,/acme//pricing,/acme/pricing/tree/main,/acme/pricing/tree/main/x/y,/acme/pricing/tree,/acme/pricing/tree/,/acme/pricing/blob/main/x,",
+            "/acme/pricing/-/tree/main,/acme/pricing/get/main.tar.gz,/acme/pricing/src/main/,/acme/x/archive.tar.gz,/acme/../acme/pricing,/acme/./pricing,/acme/%2e%2E/x/pricing,",
+            "/acme/pricing/..,/acme/pricing/%2e,\\acme\\pricing,/acme/pri%63ing,/acme/pricing%2Fx,/acme/pricing%zz,/ac%E2%82%ACme/x,/acme/%E2%82,/acme/€uro,/ac me/pri^`{}|cing,",
+            "/~acme/pricing,/acme%2Fx/pricing,/acme/pricing%2Ftree%2Fmain,/acme%2F-%2Fx/pricing,/acme/pri%3Fce,/acme/pri%23ce,/acme/pri%2541,/acme/pri%25,/acme/%252e%252e/x,",
+            "/acme/pri%5Cce,/acme/pri%09cing,/acme/pri%0Acing,/acme/pricing%20,/acme/pricing%25252Fx,/acme/pricing/raw,/acme/pricing/raw/x.json,",
+            "/~acme/pricing.git,/~acme/pricing/archive/v1.tar.gz,/0123456789abcdef.git,/.git,//pricing,/%zz/pricing,/acme/%zz,/acme%2F%2E%2E/pricing",
+        );
+        let tails = ["", "#main", "#", "#v1.2.0", "#feat/x y", "#%41", "#%zz", "#€", "#a?b", "#a#b", "#a%2541", "#100%25", "#main%20", "#%09x", "#a%3Fb%23c"];
+        let ports = ["", ":", ":443", ":0080", ":8080", ":99999", ":abc"];
+        let mut out = Vec::new();
+        for h in hosts.split(',') {
+            out.extend(paths.split(',').map(|p| format!("https://{h}{p}")));
+            out.extend(tails.iter().map(|t| format!("https://{h}/acme/pricing{t}")));
+            for port in ports {
+                out.extend(["/acme/pricing", "/acme", "/acme/pricing/tree/main"].iter().map(|p| format!("https://{h}{port}{p}")));
+            }
+        }
+        out.extend(["HTTPS://", "Https://", " https://", "https://\t"].iter().map(|s| format!("{s}github.com/acme/pricing ")));
+        out
+    }
+
+    /// The directory of the npm on the PATH, whose `bin/npm` is a link to its `bin/npm-cli.js`.
+    fn npm_dir() -> Option<std::path::PathBuf> {
+        let npm = std::env::split_paths(&std::env::var_os("PATH")?).map(|d| d.join("npm")).find(|p| p.is_file())?;
+        let dir = std::fs::canonicalize(npm).ok()?.parent()?.parent()?.to_path_buf();
+        dir.join("node_modules/@npmcli/package-json/lib/normalize.js").is_file().then_some(dir)
+    }
+
+    /// For each URL, one line of JSON on stdin: the `repository.url` npm's `fixRepositoryField`
+    /// leaves in the package.json (what `npm publish` corrects), the same corrected again until it
+    /// changes nothing (null where that takes more than 16), the host hosted-git-info takes the URL
+    /// for (null for none), and how many corrections change it.
+    const NPM_READS: &str = "const path = require('node:path')
+const npm = process.env.NPM_DIR
+const { normalize } = require(path.join(npm, 'node_modules/@npmcli/package-json/lib/normalize.js'))
+const hosted = require(path.join(npm, 'node_modules/hosted-git-info'))
+const fix = async (url) => {
+  const pkg = { content: { name: 'x', version: '1.0.0', repository: { type: 'git', url } } }
+  await normalize(pkg, { steps: ['fixRepositoryField'], changes: [] })
+  return pkg.content.repository.url
+}
+;(async () => {
+  for (const line of require('node:fs').readFileSync(0, 'utf8').split('\\n')) {
+    if (!line) continue
+    const url = JSON.parse(line)
+    const once = await fix(url)
+    let last = once
+    let n = once === url ? 0 : 1
+    while (last !== null) {
+      const next = await fix(last)
+      if (next === last) break
+      last = n < 16 ? next : null
+      n++
+    }
+    const h = hosted.fromUrl(url)
+    console.log(JSON.stringify([once, last, h ? h.type : null, n]))
+  }
+})()
+";
+
+    /// The URLs npm reads below are `source` lines ritsu takes: none has a query, nor a user or a
+    /// password, which [`WebUrl`] does not read.
+    #[test]
+    fn the_urls_compared_are_sources() {
+        for s in REPOSITORIES.iter().map(|(s, _)| s.to_string()).chain(urls()) {
+            assert!(ritsu_base::modules::manifest::source_problem(&s).is_none(), "{s:?} is no `source`");
+        }
+    }
+
+    /// npm's own reading of a repository's URL, with the npm on the PATH (`npm publish` corrects the
+    /// package.json with @npmcli/package-json's `fixRepositoryField`, which runs hosted-git-info),
+    /// for the URLs above and those [`urls`] puts together: where hosted-git-info takes the URL for
+    /// a repository on a host it knows (GitHub, GitLab, Bitbucket, sourcehut, a gist), ritsu writes
+    /// what npm's correction comes to once it changes nothing, which is its first correction for
+    /// all but a few URLs, and npm leaves that as it is (it would warn otherwise); npm and ritsu
+    /// write any other URL as it is.
+    #[test]
+    fn npm_writes_the_repository_as_ritsu_does() {
+        if !ritsu_testkit::ready(ritsu_testkit::Need::Node, || npm_dir().is_some(), "node or npm is not installed; npm's reading of a repository's URL is not compared") {
+            return;
+        }
+        let sources: Vec<String> = REPOSITORIES.iter().map(|(s, _)| s.to_string()).chain(urls()).collect();
+        let ours: Vec<String> = sources.iter().map(|s| npm_repository_url(s)).collect();
+        let input: String = sources.iter().chain(&ours).map(|u| format!("{}\n", serde_json::to_string(u).unwrap())).collect();
+        let mut node = std::process::Command::new("node")
+            .args(["-e", NPM_READS])
+            .env("NPM_DIR", npm_dir().unwrap())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        std::io::Write::write_all(&mut node.stdin.take().unwrap(), input.as_bytes()).unwrap();
+        let out = node.wait_with_output().unwrap();
+        assert!(out.status.success(), "node does not read the URLs:\n{}", String::from_utf8_lossy(&out.stderr));
+        let read: Vec<(String, Option<String>, Option<String>, usize)> = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(read.len(), 2 * sources.len());
+        let (mut wrong, mut twice) = (Vec::new(), Vec::new());
+        // the URLs on each host npm knows
+        let mut hosts: BTreeMap<&str, usize> = BTreeMap::new();
+        let most = read[..sources.len()].iter().map(|r| r.3).max().unwrap_or(0);
+        for (i, s) in sources.iter().enumerate() {
+            let ((npm, last, host, _), ours, again) = (&read[i], &ours[i], &read[sources.len() + i].0);
+            if let Some(host) = host {
+                *hosts.entry(host).or_default() += 1;
+                if last.as_ref() != Some(ours) || again != ours {
+                    wrong.push(format!("{s:?}: ritsu writes {ours:?}, npm {npm:?} and at last {last:?}, and npm makes ritsu's {again:?}"));
+                } else if npm != ours {
+                    twice.push(s.clone());
+                }
+            } else if ours != s || npm != s {
+                wrong.push(format!("{s:?}: ritsu writes {ours:?} and npm {npm:?}, not the URL as it is"));
+            }
+        }
+        assert!(wrong.is_empty(), "npm and ritsu write these repositories apart:\n{}", wrong.join("\n"));
+        println!(
+            "npm writes the repository of {} URLs as ritsu does, {} of them on a host npm knows ({hosts:?}), of which {} take more than one correction ({:?}, …; {most} at most)",
+            sources.len(),
+            hosts.values().sum::<usize>(),
+            twice.len(),
+            twice.first().map_or("", String::as_str),
+        );
     }
 }

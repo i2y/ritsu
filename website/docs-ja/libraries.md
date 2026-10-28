@@ -33,7 +33,7 @@ require tax path "../tax"
 
 - `library typescript|python|go "<名前>"` は、その言語のレジストリでのパッケージの名前です。npm のパッケージの名前、Python のディストリビューションの名前、Go のモジュールのパスを書きます。Python では、ディストリビューション `acme-pricing` を `acme_pricing` として import します。名前を小文字にし、`-`・`_`・`.` の連なりを一つの `_` にした名前です。版 2 からは、Go の決まりに従って Go のモジュールのパスの最後に `/v2` が付き、ritsu はそれを import するコードもそのパスで書きます。
 - `version` は、どの言語のライブラリの版にもなります。`--library` には `version` の行が要ります。Python の版（PEP 440）にできるプレリリースは、`alpha`、`beta`、`rc` に番号を付けたものだけです。`1.0.0-rc.1` は `1.0.0rc1` になります。`1.0.0-dev.1` なら、ritsu は止まります。
-- `description` と `license` は、package.json と pyproject.toml に入ります。`source` は package.json の `repository` に入り、npm の provenance がこれを確かめます（[npm に公開する](#npm-に公開する)）。`source` は pyproject.toml の `[project.urls]` の `Repository` にも入ります。
+- `description` と `license` は、package.json と pyproject.toml に入ります。`source` は package.json の `repository` に入り、npm の provenance がこれを確かめます（[npm に公開する](#npm-に公開する)）。`source` は pyproject.toml の `[project.urls]` の `Repository` にも入ります。`source` はパッケージと一緒に公開されるので、ユーザー、パスワード、クエリを持つ URL は E302 になります。
 
 ## 生成する
 
@@ -166,7 +166,7 @@ type GBPc = pricinggounits.GBPc
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/acme/pricing"
+    "url": "git+https://github.com/acme/pricing.git"
   },
   "type": "commonjs",
   "exports": {
@@ -243,7 +243,7 @@ go 1.26.0
 
 ### npm に公開する
 
-GitHub Actions から OIDC のトークン（`id-token: write`）で公開すると、npm はパッケージに provenance を付けます。provenance は、パッケージを組んだリポジトリとワークフローを示す、署名つきの記録です。npm は、package.json の `repository` がそのリポジトリと一致すること（大文字と小文字の違いも認めません）を求めます。ritsu は、`repository` を `source` の行から書きます。
+GitHub Actions から OIDC のトークン（`id-token: write`）で公開すると、npm はパッケージに provenance を付けます。provenance は、パッケージを組んだリポジトリとワークフローを示す、署名つきの記録です。npm は、package.json の `repository` がそのリポジトリと一致すること（大文字と小文字の違いも認めません）を求めます。ritsu は、`repository` を `source` の行から、npm が公開するときに直したあとの形で書きます。GitHub、GitLab、Bitbucket、sourcehut のリポジトリと gist の URL は、npm の形になります。たとえば `https://github.com/acme/pricing` は `git+https://github.com/acme/pricing.git` になります。npm はこの形をそのまま公開し、package.json を直したという警告も出しません。
 
 npmjs.com でパッケージに信頼された発行者（trusted publisher）を設定すれば（npm 11.5.1 以上、Node 22.14.0 以上）、ワークフローにトークンは要らず、npm が provenance を自分で付けます。
 

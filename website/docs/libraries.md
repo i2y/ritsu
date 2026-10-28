@@ -52,7 +52,8 @@ require tax path "../tax"
   and `1.0.0-dev.1` stops the run.
 - `description` and `license` go into package.json and pyproject.toml, and `source` into
   package.json's `repository`, which npm's provenance checks ([To npm](#to-npm)), and into the
-  `Repository` of pyproject.toml's `[project.urls]`.
+  `Repository` of pyproject.toml's `[project.urls]`. As `source` is published with the packages,
+  a URL with a user, a password or a query there is E302.
 
 ## Generate
 
@@ -209,7 +210,7 @@ run stops; make one library depend on the other, or generate without `--library`
   "license": "MIT OR Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/acme/pricing"
+    "url": "git+https://github.com/acme/pricing.git"
   },
   "type": "commonjs",
   "exports": {
@@ -313,8 +314,11 @@ build the libraries as these registries' tools do, but do not run the workflows.
 
 npm attaches provenance to a package, a signed statement of the repository and the workflow that
 built it, when the package is published from GitHub Actions with an OIDC token
-(`id-token: write`). It requires package.json's `repository` to be that repository, exactly: the
-library takes it from the `source` line.
+(`id-token: write`). It requires package.json's `repository` to be that repository, exactly. The
+library takes it from the `source` line, in the form npm gives the URL of a repository on GitHub,
+GitLab, Bitbucket or sourcehut, or of a gist, when it publishes: `https://github.com/acme/pricing`
+is written `git+https://github.com/acme/pricing.git`, which npm publishes as it is, with no warning
+that it corrected the package.json.
 
 With a trusted publisher set for the package on npmjs.com (npm 11.5.1 or later, Node 22.14.0 or
 later), the workflow needs no token, and npm adds provenance on its own:

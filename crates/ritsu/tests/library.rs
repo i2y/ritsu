@@ -285,8 +285,10 @@ fn a_major_version_from_2_is_in_the_go_modules_path() {
 
 /// The module's `source` is the npm package's `repository`, which npm's provenance checks against
 /// the repository the package is built in, and the `Repository` of the PyPI project's URLs, which
-/// PyPI marks verified when a trusted publisher publishes from it. A module with no `source` has
-/// neither (the golden files).
+/// PyPI marks verified when a trusted publisher publishes from it. The npm package's is written as
+/// npm writes the URL of a repository on GitHub when it publishes (it would warn otherwise); the
+/// PyPI project's, as the `source` line writes it. A module with no `source` has neither (the
+/// golden files).
 #[test]
 fn the_modules_source_is_the_repository_of_the_npm_package_and_the_pypi_project() {
     let t = example(&["tax", "pricing", "shop"]);
@@ -295,7 +297,7 @@ fn the_modules_source_is_the_repository_of_the_npm_package_and_the_pypi_project(
     assert_eq!(code, 0, "{err}");
     assert_has(
         &t.path().join("out/pricing/typescript/package.json"),
-        "  \"license\": \"MIT OR Apache-2.0\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/acme/pricing\"\n  },\n",
+        "  \"license\": \"MIT OR Apache-2.0\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/acme/pricing.git\"\n  },\n",
     );
     assert_has(&t.path().join("out/pricing/python/pyproject.toml"), "dependencies = [\n]\n\n[project.urls]\nRepository = \"https://github.com/acme/pricing\"\n\n[build-system]\n");
 }
