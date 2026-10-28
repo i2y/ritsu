@@ -33,6 +33,25 @@ fn restore_sigpipe() {
 #[cfg(not(unix))]
 fn restore_sigpipe() {}
 
+/// Whether this thread blocks SIGPIPE. macOS raises the signal of a write to a pipe whose reader
+/// went away on the process, not on the thread that wrote, and gives it to the first thread that
+/// does not block it: the main thread, waiting for the command's. The command's thread would go on
+/// with the write's error, which std's printing panics on, before the signal ends the process.
+/// Blocked on the main thread while the command's thread runs, and not on that thread, the signal
+/// is the writer's. Linux raises it on the thread that wrote.
+#[cfg(target_os = "macos")]
+fn block_sigpipe(block: bool) {
+    unsafe extern "C" {
+        fn pthread_sigmask(how: i32, set: *const u32, old: *mut u32) -> i32;
+    }
+    // sigset_t is a u32 on macOS, with signal n at the bit n - 1; SIG_BLOCK is 1, SIG_UNBLOCK 2.
+    let set: u32 = 1 << (13 - 1);
+    unsafe { pthread_sigmask(if block { 1 } else { 2 }, &set, std::ptr::null_mut()) };
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "wasi")))]
+fn block_sigpipe(_: bool) {}
+
 /// `--lang ja`, `--lang=ja`, before the command.
 fn lang_asked(args: &[String]) -> Option<String> {
     let mut i = 0;
@@ -104,8 +123,14 @@ fn main() -> ExitCode {
     // no threads; its stack is the module's own.
     #[cfg(not(target_os = "wasi"))]
     {
-        let worker = std::thread::Builder::new().stack_size(256 << 20).spawn(|| std::panic::catch_unwind(run));
-        match worker.map(|w| w.join()) {
+        block_sigpipe(true);
+        let worker = std::thread::Builder::new().stack_size(256 << 20).spawn(|| {
+            block_sigpipe(false);
+            std::panic::catch_unwind(run)
+        });
+        let ended = worker.map(|w| w.join());
+        block_sigpipe(false);
+        match ended {
             Ok(Ok(Ok(code))) => code,
             _ => ExitCode::from(2),
         }
