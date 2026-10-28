@@ -231,9 +231,9 @@ pub fn commands() -> Vec<Cmd> {
                 budget(),
             ],
             vec![
-                (0, tr!("新しい lock での検査にエラーが無い（振る舞いが変わっていても）", "no error in the check with the new lock (whatever the behavior)")),
+                (0, tr!("新しい lock での検査にエラーが無く、変わったモジュールをどれも比べられた（振る舞いが変わっていても）", "no error in the check with the new lock, and every module that changed compared (whatever the behavior)")),
                 (1, tr!("エラーがある。--fail-on-change では、振る舞いに示せた違いがあるときも", "an error; with --fail-on-change, a difference shown in behavior too")),
-                (2, tr!("走らせられない", "cannot run")),
+                (2, tr!("走らせられない。または、1 にならず、比べられなかったモジュールがある", "cannot run; or nothing makes it 1, and a module that changed could not be compared")),
             ],
             vec!["ritsu mod report --base origin/main --format markdown"],
         ),
@@ -302,6 +302,24 @@ pub fn table() -> Table {
     }
 }
 
+/// A command's page of `--help`: the table's, and under the purpose of `diff` and `report`, that
+/// what they read is fetched when it is not here (DESIGN 17.9 and 17.10; `Cmd` has no place for a
+/// note).
+fn page(table: &Table, cmd: &Cmd, lang: Lang) -> String {
+    let p = table.help_cmd(cmd, lang);
+    if !matches!(cmd.name, "diff" | "report") {
+        return p;
+    }
+    let note = tr!(
+        "読むモジュールの版のうち、置き場にも同梱のコピーにも無いものは、`ritsu mod fetch` と同じに取ってくる。そろっていれば通信しない。",
+        "The versions it reads that are in neither the store nor the module's copy are fetched, as `ritsu mod fetch` fetches them; when they are all here, it does not use the network."
+    );
+    match p.split_once("\n\n") {
+        Some((head, rest)) => format!("{head}\n\n{}\n\n{rest}", note.get(lang)),
+        None => p,
+    }
+}
+
 /// `--lang ja`, `--lang=ja`, anywhere on the command line.
 fn lang_in(args: &[String]) -> Option<String> {
     args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) })
@@ -351,7 +369,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             }
             Some(c) => match table.command(c) {
                 Some(cmd) => {
-                    print!("{}", table.help_cmd(cmd, lang));
+                    print!("{}", page(&table, cmd, lang));
                     0
                 }
                 None => no_command(c),
@@ -365,7 +383,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
                 Err(e) => return refuse(e, lang),
             };
             if a.has("--help") {
-                print!("{}", table.help_cmd(cmd, lang));
+                print!("{}", page(&table, cmd, lang));
                 return 0;
             }
             let (least, most) = arity(cmd.name);

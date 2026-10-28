@@ -22,6 +22,10 @@
 //!   on stderr, and nothing asked of the registry once the store has it. A fetch that stops (an OCI
 //!   manifest that is not its digest, a registry that does not answer) stops the report (exit 2),
 //!   in each language.
+//! - A module that changed whose difference cannot be made (what one of its versions reads cannot
+//!   be fetched), beside one whose difference is made: the report says why in its place, counts it
+//!   at the top, and exits 2, with `--fail-on-change` too when no difference is shown in behavior,
+//!   in each language.
 
 use ritsu_base::modules::store::{self, Store};
 use ritsu_testkit::registry::{self as reg, Registry};
@@ -847,5 +851,82 @@ fn what_a_report_reads_is_fetched() {
         assert_eq!((code, out.as_str()), (2, ""), "{err}");
         assert!(err.starts_with(&head) && err.ends_with(tail) && err.lines().count() == 1, "{err}");
         assert!(!holds_any(&store));
+    }
+}
+
+/// Two modules that changed, one of which cannot be compared. Shop requires tax itself, above the
+/// version pricing requires: `three` pins pricing 1.0.0 and tax 1.1.0, `four` (the working tree)
+/// pricing 1.1.0 and tax 1.2.0, so neither lock pins tax 1.0.0, which each version of pricing pins
+/// in its own lock. With other bytes for tax 1.0.0's OCI manifest, what pricing 1.0.0 reads cannot
+/// be fetched: pricing's difference is the error in its place, tax's is made, the top counts the
+/// module not compared, and the report exits 2, with `--fail-on-change` too (no difference is shown
+/// in behavior: tax 1.2.0 answers as 1.1.0 does), nothing of tax 1.0.0 put in the store.
+#[test]
+fn a_module_that_cannot_be_compared_makes_exit_2() {
+    if !has_git() {
+        return;
+    }
+    let w = OnRegistry::new("mod-report-not-compared");
+    let host = w.r.host.clone();
+    let pushed = w.path("pushed");
+    for v in ["1.1.0", "1.2.0"] {
+        let dir = format!("tax-{v}");
+        copy_dir(&w.path("tax"), &w.path(&dir));
+        replace(&w.path(&dir), "ritsu.mod", "version 1.0.0", &format!("version {v}"));
+        let (code, out, err) = w.run(&dir, &pushed, &["mod", "push"]);
+        assert_eq!(code, 0, "{out}{err}");
+    }
+    let repo = w.path("shop");
+    let pricing = |v: &str| format!("\"{host}/acme/pricing\" {v}");
+    let tax = |v: &str| format!("require tax oci \"{host}/acme/tax\" {v}");
+    for (from, to, tag) in [
+        (pricing("1.1.0"), format!("{}\n{}", pricing("1.0.0"), tax("1.1.0")), "three"),
+        (format!("{}\n{}", pricing("1.0.0"), tax("1.1.0")), format!("{}\n{}", pricing("1.1.0"), tax("1.2.0")), "four"),
+    ] {
+        replace(&repo, "ritsu.mod", &from, &to);
+        let (code, out, err) = w.run("shop", &pushed, &["mod", "lock"]);
+        assert_eq!(code, 0, "{out}{err}");
+        git(&repo, &["commit", "-q", "-a", "-m", tag]);
+        git(&repo, &["tag", tag]);
+    }
+    let digest = |name: &str, v: &str| w.digest(&format!("acme/{name}"), v);
+    let (d10, d11, t10, t11, t12) = (digest("pricing", "1.0.0"), digest("pricing", "1.1.0"), digest("tax", "1.0.0"), digest("tax", "1.1.0"), digest("tax", "1.2.0"));
+    let manifest = w.r.get("acme/tax", &t10).unwrap();
+    let other = String::from_utf8(manifest).unwrap().replace("Acme", "Acne");
+    w.r.serve_instead(&t10, other.as_bytes());
+    let x = format!("sha256:{}", reg::sha256_hex(other.as_bytes()));
+
+    let store = w.path("store");
+    let (code, out, err) = w.run("shop", &store, &["mod", "report", "--base", "three", "--format", "json"]);
+    let fetched = |name: &str, v: &str, d: &str| format!("fetched {host}/acme/{name} {v} ({d})\n");
+    let four = [fetched("pricing", "1.0.0", &d10), fetched("tax", "1.1.0", &t11), fetched("pricing", "1.1.0", &d11), fetched("tax", "1.2.0", &t12)].concat();
+    assert_eq!((code, err), (2, four), "{out}");
+    let v = json(&out);
+    let why = format!("cannot fetch the modules `@pricing@1.0.0` reads: the bytes fetched as the OCI manifest of `{host}/acme/tax` 1.0.0 have the digest {x}, not the {t10} asked for");
+    let modules = v["modules"].as_array().unwrap();
+    assert_eq!(modules.len(), 2, "{out}");
+    assert_eq!((&modules[0]["module"], &modules[0]["diff"], &modules[0]["error"]), (&serde_json::json!(format!("{host}/acme/pricing")), &serde_json::Value::Null, &serde_json::json!(why)));
+    assert_eq!((&modules[1]["module"], &modules[1]["change"], &modules[1]["error"]), (&serde_json::json!(format!("{host}/acme/tax")), &serde_json::json!("upgraded"), &serde_json::Value::Null));
+    assert_eq!(modules[1]["diff"]["files"]["changed"], serde_json::json!(["ritsu.mod"]));
+    assert_eq!((&v["check"]["head"]["errors"], &v["ok"]), (&serde_json::json!(0), &serde_json::json!(false)));
+    assert!(!store.join("sha256").join(t10.trim_start_matches("sha256:")).exists());
+    // no difference shown in behavior: --fail-on-change leaves it 2
+    assert_eq!(w.run("shop", &store, &["mod", "report", "--base", "three", "--fail-on-change"]).0, 2);
+    // the text, in each language: the count at the top, the reason in pricing's place, the last line
+    for (lang, count, reason, last) in [
+        ("en", "modules not compared: 1\n", format!("\nnot compared: {why}\n"), "\nthe check with the lock of the working tree has no error; 1 module could not be compared, so this does not say behavior stays the same, which makes exit 2.\n".to_string()),
+        (
+            "ja",
+            "比べられなかったモジュール：1 個\n",
+            format!("\n比べられません：`@pricing@1.0.0` が読むモジュールを取り出せません。`{host}/acme/tax` 1.0.0 の OCI のマニフェストとして受け取ったバイトのダイジェストは {x} で、求めた {t10} ではありません\n"),
+            "\n作業ツリーの lock での検査にエラーはありません。比べられなかったモジュールが 1 個あり、振る舞いが変わらないとは言えないので、exit 2 です。\n".to_string(),
+        ),
+    ] {
+        let (code, out, err) = w.run("shop", &store, &["mod", "report", "--base", "three", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (2, ""), "{out}");
+        assert!(out.contains(count) && out.contains(&reason) && out.ends_with(&last), "{out}");
+        let (code, md, _) = w.run("shop", &store, &["mod", "report", "--base", "three", "--lang", lang, "--format", "markdown"]);
+        assert_eq!(code, 2, "{md}");
+        assert!(md.contains(&format!("|\n\n**{}**{}", if lang == "ja" { "比べられなかったモジュール" } else { "Modules not compared" }, if lang == "ja" { "：1 個\n" } else { ": 1\n" })), "{md}");
     }
 }

@@ -74,8 +74,9 @@ fn json(out: &str) -> serde_json::Value {
 const COMMANDS: [&str; 15] = ["init", "add", "get", "remove", "lock", "fetch", "list", "versions", "vendor", "clean", "where", "push", "diff", "report", "site"];
 
 /// `ritsu mod --help` in both languages, held to golden files: the fifteen commands of DESIGN 17.19,
-/// in its order. Each command has its page, which `ritsu mod help <command>` prints too; `ritsu
-/// --help` lists `ritsu mod`, and `ritsu help mod` is `ritsu mod --help`.
+/// in its order. Each command has its page, which `ritsu mod help <command>` prints too; the pages of
+/// `diff` and `report` say under the purpose that what they read is fetched when it is not here.
+/// `ritsu --help` lists `ritsu mod`, and `ritsu help mod` is `ritsu mod --help`.
 #[test]
 fn ritsu_mod_has_a_table_of_its_own() {
     let t = TempDir::new("mod-help");
@@ -91,6 +92,12 @@ fn ritsu_mod_has_a_table_of_its_own() {
             let (code, page, err) = ritsu_in(t.path(), t.path(), &["mod", c, "--help", "--lang", lang]);
             assert!(code == 0 && err.is_empty() && page.starts_with(&format!("ritsu mod {c} — ")), "{c}: {page}{err}");
             assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "help", c, "--lang", lang]).1, page, "{c}");
+            let fetches = if lang == "ja" {
+                "\n\n読むモジュールの版のうち、置き場にも同梱のコピーにも無いものは、`ritsu mod fetch` と同じに取ってくる。そろっていれば通信しない。\n\n使い方:\n"
+            } else {
+                "\n\nThe versions it reads that are in neither the store nor the module's copy are fetched, as `ritsu mod fetch` fetches them; when they are all here, it does not use the network.\n\nUsage:\n"
+            };
+            assert_eq!(page.contains(fetches), matches!(c, "diff" | "report"), "{c}: {page}");
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -126,10 +133,8 @@ fn the_commands_to_come_say_this_version_has_them_not() {
     let t = example();
     let shop = t.path().join("shop");
     let before = t.read("shop/ritsu.mod");
-    for args in [&["site", "modules.list", "--out", "site"][..]] {
-        let (code, out, err) = ritsu_in(&shop, t.path(), &[&["mod"][..], args].concat());
-        assert_eq!((code, out.as_str(), err), (2, "", format!("error: `ritsu mod {}` is not in this version yet\n", args[0])), "{args:?}");
-    }
+    let (code, out, err) = ritsu_in(&shop, t.path(), &["mod", "site", "modules.list", "--out", "site"]);
+    assert_eq!((code, out.as_str(), err.as_str()), (2, "", "error: `ritsu mod site` is not in this version yet\n"));
     assert_eq!(t.read("shop/ritsu.mod"), before);
 }
 

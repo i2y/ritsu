@@ -23,6 +23,10 @@
 //! a changed module's two versions are compared, what the lock of each pins (each is read as a
 //! module of its own). Nothing is asked of a registry when the store has them; what was fetched is
 //! said on the standard error, and what stops a fetch of the two locks stops the report (exit 2).
+//!
+//! The exit code: 1 for an error with the head's lock (and with `--fail-on-change`, a difference
+//! shown in behavior); else 2 when a module that changed could not be compared, which the report
+//! says in that module's place and counts at the top; else 0.
 
 use super::{Ctx, fetch};
 use super::diff::{self, Behavior, ModDiff, Module, Spot};
@@ -190,10 +194,30 @@ impl Report {
         self.modules.iter().any(|m| matches!(&m.diff, Some(Ok(d)) if d.behavior_differs()) || m.yours.iter().any(differs))
     }
 
+    /// How many modules that changed have no `ritsu mod diff`, for it could not be made (what a
+    /// version reads cannot be fetched, a version cannot be read).
+    pub fn not_compared(&self) -> usize {
+        self.modules.iter().filter(|m| matches!(m.diff, Some(Err(_)))).count()
+    }
+
     /// 1 for an error with the head's lock, and with `--fail-on-change` for a difference shown in
-    /// behavior too; else 0.
+    /// behavior too; else 2 when a module that changed could not be compared, for the report lacks
+    /// it (as `ritsu mod diff` says 2 when it shows no difference and could not compare a file);
+    /// else 0.
     pub fn exit(&self, fail_on_change: bool) -> u8 {
-        u8::from(self.errors() > 0 || (fail_on_change && self.behavior_changed()))
+        if self.errors() > 0 || (fail_on_change && self.behavior_changed()) {
+            1
+        } else if self.not_compared() > 0 {
+            2
+        } else {
+            0
+        }
+    }
+
+    /// The modules not compared, as the summary at the top says them; None when every one was.
+    fn not_compared_line(&self, lang: Lang) -> Option<String> {
+        let k = self.not_compared();
+        (k > 0).then(|| if lang == Lang::Ja { format!("{} 個", diff::n(k)) } else { diff::n(k) })
     }
 }
 
@@ -744,6 +768,20 @@ impl Report {
             tr!("{head} での検査に、エラーが {k} 件あります。", "the check with {head} has {e}.")
         } else if self.modules.is_empty() {
             tr!("二つの lock は同じモジュールを指していて、{head} での検査にエラーはありません。", "the two locks pin the same modules, and the check with {head} has no error.")
+        } else if code == 2 {
+            let not = self.not_compared();
+            let (k, m) = (diff::n(not), plural(not, "module", "modules"));
+            if self.behavior_changed() {
+                tr!(
+                    "{head} での検査にエラーはありません。振る舞いに示せた違いがあり、比べられなかったモジュールが {k} 個あるので、exit 2 です。",
+                    "the check with {head} has no error; a difference is shown in behavior, and {m} could not be compared, which makes exit 2."
+                )
+            } else {
+                tr!(
+                    "{head} での検査にエラーはありません。比べられなかったモジュールが {k} 個あり、振る舞いが変わらないとは言えないので、exit 2 です。",
+                    "the check with {head} has no error; {m} could not be compared, so this does not say behavior stays the same, which makes exit 2."
+                )
+            }
         } else {
             match (self.behavior_changed(), code) {
                 (true, 1) => tr!(
@@ -769,6 +807,9 @@ impl Report {
         let (base, head) = self.locks(lang, "");
         for (lock, counts) in [(base, self.base_check), (head, self.head_check)] {
             o.push_str(&format!("{}{c}{}\n", tr!("{lock} での検査", "the check with {lock}").get(lang), Report::counts_line(counts, lang)));
+        }
+        if let Some(k) = self.not_compared_line(lang) {
+            o.push_str(&format!("{}{c}{k}\n", tr!("比べられなかったモジュール", "modules not compared").get(lang)));
         }
         for (title, ds) in [(tr!("新しい診断", "new diagnostics"), &self.new), (tr!("消えた診断", "diagnostics gone"), &self.gone)] {
             if ds.is_empty() {
@@ -819,6 +860,9 @@ impl Report {
         let (base, head) = self.locks(lang, "`");
         for (lock, counts) in [(base, self.base_check), (head, self.head_check)] {
             o.push_str(&format!("| {} | {} | {} |\n", sentence(tr!("{lock} で", "with {lock}").get(lang), lang), diff::n(counts.errors), diff::n(counts.warnings)));
+        }
+        if let Some(k) = self.not_compared_line(lang) {
+            o.push_str(&format!("\n**{}**{c}{k}\n", tr!("比べられなかったモジュール", "Modules not compared").get(lang)));
         }
         if !self.new.is_empty() {
             o.push_str(&format!("\n### {} ({})\n", tr!("新しい診断", "New diagnostics").get(lang), diff::n(self.new.len())));
@@ -1060,5 +1104,48 @@ mod tests {
     fn every_word_with_an_at_is_in_backticks() {
         let md = "a @pricing/rules/fee.rule b `@tax/x` | <code>@a</code> | x@y\n```\n@fenced\n```\n";
         assert_eq!(diff::guarded(md), "a `@pricing/rules/fee.rule` b `@tax/x` | <code>@a</code> | `x@y`\n```\n@fenced\n```\n");
+    }
+
+    /// A report of `modules`, with `errors` in the check with the head's lock.
+    fn report_of(modules: Vec<Changed>, errors: usize) -> Report {
+        let head_check = Counts { errors, warnings: 0 };
+        Report { base: "one".into(), head: None, base_check: Counts::default(), head_check, new: Vec::new(), breaks: 0, gone: Vec::new(), modules }
+    }
+
+    /// pricing, upgraded, with what `ritsu mod diff` says of it.
+    fn pricing(diff: Option<Result<ModDiff, Text>>) -> Changed {
+        Changed { module: "example.com/acme/pricing".into(), prefix: "@pricing".into(), change: Change::Upgraded, old: None, new: None, diagnostics: Vec::new(), diff, yours: Vec::new() }
+    }
+
+    /// The order of the exit codes: an error with the head's lock is 1 whatever was not compared, and
+    /// so is a difference shown in behavior with `--fail-on-change`; a module not compared is 2 when
+    /// nothing makes it 1; a module with no diff to make (added or removed) is no module not
+    /// compared. The summary at the top and the last line say the 2, with a difference shown or not.
+    #[test]
+    fn a_module_not_compared_makes_exit_2_when_nothing_makes_it_1() {
+        let not = || Some(Err(tr!("比べられません", "cannot be compared")));
+        assert_eq!(report_of(Vec::new(), 0).exit(false), 0);
+        assert_eq!(report_of(vec![pricing(None)], 0).exit(true), 0);
+        let r = report_of(vec![pricing(None), pricing(not())], 0);
+        assert_eq!((r.not_compared(), r.exit(false), r.exit(true)), (1, 2, 2));
+        assert_eq!(report_of(vec![pricing(not())], 1).exit(false), 1);
+        let text = r.text(Lang::En, 2);
+        assert!(text.contains("\nmodules not compared: 1\nnew diagnostics: none\n"), "{text}");
+        assert!(text.ends_with("\nthe check with the lock of the working tree has no error; 1 module could not be compared, so this does not say behavior stays the same, which makes exit 2.\n"), "{text}");
+        let md = r.markdown(Lang::Ja, 2);
+        assert!(md.contains("|\n\n**比べられなかったモジュール**：1 個\n"), "{md}");
+        assert!(md.ends_with("\n作業ツリーの lock での検査にエラーはありません。比べられなかったモジュールが 1 個あり、振る舞いが変わらないとは言えないので、exit 2 です。\n"), "{md}");
+        // every module compared: no such line
+        assert!(!report_of(vec![pricing(None)], 0).text(Lang::En, 0).contains("not compared"));
+        // a difference shown in a file of yours: 1 with `--fail-on-change`, else still 2
+        let said = diff::Said { text: String::new(), markdown: String::new(), json: Json::Null, differs: true, total: true, more: false };
+        let mut shown = pricing(not());
+        shown.yours = vec![Behavior { file: "orders/total.rule".into(), tool: ritsu_base::naming::Tool::Rulec, result: Ok(said) }];
+        let r = report_of(vec![shown], 0);
+        assert_eq!((r.behavior_changed(), r.exit(false), r.exit(true)), (true, 2, 1));
+        let text = r.text(Lang::En, 2);
+        assert!(text.ends_with("\nthe check with the lock of the working tree has no error; a difference is shown in behavior, and 1 module could not be compared, which makes exit 2.\n"), "{text}");
+        let text = r.text(Lang::Ja, 2);
+        assert!(text.ends_with("\n作業ツリーの lock での検査にエラーはありません。振る舞いに示せた違いがあり、比べられなかったモジュールが 1 個あるので、exit 2 です。\n"), "{text}");
     }
 }

@@ -418,7 +418,7 @@ fn the_desk_and_the_book_held_to_golden_files() {
         let payment = format!("{}/{}", n.calendars, n.payment);
         assert!(!v["files"]["changed"].as_array().unwrap().iter().any(|f| f == payment.as_str()));
         let tools: Vec<(&str, &str)> = v["behavior"].as_array().unwrap().iter().map(|b| (b["file"].as_str().unwrap(), b["tool"].as_str().unwrap())).collect();
-        let mut want = vec![
+        let mut want = [
             (format!("{}/{}", n.calendars, n.office), "koyomi"),
             (payment.clone(), "koyomi"),
             (format!("{}/{}", n.gates, n.rule), "rulec"),

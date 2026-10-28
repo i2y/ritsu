@@ -121,7 +121,7 @@ pub struct FileSide {
 }
 
 enum Side {
-    Module(Module),
+    Module(Box<Module>),
     File(FileSide),
 }
 
@@ -140,7 +140,7 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
     if spelled == "." {
         let root = ctx.root()?;
         fetched(ctx, spelled, None, &root)?;
-        return Module::at(&root, ctx.shown(&root), None).map(Side::Module);
+        return Module::at(&root, ctx.shown(&root), None).map(|m| Side::Module(Box::new(m)));
     }
     let p = Path::new(spelled);
     if ritsu_base::fs::is_dir(p) {
@@ -153,7 +153,7 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
         };
         fetched(ctx, spelled, None, &root)?;
         // its files are shown from the directory the run is in, through the module's root
-        return Module::at(&root, ctx.shown(&root), None).map(Side::Module);
+        return Module::at(&root, ctx.shown(&root), None).map(|m| Side::Module(Box::new(m)));
     }
     if !ritsu_base::fs::exists(p)
         && let Some((name, version)) = module_version(spelled)
@@ -171,7 +171,7 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
         // the version is read as a module of its own, with its own lock
         let root = store.files(&digest);
         fetched(ctx, spelled, None, &root)?;
-        return Module::at(&root, spelled.to_string(), Some(digest)).map(Side::Module);
+        return Module::at(&root, spelled.to_string(), Some(digest)).map(|m| Side::Module(Box::new(m)));
     }
     let a = address::parse(spelled)?;
     let opened = open_fetching(ctx, spelled, &a)?;
@@ -427,7 +427,7 @@ impl IChange {
     /// A candidate for a change that breaks a user: a removal or a change, not of a description
     /// (words for a person, which no caller reads).
     pub fn may_break(&self) -> bool {
-        self.how != How::Added && !self.at.rsplit('/').next().is_some_and(|k| k == "description")
+        self.how != How::Added && self.at.rsplit('/').next() != Some("description")
     }
 }
 
@@ -744,6 +744,9 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
     out
 }
 
+/// A language's command line run in this process, with its two streams: the exit code.
+type Run<'a> = dyn Fn(&[String], &mut dyn Write, &mut dyn Write) -> u8 + 'a;
+
 /// What a language prints with `api` for the file at `path` (of the side `label`), asked in this
 /// process. Err, saying so, for a file that does not pass the language's check.
 fn api_of(tool: Tool, path: &Path, label: &str, joined: &Joined) -> Result<Json, Text> {
@@ -756,7 +759,7 @@ fn api_of(tool: Tool, path: &Path, label: &str, joined: &Joined) -> Result<Json,
         )
     };
     let parse = |s: &str| ritsu_base::json::parse(s.trim()).map_err(|_| not_passing());
-    let captured = |run: &dyn Fn(&[String], &mut dyn Write, &mut dyn Write) -> u8| -> Result<Json, Text> {
+    let captured = |run: &Run<'_>| -> Result<Json, Text> {
         let (mut out, mut err) = (Vec::new(), Vec::new());
         let args = vec!["api".to_string(), p.clone()];
         if run(&args, &mut out, &mut err) != 0 {
@@ -1120,8 +1123,8 @@ fn grouped(changes: &[IChange]) -> Vec<Line> {
     let parts: Vec<Vec<&str>> = changes.iter().map(|c| c.at.split('/').collect()).collect();
     let key = |i: usize, k: usize| -> Key { (k, parts[i][..k].join("/"), parts[i][k + 1..].join("/"), changes[i].how, changes[i].may_break(), values[i].clone()) };
     let mut alike: BTreeMap<Key, Vec<usize>> = BTreeMap::new();
-    for i in 0..changes.len() {
-        for k in 1..parts[i].len() {
+    for (i, p) in parts.iter().enumerate() {
+        for k in 1..p.len() {
             alike.entry(key(i, k)).or_default().push(i);
         }
     }
@@ -1367,7 +1370,7 @@ pub(super) fn capped(md: &str, rows: usize, lang: Lang) -> String {
         out.extend(lines[i..(i + 2 + body.min(rows))].iter().map(|l| l.to_string()));
         if body > rows {
             out.push(String::new());
-            out.push(ritsu_base::text::capitalize(&tr!("表の行はほか {} 行あります（JSON に全部あります）", "and {} more rows (the JSON has them all)", n(body - rows)).get(lang).to_string()));
+            out.push(ritsu_base::text::capitalize(tr!("表の行はほか {} 行あります（JSON に全部あります）", "and {} more rows (the JSON has them all)", n(body - rows)).get(lang)));
         }
         i = end;
     }

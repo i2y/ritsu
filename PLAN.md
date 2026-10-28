@@ -2259,12 +2259,16 @@ C2 で確かめたこと（2026-10-29、この機械で）：
   - `ritsu mod diff` と `ritsu mod report` は、読むものを `ritsu mod fetch` と同じ関数で取ってくる（DESIGN 17.9.6、17.10、17.12）。`fetch.rs` に、木の lock が固定するものを取る `tree` と、`<名前>@<版>` を取る `version` を足し、出力を標準エラーに言う形に分けた。`ritsu_base::modules::address` に `try_open` を足し、`@<名前>@<版>/…` で置き場に無い版（`Unopened::Missing`）を見分けて、取っては開き直す。取ってきたあとは、スレッドに覚えた依存の木を捨てる（`refer::forget`）。置き場に無い版で止まった木を読み直すためである。
   - `--rev` は、その版の木を `fs::GitRevision` で読む。同梱のコピー、リポジトリの中のパスの依存、鍵もその版のもので、鍵は置き場の `tmp/` に書いて cosign に渡す（DESIGN 17.12、17.14）。report の base の側の検査も、鍵を base の版から読む（DESIGN 17.10）。
   - 通信を止めるフラグは作らない。理由は DESIGN 17.12 に書いた。
-  - 試験：`modules_diff.rs` の `what_a_diff_reads_is_fetched`、`modules_report.rs` の `what_a_report_reads_is_fetched`、`modules_oci.rs` の `a_key_rotated_between_two_revisions`。
+  - `ritsu mod report` は、変わったモジュールの差を作れず、1 にもならないとき、exit 2 で終わる（前は 0。DESIGN 17.10）。テキストと markdown の上のまとめに、比べられなかったモジュールの数を出す（一つ以上のときだけ）。JSON はモジュールごとの `error` のままで、`ok` は false になる。
+  - `ritsu mod diff --help` と `ritsu mod report --help` は、目的の下の一行で、置き場に無い版を `ritsu mod fetch` と同じに取ってくることと、そろっていれば通信しないことを言う。`Cmd` に注の欄が無いので、`modules/cli.rs` の `page` が目的の段落のあとに差し込む。
+  - C と D のコードの clippy の警告 7 件（`diff.rs` の 5 件、`modules_diff.rs` と `modules_cli.rs` の 1 件ずつ）を、振る舞いを変えずに直した。
+  - 試験：`modules_diff.rs` の `what_a_diff_reads_is_fetched`、`modules_report.rs` の `what_a_report_reads_is_fetched` と `a_module_that_cannot_be_compared_makes_exit_2`、`modules_oci.rs` の `a_key_rotated_between_two_revisions`、report.rs の中の `a_module_not_compared_makes_exit_2_when_nothing_makes_it_1`。
     - 空の置き場から取ってきた答えが、`ritsu mod fetch` でそろえた置き場での答えと同じで、取ってきた版を標準エラーに一行ずつ言う。そろった置き場では、テストのレジストリに問い合わせが一つも届かない。
     - 取り出しが止まるとき（ダイジェストの違う OCI のマニフェスト、答えないレジストリ）は exit 2 で、英日の文を確かめ、置き場に何も残らない。
     - 版のあいだで鍵を替えたモジュール（偽の cosign が鍵のバイトを比べる）で、空の置き場から `fetch --rev <base>` と `fetch` と `report` が通る。作業ツリーの鍵で前の版を取ると exit 1 で止まる。
     - C の試験のうち、置き場に無い版で止まる二つ（例の `example.com` に向かう）は、取り出しの試験に替えた。
-  - 確かめたこと（この機械で）：fast の段の `-p ritsu-base -p ritsu` で 461 件が通った。SKIP の行 56 は、どれも段による飛ばしである。tools の段の cosign の試験 4 件（本物の cosign 3.1.4 で署名して確かめる 1 件と、偽の cosign の 3 件。鍵を替えた試験を含む）が SKIP なしで通った。`address` を使う koyomi と sekisho の diff の試験（5 件と 7 件）も通り、`wasm32-wasip1` でも組める。
+    - 変わった二つのモジュールのうち pricing の差だけが作れない材料（pricing のどちらの版の lock も固定する tax 1.0.0 の OCI のマニフェストに、テストのレジストリが別のバイトを返す）で、exit 2（`--fail-on-change` でも 2）、tax の差は出る、pricing の `error`、英日のテキストと markdown の数の行と結びの一文、tax 1.0.0 が置き場に無いこと。単体の試験は、1、2、0 の順と、振る舞いに示せた違いがあるときの結びを確かめる。`modules_cli.rs` は、二つの `--help` の一行を英日で確かめる。
+  - 確かめたこと（この機械で）：fast の段の `-p ritsu-base -p ritsu` で 461 件が通った。SKIP の行 56 は、どれも段による飛ばしである。tools の段の cosign の試験 4 件（本物の cosign 3.1.4 で署名して確かめる 1 件と、偽の cosign の 3 件。鍵を替えた試験を含む）が SKIP なしで通った。`address` を使う koyomi と sekisho の diff の試験（5 件と 7 件）も通り、`wasm32-wasip1` でも組める。報告の終了コード、`--help`、clippy の直しのあとは、fast の段の `-p ritsu` で 275 件が通り（SKIP の行 69 は、どれも段による飛ばし）、tools の段の cosign の試験 4 件が SKIP なしで通った。`cargo clippy -p ritsu --all-targets` は、C と D のコードに警告を出さない。
 
 **D.6 cosign**（DESIGN 17.14）
 
