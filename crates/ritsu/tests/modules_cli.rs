@@ -130,8 +130,6 @@ fn the_commands_to_come_say_this_version_has_them_not() {
         &["fetch"][..],
         &["versions", "tax"],
         &["push", "--dry-run"],
-        &["diff", "example.com/acme/pricing@1.0.0"],
-        &["report", "--base", "main"],
         &["site", "modules.list", "--out", "site"],
         &["get", "pricing@latest"],
     ] {

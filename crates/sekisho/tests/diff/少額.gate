@@ -1,0 +1,30 @@
+gate 少額(held_ja) v1
+description "規則の区分で返金する。係は、規則が少額と言う金額を返金できる。held.gate の日本語の版"
+namespace ShopJa
+
+use rule 区分 from "区分.rule"
+
+role 係(clerk)
+  description "お客さまに応対する"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係
+
+resource 注文(Order)
+  description "店の注文"
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+  input
+    金額(amount) : number  range >=1 <=20
+  context
+    大きさ(size) = 区分(金額: 金額).区分
+
+permit 係は少額を返金できる(clerks_refund_small_amounts)
+  description "係は、規則が少額と言う金額を返金できる"
+  principal in 係
+  action 返金する
+  when 大きさ is 少額

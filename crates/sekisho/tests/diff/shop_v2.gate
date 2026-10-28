@@ -1,0 +1,63 @@
+gate shop v2
+description "The shop of the tests of sekisho diff, its second version: clerks refund up to 8, a suspended member refunds nothing, the managers' permit has another name and no longer reads seniority, cancelling is gone and approving is new"
+namespace Shop
+
+enum state = open | shipped | closed
+enum region = north | south
+
+role clerk
+  description "Answers customers and refunds small amounts"
+
+role manager
+  description "Runs the shop"
+  includes clerk
+
+role auditor
+  description "Looks at refunds afterwards"
+
+principal User
+  description "A member of the staff"
+  roles clerk, manager, auditor
+  attributes
+    suspended : bool
+    region    : region
+
+resource Order
+  description "An order of the shop"
+  attributes
+    state : state
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    amount : number  range >=1 <=20
+
+action approve_refund
+  description "Approve a refund someone else made"
+  principal User
+  resource Order
+
+permit clerks_refund_small_amounts
+  description "A clerk refunds up to 8"
+  principal in clerk
+  action refund_order
+  when amount <= 8
+
+permit managers_refund_up_to_15
+  description "A manager refunds up to 15"
+  principal in manager
+  action refund_order
+  when amount <= 15
+
+forbid suspended_members_refund_nothing
+  description "A suspended member refunds nothing"
+  principal is User
+  action refund_order
+  when principal.suspended
+
+permit auditors_approve
+  description "An auditor approves refunds"
+  principal in auditor
+  action approve_refund

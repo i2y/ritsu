@@ -1,0 +1,84 @@
+{
+  "koyomi": "0.36.0",
+  "kind": "dates",
+  "old": {
+    "file": "支払日_日を受け取る.cal",
+    "name": "支払日",
+    "version": "1"
+  },
+  "new": {
+    "file": "支払日_日を受け取る_休みを足す.cal",
+    "name": "支払日",
+    "version": "1"
+  },
+  "inputs": {
+    "compared": [
+      {
+        "name": "受領日",
+        "type": "date",
+        "from": "2026-01-01",
+        "to": "2026-10-31",
+        "old": {
+          "from": "2026-01-01",
+          "to": "2026-10-31"
+        },
+        "new": {
+          "from": "2026-01-01",
+          "to": "2026-10-31"
+        }
+      },
+      {
+        "name": "支払の日",
+        "type": "int",
+        "from": 9,
+        "to": 11,
+        "old": {
+          "from": 9,
+          "to": 11
+        },
+        "new": {
+          "from": 9,
+          "to": 11
+        }
+      }
+    ],
+    "only_old": [],
+    "only_new": []
+  },
+  "comparable": true,
+  "combinations": 912,
+  "dates": {
+    "compared": [
+      "締め日",
+      "支払日"
+    ],
+    "only_old": [],
+    "only_new": []
+  },
+  "changes": [
+    {
+      "date": "支払日",
+      "inputs": {
+        "受領日": {
+          "from": "2026-04-21",
+          "to": "2026-05-20"
+        },
+        "支払の日": 10
+      },
+      "old": {
+        "from": "2026-06-10",
+        "to": "2026-06-10"
+      },
+      "new": {
+        "from": "2026-06-09",
+        "to": "2026-06-09"
+      },
+      "shift_days": -1,
+      "combinations": 30
+    }
+  ],
+  "same_elsewhere": true,
+  "total": {
+    "combinations_changed": 30
+  }
+}

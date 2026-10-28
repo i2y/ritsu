@@ -1,0 +1,23 @@
+sekisho diff — compare the decisions of two versions: for each action both have, on every combination of both versions' cuts
+
+Usage:
+  sekisho diff <old> <new> [--format text|markdown|json] [--budget <n>] [--root <dir>] [--lang ja|en]
+
+Arguments:
+  <old> <new>  two .gate files: `<path>`, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or `@<name>@<version>/<path>` (a version in the store)
+
+Flags:
+  --format text|markdown|json  json has every change; text and markdown show up to 3 examples of each (default text)
+  --budget <n>                 the most combinations of one action walked over both versions; over it, exit 2 (default 100000000)
+  --root <dir>                 the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
+  --lang ja|en                 the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
+  --help                       print this page
+
+Exit codes:
+  0  no permission gained or lost and the same interface (the deciding policies may change, and some combinations may be undecided)
+  1  a permission gained or lost, or the interface differs
+  2  cannot compare (a side that does not pass check, over the budget, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none)
+
+Examples:
+  $ ritsu sekisho diff examples/refunds/refunds.gate@HEAD~1 examples/refunds/refunds.gate
+  $ ritsu sekisho diff @shop@1.0.0/shop.gate @shop/shop.gate --format markdown

@@ -121,6 +121,39 @@ pub fn table() -> Table {
                 codes: vec![],
             },
             Cmd {
+                usage: Some("sekisho diff <old> <new> [--format text|markdown|json] [--budget <n>] [--root <dir>] [--lang ja|en]"),
+                name: "diff",
+                args: "<old> <new>",
+                purpose: tr!(
+                    "二つの版の決定を比べる。両方にある action ごとに、二つの版の切り方を合わせた組み合わせの全部で",
+                    "compare the decisions of two versions: for each action both have, on every combination of both versions' cuts"
+                ),
+                params: vec![(
+                    "<old> <new>",
+                    tr!(
+                        "二つの .gate。`<パス>`、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）",
+                        "two .gate files: `<path>`, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or `@<name>@<version>/<path>` (a version in the store)"
+                    ),
+                )],
+                flags: vec![
+                    flag("--format", Some("text|markdown|json"), tr!("json は全部の変わりを持つ。text と markdown は変わりごとに例を 3 つまで", "json has every change; text and markdown show up to 3 examples of each"))
+                        .choices(&["text", "markdown", "json"])
+                        .default("text"),
+                    flag("--budget", Some("<n>"), tr!("一つの action で二つの版を合わせてたどる組み合わせの上限。超えたら exit 2", "the most combinations of one action walked over both versions; over it, exit 2")).default("100000000"),
+                    root_flag(),
+                ],
+                exits: vec![
+                    (0, tr!("許可の増減もインターフェースの違いも無い（効いたポリシーだけの変わりと、決められない組み合わせはありうる）", "no permission gained or lost and the same interface (the deciding policies may change, and some combinations may be undecided)")),
+                    (1, tr!("許可が増えたか減った、またはインターフェースが違う", "a permission gained or lost, or the interface differs")),
+                    (2, tr!("比べられない（検査を通らない、上限を超える、読めない、ほかの言語を読むファイルをそれを読めないこの sekisho で走らせた）", "cannot compare (a side that does not pass check, over the budget, a file that cannot be read, or a file that reads another language run with this sekisho, which reads none)")),
+                ],
+                examples: vec![
+                    "ritsu sekisho diff examples/refunds/refunds.gate@HEAD~1 examples/refunds/refunds.gate",
+                    "ritsu sekisho diff @shop@1.0.0/shop.gate @shop/shop.gate --format markdown",
+                ],
+                codes: vec![],
+            },
+            Cmd {
                 usage: None,
                 name: "vectors",
                 args: "<file.gate>",
@@ -286,19 +319,51 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
         let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
-    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
-    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN
+    // 17.6); `diff` reads its two sides by their own spelling (17.9.1)
+    if cmd.name != "diff"
+        && let Err(t) = ritsu_base::modules::given_all(&a.pos)
+    {
         return refuse(err, t, lang);
     }
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
         "gen" => crate::r#gen::run(&a, lang, suite, out, err),
+        "diff" => diff_cmd(&a, lang, suite, out, err),
         "vectors" => vectors_cmd(&a, lang, suite, out, err),
         "api" => api_cmd(&a, lang, suite, out, err),
         "doc" => doc_cmd(&a, lang, suite, out, err),
         "explain" => explain_cmd(&a, lang, out, err),
         _ => unreachable!("every command in the table is dispatched"),
     }
+}
+
+/// `sekisho diff <old> <new>` (ritsu's DESIGN 17.9.4).
+fn diff_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {
+    let [old, new] = a.pos.as_slice() else {
+        return refuse(err, tr!("`sekisho diff` には古い版と新しい版の二つを渡してください", "`sekisho diff` takes two sides, the old and the new"), lang);
+    };
+    let budget = match a.get("--budget") {
+        None => check::DEFAULT_BUDGET,
+        Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
+            Ok(n) if n > 0 => n,
+            _ => return refuse(err, tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer"), lang),
+        },
+    };
+    // the check of each side is held to the larger of `--budget` and the default, as koyomi's is: a
+    // small budget stops the diff's walk, not a side that passes `sekisho check`
+    let opts = Options { budget: budget.max(check::DEFAULT_BUDGET), root: a.get("--root").map(PathBuf::from) };
+    let sides = crate::diff::side(old, suite, &opts).and_then(|o| crate::diff::side(new, suite, &opts).map(|n| (o, n)));
+    let d = match sides.and_then(|(o, n)| crate::diff::diff(&o, &n, suite, budget as u128)) {
+        Ok(d) => d,
+        Err(t) => return refuse(err, t, lang),
+    };
+    let _ = match a.get("--format") {
+        Some("json") => writeln!(out, "{}", crate::diff::to_json(&d, lang).pretty()),
+        Some("markdown") => write!(out, "{}", crate::diff::markdown(&d, lang)),
+        _ => write!(out, "{}", crate::diff::text(&d, lang)),
+    };
+    u8::from(d.differs())
 }
 
 fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut dyn Write) -> u8 {

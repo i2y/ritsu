@@ -1,0 +1,23 @@
+sekisho diff — 二つの版の決定を比べる。両方にある action ごとに、二つの版の切り方を合わせた組み合わせの全部で
+
+使い方:
+  sekisho diff <old> <new> [--format text|markdown|json] [--budget <n>] [--root <dir>] [--lang ja|en]
+
+引数:
+  <old> <new>  二つの .gate。`<パス>`、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）
+
+フラグ:
+  --format text|markdown|json  json は全部の変わりを持つ。text と markdown は変わりごとに例を 3 つまで（既定 text）
+  --budget <n>                 一つの action で二つの版を合わせてたどる組み合わせの上限。超えたら exit 2（既定 100000000）
+  --root <dir>                 参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
+  --lang ja|en                 文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
+  --help                       この画面を出す
+
+exit code:
+  0  許可の増減もインターフェースの違いも無い（効いたポリシーだけの変わりと、決められない組み合わせはありうる）
+  1  許可が増えたか減った、またはインターフェースが違う
+  2  比べられない（検査を通らない、上限を超える、読めない、ほかの言語を読むファイルをそれを読めないこの sekisho で走らせた）
+
+例:
+  $ ritsu sekisho diff examples/refunds/refunds.gate@HEAD~1 examples/refunds/refunds.gate
+  $ ritsu sekisho diff @shop@1.0.0/shop.gate @shop/shop.gate --format markdown

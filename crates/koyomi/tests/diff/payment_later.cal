@@ -1,0 +1,13 @@
+dates payment v1
+description "Closes on the 20th; pays on the 10th of the next month, or on the business day before when that day is closed. This version reads the calendar with the founding day. The days are the example's own"
+use calendar "office_added.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2026-10-31
+
+date closing = received
+  close day 20
+
+date payment = closing
+  day 10 of month +1
+  roll preceding

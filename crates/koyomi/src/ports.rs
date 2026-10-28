@@ -85,6 +85,10 @@ impl Files for Recorder {
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
         self.outer.canonicalize(p)
     }
+
+    fn revision(&self) -> Option<String> {
+        self.outer.revision()
+    }
 }
 
 /// `koyomi check` of the file, as the ports ask it (a loader of its own for the calendars it

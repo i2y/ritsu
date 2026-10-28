@@ -1,0 +1,96 @@
+{
+  "sekisho": "0.36.0",
+  "old": {
+    "file": "tests/diff/held.gate",
+    "name": "held",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/held_v2.gate",
+    "name": "held",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "refund_order",
+      "combinations": 6,
+      "gained": [],
+      "lost": [
+        {
+          "count": 1,
+          "old_policies": [
+            "clerks_refund_small_amounts"
+          ],
+          "new_policies": [
+            "nothing_from_4"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "resource": "Order",
+              "amount": "4 to 20",
+              "size": "small"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        {
+          "count": 3,
+          "old_policies": [],
+          "new_policies": [
+            "nothing_from_4"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "no",
+              "resource": "Order",
+              "amount": "4 to 20",
+              "size": "small"
+            },
+            {
+              "principal": "User",
+              "clerk": "no",
+              "resource": "Order",
+              "amount": "4 to 20",
+              "size": "large"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "resource": "Order",
+              "amount": "4 to 20",
+              "size": "large"
+            }
+          ]
+        }
+      ],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "total": {
+    "gained": 0,
+    "lost": 1,
+    "reasons": 3,
+    "unknown": 0
+  }
+}

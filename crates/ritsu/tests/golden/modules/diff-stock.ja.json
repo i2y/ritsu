@@ -1,0 +1,298 @@
+{
+  "ritsu": "0.36.0",
+  "old": {
+    "path": "在庫-1.0.0",
+    "module": "example.com/acme/stock",
+    "version": "1.0.0",
+    "digest": null
+  },
+  "new": {
+    "path": "在庫-1.1.0",
+    "module": "example.com/acme/stock",
+    "version": "1.1.0",
+    "digest": null
+  },
+  "files": {
+    "added": [],
+    "removed": [],
+    "changed": [
+      "ritsu.mod",
+      "帳簿/在庫.book"
+    ],
+    "same": 0
+  },
+  "requires": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "behavior": [],
+  "interface": [
+    {
+      "file": "帳簿/在庫.book",
+      "tool": "chobo",
+      "how": "api",
+      "version": {
+        "old": "1",
+        "new": "2"
+      },
+      "changes": [
+        {
+          "at": "/accounts/棚/lower/value",
+          "change": "changed",
+          "old": 0,
+          "new": 3,
+          "may_break": true
+        },
+        {
+          "at": "/transfers/入荷/key/1",
+          "change": "removed",
+          "old": "sku",
+          "new": null,
+          "may_break": true
+        },
+        {
+          "at": "/transfers/入荷/definition",
+          "change": "changed",
+          "old": "4b08ebd597351ce90255bd4b574d237f",
+          "new": "9d464b2546c1a224918a7b384cddfecb",
+          "may_break": true
+        },
+        {
+          "at": "/transfers/入荷/operations/do/key/params/1",
+          "change": "removed",
+          "old": "sku",
+          "new": null,
+          "may_break": true
+        },
+        {
+          "at": "/transfers/出荷/definition",
+          "change": "changed",
+          "old": "766d277360a66d957d82b5d6e96e2238",
+          "new": "1a602936af02acd196b4320c99d26ead",
+          "may_break": true
+        },
+        {
+          "at": "/transfers/出荷/operations/do/refusals/在庫切れ/bound",
+          "change": "changed",
+          "old": "at least 0",
+          "new": "at least 3",
+          "may_break": true
+        },
+        {
+          "at": "/transfers/返品",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "返品",
+            "description": null,
+            "params": [
+              {
+                "name": "伝票",
+                "type": "string"
+              },
+              {
+                "name": "sku",
+                "type": "string"
+              },
+              {
+                "name": "数",
+                "type": "amount",
+                "unit": "個"
+              }
+            ],
+            "key": [
+              "伝票",
+              "sku"
+            ],
+            "pending": null,
+            "moves": [
+              {
+                "amount": {
+                  "param": "数"
+                },
+                "from": {
+                  "account": "客",
+                  "args": []
+                },
+                "to": {
+                  "account": "棚",
+                  "args": [
+                    {
+                      "param": "sku"
+                    }
+                  ]
+                }
+              }
+            ],
+            "code": 32509,
+            "definition": "14bb35274fde4ab060a6f48cdaec4b3a",
+            "operations": {
+              "do": {
+                "refusals": [
+                  {
+                    "name": "key_conflict",
+                    "because": "key",
+                    "spends_key": false
+                  }
+                ],
+                "key": {
+                  "params": [
+                    "伝票",
+                    "sku"
+                  ]
+                }
+              }
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/postgres/functions/返品_do",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "返品",
+            "op": "do",
+            "name": "返品_do",
+            "params": [
+              "p_tenant",
+              "p_伝票",
+              "p_sku",
+              "p_数"
+            ]
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/typescript/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "返品",
+            "member": "返品",
+            "args": "返品Args"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/python/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "返品",
+            "member": "返品",
+            "params": {
+              "伝票": "伝票",
+              "sku": "sku",
+              "数": "数"
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/go/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "返品",
+            "member": "X返品",
+            "args": "X返品Args",
+            "fields": {
+              "伝票": "X伝票",
+              "sku": "Sku",
+              "数": "X数"
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/rust/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "返品",
+            "member": "返品",
+            "args": "返品Args",
+            "calls": "返品Calls",
+            "fields": {
+              "伝票": "伝票",
+              "sku": "sku",
+              "数": "数"
+            },
+            "operations": {
+              "do": "r#do"
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/tigerbeetle/chains/1/transfers/1",
+          "change": "added",
+          "old": null,
+          "new": {
+            "move": 1,
+            "role": "probe"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/tigerbeetle/chains/1/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "move": 1,
+            "role": "probe_void"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/tigerbeetle/chains/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "返品",
+            "op": "do",
+            "transfers": [
+              {
+                "move": 1,
+                "role": "main"
+              }
+            ]
+          },
+          "may_break": false
+        }
+      ],
+      "breaks": [
+        {
+          "code": "E050",
+          "severity": "error",
+          "file": "帳簿/在庫.book",
+          "line": 4,
+          "col": 9,
+          "message": "勘定 `棚` の下限（0 → 3）が 在庫-1.0.0 のときと違います。すでにある勘定は前の定義のまま残るので、chobo はこの変更を扱えません",
+          "notes": [],
+          "excerpt": "",
+          "operations": [],
+          "hint": "新しい名前の勘定を宣言し、残高を移す振替を書いてください",
+          "fix": null
+        },
+        {
+          "code": "E051",
+          "severity": "error",
+          "file": "帳簿/在庫.book",
+          "line": 9,
+          "col": 10,
+          "message": "振替 `入荷` のキーが 在庫-1.0.0 のときと違います。呼んでいる途中の操作をリトライすると key_conflict で拒否されます",
+          "notes": [],
+          "excerpt": "",
+          "operations": [],
+          "hint": "新しい名前の振替を宣言し、前の振替は、その仮押さえがどれも終わるまで残しておいてください",
+          "fix": null
+        }
+      ],
+      "note": null
+    }
+  ],
+  "differs": true
+}

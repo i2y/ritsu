@@ -12,6 +12,8 @@ pub mod cli;
 pub mod codes;
 pub mod date;
 pub mod diag;
+/// `koyomi diff`: two versions compared on everything both answer (ritsu's DESIGN 17.9.3).
+pub mod diff;
 pub mod doc;
 pub mod eval;
 pub mod fetch;

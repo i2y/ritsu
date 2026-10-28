@@ -2142,33 +2142,53 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 
 ### 8.3 C：差分と報告
 
-**C.1 版の指し方と rulec**（DESIGN 17.9.1、17.9.2）
+**C.1 版の指し方と rulec**（DESIGN 17.9.1、17.9.2、17.6）
 
-- `crates/ritsu-base/src/fs.rs` に `GitRevision`（リポジトリの中のパスは `git show <版>:<パス>`、外はディスク）を足し、rulec の `vfs::with_git_rev` をその上に載せ替える。
-- 版の書き方を読む関数を土台に一つ置き（`ritsu_base::modules::address`）、rulec、koyomi、sekisho、`ritsu mod diff` が使う。rulec の `load_rule_with` は、`split_once('@')` の前に、頭の `@` を見る。
-- 試験：`crates/ritsu/tests/rulec_diff.rs` に、`@pricing/rules/shipping_fee.rule` と `@pricing@1.0.0/…`（B.3 の道具で置き場に二つの版）の差、`@pricing/…@HEAD` が exit 2 になること。rulec のいまの `diff` の試験と golden が変わらないこと。
+- `crates/ritsu-base/src/fs.rs` に二つの層を足した。どちらも書き込まない。
+  - `GitRevision`：リポジトリの中のパスは、開いたときに `git ls-tree` で一度並べ、ファイルは `git cat-file` で一度だけ読む。外のパス（置き場、ほかのリポジトリのファイル）はディスクから読む。`.git` はディスクから読むので、モジュールのルートを探す歩きは、作業ツリーと同じところで止まる。rulec の `vfs::with_git_rev` は、この上に載せ替えた。
+  - `Overlay`：与えたファイルだけを差し替え、ほかは下の層に渡す。`@<名前>@<版>/…` が、手元のモジュールがその版を求めたときの `ritsu.mod` と `ritsu.lock` を読むために使う。
+- 版の書き方は `ritsu_base::modules::address`（`parse`、`open`、`find_version`、`fetch_version`）が読み、rulec、koyomi、sekisho、`ritsu mod diff` が使う。rulec の `load_rule_with` は、`split_once('@')` の前に頭の `@` を見る。
+- git の版から読むとき（rulec の `check --diff-base`、`replay`、`diff`）は、その版の `ritsu.mod` と `ritsu.lock` で依存を読む。B の間の仮の形（いまの見せ方から読む）をやめ、DESIGN 17.6 の「版を指して読むとき」を書き直した。置き場に無い版は、`ritsu mod fetch --rev <版>` を言って exit 2 で止まる。
+- 試験：`crates/ritsu/tests/rulec_diff.rs` に二つ足した（英日）。
+  - 置き場の `@pricing@1.0.0/…` と lock の `@pricing/…`：重さの段と `eu` で料金が違う（exit 1）、注文の合計は同じ（exit 0）、置き場に無い版と、依存のファイルに付けた git の版（exit 2）。
+  - lock だけを上げたコミット（`ritsu.lock` と `ritsu.mod` だけが変わる）の前後：`diff` に依存の変わりが出る、`replay` が base の答えを再現する、置き場に base の依存が無ければ `diff` と `check --diff-base` が `ritsu mod fetch --rev HEAD~1` を言って exit 2 になる。
 
 **C.2 koyomi の diff**（DESIGN 17.9.3）
 
-- `crates/koyomi/src/diff.rs`（カレンダーと日付のファイル）、`cli.rs` のコマンドの表に `diff`、`ritsu koyomi diff`。
-- 試験：`crates/koyomi/tests/diff.rs` と材料 `crates/koyomi/tests/diff/`（英日）。カレンダー：祝日が一日増えた、名前だけ変わった、知っている日の範囲が延びた、時差が変わった、同じ。日付のファイル：期日が一日ずれる区間、入力の範囲が狭まった、片方にしかない入力（比べられない）、`--budget` を超える（exit 2）、片方が検査を通らない（exit 2）。text、markdown、JSON の golden（英日）。突き合わせ：小さな材料の全部で、二つの側を一日ずつ、一つの組み合わせずつ評価した総当たりの答えと、区間をほどいた答えが同じであること。
+- `crates/koyomi/src/diff.rs`（カレンダーと日付のファイル）と、`cli.rs` の表の `diff`（`ritsu koyomi diff` も同じ）。それぞれの側の検査は、`--budget` と既定の大きいほうを上限にする。言語の文書（`docs/reference.md` とスキルのコピー、koyomi の DESIGN 5 章）に `diff` を足した。
+- 試験：`crates/koyomi/tests/diff.rs`（5 件）と材料 `crates/koyomi/tests/diff/`（英日）。
+  - golden は `tests/golden/diff/` の 18（三つの組 × 英日 × text、markdown、JSON）。
+  - 一つずつの変わり：休みを一日足した、名前を変えた、一年先まで知った、時差、同じファイル。支払いが一日早まる、受け取る期間を狭めた、片方にしかない入力。
+  - exit 2：検査を通らない側、種類の違う二つ、`--budget` を超える。git の版を付けた側（その版のカレンダーを読む）。
+  - 総当たり：材料の同じ種類の組の全部（英日）で、一日ずつ、一つの組み合わせずつ二つの版で計算した答えと、diff の区間をほどいた答えが同じになる。数は下の「確かめたこと」にある。
 
 **C.3 sekisho の diff**（DESIGN 17.9.4）
 
-- `crates/sekisho/src/diff.rs`、`cli.rs` に `diff`、`ritsu sekisho diff`。`cells::cut` に両方の比較を渡す、`walk` で一つの空間をたどる、`walk::confirm` で確かめ直す。
-- 試験：`crates/sekisho/tests/diff.rs` と材料 `crates/sekisho/tests/diff/`（英日）。許可が増えた、減った、効いたポリシーだけが変わった、片方にしかない action と役割、正確でない値の確かめ直しと「決められない」、`--budget`。golden（英日、三つの形）。突き合わせ：小さな材料で、組み合わせを一つずつ二つの側で評価した総当たりの答えとまとめた答えが同じであること。
+- `crates/sekisho/src/diff.rs` と、`cli.rs` の表の `diff`（`ritsu sekisho diff` も同じ）。計画では `cells::cut` に両方の比較を渡して一つの空間をたどるつもりだったが、二つの版をそれぞれたどり（どちらにも、もう片方の条件が読むものを渡す。`walk::space_also` を足した）、読むものの名前で突き合わせる形にした（DESIGN 17.9.4 に書いた）。正確でない値は `walk::confirm` で確かめ直す。言語の文書（`docs/reference.md` とスキルのコピー、sekisho の DESIGN 11 章）に `diff` を足した。
+- 試験：`crates/sekisho/tests/diff.rs`（6 件）と材料 `crates/sekisho/tests/diff/`（英日）。
+  - golden は `tests/diff/golden/` の 18（三つの組 × 英日 × 三つの形）と、`tests/golden/cli/diff.{en,ja}.txt`。
+  - 許可が増えた、減った、効いたポリシーだけが変わった、片方にしかないもの、正確でない値の確かめ直しと「決められない」、`--budget`、exit 2、git の版を付けた側。
+  - 総当たり：材料の組の全部（それぞれ自分自身との組も）を、三通りの rulec（本物、範囲での答えを言えないもの、評価もできないもの）で比べ、組み合わせを一つずつ二つの版で決めた答えと、まとめた答えが同じになる。決められない組み合わせが出てよいのは、評価もできない rulec のときだけである。数は下の「確かめたこと」にある。
 
 **C.4 インターフェースの差と `ritsu mod diff`**（DESIGN 17.9.5、17.9.6）
 
-- `crates/ritsu/src/modules/diff.rs`：ファイルの追加と削除と変わり、`api` の JSON の比べ方（名前での突き合わせ、名前を入れた JSON Pointer、壊しうる差の候補）、`Items` の比べ方、ファイルの頭の版、`require` の変わり、振る舞いの差（rulec、koyomi、sekisho を呼ぶ）、帳簿のデータの続き（DESIGN 17.9.5）。置き場に無い版は、D が入るまでは exit 2 で `ritsu mod fetch` を言う（D の取り出しにつなぐのは D.5）。
-- `crates/chobo/src/diffbase.rs`：二つの帳簿の本文を比べる関数を、git から読む部分と分けて公開する。`chobo check --diff-base` の出力は変えない。
-- 試験：`crates/ritsu/tests/modules_diff.rs`。例の `versions/pricing-1.0.0` と `pricing`（1.1.0）の差（重さの段の境目の振る舞いの差、地域の `eu` を足したインターフェースの差）、`pricing` と `versions/pricing-2.0.0` の差（出力の名前を消した、壊しうる差の候補）、二つのファイルを渡す形、同じものどうし（exit 0）。帳簿を持つ小さな材料の二つの版（勘定の境界を変えた）で、E050 が「壊れる差」として出て exit 1 になること。golden（英日、三つの形）。chobo の `tests/diffbase.rs` が変わらずに通ること。
+- `crates/ritsu/src/modules/diff.rs`：ファイルの追加と削除と変わり、`require` の変わり、振る舞いの差（rulec、koyomi、sekisho をこのプロセスの中で呼ぶ）、`api` の JSON と `Items` の比べ方、ファイルの頭の版、帳簿のデータの続き。計画から変えたところ（振る舞いは両方の版の全部の規則・日付・カレンダー・ゲートで比べる、api の JSON から除くもの、説明の差は壊しうる差の候補にしない、似た差を `{a,b,c}` にまとめる、変わらないファイルを一行にまとめる、言語の無いファイルの変わりは違いに数えない、終了コードの 2）は DESIGN 17.9.5 と 17.9.6 に書いた。
+- 置き場に無い版は、`ritsu mod fetch <名前>@<版>` を言って exit 2 で止まる。取り出しにつなぐのは D.5 である。
+- `crates/chobo/src/diffbase.rs`：二つの帳簿の本文を比べる `between` を、git から読む部分と分けて公開した。`chobo check --diff-base` の出力は変えていない。
+- 試験：`crates/ritsu/tests/modules_diff.rs`（5 件）。
+  - 置き場の pricing の 1.0.0 → 1.1.0 と 1.1.0 → 2.0.0（英日、三つの形）。
+  - 机（koyomi、sekisho、rulec が一度に入る材料）と在庫の帳簿の二つの版を、ディレクトリとして比べる（英日、三つの形）。帳簿は棚の下限を上げて E050、`receive` のキーを狭めて E051。
+  - 振る舞いの差が、それぞれの言語の diff の言うことと同じであること。二つのファイルを渡す形。同じ版どうし（exit 0）。exit 2 の五つ。
+  - golden は `tests/golden/modules/diff-*` の 24。chobo の `tests/diffbase.rs` は変えずに通る。
 
 **C.5 `ritsu mod report`**（DESIGN 17.10）
 
-- `crates/ritsu/src/modules/report.rs`：二つの git の版の lock を比べる、手元のファイルを head のまま二つの lock で確かめる、新しい診断と消えた診断を変わったモジュールに割り当てる、変わったモジュールごとの `ritsu mod diff`、手元のファイルの答えのうち変わるもの、パスの依存は git で比べる、markdown（`@` をコードの書き方に、60,000 字まで）と JSON、`--fail-on-change`。
-- CI の書き方（`gh pr comment --body-file`）の文案を、G が README とサイトに入れられる形で報告に書く。
-- 試験：`crates/ritsu/tests/modules_report.rs`。テストの中で git のリポジトリを作り、`shop` の lock を 1.1.0 から 2.0.0 に上げる（置き場は B.3 の道具で作る）。検査が止まること（exit 1）、1.0.0 から 1.1.0 では振る舞いの差だけが出ること（exit 0、`--fail-on-change` で 1）、同じ版でダイジェストが違うこと（タグが動いた）がいちばん上に出ること、markdown の長さの上限、`@` がどれもバッククォートの中にあること。golden（英日、markdown と JSON）。
+- `crates/ritsu/src/modules/report.rs`：二つの木を比べて変わったモジュールを七つの変わり方で挙げる、手元のモジュールを head と base の見せ方（手元のファイルは head、`ritsu.mod`・`ritsu.lock`・同梱のコピー・パスの依存は base）で `ritsu check --deps-warnings` にかける、新しい診断と消えた診断を、参照をたどって変わったモジュールに割り当てる、変わったモジュールごとの `ritsu mod diff`、手元のファイルの答えのうち変わるもの、markdown（`@` をコードの書き方に、表は 50 行まで、60,000 字で切るときは `<details>` とコードの囲みを閉じる）、text、JSON、`--fail-on-change`。計画から変えたところは DESIGN 17.10 と 17.21 に書いた。取り出しは C.4 と同じく、まだつないでいない。
+- 試験：`crates/ritsu/tests/modules_report.rs`（4 件）と report.rs の中の 2 件。テストの中で git のリポジトリと置き場を作る。
+  - 例の shop：pricing 1.0.0 → 1.1.0 は答えの差だけ（exit 0、`--fail-on-change` で 1）、1.1.0 → 2.0.0 はフローが読む出力の名前が変わって新しいエラー（pricing に割り当て、exit 1）、同じ 1.1.0 を中身を替えて出し直す（タグが動いた、いちばん上に出る）。
+  - 机を依存に持つモジュールで、手元の日付のファイルとゲートの答えが変わるもの（koyomi と sekisho の差。英日、text、markdown、JSON）。
+  - 60,000 字を超える報告が、`<details>` を閉じて切れること。二つの lock が同じモジュールを固定する版どうし。exit 2 の三つ（`--base` が無い、git の版が無い、置き場に無い版）。
+  - どの markdown も、`@` がコードの外に無く、`<details>` が閉じていて、機械のパスを含まない。golden は `tests/golden/modules/report-*` の 18（ダイジェストは伏せる）。
 
 **C の完了の条件**
 
@@ -2176,6 +2196,13 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 2. koyomi と sekisho の diff が、材料の全部で総当たりの答えと同じになる。
 3. `ritsu mod diff` と `ritsu mod report` の golden が通る。
 4. 触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
+
+C で確かめたこと（2026-10-28、この機械で）：
+
+1. rulec の `tests/` と golden には触っていない。`-p rulec` の fast の段は 1,224 件が通った（ignored 1 は前からのもの）。
+2. 総当たりは、koyomi が 112 の組（英日）で、カレンダーの 29,200 日と日付のファイルの 14,992 通りを二つの版で計算し、sekisho が 216 の diff（72 の組 × 三通りの rulec）で、23,228 のリクエストを二つの版で決め、5,568 通りをたどった。どちらも diff の答えと一つも違わなかった。
+3. `tests/golden/modules/` の diff の 24 と report の 18、koyomi の 18、sekisho の 20 が通る。
+4. 触ったクレート（ritsu-base、rulec、koyomi、sekisho、chobo、ritsu）の fast の段で 2,083 件のうち 2,082 件が通った。落ちた一つは koyomi の `tests/docs.rs` で、`koyomi --help` の出力を貼った文書に `diff` の行が無かったためである。文書を直し、koyomi と sekisho の docs・design・skill と、ritsu の skill・release の試験を回し直して通った。SKIP の行は 407 で、どれも fast の段で道具の段のものを飛ばしたもの（python 202、lean 42、node 35、go 29 など）である。ほかに、rulec の PostgreSQL のサーバーが無いときの SKIP が一つある。
 
 ### 8.4 D：レジストリと署名
 

@@ -914,6 +914,7 @@ $ koyomi check tests/mutants/E201_無い日の扱いが無い.cal --lang ja
 |---|---|
 | `koyomi check <file.cal>... [--format json] [--budget <n>]` | 検査（3 章）。ディレクトリを渡すと、下の `.cal` を全部（パスの順に） |
 | `koyomi eval <file.cal> <名前>=<値>... [--format json]` | 一つの入力ですべての日付を計算し、計算の段を見せる。入力は名前でも別名でも渡せる。条件も、その入力で成り立つかを一つずつ言う。calendar のファイルなら `koyomi eval <file.cal> <日付>` で、営業日か休みか（休みの理由つき） |
+| `koyomi diff <旧> <新> [--format text\|markdown\|json] [--budget <n>]` | 二つの版の答えを比べる。カレンダーは両方が知っている日の全部で、日付のファイルは両方が受け取る入力の全部で比べる。それぞれの側は、パス、`<パス>@<git の版>`、`@<名前>/<パス>`、`@<名前>@<版>/<パス>` のどれか（ritsu の DESIGN 17.9.3）。違いがあれば 1、比べられなければ 2 |
 | `koyomi gen <file.cal>... [--target typescript\|python\|go\|rust\|sql\|wasm] [--out <dir>] [--check]` | コードとランナーを生成する（6 章）。検査を通らないファイルからは生成しない。`--target` が無ければ全部の出力先。`--out` の既定は `generated`。`--check` は、書き出す代わりに、いまの生成物が最新かを確かめる |
 | `koyomi vectors <file.cal>` | 範囲のすべての入力の結果を JSON Lines で出す（6.3） |
 | `koyomi doc <file.cal> [--format markdown\|html] [--months <YYYY-MM>..<YYYY-MM>]` | 人が読むページ（7 章）を標準出力に。既定は Markdown。条件が成り立たなくてもページを出して 0、ページを作れないエラーなら診断を標準エラーに出して 1 |

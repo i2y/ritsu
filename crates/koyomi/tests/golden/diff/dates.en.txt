@@ -1,0 +1,15 @@
+koyomi diff: dates payment v1 → v2
+  old: payment.cal
+  new: payment_v2.cal
+
+the inputs differ:
+  received: 2026-01-01..2026-10-31 → 2026-01-01..2026-09-30
+
+inputs compared: received 2026-01-01..2026-09-30 (273 combinations)
+dates compared: closing, payment
+dates only in the new version: reminder
+
+payment: 1 interval, 30 combinations
+  received 2026-04-21..2026-05-20: 2026-06-10 → 2026-06-09 (1 day earlier)
+
+for every other combination, every date gets the same value.

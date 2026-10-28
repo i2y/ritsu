@@ -1,0 +1,15 @@
+sekisho diff: gate held v1 → v2
+  old: tests/diff/held.gate
+  new: tests/diff/held_v2.gate
+
+refund_order: 6 combinations walked over both versions
+  allow lost (allow → deny): 1 combination
+    deciding policies: clerks_refund_small_amounts → nothing_from_4
+    - User holding clerk, Order, amount: 4 to 20, size: small
+  the same answer, decided by other policies: 3 combinations
+    deciding policies: none → nothing_from_4
+    - User holding no role, Order, amount: 4 to 20, size: small
+    - User holding no role, Order, amount: 4 to 20, size: large
+    - User holding clerk, Order, amount: 4 to 20, size: large
+
+for every other combination, every action is decided the same.

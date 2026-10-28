@@ -115,6 +115,12 @@ pub trait Files {
     fn current_dir(&self) -> io::Result<PathBuf>;
     /// The path made absolute, `.` and `..` folded; an error when nothing is there.
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf>;
+    /// The git revision the files are read at ([`GitRevision`]), for a sentence that says what to
+    /// run (`ritsu mod fetch --rev <revision>`): None for the disk and memory. A [`Files`] that hands
+    /// its calls on hands this on too.
+    fn revision(&self) -> Option<String> {
+        None
+    }
 }
 
 thread_local! {
@@ -137,6 +143,11 @@ pub fn with<R>(files: Rc<dyn Files>, f: impl FnOnce() -> R) -> R {
 
 fn held() -> Option<Rc<dyn Files>> {
     FILES.with(|c| c.borrow().clone())
+}
+
+/// The git revision this thread reads at ([`Files::revision`]): None for the disk and memory.
+pub fn revision() -> Option<String> {
+    held().and_then(|f| f.revision())
 }
 
 /// What this module reads and writes on this thread when it is not the disk: the files of the
@@ -794,5 +805,308 @@ impl Files for Memory {
     fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
         self.metadata(p)?;
         Ok(self.abs(p))
+    }
+}
+
+// ── A git revision, and files laid over others ───────────────────────────
+
+/// What is at a path of a git revision.
+#[derive(Clone, Debug)]
+enum AtRevision {
+    /// A file: its object, and its length.
+    File(String, u64),
+    Dir,
+    /// A symbolic link or a submodule, which a revision is not read through.
+    Other,
+}
+
+/// The files of a git revision (DESIGN 17.9.1): a path in the repository is read as `git show
+/// <revision>:<path>` reads it, and a path outside it (the store, a file of another repository) from
+/// the disk. The repository is the one the directory it was opened in is in; its `.git` is read from
+/// the disk, so that the search for a module's root stops where it does in the working tree. Nothing
+/// is written. What is in the revision is listed once, when it is opened (`git ls-tree`), and a file
+/// is read once (`git cat-file`).
+#[derive(Debug)]
+pub struct GitRevision {
+    /// The top of the working tree, as git writes it, and as the directory it was opened in writes
+    /// it when that differs (a path through a symbolic link).
+    tops: Vec<PathBuf>,
+    /// The revision as it was written, which the sentences say.
+    rev: String,
+    commit: String,
+    /// Every path of the revision, from the top with `/` between the parts.
+    entries: BTreeMap<String, AtRevision>,
+    read: RefCell<BTreeMap<String, Vec<u8>>>,
+}
+
+/// Run git in `dir`: what it printed, or None when it ended with an error. Err when it cannot start.
+fn git_in(dir: &Path, args: &[&str]) -> Result<Option<Vec<u8>>, crate::text::Text> {
+    match std::process::Command::new("git").arg("-C").arg(dir).args(args).output() {
+        Ok(o) => Ok(o.status.success().then_some(o.stdout)),
+        Err(e) if crate::wasi::unsupported(&e) => Err(crate::wasi::cannot_start("git")),
+        Err(e) => Err(crate::tr!("git を起動できません（{e}）", "cannot start git ({e})")),
+    }
+}
+
+impl GitRevision {
+    /// The revision `rev` of the repository the directory `dir` is in. Err, with the sentence to say,
+    /// when git cannot start, `dir` is in no repository, or the revision is not one.
+    pub fn open(dir: &Path, rev: &str) -> Result<GitRevision, crate::text::Text> {
+        let shown = dir.display().to_string();
+        let top = git_in(dir, &["rev-parse", "--show-toplevel"])?
+            .ok_or_else(|| crate::tr!("`{shown}` は git のリポジトリの中にありません", "`{shown}` is in no git repository"))?;
+        let top = PathBuf::from(String::from_utf8_lossy(&top).trim_end_matches(['\n', '\r']));
+        let commit = git_in(&top, &["rev-parse", "--verify", "--quiet", "--end-of-options", &format!("{rev}^{{commit}}")])?
+            .ok_or_else(|| crate::tr!("git の版 `{rev}` が見つかりません", "the git revision `{rev}` cannot be resolved"))?;
+        let commit = String::from_utf8_lossy(&commit).trim().to_string();
+        let listing = git_in(&top, &["ls-tree", "-r", "-t", "-z", "--long", &commit])?
+            .ok_or_else(|| crate::tr!("git の版 `{rev}` のファイルを一覧できません", "cannot list the files of the git revision `{rev}`"))?;
+        let mut entries = BTreeMap::new();
+        for rec in listing.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+            // `<mode> <type> <object> <size>\t<path>`, the size `-` for a tree
+            let Some(tab) = rec.iter().position(|b| *b == b'\t') else { continue };
+            let head = String::from_utf8_lossy(&rec[..tab]).into_owned();
+            let path = String::from_utf8_lossy(&rec[tab + 1..]).into_owned();
+            let words: Vec<&str> = head.split_whitespace().collect();
+            let at = match (words.first(), words.get(1), words.get(2), words.get(3)) {
+                (Some(&"120000"), ..) => AtRevision::Other,
+                (_, Some(&"blob"), Some(object), Some(len)) => AtRevision::File(object.to_string(), len.parse().unwrap_or(0)),
+                (_, Some(&"tree"), ..) => AtRevision::Dir,
+                _ => AtRevision::Other,
+            };
+            entries.insert(path, at);
+        }
+        let mut tops = vec![top.clone()];
+        for other in [std::fs::canonicalize(&top).ok(), spelled_from(dir, &top)].into_iter().flatten() {
+            if !tops.contains(&other) {
+                tops.push(other);
+            }
+        }
+        Ok(GitRevision { tops, rev: rev.to_string(), commit, entries, read: RefCell::new(BTreeMap::new()) })
+    }
+
+    /// The commit the revision is.
+    pub fn commit(&self) -> &str {
+        &self.commit
+    }
+
+    /// The path from the top of the repository, `/` between the parts, of a path in it; None for a
+    /// path outside it, and for one in its `.git`.
+    fn in_repo(&self, p: &Path) -> Option<String> {
+        let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&Disk.current_dir().unwrap_or_default().join(p)) };
+        let rel = self.tops.iter().find_map(|t| abs.strip_prefix(t).ok().map(Path::to_path_buf)).or_else(|| {
+            // a spelling of the top through a symbolic link: the deepest part of the path that is on the disk, made canonical
+            let real = abs.ancestors().find_map(|a| std::fs::canonicalize(a).ok().map(|c| c.join(abs.strip_prefix(a).unwrap_or(Path::new("")))))?;
+            self.tops.iter().find_map(|t| real.strip_prefix(t).ok().map(Path::to_path_buf))
+        })?;
+        let parts: Vec<String> = rel.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+        if parts.first().is_some_and(|f| f == ".git") {
+            return None;
+        }
+        Some(parts.join("/"))
+    }
+
+    fn at(&self, rel: &str) -> Option<&AtRevision> {
+        if rel.is_empty() {
+            return Some(&AtRevision::Dir);
+        }
+        self.entries.get(rel)
+    }
+
+    fn read_only(&self, p: &Path) -> io::Error {
+        io::Error::new(io::ErrorKind::PermissionDenied, format!("{} is read at the git revision {}, which is not written to", p.display(), self.rev))
+    }
+}
+
+/// The top of the repository as the directory it was opened in writes it, when `dir` reaches the top
+/// through a symbolic link (`/var` and `/private/var`): the part of `dir` above as many parts as the
+/// canonical `dir` has below the top.
+fn spelled_from(dir: &Path, top: &Path) -> Option<PathBuf> {
+    let abs = if crate::paths::rooted(dir) { fold(dir) } else { fold(&std::env::current_dir().ok()?.join(dir)) };
+    let below = std::fs::canonicalize(&abs).ok()?.strip_prefix(std::fs::canonicalize(top).ok()?).ok()?.components().count();
+    let mut t = abs;
+    for _ in 0..below {
+        t.pop();
+    }
+    Some(t)
+}
+
+impl Files for GitRevision {
+    fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
+        let Some(rel) = self.in_repo(p) else { return Disk.read(p) };
+        match self.at(&rel) {
+            Some(AtRevision::File(object, _)) => {
+                if let Some(b) = self.read.borrow().get(&rel) {
+                    return Ok(b.clone());
+                }
+                let top = &self.tops[0];
+                let o = std::process::Command::new("git").arg("-C").arg(top).args(["cat-file", "blob", object]).output()?;
+                if !o.status.success() {
+                    return Err(not_found());
+                }
+                self.read.borrow_mut().insert(rel, o.stdout.clone());
+                Ok(o.stdout)
+            }
+            Some(AtRevision::Dir) => Err(is_a_directory()),
+            _ => Err(not_found()),
+        }
+    }
+
+    fn metadata(&self, p: &Path) -> io::Result<Meta> {
+        let Some(rel) = self.in_repo(p) else { return Disk.metadata(p) };
+        match self.at(&rel) {
+            Some(AtRevision::File(_, len)) => Ok(Meta { kind: Kind::File, len: *len }),
+            Some(AtRevision::Dir) => Ok(Meta { kind: Kind::Dir, len: 0 }),
+            Some(AtRevision::Other) => Ok(Meta { kind: Kind::Other, len: 0 }),
+            None => Err(not_found()),
+        }
+    }
+
+    fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        let Some(rel) = self.in_repo(p) else { return Disk.read_dir(p) };
+        match self.at(&rel) {
+            Some(AtRevision::Dir) => {}
+            Some(_) => return Err(not_a_directory()),
+            None => return Err(not_found()),
+        }
+        let start = if rel.is_empty() { String::new() } else { format!("{rel}/") };
+        let mut out = Vec::new();
+        for (path, at) in self.entries.range(start.clone()..) {
+            let Some(name) = path.strip_prefix(&start) else { break };
+            if name.contains('/') {
+                continue;
+            }
+            let kind = match at {
+                AtRevision::File(..) => Kind::File,
+                AtRevision::Dir => Kind::Dir,
+                AtRevision::Other => Kind::Other,
+            };
+            out.push((OsString::from(name), kind));
+        }
+        if rel.is_empty() {
+            // the repository's own directory is there at every revision
+            out.push((OsString::from(".git"), Kind::Dir));
+            out.sort_by(|a, b| a.0.cmp(&b.0));
+        }
+        Ok(out)
+    }
+
+    fn write(&self, p: &Path, _bytes: &[u8]) -> io::Result<()> {
+        Err(self.read_only(p))
+    }
+
+    fn create_dir_all(&self, p: &Path) -> io::Result<()> {
+        Err(self.read_only(p))
+    }
+
+    fn current_dir(&self) -> io::Result<PathBuf> {
+        Disk.current_dir()
+    }
+
+    fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
+        let Some(rel) = self.in_repo(p) else { return Disk.canonicalize(p) };
+        self.at(&rel).ok_or_else(not_found)?;
+        let top = std::fs::canonicalize(&self.tops[0]).unwrap_or_else(|_| self.tops[0].clone());
+        Ok(if rel.is_empty() { top } else { top.join(rel) })
+    }
+
+    fn revision(&self) -> Option<String> {
+        Some(self.rev.clone())
+    }
+}
+
+/// Files laid over others: each file given is read at its path (absolute) in place of what is there,
+/// and every other call is handed to the files under (the disk when none). What `@<name>@<version>/…`
+/// reads through (DESIGN 17.9.1): the module at hand's `ritsu.mod` and `ritsu.lock` as they would be
+/// if it required that version, and its other files as they are. Nothing is written.
+pub struct Overlay {
+    files: BTreeMap<PathBuf, Vec<u8>>,
+    under: Option<Rc<dyn Files>>,
+}
+
+impl Overlay {
+    /// No file laid over `under` (the disk when None).
+    pub fn new(under: Option<Rc<dyn Files>>) -> Overlay {
+        Overlay { files: BTreeMap::new(), under }
+    }
+
+    /// The file at `path` (absolute), read as `bytes`.
+    pub fn put(&mut self, path: &Path, bytes: impl Into<Vec<u8>>) {
+        self.files.insert(fold(path), bytes.into());
+    }
+
+    fn under(&self) -> &dyn Files {
+        match &self.under {
+            Some(f) => f.as_ref(),
+            None => &Disk,
+        }
+    }
+
+    fn laid(&self, p: &Path) -> Option<&Vec<u8>> {
+        if self.files.is_empty() {
+            return None;
+        }
+        let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&self.under().current_dir().ok()?.join(p)) };
+        self.files.get(&abs)
+    }
+}
+
+impl Files for Overlay {
+    fn read(&self, p: &Path) -> io::Result<Vec<u8>> {
+        match self.laid(p) {
+            Some(b) => Ok(b.clone()),
+            None => self.under().read(p),
+        }
+    }
+
+    fn metadata(&self, p: &Path) -> io::Result<Meta> {
+        match self.laid(p) {
+            Some(b) => Ok(Meta { kind: Kind::File, len: b.len() as u64 }),
+            None => self.under().metadata(p),
+        }
+    }
+
+    fn read_dir(&self, p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        let mut out = self.under().read_dir(p)?;
+        let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&self.under().current_dir()?.join(p)) };
+        for f in self.files.keys() {
+            if f.parent() == Some(abs.as_path())
+                && let Some(n) = f.file_name()
+                && !out.iter().any(|(x, _)| x == n)
+            {
+                out.push((n.to_os_string(), Kind::File));
+            }
+        }
+        Ok(out)
+    }
+
+    fn write(&self, p: &Path, _bytes: &[u8]) -> io::Result<()> {
+        Err(read_only(p))
+    }
+
+    fn create_dir_all(&self, p: &Path) -> io::Result<()> {
+        Err(read_only(p))
+    }
+
+    fn current_dir(&self) -> io::Result<PathBuf> {
+        self.under().current_dir()
+    }
+
+    fn canonicalize(&self, p: &Path) -> io::Result<PathBuf> {
+        match self.laid(p) {
+            Some(_) => {
+                let abs = if crate::paths::rooted(p) { fold(p) } else { fold(&self.under().current_dir()?.join(p)) };
+                let dir = abs.parent().map(|d| self.under().canonicalize(d)).transpose()?;
+                Ok(match (dir, abs.file_name()) {
+                    (Some(d), Some(n)) => d.join(n),
+                    _ => abs,
+                })
+            }
+            None => self.under().canonicalize(p),
+        }
+    }
+
+    fn revision(&self) -> Option<String> {
+        self.under().revision()
     }
 }

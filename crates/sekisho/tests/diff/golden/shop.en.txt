@@ -1,0 +1,63 @@
+sekisho diff: gate shop v1 → v2
+  old: tests/diff/shop.gate
+  new: tests/diff/shop_v2.gate
+
+only in the old version:
+  action cancel_order
+  attribute User.seniority
+
+only in the new version:
+  action approve_refund
+  role auditor
+  attribute User.region
+
+refund_order: 64 combinations walked over both versions
+  allow gained (deny → allow): 2 combinations
+    deciding policies: none → clerks_refund_small_amounts
+    - User holding clerk (seniority: 0 to 1, suspended: no), Order, amount: 6 to 8
+    - User holding clerk (seniority: 2 to 10, suspended: no), Order, amount: 6 to 8
+  allow gained (deny → allow): 2 combinations
+    deciding policies: none → clerks_refund_small_amounts, managers_refund_up_to_15
+    - User holding manager (seniority: 0 to 1, suspended: no), Order, amount: 6 to 8
+    - User holding clerk and manager (seniority: 0 to 1, suspended: no), Order, amount: 6 to 8
+  allow gained (deny → allow): 2 combinations
+    deciding policies: none → managers_refund_up_to_15
+    - User holding manager (seniority: 0 to 1, suspended: no), Order, amount: 9 to 15
+    - User holding clerk and manager (seniority: 0 to 1, suspended: no), Order, amount: 9 to 15
+  allow lost (allow → deny): 4 combinations
+    deciding policies: clerks_refund_small_amounts → suspended_members_refund_nothing
+    - User holding clerk (seniority: 0 to 1, suspended: yes), Order, amount: 1 to 5
+    - User holding manager (seniority: 0 to 1, suspended: yes), Order, amount: 1 to 5
+    - User holding clerk and manager (seniority: 0 to 1, suspended: yes), Order, amount: 1 to 5
+  allow lost (allow → deny): 2 combinations
+    deciding policies: clerks_refund_small_amounts, managers_refund → suspended_members_refund_nothing
+    - User holding manager (seniority: 2 to 10, suspended: yes), Order, amount: 1 to 5
+    - User holding clerk and manager (seniority: 2 to 10, suspended: yes), Order, amount: 1 to 5
+  allow lost (allow → deny): 4 combinations
+    deciding policies: managers_refund → suspended_members_refund_nothing
+    - User holding manager (seniority: 2 to 10, suspended: yes), Order, amount: 6 to 8
+    - User holding manager (seniority: 2 to 10, suspended: yes), Order, amount: 9 to 15
+    - User holding clerk and manager (seniority: 2 to 10, suspended: yes), Order, amount: 6 to 8
+  the same answer, decided by other policies: 22 combinations
+    deciding policies: none → suspended_members_refund_nothing
+    - User holding no role (seniority: 0 to 1, suspended: yes), Order, amount: 1 to 5
+    - User holding no role (seniority: 0 to 1, suspended: yes), Order, amount: 6 to 8
+    - User holding no role (seniority: 0 to 1, suspended: yes), Order, amount: 9 to 15
+  the same answer, decided by other policies: 2 combinations
+    deciding policies: clerks_refund_small_amounts → clerks_refund_small_amounts, managers_refund_up_to_15
+    - User holding manager (seniority: 0 to 1, suspended: no), Order, amount: 1 to 5
+    - User holding clerk and manager (seniority: 0 to 1, suspended: no), Order, amount: 1 to 5
+  the same answer, decided by other policies: 2 combinations
+    deciding policies: clerks_refund_small_amounts, managers_refund → clerks_refund_small_amounts, managers_refund_up_to_15
+    - User holding manager (seniority: 2 to 10, suspended: no), Order, amount: 1 to 5
+    - User holding clerk and manager (seniority: 2 to 10, suspended: no), Order, amount: 1 to 5
+  the same answer, decided by other policies: 2 combinations
+    deciding policies: managers_refund → clerks_refund_small_amounts, managers_refund_up_to_15
+    - User holding manager (seniority: 2 to 10, suspended: no), Order, amount: 6 to 8
+    - User holding clerk and manager (seniority: 2 to 10, suspended: no), Order, amount: 6 to 8
+  the same answer, decided by other policies: 2 combinations
+    deciding policies: managers_refund → managers_refund_up_to_15
+    - User holding manager (seniority: 2 to 10, suspended: no), Order, amount: 9 to 15
+    - User holding clerk and manager (seniority: 2 to 10, suspended: no), Order, amount: 9 to 15
+
+for every other combination, every action is decided the same.

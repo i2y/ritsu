@@ -81,6 +81,42 @@ pub fn commands() -> Vec<Cmd> {
         },
         Cmd {
             usage: None,
+            name: "diff",
+            args: "<old> <new>",
+            purpose: tr!(
+                "二つの版の答えを比べる。カレンダーは両方が知っている日の全部で、日付のファイルは両方が受け取る入力の全部で",
+                "compare the answers of two versions: a calendar on every day both know, a dates file on every input both take"
+            ),
+            params: vec![
+                (
+                    "<old> <new>",
+                    tr!(
+                        "同じ種類の二つ（カレンダーか、日付のファイル）。`<パス>`、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）",
+                        "two of a kind (calendars, or dates files): `<path>`, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or `@<name>@<version>/<path>` (a version in the store)"
+                    ),
+                ),
+            ],
+            flags: vec![
+                flag("--format", Some("text|markdown|json"), tr!("json は区間の全部を持つ。text と markdown は日付ごとに 200 区間まで", "json has every interval; text and markdown show up to 200 for each date"))
+                    .choices(&["text", "markdown", "json"])
+                    .default("text"),
+                flag("--budget", Some("<n>"), tr!("比べる入力の組み合わせの上限。超えたら何も比べずに exit 2", "the most input combinations to compare; over it, nothing is compared (exit 2)"))
+                    .default(crate::check::DEFAULT_BUDGET.to_string()),
+            ],
+            exits: vec![
+                (0, tr!("入力の違いも答えの違いも無い", "neither the inputs nor the answers differ")),
+                (1, tr!("入力か答えに違いがある", "the inputs or the answers differ")),
+                (2, tr!("比べられない（種類が違う、検査を通らない、上限を超える、読めない）", "cannot compare (two kinds, a side that does not pass check, over the budget, a file that cannot be read)")),
+            ],
+            examples: vec![
+                "koyomi diff examples/close_20th_pay_10th.cal@HEAD~1 examples/close_20th_pay_10th.cal",
+                "koyomi diff examples/calendars/england_and_wales.cal@v1.0.0 examples/calendars/england_and_wales.cal --format json",
+                "koyomi diff @calendars@1.0.0/england_and_wales.cal @calendars/england_and_wales.cal --lang ja",
+            ],
+            codes: vec![],
+        },
+        Cmd {
+            usage: None,
             name: "gen",
             args: "<file.cal>...",
             purpose: tr!(

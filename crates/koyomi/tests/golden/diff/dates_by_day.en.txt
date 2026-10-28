@@ -1,0 +1,11 @@
+koyomi diff: dates payment v1 → v1
+  old: payment_by_day.cal
+  new: payment_by_day_later.cal
+
+inputs compared: received 2026-01-01..2026-10-31, pay_day 9..11 (912 combinations)
+dates compared: closing, payment
+
+payment: 1 interval, 30 combinations
+  received 2026-04-21..2026-05-20, pay_day 10: 2026-06-10 → 2026-06-09 (1 day earlier)
+
+for every other combination, every date gets the same value.

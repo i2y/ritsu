@@ -1,0 +1,1015 @@
+{
+  "ritsu": "0.36.0",
+  "base": {
+    "rev": "two"
+  },
+  "head": {
+    "rev": "three"
+  },
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 1,
+      "warnings": 0
+    },
+    "new": [
+      {
+        "tool": "dandori",
+        "file": "注文/注文を受ける.flow",
+        "dependency": null,
+        "code": "E002",
+        "severity": "error",
+        "line": 48,
+        "col": 43,
+        "message": "`送料.outputs` にフィールド `料金` はありません（あるのは 送料）",
+        "notes": [],
+        "path": []
+      }
+    ],
+    "gone": []
+  },
+  "modules": [
+    {
+      "module": "example.com/acme/pricing",
+      "prefix": "@pricing",
+      "change": "upgraded",
+      "old": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "new": {
+        "version": "2.0.0",
+        "digest": "sha256:<digest>"
+      },
+      "diagnostics": [
+        0
+      ],
+      "diff": {
+        "old": {
+          "path": "@pricing@1.1.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "new": {
+          "path": "@pricing@2.0.0",
+          "module": "example.com/acme/pricing",
+          "version": "2.0.0",
+          "digest": "sha256:<digest>"
+        },
+        "files": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            "ritsu.mod",
+            "規則/送料.rule"
+          ],
+          "same": 2
+        },
+        "requires": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "behavior": [
+          {
+            "file": "規則/注文の合計.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "注文の合計",
+              "old": "@pricing@1.1.0/規則/注文の合計.rule",
+              "new": "@pricing@2.0.0/規則/注文の合計.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 1,
+              "feasible": 1,
+              "same": 1,
+              "differing": 0,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          },
+          {
+            "file": "規則/送料.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "送料",
+              "old": "@pricing@1.1.0/規則/送料.rule",
+              "new": "@pricing@2.0.0/規則/送料.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 15,
+              "feasible": 15,
+              "same": 0,
+              "differing": 15,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [
+                {
+                  "what": "output_removed",
+                  "name": "料金"
+                },
+                {
+                  "what": "output_added",
+                  "name": "送料"
+                }
+              ],
+              "changes": [
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "国内"
+                      ],
+                      "text": "地域 = 国内"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "1",
+                          "to": "1"
+                        },
+                        {
+                          "from": "2",
+                          "to": "2499"
+                        },
+                        {
+                          "from": "2500",
+                          "to": "2500"
+                        }
+                      ],
+                      "text": "重さ >=1g <=2500g"
+                    }
+                  ],
+                  "text": "地域 = 国内  かつ  重さ >=1g <=2500g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "395",
+                      "new": "-"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 1
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 1
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "国内"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "1"
+                    }
+                  ],
+                  "cells": 3
+                },
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "EU"
+                      ],
+                      "text": "地域 = EU"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "1",
+                          "to": "1"
+                        },
+                        {
+                          "from": "2",
+                          "to": "2499"
+                        },
+                        {
+                          "from": "2500",
+                          "to": "2500"
+                        }
+                      ],
+                      "text": "重さ >=1g <=2500g"
+                    }
+                  ],
+                  "text": "地域 = EU  かつ  重さ >=1g <=2500g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "1250",
+                      "new": "-"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 3
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 3
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "EU"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "1"
+                    }
+                  ],
+                  "cells": 3
+                },
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "その他の地域"
+                      ],
+                      "text": "地域 = その他の地域"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "1",
+                          "to": "1"
+                        },
+                        {
+                          "from": "2",
+                          "to": "2499"
+                        },
+                        {
+                          "from": "2500",
+                          "to": "2500"
+                        }
+                      ],
+                      "text": "重さ >=1g <=2500g"
+                    }
+                  ],
+                  "text": "地域 = その他の地域  かつ  重さ >=1g <=2500g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "1850",
+                      "new": "-"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 5
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 5
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "その他の地域"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "1"
+                    }
+                  ],
+                  "cells": 3
+                },
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "国内"
+                      ],
+                      "text": "地域 = 国内"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2501",
+                          "to": "29999"
+                        },
+                        {
+                          "from": "30000",
+                          "to": "30000"
+                        }
+                      ],
+                      "text": "重さ >=2501g <=30000g"
+                    }
+                  ],
+                  "text": "地域 = 国内  かつ  重さ >=2501g <=30000g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "695",
+                      "new": "-"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 2
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 2
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "国内"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "2501"
+                    }
+                  ],
+                  "cells": 2
+                },
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "EU"
+                      ],
+                      "text": "地域 = EU"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2501",
+                          "to": "29999"
+                        },
+                        {
+                          "from": "30000",
+                          "to": "30000"
+                        }
+                      ],
+                      "text": "重さ >=2501g <=30000g"
+                    }
+                  ],
+                  "text": "地域 = EU  かつ  重さ >=2501g <=30000g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "1950",
+                      "new": "-"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 4
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 4
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "EU"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "2501"
+                    }
+                  ],
+                  "cells": 2
+                },
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "その他の地域"
+                      ],
+                      "text": "地域 = その他の地域"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2501",
+                          "to": "29999"
+                        },
+                        {
+                          "from": "30000",
+                          "to": "30000"
+                        }
+                      ],
+                      "text": "重さ >=2501g <=30000g"
+                    }
+                  ],
+                  "text": "地域 = その他の地域  かつ  重さ >=2501g <=30000g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "2950",
+                      "new": "-"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 6
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 6
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "その他の地域"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "2501"
+                    }
+                  ],
+                  "cells": 2
+                }
+              ],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          }
+        ],
+        "interface": [
+          {
+            "file": "規則/送料.rule",
+            "tool": "rulec",
+            "how": "api",
+            "version": null,
+            "changes": [
+              {
+                "at": "/python/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/python/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/typescript/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/typescript/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/javascript/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "bigint",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/javascript/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "bigint",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/rust/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/rust/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/ruby/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "Integer",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/ruby/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "Integer",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/php/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "int",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/php/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "int",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/go/output_fields/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "Fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/go/output_fields/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "ShippingFee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/swift/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/swift/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shippingFee",
+                  "type": "GBPc",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/java/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "long",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/java/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "long",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/numpy/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "料金",
+                  "type": "ndarray[int64]",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/numpy/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "送料",
+                  "type": "ndarray[int64]",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/connect/response_fields/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "field": "fee",
+                  "type": "int64",
+                  "optional": false
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/connect/response_fields/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "field": "shipping_fee",
+                  "type": "int64",
+                  "optional": false
+                },
+                "may_break": false
+              },
+              {
+                "at": "/sql/outputs/料金",
+                "change": "removed",
+                "old": {
+                  "name": "料金",
+                  "alias": "fee",
+                  "type": "bigint",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "new": null,
+                "may_break": true
+              },
+              {
+                "at": "/sql/outputs/送料",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "送料",
+                  "alias": "shipping_fee",
+                  "type": "bigint",
+                  "unit": "GBPc",
+                  "range": {
+                    "min": 395,
+                    "max": 2950
+                  },
+                  "optional": false,
+                  "rounding": {
+                    "mode": "up",
+                    "grid": 1
+                  }
+                },
+                "may_break": false
+              },
+              {
+                "at": "/sql/function/signature",
+                "change": "changed",
+                "old": "\"shipping_fee\"(\"weight\" bigint, \"region\" text) RETURNS TABLE (\"fee\" bigint, \"fee_by_weight_row\" int)",
+                "new": "\"shipping_fee\"(\"weight\" bigint, \"region\" text) RETURNS TABLE (\"shipping_fee\" bigint, \"fee_by_weight_row\" int)",
+                "may_break": true
+              }
+            ],
+            "breaks": [],
+            "note": null
+          }
+        ],
+        "differs": true
+      },
+      "error": null,
+      "yours": []
+    }
+  ],
+  "ok": false
+}

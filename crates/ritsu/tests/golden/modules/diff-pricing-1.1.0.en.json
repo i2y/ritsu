@@ -1,0 +1,324 @@
+{
+  "ritsu": "0.36.0",
+  "old": {
+    "path": "example.com/acme/pricing@1.0.0",
+    "module": "example.com/acme/pricing",
+    "version": "1.0.0",
+    "digest": "sha256:<digest>"
+  },
+  "new": {
+    "path": "example.com/acme/pricing@1.1.0",
+    "module": "example.com/acme/pricing",
+    "version": "1.1.0",
+    "digest": "sha256:<digest>"
+  },
+  "files": {
+    "added": [],
+    "removed": [],
+    "changed": [
+      "ritsu.mod",
+      "rules/shipping_fee.rule"
+    ],
+    "same": 2
+  },
+  "requires": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "behavior": [
+    {
+      "file": "rules/order_total.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "order_total",
+        "old": "example.com/acme/pricing@1.0.0/rules/order_total.rule",
+        "new": "example.com/acme/pricing@1.1.0/rules/order_total.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 1,
+        "feasible": 1,
+        "same": 1,
+        "differing": 0,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [],
+        "changes": [],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    },
+    {
+      "file": "rules/shipping_fee.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "shipping_fee",
+        "old": "example.com/acme/pricing@1.0.0/rules/shipping_fee.rule",
+        "new": "example.com/acme/pricing@1.1.0/rules/shipping_fee.rule",
+        "old_version": "1",
+        "new_version": "1",
+        "over_budget": false,
+        "total": true,
+        "cells": 14,
+        "feasible": 14,
+        "same": 10,
+        "differing": 4,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [
+          {
+            "what": "enum_value_added",
+            "name": "region.eu"
+          }
+        ],
+        "changes": [
+          {
+            "region": [
+              {
+                "column": "region",
+                "kind": "input",
+                "accepts": [
+                  "domestic"
+                ],
+                "text": "region = domestic"
+              },
+              {
+                "column": "weight",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "2001",
+                    "to": "2499"
+                  },
+                  {
+                    "from": "2500",
+                    "to": "2500"
+                  }
+                ],
+                "text": "weight >=2001g <=2500g"
+              }
+            ],
+            "text": "region = domestic  and  weight >=2001g <=2500g",
+            "outputs": [
+              {
+                "output": "fee",
+                "old": "695",
+                "new": "395"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 2
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 1
+              }
+            ],
+            "witness": [
+              {
+                "input": "region",
+                "value": "domestic"
+              },
+              {
+                "input": "weight",
+                "value": "2001"
+              }
+            ],
+            "cells": 2
+          },
+          {
+            "region": [
+              {
+                "column": "region",
+                "kind": "input",
+                "accepts": [
+                  "world"
+                ],
+                "text": "region = world"
+              },
+              {
+                "column": "weight",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "2001",
+                    "to": "2499"
+                  },
+                  {
+                    "from": "2500",
+                    "to": "2500"
+                  }
+                ],
+                "text": "weight >=2001g <=2500g"
+              }
+            ],
+            "text": "region = world  and  weight >=2001g <=2500g",
+            "outputs": [
+              {
+                "output": "fee",
+                "old": "2950",
+                "new": "1850"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 4
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 5
+              }
+            ],
+            "witness": [
+              {
+                "input": "region",
+                "value": "world"
+              },
+              {
+                "input": "weight",
+                "value": "2001"
+              }
+            ],
+            "cells": 2
+          }
+        ],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    }
+  ],
+  "interface": [
+    {
+      "file": "rules/shipping_fee.rule",
+      "tool": "rulec",
+      "how": "api",
+      "version": null,
+      "changes": [
+        {
+          "at": "/python/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "EU"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/typescript/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "EU"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/javascript/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "EU"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/rust/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "Eu"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/ruby/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "EU"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/php/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "Region::EU"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/go/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "RegionEu"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/swift/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "eu"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/java/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "Region.EU"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/connect/enums/region/values/world/number",
+          "change": "changed",
+          "old": 2,
+          "new": 3,
+          "may_break": true
+        },
+        {
+          "at": "/connect/enums/region/values/eu",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "eu",
+            "alias": "REGION_EU",
+            "number": 2
+          },
+          "may_break": false
+        }
+      ],
+      "breaks": [],
+      "note": null
+    }
+  ],
+  "differs": true
+}

@@ -1,0 +1,71 @@
+{
+  "koyomi": "0.36.0",
+  "kind": "dates",
+  "old": {
+    "file": "payment.cal",
+    "name": "payment",
+    "version": "1"
+  },
+  "new": {
+    "file": "payment_v2.cal",
+    "name": "payment",
+    "version": "2"
+  },
+  "inputs": {
+    "compared": [
+      {
+        "name": "received",
+        "type": "date",
+        "from": "2026-01-01",
+        "to": "2026-09-30",
+        "old": {
+          "from": "2026-01-01",
+          "to": "2026-10-31"
+        },
+        "new": {
+          "from": "2026-01-01",
+          "to": "2026-09-30"
+        }
+      }
+    ],
+    "only_old": [],
+    "only_new": []
+  },
+  "comparable": true,
+  "combinations": 273,
+  "dates": {
+    "compared": [
+      "closing",
+      "payment"
+    ],
+    "only_old": [],
+    "only_new": [
+      "reminder"
+    ]
+  },
+  "changes": [
+    {
+      "date": "payment",
+      "inputs": {
+        "received": {
+          "from": "2026-04-21",
+          "to": "2026-05-20"
+        }
+      },
+      "old": {
+        "from": "2026-06-10",
+        "to": "2026-06-10"
+      },
+      "new": {
+        "from": "2026-06-09",
+        "to": "2026-06-09"
+      },
+      "shift_days": -1,
+      "combinations": 30
+    }
+  ],
+  "same_elsewhere": true,
+  "total": {
+    "combinations_changed": 30
+  }
+}

@@ -1,0 +1,678 @@
+{
+  "ritsu": "0.36.0",
+  "base": {
+    "rev": "one"
+  },
+  "head": {
+    "rev": null
+  },
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "new": [],
+    "gone": []
+  },
+  "modules": [
+    {
+      "module": "example.com/acme/desk",
+      "prefix": "@desk",
+      "change": "upgraded",
+      "old": {
+        "version": "1.0.0",
+        "digest": "sha256:<digest>"
+      },
+      "new": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "diagnostics": [],
+      "diff": {
+        "old": {
+          "path": "@desk@1.0.0",
+          "module": "example.com/acme/desk",
+          "version": "1.0.0",
+          "digest": "sha256:<digest>"
+        },
+        "new": {
+          "path": "@desk@1.1.0",
+          "module": "example.com/acme/desk",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "files": {
+          "added": [
+            "暦/data/休み_二版.csv"
+          ],
+          "removed": [
+            "暦/data/休み.csv"
+          ],
+          "changed": [
+            "ritsu.mod",
+            "ゲート/上限.gate",
+            "ゲート/区分.rule",
+            "暦/事務所.cal"
+          ],
+          "same": 1
+        },
+        "requires": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "behavior": [
+          {
+            "file": "ゲート/上限.gate",
+            "tool": "sekisho",
+            "result": {
+              "sekisho": "0.36.0",
+              "old": {
+                "file": "@desk@1.0.0/ゲート/上限.gate",
+                "name": "上限",
+                "version": "v1"
+              },
+              "new": {
+                "file": "@desk@1.1.0/ゲート/上限.gate",
+                "name": "上限",
+                "version": "v2"
+              },
+              "actions": [
+                {
+                  "action": "返金する",
+                  "combinations": 20,
+                  "gained": [
+                    {
+                      "count": 1,
+                      "old_policies": [],
+                      "new_policies": [
+                        "係は少額を返金できる"
+                      ],
+                      "examples": [
+                        {
+                          "principal": "職員",
+                          "係": "はい",
+                          "責任者": "いいえ",
+                          "resource": "注文",
+                          "金額": "1〜15",
+                          "大きさ": "少額",
+                          "old 大きさ": "多額"
+                        }
+                      ]
+                    }
+                  ],
+                  "lost": [],
+                  "reasons": [
+                    {
+                      "count": 1,
+                      "old_policies": [
+                        "責任者は返金できる"
+                      ],
+                      "new_policies": [
+                        "係は少額を返金できる",
+                        "責任者は返金できる"
+                      ],
+                      "examples": [
+                        {
+                          "principal": "職員",
+                          "係": "はい",
+                          "責任者": "はい",
+                          "resource": "注文",
+                          "金額": "1〜15",
+                          "大きさ": "少額",
+                          "old 大きさ": "多額"
+                        }
+                      ]
+                    }
+                  ],
+                  "unknown": [],
+                  "frames_only_old": [],
+                  "frames_only_new": [],
+                  "same_elsewhere": true
+                }
+              ],
+              "only_old": {
+                "actions": [],
+                "roles": [],
+                "attributes": [],
+                "inputs": [],
+                "types": []
+              },
+              "only_new": {
+                "actions": [],
+                "roles": [],
+                "attributes": [],
+                "inputs": [],
+                "types": []
+              },
+              "total": {
+                "gained": 1,
+                "lost": 0,
+                "reasons": 1,
+                "unknown": 0
+              }
+            },
+            "error": null
+          },
+          {
+            "file": "ゲート/区分.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "区分",
+              "old": "@desk@1.0.0/ゲート/区分.rule",
+              "new": "@desk@1.1.0/ゲート/区分.rule",
+              "old_version": "1",
+              "new_version": "2",
+              "over_budget": false,
+              "total": true,
+              "cells": 9,
+              "feasible": 9,
+              "same": 6,
+              "differing": 3,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [
+                {
+                  "region": [
+                    {
+                      "column": "金額",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "6",
+                          "to": "6"
+                        },
+                        {
+                          "from": "7",
+                          "to": "7"
+                        },
+                        {
+                          "from": "8",
+                          "to": "8"
+                        }
+                      ],
+                      "text": "金額 >=6 <=8"
+                    }
+                  ],
+                  "text": "金額 >=6 <=8",
+                  "outputs": [
+                    {
+                      "output": "区分",
+                      "old": "多額",
+                      "new": "少額"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "区分",
+                      "row": 2
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "区分",
+                      "row": 1
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "金額",
+                      "value": "6"
+                    }
+                  ],
+                  "cells": 3
+                }
+              ],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          },
+          {
+            "file": "暦/事務所.cal",
+            "tool": "koyomi",
+            "result": {
+              "koyomi": "0.36.0",
+              "kind": "calendar",
+              "old": {
+                "file": "@desk@1.0.0/暦/事務所.cal",
+                "name": "事務所",
+                "version": "1"
+              },
+              "new": {
+                "file": "@desk@1.1.0/暦/事務所.cal",
+                "name": "事務所",
+                "version": "2"
+              },
+              "compared": {
+                "from": "2026-01-01",
+                "to": "2026-12-31",
+                "days": 365
+              },
+              "changes": [
+                {
+                  "from": "2026-06-10",
+                  "to": "2026-06-10",
+                  "days": 1,
+                  "old": "open",
+                  "new": "closed",
+                  "old_reasons": [],
+                  "new_reasons": [
+                    "創立記念日"
+                  ]
+                }
+              ],
+              "renamed": [
+                {
+                  "from": "2026-05-04",
+                  "to": "2026-05-04",
+                  "old_reasons": [
+                    "みどりの日"
+                  ],
+                  "new_reasons": [
+                    "春の休み"
+                  ]
+                }
+              ],
+              "known": {
+                "old": {
+                  "from": "2026-01-01",
+                  "to": "2026-12-31"
+                },
+                "new": {
+                  "from": "2026-01-01",
+                  "to": "2027-12-31"
+                }
+              },
+              "offset": {
+                "old": "none",
+                "new": "+09:00"
+              },
+              "same_elsewhere": true,
+              "total": {
+                "changed_days": 1
+              }
+            },
+            "error": null
+          },
+          {
+            "file": "暦/支払日.cal",
+            "tool": "koyomi",
+            "result": {
+              "koyomi": "0.36.0",
+              "kind": "dates",
+              "old": {
+                "file": "@desk@1.0.0/暦/支払日.cal",
+                "name": "支払日",
+                "version": "1"
+              },
+              "new": {
+                "file": "@desk@1.1.0/暦/支払日.cal",
+                "name": "支払日",
+                "version": "1"
+              },
+              "inputs": {
+                "compared": [
+                  {
+                    "name": "受領日",
+                    "type": "date",
+                    "from": "2026-01-01",
+                    "to": "2026-10-31",
+                    "old": {
+                      "from": "2026-01-01",
+                      "to": "2026-10-31"
+                    },
+                    "new": {
+                      "from": "2026-01-01",
+                      "to": "2026-10-31"
+                    }
+                  }
+                ],
+                "only_old": [],
+                "only_new": []
+              },
+              "comparable": true,
+              "combinations": 304,
+              "dates": {
+                "compared": [
+                  "締め日",
+                  "支払日"
+                ],
+                "only_old": [],
+                "only_new": []
+              },
+              "changes": [
+                {
+                  "date": "支払日",
+                  "inputs": {
+                    "受領日": {
+                      "from": "2026-04-21",
+                      "to": "2026-05-20"
+                    }
+                  },
+                  "old": {
+                    "from": "2026-06-10",
+                    "to": "2026-06-10"
+                  },
+                  "new": {
+                    "from": "2026-06-09",
+                    "to": "2026-06-09"
+                  },
+                  "shift_days": -1,
+                  "combinations": 30
+                }
+              ],
+              "same_elsewhere": true,
+              "total": {
+                "combinations_changed": 30
+              }
+            },
+            "error": null
+          }
+        ],
+        "interface": [
+          {
+            "file": "ゲート/上限.gate",
+            "tool": "sekisho",
+            "how": "api",
+            "version": {
+              "old": "v1",
+              "new": "v2"
+            },
+            "changes": [
+              {
+                "at": "/description",
+                "change": "changed",
+                "old": "規則の区分で返金する。係は少額を、責任者は 15 まで返金できる。limits.gate の日本語の版",
+                "new": "規則の二つ目の版の区分で返金する。係は少額を、責任者は 15 まで返金できる。limits.gate の日本語の版",
+                "may_break": false
+              }
+            ],
+            "breaks": [],
+            "note": null
+          },
+          {
+            "file": "ゲート/区分.rule",
+            "tool": "rulec",
+            "how": "api",
+            "version": {
+              "old": "1",
+              "new": "2"
+            },
+            "changes": [
+              {
+                "at": "/connect/proto",
+                "change": "changed",
+                "old": "proto/rulec/band_ja/v1/band_ja.proto",
+                "new": "proto/rulec/band_ja/v2/band_ja.proto",
+                "may_break": true
+              },
+              {
+                "at": "/connect/package",
+                "change": "changed",
+                "old": "rulec.band_ja.v1",
+                "new": "rulec.band_ja.v2",
+                "may_break": true
+              },
+              {
+                "at": "/connect/path",
+                "change": "changed",
+                "old": "/rulec.band_ja.v1.BandJaService/Decide",
+                "new": "/rulec.band_ja.v2.BandJaService/Decide",
+                "may_break": true
+              },
+              {
+                "at": "/wasm/package",
+                "change": "changed",
+                "old": "rulec:band-ja@1.0.0",
+                "new": "rulec:band-ja@2.0.0",
+                "may_break": true
+              }
+            ],
+            "breaks": [],
+            "note": null
+          },
+          {
+            "file": "暦/事務所.cal",
+            "tool": "koyomi",
+            "how": "api",
+            "version": {
+              "old": "1",
+              "new": "2"
+            },
+            "changes": [
+              {
+                "at": "/calendar/offset",
+                "change": "changed",
+                "old": null,
+                "new": "+09:00",
+                "may_break": true
+              },
+              {
+                "at": "/calendar/sources/休み/file",
+                "change": "changed",
+                "old": "data/休み.csv",
+                "new": "data/休み_二版.csv",
+                "may_break": true
+              },
+              {
+                "at": "/calendar/sources/休み/sha256",
+                "change": "changed",
+                "old": "35bb4ae3b17bde2d",
+                "new": "3f3143cb93699e1e",
+                "may_break": true
+              },
+              {
+                "at": "/calendar/sources/休み/covers/to",
+                "change": "changed",
+                "old": "2026-12-31",
+                "new": "2027-12-31",
+                "may_break": true
+              },
+              {
+                "at": "/calendar/sources/休み/rows",
+                "change": "changed",
+                "old": 3,
+                "new": 7,
+                "may_break": true
+              },
+              {
+                "at": "/calendar/data_range/to",
+                "change": "changed",
+                "old": "2026-12-31",
+                "new": "2027-12-31",
+                "may_break": true
+              },
+              {
+                "at": "/wasm/package",
+                "change": "changed",
+                "old": "koyomi:office@1.0.0",
+                "new": "koyomi:office@2.0.0",
+                "may_break": true
+              }
+            ],
+            "breaks": [],
+            "note": null
+          }
+        ],
+        "differs": true
+      },
+      "error": null,
+      "yours": [
+        {
+          "file": "請求.cal",
+          "tool": "koyomi",
+          "result": {
+            "koyomi": "0.36.0",
+            "kind": "dates",
+            "old": {
+              "file": "請求.cal",
+              "name": "請求",
+              "version": "1"
+            },
+            "new": {
+              "file": "請求.cal",
+              "name": "請求",
+              "version": "1"
+            },
+            "inputs": {
+              "compared": [
+                {
+                  "name": "受領日",
+                  "type": "date",
+                  "from": "2026-01-01",
+                  "to": "2026-10-31",
+                  "old": {
+                    "from": "2026-01-01",
+                    "to": "2026-10-31"
+                  },
+                  "new": {
+                    "from": "2026-01-01",
+                    "to": "2026-10-31"
+                  }
+                }
+              ],
+              "only_old": [],
+              "only_new": []
+            },
+            "comparable": true,
+            "combinations": 304,
+            "dates": {
+              "compared": [
+                "締め日",
+                "支払日"
+              ],
+              "only_old": [],
+              "only_new": []
+            },
+            "changes": [
+              {
+                "date": "支払日",
+                "inputs": {
+                  "受領日": {
+                    "from": "2026-04-21",
+                    "to": "2026-05-20"
+                  }
+                },
+                "old": {
+                  "from": "2026-06-10",
+                  "to": "2026-06-10"
+                },
+                "new": {
+                  "from": "2026-06-09",
+                  "to": "2026-06-09"
+                },
+                "shift_days": -1,
+                "combinations": 30
+              }
+            ],
+            "same_elsewhere": true,
+            "total": {
+              "combinations_changed": 30
+            }
+          },
+          "error": null
+        },
+        {
+          "file": "返金.gate",
+          "tool": "sekisho",
+          "result": {
+            "sekisho": "0.36.0",
+            "old": {
+              "file": "返金.gate",
+              "name": "返金",
+              "version": "v1"
+            },
+            "new": {
+              "file": "返金.gate",
+              "name": "返金",
+              "version": "v1"
+            },
+            "actions": [
+              {
+                "action": "返金する",
+                "combinations": 20,
+                "gained": [
+                  {
+                    "count": 1,
+                    "old_policies": [],
+                    "new_policies": [
+                      "係は少額を返金できる"
+                    ],
+                    "examples": [
+                      {
+                        "principal": "職員",
+                        "係": "はい",
+                        "責任者": "いいえ",
+                        "resource": "注文",
+                        "金額": "1〜15",
+                        "大きさ": "少額",
+                        "old 大きさ": "多額"
+                      }
+                    ]
+                  }
+                ],
+                "lost": [],
+                "reasons": [
+                  {
+                    "count": 1,
+                    "old_policies": [
+                      "責任者は返金できる"
+                    ],
+                    "new_policies": [
+                      "係は少額を返金できる",
+                      "責任者は返金できる"
+                    ],
+                    "examples": [
+                      {
+                        "principal": "職員",
+                        "係": "はい",
+                        "責任者": "はい",
+                        "resource": "注文",
+                        "金額": "1〜15",
+                        "大きさ": "少額",
+                        "old 大きさ": "多額"
+                      }
+                    ]
+                  }
+                ],
+                "unknown": [],
+                "frames_only_old": [],
+                "frames_only_new": [],
+                "same_elsewhere": true
+              }
+            ],
+            "only_old": {
+              "actions": [],
+              "roles": [],
+              "attributes": [],
+              "inputs": [],
+              "types": []
+            },
+            "only_new": {
+              "actions": [],
+              "roles": [],
+              "attributes": [],
+              "inputs": [],
+              "types": []
+            },
+            "total": {
+              "gained": 1,
+              "lost": 0,
+              "reasons": 1,
+              "unknown": 0
+            }
+          },
+          "error": null
+        }
+      ]
+    }
+  ],
+  "ok": true
+}

@@ -4,6 +4,8 @@
 //! modules, by a path or from an OCI registry. A file names a dependency's file by `@<name>/…`, read
 //! from the root of the module the file is in.
 //!
+//! - [`address`]: how the diffs name the two sides they compare (`@<name>@<version>/…`, `…@<git
+//!   revision>`), and the files each side is read through.
 //! - [`lex`]: the words of a line of `ritsu.mod` and `ritsu.lock`, which are ritsu's lexis.
 //! - [`manifest`], [`lock`], [`semver`] and [`names`]: `ritsu.mod` (read, and changed a line at a
 //!   time), `ritsu.lock`, versions and their order, and the forms of the names (E301–E303).
@@ -21,6 +23,7 @@
 //! Nothing here depends on anything but std (DESIGN 3.1, P9). Nothing here goes to the network: what
 //! fetches and pushes is the `ritsu` crate's.
 
+pub mod address;
 pub mod artifact;
 pub mod digest;
 pub mod graph;

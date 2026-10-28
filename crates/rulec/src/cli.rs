@@ -1430,7 +1430,18 @@ fn check(
         let mut suppressed = 0usize;
         if let Some(rev) = diff_base {
             let known: std::collections::HashSet<String> = match base_source(rev, path) {
-                Ok(Some(b)) => crate::vfs::with_git_rev(rev, || crate::report(&b, path)).diags.iter().filter_map(|d| d.key.clone()).collect(),
+                Ok(Some(b)) => match crate::vfs::with_git_rev(rev, || match ritsu_base::modules::address::stopped(path) {
+                    // a dependency the base's lock pins that the store does not have
+                    Some(t) => Err(crate::i18n::text(&t)),
+                    None => Ok(crate::report(&b, path)),
+                })
+                .and_then(|r| r) {
+                    Ok(r) => r.diags.iter().filter_map(|d| d.key.clone()).collect(),
+                    Err(e) => {
+                        eprintln!("error: {e}");
+                        return ExitCode::from(2);
+                    }
+                },
                 Ok(None) => Default::default(),
                 Err(t) => {
                     eprintln!("error: {}", crate::i18n::text(&t));
@@ -1608,11 +1619,30 @@ fn load_rule(spec: &str) -> Result<(String, crate::ast::RuleFile, crate::types::
 fn load_rule_with(spec: &str, lenient: bool) -> Result<(String, crate::ast::RuleFile, crate::types::Checked), String> {
     let prep = |src: &str, path: &str| if lenient { crate::prepare_lenient(src, path) } else { crate::prepare(src, path) };
     let not_checked = || tr!("`{spec}` は検査を通っていません", "`{spec}` does not pass check");
+    // a file of a module's dependency, at the lock's version or at a version of the store (ritsu's
+    // DESIGN 17.9.1): its own spelling, read before rulec's `@`
+    if spec.starts_with('@') {
+        let side = ritsu_base::modules::address::parse(spec).and_then(|a| ritsu_base::modules::address::open(&a)).map_err(|t| crate::i18n::text(&t))?;
+        return side.with(|| {
+            if let Some(t) = ritsu_base::modules::address::stopped(&side.path) {
+                return Err(crate::i18n::text(&t));
+            }
+            let src = ritsu_base::fs::read_to_string(&side.path).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?;
+            let (f, c) = prep(&src, &side.path).map_err(|_| not_checked())?;
+            Ok((src, f, c))
+        });
+    }
     match spec.split_once('@') {
         Some((left, rev)) if !std::path::Path::new(spec).exists() => {
-            let src = git_source(left, rev)?;
+            let (src, at) = git_source(left, rev)?;
             let path = if left.ends_with(".rule") { left.to_string() } else { spec.to_string() };
-            let (f, c) = crate::vfs::with_git_rev(rev, || prep(&src, &path)).map_err(|_| not_checked())?;
+            let (f, c) = crate::vfs::with_git_rev(&at, || {
+                // a dependency the revision's lock pins that the store does not have
+                if let Some(t) = ritsu_base::modules::address::stopped(&path) {
+                    return Err(crate::i18n::text(&t));
+                }
+                prep(&src, &path).map_err(|_| not_checked())
+            })??;
             Ok((src, f, c))
         }
         _ => {
@@ -1633,14 +1663,15 @@ fn git(args: &[&str]) -> Result<Option<String>, String> {
     Ok(o.status.success().then(|| String::from_utf8_lossy(&o.stdout).into_owned()))
 }
 
-/// The text of a rule at a revision. `left` is either a path (it ends in `.rule`), read as
-/// `git show <rev>:<path>`, or a rule's name, looked up first in the tag `rules/<name>/<rev>`
-/// and then in `<rev>` itself.
-fn git_source(left: &str, rev: &str) -> Result<String, String> {
+/// The text of a rule at a revision, and the revision it was read at, which the rules it applies
+/// are read at too. `left` is either a path (it ends in `.rule`), read as `git show <rev>:<path>`,
+/// or a rule's name, looked up first in the tag `rules/<name>/<rev>` and then in `<rev>` itself.
+fn git_source(left: &str, rev: &str) -> Result<(String, String), String> {
     if left.ends_with(".rule") {
-        return git(&["show", &format!("{rev}:{left}")])?.ok_or_else(|| {
+        let src = git(&["show", &format!("{rev}:{left}")])?.ok_or_else(|| {
             tr!("`{rev}` に `{left}` が無いか、`{rev}` が見つかりません", "no `{left}` at `{rev}`, or `{rev}` cannot be resolved")
-        });
+        })?;
+        return Ok((src, rev.to_string()));
     }
     let file = format!("{left}.rule");
     let tag = format!("rules/{left}/{rev}");
@@ -1653,8 +1684,8 @@ fn git_source(left: &str, rev: &str) -> Result<String, String> {
             .split('\0')
             .find(|p| *p == file || p.ends_with(&format!("/{file}")))
             .ok_or_else(|| tr!("`{r}` の中に {file} がありません", "no {file} in `{r}`"))?;
-        return git(&["show", &format!("{r}:{path}")])?
-            .ok_or_else(|| tr!("`{r}:{path}` が読めません", "cannot read `{r}:{path}`"));
+        let src = git(&["show", &format!("{r}:{path}")])?.ok_or_else(|| tr!("`{r}:{path}` が読めません", "cannot read `{r}:{path}`"))?;
+        return Ok((src, r.to_string()));
     }
     Err(tr!(
         "`{left}@{rev}`: git タグ `{tag}` も、リビジョン `{rev}` も見つかりません",
@@ -1805,6 +1836,70 @@ fn replay_cmd(files: &[&String], a: &Args, md: bool, json: bool) -> ExitCode {
     ExitCode::from(u8::from(!rep.mismatches.is_empty() || rep.compared_nothing()))
 }
 
+/// The two versions `diff` compares, read as it reads them (a path, `<path>@<revision>`, a rule's
+/// name at a revision, or a module's spelling, ritsu's DESIGN 17.9.1). Err when one cannot be read
+/// or does not pass check, or when they are two rules.
+fn two_versions(a: &str, b: &str) -> Result<(crate::ast::RuleFile, crate::types::Checked, crate::ast::RuleFile, crate::types::Checked), String> {
+    two_versions_through((a, None), (b, None))
+}
+
+/// The files a side of a diff is read through (ritsu's DESIGN 17.10: the module at hand with the
+/// lock of another revision); None for the files as they are.
+pub type Through = Option<std::rc::Rc<dyn ritsu_base::fs::Files>>;
+
+/// [`two_versions`], each side read through its own files.
+fn two_versions_through(a: (&str, Through), b: (&str, Through)) -> Result<(crate::ast::RuleFile, crate::types::Checked, crate::ast::RuleFile, crate::types::Checked), String> {
+    let load = |spec: &str, files: Through| match files {
+        Some(f) => ritsu_base::fs::with(f, || load_rule_with(spec, true)),
+        None => load_rule_with(spec, true),
+    };
+    let (_, of, oc) = load(a.0, a.1)?;
+    let (_, nf, nc) = load(b.0, b.1)?;
+    if of.name.text != nf.name.text {
+        return Err(tr!(
+            "別の規則を比べようとしています（`{}` と `{}`）",
+            "comparing different rules (`{}` and `{}`)",
+            of.name.text, nf.name.text
+        ));
+    }
+    Ok((of, oc, nf, nc))
+}
+
+/// What `rulec diff <old> <new>` says over the whole input space (§15.122), as `ritsu mod diff`
+/// takes it for a rule that two versions of a module both have (ritsu's DESIGN 17.9.6).
+pub struct WholeDiff {
+    /// What `diff` prints, `--format markdown` prints and `--format json` prints (without its last
+    /// newline), in the language of the thread ([`crate::i18n::with`]).
+    pub text: String,
+    pub markdown: String,
+    pub json: String,
+    /// Whether an answer, or what an input may be, differs (`diff` exits 1).
+    pub differs: bool,
+    /// Whether "every other input gets the same answer" was earned: no cell over the budget,
+    /// unsettled or unrealized.
+    pub total: bool,
+}
+
+/// `rulec diff <old> <new>` over the whole input space, `old` and `new` read as `diff` reads them
+/// and named `shown` in the Markdown and the JSON, the walk held to `budget` (the default when
+/// None). Err, with what `diff` says on stderr (exit 2), as [`two_versions`].
+pub fn diff_whole(old: &str, new: &str, shown: (&str, &str), budget: Option<usize>) -> Result<WholeDiff, String> {
+    diff_whole_through((old, None), (new, None), shown, budget)
+}
+
+/// [`diff_whole`], each side read through its own files (the rules it applies too).
+pub fn diff_whole_through(old: (&str, Through), new: (&str, Through), shown: (&str, &str), budget: Option<usize>) -> Result<WholeDiff, String> {
+    let (of, oc, nf, nc) = two_versions_through(old, new)?;
+    let d = crate::vdiff::diff((&of, &oc), (&nf, &nc), budget.unwrap_or(crate::vdiff::DEFAULT_BUDGET));
+    Ok(WholeDiff {
+        text: crate::vdiff::render(&d, &nc, false),
+        markdown: crate::vdiff::markdown(&d, &nc, shown.0, shown.1, false),
+        json: crate::vdiff::render_json(&d, &nc, shown.0, shown.1),
+        differs: d.any(),
+        total: d.total(),
+    })
+}
+
 /// §10.4: apply two versions to the same records and report how many change and by how much.
 /// `rulec diff <old> <new>` with no `--fixtures`: the difference over the whole input
 /// space (§15.122). Exit 1 when anything moved, the way the record-shaped answer does.
@@ -1835,19 +1930,7 @@ fn vdiff_cmd(a: &String, b: &String, opts: &Args, md: bool, json: bool) -> ExitC
         );
         return ExitCode::from(2);
     }
-    let r = (|| -> Result<_, String> {
-        let (_, of, oc) = load_rule_with(a, true)?;
-        let (_, nf, nc) = load_rule_with(b, true)?;
-        if of.name.text != nf.name.text {
-            return Err(tr!(
-                "別の規則を比べようとしています（`{}` と `{}`）",
-                "comparing different rules (`{}` and `{}`)",
-                of.name.text, nf.name.text
-            ));
-        }
-        Ok((of, oc, nf, nc))
-    })();
-    let (of, oc, nf, nc) = match r {
+    let (of, oc, nf, nc) = match two_versions(a, b) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: {e}");

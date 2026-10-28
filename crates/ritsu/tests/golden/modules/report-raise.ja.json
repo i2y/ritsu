@@ -1,0 +1,363 @@
+{
+  "ritsu": "0.36.0",
+  "base": {
+    "rev": "one"
+  },
+  "head": {
+    "rev": null
+  },
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "new": [],
+    "gone": []
+  },
+  "modules": [
+    {
+      "module": "example.com/acme/pricing",
+      "prefix": "@pricing",
+      "change": "upgraded",
+      "old": {
+        "version": "1.0.0",
+        "digest": "sha256:<digest>"
+      },
+      "new": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "diagnostics": [],
+      "diff": {
+        "old": {
+          "path": "@pricing@1.0.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.0.0",
+          "digest": "sha256:<digest>"
+        },
+        "new": {
+          "path": "@pricing@1.1.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "files": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            "ritsu.mod",
+            "規則/送料.rule"
+          ],
+          "same": 2
+        },
+        "requires": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "behavior": [
+          {
+            "file": "規則/注文の合計.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "注文の合計",
+              "old": "@pricing@1.0.0/規則/注文の合計.rule",
+              "new": "@pricing@1.1.0/規則/注文の合計.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 1,
+              "feasible": 1,
+              "same": 1,
+              "differing": 0,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          },
+          {
+            "file": "規則/送料.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "送料",
+              "old": "@pricing@1.0.0/規則/送料.rule",
+              "new": "@pricing@1.1.0/規則/送料.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 14,
+              "feasible": 14,
+              "same": 10,
+              "differing": 4,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [
+                {
+                  "what": "enum_value_added",
+                  "name": "地域.EU"
+                }
+              ],
+              "changes": [
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "国内"
+                      ],
+                      "text": "地域 = 国内"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2001",
+                          "to": "2499"
+                        },
+                        {
+                          "from": "2500",
+                          "to": "2500"
+                        }
+                      ],
+                      "text": "重さ >=2001g <=2500g"
+                    }
+                  ],
+                  "text": "地域 = 国内  かつ  重さ >=2001g <=2500g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "695",
+                      "new": "395"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 2
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 1
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "国内"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "2001"
+                    }
+                  ],
+                  "cells": 2
+                },
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "その他の地域"
+                      ],
+                      "text": "地域 = その他の地域"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2001",
+                          "to": "2499"
+                        },
+                        {
+                          "from": "2500",
+                          "to": "2500"
+                        }
+                      ],
+                      "text": "重さ >=2001g <=2500g"
+                    }
+                  ],
+                  "text": "地域 = その他の地域  かつ  重さ >=2001g <=2500g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "2950",
+                      "new": "1850"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 4
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 5
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "その他の地域"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "2001"
+                    }
+                  ],
+                  "cells": 2
+                }
+              ],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          }
+        ],
+        "interface": [
+          {
+            "file": "規則/送料.rule",
+            "tool": "rulec",
+            "how": "api",
+            "version": null,
+            "changes": [
+              {
+                "at": "/python/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "EU"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/typescript/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "EU"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/javascript/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "EU"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/rust/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "Eu"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/ruby/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "EU"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/php/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "Region::EU"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/go/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "RegionEu"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/swift/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "eu"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/java/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "Region.EU"
+                },
+                "may_break": false
+              },
+              {
+                "at": "/connect/enums/地域/values/その他の地域/number",
+                "change": "changed",
+                "old": 2,
+                "new": 3,
+                "may_break": true
+              },
+              {
+                "at": "/connect/enums/地域/values/EU",
+                "change": "added",
+                "old": null,
+                "new": {
+                  "name": "EU",
+                  "alias": "REGION_EU",
+                  "number": 2
+                },
+                "may_break": false
+              }
+            ],
+            "breaks": [],
+            "note": null
+          }
+        ],
+        "differs": true
+      },
+      "error": null,
+      "yours": []
+    }
+  ],
+  "ok": true
+}

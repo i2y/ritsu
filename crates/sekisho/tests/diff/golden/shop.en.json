@@ -1,0 +1,403 @@
+{
+  "sekisho": "0.36.0",
+  "old": {
+    "file": "tests/diff/shop.gate",
+    "name": "shop",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/shop_v2.gate",
+    "name": "shop",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "refund_order",
+      "combinations": 64,
+      "gained": [
+        {
+          "count": 2,
+          "old_policies": [],
+          "new_policies": [
+            "clerks_refund_small_amounts"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "no",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "6 to 8"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "no",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "6 to 8"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [],
+          "new_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund_up_to_15"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "6 to 8"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "6 to 8"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [],
+          "new_policies": [
+            "managers_refund_up_to_15"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "9 to 15"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "9 to 15"
+            }
+          ]
+        }
+      ],
+      "lost": [
+        {
+          "count": 4,
+          "old_policies": [
+            "clerks_refund_small_amounts"
+          ],
+          "new_policies": [
+            "suspended_members_refund_nothing"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "no",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "1 to 5"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "1 to 5"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "1 to 5"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund"
+          ],
+          "new_policies": [
+            "suspended_members_refund_nothing"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "1 to 5"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "1 to 5"
+            }
+          ]
+        },
+        {
+          "count": 4,
+          "old_policies": [
+            "managers_refund"
+          ],
+          "new_policies": [
+            "suspended_members_refund_nothing"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "6 to 8"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "9 to 15"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "6 to 8"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        {
+          "count": 22,
+          "old_policies": [],
+          "new_policies": [
+            "suspended_members_refund_nothing"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "no",
+              "manager": "no",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "1 to 5"
+            },
+            {
+              "principal": "User",
+              "clerk": "no",
+              "manager": "no",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "6 to 8"
+            },
+            {
+              "principal": "User",
+              "clerk": "no",
+              "manager": "no",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "yes",
+              "resource": "Order",
+              "amount": "9 to 15"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "clerks_refund_small_amounts"
+          ],
+          "new_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund_up_to_15"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "1 to 5"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "0 to 1",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "1 to 5"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund"
+          ],
+          "new_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund_up_to_15"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "1 to 5"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "1 to 5"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "managers_refund"
+          ],
+          "new_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund_up_to_15"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "6 to 8"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "6 to 8"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "managers_refund"
+          ],
+          "new_policies": [
+            "managers_refund_up_to_15"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "9 to 15"
+            },
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "principal.seniority": "2 to 10",
+              "principal.suspended": "no",
+              "resource": "Order",
+              "amount": "9 to 15"
+            }
+          ]
+        }
+      ],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [
+      "cancel_order"
+    ],
+    "roles": [],
+    "attributes": [
+      "User.seniority"
+    ],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [
+      "approve_refund"
+    ],
+    "roles": [
+      "auditor"
+    ],
+    "attributes": [
+      "User.region"
+    ],
+    "inputs": [],
+    "types": []
+  },
+  "total": {
+    "gained": 6,
+    "lost": 10,
+    "reasons": 30,
+    "unknown": 0
+  }
+}

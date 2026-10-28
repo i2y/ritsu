@@ -33,6 +33,8 @@ pub mod cli;
 pub mod codes;
 pub mod contracts;
 pub mod diag;
+/// `sekisho diff`: what changes between two versions of a gate (ritsu's DESIGN 17.9.4).
+pub mod diff;
 /// `sekisho doc`: the page for people, as Markdown and as one HTML file (DESIGN 7).
 pub mod doc;
 pub mod eval;

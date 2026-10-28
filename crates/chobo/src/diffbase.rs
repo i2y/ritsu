@@ -189,3 +189,17 @@ pub fn against(src_book: &Book, before: Option<&str>, rev: &str) -> (Vec<Diag>, 
         None => (vec![], Some(tr!("{rev} の帳簿にエラーがあるので、比べられません", "the book at {rev} has errors; it cannot be compared"))),
     }
 }
+
+/// The diagnostics of the change from the book whose text is `old` to the one whose text is `new`,
+/// the old one named `label` in them (as `rev` is in [`compare`]): what `ritsu mod diff` holds two
+/// versions of a module's book to (ritsu's DESIGN 17.9.5), with no revision to read. Err, saying
+/// which, when a book does not read.
+pub fn between(old: &str, new: &str, label: &str) -> Result<Vec<Diag>, Text> {
+    let (Some(o), _) = model::load(old) else {
+        return Err(tr!("{label} の帳簿にエラーがあるので、比べられません", "the book at {label} has errors; it cannot be compared"));
+    };
+    let (Some(n), _) = model::load(new) else {
+        return Err(tr!("新しい版の帳簿にエラーがあるので、比べられません", "the book of the new version has errors; it cannot be compared"));
+    };
+    Ok(compare(&o, &n, label))
+}

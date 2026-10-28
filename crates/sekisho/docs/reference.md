@@ -553,6 +553,12 @@ $ sekisho explain E302
   run-tests`: the request, the entities, and the decision and the deciding policies by sekisho's
   reference evaluation, at both ends of each stretch of a number.
 - `api <file.gate> [--root <dir>]`: JSON for other tools (below).
+- `diff <old> <new> [--format text|markdown|json] [--budget <n>] [--root <dir>]`: what changes between
+  two versions of a gate, for each action both have, on every combination of both versions' cuts:
+  the permissions gained and lost, the combinations decided by other policies, and what only one
+  version has. Each side is a path, `<path>@<git revision>`, `@<name>/<path>` or
+  `@<name>@<version>/<path>`; a side that does not pass check stops it (exit 2). `--budget` is the
+  most combinations of one action walked over both versions.
 - `explain <code> | --all [--format markdown|json]`: when a diagnostic is printed, how to fix it,
   and the smallest file that prints it.
 
@@ -565,8 +571,8 @@ English) and `--help`.
 | Code | When |
 |---|---|
 | 0 | no errors (there may be warnings); generated; printed |
-| 1 | at least one error; `gen --check` found a file that differs or is missing |
-| 2 | bad arguments, a file that cannot be read or written, or a file that reads another language run with sekisho's own binary (E209) |
+| 1 | at least one error; `gen --check` found a file that differs or is missing; `diff` found a permission gained or lost, or an interface that differs |
+| 2 | bad arguments, a file that cannot be read or written, or a file that reads another language run with sekisho's own binary (E209); two versions `diff` cannot compare |
 
 ## JSON
 

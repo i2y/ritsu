@@ -1,0 +1,267 @@
+{
+  "ritsu": "0.36.0",
+  "base": {
+    "rev": "two"
+  },
+  "head": {
+    "rev": null
+  },
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "new": [],
+    "gone": []
+  },
+  "modules": [
+    {
+      "module": "example.com/acme/pricing",
+      "prefix": "@pricing",
+      "change": "moved",
+      "old": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "new": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "diagnostics": [],
+      "diff": {
+        "old": {
+          "path": "@pricing@1.1.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "new": {
+          "path": "@pricing@1.1.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "files": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            "rules/shipping_fee.rule"
+          ],
+          "same": 3
+        },
+        "requires": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "behavior": [
+          {
+            "file": "rules/order_total.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "order_total",
+              "old": "@pricing@1.1.0/rules/order_total.rule",
+              "new": "@pricing@1.1.0/rules/order_total.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 1,
+              "feasible": 1,
+              "same": 1,
+              "differing": 0,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          },
+          {
+            "file": "rules/shipping_fee.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "shipping_fee",
+              "old": "@pricing@1.1.0/rules/shipping_fee.rule",
+              "new": "@pricing@1.1.0/rules/shipping_fee.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 15,
+              "feasible": 15,
+              "same": 13,
+              "differing": 2,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [
+                {
+                  "region": [
+                    {
+                      "column": "region",
+                      "kind": "input",
+                      "accepts": [
+                        "world"
+                      ],
+                      "text": "region = world"
+                    },
+                    {
+                      "column": "weight",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2501",
+                          "to": "29999"
+                        },
+                        {
+                          "from": "30000",
+                          "to": "30000"
+                        }
+                      ],
+                      "text": "weight >=2501g <=30000g"
+                    }
+                  ],
+                  "text": "region = world  and  weight >=2501g <=30000g",
+                  "outputs": [
+                    {
+                      "output": "fee",
+                      "old": "2950",
+                      "new": "3150"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "fee_by_weight",
+                      "row": 6
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "fee_by_weight",
+                      "row": 6
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "region",
+                      "value": "world"
+                    },
+                    {
+                      "input": "weight",
+                      "value": "2501"
+                    }
+                  ],
+                  "cells": 2
+                }
+              ],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          }
+        ],
+        "interface": [
+          {
+            "file": "rules/shipping_fee.rule",
+            "tool": "rulec",
+            "how": "api",
+            "version": null,
+            "changes": [
+              {
+                "at": "/python/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/typescript/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/javascript/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/rust/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/ruby/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/php/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/go/output_fields/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/swift/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/java/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/numpy/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/sql/outputs/fee/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              }
+            ],
+            "breaks": [],
+            "note": null
+          }
+        ],
+        "differs": true
+      },
+      "error": null,
+      "yours": []
+    }
+  ],
+  "ok": true
+}

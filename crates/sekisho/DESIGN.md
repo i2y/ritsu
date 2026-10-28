@@ -59,7 +59,7 @@ Cedar は小さく、解析しやすく、意味は Lean で形式化されて�
 - 見出しは `gate <名前> v1`、次に `description "…"`。`v1` は人のための目印で、生成物の頭と `api` に書き出すだけである。
 - ほかのファイルは `use rule … from "…"`、`use dates … from "…"`、`use calendar … from "…"`、`use openapi|proto … from "…"` で読む（dandori と同じ）。
 - 数は rulec の単位の型で書く（`money[GBP, incl_tax]`、`range >=1GBP <=10_000GBP`）。日付は `date`。
-- コマンドは `check`・`gen`・`doc`・`api`・`vectors`・`explain`。終了コードは 0、1、2（ritsu の DESIGN 4.4）。診断の形と台帳は ritsu の土台のもの。
+- コマンドは `check`・`gen`・`doc`・`api`・`vectors`・`diff`・`explain`。終了コードは 0、1、2（ritsu の DESIGN 4.4）。診断の形と台帳は ritsu の土台のもの。
 - 例とテストは英語が先で、日本語の版を `<名前>.ja.gate` として横に置く（ritsu の DESIGN 10.10）。
 
 ### 0.5 語
@@ -1592,10 +1592,11 @@ sekisho gen <file.gate>... --target cedar|typescript|python|go [--authorizer ced
 sekisho doc <file.gate> [--format markdown|html] [--root <dir>] [--lang en|ja]
 sekisho vectors <file.gate> [--action <action>] [--root <dir>]          全部の組み合わせを cedar run-tests の形で
 sekisho api <file.gate> [--root <dir>]                                   外のツールのための JSON（action、守る操作、役割、ポリシーの @id、期待）
+sekisho diff <old> <new> [--format text|markdown|json] [--budget <n>] [--root <dir>] [--lang en|ja]   二つの版の決定の差
 sekisho explain <code> | --all [--format markdown|json]
 ```
 
-- 段階 D までにできたもの：`check`、`explain`、`gen --target cedar`（段階 B。5 章）と `typescript`・`python`・`go`・`--authorizer`・`--module`（段階 C。5.3〜5.6）、`vectors`（6.1）、`api`、`doc`（段階 D。7 章）。コマンドの表（`src/cli.rs`）には、できたものだけを載せる（ritsu の DESIGN 4.4。載せたフラグは必ず効く）。
+- 段階 D までにできたもの：`check`、`explain`、`gen --target cedar`（段階 B。5 章）と `typescript`・`python`・`go`・`--authorizer`・`--module`（段階 C。5.3〜5.6）、`vectors`（6.1）、`api`、`doc`（段階 D。7 章）。`diff` はモジュールの仕組みと一緒に足した（ritsu の DESIGN 17.9.4）。両方にある action ごとに、二つの版の切り方を合わせた組み合わせの全部で決定を比べ、許可が増えたか減ったか、片方にしかないものがあれば exit 1、比べられなければ exit 2。コマンドの表（`src/cli.rs`）には、できたものだけを載せる（ritsu の DESIGN 4.4。載せたフラグは必ず効く）。
 - `gen --authorizer avp` は、Verified Permissions の上限を超えるものがあれば W401 を言い（5.8）、生成は続ける。警告なので終了コードは変わらない。
 - `vectors`、`api`、`doc` は、検査を通るファイルを一つ取る。通らなければ、その診断を出して exit 1。`vectors --action` は action の名前か別名で、無ければ exit 2。
 - `api` の JSON は、koyomi と chobo の `api` と同じく、ツールと版とファイルのことから始まる：`sekisho`（版）、`name`、`alias`、`version`、`source_sha256`、`description`、`namespace`、`uses`（`use` の行）、`today`、`cedar`（`gen --target cedar` が書く四つのファイル）、`roles`（Cedar のエンティティ、`includes`、`can`）、`types`（エンティティタイプ、持てる役割、親になれる型、属性と Cedar に出るか）、`workflows`、`actions`（エンティティ、守る操作、principal と resource の型、`from`、`nobody`、`input`、context の値と、計算の式、Cedar に渡る値、省けるか。`allowed` の値は `asks` に、尋ねる action と、その入力に渡すもの）、`policies`（`@id`、効く action、書いたファイル）、`expects`、`separations`。どれも行の番号を持つ。守る操作（`actions` の `guards`）は、一つずつ `{"reference": …, "line": …}` で、`reference` は sakai の `api` と同じ参照の JSON（`{"text", "tool", "path", "items"}`。ritsu の DESIGN 6.2 の 7）、パスはルートから（2.6）である。`uses` の `path` と `policies` の `file` は、`.gate` のディレクトリから書く（手元のパスを書かない）。

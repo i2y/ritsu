@@ -1,0 +1,84 @@
+{
+  "koyomi": "0.36.0",
+  "kind": "dates",
+  "old": {
+    "file": "payment_by_day.cal",
+    "name": "payment",
+    "version": "1"
+  },
+  "new": {
+    "file": "payment_by_day_later.cal",
+    "name": "payment",
+    "version": "1"
+  },
+  "inputs": {
+    "compared": [
+      {
+        "name": "received",
+        "type": "date",
+        "from": "2026-01-01",
+        "to": "2026-10-31",
+        "old": {
+          "from": "2026-01-01",
+          "to": "2026-10-31"
+        },
+        "new": {
+          "from": "2026-01-01",
+          "to": "2026-10-31"
+        }
+      },
+      {
+        "name": "pay_day",
+        "type": "int",
+        "from": 9,
+        "to": 11,
+        "old": {
+          "from": 9,
+          "to": 11
+        },
+        "new": {
+          "from": 9,
+          "to": 11
+        }
+      }
+    ],
+    "only_old": [],
+    "only_new": []
+  },
+  "comparable": true,
+  "combinations": 912,
+  "dates": {
+    "compared": [
+      "closing",
+      "payment"
+    ],
+    "only_old": [],
+    "only_new": []
+  },
+  "changes": [
+    {
+      "date": "payment",
+      "inputs": {
+        "received": {
+          "from": "2026-04-21",
+          "to": "2026-05-20"
+        },
+        "pay_day": 10
+      },
+      "old": {
+        "from": "2026-06-10",
+        "to": "2026-06-10"
+      },
+      "new": {
+        "from": "2026-06-09",
+        "to": "2026-06-09"
+      },
+      "shift_days": -1,
+      "combinations": 30
+    }
+  ],
+  "same_elsewhere": true,
+  "total": {
+    "combinations_changed": 30
+  }
+}

@@ -1,0 +1,29 @@
+ritsu mod diff：example.com/acme/stock 1.0.0 → 1.1.0
+  古い版：在庫-1.0.0
+  新しい版：在庫-1.1.0
+
+ファイル：変わった 2
+  変わった：ritsu.mod
+  変わった：帳簿/在庫.book
+require：変わりません
+
+インターフェース：
+  帳簿/在庫.book (chobo、api)：差が 15 件、うち使う側を壊しうるもの 6 件
+    ファイルの頭の版：1 → 2
+    データを壊す差：E050（4 行目）：勘定 `棚` の下限（0 → 3）が 在庫-1.0.0 のときと違います。すでにある勘定は前の定義のまま残るので、chobo はこの変更を扱えません
+    データを壊す差：E051（9 行目）：振替 `入荷` のキーが 在庫-1.0.0 のときと違います。呼んでいる途中の操作をリトライすると key_conflict で拒否されます
+    壊しうる：変わった：/accounts/棚/lower/value：0 → 3
+    壊しうる：消した：/transfers/入荷/key/1
+    壊しうる：変わった：/transfers/入荷/definition："4b08ebd597351ce90255bd4b574d237f" → "9d464b2546c1a224918a7b384cddfecb"
+    壊しうる：消した：/transfers/入荷/operations/do/key/params/1
+    壊しうる：変わった：/transfers/出荷/definition："766d277360a66d957d82b5d6e96e2238" → "1a602936af02acd196b4320c99d26ead"
+    壊しうる：変わった：/transfers/出荷/operations/do/refusals/在庫切れ/bound："at least 0" → "at least 3"
+    足した：/transfers/返品
+    足した：/targets/postgres/functions/返品_do
+    足した：/targets/{typescript,python,go,rust}/transfers/2
+    足した：/targets/tigerbeetle/chains/1/transfers/1
+    足した：/targets/tigerbeetle/chains/1/transfers/2
+    足した：/targets/tigerbeetle/chains/2
+  壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
+
+振る舞いかインターフェースに、示せた違いがあります。

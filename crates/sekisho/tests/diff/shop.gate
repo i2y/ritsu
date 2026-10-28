@@ -1,0 +1,54 @@
+gate shop v1
+description "The shop of the tests of sekisho diff: who refunds an order, and who cancels one"
+namespace Shop
+
+enum state = open | shipped | closed
+
+role clerk
+  description "Answers customers and refunds small amounts"
+
+role manager
+  description "Runs the shop"
+  includes clerk
+
+principal User
+  description "A member of the staff"
+  roles clerk, manager
+  attributes
+    suspended : bool
+    seniority : number  range >=0 <=10
+
+resource Order
+  description "An order of the shop"
+  attributes
+    state : state
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    amount : number  range >=1 <=20
+
+action cancel_order
+  description "Cancel an order"
+  principal User
+  resource Order
+
+permit clerks_refund_small_amounts
+  description "A clerk refunds up to 5"
+  principal in clerk
+  action refund_order
+  when amount <= 5
+
+permit managers_refund
+  description "A manager of some seniority refunds up to 15"
+  principal in manager
+  action refund_order
+  when amount <= 15 and principal.seniority >= 2
+
+permit clerks_cancel_open_orders
+  description "A clerk cancels an order that is open"
+  principal in clerk
+  action cancel_order
+  when resource.state is open

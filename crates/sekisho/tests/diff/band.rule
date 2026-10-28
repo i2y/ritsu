@@ -1,0 +1,16 @@
+rule band v1
+description "The band of a refund: small up to 5, large above. The amounts are the test's own"
+
+enum band = small | large
+
+inputs
+  amount : number  range >=1 <=20
+
+outputs
+  band : band
+
+table band
+policy unique
+| amount | -> band |
+| <=5    | small   |
+| >=6    | large   |

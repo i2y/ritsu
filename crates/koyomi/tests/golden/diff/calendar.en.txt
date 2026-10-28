@@ -1,0 +1,16 @@
+koyomi diff: calendar office v1 → v2
+  old: office.cal
+  new: office_v2.cal
+
+compared: 2026-01-01..2026-12-31 (365 days, the days both versions know)
+
+open or closed changed (1 interval, 1 day):
+  2026-06-10: open → closed (Founding day)
+
+closed in both, for other reasons (1 interval, 1 day):
+  2026-05-04: Early May bank holiday → May Day
+
+the days known: 2026-01-01..2026-12-31 → 2026-01-01..2027-12-31
+offset: none → +01:00
+
+every other day of 2026-01-01..2026-12-31 gets the same answer.

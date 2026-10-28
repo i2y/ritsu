@@ -1,0 +1,16 @@
+rule 区分(band_ja) v2
+description "返金の区分の二つ目の版。8 までは少額、それより上は多額。金額はこの試験のもの"
+
+enum 区分(band) = 少額(small) | 多額(large)
+
+inputs
+  金額(amount) : number  range >=1 <=20
+
+outputs
+  区分(band) : 区分
+
+table 区分(band)
+policy unique
+| 金額 | -> 区分 |
+| <=8  | 少額    |
+| >=9  | 多額    |

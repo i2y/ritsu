@@ -1,0 +1,267 @@
+{
+  "ritsu": "0.36.0",
+  "base": {
+    "rev": "two"
+  },
+  "head": {
+    "rev": null
+  },
+  "check": {
+    "base": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "head": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "new": [],
+    "gone": []
+  },
+  "modules": [
+    {
+      "module": "example.com/acme/pricing",
+      "prefix": "@pricing",
+      "change": "moved",
+      "old": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "new": {
+        "version": "1.1.0",
+        "digest": "sha256:<digest>"
+      },
+      "diagnostics": [],
+      "diff": {
+        "old": {
+          "path": "@pricing@1.1.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "new": {
+          "path": "@pricing@1.1.0",
+          "module": "example.com/acme/pricing",
+          "version": "1.1.0",
+          "digest": "sha256:<digest>"
+        },
+        "files": {
+          "added": [],
+          "removed": [],
+          "changed": [
+            "規則/送料.rule"
+          ],
+          "same": 3
+        },
+        "requires": {
+          "added": [],
+          "removed": [],
+          "changed": []
+        },
+        "behavior": [
+          {
+            "file": "規則/注文の合計.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "注文の合計",
+              "old": "@pricing@1.1.0/規則/注文の合計.rule",
+              "new": "@pricing@1.1.0/規則/注文の合計.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 1,
+              "feasible": 1,
+              "same": 1,
+              "differing": 0,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          },
+          {
+            "file": "規則/送料.rule",
+            "tool": "rulec",
+            "result": {
+              "rule": "送料",
+              "old": "@pricing@1.1.0/規則/送料.rule",
+              "new": "@pricing@1.1.0/規則/送料.rule",
+              "old_version": "1",
+              "new_version": "1",
+              "over_budget": false,
+              "total": true,
+              "cells": 15,
+              "feasible": 15,
+              "same": 13,
+              "differing": 2,
+              "unsettled": 0,
+              "unrealized": 0,
+              "domain": [],
+              "changes": [
+                {
+                  "region": [
+                    {
+                      "column": "地域",
+                      "kind": "input",
+                      "accepts": [
+                        "その他の地域"
+                      ],
+                      "text": "地域 = その他の地域"
+                    },
+                    {
+                      "column": "重さ",
+                      "kind": "input",
+                      "accepts": [
+                        {
+                          "from": "2501",
+                          "to": "29999"
+                        },
+                        {
+                          "from": "30000",
+                          "to": "30000"
+                        }
+                      ],
+                      "text": "重さ >=2501g <=30000g"
+                    }
+                  ],
+                  "text": "地域 = その他の地域  かつ  重さ >=2501g <=30000g",
+                  "outputs": [
+                    {
+                      "output": "料金",
+                      "old": "2950",
+                      "new": "3150"
+                    }
+                  ],
+                  "uniform": true,
+                  "old_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 6
+                    }
+                  ],
+                  "new_rows": [
+                    {
+                      "table": "重さの段",
+                      "row": 6
+                    }
+                  ],
+                  "witness": [
+                    {
+                      "input": "地域",
+                      "value": "その他の地域"
+                    },
+                    {
+                      "input": "重さ",
+                      "value": "2501"
+                    }
+                  ],
+                  "cells": 2
+                }
+              ],
+              "unknown": [],
+              "machine": null
+            },
+            "error": null
+          }
+        ],
+        "interface": [
+          {
+            "file": "規則/送料.rule",
+            "tool": "rulec",
+            "how": "api",
+            "version": null,
+            "changes": [
+              {
+                "at": "/python/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/typescript/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/javascript/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/rust/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/ruby/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/php/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/go/output_fields/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/swift/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/java/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/numpy/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              },
+              {
+                "at": "/sql/outputs/料金/range/max",
+                "change": "changed",
+                "old": 2950,
+                "new": 3150,
+                "may_break": true
+              }
+            ],
+            "breaks": [],
+            "note": null
+          }
+        ],
+        "differs": true
+      },
+      "error": null,
+      "yours": []
+    }
+  ],
+  "ok": true
+}

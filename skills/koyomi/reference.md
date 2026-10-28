@@ -366,6 +366,7 @@ A small language for closing days, payment days, business days and month arithme
 Usage:
   koyomi check <file.cal>...                   compute on every input of the range, and hold the claims and the examples to it
   koyomi eval <file.cal> <name>=<value>...     compute every date on one input and show each step; for a calendar, whether a day is open or closed
+  koyomi diff <old> <new>                      compare the answers of two versions: a calendar on every day both know, a dates file on every input both take
   koyomi gen <file.cal>...                     generate TypeScript, Python, Go, Rust, SQL and Wasm, each with a runner; nothing is generated from a file that does not pass check
   koyomi vectors <file.cal>                    print the reference interpreter's result for every input of the range as JSON Lines, with the inputs just outside it
   koyomi doc <file.cal>                        print the page for people (accounting, legal, whoever keeps the calendar, the developers reviewing the code): Markdown, or one HTML file
@@ -382,6 +383,7 @@ Exit codes: 0 no errors / 1 errors / 2 bad arguments or a file that cannot be re
 |---|---|
 | `koyomi check <file.cal>...` | `--format json`, `--budget <n>`; a directory stands for every `.cal` under it |
 | `koyomi eval <file.cal> <name>=<value>...` | `--format json`; a name or its alias; for a calendar, one date (`koyomi eval examples/calendars/england_and_wales.cal 2026-04-03`) |
+| `koyomi diff <old> <new>` | `--format markdown\|json`, `--budget <n>`; two calendars or two dates files, each a path, `<path>@<git revision>`, `@<name>/<path>` or `@<name>@<version>/<path>` |
 | `koyomi gen <file.cal>...` | `--target typescript\|python\|go\|rust\|sql\|wasm` (every target without it), `--out <dir>` (`generated`), `--check` |
 | `koyomi vectors <file.cal>` | |
 | `koyomi doc <file.cal>` | `--format markdown\|html`, `--months <YYYY-MM>..<YYYY-MM>` |
@@ -396,7 +398,8 @@ value and a flag given twice are refused with exit code 2, never ignored.
 **Exit codes.** 0 when there is no error (warnings may be), 1 when there is one, 2 for bad
 arguments, a file that cannot be read, or a bug in koyomi. `doc` prints a page, and exits 0, for a
 file whose claims or examples fail; any other error leaves it without a page, with exit 1.
-`source outdated` exits 1 when a source has moved on.
+`source outdated` exits 1 when a source has moved on. `diff` exits 1 when the inputs or the answers
+of the two versions differ, and 2 when they cannot be compared.
 
 **The network.** Only `source fetch` and `source outdated` read it, through `curl`, trying an HTTP
 URL three times. Every other command, `check` among them, reads only the files.

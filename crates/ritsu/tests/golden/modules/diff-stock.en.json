@@ -1,0 +1,298 @@
+{
+  "ritsu": "0.36.0",
+  "old": {
+    "path": "stock-1.0.0",
+    "module": "example.com/acme/stock",
+    "version": "1.0.0",
+    "digest": null
+  },
+  "new": {
+    "path": "stock-1.1.0",
+    "module": "example.com/acme/stock",
+    "version": "1.1.0",
+    "digest": null
+  },
+  "files": {
+    "added": [],
+    "removed": [],
+    "changed": [
+      "books/stock.book",
+      "ritsu.mod"
+    ],
+    "same": 0
+  },
+  "requires": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "behavior": [],
+  "interface": [
+    {
+      "file": "books/stock.book",
+      "tool": "chobo",
+      "how": "api",
+      "version": {
+        "old": "1",
+        "new": "2"
+      },
+      "changes": [
+        {
+          "at": "/accounts/shelf/lower/value",
+          "change": "changed",
+          "old": 0,
+          "new": 3,
+          "may_break": true
+        },
+        {
+          "at": "/transfers/receive/key/1",
+          "change": "removed",
+          "old": "sku",
+          "new": null,
+          "may_break": true
+        },
+        {
+          "at": "/transfers/receive/definition",
+          "change": "changed",
+          "old": "181da693d81130042643070747c5bb1c",
+          "new": "b0574e00b7d68262080316101403e8c7",
+          "may_break": true
+        },
+        {
+          "at": "/transfers/receive/operations/do/key/params/1",
+          "change": "removed",
+          "old": "sku",
+          "new": null,
+          "may_break": true
+        },
+        {
+          "at": "/transfers/ship/definition",
+          "change": "changed",
+          "old": "0369dd8e4cec74d2c1e5f68bf98ee348",
+          "new": "2e82fe24dacb05136689593c7a23ff0f",
+          "may_break": true
+        },
+        {
+          "at": "/transfers/ship/operations/do/refusals/out_of_stock/bound",
+          "change": "changed",
+          "old": "at least 0",
+          "new": "at least 3",
+          "may_break": true
+        },
+        {
+          "at": "/transfers/take_back",
+          "change": "added",
+          "old": null,
+          "new": {
+            "name": "take_back",
+            "description": null,
+            "params": [
+              {
+                "name": "slip",
+                "type": "string"
+              },
+              {
+                "name": "sku",
+                "type": "string"
+              },
+              {
+                "name": "count",
+                "type": "amount",
+                "unit": "piece"
+              }
+            ],
+            "key": [
+              "slip",
+              "sku"
+            ],
+            "pending": null,
+            "moves": [
+              {
+                "amount": {
+                  "param": "count"
+                },
+                "from": {
+                  "account": "customer",
+                  "args": []
+                },
+                "to": {
+                  "account": "shelf",
+                  "args": [
+                    {
+                      "param": "sku"
+                    }
+                  ]
+                }
+              }
+            ],
+            "code": 10774,
+            "definition": "09d46ec9fdebbdce6ebad83421240bb7",
+            "operations": {
+              "do": {
+                "refusals": [
+                  {
+                    "name": "key_conflict",
+                    "because": "key",
+                    "spends_key": false
+                  }
+                ],
+                "key": {
+                  "params": [
+                    "slip",
+                    "sku"
+                  ]
+                }
+              }
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/postgres/functions/take_back_do",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "take_back",
+            "op": "do",
+            "name": "take_back_do",
+            "params": [
+              "p_tenant",
+              "p_slip",
+              "p_sku",
+              "p_count"
+            ]
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/typescript/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "take_back",
+            "member": "take_back",
+            "args": "take_backArgs"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/python/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "take_back",
+            "member": "take_back",
+            "params": {
+              "slip": "slip",
+              "sku": "sku",
+              "count": "count"
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/go/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "take_back",
+            "member": "Take_back",
+            "args": "Take_backArgs",
+            "fields": {
+              "slip": "Slip",
+              "sku": "Sku",
+              "count": "Count"
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/rust/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "take_back",
+            "member": "take_back",
+            "args": "TakeBackArgs",
+            "calls": "TakeBackCalls",
+            "fields": {
+              "slip": "slip",
+              "sku": "sku",
+              "count": "count"
+            },
+            "operations": {
+              "do": "r#do"
+            }
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/tigerbeetle/chains/1/transfers/1",
+          "change": "added",
+          "old": null,
+          "new": {
+            "move": 1,
+            "role": "probe"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/tigerbeetle/chains/1/transfers/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "move": 1,
+            "role": "probe_void"
+          },
+          "may_break": false
+        },
+        {
+          "at": "/targets/tigerbeetle/chains/2",
+          "change": "added",
+          "old": null,
+          "new": {
+            "kind": "take_back",
+            "op": "do",
+            "transfers": [
+              {
+                "move": 1,
+                "role": "main"
+              }
+            ]
+          },
+          "may_break": false
+        }
+      ],
+      "breaks": [
+        {
+          "code": "E050",
+          "severity": "error",
+          "file": "books/stock.book",
+          "line": 4,
+          "col": 9,
+          "message": "the account `shelf` differs from stock-1.0.0 in its lower bound (0 → 3): the accounts that already exist keep the old definition, so chobo cannot make this change",
+          "notes": [],
+          "excerpt": "",
+          "operations": [],
+          "hint": "declare an account under a new name, and write a transfer that moves the balances over",
+          "fix": null
+        },
+        {
+          "code": "E051",
+          "severity": "error",
+          "file": "books/stock.book",
+          "line": 9,
+          "col": 10,
+          "message": "the transfer `receive` differs from stock-1.0.0 in its key: a retry in flight would be refused with key_conflict",
+          "notes": [],
+          "excerpt": "",
+          "operations": [],
+          "hint": "declare the new form under a new name, and keep the old one until every hold it made has ended",
+          "fix": null
+        }
+      ],
+      "note": null
+    }
+  ],
+  "differs": true
+}

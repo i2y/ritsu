@@ -1,0 +1,472 @@
+{
+  "ritsu": "0.36.0",
+  "old": {
+    "path": "desk-1.0.0",
+    "module": "example.com/acme/desk",
+    "version": "1.0.0",
+    "digest": null
+  },
+  "new": {
+    "path": "desk-1.1.0",
+    "module": "example.com/acme/desk",
+    "version": "1.1.0",
+    "digest": null
+  },
+  "files": {
+    "added": [
+      "calendars/data/days_off_v2.csv"
+    ],
+    "removed": [
+      "calendars/data/days_off.csv"
+    ],
+    "changed": [
+      "calendars/office.cal",
+      "gates/band.rule",
+      "gates/limits.gate",
+      "ritsu.mod"
+    ],
+    "same": 1
+  },
+  "requires": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "behavior": [
+    {
+      "file": "calendars/office.cal",
+      "tool": "koyomi",
+      "result": {
+        "koyomi": "0.36.0",
+        "kind": "calendar",
+        "old": {
+          "file": "desk-1.0.0/calendars/office.cal",
+          "name": "office",
+          "version": "1"
+        },
+        "new": {
+          "file": "desk-1.1.0/calendars/office.cal",
+          "name": "office",
+          "version": "2"
+        },
+        "compared": {
+          "from": "2026-01-01",
+          "to": "2026-12-31",
+          "days": 365
+        },
+        "changes": [
+          {
+            "from": "2026-06-10",
+            "to": "2026-06-10",
+            "days": 1,
+            "old": "open",
+            "new": "closed",
+            "old_reasons": [],
+            "new_reasons": [
+              "Founding day"
+            ]
+          }
+        ],
+        "renamed": [
+          {
+            "from": "2026-05-04",
+            "to": "2026-05-04",
+            "old_reasons": [
+              "Early May bank holiday"
+            ],
+            "new_reasons": [
+              "May Day"
+            ]
+          }
+        ],
+        "known": {
+          "old": {
+            "from": "2026-01-01",
+            "to": "2026-12-31"
+          },
+          "new": {
+            "from": "2026-01-01",
+            "to": "2027-12-31"
+          }
+        },
+        "offset": {
+          "old": "none",
+          "new": "+01:00"
+        },
+        "same_elsewhere": true,
+        "total": {
+          "changed_days": 1
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "calendars/payment.cal",
+      "tool": "koyomi",
+      "result": {
+        "koyomi": "0.36.0",
+        "kind": "dates",
+        "old": {
+          "file": "desk-1.0.0/calendars/payment.cal",
+          "name": "payment",
+          "version": "1"
+        },
+        "new": {
+          "file": "desk-1.1.0/calendars/payment.cal",
+          "name": "payment",
+          "version": "1"
+        },
+        "inputs": {
+          "compared": [
+            {
+              "name": "received",
+              "type": "date",
+              "from": "2026-01-01",
+              "to": "2026-10-31",
+              "old": {
+                "from": "2026-01-01",
+                "to": "2026-10-31"
+              },
+              "new": {
+                "from": "2026-01-01",
+                "to": "2026-10-31"
+              }
+            }
+          ],
+          "only_old": [],
+          "only_new": []
+        },
+        "comparable": true,
+        "combinations": 304,
+        "dates": {
+          "compared": [
+            "closing",
+            "payment"
+          ],
+          "only_old": [],
+          "only_new": []
+        },
+        "changes": [
+          {
+            "date": "payment",
+            "inputs": {
+              "received": {
+                "from": "2026-04-21",
+                "to": "2026-05-20"
+              }
+            },
+            "old": {
+              "from": "2026-06-10",
+              "to": "2026-06-10"
+            },
+            "new": {
+              "from": "2026-06-09",
+              "to": "2026-06-09"
+            },
+            "shift_days": -1,
+            "combinations": 30
+          }
+        ],
+        "same_elsewhere": true,
+        "total": {
+          "combinations_changed": 30
+        }
+      },
+      "error": null
+    },
+    {
+      "file": "gates/band.rule",
+      "tool": "rulec",
+      "result": {
+        "rule": "band",
+        "old": "desk-1.0.0/gates/band.rule",
+        "new": "desk-1.1.0/gates/band.rule",
+        "old_version": "1",
+        "new_version": "2",
+        "over_budget": false,
+        "total": true,
+        "cells": 9,
+        "feasible": 9,
+        "same": 6,
+        "differing": 3,
+        "unsettled": 0,
+        "unrealized": 0,
+        "domain": [],
+        "changes": [
+          {
+            "region": [
+              {
+                "column": "amount",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "6",
+                    "to": "6"
+                  },
+                  {
+                    "from": "7",
+                    "to": "7"
+                  },
+                  {
+                    "from": "8",
+                    "to": "8"
+                  }
+                ],
+                "text": "amount >=6 <=8"
+              }
+            ],
+            "text": "amount >=6 <=8",
+            "outputs": [
+              {
+                "output": "band",
+                "old": "large",
+                "new": "small"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "band",
+                "row": 2
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "band",
+                "row": 1
+              }
+            ],
+            "witness": [
+              {
+                "input": "amount",
+                "value": "6"
+              }
+            ],
+            "cells": 3
+          }
+        ],
+        "unknown": [],
+        "machine": null
+      },
+      "error": null
+    },
+    {
+      "file": "gates/limits.gate",
+      "tool": "sekisho",
+      "result": {
+        "sekisho": "0.36.0",
+        "old": {
+          "file": "desk-1.0.0/gates/limits.gate",
+          "name": "limits",
+          "version": "v1"
+        },
+        "new": {
+          "file": "desk-1.1.0/gates/limits.gate",
+          "name": "limits",
+          "version": "v2"
+        },
+        "actions": [
+          {
+            "action": "refund_order",
+            "combinations": 20,
+            "gained": [
+              {
+                "count": 1,
+                "old_policies": [],
+                "new_policies": [
+                  "clerks_refund_small_amounts"
+                ],
+                "examples": [
+                  {
+                    "principal": "User",
+                    "clerk": "yes",
+                    "manager": "no",
+                    "resource": "Order",
+                    "amount": "1 to 15",
+                    "size": "small",
+                    "old size": "large"
+                  }
+                ]
+              }
+            ],
+            "lost": [],
+            "reasons": [
+              {
+                "count": 1,
+                "old_policies": [
+                  "managers_refund"
+                ],
+                "new_policies": [
+                  "clerks_refund_small_amounts",
+                  "managers_refund"
+                ],
+                "examples": [
+                  {
+                    "principal": "User",
+                    "clerk": "yes",
+                    "manager": "yes",
+                    "resource": "Order",
+                    "amount": "1 to 15",
+                    "size": "small",
+                    "old size": "large"
+                  }
+                ]
+              }
+            ],
+            "unknown": [],
+            "frames_only_old": [],
+            "frames_only_new": [],
+            "same_elsewhere": true
+          }
+        ],
+        "only_old": {
+          "actions": [],
+          "roles": [],
+          "attributes": [],
+          "inputs": [],
+          "types": []
+        },
+        "only_new": {
+          "actions": [],
+          "roles": [],
+          "attributes": [],
+          "inputs": [],
+          "types": []
+        },
+        "total": {
+          "gained": 1,
+          "lost": 0,
+          "reasons": 1,
+          "unknown": 0
+        }
+      },
+      "error": null
+    }
+  ],
+  "interface": [
+    {
+      "file": "calendars/office.cal",
+      "tool": "koyomi",
+      "how": "api",
+      "version": {
+        "old": "1",
+        "new": "2"
+      },
+      "changes": [
+        {
+          "at": "/calendar/offset",
+          "change": "changed",
+          "old": null,
+          "new": "+01:00",
+          "may_break": true
+        },
+        {
+          "at": "/calendar/sources/days_off/file",
+          "change": "changed",
+          "old": "data/days_off.csv",
+          "new": "data/days_off_v2.csv",
+          "may_break": true
+        },
+        {
+          "at": "/calendar/sources/days_off/sha256",
+          "change": "changed",
+          "old": "db3a1d57457a1dd9",
+          "new": "a045e62eccc16e1f",
+          "may_break": true
+        },
+        {
+          "at": "/calendar/sources/days_off/covers/to",
+          "change": "changed",
+          "old": "2026-12-31",
+          "new": "2027-12-31",
+          "may_break": true
+        },
+        {
+          "at": "/calendar/sources/days_off/rows",
+          "change": "changed",
+          "old": 3,
+          "new": 7,
+          "may_break": true
+        },
+        {
+          "at": "/calendar/data_range/to",
+          "change": "changed",
+          "old": "2026-12-31",
+          "new": "2027-12-31",
+          "may_break": true
+        },
+        {
+          "at": "/wasm/package",
+          "change": "changed",
+          "old": "koyomi:office@1.0.0",
+          "new": "koyomi:office@2.0.0",
+          "may_break": true
+        }
+      ],
+      "breaks": [],
+      "note": null
+    },
+    {
+      "file": "gates/band.rule",
+      "tool": "rulec",
+      "how": "api",
+      "version": {
+        "old": "1",
+        "new": "2"
+      },
+      "changes": [
+        {
+          "at": "/connect/proto",
+          "change": "changed",
+          "old": "proto/rulec/band/v1/band.proto",
+          "new": "proto/rulec/band/v2/band.proto",
+          "may_break": true
+        },
+        {
+          "at": "/connect/package",
+          "change": "changed",
+          "old": "rulec.band.v1",
+          "new": "rulec.band.v2",
+          "may_break": true
+        },
+        {
+          "at": "/connect/path",
+          "change": "changed",
+          "old": "/rulec.band.v1.BandService/Decide",
+          "new": "/rulec.band.v2.BandService/Decide",
+          "may_break": true
+        },
+        {
+          "at": "/wasm/package",
+          "change": "changed",
+          "old": "rulec:band@1.0.0",
+          "new": "rulec:band@2.0.0",
+          "may_break": true
+        }
+      ],
+      "breaks": [],
+      "note": null
+    },
+    {
+      "file": "gates/limits.gate",
+      "tool": "sekisho",
+      "how": "api",
+      "version": {
+        "old": "v1",
+        "new": "v2"
+      },
+      "changes": [
+        {
+          "at": "/description",
+          "change": "changed",
+          "old": "Refunds by the band of a rule: a clerk refunds a small amount, a manager up to 15",
+          "new": "Refunds by the band of a rule, read from its second version: a clerk refunds a small amount, a manager up to 15",
+          "may_break": false
+        }
+      ],
+      "breaks": [],
+      "note": null
+    }
+  ],
+  "differs": true
+}

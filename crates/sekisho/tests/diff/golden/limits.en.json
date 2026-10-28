@@ -1,0 +1,87 @@
+{
+  "sekisho": "0.36.0",
+  "old": {
+    "file": "tests/diff/limits.gate",
+    "name": "limits",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/limits_v2.gate",
+    "name": "limits",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "refund_order",
+      "combinations": 20,
+      "gained": [
+        {
+          "count": 1,
+          "old_policies": [],
+          "new_policies": [
+            "clerks_refund_small_amounts"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "no",
+              "resource": "Order",
+              "amount": "1 to 15",
+              "size": "small",
+              "old size": "large"
+            }
+          ]
+        }
+      ],
+      "lost": [],
+      "reasons": [
+        {
+          "count": 1,
+          "old_policies": [
+            "managers_refund"
+          ],
+          "new_policies": [
+            "clerks_refund_small_amounts",
+            "managers_refund"
+          ],
+          "examples": [
+            {
+              "principal": "User",
+              "clerk": "yes",
+              "manager": "yes",
+              "resource": "Order",
+              "amount": "1 to 15",
+              "size": "small",
+              "old size": "large"
+            }
+          ]
+        }
+      ],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "total": {
+    "gained": 1,
+    "lost": 0,
+    "reasons": 1,
+    "unknown": 0
+  }
+}

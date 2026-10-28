@@ -1,0 +1,63 @@
+gate 店(shop_ja) v2
+description "sekisho diff の試験の店の二つ目の版。係は 8 まで返金でき、停止中の職員は返金できず、責任者のポリシーは名前が変わって勤続を読まなくなり、取り消しが無くなって承認が増えた"
+namespace ShopJa
+
+enum 状態(state) = 受付中(open) | 発送済(shipped) | 締め済(closed)
+enum 地域(region) = 北(north) | 南(south)
+
+role 係(clerk)
+  description "お客さまに応対し、少額の返金をする"
+
+role 責任者(manager)
+  description "店を回す"
+  includes 係
+
+role 監査(auditor)
+  description "あとから返金を確かめる"
+
+principal 職員(User)
+  description "店の職員"
+  roles 係, 責任者, 監査
+  attributes
+    停止中(suspended) : bool
+    地域(region)      : 地域
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(state) : 状態
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+  input
+    金額(amount) : number  range >=1 <=20
+
+action 返金を承認する(approve_refund)
+  description "ほかの人がした返金を承認する"
+  principal 職員
+  resource 注文
+
+permit 係は少額を返金できる(clerks_refund_small_amounts)
+  description "係は 8 まで返金できる"
+  principal in 係
+  action 返金する
+  when 金額 <= 8
+
+permit 責任者は15まで返金できる(managers_refund_up_to_15)
+  description "責任者は 15 まで返金できる"
+  principal in 責任者
+  action 返金する
+  when 金額 <= 15
+
+forbid 停止中の職員は返金できない(suspended_members_refund_nothing)
+  description "停止中の職員は何も返金できない"
+  principal is 職員
+  action 返金する
+  when principal.停止中
+
+permit 監査は承認できる(auditors_approve)
+  description "監査は返金を承認できる"
+  principal in 監査
+  action 返金を承認する

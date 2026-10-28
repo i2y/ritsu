@@ -1,0 +1,54 @@
+gate 店(shop_ja) v1
+description "sekisho diff の試験の店。だれが注文を返金し、だれが取り消すか。shop.gate の日本語の版"
+namespace ShopJa
+
+enum 状態(state) = 受付中(open) | 発送済(shipped) | 締め済(closed)
+
+role 係(clerk)
+  description "お客さまに応対し、少額の返金をする"
+
+role 責任者(manager)
+  description "店を回す"
+  includes 係
+
+principal 職員(User)
+  description "店の職員"
+  roles 係, 責任者
+  attributes
+    停止中(suspended) : bool
+    勤続(seniority)   : number  range >=0 <=10
+
+resource 注文(Order)
+  description "店の注文"
+  attributes
+    状態(state) : 状態
+
+action 返金する(refund_order)
+  description "注文を返金する"
+  principal 職員
+  resource 注文
+  input
+    金額(amount) : number  range >=1 <=20
+
+action 取り消す(cancel_order)
+  description "注文を取り消す"
+  principal 職員
+  resource 注文
+
+permit 係は少額を返金できる(clerks_refund_small_amounts)
+  description "係は 5 まで返金できる"
+  principal in 係
+  action 返金する
+  when 金額 <= 5
+
+permit 責任者は返金できる(managers_refund)
+  description "勤続 2 以上の責任者は 15 まで返金できる"
+  principal in 責任者
+  action 返金する
+  when 金額 <= 15 and principal.勤続 >= 2
+
+permit 係は受付中の注文を取り消せる(clerks_cancel_open_orders)
+  description "係は受付中の注文を取り消せる"
+  principal in 係
+  action 取り消す
+  when resource.状態 is 受付中

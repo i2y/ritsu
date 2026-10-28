@@ -1,0 +1,35 @@
+ritsu mod diff: example.com/acme/pricing 1.0.0 → 1.1.0
+  old: example.com/acme/pricing@1.0.0
+  new: example.com/acme/pricing@1.1.0
+
+files: 2 changed, 2 the same
+  changed: ritsu.mod
+  changed: rules/shipping_fee.rule
+require: no change
+
+behavior:
+  rules/order_total.rule (rulec): the same answers
+  rules/shipping_fee.rule (rulec): the answers differ
+    rule shipping_fee v1 → v1
+      an enum gained a value: region.eu
+    14 cells, of which 14 are inputs that can occur: 10 same, 4 differ, 0 unsettled, 0 unrealized
+
+      region = domestic  and  weight >=2001g <=2500g
+        fee: 695 → 395
+        rows: table fee_by_weight row 2 → table fee_by_weight row 1
+        example: region=domestic, weight=2001
+
+      region = world  and  weight >=2001g <=2500g
+        fee: 2950 → 1850
+        rows: table fee_by_weight row 4 → table fee_by_weight row 5
+        example: region=world, weight=2001
+
+    of the inputs both versions accept, those outside this region get the same answer; what they accept differs as listed above.
+
+interface:
+  rules/shipping_fee.rule (rulec, api): 11 changes, 1 of them may break a user
+    may break: changed: /connect/enums/region/values/world/number: 2 → 3
+    added: /{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu
+  a change that may break a user is a candidate: whether it does is for that user's check to say.
+
+a difference is shown in behavior or in an interface.

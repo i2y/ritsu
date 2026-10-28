@@ -505,6 +505,76 @@ impl Memo {
 
 /// The space of an action: its frames, each with its factors and its policies compiled.
 pub fn space(g: &Gate, action: usize, known: &Known, ask: &dyn Ask, memo: &Memo, budget: u128) -> Result<Space, Stop> {
+    space_also(g, action, known, ask, memo, budget, &AlsoByFrame::new())
+}
+
+/// What another version of a gate reads in a frame of an action, by name (ritsu's DESIGN 17.9.4):
+/// `sekisho diff` walks each version with what the other reads, so that both are cut alike and one
+/// combination of the one is one of the other. A role, an attribute or an input this version does
+/// not have is passed over.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Also {
+    /// The roles the conditions read, by name.
+    pub roles: BTreeSet<String>,
+    /// The attributes and inputs the conditions read, each with the constants a number is compared
+    /// with (in the counts of its unit).
+    pub places: Vec<(Place, Vec<(Op, i128)>)>,
+    pub workflow: bool,
+    /// The terms of each entity type the conditions relate (by the type's name), and those the
+    /// principal is asked to be a member of.
+    pub terms: BTreeMap<String, (Vec<Term>, BTreeSet<Term>)>,
+}
+
+/// An attribute or an input, by name.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Place {
+    Attr(Owner, String),
+    Input(String),
+}
+
+/// [`Also`] by the frame: the principal type's name and the resource type's.
+pub type AlsoByFrame = BTreeMap<(String, String), Also>;
+
+/// What the conditions of an action read in each of its frames, by name: what the other version's
+/// walk is given ([`space_also`]). Nothing is asked of another language.
+pub fn reads(g: &Gate, action: usize, known: &Known) -> AlsoByFrame {
+    let a = &g.actions[action];
+    let mut out = AlsoByFrame::new();
+    for &pt in &a.principals {
+        for &rt in &a.resources {
+            let mut c = Compiler::new(g, action, pt, rt, known);
+            for p in g.policies_on(action) {
+                c.policy(&g.policies[p]);
+            }
+            for e in g.expects_on(action) {
+                c.expect(&g.expects[e]);
+            }
+            let mut also = Also { workflow: c.workflow_read, ..Also::default() };
+            for r in 0..g.roles.len() {
+                if c.roles_read & bit(r) != 0 {
+                    also.roles.insert(g.roles[r].named.name.clone());
+                }
+            }
+            for (at, sl) in c.slots.iter().enumerate() {
+                let place = match sl {
+                    Slot::Attr(o, i) => Place::Attr(*o, g.owner_type(*o, pt, rt).attrs[*i].named.name.clone()),
+                    Slot::Input(i) => Place::Input(a.inputs[*i].named.name.clone()),
+                    _ => continue,
+                };
+                also.places.push((place, c.cmps.get(&at).cloned().unwrap_or_default()));
+            }
+            for (ty, terms) in &c.terms {
+                let members: BTreeSet<Term> = c.members.get(ty).map(|ms| ms.iter().map(|&i| terms[i].clone()).collect()).unwrap_or_default();
+                also.terms.insert(g.types[*ty].named.name.clone(), (terms.clone(), members));
+            }
+            out.insert((g.types[pt].named.name.clone(), g.types[rt].named.name.clone()), also);
+        }
+    }
+    out
+}
+
+/// [`space`], each frame also reading what `also` says the other version of the gate reads there.
+pub fn space_also(g: &Gate, action: usize, known: &Known, ask: &dyn Ask, memo: &Memo, budget: u128, also: &AlsoByFrame) -> Result<Space, Stop> {
     let a = &g.actions[action];
     let policies = g.policies_on(action);
     let permit: Vec<bool> = policies.iter().map(|&p| g.policies[p].permit).collect();
@@ -516,6 +586,9 @@ pub fn space(g: &Gate, action: usize, known: &Known, ask: &dyn Ask, memo: &Memo,
             let mut c = Compiler::new(g, action, pt, rt, known);
             let compiled: Vec<Compiled> = policies.iter().map(|&p| c.policy(&g.policies[p])).collect();
             let selects: Vec<Compiled> = expects.iter().map(|&e| c.expect(&g.expects[e])).collect();
+            if let Some(x) = also.get(&(g.types[pt].named.name.clone(), g.types[rt].named.name.clone())) {
+                c.also(x);
+            }
             // a condition reads a computed value no language answered for: another diagnostic says why
             if c.unknown {
                 return Err(Stop::Unknown);
@@ -1045,6 +1118,54 @@ impl<'g> Compiler<'g> {
                 }
             }
         })
+    }
+
+    /// Read what the other version of the gate reads too ([`Also`]): its roles, its attributes and
+    /// inputs with their constants, the workflow, the terms of its relations.
+    fn also(&mut self, x: &Also) {
+        let g = self.g;
+        for name in &x.roles {
+            if let Some(r) = g.roles.iter().position(|r| r.named.name == *name) {
+                self.roles_read |= bit(r);
+            }
+        }
+        for (p, cmps) in &x.places {
+            let (slot, f) = match p {
+                Place::Attr(o, n) => match g.owner_type(*o, self.principal, self.resource).attrs.iter().position(|f| f.named.name == *n) {
+                    Some(i) => (Slot::Attr(*o, i), &g.owner_type(*o, self.principal, self.resource).attrs[i]),
+                    None => continue,
+                },
+                Place::Input(n) => match self.act().inputs.iter().position(|f| f.named.name == *n) {
+                    Some(i) => (Slot::Input(i), &self.act().inputs[i]),
+                    None => continue,
+                },
+            };
+            let at = self.place(slot);
+            if let FieldType::Num { .. } = f.ty {
+                self.cmps.entry(at).or_default().extend(cmps.iter().copied());
+            }
+        }
+        if x.workflow && g.types[self.principal].kind == Kind::Workflow {
+            self.workflow_read = true;
+            self.place(Slot::Workflow);
+        }
+        for (name, (terms, members)) in &x.terms {
+            let Some(ty) = g.types.iter().position(|t| t.named.name == *name) else { continue };
+            for t in terms {
+                if self.term_type(t) == Some(ty) {
+                    self.term(ty, t);
+                }
+            }
+            for t in members {
+                if self.term_type(t) == Some(ty) {
+                    let (_, i) = self.term(ty, t);
+                    if ty == self.principal {
+                        self.term(ty, &Term::Principal);
+                    }
+                    self.members.entry(ty).or_default().insert(i);
+                }
+            }
+        }
     }
 
     fn terms_by_place(&self) -> BTreeMap<usize, Vec<Term>> {

@@ -1,0 +1,96 @@
+{
+  "sekisho": "0.36.0",
+  "old": {
+    "file": "tests/diff/少額.gate",
+    "name": "少額",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/少額_二版.gate",
+    "name": "少額",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "返金する",
+      "combinations": 6,
+      "gained": [],
+      "lost": [
+        {
+          "count": 1,
+          "old_policies": [
+            "係は少額を返金できる"
+          ],
+          "new_policies": [
+            "4からは返金しない"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "resource": "注文",
+              "金額": "4〜20",
+              "大きさ": "少額"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        {
+          "count": 3,
+          "old_policies": [],
+          "new_policies": [
+            "4からは返金しない"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "いいえ",
+              "resource": "注文",
+              "金額": "4〜20",
+              "大きさ": "少額"
+            },
+            {
+              "principal": "職員",
+              "係": "いいえ",
+              "resource": "注文",
+              "金額": "4〜20",
+              "大きさ": "多額"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "resource": "注文",
+              "金額": "4〜20",
+              "大きさ": "多額"
+            }
+          ]
+        }
+      ],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "total": {
+    "gained": 0,
+    "lost": 1,
+    "reasons": 3,
+    "unknown": 0
+  }
+}

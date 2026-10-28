@@ -1,0 +1,61 @@
+ritsu mod diff: example.com/acme/pricing 1.1.0 → 2.0.0
+  old: example.com/acme/pricing@1.1.0
+  new: example.com/acme/pricing@2.0.0
+
+files: 2 changed, 2 the same
+  changed: ritsu.mod
+  changed: rules/shipping_fee.rule
+require: no change
+
+behavior:
+  rules/order_total.rule (rulec): the same answers
+  rules/shipping_fee.rule (rulec): the answers differ
+    rule shipping_fee v1 → v1
+      an output was removed: fee
+      an output was added: shipping_fee
+    15 cells, of which 15 are inputs that can occur: 0 same, 15 differ, 0 unsettled, 0 unrealized
+
+      region = domestic  and  weight >=1g <=2500g
+        fee: 395GBPc → -
+        rows: table fee_by_weight row 1
+        example: region=domestic, weight=1
+
+      region = eu  and  weight >=1g <=2500g
+        fee: 1250GBPc → -
+        rows: table fee_by_weight row 3
+        example: region=eu, weight=1
+
+      region = world  and  weight >=1g <=2500g
+        fee: 1850GBPc → -
+        rows: table fee_by_weight row 5
+        example: region=world, weight=1
+
+      region = domestic  and  weight >=2501g <=30000g
+        fee: 695GBPc → -
+        rows: table fee_by_weight row 2
+        example: region=domestic, weight=2501
+
+      region = eu  and  weight >=2501g <=30000g
+        fee: 1950GBPc → -
+        rows: table fee_by_weight row 4
+        example: region=eu, weight=2501
+
+      region = world  and  weight >=2501g <=30000g
+        fee: 2950GBPc → -
+        rows: table fee_by_weight row 6
+        example: region=world, weight=2501
+
+    of the inputs both versions accept, those outside this region get the same answer; what they accept differs as listed above.
+
+interface:
+  rules/shipping_fee.rule (rulec, api): 25 changes, 13 of them may break a user
+    may break: removed: /{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/fee
+    may break: removed: /go/output_fields/fee
+    may break: removed: /connect/response_fields/fee
+    may break: changed: /sql/function/signature: "…xt) RETURNS TABLE (\"fee\" bigint, \"fee_by_weight_ro…" → "…xt) RETURNS TABLE (\"shipping_fee\" bigint, \"fee_by_…"
+    added: /{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/shipping_fee
+    added: /go/output_fields/shipping_fee
+    added: /connect/response_fields/shipping_fee
+  a change that may break a user is a candidate: whether it does is for that user's check to say.
+
+a difference is shown in behavior or in an interface.

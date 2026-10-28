@@ -1,0 +1,39 @@
+gate limits v1
+description "Refunds by the band of a rule: a clerk refunds a small amount, a manager up to 15"
+namespace Shop
+
+use rule band from "band.rule"
+
+role clerk
+  description "Answers customers"
+
+role manager
+  description "Runs the shop"
+
+principal User
+  description "A member of the staff"
+  roles clerk, manager
+
+resource Order
+  description "An order of the shop"
+
+action refund_order
+  description "Refund an order"
+  principal User
+  resource Order
+  input
+    amount : number  range >=1 <=20
+  context
+    size = band(amount: amount).band
+
+permit clerks_refund_small_amounts
+  description "A clerk refunds an amount the rule calls small"
+  principal in clerk
+  action refund_order
+  when size is small
+
+permit managers_refund
+  description "A manager refunds up to 15"
+  principal in manager
+  action refund_order
+  when amount <= 15

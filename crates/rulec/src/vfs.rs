@@ -2,8 +2,9 @@
 //!
 //! `check --diff-base <rev>` reports what the base revision reported, and `replay` and `diff`
 //! run a rule as it was at a revision; a rule that applies another (§15.69) has to read that
-//! other rule from the same revision, not from the working tree. The read goes through
-//! here, and a caller that works at a revision says so around the call.
+//! other rule from the same revision, not from the working tree, and a dependency of a module of
+//! ritsu's at the version that revision's lock pins. A caller that works at a revision says so
+//! around the call ([`with_git_rev`]), and every read of ritsu's layer of files is the revision's.
 //!
 //! A path written in a rule (`apply`, `import`, `shape`, `source … file`, `contribution … to`,
 //! `range from koyomi`) is followed from the directory of the file that wrote it ([`follow`]): in
@@ -12,7 +13,6 @@
 //! the directory joined to it, as it always was.
 
 use ritsu_base::modules::Refused;
-use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 
 /// The directory a path written in the file at `base` is followed from: the file's directory,
@@ -48,38 +48,22 @@ pub fn outside_note(dir: &Path, written: &str) -> Option<String> {
     (!ritsu_base::fs::exists(dir.join(written))).then(|| crate::i18n::text(&note))
 }
 
-thread_local! {
-    static REV: RefCell<Option<String>> = const { RefCell::new(None) };
+/// Run `f` with every read of the layer taken from the git revision `rev` of the repository the
+/// working directory is in (ritsu's `fs::GitRevision`, its DESIGN 17.9.1): the revision's files,
+/// its `ritsu.mod` and `ritsu.lock` among them, so that a dependency is read at the version that
+/// revision's lock pins (from the store), and a dependency by a path in the repository at that
+/// revision. Err, with what to say, when the revision cannot be opened (no git, no repository, no
+/// such revision).
+pub fn with_git_rev<R>(rev: &str, f: impl FnOnce() -> R) -> Result<R, String> {
+    let here = ritsu_base::fs::current_dir().unwrap_or_default();
+    let g = ritsu_base::fs::GitRevision::open(&here, rev).map_err(|t| crate::i18n::text(&t))?;
+    Ok(ritsu_base::fs::with(std::rc::Rc::new(g), f))
 }
 
-/// Run `f` with every read through this module taken from `rev` (`git show rev:path`).
-pub fn with_git_rev<R>(rev: &str, f: impl FnOnce() -> R) -> R {
-    let before = REV.with(|r| r.replace(Some(rev.to_string())));
-    let out = f();
-    REV.with(|r| *r.borrow_mut() = before);
-    out
-}
-
-/// The bytes of a file, from the working tree or from the revision in force.
+/// The bytes of a file, from the files of the thread: the working tree, or the revision
+/// [`with_git_rev`] reads at.
 pub fn read(path: &Path) -> std::io::Result<Vec<u8>> {
-    let rev = REV.with(|r| r.borrow().clone());
-    let Some(rev) = rev else { return ritsu_base::fs::read(path) };
-    // a dependency's file is the one the lock pins, which no revision of this repository holds
-    if ritsu_base::modules::map(path).is_some() {
-        return ritsu_base::fs::read(path);
-    }
-    // git resolves `rev:./p` against the current directory, as the working tree read does.
-    let spec = if path.is_absolute() {
-        format!("{rev}:{}", path.display())
-    } else {
-        format!("{rev}:./{}", path.display())
-    };
-    let out = std::process::Command::new("git").args(["show", &spec]).output()?;
-    if out.status.success() {
-        Ok(out.stdout)
-    } else {
-        Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("no `{spec}`")))
-    }
+    ritsu_base::fs::read(path)
 }
 
 pub fn read_to_string(path: &Path) -> std::io::Result<String> {

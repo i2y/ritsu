@@ -1,0 +1,9 @@
+calendar office v1
+description "The office of the tests of koyomi diff: closed at weekends and on the days of its table. This version adds the founding day. The days are the example's own"
+
+source days_off = file "data/days_off_added.csv" sha256:588b9f51c8ce3409
+  format csv
+  covers 2026-01-01..2026-12-31
+
+closed weekly sat, sun
+closed days_off

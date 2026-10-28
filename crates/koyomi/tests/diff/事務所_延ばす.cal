@@ -1,0 +1,9 @@
+calendar 事務所(office) v1
+description "koyomi diff の試験の事務所。土日と、表の日を休む。この版は 2027 年も知っている。日はこの例のために決めたもの"
+
+source 休み = file "data/休み_延ばす.csv" sha256:7d0b79620eec327a
+  format csv
+  covers 2026-01-01..2027-12-31
+
+closed weekly sat, sun
+closed 休み

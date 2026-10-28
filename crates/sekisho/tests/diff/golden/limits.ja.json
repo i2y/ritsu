@@ -1,0 +1,87 @@
+{
+  "sekisho": "0.36.0",
+  "old": {
+    "file": "tests/diff/上限.gate",
+    "name": "上限",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/上限_二版.gate",
+    "name": "上限",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "返金する",
+      "combinations": 20,
+      "gained": [
+        {
+          "count": 1,
+          "old_policies": [],
+          "new_policies": [
+            "係は少額を返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "いいえ",
+              "resource": "注文",
+              "金額": "1〜15",
+              "大きさ": "少額",
+              "old 大きさ": "多額"
+            }
+          ]
+        }
+      ],
+      "lost": [],
+      "reasons": [
+        {
+          "count": 1,
+          "old_policies": [
+            "責任者は返金できる"
+          ],
+          "new_policies": [
+            "係は少額を返金できる",
+            "責任者は返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "resource": "注文",
+              "金額": "1〜15",
+              "大きさ": "少額",
+              "old 大きさ": "多額"
+            }
+          ]
+        }
+      ],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [],
+    "roles": [],
+    "attributes": [],
+    "inputs": [],
+    "types": []
+  },
+  "total": {
+    "gained": 1,
+    "lost": 0,
+    "reasons": 1,
+    "unknown": 0
+  }
+}

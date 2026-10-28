@@ -1,0 +1,62 @@
+{
+  "koyomi": "0.36.0",
+  "kind": "calendar",
+  "old": {
+    "file": "事務所.cal",
+    "name": "事務所",
+    "version": "1"
+  },
+  "new": {
+    "file": "事務所_二版.cal",
+    "name": "事務所",
+    "version": "2"
+  },
+  "compared": {
+    "from": "2026-01-01",
+    "to": "2026-12-31",
+    "days": 365
+  },
+  "changes": [
+    {
+      "from": "2026-06-10",
+      "to": "2026-06-10",
+      "days": 1,
+      "old": "open",
+      "new": "closed",
+      "old_reasons": [],
+      "new_reasons": [
+        "創立記念日"
+      ]
+    }
+  ],
+  "renamed": [
+    {
+      "from": "2026-05-04",
+      "to": "2026-05-04",
+      "old_reasons": [
+        "みどりの日"
+      ],
+      "new_reasons": [
+        "春の休み"
+      ]
+    }
+  ],
+  "known": {
+    "old": {
+      "from": "2026-01-01",
+      "to": "2026-12-31"
+    },
+    "new": {
+      "from": "2026-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "offset": {
+    "old": "none",
+    "new": "+09:00"
+  },
+  "same_elsewhere": true,
+  "total": {
+    "changed_days": 1
+  }
+}

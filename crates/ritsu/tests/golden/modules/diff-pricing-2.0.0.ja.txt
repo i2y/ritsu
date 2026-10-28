@@ -1,0 +1,61 @@
+ritsu mod diff：example.com/acme/pricing 1.1.0 → 2.0.0
+  古い版：example.com/acme/pricing@1.1.0
+  新しい版：example.com/acme/pricing@2.0.0
+
+ファイル：変わった 2、同じ 2
+  変わった：ritsu.mod
+  変わった：規則/送料.rule
+require：変わりません
+
+振る舞い：
+  規則/注文の合計.rule (rulec)：同じ答えです
+  規則/送料.rule (rulec)：答えが変わります
+    規則 送料 v1 → v1
+      出力が消えた: 料金
+      出力が増えた: 送料
+    入力の組み合わせ 15 通り。うち起きうるのは 15 通りで、同じ 0 / 違う 15 / 決められず 0 / 入力を作れず 0
+
+      地域 = 国内  かつ  重さ >=1g <=2500g
+        料金: 395GBPc → -
+        当たる行: 表 重さの段 行1
+        例: 地域=国内, 重さ=1
+
+      地域 = EU  かつ  重さ >=1g <=2500g
+        料金: 1250GBPc → -
+        当たる行: 表 重さの段 行3
+        例: 地域=EU, 重さ=1
+
+      地域 = その他の地域  かつ  重さ >=1g <=2500g
+        料金: 1850GBPc → -
+        当たる行: 表 重さの段 行5
+        例: 地域=その他の地域, 重さ=1
+
+      地域 = 国内  かつ  重さ >=2501g <=30000g
+        料金: 695GBPc → -
+        当たる行: 表 重さの段 行2
+        例: 地域=国内, 重さ=2501
+
+      地域 = EU  かつ  重さ >=2501g <=30000g
+        料金: 1950GBPc → -
+        当たる行: 表 重さの段 行4
+        例: 地域=EU, 重さ=2501
+
+      地域 = その他の地域  かつ  重さ >=2501g <=30000g
+        料金: 2950GBPc → -
+        当たる行: 表 重さの段 行6
+        例: 地域=その他の地域, 重さ=2501
+
+    両方の版が受け付ける入力のうち、ここに挙げたほかは同じ答えを返します。受け付ける入力そのものの違いは上のとおりです。
+
+インターフェース：
+  規則/送料.rule (rulec、api)：差が 25 件、うち使う側を壊しうるもの 13 件
+    壊しうる：消した：/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/料金
+    壊しうる：消した：/go/output_fields/料金
+    壊しうる：消した：/connect/response_fields/料金
+    壊しうる：変わった：/sql/function/signature："…xt) RETURNS TABLE (\"fee\" bigint, \"fee_by_weight_ro…" → "…xt) RETURNS TABLE (\"shipping_fee\" bigint, \"fee_by_…"
+    足した：/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/送料
+    足した：/go/output_fields/送料
+    足した：/connect/response_fields/送料
+  壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
+
+振る舞いかインターフェースに、示せた違いがあります。

@@ -85,13 +85,17 @@ pub fn run(args: Vec<String>) -> ExitCode {
         print!("{}", table.help_cmd(cmd, lang));
         return ExitCode::SUCCESS;
     }
-    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
-    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN
+    // 17.6); `diff` reads its two sides by their own spelling (17.9.1)
+    if cmd.name != "diff"
+        && let Err(t) = ritsu_base::modules::given_all(&a.pos)
+    {
         return refuse(t, lang);
     }
     match cmd.name {
         "check" => check_cmd(&a, lang),
         "eval" => eval_cmd(&a, lang),
+        "diff" => diff_cmd(&a, lang),
         "explain" => explain_cmd(&a, lang),
         "api" => api_cmd(&a, lang),
         "gen" => gen_cmd(&a, lang),
@@ -180,6 +184,31 @@ fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
     } else {
         0
     })
+}
+
+/// `koyomi diff <old> <new>` (ritsu's DESIGN 17.9.3).
+fn diff_cmd(a: &Args, lang: Lang) -> ExitCode {
+    let [old, new] = a.pos.as_slice() else {
+        return refuse(tr!("`koyomi diff` には古い版と新しい版の二つを渡してください", "`koyomi diff` takes two sides, the old and the new"), lang);
+    };
+    let budget = match a.get("--budget") {
+        None => check::DEFAULT_BUDGET,
+        Some(b) => match b.replace([',', '_'], "").parse::<u64>() {
+            Ok(n) if n > 0 => n,
+            _ => return refuse(tr!("`--budget {b}` は正の整数ではありません", "`--budget {b}` is not a positive integer"), lang),
+        },
+    };
+    let sides = crate::diff::spelled(old, budget).and_then(|o| crate::diff::spelled(new, budget).map(|n| (o, n)));
+    let d = match sides.and_then(|(o, n)| crate::diff::diff(&o, &n, budget)) {
+        Ok(d) => d,
+        Err(t) => return refuse(t, lang),
+    };
+    match a.get("--format") {
+        Some("json") => println!("{}", serde_json::to_string_pretty(&crate::diff::to_json(&d, lang)).unwrap()),
+        Some("markdown") => print!("{}", crate::diff::markdown(&d, lang)),
+        _ => print!("{}", crate::diff::text(&d, lang)),
+    }
+    ExitCode::from(u8::from(d.differs()))
 }
 
 fn print_diags(ds: &[crate::diag::Diag], lang: Lang) {

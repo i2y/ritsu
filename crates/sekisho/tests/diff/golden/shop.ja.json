@@ -1,0 +1,403 @@
+{
+  "sekisho": "0.36.0",
+  "old": {
+    "file": "tests/diff/店.gate",
+    "name": "店",
+    "version": "v1"
+  },
+  "new": {
+    "file": "tests/diff/店_二版.gate",
+    "name": "店",
+    "version": "v2"
+  },
+  "actions": [
+    {
+      "action": "返金する",
+      "combinations": 64,
+      "gained": [
+        {
+          "count": 2,
+          "old_policies": [],
+          "new_policies": [
+            "係は少額を返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "いいえ",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "6〜8"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "いいえ",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "6〜8"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [],
+          "new_policies": [
+            "係は少額を返金できる",
+            "責任者は15まで返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "6〜8"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "6〜8"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [],
+          "new_policies": [
+            "責任者は15まで返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "9〜15"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "9〜15"
+            }
+          ]
+        }
+      ],
+      "lost": [
+        {
+          "count": 4,
+          "old_policies": [
+            "係は少額を返金できる"
+          ],
+          "new_policies": [
+            "停止中の職員は返金できない"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "いいえ",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "1〜5"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "1〜5"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "1〜5"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "係は少額を返金できる",
+            "責任者は返金できる"
+          ],
+          "new_policies": [
+            "停止中の職員は返金できない"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "1〜5"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "1〜5"
+            }
+          ]
+        },
+        {
+          "count": 4,
+          "old_policies": [
+            "責任者は返金できる"
+          ],
+          "new_policies": [
+            "停止中の職員は返金できない"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "6〜8"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "9〜15"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "6〜8"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        {
+          "count": 22,
+          "old_policies": [],
+          "new_policies": [
+            "停止中の職員は返金できない"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "いいえ",
+              "責任者": "いいえ",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "1〜5"
+            },
+            {
+              "principal": "職員",
+              "係": "いいえ",
+              "責任者": "いいえ",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "6〜8"
+            },
+            {
+              "principal": "職員",
+              "係": "いいえ",
+              "責任者": "いいえ",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "はい",
+              "resource": "注文",
+              "金額": "9〜15"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "係は少額を返金できる"
+          ],
+          "new_policies": [
+            "係は少額を返金できる",
+            "責任者は15まで返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "1〜5"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "0〜1",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "1〜5"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "係は少額を返金できる",
+            "責任者は返金できる"
+          ],
+          "new_policies": [
+            "係は少額を返金できる",
+            "責任者は15まで返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "1〜5"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "1〜5"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "責任者は返金できる"
+          ],
+          "new_policies": [
+            "係は少額を返金できる",
+            "責任者は15まで返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "6〜8"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "6〜8"
+            }
+          ]
+        },
+        {
+          "count": 2,
+          "old_policies": [
+            "責任者は返金できる"
+          ],
+          "new_policies": [
+            "責任者は15まで返金できる"
+          ],
+          "examples": [
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "9〜15"
+            },
+            {
+              "principal": "職員",
+              "係": "はい",
+              "責任者": "はい",
+              "principal.勤続": "2〜10",
+              "principal.停止中": "いいえ",
+              "resource": "注文",
+              "金額": "9〜15"
+            }
+          ]
+        }
+      ],
+      "unknown": [],
+      "frames_only_old": [],
+      "frames_only_new": [],
+      "same_elsewhere": true
+    }
+  ],
+  "only_old": {
+    "actions": [
+      "取り消す"
+    ],
+    "roles": [],
+    "attributes": [
+      "職員.勤続"
+    ],
+    "inputs": [],
+    "types": []
+  },
+  "only_new": {
+    "actions": [
+      "返金を承認する"
+    ],
+    "roles": [
+      "監査"
+    ],
+    "attributes": [
+      "職員.地域"
+    ],
+    "inputs": [],
+    "types": []
+  },
+  "total": {
+    "gained": 6,
+    "lost": 10,
+    "reasons": 30,
+    "unknown": 0
+  }
+}

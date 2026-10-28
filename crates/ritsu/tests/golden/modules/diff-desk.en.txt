@@ -1,0 +1,90 @@
+ritsu mod diff: example.com/acme/desk 1.0.0 → 1.1.0
+  old: desk-1.0.0
+  new: desk-1.1.0
+
+files: 1 added, 1 removed, 4 changed, 1 the same
+  added: calendars/data/days_off_v2.csv
+  removed: calendars/data/days_off.csv
+  changed: calendars/office.cal
+  changed: gates/band.rule
+  changed: gates/limits.gate
+  changed: ritsu.mod
+require: no change
+
+behavior:
+  calendars/office.cal (koyomi): the answers differ
+    koyomi diff: calendar office v1 → v2
+      old: desk-1.0.0/calendars/office.cal
+      new: desk-1.1.0/calendars/office.cal
+
+    compared: 2026-01-01..2026-12-31 (365 days, the days both versions know)
+
+    open or closed changed (1 interval, 1 day):
+      2026-06-10: open → closed (Founding day)
+
+    closed in both, for other reasons (1 interval, 1 day):
+      2026-05-04: Early May bank holiday → May Day
+
+    the days known: 2026-01-01..2026-12-31 → 2026-01-01..2027-12-31
+    offset: none → +01:00
+
+    every other day of 2026-01-01..2026-12-31 gets the same answer.
+  calendars/payment.cal (koyomi): the answers differ
+    koyomi diff: dates payment v1 → v1
+      old: desk-1.0.0/calendars/payment.cal
+      new: desk-1.1.0/calendars/payment.cal
+
+    inputs compared: received 2026-01-01..2026-10-31 (304 combinations)
+    dates compared: closing, payment
+
+    payment: 1 interval, 30 combinations
+      received 2026-04-21..2026-05-20: 2026-06-10 → 2026-06-09 (1 day earlier)
+
+    for every other combination, every date gets the same value.
+  gates/band.rule (rulec): the answers differ
+    rule band v1 → v2
+    9 cells, of which 9 are inputs that can occur: 6 same, 3 differ, 0 unsettled, 0 unrealized
+
+      amount >=6 <=8
+        band: large → small
+        rows: table band row 2 → table band row 1
+        example: amount=6
+
+    outside this region the two versions answer alike.
+  gates/limits.gate (sekisho): the answers differ
+    sekisho diff: gate limits v1 → v2
+      old: desk-1.0.0/gates/limits.gate
+      new: desk-1.1.0/gates/limits.gate
+
+    refund_order: 20 combinations walked over both versions
+      allow gained (deny → allow): 1 combination
+        deciding policies: none → clerks_refund_small_amounts
+        - User holding clerk, Order, amount: 1 to 15, size: small (in the old version: size: large)
+      the same answer, decided by other policies: 1 combination
+        deciding policies: managers_refund → clerks_refund_small_amounts, managers_refund
+        - User holding clerk and manager, Order, amount: 1 to 15, size: small (in the old version: size: large)
+
+    for every other combination, every action is decided the same.
+
+interface:
+  calendars/office.cal (koyomi, api): 7 changes, 7 of them may break a user
+    the version at the head of the file: 1 → 2
+    may break: changed: /calendar/offset: null → "+01:00"
+    may break: changed: /calendar/sources/days_off/file: "data/days_off.csv" → "data/days_off_v2.csv"
+    may break: changed: /calendar/sources/days_off/sha256: "db3a1d57457a1dd9" → "a045e62eccc16e1f"
+    may break: changed: /calendar/sources/days_off/covers/to: "2026-12-31" → "2027-12-31"
+    may break: changed: /calendar/sources/days_off/rows: 3 → 7
+    may break: changed: /calendar/data_range/to: "2026-12-31" → "2027-12-31"
+    may break: changed: /wasm/package: "koyomi:office@1.0.0" → "koyomi:office@2.0.0"
+  gates/band.rule (rulec, api): 4 changes, 4 of them may break a user
+    the version at the head of the file: 1 → 2
+    may break: changed: /connect/proto: "proto/rulec/band/v1/band.proto" → "proto/rulec/band/v2/band.proto"
+    may break: changed: /connect/package: "rulec.band.v1" → "rulec.band.v2"
+    may break: changed: /connect/path: "/rulec.band.v1.BandService/Decide" → "/rulec.band.v2.BandService/Decide"
+    may break: changed: /wasm/package: "rulec:band@1.0.0" → "rulec:band@2.0.0"
+  gates/limits.gate (sekisho, api): 1 change, 0 of them may break a user
+    the version at the head of the file: v1 → v2
+    changed: /description: "…y the band of a rule: a clerk refunds a small amou…" → "…y the band of a rule, read from its second version…"
+  a change that may break a user is a candidate: whether it does is for that user's check to say.
+
+a difference is shown in behavior or in an interface.

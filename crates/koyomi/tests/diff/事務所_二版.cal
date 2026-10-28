@@ -1,0 +1,10 @@
+calendar 事務所(office) v2
+description "koyomi diff の試験の事務所。土日と、表の日を休む。この版は創立記念日を足し、休みの名前を一つ変え、2027 年も知り、時差を持つ。日はこの例のために決めたもの"
+offset +09:00
+
+source 休み = file "data/休み_二版.csv" sha256:3f3143cb93699e1e
+  format csv
+  covers 2026-01-01..2027-12-31
+
+closed weekly sat, sun
+closed 休み

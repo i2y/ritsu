@@ -145,6 +145,15 @@ pub fn load_with(root: &Path, store: Option<&Store>) -> (Result<Tree, Problem>, 
     (r, l.inputs)
 }
 
+/// The command that fetches what a tree read here lacks: `ritsu mod fetch`, and `ritsu mod fetch --rev
+/// <revision>` for a tree read at a git revision (DESIGN 17.9.1), whose lock is that revision's.
+pub fn fetch_words() -> String {
+    match fs::revision() {
+        Some(rev) => format!("ritsu mod fetch --rev {rev}"),
+        None => "ritsu mod fetch".to_string(),
+    }
+}
+
 /// `a` and `b` joined and their `.` and `..` folded by their letters, a `..` that leads above `a`
 /// kept: the path from the root of the module at hand to a module a path reaches (`../tax`).
 pub fn up_join(a: &str, b: &str) -> String {
@@ -393,9 +402,10 @@ impl<'a> Loader<'a> {
     fn fetched(&mut self, name: &ModuleName, l: &Locked, shown: &str) -> Option<Node> {
         let Pinned::Oci { version, digest, files } = &l.pinned else { return None };
         let Some((store, at)) = vendor::find(&self.root, digest, self.store) else {
+            let fetch = fetch_words();
             self.stops.push(tr!(
-                "依存 `{name}` {version} が、置き場にも同梱のコピーにもありません。`ritsu mod fetch` を走らせてください",
-                "the dependency `{name}` {version} is neither in the store nor in this module's copy of it; run `ritsu mod fetch`"
+                "依存 `{name}` {version} が、置き場にも同梱のコピーにもありません。`{fetch}` を走らせてください",
+                "the dependency `{name}` {version} is neither in the store nor in this module's copy of it; run `{fetch}`"
             ));
             return None;
         };
@@ -631,9 +641,10 @@ impl<'a> Loader<'a> {
             for line in lines {
                 if !self.nodes[j].verified.contains(&line) {
                     let v = self.nodes[j].version().map(|v| v.to_string()).unwrap_or_default();
+                    let fetch = fetch_words();
                     self.stops.push(tr!(
-                        "`{name}` {v} の署名を `{line}` で確かめた記録がありません。`ritsu mod fetch` を走らせてください",
-                        "there is no record that the signature of `{name}` {v} was checked against `{line}`; run `ritsu mod fetch`"
+                        "`{name}` {v} の署名を `{line}` で確かめた記録がありません。`{fetch}` を走らせてください",
+                        "there is no record that the signature of `{name}` {v} was checked against `{line}`; run `{fetch}`"
                     ));
                 }
             }

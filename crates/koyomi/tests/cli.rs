@@ -28,7 +28,7 @@ fn no_arguments_and_help() {
     assert!(err(&o).contains("koyomi check"), "{}", err(&o));
     let o = koyomi(&["--help"]);
     assert_eq!(code(&o), 0);
-    for c in ["check", "eval", "gen", "vectors", "doc", "api", "source", "explain"] {
+    for c in ["check", "eval", "diff", "gen", "vectors", "doc", "api", "source", "explain"] {
         assert!(out(&o).contains(&format!("koyomi {c} ")), "{c} is in --help");
     }
     assert_eq!(code(&koyomi(&["doc"])), 2);
@@ -39,7 +39,7 @@ fn no_arguments_and_help() {
 
 #[test]
 fn every_command_has_its_help() {
-    for c in ["check", "eval", "gen", "vectors", "doc", "api", "source", "explain"] {
+    for c in ["check", "eval", "diff", "gen", "vectors", "doc", "api", "source", "explain"] {
         let a = koyomi(&[c, "--help"]);
         let b = koyomi(&["help", c]);
         let h = koyomi(&[c, "-h"]);
@@ -85,6 +85,11 @@ fn what_is_refused_with_exit_2() {
         vec!["source", "fetch"],
         vec!["source", "update", f],
         vec!["source", "pin", "examples/none.cal"],
+        vec!["diff", f],
+        vec!["diff", f, f, "--budget", "0"],
+        vec!["diff", f, f, "--format", "yaml"],
+        vec!["diff", f, "examples/none.cal"],
+        vec!["diff", f, "examples/calendars/東京の営業日.cal"],
     ] {
         let o = koyomi(&args);
         assert_eq!(code(&o), 2, "{args:?}: {}{}", out(&o), err(&o));

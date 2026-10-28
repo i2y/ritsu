@@ -1,0 +1,62 @@
+{
+  "koyomi": "0.36.0",
+  "kind": "calendar",
+  "old": {
+    "file": "office.cal",
+    "name": "office",
+    "version": "1"
+  },
+  "new": {
+    "file": "office_v2.cal",
+    "name": "office",
+    "version": "2"
+  },
+  "compared": {
+    "from": "2026-01-01",
+    "to": "2026-12-31",
+    "days": 365
+  },
+  "changes": [
+    {
+      "from": "2026-06-10",
+      "to": "2026-06-10",
+      "days": 1,
+      "old": "open",
+      "new": "closed",
+      "old_reasons": [],
+      "new_reasons": [
+        "Founding day"
+      ]
+    }
+  ],
+  "renamed": [
+    {
+      "from": "2026-05-04",
+      "to": "2026-05-04",
+      "old_reasons": [
+        "Early May bank holiday"
+      ],
+      "new_reasons": [
+        "May Day"
+      ]
+    }
+  ],
+  "known": {
+    "old": {
+      "from": "2026-01-01",
+      "to": "2026-12-31"
+    },
+    "new": {
+      "from": "2026-01-01",
+      "to": "2027-12-31"
+    }
+  },
+  "offset": {
+    "old": "none",
+    "new": "+01:00"
+  },
+  "same_elsewhere": true,
+  "total": {
+    "changed_days": 1
+  }
+}
