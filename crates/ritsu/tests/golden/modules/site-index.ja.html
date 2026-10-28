@@ -1,0 +1,14 @@
+<main>
+<h1>Acme modules</h1>
+<p class="lead">The modules the Acme shop publishes</p>
+<div class="scroll"><table>
+<tr><th>モジュール</th><th>説明</th><th>いちばん新しい版</th><th>署名</th></tr>
+<tr><td><a href="./<registry>/acme/tax/index.html"><code><registry>/acme/tax</code></a></td><td>The VAT rates of the Acme shop</td><td>1.1.0</td><td><span class="ok">一覧の <code>signature</code> の行で確かめました</span></td></tr>
+<tr><td><a href="./<registry>/acme/pricing/index.html"><code><registry>/acme/pricing</code></a></td><td>Shipping fees and order totals of the Acme shop</td><td>1.1.0</td><td><span class="ok">一覧の <code>signature</code> の行で確かめました</span></td></tr>
+<tr><td><a href="./<registry>/acme/shop/index.html"><code><registry>/acme/shop</code></a></td><td>The order flow and the checkout of the Acme shop</td><td>0.2.0</td><td><span class="ok">一覧の <code>signature</code> の行で確かめました</span></td></tr>
+</table></div>
+<h2>署名の決まり</h2>
+<p>このサイトは、載せたモジュールの署名を次の行で確かめました。使う側の <code>ritsu.mod</code> に同じ行を書けば、取り出すときに同じように確かめます。</p>
+<pre><code>signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
+<footer><code>ritsu mod site</code> <version> が書きました</footer>
+</main>

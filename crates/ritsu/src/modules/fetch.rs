@@ -708,11 +708,16 @@ fn named(ctx: &Ctx, a: &Args, store: &Store) -> u8 {
 /// reaches, and the files of the versions chosen (DESIGN 17.12); the lines of the module at `root`,
 /// when there is one, apply too. No lock is written.
 fn of_versions(root: Option<&Path>, store: &Store, wanted: &[(ModuleName, Version)]) -> Result<Done, Stop> {
+    let writer = root.and_then(|r| fs::raw::read(&r.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok()).map(|m| (m, r.to_path_buf())));
+    of_versions_by(writer, store, wanted)
+}
+
+/// [`of_versions`], with the lines of `writer` (a `ritsu.mod` and the directory its key files are
+/// read from) applying to every version.
+fn of_versions_by(writer: Option<(Manifest, PathBuf)>, store: &Store, wanted: &[(ModuleName, Version)]) -> Result<Done, Stop> {
     let mut members: Vec<Member> = Vec::new();
-    if let Some(r) = root
-        && let Some(m) = fs::raw::read(&r.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok())
-    {
-        members.push(Member { name: m.module.value.clone(), manifest: Some(m), dir: Some(r.to_path_buf()), staged: None, pinned: None, copy: false });
+    if let Some((m, dir)) = writer {
+        members.push(Member { name: m.module.value.clone(), manifest: Some(m), dir: Some(dir), staged: None, pinned: None, copy: false });
     }
     // the choice of the versions from the versions named, each `ritsu.mod` from the store or fetched
     let picked = graph::mvs_try(wanted, |k, v| -> Result<Vec<(ModuleName, Version)>, Stop> {
@@ -799,6 +804,41 @@ pub fn version(root: Option<&Path>, name: &ModuleName, v: &Version) -> Result<Do
         ));
     };
     of_versions(root, &store, &[(name.clone(), v.clone())]).map_err(Stop::text)
+}
+
+/// The version `version` of `name` for a list of modules (`ritsu mod site`, DESIGN 17.17): fetched
+/// as `ritsu mod fetch <name>@<version>` fetches it, with what the choice of the versions from it
+/// reaches, each checked against the list's `signature` lines (`lines`, whose key files are read
+/// from `dir`, the list's directory); then the modules its own lock pins, fetched and checked against
+/// its own lines, as `ritsu mod diff` reads a version (its files are read as a module of their own,
+/// with that lock). The store, and the digest of the version's OCI manifest; or the exit code (1:
+/// what the registry holds is not what it has to be, or a signature does not pass; 2: the registry
+/// or cosign cannot be asked) and what stops it.
+pub fn listed(dir: &Path, lines: &[Signature], name: &ModuleName, version: &Version) -> Result<(Store, String), (u8, Text)> {
+    let Some(store) = Store::located() else {
+        return Err((2, tr!(
+            "`{name}` {version} を取り出す置き場の場所が分かりません（`RITSU_MODULES` も `HOME` もありません）",
+            "there is no place for the store to fetch `{name}` {version} into: neither `RITSU_MODULES` nor `HOME` is set"
+        )));
+    };
+    let code = |s: Stop| -> (u8, Text) {
+        match s {
+            Stop::Cannot(t) => (2, t),
+            other => (1, other.text()),
+        }
+    };
+    // the list's lines, as the lines of a module of no name that applies them to every version
+    let text: String = std::iter::once("module site\n".to_string()).chain(lines.iter().map(|l| format!("{}\n", l.text()))).collect();
+    let writer = manifest::parse(text.as_bytes(), manifest::FILE).map_err(|ds| (2, ds.first().map(|d| d.message.clone()).unwrap_or_default()))?;
+    of_versions_by(Some((writer, dir.to_path_buf())), &store, &[(name.clone(), version.clone())]).map_err(code)?;
+    let Some(d) = store.find(name, version) else {
+        return Err((2, tr!("置き場の版の索引に `{name}` {version} がありません", "the store's index of versions has no `{name}` {version}")));
+    };
+    match of_tree(&store.files(&d), &store) {
+        Err(Halt::Stop(s)) => Err(code(s)),
+        // what the version's own tree says of itself is said where its files are read
+        _ => Ok((store, d)),
+    }
 }
 
 /// The version `version` of the module `name`, which the choice of the versions reaches (DESIGN

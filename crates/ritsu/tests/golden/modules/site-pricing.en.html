@@ -1,0 +1,21 @@
+<main>
+<nav class="crumbs"><a href="../../../index.html">Acme modules</a></nav>
+<h1><code><registry>/acme/pricing</code></h1>
+<p class="lead">Shipping fees and order totals of the Acme shop</p>
+<h2>Versions</h2>
+<div class="scroll"><table>
+<tr><th>Version</th><th>Digest</th><th>Files</th><th>Verified</th></tr>
+<tr><td><a href="./1.1.0/index.html">1.1.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">its digests and its signature</span></td></tr>
+<tr><td><a href="./1.0.0/index.html">1.0.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">its digests and its signature</span></td></tr>
+</table></div>
+<h2>Requiring it</h2>
+<pre><code>ritsu mod add pricing <registry>/acme/pricing@1.1.0</code></pre>
+<p>It writes this <code>require</code> line in <code>ritsu.mod</code>, and the files name the module&#39;s files <code>@pricing/…</code>. To check its signature, write the <code>signature</code> line too.</p>
+<pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0
+signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
+<h2>Source and license</h2>
+<ul>
+<li>License: <code>MIT OR Apache-2.0</code></li>
+</ul>
+<footer>Written by <code>ritsu mod site</code> <version></footer>
+</main>

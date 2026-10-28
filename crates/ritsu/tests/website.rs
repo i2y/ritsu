@@ -50,10 +50,12 @@
 //!   command prints;
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
-//!   playground, the pages of sekisho, the pages of kaname (with a set of tabs for the hosts of each
-//!   functional core on the page of the examples), the pages the languages' playgrounds had, each
-//!   with nothing beside it and its link and the nav of its site leading to the playground in the
-//!   tree, the marketplace of Claude Code as it is written, and a file of the tree for every
+//!   playground, the guide to modules and the list of modules that `ritsu mod site` writes from
+//!   website/modules.list (with the ritsu of these tests), the pages of sekisho, the pages of kaname
+//!   (with a set of tabs for the hosts of each functional core on the page of the examples), the
+//!   pages the languages' playgrounds had, each with nothing beside it and its link and the nav of
+//!   its site leading to the playground in the tree, the marketplace of Claude Code as it is
+//!   written, and a file of the tree for every
 //!   relative link of ritsu's built pages, none of which climbs out of /ritsu/; and the code of the
 //!   languages on ritsu's pages is coloured by their lexers (website/tools/knlexer.py,
 //!   gatelexer.py and cedarlexer.py, and the lexers of rulec's, dandori's and chobo's sites): every
@@ -184,9 +186,14 @@ fn dir_of(name: &str) -> String {
 }
 
 /// The Markdown a path of the built site is made from: ritsu's pages at the root and under `/ja/`,
-/// a language's site under `/<language>/` and `/<language>/ja/`.
+/// a language's site under `/<language>/` and `/<language>/ja/`; and the list of modules under
+/// `/modules/list/` and `/ja/modules/list/`, which `ritsu mod site` writes from website/modules.list
+/// as build.sh builds the site (DESIGN 17.17).
 fn source_of(url: &str, sites: &[String]) -> Option<PathBuf> {
     let mut parts: Vec<&str> = url.split('/').filter(|p| !p.is_empty()).collect();
+    if parts.starts_with(&["modules", "list"]) || parts.starts_with(&["ja", "modules", "list"]) {
+        return Some(website().join("modules.list"));
+    }
     let mut base = website();
     if let Some(first) = parts.first().copied()
         && sites.iter().any(|s| s == first)
@@ -426,8 +433,8 @@ fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_and_by_hand() {
     let mut lines = text.lines().skip_while(|l| *l != "on:");
     assert_eq!(lines.next(), Some("on:"), "docs.yml has no `on:`");
     let triggers: Vec<&str> = lines.take_while(|l| l.is_empty() || l.starts_with(' ')).map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
-    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \"crates/chobo/docs/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
-    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's and chobo's sync.sh copy in, and itself), and by hand");
+    let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \"crates/chobo/docs/**\"", "- \"modules/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
+    assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's and chobo's sync.sh copy in, the modules its list shows, and itself), and by hand");
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
 }
 
@@ -1169,7 +1176,15 @@ fn build_sh_builds_the_tree_that_is_published() {
     // rulec's sync.sh copies rulec's documents in from crates/rulec, beside website/, which it reads
     // and does not write.
     std::os::unix::fs::symlink(root().join("crates"), t.path().join("crates")).unwrap();
-    let o = Command::new("bash").arg(copy.join("build.sh")).output().expect("could not run bash");
+    // The list of modules shows the seed module's working tree, beside website/ (modules.list), with
+    // the ritsu of these tests.
+    std::os::unix::fs::symlink(root().join("modules"), t.path().join("modules")).unwrap();
+    let o = Command::new("bash")
+        .arg(copy.join("build.sh"))
+        .env("RITSU", env!("CARGO_BIN_EXE_ritsu"))
+        .env(ritsu_base::modules::store::VARIABLE, t.path().join("store"))
+        .output()
+        .expect("could not run bash");
     assert!(o.status.success(), "build.sh failed:\n{}\n{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     let built = copy.join("build");
 
@@ -1199,6 +1214,12 @@ fn build_sh_builds_the_tree_that_is_published() {
         "ja/kaname/together/index.html",
         "ns/yuen/index.html",
         "ja/ns/yuen/index.html",
+        "modules/index.html",
+        "ja/modules/index.html",
+        "modules/list/index.html",
+        "ja/modules/list/index.html",
+        "modules/list/ghcr.io/i2y/ritsu-holidays/1.0.0/index.html",
+        "ja/modules/list/ghcr.io/i2y/ritsu-holidays/1.0.0/module.json",
     ]
     .map(String::from)
     .to_vec();

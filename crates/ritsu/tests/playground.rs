@@ -2,7 +2,9 @@
 //! `ritsu` binary answers in a directory holding the same files, the module it runs answers what the
 //! library answers, and the page starts in Chrome, shows what `ritsu check` prints, lists every
 //! project it opens, and opens the links it reads and the links it gives. The shop's gates write
-//! Cedar that the official Cedar CLI holds, in both versions of the shop.
+//! Cedar that the official Cedar CLI holds, in both versions of the shop. A file that is not UTF-8
+//! text goes to the module as its bytes, and a version on a site of modules (`ritsu mod site`,
+//! DESIGN 17.17) opens in the page.
 //!
 //! It took over from the playgrounds rulec's and dandori's sites had (DESIGN 13.2): it opens every
 //! example they opened, and their pages (website/rulec/docs/playground.md, website/dandori/docs/
@@ -12,13 +14,15 @@
 //! Two of its files are committed products: projects.json, the projects the page opens, written
 //! from the files they are made of (`RITSU_BLESS=1` writes it anew), and ritsu.wasm, built by
 //! website/tools/make_wasm.sh. Both can go stale, and these tests are what says so. The projects
-//! are the shop (website/playground/), an empty one, the examples of rulec's playground (one rule
-//! each, from rulec's corpus and the table on rulec's front page), the examples of dandori's (each
-//! flow with every file it reads, from dandori's examples), chobo's examples (one book each, which
-//! chobo's site opens) and sekisho's example (each version of its gate with every file it reads).
-//! Node drives the module, Chrome the page (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps
-//! it, else on the PATH), and the Cedar CLI is ritsu-testkit's too (`RITSU_CEDAR`, else on the
-//! PATH, at 4.13.0). A test that cannot find what it needs prints `SKIP: ritsu: …` and passes.
+//! are the shop (website/playground/), the example of modules (its shop, locked to pricing and tax
+//! and with its copy of the store, in English and in Japanese; DESIGN 17.26), an empty one, the
+//! examples of rulec's playground (one rule each, from rulec's corpus and the table on rulec's
+//! front page), the examples of dandori's (each flow with every file it reads, from dandori's
+//! examples), chobo's examples (one book each, which chobo's site opens) and sekisho's example
+//! (each version of its gate with every file it reads). Node drives the module, Chrome the page
+//! (ritsu-testkit's: `RITSU_CHROME`, else where macOS keeps it, else on the PATH), and the Cedar
+//! CLI is ritsu-testkit's too (`RITSU_CEDAR`, else on the PATH, at 4.13.0). A test that cannot find
+//! what it needs prints `SKIP: ritsu: …` and passes.
 
 use ritsu_base::fs::{Files, Kind, Memory, Meta};
 use ritsu_base::naming::Tool;
@@ -294,7 +298,7 @@ fn reads_of(flow: &str, every: &[(String, String)]) -> BTreeSet<String> {
 /// asks for what Step Functions cannot run; then for Lambda durable functions.
 fn target_for(flow: &str, files: &[(String, String)]) -> &'static str {
     if flow.contains("/aws/") {
-        let r = Request { files: files.to_vec(), lang: Lang::En, path: flow.into(), target: Some("asl".into()) };
+        let r = Request { files: files.iter().map(|(p, t)| (p.clone(), t.as_bytes().to_vec())).collect(), lang: Lang::En, path: flow.into(), target: Some("asl".into()) };
         if playground::generate(&r)["code"] == 0 { "asl" } else { "durable" }
     } else if flow.contains("/pydantic-graph/") {
         "pydantic-graph"
@@ -409,13 +413,70 @@ fn sekisho_examples() -> Vec<Project> {
         .collect()
 }
 
+/// `ritsu`, run in `dir` with the store at `store` and English asked of the environment; it has to
+/// pass.
+fn ritsu_with_store(dir: &Path, store: &Path, args: &[&str]) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+    c.current_dir(dir).args(args).env(ritsu_base::modules::store::VARIABLE, store).env("RITSU_LANG", "en");
+    let o = c.output().expect("could not run ritsu");
+    assert!(o.status.success(), "ritsu {args:?} in {}: {}{}", dir.display(), String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+}
+
+/// The example of modules (DESIGN 17.26), in English (`modules`) or in Japanese (`modules.ja`), with
+/// shop locked to pricing and tax from a registry: the two put in the store `store/` of a directory
+/// of the test's own, on a fixed date, and pricing's lock and shop's written there, so that the
+/// files are the same at every run but for the version of ritsu the locks carry; no registry is
+/// asked. The directory, and the name of shop's directory in it.
+fn locked_example(dir: &str) -> (TempDir, &'static str) {
+    let (shop, pricing, tax) = if dir == "modules" { ("shop", "pricing", "tax") } else { ("店", "価格", "税") };
+    let t = TempDir::new("playground-modules");
+    let src = repo().join("crates/ritsu/tests/projects").join(dir);
+    for m in [shop, pricing, tax] {
+        ritsu_testkit::tmp::copy_dir(&src.join(m), &t.path().join(m));
+    }
+    let replace = |rel: &str, from: &str, to: &str| {
+        let file = t.path().join(rel);
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains(from), "{rel} has no `{from}`");
+        std::fs::write(&file, text.replacen(from, to, 1)).unwrap();
+    };
+    replace(&format!("{pricing}/ritsu.mod"), &format!("require tax path \"../{tax}\""), "require tax oci \"example.com/acme/tax\" 1.0.0");
+    replace(&format!("{shop}/ritsu.mod"), &format!("require pricing path \"../{pricing}\""), "require pricing oci \"example.com/acme/pricing\" 1.1.0");
+    let store = t.path().join("store");
+    let put = |m: &str| {
+        ritsu_base::modules::store::put_directory(&ritsu_base::modules::store::Store::at(&store), &t.path().join(m), "2026-10-28", &[]).unwrap_or_else(|e| panic!("{}", e.en));
+    };
+    put(tax);
+    ritsu_with_store(&t.path().join(pricing), &store, &["mod", "lock"]);
+    put(pricing);
+    ritsu_with_store(&t.path().join(shop), &store, &["mod", "lock"]);
+    (t, shop)
+}
+
+/// The example of modules as the page opens it, in English (`modules`) and in Japanese
+/// (`modules.ja`): the module at hand, shop, locked ([`locked_example`]), with pricing and tax in the
+/// form of its copy of the store (DESIGN 17.22), as `ritsu mod vendor` writes it and as `module.json`
+/// of a version on a site of modules holds it (DESIGN 17.17): shop's own files first, then
+/// `.ritsu/modules/`. A new version of ritsu writes projects.json anew, as the locks carry the
+/// version. It opens on the flow, whose rules are pricing's.
+fn modules_example(name: &str) -> Project {
+    let (dir, open) = if name == "modules" { ("modules", "orders/place_order.flow") } else { ("modules.ja", "注文/注文を受ける.flow") };
+    let (t, shop) = locked_example(dir);
+    ritsu_with_store(&t.path().join(shop), &t.path().join("store"), &["mod", "vendor"]);
+    let (mut files, copy): (Vec<_>, Vec<_>) = files_of(&t.path().join(shop)).into_iter().partition(|(p, _)| !p.starts_with(".ritsu/"));
+    files.extend(copy);
+    assert!(files.iter().any(|(p, _)| p == open), "{name} has no {open}");
+    let from = files.iter().map(|(p, _)| format!("crates/ritsu/tests/projects/{dir}/{shop}/{p}")).collect();
+    Project { name: name.into(), group: "modules".into(), open: open.into(), files, from, ..Project::default() }
+}
+
 /// The projects the page opens, in the order its list has them (each page lists those of its
-/// language): the shop in English and in Japanese, an empty project to start from one file, the
-/// examples of rulec's page in English and then in Japanese, the examples of dandori's page,
-/// chobo's examples in English and then in Japanese, and sekisho's example in English and in
-/// Japanese.
+/// language): the shop in English and in Japanese, the example of modules in English and in
+/// Japanese, an empty project to start from one file, the examples of rulec's page in English and
+/// then in Japanese, the examples of dandori's page, chobo's examples in English and then in
+/// Japanese, and sekisho's example in English and in Japanese.
 fn made() -> Vec<Project> {
-    let mut out = vec![shop("shop"), shop("shop.ja")];
+    let mut out = vec![shop("shop"), shop("shop.ja"), modules_example("modules"), modules_example("modules.ja")];
     out.push(Project { name: "empty".into(), group: "own".into(), ..Project::default() });
     for (i, lang) in ["en", "ja"].into_iter().enumerate() {
         for (key, en, ja) in RULEC {
@@ -1034,6 +1095,60 @@ fn the_page_answers_as_the_command_does() {
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
+/// A file that is not UTF-8 text goes to the module as its bytes, `{"base64": "…"}` in place of its
+/// text (DESIGN 17.17, 17.22): koyomi's example that closes Japan's national holidays, with the
+/// Cabinet Office's CSV in Shift_JIS beside it, answers `check`, `gen` and `doc` in the page as the
+/// binary answers them in a directory holding the same bytes, in each language. An item that is
+/// neither text nor that, or whose base64 cannot be read, is refused.
+#[test]
+fn a_file_of_bytes_goes_in_as_its_bytes() {
+    let from = repo().join("crates/koyomi/examples/calendars");
+    let (cal, csv) = ("tokyo_business_days.cal", "data/syukujitsu.csv");
+    let text = std::fs::read_to_string(from.join(cal)).unwrap();
+    let bytes = std::fs::read(from.join(csv)).unwrap();
+    assert!(String::from_utf8(bytes.clone()).is_err(), "{csv} is UTF-8 now, and tests nothing here");
+    let dir = TempDir::new("playground-bytes");
+    dir.write(cal, &text);
+    dir.write(csv, &bytes);
+    let mut failures = Vec::new();
+    let mut n = 0;
+    for lang in ["en", "ja"] {
+        for (kind, req) in requests(&[(cal.to_string(), text.clone())], lang) {
+            let mut req = req;
+            req["files"] = json!({ cal: text, csv: { "base64": ritsu_base::sources::base64_encode(&bytes) } });
+            let r = Request::from_json(&req).unwrap();
+            let answers = match kind {
+                "check" => vec![playground::check(&r)],
+                "gen" => vec![playground::generate(&r)],
+                _ => {
+                    let a = playground::doc(&r);
+                    vec![a["html"].clone(), a["markdown"].clone()]
+                }
+            };
+            for a in answers {
+                let (code, out, err) = ritsu_in(dir.path(), &words_of(a["command"].as_str().unwrap(), lang));
+                let got = (a["code"].as_u64().unwrap() as u8, a["out"].as_str().unwrap(), a["err"].as_str().unwrap());
+                if (code, out.as_str(), err.as_str()) != got {
+                    failures.push(format!("{kind} ({lang}): `{}`\n--- the command (exit {code})\n{out}{err}\n--- the page (exit {})\n{}{}", a["command"], got.0, got.1, got.2));
+                }
+                n += 1;
+            }
+        }
+    }
+    let check = playground::check(&Request::from_json(&json!({ "files": { cal: text, csv: { "base64": ritsu_base::sources::base64_encode(&bytes) } }, "lang": "en", "path": "" })).unwrap());
+    assert_eq!(check["code"], 0, "{check}");
+    for (item, said) in [
+        (json!(7), format!("the file {csv} is neither text nor {{\"base64\": …}}")),
+        (json!({ "base64": "not base64!" }), format!("the base64 of the file {csv} cannot be read")),
+        (json!({ "base64": "AAAA", "more": 1 }), format!("the file {csv} is neither text nor {{\"base64\": …}}")),
+    ] {
+        let e = Request::from_json(&json!({ "files": { cal: text, csv: item }, "lang": "en", "path": "" })).unwrap_err();
+        assert_eq!(e, said);
+    }
+    eprintln!("compared: {n} answers of the page with what the binary prints, on a file of bytes");
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
 /// Every request of one project's page, each held to the binary; how many answers were compared.
 fn compare(what: &str, lang: &str, files: &[(String, String)], failures: &mut Vec<String>) -> usize {
     let mut n = 0;
@@ -1319,7 +1434,11 @@ const PUBLISHED: [&str; 2] = ["/ritsu/playground/", "/ritsu/ja/playground/"];
 /// A server for the pages, each at its path, and the playground's files where the site publishes
 /// them.
 fn serve(pages: Vec<(String, String)>) -> u16 {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    serve_on(std::net::TcpListener::bind("127.0.0.1:0").unwrap(), pages)
+}
+
+/// [`serve`] on a listener bound already: for pages that name the server's own port.
+fn serve_on(listener: std::net::TcpListener, pages: Vec<(String, String)>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let pages = std::sync::Arc::new(pages);
     std::thread::spawn(move || {
@@ -1337,7 +1456,7 @@ fn respond(mut s: std::net::TcpStream, pages: &[(String, String)]) {
     let head = String::from_utf8_lossy(&buf[..n]);
     let asked = head.split_whitespace().nth(1).unwrap_or("/").split(['?', '#']).next().unwrap_or("/").to_string();
     let found = if let Some((_, page)) = pages.iter().find(|(at, _)| *at == asked) {
-        Some((page.as_bytes().to_vec(), "text/html; charset=utf-8"))
+        Some((page.as_bytes().to_vec(), if asked.ends_with(".json") { "application/json" } else { "text/html; charset=utf-8" }))
     } else {
         let kind = match asked.rsplit('.').next() {
             Some("js") => "text/javascript",
@@ -1815,10 +1934,10 @@ fn the_page_starts_in_chrome() {
         }
         assert_eq!(text_of(opened, "open"), contract, "{page}: the page does not open on the contract");
         assert_eq!(text_of(opened, "text"), shop.files.iter().find(|(p, _)| p == contract).unwrap().1, "{page}: the editor holds another contract");
-        // the list: the projects of this page's language, in their six groups
+        // the list: the projects of this page's language, in their seven groups
         let mine: Vec<&str> = projects.iter().filter(|p| p.langs().contains(&tag)).map(|p| p.name.as_str()).collect();
         assert_eq!(opened["listed"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect::<Vec<_>>(), mine, "{page}: the list has other projects than projects.json has for this page");
-        assert_eq!(opened["groups"], 6, "{page}: the list does not have its six groups");
+        assert_eq!(opened["groups"], 7, "{page}: the list does not have its seven groups");
         // a .proto has no page for people, which the page says; under the site's dark scheme, a rule's
         // page is drawn dark (the next visit opens one)
         assert_eq!(dark["page"], Value::Null, "{page}: a page is drawn of the contract");
@@ -2309,4 +2428,88 @@ fn the_pages_before_send_their_links_on() {
         }
     }
     eprintln!("compared: {} links to the pages rulec's and dandori's playgrounds had, sent on to the playground in Chrome, with what the library answers", visits.len());
+}
+
+/// A version on a site of modules opens in the playground (DESIGN 17.17). `ritsu mod site` writes,
+/// in each language, the site of the example's shop (locked to pricing and tax in a store of the
+/// test's own, with a file in Shift_JIS among its files) and of a module too big for a link, for the
+/// playground alone on the test's server. The button of shop's page packs its `module.json` into a
+/// link of that page, which opens it in the empty project and answers its check as the library
+/// answers the same files; the file in Shift_JIS shows read only, a note in its place. The button
+/// of the big module's page says that it is too big, and the page stays where it is.
+#[test]
+fn a_version_on_a_site_of_modules_opens_in_the_playground() {
+    let Some(chrome) = chrome() else {
+        return;
+    };
+    let (t, shop) = locked_example("modules");
+    let csv = "notes/holidays.csv";
+    let sjis: &[u8] = b"\x93\xfa\x95\x74,\x8b\x78\x93\xfa\n2026-01-01,\x8c\xb3\x93\xfa\n";
+    t.write(&format!("{shop}/{csv}"), sjis);
+    // a megabyte that does not compress
+    let mut noise = Vec::with_capacity(1_000_000);
+    let mut x: u64 = 0x9e37_79b9_7f4a_7c15;
+    while noise.len() < 1_000_000 {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        noise.extend_from_slice(&x.to_le_bytes());
+    }
+    t.write("big/ritsu.mod", "module example.com/acme/big\nversion 0.1.0\n");
+    t.write("big/data/noise.bin", &noise);
+    t.write("modules.list", format!("local \"{shop}\"\nlocal \"big\"\n"));
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let mut pages = Vec::new();
+    for (tag, play) in [("en", PUBLISHED[0].replace("playground", "play")), ("ja", PUBLISHED[1].replace("playground", "play"))] {
+        let out = format!("site-{tag}");
+        let playground = format!("{base}{play}");
+        ritsu_with_store(t.path(), &t.path().join("store"), &["mod", "site", "modules.list", "--out", &out, "--lang", tag, "--playground", &playground]);
+        let mut stack = vec![t.path().join(&out)];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    let rel = p.strip_prefix(t.path()).unwrap().to_string_lossy().into_owned();
+                    pages.push((format!("/{rel}"), std::fs::read_to_string(&p).unwrap()));
+                }
+            }
+        }
+    }
+    serve_on(listener, playground_pages(pages.clone()));
+    let read_only = r#"(async () => {
+  const lib = new URL("libraries.js", document.querySelector('script[src$="playground.js"]').src).href;
+  const { EditorView } = await import(lib);
+  const v = EditorView.findFromDOM(document.querySelector(".pg .cm-editor"));
+  return { open: document.querySelector('.pg-file[aria-selected="true"]').dataset.path, readOnly: v.state.readOnly, editable: v.contentDOM.getAttribute("contenteditable"), text: v.state.doc.toString() };
+})()"#;
+    for (tag, play, big) in [("en", "/ritsu/play/", "Too big to open in the playground"), ("ja", "/ritsu/ja/play/", "大きすぎて、ブラウザで試すページでは開けません")] {
+        let at = |m: &str| format!("/site-{tag}/example.com/acme/{m}/0.1.0/index.html");
+        let pressed = format!("document.getElementById(\"open\").textContent === {}", json!(big));
+        let visits = vec![
+            Visit::to(format!("{base}{}", at("shop"))).click("#open").ready().state().run(&press(&format!(".pg-file[data-path=\"{csv}\"]"))).get(read_only),
+            Visit::to(format!("{base}{}", at("big"))).click("#open").wait(&pressed).get("[location.pathname, document.getElementById(\"open\").disabled]"),
+        ];
+        let got = drive(&chrome, visits);
+        // shop: the page alone, on the empty project with the files of module.json, and its check
+        let json_at = format!("/site-{tag}/example.com/acme/shop/0.1.0/module.json");
+        let items: Value = serde_json::from_str(&pages.iter().find(|(p, _)| *p == json_at).expect("shop's module.json").1).unwrap();
+        let files: serde_json::Map<String, Value> = items.as_array().unwrap().iter().map(|i| (i[0].as_str().unwrap().to_string(), i[1].clone())).collect();
+        assert_eq!(files[csv], json!({ "base64": ritsu_base::sources::base64_encode(sjis) }), "{tag}");
+        let want = playground::check(&Request::from_json(&json!({ "files": files, "lang": tag, "path": "" })).unwrap());
+        assert_eq!(want["code"], 0, "{tag}: {want}");
+        let opened = &got[0][0];
+        assert_eq!((text_of(opened, "path"), text_of(opened, "project")), (play, "empty"), "{tag}");
+        assert!(text_of(opened, "hash").starts_with("#project=empty&edits="), "{tag}: {}", text_of(opened, "hash"));
+        assert_eq!(text_of(opened, "said"), said(&want), "{tag}: the page shows another check");
+        assert!(text_of(opened, "status").ends_with(&counts_in(tag, &want)), "{tag}: {}", text_of(opened, "status"));
+        let shown = &got[0][1];
+        let note = if tag == "ja" { format!("UTF-8 のテキストではないファイルです（{} バイト）。", sjis.len()) } else { format!("This file is not UTF-8 text ({} bytes).", sjis.len()) };
+        assert_eq!((text_of(shown, "open"), &shown["readOnly"], text_of(shown, "editable")), (csv, &json!(true), "false"), "{tag}");
+        assert!(text_of(shown, "text").starts_with(&note), "{tag}: {}", text_of(shown, "text"));
+        // the big module: the button says so, and the page stays
+        assert_eq!(got[1][0], json!([at("big"), true]), "{tag}");
+    }
 }

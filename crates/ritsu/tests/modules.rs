@@ -13,7 +13,10 @@
 //! held to golden files, and stopped by a tree that cannot be read; `ritsu run --with` the root of a
 //! module, which merges the contributions of the whole tree; the page `ritsu rulec doc` draws of a
 //! dependency's rule, which names the module of the rule it applies; and the page each language draws
-//! of a file that names a dependency's, which names the module of that file.
+//! of a file that names a dependency's, which names the module of that file. The seed module of the
+//! repository (`modules/holidays`, DESIGN 17.18): its data files and their pins, which are koyomi's
+//! example's, its check, held to golden files, and the workflow that publishes it, which runs by
+//! hand only.
 
 use ritsu_base::modules::lock::{Lock, Locked};
 use ritsu_base::modules::semver::Version;
@@ -1007,4 +1010,106 @@ fn e307_fails_a_check_whose_files_all_pass() {
     let (code, out, _) = ritsu_in(&shop, t.path(), &["check"]);
     assert_eq!(code, 0, "{out}");
     assert!(out.ends_with("ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the languages: 0 checked, 0 undecided\n"), "{out}");
+}
+
+// ── The seed module (DESIGN 17.18) ──────────────────────────────────────────────────────────
+
+/// The root of the repository.
+fn repo() -> PathBuf {
+    here().join("../..")
+}
+
+/// The data files a calendar's `source … = file "<file>" url "<url>" sha256:<head>` lines pin, under
+/// `dir` (its `.cal` files, walked): the file's name, the URL and the digest's head, a line each.
+fn pins(dir: &Path) -> std::collections::BTreeSet<(String, String, String)> {
+    let mut out = std::collections::BTreeSet::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|x| x == "cal") {
+                for line in std::fs::read_to_string(&p).unwrap().lines().filter(|l| l.starts_with("source ")) {
+                    let quoted: Vec<&str> = line.split('"').collect();
+                    let (file, url) = (quoted[1], quoted[3]);
+                    let sha = line.rsplit("sha256:").next().unwrap().trim();
+                    let name = file.rsplit('/').next().unwrap();
+                    out.insert((name.to_string(), url.to_string(), sha.to_string()));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The data files of the seed module are, byte for byte, those of koyomi's example of calendars,
+/// and each calendar of the module pins its file by the URL and the digest koyomi's example pins it
+/// by: one is not made new without the other.
+#[test]
+fn the_seed_module_holds_the_data_and_the_pins_of_koyomi_s_example() {
+    let seed = repo().join("modules/holidays");
+    let koyomi = repo().join("crates/koyomi/examples/calendars");
+    for (ours, theirs) in [("uk/data/bank-holidays.json", "data/bank-holidays.json"), ("japan/data/syukujitsu.csv", "data/syukujitsu.csv")] {
+        let (a, b) = (std::fs::read(seed.join(ours)).unwrap(), std::fs::read(koyomi.join(theirs)).unwrap());
+        assert!(a == b, "modules/holidays/{ours} is not the bytes of crates/koyomi/examples/calendars/{theirs}");
+    }
+    let (ours, theirs) = (pins(&seed), pins(&koyomi));
+    assert_eq!(ours.len(), 2, "{ours:?}");
+    assert!(ours.is_subset(&theirs), "the seed module pins {ours:?}, and koyomi's example {theirs:?}");
+    // five calendars, which close the holidays and nothing else: no weekend
+    let mut cals = 0;
+    for f in ["uk/england_and_wales.cal", "uk/scotland.cal", "uk/northern_ireland.cal", "japan/national_holidays.cal", "japan/国民の祝日.cal"] {
+        let text = std::fs::read_to_string(seed.join(f)).unwrap();
+        assert!(!text.contains("closed weekly"), "{f} closes a day of the week");
+        cals += 1;
+    }
+    assert_eq!(cals, 5);
+}
+
+/// `ritsu check modules/holidays`, from the root of the repository, in English and in Japanese and
+/// as JSON, held to golden files: the five calendars pass, and the module has no dependency.
+#[test]
+fn the_seed_module_passes_its_check() {
+    let empty = TempDir::new("modules-seed");
+    let mut failures = Vec::new();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(&repo(), empty.path(), &["check", "modules/holidays", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (0, ""), "{out}");
+        golden(&format!("tests/golden/modules/holidays.{lang}.txt"), &out, &mut failures);
+    }
+    let (code, out, _) = ritsu_in(&repo(), empty.path(), &["check", "modules/holidays", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    golden("tests/golden/modules/holidays.json", &out, &mut failures);
+    let v = json(&out);
+    assert_eq!((v["module"]["name"].as_str(), v["files"].as_array().map(Vec::len)), (Some("ghcr.io/i2y/ritsu-holidays"), Some(5)));
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// `.github/workflows/modules.yml` (DESIGN 17.18) starts by hand only, and pushes nothing unless
+/// `publish` is ticked; its publishing job alone has the rights to push and to sign, and it installs
+/// the cosign the tests install (tools.yml), at the same version and held to the same checksum.
+#[test]
+fn the_workflow_that_publishes_the_seed_module_runs_by_hand_only() {
+    let read = |p: &str| std::fs::read_to_string(repo().join(p)).unwrap();
+    // the lines that are not comments
+    let wf: String = read(".github/workflows/modules.yml").lines().filter(|l| !l.trim_start().starts_with('#')).map(|l| format!("{l}\n")).collect();
+    let on = wf.split_once("\non:\n").expect("modules.yml has no `on:`").1;
+    let triggers: Vec<&str> = on.lines().take_while(|l| l.is_empty() || l.starts_with(' ')).filter(|l| l.starts_with("  ") && !l.starts_with("   ")).collect();
+    assert_eq!(triggers, ["  workflow_dispatch:"], "modules.yml starts on more than a run by hand");
+    assert!(wf.contains("      publish:\n"), "modules.yml has no input `publish`");
+    let publish_input = wf.split_once("      publish:\n").unwrap().1;
+    assert!(publish_input.contains("        type: boolean\n        default: false\n"), "`publish` is not a boolean that is false unless ticked");
+    let (check, publish) = wf.split_once("\n  publish:\n").expect("modules.yml has no job `publish`");
+    assert!(publish.contains("\n    if: ${{ inputs.publish }}\n"), "the job `publish` runs when `publish` is not ticked");
+    for right in ["packages: write", "id-token: write"] {
+        assert!(!check.contains(right), "modules.yml gives `{right}` outside the job `publish`");
+        assert_eq!(publish.matches(right).count(), 1, "the job `publish` does not have `{right}`");
+    }
+    let tools = read(".github/workflows/tools.yml");
+    let pinned: Vec<&str> = wf.lines().filter(|l| l.contains("/sigstore/cosign/releases/download/") || l.contains("| sha256sum -c -")).collect();
+    assert_eq!(pinned.len(), 2, "{pinned:?}");
+    for line in pinned {
+        assert!(tools.lines().any(|t| t == line), "tools.yml installs another cosign than modules.yml's\n{line}");
+    }
 }

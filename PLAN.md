@@ -2007,7 +2007,7 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 | C | 版の指し方、rulec の `@`、koyomi と sekisho の diff、インターフェースの差、`ritsu mod diff`、`ritsu mod report` | B | 12〜16 時間 |
 | D | curl の呼び方、テストの中のレジストリ、認証、送り出し、取り出し、置き場への書き込み、cosign、CI の段 | B | 14〜18 時間 |
 | E | ライブラリの形の gen（TypeScript、Python、Go） | B | 6〜8 時間 |
-| F | 種のモジュール、一覧のサイト、ブラウザで試すページ、ritsu のサイト、公開のワークフロー、npm | C、D | 10〜13 時間 |
+| F | 祝日のモジュール、一覧のサイト、ブラウザで試すページ、ritsu のサイト、公開のワークフロー、npm | C、D | 10〜13 時間 |
 | G | README、スキル、サイトのページ、台帳から作る文書、数の同期、DESIGN 17 章の書き直し、日本語の読み直し | B〜F | 5〜7 時間 |
 | 仕上げ | 全体の試験を一度、CI（毎晩の回も）、取り込み、リリース（取りまとめ役） | G | 3〜4 時間 |
 
@@ -2280,9 +2280,9 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 **D.7 CI**（DESIGN 10.5、17.25）
 
 - tools.yml：cosign を版とチェックサムで固定して入れる（D.6 で確かめた版）。
-- platforms.yml：distribution の参照実装のレジストリをサービスとして立て（イメージはダイジェストで固定）、`RITSU_TEST_REGISTRY` を渡す。その上で、送り出し、取り出し、cosign。種のモジュールの `push --dry-run` のダイジェストを Linux で出し、macOS の値（golden）と比べる。
+- platforms.yml：distribution の参照実装のレジストリをサービスとして立て（イメージはダイジェストで固定）、`RITSU_TEST_REGISTRY` を渡す。その上で、送り出し、取り出し、cosign。祝日のモジュールの `push --dry-run` のダイジェストを Linux で出し、macOS の値（golden）と比べる。
 - `ci/skips/` には足さない（CI では道具を入れるため）。
-- 結果（2026-10-28）：tools.yml の dandori の組（ritsu のテストを回す組）に cosign 3.1.4 を、platforms.yml にレジストリのサービスと cosign と ritsu の二つのテストを足した。固定した値は DESIGN 17.25 の「CI に固定したもの」。手では走らせていない。種のモジュールの `push --dry-run` は、種のモジュールを作る F が platforms.yml の同じ段に足す。いまは小さなモジュールの golden を Linux で比べる。
+- 結果（2026-10-28）：tools.yml の dandori の組（ritsu のテストを回す組）に cosign 3.1.4 を、platforms.yml にレジストリのサービスと cosign と ritsu の二つのテストを足した。固定した値は DESIGN 17.25 の「CI に固定したもの」。手では走らせていない。祝日のモジュールの `push --dry-run` は、そのモジュールを作る F が platforms.yml の同じ段に足す。いまは小さなモジュールの golden を Linux で比べる。
 
 **D の完了の条件**
 
@@ -2315,14 +2315,20 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 
 **E の完了の条件**：E.5 の golden と tools の段の三つが通る。アプリの形の golden が変わらない。触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
 
-### 8.6 F：種のモジュール、一覧のサイト、ブラウザ、npm
+### 8.6 F：祝日のモジュール、一覧のサイト、ブラウザ、npm
 
-- **F.1 種のモジュール**（DESIGN 17.18）：`modules/holidays/` を作る（英国の三つと日本（英語と日本語の版）、データ、README（英日）、`THIRD_PARTY_NOTICES.md`）。fast.yml に `ritsu check modules/holidays`。`crates/ritsu/tests/modules.rs` に、データのファイルと固定が koyomi の例と同じであることの試験と、`check` の golden。
+- **F.1 祝日のモジュール**（DESIGN 17.18）：`modules/holidays/` を作る（英国の三つと日本（英語と日本語の版）、データ、README（英日）、`THIRD_PARTY_NOTICES.md`）。fast.yml に `ritsu check modules/holidays`。`crates/ritsu/tests/modules.rs` に、データのファイルと固定が koyomi の例と同じであることの試験と、`check` の golden。
+  - 結果（2026-10-29）：`modules/holidays/` に、`ritsu.mod`（`ghcr.io/i2y/ritsu-holidays` 1.0.0、`ritsu >=0.36.0`、`license "(MIT OR Apache-2.0) AND OGL-UK-3.0 AND LicenseRef-PDL-1.0"`）、祝日だけを閉じる五つのカレンダー、koyomi の例と同じバイトのデータ二つ、README（英日）、`THIRD_PARTY_NOTICES.md` を置いた。fast.yml に `ritsu check modules/holidays` の段を足した。`modules.rs` の二つの試験が、データと固定が koyomi の例と同じこと、カレンダーが曜日を閉じないこと、`check` の英日と JSON の golden を確かめる。D から持ち越した `push --dry-run` の golden（英日と JSON）は `modules_oci.rs` の試験にし、platforms.yml の同じ段に足した（Linux では CI が比べる）。入れ子のモジュールになっても、根の `ritsu.ctx` の検査の JSON、木を数える試験、B の突き合わせのスクリプトの出力は変わらない（DESIGN 17.18）。
 - **F.2 `ritsu mod site`**（DESIGN 17.17）：`crates/ritsu/src/modules/site.rs`。一覧のファイルの読み方、版の一覧と取り出しと確かめ、ページ（`ritsu_base::docpage` の枠）、`module.json`、開くボタンの小さなスクリプト（ブラウザで試すページと同じ圧縮）。試験：`crates/ritsu/tests/modules_site.rs`。テストのレジストリに例の三つのモジュールを二つの版ずつ置き、一覧のサイトを作って HTML の golden（英日）、`module.json` の中身、確かめられないモジュールで exit 1。Chrome で、版のページのボタンが作るリンクを開き、ブラウザで試すページが `shop` を読み込んで検査の答えを出すこと（tools の段）。
+  - 結果（2026-10-29）：一覧のファイルの行は `title`・`description`・`playground`・`module`・`signature`・`local` の六つで、`local` のパスは一覧のファイルのディレクトリから読む。版ごとに取り出して確かめ（`fetch::listed`。一覧の `signature` の行はどの版にも効く）、版の lock が固定するモジュールも取り出して確かめる。ページ、言語の `doc` のページ、前の版からの差（`ritsu mod diff` の Markdown の本文を HTML にしたもの）、`module.json` を書く。`ritsu mod` の表の「この版にはまだ無い」の口は、最後のコマンドが入ったので外した（`modules_cli.rs` のその試験も外した）。`modules_site.rs` の四つの試験：三つのモジュールを二つの版ずつ置いたサイト（HTML の golden は 6 枚を英日で。ファイルの一覧、言語の `doc` のページ、cosign の呼び方、`module.json` が空の置き場で `ritsu check` を通り `ritsu mod vendor --check` が lock と合うこと）、cosign が通さないときの exit 1、作業ツリーの四つ（一つ先の版、レジストリにある版、パスで読む例、リンクに入らない大きさのモジュール）とブラウザで試すページの URL の決まり方、止まるときの六つ（exit 2、何も書かない）。Chrome の試験は `playground.rs` に置いた（F.3）。
 - **F.3 ブラウザで試すページ**（DESIGN 17.22）：変更の項目の `{"base64": "…"}`（`website/docs/playground/playground.js`、`worker.js`、エディタは読むだけ）、`ritsu-wasm` の `Memory` の `@` の見せ方、プロジェクトの一覧に `modules` と `modules.ja`（同梱のコピーの形）、`ritsu.wasm` を作り直す。試験：`crates/ritsu/tests/playground.rs` に `base64` の項目と `modules` の検査の答え。
+  - 結果（2026-10-29）：変更の項目と `projects.json` のファイルに `{"base64": "…"}` を足した（`playground.js` の `isBytes`・`byteCount`・`changed`・`stateOf`、`worker.js` の頭の注、ritsu-wasm の `Request` はファイルをバイトで持つ）。UTF-8 でないファイルは、エディターが説明を読むだけで見せる。`Memory` の `@` は前からディスクと同じに見せるので、直すところは無かった（ページの答えはバイナリと一字も違わない）。プロジェクトの一覧に `modules` と `modules.ja`（グループ `modules`。七つ目）を足した。テストが例をコピーし、`require` をレジストリの形にして lock を書き、`ritsu mod vendor` で作る。`ritsu.wasm` を `make_wasm.sh` で作り直した（16,492,171 バイトから 17,019,173 バイト）。`playground.rs` に二つの試験を足した。`base64` の項目（8 の答えをバイナリと比べ、読めない項目の文を確かめる）と、Chrome で一覧のサイトの版のページのボタンがページを開き、検査の答えがライブラリと同じであること（大きすぎるモジュールのボタンの文も）。ページとバイナリの突き合わせは 2,588 の答え（112 のプロジェクトと編集）、モジュールとライブラリの突き合わせは 654 の問いになった（DESIGN 8.7、17.22）。
 - **F.4 ritsu のサイト**：`website/modules.list`、docs.yml で `ritsu mod site` を英日で走らせて `build/modules/list/` と `build/ja/modules/list/` に置く、案内のページ `website/docs/modules.md` と `website/docs-ja/modules.md` の骨組み（中身は G）、サイトの頭のページからのリンク。試験：`crates/ritsu/tests/website.rs` の組んだ木に、一覧のページがあること。
+  - 結果（2026-10-29）：`website/modules.list` は `local "../modules/holidays"` を持つ（パスは一覧のファイルのディレクトリから読むので、`website/` からのパスにした）。`build.sh` は ritsu を `RITSU` か PATH から探し、無ければ一覧を作らずにそう言う。docs.yml は、コミットから ritsu を組んで `RITSU` で渡し、組んだ木の二つの一覧のページを確かめ、`modules/**` を変えた push でも走る。案内のページ（英日）は骨組みと一覧へのリンクで、目次では「Node で使う」と「ライブラリとして公開する」のあいだに置き、頭のページ（英日）に一文を足した。`website.rs` は、組んだ木に案内のページと二つの一覧のページがあることと、docs.yml の始まりを確かめる（DESIGN 17.17）。
 - **F.5 公開のワークフロー**：`.github/workflows/modules.yml`（DESIGN 17.18 の形。`publish` の既定は false）。`actionlint` があればかける。手で走らせない（公開を決めてから走らせる）。
+  - 結果（2026-10-29）：`check` のジョブ（`contents: read`）が ritsu を組み、`ritsu check .` と `push --dry-run` でダイジェストを出す。`publish` のジョブだけが `packages: write` と `id-token: write` を持ち、ghcr.io に送り、鍵を持たずに cosign で署名し、cosign と `ritsu mod fetch` の二通りで署名を確かめる（DESIGN 17.18）。`modules.rs` の試験が、始まりと `publish` の既定と権限と cosign の固定を確かめる。actionlint は手元に無く、YAML として読めること、`run` の中の `bash -n`、`check` のジョブの手順を手元で走らせることで確かめた。ワークフローは一度も走らせていない。
 - **F.6 npm**（DESIGN 17.22）：`packaging/npm` の試験に、通信の要るコマンドが `curl` を挙げて止まることと、置き場と同梱のコピーを読む `check`、`dirs` で置き場を開いていないときの文。
+  - 結果（2026-10-29）：`crates/ritsu/tests/npm.rs` に二つの試験を足した（tools の段）。通信の要る 12 のコマンドが curl・git・cosign を挙げて exit 2 で止まり、モジュールと置き場を変えないこと。置き場（`RITSU_MODULES`、`HOME`、`HOME` と `XDG_CACHE_HOME`）と同梱のコピーを読む 42 のコマンドがネイティブと同じ答えを返すこと、API の `dirs` で置き場を開いていないときと `HOME` が無いときの文。作る前の試しで WASI の不具合を三つ見つけて直した。`mod vendor` と `push --dry-run` が `std::process::id()` で panic すること（`ritsu_base::wasi::run_id`）、作業用のファイルの場所の `std::env::temp_dir()` で panic すること（置き場の `tmp/` を使い、置き場が無ければそう言って止まる）、macOS で `dirs` を絞ると置き場の場所を取り違えること（ローダーが `RITSU_WASI_PLATFORM` で系の名前を渡す。DESIGN 8.8、17.15）。依存が見つからないときの文に、WASI では `dirs` と `ritsu mod vendor` のことを足した（DESIGN 17.22）。
 
 **F の完了の条件**：`ritsu check modules/holidays` が通る。一覧のサイトの golden と、Chrome での開く試験が通る（Chrome の無い機械では SKIP）。ブラウザで試すページが `modules` を読む。`modules.yml` は一度も走らせていない。触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
 
@@ -2342,7 +2348,7 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 - 全体の試験を一度回す（DESIGN 10.2 の三つの段。platforms はレジストリのサービスを含めて）。
 - CI の push の回と、毎晩の platforms・kani・audit・tools の回を見る。
 - 取り込みと、リリースの判断（版は 0.37.0 を案とする。DESIGN 17 章の例の `ritsu >=0.37.0` もそれに合わせてある）。
-- 種のモジュールの公開（`modules.yml` を `publish` で走らせる）は、公開を決めてから。
+- 祝日のモジュールの公開（`modules.yml` を `publish` で走らせる）は、公開を決めてから。
 
 ### 8.9 例のプロジェクトの材料（B.4 で作る）
 
@@ -2380,5 +2386,5 @@ DESIGN 17 章で★を付けたもの。推す形は、どれも 17 章に書い
 7. 振る舞いの差は rulec、koyomi、sekisho だけで、ほかの六つはインターフェースの差（17.9.5）。C に関わる。
 8. ライブラリの依存は、依存のモジュールが `library` の行を持つか、`--embed` で中に入れる（17.16）。E に関わる。
 9. 層の tar を圧縮しない（17.11）。D に関わる。
-10. 種のモジュールの名前を `ghcr.io/i2y/ritsu-holidays`、最初の版を 1.0.0 にする（17.18）。F に関わる。
+10. 祝日のモジュールの名前を `ghcr.io/i2y/ritsu-holidays`、最初の版を 1.0.0 にする（17.18）。F に関わる。
 11. Lean のモデルを足さない（17.24）。

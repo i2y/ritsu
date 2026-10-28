@@ -1,0 +1,49 @@
+{
+  "ritsu": "0.36.0",
+  "root": "modules/holidays",
+  "ok": true,
+  "module": {
+    "name": "ghcr.io/i2y/ritsu-holidays",
+    "version": "1.0.0"
+  },
+  "dependencies": [],
+  "files": [
+    {
+      "tool": "koyomi",
+      "file": "japan/national_holidays.cal",
+      "dependency": null,
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "japan/国民の祝日.cal",
+      "dependency": null,
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "uk/england_and_wales.cal",
+      "dependency": null,
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "uk/northern_ireland.cal",
+      "dependency": null,
+      "ok": true
+    },
+    {
+      "tool": "koyomi",
+      "file": "uk/scotland.cal",
+      "dependency": null,
+      "ok": true
+    }
+  ],
+  "diagnostics": [],
+  "contributions": [],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0
+  }
+}

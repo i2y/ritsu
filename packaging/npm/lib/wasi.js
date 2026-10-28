@@ -7,8 +7,10 @@
 // directory the loader names in RITSU_WASI_CWD, so that every path it reads and prints is the one
 // the native binary reads and prints there. RITSU_WASI_UTC_OFFSET is the offset of the host's
 // clock from UTC, which a WebAssembly module cannot read (`yuen review` takes today's date from
-// it). Those two are the only variables the loader adds; everything else in the environment is
-// the caller's.
+// it). RITSU_WASI_PLATFORM is the system Node runs on (`process.platform`), which the module cannot
+// tell either: the store of the modules is in ~/Library/Caches on macOS and in ~/.cache elsewhere,
+// as the native binary has it, whatever `dirs` opens (DESIGN 17.15). Those three are the only
+// variables the loader adds; everything else in the environment is the caller's.
 
 import { closeSync, readFileSync, readlinkSync, realpathSync, statSync, writeSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -150,7 +152,7 @@ export function utcOffset(env) {
   return -now.getTimezoneOffset() * 60;
 }
 
-/** The caller's environment as WASI takes it (every value a string), with the loader's two. */
+/** The caller's environment as WASI takes it (every value a string), with the loader's three. */
 export function environment(env, cwd) {
   const out = {};
   for (const [k, v] of Object.entries(env ?? process.env)) {
@@ -160,6 +162,7 @@ export function environment(env, cwd) {
   }
   out.RITSU_WASI_CWD = cwd;
   out.RITSU_WASI_UTC_OFFSET = String(utcOffset(out));
+  out.RITSU_WASI_PLATFORM = process.platform;
   return out;
 }
 

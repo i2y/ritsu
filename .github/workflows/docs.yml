@@ -11,11 +11,12 @@ name: docs
 #   website/dandori/docs-ja/   -> https://i2y.github.io/ritsu/dandori/ja/
 #   website/chobo/docs/        -> https://i2y.github.io/ritsu/chobo/
 #   website/chobo/docs-ja/     -> https://i2y.github.io/ritsu/chobo/ja/
+#   website/modules.list       -> https://i2y.github.io/ritsu/modules/list/ and …/ja/modules/list/
 #
 # It runs on a push to main that changes what the site is built from (website/, the documents
-# rulec's and chobo's sync.sh copy in, and this file), and by hand from the Actions tab. Pages takes
-# its source from "GitHub Actions" in the repository's settings. crates/ritsu/tests/website.rs
-# holds this file to those triggers.
+# rulec's and chobo's sync.sh copy in, the modules the list shows, and this file), and by hand from
+# the Actions tab. Pages takes its source from "GitHub Actions" in the repository's settings.
+# crates/ritsu/tests/website.rs holds this file to those triggers.
 
 on:
   push:
@@ -25,6 +26,7 @@ on:
       - "crates/rulec/AGENTS.md"
       - "crates/rulec/docs/**"
       - "crates/chobo/docs/**"
+      - "modules/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -48,18 +50,29 @@ jobs:
         with:
           python-version: "3.13"
 
+      # The list of modules (DESIGN 17.17) is the one page `ritsu mod site` writes as the site is
+      # built, from website/modules.list: ritsu is built from this commit for it.
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build ritsu
+        run: cargo build --locked --release -p ritsu
+
       # build.sh builds ritsu's pages in both languages, then each language's site with its own
-      # build.sh, and copies it to build/<language>. Nothing but Zensical is needed: the pictures,
-      # the pages `dandori doc` and `chobo doc` write for the examples and the playground's module
-      # and projects are committed, rulec's and chobo's sync.sh copy their documents in from
-      # crates/rulec and crates/chobo, and the lexers that colour the code are plain Python:
-      # website/tools/knlexer.py, gatelexer.py and cedarlexer.py, and rulec's tools/rulelexer.py,
-      # dandori's tools/flowlexer.py and chobo's tools/booklexer.py, which ritsu's pages use too. The
-      # tests of each language (rulec's tests/website.rs and tests/docs.rs, dandori's and chobo's
-      # tests/docs.rs and tests/doc.rs, kaname's and sekisho's tests/docs.rs, ritsu-base's
-      # tests/cedar.rs) and ritsu's tests/website.rs and tests/playground.rs hold the pages and the
-      # lexers to the tools; the other workflows run them.
+      # build.sh, and copies it to build/<language>, then the list of modules with the ritsu built
+      # above. Nothing else but Zensical is needed: the pictures, the pages `dandori doc` and
+      # `chobo doc` write for the examples and the playground's module and projects are committed,
+      # rulec's and chobo's sync.sh copy their documents in from crates/rulec and crates/chobo, and
+      # the lexers that colour the code are plain Python: website/tools/knlexer.py, gatelexer.py and
+      # cedarlexer.py, and rulec's tools/rulelexer.py, dandori's tools/flowlexer.py and chobo's
+      # tools/booklexer.py, which ritsu's pages use too. The tests of each language (rulec's
+      # tests/website.rs and tests/docs.rs, dandori's and chobo's tests/docs.rs and tests/doc.rs,
+      # kaname's and sekisho's tests/docs.rs, ritsu-base's tests/cedar.rs) and ritsu's
+      # tests/website.rs and tests/playground.rs hold the pages and the lexers to the tools; the
+      # other workflows run them.
       - name: Build the site
+        env:
+          RITSU: ${{ github.workspace }}/target/release/ritsu
         run: |
           cd website
           uv venv --python 3.13 .venv
@@ -95,6 +108,8 @@ jobs:
           test -f website/build/chobo/ja/codes/index.html
           test -f website/build/chobo/doc/refunds.html
           test -f website/build/chobo/ja/doc/refunds.html
+          test -f website/build/modules/list/index.html
+          test -f website/build/ja/modules/list/index.html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

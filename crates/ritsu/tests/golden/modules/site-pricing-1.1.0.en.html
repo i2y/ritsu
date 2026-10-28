@@ -1,0 +1,77 @@
+<main>
+<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/pricing</a></nav>
+<h1><code><registry>/acme/pricing</code> 1.1.0</h1>
+<p class="lead">Shipping fees and order totals of the Acme shop</p>
+<p>Reference: <code><registry>/acme/pricing@sha256:<digest></code></p>
+<pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0</code></pre>
+<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/play/" data-big="Too big to open in the playground" data-failed="Could not hand the files to the playground">Open in the playground</button></p>
+<p class="lead">The files go in the link, after its <code>#</code>, which a browser does not send to a server.</p>
+<script>
+document.getElementById("open").addEventListener("click", async (e) => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  try {
+    const files = await (await fetch("module.json")).json();
+    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (packed.length > 1000000) {
+      b.textContent = b.dataset.big;
+      return;
+    }
+    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
+  } catch (err) {
+    b.textContent = b.dataset.failed;
+  }
+});
+</script>
+<h2>Files</h2>
+<div class="scroll"><table>
+<tr><th>File</th><th>Language</th><th>Bytes</th></tr>
+<tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<tr><td><a href="./files/rules/order_total.rule.html"><code>rules/order_total.rule</code></a></td><td>rulec</td><td>997</td></tr>
+<tr><td><a href="./files/rules/shipping_fee.rule.html"><code>rules/shipping_fee.rule</code></a></td><td>rulec</td><td>1,005</td></tr>
+</table></div>
+<h2>Changes since 1.0.0</h2>
+<ul>
+<li>Files: 2 changed, 2 the same</li>
+<li>require: no change</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Change</th><th>File</th></tr>
+<tr><td>changed</td><td><code>ritsu.mod</code></td></tr>
+<tr><td>changed</td><td><code>rules/shipping_fee.rule</code></td></tr>
+</table></div>
+<h3>Behavior</h3>
+<ul>
+<li><code>rules/order_total.rule</code> (rulec): the same answers</li>
+</ul>
+<details><summary><code>rules/shipping_fee.rule</code> (rulec): the answers differ</summary>
+<p><strong>Version diff (over the whole input space)</strong></p>
+<p><code><registry>/acme/pricing@1.0.0/rules/shipping_fee.rule</code> → <code><registry>/acme/pricing@1.1.0/rules/shipping_fee.rule</code></p>
+<ul>
+<li><code>region.eu</code> — an enum gained a value</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>where they differ</th><th>answer</th><th>example</th><th>cells</th></tr>
+<tr><td>region = domestic  and  weight &gt;=2001g &lt;=2500g</td><td>fee: 695 → 395</td><td>region=domestic, weight=2001</td><td>2</td></tr>
+<tr><td>region = world  and  weight &gt;=2001g &lt;=2500g</td><td>fee: 2950 → 1850</td><td>region=world, weight=2001</td><td>2</td></tr>
+</table></div>
+<p>Of the inputs both versions accept, those outside this region get the same answer.</p>
+</details>
+<h3>Interface</h3>
+<ul>
+<li><code>rules/shipping_fee.rule</code> (rulec, api): 11 changes, 1 of them may break a user</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Change</th><th>Where</th><th>Old → new</th></tr>
+<tr><td>may break: changed</td><td><code>/connect/enums/region/values/world/number</code></td><td><code>2 → 3</code></td></tr>
+<tr><td>added</td><td><code>/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu</code></td><td></td></tr>
+</table></div>
+<p>A change that may break a user is a candidate: whether it does is for that user&#39;s check to say.</p>
+<p>A difference is shown in behavior or in an interface.</p>
+<footer>Written by <code>ritsu mod site</code> <version></footer>
+</main>

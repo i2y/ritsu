@@ -1,0 +1,178 @@
+name: modules
+
+# Publish a module of this repository to ghcr.io (DESIGN 17.18), by hand only, from the Actions tab.
+#
+# `check` builds ritsu from the commit, checks the module (`ritsu check`) and builds its artifact
+# without pushing it (`ritsu mod push --dry-run`), which says the digest it would have. That is all a
+# run without `publish` does. With `publish`, `publish` builds ritsu again, logs in to ghcr.io with the
+# workflow's token (`packages: write`), pushes the module, and holds the digest pushed to the one
+# `check` said. It installs cosign at a pinned version, held to the checksum of its release, and signs
+# the digest with no key, as this workflow (GitHub's OIDC, `id-token: write`). Then it checks the
+# signature twice: with cosign, against the workflow's identity, and with ritsu, by fetching the
+# version into a module of its own whose `signature` line is the one a user writes. The job's summary
+# says the reference, how to require the module, and that line.
+#
+# A package new on ghcr.io is private until its settings make it public. Run with `publish` only once
+# publishing the module is decided; the module's `version` is the version pushed, and a version on
+# the registry is not pushed again (ritsu stops when its tag is there with other bytes).
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "The module's directory, from the repository's root"
+        type: string
+        default: modules/holidays
+      publish:
+        description: "Push the module to ghcr.io and sign it (else check it and build its artifact only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modules
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      module: ${{ steps.dry.outputs.module }}
+      version: ${{ steps.dry.outputs.version }}
+      digest: ${{ steps.dry.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build ritsu
+        run: cargo build --locked --release -p ritsu
+
+      - name: Check the module
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          set -eu
+          cd "$MODULE"
+          "$GITHUB_WORKSPACE/target/release/ritsu" check .
+
+      # The artifact as `ritsu mod push` would send it, and its digest; nothing leaves the runner.
+      - name: Build its artifact, and push nothing
+        id: dry
+        env:
+          MODULE: ${{ inputs.module }}
+        run: |
+          set -eu
+          cd "$MODULE"
+          "$GITHUB_WORKSPACE/target/release/ritsu" mod push --dry-run
+          "$GITHUB_WORKSPACE/target/release/ritsu" mod push --dry-run --format json > "$RUNNER_TEMP/dry.json"
+          {
+            echo "module=$(jq -r .module "$RUNNER_TEMP/dry.json")"
+            echo "version=$(jq -r .version "$RUNNER_TEMP/dry.json")"
+            echo "digest=$(jq -r .digest "$RUNNER_TEMP/dry.json")"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### $(jq -r '.module + " " + .version' "$RUNNER_TEMP/dry.json")"
+            echo
+            echo "Checked, and built with the digest \`$(jq -r .digest "$RUNNER_TEMP/dry.json")\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: check
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      MODULE: ${{ inputs.module }}
+      NAME: ${{ needs.check.outputs.module }}
+      VERSION: ${{ needs.check.outputs.version }}
+      DIGEST: ${{ needs.check.outputs.digest }}
+      ISSUER: https://token.actions.githubusercontent.com
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build ritsu
+        run: cargo build --locked --release -p ritsu
+
+      # The release's binary, held to the checksum of the release's cosign_checksums.txt, as
+      # tools.yml installs it.
+      - name: cosign 3.1.4
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cosign"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/cosign" https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  $d/cosign" | sha256sum -c -
+          chmod +x "$d/cosign"
+          echo "$d" >> "$GITHUB_PATH"
+
+      # ritsu reads the credentials of a registry from Docker's config file (DESIGN 17.13), which
+      # `docker login` writes; cosign reads them from there too.
+      - name: Log in to ghcr.io
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          case "$NAME" in
+            ghcr.io/*) ;;
+            *) echo "the module is $NAME, which is not on ghcr.io: this workflow pushes to ghcr.io only" >&2; exit 1 ;;
+          esac
+          printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Push the module
+        run: |
+          set -eu
+          cd "$MODULE"
+          "$GITHUB_WORKSPACE/target/release/ritsu" mod push --format json > "$RUNNER_TEMP/pushed.json"
+          cat "$RUNNER_TEMP/pushed.json"
+          pushed="$(jq -r .digest "$RUNNER_TEMP/pushed.json")"
+          if [ "$pushed" != "$DIGEST" ]; then
+            echo "pushed $pushed, but the check built $DIGEST" >&2
+            exit 1
+          fi
+
+      # No key: cosign signs as this workflow, with the identity GitHub's OIDC gives it
+      # (https://github.com/<repository>/.github/workflows/modules.yml@<ref>), and the signature goes
+      # beside the digest on the registry.
+      - name: Sign it
+        run: cosign sign --yes "$NAME@$DIGEST"
+
+      - name: Check the signature, with cosign and with ritsu
+        run: |
+          set -eu
+          identity="^https://github[.]com/$(printf '%s' "$GITHUB_REPOSITORY" | sed 's/[.]/[.]/g')/"
+          cosign verify --certificate-identity-regexp "$identity" --certificate-oidc-issuer "$ISSUER" "$NAME@$DIGEST" > /dev/null
+          line="signature \"$NAME\" by matching \"$identity\" issuer \"$ISSUER\""
+          dir="$RUNNER_TEMP/fetched"
+          mkdir -p "$dir"
+          printf 'module fetched\nversion 0.1.0\n%s\n' "$line" > "$dir/ritsu.mod"
+          (cd "$dir" && RITSU_MODULES="$RUNNER_TEMP/store" "$GITHUB_WORKSPACE/target/release/ritsu" mod fetch "$NAME@$VERSION")
+          short="$(printf '%s' "${NAME##*/}" | tr -c 'a-z0-9\n' '_')"
+          {
+            echo "### Pushed and signed"
+            echo
+            echo "Reference: \`$NAME@$DIGEST\`"
+            echo
+            echo "To require it, and to check its signature when it is fetched:"
+            echo
+            echo '```'
+            echo "ritsu mod add $short $NAME@$VERSION"
+            echo "$line"
+            echo '```'
+            echo
+            echo "A package new on ghcr.io is private until its settings make it public."
+          } >> "$GITHUB_STEP_SUMMARY"

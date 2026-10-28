@@ -1,0 +1,77 @@
+<main>
+<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/pricing</a></nav>
+<h1><code><registry>/acme/pricing</code> 1.1.0</h1>
+<p class="lead">Shipping fees and order totals of the Acme shop</p>
+<p>参照: <code><registry>/acme/pricing@sha256:<digest></code></p>
+<pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0</code></pre>
+<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/ja/play/" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
+<p class="lead">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
+<script>
+document.getElementById("open").addEventListener("click", async (e) => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  try {
+    const files = await (await fetch("module.json")).json();
+    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (packed.length > 1000000) {
+      b.textContent = b.dataset.big;
+      return;
+    }
+    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
+  } catch (err) {
+    b.textContent = b.dataset.failed;
+  }
+});
+</script>
+<h2>ファイル</h2>
+<div class="scroll"><table>
+<tr><th>ファイル</th><th>言語</th><th>バイト</th></tr>
+<tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<tr><td><a href="./files/rules/order_total.rule.html"><code>rules/order_total.rule</code></a></td><td>rulec</td><td>997</td></tr>
+<tr><td><a href="./files/rules/shipping_fee.rule.html"><code>rules/shipping_fee.rule</code></a></td><td>rulec</td><td>1,005</td></tr>
+</table></div>
+<h2>1.0.0 からの差</h2>
+<ul>
+<li>ファイル：変わった 2、同じ 2</li>
+<li>require：変わりません</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>変わり方</th><th>ファイル</th></tr>
+<tr><td>変わった</td><td><code>ritsu.mod</code></td></tr>
+<tr><td>変わった</td><td><code>rules/shipping_fee.rule</code></td></tr>
+</table></div>
+<h3>振る舞い</h3>
+<ul>
+<li><code>rules/order_total.rule</code> (rulec)：同じ答えです</li>
+</ul>
+<details><summary><code>rules/shipping_fee.rule</code> (rulec)：答えが変わります</summary>
+<p><strong>版の差分（入力の全体で比べたもの）</strong></p>
+<p><code><registry>/acme/pricing@1.0.0/rules/shipping_fee.rule</code> → <code><registry>/acme/pricing@1.1.0/rules/shipping_fee.rule</code></p>
+<ul>
+<li><code>region.eu</code> — 列挙に値が増えた</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>違いが出る入力</th><th>答え</th><th>例</th><th>通り</th></tr>
+<tr><td>region = domestic  かつ  weight &gt;=2001g &lt;=2500g</td><td>fee: 695 → 395</td><td>region=domestic, weight=2001</td><td>2</td></tr>
+<tr><td>region = world  かつ  weight &gt;=2001g &lt;=2500g</td><td>fee: 2950 → 1850</td><td>region=world, weight=2001</td><td>2</td></tr>
+</table></div>
+<p>両方の版が受け付ける入力のうち、ここに挙げたほかは同じ答えを返します。</p>
+</details>
+<h3>インターフェース</h3>
+<ul>
+<li><code>rules/shipping_fee.rule</code> (rulec、api)：差が 11 件、うち使う側を壊しうるもの 1 件</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>変わり方</th><th>場所</th><th>古い値 → 新しい値</th></tr>
+<tr><td>壊しうる：変わった</td><td><code>/connect/enums/region/values/world/number</code></td><td><code>2 → 3</code></td></tr>
+<tr><td>足した</td><td><code>/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu</code></td><td></td></tr>
+</table></div>
+<p>壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。</p>
+<p>振る舞いかインターフェースに、示せた違いがあります。</p>
+<footer><code>ritsu mod site</code> <version> が書きました</footer>
+</main>

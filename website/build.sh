@@ -28,5 +28,18 @@ for site in "${sites[@]}"; do
   rm -rf "build/$site"
   cp -R "$site/build" "build/$site"
 done
+# The list of modules (DESIGN 17.17): `ritsu mod site` writes it from modules.list, in English and in
+# Japanese. It takes ritsu: $RITSU, else ritsu on the PATH (docs.yml builds it from the commit);
+# without either, the site is built without the list, and this says so.
+ritsu="${RITSU:-$(command -v ritsu || true)}"
+if [ -n "$ritsu" ]; then
+  "$ritsu" mod site modules.list --out build/modules/list --lang en
+  "$ritsu" mod site modules.list --out build/ja/modules/list --lang ja
+fi
 echo "site: build/ (en) + build/ja (ja)"
 for site in "${sites[@]}"; do echo "  $site: build/$site (en) + build/$site/ja (ja)"; done
+if [ -n "$ritsu" ]; then
+  echo "  modules: build/modules/list (en) + build/ja/modules/list (ja)"
+else
+  echo "  modules: not built, as no ritsu was found (set RITSU, or put ritsu on the PATH)"
+fi

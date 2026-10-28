@@ -40,24 +40,34 @@ pub const OUT: &str = "generated";
 /// file asked about (and for a generator that takes one, the target).
 #[derive(Clone, Debug)]
 pub struct Request {
-    /// By their paths from the project's root, `/` between the parts.
-    pub files: Vec<(String, String)>,
+    /// By their paths from the project's root, `/` between the parts, each with its bytes.
+    pub files: Vec<(String, Vec<u8>)>,
     pub lang: Lang,
     pub path: String,
     pub target: Option<String>,
 }
 
 impl Request {
-    /// `{"files": {path: text}, "lang": "en"|"ja", "path": …, "target": …}`.
+    /// `{"files": {path: text}, "lang": "en"|"ja", "path": …, "target": …}`. A file that is not
+    /// UTF-8 text (a CSV in Shift_JIS that a calendar reads) is `{"base64": "…"}` in place of its
+    /// text (DESIGN 17.17, 17.22), and goes into memory as its bytes.
     pub fn from_json(v: &Value) -> Result<Request, String> {
         let given = v["files"].as_object().ok_or("the request has no `files`")?;
         let mut files = Vec::new();
-        for (p, text) in given {
+        for (p, held) in given {
             let rel = ritsu_base::paths::join(".", p).map_err(|e| e.text(p).en)?;
             if rel == "." {
                 return Err(format!("`{p}` names the project's root, not a file"));
             }
-            files.push((rel, text.as_str().ok_or_else(|| format!("the file {p} is not text"))?.to_string()));
+            let bytes = match held {
+                Value::String(text) => text.as_bytes().to_vec(),
+                Value::Object(o) if o.len() == 1 && o.contains_key("base64") => o["base64"]
+                    .as_str()
+                    .and_then(ritsu_base::sources::base64_decode)
+                    .ok_or_else(|| format!("the base64 of the file {p} cannot be read"))?,
+                _ => return Err(format!("the file {p} is neither text nor {{\"base64\": …}}")),
+            };
+            files.push((rel, bytes));
         }
         Ok(Request {
             files,
@@ -70,8 +80,8 @@ impl Request {
     /// The files in memory, run in [`HOME`].
     fn memory(&self) -> Rc<Memory> {
         let m = Memory::new(HOME);
-        for (p, text) in &self.files {
-            m.add(p, text.as_bytes().to_vec());
+        for (p, bytes) in &self.files {
+            m.add(p, bytes.clone());
         }
         Rc::new(m)
     }

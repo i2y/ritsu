@@ -70,5 +70,10 @@ jobs:
       - name: The crates keep to ritsu's own map
         run: cargo run --locked -q -p ritsu -- check ritsu.ctx
 
+      # The seed module (DESIGN 17.18): its calendars pass against the data they pin, on every push,
+      # whether or not it is published.
+      - name: The seed module passes its check
+        run: cargo run --locked -q -p ritsu -- check modules/holidays
+
       - name: The tests of the fast level
         run: cargo xtask test --level fast

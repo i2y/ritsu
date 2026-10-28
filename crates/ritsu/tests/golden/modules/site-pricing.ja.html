@@ -1,0 +1,21 @@
+<main>
+<nav class="crumbs"><a href="../../../index.html">Acme modules</a></nav>
+<h1><code><registry>/acme/pricing</code></h1>
+<p class="lead">Shipping fees and order totals of the Acme shop</p>
+<h2>版</h2>
+<div class="scroll"><table>
+<tr><th>版</th><th>ダイジェスト</th><th>ファイル</th><th>確かめたこと</th></tr>
+<tr><td><a href="./1.1.0/index.html">1.1.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">ダイジェストと署名</span></td></tr>
+<tr><td><a href="./1.0.0/index.html">1.0.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">ダイジェストと署名</span></td></tr>
+</table></div>
+<h2>足し方</h2>
+<pre><code>ritsu mod add pricing <registry>/acme/pricing@1.1.0</code></pre>
+<p><code>ritsu.mod</code> に次の <code>require</code> の行が入り、ファイルからは <code>@pricing/…</code> で指せます。署名を確かめるなら、<code>signature</code> の行も書いてください。</p>
+<pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0
+signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
+<h2>ソースとライセンス</h2>
+<ul>
+<li>ライセンス: <code>MIT OR Apache-2.0</code></li>
+</ul>
+<footer><code>ritsu mod site</code> <version> が書きました</footer>
+</main>

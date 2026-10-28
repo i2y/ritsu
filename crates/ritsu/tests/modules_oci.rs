@@ -412,6 +412,41 @@ fn a_dry_run_gives_the_same_digest_every_time() {
     assert!(!t.exists("curl.log"), "the dry run called curl");
 }
 
+/// `push --dry-run` of the seed module of the repository (`modules/holidays`, DESIGN 17.18), run
+/// where it is: the digest a publication would give, held to golden files written on macOS, which the
+/// platforms level holds Linux to. A change to a file of the module, or to its `ritsu >=` line, gives
+/// another digest, and the golden files are written again (`RITSU_BLESS=1`).
+#[test]
+fn the_seed_module_s_dry_run_gives_the_same_digest_every_time() {
+    let t = TempDir::new("oci-seed-dry-run");
+    let seed = here().join("../../modules/holidays");
+    executable(&t.write("bin/curl", format!("#!/bin/sh\necho called >> '{}'\nexit 7\n", t.path().join("curl.log").display())));
+    let path = format!("{}:{}", t.path().join("bin").display(), std::env::var("PATH").unwrap_or_default());
+    let run = |args: &[&str]| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
+        c.current_dir(&seed).args(args).env(store::VARIABLE, t.path().join("store")).env("DOCKER_CONFIG", t.path().join("docker")).env("PATH", &path);
+        for v in LANG_VARS {
+            c.env_remove(v);
+        }
+        said(c.output().unwrap())
+    };
+    let mut failures = Vec::new();
+    for (lang, ext) in [("en", "en.txt"), ("ja", "ja.txt")] {
+        let (code, out, err) = run(&["mod", "push", "--dry-run", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (0, ""), "{out}");
+        if let Err(e) = ritsu_testkit::golden::check(&here().join(format!("tests/golden/modules/holidays-push-dry-run.{ext}")), &out) {
+            failures.push(e);
+        }
+    }
+    let (code, out, _) = run(&["mod", "push", "--dry-run", "--format", "json"]);
+    assert_eq!(code, 0);
+    if let Err(e) = ritsu_testkit::golden::check(&here().join("tests/golden/modules/holidays-push-dry-run.json"), &out) {
+        failures.push(e);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(!t.exists("curl.log"), "the dry run called curl");
+}
+
 /// Each broken answer of a registry stops `fetch` (exit 1 for what the answer holds, exit 2 for an
 /// answer that does not come), and nothing is put in the store: an OCI manifest that is not its
 /// digest, a layer that is not its digest, an OCI manifest and a layer with more bytes than they may

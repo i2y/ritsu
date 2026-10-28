@@ -67,3 +67,20 @@ pub fn cannot_connect(address: &str) -> Text {
 pub fn starting(program: &str, e: &io::Error) -> Text {
     if unsupported(e) { cannot_start(program) } else { Text::same(e.to_string()) }
 }
+
+/// A number that tells this run from the others running at the same time, for the names of the
+/// files it makes and then renames or removes: the process's id, and under WASI, where std's
+/// `process::id` panics (WASI has no processes), a random number drawn once (from the host's
+/// randomness, which std's hash maps draw on).
+pub fn run_id() -> u64 {
+    #[cfg(target_os = "wasi")]
+    {
+        use std::hash::{BuildHasher, Hasher};
+        static ID: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+        *ID.get_or_init(|| std::collections::hash_map::RandomState::new().build_hasher().finish())
+    }
+    #[cfg(not(target_os = "wasi"))]
+    {
+        u64::from(std::process::id())
+    }
+}

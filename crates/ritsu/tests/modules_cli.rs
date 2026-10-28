@@ -1,7 +1,6 @@
 //! `ritsu mod` (DESIGN 17.19, 17.21; PLAN B.10): its table, held to golden files in English and in
 //! Japanese, and listed by `ritsu --help`; a flag no command knows, refused by each of the fifteen
-//! (exit 2); the commands of the stages to come, which say this version does not have them yet;
-//! `init`, and the `ritsu.mod` it writes; `add` with a directory and `remove`, which change one line
+//! (exit 2); `init`, and the `ritsu.mod` it writes; `add` with a directory and `remove`, which change one line
 //! and keep the comments, the order and the line endings; `list` of the example in both languages
 //! and as JSON, held to golden files; `where`; and, with the modules of the example from a registry
 //! (placed in a store of the test's own), `lock` (the lock it writes is the one the tests of the
@@ -124,18 +123,6 @@ fn every_command_refuses_a_flag_it_does_not_know() {
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "add", "pricing"]), (2, String::new(), "ritsu mod add <name> <source> [--format text|json]\n".into()));
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "lock", "extra"]).0, 2);
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "list", "--format", "yaml"]).0, 2);
-}
-
-/// The commands the stages to come make say that this version does not have them yet (exit 2),
-/// and write nothing.
-#[test]
-fn the_commands_to_come_say_this_version_has_them_not() {
-    let t = example();
-    let shop = t.path().join("shop");
-    let before = t.read("shop/ritsu.mod");
-    let (code, out, err) = ritsu_in(&shop, t.path(), &["mod", "site", "modules.list", "--out", "site"]);
-    assert_eq!((code, out.as_str(), err.as_str()), (2, "", "error: `ritsu mod site` is not in this version yet\n"));
-    assert_eq!(t.read("shop/ritsu.mod"), before);
 }
 
 /// `init` writes the `ritsu.mod` of DESIGN 17.3 (the name, the version, the least ritsu that reads

@@ -1,0 +1,61 @@
+<main>
+<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/shop</a></nav>
+<h1><code><registry>/acme/shop</code> 0.2.0</h1>
+<p class="lead">The order flow and the checkout of the Acme shop</p>
+<p>Reference: <code><registry>/acme/shop@sha256:<digest></code></p>
+<pre><code>require shop oci &quot;<registry>/acme/shop&quot; 0.2.0</code></pre>
+<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/play/" data-big="Too big to open in the playground" data-failed="Could not hand the files to the playground">Open in the playground</button></p>
+<p class="lead">The files go in the link, after its <code>#</code>, which a browser does not send to a server.</p>
+<script>
+document.getElementById("open").addEventListener("click", async (e) => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  try {
+    const files = await (await fetch("module.json")).json();
+    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (packed.length > 1000000) {
+      b.textContent = b.dataset.big;
+      return;
+    }
+    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
+  } catch (err) {
+    b.textContent = b.dataset.failed;
+  }
+});
+</script>
+<h2>Files</h2>
+<div class="scroll"><table>
+<tr><th>File</th><th>Language</th><th>Bytes</th></tr>
+<tr><td><a href="./files/checkout/basket.kn.html"><code>checkout/basket.kn</code></a></td><td>kaname</td><td>1,453</td></tr>
+<tr><td><a href="./files/orders/place_order.flow.html"><code>orders/place_order.flow</code></a></td><td>dandori</td><td>1,960</td></tr>
+<tr><td><a href="./files/orders/scenarios/charged.json.html"><code>orders/scenarios/charged.json</code></a></td><td>—</td><td>394</td></tr>
+<tr><td><a href="./files/orders/scenarios/not_charged.json.html"><code>orders/scenarios/not_charged.json</code></a></td><td>—</td><td>425</td></tr>
+<tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+</table></div>
+<h2>Changes since 0.1.0</h2>
+<ul>
+<li>Files: 2 changed, 4 the same</li>
+<li>require: no change</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Change</th><th>File</th></tr>
+<tr><td>changed</td><td><code>checkout/basket.kn</code></td></tr>
+<tr><td>changed</td><td><code>ritsu.mod</code></td></tr>
+</table></div>
+<h3>Interface</h3>
+<ul>
+<li><code>checkout/basket.kn</code> (kaname, api): 1 change, 1 of them may break a user</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>Change</th><th>Where</th><th>Old → new</th></tr>
+<tr><td>may break: changed</td><td><code>/records/Line/fields/qty/range</code></td><td><code>&quot;&gt;=1 &lt;=10&quot; → &quot;&gt;=1 &lt;=5&quot;</code></td></tr>
+</table></div>
+<p>A change that may break a user is a candidate: whether it does is for that user&#39;s check to say.</p>
+<p>A difference is shown in behavior or in an interface.</p>
+<footer>Written by <code>ritsu mod site</code> <version></footer>
+</main>

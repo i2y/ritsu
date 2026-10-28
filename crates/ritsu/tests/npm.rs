@@ -13,6 +13,15 @@
 //! - `what_needs_another_program_says_so`: a command that starts another program or reaches the
 //!   network stops in the package with the language's own head and exit code, saying why and what
 //!   to run instead (ritsu-base's `wasi`).
+//! - `a_module_command_that_needs_the_network_says_so`: so do the commands of `ritsu mod` that need
+//!   curl, git or cosign (DESIGN 17.22), and they change neither the module nor the store.
+//! - `the_package_reads_a_module_s_dependencies_as_the_binary_does`: a module's dependencies from a
+//!   registry, read from the store `RITSU_MODULES` names, from the module's copy of the store, and
+//!   from the store's place on the system (from `HOME` and `XDG_CACHE_HOME`), by the commands that
+//!   read files only (`check`, `run`, `mod list`, `where`, `lock --check`, `diff`, `clean
+//!   --dry-run`, `vendor`, `push --dry-run`), as the binary reads them; and, through the API with
+//!   `dirs`, the store opened when it is among `dirs`, and the sentence that says where it is when
+//!   it is not.
 //! - `the_package_holds_what_it_should`: what `npm pack` puts in, and package.json's version,
 //!   license, bins and engines, with no script npm would run on install.
 //! - `the_javascript_tests_pass`: `node --test packaging/npm/test/*.test.js`: the API, the bins, and the
@@ -1063,6 +1072,296 @@ for (let l = line(); l !== null; l = line()) {
         }
         println!("npm: {} commands that need another program or the network stop, each saying so", cases.len());
         assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    // ── Modules (DESIGN 17.15, 17.22) ───────────────────────────────────────────────────────────
+
+    /// `ritsu <args>` in `dir`, by the package (`by_node`) or by the native binary, with the
+    /// variables `set`, and the store's others (`RITSU_MODULES`, `XDG_CACHE_HOME`) taken away unless
+    /// they are set: a run reads the store the test gives it, never this machine's.
+    fn with_env(pkg: &Path, by_node: bool, args: &[&str], dir: &Path, set: &[(&str, &Path)]) -> Said {
+        let mut c = if by_node {
+            let mut c = Command::new("node");
+            c.arg(pkg.join("bin/ritsu.js"));
+            c
+        } else {
+            Command::new(ritsu())
+        };
+        c.args(args).current_dir(dir);
+        quiet(&mut c);
+        for v in [ritsu_base::modules::store::VARIABLE, "XDG_CACHE_HOME"] {
+            c.env_remove(v);
+        }
+        for (k, v) in set {
+            c.env(k, v);
+        }
+        let r = ritsu_testkit::run::run_with_input(&mut c, None, LIMIT);
+        assert!(!r.timed_out, "`ritsu {}` in {} ran past the limit", args.join(" "), dir.display());
+        Said { code: r.code, stdout: r.stdout, stderr: r.stderr }
+    }
+
+    /// The example of modules (DESIGN 17.26) as a registry gives it, in `w`: tax, pricing (1.1.0, and
+    /// 1.0.0 beside it) and shop, copied from ritsu's test projects, each `require` turned into one
+    /// of `example.com/acme/…`; tax and the two versions of pricing put in the store `<w>/store` on a
+    /// fixed date, and the locks written against that store. No registry is asked. The store.
+    fn modules(w: &TempDir) -> PathBuf {
+        use ritsu_base::modules::store::{self, Store};
+        let src = root().join("crates/ritsu/tests/projects/modules");
+        for (from, into) in [("tax", "tax"), ("pricing", "pricing"), ("versions/pricing-1.0.0", "pricing-1.0.0"), ("shop", "shop")] {
+            ritsu_testkit::tmp::copy_dir(&src.join(from), &w.path().join(into));
+        }
+        let replace = |rel: &str, from: &str, to: &str| {
+            let file = w.path().join(rel);
+            let text = std::fs::read_to_string(&file).unwrap();
+            assert!(text.contains(from), "{rel} has no `{from}`");
+            std::fs::write(&file, text.replacen(from, to, 1)).unwrap();
+        };
+        replace("pricing/ritsu.mod", "require tax path \"../tax\"", "require tax oci \"example.com/acme/tax\" 1.0.0");
+        replace("pricing-1.0.0/ritsu.mod", "require tax path \"../../tax\"", "require tax oci \"example.com/acme/tax\" 1.0.0");
+        replace("shop/ritsu.mod", "require pricing path \"../pricing\"", "require pricing oci \"example.com/acme/pricing\" 1.1.0");
+        let store = w.path().join("store");
+        let put = |m: &str| {
+            store::put_directory(&Store::at(&store), &w.path().join(m), "2026-10-28", &[]).unwrap_or_else(|e| panic!("{}", e.en));
+        };
+        let lock = |m: &str| {
+            let said = with_env(Path::new(""), false, &["mod", "lock"], &w.path().join(m), &[(store::VARIABLE, &store)]);
+            assert_eq!(said.code, Some(0), "ritsu mod lock in {m}: {said:?}");
+        };
+        put("tax");
+        for m in ["pricing", "pricing-1.0.0"] {
+            lock(m);
+            put(m);
+        }
+        lock("shop");
+        store
+    }
+
+    /// The commands of `ritsu mod` that reach a registry, start git or check a signature with cosign
+    /// stop in the package (DESIGN 17.22), saying ritsu-base's `wasi` sentence for curl, git or
+    /// cosign, with exit 2, the code a native run without the program has; they change no file of the
+    /// module and put nothing in the store.
+    #[test]
+    fn a_module_command_that_needs_the_network_says_so() {
+        use ritsu_base::wasi::cannot_start;
+        let t = TempDir::new("npm-package");
+        let Some(pkg) = package(&t) else { return };
+        let w = TempDir::new("npm-modules-network");
+        let full = modules(&w);
+        let empty = w.path().join("empty-store");
+        let (home, docker) = (w.path().join("home"), w.path().join("docker"));
+        for d in [&empty, &home, &docker] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        // tax as it is pushed: with the least ritsu that reads it
+        ritsu_testkit::tmp::copy_dir(&w.path().join("tax"), &w.path().join("tax-push"));
+        let m = std::fs::read_to_string(w.path().join("tax-push/ritsu.mod")).unwrap();
+        w.write("tax-push/ritsu.mod", format!("{m}ritsu >=0.36.0\n"));
+        // shop asking that its dependencies be signed with a key, which no record says was checked
+        ritsu_testkit::tmp::copy_dir(&w.path().join("shop"), &w.path().join("signed"));
+        let m = std::fs::read_to_string(w.path().join("signed/ritsu.mod")).unwrap();
+        w.write("signed/ritsu.mod", format!("{m}signature \"example.com/acme/\" key \"cosign.pub\"\n"));
+        w.write("signed/cosign.pub", "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----\n");
+        w.write("modules.list", "title \"Acme\"\nlocal \"shop\"\n");
+        // (where, the command, the store, the program it cannot start, in Japanese)
+        let cases: Vec<(&str, Vec<&str>, &Path, &str, bool)> = vec![
+            ("shop", vec!["mod", "add", "tax2", "example.com/acme/tax@1.0.0"], &empty, "curl", false),
+            ("shop", vec!["mod", "get", "pricing@1.0.0"], &empty, "curl", false),
+            ("shop", vec!["mod", "fetch"], &empty, "curl", false),
+            ("shop", vec!["mod", "fetch", "--lang", "ja"], &empty, "curl", true),
+            ("shop", vec!["mod", "fetch", "example.com/acme/tax@1.1.0"], &full, "curl", false),
+            ("shop", vec!["mod", "versions", "example.com/acme/tax"], &empty, "curl", false),
+            ("shop", vec!["mod", "lock"], &empty, "curl", false),
+            ("shop", vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0"], &empty, "curl", false),
+            ("tax-push", vec!["mod", "push"], &empty, "curl", false),
+            ("shop", vec!["mod", "report", "--base", "HEAD"], &full, "git", false),
+            (".", vec!["mod", "site", "modules.list", "--out", "site"], &empty, "curl", false),
+            ("signed", vec!["mod", "fetch"], &full, "cosign", false),
+        ];
+        let mut wrong = Vec::new();
+        for (at, args, store, program, japanese) in &cases {
+            let dir = w.path().join(at);
+            let (before, held) = (tree(&dir), tree(store));
+            let s = with_env(&pkg, true, args, &dir, &[(ritsu_base::modules::store::VARIABLE, store), ("HOME", &home), ("DOCKER_CONFIG", &docker)]);
+            let both = format!("{}{}", s.stdout, s.stderr);
+            let said = cannot_start(program);
+            let want = if *japanese { &said.ja } else { &said.en };
+            let shown = format!("`ritsu {}` in {at}", args.join(" "));
+            if s.code != Some(2) || !both.contains(want.as_str()) || both.contains("a bug in ritsu") || both.contains("not supported on this platform") {
+                wrong.push(format!("{shown}: exit {:?} (wanted 2), said:\n{both}", s.code));
+            }
+            if tree(&dir) != before {
+                wrong.push(format!("{shown} changed the files of the module"));
+            }
+            if tree(store) != held {
+                wrong.push(format!("{shown} changed the store"));
+            }
+        }
+        println!("npm: {} commands of modules that need the network, git or cosign stop, each saying so", cases.len());
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    /// `runSync(args, {cwd, dirs, env})` of the package's API, in a Node process of its own.
+    const API_ONCE: &str = r#"
+const [index, query] = process.argv.slice(2);
+const { runSync } = await import(index);
+const q = JSON.parse(query);
+const r = runSync(q.args, { cwd: q.cwd, dirs: q.dirs, env: q.env });
+process.stdout.write(JSON.stringify({ code: r.code, stdout: r.stdout, stderr: r.stderr }));
+"#;
+
+    /// `ritsu <args>` in `cwd` through the API, the module opening `dirs` alone, with the
+    /// environment `env` and nothing else.
+    fn api(helper: &Path, pkg: &Path, args: &[&str], cwd: &Path, dirs: &[&Path], env: &[(&str, &Path)]) -> Said {
+        let env: serde_json::Map<String, serde_json::Value> = env.iter().map(|(k, v)| (k.to_string(), serde_json::json!(v))).collect();
+        let q = serde_json::json!({ "args": args, "cwd": cwd, "dirs": dirs, "env": env });
+        let mut c = Command::new("node");
+        c.arg(helper).arg(format!("file://{}", pkg.join("lib/index.js").display())).arg(q.to_string());
+        quiet(&mut c);
+        let r = ritsu_testkit::run::run_with_input(&mut c, None, LIMIT);
+        assert!(!r.timed_out && r.code == Some(0), "the API's process for `ritsu {}` stopped: {}{}", args.join(" "), r.stdout, r.stderr);
+        let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap_or_else(|e| panic!("the API answered {:?}: {e}", r.stdout));
+        Said { code: v["code"].as_i64().map(|c| c as i32), stdout: v["stdout"].as_str().unwrap_or_default().into(), stderr: v["stderr"].as_str().unwrap_or_default().into() }
+    }
+
+    /// A module's dependencies from a registry, read by the package as the binary reads them
+    /// (DESIGN 17.15, 17.22): from the store `RITSU_MODULES` names; from the module's copy of the
+    /// store (`ritsu mod vendor`), the store it is given empty; and from the store's place on this
+    /// system, which both take from `HOME` (and `XDG_CACHE_HOME`): `~/Library/Caches` on macOS,
+    /// `$XDG_CACHE_HOME` or `~/.cache` elsewhere, whether or not there is a `~/Library/Caches` (the
+    /// package learns the system from its loader). The same output and exit code, command by
+    /// command, each exit 0. Through the API with `dirs`, the store read from its place opens when it
+    /// is among `dirs`; when it is not, the run says where the store is and the two ways to have it
+    /// read, and with no `HOME`, that there is no place for a store.
+    #[test]
+    fn the_package_reads_a_module_s_dependencies_as_the_binary_does() {
+        use ritsu_base::modules::store::VARIABLE;
+        let t = TempDir::new("npm-package");
+        let Some(pkg) = package(&t) else { return };
+        let w = TempDir::new("npm-modules-read");
+        let store = modules(&w);
+        let (empty, docker) = (w.path().join("empty-store"), w.path().join("docker"));
+        let (home, nobody) = (w.path().join("home"), w.path().join("nobody"));
+        for d in [&empty, &docker, &nobody, &home.join("Library/Caches")] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let mac = cfg!(target_os = "macos");
+        // the store at its place on this system, under a home with a ~/Library/Caches on any system
+        let by_home = if mac { home.join("Library/Caches/ritsu/modules") } else { home.join(".cache/ritsu/modules") };
+        ritsu_testkit::tmp::copy_dir(&store, &by_home);
+        // and with XDG_CACHE_HOME set, which macOS does not read
+        let (home2, xdg) = (w.path().join("home2"), w.path().join("xdg"));
+        std::fs::create_dir_all(home2.join("Library/Caches")).unwrap();
+        ritsu_testkit::tmp::copy_dir(&store, &if mac { home2.join("Library/Caches/ritsu/modules") } else { xdg.join("ritsu/modules") });
+        // a copy of shop with its copy of the store
+        ritsu_testkit::tmp::copy_dir(&w.path().join("shop"), &w.path().join("vendored"));
+        let said = with_env(&pkg, false, &["mod", "vendor"], &w.path().join("vendored"), &[(VARIABLE, &store)]);
+        assert_eq!(said.code, Some(0), "{said:?}");
+        // tax as it is pushed
+        ritsu_testkit::tmp::copy_dir(&w.path().join("tax"), &w.path().join("tax-push"));
+        let m = std::fs::read_to_string(w.path().join("tax-push/ritsu.mod")).unwrap();
+        w.write("tax-push/ritsu.mod", format!("{m}ritsu >=0.36.0\n"));
+
+        // (the command, the code it exits with)
+        let reads: Vec<(Vec<&str>, i32)> = vec![
+            (vec!["check", "."], 0),
+            (vec!["check", ".", "--format", "json"], 0),
+            (vec!["check", ".", "--lang", "ja"], 0),
+            (vec!["mod", "list"], 0),
+            (vec!["mod", "list", "--format", "json"], 0),
+            (vec!["mod", "where", "@pricing"], 0),
+            (vec!["mod", "where", "@pricing/rules/order_total.rule"], 0),
+            (vec!["run", "orders/place_order.flow", "--scenario", "orders/scenarios/charged.json"], 0),
+        ];
+        let mut in_store = reads.clone();
+        in_store.extend([
+            (vec!["mod", "lock", "--check"], 0),
+            // a difference shown: exit 1
+            (vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0"], 1),
+            (vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0", "--format", "json"], 1),
+            (vec!["mod", "clean", "--dry-run"], 0),
+            (vec!["mod", "clean", "--dry-run", "--keep", "ritsu.lock", "--lang", "ja"], 0),
+        ]);
+        let mut vendored = reads.clone();
+        vendored.push((vec!["mod", "vendor", "--check"], 0));
+        let pushed = vec![(vec!["mod", "push", "--dry-run"], 0), (vec!["mod", "push", "--dry-run", "--format", "json"], 0)];
+        // what, where, the variables, the commands
+        type Run<'a> = (&'a str, PathBuf, Vec<(&'a str, &'a Path)>, Vec<(Vec<&'a str>, i32)>);
+        let runs: Vec<Run<'_>> = vec![
+            ("the store RITSU_MODULES names", w.path().join("shop"), vec![(VARIABLE, &store), ("HOME", &nobody)], in_store),
+            ("the module's copy of the store", w.path().join("vendored"), vec![(VARIABLE, &empty), ("HOME", &nobody)], vendored),
+            ("the store at its place from HOME", w.path().join("shop"), vec![("HOME", &home)], reads.clone()),
+            ("the store at its place from HOME and XDG_CACHE_HOME", w.path().join("shop"), vec![("HOME", &home2), ("XDG_CACHE_HOME", &xdg)], reads),
+            ("a module pushed", w.path().join("tax-push"), vec![(VARIABLE, &empty), ("HOME", &nobody)], pushed),
+        ];
+        let mut wrong = Vec::new();
+        let mut n = 0;
+        for (what, dir, mut set, commands) in runs {
+            set.push(("DOCKER_CONFIG", &docker));
+            for (args, code) in commands {
+                let (a, b) = (with_env(&pkg, false, &args, &dir, &set), with_env(&pkg, true, &args, &dir, &set));
+                n += 1;
+                if a.code != Some(code) {
+                    wrong.push(format!("{what}: native `ritsu {}` exits {:?}, not {code}:\n{}{}", args.join(" "), a.code, a.stdout, a.stderr));
+                } else if let Some(d) = differs(&format!("{what}: ritsu {}", args.join(" ")), &a, &b) {
+                    wrong.push(d);
+                }
+            }
+        }
+        // `ritsu mod vendor` writes the same copy of the store by both
+        let mut copies = Vec::new();
+        for (side, by_node) in [("vendor-native", false), ("vendor-npm", true)] {
+            let dir = w.path().join(side);
+            ritsu_testkit::tmp::copy_dir(&w.path().join("shop"), &dir);
+            let said = with_env(&pkg, by_node, &["mod", "vendor"], &dir, &[(VARIABLE, &store), ("HOME", &nobody), ("DOCKER_CONFIG", &docker)]);
+            copies.push((said, tree(&dir)));
+        }
+        n += 1;
+        if let Some(d) = differs("ritsu mod vendor", &copies[0].0, &copies[1].0) {
+            wrong.push(d);
+        } else if copies[0].0.code != Some(0) || copies[0].1 != copies[1].1 {
+            let (a, b): (Vec<&String>, Vec<&String>) = (copies[0].1.keys().collect(), copies[1].1.keys().collect());
+            wrong.push(format!("`ritsu mod vendor` exits {:?}, and the package writes another copy: {a:?}\n{b:?}", copies[0].0.code));
+        }
+
+        // the API with dirs: the store at its place from HOME
+        let helper = w.write("api-once.mjs", API_ONCE);
+        let shop = w.path().join("shop");
+        let path = PathBuf::from(std::env::var_os("PATH").unwrap_or_default());
+        let env = [("PATH", path.as_path()), ("HOME", home.as_path())];
+        let native_check = with_env(&pkg, false, &["check", "."], &shop, &[("HOME", &home), ("DOCKER_CONFIG", &docker)]);
+        let opened = api(&helper, &pkg, &["check", "."], &shop, &[&shop, &by_home], &env);
+        n += 1;
+        if let Some(d) = differs("the API with dirs [shop, the store]: ritsu check .", &native_check, &opened) {
+            wrong.push(d);
+        }
+        let closed = api(&helper, &pkg, &["check", "."], &shop, &[&shop], &env);
+        let at = by_home.display();
+        let want = format!(
+            "error: the dependency `example.com/acme/pricing` 1.1.0 is neither in the store (`{at}`) nor in this module's copy of it; run `ritsu mod fetch` with the native ritsu. If it is fetched already and `dirs` opens some directories only, add the store to `dirs`, or put a copy of it in this module with `ritsu mod vendor`\n"
+        );
+        if (closed.code, closed.stdout.as_str(), closed.stderr.as_str()) != (Some(2), "", want.as_str()) {
+            wrong.push(format!("the API with dirs [shop]: exit {:?}, said:\n{}{}--- wanted exit 2 and\n{want}", closed.code, closed.stdout, closed.stderr));
+        }
+        let closed = api(&helper, &pkg, &["check", ".", "--lang", "ja"], &shop, &[&shop], &env);
+        let want = format!(
+            "エラー: 依存 `example.com/acme/pricing` 1.1.0 が、置き場（`{at}`）にも同梱のコピーにもありません。ネイティブの ritsu で `ritsu mod fetch` を走らせてください。もう取り出してあり、`dirs` で開くディレクトリを絞っているときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーを置いてください\n"
+        );
+        if (closed.code, closed.stderr.as_str()) != (Some(2), want.as_str()) {
+            wrong.push(format!("the API with dirs [shop], in Japanese: exit {:?}, said:\n{}{}--- wanted exit 2 and\n{want}", closed.code, closed.stdout, closed.stderr));
+        }
+        let homeless = api(&helper, &pkg, &["check", "."], &shop, &[&shop], &[("PATH", path.as_path())]);
+        let want = "error: the dependency `example.com/acme/pricing` 1.1.0 is not in this module's copy of the store, and there is no place for a store: neither `RITSU_MODULES` nor `HOME` is set. Put a copy in this module with `ritsu mod vendor`, or name the store with `RITSU_MODULES`\n";
+        if (homeless.code, homeless.stderr.as_str()) != (Some(2), want) {
+            wrong.push(format!("the API with no HOME: exit {:?}, said:\n{}{}--- wanted exit 2 and\n{want}", homeless.code, homeless.stdout, homeless.stderr));
+        }
+        let vendored = w.path().join("vendored");
+        let copy = api(&helper, &pkg, &["check", "."], &vendored, &[&vendored], &[("PATH", path.as_path()), ("HOME", nobody.as_path())]);
+        let native_copy = with_env(&pkg, false, &["check", "."], &vendored, &[("HOME", &nobody), ("DOCKER_CONFIG", &docker)]);
+        if let Some(d) = differs("the API with dirs [a module with its copy]: ritsu check .", &native_copy, &copy) {
+            wrong.push(d);
+        }
+        println!("npm: {n} commands read a module's dependencies as the binary does, and the API with dirs says where the store is");
+        assert!(wrong.is_empty(), "{}", wrong.join("\n\n"));
     }
 
     /// The bins of the package, each by its name.

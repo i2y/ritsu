@@ -1,0 +1,8 @@
+calendar northern_ireland v1
+description "The bank holidays of Northern Ireland, as GOV.UK lists them. Weekends are left open: the calendar that uses this one closes its own. No offset: Northern Ireland has daylight saving time, so this calendar gives dates only"
+
+source bank_holidays = file "data/bank-holidays.json" url "https://www.gov.uk/bank-holidays.json" sha256:538b3482c28b85ec
+  format govuk "northern-ireland"
+  covers listed years
+
+closed bank_holidays

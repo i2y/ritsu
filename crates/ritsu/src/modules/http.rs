@@ -206,7 +206,7 @@ fn unique(dir: &Path, what: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    dir.join(format!("curl-{}-{nanos}-{}.{what}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+    dir.join(format!("curl-{}-{nanos}-{}.{what}", ritsu_base::wasi::run_id(), N.fetch_add(1, Ordering::Relaxed)))
 }
 
 /// Files removed when the request is done, whatever happens.

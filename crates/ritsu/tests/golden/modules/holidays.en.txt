@@ -1,0 +1,6 @@
+modules/holidays/japan/national_holidays.cal: ok — calendar national_holidays: table holidays 1,067 rows, data range 1955-01-01..2027-12-31
+modules/holidays/japan/国民の祝日.cal: ok — calendar 国民の祝日: table 祝日 1,067 rows, data range 1955-01-01..2027-12-31
+modules/holidays/uk/england_and_wales.cal: ok — calendar england_and_wales: table bank_holidays 83 rows, data range 2019-01-01..2028-12-31
+modules/holidays/uk/northern_ireland.cal: ok — calendar northern_ireland: table bank_holidays 103 rows, data range 2019-01-01..2028-12-31
+modules/holidays/uk/scotland.cal: ok — calendar scotland: table bank_holidays 94 rows, data range 2019-01-01..2028-12-31
+ritsu check: 5 files (koyomi 5): all pass; borders between the languages: 0 checked, 0 undecided

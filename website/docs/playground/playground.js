@@ -38,8 +38,8 @@ const TEXT = {
     status: (version, ms, ...what) => [`ritsu ${version}`, `${ms} ms`, ...what].join(" · "),
     counts: (e, w) => (e || w ? `${e} error${e === 1 ? "" : "s"}, ${w} warning${w === 1 ? "" : "s"}` : "all pass"),
     files: (n) => `${n} file${n === 1 ? "" : "s"}`,
-    projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", empty: "An empty project", "sekisho/refunds": "Who may refund an order of a shop" },
-    groups: { ritsu: "ritsu: every language in one project", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", chobo: "chobo: one book", sekisho: "sekisho: a gate and the files it reads" },
+    projects: { shop: "A small shop", "shop.ja": "A small shop, in Japanese", modules: "A shop that reads two modules", "modules.ja": "A shop that reads two modules, in Japanese", empty: "An empty project", "sekisho/refunds": "Who may refund an order of a shop" },
+    groups: { ritsu: "ritsu: every language in one project", modules: "modules: a project and the modules it requires", own: "Start from one file", rulec: "rulec: one rule", dandori: "dandori: a flow and the files it reads", chobo: "chobo: one book", sekisho: "sekisho: a gate and the files it reads" },
     rules: { gap: "The table with a row missing", full: "The whole table", multi: "Tables in stages", big: "A bigger rule", walk: "Walking a list" },
     books: { inventory: "Stock held for an order", points: "Loyalty points", refunds: "Refunds that never exceed the sale", marketplace: "A sale split between a shop and its fee" },
     draft: "A first draft of the hotel booking, with errors",
@@ -67,6 +67,7 @@ const TEXT = {
     project: "The project to open",
     filesLabel: "The project's files",
     editor: (p) => `The file ${p}`,
+    bytes: (n) => `This file is not UTF-8 text (${n} bytes). The playground hands its bytes to ritsu as they are; the editor shows this note in its place and cannot change it.`,
     views: { doc: "the page for people", markdown: "Markdown", check: "problems", gen: "generated code" },
     viewsLabel: "What ritsu says of the file and makes of it",
     panes: { code: "code", result: "result" },
@@ -123,8 +124,8 @@ const TEXT = {
     status: (version, ms, ...what) => [`ritsu ${version}`, `${ms} ms`, ...what].join(" ・ "),
     counts: (e, w) => (e || w ? `エラー ${e} 件、警告 ${w} 件` : "どれも検査を通りました"),
     files: (n) => `${n} ファイル`,
-    projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", empty: "空のプロジェクト", "sekisho/refunds.ja": "店の注文を返金してよい人" },
-    groups: { ritsu: "ritsu（全部の言語がそろうプロジェクト）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", chobo: "chobo（帳簿一つ）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）" },
+    projects: { shop: "小さな通販（英語）", "shop.ja": "小さな通販（日本語）", modules: "モジュールを二つ読む店（英語）", "modules.ja": "モジュールを二つ読む店（日本語）", empty: "空のプロジェクト", "sekisho/refunds.ja": "店の注文を返金してよい人" },
+    groups: { ritsu: "ritsu（全部の言語がそろうプロジェクト）", modules: "モジュール（プロジェクトと、それが読むモジュール）", own: "ファイル一つから始める", rulec: "rulec（規則一つ）", dandori: "dandori（フローと、フローが読むファイル）", chobo: "chobo（帳簿一つ）", sekisho: "sekisho（ゲートと、ゲートが読むファイル）" },
     rules: { gap: "一行足りない表", full: "そろった表", multi: "表をつなぐ", big: "大きい規則", walk: "並びを歩く" },
     books: { inventory: "注文のために押さえる在庫", points: "ポイント", refunds: "売上を超えない返金", marketplace: "店の取り分と手数料に分ける売上" },
     draft: "ホテルの予約の最初の下書き（エラーあり）",
@@ -152,6 +153,7 @@ const TEXT = {
     project: "開くプロジェクト",
     filesLabel: "プロジェクトのファイル",
     editor: (p) => `ファイル ${p}`,
+    bytes: (n) => `UTF-8 のテキストではないファイルです（${n} バイト）。ブラウザで試すページは、このファイルをバイトのまま ritsu に渡します。エディターはこの説明を代わりに見せ、ファイルは書き換えられません。`,
     views: { doc: "人が読むページ", markdown: "Markdown", check: "問題", gen: "生成したコード" },
     viewsLabel: "ritsu がファイルについて言うことと、ファイルから作るもの",
     panes: { code: "コード", result: "結果" },
@@ -267,8 +269,16 @@ function title(t, p) {
   return p.name;
 }
 
+// A file that is not UTF-8 text (a CSV in Shift_JIS that a calendar reads), as a project and a link
+// hold it: `{"base64": "…"}` in place of its text (DESIGN 17.17). The page hands it to the module as
+// it is, and the editor shows it read only.
+const isBytes = (v) => v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 1 && typeof v.base64 === "string";
+
+// How many bytes the base64 of such a file holds.
+const byteCount = (v) => Math.floor((v.base64.replace(/=+$/, "").length * 3) / 4);
+
 // What the reader changed of a project, as a link carries it: every file changed or added, with its
-// text, and every file removed, with null, by its path, in the order of the tabs.
+// text (or its bytes), and every file removed, with null, by its path, in the order of the tabs.
 function changes(base, now) {
   const was = new Map(base);
   const out = now.filter(([p, text]) => was.get(p) !== text).map(([p, text]) => [p, text]);
@@ -283,7 +293,7 @@ const inside = (p) => typeof p === "string" && p !== "" && !p.startsWith("/") &&
 function changed(base, edits) {
   const files = base.map((f) => f.slice());
   for (const [p, text] of edits) {
-    if (!inside(p) || !(text === null || typeof text === "string")) throw new Error(p);
+    if (!inside(p) || !(text === null || typeof text === "string" || isBytes(text))) throw new Error(p);
     const at = files.findIndex(([q]) => q === p);
     if (text === null) {
       if (at >= 0) files.splice(at, 1);
@@ -569,10 +579,12 @@ function start(root, bundle, words, worker) {
     }
     return languages.get(ext);
   };
+  // A file's state in the editor; a file of bytes shows a note in its place, and cannot be changed.
   const stateOf = (path, text) =>
     cm.EditorState.create({
-      doc: text,
+      doc: isBytes(text) ? t.bytes(byteCount(text)) : text,
       extensions: [
+        isBytes(text) ? [cm.EditorState.readOnly.of(true), cm.EditorView.editable.of(false)] : [],
         cm.lineNumbers(),
         cm.highlightActiveLineGutter(),
         cm.highlightSpecialChars(),

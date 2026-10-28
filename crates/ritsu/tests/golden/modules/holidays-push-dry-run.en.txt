@@ -1,0 +1,4 @@
+built ghcr.io/i2y/ritsu-holidays 1.0.0, and pushed nothing (`--dry-run`)
+  digest: sha256:57b388f303cb98e0d36eeffb0955ab4a07958cef1b44b346d2d50c269ea00227
+  files: sha256:a9eccc1d3901f9a7bd45d3301b785dab29f5d1702b8332e56bb472eb22936951
+  reference: ghcr.io/i2y/ritsu-holidays@sha256:57b388f303cb98e0d36eeffb0955ab4a07958cef1b44b346d2d50c269ea00227

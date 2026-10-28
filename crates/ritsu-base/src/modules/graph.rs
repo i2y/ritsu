@@ -154,6 +154,26 @@ pub fn fetch_words() -> String {
     }
 }
 
+/// What a module neither in the store nor in the module's copy of it says in the npm package
+/// (DESIGN 17.22), which fetches nothing and may run with only the directories of `dirs` open: where
+/// the store is, that the native ritsu fetches, and the two ways to have the package read what was
+/// fetched (the store opened too, or a copy in the module).
+fn missing_under_wasi(name: &ModuleName, version: &Version, store: Option<&Store>, fetch: &str) -> Text {
+    match store {
+        Some(s) => {
+            let at = s.root.display();
+            tr!(
+                "依存 `{name}` {version} が、置き場（`{at}`）にも同梱のコピーにもありません。ネイティブの ritsu で `{fetch}` を走らせてください。もう取り出してあり、`dirs` で開くディレクトリを絞っているときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーを置いてください",
+                "the dependency `{name}` {version} is neither in the store (`{at}`) nor in this module's copy of it; run `{fetch}` with the native ritsu. If it is fetched already and `dirs` opens some directories only, add the store to `dirs`, or put a copy of it in this module with `ritsu mod vendor`"
+            )
+        }
+        None => tr!(
+            "依存 `{name}` {version} が同梱のコピーにありません。置き場の場所も分かりません（`RITSU_MODULES` も `HOME` もありません）。`ritsu mod vendor` で同梱のコピーを置くか、置き場を `RITSU_MODULES` で渡してください",
+            "the dependency `{name}` {version} is not in this module's copy of the store, and there is no place for a store: neither `RITSU_MODULES` nor `HOME` is set. Put a copy in this module with `ritsu mod vendor`, or name the store with `RITSU_MODULES`"
+        ),
+    }
+}
+
 /// `a` and `b` joined and their `.` and `..` folded by their letters, a `..` that leads above `a`
 /// kept: the path from the root of the module at hand to a module a path reaches (`../tax`).
 pub fn up_join(a: &str, b: &str) -> String {
@@ -403,10 +423,14 @@ impl<'a> Loader<'a> {
         let Pinned::Oci { version, digest, files } = &l.pinned else { return None };
         let Some((store, at)) = vendor::find(&self.root, digest, self.store) else {
             let fetch = fetch_words();
-            self.stops.push(tr!(
-                "依存 `{name}` {version} が、置き場にも同梱のコピーにもありません。`{fetch}` を走らせてください",
-                "the dependency `{name}` {version} is neither in the store nor in this module's copy of it; run `{fetch}`"
-            ));
+            self.stops.push(if cfg!(target_os = "wasi") {
+                missing_under_wasi(name, version, self.store, &fetch)
+            } else {
+                tr!(
+                    "依存 `{name}` {version} が、置き場にも同梱のコピーにもありません。`{fetch}` を走らせてください",
+                    "the dependency `{name}` {version} is neither in the store nor in this module's copy of it; run `{fetch}`"
+                )
+            });
             return None;
         };
         let fdir = store.files(digest);

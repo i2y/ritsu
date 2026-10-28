@@ -1,0 +1,13 @@
+エラー: bad.list:2:1: `title` は一度しか書けません。1 行目にもう書いてあります
+エラー: bad.list:3:1: `frob` で始まる行はありません。一覧の行は title、description、playground、module、signature、local のどれかで始めてください
+エラー: bad.list:4:8: `tax` は配らないモジュールの名前です。`module` には `<レジストリ>/<リポジトリ>` を書いてください。まだ送り出していない作業ツリーは `local` で書きます
+エラー: bad.list:6:8: モジュール `example.com/acme/shop` はもう一覧にあります
+エラー: bad.list:7:7: `local "nowhere"` の指すディレクトリに `ritsu.mod` がありません
+エラー: bad.list:8:7: `/abs` は絶対パスです。一覧のファイルのあるディレクトリからの相対パスで書いてください
+エラー: bad.list:10:7: `local "./shop"` はもう一覧にあります
+エラー: bad.list:11:12: ブラウザで試すページの URL `ftp://example.com/play/` は、https の URL（この機械の上なら http も）で、ユーザー、クエリ、`#` を含まないものを書いてください
+エラー: bad.list:12:1: `playground` は一度しか書けません。11 行目にもう書いてあります
+エラー: bad.list:13:31: `signature` の行は `signature "<頭の部分>" key "<パス>"`（あとに `tlog off` を付けてもよい）、`signature "<頭の部分>" by "<署名者>" issuer "<発行者>"`、`signature "<頭の部分>" by matching "<正規表現>" issuer "<発行者>"` の形で書いてください（`frob` のところには `key` を書きます）
+エラー: bad.list:14:1: `description` の行は `description "…"` の形で書いてください
+エラー: bad.list:15:8: `example.com/acme/` はモジュールの名前として読めません。リポジトリ `acme/` は、英小文字と数字を `.`、`_`、`__`、`-` でつないだ語を、`/` で区切って書いてください
+エラー: 一覧を読めません。何も書いていません

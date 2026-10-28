@@ -370,13 +370,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                 Some("path") => &[Want::Any, Want::Exactly("path"), Want::Str],
                 _ => &[Want::Any, Want::Exactly("oci"), Want::Str, Want::Any],
             },
-            _ => match (ts.get(2).map(|t| t.text.as_str()), ts.get(3).map(|t| t.text.as_str())) {
-                (Some("key"), _) if ts.len() > 4 => &[Want::Str, Want::Exactly("key"), Want::Str, Want::Exactly("tlog"), Want::Exactly("off")],
-                (Some("key"), _) => &[Want::Str, Want::Exactly("key"), Want::Str],
-                (Some("by"), Some("matching")) => &[Want::Str, Want::Exactly("by"), Want::Exactly("matching"), Want::Str, Want::Exactly("issuer"), Want::Str],
-                (Some("by"), _) => &[Want::Str, Want::Exactly("by"), Want::Str, Want::Exactly("issuer"), Want::Str],
-                _ => &[Want::Str, Want::Exactly("key"), Want::Str],
-            },
+            _ => signature_shape(&ts[1..]),
         };
         let args = &ts[1..];
         let wrong = (0..shape.len().max(args.len())).find(|&k| match (shape.get(k), args.get(k)) {
@@ -499,42 +493,12 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                 }
                 None => m.excludes.push(At { value: v(0).text.clone(), line: n, col: v(0).col }),
             },
-            "signature" => {
-                let prefix = &v(0).text;
-                if let Err(e) = names::prefix_ok(prefix) {
-                    r.at(E302, n, v(0).col, src, tr!(
-                        "`signature` の頭の部分 `{prefix}` は、配るモジュールの名前か、`/` で終わるその頭の部分（`\"example.com/acme/\"` など）で書いてください",
-                        "the start `{prefix}` of a `signature` line is the name of a published module, or a start of one that ends with `/` (`\"example.com/acme/\"`, say)"
-                    ).then(&sep(&e.text())));
-                    continue;
+            "signature" => match signature_of(args, n) {
+                Ok(sig) => m.signatures.push(sig),
+                Err((col, t)) => {
+                    r.at(E302, n, col, src, t);
                 }
-                let policy = match v(1).text.as_str() {
-                    "key" => {
-                        if let Some(t) = path_problem(&v(2).text, true) {
-                            r.at(E302, n, v(2).col, src, t);
-                            continue;
-                        }
-                        Policy::Key { path: v(2).text.clone(), tlog: args.len() == 3 }
-                    }
-                    _ if v(2).is_word("matching") => {
-                        let (pattern, issuer) = (&v(3).text, &v(5).text);
-                        if pattern.is_empty() || issuer.is_empty() {
-                            r.at(E302, n, v(3).col, src, tr!("署名者の正規表現と発行者は、空にできません", "neither the pattern of who signed nor the issuer can be empty"));
-                            continue;
-                        }
-                        Policy::Matching { pattern: pattern.clone(), issuer: issuer.clone() }
-                    }
-                    _ => {
-                        let (identity, issuer) = (&v(2).text, &v(4).text);
-                        if identity.is_empty() || issuer.is_empty() {
-                            r.at(E302, n, v(2).col, src, tr!("署名者と発行者は、空にできません", "neither who signed nor the issuer can be empty"));
-                            continue;
-                        }
-                        Policy::By { identity: identity.clone(), issuer: issuer.clone() }
-                    }
-                };
-                m.signatures.push(Signature { prefix: prefix.clone(), policy, line: n });
-            }
+            },
             _ => {
                 let Some(target) = Target::from_word(&v(0).text) else {
                     let t = &v(0).text;
@@ -582,6 +546,75 @@ pub fn wants(bytes: &[u8]) -> Option<Version> {
 }
 
 /// The reason after the sentence: `。` before it in Japanese, `: ` in English.
+/// The words a `signature` line takes after its first word (`args`).
+fn signature_shape(args: &[Token]) -> &'static [Want] {
+    match (args.get(1).map(|t| t.text.as_str()), args.get(2).map(|t| t.text.as_str())) {
+        (Some("key"), _) if args.len() > 3 => &[Want::Str, Want::Exactly("key"), Want::Str, Want::Exactly("tlog"), Want::Exactly("off")],
+        (Some("key"), _) => &[Want::Str, Want::Exactly("key"), Want::Str],
+        (Some("by"), Some("matching")) => &[Want::Str, Want::Exactly("by"), Want::Exactly("matching"), Want::Str, Want::Exactly("issuer"), Want::Str],
+        (Some("by"), _) => &[Want::Str, Want::Exactly("by"), Want::Str, Want::Exactly("issuer"), Want::Str],
+        _ => &[Want::Str, Want::Exactly("key"), Want::Str],
+    }
+}
+
+/// The `signature` line on line `n`, from its words after the first (`args`, of the shape
+/// [`signature_shape`] gives): the line, or the column and the sentence of its E302.
+fn signature_of(args: &[Token], n: usize) -> Result<Signature, (usize, Text)> {
+    let v = |k: usize| &args[k];
+    let prefix = &v(0).text;
+    if let Err(e) = names::prefix_ok(prefix) {
+        return Err((
+            v(0).col,
+            tr!(
+                "`signature` の頭の部分 `{prefix}` は、配るモジュールの名前か、`/` で終わるその頭の部分（`\"example.com/acme/\"` など）で書いてください",
+                "the start `{prefix}` of a `signature` line is the name of a published module, or a start of one that ends with `/` (`\"example.com/acme/\"`, say)"
+            )
+            .then(&sep(&e.text())),
+        ));
+    }
+    let policy = match v(1).text.as_str() {
+        "key" => {
+            if let Some(t) = path_problem(&v(2).text, true) {
+                return Err((v(2).col, t));
+            }
+            Policy::Key { path: v(2).text.clone(), tlog: args.len() == 3 }
+        }
+        _ if v(2).is_word("matching") => {
+            let (pattern, issuer) = (&v(3).text, &v(5).text);
+            if pattern.is_empty() || issuer.is_empty() {
+                return Err((v(3).col, tr!("署名者の正規表現と発行者は、空にできません", "neither the pattern of who signed nor the issuer can be empty")));
+            }
+            Policy::Matching { pattern: pattern.clone(), issuer: issuer.clone() }
+        }
+        _ => {
+            let (identity, issuer) = (&v(2).text, &v(4).text);
+            if identity.is_empty() || issuer.is_empty() {
+                return Err((v(2).col, tr!("署名者と発行者は、空にできません", "neither who signed nor the issuer can be empty")));
+            }
+            Policy::By { identity: identity.clone(), issuer: issuer.clone() }
+        }
+    };
+    Ok(Signature { prefix: prefix.clone(), policy, line: n })
+}
+
+/// A `signature` line of another file that writes it as `ritsu.mod` does (a list of modules, DESIGN
+/// 17.17), from its words after the first (`args`) on line `n`: the line, or the column and the
+/// sentence of what is wrong with it, as `ritsu.mod` says it.
+pub fn signature_line(args: &[Token], n: usize) -> Result<Signature, (usize, Text)> {
+    let shape = signature_shape(args);
+    let wrong = (0..shape.len().max(args.len())).find(|&k| match (shape.get(k), args.get(k)) {
+        (Some(w), Some(t)) => !fits(*w, t),
+        _ => true,
+    });
+    if let Some(k) = wrong {
+        let f = form("signature");
+        let col = args.get(k).map_or_else(|| args.last().map_or(1, |t| t.col + t.text.chars().count() + 1), |t| t.col);
+        let note = shape_note(shape.get(k).copied(), args.get(k));
+        return Err((col, Text::new(format!("`signature` の行は `{}` の形で書いてください（{}）", f.ja, note.ja), format!("write the `signature` line as `{}` ({})", f.en, note.en))));
+    }
+    signature_of(args, n)
+}
+
 fn sep(t: &Text) -> Text {
     Text::new(format!("。{}", t.ja), format!(": {}", t.en))
 }

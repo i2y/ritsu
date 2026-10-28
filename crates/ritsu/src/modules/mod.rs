@@ -76,12 +76,6 @@ impl Ctx {
         2
     }
 
-    /// What a command a later version makes says in this one: exit 2.
-    pub fn not_yet(&self) -> u8 {
-        let c = self.command;
-        self.refuse(tr!("`ritsu mod {c}` は、この版にはまだありません", "`ritsu mod {c}` is not in this version yet"))
-    }
-
     /// The directory the run is in, made canonical.
     pub fn here(&self) -> PathBuf {
         let cwd = ritsu_base::fs::current_dir().unwrap_or_default();

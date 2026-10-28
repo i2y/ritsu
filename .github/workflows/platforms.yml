@@ -280,15 +280,17 @@ jobs:
           exit $failed
 
       # A module pushed to the registry of the services, fetched back, and signed there with cosign
-      # for the fetch to check; and the digest of `ritsu mod push --dry-run` on Linux, held to the
-      # golden file written on macOS (the same files give the same bytes on every system).
+      # for the fetch to check; and the digest of `ritsu mod push --dry-run` on Linux, of the example
+      # and of the seed module (modules/holidays), each held to the golden file written on macOS (the
+      # same files give the same bytes on every system).
       - name: "ritsu: the modules on a registry, one test at a time"
         run: |
           set -u
           failed=0
           for t in \
             a_registry_of_the_platforms_level_takes_a_module_and_gives_it_back \
-            a_dry_run_gives_the_same_digest_every_time
+            a_dry_run_gives_the_same_digest_every_time \
+            the_seed_module_s_dry_run_gives_the_same_digest_every_time
           do
             echo "::group::$t"
             if ! cargo xtask test --level platforms -p ritsu -- --exact "$t"; then

@@ -56,11 +56,17 @@ pub fn with_location<R>(dir: &Path, f: impl FnOnce() -> R) -> R {
     f()
 }
 
+/// The environment variable in which the loader of the npm package names the system Node runs on
+/// (Node's `process.platform`: `darwin`, `linux`, …; DESIGN 8.8).
+pub const PLATFORM: &str = "RITSU_WASI_PLATFORM";
+
 /// Where the store is: what [`with_location`] gave on this thread; else `RITSU_MODULES`; else, on
 /// macOS, `~/Library/Caches/ritsu/modules`, and on the other systems `$XDG_CACHE_HOME/ritsu/modules`
-/// (an absolute one) or `~/.cache/ritsu/modules`. Built for WASI, where the system is not known, the
-/// macOS place is taken when `~/Library/Caches` is there. None when nothing says (no `HOME`), and in
-/// a page in the browser, which has no store.
+/// (an absolute one) or `~/.cache/ritsu/modules`. Built for WASI, the system is the one the npm
+/// package's loader names ([`PLATFORM`]), so that the package takes the place the binary takes
+/// even when `dirs` does not open `~/Library/Caches`; run another way (wasmtime), the macOS place is
+/// taken when `~/Library/Caches` is there. None when nothing says (no `HOME`), and in a page in the
+/// browser, which has no store.
 pub fn location() -> Option<PathBuf> {
     if let Some(p) = PLACE.with(|c| c.borrow().clone()) {
         return Some(p);
@@ -76,7 +82,10 @@ pub fn location() -> Option<PathBuf> {
     let mac = if cfg!(target_os = "macos") {
         true
     } else if cfg!(target_os = "wasi") {
-        fs::raw::metadata(&home.join("Library/Caches")).is_ok_and(|m| m.is_dir())
+        match var(PLATFORM) {
+            Some(p) => p.as_os_str() == "darwin",
+            None => fs::raw::metadata(&home.join("Library/Caches")).is_ok_and(|m| m.is_dir()),
+        }
     } else {
         false
     };
@@ -269,7 +278,7 @@ fn unique(dir: &Path) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    dir.join(format!("{}-{nanos}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+    dir.join(format!("{}-{nanos}-{}", crate::wasi::run_id(), N.fetch_add(1, Ordering::Relaxed)))
 }
 
 /// The files under `dir` made read only (0444), its directories 0755.

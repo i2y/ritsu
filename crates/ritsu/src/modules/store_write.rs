@@ -10,9 +10,18 @@ use std::path::PathBuf;
 
 /// The directory of the files a request writes and removes (curl's, a push's copy for its check):
 /// the store's `tmp/`, made when it is not there; the system's when no store has a place (no
-/// `HOME`).
+/// `HOME`), but under WASI, which has no such directory (std's `temp_dir` panics there).
 pub fn scratch() -> Result<PathBuf, Text> {
-    let dir = Store::located().map(|s| s.root.join("tmp")).unwrap_or_else(std::env::temp_dir);
+    let dir = match Store::located() {
+        Some(s) => s.root.join("tmp"),
+        None if cfg!(target_os = "wasi") => {
+            return Err(tr!(
+                "作業用のファイルを置く場所がありません（置き場の場所が分かりません。`RITSU_MODULES` も `HOME` もありません）。置き場を `RITSU_MODULES` で渡してください",
+                "there is no place for the files this command writes for a while: there is no place for the store, as neither `RITSU_MODULES` nor `HOME` is set; name the store with `RITSU_MODULES`"
+            ));
+        }
+        None => std::env::temp_dir(),
+    };
     std::fs::create_dir_all(&dir).map_err(|e| {
         let d = dir.display();
         tr!("{d} を作れません（{e}）", "cannot make {d} ({e})")
@@ -25,7 +34,7 @@ pub fn unique(dir: &std::path::Path, what: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    dir.join(format!("{what}-{}-{nanos}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+    dir.join(format!("{what}-{}-{nanos}-{}", ritsu_base::wasi::run_id(), N.fetch_add(1, Ordering::Relaxed)))
 }
 
 /// Today in UTC, `YYYY-MM-DD`: the day a record says.

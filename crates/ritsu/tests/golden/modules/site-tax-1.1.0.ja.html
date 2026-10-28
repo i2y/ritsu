@@ -1,0 +1,62 @@
+<main>
+<nav class="crumbs"><a href="../../../../index.html">Acme modules</a> / <a href="../index.html"><registry>/acme/tax</a></nav>
+<h1><code><registry>/acme/tax</code> 1.1.0</h1>
+<p class="lead">The VAT rates of the Acme shop</p>
+<p>参照: <code><registry>/acme/tax@sha256:<digest></code></p>
+<pre><code>require tax oci &quot;<registry>/acme/tax&quot; 1.1.0</code></pre>
+<p><button type="button" class="open" id="open" data-playground="https://i2y.github.io/ritsu/ja/play/" data-big="大きすぎて、ブラウザで試すページでは開けません" data-failed="ブラウザで試すページに渡せませんでした">ブラウザで試すページで開く</button></p>
+<p class="lead">ファイルはリンクの <code>#</code> のあとに入れて運びます。ブラウザはそこをサーバーに送りません。</p>
+<script>
+document.getElementById("open").addEventListener("click", async (e) => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  try {
+    const files = await (await fetch("module.json")).json();
+    const stream = new Blob([JSON.stringify(files)]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    const packed = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    if (packed.length > 1000000) {
+      b.textContent = b.dataset.big;
+      return;
+    }
+    location.assign(b.dataset.playground + "#project=empty&edits=" + packed);
+  } catch (err) {
+    b.textContent = b.dataset.failed;
+  }
+});
+</script>
+<h2>ファイル</h2>
+<div class="scroll"><table>
+<tr><th>ファイル</th><th>言語</th><th>バイト</th></tr>
+<tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
+<tr><td><a href="./files/rules/vat_rate.rule.html"><code>rules/vat_rate.rule</code></a></td><td>rulec</td><td>655</td></tr>
+</table></div>
+<h2>1.0.0 からの差</h2>
+<ul>
+<li>ファイル：変わった 2</li>
+<li>require：変わりません</li>
+</ul>
+<div class="scroll"><table>
+<tr><th>変わり方</th><th>ファイル</th></tr>
+<tr><td>変わった</td><td><code>ritsu.mod</code></td></tr>
+<tr><td>変わった</td><td><code>rules/vat_rate.rule</code></td></tr>
+</table></div>
+<h3>振る舞い</h3>
+<details><summary><code>rules/vat_rate.rule</code> (rulec)：答えが変わります</summary>
+<p><strong>版の差分（入力の全体で比べたもの）</strong></p>
+<p><code><registry>/acme/tax@1.0.0/rules/vat_rate.rule</code> → <code><registry>/acme/tax@1.1.0/rules/vat_rate.rule</code></p>
+<div class="scroll"><table>
+<tr><th>違いが出る入力</th><th>答え</th><th>例</th><th>通り</th></tr>
+<tr><td>category = reduced</td><td>rate: 5% → 6%</td><td>category=reduced</td><td>1</td></tr>
+</table></div>
+<p>ここに挙げた入力のほかでは、二つの版は同じ答えを返します。</p>
+</details>
+<h3>インターフェース</h3>
+<ul>
+<li><code>rules/vat_rate.rule</code> のインターフェースは変わりません</li>
+</ul>
+<p>振る舞いかインターフェースに、示せた違いがあります。</p>
+<footer><code>ritsu mod site</code> <version> が書きました</footer>
+</main>

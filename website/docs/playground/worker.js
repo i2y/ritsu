@@ -2,10 +2,11 @@
 // (crates/ritsu-wasm), held here once, and asked what the page asks.
 //
 // The page sends one message at a time, `{ seq, jobs: [[what, request], …] }`, where `what` is
-// check, gen or doc and `request` the JSON the module takes; it sends the next only once this one is
-// answered, and drops an answer that is older than what it shows (playground.js, `refresh`). Every
-// answer says the version of the module, so that a stale ritsu.wasm in a cache shows on the page
-// rather than answering quietly.
+// check, gen or doc and `request` the JSON the module takes (a file that is not UTF-8 text is in it
+// as `{"base64": "…"}`, which goes to the module as it is, and the module reads its bytes from it);
+// it sends the next only once this one is answered, and drops an answer that is older than what it
+// shows (playground.js, `refresh`). Every answer says the version of the module, so that a stale
+// ritsu.wasm in a cache shows on the page rather than answering quietly.
 //
 // One convention crosses the boundary, the one rulec's and dandori's playgrounds kept: every buffer
 // begins with its own length as a little-endian u32. `put` writes one, `take` reads one and frees it.
