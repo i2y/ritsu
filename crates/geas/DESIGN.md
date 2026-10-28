@@ -219,7 +219,8 @@ pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
          | "tz" STR | "locale" STR
          | "clock" STR ["env" STR] | "seed" NUM ["env" STR]
 claim   := "claim" STR "{" step* "}"            ; first step must be `when`
-step    := "when" IDENT "." call | ("then" | "and") check
+step    := "when" IDENT "." call [wait] | ("then" | "and") check
+wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run, get, post (§18)
 call    := "run" "(" [STR ("," STR)*] ")"
          | "get" "(" STR ")" | "post" "(" STR ["," "body" ":" STR] ")"
          | "open" "(" [STR] ")"
@@ -1284,6 +1285,7 @@ cut to one line.
 | E011 | a pin geas cannot keep for this target, or a time, a locale, a seed or a variable's name it cannot read; a pin a driver or Chrome refuses when the claim runs |
 | E012 | another target's `when` between two actions on a replayed (pixie) target |
 | E013 | an argument an action cannot take there: `into:` on pixie, `nth: 0`, `field: 0`, `advance(0)`, a path on pixie or `open()` after another action on it, a path without `/` in a browser, a browser action before `open`, a key geas does not send to a page |
+| E014 | a wait geas cannot keep: `within` after an action on a screen, below 1 second or above 60, or on a `when` with no check under it (§18) |
 | E030 | a program that could not be started |
 | E031 | a `run` that did not finish within 5 s |
 | E032 | a service that exited before opening its port, or did not open it within 5 s |
@@ -1900,3 +1902,185 @@ claim "answers the health check" {
 A claim pasted from the draft as it is gives E005 (the claim has no
 steps, and a claim starts with a `when`), and `geas check` exits 2
 (`tests/scenarios.rs`).
+
+## 18. Waiting for an answer: `within`
+
+Added 2026-10-28. A service that hands its work to a queue or a workflow
+answers before the work is done: a `post` is accepted with 202, and what it
+started finishes later, in another process. A claim about the result has
+to read it once it is there, and geas had no way to say so: a `when` made
+its call once, and its checks read that answer. The way left was a switch
+in the service that holds its answer until the work settles
+(`?wait=10`): a parameter that exists only to be checked, and a service
+that decides for the claim what "settled" means.
+
+**Decided**: `within <n> seconds` after a `when`'s call. geas makes the
+call again, 100 ms after each answer, until every check under that `when`
+holds on one answer, for up to `n` seconds from the first call.
+
+```geas
+claim "a job finishes in the background" {
+  when api.post("/jobs", body: "12")
+  then status is 202
+  when api.get("/jobs/1") within 3 seconds
+  then body json ".state" is "done"
+  and  body json ".result" is 144
+}
+```
+
+### 18.1 What a wait does
+
+- `n` is a whole number from 1 to 60, and `second` and `seconds` are both
+  read, whatever the number. A minute is the most one step waits: ten times
+  the 5 s geas gives a call, enough for a workflow that takes a few seconds
+  to start on a slow CI machine, and a broken claim still stops within a
+  minute. The interval, 100 ms between an answer and the next call, is not
+  written: it changes the load and the delay, not what a claim means, and an
+  interval or a longer limit can be added later without changing a claim.
+- The checks a wait holds each answer to are the `then` under its `when`
+  and the `and`s after it, up to the next `when` or the end of the claim:
+  the group drift counts as claimed. On the first answer all of them hold
+  on, the step ends with that answer: the checks read it, the journal and
+  the baseline write it, and the claim goes on. When the time runs out,
+  the step's answer is the last one: the checks read it, those that do not
+  hold fail the claim, and the claim goes on, as after any failed check
+  (§2). Two checks that never hold on one answer wait out the time.
+- The clock starts right before the first call: the start of a service the
+  wait is the first to use (up to 5 s for its port) is not counted. No call
+  starts after the time has passed; the last one starts by then at the
+  latest, and each call keeps its own limit (E031, E033), so a step takes
+  at most `n` + 5 seconds.
+- On a `run` target, each call starts the command again, with the same
+  pins. On a `serve` target, each call goes to the claim's instance, which
+  is not started again. A `clock` pin hands every call the same time, so
+  a wait is for work that goes on elsewhere (a job in the background, a
+  workflow, another process), never for the pinned clock to move.
+- A call that fails (E030 to E033) ends the claim at once, as in any
+  `when`, with a note saying which call of the wait it was and how long
+  after the first. An error is not an answer: calling again would hide for
+  up to a minute that the service fell over, and leave open which of its
+  errors to report.
+- A signal ends a wait as it ends any run (§10.1): geas kills the
+  programs it started and exits with 128 and the signal's number. When it
+  has Chrome's profiles to remove first, and so goes on for a moment, the
+  wait makes no call after the signal.
+- `get`, `post` and `run` can wait. `post` can because an RPC-style API,
+  such as Connect, calls its reads with POST too; `run`, because a command
+  may be how a state is read. A call is made again as it is written, so
+  whatever a `post` or a `run` does is done again on every call; the
+  language guide and the skill say so, and a claim waits on a read where
+  there is one.
+- A screen action cannot wait (E014). A screen settles after each action
+  (Chrome in virtual time, §8.4; pixie by its replay, §8.3), `advance(ms)`
+  gives it more time, and a `click` made again would be a second click.
+
+### 18.2 What it writes
+
+- `check`: a claim whose waits held prints as before, with nothing of how
+  many calls they took. A wait whose time ran out prints a line above the
+  checks it failed, with how many calls geas made and how long they took,
+  and the run that gets there writes the `when` with its `within`:
+
+  ```text
+  not ok 2 - a job finishes in the background
+      examples/jobs/jobs.geas:20: within 3 seconds — no answer held every check under it (30 calls in 3.0 s); the checks below read the last one
+          20 |   when api.get("/jobs/1") within 3 seconds
+      examples/jobs/jobs.geas:21: body json ".state" is "done" — got "finished"
+          21 |   then body json ".state" is "done"
+  ```
+
+- The journal's `when` event gets `"within":n`, and, only when the time
+  ran out, `"tries"` and `"ms"`. An entry of `--json`'s `run` is the same,
+  and has them too when a call failed while waiting, a step the journal
+  writes as an `error` event, as for any `when`. The journal is made to be the same bytes over two runs of the same
+  behavior, and with `-j1` and `-j4` (§10, PLAN appendix A; a masked value
+  is written `<masked>` for the same reason). How many calls a wait made
+  and how long they took changes from run to run, so writing them when the
+  wait held would break that for every spec that waits. A wait that ran
+  out is a failure, and its calls and its time are the evidence of it.
+  Same behavior, same bytes, weighs more than a count in every record.
+- `snap` writes the step's answer. The baseline's `call` does not hold the
+  wait, so adding or removing `within` does not ask for a new snap by
+  itself.
+- `drift` waits as `check` does and compares the step's answer; when a
+  wait's time ran out, a note says so, and that the answer compared is the
+  last one.
+- `map` waits as `check` does. Each process of a `run` that waits writes
+  its coverage into a directory of its own (§7.3), and the lines any of
+  them ran are the claim's.
+- `--jobs`: a claim that waits keeps its worker, its fixed port and its
+  `serial` target while it waits; other claims run beside it.
+
+### 18.3 What it refuses
+
+| Written | Code |
+|---|---|
+| `within` after an action on a screen | E014 |
+| `within 0 seconds`, `within -5 seconds`, `within 90 seconds` | E014 |
+| `within` on a `when` with no check under it: nothing to wait for | E014 |
+| `within 1.5 seconds`; `within seconds`; `within 10` with no unit | E001 |
+| `within 1 minute`, and any unit but seconds | E001, with a note: seconds, up to 60 |
+| `within` after a check | E001, or E002 after a node (a state geas does not know), with a note on where `within` goes |
+| `then eventually …` | E002 (a subject geas does not know), with a note pointing at `within` |
+
+`eventually` is not given E014: the unknown name is what is wrong, and the
+note leads to the form. A wait with no time written has no form at all.
+
+### 18.4 Forms passed over
+
+1. `then eventually <check> within 10 seconds`, on one check. What waits
+   is the step, all its checks on one answer; with `and`s after it, which
+   of them `eventually` covers does not read, and the call made again hides
+   inside a check.
+2. A block, `within 10 seconds { when … then … }`. It brings nesting into
+   a flat grammar, and with two `when`s inside it would make a series of
+   calls again, a `post` among them.
+3. A default wait on a target (`target api { wait 10 seconds }`), an
+   option (`--wait 10`), or waiting on every step. A claim would no longer
+   say which of its steps is asynchronous, every failing check would take
+   the time, and with an option a claim would mean something else run
+   another way.
+4. A wait with no time, or no limit.
+5. An interval to write (`every 500 ms`), or one that grows. Not needed
+   yet; either can be added without changing a claim.
+6. Minutes and milliseconds. The limit is a minute, and a wait does not
+   need finer steps than a second.
+7. Calling again after an error (18.1).
+8. Every call of a wait in the journal: their number changes from run to
+   run, and the journal would no longer be the same bytes.
+9. A wait on a screen action (18.1).
+10. Leaving it to the service's own `?wait`: the trigger itself.
+
+### 18.5 Checked, and not fixed
+
+`tests/wait.rs` runs waits against `tests/impl/later.py`, a service whose
+answers change after a number of calls or a while, and `tests/impl/tick.py`,
+a command that prints `done` from its third run: a wait holds on the third
+answer, and on the fourth when two checks have to hold on one; a job posted
+before is waited for; the journal and the baseline keep the answer the wait
+held on, with no count; a wait that runs out fails on the last answer and
+the claim goes on; an error on the third call ends the claim at once; drift
+on the same service is quiet, and says so when the time runs out; `-j1`
+and `-j4` write the same bytes; SIGINT ends a minute's wait at once, and no
+service is left. `tests/specs/` holds a spec for every refusal of 18.3;
+`examples/jobs` is the story of the READMEs, with an agent's change under
+`tests/changes/jobs/`. The calls a wait made and the time they took are
+held in the goldens as `<n>` and `<t>` (`steady` in `tests/common`), and
+`tests/docs.rs` compares the pages through the same function, so a page
+shows a run as it printed.
+
+Not fixed:
+
+- `map`'s record of a claim that waits can differ from run to run: how
+  many calls it took decides which lines ran (a branch for "still
+  running", say). A line ran in one run and not in another is either the
+  claim's or unclaimed; neither hides a change from `affected`.
+- When the checks hold on the first answer, the claim does not wait, and
+  it may end, and its service be stopped, while work it started is still
+  running. A service holding its answer until the work settled never let
+  that happen; a claim that has to see the work finish says so with a
+  check.
+- A screen that needs more than its settling and `advance(ms)` has no
+  wait.
+- geas's calls have no request headers yet; one added would be made again
+  with the call.

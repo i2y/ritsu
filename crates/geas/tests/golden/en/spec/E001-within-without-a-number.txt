@@ -1,0 +1,2 @@
+error[E001]: E001-within-without-a-number.geas:7:34: expected the time to wait, a whole number of seconds, found `seconds`
+     7 |   when api.get("/jobs/1") within seconds

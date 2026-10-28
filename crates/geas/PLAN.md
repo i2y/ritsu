@@ -79,7 +79,7 @@ src/codes.rs       the code table: summaries, explanations, repros, in en and ja
 src/report.rs      the report of a run: TAP lines, failed checks with their run,
                    claim errors, summaries, the JSON of check and snap
 src/lex.rs         tokens
-src/parse.rs       DESIGN §6's grammar into the model; static checks E001-E013
+src/parse.rs       DESIGN §6's grammar into the model; static checks E001-E014
 src/model.rs       Spec, Target, Claim, Step, Call, Check, Subject, Matcher,
                    Value, node patterns, Pin
 src/words.rs       command strings into words (§11), {port}
@@ -985,7 +985,9 @@ One event a line, in claim order:
   `headers`, with the value of a masked header, and of a masked JSON path
   in the body, written `"<masked>"`, as in the baseline, so that a `date`
   the spec masks does not keep two runs' journals from matching byte for
-  byte);
+  byte); a `when` that waits (DESIGN §18) adds `"within":n` after `call`,
+  and `"tries"` and `"ms"` after it when its time ran out, the answer being
+  the one the checks read: the one they all held on, or the last;
 - `{"claim":…,"event":"check","line":…,"check":…,"expected":…,"actual":…,"ok":…}`
   (for a `screen` check, `expected` is the node as the spec writes it and
   `actual` how many nodes matched: `no such node`, `1 such node`, `2 such
@@ -1035,7 +1037,9 @@ that what each target ran is kept apart.)
   "checks":[{"line","check","expected","actual","ok"}],"run":[{"line","call",
   "observed"}]}]}`; `run` only for a claim that is not ok, `call` as the
   spec writes it after `when` (`api.get("/")`), `observed` `null` for the
-  `when` a claim error stopped at. A failed `screen` check carries
+  `when` a claim error stopped at. A `when` that waits adds `"within"`
+  after `call`, and `"tries"` and `"ms"` when its time ran out, as the
+  journal does, or when one of its calls failed. A failed `screen` check carries
   `"screen"`, the screen it saw. A check's `check` is its subject and its
   matcher's words (`status is between`), `expected` the matcher's value as
   the spec writes it (`200 and 299`, a pattern as `"\d+"`), empty for
@@ -1053,7 +1057,8 @@ that what each target ran is kept apart.)
   itself for a `body json` path, `null` when absent; `diagnostics` holds
   the claims that could not run. A screen's change has the `field`
   `screen`, or `screen in <role> "<name>"` for a node under another, and
-  `old` and `new` are the node without its children.
+  `old` and `new` are the node without its children. A wait whose time
+  ran out adds a note to `notes`: the answer compared is the last one.
 - `explain`: one object a line, `{"geas":1,"code","severity","summary",
   "when","fix","repro":{"args":[…],"files":[{"name","text"}],"exit",
   "needs":[…],"env":{…}}}`; `env` holds the variables the repro sets for
@@ -1176,6 +1181,8 @@ The words geas uses:
 | skill folder; install it; overwrite | スキルのフォルダー; インストールする; 上書きする |
 | override (a method) | オーバーライド |
 | the fortune the example page draws | 占いの文句 |
+| wait (`within`); a wait's time runs out | 待つ, 待ち; 待つ時間が切れる |
+| the n-th call of a wait | 待ちの n 回目の呼び出し |
 
 A word not in the table: check how the repository already says it
 (`grep -r` over the Japanese files), and if nobody says it yet, ask before

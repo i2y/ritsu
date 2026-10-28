@@ -1,0 +1,7 @@
+not ok 1 - the service goes away on the third call (error)
+    error[E033]: w/gone.geas:10:3: the service `api` closed the connection without answering
+        10 |   when api.get("/gone/3") within 5 seconds
+      = call 3 of the wait, <t> s after the first
+      the run that gets there:
+          10  when api.get("/gone/3") within 5 seconds
+1 claim · 0 ok · 1 failed · journal: w/.geas/gone.journal.jsonl

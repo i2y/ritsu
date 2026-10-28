@@ -1,0 +1,5 @@
+{"claim":"a state that never comes","event":"when","line":10,"target":"api","call":"get(\"/never\")","within":1,"tries":<n>,"ms":<t>,"obs":{"status":200,"headers":{"content-length":"20","content-type":"application/json"},"body":"{\"state\": \"running\"}"}}
+{"claim":"a state that never comes","event":"check","line":11,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"running\"","ok":false}
+{"claim":"a state that never comes","event":"check","line":12,"check":"status is","expected":"200","actual":"200","ok":true}
+{"claim":"a state that never comes","event":"when","line":13,"target":"api","call":"get(\"/after/1\")","obs":{"status":200,"headers":{"content-length":"29","content-type":"application/json"},"body":"{\"calls\": 1, \"state\": \"done\"}"}}
+{"claim":"a state that never comes","event":"check","line":14,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"done\"","ok":true}

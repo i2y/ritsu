@@ -1,0 +1,2 @@
+エラー[E014]: E014-on-an-action-on-a-pixie-app.geas:7:27: `app.click("greet")` は画面への操作なので、`within` では待てません。画面は操作のたびに落ち着きます。時間が足りなければ `advance(ms)` で進めてください
+     7 |   when app.click("greet") within 5 seconds

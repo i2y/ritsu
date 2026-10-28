@@ -1,0 +1,7 @@
+{"geas_baseline":1,"pins":{}}
+{"claim":"a wait holds on the call whose answer every check holds on","idx":0,"target":"api","call":"get(\"/after/3\")","obs":{"kind":"http","status":200,"headers":{"content-length":"29","content-type":"application/json"},"body":"{\"calls\": 3, \"state\": \"done\"}"}}
+{"claim":"every check under the when holds on one answer","idx":0,"target":"api","call":"get(\"/after/3\")","obs":{"kind":"http","status":200,"headers":{"content-length":"29","content-type":"application/json"},"body":"{\"calls\": 4, \"state\": \"done\"}"}}
+{"claim":"a job started earlier is waited for","idx":0,"target":"api","call":"post(\"/jobs\")","obs":{"kind":"http","status":202,"headers":{"content-length":"31","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"running\"}"}}
+{"claim":"a job started earlier is waited for","idx":1,"target":"api","call":"get(\"/jobs/1\")","obs":{"kind":"http","status":200,"headers":{"content-length":"28","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"done\"}"}}
+{"claim":"a job started earlier is waited for","idx":2,"target":"api","call":"get(\"/jobs/1\")","obs":{"kind":"http","status":200,"headers":{"content-length":"28","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"done\"}"}}
+{"claim":"a command is run again until it prints what the check says","idx":0,"target":"tick","call":"run()","obs":{"kind":"proc","stdout":"done\n","stderr":"","exit":0}}

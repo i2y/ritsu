@@ -379,10 +379,32 @@ pub struct Check {
     pub pos: Pos,
 }
 
+/// `within <n> seconds` after a call (DESIGN §18): the call is made again until every check under
+/// its `when` holds on one observation, for at most `secs` seconds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Wait {
+    /// From 1 to [`Wait::MOST`].
+    pub secs: u64,
+    /// Where `within` is written.
+    pub pos: Pos,
+}
+
+impl Wait {
+    /// The longest a step waits, in seconds.
+    pub const MOST: u64 = 60;
+    /// The time between an observation and the next call.
+    pub const EVERY: std::time::Duration = std::time::Duration::from_millis(100);
+
+    /// As a spec writes it: `within 10 seconds`, `within 1 second`.
+    pub fn display(&self) -> String {
+        format!("within {} {}", self.secs, if self.secs == 1 { "second" } else { "seconds" })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Step {
-    /// `pos` is where `when` is written.
-    When { target: String, call: Call, pos: Pos },
+    /// `pos` is where `when` is written; `wait`, what its `within` says.
+    When { target: String, call: Call, pos: Pos, wait: Option<Wait> },
     Then(Check),
 }
 

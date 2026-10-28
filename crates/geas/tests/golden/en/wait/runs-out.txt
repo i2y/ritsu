@@ -1,0 +1,8 @@
+not ok 1 - a state that never comes
+    w/runs-out.geas:10: within 1 second — no answer held every check under it (<n> calls in <t> s); the checks below read the last one
+        10 |   when api.get("/never") within 1 second
+    w/runs-out.geas:11: body json ".state" is "done" — got "running"
+        11 |   then body json ".state" is "done"
+      the run that gets there:
+          10  when api.get("/never") within 1 second  →  200, body "{\"state\": \"running\"}"
+1 claim · 0 ok · 1 failed · journal: w/.geas/runs-out.journal.jsonl

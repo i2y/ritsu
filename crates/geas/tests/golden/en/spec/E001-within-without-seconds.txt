@@ -1,0 +1,2 @@
+error[E001]: E001-within-without-seconds.geas:8:3: expected `seconds`, found `then`
+     8 |   then body json ".state" is "done"

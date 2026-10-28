@@ -8,7 +8,7 @@ use crate::diag::{self, Diag, Show, count};
 use ritsu_base::secrets::mask;
 use ritsu_base::text::Lang;
 use crate::json;
-use crate::run::{ClaimResult, ClaimStatus};
+use crate::run::{ClaimResult, ClaimStatus, Waited};
 
 /// The lines for the claims; with `only_failures`, the claims that are not ok.
 pub fn claims(file: &str, src: &str, results: &[ClaimResult], lang: Lang, only_failures: bool) -> String {
@@ -30,7 +30,21 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
                 out.push_str(&format!("not ok {n} - {}\n", r.name));
                 // a screen two failed checks share is shown once
                 let mut last_screen: Option<&Vec<String>> = None;
+                // the `when`s whose time ran out, said once, before the first failed check that
+                // reads what they kept (DESIGN §18)
+                let mut said: Vec<usize> = Vec::new();
                 for c in r.checks.iter().filter(|c| !c.ok) {
+                    let read = r.observations.iter().rev().find(|o| o.line <= c.line);
+                    if let Some(o) = read
+                        && let Some(w) = o.waited.as_ref().filter(|w| !w.held)
+                        && !said.contains(&o.idx)
+                    {
+                        said.push(o.idx);
+                        out.push_str(&ran_out(file, o.line, w, lang));
+                        if let Some(text) = src.lines().nth(o.line.saturating_sub(1)) {
+                            out.push_str(&format!("      {:>4} | {}\n", o.line, mask(text)));
+                        }
+                    }
                     out.push_str(&match lang {
                         Lang::En => format!("    {file}:{}: {} — got {}\n", c.line, mask(&c.text()), mask(c.actual.get(lang))),
                         Lang::Ja => {
@@ -82,6 +96,24 @@ pub fn claim(file: &str, src: &str, n: usize, r: &ClaimResult, lang: Lang, only_
         }
     }
     out
+}
+
+/// The line of a `when` whose time ran out before every check under it held on one observation:
+/// how many calls it made and how long they took, the checks below it reading the last.
+fn ran_out(file: &str, line: usize, w: &Waited, lang: Lang) -> String {
+    let spent = w.spent();
+    match lang {
+        Lang::En => format!(
+            "    {file}:{line}: {} — no answer held every check under it ({}); the checks below read the last one\n",
+            w.wait.display(),
+            spent.en
+        ),
+        Lang::Ja => format!(
+            "    {file}:{line}: {} 秒のうちに、下のチェックがそろって成り立つ結果はありませんでした（{}呼びました）。下のチェックは最後の結果を見ています\n",
+            w.wait.secs,
+            spent.ja
+        ),
+    }
 }
 
 pub fn failed(results: &[ClaimResult]) -> usize {
@@ -182,8 +214,14 @@ pub fn claims_json_with(file: &str, results: &[ClaimResult], lang: Lang, ok: boo
                     .run
                     .iter()
                     .map(|s| {
+                        // a `when` that waits: its `within`, and the calls and the time when it ran out
+                        let wait = match &s.waited {
+                            None => String::new(),
+                            Some(w) if w.held => format!(",\"within\":{}", w.wait.secs),
+                            Some(w) => format!(",\"within\":{},\"tries\":{},\"ms\":{}", w.wait.secs, w.tries, w.ms),
+                        };
                         format!(
-                            "{{\"line\":{},\"call\":{},\"observed\":{}}}",
+                            "{{\"line\":{},\"call\":{}{wait},\"observed\":{}}}",
                             s.line,
                             json::quote(&mask(&s.when)),
                             s.observed.as_deref().map(|o| json::quote(&mask(o))).unwrap_or_else(|| "null".into())

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E014-on-an-action-on-a-page.geas","diagnostics":[{"code":"E014","severity":"error","file":"E014-on-an-action-on-a-page.geas","line":7,"col":28,"message":"`api.open(\"/jobs/1\")` acts on a screen, which `within` does not wait for: a screen settles after each action, and `advance(ms)` gives it more time","notes":[],"path":[]}]}

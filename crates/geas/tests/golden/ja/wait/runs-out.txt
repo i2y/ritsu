@@ -1,0 +1,8 @@
+not ok 1 - a state that never comes
+    w/runs-out.geas:10: 1 秒のうちに、下のチェックがそろって成り立つ結果はありませんでした（<t> 秒で <n> 回呼びました）。下のチェックは最後の結果を見ています
+        10 |   when api.get("/never") within 1 second
+    w/runs-out.geas:11: body json ".state" is "done" のはずが、実際は "running"
+        11 |   then body json ".state" is "done"
+      ここまでの実行:
+          10  when api.get("/never") within 1 second  →  200, body "{\"state\": \"running\"}"
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: w/.geas/runs-out.journal.jsonl

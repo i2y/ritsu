@@ -1,0 +1,21 @@
+$ geas check examples/jobs/jobs.geas
+ok 1 - a job is accepted and starts running
+ok 2 - a job finishes in the background
+ok 3 - a body that is not a number is refused
+ok 4 - an unknown job is not found
+4 claims · 4 ok · 0 failed · journal: examples/jobs/.geas/jobs.journal.jsonl
+$ geas check examples/jobs/jobs.geas
+ok 1 - a job is accepted and starts running
+not ok 2 - a job finishes in the background
+    examples/jobs/jobs.geas:20: within 3 seconds — no answer held every check under it (<n> calls in <t> s); the checks below read the last one
+        20 |   when api.get("/jobs/1") within 3 seconds
+    examples/jobs/jobs.geas:21: body json ".state" is "done" — got "finished"
+        21 |   then body json ".state" is "done"
+      the run that gets there:
+          18  when api.post("/jobs", body: "12")  →  202, body "{\"id\": \"1\", \"state\": \"running\"}"
+          20  when api.get("/jobs/1") within 3 seconds  →  200, body "{\"id\": \"1\", \"state\": \"finished\", \"result\": 144}"
+ok 3 - a body that is not a number is refused
+ok 4 - an unknown job is not found
+4 claims · 3 ok · 1 failed · journal: examples/jobs/.geas/jobs.journal.jsonl
+$ echo $?
+1

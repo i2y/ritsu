@@ -1,0 +1,3 @@
+エラー[E014]: E014-no-check-to-wait-for.geas:8:27: `within` は、この `when` の下のチェックが成り立つまで待ちます。この `when` の下にはチェックがありません
+     8 |   when api.get("/jobs/1") within 5 seconds
+  = 待って確かめたいことを `then` で書くか、`within` を外してください

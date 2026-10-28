@@ -1,0 +1,33 @@
+# Claims for a service whose jobs finish in the background. The service
+# answers before a job is done, so the claim that reads a job's result
+# waits for it: geas asks again until the checks under that `when` hold,
+# for up to the time written after the call.
+
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a job is accepted and starts running" {
+  when api.post("/jobs", body: "12")
+  then status is 202
+  and  body json ".state" is "running"
+}
+
+claim "a job finishes in the background" {
+  when api.post("/jobs", body: "12")
+  then status is 202
+  when api.get("/jobs/1") within 3 seconds
+  then body json ".state" is "done"
+  and  body json ".result" is 144
+}
+
+claim "a body that is not a number is refused" {
+  when api.post("/jobs", body: "twelve")
+  then status is 400
+}
+
+claim "an unknown job is not found" {
+  when api.get("/jobs/9")
+  then status is 404
+}

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E014-no-check-to-wait-for.geas","diagnostics":[{"code":"E014","severity":"error","file":"E014-no-check-to-wait-for.geas","line":8,"col":27,"message":"`within` waits until the checks under this `when` hold, and it has none","notes":["write under it, with `then`, what to wait for, or leave out `within`"],"path":[]}]}

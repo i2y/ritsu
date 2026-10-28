@@ -1,0 +1,11 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a job finishes" {
+  when api.post("/jobs", body: "12")
+  when api.get("/jobs/1") within 5 seconds
+  when api.get("/jobs")
+  then status is 200
+}

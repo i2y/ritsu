@@ -93,8 +93,9 @@ A claim is a name in quotes and a block of steps. The first step is a `when`: an
 written `<target>.<call>(…)`. A `then` checks what the last `when` observed; `and` is the same word
 for another check. A failed check marks the claim as failed, and the claim goes on, so every
 divergence is reported. A `when` that cannot run (the program does not start, the port never opens,
-the screen has no such button) ends the claim as an error, with a diagnostic. Names of targets and
-of claims are unique in a file (E003).
+the screen has no such button) ends the claim as an error, with a diagnostic. A `when` can wait
+for an answer that comes later, with `within <n> seconds` (below). Names of targets and of claims
+are unique in a file (E003).
 
 ## Calls and what they observe
 
@@ -117,6 +118,51 @@ HTTP is HTTP/1.1 over 127.0.0.1, one connection a request; a chunked answer is r
 carries. On a `port auto` service, `127.0.0.1:<port>`, `localhost:<port>` and `[::1]:<port>` in
 what it answers are written `{port}` before anything sees them, so a claim writes `{port}` where
 the port appears (in a redirect's `location`, say).
+
+## Waiting for an answer
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+…
+claim "a job finishes in the background" {
+  when api.post("/jobs", body: "12")
+  then status is 202
+  when api.get("/jobs/1") within 3 seconds
+  then body json ".state" is "done"
+  and  body json ".result" is 144
+}
+```
+
+A service that hands its work to a queue answers before the work is done. `within <n> seconds`
+after a `when`'s call makes geas call again, 100 ms after each answer, until every check under that
+`when` (its `then` and the `and`s after it, up to the next `when`) holds on one answer, for up to
+`n` seconds from the first call.
+
+- `n` is a whole number from 1 to 60, and `second` and `seconds` are both read. A fraction, a
+  missing number or unit, and minutes are E001; 0, a negative number and more than 60 are E014.
+- On the first answer every check holds on, the step ends with that answer, and the claim goes on.
+  When the time runs out, the checks read the last answer, those that do not hold fail the claim,
+  and the claim goes on, as after any failed check. The report says how many calls geas made and
+  how long they took.
+- The clock starts at the first call: starting the service is not counted. Each call keeps its own
+  5 s limit.
+- A call that fails (E030 to E033) ends the claim at once, as in any `when`; a note says which call
+  of the wait it was.
+- `get`, `post` and `run` can wait, since an RPC-style API (Connect, say) reads with POST too, and
+  a command may be how a state is read. A call is made again exactly as it is written, so **a
+  `post` or a `run` that waits does what it does on every call**: a `post` that creates something
+  creates it again, and one that charges charges again. Wait on a read where there is one, as above.
+- A `run` starts the command again for each call, with the same pins: a pinned `clock` is the same
+  in every call, so a wait is for work that goes on elsewhere, never for the pinned clock to move.
+- A screen action cannot wait (E014): a screen settles after each action, and `advance(ms)` gives
+  it more time. Nor can a `when` with no check under it (E014): there is nothing to wait for.
+- The journal writes the answer the step ended with, and `"within":n`; only when the time ran out
+  does it add `"tries"` and `"ms"`, so a wait that holds writes the same bytes however many calls
+  it took ([commands.md](commands.md)). The baseline's `call` does not hold the wait, and drift
+  compares the answer the wait kept.
 
 ## Subjects and matchers
 
@@ -284,7 +330,8 @@ pin     := "env" STR STR | "env" "clean" | "env" "pass" STR
          | "tz" STR | "locale" STR
          | "clock" STR ["env" STR] | "seed" NUM ["env" STR]
 claim   := "claim" STR "{" step* "}"            ; first step must be `when`
-step    := "when" IDENT "." call | ("then" | "and") check
+step    := "when" IDENT "." call [wait] | ("then" | "and") check
+wait    := "within" NUM ("second" | "seconds")  ; 1 to 60, on run, get, post
 call    := "run" "(" [STR ("," STR)*] ")"
          | "get" "(" STR ")" | "post" "(" STR ["," "body" ":" STR] ")"
          | "open" "(" [STR] ")"

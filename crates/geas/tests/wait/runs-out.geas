@@ -1,0 +1,15 @@
+# A wait whose time runs out: its claim fails on the last answer, with the
+# calls it made and the time they took, and goes on to its next step.
+
+target api {
+  serve "python3 later.py {port}"
+  port auto
+}
+
+claim "a state that never comes" {
+  when api.get("/never") within 1 second
+  then body json ".state" is "done"
+  and  status is 200
+  when api.get("/after/1")
+  then body json ".state" is "done"
+}

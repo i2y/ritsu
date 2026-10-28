@@ -594,6 +594,16 @@ pub fn drift(spec: &Spec, results: &[ClaimResult], baseline: Baseline) -> Report
         for o in &res.observations {
             let key = (res.name.clone(), o.idx);
             let (name, n) = (&res.name, o.idx + 1);
+            // a wait whose time ran out kept its last observation (DESIGN §18)
+            if let Some(w) = o.waited.as_ref().filter(|w| !w.held) {
+                let spent = w.spent();
+                r.notes.push(tr!(
+                    "主張 \"{name}\" の when#{n} は、待つ時間が切れました（{}）。比べたのは最後の結果です",
+                    "claim \"{name}\" when#{n}: the wait ran out of time ({}); the answer compared is the last one",
+                    spent.ja;
+                    spent.en,
+                ));
+            }
             let Some(b) = base.remove(&key) else {
                 r.notes.push(tr!(
                     "主張 \"{name}\" の when#{n} はベースラインにありません（新しい主張なら `geas snap` を走らせてください）",

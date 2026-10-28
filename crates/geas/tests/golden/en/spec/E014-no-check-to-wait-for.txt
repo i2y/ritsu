@@ -1,0 +1,3 @@
+error[E014]: E014-no-check-to-wait-for.geas:8:27: `within` waits until the checks under this `when` hold, and it has none
+     8 |   when api.get("/jobs/1") within 5 seconds
+  = write under it, with `then`, what to wait for, or leave out `within`

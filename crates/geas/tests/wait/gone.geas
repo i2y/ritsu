@@ -1,0 +1,12 @@
+# A service that goes away while a claim waits on it: the claim ends as an
+# error at once, saying which call of the wait it was.
+
+target api {
+  serve "python3 later.py {port}"
+  port auto
+}
+
+claim "the service goes away on the third call" {
+  when api.get("/gone/3") within 5 seconds
+  then body json ".state" is "done"
+}

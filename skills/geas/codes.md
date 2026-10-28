@@ -278,6 +278,27 @@ Repro
       then screen contains text "Hello, Ada!"
     }
 
+error[E014]: a wait geas cannot keep
+
+When it appears
+  A `when` waits in a way geas cannot keep: `within` after an action on a screen (`open`, `click`, `input`, `submit`, `press`, `advance`), which settles after each action instead; a time below 1 second or above 60; or a `when` with no `then` under it, which leaves nothing to wait for.
+
+What usually fixes it
+  Write `within` after a `run`, a `get` or a `post`, with a whole number of seconds from 1 to 60, and under it the checks to wait for. A screen is given more time with `advance(ms)`.
+
+Repro
+  $ geas check e014.geas
+  e014.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+    }
+
+    claim "a job finishes" {
+      when api.get("/jobs/1") within 0 seconds
+      then body json ".state" is "done"
+    }
+
 error[E030]: a program that could not be started
 
 When it appears

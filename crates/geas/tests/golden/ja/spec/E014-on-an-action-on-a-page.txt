@@ -1,0 +1,2 @@
+エラー[E014]: E014-on-an-action-on-a-page.geas:7:28: `api.open("/jobs/1")` は画面への操作なので、`within` では待てません。画面は操作のたびに落ち着きます。時間が足りなければ `advance(ms)` で進めてください
+     7 |   when api.open("/jobs/1") within 5 seconds

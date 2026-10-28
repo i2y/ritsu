@@ -1,0 +1,2 @@
+エラー[E001]: E001-within-not-whole.geas:7:34: `1.5` は秒の整数ではありません。整数で書いてください
+     7 |   when api.get("/jobs/1") within 1.5 seconds

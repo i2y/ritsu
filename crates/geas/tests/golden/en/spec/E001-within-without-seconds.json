@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E001-within-without-seconds.geas","diagnostics":[{"code":"E001","severity":"error","file":"E001-within-without-seconds.geas","line":8,"col":3,"message":"expected `seconds`, found `then`","notes":[],"path":[]}]}

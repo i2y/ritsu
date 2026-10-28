@@ -1,0 +1,5 @@
+claim "the state settles on the third call" when#1 api.get("/after/3")
+  - body json ".calls": disappeared: 3   [unclaimed]
+  ~ body json ".state": "done" → "running"   [claimed — `geas check` is the authority]
+note: claim "the state settles on the third call" when#1: the wait ran out of time (<n> calls in <t> s); the answer compared is the last one
+drift: 1 interaction compared · 1 drifted · 1 unclaimed change(s) · 1 claimed

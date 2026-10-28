@@ -1,0 +1,5 @@
+ok 1 - a wait holds on the call whose answer every check holds on
+ok 2 - every check under the when holds on one answer
+ok 3 - a job started earlier is waited for
+ok 4 - a command is run again until it prints what the check says
+主張 4 件 · 成り立った 4 件 · 成り立たなかった 0 件 · ジャーナル: w/.geas/holds.journal.jsonl

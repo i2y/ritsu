@@ -1,0 +1,13 @@
+# A wait for snap and drift: the answer kept is the third, on which the
+# check holds; with a file named `never` beside the service, the time runs
+# out and drift compares the last answer.
+
+target api {
+  serve "python3 later.py {port}"
+  port auto
+}
+
+claim "the state settles on the third call" {
+  when api.get("/after/3") within 1 second
+  then body json ".state" is "done"
+}

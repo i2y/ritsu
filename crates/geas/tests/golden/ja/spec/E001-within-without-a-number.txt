@@ -1,0 +1,2 @@
+エラー[E001]: E001-within-without-a-number.geas:7:34: 待つ時間（秒の整数）を書くところに `seconds` があります
+     7 |   when api.get("/jobs/1") within seconds

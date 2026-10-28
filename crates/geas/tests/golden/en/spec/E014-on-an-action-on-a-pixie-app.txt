@@ -1,0 +1,2 @@
+error[E014]: E014-on-an-action-on-a-pixie-app.geas:7:27: `app.click("greet")` acts on a screen, which `within` does not wait for: a screen settles after each action, and `advance(ms)` gives it more time
+     7 |   when app.click("greet") within 5 seconds

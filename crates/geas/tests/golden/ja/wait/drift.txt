@@ -1,0 +1,5 @@
+主張 "the state settles on the third call" の when#1 api.get("/after/3")
+  - body json ".calls": 消えた: 3   [主張なし]
+  ~ body json ".state": "done" → "running"   [主張あり — 判定は geas check]
+注意: 主張 "the state settles on the third call" の when#1 は、待つ時間が切れました（<t> 秒で <n> 回）。比べたのは最後の結果です
+ドリフト: 比べたやりとり 1 件 · 変わったやりとり 1 件 · 主張なしの変化 1 件 · 主張ありの変化 1 件

@@ -142,6 +142,7 @@ serial                                          (in a target) its claims never r
 
 when calc.run("2", "+", "3")                    arguments after the target's command
 when api.get("/path")   when api.post("/path", body: "5")
+when api.get("/jobs/1") within 10 seconds       called again until its checks hold (1 to 60 s)
 when web.open("/")      when app.open()         a page of a serve target, or the app's first screen
 when app.click("Save")  when app.click("Save", nth: 2)
 when app.input("Ada")   when app.input("Ada", field: 2)   when web.input("Ada", into: "Your name")
@@ -175,8 +176,15 @@ A role is a WAI-ARIA role name (`button`, `textbox`, `heading`, `link`, `checkbo
 pattern (`matches`, `matching`) is held against the whole value. In a string, `\n`, `\t`, `\"`
 and `\\` are escapes, and a pattern keeps its backslashes as written (`"\d+"`). geas splits a
 command into words itself, never through a shell: `'…'` and `"…"` keep blanks inside a word, and a
-shell is named when one is wanted (`run "sh -c 'cd tools && ./gen'"`). [language.md](language.md)
-has every form, with what each one means.
+shell is named when one is wanted (`run "sh -c 'cd tools && ./gen'"`).
+
+A `when` on a command or a service can wait for an answer that comes later, such as a job's result
+after the service accepted it: with `within <n> seconds` after its call, geas calls again, 100 ms
+after each answer, until every check under that `when` holds on one answer, for up to `n` seconds
+from the first call. When the time runs out, the checks read the last answer. A call is made again
+as it is written, so a `post` or a `run` that waits does what it does on every call, and a `post`
+that creates something creates it again: wait on a read where there is one.
+[language.md](language.md) has every form, with what each one means.
 
 ## 4. Reading the answers
 
@@ -197,6 +205,21 @@ as a diagnostic with its code, and the notes say what geas saw. A failed `screen
 screen it looked at, one node a line. With `--json`, the report is one object a spec:
 `{"geas":1,"ok":…,"file":…,"claims":[{"name","line","status","error","checks","run"}],"diagnostics":[…]}`,
 `diagnostics` holding the keys written in the spec (W901), `[]` when it has none.
+
+A wait whose time ran out says so above the checks it failed, with how many calls geas made and how
+long they took, and the checks read the last answer:
+
+```text
+not ok 2 - a job finishes in the background
+    examples/jobs/jobs.geas:20: within 3 seconds — no answer held every check under it (30 calls in 3.0 s); the checks below read the last one
+        20 |   when api.get("/jobs/1") within 3 seconds
+    examples/jobs/jobs.geas:21: body json ".state" is "done" — got "finished"
+        21 |   then body json ".state" is "done"
+```
+
+Read the last answer before anything else: here the service calls a finished job `"finished"`, and
+no wait would have seen `"done"`. A longer `within` is a change to the claim, which is the
+person's; it fits work that is slow, not an answer that differs.
 
 `ritsu geas drift` prints each change under the `when` it comes from: `+` appeared, `-` disappeared, `~`
 changed, then the tag. `[claimed — `geas check` is the authority]` means some check looks at that
@@ -229,6 +252,7 @@ A diagnostic has a code, a place, notes (`= …`) and the run that gets there.
 | E010 | a command that cannot be split into words; `{port}` on a target without a port | close the quote |
 | E011 | a pin geas cannot keep for that target | give `clock` and `seed` an `env "NAME"` on a process |
 | E012, E013 | another target's `when` between two pixie actions; an argument an action cannot take there | move the `when`; see [gui.md](gui.md) |
+| E014 | a `within` geas cannot keep: after a screen action, below 1 or above 60 seconds, or on a `when` with no check under it | `within` 1 to 60 seconds on a `run`, `get` or `post`, with the checks to wait for under it; `advance(ms)` for a screen |
 | E030 to E033 | a program that would not start, a `run` over 5 s, a service that never opened its port, an HTTP exchange that failed | fix the program or the target's command; the notes hold its stderr |
 | E034 to E037 | no Chrome; an action the app refused; a page that did not load or settle; a GUI driver geas cannot read | the notes show the screen and what it could reach |
 | E050, E051 | no baseline, or one that cannot be read | ask the person, then `ritsu geas snap` |

@@ -1,0 +1,11 @@
+# A wait that would take a minute, for a signal to end.
+
+target api {
+  serve "python3 later.py {port}"
+  port auto
+}
+
+claim "a state that never comes, for a minute" {
+  when api.get("/never") within 60 seconds
+  then body json ".state" is "done"
+}

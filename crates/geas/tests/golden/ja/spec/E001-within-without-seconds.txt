@@ -1,0 +1,2 @@
+エラー[E001]: E001-within-without-seconds.geas:8:3: `seconds` を書くところに `then` があります
+     8 |   then body json ".state" is "done"

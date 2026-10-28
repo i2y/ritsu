@@ -1,6 +1,6 @@
 # The examples
 
-The geas repository has seven examples under `examples/`, each a claims file beside a small program,
+The geas repository has eight examples under `examples/`, each a claims file beside a small program,
 with a README that says what it shows and how to run it. The programs were written the way an agent
 writes them; the claims are what a person reads.
 
@@ -12,6 +12,7 @@ writes them; the claims are what a person reads.
 | `tally-go` | the same service in Go | `map` on a Go service built with `-cover`, stopping on SIGTERM |
 | `tally-rust` | a command line in Rust | `map` on a program built with `-C instrument-coverage` |
 | `web-greeter` | a page and its service in Python | a page in Chrome: typing, clicking, Enter, the screen's nodes, `into:`, states, `matching`, and claims on the same service's API; all four pins (`locale`, `tz`, `clock`, `seed`), since the page writes the date, greets by the time of day and draws a fortune at random |
+| `jobs` | an HTTP service in Python whose jobs finish after it answers | a claim that posts a job and waits for its result with `within 3 seconds`, on the read, not the post |
 | `pixie-greeter` | pixie's greeter, a desktop app | a pixie target driven headless: `open()`, `input`, `click`, `submit()`, `field: 2`; the app is built with pixie and put beside the claims file |
 
 For each example but `pixie-greeter`, `tests/changes/<example>/` in the repository holds an
@@ -19,7 +20,8 @@ agent-style change: the changed files (`after/`), and for the five whose code `m
 change as a git diff (`change.diff`) and as a plain one (`change.plain.diff`). The tests run `map`
 before and after the change and `affected` on both diffs. The change to `web-greeter` turns its
 Greet button into a `<div>` with a click handler, which the screen shows as text and the claims
-refuse.
+refuse. The change to `jobs` calls a finished job `"finished"` instead of `"done"`, and the claim
+that waits runs out of time.
 
 ## Running them
 
@@ -29,6 +31,7 @@ From the repository's root, with `geas` on PATH:
 $ geas check examples/calc/calc.geas
 $ geas check examples/greeter/greeter.geas
 $ geas check examples/web-greeter/web-greeter.geas
+$ geas check examples/jobs/jobs.geas
 ```
 
 `tally-go` and `tally-rust` are built first (their READMEs give the commands), and `pixie-greeter`
@@ -43,5 +46,7 @@ runs from anywhere.
   code is quiet, and every other header is still compared.
 - **The environment is pinned when output depends on it.** The web greeter pins the locale, the
   time zone, the clock and the random seed, and its claims name the exact date and greeting.
+- **A wait is on the read.** `jobs` posts once and waits on the `get`: a call that waits is made
+  again, and a `post` made again starts another job.
 - **Screens are claimed by role and name.** `screen contains button "Greet" disabled`, never a
   selector: a claim fails when a person with a screen reader could not do what it says.

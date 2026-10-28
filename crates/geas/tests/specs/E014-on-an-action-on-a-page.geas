@@ -1,0 +1,9 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "shows the job as done" {
+  when api.open("/jobs/1") within 5 seconds
+  then screen contains text "done"
+}

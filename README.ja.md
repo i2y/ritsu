@@ -192,7 +192,7 @@ transfer refund(request: string, order: string, amount: USD)
 
 ### geas：エージェントが書いたコードについての主張
 
-コードはエージェントが書き、主張は人が読みます。geas は主張を一つずつ、動いているプログラム（コマンドライン、HTTP のサービス、ブラウザのページ）に当てて確かめ、差分を渡せば、それがどの主張にかかわるかを答えます。OpenSpec の仕様を渡せば、`geas scenarios` が、同じ名前の主張で確かめていないシナリオを挙げます。
+コードはエージェントが書き、主張は人が読みます。geas は主張を一つずつ、動いているプログラム（コマンドライン、HTTP のサービス、ブラウザのページ）に当てて確かめ、差分を渡せば、それがどの主張にかかわるかを答えます。OpenSpec の仕様を渡せば、`geas scenarios` が、同じ名前の主張で確かめていないシナリオを挙げます。サービスが答えたあとで終わるジョブのように、あとで出る結果は、主張に書いた時間まで待って確かめます。
 
 ```geas
 # The human-auditable half. The implementation (calc.py) is agent-written;

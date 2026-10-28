@@ -1,0 +1,7 @@
+not ok 1 - the service goes away on the third call（エラー）
+    エラー[E033]: w/gone.geas:10:3: サービス `api` がレスポンスを返さずに接続を閉じました
+        10 |   when api.get("/gone/3") within 5 seconds
+      = 待ちの 3 回目の呼び出しで、一回目から <t> 秒後でした
+      ここまでの実行:
+          10  when api.get("/gone/3") within 5 seconds
+主張 1 件 · 成り立った 0 件 · 成り立たなかった 1 件 · ジャーナル: w/.geas/gone.journal.jsonl

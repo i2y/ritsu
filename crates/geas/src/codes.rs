@@ -180,6 +180,17 @@ claim \"greets the name typed in\" {
 }
 ";
 
+const X_E014: &str = "target api {
+  serve \"python3 server.py {port}\"
+  port auto
+}
+
+claim \"a job finishes\" {
+  when api.get(\"/jobs/1\") within 0 seconds
+  then body json \".state\" is \"done\"
+}
+";
+
 const X_E030: &str = "target calc {
   run \"geas-example-no-such-program\"
 }
@@ -702,6 +713,19 @@ pub fn table() -> Vec<Entry> {
                 "Write what the message says the action takes there: `field: n` on pixie, counts from 1, a path with its `/`, `when <target>.open(\"/\")` before the other actions on a page, a key such as `enter`, `tab`, `a` or `cmd-s`.",
             ),
             repro: spec(&["check", "e013.geas"], &[("e013.geas", X_E013)], 2),
+        },
+        Entry {
+            code: "E014",
+            summary: tr!("geas が待てない `within`", "a wait geas cannot keep"),
+            when: tr!(
+                "`within` が、geas の待てない形で書かれているときです。画面への操作（`open`、`click`、`input`、`submit`、`press`、`advance`）の後ろの `within`（画面は操作のたびに落ち着きます）、1 秒より短いか 60 秒より長い時間、下に `then` がなく待って確かめることのない `when` が、これに当たります。",
+                "A `when` waits in a way geas cannot keep: `within` after an action on a screen (`open`, `click`, `input`, `submit`, `press`, `advance`), which settles after each action instead; a time below 1 second or above 60; or a `when` with no `then` under it, which leaves nothing to wait for.",
+            ),
+            fix: tr!(
+                "`within` は `run`・`get`・`post` の後ろに、1 から 60 までの秒の整数で書き、待って確かめるチェックをその下に書いてください。画面に時間が要るときは `advance(ms)` を使ってください。",
+                "Write `within` after a `run`, a `get` or a `post`, with a whole number of seconds from 1 to 60, and under it the checks to wait for. A screen is given more time with `advance(ms)`.",
+            ),
+            repro: spec(&["check", "e014.geas"], &[("e014.geas", X_E014)], 2),
         },
         Entry {
             code: "E030",

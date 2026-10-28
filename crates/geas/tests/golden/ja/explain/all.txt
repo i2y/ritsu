@@ -271,6 +271,27 @@
       then screen contains text "Hello, Ada!"
     }
 
+エラー[E014]: geas が待てない `within`
+
+いつ出るか
+  `within` が、geas の待てない形で書かれているときです。画面への操作（`open`、`click`、`input`、`submit`、`press`、`advance`）の後ろの `within`（画面は操作のたびに落ち着きます）、1 秒より短いか 60 秒より長い時間、下に `then` がなく待って確かめることのない `when` が、これに当たります。
+
+直し方
+  `within` は `run`・`get`・`post` の後ろに、1 から 60 までの秒の整数で書き、待って確かめるチェックをその下に書いてください。画面に時間が要るときは `advance(ms)` を使ってください。
+
+再現
+  $ geas check e014.geas
+  e014.geas:
+    target api {
+      serve "python3 server.py {port}"
+      port auto
+    }
+
+    claim "a job finishes" {
+      when api.get("/jobs/1") within 0 seconds
+      then body json ".state" is "done"
+    }
+
 エラー[E030]: 起動できないプログラム
 
 いつ出るか

@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E014-negative-seconds.geas","diagnostics":[{"code":"E014","severity":"error","file":"E014-negative-seconds.geas","line":7,"col":34,"message":"`within` waits at least 1 second","notes":[],"path":[]}]}

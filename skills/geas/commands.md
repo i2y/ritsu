@@ -102,7 +102,8 @@ One JSON object a line, in claim order:
 - `{"claim","event":"env","target","pins"}` at a claim's first use of a target that has pins;
 - `{"claim","event":"when","line","target","call","obs"}`, the observation being
   `{"stdout","stderr","exit"}`, `{"status","headers","body"}` (headers in lower case, sorted), or
-  `{"screen":<node>}`;
+  `{"screen":<node>}`; a `when` that waits adds `"within"` after `call`, and `"tries"` and `"ms"`
+  when its time ran out, the observation being the answer its checks read;
 - `{"claim","event":"check","line","check","expected","actual","ok"}`;
 - `{"claim","event":"error","line","code","message"}`.
 
@@ -110,7 +111,13 @@ One JSON object a line, in claim order:
 {"claim":"greets by name","event":"check","line":16,"check":"status is","expected":"200","actual":"200","ok":true}
 ```
 
-A masked value is written `"<masked>"`, so two runs write the same bytes where nothing changed.
+A masked value is written `"<masked>"`, so two runs write the same bytes where nothing changed. A
+wait that held writes nothing of how many calls it took, for the same reason; one whose time ran
+out writes them, since they are what happened:
+
+```text
+{"claim":"a job finishes in the background","event":"when","line":20,"target":"api","call":"get(\"/jobs/1\")","within":3,"tries":30,"ms":3005,"obs":{"status":200,"headers":{"content-length":"47","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"finished\", \"result\": 144}"}}
+```
 
 ### The baseline
 
@@ -143,14 +150,17 @@ In text, a screen is one node a line, two spaces a level: `button "Greet" disabl
 - `check`, `snap`, `map`: `{"geas":1,"ok","file","claims":[{"name","line","status","error",
   "checks":[{"line","check","expected","actual","ok"}],"run":[{"line","call","observed"}]}]}`.
   `status` is `ok`, `fail` or `error`; `error` is null or `{"code","line","col","message","notes"}`;
-  `run`, the run that gets there, comes only with a claim that is not ok. A failed `screen` check
-  carries `screen`, the screen it saw. `check` adds `"diagnostics"`, the keys written in the spec
-  (W901), `[]` when it has none; `map` adds `"map":{"record","files","code","ran"}` and
-  `"diagnostics"`. Several specs print one object a line.
+  `run`, the run that gets there, comes only with a claim that is not ok; an entry of a `when` that
+  waits adds `"within"`, and `"tries"` and `"ms"` when its time ran out or one of its calls failed.
+  A failed `screen` check carries `screen`, the screen it saw. `check` adds `"diagnostics"`, the
+  keys written in the spec (W901), `[]` when it has none; `map` adds
+  `"map":{"record","files","code","ran"}` and `"diagnostics"`. Several specs print one object a
+  line.
 - A spec that does not parse: `{"geas":1,"ok":false,"file","diagnostics":[…]}`, each diagnostic
   `{"code","severity","file","line","col","message","notes","path"}`.
 - `drift`: `{"geas":1,"file","compared","drifted","unclaimed","claimed","changes":[{"claim","when",
-  "line","call","field","old","new","claimed"}],"notes","diagnostics"}`.
+  "line","call","field","old","new","claimed"}],"notes","diagnostics"}`. A wait whose time ran out
+  adds a note: the answer compared is the last one.
 - `affected`: `{"geas":1,"spec","diff","records":[{"file","side"}],"claims":[{"index","name",
   "status","lines":[{"file","side","lines","how","startup"}]}],"unclaimed":[{"file","side","lines",
   "why"}],"deleted":[{"file","known"}],"outside","spec_changed","baseline_changed","ok"}`. A line's

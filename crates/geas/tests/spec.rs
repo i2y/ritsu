@@ -1,4 +1,4 @@
-//! Specs geas refuses before running anything (E001-E013). Each file under
+//! Specs geas refuses before running anything (E001-E014). Each file under
 //! `tests/specs/` is run by `geas check` in a scratch directory: its stderr in
 //! English and in Japanese, and its `--json`, are held to goldens, and it exits 2.
 //! A file named `E0nn-<what>.geas` has to give E0nn.
@@ -64,7 +64,7 @@ fn every_refused_spec_gives_its_diagnostics() {
 #[test]
 fn every_static_code_has_a_spec() {
     let names = specs();
-    for code in ["E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010", "E011", "E012", "E013"] {
+    for code in ["E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010", "E011", "E012", "E013", "E014"] {
         assert!(names.iter().any(|f| f.starts_with(code)), "no spec under tests/specs gives {code}");
     }
 }

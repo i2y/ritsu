@@ -1,0 +1,13 @@
+{"claim":"a wait holds on the call whose answer every check holds on","event":"when","line":15,"target":"api","call":"get(\"/after/3\")","within":5,"obs":{"status":200,"headers":{"content-length":"29","content-type":"application/json"},"body":"{\"calls\": 3, \"state\": \"done\"}"}}
+{"claim":"a wait holds on the call whose answer every check holds on","event":"check","line":16,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"done\"","ok":true}
+{"claim":"every check under the when holds on one answer","event":"when","line":20,"target":"api","call":"get(\"/after/3\")","within":5,"obs":{"status":200,"headers":{"content-length":"29","content-type":"application/json"},"body":"{\"calls\": 4, \"state\": \"done\"}"}}
+{"claim":"every check under the when holds on one answer","event":"check","line":21,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"done\"","ok":true}
+{"claim":"every check under the when holds on one answer","event":"check","line":22,"check":"body json \".calls\" is","expected":"4","actual":"4","ok":true}
+{"claim":"a job started earlier is waited for","event":"when","line":26,"target":"api","call":"post(\"/jobs\")","obs":{"status":202,"headers":{"content-length":"31","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"running\"}"}}
+{"claim":"a job started earlier is waited for","event":"check","line":27,"check":"status is","expected":"202","actual":"202","ok":true}
+{"claim":"a job started earlier is waited for","event":"when","line":28,"target":"api","call":"get(\"/jobs/1\")","within":5,"obs":{"status":200,"headers":{"content-length":"28","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"done\"}"}}
+{"claim":"a job started earlier is waited for","event":"check","line":29,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"done\"","ok":true}
+{"claim":"a job started earlier is waited for","event":"when","line":30,"target":"api","call":"get(\"/jobs/1\")","obs":{"status":200,"headers":{"content-length":"28","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"done\"}"}}
+{"claim":"a job started earlier is waited for","event":"check","line":31,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"done\"","ok":true}
+{"claim":"a command is run again until it prints what the check says","event":"when","line":35,"target":"tick","call":"run()","within":5,"obs":{"stdout":"done\n","stderr":"","exit":0}}
+{"claim":"a command is run again until it prints what the check says","event":"check","line":36,"check":"stdout is","expected":"\"done\"","actual":"\"done\"","ok":true}

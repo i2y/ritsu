@@ -1,0 +1,2 @@
+エラー[E014]: E014-zero-seconds.geas:7:34: `within` で待つ時間は、1 秒以上にしてください
+     7 |   when api.get("/jobs/1") within 0 seconds

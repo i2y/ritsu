@@ -1,0 +1,1 @@
+{"geas":1,"ok":false,"file":"E014-on-an-action-on-a-pixie-app.geas","diagnostics":[{"code":"E014","severity":"error","file":"E014-on-an-action-on-a-pixie-app.geas","line":7,"col":27,"message":"`app.click(\"greet\")` acts on a screen, which `within` does not wait for: a screen settles after each action, and `advance(ms)` gives it more time","notes":[],"path":[]}]}

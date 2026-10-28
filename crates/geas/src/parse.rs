@@ -1,4 +1,4 @@
-//! The claims file into the model, with the checks that need no run (E001-E011).
+//! The claims file into the model, with the checks that need no run (E001-E014).
 //!
 //! The first E001 stops the parse: what follows a token the grammar does not allow
 //! cannot be read reliably. Every other problem is collected, the parser skipping
@@ -54,6 +54,8 @@ enum RawStep {
         /// Where a GUI call's arguments are written, by name (`path`, `name`,
         /// `text`, `key`, `ms`, `nth`, `field`, `into`), for E013 to point at.
         args_at: Vec<(&'static str, Pos)>,
+        /// `within <n> seconds` after the call (DESIGN §18).
+        wait: Option<Wait>,
     },
     /// `check` is None when its subject or its matcher is unknown.
     Then { check: Option<Check> },
@@ -83,6 +85,17 @@ const GUI_CALLS: &[&str] = &["open", "click", "input", "submit", "press", "advan
 /// The words that start what can follow a check: the next step, or what the top
 /// level holds. A node pattern ends before them.
 const NEXT_WORDS: &[&str] = &["when", "then", "and", "target", "claim", "mask", "env", "tz", "locale", "clock", "seed"];
+
+/// Units of time a wait is not counted in, for the note E001 gives after `within <n>`.
+const OTHER_UNITS: &[&str] = &["ms", "millisecond", "milliseconds", "s", "sec", "secs", "min", "mins", "minute", "minutes", "hour", "hours"];
+
+/// Where `within` goes: the note for one written where a step or a state goes.
+fn within_goes_after_a_call() -> Text {
+    tr!(
+        "`within` は `when` の呼び出しのすぐ後ろに書きます。その下のチェックがすべて成り立つまで待ちます（`when api.get(\"/jobs/1\") within 10 seconds`）",
+        "`within` goes right after a `when`'s call, and waits for every check under it: `when api.get(\"/jobs/1\") within 10 seconds`",
+    )
+}
 
 /// An E001 has been pushed and the parse stops.
 struct Stop;
@@ -165,6 +178,13 @@ impl P {
 
     fn e002(&mut self, tok: &Tok, en: String, ja: String) {
         self.diags.push(diag::error("E002", tok.line, tok.col, Text::new(ja, en)));
+    }
+
+    /// A note on the diagnostic pushed last.
+    fn note_last(&mut self, note: Text) {
+        if let Some(d) = self.diags.pop() {
+            self.diags.push(d.note(note));
+        }
     }
 
     /// Skips the rest of `line`, up to a `}` that may close the block on that line.
@@ -497,11 +517,11 @@ impl P {
                     steps.push(RawStep::Then { check });
                 }
                 _ => {
-                    return Err(self.expected(
-                        &tk,
-                        "`when`, `then`, `and` or `}`",
-                        "`when`、`then`、`and`、`}` のどれか",
-                    ));
+                    let stop = self.expected(&tk, "`when`, `then`, `and` or `}`", "`when`、`then`、`and`、`}` のどれか");
+                    if tk.kind == Kind::Ident && tk.text == "within" {
+                        self.note_last(within_goes_after_a_call());
+                    }
+                    return Err(stop);
                 }
             }
         }
@@ -535,6 +555,7 @@ impl P {
         } else {
             (self.call(&method, args, &close)?, vec![])
         };
+        let wait = self.wait()?;
         Ok(RawStep::When {
             target: target.text.clone(),
             target_pos: at(&target),
@@ -543,7 +564,63 @@ impl P {
             call_pos: at(&method),
             pos: at(kw),
             args_at,
+            wait,
         })
+    }
+
+    /// `within <n> seconds` after a call (DESIGN §18), or None when the call does not wait. A time
+    /// that is not a whole number, or a unit other than seconds, is E001; a time below 1 second or
+    /// above 60 is E014, and the parse goes on.
+    fn wait(&mut self) -> Result<Option<Wait>, Stop> {
+        if !(self.peek().kind == Kind::Ident && self.peek().text == "within") {
+            return Ok(None);
+        }
+        let kw = self.next();
+        let n = self.next();
+        if n.kind != Kind::Num {
+            return Err(self.expected(&n, "the time to wait, a whole number of seconds", "待つ時間（秒の整数）"));
+        }
+        let digits = n.text.strip_prefix('-').unwrap_or(&n.text);
+        if !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(self.e001(
+                &n,
+                format!("`{}` is not a whole number of seconds; write a whole number", n.text),
+                format!("`{}` は秒の整数ではありません。整数で書いてください", n.text),
+            ));
+        }
+        let unit = self.next();
+        if !(unit.kind == Kind::Ident && (unit.text == "second" || unit.text == "seconds")) {
+            let stop = self.expected(&unit, "`seconds`", "`seconds`");
+            if unit.kind == Kind::Ident && OTHER_UNITS.contains(&unit.text.as_str()) {
+                self.note_last(tr!(
+                    "待つ時間は秒で書きます。60 秒まで書けます（`within 60 seconds`）",
+                    "geas counts a wait in seconds, up to 60: `within 60 seconds`",
+                ));
+            }
+            return Err(stop);
+        }
+        // a number too long for u64 is far above 60
+        let secs = digits.parse::<u64>().unwrap_or(u64::MAX);
+        if n.text.starts_with('-') || secs == 0 {
+            self.diags.push(diag::error(
+                "E014",
+                n.line,
+                n.col,
+                tr!("`within` で待つ時間は、1 秒以上にしてください", "`within` waits at least 1 second"),
+            ));
+        } else if secs > Wait::MOST {
+            let w = format!("within {} {}", n.text, unit.text);
+            self.diags.push(diag::error(
+                "E014",
+                n.line,
+                n.col,
+                tr!(
+                    "一つのステップを待てるのは 60 秒までです（`{w}`）",
+                    "`{w}` is longer than geas waits for one step, 60 seconds",
+                ),
+            ));
+        }
+        Ok(Some(Wait { secs: secs.clamp(1, Wait::MOST), pos: at(&kw) }))
     }
 
     /// The arguments after `(`, up to and with the `)`, whatever the call.
@@ -883,6 +960,12 @@ impl P {
                     format!("a check cannot name `{other}`; it names stdout, stderr, exit, status, header, body, body json or screen"),
                     format!("`{other}` はチェックできません。チェックできるのは stdout、stderr、exit、status、header、body、body json、screen です"),
                 );
+                if other == "eventually" {
+                    self.note_last(tr!(
+                        "チェックが成り立つまで待つには、`when` の呼び出しの後ろに `within <n> seconds` を書いてください（`when api.get(\"/jobs/1\") within 10 seconds`）",
+                        "to wait until the checks hold, write `within <n> seconds` after the `when`'s call: `when api.get(\"/jobs/1\") within 10 seconds`",
+                    ));
+                }
                 self.skip_line(subj.line);
                 return Ok(None);
             }
@@ -1088,6 +1171,9 @@ impl P {
                 format!("`{}` is not a state; after a node's role come its name, `with value \"…\"`, a state (disabled, enabled, checked or unchecked) and `in <role>`, in that order", next.text),
                 format!("`{}` という状態はありません。ノードのロールの後ろには、名前、`with value \"…\"`、状態（disabled、enabled、checked、unchecked）、`in <ロール>` をこの順に書いてください", next.text),
             );
+            if next.text == "within" {
+                self.note_last(within_goes_after_a_call());
+            }
             self.skip_line(next.line);
             return Ok(None);
         }
@@ -1959,7 +2045,7 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
         let mut last: Option<(Option<&Call>, usize)> = None;
         for s in &c.steps {
             match s {
-                RawStep::When { target, target_pos, call, call_word, call_pos, pos, .. } => {
+                RawStep::When { target, target_pos, call, call_word, call_pos, pos, wait, .. } => {
                     last = Some((call.as_ref(), pos.line));
                     match kinds.get(target.as_str()) {
                         None => {
@@ -1992,7 +2078,7 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
                         }
                     }
                     match call {
-                        Some(call) => steps.push(Step::When { target: target.clone(), call: call.clone(), pos: *pos }),
+                        Some(call) => steps.push(Step::When { target: target.clone(), call: call.clone(), pos: *pos, wait: *wait }),
                         None => complete = false,
                     }
                 }
@@ -2013,10 +2099,56 @@ fn static_checks(raw: RawSpec, diags: &mut Vec<Diag>) -> Option<Spec> {
         claims.push(Claim { name: c.name.clone(), steps, pos: c.pos });
     }
     gui_checks(&raw.claims, &kinds, diags);
+    wait_checks(&raw.claims, diags);
     if !complete || targets.len() != raw.targets.len() {
         return None;
     }
     Some(Spec { targets, claims, masks: raw.masks })
+}
+
+/// E014 (DESIGN §18): `within` after an action on a screen, which settles after each action
+/// instead, and `within` on a `when` with no check under it to wait for. The time itself is held
+/// to 1 to 60 seconds as it is read.
+fn wait_checks(claims: &[RawClaim], diags: &mut Vec<Diag>) {
+    for c in claims {
+        for (i, s) in c.steps.iter().enumerate() {
+            let RawStep::When { target, call, wait: Some(wait), .. } = s else {
+                continue;
+            };
+            if let Some(call) = call
+                && call.observes() == Observes::Screen
+            {
+                let shown = format!("{target}.{}", call.display());
+                diags.push(diag::error(
+                    "E014",
+                    wait.pos.line,
+                    wait.pos.col,
+                    tr!(
+                        "`{shown}` は画面への操作なので、`within` では待てません。画面は操作のたびに落ち着きます。時間が足りなければ `advance(ms)` で進めてください",
+                        "`{shown}` acts on a screen, which `within` does not wait for: a screen settles after each action, and `advance(ms)` gives it more time",
+                    ),
+                ));
+                continue;
+            }
+            if !matches!(c.steps.get(i + 1), Some(RawStep::Then { .. })) {
+                diags.push(
+                    diag::error(
+                        "E014",
+                        wait.pos.line,
+                        wait.pos.col,
+                        tr!(
+                            "`within` は、この `when` の下のチェックが成り立つまで待ちます。この `when` の下にはチェックがありません",
+                            "`within` waits until the checks under this `when` hold, and it has none",
+                        ),
+                    )
+                    .note(tr!(
+                        "待って確かめたいことを `then` で書くか、`within` を外してください",
+                        "write under it, with `then`, what to wait for, or leave out `within`",
+                    )),
+                );
+            }
+        }
+    }
 }
 
 /// E006: a call its target does not take.
@@ -2265,7 +2397,7 @@ mod tests {
         assert_eq!((claim.name.as_str(), claim.pos.line), ("adds", 5));
         assert_eq!(claim.steps.len(), 3);
         match &claim.steps[0] {
-            Step::When { target, call: Call::Run(args), pos } => {
+            Step::When { target, call: Call::Run(args), pos, wait: None } => {
                 assert_eq!((target.as_str(), pos.line, pos.col), ("calc", 6, 3));
                 assert_eq!(args, &["2", "+", "3"]);
             }
@@ -2479,6 +2611,36 @@ mod tests {
                    claim \"ok before and after\" {\n  when calc.run()\n  when app.input(\"a\")\n  when app.click(\"b\")\n  when calc.run()\n}\n\
                    claim \"between\" {\n  when app.input(\"a\")\n  when calc.run()\n  when app.click(\"b\")\n}\n";
         assert_eq!(errs(src), vec![("E012", 15, 3)]);
+    }
+
+    #[test]
+    fn a_when_that_waits() {
+        let api = "target api {\n  serve \"python3 s.py {port}\"\n  port auto\n}\ntarget calc {\n  run \"x\"\n}\n";
+        let src = format!(
+            "{api}claim \"x\" {{\n  when api.get(\"/jobs/1\") within 10 seconds\n  then body json \".state\" is \"done\"\n  \
+             when calc.run() within 1 second\n  then stdout is \"done\"\n  when api.get(\"/jobs\")\n  then status is 200\n}}\n"
+        );
+        let spec = parse(&src).unwrap();
+        let waits: Vec<Option<(u64, usize, usize)>> = spec.claims[0]
+            .steps
+            .iter()
+            .filter_map(|s| match s {
+                Step::When { wait, .. } => Some(wait.map(|w| (w.secs, w.pos.line, w.pos.col))),
+                Step::Then(_) => None,
+            })
+            .collect();
+        assert_eq!(waits, [Some((10, 9, 27)), Some((1, 11, 19)), None]);
+        let one = |when: &str| errs(&format!("{api}claim \"x\" {{\n  when {when}\n  then status is 200\n}}\n"));
+        assert_eq!(one("api.get(\"/\") within 0 seconds"), vec![("E014", 9, 28)]);
+        assert_eq!(one("api.get(\"/\") within 61 seconds"), vec![("E014", 9, 28)]);
+        assert!(parse(&format!("{api}claim \"x\" {{\n  when api.get(\"/\") within 60 seconds\n  then status is 200\n}}\n")).is_ok());
+        assert_eq!(one("api.get(\"/\") within 2.5 seconds"), vec![("E001", 9, 28)]);
+        assert_eq!(one("api.get(\"/\") within 2 minutes"), vec![("E001", 9, 30)]);
+        assert_eq!(one("api.get(\"/\") within 2"), vec![("E001", 10, 3)]);
+        // a screen action settles by itself, and a wait needs checks under it to wait for
+        assert_eq!(one("api.open(\"/\") within 2 seconds"), vec![("E014", 9, 22), ("E007", 10, 8)]);
+        let none = format!("{api}claim \"x\" {{\n  when api.get(\"/\") within 2 seconds\n  when api.get(\"/\")\n  then status is 200\n}}\n");
+        assert_eq!(errs(&none), vec![("E014", 9, 21)]);
     }
 
     #[test]

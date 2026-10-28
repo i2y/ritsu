@@ -108,6 +108,63 @@ pub fn golden(name: &str, actual: &str) {
     ritsu_testkit::golden(root().join("tests/golden").join(name), actual);
 }
 
+/// What a run printed or wrote, with what a wait spent written the same in every run
+/// (DESIGN §18): a wait whose time ran out says how many calls it made and how long they
+/// took, `27 calls in 3.0 s`, `3.0 秒で 27 回` and `"tries":27,"ms":3004`, and a call that
+/// failed while waiting says how long after the first it came. Those differ from one run
+/// to the next; the goldens hold `<n>` and `<t>`, and the pages are compared through this
+/// as well, so that they show the numbers of a real run.
+pub fn steady(text: &str) -> String {
+    let mut s = text.replace(" call in ", " calls in ");
+    s = number_before(&s, " calls in ", "<n>");
+    s = number_after(&s, " calls in ", "<t>");
+    s = number_before(&s, " 秒で ", "<t>");
+    s = number_after(&s, " 秒で ", "<n>");
+    s = number_after(&s, "\"tries\":", "<n>");
+    s = number_after(&s, "\"ms\":", "<t>");
+    s = number_after(&s, " of the wait, ", "<t>");
+    number_after(&s, "一回目から ", "<t>")
+}
+
+fn is_number(c: char) -> bool {
+    c.is_ascii_digit() || c == '.'
+}
+
+/// `text` with the number written right before each `anchor` replaced by `with`.
+fn number_before(text: &str, anchor: &str, with: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(i) = rest.find(anchor) {
+        let head = &rest[..i];
+        let kept = head.trim_end_matches(is_number);
+        out.push_str(kept);
+        if kept.len() < head.len() {
+            out.push_str(with);
+        }
+        out.push_str(anchor);
+        rest = &rest[i + anchor.len()..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `text` with the number written right after each `anchor` replaced by `with`.
+fn number_after(text: &str, anchor: &str, with: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(i) = rest.find(anchor) {
+        out.push_str(&rest[..i + anchor.len()]);
+        let tail = &rest[i + anchor.len()..];
+        let left = tail.trim_start_matches(is_number);
+        if left.len() < tail.len() {
+            out.push_str(with);
+        }
+        rest = left;
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Whether `tool args…` runs and succeeds.
 pub fn have(tool: &str, args: &[&str]) -> bool {
     ritsu_testkit::tools::runs(tool, args)

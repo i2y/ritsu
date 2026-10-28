@@ -311,6 +311,38 @@ ok 4 - the note is a field of its own
 
 ほかの GUI（デスクトップのアクセシビリティ API やエミュレーター）は、ドライバーを通して操作します。ドライバーは、操作を JSON の行で受け取り、そのたびに画面を返すプログラムです。操作と、ドライバーとのやりとりの形は [skills/geas/gui.md](../../skills/geas/gui.md)（英語）にあります。
 
+## あとで出る結果を待つ
+
+キューに仕事を渡すサービスは、仕事が終わる前に答えを返します。その結果についての主張は、結果が出るまで待たなければなりません。`when` の呼び出しの後ろに `within <n> seconds` を書くと、geas は、その `when` の下のチェックが一つの結果でそろって成り立つまで、100 ms ごとに同じ呼び出しを繰り返します。待つのは一回目の呼び出しから書いた時間までで、60 秒まで書けます。[examples/jobs](examples/jobs) は、受け付けたジョブが 0.5 秒後に終わるサービスです。
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+…
+claim "a job finishes in the background" {
+  when api.post("/jobs", body: "12")
+  then status is 202
+  when api.get("/jobs/1") within 3 seconds
+  then body json ".state" is "done"
+  and  body json ".result" is 144
+}
+```
+
+主張は、二つのチェックがそろって成り立った最初の結果から先に進みます。ジャーナルには、その結果と `"within":3` を書き、何回呼んだかは書きません。同じサービスなら毎回同じバイト列になり、ドリフトは待って得た結果を比べます。時間が切れたときは、最後の結果で主張が成り立たず、何回呼んだかも出します。エージェントが終わったジョブの状態の名前を変えると、待つ時間が切れます。
+
+```text
+not ok 2 - a job finishes in the background
+    examples/jobs/jobs.geas:20: 3 秒のうちに、下のチェックがそろって成り立つ結果はありませんでした（3.0 秒で 30 回呼びました）。下のチェックは最後の結果を見ています
+        20 |   when api.get("/jobs/1") within 3 seconds
+    examples/jobs/jobs.geas:21: body json ".state" is "done" のはずが、実際は "finished"
+        21 |   then body json ".state" is "done"
+…
+```
+
+読み出しも POST で呼ぶ API のために、`post` と `run` も待てます。ただ、呼び出しは書いたとおりに繰り返すので、その呼び出しがすることも繰り返されます。読み出しの呼び出しがあるなら、そちらで待ってください。画面はこの方法では待てません（E014）。geas は操作のたびに画面が落ち着くのを待ちます。時間が足りなければ `advance(ms)` で進めます。
+
 ## 言語
 
 `when` はターゲットの呼び出しで、`then` と `and` がその結果をチェックします。
@@ -331,7 +363,7 @@ ok 4 - the note is a field of its own
   = その環境変数の名前を、同じ行に書いてください（`clock "2026-08-29T09:00:00+09:00" env "NOW"`）
 ```
 
-どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 36 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
+どの診断にも、コードと場所と、そうなる例が付きます。最後まで走れなかった主張なら、上の E035 のように、そこまでの実行が例になります。`geas explain <code>` は、そのコードがいつ出るか、ふつうはどう直すか、そのコードが出る最小の主張のファイルを出します。診断のコードは全部で 37 種類あり、`geas explain --all --lang ja` で全部を日本語で読めます。
 
 `--jobs 4` を付けると、主張を四つまで並列に走らせます。`port auto` のサービスはそれぞれ別のポートで動きます。報告もジャーナルもベースラインも主張の順に書くので、一つずつ走らせたときとバイト単位で同じです。あるターゲットを使う主張どうしが、geas から見えない状態（ファイルやデータベース）を共有しているなら、`serial` を書いて並列に走らないようにします。言語の全体は [skills/geas/language.md](../../skills/geas/language.md)（英語）にあります。
 
@@ -416,6 +448,7 @@ geas: エージェントが書いたコードに、人が読んで確かめた�
 | [tally-go](examples/tally-go) | 同じサービスの Go 版。`-cover` を付けてビルドする |
 | [tally-rust](examples/tally-rust) | Rust のコマンドライン。`-C instrument-coverage` を付けてビルドする |
 | [web-greeter](examples/web-greeter) | Chrome で開くページとそのサービス。固定を全部使う |
+| [jobs](examples/jobs) | 答えを返したあとでジョブが終わるサービスと、`within` でそれを待つ主張 |
 | [pixie-greeter](examples/pixie-greeter) | pixie のデスクトップアプリ。pixie でビルドして、主張のファイルの横に置く |
 
 どの例にも、何を見せるか、どう走らせるか、出力のどこを見ればよいかを書いた README（英語）があります。

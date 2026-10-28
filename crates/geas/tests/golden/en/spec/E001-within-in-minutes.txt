@@ -1,0 +1,3 @@
+error[E001]: E001-within-in-minutes.geas:7:36: expected `seconds`, found `minute`
+     7 |   when api.get("/jobs/1") within 1 minute
+  = geas counts a wait in seconds, up to 60: `within 60 seconds`

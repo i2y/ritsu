@@ -1,0 +1,12 @@
+{"claim":"a job is accepted and starts running","event":"when","line":12,"target":"api","call":"post(\"/jobs\", body: \"12\")","obs":{"status":202,"headers":{"content-length":"31","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"running\"}"}}
+{"claim":"a job is accepted and starts running","event":"check","line":13,"check":"status is","expected":"202","actual":"202","ok":true}
+{"claim":"a job is accepted and starts running","event":"check","line":14,"check":"body json \".state\" is","expected":"\"running\"","actual":"\"running\"","ok":true}
+{"claim":"a job finishes in the background","event":"when","line":18,"target":"api","call":"post(\"/jobs\", body: \"12\")","obs":{"status":202,"headers":{"content-length":"31","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"running\"}"}}
+{"claim":"a job finishes in the background","event":"check","line":19,"check":"status is","expected":"202","actual":"202","ok":true}
+{"claim":"a job finishes in the background","event":"when","line":20,"target":"api","call":"get(\"/jobs/1\")","within":3,"tries":<n>,"ms":<t>,"obs":{"status":200,"headers":{"content-length":"47","content-type":"application/json"},"body":"{\"id\": \"1\", \"state\": \"finished\", \"result\": 144}"}}
+{"claim":"a job finishes in the background","event":"check","line":21,"check":"body json \".state\" is","expected":"\"done\"","actual":"\"finished\"","ok":false}
+{"claim":"a job finishes in the background","event":"check","line":22,"check":"body json \".result\" is","expected":"144","actual":"144","ok":true}
+{"claim":"a body that is not a number is refused","event":"when","line":26,"target":"api","call":"post(\"/jobs\", body: \"twelve\")","obs":{"status":400,"headers":{"content-length":"43","content-type":"application/json"},"body":"{\"error\": \"the body is not a whole number\"}"}}
+{"claim":"a body that is not a number is refused","event":"check","line":27,"check":"status is","expected":"400","actual":"400","ok":true}
+{"claim":"an unknown job is not found","event":"when","line":31,"target":"api","call":"get(\"/jobs/9\")","obs":{"status":404,"headers":{"content-length":"24","content-type":"application/json"},"body":"{\"error\": \"no such job\"}"}}
+{"claim":"an unknown job is not found","event":"check","line":32,"check":"status is","expected":"404","actual":"404","ok":true}

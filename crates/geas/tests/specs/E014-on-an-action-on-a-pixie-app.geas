@@ -1,0 +1,9 @@
+target app {
+  pixie "build/greeter"
+}
+
+claim "greets" {
+  when app.open()
+  when app.click("greet") within 5 seconds
+  then screen contains text "Hello"
+}

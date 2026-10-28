@@ -267,3 +267,36 @@ fn the_openspec_scenarios_in_english() {
 fn the_openspec_scenarios_in_japanese() {
     openspec_story("ja", "greeter.ja.geas", "ja/openspec", " --lang ja");
 }
+
+/// The story of the jobs service: the claim that waits for a job to finish holds, and an agent's
+/// change to the state a finished job reports makes the wait run out of time and fail on the last
+/// answer. How many calls a wait made and how long they took differ from run to run, so the golden
+/// holds them as `steady` writes them.
+fn jobs_story(lang: &str, flag: &str) {
+    if !python3("the jobs service's story in the READMEs") {
+        return;
+    }
+    let mut t = Session::new(&format!("readme-jobs-{lang}"));
+    copy_example("jobs", &t.s);
+    let spec = "examples/jobs/jobs.geas";
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 0);
+    t.s.write("examples/jobs/server.py", &repo_file("tests/changes/jobs/after/server.py"));
+    assert_eq!(t.geas(&format!("geas check {spec}{flag}")), 1);
+    t.status(1);
+    let text = std::mem::take(&mut t.text);
+    golden(&format!("{lang}/readme/jobs.txt"), &steady(&text));
+    // the journal is the same in either language; the skill quotes the wait that ran out
+    if lang == "en" {
+        golden("en/readme/jobs.journal.jsonl", &steady(&t.s.read("examples/jobs/.geas/jobs.journal.jsonl")));
+    }
+}
+
+#[test]
+fn the_jobs_in_english() {
+    jobs_story("en", "");
+}
+
+#[test]
+fn the_jobs_in_japanese() {
+    jobs_story("ja", " --lang ja");
+}

@@ -1,0 +1,9 @@
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+
+claim "a job finishes" {
+  when api.get("/jobs/1") within 90 seconds
+  then body json ".state" is "done"
+}

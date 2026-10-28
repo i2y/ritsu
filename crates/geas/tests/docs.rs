@@ -6,7 +6,9 @@
 //!   an excerpt of a claims file in the repository;
 //! - every console block that shows what a command printed, and every text block that starts the
 //!   way geas's output does, is lines of a golden file as they are, `$ ` lines included, with `…`
-//!   standing for lines left out (tests/readme.rs records the stories the READMEs tell);
+//!   standing for lines left out (tests/readme.rs records the stories the READMEs tell); the calls
+//!   a wait made and the time they took differ from run to run, so both sides are compared as
+//!   `steady` writes them;
 //! - every code they name is one geas has, and the count of codes they give is the count;
 //! - every geas command and option they name is in `geas --help`;
 //! - every relative link leads to a file.
@@ -159,7 +161,7 @@ fn goldens() -> Vec<(PathBuf, String)> {
     walk(&root().join("tests/golden"), "jsonl", &mut files);
     walk(&root().join("tests/golden"), "json", &mut files);
     files.into_iter().map(|p| {
-        let text = read(&p);
+        let text = steady(&read(&p));
         (p, text)
     }).collect()
 }
@@ -184,7 +186,8 @@ fn every_output_on_the_pages_is_in_a_golden_file() {
             }
             held += 1;
             seen.insert(shown(&page));
-            if !goldens.iter().any(|(_, g)| excerpt_of(&lines, g)) {
+            let steadied: Vec<String> = lines.iter().map(|l| steady(l)).collect();
+            if !goldens.iter().any(|(_, g)| excerpt_of(&steadied, g)) {
                 wrong.push(format!("{}: not lines of any golden file:\n{}", shown(&page), lines.join("\n")));
             }
         }

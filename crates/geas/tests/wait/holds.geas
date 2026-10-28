@@ -1,0 +1,37 @@
+# Waits that hold: on the third call, on the fourth when every check has to
+# hold on one answer, on a job that is done 300 ms after it starts, and on a
+# command that prints "done" from its third run.
+
+target api {
+  serve "python3 later.py {port}"
+  port auto
+}
+
+target tick {
+  run "python3 tick.py"
+}
+
+claim "a wait holds on the call whose answer every check holds on" {
+  when api.get("/after/3") within 5 seconds
+  then body json ".state" is "done"
+}
+
+claim "every check under the when holds on one answer" {
+  when api.get("/after/3") within 5 seconds
+  then body json ".state" is "done"
+  and  body json ".calls" is 4
+}
+
+claim "a job started earlier is waited for" {
+  when api.post("/jobs")
+  then status is 202
+  when api.get("/jobs/1") within 5 seconds
+  then body json ".state" is "done"
+  when api.get("/jobs/1")
+  then body json ".state" is "done"
+}
+
+claim "a command is run again until it prints what the check says" {
+  when tick.run() within 5 seconds
+  then stdout is "done"
+}

@@ -372,6 +372,48 @@ Any other GUI (an accessibility API, an emulator) is reached through a driver: a
 the actions as JSON lines and answers each with the screen.
 [skills/geas/gui.md](../../skills/geas/gui.md) has the actions and the protocol.
 
+## An answer that comes later
+
+A service that hands its work to a queue answers before the work is done, and a claim about the
+result has to wait for it. `within <n> seconds` after a `when`'s call makes geas call again, every
+100 ms, until every check under that `when` holds on one answer, for up to that time from the first
+call (60 seconds at most). [examples/jobs](examples/jobs) is a service whose jobs finish half a
+second after it accepts them:
+
+```geas
+target api {
+  serve "python3 server.py {port}"
+  port auto
+}
+…
+claim "a job finishes in the background" {
+  when api.post("/jobs", body: "12")
+  then status is 202
+  when api.get("/jobs/1") within 3 seconds
+  then body json ".state" is "done"
+  and  body json ".result" is 144
+}
+```
+
+The claim goes on from the first answer both checks hold on. The journal writes that answer and
+`"within":3`, and nothing of how many calls it took, so the same service gives the same bytes in
+every run, and drift compares the answer the wait kept. When the time runs out, the claim fails on
+the last answer, and says how many calls geas made. After an agent renamed the state of a finished
+job, the wait runs out:
+
+```text
+not ok 2 - a job finishes in the background
+    examples/jobs/jobs.geas:20: within 3 seconds — no answer held every check under it (30 calls in 3.0 s); the checks below read the last one
+        20 |   when api.get("/jobs/1") within 3 seconds
+    examples/jobs/jobs.geas:21: body json ".state" is "done" — got "finished"
+        21 |   then body json ".state" is "done"
+…
+```
+
+A `post` or a `run` can wait too, for an API that reads with POST, but each call is made again as it
+is written, and so is what it does: wait on a read where there is one. A screen is not waited for
+this way (E014): geas lets it settle after each action, and `advance(ms)` gives it more time.
+
 ## The language
 
 A `when` is an action on a target; `then` and `and` check what it observed.
@@ -399,7 +441,7 @@ error[E011]: E011-clock-without-env.geas:2:1: `clock` cannot be kept for `calc` 
 
 Every diagnostic has a code, the place, and what leads to it: a claim that could not run carries the
 run that gets there, as E035 above. `geas explain <code>` says when a code appears, what usually
-fixes it, and the smallest claims file that gives it; there are 36 codes, and `--lang ja` prints
+fixes it, and the smallest claims file that gives it; there are 37 codes, and `--lang ja` prints
 them all in Japanese. `--jobs 4` runs up to four claims at once, each service on a port of its own
 (`port auto`); the report, the journal and the baseline come out in claim order, the same bytes as
 with one, and `serial` keeps a target's claims apart when they share state geas cannot see.
@@ -495,6 +537,7 @@ and JSON geas writes.
 | [tally-go](examples/tally-go) | the same service in Go, built with `-cover` |
 | [tally-rust](examples/tally-rust) | a command line in Rust, built with `-C instrument-coverage` |
 | [web-greeter](examples/web-greeter) | a page in Chrome and its service, every pin |
+| [jobs](examples/jobs) | a service whose jobs finish after it answers, and a claim that waits for one with `within` |
 | [pixie-greeter](examples/pixie-greeter) | a pixie desktop app, built with pixie and put beside the claims |
 
 Each has a README saying what it shows, how to run it, and what to look for.
