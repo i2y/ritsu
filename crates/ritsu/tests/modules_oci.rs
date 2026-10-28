@@ -4,8 +4,9 @@
 //! `get` and `versions`; each broken answer of a registry, which stops the fetch with nothing in the
 //! store; two fetches at once; the files of an entry changed in the store (E305) and in the module's
 //! copy; `fetch --rev` and `fetch <name>@<version>`; the signatures, with a cosign of the test's own
-//! that writes down how it is called, and with the real one (the tools level, offline); and a
-//! registry of the platforms level (`RITSU_TEST_REGISTRY`).
+//! that writes down how it is called, and with the real one (the tools level, offline); a key
+//! rotated between two revisions, which `fetch --rev`, `fetch` and `report` each check with the key
+//! of their own revision; and a registry of the platforms level (`RITSU_TEST_REGISTRY`).
 //!
 //! The modules are the example's (DESIGN 17.26), copied, named on the test's registry, each
 //! `require` from it.
@@ -32,6 +33,12 @@ const LANG_VARS: [&str; 10] = ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYO
 /// A cosign of the test's own: it writes the arguments it is called with, a line each call, and
 /// says no when `FAKE_COSIGN_EXIT` is not 0.
 const FAKE_COSIGN: &str = "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_COSIGN_LOG\"\nif [ -n \"$FAKE_COSIGN_EXIT\" ] && [ \"$FAKE_COSIGN_EXIT\" != 0 ]; then\n  echo 'Error: no matching signatures (the fake cosign of the test)' >&2\n  exit \"$FAKE_COSIGN_EXIT\"\nfi\n";
+
+/// A cosign of the test's own that checks keys: it writes the arguments it is called with, a line
+/// each call, and passes a reference only when the key file it is given has the bytes of the key the
+/// reference was signed with: the file under `$FAKE_COSIGN_SIGNED` named by the reference, its `/`,
+/// `:` and `@` made `_`.
+const KEYED_COSIGN: &str = "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_COSIGN_LOG\"\nkey=\"\"\nfor a in \"$@\"; do ref=\"$a\"; done\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"--key\" ]; then key=\"$2\"; fi\n  shift\ndone\nsigned=\"$FAKE_COSIGN_SIGNED/$(printf '%s' \"$ref\" | tr '/:@' '___')\"\nif [ -n \"$key\" ] && [ -f \"$signed\" ] && cmp -s \"$key\" \"$signed\"; then exit 0; fi\necho 'Error: no matching signatures (the keyed cosign of the test)' >&2\nexit 1\n";
 
 /// `path` made executable.
 fn executable(path: &Path) {
@@ -734,6 +741,104 @@ fn the_lines_of_a_module_from_a_registry_apply_to_what_it_requires() {
     assert_eq!(left(&store), Vec::<String>::new());
     let (code, out, err) = w.run_env("shop", &["check"], &env);
     assert_eq!(code, 0, "{out}{err}");
+}
+
+/// A key rotated between two revisions (DESIGN 17.12, 17.14). shop's revision `one` requires pricing
+/// 1.0.0, signed with the old key, and has the old key; `two` (the working tree) requires 1.1.0,
+/// signed with the new key, which took the old one's place. The cosign of this test passes a
+/// reference only with the key it was signed with. From an empty store, `fetch --rev one` checks
+/// 1.0.0 with the revision's key (written for cosign under the store's tmp/, and removed after), and
+/// `fetch` checks 1.1.0 with the working tree's (at its own path); each record names its key, and
+/// `check` passes. `report --base one`, from an empty store too, fetches both and checks the base's
+/// lock with the base's key. The working tree's key does not pass 1.0.0.
+#[test]
+fn a_key_rotated_between_two_revisions() {
+    let w = World::new("oci-rotated");
+    let host = w.host();
+    executable(&w.t.write("bin/cosign", KEYED_COSIGN));
+    w.ok("tax", &["mod", "push"]);
+    for step in ["lock", "fetch", "push"] {
+        w.ok("pricing-1.0.0", &["mod", step]);
+    }
+    w.ok("pricing", &["mod", "lock"]);
+    w.ok("pricing", &["mod", "push"]);
+    let (old, _) = w.pushed("acme/pricing", "1.0.0");
+    let (new, _) = w.pushed("acme/pricing", "1.1.0");
+    let (old_key, new_key) = ("-----BEGIN PUBLIC KEY-----\nthe old key of the test\n-----END PUBLIC KEY-----\n", "-----BEGIN PUBLIC KEY-----\nthe new key of the test\n-----END PUBLIC KEY-----\n");
+    let (r10, r11) = (format!("{host}/acme/pricing@{old}"), format!("{host}/acme/pricing@{new}"));
+    w.t.write(&format!("signed/{}", r10.replace(['/', ':', '@'], "_")), old_key);
+    w.t.write(&format!("signed/{}", r11.replace(['/', ':', '@'], "_")), new_key);
+    let signed = w.path("signed");
+    let env = |store: &Path| -> Vec<(String, String)> {
+        vec![(store::VARIABLE.to_string(), store.display().to_string()), ("FAKE_COSIGN_SIGNED".to_string(), signed.display().to_string())]
+    };
+    let git = |args: &[&str]| {
+        let o = Command::new("git")
+            .current_dir(w.path("shop"))
+            .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    };
+    // `one`: pricing 1.0.0, the line for pricing, the old key
+    let line = format!("signature \"{host}/acme/pricing\" key \"keys/acme.pub\"");
+    let at = |v: &str| format!("require pricing oci \"{host}/acme/pricing\" {v}\n");
+    let m = w.t.read("shop/ritsu.mod").replace(&at("1.1.0"), &at("1.0.0"));
+    w.t.write("shop/ritsu.mod", format!("{m}\n{line}\n"));
+    w.t.write("shop/keys/acme.pub", old_key);
+    w.ok("shop", &["mod", "lock"]);
+    git(&["init", "-q"]);
+    git(&["add", "-A"]);
+    git(&["commit", "-q", "-m", "pricing 1.0.0, the old key"]);
+    git(&["tag", "one"]);
+    // `two`: pricing 1.1.0, the new key in the old one's place
+    w.t.write("shop/ritsu.mod", w.t.read("shop/ritsu.mod").replace(&at("1.0.0"), &at("1.1.0")));
+    w.t.write("shop/keys/acme.pub", new_key);
+    w.ok("shop", &["mod", "lock"]);
+    git(&["commit", "-q", "-a", "-m", "pricing 1.1.0, the new key"]);
+    std::fs::remove_file(w.path("cosign.log")).ok();
+
+    let store = w.path("store-rotated");
+    let e = env(&store);
+    let (code, out, err) = w.run_env("shop", &["mod", "fetch", "--rev", "one"], &pairs(&e));
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(out.contains(&format!("fetched {host}/acme/pricing 1.0.0 ({old})\n  checked its signature against `{line}`\n")) && out.ends_with("fetched 2 modules\n"), "{out}");
+    let (code, out, err) = w.run_env("shop", &["mod", "fetch"], &pairs(&e));
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(out, format!("fetched {host}/acme/pricing 1.1.0 ({new})\n  checked its signature against `{line}`\nfetched 1 module (1 here already)\n"));
+    let calls = w.cosign_calls();
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    let key = calls[0].strip_prefix("verify --key ").and_then(|c| c.strip_suffix(&format!(" --allow-http-registry {r10}"))).unwrap_or_else(|| panic!("{calls:?}"));
+    assert!(key.contains("/store-rotated/tmp/key-") && !Path::new(key).exists(), "{key}");
+    let disk = std::fs::canonicalize(w.path("shop/keys/acme.pub")).unwrap();
+    assert_eq!(calls[1], format!("verify --key {} --allow-http-registry {r11}", disk.display()));
+    assert_eq!(left(&store), Vec::<String>::new());
+    let digest_of = |k: &str| format!("sha256:{}", reg::sha256_hex(k.as_bytes()));
+    let policies = |d: &str| -> Vec<String> { record(&store, d)["verified"].as_array().unwrap().iter().map(|v| v["policy"].as_str().unwrap().to_string()).collect() };
+    assert_eq!((policies(&old), policies(&new)), (vec![format!("{line} {}", digest_of(old_key))], vec![format!("{line} {}", digest_of(new_key))]));
+    let (code, out, err) = w.run_env("shop", &["check"], &pairs(&e));
+    assert_eq!(code, 0, "{out}{err}");
+
+    // the report fetches both into an empty store, and checks the base's lock with the base's key
+    let report = w.path("store-report");
+    let (code, out, err) = w.run_env("shop", &["mod", "report", "--base", "one", "--format", "json"], &pairs(&env(&report)));
+    assert_eq!(code, 0, "{out}{err}");
+    let v = json(&out);
+    assert_eq!((&v["check"]["base"]["errors"], &v["check"]["head"]["errors"], &v["modules"][0]["change"]), (&serde_json::json!(0), &serde_json::json!(0), &serde_json::json!("upgraded")), "{out}");
+    assert!(err.contains(&format!("fetched {host}/acme/pricing 1.0.0 ({old})\n  checked its signature against `{line}`\n")), "{err}");
+    assert_eq!(w.cosign_calls().len(), 4);
+    assert_eq!(left(&report), Vec::<String>::new());
+
+    // the working tree's key does not pass 1.0.0: what the base's lock is checked with is the base's
+    let (code, out, err) = w.run_env("shop", &["mod", "fetch", &format!("{host}/acme/pricing@1.0.0")], &pairs(&env(&w.path("store-wrong-key"))));
+    assert_eq!((code, out.as_str()), (1, ""), "{err}");
+    assert!(err.contains(&format!("the signature of `{host}/acme/pricing` 1.0.0 does not pass `{line}`; cosign said:\nError: no matching signatures (the keyed cosign of the test)")), "{err}");
 }
 
 /// Whether `program` is on the PATH.

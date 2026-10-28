@@ -18,10 +18,13 @@
 //!    reads a changed module, compared as the base's lock reads it and as the head's does: the
 //!    answers of yours that change.
 //!
-//! Nothing is fetched here: a version the store does not have stops the report (exit 2) with the
-//! `ritsu mod fetch` to run.
+//! What the two locks pin is fetched first, as `ritsu mod fetch --rev <base>` and `ritsu mod fetch`
+//! (or `--rev <head>`) fetch it ([`fetch::tree`]), the base's with the base's key files; and before
+//! a changed module's two versions are compared, what the lock of each pins (each is read as a
+//! module of its own). Nothing is asked of a registry when the store has them; what was fetched is
+//! said on the standard error, and what stops a fetch of the two locks stops the report (exit 2).
 
-use super::Ctx;
+use super::{Ctx, fetch};
 use super::diff::{self, Behavior, ModDiff, Module, Spot};
 use ritsu_base::cli::Args;
 use ritsu_base::diag::Severity;
@@ -209,6 +212,14 @@ impl Report {
             Some(h) => Some(Rc::new(GitRevision::open(root, h).map_err(|t| vec![t])?)),
             None => None,
         };
+        // what each lock pins, fetched before either tree is read
+        for (files, rev) in [(Some(base_files.clone()), Some(base)), (head_files.clone(), head)] {
+            let done = diff::within(files, || fetch::tree(root)).map_err(|t| {
+                let (ja, en) = (Report::lock_of(rev, Lang::Ja, "`"), Report::lock_of(rev, Lang::En, "`"));
+                vec![tr!("{} のモジュールを取り出せません。", "cannot fetch the modules of {}: ", ja; en).then(&t)]
+            })?;
+            fetch::told(lang, &done);
+        }
         let base_tree = match diff::within(Some(base_files.clone()), || graph::load(root)) {
             Ok(t) => t,
             Err(Problem::Stop(said)) => return Err(said),
@@ -448,6 +459,16 @@ impl Sides<'_> {
             None => n.prefix.clone(),
         };
         let digest = |n: &Node| n.digests().map(|d| d.0.to_string());
+        // each version is read as a module of its own: what its own lock pins, fetched first
+        let fetched = |n: &Node, files: Option<Rc<dyn Files>>| -> Result<(), Text> {
+            let l = label(n);
+            let done = diff::within(files, || fetch::tree(&n.dir)).map_err(|t| tr!("`{l}` が読むモジュールを取り出せません。", "cannot fetch the modules `{l}` reads: ").then(&t))?;
+            fetch::told(lang, &done);
+            Ok(())
+        };
+        if let Err(t) = fetched(b, Some(self.base_files.clone())).and_then(|()| fetched(h, self.head_files.clone())) {
+            return Some(Err(t));
+        }
         let old = Module::through(&b.dir, label(b), digest(b), Some(self.base_files.clone()));
         let new = Module::through(&h.dir, label(h), digest(h), self.head_files.clone());
         Some(match (old, new) {
@@ -513,9 +534,10 @@ fn node_of(tree: &Tree, rel: &str) -> Option<usize> {
 // ── The module at hand with the base's lock ─────────────────────────────
 
 /// The files of the module at hand as the head has them, with the base's `ritsu.mod` and
-/// `ritsu.lock` (none, where the base has none), and the modules a path reaches in the base's tree
-/// and the module's copy of the store as the base has them. A module from a registry is read from
-/// the store by the base's lock. Nothing is written.
+/// `ritsu.lock` (none, where the base has none), and the modules a path reaches in the base's tree,
+/// the module's copy of the store and the key files of the base's `signature` lines as the base has
+/// them (the records of the checks name the base's keys, DESIGN 17.14). A module from a registry is
+/// read from the store by the base's lock. Nothing is written.
 struct BaseLock {
     laid: BTreeMap<PathBuf, Option<Vec<u8>>>,
     /// The directories read from the base.
@@ -528,9 +550,18 @@ struct BaseLock {
 impl BaseLock {
     fn new(root: &Path, rev: &str, base: Rc<dyn Files>, under: Option<Rc<dyn Files>>, tree: &Tree) -> BaseLock {
         let read = |name: &str| diff::within(Some(base.clone()), || ritsu_base::fs::raw::read(&root.join(name)).ok());
-        let laid = [manifest::FILE, lock::FILE].into_iter().map(|n| (fold(&root.join(n)), read(n))).collect();
+        let laid: BTreeMap<PathBuf, Option<Vec<u8>>> = [manifest::FILE, lock::FILE].into_iter().map(|n| (fold(&root.join(n)), read(n))).collect();
         let mut routes: Vec<PathBuf> = tree.nodes.iter().skip(1).filter(|n| n.path.is_some()).map(|n| fold(&n.dir)).collect();
         routes.push(fold(&root.join(store::VENDOR)));
+        if let Some(Some(bytes)) = laid.get(&fold(&root.join(manifest::FILE)))
+            && let Ok(m) = manifest::parse(bytes, manifest::FILE)
+        {
+            for s in &m.signatures {
+                if let manifest::Policy::Key { path, .. } = &s.policy {
+                    routes.push(fold(&root.join(path)));
+                }
+            }
+        }
         BaseLock { laid, routes, base, under, rev: rev.to_string() }
     }
 

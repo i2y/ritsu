@@ -18,6 +18,10 @@
 //! read from the store by that lock; or, for `@<name>@<version>`, the module at hand's `ritsu.mod`
 //! and lock laid over as they would be if it required that version ([`fs::Overlay`]), so that the
 //! `@` paths in the dependency's file are read at the versions Minimal Version Selection chooses then.
+//!
+//! Nothing here asks a registry. A version that no store has stops a side with what to fetch;
+//! [`try_open`] tells it apart ([`Unopened::Missing`]), so that `ritsu mod diff` fetches it and
+//! opens the side again.
 
 use super::graph::{self, Problem};
 use super::lock::Lock;
@@ -117,10 +121,54 @@ impl Opened {
     }
 }
 
+/// Why a side cannot be opened.
+#[derive(Debug)]
+pub enum Unopened {
+    /// A version that no store has: once it is fetched, the side may open.
+    Missing(Box<Missing>),
+    /// Anything else.
+    Said(Text),
+}
+
+/// A version of a module that is in neither the store nor the module's copy of it, and what to say
+/// of it (`ritsu mod diff` fetches it; the diffs of the languages, which do not fetch, say it).
+#[derive(Debug)]
+pub struct Missing {
+    pub module: ModuleName,
+    pub version: Version,
+    pub said: Text,
+}
+
+impl Unopened {
+    fn missing(module: ModuleName, version: Version, said: Text) -> Unopened {
+        Unopened::Missing(Box::new(Missing { module, version, said }))
+    }
+}
+
+impl From<Text> for Unopened {
+    fn from(t: Text) -> Unopened {
+        Unopened::Said(t)
+    }
+}
+
+impl From<Unopened> for Text {
+    fn from(u: Unopened) -> Text {
+        match u {
+            Unopened::Missing(m) => m.said,
+            Unopened::Said(t) => t,
+        }
+    }
+}
+
 /// The side `a` made ready to read. Err, with what to say (exit 2): git cannot start, the revision
 /// is not one, `@<name>@<version>` outside a module, of a name the module does not require, or of a
 /// version that is in neither the store nor the module's copy of it.
 pub fn open(a: &Address) -> Result<Opened, Text> {
+    try_open(a).map_err(Text::from)
+}
+
+/// [`open`], with a version that is in no store told apart from what else stops it.
+pub fn try_open(a: &Address) -> Result<Opened, Unopened> {
     match a {
         Address::Path(p) => Ok(Opened { path: p.clone(), files: None }),
         Address::Dependency { .. } => Ok(Opened { path: a.path(), files: None }),
@@ -135,7 +183,8 @@ pub fn open(a: &Address) -> Result<Opened, Text> {
                 return Err(tr!(
                     "`@{name}@{version}/…` は、`ritsu.mod` のあるモジュールの中でだけ書けます",
                     "`@{name}@{version}/…` is written only in a module, a directory with a `ritsu.mod`"
-                ));
+                )
+                .into());
             };
             let overlay = at_version(&root, name, version)?;
             Ok(Opened { path: a.path(), files: Some(Rc::new(overlay)) })
@@ -199,26 +248,34 @@ fn module_of_dependency(root: &Path, m: &manifest::Manifest, name: &str) -> Resu
 /// The module at `root` as it would be if it required its dependency `name` at `version`: its
 /// `ritsu.mod` with that `require` from the registry at that version, and the lock Minimal Version
 /// Selection chooses then, that version held (DESIGN 17.9.1), laid over the files of this thread.
-pub fn at_version(root: &Path, name: &str, version: &Version) -> Result<fs::Overlay, Text> {
+/// Err, [`Unopened::Missing`] for the first version the choice reaches that no store has.
+pub fn at_version(root: &Path, name: &str, version: &Version) -> Result<fs::Overlay, Unopened> {
     let file = root.join(manifest::FILE);
     let bytes = fs::raw::read(&file).map_err(|_| tr!("`ritsu.mod` を読めません", "cannot read `ritsu.mod`"))?;
     let m = manifest::parse(&bytes, manifest::FILE).map_err(|ds| ds.first().map(|d| d.message.clone()).unwrap_or_default())?;
     let module = module_of_dependency(root, &m, name)?;
     if find_version(Some(root), &module, version).is_none() {
-        return Err(fetch_version(name, version));
+        return Err(Unopened::missing(module, version.clone(), fetch_version(name, version)));
     }
     let without = m.removed(name).map_err(|e| e.text())?;
     let without = manifest::parse(without.as_bytes(), manifest::FILE).map_err(|ds| ds.first().map(|d| d.message.clone()).unwrap_or_default())?;
     let text = without.added(name, &Source::Oci { repository: module.to_string(), min: version.clone() }).map_err(|e| e.text())?;
     let mut only_mod = fs::Overlay::new(fs::current());
     only_mod.put(&file, text.clone());
+    let mut missing: Option<(ModuleName, Version)> = None;
     let chosen = fs::with(Rc::new(only_mod), || {
         graph::choose(root, |n, v| {
-            let Some((s, d)) = find_version(Some(root), n, v) else { return Err(Problem::Stop(vec![fetch_version(&n.to_string(), v)])) };
+            let Some((s, d)) = find_version(Some(root), n, v) else {
+                missing = Some((n.clone(), v.clone()));
+                return Err(Problem::Stop(vec![fetch_version(&n.to_string(), v)]));
+            };
             s.module_bytes(&d).ok_or_else(|| Problem::Stop(vec![fetch_version(&n.to_string(), v)]))
         })
     });
-    let mut chosen = chosen.map_err(|p| p.text())?;
+    let mut chosen = chosen.map_err(|p| match missing.take() {
+        Some((n, v)) => Unopened::missing(n, v, p.text()),
+        None => Unopened::Said(p.text()),
+    })?;
     chosen.versions.insert(module, version.clone());
     let lock: Lock = graph::lock_of(&chosen, |n, v| {
         let (s, d) = find_version(Some(root), n, v)?;

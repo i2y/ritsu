@@ -2174,22 +2174,22 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 **C.4 インターフェースの差と `ritsu mod diff`**（DESIGN 17.9.5、17.9.6）
 
 - `crates/ritsu/src/modules/diff.rs`：ファイルの追加と削除と変わり、`require` の変わり、振る舞いの差（rulec、koyomi、sekisho をこのプロセスの中で呼ぶ）、`api` の JSON と `Items` の比べ方、ファイルの頭の版、帳簿のデータの続き。計画から変えたところ（振る舞いは両方の版の全部の規則・日付・カレンダー・ゲートで比べる、api の JSON から除くもの、説明の差は壊しうる差の候補にしない、似た差を `{a,b,c}` にまとめる、変わらないファイルを一行にまとめる、言語の無いファイルの変わりは違いに数えない、終了コードの 2）は DESIGN 17.9.5 と 17.9.6 に書いた。
-- 置き場に無い版は、`ritsu mod fetch <名前>@<版>` を言って exit 2 で止まる。取り出しにつなぐのは D.5 である。
+- 読むモジュールが置き場に無いときの取り出しは、D.5 でつないだ（DESIGN 17.9.6）。
 - `crates/chobo/src/diffbase.rs`：二つの帳簿の本文を比べる `between` を、git から読む部分と分けて公開した。`chobo check --diff-base` の出力は変えていない。
 - 試験：`crates/ritsu/tests/modules_diff.rs`（5 件）。
   - 置き場の pricing の 1.0.0 → 1.1.0 と 1.1.0 → 2.0.0（英日、三つの形）。
   - 机（koyomi、sekisho、rulec が一度に入る材料）と在庫の帳簿の二つの版を、ディレクトリとして比べる（英日、三つの形）。帳簿は棚の下限を上げて E050、`receive` のキーを狭めて E051。
-  - 振る舞いの差が、それぞれの言語の diff の言うことと同じであること。二つのファイルを渡す形。同じ版どうし（exit 0。見出しの二つの側にダイジェストの先頭が付き、`files_digest` は `ritsu mod list` の値と同じ）。exit 2 の五つ。
+  - 振る舞いの差が、それぞれの言語の diff の言うことと同じであること。二つのファイルを渡す形。同じ版どうし（exit 0。見出しの二つの側にダイジェストの先頭が付き、`files_digest` は `ritsu mod list` の値と同じ）。exit 2 の四つ（置き場に無い版で止まる試験は、D.5 で取り出しの試験に替えた）。
   - golden は `tests/golden/modules/diff-*` の 30（同じ版どうしの `diff-same` を含む。ダイジェストは伏せる）。chobo の `tests/diffbase.rs` は変えずに通る。
 
 **C.5 `ritsu mod report`**（DESIGN 17.10）
 
-- `crates/ritsu/src/modules/report.rs`：二つの木を比べて変わったモジュールを七つの変わり方で挙げる、手元のモジュールを head と base の見せ方（手元のファイルは head、`ritsu.mod`・`ritsu.lock`・同梱のコピー・パスの依存は base）で `ritsu check --deps-warnings` にかける、新しい診断と消えた診断を、参照をたどって変わったモジュールに割り当てる、変わったモジュールごとの `ritsu mod diff`、手元のファイルの答えのうち変わるもの、markdown（`@` をコードの書き方に、表は 50 行まで、60,000 字で切るときは `<details>` とコードの囲みを閉じる）、text、JSON、`--fail-on-change`。計画から変えたところは DESIGN 17.10 と 17.21 に書いた。取り出しは C.4 と同じく、まだつないでいない。
+- `crates/ritsu/src/modules/report.rs`：二つの木を比べて変わったモジュールを七つの変わり方で挙げる、手元のモジュールを head と base の見せ方（手元のファイルは head、`ritsu.mod`・`ritsu.lock`・同梱のコピー・パスの依存は base）で `ritsu check --deps-warnings` にかける、新しい診断と消えた診断を、参照をたどって変わったモジュールに割り当てる、変わったモジュールごとの `ritsu mod diff`、手元のファイルの答えのうち変わるもの、markdown（`@` をコードの書き方に、表は 50 行まで、60,000 字で切るときは `<details>` とコードの囲みを閉じる）、text、JSON、`--fail-on-change`。計画から変えたところは DESIGN 17.10 と 17.21 に書いた。取り出しは、C.4 と同じく D.5 でつないだ。
 - 試験：`crates/ritsu/tests/modules_report.rs`（5 件）と report.rs の中の 2 件。テストの中で git のリポジトリと置き場を作る。
   - 例の shop：pricing 1.0.0 → 1.1.0 は答えの差だけ（exit 0、`--fail-on-change` で 1）、1.1.0 → 2.0.0 はフローが読む出力の名前が変わって新しいエラー（pricing に割り当て、exit 1）、同じ 1.1.0 を中身を替えて出し直す（タグが動いた、いちばん上に出る。差の中のファイルの名前に、二つの側のダイジェストの先頭が付く）。
   - 机を依存に持つモジュールで、手元の日付のファイルとゲートの答えが変わるもの（koyomi と sekisho の差。英日、text、markdown、JSON。二つの側の名前に、読む lock が付く）。
   - 言語のファイルが無く、依存を集めるだけのモジュール：`ritsu check` は exit 2 で止まるが、報告は exit 0 で、二つの側の検査の数が 0、pricing の 1.0.0 → 1.1.0 の答えの差を出す。
-  - 60,000 字を超える報告が、`<details>` を閉じて切れること。二つの lock が同じモジュールを固定する版どうし。exit 2 の三つ（`--base` が無い、git の版が無い、置き場に無い版）。
+  - 60,000 字を超える報告が、`<details>` を閉じて切れること。二つの lock が同じモジュールを固定する版どうし。exit 2 の四つ（`--base` が無い、git の版が無い、`--budget` が正の整数でない、git のリポジトリの外。置き場に無い版で止まる試験は、D.5 で取り出しの試験に替えた）。
   - どの markdown も、`@` がコードの外に無く、`<details>` が閉じていて、機械のパスを含まない。golden は `tests/golden/modules/report-*` の 18（ダイジェストは伏せる）。
 
 **C の完了の条件**
@@ -2252,9 +2252,19 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 
 **D.5 取り出し、lock、add、get、versions、置き場**（DESIGN 17.12、17.15）
 
-- `crates/ritsu/src/modules/fetch.rs`、`registry.rs`、`store_write.rs`：OCI のマニフェストと層の取り出しと確かめ、一時ディレクトリへの展開と名前を変えて置くこと、`refs`、`record.json`、`ritsu.mod` の層だけを取ること（版の選び方のため）、タグの一覧のページ、`@latest`。`add` と `get` と `lock` のレジストリの部分、`versions`、`fetch --rev`。C.4 の `ritsu mod diff` の取り出しをつなぐ。
+- `crates/ritsu/src/modules/fetch.rs`、`registry.rs`、`store_write.rs`：OCI のマニフェストと層の取り出しと確かめ、一時ディレクトリへの展開と名前を変えて置くこと、`refs`、`record.json`、`ritsu.mod` の層だけを取ること（版の選び方のため）、タグの一覧のページ、`@latest`。`add` と `get` と `lock` のレジストリの部分、`versions`、`fetch --rev`。C.4 の `ritsu mod diff` と C.5 の `ritsu mod report` に取り出しをつなぐ。
 - 試験：`modules_oci.rs` に続けて、`shop` で `add pricing <レジストリ>/acme/pricing@1.1.0`、`lock`、`fetch`、`check`（依存の依存の `tax` も）、`get pricing@latest`、`versions`。壊れた答え（ダイジェストの違い、タグが動いた、上限を超える、`..` や絶対パスやリンクの tar、500、429）のどれもが、置き場に何も残さずに止まること。同時に二つの `fetch` を走らせても置き場が壊れないこと。置き場のファイルを書き換えると `check` が E305 で止まること。
-- 結果（2026-10-28）：取り出しは、取るモジュールの全部の層をダイジェストまで確かめてから cosign を走らせ、全部が通ったときだけ置き場に置く（DESIGN 17.12 の「確かめの順」）。OCI のマニフェストか層の答えが上限か書かれた大きさを超えて curl が止めたときは、届かないとき（exit 2）と分けて受け付けない（exit 1。送り出しのタグの確かめも同じ）。`--rev` は、パスの依存と手元の行の鍵を作業ツリーから読む（★。DESIGN 17.12）。`versions` と `get` の JSON の形を DESIGN 17.21 に書いた。C.4 の `ritsu mod diff` への取り出しのつなぎは、C を取り込んでからにする（まだ）。`modules_cli.rs` を二か所直した。「この版にはまだない」と言うコマンドの試験から、D が作ったもの（`fetch`、`versions`、`push`、`get`、レジストリの形の `add`）を外した。lock を選ぶときに置き場に無い版は、前は「置き場に無い」と言って止まっていたが、いまはレジストリに問い合わせるので、その試験をテストのレジストリに向けた。
+- 結果（2026-10-28）：取り出しは、取るモジュールの全部の層をダイジェストまで確かめてから cosign を走らせ、全部が通ったときだけ置き場に置く（DESIGN 17.12 の「確かめの順」）。OCI のマニフェストか層の答えが上限か書かれた大きさを超えて curl が止めたときは、届かないとき（exit 2）と分けて受け付けない（exit 1。送り出しのタグの確かめも同じ）。`versions` と `get` の JSON の形を DESIGN 17.21 に書いた。`modules_cli.rs` を二か所直した。「この版にはまだない」と言うコマンドの試験から、D が作ったもの（`fetch`、`versions`、`push`、`get`、レジストリの形の `add`）を外した。lock を選ぶときに置き場に無い版は、前は「置き場に無い」と言って止まっていたが、いまはレジストリに問い合わせるので、その試験をテストのレジストリに向けた。
+- 結果（2026-10-29）：
+  - `ritsu mod diff` と `ritsu mod report` は、読むものを `ritsu mod fetch` と同じ関数で取ってくる（DESIGN 17.9.6、17.10、17.12）。`fetch.rs` に、木の lock が固定するものを取る `tree` と、`<名前>@<版>` を取る `version` を足し、出力を標準エラーに言う形に分けた。`ritsu_base::modules::address` に `try_open` を足し、`@<名前>@<版>/…` で置き場に無い版（`Unopened::Missing`）を見分けて、取っては開き直す。取ってきたあとは、スレッドに覚えた依存の木を捨てる（`refer::forget`）。置き場に無い版で止まった木を読み直すためである。
+  - `--rev` は、その版の木を `fs::GitRevision` で読む。同梱のコピー、リポジトリの中のパスの依存、鍵もその版のもので、鍵は置き場の `tmp/` に書いて cosign に渡す（DESIGN 17.12、17.14）。report の base の側の検査も、鍵を base の版から読む（DESIGN 17.10）。
+  - 通信を止めるフラグは作らない。理由は DESIGN 17.12 に書いた。
+  - 試験：`modules_diff.rs` の `what_a_diff_reads_is_fetched`、`modules_report.rs` の `what_a_report_reads_is_fetched`、`modules_oci.rs` の `a_key_rotated_between_two_revisions`。
+    - 空の置き場から取ってきた答えが、`ritsu mod fetch` でそろえた置き場での答えと同じで、取ってきた版を標準エラーに一行ずつ言う。そろった置き場では、テストのレジストリに問い合わせが一つも届かない。
+    - 取り出しが止まるとき（ダイジェストの違う OCI のマニフェスト、答えないレジストリ）は exit 2 で、英日の文を確かめ、置き場に何も残らない。
+    - 版のあいだで鍵を替えたモジュール（偽の cosign が鍵のバイトを比べる）で、空の置き場から `fetch --rev <base>` と `fetch` と `report` が通る。作業ツリーの鍵で前の版を取ると exit 1 で止まる。
+    - C の試験のうち、置き場に無い版で止まる二つ（例の `example.com` に向かう）は、取り出しの試験に替えた。
+  - 確かめたこと（この機械で）：fast の段の `-p ritsu-base -p ritsu` で 461 件が通った。SKIP の行 56 は、どれも段による飛ばしである。tools の段の cosign の試験 4 件（本物の cosign 3.1.4 で署名して確かめる 1 件と、偽の cosign の 3 件。鍵を替えた試験を含む）が SKIP なしで通った。`address` を使う koyomi と sekisho の diff の試験（5 件と 7 件）も通り、`wasm32-wasip1` でも組める。
 
 **D.6 cosign**（DESIGN 17.14）
 

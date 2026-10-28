@@ -162,7 +162,8 @@ pub fn tree(root: &Path) -> Rc<Result<Tree, Problem>> {
     tree
 }
 
-/// Every tree kept on this thread let go: a page in the browser whose files changed, a test.
+/// Every tree kept on this thread let go: a page in the browser whose files changed, a test, a fetch
+/// that put a version in the store or checked one (a tree that stopped at what the store lacked).
 pub fn forget() {
     TREES.with(|t| t.borrow_mut().clear());
 }

@@ -5,6 +5,9 @@
 //! - A side is `<module>@<version>` (the version's files in the store, or in the module at hand's
 //!   copy of it), a directory (the module it is in) or `.` (the module at hand). Two files, in any of
 //!   the spellings of DESIGN 17.9.1, give the difference of that file alone.
+//! - What a side reads is fetched before it is read ([`super::fetch`]): a version that is in no
+//!   store, and the modules the lock of the module the side is read in pins. Nothing is asked of a
+//!   registry when the store has them; what was fetched is said on the standard error.
 //! - Behavior: rulec's difference over the whole input space, koyomi's and sekisho's, each asked in
 //!   this process. Every rule, dates file, calendar and gate both versions have is compared, not only
 //!   those whose bytes changed: a file reads others (a rule it applies, a calendar, a dependency the
@@ -16,7 +19,7 @@
 //!
 //! [`ModDiff`] is also what `ritsu mod report` (DESIGN 17.10) puts under each module that changed.
 
-use super::Ctx;
+use super::{Ctx, fetch};
 use ritsu_base::cli::Args;
 use ritsu_base::fs::Files;
 use ritsu_base::json::Json;
@@ -44,17 +47,31 @@ pub fn diff(ctx: &Ctx, a: &Args) -> u8 {
     };
     let old = a.pos[0].as_str();
     let new = a.pos.get(1).map(String::as_str).unwrap_or(".");
+    let two_kinds = || {
+        tr!(
+            "`ritsu mod diff` は、二つのモジュール（`<名前>@<版>`、ディレクトリ、`.`）か、二つのファイルを比べます",
+            "`ritsu mod diff` compares two modules (`<module>@<version>`, a directory or `.`) or two files"
+        )
+    };
+    // the kinds of the two sides first, so that nothing is read or fetched for sides of two kinds
+    if is_module(old) != is_module(new) {
+        return ctx.refuse(two_kinds());
+    }
     let joined = Joined::new();
-    let d = match (read_side(ctx, old), read_side(ctx, new)) {
-        (Err(t), _) | (_, Err(t)) => return ctx.refuse(t),
-        (Ok(Side::Module(o)), Ok(Side::Module(n))) => modules(&o, &n, budget, ctx.lang, &joined),
-        (Ok(Side::File(o)), Ok(Side::File(n))) => files(&o, &n, budget, ctx.lang, &joined),
-        _ => {
-            return ctx.refuse(tr!(
-                "`ritsu mod diff` は、二つのモジュール（`<名前>@<版>`、ディレクトリ、`.`）か、二つのファイルを比べます",
-                "`ritsu mod diff` compares two modules (`<module>@<version>`, a directory or `.`) or two files"
-            ));
-        }
+    let o = match read_side(ctx, old) {
+        Ok(s) => s,
+        Err(t) => return ctx.refuse(t),
+    };
+    let n = match read_side(ctx, new) {
+        Ok(s) => s,
+        Err(t) => return ctx.refuse(t),
+    };
+    let d = match (o, n) {
+        (Side::Module(o), Side::Module(n)) => modules(&o, &n, budget, ctx.lang, &joined),
+        (Side::File(o), Side::File(n)) => files(&o, &n, budget, ctx.lang, &joined),
+        // a side seen through a dependency the other side's fetch brought (`@pricing/rules`, a
+        // directory once pricing is in the store)
+        _ => return ctx.refuse(two_kinds()),
     };
     let mut out = std::io::stdout();
     let _ = match ctx.format.as_str() {
@@ -108,10 +125,21 @@ enum Side {
     File(FileSide),
 }
 
-/// A side as the command line writes it.
+/// Whether a side as the command line writes it is a module (`.`, a directory, `<module>@<version>`
+/// that names no file) rather than a file.
+fn is_module(spelled: &str) -> bool {
+    let p = Path::new(spelled);
+    spelled == "." || ritsu_base::fs::is_dir(p) || (!ritsu_base::fs::exists(p) && module_version(spelled).is_some())
+}
+
+/// A side as the command line writes it, with what it reads fetched first (DESIGN 17.9.6): a version
+/// that is in no store, as `ritsu mod fetch <name>@<version>` fetches it, and the modules the lock of
+/// the module the side is read in pins, as `ritsu mod fetch` fetches them (`--rev`, for a file at a
+/// git revision). What was fetched is said on the standard error.
 fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
     if spelled == "." {
         let root = ctx.root()?;
+        fetched(ctx, spelled, None, &root)?;
         return Module::at(&root, ctx.shown(&root), None).map(Side::Module);
     }
     let p = Path::new(spelled);
@@ -123,6 +151,7 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
                 "`{spelled}` is in no module: there is no `ritsu.mod` there or above it"
             ));
         };
+        fetched(ctx, spelled, None, &root)?;
         // its files are shown from the directory the run is in, through the module's root
         return Module::at(&root, ctx.shown(&root), None).map(Side::Module);
     }
@@ -130,17 +159,68 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
         && let Some((name, version)) = module_version(spelled)
     {
         let at_hand = ctx.root().ok();
-        let Some((store, digest)) = address::find_version(at_hand.as_deref(), &name, &version) else {
-            return Err(address::fetch_version(&name.to_string(), &version));
+        let found = match address::find_version(at_hand.as_deref(), &name, &version) {
+            Some(f) => f,
+            None => {
+                let done = fetch::version(at_hand.as_deref(), &name, &version).map_err(|t| tr!("`{spelled}` を取り出せません。", "cannot fetch `{spelled}`: ").then(&t))?;
+                fetch::told(ctx.lang, &done);
+                address::find_version(at_hand.as_deref(), &name, &version).ok_or_else(|| address::fetch_version(&name.to_string(), &version))?
+            }
         };
-        return Module::at(&store.files(&digest), spelled.to_string(), Some(digest)).map(Side::Module);
+        let (store, digest) = found;
+        // the version is read as a module of its own, with its own lock
+        let root = store.files(&digest);
+        fetched(ctx, spelled, None, &root)?;
+        return Module::at(&root, spelled.to_string(), Some(digest)).map(Side::Module);
     }
     let a = address::parse(spelled)?;
-    let opened = address::open(&a)?;
+    let opened = open_fetching(ctx, spelled, &a)?;
+    // the tree the file is read in, as each language finds it (`address::stopped`), fetched before
+    // the file is looked for: a dependency's file (`@<name>/…`) is in the store, at the version
+    // that tree's lock pins
+    let abs = opened.with(|| ritsu_base::paths::absolute(Path::new(&opened.path)));
+    if let Some(root) = abs.parent().and_then(|d| opened.with(|| ritsu_base::modules::refer::raw_module_root(d))) {
+        fetched(ctx, spelled, opened.files.clone(), &root)?;
+    }
     if !opened.with(|| ritsu_base::fs::is_file(Path::new(&opened.path))) {
         return Err(tr!("`{spelled}` を読めません", "cannot read `{spelled}`"));
     }
     Ok(Side::File(FileSide { spelled: spelled.to_string(), opened }))
+}
+
+/// The side `a` opened. A version the side reaches that no store has (`@<name>@<version>`, and the
+/// versions the choice of the versions reaches then) is fetched as `ritsu mod fetch <name>@<version>`
+/// fetches it, and the side opened again, until it opens or says something else.
+fn open_fetching(ctx: &Ctx, spelled: &str, a: &address::Address) -> Result<address::Opened, Text> {
+    let at_hand = ctx.root().ok();
+    let mut asked = BTreeSet::new();
+    loop {
+        match address::try_open(a) {
+            Ok(o) => return Ok(o),
+            Err(address::Unopened::Said(t)) => return Err(t),
+            Err(address::Unopened::Missing(m)) => {
+                // fetched once, and still in no store: what the store holds says the rest
+                if !asked.insert((m.module.to_string(), m.version.to_string())) {
+                    return Err(m.said);
+                }
+                let done = fetch::version(at_hand.as_deref(), &m.module, &m.version).map_err(|t| cannot_fetch(spelled, &t))?;
+                fetch::told(ctx.lang, &done);
+            }
+        }
+    }
+}
+
+/// The modules the tree of the module at `root` pins, read through `files`, fetched; what was
+/// fetched said on the standard error.
+fn fetched(ctx: &Ctx, spelled: &str, files: Option<Rc<dyn Files>>, root: &Path) -> Result<(), Text> {
+    let done = within(files, || fetch::tree(root)).map_err(|t| cannot_fetch(spelled, &t))?;
+    fetch::told(ctx.lang, &done);
+    Ok(())
+}
+
+/// What a side says when what it reads cannot be fetched.
+fn cannot_fetch(spelled: &str, t: &Text) -> Text {
+    tr!("`{spelled}` が読むモジュールを取り出せません。", "cannot fetch the modules `{spelled}` reads: ").then(t)
 }
 
 /// `<module>@<version>`: a module's name and a version.

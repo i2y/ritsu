@@ -16,29 +16,44 @@
 //! - What each language says inside is what its own diff says: the JSON of each file's behavior is
 //!   the one `ritsu <language> diff` prints for the same two files.
 //! - The two-file form, with the spellings of DESIGN 17.9.1; a version against itself (exit 0); and
-//!   what stops a diff (exit 2): a version not in the store, which names `ritsu mod fetch`; sides of
-//!   two kinds; a directory in no module; a `--budget` that is no positive integer; and one too
-//!   small for a walk, when nothing else differs.
+//!   what stops a diff (exit 2): sides of two kinds; a directory in no module; a `--budget` that is
+//!   no positive integer; and one too small for a walk, when nothing else differs.
+//! - What a diff reads, fetched from a registry the test starts (`ritsu_testkit::registry`: curl
+//!   asks it on the loopback, and nothing else) into an empty store: the same answer as with the
+//!   store full, each version fetched said on stderr, and nothing asked of the registry once the
+//!   store has it. A fetch that stops (an OCI manifest that is not its digest, a registry that does
+//!   not answer) stops the diff (exit 2), in each language.
 
 use ritsu_base::modules::store::{self, Store};
 use ritsu_testkit::TempDir;
+use ritsu_testkit::registry::{self as reg, Registry};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// `ritsu`, run in `dir` with the store at `store` and no language asked of the environment: the
-/// exit code, what it printed and what it said on stderr.
-fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
+/// `ritsu` with `args`, to run in `dir` with the store at `store` and no language asked of the
+/// environment.
+fn command(dir: &Path, store: &Path, args: &[&str]) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
     for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
         c.env_remove(v);
     }
-    let o = c.output().expect("could not run ritsu");
+    c
+}
+
+/// The exit code, what was printed and what was said on stderr.
+fn said(o: Output) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
+/// `ritsu`, run in `dir` with the store at `store` and no language asked of the environment: the
+/// exit code, what it printed and what it said on stderr.
+fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
+    said(command(dir, store, args).output().expect("could not run ritsu"))
 }
 
 fn golden(path: &str, got: &str, failures: &mut Vec<String>) {
@@ -475,9 +490,8 @@ fn two_files() {
 }
 
 /// A version against itself: exit 0, from the store and from the module at hand's own tree. What
-/// stops a diff, exit 2: a version the store does not have (which `ritsu mod fetch` would bring), a
-/// module against a file, a directory in no module, a `--budget` that is no positive integer, and a
-/// walk over `--budget` when nothing else differs.
+/// stops a diff, exit 2: a module against a file, a directory in no module, a `--budget` that is no
+/// positive integer, and a walk over `--budget` when nothing else differs.
 #[test]
 fn the_same_version_and_what_stops_a_diff() {
     let (t, store) = registry(&EN);
@@ -499,11 +513,6 @@ fn the_same_version_and_what_stops_a_diff() {
         let (code, _, err) = ritsu_in(t.path(), &store, &[&all[..], &["--lang", "ja"]].concat());
         assert_eq!((code, err.as_str()), (2, ja), "{args:?}");
     };
-    stops(
-        &[&format!("{PRICING}@3.0.0"), &v11],
-        "error: `example.com/acme/pricing` 3.0.0 is neither in the store nor in the module's copy of it; run `ritsu mod fetch example.com/acme/pricing@3.0.0`\n",
-        "エラー: `example.com/acme/pricing` 3.0.0 が、置き場にも同梱のコピーにもありません。`ritsu mod fetch example.com/acme/pricing@3.0.0` を走らせてください\n",
-    );
     let fee = format!("{}/{}/{}", EN.pricing, EN.rules, EN.fee);
     stops(
         &[&v11, &fee],
@@ -528,4 +537,169 @@ fn the_same_version_and_what_stops_a_diff() {
     // with a budget written with separators, it is compared
     let (code, out, _) = ritsu_in(d.path(), d.path(), &["mod", "diff", &gate, &gate, "--budget", "1_000_000"]);
     assert_eq!(code, 0, "{out}");
+}
+
+// ── What a diff reads, fetched ──────────────────────────────────────────
+
+/// The example on a registry the test starts: tax 1.0.0 and pricing 1.0.0 and 1.1.0 pushed (each
+/// `require` from the registry, and a `ritsu >=` line under each version), and shop locked to
+/// pricing 1.1.0. The pushes and the lock use the store `pushed/`, and every run a Docker config of
+/// the test's own, with nothing in it.
+struct OnRegistry {
+    t: TempDir,
+    r: Registry,
+}
+
+impl OnRegistry {
+    fn new(what: &str) -> OnRegistry {
+        let r = Registry::start();
+        let t = TempDir::new(what);
+        let host = r.host.clone();
+        let from = here().join("tests/projects/modules");
+        for (src, dst) in [("tax", "tax"), ("pricing", "pricing"), ("shop", "shop"), ("versions/pricing-1.0.0", "pricing-1.0.0")] {
+            copy_dir(&from.join(src), &t.path().join(dst));
+            let file = t.path().join(dst).join("ritsu.mod");
+            let text = std::fs::read_to_string(&file)
+                .unwrap()
+                .replace("example.com/acme/", &format!("{host}/acme/"))
+                .replace("require tax path \"../tax\"", &format!("require tax oci \"{host}/acme/tax\" 1.0.0"))
+                .replace("require tax path \"../../tax\"", &format!("require tax oci \"{host}/acme/tax\" 1.0.0"))
+                .replace("require pricing path \"../pricing\"", &format!("require pricing oci \"{host}/acme/pricing\" 1.1.0"));
+            let mut out = String::new();
+            for line in text.split_inclusive('\n') {
+                out.push_str(line);
+                if line.starts_with("version ") {
+                    out.push_str("ritsu >=0.36.0\n");
+                }
+            }
+            std::fs::write(&file, out).unwrap();
+        }
+        std::fs::create_dir_all(t.path().join("docker")).unwrap();
+        let w = OnRegistry { t, r };
+        let pushed = w.path("pushed");
+        for (dir, step) in [("tax", "push"), ("pricing-1.0.0", "lock"), ("pricing-1.0.0", "fetch"), ("pricing-1.0.0", "push"), ("pricing", "lock"), ("pricing", "push"), ("shop", "lock")] {
+            let (code, out, err) = w.run(dir, &pushed, &["mod", step]);
+            assert_eq!(code, 0, "ritsu mod {step} in {dir}:\n{out}{err}");
+        }
+        w
+    }
+
+    fn path(&self, rel: &str) -> PathBuf {
+        self.t.path().join(rel)
+    }
+
+    fn command(&self, dir: &str, store: &Path, args: &[&str]) -> Command {
+        let mut c = command(&self.path(dir), store, args);
+        c.env("DOCKER_CONFIG", self.path("docker"));
+        c
+    }
+
+    /// ritsu, run in the directory `dir` of the test with the store at `store`.
+    fn run(&self, dir: &str, store: &Path, args: &[&str]) -> (i32, String, String) {
+        said(self.command(dir, store, args).output().expect("could not run ritsu"))
+    }
+
+    /// The digest of the OCI manifest of the version `tag` of `repository` in the registry.
+    fn digest(&self, repository: &str, tag: &str) -> String {
+        self.r.tag(repository, tag).unwrap_or_else(|| panic!("the registry has no {repository}:{tag}"))
+    }
+}
+
+/// Whether the store at `store` holds an entry, or a line of its index.
+fn holds_any(store: &Path) -> bool {
+    store.join("sha256").exists() || store.join("refs").exists()
+}
+
+/// What a diff reads, fetched into an empty store: two versions and the tax they read; and in shop,
+/// two files, `@pricing@1.0.0/…` (a version no lock pins, and the tax it reads) and `@pricing/…` (the
+/// lock's). Each version fetched is said on stderr, a line each; the answer is the one a store
+/// filled by `ritsu mod fetch` first gives; and with the store full, the registry is asked nothing
+/// and nothing is said. What stops a fetch stops the diff (exit 2), nothing put in the store: an
+/// OCI manifest that is not its digest, and a registry that does not answer.
+#[test]
+fn what_a_diff_reads_is_fetched() {
+    let w = OnRegistry::new("mod-diff-fetch");
+    let host = w.r.host.clone();
+    let (d10, d11, tax) = (w.digest("acme/pricing", "1.0.0"), w.digest("acme/pricing", "1.1.0"), w.digest("acme/tax", "1.0.0"));
+    let (v10, v11) = (format!("{host}/acme/pricing@1.0.0"), format!("{host}/acme/pricing@1.1.0"));
+    let fetched = |name: &str, version: &str, d: &str| format!("fetched {host}/acme/{name} {version} ({d})\n");
+    let three = [fetched("pricing", "1.0.0", &d10), fetched("tax", "1.0.0", &tax), fetched("pricing", "1.1.0", &d11)].concat();
+
+    // two versions, from the directory above the modules, in no module
+    let versions = ["mod", "diff", v10.as_str(), v11.as_str(), "--format", "json"];
+    let empty = w.path("store-versions");
+    let (code, first, err) = w.run("", &empty, &versions);
+    assert_eq!((code, err.as_str()), (1, three.as_str()), "{first}");
+    assert_eq!(json(&first)["new"]["digest"], serde_json::json!(d11));
+    w.r.clear_log();
+    assert_eq!(w.run("", &empty, &versions), (1, first.clone(), String::new()));
+    // a store `ritsu mod fetch` filled first, a version a run (the versions one run names are
+    // chosen together, and only the chosen get their files): the same answer, and the registry
+    // asked nothing
+    let full = w.path("store-full");
+    for v in [&v10, &v11] {
+        let (code, out, err) = w.run("", &full, &["mod", "fetch", v]);
+        assert_eq!(code, 0, "{out}{err}");
+    }
+    w.r.clear_log();
+    assert_eq!(w.run("", &full, &versions), (1, first, String::new()));
+    let text = ["mod", "diff", v10.as_str(), v11.as_str(), "--lang", "ja"];
+    let (_, from_full, _) = w.run("", &full, &text);
+    assert_eq!(w.r.log().len(), 0);
+    let (code, out, err) = w.run("", &w.path("store-text"), &text);
+    assert_eq!((code, out, err.is_empty()), (1, from_full, false));
+    assert!(err.starts_with(&format!("{host}/acme/pricing 1.0.0 を取り出しました（{d10}）\n")), "{err}");
+
+    // two files of shop
+    let fee = "rules/shipping_fee.rule";
+    let (old, new) = (format!("@pricing@1.0.0/{fee}"), format!("@pricing/{fee}"));
+    let files = ["mod", "diff", old.as_str(), new.as_str(), "--format", "json"];
+    let empty = w.path("store-files");
+    let (code, first, err) = w.run("shop", &empty, &files);
+    assert_eq!((code, err.as_str()), (1, three.as_str()), "{first}");
+    assert_eq!(json(&first)["behavior"][0]["result"]["changes"].as_array().map(Vec::len), Some(2), "{first}");
+    w.r.clear_log();
+    assert_eq!(w.run("shop", &empty, &files), (1, first.clone(), String::new()));
+    assert_eq!(w.run("shop", &full, &files), (1, first, String::new()));
+    assert_eq!(w.r.log().len(), 0);
+
+    // other bytes for tax's OCI manifest: shop's lock cannot be fetched, and nothing is put
+    let manifest = w.r.get("acme/tax", &tax).unwrap();
+    let other = String::from_utf8(manifest.clone()).unwrap().replace("Acme", "Acne");
+    assert_ne!(other.as_bytes(), &manifest[..]);
+    w.r.serve_instead(&tax, other.as_bytes());
+    let x = format!("sha256:{}", reg::sha256_hex(other.as_bytes()));
+    for (lang, want) in [
+        ("en", format!("error: cannot fetch the modules `.` reads: the bytes fetched as the OCI manifest of `{host}/acme/tax` 1.0.0 have the digest {x}, not the {tax} asked for\n")),
+        ("ja", format!("エラー: `.` が読むモジュールを取り出せません。`{host}/acme/tax` 1.0.0 の OCI のマニフェストとして受け取ったバイトのダイジェストは {x} で、求めた {tax} ではありません\n")),
+    ] {
+        let store = w.path(&format!("store-other-{lang}"));
+        assert_eq!(w.run("shop", &store, &["mod", "diff", ".", "--lang", lang]), (2, String::new(), want));
+        assert!(!holds_any(&store), "{lang}");
+    }
+    w.r.serve_instead(&tax, &manifest);
+
+    // a registry that does not answer: what curl said, after the three tries (two and four seconds
+    // apart; the two languages at once)
+    let OnRegistry { t, r } = w;
+    drop(r);
+    let url = format!("http://{host}/v2/acme/pricing/manifests/1.0.0");
+    let runs: Vec<_> = ["en", "ja"]
+        .iter()
+        .map(|lang| {
+            let store = t.path().join(format!("store-down-{lang}"));
+            let mut c = command(t.path(), &store, &["mod", "diff", &v10, &v11, "--lang", lang]);
+            c.env("DOCKER_CONFIG", t.path().join("docker")).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+            (store, c.spawn().expect("could not run ritsu"))
+        })
+        .collect();
+    for ((store, child), (head, tail)) in runs.into_iter().zip([
+        (format!("error: cannot fetch `{v10}`: cannot reach `GET {url}` (curl exited with 7: "), ")\n"),
+        (format!("エラー: `{v10}` を取り出せません。`GET {url}` に届きません（curl の終了コード 7: "), "）\n"),
+    ]) {
+        let (code, out, err) = said(child.wait_with_output().unwrap());
+        assert_eq!((code, out.as_str()), (2, ""), "{err}");
+        assert!(err.starts_with(&head) && err.ends_with(tail) && err.lines().count() == 1, "{err}");
+        assert!(!holds_any(&store));
+    }
 }

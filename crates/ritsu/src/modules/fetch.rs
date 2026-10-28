@@ -1,7 +1,9 @@
 //! `ritsu mod fetch` (DESIGN 17.12): the modules of the lock, or the versions named, fetched from
-//! their registries into the store, each checked against its digests and its signatures; and
-//! [`for_choosing`], which `ritsu mod lock`, `add`, `get` and `remove` call when a version they
-//! choose by is in neither the store nor the module's copy of it.
+//! their registries into the store, each checked against its digests and its signatures; [`tree`]
+//! and [`version`], the same fetch for `ritsu mod diff` and `ritsu mod report` (DESIGN 17.9.6,
+//! 17.10), which fetch what they read before they read it; and [`for_choosing`], which `ritsu mod
+//! lock`, `add`, `get` and `remove` call when a version they choose by is in neither the store nor
+//! the module's copy of it.
 //!
 //! A version is fetched in this order, and nothing is put in the store until every version of the
 //! run has passed: its OCI manifest by its digest (the bytes' sha256 held to it; its type, its two
@@ -17,6 +19,13 @@
 //! module that differs stops the run (`ritsu mod vendor` puts it again). A line that applies to it
 //! and that its record does not name is checked with cosign, and the record (where `check` reads it)
 //! names it after.
+//!
+//! The tree is read through the files of the thread (`ritsu_base::fs`). `--rev` reads it at a git
+//! revision ([`GitRevision`]): the `ritsu.mod`, the lock, the module's copy of the store, the
+//! modules a path reaches and the key files as the revision has them, a path outside the repository
+//! from the disk; `ritsu mod report` reads the base's tree so. A key file read through other files
+//! than the disk is written under the store's `tmp/` for cosign, and removed after. What is put in
+//! the store is written to the disk, and the module's copy of the store at a revision is not written.
 
 use super::cosign::{self, Rule};
 use super::http::NoAnswer;
@@ -24,6 +33,7 @@ use super::registry::{self, Remote};
 use super::{Ctx, store_write};
 use ritsu_base::cli::Args;
 use ritsu_base::diag::Diag;
+use ritsu_base::fs::{self, GitRevision};
 use ritsu_base::json::Json;
 use ritsu_base::modules::graph::{self, Problem};
 use ritsu_base::modules::lock::{self as lockfile, Lock, Pinned};
@@ -32,11 +42,11 @@ use ritsu_base::modules::names::{self, ModuleName};
 use ritsu_base::modules::semver::Version;
 use ritsu_base::modules::store::{self, Parts, Record, Store};
 use ritsu_base::modules::{E304, artifact, digest, tar};
-use ritsu_base::text::{Text, plural};
+use ritsu_base::text::{Lang, Text, plural};
 use ritsu_base::tr;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::rc::Rc;
 
 /// How a fetch stops.
 enum Stop {
@@ -47,6 +57,16 @@ enum Stop {
     Lock(Box<Diag>),
     /// The run cannot go on (the network, the credentials, no cosign, no lock): exit 2.
     Cannot(Text),
+}
+
+impl Stop {
+    /// What it says, as one sentence.
+    fn text(self) -> Text {
+        match self {
+            Stop::Refused(t) | Stop::Cannot(t) => t,
+            Stop::Lock(d) => d.message,
+        }
+    }
 }
 
 /// How a fetch stops when a request to the registry has no answer: an answer over the bytes it may
@@ -82,21 +102,53 @@ struct Staged {
 struct Member {
     name: ModuleName,
     manifest: Option<Manifest>,
-    /// Where its files are on the disk: its directory, or the `files/` of the entry that is read.
+    /// Where its files are: its directory, or the `files/` of the entry that is read.
     dir: Option<PathBuf>,
     /// For one staged, its place among the versions staged.
     staged: Option<usize>,
     /// For a module from a registry: its version, the digest of its OCI manifest, and the copy of
     /// the store it is read from when it is here.
     pinned: Option<(Version, String, Option<Store>)>,
+    /// Whether it is here in the module's copy of the store.
+    copy: bool,
 }
 
-/// What a run did, for what it prints: each version fetched, and each that was here, with the lines
+/// What a run did, for what it says: each version fetched, and each that was here, with the lines
 /// its signature was checked against in this run.
 #[derive(Default)]
-struct Done {
+pub struct Done {
     fetched: Vec<(String, String, String, Vec<Rule>)>,
     present: Vec<(String, String, String, Vec<Rule>)>,
+}
+
+impl Done {
+    /// What the run did, a line each: each version fetched (with the lines checked under it), and
+    /// each line checked of a version that was here. None when it fetched and checked nothing.
+    fn lines(&self, lang: Lang) -> Vec<String> {
+        let mut out = Vec::new();
+        for (m, v, d, rs) in &self.fetched {
+            out.push(tr!("{m} {v} を取り出しました（{d}）", "fetched {m} {v} ({d})").get(lang).to_string());
+            for r in rs {
+                let line = &r.line;
+                out.push(format!("  {}", tr!("署名を `{line}` で確かめました", "checked its signature against `{line}`").get(lang)));
+            }
+        }
+        for (m, v, _, rs) in &self.present {
+            for r in rs {
+                let line = &r.line;
+                out.push(tr!("{m} {v} の署名を `{line}` で確かめました", "checked the signature of {m} {v} against `{line}`").get(lang).to_string());
+            }
+        }
+        out
+    }
+}
+
+/// What a fetch for another command did, said on the standard error (the standard output is that
+/// command's): a line for each version fetched and each line checked; nothing when nothing was.
+pub fn told(lang: Lang, done: &Done) {
+    for l in done.lines(lang) {
+        eprintln!("{l}");
+    }
 }
 
 /// The `ritsu.mod` of a version, read, as the sentence of a version fetched names it.
@@ -176,21 +228,22 @@ fn stage(remote: &Remote, name: &ModuleName, version: &Version, pinned: Option<&
     Ok(Staged { name: name.clone(), version: version.clone(), manifest: bytes, digest: d, module, files, files_digest: layers.files_digest })
 }
 
-/// The module at hand and every module its paths reach, from the disk.
+/// The module at hand and every module its paths reach, read through the files of this thread; a
+/// path is joined and folded by its letters, as the tree is read (`graph::load`).
 fn locals(root: &Path, main: Manifest) -> Vec<Member> {
-    let mut out = vec![Member { name: main.module.value.clone(), manifest: Some(main), dir: Some(root.to_path_buf()), staged: None, pinned: None }];
+    let mut out = vec![Member { name: main.module.value.clone(), manifest: Some(main), dir: Some(root.to_path_buf()), staged: None, pinned: None, copy: false }];
     let mut i = 0;
     while i < out.len() {
         let dir = out[i].dir.clone().unwrap_or_default();
         let reqs = out[i].manifest.as_ref().map(|m| m.requires.clone()).unwrap_or_default();
         for r in reqs {
             let Source::Path { path } = &r.source else { continue };
-            let Ok(d) = ritsu_base::fs::canonicalize(dir.join(path)) else { continue };
+            let d = ritsu_base::paths::absolute(&dir.join(path));
             if out.iter().any(|m| m.dir.as_deref() == Some(d.as_path())) {
                 continue;
             }
-            let Some(m) = std::fs::read(d.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok()) else { continue };
-            out.push(Member { name: m.module.value.clone(), manifest: Some(m), dir: Some(d), staged: None, pinned: None });
+            let Some(m) = fs::raw::read(&d.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok()) else { continue };
+            out.push(Member { name: m.module.value.clone(), manifest: Some(m), dir: Some(d), staged: None, pinned: None, copy: false });
         }
         i += 1;
     }
@@ -206,10 +259,48 @@ fn needs_lock(members: &[Member]) -> bool {
     })
 }
 
+/// The key files a run writes for cosign, under the store's `tmp/` (made when the first is
+/// written), removed when the run is done with them.
+#[derive(Default)]
+struct Keys {
+    scratch: Option<PathBuf>,
+    written: Vec<PathBuf>,
+}
+
+impl Keys {
+    /// `bytes` written to a file of their own: its path, absolute.
+    fn write(&mut self, bytes: &[u8]) -> Result<PathBuf, Stop> {
+        let dir = match &self.scratch {
+            Some(d) => d.clone(),
+            None => {
+                let d = store_write::scratch().map_err(Stop::Cannot)?;
+                self.scratch = Some(d.clone());
+                d
+            }
+        };
+        let f = store_write::unique(&dir, "key");
+        std::fs::write(&f, bytes).map_err(|e| {
+            let d = f.display();
+            Stop::Cannot(tr!("{d} に書けません（{e}）", "cannot write {d} ({e})"))
+        })?;
+        self.written.push(f.clone());
+        Ok(ritsu_base::paths::absolute(&f))
+    }
+}
+
+impl Drop for Keys {
+    fn drop(&mut self) {
+        for k in &self.written {
+            let _ = std::fs::remove_file(k);
+        }
+    }
+}
+
 /// The line `s` of the member `w`, as a rule to check: for a key, its file read from the member's
-/// files (a version staged has its key written to a file under `scratch`, put in `keys` to be
-/// removed).
-fn rule_of(members: &[Member], staged: &[Staged], w: usize, s: &Signature, scratch: &Path, keys: &mut Vec<PathBuf>) -> Result<Rule, Stop> {
+/// files through the files of this thread. cosign reads a key from the disk: a key of a version
+/// staged, and one read through other files than the disk (a git revision's), is written to a file
+/// of [`Keys`]; any other is given at its own path.
+fn rule_of(members: &[Member], staged: &[Staged], w: usize, s: &Signature, keys: &mut Keys) -> Result<Rule, Stop> {
     let Policy::Key { path, .. } = &s.policy else {
         return Ok(Rule { checked: s.checked(None), line: s.text(), policy: s.policy.clone(), key: None });
     };
@@ -221,17 +312,14 @@ fn rule_of(members: &[Member], staged: &[Staged], w: usize, s: &Signature, scrat
     let (bytes, file) = match (&members[w].dir, members[w].staged) {
         (Some(dir), _) => {
             let f = ritsu_base::paths::absolute(&dir.join(path));
-            (std::fs::read(&f).map_err(|_| missing())?, f)
+            let b = fs::raw::read(&f).map_err(|_| missing())?;
+            let file = if fs::current().is_some() { keys.write(&b)? } else { f };
+            (b, file)
         }
         (None, Some(k)) => {
             let b = staged[k].files.iter().find(|(p, _)| p == path).map(|(_, b)| b.clone()).ok_or_else(missing)?;
-            let f = store_write::unique(scratch, "key");
-            std::fs::write(&f, &b).map_err(|e| {
-                let d = f.display();
-                Stop::Cannot(tr!("{d} に書けません（{e}）", "cannot write {d} ({e})"))
-            })?;
-            keys.push(f.clone());
-            (b, ritsu_base::paths::absolute(&f))
+            let file = keys.write(&b)?;
+            (b, file)
         }
         (None, None) => return Err(missing()),
     };
@@ -242,7 +330,7 @@ fn rule_of(members: &[Member], staged: &[Staged], w: usize, s: &Signature, scrat
 /// hand that cover it, and those of each member that requires it directly. With `reach_all`, every
 /// member counts as reached (the versions named, all of one tree); else those the module at hand's
 /// `require`s reach.
-fn rules(members: &[Member], staged: &[Staged], reach_all: bool, scratch: &Path, keys: &mut Vec<PathBuf>) -> Result<Vec<Vec<Rule>>, Stop> {
+fn rules(members: &[Member], staged: &[Staged], reach_all: bool, keys: &mut Keys) -> Result<Vec<Vec<Rule>>, Stop> {
     let n = members.len();
     let local: Vec<usize> = (0..n).filter(|i| members[*i].pinned.is_none()).collect();
     // each `oci` require of each member, to the member it reaches (a path wins)
@@ -290,7 +378,7 @@ fn rules(members: &[Member], staged: &[Staged], reach_all: bool, scratch: &Path,
         for w in writers {
             let lines = members[w].manifest.as_ref().map(|m| m.signatures.clone()).unwrap_or_default();
             for s in lines.iter().filter(|s| names::covers(&s.prefix, &name)) {
-                let r = rule_of(members, staged, w, s, scratch, keys)?;
+                let r = rule_of(members, staged, w, s, keys)?;
                 if !rs.iter().any(|x| x.checked == r.checked) {
                     rs.push(r);
                 }
@@ -332,31 +420,13 @@ fn stopped(ctx: &Ctx, root: Option<&Path>, s: Stop) -> u8 {
     code
 }
 
-/// The keys written for the run, removed.
-struct Keys(Vec<PathBuf>);
-
-impl Drop for Keys {
-    fn drop(&mut self) {
-        for k in &self.0 {
-            let _ = std::fs::remove_file(k);
-        }
-    }
-}
-
 /// What the members and the versions staged come to: the rules checked with cosign, the versions put
-/// in the store, the records that name a line newly checked written again, and what the run says.
-/// `bad` holds the entries of the store whose files differ from the lock, taken away before the
-/// versions fetched again are put. The exit code.
-fn finish(ctx: &Ctx, root: Option<&Path>, store: &Store, members: &[Member], staged: &[Staged], bad: &[String], reach_all: bool) -> u8 {
-    let scratch = match store_write::scratch() {
-        Ok(s) => s,
-        Err(t) => return stopped(ctx, root, Stop::Cannot(t)),
-    };
-    let mut keys = Keys(Vec::new());
-    let applying = match rules(members, staged, reach_all, &scratch, &mut keys.0) {
-        Ok(r) => r,
-        Err(s) => return stopped(ctx, root, s),
-    };
+/// in the store, and the records that name a line newly checked written again. `bad` holds the
+/// entries of the store whose files differ from the lock, taken away before the versions fetched
+/// again are put.
+fn apply(store: &Store, members: &[Member], staged: &[Staged], bad: &[String], reach_all: bool) -> Result<Done, Stop> {
+    let mut keys = Keys::default();
+    let applying = rules(members, staged, reach_all, &mut keys)?;
     // the lines each member has not been checked against
     let mut todo: Vec<Vec<Rule>> = vec![Vec::new(); members.len()];
     for (j, m) in members.iter().enumerate() {
@@ -364,16 +434,29 @@ fn finish(ctx: &Ctx, root: Option<&Path>, store: &Store, members: &[Member], sta
         let have: Vec<String> = at.as_ref().and_then(|s| s.record(d)).map(|r| r.verified.into_iter().map(|(p, _)| p).collect()).unwrap_or_default();
         todo[j] = applying[j].iter().filter(|r| !have.contains(&r.checked)).cloned().collect();
     }
+    // the module's copy of the store at a git revision is the revision's, whose records are not
+    // written: one that lacks a line stops the run before cosign is asked
+    if let Some(rev) = fs::revision() {
+        for (j, m) in members.iter().enumerate() {
+            if let (true, Some((version, ..)), Some(r)) = (m.copy, &m.pinned, todo[j].first()) {
+                let (name, line) = (&m.name, &r.line);
+                return Err(Stop::Refused(tr!(
+                    "git の版 `{rev}` の同梱のコピーにある `{name}` {version} の記録に、署名を `{line}` で確かめたことが書かれていません。git の版のファイルには書かないので、作業ツリーで `ritsu mod fetch` を走らせ、同梱のコピーをコミットしてください",
+                    "the record of `{name}` {version} in this module's copy of the store at the git revision `{rev}` names no check of its signature against `{line}`, and the files of a revision are not written; run `ritsu mod fetch` in the working tree and commit the copy"
+                )));
+            }
+        }
+    }
     for (j, m) in members.iter().enumerate() {
         let Some((version, d, _)) = &m.pinned else { continue };
         let reference = format!("{}@{d}", m.name);
         for r in &todo[j] {
             match cosign::verify(r, &reference, registry::on_loopback(&m.name)) {
                 Ok(()) => {}
-                Err(cosign::Failed::Missing(t)) => return stopped(ctx, root, Stop::Cannot(t)),
+                Err(cosign::Failed::Missing(t)) => return Err(Stop::Cannot(t)),
                 Err(cosign::Failed::Refused(said)) => {
                     let (name, line) = (&m.name, &r.line);
-                    return stopped(ctx, root, Stop::Refused(tr!(
+                    return Err(Stop::Refused(tr!(
                         "`{name}` {version} の署名が `{line}` で確かめられません。cosign の出力：\n{said}",
                         "the signature of `{name}` {version} does not pass `{line}`; cosign said:\n{said}"
                     )));
@@ -388,10 +471,8 @@ fn finish(ctx: &Ctx, root: Option<&Path>, store: &Store, members: &[Member], sta
         let Some((version, d, at)) = &m.pinned else { continue };
         if let Some(k) = m.staged {
             let s = &staged[k];
-            if bad.contains(&s.digest)
-                && let Err(t) = store_write::remove_entry(store, &s.digest)
-            {
-                return stopped(ctx, root, Stop::Cannot(t));
+            if bad.contains(&s.digest) {
+                store_write::remove_entry(store, &s.digest).map_err(Stop::Cannot)?;
             }
             let record = Record {
                 module: s.name.to_string(),
@@ -401,9 +482,7 @@ fn finish(ctx: &Ctx, root: Option<&Path>, store: &Store, members: &[Member], sta
                 verified: applying[j].iter().map(|r| (r.checked.clone(), today.clone())).collect(),
             };
             let parts = Parts { manifest: &s.manifest, module: &s.module, files: Some(&s.files), record };
-            if let Err(t) = store::place(store, &parts, Some((&s.name, &s.version))) {
-                return stopped(ctx, root, Stop::Cannot(t));
-            }
+            store::place(store, &parts, Some((&s.name, &s.version))).map_err(Stop::Cannot)?;
             done.fetched.push((m.name.to_string(), version.to_string(), d.clone(), applying[j].clone()));
         } else {
             if !todo[j].is_empty()
@@ -411,15 +490,18 @@ fn finish(ctx: &Ctx, root: Option<&Path>, store: &Store, members: &[Member], sta
             {
                 let mut verified = at.record(d).map(|r| r.verified).unwrap_or_default();
                 verified.extend(todo[j].iter().map(|r| (r.checked.clone(), today.clone())));
-                if let Err(t) = store_write::set_verified(at, d, verified) {
-                    return stopped(ctx, root, Stop::Cannot(t));
-                }
+                store_write::set_verified(at, d, verified).map_err(Stop::Cannot)?;
             }
             done.present.push((m.name.to_string(), version.to_string(), d.clone(), todo[j].clone()));
         }
     }
-    said(ctx, &done);
-    0
+    // a tree kept on this thread is kept while its files read the same, and the store is not among
+    // them: one that stopped at what the store lacked is read again (`ritsu mod diff` and `report`
+    // read the trees after they fetch)
+    if !done.fetched.is_empty() || done.present.iter().any(|(.., rs)| !rs.is_empty()) {
+        ritsu_base::modules::refer::forget();
+    }
+    Ok(done)
 }
 
 /// What a run that went through prints.
@@ -442,18 +524,8 @@ fn said(ctx: &Ctx, done: &Done) {
         println!("{}", o.pretty());
         return;
     }
-    for (m, v, d, rs) in &done.fetched {
-        println!("{}", ctx.say(&tr!("{m} {v} を取り出しました（{d}）", "fetched {m} {v} ({d})")));
-        for r in rs {
-            let line = &r.line;
-            println!("  {}", ctx.say(&tr!("署名を `{line}` で確かめました", "checked its signature against `{line}`")));
-        }
-    }
-    for (m, v, _, rs) in &done.present {
-        for r in rs {
-            let line = &r.line;
-            println!("{}", ctx.say(&tr!("{m} {v} の署名を `{line}` で確かめました", "checked the signature of {m} {v} against `{line}`")));
-        }
+    for l in done.lines(ctx.lang) {
+        println!("{l}");
     }
     let (f, p) = (done.fetched.len(), done.present.len());
     let line = match (f, p) {
@@ -474,37 +546,86 @@ fn said(ctx: &Ctx, done: &Done) {
     println!("{}", ctx.say(&line));
 }
 
-/// `git show <rev>:./<file>` in `root`: the bytes, or none when the revision has no such file.
-fn git_show(root: &Path, rev: &str, file: &str) -> Result<Option<Vec<u8>>, Text> {
-    if cfg!(target_os = "wasi") {
-        return Err(ritsu_base::wasi::cannot_start("git"));
-    }
-    let o = Command::new("git").arg("-C").arg(root).args(["show", &format!("{rev}:./{file}")]).output();
-    match o {
-        Ok(o) if o.status.success() => Ok(Some(o.stdout)),
-        Ok(_) => Ok(None),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(no_git()),
-        Err(e) => Err(ritsu_base::wasi::starting("git", &e)),
-    }
+/// Why the fetch of a tree ends: before it fetches anything, or stopped.
+enum Halt {
+    /// The module at hand's `ritsu.mod` cannot be read.
+    NoMod(std::io::Error),
+    /// Its `ritsu.mod` does not parse.
+    Diags(Vec<Diag>),
+    /// There is no lock, and a module from a registry needs one.
+    NoLock,
+    /// The lock cannot be read: what to say.
+    Lock(Text),
+    /// What stops the fetch.
+    Stop(Stop),
 }
 
-/// Whether `rev` names a commit of the repository `root` is in.
-fn git_rev(root: &Path, rev: &str) -> Result<(), Text> {
-    if cfg!(target_os = "wasi") {
-        return Err(ritsu_base::wasi::cannot_start("git"));
-    }
-    let o = Command::new("git").arg("-C").arg(root).args(["rev-parse", "--verify", "--quiet", &format!("{rev}^{{commit}}")]).output();
-    match o {
-        Ok(o) if o.status.success() => Ok(()),
-        Ok(_) => Err(tr!("`{rev}` は、ここの git の版ではありません", "`{rev}` is no revision of the git repository here")),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err(no_git()),
-        Err(e) => Err(ritsu_base::wasi::starting("git", &e)),
-    }
+/// The tree of the module at `root`, read through the files of this thread, and the modules its
+/// lock pins fetched: what `ritsu mod fetch` does (with `--rev`, at a git revision), and what
+/// [`tree`] does for `diff` and `report`. With no lock and no module from a registry, nothing is.
+fn of_tree(root: &Path, store: &Store) -> Result<Done, Halt> {
+    let main = fs::raw::read(&root.join(manifest::FILE)).map_err(Halt::NoMod)?;
+    let main = manifest::parse(&main, manifest::FILE).map_err(Halt::Diags)?;
+    let mut members = locals(root, main);
+    let Ok(lock) = fs::raw::read(&root.join(lockfile::FILE)) else {
+        return if needs_lock(&members) { Err(Halt::NoLock) } else { Ok(Done::default()) };
+    };
+    let lock: Lock = match lockfile::parse(&lock, lockfile::FILE) {
+        Ok(l) => l,
+        Err(lockfile::Error::Newer(n)) => return Err(Halt::Lock(lockfile::Error::Newer(n).text())),
+        Err(lockfile::Error::Unreadable(_)) => {
+            return Err(Halt::Lock(tr!("`ritsu.lock` を読めません。`ritsu mod lock` で書き直してください", "`ritsu.lock` cannot be read; run `ritsu mod lock` to write it again")));
+        }
+    };
+    let (staged, bad) = gather(root, store, &mut members, &lock).map_err(Halt::Stop)?;
+    apply(store, &members, &staged, &bad, false).map_err(Halt::Stop)
 }
 
-/// What `--rev` says when git is not on the PATH.
-fn no_git() -> Text {
-    tr!("git がありません。`--rev` には git が要ります。git を入れて、PATH に置いてください", "git is not there, and `--rev` reads the lock with git")
+/// The modules from a registry the lock pins (the module at hand and the modules a path reaches left
+/// out), each made a member: here (in the module's copy of the store, then the store, its files held
+/// to the lock's digest), or staged from its registry. The versions staged, and the entries of the
+/// store whose files differ from the lock.
+fn gather(root: &Path, store: &Store, members: &mut Vec<Member>, lock: &Lock) -> Result<(Vec<Staged>, Vec<String>), Stop> {
+    let local: BTreeSet<ModuleName> = members.iter().map(|m| m.name.clone()).collect();
+    let vendored = Store::vendored(root);
+    let mut staged: Vec<Staged> = Vec::new();
+    let mut bad: Vec<String> = Vec::new();
+    for l in &lock.modules {
+        let Pinned::Oci { version, digest: d, files } = &l.pinned else { continue };
+        if local.contains(&l.name) {
+            continue;
+        }
+        let mut here = None;
+        for s in [&vendored, store] {
+            if !s.has_files(d) {
+                continue;
+            }
+            if digest::files(&s.files(d)).ok().as_deref() == Some(files.as_str()) {
+                here = Some(s.clone());
+                break;
+            }
+            if *s == vendored {
+                let name = &l.name;
+                return Err(Stop::Refused(tr!(
+                    "同梱のコピーにある `{name}` {version} のファイルが、`ritsu.lock` のダイジェストと違います。`ritsu mod vendor` で置き直してください",
+                    "the files of `{name}` {version} in this module's copy of the store differ from the digest of `ritsu.lock`; run `ritsu mod vendor` to copy them again"
+                )));
+            }
+            bad.push(d.clone());
+        }
+        if let Some(s) = here {
+            let m = s.module_bytes(d).and_then(|b| manifest::parse(&b, manifest::FILE).ok());
+            let copy = s == vendored;
+            members.push(Member { name: l.name.clone(), manifest: m, dir: Some(s.files(d)), staged: None, pinned: Some((version.clone(), d.clone(), Some(s))), copy });
+            continue;
+        }
+        let remote = Remote::of(&l.name, false).map_err(Stop::Cannot)?;
+        let s = stage(&remote, &l.name, version, Some(d), Some((files, l.line)))?;
+        let m = manifest::parse(&s.module, manifest::FILE).ok();
+        members.push(Member { name: l.name.clone(), manifest: m, dir: None, staged: Some(staged.len()), pinned: Some((version.clone(), d.clone(), None)), copy: false });
+        staged.push(s);
+    }
+    Ok((staged, bad))
 }
 
 /// `ritsu mod fetch [<name>@<version>...] [--rev <revision>]`: the exit code.
@@ -528,101 +649,37 @@ pub fn fetch(ctx: &Ctx, a: &Args) -> u8 {
         Ok(r) => r,
         Err(t) => return ctx.refuse(t),
     };
-    let (main_bytes, lock_bytes) = match a.get("--rev") {
-        Some(rev) => {
-            let read = git_rev(&root, rev).and_then(|()| Ok((git_show(&root, rev, manifest::FILE)?, git_show(&root, rev, lockfile::FILE)?)));
-            match read {
-                Ok((Some(m), l)) => (m, l),
-                Ok((None, _)) => return ctx.refuse(tr!("git の版 `{rev}` に、このモジュールの `ritsu.mod` がありません", "the git revision `{rev}` has no `ritsu.mod` of this module")),
-                Err(t) => return ctx.refuse(t),
-            }
-        }
-        None => match std::fs::read(root.join(manifest::FILE)) {
-            Ok(m) => (m, std::fs::read(root.join(lockfile::FILE)).ok()),
-            Err(e) => return ctx.refuse(tr!("ritsu.mod を読めません（{e}）", "cannot read ritsu.mod ({e})")),
+    let rev = a.get("--rev");
+    let run = match rev {
+        // the tree as the revision has it: its files read with git, a path outside it from the disk
+        Some(rev) => match GitRevision::open(&root, rev) {
+            Ok(g) => fs::with(Rc::new(g), || of_tree(&root, &store)),
+            Err(t) => return ctx.refuse(t),
         },
+        None => of_tree(&root, &store),
     };
-    let main = match manifest::parse(&main_bytes, manifest::FILE) {
-        Ok(m) => m,
-        Err(ds) => return super::stopped(ctx, &root, &Problem::Diags(ds)),
-    };
-    let mut members = locals(&root, main);
-    let Some(lock_bytes) = lock_bytes else {
-        if needs_lock(&members) {
-            return stopped(ctx, Some(&root), Stop::Cannot(tr!(
-                "`ritsu.lock` がありません。レジストリから取る依存の版は lock で決まるので、`ritsu mod lock` を走らせてください",
-                "there is no `ritsu.lock`: a dependency from a registry is fetched at the version the lock pins; run `ritsu mod lock`"
-            )));
+    match run {
+        Ok(done) => {
+            said(ctx, &done);
+            0
         }
-        said(ctx, &Done::default());
-        return 0;
-    };
-    let lock: Lock = match lockfile::parse(&lock_bytes, lockfile::FILE) {
-        Ok(l) => l,
-        Err(lockfile::Error::Newer(n)) => return stopped(ctx, Some(&root), Stop::Cannot(lockfile::Error::Newer(n).text())),
-        Err(lockfile::Error::Unreadable(_)) => {
-            return stopped(ctx, Some(&root), Stop::Cannot(tr!("`ritsu.lock` を読めません。`ritsu mod lock` で書き直してください", "`ritsu.lock` cannot be read; run `ritsu mod lock` to write it again")));
-        }
-    };
-    let local: BTreeSet<ModuleName> = members.iter().map(|m| m.name.clone()).collect();
-    let vendored = Store::vendored(&root);
-    let mut staged: Vec<Staged> = Vec::new();
-    let mut bad: Vec<String> = Vec::new();
-    for l in &lock.modules {
-        let Pinned::Oci { version, digest: d, files } = &l.pinned else { continue };
-        if local.contains(&l.name) {
-            continue;
-        }
-        let mut here = None;
-        for s in [&vendored, &store] {
-            if !s.has_files(d) {
-                continue;
-            }
-            if digest::files(&s.files(d)).ok().as_deref() == Some(files.as_str()) {
-                here = Some(s.clone());
-                break;
-            }
-            if *s == vendored {
-                let name = &l.name;
-                return stopped(ctx, Some(&root), Stop::Refused(tr!(
-                    "同梱のコピーにある `{name}` {version} のファイルが、`ritsu.lock` のダイジェストと違います。`ritsu mod vendor` で置き直してください",
-                    "the files of `{name}` {version} in this module's copy of the store differ from the digest of `ritsu.lock`; run `ritsu mod vendor` to copy them again"
-                )));
-            }
-            bad.push(d.clone());
-        }
-        if let Some(s) = here {
-            let m = s.module_bytes(d).and_then(|b| manifest::parse(&b, manifest::FILE).ok());
-            members.push(Member { name: l.name.clone(), manifest: m, dir: Some(s.files(d)), staged: None, pinned: Some((version.clone(), d.clone(), Some(s))) });
-            continue;
-        }
-        let remote = match Remote::of(&l.name, false) {
-            Ok(r) => r,
-            Err(t) => return stopped(ctx, Some(&root), Stop::Cannot(t)),
-        };
-        match stage(&remote, &l.name, version, Some(d), Some((files, l.line))) {
-            Ok(s) => {
-                let m = manifest::parse(&s.module, manifest::FILE).ok();
-                members.push(Member { name: l.name.clone(), manifest: m, dir: None, staged: Some(staged.len()), pinned: Some((version.clone(), d.clone(), None)) });
-                staged.push(s);
-            }
-            Err(s) => return stopped(ctx, Some(&root), s),
-        }
+        Err(Halt::NoMod(e)) => ctx.refuse(match rev {
+            Some(rev) => tr!("git の版 `{rev}` に、このモジュールの `ritsu.mod` がありません", "the git revision `{rev}` has no `ritsu.mod` of this module"),
+            None => tr!("ritsu.mod を読めません（{e}）", "cannot read ritsu.mod ({e})"),
+        }),
+        Err(Halt::Diags(ds)) => super::stopped(ctx, &root, &Problem::Diags(ds)),
+        Err(Halt::NoLock) => stopped(ctx, Some(&root), Stop::Cannot(tr!(
+            "`ritsu.lock` がありません。レジストリから取る依存の版は lock で決まるので、`ritsu mod lock` を走らせてください",
+            "there is no `ritsu.lock`: a dependency from a registry is fetched at the version the lock pins; run `ritsu mod lock`"
+        ))),
+        Err(Halt::Lock(t)) => stopped(ctx, Some(&root), Stop::Cannot(t)),
+        Err(Halt::Stop(s)) => stopped(ctx, Some(&root), s),
     }
-    finish(ctx, Some(&root), &store, &members, &staged, &bad, false)
 }
 
-/// `ritsu mod fetch <name>@<version>...`: each version named, the `ritsu.mod` of every version the
-/// choice of the versions from it reaches, and the files of the versions chosen (DESIGN 17.12). No
-/// lock is written.
+/// `ritsu mod fetch <name>@<version>...`: [`of_versions`] for the versions named.
 fn named(ctx: &Ctx, a: &Args, store: &Store) -> u8 {
     let root = ctx.root().ok();
-    let mut members: Vec<Member> = Vec::new();
-    if let Some(r) = &root
-        && let Some(m) = std::fs::read(r.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok())
-    {
-        members.push(Member { name: m.module.value.clone(), manifest: Some(m), dir: Some(r.clone()), staged: None, pinned: None });
-    }
     let mut wanted: Vec<(ModuleName, Version)> = Vec::new();
     for arg in &a.pos {
         let Some((name, v)) = arg.rsplit_once('@') else {
@@ -638,8 +695,27 @@ fn named(ctx: &Ctx, a: &Args, store: &Store) -> u8 {
         };
         wanted.push((module, version));
     }
+    match of_versions(root.as_deref(), store, &wanted) {
+        Ok(done) => {
+            said(ctx, &done);
+            0
+        }
+        Err(s) => stopped(ctx, root.as_deref(), s),
+    }
+}
+
+/// The versions `wanted`, the `ritsu.mod` of every version the choice of the versions from them
+/// reaches, and the files of the versions chosen (DESIGN 17.12); the lines of the module at `root`,
+/// when there is one, apply too. No lock is written.
+fn of_versions(root: Option<&Path>, store: &Store, wanted: &[(ModuleName, Version)]) -> Result<Done, Stop> {
+    let mut members: Vec<Member> = Vec::new();
+    if let Some(r) = root
+        && let Some(m) = fs::raw::read(&r.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok())
+    {
+        members.push(Member { name: m.module.value.clone(), manifest: Some(m), dir: Some(r.to_path_buf()), staged: None, pinned: None, copy: false });
+    }
     // the choice of the versions from the versions named, each `ritsu.mod` from the store or fetched
-    let picked = graph::mvs_try(&wanted, |k, v| -> Result<Vec<(ModuleName, Version)>, Stop> {
+    let picked = graph::mvs_try(wanted, |k, v| -> Result<Vec<(ModuleName, Version)>, Stop> {
         let d = match store.find(k, v).filter(|d| store.has(d)) {
             Some(d) => d,
             None => chosen(store, k, v)?,
@@ -668,43 +744,61 @@ fn named(ctx: &Ctx, a: &Args, store: &Store) -> u8 {
             }
         }
         Ok(out)
-    });
-    let picked = match picked {
-        Ok(c) => c,
-        Err(s) => return stopped(ctx, root.as_deref(), s),
-    };
+    })?;
     let mut staged: Vec<Staged> = Vec::new();
     let mut bad: Vec<String> = Vec::new();
     for (k, v) in &picked {
         let Some(d) = store.find(k, v) else {
-            return stopped(ctx, root.as_deref(), Stop::Cannot(tr!("置き場の版の索引に `{k}` {v} がありません", "the store's index of versions has no `{k}` {v}")));
+            return Err(Stop::Cannot(tr!("置き場の版の索引に `{k}` {v} がありません", "the store's index of versions has no `{k}` {v}")));
         };
         let files = store.record(&d).map(|r| r.files);
         if store.has_files(&d) {
             if digest::files(&store.files(&d)).ok() == files {
                 let m = store.module_bytes(&d).and_then(|b| manifest::parse(&b, manifest::FILE).ok());
-                members.push(Member { name: k.clone(), manifest: m, dir: Some(store.files(&d)), staged: None, pinned: Some((v.clone(), d.clone(), Some(store.clone()))) });
+                members.push(Member { name: k.clone(), manifest: m, dir: Some(store.files(&d)), staged: None, pinned: Some((v.clone(), d.clone(), Some(store.clone()))), copy: false });
                 continue;
             }
             bad.push(d.clone());
         }
-        let remote = match Remote::of(k, false) {
-            Ok(r) => r,
-            Err(t) => return stopped(ctx, root.as_deref(), Stop::Cannot(t)),
-        };
-        match stage(&remote, k, v, Some(&d), None) {
-            Ok(s) => {
-                if files.as_deref().is_some_and(|f| f != s.files_digest) {
-                    return stopped(ctx, root.as_deref(), Stop::Refused(tr!("`{k}` {v} のファイルのダイジェストが、置き場の記録と違います", "the digest of the files of `{k}` {v} differs from the store's record")));
-                }
-                let m = manifest::parse(&s.module, manifest::FILE).ok();
-                members.push(Member { name: k.clone(), manifest: m, dir: None, staged: Some(staged.len()), pinned: Some((v.clone(), d.clone(), None)) });
-                staged.push(s);
-            }
-            Err(s) => return stopped(ctx, root.as_deref(), s),
+        let remote = Remote::of(k, false).map_err(Stop::Cannot)?;
+        let s = stage(&remote, k, v, Some(&d), None)?;
+        if files.as_deref().is_some_and(|f| f != s.files_digest) {
+            return Err(Stop::Refused(tr!("`{k}` {v} のファイルのダイジェストが、置き場の記録と違います", "the digest of the files of `{k}` {v} differs from the store's record")));
         }
+        let m = manifest::parse(&s.module, manifest::FILE).ok();
+        members.push(Member { name: k.clone(), manifest: m, dir: None, staged: Some(staged.len()), pinned: Some((v.clone(), d.clone(), None)), copy: false });
+        staged.push(s);
     }
-    finish(ctx, root.as_deref(), store, &members, &staged, &bad, true)
+    apply(store, &members, &staged, &bad, true)
+}
+
+/// The modules the tree of the module at `root` pins, read through the files of this thread (the
+/// working tree, a git revision, the module at hand with another lock), fetched as `ritsu mod
+/// fetch` fetches them: what `ritsu mod diff` and `ritsu mod report` read, fetched before they read
+/// it (DESIGN 17.9.6, 17.10). Nothing is asked of a registry or of cosign when every module is here
+/// and its record names every line that applies. A tree that cannot be read (no `ritsu.mod`, one
+/// that does not parse, no lock, a lock that cannot be read), and a run with no place for the store,
+/// are left to what reads the tree after, which says why. Err, with what stops the fetch (exit 2).
+pub fn tree(root: &Path) -> Result<Done, Text> {
+    let Some(store) = Store::located() else { return Ok(Done::default()) };
+    match of_tree(root, &store) {
+        Ok(done) => Ok(done),
+        Err(Halt::Stop(s)) => Err(s.text()),
+        Err(Halt::NoMod(_) | Halt::Diags(_) | Halt::NoLock | Halt::Lock(_)) => Ok(Done::default()),
+    }
+}
+
+/// The version `v` of `name`, and what the choice of the versions from it reaches, fetched as `ritsu
+/// mod fetch <name>@<version>` fetches them, for `ritsu mod diff` (DESIGN 17.9.6); the lines of the
+/// module at `root`, when there is one, apply too. Err, with what stops the fetch (exit 2).
+pub fn version(root: Option<&Path>, name: &ModuleName, v: &Version) -> Result<Done, Text> {
+    let Some(store) = Store::located() else {
+        return Err(tr!(
+            "`{name}` {v} を取り出す置き場の場所が分かりません（`RITSU_MODULES` も `HOME` もありません）",
+            "there is no place for the store to fetch `{name}` {v} into: neither `RITSU_MODULES` nor `HOME` is set"
+        ));
+    };
+    of_versions(root, &store, &[(name.clone(), v.clone())]).map_err(Stop::text)
 }
 
 /// The version `version` of the module `name`, which the choice of the versions reaches (DESIGN
@@ -720,10 +814,7 @@ pub fn for_choosing(store: Option<&Store>, name: &ModuleName, version: &Version)
             "there is no place for the store to fetch the dependency `{name}` {version} into: neither `RITSU_MODULES` nor `HOME` is set"
         ));
     };
-    chosen(store, name, version).map_err(|s| match s {
-        Stop::Refused(t) | Stop::Cannot(t) => t,
-        Stop::Lock(d) => d.message,
-    })
+    chosen(store, name, version).map_err(Stop::text)
 }
 
 /// [`for_choosing`], with what stops it told apart: what the registry answered is not what it has

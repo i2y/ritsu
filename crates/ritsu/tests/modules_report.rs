@@ -15,27 +15,44 @@
 //!   Every `@` of the Markdown is in code.
 //! - A report longer than a comment holds, cut at 60,000 characters with the fold it was in closed.
 //! - Two revisions whose locks pin the same modules; and what stops a report (exit 2): no `--base`,
-//!   a revision that is not one, a version the store does not have.
+//!   a revision that is not one, a module in no repository.
+//! - What the two locks pin, fetched from a registry the test starts (`ritsu_testkit::registry`:
+//!   curl asks it on the loopback, and nothing else) into an empty store: the same report as with
+//!   the store `ritsu mod fetch --rev <base>` and `ritsu mod fetch` filled, each version fetched said
+//!   on stderr, and nothing asked of the registry once the store has it. A fetch that stops (an OCI
+//!   manifest that is not its digest, a registry that does not answer) stops the report (exit 2),
+//!   in each language.
 
 use ritsu_base::modules::store::{self, Store};
+use ritsu_testkit::registry::{self as reg, Registry};
 use ritsu_testkit::{TempDir, skip};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output};
 
 fn here() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// `ritsu`, run in `dir` with the store at `store` and no language asked of the environment: the
-/// exit code, what it printed and what it said on stderr.
-fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
+/// `ritsu` with `args`, to run in `dir` with the store at `store` and no language asked of the
+/// environment.
+fn command(dir: &Path, store: &Path, args: &[&str]) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_ritsu"));
     c.current_dir(dir).args(args).env(store::VARIABLE, store);
     for v in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
         c.env_remove(v);
     }
-    let o = c.output().expect("could not run ritsu");
+    c
+}
+
+/// The exit code, what was printed and what was said on stderr.
+fn said(o: Output) -> (i32, String, String) {
     (o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned(), String::from_utf8_lossy(&o.stderr).into_owned())
+}
+
+/// `ritsu`, run in `dir` with the store at `store` and no language asked of the environment: the
+/// exit code, what it printed and what it said on stderr.
+fn ritsu_in(dir: &Path, store: &Path, args: &[&str]) -> (i32, String, String) {
+    said(command(dir, store, args).output().expect("could not run ritsu"))
 }
 
 /// Whether git runs; a SKIP line when it does not.
@@ -646,8 +663,8 @@ fn a_report_longer_than_a_comment_is_cut() {
     assert_eq!(v["modules"][0]["diff"]["behavior"].as_array().unwrap().len(), RULES);
 }
 
-/// What stops a report, exit 2 and nothing printed: no `--base`, a revision that is not one, a
-/// version the store does not have, a module in no repository.
+/// What stops a report, exit 2 and nothing printed: no `--base`, a revision that is not one, a module
+/// in no repository. (What stops a fetch of what the locks pin is in `what_a_report_reads_is_fetched`.)
 #[test]
 fn what_stops_a_report() {
     if !has_git() {
@@ -663,16 +680,172 @@ fn what_stops_a_report() {
     assert_eq!(stops(&repo, &store, &["mod", "report", "--lang", "ja"]), "エラー: `--base <git の版>`（比べる前の版）を付けてください\n");
     assert_eq!(stops(&repo, &store, &["mod", "report", "--base", "nowhere"]), "error: the git revision `nowhere` cannot be resolved\n");
     assert_eq!(stops(&repo, &store, &["mod", "report", "--base", "one", "--budget", "0"]), "error: `--budget 0` is not a positive integer\n");
-    // a store without the base's pricing
-    let thin = t.path().join("thin-store");
-    put(&thin, &t.path().join(EN.tax));
-    put(&thin, &t.path().join(EN.pricing));
-    let err = stops(&repo, &thin, &["mod", "report", "--base", "one"]);
-    assert!(err.contains("`example.com/acme/pricing` 1.0.0") && err.contains("`ritsu mod fetch --rev one`"), "{err}");
     // a module in no repository
     let alone = t.path().join("alone");
     copy_dir(&repo, &alone);
     std::fs::remove_dir_all(alone.join(".git")).unwrap();
     let err = stops(&alone, &store, &["mod", "report", "--base", "one"]);
     assert!(err.starts_with("error: `") && err.ends_with("` is in no git repository\n"), "{err}");
+}
+
+// ── What a report reads, fetched ────────────────────────────────────────
+
+/// The example's shop on a registry the test starts, in a repository of its own: tax 1.0.0 and
+/// pricing 1.0.0 and 1.1.0 pushed (each `require` from the registry, a `ritsu >=` line under each
+/// version), and two commits of shop, tagged `one` (pricing 1.0.0) and `two` (pricing 1.1.0, the
+/// working tree). The pushes and the locks use the store `pushed/`, and every run a Docker config of
+/// the test's own, with nothing in it.
+struct OnRegistry {
+    t: TempDir,
+    r: Registry,
+}
+
+impl OnRegistry {
+    fn new(what: &str) -> OnRegistry {
+        let r = Registry::start();
+        let t = TempDir::new(what);
+        let host = r.host.clone();
+        let from = here().join("tests/projects/modules");
+        for (src, dst) in [("tax", "tax"), ("pricing", "pricing"), ("shop", "shop"), ("versions/pricing-1.0.0", "pricing-1.0.0")] {
+            copy_dir(&from.join(src), &t.path().join(dst));
+            let file = t.path().join(dst).join("ritsu.mod");
+            let text = std::fs::read_to_string(&file)
+                .unwrap()
+                .replace("example.com/acme/", &format!("{host}/acme/"))
+                .replace("require tax path \"../tax\"", &format!("require tax oci \"{host}/acme/tax\" 1.0.0"))
+                .replace("require tax path \"../../tax\"", &format!("require tax oci \"{host}/acme/tax\" 1.0.0"))
+                .replace("require pricing path \"../pricing\"", &format!("require pricing oci \"{host}/acme/pricing\" 1.0.0"));
+            let mut out = String::new();
+            for line in text.split_inclusive('\n') {
+                out.push_str(line);
+                if line.starts_with("version ") {
+                    out.push_str("ritsu >=0.36.0\n");
+                }
+            }
+            std::fs::write(&file, out).unwrap();
+        }
+        std::fs::create_dir_all(t.path().join("docker")).unwrap();
+        let w = OnRegistry { t, r };
+        let pushed = w.path("pushed");
+        let step = |dir: &str, step: &str| {
+            let (code, out, err) = w.run(dir, &pushed, &["mod", step]);
+            assert_eq!(code, 0, "ritsu mod {step} in {dir}:\n{out}{err}");
+        };
+        for (dir, s) in [("tax", "push"), ("pricing-1.0.0", "lock"), ("pricing-1.0.0", "fetch"), ("pricing-1.0.0", "push"), ("pricing", "lock"), ("pricing", "push"), ("shop", "lock")] {
+            step(dir, s);
+        }
+        let repo = w.path("shop");
+        git(&repo, &["init", "-q"]);
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-q", "-m", "pricing 1.0.0"]);
+        git(&repo, &["tag", "one"]);
+        replace(&repo, "ritsu.mod", &format!("\"{host}/acme/pricing\" 1.0.0"), &format!("\"{host}/acme/pricing\" 1.1.0"));
+        step("shop", "lock");
+        git(&repo, &["commit", "-q", "-a", "-m", "pricing 1.1.0"]);
+        git(&repo, &["tag", "two"]);
+        w
+    }
+
+    fn path(&self, rel: &str) -> PathBuf {
+        self.t.path().join(rel)
+    }
+
+    /// ritsu, run in the directory `dir` of the test with the store at `store`.
+    fn run(&self, dir: &str, store: &Path, args: &[&str]) -> (i32, String, String) {
+        let mut c = command(&self.path(dir), store, args);
+        c.env("DOCKER_CONFIG", self.path("docker"));
+        said(c.output().expect("could not run ritsu"))
+    }
+
+    /// The digest of the OCI manifest of the version `tag` of `repository` in the registry.
+    fn digest(&self, repository: &str, tag: &str) -> String {
+        self.r.tag(repository, tag).unwrap_or_else(|| panic!("the registry has no {repository}:{tag}"))
+    }
+}
+
+/// Whether the store at `store` holds an entry, or a line of its index.
+fn holds_any(store: &Path) -> bool {
+    store.join("sha256").exists() || store.join("refs").exists()
+}
+
+/// What the two locks pin, fetched into an empty store by the report itself: the base's (pricing
+/// 1.0.0 and tax), then the head's (pricing 1.1.0), each said on stderr, a line each. The report is
+/// the one a store filled by `ritsu mod fetch --rev one` and `ritsu mod fetch` gives (as JSON and as
+/// Markdown); with the store full, the registry is asked nothing and nothing is said. What stops a
+/// fetch stops the report (exit 2), nothing put in the store: an OCI manifest that is not its
+/// digest, and a registry that does not answer.
+#[test]
+fn what_a_report_reads_is_fetched() {
+    if !has_git() {
+        return;
+    }
+    let w = OnRegistry::new("mod-report-fetch");
+    let host = w.r.host.clone();
+    let (d10, d11, tax) = (w.digest("acme/pricing", "1.0.0"), w.digest("acme/pricing", "1.1.0"), w.digest("acme/tax", "1.0.0"));
+    let fetched = |name: &str, version: &str, d: &str| format!("fetched {host}/acme/{name} {version} ({d})\n");
+    let three = [fetched("pricing", "1.0.0", &d10), fetched("tax", "1.0.0", &tax), fetched("pricing", "1.1.0", &d11)].concat();
+
+    let report = ["mod", "report", "--base", "one", "--format", "json"];
+    let empty = w.path("store-empty");
+    let (code, first, err) = w.run("shop", &empty, &report);
+    assert_eq!((code, err.as_str()), (0, three.as_str()), "{first}");
+    let v = json(&first);
+    assert_eq!((&v["modules"][0]["module"], &v["modules"][0]["change"]), (&serde_json::json!(format!("{host}/acme/pricing")), &serde_json::json!("upgraded")), "{first}");
+    w.r.clear_log();
+    assert_eq!(w.run("shop", &empty, &report), (0, first.clone(), String::new()));
+    // a store `ritsu mod fetch --rev one` and `ritsu mod fetch` filled: the same report, the
+    // registry asked nothing
+    let full = w.path("store-full");
+    for args in [&["mod", "fetch", "--rev", "one"][..], &["mod", "fetch"]] {
+        let (code, out, err) = w.run("shop", &full, args);
+        assert_eq!(code, 0, "{args:?}: {out}{err}");
+    }
+    w.r.clear_log();
+    assert_eq!(w.run("shop", &full, &report), (0, first, String::new()));
+    let markdown = ["mod", "report", "--base", "one", "--format", "markdown", "--lang", "ja"];
+    let (_, from_full, _) = w.run("shop", &full, &markdown);
+    assert_eq!(w.r.log().len(), 0);
+    let (code, out, err) = w.run("shop", &w.path("store-markdown"), &markdown);
+    assert_eq!((code, out), (0, from_full));
+    assert!(err.starts_with(&format!("{host}/acme/pricing 1.0.0 を取り出しました（{d10}）\n")), "{err}");
+
+    // other bytes for tax's OCI manifest: the base's lock cannot be fetched, and nothing is put
+    let manifest = w.r.get("acme/tax", &tax).unwrap();
+    let other = String::from_utf8(manifest.clone()).unwrap().replace("Acme", "Acne");
+    assert_ne!(other.as_bytes(), &manifest[..]);
+    w.r.serve_instead(&tax, other.as_bytes());
+    let x = format!("sha256:{}", reg::sha256_hex(other.as_bytes()));
+    for (lang, want) in [
+        ("en", format!("error: cannot fetch the modules of the lock of `one`: the bytes fetched as the OCI manifest of `{host}/acme/tax` 1.0.0 have the digest {x}, not the {tax} asked for\n")),
+        ("ja", format!("エラー: `one` の lock のモジュールを取り出せません。`{host}/acme/tax` 1.0.0 の OCI のマニフェストとして受け取ったバイトのダイジェストは {x} で、求めた {tax} ではありません\n")),
+    ] {
+        let store = w.path(&format!("store-other-{lang}"));
+        assert_eq!(w.run("shop", &store, &["mod", "report", "--base", "one", "--lang", lang]), (2, String::new(), want));
+        assert!(!holds_any(&store), "{lang}");
+    }
+    w.r.serve_instead(&tax, &manifest);
+
+    // a registry that does not answer: what curl said, after the three tries (two and four seconds
+    // apart; the two languages at once)
+    let OnRegistry { t, r } = w;
+    drop(r);
+    let url = format!("http://{host}/v2/acme/pricing/manifests/{d10}");
+    let runs: Vec<_> = ["en", "ja"]
+        .iter()
+        .map(|lang| {
+            let store = t.path().join(format!("store-down-{lang}"));
+            let mut c = command(&t.path().join("shop"), &store, &["mod", "report", "--base", "one", "--lang", lang]);
+            c.env("DOCKER_CONFIG", t.path().join("docker")).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+            (store, c.spawn().expect("could not run ritsu"))
+        })
+        .collect();
+    for ((store, child), (head, tail)) in runs.into_iter().zip([
+        (format!("error: cannot fetch the modules of the lock of `one`: cannot reach `GET {url}` (curl exited with 7: "), ")\n"),
+        (format!("エラー: `one` の lock のモジュールを取り出せません。`GET {url}` に届きません（curl の終了コード 7: "), "）\n"),
+    ]) {
+        let (code, out, err) = said(child.wait_with_output().unwrap());
+        assert_eq!((code, out.as_str()), (2, ""), "{err}");
+        assert!(err.starts_with(&head) && err.ends_with(tail) && err.lines().count() == 1, "{err}");
+        assert!(!holds_any(&store));
+    }
 }
