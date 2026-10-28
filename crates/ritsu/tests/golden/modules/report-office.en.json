@@ -9,11 +9,11 @@
   "check": {
     "base": {
       "errors": 0,
-      "warnings": 1
+      "warnings": 0
     },
     "head": {
       "errors": 0,
-      "warnings": 1
+      "warnings": 0
     },
     "new": [],
     "gone": []

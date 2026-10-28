@@ -1,13 +1,13 @@
 rule band v2
 description "The band of a refund, its second version: small up to 8, large above. The amounts are the test's own"
 
-enum band = small | large
+enum size = small | large
 
 inputs
   amount : number  range >=1 <=20
 
 outputs
-  band : band
+  band : size
 
 table band
 policy unique

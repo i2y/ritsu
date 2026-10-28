@@ -2,8 +2,8 @@
 
 | Check | Errors | Warnings |
 |---|---|---|
-| With the lock of `one` | 0 | 1 |
-| With the lock of the working tree | 0 | 1 |
+| With the lock of `one` | 0 | 0 |
+| With the lock of the working tree | 0 | 0 |
 
 ### `example.com/acme/desk` (`@desk`) 1.0.0 → 1.1.0: upgraded
 

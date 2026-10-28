@@ -1,7 +1,7 @@
 ritsu mod report: one → the working tree
 
-the check with the lock of one: 0 errors, 1 warning
-the check with the lock of the working tree: 0 errors, 1 warning
+the check with the lock of one: 0 errors, 0 warnings
+the check with the lock of the working tree: 0 errors, 0 warnings
 new diagnostics: none
 diagnostics gone: none
 
