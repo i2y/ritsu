@@ -1951,10 +1951,16 @@ sakai は地図の `except` をパスの正規表現にして `excludeFiles` に
 
 確かめたこと：`tests/imports.rs` の `go_arch_lint_leaves_out_what_the_map_excepts` で、`except "go/legacy"` を書いた英語の例の設定が `exclude` に `"legacy"` を持ち、go-arch-lint が通ること、`exclude` を消すと落ちることを確かめた。`tests/build.rs` に E501 の二つを英日の例で足した。例の 6 つの地図の 12 の設定は変わらない。
 
-見つけて直していないもの：import-linter は、まとまりのパッケージの中にある `except` のディレクトリも検査する。ArchUnit は確かめていない。`in:` と `exclude` の glob の記号はエスケープしていない。
+見つけて直していないもの：ArchUnit は確かめていない。`in:` と `exclude` の glob の記号はエスケープしていない。import-linter が、まとまりのパッケージの中にある `except` のディレクトリも検査していたことは、7.64 で直した。
 
 ### 7.63 geas は、どのコマンドでも、サービスを SIGTERM で止めてから強制終了する（2026-10-28）
 
 `check`・`snap`・`drift` は、主張が終わるとサービスのプロセスグループをすぐ SIGKILL で止めていた（`map` だけが SIGTERM を送って 5 秒待つ）。止まるときに後片づけをするサービス（一回の実行のために作ったデータベースを消す、ソケットのファイルを消す）は、主張のたびにそれを残していた。どのコマンドでも SIGTERM を送り、5 秒たっても残っていれば SIGKILL で止めるようにした。E066 は前と同じに `map` だけが言う。SIGTERM を無視するサービスでは、主張ごとに 5 秒長くなる（geas の DESIGN 7.3、10.1）。スキルの言語の説明にも書いた。
 
 確かめたこと：`tests/parallel.rs` に `check_lets_a_service_clean_up_as_it_stops` を足した。始まるときに作ったファイルを SIGTERM で消すサービスを `check` で動かし、消したことを確かめる。直す前の geas では、ファイルが残った（同じサービスを手で動かして確かめた）。geas の試験の全体が通った。
+
+### 7.64 sakai は、import-linter の設定で、パッケージの中の `except` の import を外す（2026-10-28）
+
+import-linter（grimp）は `root_packages` のパッケージをその下ごと読むので、パッケージの中のディレクトリを地図の `except` で外しても、そこのコードはパッケージの一部として調べられ、そこからほかのまとまりへの import と、そこへの import で import-linter が落ちていた。`except` のうち `root_packages` のパッケージの中にあるものを、どの契約にも `ignore_imports` で書き（ディレクトリはその下も含めて、どちら向きの import も）、当たる import が無い契約も落ちないよう `unmatched_ignore_imports_alerting = none` を書くようにした。grimp が読まないもの（名前が識別子でないディレクトリ、`.` で始まる `.py`、二つ目の `.` のある `.py`）には書かない。grimp が読むのに式に名前を書けない `.py` のファイル（`old-stuff.py`）を指す `except` は E501 にした。台帳の E501 の文に、`except` を書けない場合（import-linter と go-arch-lint）を足した（sakai の DESIGN 7.2、25 章）。
+
+確かめたこと：`tests/imports.rs` に `import_linter_leaves_out_what_the_map_excepts` を足した。`except` のディレクトリの中のコードが受注の内側を import し、請求がそれを import する英語の例で、どの契約も式を持ち、import-linter が通ること、式を消すと二つの import で落ちること、名前が識別子でないディレクトリには何も書かないことを確かめる。直す前の sakai では落ちた。`tests/build.rs` に E501 を英日の例で足した。`code python` のある 12 の地図の英日の 24 の設定は変わらない。sakai の試験の全体が通った。

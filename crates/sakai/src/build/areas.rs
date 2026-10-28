@@ -380,17 +380,21 @@ const JAVA_KEYWORDS: &[&str] = &[
     "null", "_",
 ];
 
-/// Whether a directory's name can be a module (Python) or a package (Java) name.
-pub fn module_word(language: Language, w: &str) -> bool {
+/// Whether a name has the shape of an identifier: a letter or `_`, then letters, digits and `_`.
+pub fn identifier(w: &str) -> bool {
     let mut cs = w.chars();
     let Some(first) = cs.next() else { return false };
-    let shape = (first.is_alphabetic() || first == '_') && cs.all(|c| c.is_alphanumeric() || c == '_');
+    (first.is_alphabetic() || first == '_') && cs.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Whether a directory's name can be a module (Python) or a package (Java) name.
+pub fn module_word(language: Language, w: &str) -> bool {
     let keyword = match language {
         Language::Python => PYTHON_KEYWORDS.contains(&w),
         Language::Java => JAVA_KEYWORDS.contains(&w),
         _ => false,
     };
-    shape && !keyword
+    identifier(w) && !keyword
 }
 
 /// Which group may import which (DESIGN 7.1).

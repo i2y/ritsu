@@ -183,6 +183,7 @@ fn what_cannot_be_written() {
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
     }
     excepts_go_arch_lint_cannot_hold(&example(), "通販.ctx");
+    excepts_import_linter_cannot_hold(&example(), "通販.ctx");
 }
 
 // ── The English twins: the same groups and settings, written from the English example and map ──
@@ -298,6 +299,7 @@ fn what_cannot_be_written_in_english() {
         assert!(text.contains("error[E501]") && text.contains(says), "{text}");
     }
     excepts_go_arch_lint_cannot_hold(&example_en(), "shop.ctx");
+    excepts_import_linter_cannot_hold(&example_en(), "shop.ctx");
 }
 
 /// An `except` go-arch-lint cannot hold (E501): one Go file, and a directory that the path of other
@@ -317,6 +319,22 @@ fn excepts_go_arch_lint_cannot_hold(example: &Path, map: &str) {
         for t in [Target::ImportLinter, Target::DependencyCruiser, Target::ArchUnit] {
             assert!(build::run_with(dir.path(), map, t, &common::suite(), None, false, Lang::En).unwrap().done.is_some(), "{}", t.word());
         }
+    }
+}
+
+/// An `except` import-linter cannot hold (E501): a `.py` file that grimp reads as a module of a
+/// name its expressions cannot hold (`old-stuff.py`).
+fn excepts_import_linter_cannot_hold(example: &Path, map: &str) {
+    let dir = example_variant_of(example, &[(map, "covers \".\"\n", "covers \".\"\nexcept \"py/inventory/old-stuff.py\"\n")]);
+    dir.write("py/inventory/old-stuff.py", "from ordering import fulfill\n");
+    let b = build::run_with(dir.path(), map, Target::ImportLinter, &common::suite(), None, false, Lang::En).unwrap();
+    let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
+    let codes: Vec<&str> = b.outcome.diags.iter().map(|d| d.code).collect();
+    let says = "The `except` py/inventory/old-stuff.py is read as the module `inventory.old-stuff`";
+    assert!(codes == ["E501"] && text.contains(says) && b.done.is_none(), "{text}");
+    // the settings of the other tools leave it out as they did
+    for t in [Target::DependencyCruiser, Target::ArchUnit, Target::GoArchLint] {
+        assert!(build::run_with(dir.path(), map, t, &common::suite(), None, false, Lang::En).unwrap().done.is_some(), "{}", t.word());
     }
 }
 

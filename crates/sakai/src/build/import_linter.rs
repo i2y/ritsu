@@ -8,9 +8,20 @@
 //! that holds another group has an `__init__.py` of its own, that module cannot be named as a
 //! package without the group under it; the contract then names every module, one by one
 //! (`as_packages = False`), so that it says exactly what the map says.
+//!
+//! What the map's `except` leaves out inside a root package, grimp reads with the rest of the
+//! package. Every contract ignores the imports from it and to it (`ignore_imports`, the other side
+//! `**`), as dependency-cruiser's `exclude` and go-arch-lint's leave it out of what they read, and
+//! says nothing when there are none (`unmatched_ignore_imports_alerting = none`). An `except`
+//! outside every root package is not read at all. grimp 3.17 goes into no directory whose name is
+//! not an identifier, and reads no hidden `.py` file and none with a second dot in its name; it
+//! reads any other `.py` file, `old-stuff.py` too, but its expressions take names of letters,
+//! digits and `_` only, so an `except` of such a file cannot be written (E501, [`unwritable`]).
 
 use super::areas::{self, Areas};
 use crate::check::Checked;
+use crate::diag::{self, Diag};
+use crate::paths;
 use ritsu_base::text::Lang;
 use std::collections::BTreeSet;
 
@@ -153,11 +164,81 @@ fn list(key: &str, items: &[String]) -> String {
     s
 }
 
+/// An `except` inside a root package that grimp reads: a directory stands for what is under it,
+/// a `.py` file for its module.
+struct Excepted {
+    /// From the code directory.
+    path: String,
+    module: String,
+    dir: bool,
+}
+
+/// The map's `except` that grimp reads inside a root package.
+fn excepted(c: &Checked, a: &Areas, roots: &[String]) -> Vec<Excepted> {
+    let mut out = Vec::new();
+    for e in a.except.iter().filter(|e| roots.iter().any(|r| r != *e && paths::contains(r, e))) {
+        let dir = ritsu_base::fs::is_dir(paths::on_disk(&c.model.root, &paths::join(&a.dir, e).unwrap_or_default()));
+        let (dirs, file) = match e.rsplit_once('/') {
+            Some((d, f)) if !dir => (d, Some(f)),
+            _ => (e.as_str(), None),
+        };
+        if !dirs.split('/').all(areas::identifier) {
+            continue;
+        }
+        if let Some(f) = file
+            && (!f.ends_with(".py") || f.starts_with('.') || f.matches('.').count() > 1)
+        {
+            continue;
+        }
+        out.push(Excepted { path: e.clone(), module: module_of(e), dir });
+    }
+    out
+}
+
+/// Whether grimp's expressions can name the module: each part of letters, digits and `_`.
+fn nameable(module: &str) -> bool {
+    module.split('.').all(|p| !p.is_empty() && p.chars().all(|c| c.is_alphanumeric() || c == '_'))
+}
+
+/// The imports to ignore for what is excepted, from it and to it.
+fn ignored(xs: &[Excepted]) -> Vec<String> {
+    let mut out = Vec::new();
+    for x in xs.iter().filter(|x| nameable(&x.module)) {
+        let m = &x.module;
+        if x.dir {
+            out.extend([format!("{m} -> **"), format!("{m}.** -> **"), format!("** -> {m}"), format!("** -> {m}.**")]);
+        } else {
+            out.extend([format!("{m} -> **"), format!("** -> {m}")]);
+        }
+    }
+    out
+}
+
+/// Why the map's `except` cannot be written for import-linter (E501), at each entry that cannot.
+pub fn unwritable(c: &Checked, a: &Areas) -> Vec<Diag> {
+    let m = &c.model;
+    let files: BTreeSet<String> = a.areas.iter().flat_map(|x| x.files.iter().cloned()).collect();
+    let roots = root_packages(&Tree { files: &files });
+    let mut out = Vec::new();
+    for x in excepted(c, a, &roots).iter().filter(|x| !nameable(&x.module)) {
+        let Some((p, s)) = m.map.except.iter().zip(&m.map.ast.except).find(|(p, _)| paths::contains(&a.dir, p) && paths::relative(&a.dir, p) == x.path) else {
+            continue;
+        };
+        let (se, sm) = (paths::shown(p), &x.module);
+        out.push(diag::at("E501", &m.map.file, s.pos.line, s.pos.col, tr!("`except` の {se} はモジュール `{sm}` として読まれますが、import-linter の設定にはその名前を書けません", "The `except` {se} is read as the module `{sm}`, a name the settings of import-linter cannot hold")).source(&m.map.src).note(tr!(
+            "import-linter（grimp）は、名前に `-` や空白のある `.py` のファイルも、その名前のモジュールとして読みます。`ignore_imports` の式は文字、数字、`_` の名前しか受け付けないので、このファイルだけを外す書き方がありません。ファイルの名前を変えるか、外すファイルをディレクトリにまとめ、そのディレクトリを `except` に書いてください。",
+            "import-linter (grimp) reads a `.py` file with `-` or a space in its name as a module of that name, and the expressions of `ignore_imports` take names of letters, digits and `_` only, so no setting leaves out this one file. Rename the file, or put the files to leave out in a directory, and write that directory in `except`."
+        )));
+    }
+    out
+}
+
 pub fn render(c: &Checked, a: &Areas, lang: Lang) -> (String, usize) {
     let m = &c.model;
     let files: BTreeSet<String> = a.areas.iter().flat_map(|x| x.files.iter().cloned()).collect();
     let t = Tree { files: &files };
     let roots = root_packages(&t);
+    let ignored = ignored(&excepted(c, a, &roots));
     let mut s = String::from("[importlinter]\n");
     s.push_str(&list("root_packages", &roots.iter().map(|r| dotted(r)).collect::<Vec<_>>()));
     let verb = tr!("import する", "imported");
@@ -177,6 +258,10 @@ pub fn render(c: &Checked, a: &Areas, lang: Lang) -> (String, usize) {
             s.push_str("as_packages = False\n");
             s.push_str(&list("protected_modules", &every_module(a, &[i])));
             s.push_str(&list("allowed_importers", &every_module(a, &importers)));
+        }
+        if !ignored.is_empty() {
+            s.push_str(&list("ignore_imports", &ignored));
+            s.push_str("unmatched_ignore_imports_alerting = none\n");
         }
     }
     (s, a.areas.len())

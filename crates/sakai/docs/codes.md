@@ -4616,9 +4616,9 @@ See also: [E401](#e401)
 
 ## E501 — The settings of a tool cannot be written
 
-**When**: `sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, or the place of the Go code has no go.mod.
+**When**: `sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, the place of the Go code has no go.mod, or the settings of the tool cannot hold an `except` (import-linter and go-arch-lint).
 
-**Fix**: Correct the map's `code` and `owns`, or where the code is, as the note says.
+**Fix**: Correct the map's `code`, `owns` and `except`, or where the code is, as the note says.
 
 **Reproduction**: put the files below in one directory, and run `sakai build map.ctx --target import-linter` there.
 

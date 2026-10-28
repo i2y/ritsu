@@ -1129,10 +1129,10 @@ pub fn ledger() -> Ledger {
             "E501",
             tr!("ツールの設定に書けません", "The settings of a tool cannot be written"),
             tr!(
-                "`sakai build` で、地図にその言語の `code` の行が無いとき、その言語のコードを持つコンテキストが無いとき、ディレクトリの名前がその言語のモジュールの名前にならないとき（Python と Java）、コードのファイルを一つだけ指す項があるとき、Python の置き場所の直下にモジュールがあるとき（import-linter は読めない）、Java にデフォルトパッケージのクラスがあるとき、ArchUnit に `test` の置き場所が無いとき、Go の置き場所に go.mod が無いとき。",
-                "`sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, or the place of the Go code has no go.mod."
+                "`sakai build` で、地図にその言語の `code` の行が無いとき、その言語のコードを持つコンテキストが無いとき、ディレクトリの名前がその言語のモジュールの名前にならないとき（Python と Java）、コードのファイルを一つだけ指す項があるとき、Python の置き場所の直下にモジュールがあるとき（import-linter は読めない）、Java にデフォルトパッケージのクラスがあるとき、ArchUnit に `test` の置き場所が無いとき、Go の置き場所に go.mod が無いとき、`except` をツールの設定に書けないとき（import-linter と go-arch-lint）。",
+                "`sakai build` finds that the map has no `code` line for the language, no context has code in it, a directory's name is not a module's (Python and Java), an entry names one file of code, a Python module sits right in the place of the code (import-linter cannot read it), a Java class is in the default package, ArchUnit has no place for the tests, the place of the Go code has no go.mod, or the settings of the tool cannot hold an `except` (import-linter and go-arch-lint)."
             ),
-            tr!("注のとおりに、地図の `code` と `owns` か、コードの置き場所を直してください。", "Correct the map's `code` and `owns`, or where the code is, as the note says."),
+            tr!("注のとおりに、地図の `code`、`owns`、`except` か、コードの置き場所を直してください。", "Correct the map's `code`, `owns` and `except`, or where the code is, as the note says."),
             &[],
             &["E502"],
         )

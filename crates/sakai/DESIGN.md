@@ -1229,7 +1229,7 @@ C の段階で作ったときに、表だけでは決まらないことが三つ
 
 ### 7.2 Python：import-linter
 
-**決定**：まとまりごとに、import-linter の `protected` の契約を一つ書く。`protected_modules` がそのまとまりのモジュールで、`allowed_importers` が 7.1 の表でそこを import してよいモジュールである。設定は `.importlinter`（INI）で、`code python` の置き場所に書く。
+**決定**：まとまりごとに、import-linter の `protected` の契約を一つ書く。`protected_modules` がそのまとまりのモジュールで、`allowed_importers` が 7.1 の表でそこを import してよいモジュールである。設定は `.importlinter`（INI）で、`code python` の置き場所に書く。`except` で外したもののうち `root_packages` のパッケージの中にあるものは、grimp がパッケージといっしょに読むので、どの契約にも `ignore_imports` を書いて、そこからの import とそこへの import を外す。grimp が読むのに名前を式に書けない `.py` のファイルを指す `except` は E501（25 章）。
 
 `root_packages` は、置き場所の直下のディレクトリのうち `__init__.py` のあるものの名前と、`__init__.py` の無いディレクトリ（protoc が書く名前空間のパッケージ）を、`__init__.py` かモジュールのあるディレクトリまで降りた名前（`warehouse.v1`、`shop.ordering.v1`）である。grimp 3.17 は、パッケージの下にある `__init__.py` の無いディレクトリに入らない。`warehouse/__init__.py` があり、その下に protoc の `warehouse/v1/` があると、grimp は `warehouse.v1` のモジュールも、それへの import も読まなかった（`tests/maps/入れ子` で確かめた）。そこで、そういうディレクトリも `root_packages` に足す。置き場所の直下にあるモジュール（`py/top.py`）は、grimp が根に受け付けない（`NotATopLevelModule`）ので E501 にする。
 
@@ -2579,7 +2579,7 @@ error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService i
 
 - Go の置き場所の下のディレクトリを `except` で外した地図の `.go-arch-lint.yml` は、`excludeFiles` の代わりに `exclude` を持ち、go-arch-lint が通る。前は落ちていた。
 - Go のファイルを一つだけ指す `except`、ほかのコードのパスがその名前で始まる `except` のディレクトリのある地図は、`build --target go-arch-lint` が E501 で止まる。前は設定を書き、go-arch-lint が落ちるか、検査が黙って減った。
-- `docs/targets.md` の Go の段とスキルの写し、7.5 を合わせた。台帳の E501 の文は変えていない（「設定に書けない地図」のままで、当てはまる）。
+- `docs/targets.md` の Go の段とスキルの写し、7.5 を合わせた。台帳の E501 の文に `except` の場合を足したのは 25 章である。
 - Go の置き場所の下に `except` の無い地図の設定は、一字も変わらない（下の突き合わせ）。
 
 **確かめたこと**：
@@ -2590,5 +2590,45 @@ error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService i
 
 **見つけて直していないもの**：
 
-- import-linter の設定は、グループのパッケージの中にある `except` のディレクトリを、そのグループの一部として調べる。英語の例に `except "py/inventory/legacy"` を書き、その下の `old.py` に受注の内側を import させると、`lint-imports` は「Illegal imports of protected package ordering: inventory.legacy.old -> ordering.fulfill」で落ちた。地図ではそのファイルは範囲の外で、dependency-cruiser と go-arch-lint の設定は外す。グループの外のディレクトリ（`py/legacy`）なら、`root_packages` に入らないので調べない。ArchUnit は確かめていない。
+- import-linter の設定が、グループのパッケージの中にある `except` のディレクトリを、そのグループの一部として調べていた。25 章で直した。ArchUnit は確かめていない。
 - go-arch-lint の `in:` と `exclude` のパスは、glob として読まれる。ディレクトリの名前に `*`、`?`、`[` があると、ほかのディレクトリにも当たる。sakai はどちらもそのまま書く。
+
+## 25. import-linter の設定の `except`（2026-10-28）
+
+地図の `except` で外したもののうち、import-linter が読むパッケージの中にあるものを、どの契約でも `ignore_imports` で外す。外せない `.py` のファイルを指す `except` は E501 にする。
+
+**きっかけ**：24 章で見つけたこと。英語の例に `except "py/inventory/legacy"` を書き、どのコンテキストも持たない `py/inventory/legacy/old.py` に受注の内側を、請求の `py/billing/uses_old.py` にその `old.py` を import させる。sakai 0.36.0 の書いた設定のまま、import-linter 2.15 は受注と在庫の二つの契約を BROKEN にして exit 1 になった（`Contracts: 9 kept, 2 broken.`）。受注の契約には「inventory.legacy.old -> ordering.fulfill (l.2)」、在庫の契約には「billing.uses_old -> inventory.legacy.old (l.2)」が出た。
+
+**原因**：import-linter（grimp）は、`root_packages` のパッケージを、その下のディレクトリごと読む。`py/inventory/legacy` は在庫のパッケージ `inventory` の中にあるので、grimp はそれを `inventory.legacy` として読み、在庫の契約は `inventory` をパッケージとして守るので、`inventory.legacy` も在庫の一部として扱った。sakai は `except` を import-linter の設定に何も書いていなかった。dependency-cruiser の設定は `options.exclude.path` に、go-arch-lint の設定は `exclude` に書き、外したものを読まない。グループの外のディレクトリ（`py/legacy`）は、`root_packages` に入らないので grimp が読まない。テストの地図にも例にも、Python のパッケージの中を `except` で外すものが無かった。
+
+**決定**：
+
+- `except` のうち、`root_packages` のパッケージの中にあるものを、どの契約の `ignore_imports` にも書く。ディレクトリは、そのモジュールと下の全部からの import とそれらへの import の四つの式（`inventory.legacy -> **`、`inventory.legacy.** -> **`、`** -> inventory.legacy`、`** -> inventory.legacy.**`）、`.py` のファイルは、そのモジュールからとそれへの二つの式である。import-linter 2.15 の `protected` の契約は `ignore_imports` を受け付け、片側が `**` だけの式も書ける。
+- 同じ契約に `unmatched_ignore_imports_alerting = none` を書く。既定（`error`）では、外す式に当たる import が一つも無い契約が落ちる。外したコードが、ある契約に関わる import を持たないことはふつうにある。
+- grimp 3.17 が読まないものには書かない。grimp は、名前が識別子でないディレクトリ（`old-stuff`、`old stuff`）に入らず、名前が `.` で始まる `.py` と、二つ目の `.` のある `.py` を読まない。名前が識別子でないディレクトリの式を書くと、import-linter は `inventory.old-stuff -> ** is not a valid import expression.` で、検査の全体を exit 1 で止めた。
+- grimp が読むのに名前を式に書けない `.py` のファイルを指す `except` は E501 にする。grimp はファイルの名前を確かめずに、`inventory/old-stuff.py` をモジュール `inventory.old-stuff` として読む。式は、文字、数字、`_` の名前しか受け付けない（`1x` は通り、`old-stuff`、`old stuff`、`ab$` は通らなかった）。24 章の go-arch-lint と同じ扱いで、直し方は、外すファイルをディレクトリにまとめ、そのディレクトリを `except` に書くことである。ディレクトリの `**` は、そうした名前のモジュールにも当たる（`inventory.olddir.** -> **` が `inventory.olddir.old-stuff` からの import に当たった）。文は `except` の行に出す。E501 にするのは import-linter の設定だけで、ほかの三つの設定は前と同じに書ける。
+- 台帳の E501 の「いつ出るか」に「`except` をツールの設定に書けないとき（import-linter と go-arch-lint）」を、直し方に `except` を足す。24 章の go-arch-lint の場合も、それまで載っていなかった。
+
+**捨てたもの**：
+
+- **読む範囲から外すこと。** import-linter 2.15 の `[importlinter]` が読むのは `root_packages`、`contract_types`、`include_external_packages`、`exclude_type_checking_imports` だけで、ファイルやディレクトリを外す項目が無い。`except` はパッケージの中にあるので、`root_packages` を選び直しても外せない。
+- **契約の `protected_modules` から、`except` のディレクトリを抜くこと**（7.2 の `as_packages = False` の書き方で）。在庫の契約からは外れるが、外したコードは grimp のグラフに残り、そこから受注の内側への import（`inventory.legacy.old -> ordering.fulfill`）は、受注の契約に止められる。
+- **式に書けないファイルを、書かずに残すこと。** 外したはずのファイルの import で検査が落ちる。24 章と同じく、設定が地図のとおりでないので止める。
+
+**変わること**：
+
+- `root_packages` のパッケージの中に `except` のある地図の `.importlinter` は、どの契約にも `ignore_imports` と `unmatched_ignore_imports_alerting = none` を持ち、import-linter が通る。前は外したコードの import で落ちた。
+- grimp が読むのに名前を式に書けない `.py` のファイルを指す `except` のある地図は、`build --target import-linter` が E501 で止まる。前は設定を書き、import-linter が外したはずのファイルの import で落ちた。
+- `root_packages` のパッケージの中に `except` の無い地図の設定は、一字も変わらない（下の突き合わせ）。
+- 7.2、`docs/targets.md` の Python の段、台帳の E501 と `docs/codes.md`・`docs/codes.ja.md`、スキルの写しを合わせた。
+
+**確かめたこと**：
+
+- `tests/imports.rs` の `import_linter_leaves_out_what_the_map_excepts`。英語の例に上の `old.py` と `uses_old.py`、同じ `old.py` を置いた `py/inventory/old-stuff/` を足し、地図に `except "py/inventory/legacy", "py/inventory/old-stuff"` を書く。11 の契約がどれも `inventory.legacy` の四つの式を持ち、`old-stuff` はどこにも書かれず、import-linter は通る。式を消すと、上の二つの import が出て落ち、`old-stuff` の import は出ない（grimp が読まない）。直す前の sakai で走らせると、式が無いので一つ目の確かめで落ちた。
+- `tests/build.rs` の `what_cannot_be_written` と英語の版。例（英日）に `except "py/inventory/old-stuff.py"` を書くと、「The `except` py/inventory/old-stuff.py is read as the module `inventory.old-stuff`」の E501 が一つだけ出て、ほかの三つの設定は書ける。
+- 名前の形ごとに、例の写しで import-linter 2.15 を走らせた。`legacy` と `旧コード` のディレクトリは式を書き、`Analyzed 28 files` で 11 の契約が KEPT。`old-stuff` と `old stuff` は式を書かず、`Analyzed 26 files`（grimp がその下の二つを読まない）で 11 の契約が KEPT。
+- 直す前（0.36.0）と後の突き合わせ：`code python` のある地図の 12（例の英日、テストの地図の四つ、ritsu のテストのプロジェクトの二つ、誤りを入れたテストの地図の四つ）の `build --target import-linter` を英語と日本語で 24 回走らせ、書いた設定、出力、終了コードは一字も変わらない。どれも `root_packages` のパッケージの中に `except` が無い。
+
+**見つけて直していないもの**：
+
+- 識別子の形は、モジュールの名前にならないディレクトリの検査（E501）と同じく、Rust の `is_alphabetic` と `is_alphanumeric` で見ている。grimp が使う Python の `str.isidentifier`（Unicode の XID）とは、一部の文字で食い違う。`a·b` は Python では識別子だが、`·` は Rust では文字でも数字でもないので、そのディレクトリの `except` には式を書かず、grimp はそれを読む。

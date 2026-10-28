@@ -656,7 +656,7 @@ Python（`py/`）の import は次のとおり。TypeScript（`ts/`。相対パ�
 **作った（C の段階）**：計画と違うところが三つある（DESIGN 7.2）。(1) grimp 3.17 は、パッケージの下の `__init__.py` の無いディレクトリに入らないので、そういうディレクトリのうちモジュールのあるものも `root_packages` に足す。(2) 入れ子を外すための `as_packages = False` は、別の契約にせず、その契約全体を一つずつのモジュールで書く形にした。import-linter は守るモジュールを import してよいのをそのモジュールとその下だけとみなすので、まとまり自身のモジュールも `allowed_importers` に並べる必要があり、別の契約に分けると、その中でパッケージとして並べたものが下のまとまりまで許してしまう。(3) 置き場所の直下のモジュールは、grimp が根に受け付けないので E501。頭のコメントに SHA-256 は書かない（C.11）。
 
 - `.importlinter`（INI）。頭のコメントに、元の地図のファイルと SHA-256、`sakai build` で書いたこと。`[importlinter]` の `root_packages` は、Python の置き場所の直下のディレクトリのうち、`__init__.py` のあるものはその名前、無いもの（名前空間）はその下を `__init__.py` のあるディレクトリかモジュールのあるディレクトリまで降りた名前（`warehouse.v1`、`shop.ordering.v1`）。A の段階に、import-linter 2.15 が名前空間の一部をルートに受け付けることを確かめた。
-- まとまりごとに `protected` の契約。`protected_modules` はまとまりのモジュール。入れ子のまとまりを外すため、まとまりのディレクトリのうち、ほかのまとまりを含まないいちばん大きいモジュールを並べる。ほかのまとまりを含み、`__init__.py` を持つディレクトリは、`as_packages = False` の別の契約でそのモジュールだけを守る。`allowed_importers` は DESIGN 7.1 の表で import してよいまとまりのモジュール。
+- まとまりごとに `protected` の契約。`protected_modules` はまとまりのモジュール。入れ子のまとまりを外すため、まとまりのディレクトリのうち、ほかのまとまりを含まないいちばん大きいモジュールを並べる。ほかのまとまりを含み、`__init__.py` を持つディレクトリは、`as_packages = False` の別の契約でそのモジュールだけを守る。`allowed_importers` は DESIGN 7.1 の表で import してよいまとまりのモジュール。2026-10-28 から、`root_packages` のパッケージの中にある `except` は、どの契約にも `ignore_imports` で外し、grimp が読むのに名前を式に書けない `.py` のファイルを指す `except` は E501（DESIGN 25 章）。
 - グラフに無いモジュールを書かない（DESIGN 7.2）。
 - テスト：例の Python で、`lint-imports --no-logo --no-cache --config <書いた設定>` が全部 KEPT で exit 0、`Analyzed` の数が 0 でない。C.0 の四つの変異のそれぞれで exit 1、足したファイルのモジュールと行（`(l.1)` など）が出力にある。`tests/maps/入れ子/` で、入れ子の生成したコードを外の下流が import でき、内側は import できないこと。
 

@@ -169,26 +169,74 @@ fn each(t: Target, run: &(dyn Fn(&Path) -> Said + Sync), at_least: &(dyn Fn(usiz
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
-#[test]
-fn import_linter_keeps_the_map() {
-    if !common::linters() {
-        return;
+/// import-linter's `lint-imports`, run in a case's `py`.
+struct ImportLinter {
+    tool: String,
+}
+
+impl ImportLinter {
+    /// None when the linters are not asked for, or (said with `SKIP:`) when import-linter is not
+    /// there.
+    fn find() -> Option<ImportLinter> {
+        if !common::linters() {
+            return None;
+        }
+        let Some(tool) = common::lint_imports() else {
+            common::skip("import-linter is not there (SAKAI_LINT_IMPORTS, or tools/.venv: uv venv --python 3.13 tools/.venv && uv pip install --python tools/.venv/bin/python --require-hashes -r tools/requirements.txt)");
+            return None;
+        };
+        Some(ImportLinter { tool })
     }
-    let Some(tool) = common::lint_imports() else {
-        common::skip("import-linter is not there (SAKAI_LINT_IMPORTS, or tools/.venv: uv venv --python 3.13 tools/.venv && uv pip install --python tools/.venv/bin/python --require-hashes -r tools/requirements.txt)");
-        return;
-    };
-    let run = |dir: &Path| {
+
+    fn run(&self, dir: &Path) -> Said {
         let r = common::run(
-            common::uncoloured(Command::new(&tool).args(["--no-logo", "--no-cache", "--config", ".importlinter"]).current_dir(dir.join("py")).env("COLUMNS", "300").env("PYTHONDONTWRITEBYTECODE", "1")),
+            common::uncoloured(Command::new(&self.tool).args(["--no-logo", "--no-cache", "--config", ".importlinter"]).current_dir(dir.join("py")).env("COLUMNS", "300").env("PYTHONDONTWRITEBYTECODE", "1")),
             Duration::from_secs(120),
         );
         let out = format!("{}{}", r.stdout, r.stderr);
         let read = out.lines().find_map(|l| l.strip_prefix("Analyzed ").and_then(|r| r.split_whitespace().next()).and_then(|n| n.parse().ok())).unwrap_or(0);
         let lines = out.lines().map(str::trim).filter(|l| l.starts_with("Illegal imports of protected package") || (l.starts_with("- ") && l.contains(" -> "))).map(String::from).collect();
         Said { ok: r.ok, lines, read, raw: out }
-    };
-    each(Target::ImportLinter, &run, &|n, _| n);
+    }
+}
+
+#[test]
+fn import_linter_keeps_the_map() {
+    let Some(il) = ImportLinter::find() else { return };
+    each(Target::ImportLinter, &|dir| il.run(dir), &|n, _| n);
+}
+
+/// What the map's `except` leaves out inside a root package, import-linter leaves out too
+/// (`ignore_imports`): Python code under it, which no context owns, reaches into Ordering and is
+/// imported from Billing, and the run passes. Without the setting, import-linter reads it with the
+/// rest of the package `inventory` and finds both imports. grimp does not go into a directory
+/// whose name is not an identifier (`old-stuff`), and nothing is written for it.
+#[test]
+fn import_linter_leaves_out_what_the_map_excepts() {
+    let Some(il) = ImportLinter::find() else { return };
+    let dir = TempDir::new("except");
+    common::copy_dir(Path::new(common::EXAMPLE_EN), dir.path());
+    let map = dir.path().join("shop.ctx");
+    std::fs::write(&map, std::fs::read_to_string(&map).unwrap().replacen("covers \".\"\n", "covers \".\"\nexcept \"py/inventory/legacy\", \"py/inventory/old-stuff\"\n", 1)).unwrap();
+    for d in ["legacy", "old-stuff"] {
+        dir.write(&format!("py/inventory/{d}/__init__.py"), "");
+        dir.write(&format!("py/inventory/{d}/old.py"), "# Old code the map leaves out: it reaches into Ordering.\nfrom ordering import fulfill\n");
+    }
+    dir.write("py/billing/uses_old.py", "# Billing reaches into the old code the map leaves out.\nfrom inventory.legacy import old\n");
+    let b = build::run_with(dir.path(), "shop.ctx", Target::ImportLinter, &common::suite(), None, false, Lang::En).unwrap();
+    let text: String = b.outcome.diags.iter().map(|d| d.render(Lang::En)).collect();
+    assert!(!b.outcome.has_errors() && b.done.is_some(), "{text}");
+    let settings = dir.path().join("py/.importlinter");
+    let written = std::fs::read_to_string(&settings).unwrap();
+    let ignore = "ignore_imports =\n    inventory.legacy -> **\n    inventory.legacy.** -> **\n    ** -> inventory.legacy\n    ** -> inventory.legacy.**\nunmatched_ignore_imports_alerting = none\n";
+    let contracts = written.matches("[importlinter:contract:").count();
+    assert!(contracts > 0 && written.matches(ignore).count() == contracts && !written.contains("old-stuff"), "every contract ignores what the map excepts:\n{written}");
+    let said = il.run(dir.path());
+    assert!(said.ok && said.lines.is_empty() && said.read > 0, "{}", said.raw);
+    std::fs::write(&settings, written.replace(ignore, "")).unwrap();
+    let said = il.run(dir.path());
+    let caught = ["- inventory.legacy.old -> ordering.fulfill (l.2)", "- billing.uses_old -> inventory.legacy.old (l.2)"];
+    assert!(!said.ok && caught.iter().all(|c| said.lines.iter().any(|l| l == c)) && !said.raw.contains("old-stuff"), "{}", said.raw);
 }
 
 #[test]

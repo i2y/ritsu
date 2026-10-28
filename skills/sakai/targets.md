@@ -65,6 +65,8 @@ allowed_importers =
 `root_packages` names the packages under the code's directory, and also each directory without `__init__.py` down to where modules are (`warehouse.v1`, `shop.ordering.v1`): the namespace packages protoc writes.
 import-linter (grimp) does not go into a directory without `__init__.py` under a package, so such directories are named as roots of their own.
 A contract whose group holds another group, under a package with its own `__init__.py`, lists its modules one by one (`as_packages = False`).
+What `except` leaves out under a root package, import-linter reads with the rest of the package, so every contract ignores the imports from it and to it (`ignore_imports`), and says nothing when it finds none of them (`unmatched_ignore_imports_alerting = none`).
+grimp does not go into a directory whose name is not an identifier, and nothing is written for one; it does read a `.py` file such as `old-stuff.py`, whose module name the expressions of `ignore_imports` cannot hold, so an `except` that names one is E501.
 The version the tests run is import-linter 2.15 (`tools/requirements.txt`).
 
 ## TypeScript and JavaScript: dependency-cruiser
