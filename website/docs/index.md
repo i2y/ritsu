@@ -202,6 +202,10 @@ from 0.23.0 on (continuing rulec's numbering), carries archives for macOS and Li
 release also carries the npm package `@i2y/ritsu`, ritsu built for WebAssembly, which Node runs with
 no native binary: [ritsu in Node](node.md).
 
+`ritsu gen` writes a project's code as a package for each language. With `--library`, it writes a
+module as libraries that npm, PyPI and Go take, which import their dependencies' libraries by
+name: [Publishing libraries](libraries.md).
+
 The design of the whole is in [DESIGN.md](https://github.com/i2y/ritsu/blob/main/DESIGN.md), in
 Japanese. ritsu is MIT OR Apache-2.0.
 

@@ -2498,8 +2498,8 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             t.push_str("\t\"time\"\n");
         }
         t.push('\n');
-        let mut paths: Vec<(String, String)> = packages_in.iter().map(|(r, dir)| (ritsu_emit::package::go_path(&p.go_module, &format!("{dir}rules/{r}")), qualifier(r, dir))).collect();
-        paths.extend(dated_in.iter().map(|(d, dir)| (ritsu_emit::package::go_path(&p.go_module, &format!("{dir}dates/{d}")), qualifier(d, dir))));
+        let mut paths: Vec<(String, String)> = packages_in.iter().map(|(r, dir)| (p.place.go_path(&p.go_module, &format!("{dir}rules/{r}")), qualifier(r, dir))).collect();
+        paths.extend(dated_in.iter().map(|(d, dir)| (p.place.go_path(&p.go_module, &format!("{dir}dates/{d}")), qualifier(d, dir))));
         paths.sort();
         for (path, name) in paths {
             let named = if path.rsplit('/').next() == Some(name.as_str()) { String::new() } else { format!("{name} ") };
@@ -2682,7 +2682,7 @@ fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
             t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"reflect\"\n\n"));
             for (i, b) in books.iter().enumerate() {
                 let dir = p.dir_of(&m.books[*b].path);
-                t.push_str(&format!("\tddBook{i} {}\n", q(&ritsu_emit::package::go_path(&p.go_module, &format!("{dir}books/{}", m.books[*b].facts.go.module)))));
+                t.push_str(&format!("\tddBook{i} {}\n", q(&p.place.go_path(&p.go_module, &format!("{dir}books/{}", m.books[*b].facts.go.module)))));
             }
             t.push_str(")\n");
         }

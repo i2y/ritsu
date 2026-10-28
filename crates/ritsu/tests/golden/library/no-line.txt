@@ -1,0 +1,2 @@
+error: the ritsu.mod of the dependency `tax` (example.com/acme/tax) has no `library typescript` line, and a library reads its dependencies' parts from their libraries: write `library typescript "<name>"` there, or give `--embed tax` to hold the parts in this package's deps/
+エラー: 依存 `tax`（example.com/acme/tax）の ritsu.mod に、`library typescript` の行がありません。ライブラリの形のパッケージは、依存の部分を依存のライブラリから読みます。その ritsu.mod に `library typescript "<名前>"` を書くか、`--embed tax` を付けて、このパッケージの deps/ に入れてください

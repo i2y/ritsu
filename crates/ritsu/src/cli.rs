@@ -206,17 +206,34 @@ pub fn commands() -> Vec<Cmd> {
             .default("cedar"),
             flag("--name", Some("<name>"), tr!("パッケージの名前（npm のパッケージ、Python のパッケージのディレクトリ、Go の import のパスの既定）", "the package's name: the npm package's, the Python package's directory, and the Go import path unless --module says one")).default("generated"),
             flag("--module", Some("<path>"), tr!("Go のパッケージのディレクトリの import のパス", "the Go import path of the package's directory")),
+            flag(
+                "--library",
+                None,
+                tr!(
+                    "モジュール全体を、npm・PyPI・Go のモジュールに出せるライブラリにする。名前は ritsu.mod の library の行、版は version の行から取り、依存は範囲で書く。library の行を持つ依存の部分は中に入れず、そのライブラリから読む",
+                    "make the whole module a library npm, PyPI or a Go module takes: named by the library lines of ritsu.mod and versioned by its version line, with what it depends on as ranges. The parts of a dependency with a library line are read from that library, not held"
+                ),
+            ),
+            flag(
+                "--embed",
+                Some("<name>"),
+                tr!(
+                    "--library で、library の行の無い依存（名前は require の名前）の部分を、アプリの形と同じく deps/<名前>/ に入れる",
+                    "with --library, hold the parts of a dependency with no library line (named as its require names it) under deps/<name>/, as the app form does"
+                ),
+            )
+            .repeats(),
             root_flag(),
         ],
         exits: vec![
             (0, tr!("書いた、または --check で古いものが無い", "written, or --check found nothing stale")),
             (1, tr!("検査を通らないファイルがある、モジュールの木にエラーがある、または --check で古いものがある", "a file does not pass its check, the tree of modules has an error, or --check found something stale")),
             (2, tr!(
-                "引数の誤り、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール",
-                "bad arguments, a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, or a module that needs a newer ritsu"
+                "引数の誤り、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール、--library で、どのライブラリも持たず --embed にも無い依存",
+                "bad arguments, a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, a module that needs a newer ritsu, or under --library a dependency no library holds that --embed does not name"
             )),
         ],
-        examples: vec!["ritsu gen", "ritsu gen --target typescript --out generated --books tigerbeetle", "ritsu gen --check", "ritsu gen --check --format json"],
+        examples: vec!["ritsu gen", "ritsu gen --target typescript --out generated --books tigerbeetle", "ritsu gen --check", "ritsu gen --check --format json", "ritsu gen --library", "ritsu gen --library --target python --embed tax"],
         codes: vec![],
     });
     cmds.push(Cmd {

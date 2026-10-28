@@ -264,15 +264,15 @@ impl<'a> Writer<'a> {
                 UseKind::Rule => {
                     let f = self.rule_facts(ui)?;
                     let m = f.typescript.module.trim_end_matches(".ts").to_string();
-                    format!("import * as {} from \"{}\";", self.rule_name(ui)?, ritsu_emit::package::ts_path(&here, &format!("{dir}rules/{m}")))
+                    format!("import * as {} from \"{}\";", self.rule_name(ui)?, self.place.ts_path(&here, &format!("{dir}rules/{m}")))
                 }
                 UseKind::Dates => {
                     let a = self.dates_facts(ui)?.alias.clone();
-                    format!("import * as {} from \"{}\";", self.dates_name(ui, &a), ritsu_emit::package::ts_path(&here, &format!("{dir}dates/{a}")))
+                    format!("import * as {} from \"{}\";", self.dates_name(ui, &a), self.place.ts_path(&here, &format!("{dir}dates/{a}")))
                 }
                 UseKind::Calendar => {
                     let a = self.calendar_alias(ui)?;
-                    format!("import * as {} from \"{}\";", self.dates_name(ui, &a), ritsu_emit::package::ts_path(&here, &format!("{dir}dates/{a}")))
+                    format!("import * as {} from \"{}\";", self.dates_name(ui, &a), self.place.ts_path(&here, &format!("{dir}dates/{a}")))
                 }
                 _ => continue,
             };

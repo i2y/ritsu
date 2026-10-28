@@ -955,8 +955,8 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
 /// two packages up from flows/<name>/.
 pub(crate) fn py_module(m: &Model, path: &str, dir: &str) -> String {
     match (&m.package, path.split_once('.')) {
-        (Some(p), Some(("rulec", rest))) => ritsu_emit::package::py_path(&p.flow_dir(), &format!("{dir}rules/{}", rest.trim_start_matches("python."))),
-        (Some(p), Some(("koyomi", rest))) => ritsu_emit::package::py_path(&p.flow_dir(), &format!("{dir}dates/{}", rest.trim_start_matches("python."))),
+        (Some(p), Some(("rulec", rest))) => p.place.py_path(&p.flow_dir(), &format!("{dir}rules/{}", rest.trim_start_matches("python."))),
+        (Some(p), Some(("koyomi", rest))) => p.place.py_path(&p.flow_dir(), &format!("{dir}dates/{}", rest.trim_start_matches("python."))),
         _ => format!(".{path}"),
     }
 }
@@ -974,7 +974,7 @@ pub(crate) fn io_py(m: &Model) -> String {
     for (i, b) in books.iter().enumerate() {
         let f = &m.books[*b].facts;
         let from = match &m.package {
-            Some(p) => ritsu_emit::package::py_path(&p.flow_dir(), &format!("{}books/{}", p.dir_of(&m.books[*b].path), f.python.module)),
+            Some(p) => p.place.py_path(&p.flow_dir(), &format!("{}books/{}", p.dir_of(&m.books[*b].path), f.python.module)),
             None => format!("...books.{}", f.python.module),
         };
         imports.push_str(&format!("from {from} import Book as _Book{i}\n"));

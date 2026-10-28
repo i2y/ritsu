@@ -8,10 +8,17 @@
 //! reads. The path one part imports another by is made from the two directories ([`ts_path`],
 //! [`py_path`], [`py_from`]; Go's import paths are the package's module and the directory).
 //!
+//! A package written as a library (ritsu's DESIGN 17.16) does not hold the parts of a dependency
+//! that is a library itself: it imports them from that library, by the library's name. The place
+//! says where each such module's parts are ([`Place::with_libraries`]), and its [`Place::ts_path`],
+//! [`Place::py_path`], [`Place::py_from`] and [`Place::go_path`] make the import of a part from
+//! there, or else the path within the package as the functions do.
+//!
 //! Outside a module, and for every file of the module at hand, the directory is empty, and every
 //! path is what it was before there were modules (ritsu's DESIGN 17.1, M14).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// A dependency's module, as the head of a file made from one of its files names it: its name and,
 /// when it has one, its version.
@@ -33,6 +40,12 @@ pub struct Place {
     /// The dependency the file is of, for the head of its parts: None for a file of the module at
     /// hand.
     pub module: Option<Module>,
+    /// For a package written as a library, each module's directory the package does not hold
+    /// (`deps/pricing/`), with the path the language imports that directory by from the library
+    /// that holds it (`@acme/pricing`, `acme_pricing`, `example.com/acme/pricing-go`; and
+    /// `@acme/pricing/deps/tax` for a module that library holds in turn). Empty for any other
+    /// package, which holds every part it reads.
+    libraries: Arc<Vec<(String, String)>>,
 }
 
 impl Place {
@@ -45,7 +58,22 @@ impl Place {
     /// The place of the file at `rel` (its canonical path from `root`, a root with a `ritsu.mod`),
     /// of the dependency `module` (None for a file of the module at hand).
     pub fn of(root: &Path, rel: &str, module: Option<Module>) -> Place {
-        Place { root: Some(root.to_path_buf()), dir: deps_dir(rel), module }
+        Place { root: Some(root.to_path_buf()), dir: deps_dir(rel), module, libraries: Arc::default() }
+    }
+
+    /// The place, in a package written as a library (ritsu's DESIGN 17.16) that reads the modules of
+    /// `libraries` from the libraries that hold them: each module's directory as the package would
+    /// hold it, with the path the language imports that directory by (see [`Place`]'s field). The
+    /// places of the files it reads keep them ([`Place::of_file`]).
+    pub fn with_libraries(mut self, libraries: Arc<Vec<(String, String)>>) -> Place {
+        self.libraries = libraries;
+        self
+    }
+
+    /// Whether the parts of the module whose directory is `dir` (`deps/pricing/`) are read from a
+    /// library, not held by the package.
+    pub fn read_from_library(&self, dir: &str) -> bool {
+        self.libraries.iter().any(|(d, _)| d == dir)
     }
 
     /// The directory of the parts of another file the parts read, by its path as the generator
@@ -69,7 +97,57 @@ impl Place {
     /// The place of another file of the same project, by its path as the generator holds it, for
     /// parts that name no module in their head (kaname's types of a book's transfers).
     pub fn of_file(&self, path: &Path) -> Place {
-        Place { root: self.root.clone(), dir: self.dir_of(path), module: None }
+        Place { root: self.root.clone(), dir: self.dir_of(path), module: None, libraries: self.libraries.clone() }
+    }
+
+    /// The library the part at `to` (a module's path under the package's directory, as for
+    /// [`ts_path`]) is read from, by the path its module's directory is imported by, and what is
+    /// left of `to` under that directory; None for a part the package holds. The types of a book's
+    /// transfers (kaname's `glue/books/`) are the package's own, wherever the book's client is.
+    fn outside<'a>(&'a self, to: &'a str) -> Option<(&'a str, &'a str)> {
+        let (dir, root) = self.libraries.iter().filter(|(d, _)| to.starts_with(d.as_str())).max_by_key(|(d, _)| d.len())?;
+        let rest = &to[dir.len()..];
+        (!rest.starts_with("glue/books/")).then_some((root.as_str(), rest))
+    }
+
+    /// [`ts_path`], or for a part a library holds, its module's specifier in that library
+    /// (`@acme/pricing/rules/fee`).
+    pub fn ts_path(&self, from: &str, to: &str) -> String {
+        match self.outside(to) {
+            Some((root, rest)) => format!("{root}/{rest}"),
+            None => ts_path(from, to),
+        }
+    }
+
+    /// [`py_path`], or for a part a library holds, its module in that library
+    /// (`acme_pricing.rules.fee`).
+    pub fn py_path(&self, from: &str, to: &str) -> String {
+        match self.outside(to) {
+            Some((root, rest)) => format!("{root}.{}", rest.replace('/', ".")),
+            None => py_path(from, to),
+        }
+    }
+
+    /// [`py_from`], or for a part a library holds, its module in that library split for `from
+    /// <package> import <name>` (`acme_pricing.rules`, `fee`).
+    pub fn py_from(&self, from: &str, to: &str) -> (String, String) {
+        match self.outside(to) {
+            Some((root, rest)) => {
+                let dotted = format!("{root}.{}", rest.replace('/', "."));
+                let (pkg, name) = dotted.rsplit_once('.').unwrap_or((root, rest));
+                (pkg.to_string(), name.to_string())
+            }
+            None => py_from(from, to),
+        }
+    }
+
+    /// [`go_path`], or for a part a library holds, its import path in that library's module
+    /// (`example.com/acme/pricing-go/rules/fee`).
+    pub fn go_path(&self, go_module: &str, to: &str) -> String {
+        match self.outside(to) {
+            Some((root, rest)) => format!("{root}/{rest}"),
+            None => go_path(go_module, to),
+        }
     }
 }
 
@@ -177,5 +255,37 @@ mod tests {
         assert_eq!(go_path("example.com/shop", "deps/pricing/rules/fee"), "example.com/shop/deps/pricing/rules/fee");
         assert_eq!(local_name("deps/pricing/", "fee"), "pricing_fee");
         assert_eq!(local_name("", "fee"), "fee");
+    }
+
+    #[test]
+    fn a_place_with_no_libraries_makes_the_paths_the_functions_make() {
+        let p = Place::here();
+        assert_eq!(p.ts_path("flows/x/", "deps/pricing/rules/fee"), ts_path("flows/x/", "deps/pricing/rules/fee"));
+        assert_eq!(p.py_path("flows/x/", "deps/pricing/rules/fee"), py_path("flows/x/", "deps/pricing/rules/fee"));
+        assert_eq!(p.py_from("authz/", "rules/fee"), py_from("authz/", "rules/fee"));
+        assert_eq!(p.go_path("example.com/shop", "deps/pricing/rules/fee"), go_path("example.com/shop", "deps/pricing/rules/fee"));
+        assert!(!p.read_from_library("deps/pricing/"));
+    }
+
+    #[test]
+    fn a_library_s_part_is_imported_by_the_library_s_name() {
+        let ts = Place::here().with_libraries(Arc::new(vec![("deps/pricing/".into(), "@acme/pricing".into()), ("deps/pricing/deps/tax/".into(), "@acme/pricing/deps/tax".into())]));
+        assert_eq!(ts.ts_path("glue/", "deps/pricing/rules/order_total"), "@acme/pricing/rules/order_total");
+        assert_eq!(ts.ts_path("glue/", "deps/pricing/deps/tax/rules/vat_rate"), "@acme/pricing/deps/tax/rules/vat_rate");
+        assert_eq!(ts.ts_path("glue/", "units"), "../units");
+        // the types of a book's transfers are the package's own
+        assert_eq!(ts.ts_path("glue/", "deps/pricing/glue/books/ledger"), "../deps/pricing/glue/books/ledger");
+        assert!(ts.read_from_library("deps/pricing/") && !ts.read_from_library("deps/stock/"));
+        let py = Place::here().with_libraries(Arc::new(vec![("deps/pricing/".into(), "acme_pricing".into())]));
+        assert_eq!(py.py_path("flows/x/", "deps/pricing/rules/order_total"), "acme_pricing.rules.order_total");
+        assert_eq!(py.py_from("glue/", "deps/pricing/rules/order_total"), ("acme_pricing.rules".to_string(), "order_total".to_string()));
+        assert_eq!(py.py_from("glue/", "units"), ("..".to_string(), "units".to_string()));
+        let go = Place::here().with_libraries(Arc::new(vec![("deps/pricing/".into(), "example.com/acme/pricing-go/v2".into())]));
+        assert_eq!(go.go_path("example.com/acme/shop-go", "deps/pricing/rules/ordertotal"), "example.com/acme/pricing-go/v2/rules/ordertotal");
+        assert_eq!(go.go_path("example.com/acme/shop-go", "rules/fee"), "example.com/acme/shop-go/rules/fee");
+        // the places of the files a part reads keep the libraries
+        let root = std::env::temp_dir();
+        let of = Place::of(&root, "@pricing/rules/order_total.rule", None).with_libraries(Arc::new(vec![("deps/pricing/".into(), "@acme/pricing".into())]));
+        assert!(of.of_file(&root.join("@stock/books/stock.book")).read_from_library("deps/pricing/"));
     }
 }

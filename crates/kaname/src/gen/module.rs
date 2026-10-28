@@ -111,7 +111,7 @@ fn imports(g: &Gen, body: &str) -> String {
     let mut out = String::new();
     match t {
         Target::TypeScript => {
-            let at = |to: String| ritsu_emit::package::ts_path(&g.opts.here(), &to);
+            let at = |to: String| g.opts.place.ts_path(&g.opts.here(), &to);
             for (name, i) in used.iter() {
                 let line = match i {
                     Import::Kaname => format!("import * as {name} from \"{}\";", at("glue/kaname".into())),
@@ -168,7 +168,7 @@ fn imports(g: &Gen, body: &str) -> String {
                 out.push_str("\n\n");
             }
             let from = |to: String| {
-                let (pkg, m) = ritsu_emit::package::py_from(&g.opts.here(), &to);
+                let (pkg, m) = g.opts.place.py_from(&g.opts.here(), &to);
                 format!("from {pkg} import {m}")
             };
             for (name, i) in used.iter() {
@@ -205,19 +205,19 @@ fn imports(g: &Gen, body: &str) -> String {
                     Import::Datetime => continue,
                     Import::Rule(f) => {
                         let p = g.p.rules.get(f).map(|r| r.go.module.clone()).unwrap_or_default();
-                        (ritsu_emit::package::go_path(m, &format!("{}rules/{p}", g.opts.dir_of(f))), p)
+                        (g.opts.place.go_path(m, &format!("{}rules/{p}", g.opts.dir_of(f))), p)
                     }
                     Import::Dates(f) => {
                         let p = g.p.dates.get(f).map(|d| go_package(&d.alias)).unwrap_or_default();
-                        (ritsu_emit::package::go_path(m, &format!("{}dates/{p}", g.opts.dir_of(f))), p)
+                        (g.opts.place.go_path(m, &format!("{}dates/{p}", g.opts.dir_of(f))), p)
                     }
                     Import::Module(f) => {
                         let p = go_package(g.p.module(f).module.name.ascii());
-                        (ritsu_emit::package::go_path(m, &format!("{}glue/{p}", g.opts.dir_of(f))), p)
+                        (g.opts.place.go_path(m, &format!("{}glue/{p}", g.opts.dir_of(f))), p)
                     }
                     Import::Book(f) => {
                         let p = super::books::go_package_of(&g.p, f);
-                        (ritsu_emit::package::go_path(m, &format!("{}glue/books/{p}", g.opts.dir_of(f))), p)
+                        (g.opts.place.go_path(m, &format!("{}glue/books/{p}", g.opts.dir_of(f))), p)
                     }
                 };
                 let spec = if *name == pkg { format!("\"{path}\"") } else { format!("{name} \"{path}\"") };

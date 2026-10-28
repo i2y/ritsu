@@ -2263,7 +2263,7 @@ impl<'a> Gen<'a> {
             if names.is_empty() {
                 continue;
             }
-            let from = if self.package.is_some() { ritsu_emit::package::py_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { module.clone() };
+            let from = if self.package.is_some() { self.place.py_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { module.clone() };
             // The types are the module's to hand on (`X as X`, an explicit re-export): a caller,
             // the runner and the MCP server name them through the rule's module, as they name
             // the types a rule declares itself. The functions are its own use.
@@ -3752,7 +3752,7 @@ impl<'a> Gen<'a> {
     fn go_owner_path(&self, module: &str, dir: &str) -> String {
         let pkg = crate::backend::go_package(module);
         match &self.package {
-            Some(m) if !m.is_empty() => format!("{m}/{dir}rules/{pkg}"),
+            Some(m) if !m.is_empty() => self.place.go_path(m, &format!("{dir}rules/{pkg}")),
             _ => pkg,
         }
     }
@@ -6094,7 +6094,7 @@ impl<'a> Gen<'a> {
             if names.is_empty() {
                 continue;
             }
-            let from = if self.package.is_some() { ritsu_emit::package::ts_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { format!("./{module}.ts") };
+            let from = if self.package.is_some() { self.place.ts_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { format!("./{module}.ts") };
             lines.push_str(&format!("import {{ {} }} from \"{from}\";\n", names.join(", ")));
             if !again.is_empty() {
                 lines.push_str(&format!("export {{ {} }};\n", again.join(", ")));
@@ -15095,6 +15095,17 @@ pub fn package_parts_at(src: &str, path: &str, shown: &str, target: &str, go_mod
 /// its files give it. None when nothing in the package takes such an amount, or for a language a
 /// package is not written in.
 pub fn units_module(target: &str, units: &[ritsu_units::Unit]) -> Option<(String, String)> {
+    units_module_in(target, units, &BTreeMap::new())
+}
+
+/// [`units_module`], for a package written as a library (ritsu's DESIGN 17.16). The brand of a unit
+/// named in `shared` is the brand of the library that holds the unit: the module reads it from that
+/// library's `units` module (the path in `shared`, `@acme/pricing/units`, `acme_pricing.units`,
+/// `example.com/acme/pricing-go/units`) and hands it on under the same name, so that an amount the
+/// library's code gives is an amount this package's code takes, in Python and Go as in TypeScript.
+/// The brand's name is the same in every package, the unit as the table spells it first. The other
+/// spellings stay aliases here.
+pub fn units_module_in(target: &str, units: &[ritsu_units::Unit], shared: &BTreeMap<String, String>) -> Option<(String, String)> {
     // each brand by its name: the unit as the table spells it first, and its other names
     let mut brands: BTreeMap<String, (String, BTreeMap<String, String>)> = BTreeMap::new();
     for u in units {
@@ -15114,8 +15125,23 @@ pub fn units_module(target: &str, units: &[ritsu_units::Unit]) -> Option<(String
     Some(match target {
         "typescript" => {
             let mut o = format!("{}// {what}\n\n", head(Comment::Slashes));
+            let mut from: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+            for base in brands.keys() {
+                if let Some(path) = shared.get(base) {
+                    from.entry(path.as_str()).or_default().push(base.as_str());
+                }
+            }
+            for (path, names) in &from {
+                o.push_str(&format!("import type {{ {} }} from \"{path}\";\n", names.join(", ")));
+            }
+            if !from.is_empty() {
+                o.push('\n');
+            }
             for (base, (shown, others)) in &brands {
-                o.push_str(&format!("export type {base} = bigint & {{ readonly __rulec: \"{base}\" }}; // {shown}\n"));
+                match shared.get(base) {
+                    Some(_) => o.push_str(&format!("export type {{ {base} }}; // {shown}\n")),
+                    None => o.push_str(&format!("export type {base} = bigint & {{ readonly __rulec: \"{base}\" }}; // {shown}\n")),
+                }
                 for (name, written) in others {
                     o.push_str(&format!("export type {name} = {base}; // {written}, the same unit\n"));
                 }
@@ -15123,9 +15149,27 @@ pub fn units_module(target: &str, units: &[ritsu_units::Unit]) -> Option<(String
             ("units.ts".to_string(), o)
         }
         "python" => {
-            let mut o = format!("{}\"\"\"{what}\"\"\"\n\nfrom __future__ import annotations\n\nfrom typing import NewType\n\n", head(Comment::Hash));
+            let mut o = format!("{}\"\"\"{what}\"\"\"\n\nfrom __future__ import annotations\n\n", head(Comment::Hash));
+            let own = brands.keys().any(|base| !shared.contains_key(base));
+            if own {
+                o.push_str("from typing import NewType\n");
+            }
+            if own && brands.keys().any(|base| shared.contains_key(base)) {
+                o.push('\n');
+            }
+            for (base, (shown, _)) in &brands {
+                if let Some(path) = shared.get(base) {
+                    // `X as X`, an explicit re-export: the package's modules name it here
+                    o.push_str(&format!("from {path} import {base} as {base}  # {shown}\n"));
+                }
+            }
+            if brands.iter().any(|(base, (_, others))| !shared.contains_key(base) || !others.is_empty()) {
+                o.push('\n');
+            }
             for (base, (shown, others)) in &brands {
-                o.push_str(&format!("{base} = NewType(\"{base}\", int)  # {shown}\n"));
+                if !shared.contains_key(base) {
+                    o.push_str(&format!("{base} = NewType(\"{base}\", int)  # {shown}\n"));
+                }
                 for (name, written) in others {
                     o.push_str(&format!("{name} = {base}  # {written}, the same unit\n"));
                 }
@@ -15137,9 +15181,52 @@ pub fn units_module(target: &str, units: &[ritsu_units::Unit]) -> Option<(String
                 "{}\n// Package units is the types of the units the package's rules and books take amounts in, one type of each\n// unit (ritsu gen). The packages of the rules and the clients of the books name these types, so that the\n// compiler keeps an amount of one unit from where another unit is taken.\npackage units\n",
                 head(Comment::Slashes)
             );
+            // each library's units package, by a name of its own: `pricinggounits` for
+            // `example.com/acme/pricing-go/units`
+            let mut named: BTreeMap<&str, String> = BTreeMap::new();
+            for path in shared.iter().filter(|(base, _)| brands.contains_key(*base)).map(|(_, p)| p.as_str()) {
+                if named.contains_key(path) {
+                    continue;
+                }
+                let segments: Vec<&str> = path.trim_end_matches("/units").split('/').collect();
+                let last = match segments.as_slice() {
+                    [.., before, v] if v.len() > 1 && v.starts_with('v') && v[1..].bytes().all(|b| b.is_ascii_digit()) => before,
+                    [.., last] => last,
+                    [] => "",
+                };
+                let mut stem: String = last.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+                if stem.is_empty() || stem.starts_with(|c: char| c.is_ascii_digit()) {
+                    stem = format!("lib{stem}");
+                }
+                let mut name = format!("{stem}units");
+                let mut n = 2;
+                while named.values().any(|v| *v == name) {
+                    name = format!("{stem}units{n}");
+                    n += 1;
+                }
+                named.insert(path, name);
+            }
+            match named.len() {
+                0 => {}
+                1 => {
+                    let (path, name) = named.iter().next().expect("one");
+                    o.push_str(&format!("\nimport {name} \"{path}\"\n"));
+                }
+                _ => {
+                    o.push_str("\nimport (\n");
+                    for (path, name) in &named {
+                        o.push_str(&format!("\t{name} \"{path}\"\n"));
+                    }
+                    o.push_str(")\n");
+                }
+            }
             for (base, (shown, others)) in &brands {
-                // a defined type, as a rule's own brand is: the compiler rejects YenInclTax + YenExclTax
-                o.push_str(&format!("\n// {base} is an amount of {shown}.\ntype {base} int64\n"));
+                match shared.get(base) {
+                    // an alias: the same type as the library's, so an amount passes between the two
+                    Some(path) => o.push_str(&format!("\n// {base} is an amount of {shown}, the type of {path}.\ntype {base} = {}.{base}\n", named[path.as_str()])),
+                    // a defined type, as a rule's own brand is: the compiler rejects YenInclTax + YenExclTax
+                    None => o.push_str(&format!("\n// {base} is an amount of {shown}.\ntype {base} int64\n")),
+                }
                 for (name, written) in others {
                     o.push_str(&format!("\n// {name} is an amount of {written}, the same unit as {base}.\ntype {name} = {base}\n"));
                 }

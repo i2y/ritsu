@@ -1,0 +1,64 @@
+── pricing: ritsu gen --embed tax (library lines: tax, pricing, shop)
+error: `--embed` goes with `--library`
+エラー: `--embed` は `--library` と一緒に使います
+
+── pricing: ritsu gen --library rules/shipping_fee.rule (library lines: tax, pricing, shop)
+error: `--library` makes a library of the whole module (but what its `exclude` lines leave out): run it with no path
+エラー: `--library` は、モジュール全体（`exclude` の行が外すものを除く）をライブラリにします。パスを渡さずに走らせてください
+
+── pricing: ritsu gen --library --name pricing (library lines: tax, pricing, shop)
+error: `--name` and `--module` do not go with `--library`: a library is named by the `library` lines of ritsu.mod
+エラー: `--library` には `--name` も `--module` も付けられません。ライブラリの名前は、ritsu.mod の `library` の行から取ります
+
+── pricing: ritsu gen --library --module example.com/acme/pricing-go (library lines: tax, pricing, shop)
+error: `--name` and `--module` do not go with `--library`: a library is named by the `library` lines of ritsu.mod
+エラー: `--library` には `--name` も `--module` も付けられません。ライブラリの名前は、ritsu.mod の `library` の行から取ります
+
+── pricing: ritsu gen --library --embed nosuch (library lines: tax, pricing, shop)
+error: `--embed nosuch`: no dependency of the tree of modules is named `nosuch`
+エラー: `--embed nosuch`：モジュールの木に、`nosuch` という名前の依存がありません
+
+── pricing: ritsu gen --library --embed tax (library lines: tax, pricing, shop)
+error: `--embed tax`: the dependency `tax` (example.com/acme/tax) has a `library typescript` line, so it is read from that library; `--embed` is for a dependency with no line
+エラー: `--embed tax`：依存 `tax`（example.com/acme/tax）は `library typescript` の行を持つので、このパッケージはその部分をライブラリから読みます。`--embed` は、行の無い依存にだけ付けられます
+
+── shop: ritsu gen --library --embed tax (library lines: pricing, shop)
+error: `--embed tax`: the parts of the dependency `tax` (example.com/acme/tax) are read from the library `@acme/pricing`, which holds them; `--embed` is for a dependency no library holds
+エラー: `--embed tax`：依存 `tax`（example.com/acme/tax）の部分は、それを中に入れているライブラリ `@acme/pricing` から読みます。`--embed` は、どのライブラリも中に入れていない依存にだけ付けられます
+
+── pricing: ritsu gen --library --target go (library lines: tax, pricing, shop)
+error: ritsu.mod has no `library go` line: write `library go "<name>"`, the name of the package
+エラー: ritsu.mod に `library go` の行がありません。パッケージの名前にする `library go "<名前>"` を書いてください
+
+── pricing: ritsu gen --library (library lines: tax)
+error: ritsu.mod has no `library` line: write `library typescript|python|go "<name>"` for each language to write, the name of its package
+エラー: ritsu.mod に `library` の行がありません。書く言語ごとに、パッケージの名前にする `library typescript|python|go "<名前>"` を書いてください
+
+── pricing: ritsu gen --library (library lines: tax, pricing, shop)
+error: `--library` needs the `version` line of ritsu.mod: it is the version of the packages
+エラー: `--library` には、ritsu.mod の `version` の行が要ります。それがパッケージの版になります
+
+── pricing: ritsu gen --library (library lines: tax, pricing, shop)
+error: the dependency `tax` (example.com/acme/tax) has a `library typescript` line and no version: write the `version` line of its ritsu.mod, the lower end of the range this package asks for
+エラー: 依存 `tax`（example.com/acme/tax）は `library typescript` の行を持ちますが、版がありません。このパッケージが求める範囲の下の端にする版を、その ritsu.mod の `version` の行に書いてください
+
+── pricing: ritsu gen --library --target python (library lines: tax, pricing, shop)
+error: `library python "2pricing"` gives an import name Python cannot import (it begins with a digit, or is a word Python keeps)
+エラー: `library python "2pricing"` から作る import の名前は、Python で import できる名前になりません（数字で始まるか、Python の予約語です）
+
+── pricing: ritsu gen --library --target python (library lines: tax, pricing, shop)
+error: the pre-release of 1.2.0-dev.1 has no form among Python's versions (PEP 440): only alpha, beta and rc with a number have one
+エラー: 版 1.2.0-dev.1 のプレリリースは、Python の版の形（PEP 440）にできません。Python のパッケージの版にできるのは、alpha、beta、rc と番号のプレリリースだけです
+
+── pricing: ritsu gen --library --target python (library lines: tax, pricing, shop)
+error: the pre-release of 1.0.0-dev.1, the version of the dependency `tax` (example.com/acme/tax), has no form among Python's versions (PEP 440): only alpha, beta and rc with a number have one
+エラー: 依存 `tax`（example.com/acme/tax）の版 1.0.0-dev.1 のプレリリースは、Python の版の形（PEP 440）にできません。Python のパッケージの版にできるのは、alpha、beta、rc と番号のプレリリースだけです
+
+── loose: ritsu gen --library (library lines: tax, pricing, shop)
+error: `--library` makes a library of a module, and there is no ritsu.mod at the root: make it a module with `ritsu mod init`
+エラー: `--library` は、ritsu.mod のあるモジュールでだけ使えます。`ritsu mod init` でモジュールにしてください
+
+── shop: ritsu gen --library (library lines: tax, pricing, shop)
+error: `rules/spring_sale.rule` contributes to `@pricing/rules/order_discount.rule`, a rule the library `@acme/pricing` holds, and a library's code takes no contribution from the code that uses it: take the contribution out, or generate the app form (without --library)
+エラー: `rules/spring_sale.rule` は、ライブラリ `@acme/pricing` が持つ規則 `@pricing/rules/order_discount.rule` に寄与しています。ライブラリのコードは、それを使う側の寄与を受けられません。寄与を外すか、アプリの形（--library なし）で生成してください
+

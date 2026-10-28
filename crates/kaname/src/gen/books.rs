@@ -188,7 +188,7 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             types.push_str(&format!("/** Every transfer of {name} the modules build. */\nexport type {call} = {};\n", union.join(" | ")));
             // the function that applies them
             let module = &book.typescript.module;
-            let client = ritsu_emit::package::ts_path(&here, &format!("{}books/{module}", opts.place.dir));
+            let client = opts.place.ts_path(&here, &format!("{}books/{module}", opts.place.dir));
             let mut apply = format!("{}// {what_apply}\n\nimport type {{ Book, Result }} from \"{client}\";\nimport type * as calls from \"./{name}\";\n\n", head(ritsu_emit::header::Comment::Slashes));
             let f = format!("apply{}", ritsu_emit::ident::pascal(name));
             apply.push_str(&format!("/** Makes `call` through the client `book`: what the client answers. */\nexport async function {f}(book: Book, call: calls.{call}): Promise<Result> {{\n"));
@@ -245,7 +245,7 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             // the names of typing the types use: no reason to refuse with is NoReturn
             let typing: Vec<&str> = ["ClassVar", "Literal", "NoReturn", "Union"].into_iter().filter(|w| *w == "ClassVar" || *w == "Union" || types.contains(&format!(" = {w}"))).collect();
             let types = types.replacen("from typing import ClassVar, Literal, NoReturn, Union\n", &format!("from typing import {}\n", typing.join(", ")), 1);
-            let (client, module) = ritsu_emit::package::py_from(&here, &format!("{}books/{}", opts.place.dir, book.python.module));
+            let (client, module) = opts.place.py_from(&here, &format!("{}books/{}", opts.place.dir, book.python.module));
             let mut apply = format!(
                 "{}\"\"\"{what_apply}\"\"\"\n\nfrom __future__ import annotations\n\nfrom {client} import {module} as _client\nfrom . import {name} as _calls\n\n\ndef apply_{name}(book: _client.Book, call: _calls.{call}) -> _client.Result:\n    \"\"\"Makes `call` through the client `book`: what the client answers.\"\"\"\n",
                 head(ritsu_emit::header::Comment::Hash)
@@ -308,7 +308,7 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             let apkg = format!("{pkg}apply");
             let mut apply = format!(
                 "{head_go}\n// Package {apkg}: {what_apply}\npackage {apkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\tclient \"{client}\"\n\tcalls \"{calls}\"\n)\n\n// Apply makes call through the client book: what the client answers.\nfunc Apply(ctx context.Context, book *client.Book, call calls.Call) (client.Result, error) {{\n\tswitch c := call.(type) {{\n",
-                client = ritsu_emit::package::go_path(&opts.go_module, &format!("{}books/{pkg}", opts.place.dir)),
+                client = opts.place.go_path(&opts.go_module, &format!("{}books/{pkg}", opts.place.dir)),
                 calls = ritsu_emit::package::go_path(&opts.go_module, &format!("{}glue/books/{pkg}", opts.place.dir)),
             );
             for (id, _) in ops {

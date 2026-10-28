@@ -13,7 +13,7 @@ website/
 ├── build.sh            # all of it, in the one order that works
 ├── sync.sh             # copies the playground's files into docs-ja/
 ├── serve.sh            # previews build/ under /ritsu/, with caching off
-├── docs/               # the English pages: index.md, playground.md, sekisho.md, node.md
+├── docs/               # the English pages: index.md, playground.md, sekisho.md, node.md, libraries.md
 │   ├── kaname/         # kaname's pages: index.md, language.md, examples.md, checks.md, together.md
 │   ├── ns/             # what a namespace IRI opens: yuen.md (see below)
 │   ├── play/           # index.html: the playground alone, filling the window (published as it is)
@@ -51,6 +51,9 @@ playground, and the home page's table of the languages links to it. kaname's are
 their hosts in TypeScript, Python and Go (in tabs, `pymdownx.tabbed`), what the check guarantees,
 and the calls of rules, dates and books; the nav lists them after sekisho's, and the home page
 links to each. The table links the languages with neither a site nor a page to their READMEs.
+`libraries.md` says how `ritsu gen --library` writes a module as libraries and how to publish
+them; `crates/ritsu/tests/library.rs` runs its commands and holds the files it shows to what ritsu
+writes, marked by the comment above each block.
 
 The Japanese pages are written for a Japanese reader, not translated sentence by sentence, so the
 two languages say the same things but not always in the same order. A change to one goes to the

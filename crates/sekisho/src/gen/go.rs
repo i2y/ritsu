@@ -262,7 +262,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
             Import::Dates(d) => format!("{dir}dates/{}", ritsu_emit::ident::go_package(&d.alias)),
             Import::Calendar(c) => format!("{dir}dates/{}", ritsu_emit::ident::go_package(&c.alias)),
         };
-        let path = ritsu_emit::package::go_path(&o.go_module, &to);
+        let path = o.place.go_path(&o.go_module, &to);
         ours.push((path.clone(), format!("\t{} {}\n", import_name(p, o, *ui), s(&path))));
     }
     ours.sort();

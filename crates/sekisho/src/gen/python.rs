@@ -195,7 +195,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
             Import::Dates(d) => format!("{dir}dates/{}", d.alias),
             Import::Calendar(c) => format!("{dir}dates/{}", c.alias),
         };
-        let (from, name) = ritsu_emit::package::py_from(&here, &to);
+        let (from, name) = o.place.py_from(&here, &to);
         imports.push(format!("from {from} import {name} as {}\n", module_var(p, o, *ui)));
     }
     imports.sort();

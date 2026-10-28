@@ -1383,6 +1383,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 ritsu check [<パス>...] [--root <dir>] [--format json] [--budget <n>] [--deps-warnings] [--lang ja|en]
 ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <target>] [--format json]
 ritsu gen [<パス>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
+ritsu gen --library [--embed <名前>]... [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
 ritsu skills list | ritsu skills install [<name>...] [--dir <dir> | --user] [--force]
 ritsu <言語> <引数>...        rulec・dandori・koyomi・chobo・geas・yuen・sakai・sekisho・kaname のコマンドそのもの
@@ -1781,7 +1782,7 @@ generated/typescript/          generated/python/              generated/go/
 
 ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6）。
 
-`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。
+`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形のまま変わらない。
 
 `glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「Functional Core（kaname のモジュール）」（英語では the functional cores (kaname's modules)）を言う。kaname は規則と日付と帳簿をつなぐコードに限らない汎用の言語なので、そう呼ぶ。置き場の名前は `glue/` のままである。ホストのコードはこのパスでモジュールを読むので、名前を変えるとホストのビルドが壊れる。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
 
@@ -3714,17 +3715,67 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 ### 17.16 ライブラリの gen
 
-`ritsu gen --library [--embed <名前>]… [--target …] [--out …]`。付けなければ、いまのアプリの形のまま（M14）。
+`ritsu gen --library [--embed <名前>]… [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]`。付けなければ、アプリの形（9.3）のまま一字も変えない（M14）。言語ごとのパッケージを、そのレジストリ（npm、PyPI、Go のモジュール）が受け取るライブラリの形で書く。コードは `crates/ritsu/src/package/library.rs`。
 
-- **名前と版**：名前は `ritsu.mod` の `library` の行で、求めた出力先の行が無ければ exit 2。版は `version` の行で、無ければ exit 2。
-- **TypeScript**：`package.json` に `"private": true` を書かず、`name`、`version`、`license`（`license` の行から）、`type`、`exports` と、`dependencies`（いまは固定の版で書くランタイムの依存を、その版からの範囲で）、`peerDependencies`（依存のライブラリ）を書く。
-- **Python**：`pyproject.toml` の `[project]` に `name`、`version`、`license`、`dependencies`（ランタイムの依存と、依存のライブラリを、範囲で）を書く。
-- **Go**：`go.mod` を書く。`module <パス>`（版 2 からは `/v<メジャー>` を付ける。Go の決まりで、中の import もこのパスにする）、`go <版>`（生成したコードと固定した依存が求める版のうち、いちばん高いもの。サポート中の版の表と依存の `go.mod` から決める）、`require`（ランタイムの依存はいまの固定の版で、依存のライブラリは選んだ版で）。
-- **範囲の決まり**：選んだ版が `x.y.z` なら、`x.y.z` 以上で `(x+1).0.0` より前、`0.y.z` なら `0.(y+1).0` より前にする。npm は `^x.y.z`（同じ範囲になる）、Python は `>=x.y.z,<(x+1).0.0`（`0.y.z` なら `<0.(y+1).0`）と書く。Go は最小の版を書く（Go の版の選び方は、`require` を最小の版として読む）。`doc.go` に上げるよう書いている依存の依存（9.3 の `GO_RAISED`）は、`go.mod` の `require` に直に書く。ライブラリの `go.mod` が求めれば、使う側の版の選び方がその版以上を選ぶからである。
-- **アプリの形との違い**：アプリの形のパッケージは、確かめた版を「ちょうど」で書き、範囲を捨てた（9.3）。ライブラリの形は M10 のとおり範囲で書く。ライブラリは使う側のアプリの依存の一つになり、二つのライブラリが同じランタイム（`temporalio` など）を別の「ちょうど」で書けば、Python では解決できず、npm では二つが入るからである。範囲の下の端は ritsu が確かめた版（アプリの形が「ちょうど」で書く版と同じ）で、テストもこの版で回す。範囲の中のほかの版を選ぶのは使う側のロックファイルで、監査（3.6）が見るのは下の端の版である。この違いは、ライブラリの形の文書にも書く。
-- **依存の部分**：ライブラリが使う依存のモジュールは、その出力先の `library` の行を、自分の `ritsu.mod` に持っていなければならない。持っていれば、ライブラリはその部分を中に入れず、依存のライブラリを（`peerDependencies` や `require` で）読む。持っていなければ、その依存の名前を挙げて exit 2 で止まる（★）。`--embed <名前>` を付ければ、その依存の部分を、アプリの形と同じく `deps/<名前>/` に入れる。
-- **単位の型**：ライブラリは、依存のライブラリと共通に使う単位の型を、依存のライブラリから読み込む（額を変換なしに渡せるように）。ほかの単位の型は自分で持つ。依存の関係の無い二つのライブラリの単位の型は別の型になり、ホストのコードが変換して渡す。ホストの型の検査が、黙って混ぜることを止める（9.3 のねらいと同じ）。
-- **出し方の文書**（README とサイト）。npm（`npm publish --provenance`）、PyPI（信頼された発行者の形）、Go（生成したディレクトリを、モジュールのパスのリポジトリにコミットし、`vX.Y.Z` か `<サブディレクトリ>/vX.Y.Z` のタグを付ける）。それぞれワークフローの数行で書く。
+**引数**
+
+- モジュール全体（`exclude` の行が外すものを除く）を、出力先ごとに一つのライブラリにする。パスを渡すと exit 2。`--name` と `--module` も exit 2 で、名前は `library` の行から取る。`--embed` は `--library` と一緒にだけ使える（exit 2）。`ritsu.mod` の無いディレクトリでは exit 2。
+- `--target` が無ければ、`library` の行のある出力先だけを作る。行が一つも無いか、`--target` で頼んだ出力先に行が無ければ exit 2。
+- 名前は `library` の行、版は `version` の行で、版が無ければ exit 2。
+
+**どの部分をどのライブラリが持つか**
+
+- 依存のモジュールの部分は、それを持つライブラリから読み、自分の中には入れない。二つのライブラリが同じ依存を読んでも、その部分は一つで、型も一つになる。
+- 持ち手は `ritsu.mod` の `library` の行だけで決める。使う側も同じ行から同じ答えを出せるようにするためである。手元のモジュールから依存まで、各 `ritsu.mod` の `require` の順に幅優先でたどり（アプリの形が依存を `deps/<名前>/` の入れ子に置くときと同じたどり方）、最初に着いたときに通ったモジュールを順に見る。そのうち最初にその出力先の行を持つモジュールがあれば、そのモジュールから同じ決め方で探した持ち手が持つ。通ったモジュールのどれにも行が無ければ、このパッケージが持つ。
+- このパッケージが持つ依存は、`--embed <名前>` を付けたときだけ、アプリの形と同じ `deps/<名前>/` に入れる。付けなければ、その依存の名前を挙げて exit 2 で止まる（英日。付ける `--embed` も示す）。
+- `--embed` を付けられるのは、行が無く、どのライブラリも中に入れていない依存だけである（★）。行のある依存や、ほかのライブラリが中に入れている依存に付けると exit 2。どの部分がどこにあるかを、使う側が `ritsu.mod` だけから決められるようにするためである。
+- 依存のライブラリの名前と版は、行の名前（Python は import の名前、Go は `/vN` を付けたパス）と木が選んだ版である。どちらかが言語の形にならなければ exit 2（下の Python と Go）。
+- 生成器は、読むファイルの置き場所を `Place` の表（`ritsu_emit::package::Place::with_libraries`）で受け取る。表は、ライブラリが持つモジュールのディレクトリ（`deps/pricing/`）と、そこを読む import のパス（`@acme/pricing`、`acme_pricing`、`example.com/acme/pricing-go`。持ち手の中の `deps/<名前>/` があれば、その下）の組で、生成器は最長一致で引く。表が空なら、前と同じパスになる。kaname の受け渡しの型（`glue/books/`）は表から外し、使う側のパッケージに置く（下の「できないこと」）。
+
+**単位の型**
+
+- パッケージのコードが呼ぶ単位の型のうち、読むライブラリが持つものは、そのライブラリの `units` から読み込み、同じ名前で公開する。TypeScript は `import type { GBPc } from "@acme/pricing/units"` と `export type { GBPc }`、Python は `from acme_pricing.units import GBPc as GBPc`、Go は型の別名 `type GBPc = pricinggounits.GBPc` である。額を変換せずに渡せ、使う側の型の検査が、ライブラリをまたいでも単位を突き合わせる。どのライブラリも持たない単位の型は、アプリの形と同じく自分で持つ。
+- 型の持ち主は、パッケージが読むライブラリから、それぞれが読むライブラリへとたどって決める。読むライブラリがさらに別のライブラリから同じ型を読んでいれば、その別のライブラリの型である。依存の関係の無い二つのライブラリが同じ単位の型を持てば、一つのパッケージに型が二つできるので、exit 2 で止める（★）。片方のライブラリをもう片方に依存させるか、アプリの形を使う。
+
+**マニフェストに載せる依存**
+
+- 生成したコードが実際に import するものだけを載せる（★）。pricing の `order_total` は tax の規則を `apply` して中に取り込むので、pricing のコードは tax を import せず、pricing のマニフェストに tax は載らない。それでも、tax には行か `--embed` が要る（上の持ち手の決まり）。
+- **範囲の決まり**：選んだ版が `x.y.z` なら、`x.y.z` 以上で `(x+1).0.0` より前、`0.y.z` なら `0.(y+1).0` より前にする。npm は `^x.y.z`、Python は `>=x.y.z,<(x+1).0.0`（`0.y.z` なら `<0.(y+1).0`）と書く。npm の `^0.0.z` は `0.0.(z+1)` より前になって狭いので、`0.0.z` のときだけ `>=0.0.z <0.1.0` と書く（★。node-semver の README の Caret Ranges）。Go は最小の版を書く（Go の版の選び方は、`require` を最小の版として読む）。
+- **アプリの形との違い**：アプリの形のパッケージは、確かめた版を「ちょうど」で書き、範囲を捨てた（9.3）。ライブラリの形は M10 のとおり範囲で書く。ライブラリは使う側のアプリの依存の一つになり、二つのライブラリが同じランタイム（`temporalio` など）を別の「ちょうど」で書けば、Python では解決できず、npm では二つが入るからである。範囲の下限は ritsu が確かめた版（アプリの形が「ちょうど」で書く版と同じ）で、テストもこの版で回す。範囲の中のほかの版を選ぶのは使う側のロックファイルで、監査（3.6）が見るのは下限の版である。この違いは、出し方の文書にも書く。
+
+**TypeScript**
+
+- `package.json`：`private` を書かず、`name`、`version`、`description`（`description` の行に、生成したことを言う一文を続けたもの。JSON は注を書けないので、ここに書く。行が無ければアプリの形と同じ説明）、`license`（`license` の行から）、`repository`（`source` の行から）、`type`、`exports`、`files`、`scripts`、`dependencies`（ランタイムを、確かめた版からの範囲で）、`peerDependencies`（コードが import するライブラリ）、`devDependencies`（`typescript`。dandori の tools/temporal と同じ 7.0.2）を書く。あわせて `tsconfig.json`（strict、declaration、`outDir` は `dist`、`module` と `moduleResolution` は nodenext、`target` は es2022、skipLibCheck）を書く。
+- ★`repository` は、`source` の行があるときだけ `{ "type": "git", "url": <source> }` と書く。npm の provenance は、パッケージを組んだリポジトリと `repository` が一致することを求めるからである（npm の文書 Generating provenance statements）。`source` の行が無ければ書かない。
+- ★組んで出す。`exports` は `.` と `./*` を `dist/` の `.d.ts` と `.js` に向け、`files` は `dist` だけにし、`scripts.prepare` が `tsc -p tsconfig.json` で組む（npm は `prepare` を `npm install` と `npm publish` の前に走らせる）。`.ts` のままでは使えない。Node 24 は node_modules の下の `.ts` の型を外さない（ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING）からである。
+- ★CommonJS（`"type": "commonjs"`）で組み、ESM にはしない。理由は二つある。生成したコードの相対の import は拡張子を書かないので、`"type": "module"` では TS2835 で通らない。拡張子を書くように直すと、アプリの形の出力も変わる（M14）。ESM のホストも CommonJS のライブラリを import できる（Node 24 で確かめた）。
+- ★`optional-modules.d.ts`：生成したコードが頼まれたときだけ読むモジュール（ワークフローのエージェントの SDK を `await import("openai")` で読む）のうち、依存にもライブラリにも無いものを、型の無いモジュールとして宣言する。ライブラリはそれらを入れずに組める。tsc はこのファイルを `dist/` に出さず、`dist/` の宣言もそれらを読まない。使う側は、頼むものだけを入れる。
+
+**Python**
+
+- `pyproject.toml`：`[project]` に `name`（ディストリビューションの名前）、`version`（PEP 440 の形）、`description`（`description` の行。あれば）、`license`（SPDX の式。PEP 639）、`requires-python = ">=3.10"`、`dependencies`（ランタイムとライブラリを、範囲で、名前の順に）を書く。`requires-python` の下限は、アプリの形のパッケージと同じである。`[build-system]` は `setuptools>=77` で、PEP 639 の `license` の文字列を読めるのが 77 からだからである（84.0.0 で `License-Expression` が出ることを確かめた）。パッケージを探すのは import の名前とその下だけ。
+- ★import の名前は、ディストリビューションの名前を小文字にし、`-`・`_`・`.` の連なりを `_` にしたものである（`acme-pricing` は `acme_pricing`）。数字で始まるか Python の予約語なら exit 2。
+- ★版：SemVer のプレリリースのうち、`alpha`・`a`、`beta`・`b`、`rc` に番号の付いたものだけを PEP 440 にする（`1.0.0-rc.1` は `1.0.0rc1`、番号が無ければ 0）。ほかのプレリリース（`dev.1` など）は、手元のモジュールの版でも、Python の行を持つ依存の版でも exit 2。
+
+**Go**
+
+- `go.mod`：`module <パス>`（版 2 からは `/v<メジャー>` を付け、中の import もこのパスにする。Go の決まりである）、`go <版>`、`require`（コードが import するモジュール。ランタイムはいまの固定の版、ライブラリは木が選んだ版）、`GO_RAISED` の行（9.3。`// indirect`）。ライブラリの `go.mod` が求めれば、使う側の版の選び方がその版以上を選ぶ。`doc.go` は、package の名前を `library go` の名前の最後の部分から作り（`pricing-go` は `pricing_go`。予約語か、文字で始まらないなら前に `p` を付ける）、import の一覧を書かない（`go.mod` が書くので）。
+- `go` の版：Go のサポート中の版のうち一番古いもの（`GO_FLOOR`。Go は新しい二つのメジャーをサポートする。2026-10-28 には go1.27 と go1.26。https://go.dev/doc/devel/release#policy）と、コードが import するモジュール（`GO_MODULES`）と上げるモジュール（`GO_RAISED`）の `go.mod` の `go` の行のうち、いちばん高いもの。いまは 1.26.0 になる。表のモジュールの `go` の行は、tools の段の試験がモジュールのキャッシュから読み直して確かめる。依存のライブラリの `go.mod` の `go` の行は見ない（★）。それは木のモジュールではなく生成物なので、ritsu からは見えない。使う側の `go get` が、要れば使う側の `go` の行を上げる。
+- ★go.sum は書かない。生成したディレクトリで `go mod tidy` をしない。間接の依存が `go.mod` に足され、`--check` が古いと言い、次の `ritsu gen` が元に戻すからである。使う側は `go get` で自分の go.sum に書く。出す前にライブラリを組んで確かめるなら、別のモジュールから `replace` で読み、そちらで `go mod tidy` と `go vet` をする（tools の段の試験と同じ形）。確かめたこと（Go 1.26.0、2026-10-29）：生成したディレクトリの `go mod download`（引数なし）は `go.mod` を変えないが、go.sum には各モジュールの `go.mod` のハッシュしか書かず、`go build` は missing go.sum entry で止まる。中身のハッシュまでそろえても、`go.mod` が直接の依存しか書かないので、`-mod=readonly` の `go build` は updates to go.mod needed で止まる。
+
+**レジストリの道具が書くもの**
+
+- ★ライブラリの形のときだけ、`--check` と次の `ritsu gen` は、出力先のディレクトリの根の `dist/`、`build/`、`*.egg-info`、`go.sum` を見ない。tsc と setuptools は、ritsu の頭のコメント（9.2）を持ったままのファイルをそこに書くので、見れば「もう生成しないファイル」として数え、消してしまう。
+
+**できないこと**（理由と代わりの手）
+
+- **依存のライブラリの規則への寄与**（★）：ライブラリのコードは、出したときの寄与だけで組まれていて、使う側の寄与を受けられない。パッケージが持つ寄与のファイルが、ライブラリの持つ規則に寄与していれば exit 2。代わりの手は、アプリの形で生成する（寄与を合わせた規則のコードを、そのパッケージが持つ）か、寄与をライブラリの側のモジュールに移すことである。
+- **kaname の帳簿の受け渡しの型**（★）：`glue/books/` の型は、使う側のパッケージに置く。ライブラリの側にも同じ帳簿の型があれば、Python と Go では別の型になる（TypeScript は型を構造で比べるので同じになる）。`KanameError` もライブラリごとに別のクラスになる。数の型 Q は、Python の Fraction、Go の `*big.Rat`、TypeScript の構造の型なので、同じ型である。ライブラリをまたいで帳簿の振替の値を渡すなら、アプリの形で一つのパッケージにする。
+- **依存の関係の無い二つのライブラリの、同じ単位の型**：上の「単位の型」のとおり exit 2。
+
+**出し方の文書**：`website/docs/libraries.md`（英）と `website/docs-ja/libraries.md`（日）。npm（`npm publish --provenance`、または信頼された発行者）、PyPI（信頼された発行者）、Go（生成したディレクトリを、モジュールのパスのリポジトリにコミットし、`vX.Y.Z` か `<サブディレクトリ>/vX.Y.Z` のタグを付ける）を、それぞれワークフローの数行で書く。ワークフローは ritsu のリポジトリでは走らせない。書き方は、それぞれの公式の文書で確かめた（2026-10-29。npm の Generating provenance statements と Trusted publishing for npm packages、PyPI の Publishing with a Trusted Publisher と PyPA の Publishing package distribution releases using GitHub Actions、Go の Modules Reference の Mapping versions to commits と Publishing a module）。
+
+確かめ方：`crates/ritsu/tests/library.rs`。例の三つ（`tax`、`pricing`、`shop`）のコピーに `library` の行を足し、ライブラリにする（17.26）。fast の段で、三つのファイルの一覧と、マニフェスト・インデックス・単位のモジュールの golden（`tests/golden/library/`）、行の無い依存と `--embed`、止める引数の 16 の場合の英日の golden、版 2 の Go のパス、`source` の行が `repository` になること、依存の `enums` のファイルを読む規則と依存の規則を使うゲートが依存のライブラリから import すること、レジストリの道具が書くものを残すこと、出し方の二つのページが見せる出力とファイルの行が実物と合うこと。tools の段で、三つを各レジストリの道具と同じに組み（tsc で `dist/` へ、setuptools で wheel、Go は `replace` で読むモジュール）、各ライブラリのコードを `mypy --strict`（ライブラリのディレクトリから）と `go vet`（全部のパッケージ）と gofmt にかけ、pricing と shop を使うホストを `tsc --strict`、`mypy --strict`、`go vet` にかけて走らせ、shop の額が pricing の型であることと、質量がお金の型にならないことを三つの言語で確かめる。単位の持ち主の衝突と `optional-modules.d.ts` と TypeScript の版は、`library.rs` の中の単体の試験である。
 
 ### 17.17 一覧のサイト
 
@@ -3822,7 +3873,7 @@ modules/holidays/
 - `koyomi diff <旧> <新>`（17.9.3）、`sekisho diff <旧> <新>`（17.9.4）。`ritsu koyomi diff`、`ritsu sekisho diff` でも同じ。
 - `rulec diff` は 17.9.1 の書き方を受け取る（フラグは変えない）。
 - `ritsu check --deps-warnings`（17.8）。
-- `ritsu gen --library`、`--embed <名前>`（くり返せる）（17.16）。
+- `ritsu gen --library`、`--embed <名前>`（くり返せる）（17.16）。`--library` はパス、`--name`、`--module` と一緒に使えず、`--embed` は `--library` と一緒にだけ使える（どれも exit 2）。
 
 ### 17.20 診断
 
@@ -3928,8 +3979,8 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 
 | 段 | 何を |
 |---|---|
-| `fast` | 書式（`ritsu.mod` と `ritsu.lock` の読み書き、書き換えで注と並びが残ること、版の並び、名前の形）、tar（決まったバイト、読み戻し、受け付けない形の一つずつ）、`@` の解決（パス、正規の書き方、モジュールの外、入れ子、`find_root`、ファイルの層の見せ方）、言語ごとのモジュールの材料（言語ごとに一つ、`check` の英日と JSON の golden、単体のコマンドで `@` を読むこと）、例のプロジェクトの `check`・`gen`・`run`・`mod list` の golden（英日と JSON）、台帳の E301〜W303 の再現、通信しない `ritsu mod` のコマンドの golden、テストの中のレジストリでの送り出しと取り出し（`ritsu mod diff` と `report` が読むものを取ってくることも。curl がテスト自身の立てたサーバーに問い合わせる。10.2 が fast に許す形）、偽の cosign（引数を書き残すスクリプト）での呼び方、koyomi と sekisho の diff の golden と総当たりとの突き合わせ、rulec の `@` の書き方、インターフェースの差、テストの中で作った git のリポジトリでの報告、一覧のサイトの golden（HTML のファイル）、ブラウザで試すページの `base64` の項目（`tests/playground.rs`） |
-| `tools` | 本物の cosign（テストの中で作った鍵で、テストの中のレジストリに対して署名し、確かめる。通信しない形で。下の「cosign の署名の引数」）、ライブラリの gen（依存の関係のある二つのライブラリを、tsc、mypy、`go build` にかける）、依存の部分を持つ `ritsu gen` のパッケージ（`tsc --strict`、`mypy --strict`、`go vet`）、依存の `.proto` を import する `.proto`（`protoc_roots` のルートで protoc にかける。rulec の生成したモジュールを buf にかける） |
+| `fast` | 書式（`ritsu.mod` と `ritsu.lock` の読み書き、書き換えで注と並びが残ること、版の並び、名前の形）、tar（決まったバイト、読み戻し、受け付けない形の一つずつ）、`@` の解決（パス、正規の書き方、モジュールの外、入れ子、`find_root`、ファイルの層の見せ方）、言語ごとのモジュールの材料（言語ごとに一つ、`check` の英日と JSON の golden、単体のコマンドで `@` を読むこと）、例のプロジェクトの `check`・`gen`・`run`・`mod list` の golden（英日と JSON）、ライブラリの gen の golden（三つのライブラリのマニフェストと単位のモジュール、止める引数の英日。`crates/ritsu/tests/library.rs`）、台帳の E301〜W303 の再現、通信しない `ritsu mod` のコマンドの golden、テストの中のレジストリでの送り出しと取り出し（`ritsu mod diff` と `report` が読むものを取ってくることも。curl がテスト自身の立てたサーバーに問い合わせる。10.2 が fast に許す形）、偽の cosign（引数を書き残すスクリプト）での呼び方、koyomi と sekisho の diff の golden と総当たりとの突き合わせ、rulec の `@` の書き方、インターフェースの差、テストの中で作った git のリポジトリでの報告、一覧のサイトの golden（HTML のファイル）、ブラウザで試すページの `base64` の項目（`tests/playground.rs`） |
+| `tools` | 本物の cosign（テストの中で作った鍵で、テストの中のレジストリに対して署名し、確かめる。通信しない形で。下の「cosign の署名の引数」）、ライブラリの gen（例の三つのライブラリを、各レジストリの道具と同じに組んで入れ、pricing と shop を使うホストを `tsc --strict`、`mypy --strict`、`go vet` にかけて走らせる。npm や uv で取りに行かず、ほかの tools の段の試験と同じ置き場の道具とパッケージを使う。17.16）、依存の部分を持つ `ritsu gen` のパッケージ（`tsc --strict`、`mypy --strict`、`go vet`）、依存の `.proto` を import する `.proto`（`protoc_roots` のルートで protoc にかける。rulec の生成したモジュールを buf にかける） |
 | `platforms` | 本物のレジストリ（distribution-spec の参照実装のイメージを、platforms.yml のサービスとして立てる）での往復と、その上での cosign、種のモジュールの `push --dry-run` のダイジェストが Linux と macOS で同じこと |
 
 **置き場の項目を作る関数**（`ritsu_base::modules::store::put_directory`）。ディレクトリにあるモジュールを、17.11 の tar と OCI のマニフェストで成果物にし、取ってきたときと同じ形で置き場に置く。レジストリを通さないので、置き場と同梱のコピーを読むコマンドの試験は、これで置き場を作る。`ritsu-testkit` ではなく `ritsu-base` に置く。`ritsu-testkit` は std だけに依存するテストの層で（3.1。`cargo xtask deps` が確かめる）、`ritsu-base` 自身も dev-dependency として使うので、tar と成果物を書く `ritsu-base` のコードを呼べない。捨てた形：tar と OCI のマニフェストを書くコードを、`ritsu-testkit` にもう一つ持つ形。同じバイトを作る書き方が二つになり、片方だけ直すと、試験が本物と違う置き場を作る。
@@ -3962,7 +4013,7 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 
 - 材料は、パスの依存で書く（`require pricing path "../pricing"`、`require tax path "../tax"`）。
 - レジストリを通すテストは、材料を一時ディレクトリにコピーし、`module` と `require` の行をテストのレジストリ（`127.0.0.1:<ポート>/acme/…`）に書き替えて、三つを送り出し、`shop` で `add`、`lock`、`fetch`、`check` をする。
-- 使うところ：`crates/ritsu/tests/modules.rs`（`check` と `run` の golden）、`crates/ritsu/tests/modules_cli.rs`（`mod list` の golden と、通信しない `ritsu mod` のコマンド）、`crates/ritsu/tests/modules_gen.rs`（`gen` の golden と、tools の段で生成したパッケージを型の検査にかけること）、`crates/ritsu/tests/modules_oci.rs`（送り出しと取り出し）、`crates/ritsu/tests/modules_diff.rs`（1.0.0 → 1.1.0 の `ritsu mod diff` と rulec の差、1.1.0 → 2.0.0 の報告で `shop` の検査が止まること）、README の「Modules」の節（英日。`shop/ritsu.mod` と、フローの `@pricing` の行と、`check` の出力の抜粋）、サイトの案内のページ（英日）、ブラウザで試すページの `modules` と `modules.ja`（同梱のコピーの形で）。
+- 使うところ：`crates/ritsu/tests/modules.rs`（`check` と `run` の golden）、`crates/ritsu/tests/modules_cli.rs`（`mod list` の golden と、通信しない `ritsu mod` のコマンド）、`crates/ritsu/tests/modules_gen.rs`（`gen` の golden と、tools の段で生成したパッケージを型の検査にかけること）、`crates/ritsu/tests/library.rs`（三つのコピーの `ritsu.mod` に `library` の行を足し、ライブラリにする。コミットした例には行を書かない。17.16）、`crates/ritsu/tests/modules_oci.rs`（送り出しと取り出し）、`crates/ritsu/tests/modules_diff.rs`（1.0.0 → 1.1.0 の `ritsu mod diff` と rulec の差、1.1.0 → 2.0.0 の報告で `shop` の検査が止まること）、README の「Modules」の節（英日。`shop/ritsu.mod` と、フローの `@pricing` の行と、`check` の出力の抜粋）、サイトの案内のページ（英日）、ブラウザで試すページの `modules` と `modules.ja`（同梱のコピーの形で）。
 - 祝日の依存は例に入れない。例は自分のリポジトリの中で閉じ、種のモジュールの使い方は種のモジュールの README が見せる。
 
 ### 17.27 捨てた形

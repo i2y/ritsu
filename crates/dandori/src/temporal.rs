@@ -85,8 +85,8 @@ pub(crate) const RULE_SECONDS: u64 = crate::check::RULE_SECONDS;
 /// them; or, for a flow of a package (ritsu's DESIGN 9.3), in the package's rules/ and dates/.
 pub(crate) fn ts_module(m: &Model, path: &str, dir: &str) -> String {
     match (&m.package, path.split_once('/')) {
-        (Some(p), Some(("rulec", rest))) => ritsu_emit::package::ts_path(&p.flow_dir(), &format!("{dir}rules/{}", rest.trim_start_matches("typescript/"))),
-        (Some(p), Some(("koyomi", rest))) => ritsu_emit::package::ts_path(&p.flow_dir(), &format!("{dir}dates/{}", rest.trim_start_matches("typescript/"))),
+        (Some(p), Some(("rulec", rest))) => p.place.ts_path(&p.flow_dir(), &format!("{dir}rules/{}", rest.trim_start_matches("typescript/"))),
+        (Some(p), Some(("koyomi", rest))) => p.place.ts_path(&p.flow_dir(), &format!("{dir}dates/{}", rest.trim_start_matches("typescript/"))),
         _ => format!("./{path}"),
     }
 }
@@ -104,7 +104,7 @@ fn io_ts(m: &Model) -> String {
     for (i, b) in books.iter().enumerate() {
         let f = &m.books[*b].facts;
         let from = match &m.package {
-            Some(p) => ritsu_emit::package::ts_path(&p.flow_dir(), &format!("{}books/{}", p.dir_of(&m.books[*b].path), f.typescript.module)),
+            Some(p) => p.place.ts_path(&p.flow_dir(), &format!("{}books/{}", p.dir_of(&m.books[*b].path), f.typescript.module)),
             None => format!("../../books/{}", f.typescript.module),
         };
         imports.push_str(&format!("import type {{ Book as Book{i} }} from \"{from}\";\n"));

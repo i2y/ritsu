@@ -2295,11 +2295,23 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 ### 8.5 E：ライブラリの形の gen
 
 - **E.1** `ritsu gen --library` と `--embed`（`crates/ritsu/src/cli.rs` の `gen` の表、`package.rs`）。名前と版の出どころ、依存のライブラリの名前の確かめ（無ければ exit 2）、単位の型を依存のライブラリから読み込むこと。
+  - 結果（2026-10-29）：`crates/ritsu/src/package/library.rs` に、持ち手の決め方（`ritsu.mod` の `library` の行だけから、`require` の順の幅優先で）、`--embed`、単位の型の持ち主、マニフェストを書く関数を置いた。生成器へは `ritsu_emit::package::Place` の表（`with_libraries`）で渡し、rulec・dandori・kaname・sekisho の import の行は `Place` の `ts_path`・`py_path`・`py_from`・`go_path` で作る。表が空なら前と同じパスになる。単位のモジュールは rulec の `units_module_in` が書き、読むライブラリの型を同じ名前で公開する。止める場合は DESIGN 17.16 の「引数」と「できないこと」（寄与、単位の持ち主の衝突、Python の名前と版）。
 - **E.2** TypeScript：`package.json`（`private` なし、`license`、`exports`、`dependencies` を `^`、`peerDependencies`）。
+  - 結果（2026-10-29）：CommonJS で `dist/` に組んで出す形にした（`exports`、`files`、`scripts.prepare`、`devDependencies` の typescript 7.0.2、`tsconfig.json`。DESIGN 17.16）。頼まれたときだけ読むエージェントの SDK を宣言する `optional-modules.d.ts` を足した。`description` は `ritsu.mod` の `description` の行から取る。npm の provenance のために、`source` の行があれば `repository` に書く。
 - **E.3** Python：`pyproject.toml` の `[project]`（範囲）。
+  - 結果（2026-10-29）：`description`（`description` の行）、`license`、`requires-python = ">=3.10"`、`setuptools>=77`、PEP 440 の版。import の名前はディストリビューションの名前から作る。
 - **E.4** Go：`go.mod`（`module` の `/vN`、`go` の版、`require`、`GO_RAISED` の行）。`go` の版は、Go のサポート中の版の表と、生成物が import するモジュールの `go.mod` が求める版から決め、決め方を DESIGN 17.16 に書く。
-- **E.5** 試験：`crates/ritsu/tests/library.rs`。例の `tax` と `pricing` をライブラリにし、`pricing` が `tax` のライブラリを読む形で、三つの言語の golden（`package.json`、`pyproject.toml`、`go.mod` と、単位の型の import）。`library` の行の無い依存で exit 2、`--embed` で中に入ること。tools の段で、二つのライブラリを一つのアプリから使う小さなプロジェクトを、`tsc --strict`（npm のローカルのパスで入れる）、`mypy --strict`（uv の venv に二つを入れる）、`go build`（`replace` で二つを読む）にかける。アプリの形（`--library` なし）の golden が変わらないこと。
+  - 結果（2026-10-29）：`go` の版は 1.26.0（`GO_FLOOR` と、`GO_MODULES`・`GO_RAISED` の `go` の行のいちばん高いもの）。表の `go` の行は、tools の段の単体の試験（`package.rs` の `the_go_lines_are_those_of_the_modules`）がモジュールのキャッシュから読み直す。go.sum は書かない。`go mod download` と `-mod=readonly` の `go build` で確かめたことは DESIGN 17.16。
+- **E.5** 試験：`crates/ritsu/tests/library.rs`。例の `tax`・`pricing`・`shop` を一時ディレクトリにコピーし、`ritsu.mod` に `library` の行を足してライブラリにする（コミットした例は変えない。ほかの段の golden と M14 の一覧が同じ材料を読むため）。pricing は tax の規則を `apply` で取り込むので、ライブラリの間の import と単位の読み込みは shop と pricing の間に出る。
+  - fast の段：三つのライブラリのファイルの一覧と、マニフェスト・インデックス・単位のモジュールの golden（`tests/golden/library/`）、pricing のマニフェストに tax が載らないこと、`library` の行の無い依存で exit 2（英日）と `--embed` で `deps/` に入ること、止める引数の英日の golden、pricing を 2.0.0 にしたときの `/v2` のパスと範囲、`source` の行が `repository` になること、依存の `enums` のファイルを読む規則と、依存の規則を使うゲートが、依存のライブラリから import すること（rulec と sekisho の import の行）、レジストリの道具が書くものを `--check` と次の gen が残すこと、出し方の二つのページのコマンドを走らせた出力と、ページが見せるファイルの行が実物と合うこと（ブロックの上の注で、走らせる場所とファイルを示す）。単位の持ち主の衝突、`optional-modules.d.ts`、TypeScript の版は `library.rs` の単体の試験。
+  - tools の段：三つを、各レジストリの道具と同じに組んで入れ、pricing と shop を使うホストを型の検査にかけて走らせる。
+    - TypeScript：tsc でライブラリごとに `dist/` を作り、次のライブラリとホストの node_modules にコピーする（npm の `file:` は使わない。npm 11 の `file:` はリンクを作り、リンクの先から pricing の宣言が tax を見つけないため）。ホストは `tsc --strict` を通って Node で走る。
+    - Python：dandori の tools/wire の setuptools で wheel を作り、`python -m venv --without-pip` の環境に展開し、Temporal の SDK を `.pth` でつなぐ（uv は使わない）。各ライブラリのコードを、そのディレクトリから `mypy --strict -p` にかける（入れたパッケージの中の誤りを mypy は言わないため）。ホストも `mypy --strict` を通って走る。
+    - Go：`go_module()` の `go.mod` に、三つの `require` と `replace` を足したホストのモジュールで、三つのライブラリの全部のパッケージの `go vet`（`<パス>/...`）と gofmt、ホストの `go vet` と `go run`。どれも `GOPROXY=off`。
+    - どれも、ほかの tools の段の試験と同じ置き場の道具とパッケージを使い、外へ取りに行かない。
+  - アプリの形（`--library` なし）の golden が変わらないこと。
 - **E.6** 出し方の文書：`website/docs/libraries.md` と `website/docs-ja/libraries.md`（npm の `--provenance`、PyPI の信頼された発行者、Go のタグ、ライブラリの形とアプリの形の依存の書き方の違い）。ワークフローの例は、ritsu のリポジトリでは走らせない。
+  - 結果（2026-10-29）：二つのページをサイトの案内と目次に足した。書き方は、それぞれの公式の文書で確かめた（出典は DESIGN 17.16）。
 
 **E の完了の条件**：E.5 の golden と tools の段の三つが通る。アプリの形の golden が変わらない。触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
 

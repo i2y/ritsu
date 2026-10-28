@@ -42,6 +42,12 @@
 //! are made with the contributions `ritsu check` merges for the same paths, and their findings are
 //! counted as it counts them, so that the two say the same of a tree. Outside a module, the package
 //! is what it was before there were modules (M14).
+//!
+//! `--library` writes each package as a library its registry takes instead (DESIGN 17.16, the
+//! submodule [`library`]): named and versioned by the module's `ritsu.mod`, with what it depends on
+//! as ranges, reading the parts of a dependency that is a library from that library.
+
+mod library;
 
 use crate::cli;
 use ritsu_base::diag::Severity;
@@ -141,6 +147,8 @@ pub struct Options {
     /// Where the code of the gates asks: Cedar in the process, or Verified Permissions.
     pub authorizer: sekisho::r#gen::Authorizer,
     pub lang: Lang,
+    /// The package as a library (`--library`, DESIGN 17.16): None for the app form.
+    pub library: Option<library::Library>,
 }
 
 /// The versions the dependencies of a package are written with: the ones the generated code is
@@ -159,33 +167,40 @@ const CEDARPY: &str = "4.12.1";
 const BOTO3: &str = "1.43.103";
 /// And the Go modules the Go of a package imports, with the versions tested here (dandori's
 /// tools/temporal-go/go.mod, chobo's tools/runner/go/go.mod), which doc.go names: a package of Go
-/// is a directory of the module it is put in, so its requirements are that module's go.mod's.
-const GO_MODULES: &[(&str, &str)] = &[
-    ("go.temporal.io/sdk", "v1.49.0"),
-    ("go.temporal.io/api", "v1.63.5"),
-    ("github.com/jackc/pgx/v5", "v5.11.0"),
-    ("github.com/tigerbeetle/tigerbeetle-go", "v0.17.9"),
-    ("github.com/go-sql-driver/mysql", "v1.10.1"),
-    ("github.com/aws/aws-sdk-go-v2", "v1.47.1"),
-    ("github.com/aws/aws-sdk-go-v2/config", "v1.33.6"),
-    ("github.com/aws/aws-sdk-go-v2/service/lambda", "v1.110.0"),
-    ("github.com/aws/aws-sdk-go-v2/service/sns", "v1.47.2"),
-    ("github.com/aws/aws-sdk-go-v2/service/sqs", "v1.52.1"),
-    ("github.com/aws/smithy-go", "v1.28.1"),
-    ("github.com/openai/openai-go/v3", "v3.68.0"),
-    ("github.com/anthropics/anthropic-sdk-go", "v1.78.0"),
-    ("google.golang.org/protobuf", "v1.36.11"),
-    ("github.com/cedar-policy/cedar-go", "v1.8.0"),
-    ("github.com/aws/aws-sdk-go-v2/service/verifiedpermissions", "v1.41.1"),
+/// is a directory of the module it is put in, so its requirements are that module's go.mod's. Each
+/// with the `go` line of its go.mod at that version, which a library's go.mod is at least
+/// (DESIGN 17.16; the tests read the lines back from the module cache).
+const GO_MODULES: &[(&str, &str, &str)] = &[
+    ("go.temporal.io/sdk", "v1.49.0", "1.26.0"),
+    ("go.temporal.io/api", "v1.63.5", "1.25.4"),
+    ("github.com/jackc/pgx/v5", "v5.11.0", "1.25.0"),
+    ("github.com/tigerbeetle/tigerbeetle-go", "v0.17.9", "1.17"),
+    ("github.com/go-sql-driver/mysql", "v1.10.1", "1.24.0"),
+    ("github.com/aws/aws-sdk-go-v2", "v1.47.1", "1.24"),
+    ("github.com/aws/aws-sdk-go-v2/config", "v1.33.6", "1.24"),
+    ("github.com/aws/aws-sdk-go-v2/service/lambda", "v1.110.0", "1.24"),
+    ("github.com/aws/aws-sdk-go-v2/service/sns", "v1.47.2", "1.24"),
+    ("github.com/aws/aws-sdk-go-v2/service/sqs", "v1.52.1", "1.24"),
+    ("github.com/aws/smithy-go", "v1.28.1", "1.24"),
+    ("github.com/openai/openai-go/v3", "v3.68.0", "1.25.0"),
+    ("github.com/anthropics/anthropic-sdk-go", "v1.78.0", "1.24"),
+    ("google.golang.org/protobuf", "v1.36.11", "1.23"),
+    ("github.com/cedar-policy/cedar-go", "v1.8.0", "1.23.0"),
+    ("github.com/aws/aws-sdk-go-v2/service/verifiedpermissions", "v1.41.1", "1.24"),
 ];
+/// The oldest Go release the Go project supports (it supports the two newest; go1.27 and go1.26 on
+/// 2026-10-28, https://go.dev/doc/devel/release#policy), as the `go` line of a library's go.mod
+/// writes it when no module it requires asks for a later one (DESIGN 17.16).
+const GO_FLOOR: &str = "1.26.0";
 /// Modules the ones above ask for at a version with a known vulnerability, the version the tests
 /// run instead (the go.mod of chobo's tools/runner/go and of dandori's tools/temporal-go), and the
 /// advisory. `go mod tidy` gives a module the version a requirement asks for, not the newest (Go's
 /// minimal version selection), so a package that imports the module on the left would otherwise
 /// be built with the vulnerable one; doc.go says to raise it (DESIGN 9.3). pgx v5.11.0 asks for
 /// golang.org/x/text v0.29.0, whose normalization its SCRAM authentication reaches (GO-2026-5970,
-/// fixed in v0.39.0). An entry goes once the module on the left asks for a fixed version.
-const GO_RAISED: &[(&str, &str, &str, &str)] = &[("github.com/jackc/pgx/v5", "golang.org/x/text", "v0.42.0", "GO-2026-5970")];
+/// fixed in v0.39.0). An entry goes once the module on the left asks for a fixed version. The last
+/// is the `go` line of the raised version's go.mod, as for [`GO_MODULES`].
+const GO_RAISED: &[(&str, &str, &str, &str, &str)] = &[("github.com/jackc/pgx/v5", "golang.org/x/text", "v0.42.0", "GO-2026-5970", "1.26.0")];
 
 /// A package: each file by its path under the package's directory, with the file of the project it
 /// is made from (None for what the package itself is made of: the index and the manifest).
@@ -403,6 +418,15 @@ fn with_ports<R>(joined: &Joined, f: impl FnOnce() -> R) -> R {
 /// the modules' sake is made sure of before, by [`modules_hold`].
 pub fn package(project: &Project, contributions: &[String], joined: &Joined, modules: &[(Rc<kaname::check::Checked>, String)], target: Target, o: &Options) -> Result<Package, Refusal> {
     let lang = o.lang;
+    // where each file's parts go; a library reads the parts of the modules its libraries hold from
+    // them, and holds none of them (DESIGN 17.16)
+    let at = |rel: &str| -> Place {
+        let p = place_of(project, rel);
+        match &o.library {
+            Some(l) => p.with_libraries(l.table.clone()),
+            None => p,
+        }
+    };
     let mut files: Vec<(String, String, Option<String>)> = Vec::new();
     // what goes under each kind's directory of each module's directory (empty for the module at
     // hand, `deps/pricing/` for a dependency's), for the indexes: each module by its name
@@ -426,7 +450,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             continue;
         }
         let src = read(project, f, lang)?;
-        let place = place_of(project, &f.rel);
+        let place = at(&f.rel);
+        if place.read_from_library(&place.dir) {
+            continue;
+        }
         // A file of enums is the module of its types, beside the rules that read them (rulec's
         // §15.212).
         let (rel, body, used) = rulec::link::with_set(rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts_at(&src, &f.shown, &f.rel, target.key(), &o.module, place.clone())))
@@ -444,7 +471,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             let shown = &f.shown;
             return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
         };
-        let place = place_of(project, &f.rel);
+        let place = at(&f.rel);
+        if place.read_from_library(&place.dir) {
+            continue;
+        }
         let u = koyomi::codegen::unit_in(checked, lang, Some(&f.rel), place.module.as_ref());
         let (t, body) = match target {
             Target::TypeScript => (koyomi::naming::Target::TypeScript, koyomi::codegen::typescript::module(&u)),
@@ -466,7 +496,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
         };
         let stem = Path::new(&f.rel).file_name().map(|n| n.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
-        let place = place_of(project, &f.rel);
+        let place = at(&f.rel);
+        if place.read_from_library(&place.dir) {
+            continue;
+        }
         let origin = Origin::at(&f.rel, src.as_bytes()).of(place.module.clone());
         let in_package = chobo::client::InPackage { module: o.module.clone(), place: place.clone() };
         units.extend(chobo::client::package_units(book));
@@ -491,7 +524,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     // dandori: each workflow, for Temporal in the language, reading the package's rules, dates and books
     let module = o.module.clone();
     for f in project.of(Tool::Dandori) {
-        let place = place_of(project, &f.rel);
+        let place = at(&f.rel);
+        if place.read_from_library(&place.dir) {
+            continue;
+        }
         let built = with_ports(joined, || -> Result<(Vec<(String, String)>, String), Refusal> {
             let (src, c) = dandori::check::check_file(Path::new(&f.shown)).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
             let Some(mut m) = c.model else {
@@ -541,7 +577,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     let gates: sekisho::suite::Suite = joined.sekisho().into();
     for f in project.of(Tool::Sekisho) {
         let outcome = gate(project, &gates, f, lang)?;
-        let place = place_of(project, &f.rel);
+        let place = at(&f.rel);
+        if place.read_from_library(&place.dir) {
+            continue;
+        }
         let to = sekisho::r#gen::Target { name: target.key(), authorizer: o.authorizer, go_module: o.module.clone(), place: place.clone() };
         let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
             let shown = &f.shown;
@@ -562,10 +601,10 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
     // transfers; glue/'s indexes are kaname's own (the books' transfers are under glue/books/)
     if !modules.is_empty() {
         let kt = kaname::r#gen::Target::parse(target.key()).expect("the three targets are kaname's");
-        let placed: Vec<(Rc<kaname::check::Checked>, String, Place)> = modules.iter().map(|(c, rel)| (c.clone(), rel.clone(), place_of(project, rel))).collect();
+        let placed: Vec<(Rc<kaname::check::Checked>, String, Place)> = modules.iter().map(|(c, rel)| (c.clone(), rel.clone(), at(rel))).filter(|(_, _, p)| !p.read_from_library(&p.dir)).collect();
         let made = kaname::r#gen::package_in(&placed, kt, lang, &o.module);
         units.extend(made.units);
-        for (c, rel) in modules {
+        for (c, rel, _) in &placed {
             named.push(("glue", c.module.name.ascii().to_string(), rel.clone()));
         }
         for (rel, body, from) in made.files {
@@ -574,8 +613,22 @@ pub fn package(project: &Project, contributions: &[String], joined: &Joined, mod
             files.push((format!("{base}{rel}"), body, from));
         }
     }
-    // the package's one type of each unit they take amounts in (rulec's §15.248)
-    if let Some((rel, body)) = rulec::codegen::units_module(target.key(), &units) {
+    // the package's one type of each unit they take amounts in (rulec's §15.248); a library's is the
+    // type of the library it reads the unit's amounts from, when there is one (DESIGN 17.16)
+    let shared = match &o.library {
+        Some(l) => {
+            let brands: Vec<(String, String)> = units
+                .iter()
+                .filter_map(|u| {
+                    let first = u.first_spelling();
+                    first.type_name().map(|b| (b, first.to_string()))
+                })
+                .collect();
+            l.units.shared(&brands, lang)?
+        }
+        None => BTreeMap::new(),
+    };
+    if let Some((rel, body)) = rulec::codegen::units_module_in(target.key(), &units, &shared) {
         files.push((format!("{base}{rel}"), body, None));
     }
     for list in kinds.values_mut().flat_map(|k| k.values_mut()) {
@@ -925,8 +978,10 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
                 index.push_str("export * as units from \"./units\";\n");
             }
             out.push(("index.ts".to_string(), index, None));
-            // what the TypeScript imports from outside the package
+            // what the TypeScript imports from outside the package; for a library, the libraries
+            // too, by their ranges
             let mut deps: BTreeMap<String, &str> = BTreeMap::new();
+            let mut peers: BTreeMap<String, String> = BTreeMap::new();
             for (path, body, _) in files.iter().filter(|(p, _, _)| p.ends_with(".ts")) {
                 let _ = path;
                 for line in body.lines() {
@@ -936,6 +991,10 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
                     }
                     let name = line[at + 7..].split('"').next().unwrap_or("");
                     if name.starts_with('.') || name.starts_with("node:") {
+                        continue;
+                    }
+                    if let Some(r) = o.library.as_ref().and_then(|l| l.read_of(name, '/')) {
+                        peers.insert(r.name.clone(), library::npm_range(&r.version));
                         continue;
                     }
                     if name.starts_with("@temporalio/") {
@@ -955,7 +1014,19 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
                 manifest.push_str(&format!(",\n  \"dependencies\": {{\n{}\n  }}", deps_json.join(",\n")));
             }
             manifest.push_str("\n}\n");
-            out.push(("package.json".to_string(), manifest, None));
+            match &o.library {
+                None => out.push(("package.json".to_string(), manifest, None)),
+                Some(l) => {
+                    out.push(("package.json".to_string(), library::package_json(l, what, &generated, &deps, &peers), None));
+                    out.push(("tsconfig.json".to_string(), library::tsconfig(&head(Comment::Slashes)), None));
+                    let bodies = files.iter().filter(|(p, _, _)| p.ends_with(".ts")).map(|(_, b, _)| b.as_str());
+                    let known = |name: &str| deps.keys().any(|d| name == d || name.starts_with(&format!("{d}/"))) || l.read_of(name, '/').is_some();
+                    let optional = library::optional_modules(bodies, known);
+                    if !optional.is_empty() {
+                        out.push(("optional-modules.d.ts".to_string(), library::optional_modules_dts(&head(Comment::Slashes), &optional), None));
+                    }
+                }
+            }
         }
         Target::Python => {
             let n = &o.name;
@@ -980,34 +1051,53 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
             // what the code of the gates asks with: Cedar's binding, or boto3's client of Verified
             // Permissions, which the caller makes and hands in
             let gates = files.iter().any(|(p, _, _)| p.starts_with(&format!("{n}/authz/")) && p.ends_with(".py"));
-            let mut deps = Vec::new();
+            let mut deps: Vec<(&str, &str)> = Vec::new();
             match (gates, o.authorizer) {
-                (true, sekisho::r#gen::Authorizer::Cedar) => deps.push(format!("cedarpy=={CEDARPY}")),
-                (true, sekisho::r#gen::Authorizer::Avp) => deps.push(format!("boto3=={BOTO3}")),
+                (true, sekisho::r#gen::Authorizer::Cedar) => deps.push(("cedarpy", CEDARPY)),
+                (true, sekisho::r#gen::Authorizer::Avp) => deps.push(("boto3", BOTO3)),
                 _ => {}
             }
             if flows {
-                deps.push(format!("temporalio=={TEMPORAL_PYTHON}"));
+                deps.push(("temporalio", TEMPORAL_PYTHON));
             }
             if tigerbeetle {
-                deps.push(format!("tigerbeetle=={TIGERBEETLE}"));
+                deps.push(("tigerbeetle", TIGERBEETLE));
             }
-            let deps_toml: String = deps.iter().map(|d| format!("  {},\n", ritsu_emit::lit::json(d))).collect();
-            out.push((
-                "pyproject.toml".to_string(),
-                format!(
-                    "{}# {what}\n\n[project]\nname = {}\nversion = \"0.0.0\"\nrequires-python = \">=3.10\"\ndependencies = [\n{deps_toml}]\n\n[build-system]\nrequires = [\"setuptools>=68\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools.packages.find]\ninclude = [{}, {}]\n\n[tool.setuptools.package-data]\n\"*\" = [\"py.typed\", \"*.sql\"]\n",
-                    head(Comment::Hash),
-                    ritsu_emit::lit::json(n),
-                    ritsu_emit::lit::json(n),
-                    ritsu_emit::lit::json(&format!("{n}.*"))
-                ),
-                None,
-            ));
+            if let Some(l) = &o.library {
+                // as ranges from the versions tested, with the libraries its Python imports
+                let mut wanted: Vec<(String, String)> = deps.iter().map(|(d, v)| (d.to_string(), library::python_range(&library::version_of(v)).unwrap_or_default())).collect();
+                for (_, body, _) in files.iter().filter(|(p, _, _)| p.ends_with(".py")) {
+                    for line in body.lines().map(str::trim_start) {
+                        let module = line.strip_prefix("from ").or_else(|| line.strip_prefix("import ")).and_then(|r| r.split_whitespace().next()).unwrap_or("");
+                        if let Some(r) = l.read_of(module, '.')
+                            && !wanted.iter().any(|(n, _)| *n == r.name)
+                        {
+                            wanted.push((r.name.clone(), library::python_range(&r.version).unwrap_or_default()));
+                        }
+                    }
+                }
+                wanted.sort();
+                out.push(("pyproject.toml".to_string(), library::pyproject(l, &head(Comment::Hash), what, &wanted), None));
+            } else {
+                let deps_toml: String = deps.iter().map(|(d, v)| format!("  {},\n", ritsu_emit::lit::json(&format!("{d}=={v}")))).collect();
+                out.push((
+                    "pyproject.toml".to_string(),
+                    format!(
+                        "{}# {what}\n\n[project]\nname = {}\nversion = \"0.0.0\"\nrequires-python = \">=3.10\"\ndependencies = [\n{deps_toml}]\n\n[build-system]\nrequires = [\"setuptools>=68\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools.packages.find]\ninclude = [{}, {}]\n\n[tool.setuptools.package-data]\n\"*\" = [\"py.typed\", \"*.sql\"]\n",
+                        head(Comment::Hash),
+                        ritsu_emit::lit::json(n),
+                        ritsu_emit::lit::json(n),
+                        ritsu_emit::lit::json(&format!("{n}.*"))
+                    ),
+                    None,
+                ));
+            }
         }
         Target::Go => {
-            // the modules the package's Go imports, as doc.go names them
+            // the modules the package's Go imports, as doc.go names them; for a library, the
+            // libraries too, at the versions the tree chooses
             let mut imported: BTreeSet<&str> = BTreeSet::new();
+            let mut libraries: BTreeMap<String, String> = BTreeMap::new();
             for (_, body, _) in files.iter().filter(|(p, _, _)| p.ends_with(".go")) {
                 for line in body.lines() {
                     let l = line.trim();
@@ -1015,12 +1105,17 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
                     if !l.ends_with('"') || path.is_empty() {
                         continue;
                     }
-                    if let Some((m, _)) = GO_MODULES.iter().filter(|(m, _)| path == *m || path.starts_with(&format!("{m}/"))).max_by_key(|(m, _)| m.len()) {
+                    if let Some(r) = o.library.as_ref().and_then(|l| l.read_of(path, '/')) {
+                        libraries.insert(r.name.clone(), format!("v{}", r.version));
+                    } else if let Some((m, ..)) = GO_MODULES.iter().filter(|(m, ..)| path == *m || path.starts_with(&format!("{m}/"))).max_by_key(|(m, ..)| m.len()) {
                         imported.insert(m);
                     }
                 }
             }
-            let package = go_package_name(&o.module, &o.name);
+            let package = match &o.library {
+                Some(l) => l.go_package.clone(),
+                None => go_package_name(&o.module, &o.name),
+            };
             let mut doc = match (glue, authz) {
                 (false, true) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books, the workflows and the code that\n// asks the gates of a project, as one package (ritsu gen): rules/, dates/, books/, flows/ and authz/ under\n// the import path {}.\n", head(Comment::Slashes), o.module),
                 (false, false) => format!("{}\n// Package {package} is the rules, the dates, the clients of the books and the workflows of a project, as\n// one package (ritsu gen): rules/, dates/, books/ and flows/ under the import path {}.\n", head(Comment::Slashes), o.module),
@@ -1030,22 +1125,35 @@ fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec
             if files.iter().any(|(p, _, _)| p == "units/units.go") {
                 doc.push_str("//\n// The types of the units its rules and books take amounts in are in units/, one of each unit.\n");
             }
-            if !imported.is_empty() {
+            if !imported.is_empty() && o.library.is_none() {
                 doc.push_str("//\n// It imports these modules, which the go.mod of the module it is in requires (`go mod tidy`); these are\n// the versions it is tested with:\n//\n");
                 for m in &imported {
-                    let v = GO_MODULES.iter().find(|(x, _)| x == m).map(|(_, v)| *v).unwrap_or("");
+                    let v = GO_MODULES.iter().find(|(x, ..)| x == m).map(|(_, v, _)| *v).unwrap_or("");
                     doc.push_str(&format!("//\t{m} {v}\n"));
                 }
                 let raised: Vec<_> = GO_RAISED.iter().filter(|(by, ..)| imported.contains(by)).collect();
                 if !raised.is_empty() {
                     doc.push_str("//\n// Of the modules those require, these are tested at a later version than the one asked for, which\n// has a known vulnerability; raise them in the go.mod (`go get <module>@<version>`):\n//\n");
-                    for (by, m, v, advisory) in raised {
+                    for (by, m, v, advisory, _) in raised {
                         doc.push_str(&format!("//\t{m} {v} ({advisory}, through {by})\n"));
                     }
                 }
             }
             doc.push_str(&format!("package {package}\n"));
             out.push(("doc.go".to_string(), doc, None));
+            if let Some(l) = &o.library {
+                // its go.mod: what it imports, at the versions tested and the ones the tree chooses,
+                // and what those ask for at a version with a known vulnerability, raised
+                let tested = |m: &str| GO_MODULES.iter().find(|(x, ..)| *x == m);
+                let mut requires: Vec<(String, String)> = imported.iter().filter_map(|m| tested(m)).map(|(m, v, _)| (m.to_string(), v.to_string())).collect();
+                requires.extend(libraries.iter().map(|(m, v)| (m.clone(), v.clone())));
+                requires.sort();
+                let raised: Vec<_> = GO_RAISED.iter().filter(|(by, ..)| imported.contains(by)).collect();
+                let asked = imported.iter().filter_map(|m| tested(m)).map(|(.., g)| *g).chain(raised.iter().map(|(.., g)| *g));
+                let go = library::go_line(GO_FLOOR, asked);
+                let raised: Vec<(String, String)> = raised.iter().map(|(_, m, v, ..)| (m.to_string(), v.to_string())).collect();
+                out.push(("go.mod".to_string(), library::go_mod(l, &head(Comment::Slashes), go, &requires, &raised), None));
+            }
         }
     }
     out.extend(dependency_indexes(target, o, all));
@@ -1122,8 +1230,10 @@ impl Emitted {
 }
 
 /// The files of the package's directory that ritsu wrote before (their head says so) and this run
-/// does not write: what a rule taken out of the project left behind.
-fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
+/// does not write: what a rule taken out of the project left behind. A library's directory leaves
+/// out what its build writes beside the package (DESIGN 17.16): tsc's `dist/`, whose files keep the
+/// head, setuptools's `build/` and `*.egg-info`, and a `go.sum`.
+fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>, library: bool) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut todo = vec![dir.to_path_buf()];
     while let Some(d) = todo.pop() {
@@ -1134,6 +1244,9 @@ fn leftovers(dir: &Path, planned: &BTreeSet<PathBuf>) -> Vec<PathBuf> {
             let p = e.path();
             let name = e.file_name().to_string_lossy().to_string();
             if name.starts_with('.') || name == "node_modules" || name == "__pycache__" {
+                continue;
+            }
+            if library && d.as_path() == dir && (name == "dist" || name == "build" || name.ends_with(".egg-info") || name == "go.sum") {
                 continue;
             }
             if p.is_dir() {
@@ -1154,7 +1267,7 @@ fn generated_here(p: &Path) -> bool {
 }
 
 /// Write the package into `dir`, or under `check` say what differs from it.
-fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
+fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, library: bool, st: &mut Emitted, lang: Lang) -> Result<(), Refusal> {
     let planned: BTreeSet<PathBuf> = p.files.iter().map(|(rel, _, _)| dir.join(rel)).collect();
     for (rel, body, from) in &p.files {
         let path = dir.join(rel);
@@ -1186,7 +1299,7 @@ fn emit(dir: &Path, target: &'static str, p: &Package, check: bool, st: &mut Emi
         st.note(target, &shown, from, "written");
         st.written.push(shown);
     }
-    for p in leftovers(dir, &planned) {
+    for p in leftovers(dir, &planned, library) {
         let shown = p.display().to_string();
         if check {
             st.note(target, &shown, &None, "left");
@@ -1252,9 +1365,22 @@ impl Answer {
     }
 }
 
+/// The options of one language's package: for a library, its name in that language (the npm
+/// package's, the Python package's, the Go package of its root with the module's path) and the
+/// library itself.
+fn for_target(o: &Options, libraries: &[(Target, library::Library)], t: Target) -> Options {
+    match libraries.iter().find(|(lt, _)| *lt == t) {
+        None => o.clone(),
+        Some((_, l)) => {
+            let name = if t == Target::Go { l.go_package.clone() } else { l.import.clone() };
+            Options { name, module: l.import.clone(), library: Some(l.clone()), ..o.clone() }
+        }
+    }
+}
+
 /// `ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--books
-/// postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
-/// [--format json]`: the exit code.
+/// postgres|tigerbeetle] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--library
+/// [--embed <name>]...] [--root <dir>] [--format json]`: the exit code.
 pub fn command(args: &[String], lang: Lang) -> u8 {
     let table = cli::table();
     let cmd = table.command("gen").expect("gen is in the table");
@@ -1290,6 +1416,38 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         return 0;
     }
     answer.out = a.get("--out").unwrap_or("generated").to_string();
+    // `--library` (DESIGN 17.16): the whole module, named by its ritsu.mod
+    let library = a.has("--library");
+    let embed: Vec<String> = a.all("--embed").into_iter().map(str::to_string).collect();
+    if !embed.is_empty() && !library {
+        return say(refusal(2, tr!("`--embed` は `--library` と一緒に使います", "`--embed` goes with `--library`"), lang), answer);
+    }
+    if library && !a.pos.is_empty() {
+        return say(
+            refusal(
+                2,
+                tr!(
+                    "`--library` は、モジュール全体（`exclude` の行が外すものを除く）をライブラリにします。パスを渡さずに走らせてください",
+                    "`--library` makes a library of the whole module (but what its `exclude` lines leave out): run it with no path"
+                ),
+                lang,
+            ),
+            answer,
+        );
+    }
+    if library && (a.has("--name") || a.has("--module")) {
+        return say(
+            refusal(
+                2,
+                tr!(
+                    "`--library` には `--name` も `--module` も付けられません。ライブラリの名前は、ritsu.mod の `library` の行から取ります",
+                    "`--name` and `--module` do not go with `--library`: a library is named by the `library` lines of ritsu.mod"
+                ),
+                lang,
+            ),
+            answer,
+        );
+    }
     let name = a.get("--name").unwrap_or("generated").to_string();
     if !good_name(&name) {
         return say(
@@ -1348,6 +1506,18 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         }
         _ => {}
     }
+    // a library: the languages of its `library` lines, and its module's files but what it leaves out
+    let (project, targets) = if library {
+        match library::targets(&project, a.get("--target"), lang) {
+            Ok(ts) => {
+                answer.targets = ts.iter().map(|t| t.key()).collect();
+                (library::whole_module(project), ts)
+            }
+            Err(r) => return say(r, answer),
+        }
+    } else {
+        (project, targets)
+    };
     if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Kaname, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
         let given = project.given.join(" ");
         return say(
@@ -1384,11 +1554,21 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
     if let Err(r) = modules_hold(&project, &joined, &targets, lang) {
         return say(r, answer);
     }
-    let o = Options { name, module, books, authorizer, lang };
+    // each language's library: where it reads each module, and what it says it depends on
+    let libraries = if library {
+        match library::plan(&project, &whole, &joined, &verdicts, &contributions, &targets, &embed, lang) {
+            Ok(l) => l,
+            Err(r) => return say(r, answer),
+        }
+    } else {
+        Vec::new()
+    };
+    let o = Options { name, module, books, authorizer, lang, library: None };
     let out = PathBuf::from(&answer.out);
     let check = a.has("--check");
     let mut st = Emitted::default();
     for t in targets {
+        let o = for_target(&o, &libraries, t);
         let p = match package(&project, &contributions, &joined, &modules, t, &o) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
@@ -1412,7 +1592,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
                 );
             }
         }
-        let emitted = emit(&out.join(t.key()), t.key(), &p, check, &mut st, lang);
+        let emitted = emit(&out.join(t.key()), t.key(), &p, check, o.library.is_some(), &mut st, lang);
         answer.files.append(&mut st.files);
         if let Err(r) = emitted {
             return say(r, answer);
@@ -1429,7 +1609,7 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         } else {
             print!("{warnings}");
         }
-        let emitted = emit(&out.join("cedar"), "cedar", &p, check, &mut st, lang);
+        let emitted = emit(&out.join("cedar"), "cedar", &p, check, false, &mut st, lang);
         answer.files.append(&mut st.files);
         if let Err(r) = emitted {
             return say(r, answer);
@@ -1475,4 +1655,37 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         let _ = stdout.flush();
     }
     u8::from(check && !(st.missing.is_empty() && st.stale.is_empty() && st.left.is_empty()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `go` line of each Go module a package imports, and of each raised one, is the one its
+    /// go.mod says at that version, read from the module cache the tools level fills (from the
+    /// go.mod of dandori's tools/temporal-go, chobo's tools/runner/go and sekisho's
+    /// tools/runner-go): a library's go.mod is at least the highest of those its Go imports.
+    #[test]
+    fn the_go_lines_are_those_of_the_modules() {
+        let go = || std::process::Command::new("go").arg("version").output().is_ok_and(|o| o.status.success());
+        if !ritsu_testkit::ready(ritsu_testkit::Need::Go, go, "go is not installed; the go lines of the Go modules a package imports are not read back") {
+            return;
+        }
+        let cache = std::process::Command::new("go").args(["env", "GOMODCACHE"]).output().unwrap();
+        let cache = PathBuf::from(String::from_utf8_lossy(&cache.stdout).trim());
+        // a module path's capitals are written `!` and the small letter in the cache
+        let escaped = |m: &str| m.chars().map(|c| if c.is_ascii_uppercase() { format!("!{}", c.to_ascii_lowercase()) } else { c.to_string() }).collect::<String>();
+        let raised = GO_RAISED.iter().map(|(_, m, v, _, go)| (*m, *v, *go));
+        let mut wrong = Vec::new();
+        for (m, v, go) in GO_MODULES.iter().copied().chain(raised) {
+            let file = cache.join("cache/download").join(escaped(m)).join("@v").join(format!("{v}.mod"));
+            let text = std::fs::read_to_string(&file).unwrap_or_else(|e| panic!("{m} {v} is not in the module cache ({}: {e})", file.display()));
+            let line = text.lines().find_map(|l| l.trim().strip_prefix("go ")).map(str::trim);
+            if line != Some(go) {
+                wrong.push(format!("{m} {v}: go {}, not {go}", line.unwrap_or("(none)")));
+            }
+        }
+        assert!(wrong.is_empty(), "the go lines are not those of the modules' go.mod:\n{}", wrong.join("\n"));
+        println!("the go lines of {} Go modules are those of their go.mod", GO_MODULES.len() + GO_RAISED.len());
+    }
 }
