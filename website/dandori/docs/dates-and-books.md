@@ -180,11 +180,22 @@ hold's state is one that is never taken (E011). After a post that failed, the bo
 the hold all the same, so a void there can be refused with `already_posted`; the invoice's
 `on failure` takes that refusal too when it puts the goods back.
 
+Whether a hold has expired by the time a call posts or voids it is what `ritsu check` weighs where
+the flow meets the book (X5): the shortest and the longest time from the hold to the call, against
+the transfer's `pending expires after`. A wait for a length counts as that length, and so does a
+task's `timeout`. A wait until the time of a date the flow asks koyomi for after the hold, with `now`
+(`wait until due.at`, or `timeout until due.at` on a `callback` or an `event`), counts as the days
+koyomi says that date can come after its input, the fewest and the most. A call of a rule or of a
+date counts as 33 seconds at the most, its limit on every platform
+([How long a call may take](tasks.md#how-long-a-call-may-take)). When the hold has expired on every
+run, that is an error (E206); when it may or may not have, a warning (W206), which says the day
+that makes the wait the longest.
+
 ## On each platform
 
 | | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |
 |---|---|---|---|---|---|
-| a date | a Lambda Task; dandori writes the function around the Python koyomi writes | an activity around koyomi's TypeScript, Python or Go (`local`: a local activity) | an invoke of the same Lambda function | the caller image, around koyomi's TypeScript | a function around koyomi's Python |
+| a date | a Lambda Task; dandori writes the function around the Python koyomi writes | an activity around koyomi's TypeScript, Python or Go (`local`: a local activity) | a step that invokes the same Lambda function through the `Transport` | the caller image, around koyomi's TypeScript | a function around koyomi's Python |
 | an operation of a book | the book's Lambda Task; dandori writes the function around chobo's Python client, and makes the hold from the arguments | an activity dandori writes, through the `Transport`'s `book`, on the chobo client you give it | the same, in a step | the same, in the caller image | the same, through `Deps.tasks` |
 | `now` | the time the state was entered (`$states.context.State.EnteredTime`, to the second) | the workflow's clock, which a replay reads again the same | a step that reads the clock, its answer checkpointed (one operation, counted by E040) | `now()` in the expression of the template that computes the value, evaluated once | `Deps.clock` |
 

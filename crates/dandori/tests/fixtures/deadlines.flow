@@ -1,0 +1,56 @@
+workflow deadline_mistakes v1
+
+record Answer
+  by : string
+
+record Message
+  id : string
+
+inputs
+  id : string
+
+# A task that does its work is given a length, not a time.
+task count(id: string, by: timestamp) -> int
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:count"
+  timeout until by
+
+# The time is an event's one parameter.
+task approval(id: string, by: timestamp) -> Answer
+  event
+  timeout until by
+
+# What `timeout until` names is a parameter of the task.
+task ask(id: string) -> Answer
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:ask"
+  callback
+  timeout until by
+
+# ...and a `timestamp`.
+task ask_on(id: string, day: date) -> Answer
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:ask"
+  callback
+  timeout until day
+
+# An AWS API takes its own parameters.
+task queue(QueueUrl: string, MessageBody: Message, by: timestamp) -> Answer
+  aws sqs:sendMessage
+  callback
+  timeout until by
+
+# A retry after the time has passed only times out again; a failure to hand the id on can be retried.
+task ask_again(id: string, by: timestamp) -> Answer
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:ask"
+  callback
+  retry 2 times
+  timeout until by
+  idempotent
+
+task ask_after_failure(id: string, by: timestamp) -> Answer
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:ask"
+  callback
+  retry 2 times on failure
+  timeout until by
+  idempotent
+
+flow
+  succeed

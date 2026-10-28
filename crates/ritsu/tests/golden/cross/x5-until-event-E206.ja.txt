@@ -1,0 +1,31 @@
+payment_terms.cal: ok — received 2026-01-01〜2026-12-20 の 354 日のすべてで、どの日付も計算できます
+weekdays.cal: ok — カレンダー weekdays。表を使わないので、データの範囲は 0001-01-01〜9999-12-31 です
+stock.book: ok
+  receive.do    拒否されうる理由: key_conflict
+  reserve.hold  拒否されうる理由: out_of_stock（shelf(sku) at least 0）、key_conflict、already_refused
+  reserve.post  拒否されうる理由: key_conflict、already_voided、expired、over_hold、no_such_hold
+  reserve.void  拒否されうる理由: already_posted、expired、no_such_hold
+  キー: receive は、delivery と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: reserve は、order と sku の組ごとに一度だけ動きます。キーが同じで qty が違う二度目の呼び出しは、key_conflict で拒否されます。仮押さえが終わったあとに同じキーでもう一度押さえると、done_before が返り、何も押さえません。
+警告[dandori W101]: invoice.flow:41:1: `terms.payment` が失敗すると、案件 `goods` が held のままワークフローが失敗します。そうなる呼び出しは 4 か所です。呼び出しでエラーを処理するか、`on failure` を足して案件を片付けてください
+    41 |   let due = terms.payment(received: now)
+  そうなる例:
+      39  reserve: goods が held で始まる
+      41  terms.payment が失敗する（timeout・failure）
+invoice.flow: 検査を通りました（警告 1 件）
+警告[ritsu W205]: invoice.flow:41:1: koyomi の日付 `terms.payment` の `received` に渡す日が、入力の範囲に収まるかを決められません
+    41 |   let due = terms.payment(received: now)
+  = `now` はどの日にもなりえます。"payment_terms.cal" が `received` に受け取るのは 2026-01-01 から 2026-12-20 までです
+  = 範囲の外の日は、ワークフローを走らせたときに、koyomi が生成したコードが受け付けません。
+エラー[ritsu E206]: invoice.flow:44:1: `put_back` が案件 `goods` の仮押さえを取り消すときには、期限が必ず切れています
+    44 |       goods <- put_back(order: order, sku: sku)
+  = `put_back` は、仮押さえを作ってから（39 行目）早くても 17 日 9 時間あとに来ます。仮押さえは作ってから 14 日で期限が切れます（"stock.book" の `reserve`）
+  = 42 行目の `approval` は、イベントを期限 `due.at` まで待ってから `on timeout` に進みます。期限は koyomi の日付 `payment` の時刻で、その日は `received` から早くて 18 日後（2026-02-20 なら 2026-03-10）の 09:00 です。日付に渡した `now` は仮押さえのあと（41 行目）に読んでいます
+  = 帳簿はどの実行でもこれを `expired` で拒否するので、`put_back` が通ったあとの流れは動きません。
+  = 仮押さえの期限を延ばすか（振替の `pending expires after`）、もっと早く呼んでください。
+警告[ritsu W206]: invoice.flow:47:1: `ship` が案件 `goods` の仮押さえを確定するときに期限が切れているかを決められません
+    47 |   goods <- ship(order: order, sku: sku)
+  = `ship` は仮押さえを作ってから（39 行目）0 秒から 51 日 9 時間 1 分 1 秒のあいだに来ます。仮押さえは作ってから 14 日で期限が切れます
+  = いちばん長くなるのは、41 行目の `payment` に渡した `now` が 2026-07-21 のときです。42 行目の `approval` は、その日から 51 日後の 2026-09-10 の 09:00（`due.at`）まで待ちます
+  = 期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で拒否します。フローはここでそれを処理しています。
+ritsu check: ファイル 4 個（koyomi 2、chobo 1、dandori 1）。検査を通らないもの 1 個（エラー 1 件、警告 3 件）。言語の境目: 確かめた 3 か所、決められない 2 か所

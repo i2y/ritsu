@@ -60,6 +60,12 @@ there must be handled (E022). [Dates and books](dates-and-books.md)
 `key` could change it twice (E030; W030 when it only may change something). A task that starts a
 case without a `key` is a warning (W103).
 
+**Timeouts.** `timeout until` goes on a task that waits for an answer, an `event` or a `callback`, and
+names one of the task's parameters, a `timestamp` (E007, E002, E003). Such a task's `retry` does not
+retry a timeout, which past the time would only come again at once, and an `aws` callback cannot
+have it, since its parameters are the API's own (E007).
+[How long a call may take](tasks.md#how-long-a-call-may-take)
+
 **Ranges.** A value given to a rule, a task, a record or an output fits the range there (E014), and
 a value whose range nothing says is a warning (W104). So does a value of an ordered enum, held to a
 range by its values (`range >=basic <=gold`) on a rule's input or on a place of the flow, and a

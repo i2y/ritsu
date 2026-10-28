@@ -1,6 +1,8 @@
 // transport.ts for the caller in a pod of a workflow under test: the stand-in transport
 // (tools/transport.mjs), taking the scenario's answers from the mock (tools/argo/mock.mjs), in
-// the cluster, or where DANDORI_MOCK says when the runner plays the pod on this machine.
+// the cluster, or where DANDORI_MOCK says when the runner plays the pod on this machine. With
+// DANDORI_LIMITS=1 (the tests of the limits, tests/limits), a call the scenario times out gets no
+// answer, and the caller's own limit ends it.
 
 import fs from "node:fs";
 import { makeTransport } from "./transport.mjs";
@@ -21,4 +23,5 @@ export const transport = makeTransport(spec, {
   },
   // the runner hands the callback's answer to the workflow
   answerLater() {},
+  ...(process.env.DANDORI_LIMITS === "1" ? { hold: () => new Promise<never>(() => {}) } : {}),
 });

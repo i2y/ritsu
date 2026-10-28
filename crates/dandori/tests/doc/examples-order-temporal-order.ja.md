@@ -114,7 +114,7 @@ flowchart TD
 | 65 | `r = notify(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `no_recipient` → 66 行目<br>`timeout`・`failure` → `on failure` | — |
 | 68 | `order ← get_order(…)` | `GET https://warehouse.example.com/v1/orders/{id}`・`observes`・`idempotent` | 1 秒おきに 3 回（busy） | — | `busy`・`timeout`・`failure` → `on failure` | `order`: `received`・`paid`・`cancelled` |
 | 72 | `order ← request_cancel(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`・`sends cancel`・`key` | — | — | `conflict` → 73 行目<br>`timeout`・`failure` → `on failure` | `order`: `cancelled` |
-| 78 | `decision = urgency(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 78 | `decision = urgency(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
 | 79 | `order ← request_shipment(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`・`sends ship`・`key` | — | — | `conflict` → 80 行目<br>`timeout`・`failure` → `on failure` | `order`: `shipped` |
 | 82 | `n = notify(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `no_recipient`・`timeout`・`failure` → `on failure` | — |
 | 84 | `order ← delivered()` | `event`・`observes` | — | 7 日 | `timeout` → 85 行目<br>`failure` → `on failure` | `order`: `shipped`・`delivered` |

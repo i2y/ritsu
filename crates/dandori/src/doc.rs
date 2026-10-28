@@ -499,6 +499,9 @@ fn call_lines(i: &Input, target: Option<&Target>, callee: &Callee, args: &[(Stri
             if let Some(s) = t.timeout {
                 more.push(format!("timeout {}", crate::flow::show_dur(s)));
             }
+            if let Some(p) = &t.deadline {
+                more.push(format!("timeout until {p}"));
+            }
             if !more.is_empty() {
                 lines.push(more.join(" · "));
             }
@@ -777,9 +780,14 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
             if ru.local {
                 how.push_str(&tr(lang, ", a local activity on Temporal", "（Temporal ではローカルアクティビティ）"));
             }
-            // every platform retries a rule's failure `check::RULE_RETRIES` times, one second apart and then two
-            let retries = tr(lang, "2 times, after 1 second and 2 (failure)", "1 秒後と 2 秒後の 2 回（failure）");
-            (how, retries, String::new())
+            // every platform gives a try of a rule's call `check::RULE_SECONDS`, and retries its failure and
+            // its timeout `check::RULE_RETRIES` times, one second apart and then two (DESIGN 16)
+            let retries = tr(lang, "2 times, after 1 second and 2 (failure, timeout)", "1 秒後と 2 秒後の 2 回（failure・timeout）");
+            let timeout = match lang {
+                Lang::En => crate::flow::show_dur(crate::check::RULE_SECONDS),
+                Lang::Ja => crate::flow::show_dur_ja(crate::check::RULE_SECONDS),
+            };
+            (how, retries, timeout)
         }
         Callee::Task(t) => {
             let t = &m.tasks[*t];
@@ -810,6 +818,11 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
                     Lang::Ja => crate::flow::show_dur_ja(s),
                 })
                 .unwrap_or_default();
+            // `timeout until`: the time the call gives
+            let timeout = match t.deadline.as_ref().and_then(|p| args.iter().find(|(a, _)| a == p)) {
+                Some((_, at)) => tr(lang, &format!("until `{}`", at.show()), &format!("`{}` まで", at.show())),
+                None => timeout,
+            };
             (how, retries, timeout)
         }
     };

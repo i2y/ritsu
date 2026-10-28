@@ -86,7 +86,7 @@ What each method of the service does to a run.
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 73 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 73 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 75 | `答え = 在庫を引き当てる(…)` | `connect warehouse StockService/Reserve`, `key` | 2 times every 1 second (混雑) | — | `混雑`, `timeout`, `failure` → the round fails, and then the workflow |
 | 86 | `引当を戻す(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → the round fails, and then the workflow |
 | 95 | `記録する(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |

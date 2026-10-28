@@ -144,6 +144,10 @@ pub struct HoldSpan {
     /// The most seconds, when something bounds them; else the first thing that does not, in both
     /// languages (a task with no `timeout`, a wait until a time nothing bounds).
     pub most: Result<u64, Text>,
+    /// What makes the most as long as it is, when koyomi's days do (a wait until a date's time, the
+    /// time a call with `timeout until` waits until): each such wait, with the day that makes it the
+    /// longest, in both languages (empty when nothing does, or nothing bounds the most).
+    pub most_why: Vec<Text>,
 }
 
 /// Everything a flow that passes dandori's check calls in the other languages.

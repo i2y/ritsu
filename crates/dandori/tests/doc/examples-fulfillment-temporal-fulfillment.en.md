@@ -86,7 +86,7 @@ What each method of the service does to a run.
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 73 | `decision = urgency(…)` | rule `urgency.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 73 | `decision = urgency(…)` | rule `urgency.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 75 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`, `key` | 2 times every 1 second (busy) | — | `busy`, `timeout`, `failure` → the round fails, and then the workflow |
 | 86 | `release_stock(…)` | `connect warehouse StockService/Release`, `idempotent` | — | — | `timeout`, `failure` → the round fails, and then the workflow |
 | 95 | `audit(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |

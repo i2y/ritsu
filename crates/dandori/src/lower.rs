@@ -1696,8 +1696,9 @@ impl<'a> Lowerer<'a> {
                         tr!("`event` のタスクは何も呼びません。値はワークフローに名前で送られてきます。呼び出し方の項目（と、先に ID を渡す `callback`）は外してください", "an `event` task calls nothing: its value is sent to the workflow by name; leave out the ways of calling it (and `callback`, whose task hands on an id first)"),
                     ));
                 }
-                if !params.is_empty() {
-                    self.push(e("E007", *sp, tr!("`event` のタスクは何も送らないので、引数を取りません", "an `event` task sends nothing, so it takes no parameters")));
+                // what `timeout until` waits until is the one parameter an event takes
+                if params.iter().any(|(p, _)| !t.deadline.as_ref().is_some_and(|(d, _)| d == p)) {
+                    self.push(e("E007", *sp, tr!("`event` のタスクは何も送らないので、`timeout until` に書く時刻のほかに引数を取りません", "an `event` task sends nothing, so it takes no parameters but the time its `timeout until` names")));
                 }
                 if let Some(r) = &t.retry {
                     self.push(e("E007", r.span, tr!("`event` のタスクには、リトライする呼び出しがありません。送る側が送り直します", "an `event` task calls nothing that could be tried again; whoever sends the event sends it again")));
@@ -1707,6 +1708,39 @@ impl<'a> Lowerer<'a> {
                 }
                 if matches!(t.machine, Some((MachineUse::Starts { .. }, _)) | Some((MachineUse::Sends { .. }, _))) {
                     self.push(e("E007", esp, tr!("`event` のタスクが案件についてできるのは、状態を知らせる（`observes`）ことだけです。案件を始めたり、イベントを送ったりはできません", "an event can tell what a case is (`observes`), not start a case or send it an event")));
+                }
+            }
+            // `timeout until <param>`: the wait for the answer ends at the time the call gives the parameter
+            if let Some((dp, dsp)) = &t.deadline {
+                if t.event.is_none() && t.callback.is_none() {
+                    self.push(e(
+                        "E007",
+                        *dsp,
+                        tr!("`timeout until` を書けるのは、答えを待つタスク（`event` か `callback`）だけです。ほかのタスクの `timeout` は、`timeout 30 seconds` のように長さで書いてください", "`timeout until` belongs to a task that waits for an answer (`event` or `callback`); give any other task's `timeout` as a length, as `timeout 30 seconds`"),
+                    ));
+                }
+                match params.iter().find(|(p, _)| p == dp) {
+                    None => self.push(e("E002", *dsp, tr!("`timeout until` の `{dp}` は、タスク `{name}` の引数にありません", "`{dp}` of `timeout until` is not a parameter of `{name}`"))),
+                    Some((_, ty)) if *ty != Ty::Timestamp => {
+                        let shown = self.m.ty_name(ty);
+                        self.push(e("E003", *dsp, tr!("`timeout until` が待つ `{dp}` は `timestamp` にしてください。いまは `{shown}` です", "`{dp}`, the time `timeout until` waits until, must be a `timestamp`, not `{shown}`")));
+                    }
+                    Some(_) => {}
+                }
+                if t.callback.is_some() && matches!(binding, Some(Binding::Aws { .. })) {
+                    self.push(e(
+                        "E007",
+                        *dsp,
+                        tr!("`aws` のタスクの引数は API の引数なので、`timeout until` の時刻を引数にできません。ID は `lambda` で渡してください", "the parameters of an `aws` task are the API's own, so none can be the time of `timeout until`; hand the id over by `lambda`"),
+                    ));
+                }
+                // a retry after the time has passed only times out again
+                if let Some(r) = t.retry.as_ref().filter(|r| t.callback.is_some() && (r.on.is_empty() || r.on.iter().any(|(x, _)| x == "timeout"))) {
+                    self.push(e(
+                        "E007",
+                        r.span,
+                        tr!("`timeout until` のタスクは、期限を過ぎてからリトライしても、すぐにまたタイムアウトします。`retry … on failure` のように、リトライするものを `timeout` 抜きで書いてください", "a task with `timeout until` only times out again when it is tried after its time has passed; name what `retry` retries without `timeout`, as `retry … on failure`"),
+                    ));
                 }
             }
             if let Some(ksp) = t.key {
@@ -1829,6 +1863,7 @@ impl<'a> Lowerer<'a> {
                 errors,
                 retry,
                 timeout: t.timeout,
+                deadline: t.deadline.as_ref().map(|x| x.0.clone()),
                 key: t.key.is_some(),
                 key_param: t.key_param.as_ref().map(|x| x.0.clone()),
                 idempotent: t.idempotent,

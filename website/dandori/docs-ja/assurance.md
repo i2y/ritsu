@@ -78,6 +78,10 @@ System One の API のほかのサーバー（`url`）のタスクにも、同�
 - プラットフォームと日付のファイルのあいだのコード（Lambda 関数、`rules.ts`、`rules.py`、`rules.go`）は、koyomi が書くコードと一緒に、ファイルの範囲のすべての入力で動かし、koyomi が言う日付と同じ答えでなければなりません。七つに一つの入力は、カレンダーのオフセットでその日の 0 時 30 分の時刻として渡し、同じ日として読むことも確かめます。
 - フローの実行が出す帳簿の操作を、dandori が TypeScript・Python・Go で書く `Transport` と、Step Functions 向けに書く Lambda 関数から、chobo が書くクライアントに通し、chobo のテストと同じように立てた PostgreSQL、TigerBeetle、MySQL の上で動かします。答えは、同じ操作に chobo の参照インタプリタが返すものと同じでなければなりません。空の帳簿、入荷で満たした帳簿、そして同じ帳簿でもう一度（どの操作も前にした）の三通りです。durable functions と Argo の caller の `io.ts` は Temporal のもの、pydantic-graph の `io.py` は Temporal の Python 版のもので、テストはそれも確かめます。
 
+## 呼び出しの上限
+
+どのプラットフォームも、規則と日付の呼び出しに一回 10 秒の上限を付け、1 秒と 2 秒をおいて 2 回までリトライします（[呼び出しにかけてよい時間](tasks.md#呼び出しにかけてよい時間)）。五つのテストが、規則の呼び出しのどれにも `on timeout` を持つ `tests/limits/limits.flow` を、上限の 10 秒を過ぎても答えない呼び出しで、何も縮めずに本当の時間で走らせます。Temporal の TypeScript・Python・Go（履歴に start-to-close のタイムアウトが三つと、あいだに 1 秒と 2 秒のタイマーがなければなりません）、本物の Lambda 関数（待ってから答える）を動かす LocalStack の Step Functions（モックのファイルでは `States.Timeout` を投げられず、時間もかけられません）、durable functions の SDK のローカルの runner、pydantic-graph、本物の Pod で走らせる Argo Workflows（caller が終了コード 143 で終わります）です。どの回の呼び出しも上限で時間切れになり、次の回は上限とリトライの待ちを足した間隔で始まり、実行は参照インタプリタのとおり呼び出しの `on timeout` に進まなければなりません。LocalStack は HTTP Task を知らないので、Step Functions では Lambda で呼ぶ規則だけを走らせます。pydantic-graph と Argo は、同梱の規則をプロセスの中で上限なしに計算するので、そこでは Connect のサービスとして呼ぶ規則だけを走らせます。
+
 ## 図
 
 `dandori doc` が、例、tests/flows のフロー、エラーのある下書きについて書く Markdown は、golden のファイルと一字ずつ比べます。このサイトに置いた例のページも、いまの出力と同じでなければなりません。どちらにも、呼び出す規則が `rulec doc` の描いたとおりに入っています。どのシナリオでも、実行が光らせるところはつながっていなければなりません。光ったステップには光った辺が入り、選んだ分岐、入ったハンドラ、ループの戻りと出口には、光った辺がなければなりません。Mermaid の図は、rulec が描くステートマシンの図も含めて、headless Chrome の中で Mermaid 11 と 12 に描かせ、すべて描けることを確かめます。Chrome でページを開くと、ページのデータどおりに光ることと、規則ごとに `rulec doc` が描いたページが開くことも確かめます。

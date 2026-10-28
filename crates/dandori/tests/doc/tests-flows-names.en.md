@@ -34,12 +34,12 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 40 | `判定 = 急ぎ(…)` | rule `urgency.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 41 | `見積 = 与信(…)` | rule `hold_amount.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 42 | `部屋 = 扱い(…)` | rule `部屋の扱い.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 40 | `判定 = 急ぎ(…)` | rule `urgency.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 41 | `見積 = 与信(…)` | rule `hold_amount.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 42 | `部屋 = 扱い(…)` | rule `部屋の扱い.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 43 | `知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 44 | `次 = 状態(…)` | rule `order_state.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 45 | `記録 = 要否(…)` | rule `記録の要否.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 44 | `次 = 状態(…)` | rule `order_state.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 45 | `記録 = 要否(…)` | rule `記録の要否.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 

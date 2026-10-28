@@ -1,6 +1,6 @@
 # review v1
 
-Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for Temporal: the scoring is an activity dandori writes, which calls Jev with TypeSafe's key (TYPESAFE_API_KEY) on the workers of its own task queue, which may be written in another language, and so does the notice, an activity you write; the rule runs in the worker of the workflow; the approver's tool answers the callback by the update the generated client sends
+Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval, due by 17:00 on the third business day after it comes in: approving at once asks more certainty than rejecting at once. Written for Temporal: the scoring is an activity dandori writes, which calls Jev with TypeSafe's key (TYPESAFE_API_KEY) on the workers of its own task queue, which may be written in another language, and so does the notice, an activity you write; the rule and the date of the approval run in the worker of the workflow; the approver's tool answers the callback by the update the generated client sends
 
 `examples/review/temporal/review.flow`, drawn by `dandori doc`. Inputs: `application: Application`. Outputs: `verdict: policy.verdict`.
 
@@ -13,39 +13,42 @@ flowchart TD
     s2(["fail Unscorable<br>#quot;Could not score application {application.id}#quot;"])
     s3[["d = policy(…)<br>rule review_policy.rule"]]
     s4{{"match d.decision"}}
-    s6[/"a = ask_for_approval(…)<br>a task you write, answered by a callback<br>timeout 3 days"/]
-    s7(["fail NoAnswer<br>#quot;No approval in three days#quot;"])
-    s8["notify(…)<br>a task you write"]
-    s9(["succeed verdict = approve"])
-    s10["notify(…)<br>a task you write"]
-    s11(["succeed verdict = r.verdict"])
+    s6[["due = approvals.due(…)<br>dates approval_terms.cal"]]
+    s7[/"a = ask_for_approval(…)<br>a task you write, answered by a callback<br>timeout until by"/]
+    s8(["fail NoAnswer<br>#quot;No approval by 17:00 on the third business day#quot;"])
+    s9["notify(…)<br>a task you write"]
+    s10(["succeed verdict = approve"])
+    s11["notify(…)<br>a task you write"]
+    s12(["succeed verdict = r.verdict"])
     start --> s1
     s1 -.->|"on failure"| s2
     s1 --> s3
     s3 --> s4
     s4 -->|"ask"| s6
-    s6 -.->|"on timeout"| s7
-    s6 --> s8
-    s8 --> s9
-    s4 -->|"approve, reject"| s10
-    s10 --> s11
+    s6 --> s7
+    s7 -.->|"on timeout"| s8
+    s7 --> s9
+    s9 --> s10
+    s4 -->|"approve, reject"| s11
+    s11 --> s12
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s9,s11 ok
-    class s2,s7 bad
+    class s10,s12 ok
+    class s2,s8 bad
 ```
 
-A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.
+A rectangle is a task, one with a line down each side a rule or a date of a dates file, a slanted one a task whose value comes from outside (an event, or the answer to a callback), a hexagon a `match`, a rounded box a wait, and a box around steps a loop. A dashed arrow is an error the call handles.
 
 ## Calls
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 49 | `r = score(…)` | `jev · jev-1.13.0` | 2 times every 10 seconds (busy, overloaded) | 10 seconds | `busy`, `overloaded`, `timeout`, `failure` → line 50 |
-| 51 | `d = policy(…)` | rule `review_policy.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 55 | `a = ask_for_approval(…)` | a task you write, answered by a callback | — | 3 days | `timeout` → line 56<br>`failure` → the workflow fails |
-| 57 | `notify(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 59 | `notify(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 51 | `r = score(…)` | `jev · jev-1.13.0` | 2 times every 10 seconds (busy, overloaded) | 10 seconds | `busy`, `overloaded`, `timeout`, `failure` → line 52 |
+| 53 | `d = policy(…)` | rule `review_policy.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 57 | `due = approvals.due(…)` | the date `due` of `approval_terms.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 58 | `a = ask_for_approval(…)` | a task you write, answered by a callback | — | until `due.at` | `timeout` → line 59<br>`failure` → the workflow fails |
+| 60 | `notify(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
+| 62 | `notify(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 
@@ -53,10 +56,10 @@ Every way the workflow can end.
 
 | Line | End |
 |---:|---|
-| 50 | `fail Unscorable` "Could not score application {application.id}" |
-| 56 | `fail NoAnswer` "No approval in three days" |
-| 58 | `succeed verdict = approve` |
-| 60 | `succeed verdict = r.verdict` |
+| 52 | `fail Unscorable` "Could not score application {application.id}" |
+| 59 | `fail NoAnswer` "No approval by 17:00 on the third business day" |
+| 61 | `succeed verdict = approve` |
+| 63 | `succeed verdict = r.verdict` |
 
 ## Rules
 

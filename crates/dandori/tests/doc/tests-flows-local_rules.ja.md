@@ -37,10 +37,10 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 32 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout` → 33 行目<br>`failure` → ワークフローが失敗する |
+| 32 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout` → 33 行目<br>`failure` → ワークフローが失敗する |
 | 34 | `記録する(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 36 | `知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 37 | `見直し = 急ぎの見直し(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 37 | `見直し = 急ぎの見直し(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 38 | `記録する(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方

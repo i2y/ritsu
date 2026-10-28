@@ -63,8 +63,8 @@ pub fn call(m: &Model, view: View, callee: &Callee, args: &Map<String, Value>, k
             }
             return match view {
                 View::Temporal => json!({ "activity": rule_activity(&ru.name), "args": args }),
-                View::Durable => json!({ "invoke": ru.lambda.clone().unwrap_or_default(), "payload": args }),
-                View::Asl => json!({ "lambda": ru.lambda.clone().unwrap_or_default(), "payload": args }),
+                // durable functions call the Lambda function in a step, as Step Functions' Task does (DESIGN 16)
+                View::Durable | View::Asl => json!({ "lambda": ru.lambda.clone().unwrap_or_default(), "payload": args }),
                 View::Argo | View::Graph => json!({ "rule": ru.name, "args": args }),
             };
         }
@@ -892,6 +892,20 @@ pub fn jsonata_segment(e: &TExpr) -> String {
         Ty::Str | Ty::Timestamp | Ty::Date | Ty::Enum(_) => format!("$encodeUrlComponent({})", jsonata_expr(e)),
         _ => format!("($dd_v := {}; $encodeUrlComponent($type($dd_v) = \"string\" ? $dd_v : $type($dd_v) = \"null\" ? \"\" : $string($dd_v)))", jsonata_expr(e)),
     }
+}
+
+/// The argument a call gives the parameter its task's `timeout until` names: the time the wait
+/// for the answer ends at (DESIGN 16).
+pub fn deadline_arg<'a>(m: &Model, callee: &Callee, args: &'a [(String, TExpr)]) -> Option<&'a TExpr> {
+    match callee {
+        Callee::Task(t) => m.tasks[*t].deadline.as_ref().and_then(|p| args.iter().find(|(a, _)| a == p)).map(|(_, e)| e),
+        Callee::Rule(_) => None,
+    }
+}
+
+/// Whether a call of the workflow waits for its answer until a time (`timeout until`).
+pub fn waits_until(m: &Model) -> bool {
+    m.all_stmts().iter().any(|s| matches!(&s.kind, TK::Call { callee: Callee::Task(t), .. } if m.tasks[*t].deadline.is_some()))
 }
 
 pub fn rule_activity(rule: &str) -> String {

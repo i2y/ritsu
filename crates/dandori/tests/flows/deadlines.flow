@@ -1,0 +1,26 @@
+workflow deadlines v1
+description "Waits for an answer until a time (`timeout until`): a callback whose wait ends at 17:00 on the second business day after the request, a time a dates file gives from `now`. The time goes to the one who answers, with the callback's id. Runs on every platform"
+
+use dates terms from "dates/answer_terms.cal"
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:answer-terms"
+
+record Answer
+  by : string
+
+inputs
+  request : string
+
+outputs
+  answered_by : string
+
+# Someone answers in a tool of their own, by the callback's id, until the time the call gives.
+task ask(request: string, by: timestamp) -> Answer
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:ask"
+  callback
+  timeout until by
+
+flow
+  let due = terms.due(received: now)
+  let a = ask(request: request, by: due.at)
+    on timeout => succeed answered_by = "nobody by {due.at}"
+  succeed answered_by = a.by

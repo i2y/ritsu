@@ -37,12 +37,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 32 | `quote = tiers(…)` | 規則 `member_tier_shipping.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 34 | `own = tiers(…)` | 規則 `member_tier_shipping.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 32 | `quote = tiers(…)` | 規則 `member_tier_shipping.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
+| 34 | `own = tiers(…)` | 規則 `member_tier_shipping.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 37 | `send_offer(…)` | `lambda send-offer`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 38 | `send_offer(…)` | `lambda send-offer`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 40 | `picked = pick_campaign(…)` | `lambda pick-campaign`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 41 | `offer = tiers(…)` | 規則 `member_tier_shipping.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 41 | `offer = tiers(…)` | 規則 `member_tier_shipping.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

@@ -1,4 +1,4 @@
-error[E007]: tests/fixtures/events.flow:10:6: an `event` task sends nothing, so it takes no parameters
+error[E007]: tests/fixtures/events.flow:10:6: an `event` task sends nothing, so it takes no parameters but the time its `timeout until` names
     10 | task 承認の知らせ(id: string) -> 承認
 error[E007]: tests/fixtures/events.flow:12:3: an `event` task calls nothing: its value is sent to the workflow by name; leave out the ways of calling it (and `callback`, whose task hands on an id first)
     12 |   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:approve"

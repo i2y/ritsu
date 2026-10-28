@@ -114,7 +114,7 @@ flowchart TD
 | 64 | `催促の控え = 知らせる(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `宛先なし` → line 65<br>`timeout`, `failure` → `on failure` | — |
 | 67 | `受注 ← 注文を見る(…)` | `GET https://warehouse.example.com/v1/orders/{id}`, `observes`, `idempotent` | 3 times every 1 second (混雑) | — | `混雑`, `timeout`, `failure` → `on failure` | `受注`: `受付`, `入金済`, `取消` |
 | 71 | `受注 ← 取消を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`, `sends 取消依頼`, `key` | — | — | `拒否された` → line 72<br>`timeout`, `failure` → `on failure` | `受注`: `取消` |
-| 77 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
+| 77 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
 | 78 | `受注 ← 出荷を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`, `sends 出荷`, `key` | — | — | `拒否された` → line 79<br>`timeout`, `failure` → `on failure` | `受注`: `出荷済` |
 | 81 | `出荷の控え = 知らせる(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `宛先なし`, `timeout`, `failure` → `on failure` | — |
 | 83 | `受注 ← 配達の知らせ()` | `event`, `observes` | — | 7 days | `timeout` → line 84<br>`failure` → `on failure` | `受注`: `出荷済`, `配達済` |

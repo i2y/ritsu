@@ -1,0 +1,19 @@
+dates 承認の期日(approval_terms_ja) v1
+description "承認に回した申込は、受け付けた日から 3 営業日後の 17 時までに承認する"
+use calendar "../calendars/平日.cal"
+
+inputs
+  受付日(received) : date  range >=2026-01-01 <=2027-12-31
+
+date 期限(due) = 受付日
+  + 3 business days     # 「受け付けた日から 3 営業日後」
+  at 17:00              # 「17 時まで」
+
+claims
+  営業日に終わる     : 期限 is open
+  遅い受付は遅い期限 : 期限 is monotonic
+
+examples
+| 受付日     | -> 期限     |
+| 2026-04-01 | 2026-04-06 |
+| 2026-12-24 | 2027-01-04 |

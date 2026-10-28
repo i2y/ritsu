@@ -2519,11 +2519,12 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             t.push_str("\t\"time\"\n");
         }
         t.push('\n');
-        for p in &packages {
-            t.push_str(&format!("\t{}\n", q(p)));
-        }
-        for p in &dated {
-            t.push_str(&format!("\t{}\n", q(&format!("koyomi/go/{p}"))));
+        // one group, in the order gofmt keeps
+        let mut paths: Vec<String> = packages.iter().cloned().collect();
+        paths.extend(dated.iter().map(|p| format!("koyomi/go/{p}")));
+        paths.sort();
+        for path in paths {
+            t.push_str(&format!("\t{}\n", q(&path)));
         }
     }
     t.push_str(")\n\n// ddRules are the rules whose code goes with the workflow, by the names the workflow calls them by.\nvar ddRules = map[string]any{\n");
@@ -2817,6 +2818,8 @@ func ddBooked(r BookResult, err error, names map[string]string, args map[string]
 "##;
 
 /// `now` on Temporal: the workflow's clock, which a replay reads again the same.
+/// `timeout until` on Temporal: how long the wait for the answer is, from `now`.
+const UNTIL_GO: &str = "\n// ddSecondsUntil is how long `timeout until` waits for an answer: the seconds from `now` to a\n// moment given as an RFC 3339 string in UTC, rounded up, and one at the least.\nfunc ddSecondsUntil(ctx workflow.Context, at any) float64 {\n\tt, err := time.Parse(time.RFC3339Nano, ddStr(at))\n\tif err != nil {\n\t\treturn 1\n\t}\n\tnow, _ := time.Parse(time.RFC3339, ddNow(ctx))\n\tleft := t.Sub(now)\n\tn := int64(left / time.Second)\n\tif left%time.Second > 0 {\n\t\tn++\n\t}\n\tif n < 1 {\n\t\tn = 1\n\t}\n\treturn float64(n)\n}\n";
 const NOW_GO: &str = "\n// ddNow is `now`: the moment, by the workflow's clock, which a replay reads again the same; to the\n// second, in UTC.\nfunc ddNow(ctx workflow.Context) string {\n\treturn workflow.Now(ctx).UTC().Format(\"2006-01-02T15:04:05Z\")\n}\n";
 
 /// client.go: starting the workflow, answering its callbacks, and asking where it is. For a workflow
@@ -3071,7 +3074,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
     if nd.claude {
         files.push((format!("{pkg}/io_claude.go"), constant(IO_CLAUDE)));
     }
-    files.push((format!("{pkg}/runtime.go"), format!("{}{}", constant(RUNTIME), if m.uses_now() { NOW_GO } else { "" })));
+    files.push((format!("{pkg}/runtime.go"), format!("{}{}{}", constant(RUNTIME), if m.uses_now() || render::waits_until(m) { NOW_GO } else { "" }, if render::waits_until(m) { UNTIL_GO } else { "" })));
     if !crate::asl::used_books(m).is_empty() {
         files.push((format!("{pkg}/io_books.go"), io_books_file(m, &pkg, &header)));
     }
@@ -3196,6 +3199,15 @@ impl<'a> Gen<'a> {
                     format!("({})", out.join(" + "))
                 }
             }
+        }
+    }
+
+    /// How long a call of an `event` or a `callback` task waits for its answer, in seconds: until the
+    /// time the call gives the parameter of `timeout until`, or the task's `timeout` (a day without one).
+    fn answer_wait(&self, task: &TaskDef, args: &[(String, TExpr)]) -> String {
+        match task.deadline.as_ref().and_then(|p| args.iter().find(|(a, _)| a == p)) {
+            Some((_, at)) => format!("ddSecondsUntil(ctx, {})", self.expr(at)),
+            None => task.timeout.unwrap_or(86_400).to_string(),
         }
     }
 
@@ -3710,7 +3722,7 @@ impl<'a> Gen<'a> {
                         invocation.push("return r, err".into());
                     }
                     // nothing is called: the workflow waits for the event, as long as a callback
-                    Some(Via::Event) => invocation.push(format!("return dd.awaitEvent(ctx, {}, {})", q(&task.name), task.timeout.unwrap_or(86_400))),
+                    Some(Via::Event) => invocation.push(format!("return dd.awaitEvent(ctx, {}, {})", q(&task.name), self.answer_wait(task, args))),
                     _ if task.callback => {
                         counted = true;
                         let mut with_id = parts.clone();
@@ -3720,7 +3732,7 @@ impl<'a> Gen<'a> {
                         invocation.push(format!("if _, err := {}(ctx, map[string]any{{{}}}); err != nil {{", task_function(&task.name), with_id.join(", ")));
                         invocation.push("\treturn nil, err".into());
                         invocation.push("}".into());
-                        invocation.push(format!("return dd.awaitCallback(ctx, dd_id, {})", task.timeout.unwrap_or(86_400)));
+                        invocation.push(format!("return dd.awaitCallback(ctx, dd_id, {})", self.answer_wait(task, args)));
                     }
                     _ => invocation.push(format!("return {}(ctx, {args_map})", task_function(&task.name))),
                 }

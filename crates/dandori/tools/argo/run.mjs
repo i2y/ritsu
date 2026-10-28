@@ -55,6 +55,11 @@
 // tens of seconds; a run that stands still is stuck. Each run's result says how many seconds after
 // the runner started it ended.
 //
+// With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), a call that the scenario times
+// out gets no answer in a played pod, and the generated caller's own limit ends the pod (exit code
+// 143); each run's result also has `times`: when each call came and when the run ended, in
+// milliseconds from its submission. Those runs are played alone, with no real pods.
+//
 // The argo command is DANDORI_ARGO, else `argo` on the PATH. DANDORI_ARGO_KEEP=1 keeps the
 // workflows, to look at them; DANDORI_ARGO_DUMP=<directory> writes, for every run with real pods,
 // what the cluster says of its pods and nodes when it ends, and the logs of the pods that failed.
@@ -252,7 +257,7 @@ async function clusterMock(pathname, body) {
 async function stateOf(p, fresh = false) {
   if (!p.real) {
     const r = local.runs.get(p.name);
-    return r ? { steps: r.steps, pending: r.pending } : { steps: [], pending: {} };
+    return r ? { steps: r.steps, pending: r.pending, calls: r.calls } : { steps: [], pending: {}, calls: [] };
   }
   if (fresh || p.state === undefined || Date.now() - p.asked >= 1000) {
     p.state = await clusterMock(`/state?workflow=${encodeURIComponent(p.name)}`);
@@ -369,7 +374,7 @@ async function dump(p, w) {
 async function submit(p) {
   const answers = spec.runs[p.i].answers;
   if (p.real) await clusterMock("/scenario", { workflow: p.name, answers });
-  else local.runs.set(p.name, { answers, next: 0, steps: [], pending: {} });
+  else local.runs.set(p.name, { answers, next: 0, steps: [], pending: {}, calls: [] });
   const input = { name: "input", value: JSON.stringify(spec.runs[p.i].input) };
   const w = {
     apiVersion: "argoproj.io/v1alpha1",
@@ -783,6 +788,7 @@ try {
         }
         await dump(p, w);
         p.running = false;
+        p.ended = Date.now();
         p.seconds = Math.round((Date.now() - started) / 1000);
         p.nodes = Object.keys(nodesOf(w)).length;
         const params = Object.fromEntries((w.status.outputs?.parameters ?? []).map((q) => [q.name, q.value]));
@@ -800,7 +806,8 @@ try {
     const state = await stateOf(p, true);
     // the keys carry the workflow's name; the reference names the execution "test"
     const steps = JSON.parse(JSON.stringify(state.steps).split(`"${p.name}/`).join('"test/'));
-    return { steps, end: p.end, nodes: p.nodes, platform: p.platform, nudged: p.nudged, seconds: p.seconds };
+    const times = process.env.DANDORI_LIMITS === "1" ? { times: { calls: (state.calls ?? []).map((t) => t - p.submitted), end: p.ended - p.submitted } } : {};
+    return { steps, end: p.end, nodes: p.nodes, platform: p.platform, nudged: p.nudged, seconds: p.seconds, ...times };
   }
   for (const p of plays) (p.real ? results.real : results.runs).push(await result(p));
 } catch (e) {

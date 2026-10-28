@@ -312,6 +312,8 @@ pub struct TaskDecl {
     pub errors: Vec<ErrDecl>,
     pub retry: Option<RetryDecl>,
     pub timeout: Option<u64>,
+    /// `timeout until <param>`: the parameter whose time the wait for the answer ends at
+    pub deadline: Option<Name>,
     pub key: Option<Span>,
     /// `key ClientToken`: the parameter of an AWS API that takes the key
     pub key_param: Option<Name>,
@@ -1694,6 +1696,7 @@ pub fn parse(src: &str) -> Result<Program, Diag> {
                     errors: vec![],
                     retry: None,
                     timeout: None,
+                    deadline: None,
                     key: None,
                     key_param: None,
                     idempotent: false,
@@ -2008,7 +2011,21 @@ fn task_clause(cc: &mut Cur, t: &mut TaskDecl) -> Result<(), Diag> {
             }
             t.retry = Some(r);
         }
-        "timeout" => t.timeout = Some(duration(cc)?),
+        "timeout" => {
+            if t.timeout.is_some() || t.deadline.is_some() {
+                return Err(Diag::error(
+                    "E007",
+                    sp.line,
+                    sp.col,
+                    tr!("`timeout` が二つあります。長さ（`timeout 3 days`）か時刻（`timeout until <引数>`）の、どちらか一つにしてください", "a task has one `timeout`: a length, as `timeout 3 days`, or a time, as `timeout until <parameter>`"),
+                ));
+            }
+            if cc.eat_kw("until") {
+                t.deadline = Some(cc.ident(tr!("待ちが終わる時刻を受け取る引数", "the parameter that takes the time the wait ends at"))?);
+            } else {
+                t.timeout = Some(duration(cc)?);
+            }
+        }
         "key" => {
             t.key = Some(sp);
             if let Some(Tok::Ident(_)) = cc.peek() {

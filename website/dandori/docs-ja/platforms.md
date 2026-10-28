@@ -42,7 +42,7 @@ $ dandori build <file.flow> --target temporal|temporal-python|temporal-go|asl|du
 
 ### タイムアウト
 
-`timeout` を書かないタスクには、ほかのプラットフォームと同じだけの時間を与えます。`http`・`agent`・`jev` は HTTP Task と同じ 60 秒、`lambda` は 900 秒で、それ以外には独自のタイムアウトを付けません。ワークフロー自身のワーカーが受け持つアクティビティ（`queue` の無いタスク）はどれもハートビートを送るので、ワーカーがいなくなっても 30 秒以内に気づきます。規則のアクティビティのタイムアウトは 10 秒で、タイムアウトしたらリトライします。
+`timeout` を書かないタスクには、ほかのプラットフォームと同じだけの時間を与えます。`http`・`agent`・`jev` は HTTP Task と同じ 60 秒、`lambda` は 900 秒で、それ以外には独自のタイムアウトを付けません。ワークフロー自身のワーカーが受け持つアクティビティ（`queue` の無いタスク）はどれもハートビートを送るので、ワーカーがいなくなっても 30 秒以内に気づきます。規則と日付のアクティビティのタイムアウトは、ワーカーが受け取ってから 10 秒です（start-to-close のタイムアウトで、タスクキューで待つ時間は数えません）。タイムアウトしても失敗しても、1 秒と 2 秒をおいて 2 回までリトライします。`timeout until` を書いた `event` と `callback` のタスクの待ちは、待ちを始めたときのワークフローの時計から長さを決める、ワークフローのタイマーです（[呼び出しにかけてよい時間](tasks.md#呼び出しにかけてよい時間)）。
 
 ## Temporal（Python）
 
@@ -83,9 +83,11 @@ HTTP には `net/http`、Lambda と AWS の API には AWS SDK for Go v2、OpenA
 
 `--target asl` は、JSONata を使う ASL のステートマシンを書き出します。Lambda 関数として呼ぶ規則ごとに、rulec が生成する Python を包んだ Lambda のハンドラーも書き出します。`connect` を書いた規則は、HTTP Task で規則のサービスを呼びます。`connection` と、HTTPS の URL が要り、Lambda 関数は書きません。タスクは Lambda 関数、EventBridge の接続を通した HTTP の API、SDK の統合を通した AWS のサービスを呼び、コールバックにはタスクトークンを渡します。ステートマシンには自分で書くコードを置けないので、そのどれにも当たらないタスクはエラーにします（E050）。Temporal でしか意味を持たない機能（`on cancel`、`event`、実装するサービスの、実行がいまどこにいるかを聞くメソッド）も同じくエラーにします。
 
+規則と日付の Task には、Lambda で呼ぶものにも HTTP で呼ぶものにも `TimeoutSeconds` 10 を付けます。タイムアウトしたとき（`States.Timeout`）も失敗したときも、`Retry` が 1 秒と 2 秒をおいて 2 回までリトライします。`timeout until` を書いたコールバックの `.waitForTaskToken` の Task には、渡された時刻とステートに入った時刻から JSONata で計算した `TimeoutSeconds` を付けます。1 秒より短くはしません。Task の時計はトークンを渡す前から動くので、渡すのにかかった時間もこの中に入ります。
+
 ## AWS Lambda durable functions
 
-`--target durable` は、`workflow.ts`（`makeHandler(own, transport)` を持つ）、`types.ts`、`tasks.ts`、`io.ts`、`runtime.ts` を書き出します。Lambda 関数として呼ぶ規則ごとに `asl` と同じ Lambda のハンドラーも書き出し、durable function はそれを invoke します。`connect` を書いた規則は、規則のサービスに送るステップになります。自分で書くタスクは、そのコードを動かすステップになります。
+`--target durable` は、`workflow.ts`（`makeHandler(own, transport)` を持つ）、`types.ts`、`tasks.ts`、`io.ts`、`runtime.ts` を書き出します。Lambda 関数として呼ぶ規則ごとに、`asl` と同じ Lambda のハンドラーも書き出します。規則と日付の呼び出しはステップになり、`lambda` のタスクと同じく `Transport` を通して Lambda 関数を呼びます。`connect` を書いた規則なら、規則のサービスに送ります。どちらも、ステップが呼び出しに 10 秒の上限を付けます。SDK の `context.invoke` にはタイムアウトを付けられないからです。自分で書くタスクは、そのコードを動かすステップになります。`timeout until` を書いたコールバックは、時計を読むステップを一つ置き、期限までの秒数（1 秒より短くはしません）を `createCallback` に渡します。
 
 ## Argo Workflows
 
@@ -98,9 +100,13 @@ HTTP には `net/http`、Lambda と AWS の API には AWS SDK for Go v2、OpenA
 
 タスクの `timeout` は、Pod の `activeDeadlineSeconds` になります。Kubernetes は、Pod を受け付けた時点から数えるので、コンテナが起動するまでの時間も含まれます。混んでいるクラスターでは、Pod の起動に数秒かかることがあるので、その分の余裕を見込んだ `timeout` にしてください。期限が過ぎるのと同時に終わった Pod は、期限を過ぎたものとして扱われ、Argo はタスクが返したエラーの名前を読めません。そのエラーに対する `retry` は行われません。
 
+規則と日付の呼び出しの 10 秒は、Pod ではなく caller が数えます。10 秒を過ぎると caller は、期限で止められたコンテナと同じく終了コード 143 で終わり、ワークフローはそれをタイムアウトとして読みます。Kubernetes が Pod をノードに置いて起動するまでの時間は数えません。Temporal のアクティビティが、タスクキューで待つ時間を数えないのと同じです。テンプレートの `retryStrategy` は 1 秒と 2 秒の backoff で 2 回までリトライしますが、Argo が次の回を始めるのは、コントローラーがワークフローを見直したときです。既定では、変化のあと 10 秒で見直します。`timeout until` を書いたコールバックでは、ID を渡すステップのあとに、`now()` から期限までの秒数（1 秒より短くはしません）を計算するステップを置き、待ちの `suspend` はその秒数だけ続きます。
+
 ## pydantic-graph
 
 `--target pydantic-graph` は、`graph.py`（`graph` と、その `State` と `Deps`）、`types.py`、`tasks.py`（`make_tasks(own, transport)`）、`io.py`、`rules.py`、`runtime.py` を持つパッケージを書き出します。文の一つ一つがノードで、各ノードの戻り値の型に次のノードが書いてあるので、`graph.render()` でフローの図を描けます。実行の状態は、それを動かすプロセスの中にしかありません。待つときは `Deps.clock` で眠り、コールバックへの応答は `Deps.callbacks` に届きます。pydantic-graph 2.x は実行の状態をどこにも残さないので、プロセスが落ちればその実行も失われます。試作や、エージェントの中の短いフローに向いています。
+
+`connect` を書いた規則は、サービスへの一回ごとに 10 秒の上限があります。プロセスの中で rulec や koyomi の Python が計算する規則と日付には、上限を付けません。入出力の無い計算で必ず終わり、asyncio では途中で止められないからです。`timeout until` を書いたコールバックは、`Deps.clock` の時刻から渡された時刻までの秒数（1 秒より短くはしません）だけ待ちます。
 
 日付のファイルの日付と帳簿の操作は、どのプラットフォーム向けにもビルドできます。日付は規則と同じ呼び出しになり、帳簿の操作は、Step Functions では Lambda 関数、ほかでは渡された chobo のクライアントを `Transport` を通して呼ぶものになります。Step Functions と Lambda durable functions では呼ぶ日付の `lambda` が、Step Functions では帳簿の `lambda` が要ります（E050）。プラットフォームごとに何を書き出し、横に何を置くかは、[日付と帳簿](dates-and-books.md)にあります。
 

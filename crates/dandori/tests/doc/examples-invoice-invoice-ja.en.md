@@ -67,7 +67,7 @@ flowchart TD
 | Line | Call | Calls | Retries | Timeout | When it fails | Case after |
 |---:|---|---|---|---|---|---|
 | 56 | `押さえ ← 引き当てる(…)` | `book 在庫.引当.hold`, `starts 在庫.引当` | — | — | `在庫切れ` → line 57<br>`timeout`, `failure` → `on failure` | `押さえ`: `held` |
-| 58 | `期限 = 支払条件.支払日(…)` | the date `支払日` of `支払条件.cal` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
+| 58 | `期限 = 支払条件.支払日(…)` | the date `支払日` of `支払条件.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
 | 60 | `入金 = 支払を確かめる(…)` | `GET https://payments.example.com/orders/{注文}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
 | 63 | `押さえ ← 出荷する(…)` | `book 在庫.引当.post`, `sends post` | — | — | `expired` → line 64<br>`timeout`, `failure` → `on failure` | `押さえ`: `posted` |
 | 67 | `押さえ ← 戻す(…)` | `book 在庫.引当.void`, `sends void` | — | — | `expired` → line 68<br>`already_posted`, `timeout`, `failure` → `on failure` | `押さえ`: `voided` |

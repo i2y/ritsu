@@ -55,13 +55,13 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 |---:|---|---|---|---|---|
 | 39 | `求める額 = 額を聞く(…)` | `lambda ask-amount`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 40 | `受付を記す(…)` | `lambda note-request`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 41 | `判断 = 確認(…)` | rule `返金の確認.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 41 | `判断 = 確認(…)` | rule `返金の確認.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 42 | `日 = 日を選ぶ(…)` | `lambda pick-day`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 46 | `回 = 精算(…)` | rule `精算.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 46 | `回 = 精算(…)` | rule `精算.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 47 | `払い戻す(…)` | `lambda pay-back`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 | 49 | `請求一覧 = 請求を集める(…)` | `lambda list-claims`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 52 | `一回 = 確認(…)` | rule `返金の確認.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 54 | `各回 = 確認(…)` | rule `返金の確認.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the round fails, and then the workflow |
+| 52 | `一回 = 確認(…)` | rule `返金の確認.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 54 | `各回 = 確認(…)` | rule `返金の確認.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the round fails, and then the workflow |
 
 ## Ends
 

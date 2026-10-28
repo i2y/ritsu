@@ -3,8 +3,10 @@
 //! come at any time before a `post` or a `void` (its E022 asks the flow to handle `expired`). Here
 //! the lengths are compared: dandori says how long after the hold each call on it can come, the
 //! fewest and the most seconds, along every way the flow reaches the call (`HoldSpan`, with
-//! koyomi's days for a wait until a date's time); chobo says when the hold expires (`pending
-//! expires after`). Each call is a border ([`borders::held_until`]):
+//! koyomi's days for a wait until a date's time, and for the time a call with `timeout until` waits
+//! until; a call of a rule or a date takes 33 seconds at the most, the limit every target gives it);
+//! chobo says when the hold expires (`pending expires after`). Each call is a border
+//! ([`borders::held_until`]):
 //!
 //! - it comes before the hold expires on every way: shown to hold, and nothing is said. The flow
 //!   still handles `expired`, which dandori asks for since it does not compare lengths.
@@ -12,7 +14,9 @@
 //!   way on where the call goes through never runs. The fewest seconds, and what makes them up, are
 //!   the example.
 //! - otherwise undecided (W206): it can come on either side, or nothing bounds how long after it
-//!   comes (a task with no `timeout`, a rule or a date, a wait until a time nothing bounds).
+//!   comes (a task with no `timeout`, a wait until a time nothing bounds, or a `timeout until` one).
+//!   When koyomi's days make the most, the notes say the day `now` falls on that makes each such
+//!   wait the longest (`HoldSpan::most_why`).
 
 use crate::{borders, named, Borders, Flow};
 use ritsu_base::diag::Diag;
@@ -84,14 +88,20 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                             least.ja, open.ja, after.ja; least.en, open.en, after.en
                         ),
                     };
-                    let diag: Diag = Diag::at("W206", &f.file.shown, span.line, 1, tr!(
+                    let mut diag: Diag = Diag::at("W206", &f.file.shown, span.line, 1, tr!(
                         "`{task}` が案件 `{case}` の仮押さえを{verb_ja}ときに期限が切れているかを決められません",
                         "Whether the hold of the case `{case}` has expired when `{task}` {verb_en} it cannot be decided"
                     ))
                     .source(&f.src)
                     .rel(&f.file.rel)
-                    .note(note)
-                    .note(tr!(
+                    .note(note);
+                    // the day that makes each wait koyomi counts the longest
+                    if span.most.is_ok() {
+                        for why in &span.most_why {
+                            diag = diag.note(why.clone());
+                        }
+                    }
+                    let diag = diag.note(tr!(
                         "期限の切れた仮押さえへの呼び出しは、帳簿が `expired` で拒否します。フローはここでそれを処理しています。",
                         "The book refuses a call on an expired hold with `expired`, which the flow handles here."
                     ));

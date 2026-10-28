@@ -215,6 +215,22 @@ protoc.
   done before. The `io.ts` of durable functions and of Argo's caller is Temporal's, and the `io.py` of
   pydantic-graph is Temporal's for Python, which the test holds them to.
 
+## The limits of a call
+
+Every platform gives a call of a rule or of a date 10 seconds a try, and tries it twice more, a
+second and then two seconds apart ([How long a call may take](tasks.md#how-long-a-call-may-take)).
+Five tests run `tests/limits/limits.flow`, whose calls of a rule each have `on timeout`, with a call
+that does not answer within the limit, in real time and with nothing shortened: on Temporal in
+TypeScript, Python and Go (the history must show three start-to-close timeouts, with timers of a
+second and two between them), on LocalStack's Step Functions with a real Lambda function that waits
+before it answers (the mock file can neither throw `States.Timeout` nor take time), in the durable
+function's local runner, with pydantic-graph, and on Argo Workflows in real pods, where the caller
+exits 143. Each try must end at the limit, the tries must come the limit and the retry's wait apart,
+and the run must go to the call's `on timeout`, as the reference interpreter says. LocalStack has no
+HTTP Task, so on Step Functions only the rule called through Lambda runs; pydantic-graph and Argo
+compute a rule bundled with them in the process, with no limit, so only the rule called at its
+Connect service runs there.
+
 ## The pictures
 
 What `dandori doc` writes for the examples, the flows of tests/flows and a first draft with errors

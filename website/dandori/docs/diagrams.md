@@ -25,7 +25,8 @@ request, an issue or a README. Under them, a table lists every call and another
 every way the workflow can end; for a workflow that implements a service, a table of the service's
 methods comes first, with what each does to a run ([Implement a service](services.md)). The review example
 ([examples/review/temporal](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.flow)),
-where Jev scores an application and a rule decides whether a person approves it:
+where Jev scores an application, a rule decides whether a person approves it, and a date of a
+dates file says until when the approval is waited for:
 
 ```mermaid
 flowchart TD
@@ -34,26 +35,28 @@ flowchart TD
     s2(["fail Unscorable<br>#quot;Could not score application {application.id}#quot;"])
     s3[["d = policy(…)<br>rule review_policy.rule"]]
     s4{{"match d.decision"}}
-    s6[/"a = ask_for_approval(…)<br>a task you write, answered by a callback<br>timeout 3 days"/]
-    s7(["fail NoAnswer<br>#quot;No approval in three days#quot;"])
-    s8["notify(…)<br>a task you write"]
-    s9(["succeed verdict = approve"])
-    s10["notify(…)<br>a task you write"]
-    s11(["succeed verdict = r.verdict"])
+    s6[["due = approvals.due(…)<br>dates approval_terms.cal"]]
+    s7[/"a = ask_for_approval(…)<br>a task you write, answered by a callback<br>timeout until by"/]
+    s8(["fail NoAnswer<br>#quot;No approval by 17:00 on the third business day#quot;"])
+    s9["notify(…)<br>a task you write"]
+    s10(["succeed verdict = approve"])
+    s11["notify(…)<br>a task you write"]
+    s12(["succeed verdict = r.verdict"])
     start --> s1
     s1 -.->|"on failure"| s2
     s1 --> s3
     s3 --> s4
     s4 -->|"ask"| s6
-    s6 -.->|"on timeout"| s7
-    s6 --> s8
-    s8 --> s9
-    s4 -->|"approve, reject"| s10
-    s10 --> s11
+    s6 --> s7
+    s7 -.->|"on timeout"| s8
+    s7 --> s9
+    s9 --> s10
+    s4 -->|"approve, reject"| s11
+    s11 --> s12
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s9,s11 ok
-    class s2,s7 bad
+    class s10,s12 ok
+    class s2,s8 bad
 ```
 
 A rectangle is a task, one with a line down each side a rule, a slanted one a task whose value comes

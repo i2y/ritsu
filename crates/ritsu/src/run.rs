@@ -321,7 +321,9 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
                     (Passing::Wait, Some(u)) => format!("wait until {u}"),
                     (Passing::Wait, None) => format!("wait {}", duration_text(*seconds, Lang::En)),
                     (Passing::Retry, _) => tr!("リトライの前の待ち", "the wait before a retry").get(lang).to_string(),
-                    (Passing::Timeout, _) => tr!("タイムアウト", "the timeout").get(lang).to_string(),
+                    // `timeout until`: the wait for the answer ended at the time the call gave
+                    (Passing::Timeout, Some(u)) => tr!("タイムアウト（{u} まで待つ）", "the timeout of the wait until {u}").get(lang).to_string(),
+                    (Passing::Timeout, None) => tr!("タイムアウト", "the timeout").get(lang).to_string(),
                 };
                 let (ja, en) = (duration_text(*seconds, Lang::Ja), duration_text(*seconds, Lang::En));
                 let went = tr!("{ja}、{after} まで", "{en}, to {after}");

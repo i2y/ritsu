@@ -3620,8 +3620,9 @@ fn durable_one(f: &Path) {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, text).unwrap();
         }
-        // the Lambda functions the handler invokes for the rules and the dates are the ones Step Functions
-        // calls; a book's operations run in a step of the handler, through the transport, and need no Lambda
+        // the Lambda functions the handler invokes for the rules and the dates, in a step through the
+        // transport, are the ones Step Functions calls; a book's operations run in a step of the handler,
+        // through the transport, and need no Lambda
         if let Ok(asl) = dandori::asl::build(&m) {
             for (name, text) in asl.iter().filter(|(n, _)| n.starts_with("lambda/") && !n.starts_with("lambda/book_")) {
                 let same = files.iter().find(|(n, _)| n.ends_with(&format!("/{name}"))).map(|(_, t)| t);
@@ -3630,26 +3631,13 @@ fn durable_one(f: &Path) {
         }
         let p = Platform::Durable;
         let own: Vec<Value> = m.tasks.iter().filter(|t| t.via(p) == Some(Via::Own)).map(|t| json!({ "name": t.name, "method": dandori::render::ident(&t.name), "callback": t.callback })).collect();
-        let mut rules: Vec<String> = Vec::new();
-        for s in m.all_stmts() {
-            if let TK::Call { callee: Callee::Rule(r), .. } = &s.kind {
-                // a rule called at its service is no Lambda function: the generated step sends through the stand-in Transport
-                if m.rules[*r].connect.is_some() {
-                    continue;
-                }
-                let arn = m.rules[*r].lambda.clone().unwrap_or_default();
-                if !rules.contains(&arn) {
-                    rules.push(arn);
-                }
-            }
-        }
         let children: Vec<String> = m.tasks.iter().filter_map(|t| t.durable_function.clone()).collect();
         let (http, aws) = transport_spec(&m, p);
         // the local runner does not time a callback out, so the runs with a timeout are left out
         let (runs, references, left_out) = plays(&m, View::Durable, false, |calls| calls.iter().all(|c| c.kind.as_deref() != Some("timeout")));
         let runs_file = dir.join("runs.json");
         let results_file = dir.join("results.json");
-        let spec = json!({ "own": own, "rules": rules, "children": children, "http": http, "aws": aws, "runs": runs });
+        let spec = json!({ "own": own, "children": children, "http": http, "aws": aws, "runs": runs });
         std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
         let out = Command::new("node")
             .arg(root().join("tools/durable/run.mjs"))
@@ -3832,4 +3820,463 @@ fn argo_runs_as_the_reference_says() {
             flow.bound
         );
     }
+}
+
+// The limits of a rule's call, played with the platforms' own times (dandori's DESIGN 16). Every
+// platform gives a call of a rule or of a date ten seconds a try, and tries it again twice, a second
+// and then two seconds apart; X5 counts a call as 33 seconds at the most from that. These tests run
+// tests/limits/limits.flow, whose calls of a rule each have `on timeout`, with a call that takes
+// longer than the limit: each try must run out of time at the limit, the tries must come the
+// retries' waits apart, and the run must go to the call's `on timeout` as the reference says. The
+// runners keep the generated limits as they are with DANDORI_LIMITS (the timers and the timeouts,
+// which they shorten otherwise), and hold the call the scenario times out past the limit. They
+// wait through the limits in real time, a minute or so each, and so are of the platforms level,
+// the two that need only Node or Python too.
+
+/// tests/limits/limits.flow: a rule called through Lambda (`urgency`), and then one called at its
+/// Connect service (`urgency_service`), each with `on timeout`.
+fn limits_flow() -> (PathBuf, Model) {
+    let f = root().join("tests/limits/limits.flow");
+    let (_, checked) = check_file(&f).unwrap();
+    let m = checked.model.expect("tests/limits/limits.flow passes check");
+    (f, m)
+}
+
+/// The call of the limits flow that a run times out at every try.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Late {
+    /// `urgency`, through Lambda (an activity on Temporal)
+    Lambda,
+    /// `urgency_service`, at its Connect service
+    Connect,
+}
+
+/// The limit of a try of a rule's call, and the waits between the tries, as check.rs says them.
+fn limit() -> (f64, Vec<f64>) {
+    use dandori::check::{RULE_RETRIES, RULE_RETRY_BACKOFF, RULE_RETRY_INTERVAL, RULE_SECONDS};
+    let waits = (0..RULE_RETRIES).map(|k| (RULE_RETRY_INTERVAL as f64 * RULE_RETRY_BACKOFF.powi(k as i32)).ceil()).collect();
+    (RULE_SECONDS as f64, waits)
+}
+
+/// The runs of the scenarios (as `plays` makes them) in which the calls `late` names time out at
+/// every try, one a call, and the reference's trace of each.
+fn limit_plays(m: &Model, view: View, named: bool, late: &[Late]) -> (Vec<Value>, Vec<(Value, Value)>) {
+    let (runs, references, _) = plays(m, view, named, |_| true);
+    let timeout = json!({ "error": "timeout" });
+    let tries = 1 + dandori::check::RULE_RETRIES as usize;
+    let all_late = |a: &[Value]| a.len() == tries && a.iter().all(|x| *x == timeout);
+    let mut kept = (Vec::new(), Vec::new());
+    for l in late {
+        let i = runs
+            .iter()
+            .position(|r| {
+                let a = r["answers"].as_array().unwrap();
+                match l {
+                    Late::Lambda => all_late(a),
+                    Late::Connect => a.len() == tries + 1 && a[0].get("ok").is_some() && all_late(&a[1..]),
+                }
+            })
+            .unwrap_or_else(|| panic!("tests/limits/limits.flow: no scenario times the {l:?} call out at every try"));
+        kept.0.push(runs[i].clone());
+        kept.1.push(references[i].clone());
+    }
+    kept
+}
+
+/// What a test of the limits asks of the level: it needs `n` alone, but it waits through the limits
+/// in real time, and so runs with the platforms level, as the other tests of the limits do.
+fn need_at_platforms(n: Need) -> bool {
+    use ritsu_testkit::level::{allows, level, Level};
+    if !allows(Level::Platforms) {
+        let top = level().map(Level::word).unwrap_or("");
+        ritsu_testkit::skip::skip_for(ritsu_testkit::skip::Why::Level, &format!("waits through the limits of the calls in real time (the platforms level); RITSU_TEST_LEVEL is {top}"));
+        return false;
+    }
+    need(n)
+}
+
+/// A run's `times`, which the runner writes with DANDORI_LIMITS (when each call came and when the
+/// run ended, in milliseconds from its start), taken out of the run: the last calls are the tries
+/// of the call that ran out of time. Each try must come the limit and the retry's wait after the one
+/// before, and the run end the limit after the last, with at most `slack` seconds more. Says what
+/// it saw.
+fn limit_times(what: &str, run: &mut Value, slack: f64) -> String {
+    let times = run.as_object_mut().unwrap().remove("times").unwrap_or_else(|| panic!("{what}: the runner wrote no times"));
+    let calls: Vec<f64> = times["calls"].as_array().unwrap().iter().map(|t| t.as_f64().unwrap() / 1000.0).collect();
+    let end = times["end"].as_f64().unwrap() / 1000.0;
+    let (limit, waits) = limit();
+    assert!(calls.len() > waits.len(), "{what}: the runner saw {} call(s)", calls.len());
+    let tries = &calls[calls.len() - waits.len() - 1..];
+    let mut apart = Vec::new();
+    for (i, w) in waits.iter().enumerate() {
+        let gap = tries[i + 1] - tries[i];
+        assert!(gap >= limit + w - 0.05 && gap <= limit + w + slack, "{what}: try {} came {gap:.3} s after try {}, where the limit and the retry's wait are {} s", i + 2, i + 1, limit + w);
+        apart.push(format!("{gap:.1}"));
+    }
+    let last = end - tries[tries.len() - 1];
+    assert!(last >= limit - 0.05 && last <= limit + slack, "{what}: the run ended {last:.3} s after its last try, where the limit is {limit} s");
+    format!("the tries came {} s apart, and the run ended {last:.1} s after the last", apart.join(" s and "))
+}
+
+/// Seconds from 1970 of a time of a history (RFC 3339, in UTC: `2026-10-28T14:50:27.247855Z`).
+fn rfc3339_seconds(t: &str) -> f64 {
+    let (date, time) = t.trim_end_matches('Z').split_once('T').unwrap_or_else(|| panic!("not a time: {t}"));
+    let d: Vec<i64> = date.split('-').map(|x| x.parse().unwrap()).collect();
+    let (y, m) = if d[1] <= 2 { (d[0] - 1, d[1] + 9) } else { (d[0], d[1] - 3) };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * m + 2) / 5 + d[2] - 1;
+    let days = era * 146097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719468;
+    let hms: Vec<f64> = time.split(':').map(|x| x.parse().unwrap()).collect();
+    days as f64 * 86400.0 + hms[0] * 3600.0 + hms[1] * 60.0 + hms[2]
+}
+
+/// What a run's Temporal history says of the call that ran out of time: the activity scheduled at
+/// every try with a StartToClose timeout of the limit, each timed out (START_TO_CLOSE) the limit
+/// after it started, and the timers of the retries' waits between. Says what it saw.
+fn temporal_limit_history(what: &str, h: &Value) -> String {
+    let (limit, waits) = limit();
+    let events = h["events"].as_array().unwrap_or_else(|| panic!("{what}: a history with no events"));
+    let id = |v: &Value| v.as_str().map(String::from).unwrap_or_else(|| v.to_string());
+    let at = |id_: &str| events.iter().find(|e| id(&e["eventId"]) == id_).map(|e| rfc3339_seconds(e["eventTime"].as_str().unwrap())).unwrap();
+    let mut scheduled: std::collections::BTreeMap<String, Vec<(String, String)>> = std::collections::BTreeMap::new();
+    let mut tries = Vec::new();
+    let mut timers = Vec::new();
+    for e in events {
+        let a = &e["activityTaskScheduledEventAttributes"];
+        if let Some(name) = a["activityType"]["name"].as_str() {
+            scheduled.entry(name.to_string()).or_default().push((id(&e["eventId"]), a["startToCloseTimeout"].as_str().unwrap_or("").to_string()));
+        }
+        let t = &e["activityTaskTimedOutEventAttributes"];
+        if t.is_object() {
+            let kind = t["failure"]["timeoutFailureInfo"]["timeoutType"].as_str().unwrap_or("");
+            assert_eq!(kind, "TIMEOUT_TYPE_START_TO_CLOSE", "{what}: an activity timed out by {kind}");
+            tries.push(rfc3339_seconds(e["eventTime"].as_str().unwrap()) - at(&id(&t["startedEventId"])));
+        }
+        let f = &e["timerFiredEventAttributes"];
+        if f.is_object() {
+            let started = events.iter().find(|s| id(&s["eventId"]) == id(&f["startedEventId"])).unwrap();
+            let asked = started["timerStartedEventAttributes"]["startToFireTimeout"].as_str().unwrap_or("").to_string();
+            timers.push((asked, rfc3339_seconds(e["eventTime"].as_str().unwrap()) - rfc3339_seconds(started["eventTime"].as_str().unwrap())));
+        }
+    }
+    let late: Vec<_> = scheduled.iter().filter(|(_, s)| s.len() == waits.len() + 1).collect();
+    assert_eq!(late.len(), 1, "{what}: no activity was scheduled at every try: {scheduled:?}");
+    let (name, s) = late[0];
+    for (_, timeout) in s {
+        assert_eq!(timeout, &format!("{}s", limit as u64), "{what}: {name} was scheduled with a StartToClose timeout of {timeout}");
+    }
+    assert_eq!(tries.len(), waits.len() + 1, "{what}: {} tries timed out", tries.len());
+    for t in &tries {
+        assert!(*t >= limit - 0.05 && *t < limit + 2.0, "{what}: a try of {name} timed out {t:.3} s after it started, where the limit is {limit} s");
+    }
+    let asked: Vec<String> = timers.iter().map(|(a, _)| a.clone()).collect();
+    let want: Vec<String> = waits.iter().map(|w| format!("{}s", *w as u64)).collect();
+    assert_eq!(asked, want, "{what}: the timers between the tries of {name}");
+    for ((_, took), w) in timers.iter().zip(&waits) {
+        assert!(*took >= w - 0.05 && *took < w + 2.0, "{what}: a retry's timer of {w} s fired after {took:.3} s");
+    }
+    let tries: Vec<String> = tries.iter().map(|t| format!("{t:.1}")).collect();
+    let timers: Vec<String> = timers.iter().map(|(_, t)| format!("{t:.1}")).collect();
+    format!("{name}: each try timed out (START_TO_CLOSE, {}s) after {} s, with timers of {} s between", limit as u64, tries.join(", "), timers.join(" and "))
+}
+
+/// The Go runner of the limits flow alone, built once, with the patch `limits` (tools/temporal-go/build).
+fn go_limits_runner() -> Option<&'static PathBuf> {
+    static GO: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    let got = GO.get_or_init(|| {
+        let tools = root().join("tools/temporal-go");
+        if !tools.join("go.mod").exists() || !Command::new("go").arg("version").output().map(|o| o.status.success()).unwrap_or(false) {
+            return None;
+        }
+        let (_, m) = limits_flow();
+        let dir = scratch("go-limits-runner");
+        let out = dir.join("p0");
+        for (name, text) in &dandori::temporal_go::build(&m).unwrap_or_else(|d| panic!("tests/limits/limits.flow does not build for Go: {}", d[0].en)) {
+            let p = out.join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
+        let manifest = dir.join("manifest.json");
+        let entries = json!([{ "key": "limits", "dir": out.join(dandori::temporal_go::package(&m)), "patch": "limits", "callbacks": [] }]);
+        std::fs::write(&manifest, serde_json::to_string_pretty(&entries).unwrap()).unwrap();
+        let bin = dir.join("run");
+        let built = go_in(&tools).arg("run").arg("./build").arg(&bin).arg(&manifest).output().unwrap();
+        assert!(built.status.success(), "tools/temporal-go could not build the Go runner of the limits:\n{}{}", String::from_utf8_lossy(&built.stdout), String::from_utf8_lossy(&built.stderr));
+        Some(bin)
+    });
+    if got.is_none() {
+        skip("go or tools/temporal-go is missing; the limits are not played in the Go that dandori writes for Temporal");
+    }
+    got.as_ref()
+}
+
+/// The limits flow on Temporal in one language: the call through Lambda (the rule's activity) and
+/// the one at the Connect service, each timed out at every try, in two runs at once.
+fn temporal_limits(wf: Sdk) {
+    let (f, m) = limits_flow();
+    let dir = scratch(&format!("limits-temporal-{}", wf.short()));
+    if wf != Sdk::Go {
+        for (name, text) in &wf.build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en)) {
+            let p = dir.join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, text).unwrap();
+        }
+    }
+    let rules: Vec<String> = m.rules.iter().filter(|r| r.connect.is_none()).map(|r| dandori::render::rule_activity(&r.name)).collect();
+    let (http, aws) = transport_spec(&m, Platform::Temporal);
+    let (runs, references) = limit_plays(&m, View::Temporal, true, &[Late::Lambda, Late::Connect]);
+    let runs_file = dir.join("runs.json");
+    let results_file = dir.join("results.json");
+    let spec = json!({ "workflow": dandori::render::ident(&m.name), "own": [], "rules": rules, "children": [], "queues": [], "http": http, "aws": aws, "callbacks": [], "runs": runs });
+    std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
+    let histories = dir.join("histories");
+    let _ = std::fs::remove_dir_all(&histories);
+    let mut run = match wf {
+        Sdk::Ts => {
+            let mut c = Command::new("node");
+            c.arg(root().join("tools/temporal/run.mjs")).arg(dir.join(wf.package(&m)));
+            c
+        }
+        Sdk::Py => {
+            let mut c = Command::new(temporal_python().expect("the Python of tools/temporal-python"));
+            c.arg(root().join("tools/temporal-python/run.py")).arg(dir.join(wf.package(&m)));
+            c
+        }
+        Sdk::Go => {
+            let mut c = Command::new(go_limits_runner().expect("the Go runner of the limits"));
+            c.arg("limits");
+            c
+        }
+    };
+    let out = run.arg(&runs_file).arg(&results_file).arg(&histories).env("DANDORI_LIMITS", "1").output().unwrap();
+    let what = format!("the Temporal workflow in {}", wf.name());
+    assert!(out.status.success(), "{}: the runner of {what} failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    for g in &mut got {
+        let o = g.as_object_mut().unwrap();
+        for k in ["cases", "shown", "asked"] {
+            o.remove(k);
+        }
+    }
+    compare(&what, &f, &references, &got);
+    for r in &runs {
+        let id = r["id"].as_str().unwrap();
+        let h: Value = serde_json::from_str(&std::fs::read_to_string(histories.join(format!("{id}.json"))).unwrap()).unwrap();
+        eprintln!("{} {id}, on Temporal in {}: {}, and the run went to `on timeout`", rel(&f), wf.name(), temporal_limit_history(&format!("{} {id} in {}", rel(&f), wf.name()), &h));
+    }
+}
+
+/// On Temporal, in TypeScript, Python and Go at once: the generated StartToClose timeout and the
+/// retries' timers, on the dev server.
+#[test]
+fn rule_limits_hold_on_temporal() {
+    if !need(Need::Temporal) {
+        return;
+    }
+    if !temporal_available() {
+        skip("tools/temporal/node_modules is missing; run `npm install --prefix tools/temporal`");
+        return;
+    }
+    let mut langs = vec![Sdk::Ts];
+    if temporal_python().is_some() {
+        langs.push(Sdk::Py);
+    } else {
+        skip("tools/temporal-python/.venv is missing; the limits are not played in the Python that dandori writes for Temporal");
+    }
+    if go_limits_runner().is_some() {
+        langs.push(Sdk::Go);
+    }
+    std::thread::scope(|scope| {
+        for l in langs {
+            scope.spawn(move || temporal_limits(l));
+        }
+    });
+}
+
+/// On Step Functions: the generated state machine on LocalStack, whose Lambda runs a function that
+/// answers after 15 seconds in place of the rule's (tools/localstack/limits.mjs); the Task's
+/// TimeoutSeconds ends each try. The call at the Connect service is an HTTP Task, which LocalStack
+/// 4.14.0 does not run.
+#[test]
+fn rule_limits_hold_on_localstack() {
+    if !need(Need::LocalStack) {
+        return;
+    }
+    need_node!();
+    if let Err(why) = localstack_ready() {
+        skip(&why);
+        return;
+    }
+    let (f, m) = limits_flow();
+    let files = dandori::asl::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en));
+    let definition: Value = serde_json::from_str(&files[0].1).unwrap();
+    let (runs, references) = limit_plays(&m, View::Asl, true, &[Late::Lambda]);
+    let functions: Vec<String> = m.rules.iter().filter(|r| r.name == "urgency").filter_map(|r| r.lambda.clone()).collect();
+    let dir = scratch("limits-localstack");
+    let spec_file = dir.join("spec.json");
+    let results_file = dir.join("results.json");
+    let plain: Vec<Value> = runs.iter().map(|r| json!({ "id": r["id"], "input": r["input"] })).collect();
+    std::fs::write(&spec_file, serde_json::to_string(&json!({ "image": LOCALSTACK_IMAGE, "definition": definition, "functions": functions, "runs": plain })).unwrap()).unwrap();
+    let out = Command::new("node").arg(root().join("tools/localstack/limits.mjs")).arg(&spec_file).arg(&results_file).output().unwrap();
+    assert!(out.status.success(), "{}: the LocalStack runner of the limits failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let got: Value = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    let (limit, _) = limit();
+    let mut played = Vec::new();
+    for ((_, reference), g) in references.iter().zip(got["runs"].as_array().unwrap()) {
+        let mut g = g.clone();
+        let o = g.as_object_mut().unwrap();
+        let tries = o.remove("tries").unwrap();
+        let late = o.remove("late").and_then(|l| l.as_u64()).unwrap_or(0);
+        let took: Vec<f64> = tries.as_array().unwrap().iter().map(|t| t["ended"].as_f64().unwrap() - t["started"].as_f64().unwrap()).collect();
+        for t in &took {
+            assert!(*t >= limit - 0.05 && *t < limit + 2.0, "{}: a try on LocalStack timed out {t:.3} s after it started, where the limit is {limit} s", rel(&f));
+        }
+        let over = timed(reference, &mut g);
+        eprintln!(
+            "{}: on LocalStack's Step Functions with its Lambda, each try timed out (States.Timeout) after {} s, the retries waited at most {over:.3} s longer than the reference's, and the run went to `on timeout` (the history has {late} late answer(s) of the tries that timed out)",
+            rel(&f),
+            took.iter().map(|t| format!("{t:.1}")).collect::<Vec<_>>().join(", ")
+        );
+        played.push(g);
+    }
+    compare("the state machine on LocalStack", &f, &references, &played);
+}
+
+/// On Lambda durable functions: the SDK's local runner, with time as it is; a rule's call (through
+/// the Transport, in a step) is held for 15 seconds, and the generated `within` ends each try.
+#[test]
+fn rule_limits_hold_on_durable() {
+    if !need_at_platforms(Need::Node) {
+        return;
+    }
+    if !durable_available() {
+        skip("tools/durable/node_modules is missing; run `npm install --prefix tools/durable`");
+        return;
+    }
+    let (f, m) = limits_flow();
+    let dir = scratch("limits-durable");
+    for (name, text) in &dandori::temporal::build_flavor(&m, dandori::temporal::Flavor::Durable).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en)) {
+        let p = dir.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, text).unwrap();
+    }
+    let (http, aws) = transport_spec(&m, Platform::Durable);
+    let (runs, references) = limit_plays(&m, View::Durable, false, &[Late::Lambda, Late::Connect]);
+    let runs_file = dir.join("runs.json");
+    let results_file = dir.join("results.json");
+    std::fs::write(&runs_file, serde_json::to_string(&json!({ "own": [], "children": [], "http": http, "aws": aws, "runs": runs })).unwrap()).unwrap();
+    let out = Command::new("node")
+        .arg(root().join("tools/durable/run.mjs"))
+        .arg(dir.join(dandori::render::ident(&m.name)))
+        .arg(&runs_file)
+        .arg(&results_file)
+        .env("DANDORI_LIMITS", "1")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}: the durable runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    for (i, g) in got.iter_mut().enumerate() {
+        let saw = limit_times(&format!("{} run {} on Lambda durable functions", rel(&f), i + 1), g, 2.0);
+        eprintln!("{} run {} ({:?}), on Lambda durable functions: {saw}, and the run went to `on timeout`", rel(&f), i + 1, [Late::Lambda, Late::Connect][i]);
+    }
+    compare("the durable handler", &f, &references, &got);
+}
+
+/// On pydantic-graph: the call at the Connect service, with the real clock; the generated `within`
+/// ends each try. A rule whose code goes with the graph has no limit (dandori's DESIGN 16).
+#[test]
+fn rule_limits_hold_on_pydantic_graph() {
+    if !need_at_platforms(Need::Python) {
+        return;
+    }
+    let Some(python) = pydantic_graph_python() else {
+        skip("tools/pydantic-graph/.venv is missing; make it as tools/pydantic-graph/requirements.txt says");
+        return;
+    };
+    let (f, m) = limits_flow();
+    let dir = scratch("limits-pydantic-graph");
+    for (name, text) in &dandori::pydantic_graph::build(&m).unwrap_or_else(|d| panic!("{} does not build: {}", rel(&f), d[0].en)) {
+        let p = dir.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, text).unwrap();
+    }
+    let rules: Vec<Value> = m.rules.iter().filter(|r| r.connect.is_none()).map(|r| json!({ "fn": dandori::render::rule_activity(&r.name), "name": r.name })).collect();
+    let (http, aws) = transport_spec(&m, Platform::Graph);
+    let (runs, references) = limit_plays(&m, View::Graph, false, &[Late::Connect]);
+    let runs_file = dir.join("runs.json");
+    let results_file = dir.join("results.json");
+    std::fs::write(&runs_file, serde_json::to_string(&json!({ "own": [], "rules": rules, "http": http, "aws": aws, "runs": runs })).unwrap()).unwrap();
+    let out = Command::new(&python)
+        .arg(root().join("tools/pydantic-graph/run.py"))
+        .arg(dir.join(dandori::pydantic_graph::package(&m)))
+        .arg(&runs_file)
+        .arg(&results_file)
+        .env("DANDORI_LIMITS", "1")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}: the pydantic-graph runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let mut got: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    for g in &mut got {
+        let saw = limit_times(&format!("{} on pydantic-graph", rel(&f)), g, 2.0);
+        eprintln!("{} (the call at the Connect service), on pydantic-graph: {saw}, and the run went to `on timeout`", rel(&f));
+    }
+    compare("the pydantic-graph graph", &f, &references, &got);
+}
+
+/// On Argo Workflows: on the kind cluster, the runner plays the pods (tools/argo/run.mjs). The call
+/// at the Connect service runs the generated caller, whose transport gets no answer, so that the
+/// caller's own limit ends the pod with exit code 143, and the template's retryStrategy tries it
+/// again. Argo's controller starts a retry when it looks at the workflow again after the backoff,
+/// so the tries come up to half a minute later than the waits say. A rule whose code goes with the
+/// workflow is computed in the caller, which no timer stops (dandori's DESIGN 16).
+#[test]
+fn rule_limits_hold_on_argo() {
+    if !need(Need::Argo) {
+        return;
+    }
+    need_node!();
+    if let Err(why) = argo_ready() {
+        skip(&why);
+        return;
+    }
+    let (f, m) = limits_flow();
+    let files = dandori::argo::build(&m).unwrap_or_else(|d| panic!("{} does not build for Argo: {}", rel(&f), d[0].en));
+    let dir = scratch("limits-argo");
+    for (name, text) in &files {
+        let p = dir.join(name);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, text).unwrap();
+    }
+    let (http, aws) = transport_spec(&m, Platform::Argo);
+    let (runs, references) = limit_plays(&m, View::Argo, false, &[Late::Connect]);
+    let connect_rules: Vec<String> = m.rules.iter().filter(|r| r.connect.is_some()).map(|r| dandori::render::rule_activity(&r.name)).collect();
+    let runs_file = dir.join("runs.json");
+    let results_file = dir.join("results.json");
+    let spec = json!({ "template": dandori::argo::document(&m).unwrap(), "own": [], "children": [], "connectRules": connect_rules, "http": http, "aws": aws, "runs": runs, "real": [] });
+    std::fs::write(&runs_file, serde_json::to_string(&spec).unwrap()).unwrap();
+    let out = Command::new("node")
+        .arg(root().join("tools/argo/run.mjs"))
+        .arg(&dir)
+        .arg(&runs_file)
+        .arg(&results_file)
+        .env("DANDORI_LIMITS", "1")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}: the Argo runner failed:\n{}", rel(&f), String::from_utf8_lossy(&out.stderr));
+    let got: Value = serde_json::from_str(&std::fs::read_to_string(&results_file).unwrap()).unwrap();
+    let mut runs_got = Vec::new();
+    for g in got["runs"].as_array().unwrap() {
+        let mut g = g.clone();
+        let saw = limit_times(&format!("{} on Argo Workflows", rel(&f)), &mut g, 30.0);
+        let o = g.as_object_mut().unwrap();
+        for k in ["nodes", "seconds", "nudged", "platform"] {
+            o.remove(k);
+        }
+        eprintln!("{} (the call at the Connect service), on Argo Workflows: each try ended with exit code 143; {saw}, and the run went to `on timeout`", rel(&f));
+        runs_got.push(g);
+    }
+    compare("the Argo workflow", &f, &references, &runs_got);
 }

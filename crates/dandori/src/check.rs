@@ -338,6 +338,9 @@ pub struct Cost {
     /// Functions, the Choice that tests it and the Fail it may end at; on Argo, a template that
     /// computes; nothing on the platforms whose code tests it in the workflow
     pub precheck: u64,
+    /// what `timeout until` adds to each try of a call (DESIGN 16): on durable functions, the step
+    /// that reads the clock; on Argo, the step group and the template that compute the seconds
+    pub until: u64,
 }
 
 /// Step Functions: a task is entered, scheduled, started, succeeds and is exited (5); a
@@ -347,7 +350,7 @@ pub struct Cost {
 /// keeps it and one that raises the task's error (4). A workflow that implements a service starts
 /// with a Pass that fills in the input's zero values (2). A check of a rule's precondition is a Choice
 /// and the Fail it may end at (4).
-pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0, precheck: 4 };
+pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice: 2, wait: 2, loop_iter: 4, end: 3, assign: 2, map_start: 6, map_iter: 2, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 6, local_retry: 3, jev: 4, fill: 2, clock: 0, precheck: 4, until: 0 };
 
 /// Temporal: an activity is scheduled, started, completed, and a workflow task follows
 /// (6); a retry, done in the workflow's code so that it matches Step Functions, adds a
@@ -357,15 +360,15 @@ pub const ASL_COST: Cost = Cost { start: 5, call: 6, retry: 3, check: 2, choice:
 /// case, the search attribute's upsert (1). A local activity leaves a marker, and a workflow
 /// task may follow (4); its retry, a timer and another (9). A check of a rule's precondition is code
 /// in the workflow, and costs nothing.
-pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0, precheck: 0 };
+pub const TEMPORAL_COST: Cost = Cost { start: 4, call: 6, retry: 11, check: 0, choice: 0, wait: 5, loop_iter: 0, end: 4, assign: 0, map_start: 0, map_iter: 0, callback: 7, arm: 0, brk: 0, case_call: 1, local_call: 4, local_retry: 9, jev: 0, fill: 0, clock: 0, precheck: 0, until: 0 };
 
-/// Lambda durable functions: a task is one step, or a callback and its submit step (2); a
-/// rule is one invoke; a retry adds a wait and another call (3); a wait is one operation, a
-/// wait until reads the clock in a step first (2), and so does a statement that reads `now` (1);
-/// a map is one operation, and each round
+/// Lambda durable functions: a task is one step, or a callback and its submit step (2), and a
+/// callback with `timeout until` reads the clock in a step first (1); a rule is one step; a retry
+/// adds a wait and another call (3); a wait is one operation, a wait until reads the clock in a
+/// step first (2), and so does a statement that reads `now` (1); a map is one operation, and each round
 /// runs in a child context of its own (1). The limit is 3,000 operations an execution and
 /// cannot be raised.
-pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1, precheck: 0 };
+pub const DURABLE_COST: Cost = Cost { start: 0, call: 2, retry: 3, check: 0, choice: 0, wait: 2, loop_iter: 0, end: 0, assign: 0, map_start: 1, map_iter: 1, callback: 0, arm: 0, brk: 0, case_call: 0, local_call: 2, local_retry: 3, jev: 0, fill: 0, clock: 1, precheck: 0, until: 1 };
 pub const DURABLE_LIMIT: u64 = 3_000;
 
 /// Argo Workflows: the nodes in the Workflow's status. A statement is a step group of its
@@ -374,7 +377,8 @@ pub const DURABLE_LIMIT: u64 = 3_000;
 /// is 4. A call is 13: its
 /// template, its step groups for the arguments, the try, the after and the handlers, the two
 /// templates that compute, and the pod; a retry adds the retry's node and a pod; a callback,
-/// the wait and its step group. A match is 8, one node an arm (the arm's block, or a step that
+/// the wait and its step group, and with `timeout until`, the step group and the template that
+/// compute the seconds (4). A match is 8, one node an arm (the arm's block, or a step that
 /// does not run), and one for the arm of a value no arm names. A wait until computes its
 /// seconds first (8). A round of a loop is 12 (its template, step groups, start, the body's
 /// template, and what it yields), of a parallel one 11; around the rounds, a loop takes 11
@@ -382,7 +386,7 @@ pub const DURABLE_LIMIT: u64 = 3_000;
 /// check and frame. In the runs of tests/flows/edges.flow, a node took 510 to 612 bytes,
 /// about 60 compressed; the template, which Argo keeps twice in the Workflow, took 240 KB
 /// of it in the runs of examples/hotel.
-pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 0, precheck: 4 };
+pub const ARGO_COST: Cost = Cost { start: 7, call: 13, retry: 2, check: 0, choice: 9, wait: 8, loop_iter: 12, end: 22, assign: 4, map_start: 13, map_iter: 11, callback: 2, arm: 1, brk: 4, case_call: 0, local_call: 13, local_retry: 2, jev: 0, fill: 0, clock: 0, precheck: 4, until: 4 };
 /// Argo stores a Workflow of up to 1 MiB, compressing the node status when it is larger
 /// (MAX_WORKFLOW_SIZE), unless the status goes to a database. At about 60 bytes a node, that
 /// is some 15,000 nodes; values larger than the tests' leave fewer, so the check stops at 10,000.
@@ -404,9 +408,10 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
                     Callee::Task(t) => m.tasks[*t].retry.as_ref().map(|r| r.times as u64).unwrap_or(0),
                     Callee::Rule(_) => RULE_RETRIES as u64,
                 };
-                // an event is a wait like a callback's, with no call before it
+                // an event is a wait like a callback's, with no call before it; `timeout until` works
+                // out how long the wait is first
                 let waits = match callee {
-                    Callee::Task(t) if m.tasks[*t].callback || m.tasks[*t].event => c.callback,
+                    Callee::Task(t) if m.tasks[*t].callback || m.tasks[*t].event => c.callback + if m.tasks[*t].deadline.is_some() { c.until } else { 0 },
                     _ => 0,
                 };
                 let after = (handlers.len() as u64 * c.arm + handlers.iter().map(|h| cost(m, &h.body, c)).max().unwrap_or(0)).max(c.check);
@@ -442,3 +447,18 @@ fn cost(m: &Model, ss: &[TStmt], c: &Cost) -> u64 {
 /// A rule is a pure function, so repeating a call of it is harmless: every target retries
 /// a failed call of a rule twice, one second apart and then two.
 pub const RULE_RETRIES: u32 = 2;
+/// How long one try of a call of a rule or of a dates file may run, on every target (DESIGN 16):
+/// a rule is a pure function, done in no time, so a try that takes longer is retried as a
+/// failed one is, and after the retries goes to the call's `on timeout`.
+pub const RULE_SECONDS: u64 = 10;
+/// The wait before the first retry of a rule's call, and what each next wait is multiplied by.
+pub const RULE_RETRY_INTERVAL: u64 = 1;
+pub const RULE_RETRY_BACKOFF: f64 = 2.0;
+
+/// The longest a call of a rule or of a dates file takes, its retries and the waits between them
+/// counted: three tries of ten seconds, and waits of one second and two (33). X5 counts a call
+/// as taking this long at the most (DESIGN 16).
+pub fn rule_call_most() -> u64 {
+    let waits: u64 = (0..RULE_RETRIES).map(|k| (RULE_RETRY_INTERVAL as f64 * RULE_RETRY_BACKOFF.powi(k as i32)).ceil() as u64).sum();
+    (u64::from(RULE_RETRIES) + 1) * RULE_SECONDS + waits
+}

@@ -34,7 +34,7 @@ flowchart TD
 |---:|---|---|---|---|---|
 | 25 | `used = usage(…)` | `lambda usage`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 26 | `asked = ask_amount(…)` | `lambda ask-amount`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 27 | `decision = check_quota(…)` | 規則 `quota_check.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 27 | `decision = check_quota(…)` | 規則 `quota_check.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 29 | `grant(…)` | `lambda grant`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方

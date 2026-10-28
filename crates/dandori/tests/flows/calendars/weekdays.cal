@@ -1,0 +1,5 @@
+calendar weekdays v1
+description "Open Monday to Friday, in UTC. No holidays"
+offset +00:00
+
+closed weekly sat, sun

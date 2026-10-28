@@ -1,7 +1,8 @@
 workflow review v1
-description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for Argo Workflows: the scoring and the rule run in a container of the image dandori writes (`caller/`), which calls Jev with TypeSafe's key; asking for the approval and the notice are containers of your images, and the approver's tool answers the callback with `argo node set` and `argo resume`"
+description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval, due by 17:00 on the third business day after it comes in: approving at once asks more certainty than rejecting at once. Written for Argo Workflows: the scoring, the rule and the date of the approval run in a container of the image dandori writes (`caller/`), which calls Jev with TypeSafe's key; asking for the approval and the notice are containers of your images, and the approver's tool answers the callback with `argo node set` and `argo resume`"
 
 use rule policy from "../rules/review_policy.rule"
+use dates approvals from "../dates/approval_terms.cal"
 
 record Application
   id      : string
@@ -36,11 +37,12 @@ task score(purpose: string) -> Score
   timeout 10 seconds
 
 # The other tasks run in a container of their image, which reads the call from DANDORI_CALL.
-# Someone approves in a tool of their own, and the answer comes back with the callback's id.
-task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%]) -> Approval
+# Someone approves in a tool of their own, and the answer comes back with the callback's id. The
+# approver is told when the approval is due, and the wait ends then.
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%], by: timestamp) -> Approval
   image "registry.example.com/review/approval:1"
   callback
-  timeout 3 days
+  timeout until by
 
 task notify(application_id: string, text: string)
   image "registry.example.com/review/notify:1"
@@ -53,8 +55,9 @@ flow
   match d.decision
     approve, reject => pass
     ask =>
-      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure)
-        on timeout => fail NoAnswer "No approval in three days"
+      let due = approvals.due(received: now)
+      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure, by: due.at)
+        on timeout => fail NoAnswer "No approval by 17:00 on the third business day"
       notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
       succeed verdict = approve
   notify(application_id: application.id, text: "Application {application.id} was reviewed: {r.verdict}")

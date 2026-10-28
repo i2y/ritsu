@@ -114,7 +114,7 @@ flowchart TD
 | 64 | `催促の控え = 知らせる(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `宛先なし` → 65 行目<br>`timeout`・`failure` → `on failure` | — |
 | 67 | `受注 ← 注文を見る(…)` | `GET https://warehouse.example.com/v1/orders/{id}`・`observes`・`idempotent` | 1 秒おきに 3 回（混雑） | — | `混雑`・`timeout`・`failure` → `on failure` | `受注`: `受付`・`入金済`・`取消` |
 | 71 | `受注 ← 取消を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`・`sends 取消依頼`・`key` | — | — | `拒否された` → 72 行目<br>`timeout`・`failure` → `on failure` | `受注`: `取消` |
-| 77 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 77 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
 | 78 | `受注 ← 出荷を頼む(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`・`sends 出荷`・`key` | — | — | `拒否された` → 79 行目<br>`timeout`・`failure` → `on failure` | `受注`: `出荷済` |
 | 81 | `出荷の控え = 知らせる(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `宛先なし`・`timeout`・`failure` → `on failure` | — |
 | 83 | `受注 ← 配達の知らせ()` | `event`・`observes` | — | 7 日 | `timeout` → 84 行目<br>`failure` → `on failure` | `受注`: `出荷済`・`配達済` |

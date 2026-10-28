@@ -1,7 +1,8 @@
 workflow review v1
-description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for pydantic-graph: the graph runs in the Python process that takes the application; the scoring is a function dandori writes, which calls Jev with TypeSafe's key, the rule runs in the process, and the other tasks are functions you write; the approver's answer comes to the callback in the same process. The wait for the approval holds the process, and a run the process loses is lost"
+description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval, due by 17:00 on the third business day after it comes in: approving at once asks more certainty than rejecting at once. Written for pydantic-graph: the graph runs in the Python process that takes the application; the scoring is a function dandori writes, which calls Jev with TypeSafe's key, the rule and the date of the approval run in the process, and the other tasks are functions you write; the approver's answer comes to the callback in the same process. The wait for the approval holds the process, and a run the process loses is lost"
 
 use rule policy from "../rules/review_policy.rule"
+use dates approvals from "../dates/approval_terms.cal"
 
 record Application
   id      : string
@@ -35,10 +36,11 @@ task score(purpose: string) -> Score
   retry 2 times every 10 seconds on busy, overloaded
   timeout 10 seconds
 
-# Someone approves in a tool of their own, and the answer comes back with the callback's id.
-task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%]) -> Approval
+# Someone approves in a tool of their own, and the answer comes back with the callback's id. The
+# approver is told when the approval is due, and the wait ends then.
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%], by: timestamp) -> Approval
   callback
-  timeout 3 days
+  timeout until by
 
 task notify(application_id: string, text: string)
   idempotent
@@ -50,8 +52,9 @@ flow
   match d.decision
     approve, reject => pass
     ask =>
-      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure)
-        on timeout => fail NoAnswer "No approval in three days"
+      let due = approvals.due(received: now)
+      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure, by: due.at)
+        on timeout => fail NoAnswer "No approval by 17:00 on the third business day"
       notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
       succeed verdict = approve
   notify(application_id: application.id, text: "Application {application.id} was reviewed: {r.verdict}")

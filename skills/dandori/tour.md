@@ -92,7 +92,9 @@ task get_intent(intent: string) -> PaymentIntent
   nothing says `idempotent`. `retry 2 times every 2 seconds` retries a failure or a timeout, but
   not the task's declared errors; `retry … on busy` retries only what it names.
 - `timeout 2 days` bounds a call, and `callback` makes a task wait for an answer that comes later
-  (an approval, a packing crew's report).
+  (an approval, a packing crew's report); `timeout until by` ends that wait at the time the call gives
+  its parameter `by`. A rule's or a date's call gets 10 seconds a try, on every platform
+  ([How long a call may take](tasks.md#how-long-a-call-may-take)).
 - **Secrets and plain HTTP**: `discloses <parameter> "<why>"` says the task sends that parameter's
   secret where it calls, on purpose, and `plaintext "<why>"`, under a task with a URL of its own, that
   the URL is reached without encryption on purpose ([Secrets](secrets.md)).

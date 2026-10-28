@@ -67,7 +67,7 @@ flowchart TD
 | Line | Call | Calls | Retries | Timeout | When it fails | Case after |
 |---:|---|---|---|---|---|---|
 | 56 | `hold ← reserve(…)` | `book stock.reserve.hold`, `starts stock.reserve` | — | — | `out_of_stock` → line 57<br>`timeout`, `failure` → `on failure` | `hold`: `held` |
-| 58 | `due = terms.payment(…)` | the date `payment` of `payment_terms.cal` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
+| 58 | `due = terms.payment(…)` | the date `payment` of `payment_terms.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
 | 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`, `idempotent` | 2 times every 10 seconds (failure, timeout) | — | `timeout`, `failure` → `on failure` | — |
 | 63 | `hold ← ship(…)` | `book stock.reserve.post`, `sends post` | — | — | `expired` → line 64<br>`timeout`, `failure` → `on failure` | `hold`: `posted` |
 | 67 | `hold ← put_back(…)` | `book stock.reserve.void`, `sends void` | — | — | `expired` → line 68<br>`already_posted`, `timeout`, `failure` → `on failure` | `hold`: `voided` |

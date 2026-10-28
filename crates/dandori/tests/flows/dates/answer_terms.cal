@@ -1,0 +1,15 @@
+dates answer_terms v1
+description "An answer is due at 17:00 on the second business day after the request"
+use calendar "../calendars/weekdays.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2027-12-31
+
+date due = received
+  + 2 business days     # the second business day after the request
+  at 17:00              # by 17:00
+
+examples
+| received   | -> due     |
+| 2026-03-31 | 2026-04-02 |
+| 2026-04-03 | 2026-04-07 |

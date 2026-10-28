@@ -14,8 +14,13 @@
 //! - The call that makes the hold makes it somewhere inside its own run: after it, the hold is 0
 //!   seconds old at the fewest, and at most as old as the call can take.
 //! - A call takes 0 seconds at the fewest, and at the most its `timeout` for each attempt its
-//!   `retry` allows, with the waits between them. A task with no `timeout`, a rule or a date (whose
-//!   calls the flow gives no limit), leaves nothing bounding the most.
+//!   `retry` allows, with the waits between them. A task with no `timeout` leaves nothing bounding
+//!   the most. A rule or a date takes at most 33 seconds: every target gives each try of its call
+//!   10 seconds and retries it twice, 1 and 2 seconds apart (`check::rule_call_most`, dandori's
+//!   DESIGN 16).
+//! - A task with `timeout until x.at` waits until the time, as `wait until x.at` below does, and a
+//!   second more at the most, for the wait is rounded up to the second. When koyomi does not count
+//!   the time, nothing bounds the most.
 //! - `wait <n>` takes exactly its time.
 //! - `wait until x.at`, when `x` is the answer of a koyomi date whose date input was given `now`
 //!   read after the hold, lasts until the date's time. That time is between the fewest and the
@@ -28,11 +33,12 @@
 //!   most of the most. A loop takes 0 seconds at the fewest, and at the most each round as long as
 //!   its longest way, as many rounds as it can run.
 //! - A handler of `timeout` alone, under a task that waits for an event, starts when the event's
-//!   timer runs out: its `timeout` (a day without one) after the call starts, at the fewest. Any
-//!   other task's timeout can come sooner (on Temporal, an activity the workflow's own worker
-//!   serves times out when its heartbeats stop for 30 seconds, and a callback when the activity
-//!   that hands its id on times out), so its handlers start as the call ends, 0 seconds at the
-//!   fewest.
+//!   timer runs out: its `timeout` (a day without one) after the call starts, at the fewest; with
+//!   `timeout until x.at`, no sooner than the time, counted as for `wait until x.at`, and as the
+//!   call starts when koyomi does not count it. Any other task's timeout can come sooner (on
+//!   Temporal, an activity the workflow's own worker serves times out when its heartbeats stop for
+//!   30 seconds, and a callback when the activity that hands its id on times out), so its handlers
+//!   start as the call ends, 0 seconds at the fewest.
 //! - `on failure` and `on cancel` start where a failure or a cancellation can stop the run: the
 //!   hold is 0 seconds old at the fewest, and at the most as old as it can be at any call or wait.
 //!
@@ -230,6 +236,9 @@ struct Since {
     why: Vec<Text>,
     /// why `hi` is None: the first thing that bounds nothing
     open: Option<Text>,
+    /// what makes `hi` as long as it is, when koyomi's days do: the waits until a date's time, and
+    /// the day that makes each longest
+    most_why: Vec<Text>,
     /// the line of the call that made the hold (the first, when more than one can)
     made: usize,
 }
@@ -243,11 +252,25 @@ impl Since {
         }
         match hi {
             Ok(h) => self.hi = self.hi.map(|x| x + h),
-            Err(t) => {
-                if self.hi.is_some() {
-                    self.hi = None;
-                    self.open = Some(t.clone());
-                }
+            Err(t) => self.unbound(t),
+        }
+    }
+
+    /// Nothing bounds the most from here on.
+    fn unbound(&mut self, why: &Text) {
+        if self.hi.is_some() {
+            self.hi = None;
+            self.open = Some(why.clone());
+            self.most_why.clear();
+        }
+    }
+
+    /// The most becomes at least `most` (seconds since the hold), for the reasons `why`.
+    fn reach(&mut self, most: u64, why: Vec<Text>) {
+        if let Some(x) = self.hi {
+            if most >= x {
+                self.hi = Some(most);
+                self.most_why = why;
             }
         }
     }
@@ -256,7 +279,58 @@ impl Since {
         let low = if a.lo <= b.lo { a } else { b };
         let hi = a.hi.zip(b.hi).map(|(x, y)| x.max(y));
         let open = if hi.is_none() { if a.hi.is_none() { a.open.clone() } else { b.open.clone() } } else { None };
-        Since { lo: low.lo, hi, why: low.why.clone(), open, made: a.made.min(b.made) }
+        let high = if b.hi > a.hi { b } else { a };
+        let most_why = if hi.is_some() { high.most_why.clone() } else { vec![] };
+        Since { lo: low.lo, hi, why: low.why.clone(), open, most_why, made: a.made.min(b.made) }
+    }
+}
+
+/// The time a call of a task with `timeout until` waits until, or a `wait until` waits until, when
+/// it is the time of a koyomi date whose date input was given `now` read after a hold: the variable
+/// that holds the date's answer, the days koyomi counts from the input to the date, the minutes of
+/// its `at`, the date, and its date input.
+struct Counted {
+    anchor: Anchor,
+    span: ritsu_ports::DaySpan,
+    minutes: u32,
+    date: DateCall,
+    input: String,
+}
+
+impl Counted {
+    /// The fewest and the most seconds from the hold `i` to the time, when `now` was read after it.
+    fn bounds(&self, i: usize) -> Option<(i64, Option<u64>, &Since)> {
+        let since = self.anchor.since[i].as_ref()?;
+        let at_secs = i64::from(self.minutes) * 60;
+        let least = since.lo as i64 + (self.span.fewest - 1) * 86_400 + at_secs;
+        let most = since.hi.map(|h| (h as i64 + self.span.most * 86_400 + at_secs).max(0) as u64);
+        Some((least, most, since))
+    }
+
+    fn clock(&self) -> String {
+        format!("{:02}:{:02}", self.minutes / 60, self.minutes % 60)
+    }
+
+    /// The day the date's input falls on at the fewest days, and the date's day then: ` (from … to …)`.
+    fn fewest_example(&self) -> Text {
+        match self.span.fewest_at {
+            Some(day) => {
+                let (from, to) = (ritsu_ports::day_text(day), ritsu_ports::day_text(day + self.span.fewest));
+                Text { ja: format!("（{from} なら {to}）"), en: format!(" (from {from} to {to})") }
+            }
+            None => Text::default(),
+        }
+    }
+
+    /// The day `now` falls on that makes the wait the longest, and what the wait then lasts until,
+    /// as `wait` says it of the date's day (`to`), the time of `at` and the days after `now`'s day:
+    /// none when koyomi does not say the day.
+    fn longest(&self, wait: impl Fn(&str, &str, i64) -> Text) -> Option<Text> {
+        let day = self.span.most_at?;
+        let (from, to) = (ritsu_ports::day_text(day), ritsu_ports::day_text(day + self.span.most));
+        let (a, date) = (self.anchor.line, &self.date.date);
+        let w = wait(&to, &self.clock(), self.span.most);
+        Some(tr!("いちばん長くなるのは、{a} 行目の `{date}` に渡した `now` が {from} のときです。{}", "The longest is when the `now` given to `{date}` (line {a}) falls on {from}: {}", w.ja; w.en))
     }
 }
 
@@ -386,10 +460,14 @@ impl<'a> Spans<'a> {
     }
 
     /// The most seconds a call can take, or why nothing bounds it.
-    fn duration(&self, callee: &Callee, line: usize) -> Result<u64, Text> {
+    fn duration(&self, callee: &Callee, args: &[(String, TExpr)], line: usize) -> Result<u64, Text> {
         match callee {
             Callee::Task(t) => {
                 let t = &self.m.tasks[*t];
+                // `timeout until`: the wait ends at a time, which `stmt` counts from where it comes from
+                if let Some(at) = crate::render::deadline_arg(self.m, callee, args) {
+                    return Err(deadline_open(line, &t.name, &at.show()));
+                }
                 let Some(timeout) = t.timeout else {
                     return Err(tr!("{line} 行目の `{}` には `timeout` がありません", "`{}` (line {line}) has no `timeout`", t.name; t.name));
                 };
@@ -399,15 +477,54 @@ impl<'a> Spans<'a> {
                 };
                 Ok((times + 1) * timeout + waits)
             }
-            Callee::Rule(r) => {
-                let u = &self.m.rules[*r];
-                Err(if u.date().is_some() {
-                    tr!("{line} 行目の日付 `{}` の呼び出しにかかる時間には、`.flow` のどこにも上限がありません", "nothing in the flow bounds how long the call of the date `{}` (line {line}) takes", u.name; u.name)
-                } else {
-                    tr!("{line} 行目の規則 `{}` の呼び出しにかかる時間には、`.flow` のどこにも上限がありません", "nothing in the flow bounds how long the call of the rule `{}` (line {line}) takes", u.name; u.name)
-                })
-            }
+            // every target gives a try of a rule's or a date's call the same limit, and retries it the
+            // same (DESIGN 16)
+            Callee::Rule(_) => Ok(crate::check::rule_call_most()),
         }
+    }
+
+    /// The time a wait lasts until, when it is the time of a koyomi date given `now` read after a hold.
+    fn counted(&self, st: &State, at: &TExpr) -> Option<Counted> {
+        let anchor = match at {
+            TExpr::Var { name, fields, .. } if fields.len() == 1 && fields[0] == "at" => st.anchors.get(name).cloned(),
+            _ => None,
+        }?;
+        // the date's days from its input as koyomi counts them, and the minutes of its `at`
+        let u = &self.m.rules[anchor.rule];
+        let d = u.date()?;
+        let facts = crate::sources::dates(&u.info.path).ok()?;
+        let minutes = facts.functions.iter().find(|f| f.name == d.date)?.at?;
+        let input = facts.inputs.iter().find(|i| i.kind == ritsu_ports::DateKind::Date).map(|i| i.name.clone()).unwrap_or_default();
+        match crate::sources::date_span(&u.info.path, &d.date).ok()? {
+            Found::Value(span) => Some(Counted { anchor, span, minutes, date: d.clone(), input }),
+            Found::Undecided(_) => None,
+        }
+    }
+
+    /// A call's own run, from the hold `i`'s age `c` as it starts: its `dur`, or with `timeout until`,
+    /// until the time it waits until (`until`), rounded up to the second and a second at the least.
+    fn through(c: &mut Since, i: usize, dur: &Result<u64, Text>, until: Option<&Until>) {
+        let Some(u) = until else {
+            c.add(0, dur, None);
+            return;
+        };
+        let found = u.counted.as_ref().and_then(|k| k.bounds(i).map(|b| (k, b)));
+        let Some((k, (_, most, since))) = found else {
+            c.unbound(&deadline_open(u.line, &u.task, &u.shown));
+            return;
+        };
+        let Some(most) = most else {
+            c.unbound(&since.open.clone().unwrap_or_else(|| deadline_open(u.line, &u.task, &u.shown)));
+            return;
+        };
+        if c.hi.is_none() {
+            return;
+        }
+        let (line, task, shown) = (u.line, &u.task, &u.shown);
+        let mut why = since.most_why.clone();
+        why.extend(k.longest(|to, clock, most| tr!("{line} 行目の `{task}` は、その日から {most} 日後の {to} の {clock}（`{shown}`）まで待ちます", "`{task}` (line {line}) waits until `{shown}`, {to} at {clock}, {most} days after it")));
+        c.reach(most, why);
+        c.hi = c.hi.map(|h| h + 1);
     }
 
     /// The most seconds one way through a block can take.
@@ -415,12 +532,12 @@ impl<'a> Spans<'a> {
         let mut total = 0u64;
         for s in stmts {
             total += match &s.kind {
-                TK::Call { callee, handlers, .. } => {
+                TK::Call { callee, args, handlers, .. } => {
                     let mut h = 0;
                     for x in handlers {
                         h = h.max(self.longest(&x.body)?);
                     }
-                    self.duration(callee, s.line)? + h
+                    self.duration(callee, args, s.line)? + h
                 }
                 TK::Match { arms, .. } => {
                     let mut most = 0;
@@ -442,25 +559,34 @@ impl<'a> Spans<'a> {
     fn stmt(&mut self, s: &TStmt, mut st: State) -> Option<State> {
         match &s.kind {
             TK::Call { target, callee, args, handlers } => {
-                let dur = self.duration(callee, s.line);
+                let dur = self.duration(callee, args, s.line);
+                // `timeout until`: the wait for the answer ends at the time the call gives
+                let until = match (callee, crate::render::deadline_arg(self.m, callee, args)) {
+                    (Callee::Task(t), Some(at)) => Some(Until { line: s.line, task: self.m.tasks[*t].name.clone(), shown: at.show(), counted: self.counted(&st, at) }),
+                    _ => None,
+                };
                 let at_start = st.cases.clone();
                 let before: Vec<bool> = at_start.iter().map(Option::is_some).collect();
                 if let (Some(Target::Case(c)), Callee::Task(t)) = (target, callee) {
                     // a post or a void, which the hold's expiry can refuse
                     if let (true, Some(TaskMachine::Sends { event, .. }), Some(since)) = (self.expiring[*c].is_some(), &self.m.tasks[*t].machine, st.cases[*c].clone()) {
                         if event == "post" || event == "void" {
-                            self.point(*c, s.line, *t, event, &since, &dur);
+                            let mut end = since.clone();
+                            Spans::through(&mut end, *c, &dur, until.as_ref());
+                            self.point(*c, s.line, *t, event, &since, &end);
                         }
                     }
                 }
-                for c in st.cases.iter_mut().flatten() {
-                    c.add(0, &dur, None);
+                for (i, c) in st.cases.iter_mut().enumerate() {
+                    if let Some(c) = c {
+                        Spans::through(c, i, &dur, until.as_ref());
+                    }
                 }
                 // the hold this call makes, somewhere inside its run
                 if let (Some(Target::Case(c)), Callee::Task(t)) = (target, callee) {
                     if self.expiring[*c].is_some() && matches!(self.m.tasks[*t].machine, Some(TaskMachine::Starts { .. })) {
                         let open = dur.as_ref().err().cloned();
-                        st.cases[*c] = Some(Since { lo: 0, hi: dur.as_ref().ok().copied(), why: vec![], open, made: s.line });
+                        st.cases[*c] = Some(Since { lo: 0, hi: dur.as_ref().ok().copied(), why: vec![], open, most_why: vec![], made: s.line });
                     }
                 }
                 self.stoppable(&st);
@@ -483,14 +609,22 @@ impl<'a> Spans<'a> {
                     }
                 }
                 // a task that waits for an event times out only when its own timer runs out: its
-                // `timeout`, or a day without one
+                // `timeout`, or a day without one; with `timeout until`, the time it waits until
                 let timer = match callee {
-                    Callee::Task(t) if self.m.tasks[*t].event => Some((self.m.tasks[*t].timeout.unwrap_or(86_400), &self.m.tasks[*t].name)),
+                    Callee::Task(t) if self.m.tasks[*t].event && until.is_none() => Some((self.m.tasks[*t].timeout.unwrap_or(86_400), &self.m.tasks[*t].name)),
                     _ => None,
                 };
+                let event = matches!(callee, Callee::Task(t) if self.m.tasks[*t].event);
                 let mut out = Some(st.clone());
                 for h in handlers {
                     let mut entry = st.clone();
+                    if let (true, Some(u), [HErr::Timeout]) = (event, &until, h.errors.as_slice()) {
+                        for (i, (c, was)) in entry.cases.iter_mut().zip(&before).enumerate() {
+                            if let (Some(c), true) = (c, *was) {
+                                u.timed_out(c, i);
+                            }
+                        }
+                    }
                     if let (Some((secs, task)), [HErr::Timeout]) = (timer, h.errors.as_slice()) {
                         let line = s.line;
                         let why = tr!(
@@ -611,70 +745,42 @@ impl<'a> Spans<'a> {
 
     /// `wait until <at>`.
     fn until(&mut self, st: &mut State, at: &TExpr, line: usize) {
-        let anchor = match at {
-            TExpr::Var { name, fields, .. } if fields.len() == 1 && fields[0] == "at" => st.anchors.get(name).cloned(),
-            _ => None,
-        };
-        // the date's days from its input as koyomi counts them, and the minutes of its `at`
-        let counted = anchor.as_ref().and_then(|a| {
-            let u = &self.m.rules[a.rule];
-            let d = u.date()?;
-            let facts = crate::sources::dates(&u.info.path).ok()?;
-            let minutes = facts.functions.iter().find(|f| f.name == d.date)?.at?;
-            match crate::sources::date_span(&u.info.path, &d.date).ok()? {
-                Found::Value(span) => Some((span, minutes, d.clone(), facts.inputs.iter().find(|i| i.kind == ritsu_ports::DateKind::Date).map(|i| i.name.clone()).unwrap_or_default())),
-                Found::Undecided(_) => None,
-            }
-        });
+        let counted = self.counted(st, at);
         let shown = at.show();
         for (i, cur) in st.cases.iter_mut().enumerate() {
             let Some(cur) = cur else { continue };
-            let found = anchor.as_ref().zip(counted.as_ref()).and_then(|(a, c)| a.since[i].as_ref().map(|s| (a, s, c)));
-            let Some((a, since, (span, minutes, d, input))) = found else {
+            let Some((k, (least, most, since))) = counted.as_ref().and_then(|k| k.bounds(i).map(|b| (k, b))) else {
                 cur.add(0, &Err(until_open_of(line, &shown)), None);
                 continue;
             };
-            let at_secs = i64::from(*minutes) * 60;
-            let least = since.lo as i64 + (span.fewest - 1) * 86_400 + at_secs;
             if least > cur.lo as i64 {
-                let example = match span.fewest_at {
-                    Some(day) => {
-                        let (from, to) = (ritsu_ports::day_text(day), ritsu_ports::day_text(day + span.fewest));
-                        Text { ja: format!("（{from} なら {to}）"), en: format!(" (from {from} to {to})") }
-                    }
-                    None => Text::default(),
-                };
-                let clock = format!("{:02}:{:02}", minutes / 60, minutes % 60);
+                let (a, date, fewest, input, clock, example) = (k.anchor.line, &k.date.date, k.span.fewest, &k.input, k.clock(), k.fewest_example());
                 let why = tr!(
-                    "{line} 行目の `wait until {shown}` は、koyomi の日付 `{}` の時刻まで待ちます。その日は `{input}` から早くて {} 日後{}の {clock} で、日付に渡した `now` は仮押さえのあと（{} 行目）に読んでいます",
-                    "the wait until `{shown}` (line {line}) lasts until the time of koyomi's date `{}`: {} days after `{input}` at the fewest{}, at {clock}, and the `now` given to the date was read after the hold (line {})",
-                    d.date, span.fewest, example.ja, a.line; d.date, span.fewest, example.en, a.line
+                    "{line} 行目の `wait until {shown}` は、koyomi の日付 `{date}` の時刻まで待ちます。その日は `{input}` から早くて {fewest} 日後{}の {clock} で、日付に渡した `now` は仮押さえのあと（{a} 行目）に読んでいます",
+                    "the wait until `{shown}` (line {line}) lasts until the time of koyomi's date `{date}`: {fewest} days after `{input}` at the fewest{}, at {clock}, and the `now` given to the date was read after the hold (line {a})",
+                    example.ja; example.en
                 );
                 cur.lo = least as u64;
                 cur.why = since.why.clone();
                 cur.why.push(why);
             }
-            let most = since.hi.map(|h| (h as i64 + span.most * 86_400 + at_secs).max(0) as u64);
-            match (cur.hi, most) {
-                (Some(x), Some(y)) => cur.hi = Some(x.max(y)),
-                (Some(_), None) => {
-                    cur.hi = None;
-                    cur.open = since.open.clone();
+            match most {
+                Some(y) => {
+                    let mut why = since.most_why.clone();
+                    why.extend(k.longest(|to, clock, most| tr!("{line} 行目の `wait until {shown}` は、その日から {most} 日後の {to} の {clock} まで待ちます", "the wait until `{shown}` (line {line}) lasts until {to} at {clock}, {most} days after it")));
+                    cur.reach(y, why);
                 }
-                (None, _) => {}
+                None => cur.unbound(&since.open.clone().unwrap_or_else(|| until_open_of(line, &shown))),
             }
         }
     }
 
-    /// The span from the hold of the case `c` to the call on it of line `line`.
-    fn point(&mut self, c: usize, line: usize, t: usize, op: &str, since: &Since, dur: &Result<u64, Text>) {
+    /// The span from the hold of the case `c` to the call on it of line `line`: from `since`, its age
+    /// as the call starts, to `end`, its age as the call's run ends.
+    fn point(&mut self, c: usize, line: usize, t: usize, op: &str, since: &Since, end: &Since) {
         let case = &self.m.cases[c];
         let RuleKind::Hold { book, transfer } = &self.m.rules[case.rule].kind else { return };
-        let most = match (since.hi, dur) {
-            (Some(h), Ok(d)) => Ok(h + d),
-            (None, _) => Err(since.open.clone().unwrap_or_else(|| tr!("上限が分かりません", "nothing bounds it"))),
-            (Some(_), Err(why)) => Err(why.clone()),
-        };
+        let most = end.hi.ok_or_else(|| end.open.clone().unwrap_or_else(|| tr!("上限が分かりません", "nothing bounds it")));
         self.out.push(HoldSpan {
             case: case.name.clone(),
             book: self.m.books[*book].path.clone(),
@@ -685,9 +791,44 @@ impl<'a> Spans<'a> {
             op: op.to_string(),
             least: since.lo,
             least_why: since.why.clone(),
+            most_why: if most.is_ok() { end.most_why.clone() } else { vec![] },
             most,
         });
     }
+}
+
+/// A call of a task with `timeout until`: its line, the task, the time as written, and where the
+/// time comes from, when koyomi counts it.
+struct Until {
+    line: usize,
+    task: String,
+    shown: String,
+    counted: Option<Counted>,
+}
+
+impl Until {
+    /// The handler of `timeout` alone under a task that waits for an event: it starts when the time
+    /// has come, so no sooner than the time is after the hold `i`.
+    fn timed_out(&self, c: &mut Since, i: usize) {
+        let Some((k, (least, _, since))) = self.counted.as_ref().and_then(|k| k.bounds(i).map(|b| (k, b))) else { return };
+        if least <= c.lo as i64 {
+            return;
+        }
+        let (line, task, shown) = (self.line, &self.task, &self.shown);
+        let (a, date, fewest, input, clock, example) = (k.anchor.line, &k.date.date, k.span.fewest, &k.input, k.clock(), k.fewest_example());
+        let why = tr!(
+            "{line} 行目の `{task}` は、イベントを期限 `{shown}` まで待ってから `on timeout` に進みます。期限は koyomi の日付 `{date}` の時刻で、その日は `{input}` から早くて {fewest} 日後{}の {clock} です。日付に渡した `now` は仮押さえのあと（{a} 行目）に読んでいます",
+            "`{task}` (line {line}) waits for its event until `{shown}` before `on timeout` runs: the time of koyomi's date `{date}`, {fewest} days after `{input}` at the fewest{}, at {clock}, and the `now` given to the date was read after the hold (line {a})",
+            example.ja; example.en
+        );
+        c.lo = least as u64;
+        c.why = since.why.clone();
+        c.why.push(why);
+    }
+}
+
+fn deadline_open(line: usize, task: &str, shown: &str) -> Text {
+    tr!("{line} 行目の `{task}` が待つ期限 `{shown}` には上限がありません", "nothing bounds the time `{shown}` that `{task}` (line {line}) waits until")
 }
 
 fn until_open(line: usize) -> Text {

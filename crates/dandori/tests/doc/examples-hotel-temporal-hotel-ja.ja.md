@@ -129,7 +129,7 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 75 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 75 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
 | 78 | `決済 ← 決済を作る(…)` | `POST stripe /v1/payment_intents`・`starts payment_intent.payment then attach`・`key` | 2 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `決済`: `requires_confirmation` |
 | 79 | `決済 ← 与信を取る(…)` | `POST stripe /v1/payment_intents/{intent}/confirm`・`sends confirm`・`key` | — | — | `カード拒否` → 80 行目<br>`状態の不一致`・`timeout`・`failure` → `on failure` | `決済`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
 | 80 | `決済 ← 決済を見る(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `決済`: `requires_payment_method`・`requires_confirmation`・`requires_action`・`requires_capture`・`canceled` |

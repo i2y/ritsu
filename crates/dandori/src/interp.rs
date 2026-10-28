@@ -60,6 +60,10 @@ pub trait Answers {
 
     /// The run waits until this moment, as `wait until` is given it.
     fn wait_until(&mut self, _at: &Value) {}
+
+    /// A call of an `event` or a `callback` task with `timeout until` timed out: its wait for the
+    /// answer ended at this moment, rounded up to the second, and a second after it began at the least.
+    fn timeout_until(&mut self, _at: &Value) {}
 }
 
 /// Why time goes by in a run.
@@ -588,10 +592,19 @@ impl<'a> Run<'a> {
             if let Some(c) = ans.get("cause").and_then(|c| c.as_str()) {
                 err.cause = c.to_string();
             }
-            // a try that timed out took its timeout
-            if let (true, Callee::Task(t), Some(h)) = (kind == "timeout", callee, self.hook.as_deref_mut()) {
-                if let Some(secs) = m.tasks[*t].timeout {
-                    h.pass(secs as f64, Passing::Timeout);
+            // a try that timed out took its timeout: the task's, the wait until the time `timeout until`
+            // names, or the limit of a call of a rule or of a date (DESIGN 16)
+            if let (true, Some(h)) = (kind == "timeout", self.hook.as_deref_mut()) {
+                match callee {
+                    Callee::Task(t) => match m.tasks[*t].deadline.as_ref().and_then(|p| a.get(p)) {
+                        Some(at) => h.timeout_until(at),
+                        None => {
+                            if let Some(secs) = m.tasks[*t].timeout {
+                                h.pass(secs as f64, Passing::Timeout);
+                            }
+                        }
+                    },
+                    Callee::Rule(_) => h.pass(crate::check::RULE_SECONDS as f64, Passing::Timeout),
                 }
             }
             self.steps.push(json!({ "call": wire, "answer": { "error": kind, "as": err.target_name } }));

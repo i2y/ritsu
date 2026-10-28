@@ -34,7 +34,7 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 29 | `決定 = 手数料(…)` | rule `account_fee.rule`, by Connect at `https://rules.example.com` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 29 | `決定 = 手数料(…)` | rule `account_fee.rule`, by Connect at `https://rules.example.com` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 31 | `手数料を引く(…)` | `lambda charge-fee`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 32 | `解約を記す(…)` | `lambda record-closing`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 

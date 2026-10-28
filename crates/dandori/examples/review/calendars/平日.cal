@@ -1,0 +1,6 @@
+calendar 平日(weekdays_ja) v1
+description "日本時間で月曜から金曜まで営業し、12 月 29 日から 1 月 3 日までを休む。祝日の表は持たない（例は、どのカレンダーにもあることだけを使う）"
+offset +09:00
+
+closed weekly sat, sun
+closed every 12-29..01-03 "年末年始"

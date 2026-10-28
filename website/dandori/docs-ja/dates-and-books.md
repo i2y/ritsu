@@ -130,11 +130,13 @@ task 一部を出す(注文: string, sku: string, 数: int) -> 倉庫.引当
 
 仮押さえのレコードの状態は、最後の操作が返したもの（`held`、`posted`、`voided`）で、`expired` になることはありません。期限切れは `expired` での拒否として分かります。仮押さえの状態で分かれる `match` に `expired` の分岐を書くと、通ることのない分岐になります（E011）。また、確定が失敗しても、帳簿では確定していることがあります。そのあとの取消は `already_posted` で拒否されうるので、請求の例の `on failure` は、品を棚に戻すときにこの拒否も受けます。
 
+確定や取消の呼び出しが来たときに仮押さえの期限が切れているかは、`ritsu check` がフローと帳簿の境目（X5）で調べます。仮押さえから呼び出しまでの最も短い時間と最も長い時間を、振替の `pending expires after` と比べます。長さを書いた待ちは、その長さで数えます。タスクの `timeout` も同じです。仮押さえのあとで `now` を渡して koyomi に聞いた日付の時刻までの待ち（`wait until due.at`、または `callback` か `event` のタスクの `timeout until due.at`）は、その日付が入力の何日後になりうるかを koyomi に聞き、その最少と最多の日数で数えます。規則と日付の呼び出しは、どのプラットフォームでも上限が同じなので、長くて 33 秒と数えます（[呼び出しにかけてよい時間](tasks.md#呼び出しにかけてよい時間)）。どの実行でも期限が切れていればエラー（E206）、切れていることもいないこともあれば警告（W206）です。警告は、待ちがいちばん長くなる日を示します。
+
 ## プラットフォームごと
 
 | | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |
 |---|---|---|---|---|---|
-| 日付 | Lambda の Task。koyomi が書く Python を呼ぶ関数を dandori が書く | koyomi の TypeScript・Python・Go を呼ぶアクティビティ（`local` ならローカルアクティビティ） | 同じ Lambda 関数を invoke する | koyomi の TypeScript を呼ぶ caller のイメージ | koyomi の Python を呼ぶ関数 |
+| 日付 | Lambda の Task。koyomi が書く Python を呼ぶ関数を dandori が書く | koyomi の TypeScript・Python・Go を呼ぶアクティビティ（`local` ならローカルアクティビティ） | 同じ Lambda 関数を、`Transport` を通して呼ぶステップ | koyomi の TypeScript を呼ぶ caller のイメージ | koyomi の Python を呼ぶ関数 |
 | 帳簿の操作 | 帳簿の Lambda の Task。chobo の Python のクライアントで操作する関数を dandori が書き、仮押さえは渡した引数から作る | dandori が書くアクティビティが、`Transport` の `book` で、渡された chobo のクライアントを呼ぶ | 同じものをステップの中で | 同じものを caller のイメージで | 同じものを `Deps.tasks` から |
 | `now` | そのステートに入った時刻（`$states.context.State.EnteredTime` を秒まで） | ワークフローの時計（再生でも同じ時刻を読む） | 時計を読むステップ。答えはチェックポイントに残る（操作一回で、E040 が数える） | 値を計算するテンプレートの式の `now()`（一度だけ評価される） | `Deps.clock` |
 

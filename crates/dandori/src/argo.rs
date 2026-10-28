@@ -962,10 +962,15 @@ impl<'a> Gen<'a> {
                     if task.callback {
                         let w = format!("{n}-wait");
                         self.used.insert(w.clone());
+                        // `timeout until`: the seconds to the time come from the step before the wait
+                        let (inputs, duration) = match task.deadline {
+                            Some(_) => (json!([{ "name": "callback_id" }, { "name": "seconds" }]), "{{inputs.parameters.seconds}}".to_string()),
+                            None => (json!([{ "name": "callback_id" }]), task.timeout.unwrap_or(86_400).to_string()),
+                        };
                         self.templates.push(json!({
                             "name": w,
-                            "inputs": { "parameters": [{ "name": "callback_id" }] },
-                            "suspend": { "duration": task.timeout.unwrap_or(86_400).to_string() },
+                            "inputs": { "parameters": inputs },
+                            "suspend": { "duration": duration },
                             "outputs": { "parameters": [{ "name": "answer", "valueFrom": { "supplied": {}, "default": TIMEOUT } }] },
                         }));
                     }
@@ -1015,10 +1020,20 @@ impl<'a> Gen<'a> {
             }]),
         ];
         if callback {
+            let mut wait_args = vec![json!({ "name": "callback_id", "value": "{{steps.args.outputs.parameters.callback}}" })];
+            // `timeout until`: the seconds to the time, from the clock once the id has been handed on,
+            // rounded up and one at the least (DESIGN 16); Argo would read a `now()` in the duration again
+            // each time it looks
+            if let Some(at) = render::deadline_arg(m, callee, args) {
+                let secs = format!("ceil((date({}) - date({ARGO_NOW})).Seconds())", self.ex(at));
+                let until = self.compute(&format!("s{site}-until"), depth, &[], vec![("seconds".into(), None, format!("string(int({secs} > 1 ? {secs} : 1))"))]);
+                group.push(json!([Gen::step("until", &until, Gen::pass(depth), None)]));
+                wait_args.push(json!({ "name": "seconds", "value": "{{steps.until.outputs.parameters.seconds}}" }));
+            }
             group.push(json!([{
                 "name": "wait",
                 "template": format!("{tmpl}-wait"),
-                "arguments": { "parameters": [{ "name": "callback_id", "value": "{{steps.args.outputs.parameters.callback}}" }] },
+                "arguments": { "parameters": wait_args },
                 "when": "{{steps.try.status}} == Succeeded",
             }]));
         }

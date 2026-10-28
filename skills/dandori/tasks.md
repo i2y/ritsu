@@ -54,6 +54,46 @@ key for Jev and OpenAI's for its Decisions API, the clients of the books a flow 
   `DANDORI_CALL`, writes the answer to `/tmp/dandori/answer.json`, and for a declared error writes
   `{"error", "message"}` to `/tmp/dandori/error.json` and exits with 3.
 
+## How long a call may take
+
+A task's `timeout` is a length, `timeout 30 seconds`: on every platform, a try that runs past it ends
+with `timeout`, which `on timeout` takes. A task that waits for an answer, a `callback` or an
+`event`, can wait instead until a time the call gives: `timeout until <parameter>` names a
+`timestamp` parameter of the task, and the wait ends at that time, rounded up to the second. A time
+that has passed when the wait starts, or is less than a second away, gets a second. A callback sends
+the time with its other arguments, so the person or the tool that answers knows it; an event takes
+no parameter but that time. The review example waits for a person's approval until 17:00 on the
+third business day after the application comes in, the time of a date of koyomi's:
+
+```flow
+use dates approvals from "../dates/approval_terms.cal"
+…
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%], by: timestamp) -> Approval
+  callback
+  timeout until by
+…
+      let due = approvals.due(received: now)
+      let a = ask_for_approval(application_id: application.id, … by: due.at)
+        on timeout => fail NoAnswer "No approval by 17:00 on the third business day"
+```
+
+An `aws` callback cannot say `timeout until`, since its parameters are the API's own (E007), and
+neither can a callback whose `retry` tries a timeout again: a try after the time has passed only times
+out again. `retry … on failure` is fine.
+
+A call of a rule or of a date has a limit of its own, the same on every platform: ten seconds a try,
+and two tries more after a failure or a timeout, a second and then two seconds later. A call takes 33
+seconds at the most, which X5 counts on when it weighs a hold against the time a call comes
+([Dates and books](dates-and-books.md#a-hold-as-a-case)).
+
+| Platform | What ends a try of a rule or a date at ten seconds |
+|---|---|
+| Step Functions | the Task's `TimeoutSeconds`, on the Lambda Task and on the HTTP Task of a rule called at its service |
+| Temporal | the activity's `startToCloseTimeout`; the time a task waits in its task queue for a worker is not counted |
+| Lambda durable functions | the step that invokes the Lambda function, or calls the service, through the `Transport`, and stops waiting for it after ten seconds |
+| Argo Workflows | the generated caller, which ends the call with exit code 143, read as a timeout; the time the pod takes to start is not counted, and a rule or a date the caller computes itself runs to its end |
+| pydantic-graph | the call of a rule at its service; a rule or a date computed in the process has no limit, since it reads and sends nothing and always ends |
+
 ## API descriptions
 
 When the API a task calls is described, the `.flow` reads the description and the checker holds
@@ -276,7 +316,8 @@ rulec-source-sha256: 5ff6efc93a9b39d25225c10aa67460104da8e393a052635b225d497c51b
   that matched, is not read.
 - A status other than 200, and a request that does not go through, fail the call. A rule has no errors
   of its own, so `failure` is the only one, and it is retried as a rule's call always is: twice, a second
-  and two seconds later.
+  and two seconds later. A service that has not answered in ten seconds times the try out, which is
+  retried the same way ([How long a call may take](#how-long-a-call-may-take)).
 - The version of the table that answered (`rulec-source-sha256`) is not looked at. A service that has
   another table than the one checked does not fail the call: the point of one service is to change the
   table without publishing the workflows again. What holds is the answer's type and range, checked each

@@ -618,6 +618,10 @@ pub struct TaskDef {
     pub errors: Vec<ErrDef>,
     pub retry: Option<Retry>,
     pub timeout: Option<u64>,
+    /// `timeout until <param>`: an `event` or a `callback` task waits for its answer until the
+    /// time the call gives this parameter, rounded up to the second and one second at the least
+    /// (DESIGN 16)
+    pub deadline: Option<String>,
     pub key: bool,
     /// the parameter of an AWS API that takes the idempotency key
     pub key_param: Option<String>,

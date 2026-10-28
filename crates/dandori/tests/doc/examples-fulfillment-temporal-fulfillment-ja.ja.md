@@ -86,7 +86,7 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 73 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 73 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 75 | `答え = 在庫を引き当てる(…)` | `connect warehouse StockService/Reserve`・`key` | 1 秒おきに 2 回（混雑） | — | `混雑`・`timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 | 86 | `引当を戻す(…)` | `connect warehouse StockService/Release`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 | 95 | `記録する(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |

@@ -37,12 +37,12 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 32 | `見積もり = 送料(…)` | rule `会員段階の送料.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 34 | `注文の見積もり = 送料(…)` | rule `会員段階の送料.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 32 | `見積もり = 送料(…)` | rule `会員段階の送料.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 34 | `注文の見積もり = 送料(…)` | rule `会員段階の送料.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 37 | `案内を送る(…)` | `lambda send-offer`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 | 38 | `案内を送る(…)` | `lambda send-offer`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 | 40 | `選んだ段階 = キャンペーンを選ぶ(…)` | `lambda pick-campaign`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 41 | `勧め = 送料(…)` | rule `会員段階の送料.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 41 | `勧め = 送料(…)` | rule `会員段階の送料.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 

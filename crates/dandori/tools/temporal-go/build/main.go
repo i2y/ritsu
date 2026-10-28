@@ -7,7 +7,7 @@
 // manifest.json, the flows of the binary:
 //
 //	[ { "key": the name the binary knows the flow by, "dir": the generated package's directory,
-//	    "patch": "full" | "continue" | "none",
+//	    "patch": "full" | "limits" | "continue" | "none",
 //	    "callbacks": [the function of each task that hands on a callback's id] } ]
 //
 // It makes a module of its own in a temporary directory (go.mod, go.sum and harness/ of this one),
@@ -30,6 +30,9 @@
 //     every duration of the workflow's timers is at most 10 ms (ddSeconds), an event is waited for
 //     5 seconds at most, and every history is long enough to go on in a new run (ddContinueAt);
 //     and the rules are stand-ins, so rules.go (when there is one) bundles none of rulec's code.
+//   - "limits": as "full", but the activities keep their timeouts and the timers their durations
+//     (the tests of the limits, tests/limits): a rule's call the scenario times out is held until
+//     the server times it out after the generated 10 seconds, and the retry waits 1 and 2 seconds.
 //   - "continue": only every history long enough to go on in a new run (as versions.py patches).
 //   - "none": nothing (the children's flows, which run as they are).
 //
@@ -260,10 +263,11 @@ func patch(files map[string]string, e entry, timeout int) error {
 		}
 		files["runtime.go"] = strings.Replace(rt, continueAt, continueSoon, 1)
 		return nil
-	case "full":
+	case "full", "limits":
 	default:
-		return fmt.Errorf("no patch %q (full, continue or none)", e.Patch)
+		return fmt.Errorf("no patch %q (full, limits, continue or none)", e.Patch)
 	}
+	limits := e.Patch == "limits"
 	wf, ok := files["workflow.go"]
 	if !ok {
 		return errors.New("no workflow.go")
@@ -271,6 +275,9 @@ func patch(files map[string]string, e entry, timeout int) error {
 	files["workflow.go"] = atATime.ReplaceAllString(wf, "ddAtATime(1)")
 	short := fmt.Sprintf("StartToCloseTimeout: %d * time.Second", timeout)
 	for name, text := range files {
+		if limits {
+			break
+		}
 		lines := strings.Split(text, "\n")
 		for i, line := range lines {
 			// a task that hands on a callback's id keeps its timeout: the line after its `func`
@@ -298,6 +305,9 @@ func patch(files map[string]string, e entry, timeout int) error {
 	} {
 		if !strings.Contains(rt, p.marker) {
 			return errors.New(p.why)
+		}
+		if limits && p.marker == secondsMarker {
+			continue
 		}
 		rt = strings.Replace(rt, p.marker, p.by, 1)
 	}

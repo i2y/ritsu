@@ -86,7 +86,7 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 73 | `decision = urgency(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 73 | `decision = urgency(…)` | 規則 `urgency.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 75 | `r = reserve_stock(…)` | `connect warehouse StockService/Reserve`・`key` | 1 秒おきに 2 回（busy） | — | `busy`・`timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 | 86 | `release_stock(…)` | `connect warehouse StockService/Release`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 | 95 | `audit(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |

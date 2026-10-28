@@ -77,7 +77,7 @@ pub(crate) const HEARTBEAT_SECONDS: u64 = 30;
 pub(crate) const BEAT_SECONDS: u64 = 10;
 
 /// How long a rule's activity may run: a rule is a pure function, done in no time.
-pub(crate) const RULE_SECONDS: u64 = 10;
+pub(crate) const RULE_SECONDS: u64 = crate::check::RULE_SECONDS;
 
 /// io.ts, with the numbers every target sends put in.
 /// Where an import of rules.ts finds the module of a rule (`rulec/typescript/<module>`) or of a dates
@@ -469,7 +469,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
             (format!("{dir}/types.ts"), types_ts),
             (format!("{dir}/tasks.ts"), tasks_file(m, flavor, &header)),
             (format!("{dir}/io.ts"), io),
-            (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME_DURABLE}{}", if m.uses_now() { STAMP_TS } else { "" })),
+            (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME_DURABLE}{}{}", if m.uses_now() || render::waits_until(m) { STAMP_TS } else { "" }, if render::waits_until(m) { UNTIL_DURABLE_TS } else { "" })),
             (format!("{dir}/workflow.ts"), wf),
         ];
         for r in &bundled {
@@ -487,7 +487,7 @@ pub fn build_flavor(m: &Model, flavor: Flavor) -> Result<Vec<(String, String)>, 
         (format!("{dir}/types.ts"), types_ts),
         (format!("{dir}/activities.ts"), tasks_file(m, flavor, &header)),
         (format!("{dir}/io.ts"), io),
-        (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME}{}", if m.uses_now() { NOW_TS } else { "" })),
+        (format!("{dir}/runtime.ts"), format!("{header}{RUNTIME}{}{}", if m.uses_now() || render::waits_until(m) { NOW_TS } else { "" }, if render::waits_until(m) { UNTIL_TS } else { "" })),
         (format!("{dir}/workflow.ts"), wf),
         (format!("{dir}/client.ts"), client_file(m, &header)),
     ];
@@ -777,6 +777,8 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         .collect();
     let own: Vec<&TaskDef> = tasks.iter().filter(|t| matches!(t.via(p), Some(Via::Own))).cloned().collect();
     let connected = connect_rules(m);
+    // durable functions call a rule's or a date's Lambda function through the Transport, in a step (DESIGN 16)
+    let invoked: Vec<usize> = if flavor == Flavor::Durable { lambda_rules(m) } else { vec![] };
     let mut a = header.to_string();
     let (made, register) = match flavor {
         Flavor::Temporal => ("makeActivities", "the activities to register with the worker"),
@@ -796,6 +798,10 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         a.push_str("// - So is a rule that says `connect` under `use rule`: it is called at its Connect service, over HTTP\n");
         a.push_str("//   through the Transport, and the answer is read as the rule's record (io.rule). Its name is the\n");
         a.push_str("//   rule's activity, `rule_<rule>`, the same as when the rule's code goes with the workflow.\n");
+    }
+    if !invoked.is_empty() {
+        a.push_str("// - So is a rule or a date that says `lambda`: its Lambda function is invoked through the Transport, as\n");
+        a.push_str("//   Step Functions invokes it, by the name the workflow calls it by (`rule_<rule>`, `dates_<file>_<date>`).\n");
     }
     a.push_str("// - The others are yours to write (OwnTasks). ");
     match flavor {
@@ -883,8 +889,21 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
         }
         a.push_str("};\n\n");
     }
+    if !invoked.is_empty() {
+        a.push_str("/** The rules and the dates called as Lambda functions, by the names the workflow calls them by. */\n");
+        a.push_str("export interface LambdaRules {\n");
+        for r in &invoked {
+            a.push_str(&format!("  {}(args: Record<string, unknown>): Promise<Record<string, unknown>>;\n", render::rule_activity(&m.rules[*r].name)));
+        }
+        a.push_str("}\n\n");
+    }
     a.push_str(&format!("/** Your tasks and the ones dandori writes: {register}. */\n"));
-    let returns = if connected.is_empty() { "Tasks" } else { "Tasks & ConnectRules" };
+    let returns = match (connected.is_empty(), invoked.is_empty()) {
+        (true, true) => "Tasks",
+        (false, true) => "Tasks & ConnectRules",
+        (true, false) => "Tasks & LambdaRules",
+        (false, false) => "Tasks & ConnectRules & LambdaRules",
+    };
     a.push_str(&format!("export function {made}(own: OwnTasks, transport: io.Transport = io.transport()): {returns} {{\n"));
     // the rules at their services are activities too, but not ones to heartbeat: a rule is done in no time
     a.push_str(if flavor == Flavor::Temporal && !connected.is_empty() { "  const tasks = beating({\n" } else if flavor == Flavor::Temporal { "  return beating({\n" } else { "  return {\n" });
@@ -1048,13 +1067,21 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
             _ => {}
         }
     }
-    let calls: Vec<String> = connected
+    let mut calls: Vec<String> = connected
         .iter()
         .map(|r| {
             let ru = &m.rules[*r];
             format!("    {}: async (args: {{ {} }}) => io.rule(transport, RULES[{}], args, fail) as Promise<Record<string, unknown>>,\n", render::rule_activity(&ru.name), rule_arg_types(ru).join("; "), q(&ru.name))
         })
         .collect();
+    for r in &invoked {
+        let ru = &m.rules[*r];
+        calls.push(format!(
+            "    {}: async (args: Record<string, unknown>) => io.value(await transport.lambda({}, args), {{}}, fail) as Record<string, unknown>,\n",
+            render::rule_activity(&ru.name),
+            q(ru.lambda.as_deref().unwrap_or(""))
+        ));
+    }
     if flavor == Flavor::Temporal && !connected.is_empty() {
         a.push_str("  });\n  return {\n    ...tasks,\n");
         calls.iter().for_each(|c| a.push_str(c));
@@ -1070,6 +1097,12 @@ fn tasks_file(m: &Model, flavor: Flavor, header: &str) -> String {
 pub(crate) fn connect_rules(m: &Model) -> Vec<usize> {
     let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
     called.into_iter().filter(|r| m.rules[*r].connect.is_some()).collect()
+}
+
+/// The rules and the dates the workflow calls as Lambda functions, in the order `use` has them.
+fn lambda_rules(m: &Model) -> Vec<usize> {
+    let called: BTreeSet<usize> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(*r), _ => None }).collect();
+    called.into_iter().filter(|r| m.rules[*r].connect.is_none()).collect()
 }
 
 /// A rule's arguments as the TypeScript of its activity takes them: an enum's value is a string, a
@@ -1135,7 +1168,11 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     let mut call = header.to_string();
     call.push_str("// Runs one task or rule in a container of the Argo workflow: the call comes in DANDORI_CALL, the\n");
     call.push_str("// answer goes to /tmp/dandori/answer.json; a declared error goes to /tmp/dandori/error.json and\n");
-    call.push_str("// the exit code is 3; any other failure exits 1.\n//\n//   node call.ts <task or rule_<rule>>\n\n");
+    call.push_str("// the exit code is 3; any other failure exits 1.\n");
+    if m.all_stmts().iter().any(|s| matches!(&s.kind, TK::Call { callee: Callee::Rule(_), .. })) {
+        call.push_str(&format!("// A rule's or a date's call that runs past {RULE_SECONDS} seconds exits 143, as a container Argo stops at its\n// deadline does, and the workflow reads it as a timeout.\n"));
+    }
+    call.push_str("//\n//   node call.ts <task or rule_<rule>>\n\n");
     call.push_str("import fs from \"node:fs\";\nimport { makeTasks } from \"./tasks.ts\";\n");
     call.push_str("import { transport } from \"./transport.ts\";\n\n");
     call.push_str(&format!("const DECLARED: Record<string, readonly string[]> = {{\n{}\n}};\n\n", declared.join("\n")));
@@ -1148,6 +1185,16 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
         let names: Vec<String> = called.iter().map(|r| q(&render::rule_activity(&m.rules[*r].name))).collect();
         call.push_str(&format!("const BUNDLED = new Set([{}]);\n", names.join(", ")));
         call.push_str("const all: Record<string, (args: any) => Promise<unknown>> = BUNDLED.has(name) ? (await import(\"./rules.ts\")).rules : { ...makeTasks({}, transport) };\n");
+    }
+    // a rule's or a date's call runs `check::RULE_SECONDS` at the most, as on every target (DESIGN 16): the
+    // container then ends as one Argo stops at its deadline does (143), which the step after reads as a timeout
+    let limited: BTreeSet<String> = m.all_stmts().iter().filter_map(|s| match &s.kind { TK::Call { callee: Callee::Rule(r), .. } => Some(render::rule_activity(&m.rules[*r].name)), _ => None }).collect();
+    if !limited.is_empty() {
+        call.push_str(&format!("const RULES = new Set([{}]);\n", limited.iter().map(|n| q(n)).collect::<Vec<_>>().join(", ")));
+        call.push_str(&format!(
+            "if (RULES.has(name)) {{\n  setTimeout(() => {{\n    fs.writeFileSync(\"/tmp/dandori/error.json\", JSON.stringify({{ error: \"Dandori.Timeout\", message: \"no answer in {RULE_SECONDS} seconds\" }}));\n    process.exit(143);\n  }}, {});\n}}\n",
+            RULE_SECONDS * 1000
+        ));
     }
     call.push_str("try {\n  const out = await all[name](args);\n  fs.writeFileSync(\"/tmp/dandori/answer.json\", JSON.stringify(out ?? null));\n  process.exit(0);\n} catch (e) {\n");
     call.push_str("  const kind = e instanceof Error ? e.name : \"Error\";\n  const message = e instanceof Error ? e.message : String(e);\n");
@@ -1870,6 +1917,22 @@ export function now(): string {
 }
 "#;
 
+/// `timeout until` on Temporal: how long the wait for the answer is, from `now`.
+const UNTIL_TS: &str = r#"
+/** How long `timeout until` waits for an answer: the seconds from `now` to a moment given as an RFC 3339 string, rounded up, and one at the least. */
+export function secondsUntil(at: string): number {
+  return Math.max(1, Math.ceil((Date.parse(at) - Date.parse(now())) / 1000));
+}
+"#;
+
+/// `timeout until` on durable functions: how long the callback is waited for, from a moment a step read.
+const UNTIL_DURABLE_TS: &str = r#"
+/** How long `timeout until` waits for an answer: the seconds from `now` (a moment a step read, as `stamp` writes it) to a moment given as an RFC 3339 string, rounded up, and one at the least. */
+export function secondsUntil(at: string, now: string): number {
+  return Math.max(1, Math.ceil((Date.parse(at) - Date.parse(now)) / 1000));
+}
+"#;
+
 /// `now` on durable functions: the moment a step read (`Date.now()`), as dandori's timestamp.
 const STAMP_TS: &str = r#"
 /** A moment a step read, in milliseconds, as `now` reads it: to the second, in UTC. */
@@ -2464,7 +2527,14 @@ impl<'a> Gen<'a> {
         if self.flavor == Flavor::Durable {
             self.out.push_str("import { StepSemantics, withDurableExecution, type DurableContext } from \"@aws/durable-execution-sdk-js\";\n");
             let connected = m.all_stmts().iter().any(|s| matches!(&s.kind, TK::Call { callee: Callee::Rule(r), .. } if m.rules[*r].connect.is_some()));
-            self.out.push_str(if connected { "import { makeTasks, type ConnectRules, type OwnTasks, type Tasks } from \"./tasks\";\n" } else { "import { makeTasks, type OwnTasks, type Tasks } from \"./tasks\";\n" });
+            // the rules and the dates called as Lambda functions are calls of tasks.ts too (LambdaRules)
+            let invoked = !lambda_rules(m).is_empty();
+            let mut given = vec!["Tasks"];
+            given.extend(connected.then_some("ConnectRules"));
+            given.extend(invoked.then_some("LambdaRules"));
+            let mut imported: Vec<String> = given[1..].iter().map(|n| format!("type {n}")).collect();
+            imported.extend(["type OwnTasks".to_string(), "type Tasks".to_string()]);
+            self.out.push_str(&format!("import {{ makeTasks, {} }} from \"./tasks\";\n", imported.join(", ")));
             self.out.push_str("import * as io from \"./io\";\n");
             self.out.push_str("import * as T from \"./types\";\n");
             self.out.push_str("import * as dd from \"./runtime\";\n\n");
@@ -2473,7 +2543,7 @@ impl<'a> Gen<'a> {
             self.out.push_str("  const tasks = makeTasks(own, transport);\n");
             self.out.push_str(&format!("  return withDurableExecution(async (input: T.WorkflowInput, context: DurableContext): Promise<{ret}> => {{\n"));
             self.out.push_str("    try {\n      return await run(input, context, tasks);\n    } catch (e) {\n      throw dd.asFailure(e);\n    }\n  });\n}\n\n");
-            self.out.push_str(&format!("async function run(input: T.WorkflowInput, context: DurableContext, tasks: {}): Promise<{ret}> {{\n", if connected { "Tasks & ConnectRules" } else { "Tasks" }));
+            self.out.push_str(&format!("async function run(input: T.WorkflowInput, context: DurableContext, tasks: {}): Promise<{ret}> {{\n", given.join(" & ")));
             self.body();
             return std::mem::take(&mut self.out);
         }
@@ -2725,6 +2795,15 @@ impl<'a> Gen<'a> {
             d,
             &format!("if (dd_loop_{site} > dd_first_{site} && dd.historyIsLong()) await continueAsNew<typeof {fname}>(input, {{ at: {k}, round: dd_loop_{site}, vars: dd_vars(){more} }});"),
         );
+    }
+
+    /// How long a call of an `event` or a `callback` task waits for its answer, in seconds: until the
+    /// time the call gives the parameter of `timeout until`, or the task's `timeout` (a day without one).
+    fn answer_wait(&self, task: &TaskDef, args: &[(String, TExpr)]) -> String {
+        match task.deadline.as_ref().and_then(|p| args.iter().find(|(a, _)| a == p)) {
+            Some((_, at)) => format!("dd.secondsUntil({})", self.expr(at)),
+            None => task.timeout.unwrap_or(86_400).to_string(),
+        }
     }
 
     fn rounds_expr(&self) -> String {
@@ -3043,14 +3122,11 @@ impl<'a> Gen<'a> {
                 let calls = if m.rules[*r].local { "local_rule_calls" } else { "rule_calls" };
                 format!("dd.attempt(() => {calls}.{}({{ {} }}), {retriers}, [])", render::rule_activity(&m.rules[*r].name), parts.join(", "))
             }
-            // the rule at its service: the activity that sends the request, in a step, as a task of the workflow's is
-            (Flavor::Durable, Callee::Rule(r)) if m.rules[*r].connect.is_some() => {
-                let act = render::rule_activity(&m.rules[*r].name);
-                format!("dd.attempt({ctx}, {op}, () => {ctx}.step({op}, async () => tasks.{act}({{ {} }}), {{ retryStrategy: dd.noRetry }}), {retriers}, [])", parts.join(", "))
-            }
+            // a rule or a date, at its service or as a Lambda function: the call, in a step, as a task of
+            // the workflow's is, and within the limit every target gives it (DESIGN 16)
             (Flavor::Durable, Callee::Rule(r)) => {
-                let arn = q(m.rules[*r].lambda.as_deref().unwrap_or(""));
-                format!("dd.attempt({ctx}, {op}, () => {ctx}.invoke({op}, {arn}, {{ {} }}), {retriers}, [])", parts.join(", "))
+                let act = render::rule_activity(&m.rules[*r].name);
+                format!("dd.attempt({ctx}, {op}, () => {ctx}.step({op}, async () => dd.within(tasks.{act}({{ {} }}), {RULE_SECONDS}), {{ retryStrategy: dd.noRetry }}), {retriers}, [])", parts.join(", "))
             }
             (Flavor::Temporal, Callee::Task(t)) => {
                 let task = &m.tasks[*t];
@@ -3067,9 +3143,9 @@ impl<'a> Gen<'a> {
                         format!("dd.attempt(() => executeChild({}, {{ {} }}), {retriers}, [{declared}])", q(ty), opts.join(", "))
                     }
                     // nothing is called: the workflow waits for the event, as long as a callback
-                    Some(Via::Event) => format!("dd.attempt(() => dd.awaitEvent({}, {}), {retriers}, [{declared}])", q(&task.name), task.timeout.unwrap_or(86_400)),
+                    Some(Via::Event) => format!("dd.attempt(() => dd.awaitEvent({}, {}), {retriers}, [{declared}])", q(&task.name), self.answer_wait(task, args)),
                     _ if task.callback => {
-                        let timeout = task.timeout.unwrap_or(86_400);
+                        let timeout = self.answer_wait(task, args);
                         let mut with_id = parts.clone();
                         with_id.push("\"callback_id\": dd_id".into());
                         format!(
@@ -3087,12 +3163,19 @@ impl<'a> Gen<'a> {
                 match task.via(p) {
                     Some(Via::DurableFunction(f)) => format!("dd.attempt({ctx}, {op}, () => {ctx}.invoke({op}, {}, {{ {} }}), {retriers}, [{declared}])", q(f), parts.join(", ")),
                     _ if task.callback => {
-                        let timeout = task.timeout.unwrap_or(86_400);
+                        // `timeout until`: the seconds to the time, from a moment read in a step, so that a replay reads the same
+                        let (clock, timeout) = match render::deadline_arg(m, callee, args) {
+                            Some(at) => (
+                                format!("{i}  const dd_until = dd.secondsUntil({}, dd.stamp(await {ctx}.step({}, async () => Date.now(), {{ retryStrategy: dd.noRetry }})));\n", self.expr(at), q(&format!("{} {} clock", s.line, cname))),
+                                "dd_until".to_string(),
+                            ),
+                            None => (String::new(), task.timeout.unwrap_or(86_400).to_string()),
+                        };
                         let submit = q(&format!("{} {} submit", s.line, cname));
                         let mut with_id = parts.clone();
                         with_id.push("\"callback_id\": dd_id".into());
                         format!(
-                            "dd.attempt({ctx}, {op}, async () => {{\n{i}  const [dd_p, dd_id] = await {ctx}.createCallback({op}, {{ timeout: {{ seconds: {timeout} }} }});\n{i}  await {ctx}.step({submit}, async () => {{\n{i}    await tasks.{method}({{ {} }});\n{i}    return null;\n{i}  }}, {{ retryStrategy: dd.noRetry }});\n{i}  return dd.parse(await dd_p);\n{i}}}, {retriers}, [{declared}])",
+                            "dd.attempt({ctx}, {op}, async () => {{\n{clock}{i}  const [dd_p, dd_id] = await {ctx}.createCallback({op}, {{ timeout: {{ seconds: {timeout} }} }});\n{i}  await {ctx}.step({submit}, async () => {{\n{i}    await tasks.{method}({{ {} }});\n{i}    return null;\n{i}  }}, {{ retryStrategy: dd.noRetry }});\n{i}  return dd.parse(await dd_p);\n{i}}}, {retriers}, [{declared}])",
                             with_id.join(", ")
                         )
                     }

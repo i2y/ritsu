@@ -64,13 +64,13 @@ flowchart TD
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 54 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule`, by Connect at `https://rules.example.com`, a local activity on Temporal | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → line 55 |
+| 54 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule`, by Connect at `https://rules.example.com`, a local activity on Temporal | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → line 55 |
 | 56 | `失敗を記す(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
 | 59 | `便を知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
 | 60 | `便を知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
-| 62 | `見積 = 与信(…)` | rule `宿泊の与信額.rule`, by Connect at `https://rules.example.com` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the round fails, then `on failure` |
+| 62 | `見積 = 与信(…)` | rule `宿泊の与信額.rule`, by Connect at `https://rules.example.com` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the round fails, then `on failure` |
 | 63 | `与信額を記す(…)` | `lambda record-hold`, `idempotent` | — | — | `timeout`, `failure` → the round fails, then `on failure` |
-| 65 | `決まり = 方針(…)` | rule `審査の方針.rule`, by Connect at `https://rules.example.com` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → line 66 |
+| 65 | `決まり = 方針(…)` | rule `審査の方針.rule`, by Connect at `https://rules.example.com` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → line 66 |
 | 67 | `失敗を記す(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → `on failure` |
 | 72 | `失敗を記す(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 

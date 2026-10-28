@@ -1,8 +1,10 @@
 workflow 審査 v1
-description "Jev が申込を採点してその確信度も返し、その判断をそのまま実行するか、人の承認に回すかを規則が決める。そのまま承認するには、そのまま却下するより高い確信度が要る。AWS 向けの版で、Lambda durable functions で動く：採点は Jev を HTTP で呼ぶステップ、規則は durable execution が invoke する Lambda 関数、ほかのタスクは自分で書くコードで、ステップが動かす。承認する人のツールは、コールバックの ID でそれに応答する（SendDurableExecutionCallbackSuccess）。承認を求めることとお知らせは Step Functions がする呼び出しではないので、Step Functions では動かない"
+description "Jev が申込を採点してその確信度も返し、その判断をそのまま実行するか、人の承認に回すかを規則が決める。人の承認は、受け付けた日から 3 営業日後の 17 時までに受ける。そのまま承認するには、そのまま却下するより高い確信度が要る。AWS 向けの版で、Lambda durable functions で動く：採点は Jev を HTTP で呼ぶステップ、規則と承認の期日は、ステップが invoke する Lambda 関数、ほかのタスクは自分で書くコードで、ステップが動かす。承認する人のツールは、コールバックの ID でそれに応答する（SendDurableExecutionCallbackSuccess）。承認を求めることとお知らせは Step Functions がする呼び出しではないので、Step Functions では動かない"
 
 use rule 方針 from "../rules/審査の方針.rule"
   lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:review-policy"
+use dates 承認の期日 from "../dates/承認の期日.cal"
+  lambda "arn:aws:lambda:ap-northeast-1:123456789012:function:approval-terms"
 
 record 申込
   id   : string
@@ -37,10 +39,11 @@ task 採点する(用途: string) -> 採点
   retry 2 times every 10 seconds on 混雑, 過負荷
   timeout 10 seconds
 
-# 承認する人が自分のツールで承認し、その結果がコールバックの ID と一緒に返ってくる。
-task 承認を求める(申込ID: string, 金額: int, 確信度: rate[step 1%]) -> 承認
+# 承認する人が自分のツールで承認し、その結果がコールバックの ID と一緒に返ってくる。承認する人には
+# 期限も渡し、待つのはその時刻まで。
+task 承認を求める(申込ID: string, 金額: int, 確信度: rate[step 1%], 期限: timestamp) -> 承認
   callback
-  timeout 3 days
+  timeout until 期限
 
 task 知らせる(申込ID: string, 本文: string)
   idempotent
@@ -52,8 +55,9 @@ flow
   match 判定.決定
     承認, 却下 => pass
     人に回す =>
-      let 返事 = 承認を求める(申込ID: 申込.id, 金額: 申込.金額, 確信度: 結果.確信度)
-        on timeout => fail 承認なし "三日たっても承認がありません"
+      let 承認の期限 = 承認の期日.期限(受付日: now)
+      let 返事 = 承認を求める(申込ID: 申込.id, 金額: 申込.金額, 確信度: 結果.確信度, 期限: 承認の期限.at)
+        on timeout => fail 承認なし "3 営業日後の 17 時までに承認がありません"
       知らせる(申込ID: 申込.id, 本文: "{返事.承認者} さんが申込 {申込.id} を承認しました")
       succeed 判断 = 承認
   知らせる(申込ID: 申込.id, 本文: "申込 {申込.id} の審査が済みました: {結果.判断}")

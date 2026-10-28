@@ -1,0 +1,2 @@
+エラー[E007]: tests/fixtures/deadline_twice.flow:10:3: `timeout` が二つあります。長さ（`timeout 3 days`）か時刻（`timeout until <引数>`）の、どちらか一つにしてください
+    10 |   timeout until by

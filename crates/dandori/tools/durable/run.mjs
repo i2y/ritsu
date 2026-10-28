@@ -5,18 +5,24 @@
 //
 //   node tools/durable/run.mjs <generated dir> <runs.json> <results.json>
 //
-// runs.json: { "own": [ { "name", "method", "callback" } ], "rules": [arn], "children": [arn],
+// runs.json: { "own": [ { "name", "method", "callback" } ], "children": [arn],
 //              "http": [...], "aws": [...],
 //              "runs": [ { "input": {...}, "answers": [ {"ok": value} | {"error": kind} ] } ] }
 //
-// The tasks that say `lambda`, `http` or `aws` run the generated code, with a Transport that
-// writes down what it would send (tools/transport.mjs). The tasks the user writes, the rules
-// and the durable functions a task invokes are stand-ins that answer from the scenario. A
+// The tasks that say `lambda`, `http` or `aws`, and the rules and the dates, run the generated
+// code, with a Transport that writes down what it would send (tools/transport.mjs). The tasks
+// the user writes and the durable functions a task invokes are stand-ins that answer from the
+// scenario. A
 // callback's answer is sent with the callback's id. The local runner does not time a
 // callback out, so runs.json holds no timeouts.
 //
 // The rounds of `for … in parallel` run one at a time here, so that the calls come in the
 // order the reference interpreter makes them.
+//
+// With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), time is not skipped, and a call
+// that the scenario times out is held for 15 seconds, past the 10 of the generated code's limit,
+// and then fails; each run's result also has `times`: when each call came and when the run ended,
+// in milliseconds from its start.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -27,6 +33,10 @@ import { workDir } from "../work.mjs";
 
 const [dir, runsFile, outFile] = process.argv.slice(2);
 const spec = JSON.parse(fs.readFileSync(runsFile, "utf8"));
+/** The limits as they are generated, in real time (see the top). */
+const LIMITS = process.env.DANDORI_LIMITS === "1";
+/** How long a call the scenario times out is held then. */
+const LATE_MS = 15000;
 
 // Node runs TypeScript by stripping the types, and wants the extension on a relative import.
 const work = workDir("dandori-durable-");
@@ -49,6 +59,7 @@ let runner = null;
 function take(label) {
   const ans = current.answers[current.next++];
   if (ans === undefined) throw new Error(`no answer for call ${current.next} (${label})`);
+  current.calls.push(Date.now() - current.began);
   return ans;
 }
 
@@ -117,6 +128,17 @@ const run = {
   },
   answerLater,
 };
+// a call the scenario times out, with the limits as they are: no answer before the limit, and a failure after
+if (LIMITS) {
+  run.hold = () =>
+    new Promise((_, reject) =>
+      setTimeout(() => {
+        const e = new Error("the call should have run out of time first");
+        e.name = "Dandori.Test.Late";
+        reject(e);
+      }, LATE_MS),
+    );
+}
 
 const own = {};
 for (const t of spec.own ?? []) {
@@ -137,20 +159,12 @@ for (const t of spec.own ?? []) {
   }
 }
 
-await LocalDurableTestRunner.setupTestEnvironment({ skipTime: true });
+await LocalDurableTestRunner.setupTestEnvironment({ skipTime: !LIMITS });
 const results = [];
 try {
   for (const r of spec.runs) {
-    current = { answers: r.answers, next: 0, steps: [] };
+    current = { answers: r.answers, next: 0, steps: [], calls: [], began: Date.now() };
     runner = new LocalDurableTestRunner({ handlerFunction: makeHandler(own, makeTransport(spec, run)) });
-    for (const arn of spec.rules ?? []) {
-      runner.registerFunction(arn, async (event) => {
-        const ans = take(arn);
-        current.steps.push({ call: { invoke: arn, payload: event }, answer: recorded(ans) });
-        if ("ok" in ans) return ans.ok;
-        throw scriptedError(ans.error);
-      });
-    }
     // a durable function a task invokes: it fails as a dandori workflow does, with the error in ErrorData
     for (const arn of spec.children ?? []) {
       runner.registerDurableFunction(
@@ -171,7 +185,7 @@ try {
       const e = out.getError();
       end = { fail: { error: e?.errorType ?? String(out.getStatus()), cause: e?.errorMessage || null } };
     }
-    results.push({ steps: current.steps, end });
+    results.push(LIMITS ? { steps: current.steps, end, times: { calls: current.calls, end: Date.now() - current.began } } : { steps: current.steps, end });
   }
 } finally {
   await LocalDurableTestRunner.teardownTestEnvironment();

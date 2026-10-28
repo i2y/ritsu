@@ -34,7 +34,7 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 |---:|---|---|---|---|---|
 | 25 | `used = usage(…)` | `lambda usage`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 26 | `asked = ask_amount(…)` | `lambda ask-amount`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 27 | `decision = check_quota(…)` | rule `quota_check.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 27 | `decision = check_quota(…)` | rule `quota_check.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 29 | `grant(…)` | `lambda grant`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends

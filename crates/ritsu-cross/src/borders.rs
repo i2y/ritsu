@@ -21,8 +21,9 @@
 //!   for is undecided, since the search goes only as deep as chobo's check does.
 //! - [`held_until`] (X5): whether a hold is still held when a call comes, from the fewest and the
 //!   most seconds the call can come after the hold (as dandori counts them along the flow, with
-//!   koyomi's days for a wait until a date) against the seconds it expires after (chobo's
-//!   `pending expires after`).
+//!   koyomi's days for a wait until a date's time and for a call with `timeout until` it, and 33
+//!   seconds at the most for a call of a rule or a date) against the seconds it expires after
+//!   (chobo's `pending expires after`).
 
 use ritsu_base::text::Text;
 use ritsu_base::tr;

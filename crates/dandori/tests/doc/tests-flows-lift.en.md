@@ -37,12 +37,12 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 32 | `quote = tiers(…)` | rule `member_tier_shipping.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 34 | `own = tiers(…)` | rule `member_tier_shipping.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 32 | `quote = tiers(…)` | rule `member_tier_shipping.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 34 | `own = tiers(…)` | rule `member_tier_shipping.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 37 | `send_offer(…)` | `lambda send-offer`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 | 38 | `send_offer(…)` | `lambda send-offer`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 | 40 | `picked = pick_campaign(…)` | `lambda pick-campaign`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 41 | `offer = tiers(…)` | rule `member_tier_shipping.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 41 | `offer = tiers(…)` | rule `member_tier_shipping.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 
 ## Ends
 

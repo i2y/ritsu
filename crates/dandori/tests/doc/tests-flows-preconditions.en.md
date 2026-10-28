@@ -55,13 +55,13 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 |---:|---|---|---|---|---|
 | 39 | `asked = ask_amount(…)` | `lambda ask-amount`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 40 | `note_request(…)` | `lambda note-request`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 41 | `decision = check(…)` | rule `refund_check.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 41 | `decision = check(…)` | rule `refund_check.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 42 | `day = pick_day(…)` | `lambda pick-day`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 46 | `run = settle(…)` | rule `settlement.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 46 | `run = settle(…)` | rule `settlement.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 47 | `pay_back(…)` | `lambda pay-back`, `key` | — | — | `timeout`, `failure` → the workflow fails |
 | 49 | `claims = list_claims(…)` | `lambda list-claims`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 52 | `one = check(…)` | rule `refund_check.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
-| 54 | `each = check(…)` | rule `refund_check.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the round fails, and then the workflow |
+| 52 | `one = check(…)` | rule `refund_check.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
+| 54 | `each = check(…)` | rule `refund_check.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the round fails, and then the workflow |
 
 ## Ends
 

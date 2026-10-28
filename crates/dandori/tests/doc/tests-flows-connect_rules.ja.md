@@ -64,13 +64,13 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 54 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Connect で `https://rules.example.com` に）（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → 55 行目 |
+| 54 | `判定 = 急ぎ(…)` | 規則 `出荷の急ぎ.rule`（Connect で `https://rules.example.com` に）（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → 55 行目 |
 | 56 | `失敗を記す(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
 | 59 | `便を知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
 | 60 | `便を知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
-| 62 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → そのイテレーションが失敗し、`on failure` へ |
+| 62 | `見積 = 与信(…)` | 規則 `宿泊の与信額.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → そのイテレーションが失敗し、`on failure` へ |
 | 63 | `与信額を記す(…)` | `lambda record-hold`・`idempotent` | — | — | `timeout`・`failure` → そのイテレーションが失敗し、`on failure` へ |
-| 65 | `決まり = 方針(…)` | 規則 `審査の方針.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → 66 行目 |
+| 65 | `決まり = 方針(…)` | 規則 `審査の方針.rule`（Connect で `https://rules.example.com` に） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → 66 行目 |
 | 67 | `失敗を記す(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → `on failure` |
 | 72 | `失敗を記す(…)` | `lambda audit-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 

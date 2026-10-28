@@ -11,7 +11,7 @@ dandori doc hotel.flow --format html > hotel.html
 
 ## Markdown で、プルリクエストに
 
-Markdown の冒頭には、ワークフローの入力と出力を、型と、そこに書いた範囲とともに並べます（`払った額: int range >=0 <=10000`、`キャンペーン: 送料.段階 range >=一般 <=ゴールド`）。数の範囲の端は、診断と同じく、型の単位で数えた整数で書きます。そのあとに、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。サービスを実装するワークフローでは、その前に、サービスのメソッドと、それぞれが実行に対して何をするかの表が入ります（[サービスを実装する](services.md)）。Jev が申込を採点し、人の承認に回すかを規則が決める、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.ja.flow)）です。
+Markdown の冒頭には、ワークフローの入力と出力を、型と、そこに書いた範囲とともに並べます（`払った額: int range >=0 <=10000`、`キャンペーン: 送料.段階 range >=一般 <=ゴールド`）。数の範囲の端は、診断と同じく、型の単位で数えた整数で書きます。そのあとに、flow と `on failure`・`on cancel` を Mermaid のフローチャートで描きます。GitHub は、プルリクエストや issue や README の中でそのまま図にします。図の下には、すべての呼び出しの表と、すべての終わり方の表が付きます。サービスを実装するワークフローでは、その前に、サービスのメソッドと、それぞれが実行に対して何をするかの表が入ります（[サービスを実装する](services.md)）。Jev が申込を採点し、人の承認に回すかを規則が決め、承認をいつまで待つかを日付のファイルが決める、審査の例の日本語版（[examples/review/temporal/review.ja.flow](https://github.com/i2y/ritsu/blob/main/crates/dandori/examples/review/temporal/review.ja.flow)）です。
 
 ```mermaid
 flowchart TD
@@ -20,26 +20,28 @@ flowchart TD
     s2(["fail 採点不能<br>#quot;申込 {申込.id} を採点できませんでした#quot;"])
     s3[["判定 = 方針(…)<br>rule 審査の方針.rule"]]
     s4{{"match 判定.決定"}}
-    s6[/"返事 = 承認を求める(…)<br>自分で書くタスク（応答はコールバック）<br>timeout 3 days"/]
-    s7(["fail 承認なし<br>#quot;三日たっても承認がありません#quot;"])
-    s8["知らせる(…)<br>自分で書くタスク"]
-    s9(["succeed 判断 = 承認"])
-    s10["知らせる(…)<br>自分で書くタスク"]
-    s11(["succeed 判断 = 結果.判断"])
+    s6[["承認の期限 = 承認の期日.期限(…)<br>dates 承認の期日.cal"]]
+    s7[/"返事 = 承認を求める(…)<br>自分で書くタスク（応答はコールバック）<br>timeout until 期限"/]
+    s8(["fail 承認なし<br>#quot;3 営業日後の 17 時までに承認がありません#quot;"])
+    s9["知らせる(…)<br>自分で書くタスク"]
+    s10(["succeed 判断 = 承認"])
+    s11["知らせる(…)<br>自分で書くタスク"]
+    s12(["succeed 判断 = 結果.判断"])
     start --> s1
     s1 -.->|"on failure"| s2
     s1 --> s3
     s3 --> s4
     s4 -->|"人に回す"| s6
-    s6 -.->|"on timeout"| s7
-    s6 --> s8
-    s8 --> s9
-    s4 -->|"承認, 却下"| s10
-    s10 --> s11
+    s6 --> s7
+    s7 -.->|"on timeout"| s8
+    s7 --> s9
+    s9 --> s10
+    s4 -->|"承認, 却下"| s11
+    s11 --> s12
     classDef ok stroke:#2da44e,stroke-width:2px
     classDef bad stroke:#cf222e,stroke-width:2px
-    class s9,s11 ok
-    class s2,s7 bad
+    class s10,s12 ok
+    class s2,s8 bad
 ```
 
 四角はタスク、両脇に線のある四角は規則、斜めの四角は外から値が届くタスク（イベントやコールバックの応答）、六角形は `match`、角の丸い四角は待ち、ステップを囲む枠はループです。破線の矢印は、呼び出しがその場で処理するエラーです。呼び出しの二行目は呼び方で、三行目は、流れには書かれていない宣言の中身（案件に何をするか、リトライ、タイムアウト）です。

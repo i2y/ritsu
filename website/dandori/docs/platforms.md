@@ -38,7 +38,11 @@ code in `rules.ts`: its activity is in `activities.ts`, and sends to the rule's 
 - **Timeouts.** A task without `timeout` gets as long as the other platforms would give it: 60 seconds
   for `http`, `agent` and `jev`, as an HTTP Task has, 900 for `lambda`, and no limit of its own for the rest.
   Every activity the workflow's worker serves heartbeats, so that a worker that went away is noticed
-  within 30 seconds. A rule's activity gets 10 seconds, and is retried when it runs out.
+  within 30 seconds. A rule's or a date's activity gets 10 seconds from the moment a worker takes it
+  (its start-to-close timeout; the time it waits in the task queue is not counted), and is retried
+  twice, 1 and 2 seconds apart, when it runs out or fails. The wait of an `event` or a `callback` task
+  with `timeout until` is a timer of the workflow, set by the workflow's clock when the wait starts
+  ([How long a call may take](tasks.md#how-long-a-call-may-take)).
 
 ## Temporal (Python)
 
@@ -88,12 +92,21 @@ token. Code you write has no place in a state machine, so a task that is neither
 (E050), and so are the features that only Temporal can keep (`on cancel`, `event`, and a method of
 the service the workflow implements that asks where a run is).
 
+A rule's or a date's Task, by Lambda or by HTTP, has `TimeoutSeconds` 10, and its `Retry` tries it
+twice more, 1 and 2 seconds apart, when it times out (`States.Timeout`) or fails. A callback with
+`timeout until` gives its `.waitForTaskToken` Task a `TimeoutSeconds` that JSONata works out from the
+time and the moment the state was entered, a second at the least; the Task's clock starts before the
+token is handed on, so the time the handing on takes is in it.
+
 ## AWS Lambda durable functions
 
 `--target durable` writes `workflow.ts` with `makeHandler(own, transport)`, `types.ts`, `tasks.ts`,
-`io.ts` and `runtime.ts`, and for every rule it calls by Lambda, the same Lambda handler as `asl`, which
-the durable function invokes; a rule that says `connect` is a step that sends to its service. A task of
-your own is a step that runs your code.
+`io.ts` and `runtime.ts`, and for every rule it calls by Lambda, the same Lambda handler as `asl`. A
+rule's or a date's call is a step that calls its Lambda function through the `Transport`, as a `lambda`
+task does, or sends to the rule's service when the rule says `connect`, and the step gives the call 10
+seconds: the SDK's `context.invoke` takes no timeout. A task of your own is a step that runs your
+code. A callback with `timeout until` reads the clock in a step of its own, and gives
+`createCallback` the seconds left to the time, a second at the least.
 
 ## Argo Workflows
 
@@ -110,6 +123,15 @@ start a pod, so give a task a `timeout` that leaves room for that. A pod that en
 passes is marked as past it, and Argo then cannot see the name of the error the task ended with: a
 `retry` on that error does not happen.
 
+A rule's or a date's call gets its 10 seconds in the caller, not on the pod: past them the caller
+exits 143, as a container Argo stops at its deadline does, and the workflow reads it as a timeout. The
+time Kubernetes takes to place and start the pod is not counted, as a Temporal activity's time in its
+task queue is not. The template's `retryStrategy` tries a call twice more, with a backoff of 1 and 2
+seconds, but Argo starts the next try when its controller looks at the workflow again, 10 seconds after
+a change by default. A callback with `timeout until` has a step after the one that hands the id on,
+which works out the seconds left to the time from `now()`, a second at the least, and the wait's
+`suspend` lasts them.
+
 ## pydantic-graph
 
 `--target pydantic-graph` writes a package with `graph.py` (`graph`, and its `State` and `Deps`),
@@ -119,6 +141,11 @@ statement is a node, and the return type of each node names where the flow can g
 `Deps.clock`, a callback's answer comes to `Deps.callbacks`, and pydantic-graph 2.x keeps nothing
 anywhere else, so a run the process loses is lost. It suits a prototype, or a short flow inside an
 agent.
+
+A rule that says `connect` gets 10 seconds for each try at its service. A rule or a date computed in
+the process, by rulec's or koyomi's Python, gets no limit: it reads and writes nothing, always ends,
+and asyncio could not stop it in the middle anyway. A callback with `timeout until` waits the seconds
+from `Deps.clock`'s time to the one it is given, a second at the least.
 
 A dates file's dates and a book's operations build for every platform: a date is a call like a rule's,
 and an operation of a book is a Lambda function on Step Functions and a call through the `Transport`

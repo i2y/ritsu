@@ -114,7 +114,7 @@ flowchart TD
 | 65 | `r = notify(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `no_recipient` → line 66<br>`timeout`, `failure` → `on failure` | — |
 | 68 | `order ← get_order(…)` | `GET https://warehouse.example.com/v1/orders/{id}`, `observes`, `idempotent` | 3 times every 1 second (busy) | — | `busy`, `timeout`, `failure` → `on failure` | `order`: `received`, `paid`, `cancelled` |
 | 72 | `order ← request_cancel(…)` | `POST https://warehouse.example.com/v1/orders/{id}/cancellations`, `sends cancel`, `key` | — | — | `conflict` → line 73<br>`timeout`, `failure` → `on failure` | `order`: `cancelled` |
-| 78 | `decision = urgency(…)` | rule `urgency.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → `on failure` | — |
+| 78 | `decision = urgency(…)` | rule `urgency.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → `on failure` | — |
 | 79 | `order ← request_shipment(…)` | `POST https://warehouse.example.com/v1/orders/{id}/shipments`, `sends ship`, `key` | — | — | `conflict` → line 80<br>`timeout`, `failure` → `on failure` | `order`: `shipped` |
 | 82 | `n = notify(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `no_recipient`, `timeout`, `failure` → `on failure` | — |
 | 84 | `order ← delivered()` | `event`, `observes` | — | 7 days | `timeout` → line 85<br>`failure` → `on failure` | `order`: `shipped`, `delivered` |

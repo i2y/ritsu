@@ -67,8 +67,8 @@ flowchart TD
 | 59 | `入荷する(…)` | `book 倉庫.入荷.do` | — | — | `timeout`・`failure` → `on failure` | — |
 | 60 | `押さえ ← 引き当てる(…)` | `book 倉庫.引当.hold`・`starts 倉庫.引当` | — | — | `足りない` → 61 行目<br>`timeout`・`failure` → `on failure` | `押さえ`: `held` |
 | 62 | `予定 = 予定を聞く(…)` | `lambda schedule`・`idempotent` | — | — | `timeout`・`failure` → `on failure` | — |
-| 63 | `出荷 = 期限.出荷日(…)` | `出荷の期限.cal` の日付 `出荷日`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
-| 64 | `締め = 期限.締め日(…)` | `出荷の期限.cal` の日付 `締め日`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 63 | `出荷 = 期限.出荷日(…)` | `出荷の期限.cal` の日付 `出荷日`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
+| 64 | `締め = 期限.締め日(…)` | `出荷の期限.cal` の日付 `締め日`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
 | 65 | `押さえ ← 一部を出す(…)` | `book 倉庫.引当.post`・`sends post` | — | — | `expired` → 66 行目<br>`timeout`・`failure` → `on failure` | `押さえ`: `posted` |
 | 67 | `知らせる(…)` | `lambda notify`・`idempotent` | — | — | `timeout`・`failure` → `on failure` | — |
 | 74 | `押さえ ← 戻す(…)` | `book 倉庫.引当.void`・`sends void` | — | — | `expired` → 75 行目<br>`already_posted` → 76 行目<br>`timeout`・`failure` → 77 行目 | `押さえ`: `voided` |

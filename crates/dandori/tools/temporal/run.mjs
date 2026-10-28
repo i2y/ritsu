@@ -56,6 +56,11 @@
 // time here, so that the calls come in the order the reference interpreter makes them. A loop at
 // the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 // run, since the history counts as long from one event on here (dd.CONTINUE_AT).
+//
+// With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the copy keeps the timeouts of
+// the activities and the durations of the timers as they are generated: a rule's call the scenario
+// times out is held until the server times it out after the generated 10 seconds, and the retry
+// waits 1 and 2 seconds between the tries.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -99,6 +104,8 @@ const SCENARIO_NOW = "2026-03-31T15:30:00Z";
 const EVENT_MS = 5000;
 /** How long a stand-in that the scenario times out keeps its activity busy: until the server has timed it out. */
 const LATE_MS = (TIMEOUT_SECONDS + 5) * 1000;
+/** The limits as they are generated: the timeouts of the activities, and the timers (see the top). */
+const LIMITS = process.env.DANDORI_LIMITS === "1";
 
 // A copy of the generated code: Node runs the activities' TypeScript by stripping the types and
 // wants the extension on a relative import; the rounds of a parallel loop run one at a time; the
@@ -112,16 +119,16 @@ for (const f of fs.readdirSync(dir)) {
   if (f === "rules.ts") text = "export const rules = {};\n";
   if (f === "workflow.ts") {
     text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
-    const keep = (l) => (spec.callbacks ?? []).some((c) => l.startsWith(`const ${c} = `));
+    const keep = (l) => LIMITS || (spec.callbacks ?? []).some((c) => l.startsWith(`const ${c} = `));
     text = text
       .split("\n")
       .map((l) => (keep(l) ? l : l.replace(/startToCloseTimeout: "\d+ seconds"/g, `startToCloseTimeout: "${TIMEOUT}"`)))
       .join("\n");
-    text = text.replace(/workflowExecutionTimeout: "\d+ seconds"/g, `workflowExecutionTimeout: "${TIMEOUT}"`);
+    if (!LIMITS) text = text.replace(/workflowExecutionTimeout: "\d+ seconds"/g, `workflowExecutionTimeout: "${TIMEOUT}"`);
   }
   if (f === "runtime.ts") {
     if (!text.includes("return seconds * 1000;")) throw new Error("runtime.ts has no ms() to shorten");
-    text = text.replace("return seconds * 1000;", "return Math.min(seconds * 1000, 10);");
+    if (!LIMITS) text = text.replace("return seconds * 1000;", "return Math.min(seconds * 1000, 10);");
     if (!text.includes("export const CONTINUE_AT = 10000;")) throw new Error("runtime.ts has no CONTINUE_AT to lower");
     text = text.replace("export const CONTINUE_AT = 10000;", "export const CONTINUE_AT = 1;");
     // an event's wait is not a timer to shorten to nothing: the runner has to see it, and send the event

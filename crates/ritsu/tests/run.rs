@@ -419,3 +419,25 @@ fn ritsu_run_with_merges_the_contributions_it_is_given() {
     let (code, out, err) = ritsu_in(&dir, &["run", "pricing.flow", "--scenario", "scenarios/garden.json", "--with", "rules/nowhere", "--lang", "en"]);
     assert!(code == 2 && out.is_empty() && err.contains("`rules/nowhere` is not there"), "{code} {out} {err}");
 }
+
+/// A call whose answer is waited for until a time (`timeout until`, dandori's DESIGN 16), here the
+/// time of a koyomi date given `now`: when the scenario times it out, the clock goes on to that time,
+/// rounded up to the second, and the hold the run made expires on the way, as the book says when the
+/// void comes. The text says until when the call waited, in both languages.
+#[test]
+fn a_timeout_until_a_time_moves_the_clock_to_it() {
+    let t = TempDir::new("until");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("weekdays.cal", "calendar weekdays v1\ndescription \"Open Monday to Friday, in UTC\"\noffset +00:00\n\nclosed weekly sat, sun\n");
+    write("approval_terms.cal", "dates approval_terms v1\ndescription \"An approval is due at 17:00 on the third business day after the order\"\nuse calendar \"weekdays.cal\"\n\ninputs\n  received : date  range >=2026-01-01 <=2027-12-31\n\ndate due = received\n  + 3 business days\n  at 17:00\n");
+    write("stock.book", "book stock v1\ndescription \"Stock, held for 2 days at most\"\n\nunit pcs\n\naccount shelf(sku: string) : pcs\n  at least 0 refused as out_of_stock\naccount suppliers : pcs outside\naccount customers : pcs outside\n\ntransfer receive(delivery: string, sku: string, qty: pcs)\n  key delivery, sku\n  move qty from suppliers to shelf(sku)\n\ntransfer reserve(order: string, sku: string, qty: pcs)\n  key order, sku\n  pending expires after 2 days\n  move qty from shelf(sku) to customers\n");
+    write("approval.flow", "workflow approval v1\ndescription \"Holds an order's goods while someone approves it, until 17:00 on the third business day, and puts them back when no one has\"\n\nuse dates terms from \"approval_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:approval-terms\"\nuse book stock from \"stock.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:stock\"\n\nrecord Approval\n  approver : string\n\ninputs\n  order : string\n  sku   : string\n  qty   : int  range >=1 <=100\n\noutputs\n  outcome : string\n\ntask reserve(order: string, sku: string, qty: int) -> stock.reserve\n  book stock.reserve.hold\n  starts stock.reserve\n  errors out_of_stock\n\ntask ship(order: string, sku: string) -> stock.reserve\n  book stock.reserve.post\n  sends post\n  errors expired\n\ntask put_back(order: string, sku: string) -> stock.reserve\n  book stock.reserve.void\n  sends void\n  errors expired, already_posted\n\ntask ask(order: string, by: timestamp) -> Approval\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask\"\n  callback\n  timeout until by\n\ncase goods : stock.reserve follows stock.reserve\n\nflow\n  goods <- reserve(order: order, sku: sku, qty: qty)\n    on out_of_stock => fail OutOfStock \"nothing left on the shelf\"\n  let due = terms.due(received: now)\n  let a = ask(order: order, by: due.at)\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => succeed outcome = \"expired\"\n      succeed outcome = \"put back\"\n  goods <- ship(order: order, sku: sku)\n    on expired => succeed outcome = \"expired\"\n  succeed outcome = \"approved by {a.approver}\"\n\non failure\n  match goods.state\n    none => pass\n    held =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n        on already_posted => pass\n        on failure => fail NotPutBack \"the goods held for the order could not be put back\" leaving goods\n");
+    write("late.json", &json!({ "execution": "late", "now": "2026-04-03T10:00:00Z", "input": { "order": "A-1", "sku": "pen", "qty": 3 }, "books": { "stock": [{ "op": "do", "kind": "receive", "args": { "delivery": "D-1", "sku": "pen", "qty": 10 } }] }, "answers": [{ "error": "timeout" }] }).to_string());
+    let mut failures = Vec::new();
+    for lang in ["en", "ja"] {
+        let (code, out, err) = ritsu_in(t.path(), &["run", "approval.flow", "--scenario", "late.json", "--lang", lang]);
+        assert!(code == 0 && err.is_empty(), "{lang}: {code} {err}");
+        golden(&format!("tests/golden/run/until_timeout.{lang}.txt"), &out, &mut failures);
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}

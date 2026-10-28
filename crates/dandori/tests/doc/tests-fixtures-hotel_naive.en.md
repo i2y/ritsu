@@ -53,7 +53,7 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails | Case after |
 |---:|---|---|---|---|---|---|
-| 81 | `quote = hold(…)` | rule `hold_amount.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails | — |
+| 81 | `quote = hold(…)` | rule `hold_amount.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails | — |
 | 84 | `pi ← create_intent(…)` | `POST https://api.stripe.com/v1/payment_intents form`, `starts payment_intent.payment then attach`, `key` | 2 times every 2 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails | `pi`: `requires_confirmation` |
 | 85 | `pi ← confirm_intent(…)` | `POST https://api.stripe.com/v1/payment_intents/{id}/confirm form`, `sends confirm`, `key` | — | — | `card_declined` → line 86<br>`unexpected_state`, `timeout`, `failure` → the workflow fails | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
 | 86 | `pi ← get_intent(…)` | `GET https://api.stripe.com/v1/payment_intents/{id}`, `observes`, `idempotent` | 3 times every 2 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails | `pi`: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |

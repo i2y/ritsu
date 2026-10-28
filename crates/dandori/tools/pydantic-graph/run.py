@@ -16,6 +16,11 @@
 #
 # The rounds of `for … in parallel` run one at a time here, so that the calls come in the
 # order the reference interpreter makes them.
+#
+# With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the clock is the real one, and a
+# call that the scenario times out is held for 15 seconds, past the 10 of the generated code's
+# limit, and then fails; each run's result also has `times`: when each call came and when the run
+# ended, in milliseconds from its start.
 
 from __future__ import annotations
 
@@ -28,11 +33,16 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from transport import make_transport  # noqa: E402
+
+# The limits as they are generated, in real time (see the top), and how long a call the scenario times out is held then.
+LIMITS = os.environ.get("DANDORI_LIMITS") == "1"
+LATE = 15.0
 
 
 class SkippingClock:
@@ -60,6 +70,7 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
             raise rt.TaskFailure("Dandori.Test.NoAnswer", f"no answer for call {current['next'] + 1} ({label})")
         ans = current["answers"][current["next"]]
         current["next"] += 1
+        current["calls"].append(round((time.monotonic() - current["began"]) * 1000))
         return ans
 
     def recorded(ans: dict[str, Any]) -> dict[str, Any]:
@@ -88,6 +99,14 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
 
         def answer_later(self, callback_id: str, ans: dict[str, Any]) -> None:
             answer_later(callback_id, ans)
+
+    async def hold(_run: Run, ans: dict[str, Any]) -> Any:
+        """A call the scenario times out, with the limits as they are: no answer before the limit, and a failure after."""
+        await asyncio.sleep(LATE)
+        raise rt.TaskFailure("Dandori.Test.Late", "the call should have run out of time first")
+
+    if LIMITS:
+        Run.hold = hold  # type: ignore[attr-defined]
 
     class Own:
         pass
@@ -134,8 +153,8 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
     for r in spec["runs"]:
         callbacks = rt.Callbacks()
         current.clear()
-        current.update({"answers": r["answers"], "next": 0, "steps": [], "callbacks": callbacks})
-        deps: dict[str, Any] = {"tasks": tasks.make_tasks(own, make_transport(spec, Run())), "clock": SkippingClock(), "callbacks": callbacks, "run_id": "test"}
+        current.update({"answers": r["answers"], "next": 0, "steps": [], "callbacks": callbacks, "calls": [], "began": time.monotonic()})
+        deps: dict[str, Any] = {"tasks": tasks.make_tasks(own, make_transport(spec, Run())), "clock": rt.Clock() if LIMITS else SkippingClock(), "callbacks": callbacks, "run_id": "test"}
         if spec.get("rules"):
             deps["rules"] = rules
         try:
@@ -143,7 +162,10 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
             end: dict[str, Any] = {"succeed": out}
         except rt.Failure as e:
             end = {"fail": {"error": e.error, "cause": e.cause or None}}
-        results.append({"steps": current["steps"], "end": end})
+        result: dict[str, Any] = {"steps": current["steps"], "end": end}
+        if LIMITS:
+            result["times"] = {"calls": current["calls"], "end": round((time.monotonic() - current["began"]) * 1000)}
+        results.append(result)
     return results
 
 

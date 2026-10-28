@@ -55,13 +55,13 @@ flowchart TD
 |---:|---|---|---|---|---|
 | 39 | `求める額 = 額を聞く(…)` | `lambda ask-amount`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 40 | `受付を記す(…)` | `lambda note-request`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 41 | `判断 = 確認(…)` | 規則 `返金の確認.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 41 | `判断 = 確認(…)` | 規則 `返金の確認.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 42 | `日 = 日を選ぶ(…)` | `lambda pick-day`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 46 | `回 = 精算(…)` | 規則 `精算.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 46 | `回 = 精算(…)` | 規則 `精算.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 47 | `払い戻す(…)` | `lambda pay-back`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 49 | `請求一覧 = 請求を集める(…)` | `lambda list-claims`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 52 | `一回 = 確認(…)` | 規則 `返金の確認.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 54 | `各回 = 確認(…)` | 規則 `返金の確認.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
+| 52 | `一回 = 確認(…)` | 規則 `返金の確認.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
+| 54 | `各回 = 確認(…)` | 規則 `返金の確認.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → そのイテレーションが失敗し、ワークフローも失敗する |
 
 ## 終わり方
 

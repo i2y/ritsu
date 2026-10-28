@@ -188,9 +188,26 @@ fn a_flow_says_what_it_crosses_into() {
     let body = "  wait 1 day\n  goods <- put_back(order: order, sku: sku)\n    on expired => pass\n\non failure\n  match goods.state\n    none => pass\n    held =>\n      goods <- ship(order: order, sku: sku)\n        on expired => pass\n        on already_voided => pass\n";
     assert_eq!(spans(body), vec![(42, "void".to_string(), day, None), (49, "post".to_string(), 0, None)]);
     // a wait until a koyomi date's time, its date input given `now` after the hold: from the
-    // fewest days koyomi counts (18), less the day `now` can fall late in, to the 09:00
+    // fewest days koyomi counts (18), less the day `now` can fall late in, to the 09:00; at the most,
+    // the most days (51) from the latest `now` (10 seconds into the hold, as the hold's call ends), to
+    // the 09:00, and the post's own 10 seconds (the date's call, 33 seconds at the most, ends sooner)
     let body = "  let due = terms.payment(received: now)\n  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
-    assert_eq!(spans(body), vec![(43, "post".to_string(), 17 * day + 9 * hour, None)]);
+    assert_eq!(spans(body), vec![(43, "post".to_string(), 17 * day + 9 * hour, Some(10 + 51 * day + 9 * hour + 10))]);
+    // `timeout until` the same time: a callback's answer, or its timeout, can come at once (the id is
+    // handed on first), and at the most as the time comes, a second more for the rounding up; the
+    // handler of `timeout` alone under an event starts no sooner than the time
+    let waits = |body: &str| {
+        let tasks = "task ask(order: string, by: timestamp) -> string\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask\"\n  callback\n  timeout until by\n\ntask approval(by: timestamp) -> string\n  event\n  timeout until by\n\ncase goods";
+        write("spans.flow", &flow(body).replacen("case goods", tasks, 1));
+        let c = dandori::ports::Engine.crossings(&t.path().join("spans.flow"), &ports).unwrap();
+        c.holds.iter().map(|h| (h.line, h.op.clone(), h.least, h.most.clone().ok(), h.most_why.iter().map(|w| w.en.clone()).collect::<Vec<_>>())).collect::<Vec<_>>()
+    };
+    let longest = "The longest is when the `now` given to `payment` (line 50) falls on 2026-07-21: `ask` (line 51) waits until `due.at`, 2026-09-10 at 09:00, 51 days after it".to_string();
+    let body = "  let due = terms.payment(received: now)\n  let a = ask(order: order, by: due.at)\n    on timeout => pass\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    assert_eq!(waits(body), vec![(53, "post".to_string(), 0, Some(10 + 51 * day + 9 * hour + 1 + 10), vec![longest])]);
+    let body = "  let due = terms.payment(received: now)\n  let a = approval(by: due.at)\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n      fail Late \"no approval\"\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    let held = waits(body);
+    assert_eq!(held.iter().map(|h| (h.0, h.1.clone(), h.2, h.3)).collect::<Vec<_>>(), vec![(53, "void".to_string(), 17 * day + 9 * hour, None), (56, "post".to_string(), 0, Some(10 + 51 * day + 9 * hour + 1 + 10))]);
     // `now` read before the hold says nothing of how long after the hold the time comes
     let body = "  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
     let early = flow(body).replace("flow\n  goods <- reserve", "flow\n  let due = terms.payment(received: now)\n  goods <- reserve");

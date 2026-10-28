@@ -80,13 +80,15 @@ a transfer's amounts, refusals and holds (the ritsu skill has the codes).
 ## 2. The language on one page
 
 A whole workflow: the review example. Jev scores an application and says how sure it is, a rulec
-rule weighs the verdict and how sure it is, and a person approves what the rule sends on.
+rule weighs the verdict and how sure it is, and a person approves what the rule sends on, until
+17:00 on the third business day, a time koyomi's dates file gives.
 
 ```flow
 workflow review v1
-description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval: approving at once asks more certainty than rejecting at once. Written for Temporal: the scoring is an activity dandori writes, which calls Jev with TypeSafe's key (TYPESAFE_API_KEY) on the workers of its own task queue, which may be written in another language, and so does the notice, an activity you write; the rule runs in the worker of the workflow; the approver's tool answers the callback by the update the generated client sends"
+description "Jev scores an application and says how sure it is, and a rule decides whether the verdict is acted on at once or goes to a person for approval, due by 17:00 on the third business day after it comes in: approving at once asks more certainty than rejecting at once. Written for Temporal: the scoring is an activity dandori writes, which calls Jev with TypeSafe's key (TYPESAFE_API_KEY) on the workers of its own task queue, which may be written in another language, and so does the notice, an activity you write; the rule and the date of the approval run in the worker of the workflow; the approver's tool answers the callback by the update the generated client sends"
 
 use rule policy from "../rules/review_policy.rule"
+use dates approvals from "../dates/approval_terms.cal"
 
 record Application
   id      : string
@@ -121,10 +123,11 @@ task score(purpose: string) -> Score
   retry 2 times every 10 seconds on busy, overloaded
   timeout 10 seconds
 
-# Someone approves in a tool of their own, and the answer comes back with the callback's id.
-task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%]) -> Approval
+# Someone approves in a tool of their own, and the answer comes back with the callback's id. The
+# approver is told when the approval is due, and the wait ends then.
+task ask_for_approval(application_id: string, amount: int, sure: rate[step 1%], by: timestamp) -> Approval
   callback
-  timeout 3 days
+  timeout until by
 
 task notify(application_id: string, text: string)
   queue "notify"
@@ -137,8 +140,9 @@ flow
   match d.decision
     approve, reject => pass
     ask =>
-      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure)
-        on timeout => fail NoAnswer "No approval in three days"
+      let due = approvals.due(received: now)
+      let a = ask_for_approval(application_id: application.id, amount: application.amount, sure: r.sure, by: due.at)
+        on timeout => fail NoAnswer "No approval by 17:00 on the third business day"
       notify(application_id: application.id, text: "{a.approver} approved application {application.id}")
       succeed verdict = approve
   notify(application_id: application.id, text: "Application {application.id} was reviewed: {r.verdict}")
@@ -221,6 +225,8 @@ errors and retries
   errors <name> [= <status | exception | code>], …    refused as <error>
   retry <n> times [every <duration>] [backoff <x>] [on <error>, …]
   timeout <duration>       key [<parameter>]          idempotent
+  timeout until <parameter>                          event and callback: the answer is waited for until
+                                                     the timestamp the call gives (a second at the least)
 the rest
   callback                 queue "<task queue>"       image "<image>" (Argo, a task you write)
   connection "<EventBridge connection>"               model "<model>"     url "<base>" (agents, decision models)
@@ -268,7 +274,8 @@ task get_intent(intent: string) -> PaymentIntent
 ```
 
 `retry` repeats failures and timeouts, but not the errors the task declares; `retry … on <name>, …`
-repeats only what it names, which may be `failure` or `timeout` too. A task that changes something and is retried needs `key` (an idempotency key dandori makes from
+repeats only what it names, which may be `failure` or `timeout` too. A call of a rule or a date
+has ten seconds a try on every platform, and is retried twice, a second and then two apart. A task that changes something and is retried needs `key` (an idempotency key dandori makes from
 the run and the place of the call), or `idempotent` when doing it twice is the same as once.
 [tasks.md](tasks.md) has every way of calling and what each becomes on every platform,
 [agents.md](agents.md) the agents, and [jev.md](jev.md) Jev.

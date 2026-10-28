@@ -96,7 +96,7 @@ dandori は ritsu（七つの言語を一つにまとめる処理系）に取り
 - **`ritsu check` に渡す `check` の結果**（ritsu の段階 E の最初の部分。ritsu の DESIGN 8.3）：`dandori::ports::Engine::checked` が、渡された規則の口で、`dandori check` が印字するもの（診断一つずつのテキストと `--format json` のオブジェクト、通ったファイルの行）を、コマンドと同じ関数（`commands::render`、`commands::passed`）で作って渡す。コマンドの振る舞いは変えていない。日付と帳簿を足してからは、`checked_with` が規則の口に加えて日付の口と帳簿の口も受け取り、`ritsu check` はそれで渡す（前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` で E018 になっていた）。
 - **言語をまたぐ検査に渡すもの**（ritsu の段階 E。ritsu の DESIGN 7.4〜7.8）：ritsu の流れの口（`ritsu_ports::Flows`）の `crossings` が、dandori の検査を通るフローについて、ほかの言語を呼ぶところを全部渡す（`src/crossings.rs`）。dandori は自分では確かめず、ritsu-cross が相手の言語に尋ねて決める。
   - 規則、日付、帳簿の振替を呼ぶところごとに、渡す値がどこから来うるか（`Origin`）。範囲の求め方（1.3）と同じく、変数に値を入れるすべての場所を合わせる。koyomi の日付の日（`due.day`）と規則の出力（`fee.amount`）は、読むレコードの型から、どの日付や規則の答えかが分かる。数ならその範囲、何も言わないところ（範囲の無い入力やタスクの結果、日付で入ってくる値）ならその場所、`now` なら `now` である。
-  - 期限のある仮押さえを追う案件ごとに、確定（`sends post`）と取消（`sends void`）の呼び出しまでの、仮押さえを作ってからの長さの最小と最大（秒）。フローの分岐をたどり、分かれた先ごとに数える。作る呼び出しの中で仮押さえはできるので、最小はその終わりから、最大はその始まりから数える。呼び出しは最小 0 秒、最大は `timeout` に、`retry` の回数だけの試しとあいだの待ちを足したもの（`timeout` の無いタスク、規則と日付の呼び出しは上限が無い）。`wait` は書いた長さ。`wait until x.at` は、`x` が日付の入力に仮押さえのあとで読んだ `now` を渡した koyomi の日付の答えなら、koyomi が数えた入力から日付までの日数の最小から 1 日引いた日の、日付の時刻から、日数の最大の日の、日付の時刻まで（`now` はその日のどの時刻でもありうる）。日数は日付の口の `span` から読む。ほかの `wait until` は最小 0 秒で、上限が無い。`match` の分岐と呼び出しのハンドラーは、分かれた先を合わせる（最小の最小、最大の最大）。ただし、イベントを待つタスクの `on timeout` だけを書いたハンドラーは、タスクの `timeout`（無ければ一日）が過ぎてから動くので、最小にその長さを足す（ほかのタスクのタイムアウトは、Temporal のハートビートなどで `timeout` より早く来ることがあるので足さない）。ループは最小 0 秒、最大は一回でいちばん長くかかる場合の長さを回数だけ。`on failure` と `on cancel` は、失敗やキャンセルが届きうるどの点よりも長くはない。確定や取消は、その呼び出しの中で効くので、最小は呼び出しの始まりまで、最大は終わりまでである。
+  - 期限のある仮押さえを追う案件ごとに、確定（`sends post`）と取消（`sends void`）の呼び出しまでの、仮押さえを作ってからの長さの最小と最大（秒）。フローの分岐をたどり、分かれた先ごとに数える。作る呼び出しの中で仮押さえはできるので、最小はその終わりから、最大はその始まりから数える。呼び出しは最小 0 秒、最大は `timeout` に、`retry` の回数だけの試しとあいだの待ちを足したもの（`timeout` の無いタスクは上限が無い。規則と日付の呼び出しは最大 33 秒。16 章）。`timeout until` の `event` と `callback` は、期限が下の `wait until` と同じ形の `x.at` なら、期限の最大と呼び出しを始めたときの最大の大きいほうに 1 秒を足したものまでで、ほかの期限は上限が無い。`wait` は書いた長さ。`wait until x.at` は、`x` が日付の入力に仮押さえのあとで読んだ `now` を渡した koyomi の日付の答えなら、koyomi が数えた入力から日付までの日数の最小から 1 日引いた日の、日付の時刻から、日数の最大の日の、日付の時刻まで（`now` はその日のどの時刻でもありうる）。日数は日付の口の `span` から読む。ほかの `wait until` は最小 0 秒で、上限が無い。`match` の分岐と呼び出しのハンドラーは、分かれた先を合わせる（最小の最小、最大の最大）。ただし、イベントを待つタスクの `on timeout` だけを書いたハンドラーは、タスクの `timeout`（無ければ一日）が過ぎてから動くので、最小にその長さを足す（`timeout until` なら、最小を期限の最小からにする。ほかのタスクのタイムアウトは、Temporal のハートビートなどで `timeout` より早く来ることがあるので足さない）。ループは最小 0 秒、最大は一回でいちばん長くかかる場合の長さを回数だけ。`on failure` と `on cancel` は、失敗やキャンセルが届きうるどの点よりも長くはない。確定や取消は、その呼び出しの中で効くので、最小は呼び出しの始まりまで、最大は終わりまでである。
   - `rule_calls`（X2 のために E.4 で足したもの）は、規則の口だけで読むので残した。日付と帳簿を使うフローは、`crossings` で読む。
   - コマンドの振る舞いは変えていない（例と `tests/flows` のフローの全部、50 本の `ritsu dandori check` の出力が、替える前と一字も違わない）。
 - **呼ぶ操作**（sekisho の段階 D、2026-10-06。sekisho の DESIGN 4.6、8.3）：ritsu の流れの口の `operation_calls` に答える（`src/ports.rs`）。dandori の検査を通るフローについて、タスクの呼び出しのうち、`use openapi` の `http` のタスクと `use proto` の `connect` のタスクのものを、行の順に渡す。ritsu-cross の X16 が、sekisho のゲートがワークフローに許すものと突き合わせる。
@@ -259,7 +259,7 @@ dandori の式は算術を持たない（P1）ので、値の範囲は、出ど�
   - 呼び出し方（1.6）：`lambda "<関数>"`、`http <メソッド> "<URL>" [form]` と `connection "<EventBridge の接続>"`、`aws <サービス>:<操作>`、`agent [openai | claude] "<指示>"` と `model "<モデル>"`（1.7。Step Functions では `connection` も）のどれか一つ。子ワークフローとして呼ぶなら、プラットフォームごとに `workflow "<型>"`（Temporal）、`state machine "<ARN>"`（Step Functions）、`durable function "<関数>"`（durable functions）、`workflow template "<名前>"`（Argo）。子も dandori で書いたなら `flow "<パス>"`（1.9）。Temporal では `queue "<タスクキュー>"` で送り先のキューを選べる。Argo で利用者のコンテナを動かすなら `image "<イメージ>"`。
   - `errors <名前> [= <HTTP ステータス> | = <例外の名前>], …`：業務のエラー。`http` のタスクではステータスを、`aws` のタスクでは API の例外（`ConditionalCheckFailedException`、書かなければエラーの名前そのもの）を書く。`timeout` と `failure`（それ以外の失敗のすべて）は宣言しなくても使える。
   - `retry <n> times [every <時間>] [backoff <k>] [on <エラー>, …]`：`on` を書かなければ、`failure` と `timeout` をリトライ、宣言したエラーはリトライしない。
-  - `timeout <時間>`（書かなければ、プラットフォームがそのタスクに許すだけ動く。4 章）、`key`（冪等キーを送る。`aws` のタスクでは `key ClientToken` のように、キーを受け取る API の引数を書く）、`idempotent`（二度しても一度と同じ）、`callback`（トークンや ID を渡して応答を待つ）。
+  - `timeout <時間>`（書かなければ、プラットフォームがそのタスクに許すだけ動く。4 章）か `timeout until <引数>`（答えを待つタスク（`event` か `callback`）だけ。呼び出しがその `timestamp` の引数に渡した時刻で、答えの待ちが終わる。16 章）、`key`（冪等キーを送る。`aws` のタスクでは `key ClientToken` のように、キーを受け取る API の引数を書く）、`idempotent`（二度しても一度と同じ）、`callback`（トークンや ID を渡して応答を待つ）。
   - 案件に何をするか：`starts <規則>.<ステートマシン> [then <イベント>, …]`、`sends <イベント>`、`observes`。`refused as <エラー>` は、ステートマシンがイベントを拒否したときに返ってくるエラー。
   - 帳簿の振替の操作：`book <帳簿>.<振替>.<操作>`（呼び出し方の一つ。操作は `do`・`hold`・`post`・`void`。1.16）。
 - `case <名前> : <レコード> follows <規則>.<ステートマシン>`：rulec のステートマシンに従う案件。下に `held <入力> = <値>`、`external <イベント>, …`、`state <フィールド>`、`refused when <出力> = <値>` を書く。帳簿の仮押さえなら `case <名前> : <帳簿>.<振替> follows <帳簿>.<振替>`（2.7）。
@@ -320,6 +320,8 @@ Temporal、durable functions、Argo、pydantic-graph で dandori が書く実装
 - Argo：送る側のコンテナに `callback_id` を渡し、そのあとの suspend のステップで待つ。結果は `argo node set` で待ちのステップの出力 `answer` に入れ、`argo resume` で進める（4.4）。
 - pydantic-graph：送る側の関数に `callback_id` を渡し、結果は同じプロセスの中で `Deps.callbacks.answer(callback_id, …)` として受け取る（4.5）。
 
+`timeout until <引数>` を書いた `callback` のタスクは、渡された時刻まで答えを待つ。期限の引数も、ほかの引数と同じく ID と一緒に送る（答える人に期限を見せられる）。`aws` のタスクの引数は API の引数なので、`aws sqs:sendMessage` のコールバックには書けない（E007）。期限を過ぎてからのリトライはすぐまたタイムアウトするので、`timeout` をリトライする `retry`（`on` を書かないものも）も書けない（E007）。出力先ごとの待ち方は 16 章。
+
 `event` のタスクは何も呼ばない。ワークフローは、そのタスクの名前のイベントが、ワークフロー ID を宛先にして送られてくるのを待つ（Temporal の Update `dandori.event`。`client.ts` の `send(client, workflowId, "<名前>", { ok: 値 })`）。承認の画面や運送会社の通知のように、送る側が注文番号のような業務の ID しか知らないときに、コールバックの ID を先に渡さずに済む。
 
 ```
@@ -330,7 +332,7 @@ task 配達の知らせ() -> 注文
   timeout 7 days
 ```
 
-- 引数は取らない（何も送らないので）。呼び出し方、`callback`、`retry`、`key`、案件を始めることやイベントを送ることも書けない（E007）。結果の型、宣言したエラー（送る側がエラーの名前を送る）、`observes`、`timeout` は、コールバックと同じに書ける。`timeout` が無ければ、コールバックと同じく一日でタイムアウトする。
+- 引数は、`timeout until` に書く時刻の一つのほかは取らない（何も送らないので）。呼び出し方、`callback`、`retry`、`key`、案件を始めることやイベントを送ることも書けない（E007）。結果の型、宣言したエラー（送る側がエラーの名前を送る）、`observes`、`timeout` と `timeout until` は、コールバックと同じに書ける。`timeout` が無ければ、コールバックと同じく一日でタイムアウトする。
 - ワークフローは、待っているあいだのイベントだけを受け取る。待っていないイベントと、もう来たイベントは、Update の validator が拒否し、送った側に `WorkflowUpdateFailedError` が返る。送る側は、ワークフローが待つようになってから送り直す。いま何を待っているかは、クエリ `dandori.status` の `events` が返す。
 - 並列のイテレーションの中では待てない（E009）。どのイテレーションも同じ名前のイベントを待つことになり、送る側がどのイテレーションに宛てるかを言えないからである。
 - ほかのプラットフォームでは作れない（E050、P6）。Step Functions と durable functions が実行に値を送れるのは、タスクが渡すトークンや ID を通してだけである。Argo（名前で再開する suspend のステップ）と pydantic-graph（`Deps` に名前で届く値）は作れるはずだが、まだ書いていない。
@@ -1077,12 +1079,12 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 | コード | 内容 |
 |---|---|
 | E001 | 構文 |
-| E002 | 名前が無い（型・変数・フィールド・規則・タスク・日付のファイルの日付・帳簿・帳簿の振替。単位の表に無い単位と次元、税区分の誤り、記述に無い型の名前、型を作れない記述の名前、`.proto` が import して読めなかったファイルにある型を作ろうとしたときも） |
-| E003 | 型が合わない（オプショナルな値をそのまま使う、`none` の置き場所、リストのリスト、型の分からない `{…}` や `[]`、数でも順序のある列挙でもないものの範囲（順序の無い列挙の範囲も）、値の入らない範囲、型の次元に無い単位や整数にならない値で書いた範囲の端、列挙の値でない範囲の端、自分自身を含むレコードも。手で書いたものも、`.proto` から作ったものも。UTC オフセットを言わないカレンダーの日付に渡す時刻も） |
+| E002 | 名前が無い（型・変数・フィールド・規則・タスク・日付のファイルの日付・帳簿・帳簿の振替・`timeout until` が挙げるタスクの引数。単位の表に無い単位と次元、税区分の誤り、記述に無い型の名前、型を作れない記述の名前、`.proto` が import して読めなかったファイルにある型を作ろうとしたときも） |
+| E003 | 型が合わない（オプショナルな値をそのまま使う、`none` の置き場所、リストのリスト、型の分からない `{…}` や `[]`、数でも順序のある列挙でもないものの範囲（順序の無い列挙の範囲も）、値の入らない範囲、型の次元に無い単位や整数にならない値で書いた範囲の端、列挙の値でない範囲の端、自分自身を含むレコードも。手で書いたものも、`.proto` から作ったものも。UTC オフセットを言わないカレンダーの日付に渡す時刻も。`timeout until` の引数が `timestamp` でないときも（16 章）） |
 | E004 | 引数や出力の過不足、`{…}` のレコードのフィールドの不足 |
 | E005 | 規則・日付のファイル・帳簿を読めなかった（rulec の検査を通らない規則、規則を読まない dandori のクレートのバイナリで読もうとした規則、要素の並びをたどる規則、無いことがある入力か出力（`T?`）を持つ規則も。`connect` で呼ぶ規則について、rulec が Connect のサービスを言わないとき、サービスが列挙の値を何と呼ぶかを言わないときも。koyomi の検査を通らない日付のファイル、chobo の検査を通らない帳簿、無いファイルも）。出力の無い規則（rulec の `enums` のファイル）を呼んだ（呼び方によらず、呼ぶところで。10 章） |
 | E006 | 二度の宣言（生成するコードで同じ名前になる型、規則と API に付けた同じ名前、規則・日付のファイル・帳簿に付けた同じ名前も）。生成するコードでぶつかる規則の名前（規則の別名がまわりのコードの名前と同じ、別名が同じ二つの規則、タスクと規則のアクティビティが同じ名前。1.15） |
-| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数・呼び出し方・`retry`・`key`・案件を始めることなど、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、判断のモデル（`jev`）が答えられない結果の型・尋ねていないフィールド・意味の誤り（答えの列挙の範囲の外の値に書いた意味も）・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー・知らない API・System One のタスクの `refusal`・`refusal` のエラーのリトライ・Decisions API の predicate のはいといいえの意味・選択肢や段階が一つだけの列挙）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も。`plaintext` を自分の URL を持たないタスク・`connect` の無い `use rule`・URL の無い `use` に書く、`discloses` がタスクに無い引数を書く、`plaintext` と `discloses` の理由が空の文字列（1.18）も |
+| E007 | タスクの項目の誤り（`flow` のタスクのほかの呼び出し方と `image`、OpenAPI の操作を呼ぶタスクの `form`、Connect のエラーコードの誤り、ステータスの付け忘れ、同じステータスの二つのエラー、呼び出し方の重なり、`aws` の `key` の引数、`callback` にできない呼び出し方、知らない AWS のサービス、子ワークフローの `key`、エージェントの `model` の書き忘れ・宣言したエラー・`key`・Schema に書けない応答・知らないプロバイダー・Claude で大文字と小文字だけが違う列挙の値、`event` のタスクの引数（`timeout until` の時刻のほか）・呼び出し方・`retry`・`key`・案件を始めることなど、`timeout until` を答えを待たないタスク・`aws` のコールバックに書く、`timeout until` のタスクの `retry` が `timeout` をリトライする、`timeout` を二つ書く（16 章）、エージェントでないタスクや Claude の `url`、http でも https でもない `url`、判断のモデル（`jev`）が答えられない結果の型・尋ねていないフィールド・意味の誤り（答えの列挙の範囲の外の値に書いた意味も）・下限の誤り・`confidence` のエラーのリトライ・ステータスの無いエラー・知らない API・System One のタスクの `refusal`・`refusal` のエラーのリトライ・Decisions API の predicate のはいといいえの意味・選択肢や段階が一つだけの列挙）。規則の項目の誤り（`lambda` と `connect` の重なり、`connect` の無い規則の `connection`、http でも https でもない `connect`）も。帳簿の操作のタスクの、振替に無い操作、`key`、`refused as`、エラーの `= …` も。`plaintext` を自分の URL を持たないタスク・`connect` の無い `use rule`・URL の無い `use` に書く、`discloses` がタスクに無い引数を書く、`plaintext` と `discloses` の理由が空の文字列（1.18）も |
 | E008 | 案件の宣言や、案件に何をするかの誤り（`.proto` から作った列挙の値がステートマシンの状態と違う、案件の型も。帳簿の仮押さえでは、案件に合わない操作、`expire` のほかの `external`、`refused when` も） |
 | E009 | 文の置き場所の誤り（`yield`、並列のイテレーションの中の `break`・`succeed`・案件の呼び出し・イベントの待ち、`on failure` と `on cancel` の中の `succeed`、中と外の両方で値を入れる変数、規則を `let` なしで呼ぶことも） |
 | E010 | `match` のどの分岐にも当たらない値がある（範囲に収めた列挙の値なら、範囲に入る値のどれか） |
@@ -1100,7 +1102,7 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 | E030 | 外部のデータを変える呼び出しを、`key` なしでリトライする |
 | E031 | Express でできないこと（五分を超える待ち、コールバック、ネストした実行、`key` なしで外部のデータを変える呼び出し） |
 | E040 | プラットフォームで、一回の実行が大きくなりすぎうる（ビルドがプラットフォームごとに見る）。実行履歴が上限を超えうる（Step Functions は 25,000 件、Temporal は 51,200 件、Lambda durable functions は 3,000 操作）。Argo Workflows では、一回の実行のノードが目安の 10,000 個を超えうる |
-| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと判断のタスク、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`、`history encrypted`（1.18）） |
+| E050 | プラットフォームに出すのに要るものが無い、またはプラットフォームでできないこと（Step Functions では呼び出し方か `connection`（エージェントと判断のタスク、`connect` で呼ぶ規則にも要る）、ネストした実行の宣言したエラー、`http`・`agent`・`jev` の 60 秒を超える `timeout`、HTTPS でない送り先（規則のサービスも）。Temporal のほかでは `on cancel` と `event` のタスク、サービスの `status` のメソッド。Step Functions と durable functions では、呼ばれる規則の `lambda` か `connect` と、呼ばれる日付の `lambda`。Step Functions では、帳簿の `lambda`。durable functions では invoke する関数（`durable function` のタスク）の `timeout`。Argo では呼び出し方か `image`、`workflow template` の宣言したエラー、`callback` のタスクの `retry`、`history encrypted`（1.18）） |
 | E906 | 秘密の値を、プロジェクトの外の相手（モデルのプロバイダー、判断のモデルの API（Jev、OpenAI の Decisions API、このマシンでない `url` のサーバー）、URL だけで書いた相手、AWS のサービス）へ送る（1.18） |
 | W030 | 外部のデータを変えるかもしれない呼び出しを `key` なしでリトライする |
 | W032 | 確信度を使う判断のタスクのモデルが、ここを変えなくても別のバージョンに移る（Jev のエイリアス、`url` のサーバーのタグの無い名前と `:latest`、バージョンを固定する名前の無い OpenAI の Decisions API。1.11） |
@@ -1114,7 +1116,7 @@ chobo の DESIGN 5 章の案は、案件に `external expire` と `refused when 
 
 診断には、そうなる例（その点までの短い流れ）が付く。例は、状態・変数・`match` で絞った値ごとに持っているので、例の中で値が途中で変わることはない。
 
-実行履歴の件数は、一回の呼び出し、再試行、Choice、Wait、並列のイテレーションなどごとに多めに見積もった件数を足して出す（`check.rs` の `ASL_COST`・`TEMPORAL_COST`・`DURABLE_COST`・`ARGO_COST`）。多めに見積もるので、上限の近くでは言い過ぎる側に倒れる。`for` は上限の数だけ回るとして数える。サービスを実装するフロー（1.14）は、Step Functions では入力を埋める Pass が一つ増えるので、その 2 件を足す。決められなかった規則の前提を確かめる文（1.17）は、Step Functions で 4 件（Choice と Fail）、Argo で 4 ノードを足す。
+実行履歴の件数は、一回の呼び出し、再試行、Choice、Wait、並列のイテレーションなどごとに多めに見積もった件数を足して出す（`check.rs` の `ASL_COST`・`TEMPORAL_COST`・`DURABLE_COST`・`ARGO_COST`）。多めに見積もるので、上限の近くでは言い過ぎる側に倒れる。`for` は上限の数だけ回るとして数える。サービスを実装するフロー（1.14）は、Step Functions では入力を埋める Pass が一つ増えるので、その 2 件を足す。決められなかった規則の前提を確かめる文（1.17）は、Step Functions で 4 件（Choice と Fail）、Argo で 4 ノードを足す。`timeout until` のタスクの呼び出しは、durable functions で時計を読む step の 1 操作、Argo で秒数を計算するステップグループとテンプレートの 4 ノードを、試しごとに足す（16 章）。
 
 E040 は `check` ではなく、プラットフォームごとのビルドで出す。上限はプラットフォームごとに違い、Temporal だけに出すワークフローが Step Functions の上限で拒否されることのないようにするためである。Temporal では、フローの一番外のループが履歴の長くなったところで新しい実行で続ける（4.2）ので、そのループは、続ける目安の 10,000 件にループの一回分を足した件数と、回り切ったときの件数の小さいほうで数える。それでも上限を超えるのは、ループの外の部分か、ループの一回が大きすぎるときで、診断はそう言う（`tests/fixtures/history_parallel.flow` と `history_round.flow`）。
 
@@ -1135,7 +1137,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - `retry` は Retry にする。`on` が無いときは、宣言したエラーを `MaxAttempts: 0` で止める retrier を先に置き、そのあとに `States.ALL` を置く。
 - `on failure` は、各 Task の最後の Catch（`States.ALL`）から入る。エラーは変数 `dd_error` に入り、ブロックの終わりの Fail がそれで失敗し直す。
 - 冪等キーは `実行名/呼び出しの場所/各ループの回数`。HTTP では `Idempotency-Key` ヘッダ、Lambda では `idempotency_key`、AWS の API では `key` に書いた引数で渡す。
-- `callback` は、Lambda なら `lambda:invoke.waitForTaskToken` でトークンを `task_token` で渡し、SQS なら `sqs:sendMessage.waitForTaskToken` でメッセージの本文に入れる。
+- `callback` は、Lambda なら `lambda:invoke.waitForTaskToken` でトークンを `task_token` で渡し、SQS なら `sqs:sendMessage.waitForTaskToken` でメッセージの本文に入れる。`timeout until` のコールバックは、Task の `TimeoutSeconds` を JSONata の式 `$max([1, $ceil(($toMillis(<時刻>) - $toMillis(<now>)) / 1000)])` にする。`now` はステートに入った時刻なので、トークンを渡すあいだも待ちに入る（16 章）。
 - `aws` は `arn:aws:states:::aws-sdk:<サービス>:<操作>`。引数とレスポンスは API のまま（PascalCase）で、型は利用者がタスクに書く（HTTP のタスクと同じ）。
 - `agent` は HTTP Task で `https://api.openai.com/v1/responses` に送る。本文は `model`、`instructions`、`input`（引数を `$string` で JSON の文字列にしたもの）、`text.format`（`json_schema`、名前は `answer`、`strict`）。応答は、Responses API の出力のうち `message` の `output_text` を `$parse` で読み、`answer` を取り出す。モデルが拒否すると `output_text` が無いので、`$error` で Task を `States.QueryEvaluationError` で失敗させる。JSONata の式の失敗はその Task の Retry と Catch で捕捉できる（Step Functions の文書で確かめた）ので、拒否は `failure` としてリトライでき、`on failure` で処理できる。結果を `let` で受けない呼び出しでも、同じ式を Task の `Output` に置いて結果を読み、拒否を失敗にする。
 - Claude の `agent` は HTTP Task で `https://api.anthropic.com/v1/messages` に送る。ヘッダは `anthropic-version`、本文は `model`、`max_tokens`、`system`（指示）、`messages`（user のメッセージ一つに、引数を `$string` で JSON の文字列にしたもの）、`output_config.format`（`json_schema`）。応答は、`content` のうち `text` のブロックをつないで `$parse` で読み、`answer` を取り出し、その中の列挙の値を大文字と小文字を区別せずに宣言した値に直す（直す式は応答の型から作る）。`stop_reason` が `end_turn` でなければ、`$error` で Task を失敗させる。あとは OpenAI のときと同じ。
@@ -1145,6 +1147,7 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - `for … in parallel` は INLINE の Map にする。イテレーションの始まりの Pass が、ItemSelector で渡した要素と番号（`$states.context.Map.Item.Index` は ItemSelector でしか読めない）をイテレーションの変数に入れる。イテレーションの中の Task には、処理していないエラーを `{"fail": {Error, Cause, task: true}}` に変えてイテレーションを終える Catch を付け、`fail` や検査の失敗も同じ形でイテレーションを終える。Map のあと、結果の並びに失敗があれば最初のものを取り出し、タスクのエラーなら `on failure` へ、そうでなければ Fail へ進む。Fail の Cause は文字列でなければならないので、理由の無い `fail` は Cause を書かない Fail に分ける。
 - 規則を呼ぶ Lambda 関数のコード（Python）も出す。rulec が生成した Python を import し、JSON を列挙と整数に直して呼び、結果を JSON に戻す。
 - `connect` で呼ぶ規則（1.13）は HTTP Task にする。`ApiEndpoint` は `connect` の URL と `rulec api` のパス、ヘッダは `Connect-Protocol-Version: 1` で、本文は JSONata で組み立てる（フィールドの JSON の名前、数は `$string`、列挙は規則の値から `.proto` の名前への表）。結果は Task の出力の式で、ゼロ値を埋め、規則の出力の名前と値に戻してから、ほかの規則と同じ Choice で確かめる。Retry は規則のもの。`connection` が無ければ E050、HTTPS でなければ E050。その規則の Lambda 関数のコードは出さない。
+- 規則と日付の Task（Lambda も `connect` の HTTP Task も）には `TimeoutSeconds` 10 を付ける。Retry は `States.ALL` を 1 秒の間で 2 回、倍率 2.0 で、時間切れ（`States.Timeout`）もそこに入る。値は `check.rs` の `RULE_SECONDS`・`RULE_RETRIES`・`RULE_RETRY_INTERVAL`・`RULE_RETRY_BACKOFF` から読む（16 章）。
 - サービスを実装するフロー（1.14）では、最初のステートを、入力のゼロ値を埋める Pass（`Output` が埋めた入力）にし、始まりの Pass と入力を確かめる Choice はその出力を読む。サービスに書かれた `callback` のタスクは、Task の結果の式で応答を埋める。実行は、出力が無いときも `{}` で終える。`status` のメソッドを持つサービスは E050。
 - **日付**（1.16）は、規則と同じく Lambda の Task にする。呼ばれる日付ごとに、koyomi が生成した Python を呼ぶ Lambda 関数のコード（`lambda/<ファイルの別名>_<日付の別名>_handler.py`）を出す。時刻の入力は、カレンダーのオフセットでその日に読み、日付と `at`（時刻を言う日付なら）を返す。
 - **帳簿の操作**（1.16）は、`use book` の `lambda` の Lambda 関数を呼ぶ Task にする。payload は `{transfer, op, args, amounts?}`。帳簿ごとに、chobo の Python のクライアントで操作する Lambda 関数のコード（`lambda/book_<帳簿>_handler.py`）を出す。利用者は `handler = make_handler(lambda: tigerbeetle(ClientSync(…)))` のように、帳簿の値を作る関数を渡す。拒否されたら、理由を名前にした例外を投げる。Lambda はその名前を `errorType` に入れ、Step Functions はそれをエラーの名前として Catch に渡す（宣言したエラーの名前は、帳簿の理由そのもの）。通ったら、仮押さえのレコードを Task の Assign の JSONata で、渡した引数から作る。Retry は書いたとおりで、キーで冪等なので、二度目は `done_before` で通る。
@@ -1163,7 +1166,8 @@ Argo には履歴の件数の上限が無い。限りは Workflow の大きさ�
 - `queue` は、アクティビティと子ワークフローの `taskQueue` になる。別のワーカー（ほかの言語の SDK で書いたものでも）が持つアクティビティを、名前と引数の形が合えばそのまま呼べる。
 - `workflow` は `executeChild` で呼ぶ。ワークフロー ID は `親の ID/呼び出しの場所/各ループの回数/何度目か`。子の失敗は `ChildWorkflowFailure` の `cause` に `ApplicationFailure` として届くので、宣言したエラーをその `type` で見分けられる。
 - **`timeout` を書かないタスクには、プラットフォームが許す以上のタイムアウトを付けない。** Step Functions の Task に `TimeoutSeconds` を書かないのと同じにする。Temporal のアクティビティはタイムアウトを持たなければならないので、`http` と `agent` には HTTP Task と同じ 60 秒、`lambda` には Lambda が関数を動かせる 900 秒、ほかのタスクには一年を付ける。代わりに、ワークフローのワーカーが持つタスク（`queue` の無いもの）は、動いているあいだ 10 秒ごとにハートビートを送り、Temporal は 30 秒来なければそのアクティビティをタイムアウト（`timeout`）にする。ワーカーが落ちても 30 秒で分かり、`retry` があればリトライできる。`queue` のタスクは別のワーカーが持ち、ハートビートを送るとは限らないので、`timeout` が無ければ 60 秒にする。コールバックの ID を渡すアクティビティも 60 秒。
-- **規則のアクティビティは 10 秒で、タイムアウトもリトライする。** 規則は純関数で、すぐに終わる。タイムアウトは、動かしていたワーカーが落ちたことを意味するので、失敗と同じくリトライする。規則のリトライの並びはどのプラットフォームでも同じで、タイムアウトも入る（Temporal のほかでは、規則の呼び出しにタイムアウトは無い）。
+- **規則と日付のアクティビティは 10 秒で、タイムアウトもリトライする。** 規則は純関数で、すぐに終わる。タイムアウトは、動かしていたワーカーが落ちたことを意味するので、失敗と同じくリトライする。10 秒の上限とリトライの並びは、どのプラットフォームでも同じである（16 章）。上限は `startToCloseTimeout` で、ワーカーが受け取ってから数え、タスクキューで待つ時間は入らない。
+- **`timeout until` の待ちは、ワークフローのタイマーにする。** `event` と `callback` の待ちを始めるときに、ワークフローの時計（`now` と同じ読み方。再生でも同じ値）から期限までの秒数を出し（切り上げ、1 秒より短くしない。`runtime` の `secondsUntil`、Python の `seconds_until`、Go の `ddSecondsUntil`）、待ちのタイムアウトにする。コールバックでは、ID を渡すアクティビティが返ってから数え始める（16 章）。
 - **`callback` は Update で応答を受け取る。** 送る側のアクティビティに `callback_id`（ワークフロー ID と呼び出しの場所を JSON にしたもの）を渡し、ワークフローはその ID の応答が来るのを `condition` で待つ。結果は Update `dandori.answer` で受ける（`client.ts` の `answer`）。Update は、応答を受け取ったかどうかを、応答した側に返す。ワークフローが待っていない ID（渡していない ID や、タイムアウトで待つのをやめた ID）への応答と、二度目の応答は、validator が拒否する。シグナル `dandori.callback` でも受け取るが、待っていない ID への応答は捨てる。`timeout` を過ぎれば `timeout` になる。
 - `for … in parallel` は、`dd.rounds` が `k` 個ずつイテレーションを走らせる。ワークフローのコードは決定的に動くので、Promise で並べても再生で食い違わない。イテレーションの変数はイテレーションの関数の中で宣言する。
 - `on failure` は、処理されなかったタスクのエラー（`TaskError`）のときだけ走り、`fail` や結果の検査の失敗では走らない。Step Functions で Fail の状態に Catch が効かないのと同じにした。
@@ -1230,16 +1234,16 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - `types.ts`、`tasks.ts`（タスクの型、dandori が書くタスク、`OwnTasks`、`makeTasks`）、`io.ts`、`runtime.ts`、`workflow.ts` と、呼ばれる規則ごとの Lambda 関数（Step Functions 向けと同じ Python）を出す。`workflow.ts` は `makeHandler(own, transport)` を出し、利用者は `export const handler = makeHandler(自分のタスク)` と書く。
 - **タスクは step の中で呼ぶ。** `lambda` のタスクも `context.invoke` にはせず、dandori が書く実装が step の中で AWS SDK から Lambda の Invoke を呼ぶ。`context.invoke` では、invoke の先で投げたエラーの名前が `InvokeError` の中で落ちる（SDK 2.4.0 のソースで、`ErrorType` を捨てて `ErrorMessage` と `ErrorData` だけを残していることを確かめた）。Invoke のレスポンスでは、関数が投げたエラーの型が `errorType` に残る。
 - **`durable function` は `context.invoke` で呼ぶ。** 長く動く durable function を待つにはこれしかない。エラーの名前が落ちる問題は、`ErrorData` で渡して避ける。dandori が出す durable function は、`fail` のとき `ErrorData` に `{"error": <名前>}` を入れて失敗する（`Failure`、SDK の `DurableOperationError` を継ぐ）。呼ぶ側はそれを読んで宣言したエラーを見分ける。dandori 以外の関数も、同じ形で `ErrorData` を入れれば見分けられ、入れなければ `failure` になる。invoke にはタイムアウトの設定が無いので、`durable function` のタスクの `timeout` は E050。
-- **規則は `context.invoke` で Lambda を呼ぶ。** 規則は宣言したエラーを持たないので、上の問題に当たらない。Temporal で普通のアクティビティにしたのと同じ理由で、入力と結果がチェックポイントに残り、規則だけを出し直せる。
+- **規則と日付も step の中で呼ぶ。** `lambda` のタスクと同じく、dandori が書く実装（`tasks.ts` の `rule_<名前>` と `dates_<別名>_<日付>`）が、step の中で `Transport` の `lambda`（AWS SDK の Invoke）を呼び、step は呼び出しを `dd.within(…, 10)` で包む。SDK 2.4.0 の `context.invoke` の設定（`InvokeConfig`）にはタイムアウトが無く、一回の呼び出しに上限を付けられないからである（16 章）。規則は別の Lambda 関数のままなので、規則だけを出し直せることは変わらない。答えは step の結果としてチェックポイントに残る。invoke の操作と違って入力は履歴に残らないが、規則は副作用を持たず、入力は実行の状態から決まるので、再生には困らない。待つあいだ、durable の関数は動いたままになる（一回の呼び出しで 33 秒まで）。
 - **再試行は SDK にさせない。** step には `retryStrategy: () => ({ shouldRetry: false })` を渡す（渡さないと SDK の既定のリトライが効く）。ワークフローのコードが、Step Functions と同じ retrier の並びでリトライ、あいだは `context.wait` で待つ。
 - **外部のデータを変えて `key` の無いタスクは、「多くとも一回」の step にする**（`StepSemantics.AtMostOncePerRetry`）。既定の「少なくとも一回」では、結果を記録する前に落ちると同じ呼び出しがもう一度走る。「多くとも一回」の step は、中断されると結果の分からない失敗になり、検査はそれを「イベントが起きたか分からない失敗」として扱っている。
-- **`callback`** は `context.createCallback` で ID を作り、別の step の中でタスクに `callback_id` を渡す。呼び出し先は `SendDurableExecutionCallbackSuccess` で結果を JSON にして返す。タイムアウトは `CallbackTimeoutError` で、`timeout` になる。
+- **`callback`** は `context.createCallback` で ID を作り、別の step の中でタスクに `callback_id` を渡す。呼び出し先は `SendDurableExecutionCallbackSuccess` で結果を JSON にして返す。タイムアウトは `CallbackTimeoutError` で、`timeout` になる。`timeout until` のコールバックは、`createCallback` の前に時計を読む step（`<行> <タスク> clock`）を置き、期限までの秒数（切り上げ、1 秒より短くしない。`runtime.ts` の `secondsUntil`）を `createCallback` の `timeout` に渡す。コールバックの時計は ID を作ったときから動くので、ID を渡す step の時間も待ちに入る（16 章）。
 - **`for … in parallel`** は `context.map` にし、イテレーションの中のコードはイテレーションの子の context を通して呼ぶ。イテレーションは、yield した値か、どう失敗したかを JSON にして返す（チェックポイントに残すため）。`map` のあとで最初の失敗を投げ直す。
 - **今の時刻は step の中で読む。** `wait until` は、step で読んだ時刻（チェックポイントに残る）から待つ秒数を出す。Temporal と違って、ワークフローの中の `Date.now()` は再生のたびに変わる。
 - 冪等キーは `context.executionContext.durableExecutionArn` から作る。
 - 一回の実行で使える操作は 3,000 回まで（引き上げられない）。E040 はこれも見積もる。
-- `connect` で呼ぶ規則は、`context.invoke` ではなく、dandori が書く実装（`tasks.ts` の `rule_<名前>`）を step の中で呼ぶ。`lambda` は要らない。サービスを実装するフローでは、ハンドラが入力の型を確かめる前にゼロ値を埋め、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
-- 日付は、規則と同じく `context.invoke` で Lambda を呼ぶ（Step Functions と同じ関数）。帳簿の操作は、dandori が書く実装（`tasks.ts`）を step の中で呼び、`Transport` の `book` で chobo のクライアントを呼ぶ（Temporal と同じ `io.ts`）。`now` は、その文の前の step（`<行> clock`）で読む。答えはチェックポイントに残るので、再生でも同じ時刻になる。step は操作を一回使うので、E040 の見積もりは `now` を読む文ごとに 1 を足す。
+- `connect` で呼ぶ規則は、dandori が書く実装（`tasks.ts` の `rule_<名前>`）が、Lambda の代わりに規則のサービスに送る。step と 10 秒の上限は、Lambda で呼ぶ規則と同じである。`lambda` は要らない。サービスを実装するフローでは、ハンドラが入力の型を確かめる前にゼロ値を埋め、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
+- 日付は、規則と同じく step の中で Lambda を呼ぶ（Step Functions と同じ関数）。帳簿の操作は、dandori が書く実装（`tasks.ts`）を step の中で呼び、`Transport` の `book` で chobo のクライアントを呼ぶ（Temporal と同じ `io.ts`）。`now` は、その文の前の step（`<行> clock`）で読む。答えはチェックポイントに残るので、再生でも同じ時刻になる。step は操作を一回使うので、E040 の見積もりは `now` を読む文ごとに 1 を足す。
 - 規則の前提の確かめ（1.17）は、Temporal と同じワークフローのコードの `if` で、step を使わないので操作は増えない。
 - `history encrypted`（1.18）は、生成物を変えない。durable の実行のデータを暗号化するのは、関数の `DurableConfig.KMSKeyArn` に設定するカスタマー管理の KMS キーで、dandori が書くコードの外にある。鍵を設定すると、実行のデータを読む `GetDurableExecution` と `GetDurableExecutionHistory`（`IncludeExecutionData=true`）を呼ぶ人に `kms:Decrypt` が要る。実行は、始まったときの鍵を最後まで使う（2026-10-06 に AWS の文書の本文で確かめた）。
 
@@ -1255,9 +1259,10 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - **値を計算するテンプレートの式は、どんな値を読んでも評価が失敗しない形で書く。** 出力の式の評価が失敗すると、Argo はそのノードをエラーにし、`continueOn` があってもステップグループとワークフローを失敗させる。`dd_ctl` と `dd_error` は書かれず、最後のコンテナも走らないので、どのエラーで終わったかが残らない。だから、外から来る値（ワークフローの入力、タスク・規則・子のワークフロー・コールバックの結果、error.json、コールバックの応答）は、型を確かめてから読む。フィールドは map のときだけ読み、列挙の値とエラーの名前は、文字列であることを確かめてから値の一覧への `in` で比べる。Argo v4.1.4 の式（expr-lang 1.17.8）は、文字列の定数だけを並べた一覧への `in` を、その文字列を鍵にした map を引く形に置き換えるので、文字列でも `nil` でもない値を比べると評価が失敗する（11 章）。
 - **タスクの `timeout` は Pod の `activeDeadlineSeconds` にする。** テンプレートの `timeout` は、Pod が始まる前に切れると、周りのステップグループを `continueOn` に関係なく失敗させる（取れないイメージの Pod で確かめた）。`activeDeadlineSeconds` なら、始まらなかった Pod も終了コード 137 の失敗になり、`timeout` として読める。
   - 期限は、Pod を kubelet が受け付けた時点から数えるので、コンテナが起動するまでの時間も入る。期限が過ぎるのと同時に終わった Pod は、Kubernetes が DeadlineExceeded で失敗にし、Argo はノードのメッセージを、コンテナのものではなくその文（`Pod was active on the node longer than the specified deadline`）にする。次の項の `retryStrategy` の式は、宣言したエラーの名前をメッセージから読むので、終了コードが 3 のままでも、そのエラーのリトライは起きない（呼び出しの結果の読み方は、出力の `error` を見るので変わらない）。短い `timeout` は Pod の起動の分を見込んで書く（サイトの platforms のページにも書いた）。テストでは、シナリオが `timeout` まで走らせないので、本物の Pod の回は期限に余裕を足してから走らせる（5.1）。
-- `retry` は `retryStrategy` にする。リトライするエラーは `expression` で、終了コードと、コンテナが終了メッセージに残した宣言したエラーの名前から選ぶ。回数は Step Functions と同じだが、間隔の `backoff` は、実機では 10 秒ほどの刻みで待ったので、同じ秒数にはならない。
+- **規則と日付の呼び出しの 10 秒は、Pod ではなく caller が数える。** `call.ts` は、規則と日付の呼び出しのときだけ 10 秒のタイマーを置き、過ぎれば `error.json` に `Dandori.Timeout` を書いて終了コード 143 で終える。期限で止められた Pod と同じ終わり方なので、ワークフローはそれを `timeout` として読み、規則の `retryStrategy`（`limit` 2、`backoff` 1 秒、倍率 2）に入る。Pod の `activeDeadlineSeconds` にしなかったのは、Pod をノードに置いて起動するまでの時間を入れないためで、Temporal の `startToCloseTimeout` がタスクキューで待つ時間を入れないのとそろえた（16 章）。
+- `retry` は `retryStrategy` にする。リトライするエラーは `expression` で、終了コードと、コンテナが終了メッセージに残した宣言したエラーの名前から選ぶ。回数は Step Functions と同じだが、Argo は次の回を、コントローラーがワークフローを見直したときに始める（既定では変化から 10 秒。テストのクラスタは 1 秒にしている）。間隔の `backoff` は、同じ秒数にはならない。
 - `for` と `repeat` は、`withSequence` でイテレーションを並べ、`parallelism: 1` で一つずつ回す。再帰にしないのは、Argo がネストの深さを 100 までに限るからである。`break` のあとのイテレーションも並んでいるので、そのイテレーションは始まりのテンプレートで止まり、本体には入らない。`for … in parallel` は `parallelism` を `k` にする。各イテレーションは自分の `dd_ctl`・`dd_error`・変数を持ち、yield した値か、どう失敗したかを出力に残す。イテレーションがすべて終わってから、その並び（リストの順）で最初の失敗を探す。
-- `callback` は、ID を渡すステップのあとの suspend のステップで待つ。応答する側は `argo node set` で待ちのステップの出力 `answer` に `{"ok": 値}` か `{"error": 名前, "message": …}` を入れ、`argo resume` で進める。どちらも `inputs.parameters.callback_id.value=<ID>` でステップを選ぶ。タイムアウトすれば `answer` は既定の値になり、`timeout` として読む。Argo がリトライできるのは ID を渡すステップだけなので、`callback` のタスクの `retry` は E050。
+- `callback` は、ID を渡すステップのあとの suspend のステップで待つ。応答する側は `argo node set` で待ちのステップの出力 `answer` に `{"ok": 値}` か `{"error": 名前, "message": …}` を入れ、`argo resume` で進める。どちらも `inputs.parameters.callback_id.value=<ID>` でステップを選ぶ。タイムアウトすれば `answer` は既定の値になり、`timeout` として読む。Argo がリトライできるのは ID を渡すステップだけなので、`callback` のタスクの `retry` は E050。`timeout until` のコールバックは、ID を渡すステップのあとに期限までの秒数を計算するテンプレート（`s<場所>-until`）を置き、待ちのテンプレートの `suspend.duration` をその出力にする。式は `wait until` と同じものに切り上げと 1 秒の下限を足したもので、テンプレートに来たときに一度だけ評価される。ノードは 4 個増え、E040 の見積もりに足す（16 章）。
 - `workflow template` は、そのテンプレートから Workflow を作る resource のステップにする（`action: create` で作り、成功と失敗の条件で終わりを待つ）。結果は子の `dd_output`。子の失敗は `failure` としてしか届かないので、宣言したエラーは E050 にした。子を作るには、ワークフローのサービスアカウントに Workflow を作って見る権限が要る。
 - `wait until` は、待つ秒数を計算するテンプレートで一度だけ時計を読み、その秒数で suspend する。suspend の `duration` に `now()` を書くと、見に来るたびに計算し直される（`executeTemplate` は、動いているノードでもテンプレートの引数を埋め直す）。待ちのタイムアウトは、始まった時刻にその秒数を足して決まるので、タイムアウトの時刻が後ろへずれていく。
 - 冪等キーは `ワークフロー名/呼び出しの場所/各ループの回数`。
@@ -1274,7 +1279,7 @@ Temporal と同じく、コードを書き、チェックポイントと再生�
 - **文ごとに節点を一つ置く。** 節点の `run` の返り値の型に、次に行ける節点を全部書く。pydantic-graph はこの型から辺を作るので、`graph.render()` がそのまま `.flow` の流れ図になる。`match` は分岐ごとの節点へ分かれ、`on` のある呼び出しは処理したエラーの本体の最初の節点へ、ループの本体の終わりは次のイテレーションの節点（`S<場所>_again`）へ進む。
 - 変数は `State`（dataclass）のフィールドで、値は JSON のままの `dict` と `list`。ループの回数（冪等キーに入る）も `State` に置く。
 - 外への呼び出しは `Deps` を通す。`tasks`（dandori が書く `lambda`・`http`・`aws` の実装と、利用者の関数）、`rules`、`clock`、`callbacks`、`run_id`（冪等キーとコールバックの ID に入る、実行の名前）。利用者の関数は、宣言したエラーを `TaskFailure(kind, message)` で投げる。
-- 再試行、結果の検査、`on failure` の意味は Temporal と同じで、書き方も Python 版とそろえた（`dd.attempt`）。待ちとリトライの間隔は `Deps.clock` で眠り、タスクの `timeout` は `asyncio.wait_for` で測る。
+- 再試行、結果の検査、`on failure` の意味は Temporal と同じで、書き方も Python 版とそろえた（`dd.attempt`）。待ちとリトライの間隔は `Deps.clock` で眠り、タスクの `timeout` は `asyncio.wait_for` で測る。`connect` で呼ぶ規則は、サービスへの一回ごとに `dd.within(…, 10)` で包む。プロセスの中で計算する規則と日付（`Deps.rules`）には上限を付けない（16 章）。`timeout until` のコールバックは、ID を渡したあとで `Deps.clock` の時刻から期限までの秒数を出し（`dd.seconds_until`）、`await_callback` の待ちにする。
 - **並列のイテレーションは、イテレーションの本体を別のグラフにする。** イテレーションごとに `State` のコピーを作ってそのグラフを走らせ、`k` 個ずつ並べる。イテレーションの中で処理していないエラーはイテレーションのグラフの外に出て、ループの節点が、全部のイテレーションが終わってから、リストの順で最初のものを扱う。イテレーションの本体を節点の並びのまま、イテレーションごとの変数のコピーで走らせられるので、この形にした。
 - **実行はプロセスの中にしかない。** pydantic-graph 2.x は状態をどこにも残さない（1.x にあった `FileStatePersistence` などは無くなった）ので、プロセスが止まれば実行は失われる。何日もの `wait` やコールバックも書けるが、そのあいだプロセスが生きている必要がある。止まっても続く実行が要るなら、ほかのプラットフォームを使う。
 - `connect` で呼ぶ規則は、`tasks.py` の `make_tasks(own, transport)` に書く関数（`rule_<名前>`）で、グラフは `Deps.tasks` から呼ぶ（`Deps.rules` は同梱の規則だけ）。サービスを実装するフローでは、グラフの最初の節点が入力のゼロ値を埋めてから確かめ、サービスに書かれたコールバックの応答も埋める。`status` のメソッドを持つサービスは E050。
@@ -1297,14 +1302,16 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 | 子ワークフロー | ネストした実行 | `executeChild` | `context.invoke` | WorkflowTemplate から Workflow を作る | 利用者の関数 |
 | コールバック | `.waitForTaskToken` | シグナル | `createCallback` | suspend と `argo node set` | `Deps.callbacks` |
 | 並列のイテレーション | INLINE の Map、イテレーションの結果で失敗を運ぶ | `dd.rounds` | `context.map`、イテレーションの結果で失敗を運ぶ | `withSequence` と `parallelism`、イテレーションの出力で失敗を運ぶ | イテレーションごとのグラフを、状態のコピーで |
-| 規則 | Lambda と、Python をつなぐコード | アクティビティ（`local` ならローカルアクティビティ）と、TypeScript・Python・Go のどれかをつなぐコード | `context.invoke` と、Step Functions と同じ Lambda | コンテナと、TypeScript をつなぐコード | 関数と、Python をつなぐコード |
+| 規則 | Lambda と、Python をつなぐコード | アクティビティ（`local` ならローカルアクティビティ）と、TypeScript・Python・Go のどれかをつなぐコード | step の中の Invoke（`Transport` の `lambda`）と、Step Functions と同じ Lambda | コンテナと、TypeScript をつなぐコード | 関数と、Python をつなぐコード |
+| 規則と日付の一回の上限（16 章） | Task の `TimeoutSeconds` 10 | `startToCloseTimeout` 10 秒 | `dd.within(…, 10)` | caller のタイマー 10 秒（終了コード 143） | `connect` の規則は `dd.within(…, 10)`、プロセスの中の計算には無い |
+| `timeout until` の待ち（16 章） | `.waitForTaskToken` の Task の `TimeoutSeconds` を JSONata の式で | ワークフローのタイマー（`condition`、`wait_condition`、`AwaitWithTimeout`） | 時計を読む step と `createCallback` の `timeout` | 秒数を計算するテンプレートと suspend の `duration` | `Deps.clock` から秒数を出して `await_callback` |
 | on failure | Task の Catch | `TaskError` を捕捉する catch | Temporal と同じ | `dd_ctl` が `task` のときに走るステップ | `on failure` の本体の節点へ進む |
 | イベント（`event`） | 作れない（E050） | Update `dandori.event` を `condition` で待つ | 作れない（E050） | 作れない（E050、まだ） | 作れない（E050、まだ） |
 | `connect` で呼ぶ規則 | HTTP Task（`connection`）、結果は Task の出力の式で埋めて読む | dandori が書くアクティビティ `rule_<名前>`（`Transport` の `http`） | dandori が書く実装を step の中で | dandori が書く実装を caller のコンテナで | dandori が書く関数（`Deps.tasks`） |
 | 無い `T?`・`json`（入力、レコードのフィールド）を null として読む | `($exists(x) ? x : null)` | TypeScript は `?? null`、Python は `.get`、Go は `ddGet` | Temporal と同じ | 式の `nil`（`toJson` で null） | `.get` |
 | サービスの入口（ゼロ値を埋める） | 最初の Pass で入力を、Task の結果の式で応答を | ワークフローのコード（`T.fill`） | Temporal と同じ | 始まりのテンプレートの式（`sprig.set`） | グラフの最初の節点 |
 | サービスの `status` | 作れない（E050） | クエリ `dandori.status` | 作れない（E050） | 作れない（E050、まだ） | 作れない（E050、まだ） |
-| 日付（1.16） | Lambda と、koyomi の Python をつなぐコード | アクティビティ（`local` ならローカルアクティビティ）と、koyomi の TypeScript・Python・Go をつなぐコード | `context.invoke` と、Step Functions と同じ Lambda | コンテナと、koyomi の TypeScript をつなぐコード | 関数と、koyomi の Python をつなぐコード |
+| 日付（1.16） | Lambda と、koyomi の Python をつなぐコード | アクティビティ（`local` ならローカルアクティビティ）と、koyomi の TypeScript・Python・Go をつなぐコード | step の中の Invoke と、Step Functions と同じ Lambda | コンテナと、koyomi の TypeScript をつなぐコード | 関数と、koyomi の Python をつなぐコード |
 | 帳簿の操作（1.16） | 帳簿の Lambda と、chobo の Python のクライアントで操作するコード。仮押さえは Task の Assign で引数から作る | dandori が書くアクティビティ（`Transport` の `book` で chobo のクライアントを呼ぶ。Go 版はリフレクションで） | dandori が書く実装を step の中で | dandori が書く実装を caller のコンテナで | dandori が書く関数（`Transport` の `book`） |
 | `now`（1.16） | `$states.context.State.EnteredTime` を秒まで | ワークフローの時計（`Date.now()`、`workflow.now()`、`workflow.Now`） | 時計を読む step（チェックポイントに残る） | 値を計算するテンプレートの式の `now()` | `Deps.clock` |
 | 決められなかった規則の前提（1.17） | Choice と Fail（`Dandori.BrokenPrecondition`） | ワークフローのコードの `if` と `dd.fail` | Temporal と同じ | 値を計算するテンプレート（`dd_ctl` と `dd_error`） | 確かめる節点と `dd.Failure` |
@@ -1324,7 +1331,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - **参照インタプリタ**（`dandori run`）：シナリオ（入力と、呼び出しが受け取る結果の並び）に沿って型を付けた構文木を実行し、呼び出しをプラットフォームから見える形（Lambda の関数と payload、HTTP のメソッドと URL とヘッダと本文、AWS の API と引数、エージェントの名前・プロバイダー・モデル・指示・引数・Schema（Step Functions では Responses API か Messages API への HTTP のリクエスト）、ネストした実行・子ワークフロー・invoke の先と入力、Temporal のアクティビティと引数、durable functions の step と引数・コールバックの submit）で書き出す。並列のイテレーションは、リストの順に一つずつ回す。
 - **規則と期日と帳簿を計算しながら流す**（ritsu の `ritsu run`。ritsu の DESIGN 7.9）：参照インタプリタは、呼び出しの結果を、シナリオのほかに、走らせる側が渡すもの（`interp::Answers`）からも受け取れる。`ritsu run` が渡す `computed::Computed` は、規則の呼び出しには rulec の参照評価器の出力を、日付の呼び出しには koyomi のインタプリタが計算した日と時刻を、帳簿のタスクには chobo の参照インタプリタが操作した結果を返す。帳簿は、走らせる前にした操作（シナリオの `books`）から始まり、実行の中の操作を覚えていく。どの結果も、シナリオに書く形（`{"ok": …}`、`{"error": …, "cause": …}`）で返し、参照インタプリタはそれをシナリオの結果と同じに扱う（同じリトライ、同じエラーの名前、同じ結果の検査）。だから `ritsu run` の実行は、計算した結果を並びに入れたシナリオを `dandori run` で流したものと一字も違わない（`ritsu run --format json` の `replay` がそのシナリオで、`crates/ritsu/tests/run.rs` が確かめる）。
   - 言語に渡す値と、結果の読み方は、生成するコードと同じにした。日付の入力に渡す時刻はカレンダーのオフセットで日に読み（1.16）、`at` は koyomi の時刻の決め方（その日のその時刻をオフセットで UTC にしたもの）で書く。帳簿の操作は、振替の引数の名前で渡す（`render::book_call`）。Connect で呼ぶ規則の結果は、サービスが書く形にしてから読み直す。宣言していない理由で拒否された操作は、生成するコードと同じく `Dandori.Failure.<理由>` の失敗になる（Step Functions の見え方では、帳簿の Lambda 関数が理由の名前で失敗するので、理由そのもの）。規則が入力を受け付けなければ、生成したコードが入口で受け付けないのと同じく失敗になり、規則のほかの呼び出しと同じくリトライする。koyomi の日付の評価はファイルの入力を全部要るので、その日付が読まない入力には範囲のいちばん小さい値を渡す。koyomi の検査を通るファイルでは、範囲のどの入力でもどの日付も計算が止まらない（koyomi の E202〜E204）ので、結果は変わらない。
-  - 時間：実行はシナリオの `now` に始まり、`wait`（`wait until` ならその時刻まで）、リトライの前の待ち、タイムアウトした呼び出しのタイムアウトの長さだけ進む。結果が返った呼び出しには時間を数えない。シナリオはかかった長さを言わず、0 はありうるうちでいちばん短いからである。帳簿にも同じ時間がたち、有効期限の来た仮押さえは期限切れになる。`now` の値は、ほかの流し方と同じくシナリオの時刻のままにした（1.16）。並列のイテレーションは一つずつ回すので、その中の待ちは足し合わさる。
+  - 時間：実行はシナリオの `now` に始まり、`wait`（`wait until` ならその時刻まで）、リトライの前の待ち、タイムアウトした呼び出しのタイムアウトの長さ（規則と日付は 10 秒、`timeout until` のタスクは、その時点から期限までの秒数を切り上げたもの。1 秒より短くはしない。16 章）だけ進む。結果が返った呼び出しには時間を数えない。シナリオはかかった長さを言わず、0 はありうるうちでいちばん短いからである。帳簿にも同じ時間がたち、有効期限の来た仮押さえは期限切れになる。`now` の値は、ほかの流し方と同じくシナリオの時刻のままにした（1.16）。並列のイテレーションは一つずつ回すので、その中の待ちは足し合わさる。
 - **シナリオの自動生成**（`dandori scenarios`）：選んだ結果の記録を持ってワークフローを実行し直す。選び方は、選択の場所ごとに、まだ使われていない選択肢を先に取る。何か新しい所に着いた実行を土台にして、その途中の選択を一つずつ変えた実行を試し、そこから先は同じ場所で同じ選択を繰り返す（ループが回り切る流れはこれで出る）。結果の検査に落ちる結果（型の合わない結果、ありえない状態、範囲の外の数や列挙の値を持つ結果）も入れる。範囲を書いた入力（数か順序のある列挙の値の入力と、入力のレコードのフィールド）には、その一つずつに、そこだけを範囲のすぐ外の値にした入力の実行を一本ずつ入れる（9 章）。Connect のレスポンスには、既定値のフィールドを省いたレスポンス（レスポンスの中、中のメッセージ、メッセージのリストのどこでも）も入れ、どのプラットフォームも既定値を埋めて読むことを確かめる。`json` のフィールド（設定されていない `Value`）を省いたレスポンスも入れ、どのプラットフォームも null として読んで次の呼び出しに渡すことを確かめる。Claude のエージェントの応答には、列挙の値の大文字と小文字を変えた応答（どのリストにも項目が二つあり、オプショナルな値もある形）も入れる。`on cancel` のあるワークフローでは、`on cancel` の外のどの呼び出しにも、結果の代わりにキャンセル（`{"cancel": true}`）を選べる。並列のイテレーションの一つが失敗したあとに別のイテレーションでキャンセルが届く実行も、別のところとして数える。リストの長さは `for` が読むときに選び、空・一つ・二つ・上限を一つ超える長さを試す。オプショナルな値は `match` が読むときに、無い場合とある場合を選ぶ。二回以上回ったループと、一回だけのループを別のところとして数えるので、二つのイテレーションが済んでその先の終わりまで行く実行も残る。結果と入力の文字列と数は、一つの実行の中でどれも違う値にする（`id-5`、`id-6`、`1003` など）。同じ値ばかりだと、プラットフォームが二つの結果や並列のイテレーションの結果を取り違えても、突き合わせに出ない。範囲のある数は範囲の中から選ぶ（範囲が狭ければ、同じ数になることもある）。範囲を書いた列挙の値も、範囲に入る値から選ぶ。`ritsu dandori scenarios` は、手元の規則の呼び出しを選ぶ場所にせず、rulec の口で計算する（1.19）。
 - **Step Functions の突き合わせ**：生成した ASL を `tools/asl-run.mjs` が JSONata 2.0.6 で実行し、参照インタプリタと同じ形で書き出す。Map のイテレーションは一つずつ回し、イテレーションの中で外の変数に値を入れたら失敗させる（Step Functions の規則）。全シナリオで一致を見る。定義は asl-validator 4.0.0 にも通す。呼び出し方を持たないタスクのあるワークフロー（Temporal と durable functions 向けのもの）は、E050 を表示して外す。JSONata を 2.0.6 に保つのは、Step Functions がこのバージョンの仕様で評価するからである（AWS の開発者ガイド「Transforming data with JSONata in Step Functions」）。2.0.6 には既知の脆弱性が五つあり（細工した式や入力を評価したとき。直した 2.2.x は `$string` の数の書き方などが変わる）、ritsu の監査は `osv-scanner.toml` に理由と期日を書いて通している（ritsu の DESIGN 3.6）。ここで評価するのは、dandori が書いた ASL の式と、テストのシナリオの入力だけである。
 - **LocalStack の Step Functions の突き合わせ**：同じ ASL を、Docker で立てた LocalStack の Step Functions で `tools/localstack/run.mjs` が実行する。バージョンは 4.14.0 で、アカウントなしで立つコミュニティ版の最後のバージョンである（これより後のバージョンは認証トークンが無いと起動しない）。JSONata は dashjoin の Java 版（0.9.7）で、`tools/asl-run.mjs` の JavaScript 版とは別の実装になる。
@@ -1372,6 +1379,13 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
   - フローごとに一本（宣言したエラーを通るものがあればそれ）は、本物の Pod でも走らせる。`argo submit --from` と同じく WorkflowTemplate から作り、スタブのコンテナがクラスタの中のモック（`tools/argo/mock.mjs`）に結果を聞く。
   - コールバックの応答は `argo node set` と `argo resume` で渡し、タイムアウトのシナリオでは、タイムアウトしたときと同じ値を渡す。待ちは長さを 0 にしてすぐ進める。
   - タスクのタイムアウトは起こせないので、それを含むシナリオは外す。並列のイテレーションは一つずつ回す（`withSequence` を持つテンプレートの `parallelism` を 1 にする）。タイムアウトが起きないように、テンプレートの `activeDeadlineSeconds` には 120 秒を足して走らせる（本物の Pod の起動が期限に入るので。4.4 と 5.1）。
+- **規則と日付の呼び出しの上限**（16 章）：`tests/limits/limits.flow` は、規則を Lambda（`urgency`）と Connect のサービス（`urgency_service`）で一度ずつ呼び、どちらも `on timeout` で受ける。platforms の段の五つの試験（`rule_limits_hold_on_temporal`・`rule_limits_hold_on_localstack`・`rule_limits_hold_on_durable`・`rule_limits_hold_on_argo`・`rule_limits_hold_on_pydantic_graph`）が、規則の代わりに 15 秒答えない相手を置いて本当の時間で走らせ、どの試しも 10 秒で時間切れになること、試しが 10 秒とリトライの待ち（1 秒と 2 秒）の間隔で来ること、そのあと参照インタプリタのとおりに `on timeout` へ進むことを、呼ばれた回数と時刻と、実行がたどったステップで確かめる。ランナーは、環境変数 `DANDORI_LIMITS` があると、ふだん縮める待ちとタイムアウトを縮めず、呼ばれた時刻（`times`）を書く。durable functions と pydantic-graph の試験は Node か Python しか要らないが、本当の時間で一分ほど待つので、ほかの三つと同じく platforms の段で走らせる。
+  - Temporal（TypeScript・Python・Go）：dev server の履歴から、規則のアクティビティの START_TO_CLOSE のタイムアウト 3 回と、あいだの 1 秒と 2 秒のタイマーを読む。
+  - Step Functions：LocalStack のモックは `States.*` を投げられず、答えるのに時間もかからない。そこで `tools/localstack/limits.mjs` が、LocalStack に本物の Lambda 関数（Node.js 22 で、15 秒待ってから答える）を作らせて走らせる。LocalStack は docker のソケットを借り、関数ごとにコンテナを立てる。LocalStack は HTTP Task を知らないので、Lambda で呼ぶ規則だけを試す。時間切れになった試しの遅れた答え（TaskSucceeded）は、次の試しの途中で履歴に入るので、試しの始まりから 14.5 秒より早い答えは、その試しのものと数えない。
+  - durable functions：SDK のローカルの runner で、時計を進めずに（`skipTime` を false）、規則の Lambda と Connect のサービスの代わり（`Transport`）が 15 秒待ってから失敗する。
+  - pydantic-graph：本当の時計で、Connect のサービスの代わりが 15 秒眠る。プロセスの中で計算する規則には上限を付けないので、試さない。
+  - Argo：kind の上の本物の Pod で、Pod の中の `Transport` の代わり（`tools/argo/pod-transport.ts`）が答えず、caller の 10 秒のタイマーが終了コード 143 で終える。モックの送り先は、呼ばれた時刻を書く。caller の中で計算する同梱の規則はタイマーで止められないので（16.7）、Connect のサービスで呼ぶ規則だけを試す。
+  - CI の platforms のワークフローは、五つをほかの platforms の試験と同じく一つずつ回し、LocalStack の試験のために Lambda の Node.js 22 のイメージ（`public.ecr.aws/lambda/nodejs:22`）を先に取る。
 - **エージェントの突き合わせ**：`Transport` の差し替えは、エージェントの呼び出しを `Transport` に渡された形（名前・モデル・指示・引数・Schema）のまま書き出し、シナリオの値を `{"answer": …}` に包んで返す。失敗は投げる（Agents SDK が拒否を投げるのと同じ）。ASL のランナーは、Responses API への HTTP Task に API のレスポンスの形（推論の項目と、`output_text` を持つメッセージ）で返し、失敗は、モデルが拒否した応答（`output_text` の無いメッセージ）で返す。Messages API への HTTP Task には、思考のブロックと `text` のブロックを持ち `stop_reason` が `end_turn` の応答で返し、失敗は `stop_reason` が `refusal` の応答で返す。ステートマシンがそれを読む式で Task が失敗し、Retry と Catch に渡るところまでを確かめる。ランナーは、Task の Assign と Output の式の失敗を、Step Functions と同じく Retry と Catch に渡す。
 - **既定の `Transport` のエージェント**：TypeScript の既定の実装（Temporal・durable functions・Argo の caller が同じ `io.ts` を使う）と Python の既定の実装（Temporal と pydantic-graph が同じ `io.py` を使う）を、OpenAI の Agents SDK（TypeScript 0.18.0、Python 0.22.3）で走らせる（`tools/agents`）。モデルには、OpenAI の代わりに、応答を前もって決めた SDK のテスト用のモデル（`ScriptedModel`）を渡すので、OpenAI には何も送らない。シナリオのエージェントの呼び出しすべてについて、モデルが受け取ったもの（モデルの名前・指示・入力の文字列・応答の Schema）が Step Functions の同じ呼び出しで送るものと同じで、モデルの設定もツールも空であること、応答がそのまま返ること、拒否が `ModelRefusalError` になることを確かめる。また、`Transport` が作るクライアントをローカルの Responses API のモックに向け、500 が返ると一回だけ送って `InternalServerError` で失敗することを確かめる。Claude のエージェントは、Anthropic の SDK（TypeScript 0.128.0、Python 1.8.0）で、ローカル（127.0.0.1）に立てた Messages API のモックに送らせる。モックが受け取ったリクエスト（パス、`anthropic-version`、本文）が Step Functions の同じ呼び出しで送るものと同じで、一回だけであること、応答がそのまま返ること、拒否（`stop_reason: refusal`）で `AgentStopped` を投げること、500 が返るとリトライせずに `InternalServerError` で失敗することを確かめる。Anthropic には何も送らない。Open Responses のほかのサーバーのエージェント（`url`）は、送り先のパスはそのままに、ローカルに立てたそのサーバーのモックに送らせる。モックが受け取ったリクエスト（メソッド、パス、本文）が Step Functions の同じ呼び出しで送るものと同じで、一回だけであること、応答がそのまま返ること、拒否で `AgentStopped`、500 でリトライせずに `AgentHttpError` になることを確かめる。Go の既定の実装（`io.go`。Agents SDK が無いので openai-go と Anthropic の Go の SDK）は、Go のランナーの `--agents` が、`TransportOptions.HTTPClient` で送り先をローカルのモックに替えて走らせる。OpenAI のエージェントも、モックの Responses API が受け取ったリクエスト（メソッド、パス、本文）が Step Functions の同じ呼び出しで送るものと同じで一回だけであること、Claude のエージェントは TypeScript と Python と同じことを確かめる。拒否は `AgentStopped`、500 は SDK のエラー（`Error`）か、Open Responses なら `AgentHTTPError` で、どれもリトライしない。
 - **本物の Open Responses のサーバー**：このマシンで Ollama が動いていれば（`DANDORI_OLLAMA`、既定は `http://127.0.0.1:11434`）、`url` のあるエージェントごとに、シナリオで応答のある最初の呼び出しを、モデルを Ollama にあるもの（`DANDORI_OLLAMA_MODEL`、無ければいちばん小さいもの）に替え、エフォートを外して（小さなモデルは推論しないことがあり、Ollama はそうしたモデルへのエフォートを拒否する。エフォートの形はモックのサーバーで Step Functions と突き合わせている）、TypeScript と Python と Go の既定の `Transport` から本当に送る。応答は、タスクの型に合わなければならない。Ollama が無ければ SKIP にする。テストの前に読み込まれていなかったモデルは、終わったら下ろす（Ollama は読み込んだモデルを 5 分置き、8B のモデルでは 8 GB を超える。テスト全体の途中でメモリが逼迫した）。
@@ -1588,7 +1602,8 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - **Temporal で、規則をいつもローカルアクティビティにすること。** 往復と履歴は減るが、規則をワークフローと同じワーカーに置くことになり、規則だけを出し直せなくなる。ループの中で何度も判定するワークフローのために、`use rule` の下の `local` で選べるようにした（4.2）。
 - **Temporal で、コールバックをアクティビティの非同期完了で受け取ること。** はじめはこの形だった。応答する側がアクティビティのタスクトークンを持つ必要があり、待つあいだアクティビティが開いたままになる。シグナルなら、応答する側はワークフローを指す ID だけを持てばよく、待ちは `condition` のタイムアウトで表せ、テスト環境で時間を飛ばしてタイムアウトまで確かめられる。
 - **durable functions で、`lambda` のタスクを `context.invoke` で呼ぶこと。** 4.3 のとおり、宣言したエラーを見分けられない。step の中で Invoke を呼ぶ実装を dandori が書けば、利用者のコードも要らない。
-- **durable functions で、step の `retryStrategy` にリトライを任せること。** step だけなら関数一つで Step Functions と同じ並びを書けるが、`context.invoke` にはリトライの設定が無い。規則の呼び出しはどのみちワークフローのコードでリトライするので、step もそれにそろえた。
+- **durable functions で、step の `retryStrategy` にリトライを任せること。** step だけなら関数一つで Step Functions と同じ並びを書けるが、`durable function` のタスクを呼ぶ `context.invoke` にはリトライの設定が無く、それはワークフローのコードでリトライするので、step もそれにそろえた。
+- 規則と日付の呼び出しの上限の付け方と、`timeout until` の書き方で捨てた形は、16.4 にまとめた。
 - **Step Functions で、ネストした実行の失敗を Cause から読み分けること。** 子の `fail` の名前は Cause の JSON の中にあると思われるが、その形を文書で確かめられなかった。確かめられない形に頼る代わりに、宣言したエラーを E050 にした。
 - **並列のイテレーションの失敗を、先に起きた順で決めること。** プラットフォームごとに並べ方も速さも違うので、同じシナリオでも結果が変わる。リストの順なら、どのプラットフォームでも同じ失敗になる。
 - **Argo で、ステップの `when` や引数からグローバル出力パラメータを読むこと。** はじめはこの形で、変数を読む式をそのまま `when` と引数に書いていた。4.4 のとおり、同じテンプレートの前のステップが入れた値が見えない。kind の上では、処理していないエラーのあとの文まで走った。動いているステップの `when` が途中で偽に変わると、そのステップが進まなくなることも、ソースで確かめた。
@@ -1679,7 +1694,7 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - 変数の範囲を、流れに沿って（値を入れた場所ごとに）求めること。いまは、変数に入れるすべての値の範囲を合わせる（1.3）。
 - 子の `.flow`（1.9）を、本物の子と親で走らせる確かめを、Temporal のほかのプラットフォームでもすること（いまは子のスタブで突き合わせ、本物どうしは Temporal だけ）。pydantic-graph で、子のグラフを親のプロセスの中でそのまま走らせること（いまは利用者が書く関数）。
 - 規則を ASL の中に JSONata として埋めること。rulec の側の新しいプラットフォームになり、数を 2^53 までに収める証明が要る。
-- durable functions のシナリオでタイムアウトを起こすこと。
+- durable functions の突き合わせのシナリオでタイムアウトを起こすこと（規則と日付の上限の時間切れだけは、上限の試験が本当の時間で起こす。5 章）。
 - durable functions の Python（`aws_durable_execution_sdk_python`）への出力。
 - AWS の上（Step Functions の TestState と、durable functions の CloudDurableTestRunner）での確認と、`Transport` の既定の実装を本物の AWS と HTTP の本物の送信先に向ける確認（いまはローカルのモックと moto まで）。Temporal は dev server の上で確かめているが、本番の構成や Temporal Cloud の上では確かめていない。
 - LocalStack の今のバージョンでの突き合わせ。今のバージョンのイメージ（2026.8.4）は HTTP Task の実装を持つので、resource を替えずに流せるかもしれないが、起動に認証トークン（無料の Hobby のプランでも、アカウント）が要る。4.14.0 の扱い（5 章）のうち、式の評価の失敗の名前とモックの `States.` のエラーが、今のバージョンで直っているかも見ていない。
@@ -1688,7 +1703,9 @@ Temporal の列は、TypeScript 版・Python 版・Go 版のどれにも当て�
 - Argo Workflows（名前で再開する suspend のステップ）と pydantic-graph（`Deps` に名前で届く値）の `event`。
 - 待ちの途中でも受け取るイベント（受け取ったら流れを変える、Temporal のシグナルやアップデートのハンドラにあたるもの）。いまの `event` は、流れの一か所で待つものだけである。
 - Temporal で、一番外にないループ（ループの中のループ、`match` の中のループ）でも新しい実行で続けること。続きの実行に、外のループのイテレーションと、どの枝にいたかも渡すことになる。
-- Argo で、タスクのタイムアウトを含むシナリオを起こすこと（Pod をタイムアウトで止める仕組みが要る）。
+- Argo で、タスクのタイムアウトを含むシナリオを起こすこと（Pod をタイムアウトで止める仕組みが要る。規則と日付の上限の時間切れだけは、上限の試験が本物の Pod で起こす。5 章）。
+- コールバックの ID を渡す側に、どの出力先でも同じ上限を付け、X5 がそれを数えること（16.7）。
+- `event` と `callback` の期限を、変数に入れ直した時刻（`let t = due.at`）からも X5 が数えること（16.7）。
 - Argo の `on cancel`（`argo stop` で走る exit handler として）と、pydantic-graph の `on cancel`（グラフを走らせるタスクのキャンセルを受け取って）。
 - 待ち（`wait`）のあいだに届くキャンセルのシナリオ。いまのシナリオは、呼び出しのあいだに届くキャンセルだけを演じる（検査は待ちも数える）。
 - Argo で、`workflow template` の子が宣言したエラーを見分けること。子の `dd_error` は子の Workflow の出力に残るので、resource のステップで読めるはずだが、失敗した resource のステップが出力を集めるかを確かめていない。
@@ -2138,3 +2155,136 @@ TypeScript の `fetch` と Python の urllib（生成した Transport の書き�
 
 - ritsu の `tests/cross.rs` の X5 の試験に、15 日のうちに来ない承認を待って `on timeout` で取り消す形を二つ足した。イベントで待つと E206、タスクで待つと W206 で、注は「0 秒から 15 日 1 分のあいだ」である。golden は `crates/ritsu/tests/golden/cross/x5-event-E206` と `x5-task-W206`（英日）で、cross の試験 12 件が通った。
 - 木の 231 本の `.flow` の `ritsu dandori` の出力は、この直しでは変わらない（X5 は `ritsu check` が言う）。
+
+## 16. 規則と日付の呼び出しの上限と、時刻までの答えの待ち（`timeout until`）（2026-10-29）
+
+### 16.1 きっかけ
+
+仮押さえを 7 日もたせ、承認を 3 営業日待つ返金のフローを考える。3 営業日は、年末年始をはさむと暦日で 11 日になる（12 月 24 日に受け付ければ 1 月 4 日）ので、仮押さえは承認を待つあいだに切れうる。ritsu の X5（根の DESIGN 7.7）がこれを見つけるはずだったが、二つの理由で見つけられなかった。
+
+- **規則と日付の呼び出しの長さに上限が無かった。** 営業日の待ちは、koyomi の日付を呼んでから `wait until <日付>.at` と書く。X5 は `wait until` を koyomi の日数の幅で数えられるが、規則と日付の呼び出しを「上限なし」と数えたので、仮押さえからの長さの最大が決まらず、何営業日にしても W206（決められない）になった。W206 の見本（`ritsu explain W206`。仮押さえは 60 日）のタスクに `timeout 30 seconds` を書いても、替える前の ritsu は次のように言った。
+
+```text
+warning[ritsu W206]: invoice.flow:33:1: Whether the hold of the case `goods` has expired when `ship` posts it cannot be decided
+    33 |   goods <- ship(order: order, sku: sku)
+  = `ship` comes 17 days 9 hours or more after the hold is made (line 29), and nothing bounds how much more: nothing in the flow bounds how long the call of the date `terms.payment` (line 31) takes; the hold expires 60 days after it is made
+```
+
+- **答えの待ちの終わりを、時刻で書けなかった。** `event` と `callback` の `timeout` は、タスクの宣言に書く決まった長さ（`timeout 3 days`）だけで、「受け付けた日から 3 営業日後の 17 時まで承認を待つ」は書けなかった。
+
+### 16.2 原因
+
+- 規則は純関数ですぐ終わるものとして、呼び出しの長さを出力先に任せていた。リトライの並び（`check.rs` の `RULE_RETRIES`。2 回、1 秒と 2 秒の間）は出力先でそろえていたが、一回の上限は Temporal の生成器の定数（`temporal.rs` の `RULE_SECONDS`、`startToCloseTimeout` 10 秒）にしか無かった。Step Functions の Task には `TimeoutSeconds` が無く、durable functions は `context.invoke` で呼んでいて（SDK 2.4.0 の `InvokeConfig` にタイムアウトの設定が無い）、Argo の規則の Pod にも、pydantic-graph と durable functions の `connect` の規則の送信にも、上限が無かった。日付の呼び出しは規則と同じに作るので、同じだった。
+- `timeout` の句は長さしか読まなかった（`syntax.rs` の `task_clause`）。
+
+### 16.3 決定
+
+**一、呼び出しの上限。** どの出力先でも、規則と日付の呼び出しの一回に 10 秒の上限を付け、時間切れは失敗と同じく 2 回までリトライする（1 秒と 2 秒の間）。リトライのあとは、ほかのタスクの時間切れと同じく、呼び出しの `on timeout`（無ければ `on failure` か、ワークフローの失敗）に入る。値は `check.rs` の `RULE_SECONDS`・`RULE_RETRIES`・`RULE_RETRY_INTERVAL`・`RULE_RETRY_BACKOFF` の一か所に置き、生成器、参照インタプリタ、X5、`doc` の表、試験がそこを読む（`temporal.rs` の `RULE_SECONDS` は、それを指す定数にした）。X5 は一回の呼び出しを、3 回の 10 秒と 1 秒と 2 秒の待ちで、最大 33 秒と数える（`check::rule_call_most`）。
+
+| 出力先 | 上限の付け方 | 時間切れの届き方 | 前 |
+|---|---|---|---|
+| Step Functions | 規則と日付の Lambda の Task と、`connect` の HTTP Task に `TimeoutSeconds: 10` | `States.Timeout`（Retry の `States.ALL` と Catch に入る） | 無し |
+| Temporal（TypeScript・Python・Go） | 規則と日付のアクティビティの `startToCloseTimeout` 10 秒 | アクティビティのタイムアウト | 同じ（変えていない） |
+| Lambda durable functions | step の中で、`Transport` の `lambda`（Invoke）か、`connect` のサービスへの送信を、`dd.within(…, 10)` で包む | `Dandori.Timeout` | Lambda は `context.invoke` で無し、`connect` も無し |
+| Argo Workflows | caller（`call.ts`）の 10 秒のタイマー。過ぎれば `error.json` に `Dandori.Timeout` を書き、終了コード 143 で終える | 期限で止められた Pod と同じく `timeout` | 無し |
+| pydantic-graph | `connect` の規則は `dd.within(…, 10)`。プロセスの中で計算する規則と日付には付けない | `asyncio.TimeoutError` から `timeout` | 無し |
+
+- **Temporal** は `startToCloseTimeout` のままにした。ワーカーが受け取ってから数え、タスクキューで待つ時間は入らない。`scheduleToCloseTimeout` にすれば入るが、混んだワーカーで今まで通っていた呼び出しが時間切れになる。
+- **durable functions** は、規則と日付を `lambda` のタスクと同じ形（step の中で dandori が書く実装が Invoke を呼ぶ）に替えた。変わることが三つある。一つは、invoke の操作と違い、入力が履歴に残らないこと。規則と日付は副作用を持たず、入力は実行の状態から決まるので、再生には困らない。二つ目は、答えを待つあいだ durable の関数が動いたままになること（一回の呼び出しで 33 秒まで）。三つ目は、`dandori run --target durable` の呼び出しの形が、`{"invoke": <関数>, "payload": …}` から `{"lambda": <関数>, "payload": …}`（Step Functions と同じ）に変わること。Invoke のレスポンスには関数のエラーの型が残るので、invoke でエラーの名前が落ちる問題（4.3）にも当たらない。操作の数は一つのままで、E040 の見積もりは変わらない。
+- **Argo** は、Pod ではなく caller の中の呼び出しに 10 秒を付けた。Temporal の `startToCloseTimeout` がタスクキューの待ちを数えないのとそろえ、Pod をノードに置いて起動するまでの時間は数えない。Pod の起動だけで 10 秒を超えることは、負荷の下では珍しくない（5.1 の記録では、期限の付いた Pod 16 個のうち 4 個で、作ってからメインのコンテナが終わるまでが 10 秒以上だった）。時間切れは期限で止められた Pod と同じ終了コード 143 で、同じように扱われる（`timeout` の名前、`retryStrategy`、`on timeout`）。Argo で前は通っていた実行が落ちるのは、呼び出しそのものが 10 秒を超えたときだけである。プラットフォームの待ち（Temporal のタスクキュー、Argo の Pod の置き場所と起動）に上限が無いことは、X5 の前提として根の DESIGN 7.7 の ★ に書く。
+- **pydantic-graph** の、プロセスの中で計算する規則と日付（`Deps.rules`。rulec と koyomi の Python）には上限を付けない。入出力の無い計算で、規則の表と暦の範囲で必ず終わり、asyncio は同期のコードを途中で止められない（`asyncio.wait_for` は、計算が終わってからしか時間切れに気づかない）。X5 はここも 33 秒と数え、上からの見積もりとして成り立つ。
+
+**二、時刻までの答えの待ち。** タスクの句に、長さの代わりに `timeout until <引数>` と書ける。引数はそのタスクの `timestamp` の引数で、呼ぶ側が時刻を渡す。
+
+```text
+task ask_for_approval(application_id: string, by: timestamp) -> Approval
+  callback
+  timeout until by
+
+flow
+  let due = approvals.due(received: now)
+  let a = ask_for_approval(application_id: application.id, by: due.at)
+    on timeout => …
+```
+
+- 書けるのは、答えを待つタスク（`event` と `callback`）だけ（ほかは E007）。仕事をするタスクを暦の時刻で切るのは、答えを待つことと違うからである。
+- 答えの待ちは、渡した時刻に終わる。待つ秒数は秒に切り上げ、待ちを始めたときに 1 秒を切っていれば（過ぎていても）1 秒待つ。1 秒は Step Functions の `TimeoutSeconds` が取れるいちばん小さい値で、どの出力先も同じ下限にした。時間切れは `timeout` で、`on timeout` が受ける。
+- `callback` のタスクでは、期限の引数もほかの引数と同じく ID と一緒に送る（答える人に期限を見せられる）。`aws` のタスクの引数は API の引数なので、`aws` のコールバックには書けない（E007）。期限を過ぎてからのリトライはすぐまた時間切れになるので、`timeout` をリトライする `retry`（`on` を書かないものも）も書けない（E007）。`retry … on failure` は書ける。
+- `event` のタスクは、期限の引数のほかに引数を取らない（E007 の文を替えた）。
+- 期限の引数がタスクに無ければ E002、`timestamp` でなければ E003（`timestamp?` も）。`timeout` を二つ書けば E007（前は、あとに書いたものが黙って使われた）。新しい番号は作っていない。
+
+期限の秒数は、どの出力先でも `now` と同じ時計の読み方から出す。runner がすでに `now` をシナリオの時刻に替えているので、その置き換えが期限にもそのまま効く。
+
+| 出力先 | `event` | `callback` | 秒数の出し方 |
+|---|---|---|---|
+| Temporal TypeScript | `dd.awaitEvent` の待ち | ID を渡すアクティビティのあとの `dd.awaitCallback` の待ち | `runtime.ts` の `secondsUntil`。ワークフローの時計から |
+| Temporal Python | `await_event` の待ち | `await_callback` の待ち | `runtime.py` の `seconds_until`。`workflow.now()` から |
+| Temporal Go | `awaitEvent` の待ち | `awaitCallback` の待ち | `runtime.go` の `ddSecondsUntil`。`workflow.Now` から |
+| Step Functions | 作れない（E050。前と同じ） | `.waitForTaskToken` の Task の `TimeoutSeconds` を JSONata の式にする | `$max([1, $ceil(($toMillis(<時刻>) - $toMillis(<now>)) / 1000)])`。`now` はステートに入った時刻 |
+| durable functions | 作れない（E050） | 時計を読む step のあとで `createCallback` の `timeout` に | `runtime.ts` の `secondsUntil` に、step で読んだ時刻を渡す（ワークフローの中の `Date.now()` は再生で変わる） |
+| Argo Workflows | 作れない（E050） | ID を渡すステップのあとに秒数を計算するテンプレート（`s<場所>-until`）を置き、待ちの `suspend.duration` にする | `wait until` と同じ式に、切り上げと下限 1 を足したもの。テンプレートに来たときに一度だけ評価される |
+| pydantic-graph | 作れない（E050） | ID を渡したあとの `await_callback` の待ち | `runtime.py` の `seconds_until`。`Deps.clock` から |
+
+待ちの始まりは出力先で少し違う。Step Functions と durable functions は ID を渡す前から時計が動き（Task とコールバックの時間切れが、渡すことも含む）、ほかは渡したあとで秒数を出す。どちらも期限の時刻に終わる。違いが出るのは、ID を渡しているあいだに期限が過ぎたときだけで、前の二つはすぐ、ほかは 1 秒後に時間切れになる。
+
+- **参照インタプリタ**：答えが `timeout` なら、時間を期限まで進める（`interp::Answers` の `timeout_until`。`ritsu run` の `computed.rs` は、その時点から期限までの秒数を切り上げ、1 秒より短くはせずに時計と帳簿の時間を進め、`ritsu run` の行に「the timeout of the wait until <時刻>」と出す）。規則と日付の呼び出しの時間切れは、10 秒進める。答えがイベントの値か宣言したエラーなら、時間は進めない（前と同じ）。シナリオの探索は変えていない。
+- **X5**（`crossings.rs`）：期限の引数に渡した式が `x.at` で、`x` が「日付の入力に、仮押さえのあとで読んだ `now` を渡した koyomi の日付の答え」なら、期限を `wait until x.at` と同じく koyomi の日数の幅で数える。呼び出しの最大は、呼び出しを始めたときの最大と期限の最大の大きいほうに、切り上げの 1 秒を足したもの。イベントのタスクの `on timeout` だけのハンドラーは、期限の最小より早くは動かない（15 章の、決まった `timeout` を足す扱いの代わり）。コールバックの `on timeout` の最小は、前と同じく呼び出しの始まりのままにした（ID を渡すほうが先に時間切れになりうる）。期限がほかの式（入力、タスクの答え、仮押さえの前に読んだ `now`、変数に入れ直した値）なら、最大は上限なしで、注がその期限を言う。koyomi の日数が最大を決めたときは、W206 の注に、最大になる日（ritsu-ports の `DaySpan::most_at`）と、そのときの期限の日と時刻を出す（ritsu-ports の `HoldSpan::most_why`）。
+- **E040**：`timeout until` の呼び出しは、durable functions で時計を読む step の 1 操作、Argo で秒数を計算するステップグループとテンプレートの 4 ノードを足す。Temporal（タイマーは前と同じく一つ）と Step Functions（ステートは増えない）は変わらない。E050 に新しいものは無い。
+- **`doc`**：規則と日付の行のリトライの列を「1 秒後と 2 秒後の 2 回（failure・timeout）」に、タイムアウトの列を 10 秒にした。`timeout until` のタスクは「`due.at` まで」と出す。
+- **例**：`review` の四つの版（argo・aws・pydantic-graph・temporal）と日本語の版は、承認を、申し込みが来てから 3 営業日後の 17 時まで待つ（英語は `calendars/weekdays.cal` と `dates/approval_terms.cal`、日本語は `calendars/平日.cal` と `dates/承認の期日.cal`）。
+
+### 16.4 捨てたもの
+
+- **durable functions で、invoke と `context.wait` を `context.promise.race` で競わせること。** SDK の文書はタイムアウトの用途に挙げているが、負けたほうの操作（走り続ける invoke か、残る wait）を再生でどう扱うかを確かめていない。上限をそれに頼りたくない。
+- **規則の Lambda 関数そのもののタイムアウトを 10 秒にしてもらうこと。** 生成物の外の設定に頼り、時間切れは `timeout` ではなく関数のエラー（`failure`）として届く。
+- **Argo で、規則の Pod の `activeDeadlineSeconds` を 10 秒にすること。** Pod の起動が期限に入るので、混んだクラスタでは、呼び出しが起動だけで時間切れになり、2 回のリトライのあとで失敗しうる。**Argo だけ長い上限にすること**も、どの出力先でも同じ上限という決まりから外れ、X5 はいちばん長いもので数えることになるので捨てた。
+- **Temporal で `scheduleToCloseTimeout` にすること。** 16.3 のとおり。
+- **pydantic-graph で、プロセスの中の規則を `asyncio.to_thread` で別のスレッドにして時間切れにすること。** スレッドは止められずに走り続け、Temporal の Python 版と共有する `rules.py` の作りも替わる。
+- **期限を呼ぶところに書くこと**（`let a = approval() until due.at`）。呼び出しの構文木（`TK::Call`）にフィールドが要り、それを分解している 11 ファイル 14 か所と、すべての生成器の呼び出しの引数が替わる。同じタスクを期限付きと無しで呼べると、宣言の `timeout` の意味が呼び出しごとに変わる。
+- **期限の引数を送らないこと。** 宣言にある引数が黙って送られないのは分かりにくく、答える人に期限を見せたいときに同じ値をもう一つの引数で渡すことになる。
+- **期限の長さを式で書くこと**（`timeout due.at - now`）。dandori に時間の長さの値が無く、X5 が期限の出どころを読めなくなる。
+- **下限を置かないこと。** Temporal は 1 ミリ秒まで、Step Functions は 1 秒までなので、出力先で意味が 1 秒ずれる。期限を過ぎていたら Step Functions で Choice からすぐ `on timeout` に進める形も、ステートと Argo のノードが増えるので捨てた。
+
+### 16.5 変わること
+
+- **前は通っていた実行が落ちうる。** 10 秒を超える規則と日付の呼び出しは、Step Functions、durable functions、Argo（caller の中の呼び出しが 10 秒を超えたとき）、pydantic-graph の `connect` の規則で、時間切れになり、2 回リトライしたあと `on timeout`（無ければ `on failure` か、ワークフローの失敗）に進む。Temporal は前と同じである。
+- **生成するコード。** 替える前（8b069303）と後のバイナリの `ritsu dandori` を、替える前の木の 233 本の `.flow` にかけ、15 の出力（`check` の英日のテキストと JSON、七つの生成先の `build`、`doc` の英日の Markdown と HTML、`scenarios`）と、`.flow` のある 52 のディレクトリの `ritsu check`（英日のテキストと JSON）を比べた。12,641 ファイルのうち 483 が変わった。
+  - Step Functions：28 本の 50 の Task に `"TimeoutSeconds": 10` が足された。
+  - durable functions：38 本の `workflow.ts` で、規則と日付の 60 の呼び出しが `context.step(…, async () => dd.within(tasks.rule_<名前>(…), 10), …)` の形になった（46 は `context.invoke` から、14 は `connect` の step に上限が付いた）。26 本の `tasks.ts` に、Lambda で呼ぶ規則と日付の実装（`LambdaRules`）が足され、その `workflow.ts` の `run` が受け取る `tasks` の型も `LambdaRules` を含むようになった。
+  - Argo：40 本の `caller/call.ts` に、規則と日付の呼び出しの 10 秒のタイマーが足された。
+  - pydantic-graph：13 本の `graph.py` で、`connect` の規則の 16 の呼び出しが `dd.within(…, 10)` で包まれた。
+  - Temporal の TypeScript と Python の出力は、一字も変わらない（`BUILD_ID` も同じ）。Go も、次の import の順を直した二本のほかは変わらない。
+  - Go の `rules.go` は、パッケージの外のフローが規則と日付の両方を呼ぶとき、import を一つの組にしてパスの順（gofmt の順）に並べる。前は規則のモジュールのあとに koyomi の日付のパッケージを並べたので、規則のモジュールの名前が `koyomi/go/…` より後ろに来ると、gofmt の形にならなかった。替える前の木では、ritsu の試験のプロジェクト `tests/projects/invoice` の二つの版（`invoice.flow` と `invoice.ja.flow`。規則のモジュールは `paymentmethod`）がそうで、その `rules.go` の import の順と、`worker.go` の `BuildID` が変わる（4 ファイル。ワーカーのバージョニングでは、新しいビルドとして扱われる）。dandori の例と試験のフローには無く、例 `review` が日付を呼ぶようになって、tools の段の `generated_go_vets` に出た。
+  - `doc`：規則か日付を呼ぶ 79 本の英日の Markdown と HTML で、706 の行（規則と日付の行のリトライとタイムアウトの列）が変わった。
+  - `check`、`scenarios`、`ritsu check`：`tests/fixtures/events.flow` の E007 の文（16.3）だけが変わった（その文を出す 18 のファイル）。ほかの診断、境目の答え、シナリオは同じである。
+- `timeout until` を使う新しい形のフロー（`review` の八つの版、`tests/flows/deadlines.flow` と `deadline_event.flow`）は、替える前の dandori では E001 になる。`review` の Temporal の記録した履歴は、承認を待つ回（`run-3`）が無くなり、時間切れまで待つ回（`run-8`）を三つの言語で記録し直した。
+- X5 は、規則と日付の呼び出しのあとの長さを数で言う。16.1 の見本は、替えたあとは成り立つ（何も言わない。境目は「確かめた 2 か所、決められない 1 か所」で、残る一つは W205）。ritsu-cross の台帳の E206 と W206 の文、`docs/codes.md` と `docs/codes.ja.md` も合わせた。
+
+### 16.6 確かめたこと
+
+- **上限の試験**（5 章）を、出力先ごとに本当の時間で走らせた。Temporal の三つの言語では、規則のアクティビティが Lambda の規則でも Connect の規則でも 10.0 秒の START_TO_CLOSE のタイムアウトを 3 回起こし、あいだのタイマーは 1.0 秒と 2.0 秒だった。LocalStack では、Lambda の Task が 10.0 秒の `States.Timeout` を 3 回起こし、リトライの待ちは参照より長くて 0.010 秒で、遅れて届いた答えが履歴に 3 件あった。durable functions では、Lambda と Connect のどちらも試しが 11.0 秒と 12.0 秒の間隔で来て、最後の試しから 10.1 秒で終わった。pydantic-graph では、Connect の規則の試しが 11.0 秒と 12.0 秒の間隔で来て、10.0 秒で終わった。Argo（kind の上の v4.1.4、コントローラーの見直しは 1 秒）では、Connect の規則の Pod が三つとも終了コード 143 で終わり、試しは 11.2 秒と 12.2 秒の間隔で来て、最後から 11.2 秒で終わった。どの実行も参照インタプリタのとおり `on timeout` に進んだ。
+- dandori の重い試験を、一つずつ全部回した（Temporal の突き合わせの三つの言語と、言語をまたぐアクティビティ、Worker Deployment Versioning、子の `.flow`、記録した履歴の再生、Argo、LocalStack、durable functions、pydantic-graph、上限の五つ）。どれも通った。Open Responses の試験は、Ollama が動いていないので SKIP になった。
+- dandori の tools の段も全部回した（生成した TypeScript の型の検査、Go の `go vet` と gofmt、Step Functions の参照の実行、既定の `Transport`、Mermaid と Chrome の図、PostgreSQL と TigerBeetle の帳簿など）。帳簿の試験の MySQL の部分は、機械に MySQL が無いので SKIP になった。
+- 年末年始：返金のフロー（仮押さえは 7 日、承認は受け付けた日から 3 営業日後の 17 時まで、`timeout until` で待つ。営業日は東京の祝日を入れたカレンダー）で `ritsu check` を回すと、確定と三つの取消が W206 になり、注は次のとおりだった。暦日の 3 日（`timeout 3 days`）のままなら、成り立つ（境目は 19 か所を確かめ、決められないものは無い）。
+
+```text
+warning[ritsu W206]: policy/返金.flow:120:1: Whether the hold of the case `押さえ` has expired when `確定する` posts it cannot be decided
+   120 |   押さえ <- 確定する(申請: 申請番号)
+  = `確定する` comes 0 seconds to 11 days 17 hours 7 minutes 37 seconds after the hold is made (line 93), and the hold expires 7 days after it is made
+  = The longest is when the `now` given to `承認の期限` (line 107) falls on 2026-12-24: `承認の知らせ` (line 108) waits until `承認の期限.at`, 2027-01-04 at 17:00, 11 days after it
+  = The book refuses a call on an expired hold with `expired`, which the flow handles here.
+```
+
+- ritsu の `tests/cross.rs` の X5 に、支払日の 09:00 まで承認を待つ形を四つ足した。イベントで待てば、取消は仮押さえから早くて 17 日 9 時間あとなので E206、コールバックで待てば W206 で、注は「いちばん長くなるのは、42 行目の `payment` に渡した `now` が 2026-07-21 のときです。43 行目の `approval` は、その日から 51 日後の 2026-09-10 の 09:00（`due.at`）まで待ちます」、仮押さえを 60 日にすれば成り立ち、入力の時刻まで待てば上限なしの W206 である。
+- dandori の fast の段：`tests/fixtures`（`deadlines.flow` に E002・E003・E007 の六つ、`deadline_twice.flow`、英日の golden）、`tests/ports.rs`（期限のある `event` と `callback` の長さ、`most_why`、日付の呼び出しのあとの `wait until` の最大が数になること）、`doc` と例の golden、`tests/flows/deadlines.flow` と `deadline_event.flow` の突き合わせ。ritsu の `tests/run.rs` に、期限まで時計が進む `ritsu run` の golden（`until_timeout`）を足した。
+
+### 16.7 見つけて直していないもの
+
+- **コールバックの ID を渡す側の時間。** X5 は、コールバックの `timeout`（と `timeout until` の待ち）が呼び出しの全部を覆うものとして数える。Step Functions と durable functions のコールバックの時計は ID を渡す前から動くが、そこで覆われるのは待ちの長さで、渡す側そのものの長さは出力先ごとに違う。Temporal では、渡すアクティビティに 60 秒の上限が別にあり、一回の試しにつき最大 60 秒長くなりうる。durable functions の submit の step と、Argo の渡す Pod には上限が無い。直すなら、渡す側にどの出力先でも同じ上限（Temporal と同じ 60 秒。durable functions は submit の step を `dd.within(…, 60)` で包み、Argo は渡す呼び出しに caller のタイマーを付ける）を付け、X5 がコールバックの試しごとに 60 秒を足す。
+- **プラットフォームの待ち。** Temporal のタスクキューの待ちと、Argo の Pod がノードに置かれて起動するまでの待ちには、上限が無い。X5 の 33 秒はそれを数えない（根の DESIGN 7.7 の ★ の前提）。
+- **Argo のリトライの間。** Argo は次の回を、コントローラーがワークフローを見直したときに始める。既定の見直し（変化から 10 秒）では、規則の呼び出しは 33 秒ではなく、3 回の 10 秒と二つの 10 秒ほどの間で 50 秒ほどまでかかりうる。X5 は 1 秒と 2 秒で数える。
+- **Argo の caller の中で計算する規則と日付。** 同梱の規則（rulec と koyomi の TypeScript）は同期の計算なので、caller のタイマーはそれを途中で止められない。純関数で、規則の表と暦の範囲で必ず終わる。
+- **pydantic-graph のプロセスの中の規則の `on timeout`。** 上限を付けないので、本番では時間切れにならないが、シナリオと参照インタプリタはその呼び出しの `timeout` を選び、ランナーは規則の代わりのスタブで演じる。
+- **期限を変数に入れ直したもの**（`let t = due.at` のあとの `approval(by: t)`）。`wait until` と同じく、X5 は `x.at` の形だけを読み、ほかは上限なしと数える。
+- **E031**（Express の 5 分）は待ちだけを数え、規則と日付の呼び出しの 33 秒を数えない（前と同じ）。
+- **LocalStack の履歴。** LocalStack 4.14.0 は、時間切れになった試しの Lambda の答え（TaskSucceeded）を、時間切れのあと、次の試しの途中で履歴に書く。本物の Step Functions が同じことをするかは確かめていない。上限の試験は、その答えを試しの答えと数えない。

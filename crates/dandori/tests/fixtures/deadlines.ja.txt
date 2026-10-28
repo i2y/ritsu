@@ -1,0 +1,12 @@
+エラー[E007]: tests/fixtures/deadlines.flow:15:17: `timeout until` を書けるのは、答えを待つタスク（`event` か `callback`）だけです。ほかのタスクの `timeout` は、`timeout 30 seconds` のように長さで書いてください
+    15 |   timeout until by
+エラー[E007]: tests/fixtures/deadlines.flow:18:6: `event` のタスクは何も送らないので、`timeout until` に書く時刻のほかに引数を取りません
+    18 | task approval(id: string, by: timestamp) -> Answer
+エラー[E002]: tests/fixtures/deadlines.flow:26:17: `timeout until` の `by` は、タスク `ask` の引数にありません
+    26 |   timeout until by
+エラー[E003]: tests/fixtures/deadlines.flow:32:17: `timeout until` が待つ `day` は `timestamp` にしてください。いまは `date` です
+    32 |   timeout until day
+エラー[E007]: tests/fixtures/deadlines.flow:38:17: `aws` のタスクの引数は API の引数なので、`timeout until` の時刻を引数にできません。ID は `lambda` で渡してください
+    38 |   timeout until by
+エラー[E007]: tests/fixtures/deadlines.flow:44:3: `timeout until` のタスクは、期限を過ぎてからリトライしても、すぐにまたタイムアウトします。`retry … on failure` のように、リトライするものを `timeout` 抜きで書いてください
+    44 |   retry 2 times

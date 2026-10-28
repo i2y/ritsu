@@ -101,7 +101,9 @@ jobs:
       # --- The platforms. Argo: kind 0.33 (for the node image tools/argo/setup.sh pins; built
       # by Go, whose checksum database holds the module to its release), the argo CLI held to
       # its release's checksum, and the cluster setup.sh makes. LocalStack: its image, which the
-      # runner starts per test. Temporal: the dev server, which the SDK's test kit fetches.
+      # runner starts per test, and the image of its Lambda's Node.js runtime, in which the test of
+      # the limits on Step Functions runs a function. Temporal: the dev server, which the SDK's test
+      # kit fetches.
       - name: kind and the argo CLI
         run: |
           set -eu
@@ -122,8 +124,10 @@ jobs:
           argo version --short
           sh crates/dandori/tools/argo/setup.sh
 
-      - name: The LocalStack image
-        run: docker pull -q localstack/localstack:4.14.0
+      - name: The LocalStack images
+        run: |
+          docker pull -q localstack/localstack:4.14.0
+          docker pull -q public.ecr.aws/lambda/nodejs:22
 
       # --- chobo: the MySQL family on TiDB (chobo's DESIGN 4.5). TiUP v1.17.1, held to its
       # release's checksum, with the root.json the mirror's install script puts beside it (version
@@ -195,6 +199,11 @@ jobs:
             temporal_worker_versioning_keeps_a_run_on_its_build \
             temporal_runs_a_flow_as_its_child \
             argo_runs_as_the_reference_says \
+            rule_limits_hold_on_temporal \
+            rule_limits_hold_on_localstack \
+            rule_limits_hold_on_durable \
+            rule_limits_hold_on_argo \
+            rule_limits_hold_on_pydantic_graph \
             open_responses_agents_answer_on_ollama \
             jev_tasks_answer_on_typesafe \
             decision_tasks_answer_on_ollama \

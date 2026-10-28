@@ -67,7 +67,7 @@ flowchart TD
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
 | 56 | `hold ← reserve(…)` | `book stock.reserve.hold`・`starts stock.reserve` | — | — | `out_of_stock` → 57 行目<br>`timeout`・`failure` → `on failure` | `hold`: `held` |
-| 58 | `due = terms.payment(…)` | `payment_terms.cal` の日付 `payment` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 58 | `due = terms.payment(…)` | `payment_terms.cal` の日付 `payment` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
 | 60 | `payment = check_payment(…)` | `GET https://payments.example.com/orders/{order}/payment`・`idempotent` | 10 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | — |
 | 63 | `hold ← ship(…)` | `book stock.reserve.post`・`sends post` | — | — | `expired` → 64 行目<br>`timeout`・`failure` → `on failure` | `hold`: `posted` |
 | 67 | `hold ← put_back(…)` | `book stock.reserve.void`・`sends void` | — | — | `expired` → 68 行目<br>`already_posted`・`timeout`・`failure` → `on failure` | `hold`: `voided` |

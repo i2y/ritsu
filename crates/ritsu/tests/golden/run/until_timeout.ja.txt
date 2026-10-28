@@ -1,0 +1,18 @@
+approval.flow（シナリオ late.json、2026-04-03T10:00:00Z から）
+走らせる前の帳簿 stock:
+  receive.do(delivery: "D-1", sku: "pen", qty: 10)  通る
+実行:
+  reserve(order: "A-1", sku: "pen", qty: 3)      chobo     通る
+  terms.due(received: "2026-04-03T10:00:00Z")    koyomi    {"day":"2026-04-08","at":"2026-04-08T17:00:00Z"}
+  ask(order: "A-1", by: "2026-04-08T17:00:00Z")  scenario  エラー timeout
+  タイムアウト（2026-04-08T17:00:00Z まで待つ）            5 日と 07:00:00、2026-04-08T17:00:00Z まで
+  帳簿 stock の仮押さえ reserve(A-1, pen)                  期限切れ
+  put_back(order: "A-1", sku: "pen")             chobo     expired で拒否される
+終わり: succeed {"outcome":"expired"}
+終わりの帳簿 stock（stock.book）:
+  勘定:
+    shelf(pen)  確定 10、出ていく仮押さえ 0、入ってくる仮押さえ 0
+    suppliers   確定 -10、出ていく仮押さえ 0、入ってくる仮押さえ 0
+    customers   確定 0、出ていく仮押さえ 0、入ってくる仮押さえ 0
+  仮押さえ:
+    reserve(A-1, pen)  期限切れ

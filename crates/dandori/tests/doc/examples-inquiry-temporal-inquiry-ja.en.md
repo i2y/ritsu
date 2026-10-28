@@ -52,7 +52,7 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 | 66 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 2 times every 10 seconds (failure, timeout) | 1 minute | `timeout`, `failure` → line 67 |
 | 68 | `手作業 = 起票する(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails |
 | 71 | `種類 = 種類を選ぶ(…)` | `jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else 迷い` | 2 times every 1 second (failure, timeout) | 10 seconds | `迷い`, `timeout`, `failure` → line 72 |
-| 73 | `判定 = 振り分け(…)` | rule `問い合わせの振り分け.rule`, a local activity on Temporal | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 73 | `判定 = 振り分け(…)` | rule `問い合わせの振り分け.rule`, a local activity on Temporal | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 78 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 minute | `timeout`, `failure` → line 79 |
 | 80 | `票 = 起票する(…)` | a task you write, `key` | 2 times every 5 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails |
 

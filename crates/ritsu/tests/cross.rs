@@ -37,7 +37,11 @@
 //! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
 //!   the payment day at 09:00 when the hold lasts 14 days (E206), or 60 days (W206). The hold
 //!   voided when an approval does not come in 15 days: an event, which only its own timer times
-//!   out (E206), or a task, whose timeout can come sooner (W206).
+//!   out (E206), or a task, whose timeout can come sooner (W206). The hold voided when the approval
+//!   does not come by the payment day at 09:00 (`timeout until`): an event (E206), a callback, whose
+//!   id is handed on first (W206, the day that makes the wait the longest in a note), the same with
+//!   a hold of 60 days (held), and a callback waiting until a time an input gives (W206: nothing
+//!   bounds it).
 //!
 //! - X15 (the operations a context opens, against the actions that guard them; sekisho's DESIGN
 //!   4.6): `orders` — a map whose one context opens two operations of its OpenAPI document: both
@@ -375,6 +379,32 @@ fn x5_a_hold_against_its_expiry() {
     };
     run("x5-event-E206", &approval("  event\n"), 1, (0, 1, 1), &mut failures);
     run("x5-task-W206", &approval(""), 0, (0, 0, 2), &mut failures);
+    // the hold voided when the approval does not come by the payment day at 09:00 (`timeout until`):
+    // an event times out only at that time, which is 17 days and 9 hours after the hold at the
+    // fewest; a callback's timeout can come as soon as the id is handed on, and its wait lasts 51
+    // days and 9 hours at the most, from a `now` on 2026-07-21; a time an input gives bounds nothing
+    let until = |code: &str, task: &str, by: &str, extra: &[(&'static str, &'static str, &'static str)]| {
+        let task = format!("{task}\n\ntask put_back(order: string, sku: string) -> stock.reserve\n  book stock.reserve.void\n  sends void\n  errors expired\n  timeout 30 seconds\n\ncase goods");
+        let call = format!("  approval(order: order, by: {by})\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n      fail NotApproved \"no one approved the order by the payment day\"\n");
+        let mut edits: Vec<(&str, &str, &str)> = vec![
+            ("invoice.flow", "  errors out_of_stock\n", "  errors out_of_stock\n  timeout 30 seconds\n"),
+            ("invoice.flow", "  errors expired\n", "  errors expired\n  timeout 30 seconds\n"),
+        ];
+        edits.extend_from_slice(extra);
+        edits.push(("invoice.flow", "case goods", &task));
+        edits.push(("invoice.flow", "  wait until due.at\n", &call));
+        changed(code, &edits)
+    };
+    let event = "task approval(order: string, by: timestamp)\n  event\n  timeout until by";
+    let callback = "task approval(order: string, by: timestamp)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:approval\"\n  callback\n  timeout until by";
+    // an event takes no parameter but its time
+    let event = event.replace("approval(order: string, by: timestamp)", "approval(by: timestamp)");
+    let event_files: Vec<(&str, String)> = until("E206", &event, "due.at", &[]).into_iter().map(|(n, b)| (n, b.replace("approval(order: order, by: due.at)", "approval(by: due.at)"))).collect();
+    run("x5-until-event-E206", &event_files, 1, (0, 1, 2), &mut failures);
+    run("x5-until-callback-W206", &until("E206", callback, "due.at", &[]), 0, (0, 0, 3), &mut failures);
+    run("x5-until-callback-held", &until("W206", callback, "due.at", &[]), 0, (2, 0, 1), &mut failures);
+    let input = [("invoice.flow", "  qty   : int  range >=1 <=100\n", "  qty   : int  range >=1 <=100\n  by    : timestamp\n")];
+    run("x5-until-open-W206", &until("E206", callback, "by", &input), 0, (0, 0, 3), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

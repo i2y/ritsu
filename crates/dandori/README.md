@@ -159,6 +159,12 @@ it calls come with it, each as the page for people that `rulec doc` renders.
 [Build for a platform](https://i2y.github.io/ritsu/dandori/platforms/) has what each of them writes, and
 [What a task calls](https://i2y.github.io/ritsu/dandori/tasks/) what a task becomes on each.
 
+Every target gives a call of a rule or of a date 10 seconds a try, and tries it twice more, a second
+and then two seconds apart, so that `ritsu check` can count how long one takes (33 seconds at the
+most) when it holds a hold to its expiry. A task that waits for an answer, an `event` or a
+`callback`, can wait until a time the call gives it (`timeout until by`), such as the time of a dates
+file's date ([How long a call may take](https://i2y.github.io/ritsu/dandori/tasks/#how-long-a-call-may-take)).
+
 When a sekisho gate names the workflow (`workflow returns from "flows/returns.flow"`), `ritsu check`
 holds each operation the workflow calls, by an `http` task of a `use openapi` or a `connect` task, to
 what the gate allows the workflow: a call the gate allows in no combination is an error (E908), and
@@ -208,7 +214,11 @@ example and run each of them nine ways: in the reference interpreter, the ASL un
 and on LocalStack's Step Functions, the Temporal workflow in TypeScript, in Python and in Go on the
 Temporal CLI's dev server, the durable function in the SDK's local test runner, the
 WorkflowTemplate on Argo Workflows in a kind cluster, and the graph with pydantic-graph. Each must
-make the same calls, with the same arguments and idempotency keys, and end the same way. ritsu's
+make the same calls, with the same arguments and idempotency keys, and end the same way. Five more
+tests run a rule's call that takes longer than its limit, in real time, on Temporal, on LocalStack
+with a real Lambda function, in the durable function's local runner, with pydantic-graph and on Argo
+Workflows: each try must time out at 10 seconds, the tries must come a second and then two seconds
+apart, and the run must go to the call's `on timeout`. ritsu's
 playground, which runs dandori in the browser, must answer every example as the command does
 (ritsu's tests hold it to that). The operations of books that the runs make also go through the code dandori writes to chobo's clients,
 on PostgreSQL, TigerBeetle and MySQL, and must answer what chobo's reference interpreter answers.

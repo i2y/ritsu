@@ -1,0 +1,26 @@
+workflow deadline_event v1
+description "Waits for an event until a time (`timeout until`, Temporal): the approval comes to the workflow by its id, until 17:00 on the second business day after the request. The time is the event task's one parameter, which nothing sends. On the other platforms, E050"
+
+use dates terms from "dates/answer_terms.cal"
+
+record Approval
+  approver : string
+
+inputs
+  order : string
+
+outputs
+  approved_by : string
+
+# Someone approves in a tool of their own, which sends the answer to the workflow by its id.
+task approval(by: timestamp) -> Approval
+  event
+  errors rejected
+  timeout until by
+
+flow
+  let due = terms.due(received: now)
+  let a = approval(by: due.at)
+    on rejected => fail Rejected "Order {order} was rejected"
+    on timeout => fail NoApproval "No approval for order {order} by {due.at}"
+  succeed approved_by = a.approver

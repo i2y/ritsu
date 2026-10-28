@@ -133,7 +133,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/types.py"), types_file(m, &header)),
         (format!("{dir}/tasks.py"), tasks_file(m, &header)),
         (format!("{dir}/io.py"), format!("{header}{}", io_py(m))),
-        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}{}", if m.uses_now() { NOW_PY } else { "" })),
+        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}{}{}", if m.uses_now() || render::waits_until(m) { NOW_PY } else { "" }, if render::waits_until(m) { UNTIL_PY } else { "" })),
         (format!("{dir}/graph.py"), graph),
     ];
     if !called.is_empty() {
@@ -210,6 +210,17 @@ def now(clock: Any) -> str:
     import datetime as dt
 
     return clock.now().astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+"#;
+
+/// `timeout until` on pydantic-graph: how long the wait for the answer is, from `now`.
+const UNTIL_PY: &str = r#"
+
+
+def seconds_until(clock: Any, at: str) -> int:
+    """How long `timeout until` waits for an answer: the seconds from `now` to a moment given as an
+    RFC 3339 string in UTC, rounded up, and one at the least."""
+    left = (datetime.fromisoformat(at.replace("Z", "+00:00")) - datetime.fromisoformat(now(clock).replace("Z", "+00:00"))).total_seconds()
+    return max(1, int(-(-left // 1)))
 "#;
 
 const RUNTIME: &str = r#"# What the generated graph shares: retries, error kinds, keys, the clock, and the answers of
@@ -881,14 +892,21 @@ impl<'a> Gen<'a> {
         let declared = format!("[{}]", declared.join(", "));
         let mut n = self.node(format!("S{site}_{}", ident(&cname)), format!("line {}: {cname}", s.line), (site, 0), cx);
         let call = match callee {
-            // a rule at its service is a method of the tasks; the others are functions of rules.py
-            Callee::Rule(r) if m.rules[*r].connect.is_some() => format!("lambda: deps.tasks.{}({{{}}})", render::rule_activity(&m.rules[*r].name), parts.join(", ")),
+            // a rule at its service is a method of the tasks, sent within the limit every target gives a
+            // rule's call (DESIGN 16); the others are functions of rules.py, computed in the process, with
+            // nothing to wait for and nothing asyncio could stop
+            Callee::Rule(r) if m.rules[*r].connect.is_some() => {
+                format!("lambda: dd.within(deps.tasks.{}({{{}}}), {})", render::rule_activity(&m.rules[*r].name), parts.join(", "), crate::check::RULE_SECONDS)
+            }
             Callee::Rule(r) => format!("lambda: deps.rules.{}({{{}}})", render::rule_activity(&m.rules[*r].name), parts.join(", ")),
             Callee::Task(t) => {
                 let task = &m.tasks[*t];
                 let f = format!("deps.tasks.{}", method(&task.name));
                 if task.callback {
-                    let timeout = task.timeout.unwrap_or(86_400);
+                    let timeout = match render::deadline_arg(m, callee, args) {
+                        Some(at) => format!("dd.seconds_until(deps.clock, {})", self.expr(at)),
+                        None => task.timeout.unwrap_or(86_400).to_string(),
+                    };
                     let mut with_id = parts.clone();
                     with_id.push("\"callback_id\": dd_id".into());
                     n.line(0, "dd_n = dd.counter()");

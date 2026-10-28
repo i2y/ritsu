@@ -342,6 +342,15 @@ impl Answers for Computed {
         let ms = (target - self.now_ms()).max(0);
         self.go_by(ms as f64 / 1000.0, Passing::Wait, Some(given));
     }
+
+    fn timeout_until(&mut self, at: &Value) {
+        let given = at.as_str().unwrap_or_default().to_string();
+        // a value that is not a time does not come here: the check holds `timeout until` to timestamps
+        let Some(target) = moment_ms(&given) else { return };
+        // the wait ends at the time, rounded up to the second, and takes a second at the least
+        let seconds = ((target - self.now_ms()) as f64 / 1000.0).ceil().max(1.0);
+        self.go_by(seconds, Passing::Timeout, Some(given));
+    }
 }
 
 /// What a call of a rule comes to, as `ritsu run` answers it and `ritsu dandori scenarios` writes

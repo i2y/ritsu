@@ -1,0 +1,18 @@
+approval.flow (scenario late.json, from 2026-04-03T10:00:00Z)
+before the run, book stock:
+  receive.do(delivery: "D-1", sku: "pen", qty: 10)  done
+the run:
+  reserve(order: "A-1", sku: "pen", qty: 3)           chobo     done
+  terms.due(received: "2026-04-03T10:00:00Z")         koyomi    {"day":"2026-04-08","at":"2026-04-08T17:00:00Z"}
+  ask(order: "A-1", by: "2026-04-08T17:00:00Z")       scenario  error timeout
+  the timeout of the wait until 2026-04-08T17:00:00Z            5 days 07:00:00, to 2026-04-08T17:00:00Z
+  the hold reserve(A-1, pen) of the book stock                  expired
+  put_back(order: "A-1", sku: "pen")                  chobo     refused: expired
+end: succeed {"outcome":"expired"}
+book stock (stock.book) at the end:
+  accounts:
+    shelf(pen)  posted 10, held out 0, held in 0
+    suppliers   posted -10, held out 0, held in 0
+    customers   posted 0, held out 0, held in 0
+  holds:
+    reserve(A-1, pen)  expired

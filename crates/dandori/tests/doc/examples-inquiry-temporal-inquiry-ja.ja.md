@@ -52,7 +52,7 @@ flowchart TD
 | 66 | `読み = 読み取る(…)` | `agent · gpt-oss:20b · http://ollama.internal:11434/v1` | 10 秒おきに 2 回（failure・timeout） | 1 分 | `timeout`・`failure` → 67 行目 |
 | 68 | `手作業 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 | 71 | `種類 = 種類を選ぶ(…)` | `jev · nimble:9b-q4_K_M · http://ollama.internal:11434/v1 · confidence 0.8 else 迷い` | 1 秒おきに 2 回（failure・timeout） | 10 秒 | `迷い`・`timeout`・`failure` → 72 行目 |
-| 73 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 73 | `判定 = 振り分け(…)` | 規則 `問い合わせの振り分け.rule`（Temporal ではローカルアクティビティ） | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 78 | `下書き = 下書きする(…)` | `agent claude · claude-sonnet-5` | — | 1 分 | `timeout`・`failure` → 79 行目 |
 | 80 | `票 = 起票する(…)` | 自分で書くタスク・`key` | 5 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する |
 

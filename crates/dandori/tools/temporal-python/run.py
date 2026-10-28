@@ -56,6 +56,11 @@
 # a time here, so that the calls come in the order the reference interpreter makes them. A loop at
 # the top of the flow goes on in a new run (Continue-As-New) at every round but the first of a
 # run, since the history counts as long from one event on here (dd.CONTINUE_AT).
+#
+# With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the copy keeps the timeouts of the
+# activities and the durations of the timers as they are generated: a rule's call the scenario times
+# out is held until the server times it out after the generated 10 seconds, and the retry waits 1
+# and 2 seconds between the tries.
 
 from __future__ import annotations
 
@@ -104,6 +109,8 @@ TIMEOUT = int(os.environ.get("DANDORI_TEMPORAL_TIMEOUT", 20))
 LATE = float(TIMEOUT + 5)
 # How long an event is waited for here, at most: long enough for the runner to see the wait and send it.
 EVENT_SECONDS = 5
+# The limits as they are generated: the timeouts of the activities, and the timers (see the top).
+LIMITS = os.environ.get("DANDORI_LIMITS") == "1"
 
 
 def child_stand_ins(children: list[dict[str, Any]]) -> str:
@@ -583,10 +590,11 @@ def main() -> None:
     lines = text.split("\n")
     for i, line in enumerate(lines):
         # a task that hands on a callback's id is a function of two lines: its `def`, and the call
-        if not any(i > 0 and lines[i - 1].startswith(f"def {c}(") for c in spec.get("callbacks", [])):
+        if not LIMITS and not any(i > 0 and lines[i - 1].startswith(f"def {c}(") for c in spec.get("callbacks", [])):
             lines[i] = re.sub(r"start_to_close_timeout=timedelta\(seconds=\d+\)", f"start_to_close_timeout=timedelta(seconds={TIMEOUT})", line)
     text = "\n".join(lines)
-    text = re.sub(r"execution_timeout=timedelta\(seconds=\d+\)", f"execution_timeout=timedelta(seconds={TIMEOUT})", text)
+    if not LIMITS:
+        text = re.sub(r"execution_timeout=timedelta\(seconds=\d+\)", f"execution_timeout=timedelta(seconds={TIMEOUT})", text)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     path = os.path.join(copy, "runtime.py")
@@ -594,7 +602,8 @@ def main() -> None:
         text = f.read()
     marker = '"""A duration of the workflow\'s timers, in seconds: every wait of the workflow goes through here."""\n    return n\n'
     assert marker in text, "runtime.py has no seconds() to shorten"
-    text = text.replace(marker, marker.replace("return n", "return min(n, 0.01)"))
+    if not LIMITS:
+        text = text.replace(marker, marker.replace("return n", "return min(n, 0.01)"))
     assert "\nCONTINUE_AT = 10000\n" in text, "runtime.py has no CONTINUE_AT to lower"
     text = text.replace("\nCONTINUE_AT = 10000\n", "\nCONTINUE_AT = 1\n")
     # an event's wait is not a timer to shorten to nothing: the runner has to see it, and send the event

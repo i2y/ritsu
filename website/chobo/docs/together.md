@@ -165,6 +165,26 @@ When the rule's amounts all fit the hall, no run comes to `over_capacity`, and a
 it anyway gets a warning rather than a pass: chobo's search goes only as deep as its check does, so
 all it can say is that the refusal does not come within that depth.
 
+**A hold, and an answer waited for until a time.** In another version, the workflow asks for an
+approval instead of waiting for the payment day, waits for the answer until 09:00 of that day
+(`timeout until due.at`), and puts the goods back when none comes. How long that takes depends on
+the day the date is given, so whether the hold has expired cannot be decided, and the warning says
+the day that makes the wait the longest. Every call between the hold and `put_back` has an upper
+bound: the wait ends at the date's time, and a call of a rule or of a date takes 33 seconds at the
+most on every platform.
+
+<div class="cb-term" markdown>
+
+```text
+warning[ritsu W206]: invoice.flow:45:1: Whether the hold of the case `goods` has expired when `put_back` voids it cannot be decided
+    45 |       goods <- put_back(order: order, sku: sku)
+  = `put_back` comes 0 seconds to 51 days 9 hours 1 minute 1 second after the hold is made (line 40), and the hold expires 14 days after it is made
+  = The longest is when the `now` given to `payment` (line 42) falls on 2026-07-21: `approval` (line 43) waits until `due.at`, 2026-09-10 at 09:00, 51 days after it
+  = The book refuses a call on an expired hold with `expired`, which the flow handles here.
+```
+
+</div>
+
 ## A run with the book in it
 
 `ritsu run` runs a workflow with its rules computed by rulec, its dates by koyomi and its book by

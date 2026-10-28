@@ -37,12 +37,12 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
-| 32 | `見積もり = 送料(…)` | 規則 `会員段階の送料.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
-| 34 | `注文の見積もり = 送料(…)` | 規則 `会員段階の送料.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 32 | `見積もり = 送料(…)` | 規則 `会員段階の送料.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
+| 34 | `注文の見積もり = 送料(…)` | 規則 `会員段階の送料.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 37 | `案内を送る(…)` | `lambda send-offer`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 38 | `案内を送る(…)` | `lambda send-offer`・`key` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 40 | `選んだ段階 = キャンペーンを選ぶ(…)` | `lambda pick-campaign`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 41 | `勧め = 送料(…)` | 規則 `会員段階の送料.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → ワークフローが失敗する |
+| 41 | `勧め = 送料(…)` | 規則 `会員段階の送料.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

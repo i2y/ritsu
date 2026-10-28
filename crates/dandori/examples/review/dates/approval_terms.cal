@@ -1,0 +1,19 @@
+dates approval_terms v1
+description "An application sent for approval is approved by 17:00 on the third business day after it comes in"
+use calendar "../calendars/weekdays.cal"
+
+inputs
+  received : date  range >=2026-01-01 <=2027-12-31
+
+date due = received
+  + 3 business days     # "on the third business day after it comes in"
+  at 17:00              # "by 17:00"
+
+claims
+  due_on_a_business_day  : due is open
+  later_received_later_due : due is monotonic
+
+examples
+| received   | -> due     |
+| 2026-04-01 | 2026-04-06 |
+| 2026-12-24 | 2026-12-29 |

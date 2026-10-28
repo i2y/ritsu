@@ -50,12 +50,17 @@ fn no_output(m: &Model) -> &'static str {
     }
 }
 
-pub const RULE_RETRY_INTERVAL: u64 = 1;
-pub const RULE_RETRY_BACKOFF: f64 = 2.0;
+pub use crate::check::{RULE_RETRY_BACKOFF, RULE_RETRY_INTERVAL};
+
+/// The seconds a wait that ends at `at` (a JSONata expression of a timestamp) takes from `now`:
+/// rounded up, and one at the least, which is what `TimeoutSeconds` takes (DESIGN 16).
+pub fn deadline_seconds(at: &str) -> String {
+    format!("$max([1, $ceil(($toMillis({at}) - $toMillis({})) / 1000)])", render::JSONATA_NOW)
+}
 
 /// The retriers of a rule's call, the same on every target. A rule is a pure function, so any
-/// error is worth another try, a timeout too: on Temporal, it means that the worker that ran
-/// the rule went away.
+/// error is worth another try, a timeout too: a try that runs past `check::RULE_SECONDS` was
+/// held up on the way, and the next may not be.
 pub fn rule_retriers() -> Value {
     json!([{ "ErrorEquals": ["States.ALL"], "IntervalSeconds": RULE_RETRY_INTERVAL, "MaxAttempts": crate::check::RULE_RETRIES, "BackoffRate": RULE_RETRY_BACKOFF }])
 }
@@ -746,11 +751,11 @@ impl<'a> Gen<'a> {
                         w.insert("InvocationConfig".into(), json!({ "ConnectionArn": ru.connection.clone().unwrap_or_default() }));
                         w.insert("Headers".into(), json!({ "Connect-Protocol-Version": "1" }));
                         w.insert("RequestBody".into(), render::jsonata_rule_request(c, args));
-                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), render::jsonata_rule_read(c, "$states.result.ResponseBody"), None, Some(retry))
+                        ("arn:aws:states:::http:invoke".to_string(), Value::Object(w), render::jsonata_rule_read(c, "$states.result.ResponseBody"), Some(crate::check::RULE_SECONDS), Some(retry))
                     }
                     None => {
                         let f = ru.lambda.clone().unwrap_or_default();
-                        ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), None, Some(retry))
+                        ("arn:aws:states:::lambda:invoke".to_string(), json!({ "FunctionName": f, "Payload": payload }), "$states.result.Payload".to_string(), Some(crate::check::RULE_SECONDS), Some(retry))
                     }
                 }
             }
@@ -932,7 +937,15 @@ impl<'a> Gen<'a> {
             // an agent's answer is read even when the flow does not keep it, so that a refusal fails the call
             st.insert("Output".into(), json!(format!("{{% {result} %}}")));
         }
-        if let Some(t) = timeout {
+        // `timeout until <param>`: the seconds from the moment the state is entered (`now`) to the
+        // time the call gives the parameter, rounded up, and one at the least
+        let deadline = match callee {
+            Callee::Task(t) => m.tasks[*t].deadline.as_ref().and_then(|p| args.iter().find(|(a, _)| a == p)),
+            Callee::Rule(_) => None,
+        };
+        if let Some((_, at)) = deadline {
+            st.insert("TimeoutSeconds".into(), json!(format!("{{% {} %}}", deadline_seconds(&jsonata_expr(at)))));
+        } else if let Some(t) = timeout {
             st.insert("TimeoutSeconds".into(), json!(t));
         }
         if let Some(r) = retry {

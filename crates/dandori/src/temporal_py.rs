@@ -210,7 +210,7 @@ pub fn build(m: &Model) -> Result<Vec<(String, String)>, Vec<Diag>> {
         (format!("{dir}/types.py"), types_file(m, &header)),
         (format!("{dir}/activities.py"), tasks_file(m, &header)),
         (format!("{dir}/io.py"), format!("{header}{}", io_py(m))),
-        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}{}", if m.uses_now() { NOW_PY } else { "" })),
+        (format!("{dir}/runtime.py"), format!("{header}{RUNTIME}{}{}", if m.uses_now() || render::waits_until(m) { NOW_PY } else { "" }, if render::waits_until(m) { UNTIL_PY } else { "" })),
         (format!("{dir}/workflow.py"), wf),
     ];
     if !called.is_empty() {
@@ -1565,6 +1565,17 @@ def now() -> str:
     return workflow.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 "#;
 
+/// `timeout until` on Temporal: how long the wait for the answer is, from `now`.
+const UNTIL_PY: &str = r#"
+
+
+def seconds_until(at: str) -> int:
+    """How long `timeout until` waits for an answer: the seconds from `now` to a moment given as an
+    RFC 3339 string in UTC, rounded up, and one at the least."""
+    left = (datetime.fromisoformat(at.replace("Z", "+00:00")) - datetime.fromisoformat(now().replace("Z", "+00:00"))).total_seconds()
+    return max(1, int(-(-left // 1)))
+"#;
+
 const RUNTIME: &str = r#"# What the generated workflow code shares. It runs inside the workflow, so it uses nothing
 # but temporalio.workflow and what the workflow sandbox lets through.
 
@@ -1909,6 +1920,15 @@ impl<'a> Gen<'a> {
                     format!("({})", out.join(" + "))
                 }
             }
+        }
+    }
+
+    /// How long a call of an `event` or a `callback` task waits for its answer, in seconds: until the
+    /// time the call gives the parameter of `timeout until`, or the task's `timeout` (a day without one).
+    fn answer_wait(&self, task: &TaskDef, args: &[(String, TExpr)]) -> String {
+        match task.deadline.as_ref().and_then(|p| args.iter().find(|(a, _)| a == p)) {
+            Some((_, at)) => format!("dd.seconds_until({})", self.expr(at)),
+            None => task.timeout.unwrap_or(86_400).to_string(),
         }
     }
 
@@ -2379,9 +2399,9 @@ impl<'a> Gen<'a> {
                         format!("dd.attempt(lambda: workflow.execute_child_workflow({}, {{{}}}, {}), {retriers}, {declared})", q(ty), parts.join(", "), opts.join(", "))
                     }
                     // nothing is called: the workflow waits for the event, as long as a callback
-                    Some(Via::Event) => format!("dd.attempt(lambda: dd.await_event(self.dd_events, self.dd_awaited, {}, {}), {retriers}, {declared})", q(&task.name), task.timeout.unwrap_or(86_400)),
+                    Some(Via::Event) => format!("dd.attempt(lambda: dd.await_event(self.dd_events, self.dd_awaited, {}, {}), {retriers}, {declared})", q(&task.name), self.answer_wait(task, args)),
                     _ if task.callback => {
-                        let timeout = task.timeout.unwrap_or(86_400);
+                        let timeout = self.answer_wait(task, args);
                         let mut with_id = parts.clone();
                         with_id.push("\"callback_id\": dd_id".into());
                         self.line(d, &format!("dd_n_{site} = dd.counter()"));

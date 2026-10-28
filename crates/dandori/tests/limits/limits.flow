@@ -1,0 +1,23 @@
+workflow limits v1
+description "A rule's call that takes longer than the ten seconds a try that every platform gives a rule or a date: it times out three times, a second and then two seconds apart, and then its `on timeout` runs. The tests of the limits play it with the platforms' own times, once called through Lambda and once as a Connect service"
+
+use rule urgency from "../../examples/order/rules/urgency.rule"
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:urgency"
+
+use rule urgency_service from "../../examples/order/rules/urgency.rule"
+  connect "https://rules.example.com"
+  connection "arn:aws:events:us-east-1:123456789012:connection/rules/1"
+
+inputs
+  member : bool
+  amount : money[JPY, incl_tax]  range >=0JPY <=1000000JPY
+
+outputs
+  said : string
+
+flow
+  let a = urgency(member: member, amount: amount)
+    on timeout => succeed said = "the rule took too long"
+  let b = urgency_service(member: member, amount: amount)
+    on timeout => succeed said = "the rule's service took too long"
+  succeed said = "{a.carrier} and {b.carrier}"

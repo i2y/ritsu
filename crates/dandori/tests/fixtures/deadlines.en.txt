@@ -1,0 +1,12 @@
+error[E007]: tests/fixtures/deadlines.flow:15:17: `timeout until` belongs to a task that waits for an answer (`event` or `callback`); give any other task's `timeout` as a length, as `timeout 30 seconds`
+    15 |   timeout until by
+error[E007]: tests/fixtures/deadlines.flow:18:6: an `event` task sends nothing, so it takes no parameters but the time its `timeout until` names
+    18 | task approval(id: string, by: timestamp) -> Answer
+error[E002]: tests/fixtures/deadlines.flow:26:17: `by` of `timeout until` is not a parameter of `ask`
+    26 |   timeout until by
+error[E003]: tests/fixtures/deadlines.flow:32:17: `day`, the time `timeout until` waits until, must be a `timestamp`, not `date`
+    32 |   timeout until day
+error[E007]: tests/fixtures/deadlines.flow:38:17: the parameters of an `aws` task are the API's own, so none can be the time of `timeout until`; hand the id over by `lambda`
+    38 |   timeout until by
+error[E007]: tests/fixtures/deadlines.flow:44:3: a task with `timeout until` only times out again when it is tried after its time has passed; name what `retry` retries without `timeout`, as `retry … on failure`
+    44 |   retry 2 times

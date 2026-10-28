@@ -37,10 +37,10 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
-| 32 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule`, a local activity on Temporal | 2 times, after 1 second and 2 (failure) | — | `timeout` → line 33<br>`failure` → the workflow fails |
+| 32 | `判定 = 急ぎ(…)` | rule `出荷の急ぎ.rule`, a local activity on Temporal | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout` → line 33<br>`failure` → the workflow fails |
 | 34 | `記録する(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 36 | `知らせる(…)` | `lambda notify`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 37 | `見直し = 急ぎの見直し(…)` | rule `出荷の急ぎ.rule` | 2 times, after 1 second and 2 (failure) | — | `timeout`, `failure` → the workflow fails |
+| 37 | `見直し = 急ぎの見直し(…)` | rule `出荷の急ぎ.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 38 | `記録する(…)` | `lambda audit-log`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends

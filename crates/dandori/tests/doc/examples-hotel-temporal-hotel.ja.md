@@ -129,7 +129,7 @@ flowchart TD
 
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき | 呼び出しのあとの案件 |
 |---:|---|---|---|---|---|---|
-| 75 | `quote = hold(…)` | 規則 `hold_amount.rule` | 1 秒後と 2 秒後の 2 回（failure） | — | `timeout`・`failure` → `on failure` | — |
+| 75 | `quote = hold(…)` | 規則 `hold_amount.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → `on failure` | — |
 | 78 | `pi ← create_intent(…)` | `POST stripe /v1/payment_intents`・`starts payment_intent.payment then attach`・`key` | 2 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `pi`: `requires_confirmation` |
 | 79 | `pi ← confirm_intent(…)` | `POST stripe /v1/payment_intents/{intent}/confirm`・`sends confirm`・`key` | — | — | `card_declined` → 80 行目<br>`unexpected_state`・`timeout`・`failure` → `on failure` | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
 | 80 | `pi ← get_intent(…)` | `GET stripe /v1/payment_intents/{intent}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → `on failure` | `pi`: `requires_payment_method`・`requires_confirmation`・`requires_action`・`requires_capture`・`canceled` |
