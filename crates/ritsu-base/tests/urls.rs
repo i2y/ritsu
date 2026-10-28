@@ -1,7 +1,8 @@
 //! What a URL says of how it is reached (DESIGN 16.4): the loopback, the scheme and the host, plain
-//! HTTP and WebSocket to a host off the machine, and the encrypted form of an AsyncAPI protocol.
+//! HTTP and WebSocket to a host off the machine, and the encrypted form of an AsyncAPI protocol;
+//! and whether it has a user, a password or a query (a module's `source`, DESIGN 17.3).
 
-use ritsu_base::urls::{encrypted_form, is_loopback, plaintext, scheme_and_host};
+use ritsu_base::urls::{encrypted_form, has_query, has_userinfo, is_loopback, plaintext, scheme_and_host};
 
 #[test]
 fn the_loopback_is_localhost_127_slash_8_and_colon_colon_1() {
@@ -50,5 +51,44 @@ fn the_encrypted_forms_of_asyncapi_protocols() {
     // the encrypted ones, and those whose name says nothing of encryption
     for p in ["https", "wss", "amqps", "secure-mqtt", "stomps", "kafka-secure", "nats", "jms", "ibmmq", "solace", "pulsar", "googlepubsub", "sns", "sqs", "redis", "mercure", "anypointmq", ""] {
         assert_eq!(encrypted_form(p), None, "{p}");
+    }
+}
+
+#[test]
+fn a_user_or_a_password_is_an_at_sign_in_the_authority() {
+    // as the URL Standard reads it (the `/` and `\` after `://` skipped, a tab dropped) or as RFC 3986 does (a `\` is no end)
+    for u in [
+        "https://user:token@github.com/acme",
+        "https://user@github.com",
+        "https://:pw@github.com",
+        "https://a@b@github.com:443/x",
+        "https://\\/user@github.com/x",
+        "https://\t/user@github.com/x",
+        "https://github.com\\user@evil.example/x",
+        "https://u@h?x",
+        "https://u@h#x",
+    ] {
+        assert!(has_userinfo(u), "{u}");
+    }
+    // an `@` in the path, the query or the fragment, an escaped one, or no authority at all
+    for u in [
+        "https://www.npmjs.com/package/@acme/pricing",
+        "https://github.com/acme?by=a@b",
+        "https://github.com/acme#a@b",
+        "https://user%40github.com/acme",
+        "mailto:a@example.com",
+        "https://github.com/acme",
+    ] {
+        assert!(!has_userinfo(u), "{u}");
+    }
+}
+
+#[test]
+fn a_query_is_a_question_mark_before_the_fragment() {
+    for u in ["https://github.com/acme?tab=readme", "https://github.com/acme?", "https://github.com?x#y", "https://gitlab.com/acme/pricing?private_token=x#main"] {
+        assert!(has_query(u), "{u}");
+    }
+    for u in ["https://github.com/acme", "https://github.com/acme#a?b", "https://github.com/acme/pri%3Fce", ""] {
+        assert!(!has_query(u), "{u}");
     }
 }

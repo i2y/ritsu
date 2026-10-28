@@ -202,6 +202,8 @@ fn a_value_of_the_wrong_form_is_e302() {
         ("module shop\nritsu 0.37.0\n", "the value of `ritsu` is `>=` and a version as one word, as `>=0.37.0`"),
         ("module shop\nritsu >=0.37\n", "`0.37` is not a version: write three numbers with dots between them, as `1.4.0`"),
         ("module shop\nsource \"http://example.com/acme\"\n", "the `source` `http://example.com/acme` is an https URL"),
+        ("module shop\nsource \"https://u:t@github.com/acme\"\n", "the `source` URL has a user or a password in it, which a `source` cannot have"),
+        ("module shop\nsource \"https://github.com/acme?tab=x\"\n", "the `source` URL has a query (from the `?` on) in it, which a `source` cannot have"),
         ("module shop\nlicense \"  \"\n", "the `license` is empty; write an SPDX expression (`MIT OR Apache-2.0`, say)"),
         ("module shop\nrequire Pricing path \"../p\"\n", "`Pricing` cannot name a dependency: the `P` at character 1 is not taken"),
         ("module shop\nrequire acme-pricing path \"../p\"\n", "`acme-pricing` cannot name a dependency: a `-` is not taken; join words with `_`"),
@@ -237,6 +239,51 @@ fn the_japanese_texts_say_the_same() {
     let ja: Vec<&str> = ds.iter().map(|d| d.message.ja.as_str()).collect();
     assert_eq!(ja, ["`v1.0.0` はバージョンとして読めません。頭に `v` を付けずに書いてください", "依存の名前 `x-y` は使えません。`-` は使えません。語を区切るときは `_` を使ってください"]);
     assert_eq!(ds[0].render(ritsu_base::text::Lang::Ja), "エラー[E302]: ritsu.mod:2:9: `v1.0.0` はバージョンとして読めません。頭に `v` を付けずに書いてください\n     2 | version v1.0.0\n");
+}
+
+/// A `source` is published with the module and the packages made from it (DESIGN 17.3), so a URL
+/// with a user, a password or a query is E302, and the note says why; the diagnostic shows neither
+/// the URL nor its line, which go to terminals and logs. The user is looked for where either the
+/// URL Standard or RFC 3986 reads one; an `@` or a `?` elsewhere is no user and no query.
+#[test]
+fn a_source_has_no_user_no_password_and_no_query() {
+    let note_en = "ritsu writes the `source` into the module `ritsu mod push` sends, the packages `ritsu gen` makes (package.json and pyproject.toml) and the list site, all of which are meant to be published: keep credentials such as tokens and passwords out of it";
+    let note_ja = "ritsu は `source` を、`ritsu mod push` で送り出すモジュール、`ritsu gen` で生成するパッケージ（package.json と pyproject.toml）、一覧のサイトに書きます。どれも公開するものなので、トークンやパスワードのような資格情報は書かないでください";
+    let ds = manifest::parse("module shop\nsource \"https://user:token@github.com/acme/pricing\"\n".as_bytes(), "ritsu.mod").unwrap_err();
+    assert_eq!(
+        ds[0].render(ritsu_base::text::Lang::Ja),
+        format!(
+            "エラー[E302]: ritsu.mod:2:8: `source` の URL にユーザーかパスワードが入っています。`source` には書けません\n  = {note_ja}\n"
+        )
+    );
+    assert_eq!(ds[0].notes.iter().map(|n| n.en.as_str()).collect::<Vec<_>>(), [note_en]);
+    let ds = manifest::parse("module shop\nsource \"https://gitlab.com/acme/pricing?private_token=x#main\"\n".as_bytes(), "ritsu.mod").unwrap_err();
+    assert_eq!(ds[0].message.ja, "`source` の URL にクエリ（`?` から後）が入っています。`source` には書けません");
+    for lang in [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja] {
+        let said = format!("{}{}", ds[0].render(lang), ds[0].to_json(lang).compact());
+        assert!(!said.contains("private_token") && !said.contains("gitlab.com"), "{said}");
+    }
+    assert_eq!(ds[0].notes.iter().map(|n| n.ja.as_str()).collect::<Vec<_>>(), [note_ja]);
+    // a URL that is not https has no note: it is not published
+    assert!(manifest::parse(b"module shop\nsource \"http://example.com/acme\"\n", "ritsu.mod").unwrap_err()[0].notes.is_empty());
+    // a user however the authority is written: the URL Standard skips the `/` and `\` after `https://` and drops a tab
+    for url in [
+        "https://:token@github.com/acme",
+        "https://user@github.com",
+        "https://a@b@github.com:443/acme",
+        "https://\\\\/user@github.com/acme",
+        "https://\t/user@github.com/acme",
+        "https://github.com\\\\user@evil.example/acme",
+    ] {
+        let (code, message) = one(&format!("module shop\nsource \"{url}\"\n"));
+        assert_eq!(code, "E302", "{url}");
+        assert!(message.ends_with("has a user or a password in it, which a `source` cannot have"), "{url}: {message}");
+    }
+    assert!(one("module shop\nsource \"https://github.com/acme/pricing?\"\n").1.contains("has a query"), "an empty query is a query");
+    // an `@` in the path, a `?` in the fragment, an escaped `@` or `?`, a port: neither user nor query
+    for url in ["https://www.npmjs.com/package/@acme/pricing", "https://github.com/acme/pricing#a?b", "https://github.com/acme/pri%3Fce%40x", "https://github.com:443/acme/pricing#v1.2.0"] {
+        assert_eq!(read(&format!("module shop\nsource \"{url}\"\n")).source.map(|s| s.value), Some(url.to_string()));
+    }
 }
 
 #[test]

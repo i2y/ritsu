@@ -1,6 +1,7 @@
 //! What a URL says of how it is reached (DESIGN 16.4): its scheme and its host, whether the host
 //! is this machine (the loopback), whether the connection goes unencrypted, and the form of an
-//! AsyncAPI server's `protocol` that encrypts.
+//! AsyncAPI server's `protocol` that encrypts; and whether it has a user, a password or a query,
+//! which the published `source` of a module has none of (DESIGN 17.3).
 
 use std::net::IpAddr;
 
@@ -40,6 +41,23 @@ pub fn scheme_and_host(url: &str) -> Option<(String, String)> {
         hostport.split(':').next().unwrap_or("")
     };
     (!host.is_empty()).then(|| (scheme.to_ascii_lowercase(), host.to_string()))
+}
+
+/// Whether an absolute URL has a user or a password in it: an `@` in its authority, as the URL
+/// Standard (Node's `new URL`) or RFC 3986 (Python's urllib) reads it. The authority is taken
+/// wide enough for both: tabs and line breaks dropped, from after the `://` and the `/` and `\`
+/// that follow it, up to the first `/`, `?` or `#` (the URL Standard skips those `/` and `\`,
+/// and ends the authority of an https URL at a `\` as well, sooner).
+pub fn has_userinfo(url: &str) -> bool {
+    let url: String = url.chars().filter(|c| !matches!(c, '\t' | '\n' | '\r')).collect();
+    let Some((_, rest)) = url.split_once("://") else { return false };
+    let rest = rest.trim_start_matches(['/', '\\']);
+    rest[..rest.find(['/', '?', '#']).unwrap_or(rest.len())].contains('@')
+}
+
+/// Whether a URL has a query: a `?` before its fragment.
+pub fn has_query(url: &str) -> bool {
+    url.split('#').next().is_some_and(|u| u.contains('?'))
 }
 
 /// Some((scheme, host)) when the URL is `http://` or `ws://` to a host that is not the loopback.

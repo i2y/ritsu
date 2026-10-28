@@ -209,6 +209,31 @@ fn fits(want: Want, t: &Token) -> bool {
     }
 }
 
+/// The URL of a `source` line: what is wrong with it (E302), with a note to say after that, if
+/// anything. A `source` is an https URL with no user, no password and no query: it is published
+/// with the module and the packages made from it (DESIGN 17.3). The note comes only with a URL that
+/// may carry a credential, and that message does not name the URL, as its diagnostic goes to
+/// terminals and logs.
+pub fn source_problem(url: &str) -> Option<(Text, Option<Text>)> {
+    if crate::urls::scheme_and_host(url).is_none_or(|(s, _)| s != "https") {
+        return Some((tr!("`source` の `{url}` は https の URL で書いてください", "the `source` `{url}` is an https URL"), None));
+    }
+    let message = if crate::urls::has_userinfo(url) {
+        tr!("`source` の URL にユーザーかパスワードが入っています。`source` には書けません", "the `source` URL has a user or a password in it, which a `source` cannot have")
+    } else if crate::urls::has_query(url) {
+        tr!("`source` の URL にクエリ（`?` から後）が入っています。`source` には書けません", "the `source` URL has a query (from the `?` on) in it, which a `source` cannot have")
+    } else {
+        return None;
+    };
+    Some((
+        message,
+        Some(tr!(
+            "ritsu は `source` を、`ritsu mod push` で送り出すモジュール、`ritsu gen` で生成するパッケージ（package.json と pyproject.toml）、一覧のサイトに書きます。どれも公開するものなので、トークンやパスワードのような資格情報は書かないでください",
+            "ritsu writes the `source` into the module `ritsu mod push` sends, the packages `ritsu gen` makes (package.json and pyproject.toml) and the list site, all of which are meant to be published: keep credentials such as tokens and passwords out of it"
+        )),
+    ))
+}
+
 /// A path written in `ritsu.mod`, from the root of the module: what is wrong with it, if anything.
 /// `inside` asks it to stay in the module (`exclude`, a key) rather than lead to a directory beside
 /// it (a `path` dependency).
@@ -240,6 +265,12 @@ struct Reader<'a> {
 impl Reader<'_> {
     fn at(&mut self, code: &'static str, line: usize, col: usize, src: &str, message: Text) -> &mut Diag {
         self.diags.push(Diag::at(code, self.file, line, col, message).rel(self.file).source(&src_line(src, line)));
+        self.diags.last_mut().unwrap()
+    }
+
+    /// As [`Reader::at`], without the line.
+    fn unshown(&mut self, code: &'static str, line: usize, col: usize, message: Text) -> &mut Diag {
+        self.diags.push(Diag::at(code, self.file, line, col, message).rel(self.file));
         self.diags.last_mut().unwrap()
     }
 }
@@ -403,10 +434,15 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
             }
             "source" => {
                 let url = &v(0).text;
-                if crate::urls::scheme_and_host(url).is_some_and(|(s, _)| s == "https") {
-                    m.source = Some(At { value: url.clone(), line: n, col: v(0).col });
-                } else {
-                    r.at(E302, n, v(0).col, src, tr!("`source` の `{url}` は https の URL で書いてください", "the `source` `{url}` is an https URL"));
+                match source_problem(url) {
+                    None => m.source = Some(At { value: url.clone(), line: n, col: v(0).col }),
+                    // what may carry a credential: the line is not shown either
+                    Some((message, Some(note))) => {
+                        r.unshown(E302, n, v(0).col, message).notes.push(note)
+                    }
+                    Some((message, None)) => {
+                        r.at(E302, n, v(0).col, src, message);
+                    }
                 }
             }
             "require" => {
