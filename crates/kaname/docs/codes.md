@@ -576,7 +576,7 @@ See also: [W301](#w301), [E401](#e401)
 
 ## W301 — Whether a value stays in the range of where it is given cannot be decided
 
-**When**: The analysis of ranges cannot show that the value stays in the range, and no vector of the function takes it out; the generated code checks it there when it runs. The analysis counts in intervals, so an expression that uses one value twice (`side * (10 - side)`) or the answer of a recursion is estimated wider than it is.
+**When**: The analysis of ranges cannot show that the value stays in the range, and no vector of the function takes it out; the generated code checks it there when it runs. The analysis counts in intervals, so an expression that uses one value twice (`side * (10 - side)`) or the answer of a recursion is estimated wider than it is. Where a list or a record is given, the message says whether what cannot be decided is the range of its elements (or of a field of theirs) or their count, with what is written there. A parameter or a field with no range and no `count` written takes any value of its type, so a value that can be any value of its type, as an output of a rule with no range can, is not this when given there.
 
 **Fix**: Narrow the value with an `if` or a `match`, which the analysis reads, and it is shown.
 

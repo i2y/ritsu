@@ -433,8 +433,8 @@ pub fn ledger() -> Ledger {
             "W301",
             tr!("値が渡す先の範囲に収まるかを決められません", "Whether a value stays in the range of where it is given cannot be decided"),
             tr!(
-                "範囲の解析が、渡す値が範囲に収まると示せず、関数のベクタにも範囲の外にする入力が無かったとき。生成したコードが、走らせたときにその場所で確かめます。範囲の解析は区間で数えるので、同じ値が二度出る式（`side * (10 - side)`）や、再帰の答えは、本当より広く見積もります。",
-                "The analysis of ranges cannot show that the value stays in the range, and no vector of the function takes it out; the generated code checks it there when it runs. The analysis counts in intervals, so an expression that uses one value twice (`side * (10 - side)`) or the answer of a recursion is estimated wider than it is."
+                "範囲の解析が、渡す値が範囲に収まると示せず、関数のベクタにも範囲の外にする入力が無かったとき。生成したコードが、走らせたときにその場所で確かめます。範囲の解析は区間で数えるので、同じ値が二度出る式（`side * (10 - side)`）や、再帰の答えは、本当より広く見積もります。リストやレコードを渡すときは、決められないのが要素（レコードのフィールド）の範囲か、要素の数かを、文が書いてある範囲と合わせて言います。範囲も `count` も書いていない引数やフィールドは、その型のどの値でも受け取るので、範囲の無い規則の出力のように、型のどの値にもなりうる値を渡しても、これにはなりません。",
+                "The analysis of ranges cannot show that the value stays in the range, and no vector of the function takes it out; the generated code checks it there when it runs. The analysis counts in intervals, so an expression that uses one value twice (`side * (10 - side)`) or the answer of a recursion is estimated wider than it is. Where a list or a record is given, the message says whether what cannot be decided is the range of its elements (or of a field of theirs) or their count, with what is written there. A parameter or a field with no range and no `count` written takes any value of its type, so a value that can be any value of its type, as an output of a rule with no range can, is not this when given there."
             ),
             tr!("`if` か `match` で範囲に狭めると、範囲の解析がそれを読んで示せるようになります。", "Narrow the value with an `if` or a `match`, which the analysis reads, and it is shown."),
             "module example v1\n\nfn area(side: number range >=1 <=8) -> number range >=0 <=24\n  side * (10 - side)\n",

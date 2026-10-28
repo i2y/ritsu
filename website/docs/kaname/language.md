@@ -101,6 +101,12 @@ changes(before: ["ink": 4, "pad": 2, "pen": 10], after: ["pad": 2, "pen": 7, "ta
 The code generated walks a `Map` of TypeScript, a `dict` of Python and a `map` of Go in the same
 order, so the answer is the same list in every target.
 
+The input is written as `vectors` writes its `in`: an amount is a whole number of its unit with no
+unit, a rate a whole number of its steps, a date a string `YYYY-MM-DD`, and `ritsu kaname run --help`
+lists every type. A value of another kind fails `input` at the line the function is declared on,
+and says how its type is written. Given the counts as an object, the run answers
+``fails: input (`changes`, declared on line 33): An argument of `changes`: `before` is dict[string, number], given as an array of its pairs `[key, value]`, in any order, each key once (`"before": [["abc", 1]]`); it is given an object``.
+
 ## Strings and `result`
 
 A string is a sequence of code points. Its length, a cut of it and the order of two strings are in

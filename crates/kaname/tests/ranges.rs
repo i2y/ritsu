@@ -454,3 +454,53 @@ fn an_enum_input_of_a_rule_is_held_to_its_range() {
         }
     });
 }
+
+/// A rule whose input, and so whose output, has no range: what it answers is anything in int64.
+const OPEN_RULE: &str = "rule fee_open(fee_open) v1\ndescription \"A fee whose input has no range\"\n\ninputs\n  amount : money[JPY]\n\noutputs\n  fee : money[JPY]  round down(1JPY)\n\nresult fee = amount + 1JPY\n\nexamples\n| amount | -> fee |\n| 1JPY   | 2JPY   |\n";
+
+/// A rule's output with no range is a value of the whole of its type, as the generated code returns
+/// it (DESIGN 32): given in a list, or in a record in a list, where no range is written, it is shown;
+/// given where a range or a count is written, W301 says which part of the value cannot be decided and
+/// whether its range or its count, with what is written there and what the analysis finds of it, and
+/// never the ends of int64 that no one wrote.
+#[test]
+fn a_rule_output_with_no_range_takes_the_whole_of_its_type() {
+    let t = ritsu_testkit::TempDir::new("kaname-whole");
+    t.write("open.rule", OPEN_RULE);
+    let check = |src: &str| {
+        let f = t.write("m.kn", src);
+        common::check(f.to_str().unwrap())
+    };
+    let head = "module m v1\n\nuse rule fee_open from \"open.rule\"\n\nrecord Share\n  share : money[JPY]\n\n";
+    let call = "fee_open(amount: amount).fee";
+    let given = "amount: money[JPY] range >=1JPY <=1_000JPY";
+    // nothing written on the elements, nor on the field of the records
+    let o = check(&format!(
+        "{head}fn f({given}) -> number\n  g(xs: [{call}])\n\nprivate fn g(xs: list[money[JPY]] count <=20) -> number\n  count(xs)\n\nfn h({given}) -> number\n  k(xs: [Share {{ share: {call} }}])\n\nprivate fn k(xs: list[Share]) -> number\n  count(xs)\n"
+    ));
+    assert_eq!(common::codes(&o), Vec::<&str>::new(), "{}", common::shown(&o, Lang::En));
+    // a range written on the elements: W301 as before, of each element and the range written
+    let o = check(&format!("{head}fn f({given}) -> number\n  g(xs: [{call}])\n\nprivate fn g(xs: list[money[JPY]] range >=0JPY <=10_000JPY count <=20) -> number\n  count(xs)\n"));
+    assert_eq!(common::codes(&o), ["W301"]);
+    let (en, ja) = (common::shown(&o, Lang::En), common::shown(&o, Lang::Ja));
+    assert!(en.contains(&format!("Whether each element of `[{call}]` stays in >=0JPY <=10000JPY, the range of the parameter `xs` of `g`, cannot be decided")), "{en}");
+    assert!(en.contains(&format!("The analysis of ranges finds no bound on each element of `[{call}]`")), "{en}");
+    assert!(ja.contains(&format!("`[{call}]` の要素が、関数 `g` の引数 `xs` の範囲 >=0JPY <=10000JPY に収まるかを決められません")), "{ja}");
+    assert!(!en.contains("9223372036854775807") && !ja.contains("9223372036854775807"), "{en}\n{ja}");
+    // a count written, and a list whose count is not: W301 of the count
+    let o = check("module m v1\n\nfn f(ys: list[money[JPY]] range >=0JPY <=10JPY) -> number\n  g(xs: ys)\n\nprivate fn g(xs: list[money[JPY]] count <=20) -> number\n  count(xs)\n");
+    assert_eq!(common::codes(&o), ["W301"]);
+    let (en, ja) = (common::shown(&o, Lang::En), common::shown(&o, Lang::Ja));
+    assert!(en.contains("Whether the count of `ys` stays in <=20, the count of the parameter `xs` of `g`, cannot be decided"), "{en}");
+    assert!(ja.contains("`ys` の要素の数が、関数 `g` の引数 `xs` の要素の数の範囲 <=20 に収まるかを決められません"), "{ja}");
+    // the count of a field of the elements, which the parameter reaches: the field and what it writes
+    let o = check("module m v1\n\nrecord Bag\n  items : list[money[JPY]] count <=3\n\nfn f(ys: list[money[JPY]] range >=0JPY <=10JPY count <=5) -> number\n  g(bs: [Bag { items: [] }], more: ys)\n\nprivate fn g(bs: list[Bag], more: list[money[JPY]] range >=0JPY <=10JPY count <=5) -> number\n  k(bs: [Bag { items: more }])\n\nprivate fn k(bs: list[Bag]) -> number\n  count(bs)\n");
+    let (en, ja) = (common::shown(&o, Lang::En), common::shown(&o, Lang::Ja));
+    assert!(en.contains("Whether the count of the `items` of each element of `[Bag { items: more }]`, given to the parameter `bs` of `k`, stays in <=3, the count of the field `items` of Bag, cannot be decided"), "{en}");
+    assert!(en.contains("The analysis of ranges finds the count of the `items` of each element of `[Bag { items: more }]` in <=5"), "{en}");
+    assert!(ja.contains("関数 `k` の引数 `bs` に渡す `[Bag { items: more }]` の要素の `items` の要素の数が、Bag のフィールド `items` の要素の数の範囲 <=3 に収まるかを決められません"), "{ja}");
+    // and where the record is made, the field's count, with what the analysis finds of it
+    assert!(en.contains("Whether `more` stays in what the field `items` of Bag declares (count <=3) cannot be decided"), "{en}");
+    assert!(en.contains("The analysis of ranges finds the count of `more` in <=5"), "{en}");
+    assert!(ja.contains("範囲の解析では、`more` の要素の数は <=5 です。"), "{ja}");
+}

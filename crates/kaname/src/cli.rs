@@ -43,6 +43,48 @@ fn page_root_flag() -> Flag {
     )
 }
 
+/// The flags of `run`: `--input` with how a value of each type is written in it, one type a line under
+/// it, as `Program::from_json` reads a value and `vectors` writes its `in` (DESIGN 32).
+fn run_flags() -> Vec<Flag> {
+    let rest = vec![
+        flag("--trace", None, tr!("`let` ごとの値も出す", "print the value of every `let` too")),
+        flag("--format", Some("json"), tr!("一つの JSON", "one JSON object")).choices(&["json"]),
+        root_flag(),
+    ];
+    let input = "--input <file.json|->";
+    // the lines under the flag's start where its text does, after the widest flag the page prints
+    let w = rest.iter().chain([lang_flag("KANAME_LANG"), help_flag()].iter()).map(|f| ritsu_base::text::width(&f.spelled())).chain([input.len()]).max().unwrap_or(0);
+    let under = " ".repeat(w + 4);
+    let kinds: [Text; 13] = [
+        tr!("数・お金・量（number、money、mass など）: 単位を付けない整数（money[JPY] の 1JPY は 1）", "number, money, mass and the other quantities: a whole number of its unit, with no unit (1 for 1JPY of money[JPY])"),
+        tr!("率（rate）: 刻みの数の整数（rate[step 0.01%] の 5% は 500）", "rate: a whole number of its steps (500 for 5% of rate[step 0.01%])"),
+        tr!("真偽値（bool）: true か false", "bool: true or false"),
+        tr!("文字列（string）: 文字列", "string: a string"),
+        tr!("日付（date）: 文字列 \"YYYY-MM-DD\"（0001-01-01 から 9999-12-31 まで）", "date: a string \"YYYY-MM-DD\" (0001-01-01 to 9999-12-31)"),
+        tr!(
+            "列挙: 値の名前か別名の文字列（\"gold\"）。フィールドを持つ値は、値の名前とフィールドのオブジェクトの一組（{{\"placed\": {{\"on\": \"2026-01-31\"}}}}）",
+            "enum: the name or alias of a value, a string (\"gold\"); a value with fields, an object of one pair, its name and its fields ({{\"placed\": {{\"on\": \"2026-01-31\"}}}})"
+        ),
+        tr!("レコード: フィールドの名前か別名をキーにしたオブジェクト。none になれるフィールドは省ける", "record: an object, a key for each field by its name or alias; a field that may be none can be left out"),
+        tr!("リスト（list）: 配列", "list: an array"),
+        tr!("集合（set）: 要素の配列（順は問わず、同じ要素は一度だけ）", "set: an array of its members, in any order, each once"),
+        tr!("辞書（dict）: 組 [鍵, 値] の配列（順は問わず、同じ鍵は一度だけ）", "dict: an array of its pairs [key, value], in any order, each key once"),
+        tr!("T?: T の書き方か null", "T?: as T, or null"),
+        tr!("result: {{\"ok\": 値}} か {{\"err\": 値}}", "result: {{\"ok\": value}} or {{\"err\": value}}"),
+        tr!("振替: \"book\"、\"transfer\"、\"op\"、\"args\" を持つオブジェクト", "a transfer: an object of \"book\", \"transfer\", \"op\" and \"args\""),
+    ];
+    let lines = |ja: bool| kinds.iter().map(|k| format!("\n{under}{}", if ja { &k.ja } else { &k.en })).collect::<String>();
+    let help = tr!(
+        "引数を、引数の名前をキーにした JSON のオブジェクトで渡す（必ず書く。- は標準入力）。型ごとの値の書き方は次のとおりで、`vectors` の `in` と同じ:{}",
+        "the arguments, a JSON object with a key for each parameter (required; - reads standard input). A value of each type is written as the `in` of `vectors` writes it:{}",
+        lines(true);
+        lines(false)
+    );
+    let mut out = vec![flag("--input", Some("<file.json|->"), help)];
+    out.extend(rest);
+    out
+}
+
 pub fn table() -> Table {
     Table {
         tool: "kaname",
@@ -89,12 +131,7 @@ pub fn table() -> Table {
                     ("<file.kn>", tr!("検査を通る .kn のファイル", "a .kn file that passes check")),
                     ("<function>", tr!("流す関数の名前か別名", "the function to run, by its name or its alias")),
                 ],
-                flags: vec![
-                    flag("--input", Some("<file.json|->"), tr!("引数を、引数の名前をキーにした JSON のオブジェクトで渡す（必ず書く。- は標準入力）", "the arguments, a JSON object with a key for each parameter (required; - reads standard input)")),
-                    flag("--trace", None, tr!("`let` ごとの値も出す", "print the value of every `let` too")),
-                    flag("--format", Some("json"), tr!("一つの JSON", "one JSON object")).choices(&["json"]),
-                    root_flag(),
-                ],
+                flags: run_flags(),
                 exits: vec![
                     (0, tr!("最後まで評価した（関数の答えか、関数の失敗）", "evaluated to the end: the function's answer, or its failure")),
                     (1, tr!("ファイルが検査を通らない、または評価が止まらなかった", "the file does not pass check, or the evaluation did not stop")),
@@ -554,6 +591,13 @@ fn run_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
         }
         Err(Stop::Failed(fl)) => {
             let (kind, at, msg) = (fl.kind.word(), place(&root, &c.path, &fl.file, fl.line, lang), ritsu_base::text::spaced(&fl.message, lang));
+            // the failure `input` is at the line its function is declared on, which is no line of the
+            // input (DESIGN 32)
+            let at = match (fl.kind, lang) {
+                (crate::interp::Kind::Input, Lang::Ja) => format!("{at}で宣言した関数 `{}`", info.name.text),
+                (crate::interp::Kind::Input, Lang::En) => format!("`{}`, declared on {at}", info.name.text),
+                _ => at,
+            };
             let _ = match lang {
                 Lang::Ja => writeln!(out, "失敗: {kind}（{at}）: {msg}"),
                 Lang::En => writeln!(out, "fails: {kind} ({at}): {msg}"),

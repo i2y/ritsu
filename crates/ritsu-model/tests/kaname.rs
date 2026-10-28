@@ -1062,13 +1062,20 @@ impl<'a> Ex<'a> {
                     _ => Rat::int(1),
                 };
                 let den = step_of(&t).map(|s| if s.num == 0 { 1 } else { s.den });
-                match self.suite.rules.as_ref().map(|r| r.output_values(&self.p.file(canon), &c.name)) {
+                let iv = match self.suite.rules.as_ref().map(|r| r.output_values(&self.p.file(canon), &c.name)) {
                     Some(Ok(Found::Value(ov))) => {
                         let e = |v: Option<i128>| v.map(|i| Rat::int(i).mul(step));
-                        Abs::Num(Iv::new(e(ov.min), e(ov.max), den))
+                        Iv::new(e(ov.min), e(ov.max), den)
                     }
-                    _ => Abs::Num(Iv { den, ..Iv::TOP }),
-                }
+                    _ => Iv { den, ..Iv::TOP },
+                };
+                // an end the rule does not bound is the end of the type (kaname's DESIGN 32)
+                let w = kaname::ty::whole_range(strip(&t));
+                Abs::Num(Iv {
+                    lo: iv.lo.or(w.as_ref().and_then(|w| w.min)),
+                    hi: iv.hi.or(w.as_ref().and_then(|w| w.max)),
+                    ..iv
+                })
             }
             other => self.an.top(other),
         };

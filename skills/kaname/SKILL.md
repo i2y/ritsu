@@ -181,9 +181,10 @@ fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <
   (all of int64 in its unit, 0001-01-01 to 9999-12-31), and an overflow that comes from the end of
   the type is said by no code: the code checks it where it happens, and the effect has `overflow`. A
   rate carries its step (E108).
-- A rule is called with its inputs by name and answers a record of its outputs (`.fee`); a date of
-  koyomi answers a day; a transfer is a value the host makes. A date has a difference (`b - a`, in
-  days) and no `+`.
+- A rule is called with its inputs by name and answers a record of its outputs (`.fee`), each in
+  the range rulec holds it to (an output that reads an input with no range takes the whole of its
+  type); a date of koyomi answers a day; a transfer is a value the host makes. A date has a
+  difference (`b - a`, in days) and no `+`.
 - Builtins: `count`, `sum`, `any`, `all`, `map`, `filter`, `first`, `max_of`, `min_of`,
   `running_totals`, `reduce`, with a function written where it is given; rulec's `min`, `max`,
   `mod`, `isqrt`, `allocate` and the five roundings; `starts_with`, `concat`, `text`. Each may be
@@ -198,7 +199,8 @@ fn split(lines: list[Line] count >=1 <=10, discount: money[USDc] range >=0USDc <
   what cannot be read is `none`. White space is Unicode's White_Space, and case is ASCII's alone. A
   literal has no escapes: a new line is `char(10)`.
 - `running_totals` is how an amount is spread: kaname knows `before <= upto <= total`, which a
-  rule's preconditions ask.
+  rule's preconditions ask, and that each `total` is the `sum` of the same list by the same field,
+  so `if amount > sum(lines, l => l.left)` keeps `amount <= total` in its `else`.
 - A name that is not ASCII carries an alias for the generated code: `遅れの請求(claim)`.
 - The effect at the end of a function's head is checked when written: `total`, `fails rule, range`,
   `diverges`.
@@ -253,7 +255,7 @@ reproduction. The usual ones:
 
 | Code | What it means | What to do |
 |---|---|---|
-| E201, W201 | a call can break a rule's precondition, or it cannot be decided | give values kaname knows the relation of (`running_totals`), or branch on the precondition |
+| E201, W201 | a call can break a rule's precondition, or it cannot be decided | give values kaname knows the relation of (`running_totals`, or a `sum` of the same list an `if` compared), or branch on the precondition |
 | E202, W202 | a day given to a rule's date input can be outside its range | narrow the day with an `if`, or ask whether the rule should take it |
 | E203, W203 | an amount given to a transfer can be one chobo does not take (below 0) | narrow the amount, or make a negative one a transfer the other way |
 | W204 | the reasons a transfer can be refused with cannot be decided | the type takes every reason of the book's bounds; the host handles them |

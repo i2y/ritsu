@@ -663,43 +663,52 @@ impl Program {
     /// A value off the wire, read as a value of `t` (`path` names it in what is said of it): Err
     /// with what is wrong when it is not one. Its range is not looked at here.
     pub fn from_json(&self, m: &Checked, j: &Json, t: &Ty, path: &str) -> Result<Value, Text> {
+        self.read_json(m, j, t, path, false)
+    }
+
+    /// The same, where `opt` says the value may be none there (`null`), as what is said of a value
+    /// of the wrong kind tells (DESIGN 32).
+    fn read_json(&self, m: &Checked, j: &Json, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
+        let wrong = || self.wrong_json(m, j, t, path, opt);
         match t {
             Ty::Opt(inner) => {
                 if j.is_null() {
                     Ok(Value::None)
                 } else {
-                    self.from_json(m, j, inner, path)
+                    self.read_json(m, j, inner, path, true)
                 }
             }
-            Ty::Num(n) => self.num_json(m, j, t, n, path),
-            Ty::Bool => j.as_bool().map(Value::Bool).ok_or_else(|| Self::wrong_json(j, path, "bool")),
-            Ty::Str => j.as_str().map(|s| Value::Str(s.to_string())).ok_or_else(|| Self::wrong_json(j, path, "string")),
-            Ty::Date => Self::date_json(j, path),
+            Ty::Num(n) => self.num_json(m, j, t, n, path, opt),
+            Ty::Bool => j.as_bool().map(Value::Bool).ok_or_else(wrong),
+            Ty::Str => j.as_str().map(|s| Value::Str(s.to_string())).ok_or_else(wrong),
+            Ty::Date => self.date_json(m, j, t, path, opt),
             Ty::Enum(id) if self.is_sum(id) => self.variant_json(m, j, id, t, path),
-            Ty::Enum(id) => self.enum_json(m, j, id, t, path),
+            Ty::Enum(id) => self.enum_json(m, j, id, t, path, opt),
             // the type of a value of a sum: a value of the sum, that value
             Ty::Record(r @ RecId::Variant { value, .. }) => self.value_type_json(m, j, r, value, t, path),
-            Ty::List(inner) => self.list_json(m, j, inner, t, path),
+            Ty::List(inner) => self.list_json(m, j, inner, t, path, opt),
             // a dict's pairs and a set's members in any order, each key once (DESIGN 24.4)
-            Ty::Dict(kt, vt) => self.dict_json(m, j, kt, vt, t, path),
-            Ty::Set(inner) => self.set_json(m, j, inner, t, path),
-            Ty::Record(id) => self.record_json(m, j, id, t, path),
+            Ty::Dict(kt, vt) => self.dict_json(m, j, kt, vt, t, path, opt),
+            Ty::Set(inner) => self.set_json(m, j, inner, t, path, opt),
+            Ty::Record(id) => self.record_json(m, j, id, t, path, opt),
             // `{"ok": value}` or `{"err": value}` (DESIGN 26.4)
             Ty::Result(a, e) => self.result_json(m, j, a, e, t, path),
-            Ty::Transfer(id) => self.transfer_json(m, j, id, t, path),
-            Ty::None | Ty::Empty | Ty::EmptyDict | Ty::Param(_) | Ty::Fn(..) | Ty::Error => Err(Self::wrong_json(j, path, "?")),
+            Ty::Transfer(id) => self.transfer_json(m, j, id, t, path, opt),
+            Ty::None | Ty::Empty | Ty::EmptyDict | Ty::Param(_) | Ty::Fn(..) | Ty::Error => Err(wrong()),
         }
     }
 
     /// A number, an amount, a quantity or a rate off the wire: a whole number, in int64 (a rate in its steps). One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn num_json(&self, m: &Checked, j: &Json, t: &Ty, n: &NumTy, path: &str) -> Result<Value, Text> {
-        let shown = self.show_ty(m, t);
+    fn num_json(&self, m: &Checked, j: &Json, t: &Ty, n: &NumTy, path: &str, opt: bool) -> Result<Value, Text> {
         let i = match j {
             Json::Int(i) => *i,
-            Json::Frac(x) => return Err(tr!("`{path}` の {x} は整数ではありません（{shown} は整数で渡します）", "`{path}` is {x}, no whole number ({shown} is given as a whole number)")),
-            _ => return Err(Self::wrong_json(j, path, &shown)),
+            Json::Frac(x) => {
+                let (shown, how) = (self.show_ty(m, t), self.how_json(m, t, path, opt));
+                return Err(tr!("`{path}` の {x} は整数ではありません。{shown} は{}", "`{path}` is {x}, no whole number: {shown} is given as {}", how.ja; how.en));
+            }
+            _ => return Err(self.wrong_json(m, j, t, path, opt)),
         };
         if i < i64::MIN as i128 || i > i64::MAX as i128 {
             return Err(tr!("`{path}` の {i} は int64 に収まりません", "`{path}` is {i}, which does not fit in int64"));
@@ -714,8 +723,8 @@ impl Program {
     /// A date off the wire: `YYYY-MM-DD`, from 0001-01-01 to 9999-12-31. One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn date_json(j: &Json, path: &str) -> Result<Value, Text> {
-        let s = j.as_str().ok_or_else(|| Self::wrong_json(j, path, "date"))?;
+    fn date_json(&self, m: &Checked, j: &Json, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
+        let s = j.as_str().ok_or_else(|| self.wrong_json(m, j, t, path, opt))?;
         crate::date::parse(s)
             .map(Value::Date)
             .ok_or_else(|| tr!("`{path}` の \"{s}\" は日付ではありません（`YYYY-MM-DD` で、0001-01-01 から 9999-12-31 まで）", "`{path}` is \"{s}\", no date (`YYYY-MM-DD`, from 0001-01-01 to 9999-12-31)"))
@@ -724,9 +733,9 @@ impl Program {
     /// A value of an enum whose values have no fields, by its name or its alias. One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn enum_json(&self, m: &Checked, j: &Json, id: &EnumId, t: &Ty, path: &str) -> Result<Value, Text> {
+    fn enum_json(&self, m: &Checked, j: &Json, id: &EnumId, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
         let en = self.show_ty(m, t);
-        let s = j.as_str().ok_or_else(|| Self::wrong_json(j, path, &en))?;
+        let s = j.as_str().ok_or_else(|| self.wrong_json(m, j, t, path, opt))?;
         let (vs, _) = self.values(id);
         match vs.iter().find(|v| v.is(s)) {
             Some(v) => Ok(Value::Enum(v.text.clone())),
@@ -755,17 +764,16 @@ impl Program {
     /// A list: an array, each element read in its type. One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn list_json(&self, m: &Checked, j: &Json, inner: &Ty, t: &Ty, path: &str) -> Result<Value, Text> {
-        let xs = j.as_arr().ok_or_else(|| Self::wrong_json(j, path, &self.show_ty(m, t)))?;
+    fn list_json(&self, m: &Checked, j: &Json, inner: &Ty, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
+        let xs = j.as_arr().ok_or_else(|| self.wrong_json(m, j, t, path, opt))?;
         xs.iter().enumerate().map(|(i, x)| self.from_json(m, x, inner, &format!("{path}[{i}]"))).collect::<Result<Vec<_>, _>>().map(Value::List)
     }
 
     /// A dict: its pairs `[key, value]` in any order, each key once (DESIGN 24.4). One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn dict_json(&self, m: &Checked, j: &Json, kt: &Ty, vt: &Ty, t: &Ty, path: &str) -> Result<Value, Text> {
-        let shown = self.show_ty(m, t);
-        let xs = j.as_arr().ok_or_else(|| Self::wrong_json(j, path, &shown))?;
+    fn dict_json(&self, m: &Checked, j: &Json, kt: &Ty, vt: &Ty, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
+        let xs = j.as_arr().ok_or_else(|| self.wrong_json(m, j, t, path, opt))?;
         let mut pairs = Vec::with_capacity(xs.len());
         for (i, x) in xs.iter().enumerate() {
             let pair = x.as_arr().filter(|p| p.len() == 2).ok_or_else(|| {
@@ -788,9 +796,8 @@ impl Program {
     /// A set: its members in any order, each once (DESIGN 24.4). One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn set_json(&self, m: &Checked, j: &Json, inner: &Ty, t: &Ty, path: &str) -> Result<Value, Text> {
-        let shown = self.show_ty(m, t);
-        let xs = j.as_arr().ok_or_else(|| Self::wrong_json(j, path, &shown))?;
+    fn set_json(&self, m: &Checked, j: &Json, inner: &Ty, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
+        let xs = j.as_arr().ok_or_else(|| self.wrong_json(m, j, t, path, opt))?;
         let vals = xs.iter().enumerate().map(|(i, x)| self.from_json(m, x, inner, &format!("{path}[{i}]"))).collect::<Result<Vec<_>, _>>()?;
         let n = vals.len();
         let out = self.set_of(inner, vals);
@@ -804,9 +811,9 @@ impl Program {
     /// A record: an object with a key for each field (its name or its alias), a field that may be none left out. One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn record_json(&self, m: &Checked, j: &Json, id: &RecId, t: &Ty, path: &str) -> Result<Value, Text> {
+    fn record_json(&self, m: &Checked, j: &Json, id: &RecId, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
         let shown = self.show_ty(m, t);
-        let obj = j.as_obj().ok_or_else(|| Self::wrong_json(j, path, &shown))?;
+        let obj = j.as_obj().ok_or_else(|| self.wrong_json(m, j, t, path, opt))?;
         let fields = self.fields(id);
         for (k, _) in obj {
             if !fields.iter().any(|(f, _)| f.is(k)) {
@@ -860,14 +867,14 @@ impl Program {
     /// A transfer: its book, transfer and operation, and its arguments. One kind of type of [`Program::from_json`], kept out of it so that the recursion
     /// through a deep value holds a small frame for each level (DESIGN 28.1).
     #[inline(never)]
-    fn transfer_json(&self, m: &Checked, j: &Json, id: &TransferId, t: &Ty, path: &str) -> Result<Value, Text> {
-        let shown = self.show_ty(m, t);
-        let (book, params) = self.transfer(id).ok_or_else(|| Self::wrong_json(j, path, &shown))?;
+    fn transfer_json(&self, m: &Checked, j: &Json, id: &TransferId, t: &Ty, path: &str, opt: bool) -> Result<Value, Text> {
+        let wrong = || self.wrong_json(m, j, t, path, opt);
+        let (book, params) = self.transfer(id).ok_or_else(wrong)?;
         let at = |k: &str| j.get(k).and_then(Json::as_str);
         if at("book") != Some(book.name.as_str()) || at("transfer") != Some(id.transfer.as_str()) || at("op") != Some(id.op.as_str()) {
-            return Err(Self::wrong_json(j, path, &shown));
+            return Err(wrong());
         }
-        let args = j.get("args").and_then(Json::as_obj).ok_or_else(|| Self::wrong_json(j, path, &shown))?;
+        let args = j.get("args").and_then(Json::as_obj).ok_or_else(wrong)?;
         let mut out = Vec::new();
         for (p, pt) in &params {
             if let Some((_, x)) = args.iter().find(|(k, _)| k == p) {
@@ -877,12 +884,90 @@ impl Program {
         Ok(Value::Transfer(Box::new(TransferValue { id: id.clone(), args: out })))
     }
 
-    /// What is said of a value off the wire that is not of the kind its place takes.
+    /// What is said of a value off the wire that is not of the kind its place takes (DESIGN 32): its
+    /// type, how a value of it is written, with an example made from the type and the key it is given
+    /// by, and what it was given.
     #[cold]
     #[inline(never)]
-    fn wrong_json(j: &Json, path: &str, want: &str) -> Text {
+    fn wrong_json(&self, m: &Checked, j: &Json, t: &Ty, path: &str, opt: bool) -> Text {
         let got = j.kind();
-        tr!("`{path}` は {want} です。渡されたのは{}です", "`{path}` is {want}; it is given {}", got.ja; got.en)
+        let shown = self.show_ty(m, &if opt { Ty::Opt(Box::new(t.clone())) } else { t.clone() });
+        let how = self.how_json(m, t, path, opt);
+        tr!("`{path}` は {shown} で、{}。渡されたのは{}です", "`{path}` is {shown}, given as {}; it is given {}", how.ja, got.ja; how.en, got.en)
+    }
+
+    /// How a value of `t` is written in JSON, as the input of `run` and the `in` of `vectors` write it
+    /// (DESIGN 32): Japanese that ends in 渡します, English a noun; then an example made from the type,
+    /// by the key `path` ends in (`` `"amount": 1` が 1円 ``). `opt`: none (`null`) is taken too.
+    pub fn how_json(&self, m: &Checked, t: &Ty, path: &str, opt: bool) -> Text {
+        let (noun, meaning) = match t {
+            Ty::Num(n) if n.is_rate() => {
+                let s = num_text(n.step.unwrap_or(Rat::new(1, 100)), &n.unit);
+                (tr!("刻み {s} の数の整数", "a whole number of its steps of {s}"), Some(s))
+            }
+            Ty::Num(n) if matches!(n.unit.dim, Dim::Number | Dim::Count(_)) => (tr!("整数", "a whole number"), None),
+            Ty::Num(n) => (tr!("単位を付けない整数", "a whole number with no unit"), Some(num_text(Rat::int(1), &n.unit))),
+            Ty::Bool => (tr!("true か false", "true or false"), None),
+            Ty::Str => (tr!("文字列", "a string"), None),
+            Ty::Date => (tr!("`YYYY-MM-DD` の文字列", "a string `YYYY-MM-DD`"), None),
+            Ty::Enum(_) => (tr!("値の名前か別名の文字列", "the name or the alias of a value, as a string"), None),
+            Ty::Record(_) => (tr!("フィールドの名前か別名をキーにしたオブジェクト", "an object with a key for each field, by its name or its alias"), None),
+            Ty::List(_) => (tr!("配列", "an array"), None),
+            Ty::Set(_) => (tr!("要素の配列（順は問わず、同じ要素は一度）", "an array of its members, in any order, each once"), None),
+            Ty::Dict(..) => (tr!("組 `[鍵, 値]` の配列（順は問わず、同じ鍵は一度）", "an array of its pairs `[key, value]`, in any order, each key once"), None),
+            Ty::Result(..) => (tr!("`{{\"ok\": 値}}` か `{{\"err\": 値}}`", "`{{\"ok\": value}}` or `{{\"err\": value}}`"), None),
+            Ty::Transfer(_) => (tr!("`book`、`transfer`、`op`、`args` を持つオブジェクト", "an object of `book`, `transfer`, `op` and `args`"), None),
+            _ => (Text::same("?"), None),
+        };
+        // the key the value is given by: the parameter's or the field's, none for an element
+        let key = (!path.ends_with(']')).then(|| path.rsplit('.').next().unwrap_or(path)).filter(|k| !k.is_empty());
+        let ex = self.json_example(m, t, 0);
+        let ex = match key {
+            Some(k) => format!("`\"{k}\": {ex}`"),
+            None => format!("`{ex}`"),
+        };
+        let ex = match meaning {
+            Some(s) => tr!("{ex} が {s}", "{ex} is {s}"),
+            None => Text::same(ex),
+        };
+        let (nj, ne) = if opt { (format!("{}か null", noun.ja), format!("{}, or null", noun.en)) } else { (noun.ja, noun.en) };
+        tr!("{nj}で渡します（{}）", "{ne} ({})", ex.ja; ex.en)
+    }
+
+    /// A value of `t` as JSON, to show how one is written: 1 for a number (of its unit, or of its
+    /// steps), the first value of an enum, each field of a record (one deep), an element of a list.
+    fn json_example(&self, m: &Checked, t: &Ty, depth: usize) -> String {
+        let fields = |slots: Vec<(crate::ast::Name, Slot)>| -> String {
+            if depth > 0 {
+                return "{…}".to_string();
+            }
+            let fs: Vec<String> = slots.iter().map(|(f, s)| format!("\"{}\": {}", f.text, self.json_example(m, &s.ty, depth + 1))).collect();
+            format!("{{{}}}", fs.join(", "))
+        };
+        match t {
+            Ty::Opt(x) => self.json_example(m, x, depth),
+            Ty::Num(_) => "1".to_string(),
+            Ty::Bool => "true".to_string(),
+            Ty::Str => "\"abc\"".to_string(),
+            Ty::Date => "\"2026-01-31\"".to_string(),
+            Ty::Enum(id) => {
+                let first = self.values(id).0.first().map(|v| v.text.clone()).unwrap_or_default();
+                if self.value_fields(id, &first).is_empty() { format!("\"{first}\"") } else { format!("{{\"{first}\": {}}}", fields(self.value_fields(id, &first))) }
+            }
+            Ty::Record(r @ RecId::Variant { value, .. }) => match r.sum() {
+                Some(id) => format!("{{\"{value}\": {}}}", fields(self.value_fields(&id, value))),
+                None => "{…}".to_string(),
+            },
+            Ty::Record(id) => fields(self.fields(id)),
+            Ty::List(x) | Ty::Set(x) => format!("[{}]", self.json_example(m, x, depth + 1)),
+            Ty::Dict(k, v) => format!("[[{}, {}]]", self.json_example(m, k, depth + 1), self.json_example(m, v, depth + 1)),
+            Ty::Result(a, _) => format!("{{\"ok\": {}}}", self.json_example(m, a, depth + 1)),
+            Ty::Transfer(id) => {
+                let book = self.transfer(id).map(|(b, _)| b.name.clone()).unwrap_or_default();
+                format!("{{\"book\": \"{book}\", \"transfer\": \"{}\", \"op\": \"{}\", \"args\": {{…}}}}", id.transfer, id.op)
+            }
+            _ => "…".to_string(),
+        }
     }
 
     /// The first key given twice among keys on the wire, as a person reads it.

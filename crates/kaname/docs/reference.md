@@ -581,9 +581,14 @@ No builtin of a string fails: a cut past the ends is cut to them, and what canno
 
 `running_totals` is how a share is spread: given to a rule that `allocate`s a line's share between
 `before` and `upto`, the shares come to the whole, and kaname knows `before <= upto <= total` for a
-weight that is 0 or more, which a rule's preconditions ask. The weights go into the fields of the
-records it answers, and so are rounded (E103): a whole number of their unit, or a rate on the step
-its type says (`x => 1 / x` is E103; `x => half_up(1 / x, 1)` is not).
+weight that is 0 or more, which a rule's preconditions ask. It knows too that each `total` is the
+`sum` of the same list by the same field, whatever the lambdas' parameters are named: in the `else`
+of `if amount > sum(lines, l => l.left)`, a call in `map(running_totals(lines, x => x.left), r => …)`
+that gives `amount` and `r.total` to a rule keeps its precondition `amount <= total`. The list is a
+name, the weight a field of the element (or the element itself), and the totals are the list a
+builtin walks where they are made, as `map` does there, not one a `let` names. The weights go into
+the fields of the records it answers, and so are rounded (E103): a whole number of their unit, or a
+rate on the step its type says (`x => 1 / x` is E103; `x => half_up(1 / x, 1)` is not).
 
 ## Calling rules, dates and books
 
@@ -592,7 +597,10 @@ its type says (`x => 1 / x` is E103; `x => half_up(1 / x, 1)` is not).
   given by its name or its alias; an optional input may be left out. A type or unit that does not
   fit is E102 (ritsu's X1, held by kaname), and a value outside the input's range is kaname's to
   find (E301, W301). A list a rule walks is given as a list of its elements,
-  `shipping(lines: map(xs, x => shipping.lines { amount: x.amount }), …)`.
+  `shipping(lines: map(xs, x => shipping.lines { amount: x.amount }), …)`. An output is read in
+  the range rulec holds it to: the one written on its line, what the rows of its tables write, or
+  what its `result` reaches. An output with none, one that reads an input with no range, is a value
+  of the whole of its type, as the generated code returns it.
 - **A date**: `terms.due(invoiced: …)` answers the day; a date input takes a `date`, a whole input a
   `number`. A date a module gives is held to the date's range by ritsu's X6; a whole number, by
   kaname.
@@ -838,11 +846,16 @@ $ ritsu kaname explain E301
   module passes.
 - `run <file.kn> <function> --input <file.json|-> [--trace] [--format json] [--root <dir>]`: one
   function in the reference interpreter on an input of JSON, each argument by its name or alias
-  (`-` reads standard input). It prints the call, the rules and dates it calls with their answers
-  and the transfers it builds, in order, and the answer, or the failure with its kind and line.
-  `--trace` adds the value of every `let`. A failure is an answer: exit 0. The input is read as deep
-  as the arguments can nest, a value of a type that holds itself one deeper than the 200 a host may
-  give (and so failing `input`), at least 256 levels of JSON and at most 1,024.
+  (`-` reads standard input), each value written as `vectors` writes its `in` (below; `run --help`
+  lists the types one a line). It prints the call, the rules and dates it calls with their answers
+  and the transfers it builds, in order, and the answer, or the failure with its kind and line. The
+  failure `input` is of the input, so its line is the one the function is declared on, and it is
+  said so: ``fails: input (`claim`, declared on line 18)``. A value of the wrong kind says how its
+  type is written, with an example made from the type: `` `amount` is money[JPY], given as a whole
+  number with no unit (`"amount": 1` is 1JPY); it is given a string ``. `--trace` adds the value of
+  every `let`. A failure is an answer: exit 0. The input is read as deep as the arguments can nest,
+  a value of a type that holds itself one deeper than the 200 a host may give (and so failing
+  `input`), at least 256 levels of JSON and at most 1,024.
 - `vectors <file.kn> [--function <name>] [--trace]`: inputs chosen for each function, with what the
   reference interpreter answers, a JSON object a line (below). The inputs are the ends of each range,
   0, the literals a parameter is compared with and a step either side, the ends of the ranges of the

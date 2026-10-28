@@ -1293,6 +1293,10 @@ struct Local {
 /// A name and the fields under it, that a branch narrows: `invoice.amount`.
 type Sym = (String, Vec<String>);
 
+/// The step of a [`Sym`] that sums a list by the fields after it (DESIGN 32): `xs` `⅀` `amount` is
+/// `sum(xs, x => x.amount)`. No field is so named, and a branch narrows no such name.
+const SUM: &str = "\u{2140}";
+
 /// The analysis of the functions of one module.
 pub struct Analyzer<'a> {
     m: &'a Checked,
@@ -1304,8 +1308,12 @@ pub struct Analyzer<'a> {
     /// The functions of the ring the function analysed now is in.
     ring: BTreeSet<usize>,
     env: Vec<Local>,
-    /// What the conditions in force say of how two names compare.
+    /// What the conditions in force say of how two names compare. A name can also be a sum of a list
+    /// by a field of its elements (`sum(xs, x => x.amount)`, [`SUM`], DESIGN 32).
     facts: Vec<(Sym, Rel, Sym)>,
+    /// The lambda a builtin walks the elements of `running_totals(xs, x => x.amount)` with, by its id,
+    /// and the sum each element's `total` is (DESIGN 32): what binding its parameter says.
+    elem_total: Option<(usize, Sym)>,
     /// The value an expression came to last, where a condition reads it to narrow.
     last: BTreeMap<usize, V>,
     places: BTreeMap<(usize, String), Place>,
@@ -1453,6 +1461,7 @@ impl<'a> Analyzer<'a> {
             ring: BTreeSet::new(),
             env: Vec::new(),
             facts: Vec::new(),
+            elem_total: None,
             last: BTreeMap::new(),
             places: BTreeMap::new(),
             calls: Vec::new(),
@@ -1732,6 +1741,54 @@ impl<'a> Analyzer<'a> {
             }
             _ => None,
         }
+    }
+
+    /// A call of a builtin, written as a function or after a value: its name and its arguments, the
+    /// value it is written after first (DESIGN 21.4).
+    fn builtin_call<'e>(&self, e: &'e Expr) -> Option<(&'static str, Vec<&'e Expr>)> {
+        let ExprKind::Call(callee, args) = &e.kind else { return None };
+        match (rf(self.m, callee), &callee.kind) {
+            (Ref::Builtin(name), _) => Some((name, args.iter().map(Arg::expr).collect())),
+            (Ref::Method(name), ExprKind::Field(base, _, _)) => Some((name, std::iter::once(&**base).chain(args.iter().map(Arg::expr)).collect())),
+            _ => None,
+        }
+    }
+
+    /// The fields a lambda of one parameter answers of it: `x => x.amount` is `[amount]`, `x => x`
+    /// is `[]`; None for any other lambda. Two such lambdas are the same function whatever their
+    /// parameters are named.
+    fn field_lambda(&self, lam: &Expr) -> Option<Vec<String>> {
+        let ExprKind::Lambda(ps, body) = &lam.kind else { return None };
+        let [(p, _)] = ps.as_slice() else { return None };
+        let (n, fs) = self.sym(body)?;
+        (n == *p).then_some(fs)
+    }
+
+    /// The name a sum of a list by a field of its elements is in the facts (DESIGN 32): the list's,
+    /// then [`SUM`], then the fields. `sum(xs, x => x.amount)` and `xs.sum(l => l.amount)` are one
+    /// sum; the list is a name, and a name means one value in a function (E006).
+    fn sum_term(&self, list: &Expr, lam: &Expr) -> Option<Sym> {
+        let (n, mut fs) = self.sym(list)?;
+        fs.push(SUM.to_string());
+        fs.extend(self.field_lambda(lam)?);
+        Some((n, fs))
+    }
+
+    /// A call of `sum` by a field of the elements of a list that is a name, as a name the facts can
+    /// hold.
+    fn summed(&self, e: &Expr) -> Option<Sym> {
+        match self.builtin_call(e)? {
+            ("sum", xs) if xs.len() == 2 => self.sum_term(xs[0], xs[1]),
+            _ => None,
+        }
+    }
+
+    /// The sum each element's `total` is, where a builtin walks the list `running_totals(xs, x =>
+    /// x.amount)` answers (DESIGN 32): `sum(xs, x => x.amount)`, read in the same type.
+    fn totals_of(&self, list: &Expr) -> Option<Sym> {
+        let ("running_totals", xs) = self.builtin_call(list)? else { return None };
+        let [l, lam] = xs.as_slice() else { return None };
+        self.sum_term(l, lam)
     }
 
     /// The list, the dict or the set a call of `count` with no condition counts, when it is a name:
@@ -2083,114 +2140,7 @@ impl<'a> Analyzer<'a> {
     /// (`interp::outside`): the range of its numbers and dates, the count of a list, and with
     /// `reached` the fields of the records of a module it reaches.
     pub fn keeps(&self, a: &Abs, s: &Slot, reached: bool) -> bool {
-        self.keeps_in(a, s, reached, 0)
-    }
-
-    fn keeps_in(&self, a: &Abs, s: &Slot, reached: bool, depth: usize) -> bool {
-        if depth > 8 {
-            return false;
-        }
-        let a = match a {
-            Abs::Opt(_, x) => &**x,
-            x => x,
-        };
-        if matches!(a, Abs::Never) {
-            return true;
-        }
-        let mut t = &s.ty;
-        while let Ty::Opt(x) = t {
-            t = x;
-        }
-        // a list's elements, a set's members and a dict's values, each to the range, their count to
-        // the count; a dict's keys, where a parameter reaches them, to their type (`interp::outside`)
-        let counted = |c: &Iv| {
-            let count = if reached { filled(s.count.as_ref(), Some(whole_count())) } else { s.count.clone() };
-            count.as_ref().is_none_or(|r| c.within(r))
-        };
-        if reached
-            && let (Ty::Dict(k, _), Abs::Dict(_, ka, _)) = (t, a)
-            && !self.keeps_in(ka, &Slot::of((**k).clone()), true, depth + 1)
-        {
-            return false;
-        }
-        let (elem, elem_ty) = match (t, a) {
-            (Ty::List(x), Abs::List(c, e)) | (Ty::Set(x), Abs::Members(c, e)) | (Ty::Dict(_, x), Abs::Dict(c, _, e)) => {
-                if !counted(c) {
-                    return false;
-                }
-                let mut et = &**x;
-                while let Ty::Opt(y) = et {
-                    et = y;
-                }
-                (match &**e {
-                    Abs::Opt(_, v) => (**v).clone(),
-                    v => v.clone(),
-                }, et)
-            }
-            (Ty::List(_) | Ty::Set(_) | Ty::Dict(..), _) => return false,
-            // a string's code points to the count it writes (DESIGN 25.1); a string holds no more than
-            // 2⁶³ − 1 of them wherever it is
-            (Ty::Str, Abs::Str(c)) => return s.count.as_ref().is_none_or(|r| c.within(r)),
-            (Ty::Str, _) => return s.count.is_none(),
-            _ => (a.clone(), t),
-        };
-        if matches!(elem, Abs::Never) {
-            return true;
-        }
-        // a value of a record or an enum that holds itself is not held again where kaname calls a
-        // function (`interp::outside`'s `Hold::Call`, DESIGN 28.1)
-        if reached && self.p.recursive(elem_ty) {
-            return true;
-        }
-        let range = match (&s.range, elem_ty) {
-            (Some(r), _) => Some(r.clone()),
-            (None, Ty::Num(n)) if reached && n.is_rate() && n.step.is_some() => Some(Range { min: Some(Rat::zero()), max: Some(Rat::int(1)) }),
-            _ => None,
-        };
-        // where a parameter reaches it, an end not written is the type's (DESIGN 22.1)
-        let range = if reached { filled(range.as_ref(), whole_range(elem_ty)) } else { range };
-        if let Some(r) = &range
-            && !elem.iv().is_some_and(|i| i.within(r))
-        {
-            return false;
-        }
-        if reached && let Ty::Record(id @ RecId::Module { .. }) = elem_ty {
-            for (f, fs) in self.p.fields(id) {
-                if !self.keeps_in(&elem.field(&f.text), &fs, true, depth + 1) {
-                    return false;
-                }
-            }
-        }
-        // a value of a sum: the fields of each value it can be (of every value, where it can be anything)
-        let sum = match elem_ty {
-            Ty::Enum(id) if self.p.is_sum(id) => Some((id.clone(), None)),
-            Ty::Record(r @ RecId::Variant { value, .. }) => r.sum().map(|id| (id, Some(value.clone()))),
-            _ => None,
-        };
-        if reached && let Some((id, only)) = sum {
-            for v in self.p.values(&id).0 {
-                if only.as_ref().is_some_and(|o| *o != v.text) {
-                    continue;
-                }
-                let rec: Option<&Rec> = match &elem {
-                    Abs::Variants(vs) => match vs.get(&v.text) {
-                        Some(r) => Some(r),
-                        None => continue,
-                    },
-                    _ => None,
-                };
-                for (f, fs) in self.p.value_fields(&id, &v.text) {
-                    let fa = match rec {
-                        Some(r) => r.fields.iter().find(|(n, _)| *n == f.text).map(|(_, a)| a.clone()).unwrap_or(Abs::Any),
-                        None => Abs::Any,
-                    };
-                    if !self.keeps_in(&fa, &fs, true, depth + 1) {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
+        breach(self.p, a, s, reached).is_none()
     }
 
     // ── Blocks and expressions ──────────────────────────────────────────────
@@ -2568,7 +2518,9 @@ impl<'a> Analyzer<'a> {
             }
         }
         let (sa, sb) = (self.sym(a), self.sym(b));
-        if sa.is_none() && sb.is_none() {
+        // what the facts hold of a side: its name, or the sum of a list by a field (DESIGN 32)
+        let (fa, fb) = (sa.clone().or_else(|| self.summed(a)), sb.clone().or_else(|| self.summed(b)));
+        if fa.is_none() && fb.is_none() {
             return;
         }
         let read = |me: &Self, x: &Expr, tx: &Ty| -> Option<Abs> {
@@ -2581,7 +2533,7 @@ impl<'a> Analyzer<'a> {
         let (Some(xa), Some(xb)) = (read(self, a, ta), read(self, b, tb)) else { return };
         // a relation is kept between two numbers or two dates (DESIGN 5.3)
         let ordered = matches!((&xa, &xb), (Abs::Num(_), Abs::Num(_)) | (Abs::Date(_), Abs::Date(_)));
-        if let (Some(p), Some(q), true) = (&sa, &sb, own && ordered) {
+        if let (Some(p), Some(q), true) = (&fa, &fb, own && ordered) {
             match op {
                 BinOp::Lt => self.facts.push((p.clone(), Rel::Lt, q.clone())),
                 BinOp::Le => self.facts.push((p.clone(), Rel::Le, q.clone())),
@@ -3025,6 +2977,9 @@ impl<'a> Analyzer<'a> {
             }
             _ => Iv { den, ..Iv::TOP },
         };
+        // an end the rule does not bound is the end of the type, which the generated code returns
+        // its answer in, as a parameter's with no range is (DESIGN 22.1, 32)
+        let iv = fill(iv, whole_range(strip(&t)), true);
         self.outputs.insert(key, iv);
         iv
     }
@@ -3411,6 +3366,7 @@ impl<'a> Analyzer<'a> {
         for ((p, _), v) in ps.iter().zip(params) {
             self.bind(p, v);
         }
+        self.elem_total_fact(lam, ps);
         let v = self.ev(body);
         let v = match to {
             Some(t) => {
@@ -3424,6 +3380,17 @@ impl<'a> Analyzer<'a> {
         v
     }
 
+    /// Where `lam` walks the running totals of a list by a field (DESIGN 32): its parameter's `total`
+    /// is the sum of the list by that field, a fact while its body is read.
+    fn elem_total_fact(&mut self, lam: &Expr, ps: &[(String, Span)]) {
+        if let Some((id, t)) = &self.elem_total
+            && *id == lam.id
+            && let Some((p, _)) = ps.first()
+        {
+            self.facts.push(((p.clone(), vec!["total".to_string()]), Rel::Eq, t.clone()));
+        }
+    }
+
     /// A condition given to a builtin (`filter`, `first`), analysed on an element: whether it can
     /// hold and fail, and the element where it holds.
     fn condition(&mut self, lam: &Expr, elem: V) -> (bool, bool, Abs) {
@@ -3431,6 +3398,7 @@ impl<'a> Analyzer<'a> {
         let (mark, fmark) = (self.env.len(), self.facts.len());
         let Some((p, _)) = ps.first() else { return (true, true, elem.abs) };
         self.bind(p, elem.clone());
+        self.elem_total_fact(lam, ps);
         let v = self.ev(body);
         let (t, f) = truths(&v.abs);
         self.narrow(body, true);
@@ -3552,7 +3520,18 @@ impl<'a> Analyzer<'a> {
         V::of(Abs::Dict(merged(ca, cb), Box::new(ka.join(&kb)), Box::new(values)))
     }
 
+    /// A builtin that walks a list with a lambda (`map`, `filter`, `sum`, …): where the list is what
+    /// `running_totals(xs, x => x.amount)` answers, the lambda's parameter is an element whose `total`
+    /// is `sum(xs, x => x.amount)` (DESIGN 32).
     fn walk(&mut self, e: &Expr, name: &str, list: &Expr, lam: &Expr, me: &Ty) -> V {
+        let total = self.totals_of(list).map(|t| (lam.id, t));
+        let outer = std::mem::replace(&mut self.elem_total, total);
+        let v = self.walk_in(e, name, list, lam, me);
+        self.elem_total = outer;
+        v
+    }
+
+    fn walk_in(&mut self, e: &Expr, name: &str, list: &Expr, lam: &Expr, me: &Ty) -> V {
         let (count, elem) = self.walked(list);
         if count.hi.is_some_and(|h| h.num < 0) {
             return V::of(Abs::Never);
@@ -4261,23 +4240,276 @@ fn enum_range_text(values: &[String]) -> String {
     }
 }
 
-/// What a place declares, as a person reads it: `range >=0 <=5`, `count <=30`. `reached`: a
-/// parameter's, whose number or date takes the whole of its type where an end is not written (DESIGN
-/// 22.1); its count is said as written.
-fn decl_text(s: &Slot, reached: bool) -> String {
+// ── What a value is not shown to keep ───────────────────────────────────────
+
+/// A step from a value to a part of it a place holds (DESIGN 32).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Part {
+    /// Each element of a list, member of a set, value of a dict.
+    Elem,
+    /// Each key of a dict.
+    Key,
+    /// A field of a record of a module: the record, the field's name.
+    Field(Ty, String),
+    /// A field of a value of a sum: the sum, the value's name, the field's.
+    Of(Ty, String, String),
+}
+
+/// What a part of a value is held to, where the analysis cannot show it keeps it (DESIGN 32).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Held {
+    /// The count of a list, a set or a dict: as written, or none written (then int64's).
+    Count(Option<Range>),
+    /// The code points of a string, to the count written.
+    Chars(Range),
+    /// The range of a number or a date: as written (a rate with a step and none written, 0% to
+    /// 100%), or none written, and then the type's (DESIGN 22.1). The type the range is read in.
+    Range(Option<Range>, Ty),
+    /// The value as a whole: one the analysis does not follow, or nested too deep to follow.
+    Whole,
+}
+
+/// The first part of a value a place cannot be shown to keep (DESIGN 32): where it is in the value
+/// (`[]` the value itself), what it is held to, and what the analysis finds of it — the interval of
+/// the number or the date, or of the count.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Breach {
+    pub path: Vec<Part>,
+    pub held: Held,
+    pub found: Option<Iv>,
+}
+
+/// The first part of the values `a` a place declaring `s` is not shown to keep, as the interpreter
+/// holds a value to it (`interp::outside`), or None where every value keeps it. `reached`: a
+/// parameter's, whose ends and counts not written are the type's and whose records of a module are
+/// held field by field (DESIGN 22.1).
+pub fn breach(p: &Program, a: &Abs, s: &Slot, reached: bool) -> Option<Breach> {
+    breach_in(p, a, s, reached, 0)
+}
+
+fn breach_in(p: &Program, a: &Abs, s: &Slot, reached: bool, depth: usize) -> Option<Breach> {
+    let here = |held: Held, found: Option<Iv>| Some(Breach { path: Vec::new(), held, found });
+    let under = |part: Part, b: Breach| {
+        let mut path = vec![part];
+        path.extend(b.path);
+        Breach { path, ..b }
+    };
+    if depth > 8 {
+        return here(Held::Whole, None);
+    }
+    let a = match a {
+        Abs::Opt(_, x) => &**x,
+        x => x,
+    };
+    if matches!(a, Abs::Never) {
+        return None;
+    }
+    let mut t = &s.ty;
+    while let Ty::Opt(x) = t {
+        t = x;
+    }
+    // a list's elements, a set's members and a dict's values, each to the range, their count to
+    // the count; a dict's keys, where a parameter reaches them, to their type (`interp::outside`)
+    if reached
+        && let (Ty::Dict(k, _), Abs::Dict(_, ka, _)) = (t, a)
+        && let Some(b) = breach_in(p, ka, &Slot::of((**k).clone()), true, depth + 1)
+    {
+        return Some(under(Part::Key, b));
+    }
+    let (elem, elem_ty, inside) = match (t, a) {
+        (Ty::List(x), Abs::List(c, e)) | (Ty::Set(x), Abs::Members(c, e)) | (Ty::Dict(_, x), Abs::Dict(c, _, e)) => {
+            let count = if reached { filled(s.count.as_ref(), Some(whole_count())) } else { s.count.clone() };
+            if count.as_ref().is_some_and(|r| !c.within(r)) {
+                return here(Held::Count(s.count.clone()), Some(*c));
+            }
+            let mut et = &**x;
+            while let Ty::Opt(y) = et {
+                et = y;
+            }
+            (match &**e {
+                Abs::Opt(_, v) => (**v).clone(),
+                v => v.clone(),
+            }, et, true)
+        }
+        (Ty::List(_) | Ty::Set(_) | Ty::Dict(..), _) => return here(Held::Whole, None),
+        // a string's code points to the count it writes (DESIGN 25.1); a string holds no more than
+        // 2⁶³ − 1 of them wherever it is
+        (Ty::Str, Abs::Str(c)) => return s.count.as_ref().filter(|r| !c.within(r)).and_then(|r| here(Held::Chars(r.clone()), Some(*c))),
+        (Ty::Str, _) => return s.count.as_ref().and_then(|r| here(Held::Chars(r.clone()), None)),
+        _ => (a.clone(), t, false),
+    };
+    let at = |b: Breach| Some(if inside { under(Part::Elem, b) } else { b });
+    if matches!(elem, Abs::Never) {
+        return None;
+    }
+    // a value of a record or an enum that holds itself is not held again where kaname calls a
+    // function (`interp::outside`'s `Hold::Call`, DESIGN 28.1)
+    if reached && p.recursive(elem_ty) {
+        return None;
+    }
+    let written = match (&s.range, elem_ty) {
+        (Some(r), _) => Some(r.clone()),
+        (None, Ty::Num(n)) if reached && n.is_rate() && n.step.is_some() => Some(Range { min: Some(Rat::zero()), max: Some(Rat::int(1)) }),
+        _ => None,
+    };
+    // where a parameter reaches it, an end not written is the type's (DESIGN 22.1)
+    let range = if reached { filled(written.as_ref(), whole_range(elem_ty)) } else { written.clone() };
+    if let Some(r) = &range
+        && !elem.iv().is_some_and(|i| i.within(r))
+    {
+        // what is said is the range written, where the value is not shown to keep it, and the
+        // type's where only an end not written is the one not kept
+        let said = written.filter(|w| !elem.iv().is_some_and(|i| i.within(w)));
+        return at(Breach { path: Vec::new(), held: Held::Range(said, elem_ty.clone()), found: elem.iv() });
+    }
+    if reached && let Ty::Record(id @ RecId::Module { .. }) = elem_ty {
+        for (f, fs) in p.fields(id) {
+            if let Some(b) = breach_in(p, &elem.field(&f.text), &fs, true, depth + 1) {
+                return at(under(Part::Field(elem_ty.clone(), f.text.clone()), b));
+            }
+        }
+    }
+    // a value of a sum: the fields of each value it can be (of every value, where it can be anything)
+    let sum = match elem_ty {
+        Ty::Enum(id) if p.is_sum(id) => Some((id.clone(), None)),
+        Ty::Record(r @ RecId::Variant { value, .. }) => r.sum().map(|id| (id, Some(value.clone()))),
+        _ => None,
+    };
+    if reached && let Some((id, only)) = sum {
+        for v in p.values(&id).0 {
+            if only.as_ref().is_some_and(|o| *o != v.text) {
+                continue;
+            }
+            let rec: Option<&Rec> = match &elem {
+                Abs::Variants(vs) => match vs.get(&v.text) {
+                    Some(r) => Some(r),
+                    None => continue,
+                },
+                _ => None,
+            };
+            for (f, fs) in p.value_fields(&id, &v.text) {
+                let fa = match rec {
+                    Some(r) => r.fields.iter().find(|(n, _)| *n == f.text).map(|(_, a)| a.clone()).unwrap_or(Abs::Any),
+                    None => Abs::Any,
+                };
+                if let Some(b) = breach_in(p, &fa, &fs, true, depth + 1) {
+                    return at(under(Part::Of(Ty::Enum(id.clone()), v.text.clone(), f.text.clone()), b));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// What a place declares, as a person reads it and as it is written: `range >=0 <=5`, `count <=30`.
+/// An end not written is not said, though a parameter takes the type's there (DESIGN 22.1, 32).
+fn decl_text(s: &Slot) -> String {
     let mut t = &s.ty;
     while let Ty::Opt(x) | Ty::List(x) = t {
         t = x;
     }
     let mut parts = Vec::new();
-    let range = if reached { filled(s.range.as_ref(), whole_range(t)) } else { s.range.clone() };
-    if let Some(r) = &range {
+    if let Some(r) = &s.range {
         parts.push(format!("range {}", crate::value::range_text(r, t)));
     }
     if let Some(r) = &s.count {
         parts.push(format!("count {}", crate::value::range_text(r, &Ty::Num(NumTy::number()))));
     }
     parts.join(" ")
+}
+
+/// The part of a value a breach is at, read from the value out: `` `xs` ``, each element of `xs`, the
+/// `share` of each element of `xs` (DESIGN 32).
+fn part_text(src: &str, path: &[Part]) -> Text {
+    let (mut ja, mut en) = (format!("`{src}`"), format!("`{src}`"));
+    for part in path {
+        let j = crate::diag::ja_before(&ja);
+        (ja, en) = match part {
+            Part::Elem => (format!("{j}の要素"), format!("each element of {en}")),
+            Part::Key => (format!("{j}の鍵"), format!("each key of {en}")),
+            Part::Field(_, f) => (format!("{j}の `{f}`"), format!("the `{f}` of {en}")),
+            Part::Of(_, v, f) => (format!("{j}が {v} のときの `{f}`"), format!("the `{f}` of {en} where it is {v}")),
+        };
+    }
+    Text { ja, en }
+}
+
+/// What the analysis finds of the part of a value a breach is at, as W301's note says it (DESIGN 32):
+/// its interval, or the interval of its count, where an end is more than the type's (or, for a count,
+/// than 0); else that it finds no bound on it.
+fn part_note(src: &str, b: &Breach) -> Text {
+    let Text { ja, en } = part_text(src, &b.path);
+    let jp = crate::diag::ja_before(&ja);
+    let (count, chars) = (matches!(b.held, Held::Count(_) | Held::Chars(_)), matches!(b.held, Held::Chars(_)));
+    let (jw, ew) = match (count, chars) {
+        (true, true) => (format!("{jp}のコードポイントの数"), format!("the count of the code points of {en}")),
+        (true, false) => (format!("{jp}の要素の数"), format!("the count of {en}")),
+        // the value itself, which the headline quotes, is said as at the other places: the value
+        _ if b.path.is_empty() => ("値".to_string(), "the value".to_string()),
+        _ => (ja.clone(), en.clone()),
+    };
+    let bound = b.found.map(|i| Iv { lo: i.lo.filter(|l| !i.open_lo && !(count && l.num <= 0)), hi: i.hi.filter(|_| !i.open_hi), ..i }).filter(|i| i.lo.is_some() || i.hi.is_some());
+    let jb = crate::diag::ja_before(&jw);
+    match (bound, &b.held) {
+        (Some(i), Held::Range(_, t)) => {
+            let at = iv_text(i, t);
+            tr!("範囲の解析では、{jb}は {} です。関数のベクタにも、外れる入力はありませんでした。", "The analysis of ranges finds {ew} in {}, and no input among the function's vectors takes it out.", at.ja; at.en)
+        }
+        (Some(i), _) => {
+            let at = iv_text(i, &Ty::Num(NumTy::number()));
+            tr!("範囲の解析では、{jb}は {} です。関数のベクタにも、外れる入力はありませんでした。", "The analysis of ranges finds {ew} in {}, and no input among the function's vectors takes it out.", at.ja; at.en)
+        }
+        (None, _) => tr!("範囲の解析では、{jb}の範囲が決まりません。関数のベクタにも、外れる入力はありませんでした。", "The analysis of ranges finds no bound on {ew}, and no input among the function's vectors takes it out."),
+    }
+}
+
+/// The headline of W301 at a parameter (DESIGN 32): the part of the value it cannot be decided for —
+/// the value, each of its elements, a field of them — and whether its range or its count is not
+/// shown, with the range or count written there; where none is written, the values of the type, not
+/// the ends of int64 the type stands for.
+fn param_head(c: &Checked, p: &Program, src: &str, to: &Text, b: &Breach) -> Text {
+    let Text { ja, en } = part_text(src, &b.path);
+    // what writes the range or the count: the last field on the way, or the parameter
+    let owner = match b.path.iter().rev().find(|x| matches!(x, Part::Field(..) | Part::Of(..))) {
+        Some(Part::Field(r, f)) => Some(tr!("{} のフィールド `{f}`", "the field `{f}` of {}", p.show_ty(c, r))),
+        Some(Part::Of(s, v, f)) => Some(tr!("{} の値 {v} のフィールド `{f}`", "the field `{f}` of the value {v} of {}", p.show_ty(c, s))),
+        _ => None,
+    };
+    let jp = crate::diag::ja_before(&ja);
+    let (tj, oj) = (crate::diag::ja_before(&to.ja), owner.as_ref().map(|o| crate::diag::ja_before(&o.ja)));
+    let num = Ty::Num(NumTy::number());
+    match (&b.held, &owner) {
+        (Held::Range(Some(r), t), None) => {
+            let r = crate::value::range_text(r, t);
+            tr!("{jp}が、{tj}の範囲 {r} に収まるかを決められません", "Whether {en} stays in {r}, the range of {}, cannot be decided", ; to.en)
+        }
+        (Held::Range(Some(r), t), Some(o)) => {
+            let (r, oj) = (crate::value::range_text(r, t), oj.unwrap_or_default());
+            tr!("{tj}に渡す {jp}が、{oj}の範囲 {r} に収まるかを決められません", "Whether {en}, given to {}, stays in {r}, the range of {}, cannot be decided", ; to.en, o.en)
+        }
+        (Held::Range(None, t), _) => {
+            let t = p.show_ty(c, t);
+            tr!("{tj}に渡す {jp}が、{t} の値に収まるかを決められません", "Whether {en}, given to {}, stays in the values of {t} cannot be decided", ; to.en)
+        }
+        (Held::Count(Some(r)), None) => {
+            let r = crate::value::range_text(r, &num);
+            tr!("{jp}の要素の数が、{tj}の要素の数の範囲 {r} に収まるかを決められません", "Whether the count of {en} stays in {r}, the count of {}, cannot be decided", ; to.en)
+        }
+        (Held::Count(Some(r)), Some(o)) => {
+            let (r, oj) = (crate::value::range_text(r, &num), oj.unwrap_or_default());
+            tr!("{tj}に渡す {jp}の要素の数が、{oj}の要素の数の範囲 {r} に収まるかを決められません", "Whether the count of {en}, given to {}, stays in {r}, the count of {}, cannot be decided", ; to.en, o.en)
+        }
+        (Held::Count(None), _) => tr!("{tj}に渡す {jp}の要素の数が、int64 に収まるかを決められません", "Whether the count of {en}, given to {}, stays in int64 cannot be decided", ; to.en),
+        (Held::Chars(r), None) => {
+            let r = crate::value::range_text(r, &num);
+            tr!("{jp}のコードポイントの数が、{tj}のコードポイントの数の範囲 {r} に収まるかを決められません", "Whether the count of the code points of {en} stays in {r}, the count of {}, cannot be decided", ; to.en)
+        }
+        (Held::Chars(r), Some(o)) => {
+            let (r, oj) = (crate::value::range_text(r, &num), oj.unwrap_or_default());
+            tr!("{tj}に渡す {jp}のコードポイントの数が、{oj}のコードポイントの数の範囲 {r} に収まるかを決められません", "Whether the count of the code points of {en}, given to {}, stays in {r}, the count of {}, cannot be decided", ; to.en, o.en)
+        }
+        (Held::Whole, _) => tr!("{jp}が、{tj}の宣言に収まるかを決められません", "Whether {en} stays in what {} declares cannot be decided", ; to.en),
+    }
 }
 
 /// The text of a place's expression on its line.
@@ -4335,17 +4567,25 @@ fn place_diag(c: &Checked, p: &Program, f: usize, pl: &Place) -> Option<(crate::
             }
         }
         What::Param { function, param, slot } => {
-            let d = decl_text(slot, true);
-            let decl = if d.is_empty() { tr!("関数 `{function}` の引数 `{param}` の宣言", "what the parameter `{param}` of `{function}` declares") } else { tr!("関数 `{function}` の引数 `{param}` の宣言（{d}）", "what the parameter `{param}` of `{function}` declares ({d})") };
-            let ja = crate::diag::ja_before(&decl.ja);
-            if example {
-                tr!("`{src}` が、{ja}の外になることがあります", "`{src}` can be outside {}", ; decl.en)
-            } else {
-                tr!("`{src}` が、{ja}に収まるかを決められません", "Whether `{src}` stays in {} cannot be decided", ; decl.en)
+            // where it cannot be decided, which part of the value and what of it (DESIGN 32); an
+            // example's value shows which, and the headline says what is written
+            let to = tr!("関数 `{function}` の引数 `{param}`", "the parameter `{param}` of `{function}`");
+            match breach(p, &pl.value, slot, true) {
+                Some(b) if !example && b.held != Held::Whole => param_head(c, p, &src, &to, &b),
+                _ => {
+                    let d = decl_text(slot);
+                    let decl = if d.is_empty() { tr!("関数 `{function}` の引数 `{param}` の宣言", "what the parameter `{param}` of `{function}` declares") } else { tr!("関数 `{function}` の引数 `{param}` の宣言（{d}）", "what the parameter `{param}` of `{function}` declares ({d})") };
+                    let ja = crate::diag::ja_before(&decl.ja);
+                    if example {
+                        tr!("`{src}` が、{ja}の外になることがあります", "`{src}` can be outside {}", ; decl.en)
+                    } else {
+                        tr!("`{src}` が、{ja}に収まるかを決められません", "Whether `{src}` stays in {} cannot be decided", ; decl.en)
+                    }
+                }
             }
         }
         What::Answer { function, slot } => {
-            let d = decl_text(slot, false);
+            let d = decl_text(slot);
             if example {
                 tr!("関数 `{function}` の答えが、宣言（{d}）の外になることがあります", "The answer of `{function}` can be outside what it declares ({d})")
             } else {
@@ -4353,7 +4593,7 @@ fn place_diag(c: &Checked, p: &Program, f: usize, pl: &Place) -> Option<(crate::
             }
         }
         What::Field { record, field, slot } => {
-            let d = decl_text(slot, false);
+            let d = decl_text(slot);
             if example {
                 tr!("`{src}` が、{record} のフィールド `{field}` の宣言（{d}）の外になることがあります", "`{src}` can be outside what the field `{field}` of {record} declares ({d})")
             } else {
@@ -4419,7 +4659,17 @@ fn place_diag(c: &Checked, p: &Program, f: usize, pl: &Place) -> Option<(crate::
                 What::Zero => tr!("割る数", "the divisor"),
                 _ => tr!("値", "the value"),
             };
+            // at a parameter, a field and an answer, what the analysis finds of the part of the value
+            // it cannot decide for: the value, an element, a field of one; its range or its count
+            let part = match &pl.what {
+                What::Param { slot, .. } => breach(p, &pl.value, slot, true).filter(|b| b.held != Held::Whole),
+                What::Field { slot, .. } | What::Answer { slot, .. } => breach(p, &pl.value, slot, false).filter(|b| b.held != Held::Whole),
+                _ => None,
+            };
             match (&pl.what, pl.value.present(), pl.value.present().iv()) {
+                _ if part.is_some() => {
+                    d = d.note(part_note(&src, part.as_ref().unwrap()));
+                }
                 // the values of the enum the analysis finds it can be, in the enum's order
                 (What::RuleEnum { .. }, Abs::Set(Some(s)), _) => {
                     let order: Vec<Text> = match strip(&pl.ty) {
@@ -4440,7 +4690,9 @@ fn place_diag(c: &Checked, p: &Program, f: usize, pl: &Place) -> Option<(crate::
                         "The analysis of ranges does not find which values of the enum it can be, and no input among the function's vectors takes it out."
                     ));
                 }
-                (_, _, Some(i)) if i.lo.is_some() || i.hi.is_some() => {
+                // an end that is the type's, where no range is written, is no bound (DESIGN 22.1, 32)
+                (_, _, Some(i)) if (i.lo.is_some() && !i.open_lo) || (i.hi.is_some() && !i.open_hi) => {
+                    let i = Iv { lo: i.lo.filter(|_| !i.open_lo), hi: i.hi.filter(|_| !i.open_hi), ..i };
                     let at = iv_text(i, strip(&shown_ty));
                     d = d.note(tr!(
                         "範囲の解析では、{}は {} です。関数のベクタにも、外れる入力はありませんでした。",

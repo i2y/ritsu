@@ -130,6 +130,14 @@ and an amount given to a transfer against what chobo takes, with the reasons the
 transfer with. What it shows leaves the effect; what it cannot decide is checked by the code when it
 runs.
 
+A precondition between two inputs is first held to the relations kaname keeps between the values
+given: those of the branches, `before <= upto <= total` of `running_totals`, and each `total` being
+the `sum` of the same list by the same field. In the `else` of `if amount > sum(lines, l => l.left)`,
+an `amount` given beside a `total` of `running_totals(lines, l => l.left)` keeps `amount <= total`.
+A rule's answer is read in the range rulec holds it to: the one written on the output's line, what
+the rows of its tables write, or what its `result` reaches. An output that reads an input with no
+range is a value of the whole of its type, as the generated code returns it.
+
 ## In the package
 
 `ritsu gen` writes a module beside the code of the rules, the dates and the books it calls, in the

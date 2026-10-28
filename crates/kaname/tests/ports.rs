@@ -65,6 +65,67 @@ fn the_running_totals_keep_how_the_inputs_relate() {
     assert!(!x.rules[0].relations.is_empty());
 }
 
+/// A rule that takes one share of an amount spread over the lines at their running totals, and holds
+/// the amount to the whole of what is spread (DESIGN 32).
+const SHARE_RULE: &str = "rule refund_share v1\ndescription \"One line's share of a refund spread over the lines in proportion to what is left on each\"\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1_000_000USDc\n  before : money[USDc]  range >=0USDc <=100_000_000USDc\n  upto   : money[USDc]  range >=0USDc <=100_000_000USDc\n  total  : money[USDc]  range >=1USDc <=100_000_000USDc\n\nconstraint before <= upto\nconstraint upto <= total\nconstraint amount <= total\n\noutputs\n  share : money[USDc]  round down(1USDc)\n\nderive to_before : money[USDc] = allocate(amount, before, total)  range >=0USDc <=1_000_000USDc\nderive to_upto   : money[USDc] = allocate(amount, upto, total)    range >=0USDc <=1_000_000USDc\n\nresult share = to_upto - to_before\n\nexamples\n| amount   | before    | upto      | total     | -> share |\n| 1000USDc | 0USDc     | 5000USDc  | 15000USDc | 333USDc  |\n| 1000USDc | 5000USDc  | 15000USDc | 15000USDc | 667USDc  |\n";
+
+/// The `total` of each record `running_totals(xs, x => x.left)` answers is `sum(xs, x => x.left)`
+/// (DESIGN 32): an `if` that leaves out an amount above that sum keeps the rule's precondition
+/// `amount <= total` where the totals go to the rule, whatever the lambdas' parameters are named and
+/// whether the builtins are written as functions or after the list. A sum of another list, by
+/// another field, or by a lambda that is more than a field, is not that total, and keeps nothing.
+#[test]
+fn the_total_of_the_running_totals_is_the_sum_of_the_same_list() {
+    let t = TempDir::new("kaname-ports-totals");
+    t.write("share.rule", SHARE_RULE);
+    let head = "module refunds v1\n\nuse rule refund_share from \"share.rule\"\n\nrecord Line\n  left  : money[USDc]  range >=1USDc <=10_000_000USDc\n  other : money[USDc]  range >=1USDc <=10_000_000USDc\n\n";
+    let relations = |guard: &str, walk: &str| -> Vec<(String, String, String)> {
+        let src = format!(
+            "{head}fn split(lines: list[Line] count >=1 <=10, others: list[Line] count >=1 <=10, amount: money[USDc] range >=1USDc <=1_000_000USDc) -> list[money[USDc]]?\n  if amount > {guard}\n    none\n  else\n    {walk}\n"
+        );
+        let f = t.write("refunds.kn", src);
+        let x = crossings(f.to_str().unwrap());
+        assert_eq!(x.rules.len(), 1);
+        x.rules[0].relations.clone()
+    };
+    let to_rule = "refund_share(amount: amount, before: r.before, upto: r.upto, total: r.total).share";
+    let kept = |rels: &[(String, String, String)]| rels.iter().any(|(a, r, b)| (a.as_str(), r.as_str(), b.as_str()) == ("amount", "<=", "total"));
+    // the same list, the same field
+    let rels = relations("sum(lines, l => l.left)", &format!("map(running_totals(lines, l => l.left), r => {to_rule})"));
+    assert!(kept(&rels), "{rels:?}");
+    // the lambdas' parameters named apart, the builtins written after the list
+    let rels = relations("lines.sum(x => x.left)", &format!("lines.running_totals(y => y.left).map(r => {to_rule})"));
+    assert!(kept(&rels), "{rels:?}");
+    // the running totals keep their own relations as before
+    for want in [("before", "<=", "upto"), ("upto", "<=", "total")] {
+        assert!(rels.iter().any(|(a, r, b)| (a.as_str(), r.as_str(), b.as_str()) == want), "{want:?} in {rels:?}");
+    }
+    // another list, another field, a lambda that is more than a field: nothing is kept
+    for (guard, weight) in [("sum(others, l => l.left)", "l => l.left"), ("sum(lines, l => l.other)", "l => l.left"), ("sum(lines, l => l.left * 2)", "l => l.left * 2")] {
+        let rels = relations(guard, &format!("map(running_totals(lines, {weight}), r => {to_rule})"));
+        assert!(!kept(&rels), "{guard}: {rels:?}");
+    }
+}
+
+/// The share discount_split takes from its rule is what the rule's `result` comes to (DESIGN 32,
+/// rulec's §15.268): two shares of the discount at running totals in order, never below zero and
+/// never above the discount. A field that writes that range takes the share, where the analysis used
+/// to find no bound on it; a narrower one is still shown a value outside it.
+#[test]
+fn the_share_of_the_rule_has_the_range_its_result_comes_to() {
+    let src = std::fs::read_to_string("examples/discount_split/discount_split.kn")
+        .unwrap()
+        .replace("\"rules/discount_share.rule\"", "\"examples/discount_split/rules/discount_share.rule\"");
+    let with = |range: &str| {
+        assert!(src.contains("  share : money[USDc]\n"));
+        src.replace("  share : money[USDc]\n", &format!("  share : money[USDc]  {range}\n"))
+    };
+    let o = common::check_text("t.kn", &with("range >=0USDc <=10_000_000USDc"));
+    assert_eq!(common::codes(&o), Vec::<&str>::new(), "{}", common::shown(&o, ritsu_base::text::Lang::En));
+    let o = common::check_text("t.kn", &with("range >=0USDc <=9_999_999USDc"));
+    assert_eq!(common::codes(&o), ["E401", "E301"], "{}", common::shown(&o, ritsu_base::text::Lang::En));
+}
+
 #[test]
 fn a_module_whose_names_do_not_pass_has_no_crossings() {
     let t = TempDir::new("kaname-ports-wrong");
