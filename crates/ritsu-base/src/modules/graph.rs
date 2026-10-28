@@ -14,7 +14,7 @@
 
 use super::digest;
 use super::lock::{self, Lock, Locked, Pinned};
-use super::manifest::{self, Manifest, Source};
+use super::manifest::{self, Manifest, Policy, Signature, Source};
 use super::names::{self, ModuleName};
 use super::semver::Version;
 use super::store::Store;
@@ -608,8 +608,30 @@ impl<'a> Loader<'a> {
         }
     }
 
+    /// What the record of a check against the `signature` line `s` of node `i` says it checked
+    /// ([`Signature::checked`]): for a key, with the digest of the key file, read from the node's
+    /// files. None when the key file cannot be read, which is E302 at the line (said once).
+    fn checked_as(&mut self, i: usize, s: &Signature, said: &mut BTreeSet<(usize, usize)>) -> Option<String> {
+        let Policy::Key { path, .. } = &s.policy else { return Some(s.checked(None)) };
+        match fs::raw::read(&self.nodes[i].dir.join(path)) {
+            Ok(b) => Some(s.checked(Some(&b))),
+            Err(_) => {
+                if said.insert((i, s.line)) {
+                    let line = s.text();
+                    let d = self.at_mod(E302, i, s.line, 0, tr!(
+                        "`{line}` の鍵のファイル `{path}` を読めません。鍵のファイルは、この行を書いたモジュールのルートからのパスで書きます",
+                        "the key file `{path}` of `{line}` cannot be read; a key file is written from the root of the module whose line it is"
+                    ));
+                    self.diags.push(d);
+                }
+                None
+            }
+        }
+    }
+
     /// Every module's `ritsu >=`, and the record of the check of every signature that applies to a
-    /// module from a registry: what stops a run.
+    /// module from a registry: what stops a run. A line with a key is the line and the digest of its
+    /// key file ([`Signature::checked`]); a key file that cannot be read is E302.
     fn stops(&mut self) {
         let now = running();
         for i in 0..self.nodes.len() {
@@ -620,6 +642,7 @@ impl<'a> Loader<'a> {
                 self.stops.push(t);
             }
         }
+        let mut said = BTreeSet::new();
         for j in 0..self.nodes.len() {
             if self.nodes[j].pinned.is_none() {
                 continue;
@@ -632,9 +655,14 @@ impl<'a> Loader<'a> {
                 if !requires {
                     continue;
                 }
-                for s in &self.nodes[i].manifest.signatures {
-                    if names::covers(&s.prefix, &name) && !lines.contains(&s.text()) {
-                        lines.push(s.text());
+                for s in self.nodes[i].manifest.signatures.clone() {
+                    if !names::covers(&s.prefix, &name) {
+                        continue;
+                    }
+                    if let Some(c) = self.checked_as(i, &s, &mut said)
+                        && !lines.contains(&c)
+                    {
+                        lines.push(c);
                     }
                 }
             }

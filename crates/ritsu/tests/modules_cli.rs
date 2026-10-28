@@ -126,18 +126,10 @@ fn the_commands_to_come_say_this_version_has_them_not() {
     let t = example();
     let shop = t.path().join("shop");
     let before = t.read("shop/ritsu.mod");
-    for args in [
-        &["fetch"][..],
-        &["versions", "tax"],
-        &["push", "--dry-run"],
-        &["site", "modules.list", "--out", "site"],
-        &["get", "pricing@latest"],
-    ] {
+    for args in [&["site", "modules.list", "--out", "site"][..]] {
         let (code, out, err) = ritsu_in(&shop, t.path(), &[&["mod"][..], args].concat());
         assert_eq!((code, out.as_str(), err), (2, "", format!("error: `ritsu mod {}` is not in this version yet\n", args[0])), "{args:?}");
     }
-    let (code, _, err) = ritsu_in(&shop, t.path(), &["mod", "add", "tax", "example.com/acme/tax@1.0.0", "--lang", "ja"]);
-    assert_eq!((code, err.as_str()), (2, "エラー: `ritsu mod add` のレジストリの形は、この版にはまだありません（ディレクトリの形 `./…`・`../…` は使えます）\n"));
     assert_eq!(t.read("shop/ritsu.mod"), before);
 }
 
@@ -337,15 +329,21 @@ fn lock_pins_the_modules_from_a_registry() {
     let (code, out, _) = ritsu_in(&shop, &at, &["mod", "remove", "tax"]);
     assert_eq!((code, out.as_str()), (0, "removed `require tax path \"../tax\"` from ritsu.mod\nwrote ritsu.lock: 2 modules\n"));
     assert_eq!(t.read("shop/ritsu.lock"), want);
-    // a version in no store: the lock cannot be chosen, and nothing changes
+    // a version in no store, which its registry (the test's own) does not have: the lock cannot be
+    // chosen, and nothing changes
+    let registry = ritsu_testkit::registry::Registry::start();
     let empty = TempDir::new("mod-cli-empty-store");
     std::fs::remove_file(shop.join("ritsu.lock")).unwrap();
+    let host = &registry.host;
+    replace(&t, "shop/ritsu.mod", "\"example.com/acme/pricing\"", &format!("\"{host}/acme/pricing\""));
     let before = t.read("shop/ritsu.mod");
     let (code, out, err) = ritsu_in(&shop, empty.path(), &["mod", "add", "tax", "../tax"]);
     assert_eq!((code, out.as_str()), (2, ""));
-    assert_eq!(err, "error: the dependency `example.com/acme/pricing` 1.1.0 is neither in the store nor in this module's copy of it; run `ritsu mod fetch`\n");
+    assert_eq!(err, format!("error: the registry has no version 1.1.0 of `{host}/acme/pricing`\n"));
     assert_eq!(t.read("shop/ritsu.mod"), before);
     assert!(!shop.join("ritsu.lock").exists());
+    let asked: Vec<String> = registry.log().iter().map(|s| format!("{} {} {}", s.method, s.target, s.status)).collect();
+    assert_eq!(asked, ["GET /v2/acme/pricing/manifests/1.1.0 404"]);
 }
 
 /// `ritsu mod list` of the tree from a registry: the digests and where the files are, and a module

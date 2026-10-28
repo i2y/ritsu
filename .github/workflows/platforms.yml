@@ -3,9 +3,10 @@ name: platforms
 # The tests of the platforms level (DESIGN 10.2, 10.5, 10.6): the workflows dandori writes,
 # run on the platforms themselves (Temporal's dev server, Argo Workflows on a kind cluster,
 # Step Functions on LocalStack) and compared with its reference interpreter; the books of chobo
-# on a TiDB cluster (TiUP's playground) and on Vitess, as on MySQL; and the tests that ask a
-# server outside: e-Gov and the eCFR for the base layer, koyomi and yuen, and the Buf Schema
-# Registry for rulec. Nightly, by hand, and on a pull request that changes dandori.
+# on a TiDB cluster (TiUP's playground) and on Vitess, as on MySQL; ritsu's modules pushed to,
+# fetched from and signed at the reference implementation of the OCI distribution; and the tests
+# that ask a server outside: e-Gov and the eCFR for the base layer, koyomi and yuen, and the Buf
+# Schema Registry for rulec. Nightly, by hand, and on a pull request that changes dandori.
 #
 # The tests of the tools level are tools.yml's: the steps here run only the tests that need a
 # platform, one at a time, as on the machine where they were written; the runner is this job's
@@ -41,6 +42,14 @@ jobs:
   platforms:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+
+    # The reference implementation of the OCI distribution, for ritsu's modules (DESIGN 17.25):
+    # its image held to the digest of its index. The tests ask it at 127.0.0.1:5000, on the
+    # loopback, the one place ritsu speaks plain HTTP.
+    services:
+      registry:
+        image: registry:3.1.2@sha256:d4032d4cc323c1731c707931ecada07a53076eac38e3b61ae57533f170f2c6c3
+        ports: ["5000:5000"]
 
     steps:
       - uses: actions/checkout@v7
@@ -178,6 +187,25 @@ jobs:
           bin/vtcombo --version
           echo "RITSU_VITESS_BIN=$RUNNER_TEMP/vitess/bin" >> "$GITHUB_ENV"
 
+      # --- ritsu: the modules on the registry of the services (DESIGN 17.25). cosign 3.1.4 signs
+      # one there with a key of the test's own and no network, held to the checksum of its
+      # release's cosign_checksums.txt, as tools.yml installs it.
+      - name: "ritsu: cosign 3.1.4, and the registry of the services answering"
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cosign"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/cosign" https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  $d/cosign" | sha256sum -c -
+          chmod +x "$d/cosign"
+          echo "$d" >> "$GITHUB_PATH"
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:5000/v2/; then break; fi
+            sleep 1
+          done
+          curl -fsS -o /dev/null http://127.0.0.1:5000/v2/
+          echo "RITSU_TEST_REGISTRY=127.0.0.1:5000" >> "$GITHUB_ENV"
+
       - name: Copy in the pages the sites share
         run: |
           website/rulec/sync.sh
@@ -243,6 +271,29 @@ jobs:
             if ! cargo xtask test --level platforms -p "$p" -- --exact "$t"; then
               echo "::warning::$t failed once; it runs once more (DESIGN 10.6)"
               if ! cargo xtask test --level platforms -p "$p" -- --exact "$t"; then
+                echo "::error::$t failed twice"
+                failed=1
+              fi
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
+
+      # A module pushed to the registry of the services, fetched back, and signed there with cosign
+      # for the fetch to check; and the digest of `ritsu mod push --dry-run` on Linux, held to the
+      # golden file written on macOS (the same files give the same bytes on every system).
+      - name: "ritsu: the modules on a registry, one test at a time"
+        run: |
+          set -u
+          failed=0
+          for t in \
+            a_registry_of_the_platforms_level_takes_a_module_and_gives_it_back \
+            a_dry_run_gives_the_same_digest_every_time
+          do
+            echo "::group::$t"
+            if ! cargo xtask test --level platforms -p ritsu -- --exact "$t"; then
+              echo "::warning::$t failed once; it runs once more (DESIGN 10.6)"
+              if ! cargo xtask test --level platforms -p ritsu -- --exact "$t"; then
                 echo "::error::$t failed twice"
                 failed=1
               fi

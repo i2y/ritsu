@@ -2210,38 +2210,45 @@ C で確かめたこと（2026-10-28、この機械で）：
 
 - `crates/ritsu/src/modules/http.rs`：リクエストの関数を一つ。`-q`、`--config -` で秘密を標準入力から、`--proto`、リダイレクトを自分でたどる（`Authorization` は同じスキームとホストとポートにだけ）、時間と大きさの上限、`GET` と `HEAD` のやり直し、`Retry-After`、レジストリのエラーの JSON の読み方。WASI では `wasi::cannot_start("curl")`。
 - 秘密を入れる型（`Debug` と `Display` を持たない）。
+- 結果（2026-10-28）：ループバックへの問い合わせに `--noproxy "*"` を足した。やり直す curl の終了コードと `Retry-After` の上限 60 秒を DESIGN 17.12 に書いた。
 
 **D.2 テストの中のレジストリ**（DESIGN 17.25）
 
 - `crates/ritsu-testkit/src/registry.rs`（std だけ、dev-dependency のまま）：17.25 に挙げた distribution-spec の範囲、認証の三つの形、二つ目のポートへのリダイレクト、壊れた答え。ループバックの空いたポートで立て、テストの終わりに止める。
 - 試験：`crates/ritsu-testkit/tests/registry.rs`（curl で、blob と OCI のマニフェストの往復、`tags/list` のページ、referrers の絞り込み、トークンの手順）。
+- 結果（2026-10-28）：計画のとおり。試験は 8 件で、計画の四つのほかに、Basic、二つ目のポートへのリダイレクト（`Authorization` が届かないこと）、壊れた答え、sha256 と base64、cosign とレジストリの段（tools と platforms）を確かめる。
 
 **D.3 認証**（DESIGN 17.13）
 
 - `crates/ritsu/src/modules/auth.rs`：Docker の設定ファイル（`credHelpers`、`auths`、`credsStore`、`docker.io` の決まりごと）、ヘルパーを走らせる、Bearer の手順、ID トークンの `POST`、Basic、トークンの覚え書き。
 - 試験：`crates/ritsu/tests/modules_auth.rs`。テストが作る一時の `DOCKER_CONFIG` と、偽の `docker-credential-*`（標準入力のホストを確かめて決まった答えを返すスクリプト）で、三つの出どころと匿名、`identitytoken` の `POST`、401 のときの文（出どころの名前だけ）。植えた秘密が、標準出力、標準エラー、JSON、置き場と一時ディレクトリのどのファイルにも無いこと。curl に渡した引数（テストが PATH の前に置く、引数を書き残す curl の包み）に秘密が無いこと。
+- 結果（2026-10-28）：`modules_auth.rs` の 5 件（Basic と `auths`、Basic の資格情報でのトークンと二つ目のポートの blob、ID トークンの `POST`（`auths` とヘルパー）、`credHelpers` と `credsStore` と資格情報の無いヘルパーと PATH に無いヘルパー、匿名で取り出せて送り出せないことと違うパスワードと JSON でない設定ファイル）。走らせる ritsu の `TMPDIR` もテストのディレクトリにして、空で終わることを確かめる。ヘルパーが PATH に無いときと設定ファイルが読めないときの止まり方を DESIGN 17.13 に書いた。
 
 **D.4 送り出し**（DESIGN 17.12）
 
 - `crates/ritsu/src/modules/push.rs`：17.12 の 1〜9。秘密の検査（W901 の表）、一時ディレクトリでの `ritsu check`（主張は走らせない）、`--dry-run`、同じ版の扱い。
 - 試験：`crates/ritsu/tests/modules_oci.rs`。例の三つのモジュールを一時ディレクトリにコピーし、`module` と `require` の行をテストのレジストリに書き替えて、`tax`、`pricing` の順に送り出す。二度目は「送り出し済み」で exit 0、中身を変えて同じ版は exit 1、パスの依存は exit 1、鍵のあるファイルは exit 1（値が出ないこと）、検査のエラーは exit 1、`--dry-run` が二度とも同じダイジェストで通信しないこと。
+- 結果（2026-10-28）：送り出しの検査では、手元の `.geas` のファイルを検査するファイルから外す。そのために ritsu-project に `without_own_claims` を足した（DESIGN 17.12 の 4）。`--dry-run` のダイジェストは golden（`tests/golden/modules/push-dry-run.*`、英日と JSON）にし、PATH の先に置いた curl の包みが呼ばれないことも確かめる。JSON の `error` はいつも置く（DESIGN 17.21）。
 
 **D.5 取り出し、lock、add、get、versions、置き場**（DESIGN 17.12、17.15）
 
 - `crates/ritsu/src/modules/fetch.rs`、`registry.rs`、`store_write.rs`：OCI のマニフェストと層の取り出しと確かめ、一時ディレクトリへの展開と名前を変えて置くこと、`refs`、`record.json`、`ritsu.mod` の層だけを取ること（版の選び方のため）、タグの一覧のページ、`@latest`。`add` と `get` と `lock` のレジストリの部分、`versions`、`fetch --rev`。C.4 の `ritsu mod diff` の取り出しをつなぐ。
 - 試験：`modules_oci.rs` に続けて、`shop` で `add pricing <レジストリ>/acme/pricing@1.1.0`、`lock`、`fetch`、`check`（依存の依存の `tax` も）、`get pricing@latest`、`versions`。壊れた答え（ダイジェストの違い、タグが動いた、上限を超える、`..` や絶対パスやリンクの tar、500、429）のどれもが、置き場に何も残さずに止まること。同時に二つの `fetch` を走らせても置き場が壊れないこと。置き場のファイルを書き換えると `check` が E305 で止まること。
+- 結果（2026-10-28）：取り出しは、取るモジュールの全部の層をダイジェストまで確かめてから cosign を走らせ、全部が通ったときだけ置き場に置く（DESIGN 17.12 の「確かめの順」）。OCI のマニフェストか層の答えが上限か書かれた大きさを超えて curl が止めたときは、届かないとき（exit 2）と分けて受け付けない（exit 1。送り出しのタグの確かめも同じ）。`--rev` は、パスの依存と手元の行の鍵を作業ツリーから読む（★。DESIGN 17.12）。`versions` と `get` の JSON の形を DESIGN 17.21 に書いた。C.4 の `ritsu mod diff` への取り出しのつなぎは、C を取り込んでからにする（まだ）。`modules_cli.rs` を二か所直した。「この版にはまだない」と言うコマンドの試験から、D が作ったもの（`fetch`、`versions`、`push`、`get`、レジストリの形の `add`）を外した。lock を選ぶときに置き場に無い版は、前は「置き場に無い」と言って止まっていたが、いまはレジストリに問い合わせるので、その試験をテストのレジストリに向けた。
 
 **D.6 cosign**（DESIGN 17.14）
 
 - `crates/ritsu/src/modules/cosign.rs`：効く決まりを集める（手元のモジュールと、直に `require` するモジュールの行）、`cosign verify` の引数、記録、cosign が無いとき。
 - 試験（fast）：偽の `cosign`（引数を書き残して、決まった終了コードを返すスクリプト）で、四つの決まりの引数、ループバックの `--allow-http-registry`、決まりが増えたときの確かめ直し、失敗したときの exit 1 と cosign の標準エラーの頭、記録が無いときに `check` が止まること。
 - 試験（tools）：本物の cosign で、テストの中で作った鍵で署名し（通信しない形。透明性ログに載せない）、テストのレジストリに置き、`ritsu mod fetch` が確かめること、別の鍵では止まること。cosign 3 系で通信せずに鍵で署名する引数（`--tlog-upload=false` と、署名の設定を読まない引数）は、D の最初に、公開されたチェックサムで確かめて入れた cosign で確かめる。通信せずに署名できなければ、その試験は SKIP の行で理由を言い、報告に書く。
+- 結果（2026-10-28）：記録は、`key` の決まりでは鍵のファイルの中身のダイジェストを付けた文で持つ（DESIGN 17.14 の「記録の形」）。偽の cosign の試験は、四つの決まりの引数、ループバックの `--allow-http-registry`、鍵のファイルを変えたときと行を足したときの確かめ直し、cosign が通さないときと無いとき、鍵のファイルが無いとき、レジストリから取ったモジュールの行（鍵を置き場の `tmp/` に書いて消す）を確かめる。本物の cosign の試験は、cosign 3.1.4 で `--tlog-upload=false --use-signing-config=false` を使い、通信せずに通った（SKIP なし。DESIGN 17.25）。
 
 **D.7 CI**（DESIGN 10.5、17.25）
 
 - tools.yml：cosign を版とチェックサムで固定して入れる（D.6 で確かめた版）。
 - platforms.yml：distribution の参照実装のレジストリをサービスとして立て（イメージはダイジェストで固定）、`RITSU_TEST_REGISTRY` を渡す。その上で、送り出し、取り出し、cosign。種のモジュールの `push --dry-run` のダイジェストを Linux で出し、macOS の値（golden）と比べる。
 - `ci/skips/` には足さない（CI では道具を入れるため）。
+- 結果（2026-10-28）：tools.yml の dandori の組（ritsu のテストを回す組）に cosign 3.1.4 を、platforms.yml にレジストリのサービスと cosign と ritsu の二つのテストを足した。固定した値は DESIGN 17.25 の「CI に固定したもの」。手では走らせていない。種のモジュールの `push --dry-run` は、種のモジュールを作る F が platforms.yml の同じ段に足す。いまは小さなモジュールの golden を Linux で比べる。
 
 **D の完了の条件**
 

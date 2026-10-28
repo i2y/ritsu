@@ -3,6 +3,7 @@
 //! store and from a module's copy of it — held to the lock (E303–E306, E308, W302), what stops it,
 //! and how each module's files are written (the fewest `@`, then the order of the `require`s).
 
+use ritsu_base::modules::digest;
 use ritsu_base::modules::graph::{self, Problem, Tree};
 use ritsu_base::modules::lock::{Lock, Locked, Pinned};
 use ritsu_base::modules::names::ModuleName;
@@ -411,18 +412,63 @@ fn a_signature_asked_for_needs_the_record_of_its_check() {
         ("shop/ritsu.mod", &format!("module shop\nrequire tax oci \"example.com/acme/tax\" 1.0.0\n{line}\n")),
         ("shop/keys/acme.pub", "key"),
     ]);
+    // what a record of the check says: the line, and the digest of the key file
+    let checked = format!("{line} {}", digest::of(b"key"));
     let tax = put(&store, &t.path().join("src/tax"), &[]);
     write_lock(&t, "shop", vec![tax]);
-    assert_eq!(problem(load(&t, "shop", Some(&store))), [format!("stop: there is no record that the signature of `example.com/acme/tax` 1.0.0 was checked against `{line}`; run `ritsu mod fetch`")]);
+    assert_eq!(problem(load(&t, "shop", Some(&store))), [format!("stop: there is no record that the signature of `example.com/acme/tax` 1.0.0 was checked against `{checked}`; run `ritsu mod fetch`")]);
     // checked: the record says so
     let other = Store::at(t.path().join("checked"));
-    let tax = put(&other, &t.path().join("src/tax"), &[line.to_string()]);
-    write_lock(&t, "shop", vec![tax]);
+    let tax = put(&other, &t.path().join("src/tax"), std::slice::from_ref(&checked));
+    write_lock(&t, "shop", vec![tax.clone()]);
     let tree = load(&t, "shop", Some(&other)).unwrap();
-    assert_eq!(tree.nodes[1].verified, [line]);
+    assert_eq!(tree.nodes[1].verified, std::slice::from_ref(&checked));
+    // a record of the line alone, with no key's digest, is not one
+    let bare = Store::at(t.path().join("bare"));
+    write_lock(&t, "shop", vec![put(&bare, &t.path().join("src/tax"), &[line.to_string()])]);
+    assert_eq!(problem(load(&t, "shop", Some(&bare))).len(), 1);
+    // the key file changed: the check is asked for again
+    t.write("shop/keys/acme.pub", "another key");
+    write_lock(&t, "shop", vec![tax]);
+    let again = format!("{line} {}", digest::of(b"another key"));
+    assert_eq!(problem(load(&t, "shop", Some(&other))), [format!("stop: there is no record that the signature of `example.com/acme/tax` 1.0.0 was checked against `{again}`; run `ritsu mod fetch`")]);
+    t.write("shop/keys/acme.pub", "key");
+    // no key file: E302 at the line
+    std::fs::remove_file(t.path().join("shop/keys/acme.pub")).unwrap();
+    assert_eq!(
+        problem(load(&t, "shop", Some(&other))),
+        [format!("E302 ritsu.mod:3: the key file `keys/acme.pub` of `{line}` cannot be read; a key file is written from the root of the module whose line it is")]
+    );
+    t.write("shop/keys/acme.pub", "key");
     // a line that covers another module is not asked of this one
     t.write("shop/ritsu.mod", "module shop\nrequire tax oci \"example.com/acme/tax\" 1.0.0\nsignature \"example.com/other/\" key \"keys/acme.pub\"\n");
     load(&t, "shop", Some(&store)).unwrap();
+}
+
+#[test]
+fn the_same_line_over_two_keys_is_two_checks() {
+    // pricing requires tax and writes the line shop writes, over another key: each is checked
+    let t = TempDir::new("graph-two-keys");
+    let line = "signature \"example.com/acme/tax\" key \"keys/acme.pub\"";
+    files(&t, &[
+        ("src/tax/ritsu.mod", "module example.com/acme/tax\nversion 1.0.0\n"),
+        ("src/pricing/ritsu.mod", &format!("module example.com/acme/pricing\nversion 1.0.0\nrequire tax oci \"example.com/acme/tax\" 1.0.0\n{line}\n")),
+        ("src/pricing/keys/acme.pub", "pricing's key"),
+        ("shop/ritsu.mod", &format!("module shop\nrequire pricing oci \"example.com/acme/pricing\" 1.0.0\nrequire tax oci \"example.com/acme/tax\" 1.0.0\n{line}\n")),
+        ("shop/keys/acme.pub", "shop's key"),
+    ]);
+    let (shops, pricings) = (format!("{line} {}", digest::of(b"shop's key")), format!("{line} {}", digest::of(b"pricing's key")));
+    let store = Store::at(t.path().join("store"));
+    let pricing = put(&store, &t.path().join("src/pricing"), &[]);
+    let tax = put(&store, &t.path().join("src/tax"), std::slice::from_ref(&shops));
+    write_lock(&t, "shop", vec![pricing.clone(), tax]);
+    assert_eq!(problem(load(&t, "shop", Some(&store))), [format!("stop: there is no record that the signature of `example.com/acme/tax` 1.0.0 was checked against `{pricings}`; run `ritsu mod fetch`")]);
+    let both = Store::at(t.path().join("both"));
+    let pricing = put(&both, &t.path().join("src/pricing"), &[]);
+    let tax = put(&both, &t.path().join("src/tax"), &[shops.clone(), pricings.clone()]);
+    write_lock(&t, "shop", vec![pricing, tax]);
+    let tree = load(&t, "shop", Some(&both)).unwrap();
+    assert_eq!(tree.nodes[tree.by_prefix("@tax").unwrap()].verified, [shops, pricings]);
 }
 
 #[test]

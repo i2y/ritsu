@@ -1,0 +1,11 @@
+{
+  "ritsu": "0.36.0",
+  "module": "example.com/acme/tax",
+  "version": "1.0.0",
+  "digest": "sha256:ba6f45238d9e7e65db80fcf0ec3e769e92ebf2edea05545e00b78d27c023c151",
+  "files_digest": "sha256:24ecee2ce33e1d5fc3e328cf71e04dba9311ec8073f308d7f090c34fea9073ba",
+  "pushed": "dry-run",
+  "reference": "example.com/acme/tax@sha256:ba6f45238d9e7e65db80fcf0ec3e769e92ebf2edea05545e00b78d27c023c151",
+  "sign": "cosign sign --yes example.com/acme/tax@sha256:ba6f45238d9e7e65db80fcf0ec3e769e92ebf2edea05545e00b78d27c023c151",
+  "error": null
+}

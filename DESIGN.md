@@ -1864,8 +1864,8 @@ rulec の Kani の記録（`crates/rulec/experiments/kani/report.txt`）は、�
 | 段 | 走らせるもの | 目安 |
 |---|---|---|
 | `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい。curl も、テストが自分の中に立てたサーバー（e-Gov と eCFR の代わり）に問い合わせるためなら使ってよい（土台の `sources` が curl で問い合わせるため） | ワークスペース全体で数分（2026-10-03、この機械で 2 分 15 秒） |
-| `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、MySQL、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター、Cedar の CLI（sekisho が生成した Cedar をかける） | 数十分 |
-| `platforms` | サービスやクラスタを立てるか使うか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、chobo が使う TiDB のクラスタと、chobo が立てる使い捨ての Vitess（vttestserver）、Ollama、TypeSafe、OpenAI、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
+| `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、MySQL、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター、Cedar の CLI（sekisho が生成した Cedar をかける）、cosign（モジュールの署名。17.25） | 数十分 |
+| `platforms` | サービスやクラスタを立てるか使うか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、chobo が使う TiDB のクラスタと、chobo が立てる使い捨ての Vitess（vttestserver）、モジュールを置く OCI のレジストリ（`RITSU_TEST_REGISTRY`。17.25）、Ollama、TypeSafe、OpenAI、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
 
 テストは、要るものを `ritsu-testkit` で言う（`need(Tool::Postgres)` など）。`RITSU_TEST_LEVEL` が `fast`、`tools`、`platforms` のどれかなら、その段までのテストだけを走らせ、それより上の段のテストは SKIP の行を出して通す。`RITSU_TEST_LEVEL` が無ければ、いまと同じく、見つかったツールで走れるものを全部走らせる（B と C の振る舞いを変えないため）。
 
@@ -1892,7 +1892,7 @@ ritsu のリモートを作るまで、CI は走らない。ワークフロー�
 | `tools` | main への push、コードを変えた pull request、毎晩 | ツールを入れ（rulec の `ci.yml` の一覧に、koyomi、chobo、geas、yuen、sakai、sekisho、dandori のものを足す。PostgreSQL は、rulec にはサービスで、ほかには使い捨てのクラスタで）、クレートの組ごとに並べて `RITSU_TEST_LEVEL=tools` で回す。rulec の組は、試験を二つのジョブに分けて並べる。許す SKIP は、CI で用意できない pixie の greeter の四つだけ（下） |
 | `proofs` | `proofs/` か、証明書とモデルにかかわるコードを変えたとき | `lake build`、コーパスの証明書の再検査、Lean のモデルとの突き合わせ（11 章） |
 | `kani` | 毎晩と、rulec の生成器を変えたとき | rulec の CI の Kani の段（生成した Rust のハーネス） |
-| `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。TiUP の playground で TiDB を立て、Vitess をタグのソースから組んで、chobo の MySQL の系統のテストを回す。外のサーバー（e-Gov、eCFR、Buf Schema Registry）に問い合わせるテストもここで回す（下）。ほかのジョブと並べない |
+| `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。TiUP の playground で TiDB を立て、Vitess をタグのソースから組んで、chobo の MySQL の系統のテストを回す。distribution の参照実装のレジストリをサービスで立て、ritsu のモジュールの送り出しと取り出しと cosign の署名を回す（17.25）。外のサーバー（e-Gov、eCFR、Buf Schema Registry）に問い合わせるテストもここで回す（下）。ほかのジョブと並べない |
 | `npm`（tools.yml の中のジョブ） | `tools` と同じとき | `packaging/npm/build.sh` で npm のパッケージを組み、`cargo xtask test --level tools -p ritsu -- npm::` で `tests/npm.rs` を回す。Node 22・24・26 の Linux と、Node 24 の macOS（8.8）。Node ごとに二つのジョブに分け、二つの突き合わせを半分ずつ回す（下の「npm のジョブの二つの部分」） |
 | `release` | タグ（F） | 13.2 |
 | `docs` | 手で始めたとき（サイトを切り替えるまで） | ritsu のサイト（根のページと rulec と dandori のサイト）を `website/build.sh` で組み、出力の木に要るファイルがあることを確かめてから GitHub Pages に出す（13.2。F.7 で足した） |
@@ -3601,9 +3601,9 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 1. `ritsu.mod` を読む。`module` が配る名前の形で、`version` と `ritsu >=` があり、`require … path` が無く、lock が合っている（17.7）ことを求める。
 2. 送り出すファイルを集める。モジュールのルートを歩き（4.7 の飛ばす名前、`.` で始まる名前、入れ子のモジュールを除く）、`exclude` に書いたものを除く。`ritsu.lock` は入れる（使う側は読まないが、作者が何で確かめたかの記録になる）。上限を確かめる。
 3. 集めたファイル（言語のファイルに限らない）の全部に、W901 の表（16.3）をかける。見つかれば、ファイルと行を挙げ（値は出さない）、受け付けない（exit 1）。`ritsu: test secret` の行は、いまと同じく除く。
-4. 集めたファイルを一時ディレクトリにコピーし、そこをモジュールとして（同じ lock、同じ置き場で）`ritsu check` にかける。エラーがあれば、検査の出力を出して受け付けない（exit 1）。送り出すものそのものを確かめ、除いたファイルを指していないことも、ここで分かる。この検査では、モジュール自身の `.geas` の主張も走らせない（依存の `.geas` と同じ扱い。17.8）。主張が走らせるプログラムは一時ディレクトリに無く、主張は作業ツリーでの `ritsu check` が走らせるからである。
+4. 集めたファイルを一時ディレクトリにコピーし、そこをモジュールとして（同じ lock、同じ置き場で）`ritsu check` にかける。エラーがあれば、検査の出力を出して受け付けない（exit 1）。送り出すものそのものを確かめ、除いたファイルを指していないことも、ここで分かる。この検査では、モジュール自身の `.geas` の主張も走らせない（依存の `.geas` と同じ扱い。17.8）。主張が走らせるプログラムは一時ディレクトリに無く、主張は作業ツリーでの `ritsu check` が走らせるからである。一時ディレクトリは置き場の `tmp/` の下に作り、手元の同梱のコピー（`.ritsu/modules/`）もそこへコピーする。モジュール自身の `.geas` のファイルは、検査するファイルの一覧から外し、数にも入れない（2026-10-28。ritsu-project の `without_own_claims`）。言語のファイルが `.geas` しか無いモジュールでは、この検査をしない。
 5. tar と層と OCI のマニフェストを作り、ダイジェストを出す。`--dry-run` はここで終わる（通信しない）。
-6. 版のタグを `HEAD` で引く。あれば `GET` し、中身のダイジェストが同じなら「送り出し済み」と言って exit 0、違えば受け付けない（exit 1。版は動かさないので、版を上げるよう言う）。
+6. 版のタグを `HEAD` で引く。あれば `GET` し、中身のダイジェストが同じなら「送り出し済み」と言って exit 0、違えば受け付けない（exit 1。版は動かさないので、版を上げるよう言う）。モジュールでないもの（上限を超える OCI のマニフェストも）も受け付けない（exit 1）。
 7. レジストリに無い blob（空の config、`ritsu.mod`、ファイルの木）を送る。blob ごとに `HEAD` で有無を見て、無ければ `POST /v2/<名前>/blobs/uploads/` で始め、返された `Location` に `digest` を付けて `PUT` する。
 8. OCI のマニフェストをタグで `PUT` する。返された `Docker-Content-Digest` が自分のダイジェストと違えば、レジストリがバイトを変えたと言って exit 2。
 9. `<モジュールの名前>@sha256:…` と、署名の cosign のコマンド（17.14）を出す。
@@ -3612,10 +3612,12 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 **取り出し**（`ritsu mod fetch [<名前>@<版>…] [--rev <git の版>] [--format text|json]`）。
 
-- 引数が無ければ、lock（`--rev` なら、その git の版の lock）のレジストリのモジュールのうち、置き場にも同梱のコピーにもそろっていないものを取る。OCI のマニフェストをダイジェストで `GET` してバイトの sha256 を確かめ、`artifactType` と層の種類と大きさを確かめ、署名の決まりがあれば cosign で確かめ（17.14。置き場に書く前に）、層を `GET` してダイジェストを確かめ、一時ディレクトリに展開し、tar の中の `ritsu.mod` が一つ目の層と同じで、名前と版が求めたものであることを確かめ、置き場に移し、記録と版の索引を書く（17.15）。
-- すでにある項目は、中身のダイジェストを確かめる。署名の決まりが増えていて、記録がそれを挙げていなければ、cosign で確かめ直す。
-- `<名前>@<版>`（依存の名前か、モジュールの名前）を書けば、タグを引いてその版を取り、版の選び方がその版のために要る `ritsu.mod` の層と、選ばれる版のファイルを取る。lock は書かない（17.9.1 の差分のため）。
-- 終了コード：0、1（ダイジェスト、署名、名前か版の食い違い。lock がマニフェストに合わないときの E304 も）、2（通信、認証、確かめが要るのに cosign が無い、lock が無い）。
+- 引数が無ければ、lock（`--rev` なら、その git の版の lock）のレジストリのモジュールのうち、置き場にも同梱のコピーにもそろっていないものを取る。OCI のマニフェストをダイジェストで `GET` してバイトの sha256 を確かめ、`artifactType` と層の種類と大きさを確かめ、層を `GET` してダイジェストと大きさを確かめ、tar をメモリの中で読み、tar の中の `ritsu.mod` が一つ目の層と同じで、名前と版が求めたものであることを確かめる。取るモジュールの全部がここまで通ったら、署名の決まりがあるものを cosign で確かめ（17.14）、それも全部が通ったときだけ、一つずつ一時ディレクトリに展開して置き場に移し、記録と版の索引を書く（17.15）。一つでも止まれば、置き場には何も書かない。
+- 確かめの順（2026-10-28）。cosign は、置き場に書く前で、ファイルの層を取ったあとに走らせる。レジストリから取るモジュールの `signature` の行は、鍵のファイルを自分のファイルの中に持つ（17.14）ので、その鍵はファイルの層を取るまで読めないからである。cosign が確かめるのはレジストリにある OCI のマニフェストのダイジェストで、層を先に取っても確かめるものは変わらない。捨てた形：層の前に cosign を走らせる形。手元の行の鍵しか使えず、依存の行を確かめるために取り出しを二度に分けることになる。
+- すでにある項目は、中身のダイジェストを確かめる。署名の決まりが増えていて、記録がそれを挙げていなければ、cosign で確かめ直す。鍵のファイルが変わったときも同じである（17.14 の記録の形）。置き場の項目のファイルがダイジェストと違えば、その項目を消して取り直す。同梱のコピーのファイルが違えば、取り直さずに止まり（exit 1）、`ritsu mod vendor` を走らせるよう言う。同梱のコピーは置き場から作るものだからである。同梱のコピーにある項目を確かめ直したときは、同梱のコピーの `record.json` に書く。
+- `<名前>@<版>`（依存の名前か、モジュールの名前）を書けば、タグを引いてその版を取り、版の選び方がその版のために要る `ritsu.mod` の層と、選ばれる版のファイルを取る。lock は書かない（17.9.1 の差分のため）。選んだ版のどれかが `require … path` を持てば止まる（exit 1）。
+- `--rev` のとき、`ritsu.mod` と lock はその git の版のもの（`git show <版>:./ritsu.mod`）を読む。パスの依存と、手元の行の鍵のファイルは作業ツリーのものを読む（★2026-10-28）。git の版のファイルの木を一時ディレクトリに出すことはしない。`--rev` の使い道は、前の lock の依存をそろえて差分を取ること（17.9.1、17.10）で、そこで要るのはレジストリのモジュールだからである。
+- 終了コード：0、1（ダイジェスト、大きさ、署名、名前か版の食い違い。lock がマニフェストに合わないときの E304 も。OCI のマニフェストか層の答えが上限か書かれた大きさを超えて、curl が止めたときも）、2（通信、認証、確かめが要るのに cosign が無い、lock が無い）。
 
 **選ぶ、足す、上げる**（`ritsu mod lock`、`add`、`get`）は、タグを OCI のマニフェストの `GET` で引いてダイジェストを決め、版の選び方のために `ritsu.mod` の層を読む。**版の一覧**（`ritsu mod versions`）は `GET /v2/<名前>/tags/list?n=1000` を `Link` の `rel="next"` に沿ってたどり、SemVer の形のタグだけを並べる（署名の古いタグの形 `sha256-….sig` などは出ない）。`add` と `get` の `@latest` は、この一覧のうち、プレリリースでないいちばん高い版である。プレリリースの版しか無ければ、版を書くよう言って止まる（exit 2）。**有無**は OCI のマニフェストの `HEAD` で見る。
 
@@ -3625,9 +3627,9 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 - 秘密は `--config -` で標準入力から渡す（`header = "Authorization: …"` の行と、OAuth2 の `POST` の `data = "…"`）。コマンドラインにも、環境変数にも、ファイルにも書かない。プロセスの一覧から読めないようにするためである。
 - 秘密でないヘッダは `--header`、メソッドは `--request`、本文は置き場の `tmp/` のファイルから `--data-binary @<ファイル>`、レスポンスのヘッダは `--dump-header <ファイル>`、本文は `--output <ファイル>`（トークンの答えのように秘密を含みうる本文は標準出力から読み、ファイルにしない）、状態のコードは `--write-out` で受け取る。
 - `--location` は付けず、リダイレクトは ritsu がたどる（5 回まで）。`Authorization` は、スキームとホストとポートがレジストリと同じ先にだけ送る（blob の取り出しでは、レジストリが別のホストへ送ることが多い）。
-- `--proto =https`。ループバックのホスト（`ritsu_base::urls::is_loopback`）だけは `=http,https` にする（テストのレジストリのため）。ループバックでない平文の HTTP のレジストリは受け付けず、許すフラグも持たない。
-- `--connect-timeout 10 --max-time 300`、`--max-filesize <上限>`、`--user-agent ritsu/<版>`。
-- やり直しは `GET` と `HEAD` だけで、三回まで（2 秒、4 秒あけて）。429 と 503 では `Retry-After` に従う。送るほうはやり直さず、アップロードを一度だけ始め直す。
+- `--proto =https`。ループバックのホスト（`ritsu_base::urls::is_loopback`）だけは `=http,https` にする（テストのレジストリのため）。ループバックでない平文の HTTP のレジストリは受け付けず、許すフラグも持たない。ループバックのホストには `--noproxy "*"` も付ける（2026-10-28）。環境変数のプロキシは、この機械のループバックに届かないからである。
+- `--connect-timeout 10 --max-time 300`、`--max-filesize <上限>`、`--user-agent ritsu/<版>`。上限を超えた答え（curl の終了コード 63）は、ほかの届かない場合と分けて返す。取り出しと、送り出しのタグの確かめは、それを受け付けない（exit 1。2026-10-28）。レジストリに届かないのではなく、レジストリが持つものが求めたものと違うからである。
+- やり直しは `GET` と `HEAD` だけで、三回まで（2 秒、4 秒あけて）。やり直すのは、429、500、502、503、504 の答えと、curl の終了コードの 6、7、18、28、52、55、56、92（名前を引けない、つながらない、答えが途中で切れた、時間切れ、空の答え、送れない、受け取れない、HTTP/2 のストリームの誤り）である。429 と 503 では `Retry-After`（秒の形だけ）に従い、60 秒までに切る（2026-10-28）。送るほうはやり直さず、アップロードを一度だけ始め直す。
 - エラーの文には、状態のコード、URL（問い合わせの部分を除く）、レジストリのエラーの JSON の `code` と `message` を書く。`detail` は書かない（送った値がそのまま入っていることがある）。
 - WASI では `wasi::cannot_start("curl")` で止まる（17.22）。
 
@@ -3639,7 +3641,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 4. 401 で `WWW-Authenticate: Basic …` が返れば、資格情報を Basic で直に送る。
 5. トークンを付けても 401 なら、レジストリと、資格情報をどこから取ったか（`credHelpers` のヘルパーの名前、`credsStore`、`auths`）を言って exit 2 で止まる。値は言わない。
 
-**Docker の設定ファイル**は、`$DOCKER_CONFIG/config.json`、無ければ `~/.docker/config.json` を読む。レジストリのホストについて、`credHelpers` にあれば `docker-credential-<値> get` を走らせてホストを標準入力に渡し、JSON の `Username` と `Secret` を受け取る。無ければ `auths`（キーはスキームとパスを取り除いて比べる）の `auth`（`user:password` の base64）か `identitytoken` を使う。それも無ければ `credsStore` のヘルパーを走らせる。ヘルパーが資格情報は無いと答えれば（0 でない終了）、匿名で続ける。`docker.io` の名前は、API のホストを `registry-1.docker.io` に、資格情報のキーを `https://index.docker.io/v1/` にする（設定ファイルの決まりごと）。
+**Docker の設定ファイル**は、`$DOCKER_CONFIG/config.json`、無ければ `~/.docker/config.json` を読む。レジストリのホストについて、`credHelpers` にあれば `docker-credential-<値> get` を走らせてホストを標準入力に渡し、JSON の `Username` と `Secret` を受け取る。無ければ `auths`（キーはスキームとパスを取り除いて比べる）の `auth`（`user:password` の base64）か `identitytoken` を使う。それも無ければ `credsStore` のヘルパーを走らせる。ヘルパーが資格情報は無いと答えれば（0 でない終了）、匿名で続ける。ヘルパーが PATH に無ければ、どの設定（`credHelpers` か `credsStore`）のどのヘルパーかを言って exit 2 で止まる。設定ファイルが無ければ匿名で続け、JSON として読めなければ exit 2 で止まる（ファイルの中身は出さない）。資格情報は、一回の実行の中で、レジストリごとに一度だけ探す（ヘルパーも一度だけ走らせる。2026-10-28）。`docker.io` の名前は、API のホストを `registry-1.docker.io` に、資格情報のキーを `https://index.docker.io/v1/` にする（設定ファイルの決まりごと）。
 
 **出さないもの**。資格情報の値、トークン、`Authorization` のヘッダ、ヘルパーの出力は、どの出力にも書かない。診断、JSON、エラーの文、ログ、一時ファイルのどれにもである。メモリの中では `Debug` と `Display` を持たない型に入れ、うっかり書けないようにする。テストは、植えた秘密がどの出力にも無いことを確かめる（17.25）。
 
@@ -3663,12 +3665,16 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 | `by "<署名者>" issuer "<発行者>"` | `--certificate-identity <署名者> --certificate-oidc-issuer <発行者>` |
 | `by matching "<正規表現>" issuer "<発行者>"` | `--certificate-identity-regexp <正規表現> --certificate-oidc-issuer <発行者>` |
 
-`--allow-http-registry` はループバックのレジストリにだけ付ける。cosign はレジストリの資格情報を自分で Docker の設定ファイルから読むので、ritsu は秘密を渡さない。使う引数は cosign の 2 系にも 3 系にもある。
+`--allow-http-registry` はループバックのレジストリにだけ付ける。cosign はレジストリの資格情報を自分で Docker の設定ファイルから読むので、ritsu は秘密を渡さない。使う引数は cosign の 2 系にも 3 系にもある。cosign は PATH から探す。場所を渡す環境変数は持たない（2026-10-28）。ほかの道具（curl、git）と同じにするためである。
 
-- cosign が 0 で終われば、置き場の項目の `record.json` の `verified` に、決まりの文と日付を書く。
+- cosign が 0 で終われば、置き場の項目の `record.json` の `verified` に、決まりの文（下の記録の形）と日付を書く。項目が同梱のコピーにあれば、同梱のコピーの `record.json` に書く。
 - 0 でなければ、取り出しは exit 1 で、cosign の標準エラーの初めの 20 行を出す。
 - PATH に cosign が無ければ、確かめの要るモジュールがあるときだけ exit 2 で止まる。
 - 確かめるのは取り出しのとき（置き場に書く前）と、決まりが増えたとき（取り出しが、記録が決まりを挙げていないことに気づく）。`check` は cosign を走らせない（通信になるため）。効く決まりを記録が全部挙げていなければ、`ritsu mod fetch` を走らせるよう言って止まる（exit 2）。
+
+**鍵のファイル**。手元のモジュール（とパスの依存）の行の鍵は、その行を書いたモジュールのディレクトリからのパスで読み、絶対パスにして渡す。レジストリから取るモジュールの行の鍵は、そのモジュールの取ってきたファイルの中にあるので、置き場の `tmp/` の下に書いて cosign に渡し、終わったら消す。鍵のファイルが無ければ、`check` はその行に E302 を出し、取り出しは exit 1 で止まる。
+
+**記録の形**（2026-10-28）。`record.json` の `verified` の `policy` は、`key` の決まりでは、決まりの文のあとに空白と、鍵のファイルの中身のダイジェスト（`sha256:<16 進>`）を付けたものである。`by` の決まりでは、決まりの文そのものである。決まりが記録にあるかどうかは、この文字列が同じかどうかで決める。二つのモジュールが同じ文字の `key "keys/acme.pub"` を書いても、鍵の中身が違えば別の確かめになる。鍵のファイルを書き換えれば、`check` が止まり、取り出しが確かめ直す。記録は書き足すだけで、前の確かめを消さない。同じパスに違う鍵を置いた二つのモジュールが一つの置き場を使っても、互いの記録を消し合って確かめ直しをくり返すことがない。捨てた形：決まりの文だけを記録する形。鍵のファイルの中身が変わっても、前の確かめが通ってしまう。
 
 ### 17.15 置き場
 
@@ -3687,7 +3693,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
   tmp/
 ```
 
-- **書く**のは `ritsu mod` のコマンドだけで、項目は `tmp/` の下で作ってから名前を変えて置く（同時に二つの取り出しが走っても、置き場が中途半端にならない。遅れたほうは自分のものを捨てる）。`files/` のファイルは読むだけ（0444）にし、ディレクトリは 0755 にする。
+- **書く**のは `ritsu mod` のコマンドだけで、項目は `tmp/` の下で作ってから名前を変えて置く（同時に二つの取り出しが走っても、置き場が中途半端にならない。遅れたほうは自分のものを捨てる）。`files/` のファイルは読むだけ（0444）にし、ディレクトリは 0755 にする。`record.json` を書き換える（署名の確かめを足す）ときも、となりに書いてから名前を変える。`tmp/` には、curl のヘッダと本文のファイル、送り出しの検査のコピー、cosign に渡す鍵も作り、どれも使い終わったら消す（2026-10-28）。
 - **読む**ときは、`check` などが使う項目ごとに、毎回、中身のダイジェストを lock と比べる（17.11 の tar をメモリの中で作る。モジュールは小さい）。置き場のファイルを人やほかのプロセスが変えれば、E305 で分かる。
 - **消す**のは `ritsu mod clean [--keep <lock>…] [--dry-run]` で、全部か、渡した lock が固定していないものを消す。項目はダイジェストでいつでも取り直せるので、消しても困らない。
 - **同梱のコピー**。`ritsu mod vendor [--check]` は、lock のレジストリのモジュールを、手元のモジュールの `.ritsu/modules/sha256/<16 進>/…`（置き場と同じ形。`refs` と `tmp` は無い）に置く。依存を読むときは、同梱のコピーを先に見る。`--check` は、同梱のコピーが lock に合うかを確かめる。使い道は、レジストリに届かない CI、`dirs` を付けた npm のパッケージ、ブラウザで試すページ（17.22）、依存のファイルをリポジトリの中で読むことである。`.ritsu/` は `.` で始まるので、プロジェクトを歩くときに入らない（4.7）。
@@ -3850,9 +3856,11 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 
 **`ritsu mod add --format json`**：`{"ritsu", "root", "require": {"name", "module", "version", "source": "oci" | "path", "path": "../pricing" | null}, "manifest": "written", "lock": "same" | "written" | "removed" | "none"}`（★）。`require` は足した依存で、`lock` は `ritsu mod lock` の JSON の `lock` と同じ語である。
 
-**`ritsu mod push --format json`**：`{"ritsu", "module", "version", "digest", "files_digest", "pushed": "new" | "already" | "dry-run", "reference": "<名前>@sha256:…", "sign": "cosign sign …"}`。止まったときは `"error"` に文を入れる。
+**`ritsu mod push --format json`**：`{"ritsu", "module", "version", "digest", "files_digest", "pushed": "new" | "already" | "dry-run", "reference": "<名前>@sha256:…", "sign": "cosign sign --yes <名前>@sha256:…", "error": null | "<文>"}`。`error` はいつも置き、通ったときは null にする（2026-10-28。`fetch` と同じ）。止まったときは、そこまでに分かったもの（`module`、`version`、`digest`、`files_digest`）を入れ、ほかは null にする。`sign` は鍵を持たない形のコマンドで、`--dry-run` でも出す。
 
-**`ritsu mod fetch --format json`**：`{"ritsu", "fetched": [{"module", "version", "digest", "verified": […]}], "present": [{"module", "version", "digest"}], "error": null | "<文>"}`。
+**`ritsu mod fetch --format json`**：`{"ritsu", "fetched": [{"module", "version", "digest", "verified": […]}], "present": [{"module", "version", "digest", "verified": […]}], "error": null | "<文>"}`。`verified` は、この実行で cosign が確かめた決まり（17.14 の記録の形）で、`present` では確かめ直したものだけが入る（2026-10-28）。止まったときは、`fetched` と `present` が空の配列になる。置き場には何も書いていないからである。
+
+**`ritsu mod versions --format json`**：`{"ritsu", "module", "versions": ["1.0.0", …], "latest": "<版>" | null}`（2026-10-28）。`latest` は `@latest` が選ぶ版で、プレリリースしか無ければ null である。**`ritsu mod get --format json`** は `add` と同じ形である。
 
 **`koyomi diff --format json`**（カレンダー）：`{"koyomi", "kind": "calendar", "old": {"file", "name", "version"}, "new": {…}, "compared": {"from", "to", "days"} | null, "changes": [{"from", "to", "days", "old": "open" | "closed", "new": …, "old_reasons": […], "new_reasons": […]}], "renamed": [{"from", "to", "old_reasons", "new_reasons"}], "known": {"old": {"from", "to"}, "new": {"from", "to"}}, "offset": {"old", "new"} | null, "same_elsewhere": true | false, "total": {"changed_days"}}`。両方の版が知っている日が無ければ、`compared` は null、`same_elsewhere` は false である。
 
@@ -3907,18 +3915,22 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 | 段 | 何を |
 |---|---|
 | `fast` | 書式（`ritsu.mod` と `ritsu.lock` の読み書き、書き換えで注と並びが残ること、版の並び、名前の形）、tar（決まったバイト、読み戻し、受け付けない形の一つずつ）、`@` の解決（パス、正規の書き方、モジュールの外、入れ子、`find_root`、ファイルの層の見せ方）、言語ごとのモジュールの材料（言語ごとに一つ、`check` の英日と JSON の golden、単体のコマンドで `@` を読むこと）、例のプロジェクトの `check`・`gen`・`run`・`mod list` の golden（英日と JSON）、台帳の E301〜W303 の再現、通信しない `ritsu mod` のコマンドの golden、テストの中のレジストリでの送り出しと取り出し（curl がテスト自身の立てたサーバーに問い合わせる。10.2 が fast に許す形）、偽の cosign（引数を書き残すスクリプト）での呼び方、koyomi と sekisho の diff の golden と総当たりとの突き合わせ、rulec の `@` の書き方、インターフェースの差、テストの中で作った git のリポジトリでの報告、一覧のサイトの golden（HTML のファイル）、ブラウザで試すページの `base64` の項目（`tests/playground.rs`） |
-| `tools` | 本物の cosign（テストの中で作った鍵で、テストの中のレジストリに対して署名し、確かめる。通信しない形で）、ライブラリの gen（依存の関係のある二つのライブラリを、tsc、mypy、`go build` にかける）、依存の部分を持つ `ritsu gen` のパッケージ（`tsc --strict`、`mypy --strict`、`go vet`）、依存の `.proto` を import する `.proto`（`protoc_roots` のルートで protoc にかける。rulec の生成したモジュールを buf にかける） |
+| `tools` | 本物の cosign（テストの中で作った鍵で、テストの中のレジストリに対して署名し、確かめる。通信しない形で。下の「cosign の署名の引数」）、ライブラリの gen（依存の関係のある二つのライブラリを、tsc、mypy、`go build` にかける）、依存の部分を持つ `ritsu gen` のパッケージ（`tsc --strict`、`mypy --strict`、`go vet`）、依存の `.proto` を import する `.proto`（`protoc_roots` のルートで protoc にかける。rulec の生成したモジュールを buf にかける） |
 | `platforms` | 本物のレジストリ（distribution-spec の参照実装のイメージを、platforms.yml のサービスとして立てる）での往復と、その上での cosign、種のモジュールの `push --dry-run` のダイジェストが Linux と macOS で同じこと |
 
 **置き場の項目を作る関数**（`ritsu_base::modules::store::put_directory`）。ディレクトリにあるモジュールを、17.11 の tar と OCI のマニフェストで成果物にし、取ってきたときと同じ形で置き場に置く。レジストリを通さないので、置き場と同梱のコピーを読むコマンドの試験は、これで置き場を作る。`ritsu-testkit` ではなく `ritsu-base` に置く。`ritsu-testkit` は std だけに依存するテストの層で（3.1。`cargo xtask deps` が確かめる）、`ritsu-base` 自身も dev-dependency として使うので、tar と成果物を書く `ritsu-base` のコードを呼べない。捨てた形：tar と OCI のマニフェストを書くコードを、`ritsu-testkit` にもう一つ持つ形。同じバイトを作る書き方が二つになり、片方だけ直すと、試験が本物と違う置き場を作る。
 
-**テストの中のレジストリ**（`ritsu-testkit` の `registry`。std だけで、dev-dependency のまま）：distribution-spec のうち、`GET /v2/`、OCI のマニフェストの `HEAD`・`GET`・`PUT`（タグとダイジェストで）、blob の `HEAD`・`GET`、アップロードの `POST`・`PATCH`・`PUT`（cosign が使う分割の形も）、`tags/list`（`n`、`last`、`Link`）、referrers の `GET`（`artifactType` の絞り込みと、`subject` を持つ OCI のマニフェストを受けたときの `OCI-Subject`）、エラーの JSON を作る。認証は、無し、Basic、トークンの手順（同じサーバーに realm を立てる）を選べる。blob の `GET` を二つ目のポートへリダイレクトする形（`Authorization` がそこへ届かないことを確かめる）と、壊れた答え（ダイジェストの違い、動いたタグ、上限を超える大きさ、`..` や絶対パスやリンクを持つ tar、500、429）を返す形を持つ。
+**テストの中のレジストリ**（`ritsu-testkit` の `registry`。std だけで、dev-dependency のまま）：distribution-spec のうち、`GET /v2/`、OCI のマニフェストの `HEAD`・`GET`・`PUT`（タグとダイジェストで）、blob の `HEAD`・`GET`、アップロードの `POST`・`PATCH`・`PUT`（cosign が使う分割の形も）、`tags/list`（`n`、`last`、`Link`）、referrers の `GET`（`artifactType` の絞り込みと、`subject` を持つ OCI のマニフェストを受けたときの `OCI-Subject`）、エラーの JSON を作る。認証は、無し、Basic、トークンの手順（同じサーバーに realm を立てる）を選べる。blob の `GET` を二つ目のポートへリダイレクトする形（`Authorization` がそこへ届かないことを確かめる）と、壊れた答え（ダイジェストの違い、動いたタグ、上限を超える大きさ（OCI のマニフェストが書く大きさと、答えそのものの長さ）、`..` や絶対パスやリンクを持つ tar、500、429）を返す形を持つ。
 
-**秘密のテスト**。テストが植えた資格情報（偽のヘルパーのスクリプトの答え、`auths` の値、トークン）が、標準出力、標準エラー、JSON、置き場と一時ディレクトリのファイルの、どこにも無いことを確かめる。
+**秘密のテスト**。テストが植えた資格情報（偽のヘルパーのスクリプトの答え、`auths` の値、トークン）が、標準出力、標準エラー、JSON、置き場と一時ディレクトリのファイルの、どこにも無いことを確かめる。`crates/ritsu/tests/modules_auth.rs` がこれをする（2026-10-28）。植える値は `ritsu-fake-…` で始まる偽の値と分かるもので、テストのレジストリが出したトークンと、ユーザーとパスワードの base64 も探す。PATH の先に置いた curl の包みが渡された引数を書き残し、テストはそこにも秘密と `Authorization` が無いことを確かめる。走らせる ritsu には `TMPDIR` にテストのディレクトリを渡し、置き場の `tmp/` とそこが空で終わることも確かめる。
+
+**cosign の署名の引数**（cosign 3.1.4 で確かめた。2026-10-28）。通信せずに鍵で署名するのは `COSIGN_PASSWORD= cosign sign --key <鍵> --tlog-upload=false --use-signing-config=false --allow-http-registry --yes <名前>@sha256:…` である。3 系は、`--use-signing-config=false` が無いと署名の設定を TUF で取りに行く。`--tlog-upload=false` と `--use-signing-config=false` には 3.1.4 で非推奨の印が付くが、動く。確かめは表（17.14）の `--key <鍵> --insecure-ignore-tlog=true --allow-http-registry` で通る。テストは、`HTTPS_PROXY` と `HTTP_PROXY` を、来た問い合わせを書き残して何も答えないテストの中のプロキシに向け（ループバックは `NO_PROXY` で外す）、`TUF_ROOT` と `HOME` をテストのディレクトリにして cosign を走らせ、プロキシに何も届かなかったことを確かめる。cosign の版が変わって、この形で通信が要るようになれば、そのテストは落ちる（SKIP にはしない）。
 
 **突き合わせ**（M14）。替える前と後のバイナリを、マニフェストの無いすべての例とテストのプロジェクトに、英語と日本語と JSON でかけ、出力が同じであることを確かめる（16.10 と同じやり方）。`check`、`gen`、各言語の `check` と `doc` と `api` を含む。golden が変われば、その理由を報告に書く。
 
-**決まったバイト**。同じモジュールを二度 `push --dry-run` して同じダイジェストになること、Linux と macOS で同じダイジェストになること。
+**決まったバイト**。同じモジュールを二度 `push --dry-run` して同じダイジェストになること、Linux と macOS で同じダイジェストになること。`tests/golden/modules/push-dry-run.*` が、小さなモジュールのダイジェストを持つ（macOS で書いた）。platforms.yml がそのテストを Linux で回し、golden と比べる。
+
+**CI に固定したもの**（2026-10-28）。tools.yml と platforms.yml は cosign 3.1.4 の `cosign-linux-amd64` を、公開の `cosign_checksums.txt` の sha256（`424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa`）で確かめて入れる。platforms.yml のレジストリは `registry:3.1.2@sha256:d4032d4cc323c1731c707931ecada07a53076eac38e3b61ae57533f170f2c6c3`（distribution 3.1.2 のイメージの索引のダイジェスト）で、`127.0.0.1:5000` で問い合わせる。
 
 **SKIP**。cosign、Docker、protoc、buf、型の検査の道具（tsc、mypy、Go）が無い機械では、その段の試験は SKIP の行（英語）を出して通す。CI の tools と platforms では入れるので、`ci/skips/` には足さない。
 

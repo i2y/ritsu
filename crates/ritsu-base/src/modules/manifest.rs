@@ -93,9 +93,20 @@ pub struct Signature {
 }
 
 impl Signature {
-    /// The line as `ritsu.mod` writes it: what a record of a check says it checked.
+    /// The line as `ritsu.mod` writes it.
     pub fn text(&self) -> String {
         format!("signature {} {}", lex::quote(&self.prefix), self.policy.words())
+    }
+
+    /// What a record of a check against the line says it checked (DESIGN 17.14): the line, and for
+    /// a key, the digest of the key file's bytes `key` after it (`signature "example.com/acme/" key
+    /// "keys/acme.pub" sha256:…`). Two modules that write the same line over two different keys
+    /// ask for two checks, and a key file that changes asks for the check again.
+    pub fn checked(&self, key: Option<&[u8]>) -> String {
+        match (&self.policy, key) {
+            (Policy::Key { .. }, Some(b)) => format!("{} {}", self.text(), super::digest::of(b)),
+            _ => self.text(),
+        }
     }
 }
 

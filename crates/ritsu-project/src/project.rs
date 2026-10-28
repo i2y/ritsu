@@ -33,6 +33,27 @@ pub fn kind_of(path: &str) -> Option<Tool> {
     ORDER.into_iter().find(|t| t.extension() == Some(ext))
 }
 
+thread_local! {
+    /// Whether the projects this thread loads check the `.geas` files of the module at hand.
+    static OWN_CLAIMS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// `f`, run with the `.geas` files of the module at hand left out of the files a project checks,
+/// and not counted: the check `ritsu mod push` makes of the copy of what it sends runs no claim, as
+/// it runs none of a dependency's (DESIGN 17.12, step 4). A yuen or sakai file that names one still
+/// reads it, on the disk.
+pub fn without_own_claims<R>(f: impl FnOnce() -> R) -> R {
+    struct Back;
+    impl Drop for Back {
+        fn drop(&mut self) {
+            OWN_CLAIMS.with(|c| c.set(true));
+        }
+    }
+    OWN_CLAIMS.with(|c| c.set(false));
+    let _back = Back;
+    f()
+}
+
 /// One file of a project.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct File {
@@ -199,9 +220,12 @@ impl Project {
     /// their claims are not run (DESIGN 17.8), whether the whole module is read or a path names one.
     pub(crate) fn leave_out_claims(&mut self) {
         let root = self.root.clone();
-        let (theirs, ours): (Vec<File>, Vec<File>) = std::mem::take(&mut self.files)
+        let (theirs, mut ours): (Vec<File>, Vec<File>) = std::mem::take(&mut self.files)
             .into_iter()
             .partition(|f| f.tool == Tool::Geas && ritsu_base::modules::under_dependency(&paths::on_disk(&root, &f.rel)));
+        if !OWN_CLAIMS.with(std::cell::Cell::get) {
+            ours.retain(|f| f.tool != Tool::Geas);
+        }
         self.files = ours;
         self.not_run.extend(theirs);
         self.not_run.sort_by(|a, b| a.rel.cmp(&b.rel));

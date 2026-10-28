@@ -2,8 +2,8 @@ name: tools
 
 # The tests that need the tools a machine installs (DESIGN 10.2, 10.5): the generated code
 # type-checked and run in every language it is written for, PostgreSQL, TigerBeetle, Chrome,
-# Mermaid, xmllint, Lean, sakai's four linters, the Cedar CLI. Every tool is installed, and a
-# SKIP for something missing fails the job unless ci/skips/tools.txt allows it: a skipped
+# Mermaid, xmllint, Lean, sakai's four linters, the Cedar CLI, cosign. Every tool is installed,
+# and a SKIP for something missing fails the job unless ci/skips/tools.txt allows it: a skipped
 # language narrows what the run proved, in a line that is easy to read past (rulec's ci.yml,
 # where this began). A test of the platforms level says so in a SKIP line of the level and
 # passes; those run in platforms.yml and kani.yml.
@@ -262,6 +262,20 @@ jobs:
           echo "6930ebf62bd4ea607b98fff052596c6ee564b9835b4ce172c75a3f53ae9d91b7  $d/protoc.zip" | sha256sum -c -
           unzip -q "$d/protoc.zip" -d "$d"
           echo "$d/bin" >> "$GITHUB_PATH"
+
+      # ritsu's tests/modules_oci.rs signs a module with cosign and has `ritsu mod fetch` check the
+      # signature, with a key of the test's own and no network (DESIGN 17.14, 17.25). The release's
+      # binary, held to the checksum of the release's cosign_checksums.txt.
+      - name: "ritsu: cosign 3.1.4, for the signatures of the modules"
+        if: matrix.group == 'dandori'
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/cosign"
+          mkdir -p "$d"
+          curl -fsSL -o "$d/cosign" https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64
+          echo "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa  $d/cosign" | sha256sum -c -
+          chmod +x "$d/cosign"
+          echo "$d" >> "$GITHUB_PATH"
 
       # dandori's tests/examples.rs runs the books its examples call on chobo's clients, through
       # chobo's runners, on a throwaway PostgreSQL cluster (the step below), a TigerBeetle replica

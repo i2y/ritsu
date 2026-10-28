@@ -18,6 +18,8 @@
 //!   a database on a TiDB cluster of the machine's), a headless Chrome, Mermaid in that Chrome, a
 //!   small HTTP server — each stopped when its value is dropped.
 //! - [`cedar`]: the official Cedar CLI, at the version the tests are written for.
+//! - [`registry`]: a small OCI registry on a port of `127.0.0.1`, for `ritsu mod push` and `fetch`
+//!   (DESIGN 17.25), stopped when its value is dropped.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1). Every crate takes it as a
 //! dev-dependency only.
@@ -30,6 +32,7 @@ pub mod level;
 pub mod mermaid;
 pub mod mysql;
 pub mod pg;
+pub mod registry;
 pub mod run;
 pub mod side;
 pub mod skip;
