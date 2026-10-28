@@ -1996,3 +1996,309 @@ rulec のパーサーは、出力の行に書いた `range` を黙って読み�
 請求書の明細に返金を配る関数（規則が一行ぶんを二つの `allocate` の差で決め、kaname が明細を `running_totals` でたどって呼び、配った額を税率ごとに足す）で、四つのことが起きた。規則の答えを足すところが W302 になってエフェクトに `overflow` が入り、`sum` で外したあとの `total` を規則に渡しても前提が ritsu の W201 になり、`count <=20` だけを書いた引数に答えの並びを渡すと、だれも書いていない int64 の端を挙げた W301 になり、`run` に `"1000円"` を渡すと型と文字列が渡されたことだけを言った。いまは、rulec が範囲を渡さない規則の出力を型の全体から読み（範囲を書かない引数と同じ）、`result` の出力は rulec が渡すようになった範囲で読む。`running_totals(xs, x => x.f)` の `total` は `sum(xs, x => x.f)` と等しいという関係を覚え、`if` で比べた `sum` から規則の呼び出しの関係まで届く（Lean のモデルには入れていない）。W301 は、値のどの部分（各要素、各要素のフィールド、辞書の各鍵）の範囲か数かを言い、書いたものだけを挙げる。`run` は、違う形の値に型の書き方と例を言い（`` `amount` は money[JPY] で、単位を付けない整数で渡します（`"amount": 1` が 1JPY） ``）、失敗 `input` の場所を関数の名前で言い、`--help` に型ごとの書き方を十三行挙げる（kaname の DESIGN 32 章）。
 
 確かめたこと：`tests/ports.rs` の二つ、`tests/ranges.rs` と `tests/run.rs` の一つずつ。ritsu-model の突き合わせは数が前と同じ（59 のモジュール、14,092 の評価、1,080 の場所、5,287 の式、見た値 314,492）。替える前と後で、木の `.kn` の全部（65）の `kaname check`（英日と JSON）は変わらない。きっかけの四つを小さなモジュールで再現し、W302、W201、W301 が消え、`run` の文が変わることを確かめた。見つけて直していないもの：足した値の関係は Lean のモデルに無い。`let` で名前を付けた `running_totals` の答えは結ばない。括弧で終わる式を、文が閉じ括弧を落として挙げる（前から）。
+
+## 8. モジュール（2026-10-28）
+
+DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作る。この章の B〜G は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
+
+| 段階 | すること | 前に終わっているもの | 見込み（担当の作業の時間） |
+|---|---|---|---|
+| B | 書式、tar とダイジェスト、`@` の解決、九つの言語の読み方、`ritsu check`・`gen`・`run`・`doc`、台帳、通信しない `ritsu mod`、例のプロジェクト、突き合わせ | なし（B.6 だけ、返金の見本の直しの取り込み） | 16〜22 時間 |
+| C | 版の指し方、rulec の `@`、koyomi と sekisho の diff、インターフェースの差、`ritsu mod diff`、`ritsu mod report` | B | 12〜16 時間 |
+| D | curl の呼び方、テストの中のレジストリ、認証、送り出し、取り出し、置き場への書き込み、cosign、CI の段 | B | 14〜18 時間 |
+| E | ライブラリの形の gen（TypeScript、Python、Go） | B | 6〜8 時間 |
+| F | 種のモジュール、一覧のサイト、ブラウザで試すページ、ritsu のサイト、公開のワークフロー、npm | C、D | 10〜13 時間 |
+| G | README、スキル、サイトのページ、台帳から作る文書、数の同期、DESIGN 17 章の書き直し、日本語の読み直し | B〜F | 5〜7 時間 |
+| 仕上げ | 全体の試験を一度、CI（毎晩の回も）、取り込み、リリース（取りまとめ役） | G | 3〜4 時間 |
+
+合わせて 66〜88 時間である。C・D・E を並べれば、B から仕上げまでにかかる時間は 48〜64 時間になる。
+
+### 8.1 この章の段階に共通の決まり
+
+- 仕様は DESIGN 17 章である。違うことをしたくなったら、先に DESIGN 17 章に決めたことと理由と捨てた形を書き、報告で言う。
+- 担当は、git のコミット、push、stash、ブランチの操作をしない。取り込みは取りまとめ役がする。
+- 本物のレジストリ（ghcr.io など）に送らない。`docker login` をしない。テストはインターネットに出ない（テストの中のレジストリと、platforms の段のサービスにだけ問い合わせる）。
+- 資格情報とトークンを、出力、ログ、報告、golden に入れない。テストが植える秘密は、偽の値と分かる値にする（DESIGN 16.10 の偽の鍵と同じ考え）。
+- 試験は、触ったクレートと、変えた口を読むクレートの分だけを回す。全体は、出す候補が固まったときに取りまとめ役が一度回す。報告の前に `-- --nocapture` で SKIP の行を読み、数と理由を書く。
+- マニフェストの無いプロジェクトの出力は変えない（M14）。golden が変われば、変わった理由を報告に並べる。
+- 例とテストの材料は英語を先に作り、日本語の版を横に置く（DESIGN 10.10）。日本語の文は、japanese-review の手引き（DESIGN 4.1 の決まり）で読み直す。
+- 成果物（文書、golden、生成物）に、手元の絶対パス、ユーザー名、マシン名を入れない。文書に載せる出力と数は、走らせた実物を貼る。
+- テストのレジストリ、platforms のコンテナ、ブラウザを立てたまま終わらない。一時ファイルは段階の作業場所に置き、終わったら消す。
+- 同じころに進む返金の見本の直し（この PLAN の 7.59 から）が、`crates/dandori`、`crates/sakai`、`crates/geas`、`crates/ritsu-cross/src/holds.rs`、`crates/ritsu/tests/cross.rs`、`crates/ritsu/tests/golden/cross/` と、この PLAN の 7 章を変える。B.6 のほかは、そこに触らない。触る必要が出たら、取りまとめ役に言ってから触る。
+
+### 8.2 B：書式と解決と検査（通信しない）
+
+**B.1 書式**（DESIGN 17.3、17.4、17.5）
+
+- `crates/ritsu-base/src/modules/` を作る：`mod.rs`、`manifest.rs`（`ritsu.mod` の読み書き。文、行の位置、注をそのまま持つ形）、`lock.rs`、`semver.rs`（版の字、並び）、`names.rs`（モジュールの名前、依存の名前、頭の部分、`library` の名前の形）。std だけで書く（P9）。
+- 書き換えの関数（`add` は最後の `require` のあと、`get` は版の語だけ、`remove` はその行だけ。改行の種類と最後の改行を保つ）。
+- E301、E302、E303 の判定と、二つの言語の文（`Text`）。
+- 試験：`crates/ritsu-base/tests/modules_manifest.rs`、`modules_lock.rs`。読んで書くとバイトが同じになること、書き換えで注と並びと CRLF が残ること、知らない語と値の形の誤りがそれぞれ E301・E302 になること、版の並び（SemVer の 11 節の例を全部）、名前の形の境目（255 字、`localhost`、ポート、`.` の無いホスト）。
+
+**B.2 tar、ダイジェスト、OCI のマニフェスト**（DESIGN 17.11）
+
+- `crates/ritsu-base/src/modules/tar.rs`（決まったバイトで書く、ritsu の形だけを読む、パスの確かめ、上限）、`artifact.rs`（OCI のマニフェストの JSON を決まったバイトで組む、取ってきた OCI のマニフェストを確かめる、空の記述子の値）、`digest.rs`（ディレクトリから中身のダイジェストを作る。`fs` を通して読む）。
+- 展開は `create_new` で開く。リンク、ディレクトリ、`g` の項目、`..`、絶対パス、`\`、NUL、`.` で始まる段、頭の `@`、同じパス、ファイルの下のファイル、上限を超える大きさを、それぞれ止める。
+- 試験：`crates/ritsu-base/tests/modules_tar.rs`。小さなモジュールの tar とダイジェストを golden にする（16 進）。読み戻すと同じファイルになること（ランダムに作ったファイルの組で）。受け付けない形を一つずつ作った tar で止まること。100 バイトを超えるパスで pax の `x` が一つ入ること。大文字と小文字を区別しないファイルシステム（macOS の既定）で、`A.rule` と `a.rule` を持つ tar の展開が止まること。
+
+**B.3 解決**（DESIGN 17.6、17.7、17.15 の読む側）
+
+- `crates/ritsu-base/src/modules/`：`refer.rs`（`refer`、`join`、正規の書き方、モジュールの外を指さないことの確かめ、入れ子のモジュール）、`graph.rs`（依存の木、版の選び方、lock との突き合わせ E304・W302、E306・E308、スレッドごとの覚え書き）、`store.rs`（置き場の場所、項目を探す、中身のダイジェストを確かめる E305、`record.json` を読む。項目を置く `place` は試験の道具のために B で作り、取り出しから呼ぶのは D）、`vendor.rs`（同梱のコピーを先に見る）。
+- `crates/ritsu-base/src/fs.rs`：`Disk` と `Memory` に `@` の見せ方を足す（モジュールのルートのすぐ下の `@<名前>`、連なり、走らせたディレクトリの `@` で始まる相対パス）。
+- `crates/ritsu-base/src/paths.rs`：`find_root` に `ritsu.mod` を足す。`join` は変えず、`@<名前>` を `..` で取り除かないことは `modules::join` と `refer` が確かめる（DESIGN 17.6）。歩くときに入れ子のモジュールと `.ritsu/` に入らない。
+- E307 の判定（モジュールのルートに `@` で始まる名前）。
+- 試験の道具：ディレクトリから置き場の項目を作る関数 `ritsu_base::modules::store::put_directory`（B.2 の tar と OCI のマニフェストを使い、通信しない）を足す。C と D の試験もこれを使う。`ritsu-testkit` に置かない理由は DESIGN 17.25。
+- 試験：`crates/ritsu-base/tests/modules_resolve.rs`、`modules_graph.rs`。`refer` がモジュールの外で `dir.join` とバイトまで同じこと、正規の書き方（回数の少ない連なり、同じ回数なら `require` の順）、外へ出るパス、入れ子へ `@` なしで入るパス、`./@…`、版の選び方の性質（ランダムに作った木で、選んだ版がどの `require` も満たし、選び直しても変わらず、手で解いた答えと同じ）、パスの依存が勝つこと、E306・E308、lock の食い違い。
+
+**B.4 例のプロジェクトの材料**（DESIGN 17.26、8.9）
+
+- `crates/ritsu/tests/projects/modules/` と `modules.ja/` を作る（パスの依存で）。B.5 からの試験が使う。
+- いまの試験とページのうち、`crates/ritsu/tests/projects/` の下を全部たどるもの（ブラウザで試すページのプロジェクトの一覧、サイトの試験など）が、`modules` と `modules.ja`（ルートに `ritsu.mod` が無く、下がモジュールだけのディレクトリ）を読んで困らないかを見て、困るならそこで外す。
+
+**B.5 言語の読み方（rulec、koyomi、sekisho、kaname、yuen と `.proto`）**（DESIGN 17.6 の表）
+
+- rulec（`import proto`・`import jsonschema`・`import enum`・`shape`・`apply`・`contribution … to`・`source … file`・`range from koyomi`）、koyomi（`use calendar`、`source … file`）、sekisho（`use` の八つ、`workflow … from`）、kaname（`use … from`）、yuen（参照のパス）、ritsu-proto（`.proto` の `import` を、そのファイルのモジュールのルートから読む）。chobo はほかのファイルを指さないので替えるところは無く、依存の帳簿をほかの言語が読めることを試験で確かめる。どれも、いま `dir.join(書いたパス)` や `paths::join` をしているところを `ritsu_base::modules::refer`・`join` に替え、各言語の `ports.rs` の読み方も同じに替える。
+- `@` が `require` に無い、外を指す、入れ子に `@` なしで入る、依存のファイルが無い、の四つは、その言語のいまの参照の誤りのコードで、文を `ritsu_base::modules` から取る。モジュールの外で `@…` のファイルが無いときの注も足す。
+- 試験：言語ごとに `crates/<言語>/tests/modules.rs` と材料 `crates/<言語>/tests/modules/`（英語と日本語の版。小さな手元のモジュールと、パスの依存一つ）。単体のコマンドの `check`（英日と JSON）の golden、四つの誤りの golden、モジュールの外の `@` の注。rulec はコーパスの全部で、`check` の出力が変わらないことも確かめる。
+
+**B.6 言語の読み方（dandori、sakai、geas）**
+
+- 返金の見本の直しが main に入ってから、modules のブランチをその上に乗せ直して始める。
+- dandori（`use rule|dates|book … from`、`use proto|openapi|smithy`、子の `flow "…"`、`implements`）、sakai（参照のパス）、geas（主張のファイルが読むパス）。B.5 と同じ替え方と試験。geas の主張のファイルには、ほかのファイルを読むパスが無く、替えるところは無かった（2026-10-28、DESIGN 17.6 の表）。
+- 入るのが遅れれば、B.7〜B.11 のうち、この三つの言語に関わらない部分を先に進める。B は B.6 を終えてから終える。
+
+**B.7 プロジェクトと `ritsu check`**（DESIGN 17.8、17.21）
+
+- `crates/ritsu-project`（`project.rs`、`resolve.rs`、`joined.rs`）：手元のモジュールの全体を読むときに、木の全部のモジュールのファイルを正規の書き方で読む。一部のパスのときは、たどり着く依存のファイルだけを読む。入れ子のモジュールを飛ばす注。`contribution` を木の全体で集め、モジュールの境目を越えるものを注に並べる。
+- `crates/ritsu/src/` の `check`：まとめの行の依存の行、依存の警告の数と `--deps-warnings`、依存の `.geas` の主張を走らせないことと、その数の行、W301・W303、`ritsu >=` の確かめ、止まり方（E301〜E306・E308 は診断で exit 1、置き場に無い・署名の記録が無い・新しい ritsu が要る・lock の書式が新しいは exit 2）。JSON の `module`、`dependencies`、`files` と `diagnostics` の `dependency`（ルートに `ritsu.mod` があるときだけ）。
+- 根の `ritsu.ctx` の数（sakai が数える成果物）が、入れ子のモジュールを飛ばすことで変わらないかを確かめる。変わるなら理由を報告に書き、数を直す。飛ばすことでは変わらない。`ritsu.mod` はどれも、地図が `except` に入れた `crates/*/tests` の下にある（2026-10-28）。
+- 各言語がディレクトリを歩くところを、`ritsu check` と同じ決まりにそろえる（DESIGN 17.6 の「歩き方」。rulec、koyomi、yuen、sakai、geas の `scenarios`、`ritsu run --with`。2026-10-28）。
+- 試験：`crates/ritsu/tests/modules.rs`。例のプロジェクトの `shop` の `check`（英日と JSON）、`pricing` を一か所壊したとき（依存のエラーで exit 1）、依存の警告（まとめの数と `--deps-warnings`）、依存の `.geas`（走らないこと。走れば印のファイルを残すプログラムを使う主張で確かめる）、`shop` が `@tax` を `@pricing/@tax` で指したときの W303、使わない `require` の W301、パスの依存の版の食い違いが無いこと（パスだけの木は lock が要らない）、レジストリの依存を持つ形（B.3 の道具で置き場を作る）の E303・E304・E305・W302 と exit 2 の止まり方。
+
+**B.8 `ritsu gen` と `.proto` の `import`**（DESIGN 17.8 の生成、17.6 の「`.proto` の `import`」）
+
+- `crates/ritsu-project/src/named.rs`：ファイルが指すファイルを集める `named`（言語の参照、`contribution` の `to` と `after`、`.proto` の `import`）と、gen が入れるファイルを集める `reached`（依存の依存まで。並べ方は `with_dependencies` と同じ）。`ritsu check` の W301・W303 と `ritsu gen` が同じ関数を使う。`contribution` の行の診断をそのファイルのものとして数える `place_findings` も ritsu-project に置き、check と gen が同じに数える。
+- `crates/ritsu/src/package.rs`：渡したファイルからたどり着く依存のファイルだけを入れ、依存の部分を `deps/<名前>/` に置く（連なりは重ねる）。段ごとの索引（TypeScript の `index.ts`、Python の `__init__.py`）、Go の `deps/<名前>/rules/<パッケージ>/`、依存のゲートの Cedar の `cedar/deps/<名前>/`。生成の前の検査は、`ritsu check` と同じ `contribution` の集まりで規則を組み、`place_findings` と同じに数える。木の `Problem` は check と同じに止める（`Diags` は exit 1、`Stop` は標準エラーに言って exit 2 で、JSON は出さない）。
+- `crates/ritsu-emit/src/package.rs`：部分の置き場所の `Place`（ディレクトリと、依存のモジュールの名前と版）と、部分のあいだの読み込むパス（TypeScript、Python、Go）。生成器はこれを `package.rs` から受け取る：rulec の `codegen::package_parts_at`、koyomi の `codegen::unit_in`、chobo の `client::InPackage`、sekisho の `r#gen::Target`、kaname の `r#gen::package_in`、dandori の `model::InPackage`。頭の `Source:` の行（`ritsu_emit::header`）に、依存のファイルの正規の書き方とモジュールの名前と版を書く。
+- 走らせるときに一つでなければならない名前（二つのモジュールが作る Temporal のワークフローの型、一つのゲートが一緒に読まない二つのモジュールのファイルが宣言する Cedar の名前）のぶつかりと、Python が予約している語の依存の名前を、exit 2 にする。`gen --check` が依存の部分も比べ、`--format json` の `from` を正規の書き方にする。`--check` が違いを見つけ、lock の `ritsu` の行が走らせている ritsu と違うときに、一行の注を足す。
+- `.proto` の `import`：ritsu-proto の `dependency_roots`（依存のルートを正規の書き方の順に並べる）、`load`・`load_from` の探し方（手元のモジュール、続けて依存のルート）、一回の protoc に渡すルートとぶつかりを返す `protoc_roots`。dandori の `import_dirs` と、rulec の connect が契約をコピーするところも、同じ順で探す。rulec が生成するモジュールの一つのパスに、中身の違う二つの契約が入るときは exit 2 にする。
+- 試験：
+  - `crates/ritsu/tests/modules_gen.rs`：例の `shop` と `店` の `gen`（三つの言語）の golden（ファイルごとに、作った言語、もとのファイル、依存のモジュールの名前と版。`gen` が出力した英日と JSON も `gen-*.{en,ja}.txt`・`gen-*.json` に持つ）と、依存の部分を読み込むパス、`--check`、JSON の `from`。二つのモジュールが同じ名前のファイル（`rules/fee.rule`）を持つ材料で、パッケージの中でぶつからないこと。ワークフローの型と Cedar の名前のぶつかりが exit 2 になること。依存の規則に手元の `contribution` を足す材料で、check と gen の答えがそろうこと。木が読めないときの止まり方、lock の版の注、Python が予約している語の依存の名前。手元の `.proto` が依存の `.proto` を import する材料を、tools の段で `protoc_roots` のルートで protoc にかけること。tools の段で、生成したパッケージが `tsc --strict`、`mypy --strict`、`go vet` を通ること（道具は `crates/ritsu/tests/type_checkers/` に置き、`gen.rs` と一緒に使う）。
+  - `crates/ritsu/tests/modules.rs`：`.proto` の `import` だけで使う `require` に W301 が出ないこと、依存の依存の `.proto` を import すると W303 が出ること。
+  - `crates/ritsu-proto/tests/modules.rs`（英日）：手元の `.proto` が依存の `.proto` をパッケージのパスで import する（依存が `.proto` を `proto/` の下に置く形と、依存の依存）、手元に同じパスのファイルがあれば手元を読む、マニフェストの無い木では依存を探さない、`protoc_roots` のルートとぶつかり。
+  - `crates/rulec/tests/modules.rs`（英日）：契約が依存の契約を import する規則の `rulec gen`（コピーした契約が依存のものとバイトまで同じで、tools の段で buf にかける）と、中身の違う二つの契約が一つのパスに入るときの exit 2。
+
+**B.9 `run`、`doc`、`explain`、台帳**（DESIGN 17.8、17.20）
+
+- `ritsu run` と各言語の `doc` が `@` を読む。手元のページから依存のファイルへのリンクを、書き方と版の文字にする。
+- `crates/ritsu-cross/src/codes.rs` の台帳に E301〜E308、W301〜W303 を足す（英日。再現は、パスの依存と同梱のコピーだけの小さな英語のプロジェクトで、`ritsu check .`）。台帳から作る文書（`docs/codes.md`・`codes.ja.md` と、スキルの codes）を作り直す。
+- 試験：台帳の試験（再現を英日で走らせる）、`ritsu explain E304`（英日、Markdown、JSON）、例の `shop` の `run`（フローを規則の答えで流す）の golden、`ritsu rulec doc @pricing/rules/order_total.rule` の HTML と Markdown。
+
+**B.10 `ritsu mod` の表と、通信しないコマンド**（DESIGN 17.19、17.21）
+
+- `ritsu mod` は `crates/ritsu/src/main.rs` から入る（`ritsu help mod` も同じ表を出し、`ritsu --help` に一行ある）。中身は `crates/ritsu/src/modules/` に置いた。
+  - `cli.rs`：17.19 の表の十五行（`commands`、`table`）、引数の数（`arity`）、コマンドラインを読む一か所（`command`）と、一つのコマンドを一つのファイルの一つの関数に渡す振り分け（`run`）。`--format` は `text|json`（`diff` と `report` は `markdown` も）。知らないフラグ、知らないコマンド、引数の数の誤りは exit 2。
+  - `mod.rs`：どのコマンドも受け取る `Ctx`（`--lang`、`--format`、`--root`。`root` は `--root` か、走らせたディレクトリの上でいちばん近い `ritsu.mod`。`refuse`、`not_yet`、`findings`）と、木が読めないときの `stopped`（`Stop` は標準エラーに言い、`Diags` は診断を出して、どちらも exit 2 で何も書かない）。
+  - `edit.rs`：`init`、`add`（パスの形。走らせたディレクトリからのパスを受け取り、モジュールのルートからのパスで書く）、`remove`。B.1 の `manifest::init`・`added`・`removed` で書く。`change` が `ritsu.mod` と lock をそろって書くか、どちらも書かない（木が読めないか lock を選べなければ `ritsu.mod` を元のバイトに戻す）。`added_json` が `add --format json` の形を作る。
+  - `lock.rs`：`plan`（`graph::choose` と `graph::lock_of`。版の `ritsu.mod` とダイジェストは、同梱のコピー、置き場の `refs`、そこにある lock の行から読み、どれにも無ければ `fetch::for_choosing` に聞く）、`Plan::write`・`said`、`lock`（`--check` は書き直しになるなら exit 1）。パスだけの木には lock を書かず、そこにある lock は消す。`ritsu` の行だけが違う lock は書き直さない。
+  - `list.rs`：`list`（英日と JSON。取り出していないモジュールも並べ、木のエラーは診断にして exit 1）と `where_is`（`where`）。
+  - `vendor.rs`：`vendor`（置き場から `.ritsu/modules/` に置き、lock が固定していない項目は消す）と `vendor --check`、`clean`（`--keep`、`--dry-run`。消した項目を指す `refs` も消し、`tmp/` には触らない）。
+  - C・D・F が埋めるファイル。中身は、いまは exit 2 で「この版にはまだありません」と言う関数である。C は `diff.rs`（`diff`）と `report.rs`（`report`）、D は `registry.rs`（`add` のレジストリの形、`get`、`versions`）、`fetch.rs`（`fetch` と、版を選ぶときに置き場に無い版の `ritsu.mod` を取る `for_choosing`）、`push.rs`（`push`）と、注だけの `http.rs`・`auth.rs`・`store_write.rs`・`cosign.rs`、F は `site.rs`（`site`）。表と引数の読み方は `cli.rs` が持つので、どの段階も自分のファイルだけを書けばよい（下にファイルを足すときは、自分のファイルの中に `mod` を書く）。D の `add` と `get` は、`edit` の `read`・`change`・`lock_line`・`added_json` を使える。
+- `ritsu mod lock` が書く lock は、B.7 と B.8 の試験（`modules.rs`、`modules_gen.rs`）が `Lock::new` で書く lock と同じである。例の `pricing` と `tax` をレジストリから取る形で確かめた（`lock_pins_the_modules_from_a_registry`）。
+- 試験：`crates/ritsu/tests/modules_cli.rs`（11 件）。
+  - `ritsu mod --help`（英日の golden `mod-help.{en,ja}.txt`、十五のコマンドのページ、`ritsu help mod`）。
+  - 十五のコマンドが知らないフラグで exit 2 になること（英日）。C・D・F のコマンドの exit 2。
+  - `init`。`add` と `remove` で、注と並びと CRLF と、改行で終わらない最後の行が残ること。走らせたディレクトリからのパスで足せること。
+  - `list` の英日と JSON（`shop` と `店` の golden `list-*.{en,ja}.txt`・`list-*.json`）。レジストリから取る形の `list`（取り出していないモジュールと E304）。`where`。
+  - `lock` と `lock --check`（`Lock::new` と同じ lock、`ritsu` の行だけが違う lock、パスの依存が勝つ `add`、置き場に無い版で何も変えずに止まること）。パスだけの木の lock。
+  - `vendor` と `vendor --check`、`clean --dry-run` と `--keep`。
+
+**B.11 突き合わせ**（M14、DESIGN 17.25）
+
+- 前のバイナリは、このブランチが分かれた main を別の場所に書き出したソースから release で組んだもの、後のバイナリは段階 B の終わりのソースを release で組んだものである。どちらも九つの言語の名前のリンクを持ち、worktree の根から走らせた。マニフェストの無いすべての例とテストのプロジェクト（git が追っているファイル）に、英語と日本語と JSON（`doc` は Markdown の英日と HTML）でかけ、出力と終了コードと書いたファイルをバイトで比べた。
+  - 各言語の `check`（rulec はディレクトリも）と `ritsu check`（テストのプロジェクトと `ritsu.ctx`）：6,732 回。
+  - 各言語の `doc`：6,381 回。`api`：3,788 回。
+  - `ritsu gen`（34 のプロジェクト）と、前のバイナリが書いたパッケージへの `--check`：129 回。
+  - 各言語の単体の生成器：12,498 回。`rulec gen`、`koyomi gen`、`chobo build` の 14 の先、`sekisho gen` の 4 の先、`dandori build` の 7 の先である。kaname は単体の生成器を持たず、`ritsu gen` が書く。
+  - `.proto` を読む規則の `rulec gen`（契約のコピー）：150 回。
+  - `ritsu run`（invoice と product_line のシナリオ。`--with` は、ディレクトリ、ファイル、無いパス、`@`、上へ出るパス、絶対パス）：108 回。
+  - どのモジュールの中でもない、`@` で始まるパスと無いパス（各言語の `check` と `doc`、rulec の `gen` と `api`、geas、`ritsu` の `check`・`gen`・`run`）：129 回。
+  - 段階 B の材料を下に持つディレクトリを歩くコマンド（koyomi・yuen・sakai のファイルのあるディレクトリと、その三つの言語の `tests`、rulec の `tests/modules`、`ritsu check crates/ritsu/tests/projects`、根の `ritsu.ctx`）：1,221 回。
+- 結果：合わせて 31,136 回のうち、違ったのは歩くコマンドの 18 回だけで、どれも理由がある。
+  - 3 回は、git が追っていない段階 B の材料だけのディレクトリ（rulec の `tests/modules`）である。
+  - 15 回（koyomi と sakai と yuen の `tests`、根の `sakai .`、`ritsu check crates/ritsu/tests/projects`）は、git が追っているファイルだけを写した場所では前と後が同じである。木での後の出力と、写した場所での後の出力の違いは、次の三つだけである。飛ばしたモジュールの注（17.6 の歩き方。五か所のどれにもある）、モジュールの外に置いた段階 B の材料（`modules/en/loose/`、`modules/ja/外/`）の診断（koyomi と sakai）、`ritsu.ctx` の成果物の数（根の `sakai .`。木にある段階 B の新しい Rust のファイル 37 個の分で、前のバイナリも同じ木では同じ数を言う）。
+- help と台帳のページ（M14 の外）は、204 回のうち 16 回（8 ページの英日）が違う。`ritsu --help` の `ritsu mod` の行、`ritsu help check`（`--deps-warnings`、`--root`、終了コード、E301〜W303）、`ritsu help run` と `ritsu help gen` の終了コード（gen は `--root` も）、`ritsu explain --all`（英日と JSON。E301〜W303 を足しただけ）、`rulec gen --help` の終了コード 2、`sakai explain --all` の E103 である。どれも 17 章に書いた変更から来る。
+- スクリプトと数の要約は段階の作業場所に残し、二つのバイナリのうち後のものと出力は消した。
+
+**B の完了の条件**
+
+1. B.11 の突き合わせで、マニフェストの無いプロジェクトの出力が変わっていない。
+2. 例のプロジェクトの `check`・`gen`・`run`・`mod list` の golden（英日と JSON）が通る。
+3. 九つの言語の単体のコマンドが `@` を読み、四つの誤りを自分のコードで言う（言語ごとの材料の golden）。
+4. 台帳の E301〜W303 の再現が英日で通り、`ritsu explain` が引ける。
+5. `cargo xtask deps` が通る（`ritsu_base::modules` は std だけ）。
+6. 触ったクレートの試験が通り、SKIP の行を読んで数と理由を報告に書いた。
+7. DESIGN 17 章と違えたところは、DESIGN に書いてある。
+
+### 8.3 C：差分と報告
+
+**C.1 版の指し方と rulec**（DESIGN 17.9.1、17.9.2）
+
+- `crates/ritsu-base/src/fs.rs` に `GitRevision`（リポジトリの中のパスは `git show <版>:<パス>`、外はディスク）を足し、rulec の `vfs::with_git_rev` をその上に載せ替える。
+- 版の書き方を読む関数を土台に一つ置き（`ritsu_base::modules::address`）、rulec、koyomi、sekisho、`ritsu mod diff` が使う。rulec の `load_rule_with` は、`split_once('@')` の前に、頭の `@` を見る。
+- 試験：`crates/ritsu/tests/rulec_diff.rs` に、`@pricing/rules/shipping_fee.rule` と `@pricing@1.0.0/…`（B.3 の道具で置き場に二つの版）の差、`@pricing/…@HEAD` が exit 2 になること。rulec のいまの `diff` の試験と golden が変わらないこと。
+
+**C.2 koyomi の diff**（DESIGN 17.9.3）
+
+- `crates/koyomi/src/diff.rs`（カレンダーと日付のファイル）、`cli.rs` のコマンドの表に `diff`、`ritsu koyomi diff`。
+- 試験：`crates/koyomi/tests/diff.rs` と材料 `crates/koyomi/tests/diff/`（英日）。カレンダー：祝日が一日増えた、名前だけ変わった、知っている日の範囲が延びた、時差が変わった、同じ。日付のファイル：期日が一日ずれる区間、入力の範囲が狭まった、片方にしかない入力（比べられない）、`--budget` を超える（exit 2）、片方が検査を通らない（exit 2）。text、markdown、JSON の golden（英日）。突き合わせ：小さな材料の全部で、二つの側を一日ずつ、一つの組み合わせずつ評価した総当たりの答えと、区間をほどいた答えが同じであること。
+
+**C.3 sekisho の diff**（DESIGN 17.9.4）
+
+- `crates/sekisho/src/diff.rs`、`cli.rs` に `diff`、`ritsu sekisho diff`。`cells::cut` に両方の比較を渡す、`walk` で一つの空間をたどる、`walk::confirm` で確かめ直す。
+- 試験：`crates/sekisho/tests/diff.rs` と材料 `crates/sekisho/tests/diff/`（英日）。許可が増えた、減った、効いたポリシーだけが変わった、片方にしかない action と役割、正確でない値の確かめ直しと「決められない」、`--budget`。golden（英日、三つの形）。突き合わせ：小さな材料で、組み合わせを一つずつ二つの側で評価した総当たりの答えとまとめた答えが同じであること。
+
+**C.4 インターフェースの差と `ritsu mod diff`**（DESIGN 17.9.5、17.9.6）
+
+- `crates/ritsu/src/modules/diff.rs`：ファイルの追加と削除と変わり、`api` の JSON の比べ方（名前での突き合わせ、名前を入れた JSON Pointer、壊しうる差の候補）、`Items` の比べ方、ファイルの頭の版、`require` の変わり、振る舞いの差（rulec、koyomi、sekisho を呼ぶ）、帳簿のデータの続き（DESIGN 17.9.5）。置き場に無い版は、D が入るまでは exit 2 で `ritsu mod fetch` を言う（D の取り出しにつなぐのは D.5）。
+- `crates/chobo/src/diffbase.rs`：二つの帳簿の本文を比べる関数を、git から読む部分と分けて公開する。`chobo check --diff-base` の出力は変えない。
+- 試験：`crates/ritsu/tests/modules_diff.rs`。例の `versions/pricing-1.0.0` と `pricing`（1.1.0）の差（重さの段の境目の振る舞いの差、地域の `eu` を足したインターフェースの差）、`pricing` と `versions/pricing-2.0.0` の差（出力の名前を消した、壊しうる差の候補）、二つのファイルを渡す形、同じものどうし（exit 0）。帳簿を持つ小さな材料の二つの版（勘定の境界を変えた）で、E050 が「壊れる差」として出て exit 1 になること。golden（英日、三つの形）。chobo の `tests/diffbase.rs` が変わらずに通ること。
+
+**C.5 `ritsu mod report`**（DESIGN 17.10）
+
+- `crates/ritsu/src/modules/report.rs`：二つの git の版の lock を比べる、手元のファイルを head のまま二つの lock で確かめる、新しい診断と消えた診断を変わったモジュールに割り当てる、変わったモジュールごとの `ritsu mod diff`、手元のファイルの答えのうち変わるもの、パスの依存は git で比べる、markdown（`@` をコードの書き方に、60,000 字まで）と JSON、`--fail-on-change`。
+- CI の書き方（`gh pr comment --body-file`）の文案を、G が README とサイトに入れられる形で報告に書く。
+- 試験：`crates/ritsu/tests/modules_report.rs`。テストの中で git のリポジトリを作り、`shop` の lock を 1.1.0 から 2.0.0 に上げる（置き場は B.3 の道具で作る）。検査が止まること（exit 1）、1.0.0 から 1.1.0 では振る舞いの差だけが出ること（exit 0、`--fail-on-change` で 1）、同じ版でダイジェストが違うこと（タグが動いた）がいちばん上に出ること、markdown の長さの上限、`@` がどれもバッククォートの中にあること。golden（英日、markdown と JSON）。
+
+**C の完了の条件**
+
+1. rulec のいまの `diff` の試験と golden が変わらない。
+2. koyomi と sekisho の diff が、材料の全部で総当たりの答えと同じになる。
+3. `ritsu mod diff` と `ritsu mod report` の golden が通る。
+4. 触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
+
+### 8.4 D：レジストリと署名
+
+**D.1 curl の呼び方**（DESIGN 17.12 の「HTTP は curl で」）
+
+- `crates/ritsu/src/modules/http.rs`：リクエストの関数を一つ。`-q`、`--config -` で秘密を標準入力から、`--proto`、リダイレクトを自分でたどる（`Authorization` は同じスキームとホストとポートにだけ）、時間と大きさの上限、`GET` と `HEAD` のやり直し、`Retry-After`、レジストリのエラーの JSON の読み方。WASI では `wasi::cannot_start("curl")`。
+- 秘密を入れる型（`Debug` と `Display` を持たない）。
+
+**D.2 テストの中のレジストリ**（DESIGN 17.25）
+
+- `crates/ritsu-testkit/src/registry.rs`（std だけ、dev-dependency のまま）：17.25 に挙げた distribution-spec の範囲、認証の三つの形、二つ目のポートへのリダイレクト、壊れた答え。ループバックの空いたポートで立て、テストの終わりに止める。
+- 試験：`crates/ritsu-testkit/tests/registry.rs`（curl で、blob と OCI のマニフェストの往復、`tags/list` のページ、referrers の絞り込み、トークンの手順）。
+
+**D.3 認証**（DESIGN 17.13）
+
+- `crates/ritsu/src/modules/auth.rs`：Docker の設定ファイル（`credHelpers`、`auths`、`credsStore`、`docker.io` の決まりごと）、ヘルパーを走らせる、Bearer の手順、ID トークンの `POST`、Basic、トークンの覚え書き。
+- 試験：`crates/ritsu/tests/modules_auth.rs`。テストが作る一時の `DOCKER_CONFIG` と、偽の `docker-credential-*`（標準入力のホストを確かめて決まった答えを返すスクリプト）で、三つの出どころと匿名、`identitytoken` の `POST`、401 のときの文（出どころの名前だけ）。植えた秘密が、標準出力、標準エラー、JSON、置き場と一時ディレクトリのどのファイルにも無いこと。curl に渡した引数（テストが PATH の前に置く、引数を書き残す curl の包み）に秘密が無いこと。
+
+**D.4 送り出し**（DESIGN 17.12）
+
+- `crates/ritsu/src/modules/push.rs`：17.12 の 1〜9。秘密の検査（W901 の表）、一時ディレクトリでの `ritsu check`（主張は走らせない）、`--dry-run`、同じ版の扱い。
+- 試験：`crates/ritsu/tests/modules_oci.rs`。例の三つのモジュールを一時ディレクトリにコピーし、`module` と `require` の行をテストのレジストリに書き替えて、`tax`、`pricing` の順に送り出す。二度目は「送り出し済み」で exit 0、中身を変えて同じ版は exit 1、パスの依存は exit 1、鍵のあるファイルは exit 1（値が出ないこと）、検査のエラーは exit 1、`--dry-run` が二度とも同じダイジェストで通信しないこと。
+
+**D.5 取り出し、lock、add、get、versions、置き場**（DESIGN 17.12、17.15）
+
+- `crates/ritsu/src/modules/fetch.rs`、`registry.rs`、`store_write.rs`：OCI のマニフェストと層の取り出しと確かめ、一時ディレクトリへの展開と名前を変えて置くこと、`refs`、`record.json`、`ritsu.mod` の層だけを取ること（版の選び方のため）、タグの一覧のページ、`@latest`。`add` と `get` と `lock` のレジストリの部分、`versions`、`fetch --rev`。C.4 の `ritsu mod diff` の取り出しをつなぐ。
+- 試験：`modules_oci.rs` に続けて、`shop` で `add pricing <レジストリ>/acme/pricing@1.1.0`、`lock`、`fetch`、`check`（依存の依存の `tax` も）、`get pricing@latest`、`versions`。壊れた答え（ダイジェストの違い、タグが動いた、上限を超える、`..` や絶対パスやリンクの tar、500、429）のどれもが、置き場に何も残さずに止まること。同時に二つの `fetch` を走らせても置き場が壊れないこと。置き場のファイルを書き換えると `check` が E305 で止まること。
+
+**D.6 cosign**（DESIGN 17.14）
+
+- `crates/ritsu/src/modules/cosign.rs`：効く決まりを集める（手元のモジュールと、直に `require` するモジュールの行）、`cosign verify` の引数、記録、cosign が無いとき。
+- 試験（fast）：偽の `cosign`（引数を書き残して、決まった終了コードを返すスクリプト）で、四つの決まりの引数、ループバックの `--allow-http-registry`、決まりが増えたときの確かめ直し、失敗したときの exit 1 と cosign の標準エラーの頭、記録が無いときに `check` が止まること。
+- 試験（tools）：本物の cosign で、テストの中で作った鍵で署名し（通信しない形。透明性ログに載せない）、テストのレジストリに置き、`ritsu mod fetch` が確かめること、別の鍵では止まること。cosign 3 系で通信せずに鍵で署名する引数（`--tlog-upload=false` と、署名の設定を読まない引数）は、D の最初に、公開されたチェックサムで確かめて入れた cosign で確かめる。通信せずに署名できなければ、その試験は SKIP の行で理由を言い、報告に書く。
+
+**D.7 CI**（DESIGN 10.5、17.25）
+
+- tools.yml：cosign を版とチェックサムで固定して入れる（D.6 で確かめた版）。
+- platforms.yml：distribution の参照実装のレジストリをサービスとして立て（イメージはダイジェストで固定）、`RITSU_TEST_REGISTRY` を渡す。その上で、送り出し、取り出し、cosign。種のモジュールの `push --dry-run` のダイジェストを Linux で出し、macOS の値（golden）と比べる。
+- `ci/skips/` には足さない（CI では道具を入れるため）。
+
+**D の完了の条件**
+
+1. `modules_oci.rs` と `modules_auth.rs` が fast の段で通る（curl がテストの中のレジストリにだけ問い合わせる）。
+2. 植えた秘密がどの出力にも無い。
+3. 壊れた答えのどれもが、置き場に何も残さずに止まる。
+4. 本物の cosign の試験が通るか、SKIP の理由が報告にある。
+5. 触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
+
+### 8.5 E：ライブラリの形の gen
+
+- **E.1** `ritsu gen --library` と `--embed`（`crates/ritsu/src/cli.rs` の `gen` の表、`package.rs`）。名前と版の出どころ、依存のライブラリの名前の確かめ（無ければ exit 2）、単位の型を依存のライブラリから読み込むこと。
+- **E.2** TypeScript：`package.json`（`private` なし、`license`、`exports`、`dependencies` を `^`、`peerDependencies`）。
+- **E.3** Python：`pyproject.toml` の `[project]`（範囲）。
+- **E.4** Go：`go.mod`（`module` の `/vN`、`go` の版、`require`、`GO_RAISED` の行）。`go` の版は、Go のサポート中の版の表と、生成物が import するモジュールの `go.mod` が求める版から決め、決め方を DESIGN 17.16 に書く。
+- **E.5** 試験：`crates/ritsu/tests/library.rs`。例の `tax` と `pricing` をライブラリにし、`pricing` が `tax` のライブラリを読む形で、三つの言語の golden（`package.json`、`pyproject.toml`、`go.mod` と、単位の型の import）。`library` の行の無い依存で exit 2、`--embed` で中に入ること。tools の段で、二つのライブラリを一つのアプリから使う小さなプロジェクトを、`tsc --strict`（npm のローカルのパスで入れる）、`mypy --strict`（uv の venv に二つを入れる）、`go build`（`replace` で二つを読む）にかける。アプリの形（`--library` なし）の golden が変わらないこと。
+- **E.6** 出し方の文書：`website/docs/libraries.md` と `website/docs-ja/libraries.md`（npm の `--provenance`、PyPI の信頼された発行者、Go のタグ、ライブラリの形とアプリの形の依存の書き方の違い）。ワークフローの例は、ritsu のリポジトリでは走らせない。
+
+**E の完了の条件**：E.5 の golden と tools の段の三つが通る。アプリの形の golden が変わらない。触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
+
+### 8.6 F：種のモジュール、一覧のサイト、ブラウザ、npm
+
+- **F.1 種のモジュール**（DESIGN 17.18）：`modules/holidays/` を作る（英国の三つと日本（英語と日本語の版）、データ、README（英日）、`THIRD_PARTY_NOTICES.md`）。fast.yml に `ritsu check modules/holidays`。`crates/ritsu/tests/modules.rs` に、データのファイルと固定が koyomi の例と同じであることの試験と、`check` の golden。
+- **F.2 `ritsu mod site`**（DESIGN 17.17）：`crates/ritsu/src/modules/site.rs`。一覧のファイルの読み方、版の一覧と取り出しと確かめ、ページ（`ritsu_base::docpage` の枠）、`module.json`、開くボタンの小さなスクリプト（ブラウザで試すページと同じ圧縮）。試験：`crates/ritsu/tests/modules_site.rs`。テストのレジストリに例の三つのモジュールを二つの版ずつ置き、一覧のサイトを作って HTML の golden（英日）、`module.json` の中身、確かめられないモジュールで exit 1。Chrome で、版のページのボタンが作るリンクを開き、ブラウザで試すページが `shop` を読み込んで検査の答えを出すこと（tools の段）。
+- **F.3 ブラウザで試すページ**（DESIGN 17.22）：変更の項目の `{"base64": "…"}`（`website/docs/playground/playground.js`、`worker.js`、エディタは読むだけ）、`ritsu-wasm` の `Memory` の `@` の見せ方、プロジェクトの一覧に `modules` と `modules.ja`（同梱のコピーの形）、`ritsu.wasm` を作り直す。試験：`crates/ritsu/tests/playground.rs` に `base64` の項目と `modules` の検査の答え。
+- **F.4 ritsu のサイト**：`website/modules.list`、docs.yml で `ritsu mod site` を英日で走らせて `build/modules/list/` と `build/ja/modules/list/` に置く、案内のページ `website/docs/modules.md` と `website/docs-ja/modules.md` の骨組み（中身は G）、サイトの頭のページからのリンク。試験：`crates/ritsu/tests/website.rs` の組んだ木に、一覧のページがあること。
+- **F.5 公開のワークフロー**：`.github/workflows/modules.yml`（DESIGN 17.18 の形。`publish` の既定は false）。`actionlint` があればかける。手で走らせない（公開を決めてから走らせる）。
+- **F.6 npm**（DESIGN 17.22）：`packaging/npm` の試験に、通信の要るコマンドが `curl` を挙げて止まることと、置き場と同梱のコピーを読む `check`、`dirs` で置き場を開いていないときの文。
+
+**F の完了の条件**：`ritsu check modules/holidays` が通る。一覧のサイトの golden と、Chrome での開く試験が通る（Chrome の無い機械では SKIP）。ブラウザで試すページが `modules` を読む。`modules.yml` は一度も走らせていない。触ったクレートの試験が通り、SKIP の行を読んで報告に書いた。
+
+### 8.7 G：文書と仕上げ
+
+- **G.1 README**（英日）：「Modules」の節。`shop/ritsu.mod`、フローの `use rule … from "@pricing/…"` の行、`ritsu check` の出力の抜粋（実物）、`ritsu mod add`・`lock`・`fetch`・`push`、署名の行、`ritsu mod report` の CI の書き方。`crates/ritsu/tests/readme.rs` が確かめる形にする。
+- **G.2 スキル**：ritsu のスキル（モジュールの書き方、取り出し、報告）、rulec（`diff` の `@`）、koyomi（`diff`）、sekisho（`diff`）。`crates/ritsu/tests/skill.rs` が確かめる。
+- **G.3 サイト**：案内のページ（英日）の中身、koyomi と sekisho の diff のページ、rulec の diff のページの `@`。`website/sync.sh` で同期し、`website.rs` が確かめる。
+- **G.4 台帳から作る文書と数**：`docs/codes.md`・`codes.ja.md`、スキルの codes、根の README とサイトの数（コマンドの数、台帳の数、試験の数）、根の `ritsu.ctx` の成果物の数。
+- **G.5 DESIGN**：17 章を作った形に書き直す（足した経緯を書き継がず、いまの姿から組み直す）。決めたことを実物に合わせ、`go` の版、cosign の引数、レジストリのイメージなど、段階で決めたものを入れる。6.2 の 3、4.7、8.1、8.7、8.8、9.3、10.2、15 章の、関わる行を直す。PLAN のこの章に、段階ごとの作ったものと確かめたこと（実物の数）を書く。
+- **G.6 日本語の読み直し**：B〜F の日本語の出力の全部（`ritsu mod` の `--help`、診断、まとめの行、diff と報告の文、一覧のサイトのページ、`explain`）を `--lang ja` で走らせて読み、japanese-review の手引きで直す。直したら golden を取り直し、差分が言い方だけであることを読む。
+
+**G の完了の条件**：`readme.rs`、`skill.rs`、`website.rs`、台帳の試験が通る。DESIGN 17 章に見込みとスケッチが残っていない。
+
+### 8.8 仕上げ（取りまとめ役）
+
+- 全体の試験を一度回す（DESIGN 10.2 の三つの段。platforms はレジストリのサービスを含めて）。
+- CI の push の回と、毎晩の platforms・kani・audit・tools の回を見る。
+- 取り込みと、リリースの判断（版は 0.37.0 を案とする。DESIGN 17 章の例の `ritsu >=0.37.0` もそれに合わせてある）。
+- 種のモジュールの公開（`modules.yml` を `publish` で走らせる）は、公開を決めてから。
+
+### 8.9 例のプロジェクトの材料（B.4 で作る）
+
+形は DESIGN 17.26 のとおり。中身の案：
+
+- `tax/rules/vat_rate.rule`：入力 `category`（`standard`、`reduced`、`zero` の列挙）から、出力 `rate`（率。20%、5%、0%）。出典の行は書かない（例のための値と、ファイルの頭の説明に書く）。
+- `pricing/rules/shipping_fee.rule`：入力 `weight`（g。範囲 1〜30,000）と `region`（`domestic`、`eu`、`world`）から、出力 `fee`（GBP の額）。1.1.0 では重さの段の境目が 2,500 g。
+- `pricing/rules/order_total.rule`：入力 `subtotal`、`category`、`shipping` から、`@tax/rules/vat_rate.rule` を `apply` して、出力 `total`。
+- `shop/orders/place_order.flow`：入力の注文から、送料の規則と合計の規則を呼び、在庫を押さえ、合計を請求し、請求が通らなければ押さえを解くフロー。シナリオを二つ（請求が通る、通らない）。
+- `shop/checkout/basket.kn`：明細の並び（上限つき）から小計を出し、`@pricing/rules/order_total.rule` を呼ぶ kaname のモジュール。
+- `versions/pricing-1.0.0/`：境目が 2,000 g で、地域に `eu` が無い。`require tax path "../../tax"`。
+- `versions/pricing-2.0.0/`：`shipping_fee.rule` の出力の名前を `fee` から `shipping_fee` に変えた。`shop` のフローの検査がここで止まる。
+- 日本語の版 `modules.ja/`：同じ形で、ファイルの名前と中身を日本語に（`税/規則/付加価値税率.rule` のように）。モジュールの名前と依存の名前は英字のまま（DESIGN 17.3）。
+
+使うところ：`modules.rs`（B.7〜B.9）、`modules_gen.rs`（B.8）、`modules_cli.rs`（B.10）、`rulec_diff.rs`（C.1）、`modules_diff.rs`（C.4）、`modules_report.rs`（C.5）、`modules_oci.rs`（D.4、D.5）、`library.rs`（E.5）、`modules_site.rs`（F.2）、ブラウザで試すページ（F.3）、README（G.1）、サイトの案内のページ（G.3）。
+
+### 8.10 並べ方とぶつかるところ
+
+- B は一人で、B.1 から順に進める。B.6 は返金の見本の直しの取り込みを待つ。
+- B のあと、C と D を並べる。E は、B の担当の作業場所とビルドを引き継いで進めるか、C か D が終わってから始める。並べた段階がそれぞれ作業場所とビルド（一つで 11 GB ほど）を持つので、三つを同時にするとディスクが足りない（2026-10-28 の空きは 27 GiB）。
+- C と D がどちらも触るのは `crates/ritsu/src/modules/` だけで、B.10 がファイルを分けて表を先に作るので、同じファイルを書かない。D.5 が C.4 の `ritsu mod diff` に取り出しをつなぐのは、C が取り込まれてからにする。
+- F は C と D が取り込まれてから。G は最後。
+- 台帳（`crates/ritsu-cross/src/codes.rs`）は B.9 だけが足す。ほかの担当が同じころに台帳を変えるなら、取り込むときに取りまとめ役が合わせる。
+
+### 8.11 B の前に決めること（★）
+
+DESIGN 17 章で★を付けたもの。推す形は、どれも 17 章に書いた形である。B に関わるのは 1〜6 で、B を始める前に決めたい。
+
+1. 同じモジュールの二つの版を持たない（17.7）。
+2. 依存の名前は ASCII だけ（17.3）。
+3. ルートを探すときに `ritsu.mod` でも止まる（17.6）。
+4. 依存の警告は数だけを出し、一つずつは `--deps-warnings` で出す（17.8）。
+5. 依存の `.geas` の主張は走らせない（17.8）。
+6. 一回の実行の手元のモジュールは一つ（ワークスペースは作らない。17.28）。
+7. 振る舞いの差は rulec、koyomi、sekisho だけで、ほかの六つはインターフェースの差（17.9.5）。C に関わる。
+8. ライブラリの依存は、依存のモジュールが `library` の行を持つか、`--embed` で中に入れる（17.16）。E に関わる。
+9. 層の tar を圧縮しない（17.11）。D に関わる。
+10. 種のモジュールの名前を `ghcr.io/i2y/ritsu-holidays`、最初の版を 1.0.0 にする（17.18）。F に関わる。
+11. Lean のモデルを足さない（17.24）。
