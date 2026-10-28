@@ -1,0 +1,27 @@
+{
+  "execution": "charged",
+  "now": "2026-10-28T10:00:00Z",
+  "input": {
+    "order": {
+      "id": "A-1",
+      "sku": "tea",
+      "quantity": 2,
+      "weight": 1200,
+      "region": "domestic",
+      "category": "standard",
+      "subtotal": 2000
+    }
+  },
+  "answers": [
+    {
+      "ok": {
+        "id": "H-1"
+      }
+    },
+    {
+      "ok": {
+        "paid": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# The days an invoice gives to pay. The days are the test's own.
+rule payment_days v1
+description "The days an invoice gives the customer to pay, by the kind of customer"
+
+enum customer = consumer | business
+
+inputs
+  customer : customer
+
+outputs
+  days : number  round down(1)
+
+table days_by_customer
+policy unique
+| customer | -> days |
+| consumer | 14      |
+| business | 30      |
+
+examples
+| customer | -> days |
+| consumer | 14      |
+| business | 30      |

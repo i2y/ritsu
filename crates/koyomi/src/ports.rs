@@ -498,7 +498,7 @@ impl ritsu_ports::References for Engine {
     /// file a `source` copies.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let f = parsed(root, file)?;
-        let from_root = |written: &str| ritsu_base::paths::join(&ritsu_base::paths::parent(file), written).ok();
+        let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
         let mut out = Vec::new();
         if let Some((p, sp)) = &f.use_calendar
             && let Some(p) = from_root(p)

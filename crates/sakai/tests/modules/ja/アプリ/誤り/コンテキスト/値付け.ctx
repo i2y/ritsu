@@ -1,0 +1,15 @@
+# 手元のモジュールのコンテキストで、lib の規則を自分で持つもの。依存の規則を、そのコンテキストを使わずに
+# 使うモジュールの書き方で、誤り/持ち主の無い依存.ctx が使う。規則が準用する base の税率は持たない。
+context 値付け(pricing) v1
+description "モジュール lib の規則で、注文の合計を出す"
+owner "経理チーム"
+
+owns
+  rulec "@lib/規則/注文の合計.rule"
+
+published language rulec.order_total.v1
+  rulec "@lib/規則/注文の合計.rule"
+
+terms
+  合計 "客が注文に払う額。小計に、区分の付加価値税と送料を足したもの"
+    means rulec "@lib/規則/注文の合計.rule" output 合計

@@ -47,6 +47,25 @@ pub fn resolve(w: &Written, dir: &str, gather: bool) -> Result<(Name, Option<Wor
     base::resolve(w, dir, gather).map_err(|e| said(e))
 }
 
+/// [`resolve`], the naming written in the `.req` at `from` (a path from the root `root`), with its
+/// path held to the module of ritsu's the file is in (ritsu's DESIGN 17.6): a path that leads out
+/// of it, into a module below it without an `@`, or into a dependency it does not require is E013,
+/// in the words every language says it in, and `@<name>/…` is a dependency's file, from the
+/// module's root. Outside a module, what [`resolve`] answers.
+pub fn resolve_in(w: &Written, root: &std::path::Path, from: &str, gather: bool) -> Result<(Name, Option<Word>), NameError> {
+    let r = resolve(w, &ritsu_base::paths::parent(from), gather);
+    // the tool and the path's quotes are said first, as ever, and the path before the kinds
+    let Some(p) = w.path.as_ref().filter(|p| p.quoted) else { return r };
+    if matches!(&r, Err(e) if e.code == "E011") {
+        return r;
+    }
+    match ritsu_base::modules::join(root, from, &p.text) {
+        Err(ritsu_base::modules::Refused::Path(..)) => r,
+        Err(refused) => Err(err("E013", p.at, crate::diag::cap(refused.text()))),
+        Ok(full) => r.map(|(n, g)| (Name { path: full, ..n }, g)),
+    }
+}
+
 /// What is wrong, in yuen's codes and words.
 fn said(e: base::Error) -> NameError {
     let col = e.at;

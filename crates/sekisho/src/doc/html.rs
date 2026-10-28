@@ -119,9 +119,12 @@ pub fn inline(s: &str) -> String {
 pub fn embedded_label(lang: Lang, e: &Embedded) -> String {
     let file = format!("<code>{}</code>", esc(&e.file));
     let tool = format!("<code>{} doc</code>", e.tool);
-    match lang {
-        Lang::En => format!("The page of {file}, as {tool} draws it"),
-        Lang::Ja => format!("{tool} が描いた {file} のページ"),
+    // a dependency's file, not beside the page: its module and version (ritsu's DESIGN 17.8)
+    match (lang, &e.module) {
+        (Lang::En, None) => format!("The page of {file}, as {tool} draws it"),
+        (Lang::En, Some(m)) => format!("The page of {file} ({}), as {tool} draws it", esc(m)),
+        (Lang::Ja, None) => format!("{tool} が描いた {file} のページ"),
+        (Lang::Ja, Some(m)) => format!("{tool} が描いた {file}（{}）のページ", esc(m)),
     }
 }
 

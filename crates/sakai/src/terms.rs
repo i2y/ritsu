@@ -161,7 +161,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[c
                                         } else if let Some(tn) = el.get(At::To(x, ri.unwrap(), ei))
                                             && tn.tool == Tool::Rulec
                                             && let (Some((_, rule_enum)), Some(pf), Some((_, e))) = (tn.items.first(), ps.files.get(&from.path), from.items.first())
-                                            && let Some(taken) = crate::mapping::rule_import(read, &tn.path, rule_enum, &from.path, &pf.full(e))
+                                            && let Some(taken) = crate::mapping::rule_import(&m.root, read, &tn.path, rule_enum, &from.path, &pf.full(e))
                                             && let Some((_, rv)) = taken.iter().find(|(wire, _)| wire == v)
                                         {
                                             // the rule's `import proto` is the mapping (DESIGN 1.7)

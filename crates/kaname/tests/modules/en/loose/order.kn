@@ -1,0 +1,9 @@
+# A module outside every module of ritsu's: no ritsu.mod above it, so `@lib/…` is a plain relative
+# path, and there is no directory @lib beside this file.
+module order v1
+description "The total of an order by the rule order_total"
+
+use rule order_total from "@lib/rules/order_total.rule"
+
+fn total(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: order_total.category) -> money[GBPc] total
+  order_total(subtotal: subtotal, category: category, shipping: 0GBPc).total

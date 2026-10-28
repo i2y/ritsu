@@ -52,7 +52,11 @@ fn gates() -> Vec<String> {
         for e in rd.flatten() {
             let p = e.path();
             if p.is_dir() {
-                walk(&p, out);
+                // not into another module of ritsu's, as the commands' walks go (ritsu's DESIGN 17.6): its
+                // gates read their dependencies' files, and ritsu's `tests/modules_gen.rs` generates them
+                if ritsu_base::paths::not_entered(&p).is_none() {
+                    walk(&p, out);
+                }
             } else if p.extension().is_some_and(|x| x == "gate") {
                 out.push(p.to_string_lossy().to_string());
             }
@@ -119,7 +123,7 @@ fn package(gate: &str, dir: &Path, module: &str, name: &str, authorizer: Authori
         let pkg = ritsu_emit::ident::go_package(&unit.alias);
         write(&base.join("dates").join(&pkg).join(format!("{pkg}.go")), &koyomi::codegen::go::module(&unit));
     }
-    let target = sekisho::r#gen::Target { name: "go", authorizer, go_module: format!("{module}/{name}") };
+    let target = sekisho::r#gen::Target { name: "go", authorizer, go_module: format!("{module}/{name}"), place: ritsu_emit::package::Place::here() };
     let shown = ritsu_emit::header::file_name(gate);
     let mut text = String::new();
     for (rel, body) in sekisho::r#gen::code(&o, &suite, &target, &shown, lang).unwrap() {

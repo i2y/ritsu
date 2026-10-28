@@ -223,7 +223,8 @@ fn ring_below(p: &Path, seen: &mut Vec<std::path::PathBuf>, chain: &mut Vec<Stri
     let f = crate::parse::parse(&src, &p.to_string_lossy()).file?;
     let dir = p.parent().unwrap_or(Path::new(".")).to_path_buf();
     for a in &f.applies {
-        let q = dir.join(&a.path);
+        // a path the module refuses is said where that rule is checked
+        let Ok(q) = crate::vfs::follow(&dir, &a.path) else { continue };
         chain.push(q.to_string_lossy().into_owned());
         if let Some(r) = ring_below(&q, seen, chain) {
             return Some(r);
@@ -264,14 +265,26 @@ fn expand_inner(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         };
 
         // The callee, at the same revision as this rule.
-        let cpath = dir.join(&a.path);
+        let followed = crate::vfs::follow(&dir, &a.path);
+        if let Some(why) = crate::vfs::refused(&followed) {
+            out.push(Diag::error("E044", why).at(at(a.span.line)).mark(a.span.clone(), ""));
+            done.push(a);
+            continue;
+        }
+        let Ok(cpath) = followed else {
+            done.push(a);
+            continue;
+        };
         let bytes = match crate::vfs::read(&cpath) {
             Ok(b) => b,
             Err(_) => {
-                out.push(e044(
-                    tr!("`{}` を読めません", "`{}` cannot be read", a.path),
-                    tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", cpath.display()),
-                ));
+                out.push(
+                    e044(
+                        tr!("`{}` を読めません", "`{}` cannot be read", a.path),
+                        tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", cpath.display()),
+                    )
+                    .maybe_note(crate::vfs::outside_note(&dir, &a.path)),
+                );
                 done.push(a);
                 continue;
             }

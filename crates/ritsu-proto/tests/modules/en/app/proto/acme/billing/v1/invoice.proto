@@ -1,0 +1,9 @@
+// An invoice of the module at hand: its money is its own, read from the root of this module.
+syntax = "proto3";
+package acme.billing.v1;
+
+import "proto/acme/orders/v1/money.proto";
+
+message Invoice {
+  acme.orders.v1.Money amount = 1;
+}

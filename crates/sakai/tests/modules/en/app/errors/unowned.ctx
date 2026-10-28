@@ -1,0 +1,9 @@
+# A file of a dependency no context owns: the pricing of this map owns lib's rule, which applies the
+# VAT rate of base, and no context owns that rate, so the reference leads out of the scope.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "../contexts/billing.ctx"
+use context "contexts/pricing.ctx"
+
+covers ".."

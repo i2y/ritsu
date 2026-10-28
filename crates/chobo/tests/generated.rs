@@ -185,7 +185,7 @@ fn a_rust_client_in_a_package_takes_the_types_of_its_units() {
         skip(&format!("{why}; the Rust clients in a package are not built"));
         return;
     }
-    let pkg = chobo::client::InPackage { module: "example.com/shop".into() };
+    let pkg = chobo::client::InPackage { module: "example.com/shop".into(), ..Default::default() };
     let mut modules = Vec::new();
     let mut types: Vec<String> = Vec::new();
     for (i, path) in ["examples/marketplace/marketplace.book", "tests/books/allocation.book"].iter().enumerate() {

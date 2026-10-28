@@ -1,0 +1,11 @@
+# The basket of the module nested in app: the subtotal of its lines.
+module basket v1
+description "The subtotal of a basket"
+
+record Line
+  sku        : string
+  qty        : number  range >=1 <=10
+  unit_price : money[GBPc]  range >=1GBPc <=10_000GBPc
+
+fn subtotal(lines: list[Line] count >=1 <=20) -> money[GBPc]
+  sum(lines, l => l.unit_price × l.qty)

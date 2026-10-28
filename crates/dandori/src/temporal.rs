@@ -83,10 +83,10 @@ pub(crate) const RULE_SECONDS: u64 = crate::check::RULE_SECONDS;
 /// Where an import of rules.ts finds the module of a rule (`rulec/typescript/<module>`) or of a dates
 /// file (`koyomi/typescript/<alias>`): beside the workflow, where `rulec gen` and `koyomi gen` write
 /// them; or, for a flow of a package (ritsu's DESIGN 9.3), in the package's rules/ and dates/.
-pub(crate) fn ts_module(m: &Model, path: &str) -> String {
+pub(crate) fn ts_module(m: &Model, path: &str, dir: &str) -> String {
     match (&m.package, path.split_once('/')) {
-        (Some(_), Some(("rulec", rest))) => format!("../../rules/{}", rest.trim_start_matches("typescript/")),
-        (Some(_), Some(("koyomi", rest))) => format!("../../dates/{}", rest.trim_start_matches("typescript/")),
+        (Some(p), Some(("rulec", rest))) => ritsu_emit::package::ts_path(&p.flow_dir(), &format!("{dir}rules/{}", rest.trim_start_matches("typescript/"))),
+        (Some(p), Some(("koyomi", rest))) => ritsu_emit::package::ts_path(&p.flow_dir(), &format!("{dir}dates/{}", rest.trim_start_matches("typescript/"))),
         _ => format!("./{path}"),
     }
 }
@@ -103,7 +103,11 @@ fn io_ts(m: &Model) -> String {
     let mut fields = String::new();
     for (i, b) in books.iter().enumerate() {
         let f = &m.books[*b].facts;
-        imports.push_str(&format!("import type {{ Book as Book{i} }} from \"../../books/{}\";\n", f.typescript.module));
+        let from = match &m.package {
+            Some(p) => ritsu_emit::package::ts_path(&p.flow_dir(), &format!("{}books/{}", p.dir_of(&m.books[*b].path), f.typescript.module)),
+            None => format!("../../books/{}", f.typescript.module),
+        };
+        imports.push_str(&format!("import type {{ Book as Book{i} }} from \"{from}\";\n"));
         fields.push_str(&format!("  {}?: Book{i};\n", q(&f.name)));
     }
     let books_type = format!("/** The books the tasks run operations on, by the book's name: the clients of the package's books/. */\nexport interface Books {{\n{fields}}}\n\n");
@@ -1275,7 +1279,8 @@ pub(crate) fn import_names(imports: &BTreeMap<String, BTreeSet<String>>, same: i
                     local.insert((module.clone(), id.to_string()), id.to_string());
                 }
                 Some(_) => {
-                    let mut alias = format!("{id}_{}", ident(module));
+                    let (key, dir) = crate::model::split_key(module);
+                    let mut alias = format!("{id}_{}", ritsu_emit::package::local_name(dir, &ident(key)));
                     while taken.contains_key(&alias) {
                         alias.push('_');
                     }
@@ -1316,7 +1321,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
     let mut imports: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for r in called {
         if let Some(d) = m.rules[*r].date() {
-            let names = imports.entry(format!("koyomi/typescript/{}", d.file_alias)).or_default();
+            let names = imports.entry(crate::model::module_key(&format!("koyomi/typescript/{}", d.file_alias), &dir_of(m, *r))).or_default();
             names.insert(d.alias.clone());
             if d.at {
                 names.insert(format!("{}_at", d.alias));
@@ -1324,7 +1329,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
             continue;
         }
         let ts = &m.rules[*r].info.typescript;
-        let module = ts.module.trim_end_matches(".ts").to_string();
+        let module = crate::model::module_key(ts.module.trim_end_matches(".ts"), &dir_of(m, *r));
         let names = imports.entry(module).or_default();
         names.insert(ts.function.clone());
         let enum_aliases: Vec<&str> = ts.enums.iter().map(|e| e.alias.as_str()).collect();
@@ -1346,8 +1351,9 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
     for (module, names) in lines {
         if !names.is_empty() {
             // a module of koyomi's is named by its path; one of rulec's by its name
-            let path = if module.contains('/') { module.clone() } else { format!("rulec/typescript/{module}") };
-            rules_ts.push_str(&format!("import {{ {} }} from \"{}\";\n", names.join(", "), ts_module(m, &path)));
+            let (key, dir) = crate::model::split_key(&module);
+            let path = if key.contains('/') { key.to_string() } else { format!("rulec/typescript/{key}") };
+            rules_ts.push_str(&format!("import {{ {} }} from \"{}\";\n", names.join(", "), ts_module(m, &path, dir)));
         }
     }
     if dates {
@@ -1358,7 +1364,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
         let ru = &m.rules[*r];
         if let Some(d) = ru.date() {
             // koyomi's function for the date: its inputs by position, a day as `YYYY-MM-DD`
-            let module = format!("koyomi/typescript/{}", d.file_alias);
+            let module = crate::model::module_key(&format!("koyomi/typescript/{}", d.file_alias), &dir_of(m, *r));
             let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
             let offset = d.offset.unwrap_or(0);
             let mut args = Vec::new();
@@ -1382,7 +1388,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
             continue;
         }
         let ts = &ru.info.typescript;
-        let module = ts.module.trim_end_matches(".ts").to_string();
+        let module = crate::model::module_key(ts.module.trim_end_matches(".ts"), &dir_of(m, *r));
         let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
         let enum_aliases: Vec<&str> = ts.enums.iter().map(|e| e.alias.as_str()).collect();
         let mut args = Vec::new();
@@ -1437,6 +1443,12 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>) -> S
     }
     rules_ts.push_str("};\n");
     rules_ts
+}
+
+/// The directory of the module of the rule or the dates file `r` of a flow of a package, in the package
+/// (ritsu's DESIGN 17.8): empty for one of the module at hand, and outside a package.
+pub(crate) fn dir_of(m: &Model, r: usize) -> String {
+    m.package.as_ref().map(|p| p.dir_of(&m.rules[r].info.path)).unwrap_or_default()
 }
 
 /// How the code dandori writes in TypeScript reads a day it hands koyomi's code.

@@ -1,0 +1,14 @@
+# The charge of an order in the module lib: the amount is the total the rule order_total of this
+# module gives (which applies the VAT rate of base), the transfer is this module's ledger's.
+module charges v1
+description "The transfer that charges the total of an order to the customer"
+
+use rule order_total from "../rules/order_total.rule"
+use book ledger from "../books/ledger.book"
+
+fn charge(order: string, subtotal: money[GBPc] range >=1GBPc <=2_000_000GBPc, category: order_total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> ledger.charge.do
+  description "The customer pays the order's total"
+  ledger.charge.do(order: order, amount: order_total(subtotal: subtotal, category: category, shipping: shipping).total)
+
+examples
+  charge(order: "o_1", subtotal: 1000GBPc, category: order_total.category.standard, shipping: 395GBPc) = ledger.charge.do(order: "o_1", amount: 1595GBPc)

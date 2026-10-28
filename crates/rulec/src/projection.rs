@@ -475,8 +475,13 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     let mut out = Vec::new();
     let mut read_ok = Vec::new();
     for d in &f.shapes {
-        let p = d.contract_path(rule_path);
         let at = format!("{rule_path}:{}", d.span.line);
+        let followed = d.contract_path(rule_path);
+        if let Some(why) = crate::vfs::refused(&followed) {
+            out.push(Diag::error("E013", why).at(at).mark(d.span.clone(), ""));
+            continue;
+        }
+        let Ok(p) = followed else { continue };
         match ritsu_base::fs::read_to_string(&p) {
             Ok(text) => match read(d, &text) {
                 Ok(con) => read_ok.push((d, con)),
@@ -498,7 +503,8 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                         "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                         "The path is followed from the directory of the rule file (looked for: {}).",
                         p.display()
-                    )),
+                    ))
+                    .maybe_note(crate::vfs::outside_note(d.dir(rule_path), &d.file)),
             ),
         }
     }
@@ -3582,7 +3588,7 @@ pub fn proto_paths(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<S
     let mut out = std::collections::HashMap::new();
     let contract = |root: &str| -> Option<Contract> {
         let d = f.shapes.iter().find(|d| d.name.text == root && d.source == EnumSource::Proto)?;
-        let text = ritsu_base::fs::read_to_string(d.contract_path(rule_path)).ok()?;
+        let text = ritsu_base::fs::read_to_string(d.contract_path(rule_path).ok()?).ok()?;
         read(d, &text).ok()
     };
     // One field of the element message `ty`, as a `where` or an `of` reads it.
@@ -3635,7 +3641,7 @@ pub fn where_kinds(f: &RuleFile, rule_path: &str) -> std::collections::HashMap<S
         let Some(pr) = &i.from else { continue };
         let Some((field, _)) = pr.kind.test() else { continue };
         let Some(d) = f.shapes.iter().find(|d| d.name.text == pr.root.text) else { continue };
-        let Ok(text) = ritsu_base::fs::read_to_string(d.contract_path(rule_path)) else { continue };
+        let Some(text) = d.contract_path(rule_path).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()) else { continue };
         let Ok(con) = read(d, &text) else { continue };
         if let Some(k) = con.elem_field(&pr.path_steps(), &field.text) {
             out.insert(i.name.text.clone(), k);
@@ -3700,7 +3706,7 @@ pub struct ContractCert {
 pub fn contract_certificates(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<ContractCert> {
     let mut out = Vec::new();
     for d in &f.shapes {
-        let Ok(text) = ritsu_base::fs::read_to_string(d.contract_path(rule_path)) else { continue };
+        let Some(text) = d.contract_path(rule_path).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()) else { continue };
         let Ok(con) = read(d, &text) else { continue };
         let ac = con.across(f, c, &d.name.text);
         if ac.terms.is_empty() {

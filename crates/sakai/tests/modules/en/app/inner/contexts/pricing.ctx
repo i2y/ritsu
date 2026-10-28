@@ -1,0 +1,15 @@
+# The context of a module nested in app, which app does not require: a file of app reaches it only
+# through a dependency, never by a plain path.
+context Pricing(pricing) v1
+description "Works out the total of an order: its subtotal, the VAT of its category and the shipping fee"
+owner "Pricing team"
+
+owns
+  rulec "../rules/order_total.rule"
+
+published language rulec.order_total.v1
+  rulec "../rules/order_total.rule"
+
+terms
+  total "What the customer pays for an order: its subtotal, the VAT of its category and the shipping fee"
+    means rulec "../rules/order_total.rule" output total

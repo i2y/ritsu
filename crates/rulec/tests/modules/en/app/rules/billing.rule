@@ -1,0 +1,25 @@
+# Whether an order is billed at once, by its subtotal as the order service of the module lib sends
+# it: the shape is lib's order.proto, named by `@lib/…`.
+rule billing v1
+description "Whether an order is billed at once or at the end of the month, by its subtotal as the order service of the module lib sends it"
+
+shape order = proto "@lib/proto/acme/orders/v1/order.proto" acme.orders.v1.Order
+
+enum when_billed = at_once | month_end
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc  from order.subtotal_pence
+
+outputs
+  billed : when_billed
+
+table billing_by_subtotal
+policy unique
+| subtotal     | -> billed : when_billed |
+| <10_000GBPc  | at_once                 |
+| >=10_000GBPc | month_end               |
+
+examples
+| subtotal   | -> billed |
+| 999GBPc    | at_once   |
+| 10_000GBPc | month_end |

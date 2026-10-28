@@ -1,0 +1,23 @@
+# The VAT rate of the module base, which app does not require: the file is named through lib, the
+# dependency that requires base (`@lib/@base/…`).
+rule vat_of_category v1
+description "The rate of VAT for a category of goods, by the rule vat_rate of the module base"
+
+enum category = standard | reduced | zero
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+apply vat = "@lib/@base/rules/vat_rate.rule" meaning:8a62fb4ec05fd289
+  category = category
+  rate -> vat_rate
+
+result rate = vat_rate
+
+examples
+| category | -> rate |
+| standard | 20%     |
+| zero     | 0%      |

@@ -214,7 +214,10 @@ fn commands() -> Vec<Cmd> {
             exits: vec![
                 (0, tr!("生成した、または --check が一致を確かめた", "generated, or --check found everything up to date")),
                 (1, tr!("--check でずれがある、または規則が検査を通らない", "--check found a difference, or the rule does not pass check")),
-                (2, tr!("引数の誤り、書けないファイル", "bad arguments, or a file that cannot be written")),
+                (2, tr!(
+                    "引数の誤り、書けないファイル、ritsu のモジュールの中で、生成するモジュールの一つのパスに入る中身の違う二つの契約か、二つの名前で import される依存の契約",
+                    "bad arguments, a file that cannot be written, or in a module of ritsu's, two different contracts for one path of the module generated, or a contract of a dependency imported by two names"
+                )),
             ],
             examples: vec![
                 "rulec gen rules/ --out generated/".into(),
@@ -938,7 +941,7 @@ fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
         return refuse(tr!("書き方は `rulec source fetch|pin|outdated <file.rule>` です", "it is `rulec source fetch|pin|outdated <file.rule>`"));
     }
     let path = files[1];
-    let Ok(src) = std::fs::read_to_string(path) else {
+    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
         return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
     };
     let parsed = crate::parse::parse(&src, path);
@@ -956,7 +959,7 @@ fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
         }
         return match crate::link::pin::pin_contribution(&f, path, &src) {
             Ok((text, said)) => {
-                if text != src && std::fs::write(path, &text).is_err() {
+                if text != src && ritsu_base::fs::write(path, &text).is_err() {
                     return refuse(tr!("`{path}` に書けません", "cannot write `{path}`"));
                 }
                 for l in &said {
@@ -972,7 +975,7 @@ fn source_cmd(files: &[&String], via: &[String]) -> ExitCode {
         "outdated" => crate::sources::outdated(&f, path),
         _ => crate::sources::pin(&f, path, &src).and_then(|(text, o)| {
             if text != src {
-                std::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
+                ritsu_base::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
             }
             Ok(o)
         }),
@@ -1078,6 +1081,13 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
         print!("{}", help_cmd(cmd));
         return ExitCode::from(0);
     }
+    // A path that starts with `@`, in a module, is read as a path written in a file is (ritsu's
+    // DESIGN 17.6); `diff` reads a rule at a git revision too (`path@rev`), which is no such path.
+    if cmd.name != "diff"
+        && let Err(t) = ritsu_base::modules::given_all(&a.pos)
+    {
+        return refuse(crate::i18n::text(&t));
+    }
 
     // The CI of §12 writes `rulec check rules/`. A directory expands to the `.rule` files
     // inside it, in a deterministic order (by path) so that the order of the report does not
@@ -1086,7 +1096,7 @@ pub fn run(mut args: Vec<String>) -> ExitCode {
     let expanded: Vec<String> = if cmd.name == "test" {
         a.pos.clone()
     } else {
-        a.pos.iter().flat_map(|x| expand(x)).collect()
+        a.pos.iter().flat_map(|x| expand(x, cmd.name)).collect()
     };
     let files: Vec<&String> = expanded.iter().collect();
     if files.is_empty() && !cmd.args.is_empty() && !a.has("--all") {
@@ -1263,12 +1273,12 @@ fn run_cmd(cmd: &Cmd, a: &Args, files: &[&String], json: bool, markdown: bool) -
             // The draft names its source by the file's name, not by wherever it was read from.
             let base = std::path::Path::new(path).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string());
             let drafted = if kind == "csv" {
-                let Ok(src) = std::fs::read_to_string(path) else {
+                let Ok(src) = ritsu_base::fs::read_to_string(path) else {
                     return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
                 };
                 crate::import::draft(&src, &name, &base, n)
             } else {
-                let Ok(bytes) = std::fs::read(path) else {
+                let Ok(bytes) = ritsu_base::fs::read(path) else {
                     return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"));
                 };
                 // A workbook has several sheets; the draft says which one it came from,
@@ -1342,7 +1352,7 @@ fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
     let mut dirty = 0u8;
     let (mut unformatted, mut formatted): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -1356,7 +1366,7 @@ fn fmt(files: &[&String], check_only: bool, json: bool) -> ExitCode {
                 println!("{}", tr!("整形されていません: {path}", "not formatted: {path}"));
             }
             dirty = 1;
-        } else if std::fs::write(path, &out).is_err() {
+        } else if ritsu_base::fs::write(path, &out).is_err() {
             eprintln!("{}", tr!("error: `{path}` に書けません", "error: cannot write `{path}`"));
             return ExitCode::from(2);
         } else {
@@ -1405,7 +1415,7 @@ fn check(
     // (§15.231).
     let mut said: std::collections::HashSet<String> = std::collections::HashSet::new();
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -1482,26 +1492,42 @@ fn check(
 /// If the argument is a directory, collect the `.rule` files under it; a file is returned as
 /// is. A directory that does not exist does not become an empty list: its name is returned
 /// unchanged so that "cannot read" stops the run (never a silent success with 0 files).
-fn expand(arg: &str) -> Vec<String> {
+fn expand(arg: &str, command: &str) -> Vec<String> {
     let p = std::path::Path::new(arg);
-    if !p.is_dir() {
+    if !ritsu_base::fs::is_dir(p) {
         return vec![arg.to_string()];
     }
     let mut out = Vec::new();
-    collect_rules(p, &mut out);
+    let mut modules = Vec::new();
+    collect_rules(p, &mut out, &mut modules);
     out.sort();
     if out.is_empty() {
         eprintln!("{}", tr!("注意: `{arg}` の下に .rule がありません", "warning: no .rule files under `{arg}`"));
     }
+    // Another module below is not entered; when the walk did not start in a module, one line says
+    // so (DESIGN 17.6 of ritsu).
+    if ritsu_base::modules::refer::module_of(p).is_none() {
+        let lang = if crate::i18n::ja() { ritsu_base::text::Lang::Ja } else { ritsu_base::text::Lang::En };
+        modules.sort();
+        for m in modules {
+            eprintln!("{}", ritsu_base::paths::other_module_note(&m, &format!("rulec {command}")).get(lang));
+        }
+    }
     out
 }
 
-fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>) {
+/// The `.rule` files under `dir`, every directory down, but for those a walk does not enter (another
+/// module, which goes into `modules`, and the `.ritsu` of a module; ritsu's DESIGN 17.6).
+fn collect_rules(dir: &std::path::Path, out: &mut Vec<String>, modules: &mut Vec<String>) {
     let Ok(rd) = ritsu_base::fs::read_dir(dir) else { return };
     for e in rd.flatten() {
         let p = e.path();
-        if p.is_dir() {
-            collect_rules(&p, out);
+        if ritsu_base::fs::is_dir(&p) {
+            match ritsu_base::paths::not_entered(&p) {
+                Some(ritsu_base::paths::NotEntered::Module) => modules.push(p.to_string_lossy().into_owned()),
+                Some(ritsu_base::paths::NotEntered::State) => {}
+                None => collect_rules(&p, out, modules),
+            }
         } else if p.extension().is_some_and(|x| x == "rule") {
             out.push(p.to_string_lossy().into_owned());
         }
@@ -1518,7 +1544,7 @@ fn doc(files: &[&String], out_dir: Option<&str>, html: bool, customer: bool) -> 
         return ExitCode::from(2);
     }
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -1590,7 +1616,7 @@ fn load_rule_with(spec: &str, lenient: bool) -> Result<(String, crate::ast::Rule
             Ok((src, f, c))
         }
         _ => {
-            let src = std::fs::read_to_string(spec).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?;
+            let src = ritsu_base::fs::read_to_string(spec).map_err(|_| tr!("`{spec}` を読めません", "cannot read `{spec}`"))?;
             let (f, c) = prep(&src, spec).map_err(|_| not_checked())?;
             Ok((src, f, c))
         }
@@ -1665,7 +1691,7 @@ fn manifest_of(
 ) -> Result<crate::fixtures::Manifest, String> {
     let mut m = match a.get("--manifest") {
         Some(path) => {
-            let src = std::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
+            let src = ritsu_base::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
             match new {
                 Some(new) => crate::fixtures::Manifest::load_two(&src, read, new)?,
                 None => crate::fixtures::Manifest::load(&src, read.0, read.1)?,
@@ -1686,7 +1712,7 @@ fn fixtures_arg(a: &Args) -> Result<(String, String), String> {
     let path = a
         .get("--fixtures")
         .ok_or_else(|| tr!("--fixtures <file.jsonl> が要ります", "--fixtures <file.jsonl> is required"))?;
-    let src = std::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
+    let src = ritsu_base::fs::read_to_string(path).map_err(|_| tr!("`{path}` を読めません", "cannot read `{path}`"))?;
     Ok((path.to_string(), src))
 }
 
@@ -1710,7 +1736,7 @@ fn fixtures_lint(files: &[&String], a: &Args, json: bool) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let Ok(src) = std::fs::read_to_string(jsonl.as_str()) else {
+    let Ok(src) = ritsu_base::fs::read_to_string(jsonl.as_str()) else {
         eprintln!("{}", tr!("error: `{jsonl}` を読めません", "error: cannot read `{jsonl}`"));
         return ExitCode::from(2);
     };
@@ -1920,7 +1946,7 @@ fn diff_cmd(files: &[&String], opts: &Args, md: bool, json: bool) -> ExitCode {
 fn coverage(files: &[&String], json: bool) -> ExitCode {
     let mut worst = 0u8;
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -1946,7 +1972,7 @@ fn coverage(files: &[&String], json: bool) -> ExitCode {
 /// values and the fired rows.
 fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -1993,7 +2019,7 @@ fn vectors(files: &[&String], out_dir: Option<&str>) -> ExitCode {
 /// convention rots; this is built from the same names the generator emits.
 fn api(files: &[&String]) -> ExitCode {
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -2010,7 +2036,7 @@ fn api(files: &[&String]) -> ExitCode {
 /// implementation. The source's digest goes in it, because a certificate is about one text.
 fn certificate(files: &[&String]) -> ExitCode {
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -2053,7 +2079,7 @@ fn checked(src: &str, path: &str) -> Result<(crate::ast::RuleFile, crate::types:
 /// place — so that the shape of a rule can be seen rather than read a table at a time.
 fn graph(files: &[&String]) -> ExitCode {
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -2072,7 +2098,7 @@ fn one(
     f: impl Fn(&crate::ast::RuleFile, &crate::types::Checked, &str) -> Option<String>,
 ) -> ExitCode {
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };
@@ -2096,7 +2122,7 @@ fn one(
 fn verify(files: &[&String], adapter: &[String], json: bool) -> ExitCode {
     let mut worst = 0u8;
     for path in files {
-        let Ok(src) = std::fs::read_to_string(path) else {
+        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
             eprintln!("{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
             return ExitCode::from(2);
         };

@@ -1,0 +1,254 @@
+# in en/app
+
+$ dandori check --lang en orders/place_order.flow
+orders/place_order.flow: ok
+exit 0
+
+$ dandori check --lang en orders/place_order.flow --format json
+{
+  "file": "orders/place_order.flow",
+  "diagnostics": []
+}
+exit 0
+
+$ dandori check --lang en @lib/flows/price.flow
+@lib/flows/price.flow: ok
+exit 0
+
+$ dandori check --lang en errors/not_required.flow
+error[E005]: errors/not_required.flow:5:10: the `@shop` of `@shop/rules/order_total.rule` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+     5 | use rule total from "@shop/rules/order_total.rule"
+error[E002]: errors/not_required.flow:15:14: there is no type `total.category`
+    15 |   category : total.category
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E015]: errors/not_required.flow:21:1: `price` needs the input `category`, which `price` does not pass
+    21 | task price(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> Priced
+error[E002]: errors/not_required.flow:21:75: there is no type `total.category`
+    21 | task price(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> Priced
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E004]: errors/not_required.flow:28:42: `price` has no parameter `category` (subtotal, shipping)
+    28 |   let priced = price(subtotal: subtotal, category: category, shipping: shipping)
+exit 1
+
+$ dandori check --lang en errors/outside.flow
+error[E005]: errors/outside.flow:7:10: `../../lib/books/ledger.book` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+     7 | use book ledger from "../../lib/books/ledger.book"
+error[E002]: errors/outside.flow:26:8: there is no book `ledger`; name one read by `use book`
+    26 |   book ledger.charge.do
+error[E002]: errors/outside.flow:30:3: there is no task or rule `record_charge`
+    30 |   record_charge(order: order.id, amount: priced.total)
+exit 1
+
+$ dandori check --lang en errors/nested.flow
+error[E015]: errors/nested.flow:22:3: `../inner/flows/price.flow` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+    22 |   flow "../inner/flows/price.flow"
+exit 1
+
+$ dandori check --lang en errors/missing.flow
+error[E016]: errors/missing.flow:7:11: the dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `proto/acme/orders/v1/orders.proto`
+     7 | use proto orders from "@lib/proto/acme/orders/v1/orders.proto"
+error[E002]: errors/missing.flow:13:14: there is no type `orders.Order`
+    13 |   order    : orders.Order
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: errors/missing.flow:29:24: there is no variable or value `order`
+    29 |   record_charge(order: order.id, amount: priced.total)
+  = a value is a variable, a field of one, a string, a number, true or false
+exit 1
+
+$ dandori check --lang en errors/missing.flow --format json
+{
+  "file": "errors/missing.flow",
+  "diagnostics": [
+    {
+      "code": "E016",
+      "severity": "error",
+      "line": 7,
+      "col": 11,
+      "message": "the dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `proto/acme/orders/v1/orders.proto`",
+      "notes": [],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 13,
+      "col": 14,
+      "message": "there is no type `orders.Order`",
+      "notes": [
+        "a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 29,
+      "col": 24,
+      "message": "there is no variable or value `order`",
+      "notes": [
+        "a value is a variable, a field of one, a string, a number, true or false"
+      ],
+      "path": []
+    }
+  ]
+}
+exit 1
+
+# in en/app/orders
+
+$ dandori check --lang en @lib/flows/price.flow
+@lib/flows/price.flow: ok
+exit 0
+
+# in en/loose
+
+$ dandori check --lang en place_order.flow
+error[E005]: place_order.flow:6:10: could not read the rule `@lib/rules/order_total.rule`
+     6 | use rule total from "@lib/rules/order_total.rule"
+  = cannot read `@lib/rules/order_total.rule`: No such file or directory (os error 2)
+  = a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E005]: place_order.flow:7:10: could not read the book `@lib/books/ledger.book`
+     7 | use book ledger from "@lib/books/ledger.book"
+  = cannot read `@lib/books/ledger.book`: No such file or directory (os error 2)
+  = a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E016]: place_order.flow:8:11: could not read the API `@lib/proto/acme/orders/v1/order.proto`
+     8 | use proto orders from "@lib/proto/acme/orders/v1/order.proto"
+  = cannot read @lib/proto/acme/orders/v1/order.proto: No such file or directory (os error 2)
+  = a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E002]: place_order.flow:14:14: there is no type `orders.Order`
+    14 |   order    : orders.Order
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: place_order.flow:16:14: there is no type `total.category`
+    16 |   category : total.category
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E002]: place_order.flow:22:75: there is no type `total.category`
+    22 | task price(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> Priced
+  = a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?
+error[E015]: place_order.flow:23:3: could not read `@lib/flows/price.flow`
+    23 |   flow "@lib/flows/price.flow"
+  = No such file or directory (os error 2)
+  = a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E002]: place_order.flow:26:8: there is no book `ledger`; name one read by `use book`
+    26 |   book ledger.charge.do
+error[E004]: place_order.flow:29:42: `price` has no parameter `category` (subtotal, shipping)
+    29 |   let priced = price(subtotal: subtotal, category: category, shipping: shipping)
+error[E002]: place_order.flow:30:3: there is no task or rule `record_charge`
+    30 |   record_charge(order: order.id, amount: priced.total)
+exit 1
+
+$ dandori check --lang en place_order.flow --format json
+{
+  "file": "place_order.flow",
+  "diagnostics": [
+    {
+      "code": "E005",
+      "severity": "error",
+      "line": 6,
+      "col": 10,
+      "message": "could not read the rule `@lib/rules/order_total.rule`",
+      "notes": [
+        "cannot read `@lib/rules/order_total.rule`: No such file or directory (os error 2)",
+        "a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"
+      ],
+      "path": []
+    },
+    {
+      "code": "E005",
+      "severity": "error",
+      "line": 7,
+      "col": 10,
+      "message": "could not read the book `@lib/books/ledger.book`",
+      "notes": [
+        "cannot read `@lib/books/ledger.book`: No such file or directory (os error 2)",
+        "a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"
+      ],
+      "path": []
+    },
+    {
+      "code": "E016",
+      "severity": "error",
+      "line": 8,
+      "col": 11,
+      "message": "could not read the API `@lib/proto/acme/orders/v1/order.proto`",
+      "notes": [
+        "cannot read @lib/proto/acme/orders/v1/order.proto: No such file or directory (os error 2)",
+        "a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 14,
+      "col": 14,
+      "message": "there is no type `orders.Order`",
+      "notes": [
+        "a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 16,
+      "col": 14,
+      "message": "there is no type `total.category`",
+      "notes": [
+        "a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 22,
+      "col": 75,
+      "message": "there is no type `total.category`",
+      "notes": [
+        "a type is int, string, bool, timestamp, date, json, a unit such as money[円, incl_tax], an enum, a record, list[T] or T?"
+      ],
+      "path": []
+    },
+    {
+      "code": "E015",
+      "severity": "error",
+      "line": 23,
+      "col": 3,
+      "message": "could not read `@lib/flows/price.flow`",
+      "notes": [
+        "No such file or directory (os error 2)",
+        "a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 26,
+      "col": 8,
+      "message": "there is no book `ledger`; name one read by `use book`",
+      "notes": [],
+      "path": []
+    },
+    {
+      "code": "E004",
+      "severity": "error",
+      "line": 29,
+      "col": 42,
+      "message": "`price` has no parameter `category` (subtotal, shipping)",
+      "notes": [],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 30,
+      "col": 3,
+      "message": "there is no task or rule `record_charge`",
+      "notes": [],
+      "path": []
+    }
+  ]
+}
+exit 1
+

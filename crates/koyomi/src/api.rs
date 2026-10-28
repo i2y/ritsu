@@ -15,11 +15,16 @@ use std::path::{Component, Path, PathBuf};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// `to` as seen from the directory `from` (both relative to where koyomi runs, cleaned).
+/// `to` as seen from the directory `from` (both relative to where koyomi runs, cleaned). In a module, a
+/// file of a dependency (`@pricing/…`) is written from the module's root, as a file writes it there
+/// (ritsu's DESIGN 17.6).
 pub fn relative(from: &Path, to: &Path) -> String {
     let a: Vec<Component> = from.components().collect();
     let b: Vec<Component> = to.components().collect();
     let common = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    if common == 0 && b.first().is_some_and(|c| c.as_os_str().as_encoded_bytes().first() == Some(&b'@')) && ritsu_base::modules::module_of(from).is_some() {
+        return to.to_string_lossy().to_string();
+    }
     let mut out = PathBuf::new();
     for _ in common..a.len() {
         out.push("..");

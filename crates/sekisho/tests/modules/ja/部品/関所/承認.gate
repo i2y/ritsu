@@ -1,0 +1,25 @@
+# モジュール lib で、誰が購入を承認するか。上限はモジュール base の規則で、`@base/…`（このモジュールの
+# ルートからのパス）で読む。
+gate 承認(approvals) v1
+description "誰が購入を、承認する人の上限まで承認するか"
+
+use rule 承認の上限 from "@base/規則/承認の上限.rule"
+
+principal 社員(User)
+  attributes
+    上限(limit) : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+resource 購入(Purchase)
+
+action 承認する(approve)
+  principal 社員
+  resource 購入
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    区分(band) = 承認の上限(金額: 金額, 上限: principal.上限).区分
+
+permit 上限まで承認できる(approve_within_the_limit)
+  principal is 社員
+  action 承認する
+  when 区分 is 上限まで

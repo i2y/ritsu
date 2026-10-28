@@ -1,0 +1,32 @@
+# 手元のモジュールの注文。lib の規則と帳簿と .proto と流れを `@lib/…` で指す。その規則は base の税率を
+# 準用する。このモジュールは base を require していないので、そのファイルは `@lib/@base/…` として読む。
+# .proto は lib の money.proto を、lib のルートから import する。
+workflow 注文を受ける v1
+description "注文の値段をモジュール lib の流れで決め、その合計を lib の台帳で請求する"
+
+use rule 合計 from "@lib/規則/注文の合計.rule"
+use book 台帳 from "@lib/帳簿/台帳.book"
+use proto 注文 from "@lib/proto/acme/orders/v1/order.proto"
+
+record 値段
+  合計額 : money[GBPc]
+
+inputs
+  受注 : 注文.Order
+  小計 : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  区分 : 合計.区分
+  送料 : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  金額 : money[GBPc]
+
+task 値を付ける(小計: money[GBPc] range >=0GBPc <=2_000_000GBPc, 区分: 合計.区分, 送料: money[GBPc] range >=0GBPc <=10_000GBPc) -> 値段
+  flow "@lib/流れ/値付け.flow"
+
+task 請求を記す(注文: string, 金額: money[GBPc])
+  book 台帳.請求.do
+
+flow
+  let 付けた値 = 値を付ける(小計: 小計, 区分: 区分, 送料: 送料)
+  請求を記す(注文: 受注.id, 金額: 付けた値.合計額)
+  succeed 金額 = 付けた値.合計額

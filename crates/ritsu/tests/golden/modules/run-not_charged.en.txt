@@ -1,0 +1,8 @@
+orders/place_order.flow (scenario orders/scenarios/not_charged.json, from 2026-10-28T10:00:00Z)
+the run:
+  shipping(weight: 2600, region: "eu")                        rulec     {"fee":1950}
+  total(subtotal: 4000, category: "reduced", shipping: 1950)  rulec     {"total":6150}
+  reserve(order: "A-2", sku: "kettle", quantity: 1)           scenario  {"id":"H-2"}
+  charge(order: "A-2", amount: 6150)                          scenario  {"paid":false}
+  release(hold: "H-2")                                        scenario  null
+end: succeed {"outcome":"not_charged","amount":6150}

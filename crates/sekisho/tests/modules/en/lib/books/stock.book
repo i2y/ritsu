@@ -1,0 +1,21 @@
+# The stock of the module lib: a delivery adds to it, an order holds what it takes, and shipping posts
+# the hold. The book of sekisho's tests of modules, which app's gate guards.
+book stock v1
+description "Stock per SKU, for the tests of modules"
+
+unit pcs
+
+account shelf(sku: string) : pcs
+  description "what is on the shelves"
+  at least 0 refused as out_of_stock
+account suppliers : pcs outside
+account customers : pcs outside
+
+transfer receive(delivery: string, sku: string, qty: pcs)
+  key delivery, sku
+  move qty from suppliers to shelf(sku)
+
+transfer reserve(order: string, sku: string, qty: pcs)
+  key order, sku
+  pending expires after 30 minutes
+  move qty from shelf(sku) to customers

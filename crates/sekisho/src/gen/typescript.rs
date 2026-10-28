@@ -122,14 +122,16 @@ pub fn names(g: &Gate, shape: &Shape) -> Names {
 }
 
 /// The module of a gate that passes its check. `shown` is the path the head names; the rules,
-/// the dates and the calendars are read through `suite`. Err when what another language says of a
-/// file the gate reads is missing (it passed the check, so this is a bug).
-pub fn module(scope: &Scope, checked: &Checked, suite: &Suite, shown: &str, lang: Lang, authorizer: Authorizer) -> Result<String, String> {
+/// the dates and the calendars are read through `suite`; `place` is where the module goes in a
+/// package of `ritsu gen`'s, and through it where each file it reads goes (ritsu's DESIGN 17.8).
+/// Err when what another language says of a file the gate reads is missing (it passed the check, so
+/// this is a bug).
+pub fn module(scope: &Scope, checked: &Checked, suite: &Suite, shown: &str, lang: Lang, authorizer: Authorizer, place: &ritsu_emit::package::Place) -> Result<String, String> {
     let g = &checked.gate;
     let shape = cedar::shape(g, scope, checked);
-    let files = cedar::files(scope, checked, shown, lang).map_err(|e| e.message.en)?;
-    let w = Writer { g, shape: &shape, scope, checked, suite, lang, authorizer, names: names(g, &shape), out: String::new(), helpers: BTreeSet::new() };
-    w.write(&cedar::head(scope, shown, lang), &files.policies_json, &files.schema_json)
+    let files = cedar::files_in(scope, checked, shown, lang, place.module.as_ref()).map_err(|e| e.message.en)?;
+    let w = Writer { g, shape: &shape, scope, checked, suite, lang, authorizer, place, names: names(g, &shape), out: String::new(), helpers: BTreeSet::new() };
+    w.write(&cedar::head_in(scope, shown, lang, place.module.as_ref()), &files.policies_json, &files.schema_json)
 }
 
 struct Writer<'a> {
@@ -140,6 +142,7 @@ struct Writer<'a> {
     suite: &'a Suite,
     lang: Lang,
     authorizer: Authorizer,
+    place: &'a ritsu_emit::package::Place,
     names: Names,
     out: String,
     /// The helpers the code calls, written at the end.
@@ -254,20 +257,22 @@ impl<'a> Writer<'a> {
             Authorizer::Avp => self.line("import { IsAuthorizedCommand, type VerifiedPermissionsClient } from \"@aws-sdk/client-verifiedpermissions\";"),
         }
         let mut seen: BTreeSet<String> = BTreeSet::new();
+        let here = format!("{}authz/", self.place.dir);
         for (ui, u) in self.g.uses.iter().enumerate() {
+            let dir = self.place.dir_of(&u.file);
             let line = match u.kind {
                 UseKind::Rule => {
                     let f = self.rule_facts(ui)?;
                     let m = f.typescript.module.trim_end_matches(".ts").to_string();
-                    format!("import * as rule_{m} from \"../rules/{m}\";")
+                    format!("import * as {} from \"{}\";", self.rule_name(ui)?, ritsu_emit::package::ts_path(&here, &format!("{dir}rules/{m}")))
                 }
                 UseKind::Dates => {
                     let a = self.dates_facts(ui)?.alias.clone();
-                    format!("import * as dates_{a} from \"../dates/{a}\";")
+                    format!("import * as {} from \"{}\";", self.dates_name(ui, &a), ritsu_emit::package::ts_path(&here, &format!("{dir}dates/{a}")))
                 }
                 UseKind::Calendar => {
                     let a = self.calendar_alias(ui)?;
-                    format!("import * as dates_{a} from \"../dates/{a}\";")
+                    format!("import * as {} from \"{}\";", self.dates_name(ui, &a), ritsu_emit::package::ts_path(&here, &format!("{dir}dates/{a}")))
                 }
                 _ => continue,
             };
@@ -283,6 +288,19 @@ impl<'a> Writer<'a> {
     fn rule_facts(&self, ui: usize) -> Result<&'a RuleFacts, String> {
         let u = &self.g.uses[ui];
         self.scope.rules.get(&u.name).map(|r| &r.facts).ok_or_else(|| format!("rulec said nothing of {}", u.path))
+    }
+
+    /// The name the module imports the rule of the use `ui` by: `rule_<module>`, with the names of the
+    /// dependencies on the way to it for a rule of a dependency's (`rule_pricing_fee`), so that the
+    /// rules of one name of two modules are two names.
+    fn rule_name(&self, ui: usize) -> Result<String, String> {
+        let m = self.rule_facts(ui)?.typescript.module.trim_end_matches(".ts").to_string();
+        Ok(format!("rule_{}", ritsu_emit::package::local_name(&self.place.dir_of(&self.g.uses[ui].file), &m)))
+    }
+
+    /// The same for the dates file or the calendar of the use `ui`, whose alias is `alias`.
+    fn dates_name(&self, ui: usize, alias: &str) -> String {
+        format!("dates_{}", ritsu_emit::package::local_name(&self.place.dir_of(&self.g.uses[ui].file), alias))
     }
 
     fn dates_facts(&self, ui: usize) -> Result<&'a ritsu_ports::DateFacts, String> {
@@ -469,7 +487,8 @@ impl<'a> Writer<'a> {
         self.line(format!("  error?: {error};"));
         self.line("}");
         if self.authorizer == Authorizer::Avp {
-            let alias = &g.named.alias;
+            // the gate's Cedar beside the packages, a dependency's under `deps/<name>/` (ritsu's DESIGN 17.8)
+            let alias = format!("{}{}", self.place.dir, g.named.alias);
             let doc = self.t(tr!(
                 "尋ねる先：Verified Permissions のクライアントと、このゲートのスキーマ（cedar/{alias}.cedarschema.json）とポリシー（cedar/{alias}.cedar の一つずつを、@id を名前にして）を置いたポリシーストア",
                 "Where it is asked: the client of Amazon Verified Permissions, and the policy store that holds the gate's schema (cedar/{alias}.cedarschema.json) and its policies (each policy of cedar/{alias}.cedar, its @id as its name)"
@@ -512,7 +531,7 @@ impl<'a> Writer<'a> {
             self.line(format!("const _WORKFLOWS: readonly string[] = [{}];", ws.join(", ")));
         }
         if self.authorizer == Authorizer::Cedar {
-            let alias = &g.named.alias;
+            let alias = format!("{}{}", self.place.dir, g.named.alias);
             let doc = self.t(tr!(
                 "ポリシー。@id ごとに（cedar/{alias}.policies.json と同じ）。一つのテキストで渡すと、cedar-wasm はポリシーに policy0、policy1… と名前を付け、決めたポリシーがゲートの名前にならない",
                 "The policies, each by its @id (cedar/{alias}.policies.json): given as one text, cedar-wasm would name them policy0, policy1, …, and the policies that decide would not be the gate's"
@@ -895,7 +914,7 @@ impl<'a> Writer<'a> {
             (How::Rule { rule, args, output }, Kn::Rule { domain, .. }) => {
                 let facts = self.rule_facts(*rule)?;
                 let call = &facts.typescript;
-                let m = format!("rule_{}", call.module.trim_end_matches(".ts"));
+                let m = self.rule_name(*rule)?;
                 let mut params: Vec<String> = Vec::new();
                 for p in &call.params {
                     // the gate's argument for this input of the rule: by the rule's name or its alias
@@ -940,7 +959,7 @@ impl<'a> Writer<'a> {
                                 format!("_days({code})")
                             } else if let Some(e) = enum_ty {
                                 // the gate's value, as the rule's member that names it
-                                let table = self.enum_table(ai, src, facts, e)?;
+                                let table = self.enum_table(ai, src, facts, e, &m)?;
                                 self.helpers.insert("to");
                                 format!("_to({table}, {code})")
                             } else if p.ty == "bigint" || p.ty == "boolean" || p.ty == "bigint | null" || p.ty == "boolean | null" {
@@ -1000,7 +1019,7 @@ impl<'a> Writer<'a> {
                     params.push(v);
                 }
                 self.helpers.insert("dated");
-                out.push(format!("context[{key}] = day {} _dated(() => dates_{}.{}({}));", ts_op(*op), facts.alias, func.alias, params.join(", ")));
+                out.push(format!("context[{key}] = day {} _dated(() => {}.{}({}));", ts_op(*op), self.dates_name(*dates, &facts.alias), func.alias, params.join(", ")));
             }
             (How::Date { op, of: DateOf::Attr(o, n) }, Kn::Attr) => {
                 let Expr::Code(code) = self.source(ai, &Source::Attr(*o, n.clone()), pt, rt) else { return Ok(Vec::new()) };
@@ -1010,9 +1029,9 @@ impl<'a> Writer<'a> {
                 out.push(format!("context[{key}] = day {} {code};", ts_op(*op)));
             }
             (How::Open { calendar }, Kn::Open { .. }) => {
-                let a = self.calendar_alias(*calendar)?;
+                let a = self.dates_name(*calendar, &self.calendar_alias(*calendar)?);
                 self.helpers.insert("dated");
-                out.push(format!("context[{key}] = _dated(() => dates_{a}.is_open(day));"));
+                out.push(format!("context[{key}] = _dated(() => {a}.is_open(day));"));
             }
             _ => return Err(format!("no language answered for {}", cv.named.alias)),
         }
@@ -1028,7 +1047,7 @@ impl<'a> Writer<'a> {
 
     /// A table from the gate's values of an enum to the members of a rule's enum, for an input
     /// of the rule given the gate's enum.
-    fn enum_table(&mut self, ai: usize, src: &Source, facts: &RuleFacts, e: &ritsu_ports::CallEnum) -> Result<String, String> {
+    fn enum_table(&mut self, ai: usize, src: &Source, facts: &RuleFacts, e: &ritsu_ports::CallEnum, m: &str) -> Result<String, String> {
         let g = self.g;
         let a = &g.actions[ai];
         let field = match src {
@@ -1040,7 +1059,6 @@ impl<'a> Writer<'a> {
             _ => None,
         };
         let Some(Field { ty: FieldType::Enum(ge), .. }) = field else { return Err("an enum input of a rule is given what is not an enum".into()) };
-        let m = format!("rule_{}", facts.typescript.module.trim_end_matches(".ts"));
         let re = facts.enums.iter().find(|x| x.alias == e.alias).ok_or("no enum")?;
         let mut pairs = Vec::new();
         for v in &g.enums[ge].values {

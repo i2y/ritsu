@@ -1,0 +1,22 @@
+# 請求書が支払いまでに与える日数。日数はこの試験のために決めた値。
+rule 支払いの日数(payment_days) v1
+description "請求書が客に与える、支払いまでの日数。客の種類ごとに決める"
+
+enum 客の種類(customer) = 個人(consumer) | 法人(business)
+
+inputs
+  客の種類(customer) : 客の種類
+
+outputs
+  日数(days) : number  round down(1)
+
+table 客の種類ごとの日数(days_by_customer)
+policy unique
+| 客の種類 | -> 日数 |
+| 個人     | 14      |
+| 法人     | 30      |
+
+examples
+| 客の種類 | -> 日数 |
+| 個人     | 14      |
+| 法人     | 30      |

@@ -1,0 +1,29 @@
+# Requirements outside every module: no ritsu.mod above them, so `@lib/…` is a plain relative path,
+# and there is no directory @lib beside this file.
+requirements billing v1
+description "What an invoice asks for, from the pricing policy of the module lib"
+
+role accounting "Decides how orders are priced and billed"
+role development "Writes and fixes the rules"
+
+source policy = file "@lib/docs/pricing_policy.md" sha256:24746859693385ce
+
+requirement total
+  text "An invoice asks for the total of the order: its subtotal, the VAT of its category and the shipping fee"
+  owner accounting
+  from @policy
+    reviewed 2026-10-28 by accounting sha256:24746859693385ce -> sha256:022fca79379e980a
+  satisfied by rulec "@lib/rules/order_total.rule" output total
+    reviewed 2026-10-28 by development sha256:022fca79379e980a -> sha256:a14bcd3395ca1f81
+  verified by rulec "@lib/rules/order_total.rule"
+    reviewed 2026-10-28 by development sha256:022fca79379e980a -> sha256:8fe250ffcfaca1f0
+
+requirement vat
+  text "The VAT of an order is its subtotal at the rate of its category"
+  owner accounting
+  from @policy
+    reviewed 2026-10-28 by accounting sha256:24746859693385ce -> sha256:2220aa15866adf9f
+  satisfied by rulec "@lib/@base/rules/vat_rate.rule" output rate
+    reviewed 2026-10-28 by development sha256:2220aa15866adf9f -> sha256:7dce5a7e98318a37
+  verified by rulec "@lib/@base/rules/vat_rate.rule"
+    reviewed 2026-10-28 by development sha256:2220aa15866adf9f -> sha256:6a40ac99f10dc008

@@ -108,9 +108,19 @@ pub fn rooted(p: &Path) -> bool {
 }
 
 /// A path made absolute against the working directory, `.` and `..` folded by their letters
-/// (a symbolic link is not followed, so the path stays the one the person wrote).
+/// (a symbolic link is not followed, so the path stays the one the person wrote). A relative path
+/// whose first part starts with `@` is made absolute against the root of the module the working
+/// directory is in, when it is in one (DESIGN 17.6): `@pricing/rules/fee.rule` is the same file from
+/// any directory of the module.
 pub fn absolute(p: &Path) -> PathBuf {
-    let joined = if rooted(p) { p.to_path_buf() } else { crate::fs::current_dir().unwrap_or_default().join(p) };
+    let joined = if rooted(p) {
+        p.to_path_buf()
+    } else {
+        let cwd = crate::fs::current_dir().unwrap_or_default();
+        let at = matches!(p.components().next(), Some(Component::Normal(s)) if s.as_encoded_bytes().first() == Some(&b'@'));
+        let base = if at { crate::modules::refer::raw_module_root(&cwd).unwrap_or(cwd) } else { cwd };
+        base.join(p)
+    };
     let mut out = PathBuf::new();
     for c in joined.components() {
         match c {
@@ -124,15 +134,19 @@ pub fn absolute(p: &Path) -> PathBuf {
     out
 }
 
-/// The root of a project (DESIGN 6.2, item 3): the nearest directory at or above `start` that
-/// holds a `.git` (a directory, or the file a worktree has), found by looking, without running
-/// git; else `start` itself, or the directory it is in when it is a file. `--root` is the
-/// caller's to read first.
+/// The root of a project (DESIGN 6.2, item 3; 17.6): the nearest directory at or above `start`
+/// that holds a `.git` (a directory, or the file a worktree has) or a `ritsu.mod`, found by looking,
+/// without running git; else `start` itself, or the directory it is in when it is a file. The root
+/// of a dependency seen through a module (`R/@pricing`) is passed: the root is the module's. `--root`
+/// is the caller's to read first.
 pub fn find_root(start: &Path) -> PathBuf {
     let abs = absolute(start);
     let dir = if crate::fs::is_dir(&abs) { abs.clone() } else { abs.parent().map(Path::to_path_buf).unwrap_or_else(|| abs.clone()) };
     for d in dir.ancestors() {
-        if crate::fs::exists(d.join(".git")) {
+        if crate::modules::refer::is_dependency_root(d) {
+            continue;
+        }
+        if crate::fs::exists(d.join(".git")) || crate::fs::is_file(d.join(crate::modules::manifest::FILE)) {
             return d.to_path_buf();
         }
     }
@@ -171,11 +185,20 @@ pub fn between(from: &Path, to: &Path) -> String {
 /// How a run writes a path from the root for a person (DESIGN 6.2, item 8): from where the
 /// tool runs, the way the path given to it was written — the shortest relative path when it
 /// was relative, absolute when it was absolute.
+///
+/// Run in a module, a dependency's file is written as it is from the root, `@pricing/rules/fee.rule`,
+/// from any directory of the module and however the path was given (DESIGN 17.6): that is the path a
+/// command run anywhere in the module takes ([`absolute`] reads it from the module's root). Run from
+/// a directory that is not in the root's module, it is written from there as any other file is
+/// (`shop/@pricing/rules/fee.rule`), the way a command run there takes it.
 #[derive(Clone, Debug)]
 pub struct Shown {
     root: PathBuf,
     cwd: PathBuf,
     absolute: bool,
+    /// The root has a `ritsu.mod`, and the run is in that module (not above it, beside it, or in a
+    /// module below it).
+    module: bool,
 }
 
 impl Shown {
@@ -187,7 +210,10 @@ impl Shown {
 
     /// The same, run in `cwd`.
     pub fn run_in(root: &Path, cwd: &Path, given: &str) -> Shown {
-        Shown { root: absolute(root), cwd: absolute(cwd), absolute: rooted(Path::new(given)) }
+        let root = absolute(root);
+        let cwd = absolute(cwd);
+        let module = crate::fs::is_file(root.join(crate::modules::manifest::FILE)) && crate::modules::refer::raw_module_root(&cwd).is_some_and(|m| m == root);
+        Shown { root, cwd, absolute: rooted(Path::new(given)), module }
     }
 
     /// The root itself, as the run writes it: `.` when the tool runs there, `../..` two above.
@@ -201,6 +227,9 @@ impl Shown {
             Some(q) if !q.is_empty() => (q, "/"),
             _ => (p, ""),
         };
+        if self.module && p.starts_with('@') {
+            return format!("{p}{slash}");
+        }
         let target = on_disk(&self.root, p);
         let s = if self.absolute { target.to_string_lossy().to_string() } else { between(&self.cwd, &target) };
         format!("{s}{slash}")
@@ -222,8 +251,18 @@ pub fn has_skipped_part(p: &str) -> bool {
 }
 
 /// Every file under `dir` (a path from the root), in path order, passing over what
-/// [`skipped_name`] names and what `except` holds. Symbolic links are not followed.
+/// [`skipped_name`] names and what `except` holds. Symbolic links are not followed. A directory
+/// below the root with a `ritsu.mod` of its own is another module (DESIGN 17.6), and is passed over
+/// too ([`walk_noting`] says which).
 pub fn walk(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>) {
+    let mut modules = Vec::new();
+    walk_noting(root, dir, except, out, &mut modules);
+}
+
+/// [`walk`], with each module it passed over (a directory below the root with a `ritsu.mod` of its
+/// own, by its path from the root) in `modules`. The root of a dependency seen through the root's
+/// module (`@pricing`, `@pricing/@tax`) is walked: it is the dependency's files.
+pub fn walk_noting(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>, modules: &mut Vec<String>) {
     let disk = on_disk(root, dir);
     let Ok(meta) = crate::fs::symlink_metadata(&disk) else { return };
     if meta.is_file() {
@@ -233,6 +272,10 @@ pub fn walk(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>) {
         return;
     }
     if !meta.is_dir() {
+        return;
+    }
+    if nested_module(root, dir) {
+        modules.push(dir.to_string());
         return;
     }
     let Ok(rd) = crate::fs::read_dir(&disk) else { return };
@@ -248,9 +291,54 @@ pub fn walk(root: &Path, dir: &str, except: &[String], out: &mut Vec<String>) {
         }
         let Ok(m) = crate::fs::symlink_metadata(on_disk(root, &p)) else { continue };
         if m.is_dir() {
-            walk(root, &p, except, out);
+            walk_noting(root, &p, except, out, modules);
         } else if m.is_file() {
             out.push(p);
         }
     }
+}
+
+/// For a tool that walks a directory a person named in its own way (`rulec check rules/`, `koyomi
+/// check .`, `yuen check .`): whether a directory the walk met below where it started is one it does
+/// not enter (DESIGN 17.6). That is another module (a directory with a `ritsu.mod` of its own; the root
+/// of a dependency seen through a module, `shop/@pricing`, is the dependency's files, and is entered),
+/// or the `.ritsu` beside a `ritsu.mod`, which holds the module's copies of its dependencies. Each tool
+/// keeps the names it passed over before: outside a module, nothing changes.
+pub fn not_entered(dir: &Path) -> Option<NotEntered> {
+    let file = crate::modules::manifest::FILE;
+    if dir.file_name().is_some_and(|n| n == ".ritsu") && dir.parent().is_some_and(|p| crate::fs::is_file(p.join(file))) {
+        return Some(NotEntered::State);
+    }
+    if crate::fs::is_file(dir.join(file)) && !crate::modules::refer::is_dependency_root(dir) {
+        return Some(NotEntered::Module);
+    }
+    None
+}
+
+/// What [`not_entered`] found.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotEntered {
+    /// Another module: said in one line ([`other_module_note`]) when the walk did not start in a module.
+    Module,
+    /// The `.ritsu` beside a `ritsu.mod`: passed over without a word.
+    State,
+}
+
+/// The line a walk says of a module it passed over (DESIGN 17.6), when where it started is in no
+/// module: `dir` as the run writes it, and the command that reads it (`ritsu check`, `rulec check`).
+pub fn other_module_note(dir: &str, command: &str) -> Text {
+    tr!(
+        "備考: `{dir}` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `{command} {dir}` を実行してください",
+        "note: `{dir}` has a `ritsu.mod` of its own: it is another module, and was not read; run `{command} {dir}` to read it"
+    )
+}
+
+/// Whether the directory `dir` (a path from the root) is a module of its own below the root: it has
+/// a `ritsu.mod`, and it is not the root, nor a dependency's root seen through the root's module.
+fn nested_module(root: &Path, dir: &str) -> bool {
+    let file = crate::modules::manifest::FILE;
+    if dir == "." || !crate::fs::is_file(on_disk(root, dir).join(file)) {
+        return false;
+    }
+    !(dir.split('/').all(|p| p.starts_with('@')) && crate::fs::is_file(root.join(file)))
 }

@@ -79,6 +79,12 @@ impl Extra for Trail {
 /// A diagnostic of yuen's: ritsu-base's, with what led there.
 pub type Diag = ritsu_base::diag::Diag<Trail>;
 
+/// ritsu-base's message, its English starting with a capital as yuen's sentences do (yuen
+/// prints a message as written).
+pub fn cap(t: Text) -> Text {
+    Text { en: ritsu_base::text::capitalize(&t.en), ja: t.ja }
+}
+
 /// An error at a line and a column of a file: the file as the command line named it, and the
 /// same file from the root (DESIGN 2.2), for the JSON.
 pub fn error(code: &'static str, file: &str, rel: &str, line: usize, col: usize, message: Text) -> Diag {

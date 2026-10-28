@@ -1,0 +1,8 @@
+// `ritsu.mod` の無い木で、名前が `@` で始まるディレクトリにあるファイル。ただのディレクトリなので、
+// import はこれまでどおり読む。
+syntax = "proto3";
+package acme.orders.v1;
+
+message Order {
+  string id = 1;
+}

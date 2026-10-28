@@ -59,8 +59,12 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
     let (format, _) = format.clone().expect("the parser requires `format`");
     let (covers, covers_span) = covers.clone().expect("the parser requires `covers`");
     let name = &decl.name;
-    let full = o.dir.join(path);
+    // in a module, the path is held to it, and `@<name>/…` is read from its root (ritsu's DESIGN 17.6)
+    let full = ritsu_base::modules::refer_shown(o.dir, path).map_err(|r| vec![o.err("E101", decl.span, r.text())])?;
     let Ok(bytes) = ritsu_base::fs::read(&full) else {
+        if let Some(t) = ritsu_base::modules::missing(&full) {
+            return Err(vec![o.err("E101", decl.span, t)]);
+        }
         let mut d = o.err("E101", decl.span, tr!("出典「{name}」のコピー {path} がありません", "The copy of the source {name} is not there: {path}"));
         d = match url {
             Some(_) => d.note(tr!(
@@ -72,6 +76,9 @@ pub fn load_table(o: &Origin, decl: &SourceDecl) -> Result<Table, Vec<Diag>> {
                 "The copy is looked for relative to the .cal; put the file there or correct the path."
             )),
         };
+        if let Some(n) = ritsu_base::modules::outside_note_for(o.dir, path) {
+            d = d.note(n);
+        }
         return Err(vec![d]);
     };
     let digest = sha256::hex(&bytes);

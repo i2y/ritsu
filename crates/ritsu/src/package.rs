@@ -33,14 +33,25 @@
 //! begins with the same head (ritsu's version, and the file it is made from by
 //! its path from the project's root; DESIGN 9.2). `--check` writes nothing and says what is stale,
 //! as `rulec gen --check` does.
+//!
+//! In a module (DESIGN 17.8), the package holds the files of the dependencies the project's files
+//! reach ([`Project::reached`]), each dependency's parts under `deps/<name>/` (`deps/pricing/`,
+//! `deps/pricing/deps/tax/`), with indexes and `__init__.py` at each level, and each part's head
+//! naming its file the canonical way with its module's name and version. Every generator is handed
+//! where its part goes and where each file it reads goes ([`ritsu_emit::package::Place`]). The rules
+//! are made with the contributions `ritsu check` merges for the same paths, and their findings are
+//! counted as it counts them, so that the two say the same of a tree. Outside a module, the package
+//! is what it was before there were modules (M14).
 
 use crate::cli;
 use ritsu_base::diag::Severity;
 use ritsu_base::json::Json;
+use ritsu_base::modules::Problem;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
 use ritsu_base::tr;
 use ritsu_emit::header::{Comment, Origin};
+use ritsu_emit::package::{Module, Place};
 use ritsu_ports::{Finding, Part, Verdict};
 use ritsu_project::{File, Joined, Project};
 use std::collections::{BTreeMap, BTreeSet};
@@ -214,14 +225,35 @@ fn from_serde(v: &serde_json::Value) -> Json {
     ritsu_base::json::parse(&v.to_string()).unwrap_or(Json::Null)
 }
 
+/// Where the parts of the file of the project at `rel` go in the package (DESIGN 17.8): at the
+/// package's directory for a file of the module at hand, under `deps/<name>/` for each dependency of
+/// the chain a dependency's file is written with, which names its module and version in the head of
+/// what is made from it. Outside a module, every file's parts are at the package's directory, and
+/// so is every file they read (M14).
+fn place_of(project: &Project, rel: &str) -> Place {
+    let Some(Ok(tree)) = project.tree.as_deref() else { return Place::here() };
+    let module = project.dependency_of(rel).and_then(|p| tree.by_prefix(&p)).map(|i| {
+        let n = &tree.nodes[i];
+        Module { name: n.name.to_string(), version: n.version().map(|v| v.to_string()) }
+    });
+    Place::of(&project.root, rel, module)
+}
+
 /// Whether every file of the languages a package is made of passes its language's check (kaname's
 /// with what the checks across the borders came to at its calls, as `ritsu check` checks it); the
-/// diagnostics of those that do not, as `ritsu check` prints them, when one does not.
-fn checked(project: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, lang: Lang) -> Result<(), Refusal> {
+/// diagnostics of those that do not, as `ritsu check` prints them, when one does not. In a module,
+/// what rulec says of a line of a contribution is filed under the contribution, as `ritsu check`
+/// files it ([`Project::place_findings`], with the files `ritsu check` reads for the same paths,
+/// `whole`), and a file an error is filed under does not pass either (DESIGN 17.8); a rule of a
+/// dependency that fails only for such errors is not named among the files that fail
+/// ([`Project::failed_for_others`]), as the line of the dependencies of `ritsu check` does not count
+/// it.
+fn checked(project: &Project, whole: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::ProgramVerdicts>, lang: Lang) -> Result<(), Refusal> {
     let mut said = String::new();
     let mut found: Vec<Json> = Vec::new();
     let mut worst = 0u8;
     let mut failing: Vec<String> = Vec::new();
+    let mut all: Vec<(Tool, ritsu_ports::Checked)> = Vec::new();
     for tool in [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Kaname, Tool::Sekisho] {
         let files: Vec<String> = project.of(tool).iter().map(|f| f.shown.clone()).collect();
         if files.is_empty() {
@@ -237,18 +269,44 @@ fn checked(project: &Project, joined: &Joined, verdicts: &Rc<ritsu_cross::Progra
             Tool::Sekisho => sekisho::check::checked(&project.root, &files, &joined.sekisho().into(), lang),
             _ => joined.chobo.checked(&project.root, &files, lang),
         };
-        for u in units.into_iter().filter(|u| u.verdict != Verdict::Passes) {
-            worst = worst.max(if u.verdict == Verdict::Unchecked { 2 } else { 1 });
-            for p in &u.parts {
-                match p {
-                    Part::Finding(f) => {
-                        said.push_str(&f.text_of(tool.word()));
-                        found.push(crate::check::entry(tool.word(), f));
-                    }
-                    Part::Text(s) => said.push_str(s),
+        all.extend(units.into_iter().map(|u| (tool, u)));
+    }
+    if project.tree.is_some() {
+        whole.place_findings(&mut all, lang);
+    }
+    for (tool, u) in all.into_iter().filter(|(_, u)| u.verdict != Verdict::Passes) {
+        worst = worst.max(if u.verdict == Verdict::Unchecked { 2 } else { 1 });
+        for p in &u.parts {
+            match p {
+                Part::Finding(f) => {
+                    said.push_str(&f.text_of(tool.word()));
+                    found.push(crate::check::entry(tool.word(), f));
                 }
+                Part::Text(s) => said.push_str(s),
             }
+        }
+        // in a module, the files its errors are filed under, when they are others of the project's
+        // (a contribution's)
+        let others: Vec<String> = if project.tree.is_none() {
+            Vec::new()
+        } else {
+            u.findings()
+                .filter(|f| f.severity == Severity::Error)
+                .filter_map(|f| f.file.as_deref().and_then(|r| whole.holds(r)))
+                .map(|f| f.shown.clone())
+                .filter(|s| *s != u.label)
+                .collect()
+        };
+        // a rule of a dependency that fails only for what a contribution of another file adds to it
+        // is not the file that fails: the contribution is (as `ritsu check` counts it)
+        let for_others = project.tree.is_some() && ritsu_base::paths::from_root(&whole.root, Path::new(&u.label)).is_some_and(|r| whole.failed_for_others(&r, &u));
+        if !for_others && !failing.contains(&u.label) {
             failing.push(u.label);
+        }
+        for s in others {
+            if !failing.contains(&s) {
+                failing.push(s);
+            }
         }
     }
     // dandori with the dates and the books joined too, which its check of a project does not pass on
@@ -340,12 +398,15 @@ fn with_ports<R>(joined: &Joined, f: impl FnOnce() -> R) -> R {
 }
 
 /// The package of `target`, made from the project's files (which pass their checks) and its modules
-/// of kaname as [`kaname_modules`] checks them.
-pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check::Checked>, String)], target: Target, o: &Options) -> Result<Package, Refusal> {
+/// of kaname as [`kaname_modules`] checks them, the rules with the contributions of the files
+/// `contributions` merged (the rulec files `ritsu check` reads for the same paths). What stops it for
+/// the modules' sake is made sure of before, by [`modules_hold`].
+pub fn package(project: &Project, contributions: &[String], joined: &Joined, modules: &[(Rc<kaname::check::Checked>, String)], target: Target, o: &Options) -> Result<Package, Refusal> {
     let lang = o.lang;
     let mut files: Vec<(String, String, Option<String>)> = Vec::new();
-    // what goes under each kind's directory, for the indexes: each module by its name
-    let mut kinds: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    // what goes under each kind's directory of each module's directory (empty for the module at
+    // hand, `deps/pricing/` for a dependency's), for the indexes: each module by its name
+    let mut kinds: BTreeMap<String, BTreeMap<&str, Vec<String>>> = BTreeMap::new();
     // and the file of the project each is made from
     let mut named: Vec<(&str, String, String)> = Vec::new();
     let base = match target {
@@ -354,10 +415,10 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
     };
     // rulec: each rule's module
     let rulec_lang = if lang == Lang::Ja { rulec::i18n::Lang::Ja } else { rulec::i18n::Lang::En };
-    // The project is what the contributions are merged from (rulec's §15.231): each rule's module is
-    // the rule with every contribution of the project that reaches it, and a contribution has no
-    // module of its own.
-    let rule_files: Vec<String> = project.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect();
+    // The contributions are merged from the files `ritsu check` reads (rulec's §15.231, DESIGN 17.8):
+    // each rule's module is the rule with every contribution that reaches it, and a contribution has
+    // no module of its own.
+    let rule_files = contributions;
     // the units the rules and the books take amounts in, for the package's `units` module
     let mut units = Vec::new();
     for f in project.of(Tool::Rulec) {
@@ -365,14 +426,15 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
             continue;
         }
         let src = read(project, f, lang)?;
+        let place = place_of(project, &f.rel);
         // A file of enums is the module of its types, beside the rules that read them (rulec's
         // §15.212).
-        let (rel, body, used) = rulec::link::with_set(&rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts(&src, &f.shown, &f.rel, target.key(), &o.module)))
+        let (rel, body, used) = rulec::link::with_set(rule_files, || rulec::i18n::with(rulec_lang, || rulec::codegen::package_parts_at(&src, &f.shown, &f.rel, target.key(), &o.module, place.clone())))
             .map_err(|e| refusal(1, Text::new(e.clone(), e), lang))?;
         units.extend(used);
         named.push(("rules", module_of(&rel), f.rel.clone()));
-        kinds.entry("rules").or_default().push(module_of(&rel));
-        files.push((format!("{base}rules/{rel}"), body, Some(f.rel.clone())));
+        kinds.entry(place.dir.clone()).or_default().entry("rules").or_default().push(module_of(&rel));
+        files.push((format!("{base}{}rules/{rel}", place.dir), body, Some(f.rel.clone())));
     }
     // koyomi: each dates file's and calendar's module
     let mut loader = koyomi::calendar::Loader::default();
@@ -382,7 +444,8 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
             let shown = &f.shown;
             return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
         };
-        let u = koyomi::codegen::unit_shown(checked, lang, Some(&f.rel));
+        let place = place_of(project, &f.rel);
+        let u = koyomi::codegen::unit_in(checked, lang, Some(&f.rel), place.module.as_ref());
         let (t, body) = match target {
             Target::TypeScript => (koyomi::naming::Target::TypeScript, koyomi::codegen::typescript::module(&u)),
             Target::Python => (koyomi::naming::Target::Python, koyomi::codegen::python::module(&u)),
@@ -391,8 +454,8 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
         // koyomi gen's own path, under its target's directory
         let rel = t.file(&u.alias).split_once('/').map(|(_, r)| r.to_string()).unwrap_or_default();
         named.push(("dates", module_of(&rel), f.rel.clone()));
-        kinds.entry("dates").or_default().push(module_of(&rel));
-        files.push((format!("{base}dates/{rel}"), body, Some(f.rel.clone())));
+        kinds.entry(place.dir.clone()).or_default().entry("dates").or_default().push(module_of(&rel));
+        files.push((format!("{base}{}dates/{rel}", place.dir), body, Some(f.rel.clone())));
     }
     // chobo: each book's client, and on PostgreSQL the schema and the functions it calls, on the
     // MySQL family the tables its calls run on
@@ -403,8 +466,9 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
             return Err(refusal(1, tr!("`{shown}` は検査を通らないので、生成しません", "`{shown}` does not pass check, so nothing is generated from it"), lang));
         };
         let stem = Path::new(&f.rel).file_name().map(|n| n.to_string_lossy().trim_end_matches(".book").to_string()).unwrap_or_default();
-        let origin = Origin::at(&f.rel, src.as_bytes());
-        let in_package = chobo::client::InPackage { module: o.module.clone() };
+        let place = place_of(project, &f.rel);
+        let origin = Origin::at(&f.rel, src.as_bytes()).of(place.module.clone());
+        let in_package = chobo::client::InPackage { module: o.module.clone(), place: place.clone() };
         units.extend(chobo::client::package_units(book));
         let mut wanted = vec![o.books.chobo(target)];
         wanted.extend(o.books.sql());
@@ -418,16 +482,17 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
             for (rel, body) in built {
                 if Some(ct) != o.books.sql() {
                     named.push(("books", module_of(&rel), f.rel.clone()));
-                    kinds.entry("books").or_default().push(module_of(&rel));
+                    kinds.entry(place.dir.clone()).or_default().entry("books").or_default().push(module_of(&rel));
                 }
-                files.push((format!("{base}books/{rel}"), body, Some(f.rel.clone())));
+                files.push((format!("{base}{}books/{rel}", place.dir), body, Some(f.rel.clone())));
             }
         }
     }
     // dandori: each workflow, for Temporal in the language, reading the package's rules, dates and books
     let module = o.module.clone();
     for f in project.of(Tool::Dandori) {
-        let built = with_ports(joined, || -> Result<(Vec<(String, String)>, String, String), Refusal> {
+        let place = place_of(project, &f.rel);
+        let built = with_ports(joined, || -> Result<(Vec<(String, String)>, String), Refusal> {
             let (src, c) = dandori::check::check_file(Path::new(&f.shown)).map_err(|e| refusal(2, Text::new(e.clone(), e), lang))?;
             let Some(mut m) = c.model else {
                 let shown = &f.shown;
@@ -450,13 +515,13 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
                 }
             }
             m.source_path = f.rel.clone();
-            m.package = Some(dandori::model::InPackage { go_module: module.clone() });
+            m.package = Some(dandori::model::InPackage { go_module: module.clone(), place: place.clone() });
             let dir = match target {
                 Target::Go => dandori::temporal_go::package(&m),
                 _ => dandori::render::ident(&m.name),
             };
             match dandori::commands::build(&m, target.dandori()) {
-                Some(Ok(files)) => Ok((files, dir, src)),
+                Some(Ok(files)) => Ok((files, dir)),
                 Some(Err(diags)) => {
                     let json = diags.iter().map(|d| diagnostic("dandori", Some(f.rel.clone()), from_serde(&d.to_json(lang)))).collect();
                     let (shown, to) = (&f.shown, target.key());
@@ -465,29 +530,31 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
                 None => unreachable!("the three targets are dandori's"),
             }
         })?;
-        let (built, dir, _) = built;
+        let (built, dir) = built;
         named.push(("flows", dir.clone(), f.rel.clone()));
-        kinds.entry("flows").or_default().push(dir);
+        kinds.entry(place.dir.clone()).or_default().entry("flows").or_default().push(dir);
         for (rel, body) in built {
-            files.push((format!("{base}flows/{rel}"), body, Some(f.rel.clone())));
+            files.push((format!("{base}{}flows/{rel}", place.dir), body, Some(f.rel.clone())));
         }
     }
     // sekisho: each gate's code of the requests, which reads the package's rules/ and dates/
     let gates: sekisho::suite::Suite = joined.sekisho().into();
     for f in project.of(Tool::Sekisho) {
         let outcome = gate(project, &gates, f, lang)?;
-        let to = sekisho::r#gen::Target { name: target.key(), authorizer: o.authorizer, go_module: o.module.clone() };
+        let place = place_of(project, &f.rel);
+        let to = sekisho::r#gen::Target { name: target.key(), authorizer: o.authorizer, go_module: o.module.clone(), place: place.clone() };
         let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
             let shown = &f.shown;
             refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), lang)
         })?;
         for (rel, body) in made {
-            // `typescript/authz/refunds.ts` as the package holds it: `authz/refunds.ts`
+            // `typescript/authz/refunds.ts` as the package holds it: `authz/refunds.ts`, under its
+            // module's directory
             let rel = rel.split_once('/').map(|(_, r)| r.to_string()).unwrap_or(rel);
             let module = module_of(rel.strip_prefix("authz/").unwrap_or(&rel));
             named.push(("authz", module.clone(), f.rel.clone()));
-            kinds.entry("authz").or_default().push(module);
-            files.push((format!("{base}{rel}"), body, Some(f.rel.clone())));
+            kinds.entry(place.dir.clone()).or_default().entry("authz").or_default().push(module);
+            files.push((format!("{base}{}{rel}", place.dir), body, Some(f.rel.clone())));
         }
     }
     // kaname: each module's code under glue/, which calls the package's rules/ and dates/ and builds
@@ -495,13 +562,15 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
     // transfers; glue/'s indexes are kaname's own (the books' transfers are under glue/books/)
     if !modules.is_empty() {
         let kt = kaname::r#gen::Target::parse(target.key()).expect("the three targets are kaname's");
-        let made = kaname::r#gen::package(modules, kt, lang, &o.module);
+        let placed: Vec<(Rc<kaname::check::Checked>, String, Place)> = modules.iter().map(|(c, rel)| (c.clone(), rel.clone(), place_of(project, rel))).collect();
+        let made = kaname::r#gen::package_in(&placed, kt, lang, &o.module);
         units.extend(made.units);
         for (c, rel) in modules {
             named.push(("glue", c.module.name.ascii().to_string(), rel.clone()));
         }
-        kinds.entry("glue").or_default();
         for (rel, body, from) in made.files {
+            // glue/'s indexes are kaname's, at each module's directory it writes under
+            kinds.entry(module_dir(&rel)).or_default().entry("glue").or_default();
             files.push((format!("{base}{rel}"), body, from));
         }
     }
@@ -509,8 +578,17 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
     if let Some((rel, body)) = rulec::codegen::units_module(target.key(), &units) {
         files.push((format!("{base}{rel}"), body, None));
     }
-    for list in kinds.values_mut() {
+    for list in kinds.values_mut().flat_map(|k| k.values_mut()) {
         list.dedup();
+    }
+    // each module's directory the package holds a part of, and the ones on the way to it
+    let dirs: Vec<String> = kinds.keys().cloned().collect();
+    for d in dirs {
+        let mut up = d.as_str();
+        while let Some(parent) = parent_module_dir(up) {
+            kinds.entry(parent.to_string()).or_default();
+            up = parent;
+        }
     }
     // a module the package's index cannot import by its name: the languages hold their names to
     // their own tables (rulec only warns of a word a target keeps, W121), and the package's index
@@ -533,6 +611,120 @@ pub fn package(project: &Project, joined: &Joined, modules: &[(Rc<kaname::check:
     }
     files.extend(around(target, o, &kinds, &files));
     Ok(Package { files })
+}
+
+/// What stops the packages of a module for the modules' sake, made sure of before any target is
+/// written (DESIGN 17.8): two flows of two modules that make one Temporal workflow type, two gates of
+/// two modules that declare one name of Cedar's, and, when Python is among the targets, a dependency
+/// named with a word Python keeps. Each stops the run whatever is written, so none of them leaves the
+/// targets made before it; a stop of another kind is met where its target is made, as in a tree
+/// without a manifest, which none of these can stop. A file that does not pass is left to the target
+/// that reads it.
+pub fn modules_hold(project: &Project, joined: &Joined, targets: &[Target], lang: Lang) -> Result<(), Refusal> {
+    if project.tree.is_none() {
+        return Ok(());
+    }
+    // a workflow runs by the name of its type, which a worker of a server's knows one of: two flows
+    // of two modules that make one type would be one workflow
+    let mut types: Vec<(String, String, &str)> = Vec::new();
+    for f in project.of(Tool::Dandori) {
+        let Some(m) = with_ports(joined, || dandori::check::check_file(Path::new(&f.shown)).ok().and_then(|(_, c)| c.model)) else {
+            continue;
+        };
+        let (ty, dir) = (dandori::temporal::workflow_type(&m), place_of(project, &f.rel).dir);
+        if let Some((_, _, other)) = types.iter().find(|(t, d, _)| *t == ty && *d != dir) {
+            let (a, b) = (*other, f.shown.as_str());
+            return Err(refusal(
+                2,
+                tr!(
+                    "`{a}` と `{b}` は、どちらも Temporal のワークフローの型 `{ty}` を作ります。ワークフローは型の名前で走るので、一つのパッケージに二つは置けません。手元のワークフローなら、名前か版を変えてください",
+                    "`{a}` and `{b}` both make the Temporal workflow type `{ty}`: a workflow runs by the name of its type, so one package cannot hold both; if one is this module's, give it another name or version"
+                ),
+                lang,
+            ));
+        }
+        types.push((ty, dir, &f.shown));
+    }
+    // what each gate's Cedar declares, each name with the file that declares it
+    let gates: sekisho::suite::Suite = joined.sekisho().into();
+    let declared: Vec<Vec<(String, String)>> = project.of(Tool::Sekisho).into_iter().filter_map(|f| gate(project, &gates, f, lang).ok()).map(|o| sekisho::r#gen::cedar_names(&o)).collect();
+    cedar_names_hold(project, &declared, lang)?;
+    // a dependency's name is the name of a Python package of the package's (DESIGN 17.3), which a
+    // word Python keeps cannot be: the directories of the modules the package holds a part of are
+    // the ones of its files (a contribution has no module of its own)
+    if targets.contains(&Target::Python) {
+        let made = [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Sekisho, Tool::Kaname];
+        let dirs: Vec<String> = made
+            .iter()
+            .flat_map(|t| project.of(*t))
+            .filter(|f| !(f.tool == Tool::Rulec && rulec::link::is_contribution_file(&f.shown)))
+            .map(|f| place_of(project, &f.rel).dir)
+            .collect();
+        if let Some(name) = dirs.iter().flat_map(|d| ritsu_emit::package::chain(d)).find(|n| ritsu_emit::words::python::KEYWORDS.contains(n)) {
+            return Err(refusal(
+                2,
+                tr!(
+                    "依存の名前 `{name}` は Python が予約している語なので、パッケージの deps/ に置けません。`require` で別の名前を付けてください",
+                    "the dependency `{name}` is named with a word Python keeps, which the package cannot hold in its deps/; require it by another name"
+                ),
+                lang,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The directory of the module a part's path is under (`deps/pricing/` for
+/// `deps/pricing/glue/fees.ts`): its leading `deps/<name>/` parts; empty for the module at hand's.
+fn module_dir(rel: &str) -> String {
+    let parts: Vec<&str> = rel.split('/').collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i + 2 < parts.len() && parts[i] == "deps" {
+        out.push_str(&format!("deps/{}/", parts[i + 1]));
+        i += 2;
+    }
+    out
+}
+
+/// The directory of the module that requires the module at `dir` (`deps/pricing/` for
+/// `deps/pricing/deps/tax/`, empty for `deps/pricing/`); None for the module at hand's.
+fn parent_module_dir(dir: &str) -> Option<&str> {
+    let d = dir.strip_suffix('/')?;
+    let (up, _) = d.rsplit_once('/')?;
+    let up = up.strip_suffix("deps")?;
+    Some(up)
+}
+
+/// Holds the names the gates' Cedar declares to one another (DESIGN 17.8). `gates` has, for each
+/// gate of the package, each name its Cedar declares with the file that declares it: the gate's own
+/// and the ones of the files it reads with `use gate`. Two files of two modules that declare one
+/// name of Cedar's (a type or an action in its namespace) would be one thing where their gates are
+/// asked together, so the run stops. The files one gate reads together are one namespace, which
+/// sekisho holds them to (E210, E211), whatever their modules; and in one module, the names are
+/// sekisho's own concern, as they were before there were modules.
+fn cedar_names_hold(project: &Project, gates: &[Vec<(String, String)>], lang: Lang) -> Result<(), Refusal> {
+    let module = |file: &str| ritsu_base::paths::from_root(&project.root, Path::new(file)).and_then(|r| project.dependency_of(&r));
+    let together = |a: &str, b: &str| gates.iter().any(|g| g.iter().any(|(f, _)| f == a) && g.iter().any(|(f, _)| f == b));
+    let mut declared: Vec<(&str, &str)> = Vec::new();
+    for (file, name) in gates.iter().flatten() {
+        let (file, name) = (file.as_str(), name.as_str());
+        if let Some((other, _)) = declared.iter().find(|(f, n)| *n == name && *f != file && module(f) != module(file) && !together(f, file)) {
+            let (a, b) = (*other, file);
+            return Err(refusal(
+                2,
+                tr!(
+                    "`{a}` と `{b}` は、どちらも Cedar の `{name}` を宣言しています。Cedar は型と操作を名前空間の中の名前で知るので、一つのパッケージに二つは置けません。手元のゲートなら、`namespace` か名前を変えてください",
+                    "`{a}` and `{b}` both declare the Cedar `{name}`: Cedar knows a type or an action by its name in its namespace, so one package cannot hold both; if one is this module's gate, give it another `namespace` or name"
+                ),
+                lang,
+            ));
+        }
+        if !declared.contains(&(file, name)) {
+            declared.push((file, name));
+        }
+    }
+    Ok(())
 }
 
 /// A gate of the project, checked with every language joined: Err when it does not pass, or when
@@ -579,13 +771,15 @@ pub fn cedar(project: &Project, joined: &Joined, authorizer: sekisho::r#gen::Aut
                 warned.push(diagnostic("sekisho", Some(f.rel.clone()), d.to_json(lang)));
             }
         }
-        let to = sekisho::r#gen::Target { name: "cedar", authorizer, go_module: String::new() };
+        let place = place_of(project, &f.rel);
+        let to = sekisho::r#gen::Target { name: "cedar", authorizer, go_module: String::new(), place: place.clone() };
         let made = sekisho::r#gen::generate(&outcome, &to, &f.rel, lang, &gates).map_err(|e| {
             let shown = &f.shown;
             refusal(2, tr!("`{shown}` から生成できません（{e}）。sekisho の不具合です", "cannot generate from `{shown}` ({e}): a bug in sekisho"), lang)
         })?;
+        // a dependency's under `deps/<name>/` beside the packages too
         for (rel, body) in made {
-            files.push((rel.strip_prefix("cedar/").unwrap_or(&rel).to_string(), body, Some(f.rel.clone())));
+            files.push((format!("{}{}", place.dir, rel.strip_prefix("cedar/").unwrap_or(&rel)), body, Some(f.rel.clone())));
         }
     }
     Ok((Package { files }, said, warned))
@@ -609,10 +803,96 @@ fn module_of(rel: &str) -> String {
     }
 }
 
-/// What the package itself is made of: its index, its manifest with what it depends on, and the
-/// package files of Python.
-fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, files: &[(String, String, Option<String>)]) -> Vec<(String, String, Option<String>)> {
+/// The indexes of the parts of each dependency (DESIGN 17.8), by their paths under the package's
+/// directory: for each module's directory `dir` the package holds parts of under `deps/`, an index
+/// of its kinds and of the dependencies it holds parts of in turn (`deps/pricing/index.ts`,
+/// `<name>/deps/pricing/__init__.py`), each kind's index of its modules (glue/'s is kaname's), and
+/// for each directory with dependencies under it, an index of them (`deps/index.ts`). Go's packages
+/// are their directories, and have none.
+fn dependency_indexes(target: Target, o: &Options, kinds: &BTreeMap<String, BTreeMap<&str, Vec<String>>>) -> Vec<(String, String, Option<String>)> {
     let head = |c: Comment| c.line(&ritsu_emit::header::generated("ritsu"));
+    let mut out = Vec::new();
+    // the dependencies of each module's directory the package holds parts of, by their names
+    let mut below: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for d in kinds.keys() {
+        if let Some(up) = parent_module_dir(d) {
+            let name = ritsu_emit::package::chain(d).last().copied().unwrap_or_default();
+            below.entry(up).or_default().push(name);
+        }
+    }
+    let base = if target == Target::Python { format!("{}/", o.name) } else { String::new() };
+    for (dir, names) in &below {
+        match target {
+            Target::TypeScript => {
+                let mut index = format!("{}// The dependencies of the package whose parts it holds, each by its name.\n\n", head(Comment::Slashes));
+                for n in names {
+                    index.push_str(&format!("export * as {n} from \"./{n}/index\";\n"));
+                }
+                out.push((format!("{dir}deps/index.ts"), index, None));
+            }
+            Target::Python => {
+                let mut init = format!("{}\"\"\"The dependencies of the package whose parts it holds, each by its name.\"\"\"\n\n", head(Comment::Hash));
+                for n in names {
+                    init.push_str(&format!("from . import {n} as {n}\n"));
+                }
+                out.push((format!("{base}{dir}deps/__init__.py"), init, None));
+            }
+            Target::Go => {}
+        }
+    }
+    for (dir, ks) in kinds.iter().filter(|(d, _)| !d.is_empty()) {
+        let prefix = ritsu_emit::package::chain(dir).iter().map(|n| format!("@{n}")).collect::<Vec<_>>().join("/");
+        let what = format!("The parts of the dependency `{prefix}` the package holds, by their kinds.");
+        // its kinds and its dependencies, in the order of their names
+        let mut entries: Vec<&str> = ks.keys().copied().collect();
+        if below.contains_key(dir.as_str()) {
+            entries.push("deps");
+        }
+        entries.sort();
+        match target {
+            Target::TypeScript => {
+                let mut index = format!("{}// {what}\n\n", head(Comment::Slashes));
+                for k in &entries {
+                    index.push_str(&format!("export * as {k} from \"./{k}/index\";\n"));
+                }
+                out.push((format!("{dir}index.ts"), index, None));
+                for (kind, modules) in ks.iter().filter(|(k, _)| **k != "glue") {
+                    let mut sub = format!("{}// The {kind} of the dependency `{prefix}`, each by its name.\n\n", head(Comment::Slashes));
+                    for m in modules {
+                        let path = if *kind == "flows" { format!("./{m}/client") } else { format!("./{m}") };
+                        sub.push_str(&format!("export * as {m} from \"{path}\";\n"));
+                    }
+                    out.push((format!("{dir}{kind}/index.ts"), sub, None));
+                }
+            }
+            Target::Python => {
+                let mut init = format!("{}\"\"\"{what}\"\"\"\n\n", head(Comment::Hash));
+                for k in &entries {
+                    init.push_str(&format!("from . import {k} as {k}\n"));
+                }
+                out.push((format!("{base}{dir}__init__.py"), init, None));
+                for (kind, modules) in ks.iter().filter(|(k, _)| **k != "glue") {
+                    let mut sub = format!("{}\"\"\"The {kind} of the dependency `{prefix}`, each by its name.\"\"\"\n\n", head(Comment::Hash));
+                    for m in modules {
+                        sub.push_str(&format!("from . import {m} as {m}\n"));
+                    }
+                    out.push((format!("{base}{dir}{kind}/__init__.py"), sub, None));
+                }
+            }
+            Target::Go => {}
+        }
+    }
+    out
+}
+
+/// What the package itself is made of: its index, its manifest with what it depends on, and the
+/// package files of Python; and in a module, the indexes of the dependencies' parts.
+fn around(target: Target, o: &Options, all: &BTreeMap<String, BTreeMap<&str, Vec<String>>>, files: &[(String, String, Option<String>)]) -> Vec<(String, String, Option<String>)> {
+    let head = |c: Comment| c.line(&ritsu_emit::header::generated("ritsu"));
+    let none = BTreeMap::new();
+    let kinds = all.get("").unwrap_or(&none);
+    // the module at hand's index names its dependencies' parts too
+    let deps = all.keys().any(|d| !d.is_empty());
     let (glue, authz) = (kinds.contains_key("glue"), kinds.contains_key("authz"));
     let what = match (glue, authz) {
         (false, false) => "The rules, the dates, the clients of the books and the workflows of a project, as one package (ritsu gen).",
@@ -625,8 +905,10 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
     match target {
         Target::TypeScript => {
             let mut index = format!("{}// {what}\n\n", head(Comment::Slashes));
-            for (kind, modules) in kinds {
+            for kind in top(kinds, deps) {
                 index.push_str(&format!("export * as {kind} from \"./{kind}/index\";\n"));
+            }
+            for (kind, modules) in kinds {
                 // glue/'s index is kaname's
                 if *kind == "glue" {
                     continue;
@@ -678,7 +960,7 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
         Target::Python => {
             let n = &o.name;
             let mut init = format!("{}\"\"\"{what}\"\"\"\n\n", head(Comment::Hash));
-            for kind in kinds.keys() {
+            for kind in top(kinds, deps) {
                 init.push_str(&format!("from . import {kind} as {kind}\n"));
             }
             if files.iter().any(|(p, _, _)| *p == format!("{n}/units.py")) {
@@ -765,6 +1047,18 @@ fn around(target: Target, o: &Options, kinds: &BTreeMap<&str, Vec<String>>, file
             doc.push_str(&format!("package {package}\n"));
             out.push(("doc.go".to_string(), doc, None));
         }
+    }
+    out.extend(dependency_indexes(target, o, all));
+    out
+}
+
+/// The names the index of the module at hand exports, in order: its kinds, and `deps` when the
+/// package holds parts of its dependencies.
+fn top<'a>(kinds: &BTreeMap<&'a str, Vec<String>>, deps: bool) -> Vec<&'a str> {
+    let mut out: Vec<&str> = kinds.keys().copied().collect();
+    if deps {
+        out.push("deps");
+        out.sort();
     }
     out
 }
@@ -925,6 +1219,9 @@ struct Answer {
     files: Vec<Emit>,
     diagnostics: Vec<Json>,
     error: Option<(u8, String)>,
+    /// No JSON is written: the modules of the tree could not be read, and what to run was said on
+    /// the standard error (DESIGN 17.8).
+    silent: bool,
 }
 
 impl Answer {
@@ -964,9 +1261,9 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let asked = args.iter().enumerate().find_map(|(i, x)| if x == "--lang" { args.get(i + 1).cloned() } else { x.strip_prefix("--lang=").map(str::to_string) });
     let lang = if asked.is_some() { Lang::pick(asked.as_deref(), "RITSU_LANG") } else { lang };
     let json = asks_json(args);
-    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None };
+    let mut answer = Answer { root: None, check: args.iter().any(|a| a == "--check"), out: "generated".to_string(), targets: Vec::new(), files: Vec::new(), diagnostics: Vec::new(), error: None, silent: false };
     let code = generate(args, &table, cmd, lang, json, &mut answer);
-    if json {
+    if json && !answer.silent {
         println!("{}", answer.json(code).pretty());
     }
     code
@@ -1027,6 +1324,30 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         Err(e) => return say(refusal(2, e, lang), answer),
     };
     answer.root = Some(project.root_shown());
+    // In a module, the tree first, as `ritsu check` reads it (DESIGN 17.8): what stops the run is said
+    // on the standard error, with no JSON (exit 2); the tree's errors are said, and nothing is
+    // generated (exit 1).
+    match project.tree.clone().as_deref() {
+        Some(Err(Problem::Stop(said))) => {
+            let head = if lang == Lang::Ja { "エラー" } else { "error" };
+            for t in said {
+                eprintln!("{head}: {}", t.get(lang));
+            }
+            answer.silent = true;
+            return 2;
+        }
+        Some(Err(Problem::Diags(ds))) => {
+            let found: Vec<Finding> = ds.iter().map(|d| crate::check::modules::finding(&project, d, lang)).collect();
+            let text: String = found.iter().map(|f| f.text_of("ritsu")).collect();
+            let n = found.iter().filter(|f| f.severity == Severity::Error).count();
+            let errors = ritsu_base::text::plural(n, "error", "errors");
+            let why = tr!("モジュールを読めません（エラー {n} 件）。何も生成しません", "the modules could not be read ({errors}), so nothing is generated");
+            let r = refusal(1, why.clone(), lang);
+            let diagnostics = found.iter().map(|f| crate::check::entry("ritsu", f)).collect();
+            return say(Refusal { said: format!("{text}{}", r.said), diagnostics, ..r }, answer);
+        }
+        _ => {}
+    }
     if [Tool::Rulec, Tool::Koyomi, Tool::Chobo, Tool::Dandori, Tool::Kaname, Tool::Sekisho].iter().all(|t| project.of(*t).is_empty()) {
         let given = project.given.join(" ");
         return say(
@@ -1042,21 +1363,33 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         );
     }
     let joined = Joined::new();
+    // The contributions are merged from the rulec files `ritsu check` reads for the same paths: in a
+    // check of a whole module, every module's of the tree (DESIGN 17.8). They are set before any
+    // rule is read.
+    let whole = project.clone().with_dependencies();
+    let contributions: Vec<String> = whole.of(Tool::Rulec).iter().map(|f| f.shown.clone()).collect();
+    joined.rulec.set_project(contributions.clone());
+    // In a module, the files of the dependencies the files given reach go into the package with them.
+    let project = project.reached(&joined);
     // what the checks across the borders come to at the calls of the modules of kaname, once
     let verdicts = Rc::new(ritsu_cross::ProgramVerdicts::new(&joined));
-    if let Err(r) = checked(&project, &joined, &verdicts, lang) {
+    if let Err(r) = checked(&project, &whole, &joined, &verdicts, lang) {
         return say(r, answer);
     }
     let modules = match kaname_modules(&project, &joined, &verdicts, lang) {
         Ok(m) => m,
         Err(r) => return say(r, answer),
     };
+    // what stops the packages of a module for the modules' sake, before any target is written
+    if let Err(r) = modules_hold(&project, &joined, &targets, lang) {
+        return say(r, answer);
+    }
     let o = Options { name, module, books, authorizer, lang };
     let out = PathBuf::from(&answer.out);
     let check = a.has("--check");
     let mut st = Emitted::default();
     for t in targets {
-        let p = match package(&project, &joined, &modules, t, &o) {
+        let p = match package(&project, &contributions, &joined, &modules, t, &o) {
             Ok(p) => p,
             Err(r) => return say(r, answer),
         };
@@ -1118,6 +1451,26 @@ fn generate(args: &[String], table: &ritsu_base::cli::Table, cmd: &ritsu_base::c
         }
         for p in &st.left {
             let _ = writeln!(stdout, "{}", tr!("もう生成しないファイルが残っています: {p}", "generated no more, and still there: {p}").get(lang));
+        }
+        // the ritsu that wrote the lock is a record (DESIGN 17.4): when it is not this one, what
+        // differs may be what the two versions write
+        let differs = !(st.missing.is_empty() && st.stale.is_empty() && st.left.is_empty());
+        if check
+            && differs
+            && let Some(Ok(tree)) = project.tree.as_deref()
+            && let Some(lock) = &tree.lock
+            && lock.ritsu != ritsu_base::modules::graph::running()
+        {
+            let (then, now) = (lock.ritsu.to_string(), env!("CARGO_PKG_VERSION"));
+            let _ = writeln!(
+                stdout,
+                "{}",
+                tr!(
+                    "備考: ritsu.lock を書いた ritsu は {then} で、いまの ritsu は {now} です。生成物の違いは、版の違いから来ているかもしれません",
+                    "note: ritsu.lock was written by ritsu {then}, and this is ritsu {now}: what differs may come from the two versions"
+                )
+                .get(lang)
+            );
         }
         let _ = stdout.flush();
     }

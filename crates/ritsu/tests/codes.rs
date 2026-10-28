@@ -97,3 +97,34 @@ fn ritsu_explain() {
     let (code, _, err) = ritsu_in(here, &["explain"]);
     assert!(code == 2 && err.contains("`ritsu explain` needs a code such as `E101`, or `--all`"), "{err}");
 }
+
+/// `ritsu explain` looks up the codes of the modules (DESIGN 17.20) as it does the others: in
+/// English and in Japanese, as text, as the section of the pages of codes, and as JSON with the
+/// files of its reproduction, which hold a dependency from a registry and its lock.
+#[test]
+fn ritsu_explain_a_code_of_the_modules() {
+    let here = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let (code, out, err) = ritsu_in(here, &["explain", "E304"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.starts_with("E304 (error) — `ritsu.lock` does not match `ritsu.mod`\n"), "{out}");
+    assert!(out.contains("\nFix: Run `ritsu mod lock` to write the lock again.\n"), "{out}");
+    assert!(out.contains("    require tax oci \"example.com/acme/tax\" 1.2.0\n"), "{out}");
+    let (code, out, _) = ritsu_in(here, &["explain", "E304", "--lang", "ja"]);
+    assert!(code == 0 && out.starts_with("E304 (エラー) — `ritsu.lock` が `ritsu.mod` に合いません\n"), "{out}");
+    assert!(out.contains("\n直し方: `ritsu mod lock` を走らせて、lock を書き直してください。\n"), "{out}");
+    for (lang, page) in [("en", "codes.md"), ("ja", "codes.ja.md")] {
+        let (code, out, _) = ritsu_in(here, &["explain", "E304", "--format", "markdown", "--lang", lang]);
+        assert_eq!(code, 0);
+        assert!(out.starts_with("<a id=\"e304\"></a>\n"), "{out}");
+        let page = std::fs::read_to_string(here.join("../ritsu-cross/docs").join(page)).unwrap();
+        assert!(page.contains(&out), "the section of E304 ({lang}) is the one of the page of codes:\n{out}");
+    }
+    let (code, out, _) = ritsu_in(here, &["explain", "E304", "--format", "json"]);
+    assert_eq!(code, 0);
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    assert_eq!((v["code"].as_str(), v["severity"].as_str()), (Some("E304"), Some("error")));
+    assert_eq!(v["repro"]["command"], serde_json::json!(["ritsu", "check", "."]));
+    let paths: Vec<&str> = v["repro"]["files"].as_array().unwrap().iter().filter_map(|f| f["path"].as_str()).collect();
+    assert_eq!(paths, ["ritsu.mod", "ritsu.lock", "fee.rule"]);
+    assert_eq!(v["related"], serde_json::json!(["E303", "W302"]));
+}

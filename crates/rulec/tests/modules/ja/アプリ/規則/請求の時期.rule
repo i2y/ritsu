@@ -1,0 +1,25 @@
+# 注文をすぐ請求するかどうかを、モジュール lib の注文のサービスが送る小計で決める。形は lib の
+# order.proto で、`@lib/…` で指す。
+rule 請求の時期(billing) v1
+description "注文をすぐ請求するか月末に請求するかを、モジュール lib の注文のサービスが送る小計で決める"
+
+shape 注文(order) = proto "@lib/proto/acme/orders/v1/order.proto" acme.orders.v1.Order
+
+enum 時期(when_billed) = すぐ(at_once) | 月末(month_end)
+
+inputs
+  小計(subtotal) : money[GBPc]  range >=0GBPc <=2_000_000GBPc  from 注文.subtotal_pence
+
+outputs
+  請求する時期(billed) : 時期
+
+table 小計ごとの時期(billing_by_subtotal)
+policy unique
+| 小計         | -> 請求する時期 : 時期 |
+| <10_000GBPc  | すぐ                   |
+| >=10_000GBPc | 月末                   |
+
+examples
+| 小計       | -> 請求する時期 |
+| 999GBPc    | すぐ            |
+| 10_000GBPc | 月末            |

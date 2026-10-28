@@ -1,0 +1,57 @@
+# An order of the Acme shop: its shipping fee and its total come from the rules of the module
+# pricing (the total with the VAT rate of tax, which pricing applies), its goods are held, and the
+# total is charged. A charge that does not go through puts the goods back.
+workflow place_order v1
+description "Prices an order by the rules of the module pricing, holds its goods and charges its total; when the charge does not go through, the goods are put back"
+
+use rule shipping from "@pricing/rules/shipping_fee.rule"
+use rule total from "@pricing/rules/order_total.rule"
+
+record Order
+  id       : string
+  sku      : string
+  quantity : int  range >=1 <=100
+  weight   : mass[g]  range >=1g <=30_000g
+  region   : shipping.region
+  category : total.category
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+
+record Hold
+  id : string
+
+record Payment
+  paid : bool
+
+enum Outcome = charged | not_charged | out_of_stock
+
+inputs
+  order : Order
+
+outputs
+  outcome : Outcome
+  amount  : money[GBPc]
+
+task reserve(order: string, sku: string, quantity: int) -> Hold
+  http POST "https://stock.example.com/v1/holds"
+  errors out_of_stock = 409
+  key
+
+task release(hold: string)
+  http POST "https://stock.example.com/v1/holds/{hold}/release"
+  idempotent
+
+task charge(order: string, amount: money[GBPc]) -> Payment
+  http POST "https://payments.example.com/v1/orders/{order}/charges"
+  key
+
+flow
+  let parcel = shipping(weight: order.weight, region: order.region)
+  let priced = total(subtotal: order.subtotal, category: order.category, shipping: parcel.fee)
+  let held = reserve(order: order.id, sku: order.sku, quantity: order.quantity)
+    on out_of_stock => succeed outcome = out_of_stock, amount = priced.total
+  let payment = charge(order: order.id, amount: priced.total)
+  match payment.paid
+    true => succeed outcome = charged, amount = priced.total
+    false =>
+      release(hold: held.id)
+      succeed outcome = not_charged, amount = priced.total

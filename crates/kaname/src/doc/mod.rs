@@ -266,7 +266,12 @@ impl<'a> Builder<'a> {
             .iter()
             .zip(&self.c.uses)
             .map(|(u, t)| {
-                let f = code(&self.shown_from_root(t.canon(), &u.path));
+                let mut f = code(&self.shown_from_root(t.canon(), &u.path));
+                // a file of another module than this one's, a dependency's, which is not beside the
+                // page: its module and version (ritsu's DESIGN 17.8)
+                if let Some(m) = ritsu_base::modules::module_words_from(&self.c.canon, t.canon()) {
+                    f = self.t(tr!("{f}、{}", "{f}, {}", m.ja; m.en));
+                }
                 let n = code(&u.name);
                 match t {
                     Target::Rule { .. } => self.t(tr!("規則 {n}（{f}）", "the rule {n} ({f})")),

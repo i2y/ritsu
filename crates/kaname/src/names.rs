@@ -265,10 +265,11 @@ pub struct Decls {
     pub fns: Vec<FnInfo>,
 }
 
-/// Where a file a module reads is: beside the module, the path written from its directory.
-pub fn beside(module: &str, written: &str) -> PathBuf {
-    let dir = Path::new(module).parent().unwrap_or(Path::new(""));
-    if dir.as_os_str().is_empty() { PathBuf::from(written) } else { dir.join(written) }
+/// Where a file a module reads is: beside the module, the path written from its directory. In a
+/// module of ritsu's (a directory with a `ritsu.mod`), the path is held to it, and `@<name>/…` is a
+/// file of a dependency, read from the module's root (ritsu's DESIGN 17.6).
+pub fn beside(module: &str, written: &str) -> Result<PathBuf, ritsu_base::modules::Refused> {
+    ritsu_base::modules::refer_shown(Path::new(module).parent().unwrap_or(Path::new("")), written)
 }
 
 /// A file as one is told from another: what the file system says, or as written.

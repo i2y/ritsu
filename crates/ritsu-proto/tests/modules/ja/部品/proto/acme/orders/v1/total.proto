@@ -1,0 +1,10 @@
+// 注文の合計。パッケージのパスで書いた import は、lib 自身の金額を読む。lib を使うモジュールにも
+// 同じパスに money.proto があるが、この import はそれを読まない。
+syntax = "proto3";
+package acme.orders.v1;
+
+import "acme/orders/v1/money.proto";
+
+message Total {
+  Money amount = 1;
+}

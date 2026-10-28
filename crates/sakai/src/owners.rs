@@ -86,10 +86,17 @@ pub type InScope = (String, Tool, Option<(crate::contracts::Kind, bool)>);
 /// Every artifact of the scope, in path order: under `covers`, not under `except`, and with no
 /// part of its path that the scope always leaves out. A file of YAML or JSON is one when it is an
 /// OpenAPI or AsyncAPI document, or a part of one that a document reaches by `$ref` (DESIGN 15.2).
+/// In a module, the files of a dependency an entry of `owns` names are in the scope too, with no
+/// `covers` for them (ritsu's DESIGN 17.6): a directory, the artifacts under it.
 pub fn scope(m: &Model) -> Vec<InScope> {
     let mut files = Vec::new();
     for c in &m.map.covers {
         paths::walk(&m.root, c, &m.map.except, &mut files);
+    }
+    for o in m.contexts.iter().flat_map(|c| &c.owns) {
+        if dependency_of(m, &o.path).is_some() {
+            paths::walk(&m.root, &o.path, &m.map.except, &mut files);
+        }
     }
     files.sort();
     files.dedup();
@@ -144,9 +151,43 @@ pub fn named_cedar(m: &Model) -> Vec<String> {
     out
 }
 
-/// Whether a path is in the scope of the map.
+/// Whether a path is in the scope of the map. A file of a dependency (ritsu's DESIGN 17.6) is under
+/// no `covers` of the module at hand (`covers "."` does not go into `@lib`): it is in the scope when a
+/// `covers` names its dependency (`covers "@lib"`), or when an entry of `owns` of a context of the
+/// map holds it (a context of the dependency that `use context "@lib/…"` brings in, or one of the
+/// module's own). A dependency of a dependency (`@lib/@base`) is another dependency.
 pub fn in_scope(m: &Model, p: &str) -> bool {
-    m.map.covers.iter().any(|c| paths::contains(c, p) || paths::contains(p, c)) && !m.map.except.iter().any(|e| paths::contains(e, p)) && !paths::has_skipped_part(p)
+    if m.map.except.iter().any(|e| paths::contains(e, p)) || paths::has_skipped_part(p) {
+        return false;
+    }
+    let near = |c: &str| paths::contains(c, p) || paths::contains(p, c);
+    match dependency_of(m, p) {
+        None => m.map.covers.iter().any(|c| near(c)),
+        Some(dep) => {
+            let same = |q: &str| dependency_of(m, q).as_deref() == Some(dep.as_str());
+            m.map.covers.iter().any(|c| near(c) && same(c)) || m.contexts.iter().flat_map(|c| &c.owns).any(|o| o.holds(p) && same(&o.path))
+        }
+    }
+}
+
+/// The dependency a path from the root is in, as the module's view of its dependencies has it
+/// (ritsu's DESIGN 17.6): `@lib` for `@lib/rules/order_total.rule`, `@lib/@base` for a file of
+/// lib's dependency base. None for a file of the module at hand, and for every path outside a
+/// module, where a name that starts with `@` is a name like another.
+pub fn dependency_of(m: &Model, p: &str) -> Option<String> {
+    let dep = ritsu_base::modules::prefix_of(p)?;
+    ritsu_base::modules::under_dependency(&paths::on_disk(&m.root, p)).then_some(dep)
+}
+
+/// What an E103 adds when the file outside the scope is a dependency's (ritsu's DESIGN 17.6): the
+/// two ways a map takes it in.
+pub fn dependency_note(m: &Model, p: &str) -> Option<Text> {
+    let dep = dependency_of(m, p)?;
+    let sp = paths::shown(p);
+    Some(tr!(
+        "{sp} は依存 `{dep}` のファイルです。それを持つ依存のコンテキストを `use context \"{dep}/…\"` で地図に入れるか、`covers` に `\"{dep}\"` を書き、地図のどれかのコンテキストに持たせてください。",
+        "{sp} is a file of the dependency `{dep}`: bring the dependency's context that owns it into the map with `use context \"{dep}/…\"`, or write `\"{dep}\"` in `covers` and own the file in a context of the map."
+    ))
 }
 
 /// The deepest entry of any context's `owns` that holds `p`: an entry naming the file is deeper

@@ -1,0 +1,37 @@
+# A gate outside every module: no ritsu.mod above it, so `@lib/…` is a plain relative path, and
+# there is no directory @lib beside this file.
+gate purchases v1
+description "Who approves a purchase, and who receives a delivery into the stock"
+
+use rule approval from "@lib/rules/approval.rule"
+use book stock from "@lib/books/stock.book"
+
+principal User
+  attributes
+    limit : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+resource Purchase
+
+resource Delivery
+
+action approve
+  principal User
+  resource Purchase
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    band = approval(amount: amount, limit: principal.limit).band
+
+action receive_delivery
+  guards stock receive.do
+  principal User
+  resource Delivery
+
+permit approve_within_the_limit
+  principal is User
+  action approve
+  when band is within_limit
+
+permit users_receive
+  principal is User
+  action receive_delivery

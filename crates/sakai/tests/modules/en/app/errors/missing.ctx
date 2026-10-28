@@ -1,0 +1,8 @@
+# A file the dependency does not have: lib has contexts/pricing.ctx, not contexts/pricings.ctx.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "../contexts/billing.ctx"
+use context "@lib/contexts/pricings.ctx"
+
+covers ".."

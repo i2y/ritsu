@@ -66,12 +66,13 @@ fn enum_of<'a>(ps: &'a Protos, n: &Name) -> Option<(&'a proto::Enum, String, &'a
 
 /// How a rule takes an upstream enum in (`import proto`, DESIGN 1.7): each value of the `.proto`
 /// with the rule's value it becomes, when the rule's enum `name` takes in the enum `full` of the
-/// file `proto`.
-pub fn rule_import(read: &crate::suite::Read, rule: &str, name: &str, proto: &str, full: &str) -> Option<Vec<(String, String)>> {
+/// file `proto`. The rule's path is followed from the rule's directory, or from the root of the
+/// module of ritsu's it is in for `@<name>/…` (ritsu's DESIGN 17.6), under `root`.
+pub fn rule_import(root: &std::path::Path, read: &crate::suite::Read, rule: &str, name: &str, proto: &str, full: &str) -> Option<Vec<(String, String)>> {
     let f = read.facts.get(rule)?;
     let w = f.connect.as_ref()?.enums.iter().find(|w| w.name == name)?;
     let (file, _) = w.contract.as_ref()?;
-    let at = crate::paths::join(&crate::paths::parent(rule), file).ok()?;
+    let at = ritsu_base::modules::join(root, rule, file).ok()?;
     (at == proto && w.alias == full).then(|| w.values.iter().map(|(rule_value, wire, _)| (wire.clone(), rule_value.clone())).collect())
 }
 
@@ -107,7 +108,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, el: &Elem
                     },
                 };
                 let imported = match (&rule, &src.proto) {
-                    (Some((r, name)), Some((pf, pfull))) => rule_import(read, r, name, pf, pfull),
+                    (Some((r, name)), Some((pf, pfull))) => rule_import(&m.root, read, r, name, pf, pfull),
                     _ => None,
                 };
                 if let Some(taken) = &imported {

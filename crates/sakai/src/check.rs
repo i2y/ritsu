@@ -92,12 +92,13 @@ fn proto_diags(m: &Model, issues: &[Issue]) -> Vec<Diag> {
                 );
             }
             Issue::OutOfScope { file, import, at } => {
+                let dependency = owners::dependency_note(m, at);
                 let (f, at) = (shown(file), shown(at));
-                out.push(
-                    diag::at("E103", file, import.line, import.col, tr!("{f} が、地図の範囲の外の {at} を import しています", "The file {f} imports {at}, which is outside the map's scope"))
-                        .source(&src(file))
-                        .note(owners::scope_note(m)),
-                );
+                let mut d = diag::at("E103", file, import.line, import.col, tr!("{f} が、地図の範囲の外の {at} を import しています", "The file {f} imports {at}, which is outside the map's scope"))
+                    .source(&src(file))
+                    .note(owners::scope_note(m));
+                d.notes.extend(dependency);
+                out.push(d);
             }
         }
     }

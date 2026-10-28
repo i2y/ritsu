@@ -77,7 +77,37 @@ fn import_path(file: &str, pkg: Option<&str>) -> String {
 /// needs from the BSR for the files they import that are not on disk.
 pub struct Contracts {
     pub files: Vec<(String, String)>,
+    /// The file each of `files` was copied from, in the same order, as `gen` shows a path.
+    pub from: Vec<PathBuf>,
     pub deps: BufDeps,
+    /// In a module of ritsu's, one path of the module two files with different text would be
+    /// copied to, one of them a dependency's (ritsu's DESIGN 17.6): the path, and the two files.
+    /// buf reads the module in one run of protoc, which reads one file by one name.
+    pub clash: Option<(String, PathBuf, PathBuf)>,
+    /// In a module of ritsu's, a file of a dependency reached by two names (from the dependency's
+    /// root, `proto/acme/…`, and from the root its package gives, `acme/…`; ritsu's DESIGN 17.6):
+    /// the file, and the two names. It would be copied to two paths of the module, and protoc reads
+    /// the two as two files that declare the same types.
+    pub two_names: Option<(PathBuf, String, String)>,
+}
+
+/// One file as the copies of the contracts tell files apart: the file its path reads, through a
+/// dependency (`@lib/…`) the dependency's own.
+pub fn same_file_key(p: &Path) -> PathBuf {
+    ritsu_base::modules::map(p).unwrap_or_else(|| ritsu_base::paths::absolute(p))
+}
+
+/// A path as `gen` shows it, with `.` and `..` folded: in a module of ritsu's, a file of a dependency
+/// from the root of the module the chain starts from when the working directory is in it
+/// (`@lib/proto/acme/pricing/v1/money.proto`), and any other from the working directory
+/// (`proto/acme/billing/v1/plan.proto`).
+pub fn shown(p: &Path) -> PathBuf {
+    let cwd = ritsu_base::paths::absolute(Path::new("."));
+    let p = ritsu_base::paths::absolute(p);
+    match ritsu_base::modules::refer::view_parts(&p) {
+        Some((_, head, after)) if ritsu_base::modules::refer::raw_module_root(&cwd).is_some_and(|r| r == head) => after,
+        _ => PathBuf::from(ritsu_base::paths::between(&cwd, &p)),
+    }
 }
 
 /// The BSR modules the generated module depends on, with their pins, and what could not be
@@ -354,7 +384,7 @@ impl<'a> Gen<'a> {
             .iter()
             .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
         // `check` has read the contract whole before anything is generated from the rule
-        let read = ritsu_base::fs::read_to_string(self.dir().join(&im.file)).ok().and_then(|s| crate::proto::read(&im.file, &s).ok());
+        let read = crate::vfs::follow(&self.dir(), &im.file).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()).and_then(|s| crate::proto::read(&im.file, &s).ok());
         let pkg = read.as_ref().and_then(|f| f.package.clone());
         let decl = read.and_then(|f| f.enums.into_iter().find(|e| e.name == im.source));
         Some(Foreign { file: im.file.clone(), sel: im.source.clone(), import: import_path(&im.file, pkg.as_deref()), pkg, decl })
@@ -411,40 +441,81 @@ impl<'a> Gen<'a> {
     /// The contracts the generated `.proto` imports, as files to put in the module beside it:
     /// each at the path it is imported by, byte for byte — the file `rulec check` held the
     /// rule to — and with it each file it imports in turn that is found where its import path
-    /// says. The well-known types are buf's own. An import found nowhere is a file of a BSR
-    /// module the contract depends on, and what the module needs for it is in `deps` (§15.161).
+    /// says: under the root of the contract's own module, and in a module of ritsu's, what that
+    /// does not have under the roots of the module's dependencies, in their order (ritsu's
+    /// DESIGN 17.6, [`ritsu_proto::dependency_roots`]). The well-known types are buf's own. An
+    /// import found nowhere is a file of a BSR module the contract depends on, and what the
+    /// module needs for it is in `deps` (§15.161).
     pub fn proto_contracts(&self) -> Contracts {
         let mut todo: Vec<(PathBuf, String)> = Vec::new();
         for ty in self.wire_enums() {
-            if let Some(fr) = self.foreign(&ty) {
-                todo.push((self.dir().join(&fr.file), fr.import));
+            if let Some(fr) = self.foreign(&ty)
+                && let Ok(disk) = crate::vfs::follow(&self.dir(), &fr.file)
+            {
+                todo.push((disk, fr.import));
             }
         }
         let mut files: Vec<(String, String)> = Vec::new();
+        let mut from: Vec<PathBuf> = Vec::new();
+        let mut clash = None;
+        let mut two_names = None;
         let mut elsewhere: Vec<(PathBuf, String)> = Vec::new();
         while let Some((disk, at)) = todo.pop() {
-            if files.iter().any(|(p, _)| *p == at) {
+            if let Some(i) = files.iter().position(|(p, _)| *p == at) {
+                // two files for one path of the module: in a module of ritsu's, with a dependency's
+                // among them, what one of them is read as is not what the other's importer meant
+                if clash.is_none()
+                    && (ritsu_base::modules::under_dependency(&from[i]) || ritsu_base::modules::under_dependency(&disk))
+                    && ritsu_base::fs::read_to_string(&disk).is_ok_and(|t| t != files[i].1)
+                {
+                    clash = Some((at.clone(), shown(&from[i]), shown(&disk)));
+                }
+                continue;
+            }
+            // one file of a dependency's by a second name: two paths of the module, one file
+            if ritsu_base::modules::under_dependency(&disk)
+                && let Some(i) = from.iter().position(|d| same_file_key(d) == same_file_key(&disk))
+            {
+                if two_names.is_none() {
+                    let mut names = [files[i].0.clone(), at.clone()];
+                    names.sort();
+                    let [a, b] = names;
+                    two_names = Some((shown(&disk), a, b));
+                }
                 continue;
             }
             let Ok(text) = ritsu_base::fs::read_to_string(&disk) else { continue };
             let root = module_root(&disk, &at);
             // a file it imports that does not read brings nothing with it; buf names it
             let imports = crate::proto::read(&at, &text).map(|f| f.imports).unwrap_or_default();
+            // the roots of the dependencies of the module the file is in, read once it needs them
+            let mut deps: Option<Vec<PathBuf>> = None;
             for imp in imports {
                 let p = root.join(&imp);
                 if imp.starts_with("google/protobuf/") {
                     continue;
                 }
-                if ritsu_base::fs::is_file(&p) {
-                    todo.push((p, imp));
-                } else if !elsewhere.iter().any(|(_, i)| *i == imp) {
-                    elsewhere.push((disk.clone(), imp));
+                let found = if ritsu_base::fs::is_file(&p) {
+                    Some(p)
+                } else if imp.starts_with('@') {
+                    None
+                } else {
+                    let dir = disk.parent().unwrap_or(Path::new(""));
+                    deps.get_or_insert_with(|| ritsu_proto::dependency_roots(dir)).iter().map(|r| r.join(&imp)).find(|p| ritsu_base::fs::is_file(p))
+                };
+                match found {
+                    Some(p) => todo.push((p, imp)),
+                    None if !elsewhere.iter().any(|(_, i)| *i == imp) => elsewhere.push((disk.clone(), imp)),
+                    None => {}
                 }
             }
             files.push((at, text));
+            from.push(disk);
         }
-        files.sort();
-        Contracts { files, deps: bsr_deps(&elsewhere) }
+        let mut both: Vec<((String, String), PathBuf)> = files.into_iter().zip(from).collect();
+        both.sort();
+        let (files, from): (Vec<_>, Vec<_>) = both.into_iter().map(|(f, d)| (f, shown(&d))).unzip();
+        Contracts { files, from, deps: bsr_deps(&elsewhere), clash, two_names }
     }
 
     /// The BSR modules this rule's contracts import files from, which `rulec api` names so a

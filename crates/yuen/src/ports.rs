@@ -110,6 +110,8 @@ impl ritsu_ports::Items for Engine {
         let ends = crate::ends::requirement_ends(&p, &srcs, &in_cycle);
         let f = &p.files[0];
         let naming = |kind: &str, name: &str| Naming::file(Tool::Yuen, file).with(kind, name);
+        // a path as a `from` line writes it, from the root of the file's own module (ritsu's DESIGN 17.6)
+        let own = |path: &str| ritsu_base::modules::from_own_root(&p.root, &f.rel, path);
         let mut out = Vec::new();
         for (name, versions) in &p.by_name {
             let Some(&r) = versions.iter().filter(|r| p.reqs[**r].file == 0).max_by_key(|r| p.reqs[**r].version) else { continue };
@@ -124,12 +126,12 @@ impl ritsu_ports::Items for Engine {
                     pins.iter().filter_map(|x| x.pin.as_ref().map(|h| format!("from law {} {id} {} sha256:{h}\n", db.word(), x.fragment))).collect::<String>(),
                 ),
                 SourceKind::File { pin, .. } => {
-                    let path = p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| n.path.clone()).unwrap_or_default();
+                    let path = p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| own(&n.path)).unwrap_or_default();
                     (s.span.line, pin.as_ref().map(|h| format!("from file {path} sha256:{h}\n")).unwrap_or_default())
                 }
                 SourceKind::Borrowed { .. } => (s.span.line, p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| format!("{}\n", n.text())).unwrap_or_default()),
                 SourceKind::OpenSpec { pins, .. } => {
-                    let path = p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| n.path.clone()).unwrap_or_default();
+                    let path = p.names.sources[0].get(si).and_then(|n| n.as_ref()).map(|n| own(&n.path)).unwrap_or_default();
                     (
                         pins.iter().map(|x| x.span.line).fold(s.span.line, usize::max),
                         pins.iter().filter_map(|x| x.pin.as_ref().map(|h| format!("from openspec {path} {} sha256:{h}\n", x.fragment))).collect::<String>(),

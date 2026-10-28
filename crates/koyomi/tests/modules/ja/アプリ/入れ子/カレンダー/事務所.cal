@@ -1,0 +1,5 @@
+# app の中の入れ子のモジュールのカレンダー。土日を休む。
+calendar 事務所(office) v1
+description "土曜日と日曜日を休む"
+
+closed weekly sat, sun

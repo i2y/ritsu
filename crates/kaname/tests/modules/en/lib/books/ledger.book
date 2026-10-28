@@ -1,0 +1,15 @@
+# The money of the module lib, in pence: the total of an order is charged to the customer.
+book ledger v1
+description "The money of the shop of the tests of modules: the total of an order, charged to the customer"
+
+unit GBP scale 2
+
+account sales : GBP
+  description "what the shop has been paid"
+  at least 0 refused as overdrawn
+account customers : GBP outside
+
+transfer charge(order: string, amount: GBP)
+  description "the total of an order, paid by the customer"
+  key order
+  move amount from customers to sales

@@ -1,0 +1,10 @@
+// 税率が区別する品物の種類。
+syntax = "proto3";
+package acme.tax.v1;
+
+enum Category {
+  CATEGORY_UNSPECIFIED = 0;
+  CATEGORY_STANDARD = 1;
+  CATEGORY_REDUCED = 2;
+  CATEGORY_ZERO = 3;
+}

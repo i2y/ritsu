@@ -1,0 +1,8 @@
+# モジュール lib のコンテキストの地図。コンテキストは一つ。`covers "."` は依存 base の中に入らない。base の
+# 税率は、コンテキストが持つので範囲に入る。
+map 合計(totals) v1
+description "注文の合計を出す"
+
+use context "コンテキスト/値付け.ctx"
+
+covers "."

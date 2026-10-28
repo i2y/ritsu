@@ -178,7 +178,8 @@ pub fn check(g: &Gate, langs: &Langs) -> (Vec<Diag>, Known) {
         }
         let unreadable = |said: Vec<Said>, lang: &str| {
             let d = at("E201", g, u.line, tr!("`{}` は {lang} の検査を通らないか、読めません", "`{}` does not pass {lang}'s check, or cannot be read", u.path));
-            said_notes(d, &said).note(tr!("そのファイルを {lang} の検査が通るように直してください。", "Fix the file until {lang}'s check passes."))
+            let d = said_notes(d, &said).note(tr!("そのファイルを {lang} の検査が通るように直してください。", "Fix the file until {lang}'s check passes."));
+            crate::names::with_outside(d, &g.file, &u.path, &u.file)
         };
         match u.kind {
             UseKind::Rule => {
@@ -282,7 +283,8 @@ pub fn check(g: &Gate, langs: &Langs) -> (Vec<Diag>, Known) {
         for w in g.workflows.iter().filter(|w| g.from_root(&w.file).is_some()) {
             if let Err(said) = flows.crossings(&w.file, ports) {
                 let d = at("E208", g, w.named.line, tr!("`{}` は dandori の検査を通らないか、読めません", "`{}` does not pass dandori's check, or cannot be read", w.flow));
-                diags.push(said_notes(d, &said).note(tr!("ワークフローを dandori の検査が通るように直してください。", "Fix the workflow until dandori's check passes.")));
+                let d = said_notes(d, &said).note(tr!("ワークフローを dandori の検査が通るように直してください。", "Fix the workflow until dandori's check passes."));
+                diags.push(crate::names::with_outside(d, &g.file, &w.flow, &w.file));
             }
         }
     }

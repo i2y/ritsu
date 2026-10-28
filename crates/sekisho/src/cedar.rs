@@ -1068,10 +1068,16 @@ impl Files {
 /// `.gate` with its digest. `shown` is the path the head names (the file's name for sekisho's own
 /// command, the path from the project's root for `ritsu gen`).
 pub fn head(scope: &Scope, shown: &str, lang: Lang) -> String {
+    head_in(scope, shown, lang, None)
+}
+
+/// [`head`] of a gate of a dependency's, which names the dependency's module after the digest
+/// (ritsu's DESIGN 17.8).
+pub fn head_in(scope: &Scope, shown: &str, lang: Lang, module: Option<&ritsu_emit::package::Module>) -> String {
     let f = scope.file();
     let sha = ritsu_base::sha256::hex(f.src.as_bytes());
     let version = f.version.strip_prefix('v').unwrap_or(&f.version);
-    let source = ritsu_emit::header::Source { path: shown, kind: "gate", name: &f.name.text, version, sha256: &sha };
+    let source = ritsu_emit::header::Source { path: shown, kind: "gate", name: &f.name.text, version, sha256: &sha, module };
     let c = ritsu_emit::header::Comment::Slashes;
     c.line(&ritsu_emit::header::generated("sekisho")) + &c.line(source.line().get(lang))
 }
@@ -1081,9 +1087,14 @@ pub fn head(scope: &Scope, shown: &str, lang: Lang) -> String {
 /// CLI prints it for the text. Err only when ritsu-base's Cedar does not read what it is given,
 /// which is a bug of sekisho's.
 pub fn files(scope: &Scope, checked: &Checked, shown: &str, lang: Lang) -> Result<Files, c::Error> {
+    files_in(scope, checked, shown, lang, None)
+}
+
+/// [`files`] of a gate of a dependency's, whose heads name the dependency's module.
+pub fn files_in(scope: &Scope, checked: &Checked, shown: &str, lang: Lang, module: Option<&ritsu_emit::package::Module>) -> Result<Files, c::Error> {
     let g = &checked.gate;
     let shape = shape(g, scope, checked);
-    let h = head(scope, shown, lang);
+    let h = head_in(scope, shown, lang, module);
     let set = policies(g, scope, &shape);
     let body = if set.policies.is_empty() { String::new() } else { c::write_policies(&set)? };
     // the head goes right above the first policy, as `cedar format` puts a comment

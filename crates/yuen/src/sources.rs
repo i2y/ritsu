@@ -66,6 +66,11 @@ impl Resolved {
 /// The sources of every file, in the order they are declared.
 pub struct Sources {
     pub files: Vec<Vec<(String, Resolved)>>,
+    /// The root, and each file's path from it: a `from` line writes a source's path as the module
+    /// of ritsu's the `.req` is in writes it from its own root (ritsu's DESIGN 17.6), so that the end
+    /// of a dependency's requirement is the same whether its module is the one at hand or not.
+    pub root: PathBuf,
+    pub reqs: Vec<String>,
 }
 
 /// An upper end of a `from @…` line: what the requirement's end writes for it (DESIGN 4.1),
@@ -87,6 +92,11 @@ pub struct Cited {
 impl Sources {
     pub fn get(&self, fi: usize, name: &str) -> Option<&Resolved> {
         self.files[fi].iter().find(|(n, _)| n == name).map(|(_, r)| r)
+    }
+
+    /// A path from the root as the file `fi`'s module writes it from its own root.
+    fn own(&self, fi: usize, path: &str) -> String {
+        ritsu_base::modules::from_own_root(&self.root, &self.reqs[fi], path)
     }
 
     /// What one citation of a `from` line resolves to: one end per article (one for a file
@@ -119,7 +129,7 @@ impl Sources {
                 }
                 let bytes = bytes.clone()?;
                 let hash = sha256::short(&bytes);
-                Some(vec![Cited { line: format!("from file {} sha256:{hash}", name.path), hash, bytes, label: source.to_string(), law: None }])
+                Some(vec![Cited { line: format!("from file {} sha256:{hash}", self.own(fi, &name.path)), hash, bytes, label: source.to_string(), law: None }])
             }
             Resolved::OpenSpec { name, pins, .. } => {
                 if fragments.is_empty() {
@@ -130,7 +140,7 @@ impl Sources {
                     let bytes = pins.iter().find(|x| &x.name == fr)?.block.clone()?.into_bytes();
                     let hash = sha256::short(&bytes);
                     out.push(Cited {
-                        line: format!("from openspec {} {fr} sha256:{hash}", name.path),
+                        line: format!("from openspec {} {fr} sha256:{hash}", self.own(fi, &name.path)),
                         hash,
                         bytes,
                         label: format!("{source} {}", crate::lex::spelled_name(fr)),
@@ -203,9 +213,18 @@ fn borrow(p: &Project, fi: usize, s: &SourceDecl, n: &Name, diags: &mut Vec<Diag
             Resolved::Law { db, id: id.clone(), asof: asof.clone(), revision: copies::revision(&dir), dir, articles, borrowed: Some(n.clone()) }
         }
         ritsu_ports::SourceKind::File { path, url, pin } => {
-            let Ok(rel) = ritsu_base::paths::join(&dir_rel, path) else {
-                diags.push(e106(tr!("{t} のコピーのパス `{path}` はルートの外に出ます", "the path `{path}` of the copy of {t} goes outside the root")));
-                return Resolved::Broken;
+            // the path the rule or the calendar writes, from its directory; in a module of ritsu's,
+            // held to the module, and `@<name>/…` a dependency's file (ritsu's DESIGN 17.6)
+            let rel = match ritsu_base::modules::join(&p.root, &n.path, path) {
+                Ok(rel) => rel,
+                Err(ritsu_base::modules::Refused::Path(..)) => {
+                    diags.push(e106(tr!("{t} のコピーのパス `{path}` はルートの外に出ます", "the path `{path}` of the copy of {t} goes outside the root")));
+                    return Resolved::Broken;
+                }
+                Err(refused) => {
+                    diags.push(e106(crate::diag::cap(refused.text())));
+                    return Resolved::Broken;
+                }
             };
             let copy = p.root.join(&rel);
             let bytes = ritsu_base::fs::read(&copy).ok().filter(|b| pin.as_deref() == Some(sha256::short(b).as_str()));
@@ -304,15 +323,25 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
                         let mut bytes = None;
                         match ritsu_base::fs::read(&abs) {
                             Err(_) => {
-                                let mut d = p.err(fi, "E101", s.span, tr!("出典「{sname}」のコピー {shown} がありません", "The copy of the source {sname} is not there: {shown}"));
-                                d = match url {
-                                    Some(_) => d.note(tr!(
-                                        "`yuen source fetch` が url から取ってきて、そこに書きます。check は通信しません。",
-                                        "`yuen source fetch` takes it from the url and writes it there; check never reads the network."
-                                    )),
-                                    None => d.note(tr!("yuen はコピーを、.req からの相対パスで探します。ファイルを置くか、パスを直してください。", "The copy is looked for from the directory of the .req; put the file there or correct the path.")),
-                                };
-                                diags.push(d);
+                                // a dependency's copy is the dependency's, said as every language says
+                                // a dependency's file that is not there (ritsu's DESIGN 17.6)
+                                let (said, outside) = crate::check::module_words(p, fi, name);
+                                if let Some(said) = said {
+                                    diags.push(p.err(fi, "E101", s.span, said));
+                                } else {
+                                    let mut d = p.err(fi, "E101", s.span, tr!("出典「{sname}」のコピー {shown} がありません", "The copy of the source {sname} is not there: {shown}"));
+                                    d = match url {
+                                        Some(_) => d.note(tr!(
+                                            "`yuen source fetch` が url から取ってきて、そこに書きます。check は通信しません。",
+                                            "`yuen source fetch` takes it from the url and writes it there; check never reads the network."
+                                        )),
+                                        None => d.note(tr!("yuen はコピーを、.req からの相対パスで探します。ファイルを置くか、パスを直してください。", "The copy is looked for from the directory of the .req; put the file there or correct the path.")),
+                                    };
+                                    diags.push(match outside {
+                                        Some(n) => d.note(n),
+                                        None => d,
+                                    });
+                                }
                             }
                             Ok(b) => {
                                 let actual = sha256::short(&b);
@@ -353,7 +382,7 @@ pub fn check_sources(p: &Project) -> (Sources, Vec<Diag>) {
         }
         files.push(out);
     }
-    let sources = Sources { files };
+    let sources = Sources { files, root: p.root.clone(), reqs: p.files.iter().map(|f| f.rel.clone()).collect() };
     // Citations (E105, E102 for an article cited and not pinned) and what is pinned and not
     // cited (W101).
     for (fi, f) in p.files.iter().enumerate() {
@@ -538,10 +567,20 @@ fn spec_source(p: &Project, fi: usize, s: &SourceDecl, name: &Name, pins: &[PinL
     let bytes = match ritsu_base::fs::read(&abs) {
         Ok(b) => b,
         Err(_) => {
-            diags.push(p.err(fi, "E101", s.span, tr!("出典「{sname}」の仕様 {shown} がありません", "The spec of the source {sname} is not there: {shown}")).note(tr!(
-                "OpenSpec の仕様は取ってくるコピーではなく、プロジェクトのファイルです。パスを直してください。変更を archive して capability が無くなったのなら、それを読む要件を見直してください。",
-                "An OpenSpec spec is a file of the project, not a copy to fetch: correct the path. If an archived change retired the capability, look again at the requirements that read it."
-            )));
+            let (said, outside) = crate::check::module_words(p, fi, name);
+            diags.push(match said {
+                Some(said) => p.err(fi, "E101", s.span, said),
+                None => {
+                    let d = p.err(fi, "E101", s.span, tr!("出典「{sname}」の仕様 {shown} がありません", "The spec of the source {sname} is not there: {shown}")).note(tr!(
+                        "OpenSpec の仕様は取ってくるコピーではなく、プロジェクトのファイルです。パスを直してください。変更を archive して capability が無くなったのなら、それを読む要件を見直してください。",
+                        "An OpenSpec spec is a file of the project, not a copy to fetch: correct the path. If an archived change retired the capability, look again at the requirements that read it."
+                    ));
+                    match outside {
+                        Some(n) => d.note(n),
+                        None => d,
+                    }
+                }
+            });
             return Resolved::OpenSpec { name: name.clone(), abs, pins: unread(pins), spec: None };
         }
     };

@@ -575,15 +575,18 @@ impl<'a> Gen<'a> {
         n
     }
 
-    /// The name an import is read by.
+    /// The name an import is read by: for a file of a dependency's, with the names of the
+    /// dependencies on the way to it before its own (`rule_pricing_fee`, ritsu's DESIGN 17.8), so
+    /// that the files of one name of two modules are two names.
     pub fn import_name(&self, i: &Import) -> String {
         let t = self.t;
+        let of = |f: &std::path::Path, name: String| ritsu_emit::package::local_name(&self.opts.dir_of(f), &name);
         match i {
             Import::Kaname => "kaname".into(),
             Import::Units => if t == Target::Python { "_units" } else { "units" }.into(),
             Import::Datetime => "_dt".into(),
             Import::Rule(f) => {
-                let alias = self.p.rules.get(f).map(|r| r.alias.clone()).unwrap_or_default();
+                let alias = of(f, self.p.rules.get(f).map(|r| r.alias.clone()).unwrap_or_default());
                 match t {
                     Target::TypeScript => format!("rule_{alias}"),
                     Target::Python => format!("_rule_{alias}"),
@@ -591,7 +594,7 @@ impl<'a> Gen<'a> {
                 }
             }
             Import::Dates(f) => {
-                let alias = self.p.dates.get(f).map(|d| d.alias.clone()).unwrap_or_default();
+                let alias = of(f, self.p.dates.get(f).map(|d| d.alias.clone()).unwrap_or_default());
                 match t {
                     Target::TypeScript => format!("dates_{alias}"),
                     Target::Python => format!("_dates_{alias}"),
@@ -599,7 +602,7 @@ impl<'a> Gen<'a> {
                 }
             }
             Import::Module(f) => {
-                let alias = self.p.module(f).module.name.ascii().to_string();
+                let alias = of(f, self.p.module(f).module.name.ascii().to_string());
                 match t {
                     Target::TypeScript => format!("mod_{alias}"),
                     Target::Python => format!("_mod_{alias}"),
@@ -607,11 +610,15 @@ impl<'a> Gen<'a> {
                 }
             }
             Import::Book(f) => {
-                let b = self.p.books.get(f).map(|b| b.name.clone()).unwrap_or_default();
+                let b = of(f, self.p.books.get(f).map(|b| b.name.clone()).unwrap_or_default());
                 match t {
                     Target::TypeScript => format!("books_{b}"),
                     Target::Python => format!("_books_{b}"),
-                    Target::Go => super::books::go_package_of(&self.p, f),
+                    Target::Go => {
+                        let p = super::books::go_package_of(&self.p, f);
+                        let n = of(f, p.clone());
+                        if n == p { p } else { go_package(&n) }
+                    }
                 }
             }
         }

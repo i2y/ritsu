@@ -1,0 +1,25 @@
+# Who approves a purchase in the module lib: the limit is the rule of the module base, which this gate
+# reads by `@base/…`, a path from the root of this module.
+gate approvals v1
+description "Who approves a purchase, up to the approver's limit"
+
+use rule approval_limit from "@base/rules/approval_limit.rule"
+
+principal User
+  attributes
+    limit : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+resource Purchase
+
+action approve
+  principal User
+  resource Purchase
+  input
+    amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    band = approval_limit(amount: amount, limit: principal.limit).band
+
+permit approve_within_the_limit
+  principal is User
+  action approve
+  when band is within_limit

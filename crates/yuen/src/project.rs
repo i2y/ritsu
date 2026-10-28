@@ -96,14 +96,20 @@ pub fn find_root(first: &Path) -> Option<PathBuf> {
 
 /// The `.req` files a path stands for: itself, or every `.req` under a directory, in path
 /// order, leaving out what every language of ritsu passes over (what is hidden, `target`,
-/// `node_modules`, `site-packages`, `__pycache__`).
+/// `node_modules`, `site-packages`, `__pycache__`), and another module below (a directory with a
+/// `ritsu.mod` of its own; ritsu's DESIGN 17.6).
 pub fn expand(arg: &str) -> Vec<String> {
+    expand_noting(arg, &mut Vec::new())
+}
+
+/// [`expand`], with each module the walk passed over in `modules`, as the run writes it.
+pub fn expand_noting(arg: &str, modules: &mut Vec<String>) -> Vec<String> {
     let p = Path::new(arg);
     if !ritsu_base::fs::is_dir(p) {
         return vec![arg.to_string()];
     }
     let mut out = Vec::new();
-    fn walk(d: &Path, out: &mut Vec<String>) {
+    fn walk(d: &Path, out: &mut Vec<String>, modules: &mut Vec<String>) {
         let Ok(rd) = ritsu_base::fs::read_dir(d) else { return };
         let mut es: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         es.sort();
@@ -113,7 +119,14 @@ pub fn expand(arg: &str) -> Vec<String> {
                 if ritsu_base::paths::skipped_name(&name) {
                     continue;
                 }
-                walk(&e, out);
+                match ritsu_base::paths::not_entered(&e) {
+                    Some(ritsu_base::paths::NotEntered::Module) => {
+                        let e = e.strip_prefix(".").unwrap_or(&e);
+                        modules.push(e.to_string_lossy().to_string());
+                    }
+                    Some(ritsu_base::paths::NotEntered::State) => {}
+                    None => walk(&e, out, modules),
+                }
             } else if e.extension().is_some_and(|x| x == "req") {
                 // under `.`, a file is written from where yuen runs, without a leading `./`
                 let e = e.strip_prefix(".").unwrap_or(&e);
@@ -121,7 +134,18 @@ pub fn expand(arg: &str) -> Vec<String> {
             }
         }
     }
-    walk(p, &mut out);
+    walk(p, &mut out, modules);
+    out
+}
+
+/// The modules the walks of the directories `args` pass over, when a walk did not start in a
+/// module: what the command says in one line each (ritsu's DESIGN 17.6). In a module, another
+/// module below is not the module's, and nothing is said of it.
+pub fn other_modules(args: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for a in args.iter().filter(|a| ritsu_base::fs::is_dir(a) && ritsu_base::modules::refer::module_of(Path::new(a)).is_none()) {
+        expand_noting(a, &mut out);
+    }
     out
 }
 
@@ -506,11 +530,11 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
     let mut links = Vec::new();
     for r in 0..p.reqs.len() {
         let fi = p.reqs[r].file;
-        let dir = p.files[fi].dir.clone();
+        let rel = p.files[fi].rel.clone();
         let d = p.decl(r).clone();
         let mut out = Vec::new();
         for l in &d.links {
-            out.push(match names::resolve(&l.naming, &dir, false) {
+            out.push(match names::resolve_in(&l.naming, &p.root, &rel, false) {
                 Err(e) => {
                     diags.push(name_diag(p, fi, l.span.line, e));
                     None
@@ -533,11 +557,11 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
     let mut scopes = Vec::new();
     let mut sources = Vec::new();
     for fi in 0..p.files.len() {
-        let dir = p.files[fi].dir.clone();
+        let rel = p.files[fi].rel.clone();
         let ast = p.files[fi].ast.clone();
         let mut sc = Vec::new();
         for s in &ast.scopes {
-            sc.push(match names::resolve(&s.naming, &dir, true) {
+            sc.push(match names::resolve_in(&s.naming, &p.root, &rel, true) {
                 Err(e) => {
                     diags.push(name_diag(p, fi, s.span.line, e));
                     None
@@ -557,7 +581,7 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
         let mut so = Vec::new();
         for s in &ast.sources {
             so.push(match &s.kind {
-                SourceKind::Borrowed { naming } => match names::resolve(naming, &dir, false) {
+                SourceKind::Borrowed { naming } => match names::resolve_in(naming, &p.root, &rel, false) {
                     Err(e) => {
                         diags.push(name_diag(p, fi, s.span.line, e));
                         None
@@ -577,12 +601,16 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                         diags.push(p.err(fi, "E013", *path_span, tr!("仕様のパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the spec from the directory of the .req")));
                         None
                     } else {
-                        match ritsu_base::paths::join(&dir, path).ok() {
-                            None => {
+                        match ritsu_base::modules::join(&p.root, &rel, path) {
+                            Err(ritsu_base::modules::Refused::Path(..)) => {
                                 diags.push(p.err(fi, "E013", *path_span, tr!("`{path}` はルートの外に出ます", "`{path}` goes outside the root")));
                                 None
                             }
-                            Some(full) => Some(Name { tool: Tool::File, path: full, items: vec![] }),
+                            Err(refused) => {
+                                diags.push(p.err(fi, "E013", *path_span, crate::diag::cap(refused.text())));
+                                None
+                            }
+                            Ok(full) => Some(Name { tool: Tool::File, path: full, items: vec![] }),
                         }
                     }
                 }
@@ -591,12 +619,16 @@ pub fn check_names(p: &mut Project) -> Vec<Diag> {
                         diags.push(p.err(fi, "E013", *path_span, tr!("出典のコピーのパス `{path}` は、.req からの相対パスで書いてください", "Write the path `{path}` of the copy from the directory of the .req")));
                         None
                     } else {
-                        match ritsu_base::paths::join(&dir, path).ok() {
-                            None => {
+                        match ritsu_base::modules::join(&p.root, &rel, path) {
+                            Err(ritsu_base::modules::Refused::Path(..)) => {
                                 diags.push(p.err(fi, "E013", *path_span, tr!("`{path}` はルートの外に出ます", "`{path}` goes outside the root")));
                                 None
                             }
-                            Some(full) => Some(Name { tool: Tool::File, path: full, items: vec![] }),
+                            Err(refused) => {
+                                diags.push(p.err(fi, "E013", *path_span, crate::diag::cap(refused.text())));
+                                None
+                            }
+                            Ok(full) => Some(Name { tool: Tool::File, path: full, items: vec![] }),
                         }
                     }
                 }

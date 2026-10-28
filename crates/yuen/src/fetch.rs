@@ -35,12 +35,6 @@ pub struct Outcome {
     pub changed: bool,
 }
 
-/// ritsu-base's message, its English starting with a capital as yuen's sentences do (yuen
-/// prints a message as written).
-fn cap(t: Text) -> Text {
-    Text { en: ritsu_base::text::capitalize(&t.en), ja: t.ja }
-}
-
 /// e-Gov law API v2: `YUEN_EGOV`, else e-Gov itself. The requests, the retries and the reading
 /// of a reply are ritsu-base's (`ritsu_base::sources`).
 pub fn egov() -> Egov {
@@ -56,7 +50,7 @@ pub fn ecfr() -> Ecfr {
 /// before the third (a busy server refuses now and then; a scheduled job that stops on one
 /// refusal is one nobody reads), and one for a `file://` URL (DESIGN 14).
 pub fn curl(url: &str) -> Result<Vec<u8>, Text> {
-    sources::curl(url).map_err(cap)
+    sources::curl(url).map_err(crate::diag::cap)
 }
 
 /// Whether two copies say the same: their text, not their markup (rulec's §15.71).
@@ -79,9 +73,9 @@ impl Net {
         match db {
             LawDb::Egov => {
                 let (elm, amend) = sources::element_of_file(file);
-                egov().element(id, asof, asof, &elm, amend.as_deref(), &mut self.suppl).map_err(cap)
+                egov().element(id, asof, asof, &elm, amend.as_deref(), &mut self.suppl).map_err(crate::diag::cap)
             }
-            LawDb::Ecfr => Ok((ecfr().section(id, asof, file.trim_end_matches(".xml")).map_err(cap)?, String::new())),
+            LawDb::Ecfr => Ok((ecfr().section(id, asof, file.trim_end_matches(".xml")).map_err(crate::diag::cap)?, String::new())),
         }
     }
 }
@@ -173,13 +167,23 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                 SourceKind::File { url, pin, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     let path = p.shown(&n.path);
+                    // a dependency's document comes with its copies, which this module does not
+                    // write (ritsu's DESIGN 17.6); with no `ritsu.mod`, a directory named `@…` is
+                    // the project's own (M14)
+                    if ritsu_base::modules::under_dependency(&ritsu_base::paths::on_disk(&p.root, &n.path)) {
+                        lines.push(tr!(
+                            "{name}: {path} は依存のファイルなので、取り直しません。コピーは依存のほうにあります",
+                            "{name}: {path} is a file of a dependency, so it is not fetched here; its copies are the dependency's"
+                        ));
+                        continue;
+                    }
                     let Some(url) = url else {
                         lines.push(tr!("{name}: url が無いので取れません（`url \"…\"` を足すと取れます）", "{name}: no url, so the copy cannot be fetched (add `url \"…\"`)"));
                         continue;
                     };
                     let body = curl(url)?;
                     let dest = p.root.join(&n.path);
-                    let before = std::fs::read(&dest).ok();
+                    let before = ritsu_base::fs::read(&dest).ok();
                     let h = sha256::short(&body);
                     if before.as_deref() == Some(body.as_slice()) {
                         lines.push(tr!("{name}: コピー {path} は変わっていません（sha256:{h}）", "{name}: the copy {path} is unchanged (sha256:{h})"));
@@ -274,7 +278,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                 SourceKind::File { pin, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     let path = p.shown(&n.path);
-                    let Ok(bytes) = std::fs::read(p.root.join(&n.path)) else {
+                    let Ok(bytes) = ritsu_base::fs::read(p.root.join(&n.path)) else {
                         report.push(tr!("{name}: コピー {path} が無いので固定できません。先に yuen source fetch を走らせてください", "{name}: there is no copy {path} to pin; run yuen source fetch first"));
                         continue;
                     };
@@ -291,7 +295,7 @@ pub fn pin(p: &Project) -> (Vec<(usize, String)>, Outcome) {
                 SourceKind::OpenSpec { pins, .. } => {
                     let Some(n) = &p.names.sources[fi][si] else { continue };
                     let path = p.shown(&n.path);
-                    let spec = match std::fs::read(p.root.join(&n.path)).map(|b| ritsu_base::openspec::read_spec(&b)) {
+                    let spec = match ritsu_base::fs::read(p.root.join(&n.path)).map(|b| ritsu_base::openspec::read_spec(&b)) {
                         Ok(Ok(spec)) => spec,
                         Ok(Err(_)) => {
                             report.push(tr!("{name}: 仕様 {path} が読めないので固定できません（理由は yuen check が示します）", "{name}: the spec {path} cannot be read, so nothing is pinned (yuen check says why)"));
@@ -527,8 +531,8 @@ enum Whose<'a> {
 fn law_outdated(p: &Project, fi: usize, name: &str, db: LawDb, id: &str, asof: &str, files: &[(String, String)], cdir: &Path, whose: Whose, net: &mut Net, lines: &mut Vec<Text>) -> Result<bool, Text> {
     let mut changed = false;
     let later = match db {
-        LawDb::Egov => egov().later_revisions(id, asof).map_err(cap)?,
-        LawDb::Ecfr => ecfr().amendments(id, asof, &files.iter().map(|(_, file)| file.trim_end_matches(".xml").to_string()).collect::<Vec<_>>()).map_err(cap)?.into_iter().map(|(d, _)| (d, String::new())).collect(),
+        LawDb::Egov => egov().later_revisions(id, asof).map_err(crate::diag::cap)?,
+        LawDb::Ecfr => ecfr().amendments(id, asof, &files.iter().map(|(_, file)| file.trim_end_matches(".xml").to_string()).collect::<Vec<_>>()).map_err(crate::diag::cap)?.into_iter().map(|(d, _)| (d, String::new())).collect(),
     };
     if later.is_empty() {
         lines.push(match db {
@@ -618,7 +622,7 @@ fn file_outdated(p: &Project, fi: usize, name: &str, url: Option<&str>, pin: Opt
     }
     let was = pin.map(|x| format!("sha256:{x}")).unwrap_or_else(|| "-".into());
     lines.push(tr!("{name}: {url} が変わりました（固定は {was}、いまは sha256:{h}）", "{name}: {url} moved on (pinned {was}, now sha256:{h})"));
-    let copy = std::fs::read(p.root.join(copy_rel)).ok();
+    let copy = ritsu_base::fs::read(p.root.join(copy_rel)).ok();
     if let (Some(old), Ok(new)) = (copy.as_deref().and_then(|b| std::str::from_utf8(b).ok()), std::str::from_utf8(&body))
         && old.len() <= 1 << 20
         && new.len() <= 1 << 20

@@ -1,0 +1,4 @@
+module example.com/acme/shop 0.1.0
+@pricing       example.com/acme/pricing 1.1.0  path ../pricing
+@pricing/@tax  example.com/acme/tax 1.0.0      path ../tax
+ritsu mod list: 2 dependencies (2 by a path, 0 from a registry); no lock is needed

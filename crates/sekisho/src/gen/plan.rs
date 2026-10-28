@@ -34,14 +34,24 @@ impl Authorizer {
 }
 
 /// How a module of the code is written, besides the gate: the path its head names, the language of
-/// the comments, the authorizer, and for Go the import path of the package the module is in (a
-/// rule's package is `<module>/rules/<package>`, as `ritsu gen` lays a package out, DESIGN 5.6).
+/// the comments, the authorizer, for Go the import path of the package the module is in (a rule's
+/// package is `<module>/rules/<package>`, as `ritsu gen` lays a package out, DESIGN 5.6), and where
+/// the module goes in that package, and through it each module it imports (`deps/<name>/` for a
+/// dependency's, ritsu's DESIGN 17.8).
 #[derive(Clone, Debug)]
 pub struct Options {
     pub shown: String,
     pub lang: Lang,
     pub authorizer: Authorizer,
     pub go_module: String,
+    pub place: ritsu_emit::package::Place,
+}
+
+impl Options {
+    /// The directory of the module of the file the `use` `ui` of the gate reads, in the package.
+    pub fn dir_of(&self, g: &Gate, ui: usize) -> String {
+        g.uses.get(ui).map(|u| self.place.dir_of(&u.file)).unwrap_or_default()
+    }
 }
 
 /// A module of another language the code imports: a rule's, a dates file's or a calendar's.

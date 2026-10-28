@@ -256,6 +256,25 @@ pub fn proto_crossings(ps: &Protos, arts: &[Artifact]) -> Vec<Crossing> {
     out
 }
 
+/// The path the file `from` writes for `to` (both from the root `root`), as a crossing shows the
+/// reference: from the file's directory, but when the root is a module's, a dependency's file as it
+/// is from the root of the module that writes it (ritsu's DESIGN 17.6): `@pricing/rules/fee.rule`
+/// from a file of the module at hand, `@tax/…` from a file of `@pricing` for `@pricing/@tax/…`, never
+/// `../@pricing/…`. With no `ritsu.mod` at the root, a directory whose name starts with `@` is an
+/// ordinary one, and the path is from the file's directory as before (M14).
+fn written_as(root: &std::path::Path, from: &str, to: &str) -> String {
+    use ritsu_base::modules::prefix_of;
+    let relative = || ritsu_base::paths::relative(&ritsu_base::paths::parent(from), to);
+    if !ritsu_base::fs::is_file(root.join(ritsu_base::modules::manifest::FILE)) {
+        return relative();
+    }
+    match (prefix_of(from), prefix_of(to)) {
+        (a, b) if b.is_none() || a == b => relative(),
+        (Some(a), Some(_)) => to.strip_prefix(&format!("{a}/")).unwrap_or(to).to_string(),
+        _ => to.to_string(),
+    }
+}
+
 /// What the other languages say their artifacts name, as crossings (DESIGN 3.3): a rule's `import
 /// proto` (the enum, its values among what crosses), `shape` (the message, and what it reaches),
 /// `apply` (another rule), `import enum` (an `enums` file) and `range from koyomi` (a dates
@@ -313,7 +332,9 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
                 if !known && !crate::owners::in_scope(m, &to) {
                     let (f, t, how) = (shown(from), r.target.text(), r.how.clone());
                     let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, from)).unwrap_or_default();
-                    diags.push(diag::at("E103", from, r.line, 1, tr!("{f} が、地図の範囲の外の {t} を参照しています（{how}）", "The file {f} refers to {t}, which is outside the map's scope ({how})")).source(&src).note(crate::owners::scope_note(m)));
+                    let mut d = diag::at("E103", from, r.line, 1, tr!("{f} が、地図の範囲の外の {t} を参照しています（{how}）", "The file {f} refers to {t}, which is outside the map's scope ({how})")).source(&src).note(crate::owners::scope_note(m));
+                    d.notes.extend(crate::owners::dependency_note(m, &to));
+                    diags.push(d);
                 }
                 continue;
             };
@@ -340,7 +361,7 @@ pub fn suite_crossings(m: &Model, ps: &Protos, arts: &[Artifact], read: &Read) -
             let import = match &kind {
                 Kind::FlowConnect => format!("connect {}", r.target.items.iter().map(|(_, v)| v.as_str()).collect::<Vec<_>>().join("/")),
                 Kind::GateGuards => format!("guards {}", r.target.text()),
-                k => format!("{} {}", k.via(), crate::naming::quote(&ritsu_base::paths::relative(&ritsu_base::paths::parent(from), &to))),
+                k => format!("{} {}", k.via(), crate::naming::quote(&written_as(&m.root, from, &to))),
             };
             out.push(Crossing { from: from.clone(), from_tool: *tool, from_ctx: x, to, to_ctx: y, target: r.target.clone(), kind, line: r.line, col: 1, import, uses, reach, allowed: None, pointer: None, elements: vec![], from_contract: None });
         }
@@ -364,11 +385,11 @@ pub fn crate_crossings(m: &Model, arts: &[Artifact], crates: Option<&crate::carg
                 if !crate::owners::in_scope(m, &to) {
                     let (f, t) = (shown(&c.manifest), shown(dir));
                     let src = ritsu_base::fs::read_to_string(crate::paths::on_disk(&m.root, &c.manifest)).unwrap_or_default();
-                    diags.push(
-                        diag::at("E103", &c.manifest, d.line, d.col, tr!("{f} が、地図の範囲の外のクレート {t} に依存しています（{}）", "The file {f} depends on the crate at {t}, which is outside the map's scope ({})", d.table; d.table))
-                            .source(&src)
-                            .note(crate::owners::scope_note(m)),
-                    );
+                    let mut e = diag::at("E103", &c.manifest, d.line, d.col, tr!("{f} が、地図の範囲の外のクレート {t} に依存しています（{}）", "The file {f} depends on the crate at {t}, which is outside the map's scope ({})", d.table; d.table))
+                        .source(&src)
+                        .note(crate::owners::scope_note(m));
+                    e.notes.extend(crate::owners::dependency_note(m, &to));
+                    diags.push(e);
                 }
                 continue;
             };
@@ -872,4 +893,22 @@ pub fn check(m: &Model, crossings: &mut [Crossing], read: &Read, cs: &crate::con
         c.allowed = Some(Allowed::Upstream(ri));
     }
     diags
+}
+
+#[cfg(test)]
+mod tests {
+    use super::written_as;
+
+    #[test]
+    fn a_crossing_writes_a_dependency_s_file_from_the_module_s_root() {
+        let dir = ritsu_testkit::TempDir::new("written-as");
+        let root = dir.path();
+        // no ritsu.mod: a directory whose name starts with `@` is an ordinary one (M14)
+        assert_eq!(written_as(root, "rules/a.rule", "@x/rules/b.rule"), "../@x/rules/b.rule");
+        std::fs::write(root.join("ritsu.mod"), "module example.com/acme/app\nversion 0.1.0\n").unwrap();
+        assert_eq!(written_as(root, "rules/a.rule", "@pricing/rules/fee.rule"), "@pricing/rules/fee.rule");
+        assert_eq!(written_as(root, "@pricing/rules/fee.rule", "@pricing/@tax/rules/vat_rate.rule"), "@tax/rules/vat_rate.rule");
+        assert_eq!(written_as(root, "@pricing/rules/fee.rule", "@pricing/tables/base.rule"), "../tables/base.rule");
+        assert_eq!(written_as(root, "rules/a.rule", "tables/b.rule"), "../tables/b.rule");
+    }
 }

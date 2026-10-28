@@ -1,0 +1,154 @@
+# in ja/アプリ
+
+$ kaname check --lang ja 会計/かご.kn
+ok 会計/かご.kn: 関数 3 個: total 2 個、fails range 1 個
+exit 0
+
+$ kaname check --lang ja 会計/かご.kn --format json
+{
+  "kaname": "<version>",
+  "file": "会計/かご.kn",
+  "ok": true,
+  "summary": "関数 3 個: total 2 個、fails range 1 個",
+  "functions": [
+    {
+      "function": "小計",
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "places": [],
+      "calls": []
+    },
+    {
+      "function": "合計",
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "places": [],
+      "calls": [
+        {
+          "line": 20,
+          "function": "小計"
+        }
+      ]
+    },
+    {
+      "function": "請求する",
+      "effect": {
+        "fails": [
+          "range"
+        ],
+        "diverges": false
+      },
+      "written": null,
+      "places": [],
+      "calls": [
+        {
+          "line": 24,
+          "function": "小計"
+        },
+        {
+          "line": 24,
+          "function": "請求する"
+        }
+      ]
+    }
+  ],
+  "diagnostics": []
+}
+exit 0
+
+$ kaname check --lang ja @lib/会計/請求.kn
+ok @lib/会計/請求.kn: 関数 1 個、fails range
+exit 0
+
+$ kaname check --lang ja 誤り/依存に無い.kn
+エラー[E201]: 誤り/依存に無い.kn:5:21: `@shop/規則/注文の合計.rule` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません
+     5 | use rule 注文の合計 from "@shop/規則/注文の合計.rule"
+exit 1
+
+$ kaname check --lang ja 誤り/外を指す.kn
+エラー[E201]: 誤り/外を指す.kn:6:21: `../../部品/規則/注文の合計.rule` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です
+     6 | use rule 注文の合計 from "../../部品/規則/注文の合計.rule"
+exit 1
+
+$ kaname check --lang ja 誤り/入れ子.kn
+エラー[E201]: 誤り/入れ子.kn:5:20: `../入れ子/会計/かご.kn` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください
+     5 | use module かご from "../入れ子/会計/かご.kn"
+exit 1
+
+$ kaname check --lang ja 誤り/無いファイル.kn
+エラー[E201]: 誤り/無いファイル.kn:5:21: 依存 `@lib`（`example.com/acme/lib`、`../部品`）に `規則/注文合計.rule` はありません
+     5 | use rule 注文の合計 from "@lib/規則/注文合計.rule"
+exit 1
+
+$ kaname check --lang ja 誤り/無いファイル.kn --format json
+{
+  "kaname": "<version>",
+  "file": "誤り/無いファイル.kn",
+  "ok": false,
+  "summary": null,
+  "functions": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "誤り/無いファイル.kn",
+      "line": 5,
+      "col": 21,
+      "message": "依存 `@lib`（`example.com/acme/lib`、`../部品`）に `規則/注文合計.rule` はありません",
+      "notes": [],
+      "fix": null
+    }
+  ]
+}
+exit 1
+
+# in ja/アプリ/会計
+
+$ kaname check --lang ja @lib/会計/請求.kn
+ok @lib/会計/請求.kn: 関数 1 個、fails range
+exit 0
+
+# in ja/外
+
+$ kaname check --lang ja 注文.kn
+エラー[E201]: 注文.kn:6:21: `@lib/規則/注文の合計.rule` というファイルはありません
+     6 | use rule 注文の合計 from "@lib/規則/注文の合計.rule"
+  = パスは、このモジュールのファイルのあるディレクトリから書きます。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+exit 1
+
+$ kaname check --lang ja 注文.kn --format json
+{
+  "kaname": "<version>",
+  "file": "crates/kaname/tests/modules/ja/外/注文.kn",
+  "ok": false,
+  "summary": null,
+  "functions": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "crates/kaname/tests/modules/ja/外/注文.kn",
+      "line": 6,
+      "col": 21,
+      "message": "`@lib/規則/注文の合計.rule` というファイルはありません",
+      "notes": [
+        "パスは、このモジュールのファイルのあるディレクトリから書きます。",
+        "`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"
+      ],
+      "fix": null
+    }
+  ]
+}
+exit 1
+

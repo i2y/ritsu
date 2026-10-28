@@ -121,10 +121,11 @@ pub fn normalize(p: &Path) -> String {
     }
 }
 
-/// The file `rel` names from the directory of the file at `base`, as the run shows it.
-pub fn join(base: &str, rel: &str) -> String {
-    let dir = Path::new(base).parent().unwrap_or(Path::new(""));
-    normalize(&dir.join(rel))
+/// The file `rel` names from the directory of the file at `base`, as the run shows it. None for a
+/// path the module of ritsu's the file is in refuses (ritsu's DESIGN 17.6), which E067 says where
+/// the pins are checked ([`pin::check_pins`]).
+pub fn join(base: &str, rel: &str) -> Option<String> {
+    crate::vfs::follow(crate::vfs::dir_of(base, ""), rel).ok().map(|p| normalize(&p))
 }
 
 /// The file a path names, its links followed: how two spellings of one file are told to be one.
@@ -170,13 +171,13 @@ fn closure(starts: &[String]) -> Vec<String> {
         }
         if let Some(h) = &f.contrib {
             for a in &h.afters {
-                queue.push(join(&p, &a.file));
+                queue.extend(join(&p, &a.file));
             }
-            if let Some(t) = &h.to {
-                let tp = join(&p, &t.file);
-                if is_contribution_file(&tp) {
-                    queue.push(tp);
-                }
+            if let Some(t) = &h.to
+                && let Some(tp) = join(&p, &t.file)
+                && is_contribution_file(&tp)
+            {
+                queue.push(tp);
             }
         }
         out.push(p);
@@ -200,7 +201,7 @@ fn root_of(path: &str) -> Option<String> {
             return Some(p);
         }
         let t = f.contrib.as_ref()?.to.as_ref()?;
-        p = join(&p, &t.file);
+        p = join(&p, &t.file)?;
     }
 }
 
@@ -221,11 +222,21 @@ pub fn merged_into(path: &str) -> Vec<String> {
     closure(&set).into_iter().filter(|c| root_of(c).is_some_and(|r| same_file(&r, path))).collect()
 }
 
+/// What a contribution names outside itself, its `to` and each `after`, with the line each is
+/// written on and the file as the run shows it: what `ritsu check` reads for the contributions that
+/// cross from one module to another, and for the dependencies a module uses (ritsu's DESIGN 17.8).
+/// Empty for a file that is no contribution, or that does not read.
+pub fn names_of(path: &str) -> Vec<(usize, String)> {
+    let Some(f) = read(path, false).and_then(|r| r.file) else { return Vec::new() };
+    let Some(h) = &f.contrib else { return Vec::new() };
+    h.to.iter().chain(&h.afters).filter_map(|t| Some((t.span.line, join(path, &t.file)?))).collect()
+}
+
 /// The file a contribution adds to, as the run shows it, and the rule it comes down to.
 pub fn target_of(path: &str) -> Option<(String, String)> {
     let f = read(path, false)?.file?;
     let t = f.contrib.as_ref()?.to.as_ref()?;
-    Some((join(path, &t.file), root_of(path)?))
+    Some((join(path, &t.file)?, root_of(path)?))
 }
 
 /// A contribution read for the merge: as the run shows it, its text and its parse, and the file it
@@ -319,7 +330,7 @@ fn read_contrib(path: &str, tagged: bool) -> Result<Contrib, Vec<Diag>> {
     }
     let Some(file) = r.file else { return Err(Vec::new()) };
     let to = match file.contrib.as_ref().and_then(|h| h.to.as_ref()) {
-        Some(t) => join(path, &t.file),
+        Some(t) => join(path, &t.file).unwrap_or_default(),
         None => String::new(),
     };
     Ok(Contrib { shown: r.shown, src: r.src, file, to })
@@ -340,13 +351,20 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
         );
         return out;
     };
-    let target = join(path, &to.file);
+    let dir = crate::vfs::dir_of(path, "");
+    let followed = crate::vfs::follow(dir, &to.file);
+    if let Some(why) = crate::vfs::refused(&followed) {
+        out.push(Diag::error("E067", why).at(format!("{path}:{}", to.span.line)).mark(to.span.clone(), ""));
+        return out;
+    }
+    let target = followed.map(|p| normalize(&p)).unwrap_or_default();
     let Some(root) = root_of(&target) else {
         out.push(
             Diag::error("E067", tr!("足す先 `{}` を読めません", "The file `{}` it adds to cannot be read", to.file))
                 .at(format!("{path}:{}", to.span.line))
                 .mark(to.span.clone(), "")
-                .note(tr!("パスは寄与のファイルのある場所からたどります（探した先: {target}）。", "The path is followed from the directory of the contribution (looked for: {target}).")),
+                .note(tr!("パスは寄与のファイルのある場所からたどります（探した先: {target}）。", "The path is followed from the directory of the contribution (looked for: {target})."))
+                .maybe_note(crate::vfs::outside_note(dir, &to.file)),
         );
         return out;
     };
@@ -450,7 +468,7 @@ fn order(cs: Vec<Contrib>) -> (Vec<Contrib>, Vec<Diag>) {
         .map(|c| {
             let h = c.file.contrib.as_ref();
             let mut d: Vec<usize> = Vec::new();
-            let mut wants: Vec<String> = h.map(|h| h.afters.iter().map(|a| join(&c.shown, &a.file)).collect()).unwrap_or_default();
+            let mut wants: Vec<String> = h.map(|h| h.afters.iter().filter_map(|a| join(&c.shown, &a.file)).collect()).unwrap_or_default();
             wants.push(c.to.clone());
             for w in wants {
                 if let Some(k) = cs.iter().position(|o| same_file(&o.shown, &w)) {

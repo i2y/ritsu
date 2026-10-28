@@ -1,0 +1,9 @@
+# A context map outside every module: no ritsu.mod above it, so `@lib/…` is a plain relative path,
+# and there is no directory @lib beside this file.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "contexts/billing.ctx"
+use context "@lib/contexts/pricing.ctx"
+
+covers ".", "@lib"

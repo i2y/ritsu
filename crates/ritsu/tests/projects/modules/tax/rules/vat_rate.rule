@@ -1,0 +1,24 @@
+# The rates are the example's own, chosen for the modules of ritsu's tests: no law is transcribed.
+rule vat_rate v1
+description "The rate of VAT for a category of goods: standard 20%, reduced 5%, zero 0%. The rates are the example's own"
+
+enum category = standard | reduced | zero
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+| zero     | 0%                      |
+
+examples
+| category | -> rate |
+| standard | 20%     |
+| reduced  | 5%      |
+| zero     | 0%      |

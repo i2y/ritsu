@@ -1,0 +1,10 @@
+// 種類ごとの付加価値税の税率。import は、自分のモジュール base のルートから読む。
+syntax = "proto3";
+package acme.tax.v1;
+
+import "proto/acme/tax/v1/category.proto";
+
+message Rate {
+  Category category = 1;
+  int32 percent = 2;
+}

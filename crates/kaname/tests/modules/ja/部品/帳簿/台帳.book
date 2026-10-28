@@ -1,0 +1,15 @@
+# モジュール lib のお金。単位はペンス。注文の合計を客に請求する。
+book 台帳 v1
+description "モジュールの試験の店のお金。注文の合計を客に請求する"
+
+unit GBP scale 2
+
+account 売上 : GBP
+  description "店が受け取ったもの"
+  at least 0 refused as 足りない
+account 客 : GBP outside
+
+transfer 請求(注文: string, 金額: GBP)
+  description "客が払う注文の合計"
+  key 注文
+  move 金額 from 客 to 売上

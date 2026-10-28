@@ -158,10 +158,9 @@ impl ritsu_ports::Flows for Engine {
         let m = crate::sources::with_ports(ports.rules.clone(), ports.dates.clone(), ports.books.clone(), || Engine::model_with(&disk))?;
         // the bindings as written: which `use` a task's operation is of, and how the task names it
         let (_, prog) = parsed(root, file)?;
-        let dir = ritsu_base::paths::parent(file);
         let from_root = |api: &str, kind: ApiKind| -> Option<String> {
             let u = prog.apis.iter().find(|a| a.name.0 == api && a.kind == kind)?;
-            ritsu_base::paths::join(&dir, &u.path).ok()
+            ritsu_base::modules::join(root, file, &u.path).ok()
         };
         // each document read once: what ritsu-base's reader names its operations by
         let mut docs: std::collections::BTreeMap<String, Option<ritsu_base::openapi::Document>> = std::collections::BTreeMap::new();
@@ -267,7 +266,7 @@ impl ritsu_ports::References for Engine {
     /// named from its `.proto`'s package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let (_, prog) = parsed(root, file)?;
-        let from_root = |written: &str| ritsu_base::paths::join(&ritsu_base::paths::parent(file), written).ok();
+        let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
         // the `.proto` a `use proto` name stands for, from the root
         let proto = |api: &str| prog.apis.iter().find(|a| a.kind == ApiKind::Proto && a.name.0 == api).and_then(|a| from_root(&a.path));
         let mut out = Vec::new();

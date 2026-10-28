@@ -64,8 +64,8 @@ fn root_flag() -> Flag {
         "--root",
         Some("<dir>"),
         tr!(
-            "パスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ渡したパス）",
-            "the root paths count from; else the nearest directory above the first path given that holds .git (else the path given)"
+            "パスを数えるルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ渡したパス）",
+            "the root paths count from; else the nearest directory above the first path given that holds .git or ritsu.mod (else the path given)"
         ),
     )
 }
@@ -106,8 +106,8 @@ fn run() -> Cmd {
         ],
         exits: vec![
             (0, tr!("最後まで流れた（成功、失敗、キャンセルのどれで終わっても）", "the run came to its end (it succeeded, failed or was cancelled)")),
-            (1, tr!("フローにエラーがある、または流れが途中で止まった（シナリオに結果が足りないなど）", "the flow has errors, or the run could not go on (the scenario ran out of answers, say)")),
-            (2, tr!("引数の誤り、読めないファイル、流せないシナリオ", "bad arguments, a file that cannot be read, or a scenario that cannot be run")),
+            (1, tr!("フローにエラーがある、モジュールの木にエラーがある、または流れが途中で止まった（シナリオに結果が足りないなど）", "the flow has errors, the tree of modules has an error, or the run could not go on (the scenario ran out of answers, say)")),
+            (2, tr!("引数の誤り、読めないファイル、流せないシナリオ、取り出していない依存、新しい ritsu が要るモジュール", "bad arguments, a file that cannot be read, a scenario that cannot be run, a dependency not fetched, or a module that needs a newer ritsu")),
         ],
         examples: vec!["ritsu run invoice.flow --scenario scenarios/paid.json", "ritsu run invoice.flow --scenario scenarios/paid.json --target temporal --format json"],
         codes: vec![],
@@ -141,11 +141,25 @@ pub fn commands() -> Vec<Cmd> {
                     "the cap on how much a check walks: the nodes rulec's check of one rule visits (50000000 by default; past it, E109, or E128 for a machine) and the combinations sekisho walks for one action (100000000 by default; past it, E307)"
                 ),
             ),
+            flag(
+                "--deps-warnings",
+                None,
+                tr!(
+                    "モジュールの全体を検査するとき、依存のファイルの警告も一つずつ出す（無ければ、依存ごとの数だけを出す）",
+                    "in a check of a whole module, show each warning of the dependencies' files too (else only how many each dependency has)"
+                ),
+            ),
         ],
         exits: vec![
             (0, tr!("エラーなし（警告はありうる）", "no errors (there may be warnings)")),
-            (1, tr!("どれかの言語か、言語をまたぐ検査にエラーがある", "an error in a language, or across them")),
-            (2, tr!("引数の誤り、読めないファイル、言語が確かめられなかったファイル", "bad arguments, a file that cannot be read, or one a language could not check")),
+            (1, tr!("どれかの言語か、言語をまたぐ検査か、モジュールの木にエラーがある", "an error in a language, across them, or in the tree of modules")),
+            (
+                2,
+                tr!(
+                    "引数の誤り、読めないファイル、言語が確かめられなかったファイル、取り出していない依存、新しい ritsu が要るモジュール",
+                    "bad arguments, a file that cannot be read or that a language could not check, a dependency not fetched, or a module that needs a newer ritsu"
+                ),
+            ),
         ],
         examples: vec!["ritsu check", "ritsu check rules/ flows/order.flow --format json", "ritsu check . --lang ja", "ritsu check rules/ --budget 200000000"],
         codes: ritsu_cross::codes::codes(),
@@ -196,10 +210,10 @@ pub fn commands() -> Vec<Cmd> {
         ],
         exits: vec![
             (0, tr!("書いた、または --check で古いものが無い", "written, or --check found nothing stale")),
-            (1, tr!("検査を通らないファイルがある、または --check で古いものがある", "a file does not pass its check, or --check found something stale")),
+            (1, tr!("検査を通らないファイルがある、モジュールの木にエラーがある、または --check で古いものがある", "a file does not pass its check, the tree of modules has an error, or --check found something stale")),
             (2, tr!(
-                "引数の誤り、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、生成先の言語が予約している語のモジュールの名前",
-                "bad arguments, a file that cannot be read or written, two files that write one file of a package, or a module named by a word the language keeps"
+                "引数の誤り、読めないファイル、書けないファイル、パッケージの同じファイルを書く二つのファイル、走らせるときに一つでなければならない名前（ワークフローの型、Cedar の名前）を作る二つのモジュールのファイル、生成先の言語が予約している語のモジュールや依存の名前、取り出していない依存、新しい ritsu が要るモジュール",
+                "bad arguments, a file that cannot be read or written, two files that write one file of a package, files of two modules that make one name that must be one at run time (a workflow type, a name of Cedar's), a module or a dependency named by a word the language keeps, a dependency not fetched, or a module that needs a newer ritsu"
             )),
         ],
         examples: vec!["ritsu gen", "ritsu gen --target typescript --out generated --books tigerbeetle", "ritsu gen --check", "ritsu gen --check --format json"],
@@ -223,8 +237,28 @@ pub fn commands() -> Vec<Cmd> {
         codes: vec![],
     });
     cmds.push(skills());
+    cmds.push(modules());
     cmds.extend(LANGUAGES.into_iter().map(language));
     cmds
+}
+
+/// `ritsu mod` (DESIGN 17.19): the commands of the modules, with a table of their own, which `ritsu
+/// mod --help` lists. Here for `ritsu --help` only, as a language is.
+fn modules() -> Cmd {
+    Cmd {
+        usage: None,
+        name: "mod",
+        args: "<command> ...",
+        purpose: tr!(
+            "モジュールのコマンド（`ritsu.mod` と `ritsu.lock` を書く、依存を並べる、置き場とそのコピー）",
+            "the commands of the modules: write `ritsu.mod` and `ritsu.lock`, list the dependencies, and the store and its copy"
+        ),
+        params: vec![],
+        flags: vec![],
+        exits: vec![(0, tr!("そのコマンドのもの", "the command's"))],
+        examples: vec![],
+        codes: vec![],
+    }
 }
 
 /// `ritsu skills` (PLAN F.3): the ten Agent Skills the binary carries, listed or written where an

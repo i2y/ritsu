@@ -1,0 +1,73 @@
+# in en/app
+
+$ koyomi check dates/net10.cal
+dates/net10.cal: ok — 2 claims hold on all 699 days of invoice_date (2026-01-01..2027-11-30); 2 examples match
+exit 0
+
+$ koyomi check dates/net10.cal --format json
+{"file":"dates/net10.cal","ok":true,"summary":"2 claims hold on all 699 days of invoice_date (2026-01-01..2027-11-30); 2 examples match","diagnostics":[]}
+exit 0
+
+$ koyomi check @lib/calendars/office.cal
+@lib/calendars/office.cal: ok — calendar office: table closures 3 rows, data range 2026-01-01..2027-12-31
+exit 0
+
+$ koyomi check @lib/calendars/office.cal --format json
+{"file":"@lib/calendars/office.cal","ok":true,"summary":"calendar office: table closures 3 rows, data range 2026-01-01..2027-12-31","diagnostics":[]}
+exit 0
+
+$ koyomi check errors/not_required.cal
+error[E015]: errors/not_required.cal:4:14: The `@shop` of `@shop/calendars/office.cal` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+     4 | use calendar "@shop/calendars/office.cal"
+exit 1
+
+$ koyomi check errors/outside.cal
+error[E015]: errors/outside.cal:5:14: `../../lib/calendars/office.cal` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+     5 | use calendar "../../lib/calendars/office.cal"
+exit 1
+
+$ koyomi check errors/nested.cal
+error[E015]: errors/nested.cal:4:14: `../inner/calendars/office.cal` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+     4 | use calendar "../inner/calendars/office.cal"
+exit 1
+
+$ koyomi check errors/missing.cal
+error[E015]: errors/missing.cal:4:14: The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `calendars/offices.cal`
+     4 | use calendar "@lib/calendars/offices.cal"
+exit 1
+
+$ koyomi check errors/missing.cal --format json
+{"file":"errors/missing.cal","ok":false,"summary":null,"diagnostics":[{"code":"E015","severity":"error","file":"errors/missing.cal","line":4,"col":14,"message":"The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `calendars/offices.cal`","notes":[],"inputs":null,"steps":[],"fails":[],"fix":null}]}
+exit 1
+
+# in en/app/dates
+
+$ koyomi check @lib/calendars/office.cal
+@lib/calendars/office.cal: ok — calendar office: table closures 3 rows, data range 2026-01-01..2027-12-31
+exit 0
+
+# in en/loose
+
+$ koyomi check net10.cal
+error[E015]: net10.cal:5:14: The calendar @lib/calendars/office.cal cannot be read
+     5 | use calendar "@lib/calendars/office.cal"
+  = The path is relative to the directory this .cal is in.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+exit 1
+
+$ koyomi check net10.cal --format json
+{"file":"net10.cal","ok":false,"summary":null,"diagnostics":[{"code":"E015","severity":"error","file":"net10.cal","line":5,"col":14,"message":"The calendar @lib/calendars/office.cal cannot be read","notes":["The path is relative to the directory this .cal is in.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"inputs":null,"steps":[],"fails":[],"fix":null}]}
+exit 1
+
+# in en
+
+$ koyomi check .
+error[E015]: ./loose/net10.cal:5:14: The calendar @lib/calendars/office.cal cannot be read (loose/@lib/calendars/office.cal)
+     5 | use calendar "@lib/calendars/office.cal"
+  = The path is relative to the directory this .cal is in.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+note: `./app` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./app` to read it
+note: `./base` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./base` to read it
+note: `./lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `koyomi check ./lib` to read it
+exit 1
+

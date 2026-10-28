@@ -213,7 +213,7 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
     let mut quiet = Vec::new();
     let mut shadow = region::Shadow::default();
     let mut nodes = 0i64;
-    let adds_to = (f.kind == ast::FileKind::Contribution).then(|| f.contrib.as_ref().and_then(|h| h.to.as_ref()).map(|t| link::join(path, &t.file))).flatten();
+    let adds_to = (f.kind == ast::FileKind::Contribution).then(|| f.contrib.as_ref().and_then(|h| h.to.as_ref()).and_then(|t| link::join(path, &t.file))).flatten();
     let done = |diags: Vec<Diag>, quiet: Vec<Diag>, shadow: region::Shadow, nodes: i64| Report { diags, quiet, shadow, nodes, merged: Vec::new(), adds_to: adds_to.clone() };
     // A name the file's lines declare twice, or two names given one identifier (§15.262): whatever
     // reads the name below would read one of the two, so the check stops before anything does.

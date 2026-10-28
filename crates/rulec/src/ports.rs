@@ -716,9 +716,10 @@ fn machine_end(m: &crate::ast::MachineDecl) -> usize {
     m.onces.iter().map(|o| o.span.line).fold(end, usize::max)
 }
 
-/// The path of a file a rule names, from the root: written from the rule's directory.
-fn from_root(file: &str, written: &str) -> Option<String> {
-    ritsu_base::paths::join(&ritsu_base::paths::parent(file), written).ok()
+/// The path of a file a rule names, from the root: written from the rule's directory, or from the
+/// root of the module of ritsu's it is in for `@<name>/…` (ritsu's DESIGN 17.6).
+fn from_root(root: &Path, file: &str, written: &str) -> Option<String> {
+    ritsu_base::modules::join(root, file, written).ok()
 }
 
 impl ritsu_ports::Sources for Engine {
@@ -831,7 +832,7 @@ impl ritsu_ports::References for Engine {
         };
         let mut out = Vec::new();
         for im in &f.enum_imports {
-            let Some(p) = from_root(file, &im.file) else { continue };
+            let Some(p) = from_root(root, file, &im.file) else { continue };
             let (target, how) = match im.kind {
                 crate::ast::EnumSource::Proto => (Naming::file(Tool::Proto, &p).with("enum", local(&p, &im.source)), "import proto"),
                 crate::ast::EnumSource::JsonSchema => (Naming::file(Tool::File, &p), "import jsonschema"),
@@ -839,11 +840,11 @@ impl ritsu_ports::References for Engine {
             out.push(Reference { line: im.span.line, target, how: how.into() });
         }
         for ef in &f.enum_froms {
-            let Some(p) = from_root(file, &ef.file) else { continue };
+            let Some(p) = from_root(root, file, &ef.file) else { continue };
             out.push(Reference { line: ef.span.line, target: Naming::file(Tool::Rulec, &p).with("enum", &ef.name.text), how: "import enum".into() });
         }
         for sh in &f.shapes {
-            let Some(p) = from_root(file, &sh.file) else { continue };
+            let Some(p) = from_root(root, file, &sh.file) else { continue };
             let target = match sh.source {
                 crate::ast::EnumSource::Proto => Naming::file(Tool::Proto, &p).with("message", local(&p, &sh.at)),
                 crate::ast::EnumSource::JsonSchema => Naming::file(Tool::File, &p),
@@ -851,20 +852,20 @@ impl ritsu_ports::References for Engine {
             out.push(Reference { line: sh.span.line, target, how: "shape".into() });
         }
         for a in &f.applies {
-            if let Some(p) = from_root(file, &a.path) {
+            if let Some(p) = from_root(root, file, &a.path) {
                 out.push(Reference { line: a.span.line, target: Naming::file(Tool::Rulec, &p), how: "apply".into() });
             }
         }
         for s in f.sources.iter().filter(|s| s.base.is_none()) {
             if let SourceKind::File { path: written, .. } = &s.kind
-                && let Some(p) = from_root(file, written)
+                && let Some(p) = from_root(root, file, written)
             {
                 out.push(Reference { line: s.span.line, target: Naming::file(Tool::File, &p), how: "source".into() });
             }
         }
         for i in &f.inputs {
             if let Some(d) = i.range.as_ref().and_then(|r| r.days.as_ref())
-                && let Some(p) = from_root(file, &d.file)
+                && let Some(p) = from_root(root, file, &d.file)
             {
                 out.push(Reference { line: d.span.line, target: Naming::file(Tool::Koyomi, &p).with("date", &d.date), how: "range from koyomi".into() });
             }

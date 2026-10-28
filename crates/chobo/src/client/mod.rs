@@ -241,6 +241,17 @@ pub fn plan(book: &Book) -> Plan {
 pub struct InPackage {
     /// The Go import path of the package's directory.
     pub module: String,
+    /// Where the client goes in the package (ritsu's DESIGN 17.8): the `books/` of the module at
+    /// hand, or of a dependency under `deps/<name>/`, which reads the package's one `units`.
+    pub place: ritsu_emit::package::Place,
+}
+
+impl InPackage {
+    /// The directory under the package's directory the client is in: `books/`, or under a
+    /// dependency's directory.
+    pub fn books_dir(&self) -> String {
+        format!("{}books/", self.place.dir)
+    }
 }
 
 /// The name of the type an amount of `ty` has in a client in a package: its unit's type in the

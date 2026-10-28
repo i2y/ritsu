@@ -1,0 +1,14 @@
+# モジュール lib での注文の請求。金額はこのモジュールの規則「注文の合計」が出す合計（base の税率を
+# 準用する）で、振替はこのモジュールの台帳のもの。
+module 請求(charges) v1
+description "注文の合計を客に請求する振替"
+
+use rule 注文の合計 from "../規則/注文の合計.rule"
+use book 台帳 from "../帳簿/台帳.book"
+
+fn 請求する(charge)(注文(order): string, 小計(subtotal): money[GBPc] range >=1GBPc <=2_000_000GBPc, 区分(category): 注文の合計.区分, 送料(shipping): money[GBPc] range >=0GBPc <=10_000GBPc) -> 台帳.請求.do
+  description "客が注文の合計を払う"
+  台帳.請求.do(注文: 注文, 金額: 注文の合計(小計: 小計, 区分: 区分, 送料: 送料).合計)
+
+examples
+  請求する(注文: "o_1", 小計: 1000GBPc, 区分: 注文の合計.区分.標準, 送料: 395GBPc) = 台帳.請求.do(注文: "o_1", 金額: 1595GBPc)

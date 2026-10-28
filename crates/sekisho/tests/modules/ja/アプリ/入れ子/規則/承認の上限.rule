@@ -1,0 +1,25 @@
+# 上限はこの試験のために決めたもので、どの文書の転記でもない。
+rule 承認の上限(approval_limit) v1
+description "購入が、承認する人の上限の内にあるか。この試験のために決めた決まり"
+
+enum 承認の区分(approval_band) = 上限まで(within_limit) | 上限超え(over_limit)
+
+inputs
+  金額(amount) : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  上限(limit)  : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+outputs
+  区分(band) : 承認の区分
+
+derive 超過(excess) : money[GBP, incl_tax] = 金額 - 上限  range >=-49_999GBP <=20_000GBP
+
+table 決める(decide)
+policy unique
+| 超過   | -> 区分 : 承認の区分 |
+| <=0GBP | 上限まで             |
+| >0GBP  | 上限超え             |
+
+examples
+| 金額    | 上限    | -> 区分  |
+| 500GBP  | 1000GBP | 上限まで |
+| 1001GBP | 1000GBP | 上限超え |

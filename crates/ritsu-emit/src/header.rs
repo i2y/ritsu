@@ -22,6 +22,7 @@
 //! (`ritsu_base::sha256::short`). A file that is not made from a source (a runtime every client
 //! carries, a test of the helpers) has the first line only.
 
+use crate::package::Module;
 use ritsu_base::text::Text;
 use ritsu_base::tr;
 
@@ -48,17 +49,31 @@ pub struct Source<'a> {
     pub version: &'a str,
     /// The SHA-256 of the file's bytes, as 64 hex digits or already cut to sixteen.
     pub sha256: &'a str,
+    /// The dependency the file is of, in `ritsu gen` of a module (ritsu's DESIGN 17.8): its name and
+    /// version close the line. None for a file of the module at hand, and outside a module.
+    pub module: Option<&'a Module>,
 }
 
 impl Source<'_> {
     /// `Source: dates/payment_terms.cal (dates payment_terms v1, sha256:20eacc1719046107)`, in the
-    /// language the generated code is written in. The path is put on one line ([`one_line`]): a
-    /// file's name may hold a line break, and the line is a comment.
+    /// language the generated code is written in, and for a dependency's file `Source:
+    /// @pricing/rules/fee.rule (rule fee v1, sha256:…, module example.com/acme/pricing 1.1.0)`. The
+    /// path is put on one line ([`one_line`]): a file's name may hold a line break, and the line is
+    /// a comment.
     pub fn line(&self) -> Text {
-        let Source { path, kind, name, version, sha256 } = *self;
+        let Source { path, kind, name, version, sha256, module } = *self;
         let path = one_line(path);
         let sha = &sha256[..16.min(sha256.len())];
-        tr!("もと: {path}（{kind} {name} v{version}、sha256:{sha}）", "Source: {path} ({kind} {name} v{version}, sha256:{sha})")
+        match module {
+            None => tr!("もと: {path}（{kind} {name} v{version}、sha256:{sha}）", "Source: {path} ({kind} {name} v{version}, sha256:{sha})"),
+            Some(m) => {
+                let of = match &m.version {
+                    Some(v) => format!("{} {v}", one_line(&m.name)),
+                    None => one_line(&m.name).to_string(),
+                };
+                tr!("もと: {path}（{kind} {name} v{version}、sha256:{sha}、モジュール {of}）", "Source: {path} ({kind} {name} v{version}, sha256:{sha}, module {of})")
+            }
+        }
     }
 }
 
@@ -110,28 +125,36 @@ pub fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string())
 }
 
-/// What the caller of a generator knows of the file it hands over: the path the head names, and
-/// the SHA-256 of the file's bytes.
+/// What the caller of a generator knows of the file it hands over: the path the head names, the
+/// SHA-256 of the file's bytes, and the dependency it is of.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Origin {
     pub path: String,
     pub sha256: String,
+    /// The dependency the file is of (ritsu's DESIGN 17.8); None for a file of the module at hand.
+    pub module: Option<Module>,
 }
 
 impl Origin {
     /// The file at `path` as a language's own command names it, by its name.
     pub fn named(path: &str, bytes: &[u8]) -> Origin {
-        Origin { path: file_name(path), sha256: ritsu_base::sha256::hex(bytes) }
+        Origin { path: file_name(path), sha256: ritsu_base::sha256::hex(bytes), module: None }
     }
 
     /// The file at `rel` from a project's root, as `ritsu gen` names it.
     pub fn at(rel: &str, bytes: &[u8]) -> Origin {
-        Origin { path: rel.to_string(), sha256: ritsu_base::sha256::hex(bytes) }
+        Origin { path: rel.to_string(), sha256: ritsu_base::sha256::hex(bytes), module: None }
+    }
+
+    /// The same, of the dependency `module` (None for a file of the module at hand).
+    pub fn of(mut self, module: Option<Module>) -> Origin {
+        self.module = module;
+        self
     }
 
     /// What the file declares, in the head's words.
     pub fn source<'a>(&'a self, kind: &'a str, name: &'a str, version: &'a str) -> Source<'a> {
-        Source { path: &self.path, kind, name, version, sha256: &self.sha256 }
+        Source { path: &self.path, kind, name, version, sha256: &self.sha256, module: self.module.as_ref() }
     }
 }
 

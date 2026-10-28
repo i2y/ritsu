@@ -1,0 +1,104 @@
+# in en/app
+
+$ rulec check rules/
+ok rules/billing.rule
+ok rules/invoice.rule
+ok rules/vat_of_category.rule
+exit 0
+
+$ rulec check rules/ --format json
+exit 0
+
+$ rulec check @lib/rules/order_total.rule
+ok @lib/rules/order_total.rule
+exit 0
+
+$ rulec check @lib/@base/rules/vat_rate.rule
+ok @lib/@base/rules/vat_rate.rule
+exit 0
+
+$ rulec check errors/not_required.rule
+error[E044]: the `@shop` of `@shop/rules/order_total.rule` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+  --> errors/not_required.rule:15 apply order
+   |
+15 | apply order = "@shop/rules/order_total.rule" meaning:a1be19262a386726
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check errors/outside.rule
+error[E044]: `../../lib/rules/order_total.rule` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+  --> errors/outside.rule:16 apply order
+   |
+16 | apply order = "../../lib/rules/order_total.rule" meaning:a1be19262a386726
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check errors/nested.rule
+error[E044]: `../inner/rules/vat_rate.rule` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+  --> errors/nested.rule:13 apply vat
+   |
+13 | apply vat = "../inner/rules/vat_rate.rule" meaning:8a62fb4ec05fd289
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check errors/missing.rule
+error[E044]: the dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/order_totals.rule`
+  --> errors/missing.rule:15 apply order
+   |
+15 | apply order = "@lib/rules/order_totals.rule" meaning:a1be19262a386726
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check errors/missing.rule --format json
+{"v":2,"severity":"error","code":"E044","file":"errors/missing.rule","line":15,"column":1,"title":"the dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/order_totals.rule`","notes":[],"where":{"file":"errors/missing.rule","line":15,"column":1},"spans":[{"line":15,"column":1,"length":69,"label":""}],"witness":{},"rows":[],"fix":{"kind":"none"}}
+exit 1
+
+# in en/app/rules
+
+$ rulec check @lib/rules/order_total.rule
+ok @lib/rules/order_total.rule
+exit 0
+
+# in en/loose
+
+$ rulec check invoice.rule
+error[E044]: `order` cannot be applied: `@lib/rules/order_total.rule` cannot be read
+  --> invoice.rule:16 apply order
+   |
+16 | apply order = "@lib/rules/order_total.rule" meaning:a1be19262a386726
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ The path is followed from the directory of the rule file (looked for: @lib/rules/order_total.rule).
+ a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+
+exit 1
+
+$ rulec check invoice.rule --format json
+{"v":2,"severity":"error","code":"E044","file":"invoice.rule","line":16,"column":1,"title":"`order` cannot be applied: `@lib/rules/order_total.rule` cannot be read","notes":["The path is followed from the directory of the rule file (looked for: @lib/rules/order_total.rule).","a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"where":{"file":"invoice.rule","line":16,"column":1},"spans":[{"line":16,"column":1,"length":68,"label":""}],"witness":{},"rows":[],"fix":{"kind":"none"}}
+exit 1
+
+# in en
+
+$ rulec check .
+error[E044]: `order` cannot be applied: `@lib/rules/order_total.rule` cannot be read
+  --> ./loose/invoice.rule:16 apply order
+   |
+16 | apply order = "@lib/rules/order_total.rule" meaning:a1be19262a386726
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ The path is followed from the directory of the rule file (looked for: ./loose/@lib/rules/order_total.rule).
+ a path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+
+note: `./app` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./app` to read it
+note: `./base` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./base` to read it
+note: `./lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `rulec check ./lib` to read it
+exit 1
+

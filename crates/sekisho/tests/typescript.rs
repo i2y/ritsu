@@ -64,7 +64,11 @@ fn gates() -> Vec<String> {
         for e in rd.flatten() {
             let p = e.path();
             if p.is_dir() {
-                walk(&p, out);
+                // not into another module of ritsu's, as the commands' walks go (ritsu's DESIGN 17.6): its
+                // gates read their dependencies' files, and ritsu's `tests/modules_gen.rs` generates them
+                if ritsu_base::paths::not_entered(&p).is_none() {
+                    walk(&p, out);
+                }
             } else if p.extension().is_some_and(|x| x == "gate") {
                 out.push(p.to_string_lossy().to_string());
             }
@@ -214,7 +218,7 @@ fn make(root: &Path, n: usize, gate: &str, suite: &sekisho::suite::Suite) -> Opt
     }
     let alias = g.named.alias.clone();
     for (sub, lang, authorizer) in [("authz", Lang::En, Authorizer::Cedar), ("authz_ja", Lang::Ja, Authorizer::Cedar), ("authz_avp", Lang::En, Authorizer::Avp)] {
-        let text = typescript::module(scope, checked, suite, &shown, lang, authorizer).unwrap_or_else(|e| panic!("{gate}: {e}"));
+        let text = typescript::module(scope, checked, suite, &shown, lang, authorizer, &ritsu_emit::package::Place::here()).unwrap_or_else(|e| panic!("{gate}: {e}"));
         write(&format!("{sub}/{alias}.ts"), &text);
     }
     let names = typescript::names(g, &sekisho::cedar::shape(g, scope, checked));

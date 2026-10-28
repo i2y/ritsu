@@ -1,0 +1,9 @@
+# A path out of the module: lib's context is on the disk, but app does not carry it, so a user of
+# app cannot follow the path. A file of a dependency is named by `@lib/…`.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "../contexts/billing.ctx"
+use context "../../lib/contexts/pricing.ctx"
+
+covers ".."

@@ -1,0 +1,11 @@
+# The context map of the module at hand: its billing, and the pricing of the module lib, whose
+# context file is named by `@lib/…`, a path from the root of this module. `covers "."` does not go
+# into lib: lib's files are in the scope because lib's context owns them, its rule and the VAT rate
+# of base the rule applies, which this module does not require and reads as `@lib/@base/…`.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "contexts/billing.ctx"
+use context "@lib/contexts/pricing.ctx"
+
+covers "."

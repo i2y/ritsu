@@ -1,0 +1,18 @@
+# The billing of the module at hand: downstream of the pricing of lib, whose published rule gives
+# the total an invoice asks for.
+context Billing(billing) v1
+description "Bills orders: an invoice asks for the total of the order, in the days it gives to pay"
+owner "Accounting team"
+
+owns
+  rulec "../rules/payment_days.rule"
+
+published language rulec.payment_days.v1
+  rulec "../rules/payment_days.rule"
+
+terms
+  payment_days "The days an invoice gives the customer to pay"
+    means rulec "../rules/payment_days.rule" output days
+
+upstream Pricing conformist
+  through rulec.order_total.v1

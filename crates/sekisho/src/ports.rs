@@ -262,8 +262,7 @@ impl ritsu_ports::References for Engine {
             return crate::cedar_in::references(root, file);
         }
         let f = parsed(root, file)?;
-        let dir = ritsu_base::paths::parent(file);
-        let from_root = |written: &str| ritsu_base::paths::join(&dir, written).ok();
+        let from_root = |written: &str| ritsu_base::modules::join(root, file, written).ok();
         let mut out = Vec::new();
         for u in &f.uses {
             let Some(p) = from_root(&u.path.0) else { continue };

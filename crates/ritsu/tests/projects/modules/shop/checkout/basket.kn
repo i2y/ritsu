@@ -1,0 +1,23 @@
+# The checkout of the Acme shop: the subtotal of a basket, and its total as the rule order_total of
+# the module pricing gives it (with the VAT rate of tax, which that rule applies).
+module basket v1
+description "The subtotal of a basket, and its total with the VAT of its category and the shipping fee, as the rule order_total of the module pricing gives it"
+
+use rule order_total from "@pricing/rules/order_total.rule"
+
+record Line
+  sku        : string
+  qty        : number  range >=1 <=10
+  unit_price : money[GBPc]  range >=1GBPc <=10_000GBPc
+
+fn subtotal(lines: list[Line] count >=1 <=20) -> money[GBPc]
+  sum(lines, l => l.unit_price × l.qty)
+
+fn total(lines: list[Line] count >=1 <=20, category: order_total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> money[GBPc] total
+  description "The rule's total for the basket's subtotal, its category and the shipping fee"
+  order_total(subtotal: subtotal(lines: lines), category: category, shipping: shipping).total
+
+examples
+  subtotal(lines: [Line { sku: "tea", qty: 2, unit_price: 450GBPc }, Line { sku: "book", qty: 1, unit_price: 1200GBPc }]) = 2100GBPc
+  total(lines: [Line { sku: "tea", qty: 2, unit_price: 450GBPc }, Line { sku: "book", qty: 1, unit_price: 1200GBPc }], category: order_total.category.standard, shipping: 395GBPc) = 2915GBPc
+  total(lines: [Line { sku: "book", qty: 1, unit_price: 1200GBPc }], category: order_total.category.zero, shipping: 0GBPc) = 1200GBPc

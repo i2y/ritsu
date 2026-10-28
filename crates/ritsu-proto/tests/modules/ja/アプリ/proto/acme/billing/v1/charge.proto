@@ -1,0 +1,10 @@
+// `@` を付けて書いた import。protoc はモジュールの依存を知らないので、この import は読まない。
+// モジュールのほかの所では `@lib/…` が lib の注文を指すとしても、ここでは指さない。
+syntax = "proto3";
+package acme.billing.v1;
+
+import "@lib/proto/acme/orders/v1/order.proto";
+
+message Charge {
+  acme.orders.v1.Order order = 1;
+}

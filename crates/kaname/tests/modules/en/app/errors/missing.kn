@@ -1,0 +1,8 @@
+# A file the dependency does not have: lib has rules/order_total.rule, not rules/order_totals.rule.
+module order v1
+description "The total of an order by the rule order_total"
+
+use rule order_total from "@lib/rules/order_totals.rule"
+
+fn total(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: order_total.category) -> money[GBPc] total
+  order_total(subtotal: subtotal, category: category, shipping: 0GBPc).total

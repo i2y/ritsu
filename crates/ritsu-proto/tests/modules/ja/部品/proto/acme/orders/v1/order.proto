@@ -1,0 +1,12 @@
+// lib の注文。import は、自分のモジュール lib のルートから読む。protoc が lib のルートを `-I` にして
+// 読むのと同じである。lib を使うモジュールにも同じパスに money.proto があるが、この import はそれを
+// 読まない。
+syntax = "proto3";
+package acme.orders.v1;
+
+import "proto/acme/orders/v1/money.proto";
+
+message Order {
+  string id = 1;
+  Money subtotal = 2;
+}

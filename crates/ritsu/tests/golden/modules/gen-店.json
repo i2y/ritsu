@@ -1,0 +1,418 @@
+{
+  "ritsu": "0.36.0",
+  "root": ".",
+  "ok": true,
+  "check": false,
+  "out": "<out>",
+  "targets": [
+    "typescript",
+    "python",
+    "go"
+  ],
+  "files": [
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/tax/rules/vat_rate.ts",
+      "from": "@pricing/@tax/規則/付加価値税率.rule",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/rules/order_total.ts",
+      "from": "@pricing/規則/注文の合計.rule",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/rules/shipping_fee.ts",
+      "from": "@pricing/規則/送料.rule",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/types.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/activities.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/io.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/runtime.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/workflow.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/client.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/rules.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/注文を受ける/worker.ts",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/glue/kaname.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/glue/basket.ts",
+      "from": "会計/かご.kn",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/glue/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/units.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/package.json",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/rules/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/tax/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/tax/rules/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/tax/rules/vat_rate.py",
+      "from": "@pricing/@tax/規則/付加価値税率.rule",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/rules/order_total.py",
+      "from": "@pricing/規則/注文の合計.rule",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/rules/shipping_fee.py",
+      "from": "@pricing/規則/送料.rule",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/__init__.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/types.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/activities.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/io.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/runtime.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/workflow.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/rules.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/client.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/注文を受ける/worker.py",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/glue/kaname.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/glue/basket.py",
+      "from": "会計/かご.kn",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/glue/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/units.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/py.typed",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/pyproject.toml",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/rules/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/tax/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/tax/rules/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/deps/pricing/deps/tax/rules/vatrate/vat_rate.go",
+      "from": "@pricing/@tax/規則/付加価値税率.rule",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/deps/pricing/rules/ordertotal/order_total.go",
+      "from": "@pricing/規則/注文の合計.rule",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/deps/pricing/rules/shippingfee/shipping_fee.go",
+      "from": "@pricing/規則/送料.rule",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/doc.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/types.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/values.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/activities.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/io.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/runtime.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/workflow.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/rules.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/client.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/workflow/worker.go",
+      "from": "注文/注文を受ける.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/glue/kaname/kaname.go",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/glue/basket/basket.go",
+      "from": "会計/かご.kn",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/units/units.go",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/doc.go",
+      "from": null,
+      "state": "written"
+    }
+  ],
+  "diagnostics": [],
+  "error": null
+}

@@ -1,0 +1,10 @@
+// どのモジュールにも入らない所のレシート。パッケージのパスで書いた import は、これまでどおりの所を
+// 探し、見つからない。`@lib/proto` はただのディレクトリである。
+syntax = "proto3";
+package acme.billing.v1;
+
+import "acme/orders/v1/line.proto";
+
+message Receipt {
+  repeated acme.orders.v1.Line lines = 1;
+}

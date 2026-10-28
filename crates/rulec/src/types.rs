@@ -6456,7 +6456,12 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
     }
     // Followed from the file that wrote the line: the rule a contribution adds to, or the
     // contribution an input of a merged rule came from (§15.235).
-    let file = from.file_path(path);
+    let followed = from.file_path(path);
+    if let Some(why) = crate::vfs::refused(&followed) {
+        c.diags.push(Diag::error("E130", why).at(at(from.span.line)).mark(from.span.clone(), ""));
+        return;
+    }
+    let Ok(file) = followed else { return };
     let shown = file.to_string_lossy().to_string();
     let naming = format!("koyomi \"{}\" date {}", from.file, from.date);
     let stop = |c: &mut Checked, title: String, mark: String, notes: Vec<String>| {
@@ -6500,6 +6505,7 @@ fn koyomi_days(c: &mut Checked, i: &VarDecl, ty: &Ty, from: &crate::ast::DaysFro
                     let msg = if crate::i18n::ja() { s.message.ja.clone() } else { s.message.en.clone() };
                     tr!("koyomi の診断: {code}{}{line}: {msg}", "What koyomi says: {code}{}{line}: {msg}", s.file)
                 })
+                .chain(crate::vfs::outside_note(from.dir(path), &from.file))
                 .collect();
             stop(c, tr!("{naming} の日を、koyomi から得られません", "koyomi does not answer for the days of {naming}"), tr!("{shown} を読めないか、koyomi の検査を通りません", "{shown} cannot be read, or does not pass koyomi's check"), notes)
         }

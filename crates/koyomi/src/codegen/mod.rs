@@ -359,7 +359,7 @@ struct Head<'a> {
 /// file, and each source, with the digests the file was generated from. Paths are from the `.cal`'s
 /// directory, its own the file's name, so that no path of the machine that ran `gen` is written;
 /// given where the `.cal` is from a project's root (`ritsu gen`), every path is from that root.
-fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law], shown: Option<&str>) -> Vec<String> {
+fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law], shown: Option<&str>, module: Option<&ritsu_emit::package::Module>) -> Vec<String> {
     let Head { kind, path, name, version, sha } = *h0;
     let base = crate::calendar::clean(path.parent().unwrap_or(Path::new("")));
     let file = path.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
@@ -370,7 +370,7 @@ fn header(lang: Lang, h0: &Head, cal: Option<&Calendar>, laws: &[Law], shown: Op
     };
     let word = if kind == Kind::Dates { crate::kw::DATES } else { crate::kw::CALENDAR };
     let mut h = vec![ritsu_emit::header::generated("koyomi")];
-    let source = ritsu_emit::header::Source { path: shown.unwrap_or(&file), kind: word, name, version, sha256: sha };
+    let source = ritsu_emit::header::Source { path: shown.unwrap_or(&file), kind: word, name, version, sha256: sha, module };
     h.push(source.line().get(lang).to_string());
     let short = |s: &str| s[..16.min(s.len())].to_string();
     if let Some(c) = cal {
@@ -444,10 +444,10 @@ fn close(mut needed: BTreeSet<H>, cal: Option<&CalData>) -> BTreeSet<H> {
 }
 
 /// What a dates file generates.
-pub fn dates_unit(m: &Model, lang: Lang, shown: Option<&str>) -> Unit {
+pub fn dates_unit(m: &Model, lang: Lang, shown: Option<&str>, module: Option<&ritsu_emit::package::Module>) -> Unit {
     let cal = m.cal.as_ref().map(CalData::of);
     let head = Head { kind: Kind::Dates, path: &m.path, name: &m.file.name.text, version: &m.file.version, sha: &m.sha256 };
-    let header = header(lang, &head, m.cal.as_ref(), &m.laws, shown);
+    let header = header(lang, &head, m.cal.as_ref(), &m.laws, shown, module);
     let inputs: Vec<InputG> = m.inputs.iter().map(|i| InputG { name: i.name.clone(), alias: i.alias.clone(), ty: i.ty, lo: i.lo, hi: i.hi }).collect();
     let mut helpers = BTreeSet::new();
     let timed = cal.as_ref().and_then(|c| c.offset).is_some();
@@ -507,10 +507,10 @@ pub fn dates_unit(m: &Model, lang: Lang, shown: Option<&str>) -> Unit {
 }
 
 /// What a calendar file generates: `is_open`.
-pub fn calendar_unit(c: &Calendar, lang: Lang, shown: Option<&str>) -> Unit {
+pub fn calendar_unit(c: &Calendar, lang: Lang, shown: Option<&str>, module: Option<&ritsu_emit::package::Module>) -> Unit {
     let data = CalData::of(c);
     let head = Head { kind: Kind::Calendar, path: &c.info.path, name: &c.info.name, version: &c.info.version, sha: &c.info.sha256 };
-    let header = header(lang, &head, Some(c), &[], shown);
+    let header = header(lang, &head, Some(c), &[], shown, module);
     let mut helpers = BTreeSet::new();
     helpers.insert(H::IsOpen);
     let helpers = close(helpers, Some(&data));
@@ -733,9 +733,17 @@ pub fn unit_of(checked: &crate::check::Checked, lang: Lang) -> Unit {
 /// What a checked file generates, its header naming the `.cal` at `shown` (a path from a project's
 /// root, as `ritsu gen` writes it; ritsu's DESIGN 9.2) when given, else by its name.
 pub fn unit_shown(checked: &crate::check::Checked, lang: Lang, shown: Option<&str>) -> Unit {
+    unit_in(checked, lang, shown, None)
+}
+
+/// [`unit_shown`] for a file of the dependency `module` (ritsu's DESIGN 17.8), whose name and version
+/// the header's `Source:` line ends with. The paths of the calendars and the tables the header names
+/// are from the project's root, a dependency's written the canonical way (`@pricing/…`): they are
+/// the paths of files read, joined by their letters, not paths a file writes.
+pub fn unit_in(checked: &crate::check::Checked, lang: Lang, shown: Option<&str>, module: Option<&ritsu_emit::package::Module>) -> Unit {
     match checked {
-        crate::check::Checked::Dates(m, _) => dates_unit(m, lang, shown),
-        crate::check::Checked::Calendar(c) => calendar_unit(c, lang, shown),
+        crate::check::Checked::Dates(m, _) => dates_unit(m, lang, shown, module),
+        crate::check::Checked::Calendar(c) => calendar_unit(c, lang, shown, module),
     }
 }
 

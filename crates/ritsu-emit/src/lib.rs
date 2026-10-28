@@ -6,6 +6,8 @@
 //! - [`ident`]: a name of the generated code from a name of the source.
 //! - [`lit`]: a string of the source as a literal of the target.
 //! - [`header`]: the line that says a file is generated, and the comments it is written in.
+//! - [`package`]: where a part goes in the package `ritsu gen` writes, and the paths one part imports
+//!   another by.
 //!
 //! koyomi and chobo write with all of these; rulec and dandori read their tables of words from
 //! [`copies`] (C.11), and keep their own ways of making names and literals.
@@ -14,4 +16,5 @@ pub mod copies;
 pub mod header;
 pub mod ident;
 pub mod lit;
+pub mod package;
 pub mod words;

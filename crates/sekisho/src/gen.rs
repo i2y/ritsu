@@ -41,6 +41,9 @@ pub struct Target<'a> {
     pub name: &'a str,
     pub authorizer: Authorizer,
     pub go_module: String,
+    /// Where the code goes in a package of `ritsu gen`'s, and through it where each file it reads
+    /// goes (ritsu's DESIGN 17.8): `here()` for sekisho's own command.
+    pub place: ritsu_emit::package::Place,
 }
 
 /// What koyomi says of each calendar a file reads (`today is open in <calendar>`), by the index of
@@ -64,7 +67,7 @@ pub fn code(o: &check::Outcome, suite: &Suite, target: &Target, shown: &str, lan
     let (Some(scope), Some(checked)) = (o.scope.as_ref(), o.walked.as_ref()) else { return Ok(Vec::new()) };
     let cals = calendars(&checked.gate, suite);
     let p = plan::Plan::new(scope, checked, &cals, lang)?;
-    let opts = plan::Options { shown: shown.to_string(), lang, authorizer: target.authorizer, go_module: target.go_module.clone() };
+    let opts = plan::Options { shown: shown.to_string(), lang, authorizer: target.authorizer, go_module: target.go_module.clone(), place: target.place.clone() };
     let alias = scope.file().alias().to_string();
     Ok(match target.name {
         "python" => vec![(format!("python/{}", python::path(&alias)), python::module(&p, &opts))],
@@ -139,6 +142,30 @@ pub fn quotas(o: &check::Outcome, lang: Lang) -> Vec<crate::diag::Diag> {
     out
 }
 
+/// The names a gate's Cedar declares, each with the `.gate` file that declares it, as diagnostics
+/// write the file (ritsu's DESIGN 17.8): for the file and each file it reads with `use gate`, in the
+/// namespace of each, its entity types (`Shop::Order`; `Shop::Role` when it declares roles,
+/// `Shop::Workflow` when it declares workflows) and its actions (`Shop::Action::"refund"`). Cedar
+/// knows a type or an action by its name in its namespace, so two files that declare one name are
+/// one thing where the two gates are asked together. None when the names do not hold.
+pub fn cedar_names(o: &check::Outcome) -> Vec<(String, String)> {
+    let Some(scope) = o.scope.as_ref() else { return Vec::new() };
+    let mut out = Vec::new();
+    for f in &scope.files {
+        let ns = crate::names::namespace_of(f);
+        let mut names: Vec<String> = f.principals.iter().chain(&f.resources).map(|e| e.name.ascii().to_string()).collect();
+        if !f.roles.is_empty() {
+            names.push(crate::cedar::ROLE.to_string());
+        }
+        if !f.workflows.is_empty() {
+            names.push(crate::ast::WORKFLOW_TYPE.to_string());
+        }
+        names.extend(f.actions.iter().map(|a| format!("Action::\"{}\"", a.name.ascii())));
+        out.extend(names.into_iter().map(|n| (f.path.clone(), format!("{ns}::{n}"))));
+    }
+    out
+}
+
 /// What `gen` writes for one file that passes, for any target: each file's path under the
 /// directory written to, and its text. The code of the requests reads the facts of the rules, the
 /// dates and the calendars the gate computes with through `suite`. Err with what went wrong (a bug
@@ -147,8 +174,11 @@ pub fn generate(o: &check::Outcome, target: &Target, shown: &str, lang: Lang, su
     let (Some(scope), Some(checked)) = (o.scope.as_ref(), o.walked.as_ref()) else { return Ok(Vec::new()) };
     let cedar_error = |e: ritsu_base::cedar::Error| format!("{}:{}: {}", e.line, e.col, e.message.en);
     match target.name {
-        "cedar" => files(o, "cedar", shown, lang).map_err(cedar_error),
-        "typescript" => Ok(vec![(typescript::path(scope.file().alias()), typescript::module(scope, checked, suite, shown, lang, target.authorizer)?)]),
+        "cedar" => match &target.place.module {
+            None => files(o, "cedar", shown, lang).map_err(cedar_error),
+            Some(m) => crate::cedar::files_in(scope, checked, shown, lang, Some(m)).map(|f| f.paths(scope.file().alias())).map_err(cedar_error),
+        },
+        "typescript" => Ok(vec![(typescript::path(scope.file().alias()), typescript::module(scope, checked, suite, shown, lang, target.authorizer, &target.place)?)]),
         "python" | "go" => code(o, suite, target, shown, lang).map_err(cedar_error),
         _ => Ok(Vec::new()),
     }
@@ -219,7 +249,7 @@ pub fn run(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut d
                 let _ = write!(out, "{}", d.render(lang));
             }
         }
-        let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone() }, &shown, lang, suite) {
+        let made = match generate(&o, &Target { name: target, authorizer, go_module: go_module.clone(), place: ritsu_emit::package::Place::here() }, &shown, lang, suite) {
             Ok(m) => m,
             Err(e) => {
                 return refuse(err, tr!("`{f}` から生成できません（{e}）。sekisho の不具合です。報告してください", "cannot generate from `{f}` ({e}): a bug in sekisho, please report it"), lang);

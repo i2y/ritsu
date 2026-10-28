@@ -1,0 +1,70 @@
+typescript:
+  deps/index.ts: ritsu
+  deps/pricing/deps/index.ts: ritsu
+  deps/pricing/deps/tax/index.ts: ritsu
+  deps/pricing/deps/tax/rules/index.ts: ritsu
+  deps/pricing/deps/tax/rules/vat_rate.ts: rulec <- @pricing/@tax/rules/vat_rate.rule [example.com/acme/tax 1.0.0]
+  deps/pricing/index.ts: ritsu
+  deps/pricing/rules/index.ts: ritsu
+  deps/pricing/rules/order_total.ts: rulec <- @pricing/rules/order_total.rule [example.com/acme/pricing 1.1.0]
+  deps/pricing/rules/shipping_fee.ts: rulec <- @pricing/rules/shipping_fee.rule [example.com/acme/pricing 1.1.0]
+  flows/index.ts: ritsu
+  flows/place_order/activities.ts: dandori <- orders/place_order.flow
+  flows/place_order/client.ts: dandori <- orders/place_order.flow
+  flows/place_order/io.ts: dandori <- orders/place_order.flow
+  flows/place_order/rules.ts: dandori <- orders/place_order.flow
+  flows/place_order/runtime.ts: dandori <- orders/place_order.flow
+  flows/place_order/types.ts: dandori <- orders/place_order.flow
+  flows/place_order/worker.ts: dandori <- orders/place_order.flow
+  flows/place_order/workflow.ts: dandori <- orders/place_order.flow
+  glue/basket.ts: kaname <- checkout/basket.kn
+  glue/index.ts: kaname
+  glue/kaname.ts: kaname
+  index.ts: ritsu
+  package.json: ritsu
+  units.ts: ritsu
+python:
+  generated/__init__.py: ritsu
+  generated/deps/__init__.py: ritsu
+  generated/deps/pricing/__init__.py: ritsu
+  generated/deps/pricing/deps/__init__.py: ritsu
+  generated/deps/pricing/deps/tax/__init__.py: ritsu
+  generated/deps/pricing/deps/tax/rules/__init__.py: ritsu
+  generated/deps/pricing/deps/tax/rules/vat_rate.py: rulec <- @pricing/@tax/rules/vat_rate.rule [example.com/acme/tax 1.0.0]
+  generated/deps/pricing/rules/__init__.py: ritsu
+  generated/deps/pricing/rules/order_total.py: rulec <- @pricing/rules/order_total.rule [example.com/acme/pricing 1.1.0]
+  generated/deps/pricing/rules/shipping_fee.py: rulec <- @pricing/rules/shipping_fee.rule [example.com/acme/pricing 1.1.0]
+  generated/flows/__init__.py: ritsu
+  generated/flows/place_order/__init__.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/activities.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/client.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/io.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/rules.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/runtime.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/types.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/worker.py: dandori <- orders/place_order.flow
+  generated/flows/place_order/workflow.py: dandori <- orders/place_order.flow
+  generated/glue/__init__.py: kaname
+  generated/glue/basket.py: kaname <- checkout/basket.kn
+  generated/glue/kaname.py: kaname
+  generated/py.typed: (empty)
+  generated/units.py: ritsu
+  pyproject.toml: ritsu
+go:
+  deps/pricing/deps/tax/rules/vatrate/vat_rate.go: rulec <- @pricing/@tax/rules/vat_rate.rule [example.com/acme/tax 1.0.0]
+  deps/pricing/rules/ordertotal/order_total.go: rulec <- @pricing/rules/order_total.rule [example.com/acme/pricing 1.1.0]
+  deps/pricing/rules/shippingfee/shipping_fee.go: rulec <- @pricing/rules/shipping_fee.rule [example.com/acme/pricing 1.1.0]
+  doc.go: ritsu
+  flows/place_order/activities.go: dandori <- orders/place_order.flow
+  flows/place_order/client.go: dandori <- orders/place_order.flow
+  flows/place_order/doc.go: dandori <- orders/place_order.flow
+  flows/place_order/io.go: dandori <- orders/place_order.flow
+  flows/place_order/rules.go: dandori <- orders/place_order.flow
+  flows/place_order/runtime.go: dandori <- orders/place_order.flow
+  flows/place_order/types.go: dandori <- orders/place_order.flow
+  flows/place_order/values.go: dandori <- orders/place_order.flow
+  flows/place_order/worker.go: dandori <- orders/place_order.flow
+  flows/place_order/workflow.go: dandori <- orders/place_order.flow
+  glue/basket/basket.go: kaname <- checkout/basket.kn
+  glue/kaname/kaname.go: kaname
+  units/units.go: ritsu

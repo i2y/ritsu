@@ -1,0 +1,104 @@
+# in ja/アプリ
+
+$ rulec check --lang ja 規則/
+ok 規則/区分の税率.rule
+ok 規則/請求の時期.rule
+ok 規則/請求額.rule
+exit 0
+
+$ rulec check --lang ja 規則/ --format json
+exit 0
+
+$ rulec check --lang ja @lib/規則/注文の合計.rule
+ok @lib/規則/注文の合計.rule
+exit 0
+
+$ rulec check --lang ja @lib/@base/規則/付加価値税率.rule
+ok @lib/@base/規則/付加価値税率.rule
+exit 0
+
+$ rulec check --lang ja 誤り/依存に無い.rule
+エラー[E044]: `@shop/規則/注文の合計.rule` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません
+  --> 誤り/依存に無い.rule:15 準用 注文
+   |
+15 | apply 注文(order) = "@shop/規則/注文の合計.rule" meaning:680b90c58acbf1ef
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check --lang ja 誤り/外を指す.rule
+エラー[E044]: `../../部品/規則/注文の合計.rule` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です
+  --> 誤り/外を指す.rule:16 準用 注文
+   |
+16 | apply 注文(order) = "../../部品/規則/注文の合計.rule" meaning:680b90c58acbf1ef
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check --lang ja 誤り/入れ子.rule
+エラー[E044]: `../入れ子/規則/付加価値税率.rule` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください
+  --> 誤り/入れ子.rule:13 準用 付加価値税
+   |
+13 | apply 付加価値税(vat) = "../入れ子/規則/付加価値税率.rule" meaning:35d5c7d29edf24c8
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check --lang ja 誤り/無いファイル.rule
+エラー[E044]: 依存 `@lib`（`example.com/acme/lib`、`../部品`）に `規則/注文合計.rule` はありません
+  --> 誤り/無いファイル.rule:15 準用 注文
+   |
+15 | apply 注文(order) = "@lib/規則/注文合計.rule" meaning:680b90c58acbf1ef
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+
+exit 1
+
+$ rulec check --lang ja 誤り/無いファイル.rule --format json
+{"v":2,"severity":"error","code":"E044","file":"誤り/無いファイル.rule","line":15,"column":1,"title":"依存 `@lib`（`example.com/acme/lib`、`../部品`）に `規則/注文合計.rule` はありません","notes":[],"where":{"file":"誤り/無いファイル.rule","line":15,"column":1},"spans":[{"line":15,"column":1,"length":78,"label":""}],"witness":{},"rows":[],"fix":{"kind":"none"}}
+exit 1
+
+# in ja/アプリ/規則
+
+$ rulec check --lang ja @lib/規則/注文の合計.rule
+ok @lib/規則/注文の合計.rule
+exit 0
+
+# in ja/外
+
+$ rulec check --lang ja 請求額.rule
+エラー[E044]: `注文` を準用できません: `@lib/規則/注文の合計.rule` を読めません
+  --> 請求額.rule:16 準用 注文
+   |
+16 | apply 注文(order) = "@lib/規則/注文の合計.rule" meaning:680b90c58acbf1ef
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ パスは規則ファイルのある場所からたどります（探した先: @lib/規則/注文の合計.rule）。
+ `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+
+exit 1
+
+$ rulec check --lang ja 請求額.rule --format json
+{"v":2,"severity":"error","code":"E044","file":"請求額.rule","line":16,"column":1,"title":"`注文` を準用できません: `@lib/規則/注文の合計.rule` を読めません","notes":["パスは規則ファイルのある場所からたどります（探した先: @lib/規則/注文の合計.rule）。","`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"],"where":{"file":"請求額.rule","line":16,"column":1},"spans":[{"line":16,"column":1,"length":81,"label":""}],"witness":{},"rows":[],"fix":{"kind":"none"}}
+exit 1
+
+# in ja
+
+$ rulec check --lang ja .
+エラー[E044]: `注文` を準用できません: `@lib/規則/注文の合計.rule` を読めません
+  --> ./外/請求額.rule:16 準用 注文
+   |
+16 | apply 注文(order) = "@lib/規則/注文の合計.rule" meaning:680b90c58acbf1ef
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+ パスは規則ファイルのある場所からたどります（探した先: ./外/@lib/規則/注文の合計.rule）。
+ `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+
+備考: `./アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `rulec check ./アプリ` を実行してください
+備考: `./土台` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `rulec check ./土台` を実行してください
+備考: `./部品` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `rulec check ./部品` を実行してください
+exit 1
+

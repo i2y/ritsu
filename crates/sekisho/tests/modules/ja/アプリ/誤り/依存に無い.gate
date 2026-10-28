@@ -1,0 +1,36 @@
+# require していない依存。app の ritsu.mod に `require shop` は無い。
+gate 購入(purchases) v1
+description "誰が購入を承認し、誰が入荷を在庫に受け入れるか"
+
+use rule 承認 from "@shop/規則/承認.rule"
+use book 在庫 from "@lib/帳簿/在庫.book"
+
+principal 社員(User)
+  attributes
+    上限(limit) : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+resource 購入(Purchase)
+
+resource 入荷品(Delivery)
+
+action 承認する(approve)
+  principal 社員
+  resource 購入
+  input
+    金額(amount) : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  context
+    区分(band) = 承認(金額: 金額, 上限: principal.上限).区分
+
+action 入荷を受ける(receive_delivery)
+  guards 在庫 入荷.do
+  principal 社員
+  resource 入荷品
+
+permit 上限まで承認できる(approve_within_the_limit)
+  principal is 社員
+  action 承認する
+  when 区分 is 上限まで
+
+permit 社員は入荷を受ける(users_receive)
+  principal is 社員
+  action 入荷を受ける

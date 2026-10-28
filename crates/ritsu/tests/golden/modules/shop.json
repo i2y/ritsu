@@ -1,0 +1,82 @@
+{
+  "ritsu": "0.36.0",
+  "root": ".",
+  "ok": true,
+  "module": {
+    "name": "example.com/acme/shop",
+    "version": "0.1.0"
+  },
+  "dependencies": [
+    {
+      "prefix": "@pricing",
+      "name": "example.com/acme/pricing",
+      "version": "1.1.0",
+      "source": "path",
+      "path": "../pricing",
+      "digest": null,
+      "files_digest": null,
+      "where": "path",
+      "verified": [],
+      "files": 2,
+      "ok": true,
+      "errors": 0,
+      "warnings": 0,
+      "claims_not_run": 0
+    },
+    {
+      "prefix": "@pricing/@tax",
+      "name": "example.com/acme/tax",
+      "version": "1.0.0",
+      "source": "path",
+      "path": "../tax",
+      "digest": null,
+      "files_digest": null,
+      "where": "path",
+      "verified": [],
+      "files": 1,
+      "ok": true,
+      "errors": 0,
+      "warnings": 0,
+      "claims_not_run": 0
+    }
+  ],
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "@pricing/@tax/rules/vat_rate.rule",
+      "dependency": "@pricing/@tax",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "@pricing/rules/order_total.rule",
+      "dependency": "@pricing",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "@pricing/rules/shipping_fee.rule",
+      "dependency": "@pricing",
+      "ok": true
+    },
+    {
+      "tool": "kaname",
+      "file": "checkout/basket.kn",
+      "dependency": null,
+      "ok": true
+    },
+    {
+      "tool": "dandori",
+      "file": "orders/place_order.flow",
+      "dependency": null,
+      "ok": true
+    }
+  ],
+  "diagnostics": [],
+  "contributions": [],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0
+  }
+}

@@ -1,0 +1,12 @@
+// An order of lib. Its import is read from the root of its own module, lib, as protoc reads it with
+// `-I` at lib's root; the module that uses lib has a money.proto of its own at the same path, which
+// this import does not read.
+syntax = "proto3";
+package acme.orders.v1;
+
+import "proto/acme/orders/v1/money.proto";
+
+message Order {
+  string id = 1;
+  Money subtotal = 2;
+}

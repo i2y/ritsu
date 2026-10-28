@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rule order_total v1</title>
+<style>
+:root { color-scheme: light dark; --rc-bg: #fff; --rc-fg: #222; --rc-dim: #555; --rc-soft: #666; --rc-quiet: #888; --rc-line: #c8c8c8; --rc-head: #f2f2f2; --rc-hit: #ffe9a8; --rc-code: #f4f4f4; --rc-panel: #fafafa; --rc-side: #fafbfc; --rc-edge: #e0e0e0; --rc-edge-soft: #eee; --rc-edge-strong: #dcdcdc; --rc-split: #ececec; --rc-split-on: #c9d6e2; --rc-card: #fff; --rc-card-line: #bdbdbd; --rc-card-out: #8a8a8a; --rc-mark: #c07800; --rc-sel: #fffbf0; --rc-ex: #333; --rc-ex-bg: #f6f7f8; --rc-wire: #b0b0b0; --rc-shadow: rgba(0,0,0,.04); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --rc-bg: #15171b; --rc-fg: #e4e6ea; --rc-dim: #a3a8b0; --rc-soft: #9aa0a8; --rc-quiet: #8c929b; --rc-line: #3b3f47; --rc-head: #22252b; --rc-hit: #5c4712; --rc-code: #24272d; --rc-panel: #1b1e23; --rc-side: #1b1e23; --rc-edge: #2c3036; --rc-edge-soft: #2a2e34; --rc-edge-strong: #33373e; --rc-split: #2a2d33; --rc-split-on: #3e4c5c; --rc-card: #1c1f24; --rc-card-line: #464b53; --rc-card-out: #7a808a; --rc-mark: #e8a33d; --rc-sel: #2b2414; --rc-ex: #d2d5da; --rc-ex-bg: #25282e; --rc-wire: #626873; --rc-shadow: rgba(0,0,0,.35); } }
+:root[data-theme="dark"] { color-scheme: dark; --rc-bg: #15171b; --rc-fg: #e4e6ea; --rc-dim: #a3a8b0; --rc-soft: #9aa0a8; --rc-quiet: #8c929b; --rc-line: #3b3f47; --rc-head: #22252b; --rc-hit: #5c4712; --rc-code: #24272d; --rc-panel: #1b1e23; --rc-side: #1b1e23; --rc-edge: #2c3036; --rc-edge-soft: #2a2e34; --rc-edge-strong: #33373e; --rc-split: #2a2d33; --rc-split-on: #3e4c5c; --rc-card: #1c1f24; --rc-card-line: #464b53; --rc-card-out: #7a808a; --rc-mark: #e8a33d; --rc-sel: #2b2414; --rc-ex: #d2d5da; --rc-ex-bg: #25282e; --rc-wire: #626873; --rc-shadow: rgba(0,0,0,.35); }
+:root[data-theme="light"] { color-scheme: light; }
+body { font-family: system-ui, sans-serif; line-height: 1.5; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; color: var(--rc-fg); background: var(--rc-bg); }
+table { border-collapse: collapse; margin: 0.5rem 0 1rem; }
+th, td { border: 1px solid var(--rc-line); padding: 2px 10px; text-align: left; vertical-align: top; }
+th { background: var(--rc-head); }
+tr.hit td { background: var(--rc-hit); }
+code { background: var(--rc-code); padding: 0 3px; }
+#try { border: 1px solid var(--rc-line); border-radius: 6px; padding: 12px 16px; margin: 1rem 0 1.5rem; background: var(--rc-panel); container-type: inline-size; }
+#try h2 { margin-top: 0; }
+#try-form { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; align-items: center; max-width: 36rem; }
+#try-form label { display: contents; }
+#try-form input, #try-form select { font: inherit; padding: 2px 6px; min-width: 0; max-width: 100%; box-sizing: border-box; }
+@container (max-width: 20rem) { #try-form { grid-template-columns: minmax(0, 1fr); row-gap: 2px; } #try-form input, #try-form select { margin-bottom: 6px; } }
+#try-rows { margin: 10px 0; }
+#try-rows table { margin: 4px 0; }
+#try-rows input, #try-rows select, #try-rows button { font: inherit; padding: 2px 6px; }
+#try-buttons { margin: 10px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+#try-buttons button { font: inherit; padding: 4px 12px; }
+#try-result { font-weight: 600; margin: 8px 0; min-height: 1.5em; }
+#try-record { font-family: ui-monospace, monospace; font-size: 0.85em; white-space: pre-wrap; word-break: break-all; color: var(--rc-dim); margin: 0; }
+figure.machine { margin: 1rem 0; overflow-x: auto; }
+figure.machine svg { display: block; max-width: none; }
+figure.machine .st rect { fill: var(--rc-card); stroke: var(--rc-card-line); stroke-width: 1.2; }
+figure.machine .st text { fill: var(--rc-fg); font-size: 13px; }
+figure.machine .st.now rect.box { stroke: var(--rc-mark); stroke-width: 2.5; }
+figure.machine .st.next rect.box { fill: var(--rc-hit); }
+figure.machine .mv path, figure.machine .mv line { stroke: var(--rc-wire); stroke-width: 1.3; fill: none; }
+figure.machine .mv text { fill: var(--rc-dim); font-size: 11px; paint-order: stroke; stroke: var(--rc-bg); stroke-width: 3px; }
+figure.machine .start { fill: var(--rc-fg); }
+figure.machine marker path { fill: var(--rc-wire); }
+
+/* The document is laid out for reading; the board is laid out for the window. The class is
+   put on by the script, so a page with no script keeps the document's own measure. */
+body.boarded { max-width: none; margin: 0; padding: 0; }
+body.boarded main { display: none; }
+.app { display: flex; height: 100vh; align-items: stretch; }
+/* A third of the window, but never more than a comfortable measure and never less than
+   the tables of the inputs and the outputs need. A fixed width takes over half of a narrow
+   window — an MCP host's panel, the playground's frame — and leaves the board nowhere to be;
+   a window too narrow for both puts one above the other (the end of this sheet). */
+.app .side { box-sizing: border-box; width: clamp(20rem, 34%, 26rem); flex: none; border-right: 1px solid var(--rc-edge); background: var(--rc-side); padding: 22px 24px; overflow-y: auto; }
+.app .split { flex: none; width: 6px; cursor: col-resize; background: var(--rc-split); }
+.app .split:hover, .app .split.on { background: var(--rc-split-on); }
+.app .board { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--rc-bg); }
+.app .stage { flex: 1; min-height: 0; overflow: auto; padding: 30px 38px; }
+.app .cap { font-size: 0.9rem; line-height: 1.8; color: var(--rc-dim); margin: 0; padding: 14px 38px; border-top: 1px solid var(--rc-edge-soft); }
+.app .hsplit { flex: none; height: 6px; cursor: row-resize; background: var(--rc-split); }
+.app .hsplit:hover, .app .hsplit.on { background: var(--rc-split-on); }
+.app .hsplit[hidden] { display: none; }
+.app .dock { border-top: 1px solid var(--rc-edge-strong); background: var(--rc-side); padding: 16px 38px; height: 34vh; overflow-y: auto; }
+.app .dock .x { float: right; font-size: 0.85rem; color: var(--rc-quiet); cursor: pointer; }
+#canvas { position: relative; display: flex; gap: 60px; align-items: flex-start; padding: 4px; }
+#wires { position: absolute; inset: 0; overflow: visible; pointer-events: none; color: var(--rc-wire); }
+.gcol { display: flex; flex-direction: column; gap: 34px; position: relative; z-index: 1; flex: none; }
+.gcard { border: 1px solid var(--rc-card-line); border-radius: 10px; background: var(--rc-card); padding: 12px 14px; cursor: pointer; box-shadow: 0 1px 2px var(--rc-shadow); }
+.gcard.out { border-color: var(--rc-card-out); border-width: 1.5px; }
+.gcard.sel { border-color: var(--rc-mark); border-width: 2px; background: var(--rc-sel); }
+.gcard h3 { margin: 0; font-size: 1rem; display: flex; align-items: baseline; gap: 12px; }
+.gcard h3 .v { margin-left: auto; font-size: 1.1rem; }
+.gcard .by { font-size: 0.8rem; color: var(--rc-quiet); margin: 3px 0 0; }
+.gcard .by .r { color: var(--rc-mark); font-weight: 600; }
+.gcard .rd { font-size: 0.8rem; color: var(--rc-soft); margin: 2px 0 0; }
+.gcard .ex { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; color: var(--rc-ex); margin: 6px 0 0; padding: 5px 8px; background: var(--rc-ex-bg); border-radius: 5px; }
+.gcard table { margin: 10px 0 0; }
+.gcard th, .gcard td { padding: 3px 8px; white-space: nowrap; }
+/* A cell of the side's tables breaks between words only. Japanese breaks between any two
+   characters, so a column squeezed to its narrowest set a heading or a name one character
+   to a line; the notes, the last column, are prose and break as prose does. A table that
+   still does not fit scrolls by itself, and the side does not. */
+.app .side table { display: block; width: auto; max-width: 100%; overflow-x: auto; }
+.app .side th { white-space: nowrap; }
+.app .side td { word-break: keep-all; overflow-wrap: break-word; }
+.app .side td:last-child { word-break: normal; }
+/* Too narrow for the side and the board side by side (a phone, a small frame): one column
+   the page scrolls, in the order a reader takes it. The form to try the rule, the picture
+   it lights up, and then the rest of the document. */
+@media (max-width: 719px) {
+  .app { flex-direction: column; height: auto; }
+  .app .side, .app .board { display: contents; }
+  .app .split, .app .hsplit { display: none; }
+  .app .side > * { order: 3; margin-left: 16px; margin-right: 16px; }
+  .app .side > #try { order: 1; margin: 16px; }
+  .app .stage { order: 2; flex: none; height: 70vh; padding: 16px; border-top: 1px solid var(--rc-edge-soft); border-bottom: 1px solid var(--rc-edge-soft); }
+  .app .cap { order: 2; padding: 10px 16px; border-top: 0; }
+  .app .dock { order: 2; height: auto; max-height: 60vh; padding: 12px 16px; }
+}
+</style>
+</head>
+<body>
+<main>
+<!-- Generated by rulec 0.36.0 from @pricing/rules/order_total.rule (sha256:8de98b42608f). This is a read-only rendering; the source of truth is the .rule file. Edits cannot be carried back. -->
+<h1>Rule order_total v1</h1>
+<p>The total of an order: its subtotal, the VAT of its category at the rate of the rule vat_rate of the module tax, and the shipping fee</p>
+<section id="try">
+<h2>Try a case</h2>
+<p>Enter the inputs: the rows that match light up and the outputs appear. What runs is the generated code itself, and the line it would write to a log is shown as it is.</p>
+<form id="try-form"></form>
+<div id="try-rows"></div>
+<div id="try-buttons"></div>
+<div id="try-result"></div>
+<pre id="try-record"></pre>
+</section>
+
+<section class="sec" data-sec="inputs">
+<h2>Inputs</h2>
+<table>
+<thead><tr><th>Name</th><th>Type</th><th>Range</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>subtotal</td><td>money[GBPc]</td><td>0GBPc to 2_000_000GBPc</td><td></td></tr>
+<tr><td>category</td><td>category (3 values)</td><td></td><td></td></tr>
+<tr><td>shipping</td><td>money[GBPc]</td><td>0GBPc to 10_000GBPc</td><td></td></tr>
+</tbody>
+</table>
+</section>
+<section class="sec" data-sec="outputs">
+<h2>Outputs</h2>
+<table>
+<thead><tr><th>Name</th><th>Type</th><th>Rounding</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>total</td><td>money[GBPc]</td><td>half_up(1GBPc)</td><td></td></tr>
+</tbody>
+</table>
+</section>
+<section class="sec" data-sec="types">
+<h2>Types</h2>
+<p>An enum is a <strong>closed</strong> finite set. Add a value, and every table that does not look at it fails the completeness check.</p>
+<ul>
+<li><strong>category</strong> (3 values) — standard, reduced, zero</li>
+</ul>
+</section>
+<section class="sec">
+<h2>Applied rule vat: @tax/rules/vat_rate.rule (module example.com/acme/tax 1.0.0) (unpinned)</h2>
+<p>Rule <strong>vat_rate</strong> v1 is applied with the following substitutions.</p>
+<p>The rate of VAT for a category of goods: standard 20%, reduced 5%, zero 0%. The rates are the example's own</p>
+<table>
+<thead><tr><th>Callee input</th><th>What this rule passes</th><th>Value mapping</th></tr></thead>
+<tbody>
+<tr><td>category</td><td>category</td><td></td></tr>
+</tbody>
+</table>
+<table>
+<thead><tr><th>Callee output</th><th>Its name in this rule</th></tr></thead>
+<tbody>
+<tr><td>rate</td><td>vat_rate</td></tr>
+</tbody>
+</table>
+</section>
+<section class="sec" data-table="vat:rate_by_category">
+<h3 id="t-vat:rate_by_category">Table rate_by_category (policy unique)</h3>
+<table>
+<thead><tr><th>Column</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>category</td><td>Input</td></tr>
+<tr><td>→ rate</td><td>Output of this rule</td></tr>
+</tbody>
+</table>
+<table>
+<thead><tr><th>#</th><th>category</th><th>→ rate (rate / down(1%))</th></tr></thead>
+<tbody>
+<tr data-t="vat:rate_by_category" data-r="1"><td>1</td><td>standard</td><td>20%</td></tr>
+<tr data-t="vat:rate_by_category" data-r="2"><td>2</td><td>reduced</td><td>5%</td></tr>
+<tr data-t="vat:rate_by_category" data-r="3"><td>3</td><td>zero</td><td>0%</td></tr>
+</tbody>
+</table>
+<p><strong>What <code>rulec check</code> verified of the callee</strong></p>
+<ul>
+<li>Every combination of inputs matches some row (E101 completeness)</li>
+<li>There is no row that can never match (E102 unreachable row)</li>
+<li>No input matches two or more rows at once (E105 overlap). Reordering the rows does not change the meaning</li>
+</ul>
+</section>
+<section class="sec">
+<h2>Result</h2>
+<p><code>subtotal + subtotal * vat_rate + shipping</code></p>
+</section>
+<section class="sec">
+<h2>Examples (verified)</h2>
+<table>
+<thead><tr><th>subtotal</th><th>category</th><th>shipping</th><th>→ total</th></tr></thead>
+<tbody>
+<tr><td>1000GBPc</td><td>standard</td><td>395GBPc</td><td>1595GBPc</td></tr>
+<tr><td>1000GBPc</td><td>reduced</td><td>395GBPc</td><td>1445GBPc</td></tr>
+<tr><td>999GBPc</td><td>reduced</td><td>0GBPc</td><td>1049GBPc</td></tr>
+<tr><td>1000GBPc</td><td>zero</td><td>0GBPc</td><td>1000GBPc</td></tr>
+</tbody>
+</table>
+<p><code>rulec check</code> ran these 4 examples through the reference evaluator, and every one produced the declared values (E107). The examples are an <strong>executable specification</strong>.</p>
+</section>
+</main>
+<script type="module">
+// Code generated by rulec 0.36.0. DO NOT EDIT.
+// Source: order_total.rule (rule order_total v1, sha256:8de98b42608ff630)
+// Applies: vat = @tax/rules/vat_rate.rule (meaning:8a62fb4ec05fd289)
+
+
+/** A row that matched: the table's name, its 1-based row number, and its label when it has one. */
+
+
+export const NO_VALUE = Symbol("no value");
+
+export class RuleInputError extends Error {
+  constructor(what, value = NO_VALUE) {
+    super(value === NO_VALUE ? what : `${what}: ${String(value)}`);
+    this.name = "RuleInputError";
+    this.what = what;
+    this.value = value;
+  }
+}
+
+export class RuleContradictionError extends Error {
+  constructor(what) {
+    super(what);
+    this.name = "RuleContradictionError";
+    this.what = what;
+  }
+}
+
+function _min(a, b) {
+  return a < b ? a : b;
+}
+
+function _max(a, b) {
+  return a > b ? a : b;
+}
+
+/** Toward zero: -4.8 yen → -4 yen. */
+function _roundDown(x, g) {
+  const a = x < 0n ? -x : x;
+  const v = (a / g) * g;
+  return x < 0n ? -v : v;
+}
+
+/** Away from zero: -4.2 yen → -5 yen. */
+function _roundUp(x, g) {
+  const a = x < 0n ? -x : x;
+  const v = a % g === 0n ? (a / g) * g : (a / g + 1n) * g;
+  return x < 0n ? -v : v;
+}
+
+/** An exact half goes away from zero. */
+function _roundHalf(x, g) {
+  const a = x < 0n ? -x : x;
+  const v = 2n * (a % g) >= g ? (a / g + 1n) * g : (a / g) * g;
+  return x < 0n ? -v : v;
+}
+
+/** An exact half goes toward zero. */
+function _roundHalfDown(x, g) {
+  const a = x < 0n ? -x : x;
+  const v = 2n * (a % g) > g ? (a / g + 1n) * g : (a / g) * g;
+  return x < 0n ? -v : v;
+}
+
+/** An exact half goes to the even neighbor. */
+function _roundBankers(x, g) {
+  const a = x < 0n ? -x : x;
+  let q = a / g;
+  const r = a % g;
+  if (2n * r > g || (2n * r === g && q % 2n === 1n)) {
+    q += 1n;
+  }
+  const v = q * g;
+  return x < 0n ? -v : v;
+}
+
+export const Category = {
+  STANDARD: "standard",
+  REDUCED: "reduced",
+  ZERO: "zero",
+};
+
+export function parseCategory(s) {
+  const v = Object.values(Category).find((x) => x === s);
+  if (v === undefined) {
+    throw new RuleInputError(`${s} is not a value of enum Category`);
+  }
+  return v;
+}
+
+/** Rule order_total v1: the same decision as order_total_traced, without the rows that matched. */
+export function order_total(subtotal, category, shipping) {
+  return order_total_traced(subtotal, category, shipping)[0];
+}
+
+/** Rule order_total v1. Each branch corresponds 1:1 to a row of the rule source. Returns the outputs and the rows that matched, one per table, in order. */
+export function order_total_traced(subtotal, category, shipping) {
+  if (typeof subtotal === "number" && Number.isInteger(subtotal)) {
+    subtotal = BigInt(subtotal);
+  }
+  if (typeof subtotal !== "bigint") {
+    throw new RuleInputError(`subtotal is not an integer`, subtotal);
+  }
+  if (subtotal < 0n || subtotal > 2000000n) {
+    throw new RuleInputError(`subtotal is out of range`, subtotal);
+  }
+  if (!Object.values(Category).includes(category)) {
+    throw new RuleInputError(`category is not a value of enum category`, category);
+  }
+  if (typeof shipping === "number" && Number.isInteger(shipping)) {
+    shipping = BigInt(shipping);
+  }
+  if (typeof shipping !== "bigint") {
+    throw new RuleInputError(`shipping is not an integer`, shipping);
+  }
+  if (shipping < 0n || shipping > 10000n) {
+    throw new RuleInputError(`shipping is out of range`, shipping);
+  }
+  const trace = [];
+  // table vat:rate_by_category (policy unique)
+  let vat_rate_2;
+  if (category === Category.STANDARD) { // row 1: standard | 20%
+    vat_rate_2 = 4n;
+    trace.push({ table: "vat:rate_by_category", row: 1 });
+  } else if (category === Category.REDUCED) { // row 2: reduced | 5%
+    vat_rate_2 = 1n;
+    trace.push({ table: "vat:rate_by_category", row: 2 });
+  } else if (category === Category.ZERO) { // row 3: zero | 0%
+    vat_rate_2 = 0n;
+    trace.push({ table: "vat:rate_by_category", row: 3 });
+  } else {
+    throw new Error("unreachable: completeness was statically checked by rulec");
+  }
+  const vat_rate = _roundDown((vat_rate_2 * 5n), 1n); // definition
+  const raw = ((subtotal * 100n) + (subtotal * vat_rate)) + (shipping * 100n); // unit: 1/100 money[GBPc]
+  return [(_roundHalf(raw, 100n) / 100n), trace];
+}
+
+/** One call as a record in the fixtures format (docs/formats.md): the inputs, what came out, and the rows that matched, as one JSON line. An empty tag is left out. */
+export function order_total_record(subtotal, category, shipping, out, trace, tag = "") {
+  const ins = [
+    '"subtotal":' + String(subtotal),
+    '"category":' + JSON.stringify(category),
+    '"shipping":' + String(shipping),
+  ].join(",");
+  const obs = [
+    '"total":' + String(out),
+  ].join(",");
+  const rows = trace.map((f) => '{"table":' + JSON.stringify(f.table) + ',"row":' + String(f.row) + (f.label ? ',"label":' + JSON.stringify(f.label) : "") + "}").join(",");
+  const head = tag === "" ? "{" : '{"tag":' + JSON.stringify(tag) + ",";
+  return head + '"in":{' + ins + '},"observed":{' + obs + '},"trace":[' + rows + "]}";
+}
+
+const RULE = {"name":"order_total","version":"1","inputs":[{"name":"subtotal","alias":"subtotal","kind":"number","unit":"GBPc","scale":1,"range":{"min":0,"max":2000000}},{"name":"category","alias":"category","kind":"enum","scale":1,"values":["standard","reduced","zero"]},{"name":"shipping","alias":"shipping","kind":"number","unit":"GBPc","scale":1,"range":{"min":0,"max":10000}}],"outputs":[{"name":"total","alias":"total","kind":"number","unit":"GBPc","scale":1}],"examples":[{"subtotal":"1000","category":"standard","shipping":"395"},{"subtotal":"1000","category":"reduced","shipping":"395"},{"subtotal":"999","category":"reduced","shipping":"0"},{"subtotal":"1000","category":"zero","shipping":"0"}],"text":{"run":"Compute","example":"Example","add":"Add a row","remove":"Remove this row","carry":"Continue from this state"}};
+const FN = { run: order_total_traced, record: order_total_record };
+
+const $ = (s) => document.querySelector(s);
+const form = $("#try-form");
+const dateOf = (days) => new Date(Number(days) * 86400000).toISOString().slice(0, 10);
+// An optional value may be absent: its list starts with `none`, a truth value becomes a list
+// of `none`, `true` and `false`, and any other field left empty is the absent value.
+function widget(inp) {
+  let el;
+  if (inp.kind === "enum" || (inp.kind === "bool" && inp.optional)) {
+    el = document.createElement("select");
+    const vs = inp.kind === "bool" ? ["true", "false"] : inp.values;
+    for (const v of inp.optional ? [""].concat(vs) : vs) {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = v === "" ? "none" : v;
+      el.appendChild(o);
+    }
+  } else if (inp.kind === "bool") {
+    el = document.createElement("input");
+    el.type = "checkbox";
+  } else if (inp.kind === "date") {
+    el = document.createElement("input");
+    el.type = "date";
+  } else if (inp.kind === "string") {
+    el = document.createElement("input");
+    el.type = "text";
+    if (inp.optional) el.placeholder = "none";
+  } else {
+    el = document.createElement("input");
+    el.type = "number";
+    el.step = inp.kind === "rate" ? "any" : "1";
+    if (inp.range) {
+      const show = (v) => (inp.kind === "rate" ? String((v * 100) / inp.scale) : String(v));
+      el.min = show(inp.range.min);
+      el.max = show(inp.range.max);
+      el.placeholder = (inp.optional ? "none / " : "") + show(inp.range.min) + " … " + show(inp.range.max);
+    } else if (inp.optional) {
+      el.placeholder = "none";
+    }
+  }
+  return el;
+}
+for (const inp of RULE.inputs) {
+  const label = document.createElement("label");
+  const span = document.createElement("span");
+  span.textContent = inp.name + (inp.unit ? " (" + inp.unit + ")" : "");
+  const el = widget(inp);
+  el.name = inp.alias;
+  label.appendChild(span);
+  label.appendChild(el);
+  form.appendChild(label);
+}
+// A rule that walks a sequence gets an editor for it: one row per element, with the same
+// field widgets an input gets. The rows live outside the form so that a field name repeated
+// down the column does not collide with `form.elements`.
+let rows = [];
+// Assigned when there is a sequence to edit; `fillRows` below is what reaches for it.
+let addRow = null;
+if (RULE.elements) {
+  const box = $("#try-rows");
+  const caption = document.createElement("div");
+  caption.textContent = RULE.elements.name;
+  box.appendChild(caption);
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  for (const fd of RULE.elements.fields) {
+    const th = document.createElement("th");
+    th.textContent = fd.name + (fd.unit ? " (" + fd.unit + ")" : "");
+    head.appendChild(th);
+  }
+  head.appendChild(document.createElement("th"));
+  const body = document.createElement("tbody");
+  table.appendChild(head);
+  table.appendChild(body);
+  box.appendChild(table);
+  addRow = (vals) => {
+    const tr = document.createElement("tr");
+    const cells = {};
+    for (const fd of RULE.elements.fields) {
+      const td = document.createElement("td");
+      const el = widget(fd);
+      if (vals && vals[fd.name] !== undefined) fromWire(fd, el, vals[fd.name]);
+      td.appendChild(el);
+      tr.appendChild(td);
+      cells[fd.alias] = el;
+    }
+    const td = document.createElement("td");
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "×";
+    rm.title = RULE.text.remove;
+    rm.addEventListener("click", () => {
+      tr.remove();
+      rows = rows.filter((r) => r.tr !== tr);
+    });
+    td.appendChild(rm);
+    tr.appendChild(td);
+    body.appendChild(tr);
+    rows.push({ tr, cells });
+  };
+  const add = document.createElement("button");
+  add.type = "button";
+  add.textContent = RULE.text.add;
+  add.addEventListener("click", () => addRow());
+  box.appendChild(add);
+  // One row to start with, so the shape is visible; removing it is the empty sequence,
+  // which is a case of its own.
+  addRow();
+}
+// An example of a walk carries its elements, so choosing it rebuilds the rows as well.
+function fillRows(ex) {
+  if (!RULE.elements) return;
+  const es = ex[RULE.elements.name];
+  if (!Array.isArray(es)) return;
+  for (const r of rows.slice()) r.tr.remove();
+  rows = [];
+  for (const e of es) addRow(e);
+}
+function toWire(inp, el) {
+  if (inp.optional && el.value === "") return null;
+  switch (inp.kind) {
+    case "enum":
+    case "string":
+      return el.value;
+    case "bool":
+      return inp.optional ? el.value === "true" : el.checked;
+    case "date": {
+      const [y, m, d] = el.value.split("-").map(Number);
+      return BigInt(Math.round(Date.UTC(y, m - 1, d) / 86400000));
+    }
+    case "rate":
+      return BigInt(Math.round((Number(el.value) * inp.scale) / 100));
+    default:
+      return BigInt(el.value === "" ? 0 : el.value);
+  }
+}
+function fromWire(inp, el, v) {
+  if (inp.optional && (v === null || v === "")) {
+    el.value = "";
+    return;
+  }
+  switch (inp.kind) {
+    case "enum":
+    case "string":
+      el.value = v;
+      break;
+    case "bool":
+      if (inp.optional) el.value = String(v);
+      else el.checked = v === "true";
+      break;
+    case "date":
+      el.value = v;
+      break;
+    case "rate":
+      el.value = String((Number(v) * 100) / inp.scale);
+      break;
+    default:
+      el.value = v;
+  }
+}
+function shown(o, v) {
+  if (v === null) return "none";
+  if (o.kind === "rate") return String((Number(v) * 100) / o.scale) + "%";
+  if (o.kind === "bool") return v ? "true" : "false";
+  if (o.kind === "date") return dateOf(v);
+  return String(v) + (o.unit ? o.unit : "");
+}
+// The last answer, kept because the board is built after the first run: a page opened on
+// `?example=2` has already run by the time there are cards to put the result on.
+let lastRun = null;
+function run() {
+  const args = RULE.inputs.map((inp) => toWire(inp, form.elements[inp.alias]));
+  if (RULE.elements) {
+    args.push(
+      rows.map((r) => {
+        const e = {};
+        for (const fd of RULE.elements.fields) e[fd.alias] = toWire(fd, r.cells[fd.alias]);
+        return e;
+      })
+    );
+  }
+  for (const el of document.querySelectorAll(".hit")) el.classList.remove("hit");
+  try {
+    const [out, trace] = FN.run(...args);
+    const vals = RULE.outputs.length === 1 ? [out] : RULE.outputs.map((o) => out[o.alias]);
+    $("#try-result").textContent = RULE.outputs.map((o, i) => o.name + " = " + shown(o, vals[i])).join("   ");
+    for (const f of trace) {
+      const tr = document.querySelector('tr[data-t="' + CSS.escape(f.table) + '"][data-r="' + f.row + '"]');
+      if (tr) tr.classList.add("hit");
+    }
+    // The same trace, on the board: the row that fired is lit inside the card that holds
+    // its table, the card says which row that was, and the value it decided goes beside the
+    // card's name. What stays without a row number is a decider this case did not go
+    // through — which is the whole of what a picture can add to a list of fired rows.
+    const outs = {};
+    RULE.outputs.forEach((o, i) => { outs[o.name] = shown(o, vals[i]); });
+    lastRun = { trace, outs };
+    if (window.rulecBoardFill) rulecBoardFill(trace, outs);
+    if (RULE.machine) machineStep(out);
+    $("#try-record").textContent = FN.record(...args, out, trace, "");
+    try {
+      // The sequence is not put in the address: a link carries the scalar inputs.
+      const q = new URLSearchParams();
+      for (const inp of RULE.inputs) {
+        const el = form.elements[inp.alias];
+        const w = toWire(inp, el);
+        q.set(inp.alias, w === null ? "" : inp.kind === "bool" || inp.kind === "rate" ? String(w) : el.value);
+      }
+      history.replaceState(null, "", "?" + q.toString() + location.hash);
+    } catch (_) {
+      // A page opened somewhere the address cannot be rewritten still works; it just cannot be linked.
+    }
+  } catch (e) {
+    $("#try-result").textContent = e.message;
+    $("#try-record").textContent = "";
+  }
+}
+const buttons = $("#try-buttons");
+const go = document.createElement("button");
+go.type = "button";
+go.textContent = RULE.text.run;
+go.addEventListener("click", run);
+buttons.appendChild(go);
+// A machine: the state the call answered can be put back into the field it came
+// from, and the call made again — one event after another, as the host would. The picture
+// marks the state the call started in and the one it answered.
+let carried = null;
+function machineStep(out) {
+  const now = form.elements[RULE.machine.in].value;
+  carried = RULE.outputs.length === 1 ? out : out[RULE.machine.out];
+  for (const g of document.querySelectorAll("figure.machine .st")) {
+    g.classList.toggle("now", g.dataset.state === now);
+    g.classList.toggle("next", g.dataset.state === carried);
+  }
+  next.disabled = false;
+}
+const next = document.createElement("button");
+next.type = "button";
+next.disabled = true;
+if (RULE.machine) {
+  next.textContent = RULE.text.carry;
+  next.addEventListener("click", () => {
+    if (carried === null) return;
+    form.elements[RULE.machine.in].value = carried;
+    run();
+  });
+  buttons.appendChild(next);
+}
+function fill(ex) {
+  for (const inp of RULE.inputs) {
+    if (ex[inp.name] !== undefined) fromWire(inp, form.elements[inp.alias], ex[inp.name]);
+  }
+  fillRows(ex);
+}
+RULE.examples.forEach((ex, i) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = RULE.text.example + " " + (i + 1);
+  b.addEventListener("click", () => {
+    fill(ex);
+    run();
+  });
+  buttons.appendChild(b);
+});
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  run();
+});
+// The case is in the address: `?example=2` opens the page on the second example, and
+// `?<alias>=<wire value>&…` on any case, so a link is enough to show someone one.
+const params = new URLSearchParams(location.search);
+const ex = RULE.examples[Number(params.get("example")) - 1];
+if (ex) {
+  fill(ex);
+  run();
+} else if (RULE.inputs.some((inp) => params.has(inp.alias))) {
+  for (const inp of RULE.inputs) {
+    if (params.has(inp.alias)) fromWire(inp, form.elements[inp.alias], params.get(inp.alias));
+  }
+  run();
+}
+// `#t-基本送料` names that table. On the board it selects the decider that holds it; on a
+// page without the board — no JavaScript for it, or a rule with nothing to draw — it lands
+// on the heading. Called once the board has had its turn, and after the run above has
+// settled the page's height.
+function landOnHash() {
+  if (!location.hash) return;
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (window.rulecBoardSelect && window.rulecBoardSelect(id.replace(/^t-/, ""))) return;
+  const target = document.getElementById(id);
+  if (target) target.scrollIntoView();
+}
+// MCP Apps (SEP-1865). Inside a host's frame this page is the view of one call, so it says
+// hello and then opens on the case the host hands it: the same fields, the same rows lit up,
+// the same record line. Opened as a file it is the page it always was — nothing below runs.
+if (window.parent !== window) {
+  const post = (m) => window.parent.postMessage(m, "*");
+  const theme = (ctx) => {
+    const t = ctx && ctx.theme;
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  };
+  const open = (args) => {
+    if (!args) return;
+    fill(args);
+    run();
+  };
+  window.addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id === 1 && (m.result || m.error)) {
+      // The handshake is answered; the host may send the call from here on. Its answer says
+      // whether it is light or dark, and the page takes that over the reader's own setting:
+      // it is drawn inside the host, so it goes with the host.
+      theme(m.result && m.result.hostContext);
+      post({ jsonrpc: "2.0", method: "ui/notifications/initialized" });
+      return;
+    }
+    if (m.method === "ui/notifications/host-context-changed") theme(m.params);
+    if (m.method === "ui/notifications/tool-input") open(m.params && m.params.arguments);
+    if (m.method === "ui/notifications/tool-result") {
+      const rec = m.params && m.params.structuredContent;
+      open(rec && rec.in);
+    }
+  });
+  post({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "ui/initialize",
+    params: {
+      protocolVersion: "2026-01-26",
+      appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
+      clientInfo: { name: RULE.name, version: RULE.version },
+    },
+  });
+}
+
+const GRAPH = {"cols":[["vat:rate"],["vat_rate"],["total"]],"nodes":[{"v":"vat:rate","by":"table vat:rate_by_category","reads":["category"],"tables":["vat:rate_by_category"],"apply":"vat"},{"v":"vat_rate","by":"define","reads":[],"tables":[]},{"v":"total","by":"result","reads":["subtotal","shipping"],"tables":[],"expr":"subtotal + subtotal * vat_rate + shipping","out":true}],"edges":[{"from":"vat:rate","to":"vat_rate"},{"from":"vat_rate","to":"total"}],"text":{"caption":"Which value is decided from what, left to right. It does not happen in that order: all of it is decided in one call.","close":"close","row":"row "}};
+
+(() => {
+  const m = document.querySelector("main");
+  if (!m || typeof GRAPH === "undefined" || !GRAPH.nodes.length) return;
+  const mk = (t, c) => { const e = document.createElement(t); if (c) e.className = c; return e; };
+  const app = mk("div", "app"), side = mk("div", "side"), split = mk("div", "split"), board = mk("div", "board");
+  const stage = mk("div", "stage"), cap = mk("p", "cap"), dock = mk("div", "dock"), hsplit = mk("div", "hsplit");
+  cap.textContent = GRAPH.text.caption; dock.hidden = true; hsplit.hidden = true;
+  board.append(stage, cap, hsplit, dock); app.append(side, split, board);
+  m.hidden = true; document.body.classList.add("boarded"); document.body.append(app);
+
+  // The panes are made of the document's own sections: nothing is written twice.
+  const sec = (k) => m.querySelector('section[data-sec="' + k + '"]');
+  side.append(document.querySelector("#try"));
+  for (const k of ["inputs", "outputs", "types"]) { const s = sec(k); if (s) side.append(s); }
+
+  const canvas = mk("div"); canvas.id = "canvas";
+  const wires = document.createElementNS("http://www.w3.org/2000/svg", "svg"); wires.id = "wires";
+  canvas.append(wires); stage.append(canvas);
+  const byName = {}; for (const n of GRAPH.nodes) byName[n.v] = n;
+  // A table's name reaches its card: `#t-基本送料` named a heading before the board moved
+  // the headings into the dock, and it has to keep naming something.
+  const byTable = {}; for (const n of GRAPH.nodes) for (const t of n.tables) byTable[t] = n.v;
+  const el = {}, detail = {};
+  for (const col of GRAPH.cols) {
+    const c = mk("div", "gcol");
+    for (const v of col) {
+      const n = byName[v]; if (!n) continue;
+      const card = mk("div", "gcard" + (n.out ? " out" : "")); card.dataset.v = v;
+      const h = mk("h3");
+      const nm = mk("span"); nm.textContent = v;
+      const val = mk("span", "v");
+      h.append(nm, val);
+      const by = mk("p", "by"); by.textContent = n.by;
+      const r = mk("span", "r"); by.append(r);
+      card.append(h, by);
+      // What the value is, when it is an expression rather than a table: the line as the
+      // author wrote it. It already names what it reads, so it stands in for the reads line
+      // rather than joining it.
+      if (n.expr) { const ex = mk("p", "ex"); ex.textContent = n.expr; card.append(ex); }
+      else if (n.reads.length) { const rd = mk("p", "rd"); rd.textContent = "← " + n.reads.join("　"); card.append(rd); }
+      // The table itself, taken out of the document and put where the picture says it is.
+      //
+      // It is found through a row, not through a heading: a row carries `data-t` with the
+      // name the trace uses, which is the same name whatever language the page is in and
+      // whatever an `apply` renamed it to. A heading would be neither.
+      for (const t of n.tables) {
+        const tr = m.querySelector('tr[data-t="' + CSS.escape(t) + '"]');
+        const tbl = tr && tr.closest("table");
+        if (!tbl) continue;
+        // What is around that table — its heading, what `check` verified, the citation —
+        // is too much for a card and goes to the dock.
+        const sec = tbl.closest("section.sec");
+        if (sec) { detail[v] = detail[v] || []; detail[v].push(sec); }
+        else {
+          const box = mk("div");
+          let p = tbl.previousElementSibling, head = [];
+          while (p && !/^H[1-6]$/.test(p.tagName)) { head.unshift(p); p = p.previousElementSibling; }
+          if (p) head.unshift(p);
+          let q = tbl.nextElementSibling, tail = [];
+          while (q && !/^H[1-6]$/.test(q.tagName)) { tail.push(q); q = q.nextElementSibling; }
+          box.append(...head, ...tail);
+          detail[v] = detail[v] || []; detail[v].push(box);
+        }
+        for (const th of tbl.querySelectorAll("th")) th.textContent = th.textContent.replace(/（.*$/, "").replace(/ \(.*$/, "").trim();
+        card.append(tbl);
+      }
+      c.append(card); el[v] = card;
+    }
+    canvas.append(c);
+  }
+  for (const s of m.querySelectorAll("section.sec")) if (s.parentElement === m) side.append(s);
+
+  function wire() {
+    const b = canvas.getBoundingClientRect();
+    wires.setAttribute("width", canvas.offsetWidth); wires.setAttribute("height", canvas.offsetHeight);
+    wires.setAttribute("viewBox", "0 0 " + canvas.offsetWidth + " " + canvas.offsetHeight);
+    wires.innerHTML = '<defs><marker id="gw" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="currentColor"/></marker></defs>';
+    for (const e of GRAPH.edges) {
+      const A = el[e.from], B = el[e.to]; if (!A || !B) continue;
+      const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
+      // A card shown whole can be very tall, so an edge leaves and lands at the height of
+      // the card at the other end rather than at the middle of its own.
+      const y1 = Math.min(Math.max(rb.top + rb.height / 2, ra.top + 18), ra.bottom - 18) - b.top;
+      const y2 = Math.min(Math.max(ra.top + ra.height / 2, rb.top + 18), rb.bottom - 18) - b.top;
+      const x1 = ra.right - b.left, x2 = rb.left - b.left, d = Math.max(18, (x2 - x1) / 2);
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", "M" + x1 + " " + y1 + " C" + (x1 + d) + " " + y1 + " " + (x2 - d) + " " + y2 + " " + (x2 - 4) + " " + y2);
+      p.setAttribute("fill", "none"); p.setAttribute("stroke", "currentColor"); p.setAttribute("stroke-width", "1.4");
+      p.setAttribute("marker-end", "url(#gw)"); wires.append(p);
+    }
+  }
+  window.rulecBoardFill = function (trace, outs) {
+    const row = {}; for (const t of trace || []) row[t.table] = t.row;
+    for (const n of GRAPH.nodes) {
+      const card = el[n.v]; if (!card) continue;
+      const hit = n.tables.map((t) => row[t]).find((x) => x !== undefined);
+      card.querySelector(".r").textContent = hit === undefined ? "" : "　" + GRAPH.text.row + hit;
+      card.querySelector(".v").textContent = outs && outs[n.v] !== undefined ? outs[n.v] : "";
+    }
+    requestAnimationFrame(() => requestAnimationFrame(wire));
+  };
+  // Selecting a card, from a click or from the address.
+  function select(v, toggle) {
+    if (!el[v]) return false;
+    const on = toggle && el[v].classList.contains("sel");
+    for (const o of document.querySelectorAll(".gcard.sel")) o.classList.remove("sel");
+    dock.innerHTML = ""; dock.hidden = true; hsplit.hidden = true;
+    mark(on ? "" : v);
+    if (on) return true;
+    el[v].classList.add("sel");
+    el[v].scrollIntoView({ block: "nearest", inline: "nearest" });
+    const parts = detail[v] || []; if (!parts.length) return true;
+    const x = mk("span", "x"); x.textContent = GRAPH.text.close;
+    x.addEventListener("click", (ev) => { ev.stopPropagation(); select(v, true); });
+    dock.append(x, ...parts); dock.hidden = false; hsplit.hidden = false; wire();
+    return true;
+  }
+  // The card is in the address, beside the case: `?…#t-基本送料` opens on that decider, so
+  // "look at this one" can say which one.
+  function mark(v) {
+    const n = v && byName[v];
+    const key = n ? (n.tables[0] || v) : "";
+    try { history.replaceState(null, "", location.pathname + location.search + (key ? "#t-" + encodeURIComponent(key) : "")); } catch (_) {}
+  }
+  for (const v in el) el[v].addEventListener("click", () => select(v, true));
+  // A name from the address: a table's, or a value's.
+  window.rulecBoardSelect = (key) => select(byTable[key] || key, false);
+  // Both borders move: the side pane's width, and the dock's height.
+  let drag = null;
+  split.addEventListener("mousedown", (e) => { drag = "x"; split.classList.add("on"); e.preventDefault(); });
+  hsplit.addEventListener("mousedown", (e) => { drag = "y"; hsplit.classList.add("on"); e.preventDefault(); });
+  addEventListener("mousemove", (e) => {
+    if (drag === "x") side.style.width = Math.max(220, Math.min(e.clientX, innerWidth * 0.6)) + "px";
+    else if (drag === "y") dock.style.height = Math.max(80, Math.min(innerHeight - e.clientY, innerHeight * 0.8)) + "px";
+  });
+  addEventListener("mouseup", () => {
+    if (!drag) return;
+    split.classList.remove("on"); hsplit.classList.remove("on"); drag = null; wire();
+  });
+  addEventListener("resize", wire);
+  new ResizeObserver(() => wire()).observe(canvas);
+  wire();
+})();
+
+if (lastRun && window.rulecBoardFill) rulecBoardFill(lastRun.trace, lastRun.outs);
+landOnHash();
+</script>
+</body>
+</html>

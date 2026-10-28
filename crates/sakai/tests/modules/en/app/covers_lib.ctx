@@ -1,0 +1,10 @@
+# The map of shop.ctx, with lib in `covers` too: every file of lib is in the scope, and each of its
+# artifacts must be owned, as lib's context owns its one rule. base is another dependency, which
+# `covers "@lib"` does not go into.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "contexts/billing.ctx"
+use context "@lib/contexts/pricing.ctx"
+
+covers ".", "@lib"

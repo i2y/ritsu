@@ -584,16 +584,24 @@ impl Loader {
     /// `use calendar "<file>"`: read it, or say why it cannot be used (E015).
     pub fn use_calendar(&mut self, f: &File, dir: &Path, p: &str, sp: Span) -> Result<(Option<Calendar>, Vec<Diag>), Box<Diag>> {
         let err = |msg: Text| Box::new(Diag::error("E015", &f.path, sp.line, sp.col, msg).source(&f.src));
-        let path = dir.join(p);
-        let shown = clean(&Path::new(&f.path).parent().unwrap_or(Path::new("")).join(p)).to_string_lossy().to_string();
+        // in a module, the path is held to it, and `@<name>/…` is read from its root (ritsu's DESIGN 17.6)
+        let path = ritsu_base::modules::refer_shown(dir, p).map_err(|r| err(r.text()))?;
+        let shown = if path == dir.join(p) { clean(&Path::new(&f.path).parent().unwrap_or(Path::new("")).join(p)) } else { clean(&path) }.to_string_lossy().to_string();
         let where_ = if shown == p { String::new() } else { format!("（{shown}）") };
         let where_en = if shown == p { String::new() } else { format!(" ({shown})") };
         if self.in_progress(&path) {
             return Err(err(tr!("{p} を読むと、このファイルに戻ってきます（use calendar が循環しています）", "Reading {p} leads back to this file (the use calendar lines go round)")));
         }
         let Ok(bytes) = ritsu_base::fs::read(&path) else {
-            return Err(Box::new(err(tr!("カレンダー {p} が読めません{where_}", "The calendar {p} cannot be read{where_en}"))
-                .note(tr!("パスは、この .cal のあるディレクトリからの相対パスです。", "The path is relative to the directory this .cal is in."))));
+            if let Some(t) = ritsu_base::modules::missing(&path) {
+                return Err(err(t));
+            }
+            let d = err(tr!("カレンダー {p} が読めません{where_}", "The calendar {p} cannot be read{where_en}"))
+                .note(tr!("パスは、この .cal のあるディレクトリからの相対パスです。", "The path is relative to the directory this .cal is in."));
+            return Err(Box::new(match ritsu_base::modules::outside_note_for(dir, p) {
+                Some(n) => d.note(n),
+                None => d,
+            }));
         };
         let Ok(text) = std::str::from_utf8(&bytes) else {
             return Err(err(tr!("カレンダー {p} が UTF-8 ではありません", "The calendar {p} is not UTF-8")));

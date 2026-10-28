@@ -2467,11 +2467,22 @@ pub const AROUND_RULES: &[&str] = &["context", "ctx", "args", "int64", "any", "s
 /// generates, as activities.
 fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> String {
     let mut t = header.to_string();
-    let dated: BTreeSet<String> = called.iter().filter_map(|r| m.rules[*r].date()).map(|d| ritsu_emit::ident::go_package(&d.file_alias)).collect();
-    let mut packages = BTreeSet::new();
+    // each package by its name and the directory of its module in the package (ritsu's DESIGN 17.8):
+    // empty but for a flow of a package that reads a dependency's rule or dates file
+    let dir_of = |r: usize| crate::temporal::dir_of(m, r);
+    let dated_in: BTreeSet<(String, String)> = called.iter().filter_map(|r| m.rules[*r].date().map(|d| (ritsu_emit::ident::go_package(&d.file_alias), dir_of(*r)))).collect();
+    let mut packages_in = BTreeSet::new();
     for r in called.iter().filter(|r| m.rules[**r].is_rule()) {
-        packages.insert(m.rules[*r].info.go.module.clone());
+        packages_in.insert((m.rules[*r].info.go.module.clone(), dir_of(*r)));
     }
+    let dated: BTreeSet<String> = dated_in.iter().map(|(p, _)| p.clone()).collect();
+    let packages: BTreeSet<String> = packages_in.iter().map(|(p, _)| p.clone()).collect();
+    // a dependency's package goes by its own name, or with its module's before it when another
+    // package the flow reads has that name
+    let qualifier = |pkg: &str, dir: &str| -> String {
+        let clash = packages_in.iter().chain(&dated_in).any(|(p, d)| p == pkg && d != dir);
+        if dir.is_empty() || !clash { pkg.to_string() } else { ritsu_emit::package::local_name(dir, pkg) }
+    };
     // a rule's day goes to rulec's code as the number of days since 1970-01-01
     let days = called.iter().any(|r| m.rules[*r].is_rule() && m.rules[*r].info.inputs.iter().chain(&m.rules[*r].info.outputs).any(|c| c.ty == crate::rulec::RType::Date));
     if let Some(p) = &m.package {
@@ -2487,11 +2498,12 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
             t.push_str("\t\"time\"\n");
         }
         t.push('\n');
-        let mut paths: Vec<String> = packages.iter().map(|r| format!("{}/rules/{r}", p.go_module)).collect();
-        paths.extend(dated.iter().map(|d| format!("{}/dates/{d}", p.go_module)));
+        let mut paths: Vec<(String, String)> = packages_in.iter().map(|(r, dir)| (ritsu_emit::package::go_path(&p.go_module, &format!("{dir}rules/{r}")), qualifier(r, dir))).collect();
+        paths.extend(dated_in.iter().map(|(d, dir)| (ritsu_emit::package::go_path(&p.go_module, &format!("{dir}dates/{d}")), qualifier(d, dir))));
         paths.sort();
-        for path in paths {
-            t.push_str(&format!("\t{}\n", q(&path)));
+        for (path, name) in paths {
+            let named = if path.rsplit('/').next() == Some(name.as_str()) { String::new() } else { format!("{name} ") };
+            t.push_str(&format!("\t{named}{}\n", q(&path)));
         }
     } else {
         if !packages.is_empty() {
@@ -2542,11 +2554,12 @@ fn rules_file(m: &Model, pkg: &str, header: &str, called: &BTreeSet<usize>) -> S
     for r in called {
         let ru = &m.rules[*r];
         if let Some(d) = ru.date() {
-            t.push_str(&date_rule_go(ru, d));
+            t.push_str(&date_rule_go(ru, d, &qualifier(&ritsu_emit::ident::go_package(&d.file_alias), &dir_of(*r))));
             continue;
         }
         let go = &ru.info.go;
-        let pkgname = go.module.as_str();
+        let pkgname = qualifier(&go.module, &dir_of(*r));
+        let pkgname = pkgname.as_str();
         let is_enum = |ty: &str| go.enums.iter().any(|e| e.alias == ty);
         let mut body = Vec::new();
         let mut fields = Vec::new();
@@ -2616,8 +2629,8 @@ const DAY_GO: &str = "\n// ddDay is a day of the calendar: YYYY-MM-DD as it is, 
 
 /// A date of a dates file, as an activity of rules.go around koyomi's Go: its inputs by position,
 /// a day as the package's Date; it answers the day, and its time when the date turns into one.
-fn date_rule_go(ru: &RuleUse, d: &DateCall) -> String {
-    let pkgname = ritsu_emit::ident::go_package(&d.file_alias);
+/// `pkgname` is the name rules.go imports the dates file's package by.
+fn date_rule_go(ru: &RuleUse, d: &DateCall, pkgname: &str) -> String {
     let f = ritsu_emit::ident::pascal(&d.alias);
     let offset = d.offset.unwrap_or(0);
     let mut body = Vec::new();
@@ -2668,7 +2681,8 @@ fn io_books_file(m: &Model, pkg: &str, header: &str) -> String {
             // a flow of a package: the clients of the package's books/, by their types (ritsu's DESIGN 9.3)
             t.push_str(&format!("\npackage {pkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"reflect\"\n\n"));
             for (i, b) in books.iter().enumerate() {
-                t.push_str(&format!("\tddBook{i} {}\n", q(&format!("{}/books/{}", p.go_module, m.books[*b].facts.go.module))));
+                let dir = p.dir_of(&m.books[*b].path);
+                t.push_str(&format!("\tddBook{i} {}\n", q(&ritsu_emit::package::go_path(&p.go_module, &format!("{dir}books/{}", m.books[*b].facts.go.module)))));
             }
             t.push_str(")\n");
         }

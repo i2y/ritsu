@@ -48,13 +48,28 @@ impl Target {
 }
 
 /// How a module's code is written: the path its head names (from the project's root, as `ritsu gen`
-/// names a file), the language of its comments and its messages, and Go's import path of the
-/// package's directory (a rule's package is `<module>/rules/<package>`).
+/// names a file), the language of its comments and its messages, Go's import path of the
+/// package's directory (a rule's package is `<module>/rules/<package>`), and where the module goes
+/// in the package, and through it each file it reads (`deps/<name>/` for a dependency's, ritsu's
+/// DESIGN 17.8).
 #[derive(Clone, Debug)]
 pub struct Options {
     pub shown: String,
     pub lang: Lang,
     pub go_module: String,
+    pub place: ritsu_emit::package::Place,
+}
+
+impl Options {
+    /// The directory of the code of the file at `path` (as the module holds it), in the package.
+    pub fn dir_of(&self, path: &std::path::Path) -> String {
+        self.place.dir_of(path)
+    }
+
+    /// The directory the module's own code is in, in the package: `glue/`, or under a dependency's.
+    pub fn here(&self) -> String {
+        format!("{}glue/", self.place.dir)
+    }
 }
 
 /// What kaname writes into a package: each file by its path under the package's directory (the
@@ -88,32 +103,47 @@ pub fn helper(t: Target, lang: Lang) -> (String, String) {
 /// root its head names): the helper, each module, the types of the transfers the modules build and
 /// the functions that make them, and the indexes of `glue/`.
 pub fn package(modules: &[(Rc<Checked>, String)], t: Target, lang: Lang, go_module: &str) -> Made {
+    let placed: Vec<(Rc<Checked>, String, ritsu_emit::package::Place)> = modules.iter().map(|(c, s)| (c.clone(), s.clone(), ritsu_emit::package::Place::here())).collect();
+    package_in(&placed, t, lang, go_module)
+}
+
+/// [`package`] with where each module goes in the package (ritsu's DESIGN 17.8): a dependency's
+/// module, and the types of the transfers of a dependency's book, under the dependency's directory
+/// (`deps/<name>/glue/`), each reading what it reads where that is. The helper and the units are the
+/// package's one, at its `glue/kaname` and `units`; the indexes of `glue/` hold the module at hand's
+/// modules, as before there were modules.
+pub fn package_in(modules: &[(Rc<Checked>, String, ritsu_emit::package::Place)], t: Target, lang: Lang, go_module: &str) -> Made {
     let mut made = Made::default();
     if modules.is_empty() {
         return made;
     }
     let (hp, hs) = helper(t, lang);
     made.files.push((hp, hs, None));
-    let mut names: Vec<String> = vec!["kaname".to_string()];
-    for (c, shown) in modules {
-        let opts = Options { shown: shown.clone(), lang, go_module: go_module.to_string() };
+    // the names each index of glue/ holds, by the directory of its module in the package: the
+    // module at hand's (with the helper), then each dependency's
+    let mut names: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+    names.insert(String::new(), vec!["kaname".to_string()]);
+    for (c, shown, place) in modules {
+        let opts = Options { shown: shown.clone(), lang, go_module: go_module.to_string(), place: place.clone() };
         let (path, text, units) = module::module(c, t, &opts);
-        made.files.push((path, text, Some(shown.clone())));
-        names.push(c.module.name.ascii().to_string());
+        made.files.push((format!("{}{path}", place.dir), text, Some(shown.clone())));
+        names.entry(place.dir.clone()).or_default().push(c.module.name.ascii().to_string());
         for u in units {
             if !made.units.contains(&u) {
                 made.units.push(u);
             }
         }
     }
-    let checked: Vec<Rc<Checked>> = modules.iter().map(|(c, _)| c.clone()).collect();
+    let checked: Vec<Rc<Checked>> = modules.iter().map(|(c, _, _)| c.clone()).collect();
     let built = books::built(&checked);
-    let opts = Options { shown: String::new(), lang, go_module: go_module.to_string() };
-    let mut book_names: Vec<String> = Vec::new();
+    let mut book_names: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
     for (book, ops) in &built {
         let Some(facts) = checked.iter().find_map(|c| crate::value::Program::of(c).books.get(book).cloned()) else { continue };
+        // the types of a book's transfers are where the book's client is: under its module's directory
+        let place = modules[0].2.of_file(book);
+        let opts = Options { shown: String::new(), lang, go_module: go_module.to_string(), place: place.clone() };
         for (path, text) in books::files(t, &facts, ops, &opts) {
-            made.files.push((path, text, None));
+            made.files.push((format!("{}{path}", place.dir), text, None));
         }
         // the units of the amounts the types of the transfers name
         for tr in &facts.transfers {
@@ -126,42 +156,48 @@ pub fn package(modules: &[(Rc<Checked>, String)], t: Target, lang: Lang, go_modu
                 }
             }
         }
-        book_names.push(facts.name.clone());
+        book_names.entry(place.dir.clone()).or_default().push(facts.name.clone());
     }
-    // the indexes: each module by its name, and the books' transfers
+    for dir in book_names.keys() {
+        names.entry(dir.clone()).or_default();
+    }
+    // the indexes: each module by its name, and the books' transfers, for each directory of glue/
     let head = ritsu_emit::header::generated("kaname");
-    match t {
-        Target::TypeScript => {
-            let mut index = format!("// {head}\n// The modules of kaname of the package, each by its name, and the transfers they build.\n\n");
-            for n in &names {
-                index.push_str(&format!("export * as {n} from \"./{n}\";\n"));
-            }
-            if !book_names.is_empty() {
-                index.push_str("export * as books from \"./books/index\";\n");
-                let mut b = format!("// {head}\n// The transfers the modules of kaname build, by book.\n\n");
-                for n in &book_names {
-                    b.push_str(&format!("export * as {n} from \"./{n}\";\nexport * as {n}_apply from \"./{n}_apply\";\n"));
+    for (dir, names) in &names {
+        let book_names = book_names.get(dir).cloned().unwrap_or_default();
+        match t {
+            Target::TypeScript => {
+                let mut index = format!("// {head}\n// The modules of kaname of the package, each by its name, and the transfers they build.\n\n");
+                for n in names {
+                    index.push_str(&format!("export * as {n} from \"./{n}\";\n"));
                 }
-                made.files.push(("glue/books/index.ts".into(), b, None));
-            }
-            made.files.push(("glue/index.ts".into(), index, None));
-        }
-        Target::Python => {
-            let mut init = format!("# {head}\n\"\"\"The modules of kaname of the package, each by its name, and the transfers they build.\"\"\"\n\n");
-            for n in &names {
-                init.push_str(&format!("from . import {n} as {n}\n"));
-            }
-            if !book_names.is_empty() {
-                init.push_str("from . import books as books\n");
-                let mut b = format!("# {head}\n\"\"\"The transfers the modules of kaname build, by book.\"\"\"\n\n");
-                for n in &book_names {
-                    b.push_str(&format!("from . import {n} as {n}\nfrom . import {n}_apply as {n}_apply\n"));
+                if !book_names.is_empty() {
+                    index.push_str("export * as books from \"./books/index\";\n");
+                    let mut b = format!("// {head}\n// The transfers the modules of kaname build, by book.\n\n");
+                    for n in &book_names {
+                        b.push_str(&format!("export * as {n} from \"./{n}\";\nexport * as {n}_apply from \"./{n}_apply\";\n"));
+                    }
+                    made.files.push((format!("{dir}glue/books/index.ts"), b, None));
                 }
-                made.files.push(("glue/books/__init__.py".into(), b, None));
+                made.files.push((format!("{dir}glue/index.ts"), index, None));
             }
-            made.files.push(("glue/__init__.py".into(), init, None));
+            Target::Python => {
+                let mut init = format!("# {head}\n\"\"\"The modules of kaname of the package, each by its name, and the transfers they build.\"\"\"\n\n");
+                for n in names {
+                    init.push_str(&format!("from . import {n} as {n}\n"));
+                }
+                if !book_names.is_empty() {
+                    init.push_str("from . import books as books\n");
+                    let mut b = format!("# {head}\n\"\"\"The transfers the modules of kaname build, by book.\"\"\"\n\n");
+                    for n in &book_names {
+                        b.push_str(&format!("from . import {n} as {n}\nfrom . import {n}_apply as {n}_apply\n"));
+                    }
+                    made.files.push((format!("{dir}glue/books/__init__.py"), b, None));
+                }
+                made.files.push((format!("{dir}glue/__init__.py"), init, None));
+            }
+            Target::Go => {}
         }
-        Target::Go => {}
     }
     made
 }

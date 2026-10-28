@@ -1,0 +1,2 @@
+text An invoice asks for the total of the order: its subtotal, the VAT of its category and the shipping fee
+from file @lib/docs/pricing_policy.md sha256:24746859693385ce

@@ -1,0 +1,9 @@
+// An import of a file in the directory `@lib`, outside every module: a plain path.
+syntax = "proto3";
+package acme.billing.v1;
+
+import "@lib/proto/acme/orders/v1/order.proto";
+
+message Charge {
+  acme.orders.v1.Order order = 1;
+}

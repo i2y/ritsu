@@ -1,0 +1,26 @@
+# A file the dependency does not have: lib has rules/order_total.rule, not rules/order_totals.rule.
+rule invoice v1
+description "The amount an invoice asks for: the total of the order by the rule order_total"
+
+enum category = standard | reduced | zero
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  category : category
+  shipping : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  amount : money[GBPc]  round half_up(1GBPc)
+
+apply order = "@lib/rules/order_totals.rule" meaning:a1be19262a386726
+  subtotal = subtotal
+  category = category
+  shipping = shipping
+  total -> order_total
+
+result amount = order_total
+
+examples
+| subtotal | category | shipping | -> amount |
+| 1000GBPc | standard | 395GBPc  | 1595GBPc |
+| 1000GBPc | zero     | 0GBPc    | 1000GBPc |

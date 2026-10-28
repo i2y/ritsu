@@ -1,0 +1,18 @@
+# The price of an order in the module lib: its total by the rule order_total of this module, which
+# applies the VAT rate of base.
+workflow price v1
+description "The total of an order by the rule order_total"
+
+use rule total from "../rules/order_total.rule"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  category : total.category
+  shipping : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  total : money[GBPc]
+
+flow
+  let priced = total(subtotal: subtotal, category: category, shipping: shipping)
+  succeed total = priced.total

@@ -1049,11 +1049,40 @@ impl TK {
 }
 
 /// Where a flow of a package of ritsu's (ritsu's DESIGN 9.3) finds what it reads beside its own code:
-/// a flow is at flows/<name>/, beside the package's rules/, dates/ and books/.
+/// a flow is at flows/<name>/, beside the package's rules/, dates/ and books/; a flow of a dependency,
+/// and a rule, a dates file or a book of one, is under the dependency's directory (`deps/<name>/`,
+/// ritsu's DESIGN 17.8).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct InPackage {
     /// The Go module the package is (its go.mod): a rule's package is `<module>/rules/<package>`.
     pub go_module: String,
+    /// Where the flow goes in the package, and through it where each file it reads goes.
+    pub place: ritsu_emit::package::Place,
+}
+
+impl InPackage {
+    /// The directory under the package's directory a file of the flow is in: `flows/<name>/`, or
+    /// under a dependency's directory. Only its depth matters to the paths it imports by.
+    pub fn flow_dir(&self) -> String {
+        format!("{}flows/flow/", self.place.dir)
+    }
+
+    /// The directory of the module of a file the flow reads, in the package.
+    pub fn dir_of(&self, path: &std::path::Path) -> String {
+        self.place.dir_of(path)
+    }
+}
+
+/// The key an import of a module of the package goes by in rules.ts and rules.py: the module's own
+/// (a rule's module, a dates file's path), with the directory of a dependency's module after it
+/// (ritsu's DESIGN 17.8), so that two modules of one name in two modules are two imports.
+pub fn module_key(key: &str, dir: &str) -> String {
+    if dir.is_empty() { key.to_string() } else { format!("{key} {dir}") }
+}
+
+/// A key of [`module_key`], split back: the module's own key, and the directory of its module.
+pub fn split_key(key: &str) -> (&str, &str) {
+    key.split_once(' ').unwrap_or((key, ""))
 }
 
 #[derive(Clone, Debug)]
@@ -1115,7 +1144,8 @@ impl Model {
     /// the `.flow` with the digest of its bytes, each line a comment that starts with `mark`.
     pub fn head(&self, mark: &str) -> String {
         let version = self.version.to_string();
-        let source = ritsu_emit::header::Source { path: &self.source_path, kind: "workflow", name: &self.name, version: &version, sha256: &self.source_sha256 };
+        let module = self.package.as_ref().and_then(|p| p.place.module.as_ref());
+        let source = ritsu_emit::header::Source { path: &self.source_path, kind: "workflow", name: &self.name, version: &version, sha256: &self.source_sha256, module };
         format!("{mark} {}\n{mark} {}\n", ritsu_emit::header::generated("dandori"), source.line().get(ritsu_base::text::Lang::En))
     }
 

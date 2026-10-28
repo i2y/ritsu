@@ -34,26 +34,42 @@ impl R<'_> {
     }
 
     /// A path written in `file` (whose directory is `base`), as a path from the root (E012), that
-    /// is on the disk (E009) and is a directory or a file as `dir` says (E011).
+    /// is on the disk (E009) and is a directory or a file as `dir` says (E011). In a module of
+    /// ritsu's, the path is held to the module, and `@<name>/…` is a dependency's file, from the
+    /// module's root (ritsu's DESIGN 17.6): what the module refuses is E012, and a dependency's file
+    /// that is not there E009, in the words every language says them in.
     fn path(&mut self, file: &str, src: &str, base: &str, s: &Str, dir: Option<bool>) -> Option<String> {
-        let p = match paths::join(base, &s.value) {
+        let held = if base == paths::parent(file) { ritsu_base::modules::join(self.root, file, &s.value) } else { paths::join(base, &s.value).map_err(|e| ritsu_base::modules::Refused::Path(e, s.value.clone())) };
+        let p = match held {
             Ok(p) => p,
-            Err(e) => {
+            Err(ritsu_base::modules::Refused::Path(e, _)) => {
                 let d = self.at("E012", file, src, s.pos, paths::error_text(e, &s.value));
                 if e != paths::PathError::Empty {
                     d.notes.push(root_note());
                 }
                 return None;
             }
+            Err(refused) => {
+                self.at("E012", file, src, s.pos, refused.text());
+                return None;
+            }
         };
         let v = &s.value;
-        match ritsu_base::fs::metadata(paths::on_disk(self.root, &p)) {
+        let disk = paths::on_disk(self.root, &p);
+        match ritsu_base::fs::metadata(&disk) {
             Err(_) => {
+                if let Some(said) = ritsu_base::modules::missing(&disk) {
+                    self.at("E009", file, src, s.pos, said);
+                    return None;
+                }
                 let sp = paths::shown(&p);
-                self.at("E009", file, src, s.pos, tr!("パス \"{v}\" がありません", "The path \"{v}\" is not there")).notes.push(tr!(
+                let outside = ritsu_base::modules::outside_note_for(&paths::on_disk(self.root, base), v);
+                let d = self.at("E009", file, src, s.pos, tr!("パス \"{v}\" がありません", "The path \"{v}\" is not there"));
+                d.notes.push(tr!(
                     "パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは {sp} を指します。",
                     "A path counts from the directory of this .ctx; as written, it points at {sp}."
                 ));
+                d.notes.extend(outside);
                 None
             }
             Ok(m) => {
@@ -126,7 +142,7 @@ pub fn load(root: &Path, map: &str) -> Result<Loaded, Text> {
     };
     if !r.diags.is_empty() {
         // The map does not read, but the files it names are named.
-        reads = ast.uses.iter().filter_map(|u| paths::join(&paths::parent(map), &u.value).ok()).collect();
+        reads = ast.uses.iter().filter_map(|u| ritsu_base::modules::join(root, map, &u.value).ok()).collect();
         return Ok(Loaded { model: None, diags: r.diags, reads });
     }
     let dir = paths::parent(map);

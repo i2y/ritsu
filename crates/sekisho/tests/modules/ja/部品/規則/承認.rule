@@ -1,0 +1,29 @@
+# 購入を、承認する人の上限の内で承認できるか。区分はモジュール base の規則が出すもので、その規則を
+# `@base/…`（このモジュールのルートからのパス）で準用する。
+rule 承認(approval) v1
+description "購入が、承認する人の上限の内にあるか。モジュール base の規則「承認の上限」で決める"
+
+enum 承認の区分(approval_band) = 上限まで(within_limit) | 上限超え(over_limit)
+
+inputs
+  金額(amount) : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  上限(limit)  : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+outputs
+  区分(band) : 承認の区分
+
+apply 上限の確かめ(limit_of) = "@base/規則/承認の上限.rule" meaning:26fef40958231ee9
+  金額 = 金額
+  上限 = 上限
+  区分 -> 上限の区分
+
+table 引き継ぐ(pass_on)
+policy unique
+| 上限の区分 | -> 区分 : 承認の区分 |
+| 上限まで   | 上限まで             |
+| 上限超え   | 上限超え             |
+
+examples
+| 金額    | 上限    | -> 区分  |
+| 500GBP  | 1000GBP | 上限まで |
+| 1001GBP | 1000GBP | 上限超え |

@@ -1,0 +1,4 @@
+モジュール example.com/acme/shop 0.1.0
+@pricing       example.com/acme/pricing 1.1.0  パス ../価格
+@pricing/@tax  example.com/acme/tax 1.0.0      パス ../税
+ritsu mod list: 依存 2 個（パス 2 個、レジストリ 0 個）。lock は要りません

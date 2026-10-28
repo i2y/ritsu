@@ -345,6 +345,12 @@ pub fn run(argv: Vec<String>) -> ExitCode {
             return ExitCode::from(code);
         }
     };
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
+    if let Err(t) = ritsu_base::modules::given_all(&a.positional) {
+        let head = if a.lang == Lang::Ja { "エラー" } else { "error" };
+        eprintln!("{head}: {}", t.get(a.lang));
+        return ExitCode::from(2);
+    }
     let code = match a.cmd.as_str() {
         "check" => cmd_check(&a),
         "run" => cmd_run(&a),

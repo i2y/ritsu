@@ -1,0 +1,179 @@
+{
+  "ritsu": "0.36.0",
+  "flow": "注文/注文を受ける.flow",
+  "scenario": "注文/シナリオ/請求が通る.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-10-28T10:00:00Z",
+  "end": "2026-10-28T10:00:00Z",
+  "elapsed": 0,
+  "events": [
+    {
+      "call": "送料",
+      "args": {
+        "重さ": 1200,
+        "地域": "国内"
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "料金": 395
+        }
+      }
+    },
+    {
+      "call": "合計",
+      "args": {
+        "小計": 2000,
+        "区分": "標準",
+        "送料": 395
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "合計": 2795
+        }
+      }
+    },
+    {
+      "call": "押さえる",
+      "args": {
+        "注文": "A-1",
+        "品番": "紅茶",
+        "数": 2
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "id": "H-1"
+        }
+      }
+    },
+    {
+      "call": "請求する",
+      "args": {
+        "注文": "A-1",
+        "金額": 2795
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "済み": true
+        }
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "重さ": 1200,
+            "地域": "国内"
+          }
+        },
+        "answer": {
+          "ok": {
+            "料金": 395
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "小計": 2000,
+            "区分": "標準",
+            "送料": 395
+          }
+        },
+        "answer": {
+          "ok": {
+            "合計": 2795
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://stock.example.com/v1/holds",
+          "headers": {
+            "Idempotency-Key": "charged/3"
+          },
+          "body": {
+            "注文": "A-1",
+            "品番": "紅茶",
+            "数": 2
+          }
+        },
+        "answer": {
+          "ok": {
+            "id": "H-1"
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://payments.example.com/v1/orders/A-1/charges",
+          "headers": {
+            "Idempotency-Key": "charged/5"
+          },
+          "body": {
+            "金額": 2795
+          }
+        },
+        "answer": {
+          "ok": {
+            "済み": true
+          }
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "結果": "請求済み",
+        "金額": 2795
+      }
+    }
+  },
+  "books": [],
+  "replay": {
+    "execution": "charged",
+    "now": "2026-10-28T10:00:00Z",
+    "input": {
+      "受注": {
+        "id": "A-1",
+        "品番": "紅茶",
+        "数": 2,
+        "重さ": 1200,
+        "地域": "国内",
+        "区分": "標準",
+        "小計": 2000
+      }
+    },
+    "answers": [
+      {
+        "ok": {
+          "料金": 395
+        }
+      },
+      {
+        "ok": {
+          "合計": 2795
+        }
+      },
+      {
+        "ok": {
+          "id": "H-1"
+        }
+      },
+      {
+        "ok": {
+          "済み": true
+        }
+      }
+    ]
+  }
+}

@@ -255,7 +255,15 @@ pub fn page(o: &Outcome, suite: &Suite, lang: Lang) -> Page {
             let also: Vec<String> = x.ast.also.iter().map(|s| s.value.clone()).collect();
             facts.push(format!("{}{}", t(lang, "ほかの呼び名：", "Also called: "), join(lang, &also)));
         }
-        facts.push(format!("{}{}", t(lang, "書いたファイル：", "Written in: "), code(&rel(m, &x.file))));
+        let mut written = code(&rel(m, &x.file));
+        // a dependency's file, not beside the page: its module and version (ritsu's DESIGN 17.8)
+        if let Some(of) = ritsu_base::modules::module_words_from(std::path::Path::new(&m.map.dir), std::path::Path::new(&x.file)) {
+            written = match lang {
+                Lang::Ja => format!("{written}（{}）", of.ja),
+                Lang::En => format!("{written} ({})", of.en),
+            };
+        }
+        facts.push(format!("{}{}", t(lang, "書いたファイル：", "Written in: "), written));
         b.push(Block::List(facts));
 
         b.push(Block::Heading(3, t(lang, "成果物", "Artifacts"), None));
@@ -711,7 +719,7 @@ fn rule_pairs(c: &Checked, ci: usize, ri: usize, ei: usize) -> Option<Vec<(Strin
     let (_, name) = to.items.first()?;
     let f = c.protos.files.get(&from.path)?;
     let full = f.full(&from.items.first()?.1);
-    crate::mapping::rule_import(&c.read, &to.path, name, &from.path, &full)
+    crate::mapping::rule_import(&c.model.root, &c.read, &to.path, name, &from.path, &full)
 }
 
 /// The tables of the mappings: for each anticorruption layer's enum mapping, the upstream's

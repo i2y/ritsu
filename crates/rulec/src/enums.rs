@@ -88,7 +88,12 @@ pub fn read_imports(f: &mut RuleFile, rule_path: &str) -> Vec<Diag> {
     let froms = f.enum_froms.clone();
     for im in &froms {
         let at = format!("{rule_path}:{}", im.span.line);
-        let p = dir.join(&im.file);
+        let followed = crate::vfs::follow(&dir, &im.file);
+        if let Some(why) = crate::vfs::refused(&followed) {
+            out.push(Diag::error("E013", why).at(at).mark(im.span.clone(), ""));
+            continue;
+        }
+        let Ok(p) = followed else { continue };
         let ps = p.to_string_lossy().into_owned();
         if !read.iter().any(|(q, _)| *q == ps) {
             read.push((ps.clone(), read_enums_file(&ps)));
@@ -105,7 +110,8 @@ pub fn read_imports(f: &mut RuleFile, rule_path: &str) -> Vec<Diag> {
                             "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                             "The path is followed from the directory of the rule file (looked for: {}).",
                             p.display()
-                        )),
+                        ))
+                        .maybe_note(crate::vfs::outside_note(&dir, &im.file)),
                 );
                 continue;
             }
@@ -282,8 +288,13 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
     for im in &f.enum_imports {
         // Followed from the rule that wrote the line: the rule a contribution adds to, in the
         // contribution's check (§15.235).
-        let p = im.file_path(rule_path);
         let at = format!("{rule_path}:{}", im.span.line);
+        let followed = im.file_path(rule_path);
+        if let Some(why) = crate::vfs::refused(&followed) {
+            out.push(Diag::error("E013", why).at(at).mark(im.span.clone(), ""));
+            continue;
+        }
+        let Ok(p) = followed else { continue };
         match ritsu_base::fs::read_to_string(&p) {
             Ok(text) => match wanted(im, &text, &at) {
                 Ok(want) => out.extend(compare(f, c, im, &want, rule_path)),
@@ -297,7 +308,8 @@ pub fn check(f: &RuleFile, c: &Checked, rule_path: &str) -> Vec<Diag> {
                         "パスは規則ファイルのある場所からたどります（探した先: {}）。",
                         "The path is followed from the directory of the rule file (looked for: {}).",
                         p.display()
-                    )),
+                    ))
+                    .maybe_note(crate::vfs::outside_note(im.dir(rule_path), &im.file)),
             ),
         }
     }

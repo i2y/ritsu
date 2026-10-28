@@ -291,6 +291,7 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
         out.push(Block::P(vec![t(say(tr!("出典の宣言は無い。どの要件も、決めたことか、ほかの要件から来ている。", "No source is declared: every requirement comes from a decision or from another requirement."), lang))]));
     }
     let several_files = api["files"].as_array().map(|a| a.len() > 1).unwrap_or(false);
+    let root = p.root.clone();
     for src in &srcs {
         let name = s(&src["name"]);
         let head = if several_files { format!("{} — {name}", s(&src["file"])) } else { name.clone() };
@@ -313,6 +314,10 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
             Some("file") => {
                 p.push(t(say(tr!("ファイル ", "The file "), lang)));
                 p.push(c(s(&src["path"])));
+                // a dependency's file, not beside the page: its module and version (ritsu's DESIGN 17.8)
+                if let Some(m) = ritsu_base::modules::module_words_from(&root.join(s(&src["file"])), &root.join(s(&src["path"]))) {
+                    p.push(t(say(tr!("（{}）", " ({})", m.ja; m.en), lang)));
+                }
                 if let Some(u) = src["url"].as_str() {
                     p.push(t(say(tr!("（元は ", " (from "), lang)));
                     p.push(c(u.to_string()));
@@ -460,7 +465,9 @@ pub fn page(ch: &Checked, label: &str, lang: Lang) -> Page {
                     out.push(Block::P(vec![t(say(tr!("（{source} {frag} の条文は、上に載せた）", "(The text of {source} {frag} is quoted above.)"), lang))]));
                     continue;
                 }
-                let bytes = a.bytes.clone().or_else(|| std::fs::read(&a.abs).ok());
+                // through the layer that reads a project's files, which sees a dependency's copies
+                // (ritsu's DESIGN 17.6)
+                let bytes = a.bytes.clone().or_else(|| ritsu_base::fs::read(&a.abs).ok());
                 let Some(bytes) = bytes else { continue };
                 quoted.insert(key);
                 let dbw = if db.word() == "ecfr" { "eCFR" } else { "e-Gov" };

@@ -54,6 +54,13 @@ fn short(b: &[u8]) -> String {
     sha256::short(b)
 }
 
+/// The copy a `source … = file` line names, read through the view of a module's dependencies
+/// (ritsu's DESIGN 17.6); a path a module does not let it name is no copy.
+fn copy_of(dir: &Path, path: &str) -> std::io::Result<Vec<u8>> {
+    let p = ritsu_base::modules::refer_shown(dir, path).map_err(|_| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+    ritsu_base::fs::read(p)
+}
+
 /// `koyomi source fetch`.
 pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
     let mut lines = Vec::new();
@@ -62,22 +69,38 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
         let name = &s.name;
         match &s.kind {
             SourceKind::File { path, url, pin, .. } => {
+                // in a module, the path is held to it; a dependency's document comes with its
+                // copies, which this module does not write (ritsu's DESIGN 17.6)
+                let dest = match ritsu_base::modules::refer_shown(dir, path) {
+                    Ok(d) if ritsu_base::modules::map(&d).is_none() => d,
+                    Ok(_) => {
+                        lines.push(tr!(
+                            "{name}: {path} は依存のファイルなので、取り直しません。コピーは依存のほうにあります",
+                            "{name}: {path} is a file of a dependency, so it is not fetched here; its copies are the dependency's"
+                        ));
+                        continue;
+                    }
+                    Err(r) => {
+                        let t = r.text();
+                        lines.push(tr!("{name}: {}", "{name}: {}", t.ja; t.en));
+                        continue;
+                    }
+                };
                 let Some(url) = url else {
                     lines.push(tr!("{name}: url が無いので取れません（`url \"…\"` を足すと取れます）", "{name}: no url, so the copy cannot be fetched (add `url \"…\"`)"));
                     continue;
                 };
                 let body = sources::curl(url)?;
-                let dest = dir.join(path);
-                let before = std::fs::read(&dest).ok();
+                let before = ritsu_base::fs::read(&dest).ok();
                 let h = short(&body);
                 if before.as_deref() == Some(body.as_slice()) {
                     lines.push(tr!("{name}: コピー {path} は変わっていません（sha256:{h}）", "{name}: the copy {path} is unchanged (sha256:{h})"));
                     continue;
                 }
                 if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| tr!("{} を作れません: {e}", "cannot create {}: {e}", parent.display()))?;
+                    ritsu_base::fs::create_dir_all(parent).map_err(|e| tr!("{} を作れません: {e}", "cannot create {}: {e}", parent.display()))?;
                 }
-                std::fs::write(&dest, &body).map_err(|e| tr!("{} に書けません: {e}", "cannot write {}: {e}", dest.display()))?;
+                ritsu_base::fs::write(&dest, &body).map_err(|e| tr!("{} に書けません: {e}", "cannot write {}: {e}", dest.display()))?;
                 changed |= before.is_some();
                 let what = if before.is_some() {
                     tr!("{name}: 取り直して {path} に保存しました（sha256:{h}）", "{name}: fetched the copy {path} again (sha256:{h})")
@@ -102,20 +125,20 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                         continue;
                     };
                     let (xml, rev) = egov().law_data(id, &asof.to_string(), Some(&e))?;
-                    std::fs::create_dir_all(&cdir).map_err(|err| tr!("{} を作れません: {err}", "cannot create {}: {err}", cdir.display()))?;
+                    ritsu_base::fs::create_dir_all(&cdir).map_err(|err| tr!("{} を作れません: {err}", "cannot create {}: {err}", cdir.display()))?;
                     let dest = cdir.join(format!("{e}.xml"));
-                    let before = std::fs::read(&dest).ok();
+                    let before = ritsu_base::fs::read(&dest).ok();
                     // A copy whose text did not change keeps its bytes, and so its pin: e-Gov
                     // rewrites the markup of articles no amendment touched.
                     let same = before.as_deref().is_some_and(|b| sources::same_text(b, &xml));
                     if !same {
-                        std::fs::write(&dest, &xml).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", dest.display()))?;
+                        ritsu_base::fs::write(&dest, &xml).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", dest.display()))?;
                     }
                     if !rev.is_empty() {
                         let rp = cdir.join("revision.txt");
                         let want = format!("{rev}\n");
-                        if std::fs::read_to_string(&rp).ok().as_deref() != Some(want.as_str()) {
-                            std::fs::write(&rp, want).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", rp.display()))?;
+                        if ritsu_base::fs::read_to_string(&rp).ok().as_deref() != Some(want.as_str()) {
+                            ritsu_base::fs::write(&rp, want).map_err(|err| tr!("{} に書けません: {err}", "cannot write {}: {err}", rp.display()))?;
                         }
                     }
                     let h = short(if same { before.as_deref().unwrap() } else { &xml });
@@ -172,7 +195,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
         let name = &s.name;
         match &s.kind {
             SourceKind::File { path, pin, format, covers, .. } => {
-                let Ok(bytes) = std::fs::read(dir.join(path)) else {
+                let Ok(bytes) = copy_of(dir, path) else {
                     report.push(tr!("{name}: コピー {path} が無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy {path} to pin; run koyomi source fetch first"));
                     continue;
                 };
@@ -193,7 +216,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 let said = report.len();
                 for p in pins {
                     let Some(e) = elm(&p.fragment) else { continue };
-                    let Ok(bytes) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
+                    let Ok(bytes) = ritsu_base::fs::read(cdir.join(format!("{e}.xml"))) else {
                         report.push(tr!("{name}: {} のコピーが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {} to pin; run koyomi source fetch first", p.fragment));
                         continue;
                     };
@@ -216,7 +239,7 @@ pub fn pin(f: &File, dir: &Path, src: &str) -> Result<(String, Outcome), Text> {
                 };
                 for fr in fragments(f, name, pins).into_iter().skip(pins.len()) {
                     let Some(e) = elm(&fr) else { continue };
-                    let Ok(bytes) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
+                    let Ok(bytes) = ritsu_base::fs::read(cdir.join(format!("{e}.xml"))) else {
                         report.push(tr!("{name}: {fr} のコピーが無いので固定できません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to pin; run koyomi source fetch first"));
                         continue;
                     };
@@ -381,7 +404,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                         continue;
                     }
                 };
-                let old = match std::fs::read(dir.join(path)) {
+                let old = match copy_of(dir, path) {
                     Ok(b) => read_rows(&b, fmt).unwrap_or_default(),
                     Err(_) => {
                         lines.push(tr!("  コピー {path} が無いので、行を比べられません", "  there is no copy {path}, so the rows cannot be compared"));
@@ -410,7 +433,7 @@ pub fn outdated(f: &File, dir: &Path) -> Result<Outcome, Text> {
                 let mut differs: BTreeMap<String, Vec<(String, Vec<String>)>> = BTreeMap::new();
                 for fr in fragments(f, name, pins) {
                     let Some(e) = elm(&fr) else { continue };
-                    let Ok(mut prev) = std::fs::read(cdir.join(format!("{e}.xml"))) else {
+                    let Ok(mut prev) = ritsu_base::fs::read(cdir.join(format!("{e}.xml"))) else {
                         lines.push(tr!("{name}: {fr} のコピーが無いので比べられません。先に koyomi source fetch を走らせてください", "{name}: there is no copy of {fr} to compare; run koyomi source fetch first"));
                         continue;
                     };

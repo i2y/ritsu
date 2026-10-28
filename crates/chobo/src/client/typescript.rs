@@ -48,8 +48,11 @@ fn field_list(book: &Book, t: &TransferKind, which: &[usize], pkg: Option<&InPac
 
 /// The import of the package's types of the units (ritsu's DESIGN 9.3), for a client in a package
 /// whose calls take an amount of money or of a quantity.
-fn units_import(book: &Book, pkg: Option<&InPackage>) -> &'static str {
-    if pkg.is_some() && !package_units(book).is_empty() { "import type * as units from \"../units\";\n" } else { "" }
+fn units_import(book: &Book, pkg: Option<&InPackage>) -> String {
+    match pkg {
+        Some(p) if !package_units(book).is_empty() => format!("import type * as units from \"{}\";\n", ritsu_emit::package::ts_path(&p.books_dir(), "units")),
+        _ => String::new(),
+    }
 }
 
 /// The types of the arguments: `入荷Args`, `引当Key`, `引当Amounts`, `在庫Account`.
@@ -187,7 +190,7 @@ pub fn tigerbeetle(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> Str
     let mut o = super::head(book, origin, Comment::Slashes);
     o.push_str("// It calls the book on TigerBeetle through tigerbeetle-node 0.17.9.\n\n");
     o.push_str(head);
-    o.push_str(units_import(book, pkg));
+    o.push_str(&units_import(book, pkg));
     o.push('\n');
     o.push_str(&reason_type(book));
     o.push_str(&arg_types(book, pkg));
@@ -234,7 +237,7 @@ pub fn postgres(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String
     o.push_str(head);
     let units = units_import(book, pkg);
     if !units.is_empty() {
-        o.push_str(units);
+        o.push_str(&units);
         o.push('\n');
     }
     o.push_str(&reason_type(book));
@@ -380,7 +383,7 @@ pub fn mysql(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
         my::TABLES.iter().map(|w| format!("{}_{w}", book.name)).collect::<Vec<_>>().join(", ")
     ));
     o.push_str(head);
-    o.push_str(units_import(book, pkg));
+    o.push_str(&units_import(book, pkg));
     o.push('\n');
     o.push_str(&reason_type(book));
     o.push_str(&arg_types(book, pkg));

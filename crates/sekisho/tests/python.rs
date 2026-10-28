@@ -45,7 +45,11 @@ fn gates() -> Vec<String> {
         for e in rd.flatten() {
             let p = e.path();
             if p.is_dir() {
-                walk(&p, out);
+                // not into another module of ritsu's, as the commands' walks go (ritsu's DESIGN 17.6): its
+                // gates read their dependencies' files, and ritsu's `tests/modules_gen.rs` generates them
+                if ritsu_base::paths::not_entered(&p).is_none() {
+                    walk(&p, out);
+                }
             } else if p.extension().is_some_and(|x| x == "gate") {
                 out.push(p.to_string_lossy().to_string());
             }
@@ -102,7 +106,7 @@ fn package(gate: &str, dir: &Path, name: &str, authorizer: Authorizer, lang: rit
         let unit = koyomi::codegen::unit_shown(kc, ritsu_base::text::Lang::En, Some(&p));
         write(&base.join("dates").join(format!("{}.py", unit.alias)), &koyomi::codegen::python::module(&unit));
     }
-    let target = sekisho::r#gen::Target { name: "python", authorizer, go_module: String::new() };
+    let target = sekisho::r#gen::Target { name: "python", authorizer, go_module: String::new(), place: ritsu_emit::package::Place::here() };
     let shown = ritsu_emit::header::file_name(gate);
     for (rel, body) in sekisho::r#gen::code(&o, &suite, &target, &shown, lang).unwrap() {
         let rel = rel.strip_prefix("python/").unwrap_or(&rel).to_string();

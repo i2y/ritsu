@@ -1,0 +1,30 @@
+{
+  "execution": "not-charged",
+  "now": "2026-10-28T10:00:00Z",
+  "input": {
+    "order": {
+      "id": "A-2",
+      "sku": "kettle",
+      "quantity": 1,
+      "weight": 2600,
+      "region": "eu",
+      "category": "reduced",
+      "subtotal": 4000
+    }
+  },
+  "answers": [
+    {
+      "ok": {
+        "id": "H-2"
+      }
+    },
+    {
+      "ok": {
+        "paid": false
+      }
+    },
+    {
+      "ok": null
+    }
+  ]
+}

@@ -133,6 +133,8 @@ pub fn built(modules: &[Rc<Checked>]) -> BTreeMap<PathBuf, Vec<(TransferId, Vec<
 pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opts: &Options) -> Vec<(String, String)> {
     let head = |c: ritsu_emit::header::Comment| c.line(&ritsu_emit::header::generated("kaname"));
     let name = &book.name;
+    // where the files are, in the package: glue/books/, under the book's module's directory
+    let here = format!("{}glue/books/", opts.place.dir);
     let units_used = ops.iter().any(|(id, _)| op_params(book, &id.transfer, &id.op).iter().any(|(i, _)| book.transfers.iter().find(|x| x.name == id.transfer).is_some_and(|x| x.params[*i].unit.as_ref().and_then(|u| crate::names::book_unit(book, u)).is_some_and(|u| u.type_name().is_some()))));
     let amount_type = |unit: &str| -> String {
         match crate::names::book_unit(book, unit).and_then(|u| u.type_name()) {
@@ -153,7 +155,7 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
         Target::TypeScript => {
             let mut types = format!("{}// {what_types}\n\n", head(ritsu_emit::header::Comment::Slashes));
             if units_used {
-                types.push_str("import type * as units from \"../../units\";\n\n");
+                types.push_str(&format!("import type * as units from \"{}\";\n\n", ritsu_emit::package::ts_path(&here, "units")));
             }
             let mut union = Vec::new();
             for (id, reasons) in ops {
@@ -186,7 +188,8 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             types.push_str(&format!("/** Every transfer of {name} the modules build. */\nexport type {call} = {};\n", union.join(" | ")));
             // the function that applies them
             let module = &book.typescript.module;
-            let mut apply = format!("{}// {what_apply}\n\nimport type {{ Book, Result }} from \"../../books/{module}\";\nimport type * as calls from \"./{name}\";\n\n", head(ritsu_emit::header::Comment::Slashes));
+            let client = ritsu_emit::package::ts_path(&here, &format!("{}books/{module}", opts.place.dir));
+            let mut apply = format!("{}// {what_apply}\n\nimport type {{ Book, Result }} from \"{client}\";\nimport type * as calls from \"./{name}\";\n\n", head(ritsu_emit::header::Comment::Slashes));
             let f = format!("apply{}", ritsu_emit::ident::pascal(name));
             apply.push_str(&format!("/** Makes `call` through the client `book`: what the client answers. */\nexport async function {f}(book: Book, call: calls.{call}): Promise<Result> {{\n"));
             for (id, _) in ops {
@@ -213,7 +216,7 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
         Target::Python => {
             let mut types = format!("{}\"\"\"{what_types}\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom typing import ClassVar, Literal, NoReturn, Union\n\n", head(ritsu_emit::header::Comment::Hash));
             if units_used {
-                types.push_str("from ... import units as _units\n");
+                types.push_str(&format!("from {} import units as _units\n", ritsu_emit::package::py_from(&here, "units").0));
             }
             types.push('\n');
             let names = |tr: &str| param_names(Target::Python, book, tr);
@@ -242,9 +245,9 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             // the names of typing the types use: no reason to refuse with is NoReturn
             let typing: Vec<&str> = ["ClassVar", "Literal", "NoReturn", "Union"].into_iter().filter(|w| *w == "ClassVar" || *w == "Union" || types.contains(&format!(" = {w}"))).collect();
             let types = types.replacen("from typing import ClassVar, Literal, NoReturn, Union\n", &format!("from typing import {}\n", typing.join(", ")), 1);
-            let module = &book.python.module;
+            let (client, module) = ritsu_emit::package::py_from(&here, &format!("{}books/{}", opts.place.dir, book.python.module));
             let mut apply = format!(
-                "{}\"\"\"{what_apply}\"\"\"\n\nfrom __future__ import annotations\n\nfrom ...books import {module} as _client\nfrom . import {name} as _calls\n\n\ndef apply_{name}(book: _client.Book, call: _calls.{call}) -> _client.Result:\n    \"\"\"Makes `call` through the client `book`: what the client answers.\"\"\"\n",
+                "{}\"\"\"{what_apply}\"\"\"\n\nfrom __future__ import annotations\n\nfrom {client} import {module} as _client\nfrom . import {name} as _calls\n\n\ndef apply_{name}(book: _client.Book, call: _calls.{call}) -> _client.Result:\n    \"\"\"Makes `call` through the client `book`: what the client answers.\"\"\"\n",
                 head(ritsu_emit::header::Comment::Hash)
             );
             for (id, _) in ops {
@@ -304,8 +307,9 @@ pub fn files(t: Target, book: &BookFacts, ops: &[(TransferId, Vec<String>)], opt
             );
             let apkg = format!("{pkg}apply");
             let mut apply = format!(
-                "{head_go}\n// Package {apkg}: {what_apply}\npackage {apkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\tclient \"{m}/books/{pkg}\"\n\tcalls \"{m}/glue/books/{pkg}\"\n)\n\n// Apply makes call through the client book: what the client answers.\nfunc Apply(ctx context.Context, book *client.Book, call calls.Call) (client.Result, error) {{\n\tswitch c := call.(type) {{\n",
-                m = opts.go_module
+                "{head_go}\n// Package {apkg}: {what_apply}\npackage {apkg}\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\tclient \"{client}\"\n\tcalls \"{calls}\"\n)\n\n// Apply makes call through the client book: what the client answers.\nfunc Apply(ctx context.Context, book *client.Book, call calls.Call) (client.Result, error) {{\n\tswitch c := call.(type) {{\n",
+                client = ritsu_emit::package::go_path(&opts.go_module, &format!("{}books/{pkg}", opts.place.dir)),
+                calls = ritsu_emit::package::go_path(&opts.go_module, &format!("{}glue/books/{pkg}", opts.place.dir)),
             );
             for (id, _) in ops {
                 let k = book.transfers.iter().position(|x| x.name == id.transfer).unwrap_or(0);

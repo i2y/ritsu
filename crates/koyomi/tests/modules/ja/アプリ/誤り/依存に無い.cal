@@ -1,0 +1,20 @@
+# require していない依存。app の ritsu.mod に `require shop` は無い。
+dates 十日後払い(net10) v1
+description "請求日の 10 日後が期日。その日が事務所の休みなら、次に開いている日"
+use calendar "@shop/カレンダー/事務所.cal"
+
+inputs
+  請求日(invoice_date) : date  range >=2026-01-01 <=2027-11-30
+
+date 期日(due) = 請求日
+  + 10 days
+  roll following
+
+claims
+  期日は開いている日     : 期日 is open
+  遅い請求は遅い期日     : 期日 is monotonic
+
+examples
+| 請求日     | -> 期日    |
+| 2026-12-15 | 2026-12-29 |
+| 2026-04-06 | 2026-04-16 |

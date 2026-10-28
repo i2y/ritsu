@@ -1,0 +1,11 @@
+# app の中の入れ子のモジュールのかご。明細の小計を出す。
+module かご(basket) v1
+description "かごの小計"
+
+record 明細(Line)
+  品番(sku)        : string
+  数(qty)          : number  range >=1 <=10
+  単価(unit_price) : money[GBPc]  range >=1GBPc <=10_000GBPc
+
+fn 小計(subtotal)(明細(lines): list[明細] count >=1 <=20) -> money[GBPc]
+  sum(明細, m => m.単価 × m.数)

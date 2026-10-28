@@ -362,10 +362,9 @@ impl ritsu_ports::References for Engine {
         use crate::ast::UseKind;
         use ritsu_base::naming::{Name, Tool};
         let (m, _) = parsed(root, file)?;
-        let dir = ritsu_base::paths::parent(file);
         let mut out = Vec::new();
         for u in &m.uses {
-            let Ok(p) = ritsu_base::paths::join(&dir, &u.path) else { continue };
+            let Ok(p) = ritsu_base::modules::join(root, file, &u.path) else { continue };
             let tool = match u.kind {
                 UseKind::Rule => Tool::Rulec,
                 UseKind::Dates => Tool::Koyomi,

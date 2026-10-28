@@ -1,0 +1,23 @@
+ritsu mod 0.36.0
+
+ritsu のモジュールのコマンド。`ritsu.mod` を持つディレクトリがモジュールで、そのファイルは依存のファイルを `@<名前>/` で指す。下のコマンドが `ritsu.mod` と `ritsu.lock` を書き、依存を置き場に置く。
+
+使い方:
+  ritsu mod init <module>                新しいモジュールの `ritsu.mod` を書く（名前、版、読める ritsu の下限、`exclude "generated"`）
+  ritsu mod add <name> <source>          依存を足す。`ritsu.mod` の最後の `require` の行のあとに一行書き、木に lock が要れば lock も書き直す
+  ritsu mod get <name>@<version>         レジストリの依存の版を変える（`require` の行の版と lock）
+  ritsu mod remove <name>                依存の `require` の行を消し、木に lock が要れば lock も書き直す
+  ritsu mod lock                         依存の版を選び（最小の版の選び方）、`ritsu.lock` を書く。レジストリから取る依存が無ければ lock は要らない
+  ritsu mod fetch [<name>@<version>...]  lock のモジュール（または挙げた版）をレジストリから取り出して置き場に置く
+  ritsu mod list                         依存の木のモジュールを並べる（取り先、版とダイジェスト、求めているモジュール、ファイルがそろっているか）
+  ritsu mod versions <name>              レジストリにあるモジュールの版を並べる
+  ritsu mod vendor                       lock のレジストリのモジュールを、置き場からモジュールの `.ritsu/modules/` に置く（同梱のコピー）
+  ritsu mod clean                        置き場の項目を消す（全部か、--keep の lock が固定していないもの）
+  ritsu mod where <@path>                `@` で始まるパスが、ディスクのどこにあるかを言う
+  ritsu mod push                         モジュールを検査してレジストリに送り出す（--dry-run では、検査して組み立てるだけで送らない）
+  ritsu mod diff <old> [<new>]           モジュールの二つの版の差（ファイル、require、振る舞い、インターフェース）
+  ritsu mod report                       依存を上げると何が変わるかの報告（PR 向け）。古い lock と新しい lock での検査と、変わったモジュールの差
+  ritsu mod site <list>                  モジュールの一覧のサイトを書く（版、ファイルのページ、版のあいだの差）
+
+一つのコマンドの詳しい説明は `ritsu mod <cmd> --help`（`ritsu mod help <cmd>` も同じ）。
+どのコマンドも --root <ディレクトリ>、--lang ja|en、--help を取ります。exit code は、0 が成功、1 が確かめた結果の食い違い、2 が走らせられないことです。

@@ -1,0 +1,29 @@
+# The requirements of the module lib: its pricing policy, met by its rule, which applies the VAT rate
+# of base, named by `@base/…`, a path from the root of this module.
+requirements pricing v1
+description "The total of an order, from the pricing policy"
+
+role pricing "Decides how orders are priced"
+role development "Writes and fixes the rules"
+
+source policy = file "docs/pricing_policy.md" sha256:24746859693385ce
+
+requirement total
+  text "The total of an order is its subtotal, the VAT of its category and the shipping fee"
+  owner pricing
+  from @policy
+    reviewed 2026-10-28 by pricing sha256:24746859693385ce -> sha256:c38a0574689ec326
+  satisfied by rulec "rules/order_total.rule" output total
+    reviewed 2026-10-28 by development sha256:c38a0574689ec326 -> sha256:a14bcd3395ca1f81
+  verified by rulec "rules/order_total.rule"
+    reviewed 2026-10-28 by development sha256:c38a0574689ec326 -> sha256:8fe250ffcfaca1f0
+
+requirement vat
+  text "The VAT of an order is its subtotal at the rate of its category"
+  owner pricing
+  from @policy
+    reviewed 2026-10-28 by pricing sha256:24746859693385ce -> sha256:f6cf3483dea18d16
+  satisfied by rulec "@base/rules/vat_rate.rule" output rate
+    reviewed 2026-10-28 by development sha256:f6cf3483dea18d16 -> sha256:7dce5a7e98318a37
+  verified by rulec "@base/rules/vat_rate.rule"
+    reviewed 2026-10-28 by development sha256:f6cf3483dea18d16 -> sha256:6a40ac99f10dc008

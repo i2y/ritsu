@@ -1,0 +1,7 @@
+# sakai のモジュールの試験で、app の依存。注文の合計を出すコンテキストと、その地図を持つ。注文の合計が
+# base の税率を準用する。
+module example.com/acme/lib
+version 1.0.0
+description "モジュールの試験の値付け。注文の合計と、そのコンテキスト"
+
+require base path "../土台"

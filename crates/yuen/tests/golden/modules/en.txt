@@ -1,0 +1,115 @@
+# in en/app
+
+$ yuen check --lang en billing.req
+billing.req: ok — 2 requirements, whose 6 links are as they were looked at; every requirement is met and checked, or waived
+exit 0
+
+$ yuen check --lang en billing.req --format json
+{"root":".","ok":true,"summary":"billing.req: ok — 2 requirements, whose 6 links are as they were looked at; every requirement is met and checked, or waived","diagnostics":[]}
+exit 0
+
+$ yuen check --lang en @lib/pricing.req
+@lib/pricing.req: ok — 2 requirements, whose 6 links are as they were looked at; every requirement is met and checked, or waived
+exit 0
+
+$ yuen source fetch --lang en billing.req
+policy: @lib/docs/pricing_policy.md is a file of a dependency, so it is not fetched here; its copies are the dependency's
+exit 0
+
+$ yuen check --lang en errors/not_required.req
+error[E013]: errors/not_required.req:15:22: The `@shop` of `@shop/rules/order_total.rule` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+    15 |   satisfied by rulec "@shop/rules/order_total.rule" output total
+errors/not_required.req: 1 error
+exit 1
+
+$ yuen check --lang en errors/outside.req
+error[E013]: errors/outside.req:16:22: `../../lib/rules/order_total.rule` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+    16 |   satisfied by rulec "../../lib/rules/order_total.rule" output total
+errors/outside.req: 1 error
+exit 1
+
+$ yuen check --lang en errors/nested.req
+error[E013]: errors/nested.req:15:22: `../inner/rules/order_total.rule` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+    15 |   satisfied by rulec "../inner/rules/order_total.rule" output total
+errors/nested.req: 1 error
+exit 1
+
+$ yuen check --lang en errors/missing.req
+error[E201]: errors/missing.req:15:16: The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/order_totals.rule`
+    15 |   satisfied by rulec "@lib/rules/order_totals.rule" output total
+errors/missing.req: 1 error
+exit 1
+
+$ yuen check --lang en errors/missing.req --format json
+{"root":".","ok":false,"summary":"errors/missing.req: 1 error","diagnostics":[{"code":"E201","severity":"error","file":"errors/missing.req","line":15,"col":16,"message":"The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/order_totals.rule`","notes":[],"diff":[],"chain":[],"candidates":[],"fix":null}]}
+exit 1
+
+# in en/app/errors
+
+$ yuen check --lang en @lib/pricing.req
+@lib/pricing.req: ok — 2 requirements, whose 6 links are as they were looked at; every requirement is met and checked, or waived
+exit 0
+
+# in en/loose
+
+$ yuen check --lang en billing.req --root .
+error[E101]: billing.req:9:8: The copy of the source policy is not there: @lib/docs/pricing_policy.md
+     9 | source policy = file "@lib/docs/pricing_policy.md" sha256:24746859693385ce
+  = The copy is looked for from the directory of the .req; put the file there or correct the path.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: billing.req:16:16: rulec "@lib/rules/order_total.rule" output total is not there
+    16 |   satisfied by rulec "@lib/rules/order_total.rule" output total
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: billing.req:18:15: rulec "@lib/rules/order_total.rule" is not there
+    18 |   verified by rulec "@lib/rules/order_total.rule"
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: billing.req:26:16: rulec "@lib/@base/rules/vat_rate.rule" output rate is not there
+    26 |   satisfied by rulec "@lib/@base/rules/vat_rate.rule" output rate
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: billing.req:28:15: rulec "@lib/@base/rules/vat_rate.rule" is not there
+    28 |   verified by rulec "@lib/@base/rules/vat_rate.rule"
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+billing.req: 5 errors
+exit 1
+
+$ yuen check --lang en billing.req --root . --format json
+{"root":".","ok":false,"summary":"billing.req: 5 errors","diagnostics":[{"code":"E101","severity":"error","file":"billing.req","line":9,"col":8,"message":"The copy of the source policy is not there: @lib/docs/pricing_policy.md","notes":["The copy is looked for from the directory of the .req; put the file there or correct the path.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"diff":[],"chain":[],"candidates":[],"fix":null},{"code":"E201","severity":"error","file":"billing.req","line":16,"col":16,"message":"rulec \"@lib/rules/order_total.rule\" output total is not there","notes":["The path is written from the directory of this .req; if the file was renamed, correct the link.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"diff":[],"chain":[],"candidates":[],"fix":null},{"code":"E201","severity":"error","file":"billing.req","line":18,"col":15,"message":"rulec \"@lib/rules/order_total.rule\" is not there","notes":["The path is written from the directory of this .req; if the file was renamed, correct the link.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"diff":[],"chain":[],"candidates":[],"fix":null},{"code":"E201","severity":"error","file":"billing.req","line":26,"col":16,"message":"rulec \"@lib/@base/rules/vat_rate.rule\" output rate is not there","notes":["The path is written from the directory of this .req; if the file was renamed, correct the link.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"diff":[],"chain":[],"candidates":[],"fix":null},{"code":"E201","severity":"error","file":"billing.req","line":28,"col":15,"message":"rulec \"@lib/@base/rules/vat_rate.rule\" is not there","notes":["The path is written from the directory of this .req; if the file was renamed, correct the link.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"diff":[],"chain":[],"candidates":[],"fix":null}]}
+exit 1
+
+$ yuen source fetch --lang en billing.req --root .
+policy: no url, so the copy cannot be fetched (add `url "…"`)
+exit 0
+
+# in en
+
+$ yuen check --lang en . --root .
+error[E101]: loose/billing.req:9:8: The copy of the source policy is not there: loose/@lib/docs/pricing_policy.md
+     9 | source policy = file "@lib/docs/pricing_policy.md" sha256:24746859693385ce
+  = The copy is looked for from the directory of the .req; put the file there or correct the path.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: loose/billing.req:16:16: rulec "loose/@lib/rules/order_total.rule" output total is not there
+    16 |   satisfied by rulec "@lib/rules/order_total.rule" output total
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: loose/billing.req:18:15: rulec "loose/@lib/rules/order_total.rule" is not there
+    18 |   verified by rulec "@lib/rules/order_total.rule"
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: loose/billing.req:26:16: rulec "loose/@lib/@base/rules/vat_rate.rule" output rate is not there
+    26 |   satisfied by rulec "@lib/@base/rules/vat_rate.rule" output rate
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E201]: loose/billing.req:28:15: rulec "loose/@lib/@base/rules/vat_rate.rule" is not there
+    28 |   verified by rulec "@lib/@base/rules/vat_rate.rule"
+  = The path is written from the directory of this .req; if the file was renamed, correct the link.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+.: 5 errors
+note: `app` has a `ritsu.mod` of its own: it is another module, and was not read; run `yuen check app` to read it
+note: `base` has a `ritsu.mod` of its own: it is another module, and was not read; run `yuen check base` to read it
+note: `lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `yuen check lib` to read it
+exit 1
+

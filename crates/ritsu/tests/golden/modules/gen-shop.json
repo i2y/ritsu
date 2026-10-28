@@ -1,0 +1,418 @@
+{
+  "ritsu": "0.36.0",
+  "root": ".",
+  "ok": true,
+  "check": false,
+  "out": "<out>",
+  "targets": [
+    "typescript",
+    "python",
+    "go"
+  ],
+  "files": [
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/tax/rules/vat_rate.ts",
+      "from": "@pricing/@tax/rules/vat_rate.rule",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/rules/order_total.ts",
+      "from": "@pricing/rules/order_total.rule",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/rules/shipping_fee.ts",
+      "from": "@pricing/rules/shipping_fee.rule",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/types.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/activities.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/io.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/runtime.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/workflow.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/client.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/rules.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/place_order/worker.ts",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/glue/kaname.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/glue/basket.ts",
+      "from": "checkout/basket.kn",
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/glue/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/units.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/flows/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/package.json",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/rules/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/tax/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "typescript",
+      "path": "<out>/typescript/deps/pricing/deps/tax/rules/index.ts",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/tax/rules/vat_rate.py",
+      "from": "@pricing/@tax/rules/vat_rate.rule",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/rules/order_total.py",
+      "from": "@pricing/rules/order_total.rule",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/rules/shipping_fee.py",
+      "from": "@pricing/rules/shipping_fee.rule",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/__init__.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/types.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/activities.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/io.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/runtime.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/workflow.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/rules.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/client.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/place_order/worker.py",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/glue/kaname.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/glue/basket.py",
+      "from": "checkout/basket.kn",
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/glue/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/units.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/py.typed",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/flows/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/pyproject.toml",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/rules/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/tax/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "python",
+      "path": "<out>/python/generated/deps/pricing/deps/tax/rules/__init__.py",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/deps/pricing/deps/tax/rules/vatrate/vat_rate.go",
+      "from": "@pricing/@tax/rules/vat_rate.rule",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/deps/pricing/rules/ordertotal/order_total.go",
+      "from": "@pricing/rules/order_total.rule",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/deps/pricing/rules/shippingfee/shipping_fee.go",
+      "from": "@pricing/rules/shipping_fee.rule",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/doc.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/types.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/values.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/activities.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/io.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/runtime.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/workflow.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/rules.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/client.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/flows/place_order/worker.go",
+      "from": "orders/place_order.flow",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/glue/kaname/kaname.go",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/glue/basket/basket.go",
+      "from": "checkout/basket.kn",
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/units/units.go",
+      "from": null,
+      "state": "written"
+    },
+    {
+      "target": "go",
+      "path": "<out>/go/doc.go",
+      "from": null,
+      "state": "written"
+    }
+  ],
+  "diagnostics": [],
+  "error": null
+}

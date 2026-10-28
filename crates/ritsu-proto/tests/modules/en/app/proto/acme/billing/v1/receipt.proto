@@ -1,0 +1,10 @@
+// A receipt of the module at hand. It imports lib's line by the path of the package: app has no such
+// file, so the import is read from lib, app's dependency, under lib's `proto/`.
+syntax = "proto3";
+package acme.billing.v1;
+
+import "acme/orders/v1/line.proto";
+
+message Receipt {
+  repeated acme.orders.v1.Line lines = 1;
+}

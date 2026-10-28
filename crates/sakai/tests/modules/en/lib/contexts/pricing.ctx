@@ -1,0 +1,18 @@
+# The context of the module lib: it works out the total of an order, and publishes the rule that
+# does, whose output `total` its term means. The rule applies the VAT rate of the module base, which
+# has rules and no context of its own, so this context owns that rule too (`@base/…`, a path from
+# the root of this module): a map takes a file of a dependency in when a context of the map owns it.
+context Pricing(pricing) v1
+description "Works out the total of an order: its subtotal, the VAT of its category and the shipping fee"
+owner "Pricing team"
+
+owns
+  rulec "../rules/order_total.rule"
+  rulec "@base/rules/vat_rate.rule"
+
+published language rulec.order_total.v1
+  rulec "../rules/order_total.rule"
+
+terms
+  total "What the customer pays for an order: its subtotal, the VAT of its category and the shipping fee"
+    means rulec "../rules/order_total.rule" output total

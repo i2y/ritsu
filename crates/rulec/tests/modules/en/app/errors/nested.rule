@@ -1,0 +1,22 @@
+# A path into a module nested in app: inner has a ritsu.mod of its own, so its files are not app's.
+rule category_rate v1
+description "The rate of VAT for a category of goods, by the rule vat_rate"
+
+enum category = standard | reduced | zero
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+apply vat = "../inner/rules/vat_rate.rule" meaning:8a62fb4ec05fd289
+  category = category
+  rate -> vat_rate
+
+result rate = vat_rate
+
+examples
+| category | -> rate |
+| standard | 20%     |
+| zero     | 0%      |

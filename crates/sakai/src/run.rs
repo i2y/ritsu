@@ -97,6 +97,10 @@ fn run_command(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dy
         let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
+    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+        return refuse(err, t, lang);
+    }
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
         "build" => build_cmd(&a, lang, suite, out, err),
@@ -196,6 +200,15 @@ fn check_cmd(a: &Args, lang: Lang, suite: &Suite, out: &mut dyn Write, err: &mut
         Ok(r) => r,
         Err(e) => return refuse(err, e, lang),
     };
+    // A directory is walked without entering another module below it; when it is in no module, one
+    // line each says which it passed over (ritsu's DESIGN 17.6).
+    for r in rel.iter().filter(|r| ritsu_base::fs::is_dir(paths::on_disk(&root, r)) && ritsu_base::modules::refer::module_of(&paths::on_disk(&root, r)).is_none()) {
+        let (mut files, mut modules) = (Vec::new(), Vec::new());
+        ritsu_base::paths::walk_noting(&root, r, &[], &mut files, &mut modules);
+        for m in modules {
+            let _ = writeln!(err, "{}", ritsu_base::paths::other_module_note(&paths::shown(&m), "sakai check").get(lang));
+        }
+    }
     let outcomes = match check::check_args_with(&root, &rel, suite) {
         Ok(o) => o,
         Err(e) => return refuse(err, e, lang),

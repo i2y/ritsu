@@ -1,0 +1,30 @@
+# A path into a module nested in app: inner has a ritsu.mod of its own, so its flow is not app's.
+workflow place_order v1
+description "Prices an order by the flow of the module lib, and charges its total in lib's ledger"
+
+use rule total from "@lib/rules/order_total.rule"
+use book ledger from "@lib/books/ledger.book"
+use proto orders from "@lib/proto/acme/orders/v1/order.proto"
+
+record Priced
+  total : money[GBPc]
+
+inputs
+  order    : orders.Order
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  category : total.category
+  shipping : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  amount : money[GBPc]
+
+task price(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> Priced
+  flow "../inner/flows/price.flow"
+
+task record_charge(order: string, amount: money[GBPc])
+  book ledger.charge.do
+
+flow
+  let priced = price(subtotal: subtotal, category: category, shipping: shipping)
+  record_charge(order: order.id, amount: priced.total)
+  succeed amount = priced.total

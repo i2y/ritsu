@@ -443,26 +443,41 @@ pub struct ShapeDecl {
 impl ShapeDecl {
     /// The file the contract is read from: `file` followed from the directory of the rule that
     /// wrote the line — `rule_path`, the file being checked, unless the line came from another.
-    pub fn contract_path(&self, rule_path: &str) -> std::path::PathBuf {
+    pub fn contract_path(&self, rule_path: &str) -> Result<std::path::PathBuf, ritsu_base::modules::Refused> {
         let base = self.base.as_deref().unwrap_or(rule_path);
-        std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(&self.file)
+        crate::vfs::follow(crate::vfs::dir_of(base, "."), &self.file)
+    }
+
+    /// The directory the path is followed from.
+    pub fn dir<'a>(&'a self, rule_path: &'a str) -> &'a std::path::Path {
+        crate::vfs::dir_of(self.base.as_deref().unwrap_or(rule_path), ".")
     }
 }
 
 impl EnumImport {
     /// The file the enum is read from, followed from the directory of the rule that wrote the line.
-    pub fn file_path(&self, rule_path: &str) -> std::path::PathBuf {
+    pub fn file_path(&self, rule_path: &str) -> Result<std::path::PathBuf, ritsu_base::modules::Refused> {
         let base = self.base.as_deref().unwrap_or(rule_path);
-        std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(&self.file)
+        crate::vfs::follow(crate::vfs::dir_of(base, "."), &self.file)
+    }
+
+    /// The directory the path is followed from.
+    pub fn dir<'a>(&'a self, rule_path: &'a str) -> &'a std::path::Path {
+        crate::vfs::dir_of(self.base.as_deref().unwrap_or(rule_path), ".")
     }
 }
 
 impl DaysFrom {
     /// The koyomi file the days are read from, followed from the directory of the file that wrote
     /// the line.
-    pub fn file_path(&self, rule_path: &str) -> std::path::PathBuf {
+    pub fn file_path(&self, rule_path: &str) -> Result<std::path::PathBuf, ritsu_base::modules::Refused> {
         let base = self.base.as_deref().unwrap_or(rule_path);
-        std::path::Path::new(base).parent().unwrap_or(std::path::Path::new("")).join(&self.file)
+        crate::vfs::follow(crate::vfs::dir_of(base, ""), &self.file)
+    }
+
+    /// The directory the path is followed from.
+    pub fn dir<'a>(&'a self, rule_path: &'a str) -> &'a std::path::Path {
+        crate::vfs::dir_of(self.base.as_deref().unwrap_or(rule_path), "")
     }
 }
 

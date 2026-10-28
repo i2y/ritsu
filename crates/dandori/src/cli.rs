@@ -330,6 +330,10 @@ fn run_here(args: &[String], out: &mut dyn Write, err: &mut dyn Write) -> u8 {
         let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
+    if let Err(t) = ritsu_base::modules::given_all(&parsed.pos) {
+        return refuse(t, lang, err);
+    }
     let a = Asked::from(&parsed, lang);
     match cmd.name {
         "check" => cmd_check(&a, out, err),

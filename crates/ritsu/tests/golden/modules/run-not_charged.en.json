@@ -1,0 +1,201 @@
+{
+  "ritsu": "0.36.0",
+  "flow": "orders/place_order.flow",
+  "scenario": "orders/scenarios/not_charged.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-10-28T10:00:00Z",
+  "end": "2026-10-28T10:00:00Z",
+  "elapsed": 0,
+  "events": [
+    {
+      "call": "shipping",
+      "args": {
+        "weight": 2600,
+        "region": "eu"
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "fee": 1950
+        }
+      }
+    },
+    {
+      "call": "total",
+      "args": {
+        "subtotal": 4000,
+        "category": "reduced",
+        "shipping": 1950
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "total": 6150
+        }
+      }
+    },
+    {
+      "call": "reserve",
+      "args": {
+        "order": "A-2",
+        "sku": "kettle",
+        "quantity": 1
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "id": "H-2"
+        }
+      }
+    },
+    {
+      "call": "charge",
+      "args": {
+        "order": "A-2",
+        "amount": 6150
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "paid": false
+        }
+      }
+    },
+    {
+      "call": "release",
+      "args": {
+        "hold": "H-2"
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": null
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "weight": 2600,
+            "region": "eu"
+          }
+        },
+        "answer": {
+          "ok": {
+            "fee": 1950
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "subtotal": 4000,
+            "category": "reduced",
+            "shipping": 1950
+          }
+        },
+        "answer": {
+          "ok": {
+            "total": 6150
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://stock.example.com/v1/holds",
+          "headers": {
+            "Idempotency-Key": "not-charged/3"
+          },
+          "body": {
+            "order": "A-2",
+            "sku": "kettle",
+            "quantity": 1
+          }
+        },
+        "answer": {
+          "ok": {
+            "id": "H-2"
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://payments.example.com/v1/orders/A-2/charges",
+          "headers": {
+            "Idempotency-Key": "not-charged/5"
+          },
+          "body": {
+            "amount": 6150
+          }
+        },
+        "answer": {
+          "ok": {
+            "paid": false
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://stock.example.com/v1/holds/H-2/release"
+        },
+        "answer": {
+          "ok": null
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "outcome": "not_charged",
+        "amount": 6150
+      }
+    }
+  },
+  "books": [],
+  "replay": {
+    "execution": "not-charged",
+    "now": "2026-10-28T10:00:00Z",
+    "input": {
+      "order": {
+        "id": "A-2",
+        "sku": "kettle",
+        "quantity": 1,
+        "weight": 2600,
+        "region": "eu",
+        "category": "reduced",
+        "subtotal": 4000
+      }
+    },
+    "answers": [
+      {
+        "ok": {
+          "fee": 1950
+        }
+      },
+      {
+        "ok": {
+          "total": 6150
+        }
+      },
+      {
+        "ok": {
+          "id": "H-2"
+        }
+      },
+      {
+        "ok": {
+          "paid": false
+        }
+      },
+      {
+        "ok": null
+      }
+    ]
+  }
+}

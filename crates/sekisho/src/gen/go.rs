@@ -121,12 +121,15 @@ fn record(p: &Plan, t: usize) -> Record {
     Record { roles, groups, attrs }
 }
 
-/// The package alias a module of another language is imported as: `rulesrefundlimit`.
-fn import_name(p: &Plan, ui: usize) -> String {
+/// The package alias a module of another language is imported as: `rulesrefundlimit`, and with the
+/// names of the dependencies on the way to it for a dependency's (`rulespricingfee`), so that the
+/// packages of one name of two modules are two names.
+fn import_name(p: &Plan, o: &Options, ui: usize) -> String {
+    let chain: String = ritsu_emit::package::chain(&o.dir_of(p.g, ui)).iter().map(|c| ritsu_emit::ident::go_package(c)).collect();
     match p.imports.get(&ui) {
-        Some(Import::Rule(r)) => format!("rules{}", r.go.module),
-        Some(Import::Dates(d)) => format!("dates{}", ritsu_emit::ident::go_package(&d.alias)),
-        Some(Import::Calendar(c)) => format!("dates{}", ritsu_emit::ident::go_package(&c.alias)),
+        Some(Import::Rule(r)) => format!("rules{chain}{}", r.go.module),
+        Some(Import::Dates(d)) => format!("dates{chain}{}", ritsu_emit::ident::go_package(&d.alias)),
+        Some(Import::Calendar(c)) => format!("dates{chain}{}", ritsu_emit::ident::go_package(&c.alias)),
         None => "_".to_string(),
     }
 }
@@ -204,7 +207,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
     let mut t = String::new();
     let sha = ritsu_base::sha256::hex(f.src.as_bytes());
     let version = f.version.strip_prefix('v').unwrap_or(&f.version);
-    let source = ritsu_emit::header::Source { path: &o.shown, kind: "gate", name: &f.name.text, version, sha256: &sha };
+    let source = ritsu_emit::header::Source { path: &o.shown, kind: "gate", name: &f.name.text, version, sha256: &sha, module: o.place.module.as_ref() };
     t.push_str(&Comment::Slashes.line(&ritsu_emit::header::generated("sekisho")));
     t.push_str(&Comment::Slashes.line(source.line().get(o.lang)));
     t.push('\n');
@@ -253,12 +256,14 @@ pub fn module(p: &Plan, o: &Options) -> String {
     }
     let mut ours: Vec<(String, String)> = Vec::new();
     for (ui, imp) in &p.imports {
-        let path = match imp {
-            Import::Rule(r) => format!("{}/rules/{}", o.go_module, r.go.module),
-            Import::Dates(d) => format!("{}/dates/{}", o.go_module, ritsu_emit::ident::go_package(&d.alias)),
-            Import::Calendar(c) => format!("{}/dates/{}", o.go_module, ritsu_emit::ident::go_package(&c.alias)),
+        let dir = o.dir_of(g, *ui);
+        let to = match imp {
+            Import::Rule(r) => format!("{dir}rules/{}", r.go.module),
+            Import::Dates(d) => format!("{dir}dates/{}", ritsu_emit::ident::go_package(&d.alias)),
+            Import::Calendar(c) => format!("{dir}dates/{}", ritsu_emit::ident::go_package(&c.alias)),
         };
-        ours.push((path.clone(), format!("\t{} {}\n", import_name(p, *ui), s(&path))));
+        let path = ritsu_emit::package::go_path(&o.go_module, &to);
+        ours.push((path.clone(), format!("\t{} {}\n", import_name(p, o, *ui), s(&path))));
     }
     ours.sort();
     ours.dedup();
@@ -727,7 +732,7 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
         }
     }
     for vp in &ap.values {
-        value(p, n, a, vp, &mut c_body);
+        value(p, n, o, a, vp, &mut c_body);
     }
     for &k in &ap.asked {
         asked(p, n, o, ai, k, &mut c_body);
@@ -867,7 +872,7 @@ fn go_lit(g: &Gate, n: &Names, f: &Field, l: &Literal) -> Option<String> {
 }
 
 /// The code of one value the action computes, put into `ctx` under its alias.
-fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
+fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut String) {
     let g = p.g;
     let cv = &a.computed[vp.index];
     let e = &n.error;
@@ -928,7 +933,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
             match &vp.call {
                 Call::Rule { module, output, args, values } => {
                     let Some(facts) = p.rule(*module) else { continue };
-                    let m = import_name(p, *module);
+                    let m = import_name(p, o, *module);
                     let go = &facts.go;
                     let mut fields: Vec<String> = Vec::new();
                     for (k, (col, src)) in args.iter().enumerate() {
@@ -979,7 +984,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                     }
                 }
                 Call::Date { module, function, op, args } => {
-                    let m = import_name(p, *module);
+                    let m = import_name(p, o, *module);
                     let mut call_args: Vec<String> = Vec::new();
                     for (_, is_day, src) in args {
                         call_args.push(match src {
@@ -1007,7 +1012,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                     body.push(format!("ctx[{key}] = {}", compare("day", *op, &format!("days({raw}.Year, {raw}.Month, {raw}.Day)"))));
                 }
                 Call::Open { module } => {
-                    let m = import_name(p, *module);
+                    let m = import_name(p, o, *module);
                     body.push("d := civil(day)".to_string());
                     body.push(format!("v, err := {m}.IsOpen({m}.Date{{Year: d.Year, Month: d.Month, Day: d.Day}})"));
                     body.push(format!("if err != nil {{\n\treturn req, &{e}{{\"date\", {} + err.Error()}}\n}}", s(&format!("koyomi {}: ", p.use_path(*module)))));

@@ -1086,6 +1086,711 @@ flow
 
 関連: [E206](#e206)
 
+<a id="e301"></a>
+
+## E301 — `ritsu.mod` として読めないファイル
+
+**いつ出るか**: モジュールの `ritsu.mod` を読めないとき。知らない語で始まる行、値の無い語、文字列の中の `\"` と `\\` のほかのエスケープ、一度しか書けない語（`module`、`version`、`description`、`ritsu`、`license`、`source`）の二度目、`module` が無いか最初の文でないこと、文字列の外の全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` の知らない出力先などです。木のどれかのモジュールの `ritsu.mod` を読めなければ、依存の木が決まらないので、言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: 示された行を直してください。文は `module`、`version`、`description`、`ritsu`、`license`、`source`、`require`、`exclude`、`signature`、`library` のどれかで始まり、最初の文は `module` です。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+version 1.0.0
+
+requires tax path "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+関連: [E302](#e302)
+
+<a id="e302"></a>
+
+## E302 — `ritsu.mod` の値が、決まった形ではありません
+
+**いつ出るか**: `ritsu.mod` の値の形が違うとき。モジュールの名前、版の字、依存の名前、`require … path` の絶対パス、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、二度書いた依存の名前、空の `license`、https でない `source`、`exclude` と鍵のファイルのパスなどです。`require … path` の指す先に `ritsu.mod` が無いときも、値が指すものの誤りとして、このエラーです。言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: 示された値を、その文の形に直してください。依存の名前は、小文字の英字で始まり、小文字の英字と数字と `_` だけでできた 64 字までの語です。版の字は `1.4.0` のような SemVer の形です。パスの依存は、`ritsu.mod` のあるディレクトリを、モジュールのルートからの相対パスで指してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+
+require tax path "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+関連: [E301](#e301)
+
+<a id="e303"></a>
+
+## E303 — レジストリの依存があるのに、`ritsu.lock` がありません
+
+**いつ出るか**: 木のどれかのモジュールがレジストリから依存を取る（`require … oci`）のに、手元のモジュールの `ritsu.lock` が無いか、読めないとき。レジストリの依存の版とダイジェストは `ritsu.lock` が決めるので、それが無ければ、どのファイルを読むかが決まりません。lock を読めないのは、書式が違うとき（知らない行、ダイジェストの形など）です。言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: `ritsu mod lock` を走らせて、`ritsu.lock` を書いてください。lock は手で書かないでください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.0.0
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+関連: [E304](#e304)
+
+<a id="e304"></a>
+
+## E304 — `ritsu.lock` が `ritsu.mod` に合いません
+
+**いつ出るか**: `ritsu.lock` が、木のモジュールの `ritsu.mod` に合わないとき。lock に無いモジュール、`require` が求める最小の版より低い lock の版、取り先の種類やパスの違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無いこと、パスで読むモジュールの `oci` の行などです。`ritsu.mod` を手で書き替えて、lock を書き直していないときに起きます。言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: `ritsu mod lock` を走らせて、lock を書き直してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.2.0
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+関連: [E303](#e303), [W302](#w302)
+
+<a id="e305"></a>
+
+## E305 — 置き場か同梱のコピーのファイルが、lock のダイジェストと違います
+
+**いつ出るか**: レジストリの依存のファイルを、置き場か、モジュールに同梱したコピー（`.ritsu/modules/`。`ritsu mod vendor` が作ります）から読むとき、そのファイルのダイジェストが `ritsu.lock` の `files` のダイジェストと違うとき。だれかがコピーのファイルを手で書き替えたか、ファイルが壊れています。lock が固定した中身ではないので読まず、言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: 同梱のコピーなら、`ritsu mod vendor` で置き直してください。置き場なら、`ritsu mod clean` で消してから、`ritsu mod fetch` で取り直してください。依存を直すのは、依存のモジュールの中です。直したものを手元で先に確かめるなら、その `require` を、直したディレクトリを指す `require … path` に書き替えてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.0.0
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/ritsu.mod`:
+
+```
+module example.com/acme/tax
+version 1.0.0
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 25%                     |
+| reduced  | 5%                      |
+```
+
+関連: [E304](#e304)
+
+<a id="e306"></a>
+
+## E306 — 同じ名前のモジュールが二か所から来ます
+
+**いつ出るか**: 木の中で、同じ名前のモジュールが二か所から来るとき。二つの `require … path` が、`module` に同じ名前を書いた別々のディレクトリを指すとき、取ってきた `ritsu.mod` の `module` が取ったリポジトリと違うとき、取ってきたファイルに `ritsu.mod` が無いときです。`ritsu mod lock` が版を選ぶときに読んだタグの `ritsu.mod` の `version` がタグと違うときも、二か所が食い違うので、このエラーです。モジュールは名前で見分けるので、一つの名前の中身は一つでなければなりません。言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: モジュールを一か所から読むようにしてください。コピーしたディレクトリなら、`module` に自分の名前を付けるか、`require` を一つにしてください。取ってきたモジュールなら、その作者に知らせてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+
+require tax path "tax"
+require vat path "vat"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`tax/ritsu.mod`:
+
+```
+module tax
+```
+
+`tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+`vat/ritsu.mod`:
+
+```
+module tax
+```
+
+`vat/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+<a id="e307"></a>
+
+## E307 — モジュールのルートに、`@` で始まる名前があります
+
+**いつ出るか**: モジュールのルートのすぐ下に、`@` で始まる名前のファイルかディレクトリがあるとき。モジュールの中では `@<名前>` が依存を指すので、その名前のファイルは読めません（ritsu のファイルの層では、そこに依存が見えます）。木を読むのは止めず、ほかのファイルはいつものとおり検査しますが、このエラーで exit は 1 になります。
+
+**直し方**: `@` で始まらない名前に変えてください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`@drafts/fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+<a id="e308"></a>
+
+## E308 — レジストリから取ったモジュールが、パスの依存を持っています
+
+**いつ出るか**: レジストリから取ったモジュールの `ritsu.mod` が、`require … path` を持つとき。パスの依存は一つの作業ツリーの中でだけ読めるもので、モジュールを取ってきた側には、そのパスの先がありません。言語の検査に入らずに止まります（exit 1）。
+
+**直し方**: そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは、依存をどれも `require … oci` で書きます。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.0.0
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:a744d0c29acba47340ec3ca4332ad67719ddb5996c3ec96672573273b8036a85
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/ritsu.mod`:
+
+```
+module example.com/acme/tax
+version 1.0.0
+
+require rates path "../rates"
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+<a id="w301"></a>
+
+## W301 — どのファイルも使っていない依存があります
+
+**いつ出るか**: モジュールが `require` した依存のファイルを、そのモジュールのどのファイルも指していないとき。指すとは、言語の参照（`apply`、`use rule … from` など）、`contribution` の `to` と `after`、`.proto` の `import` です。`.proto` の `import` は `@` を書きませんが、依存の `.proto` に行き着けば、その依存を使っていると数えます。モジュールの全体を検査するときだけ言います。一部の検査では、渡さなかったファイルが何を指すかを読まないからです。依存のモジュールの W301 は、その依存の警告として数えます。
+
+**直し方**: 使わないなら、`require` の行を消してください（`ritsu mod remove <名前>`）。使うのなら、使うところで `@<名前>/…` のファイルを指してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+
+require tax path "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`tax/ritsu.mod`:
+
+```
+module tax
+```
+
+`tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+関連: [W303](#w303)
+
+<a id="w302"></a>
+
+## W302 — `ritsu.lock` に、求められていないモジュールの行があります
+
+**いつ出るか**: `ritsu.lock` に、手元のモジュールから `require` をたどっても着かないモジュールの行があるとき。`ritsu.mod` から `require` を手で消して、lock を書き直していないときに起きます。木を読むのは止めません。
+
+**直し方**: `ritsu mod lock` を走らせて、lock を書き直してください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+path tax "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+関連: [E304](#e304)
+
+<a id="w303"></a>
+
+## W303 — `require` していない、依存の依存のファイルを指しています
+
+**いつ出るか**: ファイルが、`@pricing/@tax/…` のように、自分のモジュールが `require` していない依存の依存のファイルを指すとき。パスは、そのファイルのモジュールが自分のルートから書く形で見ます。`.proto` の `import` は `@` を書きませんが、行き着いたファイルが依存の依存のものなら、`import` の行に同じく言います。依存の新しい版がその依存の依存を使わなくなると、このファイルは壊れます。依存のファイルに言うものは、その依存の警告として数えます。
+
+**直し方**: その依存の依存を、自分の `ritsu.mod` で `require` してください（`ritsu mod add`）。`require` すれば、そのファイルは `@<名前>/…` と直に書けます。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module shop
+
+require pricing path "pricing"
+```
+
+`receipt.rule`:
+
+```rule
+rule receipt v1
+description "The total of an order with gift wrapping: the order's total, and 3 GBP for the wrapping with its VAT"
+
+enum category = standard | reduced
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+  category : category
+
+outputs
+  total : money[GBPc]  round half_up(1GBPc)
+
+apply order = "@pricing/total.rule" meaning:caa5be4f9a41c851
+  subtotal = subtotal
+  category = category
+  total -> order_total
+
+apply vat = "@pricing/@tax/vat_rate.rule" meaning:f2850d644389817c
+  category = category
+  rate -> rate
+
+result total = order_total + 300GBPc + 300GBPc * rate
+```
+
+`pricing/ritsu.mod`:
+
+```
+module pricing
+
+require tax path "tax"
+```
+
+`pricing/total.rule`:
+
+```rule
+rule total v1
+description "The total of an order: its subtotal and its VAT"
+
+enum category = standard | reduced
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+  category : category
+
+outputs
+  total : money[GBPc]  round half_up(1GBPc)
+
+apply vat = "@tax/vat_rate.rule" meaning:f2850d644389817c
+  category = category
+  rate -> rate
+
+result total = subtotal + subtotal * rate
+```
+
+`pricing/tax/ritsu.mod`:
+
+```
+module tax
+```
+
+`pricing/tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+関連: [W301](#w301)
+
 <a id="w901"></a>
 
 ## W901 — 鍵が契約の文書に書かれています

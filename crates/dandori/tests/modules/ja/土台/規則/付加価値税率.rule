@@ -1,0 +1,24 @@
+# 税率はこの試験のために決めた値で、どの法令の転記でもない。
+rule 付加価値税率(vat_rate) v1
+description "品目の区分ごとの付加価値税の税率。標準は 20%、軽減は 5%、ゼロは 0%。税率はこの試験のために決めた値"
+
+enum 区分(category) = 標準(standard) | 軽減(reduced) | ゼロ(zero)
+
+inputs
+  区分(category) : 区分
+
+outputs
+  税率(rate) : rate[step 1%]  round down(1%)
+
+table 区分ごとの税率(rate_by_category)
+policy unique
+| 区分 | -> 税率 : rate[step 1%] |
+| 標準 | 20%                     |
+| 軽減 | 5%                      |
+| ゼロ | 0%                      |
+
+examples
+| 区分 | -> 税率 |
+| 標準 | 20%     |
+| 軽減 | 5%      |
+| ゼロ | 0%      |

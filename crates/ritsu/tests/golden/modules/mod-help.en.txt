@@ -1,0 +1,23 @@
+ritsu mod 0.36.0
+
+The commands of ritsu's modules. A directory with a `ritsu.mod` is a module, and its files name a dependency's files by `@<name>/`. These commands write `ritsu.mod` and `ritsu.lock`, and put the dependencies in the store.
+
+Usage:
+  ritsu mod init <module>                write the `ritsu.mod` of a new module: its name, its version, the least ritsu that reads it, and `exclude "generated"`
+  ritsu mod add <name> <source>          require a module: a line after the last `require` of `ritsu.mod`, and the lock written again when the tree needs one
+  ritsu mod get <name>@<version>         change the version of a dependency from a registry: the version on its `require` line, and the lock
+  ritsu mod remove <name>                remove a dependency's `require` line, and write the lock again when the tree needs one
+  ritsu mod lock                         choose the versions of the dependencies (Minimal Version Selection) and write `ritsu.lock`; a tree with no dependency from a registry needs no lock
+  ritsu mod fetch [<name>@<version>...]  fetch the modules of the lock (or the versions named) from their registries into the store
+  ritsu mod list                         list the modules of the tree: where each comes from, its version and digests, what requires it, and whether its files are here
+  ritsu mod versions <name>              list the versions a registry has of a module
+  ritsu mod vendor                       put the modules of the lock that come from a registry, from the store, in the module's `.ritsu/modules/` (the module's copy of them)
+  ritsu mod clean                        remove the entries of the store: all of them, or those no lock given with --keep pins
+  ritsu mod where <@path>                say where a path that starts with `@` is on the disk
+  ritsu mod push                         check the module and push it to its registry (with --dry-run, check and build it without sending it)
+  ritsu mod diff <old> [<new>]           the differences between two versions of a module: files, requires, behavior and interfaces
+  ritsu mod report                       what raising the dependencies changes, for a pull request: the checks with the old lock and the new one, and the differences of the modules that changed
+  ritsu mod site <list>                  write the site that lists modules: their versions, the pages of their files and the differences between versions
+
+For one command in detail: `ritsu mod <cmd> --help` (`ritsu mod help <cmd>` is the same page).
+Every command takes --root <dir>, --lang ja|en and --help. Exit codes: 0 success, 1 a check that found something that does not match, 2 what could not be run.

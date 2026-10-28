@@ -1,0 +1,11 @@
+# The office's calendar: closed at weekends and on the days the module base lists, which this file
+# reads by `@base/…`, a path from the root of this module. The days are the test's own.
+calendar office v1
+description "The office of the tests of modules: closed on Saturdays, Sundays and the days the module base lists"
+
+source closures = file "@base/data/closures.csv" sha256:a9dedfd32fd6e08f
+  format csv utf8
+  covers 2026-01-01..2027-12-31
+
+closed weekly sat, sun
+closed closures

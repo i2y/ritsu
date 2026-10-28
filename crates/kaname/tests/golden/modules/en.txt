@@ -1,0 +1,154 @@
+# in en/app
+
+$ kaname check --lang en checkout/basket.kn
+ok checkout/basket.kn: 3 functions: 2 total; 1 fails range
+exit 0
+
+$ kaname check --lang en checkout/basket.kn --format json
+{
+  "kaname": "<version>",
+  "file": "checkout/basket.kn",
+  "ok": true,
+  "summary": "3 functions: 2 total; 1 fails range",
+  "functions": [
+    {
+      "function": "subtotal",
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": null,
+      "places": [],
+      "calls": []
+    },
+    {
+      "function": "total",
+      "effect": {
+        "fails": [],
+        "diverges": false
+      },
+      "written": {
+        "total": true,
+        "fails": [],
+        "diverges": false
+      },
+      "places": [],
+      "calls": [
+        {
+          "line": 20,
+          "function": "subtotal"
+        }
+      ]
+    },
+    {
+      "function": "charge",
+      "effect": {
+        "fails": [
+          "range"
+        ],
+        "diverges": false
+      },
+      "written": null,
+      "places": [],
+      "calls": [
+        {
+          "line": 24,
+          "function": "subtotal"
+        },
+        {
+          "line": 24,
+          "function": "charge"
+        }
+      ]
+    }
+  ],
+  "diagnostics": []
+}
+exit 0
+
+$ kaname check --lang en @lib/checkout/charges.kn
+ok @lib/checkout/charges.kn: 1 function, fails range
+exit 0
+
+$ kaname check --lang en errors/not_required.kn
+error[E201]: errors/not_required.kn:5:27: The `@shop` of `@shop/rules/order_total.rule` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+     5 | use rule order_total from "@shop/rules/order_total.rule"
+exit 1
+
+$ kaname check --lang en errors/outside.kn
+error[E201]: errors/outside.kn:6:27: `../../lib/rules/order_total.rule` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+     6 | use rule order_total from "../../lib/rules/order_total.rule"
+exit 1
+
+$ kaname check --lang en errors/nested.kn
+error[E201]: errors/nested.kn:5:24: `../inner/checkout/basket.kn` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+     5 | use module basket from "../inner/checkout/basket.kn"
+exit 1
+
+$ kaname check --lang en errors/missing.kn
+error[E201]: errors/missing.kn:5:27: The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/order_totals.rule`
+     5 | use rule order_total from "@lib/rules/order_totals.rule"
+exit 1
+
+$ kaname check --lang en errors/missing.kn --format json
+{
+  "kaname": "<version>",
+  "file": "errors/missing.kn",
+  "ok": false,
+  "summary": null,
+  "functions": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "errors/missing.kn",
+      "line": 5,
+      "col": 27,
+      "message": "The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/order_totals.rule`",
+      "notes": [],
+      "fix": null
+    }
+  ]
+}
+exit 1
+
+# in en/app/checkout
+
+$ kaname check --lang en @lib/checkout/charges.kn
+ok @lib/checkout/charges.kn: 1 function, fails range
+exit 0
+
+# in en/loose
+
+$ kaname check --lang en order.kn
+error[E201]: order.kn:6:27: There is no file `@lib/rules/order_total.rule`
+     6 | use rule order_total from "@lib/rules/order_total.rule"
+  = A path is written from the directory of the module's file.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+exit 1
+
+$ kaname check --lang en order.kn --format json
+{
+  "kaname": "<version>",
+  "file": "crates/kaname/tests/modules/en/loose/order.kn",
+  "ok": false,
+  "summary": null,
+  "functions": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "crates/kaname/tests/modules/en/loose/order.kn",
+      "line": 6,
+      "col": 27,
+      "message": "There is no file `@lib/rules/order_total.rule`",
+      "notes": [
+        "A path is written from the directory of the module's file.",
+        "A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"
+      ],
+      "fix": null
+    }
+  ]
+}
+exit 1
+

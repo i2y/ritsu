@@ -1,0 +1,12 @@
+// A line of an order, as lib writes it. Its import is written by the path of the package, as buf
+// lays a module out under `proto/`. lib has no category of its own: the import is read from base,
+// lib's dependency, under base's `proto/`.
+syntax = "proto3";
+package acme.orders.v1;
+
+import "acme/tax/v1/category.proto";
+
+message Line {
+  string sku = 1;
+  acme.tax.v1.Category category = 2;
+}

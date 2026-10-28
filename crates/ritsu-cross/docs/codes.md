@@ -1086,6 +1086,711 @@ flow
 
 See also: [E206](#e206)
 
+<a id="e301"></a>
+
+## E301 — A `ritsu.mod` that does not read
+
+**When**: A module's `ritsu.mod` that ritsu cannot read: a line that starts with a word ritsu does not know, a word with no value, an escape in a string other than `\"` and `\\`, a second statement of a word written once at most (`module`, `version`, `description`, `ritsu`, `license`, `source`), no `module` or a `module` that is not the first statement, a full-width space outside a string, a control character other than a tab, bytes that are not UTF-8, a target of `library` ritsu does not know. When the `ritsu.mod` of a module of the tree does not read, the tree of dependencies is not known, and ritsu stops before any language checks a file (exit 1).
+
+**Fix**: Correct the line it points at. A statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature` and `library`, and the first is `module`.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+version 1.0.0
+
+requires tax path "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+See also: [E302](#e302)
+
+<a id="e302"></a>
+
+## E302 — A value of a `ritsu.mod` is not of its form
+
+**When**: A value of a `ritsu.mod` that is not of its form: a module's name, a version, a dependency's name, an absolute path in `require … path`, the start of the names a `signature` covers, a name in `library`, the version of `ritsu >=`, a dependency's name written twice, an empty `license`, a `source` that is not https, the path of an `exclude` or of a key file. A `require … path` that leads to a directory with no `ritsu.mod` is this error too, as a value that names the wrong thing. ritsu stops before any language checks a file (exit 1).
+
+**Fix**: Write the value in the form of its statement. A dependency's name is a word of up to 64 lowercase letters, digits and `_` that starts with a letter; a version is of the form of SemVer, `1.4.0`; a dependency by a path names a directory with a `ritsu.mod` in it, by a path from the module's root.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+
+require tax path "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+See also: [E301](#e301)
+
+<a id="e303"></a>
+
+## E303 — A dependency from a registry, and no `ritsu.lock`
+
+**When**: A module of the tree takes a dependency from a registry (`require … oci`), and the module at hand has no `ritsu.lock`, or one that does not read. `ritsu.lock` pins the version and the digests of each dependency from a registry, so without it which files to read is not known. A lock does not read when it is not of its form (a line ritsu does not know, a digest that is not one). ritsu stops before any language checks a file (exit 1).
+
+**Fix**: Run `ritsu mod lock` to write `ritsu.lock`; do not write the lock by hand.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.0.0
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+See also: [E304](#e304)
+
+<a id="e304"></a>
+
+## E304 — `ritsu.lock` does not match `ritsu.mod`
+
+**When**: `ritsu.lock` does not match the `ritsu.mod` of a module of the tree: a module the lock has no line for, a version in the lock below the least a `require` asks for, a source of another kind or another path, a version in the lock other than the `version` of the `ritsu.mod` fetched, a line for the module at hand itself, no line for a dependency by a path where there is a lock, an `oci` line for a module read from a path. It comes when a `ritsu.mod` was edited by hand and the lock was not written again. ritsu stops before any language checks a file (exit 1).
+
+**Fix**: Run `ritsu mod lock` to write the lock again.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.2.0
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+See also: [E303](#e303), [W302](#w302)
+
+<a id="e305"></a>
+
+## E305 — The files in the store or in the module's copy differ from the lock's digest
+
+**When**: The files of a dependency from a registry, read from the store or from the module's own copy of it (`.ritsu/modules/`, which `ritsu mod vendor` makes), have a digest other than the `files` digest of `ritsu.lock`: someone edited a file of the copy, or a file is damaged. They are not the contents the lock pins, so ritsu does not read them, and stops before any language checks a file (exit 1).
+
+**Fix**: For the module's copy, run `ritsu mod vendor` to copy the files again; for the store, run `ritsu mod clean`, then `ritsu mod fetch` to fetch them again. A dependency is corrected in its own module; to try a correction here first, make its `require` a `require … path` to the corrected directory.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.0.0
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/ritsu.mod`:
+
+```
+module example.com/acme/tax
+version 1.0.0
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 25%                     |
+| reduced  | 5%                      |
+```
+
+See also: [E304](#e304)
+
+<a id="e306"></a>
+
+## E306 — A module of one name comes from two places
+
+**When**: Within the tree, a module of one name comes from two places: two `require … path` lead to two directories whose `ritsu.mod` give the same `module`; a `ritsu.mod` fetched gives a `module` other than the repository it was fetched from; the files fetched have no `ritsu.mod`. A tag whose `ritsu.mod`, read by `ritsu mod lock` to choose the versions, gives another `version` is this error too: the two places disagree. A module is known by its name, so one name has one content. ritsu stops before any language checks a file (exit 1).
+
+**Fix**: Read the module from one place: give a directory that is a copy a name of its own in `module`, or keep one `require`; for a module fetched, tell its author.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+
+require tax path "tax"
+require vat path "vat"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`tax/ritsu.mod`:
+
+```
+module tax
+```
+
+`tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+`vat/ritsu.mod`:
+
+```
+module tax
+```
+
+`vat/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+<a id="e307"></a>
+
+## E307 — A name that starts with `@` at the root of a module
+
+**When**: Right under the root of a module, a file or a directory has a name that starts with `@`. Within a module, `@<name>` names a dependency, so a file of that name cannot be read: in ritsu's layer of files, a dependency is seen there. The tree is still read and the other files are checked as ever, and the error makes the exit 1.
+
+**Fix**: Rename it to a name that does not start with `@`.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`@drafts/fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+<a id="e308"></a>
+
+## E308 — A module from a registry has a dependency by a path
+
+**When**: The `ritsu.mod` of a module from a registry has a `require … path`. A dependency by a path is read only within one working tree, and where the module is fetched, nothing is at the end of the path. ritsu stops before any language checks a file (exit 1).
+
+**Fix**: Tell the author of the module: a module pushed to a registry writes each of its dependencies as `require … oci`. Until a version that does is pushed, the module can be put in the working tree and read with `require … path`.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax oci "example.com/acme/tax" 1.0.0
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+oci example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:a744d0c29acba47340ec3ca4332ad67719ddb5996c3ec96672573273b8036a85
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/ritsu.mod`:
+
+```
+module example.com/acme/tax
+version 1.0.0
+
+require rates path "../rates"
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+<a id="w301"></a>
+
+## W301 — A dependency no file uses
+
+**When**: No file of a module names a file of a dependency its `ritsu.mod` requires. To name is a language's reference (`apply`, `use rule … from` and the others), the `to` and the `after` of a `contribution`, and the `import` of a `.proto`: an `import` writes no `@`, and one that comes to a `.proto` of the dependency counts as a use of it. It is said only when the whole module is checked, since a check of some of its files does not read what the others name. A W301 of a dependency's module is counted with that dependency's warnings.
+
+**Fix**: If the module does not use it, delete the `require` (`ritsu mod remove <name>`); if it is to, name a file of `@<name>/…` where it does.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+
+require tax path "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`tax/ritsu.mod`:
+
+```
+module tax
+```
+
+`tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+See also: [W303](#w303)
+
+<a id="w302"></a>
+
+## W302 — `ritsu.lock` has a line for a module nothing requires
+
+**When**: `ritsu.lock` has a line for a module that the `require` of the tree, followed from the module at hand, do not come to. It comes when a `require` was deleted from a `ritsu.mod` by hand and the lock was not written again. The tree is still read.
+
+**Fix**: Run `ritsu mod lock` to write the lock again.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+path tax "tax"
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+See also: [E304](#e304)
+
+<a id="w303"></a>
+
+## W303 — A path to a file of a module the module does not require, through a dependency
+
+**When**: A file names a file of a dependency of a dependency that its own module does not require, as `@pricing/@tax/…` does; the path is taken as the file's module writes it from its own root. An `import` of a `.proto` writes no `@`, and one that comes to a file of a dependency of a dependency is said on its line all the same. A version of the dependency that no longer uses that module breaks the file. One said of a dependency's file is counted with that dependency's warnings.
+
+**Fix**: Require that module in the module's own `ritsu.mod` (`ritsu mod add`); then its file is named as `@<name>/…`.
+
+**Reproduction**: put the files below in one directory, and run `ritsu check .` there.
+
+`ritsu.mod`:
+
+```
+module shop
+
+require pricing path "pricing"
+```
+
+`receipt.rule`:
+
+```rule
+rule receipt v1
+description "The total of an order with gift wrapping: the order's total, and 3 GBP for the wrapping with its VAT"
+
+enum category = standard | reduced
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+  category : category
+
+outputs
+  total : money[GBPc]  round half_up(1GBPc)
+
+apply order = "@pricing/total.rule" meaning:caa5be4f9a41c851
+  subtotal = subtotal
+  category = category
+  total -> order_total
+
+apply vat = "@pricing/@tax/vat_rate.rule" meaning:f2850d644389817c
+  category = category
+  rate -> rate
+
+result total = order_total + 300GBPc + 300GBPc * rate
+```
+
+`pricing/ritsu.mod`:
+
+```
+module pricing
+
+require tax path "tax"
+```
+
+`pricing/total.rule`:
+
+```rule
+rule total v1
+description "The total of an order: its subtotal and its VAT"
+
+enum category = standard | reduced
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+  category : category
+
+outputs
+  total : money[GBPc]  round half_up(1GBPc)
+
+apply vat = "@tax/vat_rate.rule" meaning:f2850d644389817c
+  category = category
+  rate -> rate
+
+result total = subtotal + subtotal * rate
+```
+
+`pricing/tax/ritsu.mod`:
+
+```
+module tax
+```
+
+`pricing/tax/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+See also: [W301](#w301)
+
 <a id="w901"></a>
 
 ## W901 — A key is written in a contract

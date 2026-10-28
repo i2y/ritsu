@@ -1,0 +1,29 @@
+# モジュール lib の要件。値付けの方針から来て、lib の規則が満たす。その規則は base の税率を準用し、税率の
+# 規則は `@base/…`（このモジュールのルートからのパス）で指す。
+requirements 値付け v1
+description "注文の合計。値付けの方針から"
+
+role 値付け "注文の値段を決める"
+role 開発 "規則を書いて直す"
+
+source 方針 = file "文書/値付けの方針.md" sha256:f2d863f2f673db9e
+
+requirement 合計(total)
+  text "注文の合計は、小計に、区分の付加価値税と送料を足した額である"
+  owner 値付け
+  from @方針
+    reviewed 2026-10-28 by 値付け sha256:f2d863f2f673db9e -> sha256:d89132225e8576af
+  satisfied by rulec "規則/注文の合計.rule" output 合計
+    reviewed 2026-10-28 by 開発 sha256:d89132225e8576af -> sha256:c796617ef2114027
+  verified by rulec "規則/注文の合計.rule"
+    reviewed 2026-10-28 by 開発 sha256:d89132225e8576af -> sha256:e5465ce256b107fc
+
+requirement 付加価値税(vat)
+  text "注文の付加価値税は、小計に区分の税率を掛けた額である"
+  owner 値付け
+  from @方針
+    reviewed 2026-10-28 by 値付け sha256:f2d863f2f673db9e -> sha256:91990647971f9134
+  satisfied by rulec "@base/規則/付加価値税率.rule" output 税率
+    reviewed 2026-10-28 by 開発 sha256:91990647971f9134 -> sha256:cc410f22e52d8175
+  verified by rulec "@base/規則/付加価値税率.rule"
+    reviewed 2026-10-28 by 開発 sha256:91990647971f9134 -> sha256:9ac0442536320cac

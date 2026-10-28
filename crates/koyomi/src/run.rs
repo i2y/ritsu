@@ -85,6 +85,10 @@ pub fn run(args: Vec<String>) -> ExitCode {
         print!("{}", table.help_cmd(cmd, lang));
         return ExitCode::SUCCESS;
     }
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
+    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+        return refuse(t, lang);
+    }
     match cmd.name {
         "check" => check_cmd(&a, lang),
         "eval" => eval_cmd(&a, lang),
@@ -99,25 +103,38 @@ pub fn run(args: Vec<String>) -> ExitCode {
 }
 
 /// The `.cal` files a path stands for: itself, or every `.cal` under a directory, in path order.
-fn expand(arg: &str) -> Vec<String> {
+/// The walk does not enter another module, nor the `.ritsu` of a module; when it did not start in
+/// a module, it says on stderr which modules it passed over, and the command that reads each
+/// (ritsu's DESIGN 17.6).
+fn expand(arg: &str, command: &str, lang: Lang) -> Vec<String> {
     let p = std::path::Path::new(arg);
-    if !p.is_dir() {
+    if !ritsu_base::fs::is_dir(p) {
         return vec![arg.to_string()];
     }
     let mut out = Vec::new();
-    fn walk(d: &std::path::Path, out: &mut Vec<String>) {
+    let mut modules = Vec::new();
+    fn walk(d: &std::path::Path, out: &mut Vec<String>, modules: &mut Vec<String>) {
         let Ok(rd) = ritsu_base::fs::read_dir(d) else { return };
         let mut es: Vec<_> = rd.filter_map(|e| e.ok()).map(|e| e.path()).collect();
         es.sort();
         for e in es {
-            if e.is_dir() {
-                walk(&e, out);
+            if ritsu_base::fs::is_dir(&e) {
+                match ritsu_base::paths::not_entered(&e) {
+                    Some(ritsu_base::paths::NotEntered::Module) => modules.push(e.to_string_lossy().to_string()),
+                    Some(ritsu_base::paths::NotEntered::State) => {}
+                    None => walk(&e, out, modules),
+                }
             } else if e.extension().is_some_and(|x| x == "cal") {
                 out.push(e.to_string_lossy().to_string());
             }
         }
     }
-    walk(p, &mut out);
+    walk(p, &mut out, &mut modules);
+    if ritsu_base::modules::refer::module_of(p).is_none() {
+        for m in modules {
+            eprintln!("{}", ritsu_base::paths::other_module_note(&m, &format!("koyomi {command}")).get(lang));
+        }
+    }
     out
 }
 
@@ -138,7 +155,7 @@ fn check_cmd(a: &Args, lang: Lang) -> ExitCode {
     let mut unreadable = false;
     let mut errors = false;
     for arg in &a.pos {
-        for f in expand(arg) {
+        for f in expand(arg, "check", lang) {
             match check::check_file(&f, &opts, &mut loader) {
                 Ok(o) => {
                     errors |= o.has_errors();
@@ -176,7 +193,7 @@ fn eval_cmd(a: &Args, lang: Lang) -> ExitCode {
         return refuse(tr!("`koyomi eval` には .cal のファイルが要ります", "`koyomi eval` needs a .cal file"), lang);
     };
     let json = a.get("--format") == Some("json");
-    let Ok(text) = std::fs::read_to_string(path) else {
+    let Ok(text) = ritsu_base::fs::read_to_string(path) else {
         return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"), lang);
     };
     let is_calendar = text.lines().map(|l| l.trim()).find(|l| !l.is_empty() && !l.starts_with('#')).is_some_and(|l| l.starts_with("calendar "));
@@ -302,7 +319,7 @@ fn gen_cmd(a: &Args, lang: Lang) -> ExitCode {
     // write over each other.
     let mut planned: Vec<(String, String, String)> = Vec::new();
     for arg in &a.pos {
-        for f in expand(arg) {
+        for f in expand(arg, "gen", lang) {
             let o = match check::check_file(&f, &Options::default(), &mut loader) {
                 Ok(o) => o,
                 Err(e) => return refuse(tr!("`{f}` を読めません: {e}", "cannot read `{f}`: {e}"), lang),
@@ -443,7 +460,7 @@ fn source_cmd(a: &Args, lang: Lang) -> ExitCode {
     if !matches!(verb.as_str(), "fetch" | "pin" | "outdated") {
         return refuse(tr!("`{verb}` という source のコマンドはありません。fetch、pin、outdated のどれかです", "`{verb}` is not one of source's: fetch, pin, outdated"), lang);
     }
-    let Ok(src) = std::fs::read_to_string(path) else {
+    let Ok(src) = ritsu_base::fs::read_to_string(path) else {
         return refuse(tr!("`{path}` を読めません", "cannot read `{path}`"), lang);
     };
     let parsed = crate::parse::parse(path, &src);
@@ -457,7 +474,7 @@ fn source_cmd(a: &Args, lang: Lang) -> ExitCode {
         "outdated" => crate::fetch::outdated(&f, &dir),
         _ => crate::fetch::pin(&f, &dir, &src).and_then(|(text, o)| {
             if text != src {
-                std::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
+                ritsu_base::fs::write(path, &text).map_err(|e| tr!("`{path}` に書けません: {e}", "cannot write `{path}`: {e}"))?;
             }
             Ok(o)
         }),

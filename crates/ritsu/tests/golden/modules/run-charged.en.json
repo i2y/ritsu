@@ -1,0 +1,179 @@
+{
+  "ritsu": "0.36.0",
+  "flow": "orders/place_order.flow",
+  "scenario": "orders/scenarios/charged.json",
+  "target": "reference",
+  "diagnostics": [],
+  "start": "2026-10-28T10:00:00Z",
+  "end": "2026-10-28T10:00:00Z",
+  "elapsed": 0,
+  "events": [
+    {
+      "call": "shipping",
+      "args": {
+        "weight": 1200,
+        "region": "domestic"
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "fee": 395
+        }
+      }
+    },
+    {
+      "call": "total",
+      "args": {
+        "subtotal": 2000,
+        "category": "standard",
+        "shipping": 395
+      },
+      "by": "rulec",
+      "answer": {
+        "ok": {
+          "total": 2795
+        }
+      }
+    },
+    {
+      "call": "reserve",
+      "args": {
+        "order": "A-1",
+        "sku": "tea",
+        "quantity": 2
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "id": "H-1"
+        }
+      }
+    },
+    {
+      "call": "charge",
+      "args": {
+        "order": "A-1",
+        "amount": 2795
+      },
+      "by": "scenario",
+      "answer": {
+        "ok": {
+          "paid": true
+        }
+      }
+    }
+  ],
+  "trace": {
+    "steps": [
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "weight": 1200,
+            "region": "domestic"
+          }
+        },
+        "answer": {
+          "ok": {
+            "fee": 395
+          }
+        }
+      },
+      {
+        "call": {
+          "lambda": "",
+          "payload": {
+            "subtotal": 2000,
+            "category": "standard",
+            "shipping": 395
+          }
+        },
+        "answer": {
+          "ok": {
+            "total": 2795
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://stock.example.com/v1/holds",
+          "headers": {
+            "Idempotency-Key": "charged/3"
+          },
+          "body": {
+            "order": "A-1",
+            "sku": "tea",
+            "quantity": 2
+          }
+        },
+        "answer": {
+          "ok": {
+            "id": "H-1"
+          }
+        }
+      },
+      {
+        "call": {
+          "http": "POST",
+          "url": "https://payments.example.com/v1/orders/A-1/charges",
+          "headers": {
+            "Idempotency-Key": "charged/5"
+          },
+          "body": {
+            "amount": 2795
+          }
+        },
+        "answer": {
+          "ok": {
+            "paid": true
+          }
+        }
+      }
+    ],
+    "end": {
+      "succeed": {
+        "outcome": "charged",
+        "amount": 2795
+      }
+    }
+  },
+  "books": [],
+  "replay": {
+    "execution": "charged",
+    "now": "2026-10-28T10:00:00Z",
+    "input": {
+      "order": {
+        "id": "A-1",
+        "sku": "tea",
+        "quantity": 2,
+        "weight": 1200,
+        "region": "domestic",
+        "category": "standard",
+        "subtotal": 2000
+      }
+    },
+    "answers": [
+      {
+        "ok": {
+          "fee": 395
+        }
+      },
+      {
+        "ok": {
+          "total": 2795
+        }
+      },
+      {
+        "ok": {
+          "id": "H-1"
+        }
+      },
+      {
+        "ok": {
+          "paid": true
+        }
+      }
+    ]
+  }
+}

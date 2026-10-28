@@ -132,7 +132,7 @@ pub fn module(p: &Plan, o: &Options) -> String {
     let f = p.scope.file();
     let sha = ritsu_base::sha256::hex(f.src.as_bytes());
     let version = f.version.strip_prefix('v').unwrap_or(&f.version);
-    let source = ritsu_emit::header::Source { path: &o.shown, kind: "gate", name: &f.name.text, version, sha256: &sha };
+    let source = ritsu_emit::header::Source { path: &o.shown, kind: "gate", name: &f.name.text, version, sha256: &sha, module: o.place.module.as_ref() };
     t.push_str(&Comment::Hash.line(&ritsu_emit::header::generated("sekisho")));
     t.push_str(&Comment::Hash.line(source.line().get(o.lang)));
     // the docstring
@@ -187,12 +187,16 @@ pub fn module(p: &Plan, o: &Options) -> String {
         Authorizer::Avp => t.push_str("if TYPE_CHECKING:\n    from mypy_boto3_verifiedpermissions import VerifiedPermissionsClient\n"),
     }
     let mut imports: Vec<String> = Vec::new();
+    let here = format!("{}authz/", o.place.dir);
     for (ui, imp) in &p.imports {
-        imports.push(match imp {
-            Import::Rule(r) => format!("from ..rules import {} as {}\n", r.python.module, module_var(p, *ui)),
-            Import::Dates(d) => format!("from ..dates import {} as {}\n", d.alias, module_var(p, *ui)),
-            Import::Calendar(c) => format!("from ..dates import {} as {}\n", c.alias, module_var(p, *ui)),
-        });
+        let dir = o.dir_of(g, *ui);
+        let to = match imp {
+            Import::Rule(r) => format!("{dir}rules/{}", r.python.module),
+            Import::Dates(d) => format!("{dir}dates/{}", d.alias),
+            Import::Calendar(c) => format!("{dir}dates/{}", c.alias),
+        };
+        let (from, name) = ritsu_emit::package::py_from(&here, &to);
+        imports.push(format!("from {from} import {name} as {}\n", module_var(p, o, *ui)));
     }
     imports.sort();
     if !imports.is_empty() {
@@ -215,12 +219,16 @@ pub fn module(p: &Plan, o: &Options) -> String {
     t
 }
 
-/// The name a module of another language is imported as: `_rules_refund_limit`.
-fn module_var(p: &Plan, ui: usize) -> String {
+/// The name a module of another language is imported as: `_rules_refund_limit`, and with the names
+/// of the dependencies on the way to it for a dependency's (`_rules_pricing_fee`), so that the
+/// modules of one name of two modules are two names.
+fn module_var(p: &Plan, o: &Options, ui: usize) -> String {
+    let dir = o.dir_of(p.g, ui);
+    let named = |name: &str| ritsu_emit::package::local_name(&dir, name);
     match p.imports.get(&ui) {
-        Some(Import::Rule(r)) => format!("_rules_{}", r.python.module),
-        Some(Import::Dates(d)) => format!("_dates_{}", d.alias),
-        Some(Import::Calendar(c)) => format!("_dates_{}", c.alias),
+        Some(Import::Rule(r)) => format!("_rules_{}", named(&r.python.module)),
+        Some(Import::Dates(d)) => format!("_dates_{}", named(&d.alias)),
+        Some(Import::Calendar(c)) => format!("_dates_{}", named(&c.alias)),
         None => "_".to_string(),
     }
 }
@@ -739,7 +747,7 @@ fn action(p: &Plan, n: &Names, o: &Options, ap: &ActionPlan, t: &mut String) {
         }
     }
     for vp in &ap.values {
-        value(p, n, a, vp, t);
+        value(p, n, o, a, vp, t);
     }
     for &k in &ap.asked {
         asked(p, n, o, ai, k, t);
@@ -807,7 +815,7 @@ fn read_entity(p: &Plan, ai: usize, owner: Owner, t: usize, indent: &str, other:
 }
 
 /// The code of one value the action computes, put into `context` under its alias.
-fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
+fn value(p: &Plan, n: &Names, o: &Options, a: &Action, vp: &ValuePlan, t: &mut String) {
     let g = p.g;
     let cv = &a.computed[vp.index];
     let e = &n.error;
@@ -871,7 +879,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
             let computed: String = match &vp.call {
                 Call::Rule { module, output, args, values } => {
                     let Some(facts) = p.rule(*module) else { continue };
-                    let m = module_var(p, *module);
+                    let m = module_var(p, o, *module);
                     let py = &facts.python;
                     let mut call_args: Vec<String> = Vec::new();
                     for (col, src) in args {
@@ -919,7 +927,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                     String::new()
                 }
                 Call::Date { module, function, op, args } => {
-                    let m = module_var(p, *module);
+                    let m = module_var(p, o, *module);
                     let mut call_args: Vec<String> = Vec::new();
                     for (_, is_day, src) in args {
                         call_args.push(match src {
@@ -945,7 +953,7 @@ fn value(p: &Plan, n: &Names, a: &Action, vp: &ValuePlan, t: &mut String) {
                     String::new()
                 }
                 Call::Open { module } => {
-                    let m = module_var(p, *module);
+                    let m = module_var(p, o, *module);
                     let msg = format!("f{}", s(&format!("koyomi {}: {{x}}", p.use_path(*module))));
                     body.push_str(&format!("try:\n    context[{key}] = {m}.is_open(day)\nexcept Exception as x:\n    raise {e}(\"date\", {msg}) from x\n"));
                     String::new()

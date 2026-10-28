@@ -168,7 +168,7 @@ pub fn write_package(root: &Path, t: Target, lang: Lang, modules: &[(Rc<Checked>
             Target::Python => chobo::target::Target::PostgresPython,
             Target::Go => chobo::target::Target::PostgresGo,
         };
-        let built = chobo::target::build_in(book, &stem, ct, &origin, Some(&chobo::client::InPackage { module: GO_PACKAGE.to_string() })).unwrap_or_else(|_| panic!("{}", file.display()));
+        let built = chobo::target::build_in(book, &stem, ct, &origin, Some(&chobo::client::InPackage { module: GO_PACKAGE.to_string(), ..Default::default() })).unwrap_or_else(|_| panic!("{}", file.display()));
         for (rel, body) in built {
             put(format!("books/{rel}"), body);
         }

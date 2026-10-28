@@ -7,8 +7,10 @@
 //! (DESIGN 2.3, 8.2). `ritsu run` runs a workflow with its rules, dates and books computed by
 //! their languages (DESIGN 7.9); `ritsu gen` writes a project as one package for each of
 //! TypeScript, Python and Go (DESIGN 9.3); `ritsu skills` writes the ten Agent Skills the binary
-//! carries where an agent reads them (PLAN F.3).
+//! carries where an agent reads them (PLAN F.3); `ritsu mod …` is the commands of the modules, with a
+//! table of their own (DESIGN 17.19).
 
+mod modules;
 mod package;
 
 use ritsu::{check, cli, explain, run, skills};
@@ -169,6 +171,7 @@ fn run() -> ExitCode {
                 ExitCode::SUCCESS
             }
             Some(l) if cli::is_language(l) => language(l, &["--help".to_string()]),
+            Some(m) if m == "mod" => ExitCode::from(modules::cli::command(&["--help".to_string()], lang)),
             Some(c) => match table.command(c) {
                 Some(cmd) => {
                     print!("{}", table.help_cmd(cmd, lang));
@@ -195,6 +198,11 @@ fn run() -> ExitCode {
             let mut rest: Vec<String> = args[..at].to_vec();
             rest.extend(args[at + 1..].iter().cloned());
             ExitCode::from(run::command(&rest, lang))
+        }
+        "mod" => {
+            let mut rest: Vec<String> = args[..at].to_vec();
+            rest.extend(args[at + 1..].iter().cloned());
+            ExitCode::from(modules::cli::command(&rest, lang))
         }
         l if cli::is_language(l) => language(l, &args[at + 1..]),
         other => refuse(tr!("`{other}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{other}`; run `ritsu --help`"), lang),

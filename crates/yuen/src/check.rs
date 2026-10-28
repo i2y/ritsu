@@ -327,7 +327,17 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
             match coverage::gather(&p, n, kind.as_deref()) {
                 Err(Unread::Missing { .. }) => {
                     let path = p.shown(&n.path);
-                    d4.push(p.err(fi, "E201", crate::ast::Span { line: decl.span.line, col: decl.naming.path.as_ref().map(|w| w.at).unwrap_or(1) }, tr!("範囲のパス {path} がありません", "The path {path} of the scope is not there")));
+                    let span = crate::ast::Span { line: decl.span.line, col: decl.naming.path.as_ref().map(|w| w.at).unwrap_or(1) };
+                    d4.push(match module_words(&p, fi, n) {
+                        (Some(said), _) => p.err(fi, "E201", span, said),
+                        (None, note) => {
+                            let d = p.err(fi, "E201", span, tr!("範囲のパス {path} がありません", "The path {path} of the scope is not there"));
+                            match note {
+                                Some(n) => d.note(n),
+                                None => d,
+                            }
+                        }
+                    });
                 }
                 Err(u) => d4.extend(unread_diag(&p, fi, decl.span.line, decl.naming.tool.at, n, &u, None)),
                 Ok(items) => scopes.push(ScopeResult { file: fi, idx: si, text, kind: kind.clone(), artifacts: items, untraced: vec![] }),
@@ -359,19 +369,37 @@ pub fn check_with(args: &[String], root: Option<&str>, suite: crate::suite::Suit
     Ok(Checked { project: Some(p), diags, stage: 7, model: Some(model) })
 }
 
+/// What a file a `.req` names that is not there is said with, besides yuen's own words (ritsu's
+/// DESIGN 17.6): the sentence for a dependency's file that is not there, and the note for a path
+/// that starts with `@` where no module of ritsu's is above the `.req`, where it is a plain path.
+pub(crate) fn module_words(p: &Project, fi: usize, n: &Name) -> (Option<ritsu_base::text::Text>, Option<ritsu_base::text::Text>) {
+    let abs = if n.path == "." { p.root.clone() } else { p.root.join(&n.path) };
+    let dir = &p.files[fi].dir;
+    let written = if dir.is_empty() { Some(n.path.as_str()) } else { n.path.strip_prefix(&format!("{dir}/")) };
+    let note = written.and_then(|w| ritsu_base::modules::outside_note_for(&ritsu_base::paths::on_disk(&p.root, if dir.is_empty() { "." } else { dir }), w));
+    (ritsu_base::modules::missing(&abs).map(crate::diag::cap), note.map(crate::diag::cap))
+}
+
 fn missing(p: &Project, fi: usize, line: usize, col: usize, n: &Name, dir: bool) -> Diag {
     let t = n.text();
     let span = crate::ast::Span { line, col };
     if dir {
-        p.err(fi, "E201", span, tr!("{t} はディレクトリです。リンクが指すのはファイルです", "{t} is a directory; a link names a file")).note(tr!(
+        return p.err(fi, "E201", span, tr!("{t} はディレクトリです。リンクが指すのはファイルです", "{t} is a directory; a link names a file")).note(tr!(
             "ディレクトリを書けるのは `scope` だけです（`scope file \"src/\"`）。",
             "Only a `scope` takes a directory (`scope file \"src/\"`)."
-        ))
-    } else {
-        p.err(fi, "E201", span, tr!("{t} がありません", "{t} is not there")).note(tr!(
-            "パスは、この .req のあるディレクトリからの相対パスで書いてください。ファイルの名前を変えたのなら、リンクも直してください。",
-            "The path is written from the directory of this .req; if the file was renamed, correct the link."
-        ))
+        ));
+    }
+    let (said, outside) = module_words(p, fi, n);
+    if let Some(said) = said {
+        return p.err(fi, "E201", span, said);
+    }
+    let d = p.err(fi, "E201", span, tr!("{t} がありません", "{t} is not there")).note(tr!(
+        "パスは、この .req のあるディレクトリからの相対パスで書いてください。ファイルの名前を変えたのなら、リンクも直してください。",
+        "The path is written from the directory of this .req; if the file was renamed, correct the link."
+    ));
+    match outside {
+        Some(note) => d.note(note),
+        None => d,
     }
 }
 

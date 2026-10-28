@@ -1,0 +1,13 @@
+# app の中の入れ子のモジュールでの注文の値段。小計と送料を足す。
+workflow 値付け v1
+description "注文の合計。小計と送料を足す"
+
+inputs
+  小計 : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  送料 : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  合計額 : money[GBPc]
+
+flow
+  succeed 合計額 = 小計 + 送料

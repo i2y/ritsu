@@ -1,0 +1,11 @@
+// A refund of the module at hand. app has a money.proto of its own at the path of the package, so
+// the import reads it, not lib's at the same path: the module's own roots come first, as the first
+// root that has a file is the one protoc reads it from.
+syntax = "proto3";
+package acme.billing.v1;
+
+import "acme/orders/v1/money.proto";
+
+message Refund {
+  acme.orders.v1.Money amount = 1;
+}

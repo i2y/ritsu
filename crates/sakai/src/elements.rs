@@ -176,7 +176,8 @@ impl E<'_> {
                 return None;
             }
             if !self.arts.iter().any(|a| a.path == name.path) {
-                self.err(c, pos, "E103", tr!("{t} は、地図の範囲の外のファイルを指しています", "The name {t} points at a file outside the map's scope"));
+                let dependency = crate::owners::dependency_note(self.m, &name.path);
+                self.err(c, pos, "E103", tr!("{t} は、地図の範囲の外のファイルを指しています", "The name {t} points at a file outside the map's scope")).notes.extend(dependency);
             } else {
                 let sf = paths::shown(&name.path);
                 self.err(c, pos, "E007", tr!("{sf} は OpenAPI と AsyncAPI のどちらの文書でもありません", "The file {sf} is neither an OpenAPI nor an AsyncAPI document"));
@@ -220,7 +221,7 @@ impl E<'_> {
     fn element(&mut self, c: usize, e: &Element, files: &[String], contract_files: &[String], where_: &Text) -> Option<Name> {
         match e {
             Element::Long { written, pos } => {
-                let path = paths::join(&self.m.contexts[c].dir, &written.path).ok()?;
+                let path = ritsu_base::modules::join(&self.m.root, &self.m.contexts[c].file, &written.path).ok()?;
                 let items: Vec<(String, String)> = written.items.iter().map(|(k, _, n, _)| (k.clone(), n.clone())).collect();
                 let name = Name { tool: written.tool, path: path.clone(), items };
                 if written.tool == Tool::Rulec && !name.items.is_empty() {
@@ -257,7 +258,8 @@ impl E<'_> {
                     None => {
                         if !self.arts.iter().any(|a| a.path == path) {
                             let t = name.text();
-                            self.err(c, *pos, "E103", tr!("{t} は地図の範囲の外の proto です", "The name {t} points at a proto outside the map's scope"));
+                            let dependency = crate::owners::dependency_note(self.m, &path);
+                            self.err(c, *pos, "E103", tr!("{t} は地図の範囲の外の proto です", "The name {t} points at a proto outside the map's scope")).notes.extend(dependency);
                         }
                         // An artifact of the scope that could not be read is told as E106 already.
                         None

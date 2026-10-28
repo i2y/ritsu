@@ -543,7 +543,8 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
     let mut scope: Vec<&ast::File> = vec![f];
     scope.extend(imports.iter().copied());
     let dir = std::path::Path::new(&f.path).parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    let reach = |written: &str| -> PathBuf { if dir.as_os_str().is_empty() { PathBuf::from(written) } else { dir.join(written) } };
+    // a path refused in a module of ritsu's has been said (E201, E208): what it names is not read
+    let reach = |written: &str| -> PathBuf { crate::names::beside(&f.path, written).unwrap_or_else(|_| if dir.as_os_str().is_empty() { PathBuf::from(written) } else { dir.join(written) }) };
 
     // the enums, the roles, the types and the workflows of the scope, in the order of the files
     let mut enums: Vec<Enum> = Vec::new();
@@ -560,7 +561,7 @@ pub fn build(f: &ast::File, imports: &[&ast::File], root: &std::path::Path) -> G
         principals.extend(x.principals.iter());
         resources.extend(x.resources.iter());
         for w in &x.workflows {
-            let file = if xdir.as_os_str().is_empty() { PathBuf::from(&w.flow.0) } else { xdir.join(&w.flow.0) };
+            let file = crate::names::beside(&x.path, &w.flow.0).unwrap_or_else(|_| if xdir.as_os_str().is_empty() { PathBuf::from(&w.flow.0) } else { xdir.join(&w.flow.0) });
             workflows.push(Workflow { named: named(&w.name), flow: w.flow.0.clone(), file });
         }
     }

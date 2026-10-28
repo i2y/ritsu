@@ -1,0 +1,16 @@
+# A context of the module at hand that owns lib's rule itself, as a module that takes a dependency's
+# rules without its context would, for errors/unowned.ctx. It does not own the VAT rate of base that
+# the rule applies.
+context Pricing(pricing) v1
+description "Works out the total of an order with the rule of the module lib"
+owner "Accounting team"
+
+owns
+  rulec "@lib/rules/order_total.rule"
+
+published language rulec.order_total.v1
+  rulec "@lib/rules/order_total.rule"
+
+terms
+  total "What the customer pays for an order: its subtotal, the VAT of its category and the shipping fee"
+    means rulec "@lib/rules/order_total.rule" output total

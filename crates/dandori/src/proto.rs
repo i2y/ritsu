@@ -183,6 +183,9 @@ fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Str
     let package = f.package.clone();
     rd.ps.add(f);
     let dir = path.parent().unwrap_or(Path::new(".")).to_path_buf();
+    // the file's own module first, then its module's dependencies (ritsu's DESIGN 17.6)
+    let own = import_dirs(&dir, &package);
+    let deps = if imports.iter().any(|i| !i.path.starts_with('@')) { ritsu_proto::dependency_roots(&dir) } else { Vec::new() };
     let mut at = Vec::new();
     for imp in &imports {
         let imp = &imp.path;
@@ -196,7 +199,11 @@ fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Str
         }
         // the file is where an import is looked for, or it is passed over; a file that is there and
         // cannot be read as a `.proto` is the trouble
-        match import_dirs(&dir, &package).iter().map(|d| d.join(imp)).find(|p| crate::sources::read(p).is_ok()) {
+        // an import is not written with `@`, and is not read from a dependency by it: protoc does not
+        // see the dependencies by their names (ritsu's DESIGN 17.6)
+        let by_at = |p: &Path| imp.starts_with('@') && ritsu_base::modules::under_dependency(p);
+        let dirs = own.iter().chain(deps.iter().filter(|_| !imp.starts_with('@')));
+        match dirs.map(|d| d.join(imp)).find(|p| !by_at(p) && crate::sources::read(p).is_ok()) {
             Some(p) => at.push(Some(read(&p, None, rd)?)),
             None => {
                 if !rd.unread.contains(imp) {
@@ -211,11 +218,15 @@ fn read(path: &Path, text: Option<&str>, rd: &mut Reading) -> Result<String, Str
     Ok(name)
 }
 
-/// The directories an import is looked for in, in order. A file that sits where its package says
-/// (`shop/v1/order.proto` for `package shop.v1`) is in a buf module whose root is above `shop/`,
-/// and imports are named from that root; a file anywhere else imports from its own directory.
+/// The directories of the file's own module an import is looked for in, in order. A file in a
+/// dependency of a module of ritsu's imports from the dependency's root first, as the dependency
+/// itself reads it (ritsu's DESIGN 17.6). A file that sits where its package says
+/// (`shop/v1/order.proto` for `package shop.v1`) is in a buf module whose root is above `shop/`, and
+/// imports are named from that root; a file anywhere else imports from its own directory. What none
+/// of them has is looked for in the roots of the module's dependencies
+/// ([`ritsu_proto::dependency_roots`]).
 fn import_dirs(dir: &Path, package: &str) -> Vec<PathBuf> {
-    let mut out = Vec::new();
+    let mut out: Vec<PathBuf> = ritsu_base::modules::dependency_root(dir).into_iter().collect();
     if !package.is_empty() {
         let at: PathBuf = package.split('.').collect();
         if dir.ends_with(&at) {

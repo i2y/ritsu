@@ -28,7 +28,9 @@ fn skipped(name: &str) -> bool {
     name.starts_with('.') || name == "target" || name == "node_modules"
 }
 
-/// Every file under a directory, from the root, in path order.
+/// Every file under a directory, from the root, in path order. Another module below (a directory
+/// with a `ritsu.mod` of its own) is not entered: its files are that module's (ritsu's DESIGN 17.6),
+/// as a map's `covers` leaves them out.
 fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
     let mut out = Vec::new();
     fn walk(root: &Path, d: &Path, ext: Option<&str>, out: &mut Vec<String>) {
@@ -38,7 +40,7 @@ fn files_under(root: &Path, rel: &str, ext: Option<&str>) -> Vec<String> {
         for e in es {
             let name = e.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
             if ritsu_base::fs::is_dir(&e) {
-                if !skipped(&name) {
+                if !skipped(&name) && ritsu_base::paths::not_entered(&e).is_none() {
                     walk(root, &e, ext, out);
                 }
             } else if ext.is_none_or(|x| e.extension().is_some_and(|y| y == x)) && let Ok(r) = e.strip_prefix(root) {

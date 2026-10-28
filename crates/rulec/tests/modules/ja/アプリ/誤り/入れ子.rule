@@ -1,0 +1,22 @@
+# app の中の入れ子のモジュールへのパス。入れ子は自分の ritsu.mod を持つので、そのファイルは app のものではない。
+rule 区分の税率(category_rate) v1
+description "品目の区分ごとの付加価値税の税率。規則「付加価値税率」で出す"
+
+enum 区分(category) = 標準(standard) | 軽減(reduced) | ゼロ(zero)
+
+inputs
+  区分(category) : 区分
+
+outputs
+  税率(rate) : rate[step 1%]  round down(1%)
+
+apply 付加価値税(vat) = "../入れ子/規則/付加価値税率.rule" meaning:35d5c7d29edf24c8
+  区分 = 区分
+  税率 -> 適用する税率
+
+result 税率 = 適用する税率
+
+examples
+| 区分 | -> 税率 |
+| 標準 | 20%     |
+| ゼロ | 0%      |

@@ -278,6 +278,10 @@ pub struct Gen<'a> {
     /// import path of the package's directory. A module there reads the types of an `enums`
     /// file from its sibling in the package (§15.212); `rulec gen` writes them side by side.
     package: Option<String>,
+    /// Where the module goes in that package (ritsu's DESIGN 17.8): under `deps/<name>/` for a rule
+    /// of a dependency, and where each `enums` file it reads is, for the paths it imports them by.
+    /// Outside a package, and for the module at hand, the package's directory.
+    place: ritsu_emit::package::Place,
     /// While one walk's items of one element are written: the names something in that walk reads
     /// (§15.219). A local an item binds and nothing in the walk reads is said to be read in Go,
     /// which refuses to compile it otherwise; the rest of the rule is not looked at there.
@@ -679,6 +683,7 @@ impl<'a> Gen<'a> {
             shown: ritsu_emit::header::file_name(path),
             stages: crate::types::stages(f),
             package: None,
+            place: ritsu_emit::package::Place::here(),
             reads_here: std::cell::RefCell::new(None),
         }
     }
@@ -687,6 +692,12 @@ impl<'a> Gen<'a> {
     /// `module` (§15.212).
     pub fn in_package(mut self, module: &str) -> Self {
         self.package = Some(module.to_string());
+        self
+    }
+
+    /// The same generator, its module put at `place` in the package (ritsu's DESIGN 17.8).
+    pub fn at(mut self, place: ritsu_emit::package::Place) -> Self {
+        self.place = place;
         self
     }
 
@@ -845,7 +856,7 @@ impl<'a> Gen<'a> {
     fn header(&self, comment: &str) -> String {
         let version = self.f.version.to_string();
         let kind = if self.f.kind == FileKind::Enums { crate::kw::ENUMS } else { crate::kw::RULE };
-        let source = ritsu_emit::header::Source { path: &self.shown, kind, name: &self.f.name.text, version: &version, sha256: &self.src_hash };
+        let source = ritsu_emit::header::Source { path: &self.shown, kind, name: &self.f.name.text, version: &version, sha256: &self.src_hash, module: self.place.module.as_ref() };
         let lang = if crate::i18n::ja() { ritsu_base::text::Lang::Ja } else { ritsu_base::text::Lang::En };
         let mut h = format!("{comment} {}\n{comment} {}\n", ritsu_emit::header::generated("rulec"), source.line().get(lang));
         // A rule applied by this one is part of what was generated (§15.69): its path and the
@@ -872,7 +883,7 @@ impl<'a> Gen<'a> {
                 "{comment} 寄与: {} = {} (signature:{}, sha256:{})\n",
                 "{comment} Contributions: {} = {} (signature:{}, sha256:{})\n",
                 m.shown_name(),
-                ritsu_emit::header::one_line(&crate::link::relative(&self.path, &m.file)),
+                ritsu_emit::header::one_line(&self.contribution_shown(&m.file)),
                 m.signature.as_deref().unwrap_or(""),
                 &m.sha256[..16.min(m.sha256.len())]
             ));
@@ -1363,7 +1374,35 @@ impl<'a> Gen<'a> {
     pub(crate) fn go_owner_of(&self, en: &str) -> Option<String> {
         let o = self.f.enums.iter().find(|e| e.name.text == en)?.from.as_ref()?;
         let t = self.enum_type(en);
-        self.go_taken_names().contains(&t).then(|| crate::backend::go_package(&pub_name(&o.module)))
+        self.go_taken_names().contains(&t).then(|| self.go_qualifier(&pub_name(&o.module), &self.owner_dir(o)))
+    }
+
+    /// The directory of the module of an `enums` file the rule reads in the package (ritsu's
+    /// DESIGN 17.8): empty for one of the module at hand, and outside a package.
+    fn owner_dir(&self, o: &crate::ast::EnumOwner) -> String {
+        self.place.dir_of(std::path::Path::new(&o.path))
+    }
+
+    /// The name the rule's Go package imports the package of an `enums` file by: its package's
+    /// name, or, when another `enums` file it reads has a package of that name in another module of
+    /// the package, the name with that module's dependencies before it (`pricing_sizes`; ritsu's
+    /// DESIGN 17.8).
+    fn go_qualifier(&self, module: &str, dir: &str) -> String {
+        let pkg = crate::backend::go_package(module);
+        let clash = self.foreign_owners().iter().any(|(m, d, _)| d != dir && crate::backend::go_package(m) == pkg);
+        if clash { ritsu_emit::package::local_name(dir, &pkg) } else { pkg }
+    }
+
+    /// The path a contribution's file is written by in the head: from the rule's directory, as an
+    /// `apply` names its callee; in a package of a module, from the root when the two are of two
+    /// modules (ritsu's DESIGN 17.8), since a path from a dependency's directory to the module at
+    /// hand names no file.
+    fn contribution_shown(&self, file: &str) -> String {
+        let (own, theirs) = (ritsu_emit::package::deps_dir(&self.shown), self.place.dir_of(std::path::Path::new(file)));
+        match self.place.rel_of(std::path::Path::new(file)) {
+            Some(rel) if own != theirs => rel,
+            _ => crate::link::relative(&self.path, file),
+        }
     }
 
     /// The Go type of an enum as the rule's package writes it (§15.212, §15.239): the type it
@@ -1404,21 +1443,34 @@ impl<'a> Gen<'a> {
     /// The enums read from `enums` files, grouped by the module each comes from (§15.212): the
     /// module's name (the alias of the file's heading) and the types it gives this rule.
     pub(crate) fn foreign_enums(&self) -> Vec<(String, Vec<(String, String)>)> {
-        let mut out: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        self.foreign_owners().into_iter().map(|(m, _, ts)| (m, ts)).collect()
+    }
+
+    /// [`Gen::foreign_enums`], each module with the directory of its module in the package (ritsu's
+    /// DESIGN 17.8): two `enums` files of one name in two modules are two modules there.
+    pub(crate) fn foreign_owners(&self) -> Vec<(String, String, Vec<(String, String)>)> {
+        let mut out: Vec<(String, String, Vec<(String, String)>)> = Vec::new();
         for e in &self.f.enums {
             let Some(o) = &e.from else { continue };
             let module = pub_name(&o.module);
+            let dir = self.owner_dir(o);
             let ty = self.enum_type(&e.name.text);
-            match out.iter_mut().find(|(m, _)| *m == module) {
-                Some((_, ts)) => {
+            match out.iter_mut().find(|(m, d, _)| *m == module && *d == dir) {
+                Some((_, _, ts)) => {
                     if !ts.iter().any(|(_, t)| *t == ty) {
                         ts.push((e.name.text.clone(), ty));
                     }
                 }
-                None => out.push((module, vec![(e.name.text.clone(), ty)])),
+                None => out.push((module, dir, vec![(e.name.text.clone(), ty)])),
             }
         }
         out
+    }
+
+    /// The directory under the package's directory the rule's module is in: `rules/`, or under a
+    /// dependency's directory (ritsu's DESIGN 17.8).
+    fn rules_dir(&self) -> String {
+        format!("{}rules/", self.place.dir)
     }
 
     /// The enums of the rule that give display names (§15.211), by their names in the rule, each
@@ -1989,7 +2041,7 @@ impl<'a> Gen<'a> {
         if !units.is_empty() {
             // handed on as the module's own (`X as X`), as the types of an `enums` file are
             let names: Vec<String> = units.keys().map(|b| format!("{b} as {b}")).collect();
-            o.push_str(&format!("from ..units import {}\n", names.join(", ")));
+            o.push_str(&format!("from {} import {}\n", ritsu_emit::package::py_path(&self.rules_dir(), "units"), names.join(", ")));
         }
         if !own.is_empty() || !units.is_empty() {
             o.push('\n');
@@ -2194,12 +2246,12 @@ impl<'a> Gen<'a> {
     /// them. In a package the module beside it; from `rulec gen`, the module in the same
     /// directory.
     fn py_imports(&self, o: String) -> String {
-        let foreign = self.foreign_enums();
+        let foreign = self.foreign_owners();
         if foreign.is_empty() {
             return o;
         }
         let mut lines = String::new();
-        for (module, types) in foreign {
+        for (module, dir, types) in foreign {
             let mut names: Vec<String> = Vec::new();
             for (jp, t) in &types {
                 for n in [t.clone(), self.py_rank_fn(jp), self.py_label_fn(jp)] {
@@ -2211,7 +2263,7 @@ impl<'a> Gen<'a> {
             if names.is_empty() {
                 continue;
             }
-            let from = if self.package.is_some() { format!(".{module}") } else { module.clone() };
+            let from = if self.package.is_some() { ritsu_emit::package::py_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { module.clone() };
             // The types are the module's to hand on (`X as X`, an explicit re-export): a caller,
             // the runner and the MCP server name them through the rule's module, as they name
             // the types a rule declares itself. The functions are its own use.
@@ -3625,7 +3677,12 @@ impl<'a> Gen<'a> {
         if o.contains("strings.HasPrefix(") {
             paths.push("strings".to_string());
         }
-        paths.extend(self.foreign_enums().into_iter().map(|(m, _)| self.go_owner_path(&m)));
+        let mut named: Vec<(String, String)> = Vec::new();
+        for (m, dir, _) in self.foreign_owners() {
+            let (path, q) = (self.go_owner_path(&m, &dir), self.go_qualifier(&m, &dir));
+            let spec = if q == crate::backend::go_package(&m) { format!("{path:?}") } else { format!("{q} {path:?}") };
+            named.push((path, spec));
+        }
         // The package's types of the units (§15.248).
         if !units.is_empty() {
             paths.push(match &self.package {
@@ -3633,12 +3690,13 @@ impl<'a> Gen<'a> {
                 _ => "units".to_string(),
             });
         }
-        // gofmt keeps the specs of one block in order
-        paths.sort();
-        let imports = if paths.len() == 1 {
-            format!("import {:?}\n\n", paths[0])
+        // gofmt keeps the specs of one block in order, by their paths
+        let mut specs: Vec<(String, String)> = paths.into_iter().map(|p| (p.clone(), format!("{p:?}"))).chain(named).collect();
+        specs.sort();
+        let imports = if specs.len() == 1 {
+            format!("import {}\n\n", specs[0].1)
         } else {
-            format!("import (\n{})\n\n", paths.iter().map(|p| format!("\t{p:?}\n")).collect::<String>())
+            format!("import (\n{})\n\n", specs.iter().map(|(_, s)| format!("\t{s}\n")).collect::<String>())
         };
         let o = o.replace(IMPORT_MARK, &imports);
         align(&o)
@@ -3691,10 +3749,10 @@ impl<'a> Gen<'a> {
 
     /// The import path of the package an `enums` file's types are in (§15.212): beside the
     /// rule's package in a package of ritsu's, and a module of its own beside it from `rulec gen`.
-    fn go_owner_path(&self, module: &str) -> String {
+    fn go_owner_path(&self, module: &str, dir: &str) -> String {
         let pkg = crate::backend::go_package(module);
         match &self.package {
-            Some(m) if !m.is_empty() => format!("{m}/rules/{pkg}"),
+            Some(m) if !m.is_empty() => format!("{m}/{dir}rules/{pkg}"),
             _ => pkg,
         }
     }
@@ -3703,8 +3761,8 @@ impl<'a> Gen<'a> {
     /// value of one is a value of the other, its constants, and its parser (§15.212).
     fn go_foreign_enums(&self) -> String {
         let mut o = String::new();
-        for (module, types) in self.foreign_enums() {
-            let pkg = crate::backend::go_package(&module);
+        for (module, dir, types) in self.foreign_owners() {
+            let pkg = self.go_qualifier(&module, &dir);
             for (jp, ascii) in types {
                 let Some(vals) = self.c.enums.get(&jp) else { continue };
                 // Where the rule's own functions take the type's name, the package names it by the
@@ -5388,7 +5446,7 @@ impl<'a> Gen<'a> {
         let named = self.machine_consts().map(|(en, _, _)| en).into_iter().chain(self.prereq_graphs().into_iter().map(|g| g.over));
         for en in named {
             if let (Some(owner), Some(o)) = (self.go_owner_of(&en), self.f.enums.iter().find(|e| e.name.text == en).and_then(|e| e.from.as_ref())) {
-                let path = self.go_owner_path(&pub_name(&o.module));
+                let path = self.go_owner_path(&pub_name(&o.module), &self.owner_dir(o));
                 let line = if path == owner { format!("\t{path:?}\n") } else { format!("\t{owner} {path:?}\n") };
                 if !ours.iter().any(|(_, l)| *l == line) {
                     ours.push((path, line));
@@ -5845,7 +5903,7 @@ impl<'a> Gen<'a> {
         }
         if !units.is_empty() {
             let names: Vec<&str> = units.keys().map(String::as_str).collect();
-            o.push_str(&format!("import type {{ {0} }} from \"../units\";\nexport type {{ {0} }};\n", names.join(", ")));
+            o.push_str(&format!("import type {{ {0} }} from \"{1}\";\nexport type {{ {0} }};\n", names.join(", "), ritsu_emit::package::ts_path(&self.rules_dir(), "units")));
         }
         if !own.is_empty() || !units.is_empty() {
             o.push('\n');
@@ -6014,12 +6072,12 @@ impl<'a> Gen<'a> {
     /// head (§15.212). The types are exported again, so that what imports this rule's module
     /// finds them where it found the rule's own enums.
     fn ts_imports(&self, o: String) -> String {
-        let foreign = self.foreign_enums();
+        let foreign = self.foreign_owners();
         if foreign.is_empty() {
             return o;
         }
         let mut lines = String::new();
-        for (module, types) in foreign {
+        for (module, dir, types) in foreign {
             let mut names: Vec<String> = Vec::new();
             let mut again: Vec<String> = Vec::new();
             for (jp, t) in &types {
@@ -6036,7 +6094,7 @@ impl<'a> Gen<'a> {
             if names.is_empty() {
                 continue;
             }
-            let from = if self.package.is_some() { format!("./{module}") } else { format!("./{module}.ts") };
+            let from = if self.package.is_some() { ritsu_emit::package::ts_path(&self.rules_dir(), &format!("{dir}rules/{module}")) } else { format!("./{module}.ts") };
             lines.push_str(&format!("import {{ {} }} from \"{from}\";\n", names.join(", ")));
             if !again.is_empty() {
                 lines.push_str(&format!("export {{ {} }};\n", again.join(", ")));
@@ -14999,12 +15057,20 @@ pub fn package_module_in(src: &str, path: &str, shown: &str, target: &str, go_mo
 /// module (§15.248), for the package to declare them there: money and the quantities, as the rule
 /// writes them. An `enums` file takes none.
 pub fn package_parts(src: &str, path: &str, shown: &str, target: &str, go_module: &str) -> Result<(String, String, Vec<ritsu_units::Unit>), String> {
+    package_parts_at(src, path, shown, target, go_module, ritsu_emit::package::Place::here())
+}
+
+/// [`package_parts`], the module put at `place` in the package (ritsu's DESIGN 17.8): a rule of a
+/// dependency goes under `deps/<name>/`, and reads the package's `units` and the modules of the
+/// `enums` files it reads from where they are. The path it returns is under the rules' directory of
+/// its module, as for the module at hand.
+pub fn package_parts_at(src: &str, path: &str, shown: &str, target: &str, go_module: &str, place: ritsu_emit::package::Place) -> Result<(String, String, Vec<ritsu_units::Unit>), String> {
     let rep = crate::report(src, path);
     if crate::has_error(&rep.diags) {
         return Err(tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"));
     }
     let (f, c) = crate::prepare(src, path).map_err(|_| tr!("`{path}` は検査を通っていないので生成しません", "`{path}` does not pass check, so nothing is generated"))?;
-    let g = Gen::new(&f, &c, src, path).shown(shown).in_package(go_module);
+    let g = Gen::new(&f, &c, src, path).shown(shown).in_package(go_module).at(place);
     if f.kind == FileKind::Enums {
         let (rel, body) = g.enums_module_for(target).ok_or_else(|| format!("a package is written in {}, not in {target}", PACKAGE_TARGETS.join(", ")))?;
         return Ok((rel, body, Vec::new()));
@@ -15232,11 +15298,133 @@ fn owner_modules(f: &RuleFile) -> Result<Vec<(String, Vec<(String, String)>)>, S
     Ok(out)
 }
 
+/// Why the module `gen` writes cannot hold two contracts at one path when one of them is a
+/// dependency's (ritsu's DESIGN 17.6): buf reads the module in one run of protoc, which reads one
+/// file by one name.
+fn contracts_clash(rel: &str, a: &std::path::Path, b: &std::path::Path) -> String {
+    let (a, b) = (a.display(), b.display());
+    tr!(
+        "error: `{a}` と `{b}` は中身の違うファイルですが、どちらも生成するモジュールの `proto/{rel}` になり、`{rel}` として import されます。protoc は一つの名前を一つのファイルとして読むので、生成しません",
+        "error: `{a}` and `{b}` are two different files, and both would be `proto/{rel}` of the module generated, imported as `{rel}`; protoc reads one name as one file, so nothing is generated"
+    )
+}
+
+/// Why the module `gen` writes cannot hold one file of a dependency at two paths (ritsu's DESIGN
+/// 17.6): two contracts reach it by two names, and protoc reads the two copies as two files that
+/// declare the same types.
+fn contracts_two_names(file: &std::path::Path, a: &str, b: &str) -> String {
+    let file = file.display();
+    tr!(
+        "error: `{file}` は、`{a}` と `{b}` の二つの名前で import され、生成するモジュールの `proto/{a}` と `proto/{b}` の二つになります。protoc は二つを別のファイルとして読み、同じ型を二度宣言するので、生成しません",
+        "error: `{file}` is imported by two names, `{a}` and `{b}`, and would be both `proto/{a}` and `proto/{b}` of the module generated; protoc reads the two as two files that declare the same types, so nothing is generated"
+    )
+}
+
+/// A rule of a run of `gen`, read: its text and what `prepare` made of it, once its check passed; or
+/// what the check found, which stops the run there; or nothing, when the file does not read.
+enum RuleRead {
+    Unread,
+    Fails(String, Vec<crate::diag::Diag>),
+    Ready(String, Box<(RuleFile, Checked)>),
+}
+
+/// The rule at `path` read and checked as `gen` reads it before it writes anything of it.
+fn read_rule(path: &str) -> RuleRead {
+    let Ok(src) = ritsu_base::fs::read_to_string(path) else { return RuleRead::Unread };
+    // Nothing is generated from a rule that does not pass (README, AGENTS.md, the generate page).
+    // `prepare` only gets as far as the types, so the checks the tables themselves carry —
+    // completeness, overlap, dead rows, overflow and the examples — are run here, the way `doc`
+    // runs them (§1.6).
+    let rep = crate::report(&src, path);
+    if crate::has_error(&rep.diags) {
+        return RuleRead::Fails(src, rep.diags);
+    }
+    match crate::prepare(&src, path) {
+        Ok(fc) => RuleRead::Ready(src, Box::new(fc)),
+        Err(ds) => RuleRead::Fails(src, ds),
+    }
+}
+
+/// What stops a run of `gen` in a module of ritsu's for a dependency's file (ritsu's DESIGN 17.6):
+/// two files with different text at one path of the module of the rule's service, one of them a
+/// dependency's, and a file of a dependency's reached by two names, in one rule's contracts or across
+/// the rules of the run; the sentence the run stops with (exit 2). Made sure of over every rule that
+/// passes before any rule's files are written, as `ritsu gen` makes sure of what a module stops before
+/// any target is written, so that a stop met at the second rule does not leave the first rule's files
+/// behind. A rule that does not read or pass is left to the run, which stops at it as it did; so is a
+/// clash of two files of the module's own (exit 1), which no dependency brings.
+fn dependencies_hold(files: &[&str], read: &[RuleRead]) -> Option<String> {
+    let mut contracts: std::collections::BTreeMap<String, (String, std::path::PathBuf)> = std::collections::BTreeMap::new();
+    let mut dependency_files: std::collections::BTreeMap<std::path::PathBuf, String> = std::collections::BTreeMap::new();
+    for (path, r) in files.iter().zip(read) {
+        let RuleRead::Ready(src, fc) = r else { continue };
+        let (f, c) = &**fc;
+        if f.kind == FileKind::Enums {
+            continue;
+        }
+        let found = crate::codegen::Gen::new(f, c, src, path).proto_contracts();
+        if let Some((rel, a, b)) = &found.clash {
+            return Some(contracts_clash(rel, a, b));
+        }
+        if let Some((file, a, b)) = &found.two_names {
+            return Some(contracts_two_names(file, a, b));
+        }
+        for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
+            match contracts.get(&rel) {
+                Some((prev, prev_disk)) if *prev != body => {
+                    if ritsu_base::modules::under_dependency(prev_disk) || ritsu_base::modules::under_dependency(&disk) {
+                        return Some(contracts_clash(&rel, prev_disk, &disk));
+                    }
+                    continue;
+                }
+                Some(_) => {}
+                None => {
+                    contracts.insert(rel.clone(), (body, disk.clone()));
+                }
+            }
+            if ritsu_base::modules::under_dependency(&disk) {
+                let key = connect::same_file_key(&disk);
+                match dependency_files.get(&key) {
+                    Some(prev) if *prev != rel => {
+                        let mut names = [prev.clone(), rel.clone()];
+                        names.sort();
+                        return Some(contracts_two_names(&disk, &names[0], &names[1]));
+                    }
+                    Some(_) => {}
+                    None => {
+                        dependency_files.insert(key, rel);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out: &mut dyn std::io::Write, err: &mut dyn std::io::Write) -> u8 {
+    // In a module of ritsu's, every rule is read first, and what a dependency's file stops is made
+    // sure of before anything is written (ritsu's DESIGN 17.6); the loop below takes each rule as it
+    // was read. Outside every module, each rule is read where the loop comes to it, as before (M14).
+    let in_a_module = files.iter().any(|p| {
+        let dir = std::path::Path::new(p).parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(std::path::Path::new("."));
+        ritsu_base::modules::module_of(dir).is_some()
+    });
+    let mut early: Vec<Option<RuleRead>> = Vec::new();
+    if in_a_module {
+        let read: Vec<RuleRead> = files.iter().map(|p| read_rule(p)).collect();
+        if let Some(stop) = dependencies_hold(files, &read) {
+            let _ = writeln!(err, "{stop}");
+            return 2;
+        }
+        early = read.into_iter().map(Some).collect();
+    }
     let mut st = Emitted::default();
-    // The contracts copied into the module so far, and the rule each came with: two rules
-    // may import the same one, but not two different files under one path.
-    let mut contracts: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
+    // The contracts copied into the module so far, the rule each came with and the file it was
+    // copied from: two rules may import the same one, but not two different files under one path.
+    let mut contracts: std::collections::BTreeMap<String, (String, String, std::path::PathBuf)> = std::collections::BTreeMap::new();
+    // The files of the dependencies copied so far, each by the name it was copied under: one file is
+    // not copied under two names (ritsu's DESIGN 17.6).
+    let mut dependency_files: std::collections::BTreeMap<std::path::PathBuf, String> = std::collections::BTreeMap::new();
     // What the module needs from the BSR, over every rule of the run (§15.161).
     let mut module_deps = crate::codegen::BufDeps::default();
     // The modules of the `enums` files written so far, and the file each came from: two rules
@@ -15265,29 +15453,21 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         }
         Some(fresh)
     };
-    for path in files {
-        let Ok(src) = ritsu_base::fs::read_to_string(path) else {
-            let _ = writeln!(err, "{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
-            return 2;
-        };
-        // Nothing is generated from a rule that does not pass (README, AGENTS.md, the
-        // generate page). `prepare` only gets as far as the types, so the checks the tables
-        // themselves carry — completeness, overlap, dead rows, overflow and the examples —
-        // are run here, the way `doc` runs them (§1.6).
-        let rep = crate::report(&src, path);
-        if crate::has_error(&rep.diags) {
-            let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
-            let _ = write!(out, "{}", crate::findings_text(&rep.diags, &lines));
-            let _ = writeln!(err, "{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
-            return 1;
-        }
-        let (f, c) = match crate::prepare(&src, path) {
-            Ok(v) => v,
-            Err(ds) => {
+    for (k, path) in files.iter().enumerate() {
+        let (src, f, c) = match early.get_mut(k).and_then(Option::take).unwrap_or_else(|| read_rule(path)) {
+            RuleRead::Unread => {
+                let _ = writeln!(err, "{}", tr!("error: `{path}` を読めません", "error: cannot read `{path}`"));
+                return 2;
+            }
+            RuleRead::Fails(src, ds) => {
                 let lines: Vec<String> = src.lines().map(|s| s.to_string()).collect();
                 let _ = write!(out, "{}", crate::findings_text(&ds, &lines));
                 let _ = writeln!(err, "{}", tr!("error: `{path}` は検査を通っていないので生成しません", "error: `{path}` does not pass check, so nothing is generated"));
                 return 1;
+            }
+            RuleRead::Ready(src, fc) => {
+                let (f, c) = *fc;
+                (src, f, c)
             }
         };
         // A file of enums is its modules and nothing else: no function, so no vectors either
@@ -15410,13 +15590,27 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         // the path the import names. What they import from the BSR goes into the module's
         // `buf.yaml` and `buf.lock`, written once below.
         let found = g.proto_contracts();
+        if let Some((rel, a, b)) = &found.clash {
+            let _ = writeln!(err, "{}", contracts_clash(rel, a, b));
+            return 2;
+        }
+        if let Some((file, a, b)) = &found.two_names {
+            let _ = writeln!(err, "{}", contracts_two_names(file, a, b));
+            return 2;
+        }
         if let Err(e) = module_deps.merge(found.deps) {
             let _ = writeln!(err, "error: {e}");
             return 1;
         }
-        for (rel, body) in found.files {
+        for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
             let p = format!("{out_dir}/proto/{rel}");
-            if let Some((_, from)) = contracts.get(&p).filter(|(prev, _)| *prev != body) {
+            if let Some((_, from, prev_disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
+                // in a module of ritsu's, with a dependency's file among the two, the run stops as
+                // it does for one rule's (ritsu's DESIGN 17.6)
+                if ritsu_base::modules::under_dependency(prev_disk) || ritsu_base::modules::under_dependency(&disk) {
+                    let _ = writeln!(err, "{}", contracts_clash(&rel, prev_disk, &disk));
+                    return 2;
+                }
                 let _ = writeln!(err,
                     "{}",
                     tr!(
@@ -15426,7 +15620,23 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
                 );
                 return 1;
             }
-            contracts.insert(p.clone(), (body.clone(), path.to_string()));
+            // one file of a dependency's that another rule copied under another name
+            if ritsu_base::modules::under_dependency(&disk) {
+                let key = connect::same_file_key(&disk);
+                match dependency_files.get(&key) {
+                    Some(prev) if *prev != rel => {
+                        let mut names = [prev.clone(), rel.clone()];
+                        names.sort();
+                        let _ = writeln!(err, "{}", contracts_two_names(&disk, &names[0], &names[1]));
+                        return 2;
+                    }
+                    Some(_) => {}
+                    None => {
+                        dependency_files.insert(key, rel.clone());
+                    }
+                }
+            }
+            contracts.insert(p.clone(), (body.clone(), path.to_string(), disk));
             targets.push((p, body));
         }
         targets.push((format!("{out_dir}/vectors/{alias}.jsonl"), vec_body));

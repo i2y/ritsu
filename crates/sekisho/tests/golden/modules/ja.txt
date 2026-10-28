@@ -1,0 +1,101 @@
+# in ja/アプリ
+
+$ sekisho check --lang ja 関所/購入.gate
+関所/購入.gate: ok — action 2、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0
+exit 0
+
+$ sekisho check --lang ja 関所/購入.gate --format json
+{
+  "file": "関所/購入.gate",
+  "ok": true,
+  "summary": "action 2、ポリシー 2（permit 2、forbid 0）、期待 0、職務の分離 0",
+  "diagnostics": []
+}
+exit 0
+
+$ sekisho check --lang ja @lib/関所/承認.gate
+@lib/関所/承認.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+exit 0
+
+$ sekisho check --lang ja 誤り/依存に無い.gate
+エラー[E201]: 誤り/依存に無い.gate:5:18: `@shop/規則/承認.rule` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません
+     5 | use rule 承認 from "@shop/規則/承認.rule"
+exit 1
+
+$ sekisho check --lang ja 誤り/外を指す.gate
+エラー[E201]: 誤り/外を指す.gate:6:18: `../../部品/規則/承認.rule` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です
+     6 | use rule 承認 from "../../部品/規則/承認.rule"
+exit 1
+
+$ sekisho check --lang ja 誤り/入れ子.gate
+エラー[E201]: 誤り/入れ子.gate:5:18: `../入れ子/規則/承認の上限.rule` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください
+     5 | use rule 承認 from "../入れ子/規則/承認の上限.rule"
+exit 1
+
+$ sekisho check --lang ja 誤り/無いファイル.gate
+エラー[E201]: 誤り/無いファイル.gate:5:18: 依存 `@lib`（`example.com/acme/lib`、`../部品`）に `規則/決裁.rule` はありません
+     5 | use rule 承認 from "@lib/規則/決裁.rule"
+exit 1
+
+$ sekisho check --lang ja 誤り/無いファイル.gate --format json
+{
+  "file": "誤り/無いファイル.gate",
+  "ok": false,
+  "summary": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "誤り/無いファイル.gate",
+      "line": 5,
+      "col": 18,
+      "message": "依存 `@lib`（`example.com/acme/lib`、`../部品`）に `規則/決裁.rule` はありません",
+      "notes": [],
+      "example": null,
+      "fix": null
+    }
+  ]
+}
+exit 1
+
+# in ja/アプリ/関所
+
+$ sekisho check --lang ja @lib/関所/承認.gate
+@lib/関所/承認.gate: ok — action 1、ポリシー 1（permit 1、forbid 0）、期待 0、職務の分離 0
+exit 0
+
+# in ja/外
+
+$ sekisho check --lang ja 購入.gate
+エラー[E201]: 購入.gate:6:18: `@lib/規則/承認.rule` は rulec の検査を通りません
+     6 | use rule 承認 from "@lib/規則/承認.rule"
+  = `@lib/規則/承認.rule` を読めません: No such file or directory (os error 2)（@lib/規則/承認.rule）
+  = そのファイルを、rulec の検査が通るように直してください。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+exit 1
+
+$ sekisho check --lang ja 購入.gate --format json
+{
+  "file": "購入.gate",
+  "ok": false,
+  "summary": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "購入.gate",
+      "line": 6,
+      "col": 18,
+      "message": "`@lib/規則/承認.rule` は rulec の検査を通りません",
+      "notes": [
+        "`@lib/規則/承認.rule` を読めません: No such file or directory (os error 2)（@lib/規則/承認.rule）",
+        "そのファイルを、rulec の検査が通るように直してください。",
+        "`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"
+      ],
+      "example": null,
+      "fix": null
+    }
+  ]
+}
+exit 1
+

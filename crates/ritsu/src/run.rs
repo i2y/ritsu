@@ -51,6 +51,26 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
     let Some(scenario) = a.get("--scenario") else {
         return refuse(tr!("`--scenario <file.json>` が要ります", "`--scenario <file.json>` is required"), lang);
     };
+    // a path that starts with `@`, in a module, is read as a path written in a file is (DESIGN 17.6)
+    let given: Vec<&str> = [flow.as_str(), scenario].into_iter().chain(a.all("--with")).collect();
+    if let Err(t) = ritsu_base::modules::given_all(&given) {
+        return refuse(t, lang);
+    }
+    // In a module, the tree first, as `ritsu check` and `ritsu gen` read it (DESIGN 17.8): what stops
+    // the run is said on the standard error (exit 2); the tree's errors are said, and the flow is not
+    // run (exit 1).
+    if let Some(code) = tree_stops(flow, a.get("--format") == Some("json"), lang) {
+        return code;
+    }
+    // In a module, a path given with `--with` that does not start with `@` is one of the module's
+    // own (DESIGN 17.8): the contributions of another module's directory would not reach the rules
+    // the flow reads, which name a dependency's files by `@`. The scenario is data, and is not held
+    // to this.
+    for w in a.all("--with") {
+        if let Some(t) = with_elsewhere(flow, w) {
+            return refuse(t, lang);
+        }
+    }
     let json_out = a.get("--format") == Some("json");
     let target = a.get("--target").unwrap_or("reference").to_string();
     let view = match target.as_str() {
@@ -77,7 +97,7 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
             if !ritsu_base::fs::exists(w) {
                 return refuse(tr!("`{w}` がありません", "`{w}` is not there"), lang);
             }
-            files.extend(rule_files_under(w));
+            files.extend(whole_module(w).unwrap_or_else(|| rule_files_under(w, lang)));
         }
         j.rulec.set_project(files);
     }
@@ -374,25 +394,139 @@ fn text(flow: &str, scenario: &str, ran: &Ran, lang: Lang) -> String {
     out
 }
 
-/// The `.rule` files at `p`: the file itself, or every one under the directory, by path.
-fn rule_files_under(p: &str) -> Vec<String> {
+/// What stops a run of the flow `flow` in a module whose tree cannot be read, as `ritsu check` and
+/// `ritsu gen` stop (DESIGN 17.8): what has to be run first, on the standard error (exit 2); or the
+/// tree's diagnostics, in the text or in the JSON, and that the flow is not run (exit 1). None in a
+/// module whose tree is read, and outside every module.
+fn tree_stops(flow: &str, json_out: bool, lang: Lang) -> Option<u8> {
+    let project = ritsu_project::Project::load(&[flow.to_string()], None).ok()?;
+    let head = if lang == Lang::Ja { "エラー" } else { "error" };
+    match project.tree.clone()?.as_ref() {
+        Ok(_) => None,
+        Err(ritsu_base::modules::Problem::Stop(said)) => {
+            for t in said {
+                eprintln!("{head}: {}", t.get(lang));
+            }
+            Some(2)
+        }
+        Err(ritsu_base::modules::Problem::Diags(ds)) => {
+            let found: Vec<ritsu_ports::Finding> = ds.iter().map(|d| crate::check::modules::finding(&project, d, lang)).collect();
+            if json_out {
+                let diagnostics: Vec<Value> = found.iter().map(|f| serde_json::from_str(&crate::check::entry("ritsu", f).compact()).unwrap_or(Value::Null)).collect();
+                println!("{}", pretty(&json!({ "ritsu": env!("CARGO_PKG_VERSION"), "flow": flow, "diagnostics": diagnostics })));
+            } else {
+                let n = found.iter().filter(|f| f.severity == ritsu_base::diag::Severity::Error).count();
+                let errors = ritsu_base::text::plural(n, "error", "errors");
+                let text: String = found.iter().map(|f| f.text_of("ritsu")).collect();
+                eprint!("{text}");
+                eprintln!("{head}: {}", tr!("モジュールを読めません（エラー {n} 件）。フローは流しません", "the modules could not be read ({errors}), so the flow is not run").get(lang));
+            }
+            Some(1)
+        }
+    }
+}
+
+/// Why `--with <w>` cannot be given when the flow `flow` is in a module and `w`, a path that does not
+/// start with `@`, is in another (DESIGN 17.8): outside the flow's module, in a module below it, in a
+/// module's copy of a dependency (`.ritsu/modules/`) or in the store. Read by their real paths, the
+/// contributions there are another module's files, and would not reach the rules the flow reads,
+/// which name a dependency's files by `@`: before, they were read and silently added nothing. When
+/// `w` is in the directory a dependency of the flow's tree is read from, the sentence gives the path
+/// that names it by `@` (`@pricing`, `@pricing/rules/…`), and says where that path can be given when
+/// the run is not in the flow's module, where `@` names no dependency. None for a path in the flow's
+/// module (or in a dependency seen through it, `./@pricing`), for a path that is not there (said
+/// after), and when the flow is in no module (M14).
+fn with_elsewhere(flow: &str, w: &str) -> Option<Text> {
+    use ritsu_base::modules::refer::module_of;
+    use std::path::Component;
+    if w.starts_with('@') {
+        return None;
+    }
+    let project = ritsu_project::Project::load(&[flow.to_string()], None).ok()?;
+    let tree = project.tree.clone()?;
+    let Ok(tree) = tree.as_ref() else { return None };
+    let canonical = |p: &Path| ritsu_base::fs::canonicalize(p).ok();
+    let root = canonical(&tree.root)?;
+    let at = canonical(Path::new(w))?;
+    let dir = if ritsu_base::fs::is_dir(&at) { at.clone() } else { at.parent()?.to_path_buf() };
+    // the flow's module itself, or a dependency's root seen through it (`R/@pricing`, `R/@pricing/@tax`)
+    let through_root = |m: &Path| m.strip_prefix(&root).is_ok_and(|rest| rest.components().all(|c| matches!(c, Component::Normal(s) if s.to_str().is_some_and(|s| s.starts_with('@')))));
+    if module_of(&dir).is_some_and(|m| through_root(&m)) {
+        return None;
+    }
+    let module = tree.main().name.to_string();
+    // the dependency whose directory holds the path, the deepest when one is in another's
+    let named = tree.nodes[1..]
+        .iter()
+        .filter_map(|n| {
+            let d = canonical(&n.dir)?;
+            let rest = at.strip_prefix(&d).ok()?;
+            let parts: Vec<String> = rest.components().map(|c| c.as_os_str().to_string_lossy().into_owned()).collect();
+            Some((d.components().count(), [vec![n.prefix.clone()], parts].concat().join("/")))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, named)| named);
+    let mut t = tr!(
+        "`{w}` は、フローのあるモジュール `{module}` の中にありません。`--with` で渡した `contribution` がフローの読む規則に届くのは、そのモジュールのディレクトリのものと、依存のものを `@<名前>/` で渡したときだけです",
+        "`{w}` is not in the module `{module}`, which the flow is in: a contribution given with `--with` reaches the rules the flow reads from the module's own directories, and from a dependency's only by `@<name>/`"
+    );
+    if let Some(named) = named {
+        let here = module_of(Path::new(".")).and_then(|m| canonical(&m)).is_some_and(|m| m == root);
+        t = t.then(&if here {
+            tr!("。`{named}` と書いてください", "; give it as `{named}`")
+        } else {
+            tr!(
+                "。`@` で依存を指せるのは、走らせたディレクトリのあるモジュールの中だけなので、モジュール `{module}` のディレクトリで走らせて、`{named}` と書いてください",
+                "; `@` names a dependency only in the module the run is in, so run in a directory of the module `{module}` and give it as `{named}`"
+            )
+        });
+    }
+    Some(t)
+}
+
+/// The `.rule` files of the whole tree when `p` is the root of a module, as `ritsu check` of the
+/// module's root merges the contributions of every module of the tree (DESIGN 17.8): each as the
+/// run writes it. None for any other path, and outside every module.
+fn whole_module(p: &str) -> Option<Vec<String>> {
+    let project = ritsu_project::Project::load(&[p.to_string()], None).ok()?;
+    if !(project.whole && matches!(project.tree.as_deref(), Some(Ok(_)))) {
+        return None;
+    }
+    Some(project.with_dependencies().of(ritsu_base::naming::Tool::Rulec).iter().map(|f| f.shown.clone()).collect())
+}
+
+/// The `.rule` files at `p`: the file itself, or every one under the directory, by path. The walk
+/// does not enter another module below, nor the `.ritsu` of a module; when it did not start in a
+/// module, it says on stderr which modules it passed over (DESIGN 17.6).
+fn rule_files_under(p: &str, lang: Lang) -> Vec<String> {
     let path = Path::new(p);
     if !ritsu_base::fs::is_dir(p) {
         return vec![p.to_string()];
     }
     let mut out = Vec::new();
+    let mut modules = Vec::new();
     let mut stack = vec![path.to_path_buf()];
     while let Some(d) = stack.pop() {
         let Ok(rd) = ritsu_base::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
             let q = e.path();
-            if q.is_dir() {
-                stack.push(q);
+            if ritsu_base::fs::is_dir(&q) {
+                match ritsu_base::paths::not_entered(&q) {
+                    Some(ritsu_base::paths::NotEntered::Module) => modules.push(q.to_string_lossy().into_owned()),
+                    Some(ritsu_base::paths::NotEntered::State) => {}
+                    None => stack.push(q),
+                }
             } else if q.extension().is_some_and(|x| x == "rule") {
                 out.push(q.to_string_lossy().into_owned());
             }
         }
     }
     out.sort();
+    if ritsu_base::modules::refer::module_of(path).is_none() {
+        modules.sort();
+        for m in modules {
+            eprintln!("{}", ritsu_base::paths::other_module_note(&m, "ritsu run … --with").get(lang));
+        }
+    }
     out
 }

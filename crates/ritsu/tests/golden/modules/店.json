@@ -1,0 +1,82 @@
+{
+  "ritsu": "0.36.0",
+  "root": ".",
+  "ok": true,
+  "module": {
+    "name": "example.com/acme/shop",
+    "version": "0.1.0"
+  },
+  "dependencies": [
+    {
+      "prefix": "@pricing",
+      "name": "example.com/acme/pricing",
+      "version": "1.1.0",
+      "source": "path",
+      "path": "../価格",
+      "digest": null,
+      "files_digest": null,
+      "where": "path",
+      "verified": [],
+      "files": 2,
+      "ok": true,
+      "errors": 0,
+      "warnings": 0,
+      "claims_not_run": 0
+    },
+    {
+      "prefix": "@pricing/@tax",
+      "name": "example.com/acme/tax",
+      "version": "1.0.0",
+      "source": "path",
+      "path": "../税",
+      "digest": null,
+      "files_digest": null,
+      "where": "path",
+      "verified": [],
+      "files": 1,
+      "ok": true,
+      "errors": 0,
+      "warnings": 0,
+      "claims_not_run": 0
+    }
+  ],
+  "files": [
+    {
+      "tool": "rulec",
+      "file": "@pricing/@tax/規則/付加価値税率.rule",
+      "dependency": "@pricing/@tax",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "@pricing/規則/注文の合計.rule",
+      "dependency": "@pricing",
+      "ok": true
+    },
+    {
+      "tool": "rulec",
+      "file": "@pricing/規則/送料.rule",
+      "dependency": "@pricing",
+      "ok": true
+    },
+    {
+      "tool": "kaname",
+      "file": "会計/かご.kn",
+      "dependency": null,
+      "ok": true
+    },
+    {
+      "tool": "dandori",
+      "file": "注文/注文を受ける.flow",
+      "dependency": null,
+      "ok": true
+    }
+  ],
+  "diagnostics": [],
+  "contributions": [],
+  "borders": {
+    "held": 0,
+    "failed": 0,
+    "undecided": 0
+  }
+}

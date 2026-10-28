@@ -1,0 +1,17 @@
+# 手元のモジュールの請求。lib の値付けの下流にあたり、その公表された規則が、請求書の求める合計を出す。
+context 請求(billing) v1
+description "注文を請求する。請求書は注文の合計を求め、支払いの日数を与える"
+owner "経理チーム"
+
+owns
+  rulec "../規則/支払いの日数.rule"
+
+published language rulec.payment_days.v1
+  rulec "../規則/支払いの日数.rule"
+
+terms
+  支払いの日数 "請求書が客に与える、支払いまでの日数"
+    means rulec "../規則/支払いの日数.rule" output 日数
+
+upstream 値付け conformist
+  through rulec.order_total.v1

@@ -1,0 +1,28 @@
+# 請求書が求める額。モジュール lib の規則で出した注文の合計で、その規則を `@lib/…` で準用する。
+# その規則はさらに base の税率を準用する。このモジュールは base を require していないので、そのファイル
+# は `@lib/@base/規則/付加価値税率.rule` として読む。
+rule 請求額(invoice) v1
+description "請求書が求める額。モジュール lib の規則「注文の合計」で出した注文の合計"
+
+enum 区分(category) = 標準(standard) | 軽減(reduced) | ゼロ(zero)
+
+inputs
+  小計(subtotal) : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  区分(category) : 区分
+  送料(shipping) : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  請求する額(amount) : money[GBPc]  round half_up(1GBPc)
+
+apply 注文(order) = "@lib/規則/注文の合計.rule" meaning:680b90c58acbf1ef
+  小計 = 小計
+  区分 = 区分
+  送料 = 送料
+  合計 -> 注文の合計
+
+result 請求する額 = 注文の合計
+
+examples
+| 小計     | 区分 | 送料    | -> 請求する額 |
+| 1000GBPc | 標準 | 395GBPc | 1595GBPc      |
+| 1000GBPc | ゼロ | 0GBPc   | 1000GBPc      |

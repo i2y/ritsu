@@ -1,0 +1,11 @@
+// A statement of the module at hand, with lib's total. Each file reads its own module's money: app's
+// files app's, lib's total lib's. One run of protoc reads one money for both, the first root that
+// has it, so this file and the files it imports cannot be given to protoc together.
+syntax = "proto3";
+package acme.billing.v1;
+
+import "acme/orders/v1/total.proto";
+
+message Statement {
+  acme.orders.v1.Total total = 1;
+}

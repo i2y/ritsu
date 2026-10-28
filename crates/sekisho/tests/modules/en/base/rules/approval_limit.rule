@@ -1,0 +1,25 @@
+# The limit is the test's own: it transcribes no document.
+rule approval_limit v1
+description "Whether a purchase is within the limit of the person who would approve it. The test's own terms"
+
+enum approval_band = within_limit | over_limit
+
+inputs
+  amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  limit  : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+outputs
+  band : approval_band
+
+derive excess : money[GBP, incl_tax] = amount - limit  range >=-49_999GBP <=20_000GBP
+
+table decide
+policy unique
+| excess | -> band : approval_band |
+| <=0GBP | within_limit            |
+| >0GBP  | over_limit              |
+
+examples
+| amount  | limit   | -> band      |
+| 500GBP  | 1000GBP | within_limit |
+| 1001GBP | 1000GBP | over_limit   |

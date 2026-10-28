@@ -1,0 +1,9 @@
+# どの ritsu のモジュールにも入っていない kaname のモジュール。上に ritsu.mod が無いので、`@lib/…` は
+# ただの相対パスで、このファイルの横に @lib というディレクトリは無い。
+module 注文(order) v1
+description "規則「注文の合計」による注文の合計"
+
+use rule 注文の合計 from "@lib/規則/注文の合計.rule"
+
+fn 合計(total)(小計(subtotal): money[GBPc] range >=0GBPc <=2_000_000GBPc, 区分(category): 注文の合計.区分) -> money[GBPc] total
+  注文の合計(小計: 小計, 区分: 区分, 送料: 0GBPc).合計

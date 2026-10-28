@@ -43,6 +43,19 @@ thread_local! {
     static CURRENT: RefCell<Option<Rc<dyn Sources>>> = const { RefCell::new(None) };
 }
 
+/// The file a path written in a `.flow` names, from the directory `dir` of the `.flow`, as dandori
+/// reaches it (ritsu's DESIGN 17.6): outside a module of ritsu's, `dir.join(written)`; in one, the
+/// path held to the module, and `@<name>/…` a file of a dependency, read from the module's root.
+pub fn follow(dir: &Path, written: &str) -> Result<PathBuf, ritsu_base::modules::Refused> {
+    ritsu_base::modules::refer_shown(dir, written)
+}
+
+/// [`follow`], where what a refused path is has been said once, where the file is read: the
+/// directory joined to it, as written.
+pub fn reach(dir: &Path, written: &str) -> PathBuf {
+    follow(dir, written).unwrap_or_else(|_| dir.join(written))
+}
+
 /// Run `f` reading from `s`, then read from what was read from before.
 pub fn with<R>(s: Rc<dyn Sources>, f: impl FnOnce() -> R) -> R {
     struct Restore(Option<Rc<dyn Sources>>);

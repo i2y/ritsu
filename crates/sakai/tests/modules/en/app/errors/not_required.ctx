@@ -1,0 +1,8 @@
+# A dependency the module does not require: app's ritsu.mod has no `require shop`.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "../contexts/billing.ctx"
+use context "@shop/contexts/pricing.ctx"
+
+covers ".."

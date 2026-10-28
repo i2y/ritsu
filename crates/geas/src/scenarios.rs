@@ -54,9 +54,11 @@ fn e090(path: &str, why: Text) -> (String, Diag) {
     )
 }
 
-/// The `spec.md` files under a directory, in path order, leaving out `archive/` and what a walk
-/// passes over (names starting with `.`, `target`, `node_modules`).
-fn spec_files(dir: &Path, out: &mut Vec<PathBuf>) {
+/// The `spec.md` files under a directory, in path order, leaving out `archive/`, what a walk
+/// passes over (names starting with `.`, `target`, `node_modules`) and another module below (a
+/// directory with a `ritsu.mod` of its own, whose specs are that module's; ritsu's DESIGN 17.6),
+/// which goes in `modules`.
+fn spec_files(dir: &Path, out: &mut Vec<PathBuf>, modules: &mut Vec<String>) {
     let Ok(rd) = ritsu_base::fs::read_dir(dir) else { return };
     let mut names: Vec<String> = rd.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect();
     names.sort();
@@ -66,7 +68,11 @@ fn spec_files(dir: &Path, out: &mut Vec<PathBuf>) {
         }
         let p = dir.join(&n);
         if p.is_dir() {
-            spec_files(&p, out);
+            match ritsu_base::paths::not_entered(&p) {
+                Some(ritsu_base::paths::NotEntered::Module) => modules.push(shown(&p)),
+                Some(ritsu_base::paths::NotEntered::State) => {}
+                None => spec_files(&p, out, modules),
+            }
         } else if n == "spec.md" {
             out.push(p);
         }
@@ -77,14 +83,20 @@ fn shown(p: &Path) -> String {
     p.display().to_string()
 }
 
-fn read_openspec(given: &[String]) -> Result<Vec<File>, Vec<(String, Diag)>> {
+/// The specs given, read. A directory given in no module puts each module it passed over in
+/// `passed`, for a line each (ritsu's DESIGN 17.6).
+fn read_openspec(given: &[String], passed: &mut Vec<String>) -> Result<Vec<File>, Vec<(String, Diag)>> {
     let mut paths: Vec<PathBuf> = Vec::new();
     let mut errs = Vec::new();
     for g in given {
         let p = PathBuf::from(g);
         if p.is_dir() {
             let before = paths.len();
-            spec_files(&p, &mut paths);
+            let mut modules = Vec::new();
+            spec_files(&p, &mut paths, &mut modules);
+            if ritsu_base::modules::refer::module_of(&p).is_none() {
+                passed.extend(modules);
+            }
             if paths.len() == before {
                 errs.push(e090(g, tr!("この下に spec.md がありません", "there is no spec.md under it")));
             }
@@ -172,7 +184,12 @@ pub fn command(specs: &[String], o: &Opts) -> i32 {
             return 2;
         }
     };
-    let files = match read_openspec(o.openspec) {
+    let mut passed = Vec::new();
+    let read = read_openspec(o.openspec, &mut passed);
+    for m in &passed {
+        eprintln!("{}", ritsu_base::paths::other_module_note(m, "geas scenarios … --openspec").get(lang));
+    }
+    let files = match read {
         Ok(f) => f,
         Err(errs) => {
             for (f, d) in errs {

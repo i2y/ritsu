@@ -179,14 +179,20 @@ pub fn check(f: &RuleFile, rule_path: &str) -> Vec<Diag> {
         let whos_text = |whos: &[&str]| whos.join(if crate::i18n::ja() { "、" } else { ", " });
         match &d.kind {
             SourceKind::File { path, hash, .. } => {
-                let p = dir.join(path);
+                let followed = crate::vfs::follow(&dir, path);
+                if let Some(why) = crate::vfs::refused(&followed) {
+                    out.push(Diag::error("E039", why).at(at(d.span.line, name)).mark(d.span.clone(), ""));
+                    continue;
+                }
+                let Ok(p) = followed else { continue };
                 let cited = cited_from(&cites, name);
                 let Ok(bytes) = ritsu_base::fs::read(&p) else {
                     out.push(
                         Diag::error("E039", tr!("出典 `{name}` のコピー `{path}` を読めません", "The copy `{path}` of source `{name}` cannot be read"))
                             .at(at(d.span.line, name))
                             .mark(d.span.clone(), "")
-                            .note(tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", p.display())),
+                            .note(tr!("パスは規則ファイルのある場所からたどります（探した先: {}）。", "The path is followed from the directory of the rule file (looked for: {}).", p.display()))
+                            .maybe_note(crate::vfs::outside_note(&dir, path)),
                     );
                     continue;
                 };
@@ -807,7 +813,7 @@ pub fn fragment_grid(rule_path: &str, d: &SourceDecl, frag: &str) -> Option<Vec<
     let base = d.base.as_deref().unwrap_or(rule_path);
     let SourceKind::File { path, .. } = &d.kind else { return None };
     crate::extract::fragment(frag)?;
-    let doc = Path::new(base).parent().unwrap_or(Path::new(".")).join(path);
+    let doc = crate::vfs::follow(crate::vfs::dir_of(base, "."), path).ok()?;
     let tsv = ritsu_base::fs::read_to_string(crate::extract::copy_dir(&doc).join(crate::extract::fragment_file(frag))).ok()?;
     Some(crate::extract::from_tsv(&tsv))
 }
@@ -962,7 +968,23 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
         if d.base.is_some() {
             continue;
         }
-        let p = dir.join(path);
+        // a dependency's document comes with its copies, which this module does not write
+        // (ritsu's DESIGN 17.6)
+        let p = match crate::vfs::follow(dir, path) {
+            Ok(p) if ritsu_base::modules::map(&p).is_none() => p,
+            Ok(_) => {
+                lines.push(tr!(
+                    "{}: `{path}` は依存のファイルなので、取り直しません。コピーは依存のほうにあります",
+                    "{}: `{path}` is a file of a dependency, so it is not fetched here; its copies are the dependency's",
+                    d.name.text
+                ));
+                continue;
+            }
+            Err(r) => {
+                lines.push(format!("{}: {}", d.name.text, crate::i18n::text(&r.text())));
+                continue;
+            }
+        };
         let Some(url) = url else {
             lines.push(tr!(
                 "{}: `url` が無いので取り直せません（`{} \"…\"` を足すと取り直せます）",
@@ -1135,7 +1157,8 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
     // A pin is written at the callee's meaning (§15.230), which a comment does not move; a
     // `sha256:` written before is rewritten as one.
     for a in &f.applies {
-        let bytes = std::fs::read(dir.join(&a.path)).map_err(|e| format!("{}: {e}", a.path))?;
+        let callee = crate::vfs::follow(dir, &a.path).map_err(|r| format!("{}: {}", a.path, crate::i18n::text(&r.text())))?;
+        let bytes = ritsu_base::fs::read(&callee).map_err(|e| format!("{}: {e}", a.path))?;
         let m = crate::link::pin::meaning(&String::from_utf8_lossy(&bytes));
         if a.meaning.as_deref() != Some(m.as_str()) {
             let line = lines.get(a.span.line - 1).copied().unwrap_or("");
@@ -1154,8 +1177,8 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
         let said = report.len();
         match &d.kind {
             SourceKind::File { path, hash, .. } => {
-                let p = dir.join(path);
-                let bytes = std::fs::read(&p).map_err(|e| format!("{path}: {e}"))?;
+                let p = crate::vfs::follow(dir, path).map_err(|r| format!("{path}: {}", crate::i18n::text(&r.text())))?;
+                let bytes = ritsu_base::fs::read(&p).map_err(|e| format!("{path}: {e}"))?;
                 let h = crate::sha256::short(&bytes);
                 if hash.as_deref() != Some(h.as_str()) {
                     let line = lines.get(d.span.line - 1).copied().unwrap_or("");
@@ -1171,7 +1194,7 @@ pub fn pin(f: &RuleFile, rule_path: &str, src: &str) -> Result<(String, Outcome)
                     if frag.is_empty() || crate::extract::fragment(&frag).is_none() {
                         continue;
                     }
-                    match std::fs::read(cdir.join(crate::extract::fragment_file(&frag))) {
+                    match ritsu_base::fs::read(cdir.join(crate::extract::fragment_file(&frag))) {
                         Ok(bytes) => new_pins.push(pin_line(&frag, &crate::sha256::short(&bytes))),
                         Err(_) => {
                             if let Some(p) = d.pins.iter().find(|p| p.fragment == frag) {
@@ -1435,7 +1458,7 @@ pub fn outdated(f: &RuleFile, rule_path: &str) -> Result<Outcome, String> {
                 let now = crate::sha256::short(&body);
                 let before = hash
                     .clone()
-                    .or_else(|| std::fs::read(dir.join(path)).ok().map(|b| crate::sha256::short(&b)));
+                    .or_else(|| crate::vfs::follow(dir, path).ok().and_then(|p| ritsu_base::fs::read(p).ok()).map(|b| crate::sha256::short(&b)));
                 match before {
                     None => lines.push(tr!(
                         "{name}: 固定もコピーも無いので比べられません（いま sha256:{now}）",

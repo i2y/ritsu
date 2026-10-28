@@ -130,6 +130,7 @@ dependencies = [
  "ritsu-emit",
  "ritsu-ports",
  "ritsu-project",
+ "ritsu-proto",
  "ritsu-testkit",
  "ritsu-units",
  "ritsu-wasm",

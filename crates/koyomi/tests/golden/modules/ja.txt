@@ -1,0 +1,73 @@
+# in ja/アプリ
+
+$ koyomi check --lang ja 日付/十日後払い.cal
+日付/十日後払い.cal: ok — 2 つの条件が、請求日 2026-01-01〜2027-11-30 の 699 日のすべてで成り立ちます。例 2 行も合っています
+exit 0
+
+$ koyomi check --lang ja 日付/十日後払い.cal --format json
+{"file":"日付/十日後払い.cal","ok":true,"summary":"2 つの条件が、請求日 2026-01-01〜2027-11-30 の 699 日のすべてで成り立ちます。例 2 行も合っています","diagnostics":[]}
+exit 0
+
+$ koyomi check --lang ja @lib/カレンダー/事務所.cal
+@lib/カレンダー/事務所.cal: ok — カレンダー 事務所。表 休業日 3 行、データの範囲 2026-01-01〜2027-12-31
+exit 0
+
+$ koyomi check --lang ja @lib/カレンダー/事務所.cal --format json
+{"file":"@lib/カレンダー/事務所.cal","ok":true,"summary":"カレンダー 事務所。表 休業日 3 行、データの範囲 2026-01-01〜2027-12-31","diagnostics":[]}
+exit 0
+
+$ koyomi check --lang ja 誤り/依存に無い.cal
+エラー[E015]: 誤り/依存に無い.cal:4:14: `@shop/カレンダー/事務所.cal` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません
+     4 | use calendar "@shop/カレンダー/事務所.cal"
+exit 1
+
+$ koyomi check --lang ja 誤り/外を指す.cal
+エラー[E015]: 誤り/外を指す.cal:5:14: `../../部品/カレンダー/事務所.cal` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です
+     5 | use calendar "../../部品/カレンダー/事務所.cal"
+exit 1
+
+$ koyomi check --lang ja 誤り/入れ子.cal
+エラー[E015]: 誤り/入れ子.cal:4:14: `../入れ子/カレンダー/事務所.cal` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください
+     4 | use calendar "../入れ子/カレンダー/事務所.cal"
+exit 1
+
+$ koyomi check --lang ja 誤り/無いファイル.cal
+エラー[E015]: 誤り/無いファイル.cal:4:14: 依存 `@lib`（`example.com/acme/lib`、`../部品`）に `カレンダー/本社.cal` はありません
+     4 | use calendar "@lib/カレンダー/本社.cal"
+exit 1
+
+$ koyomi check --lang ja 誤り/無いファイル.cal --format json
+{"file":"誤り/無いファイル.cal","ok":false,"summary":null,"diagnostics":[{"code":"E015","severity":"error","file":"誤り/無いファイル.cal","line":4,"col":14,"message":"依存 `@lib`（`example.com/acme/lib`、`../部品`）に `カレンダー/本社.cal` はありません","notes":[],"inputs":null,"steps":[],"fails":[],"fix":null}]}
+exit 1
+
+# in ja/アプリ/日付
+
+$ koyomi check --lang ja @lib/カレンダー/事務所.cal
+@lib/カレンダー/事務所.cal: ok — カレンダー 事務所。表 休業日 3 行、データの範囲 2026-01-01〜2027-12-31
+exit 0
+
+# in ja/外
+
+$ koyomi check --lang ja 十日後払い.cal
+エラー[E015]: 十日後払い.cal:5:14: カレンダー @lib/カレンダー/事務所.cal が読めません
+     5 | use calendar "@lib/カレンダー/事務所.cal"
+  = パスは、この .cal のあるディレクトリからの相対パスです。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+exit 1
+
+$ koyomi check --lang ja 十日後払い.cal --format json
+{"file":"十日後払い.cal","ok":false,"summary":null,"diagnostics":[{"code":"E015","severity":"error","file":"十日後払い.cal","line":5,"col":14,"message":"カレンダー @lib/カレンダー/事務所.cal が読めません","notes":["パスは、この .cal のあるディレクトリからの相対パスです。","`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"],"inputs":null,"steps":[],"fails":[],"fix":null}]}
+exit 1
+
+# in ja
+
+$ koyomi check --lang ja .
+エラー[E015]: ./外/十日後払い.cal:5:14: カレンダー @lib/カレンダー/事務所.cal が読めません（外/@lib/カレンダー/事務所.cal）
+     5 | use calendar "@lib/カレンダー/事務所.cal"
+  = パスは、この .cal のあるディレクトリからの相対パスです。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+備考: `./アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `koyomi check ./アプリ` を実行してください
+備考: `./土台` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `koyomi check ./土台` を実行してください
+備考: `./部品` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `koyomi check ./部品` を実行してください
+exit 1
+

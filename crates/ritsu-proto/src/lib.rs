@@ -16,7 +16,9 @@
 //! - [`buf`]: `buf.yaml`'s `deps` and `buf.lock`'s pins.
 //! - [`load`] and [`load_from`]: many files, and the names across them ([`Protos::resolve`]),
 //!   and whether a field is marked to be redacted (`debug_redact`, written on it or through a
-//!   custom option: [`Protos::redaction`]).
+//!   custom option: [`Protos::redaction`]). In a module of ritsu's, an import the file's own module
+//!   does not have is looked for in the module's dependencies ([`dependency_roots`]), and
+//!   [`protoc_roots`] says what one run of protoc is given for a file and what it imports.
 //!   Google's well-known types, `buf/validate/validate.proto` and dandori's
 //!   `dandori/v1/options.proto` are known without their files.
 //!
@@ -30,7 +32,7 @@ mod read;
 pub mod validate;
 pub mod value;
 
-pub use load::{DANDORI_OPTIONS, Issue, Protos, Resolved, Symbol, WELL_KNOWN, import_candidates, is_known, known_package, load, load_from};
+pub use load::{Clash, DANDORI_OPTIONS, Issue, Protoc, Protos, Resolved, Symbol, WELL_KNOWN, dependency_roots, import_candidates, is_known, known_package, load, load_from, protoc_roots, roots_for};
 pub use model::{Enum, EnumValue, Extension, Field, Import, Label, Message, Method, Oneof, Opt, ProtoFile, Redaction, Service, Type, json_name};
 pub use read::{Problem, ReadError, SCALARS, read};
 pub use value::Value;

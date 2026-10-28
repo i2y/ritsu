@@ -364,7 +364,9 @@ pub fn load(m: &Model, arts: &[Artifact]) -> (Contracts, Vec<Diag>) {
                 diags.push(diag::at("E108", &r.from, r.line, r.col, tr!("{sf} の `$ref` \"{w}\" の先のファイル {sfile} がありません", "The `$ref` \"{w}\" of {sf} points at {sfile}, which is not there")).source(&text).note(reader_note()));
             } else if !crate::owners::in_scope(m, f) {
                 let sfile = paths::shown(f);
-                diags.push(diag::at("E103", &r.from, r.line, r.col, tr!("{sf} の `$ref` \"{w}\" は、地図の範囲の外の {sfile} を指しています", "The `$ref` \"{w}\" of {sf} points at {sfile}, which is outside the map's scope")).source(&text).note(crate::owners::scope_note(m)));
+                let mut d = diag::at("E103", &r.from, r.line, r.col, tr!("{sf} の `$ref` \"{w}\" は、地図の範囲の外の {sfile} を指しています", "The `$ref` \"{w}\" of {sf} points at {sfile}, which is outside the map's scope")).source(&text).note(crate::owners::scope_note(m));
+                d.notes.extend(crate::owners::dependency_note(m, f));
+                diags.push(d);
             }
             continue;
         }

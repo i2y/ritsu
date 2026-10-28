@@ -1,0 +1,28 @@
+# require していない依存。app の ritsu.mod に `require shop` は無い。
+requirements 請求 v1
+description "請求書が求める額。モジュール lib の値付けの方針から"
+
+role 経理 "注文の値段と請求を決める"
+role 開発 "規則を書いて直す"
+
+source 方針 = file "@lib/文書/値付けの方針.md" sha256:f2d863f2f673db9e
+
+requirement 合計(total)
+  text "請求書は注文の合計を求める。小計に、区分の付加価値税と送料を足した額である"
+  owner 経理
+  from @方針
+    reviewed 2026-10-28 by 経理 sha256:f2d863f2f673db9e -> sha256:ae0f0dd049aebf1b
+  satisfied by rulec "@shop/規則/注文の合計.rule" output 合計
+    reviewed 2026-10-28 by 開発 sha256:ae0f0dd049aebf1b -> sha256:c796617ef2114027
+  verified by rulec "@lib/規則/注文の合計.rule"
+    reviewed 2026-10-28 by 開発 sha256:ae0f0dd049aebf1b -> sha256:e5465ce256b107fc
+
+requirement 付加価値税(vat)
+  text "注文の付加価値税は、小計に区分の税率を掛けた額である"
+  owner 経理
+  from @方針
+    reviewed 2026-10-28 by 経理 sha256:f2d863f2f673db9e -> sha256:f4b65c9fc03e1c29
+  satisfied by rulec "@lib/@base/規則/付加価値税率.rule" output 税率
+    reviewed 2026-10-28 by 開発 sha256:f4b65c9fc03e1c29 -> sha256:cc410f22e52d8175
+  verified by rulec "@lib/@base/規則/付加価値税率.rule"
+    reviewed 2026-10-28 by 開発 sha256:f4b65c9fc03e1c29 -> sha256:9ac0442536320cac

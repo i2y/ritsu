@@ -1,0 +1,50 @@
+{
+  "ritsu": "0.36.0",
+  "root": ".",
+  "module": {
+    "name": "example.com/acme/shop",
+    "version": "0.1.0"
+  },
+  "lock": null,
+  "modules": [
+    {
+      "name": "example.com/acme/pricing",
+      "version": "1.1.0",
+      "source": "path",
+      "path": "../pricing",
+      "digest": null,
+      "files_digest": null,
+      "prefix": "@pricing",
+      "required_by": [
+        {
+          "module": "example.com/acme/shop",
+          "name": "pricing",
+          "version": "0.1.0"
+        }
+      ],
+      "present": true,
+      "where": "path",
+      "verified": []
+    },
+    {
+      "name": "example.com/acme/tax",
+      "version": "1.0.0",
+      "source": "path",
+      "path": "../tax",
+      "digest": null,
+      "files_digest": null,
+      "prefix": "@pricing/@tax",
+      "required_by": [
+        {
+          "module": "example.com/acme/pricing",
+          "name": "tax",
+          "version": "1.1.0"
+        }
+      ],
+      "present": true,
+      "where": "path",
+      "verified": []
+    }
+  ],
+  "diagnostics": []
+}

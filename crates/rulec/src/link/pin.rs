@@ -314,13 +314,20 @@ pub(crate) fn check_pins(c: &Contrib, _cs: &[Contrib], _root: &str) -> Vec<Diag>
         lines.push((crate::kw::AFTER, a));
     }
     for (word, t) in lines {
-        let p = super::join(&c.shown, &t.file);
+        let dir = crate::vfs::dir_of(&c.shown, "");
+        let followed = crate::vfs::follow(dir, &t.file);
+        if let Some(why) = crate::vfs::refused(&followed) {
+            out.push(Diag::error("E067", why).at(format!("{}:{}", c.shown, t.span.line)).mark(t.span.clone(), ""));
+            continue;
+        }
+        let p = followed.map(|p| super::normalize(&p)).unwrap_or_default();
         let Some(target) = parsed(&p) else {
             out.push(
                 Diag::error("E067", tr!("`{}` を読めません", "`{}` cannot be read", t.file))
                     .at(format!("{}:{}", c.shown, t.span.line))
                     .mark(t.span.clone(), "")
-                    .note(tr!("パスは寄与のファイルのある場所からたどります（探した先: {p}）。", "The path is followed from the directory of the contribution (looked for: {p}).")),
+                    .note(tr!("パスは寄与のファイルのある場所からたどります（探した先: {p}）。", "The path is followed from the directory of the contribution (looked for: {p})."))
+                    .maybe_note(crate::vfs::outside_note(dir, &t.file)),
             );
             continue;
         };
@@ -400,8 +407,7 @@ pub fn pin_contribution(f: &RuleFile, path: &str, src: &str) -> Result<(String, 
         targets.push((crate::kw::AFTER, a));
     }
     for (word, t) in targets {
-        let p = super::join(path, &t.file);
-        let target = parsed(&p).ok_or_else(|| tr!("`{}` を読めません", "cannot read `{}`", t.file))?;
+        let target = super::join(path, &t.file).and_then(|p| parsed(&p)).ok_or_else(|| tr!("`{}` を読めません", "cannot read `{}`", t.file))?;
         let sig = signature(&target, f);
         if t.signature.as_deref() == Some(sig.as_str()) {
             said.push(tr!("{word} {}: signature:{sig} に固定済みです", "{word} {}: already pinned at signature:{sig}", t.file));

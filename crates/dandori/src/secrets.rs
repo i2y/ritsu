@@ -509,7 +509,7 @@ pub fn sends(m: &Model) -> Vec<Sent> {
                 let to = if let Some(f) = &task.api_file {
                     Some(f.clone())
                 } else if let Some(c) = &task.flow {
-                    Some(dir.join(&c.path).to_string_lossy().to_string())
+                    Some(crate::sources::reach(&dir, &c.path).to_string_lossy().to_string())
                 } else {
                     task.book().map(|b| m.books[b.book].path.to_string_lossy().to_string())
                 };

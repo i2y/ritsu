@@ -41,6 +41,9 @@
 //!   alignment, each under the one above by its depth.
 //! - [`wasi`]: what a command says when it needs another program or the network and runs where it
 //!   can have neither: ritsu built for WASI, the npm package (DESIGN 8.8).
+//! - [`modules`]: modules (DESIGN 17) — `ritsu.mod` and `ritsu.lock`, the tar and the OCI manifest of
+//!   a version, the tree of modules and its versions, the store, and where a path that names a
+//!   dependency (`@pricing/…`) leads, which [`fs`] sees.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1, P9).
 
@@ -54,6 +57,7 @@ pub mod fs;
 pub mod json;
 pub mod ledger;
 pub mod marks;
+pub mod modules;
 pub mod naming;
 pub mod openapi;
 pub mod openspec;

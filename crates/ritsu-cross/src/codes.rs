@@ -6,9 +6,11 @@
 //! ritsu's; how they are written out is ritsu-base's ([`ritsu_base::ledger`]).
 //!
 //! The numbers go in bands: E1xx for the files of a project as ritsu reads them, E2xx for the
-//! checks of the borders between the languages (DESIGN 7.2), E9xx and W9xx for the checks of
-//! security (DESIGN 16) and of authorization (sekisho's DESIGN 4.6, which go on from them). The
-//! reproductions are small English projects; the ones of security and of authorization have their
+//! checks of the borders between the languages (DESIGN 7.2), E3xx and W3xx for the modules and
+//! their dependencies (DESIGN 17.20), E9xx and W9xx for the checks of security (DESIGN 16) and of
+//! authorization (sekisho's DESIGN 4.6, which go on from them). The reproductions are small
+//! English projects (the ones of the modules hold their dependencies as paths and as a copy in the
+//! module, so none needs a registry); the ones of security and of authorization have their
 //! Japanese versions besides ([`Entry::english`]), which `explain` shows in Japanese. A code that
 //! is retired keeps its entry, and its number is given to nothing else (DESIGN 7.10).
 
@@ -264,6 +266,67 @@ fn x16_ja(flow: &'static str, gate: &'static str) -> Vec<(&'static str, &'static
     vec![("orders.json", ORDERS_API_JA), ("返品.flow", flow), ("返金.gate", gate)]
 }
 
+/// The rule of the module at hand in the reproductions of the modules: a fee by the subtotal.
+const FEE_RULE: &str = "rule fee v1\ndescription \"The fee of an order: 5 GBP below 100 GBP, none from 100 GBP\"\n\ninputs\n  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc\n\noutputs\n  fee : money[GBPc]  round up(1GBPc)\n\ntable pick\npolicy unique\n| subtotal    | -> fee : money[GBPc] |\n| <10000GBPc  | 500GBPc              |\n| >=10000GBPc | 0GBPc                |\n";
+
+/// The rule of the dependency tax in the reproductions of the modules: a rate of VAT by category.
+const VAT_RULE: &str = "rule vat_rate v1\ndescription \"The rate of VAT for a category of goods\"\n\nenum category = standard | reduced\n\ninputs\n  category : category\n\noutputs\n  rate : rate[step 1%]  round down(1%)\n\ntable rate_by_category\npolicy unique\n| category | -> rate : rate[step 1%] |\n| standard | 20%                     |\n| reduced  | 5%                      |\n";
+
+/// The same rule, its standard rate written over by hand in the module's copy (E305).
+const VAT_RULE_EDITED: &str = "rule vat_rate v1\ndescription \"The rate of VAT for a category of goods\"\n\nenum category = standard | reduced\n\ninputs\n  category : category\n\noutputs\n  rate : rate[step 1%]  round down(1%)\n\ntable rate_by_category\npolicy unique\n| category | -> rate : rate[step 1%] |\n| standard | 25%                     |\n| reduced  | 5%                      |\n";
+
+/// The `ritsu.mod` of tax, as a dependency by a path.
+const TAX_MOD: &str = "module tax\n";
+
+/// The first line of every `ritsu.lock`, which `ritsu mod` writes.
+macro_rules! lock_head {
+    () => {
+        "# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.\nlock 1\nritsu 0.36.0\n"
+    };
+}
+
+/// The `ritsu.mod` of a module that takes tax from a registry.
+const SHOP_MOD_OCI: &str = "module example.com/acme/shop\nversion 1.0.0\n\nrequire tax oci \"example.com/acme/tax\" 1.0.0\n";
+
+/// The hex of the digest the copy of tax 1.0.0 is kept under in the module's `.ritsu/modules/`
+/// (DESIGN 17.15). A copy is read by the digest of its files, the lock's `files`; the OCI
+/// manifest's digest only names its directory, and the copy here holds no manifest, which `ritsu
+/// check` does not read.
+macro_rules! tax_entry {
+    () => {
+        "ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524"
+    };
+}
+
+/// A file of the copy of tax 1.0.0 in the module.
+macro_rules! tax_copy {
+    ($file:literal) => {
+        concat!(".ritsu/modules/sha256/", tax_entry!(), "/files/", $file)
+    };
+}
+
+/// The `ritsu.mod` of tax 1.0.0, from a registry.
+const TAX_MOD_OCI: &str = "module example.com/acme/tax\nversion 1.0.0\n";
+
+/// The same, with a dependency by a path (E308).
+const TAX_MOD_OCI_PATH: &str = "module example.com/acme/tax\nversion 1.0.0\n\nrequire rates path \"../rates\"\n";
+
+/// The lock of E305: the digest of tax's files before its rule was written over.
+const LOCK_E305: &str = concat!(lock_head!(), "oci example.com/acme/tax 1.0.0 sha256:", tax_entry!(), " files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1\n");
+
+/// The lock of E308: the digest of tax's files, which hold the `require … path`.
+const LOCK_E308: &str = concat!(lock_head!(), "oci example.com/acme/tax 1.0.0 sha256:", tax_entry!(), " files sha256:a744d0c29acba47340ec3ca4332ad67719ddb5996c3ec96672573273b8036a85\n");
+
+/// The lock of E304: tax at 1.0.0, while `ritsu.mod` asks for 1.2.0 or later.
+const LOCK_E304: &str = concat!(lock_head!(), "oci example.com/acme/tax 1.0.0 sha256:", tax_entry!(), " files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1\n");
+
+/// The rule of pricing in W303: the total of an order, with the VAT rate of tax.
+const TOTAL_RULE: &str = "rule total v1\ndescription \"The total of an order: its subtotal and its VAT\"\n\nenum category = standard | reduced\n\ninputs\n  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc\n  category : category\n\noutputs\n  total : money[GBPc]  round half_up(1GBPc)\n\napply vat = \"@tax/vat_rate.rule\" meaning:f2850d644389817c\n  category = category\n  rate -> rate\n\nresult total = subtotal + subtotal * rate\n";
+
+/// The rule of the module at hand in W303: it applies pricing's total, and the VAT rate of tax
+/// through pricing, which it does not require.
+const RECEIPT_RULE: &str = "rule receipt v1\ndescription \"The total of an order with gift wrapping: the order's total, and 3 GBP for the wrapping with its VAT\"\n\nenum category = standard | reduced\n\ninputs\n  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc\n  category : category\n\noutputs\n  total : money[GBPc]  round half_up(1GBPc)\n\napply order = \"@pricing/total.rule\" meaning:caa5be4f9a41c851\n  subtotal = subtotal\n  category = category\n  total -> order_total\n\napply vat = \"@pricing/@tax/vat_rate.rule\" meaning:f2850d644389817c\n  category = category\n  rate -> rate\n\nresult total = order_total + 300GBPc + 300GBPc * rate\n";
+
 pub fn ledger() -> Ledger {
     let entries = vec![
         // ── The files of a project ──
@@ -449,6 +512,190 @@ pub fn ledger() -> Ledger {
             ),
             Repro::Dir { files: vec![("weekdays.cal", WEEKDAYS_CAL), ("payment_terms.cal", TERMS_AT_CAL), ("stock.book", STOCK_BOOK_LONG), ("invoice.flow", INVOICE_FLOW)], command: CHECK.to_vec() },
             &["E206"],
+        ),
+        // ── The modules and their dependencies (DESIGN 17.20) ──
+        Entry::new(
+            "E301",
+            tr!("`ritsu.mod` として読めないファイル", "A `ritsu.mod` that does not read"),
+            tr!(
+                "モジュールの `ritsu.mod` を読めないとき。知らない語で始まる行、値の無い語、文字列の中の `\\\"` と `\\\\` のほかのエスケープ、一度しか書けない語（`module`、`version`、`description`、`ritsu`、`license`、`source`）の二度目、`module` が無いか最初の文でないこと、文字列の外の全角の空白、タブのほかの制御文字、UTF-8 として読めないバイト、`library` の知らない出力先などです。木のどれかのモジュールの `ritsu.mod` を読めなければ、依存の木が決まらないので、言語の検査に入らずに止まります（exit 1）。",
+                "A module's `ritsu.mod` that ritsu cannot read: a line that starts with a word ritsu does not know, a word with no value, an escape in a string other than `\\\"` and `\\\\`, a second statement of a word written once at most (`module`, `version`, `description`, `ritsu`, `license`, `source`), no `module` or a `module` that is not the first statement, a full-width space outside a string, a control character other than a tab, bytes that are not UTF-8, a target of `library` ritsu does not know. When the `ritsu.mod` of a module of the tree does not read, the tree of dependencies is not known, and ritsu stops before any language checks a file (exit 1)."
+            ),
+            tr!(
+                "示された行を直してください。文は `module`、`version`、`description`、`ritsu`、`license`、`source`、`require`、`exclude`、`signature`、`library` のどれかで始まり、最初の文は `module` です。",
+                "Correct the line it points at. A statement starts with one of `module`, `version`, `description`, `ritsu`, `license`, `source`, `require`, `exclude`, `signature` and `library`, and the first is `module`."
+            ),
+            Repro::Dir { files: vec![("ritsu.mod", "module shop\nversion 1.0.0\n\nrequires tax path \"tax\"\n"), ("fee.rule", FEE_RULE)], command: CHECK.to_vec() },
+            &["E302"],
+        ),
+        Entry::new(
+            "E302",
+            tr!("`ritsu.mod` の値が、決まった形ではありません", "A value of a `ritsu.mod` is not of its form"),
+            tr!(
+                "`ritsu.mod` の値の形が違うとき。モジュールの名前、版の字、依存の名前、`require … path` の絶対パス、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、二度書いた依存の名前、空の `license`、https でない `source`、`exclude` と鍵のファイルのパスなどです。`require … path` の指す先に `ritsu.mod` が無いときも、値が指すものの誤りとして、このエラーです。言語の検査に入らずに止まります（exit 1）。",
+                "A value of a `ritsu.mod` that is not of its form: a module's name, a version, a dependency's name, an absolute path in `require … path`, the start of the names a `signature` covers, a name in `library`, the version of `ritsu >=`, a dependency's name written twice, an empty `license`, a `source` that is not https, the path of an `exclude` or of a key file. A `require … path` that leads to a directory with no `ritsu.mod` is this error too, as a value that names the wrong thing. ritsu stops before any language checks a file (exit 1)."
+            ),
+            tr!(
+                "示された値を、その文の形に直してください。依存の名前は、小文字の英字で始まり、小文字の英字と数字と `_` だけでできた 64 字までの語です。版の字は `1.4.0` のような SemVer の形です。パスの依存は、`ritsu.mod` のあるディレクトリを、モジュールのルートからの相対パスで指してください。",
+                "Write the value in the form of its statement. A dependency's name is a word of up to 64 lowercase letters, digits and `_` that starts with a letter; a version is of the form of SemVer, `1.4.0`; a dependency by a path names a directory with a `ritsu.mod` in it, by a path from the module's root."
+            ),
+            Repro::Dir { files: vec![("ritsu.mod", "module shop\n\nrequire tax path \"tax\"\n"), ("fee.rule", FEE_RULE), ("tax/vat_rate.rule", VAT_RULE)], command: CHECK.to_vec() },
+            &["E301"],
+        ),
+        Entry::new(
+            "E303",
+            tr!("レジストリの依存があるのに、`ritsu.lock` がありません", "A dependency from a registry, and no `ritsu.lock`"),
+            tr!(
+                "木のどれかのモジュールがレジストリから依存を取る（`require … oci`）のに、手元のモジュールの `ritsu.lock` が無いか、読めないとき。レジストリの依存の版とダイジェストは `ritsu.lock` が決めるので、それが無ければ、どのファイルを読むかが決まりません。lock を読めないのは、書式が違うとき（知らない行、ダイジェストの形など）です。言語の検査に入らずに止まります（exit 1）。",
+                "A module of the tree takes a dependency from a registry (`require … oci`), and the module at hand has no `ritsu.lock`, or one that does not read. `ritsu.lock` pins the version and the digests of each dependency from a registry, so without it which files to read is not known. A lock does not read when it is not of its form (a line ritsu does not know, a digest that is not one). ritsu stops before any language checks a file (exit 1)."
+            ),
+            tr!("`ritsu mod lock` を走らせて、`ritsu.lock` を書いてください。lock は手で書かないでください。", "Run `ritsu mod lock` to write `ritsu.lock`; do not write the lock by hand."),
+            Repro::Dir { files: vec![("ritsu.mod", SHOP_MOD_OCI), ("fee.rule", FEE_RULE)], command: CHECK.to_vec() },
+            &["E304"],
+        ),
+        Entry::new(
+            "E304",
+            tr!("`ritsu.lock` が `ritsu.mod` に合いません", "`ritsu.lock` does not match `ritsu.mod`"),
+            tr!(
+                "`ritsu.lock` が、木のモジュールの `ritsu.mod` に合わないとき。lock に無いモジュール、`require` が求める最小の版より低い lock の版、取り先の種類やパスの違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無いこと、パスで読むモジュールの `oci` の行などです。`ritsu.mod` を手で書き替えて、lock を書き直していないときに起きます。言語の検査に入らずに止まります（exit 1）。",
+                "`ritsu.lock` does not match the `ritsu.mod` of a module of the tree: a module the lock has no line for, a version in the lock below the least a `require` asks for, a source of another kind or another path, a version in the lock other than the `version` of the `ritsu.mod` fetched, a line for the module at hand itself, no line for a dependency by a path where there is a lock, an `oci` line for a module read from a path. It comes when a `ritsu.mod` was edited by hand and the lock was not written again. ritsu stops before any language checks a file (exit 1)."
+            ),
+            tr!("`ritsu mod lock` を走らせて、lock を書き直してください。", "Run `ritsu mod lock` to write the lock again."),
+            Repro::Dir {
+                files: vec![("ritsu.mod", "module example.com/acme/shop\nversion 1.0.0\n\nrequire tax oci \"example.com/acme/tax\" 1.2.0\n"), ("ritsu.lock", LOCK_E304), ("fee.rule", FEE_RULE)],
+                command: CHECK.to_vec(),
+            },
+            &["E303", "W302"],
+        ),
+        Entry::new(
+            "E305",
+            tr!("置き場か同梱のコピーのファイルが、lock のダイジェストと違います", "The files in the store or in the module's copy differ from the lock's digest"),
+            tr!(
+                "レジストリの依存のファイルを、置き場か、モジュールに同梱したコピー（`.ritsu/modules/`。`ritsu mod vendor` が作ります）から読むとき、そのファイルのダイジェストが `ritsu.lock` の `files` のダイジェストと違うとき。だれかがコピーのファイルを手で書き替えたか、ファイルが壊れています。lock が固定した中身ではないので読まず、言語の検査に入らずに止まります（exit 1）。",
+                "The files of a dependency from a registry, read from the store or from the module's own copy of it (`.ritsu/modules/`, which `ritsu mod vendor` makes), have a digest other than the `files` digest of `ritsu.lock`: someone edited a file of the copy, or a file is damaged. They are not the contents the lock pins, so ritsu does not read them, and stops before any language checks a file (exit 1)."
+            ),
+            tr!(
+                "同梱のコピーなら、`ritsu mod vendor` で置き直してください。置き場なら、`ritsu mod clean` で消してから、`ritsu mod fetch` で取り直してください。依存を直すのは、依存のモジュールの中です。直したものを手元で先に確かめるなら、その `require` を、直したディレクトリを指す `require … path` に書き替えてください。",
+                "For the module's copy, run `ritsu mod vendor` to copy the files again; for the store, run `ritsu mod clean`, then `ritsu mod fetch` to fetch them again. A dependency is corrected in its own module; to try a correction here first, make its `require` a `require … path` to the corrected directory."
+            ),
+            Repro::Dir {
+                files: vec![
+                    ("ritsu.mod", SHOP_MOD_OCI),
+                    ("ritsu.lock", LOCK_E305),
+                    ("fee.rule", FEE_RULE),
+                    (tax_copy!("ritsu.mod"), TAX_MOD_OCI),
+                    (tax_copy!("vat_rate.rule"), VAT_RULE_EDITED),
+                ],
+                command: CHECK.to_vec(),
+            },
+            &["E304"],
+        ),
+        Entry::new(
+            "E306",
+            tr!("同じ名前のモジュールが二か所から来ます", "A module of one name comes from two places"),
+            tr!(
+                "木の中で、同じ名前のモジュールが二か所から来るとき。二つの `require … path` が、`module` に同じ名前を書いた別々のディレクトリを指すとき、取ってきた `ritsu.mod` の `module` が取ったリポジトリと違うとき、取ってきたファイルに `ritsu.mod` が無いときです。`ritsu mod lock` が版を選ぶときに読んだタグの `ritsu.mod` の `version` がタグと違うときも、二か所が食い違うので、このエラーです。モジュールは名前で見分けるので、一つの名前の中身は一つでなければなりません。言語の検査に入らずに止まります（exit 1）。",
+                "Within the tree, a module of one name comes from two places: two `require … path` lead to two directories whose `ritsu.mod` give the same `module`; a `ritsu.mod` fetched gives a `module` other than the repository it was fetched from; the files fetched have no `ritsu.mod`. A tag whose `ritsu.mod`, read by `ritsu mod lock` to choose the versions, gives another `version` is this error too: the two places disagree. A module is known by its name, so one name has one content. ritsu stops before any language checks a file (exit 1)."
+            ),
+            tr!(
+                "モジュールを一か所から読むようにしてください。コピーしたディレクトリなら、`module` に自分の名前を付けるか、`require` を一つにしてください。取ってきたモジュールなら、その作者に知らせてください。",
+                "Read the module from one place: give a directory that is a copy a name of its own in `module`, or keep one `require`; for a module fetched, tell its author."
+            ),
+            Repro::Dir {
+                files: vec![
+                    ("ritsu.mod", "module shop\n\nrequire tax path \"tax\"\nrequire vat path \"vat\"\n"),
+                    ("fee.rule", FEE_RULE),
+                    ("tax/ritsu.mod", TAX_MOD),
+                    ("tax/vat_rate.rule", VAT_RULE),
+                    ("vat/ritsu.mod", TAX_MOD),
+                    ("vat/vat_rate.rule", VAT_RULE),
+                ],
+                command: CHECK.to_vec(),
+            },
+            &[],
+        ),
+        Entry::new(
+            "E307",
+            tr!("モジュールのルートに、`@` で始まる名前があります", "A name that starts with `@` at the root of a module"),
+            tr!(
+                "モジュールのルートのすぐ下に、`@` で始まる名前のファイルかディレクトリがあるとき。モジュールの中では `@<名前>` が依存を指すので、その名前のファイルは読めません（ritsu のファイルの層では、そこに依存が見えます）。木を読むのは止めず、ほかのファイルはいつものとおり検査しますが、このエラーで exit は 1 になります。",
+                "Right under the root of a module, a file or a directory has a name that starts with `@`. Within a module, `@<name>` names a dependency, so a file of that name cannot be read: in ritsu's layer of files, a dependency is seen there. The tree is still read and the other files are checked as ever, and the error makes the exit 1."
+            ),
+            tr!("`@` で始まらない名前に変えてください。", "Rename it to a name that does not start with `@`."),
+            Repro::Dir { files: vec![("ritsu.mod", "module shop\n"), ("fee.rule", FEE_RULE), ("@drafts/fee.rule", FEE_RULE)], command: CHECK.to_vec() },
+            &[],
+        ),
+        Entry::new(
+            "E308",
+            tr!("レジストリから取ったモジュールが、パスの依存を持っています", "A module from a registry has a dependency by a path"),
+            tr!(
+                "レジストリから取ったモジュールの `ritsu.mod` が、`require … path` を持つとき。パスの依存は一つの作業ツリーの中でだけ読めるもので、モジュールを取ってきた側には、そのパスの先がありません。言語の検査に入らずに止まります（exit 1）。",
+                "The `ritsu.mod` of a module from a registry has a `require … path`. A dependency by a path is read only within one working tree, and where the module is fetched, nothing is at the end of the path. ritsu stops before any language checks a file (exit 1)."
+            ),
+            tr!(
+                "そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは、依存をどれも `require … oci` で書きます。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。",
+                "Tell the author of the module: a module pushed to a registry writes each of its dependencies as `require … oci`. Until a version that does is pushed, the module can be put in the working tree and read with `require … path`."
+            ),
+            Repro::Dir {
+                files: vec![
+                    ("ritsu.mod", SHOP_MOD_OCI),
+                    ("ritsu.lock", LOCK_E308),
+                    ("fee.rule", FEE_RULE),
+                    (tax_copy!("ritsu.mod"), TAX_MOD_OCI_PATH),
+                    (tax_copy!("vat_rate.rule"), VAT_RULE),
+                ],
+                command: CHECK.to_vec(),
+            },
+            &[],
+        ),
+        Entry::new(
+            "W301",
+            tr!("どのファイルも使っていない依存があります", "A dependency no file uses"),
+            tr!(
+                "モジュールが `require` した依存のファイルを、そのモジュールのどのファイルも指していないとき。指すとは、言語の参照（`apply`、`use rule … from` など）、`contribution` の `to` と `after`、`.proto` の `import` です。`.proto` の `import` は `@` を書きませんが、依存の `.proto` に行き着けば、その依存を使っていると数えます。モジュールの全体を検査するときだけ言います。一部の検査では、渡さなかったファイルが何を指すかを読まないからです。依存のモジュールの W301 は、その依存の警告として数えます。",
+                "No file of a module names a file of a dependency its `ritsu.mod` requires. To name is a language's reference (`apply`, `use rule … from` and the others), the `to` and the `after` of a `contribution`, and the `import` of a `.proto`: an `import` writes no `@`, and one that comes to a `.proto` of the dependency counts as a use of it. It is said only when the whole module is checked, since a check of some of its files does not read what the others name. A W301 of a dependency's module is counted with that dependency's warnings."
+            ),
+            tr!(
+                "使わないなら、`require` の行を消してください（`ritsu mod remove <名前>`）。使うのなら、使うところで `@<名前>/…` のファイルを指してください。",
+                "If the module does not use it, delete the `require` (`ritsu mod remove <name>`); if it is to, name a file of `@<name>/…` where it does."
+            ),
+            Repro::Dir { files: vec![("ritsu.mod", "module shop\n\nrequire tax path \"tax\"\n"), ("fee.rule", FEE_RULE), ("tax/ritsu.mod", TAX_MOD), ("tax/vat_rate.rule", VAT_RULE)], command: CHECK.to_vec() },
+            &["W303"],
+        ),
+        Entry::new(
+            "W302",
+            tr!("`ritsu.lock` に、求められていないモジュールの行があります", "`ritsu.lock` has a line for a module nothing requires"),
+            tr!(
+                "`ritsu.lock` に、手元のモジュールから `require` をたどっても着かないモジュールの行があるとき。`ritsu.mod` から `require` を手で消して、lock を書き直していないときに起きます。木を読むのは止めません。",
+                "`ritsu.lock` has a line for a module that the `require` of the tree, followed from the module at hand, do not come to. It comes when a `require` was deleted from a `ritsu.mod` by hand and the lock was not written again. The tree is still read."
+            ),
+            tr!("`ritsu mod lock` を走らせて、lock を書き直してください。", "Run `ritsu mod lock` to write the lock again."),
+            Repro::Dir { files: vec![("ritsu.mod", "module shop\n"), ("ritsu.lock", concat!(lock_head!(), "path tax \"tax\"\n")), ("fee.rule", FEE_RULE)], command: CHECK.to_vec() },
+            &["E304"],
+        ),
+        Entry::new(
+            "W303",
+            tr!("`require` していない、依存の依存のファイルを指しています", "A path to a file of a module the module does not require, through a dependency"),
+            tr!(
+                "ファイルが、`@pricing/@tax/…` のように、自分のモジュールが `require` していない依存の依存のファイルを指すとき。パスは、そのファイルのモジュールが自分のルートから書く形で見ます。`.proto` の `import` は `@` を書きませんが、行き着いたファイルが依存の依存のものなら、`import` の行に同じく言います。依存の新しい版がその依存の依存を使わなくなると、このファイルは壊れます。依存のファイルに言うものは、その依存の警告として数えます。",
+                "A file names a file of a dependency of a dependency that its own module does not require, as `@pricing/@tax/…` does; the path is taken as the file's module writes it from its own root. An `import` of a `.proto` writes no `@`, and one that comes to a file of a dependency of a dependency is said on its line all the same. A version of the dependency that no longer uses that module breaks the file. One said of a dependency's file is counted with that dependency's warnings."
+            ),
+            tr!(
+                "その依存の依存を、自分の `ritsu.mod` で `require` してください（`ritsu mod add`）。`require` すれば、そのファイルは `@<名前>/…` と直に書けます。",
+                "Require that module in the module's own `ritsu.mod` (`ritsu mod add`); then its file is named as `@<name>/…`."
+            ),
+            Repro::Dir {
+                files: vec![
+                    ("ritsu.mod", "module shop\n\nrequire pricing path \"pricing\"\n"),
+                    ("receipt.rule", RECEIPT_RULE),
+                    ("pricing/ritsu.mod", "module pricing\n\nrequire tax path \"tax\"\n"),
+                    ("pricing/total.rule", TOTAL_RULE),
+                    ("pricing/tax/ritsu.mod", TAX_MOD),
+                    ("pricing/tax/vat_rate.rule", VAT_RULE),
+                ],
+                command: CHECK.to_vec(),
+            },
+            &["W301"],
         ),
         // ── Security (DESIGN 16) ──
         Entry::new(

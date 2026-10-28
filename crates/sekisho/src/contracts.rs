@@ -87,7 +87,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
             continue;
         };
         let path = u.file.to_string_lossy().to_string();
-        let unreadable = |why: Text| at("E201", g, u.line, tr!("`{}` を読めません", "`{}` cannot be read", u.path)).note(why);
+        let unreadable = |why: Text| crate::names::with_outside(at("E201", g, u.line, tr!("`{}` を読めません", "`{}` cannot be read", u.path)).note(why), &g.file, &u.path, &u.file);
         match u.kind {
             UseKind::OpenApi | UseKind::AsyncApi => {
                 let text = match ritsu_base::fs::read_to_string(&u.file) {

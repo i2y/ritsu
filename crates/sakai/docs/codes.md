@@ -968,9 +968,9 @@ See also: [E101](#e101)
 
 ## E103 — Something outside the scope is owned or referred to
 
-**When**: An entry of `owns`, what a proto imports, a file an artifact of another language refers to (a rule, an `enums` file, a dates file, a calendar, a crate and the like), or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.
+**When**: An entry of `owns`, what a proto imports, a file an artifact of another language refers to (a rule, an `enums` file, a dates file, a calendar, a crate and the like), or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it. In a module of ritsu's, a file of a dependency is in the scope when an entry of `owns` of a context of the map holds it (a context of the dependency that `use context "@lib/…"` brings in, or one of the module's own), or when `covers` names the dependency (`covers "@lib"`); `covers "."` does not go into a dependency.
 
-**Fix**: Widen the scope, or delete the entry or the reference.
+**Fix**: Widen the scope, or delete the entry or the reference. For a file of a dependency, bring the dependency's context that owns it into the map with `use context "@lib/…"`, or write the dependency in `covers` and own the file in a context of the map.
 
 **Reproduction**: put the files below in one directory, and run `sakai check .` there.
 

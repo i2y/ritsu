@@ -1,0 +1,13 @@
+# The price of an order in the module nested in app: the subtotal and the shipping fee.
+workflow price v1
+description "The total of an order: its subtotal and its shipping fee"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  shipping : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  total : money[GBPc]
+
+flow
+  succeed total = subtotal + shipping

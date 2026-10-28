@@ -1,0 +1,7 @@
+// An amount of money in pence, as lib writes it.
+syntax = "proto3";
+package acme.orders.v1;
+
+message Money {
+  int64 pence = 1;
+}

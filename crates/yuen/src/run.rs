@@ -92,6 +92,20 @@ fn run_command(args: &[String], suite: Suite, out: &mut dyn Write, err: &mut dyn
         let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
+    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+        return refuse(err, t, lang);
+    }
+    // A directory given is walked without entering another module below it; when the walk did not
+    // start in a module, one line each says which it passed over (ritsu's DESIGN 17.6).
+    let (paths, command): (&[String], String) = match cmd.name {
+        "check" | "review" | "trace" | "affected" | "doc" | "api" => (&a.pos, format!("yuen {}", cmd.name)),
+        "export" | "source" => (a.pos.get(1..).unwrap_or(&[]), format!("yuen {} {}", cmd.name, a.pos.first().map(String::as_str).unwrap_or(""))),
+        _ => (&[], String::new()),
+    };
+    for m in crate::project::other_modules(paths) {
+        let _ = writeln!(err, "{}", ritsu_base::paths::other_module_note(&m, &command).get(lang));
+    }
     match cmd.name {
         "check" => check_cmd(&a, lang, &suite, out, err),
         "review" => review_cmd(&a, lang, &suite, out, err),

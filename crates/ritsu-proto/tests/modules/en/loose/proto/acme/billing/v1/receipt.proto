@@ -1,0 +1,10 @@
+// A receipt outside every module. Its import by the path of the package is looked for where it
+// always was and is not found there: `@lib/proto` is a directory like any other.
+syntax = "proto3";
+package acme.billing.v1;
+
+import "acme/orders/v1/line.proto";
+
+message Receipt {
+  repeated acme.orders.v1.Line lines = 1;
+}

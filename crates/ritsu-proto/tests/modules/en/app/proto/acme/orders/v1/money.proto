@@ -1,0 +1,8 @@
+// The money of the module at hand, at the path lib's money is at in lib: units and a currency.
+syntax = "proto3";
+package acme.orders.v1;
+
+message Money {
+  int64 units = 1;
+  string currency = 2;
+}

@@ -130,7 +130,7 @@ impl Scope {
     }
 
     /// A file a `use` of the checked file names, from where sekisho runs.
-    pub fn path_of(&self, written: &str) -> PathBuf {
+    pub fn path_of(&self, written: &str) -> Result<PathBuf, ritsu_base::modules::Refused> {
         beside(&self.file().path, written)
     }
 
@@ -308,10 +308,58 @@ fn rule_values(facts: &RuleFacts, name: &str) -> Vec<(String, String)> {
     facts.enums.iter().find(|e| e.name == name || e.alias == name).map(|e| e.values.iter().map(|v| (v.name.clone(), v.alias.clone())).collect()).unwrap_or_default()
 }
 
-/// A file named in a `.gate`, from where sekisho runs: the `.gate`'s directory joined to it.
-fn beside(gate: &str, written: &str) -> PathBuf {
-    let dir = FsPath::new(gate).parent().unwrap_or(FsPath::new(""));
-    if dir.as_os_str().is_empty() { PathBuf::from(written) } else { dir.join(written) }
+/// A file named in a `.gate`, from where sekisho runs: the `.gate`'s directory joined to it. In a
+/// module of ritsu's (a directory with a `ritsu.mod`), the path is held to the module, and
+/// `@<name>/…` is a file of a dependency, read from the module's root (ritsu's DESIGN 17.6).
+pub(crate) fn beside(gate: &str, written: &str) -> Result<PathBuf, ritsu_base::modules::Refused> {
+    ritsu_base::modules::refer_shown(FsPath::new(gate).parent().unwrap_or(FsPath::new("")), written)
+}
+
+/// The note a "cannot read" of a file a `.gate` names takes when the file is not there and its path
+/// starts with `@` where no module of ritsu's is above the `.gate` (ritsu's DESIGN 17.6).
+pub(crate) fn outside_module(gate: &str, written: &str, target: &FsPath) -> Option<Text> {
+    if ritsu_base::fs::exists(target) {
+        return None;
+    }
+    ritsu_base::modules::outside_note_for(FsPath::new(gate).parent().unwrap_or(FsPath::new("")), written)
+}
+
+/// The paths the `use` lines and the `workflow … from` lines of a file write, held to the module of
+/// ritsu's the file is in (ritsu's DESIGN 17.6, 17.20): a path that leads out of it, or into a module
+/// below it without an `@`, and a dependency's file that is not there, are E201 (E208 for a flow), in
+/// the words every language says them in. What is said here is read by nothing after it.
+fn held_paths(f: &File, diags: &mut Vec<Diag>) {
+    let said = |written: &str| match beside(&f.path, written) {
+        Err(r) => Some(r.text()),
+        Ok(t) if !ritsu_base::fs::exists(&t) => ritsu_base::modules::missing(&t),
+        Ok(_) => None,
+    };
+    for u in &f.uses {
+        if let Some(t) = said(&u.path.0) {
+            diags.push(Diag::error("E201", &f.path, u.path.1.line, u.path.1.col, t).source(&f.src));
+        }
+    }
+    for w in &f.workflows {
+        if let Some(t) = said(&w.flow.0) {
+            diags.push(Diag::error("E208", &f.path, w.flow.1.line, w.flow.1.col, t).source(&f.src));
+        }
+    }
+}
+
+/// `d`, with the note of [`outside_module`] when it has one.
+pub(crate) fn with_outside(d: Diag, gate: &str, written: &str, target: &FsPath) -> Diag {
+    match outside_module(gate, written, target) {
+        Some(n) => d.note(n),
+        None => d,
+    }
+}
+
+/// Whether a path a `.gate` writes is one [`held_paths`] has said: what reads it passes it over.
+fn said_already(gate: &str, written: &str) -> bool {
+    match beside(gate, written) {
+        Err(_) => true,
+        Ok(t) => !ritsu_base::fs::exists(&t) && ritsu_base::modules::missing(&t).is_some(),
+    }
 }
 
 /// `+09:00` as minutes east of UTC, or why it is not one (E107): koyomi's way, since a `today`
@@ -525,6 +573,7 @@ fn check_reading(file: File, suite: &Suite, reading: &mut Vec<PathBuf>) -> Named
         return Named { diags: vec![d], scope: None };
     }
     let mut diags = Vec::new();
+    held_paths(&file, &mut diags);
     let mut scope = Scope { files: vec![file], rules: BTreeMap::new(), dates: BTreeMap::new() };
     read_gates(&mut scope, suite, reading, &mut diags);
     // a file read with `use gate` reads what this run cannot: that alone is said (E209), as for this file
@@ -553,7 +602,10 @@ fn read_gates(scope: &mut Scope, suite: &Suite, reading: &mut Vec<PathBuf>, diag
     // the `use gate` line each file read came by, in the order of `scope.files[1..]`
     let mut via: Vec<Span> = Vec::new();
     for u in uses {
-        let target = beside(&path, &u.path.0);
+        let Ok(target) = beside(&path, &u.path.0) else { continue };
+        if said_already(&path, &u.path.0) {
+            continue;
+        }
         let shown = target.display().to_string();
         let at = |msg: Text| Diag::error("E201", &path, u.span.line, u.span.col, msg).source(&src);
         let key = normal(&shown);
@@ -570,7 +622,7 @@ fn read_gates(scope: &mut Scope, suite: &Suite, reading: &mut Vec<PathBuf>, diag
         let text = match ritsu_base::fs::read_to_string(&target) {
             Ok(t) => t,
             Err(e) => {
-                diags.push(at(tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}")));
+                diags.push(with_outside(at(tr!("`{shown}` を読めません: {e}", "cannot read `{shown}`: {e}")), &path, &u.path.0, &target));
                 continue;
             }
         };
@@ -705,7 +757,10 @@ fn read_facts(scope: &mut Scope, suite: &Suite, diags: &mut Vec<Diag>) {
     };
     for u in f.uses.clone() {
         let Some((name, _)) = &u.name else { continue };
-        let target = beside(&path, &u.path.0);
+        let Ok(target) = beside(&path, &u.path.0) else { continue };
+        if said_already(&path, &u.path.0) {
+            continue;
+        }
         let shown = target.display().to_string();
         match u.kind {
             UseKind::Rule => {
@@ -714,7 +769,7 @@ fn read_facts(scope: &mut Scope, suite: &Suite, diags: &mut Vec<Diag>) {
                     Ok(facts) => {
                         scope.rules.entry(name.clone()).or_insert(Read { path: target, facts });
                     }
-                    Err(said) => diags.push(refused(&u, &shown, "rulec", &said)),
+                    Err(said) => diags.push(with_outside(refused(&u, &shown, "rulec", &said), &path, &u.path.0, &target)),
                 }
             }
             UseKind::Dates => {
@@ -723,7 +778,7 @@ fn read_facts(scope: &mut Scope, suite: &Suite, diags: &mut Vec<Diag>) {
                     Ok(facts) => {
                         scope.dates.entry(name.clone()).or_insert(Read { path: target, facts });
                     }
-                    Err(said) => diags.push(refused(&u, &shown, "koyomi", &said)),
+                    Err(said) => diags.push(with_outside(refused(&u, &shown, "koyomi", &said), &path, &u.path.0, &target)),
                 }
             }
             _ => {}

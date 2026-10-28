@@ -1,0 +1,8 @@
+# A path into a module nested in app: inner has a ritsu.mod of its own, so its files are not app's.
+module order v1
+description "The subtotal of an order by the basket of the nested module"
+
+use module basket from "../inner/checkout/basket.kn"
+
+fn subtotal(lines: list[basket.Line] count >=1 <=20) -> money[GBPc]
+  basket.subtotal(lines: lines)

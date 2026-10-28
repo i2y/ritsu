@@ -1,0 +1,4 @@
+ok 会計/かご.kn: 2 functions, total
+注文/注文を受ける.flow: ok
+dependencies: 2 modules, 3 files (rulec 3): all pass
+ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the languages: 0 checked, 0 undecided

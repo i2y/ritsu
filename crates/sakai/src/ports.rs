@@ -88,8 +88,7 @@ impl ritsu_ports::References for Engine {
     /// roots and its code.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let (_, f) = read(root, file)?;
-        let dir = ritsu_base::paths::parent(file);
-        let at = |s: &Str| ritsu_base::paths::join(&dir, &s.value).ok();
+        let at = |s: &Str| ritsu_base::modules::join(root, file, &s.value).ok();
         let mut out = Vec::new();
         let path = |s: &Str, tool: Tool, how: &str, out: &mut Vec<Reference>| {
             if let Some(p) = at(s) {
@@ -151,7 +150,7 @@ impl ritsu_ports::References for Engine {
                 let element = |e: &Element| -> Option<Naming> {
                     match e {
                         Element::Long { written, .. } => {
-                            let p = ritsu_base::paths::join(&dir, &written.path).ok()?;
+                            let p = ritsu_base::modules::join(root, file, &written.path).ok()?;
                             let mut n = Naming::file(written.tool, p);
                             for (k, _, v, _) in &written.items {
                                 n = n.with(k, v.clone());

@@ -390,10 +390,13 @@ pub fn ledger() -> Ledger {
             "E103",
             tr!("範囲の外のものを、持っているか参照しています", "Something outside the scope is owned or referred to"),
             tr!(
-                "`owns` の項や、proto の import の先、ほかの言語の成果物が参照するファイル（規則、`enums` のファイル、日付のファイル、カレンダー、クレートなど）、`means` の proto が、地図の範囲の外にあるとき。範囲は `covers` で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。",
-                "An entry of `owns`, what a proto imports, a file an artifact of another language refers to (a rule, an `enums` file, a dates file, a calendar, a crate and the like), or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it."
+                "`owns` の項や、proto の import の先、ほかの言語の成果物が参照するファイル（規則、`enums` のファイル、日付のファイル、カレンダー、クレートなど）、`means` の proto が、地図の範囲の外にあるとき。範囲は `covers` で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。ritsu のモジュールでは、依存のファイルは、地図のコンテキストの `owns` の項が含むとき（`use context \"@lib/…\"` で入れた依存のコンテキストのものでも、手元のコンテキストのものでもよい）と、`covers` が依存を書くとき（`covers \"@lib\"`）に範囲に入ります。`covers \".\"` は依存の中に入りません。",
+                "An entry of `owns`, what a proto imports, a file an artifact of another language refers to (a rule, an `enums` file, a dates file, a calendar, a crate and the like), or the proto of a `means` is outside the map's scope: the `covers`, without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it. In a module of ritsu's, a file of a dependency is in the scope when an entry of `owns` of a context of the map holds it (a context of the dependency that `use context \"@lib/…\"` brings in, or one of the module's own), or when `covers` names the dependency (`covers \"@lib\"`); `covers \".\"` does not go into a dependency."
             ),
-            tr!("範囲を広げるか、項や参照を消してください。", "Widen the scope, or delete the entry or the reference."),
+            tr!(
+                "範囲を広げるか、項や参照を消してください。依存のファイルなら、それを持つ依存のコンテキストを `use context \"@lib/…\"` で地図に入れるか、`covers` に依存を書いて、そのファイルを地図のどれかのコンテキストに持たせてください。",
+                "Widen the scope, or delete the entry or the reference. For a file of a dependency, bring the dependency's context that owns it into the map with `use context \"@lib/…\"`, or write the dependency in `covers` and own the file in a context of the map."
+            ),
             &[
                 ("地図.ctx", "map 地図(m) v1\nuse context \"甲.ctx\"\nuse context \"乙.ctx\"\ncovers \".\"\nexcept \"c\"\n"),
                 ("甲.ctx", "context 甲(a) v1\nowns\n  dir \"a\", \"c\"\n"),

@@ -9,7 +9,7 @@ use crate::proto::ProtoFile;
 use crate::rulec::{self, RType};
 use crate::syntax::{self, Block, Call, Expr, MachineUse, Part, Program, RangeDecl, Span, StmtKind, TypeExpr};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn type_hint() -> Text {
     tr!(
@@ -61,6 +61,15 @@ pub struct Lowerer<'a> {
 
 fn e(code: &'static str, sp: Span, message: Text) -> Diag {
     Diag::error(code, sp.line, sp.col, message)
+}
+
+/// `d`, with the note for a path that starts with `@` where no module of ritsu's is above the
+/// `.flow`, so that it is a plain path, when nothing is at `path` (ritsu's DESIGN 17.6).
+fn outside(d: Diag, base: &Path, written: &str, path: &Path) -> Diag {
+    match ritsu_base::modules::outside_note_for(base, written) {
+        Some(n) if !ritsu_base::fs::exists(path) => d.note(n),
+        _ => d,
+    }
 }
 
 /// W902: a call that goes without encryption to a host that is not this machine (DESIGN 1.18), at
@@ -226,6 +235,26 @@ impl<'a> Lowerer<'a> {
         self.diags.push(d);
     }
 
+    /// The file a line of the `.flow` names, from the directory `base` of the `.flow` (ritsu's
+    /// DESIGN 17.6). None when the module of ritsu's the `.flow` is in refuses the path, or the path
+    /// is a dependency's file that is not there, which is said with `code`, in the words every
+    /// language says it in.
+    fn follow(&mut self, base: &Path, written: &str, code: &'static str, sp: Span) -> Option<PathBuf> {
+        match crate::sources::follow(base, written) {
+            Err(r) => {
+                self.push(e(code, sp, r.text()));
+                None
+            }
+            Ok(p) => match ritsu_base::modules::missing(&p).filter(|_| !ritsu_base::fs::exists(&p)) {
+                Some(t) => {
+                    self.push(e(code, sp, t));
+                    None
+                }
+                None => Some(p),
+            },
+        }
+    }
+
     fn next_site(&mut self) -> usize {
         self.site += 1;
         self.site
@@ -248,11 +277,12 @@ impl<'a> Lowerer<'a> {
                 continue;
             }
             self.use_spans.insert(name.clone(), *sp);
-            match crate::apis::load(u.kind, &base.join(&u.path)) {
+            let Some(path) = self.follow(base, &u.path, "E016", *sp) else { continue };
+            match crate::apis::load(u.kind, &path) {
                 Ok(doc) => {
                     self.apis.insert(name.clone(), (u.kind, crate::apis::Api { name: name.clone(), doc, url: u.url.clone() }));
                 }
-                Err(msg) => self.push(e("E016", *sp, tr!("API `{}` を読めませんでした", "could not read the API `{}`", u.path)).note(Text::same(msg))),
+                Err(msg) => self.push(outside(e("E016", *sp, tr!("API `{}` を読めませんでした", "could not read the API `{}`", u.path)).note(Text::same(msg)), base, &u.path, &path)),
             }
         }
     }
@@ -280,13 +310,13 @@ impl<'a> Lowerer<'a> {
                 self.push(e("E006", *sp, tr!("規則 `{name}` が二度読み込まれています", "the rule `{name}` is used twice")));
                 continue;
             }
-            let path = base.join(&u.path);
+            let Some(path) = self.follow(base, &u.path, "E005", *sp) else { continue };
             let info = match rulec::load(&path) {
                 Ok(i) => i,
                 Err(said) => {
                     // what rulec says of the rule instead, or what the port this dandori runs with says
                     let d = e("E005", *sp, tr!("規則 `{}` を読めませんでした", "could not read the rule `{}`", u.path));
-                    self.push(crate::sources::said_notes(&said).into_iter().fold(d, Diag::note));
+                    self.push(outside(crate::sources::said_notes(&said).into_iter().fold(d, Diag::note), base, &u.path, &path));
                     continue;
                 }
             };
@@ -356,12 +386,12 @@ impl<'a> Lowerer<'a> {
             if self.used_name(name, *sp) {
                 continue;
             }
-            let path = base.join(&u.path);
+            let Some(path) = self.follow(base, &u.path, "E005", *sp) else { continue };
             let facts = match crate::sources::dates(&path) {
                 Ok(f) => f,
                 Err(said) => {
                     let d = e("E005", *sp, tr!("日付のファイル `{}` を読めませんでした", "could not read the dates file `{}`", u.path));
-                    self.push(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note));
+                    self.push(outside(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note), base, &u.path, &path));
                     continue;
                 }
             };
@@ -455,12 +485,12 @@ impl<'a> Lowerer<'a> {
             if self.used_name(name, *sp) {
                 continue;
             }
-            let path = base.join(&u.path);
+            let Some(path) = self.follow(base, &u.path, "E005", *sp) else { continue };
             let facts = match crate::sources::book(&path) {
                 Ok(f) => f,
                 Err(said) => {
                     let d = e("E005", *sp, tr!("帳簿 `{}` を読めませんでした", "could not read the book `{}`", u.path));
-                    self.push(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note));
+                    self.push(outside(crate::sources::said_notes_from(&said, base).into_iter().fold(d, Diag::note), base, &u.path, &path));
                     continue;
                 }
             };
@@ -1168,7 +1198,9 @@ impl<'a> Lowerer<'a> {
     /// The `.flow` a task runs as its child, checked on its own (E015 when it cannot be).
     fn child_flow(&mut self, path: &str, sp: Span) -> Option<Box<ChildFlow>> {
         use crate::check::ChildTrouble;
-        let (message, note) = match crate::check::child(&self.dir.join(path)) {
+        let dir = self.dir.clone();
+        let child = self.follow(&dir, path, "E015", sp)?;
+        let (message, note) = match crate::check::child(&child) {
             Ok(model) => return Some(Box::new(ChildFlow { path: path.to_string(), model })),
             Err(ChildTrouble::Cycle(chain)) => {
                 let names: Vec<String> = chain.iter().map(|p| p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default()).collect();
@@ -1187,7 +1219,7 @@ impl<'a> Lowerer<'a> {
         if let Some(note) = note {
             d = d.note(note);
         }
-        self.push(d);
+        self.push(outside(d, &dir, path, &child));
         None
     }
 
@@ -1839,7 +1871,7 @@ impl<'a> Lowerer<'a> {
             // the description of the API whose operation the task calls, as dandori reaches it
             let api_file = match &t.binding {
                 Some((syntax::Binding::Http { api: Some(a), .. }, _)) | Some((syntax::Binding::Connect { api: a, .. }, _)) => {
-                    self.prog.apis.iter().find(|u| u.name.0 == a.0).map(|u| self.dir.join(&u.path).to_string_lossy().to_string())
+                    self.prog.apis.iter().find(|u| u.name.0 == a.0).map(|u| crate::sources::reach(&self.dir, &u.path).to_string_lossy().to_string())
                 }
                 _ => None,
             };
@@ -1898,7 +1930,7 @@ impl<'a> Lowerer<'a> {
                         if let syntax::Binding::Http { method, url, .. } = b {
                             let task = self.m.tasks.last().expect("just pushed");
                             let (params, answer) = crate::apis::openapi_marks(api, method, url, &self.m, task);
-                            let file = self.prog.apis.iter().find(|u| u.name.0 == api.name).map(|u| self.dir.join(&u.path)).unwrap_or_default();
+                            let file = self.prog.apis.iter().find(|u| u.name.0 == api.name).map(|u| crate::sources::reach(&self.dir, &u.path)).unwrap_or_default();
                             let params: Vec<(String, String, SecretMark)> = params.into_iter().map(|(p, d)| (p, d.path.clone(), self.doc_mark(&file, &d))).collect();
                             let answer: Vec<(String, SecretMark)> = answer.into_iter().map(|d| (d.path.clone(), self.doc_mark(&file, &d))).collect();
                             let task = self.m.tasks.last_mut().expect("just pushed");

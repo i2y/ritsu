@@ -87,3 +87,36 @@ fn what_is_not_an_openspec_spec() {
         assert!(err.starts_with(want), "{what}: {err}");
     }
 }
+
+/// A directory given is walked without entering another module below it, a directory with a
+/// `ritsu.mod` of its own (ritsu's DESIGN 17.6): its specs are that module's. Given in no module,
+/// the walk says so in a line for each module it passed over; in a module, it passes over them
+/// without a word, as a walk of ritsu's does.
+#[test]
+fn a_walk_does_not_enter_another_module() {
+    let s = Scratch::new("scenarios-modules");
+    let specs = s.path().join("openspec/specs");
+    std::fs::create_dir_all(specs.join("greeting")).unwrap();
+    std::fs::copy(root().join("examples/greeter/openspec/specs/greeting/spec.md"), specs.join("greeting/spec.md")).unwrap();
+    // another module's spec, with a scenario no claim of the greeter answers
+    std::fs::create_dir_all(specs.join("vendor/farewell")).unwrap();
+    std::fs::write(specs.join("vendor/ritsu.mod"), "module example.com/acme/vendor\n").unwrap();
+    std::fs::write(
+        specs.join("vendor/farewell/spec.md"),
+        "# Farewell Specification\n\n## Purpose\nSays goodbye.\n\n## Requirements\n\n### Requirement: Farewell by name\nThe service SHALL answer `GET /bye?name=<name>` with `Goodbye, <name>`.\n\n#### Scenario: says goodbye by name\n- **WHEN** a client asks for `/bye?name=Alice`\n- **THEN** `message` is `Goodbye, Alice`\n",
+    )
+    .unwrap();
+    let spec = root().join("examples/greeter/greeter.geas");
+    let spec = spec.to_str().unwrap();
+    let (out, err, code) = run(s.path(), &["scenarios", spec, "--openspec", "openspec/specs", "--lang", "en"], &[]);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(!out.contains("vendor") && !out.contains("goodbye"), "{out}");
+    assert_eq!(err, "note: `openspec/specs/vendor` has a `ritsu.mod` of its own: it is another module, and was not read; run `geas scenarios … --openspec openspec/specs/vendor` to read it\n");
+    let (_, err, _) = run(s.path(), &["scenarios", spec, "--openspec", "openspec/specs", "--lang", "ja"], &[]);
+    assert_eq!(err, "備考: `openspec/specs/vendor` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `geas scenarios … --openspec openspec/specs/vendor` を実行してください\n");
+    // in a module, the same walk passes over it without a word
+    std::fs::write(s.path().join("ritsu.mod"), "module example.com/acme/greeter\n").unwrap();
+    let (out, err, code) = run(s.path(), &["scenarios", spec, "--openspec", "openspec/specs", "--lang", "en"], &[]);
+    assert_eq!((err.as_str(), code), ("", 0), "{out}");
+    assert!(!out.contains("vendor"), "{out}");
+}

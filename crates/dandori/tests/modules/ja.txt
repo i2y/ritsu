@@ -1,0 +1,254 @@
+# in ja/アプリ
+
+$ dandori check --lang ja 注文/注文を受ける.flow
+注文/注文を受ける.flow: 検査を通りました
+exit 0
+
+$ dandori check --lang ja 注文/注文を受ける.flow --format json
+{
+  "file": "注文/注文を受ける.flow",
+  "diagnostics": []
+}
+exit 0
+
+$ dandori check --lang ja @lib/流れ/値付け.flow
+@lib/流れ/値付け.flow: 検査を通りました
+exit 0
+
+$ dandori check --lang ja 誤り/依存に無い.flow
+エラー[E005]: 誤り/依存に無い.flow:5:10: `@shop/規則/注文の合計.rule` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません
+     5 | use rule 合計 from "@shop/規則/注文の合計.rule"
+エラー[E002]: 誤り/依存に無い.flow:15:8: 型 `合計.区分` はありません
+    15 |   区分 : 合計.区分
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E015]: 誤り/依存に無い.flow:21:1: `値付け` には入力 `区分` が要りますが、`値を付ける` はそれを渡しません
+    21 | task 値を付ける(小計: money[GBPc] range >=0GBPc <=2_000_000GBPc, 区分: 合計.区分, 送料: money[GBPc] range >=0GBPc <=10_000GBPc) -> 値段
+エラー[E002]: 誤り/依存に無い.flow:21:63: 型 `合計.区分` はありません
+    21 | task 値を付ける(小計: money[GBPc] range >=0GBPc <=2_000_000GBPc, 区分: 合計.区分, 送料: money[GBPc] range >=0GBPc <=10_000GBPc) -> 値段
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E004]: 誤り/依存に無い.flow:28:28: `値を付ける` に引数 `区分` はありません（あるのは 小計・送料）
+    28 |   let 付けた値 = 値を付ける(小計: 小計, 区分: 区分, 送料: 送料)
+exit 1
+
+$ dandori check --lang ja 誤り/外を指す.flow
+エラー[E005]: 誤り/外を指す.flow:7:10: `../../部品/帳簿/台帳.book` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です
+     7 | use book 台帳 from "../../部品/帳簿/台帳.book"
+エラー[E002]: 誤り/外を指す.flow:26:8: 帳簿 `台帳` はありません。`use book` で読んだものを書いてください
+    26 |   book 台帳.請求.do
+エラー[E002]: 誤り/外を指す.flow:30:3: タスクか規則 `請求を記す` はありません
+    30 |   請求を記す(注文: 受注.id, 金額: 付けた値.合計額)
+exit 1
+
+$ dandori check --lang ja 誤り/入れ子.flow
+エラー[E015]: 誤り/入れ子.flow:22:3: `../入れ子/流れ/値付け.flow` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください
+    22 |   flow "../入れ子/流れ/値付け.flow"
+exit 1
+
+$ dandori check --lang ja 誤り/無いファイル.flow
+エラー[E016]: 誤り/無いファイル.flow:7:11: 依存 `@lib`（`example.com/acme/lib`、`../部品`）に `proto/acme/orders/v1/orders.proto` はありません
+     7 | use proto 注文 from "@lib/proto/acme/orders/v1/orders.proto"
+エラー[E002]: 誤り/無いファイル.flow:13:8: 型 `注文.Order` はありません
+    13 |   受注 : 注文.Order
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: 誤り/無いファイル.flow:29:13: 変数や値 `受注` はありません
+    29 |   請求を記す(注文: 受注.id, 金額: 付けた値.合計額)
+  = 値は変数・そのフィールド・文字列・数・true・false のどれかです
+exit 1
+
+$ dandori check --lang ja 誤り/無いファイル.flow --format json
+{
+  "file": "誤り/無いファイル.flow",
+  "diagnostics": [
+    {
+      "code": "E016",
+      "severity": "error",
+      "line": 7,
+      "col": 11,
+      "message": "依存 `@lib`（`example.com/acme/lib`、`../部品`）に `proto/acme/orders/v1/orders.proto` はありません",
+      "notes": [],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 13,
+      "col": 8,
+      "message": "型 `注文.Order` はありません",
+      "notes": [
+        "型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 29,
+      "col": 13,
+      "message": "変数や値 `受注` はありません",
+      "notes": [
+        "値は変数・そのフィールド・文字列・数・true・false のどれかです"
+      ],
+      "path": []
+    }
+  ]
+}
+exit 1
+
+# in ja/アプリ/注文
+
+$ dandori check --lang ja @lib/流れ/値付け.flow
+@lib/流れ/値付け.flow: 検査を通りました
+exit 0
+
+# in ja/外
+
+$ dandori check --lang ja 注文を受ける.flow
+エラー[E005]: 注文を受ける.flow:6:10: 規則 `@lib/規則/注文の合計.rule` を読めませんでした
+     6 | use rule 合計 from "@lib/規則/注文の合計.rule"
+  = `@lib/規則/注文の合計.rule` を読めません: No such file or directory (os error 2)
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+エラー[E005]: 注文を受ける.flow:7:10: 帳簿 `@lib/帳簿/台帳.book` を読めませんでした
+     7 | use book 台帳 from "@lib/帳簿/台帳.book"
+  = `@lib/帳簿/台帳.book` を読めません: No such file or directory (os error 2)
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+エラー[E016]: 注文を受ける.flow:8:11: API `@lib/proto/acme/orders/v1/order.proto` を読めませんでした
+     8 | use proto 注文 from "@lib/proto/acme/orders/v1/order.proto"
+  = cannot read @lib/proto/acme/orders/v1/order.proto: No such file or directory (os error 2)
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+エラー[E002]: 注文を受ける.flow:14:8: 型 `注文.Order` はありません
+    14 |   受注 : 注文.Order
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: 注文を受ける.flow:16:8: 型 `合計.区分` はありません
+    16 |   区分 : 合計.区分
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E002]: 注文を受ける.flow:22:63: 型 `合計.区分` はありません
+    22 | task 値を付ける(小計: money[GBPc] range >=0GBPc <=2_000_000GBPc, 区分: 合計.区分, 送料: money[GBPc] range >=0GBPc <=10_000GBPc) -> 値段
+  = 型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです
+エラー[E015]: 注文を受ける.flow:23:3: `@lib/流れ/値付け.flow` を読めませんでした
+    23 |   flow "@lib/流れ/値付け.flow"
+  = No such file or directory (os error 2)
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+エラー[E002]: 注文を受ける.flow:26:8: 帳簿 `台帳` はありません。`use book` で読んだものを書いてください
+    26 |   book 台帳.請求.do
+エラー[E004]: 注文を受ける.flow:29:28: `値を付ける` に引数 `区分` はありません（あるのは 小計・送料）
+    29 |   let 付けた値 = 値を付ける(小計: 小計, 区分: 区分, 送料: 送料)
+エラー[E002]: 注文を受ける.flow:30:3: タスクか規則 `請求を記す` はありません
+    30 |   請求を記す(注文: 受注.id, 金額: 付けた値.合計額)
+exit 1
+
+$ dandori check --lang ja 注文を受ける.flow --format json
+{
+  "file": "注文を受ける.flow",
+  "diagnostics": [
+    {
+      "code": "E005",
+      "severity": "error",
+      "line": 6,
+      "col": 10,
+      "message": "規則 `@lib/規則/注文の合計.rule` を読めませんでした",
+      "notes": [
+        "`@lib/規則/注文の合計.rule` を読めません: No such file or directory (os error 2)",
+        "`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"
+      ],
+      "path": []
+    },
+    {
+      "code": "E005",
+      "severity": "error",
+      "line": 7,
+      "col": 10,
+      "message": "帳簿 `@lib/帳簿/台帳.book` を読めませんでした",
+      "notes": [
+        "`@lib/帳簿/台帳.book` を読めません: No such file or directory (os error 2)",
+        "`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"
+      ],
+      "path": []
+    },
+    {
+      "code": "E016",
+      "severity": "error",
+      "line": 8,
+      "col": 11,
+      "message": "API `@lib/proto/acme/orders/v1/order.proto` を読めませんでした",
+      "notes": [
+        "cannot read @lib/proto/acme/orders/v1/order.proto: No such file or directory (os error 2)",
+        "`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 14,
+      "col": 8,
+      "message": "型 `注文.Order` はありません",
+      "notes": [
+        "型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 16,
+      "col": 8,
+      "message": "型 `合計.区分` はありません",
+      "notes": [
+        "型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 22,
+      "col": 63,
+      "message": "型 `合計.区分` はありません",
+      "notes": [
+        "型は int・string・bool・timestamp・date・json・money[円, incl_tax] のような単位・列挙・レコード・list[T]・T? のどれかです"
+      ],
+      "path": []
+    },
+    {
+      "code": "E015",
+      "severity": "error",
+      "line": 23,
+      "col": 3,
+      "message": "`@lib/流れ/値付け.flow` を読めませんでした",
+      "notes": [
+        "No such file or directory (os error 2)",
+        "`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"
+      ],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 26,
+      "col": 8,
+      "message": "帳簿 `台帳` はありません。`use book` で読んだものを書いてください",
+      "notes": [],
+      "path": []
+    },
+    {
+      "code": "E004",
+      "severity": "error",
+      "line": 29,
+      "col": 28,
+      "message": "`値を付ける` に引数 `区分` はありません（あるのは 小計・送料）",
+      "notes": [],
+      "path": []
+    },
+    {
+      "code": "E002",
+      "severity": "error",
+      "line": 30,
+      "col": 3,
+      "message": "タスクか規則 `請求を記す` はありません",
+      "notes": [],
+      "path": []
+    }
+  ]
+}
+exit 1
+

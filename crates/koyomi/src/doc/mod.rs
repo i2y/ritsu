@@ -324,23 +324,32 @@ fn read_calendar_files(c: &Calendar) -> Vec<CalFile> {
 fn stamp_calendar(cal: &Calendar, base: &Path, include_self: bool, lang: Lang) -> Vec<(String, Para)> {
     let mut rows = Vec::new();
     let infos: Vec<&Info> = if include_self { std::iter::once(&cal.info).chain(cal.used.iter()).collect() } else { cal.used.iter().collect() };
+    // a file of another module than the page's, a dependency's, which is not beside the page: its
+    // module and version (ritsu's DESIGN 17.8)
+    let module = |p: &Path| match ritsu_base::modules::module_words_from(base, p) {
+        Some(m) if lang == Lang::Ja => format!("、{}", m.ja),
+        Some(m) => format!(", {}", m.en),
+        None => String::new(),
+    };
     for i in infos {
         let p = crate::api::relative(base, &i.path);
+        let of = module(&i.path);
         let tail = match lang {
-            Lang::Ja => format!("（calendar {} v{}、sha256:{}）", i.name, i.version, &i.sha256[..16]),
-            Lang::En => format!(" (calendar {} v{}, sha256:{})", i.name, i.version, &i.sha256[..16]),
+            Lang::Ja => format!("（calendar {} v{}、sha256:{}{of}）", i.name, i.version, &i.sha256[..16]),
+            Lang::En => format!(" (calendar {} v{}, sha256:{}{of})", i.name, i.version, &i.sha256[..16]),
         };
         rows.push((say(tr!("カレンダー", "Calendar"), lang), vec![c(p), t(tail)]));
     }
     for tb in &cal.tables {
         let p = crate::api::relative(base, &clean(&tb.path));
         let covers = if tb.listed_years { format!("covers listed years = {}..{}", tb.covers.0, tb.covers.1) } else { format!("covers {}..{}", tb.covers.0, tb.covers.1) };
+        let of = module(&tb.path);
         let mut cell = vec![t(format!("{} = ", tb.name)), c(p)];
         cell.push(t(match (&tb.url, lang) {
-            (Some(u), Lang::Ja) => format!("（sha256:{}、{u} のコピー、{covers}）", tb.pin),
-            (Some(u), Lang::En) => format!(" (sha256:{}, a copy of {u}, {covers})", tb.pin),
-            (None, Lang::Ja) => format!("（sha256:{}、{covers}）", tb.pin),
-            (None, Lang::En) => format!(" (sha256:{}, {covers})", tb.pin),
+            (Some(u), Lang::Ja) => format!("（sha256:{}{of}、{u} のコピー、{covers}）", tb.pin),
+            (Some(u), Lang::En) => format!(" (sha256:{}{of}, a copy of {u}, {covers})", tb.pin),
+            (None, Lang::Ja) => format!("（sha256:{}{of}、{covers}）", tb.pin),
+            (None, Lang::En) => format!(" (sha256:{}{of}, {covers})", tb.pin),
         }));
         rows.push((say(tr!("表", "Table"), lang), cell));
     }

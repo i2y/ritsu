@@ -1,0 +1,8 @@
+# A dependency the module does not require: app's ritsu.mod has no `require shop`.
+module order v1
+description "The total of an order by the rule order_total"
+
+use rule order_total from "@shop/rules/order_total.rule"
+
+fn total(subtotal: money[GBPc] range >=0GBPc <=2_000_000GBPc, category: order_total.category) -> money[GBPc] total
+  order_total(subtotal: subtotal, category: category, shipping: 0GBPc).total

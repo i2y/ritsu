@@ -1,0 +1,11 @@
+# 事務所のカレンダー。土日と、モジュール base が挙げる日を休む。base の日は `@base/…`（このモジュールの
+# ルートからのパス）で読む。休業日はこの試験のために決めた日。
+calendar 事務所(office) v1
+description "モジュールの試験の事務所。土曜日、日曜日と、モジュール base が挙げる日を休む"
+
+source 休業日 = file "@base/データ/休業日.csv" sha256:91aa8f6b2947a857
+  format csv utf8
+  covers 2026-01-01..2027-12-31
+
+closed weekly sat, sun
+closed 休業日

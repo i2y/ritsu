@@ -1,0 +1,30 @@
+# The fees are the example's own. Version 1.1.0 of pricing moved the step of the weight from
+# 2,000 g to 2,500 g and added the region eu.
+rule shipping_fee v1
+description "The fee for shipping a parcel, by its weight and the region it goes to: one fee up to 2,500 g and another above. The fees are the example's own"
+
+enum region = domestic | eu | world
+
+inputs
+  weight : mass[g]  range >=1g <=30_000g
+  region : region
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table fee_by_weight
+policy unique
+| region   | weight  | -> fee : money[GBPc] |
+| domestic | <=2500g | 395GBPc              |
+| domestic | >2500g  | 695GBPc              |
+| eu       | <=2500g | 1250GBPc             |
+| eu       | >2500g  | 1950GBPc             |
+| world    | <=2500g | 1850GBPc             |
+| world    | >2500g  | 2950GBPc             |
+
+examples
+| weight  | region   | -> fee   |
+| 2500g   | domestic | 395GBPc  |
+| 2501g   | domestic | 695GBPc  |
+| 1000g   | eu       | 1250GBPc |
+| 30_000g | world    | 2950GBPc |

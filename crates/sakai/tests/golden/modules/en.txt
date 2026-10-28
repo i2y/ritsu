@@ -1,0 +1,98 @@
+# in en/app
+
+$ sakai check --lang en shop.ctx
+shop.ctx: ok — 2 contexts, 1 relationship; 3 artifacts, each in one context; no crossing to check
+exit 0
+
+$ sakai check --lang en shop.ctx --format json
+{"root":".","file":"shop.ctx","ok":true,"summary":"2 contexts, 1 relationship; 3 artifacts, each in one context; no crossing to check","diagnostics":[]}
+exit 0
+
+$ sakai check --lang en covers_lib.ctx
+covers_lib.ctx: ok — 2 contexts, 1 relationship; 3 artifacts, each in one context; no crossing to check
+exit 0
+
+$ sakai check --lang en @lib/totals.ctx
+@lib/totals.ctx: ok — 1 context, 0 relationships; 2 artifacts, each in one context; no crossing to check
+exit 0
+
+$ sakai check --lang en errors/not_required.ctx
+error[E012]: errors/not_required.ctx:6:13: The `@shop` of `@shop/contexts/pricing.ctx` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+     6 | use context "@shop/contexts/pricing.ctx"
+exit 1
+
+$ sakai check --lang en errors/outside.ctx
+error[E012]: errors/outside.ctx:7:13: `../../lib/contexts/pricing.ctx` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+     7 | use context "../../lib/contexts/pricing.ctx"
+exit 1
+
+$ sakai check --lang en errors/nested.ctx
+error[E012]: errors/nested.ctx:6:13: `../inner/contexts/pricing.ctx` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+     6 | use context "../inner/contexts/pricing.ctx"
+exit 1
+
+$ sakai check --lang en errors/missing.ctx
+error[E009]: errors/missing.ctx:6:13: The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `contexts/pricings.ctx`
+     6 | use context "@lib/contexts/pricings.ctx"
+exit 1
+
+$ sakai check --lang en errors/missing.ctx --format json
+{"root":".","file":"errors/missing.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E009","severity":"error","file":"errors/missing.ctx","line":6,"col":13,"message":"The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `contexts/pricings.ctx`","notes":[],"references":[],"fix":null}]}
+exit 1
+
+$ sakai check --lang en errors/unowned.ctx
+error[E103]: @lib/rules/order_total.rule:16:1: The file @lib/rules/order_total.rule refers to rulec "@lib/@base/rules/vat_rate.rule", which is outside the map's scope (apply)
+    16 | apply vat = "@base/rules/vat_rate.rule" meaning:8a62fb4ec05fd289
+  = The scope is the map's `covers` ("."), without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.
+  = @lib/@base/rules/vat_rate.rule is a file of the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context "@lib/@base/…"`, or write `"@lib/@base"` in `covers` and own the file in a context of the map.
+exit 1
+
+$ sakai check --lang en errors/unowned.ctx --format json
+{"root":".","file":"errors/unowned.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E103","severity":"error","file":"@lib/rules/order_total.rule","line":16,"col":1,"message":"The file @lib/rules/order_total.rule refers to rulec \"@lib/@base/rules/vat_rate.rule\", which is outside the map's scope (apply)","notes":["The scope is the map's `covers` (\".\"), without `except` and without any path with a name that starts with ., node_modules, site-packages, __pycache__ or target in it.","@lib/@base/rules/vat_rate.rule is a file of the dependency `@lib/@base`: bring the dependency's context that owns it into the map with `use context \"@lib/@base/…\"`, or write `\"@lib/@base\"` in `covers` and own the file in a context of the map."],"references":[],"fix":null}]}
+exit 1
+
+# in en/app/contexts
+
+$ sakai check --lang en @lib/totals.ctx
+@lib/totals.ctx: ok — 1 context, 0 relationships; 2 artifacts, each in one context; no crossing to check
+exit 0
+
+# in en/lib
+
+$ sakai check --lang en totals.ctx
+totals.ctx: ok — 1 context, 0 relationships; 2 artifacts, each in one context; no crossing to check
+exit 0
+
+# in en/loose
+
+$ sakai check --lang en shop.ctx --root .
+error[E009]: shop.ctx:7:13: The path "@lib/contexts/pricing.ctx" is not there
+     7 | use context "@lib/contexts/pricing.ctx"
+  = A path counts from the directory of this .ctx; as written, it points at @lib/contexts/pricing.ctx.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E009]: shop.ctx:9:13: The path "@lib" is not there
+     9 | covers ".", "@lib"
+  = A path counts from the directory of this .ctx; as written, it points at @lib.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+exit 1
+
+$ sakai check --lang en shop.ctx --root . --format json
+{"root":".","file":"shop.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E009","severity":"error","file":"shop.ctx","line":7,"col":13,"message":"The path \"@lib/contexts/pricing.ctx\" is not there","notes":["A path counts from the directory of this .ctx; as written, it points at @lib/contexts/pricing.ctx.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"references":[],"fix":null},{"code":"E009","severity":"error","file":"shop.ctx","line":9,"col":13,"message":"The path \"@lib\" is not there","notes":["A path counts from the directory of this .ctx; as written, it points at @lib.","A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"],"references":[],"fix":null}]}
+exit 1
+
+# in en
+
+$ sakai check --lang en . --root .
+error[E009]: loose/shop.ctx:7:13: The path "@lib/contexts/pricing.ctx" is not there
+     7 | use context "@lib/contexts/pricing.ctx"
+  = A path counts from the directory of this .ctx; as written, it points at loose/@lib/contexts/pricing.ctx.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+error[E009]: loose/shop.ctx:9:13: The path "@lib" is not there
+     9 | covers ".", "@lib"
+  = A path counts from the directory of this .ctx; as written, it points at loose/@lib.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+note: `app` has a `ritsu.mod` of its own: it is another module, and was not read; run `sakai check app` to read it
+note: `base` has a `ritsu.mod` of its own: it is another module, and was not read; run `sakai check base` to read it
+note: `lib` has a `ritsu.mod` of its own: it is another module, and was not read; run `sakai check lib` to read it
+exit 1
+

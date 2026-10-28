@@ -45,8 +45,11 @@ fn sig(book: &Book, t: &TransferKind, which: &[usize], optional: &[usize], pkg: 
 
 /// The import of the package's types of the units (ritsu's DESIGN 9.3), for a client in a package
 /// whose calls take an amount of money or of a quantity.
-fn units_import(book: &Book, pkg: Option<&InPackage>) -> &'static str {
-    if pkg.is_some() && !package_units(book).is_empty() { "from .. import units\n" } else { "" }
+fn units_import(book: &Book, pkg: Option<&InPackage>) -> String {
+    match pkg {
+        Some(p) if !package_units(book).is_empty() => format!("from {} import units\n", ritsu_emit::package::py_from(&p.books_dir(), "units").0),
+        _ => String::new(),
+    }
 }
 
 fn values(t: &TransferKind, which: &[usize]) -> String {
@@ -166,7 +169,7 @@ pub fn tigerbeetle(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> Str
     let mut o = header(book, origin, "It calls the book on TigerBeetle through the tigerbeetle package 0.17.9.");
     o.push_str(head.trim_end());
     o.push('\n');
-    o.push_str(units_import(book, pkg));
+    o.push_str(&units_import(book, pkg));
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
         let kind = q(&t.name);
@@ -209,7 +212,7 @@ pub fn postgres(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String
     );
     o.push_str(head.trim_end());
     o.push('\n');
-    o.push_str(units_import(book, pkg));
+    o.push_str(&units_import(book, pkg));
     let sql = |t: &TransferKind, op: &str, n: usize| q(&format!("select * from {}({})", postgres::qualified(book, &postgres::op_function(t, op)), vec!["%s"; n].join(", ")));
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
@@ -369,7 +372,7 @@ pub fn mysql(book: &Book, origin: &Origin, pkg: Option<&InPackage>) -> String {
     );
     o.push_str(head.trim_end());
     o.push('\n');
-    o.push_str(units_import(book, pkg));
+    o.push_str(&units_import(book, pkg));
     for t in &book.transfers {
         let all: Vec<usize> = (0..t.params.len()).collect();
         let kind = q(&t.name);

@@ -1,0 +1,29 @@
+# Whether a purchase is approved within the approver's limit: the band is the one the rule of the
+# module base gives, which this rule applies by `@base/…`, a path from the root of this module.
+rule approval v1
+description "Whether a purchase is within the approver's limit, by the rule approval_limit of the module base"
+
+enum approval_band = within_limit | over_limit
+
+inputs
+  amount : money[GBP, incl_tax]  range >=1GBP <=20_000GBP
+  limit  : money[GBP, incl_tax]  range >=0GBP <=50_000GBP
+
+outputs
+  band : approval_band
+
+apply limit_of = "@base/rules/approval_limit.rule" meaning:9294bdf0b7ac7371
+  amount = amount
+  limit = limit
+  band -> base_band
+
+table pass_on
+policy unique
+| base_band    | -> band : approval_band |
+| within_limit | within_limit            |
+| over_limit   | over_limit              |
+
+examples
+| amount  | limit   | -> band      |
+| 500GBP  | 1000GBP | within_limit |
+| 1001GBP | 1000GBP | over_limit   |

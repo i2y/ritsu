@@ -438,6 +438,20 @@ fn rule_path(i: &Input, r: &RuleUse) -> String {
     quoted(src_line(i.src, r.line)).map(str::to_string).unwrap_or_else(|| r.name.clone())
 }
 
+/// A rule the workflow uses, as the page heads it: its name and version, and the module and version of
+/// a rule of another module than the workflow's, a dependency's, which is not beside the page
+/// (ritsu's DESIGN 17.8).
+fn rule_title(i: &Input, r: &RuleUse) -> String {
+    let title = format!("{} v{}", r.info.rule, r.info.version);
+    match ritsu_base::modules::module_words_from(std::path::Path::new(i.file), &r.info.path) {
+        Some(m) => match i.lang {
+            Lang::Ja => format!("{title}（{}）", m.ja),
+            Lang::En => format!("{title} ({})", m.en),
+        },
+        None => title,
+    }
+}
+
 /// Each rule the workflow uses, with what `rulec doc` renders for it in the page's language:
 /// Markdown, or the page on which a reader of the rule tries a case. rulec draws its rules;
 /// the page shows them as it drew them.
@@ -1204,7 +1218,7 @@ pub fn markdown(i: &Input) -> String {
         let _ = writeln!(o, "## {}\n", tr(lang, "Rules", "規則"));
         let _ = writeln!(o, "{}\n", tr(lang, "The rules this workflow calls, each as the page for people that `rulec doc` renders.", "このワークフローが呼ぶ規則です。`rulec doc` が描いた、人が読むページをそのまま載せています。"));
         for (r, text) in docs {
-            let _ = writeln!(o, "<details>\n<summary><code>{}</code> · {} v{} · <code>{}</code></summary>\n", esc(&r.name), esc(&r.info.rule), esc(&r.info.version), esc(&rule_path(i, r)));
+            let _ = writeln!(o, "<details>\n<summary><code>{}</code> · {} · <code>{}</code></summary>\n", esc(&r.name), esc(&rule_title(i, r)), esc(&rule_path(i, r)));
             match text {
                 Ok(t) => {
                     let _ = writeln!(o, "{}\n", t.trim_end());
@@ -2122,7 +2136,7 @@ pub fn html(i: &Input) -> String {
         },
         "rules": docs.iter().map(|(r, page)| serde_json::json!({
             "name": r.name,
-            "title": format!("{} v{}", r.info.rule, r.info.version),
+            "title": rule_title(i, r),
             "file": rule_path(i, r),
             "page": page.as_ref().ok(),
             "error": page.as_ref().err().map(|e| format!("{}\n\n{e}", tr(lang, "rulec could not render this rule:", "rulec はこの規則を描けませんでした。"))),

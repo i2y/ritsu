@@ -68,7 +68,7 @@ fn head(g: &Gen, alias: &str) -> String {
     let c = &g.c;
     let t = g.t;
     let cm = comment(t);
-    let origin = Origin::at(&g.opts.shown, c.src.as_bytes());
+    let origin = Origin::at(&g.opts.shown, c.src.as_bytes()).of(g.opts.place.module.clone());
     let version = c.module.version.trim_start_matches('v');
     let source = origin.source("module", &c.module.name.text, version).line();
     let mut s = cm.line(&ritsu_emit::header::generated("kaname"));
@@ -111,23 +111,24 @@ fn imports(g: &Gen, body: &str) -> String {
     let mut out = String::new();
     match t {
         Target::TypeScript => {
+            let at = |to: String| ritsu_emit::package::ts_path(&g.opts.here(), &to);
             for (name, i) in used.iter() {
                 let line = match i {
-                    Import::Kaname => format!("import * as {name} from \"./kaname\";"),
-                    Import::Units => format!("import type * as {name} from \"../units\";"),
+                    Import::Kaname => format!("import * as {name} from \"{}\";", at("glue/kaname".into())),
+                    Import::Units => format!("import type * as {name} from \"{}\";", at("units".into())),
                     Import::Datetime => continue,
                     Import::Rule(f) => {
                         let m = g.p.rules.get(f).map(|r| r.typescript.module.trim_end_matches(".ts").to_string()).unwrap_or_default();
-                        format!("import * as {name} from \"../rules/{m}\";")
+                        format!("import * as {name} from \"{}\";", at(format!("{}rules/{m}", g.opts.dir_of(f))))
                     }
                     Import::Dates(f) => {
                         let a = g.p.dates.get(f).map(|d| d.alias.clone()).unwrap_or_default();
-                        format!("import * as {name} from \"../dates/{a}\";")
+                        format!("import * as {name} from \"{}\";", at(format!("{}dates/{a}", g.opts.dir_of(f))))
                     }
-                    Import::Module(f) => format!("import * as {name} from \"./{}\";", g.p.module(f).module.name.ascii()),
+                    Import::Module(f) => format!("import * as {name} from \"{}\";", at(format!("{}glue/{}", g.opts.dir_of(f), g.p.module(f).module.name.ascii()))),
                     Import::Book(f) => {
                         let b = g.p.books.get(f).map(|b| b.name.clone()).unwrap_or_default();
-                        format!("import type * as {name} from \"./books/{b}\";")
+                        format!("import type * as {name} from \"{}\";", at(format!("{}glue/books/{b}", g.opts.dir_of(f))))
                     }
                 };
                 out.push_str(&line);
@@ -166,23 +167,27 @@ fn imports(g: &Gen, body: &str) -> String {
                 out.push_str(&std_lines.join("\n"));
                 out.push_str("\n\n");
             }
+            let from = |to: String| {
+                let (pkg, m) = ritsu_emit::package::py_from(&g.opts.here(), &to);
+                format!("from {pkg} import {m}")
+            };
             for (name, i) in used.iter() {
                 let line = match i {
-                    Import::Kaname => "from . import kaname".to_string(),
-                    Import::Units => format!("from .. import units as {name}"),
+                    Import::Kaname => from("glue/kaname".into()),
+                    Import::Units => format!("{} as {name}", from("units".into())),
                     Import::Datetime => continue,
                     Import::Rule(f) => {
                         let m = g.p.rules.get(f).map(|r| r.python.module.clone()).unwrap_or_default();
-                        format!("from ..rules import {m} as {name}")
+                        format!("{} as {name}", from(format!("{}rules/{m}", g.opts.dir_of(f))))
                     }
                     Import::Dates(f) => {
                         let a = g.p.dates.get(f).map(|d| d.alias.clone()).unwrap_or_default();
-                        format!("from ..dates import {a} as {name}")
+                        format!("{} as {name}", from(format!("{}dates/{a}", g.opts.dir_of(f))))
                     }
-                    Import::Module(f) => format!("from . import {} as {name}", g.p.module(f).module.name.ascii()),
+                    Import::Module(f) => format!("{} as {name}", from(format!("{}glue/{}", g.opts.dir_of(f), g.p.module(f).module.name.ascii()))),
                     Import::Book(f) => {
                         let b = g.p.books.get(f).map(|b| b.name.clone()).unwrap_or_default();
-                        format!("from .books import {b} as {name}")
+                        format!("{} as {name}", from(format!("{}glue/books/{b}", g.opts.dir_of(f))))
                     }
                 };
                 out.push_str(&line);
@@ -200,19 +205,19 @@ fn imports(g: &Gen, body: &str) -> String {
                     Import::Datetime => continue,
                     Import::Rule(f) => {
                         let p = g.p.rules.get(f).map(|r| r.go.module.clone()).unwrap_or_default();
-                        (format!("{m}/rules/{p}"), p)
+                        (ritsu_emit::package::go_path(m, &format!("{}rules/{p}", g.opts.dir_of(f))), p)
                     }
                     Import::Dates(f) => {
                         let p = g.p.dates.get(f).map(|d| go_package(&d.alias)).unwrap_or_default();
-                        (format!("{m}/dates/{p}"), p)
+                        (ritsu_emit::package::go_path(m, &format!("{}dates/{p}", g.opts.dir_of(f))), p)
                     }
                     Import::Module(f) => {
                         let p = go_package(g.p.module(f).module.name.ascii());
-                        (format!("{m}/glue/{p}"), p)
+                        (ritsu_emit::package::go_path(m, &format!("{}glue/{p}", g.opts.dir_of(f))), p)
                     }
                     Import::Book(f) => {
                         let p = super::books::go_package_of(&g.p, f);
-                        (format!("{m}/glue/books/{p}"), p)
+                        (ritsu_emit::package::go_path(m, &format!("{}glue/books/{p}", g.opts.dir_of(f))), p)
                     }
                 };
                 let spec = if *name == pkg { format!("\"{path}\"") } else { format!("{name} \"{path}\"") };

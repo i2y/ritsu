@@ -1696,9 +1696,9 @@ fn cite_section(f: &RuleFile, cite: Option<&Cite>, path: &str, quote: bool) -> S
             // read out of a scan is evidence of a different kind from one that was already a
             // grid, and the person reading it should be told which they are looking at.
             let base = decl.and_then(|d| d.base.as_deref()).unwrap_or(path);
-            let doc = std::path::Path::new(base).parent().unwrap_or(std::path::Path::new(".")).join(p);
-            let by = ritsu_base::fs::read_to_string(crate::extract::copy_dir(&doc).join("extractor.txt"))
-                .ok()
+            let doc = crate::vfs::follow(crate::vfs::dir_of(base, "."), p).ok();
+            let by = doc
+                .and_then(|doc| ritsu_base::fs::read_to_string(crate::extract::copy_dir(&doc).join("extractor.txt")).ok())
                 .map(|x| tr!("、{} が読んだ", ", read by {}", x.trim()))
                 .unwrap_or_default();
             tr!("出典: {}{frags}（{p}{u}{h}{by}）", "Source: {}{frags} ({p}{u}{h}{by})", c.source)
@@ -2046,6 +2046,14 @@ fn arith_facts(c: &Checked, e: &Expr) -> Vec<String> {
     out
 }
 
+/// The module of `to`, a file the page of the file `path` names, when it is not the page's module: a
+/// dependency's file, which is not beside the page (ritsu's DESIGN 17.8). The page writes its path as
+/// it is written and the module's name and version, and no link. None for a file of the page's own
+/// module, and outside every module.
+fn other_module(path: &str, to: &str) -> Option<String> {
+    ritsu_base::modules::module_words_from(std::path::Path::new(path), std::path::Path::new(to)).map(|m| crate::i18n::text(&m))
+}
+
 /// A note with what the check showed added after it.
 fn with_checked(note: String, facts: &[String]) -> String {
     if facts.is_empty() {
@@ -2065,7 +2073,15 @@ fn with_checked(note: String, facts: &[String]) -> String {
 fn apply_section(f: &RuleFile, c: &Checked, a: &ApplyDecl, lines: &[&str], path: &str) -> String {
     let an = &a.name.text;
     let hash = a.hash.as_deref().map(|h| format!("sha256:{h}")).unwrap_or_else(|| tr!("固定なし", "unpinned"));
-    let mut o = tr!("\n## 準用 {an}: {}（{hash}）\n\n", "\n## Applied rule {an}: {} ({hash})\n\n", a.path);
+    // A rule of another module than the page's is not beside the page: its module and version go in
+    // the parentheses right after its path, as every language's page writes them, and the pin keeps
+    // the parentheses of its own it had before there were modules, so that a version is not read as
+    // what is unpinned.
+    let shown = match other_module(path, &a.callee_path) {
+        Some(m) => tr!("{}（{m}）", "{} ({m})", a.path),
+        None => a.path.clone(),
+    };
+    let mut o = tr!("\n## 準用 {an}: {shown}（{hash}）\n\n", "\n## Applied rule {an}: {shown} ({hash})\n\n");
     o.push_str(&cite_section(f, a.cite.as_ref(), path, true));
     if let Some(cm) = trailing_comment(lines, a.span.line) {
         o.push_str(&format!("{}\n\n", md_esc(&cm)));

@@ -1,0 +1,18 @@
+# モジュール lib での注文の値段。このモジュールの規則「注文の合計」で合計を出す。その規則は base の
+# 税率を準用する。
+workflow 値付け v1
+description "規則「注文の合計」で出す注文の合計"
+
+use rule 合計 from "../規則/注文の合計.rule"
+
+inputs
+  小計 : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  区分 : 合計.区分
+  送料 : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  合計額 : money[GBPc]
+
+flow
+  let 値段 = 合計(小計: 小計, 区分: 区分, 送料: 送料)
+  succeed 合計額 = 値段.合計

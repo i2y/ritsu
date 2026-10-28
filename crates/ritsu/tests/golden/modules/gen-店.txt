@@ -1,0 +1,70 @@
+typescript:
+  deps/index.ts: ritsu
+  deps/pricing/deps/index.ts: ritsu
+  deps/pricing/deps/tax/index.ts: ritsu
+  deps/pricing/deps/tax/rules/index.ts: ritsu
+  deps/pricing/deps/tax/rules/vat_rate.ts: rulec <- @pricing/@tax/規則/付加価値税率.rule [example.com/acme/tax 1.0.0]
+  deps/pricing/index.ts: ritsu
+  deps/pricing/rules/index.ts: ritsu
+  deps/pricing/rules/order_total.ts: rulec <- @pricing/規則/注文の合計.rule [example.com/acme/pricing 1.1.0]
+  deps/pricing/rules/shipping_fee.ts: rulec <- @pricing/規則/送料.rule [example.com/acme/pricing 1.1.0]
+  flows/index.ts: ritsu
+  flows/注文を受ける/activities.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/client.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/io.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/rules.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/runtime.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/types.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/worker.ts: dandori <- 注文/注文を受ける.flow
+  flows/注文を受ける/workflow.ts: dandori <- 注文/注文を受ける.flow
+  glue/basket.ts: kaname <- 会計/かご.kn
+  glue/index.ts: kaname
+  glue/kaname.ts: kaname
+  index.ts: ritsu
+  package.json: ritsu
+  units.ts: ritsu
+python:
+  generated/__init__.py: ritsu
+  generated/deps/__init__.py: ritsu
+  generated/deps/pricing/__init__.py: ritsu
+  generated/deps/pricing/deps/__init__.py: ritsu
+  generated/deps/pricing/deps/tax/__init__.py: ritsu
+  generated/deps/pricing/deps/tax/rules/__init__.py: ritsu
+  generated/deps/pricing/deps/tax/rules/vat_rate.py: rulec <- @pricing/@tax/規則/付加価値税率.rule [example.com/acme/tax 1.0.0]
+  generated/deps/pricing/rules/__init__.py: ritsu
+  generated/deps/pricing/rules/order_total.py: rulec <- @pricing/規則/注文の合計.rule [example.com/acme/pricing 1.1.0]
+  generated/deps/pricing/rules/shipping_fee.py: rulec <- @pricing/規則/送料.rule [example.com/acme/pricing 1.1.0]
+  generated/flows/__init__.py: ritsu
+  generated/flows/注文を受ける/__init__.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/activities.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/client.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/io.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/rules.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/runtime.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/types.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/worker.py: dandori <- 注文/注文を受ける.flow
+  generated/flows/注文を受ける/workflow.py: dandori <- 注文/注文を受ける.flow
+  generated/glue/__init__.py: kaname
+  generated/glue/basket.py: kaname <- 会計/かご.kn
+  generated/glue/kaname.py: kaname
+  generated/py.typed: (empty)
+  generated/units.py: ritsu
+  pyproject.toml: ritsu
+go:
+  deps/pricing/deps/tax/rules/vatrate/vat_rate.go: rulec <- @pricing/@tax/規則/付加価値税率.rule [example.com/acme/tax 1.0.0]
+  deps/pricing/rules/ordertotal/order_total.go: rulec <- @pricing/規則/注文の合計.rule [example.com/acme/pricing 1.1.0]
+  deps/pricing/rules/shippingfee/shipping_fee.go: rulec <- @pricing/規則/送料.rule [example.com/acme/pricing 1.1.0]
+  doc.go: ritsu
+  flows/workflow/activities.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/client.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/doc.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/io.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/rules.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/runtime.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/types.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/values.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/worker.go: dandori <- 注文/注文を受ける.flow
+  flows/workflow/workflow.go: dandori <- 注文/注文を受ける.flow
+  glue/basket/basket.go: kaname <- 会計/かご.kn
+  glue/kaname/kaname.go: kaname
+  units/units.go: ritsu

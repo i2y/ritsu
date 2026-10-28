@@ -1,0 +1,8 @@
+# The context map of the module lib, of its one context. `covers "."` does not go into the
+# dependency base; base's VAT rate is in the scope because the context owns it.
+map Totals(totals) v1
+description "Works out the totals of orders"
+
+use context "contexts/pricing.ctx"
+
+covers "."

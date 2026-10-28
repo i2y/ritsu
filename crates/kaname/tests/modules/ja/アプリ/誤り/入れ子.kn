@@ -1,0 +1,8 @@
+# app の中の入れ子のモジュールへのパス。入れ子は自分の ritsu.mod を持つので、そのファイルは app のものではない。
+module 注文(order) v1
+description "入れ子のモジュールのかごによる注文の小計"
+
+use module かご from "../入れ子/会計/かご.kn"
+
+fn 小計(subtotal)(明細(lines): list[かご.明細] count >=1 <=20) -> money[GBPc]
+  かご.小計(明細: 明細)

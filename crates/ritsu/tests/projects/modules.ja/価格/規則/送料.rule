@@ -1,0 +1,30 @@
+# 料金はこの例のために決めた値。pricing の 1.1.0 で、重さの段の境目を 2,000 g から 2,500 g にし、
+# 地域に EU を足した。
+rule 送料(shipping_fee) v1
+description "荷の重さと届け先の地域で決まる送料。2,500 g までと、それより重い荷とで料金が違う。料金はこの例のために決めた値"
+
+enum 地域(region) = 国内(domestic) | EU(eu) | その他の地域(world)
+
+inputs
+  重さ(weight) : mass[g]  range >=1g <=30_000g
+  地域(region) : 地域
+
+outputs
+  料金(fee) : money[GBPc]  round up(1GBPc)
+
+table 重さの段(fee_by_weight)
+policy unique
+| 地域         | 重さ    | -> 料金 : money[GBPc] |
+| 国内         | <=2500g | 395GBPc               |
+| 国内         | >2500g  | 695GBPc               |
+| EU           | <=2500g | 1250GBPc              |
+| EU           | >2500g  | 1950GBPc              |
+| その他の地域 | <=2500g | 1850GBPc              |
+| その他の地域 | >2500g  | 2950GBPc              |
+
+examples
+| 重さ    | 地域         | -> 料金  |
+| 2500g   | 国内         | 395GBPc  |
+| 2501g   | 国内         | 695GBPc  |
+| 1000g   | EU           | 1250GBPc |
+| 30_000g | その他の地域 | 2950GBPc |

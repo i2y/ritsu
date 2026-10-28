@@ -1,0 +1,56 @@
+# Acme の店の注文。送料と合計はモジュール pricing の規則で決め（合計には、pricing が準用する tax の
+# 税率が入る）、品物を押さえて合計を請求する。請求が通らなければ、押さえた品物を戻す。
+workflow 注文を受ける v1
+description "注文の値段をモジュール pricing の規則で決め、品物を押さえて合計を請求する。請求が通らなければ、品物を戻す"
+
+use rule 送料 from "@pricing/規則/送料.rule"
+use rule 合計 from "@pricing/規則/注文の合計.rule"
+
+record 注文
+  id   : string
+  品番 : string
+  数   : int  range >=1 <=100
+  重さ : mass[g]  range >=1g <=30_000g
+  地域 : 送料.地域
+  区分 : 合計.区分
+  小計 : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+
+record 押さえ
+  id : string
+
+record 支払
+  済み : bool
+
+enum 終わり方 = 請求済み | 請求できず | 在庫切れ
+
+inputs
+  受注 : 注文
+
+outputs
+  結果 : 終わり方
+  金額 : money[GBPc]
+
+task 押さえる(注文: string, 品番: string, 数: int) -> 押さえ
+  http POST "https://stock.example.com/v1/holds"
+  errors 在庫切れ = 409
+  key
+
+task 戻す(押さえID: string)
+  http POST "https://stock.example.com/v1/holds/{押さえID}/release"
+  idempotent
+
+task 請求する(注文: string, 金額: money[GBPc]) -> 支払
+  http POST "https://payments.example.com/v1/orders/{注文}/charges"
+  key
+
+flow
+  let 荷 = 送料(重さ: 受注.重さ, 地域: 受注.地域)
+  let 値段 = 合計(小計: 受注.小計, 区分: 受注.区分, 送料: 荷.料金)
+  let 押さえた = 押さえる(注文: 受注.id, 品番: 受注.品番, 数: 受注.数)
+    on 在庫切れ => succeed 結果 = 在庫切れ, 金額 = 値段.合計
+  let 入金 = 請求する(注文: 受注.id, 金額: 値段.合計)
+  match 入金.済み
+    true => succeed 結果 = 請求済み, 金額 = 値段.合計
+    false =>
+      戻す(押さえID: 押さえた.id)
+      succeed 結果 = 請求できず, 金額 = 値段.合計

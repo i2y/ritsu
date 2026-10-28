@@ -286,6 +286,10 @@ pub fn run(args: &[String], suite: &Suite, out: &mut dyn Write, err: &mut dyn Wr
         let _ = write!(out, "{}", table.help_cmd(cmd, lang));
         return 0;
     }
+    // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's DESIGN 17.6)
+    if let Err(t) = ritsu_base::modules::given_all(&a.pos) {
+        return refuse(err, t, lang);
+    }
     match cmd.name {
         "check" => check_cmd(&a, lang, suite, out, err),
         "gen" => crate::r#gen::run(&a, lang, suite, out, err),

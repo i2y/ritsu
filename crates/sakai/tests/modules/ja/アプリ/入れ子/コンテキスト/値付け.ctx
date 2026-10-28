@@ -1,0 +1,15 @@
+# app の中の入れ子のモジュールのコンテキスト。app はこのモジュールを require していないので、app のファイル
+# からは、依存としてでなければ読めない。
+context 値付け(pricing) v1
+description "注文の合計を出す。小計に、区分の付加価値税と送料を足す"
+owner "値付けチーム"
+
+owns
+  rulec "../規則/注文の合計.rule"
+
+published language rulec.order_total.v1
+  rulec "../規則/注文の合計.rule"
+
+terms
+  合計 "客が注文に払う額。小計に、区分の付加価値税と送料を足したもの"
+    means rulec "../規則/注文の合計.rule" output 合計

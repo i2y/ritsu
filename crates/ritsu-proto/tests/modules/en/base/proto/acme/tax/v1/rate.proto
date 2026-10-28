@@ -1,0 +1,10 @@
+// The rate of VAT for a category. Its import is read from the root of its own module, base.
+syntax = "proto3";
+package acme.tax.v1;
+
+import "proto/acme/tax/v1/category.proto";
+
+message Rate {
+  Category category = 1;
+  int32 percent = 2;
+}

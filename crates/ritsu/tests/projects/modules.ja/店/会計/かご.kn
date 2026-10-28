@@ -1,0 +1,23 @@
+# Acme の店の会計。かごの小計と、モジュール pricing の規則「注文の合計」が出す合計（その規則が準用
+# する tax の税率を含む）。
+module かご(basket) v1
+description "かごの小計と、区分の付加価値税と送料を足した合計を、モジュール pricing の規則「注文の合計」で出す"
+
+use rule 注文の合計 from "@pricing/規則/注文の合計.rule"
+
+record 明細(Line)
+  品番(sku)        : string
+  数(qty)          : number  range >=1 <=10
+  単価(unit_price) : money[GBPc]  range >=1GBPc <=10_000GBPc
+
+fn 小計(subtotal)(明細(lines): list[明細] count >=1 <=20) -> money[GBPc]
+  sum(明細, m => m.単価 × m.数)
+
+fn 合計(total)(明細(lines): list[明細] count >=1 <=20, 区分(category): 注文の合計.区分, 送料(shipping): money[GBPc] range >=0GBPc <=10_000GBPc) -> money[GBPc] total
+  description "かごの小計と区分と送料に対する、規則の合計"
+  注文の合計(小計: 小計(明細: 明細), 区分: 区分, 送料: 送料).合計
+
+examples
+  小計(明細: [明細 { 品番: "紅茶", 数: 2, 単価: 450GBPc }, 明細 { 品番: "本", 数: 1, 単価: 1200GBPc }]) = 2100GBPc
+  合計(明細: [明細 { 品番: "紅茶", 数: 2, 単価: 450GBPc }, 明細 { 品番: "本", 数: 1, 単価: 1200GBPc }], 区分: 注文の合計.区分.標準, 送料: 395GBPc) = 2915GBPc
+  合計(明細: [明細 { 品番: "本", 数: 1, 単価: 1200GBPc }], 区分: 注文の合計.区分.ゼロ, 送料: 0GBPc) = 1200GBPc

@@ -838,7 +838,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     let mut imports: std::collections::BTreeMap<String, BTreeSet<String>> = std::collections::BTreeMap::new();
     for r in called {
         if let Some(d) = m.rules[*r].date() {
-            let names = imports.entry(format!("koyomi.python.{}", d.file_alias)).or_default();
+            let names = imports.entry(crate::model::module_key(&format!("koyomi.python.{}", d.file_alias), &crate::temporal::dir_of(m, *r))).or_default();
             names.insert(d.alias.clone());
             if d.at {
                 names.insert(format!("{}_at", d.alias));
@@ -846,7 +846,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             continue;
         }
         let py = &m.rules[*r].info.python;
-        let names = imports.entry(py.module.clone()).or_default();
+        let names = imports.entry(crate::model::module_key(&py.module, &crate::temporal::dir_of(m, *r))).or_default();
         names.insert(py.function.clone());
         for p in &py.params {
             // an enum's class, or the NewType of a number with a unit (`YenInclTax`), which the rule takes
@@ -859,8 +859,9 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
     let (lines, local) = crate::temporal::import_names(&imports, |_| None);
     for (module, names) in lines {
         // a module of koyomi's is named by its path; one of rulec's by its name
-        let path = if module.contains('.') { module.clone() } else { format!("rulec.python.{module}") };
-        t.push_str(&format!("from {} import {}\n", py_module(m, &path), names.join(", ")));
+        let (key, dir) = crate::model::split_key(&module);
+        let path = if key.contains('.') { key.to_string() } else { format!("rulec.python.{key}") };
+        t.push_str(&format!("from {} import {}\n", py_module(m, &path, dir), names.join(", ")));
     }
     if dates {
         t.push_str(crate::asl::PY_DAY.trim_end());
@@ -871,7 +872,7 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
         let ru = &m.rules[*r];
         if let Some(d) = ru.date() {
             // koyomi's function for the date: its inputs by position, a day as datetime.date
-            let module = format!("koyomi.python.{}", d.file_alias);
+            let module = crate::model::module_key(&format!("koyomi.python.{}", d.file_alias), &crate::temporal::dir_of(m, *r));
             let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
             let args = crate::asl::date_py_args(d, |n| format!("args[{}]", q(n)));
             let mut outs = vec![format!("\"day\": {}(*a).isoformat()", name_of(&d.alias))];
@@ -892,7 +893,8 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
             continue;
         }
         let py = &ru.info.python;
-        let name_of = |n: &str| local.get(&(py.module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
+        let module = crate::model::module_key(&py.module, &crate::temporal::dir_of(m, *r));
+        let name_of = |n: &str| local.get(&(module.clone(), n.to_string())).cloned().unwrap_or_else(|| n.to_string());
         let is_enum = |ty: &str| py.enums.iter().any(|e| e.alias == ty);
         let mut args = Vec::new();
         for p in &py.params {
@@ -951,10 +953,10 @@ pub(crate) fn rules_file(m: &Model, header: &str, called: &BTreeSet<usize>, acti
 /// file (`koyomi.python.<alias>`): in the workflow's package, where `rulec gen` and `koyomi gen`
 /// write them; or, for a flow of a package (ritsu's DESIGN 9.3), in the package's rules/ and dates/,
 /// two packages up from flows/<name>/.
-pub(crate) fn py_module(m: &Model, path: &str) -> String {
+pub(crate) fn py_module(m: &Model, path: &str, dir: &str) -> String {
     match (&m.package, path.split_once('.')) {
-        (Some(_), Some(("rulec", rest))) => format!("...rules.{}", rest.trim_start_matches("python.")),
-        (Some(_), Some(("koyomi", rest))) => format!("...dates.{}", rest.trim_start_matches("python.")),
+        (Some(p), Some(("rulec", rest))) => ritsu_emit::package::py_path(&p.flow_dir(), &format!("{dir}rules/{}", rest.trim_start_matches("python."))),
+        (Some(p), Some(("koyomi", rest))) => ritsu_emit::package::py_path(&p.flow_dir(), &format!("{dir}dates/{}", rest.trim_start_matches("python."))),
         _ => format!(".{path}"),
     }
 }
@@ -971,7 +973,11 @@ pub(crate) fn io_py(m: &Model) -> String {
     let mut fields = Vec::new();
     for (i, b) in books.iter().enumerate() {
         let f = &m.books[*b].facts;
-        imports.push_str(&format!("from ...books.{} import Book as _Book{i}\n", f.python.module));
+        let from = match &m.package {
+            Some(p) => ritsu_emit::package::py_path(&p.flow_dir(), &format!("{}books/{}", p.dir_of(&m.books[*b].path), f.python.module)),
+            None => format!("...books.{}", f.python.module),
+        };
+        imports.push_str(&format!("from {from} import Book as _Book{i}\n"));
         fields.push(format!("{}: _Book{i}", q(&f.name)));
     }
     let books_type = format!("# The books the tasks run operations on, by the book's name: the clients of the package's books/.\nBooks = TypedDict(\"Books\", {{{}}}, total=False)\n\n\n", fields.join(", "));

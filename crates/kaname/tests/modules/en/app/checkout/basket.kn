@@ -1,0 +1,29 @@
+# The checkout of the module at hand: the rule, the book and the module of lib, named by `@lib/…`. The
+# rule applies the VAT rate of base, which this module does not require: it is read as `@lib/@base/…`.
+module basket v1
+description "The subtotal of a basket, its total by the rule order_total of the module lib, and the charge of an order of it"
+
+use rule order_total from "@lib/rules/order_total.rule"
+use book ledger from "@lib/books/ledger.book"
+use module charges from "@lib/checkout/charges.kn"
+
+record Line
+  sku        : string
+  qty        : number  range >=1 <=10
+  unit_price : money[GBPc]  range >=1GBPc <=10_000GBPc
+
+fn subtotal(lines: list[Line] count >=1 <=20) -> money[GBPc]
+  sum(lines, l => l.unit_price × l.qty)
+
+fn total(lines: list[Line] count >=1 <=20, category: order_total.category, shipping: money[GBPc] range >=0GBPc <=10_000GBPc) -> money[GBPc] total
+  description "The rule's total for the basket's subtotal, its category and the shipping fee"
+  order_total(subtotal: subtotal(lines: lines), category: category, shipping: shipping).total
+
+fn charge(order: string, lines: list[Line] count >=1 <=20, category: order_total.category) -> ledger.charge.do
+  description "The charge of the basket's order, with no shipping fee"
+  charges.charge(order: order, subtotal: subtotal(lines: lines), category: category, shipping: 0GBPc)
+
+examples
+  subtotal(lines: [Line { sku: "tea", qty: 2, unit_price: 450GBPc }, Line { sku: "book", qty: 1, unit_price: 1200GBPc }]) = 2100GBPc
+  total(lines: [Line { sku: "book", qty: 1, unit_price: 1000GBPc }], category: order_total.category.standard, shipping: 395GBPc) = 1595GBPc
+  charge(order: "o_1", lines: [Line { sku: "book", qty: 1, unit_price: 1000GBPc }], category: order_total.category.zero) = ledger.charge.do(order: "o_1", amount: 1000GBPc)

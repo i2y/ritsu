@@ -263,9 +263,16 @@ impl Run {
         let mut out = Vec::new();
         let mut diags = Vec::new();
         for u in &m.uses {
-            let target = beside(path, &u.path);
-            let shown = target.display().to_string();
             let at = |code: &'static str, msg: Text| Diag::error(code, path, u.path_span.line, u.path_span.col, msg).source(src);
+            let target = match beside(path, &u.path) {
+                Ok(t) => t,
+                Err(r) => {
+                    diags.push(at("E201", r.text()));
+                    out.push(None);
+                    continue;
+                }
+            };
+            let shown = target.display().to_string();
             let ext = u.kind.extension();
             let word = u.kind.word();
             if !shown.ends_with(&format!(".{ext}")) {
@@ -274,10 +281,16 @@ impl Run {
                 continue;
             }
             if !ritsu_base::fs::is_file(&target) {
-                diags.push(
-                    at("E201", tr!("`{shown}` というファイルはありません", "There is no file `{shown}`"))
+                let d = match ritsu_base::modules::missing(&target) {
+                    Some(t) => at("E201", t),
+                    None => at("E201", tr!("`{shown}` というファイルはありません", "There is no file `{shown}`"))
                         .note(tr!("パスは、このモジュールのファイルのあるディレクトリから書きます。", "A path is written from the directory of the module's file.")),
-                );
+                };
+                let outside = ritsu_base::modules::outside_note_for(Path::new(path).parent().unwrap_or(Path::new("")), &u.path);
+                diags.push(match outside {
+                    Some(n) => d.note(n),
+                    None => d,
+                });
                 out.push(None);
                 continue;
             }

@@ -765,6 +765,17 @@ pub fn run(raw: &[String]) -> i32 {
             println!("geas {}", env!("CARGO_PKG_VERSION"));
             0
         }
+        // a path that starts with `@`, in a module, is read as a path written in a file is (ritsu's
+        // DESIGN 17.6): what is wrong with it, as this file cannot be read (E081)
+        Ok(Parsed::Run(a)) if a.files.iter().any(|f| ritsu_base::modules::given(f).is_err()) => {
+            for f in &a.files {
+                if let Err(t) = ritsu_base::modules::given(f) {
+                    fail(&a, f, &[(f.clone(), diag::error("E081", 0, 0, t))], "");
+                    break;
+                }
+            }
+            2
+        }
         Ok(Parsed::Run(a)) => match a.cmd {
             Cmd::Explain => explain(&a),
             Cmd::Skill => skill_command(&a),

@@ -1,0 +1,8 @@
+# A path into the module nested in app: inner has a ritsu.mod of its own, so its context is not app's.
+map Shop(shop) v1
+description "Bills orders, priced by the module lib"
+
+use context "../contexts/billing.ctx"
+use context "../inner/contexts/pricing.ctx"
+
+covers ".."

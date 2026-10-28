@@ -1,0 +1,11 @@
+// The total of an order. Its import, written by the path of the package, reads lib's own money.
+// The module that uses lib has a money.proto of its own at that path, which this import does not
+// read.
+syntax = "proto3";
+package acme.orders.v1;
+
+import "acme/orders/v1/money.proto";
+
+message Total {
+  Money amount = 1;
+}

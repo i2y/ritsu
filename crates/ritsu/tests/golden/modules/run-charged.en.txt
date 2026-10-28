@@ -1,0 +1,7 @@
+orders/place_order.flow (scenario orders/scenarios/charged.json, from 2026-10-28T10:00:00Z)
+the run:
+  shipping(weight: 1200, region: "domestic")                  rulec     {"fee":395}
+  total(subtotal: 2000, category: "standard", shipping: 395)  rulec     {"total":2795}
+  reserve(order: "A-1", sku: "tea", quantity: 2)              scenario  {"id":"H-1"}
+  charge(order: "A-1", amount: 2795)                          scenario  {"paid":true}
+end: succeed {"outcome":"charged","amount":2795}

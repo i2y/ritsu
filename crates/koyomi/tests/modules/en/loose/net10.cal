@@ -1,0 +1,21 @@
+# A dates file outside every module: no ritsu.mod above it, so `@lib/…` is a plain relative path,
+# and there is no directory @lib beside this file.
+dates net10 v1
+description "Net 10: due ten days after the invoice date, moved to the next day the office is open"
+use calendar "@lib/calendars/office.cal"
+
+inputs
+  invoice_date : date  range >=2026-01-01 <=2027-11-30
+
+date due = invoice_date
+  + 10 days
+  roll following
+
+claims
+  due_on_an_open_day      : due is open
+  later_invoice_later_due : due is monotonic
+
+examples
+| invoice_date | -> due     |
+| 2026-12-15   | 2026-12-29 |
+| 2026-04-06   | 2026-04-16 |

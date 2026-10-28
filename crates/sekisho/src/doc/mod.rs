@@ -99,6 +99,9 @@ pub struct Embedded {
     pub tool: &'static str,
     /// The file, from the root.
     pub file: String,
+    /// The module and version of a file of another module than the gate's, a dependency's, which is
+    /// not beside the page (ritsu's DESIGN 17.8), in the page's language.
+    pub module: Option<String>,
     /// The page, in the form of the page that holds it, or what the language said when it could
     /// not draw one.
     pub page: Result<String, String>,
@@ -1068,7 +1071,8 @@ impl<'a> Builder<'a> {
                 None => Err(String::new()),
             },
         };
-        self.embedded.push(Embedded { tool, file, page });
+        let module = ritsu_base::modules::module_words_from(std::path::Path::new(&self.g.file), &path).map(|m| m.get(self.lang).to_string());
+        self.embedded.push(Embedded { tool, file, module, page });
         self.embedded.len() - 1
     }
 

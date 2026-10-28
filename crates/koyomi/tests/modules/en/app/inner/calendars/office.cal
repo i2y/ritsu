@@ -1,0 +1,5 @@
+# The calendar of the module nested in app: closed at weekends.
+calendar office v1
+description "Closed on Saturdays and Sundays"
+
+closed weekly sat, sun

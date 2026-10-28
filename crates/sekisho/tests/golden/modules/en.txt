@@ -1,0 +1,101 @@
+# in en/app
+
+$ sekisho check --lang en gates/purchases.gate
+gates/purchases.gate: ok — 2 actions, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations
+exit 0
+
+$ sekisho check --lang en gates/purchases.gate --format json
+{
+  "file": "gates/purchases.gate",
+  "ok": true,
+  "summary": "2 actions, 2 policies (2 permits, 0 forbids), 0 expectations, 0 separations",
+  "diagnostics": []
+}
+exit 0
+
+$ sekisho check --lang en @lib/gates/approvals.gate
+@lib/gates/approvals.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+exit 0
+
+$ sekisho check --lang en errors/not_required.gate
+error[E201]: errors/not_required.gate:5:24: The `@shop` of `@shop/rules/approval.rule` is no dependency: the `ritsu.mod` of the module `example.com/acme/app` has no `require shop …`
+     5 | use rule approval from "@shop/rules/approval.rule"
+exit 1
+
+$ sekisho check --lang en errors/outside.gate
+error[E201]: errors/outside.gate:6:24: `../../lib/rules/approval.rule` leads outside the module `example.com/acme/app`; a file in a module names files under the module's root, and in a dependency by `@<name>/`
+     6 | use rule approval from "../../lib/rules/approval.rule"
+exit 1
+
+$ sekisho check --lang en errors/nested.gate
+error[E201]: errors/nested.gate:5:24: `../inner/rules/approval_limit.rule` leads into `inner`, a directory below with a `ritsu.mod` of its own, without an `@`; require that module, and name its files by `@<name>/`
+     5 | use rule approval from "../inner/rules/approval_limit.rule"
+exit 1
+
+$ sekisho check --lang en errors/missing.gate
+error[E201]: errors/missing.gate:5:24: The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/approvals.rule`
+     5 | use rule approval from "@lib/rules/approvals.rule"
+exit 1
+
+$ sekisho check --lang en errors/missing.gate --format json
+{
+  "file": "errors/missing.gate",
+  "ok": false,
+  "summary": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "errors/missing.gate",
+      "line": 5,
+      "col": 24,
+      "message": "The dependency `@lib` (`example.com/acme/lib`, `../lib`) has no `rules/approvals.rule`",
+      "notes": [],
+      "example": null,
+      "fix": null
+    }
+  ]
+}
+exit 1
+
+# in en/app/gates
+
+$ sekisho check --lang en @lib/gates/approvals.gate
+@lib/gates/approvals.gate: ok — 1 action, 1 policy (1 permit, 0 forbids), 0 expectations, 0 separations
+exit 0
+
+# in en/loose
+
+$ sekisho check --lang en purchases.gate
+error[E201]: purchases.gate:6:24: `@lib/rules/approval.rule` does not pass rulec's check
+     6 | use rule approval from "@lib/rules/approval.rule"
+  = Cannot read `@lib/rules/approval.rule`: No such file or directory (os error 2) (@lib/rules/approval.rule)
+  = Correct that file until rulec's check passes it.
+  = A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path
+exit 1
+
+$ sekisho check --lang en purchases.gate --format json
+{
+  "file": "purchases.gate",
+  "ok": false,
+  "summary": null,
+  "diagnostics": [
+    {
+      "code": "E201",
+      "severity": "error",
+      "file": "purchases.gate",
+      "line": 6,
+      "col": 24,
+      "message": "`@lib/rules/approval.rule` does not pass rulec's check",
+      "notes": [
+        "Cannot read `@lib/rules/approval.rule`: No such file or directory (os error 2) (@lib/rules/approval.rule)",
+        "Correct that file until rulec's check passes it.",
+        "A path that starts with `@` names a dependency only in a module, a directory with a `ritsu.mod`; this file is in none, so it was read as a plain relative path"
+      ],
+      "example": null,
+      "fix": null
+    }
+  ]
+}
+exit 1
+

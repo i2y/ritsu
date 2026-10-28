@@ -1,0 +1,13 @@
+// モジュール lib の注文のサービスが送る注文。金額の import は、モジュールのルートから書く。protoc がモジュールのファイルを読むルートである。
+syntax = "proto3";
+
+package acme.orders.v1;
+
+import "buf/validate/validate.proto";
+import "proto/acme/orders/v1/money.proto";
+
+message Order {
+  string id = 1;
+  int64 subtotal_pence = 2 [(buf.validate.field).int64 = {gte: 0, lte: 2000000}];
+  Money paid = 3;
+}

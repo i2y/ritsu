@@ -14,6 +14,13 @@
 //! the answers the native binary's: an error of the disk says the system's number rather than
 //! WASI's ([`as_native`]), and [`canonicalize`], which WASI's std does not have, is made by hand
 //! ([`realpath`]).
+//!
+//! A module's dependency `<name>` is seen at `R/@<name>`, `R` the module's root (DESIGN 17.6): a
+//! path with a part that starts with `@` right under a directory with a `ritsu.mod` is read where
+//! [`crate::modules::refer::map`] says, the dependency's directory or its entry in the store, and
+//! nothing is made on the disk. A path with no such part is read as it is, so a tree with no
+//! `ritsu.mod` reads as it did (M14). What is written under a dependency is refused: its files are
+//! read only. A listing of `R` does not show `@<name>`. [`raw`] reads without the view.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -139,70 +146,146 @@ pub fn current() -> Option<Rc<dyn Files>> {
     held()
 }
 
+/// What the layer reads without the view of a module's dependencies: the paths as they are. What
+/// reads a module's own files to make the view (its `ritsu.mod`, its lock, the store) reads here.
+pub mod raw {
+    use super::{Disk, Files, Kind, Meta, as_native, disk_entries, held};
+    use std::ffi::OsString;
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    /// `std::fs::read`.
+    pub fn read(p: &Path) -> io::Result<Vec<u8>> {
+        match held() {
+            Some(f) => f.read(p),
+            None => Disk.read(p),
+        }
+    }
+
+    /// `std::fs::read_to_string`.
+    pub fn read_to_string(p: &Path) -> io::Result<String> {
+        match held() {
+            Some(f) => String::from_utf8(f.read(p)?).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")),
+            None => std::fs::read_to_string(p).map_err(as_native),
+        }
+    }
+
+    /// `std::fs::metadata`: a symbolic link followed.
+    pub fn metadata(p: &Path) -> io::Result<Meta> {
+        match held() {
+            Some(f) => f.metadata(p),
+            None => Disk.metadata(p),
+        }
+    }
+
+    /// `std::fs::symlink_metadata`: a symbolic link is [`Kind::Other`]. Memory holds none.
+    pub fn symlink_metadata(p: &Path) -> io::Result<Meta> {
+        match held() {
+            Some(f) => f.metadata(p),
+            None => std::fs::symlink_metadata(p).map(|m| Meta::of(&m)).map_err(as_native),
+        }
+    }
+
+    /// The names in a directory, each with what it is (a symbolic link not followed); the first
+    /// error of an entry is the answer.
+    pub fn read_dir(p: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        match held() {
+            Some(f) => f.read_dir(p),
+            None => disk_entries(p)?.into_iter().collect(),
+        }
+    }
+
+    /// `std::fs::canonicalize`.
+    pub fn canonicalize(p: &Path) -> io::Result<PathBuf> {
+        match held() {
+            Some(f) => f.canonicalize(p),
+            None => Disk.canonicalize(p),
+        }
+    }
+}
+
+/// Where a path is read: where the view of a module's dependencies says, when the path goes through
+/// one; else the path.
+fn seen(p: &Path) -> std::borrow::Cow<'_, Path> {
+    match crate::modules::refer::map(p) {
+        Some(r) => std::borrow::Cow::Owned(r),
+        None => std::borrow::Cow::Borrowed(p),
+    }
+}
+
+/// What writing under a dependency answers.
+fn read_only(p: &Path) -> io::Error {
+    io::Error::new(io::ErrorKind::PermissionDenied, format!("{} is in a dependency, whose files are read only", p.display()))
+}
+
 /// `std::fs::read`.
 pub fn read(p: impl AsRef<Path>) -> io::Result<Vec<u8>> {
-    match held() {
-        Some(f) => f.read(p.as_ref()),
-        None => Disk.read(p.as_ref()),
-    }
+    raw::read(&seen(p.as_ref()))
 }
 
 /// `std::fs::read_to_string`.
 pub fn read_to_string(p: impl AsRef<Path>) -> io::Result<String> {
-    match held() {
-        Some(f) => String::from_utf8(f.read(p.as_ref())?).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")),
-        None => std::fs::read_to_string(p).map_err(as_native),
-    }
+    raw::read_to_string(&seen(p.as_ref()))
 }
 
-/// `std::fs::write`.
+/// `std::fs::write`. Under a dependency, refused.
 pub fn write(p: impl AsRef<Path>, bytes: impl AsRef<[u8]>) -> io::Result<()> {
+    let p = p.as_ref();
+    if crate::modules::refer::under_dependency(p) {
+        return Err(read_only(p));
+    }
     match held() {
-        Some(f) => f.write(p.as_ref(), bytes.as_ref()),
-        None => Disk.write(p.as_ref(), bytes.as_ref()),
+        Some(f) => f.write(p, bytes.as_ref()),
+        None => Disk.write(p, bytes.as_ref()),
     }
 }
 
-/// `std::fs::create_dir_all`.
+/// `std::fs::create_dir_all`. Under a dependency, refused.
 pub fn create_dir_all(p: impl AsRef<Path>) -> io::Result<()> {
+    let p = p.as_ref();
+    if crate::modules::refer::under_dependency(p) {
+        return Err(read_only(p));
+    }
     match held() {
-        Some(f) => f.create_dir_all(p.as_ref()),
-        None => Disk.create_dir_all(p.as_ref()),
+        Some(f) => f.create_dir_all(p),
+        None => Disk.create_dir_all(p),
     }
 }
 
 /// `std::fs::metadata`: a symbolic link followed.
 pub fn metadata(p: impl AsRef<Path>) -> io::Result<Meta> {
-    match held() {
-        Some(f) => f.metadata(p.as_ref()),
-        None => Disk.metadata(p.as_ref()),
-    }
+    raw::metadata(&seen(p.as_ref()))
 }
 
 /// `std::fs::symlink_metadata`: a symbolic link is [`Kind::Other`]. Memory holds none.
 pub fn symlink_metadata(p: impl AsRef<Path>) -> io::Result<Meta> {
-    match held() {
-        Some(f) => f.metadata(p.as_ref()),
-        None => std::fs::symlink_metadata(p).map(|m| Meta::of(&m)).map_err(as_native),
-    }
+    raw::symlink_metadata(&seen(p.as_ref()))
 }
 
-/// `std::fs::read_dir`, in the order the directory gives (memory gives its names in order).
+/// `std::fs::read_dir`, in the order the directory gives (memory gives its names in order). The
+/// entries of a dependency's directory have their paths through the view, as the directory was named.
 pub fn read_dir(p: impl AsRef<Path>) -> io::Result<std::vec::IntoIter<io::Result<Entry>>> {
     let dir = p.as_ref().to_path_buf();
+    let real = seen(&dir).into_owned();
     let entries: Vec<io::Result<Entry>> = match held() {
-        Some(f) => f.read_dir(&dir)?.into_iter().map(|(name, kind)| Ok(Entry { dir: dir.clone(), name, kind })).collect(),
-        None => disk_entries(&dir)?.into_iter().map(|e| e.map(|(name, kind)| Entry { dir: dir.clone(), name, kind })).collect(),
+        Some(f) => f.read_dir(&real)?.into_iter().map(|(name, kind)| Ok(Entry { dir: dir.clone(), name, kind })).collect(),
+        None => disk_entries(&real)?.into_iter().map(|e| e.map(|(name, kind)| Entry { dir: dir.clone(), name, kind })).collect(),
     };
     Ok(entries.into_iter())
 }
 
 /// `std::fs::canonicalize`. In memory, the path made absolute with `.` and `..` folded. Built
 /// for WASI, whose std has no `canonicalize` (it answers that it is not supported), [`realpath`].
+/// Through a dependency, the path as the view writes it: the module's root made canonical, then
+/// `@<name>` and the rest, once the file is there.
 pub fn canonicalize(p: impl AsRef<Path>) -> io::Result<PathBuf> {
-    match held() {
-        Some(f) => f.canonicalize(p.as_ref()),
-        None => Disk.canonicalize(p.as_ref()),
+    let p = p.as_ref();
+    match crate::modules::refer::view_parts(p) {
+        Some((real, head, after)) => {
+            raw::canonicalize(&real)?;
+            Ok(raw::canonicalize(&head)?.join(after))
+        }
+        None => raw::canonicalize(p),
     }
 }
 

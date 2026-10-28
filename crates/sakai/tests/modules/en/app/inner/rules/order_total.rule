@@ -1,0 +1,26 @@
+# The rule of a module nested in app, which app does not require. The VAT is the subtotal at the rate the rule of the module base gives for
+# the category, which this rule applies by `@base/…`, a path from the root of this module.
+rule order_total v1
+description "The total of an order: its subtotal, the VAT of its category at the rate of the rule vat_rate of the module base, and the shipping fee"
+
+enum category = standard | reduced | zero
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=2_000_000GBPc
+  category : category
+  shipping : money[GBPc]  range >=0GBPc <=10_000GBPc
+
+outputs
+  total : money[GBPc]  round half_up(1GBPc)
+
+apply vat = "@base/rules/vat_rate.rule" meaning:8a62fb4ec05fd289
+  category = category
+  rate -> vat_rate
+
+result total = subtotal + subtotal * vat_rate + shipping
+
+examples
+| subtotal | category | shipping | -> total |
+| 1000GBPc | standard | 395GBPc  | 1595GBPc |
+| 1000GBPc | reduced  | 395GBPc  | 1445GBPc |
+| 1000GBPc | zero     | 0GBPc    | 1000GBPc |

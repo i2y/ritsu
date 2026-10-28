@@ -1,0 +1,98 @@
+# in ja/アプリ
+
+$ sakai check --lang ja 通販.ctx
+通販.ctx: ok — コンテキスト 2、関係 1。成果物 3 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+exit 0
+
+$ sakai check --lang ja 通販.ctx --format json
+{"root":".","file":"通販.ctx","ok":true,"summary":"コンテキスト 2、関係 1。成果物 3 件は、どれも一つのコンテキストに属する。境界を越える参照は無い","diagnostics":[]}
+exit 0
+
+$ sakai check --lang ja 依存も範囲に.ctx
+依存も範囲に.ctx: ok — コンテキスト 2、関係 1。成果物 3 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+exit 0
+
+$ sakai check --lang ja @lib/合計.ctx
+@lib/合計.ctx: ok — コンテキスト 1、関係 0。成果物 2 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+exit 0
+
+$ sakai check --lang ja 誤り/依存に無い.ctx
+エラー[E012]: 誤り/依存に無い.ctx:6:13: `@shop/コンテキスト/値付け.ctx` の `@shop` は依存ではありません。モジュール `example.com/acme/app` の `ritsu.mod` に `require shop …` がありません
+     6 | use context "@shop/コンテキスト/値付け.ctx"
+exit 1
+
+$ sakai check --lang ja 誤り/外を指す.ctx
+エラー[E012]: 誤り/外を指す.ctx:7:13: `../../部品/コンテキスト/値付け.ctx` は、モジュール `example.com/acme/app` の外を指します。モジュールの中のファイルが指せるのは、モジュールのルートの下と、`@<名前>/` で入る依存の中です
+     7 | use context "../../部品/コンテキスト/値付け.ctx"
+exit 1
+
+$ sakai check --lang ja 誤り/入れ子.ctx
+エラー[E012]: 誤り/入れ子.ctx:7:13: `../入れ子/コンテキスト/値付け.ctx` は、`ritsu.mod` を持つ下のディレクトリ `入れ子` の中を、`@` を通らずに指しています。そのモジュールを `require` に足し、`@<名前>/` で指してください
+     7 | use context "../入れ子/コンテキスト/値付け.ctx"
+exit 1
+
+$ sakai check --lang ja 誤り/無いファイル.ctx
+エラー[E009]: 誤り/無いファイル.ctx:6:13: 依存 `@lib`（`example.com/acme/lib`、`../部品`）に `コンテキスト/値段.ctx` はありません
+     6 | use context "@lib/コンテキスト/値段.ctx"
+exit 1
+
+$ sakai check --lang ja 誤り/無いファイル.ctx --format json
+{"root":".","file":"誤り/無いファイル.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E009","severity":"error","file":"誤り/無いファイル.ctx","line":6,"col":13,"message":"依存 `@lib`（`example.com/acme/lib`、`../部品`）に `コンテキスト/値段.ctx` はありません","notes":[],"references":[],"fix":null}]}
+exit 1
+
+$ sakai check --lang ja 誤り/持ち主の無い依存.ctx
+エラー[E103]: @lib/規則/注文の合計.rule:16:1: @lib/規則/注文の合計.rule が、地図の範囲の外の rulec "@lib/@base/規則/付加価値税率.rule" を参照しています（apply）
+    16 | apply 付加価値税(vat) = "@base/規則/付加価値税率.rule" meaning:35d5c7d29edf24c8
+  = 範囲は地図の `covers`（"."）で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。
+  = @lib/@base/規則/付加価値税率.rule は依存 `@lib/@base` のファイルです。それを持つ依存のコンテキストを `use context "@lib/@base/…"` で地図に入れるか、`covers` に `"@lib/@base"` を書き、地図のどれかのコンテキストに持たせてください。
+exit 1
+
+$ sakai check --lang ja 誤り/持ち主の無い依存.ctx --format json
+{"root":".","file":"誤り/持ち主の無い依存.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E103","severity":"error","file":"@lib/規則/注文の合計.rule","line":16,"col":1,"message":"@lib/規則/注文の合計.rule が、地図の範囲の外の rulec \"@lib/@base/規則/付加価値税率.rule\" を参照しています（apply）","notes":["範囲は地図の `covers`（\".\"）で決まり、`except` と、パスに . で始まる名前、node_modules、site-packages、__pycache__、target を含むものは外れます。","@lib/@base/規則/付加価値税率.rule は依存 `@lib/@base` のファイルです。それを持つ依存のコンテキストを `use context \"@lib/@base/…\"` で地図に入れるか、`covers` に `\"@lib/@base\"` を書き、地図のどれかのコンテキストに持たせてください。"],"references":[],"fix":null}]}
+exit 1
+
+# in ja/アプリ/コンテキスト
+
+$ sakai check --lang ja @lib/合計.ctx
+@lib/合計.ctx: ok — コンテキスト 1、関係 0。成果物 2 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+exit 0
+
+# in ja/部品
+
+$ sakai check --lang ja 合計.ctx
+合計.ctx: ok — コンテキスト 1、関係 0。成果物 2 件は、どれも一つのコンテキストに属する。境界を越える参照は無い
+exit 0
+
+# in ja/外
+
+$ sakai check --lang ja 通販.ctx --root .
+エラー[E009]: 通販.ctx:7:13: パス "@lib/コンテキスト/値付け.ctx" がありません
+     7 | use context "@lib/コンテキスト/値付け.ctx"
+  = パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは @lib/コンテキスト/値付け.ctx を指します。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+エラー[E009]: 通販.ctx:9:13: パス "@lib" がありません
+     9 | covers ".", "@lib"
+  = パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは @lib を指します。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+exit 1
+
+$ sakai check --lang ja 通販.ctx --root . --format json
+{"root":".","file":"通販.ctx","ok":false,"summary":null,"diagnostics":[{"code":"E009","severity":"error","file":"通販.ctx","line":7,"col":13,"message":"パス \"@lib/コンテキスト/値付け.ctx\" がありません","notes":["パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは @lib/コンテキスト/値付け.ctx を指します。","`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"],"references":[],"fix":null},{"code":"E009","severity":"error","file":"通販.ctx","line":9,"col":13,"message":"パス \"@lib\" がありません","notes":["パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは @lib を指します。","`@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました"],"references":[],"fix":null}]}
+exit 1
+
+# in ja
+
+$ sakai check --lang ja . --root .
+エラー[E009]: 外/通販.ctx:7:13: パス "@lib/コンテキスト/値付け.ctx" がありません
+     7 | use context "@lib/コンテキスト/値付け.ctx"
+  = パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは 外/@lib/コンテキスト/値付け.ctx を指します。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+エラー[E009]: 外/通販.ctx:9:13: パス "@lib" がありません
+     9 | covers ".", "@lib"
+  = パスは、この .ctx のあるディレクトリからの相対パスです。書いてあるパスは 外/@lib を指します。
+  = `@` で始まるパスが依存を指すのは、`ritsu.mod` のあるモジュールの中だけです。このファイルはモジュールの中に無いので、ふつうの相対パスとして読みました
+備考: `アプリ` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `sakai check アプリ` を実行してください
+備考: `土台` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `sakai check 土台` を実行してください
+備考: `部品` は自分の `ritsu.mod` を持つ別のモジュールなので、読んでいません。読むには `sakai check 部品` を実行してください
+exit 1
+

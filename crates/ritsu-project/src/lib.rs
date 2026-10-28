@@ -14,13 +14,19 @@
 //!   file it lands on, whether that file is part of the project, and what the language of that
 //!   file says of the thing named.
 //! - [`Project::check`]: each language's own `check` of the project's files, in that order, as
-//!   its command prints it, for `ritsu check` to print again (DESIGN 8.3).
+//!   its command prints it, for `ritsu check` to print again (DESIGN 8.3); and in a module, what
+//!   rulec says of a line of a contribution filed under the contribution
+//!   ([`Project::place_findings`]), as `ritsu check` and `ritsu gen` both count it (DESIGN 17.8).
+//! - [`Project::named`]: what each file names of other files, as paths from the root, for the
+//!   dependencies a module uses (W301, W303), and [`Project::reached`]: the files of the
+//!   dependencies the files given reach, which `ritsu gen` makes a package of (DESIGN 17.8).
 //!
 //! This is the connecting layer (DESIGN 3.1): it depends on the base layer and on the nine
 //! languages, and no language depends on it.
 
 pub mod check;
 pub mod joined;
+pub mod named;
 pub mod project;
 pub mod resolve;
 
