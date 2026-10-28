@@ -555,8 +555,8 @@ those tests keep, this page's stories as whole transcripts, and `tests/docs.rs` 
 them: every claims file here parses, every output is what geas printed, and every command, option,
 code and link exists.
 
-On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 238 tests (111
-unit tests and 127 that run the binary) in 77 seconds, none skipped; the release binary is 2.3 MB.
+On one run on macOS on Apple silicon, with every tool at hand, `cargo test` ran 254 tests (114
+unit tests and 140 that run the binary) in 82 seconds, none skipped; the release binary is 2.3 MB.
 A test whose tool is missing (python3, node, go, rustc with the llvm-tools component, Chrome, git,
 or a built pixie greeter named by `GEAS_PIXIE_GREETER`) prints `SKIP:` and passes, and this lists
 what was not run:
