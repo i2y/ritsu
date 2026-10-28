@@ -706,16 +706,18 @@ pub fn optional_modules_dts(head: &str, names: &BTreeSet<String>) -> String {
     s
 }
 
-/// package.json of the library: its name, version, description (the module's `description` line,
-/// else `what`, with `generated`, since JSON has no comment to carry it) and license, the module's
-/// `source` as its `repository` (npm's provenance checks it against the repository the package is
-/// built in), CommonJS built into `dist/` (the `exports` of every module of the package), the
-/// runtime it imports as ranges from the versions tested (`runtime`), the libraries it imports as
+/// package.json of the library: `generated` first, as the `"//"` key (JSON has no comment to carry
+/// the head of a generated file; npm passes the key over, and ritsu reads it as the head), then its
+/// name, version, description (the module's `description` line, which npm's page shows to the
+/// people who use the library, else `what`) and license, the module's `source` as its
+/// `repository` (npm's provenance checks it against the repository the package is built in),
+/// CommonJS built into `dist/` (the `exports` of every module of the package), the runtime it
+/// imports as ranges from the versions tested (`runtime`), the libraries it imports as
 /// `peerDependencies` (`peers`), and the TypeScript that builds it.
 pub fn package_json(l: &Library, what: &str, generated: &str, runtime: &BTreeMap<String, &str>, peers: &BTreeMap<String, String>) -> String {
     let j = ritsu_emit::lit::json;
-    let about = l.description.as_ref().map_or_else(|| what.to_string(), |d| format!("{}.", one_line(d).trim_end_matches('.')));
-    let mut o = format!("{{\n  \"name\": {},\n  \"version\": {},\n  \"description\": {}", j(&l.name), j(&l.version), j(&format!("{about} {generated}")));
+    let about = l.description.as_ref().map_or_else(|| what.to_string(), |d| one_line(d));
+    let mut o = format!("{{\n  \"//\": {},\n  \"name\": {},\n  \"version\": {},\n  \"description\": {}", j(generated), j(&l.name), j(&l.version), j(&about));
     if let Some(license) = &l.license {
         o.push_str(&format!(",\n  \"license\": {}", j(license)));
     }
@@ -737,9 +739,10 @@ pub fn package_json(l: &Library, what: &str, generated: &str, runtime: &BTreeMap
 }
 
 /// pyproject.toml of the library: its name, version, description (the module's `description` line)
-/// and license, the Python the app form asks for, and what it imports as ranges (`deps`: each
-/// distribution with its range), built by setuptools from the version that reads a license's SPDX
-/// expression (PEP 639).
+/// and license, the Python the app form asks for, what it imports as ranges (`deps`: each
+/// distribution with its range), and the module's `source` as the `Repository` of its URLs (PyPI
+/// marks the URL verified when it is the repository a trusted publisher publishes from), built by
+/// setuptools from the version that reads a license's SPDX expression (PEP 639).
 pub fn pyproject(l: &Library, head: &str, what: &str, deps: &[(String, String)]) -> String {
     let j = ritsu_emit::lit::json;
     let mut o = format!("{head}# {what}\n\n[project]\nname = {}\nversion = {}\n", j(&l.name), j(&l.version));
@@ -750,8 +753,12 @@ pub fn pyproject(l: &Library, head: &str, what: &str, deps: &[(String, String)])
         o.push_str(&format!("license = {}\n", j(license)));
     }
     let deps_toml: String = deps.iter().map(|(n, r)| format!("  {},\n", j(&format!("{n}{r}")))).collect();
+    o.push_str(&format!("requires-python = \">=3.10\"\ndependencies = [\n{deps_toml}]\n"));
+    if let Some(source) = &l.source {
+        o.push_str(&format!("\n[project.urls]\nRepository = {}\n", j(source)));
+    }
     o.push_str(&format!(
-        "requires-python = \">=3.10\"\ndependencies = [\n{deps_toml}]\n\n[build-system]\nrequires = [\"setuptools>=77\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools.packages.find]\ninclude = [{}, {}]\n\n[tool.setuptools.package-data]\n\"*\" = [\"py.typed\", \"*.sql\"]\n",
+        "\n[build-system]\nrequires = [\"setuptools>=77\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools.packages.find]\ninclude = [{}, {}]\n\n[tool.setuptools.package-data]\n\"*\" = [\"py.typed\", \"*.sql\"]\n",
         j(&l.import),
         j(&format!("{}.*", l.import))
     ));
