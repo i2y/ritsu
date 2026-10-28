@@ -134,9 +134,10 @@ thread_local! {
     static TREES: RefCell<Vec<Cached>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Which files the layer reads on this thread: the disk (0), or what [`crate::fs::with`] holds.
+/// Which files the layer reads on this thread: the disk (0), or what [`crate::fs::with`] holds, seen
+/// through a watcher of them ([`crate::fs::id`]).
 fn files_id() -> usize {
-    fs::current().map_or(0, |f| Rc::as_ptr(&f) as *const () as usize)
+    fs::id()
 }
 
 /// The tree of the module whose root is `root`, read once on this thread and kept while the files it

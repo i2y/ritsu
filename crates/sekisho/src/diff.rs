@@ -9,9 +9,10 @@
 //! version alone, and does not change the other's answer. The values both can take are walked: a
 //! cell of a number is where the two versions' cells meet, an enum's or a role's value one version
 //! does not have is not a combination of both (the interface lists it). Rule outputs and dates that
-//! both versions compute the same way (the same file, given the same values) are one value; computed
-//! another way, every pair of their values for the same values read is walked, and a pair is
-//! certain only where one version comes to one value there.
+//! both versions compute the same way (the same file, given the same values, its answers resting on
+//! the same text and the same files read: the ports' `rests_on`) are one value; computed another
+//! way, every pair of their values for the same values read is walked, and a pair is certain only
+//! where one version comes to one value there.
 //!
 //! Each combination is decided by both versions (`eval::decide`) and is one of four: allowed now
 //! and denied before (gained), denied now and allowed before (lost), the same answer decided by
@@ -426,17 +427,23 @@ impl Walked<'_> {
         matches!(f.slots[at], Slot::Computed(_) | Slot::Linked(..))
     }
 
-    /// What computes the value at a place, as two versions compare it: the file's text (read
-    /// through this side's files), what it computes and what it is given. None for a place of no
-    /// computed value.
+    /// What computes the value at a place, as two versions compare it: what the file's answers rest
+    /// on (its text and every file its check read, through this side's files, as rulec and koyomi
+    /// say it), what it computes and what it is given. None for a place of no computed value, and
+    /// for a file whose language cannot say what its answers rest on.
     fn computation(&self, f: &Frame, at: usize) -> Option<String> {
         let (act, ci, link) = f.computed_at(self.space.action, at)?;
         let c = &self.g.actions[act].computed[ci];
         let given = link.map(|l| format!("{:?}", f.links[l].inputs)).unwrap_or_default();
-        let text = |file: &std::path::Path| self.side.within(|| ritsu_base::fs::read(file).ok());
         Some(match self.known.computed.get(&(act, ci))? {
-            Kn::Rule { file, output, .. } => format!("rule {:?} {output} {:?} {given}", text(file)?, c.how),
-            Kn::Date { file, function, .. } => format!("date {:?} {function} {:?} {given}", text(file)?, c.how),
+            Kn::Rule { file, output, .. } => {
+                let on = self.side.within(|| self.ask.rules.and_then(|r| r.rests_on(file)))?;
+                format!("rule {on} {output} {:?} {given}", c.how)
+            }
+            Kn::Date { file, function, .. } => {
+                let on = self.side.within(|| self.ask.dates.and_then(|d| d.rests_on(file)))?;
+                format!("date {on} {function} {:?} {given}", c.how)
+            }
             Kn::Attr => format!("attr {:?} {given}", c.how),
             Kn::Open { data, closed } => format!("open {data:?} {closed:?} {:?} {given}", c.how),
         })

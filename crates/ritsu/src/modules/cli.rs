@@ -25,8 +25,8 @@ fn budget() -> Flag {
         "--budget",
         Some("<n>"),
         tr!(
-            "振る舞いの差を求めるときに調べる量の上限（rulec の検査が訪れるノード数、sekisho の組み合わせの数）",
-            "the cap on how much is walked to find a difference of behavior (the nodes rulec's check visits, the combinations of sekisho)"
+            "振る舞いの差を求めるときに調べる量の上限（rulec の検査が訪れるノード数、koyomi の日付のファイルの入力の組み合わせの数、sekisho の組み合わせの数）。書かなければ言語ごとの既定",
+            "the cap on how much is walked to find a difference of behavior (the nodes rulec's check visits, the input combinations of koyomi's dates files, the combinations of sekisho); without it, each language's default"
         ),
     )
 }

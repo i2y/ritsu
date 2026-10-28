@@ -179,14 +179,38 @@ impl Module {
     }
 
     /// How a file of this side is shown: after the side's label, or as it is when the side is the
-    /// directory the run is in.
-    fn shown(&self, rel: &str) -> String {
-        if self.label == "." { rel.to_string() } else { format!("{}/{rel}", self.label) }
+    /// directory the run is in; with the head of the side's digest after it, when both sides go by
+    /// one name (`mark`).
+    fn shown(&self, rel: &str, mark: Option<&str>) -> String {
+        let shown = if self.label == "." { rel.to_string() } else { format!("{}/{rel}", self.label) };
+        marked(shown, mark)
     }
 
     /// One of its files, as a side of a diff of behavior.
-    fn spot(&self, rel: &str) -> Spot {
-        Spot { read: self.root.join(rel).to_string_lossy().into_owned(), shown: self.shown(rel), through: self.through.clone() }
+    fn spot(&self, rel: &str, mark: Option<&str>) -> Spot {
+        Spot { read: self.root.join(rel).to_string_lossy().into_owned(), shown: self.shown(rel, mark), through: self.through.clone() }
+    }
+
+    /// The digest of its files: of the tar of what it carries, as a lock writes `files`. None when
+    /// they make no tar (a file over the size a module carries, in a directory at hand).
+    pub fn files_digest(&self) -> Option<String> {
+        let files: Vec<(String, Vec<u8>)> = self.files.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        ritsu_base::modules::tar::write(&files).ok().map(|t| digest::of(&t))
+    }
+}
+
+/// `sha256:` and the first twelve hex digits of a digest: what a side is told apart by when both
+/// sides go by one name (DESIGN 17.9.6).
+pub(super) fn digest_head(d: &str) -> String {
+    let hex = d.strip_prefix("sha256:").unwrap_or(d);
+    format!("sha256:{}", &hex[..hex.len().min(12)])
+}
+
+/// `shown`, with the head of a digest after it in parentheses when there is one.
+fn marked(shown: String, mark: Option<&str>) -> String {
+    match mark {
+        Some(m) => format!("{shown} ({m})"),
+        None => shown,
     }
 }
 
@@ -217,6 +241,20 @@ pub struct Head {
     pub module: Option<String>,
     pub version: Option<String>,
     pub digest: Option<String>,
+    /// The digest of a module's files (of the tar of what it carries, the `files_digest` of `ritsu
+    /// mod list` and of a lock), whichever way it was read; None for a file, and for files that make
+    /// no tar.
+    pub files: Option<String>,
+    /// The head of a digest the side is told apart by, when both sides go by one name: the OCI
+    /// manifest's when both have one, else the files'; for two files, their bytes'.
+    pub mark: Option<String>,
+}
+
+impl Head {
+    /// The side as the text and the Markdown head it.
+    fn shown(&self) -> String {
+        marked(self.path.clone(), self.mark.as_deref())
+    }
 }
 
 /// The files of the two versions, by the path from each root.
@@ -435,8 +473,23 @@ fn requires(o: &manifest::Manifest, n: &manifest::Manifest) -> Requires {
 
 /// Two versions of a module.
 pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: &Joined) -> ModDiff {
-    let head = |m: &Module| Head { path: m.label.clone(), module: Some(m.name.clone()), version: m.version.clone(), digest: m.digest.clone() };
-    let mut d = ModDiff { old: head(o), new: head(n), requires: requires(&o.manifest, &n.manifest), ..ModDiff::default() };
+    let (of, nf) = (o.files_digest(), n.files_digest());
+    // two sides of one name (a tag that moved, a module a path reaches read at two revisions) are
+    // told apart by their digests
+    let (om, nm) = match (o.label == n.label, &o.digest, &n.digest) {
+        (false, ..) => (None, None),
+        (true, Some(a), Some(b)) => (Some(digest_head(a)), Some(digest_head(b))),
+        (true, ..) => (of.as_deref().map(digest_head), nf.as_deref().map(digest_head)),
+    };
+    let head = |m: &Module, files: &Option<String>, mark: &Option<String>| Head {
+        path: m.label.clone(),
+        module: Some(m.name.clone()),
+        version: m.version.clone(),
+        digest: m.digest.clone(),
+        files: files.clone(),
+        mark: mark.clone(),
+    };
+    let mut d = ModDiff { old: head(o, &of, &om), new: head(n, &nf, &nm), requires: requires(&o.manifest, &n.manifest), ..ModDiff::default() };
     for (rel, bytes) in &o.files {
         match n.files.get(rel) {
             None => d.files.removed.push(rel.clone()),
@@ -449,23 +502,25 @@ pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: 
     let moved = !d.files.added.is_empty() || !d.files.removed.is_empty() || !d.files.changed.is_empty();
     for rel in o.files.keys().filter(|k| moved && n.files.contains_key(*k)) {
         let Some(tool) = behaves(rel) else { continue };
-        let result = behavior(tool, &o.spot(rel), &n.spot(rel), budget, lang, joined);
+        let result = behavior(tool, &o.spot(rel, om.as_deref()), &n.spot(rel, nm.as_deref()), budget, lang, joined);
         d.behavior.push(Behavior { file: rel.clone(), tool, result });
     }
     // `ritsu.mod` changes are said as the versions of the title and the `require` lines
     for rel in d.files.changed.iter().filter(|r| r.as_str() != manifest::FILE) {
-        let at = |m: &Module| At { read: m.root.join(rel), files: m.through.clone(), root: m.root.clone(), rel: rel.clone(), label: m.label.clone(), shown: m.shown(rel) };
-        d.interface.push(interface(rel, &at(o), &at(n), lang, joined));
+        let at = |m: &Module, mark: Option<&str>| At { read: m.root.join(rel), files: m.through.clone(), root: m.root.clone(), rel: rel.clone(), label: m.label.clone(), shown: m.shown(rel, mark) };
+        d.interface.push(interface(rel, &at(o, om.as_deref()), &at(n, nm.as_deref()), lang, joined));
     }
     d
 }
 
 /// Two files.
 fn files(o: &FileSide, n: &FileSide, budget: Option<u64>, lang: Lang, joined: &Joined) -> ModDiff {
-    let head = |f: &FileSide| Head { path: f.spelled.clone(), ..Head::default() };
-    let mut d = ModDiff { old: head(o), new: head(n), of_files: true, ..ModDiff::default() };
     let read = |f: &FileSide| f.opened.with(|| ritsu_base::fs::read(Path::new(&f.opened.path))).unwrap_or_default();
     let (ob, nb) = (read(o), read(n));
+    // two files written alike are told apart by the digests of their bytes
+    let (om, nm) = if o.spelled == n.spelled { (Some(digest_head(&digest::of(&ob))), Some(digest_head(&digest::of(&nb)))) } else { (None, None) };
+    let head = |f: &FileSide, mark: &Option<String>| Head { path: f.spelled.clone(), mark: mark.clone(), ..Head::default() };
+    let mut d = ModDiff { old: head(o, &om), new: head(n, &nm), of_files: true, ..ModDiff::default() };
     let file = n.spelled.clone();
     if ob == nb {
         d.files.same = 1;
@@ -474,18 +529,18 @@ fn files(o: &FileSide, n: &FileSide, budget: Option<u64>, lang: Lang, joined: &J
     }
     if let Some(tool) = behaves(&o.opened.path).or_else(|| behaves(&n.opened.path)) {
         // each language reads the spellings of DESIGN 17.9.1 itself
-        let spot = |f: &FileSide| Spot { read: f.spelled.clone(), shown: f.spelled.clone(), through: None };
-        let result = behavior(tool, &spot(o), &spot(n), budget, lang, joined);
+        let spot = |f: &FileSide, mark: &Option<String>| Spot { read: f.spelled.clone(), shown: marked(f.spelled.clone(), mark.as_deref()), through: None };
+        let result = behavior(tool, &spot(o, &om), &spot(n, &nm), budget, lang, joined);
         d.behavior.push(Behavior { file: file.clone(), tool, result });
     }
     if ob != nb {
-        let at = |f: &FileSide| {
+        let at = |f: &FileSide, mark: &Option<String>| {
             let read = PathBuf::from(&f.opened.path);
             let root = f.opened.with(|| ritsu_base::paths::find_root(&read));
             let rel = f.opened.with(|| ritsu_base::paths::from_root(&root, &read)).unwrap_or_else(|| f.opened.path.clone());
-            At { read, files: f.opened.files.clone(), root, rel, label: f.spelled.clone(), shown: f.spelled.clone() }
+            At { read, files: f.opened.files.clone(), root, rel, label: f.spelled.clone(), shown: marked(f.spelled.clone(), mark.as_deref()) }
         };
-        d.interface.push(interface(&file, &at(o), &at(n), lang, joined));
+        d.interface.push(interface(&file, &at(o, &om), &at(n, &nm), lang, joined));
     }
     d
 }
@@ -1122,8 +1177,8 @@ pub(super) fn more_line(k: usize, lang: Lang) -> String {
 pub fn text(d: &ModDiff, lang: Lang) -> String {
     let c = colon(lang);
     let mut o = format!("ritsu mod diff{c}{}\n", title(d, ""));
-    o.push_str(&format!("  {}{c}{}\n", tr!("古い版", "old").get(lang), d.old.path));
-    o.push_str(&format!("  {}{c}{}\n", tr!("新しい版", "new").get(lang), d.new.path));
+    o.push_str(&format!("  {}{c}{}\n", tr!("古い版", "old").get(lang), d.old.shown()));
+    o.push_str(&format!("  {}{c}{}\n", tr!("新しい版", "new").get(lang), d.new.shown()));
     o.push_str(&body_text(d, lang));
     o
 }
@@ -1208,8 +1263,8 @@ pub(super) fn html(s: &str) -> String {
 pub fn markdown(d: &ModDiff, lang: Lang) -> String {
     let c = colon(lang);
     let mut o = format!("### ritsu mod diff{c}{}\n\n", title(d, "`"));
-    o.push_str(&format!("- {}{c}`{}`\n", tr!("古い版", "Old").get(lang), d.old.path));
-    o.push_str(&format!("- {}{c}`{}`\n", tr!("新しい版", "New").get(lang), d.new.path));
+    o.push_str(&format!("- {}{c}`{}`\n", tr!("古い版", "Old").get(lang), d.old.shown()));
+    o.push_str(&format!("- {}{c}`{}`\n", tr!("新しい版", "New").get(lang), d.new.shown()));
     o.push_str(&body_markdown(d, lang, 4, SHOWN));
     guarded(&o)
 }
@@ -1442,7 +1497,13 @@ pub fn body_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> Stri
 }
 
 fn head_json(h: &Head) -> Json {
-    Json::obj([("path", Json::str(h.path.as_str())), ("module", Json::opt_str(h.module.clone())), ("version", Json::opt_str(h.version.clone())), ("digest", Json::opt_str(h.digest.clone()))])
+    Json::obj([
+        ("path", Json::str(h.path.as_str())),
+        ("module", Json::opt_str(h.module.clone())),
+        ("version", Json::opt_str(h.version.clone())),
+        ("digest", Json::opt_str(h.digest.clone())),
+        ("files_digest", Json::opt_str(h.files.clone())),
+    ])
 }
 
 fn req_json(r: &Req) -> Json {

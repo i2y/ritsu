@@ -97,8 +97,8 @@ a difference is shown in behavior or in an interface.
 your answers that change:
   invoice.cal (koyomi): the answers differ
     koyomi diff: dates invoice v1 → v1
-      old: invoice.cal
-      new: invoice.cal
+      old: invoice.cal (the lock of one)
+      new: invoice.cal (the lock of the working tree)
 
     inputs compared: received 2026-01-01..2026-10-31 (304 combinations)
     dates compared: closing, payment
@@ -109,8 +109,8 @@ your answers that change:
     for every other combination, every date gets the same value.
   refunds.gate (sekisho): the answers differ
     sekisho diff: gate refunds v1 → v1
-      old: refunds.gate
-      new: refunds.gate
+      old: refunds.gate (the lock of one)
+      new: refunds.gate (the lock of the working tree)
 
     refund_order: 20 combinations walked over both versions
       allow gained (deny → allow): 1 combination

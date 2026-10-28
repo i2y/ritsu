@@ -37,13 +37,15 @@
           "path": "@desk@1.0.0",
           "module": "example.com/acme/desk",
           "version": "1.0.0",
-          "digest": "sha256:<digest>"
+          "digest": "sha256:<digest>",
+          "files_digest": "sha256:<digest>"
         },
         "new": {
           "path": "@desk@1.1.0",
           "module": "example.com/acme/desk",
           "version": "1.1.0",
-          "digest": "sha256:<digest>"
+          "digest": "sha256:<digest>",
+          "files_digest": "sha256:<digest>"
         },
         "files": {
           "added": [
@@ -512,12 +514,12 @@
             "koyomi": "0.36.0",
             "kind": "dates",
             "old": {
-              "file": "invoice.cal",
+              "file": "invoice.cal (the lock of one)",
               "name": "invoice",
               "version": "1"
             },
             "new": {
-              "file": "invoice.cal",
+              "file": "invoice.cal (the lock of the working tree)",
               "name": "invoice",
               "version": "1"
             },
@@ -585,12 +587,12 @@
           "result": {
             "sekisho": "0.36.0",
             "old": {
-              "file": "refunds.gate",
+              "file": "refunds.gate (the lock of one)",
               "name": "refunds",
               "version": "v1"
             },
             "new": {
-              "file": "refunds.gate",
+              "file": "refunds.gate (the lock of the working tree)",
               "name": "refunds",
               "version": "v1"
             },

@@ -25,7 +25,7 @@
 
 **Version diff (over the whole input space)**
 
-`@pricing@1.1.0/rules/shipping_fee.rule` → `@pricing@1.1.0/rules/shipping_fee.rule`
+`@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)` → `@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)`
 
 | where they differ | answer | example | cells |
 |---|---|---|---|

@@ -21,13 +21,18 @@ use std::path::Path;
 /// rulec, as the ports reach it. It keeps each rule it has checked, by its path and its text, so
 /// that a program asking one rule many times (an evaluation per call of a workflow) checks it
 /// once; and the report `rulec check` prints of it, so that `ritsu check`, which prints that report
-/// and then asks the rule's facts for the workflows that use it, checks it once too.
+/// and then asks the rule's facts for the workflows that use it, checks it once too. A check is
+/// kept while every file it read reads the same ([`Seen`]): a rule of the same text whose
+/// enums, callee or contributions read otherwise (the other side of a diff, a git revision, the
+/// module at hand with another lock) is checked again, and both checks are kept.
 #[derive(Default)]
 pub struct Engine {
-    checked: std::sync::Mutex<std::collections::HashMap<(String, String), Checked2>>,
+    /// By the path and the text: the checks kept, each with what its files read.
+    checked: std::sync::Mutex<std::collections::HashMap<(String, String), Vec<Kept>>>,
     /// By the file (its path with its links followed, so two spellings of one path are one file)
-    /// and its text: the path the report was made with, its language, and the report.
-    reports: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String), (String, RLang, std::sync::Arc<crate::Report>)>>,
+    /// and its text: the path the report was made with, its language, what its files read, and the
+    /// report.
+    reports: std::sync::Mutex<std::collections::HashMap<(std::path::PathBuf, String), (String, RLang, std::sync::Arc<Seen>, std::sync::Arc<crate::Report>)>>,
     /// How many times a rule's text has been checked whole (what [`Engine::checks`] says).
     checks: std::sync::atomic::AtomicUsize,
     /// The port of dates a rule's `range from koyomi` is read through (§15.174); None where no
@@ -48,6 +53,165 @@ fn the_file(path: &str) -> std::path::PathBuf {
 
 /// A rule read and checked, or what check said of it.
 type Checked2 = std::sync::Arc<Result<(RuleFile, Checked), Vec<Said>>>;
+
+/// A check kept, with what the files it read came to.
+type Kept = (std::sync::Arc<Seen>, Checked2);
+
+/// How many checks of one text are kept: the rule read through as many sets of files in one run
+/// (the two sides of a diff, the base and the head of `ritsu mod report`).
+const KEPT_EACH: usize = 4;
+
+/// What a check read through `ritsu_base::fs`, each question once, with its answer: the files a
+/// rule reads besides itself (what it imports and applies, the contributions to it, the days of a
+/// koyomi date) at the paths the files of the thread were asked for, and the files that say where a
+/// module's dependencies are (its `ritsu.mod`, its lock) that the view of them read.
+#[derive(Default)]
+struct Seen(Vec<Look>);
+
+/// A question a check asked the files, and the answer (None where there was nothing).
+#[derive(Clone, PartialEq)]
+enum Look {
+    Read(std::path::PathBuf, Option<Vec<u8>>),
+    Meta(std::path::PathBuf, Option<ritsu_base::fs::Meta>),
+    Dir(std::path::PathBuf, Option<Vec<(std::ffi::OsString, ritsu_base::fs::Kind)>>),
+    Canonical(std::path::PathBuf, Option<std::path::PathBuf>),
+}
+
+impl Look {
+    /// The question, to ask it once.
+    fn question(&self) -> (u8, &Path) {
+        match self {
+            Look::Read(p, _) => (0, p),
+            Look::Meta(p, _) => (1, p),
+            Look::Dir(p, _) => (2, p),
+            Look::Canonical(p, _) => (3, p),
+        }
+    }
+
+    /// Whether the files the thread reads now answer the question the same.
+    fn holds(&self) -> bool {
+        use ritsu_base::fs::raw;
+        match self {
+            Look::Read(p, was) => raw::read(p).ok() == *was,
+            Look::Meta(p, was) => raw::metadata(p).ok() == *was,
+            Look::Dir(p, was) => raw::read_dir(p).ok() == *was,
+            Look::Canonical(p, was) => raw::canonicalize(p).ok() == *was,
+        }
+    }
+}
+
+impl Seen {
+    /// Whether every file the check read reads the same now.
+    fn still(&self) -> bool {
+        self.0.iter().all(Look::holds)
+    }
+
+    /// What a rule of the text `src` checked with these reads rests on ([`ritsu_ports::Rules::rests_on`]):
+    /// a digest of the text and of every file read with its bytes, in the order of the paths.
+    fn rests_on(&self, src: &str) -> String {
+        let mut read: Vec<(&Path, &Option<Vec<u8>>)> = self.0.iter().filter_map(|l| if let Look::Read(p, b) = l { Some((p.as_path(), b)) } else { None }).collect();
+        read.sort_by(|a, b| a.0.cmp(b.0));
+        read.dedup_by(|a, b| a.0 == b.0);
+        fn put(all: &mut Vec<u8>, b: &[u8]) {
+            all.extend_from_slice(&(b.len() as u64).to_le_bytes());
+            all.extend_from_slice(b);
+        }
+        let mut all = Vec::new();
+        put(&mut all, src.as_bytes());
+        for (p, b) in read {
+            put(&mut all, p.as_os_str().as_encoded_bytes());
+            match b {
+                Some(b) => {
+                    all.push(1);
+                    put(&mut all, b);
+                }
+                None => all.push(0),
+            }
+        }
+        crate::sha256::hex(&all)
+    }
+}
+
+/// The files a check reads through: every call handed on to what the thread read before (the disk,
+/// or the files of an outer `ritsu_base::fs::with`), each question noted once with its answer. It
+/// stands for the files it hands on to ([`ritsu_base::fs::Files::stands_for`]), so the tree of a
+/// module kept for those is read here too.
+struct Recorder {
+    under: Option<std::rc::Rc<dyn ritsu_base::fs::Files>>,
+    stands: usize,
+    seen: std::cell::RefCell<(Vec<Look>, std::collections::HashSet<(u8, std::path::PathBuf)>)>,
+}
+
+impl Recorder {
+    fn files(&self) -> &dyn ritsu_base::fs::Files {
+        match &self.under {
+            Some(f) => f.as_ref(),
+            None => &ritsu_base::fs::Disk,
+        }
+    }
+
+    fn note(&self, look: Look) {
+        let mut s = self.seen.borrow_mut();
+        let (kind, p) = look.question();
+        if s.1.insert((kind, p.to_path_buf())) {
+            s.0.push(look);
+        }
+    }
+}
+
+impl ritsu_base::fs::Files for Recorder {
+    fn read(&self, p: &Path) -> std::io::Result<Vec<u8>> {
+        let got = self.files().read(p);
+        self.note(Look::Read(p.to_path_buf(), got.as_ref().ok().cloned()));
+        got
+    }
+
+    fn metadata(&self, p: &Path) -> std::io::Result<ritsu_base::fs::Meta> {
+        let got = self.files().metadata(p);
+        self.note(Look::Meta(p.to_path_buf(), got.as_ref().ok().copied()));
+        got
+    }
+
+    fn read_dir(&self, p: &Path) -> std::io::Result<Vec<(std::ffi::OsString, ritsu_base::fs::Kind)>> {
+        let got = self.files().read_dir(p);
+        self.note(Look::Dir(p.to_path_buf(), got.as_ref().ok().cloned()));
+        got
+    }
+
+    fn write(&self, p: &Path, bytes: &[u8]) -> std::io::Result<()> {
+        self.files().write(p, bytes)
+    }
+
+    fn create_dir_all(&self, p: &Path) -> std::io::Result<()> {
+        self.files().create_dir_all(p)
+    }
+
+    fn current_dir(&self) -> std::io::Result<std::path::PathBuf> {
+        self.files().current_dir()
+    }
+
+    fn canonicalize(&self, p: &Path) -> std::io::Result<std::path::PathBuf> {
+        let got = self.files().canonicalize(p);
+        self.note(Look::Canonical(p.to_path_buf(), got.as_ref().ok().cloned()));
+        got
+    }
+
+    fn revision(&self) -> Option<String> {
+        self.files().revision()
+    }
+
+    fn stands_for(&self) -> Option<usize> {
+        Some(self.stands)
+    }
+}
+
+/// `f` run with every read of `ritsu_base::fs` noted: what it came to, and what it read.
+fn watched<R>(f: impl FnOnce() -> R) -> (R, Seen) {
+    let rec = std::rc::Rc::new(Recorder { under: ritsu_base::fs::current(), stands: ritsu_base::fs::id(), seen: Default::default() });
+    let got = ritsu_base::fs::with(rec.clone(), f);
+    let (looks, _) = rec.seen.take();
+    (got, Seen(looks))
+}
 
 fn rlang(l: Lang) -> RLang {
     match l {
@@ -168,48 +332,69 @@ impl Engine {
         }
     }
 
-    /// The rule at `rule`, checked: read again when its text has changed. A report `check` already
-    /// made of the same text says whether the rule passes, so it is not checked a second time.
+    /// The rule at `rule`, checked: read again when its text has changed, or a file its check read
+    /// reads otherwise. A report `check` already made of the same text, while what it read reads the
+    /// same, says whether the rule passes, so it is not checked a second time.
     fn rule(&self, rule: &Path) -> Result<(String, String, Checked2), Vec<Said>> {
-        self.joined(|| self.rule_here(rule))
+        self.joined(|| self.rule_here(rule)).map(|(path, src, got, _)| (path, src, got))
     }
 
-    fn rule_here(&self, rule: &Path) -> Result<(String, String, Checked2), Vec<Said>> {
+    /// [`Engine::rule`], with what the check read.
+    fn rule_here(&self, rule: &Path) -> Result<(String, String, Checked2, std::sync::Arc<Seen>), Vec<Said>> {
         let (path, src) = read(rule)?;
         let key = (path.clone(), crate::sha256::hex(src.as_bytes()));
-        let reported = self.reports.lock().unwrap_or_else(|e| e.into_inner()).get(&(the_file(&path), key.1.clone())).map(|(_, _, r)| r.clone());
+        let reported = self
+            .reports
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&(the_file(&path), key.1.clone()))
+            .map(|(_, _, seen, r)| (seen.clone(), r.clone()))
+            .filter(|(seen, _)| seen.still());
         let mut cache = self.checked.lock().unwrap_or_else(|e| e.into_inner());
-        let got = cache
-            .entry(key)
-            .or_insert_with(|| {
-                std::sync::Arc::new(match reported {
-                    Some(r) if crate::has_error(&r.diags) => Err(refused(&path, &src)),
-                    Some(_) => crate::prepare(&src, &path).map_err(|_| refused(&path, &src)),
-                    None => {
-                        self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        checked(&path, &src, self.budget())
-                    }
-                })
+        let kept = cache.entry(key).or_default();
+        if let Some((seen, got)) = kept.iter().find(|(seen, _)| seen.still()) {
+            return Ok((path, src, got.clone(), seen.clone()));
+        }
+        let (got, mut seen) = watched(|| {
+            std::sync::Arc::new(match &reported {
+                Some((_, r)) if crate::has_error(&r.diags) => Err(refused(&path, &src)),
+                Some(_) => crate::prepare(&src, &path).map_err(|_| refused(&path, &src)),
+                None => {
+                    self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    checked(&path, &src, self.budget())
+                }
             })
-            .clone();
-        Ok((path, src, got))
+        });
+        // read off a report, the answer rests on what the report's check read as well
+        if let Some((was, _)) = &reported {
+            seen.0.extend(was.0.iter().cloned());
+        }
+        if kept.len() >= KEPT_EACH {
+            kept.remove(0);
+        }
+        let seen = std::sync::Arc::new(seen);
+        kept.push((seen.clone(), got.clone()));
+        Ok((path, src, got, seen))
     }
 
     /// The report `rulec check` makes of a rule's text, in `lang`, naming the file `path` (its
     /// findings are written as they are found, so a report is kept for the language and the path
-    /// it was made with; whether the rule passes, [`Engine::rule`] reads off any of them).
+    /// it was made with, while what it read reads the same; whether the rule passes,
+    /// [`Engine::rule`] reads off any of them).
     fn report(&self, path: &str, src: &str, lang: RLang) -> std::sync::Arc<crate::Report> {
         let key = (the_file(path), crate::sha256::hex(src.as_bytes()));
         let mut reports = self.reports.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((p, l, r)) = reports.get(&key)
+        if let Some((p, l, seen, r)) = reports.get(&key)
             && p == path
             && *l == lang
+            && seen.still()
         {
             return r.clone();
         }
         self.checks.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let r = std::sync::Arc::new(self.joined(|| i18n::with(lang, || crate::report_with(src, path, self.budget()))));
-        reports.insert(key, (path.to_string(), lang, r.clone()));
+        let (r, seen) = self.joined(|| watched(|| i18n::with(lang, || crate::report_with(src, path, self.budget()))));
+        let r = std::sync::Arc::new(r);
+        reports.insert(key, (path.to_string(), lang, std::sync::Arc::new(seen), r.clone()));
         r
     }
 
@@ -390,6 +575,12 @@ fn holds(l: Rat, op: &str, r: Rat) -> bool {
 }
 
 impl ritsu_ports::Rules for Engine {
+    /// The text and every file the check read, from the check kept for the files read now.
+    fn rests_on(&self, rule: &Path) -> Option<String> {
+        let (_, src, _, seen) = self.joined(|| self.rule_here(rule)).ok()?;
+        Some(seen.rests_on(&src))
+    }
+
     fn facts(&self, rule: &Path) -> Result<RuleFacts, Vec<Said>> {
         let (path, src, got) = self.rule(rule)?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;

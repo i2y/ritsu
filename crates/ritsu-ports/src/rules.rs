@@ -353,6 +353,17 @@ pub trait Rules {
     /// tries a case — in `lang`, naming the file `shown` (dandori names the file alone).
     fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>>;
 
+    /// What the rule's answers rest on, as one string: its text, and every file its check read
+    /// with what the file held (what it imports and applies, the contributions to it, the days of a
+    /// koyomi date, the files that say where a module's dependencies are). Two rules whose strings
+    /// are equal answer alike, whatever files each was read through (sekisho's diff takes a value
+    /// two versions of a gate compute so as one, ritsu's DESIGN 17.9.4). The default is None, for
+    /// a port that cannot say: then no two are taken to answer alike.
+    fn rests_on(&self, rule: &Path) -> Option<String> {
+        let _ = rule;
+        None
+    }
+
     /// Whether rulec is joined at all: false for the port the binary of a receiving language's own
     /// crate holds, which reads no rule (ritsu's DESIGN 2.3), so that the language can say so once,
     /// in its own code, rather than for each rule it asks of.

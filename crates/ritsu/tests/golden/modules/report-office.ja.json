@@ -37,13 +37,15 @@
           "path": "@desk@1.0.0",
           "module": "example.com/acme/desk",
           "version": "1.0.0",
-          "digest": "sha256:<digest>"
+          "digest": "sha256:<digest>",
+          "files_digest": "sha256:<digest>"
         },
         "new": {
           "path": "@desk@1.1.0",
           "module": "example.com/acme/desk",
           "version": "1.1.0",
-          "digest": "sha256:<digest>"
+          "digest": "sha256:<digest>",
+          "files_digest": "sha256:<digest>"
         },
         "files": {
           "added": [
@@ -512,12 +514,12 @@
             "koyomi": "0.36.0",
             "kind": "dates",
             "old": {
-              "file": "請求.cal",
+              "file": "請求.cal (one の lock)",
               "name": "請求",
               "version": "1"
             },
             "new": {
-              "file": "請求.cal",
+              "file": "請求.cal (作業ツリーの lock)",
               "name": "請求",
               "version": "1"
             },
@@ -585,12 +587,12 @@
           "result": {
             "sekisho": "0.36.0",
             "old": {
-              "file": "返金.gate",
+              "file": "返金.gate (one の lock)",
               "name": "返金",
               "version": "v1"
             },
             "new": {
-              "file": "返金.gate",
+              "file": "返金.gate (作業ツリーの lock)",
               "name": "返金",
               "version": "v1"
             },

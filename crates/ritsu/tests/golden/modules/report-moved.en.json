@@ -37,13 +37,15 @@
           "path": "@pricing@1.1.0",
           "module": "example.com/acme/pricing",
           "version": "1.1.0",
-          "digest": "sha256:<digest>"
+          "digest": "sha256:<digest>",
+          "files_digest": "sha256:<digest>"
         },
         "new": {
           "path": "@pricing@1.1.0",
           "module": "example.com/acme/pricing",
           "version": "1.1.0",
-          "digest": "sha256:<digest>"
+          "digest": "sha256:<digest>",
+          "files_digest": "sha256:<digest>"
         },
         "files": {
           "added": [],
@@ -64,8 +66,8 @@
             "tool": "rulec",
             "result": {
               "rule": "order_total",
-              "old": "@pricing@1.1.0/rules/order_total.rule",
-              "new": "@pricing@1.1.0/rules/order_total.rule",
+              "old": "@pricing@1.1.0/rules/order_total.rule (sha256:<head>)",
+              "new": "@pricing@1.1.0/rules/order_total.rule (sha256:<head>)",
               "old_version": "1",
               "new_version": "1",
               "over_budget": false,
@@ -88,8 +90,8 @@
             "tool": "rulec",
             "result": {
               "rule": "shipping_fee",
-              "old": "@pricing@1.1.0/rules/shipping_fee.rule",
-              "new": "@pricing@1.1.0/rules/shipping_fee.rule",
+              "old": "@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)",
+              "new": "@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)",
               "old_version": "1",
               "new_version": "1",
               "over_budget": false,

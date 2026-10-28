@@ -486,6 +486,45 @@ fn a_rule_checked_for_ritsu_check_is_checked_once() {
     assert_eq!(e.checks(), rules.len(), "each rule is checked once, for check and for its facts");
 }
 
+/// A check is kept while what it read reads the same (ritsu's DESIGN 17.9.1): the same text of a
+/// rule, read through files whose enums differ, is checked again, both checks are kept, and one read
+/// off a report holds only while what the report read does.
+#[test]
+fn a_kept_check_holds_while_what_it_read_reads_the_same() {
+    let view = |refundable: &str| {
+        let m = std::rc::Rc::new(ritsu_base::fs::Memory::new("/shop"));
+        m.add("sizes.rule", format!("enums sizes v1\ndescription \"The sizes of an order, and the ones a clerk refunds\"\n\nenum size = small | medium | large\ngroup refundable = {refundable}\n"));
+        m.add(
+            "refund.rule",
+            "rule refund v1\ndescription \"Whether a clerk refunds an order\"\n\nimport enum size from \"sizes.rule\"\n\ninputs\n  size : size\n\noutputs\n  allowed : bool\n\ntable allowed\npolicy unique\n| size            | -> allowed |\n| refundable      | true       |\n| not: refundable | false      |\n",
+        );
+        m
+    };
+    let (passes, fails) = (view("small"), view("small, medium, large"));
+    let rule = Path::new("/shop/refund.rule");
+    let e = Engine::new();
+    let facts = |m: &std::rc::Rc<ritsu_base::fs::Memory>| ritsu_base::fs::with(m.clone(), || e.facts(rule)).map(|_| ()).map_err(|said| said.iter().map(|s| s.code.clone()).collect::<Vec<_>>());
+    // where every size is refundable, the last row is never reached: the report says so, and the
+    // facts are read off it
+    let units = ritsu_base::fs::with(fails.clone(), || e.checked(Path::new("/shop"), &["refund.rule".to_string()], ritsu_base::text::Lang::En));
+    assert_ne!(units[0].verdict, ritsu_ports::Verdict::Passes, "{}", units[0].text());
+    assert!(facts(&fails).is_err());
+    // the same text where a small order alone is refundable: checked again, and it passes
+    let before = e.checks();
+    assert_eq!(facts(&passes), Ok(()));
+    assert_eq!(e.checks() - before, 1);
+    // both are kept
+    assert!(facts(&fails).is_err());
+    assert_eq!(facts(&passes), Ok(()));
+    assert_eq!(e.checks() - before, 1);
+    // what its answers rest on: the same for the same files, wherever they are held
+    let on = |m: &std::rc::Rc<ritsu_base::fs::Memory>| ritsu_base::fs::with(m.clone(), || ritsu_ports::Rules::rests_on(&e, rule));
+    assert!(on(&passes).is_some());
+    assert_eq!(on(&passes), on(&view("small")));
+    assert_ne!(on(&passes), on(&fails));
+    assert_eq!(e.checks() - before, 1);
+}
+
 /// The values a question over ranges answers, in its order.
 fn values_of(found: &ritsu_ports::Found<Vec<(Value, ritsu_ports::Values)>>) -> Vec<Value> {
     match found {

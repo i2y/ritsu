@@ -90,7 +90,8 @@ fn json(out: &str) -> serde_json::Value {
     serde_json::from_str(out).unwrap_or_else(|e| panic!("{e}: {out}"))
 }
 
-/// The text with each digest (`sha256:` and 64 hexadecimal digits) masked.
+/// The text with each digest (`sha256:` and 64 hexadecimal digits) masked, and each head of one
+/// that tells two sides of one name apart (`sha256:` and 12).
 fn masked(text: &str) -> String {
     let mut out = String::new();
     let mut rest = text;
@@ -98,13 +99,12 @@ fn masked(text: &str) -> String {
         let after = &rest[at + 7..];
         let hex = after.chars().take_while(|c| c.is_ascii_hexdigit()).count();
         out.push_str(&rest[..at]);
-        if hex == 64 {
-            out.push_str("sha256:<digest>");
-            rest = &after[64..];
-        } else {
-            out.push_str("sha256:");
-            rest = after;
+        match hex {
+            64 => out.push_str("sha256:<digest>"),
+            12 => out.push_str("sha256:<head>"),
+            _ => out.push_str("sha256:"),
         }
+        rest = if hex == 64 || hex == 12 { &after[hex..] } else { after };
     }
     out.push_str(rest);
     out
@@ -354,6 +354,15 @@ fn the_shop_raising_pricing_held_to_golden_files() {
         let m = &v["modules"][0];
         assert_eq!((&m["change"], &m["old"]["version"], &m["new"]["version"]), (&serde_json::json!("moved"), &serde_json::json!("1.1.0"), &serde_json::json!("1.1.0")), "{out}");
         assert_ne!(m["old"]["digest"], m["new"]["digest"]);
+        // the two sides go by one name, each told apart by the head of its digest
+        let head = |d: &serde_json::Value| format!("(sha256:{})", &d.as_str().unwrap()["sha256:".len()..][..12]);
+        let file = format!("{}@1.1.0/{fee}", m["prefix"].as_str().unwrap());
+        let (oh, nh) = (head(&m["old"]["digest"]), head(&m["new"]["digest"]));
+        let (_, md, _) = report(&["--base", "two"], "markdown");
+        assert!(md.contains(&format!("`{file} {oh}` → `{file} {nh}`")), "{lang}:\n{md}");
+        let fee = m["diff"]["behavior"].as_array().unwrap().iter().find(|b| b["file"] == fee.as_str()).unwrap_or_else(|| panic!("{out}"));
+        assert_eq!((&fee["result"]["old"], &fee["result"]["new"]), (&serde_json::json!(format!("{file} {oh}")), &serde_json::json!(format!("{file} {nh}"))), "{out}");
+        assert_eq!((&m["diff"]["old"]["digest"], &m["diff"]["new"]["digest"]), (&m["old"]["digest"], &m["new"]["digest"]), "{out}");
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -518,8 +527,59 @@ fn your_answers_that_change_held_to_golden_files() {
         assert_eq!(code, 0, "{text}");
         let head = if lang == "en" { "your answers that change:" } else { "あなたの答えのうち、変わるもの：" };
         assert!(text.contains(head) && text.contains(&format!("  {} (koyomi)", n.invoice)) && text.contains(&format!("  {} (sekisho)", n.refunds)), "{text}");
+        // the two sides of a file of the office's are the same file, named with the lock each is read with
+        let (base, now) = if lang == "en" { ("the lock of one", "the lock of the working tree") } else { ("one の lock", "作業ツリーの lock") };
+        for f in [n.invoice, n.refunds] {
+            assert!(text.contains(&format!("{f} ({base})\n")) && text.contains(&format!("{f} ({now})\n")), "{f}:\n{text}");
+        }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A module with no file of ritsu's languages of its own, which only gathers a dependency: `ritsu
+/// check` has nothing to check in it, so each check counts no diagnostic, and the dependency is
+/// compared all the same.
+#[test]
+fn a_module_with_no_file_of_a_language() {
+    if !has_git() {
+        return;
+    }
+    let (t, store, _) = shop(&EN);
+    let repo = t.path().join("gather");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(
+        repo.join("ritsu.mod"),
+        format!("module example.com/acme/gather\nversion 0.1.0\ndescription \"The prices of the shop, gathered for its apps\"\n\nrequire pricing oci \"{PRICING}\" 1.0.0\n"),
+    )
+    .unwrap();
+    std::fs::write(repo.join("README.md"), "The prices of the shop, gathered.\n").unwrap();
+    let lock = || {
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "lock"]);
+        assert_eq!(code, 0, "{out}{err}");
+    };
+    lock();
+    git(&repo, &["init", "-q"]);
+    git(&repo, &["add", "."]);
+    git(&repo, &["commit", "-q", "-m", "pricing 1.0.0"]);
+    git(&repo, &["tag", "one"]);
+    replace(&repo, "ritsu.mod", &format!("\"{PRICING}\" 1.0.0"), &format!("\"{PRICING}\" 1.1.0"));
+    lock();
+    // `ritsu check` itself stops on it
+    let (code, _, err) = ritsu_in(&repo, &store, &["check"]);
+    assert_eq!(code, 2, "{err}");
+    let (code, out, err) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--format", "json"]);
+    assert_eq!((code, err.as_str()), (0, ""), "{out}");
+    let v = json(&out);
+    let counts = |side: &str| (v["check"][side]["errors"].as_u64(), v["check"][side]["warnings"].as_u64());
+    assert_eq!((counts("base"), counts("head")), ((Some(0), Some(0)), (Some(0), Some(0))), "{out}");
+    let m = &v["modules"][0];
+    assert_eq!((&m["module"], &m["change"]), (&serde_json::json!(PRICING), &serde_json::json!("upgraded")), "{out}");
+    let fee = format!("{}/{}", EN.rules, EN.fee);
+    assert!(m["diff"]["behavior"].as_array().unwrap().iter().any(|b| b["file"] == fee.as_str() && !b["result"]["changes"].as_array().unwrap().is_empty()), "{out}");
+    assert_eq!(m["yours"], serde_json::json!([]), "{out}");
+    let (code, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one"]);
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("the check with the lock of one: 0 errors, 0 warnings\nthe check with the lock of the working tree: 0 errors, 0 warnings\n"), "{text}");
 }
 
 // ── A long report, and what stops one ───────────────────────────────────

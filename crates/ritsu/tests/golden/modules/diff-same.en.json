@@ -1,0 +1,31 @@
+{
+  "ritsu": "0.36.0",
+  "old": {
+    "path": "example.com/acme/pricing@1.1.0",
+    "module": "example.com/acme/pricing",
+    "version": "1.1.0",
+    "digest": "sha256:<digest>",
+    "files_digest": "sha256:<digest>"
+  },
+  "new": {
+    "path": "example.com/acme/pricing@1.1.0",
+    "module": "example.com/acme/pricing",
+    "version": "1.1.0",
+    "digest": "sha256:<digest>",
+    "files_digest": "sha256:<digest>"
+  },
+  "files": {
+    "added": [],
+    "removed": [],
+    "changed": [],
+    "same": 4
+  },
+  "requires": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "behavior": [],
+  "interface": [],
+  "differs": false
+}

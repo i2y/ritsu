@@ -282,6 +282,9 @@ impl Report {
             let names: BTreeSet<&str> = modules.iter().map(|m| m.module.as_str()).collect();
             let local = diff::within(head_files.clone(), || digest::module_files(root, &h.main().manifest)).map_err(|t| vec![t])?;
             let joined = Joined::new();
+            // the two sides of a file of yours are the same file, told apart by the lock each is
+            // read with: `invoice.cal (the lock of main)`
+            let (base_lock, head_lock) = (Report::lock_of(Some(base), lang, ""), Report::lock_of(head, lang, ""));
             let mut yours: Vec<(Behavior, BTreeSet<String>)> = Vec::new();
             for (rel, _) in local {
                 let Some(tool) = diff::behaves(&rel) else { continue };
@@ -290,8 +293,8 @@ impl Report {
                     continue;
                 }
                 let at = root.join(&rel).to_string_lossy().into_owned();
-                let old = Spot { read: at.clone(), shown: rel.clone(), through: Some(base_view.clone()) };
-                let now = Spot { read: at, shown: rel.clone(), through: head_files.clone() };
+                let old = Spot { read: at.clone(), shown: format!("{rel} ({base_lock})"), through: Some(base_view.clone()) };
+                let now = Spot { read: at, shown: format!("{rel} ({head_lock})"), through: head_files.clone() };
                 let result = diff::behavior(tool, &old, &now, budget, lang, &joined);
                 yours.push((Behavior { file: rel, tool, result }, read));
             }
@@ -313,6 +316,14 @@ fn key(d: &Json) -> (String, String, String, String, String) {
 /// its JSON writes them, and how many errors and warnings. Err, with what it said, when it could
 /// not check (exit 2).
 fn check(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, lang: Lang) -> Result<(Vec<Json>, Counts), Vec<Text>> {
+    // a module with no file of ritsu's languages of its own (one that only gathers dependencies) has
+    // nothing for the check to say, which `ritsu check` stops on: no diagnostic, and the modules are
+    // compared all the same
+    let mut under = Vec::new();
+    diff::within(files.clone(), || ritsu_base::paths::walk(root, ".", &[], &mut under));
+    if !under.iter().any(|f| ritsu_project::project::kind_of(f).is_some()) {
+        return Ok((Vec::new(), Counts::default()));
+    }
     let at = root.to_string_lossy().into_owned();
     let mut args: Vec<String> = vec![at.clone(), "--root".into(), at, "--format".into(), "json".into(), "--deps-warnings".into()];
     if let Some(b) = budget {

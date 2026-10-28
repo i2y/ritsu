@@ -142,8 +142,8 @@ A difference is shown in behavior or in an interface.
 
 **koyomi diff: dates `invoice` v1 → v1**
 
-- Old: `invoice.cal`
-- New: `invoice.cal`
+- Old: `invoice.cal (the lock of one)`
+- New: `invoice.cal (the lock of the working tree)`
 - Inputs compared: received 2026-01-01..2026-10-31 (304 combinations)
 - Dates compared: closing, payment
 
@@ -161,8 +161,8 @@ For every other combination, every date gets the same value.
 
 **sekisho diff: gate `refunds` v1 → v1**
 
-- Old: `refunds.gate`
-- New: `refunds.gate`
+- Old: `refunds.gate (the lock of one)`
+- New: `refunds.gate (the lock of the working tree)`
 
 **`refund_order`**
 

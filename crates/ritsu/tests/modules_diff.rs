@@ -71,7 +71,8 @@ fn json(out: &str) -> serde_json::Value {
     serde_json::from_str(out).unwrap_or_else(|e| panic!("{e}: {out}"))
 }
 
-/// The text with each digest (`sha256:` and 64 hexadecimal digits) masked.
+/// The text with each digest (`sha256:` and 64 hexadecimal digits) masked, and each head of one
+/// that tells two sides of one name apart (`sha256:` and 12).
 fn masked(text: &str) -> String {
     let mut out = String::new();
     let mut rest = text;
@@ -79,13 +80,12 @@ fn masked(text: &str) -> String {
         let after = &rest[at + 7..];
         let hex = after.chars().take_while(|c| c.is_ascii_hexdigit()).count();
         out.push_str(&rest[..at]);
-        if hex == 64 {
-            out.push_str("sha256:<digest>");
-            rest = &after[64..];
-        } else {
-            out.push_str("sha256:");
-            rest = after;
+        match hex {
+            64 => out.push_str("sha256:<digest>"),
+            12 => out.push_str("sha256:<head>"),
+            _ => out.push_str("sha256:"),
         }
+        rest = if hex == 64 || hex == 12 { &after[hex..] } else { after };
     }
     out.push_str(rest);
     out
@@ -338,6 +338,25 @@ fn pricing_from_the_store_held_to_golden_files() {
                 golden(&format!("tests/golden/modules/diff-{case}.{lang}.{ext}"), &masked(&out), &mut failures);
             }
         }
+        // a version against itself: two sides of one name, each told apart by the head of its digest
+        let v11 = format!("{PRICING}@1.1.0");
+        for (format, ext) in [("text", "txt"), ("markdown", "md"), ("json", "json")] {
+            let (code, out, err) = ritsu_in(t.path(), &store, &["mod", "diff", &v11, &v11, "--format", format, "--lang", lang]);
+            assert_eq!((code, err.as_str()), (0, ""), "same {format} {lang}:\n{out}");
+            golden(&format!("tests/golden/modules/diff-same.{lang}.{ext}"), &masked(&out), &mut failures);
+        }
+        let (_, out, _) = ritsu_in(t.path(), &store, &["mod", "diff", &v11, &v11, "--format", "json"]);
+        let v = json(&out);
+        let head = v["old"]["digest"].as_str().unwrap()["sha256:".len()..][..12].to_string();
+        assert_eq!((&v["old"]["digest"], &v["old"]["files_digest"]), (&v["new"]["digest"], &v["new"]["files_digest"]), "{out}");
+        assert!(v["old"]["files_digest"].as_str().unwrap().starts_with("sha256:") && v["old"]["files_digest"] != v["old"]["digest"], "{out}");
+        // the digest of the files is the one `ritsu mod list` gives of the version in the store
+        let (_, list, _) = ritsu_in(&t.path().join(n.shop), &store, &["mod", "list", "--format", "json"]);
+        let listed = json(&list);
+        let pricing = listed["modules"].as_array().unwrap().iter().find(|m| m["name"] == PRICING).unwrap_or_else(|| panic!("{list}"));
+        assert_eq!((&pricing["version"], &pricing["files_digest"]), (&serde_json::json!("1.1.0"), &v["old"]["files_digest"]), "{list}");
+        let (_, text, _) = ritsu_in(t.path(), &store, &["mod", "diff", &v11, &v11, "--lang", lang]);
+        assert_eq!(text.matches(&format!("{v11} (sha256:{head})\n")).count(), 2, "{text}");
         let (_, out, _) = ritsu_in(t.path(), &store, &["mod", "diff", &format!("{PRICING}@1.0.0"), &format!("{PRICING}@1.1.0"), "--format", "json"]);
         let v = json(&out);
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
@@ -375,7 +394,7 @@ fn the_desk_and_the_book_held_to_golden_files() {
             for (format, ext) in [("text", "txt"), ("markdown", "md"), ("json", "json")] {
                 let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", old, new, "--format", format, "--lang", lang]);
                 assert_eq!((code, err.as_str()), (1, ""), "{case} {format} {lang}:\n{out}");
-                golden(&format!("tests/golden/modules/diff-{case}.{lang}.{ext}"), &out, &mut failures);
+                golden(&format!("tests/golden/modules/diff-{case}.{lang}.{ext}"), &masked(&out), &mut failures);
             }
         }
         // the dates file's bytes are the same; its answers are not, for it reads the calendar

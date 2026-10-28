@@ -1,0 +1,8 @@
+ritsu mod diff: example.com/acme/pricing 1.1.0 → 1.1.0
+  old: example.com/acme/pricing@1.1.0 (sha256:<head>)
+  new: example.com/acme/pricing@1.1.0 (sha256:<head>)
+
+files: 4 the same
+require: no change
+
+no difference in behavior or in an interface.

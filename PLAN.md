@@ -2165,9 +2165,10 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 **C.3 sekisho の diff**（DESIGN 17.9.4）
 
 - `crates/sekisho/src/diff.rs` と、`cli.rs` の表の `diff`（`ritsu sekisho diff` も同じ）。計画では `cells::cut` に両方の比較を渡して一つの空間をたどるつもりだったが、二つの版をそれぞれたどり（どちらにも、もう片方の条件が読むものを渡す。`walk::space_also` を足した）、読むものの名前で突き合わせる形にした（DESIGN 17.9.4 に書いた）。正確でない値は `walk::confirm` で確かめ直す。言語の文書（`docs/reference.md` とスキルのコピー、sekisho の DESIGN 11 章）に `diff` を足した。
-- 試験：`crates/sekisho/tests/diff.rs`（6 件）と材料 `crates/sekisho/tests/diff/`（英日）。
+- 試験：`crates/sekisho/tests/diff.rs`（7 件）と材料 `crates/sekisho/tests/diff/`（英日）。
   - golden は `tests/diff/golden/` の 18（三つの組 × 英日 × 三つの形）と、`tests/golden/cli/diff.{en,ja}.txt`。
   - 許可が増えた、減った、効いたポリシーだけが変わった、片方にしかないもの、正確でない値の確かめ直しと「決められない」、`--budget`、exit 2、git の版を付けた側。
+  - 同じパスに同じ本文の規則を、二つの側が違う依存で読むもの（git の版と作業ツリーで、リポジトリの中のパスの依存だけが変わった）。古い側と新しい側のどちらを先に読んでも、許可が増えたと言う。
   - 総当たり：材料の組の全部（それぞれ自分自身との組も）を、三通りの rulec（本物、範囲での答えを言えないもの、評価もできないもの）で比べ、組み合わせを一つずつ二つの版で決めた答えと、まとめた答えが同じになる。決められない組み合わせが出てよいのは、評価もできない rulec のときだけである。数は下の「確かめたこと」にある。
 
 **C.4 インターフェースの差と `ritsu mod diff`**（DESIGN 17.9.5、17.9.6）
@@ -2178,15 +2179,16 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 - 試験：`crates/ritsu/tests/modules_diff.rs`（5 件）。
   - 置き場の pricing の 1.0.0 → 1.1.0 と 1.1.0 → 2.0.0（英日、三つの形）。
   - 机（koyomi、sekisho、rulec が一度に入る材料）と在庫の帳簿の二つの版を、ディレクトリとして比べる（英日、三つの形）。帳簿は棚の下限を上げて E050、`receive` のキーを狭めて E051。
-  - 振る舞いの差が、それぞれの言語の diff の言うことと同じであること。二つのファイルを渡す形。同じ版どうし（exit 0）。exit 2 の五つ。
-  - golden は `tests/golden/modules/diff-*` の 24。chobo の `tests/diffbase.rs` は変えずに通る。
+  - 振る舞いの差が、それぞれの言語の diff の言うことと同じであること。二つのファイルを渡す形。同じ版どうし（exit 0。見出しの二つの側にダイジェストの先頭が付き、`files_digest` は `ritsu mod list` の値と同じ）。exit 2 の五つ。
+  - golden は `tests/golden/modules/diff-*` の 30（同じ版どうしの `diff-same` を含む。ダイジェストは伏せる）。chobo の `tests/diffbase.rs` は変えずに通る。
 
 **C.5 `ritsu mod report`**（DESIGN 17.10）
 
 - `crates/ritsu/src/modules/report.rs`：二つの木を比べて変わったモジュールを七つの変わり方で挙げる、手元のモジュールを head と base の見せ方（手元のファイルは head、`ritsu.mod`・`ritsu.lock`・同梱のコピー・パスの依存は base）で `ritsu check --deps-warnings` にかける、新しい診断と消えた診断を、参照をたどって変わったモジュールに割り当てる、変わったモジュールごとの `ritsu mod diff`、手元のファイルの答えのうち変わるもの、markdown（`@` をコードの書き方に、表は 50 行まで、60,000 字で切るときは `<details>` とコードの囲みを閉じる）、text、JSON、`--fail-on-change`。計画から変えたところは DESIGN 17.10 と 17.21 に書いた。取り出しは C.4 と同じく、まだつないでいない。
-- 試験：`crates/ritsu/tests/modules_report.rs`（4 件）と report.rs の中の 2 件。テストの中で git のリポジトリと置き場を作る。
-  - 例の shop：pricing 1.0.0 → 1.1.0 は答えの差だけ（exit 0、`--fail-on-change` で 1）、1.1.0 → 2.0.0 はフローが読む出力の名前が変わって新しいエラー（pricing に割り当て、exit 1）、同じ 1.1.0 を中身を替えて出し直す（タグが動いた、いちばん上に出る）。
-  - 机を依存に持つモジュールで、手元の日付のファイルとゲートの答えが変わるもの（koyomi と sekisho の差。英日、text、markdown、JSON）。
+- 試験：`crates/ritsu/tests/modules_report.rs`（5 件）と report.rs の中の 2 件。テストの中で git のリポジトリと置き場を作る。
+  - 例の shop：pricing 1.0.0 → 1.1.0 は答えの差だけ（exit 0、`--fail-on-change` で 1）、1.1.0 → 2.0.0 はフローが読む出力の名前が変わって新しいエラー（pricing に割り当て、exit 1）、同じ 1.1.0 を中身を替えて出し直す（タグが動いた、いちばん上に出る。差の中のファイルの名前に、二つの側のダイジェストの先頭が付く）。
+  - 机を依存に持つモジュールで、手元の日付のファイルとゲートの答えが変わるもの（koyomi と sekisho の差。英日、text、markdown、JSON。二つの側の名前に、読む lock が付く）。
+  - 言語のファイルが無く、依存を集めるだけのモジュール：`ritsu check` は exit 2 で止まるが、報告は exit 0 で、二つの側の検査の数が 0、pricing の 1.0.0 → 1.1.0 の答えの差を出す。
   - 60,000 字を超える報告が、`<details>` を閉じて切れること。二つの lock が同じモジュールを固定する版どうし。exit 2 の三つ（`--base` が無い、git の版が無い、置き場に無い版）。
   - どの markdown も、`@` がコードの外に無く、`<details>` が閉じていて、機械のパスを含まない。golden は `tests/golden/modules/report-*` の 18（ダイジェストは伏せる）。
 
@@ -2203,6 +2205,24 @@ C で確かめたこと（2026-10-28、この機械で）：
 2. 総当たりは、koyomi が 112 の組（英日）で、カレンダーの 29,200 日と日付のファイルの 14,992 通りを二つの版で計算し、sekisho が 216 の diff（72 の組 × 三通りの rulec）で、23,228 のリクエストを二つの版で決め、5,568 通りをたどった。どちらも diff の答えと一つも違わなかった。
 3. `tests/golden/modules/` の diff の 24 と report の 18、koyomi の 18、sekisho の 20 が通る。
 4. 触ったクレート（ritsu-base、rulec、koyomi、sekisho、chobo、ritsu）の fast の段で 2,083 件のうち 2,082 件が通った。落ちた一つは koyomi の `tests/docs.rs` で、`koyomi --help` の出力を貼った文書に `diff` の行が無かったためである。文書を直し、koyomi と sekisho の docs・design・skill と、ritsu の skill・release の試験を回し直して通った。SKIP の行は 407 で、どれも fast の段で道具の段のものを飛ばしたもの（python 202、lean 42、node 35、go 29 など）である。ほかに、rulec の PostgreSQL のサーバーが無いときの SKIP が一つある。
+
+**C の直し（C2。2026-10-29）**
+
+- `--budget` の説明（`ritsu mod diff` と `ritsu mod report`）を、言語ごとに何を数えるかが分かる文にした（rulec の検査が訪れるノード数、koyomi の日付のファイルの入力の組み合わせの数、sekisho の組み合わせの数）。
+- 名前が同じ二つの側（同じ版どうし、`.` どうし、同じファイルどうし、`ritsu mod report` のタグが動いたモジュール）は、名前の後ろにダイジェストの先頭（`sha256:` と 16 進の 12 字）を付けて見分ける（DESIGN 17.9.6）。両方の側がマニフェストのダイジェストを持てばそれ、無ければファイルのダイジェスト、二つのファイルではバイトのダイジェストを使う。JSON の側の頭に `files_digest` を足した（17.21。`ritsu mod list` と lock の `files_digest` と同じ値）。
+- `ritsu mod report` の「あなたの答えのうち、変わるもの」は、二つの側の名前に読む lock を付ける（`invoice.cal (the lock of one)`、`請求.cal (作業ツリーの lock)`）。言語のファイルが一つも無い手元のモジュールは、検査を診断の無いものとして数え、モジュールを比べる（17.10）。
+- sekisho の diff で、同じパスに同じ本文の規則を二つの側が違う依存で読むとき（git の版と作業ツリーで、リポジトリの中のパスの依存だけが変わったとき）、新しい側の答えが古い側の検査から出ていた。先に再現の試験を書き、直す前のソースで落ちることを確かめた（古い側を先に読むと「どの組み合わせでも、どの action も同じ決定になる」と言い、許可が増えた組み合わせを一つも出さなかった）。原因は二つあった。
+  - rulec の口が、検査をパスと本文だけで覚えていた。いまは、検査が `ritsu_base::fs` に頼んだ読みを記録し、それが同じに読めるあいだだけ覚えた検査を使う（パスと本文ごとに四つまで。報告も同じ）。記録する層の下でも依存の木の覚え書きが効くよう、土台の `Files` に `stands_for` を、`fs` に `id` を足した（17.6、17.9.1）。
+  - sekisho の diff（C.3 で書いたところ）が、本文の同じ計算した値を一つの値にまとめていた。口に `Rules::rests_on` と `Dates::rests_on`（本文と、検査が読んだファイルの全部の中身のダイジェスト）を足し、rulec と koyomi が答える。diff はこれが等しいときだけ一つの値にする（17.9.4）。
+- 試験：
+  - `crates/sekisho/tests/diff.rs` に再現の一つ（C.3）。直したあとは、どちらの側を先に読んでも、二つの action のそれぞれで許可が増えた組み合わせを一つ出す。
+  - `crates/rulec/tests/ports.rs` に一つ。同じ本文の規則を、enum の違う二組のファイルで尋ねると、検査し直して両方を覚え、三度目は検査しない。報告から読む答えは、報告が読んだファイルが同じに読めるときだけ使う。`rests_on` は、同じ中身のファイルでは同じ、違う中身では違う。
+  - `crates/ritsu/tests/modules_diff.rs` と `modules_report.rs`（C.4 と C.5）。golden は、JSON の頭の `files_digest`、タグが動いたモジュールのファイルの名前、手元のファイルの lock の名前で変わり、同じ版どうしの `diff-same` を足した。机の golden もダイジェストを伏せた。
+
+C2 で確かめたこと（2026-10-29、この機械で）：
+
+1. 触ったクレートとその口を読むクレートの fast の段で、2,949 件が通った（落ちたものは無い）。ritsu-base 188、ritsu-ports 5、rulec 1,225（ignored 1 は前からのもの）、koyomi 174、sekisho 147、ritsu 270、chobo 108、dandori 116、kaname 196、ritsu-cross 29、ritsu-project 6、sakai 226、yuen 259 である。
+2. SKIP の行は 471 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（python 213、lean 42、node 45、go 33、rustc 17、chrome 12 など）である。足りないものの SKIP は無い。
 
 ### 8.4 D：レジストリと署名
 

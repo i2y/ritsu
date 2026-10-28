@@ -121,6 +121,12 @@ pub trait Files {
     fn revision(&self) -> Option<String> {
         None
     }
+    /// The files a [`Files`] that only watches what is read stands for, as [`id`] numbers them:
+    /// it hands every call on to them unchanged, so what is kept for them (the tree of a module,
+    /// [`crate::modules::refer`]) is kept for it too. None, the default, for files of their own.
+    fn stands_for(&self) -> Option<usize> {
+        None
+    }
 }
 
 thread_local! {
@@ -151,10 +157,19 @@ pub fn revision() -> Option<String> {
 }
 
 /// What this module reads and writes on this thread when it is not the disk: the files of the
-/// innermost [`with`], or None for the disk. A [`Files`] that watches what is read (koyomi's ports
-/// keep a check until a file it read reads differently) hands every call on to it.
+/// innermost [`with`], or None for the disk. A [`Files`] that watches what is read (the ports of
+/// koyomi and rulec keep a check until a file it read reads differently) hands every call on to it.
 pub fn current() -> Option<Rc<dyn Files>> {
     held()
+}
+
+/// Which files this thread reads, as a number to keep what is read from them by: 0 for the disk,
+/// else the files of the innermost [`with`], or the files they stand for ([`Files::stands_for`]).
+pub fn id() -> usize {
+    match held() {
+        None => 0,
+        Some(f) => f.stands_for().unwrap_or(Rc::as_ptr(&f) as *const () as usize),
+    }
 }
 
 /// What the layer reads without the view of a module's dependencies: the paths as they are. What

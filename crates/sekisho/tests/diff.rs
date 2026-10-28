@@ -72,6 +72,9 @@ macro_rules! stand_in {
             fn doc(&self, rule: &Path, shown: &str, html: bool, lang: Lang) -> Result<String, Vec<Said>> {
                 self.0.doc(rule, shown, html, lang)
             }
+            fn rests_on(&self, rule: &Path) -> Option<String> {
+                self.0.rests_on(rule)
+            }
         }
     };
 }
@@ -408,6 +411,76 @@ fn a_side_at_a_git_revision() {
     })();
     let d = got.unwrap();
     assert_eq!(group(&d, "refund_order", Change::Gained, &[], &["clerks_refund_small_amounts"]).map(|g| g.count), Some(1), "{}", diff::text(&d, Lang::En));
+}
+
+/// A rule the same on both sides, at the same path and with the same text, whose enums come from a
+/// dependency by a path in the repository that differs between the revisions: each side reads its
+/// own enums, though one rulec answers both (its port keeps a check only while every file the check
+/// read reads the same).
+#[test]
+fn a_rule_the_same_on_both_sides_whose_dependency_differs() {
+    if Command::new("git").arg("--version").output().is_err() {
+        ritsu_testkit::skip("git is not on the PATH; a side at a revision is read with it");
+        return;
+    }
+    let t = ritsu_testkit::TempDir::new("sekisho-diff-dep");
+    let d = t.path();
+    let git = |args: &[&str]| {
+        let o = Command::new("git")
+            .arg("-C")
+            .arg(d)
+            .args(["-c", "user.name=sekisho-test", "-c", "user.email=sekisho-test@example.com", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    };
+    let write = |rel: &str, text: &str| {
+        let p = d.join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, text).unwrap();
+    };
+    let sizes = |refundable: &str| {
+        format!("enums sizes v1\ndescription \"The sizes of an order, and the ones a clerk refunds\"\n\nenum size = small | medium | large\ngroup refundable = {refundable}\n")
+    };
+    write("pricing/ritsu.mod", "module example.com/acme/pricing\nversion 1.0.0\ndescription \"The sizes of an order\"\n");
+    write("pricing/sizes.rule", &sizes("small"));
+    write("shop/ritsu.mod", "module example.com/acme/shop\nversion 0.1.0\ndescription \"Refunds by the size of an order\"\n\nrequire pricing path \"../pricing\"\n");
+    write(
+        "shop/refund.rule",
+        "rule refund v1\ndescription \"Whether a clerk refunds an order: the sizes pricing calls refundable\"\n\nimport enum size from \"@pricing/sizes.rule\"\n\ninputs\n  size : size\n\noutputs\n  allowed : bool\n\ntable allowed\npolicy unique\n| size            | -> allowed |\n| refundable      | true       |\n| not: refundable | false      |\n",
+    );
+    write(
+        "shop/refunds.gate",
+        "gate refunds v1\ndescription \"A clerk refunds an order of a size the rule lets through\"\nnamespace Shop\n\nuse rule refund from \"refund.rule\"\n\nenum size = small | medium | large\n\nrole clerk\n  description \"Answers customers\"\n\nprincipal User\n  description \"A member of the staff\"\n  roles clerk\n\nresource Order\n  description \"An order of the shop\"\n  attributes\n    size : size\n\naction refund_order\n  description \"Refund an order\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\naction refund_by_hand\n  description \"Refund an order by hand\"\n  principal User\n  resource Order\n  context\n    refundable = refund(size: resource.size).allowed\n\npermit clerks_refund\n  description \"A clerk refunds an order the rule lets through\"\n  principal in clerk\n  action refund_order\n  when refundable\n\npermit clerks_refund_by_hand\n  description \"A clerk refunds by hand an order the rule lets through\"\n  principal in clerk\n  action refund_by_hand\n  when refundable\n\nforbid large_orders_by_hand\n  description \"No one refunds a large order by hand\"\n  principal is User\n  action refund_by_hand\n  when resource.size is large\n",
+    );
+    git(&["init", "-q"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "sizes"]);
+    // the working tree's pricing calls a medium order refundable too; the rule and the gate are as
+    // committed
+    write("pricing/sizes.rule", &sizes("small, medium"));
+    let gate = d.join("shop/refunds.gate").display().to_string();
+    // the old side read first, then the new; and, with a rulec of its own, the new side first
+    for new_first in [false, true] {
+        let suite = common::joined();
+        let at = |spelled: String| ritsu_base::fs::with(Rc::new(At(d.to_path_buf())), || diff::side(&spelled, &suite, &Options::default())).map_err(|t| t.en);
+        let got = (|| -> Result<Diff, String> {
+            let (o, n) = if new_first {
+                let n = at(gate.clone())?;
+                (at(format!("{gate}@HEAD"))?, n)
+            } else {
+                let o = at(format!("{gate}@HEAD"))?;
+                (o, at(gate.clone())?)
+            };
+            diff::diff(&o, &n, &suite, 1_000_000).map_err(|t| t.en)
+        })();
+        let got = got.unwrap();
+        // the policies read the size only through the rule, and, by hand, also as it is
+        for (action, permit) in [("refund_order", "clerks_refund"), ("refund_by_hand", "clerks_refund_by_hand")] {
+            assert_eq!(group(&got, action, Change::Gained, &[], &[permit]).map(|g| g.count), Some(1), "new first: {new_first}\n{}", diff::text(&got, Lang::En));
+        }
+    }
 }
 
 /// The disk, its current directory said apart from the process's.

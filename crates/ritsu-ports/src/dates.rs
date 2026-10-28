@@ -147,6 +147,14 @@ pub trait Dates {
         Err(unanswered(file, ritsu_base::tr!("この口はページを作りません", "this port draws no page")))
     }
 
+    /// What the file's answers rest on, as one string: every file its check read (the file itself,
+    /// the calendars it uses, their tables of holidays), with what the file held, as
+    /// `Rules::rests_on` says of a rule. The default is None, for a port that cannot say.
+    fn rests_on(&self, file: &Path) -> Option<String> {
+        let _ = file;
+        None
+    }
+
     /// Whether koyomi is joined at all: false for the port the binary of a receiving language's own
     /// crate holds, which reads no dates file (DESIGN 2.3), so that the language can say so once,
     /// as with rules (`Rules::joined`).
