@@ -46,7 +46,8 @@
 //! - the configurations name the URL each site is published at, under /ritsu/, and ritsu's
 //!   repository;
 //! - .github/workflows/docs.yml runs on a push to main that changes what the site is built from,
-//!   and by hand;
+//!   and by hand, and installs the cosign tools.yml installs, which the list of modules checks the
+//!   seed module's signatures with;
 //! - the nav and the home page of each language's site lead to ritsu's playground in the site's
 //!   language, on a project the playground lists in that language; and the pages the playgrounds of
 //!   rulec's and dandori's sites had (`playground.md` in each language) send a reader on to the same
@@ -59,12 +60,13 @@
 //! - and, when Zensical is in website/.venv, build.sh builds the tree that is published, in a copy
 //!   of website/: the index pages of ritsu's site and of each language's, in both languages, the
 //!   playground, the guide to modules and the list of modules that `ritsu mod site` writes from
-//!   website/modules.list (with the ritsu of these tests), the pages of sekisho, the pages of kaname
-//!   (with a set of tabs for the hosts of each functional core on the page of the examples), the
-//!   pages the languages' playgrounds had, each with nothing beside it and its link and the nav of
-//!   its site leading to the playground in the tree, the marketplace of Claude Code as it is
-//!   written, and a file of the tree for every
-//!   relative link of ritsu's built pages, none of which climbs out of /ritsu/; and the code of the
+//!   website/modules.list (with the ritsu of these tests, and the seed module's working tree in
+//!   place of its version on ghcr.io, as the test has no network), the pages of sekisho, the pages
+//!   of kaname (with a set of tabs for the hosts of each functional core on the page of the
+//!   examples), the pages the languages' playgrounds had, each with nothing beside it and its link
+//!   and the nav of its site leading to the playground in the tree, the marketplace of Claude Code
+//!   as it is written, and a file of the tree for every relative link of ritsu's built pages, none
+//!   of which climbs out of /ritsu/; and the code of the
 //!   languages on ritsu's pages is coloured by their lexers (website/tools/knlexer.py,
 //!   gatelexer.py and cedarlexer.py, and the lexers of rulec's, dandori's and chobo's sites): every
 //!   block of `kn`, `rule`, `flow`, `book`, `gate`, `cedar` and `cedarschema` is built as its
@@ -444,6 +446,14 @@ fn the_workflow_that_publishes_the_site_runs_on_a_push_to_main_and_by_hand() {
     let want = ["push:", "branches: [main]", "paths:", "- \"website/**\"", "- \"crates/rulec/AGENTS.md\"", "- \"crates/rulec/docs/**\"", "- \"crates/chobo/docs/**\"", "- \"modules/**\"", "- \".github/workflows/docs.yml\"", "workflow_dispatch:"];
     assert_eq!(triggers, want, "docs.yml runs on a push to main that changes what the site is built from (website/, the documents rulec's and chobo's sync.sh copy in, the modules its list shows, and itself), and by hand");
     assert!(text.contains("./build.sh") && text.contains("path: website/build"), "docs.yml builds with website/build.sh and publishes website/build");
+    // the list of modules checks the signatures of the seed module (DESIGN 17.17), with the cosign
+    // tools.yml installs
+    let tools = read(&root().join(".github/workflows/tools.yml"));
+    let pinned: Vec<&str> = text.lines().filter(|l| l.contains("/sigstore/cosign/releases/download/") || l.contains("| sha256sum -c -")).collect();
+    assert_eq!(pinned.len(), 2, "docs.yml does not install cosign as tools.yml does: {pinned:?}");
+    for line in pinned {
+        assert!(tools.lines().any(|t| t == line), "tools.yml installs another cosign than docs.yml's\n{line}");
+    }
 }
 
 /// The page a language's site had for its playground, in a language (`docs/playground.md` or
@@ -1241,8 +1251,16 @@ fn build_sh_builds_the_tree_that_is_published() {
     // rulec's sync.sh copies rulec's documents in from crates/rulec, beside website/, which it reads
     // and does not write.
     std::os::unix::fs::symlink(root().join("crates"), t.path().join("crates")).unwrap();
-    // The list of modules shows the seed module's working tree, beside website/ (modules.list), with
-    // the ritsu of these tests.
+    // The list of modules (modules.list) shows the seed module as it is on ghcr.io, and checks its
+    // signature. This test has no network: the copy of the list shows the module's working tree in
+    // its place, beside website/, with the ritsu of these tests (tests/modules_site.rs builds a list
+    // from a registry of its own, and checks the signatures).
+    let list = read(&website().join("modules.list"));
+    let lines: Vec<&str> = list.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).collect();
+    assert!(lines.contains(&"module \"ghcr.io/i2y/ritsu-holidays\""), "website/modules.list shows the seed module as it is on ghcr.io:\n{list}");
+    assert!(lines.iter().any(|l| l.starts_with("signature \"ghcr.io/i2y/ritsu-holidays\" by matching ")), "website/modules.list checks the seed module's signature:\n{list}");
+    let local: Vec<&str> = lines.into_iter().filter(|l| !l.starts_with("module ") && !l.starts_with("signature ")).chain(["local \"../modules/holidays\""]).collect();
+    std::fs::write(copy.join("modules.list"), local.join("\n") + "\n").unwrap();
     std::os::unix::fs::symlink(root().join("modules"), t.path().join("modules")).unwrap();
     let o = Command::new("bash")
         .arg(copy.join("build.sh"))

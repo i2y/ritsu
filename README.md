@@ -666,9 +666,7 @@ Japan, as calendars of koyomi, with the data pinned to what GOV.UK and the Cabin
 Its calendars close the holidays and nothing else. A calendar of your own reads one with
 `use calendar "@holidays/uk/england_and_wales.cal"` and closes your weekends itself, with
 `closed weekly sat, sun`. [The list of modules](https://i2y.github.io/ritsu/modules/list/) shows
-each version of it, with a page for each file and what changed from the version before. It is not
-on the registry yet: until it is, `ritsu mod add` cannot fetch it, and the list makes its pages
-from the files of this repository.
+each version of it, with a page for each file and what changed from the version before.
 
 ### What raising a dependency changes
 

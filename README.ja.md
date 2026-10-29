@@ -551,7 +551,7 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
 
 レジストリの資格情報は、Docker の設定ファイル（`docker login` と資格情報のヘルパーが書くもの）から読み、どの出力にも出しません。git のリポジトリの資格情報は git のものです。ssh の鍵、資格情報のヘルパー、`url.<base>.insteadOf` が `git fetch` と同じく効きます。git が端末でパスワードを聞くことはありません。
 
-`ghcr.io/i2y/ritsu-holidays` は、このリポジトリのモジュール [modules/holidays](modules/holidays/README.ja.md) です。英国と日本の祝日を koyomi のカレンダーにしたもので、データは GOV.UK と内閣府が公表するファイルに固定しています。このカレンダーが閉じるのは祝日だけです。自分のカレンダーで `use calendar "@holidays/japan/国民の祝日.cal"` と書いて読み、土日は `closed weekly sat, sun` で自分で閉じます。[モジュールの一覧](https://i2y.github.io/ritsu/ja/modules/list/)には、版ごとに、ファイルごとのページと、一つ前の版からの差が載ります。ただし、まだレジストリには送り出していません。送り出すまでは `ritsu mod add` で取り出せず、一覧のページは、このリポジトリのファイルから作っています。
+`ghcr.io/i2y/ritsu-holidays` は、このリポジトリのモジュール [modules/holidays](modules/holidays/README.ja.md) です。英国と日本の祝日を koyomi のカレンダーにしたもので、データは GOV.UK と内閣府が公表するファイルに固定しています。このカレンダーが閉じるのは祝日だけです。自分のカレンダーで `use calendar "@holidays/japan/国民の祝日.cal"` と書いて読み、土日は `closed weekly sat, sun` で自分で閉じます。[モジュールの一覧](https://i2y.github.io/ritsu/ja/modules/list/)には、版ごとに、ファイルごとのページと、一つ前の版からの差が載ります。
 
 ### 依存を上げると何が変わるか
 

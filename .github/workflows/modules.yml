@@ -12,9 +12,14 @@ name: modules
 # version into a module of its own whose `signature` line is the one a user writes. The job's summary
 # says the reference, how to require the module, and that line.
 #
-# A package new on ghcr.io is private until its settings make it public. Run with `publish` only once
-# publishing the module is decided; the module's `version` is the version pushed, and a version on
-# the registry is not pushed again (ritsu stops when its tag is there with other bytes).
+# Run with `publish` once a new version is to go out: the module's `version` is the version pushed,
+# and a version on the registry is not pushed again (ritsu stops when its tag is there with other
+# bytes). The seed module's package could be read with no credentials at once, with nothing changed
+# in its settings; the manifest's org.opencontainers.image.source names this public repository.
+# After the first push of a new package, check that it can be read with no credentials; its
+# visibility is in its settings on github.com. The list of modules on ritsu's site
+# (website/modules.list) shows a new version once docs.yml runs again, which this workflow does not
+# start: run docs.yml by hand after a version is pushed.
 
 on:
   workflow_dispatch:
@@ -174,5 +179,6 @@ jobs:
             echo "$line"
             echo '```'
             echo
-            echo "A package new on ghcr.io is private until its settings make it public."
+            echo "Check that the package can be read with no credentials; its visibility is in its settings on github.com."
+            echo "The list of modules on the site shows this version once docs.yml runs again: run it by hand."
           } >> "$GITHUB_STEP_SUMMARY"

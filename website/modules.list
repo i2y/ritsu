@@ -1,10 +1,9 @@
 # The list of modules on ritsu's site (DESIGN 17.17): build.sh writes it with `ritsu mod site`, in
-# English under build/modules/list and in Japanese under build/ja/modules/list. Until the seed module
-# is pushed, the list shows its working tree, from this file's directory. Once it is on ghcr.io and
-# signed, the `local` line gives way to these two (and docs.yml then needs cosign):
-#
-#   module "ghcr.io/i2y/ritsu-holidays"
-#   signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
+# English under build/modules/list and in Japanese under build/ja/modules/list. It shows the seed
+# module as it is on ghcr.io, every version modules.yml has pushed, and checks each against the
+# signature modules.yml made, as this repository's workflow (cosign, which docs.yml installs).
+# crates/ritsu/tests/website.rs builds the site with no network, from the module's working tree.
 title "ritsu modules"
 description "Modules published from the ritsu repository"
-local "../modules/holidays"
+module "ghcr.io/i2y/ritsu-holidays"
+signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"

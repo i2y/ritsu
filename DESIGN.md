@@ -3929,7 +3929,7 @@ module "<レジストリ>/acme/shop"
 signature "<レジストリ>/acme/" by matching "^https://github[.]com/acme/" issuer "https://token.actions.githubusercontent.com"
 ```
 
-`website/modules.list` は、祝日のモジュールを作業ツリーから載せる（`title`、`description` と `local "../modules/holidays"` の三行。2026-10-29）。
+`website/modules.list` は、祝日のモジュールを ghcr.io から載せる（`title`、`description`、`module "ghcr.io/i2y/ritsu-holidays"` と、modules.yml の署名を確かめる `signature` の行。2026-10-30）。
 
 - `module` は載せるモジュールで、配るモジュールの名前（`<レジストリ>/<リポジトリ>`）で書く。
 - `git` は、git のタグで出すモジュールを載せる（2026-10-29）。`git "<URL>"` か `git "<URL>" dir "<ディレクトリ>"` と書き、モジュールの名前は URL と `dir` から決まる（17.12.1）。版の一覧はタグから読み、版のページの足し方は `ritsu mod add <名前> <URL>@<版>`（`dir` があれば `--dir <ディレクトリ>` も）と `require … git` の行、版の参照はコミットとダイジェストにする。`signature` の行が git のモジュールに当たれば、一覧を読めないと言い、E309 の文を添えて exit 2 で止まる（17.14）。
@@ -3982,10 +3982,12 @@ signature "<レジストリ>/acme/" by matching "^https://github[.]com/acme/" is
 
 - `website/modules.list` に祝日のモジュールを書き、`website/build.sh` が `ritsu mod site` を英語と日本語で走らせて、`build/modules/list/` と `build/ja/modules/list/` に置く。
 - ritsu は `RITSU` か PATH から探す。無ければ一覧を作らず、そう言う（ritsu を持たない機械でも、サイトの残りは組める）。
-- docs.yml は、そのコミットから ritsu を組んで（`cargo build --locked --release -p ritsu`）`RITSU` で渡し、組んだ木に二つの一覧のページがあることを確かめる。`modules/**` を変えた push でも走る。`crates/ritsu/tests/website.rs` が、組んだ木に一覧のページがあることを確かめる。
+- docs.yml は、そのコミットから ritsu を組んで（`cargo build --locked --release -p ritsu`）`RITSU` で渡し、cosign 3.1.4 を tools.yml と同じ URL とチェックサムで入れて、組んだ木に二つの一覧のページがあることを確かめる。祝日のモジュールは公開のパッケージなので、資格情報なしで取り出す。`modules/**` を変えた push でも走る。`crates/ritsu/tests/website.rs` が、docs.yml の cosign が tools.yml のものと同じであることと、組んだ木に一覧のページがあることを確かめる。
 - 案内のページ `website/docs/modules.md` と `website/docs-ja/modules.md`（書き方、足し方、取り出し方、送り出し方、署名、報告、ライブラリの gen）から、一覧へリンクする。目次では「Node で使う」と「ライブラリとして公開する」のあいだに置く。
-- 一覧のファイルは、祝日のモジュールを `local "../modules/holidays"`（`website/` からのパス）で載せる。レジストリの版を載せるときは、ファイルの注にある `module` と `signature` の二行に替え、docs.yml に cosign を入れる。
-- 大きさ（2026-10-29。`local` の行で作業ツリーを載せた形）：英語は 14 枚のページと `module.json` で 589,632 バイト、日本語は 609,866 バイト。`module.json` は 67,112 バイトである。
+- 一覧のファイルは、祝日のモジュールを `module` と `signature` の行で載せる。ghcr.io に送り出した版を全部載せ、どれも modules.yml の署名で確かめる。
+- `website.rs` の試験は通信しない。一覧にその二行があることを確かめてから、コピーの一覧の二行を `local "../modules/holidays"`（`website/` からのパス）に替えて組む。レジストリから一覧を作る道は、`modules_site.rs` が手元のレジストリと試験の cosign で確かめる。
+- 一覧は、docs.yml が回ったときに作る。modules.yml は docs.yml を起こさないので、新しい版を送り出したら docs.yml を手で走らせる（17.18）。
+- 大きさ（2026-10-30。ghcr.io の 1.0.0 を載せた形）：英語は 14 枚のページと `module.json` で 590,645 バイト、日本語は 610,924 バイト。`module.json` は 67,112 バイトである。
 
 ### 17.18 祝日のモジュール
 
@@ -4018,16 +4020,17 @@ modules/holidays/
   - 根の `ritsu.ctx` の検査の JSON（成果物は 626 個）は、`modules/` が有っても無くても同じバイトである。
   - 木を数える試験（website、release、skills、readme、audit）は、`website/` か `crates/` か `skills/` の下だけを歩く。`modules/` を数えるものは無い。website の試験だけが、一覧のページの分だけ増える（17.17）。
   - M14 の突き合わせ（17.25）は git が追うファイルを並べるので、祝日のモジュールの七つ（五つのカレンダーと二つのディレクトリ）も入る。それらにかけるコマンド（`koyomi check` の英日と JSON、`doc` の英日と HTML、`api` の英日、`gen` の英日）を、モジュールを入れる前のバイナリと入れたあとのバイナリで走らせ、56 回とも同じ出力だった。
-- **ワークフロー** `.github/workflows/modules.yml`（`workflow_dispatch` だけ。入力は `module`（既定 `modules/holidays`）と `publish`（既定 false））。`publish` で走らせるのは、公開を決めてからである。
+- **ワークフロー** `.github/workflows/modules.yml`（`workflow_dispatch` だけ。入力は `module`（既定 `modules/holidays`）と `publish`（既定 false））。`publish` で走らせるのは、新しい版を出すと決めてからである。
   - **ジョブ `check`**（権限は `contents: read` だけ）：コミットから ritsu をビルドし、モジュールのディレクトリで `ritsu check .` と `ritsu mod push --dry-run`（英語と JSON）を走らせる。名前、版、ダイジェストをジョブの出力にし、ジョブのまとめにダイジェストを書く。
   - **ジョブ `publish`**（`check` のあと、`publish` のときだけ。権限は `contents: read`、`packages: write`、`id-token: write`）：ritsu をもう一度ビルドする（ジョブのあいだでバイナリを渡さない）。モジュールの名前が `ghcr.io/` で始まることを確かめ、`GITHUB_TOKEN` を標準入力で渡して `docker login ghcr.io` をする（ritsu も cosign も Docker の設定ファイルを読む。17.13）。
   - 続けて `ritsu mod push --format json` を走らせ、送ったダイジェストが `check` のものと同じことを確かめる。cosign 3.1.4 を tools.yml と同じ URL とチェックサムで入れ、鍵を持たずに `cosign sign --yes <名前>@<ダイジェスト>` をする。
   - 署名は二通りに確かめる。`cosign verify --certificate-identity-regexp "^https://github[.]com/<リポジトリ>/"`（リポジトリの名前の `.` は `[.]` にする）`--certificate-oidc-issuer https://token.actions.githubusercontent.com` と、使う側が書く `signature` の行だけを持つ一時のモジュールでの `ritsu mod fetch <名前>@<版>` である。
-  - ジョブのまとめに、参照、`ritsu mod add <名前> <モジュールの名前>@<版>`（`<名前>` は一覧のサイトと同じ作り方。17.17）、`signature` の行、ghcr.io の新しいパッケージは設定で公開にするまで private であること、を書く。
+  - ジョブのまとめに、参照、`ritsu mod add <名前> <モジュールの名前>@<版>`（`<名前>` は一覧のサイトと同じ作り方。17.17）、`signature` の行、パッケージが資格情報なしで読めるかを確かめること（見え方は github.com のパッケージの設定にある）、一覧のサイトは docs.yml を手で走らせると新しい版を載せること、を書く。
   - 入力とジョブの出力は、`run` の中に `${{ }}` で書かず、環境変数で渡す。
   - `crates/ritsu/tests/modules.rs` の `the_workflow_that_publishes_the_seed_module_runs_by_hand_only` が、次を確かめる。始まりは `workflow_dispatch` だけ、`publish` は既定が false の真偽値、`packages: write` と `id-token: write` は `publish` のジョブだけ、cosign の URL とチェックサムは tools.yml と同じ。
-  - 手元に actionlint が無かったので、YAML を読み直せることと、`run` の中を `bash -n` で確かめ、`check` のジョブの手順を祝日のモジュールで手元で走らせた（2026-10-29）。ワークフローは一度も走らせていない。
-- **送り出す前のリリース**（2026-10-29）：0.37.0 は、祝日のモジュールを送り出す前に出す。README（英日）と、サイトのモジュールのページの最初の段落は、まだレジストリに無いこと、`ritsu mod add` で取り出せないこと、一覧のページはリポジトリのファイルから作ることを、一文ずつ言う。送り出したら、その文を消す。モジュールの README は、送り出すファイルに入るので書き換えない（書けば、送り出した版にその文が残る）。一覧のサイトは `local` の行で、版の行に「まだ公開していません」と出す（17.17）。
+  - 手元に actionlint が無かったので、YAML を読み直せることと、`run` の中を `bash -n` で確かめ、`check` のジョブの手順を祝日のモジュールで手元で走らせた（2026-10-29）。
+- **公開**（2026-10-30）：modules.yml を `publish` で走らせ、1.0.0 を ghcr.io に送り出して署名した。二つのジョブが通り、cosign と ritsu の二通りの確かめも通った。パッケージは、設定を変えずに資格情報なしで読めた（マニフェストの `org.opencontainers.image.source` は、公開のこのリポジトリを指す）。Docker の設定もモジュールの置き場も空にした手元で、`signature` の行だけを持つモジュールから `ritsu mod fetch ghcr.io/i2y/ritsu-holidays@1.0.0` が取り出して署名を確かめ、新しい一覧の `ritsu mod site` が英日のページを書いた（版の行は、ダイジェストと「ダイジェストと署名」を確かめたこと）。
+- **次の版**：データを新しくしたら、`ritsu.mod` の版を上げ（名前と版の決まりは上）、modules.yml を `publish` で走らせてから、docs.yml を手で走らせる。git の依存として取るためのタグ（`modules/holidays/v…`）は作らない。`module` の行がレジストリの名前なので、git からは取れない（一つのモジュールは git とレジストリの両方からは配れない。17.12.1）。
 
 ### 17.19 コマンドの表
 

@@ -30,7 +30,8 @@ for site in "${sites[@]}"; do
 done
 # The list of modules (DESIGN 17.17): `ritsu mod site` writes it from modules.list, in English and in
 # Japanese. It takes ritsu: $RITSU, else ritsu on the PATH (docs.yml builds it from the commit);
-# without either, the site is built without the list, and this says so.
+# without either, the site is built without the list, and this says so. It fetches the seed module
+# from ghcr.io and checks its signatures with cosign, which is to be on the PATH (docs.yml installs it).
 ritsu="${RITSU:-$(command -v ritsu || true)}"
 if [ -n "$ritsu" ]; then
   "$ritsu" mod site modules.list --out build/modules/list --lang en
