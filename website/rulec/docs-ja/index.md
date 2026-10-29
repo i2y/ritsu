@@ -230,6 +230,7 @@ $ rulec certificate 運賃.rule > cert.json
 $ proofs/.lake/build/bin/rulec-recheck --rule 運賃.rule cert.json
 運賃 (0.36.0), re-checked against the Lean proofs
   ranges: 1 columns a table writes numbers into hold every value their rows write
+  outputs: 1 ranges hold what their output answers, put on the grid it rounds to
   運賃表: 6 rows — complete, 6 rows reached, no two rows meet, 1 axes tiled
     12 boxes read back from the cells they were written as
     1 axes of an enum's input run over the values it takes

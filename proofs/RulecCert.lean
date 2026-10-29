@@ -14,3 +14,4 @@ import RulecCert.Carried
 import RulecCert.Prereq
 import RulecCert.Axes
 import RulecCert.Chances
+import RulecCert.Outputs

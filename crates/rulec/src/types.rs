@@ -459,6 +459,10 @@ pub struct Checked {
     /// languages read an output's range through carry it; `ranges` above does not, so nothing
     /// the code generators read from it moves.
     pub result_range: Option<(String, (Rat, Rat))>,
+    /// The outputs whose line writes a range that holds what they come to (§15.268). Every other
+    /// output's range is what decides it, and what it answers is that put on the grid of its
+    /// rounding, so [`Checked::output_range`] puts the ends out to the grid (§15.269).
+    pub written_outputs: HashSet<String>,
 }
 
 /// One expression E132 or E139 was said about (see [`Checked::arith_witness`]).
@@ -1308,6 +1312,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         opens: HashMap::new(),
         defs: HashMap::new(),
         result_range: None,
+        written_outputs: HashSet::new(),
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
     // order of declarations in the file should not change what is accepted. Whether both
@@ -6286,6 +6291,19 @@ pub fn division_factors(sn: i128, sd: i128, gi: i128, sg: i128) -> (i128, i128) 
     (a / g, b / g)
 }
 
+/// A range put out to a grid (§15.268, §15.269): the lower end rounded down to it and the upper end
+/// up, whichever way the rounding breaks a tie, which is where a value inside the range can land once
+/// rounded to that grid. A missing end stays missing; a grid of zero leaves the range as it is.
+pub fn round_out((lo, hi): (Option<Rat>, Option<Rat>), g: Rat) -> (Option<Rat>, Option<Rat>) {
+    let g = if g.num < 0 { Rat::zero().sub(g) } else { g };
+    if g.num == 0 {
+        return (lo, hi);
+    }
+    let floor = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, g);
+    let ceil = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, g);
+    (lo.map(floor), hi.map(ceil))
+}
+
 /// A value as the integer it travels as, at the scale `Checked::wire_scale` gives.
 pub fn wire_int(v: Rat, scale: i128) -> i128 {
     let s = v.mul(Rat::int(scale));
@@ -6749,16 +6767,30 @@ impl Checked {
             && lo_of(s1).is_some_and(|v| v.num > 0)
     }
 
-    /// The range an output carries to the other languages (§15.268): the one `ranges` holds — a
-    /// range written on its line, the rows of the tables that decide it, a `define` of its name —
-    /// or, for the output `result` decides with no range written, what the `result` comes to.
-    pub fn output_range(&self, name: &str) -> Option<(Option<Rat>, Option<Rat>)> {
-        if let Some(r) = self.ranges.get(name) {
-            return Some(*r);
-        }
-        match &self.result_range {
-            Some((n, (lo, hi))) if n == name => Some((Some(*lo), Some(*hi))),
+    /// The range the certificate states for a name under `ranges` (§15.268): the one `ranges` holds —
+    /// a range written on an output's line, the rows of the tables that decide it, a `define` of its
+    /// name, the range a walk or an open value declares — or, for the output `result` decides with
+    /// no range written, what the `result` comes to. It is what decides the value, which the other
+    /// claims of the certificate are worked out from: the axis of a walk or of an open value runs
+    /// over it, and an expression that reads the name is bounded by it.
+    pub fn stated_range(&self, name: &str) -> Option<(Option<Rat>, Option<Rat>)> {
+        match (self.ranges.get(name), &self.result_range) {
+            (Some(r), _) => Some(*r),
+            (None, Some((n, (lo, hi)))) if n == name => Some((Some(*lo), Some(*hi))),
             _ => None,
+        }
+    }
+
+    /// The range an output carries to the other languages (§15.268), which the certificate states
+    /// under `output_ranges`: a range written on its line, as written; otherwise the range of what
+    /// decides it ([`Checked::stated_range`]) with the ends put out to the grid of its rounding
+    /// (§15.269), since the rule answers what decides it rounded, which can pass an end that is off
+    /// the grid. A name that is not an output has its range as `ranges` holds it.
+    pub fn output_range(&self, name: &str) -> Option<(Option<Rat>, Option<Rat>)> {
+        let held = self.stated_range(name)?;
+        match self.roundings.get(name) {
+            Some((_, g)) if g.num != 0 && !self.written_outputs.contains(name) => Some(round_out(held, *g)),
+            _ => Some(held),
         }
     }
 
@@ -6784,11 +6816,10 @@ impl Checked {
                 },
             };
             let reach = decided.map(|(lo, hi)| match self.roundings.get(&name) {
-                Some((_, g)) if g.num > 0 => {
-                    let floor = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Up } else { RoundMode::Down }, *g);
-                    let ceil = |v: Rat| v.round_to(if v.num < 0 { RoundMode::Down } else { RoundMode::Up }, *g);
-                    (floor(lo), ceil(hi))
-                }
+                Some((_, g)) if g.num > 0 => match round_out((Some(lo), Some(hi)), *g) {
+                    (Some(l), Some(h)) => (l, h),
+                    _ => (lo, hi),
+                },
                 _ => (lo, hi),
             });
             let numeric = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number);
@@ -6863,6 +6894,7 @@ impl Checked {
                 }
             });
             if holds {
+                self.written_outputs.insert(name.clone());
                 self.ranges.insert(name, (dl.or(Some(lo)), dh.or(Some(hi))));
                 continue;
             }

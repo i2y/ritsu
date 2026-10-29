@@ -900,8 +900,10 @@ fn tree_rules() -> Vec<String> {
     out
 }
 
-/// Every rule in the tree that states a certificate passes here too, held to its own file
-/// (§15.196): the cells of a rule that applies another, and of a mutant, are read back as well.
+/// Every rule in the tree that states a certificate passes here too, and under `tools/recheck.py`,
+/// held to its own file (§15.196): the cells of a rule that applies another, and of a mutant, are
+/// read back as well, and every numeric output with a range is held to what it answers once rounded
+/// to its grid, as many by one program as by the other (§15.269).
 #[test]
 fn 木の規則の証明書は証明付きの検査器でもファイルを添えて通る() {
     let Some(bin) = checker() else {
@@ -911,6 +913,7 @@ fn 木の規則の証明書は証明付きの検査器でもファイルを添�
     use std::process::Stdio;
     let base = root().join("../..").canonicalize().unwrap();
     let (mut held, mut failures) = (0usize, Vec::new());
+    let (mut outputs, mut python) = ((0usize, 0usize), 0usize);
     for rel in tree_rules() {
         let o = Command::new(env!("CARGO_BIN_EXE_rulec")).current_dir(&base).args(["certificate", &rel]).output().unwrap();
         if !o.status.success() {
@@ -928,13 +931,201 @@ fn 木の規則の証明書は証明付きの検査器でもファイルを添�
             .expect("Lean の検査器を起動できない");
         p.stdin.as_mut().unwrap().write_all(&o.stdout).unwrap();
         let q = p.wait_with_output().unwrap();
+        let said = String::from_utf8_lossy(&q.stdout).into_owned();
         if !q.status.success() {
-            failures.push(format!("{rel}:\n{}", String::from_utf8_lossy(&q.stdout)));
+            failures.push(format!("{rel}:\n{said}"));
+        }
+        outputs.0 += outputs_held(&said);
+        // `tools/recheck.py` too, which holds every output's range to what it answers once rounded
+        // as the Lean program does (§15.269).
+        let cert = String::from_utf8_lossy(&o.stdout).into_owned();
+        if let Some((code, said)) = python_at(&base, &cert, &rel) {
+            if code != 0 {
+                failures.push(format!("{rel} (tools/recheck.py):\n{said}"));
+            }
+            outputs.1 += outputs_held(&said);
+            python += 1;
         }
         held += 1;
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(held >= 190, "証明書の出る規則が減っている: {held}");
+    // Every numeric output that has a range in the certificate is held to it, by both programs alike.
+    assert!(outputs.0 >= 500, "出力の範囲を確かめた数が減っている: {}", outputs.0);
+    if python > 0 {
+        assert_eq!(outputs.0, outputs.1, "二つの再検査が確かめた出力の範囲の数が違う");
+    }
+}
+
+/// How many output ranges a re-checker says it held to what the output answers once rounded.
+fn outputs_held(said: &str) -> usize {
+    said.lines()
+        .filter_map(|l| l.trim().strip_prefix("outputs: "))
+        .filter_map(|l| l.split_whitespace().next()?.parse::<usize>().ok())
+        .sum()
+}
+
+/// [`python`] run from the workspace's root, as the tree's rules are named from there.
+fn python_at(base: &std::path::Path, cert: &str, rule: &str) -> Option<(i32, String)> {
+    use std::io::Write;
+    use std::process::Stdio;
+    let have = Command::new("python3").arg("--version").output().map(|o| o.status.success()).unwrap_or(false);
+    if !ready(Need::Python, || have, "python3 が無いので tools/recheck.py は回していない") {
+        return None;
+    }
+    let mut p = Command::new("python3")
+        .current_dir(base)
+        .args([root().join("tools/recheck.py").to_str().unwrap(), "--rule", rule])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("python3 を起動できない");
+    p.stdin.as_mut().unwrap().write_all(cert.as_bytes()).unwrap();
+    let o = p.wait_with_output().unwrap();
+    Some((o.status.code().unwrap_or(-1), String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr)))
+}
+
+/// What an output answers is what decides it put on the grid its line rounds to (rulec's §15.269):
+/// a fee of the amount itself, 0JPY to 1,005JPY, rounded half up to ten yen answers up to 1,010JPY.
+/// The range the certificate states for the output under `output_ranges` — written on its line, or
+/// what a `result`, a `define` or a table decides put out to the grid — is held to that by both
+/// re-checkers (`output_mem_stated`, `written_output_mem_stated`), while `ranges` keeps what decides
+/// it: one that holds what decides the output and not its rounding, or less, is refused, with the
+/// same words from each. So is a range with no grid — the output's taken out of `rounds`, or `rounds`
+/// taken out whole — since what it bounds is the answer on that grid. A certificate from before both
+/// leaves the claim stated rather than proved.
+#[test]
+fn 出力の範囲は丸めた答えまで二つの再検査で確かめられる() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let tmp = TempDir::new("lean-rounds");
+    let dir = tmp.path().to_path_buf();
+    // Each rule, and the high end `ranges` states for `fee`: a range written on the line, or what the
+    // `result` comes to (§15.268), is already on the grid; a `define` and a table keep what decides it.
+    let rules = [
+        ("written", "rule coarse v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=1005JPY\n\noutputs\n  fee : money[JPY]  round half_up(10JPY)  range >=0JPY <=1010JPY\n\nresult fee = amount\n", "1010"),
+        ("result", "rule coarse v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=1005JPY\n\noutputs\n  fee : money[JPY]  round half_up(10JPY)\n\nresult fee = amount\n", "1010"),
+        ("define", "rule coarse v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=1005JPY\n\noutputs\n  fee : money[JPY]  round half_up(10JPY)\n\ndefine fee : money[JPY] = amount\n", "1005"),
+        ("table", "rule coarse v1\n\ninputs\n  amount : money[JPY]  range >=0JPY <=1005JPY\n  waived : bool\n\noutputs\n  fee : money[JPY]  round half_up(10JPY)\n\ndefine charged : money[JPY] = amount\n\ntable fees\npolicy unique\n| waived | -> fee  |\n| false  | charged |\n| true   | 0JPY    |\n", "1005"),
+    ];
+    for (what, src, decided) in rules {
+        let p = dir.join(format!("{what}.rule"));
+        std::fs::write(&p, src).unwrap();
+        let rule = p.to_str().unwrap();
+        let (c, cert) = rulec(&["certificate", rule]);
+        assert_eq!(c, 0, "{what}: {cert}");
+        let stated = r#""output_ranges":{"fee":["0","1010"]}"#;
+        assert!(cert.contains(stated), "{what}: 出力の範囲が丸めた答えまで届かない\n{cert}");
+        assert!(cert.contains(&format!(r#""fee":["0","{decided}"]"#)), "{what}: ranges が出力を決めるものの範囲でない\n{cert}");
+        assert!(cert.contains(r#""rounds":{"fee":"10"}"#), "{what}: 証明書が出力の刻みを言わない\n{cert}");
+        let (code, said) = lean(&bin, &cert, Some(rule));
+        assert_eq!(code, 0, "{what}: {said}");
+        assert!(said.contains("outputs: 1 ranges hold what their output answers"), "{what}: {said}");
+        if let Some((code, said)) = python(&cert, rule) {
+            assert_eq!(code, 0, "{what}: {said}");
+            assert!(said.contains("outputs: 1 ranges hold what their output answers"), "{what}: {said}");
+        }
+        // Narrowed to what decides the output, and below it: refused by both, with the same words.
+        for hi in ["1005", "1000"] {
+            let why = format!("fee: what decides it runs from 0 to 1005; rounded to 10, it answers from 0 to 1010, and the certificate states the range [0, {hi}] for it");
+            let forged = cert.replacen(stated, &format!(r#""output_ranges":{{"fee":["0","{hi}"]}}"#), 1);
+            assert_ne!(forged, cert);
+            let (code, said) = lean(&bin, &forged, Some(rule));
+            assert_eq!(code, 1, "{what}: 狭めた出力の範囲が Lean で通ってしまった\n{said}");
+            assert!(said.contains(&why), "{what}: {said}");
+            if let Some((code, said)) = python(&forged, rule) {
+                assert_eq!(code, 1, "{what}: 狭めた出力の範囲が tools/recheck.py で通ってしまった\n{said}");
+                assert!(said.contains(&why), "{what}: {said}");
+            }
+        }
+        // A range narrowed below the answer with no grid to round to: the output's grid taken out of
+        // `rounds`, or `rounds` taken out whole. Refused by both, with the same words, rather than left
+        // unread.
+        let why = "fee: the certificate states a range for it but not the grid it rounds to";
+        let narrowed = r#""output_ranges":{"fee":["0","1000"]}"#;
+        let forms = [
+            ("fee の刻みを外した", cert.replacen(&format!(r#""rounds":{{"fee":"10"}},{stated}"#), &format!(r#""rounds":{{}},{narrowed}"#), 1)),
+            ("rounds を丸ごと外した", cert.replacen(&format!(r#","rounds":{{"fee":"10"}},{stated}"#), &format!(",{narrowed}"), 1)),
+        ];
+        for (form, forged) in forms {
+            assert_ne!(forged, cert, "{what}: {form}");
+            let (code, said) = lean(&bin, &forged, Some(rule));
+            assert_eq!(code, 1, "{what}: 刻みの無い出力の範囲が Lean で通ってしまった（{form}）\n{said}");
+            assert!(said.contains(why), "{what}: {form}: {said}");
+            if let Some((code, said)) = python(&forged, rule) {
+                assert_eq!(code, 1, "{what}: 刻みの無い出力の範囲が tools/recheck.py で通ってしまった（{form}）\n{said}");
+                assert!(said.contains(why), "{what}: {form}: {said}");
+            }
+        }
+        // Without the grids and the ranges they put out, the claim is the certificate's word, and the
+        // run says so.
+        let old = cert.replacen(&format!(r#","rounds":{{"fee":"10"}},{stated}"#), "", 1);
+        assert_ne!(old, cert);
+        let (code, said) = lean(&bin, &old, Some(rule));
+        assert_eq!(code, 0, "{what}: {said}");
+        assert!(said.contains("the certificate does not say what grid its outputs round to") && !said.contains("OK: every claim"), "{what}: {said}");
+        if let Some((code, said)) = python(&old, rule) {
+            assert_eq!(code, 0, "{what}: {said}");
+            assert!(said.contains("the certificate does not say what grid its outputs round to"), "{what}: {said}");
+        }
+    }
+}
+
+/// The range an output answers in is stated beside `ranges`, not in it (rulec's §15.269), because the
+/// other claims read `ranges` as what decides each name. A sum of up to 1,050 cents that the rule
+/// rounds down to a dollar answers up to 1,100 cents, and a table cut on the sum runs to 1,050 cents;
+/// a `define` read by one written above it bounds that one by its own range. Both certificates pass
+/// both re-checkers, with the output's range held. A range written on the line of a walk is the walk's
+/// too, and nothing tighter is stated: off the grid, the run says so rather than refusing it.
+#[test]
+fn 出力の範囲を丸めの刻みへ広げても証明書のほかの主張は変わらない() {
+    let Some(bin) = checker() else {
+        return;
+    };
+    let tmp = TempDir::new("lean-rounds-apart");
+    let dir = tmp.path().to_path_buf();
+    let walk = |total: &str, sum: &str| {
+        format!(
+            "rule walk_grid v1\n\ninputs\n  cap : money[USDc]  range >=0USDc <=1000USDc  contract_only\n\nelements items\n  w : money[USDc]  range >=0USDc <=150USDc\n\noutputs\n  total : money[USDc]  round down(100USDc){total}\n  big   : bool\n\nsum total over items of w  range >=0USDc <={sum}USDc\n\ntable big_of\npolicy unique\n| total     | -> big : bool |\n| <=500USDc | false         |\n| >500USDc  | true          |\n"
+        )
+    };
+    let read_first = "rule order_dep v1\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1000USDc\n\noutputs\n  total : money[USDc]  round half_up(1USDc)\n  fee   : money[USDc]  round half_up(1USDc)\n\ndefine total : money[USDc] = fee + amount\n\ndefine fee : money[USDc] = amount × 3.49% + 49USDc\n";
+    let cases = [
+        ("walk", walk("", "1050"), r#""total":["0","1050"]"#, r#""output_ranges":{"total":["0","1100"]}"#),
+        ("read_first", read_first.to_string(), r#""fee":["490349/10000","839/10"]"#, r#""output_ranges":{"fee":["49","84"]}"#),
+    ];
+    for (what, src, decided, stated) in cases {
+        let p = dir.join(format!("{what}.rule"));
+        std::fs::write(&p, &src).unwrap();
+        let rule = p.to_str().unwrap();
+        let (c, cert) = rulec(&["certificate", rule]);
+        assert_eq!(c, 0, "{what}: {cert}");
+        assert!(cert.contains(decided) && cert.contains(stated), "{what}: {cert}");
+        let (code, said) = lean(&bin, &cert, Some(rule));
+        assert_eq!(code, 0, "{what}: {said}");
+        assert!(said.contains("outputs: 1 ranges hold what their output answers") && said.contains("OK: every claim"), "{what}: {said}");
+        if let Some((code, said)) = python(&cert, rule) {
+            assert_eq!(code, 0, "{what}: {said}");
+            assert!(said.contains("outputs: 1 ranges hold what their output answers") && said.contains("every claim this program states was proved"), "{what}: {said}");
+        }
+    }
+    // A range written on the walk's output line, off the grid: `check` holds it to what the sum comes
+    // to (E140), and the certificate has nothing tighter for the re-checkers.
+    let p = dir.join("walk_written.rule");
+    std::fs::write(&p, walk("  range >=0USDc <=1050USDc", "1000")).unwrap();
+    let rule = p.to_str().unwrap();
+    let (c, cert) = rulec(&["certificate", rule]);
+    assert_eq!(c, 0, "{cert}");
+    let why = "what total answers once rounded: the range it declares, [0, 1050], does not sit on the grid it rounds to, 100";
+    let (code, said) = lean(&bin, &cert, Some(rule));
+    assert_eq!(code, 0, "{said}");
+    assert!(said.contains(why) && !said.contains("OK: every claim"), "{said}");
+    if let Some((code, said)) = python(&cert, rule) {
+        assert_eq!(code, 0, "{said}");
+        assert!(said.contains(why), "{said}");
+    }
 }
 
 /// What a row writes where its own cell narrows it (`inside`, rulec's §15.213) is worked out again from

@@ -992,16 +992,20 @@ E140 too: the output reads an input with no range, or is no number. A range with
 takes the other end from what the output comes to.
 
 The range written is then the output's range wherever an input's or a derive's is said: the
-certificate's `ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the comments
+certificate's `ranges` and `output_ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the comments
 of the SQL and of the `.proto`, the page for people (beside the output), and ritsu's port, through
 which kaname and the other languages read what a rule answers. `rulec diff` tells a range that
 moved as a change of what the rule answers (`output_range`). The range is checked, so the
 generated code checks nothing more when it runs.
 
-Where no range is written, a numeric output still has the range of what it comes to where the
-other languages read it, the certificate's `ranges` and the port: what the rows of the tables that
-decide it write, or what its `result` reaches. The schema, `api` and the generated code carry a
-table's range and not a `result`'s. `range from koyomi` (E065) and `random` (E070) are an input's
+Where no range is written, a numeric output still has a range where the other languages read it,
+the certificate's `output_ranges` and the port: what decides it — what the rows of the tables that
+decide it write, a `define` of its name, what its `result` reaches, the range a walk or an open
+value declares — put out to the grid of its rounding, since the rule answers that rounded. Both
+re-checkers of the certificate hold that range, written or not, to what the output answers. The
+certificate's `ranges` keeps what decides the output, which its other claims are worked out from.
+The schema, `api` and the generated code carry what a table or a `define` decides as it is, not
+put out to the grid, and nothing for a `result`. `range from koyomi` (E065) and `random` (E070) are an input's
 alone. A word an output's line does not read, anything but `range` and `round`, is E047, as on
 every declaration line.
 

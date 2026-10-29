@@ -2163,6 +2163,71 @@ def checkOpens (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
     r := r.say s!"  open values: {held} hold what their {terms} terms come to together inside the range they declare{from_}"
   return r
 
+/-- **What an output answers, held to the range the certificate states for it** (rulec's §15.269).
+    Every numeric output rounds to a grid (§7.2, E104), which `rounds` gives, and the rule answers what
+    decides the output put on that grid, whichever way the mode rounds. The range `output_ranges`
+    states for the output is the one the other languages read the answer in, so it has to hold what
+    decides the output — worked out here as every name's is: a `result` or a `define` from its
+    expression (`Worked.reachOf`), a column a table writes numbers into from what its rows write
+    (`Worked.writtenOf`) — rounded out to the grid (`roundedWithin`); `output_mem_stated` and
+    `written_output_mem_stated` are what a pass settles. What a walk leaves behind and an open value
+    answer inside the range `ranges` states for them, which their own checks hold them to
+    (`checkExtremes`, `checkFoldAnswers`, `checkOpens`, and what is declared for a `count` or a
+    `sum`), so that range is what decides them (`rounded_mem_stated`). Where it is also the range
+    stated for the output, there is nothing tighter, and an end off the grid is stated rather than
+    refused. Every output with a range under `output_ranges` is checked, and comes with its grid under
+    `rounds` — rulec writes one for every numeric output (E104) — or is refused: what the range bounds
+    is the answer on that grid, and the theorems take the grid the certificate gives. A certificate
+    with neither, from before it stated them, leaves the claim its word. -/
+def checkRounds (cert : Json) (w : Worked) (r : Report) : Report := Id.run do
+  let mut r := r
+  let roundsJ? := field cert "rounds"
+  let statedJ? := field cert "output_ranges"
+  if roundsJ?.isNone && statedJ?.isNone then
+    return r.state "what each output answers once rounded: the certificate does not say what grid its outputs round to"
+  let roundsJ := roundsJ?.getD Json.null
+  let statedJ := statedJ?.getD Json.null
+  let rangesJ := (field cert "ranges").getD Json.null
+  let walks := (fieldArr cert "walks").toList.filterMap str
+  let opens := (fieldArr cert "opens").toList.map (fieldStr · "name")
+  let mut held := 0
+  for (name, sj) in objPairs statedJ do
+    let some gj := field roundsJ name
+      | r := r.fail s!"{name}: the certificate states a range for it but not the grid it rounds to"
+        continue
+    let some g := optRat gj
+      | r := r.fail s!"{name}: the grid it rounds to cannot be read"
+        continue
+    if g ≤ 0 then
+      r := r.fail s!"{name}: the grid it rounds to, {ratText g}, is not above zero"
+      continue
+    let some S := ratPair sj
+      | r := r.state s!"what {name} answers once rounded: an end of the range the certificate states for it is open"
+        continue
+    -- What decides the output: worked out here, or for a walk or an open value the range the
+    -- certificate declares for it (`none` where an end of that is open), with which of the two it is.
+    let J? : Option (Option Span2 × Bool) := match w.reachOf name, w.writtenOf name with
+      | some I, _ => some (some I, false)
+      | none, some H => some (some H, false)
+      | none, none =>
+        if walks.contains name || opens.contains name then
+          (field rangesJ name).map (fun dj => (ratPair dj, true))
+        else none
+    match J? with
+    | none =>
+      r := r.state s!"what {name} answers once rounded: this program does not work out what decides it"
+    | some (none, _) =>
+      r := r.state s!"what {name} answers once rounded: an end of the range it declares is open"
+    | some (some J, own) =>
+      if roundedWithin g S J then held := held + 1
+      else if own && J == S then
+        r := r.state s!"what {name} answers once rounded: the range it declares, [{ratText S.1}, {ratText S.2}], does not sit on the grid it rounds to, {ratText g}"
+      else
+        r := r.fail s!"{name}: what decides it runs from {ratText J.1} to {ratText J.2}; rounded to {ratText g}, it answers from {ratText (floorTo g J.1)} to {ratText (ceilTo g J.2)}, and the certificate states the range [{ratText S.1}, {ratText S.2}] for it"
+  if held > 0 then
+    r := r.say s!"  outputs: {held} ranges hold what their output answers, put on the grid it rounds to"
+  return r
+
 /-- Whether two lists hold the same values, each once. -/
 def sameOnce (a b : List String) : Bool :=
   a.length == b.length && b.all (fun x => a.count x == 1)
@@ -3045,6 +3110,9 @@ def run (text : String) (rule : Option (String × ByteArray)) : IO UInt32 := do
     -- whole of it, and the claim is that the terms the rule and its contributions give stay inside it
     -- put together (`openOk`, and `openValue_mem_stated` is what a pass settles).
     r := checkOpens cert worked r
+    -- What each numeric output answers, its value put on the grid it rounds to, inside the range the
+    -- certificate states for it (rulec's §15.269, `output_mem_stated`, `written_output_mem_stated`).
+    r := checkRounds cert worked r
     let mut tables : Array ReadTable := #[]
     for tj in fieldArr cert "tables" do
       if kindsKnown then

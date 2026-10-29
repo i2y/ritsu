@@ -34,6 +34,7 @@ from that rule's directory.
 | `RulecCert/Prereq.lean` | which values of an enum need which before them (rulec's §15.222): from the order the certificate gives, no value needs itself however far its needs are followed (`no_cycle`); a case that starts with `start` and takes the values in the other order comes to hold them all (`reached_holds`), and none of those no case can take (`never_held`); and an `ordered by` table's answers do not go down along the needs (`order_along`) |
 | `RulecCert/Axes.lean` | a numeric axis tiles what its column takes (rulec's §15.243): where the check passes, every value of the range on the axis's grid stands on exactly one coordinate (`axisTilesB_cover`, `axisTilesB_unique`); what a `max`, a `min` or a fold answers stands on a coordinate of the axis a table below reads it on (`extreme_on_axis`, `foldAnswer_on_axis`); and a point made of such coordinates is one a row takes (`Certified.answers_at`) |
 | `RulecCert/Chances.lean` | the claims of `chances` (rulec's §15.224–§15.226, §15.243): wherever the inputs that are not random take values the claim's cells let in, the share of the draws whose outputs pass its output cells passes the chance it writes, under every rounding. Counted box by box — the coordinates of a random axis tile what its input is drawn from (`tiles_flatMap`, `countP_cart_flatMap`), inside a box the tables answer every draw alike (`cellOf_sound`, `Claim.box_const`), and a class's hits over its points are the share (`Claim.count_share`) — it is `Claim.holds`; run point by point, `RunClaim.holds`; over a pick by weight, the walk run at every draw, `WeightedClaim.holds` |
+| `RulecCert/Outputs.lean` | the range each numeric output answers in (rulec's §15.269): wherever every name with a range is inside it and every `constraint` holds, what decides the output — a `result` or a `define` (`OutputHolds`), what a row of a table that fires writes (`WrittenOutputHolds`) — put on the grid it rounds to, whichever way the rounding goes, is inside the range the certificate states for it in `output_ranges`. `roundedWithin` checks that range against what decides the output rounded out to the grid, and `output_mem_stated` and `written_output_mem_stated` are what a pass settles; both come from `rounded_mem_stated`, which with `extreme_mem_stated`, `foldAnswer_mem_stated` and `openValue_mem_stated` also covers what a walk leaves behind and an open value. Each theorem is of one output and the grid `rounds` gives it; `checkRounds` in `RulecMain.lean` goes through every output `output_ranges` names, and refuses one `rounds` gives no grid |
 | `RulecCert/Certified.lean` | one table's certificate, and the three theorems put together; and, where a row's box is the box its cells describe less the coordinates of a column decided above at a value no table above writes (rulec's §15.253), the same claims of the table whose rows take the boxes their cells describe: at a point the rule is asked about the two boxes take the same points (`inBox_dropNever`), so completeness, one row and a point for every row carry over (`Certified.cells_complete`, `cells_unique`, `cells_reached`) |
 | `RulecCert/Read.lean`, `RulecCert/Sha256.lean`, `RulecMain.lean` | reading the JSON, the digest, and the program that runs the checks |
 
@@ -67,14 +68,21 @@ than its state adds, in a certificate that does not say what grid a carried outp
 where a case starts, which no `initial_source` ties to the file. A claim of `chances` adds itself
 where `check` left it undecided within its budget (W129), or where this program cannot run it as
 the check did: a value the rule computes that reads one listed after it, a rounding that decides
-the answer at a draw, a column of strings, more points than it runs.
+the answer at a draw, a column of strings, more points than it runs. A certificate from before
+rulec's §15.269, which states neither `rounds` nor `output_ranges`, adds what each output answers
+once rounded; so does an output whose range has an open end, one whose deciding value this program
+does not work out, and one whose range is the one its walk or open value declares with an end off
+the grid, where there is nothing tighter to hold it to. A range under `output_ranges` for an output
+`rounds` gives no grid is refused, `rounds` left out whole included: what the range bounds is the
+answer on that grid, and the theorems take the grid the certificate gives.
 
 Beyond those, the document's own account of the rule — the declared ranges, the types, the
 groups, the enums, the constraints, each value's expression and scale, the scale of every name,
 the grid a carried output rounds to, what a `max` or a `min` reads and the values a fold answers
 with, the graph of a `prerequisites` block, the cell a `once` line tests, the terms of an open value,
-the grid each output a claim of `chances` reads rounds to, the arms of a pick by weight and what
-each takes — is its word. What is worked out from it is checked: the step a numeric axis is cut at has to
+the grid each output a claim of `chances` reads rounds to, the grid each numeric output rounds to
+(`rounds`), the arms of a pick by weight and what each takes — is its word. What is worked out
+from it is checked: the step a numeric axis is cut at has to
 divide the step its column's values take, worked out from the expressions and the scales the
 way rulec works it out (`checkSteps` in `RulecMain.lean`), so an axis of tenths of a pound cut
 every whole pound is refused; and the interval each value the rule computes is forced into is
@@ -84,6 +92,9 @@ document states for them (rulec's §15.195). A column a table writes numbers int
 same way, by the hull of what its rows write, each row's answer cell an expression of its own
 (`hullOf`): it is what a value over the column is worked out with and what the column's range in
 a linear model is, and the range the document states for it is held to it (rulec's §15.196). The
+range the document states for each numeric output under `output_ranges`, which the
+other languages read the rule's answer in, is held to what decides the output put out
+to the grid it rounds to (`checkRounds`, rulec's §15.269). The
 truth value a boolean `define` of one comparison can take is worked out from its comparison and
 the intervals of its two sides, and the kind of every column from `inputs`, `walks`, `values` and
 `decides`. Where a leaf or a pair rests on the rows of a table above that write a value, those

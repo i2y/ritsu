@@ -758,6 +758,82 @@ def check_opens(cert, known):
     return held, terms, by
 
 
+def floor_to(g, v):
+    """`v` rounded down to the grid `g`, a grid above zero."""
+    return (v // g) * g
+
+
+def ceil_to(g, v):
+    """`v` rounded up to the grid `g`, a grid above zero."""
+    return -((-v) // g) * g
+
+
+def check_rounds(cert, known):
+    """What each numeric output answers is what decides it put on the grid its line rounds to
+    (rulec's §7.2, §15.269), whichever way the mode rounds: between that value rounded down to the
+    grid and rounded up. The range `output_ranges` states for the output is the one the other
+    languages read the answer in, so it has to hold what decides the output — worked out here, a
+    `result` or a `define` from its expression, a column a table writes numbers into from what its
+    rows write — rounded out to the grid. What a walk leaves behind and an open value answer inside
+    the range `ranges` states for them, which their own checks hold them to, so that range is what
+    decides them. Where it is also the range stated for the output (one written on the output's line
+    is the walk's), this program has nothing tighter, and an end off the grid is said rather than
+    refused. Every output with a range stated comes with its grid under `rounds` — rulec writes one
+    for every numeric output (E104) — and a range with none is refused: what it bounds is the answer
+    on that grid, so there is nothing to hold it to. Returns how many were held, and the outputs whose
+    answer this program cannot hold to a range."""
+    stated = cert.get("output_ranges", {})
+    grids = cert.get("rounds", {})
+    declared = cert.get("ranges", {})
+    walks = set(cert.get("walks", []))
+    opens = {o.get("name") for o in cert.get("opens", [])}
+
+    def read(x):
+        # A number the certificate writes, or None where it writes none this program can read.
+        try:
+            return num(x)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+    def ends(v):
+        return (read(v[0]), read(v[1])) if isinstance(v, list) and len(v) >= 2 else (None, None)
+
+    held, left = 0, []
+    for name, s in stated.items():
+        if name not in grids:
+            raise Bad(f"{name}: the certificate states a range for it but not the grid it rounds to")
+        g = read(grids[name])
+        if g is None:
+            raise Bad(f"{name}: the grid it rounds to cannot be read")
+        if g <= 0:
+            raise Bad(f"{name}: the grid it rounds to, {g}, is not above zero")
+        a, b = ends(s)
+        if a is None or b is None:
+            left.append(f"what {name} answers once rounded: an end of the range the certificate states for it is open")
+            continue
+        own = None
+        if name in known:
+            lo, hi = known[name]
+        elif (name in walks or name in opens) and name in declared:
+            lo, hi = ends(declared[name])
+            if lo is None or hi is None:
+                left.append(f"what {name} answers once rounded: an end of the range it declares is open")
+                continue
+            own = (lo, hi)
+        else:
+            left.append(f"what {name} answers once rounded: this program does not work out what decides it")
+            continue
+        flo, chi = floor_to(g, lo), ceil_to(g, hi)
+        if a > flo or b < chi:
+            if own == (a, b):
+                left.append(f"what {name} answers once rounded: the range it declares, [{s[0]}, {s[1]}], does not sit on the grid it rounds to, {g}")
+                continue
+            raise Bad(f"{name}: what decides it runs from {lo} to {hi}; rounded to {g}, it answers from {flo} to {chi}, "
+                      f"and the certificate states the range [{s[0]}, {s[1]}] for it")
+        held += 1
+    return held, left
+
+
 def check_fold_answers(cert, known):
     """The answer of a fold the items below read is one of the values the fold answers with
     (§15.219): `empty`, `exhausted` unless it is `held`, a `stop with`, what an arm takes or
@@ -3933,6 +4009,20 @@ def check(cert):
         except Bad as e:
             out.append(f"  FAILED open values: {e}")
             ok = False
+    # What each numeric output answers, its value put on the grid it rounds to, inside the range the
+    # certificate states for it (rulec's §15.269). A certificate with neither is from before rulec
+    # stated them; one with ranges and no grids is refused for each range.
+    if "rounds" in cert or "output_ranges" in cert:
+        try:
+            held, left = check_rounds(cert, known)
+            STATED.extend(left)
+            if held:
+                out.append(f"  outputs: {held} ranges hold what their output answers, put on the grid it rounds to")
+        except Bad as e:
+            out.append(f"  FAILED outputs: {e}")
+            ok = False
+    else:
+        STATED.append("what each output answers once rounded: the certificate does not say what grid its outputs round to")
     # The reach of a derived value is the interval its own expression is forced into — the
     # cover's "out of reach" leaves are held to that, recomputed here.
     computed = {v["name"] for v in cert.get("values", [])}

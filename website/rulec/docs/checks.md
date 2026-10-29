@@ -480,7 +480,10 @@ read as never below zero and never above the amount handed out
 ([the example](examples.md#apportioning-by-ratio)). The range is then
 the answer's wherever an input's range is said: the certificate,
 `rulec schema` and `rulec api`, the page for people, and ritsu's port,
-through which the other languages read the answer. See
+through which the other languages read the answer. With none written,
+the certificate and the port carry what decides the output put out to
+the grid it rounds to, and the certificate's two re-checkers hold the
+range, written or not, to what the output answers once rounded. See
 [the reference](reference.md#range-on-an-output--the-range-other-languages-read-it-in).
 
 ## Showing it to people

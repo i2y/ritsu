@@ -170,9 +170,11 @@ forged certificate got past a re-checker.
 **Where it stops:** the certificate is tied to one text by a digest and, cell by cell, by
 those byte spans — the answers a row writes into a column of numbers among them. What follows
 from the cells is worked out again rather than read: the interval of each value the rule
-computes, the values a table writes into a column of numbers, and the kind of each column.
-Everything else in it — the declared ranges, the types, the groups, the constraints, each
-value's expression — is the document's own word, and going behind that would take a parser for
+computes, the values a table writes into a column of numbers, and the kind of each column. The
+range it states for each output, the one the other languages read the rule's answer in, is held
+to what decides the output put out to the grid it rounds to. Everything else in it — the declared
+ranges, the types, the groups, the constraints, each value's expression, the grid each output
+rounds to — is the document's own word, and going behind that would take a parser for
 the rule. A checker that reads a rule the way rulec reads it is not
 independent of it. The reading of a contract — which inputs it feeds, which conditions it
 places and how they open into cases — is the document's word too: the certificate is tied to

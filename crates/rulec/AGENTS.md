@@ -278,11 +278,11 @@ language, a spreadsheet formula — you need no backend and give up no compariso
 
 ### `rulec certificate <file.rule>`
 
-The evidence behind all five proofs, as one JSON object something other than rulec can
-re-check: the tree tiling the input space, the axis each pair of rows of a `unique` table
-parts on, a point reaching each row with its values, every computed value's interval and
-type, and where each cell stands in the file. `tools/recheck.py` re-checks it with no
-dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and runs them.
+The evidence behind all five proofs, as one JSON object something other than rulec can re-check:
+the tree tiling the input space, the axis each pair of rows of a `unique` table parts on, a
+point reaching each row with its values, every computed value's interval and type, each output's
+range once rounded, and where each cell stands in the file. `tools/recheck.py` re-checks it with
+no dependencies; `proofs/` proves in Lean 4 that those checks imply the claims and runs them.
 `--rule <file>` ties it to that text, cell by cell ([docs/formats.md](docs/formats.md)).
 
 ### `rulec test generated/ --format json`

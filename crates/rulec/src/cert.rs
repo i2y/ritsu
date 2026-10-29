@@ -218,6 +218,11 @@ fn source_json(src: &str, spans: &[Option<(usize, usize, usize)>], tests: &[Cert
 pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> String {
     let tables: Vec<String> = c.sets.iter().filter_map(|s| certificate_of(s, c, f).map(|t| table_json(t, src, rule_path))).collect();
     let contracts: Vec<String> = crate::projection::contract_certificates(f, c, rule_path).iter().map(contract_json).collect();
+    // The numeric outputs, each once, in order: the ones `rounds` and `output_ranges` speak of.
+    let mut numeric_outputs: Vec<&String> =
+        f.outputs.iter().map(|o| &o.name.text).filter(|n| c.ty_of(n).is_some_and(|t| t.present().is_numeric())).collect();
+    numeric_outputs.sort();
+    numeric_outputs.dedup();
     let mut ranges = Obj::new();
     // The output `result` decides is stated with what it comes to, as an output a table decides
     // is (§15.268).
@@ -225,7 +230,7 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
     names.sort();
     names.dedup();
     for n in names {
-        let Some((lo, hi)) = c.output_range(n) else { continue };
+        let Some((lo, hi)) = c.stated_range(n) else { continue };
         ranges = ranges.raw(n, format!("[{},{}]", end(&lo), end(&hi)));
     }
     // The days a date input takes from a koyomi file (§15.174): where they come from — the file
@@ -276,6 +281,31 @@ pub fn certificate(f: &RuleFile, c: &Checked, src: &str, rule_path: &str) -> Str
                 s = s.int(n, c.scales[n]);
             }
             s.finish()
+        })
+        // The grid each numeric output rounds to (§7.2: every one declares it, E104), on the scale
+        // of `ranges`, and the range ritsu's port gives the other languages for it (§15.268): what
+        // the rule answers is what decides the output put on that grid, whichever way the mode
+        // rounds, so a re-checker holds that range to what decides it rounded out to the grid
+        // (§15.269). `ranges` keeps what decides it, which the other claims are worked out from.
+        .raw("rounds", {
+            let mut r = Obj::new();
+            for n in &numeric_outputs {
+                let Some((_, g)) = c.roundings.get(*n) else { continue };
+                let g = if g.num < 0 { Rat::zero().sub(*g) } else { *g };
+                if g.num != 0 {
+                    r = r.raw(n, crate::json::quote(&rat(&g)));
+                }
+            }
+            r.finish()
+        })
+        .raw("output_ranges", {
+            let mut r = Obj::new();
+            for n in &numeric_outputs {
+                if let Some((lo, hi)) = c.output_range(n) {
+                    r = r.raw(n, format!("[{},{}]", end(&lo), end(&hi)));
+                }
+            }
+            r.finish()
         });
     let o = match days {
         Some(d) => o.raw("days", d),

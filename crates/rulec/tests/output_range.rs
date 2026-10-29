@@ -49,9 +49,14 @@ fn fix(src: &str) -> Option<String> {
 
 /// The certificate's `ranges`, as `name → [lo, hi]`.
 fn ranges(dir: &Path, file: &str) -> rulec::json::Json {
+    certificate(dir, file).get("ranges").cloned().unwrap_or_else(|| panic!("no ranges in the certificate of {file}"))
+}
+
+/// The certificate of `file`.
+fn certificate(dir: &Path, file: &str) -> rulec::json::Json {
     let (code, out) = rulec(dir, &["certificate", file]);
     assert_eq!(code, 0, "{out}");
-    rulec::json::parse(&out).unwrap().get("ranges").cloned().unwrap_or_else(|| panic!("no ranges: {out}"))
+    rulec::json::parse(&out).unwrap()
 }
 
 fn ends(r: &rulec::json::Json, name: &str) -> Option<(String, String)> {
@@ -251,6 +256,34 @@ fn the_output_a_result_decides_has_the_range_it_comes_to() {
     let j = rulec::json::parse(&schema).unwrap();
     let out = j.get("properties").and_then(|p| p.get("out")).and_then(|o| o.get("properties")).and_then(|p| p.get("fee")).unwrap_or_else(|| panic!("{schema}"));
     assert!(out.get("minimum").is_none() && out.get("maximum").is_none(), "{schema}");
+}
+
+/// With no range written, an output a `define` of its name or a table decides carries what decides
+/// it put out to the grid of its rounding (§15.269). A card fee of 3.49% and 49 cents comes to
+/// 49.0349 to 83.9 cents, and the rule answers it rounded half up to the cent: 49 to 84. The port
+/// and the certificate's `output_ranges` carry 49 to 84, which holds every answer — 84 at 1,000
+/// cents, as the example says — where the certificate stated 49.0349 (49 for the table) to 83.9 and
+/// the port carried 49 to 83. `ranges` keeps what decides it.
+#[test]
+fn an_output_with_no_range_written_carries_what_decides_it_put_out_to_its_grid() {
+    let t = TempDir::new("define-range");
+    let dir = t.path();
+    let by_define = "rule card_fee v1\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1000USDc\n\noutputs\n  fee : money[USDc]  round half_up(1USDc)\n\ndefine fee : money[USDc] = amount × 3.49% + 49USDc\n\nexamples\n| amount   | -> fee |\n| 1000USDc | 84USDc |\n| 1USDc    | 49USDc |\n";
+    let by_table = "rule card_fee v1\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1000USDc\n  waived : bool\n\noutputs\n  fee : money[USDc]  round half_up(1USDc)\n\ndefine charged : money[USDc] = amount × 3.49% + 49USDc\n\ntable fees\npolicy unique\n| waived | -> fee   |\n| false  | charged  |\n| true   | 49USDc   |\n\nexamples\n| amount   | waived | -> fee |\n| 1000USDc | false  | 84USDc |\n";
+    // What decides it: the `define`, and the rows of the table, one of which writes 49 cents.
+    for (what, src, decided) in [("define", by_define, "490349/10000"), ("table", by_table, "49")] {
+        let (codes, en, _) = said(src);
+        assert!(codes.is_empty(), "{what}: {en}");
+        std::fs::write(dir.join("fee.rule"), src).unwrap();
+        let cert = certificate(dir, "fee.rule");
+        assert_eq!(ends(cert.get("output_ranges").unwrap(), "fee"), pair("49", "84"), "{what}");
+        assert_eq!(ends(cert.get("ranges").unwrap(), "fee"), pair(decided, "839/10"), "{what}");
+        let e = rulec::ports::Engine::new();
+        match e.output_values(&dir.join("fee.rule"), "fee").unwrap() {
+            Found::Value(v) => assert_eq!((v.min, v.max), (Some(49), Some(84)), "{what}"),
+            Found::Undecided(t) => panic!("{what}: {t:?}"),
+        }
+    }
 }
 
 /// Two shares of one amount over one whole, the first at a running total the `constraint` lines
