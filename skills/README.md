@@ -88,7 +88,7 @@ Every release has `ritsu-skills-v<version>.zip`, listed in its `SHA256SUMS`. It 
 folders and the two licenses, so unzipping it where an agent reads skills is the install:
 
 ```console
-$ unzip ritsu-skills-v0.36.0.zip -d ~/.claude/skills -x 'LICENSE-*'
+$ unzip ritsu-skills-v0.37.0.zip -d ~/.claude/skills -x 'LICENSE-*'
 ```
 
 ## Letting a skill run its commands

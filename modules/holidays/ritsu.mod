@@ -5,6 +5,6 @@
 module ghcr.io/i2y/ritsu-holidays
 version 1.0.0
 description "The public holidays of the United Kingdom and of Japan, as calendars of koyomi"
-ritsu >=0.36.0
+ritsu >=0.37.0
 license "(MIT OR Apache-2.0) AND OGL-UK-3.0 AND LicenseRef-PDL-1.0"
 source "https://github.com/i2y/ritsu"

@@ -59,7 +59,7 @@ flowchart TD
 <details>
 <summary><code>tiers</code> · member_tier_shipping v1 · <code>rules/member_tier_shipping.rule</code></summary>
 
-<!-- rulec 0.36.0 が member_tier_shipping.rule (sha256:01d90343a970) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
+<!-- rulec 0.37.0 が member_tier_shipping.rule (sha256:01d90343a970) から生成した資料です。読むためのもので、もとになるのは .rule のほうです。ここを編集しても .rule には戻せません。 -->
 # 規則 member_tier_shipping v1
 
 Shipping by membership tier: gold and above ship free, and a campaign lifts a member to the campaign's tier for that order alone

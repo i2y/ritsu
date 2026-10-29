@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.36.0",
+  "ritsu": "0.37.0",
   "base": {
     "rev": "one"
   },
@@ -76,7 +76,7 @@
             "file": "calendars/office.cal",
             "tool": "koyomi",
             "result": {
-              "koyomi": "0.36.0",
+              "koyomi": "0.37.0",
               "kind": "calendar",
               "old": {
                 "file": "@desk@1.0.0/calendars/office.cal",
@@ -143,7 +143,7 @@
             "file": "calendars/payment.cal",
             "tool": "koyomi",
             "result": {
-              "koyomi": "0.36.0",
+              "koyomi": "0.37.0",
               "kind": "dates",
               "old": {
                 "file": "@desk@1.0.0/calendars/payment.cal",
@@ -293,7 +293,7 @@
             "file": "gates/limits.gate",
             "tool": "sekisho",
             "result": {
-              "sekisho": "0.36.0",
+              "sekisho": "0.37.0",
               "old": {
                 "file": "@desk@1.0.0/gates/limits.gate",
                 "name": "limits",
@@ -515,7 +515,7 @@
           "file": "invoice.cal",
           "tool": "koyomi",
           "result": {
-            "koyomi": "0.36.0",
+            "koyomi": "0.37.0",
             "kind": "dates",
             "old": {
               "file": "invoice.cal (the lock of one)",
@@ -589,7 +589,7 @@
           "file": "refunds.gate",
           "tool": "sekisho",
           "result": {
-            "sekisho": "0.36.0",
+            "sekisho": "0.37.0",
             "old": {
               "file": "refunds.gate (the lock of one)",
               "name": "refunds",

@@ -573,7 +573,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: i2y/ritsu@v0.36.0
+      - uses: i2y/ritsu@v0.37.0
       - name: Report what raising the dependencies changes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -688,12 +688,12 @@ cargo install --git https://github.com/i2y/ritsu --locked ritsu
 cargo install --git https://github.com/i2y/ritsu --locked rulec
 ```
 
-リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.36.0` で入ります。
+リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.37.0` で入ります。
 
 0.26.0 からは、リリースに `i2y-ritsu-<バージョン>.tgz` も付きます。npm のパッケージ `@i2y/ritsu` で、中身は WebAssembly 向けに組んだ ritsu です。ネイティブのバイナリなしに Node 22 以降で動き、ネイティブのバイナリと同じコマンドと、JavaScript から呼ぶための API があります。npm のレジストリには置いていないので、リリースから入れます。
 
 ```
-npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.36.0/i2y-ritsu-0.36.0.tgz
+npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.37.0/i2y-ritsu-0.37.0.tgz
 ```
 
 使い方と、ほかのプログラムを起動したりネットワークに接続したりするためにネイティブのバイナリが要るコマンドは、[Node で使う](https://i2y.github.io/ritsu/ja/node/)にあります。
