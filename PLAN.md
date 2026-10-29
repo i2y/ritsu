@@ -2430,6 +2430,8 @@ G で確かめたこと（2026-10-29、この機械で）：
   - 結果（2026-10-29）：`ritsu_testkit::git` は、ループバックで HTTP を読み、要求ごとに `git http-backend` を CGI として走らせる。ファイルを除いた取得を受け付けるか、プロトコルの版 0 だけを話すか、Basic の認証を、試験が選ぶ。リポジトリのコミットとタグは、名前と日時を固定して、どの機械でも同じコミットになる。足した試験は 36 である。ritsu-base が 15（`modules_git.rs` 10、`modules/git.rs` の単体試験 4、`modules_lock.rs` 1）、ritsu が 21（`modules_git.rs` 18、`modules/git.rs` の単体試験 1、`npm.rs` 1（tools の段）、`playground.rs` 1）。ほかに、`npm.rs` の止まるコマンドの試験に git の 10 のコマンドを、`modules_manifest.rs` に `require … git` の行の書き方の誤りを足した。JSON のキー（`url`、`commit`）と文が増えたので、`modules.rs`、`modules_cli.rs`、`modules_oci.rs`、`modules_site.rs`、`modules_graph.rs` の試験と golden を合わせた。I-1 の計画で `modules_auth.rs` と `modules_site.rs` に置くとした資格情報と一覧のサイトの試験は、テストの git のサーバーを使うので `modules_git.rs` に置いた。
 - **I.10 一緒にした直し**：`ritsu help <コマンド> --lang ja` が英語を出していた（前からの不具合）。
   - 結果（2026-10-29）：`help` のあとに書いた `--lang` も読み、言語のコマンドの `--help`（`ritsu help rulec --lang ja`）にはそのまま渡す。`entry.rs` の試験に、後ろに書いた `--lang` を足した。
+- **I.11 git の最低の版**（DESIGN 17.12.1）：git の依存は 2.29 以上で確かめていたが、git の版を読む層 `fs::GitRevision`（`ritsu mod fetch --rev`、`ritsu mod report`、`mod diff` の版の読み、rulec の vfs）は `rev-parse --end-of-options` のために 2.30 が要り、版の確かめが無かった。使う人に言う版を一つにする。
+  - 結果（2026-10-30）：最低の版を 2.30 にし、版と確かめ方を `ritsu_base::fs` の `GIT_OLDEST` と `git_new_enough` に移した。git の依存は最初の git の前に、`GitRevision::open` は開くときに `git version` を読み、古ければ、その出力を添えて exit 2 で止まる。試験は、版の読み方（ritsu-base の `fs.rs`）と、2.29.2 と名乗る git で `mod add` と `mod fetch --rev` が何も書かずに止まること（ritsu の `modules_git.rs`）。サイトのモジュールのページ（英日）の git の版の文を直した。
 
 **I の完了の条件**：`path` と `oci` が通るところを、git の依存も通る（マニフェスト、lock、版の選び方、取り出しと置き場、同梱のコピー、`ritsu mod` のコマンド、検査と生成と実行、`diff` と `report`、一覧のサイト、npm とブラウザ、文書、試験）。試験はインターネットに出ない。マニフェストの無い木の出力は変わらない（M14）。
 

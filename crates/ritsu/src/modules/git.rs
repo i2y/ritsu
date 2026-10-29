@@ -67,9 +67,6 @@ pub const LOCAL_VARS: [&str; 15] = [
 /// The settings every git is run with.
 const SETTINGS: [&str; 5] = ["core.hooksPath=/dev/null", "protocol.version=2", "transfer.fsckObjects=true", "gc.auto=0", "maintenance.auto=false"];
 
-/// The oldest git ritsu runs: `fetch --stdin` and `--no-write-fetch-head` came in 2.29.
-pub const OLDEST: (u32, u32) = (2, 29);
-
 /// How long one git may run.
 const TIMEOUT: Duration = Duration::from_secs(300);
 
@@ -177,7 +174,7 @@ impl Git {
         Git { repos: BTreeMap::new(), tags: BTreeMap::new(), checked: false }
     }
 
-    /// git's version, held to [`OLDEST`], once a run.
+    /// git's version, held to [`ritsu_base::fs::GIT_OLDEST`], once a run.
     fn check(&mut self) -> Result<(), Failed> {
         if self.checked {
             return Ok(());
@@ -197,9 +194,8 @@ impl Git {
             Err(e) => return Err(Failed::Cannot(ritsu_base::wasi::starting("git", &e))),
         };
         let said = String::from_utf8_lossy(&o.stdout).trim().to_string();
-        let (major, minor) = version_of(&said).unwrap_or((0, 0));
-        if (major, minor) < OLDEST {
-            let (a, b) = OLDEST;
+        if !ritsu_base::fs::git_new_enough(&said) {
+            let (a, b) = ritsu_base::fs::GIT_OLDEST;
             return Err(Failed::Cannot(tr!(
                 "git が古すぎます（`{said}`）。git の依存には git {a}.{b} 以上が要ります",
                 "git is too old (`{said}`): a dependency from git needs git {a}.{b} or later"
@@ -552,15 +548,6 @@ fn read_blobs(dir: &Path, u: &Url, oids: &[String]) -> Result<Vec<Vec<u8>>, Fail
     Ok(out)
 }
 
-/// git's version from `git version`'s line: `git version 2.50.1 (Apple Git-155)` gives (2, 50).
-pub fn version_of(line: &str) -> Option<(u32, u32)> {
-    let v = line.strip_prefix("git version ")?.split_whitespace().next()?;
-    let mut parts = v.split('.');
-    let major = parts.next()?.parse().ok()?;
-    let minor = parts.next()?.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok()?;
-    Some((major, minor))
-}
-
 /// Running git with the variables that point it at a repository taken away.
 trait ClearLocal {
     fn env_clear_local(&mut self) -> &mut Self;
@@ -633,18 +620,4 @@ fn run(mut c: Command, input: Option<&[u8]>) -> Result<Ran, Failed> {
     let stdout = reader.join().unwrap_or_default();
     let stderr = String::from_utf8_lossy(&err_reader.join().unwrap_or_default()).into_owned();
     Ok(Ran { ok: status.success(), stdout, stderr })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_version_of_git() {
-        assert_eq!(version_of("git version 2.50.1 (Apple Git-155)"), Some((2, 50)));
-        assert_eq!(version_of("git version 2.29.0.windows.1"), Some((2, 29)));
-        assert_eq!(version_of("git version 2.28.0"), Some((2, 28)));
-        assert!(version_of("git version 2.28.0").unwrap() < OLDEST);
-        assert_eq!(version_of("hub version 1"), None);
-    }
 }

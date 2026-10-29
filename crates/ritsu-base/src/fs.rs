@@ -854,6 +854,41 @@ pub struct GitRevision {
     read: RefCell<BTreeMap<String, Vec<u8>>>,
 }
 
+/// The oldest git ritsu runs (DESIGN 17.12.1): `rev-parse --end-of-options`, with which a revision
+/// is read here, came in 2.30, and `fetch --stdin` and `--no-write-fetch-head`, with which a
+/// dependency is fetched from git, in 2.29.
+pub const GIT_OLDEST: (u32, u32) = (2, 30);
+
+/// The major and minor version in what `git version` printed (`git version 2.50.1 (Apple Git-155)`).
+pub fn git_version(said: &str) -> Option<(u32, u32)> {
+    let v = said.strip_prefix("git version ")?.split_whitespace().next()?;
+    let mut parts = v.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok()?;
+    Some((major, minor))
+}
+
+/// Whether what `git version` printed is a git as new as [`GIT_OLDEST`]; what does not read as a
+/// version is not.
+pub fn git_new_enough(said: &str) -> bool {
+    git_version(said).is_some_and(|v| v >= GIT_OLDEST)
+}
+
+/// Err, with the sentence to say, when git cannot start or is older than [`GIT_OLDEST`].
+fn git_checked() -> Result<(), crate::text::Text> {
+    let o = match std::process::Command::new("git").arg("version").output() {
+        Ok(o) => o,
+        Err(e) if crate::wasi::unsupported(&e) => return Err(crate::wasi::cannot_start("git")),
+        Err(e) => return Err(crate::tr!("git を起動できません（{e}）", "cannot start git ({e})")),
+    };
+    let said = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    if git_new_enough(&said) {
+        return Ok(());
+    }
+    let (a, b) = GIT_OLDEST;
+    Err(crate::tr!("git が古すぎます（`{said}`）。git の版を読むには git {a}.{b} 以上が要ります", "git is too old (`{said}`): reading a git revision needs git {a}.{b} or later"))
+}
+
 /// Run git in `dir`: what it printed, or None when it ended with an error. Err when it cannot start.
 fn git_in(dir: &Path, args: &[&str]) -> Result<Option<Vec<u8>>, crate::text::Text> {
     match std::process::Command::new("git").arg("-C").arg(dir).args(args).output() {
@@ -865,8 +900,9 @@ fn git_in(dir: &Path, args: &[&str]) -> Result<Option<Vec<u8>>, crate::text::Tex
 
 impl GitRevision {
     /// The revision `rev` of the repository the directory `dir` is in. Err, with the sentence to say,
-    /// when git cannot start, `dir` is in no repository, or the revision is not one.
+    /// when git cannot start or is too old, `dir` is in no repository, or the revision is not one.
     pub fn open(dir: &Path, rev: &str) -> Result<GitRevision, crate::text::Text> {
+        git_checked()?;
         let shown = dir.display().to_string();
         let top = git_in(dir, &["rev-parse", "--show-toplevel"])?
             .ok_or_else(|| crate::tr!("`{shown}` は git のリポジトリの中にありません", "`{shown}` is in no git repository"))?;

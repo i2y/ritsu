@@ -173,3 +173,19 @@ fn an_error_of_wasi_takes_the_systems_number() {
     let words = e.to_string();
     assert_eq!(fs::as_native(e).to_string(), words);
 }
+
+/// git's version as `git version` prints it, held to 2.30, the oldest ritsu runs (DESIGN 17.12.1).
+#[test]
+fn the_version_of_git() {
+    assert_eq!(fs::git_version("git version 2.50.1 (Apple Git-155)"), Some((2, 50)));
+    assert_eq!(fs::git_version("git version 2.30.0.windows.1"), Some((2, 30)));
+    assert_eq!(fs::git_version("git version 2.29.2"), Some((2, 29)));
+    assert_eq!(fs::git_version("hub version 1"), None);
+    assert_eq!(fs::GIT_OLDEST, (2, 30));
+    for new in ["git version 2.30.0", "git version 2.56.0", "git version 3.0.0"] {
+        assert!(fs::git_new_enough(new), "{new}");
+    }
+    for old in ["git version 2.29.2", "git version 1.99.0", "hub version 1", ""] {
+        assert!(!fs::git_new_enough(old), "{old}");
+    }
+}

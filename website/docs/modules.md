@@ -218,10 +218,9 @@ require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
   `ritsu mod get` takes the commit the tag leads to now, and `ritsu mod report` puts the move first.
   When the repository no longer gives the lock's commit, `ritsu mod fetch` stops and says that the
   tag moved.
-- ritsu runs git, 2.29 or later (2.30 for `ritsu mod fetch --rev` and `ritsu mod report`), with your
-  settings: ssh keys, credential helpers and `url.<base>.insteadOf` work as they do for
-  `git fetch`. ritsu does not let git ask for a password on the terminal: with no credential, it
-  stops at once.
+- ritsu runs git, 2.30 or later, with your settings: ssh keys, credential helpers and
+  `url.<base>.insteadOf` work as they do for `git fetch`. ritsu does not let git ask for a password
+  on the terminal: with no credential, it stops at once.
 
 A module shared by git has no signature to check: the lock's commit and digests hold it, and a
 `signature` line that covers it is E309. A module that requires one from git cannot be pushed to a

@@ -63,6 +63,10 @@ const GIT_VARS: [&str; 21] = [
 /// the variables ritsu sets or takes away) and runs the real one.
 const WRAPPED_GIT: &str = "#!/bin/sh\n{\n  printf 'git %s\\n' \"$*\"\n  printf '  GIT_ALLOW_PROTOCOL=%s GIT_TERMINAL_PROMPT=%s GIT_NO_LAZY_FETCH=%s GIT_DIR=%s GIT_INDEX_FILE=%s GIT_OBJECT_DIRECTORY=%s\\n' \"${GIT_ALLOW_PROTOCOL-unset}\" \"${GIT_TERMINAL_PROMPT-unset}\" \"${GIT_NO_LAZY_FETCH-unset}\" \"${GIT_DIR-unset}\" \"${GIT_INDEX_FILE-unset}\" \"${GIT_OBJECT_DIRECTORY-unset}\"\n} >> \"$WRAPPED_GIT_LOG\"\nexec \"$REAL_GIT\" \"$@\"\n";
 
+/// A git of the test's own, first on the PATH, that says it is 2.29.2 and runs the real one for
+/// anything else.
+const OLD_GIT: &str = "#!/bin/sh\nif [ \"$1\" = version ]; then echo 'git version 2.29.2'; exit 0; fi\nexec \"$REAL_GIT\" \"$@\"\n";
+
 /// An ssh of the test's own: it writes down its arguments and runs the command it is given here,
 /// in the server's root (`git-upload-pack '<path>'`, an absolute path taken from the root).
 const FAKE_SSH: &str = "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$FAKE_SSH_LOG\"\nfor a in \"$@\"; do cmd=\"$a\"; done\ncd \"$FAKE_SSH_ROOT\" || exit 1\ncmd=$(printf '%s' \"$cmd\" | sed -e \"s#^git-upload-pack '/#git upload-pack '$FAKE_SSH_ROOT/#\" -e \"s#^git-upload-pack '#git upload-pack '#\")\nexec sh -c \"$cmd\"\n";
@@ -919,6 +923,39 @@ fn diff_fetch_rev_and_push() {
     let (code, out, err) = w.run("shop", &["mod", "push", "--dry-run"]);
     assert_eq!((code, out.as_str()), (1, ""), "{err}");
     assert!(err.contains(&format!("is `require pricing git \"{}\" 1.0.0`, and a module with a dependency from git cannot be pushed to a registry", w.url("acme/pricing"))), "{err}");
+}
+
+/// A git older than 2.30 stops a command before it fetches or reads anything (DESIGN 17.12.1): `add`
+/// from git, and `fetch --rev`, which reads the revision with `rev-parse --end-of-options`. Each
+/// says what `git version` printed, and writes nothing.
+#[test]
+fn a_git_older_than_2_30_stops_at_once() {
+    let Some(w) = World::new("git-old") else { return };
+    w.tax_and_pricing();
+    w.shop();
+    let git = |args: &[&str]| {
+        let o = Command::new("git").current_dir(w.path("shop")).args(["-c", "user.name=ritsu-test", "-c", "user.email=ritsu-test@example.com", "-c", "commit.gpgsign=false"]).args(args).env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_CONFIG_NOSYSTEM", "1").output().unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    };
+    git(&["init", "--quiet", "--initial-branch=main"]);
+    git(&["add", "-A"]);
+    git(&["commit", "--quiet", "-m", "shop"]);
+    executable(&w.t.write("bin/git", OLD_GIT));
+    let real = real_git().display().to_string();
+    let env = [("REAL_GIT", real.as_str())];
+    let before = w.t.read("shop/ritsu.mod");
+    let (code, out, err) = w.run_env("shop", &["mod", "add", "pricing", &format!("{}@1.1.0", w.url("acme/pricing"))], &env);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.contains("git is too old (`git version 2.29.2`): a dependency from git needs git 2.30 or later"), "{err}");
+    assert_eq!(w.t.read("shop/ritsu.mod"), before);
+    assert!(!w.path("shop/ritsu.lock").exists());
+    let (code, out, err) = w.run_env("shop", &["mod", "fetch", "--rev", "HEAD"], &env);
+    assert_eq!((code, out.as_str()), (2, ""), "{err}");
+    assert!(err.contains("git is too old (`git version 2.29.2`): reading a git revision needs git 2.30 or later"), "{err}");
+    let (code, _, err) = w.run_env("shop", &["mod", "fetch", "--rev", "HEAD", "--lang", "ja"], &env);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("git が古すぎます（`git version 2.29.2`）。git の版を読むには git 2.30 以上が要ります"), "{err}");
+    assert!(!w.store().exists() || files_under(&w.store()).is_empty(), "{:?}", files_under(&w.store()));
 }
 
 /// One place for each module in a tree: the module at hand decides between two URLs of one name;
