@@ -144,3 +144,25 @@ fn a_module_in_japanese() {
     }
     ritsu_testkit::golden(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden/modules/ja.txt"), &t);
 }
+
+/// The note of E012 says what found the root (ritsu's DESIGN 17.6). A root that holds a `ritsu.mod`
+/// is a module's, and the note says so. Here the map is in a directory below that root which holds
+/// a `.git`, and a module does not reach past a `.git`: the map is in no module, and its path is held
+/// to the root. A root that holds no `ritsu.mod` keeps the note it had (the golden files of the
+/// mutant `E012_outside_the_root`).
+#[test]
+fn the_note_of_a_path_out_of_the_root_says_the_root_is_a_module_s() {
+    let t = std::env::temp_dir().join(format!("sakai-module-root-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&t);
+    std::fs::create_dir_all(t.join("repo/.git")).unwrap();
+    std::fs::write(t.join("ritsu.mod"), "module app\n").unwrap();
+    std::fs::write(t.join("repo/shop.ctx"), "map Shop(shop) v1\nuse context \"alpha.ctx\"\ncovers \".\"\n").unwrap();
+    std::fs::write(t.join("repo/alpha.ctx"), "context Alpha(a) v1\nowns\n  dir \"../../outside\"\n").unwrap();
+    let os = sakai::check::check_args_with(&t, &["repo/shop.ctx".to_string()], &common::suite());
+    let _ = std::fs::remove_dir_all(&t);
+    let os = os.unwrap();
+    let [en, ja] = [ritsu_base::text::Lang::En, ritsu_base::text::Lang::Ja].map(|l| os.iter().map(|o| sakai::check::render(o, l)).collect::<String>());
+    assert!(en.contains("error[E012]: repo/alpha.ctx:3:7: The path \"../../outside\" goes outside the root"), "{en}");
+    assert!(en.contains("= The root is the nearest directory above the path given to sakai that holds .git or ritsu.mod; here, it is the module's root, which holds ritsu.mod (--root changes it)."), "{en}");
+    assert!(ja.contains("= ルートは、sakai に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリです。ここでは ritsu.mod を持つモジュールのルートです（--root で替えられます）。"), "{ja}");
+}

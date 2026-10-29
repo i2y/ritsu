@@ -20,7 +20,7 @@ pub struct Options {
     pub budget: u64,
     /// `--root`: the root the references are written from (DESIGN 2.6), the project's for `ritsu
     /// check`. None finds it from the file checked, as yuen and sakai find theirs: the nearest
-    /// directory above it that holds `.git`, else the file's directory ([`root_of`]).
+    /// directory above it that holds `.git` or `ritsu.mod`, else the file's directory ([`root_of`]).
     pub root: Option<PathBuf>,
 }
 
@@ -30,8 +30,8 @@ impl Default for Options {
     }
 }
 
-/// The root of a run (ritsu's DESIGN 6.2, item 3): `--root`, else the nearest directory above the
-/// first path given that holds `.git`, else the directory of that file.
+/// The root of a run (ritsu's DESIGN 6.2, item 3; 17.6): `--root`, else the nearest directory above
+/// the first path given that holds `.git` or `ritsu.mod`, else the directory of that file.
 pub fn root_of(root: Option<&Path>, first: &str) -> PathBuf {
     match root {
         Some(r) => ritsu_base::paths::absolute(r),

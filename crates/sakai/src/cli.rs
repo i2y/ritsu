@@ -18,8 +18,8 @@ fn root_flag() -> Flag {
         "--root",
         Some("<dir>"),
         tr!(
-            "パスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ渡したディレクトリ）",
-            "the root paths count from; else the nearest directory above the first path given that holds .git (else the directory given)"
+            "パスを数えるルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ渡したディレクトリ）",
+            "the root paths count from; else the nearest directory above the first path given that holds .git or ritsu.mod (else the directory given)"
         ),
     )
 }

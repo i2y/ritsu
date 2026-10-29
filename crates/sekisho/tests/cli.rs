@@ -299,10 +299,11 @@ fn api_says_what_the_gate_declares() {
 }
 
 /// The root the references are written from (DESIGN 2.6): `--root`, else the nearest directory
-/// above the first path given that holds `.git`. An operation an action guards is named with its
-/// document's path from the root, by its `operationId` however the `guards` line writes it; a
-/// document outside the root has no reference (E201), and a root that is no directory stops the
-/// command (exit 2).
+/// above the first path given that holds `.git` or `ritsu.mod`. An operation an action guards is
+/// named with its document's path from the root, by its `operationId` however the `guards` line
+/// writes it; a document outside the root has no reference (E201), whose note says what found the
+/// root (a root that holds a `ritsu.mod` is a module's, ritsu's DESIGN 17.6), and a root that is no
+/// directory stops the command (exit 2).
 #[test]
 fn the_root_the_references_are_written_from() {
     let guards_of = |out: &str| -> Vec<String> {
@@ -324,6 +325,13 @@ fn the_root_the_references_are_written_from() {
     let (code, out, err) = run(&["check", "tests/gen/guards.gate", "--root", "tests/gen"], common::joined());
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.starts_with("error[E201]: tests/gen/guards.gate:5:1: `../../examples/refunds/api/orders.json` is outside the root\n"), "{out}");
+    assert!(out.contains("The root is the nearest directory above the first path given that has a .git (else the directory of the file given); --root changes it."), "{out}");
+    // a root that holds a ritsu.mod: the note says it is the module's
+    let (code, out, err) = run(&["check", "tests/gen/guards.gate", "--root", "tests/modules/en/app"], common::joined());
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(out.contains("The root is the nearest directory above the first path given that has a .git or a ritsu.mod; here, it is the module's root, which has the ritsu.mod; --root changes it."), "{out}");
+    let (_, out, _) = run(&["check", "tests/gen/guards.gate", "--root", "tests/modules/en/app", "--lang", "ja"], common::joined());
+    assert!(out.contains("ルートは、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリです。ここでは ritsu.mod を持つモジュールのルートです（--root で替えられます）。"), "{out}");
     let (code, out, err) = run(&["gen", "tests/gen/guards.gate", "--target", "cedar", "--root", "tests/gen", "--check"], common::joined());
     assert_eq!(code, 1, "{out}{err}");
     assert!(out.contains("error[E201]") && err.contains("does not pass check"), "{out}{err}");

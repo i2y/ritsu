@@ -346,8 +346,8 @@ pub fn ledger() -> Ledger {
             "E012",
             tr!("絶対パスか、ルートの外に出るパスか、空のパスです", "A path is absolute, goes outside the root, or is empty"),
             tr!(
-                "パスを `/` から書いたとき、`..` でルートの外に出るとき、`\"\"` と空で書いたとき。ルートは、sakai に渡したパスの上で .git を持つ一番近いディレクトリです（無ければ渡したディレクトリ。`--root` で替えられます）。",
-                "A path starts with `/`, goes outside the root with `..`, or is written empty, `\"\"`. The root is the nearest directory above the path given to sakai that holds .git (else the directory given; `--root` changes it)."
+                "パスを `/` から書いたとき、`..` でルートの外に出るとき、`\"\"` と空で書いたとき。ルートは、sakai に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリです（どちらも無ければ渡したディレクトリ。`--root` で替えられます）。ルートが ritsu.mod を持つときは、診断の注も、それがモジュールのルートであることを言います。",
+                "A path starts with `/`, goes outside the root with `..`, or is written empty, `\"\"`. The root is the nearest directory above the path given to sakai that holds .git or ritsu.mod (else the directory given; `--root` changes it). When the root holds ritsu.mod, the diagnostic's note says that it is the module's root."
             ),
             tr!(
                 "ルートの中のパスを、書いたファイルのディレクトリからの相対パスで書いてください。そのディレクトリ自身は `\".\"` と書いてください。",

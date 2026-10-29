@@ -44,7 +44,7 @@ fn tool_list_ja() -> String {
 /// `scope`, `gather` lets one kind follow the pairs (DESIGN 1.8): it is returned apart. The
 /// words carry their columns, which a diagnostic points at.
 pub fn resolve(w: &Written, dir: &str, gather: bool) -> Result<(Name, Option<Word>), NameError> {
-    base::resolve(w, dir, gather).map_err(|e| said(e))
+    base::resolve(w, dir, gather).map_err(|e| said(e, false))
 }
 
 /// [`resolve`], the naming written in the `.req` at `from` (a path from the root `root`), with its
@@ -53,7 +53,8 @@ pub fn resolve(w: &Written, dir: &str, gather: bool) -> Result<(Name, Option<Wor
 /// in the words every language says it in, and `@<name>/…` is a dependency's file, from the
 /// module's root. Outside a module, what [`resolve`] answers.
 pub fn resolve_in(w: &Written, root: &std::path::Path, from: &str, gather: bool) -> Result<(Name, Option<Word>), NameError> {
-    let r = resolve(w, &ritsu_base::paths::parent(from), gather);
+    let module = ritsu_base::fs::is_file(root.join(ritsu_base::modules::manifest::FILE));
+    let r = base::resolve(w, &ritsu_base::paths::parent(from), gather).map_err(|e| said(e, module));
     // the tool and the path's quotes are said first, as ever, and the path before the kinds
     let Some(p) = w.path.as_ref().filter(|p| p.quoted) else { return r };
     if matches!(&r, Err(e) if e.code == "E011") {
@@ -66,8 +67,10 @@ pub fn resolve_in(w: &Written, root: &std::path::Path, from: &str, gather: bool)
     }
 }
 
-/// What is wrong, in yuen's codes and words.
-fn said(e: base::Error) -> NameError {
+/// What is wrong, in yuen's codes and words. `module` is whether the root holds a `ritsu.mod`: the
+/// note of a path outside the root says the mark that found the root (ritsu's DESIGN 17.6), and a
+/// root that holds none is told as it was before there were modules, word for word (M14).
+fn said(e: base::Error, module: bool) -> NameError {
     let col = e.at;
     match e.kind {
         ErrorKind::UnknownTool(t) | ErrorKind::QuotedTool(t) => {
@@ -95,10 +98,17 @@ fn said(e: base::Error) -> NameError {
         ErrorKind::EmptyPath => err("E013", col, tr!("パスが空です", "The path is empty")),
         ErrorKind::AbsolutePath(t) => err("E013", col, tr!("`{t}` は絶対パスです。参照を書いたファイルのディレクトリからの相対パスで書いてください", "`{t}` is an absolute path; write it from the directory of the file the naming is in"))
             .note(tr!("絶対パスは、ほかの人のマシンでは別の場所を指します。", "An absolute path points somewhere else on someone else's machine.")),
-        ErrorKind::OutsideRoot(t) => err("E013", col, tr!("`{t}` はルートの外に出ます", "`{t}` goes outside the root")).note(tr!(
-            "ルートは、渡したパスの上で `.git` を持つ一番近いディレクトリです（無ければ渡したディレクトリ、`--root` で替えられます）。",
-            "The root is the nearest directory above the path given that has a `.git` (else the directory given; `--root` changes it)."
-        )),
+        ErrorKind::OutsideRoot(t) => err("E013", col, tr!("`{t}` はルートの外に出ます", "`{t}` goes outside the root")).note(if module {
+            tr!(
+                "ルートは、渡したパスの上で `.git` か `ritsu.mod` を持つ一番近いディレクトリです。ここでは `ritsu.mod` を持つモジュールのルートです（`--root` で替えられます）。",
+                "The root is the nearest directory above the path given that has a `.git` or a `ritsu.mod`; here, it is the module's root, which has the `ritsu.mod` (`--root` changes it)."
+            )
+        } else {
+            tr!(
+                "ルートは、渡したパスの上で `.git` を持つ一番近いディレクトリです（無ければ渡したディレクトリ、`--root` で替えられます）。",
+                "The root is the nearest directory above the path given that has a `.git` (else the directory given; `--root` changes it)."
+            )
+        }),
         ErrorKind::QuotedKind(_) => err("E012", col, tr!("種類は `\"…\"` で囲まずに書いてください", "A kind is a word, not a string in quotes")),
         ErrorKind::NoKinds(_) => err("E012", col, tr!("file に種類はありません。file はファイルを丸ごと指します", "file has no kinds; it names a whole file")),
         // The rest of what a kind can do wrong is said in ritsu-base's words, which were yuen's.

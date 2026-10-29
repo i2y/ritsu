@@ -12,7 +12,7 @@ sekisho gen — Cedar のスキーマとポリシーか、リクエストを組�
   --module <path>                      go のコードが規則と日付のパッケージを import するモジュールのパス（<path>/rules/<パッケージ>、<path>/dates/<パッケージ>。ritsu gen の --module と同じ）（既定 generated）
   --out <dir>                          生成物を書くディレクトリ（既定 generated）
   --check                              書き出さずに、ディスクの生成物が、いま生成するものと一字一句同じかを見る。違えば 1（CI 用）
-  --root <dir>                         参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
+  --root <dir>                         参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ、そのファイルのあるディレクトリ）
   --lang ja|en                         文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
   --help                               この画面を出す
 

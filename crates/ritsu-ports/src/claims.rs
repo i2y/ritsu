@@ -111,7 +111,8 @@ pub trait Claims {
 
     /// What the diff (its bytes, and the name to show it by) comes to for the spec's claims, read
     /// from `records` (the record beside the spec when none are given), with the paths of the
-    /// diff and the records read from `root` (the nearest directory with a `.git` when None).
+    /// diff and the records read from `root` (the nearest directory with a `.git` or a `ritsu.mod`
+    /// when None).
     /// When geas cannot answer — no record, a record of other code, a diff it cannot read — what
     /// it says.
     fn affected(&self, file: &Path, root: Option<&Path>, diff: &[u8], diff_shown: &str, records: &[String]) -> Result<Affected, Vec<Said>>;

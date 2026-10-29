@@ -104,10 +104,10 @@ and a target that gave no record at all is W060.
 `.geas/<stem>.map.jsonl` holds every source file under the root (`.py`; `.js .mjs .cjs .ts .mts
 .cts`; `.go`; `.rs`), loaded or not, with its git blob hash, and, for each claim and target, the
 lines of each file it ran ([commands.md](commands.md) has the format). The root is the nearest
-directory above the spec holding `.git`, else the spec's own directory; `--root` overrides it.
-Paths with a component `.geas`, `.git`, `node_modules`, `site-packages`, `__pycache__` or `target`
-are left out. One run on one tree writes the same bytes, so a record can be cached or committed;
-nobody audits it.
+directory above the spec holding `.git` or `ritsu.mod`, else the spec's own directory; `--root`
+overrides it. Paths with a component `.geas`, `.git`, `node_modules`, `site-packages`, `__pycache__`
+or `target` are left out. One run on one tree writes the same bytes, so a record can be cached or
+committed; nobody audits it.
 
 A record is exactly the code it was measured on, by hash. `affected` holds it to the diff file by
 file and refuses one that does not fit (E062): a file the diff does not touch must have the

@@ -28,8 +28,8 @@ fn root_flag() -> Flag {
         "--root",
         Some("<dir>"),
         tr!(
-            "参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）",
-            "the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)"
+            "参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ、そのファイルのあるディレクトリ）",
+            "the root the paths of references count from; else the nearest directory above the first path given that holds .git or ritsu.mod (else the directory of that file)"
         ),
     )
 }

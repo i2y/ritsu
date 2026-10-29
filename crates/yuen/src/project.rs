@@ -87,7 +87,8 @@ pub fn relative(from: &Path, to: &Path) -> String {
 }
 
 /// The root of a project (DESIGN 2.2): the nearest directory at or above the first path given
-/// that has a `.git`, else the directory given (a file's own directory). It is found as every
+/// that has a `.git` or a `ritsu.mod` (ritsu's DESIGN 17.6), else the directory given (a file's own
+/// directory). It is found as every
 /// language of ritsu finds it (ritsu-base's `paths::find_root`), then with its symbolic links
 /// followed, as yuen keeps every path of a project.
 pub fn find_root(first: &Path) -> Option<PathBuf> {

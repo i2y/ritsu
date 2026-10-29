@@ -8,7 +8,7 @@ sekisho vectors — 全部の組み合わせを、cedar run-tests が読むテ�
 
 フラグ:
   --action <action>  この action の組み合わせだけ（名前か別名）
-  --root <dir>       参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）
+  --root <dir>       参照のパスを数えるルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ、そのファイルのあるディレクトリ）
   --lang ja|en       文面の言語。無ければ環境変数 SEKISHO_LANG、次に RITSU_LANG、どちらも無ければ en（既定 en）
   --help             この画面を出す
 

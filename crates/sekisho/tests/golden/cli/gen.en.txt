@@ -12,7 +12,7 @@ Flags:
   --module <path>                      the Go module path the code of go imports the rules' and the dates' packages by (<path>/rules/<package>, <path>/dates/<package>; ritsu gen's --module) (default generated)
   --out <dir>                          the directory the generated files go to (default generated)
   --check                              write nothing; exit 1 if a file on disk differs from what gen would write (for CI)
-  --root <dir>                         the root the paths of references count from; else the nearest directory above the first path given that holds .git (else the directory of that file)
+  --root <dir>                         the root the paths of references count from; else the nearest directory above the first path given that holds .git or ritsu.mod (else the directory of that file)
   --lang ja|en                         the language of the text; else the SEKISHO_LANG environment variable, then RITSU_LANG, else en (default en)
   --help                               print this page
 

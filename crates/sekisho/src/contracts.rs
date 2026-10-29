@@ -56,8 +56,17 @@ fn operation_word(op: &str) -> Text {
     Text::same(if bare { op.to_string() } else { ritsu_base::naming::quote(op) })
 }
 
-/// How the root is found, for a file outside it: `named` says what is named from the root.
-pub(crate) fn outside_note(named: Text) -> Text {
+/// How the root is found, for a file outside it: `named` says what is named from the root. The
+/// mark that found it is said (ritsu's DESIGN 17.6): a root `root` that holds a `ritsu.mod` is a
+/// module's, and any other is told as it was before there were modules, word for word (M14).
+pub(crate) fn outside_note(named: Text, root: &std::path::Path) -> Text {
+    if ritsu_base::fs::is_file(root.join(ritsu_base::modules::manifest::FILE)) {
+        return tr!(
+            "{}ルートは、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリです。ここでは ritsu.mod を持つモジュールのルートです（--root で替えられます）。",
+            "{} The root is the nearest directory above the first path given that has a .git or a ritsu.mod; here, it is the module's root, which has the ritsu.mod; --root changes it.",
+            named.ja; named.en
+        );
+    }
     tr!(
         "{}ルートは、最初に渡したパスの上で .git を持つ一番近いディレクトリです（無ければ、渡したファイルのあるディレクトリ。--root で替えられます）。",
         "{} The root is the nearest directory above the first path given that has a .git (else the directory of the file given); --root changes it.",
@@ -66,8 +75,8 @@ pub(crate) fn outside_note(named: Text) -> Text {
 }
 
 /// How the root is found, for a contract outside it.
-fn root_note() -> Text {
-    outside_note(tr!("action が守る操作は、ルートからのパスで参照します。", "An operation an action guards is named by a reference whose path is from the root."))
+fn root_note(g: &Gate) -> Text {
+    outside_note(tr!("action が守る操作は、ルートからのパスで参照します。", "An operation an action guards is named by a reference whose path is from the root."), &g.root)
 }
 
 /// The checks of the contracts an action guards. `books` is chobo, when it is joined. What they
@@ -83,7 +92,7 @@ pub fn check(g: &Gate, books: Option<&dyn ritsu_ports::Books>) -> (Vec<Diag>, Ve
         }
         // the operations it holds are named from the root, so it has to be under it
         let Some(rel) = g.from_root(&u.file) else {
-            diags.push(at("E201", g, u.line, tr!("`{}` はルートの外にあります", "`{}` is outside the root", u.path)).note(root_note()));
+            diags.push(at("E201", g, u.line, tr!("`{}` はルートの外にあります", "`{}` is outside the root", u.path)).note(root_note(g)));
             continue;
         };
         let path = u.file.to_string_lossy().to_string();

@@ -25,8 +25,8 @@ fn root_flag() -> Flag {
         "--root",
         Some("<dir>"),
         tr!(
-            "JSON に書くパスを数えるルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）",
-            "the root the paths in the JSON count from; else the nearest directory above the first path given that holds .git (else the directory of that file)"
+            "JSON に書くパスを数えるルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ、そのファイルのあるディレクトリ）",
+            "the root the paths in the JSON count from; else the nearest directory above the first path given that holds .git or ritsu.mod (else the directory of that file)"
         ),
     )
 }
@@ -37,8 +37,8 @@ fn page_root_flag() -> Flag {
         "--root",
         Some("<dir>"),
         tr!(
-            "ページに書くパスを数えるルート。無ければ、渡したパスの上で .git を持つ一番近いディレクトリ（それも無ければ、そのファイルのあるディレクトリ）",
-            "the root the paths on the page count from; else the nearest directory above the path given that holds .git (else the directory of that file)"
+            "ページに書くパスを数えるルート。無ければ、渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ、そのファイルのあるディレクトリ）",
+            "the root the paths on the page count from; else the nearest directory above the path given that holds .git or ritsu.mod (else the directory of that file)"
         ),
     )
 }

@@ -194,7 +194,7 @@ $ sakai api examples/shop/shop.ctx
 $ sakai explain E401
 ```
 
-`check` takes map files and directories, and `--format json`; `--root` changes the directory paths are counted from (else the nearest one above that holds `.git`).
+`check` takes map files and directories, and `--format json`; `--root` changes the directory paths are counted from (else the nearest one above that holds `.git` or `ritsu.mod`).
 Every command takes `--lang ja|en` (else `SAKAI_LANG`, then `RITSU_LANG`, else English) and `--help`.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 

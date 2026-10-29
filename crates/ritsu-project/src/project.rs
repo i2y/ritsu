@@ -93,8 +93,8 @@ pub struct Project {
 
 impl Project {
     /// The project of the paths given (`.` when none is), under `--root` when it is given, else
-    /// under the nearest directory above the first path that holds a `.git`, else the first path
-    /// itself (DESIGN 6.2, item 3). A path that is not there, that is outside the root, or a file
+    /// under the nearest directory above the first path that holds a `.git` or a `ritsu.mod`, else
+    /// the first path itself (DESIGN 6.2, item 3; 17.6). A path that is not there, that is outside the root, or a file
     /// of no language given by name, is what the person has to correct: the error says so. So does
     /// a project with no file of any language, which checks nothing, and one with only the `.geas`
     /// files of dependencies, whose claims are not run (DESIGN 17.8).

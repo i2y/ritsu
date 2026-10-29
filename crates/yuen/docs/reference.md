@@ -249,7 +249,7 @@ comes only right after its parent's pair (E012).
 - **Paths** are written in quotes, from the directory of the file the naming is written in, with
   `/` between parts; `.` and `..` fold away. An empty path, an absolute one and one that folds out
   of the root are E013. The **root** is the nearest directory above the first path given that
-  holds `.git` (else the directory given), or `--root <dir>`.
+  holds `.git` or `ritsu.mod` (else the directory given), or `--root <dir>`.
 - **Names** are each language's own (not their aliases: E202 points at the name). A name is a word
   (no space, `"` or `#`) or a string in `"…"`; names are compared as written, case and all. A
   `proto` name is the name from the file's package, nested names joined with `.`.

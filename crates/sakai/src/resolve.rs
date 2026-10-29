@@ -43,9 +43,10 @@ impl R<'_> {
         let p = match held {
             Ok(p) => p,
             Err(ritsu_base::modules::Refused::Path(e, _)) => {
+                let note = root_note(self.root);
                 let d = self.at("E012", file, src, s.pos, paths::error_text(e, &s.value));
                 if e != paths::PathError::Empty {
-                    d.notes.push(root_note());
+                    d.notes.push(note);
                 }
                 return None;
             }
@@ -117,7 +118,16 @@ impl R<'_> {
     }
 }
 
-fn root_note() -> Text {
+/// How the root is found, by the mark that found it (ritsu's DESIGN 17.6): a root that holds a
+/// `ritsu.mod` is a module's, and the note says so; any other root is told as it was before there
+/// were modules, word for word (M14).
+fn root_note(root: &Path) -> Text {
+    if ritsu_base::fs::is_file(root.join(ritsu_base::modules::manifest::FILE)) {
+        return tr!(
+            "ルートは、sakai に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリです。ここでは ritsu.mod を持つモジュールのルートです（--root で替えられます）。",
+            "The root is the nearest directory above the path given to sakai that holds .git or ritsu.mod; here, it is the module's root, which holds ritsu.mod (--root changes it)."
+        );
+    }
     tr!(
         "ルートは、sakai に渡したパスの上で .git を持つ一番近いディレクトリです（無ければ渡したディレクトリ。--root で替えられます）。",
         "The root is the nearest directory above the path given to sakai that holds .git (else the directory given; --root changes it)."

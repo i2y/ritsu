@@ -41,8 +41,8 @@ pub struct Gate {
     pub file: String,
     pub src: String,
     /// The root a reference's path is written from (ritsu's DESIGN 6.2, item 3; DESIGN 2.6): what
-    /// `--root` says, else the nearest directory above the first path given that holds `.git`,
-    /// else the directory of the file given.
+    /// `--root` says, else the nearest directory above the first path given that holds `.git` or
+    /// `ritsu.mod` (ritsu's DESIGN 17.6), else the directory of the file given.
     pub root: PathBuf,
     /// `gate 返金(refunds_ja) v1`
     pub named: Named,

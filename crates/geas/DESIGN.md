@@ -461,8 +461,9 @@ the root and written with `/`, no absolute path anywhere:
 The lines are sorted (files by path; claims in spec order, then targets
 in spec order, then paths), so one run on one tree writes the same bytes
 (the tests run `map` twice and compare). The root is the nearest
-directory above the spec that holds `.git`, found by looking, not by
-running git; else the spec's own directory; `--root` overrides it. Paths
+directory above the spec that holds `.git` or `ritsu.mod` (ritsu's
+DESIGN 17.6), found by looking, not by running git; else the spec's own
+directory; `--root` overrides it. Paths
 with a component `.geas`, `.git`, `node_modules`, `site-packages`,
 `__pycache__` or `target` are left out: tool state, installed packages,
 byte code, and Cargo's build directory, which holds generated `.rs` files

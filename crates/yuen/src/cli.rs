@@ -16,8 +16,8 @@ pub fn global_flags() -> Vec<Flag> {
             "--root",
             Some("<dir>"),
             tr!(
-                "パスを読むルート。無ければ、最初に渡したパスの上で .git を持つ一番近いディレクトリ（無ければ渡したディレクトリ）",
-                "the root paths are read from; without it, the nearest directory above the first path given that has a .git (else the directory given)"
+                "パスを読むルート。無ければ、最初に渡したパスの上で .git か ritsu.mod を持つ一番近いディレクトリ（どちらも無ければ渡したディレクトリ）",
+                "the root paths are read from; without it, the nearest directory above the first path given that has a .git or a ritsu.mod (else the directory given)"
             ),
         ),
         help_flag(),

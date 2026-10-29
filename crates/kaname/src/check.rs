@@ -404,8 +404,8 @@ impl Run {
     }
 }
 
-/// The root of a run (ritsu's DESIGN 6.2, item 3): `--root`, else the nearest directory above the
-/// first path given that holds `.git`, else the directory of that file.
+/// The root of a run (ritsu's DESIGN 6.2, item 3; 17.6): `--root`, else the nearest directory above
+/// the first path given that holds `.git` or `ritsu.mod`, else the directory of that file.
 pub fn root_of(root: Option<&Path>, first: &str) -> PathBuf {
     match root {
         Some(r) => ritsu_base::paths::absolute(r),

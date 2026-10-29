@@ -51,7 +51,7 @@ fn outside_the_root(code: &'static str, g: &Gate, line: usize, written: &str) ->
     at(code, g, line, tr!("`{written}` はルートの外にあります", "`{written}` is outside the root")).note(crate::contracts::outside_note(tr!(
         "gate が読むファイルは、生成する Cedar の `@doc` でも、ほかの言語からも、ルートからのパスで参照します。",
         "A file a gate reads is named by a reference whose path is from the root, in the `@doc` of the generated Cedar and by the other languages."
-    )))
+    ), &g.root))
 }
 
 /// `d` with `notes`, in order.

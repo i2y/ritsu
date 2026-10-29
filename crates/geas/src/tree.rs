@@ -62,8 +62,8 @@ pub fn is_source(rel: &str) -> bool {
 }
 
 /// The root of a spec in `spec_dir` (absolute): the nearest directory holding
-/// `.git`, a directory or the file a worktree has, found by looking, not by running
-/// git; else the spec's own directory. It is how every language of ritsu finds the
+/// `.git` (a directory or the file a worktree has) or `ritsu.mod`, found by looking,
+/// not by running git; else the spec's own directory. It is how every language of ritsu finds the
 /// root of a project (ritsu-base's `paths::find_root`).
 pub fn root_of(spec_dir: &Path) -> PathBuf {
     ritsu_base::paths::find_root(spec_dir)

@@ -254,7 +254,7 @@ A kind can hold another only as its tool nests them: `service S method M`, `mess
 The kinds are those of each tool: rulec's `input`, `output`, `enum`, `value`, `table`, `clause`, `define`, `derive`, `machine`, `source`; koyomi's `input`, `date`, `claim`, `source`; chobo's `unit`, `account`, `transfer`, `operation`; geas's `claim`; dandori's `task`, `case`, `record`, `field`, `enum`, `value`, `input`, `output`; the `.proto`'s `service`, `method`, `message`, `field`, `enum`, `value`; OpenAPI's `schema`, `property`, `value`, `operation`, `pointer`; AsyncAPI's `channel`, `message`, `operation`, `schema`, `property`, `value`, `pointer`; Cedar's `policy`, `action`, `entity`; yuen's `requirement`, `source`; sakai's `context`, `term`; sekisho's `principal`, `resource`, `attribute`, `role`, `workflow`, `enum`, `value`, `action`, `input`, `context`, `policy`, `expect`, `separate`; kaname's `function`, `record`, `field`, `enum`, `value`.
 A name is a word (no space, `"` or `#`) or a string in `"…"` with `\"` and `\\` as its only escapes.
 A path is from the directory of the file it is written in, `/` between its parts; an absolute path, or one that leaves the root, is E012.
-In JSON, a path is from the root: the nearest directory above the first path given that holds `.git`, or `--root`.
+In JSON, a path is from the root: the nearest directory above the first path given that holds `.git` or `ritsu.mod`, or `--root`.
 
 The tool words and the kind words are keywords: no map, context, term or downstream value can be named with one (E002).
 

@@ -232,8 +232,8 @@ fn ran_entry(v: &J, r: &Record) -> Result<RecRan, Text> {
 }
 
 /// The root a spec's record is relative to: `--root`, or the nearest directory
-/// above the spec holding `.git`, else the spec's own directory; and the spec's path
-/// relative to it.
+/// above the spec holding `.git` or `ritsu.mod`, else the spec's own directory; and
+/// the spec's path relative to it.
 pub fn root_and_spec(file: &str, root_flag: Option<&str>) -> Result<(PathBuf, String), Diag> {
     let spec_abs = ritsu_base::fs::canonicalize(file).map_err(|e| {
         diag::error("E081", 0, 0, tr!("このファイルを読めません: {e}", "cannot read this file: {e}"))

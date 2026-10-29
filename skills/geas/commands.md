@@ -56,7 +56,7 @@ not take is E080, never ignored.
 | `--json` | every command that reports | the answer as JSON on stdout (below) |
 | `--lang ja` | every command | the messages in Japanese; `en` is the default. `ok`, `not ok` and the JSON keys stay as they are |
 | `--jobs N`, `-j N`, `-jN` | `check`, `snap`, `drift`, `map` | up to N claims at once; the output is the same bytes as with one |
-| `--root <dir>` | `map`, `affected` | the directory the record's paths are relative to; by default the nearest directory above the spec holding `.git`, else the spec's own |
+| `--root <dir>` | `map`, `affected` | the directory the record's paths are relative to; by default the nearest directory above the spec holding `.git` or `ritsu.mod`, else the spec's own |
 | `--out <file>` | `map` | where to write the record, instead of `.geas/<stem>.map.jsonl` |
 | `--map <file>` | `affected` | a record to read instead of the spec's; give it twice for a record of each side of the diff |
 | `--install <dir>`, `--force` | `skill` | where to write the skill folder, and whether to write over one |

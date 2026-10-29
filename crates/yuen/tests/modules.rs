@@ -178,3 +178,32 @@ fn a_scope_does_not_take_in_another_module() {
         assert!(!r.stdout.contains("report.py"), "{in_a_module}: {}", r.stdout);
     }
 }
+
+/// The note of E013 for a path out of the root says what found the root (ritsu's DESIGN 17.6). A
+/// root that holds a `ritsu.mod` is a module's, and the note says so. Here the `.req` is in a
+/// directory below that root which holds a `.git`, and a module does not reach past a `.git`: the
+/// file is in no module, and its path is held to the root. A root that holds no `ritsu.mod` keeps
+/// the note it had (the golden files of the mutant `E013_outside_the_root`).
+#[test]
+fn the_note_of_a_path_out_of_the_root_says_the_root_is_a_module_s() {
+    let t = std::env::temp_dir().join(format!("yuen-module-root-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&t);
+    std::fs::create_dir_all(t.join("repo/.git")).unwrap();
+    std::fs::write(t.join("ritsu.mod"), "module app\n").unwrap();
+    std::fs::write(
+        t.join("repo/payment.req"),
+        "requirements payment v1\n\nrole accounting\n\nrequirement payment_day\n  text \"Pays on the 10th\"\n  owner accounting\n  decided 2026-10-03 by accounting \"for the example\"\n  satisfied by file \"../../pay.py\"\n  not verified \"Accounting compares them\"\n",
+    )
+    .unwrap();
+    let said = |lang: &str| {
+        let args: Vec<String> = ["check", "--lang", lang, &t.join("repo/payment.req").to_string_lossy(), "--root", &t.to_string_lossy()].map(String::from).to_vec();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = yuen::run::run(&args, common::suite(), &mut out, &mut err);
+        (code, format!("{}{}", String::from_utf8_lossy(&out), String::from_utf8_lossy(&err)))
+    };
+    let (en, ja) = (said("en"), said("ja"));
+    let _ = std::fs::remove_dir_all(&t);
+    assert!(en.0 == 1 && en.1.contains("`../../pay.py` goes outside the root"), "{en:?}");
+    assert!(en.1.contains("= The root is the nearest directory above the path given that has a `.git` or a `ritsu.mod`; here, it is the module's root, which has the `ritsu.mod` (`--root` changes it)."), "{en:?}");
+    assert!(ja.1.contains("= ルートは、渡したパスの上で `.git` か `ritsu.mod` を持つ一番近いディレクトリです。ここでは `ritsu.mod` を持つモジュールのルートです（`--root` で替えられます）。"), "{ja:?}");
+}

@@ -756,7 +756,7 @@ See also: [E012](#e012)
 
 ## E012 — A path is absolute, goes outside the root, or is empty
 
-**When**: A path starts with `/`, goes outside the root with `..`, or is written empty, `""`. The root is the nearest directory above the path given to sakai that holds .git (else the directory given; `--root` changes it).
+**When**: A path starts with `/`, goes outside the root with `..`, or is written empty, `""`. The root is the nearest directory above the path given to sakai that holds .git or ritsu.mod (else the directory given; `--root` changes it). When the root holds ritsu.mod, the diagnostic's note says that it is the module's root.
 
 **Fix**: Write a path inside the root, from the directory of the file; that directory itself is written `"."`.
 

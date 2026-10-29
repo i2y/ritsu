@@ -91,7 +91,7 @@ and a module that reads only modules is read in full.
 ### The root
 
 `--root` is the directory the paths in the JSON and on the page are written from; else the nearest
-directory above the first file given that holds `.git`, else that file's directory.
+directory above the first file given that holds `.git` or `ritsu.mod`, else that file's directory.
 
 ## Types
 

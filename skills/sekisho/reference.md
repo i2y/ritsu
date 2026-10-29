@@ -101,9 +101,9 @@ use gate "people.gate"
 What a gate names of another file is written from the root of the project, so that sekisho, yuen,
 sakai and ritsu name one thing alike: the operations an action guards (`openapi "api/orders.json"
 operation refundOrder`), the rules and the dates a computed value reads, the flow of a workflow. The
-root is `--root`, else the nearest directory above the first file given that holds `.git`, else the
-directory of that file; `ritsu check` gives the project's root. A file read from outside the root
-is E201 at its `use` line, and a flow outside it E208.
+root is `--root`, else the nearest directory above the first file given that holds `.git` or
+`ritsu.mod`, else the directory of that file; `ritsu check` gives the project's root. A file read
+from outside the root is E201 at its `use` line, and a flow outside it E208.
 
 ## Today
 
