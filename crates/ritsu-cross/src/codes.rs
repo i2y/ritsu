@@ -1,9 +1,10 @@
 //! The ledger of ritsu's own codes (DESIGN 4.3, 7.1): what `ritsu check` says itself, apart from
 //! what each language says in its own codes. `ritsu explain` reads it, `docs/codes.md` and
 //! `docs/codes.ja.md` are its Markdown, and a test lays out every reproduction — the files of a
-//! small project — runs `ritsu check .` on it, and requires the code to come out, so a
-//! reproduction cannot go stale while the prose around it still reads well. The entries are
-//! ritsu's; how they are written out is ritsu-base's ([`ritsu_base::ledger`]).
+//! small project — runs `ritsu check .` on it (`ritsu mod diff` on the two versions of E310's), and
+//! requires the code to come out, so a reproduction cannot go stale while the prose around it still
+//! reads well. The entries are ritsu's; how they are written out is ritsu-base's
+//! ([`ritsu_base::ledger`]).
 //!
 //! The numbers go in bands: E1xx for the files of a project as ritsu reads them, E2xx for the
 //! checks of the borders between the languages (DESIGN 7.2), E3xx and W3xx for the modules and
@@ -337,6 +338,13 @@ const TOTAL_RULE: &str = "rule total v1\ndescription \"The total of an order: it
 /// The rule of the module at hand in W303: it applies pricing's total, and the VAT rate of tax
 /// through pricing, which it does not require.
 const RECEIPT_RULE: &str = "rule receipt v1\ndescription \"The total of an order with gift wrapping: the order's total, and 3 GBP for the wrapping with its VAT\"\n\nenum category = standard | reduced\n\ninputs\n  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc\n  category : category\n\noutputs\n  total : money[GBPc]  round half_up(1GBPc)\n\napply order = \"@pricing/total.rule\" meaning:caa5be4f9a41c851\n  subtotal = subtotal\n  category = category\n  total -> order_total\n\napply vat = \"@pricing/@tax/vat_rate.rule\" meaning:f2850d644389817c\n  category = category\n  rate -> rate\n\nresult total = order_total + 300GBPc + 300GBPc * rate\n";
+
+/// The rule of the first version in E310: a fee by the region a parcel goes to.
+const REGION_FEE_RULE: &str = "rule fee v1\ndescription \"The fee for a parcel, by the region it goes to\"\n\nenum region = domestic | world\n\ninputs\n  region : region\n\noutputs\n  fee : money[GBPc]  round up(1GBPc)\n\ntable pick\npolicy unique\n| region   | -> fee : money[GBPc] |\n| domestic | 395GBPc              |\n| world    | 1850GBPc             |\n";
+
+/// The rule of the second version in E310: the region eu added between the two others, which moves
+/// world's number on the Connect wire from 2 to 3.
+const REGION_FEE_RULE_EU: &str = "rule fee v1\ndescription \"The fee for a parcel, by the region it goes to\"\n\nenum region = domestic | eu | world\n\ninputs\n  region : region\n\noutputs\n  fee : money[GBPc]  round up(1GBPc)\n\ntable pick\npolicy unique\n| region   | -> fee : money[GBPc] |\n| domestic | 395GBPc              |\n| eu       | 1250GBPc             |\n| world    | 1850GBPc             |\n";
 
 pub fn ledger() -> Ledger {
     let entries = vec![
@@ -682,6 +690,23 @@ pub fn ledger() -> Ledger {
                 command: CHECK.to_vec(),
             },
             &["E308"],
+        ),
+        Entry::new(
+            "E310",
+            tr!("前の版からある列挙の値の、Connect での番号が変わりました", "The number of a value of an enum on the Connect wire changed since the old version"),
+            tr!(
+                "`ritsu mod diff` が比べる二つの版の両方にある規則の列挙の値で、規則の Connect の `.proto` での番号が変わったとき。`ritsu mod report` が比べる、変わったモジュールの二つの版でも同じです。rulec は規則が自分で宣言した列挙の値に、宣言の順で 1 から番号を振ります。途中に値を足したり、値の順を入れ替えたりすると、後ろの値の番号がずれます。protobuf のバイナリの形は値を番号で送るので、片方の版から生成したコードが書いたメッセージを、もう片方の版のコードは別の値として読みます。どちらも失敗せず、答えが違うだけです（JSON の形は名前で送るので、ずれません）。メソッドのパス（`/<package>.<service>/Decide`）が二つの版で違うときは、前の版の呼び出しが新しい版に届かず、別の値として読まれることはないので、このエラーにはしません。パスの変化は、使う側を壊しうる差の候補として示します。規則の版（`rule … v2`）を上げると、パスが変わります。`ritsu mod diff` はインターフェースの差の中に示し（exit 1）、`ritsu mod report` は変わったモジュールの新しいエラーとして数えます（exit 1）。",
+                "A value of an enum of a rule, in both versions `ritsu mod diff` compares, has another number in the rule's Connect `.proto`; and so in the two versions of a changed module `ritsu mod report` compares. rulec numbers the values of an enum the rule declares from 1, in the order they are written, so a value added in the middle, or two values that change places, move the numbers of the values after. protobuf's binary form sends a value by its number: what the code generated from one version writes, the code of the other reads as another value. Neither fails, and the answer is another (the JSON form sends the name, which does not move). When the method's path (`/<package>.<service>/Decide`) differs between the two versions, a caller of the old one does not reach the new one, and nothing is read as another value, so it is not this error: the change of the path is shown as a candidate for a change that may break a user. Raising the rule's version (`rule … v2`) changes the path. `ritsu mod diff` shows it among the differences of the interface (exit 1), and `ritsu mod report` counts it as a new error of the module that changed (exit 1)."
+            ),
+            tr!(
+                "新しい値は、列挙の最後に足してください。ほかの値の番号は変わりません。番号を宣言の順から切り離すなら、列挙を `.proto` に書き、`import proto \"<ファイル>\" <列挙> -> <名前>` で読んでください。番号は `.proto` のものになります。順を変えるしかないなら、規則の版を上げて（`rule … v2`）新しい版を別のサービスとして出し、前のサービスは呼ぶ側がいなくなるまで残してください。",
+                "Add a new value at the end of the enum: the numbers of the others stay. To take the numbers away from the order they are written in, write the enum in a `.proto` and read it with `import proto \"<file>\" <enum> -> <name>`: the numbers are the `.proto`'s. Where the order has to change, raise the rule's version (`rule … v2`), so that the new version is another service, and keep the old service until nothing calls it."
+            ),
+            Repro::Dir {
+                files: vec![("old/ritsu.mod", "module shop\nversion 1.0.0\n"), ("old/fee.rule", REGION_FEE_RULE), ("new/ritsu.mod", "module shop\nversion 1.1.0\n"), ("new/fee.rule", REGION_FEE_RULE_EU)],
+                command: vec!["ritsu", "mod", "diff", "old", "new"],
+            },
+            &[],
         ),
         Entry::new(
             "W301",

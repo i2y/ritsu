@@ -152,69 +152,6 @@
                 "column": "region",
                 "kind": "input",
                 "accepts": [
-                  "eu"
-                ],
-                "text": "region = eu"
-              },
-              {
-                "column": "weight",
-                "kind": "input",
-                "accepts": [
-                  {
-                    "from": "1",
-                    "to": "1"
-                  },
-                  {
-                    "from": "2",
-                    "to": "2499"
-                  },
-                  {
-                    "from": "2500",
-                    "to": "2500"
-                  }
-                ],
-                "text": "weight >=1g <=2500g"
-              }
-            ],
-            "text": "region = eu  and  weight >=1g <=2500g",
-            "outputs": [
-              {
-                "output": "fee",
-                "old": "1250",
-                "new": "-"
-              }
-            ],
-            "uniform": true,
-            "old_rows": [
-              {
-                "table": "fee_by_weight",
-                "row": 3
-              }
-            ],
-            "new_rows": [
-              {
-                "table": "fee_by_weight",
-                "row": 3
-              }
-            ],
-            "witness": [
-              {
-                "input": "region",
-                "value": "eu"
-              },
-              {
-                "input": "weight",
-                "value": "1"
-              }
-            ],
-            "cells": 3
-          },
-          {
-            "region": [
-              {
-                "column": "region",
-                "kind": "input",
-                "accepts": [
                   "world"
                 ],
                 "text": "region = world"
@@ -264,6 +201,69 @@
               {
                 "input": "region",
                 "value": "world"
+              },
+              {
+                "input": "weight",
+                "value": "1"
+              }
+            ],
+            "cells": 3
+          },
+          {
+            "region": [
+              {
+                "column": "region",
+                "kind": "input",
+                "accepts": [
+                  "eu"
+                ],
+                "text": "region = eu"
+              },
+              {
+                "column": "weight",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "1",
+                    "to": "1"
+                  },
+                  {
+                    "from": "2",
+                    "to": "2499"
+                  },
+                  {
+                    "from": "2500",
+                    "to": "2500"
+                  }
+                ],
+                "text": "weight >=1g <=2500g"
+              }
+            ],
+            "text": "region = eu  and  weight >=1g <=2500g",
+            "outputs": [
+              {
+                "output": "fee",
+                "old": "1250",
+                "new": "-"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 3
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 3
+              }
+            ],
+            "witness": [
+              {
+                "input": "region",
+                "value": "eu"
               },
               {
                 "input": "weight",
@@ -337,65 +337,6 @@
                 "column": "region",
                 "kind": "input",
                 "accepts": [
-                  "eu"
-                ],
-                "text": "region = eu"
-              },
-              {
-                "column": "weight",
-                "kind": "input",
-                "accepts": [
-                  {
-                    "from": "2501",
-                    "to": "29999"
-                  },
-                  {
-                    "from": "30000",
-                    "to": "30000"
-                  }
-                ],
-                "text": "weight >=2501g <=30000g"
-              }
-            ],
-            "text": "region = eu  and  weight >=2501g <=30000g",
-            "outputs": [
-              {
-                "output": "fee",
-                "old": "1950",
-                "new": "-"
-              }
-            ],
-            "uniform": true,
-            "old_rows": [
-              {
-                "table": "fee_by_weight",
-                "row": 4
-              }
-            ],
-            "new_rows": [
-              {
-                "table": "fee_by_weight",
-                "row": 4
-              }
-            ],
-            "witness": [
-              {
-                "input": "region",
-                "value": "eu"
-              },
-              {
-                "input": "weight",
-                "value": "2501"
-              }
-            ],
-            "cells": 2
-          },
-          {
-            "region": [
-              {
-                "column": "region",
-                "kind": "input",
-                "accepts": [
                   "world"
                 ],
                 "text": "region = world"
@@ -441,6 +382,65 @@
               {
                 "input": "region",
                 "value": "world"
+              },
+              {
+                "input": "weight",
+                "value": "2501"
+              }
+            ],
+            "cells": 2
+          },
+          {
+            "region": [
+              {
+                "column": "region",
+                "kind": "input",
+                "accepts": [
+                  "eu"
+                ],
+                "text": "region = eu"
+              },
+              {
+                "column": "weight",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "2501",
+                    "to": "29999"
+                  },
+                  {
+                    "from": "30000",
+                    "to": "30000"
+                  }
+                ],
+                "text": "weight >=2501g <=30000g"
+              }
+            ],
+            "text": "region = eu  and  weight >=2501g <=30000g",
+            "outputs": [
+              {
+                "output": "fee",
+                "old": "1950",
+                "new": "-"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 4
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "fee_by_weight",
+                "row": 4
+              }
+            ],
+            "witness": [
+              {
+                "input": "region",
+                "value": "eu"
               },
               {
                 "input": "weight",

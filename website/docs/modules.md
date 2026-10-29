@@ -349,15 +349,20 @@ behavior:
         example: region=domestic, weight=2001
 …
 interface:
-  rules/shipping_fee.rule (rulec, api): 11 changes, 1 of them may break a user
-    may break: changed: /connect/enums/region/values/world/number: 2 → 3
+  rules/shipping_fee.rule (rulec, api): 10 changes, 0 of them may break a user
+    added: /{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu
 …
 ```
 
 A change that may break a user is a candidate: whether it does is for the user's check to say.
-`rulec diff`, `koyomi diff` and `sekisho diff` name a version in the same ways, and two more:
-`@<name>/<path>` is a file of a dependency at the version the lock pins, and
-`@<name>@<version>/<path>` the file at that version of the module.
+Some changes break a user whatever its check says. An account or a transfer of a book that changed
+is chobo's E050 or E051: the accounts and the holds already in a database keep the old definition.
+A value of an enum whose number on the Connect wire moved is E310: a message one version writes, the
+other reads as another value, and neither fails. That is why `pricing` 1.1.0 adds `eu` after the
+other regions. `ritsu mod diff` says these among the changes of the interface, and
+`ritsu mod report` counts them as errors. `rulec diff`, `koyomi diff` and `sekisho diff` name a
+version in the same ways, and two more: `@<name>/<path>` is a file of a dependency at the version
+the lock pins, and `@<name>@<version>/<path>` the file at that version of the module.
 
 `ritsu mod report --base <revision>` answers what a pull request that raises a dependency asks. It
 reads your files as the head has them, with the dependencies of the base and then with those of the

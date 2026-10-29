@@ -27,9 +27,7 @@ require：変わりません
     両方の版が受け付ける入力のうち、ここに挙げたほかは同じ答えを返します。受け付ける入力そのものの違いは上のとおりです。
 
 インターフェース：
-  規則/送料.rule (rulec、api)：差が 11 件、うち使う側を壊しうるもの 1 件
-    変わった（壊しうる）：/connect/enums/地域/values/その他の地域/number：2 → 3
+  規則/送料.rule (rulec、api)：差が 10 件、うち使う側を壊しうるもの 0 件
     足した：/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/地域/values/EU
-  壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
 
 振る舞いかインターフェースに違いが見つかりました。

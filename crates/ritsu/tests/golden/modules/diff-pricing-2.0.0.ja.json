@@ -152,69 +152,6 @@
                 "column": "地域",
                 "kind": "input",
                 "accepts": [
-                  "EU"
-                ],
-                "text": "地域 = EU"
-              },
-              {
-                "column": "重さ",
-                "kind": "input",
-                "accepts": [
-                  {
-                    "from": "1",
-                    "to": "1"
-                  },
-                  {
-                    "from": "2",
-                    "to": "2499"
-                  },
-                  {
-                    "from": "2500",
-                    "to": "2500"
-                  }
-                ],
-                "text": "重さ >=1g <=2500g"
-              }
-            ],
-            "text": "地域 = EU  かつ  重さ >=1g <=2500g",
-            "outputs": [
-              {
-                "output": "料金",
-                "old": "1250",
-                "new": "-"
-              }
-            ],
-            "uniform": true,
-            "old_rows": [
-              {
-                "table": "重さの段",
-                "row": 3
-              }
-            ],
-            "new_rows": [
-              {
-                "table": "重さの段",
-                "row": 3
-              }
-            ],
-            "witness": [
-              {
-                "input": "地域",
-                "value": "EU"
-              },
-              {
-                "input": "重さ",
-                "value": "1"
-              }
-            ],
-            "cells": 3
-          },
-          {
-            "region": [
-              {
-                "column": "地域",
-                "kind": "input",
-                "accepts": [
                   "その他の地域"
                 ],
                 "text": "地域 = その他の地域"
@@ -264,6 +201,69 @@
               {
                 "input": "地域",
                 "value": "その他の地域"
+              },
+              {
+                "input": "重さ",
+                "value": "1"
+              }
+            ],
+            "cells": 3
+          },
+          {
+            "region": [
+              {
+                "column": "地域",
+                "kind": "input",
+                "accepts": [
+                  "EU"
+                ],
+                "text": "地域 = EU"
+              },
+              {
+                "column": "重さ",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "1",
+                    "to": "1"
+                  },
+                  {
+                    "from": "2",
+                    "to": "2499"
+                  },
+                  {
+                    "from": "2500",
+                    "to": "2500"
+                  }
+                ],
+                "text": "重さ >=1g <=2500g"
+              }
+            ],
+            "text": "地域 = EU  かつ  重さ >=1g <=2500g",
+            "outputs": [
+              {
+                "output": "料金",
+                "old": "1250",
+                "new": "-"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "重さの段",
+                "row": 3
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "重さの段",
+                "row": 3
+              }
+            ],
+            "witness": [
+              {
+                "input": "地域",
+                "value": "EU"
               },
               {
                 "input": "重さ",
@@ -337,65 +337,6 @@
                 "column": "地域",
                 "kind": "input",
                 "accepts": [
-                  "EU"
-                ],
-                "text": "地域 = EU"
-              },
-              {
-                "column": "重さ",
-                "kind": "input",
-                "accepts": [
-                  {
-                    "from": "2501",
-                    "to": "29999"
-                  },
-                  {
-                    "from": "30000",
-                    "to": "30000"
-                  }
-                ],
-                "text": "重さ >=2501g <=30000g"
-              }
-            ],
-            "text": "地域 = EU  かつ  重さ >=2501g <=30000g",
-            "outputs": [
-              {
-                "output": "料金",
-                "old": "1950",
-                "new": "-"
-              }
-            ],
-            "uniform": true,
-            "old_rows": [
-              {
-                "table": "重さの段",
-                "row": 4
-              }
-            ],
-            "new_rows": [
-              {
-                "table": "重さの段",
-                "row": 4
-              }
-            ],
-            "witness": [
-              {
-                "input": "地域",
-                "value": "EU"
-              },
-              {
-                "input": "重さ",
-                "value": "2501"
-              }
-            ],
-            "cells": 2
-          },
-          {
-            "region": [
-              {
-                "column": "地域",
-                "kind": "input",
-                "accepts": [
                   "その他の地域"
                 ],
                 "text": "地域 = その他の地域"
@@ -441,6 +382,65 @@
               {
                 "input": "地域",
                 "value": "その他の地域"
+              },
+              {
+                "input": "重さ",
+                "value": "2501"
+              }
+            ],
+            "cells": 2
+          },
+          {
+            "region": [
+              {
+                "column": "地域",
+                "kind": "input",
+                "accepts": [
+                  "EU"
+                ],
+                "text": "地域 = EU"
+              },
+              {
+                "column": "重さ",
+                "kind": "input",
+                "accepts": [
+                  {
+                    "from": "2501",
+                    "to": "29999"
+                  },
+                  {
+                    "from": "30000",
+                    "to": "30000"
+                  }
+                ],
+                "text": "重さ >=2501g <=30000g"
+              }
+            ],
+            "text": "地域 = EU  かつ  重さ >=2501g <=30000g",
+            "outputs": [
+              {
+                "output": "料金",
+                "old": "1950",
+                "new": "-"
+              }
+            ],
+            "uniform": true,
+            "old_rows": [
+              {
+                "table": "重さの段",
+                "row": 4
+              }
+            ],
+            "new_rows": [
+              {
+                "table": "重さの段",
+                "row": 4
+              }
+            ],
+            "witness": [
+              {
+                "input": "地域",
+                "value": "EU"
               },
               {
                 "input": "重さ",

@@ -20,30 +20,30 @@ behavior:
         rows: table fee_by_weight row 1
         example: region=domestic, weight=1
 
-      region = eu  and  weight >=1g <=2500g
-        fee: 1250GBPc → -
-        rows: table fee_by_weight row 3
-        example: region=eu, weight=1
-
       region = world  and  weight >=1g <=2500g
         fee: 1850GBPc → -
         rows: table fee_by_weight row 5
         example: region=world, weight=1
+
+      region = eu  and  weight >=1g <=2500g
+        fee: 1250GBPc → -
+        rows: table fee_by_weight row 3
+        example: region=eu, weight=1
 
       region = domestic  and  weight >=2501g <=30000g
         fee: 695GBPc → -
         rows: table fee_by_weight row 2
         example: region=domestic, weight=2501
 
-      region = eu  and  weight >=2501g <=30000g
-        fee: 1950GBPc → -
-        rows: table fee_by_weight row 4
-        example: region=eu, weight=2501
-
       region = world  and  weight >=2501g <=30000g
         fee: 2950GBPc → -
         rows: table fee_by_weight row 6
         example: region=world, weight=2501
+
+      region = eu  and  weight >=2501g <=30000g
+        fee: 1950GBPc → -
+        rows: table fee_by_weight row 4
+        example: region=eu, weight=2501
 
     of the inputs both versions accept, those outside this region get the same answer; what they accept differs as listed above.
 

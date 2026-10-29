@@ -1,9 +1,9 @@
 # 料金はこの例のために決めた値。pricing の 1.1.0 で、重さの段の境目を 2,000 g から 2,500 g にし、
-# 地域に EU を足した。
+# 地域の最後に EU を足した。ほかの地域の Connect での番号は変わらない。
 rule 送料(shipping_fee) v1
 description "荷の重さと届け先の地域で決まる送料。2,500 g までと、それより重い荷とで料金が違う。料金はこの例のために決めた値"
 
-enum 地域(region) = 国内(domestic) | EU(eu) | その他の地域(world)
+enum 地域(region) = 国内(domestic) | その他の地域(world) | EU(eu)
 
 inputs
   重さ(weight) : mass[g]  range >=1g <=30_000g

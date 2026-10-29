@@ -38,11 +38,11 @@
 | where they differ | answer | example | cells |
 |---|---|---|---|
 | region = domestic  and  weight >=1g <=2500g | fee: 395GBPc → - | region=domestic, weight=1 | 3 |
-| region = eu  and  weight >=1g <=2500g | fee: 1250GBPc → - | region=eu, weight=1 | 3 |
 | region = world  and  weight >=1g <=2500g | fee: 1850GBPc → - | region=world, weight=1 | 3 |
+| region = eu  and  weight >=1g <=2500g | fee: 1250GBPc → - | region=eu, weight=1 | 3 |
 | region = domestic  and  weight >=2501g <=30000g | fee: 695GBPc → - | region=domestic, weight=2501 | 2 |
-| region = eu  and  weight >=2501g <=30000g | fee: 1950GBPc → - | region=eu, weight=2501 | 2 |
 | region = world  and  weight >=2501g <=30000g | fee: 2950GBPc → - | region=world, weight=2501 | 2 |
+| region = eu  and  weight >=2501g <=30000g | fee: 1950GBPc → - | region=eu, weight=2501 | 2 |
 
 Of the inputs both versions accept, those outside this region get the same answer.
 

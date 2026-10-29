@@ -33,7 +33,7 @@ document.getElementById("open").addEventListener("click", async (e) => {
 <tr><td><a href="./files/ritsu.lock.html"><code>ritsu.lock</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
 <tr><td><a href="./files/ritsu.mod.html"><code>ritsu.mod</code></a></td><td>—</td><td>&lt;bytes&gt;</td></tr>
 <tr><td><a href="./files/rules/order_total.rule.html"><code>rules/order_total.rule</code></a></td><td>rulec</td><td>997</td></tr>
-<tr><td><a href="./files/rules/shipping_fee.rule.html"><code>rules/shipping_fee.rule</code></a></td><td>rulec</td><td>1,005</td></tr>
+<tr><td><a href="./files/rules/shipping_fee.rule.html"><code>rules/shipping_fee.rule</code></a></td><td>rulec</td><td>1,050</td></tr>
 </table></div>
 <h2>1.0.0 からの差</h2>
 <ul>
@@ -64,14 +64,12 @@ document.getElementById("open").addEventListener("click", async (e) => {
 </details>
 <h3>インターフェース</h3>
 <ul>
-<li><code>rules/shipping_fee.rule</code> (rulec、api)：差が 11 件、うち使う側を壊しうるもの 1 件</li>
+<li><code>rules/shipping_fee.rule</code> (rulec、api)：差が 10 件、うち使う側を壊しうるもの 0 件</li>
 </ul>
 <div class="scroll"><table>
 <tr><th>変わり方</th><th>場所</th><th>古い値 → 新しい値</th></tr>
-<tr><td>変わった（壊しうる）</td><td><code>/connect/enums/region/values/world/number</code></td><td><code>2 → 3</code></td></tr>
 <tr><td>足した</td><td><code>/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu</code></td><td></td></tr>
 </table></div>
-<p>壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。</p>
 <p>振る舞いかインターフェースに違いが見つかりました。</p>
 <footer><code>ritsu mod site</code> <version> が書きました</footer>
 </main>

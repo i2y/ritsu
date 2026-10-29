@@ -1,6 +1,7 @@
 //! ritsu's own codes (DESIGN 4.3, 7.1; PLAN E.3): `ritsu explain` looks them up, and every
 //! code's reproduction — the files of a small project — printed by `ritsu check .`, with the
-//! code's headline carrying `ritsu`.
+//! code's headline carrying `ritsu`, or by `ritsu mod diff`, among the differences of an interface
+//! with its tool (E310).
 
 use ritsu_testkit::TempDir;
 use std::path::Path;
@@ -23,6 +24,17 @@ fn every_reproduction_prints_its_code() {
         for lang in ["en", "ja"] {
             let mut args: Vec<&str> = command[1..].to_vec();
             args.extend(["--lang", lang]);
+            // `ritsu mod diff` says ritsu's codes among the differences of an interface, which its
+            // JSON gives with their tool
+            if command[1..].starts_with(&["mod", "diff"]) {
+                args.extend(["--format", "json"]);
+                let (_, out, _) = ritsu_in(dir, &args);
+                let v: serde_json::Value = serde_json::from_str(&out).unwrap_or_default();
+                for i in v["interface"].as_array().into_iter().flatten() {
+                    codes.extend(i["breaks"].as_array().into_iter().flatten().filter(|b| b["tool"] == "ritsu").filter_map(|b| b["code"].as_str().map(String::from)));
+                }
+                continue;
+            }
             let (_, out, err) = ritsu_in(dir, &args);
             for l in out.lines().chain(err.lines()) {
                 if let Some(rest) = l.split_once("[ritsu ").map(|(_, r)| r)

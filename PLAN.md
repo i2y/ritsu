@@ -2284,6 +2284,26 @@ C3 で確かめたこと（2026-10-30、この機械で）：
 2. SKIP の行は 65 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（node、python、go、chrome など）である。足りないものの SKIP は無い。
 3. 書いた行に clippy の警告は無い。`mod report` は git が要るので、ブラウザと npm の `ritsu.wasm` では前と同じ文で止まり、作り直しは要らない。
 
+**C の足し（C4。2026-10-30）：Connect の番号が動くのを壊れる差に**（DESIGN 17.9.5、17.20、17.21）
+
+`ritsu mod diff` は、規則の列挙の途中に値を足したときの Connect の番号の変わり（`/connect/enums/<列挙>/values/<値>/number`）を、使う側を壊しうる差の候補としか言わなかった。番号が動けば、protobuf のバイナリの形で、前の版と新しい版のあいだのメッセージの値が別の値として読まれる。使う側の検査は新しい版しか読まないので、それを言えない。
+
+- `diff.rs` の `renumbered`：二つの版の api の JSON の `connect` で、両方にある列挙の値の番号が違えば E310 にする。メソッドのパスが違えば（規則の版を上げたとき）出さない。行は、rulec の `Items` が言う、新しい版の列挙の値の行である。`Iface.breaks` は道具の語との組にした（chobo か ritsu）。text と markdown は道具ごとの見出し（「データを壊す差」「呼び出しを壊す差」）で出し、JSON の `breaks` には `tool` を付けた。`report.rs` の `break_json` は、決め打ちの `chobo` の代わりに、その道具を書く。
+- 台帳：ritsu-cross の E310。再現は二つの版のディレクトリを `ritsu mod diff old new` で比べるもので、ritsu の `codes.rs` の試験は、`mod diff` の再現のコードを JSON の `breaks` から拾う。`docs/codes.md`（英日）を書き直した。
+- 例：pricing の 1.1.0 と 2.0.0（英日）の地域の列挙で、eu を最後に移した。上げる筋を、答えの差だけを見せる筋のままにするためである（番号が動けば、上げる筋も壊れる筋になる）。golden（diff-pricing、report-raise と report-break、diff-stock の JSON の `tool`）と playground の `projects.json` を取り直した。
+- 試験：
+  - `modules_diff.rs` の `a_number_that_moves_on_the_connect_wire_breaks_the_calls`（英日）：1.1.0 の eu を真ん中に戻すと、二つの値が E310 になる（列挙の行、text と JSON）。規則の版も上げると E310 は無く、`/connect/path` が候補になる。
+  - `modules_report.rs` の `a_number_that_moves_on_the_connect_wire_is_a_new_error`（英日）：eu を真ん中に戻した 1.2.0 に上げると、head の検査は通るのに、pricing の新しいエラーが二つあり、exit 1 になる。
+  - pricing の 1.1.0 の差の試験は、壊しうる差が無く、eu の番号が 3 であることを確かめる。
+- 文書：DESIGN 17.9.5（Connect の番号）、17.9.6 と 17.10 の終了コード、17.20 の表、17.21。サイトのモジュールのページ（英日）、ritsu のスキルの 9 節。
+- 残り：入力と出力と並びの要素のフィールドの番号は、api の JSON に無いので、まだ比べない（rulec の api に番号を足すのは、この節の二つ目でする）。
+
+C4 で確かめたこと（2026-10-30、この機械で）：
+
+1. 触ったクレートの fast の段で 575 件が通った（落ちたものは無い）。ritsu 339、ritsu-base 207、ritsu-cross 29 である。足した二つの試験、台帳の再現を走らせる ritsu の `codes.rs`、golden を取り直した `modules_diff.rs`、`modules_report.rs`、`modules_site.rs`、それに `skill.rs`、`website.rs`、`playground.rs` がこの中にある。
+2. SKIP の行は 78 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（node 26、python 20、go 20、chrome 6 など）である。足りないものの SKIP は無い。
+3. 書いた行に clippy の警告は無い。playground の `ritsu.wasm` は作り直さなくてよい。例の規則が変わっても、`playground.rs` の `the_module_answers_as_the_library_does` が道具の段で通った。
+
 ### 8.4 D：レジストリと署名
 
 **D.1 curl の呼び方**（DESIGN 17.12 の「HTTP は curl で」）

@@ -337,20 +337,13 @@
                 "may_break": false
               },
               {
-                "at": "/connect/enums/region/values/world/number",
-                "change": "changed",
-                "old": 2,
-                "new": 3,
-                "may_break": true
-              },
-              {
                 "at": "/connect/enums/region/values/eu",
                 "change": "added",
                 "old": null,
                 "new": {
                   "name": "eu",
                   "alias": "REGION_EU",
-                  "number": 2
+                  "number": 3
                 },
                 "may_break": false
               }

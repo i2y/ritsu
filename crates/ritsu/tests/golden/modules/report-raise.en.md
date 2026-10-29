@@ -38,14 +38,11 @@ Of the inputs both versions accept, those outside this region get the same answe
 
 #### Interface
 
-- `rules/shipping_fee.rule` (rulec, api): 11 changes, 1 of them may break a user
+- `rules/shipping_fee.rule` (rulec, api): 10 changes, 0 of them may break a user
 
 | Change | Where | Old → new |
 |---|---|---|
-| may break: changed | `/connect/enums/region/values/world/number` | `2 → 3` |
 | added | `/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu` |  |
-
-A change that may break a user is a candidate: whether it does is for that user's check to say.
 
 A difference is shown in behavior or in an interface.
 

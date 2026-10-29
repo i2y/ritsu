@@ -27,9 +27,7 @@ behavior:
     of the inputs both versions accept, those outside this region get the same answer; what they accept differs as listed above.
 
 interface:
-  rules/shipping_fee.rule (rulec, api): 11 changes, 1 of them may break a user
-    may break: changed: /connect/enums/region/values/world/number: 2 → 3
+  rules/shipping_fee.rule (rulec, api): 10 changes, 0 of them may break a user
     added: /{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/region/values/eu
-  a change that may break a user is a candidate: whether it does is for that user's check to say.
 
 a difference is shown in behavior or in an interface.

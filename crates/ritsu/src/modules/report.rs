@@ -11,8 +11,8 @@
 //!    path reaches as the base has them). A diagnostic only the first has is new, one only the
 //!    second has is gone (by the tool, the code, the file, the line and the text). Each new one goes
 //!    to the changed modules it is about: the module of its file, else the changed modules its file
-//!    reads, through other files too. A changed book's E050 and E051 (DESIGN 17.9.5) are new errors
-//!    of its module.
+//!    reads, through other files too. A changed book's E050 and E051, and a changed file's E310
+//!    (DESIGN 17.9.5), are new errors of its module.
 //! 3. For each module that changed, what `ritsu mod diff` says of its two versions; and each file of
 //!    the module at hand that has a diff of behavior (a rule, a dates file, a calendar, a gate) and
 //!    reads a changed module, compared as the base's lock reads it and as the head's does: the
@@ -200,9 +200,11 @@ pub struct Report {
     pub base_check: Counts,
     pub head_check: Counts,
     /// The diagnostics only the check with the head's lock has, as `ritsu check --format json`
-    /// writes them, and each E050 and E051 of a changed book against its old version: errors first.
+    /// writes them, and each E050 and E051 of a changed book and each E310 of a changed file against
+    /// its old version: errors first.
     pub new: Vec<Json>,
-    /// How many of [`Report::new`] are a book's E050 and E051, which the check does not count.
+    /// How many of [`Report::new`] are a book's E050 and E051 and a file's E310, which the check
+    /// does not count.
     pub breaks: usize,
     /// The diagnostics only the check with the base's lock has.
     pub gone: Vec<Json>,
@@ -210,7 +212,8 @@ pub struct Report {
 }
 
 impl Report {
-    /// The errors with the head's lock: the check's, and each E050 and E051 of a changed book.
+    /// The errors with the head's lock: the check's, each E050 and E051 of a changed book, and each
+    /// E310 of a changed file.
     pub fn errors(&self) -> usize {
         self.head_check.errors + self.breaks
     }
@@ -314,15 +317,15 @@ impl Report {
             m.diff = sides.module_diff(m, budget, lang);
         }
 
-        // the new diagnostics, errors first: the check's, then each changed book's E050 and E051,
-        // which are its module's
+        // the new diagnostics, errors first: the check's, then each changed book's E050 and E051
+        // and each changed file's E310, which are its module's
         let mut new: Vec<(Json, Option<usize>)> = with_head.iter().filter(|d| !base_keys.contains(&key(d))).map(|d| (d.clone(), None)).collect();
         let mut breaks = 0;
         for (k, m) in modules.iter().enumerate() {
             let Some(Ok(d)) = &m.diff else { continue };
             for i in &d.interface {
-                for f in i.breaks.iter().filter(|f| f.severity == Severity::Error) {
-                    new.push((break_json(m, &i.file, f), Some(k)));
+                for (tool, f) in i.breaks.iter().filter(|(_, f)| f.severity == Severity::Error) {
+                    new.push((break_json(m, tool, &i.file, f), Some(k)));
                     breaks += 1;
                 }
             }
@@ -410,15 +413,16 @@ fn check(files: Option<Rc<dyn Files>>, root: &Path, budget: Option<u64>, lang: L
     Ok((diags, counts))
 }
 
-/// A book's E050 or E051 against its old version, as the check's JSON writes a diagnostic: the file
-/// from the module at hand's root, and the dependency it is in after it.
-fn break_json(m: &Changed, file: &str, f: &ritsu_ports::Finding) -> Json {
+/// A book's E050 or E051, or a file's E310, against its old version, as the check's JSON writes a
+/// diagnostic: the tool whose code it is, the file from the module at hand's root, and the
+/// dependency it is in after it.
+fn break_json(m: &Changed, tool: &str, file: &str, f: &ritsu_ports::Finding) -> Json {
     let path = format!("{}/{file}", m.prefix);
     let put = |o: &mut Vec<(String, Json)>| {
         o.push(("file".into(), Json::str(path.as_str())));
         o.push(("dependency".into(), Json::str(m.prefix.as_str())));
     };
-    let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str("chobo"))];
+    let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str(tool))];
     match &f.json {
         Json::Obj(kv) => {
             if !kv.iter().any(|(k, _)| k == "file") {

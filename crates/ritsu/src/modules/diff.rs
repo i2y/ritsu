@@ -16,7 +16,9 @@
 //! - Interface: what the language's `api` prints, compared by name; what a file holds (DESIGN 6.4)
 //!   for dandori, geas and `.proto`; the digest for any other file. A book also goes through what
 //!   `chobo check --diff-base` holds a book to (chobo's `diffbase::between`): E050 and E051 are the
-//!   differences that break the data already in a database.
+//!   differences that break the data already in a database. A value of an enum both versions have
+//!   whose number on the Connect wire changed, the method's path being the same, is ritsu's E310: a
+//!   message one version writes, the other reads as another value.
 //!
 //! [`ModDiff`] is also what `ritsu mod report` (DESIGN 17.10) puts under each module that changed.
 
@@ -450,8 +452,10 @@ pub struct Iface {
     /// The version at the head of the file (`v1` → `v2`), when it changed.
     pub version: Option<(String, String)>,
     pub changes: Vec<IChange>,
-    /// A book's E050, E051 and W107 against the old version.
-    pub breaks: Vec<ritsu_ports::Finding>,
+    /// What breaks what is already out there, each with the tool whose code it is: a book's E050,
+    /// E051 and W107 against the old version (chobo's), and a value whose number on the Connect wire
+    /// changed (ritsu's E310).
+    pub breaks: Vec<(&'static str, ritsu_ports::Finding)>,
     /// Why the interface was compared by its digest alone.
     pub note: Option<Text>,
 }
@@ -464,9 +468,10 @@ impl Iface {
         self.how != "digest" && self.changes.is_empty() && self.breaks.is_empty() && self.note.is_none() && self.version.is_none()
     }
 
-    /// A book's E050 or E051: what the data already in a database cannot follow.
+    /// A book's E050 or E051, or an E310: what the data already in a database, or a caller built on
+    /// the old version, cannot follow.
     pub fn breaking(&self) -> bool {
-        self.breaks.iter().any(|f| f.severity == ritsu_base::diag::Severity::Error)
+        self.breaks.iter().any(|(_, f)| f.severity == ritsu_base::diag::Severity::Error)
     }
 }
 
@@ -486,8 +491,8 @@ pub struct ModDiff {
 impl ModDiff {
     /// Whether a difference is shown in behavior or in an interface: answers that differ, a file of
     /// a language added or removed (all it holds came or went), a change of an interface, a book's
-    /// E050 or E051. A file of no language (data, a document) whose bytes changed is listed, and is
-    /// no such difference.
+    /// E050 or E051, an E310. A file of no language (data, a document) whose bytes changed is
+    /// listed, and is no such difference.
     pub fn differs(&self) -> bool {
         self.behavior_differs()
             || self.files.added.iter().chain(&self.files.removed).any(|f| tool_of(f).is_some())
@@ -730,6 +735,7 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
                     out.changes.retain(|c| !(c.at.ends_with("/version") && c.old.as_ref().map(scalar).as_ref() == Some(&x) && c.new.as_ref().map(scalar).as_ref() == Some(&y)));
                     out.version = Some((x, y));
                 }
+                out.breaks = renumbered(&a, &b, file, o, n, lang, joined);
             }
             (Err(t), _) | (_, Err(t)) => out.note = Some(t),
         },
@@ -738,18 +744,62 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
         let text = |a: &At| a.with(|| ritsu_base::fs::read_to_string(&a.read)).ok();
         if let (Some(a), Some(b)) = (text(o), text(n)) {
             match chobo::diffbase::between(&a, &b, &o.label) {
-                Ok(ds) => {
-                    out.breaks = ds
-                        .into_iter()
-                        .map(|mut d| {
-                            d.file = n.shown.clone();
-                            d.rel = file.to_string();
-                            ritsu_ports::Finding::of(&d, Some(file.to_string()), lang)
-                        })
-                        .collect()
-                }
+                Ok(ds) => out.breaks.extend(ds.into_iter().map(|mut d| {
+                    d.file = n.shown.clone();
+                    d.rel = file.to_string();
+                    ("chobo", ritsu_ports::Finding::of(&d, Some(file.to_string()), lang))
+                })),
                 Err(t) => out.note = Some(t),
             }
+        }
+    }
+    out
+}
+
+/// Each value of an enum both versions have whose number on the Connect wire changed: ritsu's E310,
+/// said as a book's E050 is, in the new version's file at the value's line. The method's path must
+/// be the same in both. A rule whose version was raised is another service on the wire, whose old
+/// callers reach nothing rather than a wrong value, and the change of its path is a candidate.
+fn renumbered(a: &Json, b: &Json, file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Vec<(&'static str, ritsu_ports::Finding)> {
+    let (Some(ca), Some(cb), Some(tool)) = (a.get("connect"), b.get("connect"), tool_of(&n.rel)) else { return Vec::new() };
+    if ca.get("path").is_none() || ca.get("path") != cb.get("path") {
+        return Vec::new();
+    }
+    let list = |j: Option<&Json>| j.and_then(Json::as_arr).unwrap_or_default().to_vec();
+    let named = |j: Option<&Json>, name: &str| list(j).into_iter().find(|x| x.get("name").and_then(Json::as_str) == Some(name));
+    let items = match n.with(|| joined.index.items(tool, &n.root, &n.rel)) {
+        Some(Ok(items)) => items,
+        _ => Vec::new(),
+    };
+    let mut out = Vec::new();
+    for ea in list(ca.get("enums")) {
+        let Some(e) = ea.get("name").and_then(Json::as_str) else { continue };
+        let Some(eb) = named(cb.get("enums"), e) else { continue };
+        for va in list(ea.get("values")) {
+            let Some(v) = va.get("name").and_then(Json::as_str) else { continue };
+            let Some(vb) = named(eb.get("values"), v) else { continue };
+            let (Some(x), Some(y)) = (va.get("number").map(Json::compact), vb.get("number").map(Json::compact)) else { continue };
+            if x == y {
+                continue;
+            }
+            let old = &o.label;
+            let line = items.iter().find(|i| matches!(i.naming.items.as_slice(), [(k, m), (l, w)] if k == "enum" && m == e && l == "value" && w == v)).map_or(0, |i| i.lines.0);
+            let d = ritsu_base::modules::Diag::error(
+                ritsu_base::modules::E310,
+                &n.shown,
+                line,
+                0,
+                tr!(
+                    "列挙 `{e}` の値 `{v}` の Connect での番号（{x} → {y}）が {old} のときと違います。片方の版が書いたメッセージを、もう片方は別の値として読みます",
+                    "the value `{v}` of the enum `{e}` differs from {old} in its number on the Connect wire ({x} → {y}): a message one version writes, the other reads as another value"
+                ),
+            )
+            .rel(file)
+            .note(tr!(
+                "値を最後に足せば、ほかの値の番号は変わりません。.proto から読む列挙（`import proto`）の番号は、契約のものです",
+                "a value added after the others leaves their numbers as they are, and an enum read from a .proto (`import proto`) has the contract's"
+            ));
+            out.push(("ritsu", ritsu_ports::Finding::of(&d, Some(file.to_string()), lang)));
         }
     }
     out
@@ -1174,10 +1224,15 @@ fn grouped(changes: &[IChange]) -> Vec<Line> {
     out
 }
 
-/// A book's diagnostic against the old version, in a line: its code, its line, and what it says.
-fn break_line(f: &ritsu_ports::Finding, lang: Lang, q: &str) -> String {
+/// A difference that breaks what is already out there, in a line: its code, its line, and what it
+/// says. A book's breaks the data in a database, an E310 the calls between the two versions.
+fn break_line(tool: &str, f: &ritsu_ports::Finding, lang: Lang, q: &str) -> String {
     let c = colon(lang);
-    let label = if f.severity == ritsu_base::diag::Severity::Error { tr!("データを壊す差", "breaks the data") } else { tr!("注意", "warning") };
+    let label = match (f.severity, tool) {
+        (ritsu_base::diag::Severity::Error, "chobo") => tr!("データを壊す差", "breaks the data"),
+        (ritsu_base::diag::Severity::Error, _) => tr!("呼び出しを壊す差", "breaks the calls"),
+        _ => tr!("注意", "warning"),
+    };
     let message = f.json.get("message").and_then(Json::as_str).unwrap_or_default();
     let line = match (f.line, lang) {
         (Some(l), Lang::Ja) => format!("（{l} 行目）"),
@@ -1320,8 +1375,8 @@ pub fn body_text(d: &ModDiff, lang: Lang) -> String {
             if let Some((a, b)) = &i.version {
                 o.push_str(&format!("    {}{c}{a} → {b}\n", tr!("ファイルの頭の版", "the version at the head of the file").get(lang)));
             }
-            for f in &i.breaks {
-                o.push_str(&format!("    {}\n", break_line(f, lang, "")));
+            for (tool, f) in &i.breaks {
+                o.push_str(&format!("    {}\n", break_line(tool, f, lang, "")));
             }
             let g = grouped(&i.changes);
             for l in g.iter().take(SHOWN) {
@@ -1560,8 +1615,8 @@ pub fn body_markdown(d: &ModDiff, lang: Lang, level: usize, rows: usize) -> Stri
             if let Some((a, b)) = &i.version {
                 o.push_str(&format!("  - {}{c}`{a}` → `{b}`\n", tr!("ファイルの頭の版", "The version at the head of the file").get(lang)));
             }
-            for f in &i.breaks {
-                o.push_str(&format!("  - {}\n", ritsu_base::text::capitalize(&break_line(f, lang, "**"))));
+            for (tool, f) in &i.breaks {
+                o.push_str(&format!("  - {}\n", ritsu_base::text::capitalize(&break_line(tool, f, lang, "**"))));
             }
             if let Some(t) = &i.note {
                 o.push_str(&format!("  - {}\n", t.get(lang)));
@@ -1626,9 +1681,19 @@ pub fn iface_json(i: &Iface, lang: Lang) -> Json {
         ("how", Json::str(i.how)),
         ("version", i.version.as_ref().map_or(Json::Null, |(a, b)| Json::obj([("old", Json::str(a.as_str())), ("new", Json::str(b.as_str()))]))),
         ("changes", Json::arr(changes)),
-        ("breaks", Json::arr(i.breaks.iter().map(|f| f.json.clone()))),
+        ("breaks", Json::arr(i.breaks.iter().map(|(tool, f)| with_tool(tool, &f.json)))),
         ("note", i.note.as_ref().map_or(Json::Null, |t| Json::str(t.get(lang)))),
     ])
+}
+
+/// A diagnostic's JSON with the tool whose code it is first, as `ritsu check --format json` writes
+/// one: chobo's E050 and ritsu's E310 are two codes of two tools.
+fn with_tool(tool: &str, j: &Json) -> Json {
+    let mut o: Vec<(String, Json)> = vec![("tool".into(), Json::str(tool))];
+    if let Json::Obj(kv) = j {
+        o.extend(kv.iter().filter(|(k, _)| k != "tool").cloned());
+    }
+    Json::Obj(o)
 }
 
 /// One file's behavior as the JSON holds it.

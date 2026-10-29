@@ -3,13 +3,16 @@
 //!
 //! - The example's `pricing` from a registry: tax and the three versions of pricing (each with the
 //!   lock `ritsu mod lock` writes) placed in a store of the test's own, and compared by
-//!   `<module>@<version>`. 1.0.0 → 1.1.0 moves the step of the weight and adds `eu` (answers that
-//!   differ; an interface with a value added, and the number of a `connect` value changed); 1.1.0 →
-//!   2.0.0 renames the output (changes that may break a user).
+//!   `<module>@<version>`. 1.0.0 → 1.1.0 moves the step of the weight and adds `eu` after the other
+//!   regions (answers that differ; an interface with a value added, the next number on the Connect
+//!   wire its own); 1.1.0 → 2.0.0 renames the output (changes that may break a user).
 //! - Two modules the test writes, compared as directories: a desk (a calendar, a dates file that
 //!   reads it, and a gate that reads a rule, from the materials of koyomi's and sekisho's diffs; the
 //!   dates file's bytes do not change, its answers do) and a stock book (E050 and E051 at the top of
 //!   its interface).
+//! - pricing 1.1.0 against itself with `eu` moved back between the two other regions, as directories:
+//!   ritsu's E310 for each value whose number on the Connect wire moves, and none once the rule's
+//!   version is raised too, which moves the method's path.
 //! - Each in the three formats, held to golden files (`tests/golden/modules/diff-*`; `RITSU_BLESS=1`
 //!   writes them). The digests of the store's versions are masked: the lock in each carries the
 //!   version of ritsu.
@@ -383,16 +386,14 @@ fn pricing_from_the_store_held_to_golden_files() {
         // the step of the weight: two cells of the fee differ; the other rule answers the same
         let behavior: Vec<(&str, bool)> = v["behavior"].as_array().unwrap().iter().map(|b| (b["file"].as_str().unwrap(), b["result"]["changes"].as_array().is_some_and(|c| !c.is_empty()))).collect();
         assert!(behavior.contains(&(fee.as_str(), true)) && behavior.iter().filter(|(_, d)| *d).count() == 1, "{behavior:?}");
-        // eu added in each language the rule is generated in, and the number `connect` gives the value
-        // after it moved: the one change that may break a user
+        // eu added, last, in each language the rule is generated in: `connect` gives it the next
+        // number and the others keep theirs, so no change may break a user and nothing breaks
         let changes = v["interface"][0]["changes"].as_array().unwrap();
-        let breaking: Vec<&serde_json::Value> = changes.iter().filter(|c| c["may_break"] == true).collect();
-        assert_eq!(breaking.len(), 1, "{changes:?}");
-        let at = breaking[0]["at"].as_str().unwrap();
-        assert!(at.starts_with("/connect/enums/") && at.ends_with("/number") && breaking[0]["old"] == 2 && breaking[0]["new"] == 3, "{at}");
         let added: Vec<&str> = changes.iter().filter(|c| c["change"] == "added").map(|c| c["at"].as_str().unwrap()).collect();
-        assert_eq!(added.len(), 10, "{added:?}");
+        assert_eq!((added.len(), changes.len()), (10, 10), "{changes:?}");
         assert!(added.iter().all(|a| a.contains("/enums/") && a.rsplit('/').next() == added[0].rsplit('/').next()), "{added:?}");
+        let connect = changes.iter().find(|c| c["at"].as_str().unwrap().starts_with("/connect/")).unwrap();
+        assert_eq!((&connect["new"]["number"], &v["interface"][0]["breaks"]), (&serde_json::json!(3), &serde_json::json!([])), "{out}");
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -439,6 +440,58 @@ fn the_desk_and_the_book_held_to_golden_files() {
         assert!(v["behavior"].as_array().unwrap().is_empty());
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// A value of an enum whose number on the Connect wire moves (E310), in each language: pricing
+/// 1.1.0 against itself as two directories, the new one with eu moved back between domestic and
+/// world. Both values break the calls, at the line of the enum, in the text and in the JSON with
+/// the tool. With the rule's version raised too, the method's path moves: a caller of the old one
+/// reaches nothing rather than a wrong value, and the change of the path is a candidate.
+#[test]
+fn a_number_that_moves_on_the_connect_wire_breaks_the_calls() {
+    for n in [EN, JA] {
+        let lang = n.lang;
+        let t = TempDir::new(&format!("mod-diff-numbers-{lang}"));
+        let src = here().join("tests/projects").join(n.dir);
+        copy_dir(&src.join(n.tax), &t.path().join(n.tax));
+        for side in ["old", "new"] {
+            copy_dir(&src.join(n.pricing), &t.path().join(side));
+        }
+        let fee = format!("{}/{}", n.rules, n.fee);
+        let (region, eu, world, last, middle, head) = if lang == "en" {
+            ("region", "eu", "world", "domestic | world | eu", "domestic | eu | world", "rule shipping_fee v1")
+        } else {
+            ("地域", "EU", "その他の地域", "国内(domestic) | その他の地域(world) | EU(eu)", "国内(domestic) | EU(eu) | その他の地域(world)", "rule 送料(shipping_fee) v1")
+        };
+        replace(&t.path().join("new"), &fee, last, middle);
+        let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--format", "json", "--lang", lang]);
+        let v = json(&out);
+        let i = &v["interface"][0];
+        assert_eq!((code, err.as_str(), i["file"].as_str()), (1, "", Some(fee.as_str())), "{lang}:\n{out}");
+        let breaks: Vec<(&str, &str, &str, i64)> = i["breaks"].as_array().unwrap().iter().map(|b| (b["tool"].as_str().unwrap(), b["code"].as_str().unwrap(), b["file"].as_str().unwrap(), b["line"].as_i64().unwrap())).collect();
+        assert_eq!(breaks, [("ritsu", "E310", fee.as_str(), 6), ("ritsu", "E310", fee.as_str(), 6)], "{lang}:\n{out}");
+        let (_, text, _) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--lang", lang]);
+        let lines = if lang == "en" {
+            [
+                format!("    breaks the calls: E310 (line 6): the value `{world}` of the enum `{region}` differs from old in its number on the Connect wire (2 → 3): a message one version writes, the other reads as another value\n"),
+                format!("    breaks the calls: E310 (line 6): the value `{eu}` of the enum `{region}` differs from old in its number on the Connect wire (3 → 2): a message one version writes, the other reads as another value\n"),
+            ]
+        } else {
+            [
+                format!("    呼び出しを壊す差：E310（6 行目）：列挙 `{region}` の値 `{world}` の Connect での番号（2 → 3）が old のときと違います。片方の版が書いたメッセージを、もう片方は別の値として読みます\n"),
+                format!("    呼び出しを壊す差：E310（6 行目）：列挙 `{region}` の値 `{eu}` の Connect での番号（3 → 2）が old のときと違います。片方の版が書いたメッセージを、もう片方は別の値として読みます\n"),
+            ]
+        };
+        for line in &lines {
+            assert!(text.contains(line.as_str()), "{lang}: no {line:?}:\n{text}");
+        }
+        // the rule's version raised as well: another package and another path on the wire
+        replace(&t.path().join("new"), &fee, head, &head.replace(" v1", " v2"));
+        let (code, out, _) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--format", "json"]);
+        let i = &json(&out)["interface"][0];
+        let path = i["changes"].as_array().unwrap().iter().find(|c| c["at"] == "/connect/path").unwrap_or_else(|| panic!("{lang}:\n{out}"));
+        assert_eq!((code, &i["breaks"], &path["may_break"]), (1, &serde_json::json!([]), &serde_json::json!(true)), "{lang}:\n{out}");
+    }
 }
 
 /// The behavior of each file is what the language's own diff says of the same two files: `ritsu

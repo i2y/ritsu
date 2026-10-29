@@ -269,6 +269,7 @@
       ],
       "breaks": [
         {
+          "tool": "chobo",
           "code": "E050",
           "severity": "error",
           "file": "帳簿/在庫.book",
@@ -282,6 +283,7 @@
           "fix": null
         },
         {
+          "tool": "chobo",
           "code": "E051",
           "severity": "error",
           "file": "帳簿/在庫.book",

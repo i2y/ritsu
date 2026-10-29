@@ -71,6 +71,9 @@ pub const E308: &str = "E308";
 /// A `signature` line that covers a module from a git repository, whose signature ritsu cannot
 /// check.
 pub const E309: &str = "E309";
+/// A value of an enum both versions of a module have, whose number on the Connect wire changed: the
+/// method's path being the same, a message one version writes, the other reads as another value.
+pub const E310: &str = "E310";
 /// A dependency no file uses.
 pub const W301: &str = "W301";
 /// A line of `ritsu.lock` for a module nothing requires now.

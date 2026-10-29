@@ -1661,6 +1661,73 @@ policy unique
 
 See also: [E308](#e308)
 
+<a id="e310"></a>
+
+## E310 — The number of a value of an enum on the Connect wire changed since the old version
+
+**When**: A value of an enum of a rule, in both versions `ritsu mod diff` compares, has another number in the rule's Connect `.proto`; and so in the two versions of a changed module `ritsu mod report` compares. rulec numbers the values of an enum the rule declares from 1, in the order they are written, so a value added in the middle, or two values that change places, move the numbers of the values after. protobuf's binary form sends a value by its number: what the code generated from one version writes, the code of the other reads as another value. Neither fails, and the answer is another (the JSON form sends the name, which does not move). When the method's path (`/<package>.<service>/Decide`) differs between the two versions, a caller of the old one does not reach the new one, and nothing is read as another value, so it is not this error: the change of the path is shown as a candidate for a change that may break a user. Raising the rule's version (`rule … v2`) changes the path. `ritsu mod diff` shows it among the differences of the interface (exit 1), and `ritsu mod report` counts it as a new error of the module that changed (exit 1).
+
+**Fix**: Add a new value at the end of the enum: the numbers of the others stay. To take the numbers away from the order they are written in, write the enum in a `.proto` and read it with `import proto "<file>" <enum> -> <name>`: the numbers are the `.proto`'s. Where the order has to change, raise the rule's version (`rule … v2`), so that the new version is another service, and keep the old service until nothing calls it.
+
+**Reproduction**: put the files below in one directory, and run `ritsu mod diff old new` there.
+
+`old/ritsu.mod`:
+
+```
+module shop
+version 1.0.0
+```
+
+`old/fee.rule`:
+
+```rule
+rule fee v1
+description "The fee for a parcel, by the region it goes to"
+
+enum region = domestic | world
+
+inputs
+  region : region
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| region   | -> fee : money[GBPc] |
+| domestic | 395GBPc              |
+| world    | 1850GBPc             |
+```
+
+`new/ritsu.mod`:
+
+```
+module shop
+version 1.1.0
+```
+
+`new/fee.rule`:
+
+```rule
+rule fee v1
+description "The fee for a parcel, by the region it goes to"
+
+enum region = domestic | eu | world
+
+inputs
+  region : region
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| region   | -> fee : money[GBPc] |
+| domestic | 395GBPc              |
+| eu       | 1250GBPc             |
+| world    | 1850GBPc             |
+```
+
 <a id="w301"></a>
 
 ## W301 — A dependency no file uses

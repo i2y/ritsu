@@ -3,7 +3,7 @@
 rule shipping_fee v1
 description "The fee for shipping a parcel, by its weight and the region it goes to: one fee up to 2,500 g and another above. The fees are the example's own"
 
-enum region = domestic | eu | world
+enum region = domestic | world | eu
 
 inputs
   weight : mass[g]  range >=1g <=30_000g

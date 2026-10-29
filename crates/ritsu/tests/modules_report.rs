@@ -14,6 +14,9 @@
 //!   answer that changes (PLAN 8.3 C3): the shop's flow reading the fee, a kaname module of the
 //!   office's reading its dates file and another reading that module, and the shop's flow and
 //!   kaname module reading the rate of tax, raised alone, through pricing's total.
+//! - pricing raised to a version whose region eu moves between the two others: ritsu's E310 for each
+//!   value whose number on the Connect wire moves, new errors the report gives to pricing (exit 1),
+//!   though the check passes.
 //! - Markdown and JSON held to golden files (`tests/golden/modules/report-*`; `RITSU_BLESS=1`
 //!   writes them), the digests masked: the lock in each version carries the version of ritsu.
 //!   Every `@` of the Markdown is in code.
@@ -690,6 +693,45 @@ fn your_lines_that_read_answers_that_change() {
         let (_, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "two", "--lang", lang]);
         let line = if lang == "en" { format!("  {}:{flow_at} (dandori, use rule): {rate}, through {total}\n", n.flow) } else { format!("  {}:{flow_at} (dandori, use rule)：{total} を通して {rate}\n", n.flow) };
         assert!(text.contains(&line), "shop {lang}: no {line:?}:\n{text}");
+    }
+}
+
+/// A version of pricing whose region eu moves back between domestic and world: each value whose
+/// number on the Connect wire moves is ritsu's E310, a new error of pricing in the report, which
+/// exits 1 though the check with the head's lock passes, in each language.
+#[test]
+fn a_number_that_moves_on_the_connect_wire_is_a_new_error() {
+    for n in [EN, JA] {
+        let (t, store, repo) = shop(&n);
+        let lang = n.lang;
+        let v12 = t.path().join("pricing-1.2.0");
+        copy_dir(&t.path().join(n.pricing), &v12);
+        replace(&v12, "ritsu.mod", "version 1.1.0", "version 1.2.0");
+        let fee = format!("{}/{}", n.rules, n.fee);
+        let (last, middle) = if lang == "en" { ("domestic | world | eu", "domestic | eu | world") } else { ("国内(domestic) | その他の地域(world) | EU(eu)", "国内(domestic) | EU(eu) | その他の地域(world)") };
+        replace(&v12, &fee, last, middle);
+        let (code, out, err) = ritsu_in(&v12, &store, &["mod", "lock"]);
+        assert_eq!(code, 0, "{out}{err}");
+        put(&store, &v12);
+        replace(t.path(), &format!("{}/ritsu.mod", n.shop), &format!("\"{PRICING}\" 1.1.0"), &format!("\"{PRICING}\" 1.2.0"));
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "lock"]);
+        assert_eq!(code, 0, "{out}{err}");
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "report", "--base", "two", "--format", "json", "--lang", lang]);
+        assert_eq!(err, "", "shop {lang}:\n{out}");
+        let v = json(&out);
+        let file = format!("@pricing/{fee}");
+        let new: Vec<(&str, &str, &str, &str, i64)> = v["check"]["new"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| (d["tool"].as_str().unwrap(), d["code"].as_str().unwrap(), d["file"].as_str().unwrap(), d["dependency"].as_str().unwrap_or(""), d["line"].as_i64().unwrap_or(0)))
+            .collect();
+        let want = ("ritsu", "E310", file.as_str(), "@pricing", 6);
+        assert_eq!((code, &v["check"]["head"]["errors"], new), (1, &serde_json::json!(0), vec![want, want]), "shop {lang}:\n{out}");
+        assert_eq!(v["modules"][0]["diagnostics"], serde_json::json!([0, 1]), "shop {lang}:\n{out}");
+        let (_, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "two", "--lang", lang]);
+        let closing = if lang == "en" { "the check with the lock of the working tree has 2 errors.\n" } else { "作業ツリーの lock での検査に、エラーが 2 件あります。\n" };
+        assert!(text.contains(&format!("  error[ritsu E310] {file}:6: ")) && text.ends_with(closing), "shop {lang}:\n{text}");
     }
 }
 

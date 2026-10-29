@@ -33,13 +33,10 @@
 
 #### インターフェース
 
-- `規則/送料.rule` (rulec、api)：差が 11 件、うち使う側を壊しうるもの 1 件
+- `規則/送料.rule` (rulec、api)：差が 10 件、うち使う側を壊しうるもの 0 件
 
 | 変わり方 | 場所 | 古い値 → 新しい値 |
 |---|---|---|
-| 変わった（壊しうる） | `/connect/enums/地域/values/その他の地域/number` | `2 → 3` |
 | 足した | `/{python,typescript,javascript,rust,ruby,php,go,swift,java,connect}/enums/地域/values/EU` |  |
-
-壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
 
 振る舞いかインターフェースに違いが見つかりました。
