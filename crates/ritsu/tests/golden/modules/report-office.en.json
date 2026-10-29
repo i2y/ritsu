@@ -677,7 +677,8 @@
           },
           "error": null
         }
-      ]
+      ],
+      "readers": []
     }
   ],
   "ok": true

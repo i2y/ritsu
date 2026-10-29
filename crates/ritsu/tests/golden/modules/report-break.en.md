@@ -66,4 +66,10 @@ A change that may break a user is a candidate: whether it does is for that user'
 
 A difference is shown in behavior or in an interface.
 
+#### Your lines that read answers that change
+
+- `orders/place_order.flow:7` (dandori, `use rule`): `@pricing/rules/shipping_fee.rule`
+
+dandori and kaname have no diff of behavior: whether the answers of these files change is not compared.
+
 The check with the lock of `three` has 1 error.

@@ -362,7 +362,19 @@
         "differs": true
       },
       "error": null,
-      "yours": []
+      "yours": [],
+      "readers": [
+        {
+          "file": "orders/place_order.flow",
+          "line": 7,
+          "tool": "dandori",
+          "how": "use rule",
+          "names": "@pricing/rules/shipping_fee.rule",
+          "differ": [
+            "@pricing/rules/shipping_fee.rule"
+          ]
+        }
+      ]
     }
   ],
   "ok": true

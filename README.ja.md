@@ -555,7 +555,7 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
 
 ### 依存を上げると何が変わるか
 
-`ritsu mod diff` は、モジュールの二つの版を比べます。足したファイルと消したファイル、変わったファイルが使う側のコードに見せる形、それに規則、日付、ゲートでは、答えが変わる入力の全部です。試した点だけでなく、入力の全体で比べます。`ritsu mod report` は、依存を上げる PR が知りたいことに答えます。プロジェクトを base の lock と head の lock で検査し、変わったモジュールごとに、その差と、手元のファイルの答えのうち変わるものを言います。GitHub Actions では、次のワークフローがそれを PR に貼ります。
+`ritsu mod diff` は、モジュールの二つの版を比べます。足したファイルと消したファイル、変わったファイルが使う側のコードに見せる形、それに規則、日付、ゲートでは、答えが変わる入力の全部です。試した点だけでなく、入力の全体で比べます。`ritsu mod report` は、依存を上げる PR が知りたいことに答えます。プロジェクトを base の lock と head の lock で検査し、変わったモジュールごとに、その差と、手元のファイルの答えのうち変わるもの、変わる答えを読む手元のフローと kaname のモジュールの行を言います。GitHub Actions では、次のワークフローがそれを PR に貼ります。
 
 ```yaml
 # .github/workflows/ritsu-mod-report.yml

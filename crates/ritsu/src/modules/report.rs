@@ -17,6 +17,8 @@
 //!    the module at hand that has a diff of behavior (a rule, a dates file, a calendar, a gate) and
 //!    reads a changed module, compared as the base's lock reads it and as the head's does: the
 //!    answers of yours that change.
+//! 4. The lines of the flows and the kaname modules of the module at hand, which have no diff of
+//!    behavior, that read a file whose answers differ in 3: said, not compared.
 //!
 //! What the two locks pin is fetched first, as `ritsu mod fetch --rev <base>` and `ritsu mod fetch`
 //! (or `--rev <head>`) fetch it ([`fetch::tree`]), the base's with the base's key files; and before
@@ -36,6 +38,7 @@ use ritsu_base::fs::{Disk, Files, GitRevision, Kind, Meta};
 use ritsu_base::json::Json;
 use ritsu_base::modules::graph::{self, Node, Problem, Tree};
 use ritsu_base::modules::{digest, lock, manifest, store};
+use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text, capitalize, plural};
 use ritsu_base::tr;
 use ritsu_project::Joined;
@@ -167,6 +170,26 @@ pub struct Changed {
     pub diff: Option<Result<ModDiff, Text>>,
     /// The files of the module at hand that read it, each compared as the two locks read it.
     pub yours: Vec<Behavior>,
+    /// The lines of the flows and the kaname modules of the module at hand that read a file whose
+    /// answers differ: one of its files, or one of [`Changed::yours`].
+    pub readers: Vec<Reader>,
+}
+
+/// A line of a flow or a kaname module of the module at hand (languages with no diff of behavior)
+/// that reads a file whose answers differ: where it reads, for its own answers are not compared.
+#[derive(Clone, Debug)]
+pub struct Reader {
+    /// The file, from the root.
+    pub file: String,
+    pub line: usize,
+    pub tool: Tool,
+    /// How the line reads, in its language's words (`use rule`, `use module`, `flow`).
+    pub how: String,
+    /// What the line names, from the root.
+    pub names: String,
+    /// The files whose answers differ that the line reads, from the root: what it names, or files
+    /// it reaches through what it names.
+    pub differ: Vec<String>,
 }
 
 /// What a report says.
@@ -324,20 +347,23 @@ impl Report {
             // read with: `invoice.cal (the lock of main)`
             let (base_lock, head_lock) = (Report::lock_of(Some(base), lang, ""), Report::lock_of(head, lang, ""));
             let mut yours: Vec<(Behavior, BTreeSet<String>)> = Vec::new();
-            for (rel, _) in local {
-                let Some(tool) = diff::behaves(&rel) else { continue };
-                let read: BTreeSet<String> = sides.reads(&rel).into_iter().filter(|n| names.contains(n.as_str())).collect();
+            for (rel, _) in &local {
+                let Some(tool) = diff::behaves(rel) else { continue };
+                let read: BTreeSet<String> = sides.reads(rel).into_iter().filter(|n| names.contains(n.as_str())).collect();
                 if read.is_empty() {
                     continue;
                 }
-                let at = root.join(&rel).to_string_lossy().into_owned();
+                let at = root.join(rel).to_string_lossy().into_owned();
                 let old = Spot { read: at.clone(), shown: format!("{rel} ({base_lock})"), through: Some(base_view.clone()) };
                 let now = Spot { read: at, shown: format!("{rel} ({head_lock})"), through: head_files.clone() };
                 let result = diff::behavior(tool, &old, &now, budget, lang, &joined);
-                yours.push((Behavior { file: rel, tool, result }, read));
+                yours.push((Behavior { file: rel.clone(), tool, result }, read));
             }
             for m in &mut modules {
                 m.yours = yours.iter().filter(|(_, read)| read.contains(&m.module)).map(|(b, _)| b.clone()).collect();
+            }
+            for (k, r) in sides.readers(h, &local, &modules, &yours) {
+                modules[k].readers.push(r);
             }
         }
         Ok(Report { base: base.to_string(), head: head.map(str::to_string), base_check, head_check, new: new.into_iter().map(|(d, _)| d).collect(), breaks, gone, modules })
@@ -457,6 +483,7 @@ fn changes(base: &Tree, head: &Tree, base_files: &Rc<dyn Files>, head_files: &Op
             diagnostics: Vec::new(),
             diff: None,
             yours: Vec::new(),
+            readers: Vec::new(),
         });
     }
     out.sort_by_key(|m| m.change != Change::Moved);
@@ -532,6 +559,84 @@ impl Sides<'_> {
         }
         let read = self.reads(file);
         modules.iter().enumerate().filter(|(_, m)| read.contains(&m.module)).map(|(k, _)| k).collect()
+    }
+
+    /// The lines of the flows and the kaname modules among `local` (the files of the module at hand)
+    /// that read a file whose answers differ, as the head reads them: a file of a changed module
+    /// whose `ritsu mod diff` says so, or one of `yours` that does. A line is followed through the
+    /// files it names whose answers were not compared, and stops at each that was. Each with the
+    /// changed module it is about: the module of the files it reads, or for one of `yours`, each
+    /// changed module that file reads.
+    fn readers(&self, head: &Tree, local: &[(String, Vec<u8>)], modules: &[Changed], yours: &[(Behavior, BTreeSet<String>)]) -> Vec<(usize, Reader)> {
+        let mine = |path: &str| yours.iter().find(|(b, _)| b.file == path);
+        // whether a file's answers differ, when they were compared
+        let differs = |path: &str| -> Option<bool> {
+            let result = match node_of(head, path) {
+                Some(i) => {
+                    let name = head.nodes[i].name.to_string();
+                    let rel = path.split('/').skip_while(|p| p.starts_with('@')).collect::<Vec<_>>().join("/");
+                    let Some(Ok(d)) = &modules.iter().find(|m| m.module == name)?.diff else { return None };
+                    &d.behavior.iter().find(|b| b.file == rel)?.result
+                }
+                None => &mine(path)?.0.result,
+            };
+            result.as_ref().ok().map(|s| s.differs)
+        };
+        let owners = |path: &str| -> Vec<usize> {
+            match node_of(head, path) {
+                Some(i) => modules.iter().position(|m| m.module == head.nodes[i].name.to_string()).into_iter().collect(),
+                None => {
+                    let read = mine(path).map(|(_, read)| read);
+                    modules.iter().enumerate().filter(|(_, m)| read.is_some_and(|r| r.contains(&m.module))).map(|(k, _)| k).collect()
+                }
+            }
+        };
+        let index = &self.head_index.index;
+        // the files whose answers differ that a file leads to, it among them
+        let reached = |from: &str| -> BTreeSet<String> {
+            let mut out = BTreeSet::new();
+            let mut seen = BTreeSet::new();
+            let mut todo = vec![from.to_string()];
+            while let Some(f) = todo.pop() {
+                if !seen.insert(f.clone()) {
+                    continue;
+                }
+                match differs(&f) {
+                    Some(true) => {
+                        out.insert(f);
+                    }
+                    Some(false) => {}
+                    None => {
+                        if let Some(Ok(refs)) = diff::tool_of(&f).and_then(|t| index.references(t, self.root, &f)) {
+                            todo.extend(refs.into_iter().map(|r| r.target.path));
+                        }
+                    }
+                }
+            }
+            out
+        };
+        diff::within(self.head_files.clone(), || {
+            let mut known: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+            let mut out = Vec::new();
+            for (rel, _) in local {
+                let Some(tool) = diff::tool_of(rel).filter(|t| matches!(t, Tool::Dandori | Tool::Kaname)) else { continue };
+                let Some(Ok(refs)) = index.references(tool, self.root, rel) else { continue };
+                for r in refs {
+                    let path = r.target.path;
+                    let differ = known.entry(path.clone()).or_insert_with(|| reached(&path));
+                    let mut by: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+                    for p in differ.iter() {
+                        for k in owners(p) {
+                            by.entry(k).or_default().push(p.clone());
+                        }
+                    }
+                    for (k, differ) in by {
+                        out.push((k, Reader { file: rel.clone(), line: r.line, tool, how: r.how.clone(), names: path.clone(), differ }));
+                    }
+                }
+            }
+            out
+        })
     }
 }
 
@@ -862,9 +967,45 @@ impl Report {
                     }
                 }
             }
+            if !m.readers.is_empty() {
+                o.push_str(&format!("\n{}{e}\n", Report::readers_title(lang, false)));
+                for r in &m.readers {
+                    o.push_str(&format!("  {}:{} ({}, {}){c}{}\n", r.file, r.line, r.tool.word(), r.how, Report::read(r, lang, "")));
+                }
+                o.push_str(&format!("  {}\n", Report::readers_note(lang)));
+            }
         }
         o.push_str(&format!("\n{}\n", self.closing(lang, code, "")));
         o
+    }
+
+    /// The title of the lines of yours that read answers that change.
+    fn readers_title(lang: Lang, heading: bool) -> String {
+        let t = tr!("変わる答えを読む手元の行", "your lines that read answers that change").get(lang).to_string();
+        if heading { sentence(&t, lang) } else { t }
+    }
+
+    /// Why the lines of yours that read answers that change are listed and not compared (a sentence
+    /// that starts with a language's name, which is written in lower case).
+    fn readers_note(lang: Lang) -> String {
+        tr!(
+            "dandori と kaname には振る舞いの差が無いので、これらのファイルの答えが変わるかは比べていません。",
+            "dandori and kaname have no diff of behavior: whether the answers of these files change is not compared."
+        )
+        .get(lang)
+        .to_string()
+    }
+
+    /// What a line of yours reads whose answers differ, each path in `q`: the files, and what the
+    /// line names when it reaches them through it.
+    fn read(r: &Reader, lang: Lang, q: &str) -> String {
+        let and = if lang == Lang::Ja { "、" } else { ", " };
+        let differ = r.differ.iter().map(|p| format!("{q}{p}{q}")).collect::<Vec<_>>().join(and);
+        if r.differ.len() == 1 && r.differ[0] == r.names {
+            return differ;
+        }
+        let names = format!("{q}{}{q}", r.names);
+        tr!("{names} を通して {differ}", "{differ}, through {names}").get(lang).to_string()
     }
 
     /// The report as Markdown, to paste in a comment of a pull request: every word with an `@` in
@@ -933,6 +1074,16 @@ impl Report {
                     o.pop();
                 }
             }
+            if !m.readers.is_empty() {
+                o.push_str(&format!("\n#### {}\n\n", Report::readers_title(lang, true)));
+                for r in m.readers.iter().take(ROWS) {
+                    o.push_str(&format!("- `{}:{}` ({}, `{}`){c}{}\n", r.file, r.line, r.tool.word(), r.how, Report::read(r, lang, "`")));
+                }
+                if m.readers.len() > ROWS {
+                    o.push_str(&format!("\n{}\n", sentence(&diff::more_line(m.readers.len() - ROWS, lang), lang)));
+                }
+                o.push_str(&format!("\n{}\n", Report::readers_note(lang)));
+            }
         }
         o.push_str(&format!("\n{}\n", sentence(&self.closing(lang, code, "`"), lang)));
         fit(&diff::guarded(&o), LIMIT, lang)
@@ -999,6 +1150,19 @@ impl Report {
                     },
                 ),
                 ("yours", Json::arr(m.yours.iter().map(|b| diff::behavior_json(b, lang)))),
+                (
+                    "readers",
+                    Json::arr(m.readers.iter().map(|r| {
+                        Json::obj([
+                            ("file", Json::str(r.file.as_str())),
+                            ("line", Json::int(r.line as i128)),
+                            ("tool", Json::str(r.tool.word())),
+                            ("how", Json::str(r.how.as_str())),
+                            ("names", Json::str(r.names.as_str())),
+                            ("differ", Json::arr(r.differ.iter().map(|p| Json::str(p.as_str())))),
+                        ])
+                    })),
+                ),
             ])
         });
         Json::obj([
@@ -1135,7 +1299,7 @@ mod tests {
 
     /// pricing, upgraded, with what `ritsu mod diff` says of it.
     fn pricing(diff: Option<Result<ModDiff, Text>>) -> Changed {
-        Changed { module: "example.com/acme/pricing".into(), prefix: "@pricing".into(), change: Change::Upgraded, old: None, new: None, diagnostics: Vec::new(), diff, yours: Vec::new() }
+        Changed { module: "example.com/acme/pricing".into(), prefix: "@pricing".into(), change: Change::Upgraded, old: None, new: None, diagnostics: Vec::new(), diff, yours: Vec::new(), readers: Vec::new() }
     }
 
     /// The order of the exit codes: an error with the head's lock is 1 whatever was not compared, and

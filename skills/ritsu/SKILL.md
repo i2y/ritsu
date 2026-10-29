@@ -341,16 +341,17 @@ That line counts a dependency's warnings, and `--deps-warnings` shows each. A de
 claims are not run. An error in a dependency's own files is its author's to fix: tell the person,
 and do not copy the files into the project to change them.
 
-**Raising a version** changes the answers of the files that read the module, so show what it
-changes before it is merged. `ritsu mod diff <module>@<old> <module>@<new>` compares two versions of
-a module: the files, the requires, every input of a rule, a date or a gate that gets another answer,
+**Raising a version** changes the answers of the files that read the module, so show what it changes
+before it is merged. `ritsu mod diff <module>@<old> <module>@<new>` compares two versions of a
+module: the files, the requires, every input of a rule, a date or a gate that gets another answer,
 and the interfaces (exit 1 when it shows a difference of behavior or of an interface, 2 when it
 cannot compare). `ritsu mod report --base origin/main --format markdown` writes what a pull request
-that changes the lock changes: the check with each lock, and the diff of each module that changed
-(exit 1 on an error with the new lock, or, with `--fail-on-change`, on a difference of behavior; 2
-when a module that changed cannot be compared). `rulec diff`, `koyomi diff` and `sekisho diff` take
-a dependency's file as `@<name>/<path>` (the lock's version) or `@<name>@<version>/<path>` (a version
-in the store).
+that changes the lock changes: the check with each lock, the diff of each module that changed, the
+answers of the person's rules, dates and gates that change, and the lines of their flows and kaname
+modules that read an answer that changes, which are listed, not compared (exit 1 on an error with
+the new lock, or, with `--fail-on-change`, on a difference of behavior; 2 when a module that changed
+cannot be compared). `rulec diff`, `koyomi diff` and `sekisho diff` take a dependency's file as
+`@<name>/<path>` (the lock's version) or `@<name>@<version>/<path>` (a version in the store).
 
 **Publishing** is the person's (§7). `ritsu mod push --dry-run` checks and builds the module without
 sending it. `ritsu mod push` sends it with the credentials of Docker's configuration, refuses a

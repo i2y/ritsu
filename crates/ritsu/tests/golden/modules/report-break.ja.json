@@ -1014,7 +1014,19 @@
         "differs": true
       },
       "error": null,
-      "yours": []
+      "yours": [],
+      "readers": [
+        {
+          "file": "注文/注文を受ける.flow",
+          "line": 6,
+          "tool": "dandori",
+          "how": "use rule",
+          "names": "@pricing/規則/送料.rule",
+          "differ": [
+            "@pricing/規則/送料.rule"
+          ]
+        }
+      ]
     }
   ],
   "ok": false

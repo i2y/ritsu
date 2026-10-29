@@ -2268,6 +2268,22 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 1. 触ったクレートとその口を読むクレートの fast の段で、2,949 件が通った（落ちたものは無い）。ritsu-base 188、ritsu-ports 5、rulec 1,225（ignored 1 は前からのもの）、koyomi 174、sekisho 147、ritsu 270、chobo 108、dandori 116、kaname 196、ritsu-cross 29、ritsu-project 6、sakai 226、yuen 259 である。
 2. SKIP の行は 471 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（python 213、lean 42、node 45、go 33、rustc 17、chrome 12 など）である。足りないものの SKIP は無い。
 
+**C の足し（C3。2026-10-30）：変わる答えを読む手元の行**（DESIGN 17.10 の 4、17.21）
+
+手元のファイルが dandori と kaname だけのモジュールでは、依存の規則の答えが変わっても、`ritsu mod report` は手元について何も言わなかった。二つの言語には振る舞いの差が無く（17.9.5）、「手元のファイルの答えのうち、変わるもの」が規則、日付、カレンダー、ゲートだけを比べるからである。
+
+- `report.rs` の `Sides::readers`：手元のフローと kaname のモジュールの参照を、head の側で、根からのパスでたどる。答えを比べていないファイルと比べられなかったファイルは通り抜け、比べたファイルで止まり、答えが違えばその行を出す。答えの違うファイルは、変わったモジュールの `ritsu mod diff` の振る舞いと、手元のファイルの答えの差から引く。依存のファイルは、木の節とモジュールの中のパスで見分けるので、`@pricing/@tax/…` と `@tax/…` のどちらの書き方で届いても同じファイルになる。行は、届いたファイルが関わる変わったモジュールの節に出す。text と markdown は「変わる答えを読む手元の行」の節（markdown は 50 行まで）と、比べていないことを言う一文、JSON はモジュールごとの `readers`。終了コードと `--fail-on-change` は変えない。
+- 試験：`modules_report.rs`。
+  - 例の shop の三つの golden（上げる、壊れる、タグが動く。英日、markdown と JSON）に、送料の規則を読むフローの行が出る。合計の規則は答えが同じなので、それを読むフローの行と kaname のモジュールは出ない。机の golden の JSON には空の `readers` が増えた。
+  - `your_lines_that_read_answers_that_change`（英日）：事務所に kaname のモジュールを二つ足す。一つは手元の日付のファイル（答えが違う）を読み、もう一つは一つ目を読む（一つ目を通して届く）。shop では、pricing を 1.1.0 のまま税だけを 1.1.0 に上げ、pricing の合計の規則（比べていない）を通して税の規則に届く、フローと kaname のモジュールの行が出る。合計の規則の `meaning:` の固定が E040 になり、税に割り当てた新しいエラーとして exit 1 になることも確かめる。
+- 文書：DESIGN 17.10（4 と出力と終了コード）と 17.21、README（英日）、サイトのモジュールのページ（英日）、ritsu のスキルの 9 節。
+
+C3 で確かめたこと（2026-10-30、この機械で）：
+
+1. ritsu の fast の段で 337 件が通った（落ちたものは無い）。`modules_report.rs` の 8 件、`readme.rs` の 10 件、`skill.rs` の 15 件、`website.rs` の 26 件がこの中にある。
+2. SKIP の行は 65 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（node、python、go、chrome など）である。足りないものの SKIP は無い。
+3. 書いた行に clippy の警告は無い。`mod report` は git が要るので、ブラウザと npm の `ritsu.wasm` では前と同じ文で止まり、作り直しは要らない。
+
 ### 8.4 D：レジストリと署名
 
 **D.1 curl の呼び方**（DESIGN 17.12 の「HTTP は curl で」）

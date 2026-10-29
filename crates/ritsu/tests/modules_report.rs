@@ -10,6 +10,10 @@
 //!   rule it reads) from a registry, with a dates file and a gate of its own that read the desk's
 //!   calendar and rule: what raising the desk changes in their answers (koyomi's and sekisho's
 //!   diffs).
+//! - The lines of the flows and the kaname modules, which have no diff of behavior, that read an
+//!   answer that changes (PLAN 8.3 C3): the shop's flow reading the fee, a kaname module of the
+//!   office's reading its dates file and another reading that module, and the shop's flow and
+//!   kaname module reading the rate of tax, raised alone, through pricing's total.
 //! - Markdown and JSON held to golden files (`tests/golden/modules/report-*`; `RITSU_BLESS=1`
 //!   writes them), the digests masked: the lock in each version carries the version of ritsu.
 //!   Every `@` of the Markdown is in code.
@@ -188,6 +192,10 @@ struct Names {
     rules: &'static str,
     fee: &'static str,
     flow: &'static str,
+    /// The rule of pricing that applies tax's rate, the kaname module that reads it, and tax's rule.
+    total: &'static str,
+    basket: &'static str,
+    vat: &'static str,
 }
 
 const EN: Names = Names {
@@ -201,6 +209,9 @@ const EN: Names = Names {
     rules: "rules",
     fee: "shipping_fee.rule",
     flow: "orders/place_order.flow",
+    total: "order_total.rule",
+    basket: "checkout/basket.kn",
+    vat: "vat_rate.rule",
 };
 
 const JA: Names = Names {
@@ -214,6 +225,9 @@ const JA: Names = Names {
     rules: "規則",
     fee: "送料.rule",
     flow: "注文/注文を受ける.flow",
+    total: "注文の合計.rule",
+    basket: "会計/かご.kn",
+    vat: "付加価値税率.rule",
 };
 
 const PRICING: &str = "example.com/acme/pricing";
@@ -300,7 +314,7 @@ fn the_shop_raising_pricing_held_to_golden_files() {
         assert_eq!((code, &v["base"]["rev"], &v["head"]["rev"], &v["ok"]), (0, &serde_json::json!("one"), &serde_json::Value::Null, &serde_json::json!(true)));
         let m = &v["modules"][0];
         let keys: Vec<&str> = m.as_object().unwrap().keys().map(String::as_str).collect();
-        assert_eq!(keys, ["module", "prefix", "change", "old", "new", "diagnostics", "diff", "error", "yours"]);
+        assert_eq!(keys, ["module", "prefix", "change", "old", "new", "diagnostics", "diff", "error", "yours", "readers"]);
         assert_eq!(v["modules"].as_array().unwrap().len(), 1, "{out}");
         assert_eq!((&m["module"], &m["prefix"], &m["change"]), (&serde_json::json!(PRICING), &serde_json::json!("@pricing"), &serde_json::json!("upgraded")));
         assert_eq!((&m["old"]["version"], &m["new"]["version"]), (&serde_json::json!("1.0.0"), &serde_json::json!("1.1.0")));
@@ -314,6 +328,14 @@ fn the_shop_raising_pricing_held_to_golden_files() {
         assert_eq!(m["diff"]["files"], alone["files"]);
         let fee = format!("{}/{}", n.rules, n.fee);
         assert!(m["diff"]["behavior"].as_array().unwrap().iter().any(|b| b["file"] == fee.as_str() && !b["result"]["changes"].as_array().unwrap().is_empty()));
+        // the shop has no file with a diff of behavior of its own, only a flow and a kaname module:
+        // the flow's line that reads the fee is said; the total, which both read, answers the same
+        assert_eq!(m["yours"], serde_json::json!([]), "{out}");
+        let flow = std::fs::read_to_string(repo.join(n.flow)).unwrap();
+        let line = flow.lines().position(|l| l.starts_with("use rule") && l.contains(&fee)).unwrap() + 1;
+        let fee_at = format!("@pricing/{fee}");
+        let reader = serde_json::json!({"file": n.flow, "line": line, "tool": "dandori", "how": "use rule", "names": fee_at, "differ": [fee_at]});
+        assert_eq!(m["readers"], serde_json::json!([reader]), "{out}");
         // with `--fail-on-change`, a difference in behavior is exit 1
         let (code, out, err) = report(&["--base", "one", "--fail-on-change"], "json");
         assert_eq!((code, err.as_str()), (1, ""), "{out}");
@@ -555,6 +577,120 @@ fn your_answers_that_change_held_to_golden_files() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// The line of `file` (from `root`) that starts with `start` and names `path`, from 1.
+fn line_of(root: &Path, file: &str, start: &str, path: &str) -> usize {
+    let text = std::fs::read_to_string(root.join(file)).unwrap();
+    text.lines().position(|l| l.starts_with(start) && l.contains(path)).unwrap_or_else(|| panic!("{file} has no `{start}` line that names {path}")) + 1
+}
+
+/// The lines of the flows and the kaname modules of yours, which have no diff of behavior, that read
+/// answers that change: a line is followed through what it names whose answers were not compared (a
+/// kaname module of yours, a rule of a module that did not change) to a file whose answers differ
+/// (one of yours, or one of a changed module), each said under the module it is about, in each
+/// language.
+#[test]
+fn your_lines_that_read_answers_that_change() {
+    if !has_git() {
+        return;
+    }
+    // the office's two kaname modules: one reads the office's dates file, whose answers differ with
+    // the desk raised, and the other reads the first
+    for n in [OFFICE_EN, OFFICE_JA] {
+        let (_t, store, repo) = office(&n);
+        let lang = n.lang;
+        let (billing, summary) = if lang == "en" {
+            (
+                ("billing.kn", "module billing v1\ndescription \"The day an invoice is paid, by the office's dates\"\n\nuse dates invoice from \"invoice.cal\"\n\nfn paid(received: date range >=2026-01-01 <=2026-10-31) -> date\n  invoice.payment(received: received)\n"),
+                ("summary.kn", "module summary v1\ndescription \"The day the office pays, by billing\"\n\nuse module billing from \"billing.kn\"\n\nfn paid_on(received: date range >=2026-01-01 <=2026-10-31) -> date\n  billing.paid(received: received)\n"),
+            )
+        } else {
+            (
+                ("請求の日.kn", "module 請求の日(billing) v1\ndescription \"請求が払われる日。事務所の日付のファイルによる\"\n\nuse dates 請求 from \"請求.cal\"\n\nfn 支払日(paid)(受領日(received): date range >=2026-01-01 <=2026-10-31) -> date\n  請求.支払日(受領日: 受領日)\n"),
+                ("まとめ.kn", "module まとめ(summary) v1\ndescription \"事務所が払う日。請求の日による\"\n\nuse module 請求の日 from \"請求の日.kn\"\n\nfn 払う日(paid_on)(受領日(received): date range >=2026-01-01 <=2026-10-31) -> date\n  請求の日.支払日(受領日: 受領日)\n"),
+            )
+        };
+        for (file, text) in [billing, summary] {
+            std::fs::write(repo.join(file), text).unwrap();
+        }
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--format", "json", "--lang", lang]);
+        assert_eq!((code, err.as_str()), (0, ""), "office {lang}:\n{out}");
+        let v = json(&out);
+        let m = &v["modules"][0];
+        let mut want = vec![
+            serde_json::json!({"file": billing.0, "line": 4, "tool": "kaname", "how": "use dates", "names": n.invoice, "differ": [n.invoice]}),
+            serde_json::json!({"file": summary.0, "line": 4, "tool": "kaname", "how": "use module", "names": billing.0, "differ": [n.invoice]}),
+        ];
+        want.sort_by_key(|r| r["file"].as_str().unwrap().to_string());
+        assert_eq!(m["readers"], serde_json::json!(want), "office {lang}:\n{out}");
+        let (code, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--lang", lang]);
+        assert_eq!(code, 0, "{text}");
+        let (b, s, i) = (billing.0, summary.0, n.invoice);
+        let said = if lang == "en" {
+            [
+                "\nyour lines that read answers that change:\n".to_string(),
+                format!("\n  {b}:4 (kaname, use dates): {i}\n"),
+                format!("\n  {s}:4 (kaname, use module): {i}, through {b}\n"),
+                "\n  dandori and kaname have no diff of behavior: whether the answers of these files change is not compared.\n".to_string(),
+            ]
+        } else {
+            [
+                "\n変わる答えを読む手元の行：\n".to_string(),
+                format!("\n  {b}:4 (kaname, use dates)：{i}\n"),
+                format!("\n  {s}:4 (kaname, use module)：{b} を通して {i}\n"),
+                "\n  dandori と kaname には振る舞いの差が無いので、これらのファイルの答えが変わるかは比べていません。\n".to_string(),
+            ]
+        };
+        for line in &said {
+            assert!(text.contains(line.as_str()), "office {lang}: no {line:?}:\n{text}");
+        }
+        let (_, md, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--format", "markdown", "--lang", lang]);
+        let through = if lang == "en" { format!("- `{s}:4` (kaname, `use module`): `{i}`, through `{b}`\n") } else { format!("- `{s}:4` (kaname, `use module`)：`{b}` を通して `{i}`\n") };
+        assert!(md.contains(&through), "office {lang}:\n{md}");
+    }
+
+    // tax raised beside pricing, which stays at 1.1.0: the lines that read pricing's total read the
+    // rate of tax through it, a rule whose answers were not compared
+    for n in [EN, JA] {
+        let (t, store, repo) = shop(&n);
+        let lang = n.lang;
+        let tax = t.path().join("tax-1.1.0");
+        copy_dir(&t.path().join(n.tax), &tax);
+        replace(&tax, "ritsu.mod", "version 1.0.0", "version 1.1.0");
+        let vat = format!("{}/{}", n.rules, n.vat);
+        let rates = std::fs::read_to_string(tax.join(&vat)).unwrap();
+        assert!(rates.contains("| 5%"));
+        std::fs::write(tax.join(&vat), rates.replace("| 5%", "| 6%")).unwrap();
+        put(&store, &tax);
+        let manifest = std::fs::read_to_string(repo.join("ritsu.mod")).unwrap();
+        std::fs::write(repo.join("ritsu.mod"), format!("{manifest}require tax oci \"example.com/acme/tax\" 1.1.0\n")).unwrap();
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "lock"]);
+        assert_eq!(code, 0, "{out}{err}");
+        let (code, out, err) = ritsu_in(&repo, &store, &["mod", "report", "--base", "two", "--format", "json", "--lang", lang]);
+        assert_eq!(err, "", "shop {lang}:\n{out}");
+        let v = json(&out);
+        let changed: Vec<(&str, &str)> = v["modules"].as_array().unwrap().iter().map(|m| (m["module"].as_str().unwrap(), m["change"].as_str().unwrap())).collect();
+        assert_eq!(changed, [("example.com/acme/tax", "upgraded")], "shop {lang}:\n{out}");
+        let m = &v["modules"][0];
+        assert!(m["diff"]["behavior"].as_array().unwrap().iter().any(|b| b["file"] == vat.as_str() && !b["result"]["changes"].as_array().unwrap().is_empty()), "shop {lang}:\n{out}");
+        // pricing's total pins the meaning of the rate it applies, which changed: E040 in pricing, a
+        // new error about tax (exit 1)
+        let new = v["check"]["new"].as_array().unwrap();
+        assert!(new.iter().any(|d| d["code"] == "E040" && d["file"] == format!("@pricing/{}/{}", n.rules, n.total)) && m["diagnostics"] != serde_json::json!([]), "shop {lang}:\n{out}");
+        // the shop requires tax too, so the rate is named by its own `@tax/` (the fewest `@` first)
+        let rate = format!("@tax/{vat}");
+        let total = format!("@pricing/{}/{}", n.rules, n.total);
+        let (basket_at, flow_at) = (line_of(&repo, n.basket, "use rule", &total), line_of(&repo, n.flow, "use rule", &total));
+        let want = serde_json::json!([
+            {"file": n.basket, "line": basket_at, "tool": "kaname", "how": "use rule", "names": total, "differ": [rate]},
+            {"file": n.flow, "line": flow_at, "tool": "dandori", "how": "use rule", "names": total, "differ": [rate]},
+        ]);
+        assert_eq!((code, &m["readers"]), (1, &want), "shop {lang}:\n{out}");
+        let (_, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "two", "--lang", lang]);
+        let line = if lang == "en" { format!("  {}:{flow_at} (dandori, use rule): {rate}, through {total}\n", n.flow) } else { format!("  {}:{flow_at} (dandori, use rule)：{total} を通して {rate}\n", n.flow) };
+        assert!(text.contains(&line), "shop {lang}: no {line:?}:\n{text}");
+    }
 }
 
 /// A module with no file of ritsu's languages of its own, which only gathers a dependency: `ritsu

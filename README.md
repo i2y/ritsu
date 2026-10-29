@@ -674,8 +674,9 @@ each version of it, with a page for each file and what changed from the version 
 file shows the code that uses it, and, for rules, dates and gates, every input that gets a different
 answer, over the whole input space rather than a sample. `ritsu mod report` answers what a pull
 request that raises a dependency asks. It checks the project against the lock of the base and the
-lock of the head, and says, for each module that changed, its diff and which answers of your own
-files change. In GitHub Actions it posts that on the pull request:
+lock of the head, and says, for each module that changed, its diff, which answers of your own files
+change, and which lines of your flows and kaname modules read an answer that changes. In GitHub
+Actions it posts that on the pull request:
 
 ```yaml
 # .github/workflows/ritsu-mod-report.yml

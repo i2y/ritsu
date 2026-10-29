@@ -362,9 +362,10 @@ A change that may break a user is a candidate: whether it does is for the user's
 `ritsu mod report --base <revision>` answers what a pull request that raises a dependency asks. It
 reads your files as the head has them, with the dependencies of the base and then with those of the
 head, and fetches the modules both locks pin. It says which diagnostics the head adds and removes,
-and, for each module that changed, its diff and which answers of your own files change. A module
-whose tag moved, the same version with other files, comes first. The markdown is a comment for the
-pull request:
+and, for each module that changed, its diff, which answers of your own files change, and which
+lines of your flows and kaname modules read an answer that changes: dandori and kaname have no diff
+of behavior, so those lines are listed, not compared. A module whose tag moved, the same version
+with other files, comes first. The markdown is a comment for the pull request:
 
 ```yaml
 # .github/workflows/ritsu-mod-report.yml
