@@ -1,5 +1,5 @@
 gate held v2
-description "Refunds by the band of a rule, its second version: a clerk refunds an amount the rule calls small, and nothing from 4"
+description "Refunds by the band of a rule, its second version: a clerk refunds an amount the rule calls small, and nothing from 4 to 10"
 namespace Shop
 
 use rule band from "band.rule"
@@ -29,8 +29,8 @@ permit clerks_refund_small_amounts
   action refund_order
   when size is small
 
-forbid nothing_from_4
-  description "Nothing is refunded from 4"
+forbid nothing_from_4_to_10
+  description "Nothing is refunded from 4 to 10"
   principal is User
   action refund_order
-  when amount >= 4
+  when amount >= 4 and amount <= 10

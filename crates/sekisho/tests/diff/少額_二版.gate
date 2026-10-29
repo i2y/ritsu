@@ -1,5 +1,5 @@
 gate 少額(held_ja) v2
-description "規則の区分で返金する、二つ目の版。係は規則が少額と言う金額を返金できるが、4 からは何も返金できない"
+description "規則の区分で返金する、二つ目の版。係は規則が少額と言う金額を返金できるが、4 から 10 までは何も返金できない"
 namespace ShopJa
 
 use rule 区分 from "区分.rule"
@@ -29,8 +29,8 @@ permit 係は少額を返金できる(clerks_refund_small_amounts)
   action 返金する
   when 大きさ is 少額
 
-forbid 4からは返金しない(nothing_from_4)
-  description "4 からは何も返金しない"
+forbid 4から10までは返金しない(nothing_from_4_to_10)
+  description "4 から 10 までは何も返金しない"
   principal is 職員
   action 返金する
-  when 金額 >= 4
+  when 金額 >= 4 and 金額 <= 10
