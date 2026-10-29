@@ -41,8 +41,24 @@ fn ritsu_says_what_it_has() {
     assert_eq!(ritsu(&["nope"]), (2, String::new(), "error: there is no command `nope`; run `ritsu --help`\n".into()));
     let (code, out, _) = ritsu(&["check", "--help"]);
     assert!(code == 0 && out.starts_with("ritsu check — check the files of a project"), "{out}");
-    let (code, out, _) = ritsu(&["help", "check", "--lang", "ja"]);
-    assert!(code == 0 && out.starts_with("ritsu check — "), "{out}");
+    // `--lang` before `help`, after it, or after the command it is asked of
+    for args in [["--lang", "ja", "help", "check"], ["help", "check", "--lang", "ja"], ["help", "--lang", "ja", "check"]] {
+        let (code, out, _) = ritsu(&args);
+        assert!(code == 0 && out.starts_with("ritsu check — プロジェクトのファイルを"), "{args:?}: {out}");
+    }
+    let (code, out, _) = ritsu(&["help", "check", "--lang=ja"]);
+    assert!(code == 0 && out.starts_with("ritsu check — プロジェクトのファイルを"), "{out}");
+    let (code, out, _) = ritsu(&["help", "mod", "--lang", "ja"]);
+    assert!(code == 0 && out.contains("ritsu のモジュールのコマンド"), "{out}");
+    // a language's page, in the language asked before `help` or after it
+    for args in [["--lang", "ja", "help", "rulec"], ["help", "rulec", "--lang", "ja"]] {
+        let (code, out, _) = ritsu(&args);
+        assert!(code == 0 && out.contains("業務ルールを一枚の表として書き"), "{args:?}: {out}");
+    }
+    let (code, out, _) = ritsu(&["help", "rulec"]);
+    assert!(code == 0 && out.contains("Write business rules as one table"), "{out}");
+    let (code, _, err) = ritsu(&["help", "nope", "--lang", "ja"]);
+    assert_eq!((code, err.as_str()), (2, "エラー: `nope` というコマンドはありません。`ritsu --help` を読んでください\n"));
 }
 
 /// `ritsu <language>` is the language's own command, for every one of the nine.

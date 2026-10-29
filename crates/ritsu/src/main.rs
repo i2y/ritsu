@@ -70,6 +70,28 @@ fn lang_asked(args: &[String]) -> Option<String> {
     None
 }
 
+/// The words after `help`: the command it is asked of (the first word that is no `--lang` and no
+/// value of one), and the language a `--lang` among them asks for.
+fn help_topic(after: &[String]) -> (Option<&str>, Option<String>) {
+    let (mut topic, mut asked) = (None, None);
+    let mut i = 0;
+    while i < after.len() {
+        if after[i] == "--lang" {
+            asked = after.get(i + 1).cloned();
+            i += 2;
+            continue;
+        }
+        match after[i].strip_prefix("--lang=") {
+            Some(v) => asked = Some(v.to_string()),
+            None => {
+                topic.get_or_insert(after[i].as_str());
+            }
+        }
+        i += 1;
+    }
+    (topic, asked)
+}
+
 fn refuse(msg: Text, lang: Lang) -> ExitCode {
     let head = if lang == Lang::Ja { "エラー" } else { "error" };
     eprintln!("{head}: {}", msg.get(lang));
@@ -190,21 +212,31 @@ fn run() -> ExitCode {
             print!("{}", table.help_all(lang));
             ExitCode::SUCCESS
         }
-        "help" => match args.get(at + 1) {
-            None => {
-                print!("{}", table.help_all(lang));
-                ExitCode::SUCCESS
-            }
-            Some(l) if cli::is_language(l) => language(l, &["--help".to_string()]),
-            Some(m) if m == "mod" => ExitCode::from(modules::cli::command(&["--help".to_string()], lang)),
-            Some(c) => match table.command(c) {
-                Some(cmd) => {
-                    print!("{}", table.help_cmd(cmd, lang));
+        "help" => {
+            // `--lang` after `help` counts too (`ritsu help check --lang ja`), and is no command
+            let (topic, asked) = help_topic(&args[at + 1..]);
+            let asked = asked.or_else(|| lang_asked(&args));
+            let lang = match &asked {
+                Some(l) => Lang::pick(Some(l), "RITSU_LANG"),
+                None => lang,
+            };
+            match topic {
+                None => {
+                    print!("{}", table.help_all(lang));
                     ExitCode::SUCCESS
                 }
-                None => refuse(tr!("`{c}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{c}`; run `ritsu --help`"), lang),
-            },
-        },
+                // a language reads its own variable (`RULEC_LANG`) when no `--lang` is asked
+                Some(l) if cli::is_language(l) => language(l, &std::iter::once("--help".to_string()).chain(asked.into_iter().flat_map(|a| ["--lang".to_string(), a])).collect::<Vec<_>>()),
+                Some("mod") => ExitCode::from(modules::cli::command(&["--help".to_string()], lang)),
+                Some(c) => match table.command(c) {
+                    Some(cmd) => {
+                        print!("{}", table.help_cmd(cmd, lang));
+                        ExitCode::SUCCESS
+                    }
+                    None => refuse(tr!("`{c}` というコマンドはありません。`ritsu --help` を読んでください", "there is no command `{c}`; run `ritsu --help`"), lang),
+                },
+            }
+        }
         "--version" | "-V" => {
             println!("ritsu {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
