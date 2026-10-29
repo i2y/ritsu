@@ -365,9 +365,9 @@ See also: [E202](#e202)
 
 ## E203 — An amount given to a transfer can be one chobo does not take
 
-**When**: An amount of a transfer can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1), and chobo fails such a call rather than refusing it as a business outcome. For a workflow, it is checked where a rule's numeric output is given to a chobo transfer as its amount: rulec counts what the output comes to (the numbers the rows write, or its intervals), and the notes give an input of the rule that comes to that amount, from the rule's vectors. For a function of kaname, every amount is checked, a rule's output or one kaname computes, and it is this error where a run of the function's vectors comes to such an amount; the notes give the function's input and the amount.
+**When**: An amount of a transfer can be below 0 or above 2⁶³ − 1 (chobo takes 0 to 2⁶³ − 1), and chobo fails such a call rather than refusing it as a business outcome. For a workflow, it is checked where a rule's numeric output is given to a chobo transfer as its amount, and it is this error where an input from the rule's vectors comes to such an amount; an end of the range rulec counts, or a number a row writes, is not enough (W203). The notes give that input and the amount. For a function of kaname, every amount is checked, a rule's output or one kaname computes, and it is this error where a run of the function's vectors comes to such an amount; the notes give the function's input and the amount.
 
-**Fix**: Make the amounts 0 or more (a negative one, such as a refund, is a transfer the other way), or branch before the transfer.
+**Fix**: Make the amounts 0 or more (a negative one, such as a refund, is a transfer the other way). In kaname, the amount can also be narrowed with an `if` before the transfer.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 
@@ -458,9 +458,9 @@ See also: [W203](#w203), [E204](#e204)
 
 ## W203 — Whether chobo takes an amount given to a transfer cannot be decided
 
-**When**: Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say); an amount chobo does not take fails the call when the workflow runs. For a function of kaname, the amounts kaname's ranges find do not stay inside what chobo takes, and no run of the function's vectors comes to one outside; kaname's generated code checks the amount where it builds the transfer, and the function fails with `range` for one chobo does not take.
+**When**: Where a workflow gives a rule's numeric output to a transfer as its amount, the output's range has an open end, or the value can also come from somewhere with no range (a task's answer without one, say). It is also this warning where rulec counts the output's range outside what chobo takes and no input from the rule's vectors comes to such an amount: rulec bounds an output by moving each input over its own range, and does not narrow the bound by a `constraint` that ties two inputs, so the output may never come to one. An amount chobo does not take fails the call when the workflow runs. For a function of kaname, the amounts kaname's ranges find do not stay inside what chobo takes, and no run of the function's vectors comes to one outside; kaname's generated code checks the amount where it builds the transfer, and the function fails with `range` for one chobo does not take.
 
-**Fix**: Give the places the value comes from a range (the `range` of a task's answer or of the workflow's input). In kaname, narrow the amount with an `if` before the transfer.
+**Fix**: Give the places the value comes from a range (the `range` of a task's answer or of the workflow's input). Where rulec's range of the output reaches outside, write the rule so that rulec counts the output as 0 or more (`max(…, 0)`, say), or make a negative amount a transfer the other way. In kaname, narrow the amount with an `if` before the transfer.
 
 **Reproduction**: put the files below in one directory, and run `ritsu check .` there.
 

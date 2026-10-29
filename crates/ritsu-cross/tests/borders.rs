@@ -3,7 +3,7 @@
 //! to real answers of koyomi, chobo and rulec. `crates/ritsu/tests/cross.rs` reaches the same
 //! decisions from projects, where a flow calls them.
 
-use ritsu_cross::borders::{amount_fits, amounts_given, amounts_hull, day_text, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom, Unmet};
+use ritsu_cross::borders::{amount_fits, amount_unshown, amounts_given, amounts_hull, amounts_unshown, day_text, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom, Unmet};
 use ritsu_ports::{Answer, Books, Dates, Found, Rules};
 use std::path::{Path, PathBuf};
 
@@ -58,16 +58,38 @@ fn x4_a_rules_output_as_an_amount() {
     assert_eq!(amount_fits(&fee), Answer::Holds);
     let adjust = r.output_values(&t.path().join("adjust.rule"), "amount").unwrap();
     match amount_fits(&adjust) {
-        Answer::Fails((v, Some(input))) => {
+        Answer::Fails((v, input)) => {
             assert_eq!(v, -300);
             assert_eq!(input, vec![("what".to_string(), ritsu_ports::Value::Enum("refund".into()))]);
         }
         other => panic!("{other:?}"),
     }
+    // an example is an input from the rule's vectors: rulec counts a range from above, so neither
+    // an end of it nor a number a row writes shows an amount the output comes to
+    let seats = |constraint: &str| format!("rule seats v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n{constraint}\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n");
+    write("free.rule", &seats(""));
+    write("tied.rule", &seats("\nconstraint holding <= asked\n"));
+    write("unreached.rule", "rule unreached v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| asked | holding | -> needed : number |\n| <=40  | >40     | -20                |\n| <=40  | <=40    | 10                 |\n| >40   | -       | 30                 |\n");
+    write("wide.rule", "rule wide v1\n\nenum kind = workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  range >=-10 <=100  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| workshop   | 30                 |\n| talk       | 80                 |\n");
+    let int = |n: i128| ritsu_ports::Value::Int(n);
+    let free = r.output_values(&t.path().join("free.rule"), "needed").unwrap();
+    assert_eq!(amount_fits(&free), Answer::Fails((-50, vec![("asked".to_string(), int(0)), ("holding".to_string(), int(50))])));
+    assert_eq!(amount_unshown(&free), None);
+    for (file, ends) in [("tied.rule", (-50, 100)), ("unreached.rule", (-20, 30)), ("wide.rule", (-10, 100))] {
+        let o = r.output_values(&t.path().join(file), "needed").unwrap();
+        assert!(matches!(amount_fits(&o), Answer::Undecided(_)), "{file}: {:?}", amount_fits(&o));
+        assert_eq!(amount_unshown(&o), Some(ends), "{file}");
+    }
+    let tied = r.output_values(&t.path().join("tied.rule"), "needed").unwrap();
+    assert_eq!(amounts_unshown(&[fee.clone(), tied.clone()], None), Some((1, -50, 100)));
+    assert!(matches!(amounts_given(&[fee.clone(), tied.clone(), adjust.clone()], &[], None), Answer::Fails((-300, AmountFrom::Output(2, _)))));
+    let why = ritsu_base::tr!("範囲が無い", "no range");
+    assert_eq!(amounts_unshown(&[tied.clone()], Some(&why)), None);
+    assert_eq!(amount_unshown(&fee), None);
     assert!(matches!(r.output_values(&t.path().join("fee.rule"), "parcel").unwrap(), Found::Undecided(_)));
     // by where an amount can come from: rules' outputs, ranges dandori knows, places that say nothing
     assert_eq!(amounts_given(&[fee.clone()], &[(Some(1), Some(100))], None), Answer::Holds);
-    assert!(matches!(amounts_given(&[fee.clone(), adjust.clone()], &[], None), Answer::Fails((-300, AmountFrom::Output(1, Some(_))))));
+    assert!(matches!(amounts_given(&[fee.clone(), adjust.clone()], &[], None), Answer::Fails((-300, AmountFrom::Output(1, _)))));
     // chobo takes 0 (a transfer that moves nothing); a negative amount is the first it does not take
     assert_eq!(amounts_given(&[fee.clone()], &[(Some(0), Some(100))], None), Answer::Holds);
     assert_eq!(amounts_given(&[fee.clone()], &[(Some(-1), Some(100))], None), Answer::Fails((-1, AmountFrom::Range(0))));

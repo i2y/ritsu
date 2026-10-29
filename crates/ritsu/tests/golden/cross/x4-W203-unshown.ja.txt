@@ -1,0 +1,14 @@
+ok seats.rule
+hall.book: ok
+  assign.do   拒否されうる理由: over_capacity（given(event) at most 300）、key_conflict、already_refused
+  release.do  拒否されうる理由: not_given（given(event) at least 0）、key_conflict、already_refused
+  キー: assign は、event ごとに一度だけ動きます。キーが同じで count が違う二度目の呼び出しは、key_conflict で拒否されます。
+  キー: release は、event ごとに一度だけ動きます。キーが同じで count が違う二度目の呼び出しは、key_conflict で拒否されます。
+booking.flow: 検査を通りました
+警告[ritsu W203]: booking.flow:19:1: タスク `give_seats` が `count` に渡す額を chobo が受け取るかを決められません
+    19 |   give_seats(event: event, count: need.needed)
+  = rulec の数えた範囲では、`need.needed`（規則 "seats.rule" の出力 `needed`）は >=-50 <=100 です。規則のベクタには、chobo が受け取らない額になる入力がありませんでした。
+  = rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます。二つの入力を結ぶ `constraint`（`holding <= asked` など）では狭めないので、出力が実際にはそういう額にならないことがあります。
+  = 受け取らない額なら、ワークフローを走らせたときに chobo がその呼び出しを失敗させます。
+  = rulec が出力を 0 以上と数えるように規則を書くか（`max(…, 0)` など）、負の額を向きの違う振替に分ければ、決められます。
+ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 3 か所、決められない 1 か所

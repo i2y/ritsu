@@ -3,7 +3,12 @@
 //!
 //! - each such amount is a border, held to the amounts chobo takes, 0 to 2⁶³ − 1
 //!   ([`borders::amounts_given`]: E203 and W203). chobo fails a call with any other amount rather
-//!   than refusing it, so the call would fail only when the workflow runs.
+//!   than refusing it, so the call would fail only when the workflow runs. An example is an input
+//!   from the rule's vectors that comes to an amount outside; where rulec's range of the output
+//!   reaches outside and no input does, it is undecided, and the notes say why
+//!   ([`borders::amounts_unshown`]). The output is counted over every input of the rule: a branch
+//!   of the flow before the transfer, or the range of what the flow gives the rule, does not
+//!   narrow it.
 //! - for `do` and `hold`, whose refusals can turn on the amounts (an account's bound), the
 //!   refusals are one border more: chobo's search, with every amount held to the range of the
 //!   amounts the call gives (`Books::refusals`), against the errors the task declares, both held to
@@ -96,15 +101,10 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                     Answer::Fails((v, at)) => {
                         borders.failed += 1;
                         let from = match &at {
-                            borders::AmountFrom::Output(i, input) => {
+                            borders::AmountFrom::Output(i, inputs) => {
                                 let (rule, output, _) = &got.outputs[*i];
-                                match input {
-                                    Some(inputs) => {
-                                        let at = inputs.iter().map(|(n, x)| format!("{n} = {}", shown(x))).collect::<Vec<_>>().join(", ");
-                                        tr!("`{given}` は規則 \"{rule}\" の出力 `{output}` で、{at} のとき {v} になります", "`{given}` is the output `{output}` of the rule \"{rule}\", which comes to {v} at {at}")
-                                    }
-                                    None => tr!("`{given}` は規則 \"{rule}\" の出力 `{output}` で、{v} になることがあります", "`{given}` is the output `{output}` of the rule \"{rule}\", which can come to {v}"),
-                                }
+                                let at = inputs.iter().map(|(n, x)| format!("{n} = {}", shown(x))).collect::<Vec<_>>().join(", ");
+                                tr!("`{given}` は規則 \"{rule}\" の出力 `{output}` で、{at} のとき {v} になります", "`{given}` is the output `{output}` of the rule \"{rule}\", which comes to {v} at {at}")
                             }
                             borders::AmountFrom::Range(_) => tr!("`{given}` は {v} になることがあります", "`{given}` can be {v}"),
                         };
@@ -120,24 +120,43 @@ pub(crate) fn check(project: &Project, flows: &[Flow], joined: &Joined, lang: La
                             "chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused."
                         ))
                         .note(tr!(
-                            "規則の返す額を 0 以上にするか（負の額は、向きの違う振替に分けてください）、振替の前に分岐してください。",
-                            "Make the rule's amounts 0 or more (a negative one is a transfer the other way), or branch before the transfer."
+                            "規則の返す額を 0 以上にしてください（負の額は、向きの違う振替に分けてください）。",
+                            "Make the rule's amounts 0 or more (a negative one is a transfer the other way)."
                         ));
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                     }
                     Answer::Undecided(why) => {
                         borders.undecided += 1;
+                        let fails_then = tr!(
+                            "受け取らない額なら、ワークフローを走らせたときに chobo がその呼び出しを失敗させます。",
+                            "chobo fails a call with an amount it does not take when the workflow runs."
+                        );
                         let diag: Diag = Diag::at("W203", &f.file.shown, call.line, 1, tr!(
                             "タスク `{task}` が `{param}` に渡す額を chobo が受け取るかを決められません",
                             "Whether chobo takes the amount the task `{task}` gives `{param}` cannot be decided"
                         ))
                         .source(&f.src)
-                        .rel(&f.file.rel)
-                        .note(why)
-                        .note(tr!(
-                            "受け取らない額なら、ワークフローを走らせたときに chobo がその呼び出しを失敗させます。",
-                            "chobo fails a call with an amount it does not take when the workflow runs."
-                        ));
+                        .rel(&f.file.rel);
+                        // rulec's range of an output reaches outside, but no input from the rule's vectors does
+                        let diag = match borders::amounts_unshown(&outs, got.other.as_ref()) {
+                            Some((i, lo, hi)) => {
+                                let (rule, output, _) = &got.outputs[i];
+                                diag.note(tr!(
+                                    "rulec の数えた範囲では、`{given}`（規則 \"{rule}\" の出力 `{output}`）は >={lo} <={hi} です。規則のベクタには、chobo が受け取らない額になる入力がありませんでした。",
+                                    "rulec counts `{given}`, the output `{output}` of the rule \"{rule}\", as >={lo} <={hi}, and none of the rule's vectors gives it an amount chobo does not take."
+                                ))
+                                .note(tr!(
+                                    "rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます。二つの入力を結ぶ `constraint`（`holding <= asked` など）では狭めないので、出力が実際にはそういう額にならないことがあります。",
+                                    "rulec bounds an output by moving each input over its own range, and does not narrow the bound by a `constraint` that ties two inputs (`holding <= asked`, say), so the output may never come to such an amount."
+                                ))
+                                .note(fails_then)
+                                .note(tr!(
+                                    "rulec が出力を 0 以上と数えるように規則を書くか（`max(…, 0)` など）、負の額を向きの違う振替に分ければ、決められます。",
+                                    "Write the rule so that rulec counts the output as 0 or more (`max(…, 0)`, say), or make a negative amount a transfer the other way, and this can be decided."
+                                ))
+                            }
+                            None => diag.note(why).note(fails_then),
+                        };
                         out.push(Finding::of(&diag, Some(f.file.rel.clone()), lang));
                     }
                 }

@@ -13,7 +13,9 @@
 //!   (an amount outside is a failure of the call, not a refusal: chobo's DESIGN 1.5). The value can
 //!   be the output of rules, whose fewest and most rulec counts (`Rules::output_values`, with an
 //!   input from the rule's vectors for each value), or a number dandori knows the range of.
-//!   [`amount_fits`] is the decision for one output.
+//!   [`amount_fits`] is the decision for one output: an example of an output is always an input
+//!   from the rule's vectors, since rulec counts the range from above and a number a row writes may
+//!   be one no input within the rule's constraints comes to.
 //! - [`refusals_met`] (X4): the refusals chobo's search finds for the operation with the amounts
 //!   held to their range (`Books::refusals`) against the errors the task handles, both held to the
 //!   reasons of the book's bounds (the refusals that turn on the amounts): one it can come to that
@@ -71,35 +73,69 @@ pub fn days_given(dates: &[Found<DaySet>], other: Option<&Text>, range: (Option<
 /// 2⁶³ − 1 in the unit's smallest step (an amount of 0 moves nothing, and chobo takes it).
 pub const MAX_AMOUNT: i128 = i64::MAX as i128;
 
-/// X4: whether every value a rule's output comes to is an amount chobo takes. The example is the
-/// offending amount with an input that comes to it, when the vectors have one.
-pub fn amount_fits(out: &Found<OutputValues>) -> Answer<(i128, Option<Values>)> {
+/// X4: whether every value a rule's output comes to is an amount chobo takes. It holds when rulec
+/// counts both ends of the output's range and they lie inside 0 to 2⁶³ − 1. Otherwise the example
+/// is an amount outside that an input from the rule's vectors comes to (rulec's `examples`, which
+/// keep to the inputs' ranges and the rule's constraints): the smallest below 0, else the largest
+/// above 2⁶³ − 1, the first of equal ones. With no such input it is undecided: rulec counts the
+/// range from above (it does not narrow it by a constraint that ties two inputs), and it lets a
+/// row through that only an input outside the constraints reaches, so neither an end nor a number
+/// a row writes shows that the output comes to an amount outside.
+pub fn amount_fits(out: &Found<OutputValues>) -> Answer<(i128, Values)> {
     let o = match out {
         Found::Value(o) => o,
         Found::Undecided(why) => return Answer::Undecided(why.clone()),
     };
-    let (Some(lo), Some(hi)) = (o.min, o.max) else {
-        return Answer::Undecided(tr!("出力の範囲に上限か下限が無いので、chobo が受け取る額に収まるとは言えません", "the output's range has an open end, so it cannot be shown to stay an amount chobo takes"));
-    };
-    let bad = if lo < 0 {
-        Some(o.values.as_ref().and_then(|vs| vs.iter().copied().find(|v| *v < 0)).unwrap_or(lo))
-    } else if hi > MAX_AMOUNT {
-        Some(hi)
-    } else {
-        None
-    };
-    match bad {
-        None => Answer::Holds,
-        Some(v) => Answer::Fails((v, o.examples.iter().find(|(x, _)| *x == v).map(|(_, inputs)| inputs.clone()))),
+    if let (Some(lo), Some(hi)) = (o.min, o.max) {
+        if lo >= 0 && hi <= MAX_AMOUNT {
+            return Answer::Holds;
+        }
+    }
+    if let Some((v, inputs)) = outside_example(&o.examples) {
+        return Answer::Fails((*v, inputs.clone()));
+    }
+    match (o.min, o.max) {
+        (Some(lo), Some(hi)) => Answer::Undecided(tr!(
+            "rulec の数えた範囲では出力が >={lo} <={hi} で、規則のベクタには chobo が受け取らない額になる入力がありません",
+            "rulec counts the output as >={lo} <={hi}, and none of the rule's vectors gives it an amount chobo does not take"
+        )),
+        _ => Answer::Undecided(tr!("出力の範囲に上限か下限が無いので、chobo が受け取る額に収まるとは言えません", "the output's range has an open end, so it cannot be shown to stay an amount chobo takes")),
     }
 }
 
+/// The example [`amount_fits`] gives, among an output's examples: of the amounts chobo does not
+/// take, the smallest below 0, else the largest above 2⁶³ − 1; the first of equal ones.
+fn outside_example(examples: &[(i128, Values)]) -> Option<&(i128, Values)> {
+    let below = examples.iter().filter(|e| e.0 < 0).min_by_key(|e| e.0);
+    below.or_else(|| examples.iter().filter(|e| e.0 > MAX_AMOUNT).min_by_key(|e| std::cmp::Reverse(e.0)))
+}
+
+/// The ends of an output's range when [`amount_fits`] leaves it undecided for want of an example:
+/// rulec counts both, one lies outside the amounts chobo takes, and no input from the rule's
+/// vectors comes to an amount outside.
+pub fn amount_unshown(out: &Found<OutputValues>) -> Option<(i128, i128)> {
+    match out {
+        Found::Value(OutputValues { min: Some(lo), max: Some(hi), examples, .. }) if (*lo < 0 || *hi > MAX_AMOUNT) && outside_example(examples).is_none() => Some((*lo, *hi)),
+        _ => None,
+    }
+}
+
+/// What leaves [`amounts_given`] undecided, when it is an output [`amount_unshown`] gives the ends
+/// of: its place and its ends. None when a place that says nothing comes first (`other`), or when
+/// the first output left undecided is so for another reason.
+pub fn amounts_unshown(outputs: &[Found<OutputValues>], other: Option<&Text>) -> Option<(usize, i128, i128)> {
+    if other.is_some() {
+        return None;
+    }
+    let (i, o) = outputs.iter().enumerate().find(|(_, o)| matches!(amount_fits(o), Answer::Undecided(_)))?;
+    amount_unshown(o).map(|(lo, hi)| (i, lo, hi))
+}
+
 /// Where the amount of an example of [`amounts_given`] comes from: an output of a rule, by its
-/// place, with an input of the rule that comes to it when the vectors have one; or a range dandori
-/// knows, by its place.
+/// place, with an input of the rule that comes to it; or a range dandori knows, by its place.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AmountFrom {
-    Output(usize, Option<Values>),
+    Output(usize, Values),
     Range(usize),
 }
 

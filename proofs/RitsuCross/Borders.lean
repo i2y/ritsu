@@ -16,6 +16,9 @@
     seconds the call can come after the hold, against the seconds it expires after.
 
   Each is written as `borders.rs` writes it, and each theorem below says what an answer settles.
+  An example of `amountFits` is always one rulec gives, an input from the rule's vectors
+  (`amountFits_fails`, `amountFits_undecided`): rulec counts an output's range from above, so
+  neither an end of it nor a number a row writes shows an amount the output comes to.
   `amountFits_chobo_takes` and `amountFits_fails_chobo` tie X4 to `ChoboModel` (an amount the check
   lets through is one chobo's interpreter takes, and the amount it gives as an example is one the
   interpreter does not take), and
@@ -160,57 +163,179 @@ theorem daysGiven_fails {dates : List (Found (List Int))} {other : Bool} {range 
 def maxAmount : Int := 9223372036854775807
 
 /-- What a numeric output of a rule comes to (`ritsu_ports::OutputValues`), on the wire: its fewest
-    and its most, every number its rows write when each writes one, and for some of those values
-    an input that comes to it (`α`, which this check only hands on). -/
+    and its most, every number its rows write when each writes one, and for some of the values it
+    comes to an input from the rule's vectors that comes to it (`α`, which this check only hands
+    on). -/
 structure OutputValues (α : Type) where
   min : Option Int
   max : Option Int
   values : Option (List Int)
   examples : List (Int × α)
 
-/-- `borders::amount_fits`: an amount below 1 is looked for first among the numbers the rows
-    write, then the low end; an amount above 2⁶³ − 1 is the high end. -/
-def amountFits {α : Type} (out : Found (OutputValues α)) : Answer (Int × Option α) :=
+/-- Whether rulec counts both ends of an output's range and they lie inside 0 to 2⁶³ − 1. -/
+def OutputValues.inside {α : Type} (o : OutputValues α) : Bool :=
+  match o.min, o.max with
+  | some lo, some hi => decide (0 ≤ lo) && decide (hi ≤ maxAmount)
+  | _, _ => false
+
+/-- Of the examples below 0, the smallest; the first of equal ones. -/
+def pickBelow {α : Type} : List (Int × α) → Option (Int × α)
+  | [] => none
+  | e :: es =>
+    match pickBelow es with
+    | none => if e.1 < 0 then some e else none
+    | some b => if e.1 < 0 ∧ e.1 ≤ b.1 then some e else some b
+
+/-- Of the examples above 2⁶³ − 1, the largest; the first of equal ones. -/
+def pickAbove {α : Type} : List (Int × α) → Option (Int × α)
+  | [] => none
+  | e :: es =>
+    match pickAbove es with
+    | none => if maxAmount < e.1 then some e else none
+    | some b => if maxAmount < e.1 ∧ b.1 ≤ e.1 then some e else some b
+
+/-- `borders::amount_fits`: it holds when both ends of the output's range are known and inside 0 to
+    2⁶³ − 1. Otherwise the example is an amount outside that an input from the rule's vectors
+    comes to: the smallest below 0, else the largest above 2⁶³ − 1. With none it is undecided:
+    neither an end of rulec's range nor a number a row writes is an amount the output is shown to
+    come to. -/
+def amountFits {α : Type} (out : Found (OutputValues α)) : Answer (Int × α) :=
   match out with
   | .undecided => .undecided
   | .value o =>
-    match o.min, o.max with
-    | some lo, some hi =>
-      let bad : Option Int :=
-        if lo < 0 then some ((o.values.bind (fun vs => vs.find? (fun v => decide (v < 0)))).getD lo)
-        else if hi > maxAmount then some hi
-        else none
-      match bad with
-      | none => .holds
-      | some v => .fails (v, (o.examples.find? (fun e => e.1 == v)).map (·.2))
-    | _, _ => .undecided
+    if o.inside then .holds
+    else match pickBelow o.examples with
+      | some e => .fails e
+      | none => match pickAbove o.examples with
+        | some e => .fails e
+        | none => .undecided
 
-/-- **X4's amounts hold exactly when** both ends are known, the low one is at least 1 and the high
+/-- With no example below 0, every example is 0 or more. -/
+theorem pickBelow_none {α : Type} : ∀ {es : List (Int × α)}, pickBelow es = none → ∀ x ∈ es, 0 ≤ x.1
+  | [], _, x, hx => by simp at hx
+  | y :: ys, h, x, hx => by
+    simp only [pickBelow] at h
+    split at h
+    · next hn =>
+      split at h
+      · exact absurd h (by simp)
+      · next hy =>
+        rcases List.mem_cons.1 hx with rfl | hx'
+        · omega
+        · exact pickBelow_none hn x hx'
+    · split at h <;> exact absurd h (by simp)
+
+/-- `pickBelow` gives an example below 0, and none is below it. -/
+theorem pickBelow_some {α : Type} : ∀ {es : List (Int × α)} {e : Int × α}, pickBelow es = some e →
+    e ∈ es ∧ e.1 < 0 ∧ ∀ x ∈ es, x.1 < 0 → e.1 ≤ x.1
+  | [], e, h => by simp [pickBelow] at h
+  | x :: xs, e, h => by
+    simp only [pickBelow] at h
+    split at h
+    · next hn =>
+      split at h
+      · next hx =>
+        simp only [Option.some.injEq] at h
+        subst h
+        refine ⟨List.mem_cons_self, hx, fun y hy hy0 => ?_⟩
+        rcases List.mem_cons.1 hy with rfl | hy'
+        · exact Int.le_refl _
+        · exact absurd (pickBelow_none hn y hy') (by omega)
+      · exact absurd h (by simp)
+    · next b hb =>
+      obtain ⟨hbm, hb0, hball⟩ := pickBelow_some hb
+      split at h
+      · next hx =>
+        simp only [Option.some.injEq] at h
+        subst h
+        refine ⟨List.mem_cons_self, hx.1, fun y hy hy0 => ?_⟩
+        rcases List.mem_cons.1 hy with rfl | hy'
+        · exact Int.le_refl _
+        · exact Int.le_trans hx.2 (hball y hy' hy0)
+      · next hx =>
+        simp only [Option.some.injEq] at h
+        subst h
+        refine ⟨List.mem_cons_of_mem _ hbm, hb0, fun y hy hy0 => ?_⟩
+        rcases List.mem_cons.1 hy with rfl | hy'
+        · omega
+        · exact hball y hy' hy0
+
+/-- With no example above 2⁶³ − 1, every example is 2⁶³ − 1 or less. -/
+theorem pickAbove_none {α : Type} : ∀ {es : List (Int × α)}, pickAbove es = none → ∀ x ∈ es, x.1 ≤ maxAmount
+  | [], _, x, hx => by simp at hx
+  | y :: ys, h, x, hx => by
+    simp only [pickAbove] at h
+    split at h
+    · next hn =>
+      split at h
+      · exact absurd h (by simp)
+      · next hy =>
+        rcases List.mem_cons.1 hx with rfl | hx'
+        · omega
+        · exact pickAbove_none hn x hx'
+    · split at h <;> exact absurd h (by simp)
+
+/-- `pickAbove` gives an example above 2⁶³ − 1, and none is above it. -/
+theorem pickAbove_some {α : Type} : ∀ {es : List (Int × α)} {e : Int × α}, pickAbove es = some e →
+    e ∈ es ∧ maxAmount < e.1 ∧ ∀ x ∈ es, maxAmount < x.1 → x.1 ≤ e.1
+  | [], e, h => by simp [pickAbove] at h
+  | x :: xs, e, h => by
+    simp only [pickAbove] at h
+    split at h
+    · next hn =>
+      split at h
+      · next hx =>
+        simp only [Option.some.injEq] at h
+        subst h
+        refine ⟨List.mem_cons_self, hx, fun y hy hy0 => ?_⟩
+        rcases List.mem_cons.1 hy with rfl | hy'
+        · exact Int.le_refl _
+        · exact absurd (pickAbove_none hn y hy') (by omega)
+      · exact absurd h (by simp)
+    · next b hb =>
+      obtain ⟨hbm, hb0, hball⟩ := pickAbove_some hb
+      split at h
+      · next hx =>
+        simp only [Option.some.injEq] at h
+        subst h
+        refine ⟨List.mem_cons_self, hx.1, fun y hy hy0 => ?_⟩
+        rcases List.mem_cons.1 hy with rfl | hy'
+        · exact Int.le_refl _
+        · exact Int.le_trans (hball y hy' hy0) hx.2
+      · next hx =>
+        simp only [Option.some.injEq] at h
+        subst h
+        refine ⟨List.mem_cons_of_mem _ hbm, hb0, fun y hy hy0 => ?_⟩
+        rcases List.mem_cons.1 hy with rfl | hy'
+        · omega
+        · exact hball y hy' hy0
+
+theorem OutputValues.inside_iff {α : Type} {o : OutputValues α} :
+    o.inside = true ↔ ∃ lo hi, o.min = some lo ∧ o.max = some hi ∧ 0 ≤ lo ∧ hi ≤ maxAmount := by
+  unfold OutputValues.inside
+  split
+  · next lo hi hlo hhi => simp [hlo, hhi]
+  · next hne =>
+    simp only [Bool.false_eq_true, false_iff, not_exists, not_and]
+    intro lo hi hlo hhi _
+    exact absurd (hne lo hi hlo hhi) (by simp)
+
+/-- **X4's amounts hold exactly when** both ends are known, the low one is at least 0 and the high
     one at most 2⁶³ − 1. -/
 theorem amountFits_holds_iff {α : Type} {o : OutputValues α} :
     amountFits (.value o) = .holds ↔
       ∃ lo hi, o.min = some lo ∧ o.max = some hi ∧ 0 ≤ lo ∧ hi ≤ maxAmount := by
+  rw [← OutputValues.inside_iff]
   simp only [amountFits]
   constructor
   · intro h
     split at h
-    · next lo hi hlo hhi =>
-      refine ⟨lo, hi, hlo, hhi, ?_⟩
-      split at h
-      · next hb =>
-        split at hb
-        · exact absurd hb (by simp)
-        · next h1 =>
-          split at hb
-          · exact absurd hb (by simp)
-          · next h2 => exact ⟨by omega, by omega⟩
+    · assumption
+    · split at h
       · exact absurd h (by simp)
-    · exact absurd h (by simp)
-  · rintro ⟨lo, hi, hlo, hhi, h1, h2⟩
-    simp only [hlo, hhi]
-    have e1 : ¬ lo < 0 := by omega
-    have e2 : ¬ hi > maxAmount := by omega
-    simp [e1, e2]
+      · split at h <;> exact absurd h (by simp)
+  · intro hin
+    simp [hin]
 
 /-- **When X4's amounts hold**, every value of the output's range is an amount from 0 to 2⁶³ − 1. -/
 theorem amountFits_holds {α : Type} {o : OutputValues α} {lo hi : Int}
@@ -224,62 +349,71 @@ theorem amountFits_holds {α : Type} {o : OutputValues α} {lo hi : Int}
   intro v hv1 hv2
   exact ⟨by omega, by omega⟩
 
-/-- **When X4's amounts give an example**, it is outside 0 to 2⁶³ − 1, it is one of the numbers the
-    rows write or an end of the output's range, and the input beside it is the one the rule's
-    vectors give for it. -/
-theorem amountFits_fails {α : Type} {o : OutputValues α} {v : Int} {ex : Option α}
-    (h : amountFits (.value o) = .fails (v, ex)) :
-    (v < 0 ∨ maxAmount < v) ∧
-      ((∃ vs, o.values = some vs ∧ v ∈ vs) ∨ o.min = some v ∨ o.max = some v) ∧
-      ex = (o.examples.find? (fun e => e.1 == v)).map (·.2) := by
+/-- The example `amountFits` gives comes from `pickBelow`, or, with none below 0, from
+    `pickAbove`. -/
+theorem amountFits_fails_pick {α : Type} {o : OutputValues α} {e : Int × α}
+    (h : amountFits (.value o) = .fails e) :
+    pickBelow o.examples = some e ∨ (pickBelow o.examples = none ∧ pickAbove o.examples = some e) := by
   simp only [amountFits] at h
   split at h
-  · next lo hi hlo hhi =>
+  · exact absurd h (by simp)
+  · split at h
+    · next b hb =>
+      simp only [Answer.fails.injEq] at h
+      subst h
+      exact Or.inl hb
+    · next hb =>
+      split at h
+      · next a ha =>
+        simp only [Answer.fails.injEq] at h
+        subst h
+        exact Or.inr ⟨hb, ha⟩
+      · exact absurd h (by simp)
+
+/-- **When X4's amounts give an example**, it is outside 0 to 2⁶³ − 1, and it is one of the
+    examples rulec gives: an input from the rule's vectors, with the amount the output comes to at
+    it. -/
+theorem amountFits_fails {α : Type} {o : OutputValues α} {v : Int} {ex : α}
+    (h : amountFits (.value o) = .fails (v, ex)) :
+    (v < 0 ∨ maxAmount < v) ∧ (v, ex) ∈ o.examples := by
+  rcases amountFits_fails_pick h with hb | ⟨-, ha⟩
+  · obtain ⟨hm, h0, -⟩ := pickBelow_some hb
+    exact ⟨Or.inl h0, hm⟩
+  · obtain ⟨hm, h0, -⟩ := pickAbove_some ha
+    exact ⟨Or.inr h0, hm⟩
+
+/-- **The example X4 gives is the one furthest out**: no example is below it, and one above
+    2⁶³ − 1 comes only where no example is below 0, and then no example is above it. -/
+theorem amountFits_fails_first {α : Type} {o : OutputValues α} {v : Int} {ex : α}
+    (h : amountFits (.value o) = .fails (v, ex)) :
+    (∀ x ∈ o.examples, x.1 < 0 → v ≤ x.1) ∧
+      (maxAmount < v → (∀ x ∈ o.examples, 0 ≤ x.1) ∧ ∀ x ∈ o.examples, maxAmount < x.1 → x.1 ≤ v) := by
+  rcases amountFits_fails_pick h with hb | ⟨hn, ha⟩
+  · obtain ⟨-, h0, hall⟩ := pickBelow_some hb
+    refine ⟨hall, fun hv => ?_⟩
+    have h0' : v < 0 := h0
+    exact absurd hv (by unfold maxAmount; omega)
+  · obtain ⟨-, -, hall⟩ := pickAbove_some ha
+    have hz := pickBelow_none hn
+    exact ⟨fun x hx hx0 => absurd (hz x hx) (by omega), fun _ => ⟨hz, hall⟩⟩
+
+/-- **When X4's amounts are undecided** for an output rulec counts, the output's range is not shown
+    inside 0 to 2⁶³ − 1, and no input from the rule's vectors comes to an amount outside: every
+    example is one chobo takes. -/
+theorem amountFits_undecided {α : Type} {o : OutputValues α}
+    (h : amountFits (.value o) = .undecided) :
+    o.inside = false ∧ ∀ x ∈ o.examples, 0 ≤ x.1 ∧ x.1 ≤ maxAmount := by
+  simp only [amountFits] at h
+  split at h
+  · exact absurd h (by simp)
+  · next hin =>
     split at h
     · exact absurd h (by simp)
-    · next b hb =>
-      simp only [Answer.fails.injEq, Prod.mk.injEq] at h
-      obtain ⟨rfl, rfl⟩ := h
-      refine ⟨?_, ?_, rfl⟩
-      · split at hb
-        · next h1 =>
-          simp only [Option.some.injEq] at hb
-          subst hb
-          cases hv : o.values.bind (fun vs => vs.find? (fun v => decide (v < 0))) with
-          | none => simp only [Option.getD_none]; exact Or.inl h1
-          | some w =>
-            simp only [Option.getD_some]
-            left
-            cases hvs : o.values with
-            | none => rw [hvs] at hv; simp at hv
-            | some vs =>
-              rw [hvs] at hv
-              simpa using List.find?_some hv
-        · split at hb
-          · next h2 =>
-            simp only [Option.some.injEq] at hb
-            subst hb
-            right; omega
-          · exact absurd hb (by simp)
-      · split at hb
-        · simp only [Option.some.injEq] at hb
-          subst hb
-          cases hv : o.values.bind (fun vs => vs.find? (fun v => decide (v < 0))) with
-          | none => simp only [Option.getD_none]; exact Or.inr (Or.inl hlo)
-          | some w =>
-            simp only [Option.getD_some]
-            left
-            cases hvs : o.values with
-            | none => rw [hvs] at hv; simp at hv
-            | some vs =>
-              rw [hvs] at hv
-              exact ⟨vs, rfl, List.mem_of_find?_eq_some hv⟩
-        · split at hb
-          · simp only [Option.some.injEq] at hb
-            subst hb
-            exact Or.inr (Or.inr hhi)
-          · exact absurd hb (by simp)
-  · exact absurd h (by simp)
+    · next hb =>
+      split at h
+      · exact absurd h (by simp)
+      · next ha =>
+        exact ⟨by simpa using hin, fun x hx => ⟨pickBelow_none hb x hx, pickAbove_none ha x hx⟩⟩
 
 /-- **X4, held to chobo's interpreter**: an amount in the range of an output the check lets through
     is one `ChoboModel.fits` takes as an amount argument (from 0 to 2⁶³ − 1). -/
@@ -296,10 +430,10 @@ theorem amountFits_chobo_takes {α : Type} {o : OutputValues α} {lo hi a : Int}
 /-- **X4, held to chobo's interpreter, the other way**: the amount X4 gives as an example is one
     `ChoboModel.fits` does not take as an amount argument (below 0 or above 2⁶³ − 1), so the check
     refuses exactly what the interpreter does not take. -/
-theorem amountFits_fails_chobo {α : Type} {o : OutputValues α} {v : Int} {ex : Option α}
+theorem amountFits_fails_chobo {α : Type} {o : OutputValues α} {v : Int} {ex : α}
     (h : amountFits (.value o) = .fails (v, ex)) :
     (decide (0 ≤ v) && decide (v ≤ ChoboModel.maxAmount)) = false := by
-  obtain ⟨hv, -, -⟩ := amountFits_fails h
+  obtain ⟨hv, -⟩ := amountFits_fails h
   simp only [maxAmount] at hv
   cases h1 : decide (0 ≤ v) with
   | false => rfl
@@ -309,9 +443,10 @@ theorem amountFits_fails_chobo {α : Type} {o : OutputValues α} {v : Int} {ex :
     simp [hm]
 
 /-- Where the amount of an example of `amountsGiven` comes from: an output of a rule, by its place,
-    with an input that comes to it; or a range dandori knows, by its place. -/
+    with an input from the rule's vectors that comes to it; or a range dandori knows, by its
+    place. -/
 inductive AmountFrom (α : Type) where
-  | output (i : Nat) (ex : Option α)
+  | output (i : Nat) (ex : α)
   | range (i : Nat)
   deriving Repr
 

@@ -585,7 +585,7 @@ fn output_json(out: &Found<OutputValues>) -> Value {
 
 fn amount_row(out: &Found<OutputValues>) -> (String, String) {
     let line = json!({"amount_fits": {"out": output_json(out)}});
-    let rust = answer(&amount_fits(out), |(v, ex)| json!([v, ex.as_ref().map_or(Value::Null, values_json)]));
+    let rust = answer(&amount_fits(out), |(v, ex)| json!([v, values_json(ex)]));
     (line.to_string(), rust)
 }
 
@@ -606,10 +606,24 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
             outputs += 1;
         }
     }
-    // every branch: open ends, below 1 among the rows' numbers or only at the low end, above
-    // 2⁶³ − 1, an example or none
+    // two rules of the shapes where an example decides: a refund the vectors reach (an example), and
+    // a difference a constraint keeps at 0 or more, which rulec counts from -50 (none)
+    let written_rules = tmp.path().join("rules");
+    std::fs::create_dir_all(&written_rules).unwrap();
+    std::fs::write(written_rules.join("adjust.rule"), "rule adjust v1\n\nenum kind = charge | refund\n\ninputs\n  what : kind\n\noutputs\n  amount : number  round down(1)\n\ntable pick\npolicy unique\n| what   | -> amount : number |\n| charge | 300                |\n| refund | -300               |\n").unwrap();
+    std::fs::write(written_rules.join("tied.rule"), "rule tied v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n").unwrap();
+    for (file, name) in [("adjust.rule", "amount"), ("tied.rule", "needed")] {
+        let out = engine.output_values(&written_rules.join(file), name).unwrap();
+        rows.push(amount_row(&out));
+    }
+    // every branch: open ends, both ends inside, an example below 0 (the smallest of several, the
+    // first of equal ones, wherever it is among the examples), above 2⁶³ − 1 (the largest, and only
+    // with none below 0), an example where an end is open, and ends outside with every example
+    // inside, which is undecided
     let why = ritsu_base::tr!("分かりません", "not known");
     let ex = |v: i128| (v, vec![("what".to_string(), Wire::Enum(format!("e{v}")))]);
+    let tagged = |v: i128, tag: &str| (v, vec![("what".to_string(), Wire::Enum(tag.to_string()))]);
+    let past = 9_223_372_036_854_775_808_i128;
     let written = [
         Found::Undecided(why),
         Found::Value(OutputValues { min: None, max: Some(5), values: None, examples: vec![] }),
@@ -621,6 +635,15 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
         Found::Value(OutputValues { min: Some(-5), max: Some(5), values: None, examples: vec![] }),
         Found::Value(OutputValues { min: Some(1), max: Some(9_223_372_036_854_775_808), values: None, examples: vec![ex(9_223_372_036_854_775_808)] }),
         Found::Value(OutputValues { min: Some(7), max: Some(3), values: None, examples: vec![] }),
+        Found::Value(OutputValues { min: Some(-5), max: Some(5), values: None, examples: vec![ex(3), ex(-2)] }),
+        Found::Value(OutputValues { min: Some(-5), max: Some(5), values: None, examples: vec![ex(-1), ex(-4), ex(2)] }),
+        Found::Value(OutputValues { min: Some(-5), max: Some(past), values: None, examples: vec![ex(past), ex(-1)] }),
+        Found::Value(OutputValues { min: Some(1), max: Some(past + 5), values: None, examples: vec![ex(past), ex(past + 5), ex(3)] }),
+        Found::Value(OutputValues { min: Some(-5), max: Some(5), values: None, examples: vec![tagged(-4, "first"), tagged(-4, "second")] }),
+        Found::Value(OutputValues { min: Some(1), max: Some(past + 5), values: None, examples: vec![tagged(past + 5, "first"), tagged(past + 5, "second")] }),
+        Found::Value(OutputValues { min: None, max: Some(5), values: None, examples: vec![ex(-3)] }),
+        Found::Value(OutputValues { min: Some(1), max: None, values: None, examples: vec![ex(past)] }),
+        Found::Value(OutputValues { min: Some(-5), max: Some(past), values: Some(vec![0, 5]), examples: vec![ex(0), ex(5)] }),
     ];
     for out in &written {
         rows.push(amount_row(out));
@@ -645,7 +668,7 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
     ];
     let why = ritsu_base::tr!("分かりません", "not known");
     let from_json = |f: &AmountFrom| match f {
-        AmountFrom::Output(i, ex) => json!({"output": [i, ex.as_ref().map_or(Value::Null, values_json)]}),
+        AmountFrom::Output(i, ex) => json!({"output": [i, values_json(ex)]}),
         AmountFrom::Range(i) => json!({"range": i}),
     };
     let ends_json = |rs: &[(Option<i128>, Option<i128>)]| Value::Array(rs.iter().map(|(lo, hi)| json!([end(*lo), end(*hi)])).collect());

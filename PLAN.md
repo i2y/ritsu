@@ -1989,13 +1989,34 @@ import-linter（grimp）は `root_packages` のパッケージをその下ごと
 
 rulec のパーサーは、出力の行に書いた `range` を黙って読み飛ばしていた。`配分 : money[円, incl_tax]  range >=0円 <=10円` と書いた規則は、例が 7,333 円を答えても検査を通り、生成したコードも schema も範囲を書かない規則と変わらなかった。宣言の行の種類ごとに読み飛ばされる語を見回すと、ほかにも 11 の組み合わせ（出力の行の `contract_only`、入力の行の `round`、`derive` の行の `round`・`contract_only`・`random`、`from` のパスや `shape` の行の後ろの `range` など）が黙って通っていた。また、証明書の `ranges` と口 `Rules::output_values` には、`result` が決める出力のとる値が載らず、kaname・dandori・ritsu-cross はそういう出力を端の無い値として読んだ。いまは、出力の行の範囲を読み、出力のとる値（表の行のセル、`define`、`result` の式が、入力の範囲と `constraint` のもとでとる値を、丸めの刻みへ外向きに広げたもの）を含まなければ E140 で止める。確かめられない範囲（範囲の無い入力を読む出力、数でない出力）も E140 にする。確かめた範囲は、証明書、`rulec schema`、`rulec api`、MCP のツールの `outputSchema`、`.proto` と SQL のコメント、`doc` と人が読むページ、口に、入力の範囲と同じく出る。範囲を書かない `result` の出力は、とる値の範囲を証明書と口にだけ載せる。按分の定番の形（同じ金額を手前までとここまでの累計で `allocate` して引く）の差は、`constraint` が累計の順を決めていれば 0 から金額までと読み、Python と Lean の再検査も同じに読む（`RulecCert` の `sharesInOrder_le`）。宣言の行は種類ごとに読む語を決め、ほかの語は E047 にした。`rulec diff` は出力の範囲の動きを言う（rulec の DESIGN §15.268）。
 
-確かめたこと：`tests/output_range.rs` の 8 つ、台帳の例（英日）、mutant と golden の E140。見回しの 17 本は、黙って通った 12 本のうち 11 本が E047、出力の行の `range` が E140 で止まり、ほかの 5 本は前と同じ。替える前と後のバイナリで木の `.rule` の全部（911 本）を `check`（英日、JSON）、証明書、schema、`api`、`gen` にかけて比べ、変わったのは 47 本（46 本は証明書の `ranges` に `result` の出力が一つ増え、うち 4 本は按分の差で `values` も狭まった。1 本は E047 の文が変わった mutant。範囲を書いた按分の規則 2 本は schema・`api`・`gen` の 9 つのファイルも変わる）。言語をまたぐファイルを持つ 52 のディレクトリの `ritsu check` は変わらない。見つけて直していないもの：証明書の再検査は、出力の行の範囲がとる値を含むことを確かめ直さない。按分の差の読み方は、按分の三つの引数が名前のときだけ。X4 は rulec の区間の端を出力がなる額として読むので、`constraint` が負にしない差（`asked - holding`）を振替に渡すと、例の無い E203 になる（表の出力では前から。`result` の出力も同じになった）。
+確かめたこと：`tests/output_range.rs` の 8 つ、台帳の例（英日）、mutant と golden の E140。見回しの 17 本は、黙って通った 12 本のうち 11 本が E047、出力の行の `range` が E140 で止まり、ほかの 5 本は前と同じ。替える前と後のバイナリで木の `.rule` の全部（911 本）を `check`（英日、JSON）、証明書、schema、`api`、`gen` にかけて比べ、変わったのは 47 本（46 本は証明書の `ranges` に `result` の出力が一つ増え、うち 4 本は按分の差で `values` も狭まった。1 本は E047 の文が変わった mutant。範囲を書いた按分の規則 2 本は schema・`api`・`gen` の 9 つのファイルも変わる）。言語をまたぐファイルを持つ 52 のディレクトリの `ritsu check` は変わらない。見つけて直していないもの：証明書の再検査は、出力の行の範囲がとる値を含むことを確かめ直さない。按分の差の読み方は、按分の三つの引数が名前のときだけ。rulec の区間は二つの入力を結ぶ `constraint` で狭めないので、`constraint` が負にしない差（`asked - holding`）を振替に渡すと、X4 は W203（決められない）になる（7.69。前は例の入力の無い E203 だった）。
 
 ### 7.68 kaname は規則の答えを型の全体まで読み、`running_totals` の `total` を同じリストの `sum` と結び、W301 と `run` の文を直す（2026-10-28）
 
 請求書の明細に返金を配る関数（規則が一行ぶんを二つの `allocate` の差で決め、kaname が明細を `running_totals` でたどって呼び、配った額を税率ごとに足す）で、四つのことが起きた。規則の答えを足すところが W302 になってエフェクトに `overflow` が入り、`sum` で外したあとの `total` を規則に渡しても前提が ritsu の W201 になり、`count <=20` だけを書いた引数に答えの並びを渡すと、だれも書いていない int64 の端を挙げた W301 になり、`run` に `"1000円"` を渡すと型と文字列が渡されたことだけを言った。いまは、rulec が範囲を渡さない規則の出力を型の全体から読み（範囲を書かない引数と同じ）、`result` の出力は rulec が渡すようになった範囲で読む。`running_totals(xs, x => x.f)` の `total` は `sum(xs, x => x.f)` と等しいという関係を覚え、`if` で比べた `sum` から規則の呼び出しの関係まで届く（Lean のモデルには入れていない）。W301 は、値のどの部分（各要素、各要素のフィールド、辞書の各鍵）の範囲か数かを言い、書いたものだけを挙げる。`run` は、違う形の値に型の書き方と例を言い（`` `amount` は money[JPY] で、単位を付けない整数で渡します（`"amount": 1` が 1JPY） ``）、失敗 `input` の場所を関数の名前で言い、`--help` に型ごとの書き方を十三行挙げる（kaname の DESIGN 32 章）。
 
 確かめたこと：`tests/ports.rs` の二つ、`tests/ranges.rs` と `tests/run.rs` の一つずつ。ritsu-model の突き合わせは数が前と同じ（59 のモジュール、14,092 の評価、1,080 の場所、5,287 の式、見た値 314,492）。替える前と後で、木の `.kn` の全部（65）の `kaname check`（英日と JSON）は変わらない。きっかけの四つを小さなモジュールで再現し、W302、W201、W301 が消え、`run` の文が変わることを確かめた。見つけて直していないもの：足した値の関係は Lean のモデルに無い。`let` で名前を付けた `running_totals` の答えは結ばない。括弧で終わる式を、文が閉じ括弧を落として挙げる（前から）。
+
+### 7.69 ritsu の X4 は、外れる額になる入力が規則のベクタにあるときだけ E203 にし、無ければ W203 にする（2026-10-29）
+
+ワークフローが規則の数の出力を chobo の振替の額に渡すところで、X4（DESIGN 7.6）は、rulec が数えた出力の範囲の端が 0〜2⁶³ − 1 を外れれば E203 にしていた。外れる額は範囲の端か、行がどれも数を書く出力なら行の負の数のいちばん小さいもので、その額になる入力が規則のベクタに無くても E203 だった。rulec の範囲は上からの見積もりで、二つの入力を結ぶ `constraint` では狭めない。`constraint holding <= asked` のもとの `result needed = asked - holding` は負にならないが、範囲は −50〜100 で、ワークフローがそれを振替に渡すと、注が「`need.needed` is the output `needed` of the rule "seats.rule", which can come to -50」とだけ言う E203 になった。rulec は `constraint` の外でしか届かない行を何も言わずに通し、出力の行には、とる値より広い `range` も書ける（rulec の §15.268）。行の数も範囲の端も、出力がその額になる証拠にはならない。
+
+いまは、rulec が `Rules::output_values` に添える例（範囲の両端と行の数のそれぞれについて、その値になる規則のベクタの入力。ベクタは入力の範囲と `constraint` を守る）のうち、0〜2⁶³ − 1 を外れるものがあるときだけ E203 にし、注にその入力と額を書く。例は、0 より小さい額のいちばん小さいもの、無ければ 2⁶³ − 1 を超える額のいちばん大きいもので、同じ額なら先のものである。前に例の付いていた E203 は、額も入力も同じになる。範囲が外れても外れる例が無ければ W203 で、注は rulec の範囲の数え方と、規則の書き方（rulec が 0 以上と数える形にする `max(…, 0)`、負の額を向きの違う振替に分ける）を言う。範囲の端が開いていても、外れる例があれば E203 にした（kaname の X4 が関数のベクタを見るのにそろえた。木と試験には無い形）。ワークフローの E203 の注と台帳の E203 の直し方からは「振替の前に分岐してください」を外した。ワークフローの X4 はフローの分岐を見ないので、分岐しても答えは変わらないからである（kaname の文は、`if` で額を狭めれば決まるので残した）。Lean の `RitsuCross` の `amountFits` も同じ形にし、例が rulec の例の一つで外れる額であること（`amountFits_fails`）、例の選び方の順（`amountFits_fails_first`）、決められないのはどの例も 0〜2⁶³ − 1 にあるときだけであること（`amountFits_undecided`）を証明した。`amountFits_holds_iff`、`amountFits_chobo_takes`、`amountFits_fails_chobo` は、主張を変えずに証明し直した（DESIGN 7.6 と 11.2 の 3、rulec の DESIGN §15.268、台帳の E203 と W203）。
+
+確かめたこと：ritsu-cross の `tests/borders.rs`（本物の rulec の答えで、`constraint` の無い差は例のある E203、`constraint` の差、`constraint` の外でしか届かない行、とる値より広く書いた出力の範囲は W203、返金の規則の E203 は前と同じ額と入力）、台帳の再現（英日）、ritsu の `tests/cross.rs` に足した `x4-W203-unshown`（英日の golden。`constraint` の差を、その `constraint` を守るフローから渡す）。替える前のバイナリでは「which can come to -50」の E203 だった形が、次の W203 になる。
+
+```text
+warning[ritsu W203]: booking.flow:19:1: Whether chobo takes the amount the task `give_seats` gives `count` cannot be decided
+    19 |   give_seats(event: event, count: need.needed)
+  = rulec counts `need.needed`, the output `needed` of the rule "seats.rule", as >=-50 <=100, and none of the rule's vectors gives it an amount chobo does not take.
+  = rulec bounds an output by moving each input over its own range, and does not narrow the bound by a `constraint` that ties two inputs (`holding <= asked`, say), so the output may never come to such an amount.
+  = chobo fails a call with an amount it does not take when the workflow runs.
+  = Write the rule so that rulec counts the output as 0 or more (`max(…, 0)`, say), or make a negative amount a transfer the other way, and this can be decided.
+```
+
+ritsu-model の突き合わせに、例の選び方の枝を全部通す九つの形と、一時ディレクトリに書いた二つの規則（ベクタが負の額に届く返金と、`constraint` が 0 以上に保つ差）の本物の rulec の答えを足した。`lake build` と ritsu-model の試験が通った（X4 の額の突き合わせは 2,911 行）。新しい定理が頼る公理は `propext`、`Quot.sound`（`amountFits_fails_first` はそれに `Classical.choice`）だけである。言語をまたぐファイルを持つ 65 のディレクトリの `ritsu check`（英日と JSON）を替える前と後のバイナリで比べ、X4 で変わったものは無い（木にワークフローの E203・W203 は無く、kaname の E203 の 1 件は関数のベクタから決まる）。
+
+見つけて直していないもの：ワークフローの X4 は、規則の出力を規則の入力の全部で数え、フローの分岐も、フローが規則に渡す値の範囲も見ない。返却を返す規則の出力を、`match` で返却でない分岐だけから振替に渡しても、流れが渡さない入力（`event_kind = handback`）を例にした E203 になる。rulec が例を探すのは範囲の両端と行の数だけなので、計算する出力で、端には届かないが負になる入力がベクタにあっても W203 になる。
 
 ## 8. モジュール（2026-10-28）
 

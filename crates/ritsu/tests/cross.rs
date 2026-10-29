@@ -30,8 +30,10 @@
 //! - X4 (a rule's output as a transfer's amount): `booking` — the seats an event needs given to the
 //!   hall at once: every kind fits (held), a handback gives 20 seats back (−20, E203: chobo takes 0
 //!   to 2⁶³ − 1, so a negative amount is a transfer the other way), the seats can come from an
-//!   answer with no range (W203), a concert needs more than the hall holds (E204), the task handles
-//!   the hall being full, which no kind comes to (W204).
+//!   answer with no range (W203), the seats still to give, which a constraint keeps at 0 or more
+//!   though rulec counts them from −50 (W203: none of the rule's vectors comes to a negative
+//!   amount), a concert needs more than the hall holds (E204), the task handles the hall being
+//!   full, which no kind comes to (W204).
 //! - X6 (the day given to a koyomi date): `reminding` — the payment day given to a reminder whose
 //!   range holds every payment day (held), ends before the last (E205), or the day received (W205).
 //! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
@@ -324,6 +326,13 @@ fn x4_a_rules_output_as_a_transfers_amount() {
     run("x4-held", &held, 0, (2, 0, 0), &mut failures);
     run("x4-E203", &changed("E203", &[]), 1, (1, 1, 0), &mut failures);
     run("x4-W203", &changed("W203", &[]), 0, (0, 0, 2), &mut failures);
+    // undecided, not an example: rulec counts the seats still to give as -50 to 100, but the rule's
+    // constraint keeps every input from the rule's vectors at 0 or more (rulec does not narrow the
+    // range by it); the flow keeps the constraint (X2)
+    let tied = "rule seats v1\ndescription \"The seats an event still needs: what it asked for, less what it holds, which is never more than it asked for\"\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n".to_string();
+    let flow = "workflow booking v1\ndescription \"Gives an event the seats it still needs\"\n\nuse rule seats from \"seats.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:seats\"\nuse book hall from \"hall.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:hall\"\n\ninputs\n  event   : string\n  asked   : int  range >=50 <=100\n  holding : int  range >=0 <=50\n\ntask give_seats(event: string, count: int)\n  book hall.assign.do\n\nflow\n  let need = seats(asked: asked, holding: holding)\n  give_seats(event: event, count: need.needed)\n".to_string();
+    let book = changed("W203", &[]).into_iter().find(|(n, _)| *n == "hall.book").unwrap().1;
+    run("x4-W203-unshown", &[("seats.rule", tied), ("hall.book", book), ("booking.flow", flow)], 0, (2, 0, 1), &mut failures);
     run("x4-E204", &changed("E204", &[]), 1, (1, 1, 0), &mut failures);
     run("x4-W204", &changed("W204", &[]), 0, (1, 0, 1), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));

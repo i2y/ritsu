@@ -189,7 +189,7 @@ def amountsGivenLine (j : Json) : Except String Json := do
   let outputs ← (← jarr (← jfield j "outputs")).mapM readOut
   let a := amountsGiven outputs (← readEnds (← jfield j "ranges")) (← (← jfield j "other").getBool?)
   return answerJ (fun (v, from_) => Json.arr #[intJ v, match from_ with
-    | .output i ex => Json.mkObj [("output", Json.arr #[intJ i, ex.getD Json.null])]
+    | .output i ex => Json.mkObj [("output", Json.arr #[intJ i, ex])]
     | .range i => Json.mkObj [("range", intJ i)]]) a
 
 /-- The answer to one `amounts_hull` line. -/
@@ -229,7 +229,7 @@ def amountFitsLine (j : Json) : Except String Json := do
         return ((← (xs[0]?.getD Json.null).getInt?), xs[1]?.getD Json.null))
       pure (Found.value ({ min := ← joptInt (← jfield o "min"), max := ← joptInt (← jfield o "max"),
                            values, examples } : OutputValues Json))
-  return answerJ (fun (v, ex) => Json.arr #[intJ v, ex.getD Json.null]) (amountFits out)
+  return answerJ (fun (v, ex) => Json.arr #[intJ v, ex]) (amountFits out)
 
 /-- The answer to one `refusals_met` line. -/
 def refusalsMetLine (j : Json) : Except String Json := do
