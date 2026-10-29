@@ -52,6 +52,15 @@ jobs:
         ports: ["5000:5000"]
 
     steps:
+      # The builds of the tests, the images and Vitess's build fill the runner's disk, which ran
+      # out in the last step (DESIGN 10.5): the SDKs no step here uses are taken off first.
+      - name: Room on the disk
+        run: |
+          set -eu
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - uses: actions/checkout@v7
 
       - name: Rust

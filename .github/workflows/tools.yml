@@ -235,9 +235,15 @@ jobs:
             uv pip install --python "crates/dandori/tools/$d/.venv/bin/python" -r "crates/dandori/tools/$d/requirements.txt"
           done
 
-      - name: "dandori: the Go modules of tools/temporal-go"
+      # ritsu's tests/library.rs builds a host of the Go libraries with no network (GOPROXY=off),
+      # its go.mod requiring what these two modules require; Go reads the go.mod of every module
+      # of that graph, more than the other tests fetch (DESIGN 10.5).
+      - name: "dandori: the Go modules of tools/temporal-go and of chobo's tools/runner/go"
         if: matrix.group == 'dandori'
-        run: cd crates/dandori/tools/temporal-go && go mod download
+        run: |
+          set -eu
+          (cd crates/dandori/tools/temporal-go && go mod download)
+          (cd crates/chobo/tools/runner/go && go mod download)
 
       # ritsu's tests/website.rs builds the site (ritsu's pages and dandori's) with website/build.sh,
       # which runs the Zensical of website/.venv, and reads the repository's gates and Cedar with the

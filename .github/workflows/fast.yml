@@ -25,7 +25,8 @@ env:
 jobs:
   fast:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # The tests took 37 minutes, and saving the cache about 4 more (DESIGN 10.5)
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v7
