@@ -2,8 +2,10 @@
 
 A module is a directory with a `ritsu.mod`: a project that other projects require, from a directory
 beside them, a git repository or an OCI registry, and whose files they read by `@<name>/…` paths.
-The modules published from ritsu's repository are on [the list of modules](modules/list/), with
-their versions, the pages of their files and what changed between versions.
+The modules of ritsu's repository are on [the list of modules](modules/list/), with their versions,
+the pages of their files and what changed between versions. The module of holidays is not on the
+registry yet: until it is, `ritsu mod add` cannot fetch it, and the list makes its pages from the
+files of the repository.
 
 A project checks the files it requires with its own files, with each language's check and the checks
 across the languages, so a proof does not stop at a module's edge. The examples on this page are the

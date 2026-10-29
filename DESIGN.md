@@ -4026,6 +4026,7 @@ modules/holidays/
   - 入力とジョブの出力は、`run` の中に `${{ }}` で書かず、環境変数で渡す。
   - `crates/ritsu/tests/modules.rs` の `the_workflow_that_publishes_the_seed_module_runs_by_hand_only` が、次を確かめる。始まりは `workflow_dispatch` だけ、`publish` は既定が false の真偽値、`packages: write` と `id-token: write` は `publish` のジョブだけ、cosign の URL とチェックサムは tools.yml と同じ。
   - 手元に actionlint が無かったので、YAML を読み直せることと、`run` の中を `bash -n` で確かめ、`check` のジョブの手順を祝日のモジュールで手元で走らせた（2026-10-29）。ワークフローは一度も走らせていない。
+- **送り出す前のリリース**（2026-10-29）：0.37.0 は、祝日のモジュールを送り出す前に出す。README（英日）と、サイトのモジュールのページの最初の段落は、まだレジストリに無いこと、`ritsu mod add` で取り出せないこと、一覧のページはリポジトリのファイルから作ることを、一文ずつ言う。送り出したら、その文を消す。モジュールの README は、送り出すファイルに入るので書き換えない（書けば、送り出した版にその文が残る）。一覧のサイトは `local` の行で、版の行に「まだ公開していません」と出す（17.17）。
 
 ### 17.19 コマンドの表
 
