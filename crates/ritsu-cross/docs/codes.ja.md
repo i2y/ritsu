@@ -1130,9 +1130,9 @@ policy unique
 
 ## E302 — `ritsu.mod` の値が、決まった形ではありません
 
-**いつ出るか**: `ritsu.mod` の値の形が違うとき。モジュールの名前、版の字、依存の名前、`require … path` の絶対パス、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、二度書いた依存の名前、空の `license`、https でない `source`、`exclude` と鍵のファイルのパスなどです。`require … path` の指す先に `ritsu.mod` が無いときも、値が指すものの誤りとして、このエラーです。言語の検査に入らずに止まります（exit 1）。
+**いつ出るか**: `ritsu.mod` の値の形が違うとき。モジュールの名前、版の字、依存の名前、`require … path` の絶対パス、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、二度書いた依存の名前、空の `license`、https でない `source`、`exclude` と鍵のファイルのパス、`require … git` の URL と `dir` などです。git の URL は https か ssh（scp の形も）で書きます。`git://`、`file://`、ローカルのパス、`<transport>::` の形、この機械の外への平文の http、`-` で始まる値は受け付けません。URL と `dir` から決まるモジュールの名前に大文字があるときも、このエラーです。ユーザーかパスワードのある https の URL、パスワードのある ssh の URL、クエリのある URL は、資格情報を含むことがあるので、診断に URL も行も出しません。`require … path` の指す先に `ritsu.mod` が無いときも、値が指すものの誤りとして、このエラーです。言語の検査に入らずに止まります（exit 1）。
 
-**直し方**: 示された値を、その文の形に直してください。依存の名前は、小文字の英字で始まり、小文字の英字と数字と `_` だけでできた 64 字までの語です。版の字は `1.4.0` のような SemVer の形です。パスの依存は、`ritsu.mod` のあるディレクトリを、モジュールのルートからの相対パスで指してください。
+**直し方**: 示された値を、その文の形に直してください。依存の名前は、小文字の英字で始まり、小文字の英字と数字と `_` だけでできた 64 字までの語です。版の字は `1.4.0` のような SemVer の形です。パスの依存は、`ritsu.mod` のあるディレクトリを、モジュールのルートからの相対パスで指してください。git の依存の資格情報は `ritsu.mod` に書かず、git の資格情報のヘルパーか ssh の鍵に任せてください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -1188,9 +1188,9 @@ policy unique
 
 <a id="e303"></a>
 
-## E303 — レジストリの依存があるのに、`ritsu.lock` がありません
+## E303 — レジストリか git の依存があるのに、`ritsu.lock` がありません
 
-**いつ出るか**: 木のどれかのモジュールがレジストリから依存を取る（`require … oci`）のに、手元のモジュールの `ritsu.lock` が無いか、読めないとき。レジストリの依存の版とダイジェストは `ritsu.lock` が決めるので、それが無ければ、どのファイルを読むかが決まりません。lock を読めないのは、書式が違うとき（知らない行、ダイジェストの形など）です。言語の検査に入らずに止まります（exit 1）。
+**いつ出るか**: 木のどれかのモジュールがレジストリか git のリポジトリから依存を取る（`require … oci` か `require … git`）のに、手元のモジュールの `ritsu.lock` が無いか、読めないとき。そうした依存の版とダイジェスト（git ならコミットも）は `ritsu.lock` が決めるので、それが無ければ、どのファイルを読むかが決まりません。lock を読めないのは、書式が違うとき（知らない行、ダイジェストの形など）です。言語の検査に入らずに止まります（exit 1）。
 
 **直し方**: `ritsu mod lock` を走らせて、`ritsu.lock` を書いてください。lock は手で書かないでください。
 
@@ -1230,7 +1230,7 @@ policy unique
 
 ## E304 — `ritsu.lock` が `ritsu.mod` に合いません
 
-**いつ出るか**: `ritsu.lock` が、木のモジュールの `ritsu.mod` に合わないとき。lock に無いモジュール、`require` が求める最小の版より低い lock の版、取り先の種類やパスの違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無いこと、パスで読むモジュールの `oci` の行などです。`ritsu.mod` を手で書き替えて、lock を書き直していないときに起きます。言語の検査に入らずに止まります（exit 1）。
+**いつ出るか**: `ritsu.lock` が、木のモジュールの `ritsu.mod` に合わないとき。lock に無いモジュール、`require` が求める最小の版より低い lock の版、取り先の種類やパスの違い、`require … git` と lock の URL の違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無いこと、パスで読むモジュールの `oci` か `git` の行などです。`ritsu.mod` を手で書き替えて、lock を書き直していないときに起きます。言語の検査に入らずに止まります（exit 1）。
 
 **直し方**: `ritsu mod lock` を走らせて、lock を書き直してください。
 
@@ -1356,9 +1356,9 @@ policy unique
 
 ## E306 — 同じ名前のモジュールが二か所から来ます
 
-**いつ出るか**: 木の中で、同じ名前のモジュールが二か所から来るとき。二つの `require … path` が、`module` に同じ名前を書いた別々のディレクトリを指すとき、取ってきた `ritsu.mod` の `module` が取ったリポジトリと違うとき、取ってきたファイルに `ritsu.mod` が無いときです。`ritsu mod lock` が版を選ぶときに読んだタグの `ritsu.mod` の `version` がタグと違うときも、二か所が食い違うので、このエラーです。モジュールは名前で見分けるので、一つの名前の中身は一つでなければなりません。言語の検査に入らずに止まります（exit 1）。
+**いつ出るか**: 木の中で、同じ名前のモジュールが二か所から来るとき。二つの `require … path` が、`module` に同じ名前を書いた別々のディレクトリを指すとき、取ってきた `ritsu.mod` の `module` が取ったリポジトリ（git なら URL と `dir` から決まる名前）と違うとき、取ってきたファイルに `ritsu.mod` が無いときです。二つの依存が、一つの名前のモジュールを別々の取り先（レジストリと git、二つの URL）から求め、手元のモジュールがそのモジュールの `require` を書いていないときも、このエラーです。`ritsu mod lock` が版を選ぶときに読んだタグの `ritsu.mod` の `version` がタグと違うときも、二か所が食い違うので、このエラーです。モジュールは名前で見分けるので、一つの名前の中身は一つでなければなりません。言語の検査に入らずに止まります（exit 1）。
 
-**直し方**: モジュールを一か所から読むようにしてください。コピーしたディレクトリなら、`module` に自分の名前を付けるか、`require` を一つにしてください。取ってきたモジュールなら、その作者に知らせてください。
+**直し方**: モジュールを一か所から読むようにしてください。コピーしたディレクトリなら、`module` に自分の名前を付けるか、`require` を一つにしてください。依存が別々の取り先から求めるなら、手元のモジュールの `require` に取り先を書けば、それが選ばれます。取ってきたモジュールなら、その作者に知らせてください。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -1500,11 +1500,11 @@ policy unique
 
 <a id="e308"></a>
 
-## E308 — レジストリから取ったモジュールが、パスの依存を持っています
+## E308 — 取ってきたモジュールが、持てない依存を持っています
 
-**いつ出るか**: レジストリから取ったモジュールの `ritsu.mod` が、`require … path` を持つとき。パスの依存は一つの作業ツリーの中でだけ読めるもので、モジュールを取ってきた側には、そのパスの先がありません。言語の検査に入らずに止まります（exit 1）。
+**いつ出るか**: レジストリか git のリポジトリから取ったモジュールの `ritsu.mod` が `require … path` を持つとき、またはレジストリから取ったモジュールが `require … git` を持つとき。パスの依存は一つの作業ツリーの中でだけ読めるもので、モジュールを取ってきた側には、そのパスの先がありません。レジストリのモジュールを取る人が、その git のリポジトリに届くとは限らず、git の依存には確かめる署名もありません。言語の検査に入らずに止まります（exit 1）。
 
-**直し方**: そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは、依存をどれも `require … oci` で書く必要があります。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。
+**直し方**: そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは依存をどれも `require … oci` で、git で配るモジュールはパスでない取り先で書く必要があります。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。
 
 **再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
 
@@ -1574,6 +1574,92 @@ policy unique
 | standard | 20%                     |
 | reduced  | 5%                      |
 ```
+
+<a id="e309"></a>
+
+## E309 — `signature` の行が、git のリポジトリから取るモジュールに当たっています
+
+**いつ出るか**: 手元のモジュールか、そのモジュールを求めるモジュールの `ritsu.mod` で、`signature` の行の頭の部分が、git のリポジトリから取るモジュールの名前に当たるとき。ritsu が署名を確かめるのはレジストリから取るモジュールだけで、git の依存には確かめる署名がありません。確かめると書いたモジュールを確かめずに読むことはしないので、`ritsu mod fetch` は何も取らずに止まり（exit 1）、検査は言語の検査に入らずに止まります（exit 1）。`ritsu mod site` の一覧の `signature` の行なら、一覧を読めないものとして止まります（exit 2）。
+
+**直し方**: 頭の部分を狭めて、git の依存に当たらないようにしてください（`signature "example.com/acme/pricing" …` のように、一つのモジュールにも書けます）。署名を確かめたいモジュールは、レジストリから取ってください。
+
+**再現**: 下のファイルを一つのディレクトリに置き、そこで `ritsu check .` を走らせます。
+
+`ritsu.mod`:
+
+```
+module example.com/acme/shop
+version 1.0.0
+
+require tax git "https://example.com/acme/tax" 1.0.0
+
+signature "example.com/acme/" key "cosign.pub"
+```
+
+`ritsu.lock`:
+
+```
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu 0.36.0
+git example.com/acme/tax 1.0.0 sha256:ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524 files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1 commit 9fceb02d0ae598e95dc970b74767f19372d61af8 "https://example.com/acme/tax"
+```
+
+`cosign.pub`:
+
+```
+-----BEGIN PUBLIC KEY-----
+-----END PUBLIC KEY-----
+```
+
+`fee.rule`:
+
+```rule
+rule fee v1
+description "The fee of an order: 5 GBP below 100 GBP, none from 100 GBP"
+
+inputs
+  subtotal : money[GBPc]  range >=0GBPc <=1_000_000GBPc
+
+outputs
+  fee : money[GBPc]  round up(1GBPc)
+
+table pick
+policy unique
+| subtotal    | -> fee : money[GBPc] |
+| <10000GBPc  | 500GBPc              |
+| >=10000GBPc | 0GBPc                |
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/ritsu.mod`:
+
+```
+module example.com/acme/tax
+version 1.0.0
+```
+
+`.ritsu/modules/sha256/ad42a050d36b11d05b184ceeabbc88f82ff364f63226e2e180ece5c4fe665524/files/vat_rate.rule`:
+
+```rule
+rule vat_rate v1
+description "The rate of VAT for a category of goods"
+
+enum category = standard | reduced
+
+inputs
+  category : category
+
+outputs
+  rate : rate[step 1%]  round down(1%)
+
+table rate_by_category
+policy unique
+| category | -> rate : rate[step 1%] |
+| standard | 20%                     |
+| reduced  | 5%                      |
+```
+
+関連: [E308](#e308)
 
 <a id="w301"></a>
 

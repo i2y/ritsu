@@ -579,9 +579,9 @@ them:
 ## Modules
 
 A module is a directory with a `ritsu.mod`, which gives its files a name and a version. Other
-projects require it, from a directory beside them or from an OCI registry, and read its files by
-`@<name>/…` paths. A project checks the files it requires with its own, so a proof does not stop at
-a module's edge either. Here, in ritsu's tests
+projects require it, from a directory beside them, a git repository or an OCI registry, and read its
+files by `@<name>/…` paths. A project checks the files it requires with its own, so a proof does
+not stop at a module's edge either. Here, in ritsu's tests
 ([crates/ritsu/tests/projects/modules](crates/ritsu/tests/projects/modules)), a shop requires
 `pricing`, which requires `tax`:
 
@@ -624,24 +624,41 @@ $ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
 $ ritsu mod fetch
 ```
 
+A module in a git repository is required by the repository's URL. Its versions are the tags
+`v<version>`, or `<dir>/v<version>` for a module in a directory of the repository, given with
+`--dir <dir>`:
+
+```console
+$ ritsu mod add rates https://example.com/acme/rates@1.2.0
+```
+
 - The lock pins every module the project reads, the dependencies of its dependencies too, to a
-  version and two digests. Every command checks the files it reads against them, and
-  `ritsu mod lock --check` fails a build whose lock is stale. `ritsu mod get <name>@<version>`
-  raises a dependency.
+  version and two digests, and a module from git to the commit its tag led to as well. Every
+  command checks the files it reads against them, and `ritsu mod lock --check` fails a build whose
+  lock is stale. `ritsu mod get <name>@<version>` raises a dependency.
 - `ritsu mod fetch` fetches what the lock pins into a store kept across runs. `ritsu mod vendor`
-  puts a copy of it in the module (`.ritsu/modules/`), for a build that cannot reach the registry.
-  Only `ritsu mod` reaches the network: `check`, `gen`, `run` and the languages' commands read the
-  store and the copy.
-- `ritsu mod push` checks the module, refuses it when a file holds a key (W901), and pushes it to the
-  registry its name names. It prints the `cosign sign` command that signs it. With a `signature`
-  line in `ritsu.mod`, a fetch has cosign check the signature before it keeps the module:
+  puts a copy of it in the module (`.ritsu/modules/`), for a build that cannot reach the registry or
+  the repository. Only `ritsu mod` reaches the network: `check`, `gen`, `run` and the languages'
+  commands read the store and the copy.
+- A module is shared by git when its author tags a commit and pushes the tag: there is no registry
+  to run, and no signature to check (a `signature` line that covers a module from git is E309). A
+  module for others to use is published to a registry, where its signature can be checked. The name
+  of a module from git is where it is (`example.com/acme/rates`), so one module is shared one of the
+  two ways. Moving it to a registry changes its `module` line, and the projects that use it change
+  their `require` line and lock; their files name it by the name they gave it, and do not change.
+- `ritsu mod push` checks the module, refuses it when a file holds a key (W901) or it requires a
+  module from git, and pushes it to the registry its name names. It prints the `cosign sign` command
+  that signs it. With a `signature` line in `ritsu.mod`, a fetch has cosign check the signature
+  before it keeps the module:
 
 ```
 signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
 ```
 
 The credentials for a registry come from Docker's configuration file (what `docker login` and the
-credential helpers write), and no output shows them.
+credential helpers write), and no output shows them. Those for a git repository are git's own: ssh
+keys, credential helpers and `url.<base>.insteadOf` work as they do for `git fetch`, and ritsu does
+not let git ask for a password on the terminal.
 
 `ghcr.io/i2y/ritsu-holidays` is a module of this repository,
 [modules/holidays](modules/holidays/README.md): the public holidays of the United Kingdom and of
@@ -710,8 +727,8 @@ need the native ritsu. When `dirs` opens only some directories, add the store to
 copy in the module with `ritsu mod vendor`.
 
 `ritsu mod --help` lists the fifteen commands of `ritsu mod`, and
-[Modules](https://i2y.github.io/ritsu/modules/) on ritsu's site says how to write, require, push and
-sign a module.
+[Modules](https://i2y.github.io/ritsu/modules/) on ritsu's site says how to write, require, share by
+git, push and sign a module.
 
 ## Security checks
 

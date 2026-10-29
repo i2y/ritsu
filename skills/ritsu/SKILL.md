@@ -18,9 +18,9 @@ to, the bounds of an account) is what the next is held to.
 It also applies when the project holds the files of one language only and a diagnostic names
 `ritsu`, when a command of one language has to read another (`ritsu dandori`, `ritsu yuen`,
 `ritsu sakai`, `ritsu sekisho`, `ritsu kaname`, §6), and when the project is a module (a
-`ritsu.mod`) that requires the files of other modules or is to be published (§9). It does not replace the language skills: to
-write a rule, a workflow, a date, a ledger, a claim, a requirement, a map, a gate or a functional
-core, read the skill of that language (§5).
+`ritsu.mod`) that requires the files of other modules or is to be shared or published (§9). It
+does not replace the language skills: to write a rule, a workflow, a date, a ledger, a claim, a
+requirement, a map, a gate or a functional core, read the skill of that language (§5).
 
 A file never mixes two languages. A tariff, a calendar, a ledger and a workflow are read by
 different people, so each is a file of its own, and the files meet by name: a workflow's `use rule`,
@@ -121,13 +121,14 @@ comes with an example that breaks it; a warning says what could not be decided.
 | E206 | a hold has always expired by the time the flow posts or voids it | make the hold last longer (the transfer's `pending expires after`), or make the call sooner |
 | W206 | whether the hold has expired by then cannot be decided: nothing bounds the time between making the hold and the call | give the task that makes the hold, and the tasks between, a `timeout`; where none can be given, leave it |
 | E301 | a `ritsu.mod` does not read: a word it does not know, a word with no value, a word written twice that is written once, no `module` first, bytes that are not UTF-8 | correct the line it points at; the first statement is `module` |
-| E302 | a value of a `ritsu.mod` is not of its form (a name, a version, an absolute `path`, a dependency's name twice), or a `require … path` leads to a directory with no `ritsu.mod` | write the value in its form; a dependency by a path names a directory with a `ritsu.mod`, from the module's root |
-| E303 | a dependency comes from a registry and the module has no `ritsu.lock`, or one that does not read | run `ritsu mod lock`; do not write the lock by hand |
-| E304 | `ritsu.lock` does not match a `ritsu.mod`: a version below the least a `require` asks for, a module it has no line for, a source of another kind or path | run `ritsu mod lock` |
+| E302 | a value of a `ritsu.mod` is not of its form (a name, a version, an absolute `path`, a dependency's name twice; a git URL that is not https or ssh, that gives a name with an uppercase letter, or that may carry a credential: a user or a password in an https URL, a query), or a `require … path` leads to a directory with no `ritsu.mod` | write the value in its form; a dependency by a path names a directory with a `ritsu.mod`, from the module's root; leave git's credentials to its credential helper or an ssh key, never in `ritsu.mod` |
+| E303 | a dependency comes from a registry or a git repository and the module has no `ritsu.lock`, or one that does not read | run `ritsu mod lock`; do not write the lock by hand |
+| E304 | `ritsu.lock` does not match a `ritsu.mod`: a version below the least a `require` asks for, a module it has no line for, a source of another kind, another path or another git URL | run `ritsu mod lock` |
 | E305 | the files of a dependency in the store or in the module's copy (`.ritsu/modules/`) differ from the lock's digest | `ritsu mod vendor` for the copy; `ritsu mod clean`, then `ritsu mod fetch`, for the store; correct a dependency in its own module |
-| E306 | a module of one name comes from two places (two paths, or a `ritsu.mod` fetched that names another module) | read the module from one place |
+| E306 | a module of one name comes from two places (two paths, a `ritsu.mod` fetched that names another module, or two dependencies that require it from two sources, a registry and git or two URLs) | read the module from one place; where two dependencies differ, a `require` of it in the module at hand chooses the source |
 | E307 | a file or a directory right under a module's root has a name that starts with `@`, which names a dependency there | rename it |
-| E308 | a module from a registry has a `require … path`, which cannot be read where it is fetched | tell its author; meanwhile put it in the working tree and read it with `require … path` |
+| E308 | a module fetched has a dependency it cannot have: a `require … path` in one from a registry or git, which cannot be read where it is fetched, or a `require … git` in one from a registry | tell its author; meanwhile put it in the working tree and read it with `require … path` |
+| E309 | a `signature` line covers a module from a git repository: ritsu checks the signatures of modules from registries only, so `ritsu mod fetch` and `ritsu check` stop | narrow the line's start so that it covers no module from git (a line can cover one module); take a module whose signature is to be checked from a registry |
 | W301 | no file of a module names a file of a dependency it requires (an `import` of a `.proto` that comes to the dependency counts); said when the whole module is checked | delete the `require` (`ritsu mod remove <name>`), or name a file of `@<name>/…` where it is used |
 | W302 | `ritsu.lock` has a line for a module nothing requires now | run `ritsu mod lock` |
 | W303 | a file names a file of a dependency of a dependency its module does not require (`@pricing/@tax/…`, or an `import` of a `.proto` that comes to one) | require that module in the module's own `ritsu.mod` |
@@ -256,7 +257,8 @@ such a rule.
 - **Which version of a dependency to take, and what to publish.** A new version of a module changes
   the answers of every file that reads it: show the person what `ritsu mod report` says, and let
   them decide. Pushing and signing a module are theirs too: they log in to the registry
-  (`docker login`) and choose the identity its signature names (§9).
+  (`docker login`) and choose the identity its signature names, or, for a module shared by git,
+  tag the version and push the tag (§9).
 - **Reading the pages.** The pages for people that the languages write are for whoever has to
   understand what the code is to carry out and check it against what they know: the people who run the business,
   finance and legal, operators and the developers reviewing the code. Hand them the page; what they
@@ -306,17 +308,24 @@ project's own files, so the checks across the languages reach into a dependency 
 project. `ritsu mod --help` lists the commands; `ritsu mod <command> --help` says what each takes.
 
 **Require a module** with `ritsu mod add <name> <source>`: a directory beside the project
-(`../pricing`) or a module on an OCI registry (`ghcr.io/i2y/ritsu-holidays@1.0.0`).
+(`../pricing`), a module on an OCI registry (`ghcr.io/i2y/ritsu-holidays@1.0.0`), or a module in a
+git repository by its https or ssh URL (`https://example.com/acme/rates@1.2.0`, with
+`--dir <dir>` for a module in a directory of the repository). A git repository's versions are its
+tags `v<version>` (`<dir>/v<version>`), and the lock pins each one's commit and the digest of its
+files. A module from git is named by where it is, the host and path of the URL and the `dir`
+(`example.com/acme/rates`), so one module is served either from git or from a registry, not both.
+git reaches a private repository with the person's own credentials (git's credential helper, an
+ssh key); never write one in `ritsu.mod`, and never ask for one.
 `ritsu mod get <name>@<version>` raises it, and `ritsu mod remove <name>` drops it. They write
 `ritsu.mod` and `ritsu.lock`. Do not write the lock by hand: `ritsu mod lock` writes it again, with
 the least version of each module that meets every `require` of it.
 
 **Fetch** what the lock pins with `ritsu mod fetch`, into a store kept across runs (`RITSU_MODULES`,
-else the user's cache directory). Only `ritsu mod` reaches the network: `check`, `gen`, `run` and the
-languages' commands read the store, and the module's own copy that `ritsu mod vendor` puts in
-`.ritsu/modules/` for a build that cannot reach the registry. Every command holds what it reads to
-the lock's digests (E305). `ritsu mod list` says where each module comes from and whether its files
-are here, and `ritsu mod where @<name>/<path>` where a file is on the disk.
+else the user's cache directory). Only `ritsu mod` reaches the network: `check`, `gen`, `run` and
+the languages' commands read the store, and the module's own copy that `ritsu mod vendor` puts in
+`.ritsu/modules/` for a build that cannot reach the registry or the repository. Every command holds
+what it reads to the lock's digests (E305). `ritsu mod list` says where each module comes from and
+whether its files are here, and `ritsu mod where @<name>/<path>` where a file is on the disk.
 
 **What `ritsu check` prints** in a module: its files as before, and a line for the dependencies,
 whose files are checked too:
@@ -345,18 +354,23 @@ in the store).
 
 **Publishing** is the person's (§7). `ritsu mod push --dry-run` checks and builds the module without
 sending it. `ritsu mod push` sends it with the credentials of Docker's configuration, refuses a
-module whose files hold a key (W901), and prints the `cosign sign` command that signs it; never ask
-for a token or print one. A `signature` line in a `ritsu.mod` makes every fetch of that module
-check its signature with cosign before keeping it.
+module whose files hold a key (W901) or that has a dependency from git, and prints the
+`cosign sign` command that signs it; never ask for a token or print one. A `signature` line in a
+`ritsu.mod` makes every fetch of that module check its signature with cosign before keeping it; it
+cannot cover a module from git, which has no signature to check (E309). A module in a git
+repository is published by pushing a tag `v<version>` (`<dir>/v<version>`) on a commit whose
+`ritsu.mod` gives that version. Do not move a tag once pushed: the locks of others pin its commit,
+and `ritsu mod fetch` fails when that commit is gone.
 
 **A site that lists modules**: `ritsu mod site <list> --out <dir>` writes a page for each version of
 each module a list file names, with the pages of its files and what changed from the version
 before. A line of the list starts with `title`, `description`, `playground` (the page that runs
 ritsu in the browser; `--playground <URL>` gives it too), `module` (`"<registry>/<repository>"`),
-`signature` (as in `ritsu.mod`, checked on every version) or `local` (a directory not pushed yet,
-from the list's directory). It exits 1 when a version cannot be verified (its page says so), and 2,
-writing nothing, when the list does not read (it names each wrong line), a registry cannot be
-reached, or cosign is needed and missing.
+`git` (`"<URL>"`, then `dir "<dir>"` for a module in a directory of the repository), `signature`
+(as in `ritsu.mod`, checked on every version; it cannot cover a module from git) or `local` (a
+directory not pushed yet, from the list's directory). It exits 1 when a version cannot be verified
+(its page says so), and 2, writing nothing, when the list does not read (it names each wrong line),
+a registry or a repository cannot be reached, or cosign is needed and missing.
 
 **In the npm package**, which reaches no network, the commands that reach a registry or run git or
 cosign (`add`, `get`, `fetch`, `versions`, `push`, `report` and `site`, and `lock`, `remove` and

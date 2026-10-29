@@ -1999,7 +1999,7 @@ rulec のパーサーは、出力の行に書いた `range` を黙って読み�
 
 ## 8. モジュール（2026-10-28）
 
-DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作る。この章の B〜G は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
+DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
 
 | 段階 | すること | 前に終わっているもの | 見込み（担当の作業の時間） |
 |---|---|---|---|
@@ -2009,21 +2009,22 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 | E | ライブラリの形の gen（TypeScript、Python、Go） | B | 6〜8 時間 |
 | F | 祝日のモジュール、一覧のサイト、ブラウザで試すページ、ritsu のサイト、公開のワークフロー、npm | C、D | 10〜13 時間 |
 | G | README、スキル、サイトのページ、台帳から作る文書、数の同期、DESIGN 17 章の書き直し、日本語の読み直し | B〜F | 5〜7 時間 |
-| 仕上げ | 全体の試験を一度、CI（毎晩の回も）、取り込み、リリース（取りまとめ役） | G | 3〜4 時間 |
+| I | git の依存：`require … git` の行、名前とタグと版、lock と置き場、git の呼び方、`ritsu mod` のコマンド、一覧のサイト、npm とブラウザ、台帳、文書、テストの git のサーバー | G | （立てていない） |
+| 仕上げ | 全体の試験を一度、CI（毎晩の回も）、取り込み、リリース（取りまとめ役） | I | 3〜4 時間 |
 
-合わせて 66〜88 時間である。C・D・E を並べれば、B から仕上げまでにかかる時間は 48〜64 時間になる。
+B〜G と仕上げの見込みは、合わせて 66〜88 時間である。C・D・E を並べれば、B から仕上げまでにかかる時間は 48〜64 時間になる。
 
 ### 8.1 この章の段階に共通の決まり
 
 - 仕様は DESIGN 17 章である。違うことをしたくなったら、先に DESIGN 17 章に決めたことと理由と捨てた形を書き、報告で言う。
 - 担当は、git のコミット、push、stash、ブランチの操作をしない。取り込みは取りまとめ役がする。
-- 本物のレジストリ（ghcr.io など）に送らない。`docker login` をしない。テストはインターネットに出ない（テストの中のレジストリと、platforms の段のサービスにだけ問い合わせる）。
+- 本物のレジストリ（ghcr.io など）に送らない。`docker login` をしない。テストはインターネットに出ない（テストの中のレジストリと git のサーバー、platforms の段のサービスにだけ問い合わせる）。
 - 資格情報とトークンを、出力、ログ、報告、golden に入れない。テストが植える秘密は、偽の値と分かる値にする（DESIGN 16.10 の偽の鍵と同じ考え）。
 - 試験は、触ったクレートと、変えた口を読むクレートの分だけを回す。全体は、出す候補が固まったときに取りまとめ役が一度回す。報告の前に `-- --nocapture` で SKIP の行を読み、数と理由を書く。
 - マニフェストの無いプロジェクトの出力は変えない（M14）。golden が変われば、変わった理由を報告に並べる。
 - 例とテストの材料は英語を先に作り、日本語の版を横に置く（DESIGN 10.10）。日本語の文は、japanese-review の手引き（DESIGN 4.1 の決まり）で読み直す。
 - 成果物（文書、golden、生成物）に、手元の絶対パス、ユーザー名、マシン名を入れない。文書に載せる出力と数は、走らせた実物を貼る。
-- テストのレジストリ、platforms のコンテナ、ブラウザを立てたまま終わらない。一時ファイルは段階の作業場所に置き、終わったら消す。
+- テストのレジストリと git のサーバー、platforms のコンテナ、ブラウザを立てたまま終わらない。一時ファイルは段階の作業場所に置き、終わったら消す。
 - 同じころに進む返金の見本の直し（この PLAN の 7.59 から）が、`crates/dandori`、`crates/sakai`、`crates/geas`、`crates/ritsu-cross/src/holds.rs`、`crates/ritsu/tests/cross.rs`、`crates/ritsu/tests/golden/cross/` と、この PLAN の 7 章を変える。B.6 のほかは、そこに触らない。触る必要が出たら、取りまとめ役に言ってから触る。
 
 ### 8.2 B：書式と解決と検査（通信しない）
@@ -2050,7 +2051,7 @@ DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で
 - 試験の道具：ディレクトリから置き場の項目を作る関数 `ritsu_base::modules::store::put_directory`（B.2 の tar と OCI のマニフェストを使い、通信しない）を足す。C と D の試験もこれを使う。`ritsu-testkit` に置かない理由は DESIGN 17.25。
 - 試験：`crates/ritsu-base/tests/modules_resolve.rs`、`modules_graph.rs`。`refer` がモジュールの外で `dir.join` とバイトまで同じこと、正規の書き方（回数の少ない連なり、同じ回数なら `require` の順）、外へ出るパス、入れ子へ `@` なしで入るパス、`./@…`、版の選び方の性質（ランダムに作った木で、選んだ版がどの `require` も満たし、選び直しても変わらず、手で解いた答えと同じ）、パスの依存が勝つこと、E306・E308、lock の食い違い。
 
-**B.4 例のプロジェクトの材料**（DESIGN 17.26、8.9）
+**B.4 例のプロジェクトの材料**（DESIGN 17.26、8.10）
 
 - `crates/ritsu/tests/projects/modules/` と `modules.ja/` を作る（パスの依存で）。B.5 からの試験が使う。
 - いまの試験とページのうち、`crates/ritsu/tests/projects/` の下を全部たどるもの（ブラウザで試すページのプロジェクトの一覧、サイトの試験など）が、`modules` と `modules.ja`（ルートに `ritsu.mod` が無く、下がモジュールだけのディレクトリ）を読んで困らないかを見て、困るならそこで外す。
@@ -2335,7 +2336,7 @@ C2 で確かめたこと（2026-10-29、この機械で）：
 ### 8.7 G：文書と仕上げ
 
 - **G.1 README**（英日）：「Modules」の節。`shop/ritsu.mod`、フローの `use rule … from "@pricing/…"` の行、`ritsu check` の出力の抜粋（実物）、`ritsu mod add`・`lock`・`fetch`・`push`、署名の行、`ritsu mod report` の CI の書き方。`crates/ritsu/tests/readme.rs` が確かめる形にする。
-  - 結果（2026-10-29）：README（英日）に「Modules」（日本語は「モジュール」）の節を置いた。中身は、例のプロジェクトの `shop/ritsu.mod`（ブロックの上の注で、どのファイルかを示す）、フローの `use rule … from "@pricing/…"` の二行、`shop` で走らせた `ritsu check .` の出力、`ritsu mod add` と `fetch`、lock・`get`・`vendor`・`push` の項目、`signature` の行、資格情報の読み方、祝日のモジュールの読み方と一覧のサイトへのリンク（公開したあとの形。公開は 8.8）、版を上げるときの `ritsu mod diff` と `report`、報告を pull request に載せるワークフロー（C の下書きから）、npm のパッケージでは走らないコマンド、`ritsu mod --help` の 15 のコマンドと案内のページへのリンクである。「Commands」に `ritsu gen --library …` と `ritsu mod <command> …` の行と、サイトの「Publishing libraries」への案内を足した。`readme.rs` に二つの試験を足した。注でファイルを示したブロックが、そのファイルの行であること（`common::marked_files`）と、報告のワークフローが README（英日）と案内のページ（英日）で同じ文であり、README（英日）とサイトのどのページの `i2y/ritsu@v<版>` もワークスペースの版であること（いまは 12 か所。ほかに根の `action.yml` の注に一つ）である。本文に書いた `ritsu mod <コマンド>` が `ritsu mod --help` にあることは、`common::commands_named` が確かめる。ワークフローは、actionlint が手元に無いので、四か所とも YAML として読めることと、`run` の中を `bash -n` で確かめた。一度も走らせていない。
+  - 結果（2026-10-29）：README（英日）に「Modules」（日本語は「モジュール」）の節を置いた。中身は、例のプロジェクトの `shop/ritsu.mod`（ブロックの上の注で、どのファイルかを示す）、フローの `use rule … from "@pricing/…"` の二行、`shop` で走らせた `ritsu check .` の出力、`ritsu mod add` と `fetch`、lock・`get`・`vendor`・`push` の項目、`signature` の行、資格情報の読み方、祝日のモジュールの読み方と一覧のサイトへのリンク（公開したあとの形。公開は 8.9）、版を上げるときの `ritsu mod diff` と `report`、報告を pull request に載せるワークフロー（C の下書きから）、npm のパッケージでは走らないコマンド、`ritsu mod --help` の 15 のコマンドと案内のページへのリンクである。「Commands」に `ritsu gen --library …` と `ritsu mod <command> …` の行と、サイトの「Publishing libraries」への案内を足した。`readme.rs` に二つの試験を足した。注でファイルを示したブロックが、そのファイルの行であること（`common::marked_files`）と、報告のワークフローが README（英日）と案内のページ（英日）で同じ文であり、README（英日）とサイトのどのページの `i2y/ritsu@v<版>` もワークスペースの版であること（いまは 12 か所。ほかに根の `action.yml` の注に一つ）である。本文に書いた `ritsu mod <コマンド>` が `ritsu mod --help` にあることは、`common::commands_named` が確かめる。ワークフローは、actionlint が手元に無いので、四か所とも YAML として読めることと、`run` の中を `bash -n` で確かめた。一度も走らせていない。
 - **G.2 スキル**：ritsu のスキル（モジュールの書き方、取り出し、報告）、rulec（`diff` の `@`）、koyomi（`diff`）、sekisho（`diff`）。`crates/ritsu/tests/skill.rs` が確かめる。
   - 結果（2026-10-29）：ritsu のスキルに「9. Modules」の節（足し方、取り出し、モジュールでの `ritsu check` の出力、版を上げるときの `diff` と `report`、送り出しと署名、一覧のサイト、npm のパッケージ）と、人が決めることの一項（どの版を取るか、何を送り出すか）を足した。rulec のスキルに `diff` の `@<名前>/<パス>` と `@<名前>@<版>/<パス>`（`crates/rulec/AGENTS.md` の段落からコピーする）を、koyomi と sekisho のスキルに `diff` を足した。geas・kaname・sakai・sekisho・yuen の reference の、ルートの決め方の文を直した（G.5 の `--root`）。`skill.rs` の 15 の試験が通る。
 - **G.3 サイト**：案内のページ（英日）の中身、koyomi と sekisho の diff のページ、rulec の diff のページの `@`。`website/sync.sh` で同期し、`website.rs` が確かめる。
@@ -2362,14 +2363,51 @@ G で確かめたこと（2026-10-29、この機械で）：
 5. `website/build.sh` で、Zensical 0.0.67 と作業ツリーの ritsu でサイトを組んだ。一覧のサイトは英日とも 14 枚のページである。出た警告は、rulec のサイトの `reference.md` のアンカー一つ（英日で二回。前からのもので、G は触っていない）だけだった。
 6. DESIGN 17 章に、足した経緯、見込み、スケッチの文は無い（「まだやらないこと」の 17.28 は、やらないことの一覧として残す）。`modules/holidays` の日本語の呼び方は、どこも「祝日のモジュール」にそろっている。
 
-### 8.8 仕上げ（取りまとめ役）
+### 8.8 I：git の依存
+
+依存の取り先に、`path` と `oci` に加えて git のリポジトリを足す（DESIGN 17.12.1）。自分たちのリポジトリのあいだで共有するモジュールは git から、広く配って署名で確かめるモジュールはレジストリから取る。`path` と `oci` が通るところは、git も全部通す。I-1 で設計を決め、I-2 で作った（どちらも 2026-10-29）。版の字と `ritsu >=` の行は変えていない（仕上げで上げる）。
+
+- **I.1 書き方と名前**（DESIGN 17.3、17.5、17.12.1）：`require <名前> git "<URL>" <版> [dir "<ディレクトリ>"]` の行を読み書きする。モジュールの名前は URL と `dir` から決まる。受け付けない URL は、git を起動する前に止める。
+  - 結果（2026-10-29）：`ritsu_base::modules::git` に、URL の読み方（`parse`。https、ssh、scp の形、ループバックの http）と受け付けない形の理由、名前（`name_of`。ホストとパスから `.git` を除き、`dir` を足す）、タグと版（`tag_of`、`tag_pattern`、`versions_of`）、Git LFS のポインタ（`is_lfs_pointer`）、git の標準エラーの資格情報を伏せる `redacted` を置いた。`manifest.rs` は `require … git` の行を読み、`get`・`add`・`remove` で一語ずつ書き換える。資格情報を持ちうる URL の診断は、`source` の行と同じく URL も行も出さない。名前に大文字が入る URL と `dir` は E302 にした。名前が場所なので、一つのモジュールを git とレジストリの両方からは配れないこと、レジストリへの移し方、大文字の扱いは、17.12.1 とサイトの案内のページ（英日）に書いた。
+- **I.2 lock と置き場**（17.4、17.15）：lock の `git` の行と、置き場の `git/` の索引。
+  - 結果（2026-10-29）：lock の行は `git <名前> <版> sha256:<ダイジェスト> files sha256:<ダイジェスト> commit <コミット> "<URL>"` で、lock の書式の版は 1 のままにした。置き場は `git/<名前>/<版>` の索引を `refs/` と分けて持ち、項目の `record.json` に `"git"`（URL とコミット）を書く。ダイジェストは送り出しと同じ関数（`artifact::build`。運ぶファイルの選びは `digest::carried_of_tree`）で作るので、改行を変えないチェックアウトで `push --dry-run` が出すものと同じになる。
+- **I.3 解決と検査**（17.7、17.8、17.14）：一つのモジュールの取り先は一つ。署名の行が git の依存に当たれば E309。
+  - 結果（2026-10-29）：`graph.rs` は、通信する前に手元の木の取り先を全部見て、二つの依存が同じモジュールを別々の取り先（レジストリと git、二つの URL）から求め、手元のモジュールがそのモジュールの `require` を書いていなければ E306 で止まる。手元のモジュールの `require` が取り先を選び、パスの依存が勝つ。git から取ったモジュールは git の依存もレジストリの依存も持て、レジストリから取ったモジュールの `require … git` は E308 である。`signature` の行の頭の部分が git の依存に当たれば E309 にした。
+- **I.4 取り出し**（17.12.1）：git を子のプロセスとして呼び、モジュールのファイルだけを取る。
+  - 結果（2026-10-29）：`crates/ritsu/src/modules/git.rs` の `Git`（`versions`、`tag`、`make`）が、一つの版を十の手順で取る。コミットと木だけを取り、`ls-tree` で運ぶファイルを選び、その blob をまとめて取る。ファイルを除いた取得を受け付けないサーバーと、プロトコルの版 0 のサーバーでは、`--depth=1 --no-filter` で取り直す。子のプロセスは、`git rev-parse --local-env-vars` の 15 の変数を消し、`GIT_ALLOW_PROTOCOL`、`GIT_TERMINAL_PROMPT=0`、`GIT_NO_LAZY_FETCH=1`、`core.hooksPath=/dev/null` ほかの設定、`--git-dir`、`--end-of-options` で走らせる。git 2.29 以上、一つの git に 300 秒、標準エラーは資格情報を伏せて 20 行まで。作る途中で、試験が不具合を二つ見つけ、直した。一つは、一時のリポジトリを作る `git init` に設定を渡しておらず、使う人の大域の `core.hooksPath` のフックが走ったことである。もう一つは、git がフィルタを付けて取った URL にそのフィルタを覚え、取り直しにも付けたことで、`--no-filter` を足した。
+- **I.5 コマンド**（17.10、17.12、17.17、17.19、17.21）：`ritsu mod` のコマンド、`check`・`gen`・`run`、`diff` と `report`、一覧のサイト。
+  - 結果（2026-10-29）：`add` は、取り先が git の URL かを `cli::is_git` で見分け、`--dir` でリポジトリの中のディレクトリを取る。`--dir` を git の URL でない取り先に付ければ、何も書かずに exit 2 で終わる。`versions` は git の URL も取る。`get`・`lock`・`remove`・`fetch`・`list`・`where`・`vendor`・`clean`・`diff`・`report`・`site` が git の依存を扱い、`check`・`gen`・`run` は置き場と同梱のコピーから読む。`report` はタグが動いたことを `moved` で言う。`push` は、git の依存を持つモジュールをパスの依存と同じく送り出さず（exit 1）、依存を先にレジストリに送り出し、`require` の行を `oci` に書き換えて `ritsu mod lock` を走らせるよう言う。パスの依存の文は前は `ritsu mod add` を勧めていたが、`add` はもう求めている名前を受け付けないので、同じ勧めに直した。一覧のサイトは、一覧のファイルの `git` の行を読み、版のページに足し方とコミットを出す。JSON に `url`、`commit`、`dir` のキーを足した（git でない依存では null）。
+- **I.6 npm とブラウザ**（17.22）
+  - 結果（2026-10-29）：WASI では、git の依存を取るコマンドが `"git"` の文で止まる。置き場と同梱のコピーにある git の依存は、ネイティブと同じに読む。ブラウザで試すページは、同梱のコピーの git の依存と lock の `git` の行を、同じ Rust のコードで読む。JSON のキーが増えたので、`ritsu.wasm` を `make_wasm.sh` で作り直した（17,021,257 バイトから 17,057,968 バイト、gzip で 5,037,678 バイト。DESIGN 8.7、17.22）。
+- **I.7 診断と台帳**（17.20）
+  - 結果（2026-10-29）：台帳に E309 を足し、E302・E303・E304・E306・E308 の説明に git の場合を足した。ritsu-cross の `docs/codes.md`・`codes.ja.md` を台帳から書き直し、ritsu のスキルの codes の表を合わせた。
+- **I.8 文書**：G の報告に並んだ場所（依存の種類を並べる場所、レジストリを共有のただ一つの方法として書く場所、`ritsu mod add` の書き方の場所）の全部に git を足す。
+  - 結果（2026-10-29）：DESIGN に 17.12.1 を置き、17 章の関わる節（17.2〜17.10、17.12、17.14、17.15、17.17、17.19〜17.23、17.25〜17.28）を直した。17.29 に、確かめた文書（git の RelNotes 2.24.0・2.29.0・2.30.0、git-fetch・git-init の文書、Go の Modules Reference、Cargo の git の依存、Terraform のモジュールのソース、CUE のモジュール、GitHub の REST API、`actions/checkout`、Actions のランナーのイメージ、Git LFS の仕様）を載せた。README（英日）の「Modules」に、git の依存の足し方と例、git で共有すること、git の資格情報を足した。サイトの案内のページ（英日）に八つ目の節「git でモジュールを共有する」を置き（`website.rs` の節の数も 8 にした）、ritsu のスキルの 9 節にも git を足した。`--lang ja` で出る新しい文（ソースの 143 の文）は、走らせて japanese-review の手引きで読み直し、11 の文を直した（git の標準エラーを添える 7 の文の「git が言ったこと」を、cosign と同じ「git の出力」に。E306 の文と説明、資格情報の注、一覧のサイトの署名の注）。
+- **I.9 試験**：テストの中の git のサーバーで、fast の段で回す。
+  - 結果（2026-10-29）：`ritsu_testkit::git` は、ループバックで HTTP を読み、要求ごとに `git http-backend` を CGI として走らせる。ファイルを除いた取得を受け付けるか、プロトコルの版 0 だけを話すか、Basic の認証を、試験が選ぶ。リポジトリのコミットとタグは、名前と日時を固定して、どの機械でも同じコミットになる。足した試験は 36 である。ritsu-base が 15（`modules_git.rs` 10、`modules/git.rs` の単体試験 4、`modules_lock.rs` 1）、ritsu が 21（`modules_git.rs` 18、`modules/git.rs` の単体試験 1、`npm.rs` 1（tools の段）、`playground.rs` 1）。ほかに、`npm.rs` の止まるコマンドの試験に git の 10 のコマンドを、`modules_manifest.rs` に `require … git` の行の書き方の誤りを足した。JSON のキー（`url`、`commit`）と文が増えたので、`modules.rs`、`modules_cli.rs`、`modules_oci.rs`、`modules_site.rs`、`modules_graph.rs` の試験と golden を合わせた。I-1 の計画で `modules_auth.rs` と `modules_site.rs` に置くとした資格情報と一覧のサイトの試験は、テストの git のサーバーを使うので `modules_git.rs` に置いた。
+- **I.10 一緒にした直し**：`ritsu help <コマンド> --lang ja` が英語を出していた（前からの不具合）。
+  - 結果（2026-10-29）：`help` のあとに書いた `--lang` も読み、言語のコマンドの `--help`（`ritsu help rulec --lang ja`）にはそのまま渡す。`entry.rs` の試験に、後ろに書いた `--lang` を足した。
+
+**I の完了の条件**：`path` と `oci` が通るところを、git の依存も通る（マニフェスト、lock、版の選び方、取り出しと置き場、同梱のコピー、`ritsu mod` のコマンド、検査と生成と実行、`diff` と `report`、一覧のサイト、npm とブラウザ、文書、試験）。試験はインターネットに出ない。マニフェストの無い木の出力は変わらない（M14）。
+
+I で確かめたこと（2026-10-29、この機械で）：
+
+1. 触ったクレートの fast の段で、599 件が通った（落ちたもの、ignored は無い）。ritsu-base 206、ritsu-testkit 29、ritsu-cross 29、ritsu 335 である。台帳の試験（ritsu-cross と ritsu の `codes.rs`。E309 の再現と `ritsu explain` を含む）と、`readme.rs`、`skill.rs`、`website.rs` はこの中にある。
+2. SKIP の行は 72 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（node 22、python 16、go 15、chrome 7、postgres 2、cedar・cosign・mermaid・mysql・protoc・ruby・tigerbeetle が 1 ずつ、platforms の OCI のレジストリ・tidb・vitess が 1 ずつ）である。足りないものの SKIP は無い。git の試験は fast の段で走り、SKIP は無い。
+3. tools の段で、`library.rs`（10）、`npm.rs`（10）、`playground.rs`（16）、`website.rs`（26）が、SKIP なしで通った。npm のパッケージでは、通信の要る 22 のコマンド（git の依存の 10 を含む）が止まり、テストの git のサーバーからネイティブのバイナリが取った git の依存を置き場と同梱のコピーから読む 25 のコマンドが、ネイティブと同じに答えた。ブラウザで試すページは、git の依存を持つ例の 40 の答えがバイナリと同じで、ページとバイナリの突き合わせは 2,588 の答え（112 のプロジェクトと編集）、モジュールとライブラリの突き合わせは 654 の問いだった。モジュールとライブラリの突き合わせは、作り直す前の `ritsu.wasm` では、JSON に `url` と `commit` のキーが無くて落ち、作り直したあとに通った。`website.rs` のサイトを組む試験は、42 のファイルと 1,298 のリンクを確かめた。
+4. `website/build.sh` を、作業ツリーのコピーの中で、Zensical 0.0.67 と作業ツリーの ritsu で走らせた。一覧のサイトは英日とも 14 枚のページで、案内のページ（英日）に git の節がある。出た警告は、rulec のサイトの `reference.md` のアンカー一つ（英日で二回。前からのもの）だけだった。
+5. M14 を、G の突き合わせのスクリプトで確かめた。古いバイナリはモジュールの仕組みを入れる前の main（8b069303）を release で組んだもの、新しいバイナリは I の作業ツリーを release で組んだものである。34,240 回のうち 32,472 回は一字も違わず、違った 1,768 回の分け方（`ritsu.mod` を持つディレクトリの中のファイル 1,491、`@` の注 182、木を歩く検査 95）は G のときと同じで、説明の付かない違いは 0 だった。M14 の外の `--help` は、204 のページのうち 70 が違った（G のときは 68）。I.10 の直しで、`--lang ja` を後ろに書いた `ritsu help` の 5 ページ（`check`・`run`・`gen`・`explain`・`skills`）が日本語になった（古いバイナリは英語を出していた）。そのうち `explain` と `skills` の二つは、G のときは違わなかったページである。
+6. I-1 で記憶から書いていた git の版と、Go、Cargo、Terraform、CUE、Actions のランナーのことは、公式の文書で確かめて 17.29 に出典を載せた。`--end-of-options` は 2.24.0、`fetch --stdin` と `--no-write-fetch-head` は 2.29.0、`rev-parse --end-of-options` は 2.30.0 で入り、`init --object-format` は 2.27.0 の文書にもあった。最低の版 2.29 は変わらない。git の版を読む層 `fs::GitRevision`（17.9.1）が `rev-parse --end-of-options` を使うので、`ritsu mod fetch --rev` と `ritsu mod report` には 2.30 以上が要る（17.12.1）。Actions の Ubuntu 24.04 のイメージ（20261026.354.1）の git は 2.56.0 である。
+7. I-2 で書いた行に、clippy の警告は無い（触った四つのクレートで clippy が出す 632 の警告は、どれも I-2 が書いていない行のもの）。
+
+### 8.9 仕上げ（取りまとめ役）
 
 - 全体の試験を一度回す（DESIGN 10.2 の三つの段。platforms はレジストリのサービスを含めて）。
 - CI の push の回と、毎晩の platforms・kani・audit・tools の回を見る。
 - 取り込みと、リリースの判断（版は 0.37.0 を案とする。DESIGN 17 章の例の `ritsu >=0.37.0` もそれに合わせてある）。
 - 祝日のモジュールの公開（`modules.yml` を `publish` で走らせる）は、公開を決めてから。
 
-### 8.9 例のプロジェクトの材料（B.4 で作る）
+### 8.10 例のプロジェクトの材料（B.4 で作る）
 
 形は DESIGN 17.26 のとおり。中身の案：
 
@@ -2382,17 +2420,17 @@ G で確かめたこと（2026-10-29、この機械で）：
 - `versions/pricing-2.0.0/`：`shipping_fee.rule` の出力の名前を `fee` から `shipping_fee` に変えた。`shop` のフローの検査がここで止まる。
 - 日本語の版 `modules.ja/`：同じ形で、ファイルの名前と中身を日本語に（`税/規則/付加価値税率.rule` のように）。モジュールの名前と依存の名前は英字のまま（DESIGN 17.3）。
 
-使うところ：`modules.rs`（B.7〜B.9）、`modules_gen.rs`（B.8）、`modules_cli.rs`（B.10）、`rulec_diff.rs`（C.1）、`modules_diff.rs`（C.4）、`modules_report.rs`（C.5）、`modules_oci.rs`（D.4、D.5）、`library.rs`（E.5）、`modules_site.rs`（F.2）、ブラウザで試すページ（F.3）、README（G.1）、サイトの案内のページ（G.3）。
+使うところ：`modules.rs`（B.7〜B.9）、`modules_gen.rs`（B.8）、`modules_cli.rs`（B.10）、`rulec_diff.rs`（C.1）、`modules_diff.rs`（C.4）、`modules_report.rs`（C.5）、`modules_oci.rs`（D.4、D.5）、`library.rs`（E.5）、`modules_site.rs`（F.2）、ブラウザで試すページ（F.3）、README（G.1）、サイトの案内のページ（G.3）、`modules_git.rs`（I.9）。
 
-### 8.10 並べ方とぶつかるところ
+### 8.11 並べ方とぶつかるところ
 
 - B は一人で、B.1 から順に進める。B.6 は返金の見本の直しの取り込みを待つ。
 - B のあと、C と D を並べる。E は、B の担当の作業場所とビルドを引き継いで進めるか、C か D が終わってから始める。並べた段階がそれぞれ作業場所とビルド（一つで 11 GB ほど）を持つので、三つを同時にするとディスクが足りない（2026-10-28 の空きは 27 GiB）。
 - C と D がどちらも触るのは `crates/ritsu/src/modules/` だけで、B.10 がファイルを分けて表を先に作るので、同じファイルを書かない。D.5 が C.4 の `ritsu mod diff` に取り出しをつなぐのは、C が取り込まれてからにする。
-- F は C と D が取り込まれてから。G は最後。
-- 台帳（`crates/ritsu-cross/src/codes.rs`）は B.9 だけが足す。ほかの担当が同じころに台帳を変えるなら、取り込むときに取りまとめ役が合わせる。
+- F は C と D が取り込まれてから。G はそのあと、I は G のコミットのあと。
+- 台帳（`crates/ritsu-cross/src/codes.rs`）に足すのは B.9 と I.7 である。ほかの担当が同じころに台帳を変えるなら、取り込むときに取りまとめ役が合わせる。
 
-### 8.11 B の前に決めること（★）
+### 8.12 B の前に決めること（★）
 
 DESIGN 17 章で★を付けたもの。推す形は、どれも 17 章に書いた形である。B に関わるのは 1〜6 で、B を始める前に決めたい。
 

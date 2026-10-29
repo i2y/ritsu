@@ -3,8 +3,9 @@
 //! interface of each file that changed (DESIGN 17.9.5).
 //!
 //! - A side is `<module>@<version>` (the version's files in the store, or in the module at hand's
-//!   copy of it), a directory (the module it is in) or `.` (the module at hand). Two files, in any of
-//!   the spellings of DESIGN 17.9.1, give the difference of that file alone.
+//!   copy of it; from the git repository the module at hand's tree takes the module from, if it
+//!   does, else from its registry), a directory (the module it is in) or `.` (the module at hand).
+//!   Two files, in any of the spellings of DESIGN 17.9.1, give the difference of that file alone.
 //! - What a side reads is fetched before it is read ([`super::fetch`]): a version that is in no
 //!   store, and the modules the lock of the module the side is read in pins. Nothing is asked of a
 //!   registry when the store has them; what was fetched is said on the standard error.
@@ -19,10 +20,11 @@
 //!
 //! [`ModDiff`] is also what `ritsu mod report` (DESIGN 17.10) puts under each module that changed.
 
-use super::{Ctx, fetch};
+use super::{Ctx, fetch, registry};
 use ritsu_base::cli::Args;
 use ritsu_base::fs::Files;
 use ritsu_base::json::Json;
+use ritsu_base::modules::graph::Origin;
 use ritsu_base::modules::{address, digest, manifest};
 use ritsu_base::naming::Tool;
 use ritsu_base::text::{Lang, Text};
@@ -106,6 +108,8 @@ pub struct Module {
     pub version: Option<String>,
     /// The digest of the version's OCI manifest, for a version from the store.
     pub digest: Option<String>,
+    /// The commit of a version from a git repository.
+    pub commit: Option<String>,
     pub manifest: manifest::Manifest,
     /// Its files (what it carries when it is pushed), by the path from its root.
     pub files: BTreeMap<String, Vec<u8>>,
@@ -159,19 +163,22 @@ fn read_side(ctx: &Ctx, spelled: &str) -> Result<Side, Text> {
         && let Some((name, version)) = module_version(spelled)
     {
         let at_hand = ctx.root().ok();
-        let found = match address::find_version(at_hand.as_deref(), &name, &version) {
+        let origin = at_hand.as_deref().and_then(|r| registry::git_origin(r, &name)).unwrap_or(Origin::Oci);
+        let found = match address::find_version_from(at_hand.as_deref(), &name, &origin, &version) {
             Some(f) => f,
             None => {
-                let done = fetch::version(at_hand.as_deref(), &name, &version).map_err(|t| tr!("`{spelled}` を取り出せません。", "cannot fetch `{spelled}`: ").then(&t))?;
+                let done = fetch::version(at_hand.as_deref(), &name, &origin, &version).map_err(|t| tr!("`{spelled}` を取り出せません。", "cannot fetch `{spelled}`: ").then(&t))?;
                 fetch::told(ctx.lang, &done);
-                address::find_version(at_hand.as_deref(), &name, &version).ok_or_else(|| address::fetch_version(&name.to_string(), &version))?
+                address::find_version_from(at_hand.as_deref(), &name, &origin, &version).ok_or_else(|| address::fetch_version(&name.to_string(), &version))?
             }
         };
-        let (store, digest) = found;
+        let (store, digest, commit) = found;
         // the version is read as a module of its own, with its own lock
         let root = store.files(&digest);
         fetched(ctx, spelled, None, &root)?;
-        return Module::at(&root, spelled.to_string(), Some(digest)).map(|m| Side::Module(Box::new(m)));
+        let mut m = Module::at(&root, spelled.to_string(), Some(digest))?;
+        m.commit = commit;
+        return Ok(Side::Module(Box::new(m)));
     }
     let a = address::parse(spelled)?;
     let opened = open_fetching(ctx, spelled, &a)?;
@@ -203,7 +210,7 @@ fn open_fetching(ctx: &Ctx, spelled: &str, a: &address::Address) -> Result<addre
                 if !asked.insert((m.module.to_string(), m.version.to_string())) {
                     return Err(m.said);
                 }
-                let done = fetch::version(at_hand.as_deref(), &m.module, &m.version).map_err(|t| cannot_fetch(spelled, &t))?;
+                let done = fetch::version(at_hand.as_deref(), &m.module, &m.origin, &m.version).map_err(|t| cannot_fetch(spelled, &t))?;
                 fetch::told(ctx.lang, &done);
             }
         }
@@ -255,7 +262,7 @@ impl Module {
             tr!("`{label}` の `ritsu.mod` を読めません（{}）", "cannot read the `ritsu.mod` of `{label}` ({})", first.ja; first.en)
         })?;
         let files: BTreeMap<String, Vec<u8>> = digest::module_files(root, &m)?.into_iter().collect();
-        Ok(Module { name: m.module.value.to_string(), version: m.version.as_ref().map(|v| v.value.to_string()), label, root: root.to_path_buf(), digest, manifest: m, files, through: None })
+        Ok(Module { name: m.module.value.to_string(), version: m.version.as_ref().map(|v| v.value.to_string()), label, root: root.to_path_buf(), digest, commit: None, manifest: m, files, through: None })
     }
 
     /// How a file of this side is shown: after the side's label, or as it is when the side is the
@@ -325,6 +332,8 @@ pub struct Head {
     /// mod list` and of a lock), whichever way it was read; None for a file, and for files that make
     /// no tar.
     pub files: Option<String>,
+    /// The commit of a version from a git repository.
+    pub commit: Option<String>,
     /// The head of a digest the side is told apart by, when both sides go by one name: the OCI
     /// manifest's when both have one, else the files'; for two files, their bytes'.
     pub mark: Option<String>,
@@ -529,6 +538,7 @@ pub(super) fn tool_of(rel: &str) -> Option<Tool> {
 fn require_of(r: &manifest::Require) -> Req {
     let (module, version) = match &r.source {
         manifest::Source::Oci { repository, min } => (repository.clone(), Some(min.to_string())),
+        manifest::Source::Git { url, min, .. } => (r.source.module().map_or_else(|| url.clone(), |m| m.to_string()), Some(min.to_string())),
         manifest::Source::Path { path } => (path.clone(), None),
     };
     Req { name: r.name.clone(), module, version, words: r.source.words() }
@@ -567,6 +577,7 @@ pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: 
         version: m.version.clone(),
         digest: m.digest.clone(),
         files: files.clone(),
+        commit: m.commit.clone(),
         mark: mark.clone(),
     };
     let mut d = ModDiff { old: head(o, &of, &om), new: head(n, &nf, &nm), requires: requires(&o.manifest, &n.manifest), ..ModDiff::default() };
@@ -1590,6 +1601,7 @@ fn head_json(h: &Head) -> Json {
         ("version", Json::opt_str(h.version.clone())),
         ("digest", Json::opt_str(h.digest.clone())),
         ("files_digest", Json::opt_str(h.files.clone())),
+        ("commit", Json::opt_str(h.commit.clone())),
     ])
 }
 

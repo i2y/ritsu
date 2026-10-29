@@ -31,6 +31,18 @@ fn budget() -> Flag {
     )
 }
 
+/// `--dir` of `add` and `versions`: the module's directory in its git repository.
+fn dir_flag() -> Flag {
+    flag(
+        "--dir",
+        Some("<dir>"),
+        tr!(
+            "git のリポジトリの中の、モジュールのディレクトリ（git の URL にだけ付ける。タグは `<dir>/v<版>`）",
+            "the module's directory in the git repository (with a git URL alone; its tags are `<dir>/v<version>`)"
+        ),
+    )
+}
+
 fn cmd(name: &'static str, args: &'static str, purpose: Text, params: Vec<(&'static str, Text)>, flags: Vec<Flag>, exits: Vec<(u8, Text)>, examples: Vec<&'static str>) -> Cmd {
     Cmd { usage: None, name, args, purpose, params, flags, exits, examples, codes: vec![] }
 }
@@ -62,27 +74,42 @@ pub fn commands() -> Vec<Cmd> {
                 (
                     "<source>",
                     tr!(
-                        "取り先。`<リポジトリ>`、`<リポジトリ>@<版>`、`<リポジトリ>@latest`（版を書かなければ @latest）か、`./…`・`../…` で始まるディレクトリ（走らせたディレクトリから）",
-                        "where it comes from: `<repository>`, `<repository>@<version>`, `<repository>@latest` (@latest when no version is written), or a directory that starts with `./` or `../` (from where ritsu runs)"
+                        "取り先。レジストリの `<リポジトリ>`、`<リポジトリ>@<版>`、`<リポジトリ>@latest`（版を書かなければ @latest）、git のリポジトリの URL（`https://…`、`ssh://…`、`<ユーザー>@<ホスト>:<パス>`。版は同じく `@<版>` か `@latest`）か、`./…`・`../…` で始まるディレクトリ（走らせたディレクトリから）",
+                        "where it comes from: a registry's `<repository>`, `<repository>@<version>` or `<repository>@latest` (@latest when no version is written); a git repository's URL (`https://…`, `ssh://…` or `<user>@<host>:<path>`, its version written in the same way, `@<version>` or `@latest`); or a directory that starts with `./` or `../` (from where ritsu runs)"
                     ),
                 ),
             ],
-            vec![format()],
+            vec![dir_flag(), format()],
             vec![
                 (0, tr!("足した", "added")),
-                (2, tr!("引数の誤り、もう求めている名前、`ritsu.mod` の無いディレクトリ、読めない依存の木、届かないレジストリ", "bad arguments, a name required already, a directory with no `ritsu.mod`, a tree that cannot be read, or a registry that cannot be reached")),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、もう求めている名前、`ritsu.mod` の無いディレクトリ、読めない依存の木、届かないレジストリか git のリポジトリ",
+                        "bad arguments, a name required already, a directory with no `ritsu.mod`, a tree that cannot be read, or a registry or a git repository that cannot be reached"
+                    ),
+                ),
             ],
-            vec!["ritsu mod add pricing ../pricing", "ritsu mod add tax example.com/acme/tax@1.0.0"],
+            vec!["ritsu mod add pricing ../pricing", "ritsu mod add tax example.com/acme/tax@1.0.0", "ritsu mod add rates https://example.com/acme/rates@1.2.0"],
         ),
         cmd(
             "get",
             "<name>@<version>",
-            tr!("レジストリの依存の版を変える（`require` の行の版と lock）", "change the version of a dependency from a registry: the version on its `require` line, and the lock"),
+            tr!(
+                "レジストリか git のリポジトリから取る依存の版を変える（`require` の行の版と lock）。git の依存は、タグがいま指すコミットを取る",
+                "change the version of a dependency from a registry or a git repository: the version on its `require` line, and the lock (from git, at the commit its tag leads to now)"
+            ),
             vec![("<name>@<version>", tr!("依存の名前と版。`<name>@latest` は、プレリリースでない一番高い版", "the dependency's name and version; `<name>@latest` is the highest version that is not a prerelease"))],
             vec![format()],
             vec![
                 (0, tr!("版を変えた", "the version was changed")),
-                (2, tr!("引数の誤り、求めていない名前かパスの依存、レジストリに無い版、届かないレジストリ", "bad arguments, a name not required or required by a path, a version the registry does not have, or a registry that cannot be reached")),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、求めていない名前かパスの依存、レジストリやリポジトリに無い版、届かないレジストリか git のリポジトリ",
+                        "bad arguments, a name not required or required by a path, a version the registry or the repository does not have, or a registry or a git repository that cannot be reached"
+                    ),
+                ),
             ],
             vec!["ritsu mod get tax@1.1.0", "ritsu mod get tax@latest"],
         ),
@@ -92,35 +119,65 @@ pub fn commands() -> Vec<Cmd> {
             tr!("依存の `require` の行を消し、木に lock が要れば lock も書き直す", "remove a dependency's `require` line, and write the lock again when the tree needs one"),
             vec![("<name>", tr!("依存の名前", "the dependency's name"))],
             vec![],
-            vec![(0, tr!("消した", "removed")), (2, tr!("引数の誤り、求めていない名前、読めない依存の木、届かないレジストリ", "bad arguments, a name not required, a tree that cannot be read, or a registry that cannot be reached"))],
+            vec![
+                (0, tr!("消した", "removed")),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、求めていない名前、読めない依存の木、届かないレジストリか git のリポジトリ",
+                        "bad arguments, a name not required, a tree that cannot be read, or a registry or a git repository that cannot be reached"
+                    ),
+                ),
+            ],
             vec!["ritsu mod remove pricing"],
         ),
         cmd(
             "lock",
             "",
             tr!(
-                "依存の版を選び（最小の版の選び方）、`ritsu.lock` を書く。レジストリから取る依存が無ければ lock は要らない",
-                "choose the versions of the dependencies (Minimal Version Selection) and write `ritsu.lock`; a tree with no dependency from a registry needs no lock"
+                "依存の版を選び（最小の版の選び方）、`ritsu.lock` を書く。レジストリからも git のリポジトリからも取る依存が無ければ lock は要らない",
+                "choose the versions of the dependencies (Minimal Version Selection) and write `ritsu.lock`; a tree with no dependency from a registry or a git repository needs no lock"
             ),
             vec![],
             vec![flag("--check", None, tr!("書かずに、lock が書き直しになるなら 1 で終わる（CI 用）", "write nothing, and exit 1 if the lock would be written again (for CI)")), format()],
             vec![
                 (0, tr!("書いた、または変わらない", "written, or the same")),
                 (1, tr!("--check で、lock が書き直しになる（何も書いていない）", "with --check, the lock would be written again (nothing was written)")),
-                (2, tr!("引数の誤り、読めない依存の木、新しい書式の lock、置き場にも、届くレジストリにも無い版", "bad arguments, a tree that cannot be read, a lock of a newer format, or a version in neither the store nor a registry that can be reached")),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、読めない依存の木、新しい書式の lock、置き場にも、届くレジストリや git のリポジトリにも無い版",
+                        "bad arguments, a tree that cannot be read, a lock of a newer format, or a version in neither the store nor a registry or a git repository that can be reached"
+                    ),
+                ),
             ],
             vec!["ritsu mod lock", "ritsu mod lock --check"],
         ),
         cmd(
             "fetch",
             "[<name>@<version>...]",
-            tr!("lock のモジュール（または挙げた版）をレジストリから取り出して置き場に置く", "fetch the modules of the lock (or the versions named) from their registries into the store"),
+            tr!(
+                "lock のモジュール（または挙げた版）を、レジストリや git のリポジトリから取り出して置き場に置く",
+                "fetch the modules of the lock (or the versions named) from their registries and git repositories into the store"
+            ),
             vec![("<name>@<version>...", tr!("取る版（依存の名前かモジュールの名前）。無ければ lock のうち、そろっていないもの", "the versions to fetch, by a dependency's name or a module's; else those of the lock that are not here"))],
             vec![flag("--rev", Some("<revision>"), tr!("lock をこの git の版から読む", "read the lock of this git revision")), format()],
             vec![
                 (0, tr!("取り出した、またはそろっていた", "fetched, or all there")),
-                (1, tr!("ダイジェスト、署名、名前か版の食い違い（lock が合わないときの E304 も）", "a digest, a signature, a name or a version that does not match (and E304 for a lock that does not match)")),
-                (2, tr!("引数の誤り、届かないレジストリ、認証の誤り、確かめが要るのに cosign が無い、lock が無い", "bad arguments, a registry that cannot be reached or does not take the credentials, a signature to check with no cosign, or no lock")),
+                (
+                    1,
+                    tr!(
+                        "ダイジェスト、署名、名前か版の食い違い（lock が合わないときの E304、git の依存に当たる署名の行の E309 も）、モジュールにならない git のコミット（シンボリックリンク、サブモジュール、LFS のポインタ）",
+                        "a digest, a signature, a name or a version that does not match (and E304 for a lock that does not match, E309 for a signature line over a dependency from git), or a git commit that is no module (a symbolic link, a submodule, an LFS pointer)"
+                    ),
+                ),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、届かないレジストリか git のリポジトリ、認証の誤り、確かめが要るのに cosign が無い、git が無いか古い、lock が無い",
+                        "bad arguments, a registry or a git repository that cannot be reached or does not take the credentials, a signature to check with no cosign, no git or an old one, or no lock"
+                    ),
+                ),
             ],
             vec!["ritsu mod fetch", "ritsu mod fetch example.com/acme/pricing@1.2.0"],
         ),
@@ -143,18 +200,30 @@ pub fn commands() -> Vec<Cmd> {
         cmd(
             "versions",
             "<name>",
-            tr!("レジストリにあるモジュールの版を並べる", "list the versions a registry has of a module"),
-            vec![("<name>", tr!("依存の名前か、モジュールの名前", "a dependency's name, or a module's"))],
-            vec![format()],
-            vec![(0, tr!("並べた", "listed")), (2, tr!("引数の誤り、依存でもモジュールでもない名前、届かないレジストリ", "bad arguments, a name of no dependency and no module, or a registry that cannot be reached"))],
-            vec!["ritsu mod versions tax", "ritsu mod versions example.com/acme/tax --format json"],
+            tr!(
+                "レジストリか git のリポジトリにあるモジュールの版を並べる（git では、タグ `v<版>` か `<dir>/v<版>`）",
+                "list the versions a registry or a git repository has of a module (in git, its tags `v<version>` or `<dir>/v<version>`)"
+            ),
+            vec![("<name>", tr!("依存の名前、モジュールの名前、git のリポジトリの URL", "a dependency's name, a module's, or a git repository's URL"))],
+            vec![dir_flag(), format()],
+            vec![
+                (0, tr!("並べた", "listed")),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、依存でもモジュールでもない名前、届かないレジストリか git のリポジトリ",
+                        "bad arguments, a name of no dependency and no module, or a registry or a git repository that cannot be reached"
+                    ),
+                ),
+            ],
+            vec!["ritsu mod versions tax", "ritsu mod versions example.com/acme/tax --format json", "ritsu mod versions https://example.com/acme/rates"],
         ),
         cmd(
             "vendor",
             "",
             tr!(
-                "lock のレジストリのモジュールを、置き場からモジュールの `.ritsu/modules/` に置く（同梱のコピー）",
-                "put the modules of the lock that come from a registry, from the store, in the module's `.ritsu/modules/` (the module's copy of them)"
+                "lock のレジストリと git のリポジトリのモジュールを、置き場からモジュールの `.ritsu/modules/` に置く（同梱のコピー）",
+                "put the modules of the lock that come from a registry or a git repository, from the store, in the module's `.ritsu/modules/` (the module's copy of them)"
             ),
             vec![],
             vec![flag("--check", None, tr!("置かずに、同梱のコピーが lock に合わなければ 1 で終わる", "put nothing, and exit 1 if the copy does not match the lock"))],
@@ -194,7 +263,13 @@ pub fn commands() -> Vec<Cmd> {
             vec![flag("--dry-run", None, tr!("送らない", "send nothing")), format()],
             vec![
                 (0, tr!("送り出した、または送り出し済み", "pushed, or pushed already")),
-                (1, tr!("送り出さなかった（検査を通らない、秘密がある、上限を超える、パスの依存がある、版のタグに別の中身がある）", "refused: the check, a secret, a limit, a dependency by a path, or another content at the version's tag")),
+                (
+                    1,
+                    tr!(
+                        "送り出さなかった（検査を通らない、秘密がある、上限を超える、パスか git の依存がある、版のタグに別の中身がある）",
+                        "refused: the check, a secret, a limit, a dependency by a path or from git, or another content at the version's tag"
+                    ),
+                ),
                 (2, tr!("届かないレジストリ、認証の誤り、lock が無い", "a registry that cannot be reached, the credentials, or no lock")),
             ],
             vec!["ritsu mod push --dry-run", "ritsu mod push"],
@@ -249,7 +324,13 @@ pub fn commands() -> Vec<Cmd> {
             vec![
                 (0, tr!("書いた", "written")),
                 (1, tr!("確かめられないモジュールがある（そのページにそう書いた）", "a module could not be verified (its page says so)")),
-                (2, tr!("引数の誤り、届かないレジストリ", "bad arguments, or a registry that cannot be reached")),
+                (
+                    2,
+                    tr!(
+                        "引数の誤り、届かないレジストリか git のリポジトリ、git のモジュールに当たる `signature` の行",
+                        "bad arguments, a registry or a git repository that cannot be reached, or a `signature` line over a module from git"
+                    ),
+                ),
             ],
             vec!["ritsu mod site modules.list --out site"],
         ),
@@ -401,6 +482,16 @@ pub fn command(args: &[String], lang: Lang) -> u8 {
 /// repository.
 pub fn is_path(source: &str) -> bool {
     source == "." || source == ".." || source.starts_with("./") || source.starts_with("../")
+}
+
+/// Whether the source of `add`, or the name `versions` is given, is a git repository's URL (DESIGN
+/// 17.19): one with a scheme (`https://`, `ssh://`; any other is read as a git URL too, so that E302
+/// says why it is not one ritsu takes), a `<transport>::`, or the scp form `<user>@<host>:<path>`,
+/// whose `@` and `:` come before the first `/`. A registry's repository has no scheme and no `@`
+/// before its first `/` (`localhost:5000/acme/tax`).
+pub fn is_git(source: &str) -> bool {
+    let head = source.split('/').next().unwrap_or("");
+    source.contains("://") || source.contains("::") || (head.contains('@') && head.contains(':'))
 }
 
 /// The command's function, with what its command line said.

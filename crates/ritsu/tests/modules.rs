@@ -683,7 +683,7 @@ fn modules_from_a_registry_are_held_to_the_lock() {
     let v = json(&out);
     let p = &v["dependencies"][0];
     let keys: Vec<&str> = p.as_object().unwrap().keys().map(String::as_str).collect();
-    assert_eq!(keys, ["prefix", "name", "version", "source", "path", "digest", "files_digest", "where", "verified", "files", "ok", "errors", "warnings", "claims_not_run"]);
+    assert_eq!(keys, ["prefix", "name", "version", "source", "path", "url", "commit", "digest", "files_digest", "where", "verified", "files", "ok", "errors", "warnings", "claims_not_run"]);
     assert_eq!((p["prefix"].as_str(), p["source"].as_str(), p["where"].as_str(), p["path"].clone()), (Some("@pricing"), Some("oci"), Some("store"), serde_json::Value::Null));
     assert!(p["digest"].as_str().is_some_and(|d| d.starts_with("sha256:")) && p["files_digest"].as_str().is_some_and(|d| d.starts_with("sha256:")), "{p}");
     assert_eq!(v["dependencies"][1]["prefix"], "@pricing/@tax");
@@ -964,11 +964,11 @@ fn a_path_wins_over_a_registry_and_the_check_says_so() {
     let (code, out, err) = ritsu_in(&shop, t.path(), &["check", "--lang", "en"]);
     assert_eq!((code, err.as_str()), (0, ""), "{out}");
     assert!(
-        out.contains("note: the module example.com/acme/tax is read from the path a `require … path` gives, in place of the version from a registry another `require` of the tree asks for\n"),
+        out.contains("note: the module example.com/acme/tax is read from the path a `require … path` gives, in place of the version from a registry or a git repository another `require` of the tree asks for\n"),
         "{out}"
     );
     let (_, out, _) = ritsu_in(&shop, t.path(), &["check", "--lang", "ja"]);
-    assert!(out.contains("備考: モジュール example.com/acme/tax は、木のほかの `require` がレジストリの版を求めていますが、`require … path` のパスから読んでいます\n"), "{out}");
+    assert!(out.contains("備考: モジュール example.com/acme/tax は、木のほかの `require` がレジストリか git のリポジトリの版を求めていますが、`require … path` のパスから読んでいます\n"), "{out}");
 }
 
 /// A name that starts with `@` right under the root of a module (E307) is a finding of no file of

@@ -1,7 +1,8 @@
 //! What `ritsu mod` asks of a registry (DESIGN 17.12): the requests of the distribution-spec it
 //! sends ([`Remote`]), and the commands that are nothing but those: `add` with a repository, `get`,
-//! and `versions`. The table reads their command lines before they are called, and sends `add` here
-//! when its source is not a directory ([`super::cli::is_path`]).
+//! and `versions`, which ask a git repository the same of a dependency from git (DESIGN 17.12.1,
+//! with [`super::git`]). The table reads their command lines before they are called, and sends `add`
+//! here when its source is not a directory ([`super::cli::is_path`]).
 //!
 //! A registry is asked over https, a host of the loopback over plain HTTP (a registry a test
 //! starts), and `docker.io` at `registry-1.docker.io` (a name of one part there is under `library/`).
@@ -9,19 +10,24 @@
 //! with `GET /v2/<name>/tags/list?n=1000` and each `Link` with `rel="next"` after it, of which only
 //! the tags that are versions count (a signature's old tag, `sha256-….sig`, is none). `@latest` is
 //! the highest version that is not a prerelease; a registry with prereleases alone has none, and the
-//! command asks for a version (exit 2).
+//! command asks for a version (exit 2). The versions of a git repository are its tags `v<version>`
+//! (`<dir>/v<version>`), and `add` and `get` take the commit the tag leads to now.
 
+use super::git::{Failed, Git};
 use super::http::{self, Body, NoAnswer, Request, Response};
-use super::{Ctx, auth, edit, store_write};
+use super::{Ctx, auth, cli, edit, store_write};
 use ritsu_base::cli::Args;
 use ritsu_base::json::{self, Json};
 use ritsu_base::modules::artifact;
+use ritsu_base::modules::git as gitbase;
+use ritsu_base::modules::graph::Origin;
+use ritsu_base::modules::lock::{self as lockfile, Pinned};
 use ritsu_base::modules::manifest::{self, Source};
 use ritsu_base::modules::names::ModuleName;
 use ritsu_base::modules::semver::Version;
 use ritsu_base::text::Text;
 use ritsu_base::tr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The most bytes a page of tags may have, and an answer with nothing to read.
 const MAX_TAGS: u64 = 16 * 1024 * 1024;
@@ -221,15 +227,43 @@ pub fn latest(vs: &[Version]) -> Option<&Version> {
     vs.iter().rev().find(|v| !v.is_prerelease())
 }
 
-/// The version `asked` names of `module`: itself, or for `latest`, the registry's latest.
-fn version_asked(module: &ModuleName, asked: &str) -> Result<Version, Text> {
+/// The versions of `module` from `origin`, lowest first: the tags of its registry, or of its git
+/// repository.
+fn versions_from(module: &ModuleName, origin: &Origin, git: &mut Git) -> Result<Vec<Version>, Text> {
+    match origin {
+        Origin::Oci => Remote::of(module, false)?.versions(),
+        Origin::Git { url, dir } => Ok(git.versions(url, dir.as_deref()).map_err(Failed::text)?.into_iter().map(|(v, _)| v).collect()),
+    }
+}
+
+/// What a command says when `origin` has no version of `module`.
+fn no_versions(module: &ModuleName, origin: &Origin) -> Text {
+    match origin {
+        Origin::Oci => tr!("レジストリに `{module}` の版がありません", "the registry has no version of `{module}`"),
+        Origin::Git { url, dir } => {
+            let (ja, en) = match dir {
+                Some(d) => (format!("{d}/v<版>"), format!("{d}/v<version>")),
+                None => ("v<版>".to_string(), "v<version>".to_string()),
+            };
+            tr!(
+                "git のリポジトリ `{url}` に、`{module}` の版のタグ（`{}`）がありません",
+                "the git repository `{url}` has no tag of a version of `{module}` (`{}`)",
+                ja; en
+            )
+        }
+    }
+}
+
+/// The version `asked` names of `module` from `origin`: itself, or for `latest`, the latest of its
+/// registry or of its git repository's tags.
+fn version_asked(module: &ModuleName, origin: &Origin, asked: &str, git: &mut Git) -> Result<Version, Text> {
     if asked != "latest" {
         return Version::parse(asked).map_err(|e| e.text(asked));
     }
-    let vs = Remote::of(module, false)?.versions()?;
+    let vs = versions_from(module, origin, git)?;
     match latest(&vs) {
         Some(v) => Ok(v.clone()),
-        None if vs.is_empty() => Err(tr!("レジストリに `{module}` の版がありません", "the registry has no version of `{module}`")),
+        None if vs.is_empty() => Err(no_versions(module, origin)),
         None => Err(tr!(
             "`{module}` にはプレリリースの版しかありません。`@<版>` で版を書いてください",
             "`{module}` has prereleases alone; write the version, `@<version>`"
@@ -237,47 +271,106 @@ fn version_asked(module: &ModuleName, asked: &str) -> Result<Version, Text> {
     }
 }
 
-/// The module a name on the command line names: a dependency of the module at hand from a registry,
-/// by its name, or a module by its published name.
-pub fn module_named(ctx: &Ctx, name: &str) -> Result<ModuleName, Text> {
-    if let Ok(root) = ctx.root()
+/// The source of a `require … git`, with its module's name: what is wrong with it (E302's sentence)
+/// when its URL or its `dir` is not one ritsu takes.
+fn git_source(url: &str, dir: Option<&str>) -> Result<(ModuleName, Origin), Text> {
+    let module = gitbase::name_of(url, dir).map_err(|p| p.text)?;
+    Ok((module, Origin::Git { url: url.to_string(), dir: dir.map(str::to_string) }))
+}
+
+/// The git repository the tree of the module at `root` takes `name` from, if it does: its lock's
+/// line, else a `require` of the module at hand.
+pub fn git_origin(root: &Path, name: &ModuleName) -> Option<Origin> {
+    let pinned = std::fs::read(root.join(lockfile::FILE)).ok().and_then(|b| lockfile::parse(&b, lockfile::FILE).ok()).and_then(|l| l.get(name).map(|l| l.pinned.clone()));
+    match pinned {
+        Some(p @ Pinned::Git { .. }) => return Origin::of_pinned(&p, name),
+        Some(_) => return None,
+        None => {}
+    }
+    let m = std::fs::read(root.join(manifest::FILE)).ok().and_then(|b| manifest::parse(&b, manifest::FILE).ok())?;
+    m.requires.iter().find(|r| matches!(r.source, Source::Git { .. }) && r.source.module().as_ref() == Some(name)).and_then(|r| Origin::of(&r.source))
+}
+
+/// The module a name on the command line names, and where it comes from: a dependency of the module
+/// at hand from a registry or a git repository, by its name; or a module by its published name, from
+/// the git repository the module at hand's tree takes it from (its lock, else its `require`), else
+/// from its registry (DESIGN 17.9.1).
+pub fn module_named(ctx: &Ctx, name: &str) -> Result<(ModuleName, Origin), Text> {
+    let root = ctx.root().ok();
+    if let Some(root) = &root
         && let Ok(bytes) = std::fs::read(root.join(manifest::FILE))
         && let Ok(m) = manifest::parse(&bytes, manifest::FILE)
         && let Some(r) = m.require(name)
     {
         return match &r.source {
-            Source::Oci { repository, .. } => ModuleName::parse(repository).map_err(|e| e.text()),
+            Source::Oci { repository, .. } => ModuleName::parse(repository).map(|n| (n, Origin::Oci)).map_err(|e| e.text()),
+            Source::Git { url, dir, .. } => git_source(url, dir.as_deref()),
             Source::Path { path } => Err(tr!(
-                "依存 `{name}` はパス `{path}` から読むので、レジストリにはありません",
-                "the dependency `{name}` is read from the path `{path}`, so no registry has it"
+                "依存 `{name}` はパス `{path}` から読むので、レジストリにも git のリポジトリにもありません",
+                "the dependency `{name}` is read from the path `{path}`, so neither a registry nor a git repository has it"
             )),
         };
     }
     match ModuleName::parse(name) {
-        Ok(m) if m.is_published() => Ok(m),
+        Ok(m) if m.is_published() => {
+            let origin = root.as_deref().and_then(|r| git_origin(r, &m)).unwrap_or(Origin::Oci);
+            Ok((m, origin))
+        }
         _ => Err(tr!(
-            "`{name}` は、レジストリから取る依存の名前でも、配るモジュールの名前（`<レジストリ>/<リポジトリ>`）でもありません",
-            "`{name}` is neither the name of a dependency from a registry nor a published module's name (`<registry>/<repository>`)"
+            "`{name}` は、レジストリか git のリポジトリから取る依存の名前でも、配るモジュールの名前（`<レジストリ>/<リポジトリ>`）でもありません",
+            "`{name}` is neither the name of a dependency from a registry or a git repository nor a published module's name (`<registry>/<repository>`)"
         )),
     }
 }
 
-/// `ritsu mod add <name> <repository>[@<version>|@latest]`: the exit code. `a.pos` holds the name
-/// and the source; `add` with a directory is [`super::edit::add`].
+/// A git source of `add`, split into its URL and the version written after its last `@`: the part
+/// after the last `@` is a version (or `latest`) when it has neither a `/` nor a `:`, since the `@`
+/// of an ssh URL's user is followed by its host and path (DESIGN 17.19).
+pub fn git_and_version(source: &str) -> (&str, &str) {
+    match source.rsplit_once('@') {
+        Some((url, v)) if !v.contains('/') && !v.contains(':') => (url, v),
+        _ => (source, "latest"),
+    }
+}
+
+/// What `add` says of `--dir` with a source that is not a git URL (exit 2).
+pub fn dir_without_git() -> Text {
+    tr!(
+        "`--dir` は、git のリポジトリから取る依存にだけ付けられます（リポジトリの中の、モジュールのディレクトリ）",
+        "`--dir` goes with a dependency from a git repository alone: the module's directory in the repository"
+    )
+}
+
+/// `ritsu mod add <name> <repository>[@<version>|@latest]` and `<name> <git URL>[@<version>|@latest]
+/// [--dir <dir>]`: the exit code. `a.pos` holds the name and the source; `add` with a directory is
+/// [`super::edit::add`].
 pub fn add(ctx: &Ctx, a: &Args) -> u8 {
-    let (name, source) = (a.pos[0].as_str(), a.pos[1].as_str());
+    let (name, written) = (a.pos[0].as_str(), a.pos[1].as_str());
     let root = match ctx.root() {
         Ok(r) => r,
         Err(t) => return ctx.refuse(t),
     };
-    let (repository, asked) = source.rsplit_once('@').unwrap_or((source, "latest"));
-    let module = match ModuleName::parse(repository) {
-        Ok(m) if m.is_published() => m,
-        _ => {
-            return ctx.refuse(tr!(
-                "`{repository}` は配るモジュールの名前ではありません。レジストリの依存は `<レジストリ>/<リポジトリ>`、パスの依存は `./…` か `../…` で書いてください",
-                "`{repository}` is no published module's name: a dependency from a registry is `<registry>/<repository>`, and one by a path starts with `./` or `../`"
-            ));
+    let dir = a.get("--dir");
+    let git_url = cli::is_git(written);
+    if dir.is_some() && !git_url {
+        return ctx.refuse(dir_without_git());
+    }
+    let (module, origin, asked) = if git_url {
+        let (url, asked) = git_and_version(written);
+        match git_source(url, dir) {
+            Ok((m, o)) => (m, o, asked),
+            Err(t) => return ctx.refuse(t),
+        }
+    } else {
+        let (repository, asked) = written.rsplit_once('@').unwrap_or((written, "latest"));
+        match ModuleName::parse(repository) {
+            Ok(m) if m.is_published() => (m, Origin::Oci, asked),
+            _ => {
+                return ctx.refuse(tr!(
+                    "`{repository}` は配るモジュールの名前でも、git の URL でもありません。レジストリの依存は `<レジストリ>/<リポジトリ>`、git の依存は `https://…` か `ssh://…` か `<ユーザー>@<ホスト>:<パス>`、パスの依存は `./…` か `../…` で書いてください",
+                    "`{repository}` is neither a published module's name nor a git URL: a dependency from a registry is `<registry>/<repository>`, one from git `https://…`, `ssh://…` or `<user>@<host>:<path>`, and one by a path starts with `./` or `../`"
+                ));
+            }
         }
     };
     let file = root.join(manifest::FILE);
@@ -285,25 +378,26 @@ pub fn add(ctx: &Ctx, a: &Args) -> u8 {
         Ok(x) => x,
         Err(code) => return code,
     };
-    // the name is checked before the registry is asked
-    if let Err(e) = m.added(name, &Source::Oci { repository: module.to_string(), min: Version::new(0, 0, 0) }) {
+    // the name is checked before the registry or the repository is asked
+    if let Err(e) = m.added(name, &origin.source(&module, &Version::new(0, 0, 0))) {
         return ctx.refuse(e.text());
     }
-    let version = match version_asked(&module, asked) {
+    let mut git = Git::new();
+    let version = match version_asked(&module, &origin, asked, &mut git) {
         Ok(v) => v,
         Err(t) => return ctx.refuse(t),
     };
-    let source = Source::Oci { repository: module.to_string(), min: version.clone() };
+    let source = origin.source(&module, &version);
     let text = match m.added(name, &source) {
         Ok(t) => t,
         Err(e) => return ctx.refuse(e.text()),
     };
-    let plan = match edit::change(ctx, &root, &file, &before, &text) {
+    let plan = match edit::change(ctx, &root, &file, &before, &text, Some(&module), &mut git) {
         Ok(p) => p,
         Err(code) => return code,
     };
     if ctx.json() {
-        println!("{}", edit::added_json(ctx, &root, name, &module.to_string(), Some(version.to_string()), None, plan.done).pretty());
+        println!("{}", edit::added_json(ctx, &root, name, &module.to_string(), Some(version.to_string()), &source, plan.done).pretty());
         return 0;
     }
     let line = format!("require {name} {}", source.words());
@@ -327,15 +421,20 @@ pub fn get(ctx: &Ctx, a: &Args) -> u8 {
         Ok(x) => x,
         Err(code) => return code,
     };
-    let (module, old) = match m.require(name).map(|r| &r.source) {
+    let (module, origin, old) = match m.require(name).map(|r| &r.source) {
         Some(Source::Oci { repository, min }) => match ModuleName::parse(repository) {
-            Ok(n) => (n, min.clone()),
+            Ok(n) => (n, Origin::Oci, min.clone()),
             Err(e) => return ctx.refuse(e.text()),
         },
-        Some(Source::Path { .. }) => return ctx.refuse(manifest::EditError::NotOci(name.to_string()).text()),
+        Some(Source::Git { url, min, dir }) => match git_source(url, dir.as_deref()) {
+            Ok((n, o)) => (n, o, min.clone()),
+            Err(t) => return ctx.refuse(t),
+        },
+        Some(Source::Path { .. }) => return ctx.refuse(manifest::EditError::ByPath(name.to_string()).text()),
         None => return ctx.refuse(manifest::EditError::NotRequired(name.to_string()).text()),
     };
-    let version = match version_asked(&module, asked) {
+    let mut git = Git::new();
+    let version = match version_asked(&module, &origin, asked, &mut git) {
         Ok(v) => v,
         Err(t) => return ctx.refuse(t),
     };
@@ -343,12 +442,13 @@ pub fn get(ctx: &Ctx, a: &Args) -> u8 {
         Ok(t) => t,
         Err(e) => return ctx.refuse(e.text()),
     };
-    let plan = match edit::change(ctx, &root, &file, &before, &text) {
+    let plan = match edit::change(ctx, &root, &file, &before, &text, Some(&module), &mut git) {
         Ok(p) => p,
         Err(code) => return code,
     };
     if ctx.json() {
-        println!("{}", edit::added_json(ctx, &root, name, &module.to_string(), Some(version.to_string()), None, plan.done).pretty());
+        let source = origin.source(&module, &version);
+        println!("{}", edit::added_json(ctx, &root, name, &module.to_string(), Some(version.to_string()), &source, plan.done).pretty());
         return 0;
     }
     if old == version {
@@ -360,14 +460,25 @@ pub fn get(ctx: &Ctx, a: &Args) -> u8 {
     0
 }
 
-/// `ritsu mod versions <name>`: the exit code.
+/// `ritsu mod versions <name>` and `<git URL> [--dir <dir>]`: the exit code.
 pub fn versions(ctx: &Ctx, a: &Args) -> u8 {
     let name = a.pos[0].as_str();
-    let module = match module_named(ctx, name) {
+    let dir = a.get("--dir");
+    let named = if cli::is_git(name) {
+        git_source(name, dir)
+    } else if dir.is_some() {
+        return ctx.refuse(tr!(
+            "`--dir` は、git の URL にだけ付けられます（リポジトリの中の、モジュールのディレクトリ）",
+            "`--dir` goes with a git URL alone: the module's directory in the repository"
+        ));
+    } else {
+        module_named(ctx, name)
+    };
+    let (module, origin) = match named {
         Ok(m) => m,
         Err(t) => return ctx.refuse(t),
     };
-    let vs = match Remote::of(&module, false).and_then(|r| r.versions()) {
+    let vs = match versions_from(&module, &origin, &mut Git::new()) {
         Ok(v) => v,
         Err(t) => return ctx.refuse(t),
     };
@@ -383,7 +494,11 @@ pub fn versions(ctx: &Ctx, a: &Args) -> u8 {
         return 0;
     }
     if vs.is_empty() {
-        println!("{}", ctx.say(&tr!("レジストリに `{module}` の版はありません", "the registry has no version of `{module}`")));
+        let none = match origin {
+            Origin::Oci => tr!("レジストリに `{module}` の版はありません", "the registry has no version of `{module}`"),
+            Origin::Git { .. } => no_versions(&module, &origin),
+        };
+        println!("{}", ctx.say(&none));
     }
     for v in &vs {
         println!("{v}");

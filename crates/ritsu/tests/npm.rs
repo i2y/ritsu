@@ -14,7 +14,8 @@
 //!   network stops in the package with the language's own head and exit code, saying why and what
 //!   to run instead (ritsu-base's `wasi`).
 //! - `a_module_command_that_needs_the_network_says_so`: so do the commands of `ritsu mod` that need
-//!   curl, git or cosign (DESIGN 17.22), and they change neither the module nor the store.
+//!   curl, git or cosign (DESIGN 17.22), with dependencies from registries and from git
+//!   repositories, and they change neither the module nor the store.
 //! - `the_package_reads_a_module_s_dependencies_as_the_binary_does`: a module's dependencies from a
 //!   registry, read from the store `RITSU_MODULES` names, from the module's copy of the store, and
 //!   from the store's place on the system (from `HOME` and `XDG_CACHE_HOME`), by the commands that
@@ -22,6 +23,9 @@
 //!   --dry-run`, `vendor`, `push --dry-run`), as the binary reads them; and, through the API with
 //!   `dirs`, the store opened when it is among `dirs`, and the sentence that says where it is when
 //!   it is not.
+//! - `the_package_reads_a_dependency_from_git_as_the_binary_does`: so are dependencies from a git
+//!   repository, served by a git server on this machine and fetched by the binary, from the store
+//!   and from the module's copy of it; the server answers nothing while the commands run.
 //! - `the_package_holds_what_it_should`: what `npm pack` puts in, and package.json's version,
 //!   license, bins and engines, with no script npm would run on install.
 //! - `the_javascript_tests_pass`: `node --test packaging/npm/test/*.test.js`: the API, the bins, and the
@@ -1138,16 +1142,40 @@ for (let l = line(); l !== null; l = line()) {
 
     /// The commands of `ritsu mod` that reach a registry, start git or check a signature with cosign
     /// stop in the package (DESIGN 17.22), saying ritsu-base's `wasi` sentence for curl, git or
-    /// cosign, with exit 2, the code a native run without the program has; they change no file of the
-    /// module and put nothing in the store.
+    /// cosign (`ritsu mod site`, which may need the three, the sentence for the programs a command
+    /// runs), with exit 2, the code a native run without the program has; they change no file of
+    /// the module and put nothing in the store. With a dependency from a git repository
+    /// (`shop-git`, its lock written as `ritsu mod lock` writes it, and a store that holds tax
+    /// alone), each says git.
     #[test]
     fn a_module_command_that_needs_the_network_says_so() {
-        use ritsu_base::wasi::cannot_start;
+        use ritsu_base::modules::store::{self, Store};
+        use ritsu_base::wasi::{cannot_start, cannot_start_programs};
         let t = TempDir::new("npm-package");
         let Some(pkg) = package(&t) else { return };
         let w = TempDir::new("npm-modules-network");
         let full = modules(&w);
         let empty = w.path().join("empty-store");
+        // shop with pricing from a git repository, and a store that holds tax alone
+        ritsu_testkit::tmp::copy_dir(&w.path().join("shop"), &w.path().join("shop-git"));
+        let url = "https://example.com/acme/pricing";
+        let m = std::fs::read_to_string(w.path().join("shop-git/ritsu.mod")).unwrap();
+        let from = "require pricing oci \"example.com/acme/pricing\" 1.1.0";
+        assert!(m.contains(from), "shop's ritsu.mod has no `{from}`");
+        w.write("shop-git/ritsu.mod", m.replacen(from, &format!("require pricing git \"{url}\" 1.1.0"), 1));
+        let lock = std::fs::read_to_string(w.path().join("shop-git/ritsu.lock")).unwrap();
+        let lock: String = lock
+            .lines()
+            .map(|l| match l.strip_prefix("oci example.com/acme/pricing ") {
+                Some(rest) => format!("git example.com/acme/pricing {rest} commit 9fceb02d0ae598e95dc970b74767f19372d61af8 \"{url}\"\n"),
+                None => format!("{l}\n"),
+            })
+            .collect();
+        assert!(lock.contains("\ngit example.com/acme/pricing 1.1.0 "), "shop's lock has no line for pricing:\n{lock}");
+        w.write("shop-git/ritsu.lock", lock);
+        let tax_only = w.path().join("tax-store");
+        store::put_directory(&Store::at(&tax_only), &w.path().join("tax"), "2026-10-28", &[]).unwrap_or_else(|e| panic!("{}", e.en));
+        w.write("git.list", format!("title \"Acme\"\ngit \"{url}\"\n"));
         let (home, docker) = (w.path().join("home"), w.path().join("docker"));
         for d in [&empty, &home, &docker] {
             std::fs::create_dir_all(d).unwrap();
@@ -1162,28 +1190,40 @@ for (let l = line(); l !== null; l = line()) {
         w.write("signed/ritsu.mod", format!("{m}signature \"example.com/acme/\" key \"cosign.pub\"\n"));
         w.write("signed/cosign.pub", "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\n-----END PUBLIC KEY-----\n");
         w.write("modules.list", "title \"Acme\"\nlocal \"shop\"\n");
-        // (where, the command, the store, the program it cannot start, in Japanese)
-        let cases: Vec<(&str, Vec<&str>, &Path, &str, bool)> = vec![
-            ("shop", vec!["mod", "add", "tax2", "example.com/acme/tax@1.0.0"], &empty, "curl", false),
-            ("shop", vec!["mod", "get", "pricing@1.0.0"], &empty, "curl", false),
-            ("shop", vec!["mod", "fetch"], &empty, "curl", false),
-            ("shop", vec!["mod", "fetch", "--lang", "ja"], &empty, "curl", true),
-            ("shop", vec!["mod", "fetch", "example.com/acme/tax@1.1.0"], &full, "curl", false),
-            ("shop", vec!["mod", "versions", "example.com/acme/tax"], &empty, "curl", false),
-            ("shop", vec!["mod", "lock"], &empty, "curl", false),
-            ("shop", vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0"], &empty, "curl", false),
-            ("tax-push", vec!["mod", "push"], &empty, "curl", false),
-            ("shop", vec!["mod", "report", "--base", "HEAD"], &full, "git", false),
-            (".", vec!["mod", "site", "modules.list", "--out", "site"], &empty, "curl", false),
-            ("signed", vec!["mod", "fetch"], &full, "cosign", false),
+        let (curl, git, cosign, programs) = (cannot_start("curl"), cannot_start("git"), cannot_start("cosign"), cannot_start_programs());
+        // (where, the command, the store, the sentence, in Japanese)
+        let cases: Vec<(&str, Vec<&str>, &Path, _, bool)> = vec![
+            ("shop", vec!["mod", "add", "tax2", "example.com/acme/tax@1.0.0"], &empty, &curl, false),
+            ("shop", vec!["mod", "get", "pricing@1.0.0"], &empty, &curl, false),
+            ("shop", vec!["mod", "fetch"], &empty, &curl, false),
+            ("shop", vec!["mod", "fetch", "--lang", "ja"], &empty, &curl, true),
+            ("shop", vec!["mod", "fetch", "example.com/acme/tax@1.1.0"], &full, &curl, false),
+            ("shop", vec!["mod", "versions", "example.com/acme/tax"], &empty, &curl, false),
+            ("shop", vec!["mod", "lock"], &empty, &curl, false),
+            ("shop", vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0"], &empty, &curl, false),
+            ("tax-push", vec!["mod", "push"], &empty, &curl, false),
+            ("shop", vec!["mod", "report", "--base", "HEAD"], &full, &git, false),
+            (".", vec!["mod", "site", "modules.list", "--out", "site"], &empty, &programs, false),
+            ("signed", vec!["mod", "fetch"], &full, &cosign, false),
+            // a dependency from a git repository
+            // with the version written, the tree's modules come first: with them in the store, git is next
+            ("shop", vec!["mod", "add", "rates", "https://example.com/acme/rates@1.0.0"], &full, &git, false),
+            ("shop", vec!["mod", "add", "rates", "https://example.com/acme/rates", "--dir", "rates", "--lang", "ja"], &empty, &git, true),
+            ("shop", vec!["mod", "versions", "https://example.com/acme/rates"], &empty, &git, false),
+            ("shop-git", vec!["mod", "versions", "pricing"], &tax_only, &git, false),
+            ("shop-git", vec!["mod", "get", "pricing@1.0.0"], &tax_only, &git, false),
+            ("shop-git", vec!["mod", "fetch"], &tax_only, &git, false),
+            ("shop-git", vec!["mod", "fetch", "--lang", "ja"], &tax_only, &git, true),
+            ("shop-git", vec!["mod", "lock"], &tax_only, &git, false),
+            ("shop-git", vec!["mod", "diff", "example.com/acme/pricing@1.0.0", "example.com/acme/pricing@1.1.0"], &tax_only, &git, false),
+            (".", vec!["mod", "site", "git.list", "--out", "site"], &empty, &programs, false),
         ];
         let mut wrong = Vec::new();
-        for (at, args, store, program, japanese) in &cases {
+        for (at, args, store, said, japanese) in &cases {
             let dir = w.path().join(at);
             let (before, held) = (tree(&dir), tree(store));
             let s = with_env(&pkg, true, args, &dir, &[(ritsu_base::modules::store::VARIABLE, store), ("HOME", &home), ("DOCKER_CONFIG", &docker)]);
             let both = format!("{}{}", s.stdout, s.stderr);
-            let said = cannot_start(program);
             let want = if *japanese { &said.ja } else { &said.en };
             let shown = format!("`ritsu {}` in {at}", args.join(" "));
             if s.code != Some(2) || !both.contains(want.as_str()) || both.contains("a bug in ritsu") || both.contains("not supported on this platform") {
@@ -1361,6 +1401,157 @@ process.stdout.write(JSON.stringify({ code: r.code, stdout: r.stdout, stderr: r.
             wrong.push(d);
         }
         println!("npm: {n} commands read a module's dependencies as the binary does, and the API with dirs says where the store is");
+        assert!(wrong.is_empty(), "{}", wrong.join("\n\n"));
+    }
+
+    /// A module's dependency from a git repository (DESIGN 17.12.1, 17.22), read by the package as
+    /// the binary reads it. tax 1.0.0 and pricing 1.0.0 and 1.1.0 are served by a git server on this
+    /// machine (ritsu-testkit's `git`), pricing with its lock, and shop requires pricing from there;
+    /// the native binary writes shop's lock, fetches what it pins, and pricing 1.0.0 too. Then the
+    /// commands that read files only, by both, from the store `RITSU_MODULES` names and from the
+    /// module's copy of the store: the same output and exit code, command by command, and the same
+    /// copy written by `ritsu mod vendor`. The server answers no request while they run: neither
+    /// starts git to read what is fetched.
+    #[test]
+    fn the_package_reads_a_dependency_from_git_as_the_binary_does() {
+        use ritsu_base::modules::store::VARIABLE;
+        use ritsu_testkit::git::{GitServer, Options, Repo};
+        let t = TempDir::new("npm-package");
+        let Some(pkg) = package(&t) else { return };
+        let serves = Command::new("git")
+            .arg("http-backend")
+            .env("REQUEST_METHOD", "GET")
+            .env("GIT_PROJECT_ROOT", std::env::temp_dir())
+            .env("PATH_INFO", "/none")
+            .output()
+            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("Status:"));
+        if !serves {
+            ritsu_testkit::skip::skip("git with http-backend is not on the PATH; a dependency from git is fetched with git");
+            return;
+        }
+        let w = TempDir::new("npm-modules-git");
+        let server = GitServer::start(&w.path().join("git"), Options::hosted());
+        let (store, setup, empty) = (w.path().join("store"), w.path().join("setup-store"), w.path().join("empty-store"));
+        let (nobody, docker) = (w.path().join("nobody"), w.path().join("docker"));
+        for d in [&empty, &nobody, &docker] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let gitconfig = w.write("gitconfig", "");
+        // the native binary with the store `at`, and a git that reads no configuration of this
+        // machine's
+        let fetching = |dir: &Path, args: &[&str], at: &Path| -> Said {
+            let mut c = Command::new(ritsu());
+            c.args(args).current_dir(dir);
+            quiet(&mut c);
+            for (k, _) in std::env::vars_os() {
+                if k.to_string_lossy().starts_with("GIT_") {
+                    c.env_remove(k);
+                }
+            }
+            c.env_remove("XDG_CACHE_HOME").env(VARIABLE, at).env("GIT_CONFIG_NOSYSTEM", "1").env("GIT_CONFIG_GLOBAL", &gitconfig);
+            let r = ritsu_testkit::run::run_with_input(&mut c, None, LIMIT);
+            assert!(!r.timed_out, "`ritsu {}` in {} ran past the limit", args.join(" "), dir.display());
+            Said { code: r.code, stdout: r.stdout, stderr: r.stderr }
+        };
+        // the example's modules, named for the server, each `require … path` one of its repository
+        let src = root().join("crates/ritsu/tests/projects/modules");
+        let tax_url = server.url_of("acme/tax");
+        let put = |repo: &Repo, from: &str| {
+            for (rel, bytes) in tree(&src.join(from)) {
+                if rel == "ritsu.mod" {
+                    let text = String::from_utf8(bytes).unwrap().replace("module example.com/acme/", "module 127.0.0.1/acme/");
+                    let text = text.replace("require tax path \"../tax\"", &format!("require tax git \"{tax_url}\" 1.0.0"));
+                    repo.write(&rel, text.replace("require tax path \"../../tax\"", &format!("require tax git \"{tax_url}\" 1.0.0")));
+                } else {
+                    repo.write(&rel, bytes);
+                }
+            }
+        };
+        let tax = server.repo("acme/tax");
+        put(&tax, "tax");
+        tax.commit("tax 1.0.0");
+        tax.tag("v1.0.0");
+        let pricing = server.repo("acme/pricing");
+        for (from, version) in [("versions/pricing-1.0.0", "1.0.0"), ("pricing", "1.1.0")] {
+            put(&pricing, from);
+            let said = fetching(&pricing.work, &["mod", "lock"], &setup);
+            assert_eq!(said.code, Some(0), "the lock of pricing {version}: {said:?}");
+            pricing.git(&["add", "ritsu.lock"]);
+            pricing.commit(&format!("pricing {version}"));
+            pricing.annotated(&format!("v{version}"));
+        }
+        let shop = w.path().join("shop");
+        ritsu_testkit::tmp::copy_dir(&src.join("shop"), &shop);
+        let m = std::fs::read_to_string(shop.join("ritsu.mod")).unwrap();
+        w.write("shop/ritsu.mod", m.replacen("require pricing path \"../pricing\"", &format!("require pricing git \"{}\" 1.1.0", server.url_of("acme/pricing")), 1));
+        for args in [vec!["mod", "lock"], vec!["mod", "fetch"], vec!["mod", "fetch", "127.0.0.1/acme/pricing@1.0.0"]] {
+            let said = fetching(&shop, &args, &store);
+            assert_eq!(said.code, Some(0), "`ritsu {}` in shop: {said:?}", args.join(" "));
+        }
+        let vendored = w.path().join("vendored");
+        ritsu_testkit::tmp::copy_dir(&shop, &vendored);
+        let said = fetching(&vendored, &["mod", "vendor"], &store);
+        assert_eq!(said.code, Some(0), "{said:?}");
+        let lock = std::fs::read_to_string(shop.join("ritsu.lock")).unwrap();
+        assert!(lock.lines().filter(|l| l.starts_with("git 127.0.0.1/acme/")).count() == 2, "shop's lock pins tax and pricing from git:\n{lock}");
+
+        // (the command, the code it exits with)
+        let reads: Vec<(Vec<&str>, i32)> = vec![
+            (vec!["check", "."], 0),
+            (vec!["check", ".", "--format", "json"], 0),
+            (vec!["check", ".", "--lang", "ja"], 0),
+            (vec!["mod", "list"], 0),
+            (vec!["mod", "list", "--format", "json"], 0),
+            (vec!["mod", "list", "--lang", "ja"], 0),
+            (vec!["mod", "where", "@pricing"], 0),
+            (vec!["mod", "where", "@pricing/rules/order_total.rule"], 0),
+            (vec!["run", "orders/place_order.flow", "--scenario", "orders/scenarios/charged.json"], 0),
+        ];
+        let mut in_store = reads.clone();
+        in_store.extend([
+            (vec!["mod", "lock", "--check"], 0),
+            // a difference shown: exit 1
+            (vec!["mod", "diff", "127.0.0.1/acme/pricing@1.0.0", "127.0.0.1/acme/pricing@1.1.0"], 1),
+            (vec!["mod", "diff", "127.0.0.1/acme/pricing@1.0.0", "127.0.0.1/acme/pricing@1.1.0", "--format", "json"], 1),
+            (vec!["mod", "clean", "--dry-run"], 0),
+            (vec!["mod", "clean", "--dry-run", "--keep", "ritsu.lock", "--lang", "ja"], 0),
+        ]);
+        let mut in_copy = reads;
+        in_copy.push((vec!["mod", "vendor", "--check"], 0));
+        let asked = server.answered();
+        let mut wrong = Vec::new();
+        let mut n = 0;
+        for (what, dir, at, commands) in [("the store RITSU_MODULES names", &shop, &store, in_store), ("the module's copy of the store", &vendored, &empty, in_copy)] {
+            let set = [(VARIABLE, at.as_path()), ("HOME", nobody.as_path()), ("DOCKER_CONFIG", docker.as_path())];
+            for (args, code) in commands {
+                let (a, b) = (with_env(&pkg, false, &args, dir, &set), with_env(&pkg, true, &args, dir, &set));
+                n += 1;
+                if a.code != Some(code) {
+                    wrong.push(format!("{what}: native `ritsu {}` exits {:?}, not {code}:\n{}{}", args.join(" "), a.code, a.stdout, a.stderr));
+                } else if let Some(d) = differs(&format!("{what}: ritsu {}", args.join(" ")), &a, &b) {
+                    wrong.push(d);
+                }
+            }
+        }
+        // `ritsu mod vendor` writes the same copy of the store by both
+        let mut copies = Vec::new();
+        for (side, by_node) in [("vendor-native", false), ("vendor-npm", true)] {
+            let dir = w.path().join(side);
+            ritsu_testkit::tmp::copy_dir(&shop, &dir);
+            let said = with_env(&pkg, by_node, &["mod", "vendor"], &dir, &[(VARIABLE, &store), ("HOME", &nobody), ("DOCKER_CONFIG", &docker)]);
+            copies.push((said, tree(&dir)));
+        }
+        n += 1;
+        if let Some(d) = differs("ritsu mod vendor", &copies[0].0, &copies[1].0) {
+            wrong.push(d);
+        } else if copies[0].0.code != Some(0) || copies[0].1 != copies[1].1 {
+            let (a, b): (Vec<&String>, Vec<&String>) = (copies[0].1.keys().collect(), copies[1].1.keys().collect());
+            wrong.push(format!("`ritsu mod vendor` exits {:?}, and the package writes another copy: {a:?}\n{b:?}", copies[0].0.code));
+        }
+        if server.answered() != asked {
+            wrong.push(format!("the git server answered {} requests while the commands that read files only ran", server.answered() - asked));
+        }
+        println!("npm: {n} commands read a module's dependency from git as the binary does");
         assert!(wrong.is_empty(), "{}", wrong.join("\n\n"));
     }
 

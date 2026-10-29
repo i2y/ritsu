@@ -317,6 +317,17 @@ const LOCK_E305: &str = concat!(lock_head!(), "oci example.com/acme/tax 1.0.0 sh
 /// The lock of E308: the digest of tax's files, which hold the `require … path`.
 const LOCK_E308: &str = concat!(lock_head!(), "oci example.com/acme/tax 1.0.0 sha256:", tax_entry!(), " files sha256:a744d0c29acba47340ec3ca4332ad67719ddb5996c3ec96672573273b8036a85\n");
 
+/// The `ritsu.mod` of E309: tax from a git repository, and a `signature` line that covers it.
+const SHOP_MOD_GIT_SIGNED: &str = "module example.com/acme/shop\nversion 1.0.0\n\nrequire tax git \"https://example.com/acme/tax\" 1.0.0\n\nsignature \"example.com/acme/\" key \"cosign.pub\"\n";
+
+/// The lock of E309: tax 1.0.0 from its git repository, the files those of the module's copy.
+const LOCK_E309: &str = concat!(
+    lock_head!(),
+    "git example.com/acme/tax 1.0.0 sha256:",
+    tax_entry!(),
+    " files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1 commit 9fceb02d0ae598e95dc970b74767f19372d61af8 \"https://example.com/acme/tax\"\n"
+);
+
 /// The lock of E304: tax at 1.0.0, while `ritsu.mod` asks for 1.2.0 or later.
 const LOCK_E304: &str = concat!(lock_head!(), "oci example.com/acme/tax 1.0.0 sha256:", tax_entry!(), " files sha256:371cad84ba72971bb3282231b913a7301282eb675fffbf647f18ccda43b6bcf1\n");
 
@@ -532,22 +543,22 @@ pub fn ledger() -> Ledger {
             "E302",
             tr!("`ritsu.mod` の値が、決まった形ではありません", "A value of a `ritsu.mod` is not of its form"),
             tr!(
-                "`ritsu.mod` の値の形が違うとき。モジュールの名前、版の字、依存の名前、`require … path` の絶対パス、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、二度書いた依存の名前、空の `license`、https でない `source`、`exclude` と鍵のファイルのパスなどです。`require … path` の指す先に `ritsu.mod` が無いときも、値が指すものの誤りとして、このエラーです。言語の検査に入らずに止まります（exit 1）。",
-                "A value of a `ritsu.mod` that is not of its form: a module's name, a version, a dependency's name, an absolute path in `require … path`, the start of the names a `signature` covers, a name in `library`, the version of `ritsu >=`, a dependency's name written twice, an empty `license`, a `source` that is not https, the path of an `exclude` or of a key file. A `require … path` that leads to a directory with no `ritsu.mod` is this error too, as a value that names the wrong thing. ritsu stops before any language checks a file (exit 1)."
+                "`ritsu.mod` の値の形が違うとき。モジュールの名前、版の字、依存の名前、`require … path` の絶対パス、`signature` の頭の部分、`library` の名前、`ritsu >=` の版、二度書いた依存の名前、空の `license`、https でない `source`、`exclude` と鍵のファイルのパス、`require … git` の URL と `dir` などです。git の URL は https か ssh（scp の形も）で書きます。`git://`、`file://`、ローカルのパス、`<transport>::` の形、この機械の外への平文の http、`-` で始まる値は受け付けません。URL と `dir` から決まるモジュールの名前に大文字があるときも、このエラーです。ユーザーかパスワードのある https の URL、パスワードのある ssh の URL、クエリのある URL は、資格情報を含むことがあるので、診断に URL も行も出しません。`require … path` の指す先に `ritsu.mod` が無いときも、値が指すものの誤りとして、このエラーです。言語の検査に入らずに止まります（exit 1）。",
+                "A value of a `ritsu.mod` that is not of its form: a module's name, a version, a dependency's name, an absolute path in `require … path`, the start of the names a `signature` covers, a name in `library`, the version of `ritsu >=`, a dependency's name written twice, an empty `license`, a `source` that is not https, the path of an `exclude` or of a key file, the URL and the `dir` of a `require … git`. A git URL is https or ssh (the scp form too); `git://`, `file://`, a local path, the form `<transport>::`, plain http to anything but this machine and a value that starts with `-` are not taken, nor a URL and a `dir` that give a module name with an uppercase letter. An https URL with a user or a password, an ssh URL with a password and a URL with a query may carry a credential, so the diagnostic shows neither the URL nor the line. A `require … path` that leads to a directory with no `ritsu.mod` is this error too, as a value that names the wrong thing. ritsu stops before any language checks a file (exit 1)."
             ),
             tr!(
-                "示された値を、その文の形に直してください。依存の名前は、小文字の英字で始まり、小文字の英字と数字と `_` だけでできた 64 字までの語です。版の字は `1.4.0` のような SemVer の形です。パスの依存は、`ritsu.mod` のあるディレクトリを、モジュールのルートからの相対パスで指してください。",
-                "Write the value in the form of its statement. A dependency's name is a word of up to 64 lowercase letters, digits and `_` that starts with a letter; a version is of the form of SemVer, `1.4.0`; a dependency by a path names a directory with a `ritsu.mod` in it, by a path from the module's root."
+                "示された値を、その文の形に直してください。依存の名前は、小文字の英字で始まり、小文字の英字と数字と `_` だけでできた 64 字までの語です。版の字は `1.4.0` のような SemVer の形です。パスの依存は、`ritsu.mod` のあるディレクトリを、モジュールのルートからの相対パスで指してください。git の依存の資格情報は `ritsu.mod` に書かず、git の資格情報のヘルパーか ssh の鍵に任せてください。",
+                "Write the value in the form of its statement. A dependency's name is a word of up to 64 lowercase letters, digits and `_` that starts with a letter; a version is of the form of SemVer, `1.4.0`; a dependency by a path names a directory with a `ritsu.mod` in it, by a path from the module's root. Keep the credentials of a dependency from git out of `ritsu.mod`, and leave them to git's credential helper or an ssh key."
             ),
             Repro::Dir { files: vec![("ritsu.mod", "module shop\n\nrequire tax path \"tax\"\n"), ("fee.rule", FEE_RULE), ("tax/vat_rate.rule", VAT_RULE)], command: CHECK.to_vec() },
             &["E301"],
         ),
         Entry::new(
             "E303",
-            tr!("レジストリの依存があるのに、`ritsu.lock` がありません", "A dependency from a registry, and no `ritsu.lock`"),
+            tr!("レジストリか git の依存があるのに、`ritsu.lock` がありません", "A dependency from a registry or a git repository, and no `ritsu.lock`"),
             tr!(
-                "木のどれかのモジュールがレジストリから依存を取る（`require … oci`）のに、手元のモジュールの `ritsu.lock` が無いか、読めないとき。レジストリの依存の版とダイジェストは `ritsu.lock` が決めるので、それが無ければ、どのファイルを読むかが決まりません。lock を読めないのは、書式が違うとき（知らない行、ダイジェストの形など）です。言語の検査に入らずに止まります（exit 1）。",
-                "A module of the tree takes a dependency from a registry (`require … oci`), and the module at hand has no `ritsu.lock`, or one that does not read. `ritsu.lock` pins the version and the digests of each dependency from a registry, so without it which files to read is not known. A lock does not read when it is not of its form (a line ritsu does not know, a digest that is not one). ritsu stops before any language checks a file (exit 1)."
+                "木のどれかのモジュールがレジストリか git のリポジトリから依存を取る（`require … oci` か `require … git`）のに、手元のモジュールの `ritsu.lock` が無いか、読めないとき。そうした依存の版とダイジェスト（git ならコミットも）は `ritsu.lock` が決めるので、それが無ければ、どのファイルを読むかが決まりません。lock を読めないのは、書式が違うとき（知らない行、ダイジェストの形など）です。言語の検査に入らずに止まります（exit 1）。",
+                "A module of the tree takes a dependency from a registry or a git repository (`require … oci` or `require … git`), and the module at hand has no `ritsu.lock`, or one that does not read. `ritsu.lock` pins the version and the digests of each such dependency (and the commit of one from git), so without it which files to read is not known. A lock does not read when it is not of its form (a line ritsu does not know, a digest that is not one). ritsu stops before any language checks a file (exit 1)."
             ),
             tr!("`ritsu mod lock` を走らせて、`ritsu.lock` を書いてください。lock は手で書かないでください。", "Run `ritsu mod lock` to write `ritsu.lock`; do not write the lock by hand."),
             Repro::Dir { files: vec![("ritsu.mod", SHOP_MOD_OCI), ("fee.rule", FEE_RULE)], command: CHECK.to_vec() },
@@ -557,8 +568,8 @@ pub fn ledger() -> Ledger {
             "E304",
             tr!("`ritsu.lock` が `ritsu.mod` に合いません", "`ritsu.lock` does not match `ritsu.mod`"),
             tr!(
-                "`ritsu.lock` が、木のモジュールの `ritsu.mod` に合わないとき。lock に無いモジュール、`require` が求める最小の版より低い lock の版、取り先の種類やパスの違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無いこと、パスで読むモジュールの `oci` の行などです。`ritsu.mod` を手で書き替えて、lock を書き直していないときに起きます。言語の検査に入らずに止まります（exit 1）。",
-                "`ritsu.lock` does not match the `ritsu.mod` of a module of the tree: a module the lock has no line for, a version in the lock below the least a `require` asks for, a source of another kind or another path, a version in the lock other than the `version` of the `ritsu.mod` fetched, a line for the module at hand itself, no line for a dependency by a path where there is a lock, an `oci` line for a module read from a path. It comes when a `ritsu.mod` was edited by hand and the lock was not written again. ritsu stops before any language checks a file (exit 1)."
+                "`ritsu.lock` が、木のモジュールの `ritsu.mod` に合わないとき。lock に無いモジュール、`require` が求める最小の版より低い lock の版、取り先の種類やパスの違い、`require … git` と lock の URL の違い、lock の版と取ってきた `ritsu.mod` の `version` の違い、手元のモジュール自身の行、lock があるのにパスの依存の行が無いこと、パスで読むモジュールの `oci` か `git` の行などです。`ritsu.mod` を手で書き替えて、lock を書き直していないときに起きます。言語の検査に入らずに止まります（exit 1）。",
+                "`ritsu.lock` does not match the `ritsu.mod` of a module of the tree: a module the lock has no line for, a version in the lock below the least a `require` asks for, a source of another kind or another path, a `require … git` and a lock line of two URLs, a version in the lock other than the `version` of the `ritsu.mod` fetched, a line for the module at hand itself, no line for a dependency by a path where there is a lock, an `oci` or a `git` line for a module read from a path. It comes when a `ritsu.mod` was edited by hand and the lock was not written again. ritsu stops before any language checks a file (exit 1)."
             ),
             tr!("`ritsu mod lock` を走らせて、lock を書き直してください。", "Run `ritsu mod lock` to write the lock again."),
             Repro::Dir {
@@ -594,12 +605,12 @@ pub fn ledger() -> Ledger {
             "E306",
             tr!("同じ名前のモジュールが二か所から来ます", "A module of one name comes from two places"),
             tr!(
-                "木の中で、同じ名前のモジュールが二か所から来るとき。二つの `require … path` が、`module` に同じ名前を書いた別々のディレクトリを指すとき、取ってきた `ritsu.mod` の `module` が取ったリポジトリと違うとき、取ってきたファイルに `ritsu.mod` が無いときです。`ritsu mod lock` が版を選ぶときに読んだタグの `ritsu.mod` の `version` がタグと違うときも、二か所が食い違うので、このエラーです。モジュールは名前で見分けるので、一つの名前の中身は一つでなければなりません。言語の検査に入らずに止まります（exit 1）。",
-                "Within the tree, a module of one name comes from two places: two `require … path` lead to two directories whose `ritsu.mod` give the same `module`; a `ritsu.mod` fetched gives a `module` other than the repository it was fetched from; the files fetched have no `ritsu.mod`. A tag whose `ritsu.mod`, read by `ritsu mod lock` to choose the versions, gives another `version` is this error too: the two places disagree. A module is known by its name, so one name has one content. ritsu stops before any language checks a file (exit 1)."
+                "木の中で、同じ名前のモジュールが二か所から来るとき。二つの `require … path` が、`module` に同じ名前を書いた別々のディレクトリを指すとき、取ってきた `ritsu.mod` の `module` が取ったリポジトリ（git なら URL と `dir` から決まる名前）と違うとき、取ってきたファイルに `ritsu.mod` が無いときです。二つの依存が、一つの名前のモジュールを別々の取り先（レジストリと git、二つの URL）から求め、手元のモジュールがそのモジュールの `require` を書いていないときも、このエラーです。`ritsu mod lock` が版を選ぶときに読んだタグの `ritsu.mod` の `version` がタグと違うときも、二か所が食い違うので、このエラーです。モジュールは名前で見分けるので、一つの名前の中身は一つでなければなりません。言語の検査に入らずに止まります（exit 1）。",
+                "Within the tree, a module of one name comes from two places: two `require … path` lead to two directories whose `ritsu.mod` give the same `module`; a `ritsu.mod` fetched gives a `module` other than the repository it was fetched from (from git, the name the URL and the `dir` give); the files fetched have no `ritsu.mod`. Two dependencies that require a module of one name from two sources (a registry and git, two URLs), with neither written in the module at hand, are this error too. A tag whose `ritsu.mod`, read by `ritsu mod lock` to choose the versions, gives another `version` is this error too: the two places disagree. A module is known by its name, so one name has one content. ritsu stops before any language checks a file (exit 1)."
             ),
             tr!(
-                "モジュールを一か所から読むようにしてください。コピーしたディレクトリなら、`module` に自分の名前を付けるか、`require` を一つにしてください。取ってきたモジュールなら、その作者に知らせてください。",
-                "Read the module from one place: give a directory that is a copy a name of its own in `module`, or keep one `require`; for a module fetched, tell its author."
+                "モジュールを一か所から読むようにしてください。コピーしたディレクトリなら、`module` に自分の名前を付けるか、`require` を一つにしてください。依存が別々の取り先から求めるなら、手元のモジュールの `require` に取り先を書けば、それが選ばれます。取ってきたモジュールなら、その作者に知らせてください。",
+                "Read the module from one place: give a directory that is a copy a name of its own in `module`, or keep one `require`; where dependencies require it from two sources, a `require` of the module at hand that writes the source chooses it; for a module fetched, tell its author."
             ),
             Repro::Dir {
                 files: vec![
@@ -627,14 +638,14 @@ pub fn ledger() -> Ledger {
         ),
         Entry::new(
             "E308",
-            tr!("レジストリから取ったモジュールが、パスの依存を持っています", "A module from a registry has a dependency by a path"),
+            tr!("取ってきたモジュールが、持てない依存を持っています", "A module fetched has a dependency it cannot have"),
             tr!(
-                "レジストリから取ったモジュールの `ritsu.mod` が、`require … path` を持つとき。パスの依存は一つの作業ツリーの中でだけ読めるもので、モジュールを取ってきた側には、そのパスの先がありません。言語の検査に入らずに止まります（exit 1）。",
-                "The `ritsu.mod` of a module from a registry has a `require … path`. A dependency by a path is read only within one working tree, and where the module is fetched, nothing is at the end of the path. ritsu stops before any language checks a file (exit 1)."
+                "レジストリか git のリポジトリから取ったモジュールの `ritsu.mod` が `require … path` を持つとき、またはレジストリから取ったモジュールが `require … git` を持つとき。パスの依存は一つの作業ツリーの中でだけ読めるもので、モジュールを取ってきた側には、そのパスの先がありません。レジストリのモジュールを取る人が、その git のリポジトリに届くとは限らず、git の依存には確かめる署名もありません。言語の検査に入らずに止まります（exit 1）。",
+                "The `ritsu.mod` of a module from a registry or a git repository has a `require … path`, or one of a module from a registry has a `require … git`. A dependency by a path is read only within one working tree, and where the module is fetched, nothing is at the end of the path; the one who takes a module from a registry may not reach the git repository, and a dependency from git has no signature to check. ritsu stops before any language checks a file (exit 1)."
             ),
             tr!(
-                "そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは、依存をどれも `require … oci` で書く必要があります。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。",
-                "Tell the author of the module: a module pushed to a registry writes each of its dependencies as `require … oci`. Until a version that does is pushed, the module can be put in the working tree and read with `require … path`."
+                "そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは依存をどれも `require … oci` で、git で配るモジュールはパスでない取り先で書く必要があります。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。",
+                "Tell the author of the module: a module pushed to a registry writes each of its dependencies as `require … oci`, and one served from git writes them with a source that is not a path. Until a version that does is out, the module can be put in the working tree and read with `require … path`."
             ),
             Repro::Dir {
                 files: vec![
@@ -647,6 +658,30 @@ pub fn ledger() -> Ledger {
                 command: CHECK.to_vec(),
             },
             &[],
+        ),
+        Entry::new(
+            "E309",
+            tr!("`signature` の行が、git のリポジトリから取るモジュールに当たっています", "A `signature` line covers a module from a git repository"),
+            tr!(
+                "手元のモジュールか、そのモジュールを求めるモジュールの `ritsu.mod` で、`signature` の行の頭の部分が、git のリポジトリから取るモジュールの名前に当たるとき。ritsu が署名を確かめるのはレジストリから取るモジュールだけで、git の依存には確かめる署名がありません。確かめると書いたモジュールを確かめずに読むことはしないので、`ritsu mod fetch` は何も取らずに止まり（exit 1）、検査は言語の検査に入らずに止まります（exit 1）。`ritsu mod site` の一覧の `signature` の行なら、一覧を読めないものとして止まります（exit 2）。",
+                "In the `ritsu.mod` of the module at hand, or of a module that requires it, the start of a `signature` line covers the name of a module from a git repository. ritsu checks the signatures of modules from registries only, and a dependency from git has no signature to check; a module a line says to check is not read unchecked, so `ritsu mod fetch` stops before it fetches anything (exit 1), and a check stops before any language checks a file (exit 1). A `signature` line of the list of `ritsu mod site` makes the list one that cannot be read (exit 2)."
+            ),
+            tr!(
+                "頭の部分を狭めて、git の依存に当たらないようにしてください（`signature \"example.com/acme/pricing\" …` のように、一つのモジュールにも書けます）。署名を確かめたいモジュールは、レジストリから取ってください。",
+                "Narrow the start so that it covers no dependency from git (a line can cover one module, as `signature \"example.com/acme/pricing\" …` does); take a module whose signature is to be checked from a registry."
+            ),
+            Repro::Dir {
+                files: vec![
+                    ("ritsu.mod", SHOP_MOD_GIT_SIGNED),
+                    ("ritsu.lock", LOCK_E309),
+                    ("cosign.pub", "-----BEGIN PUBLIC KEY-----\n-----END PUBLIC KEY-----\n"),
+                    ("fee.rule", FEE_RULE),
+                    (tax_copy!("ritsu.mod"), TAX_MOD_OCI),
+                    (tax_copy!("vat_rate.rule"), VAT_RULE),
+                ],
+                command: CHECK.to_vec(),
+            },
+            &["E308"],
         ),
         Entry::new(
             "W301",

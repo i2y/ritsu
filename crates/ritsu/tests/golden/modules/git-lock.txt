@@ -1,0 +1,5 @@
+# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
+lock 1
+ritsu <version>
+git 127.0.0.1/acme/pricing 1.1.0 sha256:<digest> files sha256:<digest> commit <commit> "http://127.0.0.1:<port>/acme/pricing"
+git 127.0.0.1/acme/tax 1.0.0 sha256:<digest> files sha256:<digest> commit <commit> "http://127.0.0.1:<port>/acme/tax"

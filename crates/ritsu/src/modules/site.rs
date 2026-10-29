@@ -2,14 +2,17 @@
 //! modules, written from a list of them.
 //!
 //! - **The list** is written in the lexis of `ritsu.mod` (DESIGN 17.3): `title`, `description`,
-//!   `playground` (each once), `module "<name>"` (a module of a registry), `local "<path>"` (the
-//!   working tree of a module that is not published yet, from the list's directory), and
-//!   `signature` lines, which are read as `ritsu.mod` reads them and check the modules the list
-//!   shows (their key files are read from the list's directory).
-//! - **What is read.** For a module of a registry, the versions its registry lists, each fetched as
-//!   `ritsu mod fetch <name>@<version>` fetches it, its signature checked against the list's lines
-//!   that cover it, and then read as `ritsu mod diff` reads a version: as a module of its own, with
-//!   its own lock, whose modules are fetched and checked against its own lines ([`fetch::listed`]).
+//!   `playground` (each once), `module "<name>"` (a module of a registry), `git "<URL>" [dir
+//!   "<dir>"]` (a module of a git repository, DESIGN 17.12.1), `local "<path>"` (the working tree of
+//!   a module that is not published yet, from the list's directory), and `signature` lines, which are
+//!   read as `ritsu.mod` reads them and check the modules the list shows (their key files are read
+//!   from the list's directory). A `signature` line that covers a module of a git repository makes
+//!   the list one that cannot be read: no signature of git is checked.
+//! - **What is read.** For a module of a registry, the versions its registry lists (for one of a
+//!   git repository, its tags), each fetched as `ritsu mod fetch <name>@<version>` fetches it, its
+//!   signature checked against the list's lines that cover it, and then read as `ritsu mod diff`
+//!   reads a version: as a module of its own, with its own lock, whose modules are fetched and
+//!   checked against its own lines ([`fetch::listed`]).
 //!   A version that does not pass is shown as not verified, and the command exits 1. For a working
 //!   tree, its files, and the modules its lock pins, fetched as `ritsu mod fetch` fetches them. A
 //!   working tree of a module the list also names from a registry is one more version of it, when
@@ -37,8 +40,10 @@ use super::{Ctx, diff, fetch, registry};
 use ritsu_base::cli::Args;
 use ritsu_base::docpage::{self, esc};
 use ritsu_base::json::Json;
+use ritsu_base::modules::git as gitbase;
+use ritsu_base::modules::graph::Origin;
 use ritsu_base::modules::lex::{self, Kind, Token};
-use ritsu_base::modules::lock::{self as lockfile, Pinned};
+use ritsu_base::modules::lock as lockfile;
 use ritsu_base::modules::manifest::{self, Signature, Source};
 use ritsu_base::modules::names::{self, ModuleName};
 use ritsu_base::modules::semver::Version;
@@ -64,7 +69,7 @@ const LINK_MAX: usize = 1_000_000;
 const ROWS: usize = 200;
 
 /// The words a line of a list starts with.
-const WORDS: [&str; 6] = ["title", "description", "playground", "module", "signature", "local"];
+const WORDS: [&str; 7] = ["title", "description", "playground", "module", "git", "signature", "local"];
 
 // ── The list ────────────────────────────────────────────────────────────
 
@@ -72,6 +77,8 @@ const WORDS: [&str; 6] = ["title", "description", "playground", "module", "signa
 enum Entry {
     /// From a registry.
     Module(ModuleName),
+    /// From a git repository: the name its URL and `dir` give, the URL and the `dir`.
+    Git(ModuleName, String, Option<String>),
     /// A working tree: the path as written, and the directory it leads to.
     Local(String, PathBuf),
 }
@@ -118,8 +125,8 @@ fn read_list(file: &str, text: &str, dir: PathBuf) -> Result<List, Vec<Text>> {
             wrong.push(at(
                 head.col,
                 tr!(
-                    "`{w}` で始まる行は書けません。一覧の行は title、description、playground、module、signature、local のどれかで始めてください",
-                    "no line starts with `{w}`; a line of a list starts with title, description, playground, module, signature or local"
+                    "`{w}` で始まる行は書けません。一覧の行は title、description、playground、module、git、signature、local のどれかで始めてください",
+                    "no line starts with `{w}`; a line of a list starts with title, description, playground, module, git, signature or local"
                 ),
             ));
             continue;
@@ -129,6 +136,19 @@ fn read_list(file: &str, text: &str, dir: PathBuf) -> Result<List, Vec<Text>> {
             match manifest::signature_line(args, n) {
                 Ok(s) => list.signatures.push(s),
                 Err((col, t)) => wrong.push(at(col, t)),
+            }
+            continue;
+        }
+        if word == "git" {
+            match git_line(args) {
+                Ok((m, url, dir)) => {
+                    if list.entries.iter().any(|e| matches!(e, Entry::Module(x) | Entry::Git(x, ..) if *x == m)) {
+                        wrong.push(at(args[0].col, tr!("モジュール `{m}` はもう一覧にあります", "the module `{m}` is in the list already")));
+                    } else {
+                        list.entries.push(Entry::Git(m, url, dir));
+                    }
+                }
+                Err((col, t)) => wrong.push(at(col.unwrap_or(head.col), t)),
             }
             continue;
         }
@@ -155,7 +175,7 @@ fn read_list(file: &str, text: &str, dir: PathBuf) -> Result<List, Vec<Text>> {
             },
             "module" => match ModuleName::parse(&value) {
                 Ok(m) if m.is_published() => {
-                    if list.entries.iter().any(|e| matches!(e, Entry::Module(x) if *x == m)) {
+                    if list.entries.iter().any(|e| matches!(e, Entry::Module(x) | Entry::Git(x, ..) if *x == m)) {
                         wrong.push(at(col, tr!("モジュール `{m}` はもう一覧にあります", "the module `{m}` is in the list already")));
                     } else {
                         list.entries.push(Entry::Module(m));
@@ -200,9 +220,43 @@ fn read_list(file: &str, text: &str, dir: PathBuf) -> Result<List, Vec<Text>> {
         }
     }
     if list.entries.is_empty() && wrong.is_empty() {
-        wrong.push(tr!("{file} には `module` の行も `local` の行もありません", "{file} has no `module` line and no `local` line"));
+        wrong.push(tr!("{file} には `module` の行も `git` の行も `local` の行もありません", "{file} has no `module` line, no `git` line and no `local` line"));
+    }
+    // a line that would check the signature of a module from git, which has none to check (E309)
+    for s in &list.signatures {
+        for e in &list.entries {
+            if let Entry::Git(m, ..) = e
+                && names::covers(&s.prefix, &m.to_string())
+            {
+                let n = s.line;
+                let t = ritsu_base::modules::graph::e309_text(&s.prefix, &m.to_string());
+                wrong.push(tr!("{file}:{n}:1: {}", "{file}:{n}:1: {}", t.ja; t.en));
+            }
+        }
     }
     if wrong.is_empty() { Ok(list) } else { Err(wrong) }
+}
+
+/// A `git` line of the list: the module's name, the URL and the `dir`.
+type GitLine = (ModuleName, String, Option<String>);
+
+/// The words after `git` on a line of the list: `"<URL>"`, then `dir "<dir>"` or nothing. The
+/// module's name, the URL and the `dir`; or the column (when one is to say) and what is wrong.
+fn git_line(args: &[Token]) -> Result<GitLine, (Option<usize>, Text)> {
+    let form = || (None, tr!("`git` の行は `git \"<URL>\"` か `git \"<URL>\" dir \"<ディレクトリ>\"` の形で書いてください", "write the `git` line as `git \"<URL>\"` or `git \"<URL>\" dir \"<dir>\"`"));
+    let (url, dir) = match args {
+        [u] if u.kind == Kind::Str => (u, None),
+        [u, w, d] if u.kind == Kind::Str && w.kind == Kind::Word && w.text == "dir" && d.kind == Kind::Str => (u, Some(d)),
+        _ => return Err(form()),
+    };
+    if let Some(d) = dir
+        && let Some(t) = gitbase::dir_problem(&d.text)
+    {
+        return Err((Some(d.col), t));
+    }
+    // a URL that may carry a credential is said without itself
+    let m = gitbase::name_of(&url.text, dir.map(|d| d.text.as_str())).map_err(|p| (Some(url.col), p.text))?;
+    Ok((m, url.text.clone(), dir.map(|d| d.text.clone())))
 }
 
 /// The one string of a line's words.
@@ -238,8 +292,10 @@ struct Shown {
     version: String,
     /// False for a working tree.
     published: bool,
-    /// The digest of its OCI manifest, for a version of a registry.
+    /// The digest of its OCI manifest, for a version of a registry or a git repository.
     digest: Option<String>,
+    /// The commit of a version of a git repository.
+    commit: Option<String>,
     /// Its files, read; None when it could not be verified.
     module: Option<diff::Module>,
     /// The modules its lock pins: the store each one's entry is read from, and its digest.
@@ -253,8 +309,10 @@ struct Shown {
 /// A module the list shows, with its versions, oldest first.
 struct Shelf {
     name: String,
-    /// Whether the list names it from a registry.
+    /// Whether the list names it from a registry or a git repository.
     registry: bool,
+    /// For a module of a git repository: its URL and its `dir`.
+    git: Option<(String, Option<String>)>,
     versions: Vec<Shown>,
     /// The versions of the working trees of it that the list names and its registry has already.
     shadowed: Vec<String>,
@@ -271,35 +329,38 @@ impl Shelf {
     }
 }
 
-/// The modules the lock of the module at `root` (whose files are `files`) pins from a registry,
-/// each where it is read: the module's copy of the store first, then the store.
+/// The modules the lock of the module at `root` (whose files are `files`) pins from a registry or a
+/// git repository, each where it is read: the module's copy of the store first, then the store.
 fn pinned(root: &Path, files: &BTreeMap<String, Vec<u8>>) -> Vec<(Store, String)> {
     let Some(bytes) = files.get(lockfile::FILE) else { return Vec::new() };
     let Ok(lock) = lockfile::parse(bytes, lockfile::FILE) else { return Vec::new() };
     let store = Store::located();
     lock.modules
         .iter()
-        .filter_map(|l| match &l.pinned {
-            Pinned::Oci { digest, .. } => vendor::find(root, digest, store.as_ref()).map(|(s, _)| (s, digest.clone())),
-            Pinned::Path { .. } => None,
-        })
+        .filter_map(|l| l.pinned.digests().and_then(|(_, digest, _)| vendor::find(root, digest, store.as_ref()).map(|(s, _)| (s, digest.to_string()))))
         .collect()
 }
 
-/// Every version of the module `name` its registry lists, fetched and checked; or what stops the
-/// command (exit 2) when the registry or cosign cannot be asked.
-fn of_registry(list: &List, name: &ModuleName) -> Result<Vec<Shown>, Text> {
-    let versions = registry::Remote::of(name, false).and_then(|r| r.versions()).map_err(|t| tr!("`{name}` の版の一覧を引けません。", "cannot list the versions of `{name}`: ").then(&t))?;
+/// Every version of the module `name` its registry (`origin`: or its git repository's tags) lists,
+/// fetched and checked; or what stops the command (exit 2) when the registry, the repository or
+/// cosign cannot be asked.
+fn of_registry(list: &List, name: &ModuleName, origin: &Origin) -> Result<Vec<Shown>, Text> {
+    let versions = match origin {
+        Origin::Oci => registry::Remote::of(name, false).and_then(|r| r.versions()),
+        Origin::Git { url, dir } => super::git::Git::new().versions(url, dir.as_deref()).map(|vs| vs.into_iter().map(|(v, _)| v).collect()).map_err(super::git::Failed::text),
+    }
+    .map_err(|t| tr!("`{name}` の版の一覧を引けません。", "cannot list the versions of `{name}`: ").then(&t))?;
     let mut out = Vec::new();
     for v in versions {
-        let shown = match fetch::listed(&list.dir, &list.signatures, name, &v) {
+        let shown = match fetch::listed(&list.dir, &list.signatures, name, origin, &v) {
             Ok((store, d)) => {
                 let root = store.files(&d);
                 let module = diff::Module::at(&root, format!("{name}@{v}"), Some(d.clone()))?;
                 let deps = pinned(&root, &module.files);
-                Shown { version: v.to_string(), published: true, digest: Some(d), module: Some(module), deps, paths: false, failed: None }
+                let commit = store.record(&d).and_then(|r| r.git).map(|(_, c)| c).filter(|_| matches!(origin, Origin::Git { .. }));
+                Shown { version: v.to_string(), published: true, digest: Some(d), commit, module: Some(module), deps, paths: false, failed: None }
             }
-            Err((1, t)) => Shown { version: v.to_string(), published: true, digest: None, module: None, deps: Vec::new(), paths: false, failed: Some(t) },
+            Err((1, t)) => Shown { version: v.to_string(), published: true, digest: None, commit: None, module: None, deps: Vec::new(), paths: false, failed: Some(t) },
             Err((_, t)) => return Err(tr!("`{name}` {v} を取り出せません。", "cannot fetch `{name}` {v}: ").then(&t)),
         };
         out.push(shown);
@@ -317,7 +378,7 @@ fn of_working_tree(dir: &Path, written: &str, lang: Lang) -> Result<(String, Sho
     let paths = module.manifest.requires.iter().any(|r| matches!(r.source, Source::Path { .. }));
     let deps = pinned(dir, &module.files);
     let version = module.version.clone().unwrap_or_else(|| "unversioned".to_string());
-    Ok((module.name.clone(), Shown { version, published: false, digest: None, module: Some(module), deps, paths, failed: None }))
+    Ok((module.name.clone(), Shown { version, published: false, digest: None, commit: None, module: Some(module), deps, paths, failed: None }))
 }
 
 /// Every module of the list, read, in the order the list names them; a working tree of a module
@@ -326,13 +387,17 @@ fn gather(list: &List, lang: Lang) -> Result<Vec<Shelf>, Text> {
     let mut shelves: Vec<Shelf> = Vec::new();
     for e in &list.entries {
         match e {
-            Entry::Module(m) => shelves.push(Shelf { name: m.to_string(), registry: true, versions: of_registry(list, m)?, shadowed: Vec::new() }),
+            Entry::Module(m) => shelves.push(Shelf { name: m.to_string(), registry: true, git: None, versions: of_registry(list, m, &Origin::Oci)?, shadowed: Vec::new() }),
+            Entry::Git(m, url, dir) => {
+                let origin = Origin::Git { url: url.clone(), dir: dir.clone() };
+                shelves.push(Shelf { name: m.to_string(), registry: true, git: Some((url.clone(), dir.clone())), versions: of_registry(list, m, &origin)?, shadowed: Vec::new() });
+            }
             Entry::Local(written, dir) => {
                 let (name, shown) = of_working_tree(dir, written, lang)?;
-                let later = shelves.iter().position(|s| s.name == name).is_none() && list.entries.iter().any(|x| matches!(x, Entry::Module(m) if m.to_string() == name));
+                let later = shelves.iter().position(|s| s.name == name).is_none() && list.entries.iter().any(|x| matches!(x, Entry::Module(m) | Entry::Git(m, ..) if m.to_string() == name));
                 if later {
                     // the registry's comes first, where the list names it
-                    shelves.push(Shelf { name: format!("\u{0}{name}"), registry: false, versions: vec![shown], shadowed: Vec::new() });
+                    shelves.push(Shelf { name: format!("\u{0}{name}"), registry: false, git: None, versions: vec![shown], shadowed: Vec::new() });
                     continue;
                 }
                 put(&mut shelves, name, shown);
@@ -367,7 +432,7 @@ fn put(shelves: &mut Vec<Shelf>, name: String, shown: Shown) {
                 None => s.versions.push(shown),
             }
         }
-        None => shelves.push(Shelf { name, registry: false, versions: vec![shown], shadowed: Vec::new() }),
+        None => shelves.push(Shelf { name, registry: false, git: None, versions: vec![shown], shadowed: Vec::new() }),
     }
 }
 
@@ -376,8 +441,9 @@ fn put(shelves: &mut Vec<Shelf>, name: String, shown: Shown) {
 /// `ritsu mod site <list>`: the exit code. `--out` is required, and this function is the one to say
 /// so.
 pub fn site(ctx: &Ctx, a: &Args) -> u8 {
+    // a site reads registries with curl, git repositories with git, and signatures with cosign
     if cfg!(target_os = "wasi") {
-        return ctx.refuse(ritsu_base::wasi::cannot_start("curl"));
+        return ctx.refuse(ritsu_base::wasi::cannot_start_programs());
     }
     let Some(out) = a.get("--out") else {
         return ctx.refuse(tr!("書く先のディレクトリを `--out <ディレクトリ>` で渡してください", "say where the site goes with `--out <dir>`"));
@@ -492,6 +558,14 @@ fn short_name(module: &str) -> String {
     if names::dependency_ok(&s).is_ok() { s } else { "dependency".to_string() }
 }
 
+/// The `require` line of a module of a git repository at `version`.
+fn git_require(short: &str, url: &str, dir: Option<&str>, version: &str) -> String {
+    match dir {
+        Some(d) => format!("require {short} git {} {version} dir {}", lex::quote(url), lex::quote(d)),
+        None => format!("require {short} git {} {version}", lex::quote(url)),
+    }
+}
+
 /// The head of a digest a page shows, the whole in its title.
 fn digest_cell(d: &str) -> String {
     format!("<code title=\"{}\">{}</code>", esc(d), esc(&diff::digest_head(d)))
@@ -596,6 +670,9 @@ impl Writer<'_> {
         if !s.registry {
             return format!("<span class=\"warn\">{}</span>", esc(&self.say(tr!("まだ公開していません", "not published yet"))));
         }
+        if s.git.is_some() {
+            return inline(&self.say(tr!("git のリポジトリから取るので、署名はありません（lock がコミットとダイジェストで固定します）", "from a git repository: no signature, held by its commit and digests")));
+        }
         if self.lines_for(&s.name).is_empty() {
             inline(&self.say(tr!("一覧の `signature` の行が覆っていません", "no `signature` line of the list covers it")))
         } else {
@@ -687,7 +764,20 @@ impl Writer<'_> {
             let short = short_name(&s.name);
             b.push_str(&format!("<h2>{}</h2>\n", esc(&self.say(tr!("依存に足す書き方", "Requiring it")))));
             let name = &s.name;
-            if v.published {
+            if v.published
+                && let Some((url, dir)) = &s.git
+            {
+                let flag = dir.as_ref().map(|d| format!(" --dir {d}")).unwrap_or_default();
+                b.push_str(&format!("<pre><code>{}</code></pre>\n", esc(&format!("ritsu mod add {short} {url}@{}{flag}", v.version))));
+                b.push_str(&format!(
+                    "<p>{}</p>\n",
+                    inline(&self.say(tr!(
+                        "このコマンドが `ritsu.mod` に次の `require` の行を書き、ファイルからは `@{short}/…` で指せるようになります。版は git のリポジトリのタグで、lock がタグの指すコミットとダイジェストを固定します。",
+                        "It writes this `require` line in `ritsu.mod`, and the files name the module's files `@{short}/…`. The versions are the git repository's tags, and the lock holds the commit a tag leads to and its digests."
+                    )))
+                ));
+                b.push_str(&format!("<pre><code>{}</code></pre>\n", esc(&git_require(&short, url, dir.as_deref(), &v.version))));
+            } else if v.published {
                 b.push_str(&format!("<pre><code>{}</code></pre>\n", esc(&format!("ritsu mod add {short} {name}@{}", v.version))));
                 b.push_str(&format!(
                     "<p>{}</p>\n",
@@ -735,7 +825,18 @@ impl Writer<'_> {
         if let Some(d) = &m.manifest.description {
             b.push_str(&format!("<p class=\"lead\">{}</p>\n", esc(&d.value)));
         }
-        if let Some(d) = &v.digest {
+        if let (Some(d), Some((url, dir))) = (&v.digest, &s.git) {
+            let commit = v.commit.as_deref().unwrap_or("—");
+            b.push_str(&format!(
+                "<p>{}: <code>{}</code><br>{}: <code>{}</code></p>\n",
+                esc(&self.say(tr!("コミット", "Commit"))),
+                esc(commit),
+                esc(&self.say(tr!("ダイジェスト", "Digest"))),
+                esc(d)
+            ));
+            let short = short_name(&s.name);
+            b.push_str(&format!("<pre><code>{}</code></pre>\n", esc(&git_require(&short, url, dir.as_deref(), &v.version))));
+        } else if let Some(d) = &v.digest {
             b.push_str(&format!("<p>{}: <code>{}@{}</code></p>\n", esc(&self.say(tr!("参照", "Reference"))), esc(&s.name), esc(d)));
             let short = short_name(&s.name);
             b.push_str(&format!("<pre><code>{}</code></pre>\n", esc(&format!("require {short} oci {} {}", lex::quote(&s.name), v.version))));

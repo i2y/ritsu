@@ -1,0 +1,21 @@
+{
+  "ritsu": "<version>",
+  "fetched": [
+    {
+      "module": "127.0.0.1/acme/pricing",
+      "version": "1.1.0",
+      "digest": "sha256:<digest>",
+      "commit": "<commit>",
+      "verified": []
+    },
+    {
+      "module": "127.0.0.1/acme/tax",
+      "version": "1.0.0",
+      "digest": "sha256:<digest>",
+      "commit": "<commit>",
+      "verified": []
+    }
+  ],
+  "present": [],
+  "error": null
+}

@@ -136,8 +136,8 @@ pub fn crossings(project: &Project) -> Vec<Crossing> {
 }
 
 /// The notes before the summary: each contribution that crosses from one module to another, each
-/// module read from a path in place of the version a registry gives it elsewhere in the tree
-/// (DESIGN 17.7), and each module the walk passed over (DESIGN 17.6).
+/// module read from a path in place of the version a registry or a git repository gives it elsewhere
+/// in the tree (DESIGN 17.7), and each module the walk passed over (DESIGN 17.6).
 pub fn notes(project: &Project, crossings: &[Crossing]) -> Vec<Text> {
     let mut out = Vec::new();
     if let Some(Ok(tree)) = project.tree.as_deref() {
@@ -153,8 +153,8 @@ pub fn notes(project: &Project, crossings: &[Crossing]) -> Vec<Text> {
         }
         for name in &tree.path_won {
             out.push(tr!(
-                "備考: モジュール {name} は、木のほかの `require` がレジストリの版を求めていますが、`require … path` のパスから読んでいます",
-                "note: the module {name} is read from the path a `require … path` gives, in place of the version from a registry another `require` of the tree asks for"
+                "備考: モジュール {name} は、木のほかの `require` がレジストリか git のリポジトリの版を求めていますが、`require … path` のパスから読んでいます",
+                "note: the module {name} is read from the path a `require … path` gives, in place of the version from a registry or a git repository another `require` of the tree asks for"
             ));
         }
     }

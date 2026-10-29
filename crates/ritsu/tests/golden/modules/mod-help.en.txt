@@ -5,13 +5,13 @@ The commands of ritsu's modules. A directory with a `ritsu.mod` is a module, and
 Usage:
   ritsu mod init <module>                write the `ritsu.mod` of a new module: its name, its version, the least ritsu that reads it, and `exclude "generated"`
   ritsu mod add <name> <source>          require a module: a line after the last `require` of `ritsu.mod`, and the lock written again when the tree needs one
-  ritsu mod get <name>@<version>         change the version of a dependency from a registry: the version on its `require` line, and the lock
+  ritsu mod get <name>@<version>         change the version of a dependency from a registry or a git repository: the version on its `require` line, and the lock (from git, at the commit its tag leads to now)
   ritsu mod remove <name>                remove a dependency's `require` line, and write the lock again when the tree needs one
-  ritsu mod lock                         choose the versions of the dependencies (Minimal Version Selection) and write `ritsu.lock`; a tree with no dependency from a registry needs no lock
-  ritsu mod fetch [<name>@<version>...]  fetch the modules of the lock (or the versions named) from their registries into the store
+  ritsu mod lock                         choose the versions of the dependencies (Minimal Version Selection) and write `ritsu.lock`; a tree with no dependency from a registry or a git repository needs no lock
+  ritsu mod fetch [<name>@<version>...]  fetch the modules of the lock (or the versions named) from their registries and git repositories into the store
   ritsu mod list                         list the modules of the tree: where each comes from, its version and digests, what requires it, and whether its files are here
-  ritsu mod versions <name>              list the versions a registry has of a module
-  ritsu mod vendor                       put the modules of the lock that come from a registry, from the store, in the module's `.ritsu/modules/` (the module's copy of them)
+  ritsu mod versions <name>              list the versions a registry or a git repository has of a module (in git, its tags `v<version>` or `<dir>/v<version>`)
+  ritsu mod vendor                       put the modules of the lock that come from a registry or a git repository, from the store, in the module's `.ritsu/modules/` (the module's copy of them)
   ritsu mod clean                        remove the entries of the store: all of them, or those no lock given with --keep pins
   ritsu mod where <@path>                say where a path that starts with `@` is on the disk
   ritsu mod push                         check the module and push it to its registry (with --dry-run, check and build it without sending it)

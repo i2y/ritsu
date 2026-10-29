@@ -2513,3 +2513,48 @@ fn a_version_on_a_site_of_modules_opens_in_the_playground() {
         assert_eq!(got[1][0], json!([at("big"), true]), "{tag}");
     }
 }
+
+/// A dependency from a git repository in the module's copy of the store (DESIGN 17.12.1, 17.22):
+/// the example of modules with pricing from git (`require … git`, and its lock line with the commit
+/// and the URL; the files are the same, so the copy is too). The page reads it as the binary does,
+/// in each language, and the check passes: the page reads the copy and the lock, and never git.
+#[test]
+fn a_dependency_from_git_in_the_copy_answers_as_the_command_does() {
+    let p = committed().into_iter().find(|p| p.name == "modules").expect("projects.json has the example of modules");
+    let url = "https://example.com/acme/pricing";
+    let mut files = p.files.clone();
+    let mut changed = 0;
+    for (path, text) in files.iter_mut() {
+        if path == "ritsu.mod" {
+            let from = "require pricing oci \"example.com/acme/pricing\" 1.1.0";
+            assert!(text.contains(from), "{text}");
+            *text = text.replace(from, &format!("require pricing git \"{url}\" 1.1.0"));
+            changed += 1;
+        } else if path == "ritsu.lock" {
+            let lines: Vec<String> = text
+                .lines()
+                .map(|l| match l.strip_prefix("oci example.com/acme/pricing 1.1.0 ") {
+                    Some(rest) => format!("git example.com/acme/pricing 1.1.0 {rest} commit 9fceb02d0ae598e95dc970b74767f19372d61af8 \"{url}\""),
+                    None => l.to_string(),
+                })
+                .collect();
+            let new = format!("{}\n", lines.join("\n"));
+            assert_ne!(&new, text, "{text}");
+            *text = new;
+            changed += 1;
+        }
+    }
+    assert_eq!(changed, 2);
+    let mut failures = Vec::new();
+    let mut n = 0;
+    for lang in ["en", "ja"] {
+        n += compare("the example of modules, pricing from git", lang, &files, &mut failures);
+        let r = Request::from_json(&json!({ "files": files_json(&files), "lang": lang, "path": "" })).unwrap();
+        let a = playground::check(&r);
+        assert_eq!(a["code"], 0, "{a}");
+        let deps = &a["json"]["dependencies"];
+        assert_eq!((&deps[0]["source"], &deps[0]["url"], &deps[0]["where"]), (&json!("git"), &json!(url), &json!("vendor")), "{deps}");
+    }
+    eprintln!("compared: {n} answers of the page with what the binary prints, on the example of modules with a dependency from git");
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}

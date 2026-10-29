@@ -5,13 +5,13 @@ ritsu のモジュールのコマンド。`ritsu.mod` を持つディレクト�
 使い方:
   ritsu mod init <module>                新しいモジュールの `ritsu.mod` を書く（名前、版、読める ritsu の下限、`exclude "generated"`）
   ritsu mod add <name> <source>          依存を足す。`ritsu.mod` の最後の `require` の行のあとに一行書き、木に lock が要れば lock も書き直す
-  ritsu mod get <name>@<version>         レジストリの依存の版を変える（`require` の行の版と lock）
+  ritsu mod get <name>@<version>         レジストリか git のリポジトリから取る依存の版を変える（`require` の行の版と lock）。git の依存は、タグがいま指すコミットを取る
   ritsu mod remove <name>                依存の `require` の行を消し、木に lock が要れば lock も書き直す
-  ritsu mod lock                         依存の版を選び（最小の版の選び方）、`ritsu.lock` を書く。レジストリから取る依存が無ければ lock は要らない
-  ritsu mod fetch [<name>@<version>...]  lock のモジュール（または挙げた版）をレジストリから取り出して置き場に置く
+  ritsu mod lock                         依存の版を選び（最小の版の選び方）、`ritsu.lock` を書く。レジストリからも git のリポジトリからも取る依存が無ければ lock は要らない
+  ritsu mod fetch [<name>@<version>...]  lock のモジュール（または挙げた版）を、レジストリや git のリポジトリから取り出して置き場に置く
   ritsu mod list                         依存の木のモジュールを並べる（取り先、版とダイジェスト、求めているモジュール、ファイルがそろっているか）
-  ritsu mod versions <name>              レジストリにあるモジュールの版を並べる
-  ritsu mod vendor                       lock のレジストリのモジュールを、置き場からモジュールの `.ritsu/modules/` に置く（同梱のコピー）
+  ritsu mod versions <name>              レジストリか git のリポジトリにあるモジュールの版を並べる（git では、タグ `v<版>` か `<dir>/v<版>`）
+  ritsu mod vendor                       lock のレジストリと git のリポジトリのモジュールを、置き場からモジュールの `.ritsu/modules/` に置く（同梱のコピー）
   ritsu mod clean                        置き場の項目を消す（全部か、--keep の lock が固定していないもの）
   ritsu mod where <@path>                `@` で始まるパスが、ディスクのどこにあるかを言う
   ritsu mod push                         モジュールを検査してレジストリに送り出す（--dry-run では、検査して組み立てるだけで送らない）

@@ -1,6 +1,8 @@
 //! `ritsu.lock` (DESIGN 17.4): written one way (its head, its format, the ritsu that wrote it, a line
 //! a module in the order of the bytes of their names), read back to the same, E303 for what cannot
-//! be read, and a stop for a format newer than this ritsu reads.
+//! be read, and a stop for a format newer than this ritsu reads. A line of a module from a git
+//! repository has its commit and its URL (DESIGN 17.12.1), and a URL that may carry a credential is
+//! not shown.
 
 use ritsu_base::modules::lock::{self, Lock, Locked, Pinned};
 use ritsu_base::modules::names::ModuleName;
@@ -8,6 +10,7 @@ use ritsu_base::modules::semver::Version;
 
 const A: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
 const B: &str = "sha256:2222222222222222222222222222222222222222222222222222222222222222";
+const C: &str = "3333333333333333333333333333333333333333";
 
 fn name(s: &str) -> ModuleName {
     ModuleName::parse(s).unwrap()
@@ -49,6 +52,32 @@ fn a_lock_is_written_in_one_way_and_read_back() {
 }
 
 #[test]
+fn a_git_line_is_written_in_one_way_and_read_back() {
+    let sha256 = "4".repeat(64);
+    let git = |n: &str, commit: &str, url: &str| Locked {
+        name: name(n),
+        pinned: Pinned::Git { version: Version::parse("1.2.0").unwrap(), digest: A.into(), files: B.into(), commit: commit.into(), url: url.into() },
+        line: 0,
+    };
+    let mut l = Lock::new(vec![
+        git("example.com/acme/rates", C, "https://example.com/acme/rates"),
+        git("example.com/acme/mono/modules/tax", &sha256, "git@example.com:acme/mono.git"),
+        oci("example.com/acme/pricing", "1.1.0"),
+    ]);
+    l.ritsu = Version::parse("0.37.0").unwrap();
+    let text = l.text();
+    assert!(text.ends_with(&format!(
+        "lock 1\nritsu 0.37.0\ngit example.com/acme/mono/modules/tax 1.2.0 {A} files {B} commit {sha256} \"git@example.com:acme/mono.git\"\noci example.com/acme/pricing 1.1.0 {A} files {B}\ngit example.com/acme/rates 1.2.0 {A} files {B} commit {C} \"https://example.com/acme/rates\"\n"
+    )), "{text}");
+    let back = lock::parse(text.as_bytes(), "ritsu.lock").unwrap();
+    assert_eq!(back.text(), text);
+    let rates = back.get(&name("example.com/acme/rates")).unwrap();
+    assert_eq!(rates.version().map(|v| v.to_string()), Some("1.2.0".into()));
+    assert_eq!(rates.pinned.git(), Some((C, "https://example.com/acme/rates")));
+    assert_eq!(rates.pinned.digests().map(|(_, d, f)| (d, f)), Some((A, B)));
+}
+
+#[test]
 fn a_newer_format_stops() {
     match lock::parse(b"lock 2\nritsu 9.0.0\nnew things\n", "ritsu.lock") {
         Err(e @ lock::Error::Newer(2)) => {
@@ -73,7 +102,12 @@ fn what_cannot_be_read_is_e303() {
         (format!("lock 1\nritsu 0.37.0\noci example.com/a v1.0.0 {A} files {B}\n"), vec![("E303", Some(3), "`v1.0.0` is not a version: write it with no `v` before it".into())]),
         (format!("lock 1\nritsu 0.37.0\noci pricing 1.0.0 {A} files {B}\n"), vec![("E303", Some(3), "`pricing` is not the name of a module in a registry".into())]),
         ("lock 1\nritsu 0.37.0\npath pricing \"/srv/pricing\"\n".into(), vec![("E303", Some(3), "`/srv/pricing` is not a path from the root of the module".into())]),
-        ("lock 1\nritsu 0.37.0\npath pricing ../pricing\n".into(), vec![("E303", Some(3), "this line cannot be read: a line of `ritsu.lock` is `oci <name> <version> <digest> files <digest>` or `path <name> \"<path>\"`".into())]),
+        ("lock 1\nritsu 0.37.0\npath pricing ../pricing\n".into(), vec![("E303", Some(3), "this line cannot be read: a line of `ritsu.lock` is `oci <name> <version> <digest> files <digest>`, `git <name> <version> <digest> files <digest> commit <commit> \"<URL>\"` or `path <name> \"<path>\"`".into())]),
+        // a git line: its commit, its name, and its URL, which has to give that name
+        (format!("lock 1\nritsu 0.37.0\ngit example.com/acme/rates 1.0.0 {A} files {B} commit abc123 \"https://example.com/acme/rates\"\n"), vec![("E303", Some(3), "`abc123` is not the name of a commit (40 or 64 lowercase hex digits)".into())]),
+        (format!("lock 1\nritsu 0.37.0\ngit rates 1.0.0 {A} files {B} commit {C} \"https://example.com/acme/rates\"\n"), vec![("E303", Some(3), "`rates` is not the name of a module from a git repository".into())]),
+        (format!("lock 1\nritsu 0.37.0\ngit example.com/acme/other 1.0.0 {A} files {B} commit {C} \"https://example.com/acme/rates\"\n"), vec![("E303", Some(3), "the git URL `https://example.com/acme/rates` does not give the module's name `example.com/acme/other`; run `ritsu mod lock` to write it again".into())]),
+        (format!("lock 1\nritsu 0.37.0\ngit example.com/acme/rates 1.0.0 {A} files {B} commit {C} https://example.com/acme/rates\n"), vec![("E303", Some(3), "this line cannot be read: a line of `ritsu.lock` is `oci <name> <version> <digest> files <digest>`, `git <name> <version> <digest> files <digest> commit <commit> \"<URL>\"` or `path <name> \"<path>\"`".into())]),
         (
             "lock 1\nritsu 0.37.0\npath pricing \"../a\"\npath pricing \"../b\"\n".into(),
             vec![("E303", Some(4), "`pricing` already has a line, line 3".into())],
@@ -83,6 +117,15 @@ fn what_cannot_be_read_is_e303() {
         let got = unreadable(&text);
         let got: Vec<(&str, Option<usize>, String)> = got.into_iter().collect();
         assert_eq!(got, want, "{text}");
+    }
+    // a URL that may carry a credential: the diagnostic has neither it nor the line
+    let secret = format!("lock 1\nritsu 0.37.0\ngit example.com/acme/rates 1.0.0 {A} files {B} commit {C} \"https://ci:hunter2@example.com/acme/rates\"\n");
+    match lock::parse(secret.as_bytes(), "ritsu.lock") {
+        Err(lock::Error::Unreadable(ds)) => {
+            assert_eq!(ds[0].message.en, "the git URL of `example.com/acme/rates` is not one ritsu takes; run `ritsu mod lock` to write it again");
+            assert!(!format!("{ds:?}").contains("hunter2"), "{ds:?}");
+        }
+        other => panic!("{other:?}"),
     }
     match lock::parse(b"lock 1\nritsu \xff\n", "ritsu.lock") {
         Err(lock::Error::Unreadable(ds)) => assert_eq!((ds[0].line, ds[0].message.en.as_str()), (Some(2), "there are bytes that are not UTF-8")),

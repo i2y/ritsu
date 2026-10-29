@@ -1,7 +1,7 @@
 //! `ritsu mod list` and `ritsu mod where` (DESIGN 17.19, 17.21).
 //!
 //! `list` reads the modules of the tree from the manifests and the lock, not from the files of the
-//! modules from a registry: a module of the lock whose files are neither in the store nor in the
+//! modules from a registry or a git repository: a module of the lock whose files are neither in the store nor in the
 //! module's copy is listed with `present: false`, which is what the list is for. The tree is read as
 //! `ritsu check` reads it as well, for its diagnostics (a lock that does not match, E304; a line the
 //! tree does not reach, W302), which the list says after the modules (exit 1 for an error).
@@ -29,8 +29,10 @@ struct Listed {
     /// For a module a path reaches: its directory, and the path to it from the root.
     dir: Option<PathBuf>,
     path: Option<String>,
-    /// For a module from a registry: its two digests, from the lock.
+    /// For a module from a registry or a git repository: its two digests, from the lock.
     digests: Option<(String, String)>,
+    /// For a module from a git repository: its URL, and the commit the lock pins.
+    git: Option<(String, Option<String>)>,
     prefix: Option<String>,
     required_by: Vec<(String, String, Option<String>)>,
     present: bool,
@@ -68,6 +70,7 @@ fn listing(root: &Path, main: Manifest, lock: Option<&Lock>, store: Option<&Stor
         dir: Some(root.to_path_buf()),
         path: Some(".".to_string()),
         digests: None,
+        git: None,
         prefix: Some(String::new()),
         required_by: Vec::new(),
         present: true,
@@ -100,6 +103,7 @@ fn listing(root: &Path, main: Manifest, lock: Option<&Lock>, store: Option<&Stor
                 dir: Some(dir),
                 path: Some(rel),
                 digests: None,
+                git: None,
                 prefix: None,
                 required_by: Vec::new(),
                 present: true,
@@ -112,15 +116,19 @@ fn listing(root: &Path, main: Manifest, lock: Option<&Lock>, store: Option<&Stor
     while let Some(i) = queue.pop_front() {
         let reqs = nodes[i].manifest.as_ref().map(|m| m.requires.clone()).unwrap_or_default();
         for r in reqs {
-            let Source::Oci { repository, .. } = &r.source else { continue };
-            let Ok(name) = ModuleName::parse(repository) else { continue };
+            let Some(name) = r.source.module() else { continue };
             if by_name.contains_key(&name) {
                 continue;
             }
-            let pinned = lock.and_then(|l| l.get(&name)).and_then(|l| match &l.pinned {
-                Pinned::Oci { version, digest, files } => Some((version.to_string(), digest.clone(), files.clone())),
-                Pinned::Path { .. } => None,
-            });
+            let line = lock.and_then(|l| l.get(&name)).map(|l| &l.pinned);
+            let pinned = line.and_then(Pinned::digests).map(|(v, d, f)| (v.to_string(), d.to_string(), f.to_string()));
+            // from git: the lock's URL and commit; else, not in the lock, the URL of the `require`
+            let git = match (line, &r.source) {
+                (Some(Pinned::Git { url, commit, .. }), _) => Some((url.clone(), Some(commit.clone()))),
+                (Some(_), _) => None,
+                (None, Source::Git { url, .. }) => Some((url.clone(), None)),
+                (None, _) => None,
+            };
             let (version, digests, found, m, verified) = match &pinned {
                 Some((v, d, f)) => {
                     let found = vendor::find(root, d, store);
@@ -144,6 +152,7 @@ fn listing(root: &Path, main: Manifest, lock: Option<&Lock>, store: Option<&Stor
                 dir: None,
                 path: None,
                 digests,
+                git,
                 prefix: None,
                 required_by: Vec::new(),
                 present: found.is_some(),
@@ -162,7 +171,7 @@ fn listing(root: &Path, main: Manifest, lock: Option<&Lock>, store: Option<&Stor
                     let (dir, _) = target(&nodes, i, path);
                     nodes.iter().position(|n| n.dir.as_ref() == Some(&dir))
                 }
-                Source::Oci { repository, .. } => ModuleName::parse(repository).ok().and_then(|n| by_name.get(&n).copied()),
+                Source::Oci { .. } | Source::Git { .. } => r.source.module().and_then(|n| by_name.get(&n).copied()),
             };
             if let Some(j) = j {
                 deps[i].push((r.name.clone(), j));
@@ -201,11 +210,18 @@ fn module_json(m: &Listed) -> Json {
         Some((d, f)) => (Some(d.as_str()), Some(f.as_str())),
         None => (None, None),
     };
+    let source = match (&m.path, &m.git) {
+        (Some(_), _) => "path",
+        (None, Some(_)) => "git",
+        (None, None) => "oci",
+    };
     Json::obj([
         ("name", Json::str(m.name.to_string())),
         ("version", Json::opt_str(m.version.clone())),
-        ("source", Json::str(if m.path.is_some() { "path" } else { "oci" })),
+        ("source", Json::str(source)),
         ("path", Json::opt_str(m.path.clone())),
+        ("url", Json::opt_str(m.git.as_ref().map(|(u, _)| u.as_str()))),
+        ("commit", Json::opt_str(m.git.as_ref().and_then(|(_, c)| c.as_deref()))),
         ("digest", Json::opt_str(digest)),
         ("files_digest", Json::opt_str(files)),
         ("prefix", Json::opt_str(m.prefix.clone())),
@@ -219,15 +235,25 @@ fn module_json(m: &Listed) -> Json {
     ])
 }
 
-/// Where a module of the list is, as the text says it.
+/// Where a module of the list is, as the text says it: a module from git with the first twelve
+/// digits of the commit the lock pins.
 fn place_text(m: &Listed) -> Text {
-    match (&m.path, m.at) {
-        (Some(p), _) => tr!("パス {p}", "path {p}"),
-        (None, Some(Where::Vendor)) => tr!("レジストリ、同梱のコピー", "registry, in this module's copy"),
-        (None, Some(_)) => tr!("レジストリ、置き場", "registry, in the store"),
-        (None, None) if m.version.is_none() => tr!("レジストリ、lock に無い", "registry, not in the lock"),
-        (None, None) => tr!("レジストリ、取り出していない", "registry, not fetched"),
-    }
+    let from = match &m.git {
+        Some((_, Some(c))) => {
+            let c = &c[..12.min(c.len())];
+            tr!("git {c}", "git {c}")
+        }
+        Some((_, None)) => tr!("git", "git"),
+        None => tr!("レジストリ", "registry"),
+    };
+    let at = match (&m.path, m.at) {
+        (Some(p), _) => return tr!("パス {p}", "path {p}"),
+        (None, Some(Where::Vendor)) => tr!("、同梱のコピー", ", in this module's copy"),
+        (None, Some(_)) => tr!("、置き場", ", in the store"),
+        (None, None) if m.version.is_none() => tr!("、lock に無い", ", not in the lock"),
+        (None, None) => tr!("、取り出していない", ", not fetched"),
+    };
+    from.then(&at)
 }
 
 fn pad(s: &str, w: usize) -> String {
@@ -303,14 +329,23 @@ pub fn list(ctx: &Ctx, _a: &Args) -> u8 {
     }
     let n = deps.len();
     let by_path = deps.iter().filter(|m| m.path.is_some()).count();
-    let from_registry = n - by_path;
+    let from_git = deps.iter().filter(|m| m.path.is_none() && m.git.is_some()).count();
+    let from_registry = n - by_path - from_git;
     let missing = deps.iter().filter(|m| !m.present).count();
     let dependencies = plural(n, "dependency", "dependencies");
-    let mut t = tr!(
-        "ritsu mod list: 依存 {n} 個（パス {by_path} 個、レジストリ {from_registry} 個）",
-        "ritsu mod list: {dependencies} ({by_path} by a path, {from_registry} from a registry)"
-    );
-    t = t.then(&match (&lock, from_registry) {
+    // the count from git is said when there is one, so that a tree with none reads as before
+    let mut t = if from_git == 0 {
+        tr!(
+            "ritsu mod list: 依存 {n} 個（パス {by_path} 個、レジストリ {from_registry} 個）",
+            "ritsu mod list: {dependencies} ({by_path} by a path, {from_registry} from a registry)"
+        )
+    } else {
+        tr!(
+            "ritsu mod list: 依存 {n} 個（パス {by_path} 個、レジストリ {from_registry} 個、git {from_git} 個）",
+            "ritsu mod list: {dependencies} ({by_path} by a path, {from_registry} from a registry, {from_git} from git)"
+        )
+    };
+    t = t.then(&match (&lock, from_registry + from_git) {
         (Some(l), _) => {
             let v = l.ritsu.to_string();
             tr!("。ritsu.lock は ritsu {v} が書きました", "; ritsu.lock written by ritsu {v}")

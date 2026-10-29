@@ -237,8 +237,8 @@ fn a_module_pushed_is_locked_fetched_and_checked() {
         v,
         serde_json::json!({
             "ritsu": env!("CARGO_PKG_VERSION"),
-            "fetched": [{"module": format!("{host}/acme/pricing"), "version": "1.1.0", "digest": pricing, "verified": []}],
-            "present": [{"module": format!("{host}/acme/tax"), "version": "1.0.0", "digest": tax, "verified": []}],
+            "fetched": [{"module": format!("{host}/acme/pricing"), "version": "1.1.0", "digest": pricing, "commit": null, "verified": []}],
+            "present": [{"module": format!("{host}/acme/tax"), "version": "1.0.0", "digest": tax, "commit": null, "verified": []}],
             "error": null
         })
     );
@@ -295,7 +295,7 @@ fn versions_get_and_add_ask_the_registry() {
         format!("added `require pricing oci \"{host}/acme/pricing\" 1.1.0` to ritsu.mod ({host}/acme/pricing 1.1.0)\nwrote ritsu.lock: 2 modules\n")
     );
     let v = json(&w.ok("shop2", &["mod", "add", "tax", &format!("{host}/acme/tax@1.0.0"), "--format", "json"]));
-    assert_eq!(v["require"], serde_json::json!({"name": "tax", "module": format!("{host}/acme/tax"), "version": "1.0.0", "source": "oci", "path": null}));
+    assert_eq!(v["require"], serde_json::json!({"name": "tax", "module": format!("{host}/acme/tax"), "version": "1.0.0", "source": "oci", "path": null, "url": null, "dir": null}));
     // a version the registry does not have: nothing changes
     let before = (w.t.read("shop2/ritsu.mod"), w.t.read("shop2/ritsu.lock"));
     let (code, out, err) = w.run("shop2", &["mod", "get", "pricing@9.9.9"]);

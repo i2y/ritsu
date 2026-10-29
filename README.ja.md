@@ -496,7 +496,7 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 
 ## モジュール
 
-モジュールは `ritsu.mod` を持つディレクトリで、`ritsu.mod` がそのファイルに名前と版を付けます。ほかのプロジェクトは、横のディレクトリか OCI のレジストリからモジュールを依存に足し、そのファイルを `@<名前>/…` のパスで読みます。プロジェクトは、依存のファイルを自分のファイルと一緒に検査するので、証明はモジュールの境目でも切れません。次は ritsu のテストの例（[crates/ritsu/tests/projects/modules.ja](crates/ritsu/tests/projects/modules.ja)）で、店は `pricing` を、`pricing` は `tax` を依存に足しています。
+モジュールは `ritsu.mod` を持つディレクトリで、`ritsu.mod` がそのファイルに名前と版を付けます。ほかのプロジェクトは、横のディレクトリ、git のリポジトリ、OCI のレジストリのどれかからモジュールを依存に足し、そのファイルを `@<名前>/…` のパスで読みます。プロジェクトは、依存のファイルを自分のファイルと一緒に検査するので、証明はモジュールの境目でも切れません。次は ritsu のテストの例（[crates/ritsu/tests/projects/modules.ja](crates/ritsu/tests/projects/modules.ja)）で、店は `pricing` を、`pricing` は `tax` を依存に足しています。
 
 <!-- crates/ritsu/tests/projects/modules.ja/店/ritsu.mod -->
 ```
@@ -534,15 +534,22 @@ $ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
 $ ritsu mod fetch
 ```
 
-- lock は、プロジェクトが読むモジュールを、依存の依存まで全部、版と二つのダイジェストで固定します。どのコマンドも、読むファイルをこの固定と突き合わせます。lock が古ければ、`ritsu mod lock --check` がビルドを落とします。依存の版を上げるのは `ritsu mod get <名前>@<版>` です。
-- `ritsu mod fetch` は、lock が固定するものを取り出し、実行をまたいで使う置き場に置きます。`ritsu mod vendor` は、そのコピーをモジュールの中（`.ritsu/modules/`）に置きます。レジストリに届かないビルドのためです。通信するのは `ritsu mod` だけで、`check`、`gen`、`run`、各言語のコマンドは、置き場と同梱のコピーを読みます。
-- `ritsu mod push` は、モジュールを検査し、鍵を持つファイルがあれば受け付けず（W901）、モジュールの名前が指すレジストリに送り出します。署名する `cosign sign` のコマンドも出します。`ritsu.mod` に `signature` の行を書けば、取り出しは、モジュールを置き場に置く前に、cosign で署名を確かめます。
+git のリポジトリにあるモジュールは、リポジトリの URL で依存に足します。版はタグ `v<版>` です。リポジトリの中のディレクトリにあるモジュールは、`--dir <ディレクトリ>` で指し、タグは `<ディレクトリ>/v<版>` です。
+
+```console
+$ ritsu mod add rates https://example.com/acme/rates@1.2.0
+```
+
+- lock は、プロジェクトが読むモジュールを、依存の依存まで全部、版と二つのダイジェストで固定します。git から取るモジュールは、タグが指していたコミットでも固定します。どのコマンドも、読むファイルをこの固定と突き合わせます。lock が古ければ、`ritsu mod lock --check` がビルドを落とします。依存の版を上げるのは `ritsu mod get <名前>@<版>` です。
+- `ritsu mod fetch` は、lock が固定するものを取り出し、実行をまたいで使う置き場に置きます。`ritsu mod vendor` は、そのコピーをモジュールの中（`.ritsu/modules/`）に置きます。レジストリやリポジトリに届かないビルドのためです。通信するのは `ritsu mod` だけで、`check`、`gen`、`run`、各言語のコマンドは、置き場と同梱のコピーを読みます。
+- git で共有するモジュールは、作者がコミットにタグを打って push すれば使えます。用意するレジストリも、確かめる署名もありません（git から取るモジュールに当たる `signature` の行は E309 です）。ほかの人に使ってもらうモジュールは、署名を確かめられるレジストリに送り出します。git から取るモジュールの名前は場所（`example.com/acme/rates`）なので、一つのモジュールを配る方法はどちらか一つです。レジストリに移すと `module` の行が変わり、使う側は `require` の行と lock を書き換えます。ファイルは使う側が付けた名前で依存を指すので、変わりません。
+- `ritsu mod push` は、モジュールを検査し、鍵を持つファイル（W901）か、git から取る依存があれば受け付けず、モジュールの名前が指すレジストリに送り出します。署名する `cosign sign` のコマンドも出します。`ritsu.mod` に `signature` の行を書けば、取り出しは、モジュールを置き場に置く前に、cosign で署名を確かめます。
 
 ```
 signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
 ```
 
-レジストリの資格情報は、Docker の設定ファイル（`docker login` と資格情報のヘルパーが書くもの）から読み、どの出力にも出しません。
+レジストリの資格情報は、Docker の設定ファイル（`docker login` と資格情報のヘルパーが書くもの）から読み、どの出力にも出しません。git のリポジトリの資格情報は git のものです。ssh の鍵、資格情報のヘルパー、`url.<base>.insteadOf` が `git fetch` と同じく効きます。git が端末でパスワードを聞くことはありません。
 
 `ghcr.io/i2y/ritsu-holidays` は、このリポジトリのモジュール [modules/holidays](modules/holidays/README.ja.md) です。英国と日本の祝日を koyomi のカレンダーにしたもので、データは GOV.UK と内閣府が公表するファイルに固定しています。このカレンダーが閉じるのは祝日だけです。自分のカレンダーで `use calendar "@holidays/japan/国民の祝日.cal"` と書いて読み、土日は `closed weekly sat, sun` で自分で閉じます。[モジュールの一覧](https://i2y.github.io/ritsu/ja/modules/list/)には、版ごとに、ファイルごとのページと、一つ前の版からの差が載ります。
 
@@ -592,7 +599,7 @@ jobs:
 
 npm のパッケージは、モジュールの依存を、置き場と、`ritsu mod vendor` がモジュールに置く同梱のコピーから読みます。レジストリに問い合わせるコマンドと、git か cosign を走らせるコマンド（`add`、`get`、`fetch`、`versions`、`push`、`report`、`site` と、取り出しが要るときの `lock`、`remove`、`diff`）には、ネイティブの ritsu が要ります。`dirs` で開くディレクトリを絞るときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーをモジュールに置きます。
 
-`ritsu mod` の 15 のコマンドは `ritsu mod --help` が並べます。モジュールの書き方、足し方、送り出し方、署名の付け方は、ritsu のサイトの[モジュール](https://i2y.github.io/ritsu/ja/modules/)にあります。
+`ritsu mod` の 15 のコマンドは `ritsu mod --help` が並べます。モジュールの書き方、足し方、git での共有のしかた、送り出し方、署名の付け方は、ritsu のサイトの[モジュール](https://i2y.github.io/ritsu/ja/modules/)にあります。
 
 ## セキュリティの検査
 

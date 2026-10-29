@@ -1,12 +1,15 @@
 //! The tree of modules (DESIGN 17.7): the module at hand, the modules its `require`s reach by a
-//! path, and those they reach in a registry, each once, with the version its lock pins.
+//! path, and those they reach in a registry or a git repository, each once, with the version its
+//! lock pins.
 //!
 //! [`load`] reads a tree as a check reads it: it chooses no version. A module from a path is read
-//! where the path leads, one from a registry from the module's copy of the store or the store
-//! itself, its files checked against the lock's digest (E305); the lock is held to `ritsu.mod`
-//! (E304, W302). A module a path reaches wins over the same module in a registry, wherever in the
-//! tree. [`choose`] chooses the versions, as `ritsu mod lock` does: Minimal Version Selection
-//! ([`mvs`]) over every version reached, chosen or not.
+//! where the path leads, one from a registry or a git repository from the module's copy of the
+//! store or the store itself, its files checked against the lock's digest (E305); the lock is held
+//! to `ritsu.mod` (E304, W302). A module a path reaches wins over the same module in a registry or
+//! a git repository, wherever in the tree; otherwise a module has one source in the tree, the one
+//! the module at hand's `require` names, or the one every `require` of it names (E306).
+//! [`choose`] chooses the versions, as `ritsu mod lock` does: Minimal Version Selection ([`mvs`])
+//! over every version reached, chosen or not.
 //!
 //! Each module has one way to write it ([`Node::prefix`]): the chain of `@<name>` with the fewest
 //! steps from the module at hand, and of chains as short, the one a walk breadth first, in the
@@ -19,7 +22,7 @@ use super::names::{self, ModuleName};
 use super::semver::Version;
 use super::store::Store;
 use super::vendor::{self, Where};
-use super::{Diag, E302, E303, E304, E305, E306, E307, E308, W302};
+use super::{Diag, E302, E303, E304, E305, E306, E307, E308, E309, W302};
 use crate::fs;
 use crate::text::Text;
 use crate::tr;
@@ -37,7 +40,8 @@ pub struct Node {
     /// For a module a path reaches, the path from the root of the module at hand (`.` for that
     /// module itself).
     pub path: Option<String>,
-    /// For a module from a registry, its line of the lock: the version, and the two digests.
+    /// For a module from a registry or a git repository, its line of the lock: the version, the two
+    /// digests, and for one from git the commit and the URL.
     pub pinned: Option<Locked>,
     /// How its files are written from the root of the module at hand: empty for that module,
     /// `@pricing`, `@pricing/@tax`.
@@ -57,12 +61,170 @@ impl Node {
         }
     }
 
-    /// The digests of its OCI manifest and of its files, for one from a registry.
+    /// The digests of its OCI manifest and of its files, for one from a registry or a git
+    /// repository.
     pub fn digests(&self) -> Option<(&str, &str)> {
-        match self.pinned.as_ref().map(|l| &l.pinned) {
-            Some(Pinned::Oci { digest, files, .. }) => Some((digest, files)),
-            _ => None,
+        self.pinned.as_ref().and_then(|l| l.pinned.digests()).map(|(_, d, f)| (d, f))
+    }
+
+    /// The commit and the URL of a module from a git repository.
+    pub fn git(&self) -> Option<(&str, &str)> {
+        self.pinned.as_ref().and_then(|l| l.pinned.git())
+    }
+
+    /// Where its versions come from, for one from a registry or a git repository.
+    pub fn origin(&self) -> Option<Origin> {
+        self.pinned.as_ref().and_then(|l| Origin::of_pinned(&l.pinned, &self.name))
+    }
+}
+
+/// Where the versions of a module come from when no path of the tree reaches it (DESIGN 17.7): a
+/// registry, whose repository is the module's name, or a git repository, by its URL and the
+/// directory of the module in it (DESIGN 17.12.1).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Origin {
+    Oci,
+    Git { url: String, dir: Option<String> },
+}
+
+impl Origin {
+    /// The source a `require` names; none for a path.
+    pub fn of(source: &Source) -> Option<Origin> {
+        match source {
+            Source::Oci { .. } => Some(Origin::Oci),
+            Source::Git { url, dir, .. } => Some(Origin::Git { url: url.clone(), dir: dir.clone() }),
+            Source::Path { .. } => None,
         }
+    }
+
+    /// The source a line of the lock pins for the module `name`; none for a path.
+    pub fn of_pinned(pinned: &Pinned, name: &ModuleName) -> Option<Origin> {
+        match pinned {
+            Pinned::Oci { .. } => Some(Origin::Oci),
+            Pinned::Git { url, .. } => Some(Origin::Git { url: url.clone(), dir: super::git::dir_of(name, url).flatten() }),
+            Pinned::Path { .. } => None,
+        }
+    }
+
+    /// The source of a `require` of the module `name` from here, asking for `min` or later.
+    pub fn source(&self, name: &ModuleName, min: &Version) -> Source {
+        match self {
+            Origin::Oci => Source::Oci { repository: name.to_string(), min: min.clone() },
+            Origin::Git { url, dir } => Source::Git { url: url.clone(), min: min.clone(), dir: dir.clone() },
+        }
+    }
+
+    /// `oci`, `git`.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Origin::Oci => "oci",
+            Origin::Git { .. } => "git",
+        }
+    }
+
+    /// The URL of a git repository.
+    pub fn url(&self) -> Option<&str> {
+        match self {
+            Origin::Git { url, .. } => Some(url),
+            Origin::Oci => None,
+        }
+    }
+}
+
+/// The source a module of the tree is taken from (DESIGN 17.7), and the `require` that named it
+/// first: its words and the file it is in, as a diagnostic writes them.
+#[derive(Clone, Debug)]
+struct Decided {
+    origin: Origin,
+    /// The module at hand's `require` named it, which chooses.
+    here: bool,
+    line: String,
+    file: String,
+}
+
+/// The one source of each module from a registry or a git repository in a tree (DESIGN 17.7), as
+/// its `require`s name them: the module at hand's `require` chooses; without one, every `require` of
+/// the module names the same source.
+#[derive(Clone, Debug, Default)]
+pub struct Sources {
+    of: BTreeMap<ModuleName, Decided>,
+}
+
+impl Sources {
+    /// Notes the source `origin` a `require` (`line`, in `file`; of the module at hand when `here`)
+    /// names for the module `name`. Err, the E306 of a second source, to say at the `require`.
+    pub fn note(&mut self, name: &ModuleName, origin: Origin, here: bool, line: String, file: String) -> Result<(), Text> {
+        match self.of.get(name) {
+            None => {
+                self.of.insert(name.clone(), Decided { origin, here, line, file });
+                Ok(())
+            }
+            Some(d) if d.origin == origin || (d.here && !here) => Ok(()),
+            Some(d) => {
+                let (l1, f1) = (&d.line, &d.file);
+                Err(if d.here {
+                    tr!(
+                        "モジュール `{name}` の取り先が二つあります（`{f1}` の `{l1}` と `{line}`）。手元のモジュールの、`{name}` を求める `require` を一つにしてください",
+                        "the module `{name}` comes from two sources, `{l1}` and `{line}` in `{f1}`; keep one `require` of it in the module at hand"
+                    )
+                } else {
+                    tr!(
+                        "モジュール `{name}` の取り先が二つあります（`{f1}` の `{l1}` と、`{file}` の `{line}`）。使う取り先を、手元のモジュールの `require` に書いてください",
+                        "the module `{name}` comes from two sources, `{l1}` in `{f1}` and `{line}` in `{file}`; write the one to take in a `require` of the module at hand"
+                    )
+                })
+            }
+        }
+    }
+
+    /// The source of a module noted.
+    pub fn get(&self, name: &ModuleName) -> Option<&Origin> {
+        self.of.get(name).map(|d| &d.origin)
+    }
+
+    /// Each module noted, with its source.
+    pub fn into_map(self) -> BTreeMap<ModuleName, Origin> {
+        self.of.into_iter().map(|(n, d)| (n, d.origin)).collect()
+    }
+}
+
+/// What E309 says: the `signature` line whose start is `prefix` covers `name`, a module from a git
+/// repository (DESIGN 17.14).
+pub fn e309_text(prefix: &str, name: &str) -> Text {
+    tr!(
+        "`signature` の頭の部分 `{prefix}` が、git のリポジトリから取るモジュール `{name}` に当たります。ritsu が署名を確かめられるのは、レジストリから取るモジュールだけです。頭の部分を `{name}` に当たらないように狭めるか、`{name}` をレジストリから取ってください",
+        "the start `{prefix}` of a `signature` line covers `{name}`, a module from a git repository; ritsu checks the signatures of modules from registries only. Narrow the start so that it does not cover `{name}`, or take `{name}` from a registry"
+    )
+}
+
+/// Where a module comes from, as a sentence writes it after a word: `レジストリから`, ` git の
+/// リポジトリ `…` から` (with the space the Japanese puts before a word in Latin letters).
+fn from_text(origin: &Origin) -> Text {
+    match origin {
+        Origin::Oci => tr!("レジストリから", "from a registry"),
+        Origin::Git { url, .. } => tr!(" git のリポジトリ `{url}` から", "from the git repository `{url}`"),
+    }
+}
+
+/// The E308 of a `require` of a module from a registry or a git repository (`origin`) that it cannot
+/// have: a path, which is not where the module is used; and in a module from a registry, a git
+/// repository, which the one who takes the module may not reach (DESIGN 17.12.1).
+pub fn cannot_require(name: &ModuleName, version: &Version, origin: &Origin, r: &manifest::Require) -> Option<Text> {
+    let words = format!("require {} {}", r.name, r.source.words());
+    match (&r.source, origin) {
+        (Source::Path { .. }, Origin::Oci) => Some(tr!(
+            "レジストリから取ったモジュール `{name}` {version} が、`{words}` を持っています。パスの依存は使う側の手元に無いので読めません",
+            "the module `{name}` {version}, from a registry, has `{words}`; a dependency by a path is not where the module is used, so it cannot be read"
+        )),
+        (Source::Path { .. }, Origin::Git { .. }) => Some(tr!(
+            "git のリポジトリから取ったモジュール `{name}` {version} が、`{words}` を持っています。パスの依存は使う側の手元に無いので読めません",
+            "the module `{name}` {version}, from a git repository, has `{words}`; a dependency by a path is not where the module is used, so it cannot be read"
+        )),
+        (Source::Git { .. }, Origin::Oci) => Some(tr!(
+            "レジストリから取ったモジュール `{name}` {version} が、`{words}` を持っています。レジストリのモジュールの依存はレジストリから取ります。取る人が git のリポジトリに届くとは限らず、git の依存には確かめる署名も無いからです",
+            "the module `{name}` {version}, from a registry, has `{words}`; a module from a registry takes its dependencies from registries, since the one who takes it may not reach the git repository, and a dependency from git has no signature to check"
+        )),
+        _ => None,
     }
 }
 
@@ -262,6 +424,8 @@ struct Loader<'a> {
     /// The lock is there and cannot be read (E303 said so).
     lock_bad: bool,
     path_won: BTreeSet<ModuleName>,
+    /// The source of each module from a registry or a git repository (E306).
+    origins: Sources,
 }
 
 impl<'a> Loader<'a> {
@@ -281,6 +445,7 @@ impl<'a> Loader<'a> {
             lock_text: String::new(),
             lock_bad: false,
             path_won: BTreeSet::new(),
+            origins: Sources::default(),
         }
     }
 
@@ -418,9 +583,12 @@ impl<'a> Loader<'a> {
         true
     }
 
-    /// A module from a registry, at the version and with the digests of its lock's line.
+    /// A module from a registry or a git repository, at the version and with the digests of its
+    /// lock's line.
     fn fetched(&mut self, name: &ModuleName, l: &Locked, shown: &str) -> Option<Node> {
-        let Pinned::Oci { version, digest, files } = &l.pinned else { return None };
+        let (Some((version, digest, files)), Some(origin)) = (l.pinned.digests(), Origin::of_pinned(&l.pinned, name)) else { return None };
+        let (version, digest, files) = (version.clone(), digest.to_string(), files.to_string());
+        let (version, digest, files) = (&version, &digest, &files);
         let Some((store, at)) = vendor::find(&self.root, digest, self.store) else {
             let fetch = fetch_words();
             self.stops.push(if cfg!(target_os = "wasi") {
@@ -479,12 +647,8 @@ impl<'a> Loader<'a> {
             ok = false;
         }
         for r in &m.requires {
-            if let Source::Path { path } = &r.source {
-                self.diags.push(Diag::at(E308, &f, r.line, r.col, tr!(
-                    "レジストリから取ったモジュール `{name}` {version} が、`require {} path \"{path}\"` を持っています。パスの依存は使う側の手元に無いので読めません",
-                    "the module `{name}` {version}, from a registry, has `require {} path \"{path}\"`; a dependency by a path is not where the module is used, so it cannot be read",
-                    r.name; r.name
-                )).rel(&f).source(&m.text()));
+            if let Some(t) = cannot_require(name, version, &origin, r) {
+                self.diags.push(Diag::at(E308, &f, r.line, r.col, t).rel(&f).source(&m.text()));
                 ok = false;
             }
         }
@@ -495,16 +659,18 @@ impl<'a> Loader<'a> {
         Some(Node { name: name.clone(), manifest: m, dir: fdir, at, path: None, pinned: Some(l.clone()), prefix: String::new(), deps: Vec::new(), verified })
     }
 
-    /// Every module from a registry the tree reaches, each held to the lock.
+    /// Every module from a registry or a git repository the tree reaches, each from its one source
+    /// (E306) and held to the lock.
     fn registry(&mut self) {
         let mut queue: VecDeque<usize> = (0..self.nodes.len()).collect();
         let mut said_no_lock = false;
         while let Some(i) = queue.pop_front() {
             let reqs = self.nodes[i].manifest.requires.clone();
             for r in reqs {
-                let Source::Oci { repository, min } = &r.source else { continue };
-                let Ok(name) = ModuleName::parse(repository) else { continue };
+                let (Some(origin), Some(min)) = (Origin::of(&r.source), r.source.min()) else { continue };
+                let Some(name) = r.source.module() else { continue };
                 if let Some(j) = self.by_name.get(&name).copied()
+                    && j != usize::MAX
                     && self.nodes[j].pinned.is_none()
                 {
                     // a path reaches it, or it is the module at hand: the path wins
@@ -513,22 +679,36 @@ impl<'a> Loader<'a> {
                     }
                     continue;
                 }
+                let line = format!("require {} {}", r.name, r.source.words());
+                if let Err(t) = self.origins.note(&name, origin.clone(), i == 0, line.clone(), shown_file(&self.shown[i], manifest::FILE)) {
+                    let d = self.at_mod(E306, i, r.line, r.col, t);
+                    self.diags.push(d);
+                    continue;
+                }
+                // the source the tree takes it from: this `require`'s, or the module at hand's
+                let origin = self.origins.get(&name).cloned().unwrap_or(origin);
                 if self.lock_bad {
                     continue;
                 }
                 let Some(lock) = &self.lock else {
                     if !said_no_lock {
                         said_no_lock = true;
-                        let d = self.at_mod(E303, i, r.line, r.col, tr!(
-                            "`ritsu.lock` がありません。依存 `{}` はレジストリから取るので、選んだ版とダイジェストを `ritsu.lock` に固定する必要があります。`ritsu mod lock` を走らせてください",
-                            "there is no `ritsu.lock`: the dependency `{}` comes from a registry, so the version chosen and its digests are pinned in `ritsu.lock`; run `ritsu mod lock`",
-                            r.name; r.name
-                        ));
+                        let d = self.at_mod(E303, i, r.line, r.col, match origin {
+                            Origin::Oci => tr!(
+                                "`ritsu.lock` がありません。依存 `{}` はレジストリから取るので、選んだ版とダイジェストを `ritsu.lock` に固定する必要があります。`ritsu mod lock` を走らせてください",
+                                "there is no `ritsu.lock`: the dependency `{}` comes from a registry, so the version chosen and its digests are pinned in `ritsu.lock`; run `ritsu mod lock`",
+                                r.name; r.name
+                            ),
+                            Origin::Git { .. } => tr!(
+                                "`ritsu.lock` がありません。依存 `{}` は git のリポジトリから取るので、選んだ版とダイジェストとコミットを `ritsu.lock` に固定する必要があります。`ritsu mod lock` を走らせてください",
+                                "there is no `ritsu.lock`: the dependency `{}` comes from a git repository, so the version chosen, its digests and its commit are pinned in `ritsu.lock`; run `ritsu mod lock`",
+                                r.name; r.name
+                            ),
+                        });
                         self.diags.push(d);
                     }
                     continue;
                 };
-                let line = format!("require {} {}", r.name, r.source.words());
                 let Some(l) = lock.get(&name).cloned() else {
                     let d = self.at_mod(E304, i, r.line, r.col, tr!(
                         "`ritsu.lock` が `ritsu.mod` に合いません。`{line}` のモジュールが lock にありません。`ritsu mod lock` を走らせてください",
@@ -537,12 +717,25 @@ impl<'a> Loader<'a> {
                     self.diags.push(d);
                     continue;
                 };
-                let version = match &l.pinned {
-                    Pinned::Oci { version, .. } => version.clone(),
-                    Pinned::Path { path } => {
+                let from = from_text(&origin);
+                let version = match (&l.pinned, &origin) {
+                    (Pinned::Path { path }, _) => {
                         let d = self.at_mod(E304, i, r.line, r.col, tr!(
-                            "`ritsu.lock` が `ritsu.mod` に合いません。`{line}` はレジストリから取りますが、lock は `{name}` をパス `{path}` から読みます。`ritsu mod lock` を走らせてください",
-                            "`ritsu.lock` does not match `ritsu.mod`: `{line}` comes from a registry, and the lock reads `{name}` from the path `{path}`; run `ritsu mod lock`"
+                            "`ritsu.lock` が `ritsu.mod` に合いません。`{line}` は{}取りますが、lock は `{name}` をパス `{path}` から読みます。`ritsu mod lock` を走らせてください",
+                            "`ritsu.lock` does not match `ritsu.mod`: `{line}` comes {}, and the lock reads `{name}` from the path `{path}`; run `ritsu mod lock`",
+                            from.ja; from.en
+                        ));
+                        self.diags.push(d);
+                        continue;
+                    }
+                    (Pinned::Oci { version, .. }, Origin::Oci) => version.clone(),
+                    (Pinned::Git { version, url, .. }, Origin::Git { url: wanted, .. }) if url == wanted => version.clone(),
+                    (pinned, _) => {
+                        let theirs = Origin::of_pinned(pinned, &name).map(|o| from_text(&o)).unwrap_or_default();
+                        let d = self.at_mod(E304, i, r.line, r.col, tr!(
+                            "`ritsu.lock` が `ritsu.mod` に合いません。`{name}` は{}取りますが、lock は{}取ります。`ritsu mod lock` を走らせてください",
+                            "`ritsu.lock` does not match `ritsu.mod`: `{name}` comes {}, and the lock takes it {}; run `ritsu mod lock`",
+                            from.ja, theirs.ja; from.en, theirs.en
                         ));
                         self.diags.push(d);
                         continue;
@@ -604,12 +797,14 @@ impl<'a> Loader<'a> {
                         self.diags.push(d);
                     }
                 }
-                (Some(j), Pinned::Oci { .. }) => {
+                (Some(j), pinned @ (Pinned::Oci { .. } | Pinned::Git { .. })) => {
                     if self.nodes[j].pinned.is_none() {
                         let rel = self.nodes[j].path.clone().unwrap_or_default();
+                        let from = Origin::of_pinned(pinned, &l.name).map(|o| from_text(&o)).unwrap_or_default();
                         let d = self.at_lock(E304, l.line, tr!(
-                            "`ritsu.lock` が `ritsu.mod` に合いません。lock は `{name}` をレジストリから取りますが、この木ではパス `{rel}` から読みます。`ritsu mod lock` を走らせてください",
-                            "`ritsu.lock` does not match `ritsu.mod`: the lock takes `{name}` from a registry, and this tree reads it from the path `{rel}`; run `ritsu mod lock`"
+                            "`ritsu.lock` が `ritsu.mod` に合いません。lock は `{name}` を{}取りますが、この木ではパス `{rel}` から読みます。`ritsu mod lock` を走らせてください",
+                            "`ritsu.lock` does not match `ritsu.mod`: the lock takes `{name}` {}, and this tree reads it from the path `{rel}`; run `ritsu mod lock`",
+                            from.ja; from.en
                         ));
                         self.diags.push(d);
                     }
@@ -655,7 +850,9 @@ impl<'a> Loader<'a> {
 
     /// Every module's `ritsu >=`, and the record of the check of every signature that applies to a
     /// module from a registry: what stops a run. A line with a key is the line and the digest of its
-    /// key file ([`Signature::checked`]); a key file that cannot be read is E302.
+    /// key file ([`Signature::checked`]); a key file that cannot be read is E302. A signature line
+    /// that applies to a module from a git repository, whose signature ritsu does not check, is E309
+    /// at the line.
     fn stops(&mut self) {
         let now = running();
         for i in 0..self.nodes.len() {
@@ -672,6 +869,10 @@ impl<'a> Loader<'a> {
                 continue;
             }
             let name = self.nodes[j].name.to_string();
+            if self.nodes[j].git().is_some() {
+                self.e309(j);
+                continue;
+            }
             // the lines of the module at hand, and of each module that requires this one
             let mut lines: Vec<String> = Vec::new();
             for i in 0..self.nodes.len() {
@@ -703,6 +904,23 @@ impl<'a> Loader<'a> {
         }
     }
 
+    /// E309: each `signature` line of the module at hand, or of a module that requires node `j`,
+    /// that applies to node `j`, a module from a git repository.
+    fn e309(&mut self, j: usize) {
+        let name = self.nodes[j].name.to_string();
+        for i in 0..self.nodes.len() {
+            if i != 0 && !self.nodes[i].deps.iter().any(|(_, k)| *k == j) {
+                continue;
+            }
+            for s in self.nodes[i].manifest.signatures.clone() {
+                if names::covers(&s.prefix, &name) {
+                    let d = self.at_mod(E309, i, s.line, 0, e309_text(&s.prefix, &name));
+                    self.diags.push(d);
+                }
+            }
+        }
+    }
+
     /// Each `require` of each node, to the node it reaches.
     fn edges(&mut self) {
         for i in 0..self.nodes.len() {
@@ -713,7 +931,7 @@ impl<'a> Loader<'a> {
                         let (dir, _) = self.path_target(i, path);
                         self.nodes.iter().position(|n| n.path.is_some() && n.dir == dir)
                     }
-                    Source::Oci { repository, .. } => ModuleName::parse(repository).ok().and_then(|n| self.by_name.get(&n).copied()).filter(|j| *j != usize::MAX),
+                    Source::Oci { .. } | Source::Git { .. } => r.source.module().and_then(|n| self.by_name.get(&n).copied()).filter(|j| *j != usize::MAX),
                 };
                 if let Some(j) = target {
                     deps.push((r.name.clone(), j));
@@ -847,35 +1065,54 @@ pub fn mvs_try<K: Ord + Clone, E>(roots: &[(K, Version)], mut requires: impl FnM
 }
 
 /// What `ritsu mod lock` chooses (DESIGN 17.7): the modules a path reaches, each with its path from
-/// the root of the module at hand, and a version of each module from a registry.
+/// the root of the module at hand, and a version of each module from a registry or a git repository,
+/// with the source the tree takes it from.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Chosen {
     pub paths: Vec<(ModuleName, String)>,
     pub versions: BTreeMap<ModuleName, Version>,
+    pub origins: BTreeMap<ModuleName, Origin>,
+}
+
+impl Chosen {
+    /// The source of a module chosen.
+    pub fn origin(&self, name: &ModuleName) -> Origin {
+        self.origins.get(name).cloned().unwrap_or(Origin::Oci)
+    }
 }
 
 /// The versions the module at hand's tree chooses: its `ritsu.mod` and those the paths reach, read
-/// from the disk, and `ritsu_mod` the `ritsu.mod` of each version of a module from a registry that is
-/// reached (from the store, or a registry), each asked for once.
-pub fn choose(root: &Path, mut ritsu_mod: impl FnMut(&ModuleName, &Version) -> Result<Vec<u8>, Problem>) -> Result<Chosen, Problem> {
+/// from the disk, and `ritsu_mod` the `ritsu.mod` of each version of a module from a registry or a
+/// git repository that is reached (from the store, a registry or the repository), each asked for
+/// once, from the one source the tree takes the module from (E306).
+pub fn choose(root: &Path, mut ritsu_mod: impl FnMut(&ModuleName, &Origin, &Version) -> Result<Vec<u8>, Problem>) -> Result<Chosen, Problem> {
     let mut l = Loader::new(root, None);
     if !l.locals() || !l.diags.is_empty() || !l.stops.is_empty() {
         return Err(l.problem());
     }
     let local: BTreeSet<ModuleName> = l.nodes.iter().map(|n| n.name.clone()).collect();
+    let mut origins = Sources::default();
     let mut roots: Vec<(ModuleName, Version)> = Vec::new();
-    for n in &l.nodes {
-        for r in &n.manifest.requires {
-            if let Source::Oci { repository, min } = &r.source
-                && let Ok(name) = ModuleName::parse(repository)
-                && !local.contains(&name)
-            {
-                roots.push((name, min.clone()));
+    let mut ds = Vec::new();
+    for i in 0..l.nodes.len() {
+        for r in &l.nodes[i].manifest.requires {
+            let (Some(origin), Some(min), Some(name)) = (Origin::of(&r.source), r.source.min(), r.source.module()) else { continue };
+            if local.contains(&name) {
+                continue;
+            }
+            let line = format!("require {} {}", r.name, r.source.words());
+            match origins.note(&name, origin, i == 0, line, shown_file(&l.shown[i], manifest::FILE)) {
+                Ok(()) => roots.push((name, min.clone())),
+                Err(t) => ds.push(l.at_mod(E306, i, r.line, r.col, t)),
             }
         }
     }
+    if !ds.is_empty() {
+        return Err(Problem::Diags(ds));
+    }
     let versions = mvs_try(&roots, |name, version| {
-        let bytes = ritsu_mod(name, version)?;
+        let origin = origins.get(name).cloned().unwrap_or(Origin::Oci);
+        let bytes = ritsu_mod(name, &origin, version)?;
         let shown = format!("{name}@{version}/{}", manifest::FILE);
         let m = manifest::parse(&bytes, &shown).map_err(Problem::Diags)?;
         let mut ds = Vec::new();
@@ -893,42 +1130,50 @@ pub fn choose(root: &Path, mut ritsu_mod: impl FnMut(&ModuleName, &Version) -> R
                 "the `ritsu.mod` of the tag {version} of `{name}` has the `version` {theirs}"
             )).rel(&shown).source(&m.text()));
         }
+        let mut next = Vec::new();
         for r in &m.requires {
-            if let Source::Path { path } = &r.source {
-                ds.push(Diag::at(E308, &shown, r.line, r.col, tr!(
-                    "レジストリから取ったモジュール `{name}` {version} が、`require {} path \"{path}\"` を持っています。パスの依存は使う側の手元に無いので読めません",
-                    "the module `{name}` {version}, from a registry, has `require {} path \"{path}\"`; a dependency by a path is not where the module is used, so it cannot be read",
-                    r.name; r.name
-                )).rel(&shown).source(&m.text()));
+            if let Some(t) = cannot_require(name, version, &origin, r) {
+                ds.push(Diag::at(E308, &shown, r.line, r.col, t).rel(&shown).source(&m.text()));
+                continue;
+            }
+            let (Some(o), Some(min), Some(n)) = (Origin::of(&r.source), r.source.min(), r.source.module()) else { continue };
+            if local.contains(&n) {
+                continue;
+            }
+            let line = format!("require {} {}", r.name, r.source.words());
+            match origins.note(&n, o, false, line, shown.clone()) {
+                Ok(()) => next.push((n, min.clone())),
+                Err(t) => ds.push(Diag::at(E306, &shown, r.line, r.col, t).rel(&shown).source(&m.text())),
             }
         }
         if !ds.is_empty() {
             return Err(Problem::Diags(ds));
         }
-        Ok(m.requires
-            .iter()
-            .filter_map(|r| match &r.source {
-                Source::Oci { repository, min } => ModuleName::parse(repository).ok().filter(|n| !local.contains(n)).map(|n| (n, min.clone())),
-                Source::Path { .. } => None,
-            })
-            .collect())
+        Ok(next)
     })?;
     let paths = l.nodes.iter().skip(1).map(|n| (n.name.clone(), n.path.clone().unwrap_or_default())).collect();
-    Ok(Chosen { paths, versions })
+    let origins = origins.into_map().into_iter().filter(|(n, _)| versions.contains_key(n)).collect();
+    Ok(Chosen { paths, versions, origins })
 }
 
-/// The lock of what was chosen: a `path` line for each module a path reaches, and an `oci` line
-/// with the digests `digests` gives for each version chosen.
-pub fn lock_of(chosen: &Chosen, mut digests: impl FnMut(&ModuleName, &Version) -> Option<(String, String)>) -> Result<Lock, Text> {
+/// The lock of what was chosen: a `path` line for each module a path reaches, and for each version
+/// chosen an `oci` line, or a `git` line, with the digests `pins` gives, and for git the commit.
+pub fn lock_of(chosen: &Chosen, mut pins: impl FnMut(&ModuleName, &Origin, &Version) -> Option<(String, String, Option<String>)>) -> Result<Lock, Text> {
     let mut modules = Vec::new();
     for (name, path) in &chosen.paths {
         modules.push(Locked { name: name.clone(), pinned: Pinned::Path { path: path.clone() }, line: 0 });
     }
     for (name, version) in &chosen.versions {
-        let Some((digest, files)) = digests(name, version) else {
+        let origin = chosen.origin(name);
+        let Some((digest, files, commit)) = pins(name, &origin, version) else {
             return Err(tr!("`{name}` {version} のダイジェストが分かりません", "the digests of `{name}` {version} are not known"));
         };
-        modules.push(Locked { name: name.clone(), pinned: Pinned::Oci { version: version.clone(), digest, files }, line: 0 });
+        let pinned = match (origin, commit) {
+            (Origin::Oci, _) => Pinned::Oci { version: version.clone(), digest, files },
+            (Origin::Git { url, .. }, Some(commit)) => Pinned::Git { version: version.clone(), digest, files, commit, url },
+            (Origin::Git { .. }, None) => return Err(tr!("`{name}` {version} のコミットが分かりません", "the commit of `{name}` {version} is not known")),
+        };
+        modules.push(Locked { name: name.clone(), pinned, line: 0 });
     }
     Ok(Lock::new(modules))
 }

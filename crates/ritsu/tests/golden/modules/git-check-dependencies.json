@@ -1,0 +1,38 @@
+[
+  {
+    "prefix": "@pricing",
+    "name": "127.0.0.1/acme/pricing",
+    "version": "1.1.0",
+    "source": "git",
+    "path": null,
+    "url": "http://127.0.0.1:<port>/acme/pricing",
+    "commit": "<commit>",
+    "digest": "sha256:<digest>",
+    "files_digest": "sha256:<digest>",
+    "where": "store",
+    "verified": [],
+    "files": 2,
+    "ok": true,
+    "errors": 0,
+    "warnings": 0,
+    "claims_not_run": 0
+  },
+  {
+    "prefix": "@pricing/@tax",
+    "name": "127.0.0.1/acme/tax",
+    "version": "1.0.0",
+    "source": "git",
+    "path": null,
+    "url": "http://127.0.0.1:<port>/acme/tax",
+    "commit": "<commit>",
+    "digest": "sha256:<digest>",
+    "files_digest": "sha256:<digest>",
+    "where": "store",
+    "verified": [],
+    "files": 1,
+    "ok": true,
+    "errors": 0,
+    "warnings": 0,
+    "claims_not_run": 0
+  }
+]

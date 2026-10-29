@@ -1,0 +1,2 @@
+added `require pricing git "http://127.0.0.1:<port>/acme/pricing" 1.1.0` to ritsu.mod (127.0.0.1/acme/pricing 1.1.0)
+wrote ritsu.lock: 2 modules

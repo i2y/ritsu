@@ -1,0 +1,2 @@
+ritsu.mod に `require dep git "http://127.0.0.1:<port>/acme/tax" 1.0.0` を足しました（127.0.0.1/acme/tax 1.0.0）
+ritsu.lock を書きました（モジュール 1 個）

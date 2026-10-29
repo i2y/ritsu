@@ -33,6 +33,9 @@ pub struct At<T> {
 pub enum Source {
     /// A registry's repository (the dependency's module name) and the least version asked for.
     Oci { repository: String, min: Version },
+    /// A git repository's URL, the least version asked for, and the directory of the module in the
+    /// repository, if it is not at its root (DESIGN 17.12.1).
+    Git { url: String, min: Version, dir: Option<String> },
     /// A directory, from the root of the module that requires it, `/` between its parts.
     Path { path: String },
 }
@@ -42,7 +45,36 @@ impl Source {
     pub fn words(&self) -> String {
         match self {
             Source::Oci { repository, min } => format!("oci {} {min}", lex::quote(repository)),
+            Source::Git { url, min, dir: None } => format!("git {} {min}", lex::quote(url)),
+            Source::Git { url, min, dir: Some(d) } => format!("git {} {min} dir {}", lex::quote(url), lex::quote(d)),
             Source::Path { path } => format!("path {}", lex::quote(path)),
+        }
+    }
+
+    /// The name of the module it gives: the repository of a registry, the name a git URL and its
+    /// `dir` give (DESIGN 17.12.1); none for a path, whose module is the one its `ritsu.mod` names.
+    pub fn module(&self) -> Option<ModuleName> {
+        match self {
+            Source::Oci { repository, .. } => ModuleName::parse(repository).ok(),
+            Source::Git { url, dir, .. } => super::git::name_of(url, dir.as_deref()).ok(),
+            Source::Path { .. } => None,
+        }
+    }
+
+    /// The least version it asks for; none for a path.
+    pub fn min(&self) -> Option<&Version> {
+        match self {
+            Source::Oci { min, .. } | Source::Git { min, .. } => Some(min),
+            Source::Path { .. } => None,
+        }
+    }
+
+    /// The same source, asking for another least version (a path stays as it is).
+    pub fn with_min(&self, version: &Version) -> Source {
+        match self {
+            Source::Oci { repository, .. } => Source::Oci { repository: repository.clone(), min: version.clone() },
+            Source::Git { url, dir, .. } => Source::Git { url: url.clone(), min: version.clone(), dir: dir.clone() },
+            Source::Path { path } => Source::Path { path: path.clone() },
         }
     }
 }
@@ -56,7 +88,7 @@ pub struct Require {
     pub line: usize,
     /// The column of the name.
     pub col: usize,
-    /// The bytes of the version word in its line (an `oci` line's).
+    /// The bytes of the version word in its line (an `oci` or a `git` line's).
     version_at: Option<(usize, usize)>,
 }
 
@@ -150,7 +182,10 @@ fn form(word: &str) -> Text {
         "ritsu" => tr!("ritsu >=<版>", "ritsu >=<version>"),
         "license" => tr!("license \"<SPDX の式>\"", "license \"<SPDX expression>\""),
         "source" => tr!("source \"<https の URL>\"", "source \"<https URL>\""),
-        "require" => tr!("require <名前> oci \"<リポジトリ>\" <版>` か `require <名前> path \"<パス>\"", "require <name> oci \"<repository>\" <version>` or `require <name> path \"<path>\""),
+        "require" => tr!(
+            "require <名前> oci \"<リポジトリ>\" <版>`、`require <名前> git \"<URL>\" <版>`（あとに `dir \"<ディレクトリ>\"` を付けてもよい）、`require <名前> path \"<パス>\"",
+            "require <name> oci \"<repository>\" <version>`, `require <name> git \"<URL>\" <version>` (with `dir \"<directory>\"` after it, if need be) or `require <name> path \"<path>\""
+        ),
         "exclude" => tr!("exclude \"<パス>\"", "exclude \"<path>\""),
         "signature" => tr!(
             "signature \"<頭の部分>\" key \"<パス>\"`（あとに `tlog off` を付けてもよい）、`signature \"<頭の部分>\" by \"<署名者>\" issuer \"<発行者>\"`、`signature \"<頭の部分>\" by matching \"<正規表現>\" issuer \"<発行者>\"",
@@ -232,6 +267,15 @@ pub fn source_problem(url: &str) -> Option<(Text, Option<Text>)> {
             "ritsu writes the `source` into the module `ritsu mod push` sends, the packages `ritsu gen` makes (package.json and pyproject.toml) and the list site, all of which are meant to be published: keep credentials such as tokens and passwords out of it"
         )),
     ))
+}
+
+/// The note after the E302 of a git URL that may carry a credential, whose message names neither
+/// the URL nor its line: `ritsu.mod` is committed, and the module may be pushed and listed.
+fn git_secret_note() -> Text {
+    tr!(
+        "`ritsu.mod` はリポジトリにコミットされ、モジュールと一緒に配られるファイルです。トークンやパスワードのような資格情報は書かず、git の資格情報のヘルパーか ssh の鍵に任せてください。資格情報が端末やログに出ないよう、この診断は URL も行も出していません",
+        "`ritsu.mod` is committed to the repository and goes wherever the module goes: keep credentials such as tokens and passwords out of it, and leave them to git's credential helper or an ssh key. The diagnostic shows neither the URL nor the line, so that a credential goes to no terminal and no log"
+    )
 }
 
 /// A path written in `ritsu.mod`, from the root of the module: what is wrong with it, if anything.
@@ -368,6 +412,8 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
             "library" => &[Want::Any, Want::Str],
             "require" => match ts.get(2).map(|t| t.text.as_str()) {
                 Some("path") => &[Want::Any, Want::Exactly("path"), Want::Str],
+                Some("git") if ts.len() > 5 => &[Want::Any, Want::Exactly("git"), Want::Str, Want::Any, Want::Exactly("dir"), Want::Str],
+                Some("git") => &[Want::Any, Want::Exactly("git"), Want::Str, Want::Any],
                 _ => &[Want::Any, Want::Exactly("oci"), Want::Str, Want::Any],
             },
             _ => signature_shape(&ts[1..]),
@@ -460,6 +506,25 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                         continue;
                     }
                     Source::Path { path: v(2).text.clone() }
+                } else if v(1).text == "git" {
+                    let (url, dir) = (&v(2).text, (args.len() > 4).then(|| v(5).text.clone()));
+                    if let Err(p) = super::git::name_of(url, dir.as_deref()) {
+                        // what may carry a credential: neither the URL nor the line is shown
+                        if p.secret {
+                            r.unshown(E302, n, v(2).col, p.text).notes.push(git_secret_note());
+                        } else {
+                            let at_dir = super::git::parse(url).is_ok() && dir.as_deref().is_some_and(|d| super::git::dir_problem(d).is_some());
+                            r.at(E302, n, if at_dir { v(5).col } else { v(2).col }, src, p.text);
+                        }
+                        continue;
+                    }
+                    match Version::parse(&v(3).text) {
+                        Ok(min) => Source::Git { url: url.clone(), min, dir },
+                        Err(e) => {
+                            r.at(E302, n, v(3).col, src, e.text(&v(3).text));
+                            continue;
+                        }
+                    }
                 } else {
                     let repo = &v(2).text;
                     match ModuleName::parse(repo) {
@@ -484,7 +549,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                         }
                     }
                 };
-                let version_at = matches!(source, Source::Oci { .. }).then(|| (v(3).start, v(3).end));
+                let version_at = matches!(source, Source::Oci { .. } | Source::Git { .. }).then(|| (v(3).start, v(3).end));
                 m.requires.push(Require { name: name.clone(), source, line: n, col: v(0).col, version_at });
             }
             "exclude" => match path_problem(&v(0).text, true) {
@@ -627,7 +692,7 @@ pub enum EditError {
     /// The name is required already, on a line.
     Required(String, usize),
     /// The dependency comes from a path, which has no version to change.
-    NotOci(String),
+    ByPath(String),
     /// The name cannot name a dependency.
     BadName(String, names::NameError),
 }
@@ -637,9 +702,9 @@ impl EditError {
         match self {
             EditError::NotRequired(n) => tr!("`ritsu.mod` に依存 `{n}` はありません", "`ritsu.mod` requires no `{n}`"),
             EditError::Required(n, l) => tr!("依存 `{n}` は、`ritsu.mod` の {l} 行目にもう書いてあります", "the dependency `{n}` is already on line {l} of `ritsu.mod`"),
-            EditError::NotOci(n) => tr!(
-                "依存 `{n}` はパスから読むので、版を変えられません。レジストリから取るなら、`ritsu.mod` の行を `oci` に書き替えてください",
-                "the dependency `{n}` is read from a path, which has no version to change; to take it from a registry, write its line in `ritsu.mod` with `oci`"
+            EditError::ByPath(n) => tr!(
+                "依存 `{n}` はパスから読むので、版を変えられません。レジストリか git のリポジトリから取るなら、`ritsu.mod` の行を `oci` か `git` に書き替えてください",
+                "the dependency `{n}` is read from a path, which has no version to change; to take it from a registry or a git repository, write its line in `ritsu.mod` with `oci` or `git`"
             ),
             EditError::BadName(n, e) => tr!("依存の名前 `{n}` は使えません", "`{n}` cannot name a dependency").then(&sep(&e.text())),
         }
@@ -698,11 +763,11 @@ impl Manifest {
         Ok(lines.iter().map(|(l, e)| format!("{l}{e}")).collect())
     }
 
-    /// The text with the version of an `oci` dependency changed, and no other byte of the line
-    /// (`ritsu mod get`).
+    /// The text with the version of an `oci` or a `git` dependency changed, and no other byte of the
+    /// line (`ritsu mod get`).
     pub fn with_version(&self, name: &str, version: &Version) -> Result<String, EditError> {
         let r = self.require(name).ok_or_else(|| EditError::NotRequired(name.to_string()))?;
-        let Some((a, b)) = r.version_at else { return Err(EditError::NotOci(name.to_string())) };
+        let Some((a, b)) = r.version_at else { return Err(EditError::ByPath(name.to_string())) };
         let mut lines = self.lines.clone();
         let line = &mut lines[r.line - 1].0;
         line.replace_range(a..b, &version.to_string());

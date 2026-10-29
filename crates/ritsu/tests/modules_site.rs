@@ -499,7 +499,7 @@ fn what_stops_the_site_writes_nothing() {
         golden(&format!("tests/golden/modules/site-bad-list.{lang}.txt"), &err, &mut failures);
     }
     assert_eq!(run(&["mod", "site", "nope.list", "--out", "out"]), (2, String::new(), "error: cannot read nope.list (No such file or directory (os error 2)); nothing was written\n".into()));
-    assert_eq!(run(&["mod", "site", "empty.list", "--out", "out"]), (2, String::new(), "error: empty.list has no `module` line and no `local` line\nerror: the list cannot be read; nothing was written\n".into()));
+    assert_eq!(run(&["mod", "site", "empty.list", "--out", "out"]), (2, String::new(), "error: empty.list has no `module` line, no `git` line and no `local` line\nerror: the list cannot be read; nothing was written\n".into()));
     assert_eq!(
         run(&["mod", "site", "ok.list", "--out", "out", "--playground", "http://example.com/play/"]),
         (2, String::new(), "error: the playground's URL `http://example.com/play/` is an https URL (or an http one on this machine) with no user, no query and no `#`\n".into())

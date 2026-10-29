@@ -20,12 +20,16 @@
 //! - [`cedar`]: the official Cedar CLI, at the version the tests are written for.
 //! - [`registry`]: a small OCI registry on a port of `127.0.0.1`, for `ritsu mod push` and `fetch`
 //!   (DESIGN 17.25), stopped when its value is dropped.
+//! - [`git`]: a git server on a port of `127.0.0.1` (`git http-backend` run for each request), for
+//!   the dependencies from git repositories (DESIGN 17.12.1), and the repositories it serves, whose
+//!   commits are the same on every machine; stopped when its value is dropped.
 //!
 //! Nothing here depends on anything but std (DESIGN 3.1). Every crate takes it as a
 //! dev-dependency only.
 
 pub mod cedar;
 pub mod chrome;
+pub mod git;
 pub mod golden;
 pub mod http;
 pub mod level;

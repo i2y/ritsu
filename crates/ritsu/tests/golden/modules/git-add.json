@@ -1,0 +1,15 @@
+{
+  "ritsu": "<version>",
+  "root": ".",
+  "require": {
+    "name": "dep",
+    "module": "127.0.0.1/acme/pricing",
+    "version": "1.0.0",
+    "source": "git",
+    "path": null,
+    "url": "http://127.0.0.1:<port>/acme/pricing",
+    "dir": null
+  },
+  "manifest": "written",
+  "lock": "written"
+}

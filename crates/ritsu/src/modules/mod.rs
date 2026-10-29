@@ -13,8 +13,9 @@
 //! so that each stage fills its own files and no other: [`diff`] and [`report`] (stage C, DESIGN
 //! 17.9.6, 17.10); [`registry`] (`add` from a registry, `get`, `versions`), [`fetch`] (`fetch`, and
 //! the `ritsu.mod` a version is chosen by when it is not in the store), [`push`], and [`http`],
-//! [`auth`], [`store_write`] and [`cosign`] for what those need (stage D, DESIGN 17.12–17.14); and
-//! [`site`] (stage F, DESIGN 17.17).
+//! [`auth`], [`store_write`] and [`cosign`] for what those need (stage D, DESIGN 17.12–17.14);
+//! [`site`] (stage F, DESIGN 17.17); and [`git`], the git a dependency from a git repository is
+//! fetched with (stage I, DESIGN 17.12.1).
 
 pub mod cli;
 mod edit;
@@ -37,6 +38,9 @@ pub mod store_write;
 
 // stage F
 pub mod site;
+
+// stage I
+pub mod git;
 
 use ritsu_base::diag::{Diag, Severity};
 use ritsu_base::modules::graph::Problem;

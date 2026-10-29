@@ -100,9 +100,10 @@ pub enum Change {
     Removed,
     Upgraded,
     Downgraded,
-    /// From a registry on one side and a path on the other, or from another path.
+    /// From a registry, a git repository or a path on one side and from another on the other, or
+    /// from another path or another git URL.
     Source,
-    /// The same version from a registry, with another digest: the tag moved.
+    /// The same version from a registry or a git repository, with another digest: the tag moved.
     Moved,
     /// A module a path reaches, at the same version, whose files changed.
     Changed,
@@ -142,11 +143,13 @@ impl Change {
     }
 }
 
-/// A module's version on one side, and the digest of its OCI manifest for one from a registry.
+/// A module's version on one side, the digest of its OCI manifest for one from a registry or a git
+/// repository, and the commit for one from git.
 #[derive(Clone, Debug)]
 pub struct Pin {
     pub version: Option<String>,
     pub digest: Option<String>,
+    pub commit: Option<String>,
 }
 
 /// A module that changed.
@@ -425,6 +428,7 @@ fn changes(base: &Tree, head: &Tree, base_files: &Rc<dyn Files>, head_files: &Op
             (None, Some(_)) => Change::Added,
             (Some(_), None) => Change::Removed,
             (Some(b), Some(h)) => match (b.pinned.is_some(), h.pinned.is_some()) {
+                (true, true) if b.origin() != h.origin() => Change::Source,
                 (true, true) => match by_version(b, h) {
                     Some(c) => c,
                     None if b.digests().map(|d| d.0) != h.digests().map(|d| d.0) => Change::Moved,
@@ -443,7 +447,7 @@ fn changes(base: &Tree, head: &Tree, base_files: &Rc<dyn Files>, head_files: &Op
             },
             (None, None) => continue,
         };
-        let pin = |n: &Node| Pin { version: n.version().map(|v| v.to_string()), digest: n.digests().map(|d| d.0.to_string()) };
+        let pin = |n: &Node| Pin { version: n.version().map(|v| v.to_string()), digest: n.digests().map(|d| d.0.to_string()), commit: n.git().map(|(c, _)| c.to_string()) };
         out.push(Changed {
             module: name,
             prefix: h.as_ref().or(b.as_ref()).map(|n| n.prefix.clone()).unwrap_or_default(),
@@ -493,8 +497,15 @@ impl Sides<'_> {
         if let Err(t) = fetched(b, Some(self.base_files.clone())).and_then(|()| fetched(h, self.head_files.clone())) {
             return Some(Err(t));
         }
-        let old = Module::through(&b.dir, label(b), digest(b), Some(self.base_files.clone()));
-        let new = Module::through(&h.dir, label(h), digest(h), self.head_files.clone());
+        let commit = |n: &Node| n.git().map(|(c, _)| c.to_string());
+        let old = Module::through(&b.dir, label(b), digest(b), Some(self.base_files.clone())).map(|mut m| {
+            m.commit = commit(b);
+            m
+        });
+        let new = Module::through(&h.dir, label(h), digest(h), self.head_files.clone()).map(|mut m| {
+            m.commit = commit(h);
+            m
+        });
         Some(match (old, new) {
             // what the index and the checks keep is kept by the path: a module of its own each
             (Ok(o), Ok(n)) => Ok(diff::modules(&o, &n, budget, lang, &Joined::new())),
@@ -723,7 +734,8 @@ impl Report {
         }
     }
 
-    /// A tag that moved, said at the top: the version, and the two digests.
+    /// A tag that moved, said at the top: the version, and the two digests; for a module from a git
+    /// repository, the first twelve digits of the two commits too.
     fn moved_line(&self, m: &Changed, lang: Lang, q: &str) -> String {
         let v = m.new.as_ref().and_then(|p| p.version.clone()).unwrap_or_default();
         let d = |p: &Option<Pin>| p.as_ref().and_then(|p| p.digest.clone()).unwrap_or_default();
@@ -732,10 +744,17 @@ impl Report {
         let (base, head) = self.locks(lang, q);
         // a space between the particle and a revision, none before 作業ツリー
         let and = if head.starts_with(|c: char| c.is_ascii()) { "と " } else { "と" };
-        tr!(
-            "{q}{module}{q} {v} は、{base} {and}{head} で中身が違います（ダイジェスト {q}{od}{q} → {q}{nd}{q}）。同じ版が別の中身で出し直されていて、前に確かめたものではありません。",
-            "{q}{module}{q} {v} in {base} is not the one in {head} (its digest went from {q}{od}{q} to {q}{nd}{q}): the same version was published again with other contents, and is not the one checked before."
-        )
+        let c = |p: &Option<Pin>| p.as_ref().and_then(|p| p.commit.clone()).map(|c| c[..12.min(c.len())].to_string());
+        match (c(&m.old), c(&m.new)) {
+            (Some(oc), Some(nc)) => tr!(
+                "{q}{module}{q} {v} は、{base} {and}{head} で中身が違います（コミット {q}{oc}{q} → {q}{nc}{q}、ダイジェスト {q}{od}{q} → {q}{nd}{q}）。同じ版のタグが別のコミットに動かされていて、前に確かめたものではありません。",
+                "{q}{module}{q} {v} in {base} is not the one in {head} (its commit went from {q}{oc}{q} to {q}{nc}{q}, its digest from {q}{od}{q} to {q}{nd}{q}): the tag of the same version was moved to another commit, and is not the one checked before."
+            ),
+            _ => tr!(
+                "{q}{module}{q} {v} は、{base} {and}{head} で中身が違います（ダイジェスト {q}{od}{q} → {q}{nd}{q}）。同じ版が別の中身で出し直されていて、前に確かめたものではありません。",
+                "{q}{module}{q} {v} in {base} is not the one in {head} (its digest went from {q}{od}{q} to {q}{nd}{q}): the same version was published again with other contents, and is not the one checked before."
+            ),
+        }
         .get(lang)
         .to_string()
     }
@@ -954,7 +973,9 @@ impl Report {
     /// The report as JSON (DESIGN 17.21).
     pub fn to_json(&self, lang: Lang, code: u8) -> Json {
         let counts = |c: Counts| Json::obj([("errors", Json::int(c.errors as i128)), ("warnings", Json::int(c.warnings as i128))]);
-        let pin = |p: &Option<Pin>| p.as_ref().map_or(Json::Null, |p| Json::obj([("version", Json::opt_str(p.version.clone())), ("digest", Json::opt_str(p.digest.clone()))]));
+        let pin = |p: &Option<Pin>| {
+            p.as_ref().map_or(Json::Null, |p| Json::obj([("version", Json::opt_str(p.version.clone())), ("digest", Json::opt_str(p.digest.clone())), ("commit", Json::opt_str(p.commit.clone()))]))
+        };
         let modules = self.modules.iter().map(|m| {
             Json::obj([
                 ("module", Json::str(m.module.as_str())),

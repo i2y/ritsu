@@ -135,7 +135,7 @@ fn get_changes_the_version_word_and_no_other_byte() {
     let t = "module shop\nrequire  tax   oci \"example.com/acme/tax\"   1.0.0   # pinned for the audit\r\nrequire p path \"../p\"\n";
     let got = read(t).with_version("tax", &v("1.10.0")).unwrap();
     assert_eq!(got, "module shop\nrequire  tax   oci \"example.com/acme/tax\"   1.10.0   # pinned for the audit\r\nrequire p path \"../p\"\n");
-    assert_eq!(read(t).with_version("p", &v("1.0.0")), Err(EditError::NotOci("p".into())));
+    assert_eq!(read(t).with_version("p", &v("1.0.0")), Err(EditError::ByPath("p".into())));
     assert_eq!(read(t).with_version("q", &v("1.0.0")), Err(EditError::NotRequired("q".into())));
 }
 
@@ -175,7 +175,8 @@ fn a_line_that_cannot_be_read_is_e301() {
         ("module shop\ndescription \"open\n", "a string is not closed"),
         ("module shop\u{7}\n", "the control character U+0007 cannot be written here (the tab is the only one taken)"),
         ("\"module\" shop\n", "a statement starts with a word, and `\"module\"` is a string"),
-        ("module shop\nrequire x oci \"example.com/x\"\n", "write the `require` line as `require <name> oci \"<repository>\" <version>` or `require <name> path \"<path>\"`"),
+        ("module shop\nrequire x oci \"example.com/x\"\n", "write the `require` line as `require <name> oci \"<repository>\" <version>`, `require <name> git \"<URL>\" <version>` (with `dir \"<directory>\"` after it, if need be) or `require <name> path \"<path>\"`"),
+        ("module shop\nrequire x git \"https://example.com/x\" 1.0.0 dir\n", "write the `require` line as `require <name> oci \"<repository>\" <version>`, `require <name> git \"<URL>\" <version>` (with `dir \"<directory>\"` after it, if need be) or `require <name> path \"<path>\"`"),
         ("module shop\nsignature \"example.com/\" key\n", "write the `signature` line as `signature \"<start>\" key \"<path>\"` (with `tlog off` after it, if need be), `signature \"<start>\" by \"<identity>\" issuer \"<issuer>\"` or `signature \"<start>\" by matching \"<pattern>\" issuer \"<issuer>\"`"),
         ("module shop\nsignature \"example.com/\" key \"k.pub\" tlog on\n", "write the `signature` line as `signature \"<start>\" key \"<path>\"` (with `tlog off` after it, if need be), `signature \"<start>\" by \"<identity>\" issuer \"<issuer>\"` or `signature \"<start>\" by matching \"<pattern>\" issuer \"<issuer>\"`"),
     ];

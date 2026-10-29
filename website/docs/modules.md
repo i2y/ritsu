@@ -1,9 +1,9 @@
 # Modules
 
 A module is a directory with a `ritsu.mod`: a project that other projects require, from a directory
-beside them or from an OCI registry, and whose files they read by `@<name>/…` paths. The modules
-published from ritsu's repository are on [the list of modules](modules/list/), with their versions,
-the pages of their files and what changed between versions.
+beside them, a git repository or an OCI registry, and whose files they read by `@<name>/…` paths.
+The modules published from ritsu's repository are on [the list of modules](modules/list/), with
+their versions, the pages of their files and what changed between versions.
 
 A project checks the files it requires with its own files, with each language's check and the checks
 across the languages, so a proof does not stop at a module's edge. The examples on this page are the
@@ -33,12 +33,13 @@ A line of `ritsu.mod` is one statement, and `#` starts a note that runs to the e
 
 | Line | What it says |
 |---|---|
-| `module <name>` | The module's name. A module pushed to a registry is named by its repository there (`example.com/acme/pricing`, `ghcr.io/i2y/ritsu-holidays`). A module only read by a path may have a short name (`shop`). |
-| `version <version>` | The version, in SemVer's form, without a `v` and without build metadata (`1.4.0`, `2.0.0-rc.1`). It is the tag the module is pushed as. |
+| `module <name>` | The module's name. A module pushed to a registry is named by its repository there (`example.com/acme/pricing`, `ghcr.io/i2y/ritsu-holidays`), and a module shared by git by where it is (`example.com/acme/rates`, [below](#sharing-a-module-by-git)). A module only read by a path may have a short name (`shop`). |
+| `version <version>` | The version, in SemVer's form, without a `v` and without build metadata (`1.4.0`, `2.0.0-rc.1`). It is the tag the module is pushed as, and, after a `v`, the tag of a module shared by git (`v1.4.0`). |
 | `ritsu >=<version>` | The least ritsu that reads the module. An older one stops and says which version it needs. |
 | `description`, `license`, `source` | What the registry, the list of modules and the libraries show. `license` is an SPDX expression. `source` is the https URL of the module's repository, with no user, password or query (E302), as it is published. |
 | `require <name> path "<dir>"` | A dependency in a directory, written from the module's root. |
 | `require <name> oci "<repository>" <version>` | A dependency from a registry, at that version or a later one. |
+| `require <name> git "<URL>" <version> [dir "<dir>"]` | A dependency from the tags of a git repository, at that version or a later one; `dir` is the module's directory in the repository ([Sharing a module by git](#sharing-a-module-by-git)). |
 | `exclude "<path>"` | A file or a directory that `ritsu mod push` leaves out. `ritsu mod init` writes `exclude "generated"`, where `ritsu gen` writes. |
 | `signature "<name>" …` | The signature the modules of that name must have ([Signatures](#signatures)). |
 | `library typescript\|python\|go "<name>"` | The name of the module's library in that language ([Libraries](#libraries)). |
@@ -72,13 +73,15 @@ writes the page of the dependency's rule, and `ritsu mod where` says where the f
 ## Requiring a module
 
 `ritsu mod add <name> <source>` requires a module: from a directory, as `./…` or `../…` from where
-it runs, or from a registry, as `<repository>@<version>` or `<repository>@latest` (`@latest`, or no
-version, takes the latest version that is not a pre-release). It writes the `require` line after the
-last one, and `ritsu.lock` when the module needs one.
+it runs, from a registry, as `<repository>@<version>` or `<repository>@latest`, or from a git
+repository, as `<URL>@<version>` or `<URL>@latest` (`@latest`, or no version, takes the latest
+version that is not a pre-release). It writes the `require` line after the last one, and
+`ritsu.lock` when the module needs one.
 
 ```console
 $ ritsu mod add pricing ../pricing
 $ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
+$ ritsu mod add rates https://example.com/acme/rates@1.2.0
 $ ritsu mod get holidays@latest
 $ ritsu mod remove holidays
 ```
@@ -87,25 +90,28 @@ The name is the requiring project's to choose: it is what the project's files wr
 `ritsu mod add` line on [the list of modules](modules/list/) calls the module of holidays
 `ritsu_holidays`, after its repository; this page, like the module's README, calls it `holidays`.
 
-`ritsu mod get <name>@<version>` changes the version of a dependency from a registry, and
-`ritsu mod remove <name>` removes its line. The three write `ritsu.mod` and `ritsu.lock` together or
-not at all, and keep the other lines of `ritsu.mod` and their notes as they are.
+`ritsu mod get <name>@<version>` changes the version of a dependency from a registry or a git
+repository, and `ritsu mod remove <name>` removes its line. The three write `ritsu.mod` and
+`ritsu.lock` together or not at all, and keep the other lines of `ritsu.mod` and their notes as they
+are.
 
 `ritsu.lock` is ritsu's to write. It has a line for every module the project reads, the dependencies
 of its dependencies too: for a module from a registry, the version chosen and two digests, the OCI
-manifest's, which the registry and cosign know, and the digest of the module's files. The version is
+manifest's, which the registry and cosign know, and the digest of the module's files; for a module
+from git, the same, the commit its tag led to and the repository's URL. The version is
 chosen by Minimal Version Selection: for each module, the highest of the versions the `require`
 lines ask for, and one version of each module. So `ritsu.mod` decides the lock with no question to a
 registry, and two machines with the same files read the same files of every module. A module that
-requires nothing from a registry needs no lock, and has none.
+requires nothing from a registry or a git repository needs no lock, and has none.
 
 - Every command checks the lock against `ritsu.mod`, and stops at a lock that does not match it
   (E304). `ritsu mod lock` writes it again, and `ritsu mod lock --check` exits 1 when it would
   change: a step of CI.
-- The files of a dependency from a registry are checked against the lock's digest whenever they are
-  read (E305).
-- A `require … path` in the working tree wins over a `require … oci` of the same module anywhere in
-  the tree. Writing one is how a dependency is changed and checked from the module that uses it.
+- The files of a dependency from a registry or a git repository are checked against the lock's
+  digest whenever they are read (E305).
+- A `require … path` in the working tree wins over a `require … oci` or a `require … git` of the
+  same module anywhere in the tree. Writing one is how a dependency is changed and checked from the
+  module that uses it.
 
 `ritsu mod list` lists the modules the project reads:
 
@@ -142,8 +148,8 @@ ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the langua
 ## Fetching what a module requires
 
 Only `ritsu mod` reaches the network. `ritsu check`, `gen`, `run` and the languages' commands read a
-dependency from a registry where `ritsu mod fetch` has put it. When it is not there, they stop and
-say to run `ritsu mod fetch`.
+dependency from a registry or a git repository where `ritsu mod fetch` has put it. When it is not
+there, they stop and say to run `ritsu mod fetch`.
 
 ```console
 $ ritsu mod fetch
@@ -157,8 +163,9 @@ $ ritsu mod vendor
   `--rev <revision>` fetches what the lock at that git revision pins, and `<name>@<version>` that
   version.
 - `ritsu mod vendor` puts a copy of them in the module, in `.ritsu/modules/`, for a build that
-  cannot reach the registry, or to keep them in the repository. `ritsu mod vendor --check` says
-  whether the copy matches the lock. Each command reads the copy before the store.
+  cannot reach the registry or the repository, or to keep them in the repository.
+  `ritsu mod vendor --check` says whether the copy matches the lock. Each command reads the copy
+  before the store.
 - `ritsu mod clean` removes what the store holds, or with `--keep <lock>…` what those locks do not
   pin. Anything removed is fetched again by its digest.
 - `ritsu mod where @<name>/<path>` says where a file of a dependency is on the disk, for an editor.
@@ -175,6 +182,69 @@ reach a registry or run git or cosign (`add`, `get`, `fetch`, `versions`, `push`
 the API's `dirs` opens only some directories, add the store to `dirs`, or put the copy in the module
 with `ritsu mod vendor`.
 
+## Sharing a module by git
+
+A module shared among your own repositories needs no registry. Its author tags a commit
+`v<version>` and pushes the tag, and a project requires the module by the repository's URL. A
+module in a directory of a repository takes `--dir`, and its tags are `<dir>/v<version>`:
+
+```console
+$ ritsu mod add rates https://example.com/acme/rates@1.2.0
+$ ritsu mod add tax git@example.com:acme/mono.git@1.0.0 --dir modules/tax
+$ ritsu mod versions https://example.com/acme/rates
+```
+
+```text
+require rates git "https://example.com/acme/rates" 1.2.0
+require tax git "git@example.com:acme/mono.git" 1.0.0 dir "modules/tax"
+```
+
+- A URL is `https://…`, `ssh://…` or the scp form `<user>@<host>:<path>`. `git://`, `file://`,
+  plain `http://` to another machine, `<transport>::…`, and a URL with a password or a query in it
+  are E302.
+- The module's name is where it is: the host, the repository's path without `.git`, and the `dir`,
+  with no scheme, user or port (`example.com/acme/rates`, `example.com/acme/mono/modules/tax`). The
+  `ritsu.mod` at the tag says that `module` and the tag's version.
+- Names are in lower case: write the URL in lower case. Many hosts do not tell the cases of a
+  repository's path apart; on one that does, a repository with an upper-case letter in its path
+  cannot be required.
+- A tag without `v`, with `+`, or not in SemVer's form is not a version. A pre-release is one, but
+  `@latest` does not take it.
+- The lock pins the commit the tag led to, with the URL. `ritsu mod fetch` fetches that commit by
+  its name, with no checkout: the commit and its trees, then the files of the module at once, read
+  as git holds them, with no filter, no change of the ends of the lines and no hook. A symbolic
+  link, a submodule or a Git LFS pointer in the module stops it.
+- A moved tag is seen as a registry's is: `ritsu mod fetch` keeps to the lock's commit,
+  `ritsu mod get` takes the commit the tag leads to now, and `ritsu mod report` puts the move first.
+  When the repository no longer gives the lock's commit, `ritsu mod fetch` stops and says that the
+  tag moved.
+- ritsu runs git, 2.29 or later (2.30 for `ritsu mod fetch --rev` and `ritsu mod report`), with your
+  settings: ssh keys, credential helpers and `url.<base>.insteadOf` work as they do for
+  `git fetch`. ritsu does not let git ask for a password on the terminal: with no credential, it
+  stops at once.
+
+A module shared by git has no signature to check: the lock's commit and digests hold it, and a
+`signature` line that covers it is E309. A module that requires one from git cannot be pushed to a
+registry. Since the name of a module from git is where it is, one module is shared one of the two
+ways. To move a module from git to a registry, change its `module` line to the registry's repository
+and push a new version. The projects that use it change their `require … git` line to
+`require … oci` and run `ritsu mod lock`; their files name the module by the name they gave it, and
+do not change.
+
+In GitHub Actions, the token `actions/checkout` keeps is for the repository it checks out, and reads
+no other. ritsu runs git in a repository of its own, which does not use it. A job that requires a
+module from another private repository gives git a token that reads it, kept as a secret (here
+`MODULES_TOKEN`), through git's global configuration. A credential helper that reads the token from
+the environment keeps it out of the files, with the user name the host takes with a token:
+
+```sh
+git config --global credential.https://example.com.username ci
+git config --global credential.https://example.com.helper '!f() { test "$1" = get && echo "password=$MODULES_TOKEN"; }; f'
+```
+
+Run these in a step before ritsu's, and give the step that runs `ritsu mod fetch` the secret in its
+`env` as `MODULES_TOKEN`.
+
 ## Pushing a module to a registry
 
 `ritsu mod push` pushes the module to the repository its name names, as the tag of its version:
@@ -187,7 +257,7 @@ built ghcr.io/i2y/ritsu-holidays 1.0.0, and pushed nothing (`--dry-run`)
 ```
 
 1. It takes a module with a name of a registry, a `version` and a `ritsu >=` line, no
-   `require … path`, and a lock that matches.
+   `require … path` or `require … git`, and a lock that matches.
 2. It gathers the module's files, all but what `exclude` names, the names that start with `.` and the
    modules below, and refuses the module when one of them holds a key (W901, said by file and line,
    never the key).
@@ -212,8 +282,10 @@ signature as a module that requires it would.
 page of each file, what changed from the version before, the `ritsu mod add` line, and a button
 that opens a version in the playground. The list file has the lines `title`, `description`,
 `playground`, `module` (a module on a registry, every version of which is fetched and checked),
-`signature` (as in `ritsu.mod`) and `local` (a working tree not pushed yet). It exits 1 when a
-version does not pass its checks, and 2 when the list does not read or a registry cannot be reached.
+`git` (a module shared by git, as `git "<URL>"` or `git "<URL>" dir "<dir>"`, every tag of which is
+fetched and checked), `signature` (as in `ritsu.mod`) and `local` (a working tree not pushed yet).
+It exits 1 when a version does not pass its checks, and 2 when the list does not read or a registry
+or a repository cannot be reached.
 
 ## Signatures
 
@@ -246,12 +318,15 @@ signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ri
 - `ritsu mod fetch` runs cosign from the PATH before it keeps a module, and records what it checked
   in the store. `ritsu check` runs no cosign: when the record lacks a line that applies, it stops
   and says to run `ritsu mod fetch`.
+- ritsu checks the signatures of modules from registries alone. A line that covers a module from git
+  is E309: narrow its start, or take the module from a registry.
 
 ## What raising a version changes
 
 `ritsu mod diff <old> [<new>]` compares two versions of a module. Each side is
-`<module>@<version>`, a directory, or `.` (the working tree, when `<new>` is not given), and the
-modules either side reads are fetched when they are not here. It lists the files added, removed and
+`<module>@<version>` (from its git repository when the tree takes it from git), a directory, or `.`
+(the working tree, when `<new>` is not given), and the modules either side reads are fetched when
+they are not here. It lists the files added, removed and
 changed and the changes of `require`. For every rule, dates file, calendar and gate in both versions,
 it shows each input that gets a different answer, over the whole input space rather than a sample,
 and says that the others get the same. For each changed file it shows the changes of what the file

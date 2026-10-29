@@ -199,8 +199,9 @@ pub fn path_why(p: &str) -> Option<PathWhy> {
 }
 
 /// The checks of a set of files that do not need their bytes: each path, a path twice, a file under
-/// a file, how many. `files` is in the order of the bytes of their paths.
-fn check_set(paths: &[&str]) -> Result<(), Error> {
+/// a file, how many. `files` is in the order of the bytes of their paths. A module from a git
+/// repository is checked so before the bytes of its files are fetched.
+pub fn check_set(paths: &[&str]) -> Result<(), Error> {
     if paths.len() > MAX_FILES {
         return Err(Error::TooManyFiles(paths.len()));
     }

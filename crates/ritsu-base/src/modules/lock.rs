@@ -1,12 +1,14 @@
 //! `ritsu.lock` (DESIGN 17.4): the module of every node of the tree but the module at hand, with
-//! where it comes from, and for one from a registry the version chosen and its two digests. ritsu
-//! writes it whole, in one way; a person does not.
+//! where it comes from, and for one from a registry or a git repository the version chosen and its
+//! two digests (and for git, the commit of the tag and the URL). ritsu writes it whole, in one way;
+//! a person does not.
 //!
 //! ```text
 //! # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 //! lock 1
 //! ritsu 0.37.0
 //! oci example.com/acme/pricing 1.1.0 sha256:<64 hex> files sha256:<64 hex>
+//! git example.com/acme/rates 1.2.0 sha256:<64 hex> files sha256:<64 hex> commit <40 hex> "https://example.com/acme/rates"
 //! path example.com/acme/tax "../tax"
 //! ```
 //!
@@ -14,6 +16,7 @@
 //! a newer ritsu, and reading it stops ([`Error::Newer`]).
 
 use super::digest;
+use super::git;
 use super::lex::{self, Kind};
 use super::names::ModuleName;
 use super::semver::Version;
@@ -36,6 +39,10 @@ pub const HEAD: &str = "# Written by ritsu mod. Run `ritsu mod lock` to write it
 pub enum Pinned {
     /// The version chosen, the digest of its OCI manifest, and the digest of its files (the tar).
     Oci { version: Version, digest: String, files: String },
+    /// The version chosen from a git repository, the digests of the OCI manifest and of the files
+    /// ritsu made from the commit its tag led to, that commit, and the repository's URL (DESIGN
+    /// 17.12.1).
+    Git { version: Version, digest: String, files: String, commit: String, url: String },
     /// A directory, from the root of the module at hand.
     Path { path: String },
 }
@@ -49,20 +56,37 @@ pub struct Locked {
     pub line: usize,
 }
 
+impl Pinned {
+    /// The version, the digest of the OCI manifest and the digest of the files, for a module from
+    /// a registry or a git repository.
+    pub fn digests(&self) -> Option<(&Version, &str, &str)> {
+        match self {
+            Pinned::Oci { version, digest, files } | Pinned::Git { version, digest, files, .. } => Some((version, digest, files)),
+            Pinned::Path { .. } => None,
+        }
+    }
+
+    /// The commit and the URL, for a module from a git repository.
+    pub fn git(&self) -> Option<(&str, &str)> {
+        match self {
+            Pinned::Git { commit, url, .. } => Some((commit, url)),
+            _ => None,
+        }
+    }
+}
+
 impl Locked {
     /// The line as the lock writes it.
     pub fn text(&self) -> String {
         match &self.pinned {
             Pinned::Oci { version, digest, files } => format!("oci {} {version} {digest} files {files}", self.name),
+            Pinned::Git { version, digest, files, commit, url } => format!("git {} {version} {digest} files {files} commit {commit} {}", self.name, lex::quote(url)),
             Pinned::Path { path } => format!("path {} {}", self.name, lex::quote(path)),
         }
     }
 
     pub fn version(&self) -> Option<&Version> {
-        match &self.pinned {
-            Pinned::Oci { version, .. } => Some(version),
-            Pinned::Path { .. } => None,
-        }
+        self.pinned.digests().map(|(v, ..)| v)
     }
 }
 
@@ -195,10 +219,25 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Lock, Error> {
             continue;
         }
         let shape_oci = [Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Word];
+        let shape_git = [Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Word, Kind::Str];
         let line = match words[0] {
-            "oci" if kinds_ok(&shape_oci) && words[4] == "files" => {
+            "oci" | "git" if (words[0] == "oci" && kinds_ok(&shape_oci) || words[0] == "git" && kinds_ok(&shape_git) && words[6] == "commit") && words[4] == "files" => {
+                // a git URL ritsu does not take may carry a credential: neither it nor the line is
+                // shown
+                if words[0] == "git" && git::parse(&ts[8].text).is_err() {
+                    put(n, ts[8].col, "", tr!(
+                        "`{}` の git の URL は、ritsu が受け付ける URL ではありません。`ritsu mod lock` で書き直してください",
+                        "the git URL of `{}` is not one ritsu takes; run `ritsu mod lock` to write it again",
+                        words[1]; words[1]
+                    ));
+                    continue;
+                }
                 let name = match ModuleName::parse(words[1]) {
                     Ok(m) if m.is_published() => m,
+                    _ if words[0] == "git" => {
+                        put(n, ts[1].col, src, tr!("`{}` は git のリポジトリのモジュールの名前として読めません", "`{}` is not the name of a module from a git repository", words[1]));
+                        continue;
+                    }
                     _ => {
                         put(n, ts[1].col, src, tr!("`{}` はレジストリのモジュールの名前として読めません", "`{}` is not the name of a module in a registry", words[1]));
                         continue;
@@ -216,7 +255,24 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Lock, Error> {
                     put(n, ts[k].col, src, tr!("`{w}` はダイジェスト（`sha256:` と 64 桁の 16 進の小文字）ではありません", "`{w}` is not a digest (`sha256:` and 64 lowercase hex digits)"));
                     continue;
                 }
-                Locked { name, pinned: Pinned::Oci { version, digest: words[3].to_string(), files: words[5].to_string() }, line: n }
+                let (digest, files) = (words[3].to_string(), words[5].to_string());
+                if words[0] == "oci" {
+                    Locked { name, pinned: Pinned::Oci { version, digest, files }, line: n }
+                } else {
+                    let (commit, url) = (words[7], &ts[8].text);
+                    if !git::is_commit(commit) {
+                        put(n, ts[7].col, src, tr!("`{commit}` はコミットの名前（40 桁か 64 桁の 16 進の小文字）ではありません", "`{commit}` is not the name of a commit (40 or 64 lowercase hex digits)"));
+                        continue;
+                    }
+                    if git::dir_of(&name, url).is_none() {
+                        put(n, ts[8].col, src, tr!(
+                            "git の URL `{url}` からは、モジュールの名前 `{name}` になりません。`ritsu mod lock` で書き直してください",
+                            "the git URL `{url}` does not give the module's name `{name}`; run `ritsu mod lock` to write it again"
+                        ));
+                        continue;
+                    }
+                    Locked { name, pinned: Pinned::Git { version, digest, files, commit: commit.to_string(), url: url.clone() }, line: n }
+                }
             }
             "path" if kinds_ok(&[Kind::Word, Kind::Word, Kind::Str]) => {
                 let name = match ModuleName::parse(words[1]) {
@@ -235,8 +291,8 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Lock, Error> {
             }
             _ => {
                 put(n, head.col, src, tr!(
-                    "この行は読めません。`ritsu.lock` の行は `oci <名前> <版> <ダイジェスト> files <ダイジェスト>` か `path <名前> \"<パス>\"` です",
-                    "this line cannot be read: a line of `ritsu.lock` is `oci <name> <version> <digest> files <digest>` or `path <name> \"<path>\"`"
+                    "この行は読めません。`ritsu.lock` の行は `oci <名前> <版> <ダイジェスト> files <ダイジェスト>`、`git <名前> <版> <ダイジェスト> files <ダイジェスト> commit <コミット> \"<URL>\"`、`path <名前> \"<パス>\"` のどれかです",
+                    "this line cannot be read: a line of `ritsu.lock` is `oci <name> <version> <digest> files <digest>`, `git <name> <version> <digest> files <digest> commit <commit> \"<URL>\"` or `path <name> \"<path>\"`"
                 ));
                 continue;
             }

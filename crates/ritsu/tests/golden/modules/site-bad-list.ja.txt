@@ -1,5 +1,5 @@
 エラー: bad.list:2:1: `title` は一度しか書けません。1 行目にもう書いてあります
-エラー: bad.list:3:1: `frob` で始まる行は書けません。一覧の行は title、description、playground、module、signature、local のどれかで始めてください
+エラー: bad.list:3:1: `frob` で始まる行は書けません。一覧の行は title、description、playground、module、git、signature、local のどれかで始めてください
 エラー: bad.list:4:8: `tax` は配らないモジュールの名前です。`module` には `<レジストリ>/<リポジトリ>` を書いてください。まだ送り出していない作業ツリーなら、`local` の行で書いてください
 エラー: bad.list:6:8: モジュール `example.com/acme/shop` はもう一覧にあります
 エラー: bad.list:7:7: `local "nowhere"` の指すディレクトリに `ritsu.mod` がありません

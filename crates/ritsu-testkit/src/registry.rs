@@ -239,20 +239,20 @@ impl Drop for Registry {
     }
 }
 
-/// A request read off a connection.
-struct Request {
-    method: String,
-    target: String,
-    headers: Vec<(String, String)>,
-    body: Vec<u8>,
+/// A request read off a connection (the git server reads its requests so too).
+pub(crate) struct Request {
+    pub(crate) method: String,
+    pub(crate) target: String,
+    pub(crate) headers: Vec<(String, String)>,
+    pub(crate) body: Vec<u8>,
 }
 
 impl Request {
-    fn header(&self, name: &str) -> Option<&str> {
+    pub(crate) fn header(&self, name: &str) -> Option<&str> {
         self.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.as_str())
     }
 
-    fn path(&self) -> &str {
+    pub(crate) fn path(&self) -> &str {
         self.target.split('?').next().unwrap_or("")
     }
 
@@ -295,7 +295,7 @@ impl Response {
     }
 }
 
-fn reason(status: u16) -> &'static str {
+pub(crate) fn reason(status: u16) -> &'static str {
     match status {
         100 => "Continue",
         200 => "OK",
@@ -356,7 +356,7 @@ fn serve_connection(conn: TcpStream, state: &Arc<Mutex<State>>, stop: &AtomicBoo
 
 /// One request: its line, its headers and its body (by `Content-Length` or in chunks). A request
 /// that says `Expect: 100-continue` is told to go on first.
-fn read_request(r: &mut BufReader<TcpStream>, w: &mut TcpStream) -> Option<Request> {
+pub(crate) fn read_request(r: &mut BufReader<TcpStream>, w: &mut TcpStream) -> Option<Request> {
     let mut line = String::new();
     loop {
         line.clear();

@@ -1,29 +1,29 @@
 //! `ritsu mod vendor [--check]` and `ritsu mod clean [--keep <lock>…] [--dry-run]` (DESIGN 17.15):
 //! the module's copy of the store, made from the store, and the store's entries removed.
 //!
-//! `vendor` puts each module of the lock that comes from a registry in `.ritsu/modules/` in the
-//! store's shape (no `refs`, no `tmp`), from the store, checked against the lock's digest of its
+//! `vendor` puts each module of the lock that comes from a registry or a git repository in
+//! `.ritsu/modules/` in the store's shape (no `refs`, no `git`, no `tmp`), from the store, checked against the lock's digest of its
 //! files first; an entry there that the lock does not pin is removed, so that the copy holds the
 //! lock and nothing else. Nothing is written until every module is found. `--check` writes nothing,
 //! and says each module that is missing or differs, and each entry the lock does not pin (exit 1).
 //!
-//! `clean` removes the entries of the store, and the lines of its index of versions that lead to
-//! them; with `--keep`, those no lock given pins. Its `tmp/` is left alone: a fetch run at the same
+//! `clean` removes the entries of the store, and the lines of its index of versions and of its git
+//! index that lead to them; with `--keep`, those no lock given pins. Its `tmp/` is left alone: a fetch run at the same
 //! time may be making an entry there.
 
 use super::Ctx;
 use ritsu_base::cli::Args;
 use ritsu_base::modules::digest;
 use ritsu_base::modules::graph::{self, Problem};
-use ritsu_base::modules::lock::{self as lockfile, Lock, Pinned};
+use ritsu_base::modules::lock::{self as lockfile, Lock};
 use ritsu_base::modules::store::{self, Parts, Store};
 use ritsu_base::text::{Text, plural};
 use ritsu_base::tr;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-/// A module of the lock from a registry: its name and version as the text says them, and its two
-/// digests.
+/// A module of the lock from a registry or a git repository: its name and version as the text says
+/// them, and its two digests.
 struct Pin {
     what: String,
     digest: String,
@@ -33,10 +33,7 @@ struct Pin {
 fn pins(lock: &Lock) -> Vec<Pin> {
     lock.modules
         .iter()
-        .filter_map(|l| match &l.pinned {
-            Pinned::Oci { version, digest, files } => Some(Pin { what: format!("{} {version}", l.name), digest: digest.clone(), files: files.clone() }),
-            Pinned::Path { .. } => None,
-        })
+        .filter_map(|l| l.pinned.digests().map(|(version, digest, files)| Pin { what: format!("{} {version}", l.name), digest: digest.to_string(), files: files.to_string() }))
         .collect()
 }
 
@@ -78,8 +75,8 @@ pub fn vendor(ctx: &Ctx, a: &Args) -> u8 {
     let pinned = match &lock {
         Some(l) => pins(l),
         None => {
-            // no lock: none is needed when no dependency comes from a registry
-            match graph::choose(&root, |_, _| Err(Problem::Stop(Vec::new()))) {
+            // no lock: none is needed when no dependency comes from a registry or a git repository
+            match graph::choose(&root, |_, _, _| Err(Problem::Stop(Vec::new()))) {
                 Ok(_) => Vec::new(),
                 Err(Problem::Stop(_)) => return ctx.refuse(tr!("ritsu.lock がありません。`ritsu mod lock` を走らせてください", "there is no ritsu.lock; run `ritsu mod lock`")),
                 Err(p) => return super::stopped(ctx, &root, &p),
@@ -93,8 +90,8 @@ pub fn vendor(ctx: &Ctx, a: &Args) -> u8 {
         println!(
             "{}",
             ctx.say(&tr!(
-                "{head}: レジストリから取る依存が無いので、.ritsu/modules に置くものはありません",
-                "{head}: no dependency comes from a registry, so .ritsu/modules holds nothing"
+                "{head}: レジストリからも git のリポジトリからも取る依存が無いので、.ritsu/modules に置くものはありません",
+                "{head}: no dependency comes from a registry or a git repository, so .ritsu/modules holds nothing"
             ))
         );
         return 0;
@@ -259,16 +256,20 @@ pub fn clean(ctx: &Ctx, a: &Args) -> u8 {
         println!("{}", ctx.say(&line));
     }
     if !dry {
-        // the lines of the index of versions whose entry is gone
-        let mut refs = Vec::new();
-        files_under(&s.root.join("refs"), &mut refs);
-        for f in refs {
-            let d = std::fs::read_to_string(&f).map(|t| t.trim_end().to_string()).unwrap_or_default();
-            if !s.has(&d) {
-                let _ = std::fs::remove_file(&f);
+        // the lines of the index of versions, and of the git index (`<commit> <digest>`), whose entry
+        // is gone
+        for index in ["refs", "git"] {
+            let mut lines = Vec::new();
+            files_under(&s.root.join(index), &mut lines);
+            for f in lines {
+                let text = std::fs::read_to_string(&f).unwrap_or_default();
+                let d = text.trim_end().rsplit(' ').next().unwrap_or_default();
+                if !s.has(d) {
+                    let _ = std::fs::remove_file(&f);
+                }
             }
+            prune(&s.root.join(index));
         }
-        prune(&s.root.join("refs"));
     }
     let (n, k) = (gone.len(), kept.len());
     let entries_en = plural(n, "entry", "entries");

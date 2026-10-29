@@ -1,15 +1,17 @@
 //! The store (DESIGN 17.15): where the modules fetched are kept across runs, and the copy of it in a
-//! module's `.ritsu/modules/` (`ritsu mod vendor`), which has the same shape without `refs` and
-//! `tmp`.
+//! module's `.ritsu/modules/` (`ritsu mod vendor`), which has the same shape without `refs`, `git`
+//! and `tmp`.
 //!
 //! ```text
 //! <store>/
 //!   sha256/<hex of the OCI manifest's digest>/
-//!     manifest.json   the OCI manifest's bytes
+//!     manifest.json   the OCI manifest's bytes (for a module from git, the one ritsu made)
 //!     ritsu.mod       the first layer
 //!     files/          the module's files (read only; none for a version fetched for its ritsu.mod alone)
-//!     record.json     {"module", "version", "files", "fetched", "verified": [{"policy", "on"}]}
+//!     record.json     {"module", "version", "files", "fetched", "verified": [{"policy", "on"}],
+//!                      "git": {"url", "commit"} for a module from git}
 //!   refs/<registry>/<repository>/<version>   one line: sha256:<hex>
+//!   git/<module name>/<version>              one line: <commit> sha256:<hex>
 //!   tmp/
 //! ```
 //!
@@ -115,17 +117,24 @@ pub struct Record {
     pub fetched: String,
     /// The signature lines it was checked against, each with the day it was.
     pub verified: Vec<(String, String)>,
+    /// For a module from a git repository: its URL, and the commit the files were made from.
+    pub git: Option<(String, String)>,
 }
 
 impl Record {
     pub fn to_json(&self) -> Json {
-        Json::obj([
+        let mut fields = vec![
             ("module", Json::str(&self.module)),
             ("version", Json::str(&self.version)),
             ("files", Json::str(&self.files)),
             ("fetched", Json::str(&self.fetched)),
             ("verified", Json::arr(self.verified.iter().map(|(p, on)| Json::obj([("policy", Json::str(p)), ("on", Json::str(on))])))),
-        ])
+        ];
+        // a record of a module from a registry is written as it was before git came
+        if let Some((url, commit)) = &self.git {
+            fields.push(("git", Json::obj([("url", Json::str(url)), ("commit", Json::str(commit))])));
+        }
+        Json::obj(fields)
     }
 
     pub fn from_json(j: &Json) -> Option<Record> {
@@ -136,7 +145,11 @@ impl Record {
             .iter()
             .map(|v| Some((v.get("policy")?.as_str()?.to_string(), v.get("on")?.as_str()?.to_string())))
             .collect::<Option<Vec<_>>>()?;
-        Some(Record { module: s("module")?, version: s("version")?, files: s("files")?, fetched: s("fetched")?, verified })
+        let git = match j.get("git") {
+            Some(g) => Some((g.get("url")?.as_str()?.to_string(), g.get("commit")?.as_str()?.to_string())),
+            None => None,
+        };
+        Some(Record { module: s("module")?, version: s("version")?, files: s("files")?, fetched: s("fetched")?, verified, git })
     }
 }
 
@@ -201,6 +214,39 @@ impl Store {
         let d = s.strip_suffix('\n').unwrap_or(&s);
         digest::is_digest(d).then(|| d.to_string())
     }
+
+    /// The file of the index of the versions of a module from a git repository (DESIGN 17.15),
+    /// apart from `refs`: a registry and a git repository may both give a module of one name, with
+    /// other contents.
+    pub fn git_file(&self, name: &ModuleName, version: &Version) -> Option<PathBuf> {
+        match name {
+            ModuleName::Published { registry, repository } => Some(self.root.join("git").join(registry).join(repository).join(version.to_string())),
+            ModuleName::Local(_) => None,
+        }
+    }
+
+    /// The commit and the digest the git index has for a module's version: what its tag led to when
+    /// it was fetched, and the digest of the OCI manifest made from it.
+    pub fn find_git(&self, name: &ModuleName, version: &Version) -> Option<(String, String)> {
+        let bytes = fs::raw::read(&self.git_file(name, version)?).ok()?;
+        let s = String::from_utf8(bytes).ok()?;
+        let (commit, d) = s.strip_suffix('\n').unwrap_or(&s).split_once(' ')?;
+        (super::git::is_commit(commit) && digest::is_digest(d)).then(|| (commit.to_string(), d.to_string()))
+    }
+}
+
+/// The line of the git index for a module's version: the commit its tag led to and the digest of
+/// the entry made from it (DESIGN 17.15).
+pub fn put_git_index(store: &Store, name: &ModuleName, version: &Version, commit: &str, digest: &str) -> Result<(), Text> {
+    let Some(f) = store.git_file(name, version) else { return Ok(()) };
+    let disk = |p: &Path, e: std::io::Error| {
+        let d = p.display();
+        tr!("{d} に書けません（{e}）", "cannot write {d} ({e})")
+    };
+    if let Some(parent) = f.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| disk(parent, e))?;
+    }
+    std::fs::write(&f, format!("{commit} {digest}\n")).map_err(|e| disk(&f, e))
 }
 
 /// An entry to place: the OCI manifest's bytes, `ritsu.mod`, the files (none for a version fetched
@@ -318,7 +364,7 @@ pub struct Placed {
 }
 
 impl Placed {
-    /// The line of a lock that pins it.
+    /// The line of a lock that pins it, from a registry.
     pub fn locked(&self) -> super::lock::Locked {
         super::lock::Locked {
             name: self.name.clone(),
@@ -349,6 +395,7 @@ pub fn put_directory(store: &Store, dir: &Path, today: &str, verified: &[String]
         files: built.files_digest.clone(),
         fetched: today.to_string(),
         verified: verified.iter().map(|p| (p.clone(), today.to_string())).collect(),
+        git: None,
     };
     let digest = place(store, &Parts { manifest: &built.manifest, module: &bytes, files: Some(&files), record }, Some((&m.module.value, &version)))?;
     Ok(Placed { name: m.module.value.clone(), version, digest, files_digest: built.files_digest })

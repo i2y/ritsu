@@ -487,7 +487,7 @@ fn choose_reads_each_version_reached_once_and_writes_the_lock() {
     .map(|((m, x), b)| ((m.to_string(), x.to_string()), b))
     .collect();
     let mut asked: Vec<String> = Vec::new();
-    let chosen = graph::choose(&t.path().join("shop"), |m, x| {
+    let chosen = graph::choose(&t.path().join("shop"), |m, _, x| {
         asked.push(format!("{m} {x}"));
         Ok(mods[&(m.to_string(), x.to_string())].as_bytes().to_vec())
     })
@@ -497,10 +497,10 @@ fn choose_reads_each_version_reached_once_and_writes_the_lock() {
     assert_eq!(chosen.paths, [(ModuleName::parse("local").unwrap(), "../local".to_string())]);
     assert_eq!(chosen.versions.iter().map(|(m, x)| format!("{m} {x}")).collect::<Vec<_>>(), ["example.com/acme/pricing 1.0.0", "example.com/acme/tax 1.1.0"]);
     let d = "sha256:0000000000000000000000000000000000000000000000000000000000000000".to_string();
-    let lock = graph::lock_of(&chosen, |_, _| Some((d.clone(), d.clone()))).unwrap();
+    let lock = graph::lock_of(&chosen, |_, _, _| Some((d.clone(), d.clone(), None))).unwrap();
     assert_eq!(lock.modules.len(), 3);
     // a version fetched that names another module, or has a path dependency
-    let e = graph::choose(&t.path().join("shop"), |m, x| Ok(format!("module example.com/acme/other\nversion {x}\nrequire p path \"../p\"\n# {m}\n").into_bytes())).unwrap_err();
+    let e = graph::choose(&t.path().join("shop"), |m, _, x| Ok(format!("module example.com/acme/other\nversion {x}\nrequire p path \"../p\"\n# {m}\n").into_bytes())).unwrap_err();
     assert_eq!(problem(Err(e)).len(), 2);
 }
 
@@ -526,7 +526,7 @@ trait Digest {
 impl Digest for Locked {
     fn pinned_digest(&self) -> Option<String> {
         match &self.pinned {
-            Pinned::Oci { digest, .. } => Some(digest.clone()),
+            Pinned::Oci { digest, .. } | Pinned::Git { digest, .. } => Some(digest.clone()),
             Pinned::Path { .. } => None,
         }
     }

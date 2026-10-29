@@ -1,5 +1,5 @@
 error: bad.list:2:1: `title` is written once, and it is already on line 1
-error: bad.list:3:1: no line starts with `frob`; a line of a list starts with title, description, playground, module, signature or local
+error: bad.list:3:1: no line starts with `frob`; a line of a list starts with title, description, playground, module, git, signature or local
 error: bad.list:4:8: `tax` is the name of a module that is not published; `module` takes `<registry>/<repository>`, and a working tree not pushed yet is written with `local`
 error: bad.list:6:8: the module `example.com/acme/shop` is in the list already
 error: bad.list:7:7: the directory `local "nowhere"` names has no `ritsu.mod`

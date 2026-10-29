@@ -14,16 +14,18 @@
 //! for the files of the repository at hand, and a dependency's version is written as a version.
 //!
 //! Each side is read through files of its own ([`open`]): a git revision ([`fs::GitRevision`]),
-//! whose `ritsu.mod` and `ritsu.lock` are the revision's and whose dependencies from a registry are
-//! read from the store by that lock; or, for `@<name>@<version>`, the module at hand's `ritsu.mod`
-//! and lock laid over as they would be if it required that version ([`fs::Overlay`]), so that the
-//! `@` paths in the dependency's file are read at the versions Minimal Version Selection chooses then.
+//! whose `ritsu.mod` and `ritsu.lock` are the revision's and whose dependencies from a registry or a
+//! git repository are read from the store by that lock; or, for `@<name>@<version>`, the module at
+//! hand's `ritsu.mod` and lock laid over as they would be if it required that version
+//! ([`fs::Overlay`]), so that the `@` paths in the dependency's file are read at the versions
+//! Minimal Version Selection chooses then. A dependency from a git repository is required at that
+//! version from the same repository (its tag), one by a path from the registry of its name.
 //!
 //! Nothing here asks a registry. A version that no store has stops a side with what to fetch;
 //! [`try_open`] tells it apart ([`Unopened::Missing`]), so that `ritsu mod diff` fetches it and
 //! opens the side again.
 
-use super::graph::{self, Problem};
+use super::graph::{self, Origin, Problem};
 use super::lock::Lock;
 use super::manifest::{self, Source};
 use super::names::ModuleName;
@@ -130,18 +132,20 @@ pub enum Unopened {
     Said(Text),
 }
 
-/// A version of a module that is in neither the store nor the module's copy of it, and what to say
-/// of it (`ritsu mod diff` fetches it; the diffs of the languages, which do not fetch, say it).
+/// A version of a module that is in neither the store nor the module's copy of it, where it comes
+/// from, and what to say of it (`ritsu mod diff` fetches it; the diffs of the languages, which do not
+/// fetch, say it).
 #[derive(Debug)]
 pub struct Missing {
     pub module: ModuleName,
+    pub origin: Origin,
     pub version: Version,
     pub said: Text,
 }
 
 impl Unopened {
-    fn missing(module: ModuleName, version: Version, said: Text) -> Unopened {
-        Unopened::Missing(Box::new(Missing { module, version, said }))
+    fn missing(module: ModuleName, origin: Origin, version: Version, said: Text) -> Unopened {
+        Unopened::Missing(Box::new(Missing { module, origin, version, said }))
     }
 }
 
@@ -215,6 +219,26 @@ pub fn find_version(root: Option<&Path>, module: &ModuleName, version: &Version)
     None
 }
 
+/// The entry of a module's version from its source: from a registry as [`find_version`] finds it,
+/// from a git repository by the store's index of the versions from git (the commit its tag led to
+/// when it was fetched, and the digest made from it), with the commit. None when no store has it
+/// with its files.
+pub fn find_version_from(root: Option<&Path>, module: &ModuleName, origin: &Origin, version: &Version) -> Option<(Store, String, Option<String>)> {
+    if *origin == Origin::Oci {
+        return find_version(root, module, version).map(|(s, d)| (s, d, None));
+    }
+    let located = Store::located();
+    for s in stores(root) {
+        let found = s.find_git(module, version).or_else(|| located.as_ref().and_then(|l| l.find_git(module, version)));
+        if let Some((commit, d)) = found
+            && s.has_files(&d)
+        {
+            return Some((s, d, Some(commit)));
+        }
+    }
+    None
+}
+
 /// What to run for a version the store does not have: `ritsu mod fetch <name>@<version>`.
 pub fn fetch_version(name: &str, version: &Version) -> Text {
     tr!(
@@ -223,9 +247,10 @@ pub fn fetch_version(name: &str, version: &Version) -> Text {
     )
 }
 
-/// The module the dependency `name` of the module at `root` is: its name in a registry, or the name
-/// in the `ritsu.mod` its path leads to.
-fn module_of_dependency(root: &Path, m: &manifest::Manifest, name: &str) -> Result<ModuleName, Text> {
+/// The module the dependency `name` of the module at `root` is, and where its versions come from: its
+/// name in a registry or the name its git URL gives, or the name in the `ritsu.mod` its path leads to,
+/// whose versions come from the registry of that name.
+fn module_of_dependency(root: &Path, m: &manifest::Manifest, name: &str) -> Result<(ModuleName, Origin), Text> {
     let Some(r) = m.require(name) else {
         let module = m.module.value.to_string();
         return Err(tr!(
@@ -234,53 +259,56 @@ fn module_of_dependency(root: &Path, m: &manifest::Manifest, name: &str) -> Resu
         ));
     };
     match &r.source {
-        Source::Oci { repository, .. } => ModuleName::parse(repository).map_err(|e| e.text()),
+        Source::Oci { repository, .. } => ModuleName::parse(repository).map(|n| (n, Origin::Oci)).map_err(|e| e.text()),
+        Source::Git { url, dir, .. } => super::git::name_of(url, dir.as_deref()).map(|n| (n, Origin::Git { url: url.clone(), dir: dir.clone() })).map_err(|p| p.text),
         Source::Path { path } => {
             let file = graph::fold(&root.join(path)).join(manifest::FILE);
             let bytes = fs::raw::read(&file).map_err(|_| {
                 tr!("依存 `{name}` の `ritsu.mod` を読めません", "cannot read the `ritsu.mod` of the dependency `{name}`")
             })?;
-            manifest::parse(&bytes, manifest::FILE).map(|m| m.module.value).map_err(|ds| ds.first().map(|d| d.message.clone()).unwrap_or_default())
+            manifest::parse(&bytes, manifest::FILE).map(|m| (m.module.value, Origin::Oci)).map_err(|ds| ds.first().map(|d| d.message.clone()).unwrap_or_default())
         }
     }
 }
 
 /// The module at `root` as it would be if it required its dependency `name` at `version`: its
-/// `ritsu.mod` with that `require` from the registry at that version, and the lock Minimal Version
-/// Selection chooses then, that version held (DESIGN 17.9.1), laid over the files of this thread.
-/// Err, [`Unopened::Missing`] for the first version the choice reaches that no store has.
+/// `ritsu.mod` with that `require` at that version (from the same git repository for one from git,
+/// else from the registry), and the lock Minimal Version Selection chooses then, that version held
+/// (DESIGN 17.9.1), laid over the files of this thread. Err, [`Unopened::Missing`] for the first
+/// version the choice reaches that no store has.
 pub fn at_version(root: &Path, name: &str, version: &Version) -> Result<fs::Overlay, Unopened> {
     let file = root.join(manifest::FILE);
     let bytes = fs::raw::read(&file).map_err(|_| tr!("`ritsu.mod` を読めません", "cannot read `ritsu.mod`"))?;
     let m = manifest::parse(&bytes, manifest::FILE).map_err(|ds| ds.first().map(|d| d.message.clone()).unwrap_or_default())?;
-    let module = module_of_dependency(root, &m, name)?;
-    if find_version(Some(root), &module, version).is_none() {
-        return Err(Unopened::missing(module, version.clone(), fetch_version(name, version)));
+    let (module, origin) = module_of_dependency(root, &m, name)?;
+    if find_version_from(Some(root), &module, &origin, version).is_none() {
+        return Err(Unopened::missing(module, origin, version.clone(), fetch_version(name, version)));
     }
     let without = m.removed(name).map_err(|e| e.text())?;
     let without = manifest::parse(without.as_bytes(), manifest::FILE).map_err(|ds| ds.first().map(|d| d.message.clone()).unwrap_or_default())?;
-    let text = without.added(name, &Source::Oci { repository: module.to_string(), min: version.clone() }).map_err(|e| e.text())?;
+    let text = without.added(name, &origin.source(&module, version)).map_err(|e| e.text())?;
     let mut only_mod = fs::Overlay::new(fs::current());
     only_mod.put(&file, text.clone());
-    let mut missing: Option<(ModuleName, Version)> = None;
+    let mut missing: Option<(ModuleName, Origin, Version)> = None;
     let chosen = fs::with(Rc::new(only_mod), || {
-        graph::choose(root, |n, v| {
-            let Some((s, d)) = find_version(Some(root), n, v) else {
-                missing = Some((n.clone(), v.clone()));
+        graph::choose(root, |n, o, v| {
+            let Some((s, d, _)) = find_version_from(Some(root), n, o, v) else {
+                missing = Some((n.clone(), o.clone(), v.clone()));
                 return Err(Problem::Stop(vec![fetch_version(&n.to_string(), v)]));
             };
             s.module_bytes(&d).ok_or_else(|| Problem::Stop(vec![fetch_version(&n.to_string(), v)]))
         })
     });
     let mut chosen = chosen.map_err(|p| match missing.take() {
-        Some((n, v)) => Unopened::missing(n, v, p.text()),
+        Some((n, o, v)) => Unopened::missing(n, o, v, p.text()),
         None => Unopened::Said(p.text()),
     })?;
-    chosen.versions.insert(module, version.clone());
-    let lock: Lock = graph::lock_of(&chosen, |n, v| {
-        let (s, d) = find_version(Some(root), n, v)?;
+    chosen.versions.insert(module.clone(), version.clone());
+    chosen.origins.insert(module, origin);
+    let lock: Lock = graph::lock_of(&chosen, |n, o, v| {
+        let (s, d, commit) = find_version_from(Some(root), n, o, v)?;
         let files = s.record(&d)?.files;
-        Some((d, files))
+        Some((d, files, commit))
     })
     .map_err(|t| t.then(&tr!("。置き場の記録を確かめてください", "; check the records of the store")))?;
     let mut overlay = fs::Overlay::new(fs::current());
@@ -304,9 +332,9 @@ pub fn stopped(path: &str) -> Option<Text> {
 /// The directory a module's version is read from as a module at hand (`ritsu mod diff <module>@<version>`):
 /// its entry's files, which carry its own `ritsu.mod` and `ritsu.lock`. Err, saying what to fetch,
 /// when no store has it.
-pub fn version_dir(root: Option<&Path>, module: &ModuleName, version: &Version) -> Result<PathBuf, Text> {
-    match find_version(root, module, version) {
-        Some((s, d)) => Ok(s.files(&d)),
+pub fn version_dir(root: Option<&Path>, module: &ModuleName, origin: &Origin, version: &Version) -> Result<PathBuf, Text> {
+    match find_version_from(root, module, origin, version) {
+        Some((s, d, _)) => Ok(s.files(&d)),
         None => Err(fetch_version(&module.to_string(), version)),
     }
 }

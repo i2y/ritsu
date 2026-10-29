@@ -1,0 +1,4 @@
+モジュール example.com/acme/shop 0.1.0
+@pricing       127.0.0.1/acme/pricing 1.1.0  git <commit12>、置き場
+@pricing/@tax  127.0.0.1/acme/tax 1.0.0      git <commit12>、置き場
+ritsu mod list: 依存 2 個（パス 0 個、レジストリ 0 個、git 2 個）。ritsu.lock は ritsu <version> が書きました

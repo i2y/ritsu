@@ -1,0 +1,57 @@
+{
+  "ritsu": "<version>",
+  "root": ".",
+  "module": {
+    "name": "example.com/acme/shop",
+    "version": "0.1.0"
+  },
+  "lock": {
+    "lock": 1,
+    "ritsu": "<version>"
+  },
+  "modules": [
+    {
+      "name": "127.0.0.1/acme/pricing",
+      "version": "1.1.0",
+      "source": "git",
+      "path": null,
+      "url": "http://127.0.0.1:<port>/acme/pricing",
+      "commit": "<commit>",
+      "digest": "sha256:<digest>",
+      "files_digest": "sha256:<digest>",
+      "prefix": "@pricing",
+      "required_by": [
+        {
+          "module": "example.com/acme/shop",
+          "name": "pricing",
+          "version": "0.1.0"
+        }
+      ],
+      "present": true,
+      "where": "store",
+      "verified": []
+    },
+    {
+      "name": "127.0.0.1/acme/tax",
+      "version": "1.0.0",
+      "source": "git",
+      "path": null,
+      "url": "http://127.0.0.1:<port>/acme/tax",
+      "commit": "<commit>",
+      "digest": "sha256:<digest>",
+      "files_digest": "sha256:<digest>",
+      "prefix": "@pricing/@tax",
+      "required_by": [
+        {
+          "module": "127.0.0.1/acme/pricing",
+          "name": "tax",
+          "version": "1.1.0"
+        }
+      ],
+      "present": true,
+      "where": "store",
+      "verified": []
+    }
+  ],
+  "diagnostics": []
+}

@@ -1,0 +1,4 @@
+module example.com/acme/shop 0.1.0
+@pricing       127.0.0.1/acme/pricing 1.1.0  git <commit12>, in the store
+@pricing/@tax  127.0.0.1/acme/tax 1.0.0      git <commit12>, in the store
+ritsu mod list: 2 dependencies (0 by a path, 0 from a registry, 2 from git); ritsu.lock written by ritsu <version>

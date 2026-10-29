@@ -120,7 +120,7 @@ fn every_command_refuses_a_flag_it_does_not_know() {
         assert_eq!((code, err), (2, format!("エラー: `--frob` というフラグはありません。`ritsu mod {c} --help` を読んでください\n")), "{c}");
     }
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "nope"]), (2, String::new(), "error: there is no command `nope`; run `ritsu mod --help`\n".into()));
-    assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "add", "pricing"]), (2, String::new(), "ritsu mod add <name> <source> [--format text|json]\n".into()));
+    assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "add", "pricing"]), (2, String::new(), "ritsu mod add <name> <source> [--dir <dir>] [--format text|json]\n".into()));
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "lock", "extra"]).0, 2);
     assert_eq!(ritsu_in(t.path(), t.path(), &["mod", "list", "--format", "yaml"]).0, 2);
 }
@@ -191,7 +191,7 @@ fn add_and_remove_change_one_line() {
         serde_json::json!({
             "ritsu": env!("CARGO_PKG_VERSION"),
             "root": ".",
-            "require": {"name": "pricing", "module": "example.com/acme/pricing", "version": "1.1.0", "source": "path", "path": "../pricing"},
+            "require": {"name": "pricing", "module": "example.com/acme/pricing", "version": "1.1.0", "source": "path", "path": "../pricing", "url": null, "dir": null},
             "manifest": "written",
             "lock": "none",
         })
@@ -230,7 +230,7 @@ fn the_list_of_the_example() {
         let keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
         assert_eq!(keys, ["ritsu", "root", "module", "lock", "modules", "diagnostics"]);
         let keys: Vec<&str> = v["modules"][0].as_object().unwrap().keys().map(String::as_str).collect();
-        assert_eq!(keys, ["name", "version", "source", "path", "digest", "files_digest", "prefix", "required_by", "present", "where", "verified"]);
+        assert_eq!(keys, ["name", "version", "source", "path", "url", "commit", "digest", "files_digest", "prefix", "required_by", "present", "where", "verified"]);
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     // from a directory of the module, and from above it with --root
@@ -288,7 +288,7 @@ fn lock_pins_the_modules_from_a_registry() {
     let v = json(&out);
     assert_eq!((code, &v["check"], &v["lock"]), (0, &serde_json::json!(true), &serde_json::json!("same")));
     assert_eq!(v["modules"][0]["name"], "example.com/acme/pricing");
-    assert_eq!(v["modules"][1], serde_json::json!({"name": "example.com/acme/tax", "source": "oci", "version": "1.0.0", "path": null, "digest": v["modules"][1]["digest"], "files_digest": v["modules"][1]["files_digest"]}));
+    assert_eq!(v["modules"][1], serde_json::json!({"name": "example.com/acme/tax", "source": "oci", "version": "1.0.0", "path": null, "url": null, "commit": null, "digest": v["modules"][1]["digest"], "files_digest": v["modules"][1]["files_digest"]}));
     // a lock another ritsu wrote, the same otherwise, is the same lock
     t.write("shop/ritsu.lock", want.replace(&format!("\nritsu {}\n", env!("CARGO_PKG_VERSION")), "\nritsu 0.37.0\n"));
     assert_eq!(ritsu_in(&shop, &at, &["mod", "lock"]).1, "ritsu.lock is up to date: 2 modules\n");
@@ -481,9 +481,9 @@ fn a_tree_of_paths_needs_no_lock() {
     let t = example();
     let shop = t.path().join("shop");
     let (code, out, _) = ritsu_in(&shop, t.path(), &["mod", "lock", "--check"]);
-    assert_eq!((code, out.as_str()), (0, "no lock is needed: no dependency comes from a registry\n"));
+    assert_eq!((code, out.as_str()), (0, "no lock is needed: no dependency comes from a registry or a git repository\n"));
     let (code, out, _) = ritsu_in(&shop, t.path(), &["mod", "lock", "--lang", "ja"]);
-    assert_eq!((code, out.as_str()), (0, "lock は要りません。レジストリから取る依存がありません\n"));
+    assert_eq!((code, out.as_str()), (0, "lock は要りません。レジストリからも git のリポジトリからも取る依存がありません\n"));
     assert!(!shop.join("ritsu.lock").exists());
     t.write("shop/ritsu.lock", "lock 1\nritsu 0.37.0\npath example.com/acme/pricing \"../pricing\"\npath example.com/acme/tax \"../tax\"\n");
     let (code, out, _) = ritsu_in(&shop, t.path(), &["mod", "lock", "--check", "--format", "json"]);
@@ -491,7 +491,7 @@ fn a_tree_of_paths_needs_no_lock() {
     assert_eq!(json(&out), serde_json::json!({"ritsu": env!("CARGO_PKG_VERSION"), "root": ".", "check": true, "lock": "removed", "modules": []}));
     assert!(shop.join("ritsu.lock").exists());
     let (code, out, _) = ritsu_in(&shop, t.path(), &["mod", "lock"]);
-    assert_eq!((code, out.as_str()), (0, "removed ritsu.lock: no dependency comes from a registry, so the tree needs no lock\n"));
+    assert_eq!((code, out.as_str()), (0, "removed ritsu.lock: no dependency comes from a registry or a git repository, so the tree needs no lock\n"));
     assert!(!shop.join("ritsu.lock").exists());
     // a tree that cannot be read: the lock is not chosen (exit 2), and its diagnostics are said
     replace(&t, "shop/ritsu.mod", "require pricing path \"../pricing\"", "require pricing path \"../nowhere\"");

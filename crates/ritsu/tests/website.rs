@@ -27,7 +27,7 @@
 //!   of ritsu's tests and the module of holidays as the tools have them: the lines of the files, a
 //!   block marked with the file it is (`<!-- … -->` above its fence), what the commands print, and
 //!   the commands its prose names; the two pages show the same kinds of blocks and tables, as many
-//!   of each, under the same seven headings;
+//!   of each, under the same eight headings;
 //! - the pages of kaname (website/docs/kaname/ and website/docs-ja/kaname/) show its examples and the
 //!   materials of its tests as the tools have them: the lines of the `.kn` files, what the commands
 //!   print (a `gen` into a scratch directory), and the lines of the hosts of its examples in
@@ -1079,7 +1079,7 @@ fn the_guide_to_modules_shows_the_files_and_what_the_commands_print() {
         (kinds, tables(&p.text).len(), headings)
     };
     let (en, ja) = (shown(&pages[0]), shown(&pages[1]));
-    assert_eq!(en.2, 7, "the guide has seven sections");
+    assert_eq!(en.2, 8, "the guide has eight sections");
     assert_eq!(en, ja, "the two pages show other kinds of blocks, or other numbers of blocks, tables or sections");
 }
 

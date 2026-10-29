@@ -2,16 +2,18 @@
 //! built into its OCI artifact and pushed to the registry its name says.
 //!
 //! In this order, and each step stops the push: `ritsu.mod` read (a published name, a `version`, a
-//! `ritsu >=`, no `require … path`) and the tree with its lock; the files the module carries
-//! gathered and held to the limits; every one of them scanned for keys (W901's table, which leaves
-//! out a line marked `ritsu: test secret`); a copy of them checked as the module (with the same lock
-//! and the same store, its own `.geas` claims not run); the artifact built and its digest said, where
-//! `--dry-run` ends, before any request; the tag looked up (the same files are pushed already, other
-//! files refuse the push: a version does not move); each blob the registry does not have uploaded;
-//! the OCI manifest put at the tag. Then the reference and the commands that sign it with cosign.
+//! `ritsu >=`, no `require … path`, no `require … git`: DESIGN 17.12.1) and the tree with its lock;
+//! the files the module carries gathered and held to the limits; every one of them scanned for keys
+//! (W901's table, which leaves out a line marked `ritsu: test secret`); a copy of them checked as
+//! the module (with the same lock and the same store, its own `.geas` claims not run); the artifact
+//! built and its digest said, where `--dry-run` ends, before any request; the tag looked up (the
+//! same files are pushed already, other files refuse the push: a version does not move); each blob
+//! the registry does not have uploaded; the OCI manifest put at the tag. Then the reference and the
+//! commands that sign it with cosign.
 //!
-//! Exit 0 (pushed, or pushed already), 1 (refused: the check, a key, a limit, a path dependency,
-//! other files at the version's tag), 2 (cannot: the network, the credentials, no lock).
+//! Exit 0 (pushed, or pushed already), 1 (refused: the check, a key, a limit, a path dependency or
+//! one from git, other files at the version's tag), 2 (cannot: the network, the credentials, no
+//! lock).
 
 use super::cosign;
 use super::http::NoAnswer;
@@ -274,8 +276,15 @@ fn run(ctx: &Ctx, a: &Args, known: &mut Known) -> Result<Done, Stop> {
     if let Some(r) = m.requires.iter().find(|r| matches!(r.source, Source::Path { .. })) {
         let (rn, line, words) = (&r.name, r.line, r.source.words());
         return Err(Stop::Refused(tr!(
-            "`ritsu.mod` の {line} 行目は `require {rn} {words}` です。パスの依存を持つモジュールは送り出せません（取る側にそのパスがありません）。依存を先に送り出し、`ritsu mod add {rn} <リポジトリ>` で取り先をレジストリにしてください",
-            "line {line} of `ritsu.mod` is `require {rn} {words}`, and a module with a path dependency cannot be pushed (whoever fetches it has no such path); push the dependency first, and make it come from the registry with `ritsu mod add {rn} <repository>`"
+            "`ritsu.mod` の {line} 行目は `require {rn} {words}` です。パスの依存を持つモジュールは送り出せません（取る側にそのパスがありません）。依存を先に送り出し、この行を `require {rn} oci \"<リポジトリ>\" <版>` に書き換えてから、`ritsu mod lock` を走らせてください",
+            "line {line} of `ritsu.mod` is `require {rn} {words}`, and a module with a path dependency cannot be pushed (whoever fetches it has no such path); push the dependency first, change this line to `require {rn} oci \"<repository>\" <version>`, and run `ritsu mod lock`"
+        )));
+    }
+    if let Some(r) = m.requires.iter().find(|r| matches!(r.source, Source::Git { .. })) {
+        let (rn, line, words) = (&r.name, r.line, r.source.words());
+        return Err(Stop::Refused(tr!(
+            "`ritsu.mod` の {line} 行目は `require {rn} {words}` です。git の依存を持つモジュールはレジストリに送り出せません（取る側がそのリポジトリに届くとは限らず、git の依存には確かめる署名もありません）。依存をレジストリに送り出し、この行を `require {rn} oci \"<リポジトリ>\" <版>` に書き換えてから、`ritsu mod lock` を走らせてください",
+            "line {line} of `ritsu.mod` is `require {rn} {words}`, and a module with a dependency from git cannot be pushed to a registry (whoever fetches it may not reach that repository, and a dependency from git has no signature to check); push the dependency to a registry, change this line to `require {rn} oci \"<repository>\" <version>`, and run `ritsu mod lock`"
         )));
     }
     let located = store::Store::located();

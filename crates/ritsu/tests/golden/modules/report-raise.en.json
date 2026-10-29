@@ -25,11 +25,13 @@
       "change": "upgraded",
       "old": {
         "version": "1.0.0",
-        "digest": "sha256:<digest>"
+        "digest": "sha256:<digest>",
+        "commit": null
       },
       "new": {
         "version": "1.1.0",
-        "digest": "sha256:<digest>"
+        "digest": "sha256:<digest>",
+        "commit": null
       },
       "diagnostics": [],
       "diff": {
@@ -38,14 +40,16 @@
           "module": "example.com/acme/pricing",
           "version": "1.0.0",
           "digest": "sha256:<digest>",
-          "files_digest": "sha256:<digest>"
+          "files_digest": "sha256:<digest>",
+          "commit": null
         },
         "new": {
           "path": "@pricing@1.1.0",
           "module": "example.com/acme/pricing",
           "version": "1.1.0",
           "digest": "sha256:<digest>",
-          "files_digest": "sha256:<digest>"
+          "files_digest": "sha256:<digest>",
+          "commit": null
         },
         "files": {
           "added": [],

@@ -4,6 +4,7 @@
 //! change `ritsu.mod` and `ritsu.lock` together or not at all: when the tree cannot be read after the
 //! change, or its lock cannot be chosen, `ritsu.mod` is put back as it was (exit 2).
 
+use super::git::Git;
 use super::lock::{self, Done};
 use super::{Ctx, stopped};
 use ritsu_base::cli::Args;
@@ -69,9 +70,10 @@ pub(super) fn read(ctx: &Ctx, root: &Path, file: &Path) -> Result<(Vec<u8>, Mani
 
 /// `text` written to `ritsu.mod`, then the lock the tree wants: `ritsu.mod` put back as it was
 /// (`before`) when the lock cannot be chosen. What was done to the lock, or the exit code. `add`
-/// from a registry and `get` (stage D) change `ritsu.mod` through it too, so that every command that
-/// writes `ritsu.mod` writes the lock with it or neither (DESIGN 17.19).
-pub(super) fn change(ctx: &Ctx, root: &Path, file: &Path, before: &[u8], text: &str) -> Result<lock::Plan, u8> {
+/// from a registry or a git repository and `get` change `ritsu.mod` through it too, so that every
+/// command that writes `ritsu.mod` writes the lock with it or neither (DESIGN 17.19); the module they
+/// change is `fresh`, and `git` the git of the run ([`lock::plan`]).
+pub(super) fn change(ctx: &Ctx, root: &Path, file: &Path, before: &[u8], text: &str, fresh: Option<&ModuleName>, git: &mut Git) -> Result<lock::Plan, u8> {
     let shown = || ctx.shown(file);
     std::fs::write(file, text).map_err(|e| {
         let shown = shown();
@@ -80,7 +82,7 @@ pub(super) fn change(ctx: &Ctx, root: &Path, file: &Path, before: &[u8], text: &
     let put_back = || {
         let _ = std::fs::write(file, before);
     };
-    let plan = match lock::plan(root, Store::located().as_ref()) {
+    let plan = match lock::plan(root, Store::located().as_ref(), fresh, git) {
         Ok(p) => p,
         Err(p) => {
             put_back();
@@ -104,6 +106,9 @@ pub(super) fn lock_line(ctx: &Ctx, plan: &lock::Plan) {
 /// `ritsu mod add <name> ./…|../…`: a dependency by a path (DESIGN 17.3, 17.19), the path given from
 /// where ritsu runs and written from the root of the module (★). The exit code.
 pub fn add(ctx: &Ctx, a: &Args) -> u8 {
+    if a.get("--dir").is_some() {
+        return ctx.refuse(super::registry::dir_without_git());
+    }
     let (name, source) = (a.pos[0].as_str(), a.pos[1].as_str());
     let root = match ctx.root() {
         Ok(r) => r,
@@ -133,7 +138,7 @@ pub fn add(ctx: &Ctx, a: &Args) -> u8 {
         Ok(t) => t,
         Err(e) => return ctx.refuse(e.text()),
     };
-    let plan = match change(ctx, &root, &file, &before, &text) {
+    let plan = match change(ctx, &root, &file, &before, &text, None, &mut Git::new()) {
         Ok(p) => p,
         Err(code) => return code,
     };
@@ -143,7 +148,7 @@ pub fn add(ctx: &Ctx, a: &Args) -> u8 {
     let module = added.as_ref().map(|m| m.module.value.to_string()).unwrap_or_default();
     let version = added.as_ref().and_then(|m| m.version.as_ref()).map(|v| v.value.to_string());
     if ctx.json() {
-        println!("{}", added_json(ctx, &root, name, &module, version, Some(&path), plan.done).pretty());
+        println!("{}", added_json(ctx, &root, name, &module, version, &source, plan.done).pretty());
         return 0;
     }
     let what = match &version {
@@ -155,10 +160,14 @@ pub fn add(ctx: &Ctx, a: &Args) -> u8 {
     0
 }
 
-/// What `ritsu mod add --format json` prints (DESIGN 17.21): the dependency added, from a directory
-/// when `path` is given and from a registry when it is not (stage D's `add` prints the same), and
-/// what was done to the lock.
-pub(super) fn added_json(ctx: &Ctx, root: &Path, name: &str, module: &str, version: Option<String>, path: Option<&str>, done: Done) -> Json {
+/// What `ritsu mod add --format json` prints (DESIGN 17.21): the dependency added, from `source` (a
+/// directory, a registry or a git repository; `get` prints the same), and what was done to the lock.
+pub(super) fn added_json(ctx: &Ctx, root: &Path, name: &str, module: &str, version: Option<String>, source: &Source, done: Done) -> Json {
+    let (kind, path, url, dir) = match source {
+        Source::Oci { .. } => ("oci", None, None, None),
+        Source::Git { url, dir, .. } => ("git", None, Some(url.as_str()), dir.as_deref()),
+        Source::Path { path } => ("path", Some(path.as_str()), None, None),
+    };
     Json::obj([
         ("ritsu", Json::str(env!("CARGO_PKG_VERSION"))),
         ("root", Json::str(ctx.shown(root))),
@@ -168,8 +177,10 @@ pub(super) fn added_json(ctx: &Ctx, root: &Path, name: &str, module: &str, versi
                 ("name", Json::str(name)),
                 ("module", Json::str(module)),
                 ("version", Json::opt_str(version)),
-                ("source", Json::str(if path.is_some() { "path" } else { "oci" })),
+                ("source", Json::str(kind)),
                 ("path", Json::opt_str(path)),
+                ("url", Json::opt_str(url)),
+                ("dir", Json::opt_str(dir)),
             ]),
         ),
         ("manifest", Json::str("written")),
@@ -195,7 +206,7 @@ pub fn remove(ctx: &Ctx, a: &Args) -> u8 {
         Ok(t) => t,
         Err(e) => return ctx.refuse(e.text()),
     };
-    let plan = match change(ctx, &root, &file, &before, &text) {
+    let plan = match change(ctx, &root, &file, &before, &text, None, &mut Git::new()) {
         Ok(p) => p,
         Err(code) => return code,
     };
