@@ -46,6 +46,10 @@ for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith(".ts")) continue;
   let text = fs.readFileSync(path.join(dir, f), "utf8").replace(/from "(\.\/[^"]+)"/g, (_, p) => `from "${p}.ts"`);
   if (f === "workflow.ts") text = text.replace(/dd\.atATime\(\d+\)/g, "dd.atATime(1)");
+  // the local runner's checkpoint server times a callback out with Node's setTimeout, which fires at
+  // once for a delay past 2^31 - 1 ms (24.8 days): a `timeout until` further off waits that long here
+  // instead, which no run reaches, as no run here times a callback out
+  if (f === "workflow.ts") text = text.replace(/\{ timeout: \{ seconds: ([^ }]+) \} \}/g, "{ timeout: { seconds: Math.min($1, 2147483) } }");
   // the clock `now` reads is the scenarios' moment (dandori's render::SCENARIO_NOW), as in the reference
   if (f === "runtime.ts") text = text.replace('return new Date(ms).toISOString().slice(0, 19) + "Z";', 'return "2026-03-31T15:30:00Z";');
   fs.writeFileSync(path.join(work, f), text);

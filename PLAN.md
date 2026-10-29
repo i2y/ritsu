@@ -2459,6 +2459,7 @@ I で確かめたこと（2026-10-29、この機械で）：
   - 7.72 までを乗せた木で 0.37.0 に上げ、祝日のモジュールの `ritsu >=` も 0.37.0 にした。
   - tools の段のワークスペース全体の試験で、3,421 件が通った。落ちた一件は sekisho の `tests/cedar.rs` の変異の試験で、二版の見張り（`held_v2.gate` と `少額_二版.gate`）の 4 からの禁止が large の帯を全部決めていて、許可の `when size is small` を外す変異が等価になっていた。禁止を 4〜10 にし、diff の golden を作り直した。
   - push した回で三つが落ち、直した（DESIGN 10.5）。fast は試験が通ったあと、キャッシュの保存の途中で上限の 40 分に達した（60 分にした）。tools の dandori の組は、`library.rs` の Go のホストが、CI のモジュールキャッシュに無い go.mod を読んだ（chobo の `tools/runner/go` のモジュールも取ってくる）。platforms は、レジストリの段まで通ったあと、最後の段でランナーのディスクが尽きた（使わない SDK を最初に消す）。
+  - 直したあとの回では、tools の dandori の組の durable の突き合わせ（`durable_runs_as_the_reference_says`）が一度だけ落ちた。試験のランナーの checkpoint のサーバーは、コールバックの期限を Node の `setTimeout` で数える。Node は 24.8 日を超える待ちをすぐに発火させるので、`timeout until` の期限がそれより先のコールバック（review の例の run 7 など）は、作ったすぐあとに期限切れになっていた。応答の届くのが遅れた実行だけが落ちる（応答を 50 ミリ秒遅らせると、期限の遠い 3 本だけが決まって落ちた）。ランナーが生成したコードを読むときに、コールバックの期限を Node の上限までに抑えた（dandori の DESIGN 5）。生成するコードは変わらない。
 - **残すこと**：
   - 直したあとの push の回と、毎晩の platforms・kani・audit・tools の回を見てから、`v0.37.0` のタグを打って公開する。
   - 祝日のモジュールの公開は、公開を決めてから。手順：`modules.yml` を `publish` で走らせ、ghcr.io のパッケージを公開にする。一覧の `local` の行を `module` と `signature` の行に替え、docs.yml に cosign を入れる。README とサイトの「まだレジストリに無い」の文を消す。
