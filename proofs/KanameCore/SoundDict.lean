@@ -11,10 +11,10 @@ namespace KanameCore
 theorem gPairs {o₀ o : Out} {A : ACtx} {m : Nat} {pairs : List (Expr × Option Conv × Expr × Option Conv)}
     {ks vs : Abs} {k : Nat} (h : Grows o₀ o) : Grows o₀ (pairsAbs A m pairs ks vs k o).out :=
   h.trans ((sat m).pairs _ _ _ _ _ _).1
-theorem gLam1 {o₀ o : Out} {A : ACtx} {m : Nat} {x : String} {elem : Abs} {body : Expr} {c : Option Conv}
-    (h : Grows o₀ o) : Grows o₀ (lam1 A m x elem body c o).2 := h.trans ((sat m).lam1 _ _ _ _ _ _)
-theorem gCond {o₀ o : Out} {A : ACtx} {m : Nat} {x : String} {elem : Abs} {body : Expr} {c : Option Conv}
-    (h : Grows o₀ o) : Grows o₀ (condition A m x elem body c o).2 := h.trans ((sat m).cond _ _ _ _ _ _)
+theorem gLam1 {o₀ o : Out} {A : ACtx} {t : Option Term} {m : Nat} {x : String} {elem : Abs} {body : Expr}
+    {c : Option Conv} (h : Grows o₀ o) : Grows o₀ (lam1 A t m x elem body c o).2 := h.trans ((sat m).lam1 _ _ _ _ _ _ _)
+theorem gCond {o₀ o : Out} {A : ACtx} {t : Option Term} {m : Nat} {x : String} {elem : Abs} {body : Expr}
+    {c : Option Conv} (h : Grows o₀ o) : Grows o₀ (condition A t m x elem body c o).2 := h.trans ((sat m).cond _ _ _ _ _ _ _)
 
 section
 variable {C : Ctx} {res : List (Option Abs)} {n : Nat}
@@ -175,14 +175,14 @@ theorem pairs_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env)
 /-- **A function given to a builtin, once**: what it answers for an element. -/
 theorem lam1_step (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {x : String} {body : Expr}
     {c : Option Conv} {elem : Abs} {el : Val} {o : Out} {dep : Nat} (hG : Good C res A) (hS : Sat A ρ)
-    (he : Mem elem el) (hw : (lam1 A m x elem body c o).2.widened = false) :
-    (∀ a', (eval C n dep ((x, el) :: ρ) body >>= coerce c) = .ok a' → Mem (lam1 A m x elem body c o).1 a') ∧
+    (he : Mem elem el) (hw : (lam1 A none m x elem body c o).2.widened = false) :
+    (∀ a', (eval C n dep ((x, el) :: ρ) body >>= coerce c) = .ok a' → Mem (lam1 A none m x elem body c o).1 a') ∧
     (∀ k l, (eval C n dep ((x, el) :: ρ) body >>= coerce c) = .error (.failed k l) → k.ofEffect = true →
-      Wit C (lam1 A m x elem body c o).2) := by
+      Wit C (lam1 A none m x elem body c o).2) := by
   cases m with
   | zero => simp only [lam1]; exact ⟨fun a' _ => Mem.any a', fun _ _ _ _ => wit_fuel⟩
   | succ m =>
-    simp only [lam1] at hw ⊢
+    simp only [lam1, ACtx.bindLam_none] at hw ⊢
     have hG' : Good C res (A.bindNew x elem) := hG
     obtain ⟨h1, h2⟩ := IH.expr m (A.bindNew x elem) _ body o dep hG' (hS.bindNew he)
       (grows_not_widened (grows_convA (Grows.refl _)) hw)
@@ -196,11 +196,11 @@ theorem lam1_step (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {x : St
 theorem each2_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (x : String) (kb : Expr) (kc : Option Conv)
     (y : String) (vb : Expr) (vc : Option Conv) (xs : List Val) (elem : Abs) (o : Out) (dep : Nat)
     (hG : Good C res A) (hS : Sat A ρ) (hel : ∀ el ∈ xs, Mem elem el)
-    (hw : (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2.widened = false) :
+    (hw : (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).2.widened = false) :
     (∀ ps, evalEach2 C (n + 1) dep ρ x kb kc y vb vc xs = .ok ps → ps.length = xs.length ∧
-      ∀ p ∈ ps, Mem (lam1 A m x elem kb kc o).1 p.1 ∧ Mem (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).1 p.2) ∧
+      ∀ p ∈ ps, Mem (lam1 A none m x elem kb kc o).1 p.1 ∧ Mem (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).1 p.2) ∧
     (∀ k l, evalEach2 C (n + 1) dep ρ x kb kc y vb vc xs = .error (.failed k l) → k.ofEffect = true →
-      Wit C (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2) := by
+      Wit C (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).2) := by
   cases xs with
   | nil =>
     refine ⟨fun ps h => ?_, fun k l h => ?_⟩
@@ -209,7 +209,7 @@ theorem each2_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (x : S
   | cons el rest =>
     have he : Mem elem el := hel el (List.mem_cons_self ..)
     have hrest : ∀ e ∈ rest, Mem elem e := fun e h => hel e (List.mem_cons_of_mem _ h)
-    have gk : Grows (lam1 A m x elem kb kc o).2 (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2 :=
+    have gk : Grows (lam1 A none m x elem kb kc o).2 (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).2 :=
       gLam1 (Grows.refl _)
     obtain ⟨k1, k2⟩ := lam1_step (dep := dep) IH hG hS he (grows_not_widened gk hw) (x := x) (body := kb) (c := kc)
     obtain ⟨v1, v2⟩ := lam1_step (dep := dep) IH hG hS he hw (x := y) (body := vb) (c := vc)
@@ -576,8 +576,8 @@ theorem walkK_list_ok (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o 
     ∃ xs answers, Sat (ev A m coll o).ctx ρ ∧ ((walked (ev A m coll o).abs).1.hi.any fun h => h.num < 0) = false ∧
       (walked (ev A m coll o).abs).1.In (xs.length : Rat) ∧ (∀ y ∈ xs, Mem (walked (ev A m coll o).abs).2 y) ∧
       answers.length = xs.length ∧
-      ((lam1 (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2.widened = false →
-        ∀ a ∈ answers, Mem (lam1 (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).1 a) ∧
+      ((lam1 (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2.widened = false →
+        ∀ a ∈ answers, Mem (lam1 (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).1 a) ∧
       (if (w == .flatMap && !answers.all (fun a => (listOf a).isSome)) = true then failK .type line
         else if (w == .groupBy && decide (i64max < (xs.length : Int))) = true then .error .diverged
         else sized (foldK w key xs answers)) = .ok v := by
@@ -600,7 +600,7 @@ theorem walkK_list_ok (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o 
       obtain ⟨answers, has, hv⟩ := bind_ok hv
       have hlen := (evalEach_shape n dep ρ x body c .map xs answers has).2.1 (fun a _ => stopAt_map a)
       exact ⟨xs, answers, hsl, hneg, hcnt, helem, hlen,
-        fun hwl a ha => (lamBody IH hG1 hsl helem hwl (w := .map) (dep := dep)).1 answers has a ha, hv⟩
+        fun hwl a ha => (lamBody IH hG1 hsl helem (totOK_of_eval hcv) hwl (w := .map) (dep := dep)).1 answers has a ha, hv⟩
   | _ =>
     cases w <;> simp only at hv <;> first | exact absurd rfl hl | exact absurd rfl hr | exact absurd hv failK_ne_ok
 
@@ -610,8 +610,8 @@ theorem walkK_list_err (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o
     (hwr : (ev A m coll o).out.widened = false)
     (hv : eval C (n + 1) dep ρ (.walkK id line w coll x body c key) = .error (.failed k l)) (hk : k.ofEffect = true) :
     Wit C (ev A m coll o).out ∨ (((walked (ev A m coll o).abs).1.hi.any fun h => h.num < 0) = false ∧
-      ((lam1 (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2.widened = false →
-        Wit C (lam1 (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2)) := by
+      ((lam1 (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2.widened = false →
+        Wit C (lam1 (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2)) := by
   have hG1 : Good C res (ev A m coll o).ctx := hG.same ((sat m).ev A coll o).2
   obtain ⟨hl1, hl2⟩ := IH.expr m A ρ coll o dep hG hS hwr
   simp only [eval] at hv
@@ -630,7 +630,7 @@ theorem walkK_list_err (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o
     all_goals
       simp only at hv
       rcases bind_err hv with hv | ⟨answers, _, hv⟩
-      · exact Or.inr ⟨hneg, fun hwl => (lamBody IH hG1 hsl helem hwl (w := .map) (dep := dep)).2 k l hv hk⟩
+      · exact Or.inr ⟨hneg, fun hwl => (lamBody IH hG1 hsl helem (totOK_of_eval hcv) hwl (w := .map) (dep := dep)).2 k l hv hk⟩
       · exfalso
         try simp only [Bool.true_and, beq_self_eq_true] at hv
         first
@@ -682,11 +682,11 @@ theorem walkK_never_branch (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env
 theorem walkK_lam_branch (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : Out} {dep id line : Nat}
     {w : WalkK} {coll : Expr} {x : String} {body : Expr} {c : Option Conv} {key : Key} {R : AR}
     (hG : Good C res A) (hS : Sat A ρ) (hlw : w ≠ .filterD ∧ w ≠ .mapValues ∧ w ≠ .last)
-    (hRo : R.out = (lam1 (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2)
+    (hRo : R.out = (lam1 (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2)
     (hRc : R.ctx = (ev A m coll o).ctx) (hRn : R.nar = .none) (hw : R.out.widened = false)
     (hF : ∀ xs answers v, (walked (ev A m coll o).abs).1.In (xs.length : Rat) →
       (∀ y ∈ xs, Mem (walked (ev A m coll o).abs).2 y) → answers.length = xs.length →
-      (∀ a ∈ answers, Mem (lam1 (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).1 a) →
+      (∀ a ∈ answers, Mem (lam1 (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).1 a) →
       (w = .flatMap → answers.all (fun a => (listOf a).isSome) = true) → (w = .groupBy → (xs.length : Int) ≤ i64max) →
       sized (foldK w key xs answers) = .ok v → Mem R.abs v) :
     Concl C ρ (eval C (n + 1) dep ρ (.walkK id line w coll x body c key)) R := by
@@ -897,7 +897,7 @@ theorem walkK_last (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : O
     rw [ite_eq_right hneg] at hw
     simp only [AR.of] at hw ⊢
     have gc : Grows (ev A m coll o).out
-        (condition (ev A m coll o).ctx m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2 :=
+        (condition (ev A m coll o).ctx (totalsOf coll) m x (walked (ev A m coll o).abs).2 body c (ev A m coll o).out).2 :=
       gCond (Grows.refl _)
     obtain ⟨hl1, hl2⟩ := IH.expr m A ρ coll o dep hG hS (grows_not_widened gc hw)
     refine ⟨fun v hv => ?_, fun k l hv hk => ?_⟩
@@ -913,7 +913,7 @@ theorem walkK_last (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : O
         obtain ⟨hcnt, helem⟩ := walked_sound hml
         have helem' : ∀ y ∈ xs.reverse, Mem (walked (ev A m coll o).abs).2 y :=
           fun y hy => helem y (List.mem_reverse.mp hy)
-        obtain ⟨hb1, _⟩ := condBody IH hG1 hsl helem' hw (w := .first) (dep := dep)
+        obtain ⟨hb1, _⟩ := condBody IH hG1 hsl helem' ((totOK_of_eval hcv).sub fun y hy => List.mem_reverse.mp hy) hw (w := .first) (dep := dep)
         obtain ⟨_, _, hheld⟩ := hb1 answers has
         refine ⟨?_, hsl, fun _ _ => trivial⟩
         simp only [foldK]
@@ -940,7 +940,7 @@ theorem walkK_last (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : O
           have helem' : ∀ y ∈ xs.reverse, Mem (walked (ev A m coll o).abs).2 y :=
             fun y hy => helem y (List.mem_reverse.mp hy)
           rcases bind_err hv with hv | ⟨answers, _, hv⟩
-          · exact (condBody IH hG1 hsl helem' hw (w := .first) (dep := dep)).2 k l hv hk
+          · exact (condBody IH hG1 hsl helem' ((totOK_of_eval hcv).sub fun y hy => List.mem_reverse.mp hy) hw (w := .first) (dep := dep)).2 k l hv hk
           · rcases bind_err hv with hv | ⟨_, _, hv⟩
             · have := answersOK_err hv
               simp only [Stop.failed.injEq] at this
@@ -1011,7 +1011,7 @@ theorem walkK_filterD (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o 
             (match (generalizing := false) (ev A m coll o).abs with
               | .dict cnt k v => (cnt, k, v) | _ => (anyCount, Abs.any, Abs.any)).2.2) y := by
           intro y hy; obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hy; exact Mem_entry (hk p hp) (hvv p hp)
-        obtain ⟨hb1, _⟩ := condBody IH hG1 hsl helem hw (w := .map) (dep := dep)
+        obtain ⟨hb1, _⟩ := condBody IH hG1 hsl helem (TotOK.none ρ _) hw (w := .map) (dep := dep)
         obtain ⟨_, _, hheld⟩ := hb1 answers has
         refine ⟨Mem.dict ?_ (fun q hq => ?_) (fun q hq => ?_) (dictFrom_nodup key _), hsl, fun _ _ => trivial⟩
         · refine upTo_sound hc (Nat.le_trans (dictFrom_length_le key _) ?_)
@@ -1039,7 +1039,7 @@ theorem walkK_filterD (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o 
                 | .dict cnt k v => (cnt, k, v) | _ => (anyCount, Abs.any, Abs.any)).2.2) y := by
             intro y hy; obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hy; exact Mem_entry (hk' p hp) (hvv p hp)
           rcases bind_err hv with hv | ⟨answers, _, hv⟩
-          · exact (condBody IH hG1 hsl helem hw (w := .map) (dep := dep)).2 k l hv hk
+          · exact (condBody IH hG1 hsl helem (TotOK.none ρ _) hw (w := .map) (dep := dep)).2 k l hv hk
           · rcases bind_err hv with hv | ⟨_, _, hv⟩
             · have := answersOK_err hv
               simp only [Stop.failed.injEq] at this
@@ -1097,7 +1097,7 @@ theorem walkK_mapValues (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {
             (match (generalizing := false) (ev A m coll o).abs with
               | .dict cnt k v => (cnt, k, v) | _ => (anyCount, Abs.any, Abs.any)).2.2 y := by
           intro y hy; obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hy; exact hvv p hp
-        obtain ⟨hb1, _⟩ := lamBody IH hG1 hsl helem hw (w := .map) (dep := dep)
+        obtain ⟨hb1, _⟩ := lamBody IH hG1 hsl helem (TotOK.none ρ _) hw (w := .map) (dep := dep)
         have hans := hb1 answers has
         have hlen : answers.length = ps.length := by
           have := (evalEach_shape n dep ρ x body c .map _ answers has).2.1 (fun a _ => stopAt_map a)
@@ -1135,7 +1135,7 @@ theorem walkK_mapValues (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {
                 | .dict cnt k v => (cnt, k, v) | _ => (anyCount, Abs.any, Abs.any)).2.2 y := by
             intro y hy; obtain ⟨p, hp, rfl⟩ := List.mem_map.mp hy; exact hvv p hp
           rcases bind_err hv with hv | ⟨answers, _, hv⟩
-          · exact (lamBody IH hG1 hsl helem hw (w := .map) (dep := dep)).2 k l hv hk
+          · exact (lamBody IH hG1 hsl helem (TotOK.none ρ _) hw (w := .map) (dep := dep)).2 k l hv hk
           · exact absurd hv (fun h => sized_not_failed h)
         | _ => simp only at hv; rw [fail_type hv] at hk; cases hk
 
@@ -1263,11 +1263,11 @@ theorem case_toDict (IH : SoundAt C res n) {m : Nat} {A : ACtx} {ρ : Env} {o : 
           | list xs => rw [walked_not_neg hml] at hneg; cases hneg
           | _ => simp only at hv; rw [fail_type hv] at hk; cases hk
     · rename_i hneg; rw [ite_eq_right hneg] at hw
-      have hw2 : (lam1 (ev A m list o).ctx m y (walked (ev A m list o).abs).2 vb vc
-          (lam1 (ev A m list o).ctx m x (walked (ev A m list o).abs).2 kb kc (ev A m list o).out).2).2.widened = false := by
+      have hw2 : (lam1 (ev A m list o).ctx none m y (walked (ev A m list o).abs).2 vb vc
+          (lam1 (ev A m list o).ctx none m x (walked (ev A m list o).abs).2 kb kc (ev A m list o).out).2).2.widened = false := by
         revert hw; split <;> exact fun h => h
-      have gl : Grows (ev A m list o).out (lam1 (ev A m list o).ctx m y (walked (ev A m list o).abs).2 vb vc
-          (lam1 (ev A m list o).ctx m x (walked (ev A m list o).abs).2 kb kc (ev A m list o).out).2).2 :=
+      have gl : Grows (ev A m list o).out (lam1 (ev A m list o).ctx none m y (walked (ev A m list o).abs).2 vb vc
+          (lam1 (ev A m list o).ctx none m x (walked (ev A m list o).abs).2 kb kc (ev A m list o).out).2).2 :=
         gLam1 (gLam1 (Grows.refl _))
       obtain ⟨hl1, hl2⟩ := IH.expr m A ρ list o dep hG hS (grows_not_widened gl hw2)
       refine ⟨fun v hv => ?_, fun k l hv hk => ?_⟩

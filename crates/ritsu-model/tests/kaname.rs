@@ -62,7 +62,12 @@ fn suite() -> Suite {
 /// relation keeps (undecided) and one a run breaks (an example), a koyomi date given a day past its
 /// input's range (an example), a koyomi day given to a rule whose range starts later (an example) and
 /// narrowed to it (shown), and a rule whose date input's range is a koyomi date (X2's days: kept, and
-/// given the days of another date).
+/// given the days of another date). And a module whose functions spread a refund over the running
+/// totals of a list, each after an `if` that leaves out a refund above a sum (kaname's DESIGN 32,
+/// 33): the sum of the same list by the same field keeps the rule's precondition `amount <= total`
+/// (written as functions, and after the list with the lambdas' parameters named apart); a sum of
+/// another list, by another field or by more than a field, keeps nothing, and neither do running
+/// totals a `let` names.
 fn materials(tmp: &TempDir) -> Vec<(String, PathBuf)> {
     let examples = kaname_dir().join("examples");
     let changed = |name: &str, tag: &str, edits: &[(&str, &str)]| -> (String, PathBuf) {
@@ -104,6 +109,29 @@ fn materials(tmp: &TempDir) -> Vec<(String, PathBuf)> {
     billing("narrowed", ">=2026-03-01 <=2027-01-31", narrowed, "payment");
     billing("koyomi's days", "from koyomi \"payment_terms.cal\" date payment", pick, "payment");
     billing("another date's days", "from koyomi \"payment_terms.cal\" date payment", pick, "closing");
+    let share = "rule refund_share v1\ndescription \"One line's share of a refund spread over the lines in proportion to what is left on each\"\n\ninputs\n  amount : money[USDc]  range >=1USDc <=1_000_000USDc\n  before : money[USDc]  range >=0USDc <=100_000_000USDc\n  upto   : money[USDc]  range >=0USDc <=100_000_000USDc\n  total  : money[USDc]  range >=1USDc <=100_000_000USDc\n\nconstraint before <= upto\nconstraint upto <= total\nconstraint amount <= total\n\noutputs\n  share : money[USDc]  round down(1USDc)\n\nderive to_before : money[USDc] = allocate(amount, before, total)  range >=0USDc <=1_000_000USDc\nderive to_upto   : money[USDc] = allocate(amount, upto, total)    range >=0USDc <=1_000_000USDc\n\nresult share = to_upto - to_before\n";
+    let to_rule = "refund_share(amount: amount, before: r.before, upto: r.upto, total: r.total).share";
+    let split = |name: &str, count: &str, guard: &str, walk: &str| {
+        format!(
+            "fn {name}(lines: list[Line] count >=1 <={count}, others: list[Line] count >=1 <=10, amount: money[USDc] range >=1USDc <=1_000_000USDc) -> list[money[USDc]]?\n  if amount > {guard}\n    none\n  else\n    {}\n",
+            walk.replace("RULE", to_rule)
+        )
+    };
+    let refunds = [
+        "module refunds v1\n\nuse rule refund_share from \"share.rule\"\n\nrecord Line\n  left  : money[USDc]  range >=1USDc <=10_000_000USDc\n  other : money[USDc]  range >=1USDc <=10_000_000USDc\n".to_string(),
+        split("same", "10", "sum(lines, l => l.left)", "map(running_totals(lines, l => l.left), r => RULE)"),
+        split("apart", "10", "lines.sum(x => x.left)", "lines.running_totals(y => y.left).map(r => RULE)"),
+        split("another_list", "10", "sum(others, l => l.left)", "map(running_totals(lines, l => l.left), r => RULE)"),
+        split("another_field", "10", "sum(lines, l => l.other)", "map(running_totals(lines, l => l.left), r => RULE)"),
+        split("more_than_a_field", "5", "sum(lines, l => l.left * 2)", "map(running_totals(lines, l => l.left * 2), r => RULE)"),
+        split("named", "10", "sum(lines, l => l.left)", "let rs = running_totals(lines, l => l.left)\n    map(rs, r => RULE)"),
+    ];
+    let d = tmp.path().join("refunds");
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("share.rule"), share).unwrap();
+    let f = d.join("refunds.kn");
+    std::fs::write(&f, refunds.join("\n")).unwrap();
+    out.push(("refunds".to_string(), f));
     out
 }
 
@@ -1585,6 +1613,6 @@ fn every_run_and_the_analysis_of_every_module_come_out_as_the_model_says() {
         prepared.len()
     );
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
-    assert_eq!(prepared.len(), EXAMPLES.len() + MODULES.len() + 9, "the modules are fewer than they were");
+    assert_eq!(prepared.len(), EXAMPLES.len() + MODULES.len() + 10, "the modules are fewer than they were");
     assert!(lines >= 600 && places >= 180 && exprs >= 800 && verdicts >= 25, "fewer than they were: {lines} runs, {places} places, {exprs} expressions, {verdicts} verdicts");
 }

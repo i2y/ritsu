@@ -408,30 +408,28 @@ theorem elems_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (elems
                 exact (IH.elems m _ ρ rest _ (k + 1) _ dep (pre ++ [v']) hGx hs hw hpre' (by simp [hk])).2 k' l h5 hk'
               · cases h5
 
-theorem each_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (x : String) (body : Expr) (c : Option Conv)
-    (w : Walk) (xs : List Val) (elem : Abs) (o : Out) (dep : Nat) (hG : Good C res A) (hS : Sat A ρ)
-    (hel : ∀ el ∈ xs, Mem elem el) (hw : (ev (A.bindNew x elem) m body o).out.widened = false) :
+theorem each_succ (IH : SoundAt C res n) (m : Nat) (B : ACtx) (ρ : Env) (x : String) (body : Expr) (c : Option Conv)
+    (w : Walk) (xs : List Val) (o : Out) (dep : Nat) (hG : Good C res B) (hS : ∀ el ∈ xs, Sat B ((x, el) :: ρ))
+    (hw : (ev B m body o).out.widened = false) :
     (∀ as, evalEach C (n + 1) dep ρ x body c w xs = .ok as →
       as.length ≤ xs.length ∧ ((∀ a ∈ as, stopAt w a = false) → as.length = xs.length) ∧ (xs ≠ [] → as ≠ []) ∧
-      ∀ el a, (el, a) ∈ xs.zip as → AnsOK ρ x (ev (A.bindNew x elem) m body o) c el a) ∧
+      ∀ el a, (el, a) ∈ xs.zip as → AnsOK ρ x (ev B m body o) c el a) ∧
     (∀ k l, evalEach C (n + 1) dep ρ x body c w xs = .error (.failed k l) → k.ofEffect = true →
-      Wit C (convA (ev (A.bindNew x elem) m body o).out c (ev (A.bindNew x elem) m body o).abs).2) := by
+      Wit C (convA (ev B m body o).out c (ev B m body o).abs).2) := by
   cases xs with
   | nil =>
     refine ⟨fun as h => ?_, fun k l h => ?_⟩
     · simp [evalEach] at h; subst h; simp
     · simp [evalEach] at h
   | cons el rest =>
-    have he : Mem elem el := hel el (List.mem_cons_self ..)
-    have hrest : ∀ e ∈ rest, Mem elem e := fun e h => hel e (List.mem_cons_of_mem _ h)
-    have hG' : Good C res (A.bindNew x elem) := hG
-    obtain ⟨b1, b2⟩ := IH.expr m (A.bindNew x elem) ((x, el) :: ρ) body o dep hG' (hS.bindNew he) hw
+    have hrest : ∀ e ∈ rest, Sat B ((x, e) :: ρ) := fun e h => hS e (List.mem_cons_of_mem _ h)
+    obtain ⟨b1, b2⟩ := IH.expr m B ((x, el) :: ρ) body o dep hG (hS el (List.mem_cons_self ..)) hw
     refine ⟨fun as h => ?_, fun k l h hk => ?_⟩
     · simp only [evalEach] at h
       obtain ⟨raw, hraw, h1⟩ := bind_ok h
       obtain ⟨a, ha, h2⟩ := bind_ok h1
       obtain ⟨hm, hs, hn⟩ := b1 raw hraw
-      have hans : AnsOK ρ x (ev (A.bindNew x elem) m body o) c el a := ⟨raw, hm, hs, hn, ha⟩
+      have hans : AnsOK ρ x (ev B m body o) c el a := ⟨raw, hm, hs, hn, ha⟩
       split at h2
       · rename_i hstop
         cases h2
@@ -441,7 +439,7 @@ theorem each_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (x : St
       · rename_i hstop
         obtain ⟨as', has', h3⟩ := bind_ok h2
         cases h3
-        obtain ⟨l1, l2, _, l4⟩ := (IH.each m A ρ x body c w rest elem o dep hG hS hrest hw).1 as' has'
+        obtain ⟨l1, l2, _, l4⟩ := (IH.each m B ρ x body c w rest o dep hG hrest hw).1 as' has'
         refine ⟨by simp; exact l1, fun hall => ?_, fun _ => by simp, fun el' a' h' => ?_⟩
         · simp only [List.length_cons]
           rw [l2 (fun b hb => hall b (List.mem_cons_of_mem _ hb))]
@@ -457,7 +455,7 @@ theorem each_succ (IH : SoundAt C res n) (m : Nat) (A : ACtx) (ρ : Env) (x : St
         · split at h2
           · cases h2
           · rcases bind_err h2 with h3 | ⟨as', _, h3⟩
-            · exact (IH.each m A ρ x body c w rest elem o dep hG hS hrest hw).2 k l h3 hk
+            · exact (IH.each m B ρ x body c w rest o dep hG hrest hw).2 k l h3 hk
             · cases h3
 
 -- ── Every step ───────────────────────────────────────────────────────────────

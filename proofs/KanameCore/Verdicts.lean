@@ -158,6 +158,7 @@ theorem relPairs_mem {A : ACtx} : ∀ {l : List (String × Expr)} {na nb : Strin
 theorem symOK_of {ρ : Env} {e : Expr} {s : Sym} {x : Val} (hs : sym e = some s) (hv : symVal ρ s = some x) :
     SymOK ρ e x where
   sym s' hs' := by rw [hs] at hs'; cases hs'; exact hv
+  sum t ht := by cases e <;> simp [sym, summed] at hs ht
   count l hl := by cases e <;> simp [sym, counted] at hs hl
 
 theorem relation_syms {A : ACtx} {a b : Expr} {r : Rel} (h : relation A a b = some r) :

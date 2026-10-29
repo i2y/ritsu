@@ -876,14 +876,14 @@ theorem mem_zip_left {xs as : List Val} {a : Val} (hlen : as.length ≤ xs.lengt
 /-- **A condition given to a walk**: what it can come out as, and the elements where it holds. -/
 theorem condBody {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C res n) {m : Nat} {A : ACtx}
     {ρ : Env} {x : String} {elem : Abs} {body : Expr} {c : Option Conv} {o : Out} {dep : Nat} {w : Walk}
-    {xs : List Val} (hG : Good C res A) (hS : Sat A ρ) (helem : ∀ el ∈ xs, Mem elem el)
-    (hwid : (condition A m x elem body c o).2.widened = false) :
+    {xs : List Val} {tot : Option Term} (hG : Good C res A) (hS : Sat A ρ) (helem : ∀ el ∈ xs, Mem elem el)
+    (htot : TotOK ρ tot xs) (hwid : (condition A tot m x elem body c o).2.widened = false) :
     (∀ as, evalEach C n dep ρ x body c w xs = .ok as →
-      (∀ a ∈ as, a = .bool true → (condition A m x elem body c o).1.1 = true) ∧
-      (∀ a ∈ as, a = .bool false → (condition A m x elem body c o).1.2.1 = true) ∧
-      (∀ el a, (el, a) ∈ xs.zip as → a = .bool true → Mem (condition A m x elem body c o).1.2.2 el)) ∧
+      (∀ a ∈ as, a = .bool true → (condition A tot m x elem body c o).1.1 = true) ∧
+      (∀ a ∈ as, a = .bool false → (condition A tot m x elem body c o).1.2.1 = true) ∧
+      (∀ el a, (el, a) ∈ xs.zip as → a = .bool true → Mem (condition A tot m x elem body c o).1.2.2 el)) ∧
     (∀ k l, evalEach C n dep ρ x body c w xs = .error (.failed k l) → k.ofEffect = true →
-      Wit C (condition A m x elem body c o).2) := by
+      Wit C (condition A tot m x elem body c o).2) := by
   cases m with
   | zero =>
     simp only [condition]
@@ -891,10 +891,11 @@ theorem condBody {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C r
       fun _ _ _ _ => wit_fuel⟩
   | succ m =>
     simp only [condition] at hwid ⊢
-    have hG' : Good C res (A.bindNew x elem) := hG
-    have hwid' : (ev (A.bindNew x elem) m body o).out.widened = false :=
+    have hG' : Good C res (A.bindLam x elem tot) := hG.same (same_bindLam (Same.refl A))
+    have hwid' : (ev (A.bindLam x elem tot) m body o).out.widened = false :=
       grows_not_widened (grows_convA (Grows.refl _)) hwid
-    obtain ⟨h1, h2⟩ := IH.each m A ρ x body c w xs elem o dep hG hS helem hwid'
+    obtain ⟨h1, h2⟩ := IH.each m (A.bindLam x elem tot) ρ x body c w xs o dep hG'
+      (fun el hel => hS.bindLam (helem el hel) (fun t ht => htot t ht el hel)) hwid'
     refine ⟨fun as has => ?_, fun k l h hk => h2 k l h hk⟩
     obtain ⟨hlen, _, _, hans⟩ := h1 as has
     refine ⟨?_, ?_, ?_⟩
@@ -914,7 +915,7 @@ theorem condBody {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C r
       have hraw := coerce_bool hc
       subst hraw
       have hS' := Sat.apply _ true hsat (hnar true rfl)
-      cases hl : ((ev (A.bindNew x elem) m body o).nar.apply true (ev (A.bindNew x elem) m body o).ctx).lookup x with
+      cases hl : ((ev (A.bindLam x elem tot) m body o).nar.apply true (ev (A.bindLam x elem tot) m body o).ctx).lookup x with
       | none => simp only [Option.getD_none]; exact helem el (List.of_mem_zip hel).1
       | some h' =>
         simp only [Option.getD_some]
@@ -924,20 +925,22 @@ theorem condBody {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C r
 /-- **A function given to a walk**: each answer among what it answers. -/
 theorem lamBody {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C res n) {m : Nat} {A : ACtx}
     {ρ : Env} {x : String} {elem : Abs} {body : Expr} {c : Option Conv} {o : Out} {dep : Nat} {w : Walk}
-    {xs : List Val} (hG : Good C res A) (hS : Sat A ρ) (helem : ∀ el ∈ xs, Mem elem el)
-    (hwid : (lam1 A m x elem body c o).2.widened = false) :
-    (∀ as, evalEach C n dep ρ x body c w xs = .ok as → ∀ a ∈ as, Mem (lam1 A m x elem body c o).1 a) ∧
+    {xs : List Val} {tot : Option Term} (hG : Good C res A) (hS : Sat A ρ) (helem : ∀ el ∈ xs, Mem elem el)
+    (htot : TotOK ρ tot xs) (hwid : (lam1 A tot m x elem body c o).2.widened = false) :
+    (∀ as, evalEach C n dep ρ x body c w xs = .ok as → ∀ a ∈ as, Mem (lam1 A tot m x elem body c o).1 a) ∧
     (∀ k l, evalEach C n dep ρ x body c w xs = .error (.failed k l) → k.ofEffect = true →
-      Wit C (lam1 A m x elem body c o).2) := by
+      Wit C (lam1 A tot m x elem body c o).2) := by
   cases m with
   | zero =>
     simp only [lam1]
     exact ⟨fun _ _ a _ => Mem.any a, fun _ _ _ _ => wit_fuel⟩
   | succ m =>
     simp only [lam1] at hwid ⊢
-    have hwid' : (ev (A.bindNew x elem) m body o).out.widened = false :=
+    have hG' : Good C res (A.bindLam x elem tot) := hG.same (same_bindLam (Same.refl A))
+    have hwid' : (ev (A.bindLam x elem tot) m body o).out.widened = false :=
       grows_not_widened (grows_convA (Grows.refl _)) hwid
-    obtain ⟨h1, h2⟩ := IH.each m A ρ x body c w xs elem o dep hG hS helem hwid'
+    obtain ⟨h1, h2⟩ := IH.each m (A.bindLam x elem tot) ρ x body c w xs o dep hG'
+      (fun el hel => hS.bindLam (helem el hel) (fun t ht => htot t ht el hel)) hwid'
     refine ⟨fun as has a ha => ?_, fun k l h hk => h2 k l h hk⟩
     obtain ⟨hlen, _, _, hans⟩ := h1 as has
     obtain ⟨el, hel⟩ := mem_zip_left hlen ha
@@ -997,10 +1000,10 @@ theorem walk_case {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C 
     have S := sat m
     have hG1 : Good C res (ev A m list o).ctx := hG.same (S.ev _ _ _).2
     -- what the analysis of the function given grows from
-    have gcond : ∀ (A' : ACtx) (el : Abs) (o' : Out), Grows o' (condition A' m x el body c o').2 :=
-      fun A' el o' => S.cond _ _ _ _ _ _
-    have glam : ∀ (A' : ACtx) (el : Abs) (o' : Out), Grows o' (lam1 A' m x el body c o').2 :=
-      fun A' el o' => S.lam1 _ _ _ _ _ _
+    have gcond : ∀ (A' : ACtx) (el : Abs) (o' : Out), Grows o' (condition A' (totalsOf list) m x el body c o').2 :=
+      fun A' el o' => S.cond _ _ _ _ _ _ _
+    have glam : ∀ (A' : ACtx) (el : Abs) (o' : Out), Grows o' (lam1 A' (totalsOf list) m x el body c o').2 :=
+      fun A' el o' => S.lam1 _ _ _ _ _ _ _
     simp only [walkAbs] at hw ⊢
     -- the list walked
     have hwl : (ev A m list o).out.widened = false := by
@@ -1039,7 +1042,7 @@ theorem walk_case {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C 
           · rename_i hc
             rw [ite_eq_left hc] at hw
             simp only [AR.of] at hw ⊢
-            obtain ⟨hb1, _⟩ := condBody IH hG1 hsl helem hw (w := w) (dep := dep)
+            obtain ⟨hb1, _⟩ := condBody IH hG1 hsl helem (totOK_of_eval hlv) hw (w := w) (dep := dep)
             obtain ⟨ht, hf, hheld⟩ := hb1 as has
             have hbool : ∀ a ∈ as, ∃ b, a = .bool b := by
               cases w <;> simp [Walk.isCondition] at hc <;> simp only [answersOK] at hok <;> exact bools_of_ok hok
@@ -1049,7 +1052,7 @@ theorem walk_case {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C 
             simp only [AR.of] at hw ⊢
             have hc' : w.isCondition = false := by simpa using hc
             have hwl1 := grows_not_widened (lamResult_grows (Grows.refl _)) hw
-            obtain ⟨hb1, _⟩ := lamBody IH hG1 hsl helem hwl1 (w := w) (dep := dep)
+            obtain ⟨hb1, _⟩ := lamBody IH hG1 hsl helem (totOK_of_eval hlv) hwl1 (w := w) (dep := dep)
             exact ⟨(lamResult_sound (C := C) hc' hcnt helem hshape (hb1 as has) hok).1 v hv, hsl, fun _ _ => trivial⟩
       | _ => simp [failK] at hv
     · simp only [eval] at hv
@@ -1059,18 +1062,18 @@ theorem walk_case {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C 
             AR.of .never (ev A m list o).out (ev A m list o).ctx
           else if w.isCondition = true then
             AR.of (condResult w (walked (ev A m list o).abs).1 (walked (ev A m list o).abs).2
-              (condition (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1.1
-              (condition (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1.2.1
-              (condition (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1.2.2)
-              (condition (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).2
+              (condition (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1.1
+              (condition (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1.2.1
+              (condition (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1.2.2)
+              (condition (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).2
               (ev A m list o).ctx
           else
-            AR.of (lamResult (lam1 (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).2 id w
+            AR.of (lamResult (lam1 (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).2 id w
                 (walked (ev A m list o).abs).1 (walked (ev A m list o).abs).2
-                (lam1 (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1 step).1
-              (lamResult (lam1 (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).2 id w
+                (lam1 (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1 step).1
+              (lamResult (lam1 (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).2 id w
                 (walked (ev A m list o).abs).1 (walked (ev A m list o).abs).2
-                (lam1 (ev A m list o).ctx m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1 step).2
+                (lam1 (ev A m list o).ctx (totalsOf list) m x (walked (ev A m list o).abs).2 body c (ev A m list o).out).1 step).2
               (ev A m list o).ctx).out := by
         split
         · exact Grows.refl _
@@ -1103,12 +1106,12 @@ theorem walk_case {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C 
               · rename_i hc
                 rw [ite_eq_left hc] at hw
                 simp only [AR.of] at hw ⊢
-                exact (condBody IH hG1 hsl helem hw (w := w) (dep := dep)).2 k l hv hk
+                exact (condBody IH hG1 hsl helem (totOK_of_eval hlv) hw (w := w) (dep := dep)).2 k l hv hk
               · rename_i hc
                 rw [ite_eq_right hc] at hw
                 simp only [AR.of] at hw ⊢
                 have hwl1 := grows_not_widened (lamResult_grows (Grows.refl _)) hw
-                exact Wit.grow ((lamBody IH hG1 hsl helem hwl1 (w := w) (dep := dep)).2 k l hv hk)
+                exact Wit.grow ((lamBody IH hG1 hsl helem (totOK_of_eval hlv) hwl1 (w := w) (dep := dep)).2 k l hv hk)
                   (lamResult_grows (Grows.refl _))
           · rcases bind_err hv with hv | ⟨u, hok, hv⟩
             · have h1 := answersOK_err hv
@@ -1138,7 +1141,7 @@ theorem walk_case {C : Ctx} {res : List (Option Abs)} {n : Nat} (IH : SoundAt C 
                   simp only [AR.of] at hw ⊢
                   have hc' : w.isCondition = false := by simpa using hc
                   have hwl1 := grows_not_widened (lamResult_grows (Grows.refl _)) hw
-                  obtain ⟨hb1, _⟩ := lamBody IH hG1 hsl helem hwl1 (w := w) (dep := dep)
+                  obtain ⟨hb1, _⟩ := lamBody IH hG1 hsl helem (totOK_of_eval hlv) hwl1 (w := w) (dep := dep)
                   exact (lamResult_sound hc' hcnt helem hshape (hb1 as has) hok).2 k l hv hk
         | _ => have := failK_err hv; subst this; simp [Kind.ofEffect] at hk
 

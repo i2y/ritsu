@@ -269,14 +269,14 @@ structure SoundAt (C : Ctx) (res : List (Option Abs)) (n : Nat) : Prop where
     (∀ vs, evalElems C n dep ρ elems = .ok vs → Mem (listAbs A m elems elem k o).abs (.list (pre ++ vs)) ∧
         Sat (listAbs A m elems elem k o).ctx ρ) ∧
     (∀ k' l, evalElems C n dep ρ elems = .error (.failed k' l) → k'.ofEffect = true → Wit C (listAbs A m elems elem k o).out)
-  each : ∀ (m : Nat) (A : ACtx) (ρ : Env) (x : String) (body : Expr) (c : Option Conv) (w : Walk) (xs : List Val)
-      (elem : Abs) (o : Out) (dep : Nat), Good C res A → Sat A ρ → (∀ el ∈ xs, Mem elem el) →
-    (ev (A.bindNew x elem) m body o).out.widened = false →
+  each : ∀ (m : Nat) (B : ACtx) (ρ : Env) (x : String) (body : Expr) (c : Option Conv) (w : Walk) (xs : List Val)
+      (o : Out) (dep : Nat), Good C res B → (∀ el ∈ xs, Sat B ((x, el) :: ρ)) →
+    (ev B m body o).out.widened = false →
     (∀ as, evalEach C n dep ρ x body c w xs = .ok as →
       as.length ≤ xs.length ∧ ((∀ a ∈ as, stopAt w a = false) → as.length = xs.length) ∧ (xs ≠ [] → as ≠ []) ∧
-      ∀ el a, (el, a) ∈ xs.zip as → AnsOK ρ x (ev (A.bindNew x elem) m body o) c el a) ∧
+      ∀ el a, (el, a) ∈ xs.zip as → AnsOK ρ x (ev B m body o) c el a) ∧
     (∀ k l, evalEach C n dep ρ x body c w xs = .error (.failed k l) → k.ofEffect = true →
-      Wit C (convA (ev (A.bindNew x elem) m body o).out c (ev (A.bindNew x elem) m body o).abs).2)
+      Wit C (convA (ev B m body o).out c (ev B m body o).abs).2)
   pairs : ∀ (m : Nat) (A : ACtx) (ρ : Env) (pairs : List (Expr × Option Conv × Expr × Option Conv)) (ks vs : Abs)
       (k : Nat) (o : Out) (dep : Nat) (pre : List (Val × Val)) (key : Key), Good C res A → Sat A ρ →
     (pairsAbs A m pairs ks vs k o).out.widened = false → (∀ p ∈ pre, Mem ks p.1 ∧ Mem vs p.2) → pre.length = k →
@@ -286,11 +286,11 @@ structure SoundAt (C : Ctx) (res : List (Option Abs)) (n : Nat) : Prop where
       Wit C (pairsAbs A m pairs ks vs k o).out)
   each2 : ∀ (m : Nat) (A : ACtx) (ρ : Env) (x : String) (kb : Expr) (kc : Option Conv) (y : String) (vb : Expr)
       (vc : Option Conv) (xs : List Val) (elem : Abs) (o : Out) (dep : Nat), Good C res A → Sat A ρ →
-    (∀ el ∈ xs, Mem elem el) → (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2.widened = false →
+    (∀ el ∈ xs, Mem elem el) → (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).2.widened = false →
     (∀ ps, evalEach2 C n dep ρ x kb kc y vb vc xs = .ok ps → ps.length = xs.length ∧
-      ∀ p ∈ ps, Mem (lam1 A m x elem kb kc o).1 p.1 ∧ Mem (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).1 p.2) ∧
+      ∀ p ∈ ps, Mem (lam1 A none m x elem kb kc o).1 p.1 ∧ Mem (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).1 p.2) ∧
     (∀ k l, evalEach2 C n dep ρ x kb kc y vb vc xs = .error (.failed k l) → k.ofEffect = true →
-      Wit C (lam1 A m y elem vb vc (lam1 A m x elem kb kc o).2).2)
+      Wit C (lam1 A none m y elem vb vc (lam1 A none m x elem kb kc o).2).2)
   merge : ∀ (m : Nat) (A : ACtx) (ρ : Env) (key : Key) (ps : List (Val × Val)) (x y : String) (body : Expr)
       (c : Option Conv) (va vb : Abs) (qs : List (Val × Val)) (o : Out) (dep : Nat), Good C res A → Sat A ρ →
     (∀ p ∈ ps, Mem va p.2) → (∀ q ∈ qs, Mem vb q.2) → (lam2 A m x y va vb body c o).2.widened = false →
@@ -320,7 +320,7 @@ theorem sound_zero {C : Ctx} {res : List (Option Abs)} : SoundAt C res 0 where
   list m A ρ args o dep _ _ _ := ⟨fun v h => by simp [evalList] at h, fun k l h => by simp [evalList] at h⟩
   elems m A ρ elems elem k o dep pre _ _ _ _ _ :=
     ⟨fun v h => by simp [evalElems] at h, fun k l h => by simp [evalElems] at h⟩
-  each m A ρ x body c w xs elem o dep _ _ _ _ :=
+  each m B ρ x body c w xs o dep _ _ _ :=
     ⟨fun v h => by simp [evalEach] at h, fun k l h => by simp [evalEach] at h⟩
   pairs m A ρ pairs ks vs k o dep pre key _ _ _ _ _ :=
     ⟨fun v h => by simp [evalPairs] at h, fun k l h => by simp [evalPairs] at h⟩

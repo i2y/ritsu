@@ -221,7 +221,15 @@ theorem Same.trans {A B C : ACtx} (h1 : Same A B) (h2 : Same B C) : Same A C :=
 
 theorem same_bind {A B : ACtx} (h : Same A B) {x : String} {a : Abs} : Same A (B.bind x a) := h
 theorem same_bindNew {A B : ACtx} (h : Same A B) {x : String} {a : Abs} : Same A (B.bindNew x a) := h
-theorem same_facts {A B : ACtx} (h : Same A B) {fs : List (Sym × Rel × Sym)} : Same A { B with facts := fs } := h
+theorem same_facts {A B : ACtx} (h : Same A B) {fs : List (Term × Rel × Term)} : Same A { B with facts := fs } := h
+theorem same_bindLam {A B : ACtx} (h : Same A B) {x : String} {a : Abs} {tot : Option Term} :
+    Same A (B.bindLam x a tot) := by
+  unfold ACtx.bindLam
+  split
+  · split
+    · exact h
+    · exact h
+  · exact h
 
 theorem same_narrowTo {A B : ACtx} (h : Same A B) {s : Sym} {a : Abs} : Same A (B.narrowTo s a) := by
   unfold ACtx.narrowTo; split
@@ -256,7 +264,7 @@ theorem same_narrowSide {A B : ACtx} (h : Same A B) {s : Option Sym} {conv : Opt
   repeat' split
   all_goals first | exact h | exact same_narrowTo h
 
-theorem same_addFact {A B : ACtx} (h : Same A B) {op : CmpOp} {syA syB : Option Sym} {ca cb : Option Conv}
+theorem same_addFact {A B : ACtx} (h : Same A B) {op : CmpOp} {syA syB : Option Term} {ca cb : Option Conv}
     {xa xb : Abs} : Same A (addFact B op syA syB ca cb xa xb) := by
   simp only [addFact]
   repeat' split
@@ -530,8 +538,8 @@ structure SAt (m : Nat) : Prop where
   list : ∀ A args o, Grows o (evList A m args o).2.1 ∧ Same A (evList A m args o).2.2
   elems : ∀ A elems elem k o, Grows o (listAbs A m elems elem k o).out ∧ Same A (listAbs A m elems elem k o).ctx
   pairs : ∀ A pairs ks vs k o, Grows o (pairsAbs A m pairs ks vs k o).out ∧ Same A (pairsAbs A m pairs ks vs k o).ctx
-  lam1 : ∀ A x elem body c o, Grows o (lam1 A m x elem body c o).2
-  cond : ∀ A x elem body c o, Grows o (condition A m x elem body c o).2
+  lam1 : ∀ A t x elem body c o, Grows o (lam1 A t m x elem body c o).2
+  cond : ∀ A t x elem body c o, Grows o (condition A t m x elem body c o).2
   walk : ∀ A id w list x body c ord step o,
     Grows o (walkAbs A m id w list x body c ord step o).out ∧ Same A (walkAbs A m id w list x body c ord step o).ctx
   reduce : ∀ A list first acc x body c out o,
@@ -554,8 +562,8 @@ theorem sat_zero : SAt 0 where
   list A _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   elems A _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   pairs A _ _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
-  lam1 _ _ _ _ _ o := grows_fuel (Grows.refl o)
-  cond _ _ _ _ _ o := grows_fuel (Grows.refl o)
+  lam1 _ _ _ _ _ _ o := grows_fuel (Grows.refl o)
+  cond _ _ _ _ _ _ o := grows_fuel (Grows.refl o)
   walk A _ _ _ _ _ _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   reduce A _ _ _ _ _ _ _ o := ⟨grows_fuel (Grows.refl o), Same.refl A⟩
   rounds _ _ _ _ _ _ _ _ o := grows_fuel (Grows.refl o)
@@ -634,10 +642,10 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
     fun h => h.trans (S.pairs _ _ _ _ _ _).1
   have hpairsS : ∀ {A₀ A pairs ks vs k o}, Same A₀ A → Same A₀ (pairsAbs A m pairs ks vs k o).ctx :=
     fun h => h.trans (S.pairs _ _ _ _ _ _).2
-  have hlam1 : ∀ {o₀ o A x elem body c}, Grows o₀ o → Grows o₀ (lam1 A m x elem body c o).2 :=
-    fun h => h.trans (S.lam1 _ _ _ _ _ _)
-  have hcond : ∀ {o₀ o A x elem body c}, Grows o₀ o → Grows o₀ (condition A m x elem body c o).2 :=
-    fun h => h.trans (S.cond _ _ _ _ _ _)
+  have hlam1 : ∀ {o₀ o A t x elem body c}, Grows o₀ o → Grows o₀ (lam1 A t m x elem body c o).2 :=
+    fun h => h.trans (S.lam1 _ _ _ _ _ _ _)
+  have hcond : ∀ {o₀ o A t x elem body c}, Grows o₀ o → Grows o₀ (condition A t m x elem body c o).2 :=
+    fun h => h.trans (S.cond _ _ _ _ _ _ _)
   have hwalk : ∀ {o₀ o A id w list x body c ord step}, Grows o₀ o → Grows o₀ (walkAbs A m id w list x body c ord step o).out :=
     fun h => h.trans (S.walk _ _ _ _ _ _ _ _ _ _).1
   have hwalkS : ∀ {A₀ A id w list x body c ord step o}, Same A₀ A → Same A₀ (walkAbs A m id w list x body c ord step o).ctx :=
@@ -741,11 +749,11 @@ theorem sat_succ {m : Nat} (S : SAt m) : SAt (m + 1) := by
       all_goals (try simp only [AR.of])
       all_goals refine ⟨?_, ?_⟩ <;> gclose
   · -- lam1
-    intro A x elem body c o
+    intro A t x elem body c o
     simp only [lam1]
     gclose
   · -- condition
-    intro A x elem body c o
+    intro A t x elem body c o
     simp only [condition]
     gclose
   · -- walkAbs

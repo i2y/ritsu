@@ -4,9 +4,15 @@
   `Sat A ρ` says an environment of the evaluation is among those the scope of the analysis says:
   every name the scope has a value for is in the environment, with a value among what the scope
   says of it, and every relation the conditions in force keep between two names (or fields of
-  them) holds between their values. A condition that came out true (or false) narrows the scope to
-  one the environment is still in: `Sat.apply`. A difference of two names whose order a relation
-  says is on the side it says: `relation_sound`, `subRel_sound`.
+  them, or sums of lists by a field of their elements) holds between their values. A condition
+  that came out true (or false) narrows the scope to one the environment is still in: `Sat.apply`.
+  A difference of two names whose order a relation says is on the side it says: `relation_sound`,
+  `subRel_sound`.
+
+  A sum is the value `sum(xs, x => x.f)` answers (`summed_eval`), and each element of what
+  `running_totals(xs, y => y.f)` answers has it as its `total` (`totals_eval`): the parameter of a
+  function given to a walk of those elements is bound with that fact (`Sat.bindLam`, kaname's
+  DESIGN 32, 33).
 -/
 import KanameCore.Grows
 
@@ -42,6 +48,21 @@ theorem pathVal_append (w : Val) (path : List String) (f : String) :
   unfold pathVal
   simp [List.foldl_append]
 
+-- ── The value of a sum ──────────────────────────────────────────────────────
+
+/-- The numbers of a list of values added up from `acc`, as `sumN` adds them where it answers. -/
+def addUp (acc : Rat) (vs : List Val) : Rat := vs.foldl (fun a v => a + asNum v) acc
+
+/-- The value a term has in an environment of the evaluation: a name's, or the sum of the elements
+    of the list by the path, where the list is one and each element has a value there. -/
+def termVal (ρ : Env) : Term → Option Val
+  | .name s => symVal ρ s
+  | .sum l path => match symVal ρ l with
+    | some (.list els) => (els.mapM (pathVal · path)).map fun ws => .num (addUp 0 ws)
+    | _ => none
+
+theorem termVal_name (ρ : Env) (s : Sym) : termVal ρ (.name s) = symVal ρ s := rfl
+
 /-- A relation between two values: equal, or two numbers (two dates) in order. -/
 def RelSem : Rel → Val → Val → Prop
   | .eq, x, y => x = y
@@ -54,7 +75,7 @@ def RelSem : Rel → Val → Val → Prop
 /-- **An environment of the evaluation among those a scope of the analysis says.** -/
 structure Sat (A : ACtx) (ρ : Env) : Prop where
   env : ∀ x a, A.lookup x = some a → ∃ v, ρ.get? x = some v ∧ Mem a v
-  facts : ∀ p r q, (p, r, q) ∈ A.facts → ∃ x y, symVal ρ p = some x ∧ symVal ρ q = some y ∧ RelSem r x y
+  facts : ∀ p r q, (p, r, q) ∈ A.facts → ∃ x y, termVal ρ p = some x ∧ termVal ρ q = some y ∧ RelSem r x y
 
 theorem lookup_cons (A : ACtx) (x : String) (a : Abs) (y : String) :
     ({ A with env := (x, a) :: A.env } : ACtx).lookup y = if x = y then some a else A.lookup y := by
@@ -75,6 +96,14 @@ theorem symVal_cons_ne {ρ : Env} {x : String} {v : Val} {s : Sym} (h : s.1 ≠ 
   unfold symVal
   rw [get_cons]; simp [Ne.symm h]
 
+theorem termVal_cons_ne {ρ : Env} {x : String} {v : Val} {t : Term} (h : t.base ≠ x) :
+    termVal ((x, v) :: ρ) t = termVal ρ t := by
+  cases t with
+  | name s => exact symVal_cons_ne h
+  | sum l path =>
+    have h' : l.1 ≠ x := h
+    simp only [termVal, symVal_cons_ne h']
+
 /-- **A name the evaluation gives a value to.** -/
 theorem Sat.bindNew {A : ACtx} {ρ : Env} (h : Sat A ρ) {x : String} {a : Abs} {v : Val} (hv : Mem a v) :
     Sat (A.bindNew x a) ((x, v) :: ρ) where
@@ -93,7 +122,45 @@ theorem Sat.bindNew {A : ACtx} {ρ : Env} (h : Sat A ρ) {x : String} {a : Abs} 
     simp only [List.mem_filter, Bool.and_eq_true, bne_iff_ne, ne_eq] at hm
     obtain ⟨hm, hp, hq⟩ := hm
     obtain ⟨x', y', h1, h2, h3⟩ := h.facts p r q hm
-    exact ⟨x', y', by rw [symVal_cons_ne hp]; exact h1, by rw [symVal_cons_ne hq]; exact h2, h3⟩
+    exact ⟨x', y', by rw [termVal_cons_ne hp]; exact h1, by rw [termVal_cons_ne hq]; exact h2, h3⟩
+
+/-- What the elements a walk's function is given hold of the sum `tot` it is given (kaname's DESIGN
+    32, 33): each has a `total`, the value of the sum. -/
+def TotOK (ρ : Env) (tot : Option Term) (xs : List Val) : Prop :=
+  ∀ t, tot = some t → ∀ el ∈ xs, ∃ u, pathVal el ["total"] = some u ∧ termVal ρ t = some u
+
+theorem TotOK.none (ρ : Env) (xs : List Val) : TotOK ρ none xs := fun _ h => by cases h
+
+theorem TotOK.sub {ρ : Env} {tot : Option Term} {xs ys : List Val} (h : TotOK ρ tot xs) (hs : ∀ y ∈ ys, y ∈ xs) :
+    TotOK ρ tot ys := fun t ht el hel => h t ht el (hs el hel)
+
+/-- **The parameter of a function given to a walk**: bound to an element, and its `total` to the
+    sum where the walk is of running totals. -/
+theorem Sat.bindLam {A : ACtx} {ρ : Env} (h : Sat A ρ) {x : String} {a : Abs} {v : Val} (hv : Mem a v)
+    {tot : Option Term} (ht : ∀ t, tot = some t → ∃ u, pathVal v ["total"] = some u ∧ termVal ρ t = some u) :
+    Sat (A.bindLam x a tot) ((x, v) :: ρ) := by
+  have hb := h.bindNew (x := x) hv
+  unfold ACtx.bindLam
+  cases tot with
+  | none => exact hb
+  | some t =>
+    simp only
+    split
+    · exact hb
+    · rename_i hne
+      have hne' : t.base ≠ x := by simpa using hne
+      obtain ⟨u, hu, ht'⟩ := ht t rfl
+      refine ⟨hb.env, ?_⟩
+      intro p r q hm
+      simp only [List.mem_append, List.mem_singleton] at hm
+      rcases hm with hm | hm
+      · exact hb.facts p r q hm
+      · cases hm
+        refine ⟨u, u, ?_, ?_, rfl⟩
+        · simp only [termVal, symVal, get_cons, ite_true, Option.bind_some]; exact hu
+        · rw [termVal_cons_ne hne']; exact ht'
+
+theorem ACtx.bindLam_none (A : ACtx) (x : String) (a : Abs) : A.bindLam x a none = A.bindNew x a := rfl
 
 /-- The scope where a function starts: its parameters, each with what it takes. -/
 theorem Sat.nil (M : Module) (results : List (Option Abs)) (ring : List Nat) (d : Nat := 0) (own : Bool := true)
@@ -148,6 +215,152 @@ theorem sym_eval {C : Ctx} : ∀ {e : Expr} {s : Sym} {n dep : Nat} {ρ : Env} {
   | .round .., _, _, _, _, _, hs, _ | .count1 .., _, _, _, _, _, hs, _ | .startsWith .., _, _, _, _, _, hs, _
   | .concat .., _, _, _, _, _, hs, _ | .text .., _, _, _, _, _, hs, _ | .bad .., _, _, _, _, _, hs, _ => by
     simp [sym] at hs
+
+-- ── The value of a sum, and the totals of running totals ─────────────────────
+
+theorem fieldPath_sym {x : String} {body : Expr} {path : List String} (h : fieldPath x body = some path) :
+    sym body = some (x, path) := by
+  unfold fieldPath at h
+  rcases hs : sym body with _ | ⟨nm, fs⟩ <;> rw [hs] at h <;> simp at h
+  obtain ⟨rfl, rfl⟩ := h
+  rfl
+
+/-- A function that answers a field of its parameter, given each element of a list by a walk that
+    no answer stops: its answers are the elements' values at that field. -/
+theorem evalEach_path {C : Ctx} {x : String} {body : Expr} {path : List String} {w : Walk}
+    (hp : fieldPath x body = some path) (hw : ∀ v, stopAt w v = false) :
+    ∀ (n dep : Nat) (ρ : Env) (els as : List Val), evalEach C n dep ρ x body none w els = .ok as →
+      els.mapM (pathVal · path) = some as
+  | 0, _, _, _, _, h => by simp [evalEach] at h
+  | _ + 1, _, _, [], as, h => by simp [evalEach] at h; subst h; rfl
+  | n + 1, dep, ρ, el :: rest, as, h => by
+    simp only [evalEach, bind, Except.bind] at h
+    rcases ha : eval C n dep ((x, el) :: ρ) body with e | a <;> rw [ha] at h
+    · cases h
+    · simp only [coerce, hw, Bool.false_eq_true, ite_false] at h
+      rcases hr : evalEach C n dep ρ x body none w rest with e | as' <;> rw [hr] at h
+      · cases h
+      · simp only [Except.ok.injEq] at h
+        subst h
+        have hv := sym_eval (fieldPath_sym hp) ha
+        simp only [symVal, get_cons, ite_true, Option.bind_some] at hv
+        rw [List.mapM_cons, hv, evalEach_path hp hw n dep ρ rest as' hr]
+        rfl
+
+theorem sumN_addUp {line : Nat} : ∀ (vs : List Val) (acc t : Rat), sumN line acc vs = .ok t → t = addUp acc vs
+  | [], acc, t, h => by simp [sumN] at h; subst h; rfl
+  | v :: vs, acc, t, h => by
+    simp only [sumN, bind, Except.bind] at h
+    rcases ha : liftA line (addN acc (asNum v)) with e | acc' <;> rw [ha] at h
+    · cases h
+    · have hacc : acc' = acc + asNum v := by
+        simp only [addN, held] at ha
+        split at ha <;> simp [liftA] at ha
+        exact ha.symm
+      subst hacc
+      exact sumN_addUp vs _ t h
+
+theorem summed_some {e : Expr} {t : Term} (h : summed e = some t) :
+    ∃ id line list x body ord step, e = .walk id line .sum list x body none ord step ∧ sumTerm list x body = some t := by
+  unfold summed at h
+  split at h
+  · exact ⟨_, _, _, _, _, _, _, rfl, h⟩
+  · simp at h
+
+theorem totalsOf_some {e : Expr} {t : Term} (h : totalsOf e = some t) :
+    ∃ id line list x body ord step, e = .walk id line .running list x body none ord step ∧
+      sumTerm list x body = some t := by
+  unfold totalsOf at h
+  split at h
+  · exact ⟨_, _, _, _, _, _, _, rfl, h⟩
+  · simp at h
+
+theorem sumTerm_some {list : Expr} {x : String} {body : Expr} {t : Term} (h : sumTerm list x body = some t) :
+    ∃ l path, sym list = some l ∧ fieldPath x body = some path ∧ t = .sum l path := by
+  unfold sumTerm at h
+  split at h
+  · rename_i l path hl hp; cases h; exact ⟨l, path, hl, hp, rfl⟩
+  · simp at h
+
+/-- What a walk of a list by a field of its elements comes to: the list, and the elements' values
+    at the field, added up to what it answers (`fold`). -/
+theorem walk_field_eval {C : Ctx} {id line : Nat} {w : Walk} {list : Expr} {x : String} {body : Expr}
+    {ord : Order} {step : Option Rat} {path : List String} {n dep : Nat} {ρ : Env} {v : Val}
+    (hp : fieldPath x body = some path) (hw : ∀ v, stopAt w v = false)
+    (he : eval C n dep ρ (.walk id line w list x body none ord step) = .ok v) :
+    ∃ n' xs answers, eval C n' dep ρ list = .ok (.list xs) ∧ xs.mapM (pathVal · path) = some answers ∧
+      fold w line ord step xs answers = .ok v := by
+  cases n with
+  | zero => simp [eval] at he
+  | succ n =>
+    simp only [eval, bind, Except.bind] at he
+    rcases hl : eval C n dep ρ list with e | lv <;> rw [hl] at he
+    · cases he
+    · cases lv with
+      | list xs =>
+        simp only at he
+        rcases ha : evalEach C n dep ρ x body none w xs with e | answers <;> rw [ha] at he
+        · cases he
+        · simp only at he
+          rcases hok : answersOK w line answers with e | u <;> rw [hok] at he
+          · cases he
+          · exact ⟨n, xs, answers, hl, evalEach_path hp hw n dep ρ xs answers ha, he⟩
+      | _ => simp [failK] at he
+
+/-- **The value of a sum of a list by a field is the sum's value in the environment.** -/
+theorem summed_eval {C : Ctx} {e : Expr} {t : Term} {n dep : Nat} {ρ : Env} {v : Val}
+    (hs : summed e = some t) (he : eval C n dep ρ e = .ok v) : termVal ρ t = some v := by
+  obtain ⟨id, line, list, x, body, ord, step, rfl, hst⟩ := summed_some hs
+  obtain ⟨l, path, hl, hp, rfl⟩ := sumTerm_some hst
+  obtain ⟨n', xs, answers, hlist, hmap, hfold⟩ := walk_field_eval hp (fun v => rfl) he
+  have hsym := sym_eval hl hlist
+  simp only [fold, bind, Except.bind] at hfold
+  rcases hst' : answers.forM (fun a => stepped step a line) with e | u <;> rw [hst'] at hfold
+  · cases hfold
+  · simp only at hfold
+    rcases htot : sumN line 0 answers with e | total <;> rw [htot] at hfold
+    · cases hfold
+    · simp only [Except.ok.injEq] at hfold
+      subst hfold
+      simp only [termVal, hsym, hmap, Option.map_some, sumN_addUp answers 0 total htot]
+
+theorem runningN_total (total : Rat) : ∀ (b : Rat) (ps : List (Val × Val)), ∀ el ∈ runningN total b ps,
+    pathVal el ["total"] = some (.num total)
+  | _, [] => by simp [runningN]
+  | b, (x, w) :: rest => by
+    intro el hel
+    simp only [runningN, List.mem_cons] at hel
+    rcases hel with rfl | hel
+    · simp [pathVal, Val.field?]
+    · exact runningN_total total _ rest el hel
+
+/-- **Each element of what `running_totals` answers has the sum of the list by the same field as
+    its `total`.** -/
+theorem totals_eval {C : Ctx} {e : Expr} {t : Term} {n dep : Nat} {ρ : Env} {xs : List Val}
+    (hs : totalsOf e = some t) (he : eval C n dep ρ e = .ok (.list xs)) : TotOK ρ (some t) xs := by
+  obtain ⟨id, line, list, x, body, ord, step, rfl, hst⟩ := totalsOf_some hs
+  obtain ⟨l, path, hl, hp, rfl⟩ := sumTerm_some hst
+  obtain ⟨n', ys, answers, hlist, hmap, hfold⟩ := walk_field_eval hp (fun v => rfl) he
+  have hsym := sym_eval hl hlist
+  simp only [fold, bind, Except.bind] at hfold
+  rcases hst' : answers.forM (fun a => stepped step a line) with e | u <;> rw [hst'] at hfold
+  · cases hfold
+  · simp only at hfold
+    rcases htot : sumN line 0 answers with e | total <;> rw [htot] at hfold
+    · cases hfold
+    · simp only [Except.ok.injEq, Val.list.injEq] at hfold
+      subst hfold
+      intro t' ht' el hel
+      cases ht'
+      refine ⟨.num total, runningN_total total 0 _ el hel, ?_⟩
+      simp only [termVal, hsym, hmap, Option.map_some, sumN_addUp answers 0 total htot]
+
+/-- What the elements of a list a walk is given hold of the sum each one's `total` is. -/
+theorem totOK_of_eval {C : Ctx} {e : Expr} {n dep : Nat} {ρ : Env} {xs : List Val}
+    (he : eval C n dep ρ e = .ok (.list xs)) : TotOK ρ (totalsOf e) xs := by
+  cases ht : totalsOf e with
+  | none => exact TotOK.none ρ xs
+  | some t => exact totals_eval ht he
 
 theorem Mem_path : ∀ (path : List String) {a : Abs} {w u : Val}, Mem a w → pathVal w path = some u →
     Mem (path.foldl (fun a f => a.field f) a) u
@@ -573,10 +786,11 @@ theorem narrowIv_sound {x y : Iv} {op : CmpOp} {step : Option Rat} {p q : Rat} (
 
 -- ── What a condition says of the environment ────────────────────────────────
 
-/-- The value of an expression a branch narrows, as the environment has it: the name it is, and the
-    count of the list a `count` counts. -/
+/-- The value of an expression a branch narrows, as the environment has it: the name it is, the sum
+    of a list it is, and the count of the list a `count` counts. -/
 structure SymOK (ρ : Env) (e : Expr) (x : Val) : Prop where
   sym : ∀ s, sym e = some s → symVal ρ s = some x
+  sum : ∀ t, summed e = some t → termVal ρ t = some x
   count : ∀ l, counted e = some l → ∀ w, symVal ρ l = some w →
     x = .num (match w with
       | .list xs => (xs.length : Rat)
@@ -584,6 +798,14 @@ structure SymOK (ρ : Env) (e : Expr) (x : Val) : Prop where
       | .set xs => (xs.length : Rat)
       | .str s => (s.length : Rat)
       | _ => 0)
+
+/-- What the facts hold of a side of a comparison is its value. -/
+theorem SymOK.term {ρ : Env} {e : Expr} {x : Val} (h : SymOK ρ e x) {t : Term} (ht : factTerm e = some t) :
+    termVal ρ t = some x := by
+  unfold factTerm at ht
+  rcases hs : KanameCore.sym e with _ | s <;> rw [hs] at ht
+  · exact h.sum t ht
+  · simp only [Option.some.injEq] at ht; subst ht; exact h.sym s hs
 
 /-- A value on the step its type says. -/
 def StepOK (s : Option Rat) (x : Val) : Prop := ∀ st r, s = some st → x = .num r → onStep st r = true
@@ -601,6 +823,7 @@ def NarHolds (ρ : Env) : Nar → Bool → Prop
 theorem symOK_of_eval {C : Ctx} {e : Expr} {n dep : Nat} {ρ : Env} {v : Val} (h : eval C n dep ρ e = .ok v) :
     SymOK ρ e v where
   sym s hs := sym_eval hs h
+  sum t ht := summed_eval ht h
   count l hl w hw := by
     cases e <;> simp [counted] at hl
     rename_i id lst
@@ -854,11 +1077,11 @@ theorem Sat.narrowCounts {A : ACtx} {ρ : Env} (h : Sat A ρ) {op : CmpOp} {a b 
 
 -- ── Facts ────────────────────────────────────────────────────────────────────
 
-theorem Sat.addFact {A : ACtx} {ρ : Env} (h : Sat A ρ) {op : CmpOp} {syA syB : Option Sym} {ca cb : Option Conv}
+theorem Sat.addFact {A : ACtx} {ρ : Env} (h : Sat A ρ) {op : CmpOp} {syA syB : Option Term} {ca cb : Option Conv}
     {xa xb : Abs}
     (hf : ∀ p q f, syA = some p → syB = some q → ca = none → cb = none →
       ((∃ i j, xa = .num i ∧ xb = .num j) ∨ (∃ i j, xa = .date i ∧ xb = .date j)) → factOf op p q = some f →
-      ∃ x y, symVal ρ f.1 = some x ∧ symVal ρ f.2.2 = some y ∧ RelSem f.2.1 x y) :
+      ∃ x y, termVal ρ f.1 = some x ∧ termVal ρ f.2.2 = some y ∧ RelSem f.2.1 x y) :
     Sat (addFact A op syA syB ca cb xa xb) ρ := by
   unfold KanameCore.addFact
   simp only
@@ -880,11 +1103,11 @@ theorem Sat.addFact {A : ACtx} {ρ : Env} (h : Sat A ρ) {op : CmpOp} {syA syB :
     · exact h
   · exact h
 
-theorem factOf_sound {op : CmpOp} {p q : Sym} {f : Sym × Rel × Sym} {ρ : Env} {x y : Val}
-    (hp : symVal ρ p = some x) (hq : symVal ρ q = some y) (hf : factOf op p q = some f)
+theorem factOf_sound {op : CmpOp} {p q : Term} {f : Term × Rel × Term} {ρ : Env} {x y : Val}
+    (hp : termVal ρ p = some x) (hq : termVal ρ q = some y) (hf : factOf op p q = some f)
     (hrel : ∀ a b, x = .num a → y = .num b → OpRel op a b) (hrel' : ∀ a b : Int, x = .date a → y = .date b → OpRel op a b)
     (hk : (∃ a b, x = .num a ∧ y = .num b) ∨ (∃ a b : Int, x = .date a ∧ y = .date b)) :
-    ∃ x' y', symVal ρ f.1 = some x' ∧ symVal ρ f.2.2 = some y' ∧ RelSem f.2.1 x' y' := by
+    ∃ x' y', termVal ρ f.1 = some x' ∧ termVal ρ f.2.2 = some y' ∧ RelSem f.2.1 x' y' := by
   rcases hk with ⟨a, b, rfl, rfl⟩ | ⟨a, b, rfl, rfl⟩
   · have := hrel a b rfl rfl
     cases op with
@@ -969,8 +1192,8 @@ theorem Sat.narrowCmp {A : ACtx} {ρ : Env} (h : Sat A ρ) {op : CmpOp} {a b : E
     · -- the fact
       intro p q f hp hq hca hcb hk hf
       subst hca hcb
-      have hpx := hxa.sym p hp
-      have hqy := hyb.sym q hq
+      have hpx := hxa.term hp
+      have hqy := hyb.term hq
       refine factOf_sound hpx hqy hf ?_ fdate ?_
       · intro u v hu hv
         obtain ⟨p', q', e1, e2, hr⟩ := fnum u v hu hv
@@ -1136,14 +1359,14 @@ theorem RelSem.compose {r1 r2 : Rel} {x w z : Val} (h1 : RelSem r1 x w) (h2 : Re
       all_goals first | exact Rat.le_trans h1 h2 | omega
 
 /-- Each edge: the values of its two ends keep its relation. -/
-def EdgesOK (ρ : Env) (edges : List (Sym × Rel × Sym)) : Prop :=
-  ∀ e ∈ edges, ∃ u w, symVal ρ e.1 = some u ∧ symVal ρ e.2.2 = some w ∧ RelSem e.2.1 u w
+def EdgesOK (ρ : Env) (edges : List (Term × Rel × Term)) : Prop :=
+  ∀ e ∈ edges, ∃ u w, termVal ρ e.1 = some u ∧ termVal ρ e.2.2 = some w ∧ RelSem e.2.1 u w
 
 /-- What the strongest relations so far say: from the value `x0` to the value of each name. -/
-def BestOK (ρ : Env) (x0 : Val) (best : List (Sym × Rel)) : Prop :=
-  ∀ s r, (s, r) ∈ best → ∃ w, symVal ρ s = some w ∧ RelSem r x0 w
+def BestOK (ρ : Env) (x0 : Val) (best : List (Term × Rel)) : Prop :=
+  ∀ s r, (s, r) ∈ best → ∃ w, termVal ρ s = some w ∧ RelSem r x0 w
 
-theorem bestGet_mem {best : List (Sym × Rel)} {s : Sym} {r : Rel} (h : bestGet best s = some r) : (s, r) ∈ best := by
+theorem bestGet_mem {best : List (Term × Rel)} {s : Term} {r : Rel} (h : bestGet best s = some r) : (s, r) ∈ best := by
   unfold bestGet at h
   rcases hf : best.find? (·.1 == s) with _ | ⟨k, v⟩ <;> rw [hf] at h <;> simp at h
   subst h
@@ -1151,8 +1374,8 @@ theorem bestGet_mem {best : List (Sym × Rel)} {s : Sym} {r : Rel} (h : bestGet 
   have hk := List.find?_some hf
   simp at hk; subst hk; exact hm
 
-theorem BestOK.put {ρ : Env} {x0 : Val} {best : List (Sym × Rel)} (h : BestOK ρ x0 best) {s : Sym} {r : Rel} {w : Val}
-    (hw : symVal ρ s = some w) (hr : RelSem r x0 w) : BestOK ρ x0 (bestPut best s r) := by
+theorem BestOK.put {ρ : Env} {x0 : Val} {best : List (Term × Rel)} (h : BestOK ρ x0 best) {s : Term} {r : Rel} {w : Val}
+    (hw : termVal ρ s = some w) (hr : RelSem r x0 w) : BestOK ρ x0 (bestPut best s r) := by
   intro s' r' hm
   unfold bestPut at hm
   split at hm
@@ -1168,9 +1391,9 @@ theorem BestOK.put {ρ : Env} {x0 : Val} {best : List (Sym × Rel)} (h : BestOK 
     · simp at hm; obtain ⟨rfl, rfl⟩ := hm; exact ⟨w, hw, hr⟩
 
 /-- One candidate of an edge, where the edge's relation holds between its values. -/
-theorem cand_ok {ρ : Env} {x0 : Val} {yEdge : Sym} (acc : List (Sym × Rel) × Bool) (src dst : Sym) (rel : Rel)
+theorem cand_ok {ρ : Env} {x0 : Val} {yEdge : Term} (acc : List (Term × Rel) × Bool) (src dst : Term) (rel : Rel)
     (h : BestOK ρ x0 acc.1)
-    (he : (src == yEdge && rel != .eq) = false → ∃ u w, symVal ρ src = some u ∧ symVal ρ dst = some w ∧ RelSem rel u w) :
+    (he : (src == yEdge && rel != .eq) = false → ∃ u w, termVal ρ src = some u ∧ termVal ρ dst = some w ∧ RelSem rel u w) :
     BestOK ρ x0 (if (src == yEdge && rel != .eq) = true then acc
       else match bestGet acc.1 src with
         | none => acc
@@ -1200,10 +1423,10 @@ theorem foldl_inv_mem {α β : Type} (P : β → Prop) (f : β → α → β) :
   | a :: l, hf, b, h => foldl_inv_mem P f l (fun b' a' ha' hb' => hf b' a' (List.mem_cons_of_mem a ha') hb') (f b a)
       (hf b a (List.mem_cons_self) h)
 
-theorem relPass_ok {ρ : Env} {x0 : Val} {edges : List (Sym × Rel × Sym)} (he : EdgesOK ρ edges)
-    {best : List (Sym × Rel)} (h : BestOK ρ x0 best) : BestOK ρ x0 (relPass edges best).1 := by
+theorem relPass_ok {ρ : Env} {x0 : Val} {edges : List (Term × Rel × Term)} (he : EdgesOK ρ edges)
+    {best : List (Term × Rel)} (h : BestOK ρ x0 best) : BestOK ρ x0 (relPass edges best).1 := by
   unfold relPass
-  refine foldl_inv_mem (fun acc : List (Sym × Rel) × Bool => BestOK ρ x0 acc.1) _ edges ?_ (best, false) h
+  refine foldl_inv_mem (fun acc : List (Term × Rel) × Bool => BestOK ρ x0 acc.1) _ edges ?_ (best, false) h
   rintro acc ⟨x, r, y⟩ hmem hacc
   obtain ⟨u, w, hu, hw, hr⟩ := he _ hmem
   simp only [List.foldl_cons, List.foldl_nil]
@@ -1218,8 +1441,8 @@ theorem relPass_ok {ρ : Env} {x0 : Val} {edges : List (Sym × Rel × Sym)} (he 
   subst hr
   exact ⟨u, u, hw, hu, rfl⟩
 
-theorem relIterate_ok {ρ : Env} {x0 : Val} {edges : List (Sym × Rel × Sym)} (he : EdgesOK ρ edges) :
-    ∀ (n : Nat) {best : List (Sym × Rel)}, BestOK ρ x0 best → BestOK ρ x0 (relIterate edges n best)
+theorem relIterate_ok {ρ : Env} {x0 : Val} {edges : List (Term × Rel × Term)} (he : EdgesOK ρ edges) :
+    ∀ (n : Nat) {best : List (Term × Rel)}, BestOK ρ x0 best → BestOK ρ x0 (relIterate edges n best)
   | 0, best, h => h
   | n + 1, best, h => by
     simp only [relIterate]
@@ -1254,9 +1477,9 @@ theorem recordEdges_ok {A : ACtx} {ρ : Env} (h : Sat A ρ) {s : Sym} {v : Val} 
       | @record _ _ vs hf hr =>
         obtain ⟨u, w, hu, hw, hrel⟩ := hr a r b hm
         refine ⟨u, w, ?_, ?_, ?_⟩
-        · simp only [symVal, hg, Option.bind_some, pathVal_append, hb, Option.bind_some, Val.field?]
+        · simp only [termVal, symVal, hg, Option.bind_some, pathVal_append, hb, Option.bind_some, Val.field?]
           exact hu
-        · simp only [symVal, hg, Option.bind_some, pathVal_append, hb, Option.bind_some, Val.field?]
+        · simp only [termVal, symVal, hg, Option.bind_some, pathVal_append, hb, Option.bind_some, Val.field?]
           exact hw
         · cases u <;> cases w <;> simp only [RelVals] at hrel <;> try exact absurd hrel id
           cases r <;> simp only [Rel.holds, decide_eq_true_eq, beq_iff_eq] at hrel <;> simp only [RelSem] <;>
@@ -1288,12 +1511,12 @@ theorem relation_sound {A : ACtx} {ρ : Env} (h : Sat A ρ) {a b : Expr} {x y : 
         · exact recordEdges_ok h hx e he
         · exact recordEdges_ok h hy e he
       have hbest := relIterate_ok (x0 := x) hedges ((A.facts ++ recordEdges A sa ++ recordEdges A sb).length + 1)
-        (best := [(sa, .eq)]) (by
+        (best := [(.name sa, .eq)]) (by
           intro s' r' hm
           simp at hm; obtain ⟨rfl, rfl⟩ := hm
           exact ⟨x, hx, rfl⟩)
-      obtain ⟨w, hw, hrel⟩ := hbest sb r (bestGet_mem hr)
-      rw [hy] at hw; cases hw
+      obtain ⟨w, hw, hrel⟩ := hbest (.name sb) r (bestGet_mem hr)
+      rw [termVal_name, hy] at hw; cases hw
       exact hrel
   · simp at hr
 

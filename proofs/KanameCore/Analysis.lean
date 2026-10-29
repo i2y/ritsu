@@ -163,6 +163,20 @@ def Out.merged (o : Out) : Out :=
 /-- A name and the fields under it, that a branch narrows: `invoice.amount`. -/
 abbrev Sym := String × List String
 
+/-- What the conditions in force relate: a name and the fields under it, or the sum of a list that is
+    a name by a field of its elements (`sum(xs, x => x.amount)`, kaname's DESIGN 32, 33): the list's
+    name and fields, and the path the lambda answers of its parameter. Rust writes the second as a
+    name with the step `⅀` between the two (`ranges::SUM`); a branch narrows no such name. -/
+inductive Term where
+  | name (s : Sym)
+  | sum (list : Sym) (path : List String)
+  deriving DecidableEq, Repr, Inhabited
+
+/-- The name in scope a term reads: the name, or the list's. -/
+def Term.base : Term → String
+  | .name s => s.1
+  | .sum l _ => l.1
+
 /-- The scope of the analysis of one function: the module and what its functions answer once they
     are analysed, the ring of the function, the names in scope with their values, what the
     conditions in force say of how two names compare, and how many readings again of a body the
@@ -172,7 +186,7 @@ structure ACtx where
   results : List (Option Abs)
   ring : List Nat
   env : List (String × Abs)
-  facts : List (Sym × Rel × Sym)
+  facts : List (Term × Rel × Term)
   depth : Nat
   /-- Whether the analysis is of the function itself, not a reading again of another (what the
       lambdas it makes say they were made in), and whether it reads the body of a lambda the function
@@ -191,7 +205,17 @@ def bind (A : ACtx) (x : String) (a : Abs) : ACtx := { A with env := (x, a) :: A
     builtin): what the conditions in force said of an earlier one of the name is not of this one.
     The check of types lets no name be given twice in a scope (E006), so nothing is dropped there. -/
 def bindNew (A : ACtx) (x : String) (a : Abs) : ACtx :=
-  { A with env := (x, a) :: A.env, facts := A.facts.filter fun (p, _, q) => p.1 != x && q.1 != x }
+  { A with env := (x, a) :: A.env, facts := A.facts.filter fun (p, _, q) => p.base != x && q.base != x }
+
+/-- The parameter of a function given to a builtin that walks a list, bound to `a`: where the list
+    is what `running_totals(xs, y => y.amount)` answers, the parameter's `total` is the sum `tot` of
+    that list by that field (kaname's DESIGN 32, 33; `ranges::elem_total_fact`). A parameter named as
+    the list is not given it: the check of types lets no name be given twice in a scope (E006). -/
+def bindLam (A : ACtx) (x : String) (a : Abs) (tot : Option Term) : ACtx :=
+  let B := A.bindNew x a
+  match tot with
+  | some t => if t.base == x then B else { B with facts := B.facts ++ [(.name (x, ["total"]), .eq, t)] }
+  | none => B
 
 def symAbs (A : ACtx) (s : Sym) : Option Abs :=
   (A.lookup s.1).map fun a => s.2.foldl (fun a f => a.field f) a
@@ -208,6 +232,41 @@ def sym : Expr → Option Sym
 def counted : Expr → Option Sym
   | .count1 _ l => sym l
   | _ => none
+
+/-- The fields a function of one parameter answers of it: `x => x.amount` is `[amount]`, `x => x`
+    is `[]`; none for any other body. Two such functions are the same whatever their parameters are
+    named (`ranges::field_lambda`). -/
+def fieldPath (x : String) (body : Expr) : Option (List String) :=
+  match sym body with
+  | some (n, fs) => if n == x then some fs else none
+  | none => none
+
+/-- The sum of a list that is a name by the fields a function answers of each element
+    (`ranges::sum_term`): `sum(xs, x => x.amount)` and `xs.sum(l => l.amount)` are one sum. -/
+def sumTerm (list : Expr) (x : String) (body : Expr) : Option Term :=
+  match sym list, fieldPath x body with
+  | some s, some fs => some (.sum s fs)
+  | _, _ => none
+
+/-- A `sum` of a list that is a name by a field of its elements, as a term the facts can hold
+    (`ranges::summed`). Its answers are read as the function answers them: the check of types gives
+    a sum the type of what it adds up. -/
+def summed : Expr → Option Term
+  | .walk _ _ .sum list x body Option.none _ _ => sumTerm list x body
+  | _ => none
+
+/-- The sum each element's `total` is, where a builtin walks the list `running_totals(xs, x =>
+    x.amount)` answers (`ranges::totals_of`): `sum(xs, x => x.amount)`. -/
+def totalsOf : Expr → Option Term
+  | .walk _ _ .running list x body Option.none _ _ => sumTerm list x body
+  | _ => none
+
+/-- What the facts hold of one side of a comparison: the name it is, or the sum of a list it is
+    (`ranges::narrow_cmp`). -/
+def factTerm (e : Expr) : Option Term :=
+  match sym e with
+  | some s => some (.name s)
+  | none => summed e
 
 /-- The values with the field at `path` put to `to` (through optionals, and in each value of an enum
     that has the field). -/
@@ -556,25 +615,25 @@ def Rel.compose : Rel → Rel → Rel
   | _, _ => .le
 
 /-- The relations a record's fields keep, as edges between names. -/
-def recordEdges (A : ACtx) (s : Sym) : List (Sym × Rel × Sym) :=
+def recordEdges (A : ACtx) (s : Sym) : List (Term × Rel × Term) :=
   match s.2.reverse with
   | [] => []
   | _ :: restRev =>
     let base : Sym := (s.1, restRev.reverse)
     match A.symAbs base with
-    | some (.record _ rels) => rels.map fun (x, r, y) => ((base.1, base.2 ++ [x]), r, (base.1, base.2 ++ [y]))
+    | some (.record _ rels) => rels.map fun (x, r, y) => (.name (base.1, base.2 ++ [x]), r, .name (base.1, base.2 ++ [y]))
     | _ => []
 
-def bestGet (best : List (Sym × Rel)) (s : Sym) : Option Rel := (best.find? (·.1 == s)).map (·.2)
+def bestGet (best : List (Term × Rel)) (s : Term) : Option Rel := (best.find? (·.1 == s)).map (·.2)
 
-def bestPut (best : List (Sym × Rel)) (s : Sym) (r : Rel) : List (Sym × Rel) :=
+def bestPut (best : List (Term × Rel)) (s : Term) (r : Rel) : List (Term × Rel) :=
   if best.any (·.1 == s) then best.map fun (k, v) => if k == s then (k, r) else (k, v) else best ++ [(s, r)]
 
 /-- One pass over the edges, each forward and (for `=`) back: the strongest relation from the
     first name to each, and whether it changed. -/
-def relPass (edges : List (Sym × Rel × Sym)) (best : List (Sym × Rel)) : List (Sym × Rel) × Bool :=
-  edges.foldl (fun (acc : List (Sym × Rel) × Bool) (x, r, y) =>
-    [(x, y, r), (y, x, r)].foldl (fun (acc : List (Sym × Rel) × Bool) (src, dst, rel) =>
+def relPass (edges : List (Term × Rel × Term)) (best : List (Term × Rel)) : List (Term × Rel) × Bool :=
+  edges.foldl (fun (acc : List (Term × Rel) × Bool) (x, r, y) =>
+    [(x, y, r), (y, x, r)].foldl (fun (acc : List (Term × Rel) × Bool) (src, dst, rel) =>
       if src == y && rel != .eq then acc
       else match bestGet acc.1 src with
         | none => acc
@@ -585,20 +644,21 @@ def relPass (edges : List (Sym × Rel × Sym)) (best : List (Sym × Rel)) : List
             | some old => next.strength > old.strength
           if better then (bestPut acc.1 dst next, true) else acc) acc) (best, false)
 
-def relIterate (edges : List (Sym × Rel × Sym)) : Nat → List (Sym × Rel) → List (Sym × Rel)
+def relIterate (edges : List (Term × Rel × Term)) : Nat → List (Term × Rel) → List (Term × Rel)
   | 0, best => best
   | n + 1, best =>
     let (next, changed) := relPass edges best
     if changed then relIterate edges n next else next
 
 /-- How the values of two expressions are known to compare: what a condition in force says of the
-    names they are, or the fields of one record, followed through each other. -/
+    names they are (and of the sums of lists, kaname's DESIGN 32), or the fields of one record,
+    followed through each other. -/
 def relation (A : ACtx) (a b : Expr) : Option Rel :=
   match sym a, sym b with
   | some sa, some sb =>
     let edges := A.facts ++ recordEdges A sa ++ recordEdges A sb
-    let best := relIterate edges (edges.length + 1) [(sa, .eq)]
-    if sa == sb then some .eq else bestGet best sb
+    let best := relIterate edges (edges.length + 1) [(.name sa, .eq)]
+    if sa == sb then some .eq else bestGet best (.name sb)
   | _, _ => none
 
 /-- The id of an expression; a `let` is no expression of its own. -/
@@ -717,8 +777,8 @@ def narrowSide (A : ACtx) (s : Option Sym) (conv : Option Conv) (me other : Abs)
       | some n => A.narrowTo s n
       | none => A
 
-/-- What a comparison that holds says of how two names compare, kept as a fact. -/
-def factOf (op : CmpOp) (p q : Sym) : Option (Sym × Rel × Sym) :=
+/-- What a comparison that holds says of how two names (or sums) compare, kept as a fact. -/
+def factOf (op : CmpOp) (p q : Term) : Option (Term × Rel × Term) :=
   match op with
   | .lt => some (p, .lt, q)
   | .le => some (p, .le, q)
@@ -729,7 +789,7 @@ def factOf (op : CmpOp) (p q : Sym) : Option (Sym × Rel × Sym) :=
 
 /-- A fact between two names is kept where both are in their own unit and both are numbers or both
     dates: what `relation` reads, and what the comparison that holds says of them. -/
-def addFact (A : ACtx) (op : CmpOp) (syA syB : Option Sym) (ca cb : Option Conv) (xa xb : Abs) : ACtx :=
+def addFact (A : ACtx) (op : CmpOp) (syA syB : Option Term) (ca cb : Option Conv) (xa xb : Abs) : ACtx :=
   let comparable := ca.isNone && cb.isNone && match xa, xb with
     | .num _, .num _ => true
     | .date _, .date _ => true
@@ -744,17 +804,18 @@ def addFact (A : ACtx) (op : CmpOp) (syA syB : Option Sym) (ca cb : Option Conv)
 def narrowCounts (A : ACtx) (op : CmpOp) (a b : Expr) (ca cb : Option Conv) (va vb : Abs) : ACtx :=
   if ca.isNone && cb.isNone then narrowCount (narrowCount A a vb op) b va op.flip else A
 
-/-- A comparison, where it holds (`ranges::narrow_cmp`). -/
+/-- A comparison, where it holds (`ranges::narrow_cmp`): the fact between the names or sums the
+    sides are, and each side that is a name narrowed by the other. -/
 def narrowCmp (A : ACtx) (op : CmpOp) (a b : Expr) (ca cb : Option Conv) (sa sb : Option Rat) (va vb : Abs) : ACtx :=
   let A := narrowCounts A op a b ca cb va vb
-  match sym a, sym b with
+  match factTerm a, factTerm b with
   | none, none => A
-  | syA, syB =>
+  | fa, fb =>
     let xa := scaleBy ca va
     let xb := scaleBy cb vb
-    let A := addFact A op syA syB ca cb xa xb
-    let A := narrowSide A syA ca xa xb op sa
-    narrowSide A syB cb xb xa op.flip sb
+    let A := addFact A op fa fb ca cb xa xb
+    let A := narrowSide A (sym a) ca xa xb op sa
+    narrowSide A (sym b) cb xb xa op.flip sb
 
 def Nar.apply : Nar → Bool → ACtx → ACtx
   | .none, _, A => A
@@ -1943,7 +2004,7 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
           let (cnt, k, v) := match d with
             | .dict cnt k v => (cnt, k, v)
             | _ => (anyCount, Abs.any, Abs.any)
-          let ((_, _, held), o) := condition r.ctx n x (entryAbs k v) body c r.out
+          let ((_, _, held), o) := condition r.ctx none n x (entryAbs k v) body c r.out
           AR.of (.dict (upTo cnt) (held.field "key") (held.field "value")) o r.ctx
       -- the values of a dict, each given to the function: the same count and keys
       | .mapValues =>
@@ -1953,7 +2014,7 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
           let (cnt, k, v) := match d with
             | .dict cnt k v => (cnt, k, v)
             | _ => (anyCount, Abs.any, Abs.any)
-          let (u, o) := lam1 r.ctx n x v body c r.out
+          let (u, o) := lam1 r.ctx none n x v body c r.out
           let none' := cnt.hi.any (·.num ≤ 0) || (match v with | .never => true | _ => false)
           AR.of (.dict cnt k (if none' then .never else u)) o r.ctx
       | _ =>
@@ -1963,31 +2024,31 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
           let noneAll := noneAtAll count elem
           match w with
           | .last =>
-            let ((_, _, held), o) := condition r.ctx n x elem body c r.out
+            let ((_, _, held), o) := condition r.ctx (totalsOf coll) n x elem body c r.out
             AR.of (.opt true (stripOpt held)) o r.ctx
           -- the same elements in another order: the keys are worked out for their places
           | .sortBy | .sortByDesc =>
-            let (_, o) := lam1 r.ctx n x elem body c r.out
+            let (_, o) := lam1 r.ctx (totalsOf coll) n x elem body c r.out
             AR.of (.list count (if noneAll then .never else elem)) o r.ctx
           | .maxBy | .minBy =>
-            let (_, o) := lam1 r.ctx n x elem body c r.out
+            let (_, o) := lam1 r.ctx (totalsOf coll) n x elem body c r.out
             AR.of (optOf (count.lo.all fun l => l.num ≤ 0) (if noneAll then .never else elem)) o r.ctx
           | .flatMap =>
-            let (v, o) := lam1 r.ctx n x elem body c r.out
+            let (v, o) := lam1 r.ctx (totalsOf coll) n x elem body c r.out
             let (ci, ei) := match v with
               | .list ci ei => (ci, ei)
               | _ => (anyCount, Abs.any)
             if noneAll then AR.of (.list (Iv.ints 0 0) .never) o r.ctx
             else AR.of (.list (timesCount count ci) ei) o r.ctx
           | .filterMap =>
-            let (v, o) := lam1 r.ctx n x elem body c r.out
+            let (v, o) := lam1 r.ctx (totalsOf coll) n x elem body c r.out
             let kept := match v with
               | .opt _ y => y
               | y => y
             AR.of (.list (upTo count) (if noneAll then .never else kept)) o r.ctx
           -- a pair for each key, the elements of a key from one to as many as the list has
           | .groupBy =>
-            let (kv, o) := lam1 r.ctx n x elem body c r.out
+            let (kv, o) := lam1 r.ctx (totalsOf coll) n x elem body c r.out
             if noneAll then AR.of (.dict (Iv.ints 0 0) .never .never) o r.ctx
             else AR.of (.dict (oneUp count) kv (.list (countIv (some 1) count.hi) elem)) o r.ctx
           | _ => AR.of .any r.out r.ctx
@@ -1996,8 +2057,8 @@ def evI (A : ACtx) : Nat → Expr → Out → AR
       let (count, elem) := walked r.abs
       if count.hi.any (fun h => h.num < 0) then AR.of .never r.out r.ctx
       else
-        let (ka, o) := lam1 r.ctx n x elem kb kc r.out
-        let (va, o) := lam1 r.ctx n y elem vb vc o
+        let (ka, o) := lam1 r.ctx none n x elem kb kc r.out
+        let (va, o) := lam1 r.ctx none n y elem vb vc o
         if noneAtAll count elem then AR.of (.dict (Iv.ints 0 0) .never .never) o r.ctx
         else AR.of (.dict (oneUp count) ka va) o r.ctx
     | .mergeWith _ _ _ a b x y body c =>
@@ -2126,22 +2187,22 @@ def listAbs (A : ACtx) : Nat → List (Expr × Option Conv) → Abs → Nat → 
       listAbs r.ctx n rest (elem.join v) (k + 1) o
 termination_by structural fuel _ _ _ _ => fuel
 
-/-- A function given to a builtin, analysed with its parameter bound to `elem`: its answer read in
-    its place. -/
-def lam1 (A : ACtx) : Nat → String → Abs → Expr → Option Conv → Out → Abs × Out
+/-- A function given to a builtin, analysed with its parameter bound to `elem` (and its `total` to
+    the sum `tot`, where the builtin walks running totals): its answer read in its place. -/
+def lam1 (A : ACtx) (tot : Option Term) : Nat → String → Abs → Expr → Option Conv → Out → Abs × Out
   | 0, _, _, _, _, o => (.any, outOfFuel o)
   | n + 1, x, elem, body, c, o =>
-    let r := ev (A.bindNew x elem) n body o
+    let r := ev (A.bindLam x elem tot) n body o
     convA r.out c r.abs
 termination_by structural fuel _ _ _ _ _ => fuel
 
 /-- A condition given to a builtin, analysed on an element: whether it can hold and fail, and the
     element where it holds. Its answer is read in its place as the evaluation reads it (a bool is
     itself). -/
-def condition (A : ACtx) : Nat → String → Abs → Expr → Option Conv → Out → (Bool × Bool × Abs) × Out
+def condition (A : ACtx) (tot : Option Term) : Nat → String → Abs → Expr → Option Conv → Out → (Bool × Bool × Abs) × Out
   | 0, _, elem, _, _, o => ((true, true, elem), outOfFuel o)
   | n + 1, x, elem, body, c, o =>
-    let r := ev (A.bindNew x elem) n body o
+    let r := ev (A.bindLam x elem tot) n body o
     let (v, o) := convA r.out c r.abs
     let (t, f) := truths v
     let held := ((r.nar.apply true r.ctx).lookup x).getD elem
@@ -2157,10 +2218,10 @@ def walkAbs (A : ACtx) : Nat → Nat → Walk → Expr → String → Expr → O
     let (count, elem) := walked rl.abs
     if count.hi.any (fun h => h.num < 0) then AR.of .never o A
     else if w.isCondition then
-      let ((t, f, held), o) := condition A n x elem body c o
+      let ((t, f, held), o) := condition A (totalsOf list) n x elem body c o
       AR.of (condResult w count elem t f held) o A
     else
-      let (v, o) := lam1 A n x elem body c o
+      let (v, o) := lam1 A (totalsOf list) n x elem body c o
       let (r, o) := lamResult o id w count elem v step
       AR.of r o A
 termination_by structural fuel _ _ _ _ _ _ _ _ _ => fuel
