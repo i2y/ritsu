@@ -455,6 +455,13 @@ pub const RULE_SECONDS: u64 = 10;
 pub const RULE_RETRY_INTERVAL: u64 = 1;
 pub const RULE_RETRY_BACKOFF: f64 = 2.0;
 
+/// How long one try of a callback task may take to hand its id on, on every target (DESIGN 17):
+/// the call that hands it on (a Lambda function, a message, an image) runs before the wait for the
+/// answer, whose `timeout` it is not part of. A try that takes longer is a timeout of the task, as
+/// a wait that runs out is: its `retry` tries again, and then its `on timeout` runs. X5 counts
+/// every try of a callback as this and its `timeout`.
+pub const CALLBACK_HAND_ON_SECONDS: u64 = 60;
+
 /// The longest a call of a rule or of a dates file takes, its retries and the waits between them
 /// counted: three tries of ten seconds, and waits of one second and two (33). X5 counts a call
 /// as taking this long at the most (DESIGN 16).

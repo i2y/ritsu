@@ -32,7 +32,9 @@
 //     and the rules are stand-ins, so rules.go (when there is one) bundles none of rulec's code.
 //   - "limits": as "full", but the activities keep their timeouts and the timers their durations
 //     (the tests of the limits, tests/limits): a rule's call the scenario times out is held until
-//     the server times it out after the generated 10 seconds, and the retry waits 1 and 2 seconds.
+//     the server times it out after the generated 10 seconds, and the retry waits 1 and 2 seconds;
+//     a callback's id that the scenario times out is held, with DANDORI_LIMITS, until the server
+//     times out the activity that hands it on after the minute it gets.
 //   - "continue": only every history long enough to go on in a new run (as versions.py patches).
 //   - "none": nothing (the children's flows, which run as they are).
 //

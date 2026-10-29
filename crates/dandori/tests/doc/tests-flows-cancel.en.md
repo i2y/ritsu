@@ -85,7 +85,7 @@ flowchart TD
 |---:|---|---|---|---|---|---|
 | 46 | `受注 ← 注文を見る(…)` | a task you write, `observes`, `idempotent` | — | — | `timeout`, `failure` → `on failure` | `受注`: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
 | 48 | `r = 引き当てる(…)` | a task you write, `idempotent` | 1 time every 1 second (failure, timeout) | — | `timeout`, `failure` → line 49 | — |
-| 51 | `受注 ← 配達を待つ(…)` | a task you write, answered by a callback, `observes` | — | 7 days | `timeout` → line 52<br>`failure` → `on failure` | `受注`: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
+| 51 | `受注 ← 配達を待つ(…)` | a task you write, answered by a callback, `observes` | — | 1 minute to hand the id on, then 7 days | `timeout` → line 52<br>`failure` → `on failure` | `受注`: `受付`, `入金済`, `出荷済`, `配達済`, `取消` |
 | 58 | `知らせる(…)` | a task you write, `key` | — | — | `timeout`, `failure` → line 59 | — |
 | 67 | `受注 ← 取消を頼む(…)` | a task you write, `sends 取消依頼`, `key` | — | — | `断られた` → line 68<br>`timeout`, `failure` → line 69 | `受注`: `取消` |
 | 70 | `知らせる(…)` | a task you write, `key` | — | — | `timeout`, `failure` → line 71 | — |

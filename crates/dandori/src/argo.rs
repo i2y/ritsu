@@ -949,8 +949,12 @@ impl<'a> Gen<'a> {
                 let n = format!("task-{ti}");
                 if self.made.insert(n.clone()) {
                     self.used.insert(n.clone());
+                    // a callback's `timeout` is its wait's; the step that hands its id on gets a minute, as on
+                    // every target (DESIGN 17): the caller keeps the minute itself, from when it starts, and a
+                    // task's own image is stopped at the deadline, which counts the pod's start as well
                     let timeout = if task.callback { None } else { task.timeout };
                     let mut t = match task.via(Platform::Argo) {
+                        Some(Via::Image(img)) if task.callback => container(&n, img, None, &task.name, Some(crate::check::CALLBACK_HAND_ON_SECONDS)),
                         Some(Via::Image(img)) => container(&n, img, None, &task.name, timeout),
                         Some(Via::ArgoTemplate(wt)) => child(&n, wt, timeout),
                         _ => container(&n, "{{workflow.parameters.dandori-caller}}", Some(vec!["node".into(), "/app/call.ts".into(), ident(&task.name)]), &task.name, timeout),

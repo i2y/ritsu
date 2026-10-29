@@ -55,7 +55,7 @@ What each method of the service does to a run.
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
 | 48 | `記録する(…)` | `lambda shipping-log`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
-| 49 | `済み = 梱包を待つ(…)` | `lambda packing · callback` | — | 1 day | `timeout` → line 50<br>`failure` → the workflow fails |
+| 49 | `済み = 梱包を待つ(…)` | `lambda packing · callback` | — | 1 minute to hand the id on, then 1 day | `timeout` → line 50<br>`failure` → the workflow fails |
 | 55 | `知らせる(…)` | `lambda shipping-notice`, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 
 ## Ends

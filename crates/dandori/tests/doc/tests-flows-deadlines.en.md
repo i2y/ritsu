@@ -29,7 +29,7 @@ A rectangle is a task, one with a line down each side a rule or a date of a date
 | Line | Call | Calls | Retries | Timeout | When it fails |
 |---:|---|---|---|---|---|
 | 23 | `due = terms.due(…)` | the date `due` of `answer_terms.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
-| 24 | `a = ask(…)` | `lambda ask · callback` | — | until `due.at` | `timeout` → line 25<br>`failure` → the workflow fails |
+| 24 | `a = ask(…)` | `lambda ask · callback` | — | 1 minute to hand the id on, then until `due.at` | `timeout` → line 25<br>`failure` → the workflow fails |
 
 ## Ends
 

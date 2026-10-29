@@ -55,7 +55,7 @@ flowchart TD
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
 | 48 | `記録する(…)` | `lambda shipping-log`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
-| 49 | `済み = 梱包を待つ(…)` | `lambda packing · callback` | — | 1 日 | `timeout` → 50 行目<br>`failure` → ワークフローが失敗する |
+| 49 | `済み = 梱包を待つ(…)` | `lambda packing · callback` | — | ID を渡すのに 1 分、そのあと 1 日 | `timeout` → 50 行目<br>`failure` → ワークフローが失敗する |
 | 55 | `知らせる(…)` | `lambda shipping-notice`・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方

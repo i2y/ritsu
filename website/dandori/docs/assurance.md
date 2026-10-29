@@ -224,12 +224,25 @@ that does not answer within the limit, in real time and with nothing shortened: 
 TypeScript, Python and Go (the history must show three start-to-close timeouts, with timers of a
 second and two between them), on LocalStack's Step Functions with a real Lambda function that waits
 before it answers (the mock file can neither throw `States.Timeout` nor take time), in the durable
-function's local runner, with pydantic-graph, and on Argo Workflows in real pods, where the caller
-exits 143. Each try must end at the limit, the tries must come the limit and the retry's wait apart,
-and the run must go to the call's `on timeout`, as the reference interpreter says. LocalStack has no
-HTTP Task, so on Step Functions only the rule called through Lambda runs; pydantic-graph and Argo
-compute a rule bundled with them in the process, with no limit, so only the rule called at its
-Connect service runs there.
+function's local runner, with pydantic-graph, and on Argo Workflows, where the caller exits 143.
+Each try must end at the limit, the tries must come the limit and the retry's wait apart, and the
+run must go to the call's `on timeout`, as the reference interpreter says. LocalStack has no HTTP
+Task, so on Step Functions only the rule called through Lambda runs; pydantic-graph and Argo compute
+a rule bundled with them in the process, with no limit, so only the rule called at its Connect
+service runs there.
+
+A callback gets a minute a try on every platform to hand its id on, before it waits for the answer
+([How long a call may take](tasks.md#how-long-a-call-may-take)). Five more tests run
+`tests/limits/callbacks.flow`, whose callback has `timeout 30 seconds`, one retry a second later and
+`on timeout`, with a party that does not take the id within the minute: on Temporal in TypeScript,
+Python and Go (the history must show two start-to-close timeouts of a minute, with a timer of a
+second between them), on LocalStack's Step Functions with a real Lambda function that takes 45
+seconds (each try must end at the task's 30 seconds, since the Task's `TimeoutSeconds` bounds the
+handing on too), in the durable function's local runner and with pydantic-graph. Argo Workflows
+cannot retry a callback, so there `tests/limits/callbacks_argo.flow` hands one id on through the
+caller, which must exit 143 after the minute, and one in a task's own image, in a real pod that
+Kubernetes must stop at its deadline of a minute. Each run must go to the call's `on timeout`, as
+the reference interpreter says.
 
 ## The pictures
 

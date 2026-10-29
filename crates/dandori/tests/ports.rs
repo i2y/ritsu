@@ -194,8 +194,9 @@ fn a_flow_says_what_it_crosses_into() {
     let body = "  let due = terms.payment(received: now)\n  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
     assert_eq!(spans(body), vec![(43, "post".to_string(), 17 * day + 9 * hour, Some(10 + 51 * day + 9 * hour + 10))]);
     // `timeout until` the same time: a callback's answer, or its timeout, can come at once (the id is
-    // handed on first), and at the most as the time comes, a second more for the rounding up; the
-    // handler of `timeout` alone under an event starts no sooner than the time
+    // handed on first), and at the most as the time comes, a second more for the rounding up (the id
+    // is handed on within a minute, long before); the handler of `timeout` alone under an event starts
+    // no sooner than the time
     let waits = |body: &str| {
         let tasks = "task ask(order: string, by: timestamp) -> string\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask\"\n  callback\n  timeout until by\n\ntask approval(by: timestamp) -> string\n  event\n  timeout until by\n\ncase goods";
         write("spans.flow", &flow(body).replacen("case goods", tasks, 1));
@@ -208,6 +209,21 @@ fn a_flow_says_what_it_crosses_into() {
     let body = "  let due = terms.payment(received: now)\n  let a = approval(by: due.at)\n    on timeout =>\n      goods <- put_back(order: order, sku: sku)\n        on expired => pass\n      fail Late \"no approval\"\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
     let held = waits(body);
     assert_eq!(held.iter().map(|h| (h.0, h.1.clone(), h.2, h.3)).collect::<Vec<_>>(), vec![(53, "void".to_string(), 17 * day + 9 * hour, None), (56, "post".to_string(), 0, Some(10 + 51 * day + 9 * hour + 1 + 10))]);
+    // a callback hands its id on before it waits, a minute at the most on every target (DESIGN 17):
+    // each try of one with `timeout 30 seconds` counts 90 seconds, and its retry the wait between
+    let with_tasks = |tasks: &str, body: &str| {
+        write("spans.flow", &flow(body).replacen("case goods", &format!("{tasks}\n\ncase goods"), 1));
+        let c = dandori::ports::Engine.crossings(&t.path().join("spans.flow"), &ports).unwrap();
+        c.holds.iter().map(|h| (h.line, h.op.clone(), h.least, h.most.clone().ok())).collect::<Vec<_>>()
+    };
+    let confirm = "task confirm(order: string) -> string\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:confirm\"\n  callback\n  timeout 30 seconds\n  retry 1 times every 2 seconds\n  idempotent";
+    let body = "  let a = confirm(order: order)\n    on timeout => pass\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    assert_eq!(with_tasks(confirm, body), vec![(50, "post".to_string(), 0, Some(10 + 2 * (60 + 30) + 2 + 10))]);
+    // with `timeout until`, a retry after a failure waits between, hands the id on again (a minute)
+    // and waits until the time again, a second more for the rounding up
+    let ask = "task ask(order: string, by: timestamp) -> string\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask\"\n  callback\n  timeout until by\n  retry 1 times every 5 seconds on failure\n  idempotent";
+    let body = "  let due = terms.payment(received: now)\n  let a = ask(order: order, by: due.at)\n    on timeout => pass\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
+    assert_eq!(with_tasks(ask, body), vec![(51, "post".to_string(), 0, Some(10 + 51 * day + 9 * hour + 1 + (5 + 60 + 1) + 10))]);
     // `now` read before the hold says nothing of how long after the hold the time comes
     let body = "  wait until due.at\n  goods <- ship(order: order, sku: sku)\n    on expired => fail Expired \"too late\"\n";
     let early = flow(body).replace("flow\n  goods <- reserve", "flow\n  let due = terms.payment(received: now)\n  goods <- reserve");

@@ -59,6 +59,10 @@ package harness
 // top of the flow goes on in a new run (Continue-As-New) at every round but the first of a run,
 // since the history counts as long from one event on (ddContinueAt).
 //
+// With DANDORI_LIMITS=1 (the tests of the limits, tests/limits, whose binary the build patches with
+// "limits"), a callback the scenario times out does not hand its id on: the activity that hands it
+// on is held until the server times it out after the minute it gets.
+//
 // A workflow task that panics fails the workflow here (worker.FailWorkflow), where Temporal's
 // default would retry the task until the workflow times out: a fault of the generated code then
 // shows as the run's end, with the panic's message, instead of a runner that never ends.
@@ -175,6 +179,7 @@ type runner struct {
 	flow            Flow
 	spec            spec
 	lateFor         time.Duration
+	limits          bool
 	client          client.Client
 	own             map[string]ownTask
 	mu              sync.Mutex
@@ -187,6 +192,7 @@ func newRunner(flow Flow, sp spec, s Settings, c client.Client) *runner {
 		flow: flow, spec: sp, client: c,
 		// how long a stand-in that the scenario times out keeps its activity busy: until the server has timed it out
 		lateFor: time.Duration(s.Timeout+5) * time.Second,
+		limits:  os.Getenv("DANDORI_LIMITS") == "1",
 		own:     map[string]ownTask{},
 		runs:    map[string]*runState{},
 	}
@@ -292,10 +298,14 @@ func result(v any) any {
 	return v
 }
 
+// handOnLate is how long, with DANDORI_LIMITS, a callback the scenario times out keeps the activity
+// that hands its id on busy: past the minute that activity gets (dandori's check::CALLBACK_HAND_ON_SECONDS).
+const handOnLate = (60 + 15) * time.Second
+
 // holdOn heartbeats until the server says the activity is over (cancelled, or timed out; the
-// activity's deadline ends it too), at most r.lateFor.
-func (r *runner) holdOn(ctx context.Context) {
-	until := time.Now().Add(r.lateFor)
+// activity's deadline ends it too), at most d.
+func (r *runner) holdOn(ctx context.Context, d time.Duration) {
+	until := time.Now().Add(d)
 	for time.Now().Before(until) {
 		activity.RecordHeartbeat(ctx)
 		select {
@@ -308,8 +318,8 @@ func (r *runner) holdOn(ctx context.Context) {
 
 // late is a call the scenario times out: the activity is kept busy past its timeout, so that the
 // server times it out. (The SDK does not send what an activity returns after its deadline.)
-func (r *runner) late(ctx context.Context) error {
-	r.holdOn(ctx)
+func (r *runner) late(ctx context.Context, d time.Duration) error {
+	r.holdOn(ctx, d)
 	return temporal.NewNonRetryableApplicationError("the server should have timed this out", "Dandori.Test.Late", nil)
 }
 
@@ -319,7 +329,7 @@ func (r *runner) cancelling(ctx context.Context, run *runState) error {
 	if err := r.client.CancelWorkflow(ctx, run.id, ""); err != nil {
 		return err
 	}
-	r.holdOn(ctx)
+	r.holdOn(ctx, r.lateFor)
 	return temporal.NewNonRetryableApplicationError("the workflow was cancelled", "Dandori.Test.Cancelled", nil)
 }
 
@@ -333,7 +343,7 @@ func (r *runner) reply(ctx context.Context, run *runState, ans map[string]any) (
 		return result(v), nil
 	}
 	if kind(ans) == "timeout" {
-		return nil, r.late(ctx)
+		return nil, r.late(ctx, r.lateFor)
 	}
 	return nil, scripted(kind(ans))
 }
@@ -367,9 +377,13 @@ func (r *runner) mustRefuse(ctx context.Context, callbackID string, a CallbackAn
 
 // answerLater answers a callback with the generated client's Answer (the update dandori.answer),
 // before the task that hands the id on returns: then the answer is in the history before the
-// workflow waits for it, and its short wait cannot run out first. A timeout gets no answer.
+// workflow waits for it, and its short wait cannot run out first. A timeout gets no answer; with
+// DANDORI_LIMITS, its id is not handed on in time either.
 func (r *runner) answerLater(ctx context.Context, callbackID string, ans map[string]any) error {
 	if timesOut(ans) {
+		if r.limits {
+			return r.late(ctx, handOnLate)
+		}
 		return nil
 	}
 	if ans["cancel"] == true {
@@ -421,7 +435,7 @@ func (r *runner) hold(ctx context.Context, ans map[string]any) error {
 		}
 		return r.cancelling(ctx, run)
 	}
-	return r.late(ctx)
+	return r.late(ctx, r.lateFor)
 }
 
 func firstRunes(s string, n int) string {

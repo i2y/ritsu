@@ -4,8 +4,9 @@
 //! the lengths are compared: dandori says how long after the hold each call on it can come, the
 //! fewest and the most seconds, along every way the flow reaches the call (`HoldSpan`, with
 //! koyomi's days for a wait until a date's time, and for the time a call with `timeout until` waits
-//! until; a call of a rule or a date takes 33 seconds at the most, the limit every target gives it);
-//! chobo says when the hold expires (`pending expires after`). Each call is a border
+//! until; a call of a rule or a date takes 33 seconds at the most, the limit every target gives it,
+//! and each try of a callback a minute more than its wait, the most every target gives its task to
+//! hand the id on); chobo says when the hold expires (`pending expires after`). Each call is a border
 //! ([`borders::held_until`]):
 //!
 //! - it comes before the hold expires on every way: shown to hold, and nothing is said. The flow

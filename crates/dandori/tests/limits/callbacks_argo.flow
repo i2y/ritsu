@@ -1,0 +1,33 @@
+workflow callbacks_argo v1
+description "The callbacks of tests/limits/callbacks.flow on Argo Workflows, which retries no callback (E050): a callback whose task does not hand its id on within the minute that every platform gives it times out at the minute, and its `on timeout` runs. One is called through Lambda by the generated caller, which keeps the minute itself; the other runs an image, whose pod Kubernetes stops at its deadline of a minute"
+
+record Packing
+  boxes : int
+
+record Labels
+  count : int
+
+inputs
+  order : string
+
+outputs
+  said : string
+
+# The warehouse gets the callback's id and answers when the order is packed.
+task pack(order: string) -> Packing
+  lambda "arn:aws:lambda:us-east-1:123456789012:function:pack"
+  callback
+  timeout 30 seconds
+
+# The label printer's image hands the callback's id on, and answers when the labels are printed.
+task print_labels(order: string, boxes: int) -> Labels
+  image "registry.example.com/limits/labels:1"
+  callback
+  timeout 30 seconds
+
+flow
+  let p = pack(order: order)
+    on timeout => succeed said = "the warehouse did not take the order in time"
+  let l = print_labels(order: order, boxes: p.boxes)
+    on timeout => succeed said = "the label printer did not take the order in time"
+  succeed said = "packed in {p.boxes} boxes, with {l.count} labels"

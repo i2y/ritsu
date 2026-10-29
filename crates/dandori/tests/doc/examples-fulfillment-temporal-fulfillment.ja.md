@@ -92,7 +92,7 @@ flowchart TD
 | 95 | `audit(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 98 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan` → 99 行目<br>`timeout`・`failure` → 102 行目 |
 | 100 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan`・`timeout`・`failure` → 101 行目 |
-| 103 | `packed = wait_for_packing(…)` | 自分で書くタスク（応答はコールバック） | — | 2 日 | `timeout` → 104 行目<br>`failure` → ワークフローが失敗する |
+| 103 | `packed = wait_for_packing(…)` | 自分で書くタスク（応答はコールバック） | — | ID を渡すのに 1 分、そのあと 2 日 | `timeout` → 104 行目<br>`failure` → ワークフローが失敗する |
 | 105 | `notify(…)` | 自分で書くタスク | — | — | `no_recipient` → 106 行目<br>`timeout`・`failure` → ワークフローが失敗する |
 
 ## 終わり方

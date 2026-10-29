@@ -60,7 +60,8 @@
 // With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the copy keeps the timeouts of
 // the activities and the durations of the timers as they are generated: a rule's call the scenario
 // times out is held until the server times it out after the generated 10 seconds, and the retry
-// waits 1 and 2 seconds between the tries.
+// waits 1 and 2 seconds between the tries. A callback the scenario times out does not hand its id
+// on: the activity that hands it on is held until the server times it out after the minute it gets.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -104,6 +105,8 @@ const SCENARIO_NOW = "2026-03-31T15:30:00Z";
 const EVENT_MS = 5000;
 /** How long a stand-in that the scenario times out keeps its activity busy: until the server has timed it out. */
 const LATE_MS = (TIMEOUT_SECONDS + 5) * 1000;
+/** How long, with DANDORI_LIMITS, a callback the scenario times out keeps the activity that hands its id on busy: past the minute that activity gets (dandori's check::CALLBACK_HAND_ON_SECONDS). */
+const HAND_ON_LATE_MS = (60 + 15) * 1000;
 /** The limits as they are generated: the timeouts of the activities, and the timers (see the top). */
 const LIMITS = process.env.DANDORI_LIMITS === "1";
 
@@ -299,12 +302,12 @@ function scripted(kind) {
   return ApplicationFailure.create({ type: kind === "failure" ? "Dandori.Test.Failure" : kind, message: "scripted", nonRetryable: true });
 }
 
-/** Heartbeat until the server says the activity is over (cancelled, or timed out), at most LATE_MS. */
-async function holdOn() {
+/** Heartbeat until the server says the activity is over (cancelled, or timed out), at most `ms`. */
+async function holdOn(ms = LATE_MS) {
   const context = Context.current();
   const timer = setInterval(() => context.heartbeat(), 100);
   try {
-    await Promise.race([context.cancelled, new Promise((ok) => setTimeout(ok, LATE_MS))]);
+    await Promise.race([context.cancelled, new Promise((ok) => setTimeout(ok, ms))]);
   } catch {
     // the server is done with it
   } finally {
@@ -313,8 +316,8 @@ async function holdOn() {
 }
 
 /** A call the scenario times out: keep the activity busy past its timeout, so that the server times it out. */
-async function late() {
-  await holdOn();
+async function late(ms = LATE_MS) {
+  await holdOn(ms);
   throw ApplicationFailure.create({ type: "Dandori.Test.Late", message: "the server should have timed this out", nonRetryable: true });
 }
 
@@ -341,10 +344,14 @@ async function reply(run, ans) {
 /**
  * Answer a callback with a signal to the workflow the id names, before the task that hands the
  * id on returns: then the answer is in the history before the workflow waits for it, and its
- * short wait cannot run out first. A timeout gets no answer.
+ * short wait cannot run out first. A timeout gets no answer; with DANDORI_LIMITS, its id is not
+ * handed on in time either.
  */
 async function answerLater(callbackId, ans) {
-  if (!("ok" in ans) && ans.error === "timeout") return;
+  if (!("ok" in ans) && ans.error === "timeout") {
+    if (LIMITS) await late(HAND_ON_LATE_MS);
+    return;
+  }
   if (ans.cancel === true) {
     await env.client.workflow.getHandle(current().id).cancel();
     return;

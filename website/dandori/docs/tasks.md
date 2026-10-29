@@ -94,6 +94,20 @@ seconds at the most, which X5 counts on when it weighs a hold against the time a
 | Argo Workflows | the generated caller, which ends the call with exit code 143, read as a timeout; the time the pod takes to start is not counted, and a rule or a date the caller computes itself runs to its end |
 | pydantic-graph | the call of a rule at its service; a rule or a date computed in the process has no limit, since it reads and sends nothing and always ends |
 
+A `callback` first hands its id on, by calling its Lambda function, sending its message, or running your
+code or your image, and then waits for the answer. Handing the id on gets a minute a try on every
+platform, apart from the `timeout`, which is the wait's. A try that has not handed the id on after a
+minute ends with `timeout`, as a wait that runs out does: the task's `retry` tries it again, and then
+`on timeout` takes it. X5 counts each try of a callback as its `timeout` and the minute.
+
+| Platform | What ends the handing on of a callback's id at a minute |
+|---|---|
+| Step Functions | nothing of its own: the Task's clock starts before the token is handed on, and its `TimeoutSeconds`, the task's `timeout`, bounds the handing on and the wait together |
+| Temporal | the start-to-close timeout of the activity that hands the id on |
+| Lambda durable functions | the step that hands the id on, which stops waiting for the call after a minute |
+| Argo Workflows | the generated caller, which ends with exit code 143, read as a timeout; the time the pod takes to start is not counted. A callback that runs your own image hands the id on in your image, where nothing of dandori's keeps the time, so its pod gets `activeDeadlineSeconds: 60`, which counts the pod's start too |
+| pydantic-graph | the call that hands the id on, which it stops waiting for after a minute |
+
 ## API descriptions
 
 When the API a task calls is described, the `.flow` reads the description and the checker holds

@@ -92,7 +92,7 @@ What each method of the service does to a run.
 | 95 | `audit(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 98 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan` → line 99<br>`timeout`, `failure` → line 102 |
 | 100 | `delivery = arrange_delivery(…)` | `flow arrange_delivery.flow` | — | — | `NoVan`, `timeout`, `failure` → line 101 |
-| 103 | `packed = wait_for_packing(…)` | a task you write, answered by a callback | — | 2 days | `timeout` → line 104<br>`failure` → the workflow fails |
+| 103 | `packed = wait_for_packing(…)` | a task you write, answered by a callback | — | 1 minute to hand the id on, then 2 days | `timeout` → line 104<br>`failure` → the workflow fails |
 | 105 | `notify(…)` | a task you write | — | — | `no_recipient` → line 106<br>`timeout`, `failure` → the workflow fails |
 
 ## Ends

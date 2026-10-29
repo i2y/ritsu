@@ -50,10 +50,11 @@ pub fn workflow_type(m: &Model) -> String {
 /// went away is noticed without a limit on the task: an HTTP request or an agent gets what Step
 /// Functions' HTTP Task gives one, a Lambda function what Lambda gives one, and anything else no
 /// limit of its own (a year). A task another worker serves may not heartbeat, and gets a minute.
-/// The task that hands a callback's id on hands it on within a minute.
+/// The task that hands a callback's id on hands it on within `check::CALLBACK_HAND_ON_SECONDS`, as
+/// on every target (DESIGN 17).
 pub(crate) fn activity_timeout(t: &TaskDef) -> u64 {
     if t.callback {
-        return 60;
+        return crate::check::CALLBACK_HAND_ON_SECONDS;
     }
     if let Some(s) = t.timeout {
         return s;
@@ -1176,6 +1177,12 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
     if m.all_stmts().iter().any(|s| matches!(&s.kind, TK::Call { callee: Callee::Rule(_), .. })) {
         call.push_str(&format!("// A rule's or a date's call that runs past {RULE_SECONDS} seconds exits 143, as a container Argo stops at its\n// deadline does, and the workflow reads it as a timeout.\n"));
     }
+    // the callbacks whose id the caller hands on (a task's own image hands it on itself)
+    let handing: BTreeSet<String> = m.tasks.iter().filter(|t| t.callback && !matches!(t.via(Platform::Argo), Some(Via::Image(_)) | Some(Via::ArgoTemplate(_)) | None)).map(|t| ident(&t.name)).collect();
+    let hand_on = crate::check::CALLBACK_HAND_ON_SECONDS;
+    if !handing.is_empty() {
+        call.push_str(&format!("// A callback's task that does not hand its id on in {hand_on} seconds exits 143 too: a timeout of the task.\n"));
+    }
     call.push_str("//\n//   node call.ts <task or rule_<rule>>\n\n");
     call.push_str("import fs from \"node:fs\";\nimport { makeTasks } from \"./tasks.ts\";\n");
     call.push_str("import { transport } from \"./transport.ts\";\n\n");
@@ -1198,6 +1205,15 @@ pub fn argo_caller(m: &Model, header: &str) -> Vec<(String, String)> {
         call.push_str(&format!(
             "if (RULES.has(name)) {{\n  setTimeout(() => {{\n    fs.writeFileSync(\"/tmp/dandori/error.json\", JSON.stringify({{ error: \"Dandori.Timeout\", message: \"no answer in {RULE_SECONDS} seconds\" }}));\n    process.exit(143);\n  }}, {});\n}}\n",
             RULE_SECONDS * 1000
+        ));
+    }
+    // a callback's id is handed on within `check::CALLBACK_HAND_ON_SECONDS`, as on every target (DESIGN 17),
+    // counted from when the container starts its call, as a rule's
+    if !handing.is_empty() {
+        call.push_str(&format!("const CALLBACKS = new Set([{}]);\n", handing.iter().map(|n| q(n)).collect::<Vec<_>>().join(", ")));
+        call.push_str(&format!(
+            "if (CALLBACKS.has(name)) {{\n  setTimeout(() => {{\n    fs.writeFileSync(\"/tmp/dandori/error.json\", JSON.stringify({{ error: \"Dandori.Timeout\", message: \"the id was not handed on in {hand_on} seconds\" }}));\n    process.exit(143);\n  }}, {});\n}}\n",
+            hand_on * 1000
         ));
     }
     call.push_str("try {\n  const out = await all[name](args);\n  fs.writeFileSync(\"/tmp/dandori/answer.json\", JSON.stringify(out ?? null));\n  process.exit(0);\n} catch (e) {\n");
@@ -3186,8 +3202,11 @@ impl<'a> Gen<'a> {
                         let submit = q(&format!("{} {} submit", s.line, cname));
                         let mut with_id = parts.clone();
                         with_id.push("\"callback_id\": dd_id".into());
+                        // the id is handed on within a minute, as on every target (DESIGN 17); a step that runs
+                        // longer fails with `Dandori.Timeout`, a timeout of the task
+                        let hand_on = crate::check::CALLBACK_HAND_ON_SECONDS;
                         format!(
-                            "dd.attempt({ctx}, {op}, async () => {{\n{clock}{i}  const [dd_p, dd_id] = await {ctx}.createCallback({op}, {{ timeout: {{ seconds: {timeout} }} }});\n{i}  await {ctx}.step({submit}, async () => {{\n{i}    await tasks.{method}({{ {} }});\n{i}    return null;\n{i}  }}, {{ retryStrategy: dd.noRetry }});\n{i}  return dd.parse(await dd_p);\n{i}}}, {retriers}, [{declared}])",
+                            "dd.attempt({ctx}, {op}, async () => {{\n{clock}{i}  const [dd_p, dd_id] = await {ctx}.createCallback({op}, {{ timeout: {{ seconds: {timeout} }} }});\n{i}  await {ctx}.step({submit}, async () => {{\n{i}    await dd.within(tasks.{method}({{ {} }}), {hand_on});\n{i}    return null;\n{i}  }}, {{ retryStrategy: dd.noRetry }});\n{i}  return dd.parse(await dd_p);\n{i}}}, {retriers}, [{declared}])",
                             with_id.join(", ")
                         )
                     }

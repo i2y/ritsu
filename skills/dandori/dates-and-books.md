@@ -186,7 +186,8 @@ the transfer's `pending expires after`. A wait for a length counts as that lengt
 task's `timeout`. A wait until the time of a date the flow asks koyomi for after the hold, with `now`
 (`wait until due.at`, or `timeout until due.at` on a `callback` or an `event`), counts as the days
 koyomi says that date can come after its input, the fewest and the most. A call of a rule or of a
-date counts as 33 seconds at the most, its limit on every platform
+date counts as 33 seconds at the most, its limit on every platform, and each try of a callback as its
+`timeout` and the minute it may take to hand its id on
 ([How long a call may take](tasks.md#how-long-a-call-may-take)). When the hold has expired on every
 run, that is an error (E206); when it may or may not have, a warning (W206), which says the day
 that makes the wait the longest.

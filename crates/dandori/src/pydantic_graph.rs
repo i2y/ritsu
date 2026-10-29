@@ -913,7 +913,8 @@ impl<'a> Gen<'a> {
                     n.line(0, "");
                     n.line(0, "async def dd_call() -> Any:");
                     n.line(1, &format!("dd_id = dd.callback_id(deps.run_id, {site}, {}, next(dd_n))", self.rounds_expr()));
-                    n.line(1, &format!("await {f}({{{}}})", with_id.join(", ")));
+                    // the id is handed on within a minute, as on every target (DESIGN 17): longer is a timeout of the task
+                    n.line(1, &format!("await dd.within({f}({{{}}}), {})", with_id.join(", "), crate::check::CALLBACK_HAND_ON_SECONDS));
                     match &task.answer_zeros {
                         // the answer that a method of the service sends, read as protobuf reads it
                         Some(z) => n.line(1, &format!("return T.fill(await dd.await_callback(deps.callbacks, deps.clock, dd_id, {timeout}), {})", render::layout(z, 1, "    ", true))),

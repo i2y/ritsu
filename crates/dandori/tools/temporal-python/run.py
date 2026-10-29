@@ -60,7 +60,8 @@
 # With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the copy keeps the timeouts of the
 # activities and the durations of the timers as they are generated: a rule's call the scenario times
 # out is held until the server times it out after the generated 10 seconds, and the retry waits 1
-# and 2 seconds between the tries.
+# and 2 seconds between the tries. A callback the scenario times out does not hand its id on: the
+# activity that hands it on is held until the server times it out after the minute it gets.
 
 from __future__ import annotations
 
@@ -107,6 +108,9 @@ Runtime.set_default(Runtime(telemetry=TelemetryConfig(logging=LoggingConfig(filt
 # and the other way round.)
 TIMEOUT = int(os.environ.get("DANDORI_TEMPORAL_TIMEOUT", 20))
 LATE = float(TIMEOUT + 5)
+# How long, with DANDORI_LIMITS, a callback the scenario times out keeps the activity that hands its
+# id on busy: past the minute that activity gets (dandori's check::CALLBACK_HAND_ON_SECONDS).
+HAND_ON_LATE = float(60 + 15)
 # How long an event is waited for here, at most: long enough for the runner to see the wait and send it.
 EVENT_SECONDS = 5
 # The limits as they are generated: the timeouts of the activities, and the timers (see the top).
@@ -276,9 +280,9 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
     def scripted(kind: str) -> ApplicationError:
         return ApplicationError("scripted", type="Dandori.Test.Failure" if kind == "failure" else kind, non_retryable=True)
 
-    async def hold_on() -> None:
-        """Heartbeat until the server says the activity is over (cancelled, or timed out), at most LATE seconds."""
-        until = time.monotonic() + LATE
+    async def hold_on(seconds: float = LATE) -> None:
+        """Heartbeat until the server says the activity is over (cancelled, or timed out), at most `seconds`."""
+        until = time.monotonic() + seconds
         while time.monotonic() < until:
             activity.heartbeat()
             try:
@@ -286,9 +290,9 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
             except asyncio.CancelledError:
                 return
 
-    async def late() -> Any:
+    async def late(seconds: float = LATE) -> Any:
         """A call the scenario times out: keep the activity busy past its timeout, so that the server times it out."""
-        await hold_on()
+        await hold_on(seconds)
         raise ApplicationError("the server should have timed this out", type="Dandori.Test.Late", non_retryable=True)
 
     async def cancelling(run: dict[str, Any]) -> Any:
@@ -320,9 +324,12 @@ async def run_all(package: str, spec: dict[str, Any], histories_dir: str | None,
     async def answer_later(callback_id: str, ans: dict[str, Any]) -> None:
         """Answer a callback with the generated client's update, before the task that hands the
         id on returns: then the answer is in the history before the workflow waits for it, and its
-        short wait cannot run out first. A timeout gets no answer."""
+        short wait cannot run out first. A timeout gets no answer; with DANDORI_LIMITS, its id is
+        not handed on in time either."""
         nonlocal refusals_checked
         if "ok" not in ans and ans.get("error") == "timeout":
+            if LIMITS:
+                await late(HAND_ON_LATE)
             return
         assert env is not None
         if ans.get("cancel") is True:

@@ -46,7 +46,7 @@ A rectangle is a task, one with a line down each side a rule or a date of a date
 | 51 | `結果 = 採点する(…)` | `jev · jev-1.13.0` | 2 times every 10 seconds (混雑, 過負荷) | 10 seconds | `混雑`, `過負荷`, `timeout`, `failure` → line 52 |
 | 53 | `判定 = 方針(…)` | rule `審査の方針.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 57 | `承認の期限 = 承認の期日.期限(…)` | the date `期限` of `承認の期日.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
-| 58 | `返事 = 承認を求める(…)` | a task you write, answered by a callback | — | until `承認の期限.at` | `timeout` → line 59<br>`failure` → the workflow fails |
+| 58 | `返事 = 承認を求める(…)` | a task you write, answered by a callback | — | 1 minute to hand the id on, then until `承認の期限.at` | `timeout` → line 59<br>`failure` → the workflow fails |
 | 60 | `知らせる(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 62 | `知らせる(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 

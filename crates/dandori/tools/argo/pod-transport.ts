@@ -2,13 +2,14 @@
 // (tools/transport.mjs), taking the scenario's answers from the mock (tools/argo/mock.mjs), in
 // the cluster, or where DANDORI_MOCK says when the runner plays the pod on this machine. With
 // DANDORI_LIMITS=1 (the tests of the limits, tests/limits), a call the scenario times out gets no
-// answer, and the caller's own limit ends it.
+// answer, and a callback it times out does not hand its id on: the caller's own limit ends either.
 
 import fs from "node:fs";
 import { makeTransport } from "./transport.mjs";
 
 const spec = JSON.parse(fs.readFileSync(new URL("./spec.json", import.meta.url), "utf8"));
 const workflow = process.env.DANDORI_WORKFLOW;
+const LIMITS = process.env.DANDORI_LIMITS === "1";
 
 export const transport = makeTransport(spec, {
   async take(call: unknown, callbackId?: string) {
@@ -22,6 +23,8 @@ export const transport = makeTransport(spec, {
     return got.answer;
   },
   // the runner hands the callback's answer to the workflow
-  answerLater() {},
-  ...(process.env.DANDORI_LIMITS === "1" ? { hold: () => new Promise<never>(() => {}) } : {}),
+  answerLater(_callbackId: string, ans: any) {
+    if (LIMITS && !("ok" in ans) && ans.error === "timeout") return new Promise<never>(() => {});
+  },
+  ...(LIMITS ? { hold: () => new Promise<never>(() => {}) } : {}),
 });

@@ -29,7 +29,7 @@ flowchart TD
 | 行 | 呼び出し | 呼ぶもの | リトライ | タイムアウト | 失敗したとき |
 |---:|---|---|---|---|---|
 | 23 | `due = terms.due(…)` | `answer_terms.cal` の日付 `due` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
-| 24 | `a = ask(…)` | `lambda ask · callback` | — | `due.at` まで | `timeout` → 25 行目<br>`failure` → ワークフローが失敗する |
+| 24 | `a = ask(…)` | `lambda ask · callback` | — | ID を渡すのに 1 分、そのあと `due.at` まで | `timeout` → 25 行目<br>`failure` → ワークフローが失敗する |
 
 ## 終わり方
 

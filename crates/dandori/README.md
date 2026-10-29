@@ -161,9 +161,10 @@ it calls come with it, each as the page for people that `rulec doc` renders.
 
 Every target gives a call of a rule or of a date 10 seconds a try, and tries it twice more, a second
 and then two seconds apart, so that `ritsu check` can count how long one takes (33 seconds at the
-most) when it holds a hold to its expiry. A task that waits for an answer, an `event` or a
-`callback`, can wait until a time the call gives it (`timeout until by`), such as the time of a dates
-file's date ([How long a call may take](https://i2y.github.io/ritsu/dandori/tasks/#how-long-a-call-may-take)).
+most) when it holds a hold to its expiry. A `callback` hands its id on before it waits for the answer,
+and every target gives each try a minute to hand it on, which `ritsu check` counts too. A task that
+waits for an answer, an `event` or a `callback`, can wait until a time the call gives it
+(`timeout until by`), such as the time of a dates file's date ([How long a call may take](https://i2y.github.io/ritsu/dandori/tasks/#how-long-a-call-may-take)).
 
 When a sekisho gate names the workflow (`workflow returns from "flows/returns.flow"`), `ritsu check`
 holds each operation the workflow calls, by an `http` task of a `use openapi` or a `connect` task, to
@@ -218,7 +219,11 @@ make the same calls, with the same arguments and idempotency keys, and end the s
 tests run a rule's call that takes longer than its limit, in real time, on Temporal, on LocalStack
 with a real Lambda function, in the durable function's local runner, with pydantic-graph and on Argo
 Workflows: each try must time out at 10 seconds, the tries must come a second and then two seconds
-apart, and the run must go to the call's `on timeout`. ritsu's
+apart, and the run must go to the call's `on timeout`. Five more run a callback whose id is not
+handed on within the minute every target gives it: each try must time out at the minute (on Step
+Functions at the task's `timeout`, which bounds the handing on too), the next try must come a second
+later, and the run must go to `on timeout`; on Argo Workflows, a callback that runs a task's own image
+does so in a real pod, which Kubernetes must stop at its deadline. ritsu's
 playground, which runs dandori in the browser, must answer every example as the command does
 (ritsu's tests hold it to that). The operations of books that the runs make also go through the code dandori writes to chobo's clients,
 on PostgreSQL, TigerBeetle and MySQL, and must answer what chobo's reference interpreter answers.

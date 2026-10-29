@@ -19,8 +19,9 @@
 #
 # With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), the clock is the real one, and a
 # call that the scenario times out is held for 15 seconds, past the 10 of the generated code's
-# limit, and then fails; each run's result also has `times`: when each call came and when the run
-# ended, in milliseconds from its start.
+# limit, and then fails; a callback the scenario times out does not hand its id on: the call that
+# hands it on is held for 75 seconds, past the minute it gets, and then fails. Each run's result
+# also has `times`: when each call came and when the run ended, in milliseconds from its start.
 
 from __future__ import annotations
 
@@ -40,9 +41,11 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from transport import make_transport  # noqa: E402
 
-# The limits as they are generated, in real time (see the top), and how long a call the scenario times out is held then.
+# The limits as they are generated, in real time (see the top), and how long a call the scenario
+# times out is held then, and a callback's id it times out (past dandori's check::CALLBACK_HAND_ON_SECONDS).
 LIMITS = os.environ.get("DANDORI_LIMITS") == "1"
 LATE = 15.0
+HAND_ON_LATE = float(60 + 15)
 
 
 class SkippingClock:
@@ -79,10 +82,16 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
     def scripted(kind: str) -> Exception:
         return rt.TaskFailure("Dandori.Test.Failure" if kind == "failure" else kind, "scripted")
 
-    def answer_later(callback_id: str, ans: dict[str, Any]) -> None:
-        """Answer a callback through Deps.callbacks; a timeout gets no answer."""
+    async def late(seconds: float) -> Any:
+        """A call held past its limit: no answer before it, and a failure after."""
+        await asyncio.sleep(seconds)
+        raise rt.TaskFailure("Dandori.Test.Late", "the call should have run out of time first")
+
+    def answer_later(callback_id: str, ans: dict[str, Any]) -> Any:
+        """Answer a callback through Deps.callbacks; a timeout gets no answer, and with
+        DANDORI_LIMITS, its id is not handed on in time either (what to await)."""
         if "ok" not in ans and ans["error"] == "timeout":
-            return
+            return late(HAND_ON_LATE) if LIMITS else None
         if "ok" in ans:
             answer = {"ok": ans["ok"]}
         else:
@@ -97,13 +106,12 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
             current["steps"].append({"call": call, "answer": recorded(ans)})
             return ans
 
-        def answer_later(self, callback_id: str, ans: dict[str, Any]) -> None:
-            answer_later(callback_id, ans)
+        def answer_later(self, callback_id: str, ans: dict[str, Any]) -> Any:
+            return answer_later(callback_id, ans)
 
     async def hold(_run: Run, ans: dict[str, Any]) -> Any:
         """A call the scenario times out, with the limits as they are: no answer before the limit, and a failure after."""
-        await asyncio.sleep(LATE)
-        raise rt.TaskFailure("Dandori.Test.Late", "the call should have run out of time first")
+        return await late(LATE)
 
     if LIMITS:
         Run.hold = hold  # type: ignore[attr-defined]
@@ -120,7 +128,9 @@ async def run_all(package: str, spec: dict[str, Any]) -> list[dict[str, Any]]:
                 if t["callback"]:
                     rest = {k: v for k, v in args.items() if k != "callback_id"}
                     current["steps"].append({"call": {"callback": t["name"], "args": rest}, "answer": recorded(ans)})
-                    answer_later(args["callback_id"], ans)
+                    held = answer_later(args["callback_id"], ans)
+                    if held is not None:
+                        await held
                     return None
                 current["steps"].append({"call": {"task": t["name"], "args": args}, "answer": recorded(ans)})
                 if "ok" in ans:

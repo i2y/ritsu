@@ -21,8 +21,9 @@
 //
 // With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), time is not skipped, and a call
 // that the scenario times out is held for 15 seconds, past the 10 of the generated code's limit,
-// and then fails; each run's result also has `times`: when each call came and when the run ended,
-// in milliseconds from its start.
+// and then fails; a callback the scenario times out does not hand its id on: the call that hands it
+// on is held for 75 seconds, past the minute it gets, and then fails. Each run's result also has
+// `times`: when each call came and when the run ended, in milliseconds from its start.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -35,8 +36,9 @@ const [dir, runsFile, outFile] = process.argv.slice(2);
 const spec = JSON.parse(fs.readFileSync(runsFile, "utf8"));
 /** The limits as they are generated, in real time (see the top). */
 const LIMITS = process.env.DANDORI_LIMITS === "1";
-/** How long a call the scenario times out is held then. */
+/** How long a call the scenario times out is held then, and a callback's id it times out (past dandori's check::CALLBACK_HAND_ON_SECONDS). */
 const LATE_MS = 15000;
+const HAND_ON_LATE_MS = (60 + 15) * 1000;
 
 // Node runs TypeScript by stripping the types, and wants the extension on a relative import.
 const work = workDir("dandori-durable-");
@@ -114,7 +116,20 @@ async function deliver(callbackId, ans) {
   throw new Error(`could not answer the callback ${callbackId}`);
 }
 
+/** A call held past its limit: no answer before it, and a failure after. */
+function lateBy(ms) {
+  return new Promise((_, reject) =>
+    setTimeout(() => {
+      const e = new Error("the call should have run out of time first");
+      e.name = "Dandori.Test.Late";
+      reject(e);
+    }, ms),
+  );
+}
+
 function answerLater(callbackId, ans) {
+  // with the limits as they are, a callback the scenario times out does not hand its id on in time
+  if (LIMITS && !("ok" in ans) && ans.error === "timeout") return lateBy(HAND_ON_LATE_MS);
   setTimeout(() => deliver(callbackId, ans).catch((e) => process.stderr.write(`${e}\n`)), 0);
 }
 
@@ -129,16 +144,7 @@ const run = {
   answerLater,
 };
 // a call the scenario times out, with the limits as they are: no answer before the limit, and a failure after
-if (LIMITS) {
-  run.hold = () =>
-    new Promise((_, reject) =>
-      setTimeout(() => {
-        const e = new Error("the call should have run out of time first");
-        e.name = "Dandori.Test.Late";
-        reject(e);
-      }, LATE_MS),
-    );
-}
+if (LIMITS) run.hold = () => lateBy(LATE_MS);
 
 const own = {};
 for (const t of spec.own ?? []) {
@@ -147,7 +153,7 @@ for (const t of spec.own ?? []) {
       const { callback_id, ...rest } = args;
       const ans = take(t.name);
       current.steps.push({ call: { callback: t.name, args: normalize(rest) }, answer: recorded(ans) });
-      answerLater(callback_id, ans);
+      await answerLater(callback_id, ans);
     };
   } else {
     own[t.method] = async (args) => {

@@ -837,6 +837,19 @@ fn call_row(i: &Input, s: &TStmt, target: Option<&Target>, callee: &Callee, args
                 Some((_, at)) => tr(lang, &format!("until `{}`", at.show()), &format!("`{}` まで", at.show())),
                 None => timeout,
             };
+            // a callback hands its id on before it waits, within `check::CALLBACK_HAND_ON_SECONDS` on every
+            // target (DESIGN 17)
+            let timeout = if t.callback {
+                let hand_on = crate::check::CALLBACK_HAND_ON_SECONDS;
+                match (lang, timeout.is_empty()) {
+                    (Lang::En, true) => format!("{} to hand the id on", crate::flow::show_dur(hand_on)),
+                    (Lang::En, false) => format!("{} to hand the id on, then {timeout}", crate::flow::show_dur(hand_on)),
+                    (Lang::Ja, true) => format!("ID を渡すのに {}", crate::flow::show_dur_ja(hand_on)),
+                    (Lang::Ja, false) => format!("ID を渡すのに {}、そのあと {timeout}", crate::flow::show_dur_ja(hand_on)),
+                }
+            } else {
+                timeout
+            };
             (how, retries, timeout)
         }
     };

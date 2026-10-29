@@ -26,7 +26,8 @@
 // server. The runs with real pods are made from the WorkflowTemplate, as `argo submit --from` does.
 //
 // A task's `timeout` is the pod's `activeDeadlineSeconds`, which counts the pod's start; the copy of the template
-// that runs here has 120 seconds more (see DEADLINE_ROOM), since no scenario runs a task into its timeout.
+// that runs here has 120 seconds more (see DEADLINE_ROOM), since no scenario runs a task into its timeout. So has
+// the minute a callback's own image gets to hand its id on.
 //
 // The runs listed in `real` are played again with real pods: node:24-alpine running the caller
 // with the test transport and the stand-ins, answered by the mock in the cluster
@@ -56,9 +57,12 @@
 // the runner started it ended.
 //
 // With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), a call that the scenario times
-// out gets no answer in a played pod, and the generated caller's own limit ends the pod (exit code
-// 143); each run's result also has `times`: when each call came and when the run ended, in
-// milliseconds from its submission. Those runs are played alone, with no real pods.
+// out gets no answer in a played pod, and a callback it times out does not hand its id on: the
+// generated caller's own limit ends the pod (exit code 143). The deadlines of the pods are as
+// generated, and every container is told DANDORI_LIMITS too: a callback's own image that does not
+// hand its id on waits in its pod until Kubernetes stops the pod at its deadline, which only a real
+// pod has, and so the runs in `real` go only with real pods. Each run's result also has `times`:
+// when each call came and when the run ended, in milliseconds from its submission.
 //
 // The argo command is DANDORI_ARGO, else `argo` on the PATH. DANDORI_ARGO_KEEP=1 keeps the
 // workflows, to look at them; DANDORI_ARGO_DUMP=<directory> writes, for every run with real pods,
@@ -87,6 +91,8 @@ const ns = "argo";
 // until the runner ends them
 const PLAYER = "dandori-played";
 const PLAYED = JSON.stringify({ schedulerName: PLAYER });
+/** The limits as they are generated (see the top). */
+const LIMITS = process.env.DANDORI_LIMITS === "1";
 
 function kubectlOnce(args, input) {
   if (input === undefined) return run("kubectl", ["--context", context, "-n", ns, ...args], { maxBuffer: 1 << 28 }).then((r) => r.stdout);
@@ -234,7 +240,10 @@ fs.writeFileSync(
 
 // The runs: each one played, and the ones in `real` again with real pods.
 const plays = [];
-spec.runs.forEach((r, i) => plays.push({ i, real: false, base: `dd-${name}-${suffix}-${i + 1}`, name: `dd-${name}-${suffix}-${i + 1}`.slice(0, 60), platform: [], nudged: [] }));
+spec.runs.forEach((r, i) => {
+  if (LIMITS && (spec.real ?? []).includes(i)) return;
+  plays.push({ i, real: false, base: `dd-${name}-${suffix}-${i + 1}`, name: `dd-${name}-${suffix}-${i + 1}`.slice(0, 60), platform: [], nudged: [] });
+});
 for (const i of spec.real ?? []) plays.push({ i, real: true, base: `dd-${name}-${suffix}-real${i + 1}`, name: `dd-${name}-${suffix}-real${i + 1}`.slice(0, 60), platform: [], nudged: [] });
 const byName = new Map(plays.map((p) => [p.name, p]));
 // the names of the runs that were played again under another: what is left of them is not played
@@ -282,10 +291,12 @@ for (const t of wt.spec.templates) {
   // before its containers start: with every run at once, that is seconds in this cluster. A pod that ends by itself
   // just as the deadline passes is marked DeadlineExceeded, and Argo puts that message in the node in place of the
   // container's, in which the retryStrategy looks for the declared error's name: a `busy` is then not retried. No
-  // scenario here runs a task into its timeout (they are left out), so the deadline is given room for the start.
-  if (t.activeDeadlineSeconds !== undefined) t.activeDeadlineSeconds = Number(t.activeDeadlineSeconds) + DEADLINE_ROOM;
+  // scenario here runs a task into its timeout (they are left out), so the deadline is given room for the start;
+  // but for the tests of the limits, which run into the deadlines as they are.
+  if (t.activeDeadlineSeconds !== undefined && !LIMITS) t.activeDeadlineSeconds = Number(t.activeDeadlineSeconds) + DEADLINE_ROOM;
   const c = t.container;
   if (!c || !c.env) continue;
+  if (LIMITS) c.env.push({ name: "DANDORI_LIMITS", value: "1" });
   const task = c.env.find((e) => e.name === "DANDORI_TASK")?.value;
   if (task === undefined) continue;
   const cmd = c.command ?? [];
@@ -806,7 +817,7 @@ try {
     const state = await stateOf(p, true);
     // the keys carry the workflow's name; the reference names the execution "test"
     const steps = JSON.parse(JSON.stringify(state.steps).split(`"${p.name}/`).join('"test/'));
-    const times = process.env.DANDORI_LIMITS === "1" ? { times: { calls: (state.calls ?? []).map((t) => t - p.submitted), end: p.ended - p.submitted } } : {};
+    const times = LIMITS ? { times: { calls: (state.calls ?? []).map((t) => t - p.submitted), end: p.ended - p.submitted } } : {};
     return { steps, end: p.end, nodes: p.nodes, platform: p.platform, nudged: p.nudged, seconds: p.seconds, ...times };
   }
   for (const p of plays) (p.real ? results.real : results.runs).push(await result(p));

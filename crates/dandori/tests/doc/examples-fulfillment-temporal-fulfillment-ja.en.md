@@ -92,7 +92,7 @@ What each method of the service does to a run.
 | 95 | `記録する(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 98 | `配送 = 配送を手配する(…)` | `flow arrange_delivery.ja.flow` | — | — | `翌日便の空きなし` → line 99<br>`timeout`, `failure` → line 102 |
 | 100 | `配送 = 配送を手配する(…)` | `flow arrange_delivery.ja.flow` | — | — | `翌日便の空きなし`, `timeout`, `failure` → line 101 |
-| 103 | `箱 = 梱包を待つ(…)` | a task you write, answered by a callback | — | 2 days | `timeout` → line 104<br>`failure` → the workflow fails |
+| 103 | `箱 = 梱包を待つ(…)` | a task you write, answered by a callback | — | 1 minute to hand the id on, then 2 days | `timeout` → line 104<br>`failure` → the workflow fails |
 | 105 | `知らせる(…)` | a task you write | — | — | `宛先なし` → line 106<br>`timeout`, `failure` → the workflow fails |
 
 ## Ends

@@ -232,6 +232,11 @@ jobs:
             rule_limits_hold_on_durable \
             rule_limits_hold_on_argo \
             rule_limits_hold_on_pydantic_graph \
+            callback_limits_hold_on_temporal \
+            callback_limits_hold_on_localstack \
+            callback_limits_hold_on_durable \
+            callback_limits_hold_on_argo \
+            callback_limits_hold_on_pydantic_graph \
             open_responses_agents_answer_on_ollama \
             jev_tasks_answer_on_typesafe \
             decision_tasks_answer_on_ollama \

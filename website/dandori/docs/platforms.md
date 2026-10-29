@@ -40,9 +40,10 @@ code in `rules.ts`: its activity is in `activities.ts`, and sends to the rule's 
   Every activity the workflow's worker serves heartbeats, so that a worker that went away is noticed
   within 30 seconds. A rule's or a date's activity gets 10 seconds from the moment a worker takes it
   (its start-to-close timeout; the time it waits in the task queue is not counted), and is retried
-  twice, 1 and 2 seconds apart, when it runs out or fails. The wait of an `event` or a `callback` task
-  with `timeout until` is a timer of the workflow, set by the workflow's clock when the wait starts
-  ([How long a call may take](tasks.md#how-long-a-call-may-take)).
+  twice, 1 and 2 seconds apart, when it runs out or fails. The activity that hands a callback's id on
+  gets a minute, whatever the callback's `timeout`, which is the wait for the answer. The wait of an
+  `event` or a `callback` task with `timeout until` is a timer of the workflow, set by the workflow's
+  clock when the wait starts ([How long a call may take](tasks.md#how-long-a-call-may-take)).
 
 ## Temporal (Python)
 
@@ -96,7 +97,8 @@ A rule's or a date's Task, by Lambda or by HTTP, has `TimeoutSeconds` 10, and it
 twice more, 1 and 2 seconds apart, when it times out (`States.Timeout`) or fails. A callback with
 `timeout until` gives its `.waitForTaskToken` Task a `TimeoutSeconds` that JSONata works out from the
 time and the moment the state was entered, a second at the least; the Task's clock starts before the
-token is handed on, so the time the handing on takes is in it.
+token is handed on, so the time the handing on takes is in it. So it is with a callback's `timeout`:
+the Task has no limit of its own on handing the token on, which the other platforms give a minute.
 
 ## AWS Lambda durable functions
 
@@ -106,7 +108,8 @@ rule's or a date's call is a step that calls its Lambda function through the `Tr
 task does, or sends to the rule's service when the rule says `connect`, and the step gives the call 10
 seconds: the SDK's `context.invoke` takes no timeout. A task of your own is a step that runs your
 code. A callback with `timeout until` reads the clock in a step of its own, and gives
-`createCallback` the seconds left to the time, a second at the least.
+`createCallback` the seconds left to the time, a second at the least. The step that hands a callback's
+id on gives the call a minute.
 
 ## Argo Workflows
 
@@ -126,7 +129,10 @@ passes is marked as past it, and Argo then cannot see the name of the error the 
 A rule's or a date's call gets its 10 seconds in the caller, not on the pod: past them the caller
 exits 143, as a container Argo stops at its deadline does, and the workflow reads it as a timeout. The
 time Kubernetes takes to place and start the pod is not counted, as a Temporal activity's time in its
-task queue is not. The template's `retryStrategy` tries a call twice more, with a backoff of 1 and 2
+task queue is not. The caller gives a callback's id a minute to be handed on in the same way. A
+callback that runs your own image hands its id on in your image, where dandori cannot keep the time,
+so the pod that hands it on gets `activeDeadlineSeconds: 60`, which counts the pod's start too.
+The template's `retryStrategy` tries a call twice more, with a backoff of 1 and 2
 seconds, but Argo starts the next try when its controller looks at the workflow again, 10 seconds after
 a change by default. A callback with `timeout until` has a step after the one that hands the id on,
 which works out the seconds left to the time from `now()`, a second at the least, and the wait's
@@ -144,8 +150,9 @@ agent.
 
 A rule that says `connect` gets 10 seconds for each try at its service. A rule or a date computed in
 the process, by rulec's or koyomi's Python, gets no limit: it reads and writes nothing, always ends,
-and asyncio could not stop it in the middle anyway. A callback with `timeout until` waits the seconds
-from `Deps.clock`'s time to the one it is given, a second at the least.
+and asyncio could not stop it in the middle anyway. A callback's id gets a minute to be handed on. A
+callback with `timeout until` waits the seconds from `Deps.clock`'s time to the one it is given, a
+second at the least.
 
 A dates file's dates and a book's operations build for every platform: a date is a call like a rule's,
 and an operation of a book is a Lambda function on Step Functions and a call through the `Transport`

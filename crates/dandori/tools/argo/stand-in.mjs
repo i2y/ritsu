@@ -5,6 +5,10 @@
 // When the runner plays the pod on this machine, DANDORI_MOCK says where the mock is and
 // DANDORI_OUT and DANDORI_TERMINATION where the answer and the termination message go.
 //
+// With DANDORI_LIMITS=1 (the tests of the limits, tests/limits), a callback the scenario times out
+// does not hand its id on: the stand-in waits a minute and a half, past the minute the pod's
+// deadline gives it, and fails if nothing has stopped it by then.
+//
 //   node stand-in.mjs task|callback|rule|child <name>
 
 import fs from "node:fs";
@@ -41,6 +45,11 @@ if (!res.ok) {
   process.exit(2);
 }
 const ans = got.answer;
+if (kind === "callback" && process.env.DANDORI_LIMITS === "1" && !("ok" in ans) && ans.error === "timeout") {
+  await new Promise((r) => setTimeout(r, 90 * 1000));
+  process.stderr.write("the pod should have been stopped at its deadline\n");
+  process.exit(1);
+}
 fs.mkdirSync(out, { recursive: true });
 if (kind === "callback" || "ok" in ans) {
   fs.writeFileSync(`${out}/answer.json`, JSON.stringify(kind === "callback" ? null : ans.ok));

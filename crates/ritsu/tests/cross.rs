@@ -43,7 +43,9 @@
 //!   does not come by the payment day at 09:00 (`timeout until`): an event (E206), a callback, whose
 //!   id is handed on first (W206, the day that makes the wait the longest in a note), the same with
 //!   a hold of 60 days (held), and a callback waiting until a time an input gives (W206: nothing
-//!   bounds it).
+//!   bounds it). A callback answered within 59 minutes between a hold of an hour and the post: the
+//!   minute it may take to hand its id on makes the post come up to 20 seconds after the hold
+//!   expires (W206).
 //!
 //! - X15 (the operations a context opens, against the actions that guard them; sekisho's DESIGN
 //!   4.6): `orders` — a map whose one context opens two operations of its OpenAPI document: both
@@ -414,6 +416,22 @@ fn x5_a_hold_against_its_expiry() {
     run("x5-until-callback-held", &until("W206", callback, "due.at", &[]), 0, (2, 0, 1), &mut failures);
     let input = [("invoice.flow", "  qty   : int  range >=1 <=100\n", "  qty   : int  range >=1 <=100\n  by    : timestamp\n")];
     run("x5-until-open-W206", &until("E206", callback, "by", &input), 0, (0, 0, 3), &mut failures);
+    // the warehouse confirms the order within 59 minutes, between a hold of an hour and the post,
+    // whose calls take 10 seconds at the most: handing the callback's id on takes a minute more at
+    // the most, on every target (dandori's DESIGN 17), and the post can come after the hold expires
+    let confirm = changed(
+        "E206",
+        &[
+            ("stock.book", "for 14 days at most", "for an hour at most"),
+            ("stock.book", "pending expires after 14 days", "pending expires after 1 hour"),
+            ("invoice.flow", "use dates terms from \"payment_terms.cal\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:payment-terms\"\n", ""),
+            ("invoice.flow", "  errors out_of_stock\n", "  errors out_of_stock\n  timeout 10 seconds\n"),
+            ("invoice.flow", "  errors expired\n", "  errors expired\n  timeout 10 seconds\n"),
+            ("invoice.flow", "case goods", "task confirm(order: string)\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:confirm\"\n  callback\n  timeout 59 minutes\n\ncase goods"),
+            ("invoice.flow", "  let due = terms.payment(received: now)\n  wait until due.at\n", "  confirm(order: order)\n"),
+        ],
+    );
+    run("x5-callback-W206", &confirm, 0, (0, 0, 1), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

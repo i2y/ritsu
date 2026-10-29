@@ -170,8 +170,8 @@ approval instead of waiting for the payment day, waits for the answer until 09:0
 (`timeout until due.at`), and puts the goods back when none comes. How long that takes depends on
 the day the date is given, so whether the hold has expired cannot be decided, and the warning says
 the day that makes the wait the longest. Every call between the hold and `put_back` has an upper
-bound: the wait ends at the date's time, and a call of a rule or of a date takes 33 seconds at the
-most on every platform.
+bound: the approval's id is handed on within a minute and its wait ends at the date's time, and a call
+of a rule or of a date takes 33 seconds at the most on every platform.
 
 <div class="cb-term" markdown>
 

@@ -46,7 +46,7 @@ flowchart TD
 | 51 | `r = score(…)` | `jev · jev-1.13.0` | 10 秒おきに 2 回（busy・overloaded） | 10 秒 | `busy`・`overloaded`・`timeout`・`failure` → 52 行目 |
 | 53 | `d = policy(…)` | 規則 `review_policy.rule` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
 | 57 | `due = approvals.due(…)` | `approval_terms.cal` の日付 `due` | 1 秒後と 2 秒後の 2 回（failure・timeout） | 10 秒 | `timeout`・`failure` → ワークフローが失敗する |
-| 58 | `a = ask_for_approval(…)` | 自分で書くタスク（応答はコールバック） | — | `due.at` まで | `timeout` → 59 行目<br>`failure` → ワークフローが失敗する |
+| 58 | `a = ask_for_approval(…)` | 自分で書くタスク（応答はコールバック） | — | ID を渡すのに 1 分、そのあと `due.at` まで | `timeout` → 59 行目<br>`failure` → ワークフローが失敗する |
 | 60 | `notify(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 | 62 | `notify(…)` | 自分で書くタスク・`idempotent` | — | — | `timeout`・`failure` → ワークフローが失敗する |
 

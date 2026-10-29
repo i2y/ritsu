@@ -1,14 +1,16 @@
-// Runs the limits of a rule's call on Step Functions (the tests of the limits, tests/limits): the
-// state machine dandori generated, on LocalStack with its Lambda, which runs each function in a
-// container of its own (docker's socket is lent to LocalStack). In place of each Lambda function a
-// run times out, a function that waits 15 seconds before it answers, past the 10 seconds of the
-// Task's TimeoutSeconds. LocalStack's mock file cannot do this: it cannot throw an error whose name
-// begins with States., and a mocked answer takes no time (see run.mjs).
+// Runs the limits of a call on Step Functions (the tests of the limits, tests/limits): the state
+// machine dandori generated, on LocalStack with its Lambda, which runs each function in a container
+// of its own (docker's socket is lent to LocalStack). In place of each Lambda function a run times
+// out, a function that waits before it answers: 15 seconds, past the 10 seconds of the Task's
+// TimeoutSeconds for a rule's call, or as long as the spec says (a callback's function, which hands
+// no token on, waits past the task's `timeout`). LocalStack's mock file cannot do this: it cannot
+// throw an error whose name begins with States., and a mocked answer takes no time (see run.mjs).
 //
 //   node tools/localstack/limits.mjs <spec.json> <results.json>
 //
 // spec.json:    { "image": LocalStack's image, "definition": the state machine,
 //                 "functions": [the ARN of each Lambda function that waits],
+//                 "waits": seconds the functions wait (15 when it is not there),
 //                 "runs": [ { "id", "input" } ] }
 // results.json: { "runs": [ { "steps", "end", "tries": [ { "started", "ended" } ], "late": n } ] }
 //
@@ -41,7 +43,7 @@ const spec = JSON.parse(fs.readFileSync(specFile, "utf8"));
 const HTTP = "arn:aws:states:::http:invoke";
 const STAND_IN = "arn:aws:states:::aws-sdk:sts:getCallerIdentity";
 /** How long the function waits before it answers. */
-const WAITS_MS = 15000;
+const WAITS_MS = (spec.waits ?? 15) * 1000;
 const container = `dandori-limits-${process.pid}`;
 const began = Date.now();
 

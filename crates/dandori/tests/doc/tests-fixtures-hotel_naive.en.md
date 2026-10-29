@@ -57,7 +57,7 @@ A rectangle is a task, one with a line down each side a rule, a slanted one a ta
 | 84 | `pi ← create_intent(…)` | `POST https://api.stripe.com/v1/payment_intents form`, `starts payment_intent.payment then attach`, `key` | 2 times every 2 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails | `pi`: `requires_confirmation` |
 | 85 | `pi ← confirm_intent(…)` | `POST https://api.stripe.com/v1/payment_intents/{id}/confirm form`, `sends confirm`, `key` | — | — | `card_declined` → line 86<br>`unexpected_state`, `timeout`, `failure` → the workflow fails | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
 | 86 | `pi ← get_intent(…)` | `GET https://api.stripe.com/v1/payment_intents/{id}`, `observes`, `idempotent` | 3 times every 2 seconds (failure, timeout) | — | `timeout`, `failure` → the workflow fails | `pi`: `requires_payment_method`, `requires_confirmation`, `requires_action`, `requires_capture`, `canceled` |
-| 89 | `pi ← wait_for_customer(…)` | `lambda stripe-webhook-inbox · callback`, `observes` | — | 1 hour | `timeout`, `failure` → the workflow fails | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
+| 89 | `pi ← wait_for_customer(…)` | `lambda stripe-webhook-inbox · callback`, `observes` | — | 1 minute to hand the id on, then 1 hour | `timeout`, `failure` → the workflow fails | `pi`: `requires_payment_method`, `requires_action`, `requires_capture`, `canceled` |
 | 93 | `pi ← capture_intent(…)` | `POST https://api.stripe.com/v1/payment_intents/{id}/capture form`, `sends capture`, `key` | 2 times every 5 seconds (failure, timeout) | — | `unexpected_state` → line 94<br>`timeout`, `failure` → the workflow fails | `pi`: `processing`, `succeeded` |
 
 ## Ends

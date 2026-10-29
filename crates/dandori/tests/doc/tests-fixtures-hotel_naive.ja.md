@@ -57,7 +57,7 @@ flowchart TD
 | 84 | `pi ← create_intent(…)` | `POST https://api.stripe.com/v1/payment_intents form`・`starts payment_intent.payment then attach`・`key` | 2 秒おきに 2 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する | `pi`: `requires_confirmation` |
 | 85 | `pi ← confirm_intent(…)` | `POST https://api.stripe.com/v1/payment_intents/{id}/confirm form`・`sends confirm`・`key` | — | — | `card_declined` → 86 行目<br>`unexpected_state`・`timeout`・`failure` → ワークフローが失敗する | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
 | 86 | `pi ← get_intent(…)` | `GET https://api.stripe.com/v1/payment_intents/{id}`・`observes`・`idempotent` | 2 秒おきに 3 回（failure・timeout） | — | `timeout`・`failure` → ワークフローが失敗する | `pi`: `requires_payment_method`・`requires_confirmation`・`requires_action`・`requires_capture`・`canceled` |
-| 89 | `pi ← wait_for_customer(…)` | `lambda stripe-webhook-inbox · callback`・`observes` | — | 1 時間 | `timeout`・`failure` → ワークフローが失敗する | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
+| 89 | `pi ← wait_for_customer(…)` | `lambda stripe-webhook-inbox · callback`・`observes` | — | ID を渡すのに 1 分、そのあと 1 時間 | `timeout`・`failure` → ワークフローが失敗する | `pi`: `requires_payment_method`・`requires_action`・`requires_capture`・`canceled` |
 | 93 | `pi ← capture_intent(…)` | `POST https://api.stripe.com/v1/payment_intents/{id}/capture form`・`sends capture`・`key` | 5 秒おきに 2 回（failure・timeout） | — | `unexpected_state` → 94 行目<br>`timeout`・`failure` → ワークフローが失敗する | `pi`: `processing`・`succeeded` |
 
 ## 終わり方

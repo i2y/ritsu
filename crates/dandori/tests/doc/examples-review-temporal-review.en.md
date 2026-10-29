@@ -46,7 +46,7 @@ A rectangle is a task, one with a line down each side a rule or a date of a date
 | 51 | `r = score(…)` | `jev · jev-1.13.0` | 2 times every 10 seconds (busy, overloaded) | 10 seconds | `busy`, `overloaded`, `timeout`, `failure` → line 52 |
 | 53 | `d = policy(…)` | rule `review_policy.rule` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
 | 57 | `due = approvals.due(…)` | the date `due` of `approval_terms.cal` | 2 times, after 1 second and 2 (failure, timeout) | 10 seconds | `timeout`, `failure` → the workflow fails |
-| 58 | `a = ask_for_approval(…)` | a task you write, answered by a callback | — | until `due.at` | `timeout` → line 59<br>`failure` → the workflow fails |
+| 58 | `a = ask_for_approval(…)` | a task you write, answered by a callback | — | 1 minute to hand the id on, then until `due.at` | `timeout` → line 59<br>`failure` → the workflow fails |
 | 60 | `notify(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 | 62 | `notify(…)` | a task you write, `idempotent` | — | — | `timeout`, `failure` → the workflow fails |
 

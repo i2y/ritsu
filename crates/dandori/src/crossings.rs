@@ -14,13 +14,18 @@
 //! - The call that makes the hold makes it somewhere inside its own run: after it, the hold is 0
 //!   seconds old at the fewest, and at most as old as the call can take.
 //! - A call takes 0 seconds at the fewest, and at the most its `timeout` for each attempt its
-//!   `retry` allows, with the waits between them. A task with no `timeout` leaves nothing bounding
-//!   the most. A rule or a date takes at most 33 seconds: every target gives each try of its call
-//!   10 seconds and retries it twice, 1 and 2 seconds apart (`check::rule_call_most`, dandori's
-//!   DESIGN 16).
+//!   `retry` allows, with the waits between them. An attempt of a callback hands its id on before
+//!   it waits for the answer, which every target gives a minute at the most
+//!   (`check::CALLBACK_HAND_ON_SECONDS`, dandori's DESIGN 17), so each counts its `timeout` and a
+//!   minute. A task with no `timeout` leaves nothing bounding the most. A rule or a date takes at
+//!   most 33 seconds: every target gives each try of its call 10 seconds and retries it twice, 1
+//!   and 2 seconds apart (`check::rule_call_most`, dandori's DESIGN 16).
 //! - A task with `timeout until x.at` waits until the time, as `wait until x.at` below does, and a
-//!   second more at the most, for the wait is rounded up to the second. When koyomi does not count
-//!   the time, nothing bounds the most.
+//!   second more at the most, for the wait is rounded up to the second. A callback hands its id on
+//!   first, so its wait ends at the time, or a second after the id is handed on (a minute after the
+//!   call starts at the most) when that is later; each retry after a failure waits between, hands
+//!   the id on again and waits again, a minute and a second more than the time at the most. When
+//!   koyomi does not count the time, nothing bounds the most.
 //! - `wait <n>` takes exactly its time.
 //! - `wait until x.at`, when `x` is the answer of a koyomi date whose date input was given `now`
 //!   read after the hold, lasts until the date's time. That time is between the fewest and the
@@ -37,8 +42,8 @@
 //!   `timeout until x.at`, no sooner than the time, counted as for `wait until x.at`, and as the
 //!   call starts when koyomi does not count it. Any other task's timeout can come sooner (on
 //!   Temporal, an activity the workflow's own worker serves times out when its heartbeats stop for
-//!   30 seconds, and a callback when the activity that hands its id on times out), so its handlers
-//!   start as the call ends, 0 seconds at the fewest.
+//!   30 seconds, and on every target a callback times out when it does not hand its id on within a
+//!   minute), so its handlers start as the call ends, 0 seconds at the fewest.
 //! - `on failure` and `on cancel` start where a failure or a cancellation can stop the run: the
 //!   hold is 0 seconds old at the fewest, and at the most as old as it can be at any call or wait.
 //!
@@ -471,11 +476,8 @@ impl<'a> Spans<'a> {
                 let Some(timeout) = t.timeout else {
                     return Err(tr!("{line} 行目の `{}` には `timeout` がありません", "`{}` (line {line}) has no `timeout`", t.name; t.name));
                 };
-                let (times, waits) = match &t.retry {
-                    Some(r) => (u64::from(r.times), (0..r.times).map(|k| (r.every as f64 * r.backoff.powi(k as i32)).ceil() as u64).sum()),
-                    None => (0, 0),
-                };
-                Ok((times + 1) * timeout + waits)
+                let (times, waits) = retries(t);
+                Ok((times + 1) * (hand_on(t) + timeout) + waits)
             }
             // every target gives a try of a rule's or a date's call the same limit, and retries it the
             // same (DESIGN 16)
@@ -503,6 +505,8 @@ impl<'a> Spans<'a> {
 
     /// A call's own run, from the hold `i`'s age `c` as it starts: its `dur`, or with `timeout until`,
     /// until the time it waits until (`until`), rounded up to the second and a second at the least.
+    /// A callback hands its id on first, so its wait ends at the time, or a second after the id is
+    /// handed on when that is later; a retry after a failure hands it on and waits again.
     fn through(c: &mut Since, i: usize, dur: &Result<u64, Text>, until: Option<&Until>) {
         let Some(u) = until else {
             c.add(0, dur, None);
@@ -523,8 +527,9 @@ impl<'a> Spans<'a> {
         let (line, task, shown) = (u.line, &u.task, &u.shown);
         let mut why = since.most_why.clone();
         why.extend(k.longest(|to, clock, most| tr!("{line} 行目の `{task}` は、その日から {most} 日後の {to} の {clock}（`{shown}`）まで待ちます", "`{task}` (line {line}) waits until `{shown}`, {to} at {clock}, {most} days after it")));
+        c.hi = c.hi.map(|h| h + u.hand_on);
         c.reach(most, why);
-        c.hi = c.hi.map(|h| h + 1);
+        c.hi = c.hi.map(|h| h + 1 + u.again);
     }
 
     /// The most seconds one way through a block can take.
@@ -562,7 +567,7 @@ impl<'a> Spans<'a> {
                 let dur = self.duration(callee, args, s.line);
                 // `timeout until`: the wait for the answer ends at the time the call gives
                 let until = match (callee, crate::render::deadline_arg(self.m, callee, args)) {
-                    (Callee::Task(t), Some(at)) => Some(Until { line: s.line, task: self.m.tasks[*t].name.clone(), shown: at.show(), counted: self.counted(&st, at) }),
+                    (Callee::Task(t), Some(at)) => Some(Until::of(&self.m.tasks[*t], s.line, at.show(), self.counted(&st, at))),
                     _ => None,
                 };
                 let at_start = st.cases.clone();
@@ -798,15 +803,24 @@ impl<'a> Spans<'a> {
 }
 
 /// A call of a task with `timeout until`: its line, the task, the time as written, and where the
-/// time comes from, when koyomi counts it.
+/// time comes from, when koyomi counts it; and what a callback adds to the wait: the seconds it
+/// takes to hand its id on at the most, and for its retries (after a failure: E007 keeps a
+/// timeout from being retried), each a hand-on and a second more, and the waits between them.
 struct Until {
     line: usize,
     task: String,
     shown: String,
     counted: Option<Counted>,
+    hand_on: u64,
+    again: u64,
 }
 
 impl Until {
+    fn of(t: &TaskDef, line: usize, shown: String, counted: Option<Counted>) -> Until {
+        let (times, waits) = retries(t);
+        Until { line, task: t.name.clone(), shown, counted, hand_on: hand_on(t), again: times * (hand_on(t) + 1) + waits }
+    }
+
     /// The handler of `timeout` alone under a task that waits for an event: it starts when the time
     /// has come, so no sooner than the time is after the hold `i`.
     fn timed_out(&self, c: &mut Since, i: usize) {
@@ -824,6 +838,24 @@ impl Until {
         c.lo = least as u64;
         c.why = since.why.clone();
         c.why.push(why);
+    }
+}
+
+/// The seconds a try of a task takes to hand a callback's id on, at the most: a minute on every
+/// target (`check::CALLBACK_HAND_ON_SECONDS`, dandori's DESIGN 17), and nothing for any other task.
+fn hand_on(t: &TaskDef) -> u64 {
+    if t.callback {
+        crate::check::CALLBACK_HAND_ON_SECONDS
+    } else {
+        0
+    }
+}
+
+/// How many times a task's `retry` tries it again, and the seconds it waits between the tries.
+fn retries(t: &TaskDef) -> (u64, u64) {
+    match &t.retry {
+        Some(r) => (u64::from(r.times), (0..r.times).map(|k| (r.every as f64 * r.backoff.powi(k as i32)).ceil() as u64).sum()),
+        None => (0, 0),
     }
 }
 
