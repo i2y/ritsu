@@ -546,7 +546,7 @@ fn your_answers_that_change_held_to_golden_files() {
         // the text says each of the office's files with its language's own text under it
         let (code, text, _) = ritsu_in(&repo, &store, &["mod", "report", "--base", "one", "--lang", lang]);
         assert_eq!(code, 0, "{text}");
-        let head = if lang == "en" { "your answers that change:" } else { "あなたの答えのうち、変わるもの：" };
+        let head = if lang == "en" { "your answers that change:" } else { "手元のファイルの答えのうち、変わるもの：" };
         assert!(text.contains(head) && text.contains(&format!("  {} (koyomi)", n.invoice)) && text.contains(&format!("  {} (sekisho)", n.refunds)), "{text}");
         // the two sides of a file of the office's are the same file, named with the lock each is read with
         let (base, now) = if lang == "en" { ("the lock of one", "the lock of the working tree") } else { ("one の lock", "作業ツリーの lock") };

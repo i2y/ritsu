@@ -118,7 +118,7 @@ fn read_list(file: &str, text: &str, dir: PathBuf) -> Result<List, Vec<Text>> {
             wrong.push(at(
                 head.col,
                 tr!(
-                    "`{w}` で始まる行はありません。一覧の行は title、description、playground、module、signature、local のどれかで始めてください",
+                    "`{w}` で始まる行は書けません。一覧の行は title、description、playground、module、signature、local のどれかで始めてください",
                     "no line starts with `{w}`; a line of a list starts with title, description, playground, module, signature or local"
                 ),
             ));
@@ -164,7 +164,7 @@ fn read_list(file: &str, text: &str, dir: PathBuf) -> Result<List, Vec<Text>> {
                 Ok(_) => wrong.push(at(
                     col,
                     tr!(
-                        "`{value}` は配らないモジュールの名前です。`module` には `<レジストリ>/<リポジトリ>` を書いてください。まだ送り出していない作業ツリーは `local` で書きます",
+                        "`{value}` は配らないモジュールの名前です。`module` には `<レジストリ>/<リポジトリ>` を書いてください。まだ送り出していない作業ツリーなら、`local` の行で書いてください",
                         "`{value}` is the name of a module that is not published; `module` takes `<registry>/<repository>`, and a working tree not pushed yet is written with `local`"
                     ),
                 )),
@@ -427,7 +427,7 @@ pub fn site(ctx: &Ctx, a: &Args) -> u8 {
             eprintln!(
                 "{}",
                 ctx.say(&tr!(
-                    "注: `{name}` {v} はレジストリにもうあるので、作業ツリーではなくレジストリの版を載せました",
+                    "備考: `{name}` {v} はレジストリにもうあるので、作業ツリーではなくレジストリの版を載せました",
                     "note: `{name}` {v} is on its registry already, so the site shows the registry's and not the working tree's"
                 ))
             );
@@ -636,7 +636,7 @@ impl Writer<'_> {
                 "<h2>{}</h2>\n<p>{}</p>\n",
                 esc(&self.say(tr!("署名の決まり", "Signatures"))),
                 inline(&self.say(tr!(
-                    "このサイトは、載せたモジュールの署名を次の行で確かめました。使う側の `ritsu.mod` に同じ行を書けば、取り出すときに同じように確かめます。",
+                    "このサイトは、載せたモジュールの署名を次の行で確かめました。使う側の `ritsu.mod` に同じ行を書くと、ritsu は取り出すときに同じように署名を確かめます。",
                     "The site checked the signatures of the modules it shows against these lines. The same lines in a `ritsu.mod` check them the same way when they are fetched."
                 )))
             ));
@@ -685,14 +685,14 @@ impl Writer<'_> {
         // how to require it
         if let Some(v) = newest {
             let short = short_name(&s.name);
-            b.push_str(&format!("<h2>{}</h2>\n", esc(&self.say(tr!("足し方", "Requiring it")))));
+            b.push_str(&format!("<h2>{}</h2>\n", esc(&self.say(tr!("依存に足す書き方", "Requiring it")))));
             let name = &s.name;
             if v.published {
                 b.push_str(&format!("<pre><code>{}</code></pre>\n", esc(&format!("ritsu mod add {short} {name}@{}", v.version))));
                 b.push_str(&format!(
                     "<p>{}</p>\n",
                     inline(&self.say(tr!(
-                        "`ritsu.mod` に次の `require` の行が入り、ファイルからは `@{short}/…` で指せます。署名を確かめるなら、`signature` の行も書いてください。",
+                        "このコマンドが `ritsu.mod` に次の `require` の行を書き、ファイルからは `@{short}/…` で指せるようになります。署名を確かめるなら、`signature` の行も書いてください。",
                         "It writes this `require` line in `ritsu.mod`, and the files name the module's files `@{short}/…`. To check its signature, write the `signature` line too."
                     )))
                 ));

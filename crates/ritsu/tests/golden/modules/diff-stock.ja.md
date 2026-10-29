@@ -19,12 +19,12 @@
 
 | 変わり方 | 場所 | 古い値 → 新しい値 |
 |---|---|---|
-| 壊しうる：変わった | `/accounts/棚/lower/value` | `0 → 3` |
-| 壊しうる：消した | `/transfers/入荷/key/1` |  |
-| 壊しうる：変わった | `/transfers/入荷/definition` | `"4b08ebd597351ce90255bd4b574d237f" → "9d464b2546c1a224918a7b384cddfecb"` |
-| 壊しうる：消した | `/transfers/入荷/operations/do/key/params/1` |  |
-| 壊しうる：変わった | `/transfers/出荷/definition` | `"766d277360a66d957d82b5d6e96e2238" → "1a602936af02acd196b4320c99d26ead"` |
-| 壊しうる：変わった | `/transfers/出荷/operations/do/refusals/在庫切れ/bound` | `"at least 0" → "at least 3"` |
+| 変わった（壊しうる） | `/accounts/棚/lower/value` | `0 → 3` |
+| 消した（壊しうる） | `/transfers/入荷/key/1` |  |
+| 変わった（壊しうる） | `/transfers/入荷/definition` | `"4b08ebd597351ce90255bd4b574d237f" → "9d464b2546c1a224918a7b384cddfecb"` |
+| 消した（壊しうる） | `/transfers/入荷/operations/do/key/params/1` |  |
+| 変わった（壊しうる） | `/transfers/出荷/definition` | `"766d277360a66d957d82b5d6e96e2238" → "1a602936af02acd196b4320c99d26ead"` |
+| 変わった（壊しうる） | `/transfers/出荷/operations/do/refusals/在庫切れ/bound` | `"at least 0" → "at least 3"` |
 | 足した | `/transfers/返品` |  |
 | 足した | `/targets/postgres/functions/返品_do` |  |
 | 足した | `/targets/{typescript,python,go,rust}/transfers/2` |  |
@@ -34,4 +34,4 @@
 
 壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
 
-振る舞いかインターフェースに、示せた違いがあります。
+振る舞いかインターフェースに違いが見つかりました。

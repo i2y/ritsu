@@ -41,11 +41,11 @@
 
 | 変わり方 | 場所 | 古い値 → 新しい値 |
 |---|---|---|
-| 壊しうる：変わった | `/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/料金/range/max` | `2950 → 3150` |
-| 壊しうる：変わった | `/go/output_fields/料金/range/max` | `2950 → 3150` |
+| 変わった（壊しうる） | `/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/料金/range/max` | `2950 → 3150` |
+| 変わった（壊しうる） | `/go/output_fields/料金/range/max` | `2950 → 3150` |
 
 壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
 
-振る舞いかインターフェースに、示せた違いがあります。
+振る舞いかインターフェースに違いが見つかりました。
 
-作業ツリーの lock での検査にエラーはありません。振る舞いに示せた違いがあります。
+作業ツリーの lock での検査にエラーはありません。振る舞いに違いが見つかりました。

@@ -145,12 +145,12 @@ pub const STATEMENTS: [&str; 10] = ["module", "version", "description", "ritsu",
 fn form(word: &str) -> Text {
     match word {
         "module" => tr!("module <モジュールの名前>", "module <module name>"),
-        "version" => tr!("version <バージョン>", "version <version>"),
+        "version" => tr!("version <版>", "version <version>"),
         "description" => tr!("description \"<説明>\"", "description \"<text>\""),
-        "ritsu" => tr!("ritsu >=<バージョン>", "ritsu >=<version>"),
+        "ritsu" => tr!("ritsu >=<版>", "ritsu >=<version>"),
         "license" => tr!("license \"<SPDX の式>\"", "license \"<SPDX expression>\""),
         "source" => tr!("source \"<https の URL>\"", "source \"<https URL>\""),
-        "require" => tr!("require <名前> oci \"<リポジトリ>\" <バージョン>` か `require <名前> path \"<パス>\"", "require <name> oci \"<repository>\" <version>` or `require <name> path \"<path>\""),
+        "require" => tr!("require <名前> oci \"<リポジトリ>\" <版>` か `require <名前> path \"<パス>\"", "require <name> oci \"<repository>\" <version>` or `require <name> path \"<path>\""),
         "exclude" => tr!("exclude \"<パス>\"", "exclude \"<path>\""),
         "signature" => tr!(
             "signature \"<頭の部分>\" key \"<パス>\"`（あとに `tlog off` を付けてもよい）、`signature \"<頭の部分>\" by \"<署名者>\" issuer \"<発行者>\"`、`signature \"<頭の部分>\" by matching \"<正規表現>\" issuer \"<発行者>\"",
@@ -183,7 +183,7 @@ fn shape_note(want: Option<Want>, got: Option<&Token>) -> Text {
         }
         (Some(Want::Exactly(w)), Some(t)) => {
             let x = shown(t);
-            tr!("{x} のところには `{w}` を書きます", "`{w}` comes where {x} is")
+            tr!("{x} のところには `{w}` を書いてください", "`{w}` comes where {x} is")
         }
         (Some(Want::Any), Some(t)) => {
             let x = shown(t);
@@ -338,7 +338,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
             let w = &head.text;
             let words = STATEMENTS.map(|w| Text::same(format!("`{w}`")));
             let (ja, en) = (Text::list(&words).ja, Text::list(&words).en);
-            r.at(E301, n, head.col, src, tr!("`{w}` で始まる文はありません。文は {ja} のどれかで始めてください", "no statement starts with `{w}`; a statement starts with one of {en}"));
+            r.at(E301, n, head.col, src, tr!("`{w}` で始まる文は書けません。文は {ja} のどれかで始めてください", "no statement starts with `{w}`; a statement starts with one of {en}"));
             said_first |= first;
             first = false;
             continue;
@@ -412,7 +412,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Manifest, Vec<Diag>> {
                     }
                     None => {
                         r.at(E302, n, v(0).col, src, tr!(
-                            "`ritsu` の値は `>=0.37.0` のように、`>=` とバージョンを続けて一語で書いてください",
+                            "`ritsu` の値は `>=0.37.0` のように、`>=` と版を続けて一語で書いてください",
                             "the value of `ritsu` is `>=` and a version as one word, as `>=0.37.0`"
                         ));
                     }
@@ -638,7 +638,7 @@ impl EditError {
             EditError::NotRequired(n) => tr!("`ritsu.mod` に依存 `{n}` はありません", "`ritsu.mod` requires no `{n}`"),
             EditError::Required(n, l) => tr!("依存 `{n}` は、`ritsu.mod` の {l} 行目にもう書いてあります", "the dependency `{n}` is already on line {l} of `ritsu.mod`"),
             EditError::NotOci(n) => tr!(
-                "依存 `{n}` はパスから読むので、バージョンを変えられません。レジストリから取るなら、`ritsu.mod` の行を `oci` に書き替えてください",
+                "依存 `{n}` はパスから読むので、版を変えられません。レジストリから取るなら、`ritsu.mod` の行を `oci` に書き替えてください",
                 "the dependency `{n}` is read from a path, which has no version to change; to take it from a registry, write its line in `ritsu.mod` with `oci`"
             ),
             EditError::BadName(n, e) => tr!("依存の名前 `{n}` は使えません", "`{n}` cannot name a dependency").then(&sep(&e.text())),

@@ -633,7 +633,7 @@ pub fn ledger() -> Ledger {
                 "The `ritsu.mod` of a module from a registry has a `require … path`. A dependency by a path is read only within one working tree, and where the module is fetched, nothing is at the end of the path. ritsu stops before any language checks a file (exit 1)."
             ),
             tr!(
-                "そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは、依存をどれも `require … oci` で書きます。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。",
+                "そのモジュールの作者に知らせてください。レジストリに送り出すモジュールは、依存をどれも `require … oci` で書く必要があります。直した版が出るまでは、そのモジュールを作業ツリーに置き、`require … path` で読めます。",
                 "Tell the author of the module: a module pushed to a registry writes each of its dependencies as `require … oci`. Until a version that does is pushed, the module can be put in the working tree and read with `require … path`."
             ),
             Repro::Dir {
@@ -677,7 +677,7 @@ pub fn ledger() -> Ledger {
             "W303",
             tr!("`require` していない、依存の依存のファイルを指しています", "A path to a file of a module the module does not require, through a dependency"),
             tr!(
-                "ファイルが、`@pricing/@tax/…` のように、自分のモジュールが `require` していない依存の依存のファイルを指すとき。パスは、そのファイルのモジュールが自分のルートから書く形で見ます。`.proto` の `import` は `@` を書きませんが、行き着いたファイルが依存の依存のものなら、`import` の行に同じく言います。依存の新しい版がその依存の依存を使わなくなると、このファイルは壊れます。依存のファイルに言うものは、その依存の警告として数えます。",
+                "ファイルが、`@pricing/@tax/…` のように、自分のモジュールが `require` していない依存の依存のファイルを指すとき。パスは、そのファイルのモジュールが自分のルートから書いた形で見ます。`.proto` の `import` は `@` を書きませんが、行き着いたファイルが依存の依存のものなら、`import` の行にも同じ警告を出します。依存の新しい版がその依存の依存を使わなくなると、このファイルは壊れます。依存のファイルに言うものは、その依存の警告として数えます。",
                 "A file names a file of a dependency of a dependency that its own module does not require, as `@pricing/@tax/…` does; the path is taken as the file's module writes it from its own root. An `import` of a `.proto` writes no `@`, and one that comes to a file of a dependency of a dependency is said on its line all the same. A version of the dependency that no longer uses that module breaks the file. One said of a dependency's file is counted with that dependency's warnings."
             ),
             tr!(

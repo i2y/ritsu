@@ -520,7 +520,7 @@ impl<'a> Loader<'a> {
                     if !said_no_lock {
                         said_no_lock = true;
                         let d = self.at_mod(E303, i, r.line, r.col, tr!(
-                            "`ritsu.lock` がありません。依存 `{}` はレジストリから取るので、選んだバージョンとダイジェストを `ritsu.lock` に固定します。`ritsu mod lock` を走らせてください",
+                            "`ritsu.lock` がありません。依存 `{}` はレジストリから取るので、選んだ版とダイジェストを `ritsu.lock` に固定する必要があります。`ritsu mod lock` を走らせてください",
                             "there is no `ritsu.lock`: the dependency `{}` comes from a registry, so the version chosen and its digests are pinned in `ritsu.lock`; run `ritsu mod lock`",
                             r.name; r.name
                         ));
@@ -643,7 +643,7 @@ impl<'a> Loader<'a> {
                 if said.insert((i, s.line)) {
                     let line = s.text();
                     let d = self.at_mod(E302, i, s.line, 0, tr!(
-                        "`{line}` の鍵のファイル `{path}` を読めません。鍵のファイルは、この行を書いたモジュールのルートからのパスで書きます",
+                        "`{line}` の鍵のファイル `{path}` を読めません。鍵のファイルは、この行を書いたモジュールのルートからのパスで書いてください",
                         "the key file `{path}` of `{line}` cannot be read; a key file is written from the root of the module whose line it is"
                     ));
                     self.diags.push(d);

@@ -1028,7 +1028,11 @@ fn change_word(h: How, lang: Lang) -> &'static str {
 
 /// How a change is headed: `may break: removed`, or `added`.
 fn change_head(l: &Line, lang: Lang) -> String {
-    if l.may_break { format!("{}{}", tr!("壊しうる：", "may break: ").get(lang), change_word(l.how, lang)) } else { change_word(l.how, lang).to_string() }
+    match (l.may_break, lang) {
+        (true, Lang::Ja) => format!("{}（壊しうる）", change_word(l.how, lang)),
+        (true, _) => format!("may break: {}", change_word(l.how, lang)),
+        (false, _) => change_word(l.how, lang).to_string(),
+    }
 }
 
 /// The require lines that changed.
@@ -1051,7 +1055,7 @@ fn require_lines(r: &Requires, lang: Lang) -> Vec<String> {
 pub(super) fn verdict(b: &Behavior, lang: Lang) -> String {
     match &b.result {
         Ok(s) if s.differs => tr!("答えが変わります", "the answers differ"),
-        Ok(s) if !s.total => tr!("示せた違いはありません（調べきれなかった入力があります）", "no difference shown (some inputs were not settled)"),
+        Ok(s) if !s.total => tr!("違いは見つかりませんでした（調べきれなかった入力があります）", "no difference shown (some inputs were not settled)"),
         Ok(s) if s.more => tr!("答えは同じです（ほかの変わりがあります）", "the same answers, with other changes"),
         Ok(_) => tr!("同じ答えです", "the same answers"),
         Err(t) => tr!("比べられません（{}）", "not compared ({})", t.ja; t.en),
@@ -1215,14 +1219,14 @@ fn quiet_line(d: &ModDiff, lang: Lang, q: &str) -> Option<String> {
 
 fn closing(d: &ModDiff, lang: Lang) -> String {
     if d.differs() {
-        tr!("振る舞いかインターフェースに、示せた違いがあります。", "a difference is shown in behavior or in an interface.")
+        tr!("振る舞いかインターフェースに違いが見つかりました。", "a difference is shown in behavior or in an interface.")
     } else if d.uncompared() {
         tr!(
-            "振る舞いを比べられなかったファイルがあるので、違いが無いとは言いません。",
+            "振る舞いを比べられなかったファイルがあるので、違いが無いとは言えません。",
             "the behavior of some files could not be compared, so this does not say there is no difference."
         )
     } else if !d.whole() {
-        tr!("示せた違いはありません。ただし、調べきれなかった入力があります。", "no difference is shown, though some inputs were not settled.")
+        tr!("違いは見つかりませんでした。ただし、調べきれなかった入力があります。", "no difference is shown, though some inputs were not settled.")
     } else {
         tr!("振る舞いにもインターフェースにも、違いはありません。", "no difference in behavior or in an interface.")
     }

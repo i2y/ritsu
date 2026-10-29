@@ -286,12 +286,12 @@ pub fn library_ok(t: Target, s: &str) -> Result<(), LibraryError> {
             let first = parts[0];
             let domain = first.contains('.') && !first.starts_with('-') && first.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'.'));
             if !(parts.iter().all(|p| elem(p)) && domain) {
-                return fail("Go のモジュールのパス（`.` を含むホストで始め、英数字と `-`、`.`、`_`、`~` の段を `/` でつなぐ）として読めません", "it is not a Go module path (a host with a `.` in it first, then parts of letters, digits, `-`, `.`, `_` and `~`, with `/` between them)");
+                return fail("Go のモジュールのパス（`.` を含むホストで始め、英数字と `-`、`.`、`_`、`~` の要素を `/` でつなぐ）として読めません", "it is not a Go module path (a host with a `.` in it first, then parts of letters, digits, `-`, `.`, `_` and `~`, with `/` between them)");
             }
             let last = parts[parts.len() - 1];
             let major = last.strip_prefix('v').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && !n.starts_with('0') && n != "1");
             if parts.len() > 1 && major {
-                return fail("最後の `/vN` は書かずにおいてください。バージョン 2 からは ritsu が付けます", "leave out the `/vN` at its end; ritsu adds it from version 2 on");
+                return fail("最後の `/vN` は書かないでください。版 2 からは ritsu が付けます", "leave out the `/vN` at its end; ritsu adds it from version 2 on");
             }
             Ok(())
         }

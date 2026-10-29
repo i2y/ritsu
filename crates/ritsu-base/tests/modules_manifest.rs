@@ -237,8 +237,8 @@ fn a_value_of_the_wrong_form_is_e302() {
 fn the_japanese_texts_say_the_same() {
     let ds = manifest::parse("module shop\nversion v1.0.0\nrequire x-y path \"../x\"\n".as_bytes(), "ritsu.mod").unwrap_err();
     let ja: Vec<&str> = ds.iter().map(|d| d.message.ja.as_str()).collect();
-    assert_eq!(ja, ["`v1.0.0` はバージョンとして読めません。頭に `v` を付けずに書いてください", "依存の名前 `x-y` は使えません。`-` は使えません。語を区切るときは `_` を使ってください"]);
-    assert_eq!(ds[0].render(ritsu_base::text::Lang::Ja), "エラー[E302]: ritsu.mod:2:9: `v1.0.0` はバージョンとして読めません。頭に `v` を付けずに書いてください\n     2 | version v1.0.0\n");
+    assert_eq!(ja, ["`v1.0.0` は版として読めません。頭に `v` を付けずに書いてください", "依存の名前 `x-y` は使えません。`-` は使えません。語を区切るときは `_` を使ってください"]);
+    assert_eq!(ds[0].render(ritsu_base::text::Lang::Ja), "エラー[E302]: ritsu.mod:2:9: `v1.0.0` は版として読めません。頭に `v` を付けずに書いてください\n     2 | version v1.0.0\n");
 }
 
 /// A `source` is published with the module and the packages made from it (DESIGN 17.3), so a URL

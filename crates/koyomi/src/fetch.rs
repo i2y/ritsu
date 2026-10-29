@@ -75,7 +75,7 @@ pub fn fetch(f: &File, dir: &Path) -> Result<Outcome, Text> {
                     Ok(d) if ritsu_base::modules::map(&d).is_none() => d,
                     Ok(_) => {
                         lines.push(tr!(
-                            "{name}: {path} は依存のファイルなので、取り直しません。コピーは依存のほうにあります",
+                            "{name}: {path} は依存のファイルなので、取り直しませんでした。コピーは依存のほうにあります",
                             "{name}: {path} is a file of a dependency, so it is not fetched here; its copies are the dependency's"
                         ));
                         continue;

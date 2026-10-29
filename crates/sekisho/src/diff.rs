@@ -1100,7 +1100,7 @@ fn combos(n: u128, lang: Lang) -> String {
 fn closing(d: &Diff, lang: Lang, capital: bool) -> String {
     let t = if d.unknown() > 0 {
         tr!(
-            "決められない組み合わせがあるので、ほかの組み合わせが同じ決定になるとは言いません。\n",
+            "決められない組み合わせがあるので、ほかの組み合わせが同じ決定になるとは言えません。\n",
             "some combinations cannot be decided, so nothing is said of the others.\n"
         )
     } else if d.actions.iter().any(|a| !a.groups.is_empty()) {
@@ -1151,7 +1151,7 @@ pub fn text(d: &Diff, lang: Lang) -> String {
             o.push_str(&format!(
                 "    {}\n",
                 tr!(
-                    "ほかの言語が言えない値に頼り、その値になる具体的な入力も見つかりませんでした",
+                    "ほかの言語が答えられない値に頼っていて、その値になる具体的な入力も見つかりませんでした",
                     "they rest on a value another language could not vouch for, and no concrete input was found that gives it"
                 )
                 .get(lang)

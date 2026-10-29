@@ -78,7 +78,7 @@ pub fn commands() -> Vec<Cmd> {
             "get",
             "<name>@<version>",
             tr!("レジストリの依存の版を変える（`require` の行の版と lock）", "change the version of a dependency from a registry: the version on its `require` line, and the lock"),
-            vec![("<name>@<version>", tr!("依存の名前と版。`<名前>@latest` は、プレリリースでないいちばん高い版", "the dependency's name and version; `<name>@latest` is the highest version that is not a prerelease"))],
+            vec![("<name>@<version>", tr!("依存の名前と版。`<name>@latest` は、プレリリースでない一番高い版", "the dependency's name and version; `<name>@latest` is the highest version that is not a prerelease"))],
             vec![format()],
             vec![
                 (0, tr!("版を変えた", "the version was changed")),
@@ -107,7 +107,7 @@ pub fn commands() -> Vec<Cmd> {
             vec![
                 (0, tr!("書いた、または変わらない", "written, or the same")),
                 (1, tr!("--check で、lock が書き直しになる（何も書いていない）", "with --check, the lock would be written again (nothing was written)")),
-                (2, tr!("引数の誤り、読めない依存の木、新しい書式の lock、置き場に無く届くレジストリにも無い版", "bad arguments, a tree that cannot be read, a lock of a newer format, or a version in neither the store nor a registry that can be reached")),
+                (2, tr!("引数の誤り、読めない依存の木、新しい書式の lock、置き場にも、届くレジストリにも無い版", "bad arguments, a tree that cannot be read, a lock of a newer format, or a version in neither the store nor a registry that can be reached")),
             ],
             vec!["ritsu mod lock", "ritsu mod lock --check"],
         ),
@@ -183,7 +183,7 @@ pub fn commands() -> Vec<Cmd> {
             tr!("`@` で始まるパスが、ディスクのどこにあるかを言う", "say where a path that starts with `@` is on the disk"),
             vec![("<@path>", tr!("`@pricing/rules/fee.rule` のような、依存のファイルかディレクトリを指すパス", "a path that names a dependency's file or directory, such as `@pricing/rules/fee.rule`"))],
             vec![],
-            vec![(0, tr!("言った", "said")), (2, tr!("引数の誤り、`@` で始まらないパス、モジュールが読めないパス", "bad arguments, a path that does not start with `@`, or one the module cannot read"))],
+            vec![(0, tr!("場所を出した", "said")), (2, tr!("引数の誤り、`@` で始まらないパス、モジュールが読めないパス", "bad arguments, a path that does not start with `@`, or one the module cannot read"))],
             vec!["ritsu mod where @pricing/rules/fee.rule", "ritsu mod where @pricing"],
         ),
         cmd(
@@ -194,7 +194,7 @@ pub fn commands() -> Vec<Cmd> {
             vec![flag("--dry-run", None, tr!("送らない", "send nothing")), format()],
             vec![
                 (0, tr!("送り出した、または送り出し済み", "pushed, or pushed already")),
-                (1, tr!("受け付けない（検査、秘密、上限、パスの依存、版のタグに別の中身）", "refused: the check, a secret, a limit, a dependency by a path, or another content at the version's tag")),
+                (1, tr!("送り出さなかった（検査を通らない、秘密がある、上限を超える、パスの依存がある、版のタグに別の中身がある）", "refused: the check, a secret, a limit, a dependency by a path, or another content at the version's tag")),
                 (2, tr!("届かないレジストリ、認証の誤り、lock が無い", "a registry that cannot be reached, the credentials, or no lock")),
             ],
             vec!["ritsu mod push --dry-run", "ritsu mod push"],
@@ -210,7 +210,7 @@ pub fn commands() -> Vec<Cmd> {
             vec![format_markdown(), budget()],
             vec![
                 (0, tr!("違いが無い", "no difference")),
-                (1, tr!("振る舞いかインターフェースに、示せた違いがある", "a difference shown in behavior or in an interface")),
+                (1, tr!("振る舞いかインターフェースに違いが見つかった", "a difference shown in behavior or in an interface")),
                 (2, tr!("比べられない", "cannot compare")),
             ],
             vec!["ritsu mod diff example.com/acme/pricing@1.0.0", "ritsu mod diff example.com/acme/pricing@1.0.0 example.com/acme/pricing@1.1.0 --format markdown"],
@@ -227,13 +227,13 @@ pub fn commands() -> Vec<Cmd> {
                 flag("--base", Some("<revision>"), tr!("比べる前の git の版（要る）", "the git revision to compare with (required)")),
                 flag("--head", Some("<revision>"), tr!("比べるあとの git の版。無ければ作業ツリー", "the git revision compared; else the working tree")),
                 format_markdown(),
-                flag("--fail-on-change", None, tr!("振る舞いに示せた違いがあるときも 1 で終わる", "exit 1 when a difference is shown in behavior too")),
+                flag("--fail-on-change", None, tr!("振る舞いに違いが見つかったときも 1 で終わる", "exit 1 when a difference is shown in behavior too")),
                 budget(),
             ],
             vec![
                 (0, tr!("新しい lock での検査にエラーが無く、変わったモジュールをどれも比べられた（振る舞いが変わっていても）", "no error in the check with the new lock, and every module that changed compared (whatever the behavior)")),
-                (1, tr!("エラーがある。--fail-on-change では、振る舞いに示せた違いがあるときも", "an error; with --fail-on-change, a difference shown in behavior too")),
-                (2, tr!("走らせられない。または、1 にならず、比べられなかったモジュールがある", "cannot run; or nothing makes it 1, and a module that changed could not be compared")),
+                (1, tr!("エラーがある。--fail-on-change では、振る舞いに違いが見つかったときも", "an error; with --fail-on-change, a difference shown in behavior too")),
+                (2, tr!("走らせられない。または、1 の場合には当たらないが、変わったモジュールのどれかを比べられなかった", "cannot run; or nothing makes it 1, and a module that changed could not be compared")),
             ],
             vec!["ritsu mod report --base origin/main --format markdown"],
         ),
@@ -274,7 +274,7 @@ fn globals() -> Vec<Flag> {
             "--root",
             Some("<dir>"),
             tr!(
-                "手元のモジュールのルート。無ければ、走らせたディレクトリの上で `ritsu.mod` を持ついちばん近いディレクトリ",
+                "手元のモジュールのルート。無ければ、走らせたディレクトリの上で `ritsu.mod` を持つ一番近いディレクトリ",
                 "the root of the module at hand; else the nearest directory at or above the one ritsu runs in that holds a `ritsu.mod`"
             ),
         ),

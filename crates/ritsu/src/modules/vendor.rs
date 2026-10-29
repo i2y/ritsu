@@ -255,7 +255,7 @@ pub fn clean(ctx: &Ctx, a: &Args) -> u8 {
         if !dry && let Err(e) = store::remove(&s.entry(d)) {
             return ctx.refuse(tr!("{d} を消せません（{e}）", "cannot remove {d} ({e})"));
         }
-        let line = if dry { tr!("{d}（{what}）を消します", "would remove {d} ({what})") } else { tr!("{d}（{what}）を消しました", "removed {d} ({what})") };
+        let line = if dry { tr!("{d}（{what}）を消すことになります", "would remove {d} ({what})") } else { tr!("{d}（{what}）を消しました", "removed {d} ({what})") };
         println!("{}", ctx.say(&line));
     }
     if !dry {

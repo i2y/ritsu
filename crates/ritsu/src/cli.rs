@@ -267,8 +267,8 @@ fn modules() -> Cmd {
         name: "mod",
         args: "<command> ...",
         purpose: tr!(
-            "モジュールのコマンド（`ritsu.mod` と `ritsu.lock` を書く、依存を並べる、置き場とそのコピー）",
-            "the commands of the modules: write `ritsu.mod` and `ritsu.lock`, list the dependencies, and the store and its copy"
+            "モジュールのコマンド（`ritsu.mod` と `ritsu.lock` を書く、依存を取り出す、レジストリに送り出す、版の差と依存を上げるときの報告、一覧のサイト）",
+            "the commands of the modules: write `ritsu.mod` and `ritsu.lock`, fetch the dependencies, push to a registry, the differences between versions and the report on raising a dependency, and the site that lists modules"
         ),
         params: vec![],
         flags: vec![],

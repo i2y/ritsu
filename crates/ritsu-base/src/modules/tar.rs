@@ -80,9 +80,9 @@ pub enum Shape {
 impl Shape {
     fn text(self) -> Text {
         match self {
-            Shape::Short => tr!("二つの 0 の塊の前で終わっています", "it ends before its two blocks of zeros"),
+            Shape::Short => tr!("終わりの、0 で埋めた二つのブロックより前で切れています", "it ends before its two blocks of zeros"),
             Shape::PaxLast => tr!("pax の拡張ヘッダのあとにファイルがありません", "a pax extended header has no file after it"),
-            Shape::End => tr!("終わりが、二つの 0 の塊だけではありません", "the end is not two blocks of zeros and nothing after them"),
+            Shape::End => tr!("終わりが、0 で埋めた二つのブロックだけになっていません", "the end is not two blocks of zeros and nothing after them"),
             Shape::Checksum => tr!("チェックサムがヘッダの和と違います", "the checksum is not the sum of the header"),
             Shape::Magic => tr!("magic が `ustar` と NUL、version が `00` ではありません", "the magic is not `ustar` and a NUL, or the version not `00`"),
             Shape::Prefix => tr!("prefix のフィールドが空ではありません", "the field prefix is not empty"),
@@ -117,15 +117,15 @@ impl Error {
                     PathWhy::NotUtf8 => tr!("UTF-8 ではありません", "it is not UTF-8"),
                     PathWhy::Empty => tr!("空です", "it is empty"),
                     PathWhy::Absolute => tr!("絶対パスです", "it is absolute"),
-                    PathWhy::EmptyPart => tr!("空の段があります", "it has an empty part"),
-                    PathWhy::Dot => tr!("`.` の段があります", "it has a part `.`"),
-                    PathWhy::DotDot => tr!("`..` の段があります", "it has a part `..`"),
+                    PathWhy::EmptyPart => tr!("空の要素があります", "it has an empty part"),
+                    PathWhy::Dot => tr!("`.` という要素があります", "it has a part `.`"),
+                    PathWhy::DotDot => tr!("`..` という要素があります", "it has a part `..`"),
                     PathWhy::Backslash => tr!("`\\` があります", "it has a `\\` in it"),
                     PathWhy::Nul => tr!("NUL があります", "it has a NUL in it"),
-                    PathWhy::DotStart => tr!("`.` で始まる段があります", "it has a part that starts with `.`"),
-                    PathWhy::AtStart => tr!("最初の段が `@` で始まります", "its first part starts with `@`"),
+                    PathWhy::DotStart => tr!("`.` で始まる要素があります", "it has a part that starts with `.`"),
+                    PathWhy::AtStart => tr!("最初の要素が `@` で始まります", "its first part starts with `@`"),
                     PathWhy::TooLong => tr!("{MAX_PATH} バイトを超えます", "it is longer than {MAX_PATH} bytes"),
-                    PathWhy::TooDeep => tr!("段が {MAX_PARTS} を超えます", "it has more than {MAX_PARTS} parts"),
+                    PathWhy::TooDeep => tr!("要素が {MAX_PARTS} 個を超えます", "it has more than {MAX_PARTS} parts"),
                 };
                 tr!("モジュールのファイルのパス `{p}` は受け付けません。", "the path `{p}` of a module's file is refused: ").then(&w)
             }

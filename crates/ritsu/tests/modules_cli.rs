@@ -452,7 +452,7 @@ fn vendor_and_clean() {
         .collect();
     assert_eq!(out, format!("{}\n{}\nritsu mod clean --dry-run: 2 entries of the store would be removed, 0 kept; nothing was removed\n", lines[0], lines[1]));
     let (_, out, _) = ritsu_in(&shop, &at, &["mod", "clean", "--dry-run", "--lang", "ja"]);
-    assert_eq!(out.lines().next(), Some(format!("{}（{}）を消します", digests[0], if digests[0] == tax.digest { "example.com/acme/tax 1.0.0" } else { "example.com/acme/pricing 1.1.0" }).as_str()));
+    assert_eq!(out.lines().next(), Some(format!("{}（{}）を消すことになります", digests[0], if digests[0] == tax.digest { "example.com/acme/tax 1.0.0" } else { "example.com/acme/pricing 1.1.0" }).as_str()));
     assert!(out.ends_with("ritsu mod clean --dry-run: 置き場の項目 2 個を消し、0 個を残すことになります。何も消していません\n"), "{out}");
     assert!(store.has_files(&tax.digest) && store.has_files(&pricing.digest));
     let (code, out, _) = ritsu_in(t.path(), &at, &["mod", "clean", "--keep", "shop/ritsu.lock", "--lang", "ja"]);

@@ -109,24 +109,24 @@
 
 | 変わり方 | 場所 | 古い値 → 新しい値 |
 |---|---|---|
-| 壊しうる：変わった | `/connect/proto` | `"proto/rulec/band_ja/v1/band_ja.proto" → "proto/rulec/band_ja/v2/band_ja.proto"` |
-| 壊しうる：変わった | `/connect/package` | `"rulec.band_ja.v1" → "rulec.band_ja.v2"` |
-| 壊しうる：変わった | `/connect/path` | `"/rulec.band_ja.v1.BandJaService/Decide" → "/rulec.band_ja.v2.BandJaService/Decide"` |
-| 壊しうる：変わった | `/wasm/package` | `"rulec:band-ja@1.0.0" → "rulec:band-ja@2.0.0"` |
+| 変わった（壊しうる） | `/connect/proto` | `"proto/rulec/band_ja/v1/band_ja.proto" → "proto/rulec/band_ja/v2/band_ja.proto"` |
+| 変わった（壊しうる） | `/connect/package` | `"rulec.band_ja.v1" → "rulec.band_ja.v2"` |
+| 変わった（壊しうる） | `/connect/path` | `"/rulec.band_ja.v1.BandJaService/Decide" → "/rulec.band_ja.v2.BandJaService/Decide"` |
+| 変わった（壊しうる） | `/wasm/package` | `"rulec:band-ja@1.0.0" → "rulec:band-ja@2.0.0"` |
 
 - `暦/事務所.cal` (koyomi、api)：差が 7 件、うち使う側を壊しうるもの 7 件
   - ファイルの頭の版：`1` → `2`
 
 | 変わり方 | 場所 | 古い値 → 新しい値 |
 |---|---|---|
-| 壊しうる：変わった | `/calendar/offset` | `null → "+09:00"` |
-| 壊しうる：変わった | `/calendar/sources/休み/file` | `"data/休み.csv" → "data/休み_二版.csv"` |
-| 壊しうる：変わった | `/calendar/sources/休み/sha256` | `"35bb4ae3b17bde2d" → "3f3143cb93699e1e"` |
-| 壊しうる：変わった | `/calendar/sources/休み/covers/to` | `"2026-12-31" → "2027-12-31"` |
-| 壊しうる：変わった | `/calendar/sources/休み/rows` | `3 → 7` |
-| 壊しうる：変わった | `/calendar/data_range/to` | `"2026-12-31" → "2027-12-31"` |
-| 壊しうる：変わった | `/wasm/package` | `"koyomi:office@1.0.0" → "koyomi:office@2.0.0"` |
+| 変わった（壊しうる） | `/calendar/offset` | `null → "+09:00"` |
+| 変わった（壊しうる） | `/calendar/sources/休み/file` | `"data/休み.csv" → "data/休み_二版.csv"` |
+| 変わった（壊しうる） | `/calendar/sources/休み/sha256` | `"35bb4ae3b17bde2d" → "3f3143cb93699e1e"` |
+| 変わった（壊しうる） | `/calendar/sources/休み/covers/to` | `"2026-12-31" → "2027-12-31"` |
+| 変わった（壊しうる） | `/calendar/sources/休み/rows` | `3 → 7` |
+| 変わった（壊しうる） | `/calendar/data_range/to` | `"2026-12-31" → "2027-12-31"` |
+| 変わった（壊しうる） | `/wasm/package` | `"koyomi:office@1.0.0" → "koyomi:office@2.0.0"` |
 
 壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
 
-振る舞いかインターフェースに、示せた違いがあります。
+振る舞いかインターフェースに違いが見つかりました。

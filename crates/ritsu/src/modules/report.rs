@@ -773,7 +773,7 @@ impl Report {
             let (k, m) = (diff::n(not), plural(not, "module", "modules"));
             if self.behavior_changed() {
                 tr!(
-                    "{head} での検査にエラーはありません。振る舞いに示せた違いがあり、比べられなかったモジュールが {k} 個あるので、exit 2 です。",
+                    "{head} での検査にエラーはありません。振る舞いに違いが見つかり、比べられなかったモジュールが {k} 個あるので、exit 2 です。",
                     "the check with {head} has no error; a difference is shown in behavior, and {m} could not be compared, which makes exit 2."
                 )
             } else {
@@ -785,11 +785,11 @@ impl Report {
         } else {
             match (self.behavior_changed(), code) {
                 (true, 1) => tr!(
-                    "{head} での検査にエラーはありません。振る舞いに示せた違いがあるので、`--fail-on-change` により exit 1 です。",
+                    "{head} での検査にエラーはありません。振る舞いに違いが見つかったので、`--fail-on-change` により exit 1 です。",
                     "the check with {head} has no error; a difference is shown in behavior, which `--fail-on-change` makes exit 1."
                 ),
-                (true, _) => tr!("{head} での検査にエラーはありません。振る舞いに示せた違いがあります。", "the check with {head} has no error; a difference is shown in behavior."),
-                (false, _) => tr!("{head} での検査にエラーはなく、振る舞いに示せた違いもありません。", "the check with {head} has no error, and no difference is shown in behavior."),
+                (true, _) => tr!("{head} での検査にエラーはありません。振る舞いに違いが見つかりました。", "the check with {head} has no error; a difference is shown in behavior."),
+                (false, _) => tr!("{head} での検査にエラーはなく、振る舞いに違いも見つかりませんでした。", "the check with {head} has no error, and no difference is shown in behavior."),
             }
         };
         t.get(lang).to_string()
@@ -835,7 +835,7 @@ impl Report {
                 None => {}
             }
             if !m.yours.is_empty() {
-                o.push_str(&format!("\n{}{e}\n", tr!("あなたの答えのうち、変わるもの", "your answers that change").get(lang)));
+                o.push_str(&format!("\n{}{e}\n", tr!("手元のファイルの答えのうち、変わるもの", "your answers that change").get(lang)));
                 for b in &m.yours {
                     o.push_str(&format!("  {} ({}){c}{}\n", b.file, b.tool.word(), diff::verdict(b, lang)));
                     if let (true, Ok(s)) = (b.shows(), &b.result) {
@@ -887,7 +887,7 @@ impl Report {
                 None => {}
             }
             if !m.yours.is_empty() {
-                o.push_str(&format!("\n#### {}\n\n", tr!("あなたの答えのうち、変わるもの", "Your answers that change").get(lang)));
+                o.push_str(&format!("\n#### {}\n\n", tr!("手元のファイルの答えのうち、変わるもの", "Your answers that change").get(lang)));
                 let mut listing = false;
                 for b in &m.yours {
                     match (b.shows(), &b.result) {
@@ -1146,6 +1146,6 @@ mod tests {
         let text = r.text(Lang::En, 2);
         assert!(text.ends_with("\nthe check with the lock of the working tree has no error; a difference is shown in behavior, and 1 module could not be compared, which makes exit 2.\n"), "{text}");
         let text = r.text(Lang::Ja, 2);
-        assert!(text.ends_with("\n作業ツリーの lock での検査にエラーはありません。振る舞いに示せた違いがあり、比べられなかったモジュールが 1 個あるので、exit 2 です。\n"), "{text}");
+        assert!(text.ends_with("\n作業ツリーの lock での検査にエラーはありません。振る舞いに違いが見つかり、比べられなかったモジュールが 1 個あるので、exit 2 です。\n"), "{text}");
     }
 }

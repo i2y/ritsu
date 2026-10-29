@@ -642,7 +642,7 @@ fn commands() -> Vec<Cmd> {
                 "compare two versions: against records, how many move and by how much; with no records, which inputs get a different answer"
             ),
             params: vec![
-                ("<old>", tr!("古い版の規則。file.rule、送料@v3（git タグ rules/送料/v3）、または rules/送料.rule@origin/main（そのリビジョンのそのパス）", "the old rule: file.rule, shipping_fee@v3 (the git tag rules/shipping_fee/v3), or rules/shipping_fee.rule@origin/main (that path at that revision)")),
+                ("<old>", tr!("古い版の規則。file.rule、送料@v3（git タグ rules/送料/v3）、rules/送料.rule@origin/main（そのリビジョンのそのパス）、@<名前>/<パス>（依存の lock の版）、@<名前>@<版>/<パス>（置き場の版）", "the old rule: file.rule, shipping_fee@v3 (the git tag rules/shipping_fee/v3), rules/shipping_fee.rule@origin/main (that path at that revision), @<name>/<path> (a dependency at the lock's version) or @<name>@<version>/<path> (a version in the store)")),
                 ("<new>", tr!("新しい版の規則。書き方は <old> と同じ", "the new rule, written the same way")),
             ],
             flags: vec![

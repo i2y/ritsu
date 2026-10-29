@@ -13,7 +13,7 @@ $ yuen check --lang ja @lib/値付け.req
 exit 0
 
 $ yuen source fetch --lang ja 請求.req
-方針: @lib/文書/値付けの方針.md は依存のファイルなので、取り直しません。コピーは依存のほうにあります
+方針: @lib/文書/値付けの方針.md は依存のファイルなので、取り直しませんでした。コピーは依存のほうにあります
 exit 0
 
 $ yuen check --lang ja 誤り/依存に無い.req

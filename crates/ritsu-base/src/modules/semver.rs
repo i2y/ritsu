@@ -42,10 +42,10 @@ pub enum Error {
 
 impl Error {
     pub fn text(&self, written: &str) -> Text {
-        let head = tr!("`{written}` はバージョンとして読めません", "`{written}` is not a version");
+        let head = tr!("`{written}` は版として読めません", "`{written}` is not a version");
         let why = match self {
-            Error::Empty => tr!("バージョンが空です", "it is empty"),
-            Error::TooLong(n) => tr!("{n} 字あります。バージョンは {MAX_LEN} 字までです", "it is {n} characters long, and a version is {MAX_LEN} at most"),
+            Error::Empty => tr!("版が空です", "it is empty"),
+            Error::TooLong(n) => tr!("{n} 字あります。版は {MAX_LEN} 字までです", "it is {n} characters long, and a version is {MAX_LEN} at most"),
             Error::LeadingV => tr!("頭に `v` を付けずに書いてください", "write it with no `v` before it"),
             Error::Build => tr!("`+` のあとのビルドのメタデータは書けません。OCI のタグには `+` を使えないからです", "build metadata after a `+` is not taken, since an OCI tag cannot hold a `+`"),
             Error::Shape => tr!("`1.4.0` のように、三つの数を `.` でつないで書いてください", "write three numbers with dots between them, as `1.4.0`"),

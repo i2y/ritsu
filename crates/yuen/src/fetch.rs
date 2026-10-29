@@ -172,7 +172,7 @@ pub fn fetch(p: &Project) -> Result<Outcome, Text> {
                     // the project's own (M14)
                     if ritsu_base::modules::under_dependency(&ritsu_base::paths::on_disk(&p.root, &n.path)) {
                         lines.push(tr!(
-                            "{name}: {path} は依存のファイルなので、取り直しません。コピーは依存のほうにあります",
+                            "{name}: {path} は依存のファイルなので、取り直しませんでした。コピーは依存のほうにあります",
                             "{name}: {path} is a file of a dependency, so it is not fetched here; its copies are the dependency's"
                         ));
                         continue;

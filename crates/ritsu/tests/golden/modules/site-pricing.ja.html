@@ -8,9 +8,9 @@
 <tr><td><a href="./1.1.0/index.html">1.1.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">ダイジェストと署名</span></td></tr>
 <tr><td><a href="./1.0.0/index.html">1.0.0</a></td><td><code title="sha256:<digest>">sha256:<head></code></td><td>4</td><td><span class="ok">ダイジェストと署名</span></td></tr>
 </table></div>
-<h2>足し方</h2>
+<h2>依存に足す書き方</h2>
 <pre><code>ritsu mod add pricing <registry>/acme/pricing@1.1.0</code></pre>
-<p><code>ritsu.mod</code> に次の <code>require</code> の行が入り、ファイルからは <code>@pricing/…</code> で指せます。署名を確かめるなら、<code>signature</code> の行も書いてください。</p>
+<p>このコマンドが <code>ritsu.mod</code> に次の <code>require</code> の行を書き、ファイルからは <code>@pricing/…</code> で指せるようになります。署名を確かめるなら、<code>signature</code> の行も書いてください。</p>
 <pre><code>require pricing oci &quot;<registry>/acme/pricing&quot; 1.1.0
 signature &quot;<registry>/acme/&quot; by matching &quot;^https://github[.]com/acme/&quot; issuer &quot;https://token.actions.githubusercontent.com&quot;</code></pre>
 <h2>ソースとライセンス</h2>

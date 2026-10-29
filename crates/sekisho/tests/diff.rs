@@ -152,7 +152,7 @@ fn a_value_no_language_vouches_for() {
     let t = diff::text(&silent, Lang::En);
     assert!(t.contains("cannot be decided") && t.ends_with("some combinations cannot be decided, so nothing is said of the others.\n"), "{t}");
     let t = diff::text(&silent, Lang::Ja);
-    assert!(t.contains("決められない") && t.ends_with("決められない組み合わせがあるので、ほかの組み合わせが同じ決定になるとは言いません。\n"), "{t}");
+    assert!(t.contains("決められない") && t.ends_with("決められない組み合わせがあるので、ほかの組み合わせが同じ決定になるとは言えません。\n"), "{t}");
     let j = diff::to_json(&silent, Lang::En);
     assert_eq!(j.get("actions").and_then(|a| a.as_arr()).and_then(|a| a[0].get("same_elsewhere")).and_then(|x| x.as_bool()), Some(false));
 }

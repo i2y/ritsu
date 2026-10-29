@@ -182,7 +182,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Lock, Error> {
         }
         if ritsu.is_none() {
             if !(head.is_word("ritsu") && kinds_ok(&[Kind::Word, Kind::Word])) {
-                put(n, head.col, src, tr!("`lock {FORMAT}` の次の行は `ritsu <バージョン>` です", "the line after `lock {FORMAT}` is `ritsu <version>`"));
+                put(n, head.col, src, tr!("`lock {FORMAT}` の次の行は `ritsu <版>` です", "the line after `lock {FORMAT}` is `ritsu <version>`"));
                 return Err(Error::Unreadable(diags));
             }
             match Version::parse(words[1]) {
@@ -235,7 +235,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Lock, Error> {
             }
             _ => {
                 put(n, head.col, src, tr!(
-                    "この行は読めません。`ritsu.lock` の行は `oci <名前> <バージョン> <ダイジェスト> files <ダイジェスト>` か `path <名前> \"<パス>\"` です",
+                    "この行は読めません。`ritsu.lock` の行は `oci <名前> <版> <ダイジェスト> files <ダイジェスト>` か `path <名前> \"<パス>\"` です",
                     "this line cannot be read: a line of `ritsu.lock` is `oci <name> <version> <digest> files <digest>` or `path <name> \"<path>\"`"
                 ));
                 continue;
@@ -251,7 +251,7 @@ pub fn parse(bytes: &[u8], file: &str) -> Result<Lock, Error> {
     if format.is_none() {
         put(0, 0, "", tr!("`ritsu.lock` に `lock {FORMAT}` の行がありません", "`ritsu.lock` has no line `lock {FORMAT}`"));
     } else if ritsu.is_none() {
-        put(0, 0, "", tr!("`ritsu.lock` に `ritsu <バージョン>` の行がありません", "`ritsu.lock` has no line `ritsu <version>`"));
+        put(0, 0, "", tr!("`ritsu.lock` に `ritsu <版>` の行がありません", "`ritsu.lock` has no line `ritsu <version>`"));
     }
     match (diags.is_empty(), ritsu) {
         (true, Some(ritsu)) => Ok(Lock { ritsu, modules }),

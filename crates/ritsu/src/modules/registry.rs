@@ -275,7 +275,7 @@ pub fn add(ctx: &Ctx, a: &Args) -> u8 {
         Ok(m) if m.is_published() => m,
         _ => {
             return ctx.refuse(tr!(
-                "`{repository}` は配るモジュールの名前ではありません。レジストリの依存は `<レジストリ>/<リポジトリ>`、パスの依存は `./…` か `../…` で書きます",
+                "`{repository}` は配るモジュールの名前ではありません。レジストリの依存は `<レジストリ>/<リポジトリ>`、パスの依存は `./…` か `../…` で書いてください",
                 "`{repository}` is no published module's name: a dependency from a registry is `<registry>/<repository>`, and one by a path starts with `./` or `../`"
             ));
         }

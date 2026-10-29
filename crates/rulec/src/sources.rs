@@ -974,7 +974,7 @@ pub fn fetch(f: &RuleFile, rule_path: &str, via: &[String]) -> Result<Outcome, S
             Ok(p) if ritsu_base::modules::map(&p).is_none() => p,
             Ok(_) => {
                 lines.push(tr!(
-                    "{}: `{path}` は依存のファイルなので、取り直しません。コピーは依存のほうにあります",
+                    "{}: `{path}` は依存のファイルなので、取り直しませんでした。コピーは依存のほうにあります",
                     "{}: `{path}` is a file of a dependency, so it is not fetched here; its copies are the dependency's",
                     d.name.text
                 ));

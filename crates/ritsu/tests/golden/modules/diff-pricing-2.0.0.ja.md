@@ -42,14 +42,14 @@
 
 | 変わり方 | 場所 | 古い値 → 新しい値 |
 |---|---|---|
-| 壊しうる：消した | `/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/料金` |  |
-| 壊しうる：消した | `/go/output_fields/料金` |  |
-| 壊しうる：消した | `/connect/response_fields/料金` |  |
-| 壊しうる：変わった | `/sql/function/signature` | `"…xt) RETURNS TABLE (\"fee\" bigint, \"fee_by_weight_ro…" → "…xt) RETURNS TABLE (\"shipping_fee\" bigint, \"fee_by_…"` |
+| 消した（壊しうる） | `/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/料金` |  |
+| 消した（壊しうる） | `/go/output_fields/料金` |  |
+| 消した（壊しうる） | `/connect/response_fields/料金` |  |
+| 変わった（壊しうる） | `/sql/function/signature` | `"…xt) RETURNS TABLE (\"fee\" bigint, \"fee_by_weight_ro…" → "…xt) RETURNS TABLE (\"shipping_fee\" bigint, \"fee_by_…"` |
 | 足した | `/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/送料` |  |
 | 足した | `/go/output_fields/送料` |  |
 | 足した | `/connect/response_fields/送料` |  |
 
 壊しうる差は候補です。使う側を壊すかどうかは、使う側の検査が決めます。
 
-振る舞いかインターフェースに、示せた違いがあります。
+振る舞いかインターフェースに違いが見つかりました。

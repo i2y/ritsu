@@ -467,7 +467,7 @@ fn working_trees_and_the_playground_they_open_in() {
     assert_eq!(code, 0, "{err}");
     let next = std::fs::read_to_string(a.path(&format!("local-flag/{host}/acme/shop/0.3.0/index.html"))).unwrap();
     assert!(next.contains("data-playground=\"http://127.0.0.1:9/ritsu/play/\""), "{next}");
-    assert!(err.contains(&format!("注: `{host}/acme/shop` 0.1.0 はレジストリにもうあるので、作業ツリーではなくレジストリの版を載せました\n")), "{err}");
+    assert!(err.contains(&format!("備考: `{host}/acme/shop` 0.1.0 はレジストリにもうあるので、作業ツリーではなくレジストリの版を載せました\n")), "{err}");
 }
 
 /// What stops the command, with nothing written (exit 2): a list with mistakes (each said at its
