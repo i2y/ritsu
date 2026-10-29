@@ -204,11 +204,13 @@ $ sekisho gen examples/refunds/refunds.ja.gate --target python --root examples/r
 $ sekisho doc examples/refunds/refunds.ja.gate --root examples/refunds --format html --lang ja
 $ sekisho vectors examples/refunds/refunds.ja.gate --root examples/refunds --action 返金する
 $ sekisho api examples/refunds/refunds.ja.gate --root examples/refunds
+$ sekisho diff examples/refunds/refunds.ja.gate@HEAD~1 examples/refunds/refunds.ja.gate --lang ja
 $ sekisho explain E302 --lang ja
 ```
 
-`--root` は、ゲートがほかのファイルを指すときのパスの起点です（無ければ、最初に渡したファイルから上にたどって `.git` のある一番近いディレクトリ）。sekisho、yuen、sakai が、同じ操作を同じ書き方で指せるようにするためです。
+`--root` は、ゲートがほかのファイルを指すときのパスの起点です（無ければ、最初に渡したファイルから上にたどって `.git` か `ritsu.mod` のある一番近いディレクトリ）。sekisho、yuen、sakai が、同じ操作を同じ書き方で指せるようにするためです。
 `vectors` は、すべての組み合わせを `cedar run-tests` のテストとして書き出します。
+`diff` は、ゲートの二つの版の決定を比べます。それぞれの側は、パス、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）のどれかで、許可が増えるか減れば 1 で終わります。
 どのコマンドも `--lang ja|en`（無ければ `SEKISHO_LANG`、次に `RITSU_LANG`、どちらも無ければ英語）と `--help` を受け付けます。
 終了コードは、エラーが無ければ 0、エラーがあれば 1、引数の誤り、読めないファイル、つながっていない言語のファイルなら 2 です。
 言語とコマンドの全部は [docs/reference.md](docs/reference.md)（英語）にあります。

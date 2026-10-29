@@ -47,19 +47,25 @@ and show the page to the people who decide who may do what. Three things stay wi
 4. Generate the Cedar and the code that asks it, into the service's package (`ritsu gen`, or
    `ritsu sekisho gen --target …`), and have CI run `gen --check`.
 5. Write the page with `ritsu sekisho doc`, and show it to the people who decide.
+6. When the gate changes, or a rule or a date it reads does, `ritsu sekisho diff <old> <new>` says
+   which combinations gained or lost a permission, and which are decided by other policies, with an
+   example of each. Each side is a path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at
+   the lock's version) or `@<name>@<version>/<path>` (a version in the store); it exits 1 when a
+   permission is gained or lost or the interface differs. Show it to the people who decide.
 
 ```console
 $ ritsu sekisho check examples/refunds/refunds.gate --root examples/refunds
 $ ritsu sekisho explain E302
 $ ritsu sekisho gen examples/refunds/refunds.gate --target cedar --root examples/refunds
 $ ritsu sekisho doc examples/refunds/refunds.gate --root examples/refunds --format html
+$ ritsu sekisho diff examples/refunds/refunds.gate@HEAD~1 examples/refunds/refunds.gate
 ```
 
 Run every command as `ritsu sekisho <command>` (through a link to ritsu named sekisho, `sekisho
 <command>` is the same): it reads the rules, the dates, the calendars and the flows a gate names in
 the same process, where sekisho built alone from its crate reads no other language and stops with
 E209. `--root` is the directory the paths of what the gate names are written from (else the nearest
-directory above that holds `.git`). Add `--lang ja` for Japanese.
+directory above that holds `.git` or `ritsu.mod`). Add `--lang ja` for Japanese.
 
 ## 2. The language on one page
 

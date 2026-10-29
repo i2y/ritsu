@@ -16,8 +16,9 @@ language can make alone, because what one has shown (a rule's preconditions, the
 to, the bounds of an account) is what the next is held to.
 
 It also applies when the project holds the files of one language only and a diagnostic names
-`ritsu`, or when a command of one language has to read another (`ritsu dandori`, `ritsu yuen`,
-`ritsu sakai`, `ritsu sekisho`, `ritsu kaname`, §6). It does not replace the language skills: to
+`ritsu`, when a command of one language has to read another (`ritsu dandori`, `ritsu yuen`,
+`ritsu sakai`, `ritsu sekisho`, `ritsu kaname`, §6), and when the project is a module (a
+`ritsu.mod`) that requires the files of other modules or is to be published (§9). It does not replace the language skills: to
 write a rule, a workflow, a date, a ledger, a claim, a requirement, a map, a gate or a functional
 core, read the skill of that language (§5).
 
@@ -252,6 +253,10 @@ such a rule.
 - **What a fix would change.** E201's other fix, correcting a rule's `constraint`, changes what the
   rule promises everyone who calls it; E206's, a longer hold, changes how long stock or money is
   set aside.
+- **Which version of a dependency to take, and what to publish.** A new version of a module changes
+  the answers of every file that reads it: show the person what `ritsu mod report` says, and let
+  them decide. Pushing and signing a module are theirs too: they log in to the registry
+  (`docker login`) and choose the identity its signature names (§9).
 - **Reading the pages.** The pages for people that the languages write are for whoever has to
   understand what the code is to carry out and check it against what they know: the people who run the business,
   finance and legal, operators and the developers reviewing the code. Hand them the page; what they
@@ -290,3 +295,72 @@ With a change in OpenSpec:
 Do not copy a requirement's prose into a rule or a claim to make the two look alike. A rule holds
 the exact table the prose describes, and a claim holds a case anyone could observe; yuen keeps the
 link between them and the prose, and says when either moves.
+
+## 9. Modules
+
+A directory with a `ritsu.mod` is a **module**: its name, its version, and the modules it requires.
+Its files name a dependency's files by the name `ritsu.mod` gives the dependency, `@<name>/…`
+(`use rule shipping from "@pricing/rules/shipping_fee.rule"`,
+`use calendar "@holidays/uk/england_and_wales.cal"`), and `ritsu check` checks them with the
+project's own files, so the checks across the languages reach into a dependency as into the
+project. `ritsu mod --help` lists the commands; `ritsu mod <command> --help` says what each takes.
+
+**Require a module** with `ritsu mod add <name> <source>`: a directory beside the project
+(`../pricing`) or a module on an OCI registry (`ghcr.io/i2y/ritsu-holidays@1.0.0`).
+`ritsu mod get <name>@<version>` raises it, and `ritsu mod remove <name>` drops it. They write
+`ritsu.mod` and `ritsu.lock`. Do not write the lock by hand: `ritsu mod lock` writes it again, with
+the least version of each module that meets every `require` of it.
+
+**Fetch** what the lock pins with `ritsu mod fetch`, into a store kept across runs (`RITSU_MODULES`,
+else the user's cache directory). Only `ritsu mod` reaches the network: `check`, `gen`, `run` and the
+languages' commands read the store, and the module's own copy that `ritsu mod vendor` puts in
+`.ritsu/modules/` for a build that cannot reach the registry. Every command holds what it reads to
+the lock's digests (E305). `ritsu mod list` says where each module comes from and whether its files
+are here, and `ritsu mod where @<name>/<path>` where a file is on the disk.
+
+**What `ritsu check` prints** in a module: its files as before, and a line for the dependencies,
+whose files are checked too:
+
+```text
+ok checkout/basket.kn: 2 functions, total
+orders/place_order.flow: ok
+dependencies: 2 modules, 3 files (rulec 3): all pass
+ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+That line counts a dependency's warnings, and `--deps-warnings` shows each. A dependency's `.geas`
+claims are not run. An error in a dependency's own files is its author's to fix: tell the person,
+and do not copy the files into the project to change them.
+
+**Raising a version** changes the answers of the files that read the module, so show what it
+changes before it is merged. `ritsu mod diff <module>@<old> <module>@<new>` compares two versions of
+a module: the files, the requires, every input of a rule, a date or a gate that gets another answer,
+and the interfaces (exit 1 when it shows a difference of behavior or of an interface, 2 when it
+cannot compare). `ritsu mod report --base origin/main --format markdown` writes what a pull request
+that changes the lock changes: the check with each lock, and the diff of each module that changed
+(exit 1 on an error with the new lock, or, with `--fail-on-change`, on a difference of behavior; 2
+when a module that changed cannot be compared). `rulec diff`, `koyomi diff` and `sekisho diff` take
+a dependency's file as `@<name>/<path>` (the lock's version) or `@<name>@<version>/<path>` (a version
+in the store).
+
+**Publishing** is the person's (§7). `ritsu mod push --dry-run` checks and builds the module without
+sending it. `ritsu mod push` sends it with the credentials of Docker's configuration, refuses a
+module whose files hold a key (W901), and prints the `cosign sign` command that signs it; never ask
+for a token or print one. A `signature` line in a `ritsu.mod` makes every fetch of that module
+check its signature with cosign before keeping it.
+
+**A site that lists modules**: `ritsu mod site <list> --out <dir>` writes a page for each version of
+each module a list file names, with the pages of its files and what changed from the version
+before. A line of the list starts with `title`, `description`, `playground` (the page that runs
+ritsu in the browser; `--playground <URL>` gives it too), `module` (`"<registry>/<repository>"`),
+`signature` (as in `ritsu.mod`, checked on every version) or `local` (a directory not pushed yet,
+from the list's directory). It exits 1 when a version cannot be verified (its page says so), and 2,
+writing nothing, when the list does not read (it names each wrong line), a registry cannot be
+reached, or cosign is needed and missing.
+
+**In the npm package**, which reaches no network, the commands that reach a registry or run git or
+cosign (`add`, `get`, `fetch`, `versions`, `push`, `report` and `site`, and `lock`, `remove` and
+`diff` when they have to fetch) stop and say to run the native ritsu. When it says a dependency is
+neither in the store nor in the module's copy, run `ritsu mod fetch` with the native ritsu; if it is
+fetched already and the API's `dirs` opens only some directories, add the store to `dirs`, or put
+the copy in the module with `ritsu mod vendor`.

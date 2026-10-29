@@ -359,9 +359,9 @@ what the changed row says (a base fee a later table multiplies by 0% moves nobod
 `--fixtures`** it answers how many of your records move and by how much, read as the old version
 reads them; inputs the new one does not take are listed apart. Run `fixtures lint` first, always.
 
-A version is named by its file, its git tag (`parcel@v3` is `rules/parcel/v3`, else the revision
-`v3`), or a path at a revision — on a PR, `rules/parcel.rule@origin/main`. `--format markdown` is
-what gets posted and `--terse` keeps record values out; [formats.md](formats.md) has both shapes.
+A version is a file, a git tag (`parcel@v3` is `rules/parcel/v3`, else the revision `v3`), a path at a revision (on a
+PR, `rules/parcel.rule@origin/main`), or a dependency's rule: `@tax/vat.rule` at the lock's version, `@tax@1.0.0/vat.rule` from the
+store. `--format markdown` is what gets posted and `--terse` keeps record values out; [formats.md](formats.md) has both shapes.
 
 ### For people: `rulec doc`
 

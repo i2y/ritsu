@@ -179,12 +179,15 @@ $ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go
 $ koyomi vectors examples/net30.cal              # the result for every input, as JSON Lines
 $ koyomi doc examples/net30.cal --format html    # the page for people
 $ koyomi api examples/net30.cal                  # how to call the generated code, as JSON
+$ koyomi diff examples/net30.cal@HEAD~1 examples/net30.cal   # two versions, on every input both take
 $ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201                            # when it appears, how to fix it, a repro
 ```
 
 `--lang ja` gives the messages, the page and the comments of the generated code in Japanese. The
-exit code is 0 with no error, 1 with one, and 2 for bad arguments. The whole language, the
+exit code is 0 with no error, 1 with one, and 2 for bad arguments. `diff` takes each version as a
+path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or
+`@<name>@<version>/<path>` (a version in the store), and exits 1 when the inputs or the answers differ. The whole language, the
 commands and the formats are in [docs/reference.md](docs/reference.md), every diagnostic in
 [docs/codes.md](docs/codes.md), and the generated code in
 [docs/generated-code.md](docs/generated-code.md).

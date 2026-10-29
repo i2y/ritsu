@@ -494,6 +494,106 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 - sakai の地図のコンテキストが公開する操作に、それを守るゲートの action があるか。ワークフローが呼ぶ操作を、ゲートがそのワークフローに許しているか
 - yuen は表、日付、主張、タスク、関数を一つずつハッシュで固定し、sakai はコンテキストをまたぐ参照を行番号つきで確かめる
 
+## モジュール
+
+モジュールは `ritsu.mod` を持つディレクトリで、`ritsu.mod` がそのファイルに名前と版を付けます。ほかのプロジェクトは、横のディレクトリか OCI のレジストリからモジュールを依存に足し、そのファイルを `@<名前>/…` のパスで読みます。プロジェクトは、依存のファイルを自分のファイルと一緒に検査するので、証明はモジュールの境目でも切れません。次は ritsu のテストの例（[crates/ritsu/tests/projects/modules.ja](crates/ritsu/tests/projects/modules.ja)）で、店は `pricing` を、`pricing` は `tax` を依存に足しています。
+
+<!-- crates/ritsu/tests/projects/modules.ja/店/ritsu.mod -->
+```
+module example.com/acme/shop
+version 0.1.0
+description "Acme の店の注文のフローと会計"
+
+require pricing path "../価格"
+```
+
+店のワークフローは、`pricing` の規則をコピーせずに、店の `ritsu.mod` が依存に付けた名前で呼びます。
+
+```flow
+workflow 注文を受ける v1
+…
+use rule 送料 from "@pricing/規則/送料.rule"
+use rule 合計 from "@pricing/規則/注文の合計.rule"
+```
+
+`ritsu check` は、店が依存に足したモジュールを全部読み、そのファイルを店のファイルと一緒に検査します。ワークフローが `送料` に渡す重さも、一つのプロジェクトの中と同じく、規則の入力の範囲と突き合わせます。
+
+```console
+$ cd crates/ritsu/tests/projects/modules.ja/店
+$ ritsu check . --lang ja
+ok 会計/かご.kn: 関数 2 個、total
+注文/注文を受ける.flow: 検査を通りました
+依存: モジュール 2 個、ファイル 3 個（rulec 3）。どれも検査を通りました
+ritsu check: ファイル 2 個（kaname 1、dandori 1）。どれも検査を通りました。言語の境目: 確かめた 0 か所、決められない 0 か所
+```
+
+レジストリにあるモジュールは `ritsu mod` で依存に足します。`ritsu mod` が `ritsu.mod` と `ritsu.lock` を書きます。
+
+```console
+$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
+$ ritsu mod fetch
+```
+
+- lock は、プロジェクトが読むモジュールを、依存の依存まで全部、版と二つのダイジェストで固定します。どのコマンドも、読むファイルをこの固定と突き合わせます。lock が古ければ、`ritsu mod lock --check` がビルドを落とします。依存の版を上げるのは `ritsu mod get <名前>@<版>` です。
+- `ritsu mod fetch` は、lock が固定するものを取り出し、実行をまたいで使う置き場に置きます。`ritsu mod vendor` は、そのコピーをモジュールの中（`.ritsu/modules/`）に置きます。レジストリに届かないビルドのためです。通信するのは `ritsu mod` だけで、`check`、`gen`、`run`、各言語のコマンドは、置き場と同梱のコピーを読みます。
+- `ritsu mod push` は、モジュールを検査し、鍵を持つファイルがあれば受け付けず（W901）、モジュールの名前が指すレジストリに送り出します。署名する `cosign sign` のコマンドも出します。`ritsu.mod` に `signature` の行を書けば、取り出しは、モジュールを置き場に置く前に、cosign で署名を確かめます。
+
+```
+signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
+```
+
+レジストリの資格情報は、Docker の設定ファイル（`docker login` と資格情報のヘルパーが書くもの）から読み、どの出力にも出しません。
+
+`ghcr.io/i2y/ritsu-holidays` は、このリポジトリのモジュール [modules/holidays](modules/holidays/README.ja.md) です。英国と日本の祝日を koyomi のカレンダーにしたもので、データは GOV.UK と内閣府が公表するファイルに固定しています。このカレンダーが閉じるのは祝日だけです。自分のカレンダーで `use calendar "@holidays/japan/国民の祝日.cal"` と書いて読み、土日は `closed weekly sat, sun` で自分で閉じます。[モジュールの一覧](https://i2y.github.io/ritsu/ja/modules/list/)には、版ごとに、ファイルごとのページと、一つ前の版からの差が載ります。
+
+### 依存を上げると何が変わるか
+
+`ritsu mod diff` は、モジュールの二つの版を比べます。足したファイルと消したファイル、変わったファイルが使う側のコードに見せる形、それに規則、日付、ゲートでは、答えが変わる入力の全部です。試した点だけでなく、入力の全体で比べます。`ritsu mod report` は、依存を上げる PR が知りたいことに答えます。プロジェクトを base の lock と head の lock で検査し、変わったモジュールごとに、その差と、手元のファイルの答えのうち変わるものを言います。GitHub Actions では、次のワークフローがそれを PR に貼ります。
+
+```yaml
+# .github/workflows/ritsu-mod-report.yml
+name: ritsu mod report
+on:
+  pull_request:
+    paths: [ritsu.mod, ritsu.lock]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: i2y/ritsu@v0.36.0
+      - name: Report what raising the dependencies changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          code=0
+          ritsu mod report --base "origin/$GITHUB_BASE_REF" --format markdown > report.md || code=$?
+          ritsu mod report --base "origin/$GITHUB_BASE_REF" --format json > report.json || true
+          if [ -s report.md ]; then gh pr comment "$PR" --body-file report.md; fi
+          exit "$code"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ritsu-mod-report
+          path: report.json
+```
+
+- `fetch-depth: 0` は、`origin/<base>` を読めるように履歴を取ってくるためです。
+- `ritsu mod report` は、二つの lock が固定するモジュールを自分で取り出します。head の検査にエラーがあれば exit 1、変わったモジュールを比べられなければ exit 2 で終わります。答えが変わったときにも落とすなら、`--fail-on-change` を付けます。
+- モジュールがリポジトリのルートに無いときは、そのディレクトリを `paths` と `--root` に書きます。
+- fork からの PR では、書き込めないトークンになるので、コメントは付きません。
+- 報告を日本語で書くなら、`ritsu mod report` に `--lang ja` を付けます。
+
+npm のパッケージは、モジュールの依存を、置き場と、`ritsu mod vendor` がモジュールに置く同梱のコピーから読みます。レジストリに問い合わせるコマンドと、git か cosign を走らせるコマンド（`add`、`get`、`fetch`、`versions`、`push`、`report`、`site` と、取り出しが要るときの `lock`、`remove`、`diff`）には、ネイティブの ritsu が要ります。`dirs` で開くディレクトリを絞るときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーをモジュールに置きます。
+
+`ritsu mod` の 15 のコマンドは `ritsu mod --help` が並べます。モジュールの書き方、足し方、送り出し方、署名の付け方は、ritsu のサイトの[モジュール](https://i2y.github.io/ritsu/ja/modules/)にあります。
+
 ## セキュリティの検査
 
 各言語の検査は、セキュリティの誤りも探します。ファイルに直に書いた鍵、暗号化しない通信、認証の指定が無い操作、契約が秘密と印を付けた値をワークフローが履歴に残したり外へ送ったりすることです。どれもネットワークを使わず、何も実行しません。依存の脆弱性をデータベースで調べるものではなく、プロジェクトのファイルに書いてあることを読みます。
@@ -558,12 +658,14 @@ ritsu check <ディレクトリ>        各言語の検査と、言語をまた�
 ritsu run <フロー> …              規則を評価し、日付を計算し、帳簿を動かしながらワークフローを走らせる
 ritsu gen <ディレクトリ> --out …  プロジェクト全体を、TypeScript、Python、Go のどれか一つのパッケージに
 ritsu gen --check …               パッケージが今の状態に合っているか。--format json ならファイルごとに
+ritsu gen --library …             モジュールを、npm、PyPI、Go のライブラリにする
+ritsu mod <コマンド> …            モジュールのコマンド（add、lock、fetch、push、diff、report など）
 ritsu explain <コード>            診断の意味と再現
 ritsu skills install              Agent Skills を、エージェントが読む場所に書く
 ritsu <言語> …                    各言語のコマンド（例：ritsu rulec doc fee.rule）
 ```
 
-リリースのアーカイブには、`ritsu` と、それを指す九つのリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`）が入っていて、どれもその言語として動きます。`cargo install` で入るのは `ritsu` のバイナリだけなので、言語は `ritsu <言語> …` で呼ぶか、言語の名前のリンクを自分で作ります（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec` など）。日本語にするには `--lang ja` を付けます。
+リリースのアーカイブには、`ritsu` と、それを指す九つのリンク（`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`yuen`、`sakai`、`sekisho`、`kaname`）が入っていて、どれもその言語として動きます。`cargo install` で入るのは `ritsu` のバイナリだけなので、言語は `ritsu <言語> …` で呼ぶか、言語の名前のリンクを自分で作ります（`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec` など）。日本語にするには `--lang ja` を付けます。`ritsu gen --library` が書くものと、その公開の仕方は、ritsu のサイトの[ライブラリとして公開する](https://i2y.github.io/ritsu/ja/libraries/)にあります。`ritsu mod` については、上の[モジュール](#モジュール)を見てください。
 
 ## 入れ方
 
@@ -598,6 +700,7 @@ npm install --save-dev https://github.com/i2y/ritsu/releases/download/v0.36.0/i2
   [sakai](crates/sakai/README.ja.md)、[sekisho](crates/sekisho/README.ja.md)、
   [kaname](crates/kaname/README.ja.md)（rulec と dandori は英語だけ）
 - `crates/ritsu-*`：共通の土台、単位、口、プロジェクトの読み込み、言語をまたぐ検査、`.proto` の読み手、生成の共通部分、ブラウザ向けのビルド
+- `modules/holidays`：英国と日本の祝日のモジュール。ほかのプロジェクトが依存に足して使う
 - `proofs/`：Lean のモデル
 - `website/`：サイト（ritsu のページ、ブラウザで試すページ、`website/rulec` に置いた rulec のサイト、`website/dandori` に置いた dandori のサイト、`website/chobo` に置いた chobo のサイト）
 - `DESIGN.md`、`PLAN.md`：全体の設計（日本語）

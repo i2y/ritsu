@@ -19,15 +19,21 @@
 //!   `cargo install` lines name this repository and a package of it that has a binary, and no
 //!   page names the repository of one language by itself.
 //! - What a link made by hand does, as the Commands section says it does.
+//! - A block marked with the file it shows (`<!-- crates/ritsu/tests/projects/modules/shop/ritsu.mod -->`
+//!   above its fence) is the lines of that file, in order.
+//! - The workflow the section on modules shows is the one the guide to modules on the site shows, on
+//!   both pages, and every page installs ritsu in GitHub Actions at this version
+//!   (`uses: i2y/ritsu@v<version>`).
 //!
 //! (tests/common/mod.rs holds what tests/skill.rs shares with this file.)
 
 mod common;
 
-use common::{Page, commands_named, hosts_from_files, link_targets, page, root, run_the_consoles, code_from_files, CODE};
+use common::{Page, commands_named, hosts_from_files, link_targets, marked_files, page, root, run_the_consoles, code_from_files, CODE};
 use ritsu::cli::LANGUAGES;
 use ritsu_testkit::TempDir;
 use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
 
 fn pages() -> Vec<Page> {
@@ -168,4 +174,68 @@ fn cargo_installs_ritsu_alone_and_a_link_made_by_hand_is_a_language() {
         let out = String::from_utf8_lossy(&o.stdout);
         assert!(o.status.success() && out.starts_with(&format!("{name} ")) && out.lines().count() == 1, "{name}: {out}");
     }
+}
+
+/// The files the section on modules shows by their path (`ritsu.mod` of the example's shop).
+#[test]
+fn the_blocks_marked_with_a_file_are_that_file() {
+    let (seen, wrong) = marked_files(&pages());
+    // the shop's ritsu.mod, on each of the two pages
+    assert!(seen >= 2, "{seen} blocks marked with a file: were the marks changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The ```yaml blocks of a page, as their lines.
+fn workflows(p: &Page) -> Vec<Vec<String>> {
+    p.blocks.iter().filter(|b| b.info == "yaml").map(|b| b.lines.clone()).collect()
+}
+
+/// The workflow that posts `ritsu mod report` on a pull request is one text, on the two READMEs and
+/// the two pages of the guide to modules; and the version of ritsu a page installs in GitHub Actions
+/// is the version of this workspace, which a release raises on every page with it.
+#[test]
+fn the_workflow_of_the_report_is_one_and_installs_this_version() {
+    let guide = [page("website/docs/modules.md"), page("website/docs-ja/modules.md")];
+    let readmes = pages();
+    let want = workflows(&readmes[0]);
+    assert_eq!(want.len(), 1, "README.md shows one workflow");
+    assert!(want[0].iter().any(|l| l.contains("ritsu mod report --base")), "the workflow runs `ritsu mod report`");
+    for p in readmes.iter().chain(&guide) {
+        assert_eq!(workflows(p), want, "{} shows another workflow than README.md", p.name);
+    }
+    let version = format!("i2y/ritsu@v{}", env!("CARGO_PKG_VERSION"));
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    let mut site: Vec<PathBuf> = Vec::new();
+    for dir in ["website/docs", "website/docs-ja"] {
+        let mut todo = vec![root().join(dir)];
+        while let Some(d) = todo.pop() {
+            for e in fs::read_dir(&d).unwrap().flatten() {
+                let path = e.path();
+                if path.is_dir() {
+                    todo.push(path);
+                } else if path.extension().is_some_and(|x| x == "md") {
+                    site.push(path);
+                }
+            }
+        }
+    }
+    for file in [root().join("README.md"), root().join("README.ja.md")].into_iter().chain(site) {
+        let text = fs::read_to_string(&file).unwrap();
+        for (n, line) in text.lines().enumerate() {
+            let mut rest = line;
+            while let Some(at) = rest.find("i2y/ritsu@v") {
+                let named: String = rest[at..].chars().take_while(|c| !c.is_whitespace() && *c != '`').collect();
+                seen += 1;
+                if named != version {
+                    wrong.push(format!("{}:{}: `{named}`, where this is {version}", file.strip_prefix(root()).unwrap().display(), n + 1));
+                }
+                rest = &rest[at + 1..];
+            }
+        }
+    }
+    // the install lines and the workflows of the READMEs, the index pages, the guide to modules and
+    // the pages on publishing libraries
+    assert!(seen >= 12, "{seen} versions of ritsu's action on the pages: were they changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

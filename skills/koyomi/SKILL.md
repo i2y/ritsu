@@ -67,6 +67,14 @@ have to read koyomi's source.
    and across them: a rule input can take a date's days as its range (`range from koyomi`), and
    where a workflow calls a date or gives its day to a rule, the days are held to the ranges
    (ritsu's E202 and E205; the ritsu skill has them).
+9. **When a calendar or a dates file changes**, `ritsu koyomi diff <old> <new>` says what the change
+   moves: for a calendar, every day both versions know whose answer changed (open or closed, or
+   closed for another reason), and for a dates file, every input both take whose dates moved, with
+   how far. Each side is a path, `<path>@<git revision>` (on a pull request,
+   `calendars/office.cal@origin/main`), `@<name>/<path>` (a dependency at the lock's version) or
+   `@<name>@<version>/<path>` (a version in the store). It exits 1 when something differs, and 2
+   when the two cannot be compared (a calendar and a dates file, or a side that does not pass
+   check). Show what it says to the people who read the terms, as you show the page.
 
 ## 2. The language on one page
 

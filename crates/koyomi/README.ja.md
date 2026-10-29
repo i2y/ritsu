@@ -158,11 +158,12 @@ $ koyomi gen examples/net30.cal --out generated  # --target typescript|python|go
 $ koyomi vectors examples/net30.cal              # すべての入力の結果を JSON Lines で
 $ koyomi doc examples/net30.cal --format html    # 人が読むページ
 $ koyomi api examples/net30.cal                  # 生成したコードの呼び方を JSON で
+$ koyomi diff examples/net30.cal@HEAD~1 examples/net30.cal   # 二つの版を、両方が受け取る入力の全部で比べる
 $ koyomi source fetch|pin|outdated examples/calendars/england_and_wales.cal
 $ koyomi explain E201 --lang ja                  # いつ出るか、どう直すか、最小の再現
 ```
 
-`--lang ja` を付けると、診断、ページ、生成したコードのコメントとエラーのメッセージが日本語になります。exit code は、エラーが無ければ 0、あれば 1、引数の誤りなら 2 です。言語、コマンド、出力の形の全部は [docs/reference.md](docs/reference.md)（英語）に、診断の一覧は [docs/codes.ja.md](docs/codes.ja.md) に、生成したコードの形は [docs/generated-code.md](docs/generated-code.md)（英語）にあります。
+`--lang ja` を付けると、診断、ページ、生成したコードのコメントとエラーのメッセージが日本語になります。exit code は、エラーが無ければ 0、あれば 1、引数の誤りなら 2 です。`diff` には、それぞれの版を、パス、`<パス>@<git の版>`、`@<名前>/<パス>`（依存の lock の版）、`@<名前>@<版>/<パス>`（置き場の版）のどれかで渡し、入力か答えが違えば 1 で終わります。言語、コマンド、出力の形の全部は [docs/reference.md](docs/reference.md)（英語）に、診断の一覧は [docs/codes.ja.md](docs/codes.ja.md) に、生成したコードの形は [docs/generated-code.md](docs/generated-code.md)（英語）にあります。
 
 ## 例
 

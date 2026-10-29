@@ -102,11 +102,12 @@ pub fn links() -> TempDir {
 }
 
 /// The command line as a shell reads it, in `dir`, with standard error where standard output is, as
-/// a terminal shows them, and no language asked of the environment.
+/// a terminal shows them, and no language asked of the environment. The store of modules is one in
+/// `links`, so that a `ritsu mod` a page shows writes nothing outside the scratch directory.
 pub fn sh(links: &Path, dir: &Path, command: &str) -> String {
     let path = format!("{}:{}", links.display(), std::env::var("PATH").unwrap_or_default());
     let mut c = Command::new("sh");
-    c.arg("-c").arg(format!("{command} 2>&1")).current_dir(dir).env("PATH", path);
+    c.arg("-c").arg(format!("{command} 2>&1")).current_dir(dir).env("PATH", path).env(ritsu_base::modules::store::VARIABLE, links.join("store"));
     for var in ["RITSU_LANG", "RULEC_LANG", "DANDORI_LANG", "KOYOMI_LANG", "CHOBO_LANG", "GEAS_LANG", "YUEN_LANG", "SAKAI_LANG", "SEKISHO_LANG", "KANAME_LANG"] {
         c.env_remove(var);
     }
@@ -470,16 +471,28 @@ pub fn inline_code(text: &str) -> Vec<(usize, String)> {
     out
 }
 
-/// A command the prose names as `rulec doc` or `ritsu check` is one: the language's `--help` lists
-/// it, or ritsu's table of commands has it. How many there were, and the ones that are not.
+/// A command the prose names as `rulec doc`, `ritsu check` or `ritsu mod fetch` is one: the
+/// language's `--help` lists it, ritsu's table of commands has it, or `ritsu mod --help` lists it
+/// (what follows the command's name is not looked at). How many there were, and the ones that are
+/// not.
 pub fn commands_named(pages: &[Page]) -> (usize, Vec<String>) {
     let links = links();
     let commands: Vec<&str> = ritsu::cli::commands().iter().map(|c| c.name).collect();
+    let module_help = sh(links.path(), &root(), "ritsu mod --help");
     let mut wrong = Vec::new();
     let mut seen = 0;
     for p in pages {
         for (line, code) in inline_code(&p.text) {
             let words: Vec<&str> = code.split(' ').collect();
+            if let ["ritsu", "mod", word, ..] = words[..]
+                && word.chars().all(|c| c.is_ascii_lowercase())
+            {
+                seen += 1;
+                if !module_help.lines().any(|l| l.trim_start().starts_with(&format!("ritsu mod {word} ")) || l.trim() == format!("ritsu mod {word}")) {
+                    wrong.push(format!("{}:{line}: `{code}`: `ritsu mod --help` lists no such command", p.name));
+                }
+                continue;
+            }
             let [first, word] = words[..] else { continue };
             if !word.chars().all(|c| c.is_ascii_lowercase()) {
                 continue;
@@ -495,6 +508,34 @@ pub fn commands_named(pages: &[Page]) -> (usize, Vec<String>) {
                 if !help.lines().any(|l| l.trim_start().starts_with(&format!("{first} {word}"))) {
                     wrong.push(format!("{}:{line}: `{code}`: `{first} --help` lists no such command", p.name));
                 }
+            }
+        }
+    }
+    (seen, wrong)
+}
+
+/// The blocks a page marks with the file they show, by the line right above the fence
+/// (`<!-- crates/ritsu/tests/projects/modules/shop/ritsu.mod -->`, a path from the root of the
+/// repository): each is the lines of that file, in order, a line `…` standing for any number of
+/// lines and a `…` in a line for a part of it. How many blocks were marked, and what is wrong with
+/// each of the others.
+pub fn marked_files(pages: &[Page]) -> (usize, Vec<String>) {
+    let mut wrong = Vec::new();
+    let mut seen = 0;
+    for p in pages {
+        let lines: Vec<&str> = p.text.lines().collect();
+        for b in &p.blocks {
+            let Some(mark) = b.at.checked_sub(2).and_then(|i| lines.get(i)).and_then(|l| l.trim().strip_prefix("<!-- ")?.strip_suffix(" -->")) else {
+                continue;
+            };
+            seen += 1;
+            match fs::read_to_string(root().join(mark)) {
+                Ok(text) => {
+                    if !lines_in_order(&shown_lines(b), &trimmed(&text)) {
+                        wrong.push(format!("{}:{}: the block is not the lines of {mark}, in order", p.name, b.at));
+                    }
+                }
+                Err(e) => wrong.push(format!("{}:{}: the block is marked as {mark}, which does not read: {e}", p.name, b.at)),
             }
         }
     }

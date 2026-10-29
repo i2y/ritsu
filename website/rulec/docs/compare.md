@@ -168,7 +168,11 @@ Here v2 lets an envelope run to 24in instead of 22in.
 `parcel_rate@v2` is sugar for the git tag `rules/parcel_rate/v2`, or,
 when there is no such tag, for `v2` as a git revision. A path at a
 revision — `rules/parcel_rate.rule@origin/main` — is the file as it is on
-that branch, which is what a pull request compares against.
+that branch, which is what a pull request compares against. In a module
+(below a `ritsu.mod`), a side can also be a rule of a dependency:
+`@tax/rules/vat_rate.rule` is the file at the version the lock pins, and
+`@tax@1.0.0/rules/vat_rate.rule` the file of version 1.0.0, from the
+store.
 A diff clusters on **the transition of the fired row** — `row 2→row 1`
 says where the decision moved — and each cluster carries the count, the
 total amount, the minimum and maximum, and a witness. A uniform shift

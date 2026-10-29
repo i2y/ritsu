@@ -182,11 +182,13 @@ $ sekisho gen examples/refunds/refunds.gate --target typescript --root examples/
 $ sekisho doc examples/refunds/refunds.gate --root examples/refunds --format html
 $ sekisho vectors examples/refunds/refunds.gate --root examples/refunds --action refund_order
 $ sekisho api examples/refunds/refunds.gate --root examples/refunds
+$ sekisho diff examples/refunds/refunds.gate@HEAD~1 examples/refunds/refunds.gate
 $ sekisho explain E302
 ```
 
-`--root` is the directory the paths of what a gate names are written from (else the nearest one above the first file that holds `.git`), so that sekisho, yuen and sakai name one operation alike.
+`--root` is the directory the paths of what a gate names are written from (else the nearest one above the first file that holds `.git` or `ritsu.mod`), so that sekisho, yuen and sakai name one operation alike.
 `vectors` prints every combination as a test of `cedar run-tests`.
+`diff` compares the decisions of two versions of a gate, each a path, `<path>@<git revision>`, `@<name>/<path>` (a dependency at the lock's version) or `@<name>@<version>/<path>` (a version in the store), and exits 1 when a permission is gained or lost.
 Every command takes `--lang ja|en` (else `SEKISHO_LANG`, then `RITSU_LANG`, else English) and `--help`.
 The exit code is 0 for no errors, 1 for errors, and 2 for bad arguments, a file that cannot be read, or a language that is not joined.
 [docs/reference.md](docs/reference.md) has the whole language and every command.

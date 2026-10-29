@@ -17,9 +17,17 @@
 //! - the pages of sekisho (website/docs/sekisho.md and website/docs-ja/sekisho.md) show sekisho's
 //!   example as the tools have it: the lines of its files, what the commands print (a `gen` into a
 //!   scratch directory), the Cedar and the code `ritsu gen` writes, the table `sekisho doc` draws
-//!   and the count of combinations it says, and what `sekisho check` says of each edit a ```diff
-//!   shows; the two show the same kinds of blocks and tables, as many of each; and sekisho's
-//!   READMEs link to them;
+//!   and the count of combinations it says, what `sekisho check` says of each edit a ```diff
+//!   shows, and what `sekisho diff` prints of two versions of a gate of its tests; the two show the
+//!   same kinds of blocks and tables, as many of each; and sekisho's READMEs link to them;
+//! - the pages of koyomi (website/docs/languages/koyomi.md and the Japanese one) show what
+//!   `koyomi diff` prints of two versions of a calendar of its tests, and the commands their prose
+//!   names; the two show the same kinds of blocks;
+//! - the guide to modules (website/docs/modules.md and website/docs-ja/modules.md) shows the modules
+//!   of ritsu's tests and the module of holidays as the tools have them: the lines of the files, a
+//!   block marked with the file it is (`<!-- … -->` above its fence), what the commands print, and
+//!   the commands its prose names; the two pages show the same kinds of blocks and tables, as many
+//!   of each, under the same seven headings;
 //! - the pages of kaname (website/docs/kaname/ and website/docs-ja/kaname/) show its examples and the
 //!   materials of its tests as the tools have them: the lines of the `.kn` files, what the commands
 //!   print (a `gen` into a scratch directory), and the lines of the hosts of its examples in
@@ -77,8 +85,8 @@
 mod common;
 
 use common::{
-    Block, Page, code_from_files, commands_named, hosts_from_files, inline_code, kaname_hosts, lines_in_order, lines_of, link_targets, links, page, root,
-    run_the_consoles, sh, shown_lines, trimmed,
+    Block, Page, code_from_files, commands_named, hosts_from_files, inline_code, kaname_hosts, lines_in_order, lines_of, link_targets, links, marked_files, page,
+    root, run_the_consoles, sh, shown_lines, trimmed,
 };
 use ritsu_testkit::{Need, TempDir, ready};
 use std::collections::{BTreeMap, BTreeSet};
@@ -813,13 +821,13 @@ fn japanese(name: &str) -> bool {
 fn the_pages_of_sekisho_show_the_files_and_what_the_commands_print() {
     let pages: Vec<Page> = SEKISHO_PAGES.iter().map(|n| page(n)).collect();
     let (seen, wrong) = code_from_files(&pages);
-    // the gate, the rule, the expectation, the files the action reads, the task and the
-    // workflow's permit, on each of the two pages
-    assert!(seen >= 2 * 6, "{seen} blocks of code on the pages: were the fences changed?");
+    // the gate, the rule, the expectation, the files the action reads, the task, the workflow's
+    // permit and the second version of the rule of `sekisho diff`, on each of the two pages
+    assert!(seen >= 2 * 7, "{seen} blocks of code on the pages: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     let (ran, wrong) = run_the_consoles(&pages);
-    // check, gen --target cedar, ritsu gen and ritsu check, on each of the two pages
-    assert!(ran >= 2 * 4, "{ran} commands run: were the fences changed?");
+    // check, gen --target cedar, ritsu gen, ritsu check and diff, on each of the two pages
+    assert!(ran >= 2 * 5, "{ran} commands run: were the fences changed?");
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     let (named, wrong) = commands_named(&pages);
     assert!(named >= 2 * 4, "{named} commands named in the prose: were they changed?");
@@ -1001,6 +1009,28 @@ fn what_the_pages_of_sekisho_say_of_an_edit_is_what_sekisho_check_says() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// The pages of koyomi on ritsu's site, in English and in Japanese.
+const KOYOMI_PAGES: [&str; 2] = ["website/docs/languages/koyomi.md", "website/docs-ja/languages/koyomi.md"];
+
+#[test]
+fn the_pages_of_koyomi_show_what_koyomi_diff_prints() {
+    let pages: Vec<Page> = KOYOMI_PAGES.iter().map(|n| page(n)).collect();
+    let (ran, wrong) = run_the_consoles(&pages);
+    // `koyomi diff` of two calendars of its tests, on each of the two pages
+    assert!(ran >= 2, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (named, wrong) = commands_named(&pages);
+    // `koyomi check` and `koyomi diff`, on each of the two pages
+    assert!(named >= 2 * 2, "{named} commands named in the prose: were they changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let kinds = |p: &Page| {
+        let mut kinds: Vec<String> = p.blocks.iter().map(|b| b.info.clone()).collect();
+        kinds.sort();
+        kinds
+    };
+    assert_eq!(kinds(&pages[0]), kinds(&pages[1]), "the pages of koyomi show other kinds of blocks, or other numbers of blocks ({KOYOMI_PAGES:?})");
+}
+
 /// sekisho's READMEs lead to its page on the site, each to the page in its own language.
 #[test]
 fn the_readmes_of_sekisho_link_to_its_pages() {
@@ -1017,6 +1047,41 @@ fn the_readmes_of_sekisho_link_to_its_pages() {
 /// tests, the English versions on the English pages and the Japanese versions on the Japanese ones;
 /// the hosts, which call the code of the English versions, on both.
 const KANAME_PAGES: [&str; 5] = ["index.md", "language.md", "examples.md", "checks.md", "together.md"];
+
+/// The guide to modules, in English and in Japanese. Its examples are the modules of ritsu's tests
+/// (crates/ritsu/tests/projects/modules, and modules.ja for the Japanese page) and the module of
+/// holidays (modules/holidays).
+const MODULE_PAGES: [&str; 2] = ["website/docs/modules.md", "website/docs-ja/modules.md"];
+
+#[test]
+fn the_guide_to_modules_shows_the_files_and_what_the_commands_print() {
+    let pages: Vec<Page> = MODULE_PAGES.iter().map(|n| page(n)).collect();
+    let (seen, wrong) = code_from_files(&pages);
+    // the rule of pricing that applies tax's, on each page
+    assert!(seen >= 2, "{seen} blocks of code on the pages: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (marked, wrong) = marked_files(&pages);
+    // pricing's ritsu.mod, on each page
+    assert!(marked >= 2, "{marked} blocks marked with a file: were the marks changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (ran, wrong) = run_the_consoles(&pages);
+    // `ritsu mod list` and `ritsu check` of the shop, `ritsu mod push --dry-run` of the holidays and
+    // `ritsu mod diff` of pricing, on each page
+    assert!(ran >= 2 * 4, "{ran} commands run: were the fences changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let (named, wrong) = commands_named(&pages);
+    assert!(named >= 2 * 20, "{named} commands named in the prose: were they changed?");
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    let shown = |p: &Page| {
+        let mut kinds: Vec<String> = p.blocks.iter().map(|b| b.info.clone()).collect();
+        kinds.sort();
+        let headings = p.text.lines().filter(|l| l.starts_with("## ")).count();
+        (kinds, tables(&p.text).len(), headings)
+    };
+    let (en, ja) = (shown(&pages[0]), shown(&pages[1]));
+    assert_eq!(en.2, 7, "the guide has seven sections");
+    assert_eq!(en, ja, "the two pages show other kinds of blocks, or other numbers of blocks, tables or sections");
+}
 
 /// The pages of kaname in a language, as paths from the root of the repository.
 fn kaname_pages(ja: bool) -> Vec<String> {

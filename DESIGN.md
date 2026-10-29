@@ -615,7 +615,7 @@ rulec、koyomi、yuen の三つは、法令のコピーを同じ場所と同じ�
 
 参照の書き方の決まり（6.2）を一つの実装にする。いまは yuen の `src/names.rs` と sakai の `src/naming.rs` が別々に書き、同じ 36 行の `naming.tsv` を通している。その表は土台のテストに移す。
 
-パスは、ルートの決め方（`--root`、無ければ最初に渡したパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ渡したディレクトリ）、`.` と `..` を字の上で畳むこと、表示のパス（走らせたディレクトリから）、ディレクトリを歩くときに飛ばす名前（`.git`、`target`、`node_modules`、`.venv`、`.geas`、`__pycache__`）を一つにする。geas、yuen、sakai が別々に持っているものである。
+パスは、ルートの決め方（`--root`、無ければ最初に渡したパスの上で、`.git` か `ritsu.mod` のある、いちばん近いディレクトリ（17.6）、どちらも無ければ渡したディレクトリ）、`.` と `..` を字の上で畳むこと、表示のパス（走らせたディレクトリから）、ディレクトリを歩くときに飛ばす名前（`.` で始まる名前（`.git`、`.venv`、`.geas`、`.ritsu` など）、`target`、`node_modules`、`site-packages`、`__pycache__`。`paths::SKIPPED`）と、歩くときに入らないディレクトリ（ルートの下で自分の `ritsu.mod` を持つ、入れ子のモジュール。17.6）を一つにする。geas、yuen、sakai が別々に持っているものである。
 
 12.5 で、取り込んだ形（ルートが上にある形）で yuen を走らせたら、コピーのパスを `../../crates/yurai/tests/…` と回り道で書いた（そのときの名前は yurai）。土台の表示のパスは、走らせたディレクトリからのいちばん短い相対にする（`paths::Shown`）。yuen の表示は、土台へ移す前に C.0 で直した（yuen の `Project::shown`）。
 
@@ -890,7 +890,7 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 ### 6.1 プロジェクト
 
-`ritsu check <パス>...` は、渡したファイルとディレクトリを一つのプロジェクトとして読む。ルートは 6.2 の 3 のとおり（4.7）。ディレクトリは、4.7 の飛ばす名前を除いて下まで歩く。
+`ritsu check <パス>...` は、渡したファイルとディレクトリを一つのプロジェクトとして読む。ルートは 6.2 の 3 のとおり（4.7）。ディレクトリは、4.7 の飛ばす名前と入れ子のモジュールを除いて下まで歩く。ルートに `ritsu.mod` があれば、木の依存のファイルも読む（17.8）。
 
 ファイルの種類は拡張子で決める：`.rule`（rulec）、`.flow`（dandori。`.ja.flow` も）、`.cal`（koyomi）、`.book`（chobo）、`.geas`（geas）、`.req`（yuen）、`.ctx`（sakai）、`.proto`、`.gate`（sekisho。2026-10-06 から）、`.kn`（kaname。2026-10-18 から）。ほかのファイルは、誰かが指したとき（yuen と sakai の `file "…"`・`openapi "…"`・`asyncapi "…"`・`cedar "…"`（6.5。sakai の `cedar "…"` は 2026-10-06 に足した）、dandori の `use openapi|smithy`、sekisho の `use openapi|proto|asyncapi` のパス）にだけ読む。地図と要件が `cedar "…"` で指す Cedar の組は、言語をまたぐ検査も口 `Gates` で読む（7.14）。
 
@@ -907,7 +907,7 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 **E.1 で作った形**（`crates/ritsu-project`。PLAN の E.1）。
 
-- `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、kaname、dandori、sekisho、yuen、sakai。`ORDER`。sekisho は 2026-10-06 に dandori のあとに、kaname は 2026-10-18 に dandori の前に足した）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
+- `Project::load(パス, --root)` が、渡したパス（無ければ `.`）の下のファイルを、土台の `paths::walk`（4.7 の名前を飛ばす）で歩き、拡張子で言語を決める。ルートは `--root`、無ければ最初のパスの上で、`.git` か `ritsu.mod` のある、いちばん近いディレクトリ、どちらも無ければ最初のパスである（6.2 の 3）。並びは、上の 3 の順の言語（rulec、koyomi、chobo、geas、`.proto`、kaname、dandori、sekisho、yuen、sakai。`ORDER`。sekisho は 2026-10-06 に dandori のあとに、kaname は 2026-10-18 に dandori の前に足した）、言語の中ではパスの順である。止めるのは四つで、どれも使う人が直すもの（使い方の誤り。8.4 の exit 2）である。無いパス、ルートの外のパス、名前で渡した言語の無いファイル（`.py` など）、言語のファイルが一つも無いプロジェクト。最後のものを止めるのは、何も確かめずに通ったように見せないためである（rulec の `check` が、無いディレクトリを空のまま通さないのと同じ考え）。
 - 言語は `Joined` が一度だけ作る。rulec の `Engine`（確かめた規則を覚える）、koyomi・chobo・geas・dandori・sakai の `Engine`、sekisho の `Engine`（検査したゲートを覚える。2026-10-06 から）、kaname の `Engine`（2026-10-18 から）、その上の索引（6.4）である。`ritsu dandori` と `ritsu check` の dandori には規則と日付と帳簿の口を、`ritsu yuen` と `ritsu sakai` には索引を含む口のまとまりを、ここから渡す。dandori の口は、E の二つ目の部分から三つになった（前は規則の口だけで、日付か帳簿を使うフローは E018 で止まっていた）。`Joined::ports` が三つの口の組 `ritsu_ports::Ports` を作り、`ritsu check` は `dandori::ports::Engine::checked_with(root, files, &Ports, lang)` を呼ぶ。`ritsu run` の担当と言語をまたぐ検査の担当がそれぞれ足した入口（`checked_with_ports` と `checked_with`）は、取り込むときに `checked_with` 一つにした。`ritsu dandori` には、ritsu-cross の `Undecided` も渡す（7.4）。`ritsu sekisho` と `ritsu check` の sekisho には、`Joined::sekisho` が口のまとまり `GatePorts`（3.2）を渡す（2026-10-06）。`ritsu kaname` と `ritsu check` の kaname には、`Joined::ports` の三つの口と、ritsu-cross の `ProgramVerdicts`（口 `Verdicts`）を渡す（2026-10-18。3.2）。D の入口では三つがそれぞれ rulec の `Engine` を作り、同じ規則を別々に読んでいた（PLAN の 7.8）。
 - 一度だけ読むことの中身は、口の問いを同じファイルに一度しか問わないことである（索引、rulec の `Engine` の覚え書き、yuen と sakai の口のまとまりの覚え書き、koyomi の口の覚え書き（2026-10-06。3.2））。`ritsu check`（E.2）は、rulec の `check` の報告も rulec の `Engine` から作る。`Engine` は報告と検査を、ファイルと中身と、その検査が読んだファイルの全部（使う規則、依存の木の `ritsu.mod` と `ritsu.lock`、置き場のファイル）の中身で覚え、dandori や sakai がその規則の事実を尋ねたら、読んだファイルがどれも同じに読めるときだけ、報告から検査を通ったかを読んで、規則を検査し直さない（パスの書き方が違っても同じファイルとみなす。`rulec/tests/ports.rs` が、コーパスの 50 本で、`check` と事実の二つを尋ねても検査は一回ずつであることを確かめる。読んだファイルで覚える理由は 17.9.1）。各言語の `check` の文は、頼まれた言語で一度作る。
 - ファイルをまたぐ参照（上の 2）は `Project::references` が解く。各ファイルの言語が `References` で言う参照ごとに、行き着くファイル、そのファイルがプロジェクトのものか、行き着き方（`Landing`：ファイルが無い、索引が読むファイルならその言語の答え、`.proto` なら ritsu-proto で読んでその要素があるか、索引が読まないファイル）を返す。参照の誤りは、これまでどおり各言語が自分の `check` と自分のコードで言う（7.10）ので、これは言語をまたぐ検査（E.4）が読み、LSP を作るならそれも読む、プロジェクトの一枚の見取り図である。テストは、sakai の例をコピーした `crates/ritsu/tests/projects/通販` の参照の全部（`crates/ritsu-project/tests/golden/shop.references.txt`）を golden にする。
@@ -918,7 +918,7 @@ rulec の組み込みの名前空間は、十三か国の一段目の区分で�
 
 1. **形**：`<ツール> "<パス>" [<種類> <名前>]...`。組はツールの構造どおりに入れ子にできる。入れ子にできるのは、proto の `service S [method M]`、`message M [field f]`、`enum E [value V]`（入れ子のメッセージは名前を `.` でつなぐ：`message Order.Line`）、rulec の `enum E [value V]`、dandori の `record R [field f]` と `enum E [value V]`（6.3）、chobo の `transfer T [operation O]`、openapi と asyncapi の `schema S [property P]` と `schema S [value V]`、asyncapi の `channel C [message M]`（6.5）、sekisho の `principal P [attribute a]` と `resource R [attribute a]`、`enum E [value V]`、`action A [input i]` と `action A [context c]`、kaname の `record R [field f]` と `enum E [value V [field f]]` だけで、ほかのツールの組は一つまで。組が三つになるのは、kaname のフィールドを持つ列挙の値の下のフィールドだけである（`kaname "orders.kn" enum Order value placed field on`。土台の `Tool::grandchildren`。kaname の DESIGN 23.1）。子の種類は、親の種類のすぐあとにしか書けない。sekisho の `attribute` は、二つの親（`principal` と `resource`）のどちらのすぐあとにも書ける（土台の `ErrorKind::ChildFirst` が親の全部を持ち、誤りの文は「`attribute` は `principal` か `resource` のすぐあとにしか書けません」になる）。
 2. **ツール名**：`rulec`、`dandori`、`koyomi`、`chobo`、`geas`、`proto`、`openapi`、`asyncapi`、`cedar`、`file`、`yuen`、`sakai`、`sekisho`、`kaname`。`openapi`・`asyncapi`・`cedar` は 2026-10-06 に足した（6.5）。`sekisho` は同じ日に、sekisho の段階 D で、口 `Items` と一緒に足した。`kaname` は 2026-10-18 に、kaname の段階 C3 で足した。`dir` はツール名にしない（sakai の `.ctx` の構文の語にとどめる）。
-3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上でいちばん近い `.git` のあるディレクトリ、それも無ければ渡したディレクトリ）からの相対で、ルートの外に出るパスはエラー。
+3. **パス**：`.req` や `.ctx` の中では、書いたファイルのディレクトリからの相対。区切りは `/` で、`.` と `..` は字の上で畳む。絶対パスと空のパスはエラー。`"."` はルートを指す。末尾の `/` は取り除く。JSON では、ルート（`--root`、無ければ最初に渡したパスの上で、`.git` か `ritsu.mod` のある、いちばん近いディレクトリ、どちらも無ければ渡したディレクトリ。17.6）からの相対で、ルートの外に出るパスはエラー。モジュールの中では、`@<名前>/` で始まるパスが依存のファイルを指し、モジュールの外へ出るパスはエラーになる（17.6）。
 4. **種類**：rulec は `input`・`output`・`enum`（下に `value`）・`table`・`clause`・`define`・`derive`・`machine`・`source`、koyomi は `input`・`date`・`claim`・`source`、chobo は `unit`・`account`・`transfer`（下に `operation`。振替の操作の `do`、`hold`、`post`、`void`）、geas は `claim`、proto は `service`（下に `method`）・`message`（下に `field`）・`enum`（下に `value`）、yuen は `requirement`・`source`、sakai は `context`・`term`、dandori は `task`・`case`・`record`（下に `field`）・`enum`（下に `value`）・`input`・`output`（6.3）、openapi は `schema`（下に `property`・`value`）・`operation`・`pointer`、asyncapi は `channel`（下に `message`）・`message`・`operation`・`schema`（下に `property`・`value`）・`pointer`、cedar は `policy`・`action`・`entity`（6.5）、sekisho は `principal`（下に `attribute`）・`resource`（下に `attribute`）・`role`・`workflow`・`enum`（下に `value`）・`action`（下に `input`・`context`）・`policy`・`expect`・`separate`、kaname は `function`・`record`（下に `field`）・`enum`（下に `value`、その下に `field`）。`file` には無い。どの言語も、自分が使わない種類も参照として受け付ける。
 5. **名前**：ツールの名前（JSON の `name`）。別名は使わない。語（空白、`"`、`#` を含まない一続きの文字。頭が数字でもよい）か `"…"` で書く。`"…"` の中のエスケープは `\"` と `\\` だけで、ほかはエラー。正規化せず、大文字と小文字を区別する。proto の名前は、そのファイルの package から見た名前。文書と Cedar の名前は 6.5。文字列の外の全角の空白、`"…"` で書いた種類やツール名、名前の無い種類はエラー。
 6. **同じ・含む**：同じは、ツール名と、ルートからのパスと、組の並びが同じとき。ファイルは中のものを全部含み、親の組（proto の `service`・`message`・`enum`、rulec と dandori の `enum`、dandori の `record`、chobo の `transfer`、openapi と asyncapi の `schema`、asyncapi の `channel`、sekisho の `principal`・`resource`・`enum`・`action`、kaname の `record`・`enum`・`value`）は子を全部含む。
@@ -1385,6 +1385,7 @@ ritsu run <file.flow> --scenario <file.json> [--with <パス>]... [--target <tar
 ritsu gen [<パス>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]
 ritsu gen --library [--embed <名前>]... [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books …] [--authorizer …] [--root <dir>]
 ritsu explain <コード> | --all [--format markdown|json]
+ritsu mod <コマンド> <引数>...  モジュールの依存、送り出し、版のあいだの差、報告、一覧のサイト（17.19）
 ritsu skills list | ritsu skills install [<name>...] [--dir <dir> | --user] [--force]
 ritsu <言語> <引数>...        rulec・dandori・koyomi・chobo・geas・yuen・sakai・sekisho・kaname のコマンドそのもの
 ritsu --help | --version
@@ -1393,6 +1394,7 @@ ritsu --help | --version
 - `ritsu check` は、パスを渡さなければ今いるディレクトリを読む。各言語の `check` を全部のファイルに走らせ、言語をまたぐ検査をし、最後に一行の要約（言語ごとのファイルの数、確かめた境目の数、決められなかった数）を出す。
 - `--budget <n>` は、空間を歩く検査の上限で、rulec の検査（区画とステートマシン）が一つの規則で訪れるノード数と、sekisho が一つの action で歩く組み合わせの数に、同じ数を渡す（`ritsu_project::Joined::with_budget`）。既定は言語ごとの既定（rulec は 50,000,000、sekisho は 100,000,000）のまま。koyomi の検査も予算（E305）を持つが、koyomi の口が予算を持たないので、いまは渡さない。
 - `--deps-warnings` は、モジュールの全体を検査するとき、依存のファイルの警告も一つずつ出す。無ければ、依存ごとの数だけを出す（17.8）。
+- `ritsu mod …` は、モジュールのコマンドで、`ritsu <言語>` と同じく自分のコマンドの表を持つ（17.19）。通信するのはこのコマンドだけである（17.1 の M4）。
 - `ritsu explain` は、ritsu の台帳（言語をまたぐ検査のコード）を引く。各言語のコードは `ritsu <言語> explain <コード>` で引く。言語ごとにコードの番号が重なる（rulec の E101 と koyomi の E101 は別のもの）からである。
 - `ritsu skills` は、バイナリが持つ十の Agent Skills（ritsu のものと、九つの言語のもの）を一覧し、エージェントが読む場所に書く（13.2）。
 - `ritsu <言語> …` は、その言語のコマンドと同じものを、すべての口をつないで走らせる。
@@ -1456,7 +1458,7 @@ ritsu check: 21 files (rulec 4, koyomi 3, chobo 1, proto 5, dandori 2, sakai 6):
 
 要約は、言語ごとのファイルの数、結果、言語の境目の検査の数を言う。結果は、どれも通れば `all pass`（日本語は「どれも検査を通りました」）で、エラーと警告の数を括弧に添える。通らないファイルがあればその数を、確かめられなかったファイルがあればその数を言い、指摘の数は、その指摘があるファイルの結果の側の括弧に添える。通るファイルの警告は、ほかのファイルが通らなくても通る側に数え（`1 fail (1 error), 5 pass (1 warning)`）、通るファイルに指摘が無ければ通る側は書かない。どのファイルのものでもない指摘は、通らない側に数える（rulec の DESIGN §15.242）。ファイルがどれも通っても、どのファイルのものでもないエラー（モジュールのルートの E307 など）があれば、`all pass` とは言わず、`1 error`（日本語は「エラー 1 件」）のように数だけを言い、検査は通らない（2026-10-28）。ファイルが通らないとは、そのファイルを場所とするエラーがあるか、ファイルを一つずつ確かめる言語（rulec、koyomi、chobo、geas、kaname、dandori、sekisho）がそのファイルを通さなかった（geas の成り立たない主張など、コードの無いものも含む）ことである。境目の数は、言語をまたぐ検査（7 章）が確かめた境目と、そのうち決められなかったものである。E.4 で、X2（前提を呼び出しの場所で）と X3 の (b)（rulec の `range from koyomi`）が数に入り、E.5 で、`ritsu check` が dandori に日付の口と帳簿の口も渡すようになって（6.1。前は規則の口だけで、`use dates` と `use book` のあるフローは `ritsu check` でも E018 になっていた）、X3 の (a)、X4、X5、X6 が入った。テストのプロジェクト（`shop` と `通販`）は、フローが呼ぶ規則に前提も koyomi の範囲も無く、日付も帳簿も使わないので、どちらも 0 のままである（golden は変わらない）。2026-10-06 に、X14（16.8）も数に入った。フローが地図のコンテキストに属し、秘密の値をプロジェクトの中のファイルへ送る呼び出しごとに、境目を一つ数える（地図の無いプロジェクトでは数えない）。テストのプロジェクト四つ（`shop`、`通販`、`invoice`、`stockroom`）には秘密の値を送るフローが無いので、数は変わらない（替える前と後で確かめた）。dandori の例の `invoice` を `ritsu check` にかけると、W205 が二つ（`now` から来る日）と W206 が六つ（仮押さえを作るタスクに `timeout` が無い）出て、要約は `ritsu check: 8 files (koyomi 4, chobo 2, dandori 2): all pass (8 warnings); borders between the languages: 8 checked, 8 undecided` になる。これが正しい振る舞いで、`ritsu run` の担当のテスト（`crates/ritsu/tests/dandori.rs`）の期待は、取り込むときにこの 8 件に合わせた。日本語の要約は「ritsu check: ファイル 21 個（rulec 4、…）。検査を通らないもの 1 個（エラー 2 件）。言語の境目: 確かめた 0 か所、決められない 0 か所」の形になる。
 
-JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided`）の順である。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。境目の検査が数えたときの `borders` の三つの数は、`crates/ritsu/tests/cross.rs` がプロジェクトごとに確かめる（テキストは `tests/golden/cross/` の golden）。
+JSON は一つのオブジェクトで、キーは `ritsu`（バージョン）、`root`（走らせたディレクトリから見たルート）、`ok`（exit 0 になるか）、`files`（ファイルごとの `tool`、ルートからの `file`、`ok`）、`diagnostics`、`borders`（境目の検査の `held`・`failed`・`undecided`）の順である。ルートに `ritsu.mod` があるときだけ、`ok` のあとに `module` と `dependencies` を、`diagnostics` のあとに `contributions` を置く（17.21）。各言語の診断は、その言語の `check --format json` が書く形のまま入れ、その先頭に `tool` を置き、`file` をルートからの相対にする（言語の形に `file` が無ければ `tool` のすぐあとに足す）。rulec の診断は rulec の形（`v` が 2 の形）のままで、`title` や `column` は rulec の名前である。上の例では次のようになる（`crates/ritsu/tests/golden/check/shop-returned.json`。`…` は省いたところ）。境目の検査が数えたときの `borders` の三つの数は、`crates/ritsu/tests/cross.rs` がプロジェクトごとに確かめる（テキストは `tests/golden/cross/` の golden）。
 
 ```json
 {
@@ -1560,7 +1562,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori は、`ritsu dandori` の本体（`ritsu` のライブラリの `languages::dandori`）で走らせる。フローの規則、日付のファイル、帳簿の口と、X2 で決められない前提（7.4）を同じプロセスの中で渡すので、日付と帳簿を使うフロー（請求の例）も、バイナリと同じに答える。バイナリ（`src/main.rs`）とページは同じ関数を呼ぶ。
 - rulec の E129（koyomi をつないでいない rulec で `range from koyomi` を確かめた）の注と台帳は、koyomi が無いところとして rulec のクレートのバイナリだけを挙げる。このページは koyomi をつなぐ（rulec の §15.185）。
 
-`ritsu.wasm` は 17,019,173 バイト（gzip で 5,025,002 バイト。2026-10-29）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
+`ritsu.wasm` は 17,021,257 バイト（gzip で 5,025,488 バイト。2026-10-29）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
 
 **部品と二つのページ。** 部品は `website/docs/playground/` の七つのファイルである。ページの部分を全部作る `playground.js`（ES のモジュール）、`playground.css`、モジュールを動かす `worker.js`、エディターと Markdown のライブラリをまとめた `libraries.js`、開くプロジェクトの `projects.json`、言語ごとに色を付ける語の `words.json`、`ritsu.wasm`。日本語のサイトへは、`website/sync.sh` がこの七つをコピーする（`docs-ja/playground` はコミットしない）。ページが書くのは部品の要素（`<div class="pg" data-lang="en">`）と、`playground.js` を読む `<script type="module">` だけで、上の帯、ファイルのタブ、エディター、右側のタブは `playground.js` が作る。二つのページの違いは並べ方だけで、CSS が決める。
 
@@ -1708,6 +1710,8 @@ WASI で組んだ `realpath` は、パスを含むいちばん深い preopen か
 
 `packaging/npm/test/api.test.js` の dirs のテストが、`os.tmpdir()` の下（macOS では /var/folders）で次を確かめる。プロジェクトの外の proto を引く規則は rulec の E013（Cannot read）になり、外の値の名前は出ない（`ritsu check . --root .` でも同じで、yuen の E203 が rulec の E013 を引く）。外のファイルへのリンク（絶対と相対）と /etc/hosts へのリンクは uvwasi が止め、/etc へのリンクを通った `etc/hosts` はローダーが止め、どれも ``error: cannot read `<パス>` `` で終了コード 2 になる。プロジェクトの中を指すリンク（ファイルへ、ディレクトリへ、相対と絶対）は、根を開いたときと同じに読める。外へのリンクを通った `ritsu gen --out` は `error: cannot create …` で 2 になり、外に何も書かない。ワーカーの `run` も同じに答える。`dirs` の下のディレクトリを作業ディレクトリにした実行（`RITSU_WASI_CWD`）、書いたとおりの絶対パス、絶対パスを指すリンクで、yuen の `--root`（`canonicalize`）が根を開いたときと同じに働く。ディレクトリを順に読む `ritsu check .` は、ディレクトリへのリンクの中には入らない（ネイティブも同じ）。二つのディレクトリを渡したときも、パスはそれを開いた記述子のディレクトリからたどる（順を入れ替えても同じ）。相対パスの `dirs` は `cwd` から読む。`crates/ritsu/tests/npm.rs` の `the_api_in_the_dirs_of_a_project_answers_as_the_binary_does` は、上の突き合わせと同じコピーとコマンドを、`dirs: [コピー]` にした API（`runSync`）で走らせ、ネイティブの `ritsu <言語> …` と比べる（`explain` はファイルを読まないので外す）。API は、比べるスレッドごとに一つの Node のプロセスの中で、コマンドを続けて走らせる。外から渡されたリポジトリを検査するサービスがパッケージを使う形である（10.5 の「npm のジョブの二つの部分」）。11,106 通りが一字も違わなかった（chobo 639、dandori 2,749、geas 24、kaname 195、koyomi 322、ritsu 2,035、rulec 4,529、sakai 103、sekisho 135、yuen 375。2026-10-24）。
 
+**モジュール**（17.22）。通信か子プロセスが要る `ritsu mod` のコマンドは、ネイティブのバイナリを使うよう言って exit 2 で止まり、モジュールも置き場も変えない。置き場と同梱のコピーを読むコマンドは、ネイティブと同じに答える。置き場の場所は、ローダーが渡す `RITSU_WASI_PLATFORM` と呼び出し元の環境から、ネイティブと同じに決まる（17.15）。`dirs` で開くディレクトリを絞るときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーを置く。
+
 **確かめ方。** `crates/ritsu/tests/npm.rs`（tools の段）。組んだ .tgz（`RITSU_NPM`、無ければ `<target>/npm/i2y-ritsu-<版>.tgz`）を開いて使い、node かそれが無ければ SKIP。`the_package_answers_as_the_binary_does` が、ネイティブの `ritsu`（`CARGO_BIN_EXE_ritsu` と、それを指す言語の名前のリンク）とパッケージの bin（`node bin/<名前>.js`）を、同じコピーのディレクトリで走らせ、標準出力・標準エラー・終了コード・書いたファイルを一字も違わず比べる。範囲は、九つの言語の例（rulec はコーパス 87 本）、`crates/ritsu/tests/projects` の四つ、ブラウザで試すページの英日の通販、sekisho と kaname の例で、そこで人が走らせるコマンド（`ritsu check` と `--format json`、`ritsu gen` の三つのターゲットと `--check` と `--format json`、`ritsu run`、全部のコードの `explain`、各言語の `check`・`doc`（Markdown と HTML）・`api`・`export`・`trace`・`affected`（標準入力から読む形も）・`vectors`・`diff`・`scenarios`・`build`・`gen`・`review`、`ritsu skills list` と `install --dir`）を、英語と `--lang ja` で走らせる。読むだけのコマンドは一つのコピーを共有し、終わったらコピーが変わっていないことを確かめ、書くコマンドは両方の側にコピーを一つずつ作って、書いたファイルを比べる。12,110 通りが一字も違わなかった（chobo 701、dandori 2,819、geas 98、kaname 271、koyomi 402、ritsu 2,083、rulec 4,805、sakai 237、sekisho 223、yuen 471。この機械で、dirs の突き合わせと並べて 460 秒。2026-10-24）。ほかに、`what_needs_another_program_says_so`（上の表）、`the_package_holds_what_it_should`（`npm pack --dry-run --json` のファイルの一覧と、リポジトリのファイルとの一致、`.wasm` に手元のパスが無いこと）、`the_manifest_is_the_workspaces`（fast。`package.json` の版、ライセンス、bin、engines、`scripts` も依存も無いこと）、`the_pages_on_node_show_what_the_package_prints`（パッケージの README とサイトの英日のページの `console` と `js` の塊を、`<!-- run in <dir> -->` の印のディレクトリのコピーでパッケージを使って走らせ、ページの出力と照らし合わせる）、`the_javascript_tests_pass`（`node --test packaging/npm/test/*.test.js`。API と bin の振る舞い 20 件と、ネットワークを切った入れ方）。CI は tools.yml の `npm` のジョブで、Node 22・24・26 の Linux と Node 24 の macOS で、Node ごとに二つのジョブに分けて回す（`RITSU_NPM_PART`。10.5）。
 
 **捨てたもの。**
@@ -1782,7 +1786,7 @@ generated/typescript/          generated/python/              generated/go/
 
 ゲート（sekisho の `.gate`）の Cedar の四つのファイルは、言語に依らず `generated/cedar/<別名>.*` に一度だけ書く（sekisho の DESIGN 5.6）。
 
-`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形のまま変わらない。
+`ritsu gen [<path>...] [--target typescript|python|go] [--out <dir>] [--check] [--format json] [--books postgres|tigerbeetle|mysql] [--authorizer cedar|avp] [--name <name>] [--module <path>] [--root <dir>]` は、プロジェクト（`ritsu check` と同じ `ritsu_project::Project::load` で読む）の規則、日付のファイルとカレンダー、帳簿のクライアント、ワークフロー、ゲートに尋ねるコード、Functional Core（kaname のモジュール）を、言語ごとに一つのパッケージにして `<out>/<言語>/`（既定は `generated/<言語>/`）に書く。`--target` が無ければ三つとも。言語ごとの生成器が自分の部分を書き（rulec の `codegen::package_module`、koyomi の `codegen::unit_shown` と各出力先の `module`、chobo の `target::build`、dandori のビルドと `InPackage`、sekisho の `r#gen::generate`、kaname の `r#gen::package`）、ritsu はインデックスのファイルと依存を書くファイルだけを書く（`crates/ritsu/src/package.rs`。`gen` は Rust 2024 の予約語なので、モジュールの名前は `package`）。ゲートの認可のモジュール（`authz/`）は、action ごとにリクエストを組み立てて Cedar に尋ねるコードで、同じパッケージの `rules/` と `dates/` を読む（ワークフローと同じ）。`--authorizer cedar`（既定）はその言語の Cedar の実装をプロセスの中で呼び、`avp` は Amazon Verified Permissions に尋ねる（sekisho の DESIGN 5.5）。`avp` では、Verified Permissions の上限を超えるものを W401 で言う。`--library` を付ければ、モジュールを、言語ごとのレジストリが受け取るライブラリの形で書く（17.16）。付けなければ、ここに書く形である。モジュールの中では、渡したファイルが指す依存のファイルも、同じパッケージに入れる（17.8）。
 
 `glue/` は kaname のモジュールのコードで、同じパッケージの `rules/` と `dates/` の生成物を呼び、帳簿の振替を値として組み立てて返す。補助のモジュール（`glue/kaname.*`）をパッケージに一つ、振替の値の型と、それを帳簿のクライアントで当てる関数を帳簿ごとに一つ書く。`glue/` のインデックスは kaname が書き、パッケージの頭のインデックス、パッケージの説明、`doc.go`、`ritsu gen --help` が `glue/` と「Functional Core（kaname のモジュール）」（英語では the functional cores (kaname's modules)）を言う。kaname は規則と日付と帳簿をつなぐコードに限らない汎用の言語なので、そう呼ぶ。置き場の名前は `glue/` のままである。ホストのコードはこのパスでモジュールを読むので、名前を変えるとホストのビルドが壊れる。`ritsu gen` は `ritsu check` と同じく言語をまたぐ判定の答えを渡してモジュールを検査し、示せた場所の確かめを生成しない（kaname の DESIGN 10 章）。
 
@@ -1864,7 +1868,7 @@ rulec の Kani の記録（`crates/rulec/experiments/kani/report.txt`）は、�
 
 | 段 | 走らせるもの | 目安 |
 |---|---|---|
-| `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい。curl も、テストが自分の中に立てたサーバー（e-Gov と eCFR の代わり）に問い合わせるためなら使ってよい（土台の `sources` が curl で問い合わせるため） | ワークスペース全体で数分（2026-10-03、この機械で 2 分 15 秒） |
+| `fast` | cargo のほかに何も要らないテスト。字句、構文、検査、診断の golden、変異、`explain` の再現、`naming.tsv`、api の JSON、外のツールを走らせない文書のテスト。git は使ってよい。curl も、テストが自分の中に立てたサーバー（e-Gov と eCFR の代わり、モジュールのテストのレジストリ。17.25）に問い合わせるためなら使ってよい（土台の `sources` とモジュールの取り出しが curl で問い合わせるため） | ワークスペース全体で数分（2026-10-03、この機械で 2 分 15 秒） |
 | `tools` | 手元に入れるツールが要るテスト。生成したコードの型の検査と突き合わせ（Node、Python、Go、rustc、Ruby、PHP、Swift、Java、protoc と buf）、PostgreSQL、TigerBeetle、MySQL、Chrome、Mermaid、xmllint、Lean、sakai の四つのリンター、Cedar の CLI（sekisho が生成した Cedar をかける）、cosign（モジュールの署名。17.25） | 数十分 |
 | `platforms` | サービスやクラスタを立てるか使うか、外と通信するテスト。dandori の Temporal の dev server、kind の上の Argo、LocalStack、chobo が使う TiDB のクラスタと、chobo が立てる使い捨ての Vitess（vttestserver）、モジュールを置く OCI のレジストリ（`RITSU_TEST_REGISTRY`。17.25）、Ollama、TypeSafe、OpenAI、e-Gov と eCFR に本当に問い合わせるもの、Kani | 長い。揺れがある |
 
@@ -1896,7 +1900,7 @@ ritsu のリモートを作るまで、CI は走らない。ワークフロー�
 | `platforms` | 毎晩、手で始めたとき、`crates/dandori/` を変えた pull request | kind の上の Argo、LocalStack、Temporal の dev server を立てて、dandori の `platforms` の段を回す。TiUP の playground で TiDB を立て、Vitess をタグのソースから組んで、chobo の MySQL の系統のテストを回す。distribution の参照実装のレジストリをサービスで立て、ritsu のモジュールの送り出しと取り出しと cosign の署名を回す（17.25）。外のサーバー（e-Gov、eCFR、Buf Schema Registry）に問い合わせるテストもここで回す（下）。ほかのジョブと並べない |
 | `npm`（tools.yml の中のジョブ） | `tools` と同じとき | `packaging/npm/build.sh` で npm のパッケージを組み、`cargo xtask test --level tools -p ritsu -- npm::` で `tests/npm.rs` を回す。Node 22・24・26 の Linux と、Node 24 の macOS（8.8）。Node ごとに二つのジョブに分け、二つの突き合わせを半分ずつ回す（下の「npm のジョブの二つの部分」） |
 | `release` | タグ（F） | 13.2 |
-| `docs` | 手で始めたとき（サイトを切り替えるまで） | ritsu のサイト（根のページと rulec と dandori のサイト）を `website/build.sh` で組み、出力の木に要るファイルがあることを確かめてから GitHub Pages に出す（13.2。F.7 で足した） |
+| `docs` | main への push でサイトのもと（`website/`、rulec と chobo の文書、`modules/`）を変えたとき、手で始めたとき | ritsu のサイト（根のページと rulec、dandori、chobo のサイト）を `website/build.sh` で組み、出力の木に要るファイルがあることを確かめてから GitHub Pages に出す（13.2）。モジュールの一覧のページ（17.17）のために、そのコミットから ritsu を組んで `RITSU` で渡す |
 | `audit` | push（ブランチ）と pull request のたび、毎日、手で始めたとき、`release` から | cargo-deny で `Cargo.lock` のアドバイザリ、ライセンス、二つ目のバージョン、出どころを、osv-scanner でリポジトリのすべてのロックファイルの既知の脆弱性を確かめる（3.6） |
 
 C.12 で、`release` のほかの五つを根の `.github/workflows/` に書いた（ジョブ一つにファイル一つ。`fast.yml`、`tools.yml`、`proofs.yml`、`kani.yml`、`platforms.yml`）。F.7 で `release.yml`（タグで走る。13.2）と `packages.yml`（main への push と pull request で、文書だけの変更を除く）を足した。`packages.yml` は、rulec の `ci.yml` の `packages` のジョブのうち、静的な `ritsu` の musl のビルド、アーカイブ、`.deb` と `.rpm` を Debian と Fedora に入れて消すこと、を引き継ぐ。`cargo package` の半分は、crates.io に出さないので引き継がない。許す SKIP の一覧は `ci/skips/fast.txt`、`tools.txt`、`platforms.txt` にある。リモートが無いので、どれもまだ走らせていない。手元で確かめたのは、YAML として読めること、actionlint（v1.7.12）が何も言わないこと、`run` の中身が `bash -n` を通ること、ジョブが呼ぶコマンドがこの機械で通ることである（PLAN の C.12）。書いたときに決めたことは次のとおり。
@@ -2228,7 +2232,7 @@ git -C ~/ritsu remote remove rulec
   はじめは、リポジトリのルートをマーケットプレイスにしていた（`.claude-plugin/marketplace.json` で、プラグインの `source` は `"./"`）。この形では、マーケットプレイスを足すときに Claude Code がリポジトリ全体を clone する（6,473 ファイル、ディスク上で 120〜160 MB）。プラグインを入れるときには、プラグインのフォルダー、つまりリポジトリ全体を、もう一度キャッシュへコピーする（約 100 MB）。要るのは `skills/` の 47 ファイル（1.1 MB）だけである。さらに、新しいコミットがあれば更新のたびに clone し直し、Claude Code の文書によれば、大きなリポジトリの clone は 120 秒で時間切れになることがある。マーケットプレイスを別の小さなリポジトリに置けば、入れ方を `owner/repo` の短い形にできる。それでもサイトに置いたのは、リポジトリを一つにまとめた方針に合わせるためである。
 
   確かめたこと：`claude plugin validate --strict`（Claude Code 2.1.289）が `website/docs/marketplace.json` を通す。手元の `~/.claude` に触れないよう、`HOME` と `CLAUDE_CONFIG_DIR` を使い捨てのディレクトリにして、同じ `marketplace.json`（プラグインの取り先だけを手元のリポジトリの `file://` の URL に替えたもの）を入れた。ファイルとして足す形と、手元の HTTP サーバーの URL から足す形の両方で入れ、どちらも `claude plugin details ritsu` が八つのスキルを並べた。手元に残ったのは、`marketplace.json`（4 KB）とスキルの 47 ファイル（1.1 MB）だけである。`tests/skill.rs` が、`marketplace.json` の中身と、四つの README の入れ方の文を確かめる。`tests/website.rs` は、サイトの組み立てで `marketplace.json` がそのまま公開されることを確かめる。
-- **`ritsu skills install`。** 十のスキルを ritsu のバイナリに埋め込み（`crates/ritsu/src/skills.rs`。`include_str!` で、十のフォルダーの 52 ファイル、合わせて 1.5 MB）、`<dir>/<name>/` に書く。既定は今いるディレクトリの `.claude/skills/`、`--user` で `~/.claude/skills/`、`--dir <dir>` でほかのエージェントがスキルを読む場所に書く。名前を挙げると（`ritsu skills install rulec dandori`）、そのスキルだけを書く。すでにあって中身が同じファイルはそのままにする。ritsu の持つものと中身が違うファイル（手で変えたもの、または別の版の ritsu が書いたもの）が一つでもあれば、何も書かずに exit 1 で止まり、違うファイルを並べる。`--force` を付けると上書きする。ritsu が書かないファイルには触らない。`ritsu skills list` は十の名前と一行の説明を出す（英語と日本語）。geas の `geas skill --install` と同じ考えだが、geas がフォルダーがあるだけで上書きせずに止まるのに対し、ritsu はファイルごとに中身を比べる。同じ版を入れ直しても止まらず、手で変えたファイルだけが止める。ブラウザで試すページ（ritsu-wasm）には入れていない。
+- **`ritsu skills install`。** 十のスキルを ritsu のバイナリに埋め込み（`crates/ritsu/src/skills.rs`。`include_str!` で、十のフォルダーの 52 ファイル、合わせて 1.6 MB）、`<dir>/<name>/` に書く。既定は今いるディレクトリの `.claude/skills/`、`--user` で `~/.claude/skills/`、`--dir <dir>` でほかのエージェントがスキルを読む場所に書く。名前を挙げると（`ritsu skills install rulec dandori`）、そのスキルだけを書く。すでにあって中身が同じファイルはそのままにする。ritsu の持つものと中身が違うファイル（手で変えたもの、または別の版の ritsu が書いたもの）が一つでもあれば、何も書かずに exit 1 で止まり、違うファイルを並べる。`--force` を付けると上書きする。ritsu が書かないファイルには触らない。`ritsu skills list` は十の名前と一行の説明を出す（英語と日本語）。geas の `geas skill --install` と同じ考えだが、geas がフォルダーがあるだけで上書きせずに止まるのに対し、ritsu はファイルごとに中身を比べる。同じ版を入れ直しても止まらず、手で変えたファイルだけが止める。ブラウザで試すページ（ritsu-wasm）には入れていない。
 - **フォルダーをコピーする。** リポジトリのクローンから `skills/<name>` を `~/.claude/skills/` かプロジェクトの `.claude/skills/` にコピーする。
 - **リリースの zip。** `packaging/skills.sh` が `ritsu-skills-v<版>.zip` を書く。十のフォルダーを zip の一番上に置き、横に LICENSE-MIT と LICENSE-APACHE を置く（アーカイブの tar.gz と同じ）。スキルはプラットフォームによらないので、`release.yml` の `publish` のジョブがタグから一度だけ作り、十の `SKILL.md` があることを確かめてから `SHA256SUMS` に載せ、リリースに付ける。入れ方は `unzip ritsu-skills-v0.23.0.zip -d ~/.claude/skills -x 'LICENSE-*'` である。
 
@@ -2286,7 +2290,7 @@ git -C ~/ritsu remote remove rulec
 - **dandori のフローから kaname の関数を呼ぶこと**：total な関数だけを許す形を考えている（kaname の DESIGN 4.5、19 章）。
 - **kaname だけのサイトのページと、ブラウザで試すページの `.kn`**：サイトの頭のページの言語の一覧には、kaname も載せた（kaname の DESIGN 19 章）。
 - **言語としての、セキュリティの検査**は 16 章（2026-10-06 に作った）。その中でまだやらないことは 16.12 にある。
-- **モジュール**（ファイルをプロジェクトとリポジトリをまたいで配る仕組み）は 17 章（2026-10-28 に設計した）。その中でまだやらないことは 17.28 にある。
+- **モジュール**（ファイルをプロジェクトとリポジトリをまたいで配る仕組み）は 17 章（2026-10-28〜29 に作った）。その中でまだやらないことは 17.28 にある。
 
 
 ## 16. 言語としての、セキュリティの検査（2026-10-06）
@@ -3004,7 +3008,7 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
 
 ## 17. モジュール（2026-10-28）
 
-いまの ritsu のファイルは、一つのプロジェクトの中でしか互いを指せない。参照はルートの中のパスで書き（6.2）、版という考えも無い。料金の規則を一つのリポジトリで書き、Go のバックエンド、TypeScript のフロントエンド、バッチの三つのリポジトリが同じ版を使う、という形が取れない。政府が公表する祝日を出典の固定つきでカレンダーにしても、使う側は自分のプロジェクトにコピーするしかなく、どのコピーがどの版かも分からなくなる。この章は、九つの言語のファイルを、プロジェクトとリポジトリをまたいで配る仕組みを決める。
+モジュールが無ければ、ritsu のファイルは一つのプロジェクトの中でしか互いを指せない。参照はルートの中のパスで書き（6.2）、版という考えも無い。それでは、料金の規則を一つのリポジトリで書き、Go のバックエンド、TypeScript のフロントエンド、バッチの三つのリポジトリが同じ版を使う、という形が取れない。政府が公表する祝日を出典の固定つきでカレンダーにしても、使う側は自分のプロジェクトにコピーするしかなく、どのコピーがどの版かも分からなくなる。この章は、九つの言語のファイルを、プロジェクトとリポジトリをまたいで配る仕組みを決める。
 
 ### 17.1 芯と前提
 
@@ -3015,15 +3019,15 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
 次の 14 項を前提として置き、この章はその上で決める。章の中では M1〜M14 と呼ぶ。
 
 - **M1**：配る単位はモジュールである。ソースのファイルと、ルートに置くマニフェストからなり、版を持ち、依存（依存の依存を含む）を宣言する。呼び方は「モジュール」、コマンドは `ritsu mod …`。
-- **M2**：ファイルは `ritsu.mod`（マニフェスト）と `ritsu.lock`（lock）で、どちらもモジュールのルートに置く。マニフェストの無いプロジェクトは、いまとまったく同じに動く。lock は依存ごとに、取り先、版、中身のダイジェスト、書いた ritsu の版を持つ。書式は ritsu の字句（語、`"…"`、`#` の注）に従い、外のクレートなしに読み書きする。書き換えるコマンドは、人が書いた注と並びを壊さない。
+- **M2**：ファイルは `ritsu.mod`（マニフェスト）と `ritsu.lock`（lock）で、どちらもモジュールのルートに置く。マニフェストの無いプロジェクトの動きは変えない（M14）。lock は依存ごとに、取り先、版、中身のダイジェスト、書いた ritsu の版を持つ。書式は ritsu の字句（語、`"…"`、`#` の注）に従い、外のクレートなしに読み書きする。書き換えるコマンドは、人が書いた注と並びを壊さない。
 - **M3**：依存のファイルは、パスの頭の `@<名前>/` で指す（`use rule fee from "@pricing/rules/fee.rule"`）。名前は、指す側のファイルが属するモジュールのマニフェストが決める。どの言語のパスの書き方でも、yuen と sakai の参照（6.2）でも効く。診断と JSON は依存のファイルを同じ書き方で書き、読み直すと同じファイルを指す。
-- **M4**：通信するのは `ritsu mod` の取り出し（`fetch` のほか、`diff` と `report` が読むモジュールを取ってくること。2026-10-29）と送り出しだけで、curl の子プロセスを使い、TLS を自分で持たない（4.6 と同じ）。`check`、`gen`、`run`、各言語のコマンド（`rulec diff` などの diff も）は通信しない。依存が手元に無ければ、どのコマンドで取るかを言って止まる。
+- **M4**：通信するのは `ritsu mod` のコマンドだけで（どれが通信するかは 17.19 の表）、curl の子プロセスを使い、TLS を自分で持たない（4.6 と同じ）。`check`、`gen`、`run`、各言語のコマンド（`rulec diff` などの diff も）は通信しない。依存が手元に無ければ、どのコマンドで取るかを言って止まる。
 - **M5**：取り先は二つ。パス（同じリポジトリの中や、隣のディレクトリ）と、OCI の distribution-spec のレジストリである。自前のサーバーやサービスは持たない。
 - **M6**：依存のファイルは、使う側の `ritsu check` が自分のファイルと同じに読む。言語ごとの検査も、言語をまたぐ検査（7 章）も、モジュールの境目を越えて効く。依存先の規則への `contribution` は、使う側が `signature:` で形を固定して書ける。`ritsu gen` は、使った依存の部分を、使う側のパッケージに入れる。
 - **M7**：壊れる変更は二つに分ける。インターフェースの互換は、使う側の `ritsu check` を新しい版に対して走らせて決める（スキーマの差分では決めない）。振る舞いの違いは版の中身として、diff の結果と一緒に見せる。
 - **M8**：差分。rulec の `diff` の `@` をモジュールの版に広げる。koyomi（どの日のどの答えが変わるか）と sekisho（どの組み合わせで許可が増え、減るか）に diff を新しく作り、どちらも rulec と同じく範囲の全部で比べ、ほかは変わらないことも言い、テキストと markdown と JSON で出す。ほかの言語でどこまで作るかはこの章で決めるが、全部の言語で、ファイルの追加と削除と、インターフェースの差は出す。依存を上げるときの報告のコマンド（二つの lock を比べ、変わった依存ごとに、使う側の検査の結果と、変わったファイルの振る舞いの差を、PR に貼れる markdown と JSON で出す）と、その CI での使い方も作る。
 - **M9**：OCI。送り出し（`ritsu mod push`。検査を通らないモジュールは受け付けない）と取り出し。lock にダイジェストを固定し、取るたびに確かめる。展開は外へ書かない（`..`、絶対パス、リンク）。取ったものを、実行をまたいで置いておく場所を持つ（6.1 と 15 章の「実行をまたぐキャッシュ」は検査の結果のキャッシュで、別のもの）。認証は、匿名のトークンの手順と Docker の設定ファイル（`auths`、資格情報のヘルパー）。秘密は表示せず、診断にもログにも入れない。署名は、ritsu が暗号を持たず、送り出したモジュールのダイジェストに cosign で署名する。確かめるときは、マニフェストに書いた決まり（公開鍵、または鍵の無い署名の署名者と発行者）で cosign を子プロセスとして呼ぶ。cosign が無ければ、確かめの要るモジュールのときだけ止まる。テストは、テストの中に立てる小さなレジストリ（Rust の std だけ）で、通信を含めて回す。本物のレジストリと cosign の試験は、道具のある所でだけ走らせ、無ければ SKIP にする。
-- **M10**：ライブラリの形の gen。パッケージの名前と版を持ち、依存は範囲で書く（npm の `peerDependencies` など）。`ritsu gen` のオプションにし、いまのアプリの形を既定に残す。TypeScript、Python、Go の三つとも作り、Go は `go.mod` を書く。npm、PyPI、Go のモジュールに出す CI を文書にする。
+- **M10**：ライブラリの形の gen。パッケージの名前と版を持ち、依存は範囲で書く（npm の `peerDependencies` など）。`ritsu gen` のオプション（`--library`）にし、既定はアプリの形（9.3）にする。TypeScript、Python、Go の三つとも作り、Go は `go.mod` を書く。npm、PyPI、Go のモジュールに出す CI を文書にする。
 - **M11**：一覧のサイト。公開したモジュールの一覧から、静的なサイトを作るコマンド。モジュールごとのページ（説明、版の一覧、ファイルごとの `doc` のページ、続く版のあいだの振る舞いの差、依存に足す書き方、ブラウザで試すページで開くリンク）を作り、サーバーは持たない。ritsu のサイトにも一覧のページを置く。
 - **M12**：祝日のモジュール（最初に公開するモジュール）。出典を固定した国の祝日のカレンダーを、ritsu のリポジトリの中のモジュールにし、一覧のサイトに載せる。英国（イングランドとウェールズ）を先に、日本を横に置き、出典を確かめられる国だけを入れる。レジストリへ出すのは手で始めるワークフローで、走らせるのは公開を決めてからにする。
 - **M13**：おまけにしない。コマンドの表（`--help`、`--lang ja`、`--format json`、終了コード）、診断の台帳と `explain`、この章と PLAN、README（英日）、スキル（ritsu のものと、diff が付く言語のもの）、サイトのページ（英日）、テスト（golden と、通信を含むもの）、npm のパッケージでの振る舞い（通信や子プロセスの要るコマンドは、ネイティブのバイナリを使うよう言う）まで作る。
@@ -3097,7 +3101,7 @@ impl Protos { pub fn redaction(&self, file: &str, field: &Field) -> Option<Redac
 - `signature` の頭の部分は、モジュールの名前そのものか、`/` で終わる頭の部分（`"example.com/acme/"`）である。`key` のパスはモジュールのルートからで、モジュールの中になければならない。`tlog off` は、透明性ログに載せていない署名を受け付ける（17.14）。
 - `library` の文字列は出力先の名前の決まりに従う。`typescript` は npm のパッケージの名前（`@scope/name` か `name`）、`python` はディストリビューションの名前、`go` はモジュールのパス（版 2 からの `/vN` は付けない。17.16 で ritsu が付ける）。
 
-例（英語の例のプロジェクトの `pricing`。17.26）：
+例（全部の語を使う形。英語の例のプロジェクトの `pricing`（17.26）に、レジストリの依存、署名、除くもの、ライブラリの行を足したもので、`crates/ritsu-base/tests/modules_manifest.rs` がこれを読む）：
 
 ```
 # The prices of the Acme shop, shared by its services.
@@ -3137,14 +3141,14 @@ lock     = "lock" "1" 改行
                | "path" モジュールの名前 文字列 ;
 ```
 
-例（英語の例のプロジェクトで、`shop` が `pricing` をレジストリから取る場合）：
+例（ブラウザで試すページの `modules` のプロジェクトの lock。英語の例のプロジェクトの `shop` が、`pricing` と `tax` をレジストリの形で取る。17.22。2026-10-29）：
 
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.37.0
-oci example.com/acme/pricing 1.1.0 sha256:<64 桁> files sha256:<64 桁>
-oci example.com/acme/tax 1.0.0 sha256:<64 桁> files sha256:<64 桁>
+ritsu 0.36.0
+oci example.com/acme/pricing 1.1.0 sha256:5f8440a63e9b9aed305fe2e458f524bd299cae6cc253c4991ee81496f7f0350f files sha256:3b7b2dadf4f43ef4014ffdf47d86755cac0c734a659b375678b7e9841bd8137f
+oci example.com/acme/tax 1.0.0 sha256:46c3c2d788b9852f0899d8579c4c846bd26228732cc4ac822ea82ae03c44d91c files sha256:76ae2a686ba4b4a3501cb9e7da09d00ea800ba7ff4233591b0a2a6355c6b2d20
 ```
 
 - 行は、選んだ依存の木の、手元のモジュールのほかのモジュールに一つずつで、モジュールの名前のバイトの順に並べる。依存の名前ではなくモジュールの名前で持つのは、依存の名前がマニフェストごとのもので、二つのモジュールが同じモジュールを別の名前で呼べるからである。一つのモジュールが一行になり、版を上げた PR の差分も、その一行の差になる。
@@ -3189,21 +3193,21 @@ oci example.com/acme/tax 1.0.0 sha256:<64 桁> files sha256:<64 桁>
 
 **`.proto` の `import`**。モジュールの中の `.proto` は、依存の `.proto` を、そのパッケージのパスで import できる（`import "acme/pricing/v1/money.proto";`）。`import` には `@` を書かない。使う側のモジュールは、依存のメッセージの型（料金のモジュールの `Money` など）を、コピーせずに自分の契約に使える。
 
-- **探す順**。`import` は、まずそのファイルのモジュールの中を、いままでの探し方で探す（渡された読み込みのルート、パッケージの形から決まるルート、ファイルのディレクトリの順。`proto/acme/orders/v1/order.proto` が `package acme.orders.v1` なら、パッケージの形から決まるルートは `proto/`）。無ければ、そのモジュールの依存のルートを探す。依存のルートは、依存ごとに、その依存のルート（`@pricing`）と、その依存の `.proto` のそれぞれのパッケージの形から決まるルート（`@pricing/proto/acme/pricing/v1/money.proto` が `package acme.pricing.v1` なら `@pricing/proto`）である。依存は正規の書き方と同じ順（`@` をたどる回数の少ないほう、同じなら `require` の順、幅優先）にたどり、先に見つかったファイルを読む。protoc が `-I` の順に探すのと同じである。手元のモジュールに同じパスのファイルがあれば、手元のファイルを読む。
+- **探す順**。`import` は、まずそのファイルのモジュールの中を、マニフェストの無い木と同じ探し方で探す（渡された読み込みのルート、パッケージの形から決まるルート、ファイルのディレクトリの順。`proto/acme/orders/v1/order.proto` が `package acme.orders.v1` なら、パッケージの形から決まるルートは `proto/`）。無ければ、そのモジュールの依存のルートを探す。依存のルートは、依存ごとに、その依存のルート（`@pricing`）と、その依存の `.proto` のそれぞれのパッケージの形から決まるルート（`@pricing/proto/acme/pricing/v1/money.proto` が `package acme.pricing.v1` なら `@pricing/proto`）である。依存は正規の書き方と同じ順（`@` をたどる回数の少ないほう、同じなら `require` の順、幅優先）にたどり、先に見つかったファイルを読む。protoc が `-I` の順に探すのと同じである。手元のモジュールに同じパスのファイルがあれば、手元のファイルを読む。
 - **依存の中のファイル**は、その依存が自分で読むのと同じに読む。手元のモジュールが渡す読み込みのルートは、依存のファイルでは依存のルートに替わり（ritsu-proto の `roots_for`、dandori の `import_dirs`）、そこに無ければ、その依存の依存のルートを同じ順で探す。手元のモジュールにある同じパスのファイルは読まない。依存が自分の木で検査したときと同じファイルを読むためである。
-- **同じパスの二つのファイル**。手元と依存、または二つの依存が、同じパスに中身の違うファイルを持つことがある。検査は、ファイルごとに上の順で読むので、二つを別のファイルとして読む。同じ名前の型が二つになるが、ritsu-proto がもともと持つ「一つの契約の二つのコピー」と同じ扱いで、型の名前は、それを書いたファイルから見えるほうに解く。一回の protoc（と buf）の呼び出しでは、そうはいかない。一つの import の書き方を、渡した全部のファイルについて一つのファイルとして読むからである。そこで、一回の呼び出しに渡す一組のファイルの中で、一つの import の書き方が中身の違う二つのファイルに行き着けば、二つのファイルを挙げて止まる（`rulec gen` は exit 2）。黙って片方を読めば、もう片方を指していたファイルは、検査で読んだのとは違う型で生成される。中身が同じなら、一つのファイルとして読む。
-- **一回の呼び出しに渡すものを決めるところ**は二つある。rulec が `import proto` の契約を生成するモジュールにコピーするところ（`rulec gen` の `proto/`。`rulec test` がそれを buf にかける）と、ritsu-proto の `protoc_roots`（いまは試験が protoc にかけるときに使う）である。`protoc_roots` は、一つのファイルとそれが import するファイルに protoc を走らせるときの `-I` のルートを、上の順で、`ritsu_base::modules::map` で実のパスにして返す。一つの import の書き方が中身の違う二つのファイルに行き着くときと、一つのファイルに二つの名前でたどり着くとき（protoc は二度読み、同じ型を二度宣言する）は、ぶつかりを返す。`ritsu gen` は protoc を呼ばない。
-- **`rulec gen` の止まり方**。rulec が契約をコピーするところでも、依存のファイルに二つの名前でたどり着けば、二つの名前とファイルを挙げて止まる。手元のファイルどうしの契約のぶつかり（一つのパスに中身の違う二つの契約）は、いままでどおり exit 1 である。直すのは自分のファイルだからである。依存のファイルが関わるぶつかり（手元と依存、二つの依存、依存のファイルの二つの名前）は exit 2 にする。17.8 の名前のぶつかりと同じく、依存を変えないと直せないからである。二つの名前を見るのは依存のファイルだけである（★）。手元のファイルを二つの名前で import する木は、モジュールの前からあり、その出力を変えないためである（M14）。依存のファイルが関わるこの止まり方は、モジュールの中では、どの規則の出力も書く前に、検査を通る全部の規則について確かめる（`codegen.rs` の `dependencies_hold`。17.8 の `ritsu gen` の `modules_hold` と同じ考え）。`rulec gen` は規則ごとに書くので、二つ目の規則で止まると一つ目の規則の出力が残るからである。検査を通らない規則と、手元のファイルどうしのぶつかり（exit 1）は、いままでどおりその規則のところで止まる。
+- **同じパスの二つのファイル**。手元と依存、または二つの依存が、同じパスに中身の違うファイルを持つことがある。検査は、ファイルごとに上の順で読むので、二つを別のファイルとして読む。同じ名前の型が二つになるが、ritsu-proto の「一つの契約の二つのコピー」と同じ扱いで、型の名前は、それを書いたファイルから見えるほうに解く。一回の protoc（と buf）の呼び出しでは、そうはいかない。一つの import の書き方を、渡した全部のファイルについて一つのファイルとして読むからである。そこで、一回の呼び出しに渡す一組のファイルの中で、一つの import の書き方が中身の違う二つのファイルに行き着けば、二つのファイルを挙げて止まる（`rulec gen` は exit 2）。黙って片方を読めば、もう片方を指していたファイルは、検査で読んだのとは違う型で生成される。中身が同じなら、一つのファイルとして読む。
+- **一回の呼び出しに渡すものを決めるところ**は二つある。rulec が `import proto` の契約を生成するモジュールにコピーするところ（`rulec gen` の `proto/`。`rulec test` がそれを buf にかける）と、ritsu-proto の `protoc_roots`（試験が protoc にかけるときに使う）である。`protoc_roots` は、一つのファイルとそれが import するファイルに protoc を走らせるときの `-I` のルートを、上の順で、`ritsu_base::modules::map` で実のパスにして返す。一つの import の書き方が中身の違う二つのファイルに行き着くときと、一つのファイルに二つの名前でたどり着くとき（protoc は二度読み、同じ型を二度宣言する）は、ぶつかりを返す。`ritsu gen` は protoc を呼ばない。
+- **`rulec gen` の止まり方**。rulec が契約をコピーするところでも、依存のファイルに二つの名前でたどり着けば、二つの名前とファイルを挙げて止まる。手元のファイルどうしの契約のぶつかり（一つのパスに中身の違う二つの契約）は exit 1 である。直すのは自分のファイルだからである。依存のファイルが関わるぶつかり（手元と依存、二つの依存、依存のファイルの二つの名前）は exit 2 にする。17.8 の名前のぶつかりと同じく、依存を変えないと直せないからである。二つの名前を見るのは依存のファイルだけである（★）。手元のファイルを二つの名前で import する木は、マニフェストの無い木にもあり、その出力を変えないためである（M14）。依存のファイルが関わるこの止まり方は、モジュールの中では、どの規則の出力も書く前に、検査を通る全部の規則について確かめる（`codegen.rs` の `dependencies_hold`。17.8 の `ritsu gen` の `modules_hold` と同じ考え）。`rulec gen` は規則ごとに書くので、二つ目の規則で止まると一つ目の規則の出力が残るからである。検査を通らない規則と、手元のファイルどうしのぶつかり（exit 1）は、その規則のところで止まる。
 - **ほかに読み込みのルートを持つところ**も、同じ順で探す。ritsu-proto の `load` と `load_from`（sekisho、yuen、sakai、ritsu-project が使う）と、dandori の `use proto` と `implements` である。
 - **数え方**。`ritsu check` は、`.proto` の `import` が依存のファイルを読めば、そのモジュールがその依存を使っていると数える（17.8 の W301）。依存の依存のファイルを読む `import` は、自分の `require` に無いモジュールを読むので、その行に W303 を出す。
-- **`@` で始まる `import`**。モジュールの中では、依存の中のファイルを読まず、見つからない import として言う。モジュールの外では何も変えない。`@` で始まる名前のディレクトリはふつうのディレクトリで、`import` もいままでどおり読み、依存のルートは無い（M14）。
+- **`@` で始まる `import`**。モジュールの中では、依存の中のファイルを読まず、見つからない import として言う。モジュールの外では何も変えない。`@` で始まる名前のディレクトリはふつうのディレクトリで、`import` もふつうのパスとして読み、依存のルートは無い（M14）。
 
 捨てた形：
 
 - **手元の `.proto` から依存の `.proto` を import させない形**。使う側のモジュールが依存のメッセージの型を自分の契約に使えず、`.proto` をコピーすることになる。コピーは元とずれ、モジュールで防ぎたかった食い違いがそこで起きる。
 - **`import` に `@` を書く形**（`import "@pricing/proto/acme/pricing/v1/money.proto";`）。protoc と buf は `@` を知らないので、同じファイルを読めない。そのうえ、記述子の中のファイルの名前が、依存が自分で読むときの名前（`acme/pricing/v1/money.proto`）と変わり、同じ型が、使う側と依存とで別のファイルの名前を持つ。
 
-**モジュールの中でだけ**（M14）。書いたファイルの上（ルートまで）に `ritsu.mod` が無ければ、`@…` はいまと同じ、ただの相対パスである。そのパスのファイルが無いときは、言語のいつもの「ありません」の診断に、`@` で始まるパスは `ritsu.mod` のあるモジュールの中でだけ依存を指す、という注を足す。
+**モジュールの中でだけ**（M14）。書いたファイルの上（ルートまで）に `ritsu.mod` が無ければ、`@…` はただの相対パスである。そのパスのファイルが無いときは、言語のいつもの「ありません」の診断に、`@` で始まるパスは `ritsu.mod` のあるモジュールの中でだけ依存を指す、という注を足す。
 
 **モジュールの外を指さない**。モジュールの中のファイルに書くパスは、`.` と `..` を畳んだあとで、そのモジュールのルートの中に留まるか、`@<名前>/` で依存の中に入るかのどちらかでなければならない。ルートの外へ出るパスと、入れ子のモジュール（下のディレクトリで自分の `ritsu.mod` を持つもの）の中へ `@` を通らずに入るパスは、エラーである（言語がいつもの参照の誤りのコードで言う。文は土台が一つ持つ）。モジュールのルートに `@` で始まる名前のファイルやディレクトリがあれば E307 である。こう決めたのは、送り出したモジュールが運ぶのは自分の木だけで、外を指すパスは使う側でたどれないからと、同じファイルに二つの書き方ができるのを防ぐためである。
 
@@ -3228,7 +3232,7 @@ oci example.com/acme/tax 1.0.0 sha256:<64 桁> files sha256:<64 桁>
 - `from_own_root(ルート, 書いたファイルのルートからのパス, パス)`：パスを、書いたファイルのモジュールが自分のルートから書く形にする。依存の自分のファイルは `@<名前>/` を外し、その依存の依存は、その依存の `require` の名前で書く（回数の少ない連なり、同じ回数なら `require` の順）。モジュールが手元でも依存でも同じでなければならない値に使う（下の「要件のハッシュ」）。
 - 依存の木：実のモジュールのルート（ディスクにある `ritsu.mod` の場所）ごとに、`ritsu.mod`、`ritsu.lock`、置き場と同梱のコピーから、要るときに読む。スレッドごとに、ルートと、読んだファイル（手元の `ritsu.mod` と `ritsu.lock`、パスでたどり着いた各モジュールの `ritsu.mod`）のバイト、ファイルの層（`fs::with` が渡したもの。読みを記録するだけの層は、その下の層と同じものとみなす。`Files::stands_for` と `fs::id`）、置き場の場所を鍵にして覚える（koyomi の口の覚え書きと同じ形）。パスの依存の `ritsu.mod` も鍵に入れるのは、それが変われば木が変わるからである。依存の中のパス（`R/@pricing/@tax/…`）では、連なりの頭の実のモジュールのルート `R` の lock が、全部の版を決める。
 - モジュールの自分のファイルだけを指すパス（`@` を通らず、依存の中からでもないもの）は、木を読まずに答える。依存の木が読めないとき（パスの依存の先が無い、lock が合わないなど）も、手元のファイルは読め、`@` を通るパスだけが、木の診断の最初の文を添えてエラーになる。木が読めないことは、`ritsu check` が木の診断として一度言う。
-- `paths::find_root`：最初のパスの上で、`.git` か `ritsu.mod` のどちらかがある、いちばん近いディレクトリにする（★。6.2 の 3 と 4.7 のルートの決め方に、`ritsu.mod` を足す）。`.git` だけで決めると、リポジトリの下のディレクトリにあるモジュールで走らせたとき、ルートがリポジトリの根になり、手元のモジュールが決まらないからである。`ritsu.mod` の無い木では、いまと同じ答えである。見せ方の上の依存のルート（`R/@pricing`）には `ritsu.mod` が見えるが、そこでは止まらない。ルートは `R` である。
+- `paths::find_root`：最初のパスの上で、`.git` か `ritsu.mod` のどちらかがある、いちばん近いディレクトリにする（★。6.2 の 3、4.7）。`.git` だけで決めると、リポジトリの下のディレクトリにあるモジュールで走らせたとき、ルートがリポジトリの根になり、手元のモジュールが決まらないからである。`ritsu.mod` の無い木では、`.git` だけで決めたときと同じ答えである。見せ方の上の依存のルート（`R/@pricing`）には `ritsu.mod` が見えるが、そこでは止まらない。ルートは `R` である。
 - `paths::join` は変えない。モジュールのルートのすぐ下の `@<名前>` を `..` で取り除けないこと（`Outside`）と、依存の中から `..` で使う側へ出られないことは、`modules::join` と `refer` が確かめる。口（3.2）は、書かれたパスをつなぐところで `paths::join` の代わりに `modules::join` を呼ぶ。`paths::join` は、ルートからのパスの文字だけを見て、木に `ritsu.mod` があるかを知らない。そこで `@x/..` をエラーにすれば、マニフェストの無い木で `@x` というふつうのディレクトリの答えが変わる（M14）。`paths::join` 自身が `@<名前>` を見て `Outside` を返す形は、この理由で捨てた。
 
 **正規の書き方**。一つのファイルは一つの書き方で書く。手元のモジュールのファイルは、ルートからのふつうのパスで書く。依存のファイルは、手元のモジュールのルートから、`@` をたどる回数がいちばん少ない連なりで書き（`@pricing/rules/fee.rule`、直には依存しないものは `@pricing/@tax/rules/vat_rate.rule`）、回数が同じなら、手元のモジュールの `ritsu.mod` の `require` の順に、幅優先でたどって先に着くほうにする。`refer` と `join` は正規の書き方を返し、プロジェクトを歩くときも依存のファイルを正規の書き方で並べる。パスで覚える言語の `Engine`（rulec の検査の覚え書きなど）は、一つのファイルを一度だけ読む。
@@ -3237,9 +3241,15 @@ oci example.com/acme/tax 1.0.0 sha256:<64 桁> files sha256:<64 桁>
 
 **ルート**は、`--root`、無ければ最初のパスの上で `.git` か `ritsu.mod` のある、いちばん近いディレクトリ、それも無ければ最初のパスである。ルートに `ritsu.mod` があれば、それが手元のモジュールになる。歩くときは、自分の `ritsu.mod` を持つ下のディレクトリ（入れ子のモジュール）と `.ritsu/` に入らない。ルートに `ritsu.mod` が無いのに、歩く途中でモジュールに当たったら、そのモジュールを飛ばし、`ritsu check <そのディレクトリ>` で確かめるよう一行で言う。飛ばしたあとに言語のファイルが残らなければ、言語のファイルの無いプロジェクトと同じく exit 2 で止まる（6.1）。一回の実行の手元のモジュールは一つである（★。17.28）。二つ以上を一度に扱うと、同じモジュールを二つの lock が別の版で選びうるので、一つのファイルに一つの事実という形（17.7）が崩れる。
 
+**ルートの決め方を言う文**（2026-10-29）。ルートの決め方を言う文は、どれも上の決まりに合わせる。
+
+- `--help` の `--root` の説明（`ritsu check`、`ritsu gen`、kaname、sakai、sekisho、yuen）は、「`.git` か `ritsu.mod` のある、いちばん近いディレクトリ」と言う。help は M14 の外である。
+- ルートの外を指したときの診断の注（sakai の E012、sekisho の E201 と E208、yuen の E013）は、ルートを決めた目印を言う。ルートに `ritsu.mod` があれば、ルートは `.git` か `ritsu.mod` のあるいちばん近いディレクトリで、ここではモジュールのルートだと言う。ルートに `ritsu.mod` が無ければ、`.git` のある、いちばん近いディレクトリと言う。マニフェストの無い木の出力を変えないためである（M14）。モジュールの中のファイルがモジュールの外を指すときは、土台の文（モジュールの外を指す）で言い、この注は付かない。注が `ritsu.mod` を言うのは、ルートが `ritsu.mod` を持つのに、ファイルがそのモジュールの中に無いとき（ルートの下の `.git` を持つディレクトリの中のファイルや、ルートの外で渡したファイル）である。
+- 台帳（sakai の E012 の `explain`）は M14 の外なので、二つの場合を両方書く。
+
 **単体のコマンド**。`rulec check`、`koyomi check` のような各言語のコマンドも、同じ関数とファイルの層を通るので、フラグなしで `@` を読む。lock は、連なりの頭の実のモジュールのルートのものを読む。
 
-コマンドラインで渡したパスのうち、モジュールの中で `@` で始まるものは、走らせたディレクトリのファイルに書いたパスと同じに読む（`ritsu_base::modules::given`。走らせたディレクトリから `refer` を呼ぶ）。四つの誤り（`require` に無い、外を指す、入れ子に `@` なしで入る、依存のファイルが無い）と、依存の木が読めないことは、ファイルに書いたパスと同じ文で言い、exit 2 で止まる（8.4 の「読めないファイル」）。いつもの「読めません」では、何を直せばよいかが分からないからである。九つの言語と `ritsu` は、コマンドラインを読んだあと、コマンドの中身に入る前に、位置引数のパスをこの関数に通す。`ritsu` では、`check` と `gen` が `ritsu-project` の `Project::load` で、`run` がフローと `--scenario` と `--with` のパスを通す。ほかのフラグの値は通さない（★）。`--root` や `--out` は、依存のファイルを読む引数ではないからである。誤りの出し方は、そのコマンドが読めないファイルを言う形と同じである。多くは標準エラーの一行で、`ritsu gen --format json` は JSON の `error`、geas は読めないファイルのいつものコード（E081）の診断である。rulec の `diff` は git の版（`<パス>@<版>`）も取るので通さない。モジュールの外のパスと、`@` で始まらないパスは、いままでどおり読む（M14）。
+コマンドラインで渡したパスのうち、モジュールの中で `@` で始まるものは、走らせたディレクトリのファイルに書いたパスと同じに読む（`ritsu_base::modules::given`。走らせたディレクトリから `refer` を呼ぶ）。四つの誤り（`require` に無い、外を指す、入れ子に `@` なしで入る、依存のファイルが無い）と、依存の木が読めないことは、ファイルに書いたパスと同じ文で言い、exit 2 で止まる（8.4 の「読めないファイル」）。いつもの「読めません」では、何を直せばよいかが分からないからである。九つの言語と `ritsu` は、コマンドラインを読んだあと、コマンドの中身に入る前に、位置引数のパスをこの関数に通す。`ritsu` では、`check` と `gen` が `ritsu-project` の `Project::load` で、`run` がフローと `--scenario` と `--with` のパスを通す。ほかのフラグの値は通さない（★）。`--root` や `--out` は、依存のファイルを読む引数ではないからである。誤りの出し方は、そのコマンドが読めないファイルを言う形と同じである。多くは標準エラーの一行で、`ritsu gen --format json` は JSON の `error`、geas は読めないファイルのいつものコード（E081）の診断である。rulec の `diff` は git の版（`<パス>@<版>`）も取るので通さない。モジュールの外のパスと、`@` で始まらないパスは、ふつうのパスとして読む（M14）。
 
 ```
 error: the dependency `@pricing` (`example.com/acme/pricing`, `../pricing`) has no `rules/fee.rule`
@@ -3282,9 +3292,9 @@ note: `./app` has a `ritsu.mod` of its own: it is another module, and was not re
 
 chobo はほかのファイルを指さないので替えるところが無い。依存の帳簿は、dandori、sekisho、kaname の `use book … from "@lib/…"` が読む（各言語の `tests/modules.rs`）。`chobo check @lib/books/ledger.book` も、ファイルの層を通るので、モジュールの中ならフラグなしで読む。
 
-**依存のコピーは取らない**（rulec、koyomi、yuen の `source fetch`）。出典の `file "…"` が依存のファイルを指すとき、`source fetch` はそれを取り直さず、依存のファイルなので取り直さない、コピーは依存のほうにある、と一行で言う。依存のファイルは読むだけで（ファイルの層は書き込みをエラーにする）、コピーとその固定は、依存が自分の `source fetch` と `source pin` で決めるからである。`check` と `source pin` は、依存のコピーを読んで確かめる。依存かどうかは見せ方の上で決める（`map`、`under_dependency`）。`ritsu.mod` の無い木の `@…` というディレクトリは、いままでどおりそのプロジェクトのコピーとして取る（M14）。
+**依存のコピーは取らない**（rulec、koyomi、yuen の `source fetch`）。出典の `file "…"` が依存のファイルを指すとき、`source fetch` はそれを取り直さず、依存のファイルなので取り直さない、コピーは依存のほうにある、と一行で言う。依存のファイルは読むだけで（ファイルの層は書き込みをエラーにする）、コピーとその固定は、依存が自分の `source fetch` と `source pin` で決めるからである。`check` と `source pin` は、依存のコピーを読んで確かめる。依存かどうかは見せ方の上で決める（`map`、`under_dependency`）。`ritsu.mod` の無い木の `@…` というディレクトリは、ほかのディレクトリと同じく、そのプロジェクトのコピーとして取る（M14）。
 
-**要件のハッシュ**（yuen。★）。要件の終わりの行（`from file <パス>`、`from openspec <パス>`）は、出典のパスを含めてハッシュを取り、レビューの記録（`reviewed/`）がそのハッシュを持つ。依存の `.req` を手元のモジュールから読むと、出典のパスは `@lib/docs/…` と見え、依存の中で読んだときの `docs/…` と変わる。そのままでは、依存の中でレビューを済ませた要件が、手元から読むと全部、レビューのあとに変わったことになる。そこで、ハッシュに入れるパスは `from_own_root` で、その要件のモジュールが自分のルートから書く形にする。手元のモジュールのファイルと、ルートに `ritsu.mod` の無い木では、いままでと同じパスなので、ハッシュは変わらない（M14）。捨てた形は二つある。パスをハッシュから外す形は、いまの要件のハッシュが全部変わり、レビューがやり直しになる。依存の要件を手元で確かめない形は、依存の要件のリンクが手元で壊れても気づかない。ルートをモジュールの上に置いて（`--root`）依存の `.req` を読むと、パスの頭が `@` でなくなるので、この直しは効かない。
+**要件のハッシュ**（yuen。★）。要件の終わりの行（`from file <パス>`、`from openspec <パス>`）は、出典のパスを含めてハッシュを取り、レビューの記録（`reviewed/`）がそのハッシュを持つ。依存の `.req` を手元のモジュールから読むと、出典のパスは `@lib/docs/…` と見え、依存の中で読んだときの `docs/…` と変わる。そのままでは、依存の中でレビューを済ませた要件が、手元から読むと全部、レビューのあとに変わったことになる。そこで、ハッシュに入れるパスは `from_own_root` で、その要件のモジュールが自分のルートから書く形にする。手元のモジュールのファイルと、ルートに `ritsu.mod` の無い木では、`from_own_root` がルートからのパスをそのまま返すので、ハッシュはマニフェストの無い木と同じである（M14）。捨てた形は二つある。パスをハッシュから外す形は、すでに記録した要件のハッシュが全部変わり、レビューがやり直しになる。依存の要件を手元で確かめない形は、依存の要件のリンクが手元で壊れても気づかない。ルートをモジュールの上に置いて（`--root`）依存の `.req` を読むと、パスの頭が `@` でなくなるので、この直しは効かない。
 
 **版を指して読むとき**（rulec の `check --diff-base`、`replay`、`diff`）。git の版から読むときは、その版の `ritsu.mod` と `ritsu.lock` で依存を読む（17.9.1 の「それぞれの側の依存の読み方」）。レジストリの依存はその lock のダイジェストで置き場から読み、置き場にも同梱のコピーにも無ければ、`ritsu mod fetch --rev <git の版>` を走らせるよう言って exit 2 で止まる（`ritsu mod diff` と `report` は、止まらずに取ってくる。17.9.6、17.10）。同じリポジトリの中にあるパスの依存は、その版のファイルを読む。そのため、依存だけを上げたコミット（`ritsu.mod` と `ritsu.lock` だけが変わったもの）の前後を比べると、依存の変わりが差分に出る。
 
@@ -3318,7 +3328,7 @@ chobo はほかのファイルを指さないので替えるところが無い�
 
 **名前の衝突**。依存の名前はマニフェストごとのものなので、二つのモジュールがどちらも `pricing` という依存を持っていても、それぞれのマニフェストで別々に読む。一つのマニフェストの中の同じ名前は E302 である。モジュールの名前が同じなら同じモジュールなので、名前の違う二つのモジュールがぶつかることはない。名前の同じ二つのモジュールが二か所（二つのパス）から来れば E306 である。
 
-**循環**は許す。版の選び方は順番を要らない。手元のモジュール自身への `require` は、手元の作業ツリーを指す。ファイルのあいだの輪は、いまと同じく各言語が見つける。
+**循環**は許す。版の選び方は順番を要らない。手元のモジュール自身への `require` は、手元の作業ツリーを指す。ファイルのあいだの輪は、モジュールの境目を越えても、各言語が見つける。
 
 **依存の依存を指すこと**。手元のファイルが `@shop/@pricing/…` と、依存の依存を指すことはできるが、W303 を出す。`shop` の次の版が `pricing` を使わなくなれば、そのパスは壊れる。自分の `ritsu.mod` に `require` を書けば、使っていることが自分のマニフェストに出る。
 
@@ -3328,10 +3338,10 @@ chobo はほかのファイルを指さないので替えるところが無い�
 
 **検査**。手元のモジュールの全体を検査するとき、`ritsu check` は、木のすべてのモジュールのすべてのファイルを、プロジェクトのファイルとして正規の書き方で読み、言語ごとの検査と言語をまたぐ検査を、全部に 6.1 の順で走らせる。全体とは、渡したパスがモジュールのルートそのものになるときである（ルートで `ritsu check` か `ritsu check .`、上のディレクトリから `ritsu check shop`）。指されたファイルだけでなく全部を読むのは、依存が送り出されたときに通った検査は、その依存の lock が選んだ版の上でのもので、使う側の木では版の選び方が依存の依存にもっと新しい版を選びうるからである。その依存の中の境目も、使う側の木で確かめ直す（M6）。
 
-モジュールの下のディレクトリやファイルを渡したときは、一部の検査である。下のディレクトリでパスを渡さずに走らせたときも、そのディレクトリを渡したのと同じく一部である（★。パスが無ければ走らせたディレクトリ、という 6.2 の決まりのとおり）。一部の検査は、いまと同じく、渡したファイルと、それが指してたどり着くファイルだけを読み、`contribution` を集めるのも渡したファイルの中だけである。依存のファイルは、手元のファイルが指せば言語が読み、その診断は手元のファイルの検査の中に出る。依存の行と依存ごとの警告の数は出さず、W301 も言わない（渡さなかったファイルが何を指すかを読んでいないため）。W303 と、境目を越える `contribution` の注は、全体のときと同じに出す。`ritsu check @pricing` は、依存のファイルを渡した一部の検査で、依存のファイルの診断と、検査を通ったファイルの行を全部出す。依存の作者が自分の検査で見るものを、使う側の木の上で見るためである。
+モジュールの下のディレクトリやファイルを渡したときは、一部の検査である。下のディレクトリでパスを渡さずに走らせたときも、そのディレクトリを渡したのと同じく一部である（★。パスが無ければ走らせたディレクトリ、という 6.2 の決まりのとおり）。一部の検査は、マニフェストの無い木と同じく、渡したファイルと、それが指してたどり着くファイルだけを読み、`contribution` を集めるのも渡したファイルの中だけである。依存のファイルは、手元のファイルが指せば言語が読み、その診断は手元のファイルの検査の中に出る。依存の行と依存ごとの警告の数は出さず、W301 も言わない（渡さなかったファイルが何を指すかを読んでいないため）。W303 と、境目を越える `contribution` の注は、全体のときと同じに出す。`ritsu check @pricing` は、依存のファイルを渡した一部の検査で、依存のファイルの診断と、検査を通ったファイルの行を全部出す。依存の作者が自分の検査で見るものを、使う側の木の上で見るためである。
 
 - **依存のファイルの診断**。全体の検査では、エラーは手元のものと同じに出し、exit 1 にする。警告と注は、テキストにも JSON の `diagnostics` にも一つずつは出さず、依存ごとの数を依存の行と JSON の `dependencies` に出す。一つずつは `--deps-warnings` を付けたときに出す（★）。使う側は依存の警告を直せず、依存の作者は自分の検査で見ている。検査を通った依存のファイルの行（`ok @pricing/rules/fee.rule` など）は、`--deps-warnings` でも出さない（★）。依存の行が数を持ち、一つずつの行は `ritsu check @pricing` が出す。
-- **境目の診断**。手元のファイルと依存のファイルの境目の診断は、手元のファイルに出るので手元のものである。rulec は、`contribution` の行の診断を、足した先の規則の検査の中に出し、行の場所を JSON の `where` に持つ（rulec の §15.231）。ルートに `ritsu.mod` があるとき、ritsu はその診断を `contribution` のファイルのものとして数える（★）。手元の `contribution` が依存の規則に足した行の誤りは、手元のファイルのエラーになる。依存のファイルが通ったかどうかは、こうして数え直したあとに、そのファイルに残った診断で決める。手元の `contribution` に置かれたエラーだけで落ちた依存の規則は、依存の行では通ったものに数える。エラーは手元のファイルに出て、まとめの行がその数を持ち、exit は 1 である。そのエラーの文が足した先の依存のファイルを指していなければ、そのファイルを正規の書き方で指す注を一つ足す。規則の自分の行に置かれたエラー（`contribution` を合わせると開いた値の範囲を出る E131 など）は、依存の規則のものなので、依存の行に数える（★）。ルートに `ritsu.mod` の無い木では、いまのとおり規則の検査の中で数える（M14）。
+- **境目の診断**。手元のファイルと依存のファイルの境目の診断は、手元のファイルに出るので手元のものである。rulec は、`contribution` の行の診断を、足した先の規則の検査の中に出し、行の場所を JSON の `where` に持つ（rulec の §15.231）。ルートに `ritsu.mod` があるとき、ritsu はその診断を `contribution` のファイルのものとして数える（★）。手元の `contribution` が依存の規則に足した行の誤りは、手元のファイルのエラーになる。依存のファイルが通ったかどうかは、こうして数え直したあとに、そのファイルに残った診断で決める。手元の `contribution` に置かれたエラーだけで落ちた依存の規則は、依存の行では通ったものに数える。エラーは手元のファイルに出て、まとめの行がその数を持ち、exit は 1 である。そのエラーの文が足した先の依存のファイルを指していなければ、そのファイルを正規の書き方で指す注を一つ足す。規則の自分の行に置かれたエラー（`contribution` を合わせると開いた値の範囲を出る E131 など）は、依存の規則のものなので、依存の行に数える（★）。ルートに `ritsu.mod` の無い木では、規則の検査の中で数える（M14）。
 
   ```
   error[rulec E067]: The term sale_offf is not declared
@@ -3361,14 +3371,14 @@ chobo はほかのファイルを指さないので替えるところが無い�
 
 - **注**。まとめと依存の行の前に、一行ずつの注を出す。境目を越える `contribution`（下）、`require … path` のパスから読むモジュールのうち、木のほかの `require` がレジストリの版を求めているもの（17.7）、歩いて飛ばしたモジュール（17.6）である。
 - **JSON** は、ルートに `ritsu.mod` があるときだけ、キーを足す（17.21）。無ければ、歩いてモジュールを飛ばしたときの `skipped_modules` のほかは、一字も変えない。
-- **geas**。依存の `.geas` の主張は走らせない（★）。全体の検査でも、`ritsu check @pricing` のような一部の検査でも同じである。走らせれば、取ってきたファイルが走らせるよう書いたプログラムを、使う側の機械で動かすことになる。依存の主張は依存の作者のプログラムについてのもので、使う側の機械にはそのプログラムも無い。走らせなかった主張の数を、まとめの前に一行で出し、JSON では依存ごとの `claims_not_run` に入れる。依存の `.geas` だけを渡したときは、検査するものが無いと言って止まる（exit 2）。手元の `.geas` はいまと同じに走らせる（8.4）。
+- **geas**。依存の `.geas` の主張は走らせない（★）。全体の検査でも、`ritsu check @pricing` のような一部の検査でも同じである。走らせれば、取ってきたファイルが走らせるよう書いたプログラムを、使う側の機械で動かすことになる。依存の主張は依存の作者のプログラムについてのもので、使う側の機械にはそのプログラムも無い。走らせなかった主張の数を、まとめの前に一行で出し、JSON では依存ごとの `claims_not_run` に入れる。依存の `.geas` だけを渡したときは、検査するものが無いと言って止まる（exit 2）。手元の `.geas` は 8.4 のとおりに走らせる。
 
   ```
   dependencies: 1 claim in 1 .geas file, not run: a dependency's claims are about its author's programs
   依存: .geas のファイル 1 個の主張 1 件は、走らせていません。依存の主張は、依存の作者のプログラムについてのものです
   ```
 
-- **`contribution`**。使う側が `contribution … to "@pricing/rules/fee.rule" signature: …` と書けば、使う側の木の中で、その規則に行が足される。木の中でその規則を使うものは、どれも足した行を見る。全体の検査で rulec が `contribution` を集めるファイルの集まりは、木の全体である。依存の中の `contribution` も、いまのプロジェクトの中と同じに効き、別の依存の規則へのものも効く。モジュールの境目を越える `contribution` は、検査の出力に注として並べ、JSON の `contributions` にも入れる。ある依存が別の依存の規則を変えていることが見えるようにするためである。依存の版を上げて、`contribution` の先の規則の形が変われば、`signature:` が使う側の検査を止める（rulec のいまのエラー）。これが M7 の互換の問いへの答えになる。
+- **`contribution`**。使う側が `contribution … to "@pricing/rules/fee.rule" signature: …` と書けば、使う側の木の中で、その規則に行が足される。木の中でその規則を使うものは、どれも足した行を見る。全体の検査で rulec が `contribution` を集めるファイルの集まりは、木の全体である。依存の中の `contribution` も、一つのプロジェクトの中と同じに効き、別の依存の規則へのものも効く。モジュールの境目を越える `contribution` は、検査の出力に注として並べ、JSON の `contributions` にも入れる。ある依存が別の依存の規則を変えていることが見えるようにするためである。依存の版を上げて、`contribution` の先の規則の形が変われば、`signature:` が使う側の検査を止める（rulec の E040）。これが M7 の互換の問いへの答えになる。
 
   ```
   note: `rules/spring_sale.rule`, a contribution of this module, adds to `@pricing/rules/order_discount.rule`, a rule of the dependency `@pricing` (example.com/acme/pricing 1.1.0)
@@ -3389,7 +3399,7 @@ chobo はほかのファイルを指さないので替えるところが無い�
 **生成**。モジュールの中の `ritsu gen` は、渡したファイルと、それが指してたどり着く依存のファイルを、一つのパッケージにする。モジュールの外では、パッケージを一字も変えない（M14）。
 
 - **入れるファイル**。渡したファイル（全体なら手元のモジュールの全部）に、それが指す依存のファイルを足し、足したファイルが指すものも、依存の依存まで同じに足す。指すとは、W301 と同じく、言語の参照、`contribution` の `to` と `after`、`.proto` の `import` である（ritsu-project の `named`。`ritsu check` と同じ関数）。依存のファイルは全体の検査が読むものから取り（依存の `exclude` の行が外したファイルは含まず、`.geas` は入れない）、並べ方も全体の検査と同じにする（`with_dependencies`）。どのファイルも指さない依存のファイルは、パッケージに入れない。
-- **生成の前の検査**。パッケージに入れるファイルを、いまと同じく言語ごとに検査し、通らなければ生成しない。規則は、同じパスの `ritsu check` と同じ `contribution` の集まり（全体なら、木の全部のモジュールのもの）を足して組む。rulec が `contribution` の行に言う診断は、`ritsu check` と同じく、その `contribution` のファイルのものとして数える（`place_findings`）。こうして、一つのファイルについて、`check` と `gen` の答えをそろえる。パッケージに入れない依存のファイルは検査しない（★）。入れないファイルで生成を止めないためで、`gen` が `.req` や `.geas` を検査しないのと同じ考えである。木の全部を確かめるのは `ritsu check` である。ただし、パッケージに入れない依存の `contribution` のファイルにエラーが置かれたときも、生成は止まる。そのエラーは、パッケージに入る足した先の規則の検査が見つけるので、その規則の検査が通らないからである。止まる理由には、エラーの置かれたファイルを挙げる。手元の `contribution` に置かれたエラーだけで落ちた依存の規則は、`ritsu check` の依存の行と同じく、通らないファイルに挙げない。
+- **生成の前の検査**。パッケージに入れるファイルを、マニフェストの無い木と同じく言語ごとに検査し、通らなければ生成しない。規則は、同じパスの `ritsu check` と同じ `contribution` の集まり（全体なら、木の全部のモジュールのもの）を足して組む。rulec が `contribution` の行に言う診断は、`ritsu check` と同じく、その `contribution` のファイルのものとして数える（`place_findings`）。こうして、一つのファイルについて、`check` と `gen` の答えをそろえる。パッケージに入れない依存のファイルは検査しない（★）。入れないファイルで生成を止めないためで、`gen` が `.req` や `.geas` を検査しないのと同じ考えである。木の全部を確かめるのは `ritsu check` である。ただし、パッケージに入れない依存の `contribution` のファイルにエラーが置かれたときも、生成は止まる。そのエラーは、パッケージに入る足した先の規則の検査が見つけるので、その規則の検査が通らないからである。止まる理由には、エラーの置かれたファイルを挙げる。手元の `contribution` に置かれたエラーだけで落ちた依存の規則は、`ritsu check` の依存の行と同じく、通らないファイルに挙げない。
 - **木が読めないとき**は、`ritsu check` と同じに止まる。E301〜E306 と E308 は診断として出し、何も生成しない（exit 1。JSON では `diagnostics` に入れる）。依存が置き場に無いときなど、何かを走らせる必要があるときは、それを標準エラーに言って止まる（exit 2。`--format json` でも JSON は出さない）。
 
   ```
@@ -3399,9 +3409,9 @@ chobo はほかのファイルを指さないので替えるところが無い�
 
 - **置き場所**。依存の部分は、パッケージの形の中の `deps/<名前>/` の下に置き、`<名前>` の段は正規の書き方の連なりのとおりに重ねる（`@pricing` は `deps/pricing/`、`@pricing/@tax` は `deps/pricing/deps/tax/`）。その下は手元のモジュールの部分と同じ形である（TypeScript の `deps/pricing/rules/order_total.ts`、Python の `<名前>/deps/pricing/rules/order_total.py`、Go の `deps/pricing/rules/ordertotal/order_total.go`）。二つのモジュールに同じ名前のファイルがあっても、パッケージの中でぶつからない。段ごとに索引を置く（TypeScript の `deps/index.ts`、`deps/pricing/index.ts`、種類ごとの `deps/pricing/rules/index.ts`。Python ではそれぞれの `__init__.py`）。手元のモジュールの索引は `deps` も出す。Go のパッケージはディレクトリなので、索引は無い。依存のゲートの Cedar は `cedar/deps/<名前>/` に置く。量の単位の型はパッケージに一つだけの `units` にあり、依存の部分もそれを読む。
 - **読み込むパス**。ほかの部分を読み込むコードを書く生成器（rulec の規則、koyomi、chobo のクライアント、dandori のワークフロー、sekisho のリクエストのコード、kaname の glue）は、自分の部分の置き場所と、読み込むファイルごとの置き場所を `package.rs` から受け取り（`ritsu_emit::package::Place`）、読み込むパスをそこから作る。`rules/<別名>` を自分では組み立てない。
-- **走らせるときに一つでなければならない名前**。二つのモジュールのファイルが、Temporal のワークフローの型（名前と版から作る `place_order_v1` など）か、Cedar の名前（名前空間の中の型と操作）を同じに作れば、二つのファイルを挙げて止まる（exit 2）。走っているときは名前で見分けるので、一つのパッケージに二つは置けない。黙って名前を変えると、走っているときの名前が変わる。一つのモジュールの中のことは、いままでどおり言語が見る。一つのゲートが `use gate` で一緒に読むファイルは、モジュールが違っても一つの名前空間で（sekisho が E210 と E211 で確かめる）、ぶつかりにしない。
+- **走らせるときに一つでなければならない名前**。二つのモジュールのファイルが、Temporal のワークフローの型（名前と版から作る `place_order_v1` など）か、Cedar の名前（名前空間の中の型と操作）を同じに作れば、二つのファイルを挙げて止まる（exit 2）。走っているときは名前で見分けるので、一つのパッケージに二つは置けない。黙って名前を変えると、走っているときの名前が変わる。一つのモジュールの中のことは、言語が見る。一つのゲートが `use gate` で一緒に読むファイルは、モジュールが違っても一つの名前空間で（sekisho が E210 と E211 で確かめる）、ぶつかりにしない。
 - **Python が予約している語**。依存の名前は Python のパッケージの名前になる。`lambda` のような Python が予約している語の依存があれば、Python のパッケージを作るなら止まる（exit 2）。`--target typescript` と `--target go` では作る。
-- **書く前に確かめる止まり方**。上の二つの名前のぶつかりと Python が予約している語は、どのターゲットを書くより前に確かめる（`package.rs` の `modules_hold`）。`--target` を指定しない `ritsu gen` が、TypeScript を書いたあとで Python のところで止まり、途中まで書いたパッケージを残さないためである。どれもモジュールの木から来る止まり方で、マニフェストの無い木では起きない。ほかの理由の止まり方は、いままでどおりそのターゲットを作るところで止まり、それまでに書いたターゲットは残る（M14）。
+- **書く前に確かめる止まり方**。上の二つの名前のぶつかりと Python が予約している語は、どのターゲットを書くより前に確かめる（`package.rs` の `modules_hold`）。`--target` を指定しない `ritsu gen` が、TypeScript を書いたあとで Python のところで止まり、途中まで書いたパッケージを残さないためである。どれもモジュールの木から来る止まり方で、マニフェストの無い木では起きない。ほかの理由の止まり方は、そのターゲットを作るところで止まり、それまでに書いたターゲットは残る（M14）。
 - **頭の行**。依存の部分の頭の `Source:` には、正規の書き方と、モジュールの名前と版を書く。規則の頭の `Applies:` の行は、依存の規則が自分のルートから書いた形（`@tax/…`）のままにする（★）。規則のファイルに書いてあるとおりで、依存が自分で生成しても同じ行になる。
 
   ```
@@ -3416,7 +3426,7 @@ chobo はほかのファイルを指さないので替えるところが無い�
   備考: ritsu.lock を書いた ritsu は 0.1.0 で、いまの ritsu は 0.36.0 です。生成物の違いは、版の違いから来ているかもしれません
   ```
 
-**実行**。`ritsu run` は、`ritsu check` と `ritsu gen` と同じに木を読み、木が読めなければ同じに止まる。E301〜E306 と E308 は診断として出してフローを流さず（exit 1。`--format json` では `diagnostics` に入れる）、何かを走らせる必要があるときは、それを標準エラーに言って止まる（exit 2）。フローが読む規則と日付と帳簿は、ファイルに書いた `@` のパスから言語が読む。`contribution` は、いままでどおり `--with` で渡したものだけを足す。`--with` にモジュールのルートを渡したときは、`ritsu check` のルートと同じく、木の全部のモジュールの `contribution` を足す（★）。フローは `contribution` のファイルではないので、`--with` が無ければ足すものが無いのは、`ritsu check <フロー>` と同じである。
+**実行**。`ritsu run` は、`ritsu check` と `ritsu gen` と同じに木を読み、木が読めなければ同じに止まる。E301〜E306 と E308 は診断として出してフローを流さず（exit 1。`--format json` では `diagnostics` に入れる）、何かを走らせる必要があるときは、それを標準エラーに言って止まる（exit 2）。フローが読む規則と日付と帳簿は、ファイルに書いた `@` のパスから言語が読む。`contribution` は、マニフェストの無い木と同じく、`--with` で渡したものだけを足す。`--with` にモジュールのルートを渡したときは、`ritsu check` のルートと同じく、木の全部のモジュールの `contribution` を足す（★）。フローは `contribution` のファイルではないので、`--with` が無ければ足すものが無いのは、`ritsu check <フロー>` と同じである。
 
 ```
 error: the modules could not be read (1 error), so the flow is not run
@@ -3460,12 +3470,12 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 | 書き方 | 指すもの |
 |---|---|
 | `<パス>` | 作業ツリーのファイル（依存のファイルなら lock の版） |
-| `<パス>@<git の版>` | その git の版のファイル（rulec のいまの形を、ほかの言語にも広げる） |
-| `<規則の名前>@<版>` | rulec だけ。タグ `rules/<名前>/<版>`、無ければその git の版（いまの形） |
+| `<パス>@<git の版>` | その git の版のファイル |
+| `<規則の名前>@<版>` | rulec だけ。タグ `rules/<名前>/<版>`、無ければその git の版 |
 | `@<名前>/<パス>` | 依存 `<名前>` の、lock の版のファイル |
 | `@<名前>@<版>/<パス>` | 依存 `<名前>` の、モジュールの版 `<版>` のファイル（置き場から） |
 
-`@` で始まればモジュールの書き方で、最初の `/` の前に二つ目の `@` があれば、そのあとが版である。そうでなければ rulec のいまの読み方（最初の `@` で分ける）になる。規則の名前も、モジュールの中のファイルのパスも `@` で始まらないので、取り違えは起きない。`@<名前>/<パス>@<git の版>` は受け付けない（exit 2）。git の版は手元のリポジトリのファイルのためのもので、依存には版の書き方で書くよう言う。
+`@` で始まればモジュールの書き方で、最初の `/` の前に二つ目の `@` があれば、そのあとが版である。そうでなければ、最初の `@` で分ける（`<パス>@<git の版>` と `<規則の名前>@<版>`）。規則の名前も、モジュールの中のファイルのパスも `@` で始まらないので、取り違えは起きない。`@<名前>/<パス>@<git の版>` は受け付けない（exit 2）。git の版は手元のリポジトリのファイルのためのもので、依存には版の書き方で書くよう言う。
 
 **それぞれの側の依存の読み方**。git の版のファイルは、`ritsu.mod`、`ritsu.lock`、手元のモジュールのほかのファイルも同じ git の版から読み、依存のファイルはその lock のダイジェストで置き場から読む（足りなければ `ritsu mod fetch --rev <git の版>` を走らせるよう言う）。`@<名前>@<版>` のファイルは、そのモジュールのその版を読み、その中の `@` は、手元のモジュールが `<名前>@<版>` を求めたときに版の選び方が選ぶ版で読む（置き場に無ければ `ritsu mod fetch <名前>@<版>` を走らせるよう言って exit 2）。こう言って止まるのは言語の diff で、`ritsu mod diff` は言う代わりに取ってくる（17.9.6）。git の版から読むことは、土台のファイルの層に一つ足す（`fs::GitRevision`）。リポジトリの中のパスは、開いたときに `git ls-tree` で一度並べ、ファイルは `git cat-file` で一度だけ読む（`git show <版>:<パス>` と同じ中身）。外のパス（置き場、ほかのリポジトリ）はディスクから読む。`.git` もディスクから読むので、モジュールのルートを探す歩きは作業ツリーと同じところで止まる。`@<名前>@<版>` の側は、手元のモジュールの `ritsu.mod` と `ritsu.lock` だけを、その版を求めたときのものに差し替える層（`fs::Overlay`）で読む。どちらの層も書き込まない。rulec の `vfs::with_git_rev` もこの上に載せ替えた。
 
@@ -3473,7 +3483,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 #### 17.9.2 rulec
 
-`rulec diff` は、比べる二つに 17.9.1 のモジュールの書き方を受け取る。ほかは変えない（rulec の DESIGN §15.122 の入力の全体での比較、`--fixtures`、終了コード）。いまの `split_once('@')` の前に、頭の `@` を見る。
+`rulec diff` は、比べる二つに 17.9.1 の書き方の全部を受け取る。入力の全体での比較、`--fixtures`、終了コードは rulec の DESIGN §15.122 のとおりで、モジュールの書き方の側でも同じである。側の字は、頭の `@` を先に見て、モジュールの書き方でなければ最初の `@` で分ける。
 
 #### 17.9.3 koyomi の diff
 
@@ -3481,9 +3491,9 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 **カレンダー**は、二つがどちらも知っている日（それぞれが知っている日の範囲、`Calendar::data` の重なり）の全部で、開いているか閉じているかと、閉じている理由（`Calendar::reasons`）を比べる。
 
-1. 開いているか閉じているかが変わった日。同じ変わり方で、理由も同じ日が続くところを一つの区間にまとめる（`2027-05-03`：開いている → 閉じている（Early May bank holiday））。
+1. 開いているか閉じているかが変わった日。同じ変わり方で、理由も同じ日が続くところを一つの区間にまとめる（`2026-06-10：開いている → 閉じている（創立記念日）`。`crates/koyomi/tests/golden/diff/calendar.ja.txt`）。
 2. 答えは同じで、理由の名前だけが変わった日（祝日の名前の変更など）。答えの差とは分けて出す。
-3. 知っている日の範囲の変わり（新しい版が 2028 年を知った、など）。
+3. 知っている日の範囲の変わり（新しい版が 2027 年を知った、など）。
 4. 時差（`offset`）の変わり。
 5. 結びの一文：重なりの範囲のほかの日は、どれも同じ答えである。両方の版が知っている日が無ければ、そう言い、結びの一文は出さない。
 
@@ -3540,7 +3550,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 - `.` とディレクトリ：そのモジュールの lock が固定するものを、`ritsu mod fetch` と同じに取る。
 - 二つのファイル：`@<名前>@<版>/…` の側は、版の選び方が行き着く版のうち無いものを取っては開き直し、開けるまでくり返す。そのうえで、どの書き方の側も、ファイルを読む木（各言語が見つけるモジュール。`<パス>@<git の版>` ならその版の lock で、`ritsu mod fetch --rev` と同じ）を、ファイルを探す前に取る。`@<名前>/…` のファイルは、その木の lock の版で置き場にあるからである。
 
-確かめ（ダイジェスト、署名）と置き場への書き方は `ritsu mod fetch` と同じである（17.12。確かめが止まれば、ファイルを置き場に置かない）。取ってきた版と確かめた決まりは、`ritsu mod fetch` と同じ行で標準エラーに言う。標準出力（テキスト、markdown、JSON）は、置き場にそろっていたときと同じである。そろっていれば通信せず、何も言わない。取り出しが止まれば exit 2 で、取り出しの文の前に「`<側>` が読むモジュールを取り出せません。」（`<名前>@<版>` を取るときは「`<側>` を取り出せません。」）を付ける。取り出しなら exit 1 になる食い違い（ダイジェスト、署名）も 2 にする。この 1 は「示せた違いがある」だからである。二つの側の種類（モジュールかファイルか）が違えば、何も読まず、何も取らずに exit 2 で止まる。
+確かめ（ダイジェスト、署名）と置き場への書き方は `ritsu mod fetch` と同じである（17.12。確かめが止まれば、ファイルを置き場に置かない）。取ってきた版と確かめた決まりは、`ritsu mod fetch` と同じ行で標準エラーに言う。標準出力（テキスト、markdown、JSON）は、置き場にそろっていたときと同じである。そろっていれば通信せず、何も言わない。取り出しが止まれば exit 2 で、取り出しの文の前に「`<側>` が読むモジュールを取り出せません。」（`<名前>@<版>` を取るときは「`<側>` を取り出せません。」）を付ける。取り出しなら exit 1 になる食い違い（ダイジェスト、署名）も 2 にする。この 1 は「違いが見つかった」だからである。二つの側の種類（モジュールかファイルか）が違えば、何も読まず、何も取らずに exit 2 で止まる。
 
 **振る舞いを比べるファイル**。どれかのファイルが変わっていれば、両方の版にある規則、日付のファイル、カレンダー、ゲートの全部を比べる。変わったファイルだけではない。ファイルはほかのファイル（使う規則、カレンダー、lock が上げた依存）を読むので、同じバイトのファイルでも答えが変わりうるからである。どのファイル（`ritsu.mod` と `ritsu.lock` を含む）も変わっていなければ、たどらずに同じ答えとする。そのため、モジュールの外にあるパスの依存のファイルだけが変わったときは、ここには差が出ない（`ritsu mod report` は、そのパスの依存を、変わったモジュールとして別に比べる）。振る舞いの差の中のファイルは、側の書き方の後ろにパスを付けて書く（`example.com/acme/pricing@1.0.0/rules/fee.rule`。`.` の側はパスだけで、`ritsu mod report` の中では `@pricing@1.0.0/rules/fee.rule` のように 17.9.1 の書き方にする）。データや文書のような、言語の無いファイルの変わりは一覧に出すが、違いには数えない。
 
@@ -3548,7 +3558,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 **出力**。テキストと markdown は、見出し（二つの側と版）、ファイルの一覧、`require` の変わり、ファイルごとの振る舞いの差（その言語の diff の出力）、インターフェースの差、まとめの一文の順に並べる。インターフェースの差は、壊しうる差を先に並べる。同じ変わり方で同じ値の差が、場所の一つの部分だけ違って三つ以上あれば、一行にまとめてその部分を `{python,go,rust}` と書く。規則の api には生成する言語ごとの部分があり、規則の一つの変わりが言語の数だけ出るからである。api の形が変わらず、帳簿の壊れる差も無いファイルは、一つずつ並べずに一行で言う（「ほかの 3 個のファイルは、インターフェースが変わりません」）。ファイルの一覧と、一つのファイルのインターフェースの差は 200 行まで出し、残りは数だけを言う（`ritsu mod report` の markdown では 50 行まで）。markdown では、`@` を含む語を全部コードの書き方にする（17.10 と同じ）。JSON は全部を持つ。
 
-**終了コード**：0（違いが無い）、1（示せた違いがある）、2（比べられない）。示せた違いは、振る舞いの答えの違い、言語のファイルを足したか消したこと、インターフェースの差、帳簿の E050 と E051 である。示せた違いが無く、振る舞いを比べられなかったファイル（検査を通らない、上限を超える）があれば 2 で、違いが無いとは言わない。示せた違いがあれば、比べられなかったファイルがあっても 1 である。
+**終了コード**：0（違いが無い）、1（振る舞いかインターフェースに違いが見つかった）、2（比べられない）。違いに数えるのは、振る舞いの答えの違い、言語のファイルを足したか消したこと、インターフェースの差、帳簿の E050 と E051 である。違いが見つからず、振る舞いを比べられなかったファイル（検査を通らない、上限を超える）があれば 2 で、違いが無いとは言わない。違いが見つかれば、比べられなかったファイルがあっても 1 である。
 
 モジュールの作者は、送り出す前に `ritsu mod diff example.com/acme/pricing@1.0.0` で、前の版からの差を見られる。一覧のサイト（17.17）も、続く版のあいだの差をこれで作る。
 
@@ -3562,13 +3572,13 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 1. 取り出し（2026-10-29）。base と head の木が固定するレジストリのモジュールのうち、置き場にも同梱のコピーにも無いものを、`ritsu mod fetch --rev <base>` と `ritsu mod fetch`（`--head` を書けば `--rev <head>`）と同じ関数で取ってくる（17.12）。どちらの木も、読む前に取るので、置き場に無い版で止まることは無い。取ってきたものは標準エラーに言い（17.9.6 と同じ行）、そろっていれば通信しない。
 2. 検査。手元のモジュールを `ritsu check --deps-warnings`（依存のファイルの警告も数える）で、base の側で一度、head で一度確かめる。head でだけ出る診断（道具、コード、ファイル、行、文で比べる）が新しい診断で、base の側でだけ出たものは消えた診断である。新しい診断は、関わる変わったモジュールに割り当てる。依存のファイルの診断はそのモジュールに、手元のファイルの診断は、そのファイルが（ほかのファイルを通してでも）読む、変わったモジュールに割り当てる。読むかどうかは、二つの側のそれぞれで参照をたどって調べ、どちらかで読めば割り当てる。どの変わったモジュールも読まないファイルの診断は、どこにも割り当てず、新しい診断の表にだけ出す。変わった帳簿の E050 と E051（17.9.5 の、データの続き）も、そのモジュールの新しいエラーとして数える。head の木が読めなければ（E301〜E306 など）、それが head の検査のエラーで、モジュールは比べない。
-3. 振る舞い。変わったモジュールごとに、`ritsu mod diff <旧> <新>` の中身（ファイル、インターフェース、振る舞い）。それぞれの版は自分の lock で読むので、その lock が固定するものも、比べる前に取ってくる（取れなければ、そのモジュールの `error` になる）。そのうえで、変わったモジュールのファイルを読む手元のファイル（規則、日付、カレンダー、ゲート）ごとに、base の側で読んだものと head で読んだものを比べる（rulec、koyomi、sekisho の差）。「あなたの答えのうち、変わるもの」として出す。二つの側は同じファイルなので、名前の後ろに、読む lock を括弧に入れて付ける（`invoice.cal (the lock of one)` と `invoice.cal (the lock of the working tree)`。日本語では `請求.cal (one の lock)` と `請求.cal (作業ツリーの lock)`）。変わったモジュールをいくつも読む手元のファイルは、そのどのモジュールの下にも出す（比べるのは一度だけ）。
+3. 振る舞い。変わったモジュールごとに、`ritsu mod diff <旧> <新>` の中身（ファイル、インターフェース、振る舞い）。それぞれの版は自分の lock で読むので、その lock が固定するものも、比べる前に取ってくる（取れなければ、そのモジュールの `error` になる）。そのうえで、変わったモジュールのファイルを読む手元のファイル（規則、日付、カレンダー、ゲート）ごとに、base の側で読んだものと head で読んだものを比べる（rulec、koyomi、sekisho の差）。「手元のファイルの答えのうち、変わるもの」として出す。二つの側は同じファイルなので、名前の後ろに、読む lock を括弧に入れて付ける（`invoice.cal (the lock of one)` と `invoice.cal (the lock of the working tree)`。日本語では `請求.cal (one の lock)` と `請求.cal (作業ツリーの lock)`）。変わったモジュールをいくつも読む手元のファイルは、そのどのモジュールの下にも出す（比べるのは一度だけ）。
 
-**出力**。markdown は PR のコメントに貼る形で、上から、見出し（`base` → `head`）、タグが動いたモジュール（GitHub の `> [!WARNING]` の囲み）、検査の表（二つの側のエラーと警告の数）、比べられなかったモジュールの数（あるときだけ）、新しい診断の表（種類、コード、ファイル、行、内容、モジュール。エラーが先）、消えた診断（`<details>` に畳む）、変わったモジュールごとの節、結びの一文を並べる。モジュールの節は、見出し（名前、`@` の名前、古い版 → 新しい版、変わり方）、そのモジュールに割り当てた新しい診断の数、`ritsu mod diff` の中身（17.9.6 の markdown。作れなければ、その理由）、「あなたの答えのうち、変わるもの」（違いのあるファイルは `<details>` に畳み、ほかは一行ずつ）である。表は 50 行までにし、残りは数だけを言う。`@` を含む語は、すでにあるコードの書き方の外では、全部コードの書き方（バッククォート）で書く。GitHub は `@名前` を人への呼びかけとして通知するからである。全体は 60,000 字までにし、超えれば行の境目で切り、開いている `<details>` とコードの囲みを閉じて、JSON を見るよう最後に書く（PR のコメントの上限は 65,536 字である）。テキストは同じものを、表を使わずに並べる。JSON は 17.21 の形で全部を持つ。
+**出力**。markdown は PR のコメントに貼る形で、上から、見出し（`base` → `head`）、タグが動いたモジュール（GitHub の `> [!WARNING]` の囲み）、検査の表（二つの側のエラーと警告の数）、比べられなかったモジュールの数（あるときだけ）、新しい診断の表（種類、コード、ファイル、行、内容、モジュール。エラーが先）、消えた診断（`<details>` に畳む）、変わったモジュールごとの節、結びの一文を並べる。モジュールの節は、見出し（名前、`@` の名前、古い版 → 新しい版、変わり方）、そのモジュールに割り当てた新しい診断の数、`ritsu mod diff` の中身（17.9.6 の markdown。作れなければ、その理由）、「手元のファイルの答えのうち、変わるもの」（違いのあるファイルは `<details>` に畳み、ほかは一行ずつ）である。表は 50 行までにし、残りは数だけを言う。`@` を含む語は、すでにあるコードの書き方の外では、全部コードの書き方（バッククォート）で書く。GitHub は `@名前` を人への呼びかけとして通知するからである。全体は 60,000 字までにし、超えれば行の境目で切り、開いている `<details>` とコードの囲みを閉じて、JSON を見るよう最後に書く（PR のコメントの上限は 65,536 字である）。テキストは同じものを、表を使わずに並べる。JSON は 17.21 の形で全部を持つ。
 
-**終了コード**：0（head の検査にエラーが無く、変わったモジュールをどれも比べられた。振る舞いが変わっていても 0）、1（エラーがある。`--fail-on-change` を付ければ、振る舞いに示せた違いがあるときも 1）、2（走らせられない。または、1 にならず、比べられなかったモジュールがある）。比べられなかったモジュールは、変わったモジュールのうち、`ritsu mod diff` の中身を作れなかったものである（それぞれの版が自分の lock で読むものを取り出せないときなど）。足したモジュールと消したモジュールは、比べる相手が無いので数えない。1 にならないときに 0 でなく 2 にするのは、差の欠けた報告を CI が通さないためで（2026-10-29）、`ritsu mod diff` が、示せた違いが無く比べられなかったファイルがあれば 2 で終わるのと同じ考えである（17.9.6）。比べられなかったモジュールは、その節に理由を書き、テキストと markdown の上のまとめに数を出し、結びの一文が exit 2 のわけを言う。JSON では、モジュールごとの `error` が理由を持つ（17.21）。エラーに数えるのは、head の検査のエラーと、変わった帳簿の E050 と E051 である。`--fail-on-change` が見るのは振る舞いの違い（変わったモジュールの答えと、手元のファイルの答え）だけで、インターフェースの差は見ない。インターフェースの差で使う側が壊れれば、head の検査のエラーに出るからである。走らせられないのは、`--base` が無い、git の版が無い、二つの木の取り出しが止まる（届かない、ダイジェストや署名が合わないなど。取り出しの文の前に、「`one` の lock のモジュールを取り出せません。」のように、どちらの lock かを付ける）、base の木が読めない、どちらかの側の木が検査の前に止まる（新しい ritsu を求める木など）、`ritsu check` が手元のモジュールを検査できないときである。手元のモジュールに言語のファイルが一つも無いとき（依存を集めるだけのモジュール）は、`ritsu check` は止まる（6.1）が、報告は止まらない。二つの側の検査を、診断の無いものとして数え、モジュールを比べる。報告が答えるのは依存を上げると何が変わるかで、手元のファイルが無いことは、その答えを変えないからである。言語のファイルがあるかは、`ritsu check` と同じ歩き方（4.7 の名前を飛ばす）と拡張子で、それぞれの側の見せ方の上で調べる。
+**終了コード**：0（head の検査にエラーが無く、変わったモジュールをどれも比べられた。振る舞いが変わっていても 0）、1（エラーがある。`--fail-on-change` を付ければ、振る舞いに違いが見つかったときも 1）、2（走らせられない。または、1 の場合には当たらないが、変わったモジュールのどれかを比べられなかった）。比べられなかったモジュールは、変わったモジュールのうち、`ritsu mod diff` の中身を作れなかったものである（それぞれの版が自分の lock で読むものを取り出せないときなど）。足したモジュールと消したモジュールは、比べる相手が無いので数えない。1 にならないときに 0 でなく 2 にするのは、差の欠けた報告を CI が通さないためで（2026-10-29）、`ritsu mod diff` が、違いが見つからず比べられなかったファイルがあれば 2 で終わるのと同じ考えである（17.9.6）。比べられなかったモジュールは、その節に理由を書き、テキストと markdown の上のまとめに数を出し、結びの一文が exit 2 のわけを言う。JSON では、モジュールごとの `error` が理由を持つ（17.21）。エラーに数えるのは、head の検査のエラーと、変わった帳簿の E050 と E051 である。`--fail-on-change` が見るのは振る舞いの違い（変わったモジュールの答えと、手元のファイルの答え）だけで、インターフェースの差は見ない。インターフェースの差で使う側が壊れれば、head の検査のエラーに出るからである。走らせられないのは、`--base` が無い、git の版が無い、二つの木の取り出しが止まる（届かない、ダイジェストや署名が合わないなど。取り出しの文の前に、「`one` の lock のモジュールを取り出せません。」のように、どちらの lock かを付ける）、base の木が読めない、どちらかの側の木が検査の前に止まる（新しい ritsu を求める木など）、`ritsu check` が手元のモジュールを検査できないときである。手元のモジュールに言語のファイルが一つも無いとき（依存を集めるだけのモジュール）は、`ritsu check` は止まる（6.1）が、報告は止まらない。二つの側の検査を、診断の無いものとして数え、モジュールを比べる。報告が答えるのは依存を上げると何が変わるかで、手元のファイルが無いことは、その答えを変えないからである。言語のファイルがあるかは、`ritsu check` と同じ歩き方（4.7 の名前を飛ばす）と拡張子で、それぞれの側の見せ方の上で調べる。
 
-**CI での使い方**（README とサイトに載せる）。`ritsu.lock` を変えた PR で、履歴ごとチェックアウトし（`fetch-depth: 0`）、`uses: i2y/ritsu@v<版>` で入れ、`ritsu mod report --base "origin/$GITHUB_BASE_REF" --format markdown > report.md` を走らせ、`gh pr comment --body-file report.md` で貼る（権限 `pull-requests: write`）。JSON も成果物として残す。数行で書ける。報告が二つの lock のモジュールを取ってくるので、前に `ritsu mod fetch` を走らせる行は要らない。
+**CI での使い方**。README（英日）とサイトのモジュールの案内のページ（英日）が、同じワークフローを載せる（`crates/ritsu/tests/readme.rs` が、四つが同じ文字であることと、`uses: i2y/ritsu@v<版>` の版が ritsu の版であることを確かめる）。`ritsu.mod` か `ritsu.lock` を変えた PR で、履歴ごとチェックアウトし（`fetch-depth: 0`）、`uses: i2y/ritsu@v<版>` で入れ、`ritsu mod report --base "origin/$GITHUB_BASE_REF"` を markdown と JSON で走らせ、markdown を `gh pr comment --body-file` で貼り（権限 `pull-requests: write`）、JSON を成果物として残し、markdown の回の終了コードで終わる。報告が二つの lock のモジュールを取ってくるので、取り出しの行は要らない。
 
 ### 17.11 OCI の成果物の形
 
@@ -3614,7 +3624,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 1. `ritsu.mod` を読む。`module` が配る名前の形で、`version` と `ritsu >=` があり、`require … path` が無く、lock が合っている（17.7）ことを求める。
 2. 送り出すファイルを集める。モジュールのルートを歩き（4.7 の飛ばす名前、`.` で始まる名前、入れ子のモジュールを除く）、`exclude` に書いたものを除く。`ritsu.lock` は入れる（使う側は読まないが、作者が何で確かめたかの記録になる）。上限を確かめる。
-3. 集めたファイル（言語のファイルに限らない）の全部に、W901 の表（16.3）をかける。見つかれば、ファイルと行を挙げ（値は出さない）、受け付けない（exit 1）。`ritsu: test secret` の行は、いまと同じく除く。
+3. 集めたファイル（言語のファイルに限らない）の全部に、W901 の表（16.3）をかける。見つかれば、ファイルと行を挙げ（値は出さない）、受け付けない（exit 1）。`ritsu: test secret` の行は、W901 の検査（16.3）と同じく除く。
 4. 集めたファイルを一時ディレクトリにコピーし、そこをモジュールとして（同じ lock、同じ置き場で）`ritsu check` にかける。エラーがあれば、検査の出力を出して受け付けない（exit 1）。送り出すものそのものを確かめ、除いたファイルを指していないことも、ここで分かる。この検査では、モジュール自身の `.geas` の主張も走らせない（依存の `.geas` と同じ扱い。17.8）。主張が走らせるプログラムは一時ディレクトリに無く、主張は作業ツリーでの `ritsu check` が走らせるからである。一時ディレクトリは置き場の `tmp/` の下に作り、手元の同梱のコピー（`.ritsu/modules/`）もそこへコピーする。モジュール自身の `.geas` のファイルは、検査するファイルの一覧から外し、数にも入れない（2026-10-28。ritsu-project の `without_own_claims`）。言語のファイルが `.geas` しか無いモジュールでは、この検査をしない。
 5. tar と層と OCI のマニフェストを作り、ダイジェストを出す。`--dry-run` はここで終わる（通信しない）。
 6. 版のタグを `HEAD` で引く。あれば `GET` し、中身のダイジェストが同じなら「送り出し済み」と言って exit 0、違えば受け付けない（exit 1。版は動かさないので、版を上げるよう言う）。モジュールでないもの（上限を超える OCI のマニフェストも）も受け付けない（exit 1）。
@@ -3694,7 +3704,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 ### 17.15 置き場
 
-**場所**は `RITSU_MODULES`、無ければ、macOS では `~/Library/Caches/ritsu/modules`、ほかの Unix では `$XDG_CACHE_HOME/ritsu/modules`（無ければ `~/.cache/ritsu/modules`）である（Windows は対象にしない。15 章）。`XDG_CACHE_HOME` は、XDG の決まりのとおり、絶対パスのときだけ使う。**WASI**（npm のパッケージ。8.8）では、モジュールは走っている系を知らない。そこで、ローダーが Node の `process.platform` を `RITSU_WASI_PLATFORM` で渡し、`darwin` なら macOS の場所、ほかの値ならほかの Unix の場所にする。`RITSU_MODULES`、`HOME`、`XDG_CACHE_HOME` は、ローダーが呼び出し元の環境をそのまま渡すので、場所はネイティブのバイナリと同じになる。`dirs` で開くディレクトリを絞っても、場所は変わらない。ローダーを通さずに走らせたとき（wasmtime など）は、前のとおり `~/Library/Caches` があれば macOS の場所にする。前は WASI でもいつもこの見方で、`dirs` が `~/Library/Caches` を開いていないと、macOS でも `~/.cache/ritsu/modules` を見ていた。置き場を `dirs` に足しても読めなかった（2026-10-29 に `crates/ritsu/tests/npm.rs` の試験で確かめ、直した）。ブラウザで試すページには置き場が無く、同梱のコピーだけを読む。試験は `ritsu_base::modules::store::with_location` で、スレッドごとに自分の置き場を使う（同時に走るほかの試験と、手元の置き場に触らないため）。
+**場所**は `RITSU_MODULES`、無ければ、macOS では `~/Library/Caches/ritsu/modules`、ほかの Unix では `$XDG_CACHE_HOME/ritsu/modules`（無ければ `~/.cache/ritsu/modules`）である（Windows は対象にしない。15 章）。`XDG_CACHE_HOME` は、XDG の決まりのとおり、絶対パスのときだけ使う。**WASI**（npm のパッケージ。8.8）では、モジュールは走っている系を知らない。そこで、ローダーが Node の `process.platform` を `RITSU_WASI_PLATFORM` で渡し、`darwin` なら macOS の場所、ほかの値ならほかの Unix の場所にする。`RITSU_MODULES`、`HOME`、`XDG_CACHE_HOME` は、ローダーが呼び出し元の環境をそのまま渡すので、場所はネイティブのバイナリと同じになる。`dirs` で開くディレクトリを絞っても、場所は変わらない。ローダーを通さずに走らせたとき（wasmtime など）は、`~/Library/Caches` があれば macOS の場所にする。ブラウザで試すページには置き場が無く、同梱のコピーだけを読む。試験は `ritsu_base::modules::store::with_location` で、スレッドごとに自分の置き場を使う（同時に走るほかの試験と、手元の置き場に触らないため）。
 
 **形**：
 
@@ -3709,7 +3719,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
   tmp/
 ```
 
-- **書く**のは `ritsu mod` のコマンドだけで、項目は `tmp/` の下で作ってから名前を変えて置く（同時に二つの取り出しが走っても、置き場が中途半端にならない。遅れたほうは自分のものを捨てる）。`files/` のファイルは読むだけ（0444）にし、ディレクトリは 0755 にする。`record.json` を書き換える（署名の確かめを足す）ときも、となりに書いてから名前を変える。`tmp/` には、curl のヘッダと本文のファイル、送り出しの検査のコピー、cosign に渡す鍵も作り、どれも使い終わったら消す（2026-10-28）。`tmp/` の下の名前は、実行ごとの数と時刻と通し番号で作る。実行ごとの数は、ネイティブではプロセスの番号、WASI では一度だけ引く乱数である（`ritsu_base::wasi::run_id`）。WASI の std は `process::id` で panic するので、前は npm のパッケージの `ritsu mod vendor` と `ritsu mod push --dry-run` が「ritsu の不具合」で止まっていた（2026-10-29）。置き場の場所が無いとき（`RITSU_MODULES` も `HOME` も無いとき）、ネイティブはこれらのファイルを系の一時ディレクトリに作り、WASI ではそう言って exit 2 で止まる（WASI の std の `temp_dir` も panic する）。
+- **書く**のは `ritsu mod` のコマンドだけで、項目は `tmp/` の下で作ってから名前を変えて置く（同時に二つの取り出しが走っても、置き場が中途半端にならない。遅れたほうは自分のものを捨てる）。`files/` のファイルは読むだけ（0444）にし、ディレクトリは 0755 にする。`record.json` を書き換える（署名の確かめを足す）ときも、となりに書いてから名前を変える。`tmp/` には、curl のヘッダと本文のファイル、送り出しの検査のコピー、cosign に渡す鍵も作り、どれも使い終わったら消す（2026-10-28）。`tmp/` の下の名前は、実行ごとの数と時刻と通し番号で作る。実行ごとの数は、ネイティブではプロセスの番号、WASI では一度だけ引く乱数である（`ritsu_base::wasi::run_id`）。WASI の std は `process::id` で panic するからである。置き場の場所が無いとき（`RITSU_MODULES` も `HOME` も無いとき）、ネイティブはこれらのファイルを系の一時ディレクトリに作り、WASI ではそう言って exit 2 で止まる（WASI の std の `temp_dir` も panic する）。
 - **読む**ときは、`check` などが使う項目ごとに、毎回、中身のダイジェストを lock と比べる（17.11 の tar をメモリの中で作る。モジュールは小さい）。置き場のファイルを人やほかのプロセスが変えれば、E305 で分かる。
 - **消す**のは `ritsu mod clean [--keep <lock>…] [--dry-run]` で、全部か、渡した lock が固定していないものを消す。項目はダイジェストでいつでも取り直せるので、消しても困らない。
 - **同梱のコピー**。`ritsu mod vendor [--check]` は、lock のレジストリのモジュールを、手元のモジュールの `.ritsu/modules/sha256/<16 進>/…`（置き場と同じ形。`refs` と `tmp` は無い）に置く。依存を読むときは、同梱のコピーを先に見る。`--check` は、同梱のコピーが lock に合うかを確かめる。使い道は、レジストリに届かない CI、`dirs` を付けた npm のパッケージ、ブラウザで試すページ（17.22）、依存のファイルをリポジトリの中で読むことである。`.ritsu/` は `.` で始まるので、プロジェクトを歩くときに入らない（4.7）。
@@ -3765,8 +3775,8 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 **Go**
 
-- `go.mod`：`module <パス>`（版 2 からは `/v<メジャー>` を付け、中の import もこのパスにする。Go の決まりである）、`go <版>`、`require`（コードが import するモジュール。ランタイムはいまの固定の版、ライブラリは木が選んだ版）、`GO_RAISED` の行（9.3。`// indirect`）。ライブラリの `go.mod` が求めれば、使う側の版の選び方がその版以上を選ぶ。`doc.go` は、package の名前を `library go` の名前の最後の部分から作り（`pricing-go` は `pricing_go`。予約語か、文字で始まらないなら前に `p` を付ける）、import の一覧を書かない（`go.mod` が書くので）。
-- `go` の版：Go のサポート中の版のうち一番古いもの（`GO_FLOOR`。Go は新しい二つのメジャーをサポートする。2026-10-28 には go1.27 と go1.26。https://go.dev/doc/devel/release#policy）と、コードが import するモジュール（`GO_MODULES`）と上げるモジュール（`GO_RAISED`）の `go.mod` の `go` の行のうち、いちばん高いもの。いまは 1.26.0 になる。表のモジュールの `go` の行は、tools の段の試験がモジュールのキャッシュから読み直して確かめる。依存のライブラリの `go.mod` の `go` の行は見ない（★）。それは木のモジュールではなく生成物なので、ritsu からは見えない。使う側の `go get` が、要れば使う側の `go` の行を上げる。
+- `go.mod`：`module <パス>`（版 2 からは `/v<メジャー>` を付け、中の import もこのパスにする。Go の決まりである）、`go <版>`、`require`（コードが import するモジュール。ランタイムは `GO_MODULES` が固定する版、ライブラリは木が選んだ版）、`GO_RAISED` の行（9.3。`// indirect`）。ライブラリの `go.mod` が求めれば、使う側の版の選び方がその版以上を選ぶ。`doc.go` は、package の名前を `library go` の名前の最後の部分から作り（`pricing-go` は `pricing_go`。予約語か、文字で始まらないなら前に `p` を付ける）、import の一覧を書かない（`go.mod` が書くので）。
+- `go` の版：Go のサポート中の版のうち一番古いもの（`GO_FLOOR`。Go は新しい二つのメジャーをサポートする。2026-10-28 には go1.27 と go1.26。https://go.dev/doc/devel/release#policy）と、コードが import するモジュール（`GO_MODULES`）と上げるモジュール（`GO_RAISED`）の `go.mod` の `go` の行のうち、いちばん高いもの。2026-10-29 には 1.26.0 である。表のモジュールの `go` の行は、tools の段の試験がモジュールのキャッシュから読み直して確かめる。依存のライブラリの `go.mod` の `go` の行は見ない（★）。それは木のモジュールではなく生成物なので、ritsu からは見えない。使う側の `go get` が、要れば使う側の `go` の行を上げる。
 - ★go.sum は書かない。生成したディレクトリで `go mod tidy` をしない。間接の依存が `go.mod` に足され、`--check` が古いと言い、次の `ritsu gen` が元に戻すからである。使う側は `go get` で自分の go.sum に書く。出す前にライブラリを組んで確かめるなら、別のモジュールから `replace` で読み、そちらで `go mod tidy` と `go vet` をする（tools の段の試験と同じ形）。確かめたこと（Go 1.26.0、2026-10-29）：生成したディレクトリの `go mod download`（引数なし）は `go.mod` を変えないが、go.sum には各モジュールの `go.mod` のハッシュしか書かず、`go build` は missing go.sum entry で止まる。中身のハッシュまでそろえても、`go.mod` が直接の依存しか書かないので、`-mod=readonly` の `go build` は updates to go.mod needed で止まる。
 - ライブラリ自身のリポジトリの CI では、`go build -mod=mod ./...`（または `go vet -mod=mod ./...`）で組み、Go が CI の手元の go.mod と go.sum に書き足したものはコミットしない（出し方の文書の Go の節）。確かめたこと（Go 1.26.0、2026-10-29、`GOPROXY=off` とモジュールのキャッシュで）：cedar-go を読むゲートのライブラリで、`go build -mod=mod ./...` は exit 0 で、go.mod に `// indirect` の `require` が一つ足され、go.sum ができた。そのあとの `ritsu gen --check` は go.mod が古いと言う。Temporal の SDK を読むライブラリ（shop）は、Go の版の選び方が選ぶ testify v1.10.0 が手元のキャッシュに無く、オフラインでは組めなかった（ネットワークのある CI では取りに行ける）。
 
@@ -3788,20 +3798,25 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 `ritsu mod site <一覧のファイル> --out <ディレクトリ> [--lang en|ja] [--playground <URL>]`（`crates/ritsu/src/modules/site.rs`。2026-10-29）。
 
-**一覧のファイル**は `ritsu.mod` と同じ字句で書く。次は、`website/modules.list` が祝日のモジュールを送り出したあとに持つ形である。
+**一覧のファイル**は `ritsu.mod` と同じ字句で書く。レジストリの三つのモジュールを載せる一覧は、次のとおりである（`crates/ritsu/tests/modules_site.rs` の一覧。`<レジストリ>` はテストの中のレジストリ）。
 
 ```
-title "ritsu modules"
-description "Modules published from the ritsu repository"
-playground "https://i2y.github.io/ritsu/play/"
-module "ghcr.io/i2y/ritsu-holidays"
-signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
-local "../modules/holidays"
+# The modules of the Acme shop.
+title "Acme modules"
+description "The modules the Acme shop publishes"
+
+module "<レジストリ>/acme/tax"
+module "<レジストリ>/acme/pricing"
+module "<レジストリ>/acme/shop"
+
+signature "<レジストリ>/acme/" by matching "^https://github[.]com/acme/" issuer "https://token.actions.githubusercontent.com"
 ```
+
+`website/modules.list` は、祝日のモジュールを作業ツリーから載せる（`title`、`description` と `local "../modules/holidays"` の三行。2026-10-29）。
 
 - `module` は載せるモジュールで、配るモジュールの名前（`<レジストリ>/<リポジトリ>`）で書く。
 - `signature` は `ritsu.mod` と同じ決まりで、載せるモジュールの確かめに使う。鍵のファイルは、一覧のファイルのディレクトリから読む。
-- `local` は、まだ送り出していないモジュールの作業ツリーを、一つの版（「まだ公開していない」と書く）として載せる。パスは、一覧のファイルのディレクトリから読む。`ritsu.mod` の `require … path` が、その `ritsu.mod` のディレクトリから読むのと同じである。絶対パスは受け付けない。
+- `local` は、送り出していないモジュールの作業ツリーを、一つの版として載せる（ページは「まだ公開していません」と書き、版に「未公開」の印を付ける）。パスは、一覧のファイルのディレクトリから読む。`ritsu.mod` の `require … path` が、その `ritsu.mod` のディレクトリから読むのと同じである。絶対パスは受け付けない。
 - `playground` は、ブラウザで試すページの URL である。
 - `title`、`description`、`playground` は一度ずつ書ける。同じ `module` と、同じディレクトリ（実のパスで比べる）の `local` は、二度は書けない。`module` か `local` が一つは要る。
 - 読めない行は、全部を `<ファイル>:<行>:<列>:` の形で言い、何も書かずに exit 2 で終わる。
@@ -3851,8 +3866,8 @@ local "../modules/holidays"
 - ritsu は `RITSU` か PATH から探す。無ければ一覧を作らず、そう言う（ritsu を持たない機械でも、サイトの残りは組める）。
 - docs.yml は、そのコミットから ritsu を組んで（`cargo build --locked --release -p ritsu`）`RITSU` で渡し、組んだ木に二つの一覧のページがあることを確かめる。`modules/**` を変えた push でも走る。`crates/ritsu/tests/website.rs` が、組んだ木に一覧のページがあることを確かめる。
 - 案内のページ `website/docs/modules.md` と `website/docs-ja/modules.md`（書き方、足し方、取り出し方、送り出し方、署名、報告、ライブラリの gen）から、一覧へリンクする。目次では「Node で使う」と「ライブラリとして公開する」のあいだに置く。
-- 祝日のモジュールを送り出すまでは、一覧のファイルは `local "../modules/holidays"` を持つ（`website/` からのパス）。送り出したら、`module` と `signature` の行に替え、docs.yml に cosign を入れる。
-- 大きさ（2026-10-29。送り出す前の形）：英語は 14 枚のページと `module.json` で 589,632 バイト、日本語は 609,851 バイト。`module.json` は 67,112 バイトである。
+- 一覧のファイルは、祝日のモジュールを `local "../modules/holidays"`（`website/` からのパス）で載せる。レジストリの版を載せるときは、ファイルの注にある `module` と `signature` の二行に替え、docs.yml に cosign を入れる。
+- 大きさ（2026-10-29。`local` の行で作業ツリーを載せた形）：英語は 14 枚のページと `module.json` で 589,632 バイト、日本語は 609,866 バイト。`module.json` は 67,112 バイトである。
 
 ### 17.18 祝日のモジュール
 
@@ -3876,15 +3891,15 @@ modules/holidays/
 - **カレンダーは祝日だけを閉じる**。土日は閉じない。使う側が自分のカレンダーで `use calendar "@holidays/uk/england_and_wales.cal"` と書き、`closed weekly sat, sun` を自分で足す。営業日の決め方は使う側ごとに違うからである。
 - **README** は、出典と、データの利用の条件（英国は Open Government Licence v3.0、日本は公共データ利用規約（PDL1.0））と、使う側の書き方の例を持つ。`THIRD_PARTY_NOTICES.md` は、koyomi のものと同じ二つのファイルの分を持つ。
 - **名前と版**（★）：`ghcr.io/i2y/ritsu-holidays` の `1.0.0`。新しい年の祝日が公表されてデータを新しくする版は、マイナーの版を上げる。ファイルの名前を変える版と、ファイルを消す版は、メジャーの版を上げる。
-- **`ritsu.mod`**（2026-10-29）：`description`、`ritsu >=0.36.0`（作ったときの版。リリースの版に上げるのは、そのリリースのとき）、`license "(MIT OR Apache-2.0) AND OGL-UK-3.0 AND LicenseRef-PDL-1.0"`（カレンダーは ritsu と同じライセンス、データは出典の条件。PDL1.0 には SPDX の識別子が無いので `LicenseRef-`）、`source "https://github.com/i2y/ritsu"`。依存は無い。
+- **`ritsu.mod`**（2026-10-29）：`description`、`ritsu >=0.36.0`（木の ritsu の版。ritsu の版を上げるリリースで、そろえて上げる）、`license "(MIT OR Apache-2.0) AND OGL-UK-3.0 AND LicenseRef-PDL-1.0"`（カレンダーは ritsu と同じライセンス、データは出典の条件。PDL1.0 には SPDX の識別子が無いので `LicenseRef-`）、`source "https://github.com/i2y/ritsu"`。依存は無い。
 - **確かめ**：
   - fast の CI が `ritsu check modules/holidays` を走らせる。
   - `crates/ritsu/tests/modules.rs` が、データと固定が koyomi の例と同じであること、カレンダーが曜日を閉じないこと、`check` の英日と JSON の golden（`tests/golden/modules/holidays.*`）を確かめる。
   - `crates/ritsu/tests/modules_oci.rs` が `push --dry-run` の英日と JSON の golden（`holidays-push-dry-run.*`）を確かめる。`ritsu >=` の行を上げると、ダイジェストも変わる。curl を呼ばないことも確かめる。platforms.yml が同じ試験を Linux で回す（17.25 の「決まったバイト」）。
-- **入れ子のモジュール**。リポジトリのルートから歩くコマンドは `modules/holidays/` に入らない（17.6）。次は、足す前と変わらない（2026-10-29）。
-  - 根の `ritsu.ctx` の検査の JSON（成果物は 622 個）は、`modules/` が有っても無くても同じバイトだった。
+- **入れ子のモジュール**。リポジトリのルートから歩くコマンドは `modules/holidays/` に入らない（17.6）。確かめたこと（2026-10-29）：
+  - 根の `ritsu.ctx` の検査の JSON（成果物は 622 個）は、`modules/` が有っても無くても同じバイトである。
   - 木を数える試験（website、release、skills、readme、audit）は、`website/` か `crates/` か `skills/` の下だけを歩く。`modules/` を数えるものは無い。website の試験だけが、一覧のページの分だけ増える（17.17）。
-  - B の突き合わせのスクリプトは、git が追うファイルを並べるので、コミットのあとで祝日のモジュールの七つ（五つのカレンダーと二つのディレクトリ）が加わる。それらに、それぞれのスクリプトがかけるコマンド（`koyomi check` の英日と JSON、`doc` の英日と HTML、`api` の英日、`gen` の英日）を、モジュールを入れる前のバイナリといまのバイナリで走らせ、56 回とも同じ出力だった。
+  - M14 の突き合わせ（17.25）は git が追うファイルを並べるので、祝日のモジュールの七つ（五つのカレンダーと二つのディレクトリ）も入る。それらにかけるコマンド（`koyomi check` の英日と JSON、`doc` の英日と HTML、`api` の英日、`gen` の英日）を、モジュールを入れる前のバイナリと入れたあとのバイナリで走らせ、56 回とも同じ出力だった。
 - **ワークフロー** `.github/workflows/modules.yml`（`workflow_dispatch` だけ。入力は `module`（既定 `modules/holidays`）と `publish`（既定 false））。`publish` で走らせるのは、公開を決めてからである。
   - **ジョブ `check`**（権限は `contents: read` だけ）：コミットから ritsu をビルドし、モジュールのディレクトリで `ritsu check .` と `ritsu mod push --dry-run`（英語と JSON）を走らせる。名前、版、ダイジェストをジョブの出力にし、ジョブのまとめにダイジェストを書く。
   - **ジョブ `publish`**（`check` のあと、`publish` のときだけ。権限は `contents: read`、`packages: write`、`id-token: write`）：ritsu をもう一度ビルドする（ジョブのあいだでバイナリを渡さない）。モジュールの名前が `ghcr.io/` で始まることを確かめ、`GITHUB_TOKEN` を標準入力で渡して `docker login ghcr.io` をする（ritsu も cosign も Docker の設定ファイルを読む。17.13）。
@@ -3953,12 +3968,16 @@ ritsu の台帳（4.3、ritsu-cross の `codes.rs`）には、モジュールの
 
 E307 は木を読むのを止めない。ほかの E3xx があると木は使えず、検査はそこで止まるが、E307 は木の `found`（W302 と同じ所）に入り、木はそのまま使える。`@` で始まる名前のファイルは、ファイルの層の `R/@<名前>` に隠れて読めないだけで、ほかのファイルの読み方は変わらないからである。`ritsu check` は E307 をエラーとして数える（終了コード 1）。
 
-文の例（直す前に、japanese-review の決まりで読み直す）：
+文の例（E304 は台帳の再現を `ritsu check .` にかけたもの、W303 は `crates/ritsu/tests/modules.rs` の材料のもの。場所のあとのソースの行は省いた）：
 
-- E304：`ritsu.lock` does not match `ritsu.mod`: `require tax oci "example.com/acme/tax" 1.2.0` asks for 1.2.0 or later, and the lock has 1.0.0; run `ritsu mod lock` ／ `ritsu.lock` が `ritsu.mod` に合いません。`require tax oci "example.com/acme/tax" 1.2.0` は 1.2.0 以上を求めていますが、lock は 1.0.0 です。`ritsu mod lock` を走らせてください。
-- W303：`@shop/@pricing/rules/fee.rule` reaches a module this module does not require; require it, so that a version of shop that drops it does not break this file ／ `@shop/@pricing/rules/fee.rule` は、このモジュールが `require` していないモジュールを指しています。shop の新しい版が pricing を使わなくなると、このファイルは壊れます。`require` に足してください。
+```
+error[ritsu E304]: ritsu.mod:4:9: `ritsu.lock` does not match `ritsu.mod`: `require tax oci "example.com/acme/tax" 1.2.0` asks for 1.2.0 or later, and the lock has 1.0.0; run `ritsu mod lock`
+エラー[ritsu E304]: ritsu.mod:4:9: `ritsu.lock` が `ritsu.mod` に合いません。`require tax oci "example.com/acme/tax" 1.2.0` は 1.2.0 以上を求めていますが、lock は 1.0.0 です。`ritsu mod lock` を走らせてください
+warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` reaches a module this module does not require; require it, so that a version of pricing that drops it does not break this file
+警告[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` は、このモジュールが `require` していないモジュールを指しています。pricing の新しい版が tax を使わなくなると、このファイルは壊れます。`require` に足してください
+```
 
-**言語の参照の誤り**（`@<名前>` が `require` に無い、モジュールの外を指す、入れ子のモジュールの中を `@` なしで指す、依存のファイルが無い、モジュールの中で絶対パスか空のパスを書いた、`@` をたどるのに木が読めない（文は木の最初の診断を添える））は、いまと同じく、参照を書いた言語が自分のコードで言う（7.10）。文は `ritsu_base::modules` が二つの言語で一つ持ち、どの言語でも同じ文になる。コマンドラインで渡した `@` のパスの誤りも、同じ文で言う（17.6 の「単体のコマンド」。exit 2）。
+**言語の参照の誤り**（`@<名前>` が `require` に無い、モジュールの外を指す、入れ子のモジュールの中を `@` なしで指す、依存のファイルが無い、モジュールの中で絶対パスか空のパスを書いた、`@` をたどるのに木が読めない（文は木の最初の診断を添える））は、ほかの参照の誤りと同じく、参照を書いた言語が自分のコードで言う（7.10）。文は `ritsu_base::modules` が二つの言語で一つ持ち、どの言語でも同じ文になる。コマンドラインで渡した `@` のパスの誤りも、同じ文で言う（17.6 の「単体のコマンド」。exit 2）。
 
 **止まるもの**（依存が置き場に無い、確かめた署名の記録が無い、新しい ritsu が要る、lock の書式の版が新しい）は、診断ではなく、8.4 の exit 2 の止まり方で、何を走らせればよいかを言う。
 
@@ -3971,7 +3990,7 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 - `files` と `diagnostics` の要素に `"dependency": "@pricing" | null`（手元のファイルは null）。置くのは `file` のすぐあとである。依存の依存のファイルは、正規の書き方の連なり（`"@pricing/@tax"`）を書く。全体の検査で `--deps-warnings` が無ければ、依存のファイルの警告と注は `diagnostics` に入れない（数は `dependencies` の `warnings`）。
 - `contributions` の要素：`{"file": "rules/spring_sale.rule", "dependency": null, "to": "@pricing/rules/order_discount.rule", "to_dependency": "@pricing"}`。モジュールの境目を越える `contribution` だけを並べる（17.8 の注と同じもの）。
 - 木が読めないとき（E301〜E306、E308）は、`files` と `dependencies` が空で、`diagnostics` に木の診断が入る。
-- ルートに `ritsu.mod` が無く、歩いてモジュールを飛ばしたときだけ、`ok` のあとに `"skipped_modules": ["tax"]`（ルートからのパス）を置く（★）。飛ばしたモジュールが無ければ、いまと一字も変わらない。
+- ルートに `ritsu.mod` が無く、歩いてモジュールを飛ばしたときだけ、`ok` のあとに `"skipped_modules": ["tax"]`（ルートからのパス）を置く（★）。飛ばしたモジュールが無ければ置かない（M14）。
 
 **`ritsu mod list --format json`**：`{"ritsu", "root", "module": {"name", "version"}, "lock": {"lock": 1, "ritsu": "<版>"} | null, "modules": [{"name", "version", "source", "path", "digest", "files_digest", "prefix", "required_by": [{"module", "name", "version"}], "present": true | false, "where", "verified": […]}], "diagnostics": [ … ]}`。`where` は `"store" | "vendor" | "path"` で、取り出していなければ null である。`diagnostics` は木の診断（lock が合わないときの E304 など）で、要素は `ritsu check --format json` の `diagnostics` と同じ形である（★。17.19 の exit 1 の理由を、JSON でも読めるようにする）。
 
@@ -4012,23 +4031,22 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
   error: the dependency `example.com/acme/pricing` 1.1.0 is neither in the store (`<置き場>`) nor in this module's copy of it; run `ritsu mod fetch` with the native ritsu. If it is fetched already and `dirs` opens some directories only, add the store to `dirs`, or put a copy of it in this module with `ritsu mod vendor`
   ```
 
-  日本語は「依存 `…` 1.1.0 が、置き場（`<置き場>`）にも同梱のコピーにもありません。ネイティブの ritsu で `ritsu mod fetch` を走らせてください。もう取り出してあり、`dirs` で開くディレクトリを絞っているときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーを置いてください」。API に `HOME` も `RITSU_MODULES` も無い環境を渡したときは、置き場の場所が無いことと、`ritsu mod vendor` か `RITSU_MODULES` を言う。ネイティブの文は前のまま（`ritsu mod fetch` を走らせるよう言う）。
+  日本語は「依存 `…` 1.1.0 が、置き場（`<置き場>`）にも同梱のコピーにもありません。ネイティブの ritsu で `ritsu mod fetch` を走らせてください。もう取り出してあり、`dirs` で開くディレクトリを絞っているときは、置き場を `dirs` に足すか、`ritsu mod vendor` で同梱のコピーを置いてください」。API に `HOME` も `RITSU_MODULES` も無い環境を渡したときは、置き場の場所が無いことと、`ritsu mod vendor` か `RITSU_MODULES` を言う。ネイティブの文は、`ritsu mod fetch` を走らせるよう言う。
 - 試験（`crates/ritsu/tests/npm.rs`、tools の段）：
   - `a_module_command_that_needs_the_network_says_so` は、12 のコマンドが curl、git、cosign の文と exit 2 で止まり、モジュールと置き場を変えないことを確かめる。
   - `the_package_reads_a_module_s_dependencies_as_the_binary_does` は、`RITSU_MODULES` の置き場、同梱のコピー（空の置き場で）、`HOME` から決まる置き場、`HOME` と `XDG_CACHE_HOME` から決まる置き場を読む 42 のコマンドと `mod vendor` を、ネイティブと比べる。どの系でも `~/Library/Caches` を作っておくので、Linux ではローダーの渡す系の名前で場所が決まることも確かめる。API に `dirs` を渡したときの三つ（置き場を開いたとき、開いていないときの文、`HOME` の無いときの文）と、同梱のコピーだけを開いたときも確かめる。
-  - 作る前の試しで、`mod vendor` と `push --dry-run` が WASI で panic することと、macOS で `dirs` に置き場を足しても読めないことが分かり、直した（17.15）。
 
 **ブラウザで試すページ**（8.7）。
 
 - 置き場も通信も無い。モジュールはファイルとして渡す。プロジェクトに `ritsu.mod`、`ritsu.lock`、同梱のコピー（`.ritsu/modules/…`）を入れれば、`@` はディスクと同じに読める（`Memory` もディスクと同じ見せ方をする。17.6）。
-- 変更の項目に `{"base64": "…"}` を足し、UTF-8 でないファイルを運べるようにする（17.17）。
+- 変更の項目は `{"base64": "…"}` も取り、UTF-8 でないファイルを運べる（17.17）。
   - ritsu-wasm の `Request` はファイルをバイトで持ち、`{"base64": "…"}` を `ritsu_base::sources::base64_decode` で読む。読めない base64 と、文字列でも `{"base64"}` でもない項目は、そう言って答えない。
   - worker はそのまま渡す。エディターは、そのファイルの中身の代わりに説明（「UTF-8 のテキストではないファイルです（N バイト）。…」）を見せ、書き換えさせない（CodeMirror の `EditorState.readOnly` と `EditorView.editable`）。
-- プロジェクトの一覧に、例のプロジェクト（`modules` と `modules.ja`。17.26）を、グループ `modules` として足す（グループは七つになる）。
+- プロジェクトの一覧に、例のプロジェクト（`modules` と `modules.ja`。17.26）を、グループ `modules` として置く（グループは七つ）。
   - 中身は、`shop` のファイルと同梱のコピーである。テストが例をコピーし、`pricing` と `shop` の `require` をレジストリの形に書き換え、`tax` と `pricing` を決まった日付で置き場に置き（`put_directory`）、その置き場で lock を書き、`ritsu mod vendor` で作る。開くファイルはフロー（`orders/place_order.flow`、`注文/注文を受ける.flow`）である。
   - `projects.json` のもと（8.7）は、例のディレクトリの中のパスで書く。18 のファイルのうち、`ritsu.mod` は書き換えたもので、`ritsu.lock` と同梱のコピー（あわせて 13）はリポジトリに無い（テストが作る）。
   - lock は ritsu の版を持つので、版を上げたら `projects.json` を作り直す（`RITSU_BLESS=1` で `tests/playground.rs` を走らせる）。
-- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直した。B〜F の分で 16,492,171 バイトから 17,019,173 バイトになった（2026-10-29）。
+- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 17,021,257 バイトである（2026-10-29。モジュールの仕組みを入れる前にコミットしてあったものは 16,492,171 バイト）。
 - 試験（`crates/ritsu/tests/playground.rs`）：
   - `a_file_of_bytes_goes_in_as_its_bytes`：koyomi のカレンダーと Shift_JIS の CSV を `base64` で渡し、8 の答えをバイナリと比べ、読めない項目の文を確かめる。
   - ページの答えとバイナリの突き合わせ（2,588 の答え、112 のプロジェクトと編集）に `modules` と `modules.ja` が入る。
@@ -4038,7 +4056,7 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 
 16 章の検査との関係と、モジュールが足す守りをまとめる。
 
-- **依存のプログラムを走らせない**。`check` は依存の `.geas` の主張を走らせない（17.8）。ほかの言語の `check` は、もとからプログラムを走らせない。
+- **依存のプログラムを走らせない**。`check` は依存の `.geas` の主張を走らせない（17.8）。ほかの言語の `check` は、プログラムを走らせない。
 - **通信は `ritsu mod` だけ**（M4）。`check` は cosign も呼ばない。
 - **平文の HTTP のレジストリは受け付けない**（ループバックだけ。17.12）。16 章の W902 の考え方（平文の送り先）を、レジストリでは警告ではなくエラーにした。運ぶのはソースと、署名を確かめる対象だからである。
 - **ダイジェストで固定し、毎回確かめる**（17.11、17.15）。タグが動いても、lock を持つ使う側は前の中身を取る。動いたことは報告の先頭に出る（17.10）。
@@ -4052,7 +4070,7 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 
 ### 17.24 Lean
 
-今回、Lean のモデルは足さない（★）。P7 の Lean の層は、言語の意味の中心部分のモデルで、モジュールはどの言語の意味も変えない。決める部分のうち、版の選び方、正規の書き方、tar の読み書きは、Rust のテストで性質を確かめる（ランダムに作った依存の木で、選んだ版がどの `require` も満たし、選び直しても変わらないこと、一つのファイルが一つの書き方になること、書いた tar を読み戻すと同じファイルになり、受け付けない形はどれも止まること）。koyomi と sekisho の差分の「ほかは同じ」の主張は、検査と同じ全部をたどる仕組みの上に立つ。テストは、小さな材料で、二つの側を一つずつ評価した総当たりの答えと突き合わせる（17.25）。
+Lean のモデルは持たない（★）。P7 の Lean の層は、言語の意味の中心部分のモデルで、モジュールはどの言語の意味も変えない。決める部分のうち、版の選び方、正規の書き方、tar の読み書きは、Rust のテストで性質を確かめる（ランダムに作った依存の木で、選んだ版がどの `require` も満たし、選び直しても変わらないこと、一つのファイルが一つの書き方になること、書いた tar を読み戻すと同じファイルになり、受け付けない形はどれも止まること）。koyomi と sekisho の差分の「ほかは同じ」の主張は、検査と同じ全部をたどる仕組みの上に立つ。テストは、小さな材料で、二つの側を一つずつ評価した総当たりの答えと突き合わせる（17.25）。
 
 ### 17.25 テスト
 
@@ -4125,10 +4143,10 @@ E307 は木を読むのを止めない。ほかの E3xx があると木は使え
 
 - **ソースを配らずに、`api` の JSON と rulec の証明書だけを配る形**：使う側が言語の検査を通せず、モジュールの境目で証明が切れる（17.1）。
 - **中央の公開レジストリのサービス**：レジストリは distribution-spec のものを使う（M5）。
-- **一回の実行で、手元のモジュールを二つ以上扱うこと**（ワークスペース。★）：いまは一つで、ルートに `ritsu.mod` の無い木では、モジュールを飛ばして一つずつ確かめるよう言う（17.6）。
+- **一回の実行で、手元のモジュールを二つ以上扱うこと**（ワークスペース。★）：一回の実行の手元のモジュールは一つで、ルートに `ritsu.mod` の無い木では、モジュールを飛ばして一つずつ確かめるよう言う（17.6）。
 - **ミラーと、置き換え**（パスの依存で上書きするほかの形）。
 - **dandori、chobo、kaname、geas、yuen、sakai の振る舞いの差**（★。17.9.5）。
-- **レジストリのタグが lock のダイジェストを指したままかを確かめるコマンド**。いまは `add` と `get` と報告で分かる。
+- **レジストリのタグが lock のダイジェストを指したままかを確かめるコマンド**。タグが動いたことは、`add` と `get` と報告で分かる（17.10）。
 - **依存の検査の結果を実行をまたいで覚えること**（15 章の、実行をまたぐキャッシュ）。依存は大きくならないと見て、測ってから考える。
 - **レジストリから版を消すこと、使わないよう印を付けること**。
 - **日本語の依存の名前**（17.3）。

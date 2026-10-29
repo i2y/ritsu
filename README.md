@@ -576,6 +576,143 @@ them:
 - yuen pins each table, date, claim, task and function one by one, and sakai checks each
   reference that crosses contexts, with its line.
 
+## Modules
+
+A module is a directory with a `ritsu.mod`, which gives its files a name and a version. Other
+projects require it, from a directory beside them or from an OCI registry, and read its files by
+`@<name>/…` paths. A project checks the files it requires with its own, so a proof does not stop at
+a module's edge either. Here, in ritsu's tests
+([crates/ritsu/tests/projects/modules](crates/ritsu/tests/projects/modules)), a shop requires
+`pricing`, which requires `tax`:
+
+<!-- crates/ritsu/tests/projects/modules/shop/ritsu.mod -->
+```
+module example.com/acme/shop
+version 0.1.0
+description "The order flow and the checkout of the Acme shop"
+
+require pricing path "../pricing"
+```
+
+The shop's workflow calls the rules of `pricing` without copying them, by the name the shop's
+`ritsu.mod` gives the dependency:
+
+```flow
+workflow place_order v1
+…
+use rule shipping from "@pricing/rules/shipping_fee.rule"
+use rule total from "@pricing/rules/order_total.rule"
+```
+
+`ritsu check` reads every module the shop requires and checks their files with the shop's: a weight
+the workflow passes to `shipping` is held to the range of the rule's input as it would be in one
+project.
+
+```console
+$ cd crates/ritsu/tests/projects/modules/shop
+$ ritsu check .
+ok checkout/basket.kn: 2 functions, total
+orders/place_order.flow: ok
+dependencies: 2 modules, 3 files (rulec 3): all pass
+ritsu check: 2 files (kaname 1, dandori 1): all pass; borders between the languages: 0 checked, 0 undecided
+```
+
+A module on a registry is required with `ritsu mod`, which writes `ritsu.mod` and `ritsu.lock`:
+
+```console
+$ ritsu mod add holidays ghcr.io/i2y/ritsu-holidays@1.0.0
+$ ritsu mod fetch
+```
+
+- The lock pins every module the project reads, the dependencies of its dependencies too, to a
+  version and two digests. Every command checks the files it reads against them, and
+  `ritsu mod lock --check` fails a build whose lock is stale. `ritsu mod get <name>@<version>`
+  raises a dependency.
+- `ritsu mod fetch` fetches what the lock pins into a store kept across runs. `ritsu mod vendor`
+  puts a copy of it in the module (`.ritsu/modules/`), for a build that cannot reach the registry.
+  Only `ritsu mod` reaches the network: `check`, `gen`, `run` and the languages' commands read the
+  store and the copy.
+- `ritsu mod push` checks the module, refuses it when a file holds a key (W901), and pushes it to the
+  registry its name names. It prints the `cosign sign` command that signs it. With a `signature`
+  line in `ritsu.mod`, a fetch has cosign check the signature before it keeps the module:
+
+```
+signature "ghcr.io/i2y/ritsu-holidays" by matching "^https://github[.]com/i2y/ritsu/" issuer "https://token.actions.githubusercontent.com"
+```
+
+The credentials for a registry come from Docker's configuration file (what `docker login` and the
+credential helpers write), and no output shows them.
+
+`ghcr.io/i2y/ritsu-holidays` is a module of this repository,
+[modules/holidays](modules/holidays/README.md): the public holidays of the United Kingdom and of
+Japan, as calendars of koyomi, with the data pinned to what GOV.UK and the Cabinet Office publish.
+Its calendars close the holidays and nothing else. A calendar of your own reads one with
+`use calendar "@holidays/uk/england_and_wales.cal"` and closes your weekends itself, with
+`closed weekly sat, sun`. [The list of modules](https://i2y.github.io/ritsu/modules/list/) shows
+each version of it, with a page for each file and what changed from the version before.
+
+### What raising a dependency changes
+
+`ritsu mod diff` compares two versions of a module: the files added and removed, what each changed
+file shows the code that uses it, and, for rules, dates and gates, every input that gets a different
+answer, over the whole input space rather than a sample. `ritsu mod report` answers what a pull
+request that raises a dependency asks. It checks the project against the lock of the base and the
+lock of the head, and says, for each module that changed, its diff and which answers of your own
+files change. In GitHub Actions it posts that on the pull request:
+
+```yaml
+# .github/workflows/ritsu-mod-report.yml
+name: ritsu mod report
+on:
+  pull_request:
+    paths: [ritsu.mod, ritsu.lock]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: i2y/ritsu@v0.36.0
+      - name: Report what raising the dependencies changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          code=0
+          ritsu mod report --base "origin/$GITHUB_BASE_REF" --format markdown > report.md || code=$?
+          ritsu mod report --base "origin/$GITHUB_BASE_REF" --format json > report.json || true
+          if [ -s report.md ]; then gh pr comment "$PR" --body-file report.md; fi
+          exit "$code"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ritsu-mod-report
+          path: report.json
+```
+
+- `fetch-depth: 0` fetches the history, so that `origin/<base>` can be read.
+- `ritsu mod report` fetches the modules both locks pin. It exits 1 when the head has errors, and 2
+  when it cannot compare a module that changed. Add `--fail-on-change` to fail when answers change
+  too.
+- For a module that is not at the root of the repository, give its directory in `paths` and to
+  `--root`.
+- A pull request from a fork gets a token that cannot write, and no comment.
+- `--lang ja` writes the report in Japanese.
+
+The npm package reads a module's dependencies from the store and from the copy `ritsu mod vendor`
+puts in the module. The commands that reach a registry or run git or cosign (`add`, `get`, `fetch`,
+`versions`, `push`, `report` and `site`, and `lock`, `remove` and `diff` when they have to fetch)
+need the native ritsu. When `dirs` opens only some directories, add the store to `dirs`, or put the
+copy in the module with `ritsu mod vendor`.
+
+`ritsu mod --help` lists the fifteen commands of `ritsu mod`, and
+[Modules](https://i2y.github.io/ritsu/modules/) on ritsu's site says how to write, require, push and
+sign a module.
+
 ## Security checks
 
 The languages also read their files for what leaves a secret or a service exposed: a key written
@@ -675,6 +812,8 @@ ritsu check <dir>         every language's check, then the checks across them
 ritsu run <flow> …        a workflow run with its rules evaluated, dates computed, books moved
 ritsu gen <dir> --out …   one package of TypeScript, Python or Go for the whole project
 ritsu gen --check …       whether the packages are current; with --format json, file by file
+ritsu gen --library …     a module as libraries for npm, PyPI and Go
+ritsu mod <command> …     modules: add, lock, fetch, push, diff, report and the rest
 ritsu explain <code>      what a diagnostic means, with a reproduction
 ritsu skills install      the Agent Skills, written where an agent reads them
 ritsu <language> …        a language's own commands, as in ritsu rulec doc fee.rule
@@ -684,6 +823,9 @@ A release archive holds `ritsu` and nine links to it — `rulec`, `dandori`, `ko
 `geas`, `yuen`, `sakai`, `sekisho`, `kaname` — and each runs as its language. `cargo install` installs the `ritsu`
 binary alone: call a language as `ritsu <language> …`, or make the link yourself, named for the
 language (`ln -s "$(command -v ritsu)" ~/.cargo/bin/rulec`). Add `--lang ja` for Japanese.
+[Publishing libraries](https://i2y.github.io/ritsu/libraries/) on ritsu's site says what
+`ritsu gen --library` writes and how to publish it, and [Modules](#modules) above says what
+`ritsu mod` does.
 
 ## Install
 
@@ -726,6 +868,8 @@ native binary.
   [kaname](crates/kaname/README.md)
 - `crates/ritsu-*` — the shared base, units, ports, project reading, the checks across
   languages, the `.proto` reader, the emitters, the browser build
+- `modules/holidays` — a module of the public holidays of the United Kingdom and of Japan, for other
+  projects to require
 - `proofs/` — the Lean models
 - `website/` — the site: ritsu's pages and the playground, with rulec's site in `website/rulec`, dandori's in `website/dandori` and chobo's in `website/chobo`
 - `DESIGN.md`, `PLAN.md` — the design of the whole (in Japanese)

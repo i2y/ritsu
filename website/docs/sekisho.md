@@ -370,6 +370,45 @@ CLI. Where a policy goes beyond that part (`like`, arithmetic, sets, the functio
 extensions), sekisho says the question cannot be decided, and which part of which policy. The
 calls of workflows are held to gates only: Cedar has no way to say which flow a workflow is.
 
+## Comparing two versions
+
+`sekisho diff` compares the decisions of two versions of a gate. For each action both have, it
+walks every combination as the check does, over the stretches either version tells apart, and says
+which policies decide each. A change to what the gate reads counts as a change to the gate. In this
+one, the gate reads the second version of its rule of bands, where a small amount runs up to 8
+instead of 5:
+
+```rule
+| amount | -> band |
+| <=8    | small   |
+| >=9    | large   |
+```
+
+```console
+$ cd crates/sekisho
+$ sekisho diff tests/diff/limits.gate tests/diff/limits_v2.gate
+sekisho diff: gate limits v1 → v2
+  old: tests/diff/limits.gate
+  new: tests/diff/limits_v2.gate
+
+refund_order: 20 combinations walked over both versions
+  allow gained (deny → allow): 1 combination
+    deciding policies: none → clerks_refund_small_amounts
+    - User holding clerk, Order, amount: 1 to 15, size: small (in the old version: size: large)
+  the same answer, decided by other policies: 1 combination
+    deciding policies: managers_refund → clerks_refund_small_amounts, managers_refund
+    - User holding clerk and manager, Order, amount: 1 to 15, size: small (in the old version: size: large)
+
+for every other combination, every action is decided the same.
+```
+
+Each side is a path, a path at a git revision (`gates/refunds.gate@origin/main` on a pull request),
+or a gate of a dependency: `@<name>/<path>` at the version the lock pins, `@<name>@<version>/<path>`
+at another version in the store. The exit code is 1 when a permission is gained or lost or the
+interface differs, 0 when only the deciding policies change, and 2 when the two cannot be compared
+(a side that does not pass `sekisho check`, or more combinations than `--budget`).
+`--format markdown` writes the same in Markdown, and `--format json` gives every change.
+
 ## Try it in the browser
 
 [The playground](playground/#project=sekisho/refunds) opens this example. Press *generate* on the
