@@ -30,6 +30,75 @@ message shop.v1.Parcel
   field handling json=handling ty=Named("shop.v1.Handling") repeated=false presence=false rules=null
 enum shop.v1.Handling = HANDLING_STANDARD HANDLING_FRAGILE
 unread
+== ../rulec/tests/implements/api/shop/common/v1/rows.proto
+package shop.common.v1
+message shop.common.v1.MatchedRow
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+unread
+== ../rulec/tests/implements/api/shop/v1/cart.proto
+package shop.v1
+message shop.common.v1.MatchedRow
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+message shop.v1.CartRequest
+  field member json=member ty=Scalar("bool") repeated=false presence=true rules=null
+  field lines json=lines ty=Named("shop.v1.CartRequest.Line") repeated=true presence=false rules=null
+message shop.v1.CartRequest.Line
+  field price json=price ty=Scalar("int64") repeated=false presence=true rules=null
+message shop.v1.CartResponse
+  field fee json=fee ty=Scalar("int64") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.common.v1.MatchedRow") repeated=true presence=false rules=null
+service shop.v1.CartService imports_options=false
+  method Price in=shop.v1.CartRequest out=shop.v1.CartResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+unread
+== ../rulec/tests/implements/api/shop/v1/member_shipping.proto
+package shop.v1
+message shop.v1.FiredRow
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+message shop.v1.QuoteRequest
+  field member json=member ty=Named("shop.v1.Tier") repeated=false presence=true rules=null
+  field subtotal json=subtotal ty=Scalar("int64") repeated=false presence=true rules=null
+  field campaign json=campaign ty=Named("shop.v1.Tier") repeated=false presence=true rules=null
+message shop.v1.QuoteResponse
+  field lifted json=lifted ty=Scalar("bool") repeated=false presence=false rules=null
+  field shipping json=shipping ty=Scalar("int64") repeated=false presence=false rules=null
+  field effective json=effective ty=Named("shop.v1.Tier") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.v1.FiredRow") repeated=true presence=false rules=null
+enum shop.v1.Tier = TIER_UNSPECIFIED TIER_BASIC TIER_SILVER TIER_GOLD TIER_PLATINUM
+service shop.v1.MemberShippingService imports_options=false
+  method Quote in=shop.v1.QuoteRequest out=shop.v1.QuoteResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+service shop.v1.PlainService imports_options=false
+  method GetQuote in=shop.v1.QuoteRequest out=shop.v1.QuoteResponse streams=false
+unread
+== ../rulec/tests/mutants/contracts/member_shipping.proto
+package shop.v1
+message shop.v1.FiredRow
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+message shop.v1.QuoteRequest
+  field member json=member ty=Named("shop.v1.Tier") repeated=false presence=true rules=null
+  field subtotal json=subtotal ty=Scalar("int64") repeated=false presence=true rules=null
+  field campaign json=campaign ty=Named("shop.v1.Tier") repeated=false presence=true rules=null
+message shop.v1.QuoteResponse
+  field lifted json=lifted ty=Scalar("bool") repeated=false presence=false rules=null
+  field shipping json=shipping ty=Scalar("int64") repeated=false presence=false rules=null
+  field effective json=effective ty=Named("shop.v1.Tier") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.v1.FiredRow") repeated=true presence=false rules=null
+enum shop.v1.Tier = TIER_UNSPECIFIED TIER_BASIC TIER_SILVER TIER_GOLD TIER_PLATINUM
+service shop.v1.MemberShippingService imports_options=false
+  method Quote in=shop.v1.QuoteRequest out=shop.v1.QuoteResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
+service shop.v1.PlainService imports_options=false
+  method GetQuote in=shop.v1.QuoteRequest out=shop.v1.QuoteResponse streams=false
+unread
 == ../rulec/tests/mutants/contracts/order.proto
 package shop.v1
 enum shop.v1.MemberTier = MEMBER_TIER_UNSPECIFIED MEMBER_TIER_BASIC MEMBER_TIER_GOLD MEMBER_TIER_PLATINUM
@@ -469,6 +538,26 @@ unread google/api/annotations.proto google/type/money.proto shop/v2/cancel.proto
 == ../dandori/tests/fixtures/rules/account.proto
 package bank.v1
 enum bank.v1.Status = ACTIVE CLOSED
+unread
+== ../dandori/tests/fixtures/rules/member_shipping.proto
+package shop.v1
+message shop.v1.FiredRow
+  field table json=table ty=Scalar("string") repeated=false presence=false rules=null
+  field row json=row ty=Scalar("int32") repeated=false presence=false rules=null
+  field label json=label ty=Scalar("string") repeated=false presence=false rules=null
+message shop.v1.QuoteRequest
+  field member json=member ty=Named("shop.v1.Tier") repeated=false presence=true rules=null
+  field campaign json=campaign ty=Named("shop.v1.Tier") repeated=false presence=true rules=null
+  field subtotal json=subtotal ty=Scalar("int64") repeated=false presence=true rules=null
+message shop.v1.QuoteResponse
+  field shipping json=shipping ty=Scalar("int64") repeated=false presence=false rules=null
+  field effective json=effective ty=Named("shop.v1.Tier") repeated=false presence=false rules=null
+  field lifted json=lifted ty=Scalar("bool") repeated=false presence=false rules=null
+  field trace json=trace ty=Named("shop.v1.FiredRow") repeated=true presence=false rules=null
+enum shop.v1.Tier = TIER_UNSPECIFIED TIER_BASIC TIER_SILVER TIER_GOLD TIER_PLATINUM
+service shop.v1.MemberShippingService imports_options=false
+  method Quote in=shop.v1.QuoteRequest out=shop.v1.QuoteResponse streams=false
+    option idempotency_level = "NO_SIDE_EFFECTS"
 unread
 == ../dandori/tests/fixtures/rules/order.proto
 package shop.v1

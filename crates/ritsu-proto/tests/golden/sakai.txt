@@ -35,6 +35,82 @@ message Parcel 20
 enum Handling 25
   value HANDLING_STANDARD 0 26
   value HANDLING_FRAGILE 1 27
+== tests/implements/api/shop/common/v1/rows.proto
+syntax proto3
+package shop.common.v1
+message MatchedRow 6
+  field row 1 None Scalar("int32") json=None oneof=None line=7
+  field label 2 None Scalar("string") json=None oneof=None line=8
+  field table 3 None Scalar("string") json=None oneof=None line=9
+== tests/implements/api/shop/v1/cart.proto
+syntax proto3
+package shop.v1
+import shop/common/v1/rows.proto 5:1 public=false weak=false
+message CartRequest 7
+  field member 1 Optional Scalar("bool") json=None oneof=None line=12
+  field lines 3 Repeated Named("Line") json=None oneof=None line=13
+message CartRequest.Line 8
+  field price 2 Optional Scalar("int64") json=None oneof=None line=10
+message CartResponse 16
+  field fee 4 None Scalar("int64") json=None oneof=None line=17
+  field trace 2 Repeated Named("shop.common.v1.MatchedRow") json=None oneof=None line=18
+service CartService 21
+  method Price CartRequest CartResponse false false 22
+    option idempotency_level = NO_SIDE_EFFECTS
+== tests/implements/api/shop/v1/member_shipping.proto
+syntax proto3
+package shop.v1
+message FiredRow 13
+  field table 4 None Scalar("string") json=None oneof=None line=14
+  field row 1 None Scalar("int32") json=None oneof=None line=15
+  field label 2 None Scalar("string") json=None oneof=None line=16
+message QuoteRequest 19
+  field member 2 Optional Named("Tier") json=None oneof=None line=20
+  field subtotal 5 Optional Scalar("int64") json=None oneof=None line=23
+  field campaign 9 Optional Named("Tier") json=None oneof=None line=24
+message QuoteResponse 27
+  field lifted 7 None Scalar("bool") json=None oneof=None line=28
+  field shipping 3 None Scalar("int64") json=None oneof=None line=29
+  field effective 1 None Named("Tier") json=None oneof=None line=30
+  field trace 15 Repeated Named("FiredRow") json=None oneof=None line=31
+enum Tier 5
+  value TIER_UNSPECIFIED 0 6
+  value TIER_BASIC 1 7
+  value TIER_SILVER 2 8
+  value TIER_GOLD 3 9
+  value TIER_PLATINUM 7 10
+service MemberShippingService 34
+  method Quote QuoteRequest QuoteResponse false false 35
+    option idempotency_level = NO_SIDE_EFFECTS
+service PlainService 40
+  method GetQuote QuoteRequest QuoteResponse false false 41
+== tests/mutants/contracts/member_shipping.proto
+syntax proto3
+package shop.v1
+message FiredRow 16
+  field table 4 None Scalar("string") json=None oneof=None line=17
+  field row 1 None Scalar("int32") json=None oneof=None line=18
+  field label 2 None Scalar("string") json=None oneof=None line=19
+message QuoteRequest 22
+  field member 2 Optional Named("Tier") json=None oneof=None line=23
+  field subtotal 5 Optional Scalar("int64") json=None oneof=None line=26
+  field campaign 9 Optional Named("Tier") json=None oneof=None line=27
+message QuoteResponse 30
+  field lifted 7 None Scalar("bool") json=None oneof=None line=31
+  field shipping 3 None Scalar("int64") json=None oneof=None line=32
+  field effective 1 None Named("Tier") json=None oneof=None line=33
+  field trace 15 Repeated Named("FiredRow") json=None oneof=None line=34
+enum Tier 8
+  value TIER_UNSPECIFIED 0 9
+  value TIER_BASIC 1 10
+  value TIER_SILVER 2 11
+  value TIER_GOLD 3 12
+  value TIER_PLATINUM 7 13
+service MemberShippingService 37
+  method Quote QuoteRequest QuoteResponse false false 38
+    option idempotency_level = NO_SIDE_EFFECTS
+service PlainService 44
+  method GetQuote QuoteRequest QuoteResponse false false 45
 == tests/mutants/contracts/order.proto
 syntax proto3
 package shop.v1
@@ -60,6 +136,25 @@ tests/corpus/contracts/shipment.proto sees
   CreateShipmentRequest.destination: shop.v1.Destination (tests/corpus/contracts/shipment.proto)
   CreateShipmentRequest.parcels: shop.v1.Parcel (tests/corpus/contracts/shipment.proto)
   Parcel.handling: shop.v1.Handling (tests/corpus/contracts/shipment.proto, enum)
+tests/implements/api/shop/common/v1/rows.proto sees 
+tests/implements/api/shop/v1/cart.proto sees tests/implements/api/shop/common/v1/rows.proto
+  CartRequest.lines: shop.v1.CartRequest.Line (tests/implements/api/shop/v1/cart.proto)
+  CartResponse.trace: shop.common.v1.MatchedRow (tests/implements/api/shop/common/v1/rows.proto)
+  CartService.Price: shop.v1.CartRequest (tests/implements/api/shop/v1/cart.proto) -> shop.v1.CartResponse (tests/implements/api/shop/v1/cart.proto)
+tests/implements/api/shop/v1/member_shipping.proto sees 
+  QuoteRequest.member: shop.v1.Tier (tests/implements/api/shop/v1/member_shipping.proto, enum)
+  QuoteRequest.campaign: shop.v1.Tier (tests/implements/api/shop/v1/member_shipping.proto, enum)
+  QuoteResponse.effective: shop.v1.Tier (tests/implements/api/shop/v1/member_shipping.proto, enum)
+  QuoteResponse.trace: shop.v1.FiredRow (tests/implements/api/shop/v1/member_shipping.proto)
+  MemberShippingService.Quote: shop.v1.QuoteRequest (tests/implements/api/shop/v1/member_shipping.proto) -> shop.v1.QuoteResponse (tests/implements/api/shop/v1/member_shipping.proto)
+  PlainService.GetQuote: shop.v1.QuoteRequest (tests/implements/api/shop/v1/member_shipping.proto) -> shop.v1.QuoteResponse (tests/implements/api/shop/v1/member_shipping.proto)
+tests/mutants/contracts/member_shipping.proto sees 
+  QuoteRequest.member: shop.v1.Tier (tests/mutants/contracts/member_shipping.proto, enum)
+  QuoteRequest.campaign: shop.v1.Tier (tests/mutants/contracts/member_shipping.proto, enum)
+  QuoteResponse.effective: shop.v1.Tier (tests/mutants/contracts/member_shipping.proto, enum)
+  QuoteResponse.trace: shop.v1.FiredRow (tests/mutants/contracts/member_shipping.proto)
+  MemberShippingService.Quote: shop.v1.QuoteRequest (tests/mutants/contracts/member_shipping.proto) -> shop.v1.QuoteResponse (tests/mutants/contracts/member_shipping.proto)
+  PlainService.GetQuote: shop.v1.QuoteRequest (tests/mutants/contracts/member_shipping.proto) -> shop.v1.QuoteResponse (tests/mutants/contracts/member_shipping.proto)
 tests/mutants/contracts/order.proto sees 
 tests/mutants/contracts/quote.proto sees 
 #### ../dandori
@@ -450,6 +545,31 @@ package bank.v1
 enum Status 7
   value ACTIVE 0 8
   value CLOSED 1 9
+== tests/fixtures/rules/member_shipping.proto
+syntax proto3
+package shop.v1
+message FiredRow 16
+  field table 4 None Scalar("string") json=None oneof=None line=17
+  field row 1 None Scalar("int32") json=None oneof=None line=18
+  field label 2 None Scalar("string") json=None oneof=None line=19
+message QuoteRequest 22
+  field member 2 Optional Named("Tier") json=None oneof=None line=23
+  field campaign 9 Optional Named("Tier") json=None oneof=None line=24
+  field subtotal 5 Optional Scalar("int64") json=None oneof=None line=26
+message QuoteResponse 29
+  field shipping 3 None Scalar("int64") json=None oneof=None line=30
+  field effective 1 None Named("Tier") json=None oneof=None line=31
+  field lifted 7 None Scalar("bool") json=None oneof=None line=32
+  field trace 15 Repeated Named("FiredRow") json=None oneof=None line=33
+enum Tier 8
+  value TIER_UNSPECIFIED 0 9
+  value TIER_BASIC 1 10
+  value TIER_SILVER 2 11
+  value TIER_GOLD 3 12
+  value TIER_PLATINUM 7 13
+service MemberShippingService 36
+  method Quote QuoteRequest QuoteResponse false false 37
+    option idempotency_level = NO_SIDE_EFFECTS
 == tests/fixtures/rules/order.proto
 syntax proto3
 package shop.v1
@@ -860,6 +980,12 @@ tests/fixtures/protos/unread.proto sees
   CatalogService.Quote: shop.v1.QuoteRequest (tests/fixtures/protos/unread.proto) -> shop.v1.QuoteResponse (tests/fixtures/protos/unread.proto)
   CatalogService.Cancel: unknown -> shop.v1.Item (tests/fixtures/protos/unread.proto)
 tests/fixtures/rules/account.proto sees 
+tests/fixtures/rules/member_shipping.proto sees 
+  QuoteRequest.member: shop.v1.Tier (tests/fixtures/rules/member_shipping.proto, enum)
+  QuoteRequest.campaign: shop.v1.Tier (tests/fixtures/rules/member_shipping.proto, enum)
+  QuoteResponse.effective: shop.v1.Tier (tests/fixtures/rules/member_shipping.proto, enum)
+  QuoteResponse.trace: shop.v1.FiredRow (tests/fixtures/rules/member_shipping.proto)
+  MemberShippingService.Quote: shop.v1.QuoteRequest (tests/fixtures/rules/member_shipping.proto) -> shop.v1.QuoteResponse (tests/fixtures/rules/member_shipping.proto)
 tests/fixtures/rules/order.proto sees 
 tests/fixtures/secrets/acme/v1/sensitivity.proto sees 
 tests/fixtures/secrets/bank/v1/bank.proto sees tests/fixtures/secrets/acme/v1/sensitivity.proto

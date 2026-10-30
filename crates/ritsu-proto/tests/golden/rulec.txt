@@ -28,6 +28,54 @@ message Destination
 message Parcel
   weight_g int64 gte=1 lte=30000
   handling Handling
+== ../rulec/tests/implements/api/shop/common/v1/rows.proto
+package Some("shop.common.v1") imports []
+message MatchedRow
+  row int32
+  label string
+  table string
+== ../rulec/tests/implements/api/shop/v1/cart.proto
+package Some("shop.v1") imports ["shop/common/v1/rows.proto"]
+message CartRequest
+  member bool optional
+  lines Line repeated
+message Line
+  price int64 optional
+message CartResponse
+  fee int64
+  trace shop.common.v1.MatchedRow repeated
+== ../rulec/tests/implements/api/shop/v1/member_shipping.proto
+package Some("shop.v1") imports []
+enum Tier TIER_UNSPECIFIED=0 TIER_BASIC=1 TIER_SILVER=2 TIER_GOLD=3 TIER_PLATINUM=7
+message FiredRow
+  table string
+  row int32
+  label string
+message QuoteRequest
+  member Tier optional
+  subtotal int64 optional
+  campaign Tier optional
+message QuoteResponse
+  lifted bool
+  shipping int64
+  effective Tier
+  trace FiredRow repeated
+== ../rulec/tests/mutants/contracts/member_shipping.proto
+package Some("shop.v1") imports []
+enum Tier TIER_UNSPECIFIED=0 TIER_BASIC=1 TIER_SILVER=2 TIER_GOLD=3 TIER_PLATINUM=7
+message FiredRow
+  table string
+  row int32
+  label string
+message QuoteRequest
+  member Tier optional
+  subtotal int64 optional
+  campaign Tier optional
+message QuoteResponse
+  lifted bool
+  shipping int64
+  effective Tier
+  trace FiredRow repeated
 == ../rulec/tests/mutants/contracts/order.proto
 package Some("shop.v1") imports []
 enum MemberTier MEMBER_TIER_UNSPECIFIED=0 MEMBER_TIER_BASIC=1 MEMBER_TIER_GOLD=2 MEMBER_TIER_PLATINUM=3
@@ -294,6 +342,22 @@ message QuoteResponse
 == ../dandori/tests/fixtures/rules/account.proto
 package Some("bank.v1") imports []
 enum Status ACTIVE=0 CLOSED=1
+== ../dandori/tests/fixtures/rules/member_shipping.proto
+package Some("shop.v1") imports []
+enum Tier TIER_UNSPECIFIED=0 TIER_BASIC=1 TIER_SILVER=2 TIER_GOLD=3 TIER_PLATINUM=7
+message FiredRow
+  table string
+  row int32
+  label string
+message QuoteRequest
+  member Tier optional
+  campaign Tier optional
+  subtotal int64 optional
+message QuoteResponse
+  shipping int64
+  effective Tier
+  lifted bool
+  trace FiredRow repeated
 == ../dandori/tests/fixtures/rules/order.proto
 package Some("shop.v1") imports []
 enum MemberTier MEMBER_TIER_UNSPECIFIED=0 MEMBER_TIER_BASIC=1 MEMBER_TIER_GOLD=2
