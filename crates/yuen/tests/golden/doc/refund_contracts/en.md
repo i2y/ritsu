@@ -1,6 +1,6 @@
 # refund_contracts — where the requirements come from
 
-yuen 0.38.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
+yuen 0.39.0 made this page from the .req files below, the copies of their sources and what the other languages say of the artifacts.
 
 - `refund_contracts.req` (refund_contracts v1, `sha256:3769711dc4e8f14e`)
 

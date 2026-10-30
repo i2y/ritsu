@@ -282,7 +282,7 @@ const TAX_MOD: &str = "module tax\n";
 /// The first line of every `ritsu.lock`, which `ritsu mod` writes.
 macro_rules! lock_head {
     () => {
-        "# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.\nlock 1\nritsu 0.38.0\n"
+        "# Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.\nlock 1\nritsu 0.39.0\n"
     };
 }
 
