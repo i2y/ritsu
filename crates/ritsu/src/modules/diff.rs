@@ -16,9 +16,10 @@
 //! - Interface: what the language's `api` prints, compared by name; what a file holds (DESIGN 6.4)
 //!   for dandori, geas and `.proto`; the digest for any other file. A book also goes through what
 //!   `chobo check --diff-base` holds a book to (chobo's `diffbase::between`): E050 and E051 are the
-//!   differences that break the data already in a database. A value of an enum both versions have
-//!   whose number on the Connect wire changed, the method's path being the same, is ritsu's E310: a
-//!   message one version writes, the other reads as another value.
+//!   differences that break the data already in a database. A value of an enum or a field of a
+//!   message both versions have whose number on the Connect wire changed, the method's path being
+//!   the same, is ritsu's E310: a message one version writes, the other reads as another value or
+//!   another field.
 //!
 //! [`ModDiff`] is also what `ritsu mod report` (DESIGN 17.10) puts under each module that changed.
 
@@ -453,8 +454,8 @@ pub struct Iface {
     pub version: Option<(String, String)>,
     pub changes: Vec<IChange>,
     /// What breaks what is already out there, each with the tool whose code it is: a book's E050,
-    /// E051 and W107 against the old version (chobo's), and a value whose number on the Connect wire
-    /// changed (ritsu's E310).
+    /// E051 and W107 against the old version (chobo's), and a value or a field whose number on the
+    /// Connect wire changed (ritsu's E310).
     pub breaks: Vec<(&'static str, ritsu_ports::Finding)>,
     /// Why the interface was compared by its digest alone.
     pub note: Option<Text>,
@@ -756,10 +757,12 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
     out
 }
 
-/// Each value of an enum both versions have whose number on the Connect wire changed: ritsu's E310,
-/// said as a book's E050 is, in the new version's file at the value's line. The method's path must
-/// be the same in both. A rule whose version was raised is another service on the wire, whose old
-/// callers reach nothing rather than a wrong value, and the change of its path is a candidate.
+/// Each value of an enum, and each field of a message, both versions have whose number on the
+/// Connect wire changed: ritsu's E310, said as a book's E050 is, in the new version's file at the
+/// line of the value, the input or the output (a sequence and an element's field have no line of
+/// their own there). The method's path must be the same in both. A rule whose version was raised is
+/// another service on the wire, whose old callers reach nothing rather than a wrong value, and the
+/// change of its path is a candidate.
 fn renumbered(a: &Json, b: &Json, file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Vec<(&'static str, ritsu_ports::Finding)> {
     let (Some(ca), Some(cb), Some(tool)) = (a.get("connect"), b.get("connect"), tool_of(&n.rel)) else { return Vec::new() };
     if ca.get("path").is_none() || ca.get("path") != cb.get("path") {
@@ -767,39 +770,95 @@ fn renumbered(a: &Json, b: &Json, file: &str, o: &At, n: &At, lang: Lang, joined
     }
     let list = |j: Option<&Json>| j.and_then(Json::as_arr).unwrap_or_default().to_vec();
     let named = |j: Option<&Json>, name: &str| list(j).into_iter().find(|x| x.get("name").and_then(Json::as_str) == Some(name));
+    // The two numbers of one thing, when they differ.
+    let moved = |a: &Json, b: &Json| match (a.get("number").map(Json::compact), b.get("number").map(Json::compact)) {
+        (Some(x), Some(y)) if x != y => Some((x, y)),
+        _ => None,
+    };
     let items = match n.with(|| joined.index.items(tool, &n.root, &n.rel)) {
         Some(Ok(items)) => items,
         _ => Vec::new(),
     };
+    let line_of = |naming: &[(&str, &str)]| {
+        items.iter().find(|i| i.naming.items.len() == naming.len() && i.naming.items.iter().zip(naming).all(|((k, m), (l, w))| k == l && m == w)).map_or(0, |i| i.lines.0)
+    };
+    let old = &o.label;
     let mut out = Vec::new();
+    let mut say = |line: usize, message: Text, note: Text| {
+        let d = ritsu_base::modules::Diag::error(ritsu_base::modules::E310, &n.shown, line, 0, message).rel(file).note(note);
+        out.push(("ritsu", ritsu_ports::Finding::of(&d, Some(file.to_string()), lang)));
+    };
     for ea in list(ca.get("enums")) {
         let Some(e) = ea.get("name").and_then(Json::as_str) else { continue };
         let Some(eb) = named(cb.get("enums"), e) else { continue };
         for va in list(ea.get("values")) {
             let Some(v) = va.get("name").and_then(Json::as_str) else { continue };
-            let Some(vb) = named(eb.get("values"), v) else { continue };
-            let (Some(x), Some(y)) = (va.get("number").map(Json::compact), vb.get("number").map(Json::compact)) else { continue };
-            if x == y {
-                continue;
-            }
-            let old = &o.label;
-            let line = items.iter().find(|i| matches!(i.naming.items.as_slice(), [(k, m), (l, w)] if k == "enum" && m == e && l == "value" && w == v)).map_or(0, |i| i.lines.0);
-            let d = ritsu_base::modules::Diag::error(
-                ritsu_base::modules::E310,
-                &n.shown,
-                line,
-                0,
+            let Some((x, y)) = named(eb.get("values"), v).and_then(|vb| moved(&va, &vb)) else { continue };
+            say(
+                line_of(&[("enum", e), ("value", v)]),
                 tr!(
                     "列挙 `{e}` の値 `{v}` の Connect での番号（{x} → {y}）が {old} のときと違います。片方の版が書いたメッセージを、もう片方は別の値として読みます",
                     "the value `{v}` of the enum `{e}` differs from {old} in its number on the Connect wire ({x} → {y}): a message one version writes, the other reads as another value"
                 ),
-            )
-            .rel(file)
-            .note(tr!(
-                "値を最後に足せば、ほかの値の番号は変わりません。.proto から読む列挙（`import proto`）の番号は、契約のものです",
-                "a value added after the others leaves their numbers as they are, and an enum read from a .proto (`import proto`) has the contract's"
-            ));
-            out.push(("ritsu", ritsu_ports::Finding::of(&d, Some(file.to_string()), lang)));
+                tr!(
+                    "値を最後に足せば、ほかの値の番号は変わりません。.proto から読む列挙（`import proto`）の番号は、契約のものです",
+                    "a value added after the others leaves their numbers as they are, and an enum read from a .proto (`import proto`) has the contract's"
+                ),
+            );
+        }
+    }
+    // A field is matched by the rule's name: the request's inputs and then its sequences, the
+    // answer's outputs, and the fields of an element of each sequence.
+    let note = || {
+        tr!(
+            "番号は、入力と出力と要素のフィールドを規則に書いた順で、並びは入力のあとに続きます。足すなら最後に足すか、規則の版を上げて（`rule … v2`）別のサービスにします",
+            "the numbers are the order the rule writes its inputs, its outputs and an element's fields in, the sequences coming after the inputs: add after the others, or raise the rule's version (`rule … v2`) to make it another service"
+        )
+    };
+    for (key, kind) in [("request_fields", "input"), ("response_fields", "output")] {
+        for fa in list(ca.get(key)) {
+            let Some(f) = fa.get("name").and_then(Json::as_str) else { continue };
+            let Some((x, y)) = named(cb.get(key), f).and_then(|fb| moved(&fa, &fb)) else { continue };
+            let message = if kind == "input" {
+                tr!(
+                    "リクエストのフィールド `{f}` の Connect での番号（{x} → {y}）が {old} のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします",
+                    "the field `{f}` of the request differs from {old} in its number on the Connect wire ({x} → {y}): what one version writes there, the other reads as another field or skips"
+                )
+            } else {
+                tr!(
+                    "レスポンスのフィールド `{f}` の Connect での番号（{x} → {y}）が {old} のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします",
+                    "the field `{f}` of the response differs from {old} in its number on the Connect wire ({x} → {y}): what one version writes there, the other reads as another field or skips"
+                )
+            };
+            say(line_of(&[(kind, f)]), message, note());
+        }
+    }
+    // Each sequence with its element's fields: every one under `sequences` when a rule walks two or
+    // more, else the one under `element_fields`, named by the request's field that carries it.
+    let sequences = |c: &Json| -> Vec<(String, Json)> {
+        if let Some(s) = c.get("sequences") {
+            return list(Some(s)).into_iter().filter_map(|s| Some((s.get("name")?.as_str()?.to_string(), s.get("fields")?.clone()))).collect();
+        }
+        let carried = list(c.get("request_fields")).into_iter().find(|f| f.get("type").and_then(Json::as_str).is_some_and(|t| t.starts_with("repeated ")));
+        match (carried.as_ref().and_then(|f| f.get("name")).and_then(Json::as_str), c.get("element_fields")) {
+            (Some(s), Some(fields)) if !fields.is_null() => vec![(s.to_string(), fields.clone())],
+            _ => Vec::new(),
+        }
+    };
+    let now = sequences(cb);
+    for (s, fields) in sequences(ca) {
+        let Some((_, there)) = now.iter().find(|(t, _)| *t == s) else { continue };
+        for fa in list(Some(&fields)) {
+            let Some(f) = fa.get("name").and_then(Json::as_str) else { continue };
+            let Some((x, y)) = named(Some(there), f).and_then(|fb| moved(&fa, &fb)) else { continue };
+            say(
+                0,
+                tr!(
+                    "並び `{s}` の要素のフィールド `{f}` の Connect での番号（{x} → {y}）が {old} のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします",
+                    "the field `{f}` of an element of the sequence `{s}` differs from {old} in its number on the Connect wire ({x} → {y}): what one version writes there, the other reads as another field or skips"
+                ),
+                note(),
+            );
         }
     }
     out

@@ -129,7 +129,7 @@ comes with an example that breaks it; a warning says what could not be decided.
 | E307 | a file or a directory right under a module's root has a name that starts with `@`, which names a dependency there | rename it |
 | E308 | a module fetched has a dependency it cannot have: a `require … path` in one from a registry or git, which cannot be read where it is fetched, or a `require … git` in one from a registry | tell its author; meanwhile put it in the working tree and read it with `require … path` |
 | E309 | a `signature` line covers a module from a git repository: ritsu checks the signatures of modules from registries only, so `ritsu mod fetch` and `ritsu check` stop | narrow the line's start so that it covers no module from git (a line can cover one module); take a module whose signature is to be checked from a registry |
-| E310 | `ritsu mod diff` and `ritsu mod report`: a value of a rule's enum has another number on the Connect wire than in the old version, the method's path the same, so a message one version writes, the other reads as another value | add a new value at the end of the enum, or read the enum from a `.proto` with `import proto`; where the order has to change, raise the rule's version (`rule … v2`), which makes it another service |
+| E310 | `ritsu mod diff` and `ritsu mod report`: a value of a rule's enum, or a field of its Connect messages, has another number on the Connect wire than in the old version, the method's path the same, so a message one version writes, the other reads as another value or another field | add a new value, input, output or field of an element at the end, or read an enum from a `.proto` with `import proto`; where the order has to change, or a rule that walks a sequence takes a new input, raise the rule's version (`rule … v2`), which makes it another service |
 | W301 | no file of a module names a file of a dependency it requires (an `import` of a `.proto` that comes to the dependency counts); said when the whole module is checked | delete the `require` (`ritsu mod remove <name>`), or name a file of `@<name>/…` where it is used |
 | W302 | `ritsu.lock` has a line for a module nothing requires now | run `ritsu mod lock` |
 | W303 | a file names a file of a dependency of a dependency its module does not require (`@pricing/@tax/…`, or an `import` of a `.proto` that comes to one) | require that module in the module's own `ritsu.mod` |
@@ -346,11 +346,13 @@ and do not copy the files into the project to change them.
 before it is merged. `ritsu mod diff <module>@<old> <module>@<new>` compares two versions of a
 module: the files, the requires, every input of a rule, a date or a gate that gets another answer,
 and the interfaces (exit 1 when it shows a difference of behavior or of an interface, 2 when it
-cannot compare). A value added in the middle of a rule's enum moves the numbers of the values after
-it on the Connect wire, which breaks a caller built on the old version whatever its check says
-(E310): add a new value at the end. `ritsu mod report --base origin/main --format markdown` writes
-what a pull request that changes the lock changes: the check with each lock, the diff of each module
-that changed, the answers of the person's rules, dates and gates that change, and the lines of their
+cannot compare). A value of an enum, an input, an output or a field of an element added in the
+middle of a rule moves the numbers of those after it on the Connect wire, which breaks a caller
+built on the old version whatever its check says (E310): add them at the end, and raise the rule's
+version (`rule … v2`) to give a rule that walks a sequence a new input, since its sequences are
+numbered after the inputs. `ritsu mod report --base origin/main --format markdown` writes what a
+pull request that changes the lock changes: the check with each lock, the diff of each module that
+changed, the answers of the person's rules, dates and gates that change, and the lines of their
 flows and kaname modules that read an answer that changes, which are listed, not compared (exit 1 on
 an error with the new lock, or, with `--fail-on-change`, on a difference of behavior; 2 when a
 module that changed cannot be compared). `rulec diff`, `koyomi diff` and `sekisho diff` take a

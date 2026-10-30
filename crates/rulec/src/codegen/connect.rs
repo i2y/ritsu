@@ -1607,12 +1607,15 @@ impl<'a> Gen<'a> {
         // `optional` is the rule's `T?`: a value that may be absent. It is not the `.proto`'s
         // label, which every field a caller sends carries (§15.160). `enum` names the rule's
         // enum, which is what `enums` is keyed by: one contract's enum may be imported into
-        // two of the rule's, and the type alone would not say which.
-        let field = |name: &str, n: &crate::ast::Name, ty: &Ty| -> String {
+        // two of the rule's, and the type alone would not say which. `number` is the field's
+        // number in the `.proto`: the order the rule declares them in, the sequences after the
+        // inputs, which is what the binary form of a message carries instead of the name.
+        let field = |name: &str, n: &crate::ast::Name, ty: &Ty, number: u32| -> String {
             let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
             crate::json::Obj::new()
                 .str("name", name)
                 .str("field", &pub_name(n))
+                .int("number", number)
                 .str("type", &self.proto_ty(name, ty))
                 .bool("optional", matches!(ty, Ty::Opt(_)))
                 .opt_str("enum", if let Ty::Enum(e) = inner { Some(e.as_str()) } else { None })
@@ -1622,20 +1625,22 @@ impl<'a> Gen<'a> {
             .f
             .inputs
             .iter()
-            .map(|i| field(&i.name.text, &i.name, &self.ty_of(&i.name.text)))
+            .enumerate()
+            .map(|(k, i)| field(&i.name.text, &i.name, &self.ty_of(&i.name.text), k as u32 + 1))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
             ins.push(
                 crate::json::Obj::new()
                     .str("name", &el.name.text)
                     .str("field", &pub_name(&el.name))
+                    .int("number", (self.f.inputs.len() + s) as u32 + 1)
                     .str("type", &format!("repeated {}", self.element_type(s)))
                     .bool("optional", false)
                     .finish(),
             );
         }
         let fields_of = |el: &crate::ast::ElementsDecl| -> String {
-            crate::json::arr(&el.fields.iter().map(|fd| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text))).collect::<Vec<_>>())
+            crate::json::arr(&el.fields.iter().enumerate().map(|(k, fd)| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text), k as u32 + 1)).collect::<Vec<_>>())
         };
         // The first sequence's fields under `element_fields`, as a rule that walks one has them;
         // a rule that walks more lists every one under `sequences`, with its message (§15.219).
@@ -1662,7 +1667,8 @@ impl<'a> Gen<'a> {
             .f
             .outputs
             .iter()
-            .map(|o| field(&o.name.text, &o.name, &self.ty_of(&o.name.text)))
+            .enumerate()
+            .map(|(k, o)| field(&o.name.text, &o.name, &self.ty_of(&o.name.text), k as u32 + 1))
             .collect();
         // Every enum that crosses the wire, with each value's name and number there: what a
         // caller writing the JSON by hand has to send, and how to read a value 0 that the

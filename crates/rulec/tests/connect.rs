@@ -482,6 +482,46 @@ fn connect_の目録は生成した_proto_と一致する() {
     assert_eq!(api(RULE).get("connect").and_then(|c| c.get("element_fields")), Some(&rulec::json::Json::Null));
 }
 
+/// The number `rulec api` gives each field is the one the `.proto` gives it, which is what the
+/// binary form of a message carries instead of the name: the request's inputs and then its
+/// sequences, the answer's outputs, and an element's fields, each in the order the rule declares
+/// them. One rule of each kind: no sequence, one, and two.
+#[test]
+fn connect_のフィールドの番号は生成した_proto_と同じ() {
+    let rules = [RULE, "tests/corpus/全国運賃.rule", "tests/corpus/order_settlement.rule"];
+    let (_tmp, dir) = generate("numbers", &rules);
+    for (rule, alias, version, walked) in
+        [(RULE, "shipping_fee", "v4", 0), ("tests/corpus/全国運賃.rule", "freight", "v1", 1), ("tests/corpus/order_settlement.rule", "order_settlement", "v1", 2)]
+    {
+        let a = api(rule);
+        let c = a.get("connect").expect("connect の項が無い");
+        let body = std::fs::read_to_string(dir.join(format!("proto/rulec/{alias}/{version}/{alias}.proto"))).unwrap();
+        let file = ritsu_proto::read(&format!("{alias}.proto"), &body).expect("the file rulec wrote reads");
+        // A message's fields as the `.proto` numbers them, the answer's `trace` left out.
+        let written = |message: &str| -> Vec<(String, i128)> {
+            let m = file.messages.iter().find(|m| m.name == message).unwrap_or_else(|| panic!("{rule}: {message} が .proto に無い"));
+            m.fields.iter().filter(|f| f.name != "trace").map(|f| (f.name.clone(), f.number as i128)).collect()
+        };
+        let said = |fields: &rulec::json::Json| -> Vec<(String, i128)> {
+            items(fields)
+                .iter()
+                .map(|f| (f.get("field").and_then(|x| x.as_str()).unwrap().to_string(), f.get("number").and_then(|x| x.as_int()).expect("number が無い")))
+                .collect()
+        };
+        assert_eq!(said(c.get("request_fields").unwrap()), written("DecideRequest"), "{rule}");
+        assert_eq!(said(c.get("response_fields").unwrap()), written("DecideResponse"), "{rule}");
+        let sequences: Vec<(String, &rulec::json::Json)> = match c.get("sequences") {
+            Some(s) => items(s).iter().map(|s| (s.get("message").and_then(|x| x.as_str()).unwrap().to_string(), s.get("fields").unwrap())).collect(),
+            None => c.get("element_fields").filter(|e| **e != rulec::json::Json::Null).map(|e| ("Element".to_string(), e)).into_iter().collect(),
+        };
+        assert_eq!(sequences.len(), walked, "{rule}");
+        for (message, fields) in sequences {
+            assert!(!items(fields).is_empty(), "{rule}: {message}");
+            assert_eq!(said(fields), written(&message), "{rule}: {message}");
+        }
+    }
+}
+
 /// Names the way buf splits them. buf lint asks for `HTTP_METHOD_` in front of the values of
 /// `HTTPMethod`, so a contract that passes it is read without E032, and a rule's own enum of
 /// that name is written with that prefix. A value whose name would be left starting with a

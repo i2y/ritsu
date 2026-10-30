@@ -2310,13 +2310,32 @@ C3 で確かめたこと（2026-10-30、この機械で）：
   - `modules_report.rs` の `a_number_that_moves_on_the_connect_wire_is_a_new_error`（英日）：eu を真ん中に戻した 1.2.0 に上げると、head の検査は通るのに、pricing の新しいエラーが二つあり、exit 1 になる。
   - pricing の 1.1.0 の差の試験は、壊しうる差が無く、eu の番号が 3 であることを確かめる。
 - 文書：DESIGN 17.9.5（Connect の番号）、17.9.6 と 17.10 の終了コード、17.20 の表、17.21。サイトのモジュールのページ（英日）、ritsu のスキルの 9 節。
-- 残り：入力と出力と並びの要素のフィールドの番号は、api の JSON に無いので、まだ比べない（rulec の api に番号を足すのは、この節の二つ目でする）。
+- 入力と出力と並びの要素のフィールドの番号は、rulec の api の JSON に番号を足してから比べる（C5）。
 
 C4 で確かめたこと（2026-10-30、この機械で）：
 
 1. 触ったクレートの fast の段で 575 件が通った（落ちたものは無い）。ritsu 339、ritsu-base 207、ritsu-cross 29 である。足した二つの試験、台帳の再現を走らせる ritsu の `codes.rs`、golden を取り直した `modules_diff.rs`、`modules_report.rs`、`modules_site.rs`、それに `skill.rs`、`website.rs`、`playground.rs` がこの中にある。
 2. SKIP の行は 78 で、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（node 26、python 20、go 20、chrome 6 など）である。足りないものの SKIP は無い。
 3. 書いた行に clippy の警告は無い。playground の `ritsu.wasm` は作り直さなくてよい。例の規則が変わっても、`playground.rs` の `the_module_answers_as_the_library_does` が道具の段で通った。
+
+**C の足し（C5。2026-10-30）：フィールドの番号も壊れる差に**（DESIGN 17.9.5、17.20。rulec の DESIGN §15.272）
+
+C4 は列挙の値の番号だけを比べた。rulec の `api` の JSON のフィールドに、番号が無かったからである。rulec はフィールドにも書いた順の番号を振る（リクエストは入力が 1 からで並びがそのあと、レスポンスは出力が 1 から、要素のフィールドも 1 から）ので、途中に入力を足せば、後ろの入力と並びの番号が動く。
+
+- rulec の `api_connect`：`request_fields`、`response_fields`、`element_fields`、`sequences` の `fields` のどのフィールドにも、生成する `.proto` の番号を `number` として足した。番号の振り方は変えない（並びの番号を入力から離すと、いまの規則の番号が一度に動く）。
+- `diff.rs` の `renumbered`：列挙の値に加えて、リクエストのフィールド（入力と並び）、レスポンスのフィールド、並びの要素のフィールドを、規則での名前で合わせて番号を比べ、違えば E310 にする。行は入力と出力の行で、並びと要素のフィールドには無い。注は、番号の振り方と直し方を言う。
+- 台帳の E310 の見出しと文を、フィールドまで広げた。再現は列挙のもののまま。`docs/codes.md`（英日）を作り直した。
+- 試験：
+  - rulec の `tests/connect.rs` の `connect_のフィールドの番号は生成した_proto_と同じ`：並びをたどらない規則、一つたどる規則、二つたどる規則で、api の番号が、生成した `.proto` を ritsu-proto で読んだ番号と同じ。
+  - `modules_diff.rs` の `a_field_that_moves_on_the_connect_wire_breaks_the_calls`（英日）：並びをたどる規則の二つの版で、要素のフィールド、入力、出力の順を入れ替え、入力を一つ最後に足す。七つが E310 になる（入力と出力は行つき、並びと要素のフィールドは行なし）。最後に足した入力でも、並びの番号は動く。
+  - golden：diff-pricing-2.0.0 と report-break の JSON で、名前を変えた出力のフィールドに `number` が増えた。番号は同じ 1 なので、E310 ではない。
+- 文書：DESIGN 17.9.5 と 17.20 の表、rulec の DESIGN §15.272 と formats（スキルの中のコピーも）、サイトのモジュールのページ（英日）、ritsu のスキルの 9 節とコードの表。
+
+C5 で確かめたこと（2026-10-30、この機械で）：
+
+1. 段 A の上で、触ったクレートの fast の段で 1,817 件が通った（落ちたものは無い）。rulec 1,240（ignored 1 は前からのもの）、ritsu 341、ritsu-base 207、ritsu-cross 29 である。足した二つの試験、formats のコピーを確かめる rulec の `skill.rs`、台帳の再現を走らせる ritsu の `codes.rs`、golden を取り直した `modules_diff.rs` と `modules_report.rs` がこの中にある。
+2. SKIP の行は 479 で、rulec の PostgreSQL のサーバーが無いときの一つ（前からのもの）を除けば、どれも fast の段で、道具の段か platforms の段のものを飛ばしたもの（python 205、node 106、lean 43、swift 34、go 32 など）である。
+3. 書いた行に clippy の警告は無い。playground の `ritsu.wasm` は、この足しのためには作り直さなくてよい。wasm が走らせるのは `check`、`gen`、`doc` で、`api` を出さない。段 A のあとの wasm のまま、`playground.rs` の `the_module_answers_as_the_library_does` が道具の段で通った。
 
 ### 8.4 D：レジストリと署名
 

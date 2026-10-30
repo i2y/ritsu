@@ -13,6 +13,9 @@
 //! - pricing 1.1.0 against itself with `eu` moved back between the two other regions, as directories:
 //!   ritsu's E310 for each value whose number on the Connect wire moves, and none once the rule's
 //!   version is raised too, which moves the method's path.
+//! - A basket that walks its lines, in two versions the test writes as directories: E310 for each
+//!   field whose number moves — an input, an output, a field of a line, and the sequence of the
+//!   lines, moved by an input added after the others.
 //! - Each in the three formats, held to golden files (`tests/golden/modules/diff-*`; `RITSU_BLESS=1`
 //!   writes them). The digests of the store's versions are masked: the lock in each carries the
 //!   version of ritsu.
@@ -495,6 +498,160 @@ fn a_number_that_moves_on_the_connect_wire_breaks_the_calls() {
         let i = &json(&out)["interface"][0];
         let path = i["changes"].as_array().unwrap().iter().find(|c| c["at"] == "/connect/path").unwrap_or_else(|| panic!("{lang}:\n{out}"));
         assert_eq!((code, &i["breaks"], &path["may_break"]), (1, &serde_json::json!([]), &serde_json::json!(true)), "{lang}:\n{out}");
+    }
+}
+
+/// A basket that walks its lines, in two versions: the second writes the fields of a line, the
+/// inputs and the outputs in another order, and adds an input after the others.
+const BASKET_EN: [&str; 2] = [
+    "rule basket v1
+
+elements lines
+  quantity : number  range >=1 <=50
+  price    : money[USD]  range >=1USD <=500USD
+
+inputs
+  member  : bool
+  express : bool
+
+outputs
+  subtotal : money[USD]  round down(1USD)
+  fee      : money[USD]  round down(1USD)
+
+define line_total : money[USD] = quantity * price
+
+sum subtotal over lines of line_total  range >=0USD <=25_000USD
+
+table fees
+policy unique
+| member | express | -> fee : money[USD] |
+| true   | -       | 0USD                |
+| false  | true    | 15USD               |
+| false  | false   | 5USD                |
+",
+    "rule basket v1
+
+elements lines
+  price    : money[USD]  range >=1USD <=500USD
+  quantity : number  range >=1 <=50
+
+inputs
+  express : bool
+  member  : bool
+  gift    : bool
+
+outputs
+  fee      : money[USD]  round down(1USD)
+  subtotal : money[USD]  round down(1USD)
+
+define line_total : money[USD] = quantity * price
+
+sum subtotal over lines of line_total  range >=0USD <=25_000USD
+
+table fees
+policy unique
+| member | express | gift  | -> fee : money[USD] |
+| true   | -       | -     | 0USD                |
+| false  | true    | -     | 15USD               |
+| false  | false   | true  | 7USD                |
+| false  | false   | false | 5USD                |
+",
+];
+
+const BASKET_JA: [&str; 2] = [
+    "rule かご(basket) v1
+
+elements 明細(lines)
+  数量(quantity) : number  range >=1 <=50
+  単価(price)    : money[USD]  range >=1USD <=500USD
+
+inputs
+  会員(member)  : bool
+  速達(express) : bool
+
+outputs
+  小計(subtotal) : money[USD]  round down(1USD)
+  手数料(fee)    : money[USD]  round down(1USD)
+
+define 行の額(line_total) : money[USD] = 数量 * 単価
+
+sum 小計 over 明細 of 行の額  range >=0USD <=25_000USD
+
+table 手数料表(fees)
+policy unique
+| 会員  | 速達  | -> 手数料 : money[USD] |
+| true  | -     | 0USD                   |
+| false | true  | 15USD                  |
+| false | false | 5USD                   |
+",
+    "rule かご(basket) v1
+
+elements 明細(lines)
+  単価(price)    : money[USD]  range >=1USD <=500USD
+  数量(quantity) : number  range >=1 <=50
+
+inputs
+  速達(express) : bool
+  会員(member)  : bool
+  贈り物(gift)  : bool
+
+outputs
+  手数料(fee)    : money[USD]  round down(1USD)
+  小計(subtotal) : money[USD]  round down(1USD)
+
+define 行の額(line_total) : money[USD] = 数量 * 単価
+
+sum 小計 over 明細 of 行の額  range >=0USD <=25_000USD
+
+table 手数料表(fees)
+policy unique
+| 会員  | 速達  | 贈り物 | -> 手数料 : money[USD] |
+| true  | -     | -      | 0USD                   |
+| false | true  | -      | 15USD                  |
+| false | false | true   | 7USD                   |
+| false | false | false  | 5USD                   |
+",
+];
+
+/// A field of a message moves on the Connect wire as a value of an enum does (E310), in each
+/// language: an input, an output and a field of a line written in another order, and the sequence of
+/// the lines, whose number follows the inputs, moved by an input added after the others. Each is at
+/// the line of the new version that declares it, which a sequence and an element's field have none
+/// of.
+#[test]
+fn a_field_that_moves_on_the_connect_wire_breaks_the_calls() {
+    for (lang, file, rule) in [("en", "basket.rule", BASKET_EN), ("ja", "かご.rule", BASKET_JA)] {
+        let t = TempDir::new(&format!("mod-diff-fields-{lang}"));
+        for (side, version, body) in [("old", "1.0.0", rule[0]), ("new", "1.1.0", rule[1])] {
+            std::fs::create_dir_all(t.path().join(side)).unwrap();
+            std::fs::write(t.path().join(side).join("ritsu.mod"), format!("module shop\nversion {version}\n")).unwrap();
+            std::fs::write(t.path().join(side).join(file), body).unwrap();
+        }
+        let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--format", "json", "--lang", lang]);
+        let i = &json(&out)["interface"][0];
+        assert_eq!((code, err.as_str(), i["file"].as_str()), (1, "", Some(file)), "{lang}:\n{out}");
+        let breaks: Vec<(&str, &str, Option<i64>)> = i["breaks"].as_array().unwrap().iter().map(|b| (b["tool"].as_str().unwrap(), b["code"].as_str().unwrap(), b["line"].as_i64())).collect();
+        let lines = [Some(9), Some(8), None, Some(14), Some(13), None, None];
+        assert_eq!(breaks, lines.map(|l| ("ritsu", "E310", l)), "{lang}:\n{out}");
+        let (_, text, _) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--lang", lang]);
+        let said = if lang == "en" {
+            [
+                "    breaks the calls: E310 (line 8): the field `express` of the request differs from old in its number on the Connect wire (2 → 1): what one version writes there, the other reads as another field or skips\n",
+                "    breaks the calls: E310: the field `lines` of the request differs from old in its number on the Connect wire (3 → 4): what one version writes there, the other reads as another field or skips\n",
+                "    breaks the calls: E310 (line 13): the field `fee` of the response differs from old in its number on the Connect wire (2 → 1): what one version writes there, the other reads as another field or skips\n",
+                "    breaks the calls: E310: the field `price` of an element of the sequence `lines` differs from old in its number on the Connect wire (2 → 1): what one version writes there, the other reads as another field or skips\n",
+            ]
+        } else {
+            [
+                "    呼び出しを壊す差：E310（8 行目）：リクエストのフィールド `速達` の Connect での番号（2 → 1）が old のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします\n",
+                "    呼び出しを壊す差：E310：リクエストのフィールド `明細` の Connect での番号（3 → 4）が old のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします\n",
+                "    呼び出しを壊す差：E310（13 行目）：レスポンスのフィールド `手数料` の Connect での番号（2 → 1）が old のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします\n",
+                "    呼び出しを壊す差：E310：並び `明細` の要素のフィールド `単価` の Connect での番号（2 → 1）が old のときと違います。片方の版がそこに書いた値を、もう片方は別のフィールドとして読むか、読み飛ばします\n",
+            ]
+        };
+        for line in said {
+            assert!(text.contains(line), "{lang}: no {line:?}:\n{text}");
+        }
     }
 }
 

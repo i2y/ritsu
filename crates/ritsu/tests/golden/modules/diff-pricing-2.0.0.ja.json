@@ -889,6 +889,7 @@
           "old": {
             "name": "料金",
             "field": "fee",
+            "number": 1,
             "type": "int64",
             "optional": false
           },
@@ -902,6 +903,7 @@
           "new": {
             "name": "送料",
             "field": "shipping_fee",
+            "number": 1,
             "type": "int64",
             "optional": false
           },

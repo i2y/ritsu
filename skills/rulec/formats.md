@@ -495,13 +495,13 @@ value refused at its own boundary and one refused after it is recorded (§15.116
             "stubs":"cd proto && buf generate",
             "buf_yaml":"proto/buf.yaml","buf_gen_yaml":"proto/buf.gen.yaml","deps":[],
             "json_names":"lowerCamelCase","json_int64":"string",
-            "request_fields":[{"name":"subtotal","field":"subtotal","type":"int64","optional":false},
-                              {"name":"applied","field":"applied","type":"int64","optional":false},
-                              {"name":"kind","field":"kind","type":"CouponKind","optional":false,
+            "request_fields":[{"name":"subtotal","field":"subtotal","number":1,"type":"int64","optional":false},
+                              {"name":"applied","field":"applied","number":2,"type":"int64","optional":false},
+                              {"name":"kind","field":"kind","number":3,"type":"CouponKind","optional":false,
                                "enum":"coupon_kind"},…],
             "element_fields":null,
-            "response_fields":[{"name":"ok","field":"ok","type":"bool","optional":false},
-                               {"name":"raw","field":"raw","type":"int64","optional":false}],
+            "response_fields":[{"name":"ok","field":"ok","number":1,"type":"bool","optional":false},
+                               {"name":"raw","field":"raw","number":2,"type":"int64","optional":false}],
             "enums":[{"name":"coupon_kind","alias":"CouponKind","contract":null,
                       "unset":"COUPON_KIND_UNSPECIFIED",
                       "values":[{"name":"percent","alias":"COUPON_KIND_PERCENT","number":1},…]}],
@@ -645,9 +645,13 @@ an input the door refuses and `contradiction` for the W114 guard, the `kind`s of
 The `connect` entry is the wire a caller writes by hand, without the stubs: the method's
 `path`, the two message names, and under `request_fields` and `response_fields` each field by
 the rule's own name (`name`), the name the message has it under (`field`, which the JSON writes
-in `json_names` form) and its `type` there. `optional` is the rule's `T?` — a value that may be
-absent — and not the `.proto`'s label, which every field a caller sends carries so that a
-field left out is refused rather than read as zero
+in `json_names` form), its `number` there and its `type`. The numbers are the order the rule
+writes them in: the inputs from 1 and the sequences after them, the outputs from 1, and an
+element's fields from 1. protobuf's binary form sends a field by its number, not its name, so a
+field added in the middle moves the numbers of those after it, and a caller built on the old
+version reads one field as another: `ritsu mod diff` says so (ritsu's E310). `optional` is the
+rule's `T?` — a value that may be absent — and not the `.proto`'s label, which every field a
+caller sends carries so that a field left out is refused rather than read as zero
 ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)). A field whose type is
 an enum names the rule's enum under `enum`, which is what `enums` is keyed by: one contract's
 enum may be imported into two of the rule's, and the type alone would not say which. A rule

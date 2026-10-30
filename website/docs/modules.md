@@ -354,11 +354,12 @@ interface:
 …
 ```
 
-A change that may break a user is a candidate: whether it does is for the user's check to say.
-Some changes break a user whatever its check says. An account or a transfer of a book that changed
-is chobo's E050 or E051: the accounts and the holds already in a database keep the old definition.
-A value of an enum whose number on the Connect wire moved is E310: a message one version writes, the
-other reads as another value, and neither fails. That is why `pricing` 1.1.0 adds `eu` after the
+A change that may break a user is a candidate: whether it does is for the user's check to say. Some
+changes break a user whatever its check says. An account or a transfer of a book that changed is
+chobo's E050 or E051: the accounts and the holds already in a database keep the old definition. A
+value of an enum or a field of a message whose number on the Connect wire moved is E310: a message
+one version writes, the other reads as another value or another field, and neither fails. rulec
+numbers them in the order the rule writes them, which is why `pricing` 1.1.0 adds `eu` after the
 other regions. `ritsu mod diff` says these among the changes of the interface, and
 `ritsu mod report` counts them as errors. `rulec diff`, `koyomi diff` and `sekisho diff` name a
 version in the same ways, and two more: `@<name>/<path>` is a file of a dependency at the version
