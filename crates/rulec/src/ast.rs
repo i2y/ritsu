@@ -454,6 +454,35 @@ impl ShapeDecl {
     }
 }
 
+/// `implements proto "<file>" <Service>` (§15.274): the Connect service the rule is served as is
+/// the one the contract declares. `rulec check` holds the rule's inputs, outputs and elements to the
+/// service's messages, and `gen` serves the rule with the contract's names and numbers rather than
+/// a `.proto` of its own.
+#[derive(Debug, Clone)]
+pub struct ImplementsDecl {
+    /// The contract, as written, followed from the directory of the rule.
+    pub file: String,
+    /// The service as written: its name, or its name with the file's package (`shop.v1.…`).
+    pub service: String,
+    pub span: Span,
+    /// The file the line was written in, when it is not the one being checked: the rule a
+    /// contribution's check is about (§15.235). The path is followed from its directory.
+    pub base: Option<String>,
+}
+
+impl ImplementsDecl {
+    /// The file the contract is read from: `file` followed from the directory of the rule that
+    /// wrote the line.
+    pub fn contract_path(&self, rule_path: &str) -> Result<std::path::PathBuf, ritsu_base::modules::Refused> {
+        crate::vfs::follow(self.dir(rule_path), &self.file)
+    }
+
+    /// The directory the path is followed from.
+    pub fn dir<'a>(&'a self, rule_path: &'a str) -> &'a std::path::Path {
+        crate::vfs::dir_of(self.base.as_deref().unwrap_or(rule_path), ".")
+    }
+}
+
 impl EnumImport {
     /// The file the enum is read from, followed from the directory of the rule that wrote the line.
     pub fn file_path(&self, rule_path: &str) -> Result<std::path::PathBuf, ritsu_base::modules::Refused> {
@@ -1395,6 +1424,8 @@ pub struct RuleFile {
     pub constraints: Vec<Constraint>,
     /// The shapes of the caller's objects that inputs are projected from (§15.125).
     pub shapes: Vec<ShapeDecl>,
+    /// The contract whose Connect service the rule is served as (§15.274), when it names one.
+    pub implements: Option<ImplementsDecl>,
     /// The sequences the rule walks, each with the fields of one element (§15.56), in the order
     /// written. A rule may walk more than one (§15.219).
     pub elements: Vec<ElementsDecl>,

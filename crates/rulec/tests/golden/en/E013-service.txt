@@ -1,0 +1,7 @@
+error[E013]: `contracts/member_shipping.proto` has no service `ShippingService`
+  --> tests/mutants/m_e013svc.rule:2
+  |
+2 | implements proto "contracts/member_shipping.proto" ShippingService
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ The services in that file: MemberShippingService, PlainService

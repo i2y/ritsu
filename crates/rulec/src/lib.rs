@@ -53,6 +53,8 @@ pub mod fourier;
 pub mod grid;
 pub mod graph;
 pub mod i18n;
+/// `implements proto "<file>" <Service>`: the Connect service a rule is served as is a contract's (§15.274).
+pub mod implements;
 pub mod extract;
 pub mod import;
 pub mod codegen;
@@ -263,6 +265,8 @@ fn pipeline_inner(f: &mut ast::RuleFile, path: &str, budget: i64) -> Report {
     // the copies of the sources it cites (§15.68).
     diags.extend(enums::check(f, &t, path));
     diags.extend(projection::check(f, &t, path));
+    // The contract whose Connect service the rule is served as (§15.274).
+    diags.extend(implements::check(f, &t, path));
     diags.extend(sources::check(f, path));
     // The shape of the prerequisites (§15.222): what the graph below is read from.
     diags.extend(prereq::check_shape(f, &t, path));

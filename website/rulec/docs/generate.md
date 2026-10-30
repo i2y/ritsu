@@ -472,6 +472,15 @@ imports nothing.
 application, asked by POST and by GET — and holds all four to the
 reference evaluator.
 
+**When the contract comes first**, the rule can be served as the service it declares. A team
+that already keeps the `.proto` writes `implements proto "<file>" <Service>` at the head of the
+rule, and `gen` copies that contract in place of a `.proto` of the rule's own: the path, the
+messages and the number of every field are the contract's. The rule's own `.proto` numbers the
+fields in the order the rule declares them, so an input added in the middle would move every
+number after it; under a contract, a new input takes the number the contract gives it and nothing
+else moves. `rulec check` holds the rule to the service field by field, and says what does not
+fit as E076.
+
 And when the implementation that runs **today** is a Connect service,
 the arrow turns around: `rulec adapter --template connect-python` prints
 the twenty lines that put its answers in front of `rulec verify`, and

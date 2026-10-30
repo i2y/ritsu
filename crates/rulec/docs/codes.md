@@ -76,6 +76,7 @@ Every code rulec can print, what makes it appear, and how to fix it. The code an
 | [E071](#e071) | error | The prerequisites are misshapen |
 | [E072](#e072) | error | A carried value is not written right |
 | [E075](#e075) | error | A word is both a value of an enum and a name |
+| [E076](#e076) | error | The rule does not fit the contract it implements |
 | [E101](#e101) | error | Completeness gap: some input matches no row |
 | [E102](#e102) | error | Unreachable row: the row never matches |
 | [E103](#e103) | error | Unit mismatch: values of different types are being mixed |
@@ -204,7 +205,7 @@ Related codes: [E004](#e004), [E011](#e011)
 
 **When.** A line that is neither a table row, a comment nor blank starts with a symbol. The syntax is line-oriented: the first word of a line decides what is being declared.
 
-**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open`). A table row starts with `|`.
+**Fix.** Start the line with a declaring word (`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements`). A table row starts with `|`.
 
 **Smallest reproduction**:
 
@@ -222,7 +223,7 @@ Related codes: [E003](#e003), [E005](#e005)
 
 **When.** The word at the head of the line is not in the vocabulary. The vocabulary has no synonyms: one English spelling each.
 
-**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open`. Business words belong in names and cells, not at the head of a line.
+**Fix.** Correct it to one of `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements`. Business words belong in names and cells, not at the head of a line.
 
 **Smallest reproduction**:
 
@@ -426,9 +427,9 @@ Related codes: [E011](#e011), [E013](#e013)
 
 `error` — **No such import**
 
-**When.** The target of `import` is not there. There are three kinds: the built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese), an enum in a `.proto` (`import proto "<file>" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`).
+**When.** Something the rule reads from outside is not there, or cannot be read. Six lines read from outside: an `import` of a built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese); `import proto "<file>" <Enum> -> <enum of this rule>`, an enum of a `.proto`; `import jsonschema "<file>" "<pointer>" -> <enum of this rule>`, an enum of a JSON Schema, OpenAPI included; `import enum <enum> from "<file>"`, an enum of an `enums` file; `shape <name> = proto "<file>" <Message>` (or `jsonschema "<file>" "<pointer>"`), the contract an input's `from` reads; and `implements proto "<file>" <Service>`, the contract's service the rule is served as. For a line that reads a file it appears when the file cannot be read, when the enum, message or service it names is not in the file, or when the line is not that shape; and when there are two `implements` lines. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`).
 
-**Fix.** Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there.
+**Fix.** Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. For a line that reads a file, the path is followed from the directory of the rule file, so write it relative to that. An enum, a message or a service that is not found comes back with the ones the file has, and a message or a service is named by its name or by its name with the file's package. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there. A rule has one `implements` line.
 
 **Smallest reproduction**:
 
@@ -438,7 +439,7 @@ rule t(t) v1
 import std/us/state
 ```
 
-Related codes: [E012](#e012), [E032](#e032)
+Related codes: [E012](#e012), [E032](#e032), [E076](#e076)
 
 ## E014
 
@@ -2653,6 +2654,450 @@ policy unique
 ```
 
 Related codes: [E103](#e103), [E012](#e012)
+
+## E076
+
+`error` — **The rule does not fit the contract it implements**
+
+**When.** A rule that says `implements proto "<file>" <Service>` does not fit the contract's service. The service has to be shaped as the `.proto` rulec generates from the rule; what may differ is the package, the names of the service, the method and the messages, the numbers and the order of the fields, comments, `reserved` and other options, and the file and the message a message is declared in. Each thing that does not fit is said once: an input, a sequence, a field of an element or an output the contract does not have; a field only the contract has; a field of another type (a truth value is `bool`, a date and a string are `string`, every other number is `int64`, and an enum is the very enum the rule reads with `import proto`); a field whose `optional` differs (every field of the request and of an element is `optional`, and a field of the answer is only for an output of `T?`); an enum on the wire that is not read with `import proto`; an answer with no `repeated <Message> trace` of `string table`, `int32 row` and `string label` alone; a service whose one method is not unary with `NO_SIDE_EFFECTS`; a field with `json_name`, in a `oneof`, or a `map`; and a contract that is not proto3. A name of the rule's is said at its declaration, and what only the contract has at the `implements` line.
+
+**Fix.** When the contract gains a field, give it a number no field of its message has ever used; when it drops one, make the number `reserved`. On the rule's side, the alias of a value is the name of the contract's field. A value the service only takes and never reads is an input of `T?` marked `contract_only`. An enum on the wire is declared in the contract's `.proto` and read with `import proto`. To make a first contract, copy the `.proto` that `rulec gen` writes: it fits as it stands.
+
+**Smallest reproduction**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+  express(express) : bool
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| express | subtotal | -> shipping |
+| true    | -        | 20USD       |
+| false   | >=50USD  | 0USD        |
+| false   | -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**A field only the contract has**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+  optional bool express = 3;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**A field of another type**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional string subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**A field whose `optional` differs**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**An enum not read from the contract**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+enum tier(tier) = basic(basic) | gold(gold)
+
+inputs
+  tier(tier) : tier
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy unique
+| tier  | -> shipping |
+| gold  | 0USD        |
+| basic | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_BASIC = 1;
+  TIER_GOLD = 2;
+}
+
+message QuoteRequest {
+  optional Tier tier = 3;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**An answer with no `trace`**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+}
+```
+
+**A service not shaped as a rule's**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse);
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**A field with `json_name`, in a `oneof`, or a `map`**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2 [json_name = "sub"];
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**A contract that is not proto3**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+With `shipping.proto` beside it:
+
+```proto
+syntax = "proto2";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  optional int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  optional string table = 1;
+  optional int32 row = 2;
+  optional string label = 3;
+}
+```
+
+Related codes: [E013](#e013), [E032](#e032), [E033](#e033)
 
 ## E101
 

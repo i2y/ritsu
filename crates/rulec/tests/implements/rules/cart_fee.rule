@@ -1,0 +1,39 @@
+rule cart_fee v1
+implements proto "../api/shop/v1/cart.proto" CartService
+
+inputs
+  member : bool
+
+elements lines
+  price : money[USD]  range >=0USD <=10000USD
+
+sum total over lines of price  range >=0USD <=1000000USD
+
+outputs
+  fee : money[USD]  round up(1USD)
+
+table fee_table
+policy unique
+| total    | member | -> fee |
+| >=100USD | -      | 0USD   |
+| <100USD  | true   | 0USD   |
+| <100USD  | false  | 9USD   |
+
+examples
+| lines | member | -> fee |
+| big   | false  | 0USD   |
+| small | false  | 9USD   |
+| small | true   | 0USD   |
+| empty | false  | 9USD   |
+
+sequence big
+| price |
+| 60USD |
+| 50USD |
+
+sequence small
+| price |
+| 20USD |
+
+sequence empty
+| price |

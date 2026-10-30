@@ -286,7 +286,7 @@ E の最初の部分で、三つの言語がほかの言語を読めないとき
 
 | 口 | 出す側 | 受け取る側 | 中身 |
 |---|---|---|---|
-| `Rules` | rulec | dandori、yuen、sakai、ritsu-cross、sekisho、kaname | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み。順序のある列挙の入力の範囲は、範囲に入る値の並び）、列挙（値の名前と、生成したコードのメンバーの名前と、`.rule` に書いた別名（公開名）と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`sum`・`length`）、Connect のサービスの形（`enums` のファイルには無い。rulec の DESIGN §15.258）、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」と「入力をこの区間に限ったとき、この出力（列挙か真偽）がとる値と、そこに届く入力」（`outputs_over`。2026-10-06 に sekisho のために足した）と「入力をこの区間に限ったとき、この数の出力のいちばん小さい値と大きい値、行の数、それぞれになる入力」（`output_values_over`。2026-10-30 に ritsu の X4 のために足した）。評価は入力から出力 |
+| `Rules` | rulec | dandori、yuen、sakai、ritsu-cross、sekisho、kaname | 入力と出力（名前、別名、単位の付いた型、範囲、率の刻み。順序のある列挙の入力の範囲は、範囲に入る値の並び）、列挙（値の名前と、生成したコードのメンバーの名前と、`.rule` に書いた別名（公開名）と、Connect のワイヤでの名前と番号）、ステートマシン（軸、行が受け付ける座標、遷移、書く値、held）、前提（`constraint`・`sum`・`length`）、Connect のサービスの形（`enums` のファイルには無い。rulec の DESIGN §15.258。`implements` で契約のサービスを実装する規則では、パス、名前、番号は契約のもの。rulec の DESIGN §15.274）、生成したコードの呼び方、`rulec doc` が描いたもの。問いは「この範囲の値で、前提は必ず成り立つか」と「この入力の値をこの集合に限ったとき、表は完全で、重なりが無く、当てはまらない行が無いか」と「入力をこの区間に限ったとき、この出力（列挙か真偽）がとる値と、そこに届く入力」（`outputs_over`。2026-10-06 に sekisho のために足した）と「入力をこの区間に限ったとき、この数の出力のいちばん小さい値と大きい値、行の数、それぞれになる入力」（`output_values_over`。2026-10-30 に ritsu の X4 のために足した）。評価は入力から出力 |
 | `Dates` | koyomi | dandori、rulec、sakai（doc のため。F.2）、ritsu-cross、sekisho、kaname | 関数、引数の型と範囲、カレンダーとデータの範囲、`at` の時刻と UTC オフセット、条件の名前と文、`koyomi doc` が描いたもの。問いは「入力の範囲で、関数がとりうる値の集合」と「入力から値までの日数の最小と最大」と「カレンダーのデータの範囲と、休みの日の全部」（`calendar`）。`calendar` と `doc` は 2026-10-06 に sekisho のために足した。評価 |
 | `Books` | chobo | dandori、sakai（doc のため。D.8）、ritsu-cross、sekisho（`GatePorts`）、kaname | 単位（ritsu の単位の型。D.9）、勘定と境界と拒否の理由、振替の種類（引数と単位、キー、仮押さえと有効期限、移動）、仮押さえのステートマシン。問いは「額がこの範囲のとき、どの操作が、どの理由で拒否されうるか」。評価（帳簿の状態を持つ） |
 | `Claims` | geas | yuen、ritsu-cross | 主張の一覧（名前、行、書いたとおりの手順）。map の記録の読み方。差分が主張に何をもたらすか（geas の `affected`。D.7 で足した） |
@@ -652,7 +652,7 @@ serde_json を土台に入れない理由は、rulec と geas が依存の無い
 
 `ritsu-proto` は proto3 を読む。`syntax`、`package`、`import`（`public` と `weak` も）、入れ子のメッセージ、フィールド（`json_name`、`optional`、`repeated`、`map`、`oneof`）、列挙と値と番号、サービスとメソッド（ストリームかどうか）、サービスとメソッドのオプション（dandori の `(dandori.v1.workflow)` など）、Protovalidate の規則（`buf.validate.field` の整数の範囲と `required`。CEL の式は文字列のまま渡し、rulec の `src/cel.rs` が読む）、`buf.yaml` の依存と `buf.lock` の固定（rulec）。Google の well-known types、`buf/validate/validate.proto`、`dandori/v1/options.proto` はファイルが無くても知っているものとして扱う。型の名前は protobuf の決まり（内側から外へ、package を一段ずつ）で解決する（sakai の形）。
 
-読み手が一つになれば、同じ `.proto` を、rulec の契約の突き合わせ、dandori の `connect` と `implements`、sakai の境界を越える参照、yuen の端が、同じに読む（7.12）。
+読み手が一つになれば、同じ `.proto` を、rulec の契約の突き合わせ（`import proto`、`shape`、`implements`）、dandori の `connect` と `implements`、sakai の境界を越える参照、yuen の端が、同じに読む（7.12）。
 
 ### 4.11 土台に置かないもの
 
@@ -974,7 +974,7 @@ openapi、asyncapi、cedar の要素は、どの言語の `Items` にも入ら�
 
 yuen の端は、いまはファイル全体のもの（rulec、koyomi の日付、geas、dandori）がある（yuen の DESIGN 3.2）。定義の文が出れば、表や日付の関数やタスクの一つ一つが端になる（7.10）。端の中身が変わるので、yuen のテストと例の確かめた記録（`.req` のハッシュ）は D の段階で取り直す。D.7 で取り直し、F.1 の例もこの端で記録を書いた。koyomi の日付の端がその日付の定義の文になったので、カレンダーの一行を書き換えた例（yuen の `civil_code_periods_reread`）は、書き換えた日付へのリンク一本だけが E303 で止まる（ファイル全体を端にしていた A の段階の見込みでは、同じ `.cal` を指す三本が止まるはずだった）。
 
-**参照**（`References`）は、参照のある行、指す先、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use dates … from`（同梱、Lambda、`local`）、`use book … from`、`use proto|openapi|smithy`、`connect`、`implements`、帳簿の操作のタスクの `book`（先は `chobo "<帳簿>" transfer <振替>`）、子の `flow "…"`、rulec の `import proto`、`import jsonschema`、`import enum`、`shape`、`apply`、`source … file`、`range from koyomi`（先は `koyomi "<ファイル>" date <名前>`。E.4 で足した）、koyomi の `use calendar` と `source`、yuen と sakai の参照、sekisho の `use rule|dates|calendar|openapi|proto|asyncapi|book|gate`、`workflow … from`、`guards`（検査が見つけた操作）、手で書いた Cedar のスキーマの `@guards`、kaname の `use rule|dates|book|module` を出す。sakai はこれで、言語の参照を行番号つきで確かめ（7.10）、yuen は `trace` と `affected` でたどる。sakai が境界を越える参照として数えるのは、ほかの成果物そのものかその要素を使う参照で、規則の `import enum` と `range from koyomi`（sakai の DESIGN 20 章）、ワークフローの `use dates`（19 章）、ゲートの `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、Cedar の `@guards`（17 章）、モジュールの `use rule`・`use dates`・`use module`（18 章）もそこに入る。読む成果物の一部として扱うもの（JSON Schema、出典のコピー、祝日の表、Smithy の記述）と、帳簿の `use book` は数えない（sakai の DESIGN 3.3）。
+**参照**（`References`）は、参照のある行、指す先、参照の仕方を持つ。dandori の `use rule … from`（同梱、Lambda、Connect の URL、`local`）、`use dates … from`（同梱、Lambda、`local`）、`use book … from`、`use proto|openapi|smithy`、`connect`、`implements`、帳簿の操作のタスクの `book`（先は `chobo "<帳簿>" transfer <振替>`）、子の `flow "…"`、rulec の `import proto`、`import jsonschema`、`import enum`、`shape`、`apply`、`source … file`、`range from koyomi`（先は `koyomi "<ファイル>" date <名前>`。E.4 で足した）、`implements`（先は `proto "<ファイル>" service <サービス>`。dandori の `implements` と同じ形。2026-10-30 に足した。rulec の DESIGN §15.274）、koyomi の `use calendar` と `source`、yuen と sakai の参照、sekisho の `use rule|dates|calendar|openapi|proto|asyncapi|book|gate`、`workflow … from`、`guards`（検査が見つけた操作）、手で書いた Cedar のスキーマの `@guards`、kaname の `use rule|dates|book|module` を出す。sakai はこれで、言語の参照を行番号つきで確かめ（7.10）、yuen は `trace` と `affected` でたどる。sakai が境界を越える参照として数えるのは、ほかの成果物そのものかその要素を使う参照で、規則の `import enum` と `range from koyomi`（sakai の DESIGN 20 章）、ワークフローの `use dates`（19 章）、ゲートの `use rule`・`use dates`・`use calendar`・`use gate` と `guards`、Cedar の `@guards`（17 章）、モジュールの `use rule`・`use dates`・`use module`（18 章）もそこに入る。読む成果物の一部として扱うもの（JSON Schema、出典のコピー、祝日の表、Smithy の記述）と、帳簿の `use book` は数えない（sakai の DESIGN 3.3）。規則の `implements` も、まだ数えない（sakai の DESIGN 3.3）。ワークフローの `implements` は、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスであることを確かめる（sakai の E208）が、規則には広げていない。
 
 **E.1 で作った形**（PLAN の E.1）。索引は `ritsu-ports` の `Index` である。言語の口（`Items`、`References`）をツール名ごとに持ち、ファイルごとの答えを、ツールとルートとルートからのパスで一度だけ尋ねて覚える（参照のパスはルートからなので、ルートが違えば別の答えになる）。参照を渡せば `find` が引く。答えは四つのどれかで（`Lookup`）、その言語がつながっていない、その言語がファイルに答えない（言うこと `Said` を添える）、ある（ファイルそのものの参照なら、言語がファイルを読めたこと）、無い（同じ親の下の同じ種類のものを添える）である。何が誤りかは言わない。言うのは、参照を書いた言語である（yuen の E202、sakai の E007）。
 
@@ -3535,7 +3535,7 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 #### 17.9.5 ほかの言語：インターフェースの差
 
-全部の言語で、ファイルの追加、削除、中身の変わり（ダイジェストで）を出す。変わったファイルは、言語ごとに外に見せる形を比べる。
+全部の言語で、ファイルの追加、削除、中身の変わり（ダイジェストで）を出す。変わったファイルは、言語ごとに外に見せる形を比べる。規則は、ファイルが変わっていなくても、Connect の番号を契約から取るものを比べることがある（下の **Connect の番号**）。
 
 | 何で比べるか | 言語 |
 |---|---|
@@ -3559,9 +3559,11 @@ rulec の準用の見出しも、モジュールをパスのすぐ後ろの括�
 
 **帳簿の、データの続き**。帳簿には、使う側の検査で見えない壊れ方がある。データベースにすでにある勘定と仮押さえが、新しい版の帳簿についていけない変更（chobo の DESIGN 2.8 の E050、E051、W107）で、使う側の検査は新しい版の帳簿しか読まないので、これを言えない。そこで、変わった `.book` には、`api` の JSON の差に加えて、`chobo check --diff-base` と同じ比べ方（chobo の `diffbase.rs`。git の版の代わりに、二つの版の帳簿の本文を渡す）をかけ、E050 と E051 は「壊れる差」として、インターフェースの差のいちばん上に出す。`ritsu mod diff` はこれがあれば exit 1 で、`ritsu mod report` は、E050 と E051 を新しいエラーとして数える（17.10）。
 
-**Connect の番号**（2026-10-30）。規則にも、使う側の検査で見えない壊れ方がある。rulec は規則の Connect の `.proto` で、宣言の順に番号を振る。規則が宣言した列挙の値は 1 から、リクエストのフィールドは入力が 1 からで並びがそのあとに続き、レスポンスのフィールドは出力が 1 から、並びの要素のフィールドも 1 からである。途中に足したり、順を入れ替えたりすると、後ろのものの番号がずれる。並びは入力のあとに続くので、入力をどこに足しても並びの番号がずれる。protobuf のバイナリの形は値とフィールドを番号で送るので、前の版から生成したコードが書いたメッセージを、新しい版のコードは別の値や別のフィールドとして読むか、読み飛ばす（逆も同じ）。どちらも失敗せず、答えだけが違う。使う側の検査は新しい版の規則しか読まないので、これを言えない。そこで、二つの版の両方にある列挙の値とフィールド（規則での名前で合わせる）で、`api` の JSON の `connect` の番号（列挙の値の `number` と、`request_fields`、`response_fields`、`element_fields`、`sequences` の各フィールドの `number`）が変わったものを、ritsu の E310 として「壊れる差」に出す。行は新しい版の列挙の値、入力、出力の行である。並びと要素のフィールドには行が無い（rulec の `Items` に無い）。帳簿の E050 と E051 と同じく、`ritsu mod diff` はこれがあれば exit 1 で、`ritsu mod report` は新しいエラーとして数える。番号が動いた差そのもの（`/connect/enums/<列挙>/values/<値>/number`、`/connect/request_fields/<名前>/number` など）も、ほかの差と同じく候補として並ぶ。E310 は、その候補のうち、使う側の検査によらず壊れると言えるものである。
+**Connect の番号**（2026-10-30）。規則にも、使う側の検査で見えない壊れ方がある。規則が Connect で話す番号は、`implements` を書かない規則では、rulec が規則の `.proto` に宣言の順で振る。規則が宣言した列挙の値は 1 から、リクエストのフィールドは入力が 1 からで並びがそのあとに続き、レスポンスのフィールドは出力が 1 から、並びの要素のフィールドも 1 からである。途中に足したり、順を入れ替えたりすると、後ろのものの番号がずれる。並びは入力のあとに続くので、入力をどこに足しても並びの番号がずれる。`implements proto "<ファイル>" <サービス>` を書いた規則では、番号は契約のもので（rulec の DESIGN §15.274）、`import proto` で読んだ列挙の値の番号も契約のものである（rulec の DESIGN §15.59）。契約の番号は、契約を書き換えたときにだけ動く。protobuf のバイナリの形は値とフィールドを番号で送るので、前の版から生成したコードが書いたメッセージを、新しい版のコードは別の値や別のフィールドとして読むか、読み飛ばす（逆も同じ）。どちらも失敗せず、答えだけが違う。使う側の検査は新しい版の規則しか読まないので、これを言えない。そこで、二つの版の両方にある列挙の値とフィールド（規則での名前で合わせる）で、`api` の JSON の `connect` の番号（列挙の値の `number` と、`request_fields`、`response_fields`、`element_fields`、`sequences` の各フィールドの `number`）が変わったものを、ritsu の E310 として「壊れる差」に出す。行は新しい版の列挙の値、入力、出力の行である。並びと要素のフィールドには行が無い（rulec の `Items` に無い）。注は番号の出どころで分ける。契約の列挙の値（`enums` の項に `contract` がある）と、契約のサービスを実装する規則のフィールド（`connect.contract` がある）では、契約が番号を変えたと言い、前の番号に戻して、新しいものにはまだ使ったことのない番号を付けるよう言う。そのほかでは、番号の振り方と、最後に足すか、`implements` で番号を契約に持たせることを言う。帳簿の E050 と E051 と同じく、`ritsu mod diff` はこれがあれば exit 1 で、`ritsu mod report` は新しいエラーとして数える。番号が動いた差そのもの（`/connect/enums/<列挙>/values/<値>/number`、`/connect/request_fields/<名前>/number` など）も、ほかの差と同じく候補として並ぶ。E310 は、その候補のうち、使う側の検査によらず壊れると言えるものである。
 
-メソッドのパス（`connect.path`、`/<package>.<service>/Decide`）が二つの版で違うときは、E310 にしない。パスは規則の版（`rule … v2`）を上げると変わり、前の版から生成したクライアントは、新しい版のサーバーに届かずに失敗する（Connect の `unimplemented`）。値が別の値として黙って読まれることは起きないので、パスの変化を、使う側を壊しうる差の候補として出すだけにする。順を変えるしかないときは、版を上げて別のサービスとして出せばよい、というのが直し方の一つになる（台帳の E310）。ほかの直し方は、値と入力と出力と要素のフィールドを最後に足すことと、列挙を `.proto` に書いて `import proto` で読むことである。`.proto` から読んだ列挙の番号は `.proto` のものなので、宣言の順では動かない。並びをたどる規則に入力を足すと、最後に足しても並びの番号が動くので、版を上げるしかない。
+**変わっていない規則も比べる**（2026-10-30）。契約の番号は規則のファイルの外で動くので、規則のファイルが一字も変わらなくても、規則が話す番号は変わりうる。そこで、モジュールのどれかの `.proto` が変わったか、足されたか、消されたときは、両方の版にあって中身が同じ規則のファイルのうち、`implements` か `import proto` で `.proto` を読むもの（口の `References` の参照の仕方で見分ける）も、変わったファイルと同じに `api` の JSON を比べる。差があればインターフェースの差に並べ、無ければ並べない。`.proto` が一つも動いていなければ比べない。
+
+メソッドのパス（`connect.path`、`/<package>.<サービス>/<メソッド>`）が二つの版で違うときは、E310 にしない。`implements` を書かない規則のパスは `/rulec.<別名>.v<版>.<サービス>/Decide` で、規則の版（`rule … v2`）を上げると変わる。`implements` を書いた規則のパスは契約の package、サービス、メソッドが決め、契約の package を上げると変わる。前の版から生成したクライアントは、新しい版のサーバーに届かずに失敗する（Connect の `unimplemented`）。値が別の値として黙って読まれることは起きないので、パスの変化を、使う側を壊しうる差の候補として出すだけにする。直し方は、番号を契約に持たせることである（台帳の E310）。最初の契約には、いまの `rulec gen` が規則から書く `.proto` を写して使え、パスも番号も変わらない。`implements` を書かない規則では、値と入力と出力と要素のフィールドを最後に足す。順を変えるか消すしかないときは、版を上げて（`implements` を書いた規則なら契約の package を上げて）、別のサービスとして出す。
 
 #### 17.9.6 `ritsu mod diff`
 
@@ -4095,7 +4097,7 @@ ritsu の台帳（4.3、ritsu-cross の `codes.rs`）には、モジュールの
 | E307 | モジュールのルートに、`@` で始まる名前のファイルかディレクトリがある |
 | E308 | レジストリか git から取ったモジュールが `require … path` を持つ。レジストリから取ったモジュールが `require … git` を持つ（2026-10-29） |
 | E309 | `signature` の行が、git のリポジトリから取るモジュールに当たる（2026-10-29。17.14） |
-| E310 | 二つの版の両方にある列挙の値かフィールドの、Connect での番号が変わった。メソッドのパスが同じときだけ（2026-10-30。17.9.5）。`ritsu mod diff` と `ritsu mod report` が出す |
+| E310 | 二つの版の両方にある列挙の値かフィールドの、Connect での番号が変わった。メソッドのパスが同じときだけ。`implements` か `import proto` で `.proto` を読む規則は、規則のファイルが変わっていなくても、モジュールの `.proto` が変わったときに比べる（2026-10-30。17.9.5）。`ritsu mod diff` と `ritsu mod report` が出す |
 | W301 | `require` した依存のファイルを、そのモジュールのどのファイルも指していない（`.proto` の `import` も指すに数える。全体の検査のときだけ。17.8） |
 | W302 | `ritsu.lock` に、もう求められていないモジュールの行がある |
 | W303 | ファイルが、自分のモジュールのルートから書くと `@<名前>/@<名前>/…` になるパスで、そのモジュールが `require` していない依存の依存を指している（`.proto` の `import` が依存の依存のファイルに行き着くときも。依存のファイルなら、依存の警告に数える） |

@@ -52,6 +52,11 @@ pub const APPLY: &str = "apply";
 /// `shape order(order) = jsonschema "order.json" "#/$defs/Order"` — the shape of the object
 /// the caller already has, borrowed from the contract it is already described by (§15.125).
 pub const SHAPE: &str = "shape";
+/// `implements proto "api/shop/v1/member_shipping.proto" MemberShippingService` — the Connect
+/// service the rule is served as is the one a contract declares, with the contract's names and
+/// numbers (§15.274). A line head, read where a line starts outside every block; not reserved, so
+/// `implements : bool` under `inputs` is an input of that name.
+pub const IMPLEMENTS: &str = "implements";
 /// `dest(dest) : prefecture  from order.shipping.prefecture` — where an input is projected
 /// from, so the glue between the caller's object and the rule's flat inputs is generated and
 /// held to the contract rather than written by hand (§15.125).
@@ -117,7 +122,7 @@ pub const EXTEND: &str = "extend";
 pub const LINE_HEAD: &[&str] = &[
     DESCRIPTION, IMPORT, ENUM, GROUP, INPUTS, ELEMENTS, OUTPUTS, DERIVE, DEFINE, CONSTRAINT, TABLE,
     FOLD, COUNT, SUM, MAX, MIN, SEQUENCE, RESULT, EXAMPLES, POLICY, OVERRIDES, CLAUSE, SOURCE, APPLY,
-    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES, OPEN,
+    SHAPE, MACHINE, SCENARIO, PREREQUISITES, CHANCES, OPEN, IMPLEMENTS,
 ];
 
 /// The line heads of a `contribution` file besides those of a rule it may write (§15.227): where it

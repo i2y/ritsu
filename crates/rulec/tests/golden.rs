@@ -185,3 +185,8 @@ golden!(e033_寄与が足した値, "E033-added", "tests/mutants/m_e033addja.rul
 golden!(e040_形の固定, "E040-signature", "tests/mutants/m_e040sigja.rule", "E040");
 golden!(e044_準用の輪, "E044-ring", "tests/mutants/m_e044ringja.rule", "E044");
 golden!(w132_変えない項, "W132", "tests/mutants/m_w132ja.rule", "W132");
+
+// The service a rule implements (§15.274): a value the contract does not have, and a service the
+// contract does not declare.
+golden!(e076_契約に無い入力, "E076", "tests/mutants/m_e076ja.rule", "E076");
+golden!(e013_契約に無いサービス, "E013-service", "tests/mutants/m_e013svcja.rule", "E013");

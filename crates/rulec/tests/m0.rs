@@ -332,6 +332,12 @@ fn 変異は決めたコードだけを出す() {
         ("m_e066ja.rule", &[("E066", 1)], "上と同じファイルの日本語の版"),
         ("m_e013enum.rule", &[("E013", 1)], "無い列挙のファイルを指した"),
         ("m_e013enumja.rule", &[("E013", 1)], "上と同じ規則の日本語の版"),
+        // §15.274: a rule served as the service a contract declares, the contract beside the
+        // mutants (tests/mutants/contracts/member_shipping.proto). Written by hand (BY_HAND below).
+        ("m_e076.rule", &[("E076", 1)], "規則にだけ入力を足し、実装する契約の要求に足していない"),
+        ("m_e076ja.rule", &[("E076", 1)], "上と同じ規則の日本語の版"),
+        ("m_e013svc.rule", &[("E013", 1)], "契約に無いサービスを実装すると書いた"),
+        ("m_e013svcja.rule", &[("E013", 1)], "上と同じ規則の日本語の版"),
         // §15.227–§15.230: the merging of files. Written by hand (BY_HAND below), each English file
         // and its Japanese version beside it; a contribution is checked with the corpus rule it
         // adds to.
@@ -844,6 +850,12 @@ fn 変異はコーパスから作り直せる() {
         "m_e044ringja.rule",
         "m_w132.rule",
         "m_w132ja.rule",
+        // §15.274: a rule and the contract whose service it implements, and no corpus rule writes
+        // `implements`. In English and in Japanese.
+        "m_e076.rule",
+        "m_e076ja.rule",
+        "m_e013svc.rule",
+        "m_e013svcja.rule",
     ];
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let t = TempDir::new("mutants");

@@ -735,6 +735,110 @@ fn a_number_that_moves_on_the_connect_wire_is_a_new_error() {
     }
 }
 
+/// The contract a rule of the module `quote` implements the Connect service of (rulec's §15.274).
+const QUOTE_PROTO: &str = "syntax = \"proto3\";\n\npackage shop.v1;\n\n\
+enum Tier {\n  TIER_UNSPECIFIED = 0;\n  TIER_BASIC = 1;\n  TIER_GOLD = 3;\n  TIER_PLATINUM = 7;\n}\n\n\
+message FiredRow {\n  string table = 4;\n  int32 row = 1;\n  string label = 2;\n}\n\n\
+message QuoteRequest {\n  optional Tier member = 2;\n  reserved 3, 4;\n  optional int64 subtotal = 5;\n}\n\n\
+message QuoteResponse {\n  int64 shipping = 3;\n  repeated FiredRow trace = 15;\n}\n\n\
+service QuoteService {\n  rpc Quote(QuoteRequest) returns (QuoteResponse) {\n    option idempotency_level = NO_SIDE_EFFECTS;\n  }\n}\n";
+
+/// The rule, English and the twin with Japanese names: the enum on line 4, the input `subtotal` on
+/// line 9, and `EXTRA` where a version adds an input.
+const QUOTE_EN: &str = "rule quote v1\nimplements proto \"api/shop/v1/quote.proto\" QuoteService\n\n\
+enum tier = basic < gold < platinum\nimport proto \"api/shop/v1/quote.proto\" Tier -> tier\n\n\
+inputs\n  member : tier\n  subtotal : money[USD]  range >=0USD <=100000USD\nEXTRA\n\
+outputs\n  shipping : money[USD]  round down(1USD)\n\n\
+table shipping_fee\npolicy unique\n| member  | subtotal | -> shipping |\n| >=gold  | -        | 0USD        |\n| basic   | >=50USD  | 0USD        |\n| basic   | <50USD   | 5USD        |\n";
+
+const QUOTE_JA: &str = "rule 見積り(quote) v1\nimplements proto \"api/shop/v1/quote.proto\" QuoteService\n\n\
+enum 会員区分(tier) = 一般(basic) < ゴールド(gold) < プラチナ(platinum)\nimport proto \"api/shop/v1/quote.proto\" Tier -> 会員区分\n\n\
+inputs\n  会員(member) : 会員区分\n  小計(subtotal) : money[USD]  range >=0USD <=100000USD\nEXTRA\n\
+outputs\n  送料(shipping) : money[USD]  round down(1USD)\n\n\
+table 送料表(shipping_fee)\npolicy unique\n| 会員       | 小計    | -> 送料 |\n| >=ゴールド | -       | 0USD    |\n| 一般       | >=50USD | 0USD    |\n| 一般       | <50USD  | 5USD    |\n";
+
+/// A dependency whose rule implements a contract's service (rulec's §15.274), in each language, three
+/// versions of it in the store. Raised from 1.0.0 to 1.1.0, which adds an input to the rule and to
+/// the contract under a number of its own: no error. Raised from 1.1.0 to 1.2.0, whose contract moves
+/// the number of an input and of an enum's value while the rule's bytes stay the same: ritsu's E310
+/// for each, new errors of the dependency in the report (exit 1), each with the note that the numbers
+/// are the contract's.
+#[test]
+fn a_contract_that_moves_its_numbers_is_a_new_error() {
+    if !has_git() {
+        return;
+    }
+    const QUOTE: &str = "example.com/acme/quote";
+    for (lang, rule, extra) in [("en", QUOTE_EN, "  express : bool\n"), ("ja", QUOTE_JA, "  速達(express) : bool\n")] {
+        let t = TempDir::new(&format!("mod-report-contract-{lang}"));
+        let d = t.path();
+        let store = d.join("store");
+        let grown = QUOTE_PROTO.replace("  optional int64 subtotal = 5;\n", "  optional int64 subtotal = 5;\n  optional bool express = 11;\n");
+        let moved = grown.replace("subtotal = 5;", "subtotal = 6;").replace("TIER_PLATINUM = 7;", "TIER_PLATINUM = 8;");
+        for (version, extra, proto) in [("1.0.0", "", QUOTE_PROTO.to_string()), ("1.1.0", extra, grown.clone()), ("1.2.0", extra, moved)] {
+            let m = d.join(format!("quote-{version}"));
+            std::fs::create_dir_all(m.join("api/shop/v1")).unwrap();
+            std::fs::write(m.join("ritsu.mod"), format!("module {QUOTE}\nversion {version}\n")).unwrap();
+            std::fs::write(m.join("api/shop/v1/quote.proto"), proto).unwrap();
+            std::fs::write(m.join("quote.rule"), rule.replace("EXTRA\n", &format!("{extra}\n"))).unwrap();
+            let (code, out, err) = ritsu_in(&m, &store, &["mod", "lock"]);
+            assert_eq!(code, 0, "{version}: {out}{err}");
+            put(&store, &m);
+        }
+        let repo = d.join("app");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::write(repo.join("ritsu.mod"), format!("module example.com/acme/app\nversion 0.1.0\n\nrequire quote oci \"{QUOTE}\" 1.0.0\n")).unwrap();
+        std::fs::write(repo.join("README.md"), "The quotes of the shop.\n").unwrap();
+        let lock = || {
+            let (code, out, err) = ritsu_in(&repo, &store, &["mod", "lock"]);
+            assert_eq!(code, 0, "{out}{err}");
+        };
+        lock();
+        git(&repo, &["init", "-q"]);
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-q", "-m", "quote 1.0.0"]);
+        git(&repo, &["tag", "one"]);
+        replace(&repo, "ritsu.mod", &format!("\"{QUOTE}\" 1.0.0"), &format!("\"{QUOTE}\" 1.1.0"));
+        lock();
+        let report = |base: &str| {
+            let (code, out, err) = ritsu_in(&repo, &store, &["mod", "report", "--base", base, "--format", "json", "--lang", lang]);
+            assert_eq!(err, "", "{lang}:\n{out}");
+            (code, json(&out))
+        };
+        // an input added under a number of the contract's own
+        let (code, v) = report("one");
+        assert_eq!((code, &v["check"]["new"]), (0, &serde_json::json!([])), "{lang}:\n{v}");
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-q", "-m", "quote 1.1.0"]);
+        git(&repo, &["tag", "two"]);
+        // the contract moves two numbers
+        replace(&repo, "ritsu.mod", &format!("\"{QUOTE}\" 1.1.0"), &format!("\"{QUOTE}\" 1.2.0"));
+        lock();
+        let (code, v) = report("two");
+        let new: Vec<(&str, &str, &str, &str, i64)> = v["check"]["new"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| (d["tool"].as_str().unwrap(), d["code"].as_str().unwrap(), d["file"].as_str().unwrap(), d["dependency"].as_str().unwrap_or(""), d["line"].as_i64().unwrap_or(0)))
+            .collect();
+        let (enum_line, field_line) = (("ritsu", "E310", "@quote/quote.rule", "@quote", 4), ("ritsu", "E310", "@quote/quote.rule", "@quote", 9));
+        assert_eq!((code, new), (1, vec![enum_line, field_line]), "{lang}:\n{v}");
+        let notes: Vec<&str> = v["check"]["new"].as_array().unwrap().iter().map(|d| d["notes"][0].as_str().unwrap_or_default()).collect();
+        let want = if lang == "en" {
+            [
+                "the enum is read from a .proto (`import proto`), whose numbers are the contract's, and the contract moved this value's: put the old number back, and give a new value a number no value has used",
+                "the numbers are those of the contract the rule implements (`implements`), and the contract changed this field's: put the old number back, and give a new field a number no field has used",
+            ]
+        } else {
+            [
+                "この列挙は .proto から読んだもの（`import proto`）で、番号は契約のものです。契約がこの値の番号を変えました。前の番号に戻し、新しい値には、どの値もまだ使ったことのない番号を付けてください",
+                "番号は、規則が実装する契約（`implements`）のものです。契約がこのフィールドの番号を変えました。前の番号に戻し、新しいフィールドには、どのフィールドもまだ使ったことのない番号を付けてください",
+            ]
+        };
+        assert_eq!(notes, want, "{lang}:\n{v}");
+    }
+}
+
 /// A module with no file of ritsu's languages of its own, which only gathers a dependency: `ritsu
 /// check` has nothing to check in it, so each check counts no diagnostic, and the dependency is
 /// compared all the same.

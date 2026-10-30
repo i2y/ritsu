@@ -18,18 +18,20 @@ the same thing, and its generated code is called the same way and answers the sa
    rule reads out of the caller's object — a total, a largest or smallest value of one field over
    a collection (`from sum`, `from max`, `from min`), and a sequence taken from a collection
    (`elements … from`) — the inputs drawn at random with what is claimed of the chances of the
-   answers (`random`, `chances`, a pick by weight with `take_weighted` and `draw`), and the merging
-   of files — open values (`open … combine`), contribution files (`contribution`, `to`, `after`,
+   answers (`random`, `chances`, a pick by weight with `take_weighted` and `draw`), the merging of
+   files — open values (`open … combine`), contribution files (`contribution`, `to`, `after`,
    `into`, `extend`), open tables, clauses, enums and blocks, and the pins `signature:` and
-   `meaning:` — included. An `apply` heading pinned with `sha256:`, as written before `meaning:`
-   came, is read as it was. New constructs may be added.
+   `meaning:` — and a rule served as the Connect service a contract declares (`implements proto`)
+   included. An `apply` heading pinned with `sha256:`, as written before `meaning:` came, is read
+   as it was. New constructs may be added.
 2. **The names you may use.** The reserved words — the 65 words E009 refuses as a name,
    listed in `src/kw.rs` — are fixed at 1.0, and a test holds the list. A later release may
    add words to the language, but never to that list: a new word is read only where no name
    can stand, or gives way to a name the rule declares. A name that is legal under 1.0 stays
    legal. The words of the merging of files came this way: `open`, `combine`, `product`,
    `contribution`, `to`, `into` and `extend` are read by their place in the line, and a rule may
-   name an input `open` or `to`.
+   name an input `open` or `to`. So did `implements`, read only at the head of a line outside
+   every block: a rule may name an input `implements`.
 3. **What the generated code answers.** For a rule that passes, the code generated in every
    language returns the same outputs for the same inputs under every 1.x, and so does the
    reference evaluator: a record replayed under a later 1.x gets the answer it got before.

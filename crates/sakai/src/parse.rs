@@ -730,8 +730,8 @@ impl<'a> P<'a> {
     fn mixed(&mut self, l: &Line) {
         self.push("E004", l, l.tokens[0].col, tr!("一つの公表された言語に、proto と rulec と Rust のクレートと、OpenAPI と AsyncAPI の文書を混ぜたり、規則やクレートを二つ書いたりはできません", "One published language cannot mix proto, rulec, a crate and OpenAPI or AsyncAPI documents, or hold two rules or two crates"));
         self.note(tr!(
-            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けてください。Rust のクレートも、クレートごとに一つの公表された言語にしてください。",
-            "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>`; a Rust crate, too, is a published language of its own."
+            "rulec の規則は、規則ごとに一つの Connect のサービスを公表するので、規則ごとに `published language rulec.<別名>.v<版>` を分けてください（`implements` で契約のサービスを実装する規則では、package は契約のものです）。Rust のクレートも、クレートごとに一つの公表された言語にしてください。",
+            "A rule publishes one Connect service of its own, so each rule gets its own `published language rulec.<alias>.v<n>` (the contract's package, for a rule that implements a contract's service with `implements`); a Rust crate, too, is a published language of its own."
         ));
     }
 

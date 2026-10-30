@@ -145,9 +145,10 @@ fn 台帳の別の形の再現はその形を出す() {
     // two names Swift and Java spell alike, two SQLite reads as one column, two PostgreSQL cuts to
     // one, and a name Ruby reads as a constant (§15.263), a name the generated code uses itself and a
     // name of `_` alone (§15.265); E011 with a sequence that has no ASCII alias (§15.265); E140
-    // with an output's range that cannot be checked (§15.268)
+    // with an output's range that cannot be checked (§15.268); E076 with each other way a rule and
+    // the contract it implements part (§15.274)
     let with: Vec<&str> = rulec::codes::ledger().iter().filter(|e| !e.also.is_empty()).map(|e| e.code).collect();
-    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E102", "E103", "E108", "E121", "E140", "W121"]);
+    assert_eq!(with, ["E011", "E022", "E031", "E033", "E034", "E040", "E043", "E044", "E076", "E102", "E103", "E108", "E121", "E140", "W121"]);
     // Each by its place among the entry's other forms; `None` is the last.
     for (code, form, says) in [
         ("E033", None, [(Lang::En, "The added value z has neither a row of table t nor `default`"), (Lang::Ja, "足した値 z に、表 t の行も `default` もありません")]),
@@ -171,6 +172,14 @@ fn 台帳の別の形の再現はその形を出す() {
         ("E011", None, [(Lang::En, "A public name has no ASCII alias"), (Lang::Ja, "公開される名前に ASCII の別名がありません")]),
         ("E034", None, [(Lang::En, "The row label `r1` appears twice"), (Lang::Ja, "行ラベル `r1` が二度あります")]),
         ("E140", None, [(Lang::En, "The range of the output fee cannot be checked"), (Lang::Ja, "出力 手数料 の範囲を確かめられません")]),
+        ("E076", Some(0), [(Lang::En, "The contract's `QuoteRequest` has `express`, which the rule does not"), (Lang::Ja, "契約の `QuoteRequest` の `express` が、規則にありません")]),
+        ("E076", Some(1), [(Lang::En, "`subtotal` has another type in the contract"), (Lang::Ja, "`subtotal` の型が、契約と違います")]),
+        ("E076", Some(2), [(Lang::En, "Whether `subtotal` is `optional` does not agree with the contract"), (Lang::Ja, "`subtotal` の `optional` が、契約と合っていません")]),
+        ("E076", Some(3), [(Lang::En, "The enum `tier` is not read from a contract"), (Lang::Ja, "列挙 `tier` は、契約から読んだものではありません")]),
+        ("E076", Some(4), [(Lang::En, "The contract's `QuoteResponse` has no `trace`"), (Lang::Ja, "契約の `QuoteResponse` に `trace` がありません")]),
+        ("E076", Some(5), [(Lang::En, "The contract's service `ShippingService` is not shaped as a rule's service"), (Lang::Ja, "契約のサービス `ShippingService` は、規則のサービスの形ではありません")]),
+        ("E076", Some(6), [(Lang::En, "The contract's `QuoteRequest` writes `subtotal` in a way a rule's service does not"), (Lang::Ja, "契約の `QuoteRequest` の `subtotal` は、規則のサービスが読まない書き方です")]),
+        ("E076", None, [(Lang::En, "The contract `shipping.proto` is not proto3"), (Lang::Ja, "契約 `shipping.proto` は proto3 ではありません")]),
     ] {
         let e = rulec::codes::find(code).unwrap();
         let a = match form {
@@ -268,8 +277,8 @@ fn 台帳は重複せず_関係するコードも台帳にある() {
     // (§15.210, §15.212) 117, E132 and E139 (§15.213, §15.215) 119, E072, E134 and E135
     // (§15.217) 122, E071, E136, E137, E138 and W130 (§15.222) 127, E074 (§15.223) 128, E070,
     // E073, E133, W129 and W131 (§15.224–§15.226) 133, E067, E068, E131 and W132 (§15.227)
-    // 137, and E140 (§15.268) 138.
-    assert_eq!(all.len(), 138, "台帳の件数が変わった: {}", all.len());
+    // 137, E140 (§15.268) 138, and E076 (§15.274) 139.
+    assert_eq!(all.len(), 139, "台帳の件数が変わった: {}", all.len());
 }
 
 fn run(args: &[&str]) -> (i32, String) {

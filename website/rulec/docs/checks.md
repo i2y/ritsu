@@ -113,6 +113,19 @@ contract keeps everything the rule asks of these values, `rulec certificate` wri
 case by case, and both re-checkers verify it — the Lean one on the theorem `included_sound`
 ([How it is checked](assurance.md)).
 
+A rule may also be served **as a service a contract declares**:
+`implements proto "<file>" <Service>` hands the names and the numbers of its Connect wire to a
+`.proto` that keeps them. Every `rulec check` reads that contract and holds its service to the
+shape `gen` would write for the rule, field by field and by name, and each thing that does not
+fit is **E076**, said once: an input, a sequence or an output the contract does not have; a field
+only the contract has, which the service would drop unread or never write; a field of another
+type, or whose `optional` differs; an enum on the wire that is not read from the contract with
+`import proto`; an answer with no `trace`; a method that streams or does not declare
+`NO_SIDE_EFFECTS`. The package, the names of the service and the messages, the order and the
+numbers are the contract's to choose, and that is what lets the rule gain an input without moving
+the number of any other field
+([the reference](reference.md#34-implements--the-service-a-contract-declares)).
+
 A rule that declares its documents with `source` and cites them with `@source fragment` is
 held to its copies: every cited fragment has a copy beside the rule and its digest pinned in
 the rule. No pin is E037, a pin that differs from the copy is E038 (naming the tables, clauses
@@ -267,7 +280,7 @@ Four things it does **not** prove, and they are kept beside the word:
 3. **The row pairs W114 could not settle.** Those move to a guard at run time — so "the rows
    do not overlap" is not always provable, and the pairs where it was not are always named
 4. **That the checker itself is right.** The five above come out of rulec's own implementation,
-   and that implementation has not been proved correct. The evidence is 216 deliberately broken
+   and that implementation has not been proved correct. The evidence is 220 deliberately broken
    rules (`tests/mutants/`) each producing the diagnostic it should, the corpus rules — the
    transcriptions of published terms and statutes among them — passing on every commit, and
    the reference evaluator agreeing with twelve languages. **Evidence, not proof**

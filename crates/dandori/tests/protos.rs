@@ -285,17 +285,24 @@ fn rulec_vectors(rule: &Path) -> Vec<Value> {
     rulec::vectors::generate(&f, &c).iter().map(|v| serde_json::from_str(&rulec::vectors::to_json(&f, &c, v)).unwrap()).collect()
 }
 
-/// Where `rulec gen` writes the `.proto` of the rule's service, under its output directory.
+/// Where `rulec gen` writes the `.proto` of the rule's service, under its output directory: the rule's
+/// own, or for a rule that implements a contract's service, the contract, copied where its package
+/// puts it (rulec's §15.274).
 fn rulec_proto(rule: &Path) -> String {
     let (path, src, f, c) = rulec_checked(rule);
-    format!("proto/{}", rulec::codegen::Gen::new(&f, &c, &src, &path).proto_path())
+    match rulec::implements::served(&f, &path) {
+        Some(s) => format!("proto/{}", s.import),
+        None => format!("proto/{}", rulec::codegen::Gen::new(&f, &c, &src, &path).proto_path()),
+    }
 }
 
 /// The rules of the examples, which the flows of the examples and of tests/flows call, and the two of
 /// tests/fixtures/rules whose enum is a contract's (`import proto`): one whose values carry the
 /// contract's prefix and whose value 0 says it is not set (`delivery_fee.rule`, `MEMBER_TIER_GOLD`),
 /// and one whose values have no prefix and whose value 0 is a state of its own (`account_fee.rule`,
-/// `ACTIVE = 0`). The rule there that walks a list is not among them: dandori does not call one (E005).
+/// `ACTIVE = 0`). One more there is served as the service of a contract (`implements`,
+/// `member_shipping_quote.rule`): its path, its names and its numbers are the contract's. The rule
+/// there that walks a list is not among them: dandori does not call one (E005).
 /// Nor are the `enums` files there, which have no outputs and no service: nothing calls them (E005).
 fn rule_files() -> Vec<PathBuf> {
     let mut out = Vec::new();
@@ -340,12 +347,14 @@ fn connect_at(rule: &Path, base: &str) -> (RuleConnect, dandori::rulec::RuleInfo
 /// response by their JSON names and kinds, the names of the enums' values and of value 0, the zero
 /// values — is what the `.proto` rulec writes for the same rule says. The `.proto` of a contract the
 /// rule imports is where `rulec gen` copies it (`proto/shop/v1/order.proto`, by its package), and is
-/// read from there as an import. A change of how rulec names them shows here.
+/// read from there as an import. For a rule that implements a contract's service, that contract is
+/// the `.proto` of its service, and the path dandori calls is the contract's. A change of how rulec
+/// names them shows here.
 #[test]
 fn rulec_gen_writes_the_names_dandori_builds() {
     use dandori::proto::PType;
     use dandori::rulec::WireKind;
-    let mut checked = 0;
+    let (mut checked, mut implementing) = (0, 0);
     for rule in rule_files() {
         let (c, info) = connect_at(&rule, "https://rules.example.com");
         let out = scratch("gen");
@@ -360,6 +369,11 @@ fn rulec_gen_writes_the_names_dandori_builds() {
         assert_eq!((pf.services.len(), svc.methods.len()), (1, 1), "{name}: one service with one method");
         let path = format!("/{}/{}", svc.name, method.name);
         assert_eq!(c.url, format!("https://rules.example.com{path}"), "{name}: the path");
+        if name == "member_shipping_quote.rule" {
+            // the contract's service and method, not the rule's own (`rulec.<alias>.v1…/Decide`)
+            assert_eq!(c.url, "https://rules.example.com/shop.v1.MemberShippingService/Quote", "{name}: the contract's path");
+            implementing += 1;
+        }
 
         // each field by its JSON name: the kind, and for an enum its values and its value 0, which is the
         // first of the `.proto`'s and one of the rule's values when it does not say it is not set
@@ -406,6 +420,7 @@ fn rulec_gen_writes_the_names_dandori_builds() {
         checked += 1;
     }
     assert!(checked >= 11, "the examples' rules: {checked}");
+    assert_eq!(implementing, 1, "the rule that implements a contract's service");
     eprintln!("the names dandori reads of the rules' services are in the .proto rulec writes, for {checked} rule(s)");
 }
 

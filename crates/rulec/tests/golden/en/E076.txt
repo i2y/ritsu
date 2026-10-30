@@ -1,0 +1,8 @@
+error[E076]: The input `express` is not in the contract's `QuoteRequest`
+  --> tests/mutants/m_e076.rule:13
+   |
+13 |   express : bool                                # the contract's QuoteRequest has no field for it
+   |   ^^^^^^^
+   |
+ `QuoteRequest` is on line 22 of contracts/member_shipping.proto.
+ Add `optional bool express = <number>;` to the contract's `QuoteRequest`, with a number no field of `QuoteRequest` has ever used. A name of the rule's goes by its alias in the contract.

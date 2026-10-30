@@ -100,6 +100,7 @@ const DECLARING: &[&str] = &[
     crate::kw::DERIVE,
     crate::kw::DEFINE,
     crate::kw::SHAPE,
+    crate::kw::IMPLEMENTS,
     crate::kw::SOURCE,
     crate::kw::APPLY,
     crate::kw::COUNT,
@@ -261,6 +262,7 @@ fn declared(f: &RuleFile) -> usize {
         + f.examples.len()
         + f.constraints.len()
         + f.shapes.len()
+        + usize::from(f.implements.is_some())
         + f.sequences.len()
         + f.scenarios.len()
         + usize::from(f.description.is_some())
@@ -283,6 +285,7 @@ fn line_shape(word: &str) -> String {
         crate::kw::DEFINE => tr!("`define <名前>(<別名>) : <型> = <式>`", "`define <name>(<alias>) : <type> = <expression>`"),
         crate::kw::RESULT => tr!("`result <出力> = <式>`", "`result <output> = <expression>`"),
         crate::kw::SHAPE => tr!("`shape <名前>(<別名>) = jsonschema \"<ファイル>\" \"<ポインタ>\"`", "`shape <name>(<alias>) = jsonschema \"<file>\" \"<pointer>\"`"),
+        crate::kw::IMPLEMENTS => tr!("`implements proto \"<ファイル>\" <サービス>`", "`implements proto \"<file>\" <Service>`"),
         crate::kw::SOURCE => tr!("`source <名前> = law \"<法令番号>\" asof <日付>` か `source <名前> = file \"<ファイル>\" sha256:<ハッシュ>`", "`source <name> = law \"<law id>\" asof <date>` or `source <name> = file \"<file>\" sha256:<digest>`"),
         crate::kw::APPLY => tr!("`apply <名前>(<別名>) = \"<規則のファイル>\" sha256:<ハッシュ>` の行と、その下に入力ごとの読み替え", "`apply <name>(<alias>) = \"<rule file>\" sha256:<digest>`, with one binding per input under it"),
         crate::kw::COUNT => tr!("`count <名前>(<別名>) over <並び> where <列> = <値>  range >=… <=…`", "`count <name>(<alias>) over <sequence> where <column> = <value>  range >=… <=…`"),
@@ -399,6 +402,7 @@ impl P {
             examples: Vec::new(),
             constraints: Vec::new(),
             shapes: Vec::new(),
+            implements: None,
             elements: Vec::new(),
             sequences: Vec::new(),
             machine: None,
@@ -560,6 +564,27 @@ impl P {
                 crate::kw::SHAPE => {
                     if let Some(d) = self.shape_decl(&line) {
                         f.shapes.push(d);
+                    }
+                    self.i += 1;
+                }
+                crate::kw::IMPLEMENTS => {
+                    if let Some(d) = self.implements_decl(&line) {
+                        match &f.implements {
+                            // One rule is generated as one Connect service (§15.274).
+                            Some(first) => {
+                                let n = first.span.line;
+                                self.err(
+                                    Diag::error("E013", tr!("`implements` の行が二行あります", "There are two `implements` lines"))
+                                        .at(self.at(d.span.line))
+                                        .mark(d.span.clone(), tr!("{n} 行目に一行目があります", "the first is on line {n}"))
+                                        .note(tr!(
+                                            "規則は一つの Connect のサービスとして生成されるので、実装する契約のサービスは一つです。一行にしてください。",
+                                            "A rule is generated as one Connect service, so it implements one service of one contract. Keep one of the lines."
+                                        )),
+                                );
+                            }
+                            None => f.implements = Some(d),
+                        }
                     }
                     self.i += 1;
                 }
@@ -1288,6 +1313,46 @@ impl P {
         };
         self.tail_junk(line, end, Tail::Shape);
         Some(ShapeDecl { name, source, file, at, span: span_of(line), base: None })
+    }
+
+    /// `implements proto "api/shop/v1/member_shipping.proto" MemberShippingService` (§15.274). The
+    /// service is its name, or its name with the file's package (`shop.v1.MemberShippingService`),
+    /// as a `shape` line names a message. Nothing follows it.
+    fn implements_decl(&mut self, line: &[Token]) -> Option<ImplementsDecl> {
+        let at = self.at(span_of(line).line);
+        let shape = || {
+            Diag::error("E013", tr!("`implements` の行の形が違います", "The shape of the `implements` line is wrong"))
+                .at(at.clone())
+                .mark(span_of(line), "")
+                .note(tr!(
+                    "形は `implements proto \"<ファイル>\" <サービス>` です。サービスは、名前か、ファイルの package を付けた名前で書きます。",
+                    "The shape is `implements proto \"<file>\" <Service>`, the service named by its name or by its name with the file's package."
+                ))
+        };
+        if line.get(1).and_then(|t| t.ident()) != Some(crate::kw::PROTO) {
+            self.err(shape());
+            return None;
+        }
+        let Some(Kind::Str(file)) = line.get(2).map(|t| t.kind.clone()) else {
+            self.err(shape());
+            return None;
+        };
+        let Some(mut service) = line.get(3).and_then(|t| t.ident()).map(|s| s.to_string()) else {
+            self.err(shape());
+            return None;
+        };
+        let mut end = 4;
+        while line.get(end).is_some_and(|t| t.is(&Kind::Dot)) {
+            let Some(w) = line.get(end + 1).and_then(|t| t.ident()) else { break };
+            service.push('.');
+            service.push_str(w);
+            end += 2;
+        }
+        if end < line.len() {
+            self.err(shape().mark(span_of(&line[end..]), tr!("サービスの名前の後ろには何も書けません", "nothing follows the service")));
+            return None;
+        }
+        Some(ImplementsDecl { file, service, span: span_of(line), base: None })
     }
 
     /// The tail of an input line, from `from` to the end (§15.125, §15.223).

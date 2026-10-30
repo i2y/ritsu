@@ -439,7 +439,7 @@ fn scope(f: &mut RuleFile, path: &str) -> Vec<Diag> {
 }
 
 /// Marks every file `f` cites as followed from the directory of `base`, the file `f` was read from
-/// (§15.235): its contracts (`shape`), the enums it reads from a `.proto` or a schema (`import`), the
+/// (§15.235): its contracts (`shape`, `implements`), the enums it reads from a `.proto` or a schema (`import`), the
 /// koyomi files of its dates, and the copies of its sources. A contribution's check is about the rule
 /// it adds to, and runs under the contribution's path; what the rule names is the rule's to find.
 /// A source so marked is one the rule's own check holds to its copies, as one an `apply` brought in.
@@ -449,6 +449,9 @@ fn cites_from(f: &mut RuleFile, base: &str) {
     }
     for im in f.enum_imports.iter_mut() {
         im.base.get_or_insert_with(|| base.to_string());
+    }
+    if let Some(d) = f.implements.as_mut() {
+        d.base.get_or_insert_with(|| base.to_string());
     }
     for s in f.sources.iter_mut() {
         s.base.get_or_insert_with(|| base.to_string());
@@ -1271,6 +1274,7 @@ fn empty_like(f: &RuleFile) -> RuleFile {
         examples: Vec::new(),
         constraints: Vec::new(),
         shapes: Vec::new(),
+        implements: None,
         elements: Vec::new(),
         sequences: Vec::new(),
         machine: None,

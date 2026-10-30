@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package shop.common.v1;
+
+// One row of a table that answered.
+message MatchedRow {
+  int32 row = 1;
+  string label = 2;
+  string table = 3;
+}

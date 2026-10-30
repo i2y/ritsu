@@ -74,9 +74,9 @@ pub struct Backend {
     /// because the rule declares itself free of side effects and may be called either way,
     /// and a carrying that changed an answer is the thing worth catching.
     ///
-    /// The second argument is the `.proto`'s path under `proto/`, which carries the rule's
-    /// version and so cannot be spelled from the alias alone.
-    pub connect: Option<fn(&str, &str) -> Plan>,
+    /// The stubs are built from the whole of `proto/`: the rule's own `.proto`, or the contract
+    /// whose service the rule implements (§15.274), and the files they import.
+    pub connect: Option<fn(&str) -> Plan>,
     /// How to run the rule as a function **inside a database** (§15.80), for the backends
     /// that get one. The relation and the function are two doors on one query, and a door
     /// nobody drove would be a claim nobody checked, so `rulec test` runs this as a pass of
@@ -321,7 +321,7 @@ pub const ALL: &[Backend] = &[
         texts: true,
         wasi: None,
         mcp: Some(|alias| Plan::new("python", "python3", &["-B", &format!("{alias}_mcp.py")])),
-        connect: Some(|alias, _proto| {
+        connect: Some(|alias| {
             // The stubs come from buf, which is the only way to reach protobuf-py's own
             // plugin. The template is given inline and names the **local** plugins, so a
             // machine with no network runs this pass like any other; the `buf.gen.yaml`

@@ -1,0 +1,40 @@
+rule 会員の送料(member_tier_shipping) v1
+implements proto "contracts/member_shipping.proto" MemberShippingService
+description "会員の区分で決まる送料。速達の料金を規則にだけ足し、実装する契約には足していない（E076）"
+
+# 区分は低いほうから順に並べる。セルは区分と比べる（`>=ゴールド`）。
+enum 会員区分(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)
+import proto "contracts/member_shipping.proto" Tier -> 会員区分
+
+inputs
+  会員(member) : 会員区分                                  # 会員自身の区分
+  キャンペーン(campaign) : 会員区分  range >=一般 <=ゴールド  # キャンペーンが引き上げるのはゴールドまで
+  小計(subtotal) : money[USD]  range >=0USD <=100000USD
+  速達(express) : bool                                     # 契約の QuoteRequest にこのフィールドは無い
+
+outputs
+  送料(shipping) : money[USD]  round down(1USD)
+  適用区分(effective) : 会員区分
+  引き上げ(lifted) : bool
+
+# 注文は、二つの区分の高いほうで送る。
+define 適用区分 : 会員区分 = max(会員, キャンペーン)
+define 引き上げ : bool = キャンペーン > 会員
+
+table 送料表(shipping_fee)
+policy unique
+| 速達  | 適用区分   | 小計     | -> 送料 |
+| true  | -          | -        | 12USD   |
+| false | >=ゴールド | -        | 0USD    |
+| false | シルバー   | >=50USD  | 0USD    |
+| false | シルバー   | <50USD   | 5USD    |
+| false | 一般       | >=100USD | 0USD    |
+| false | 一般       | <100USD  | 8USD    |
+
+examples
+| 会員     | キャンペーン | 小計  | 速達  | -> 送料 | 適用区分 | 引き上げ |
+| プラチナ | 一般         | 10USD | false | 0USD    | プラチナ | false    |
+| 一般     | ゴールド     | 10USD | false | 0USD    | ゴールド | true     |
+| シルバー | 一般         | 60USD | false | 0USD    | シルバー | false    |
+| シルバー | シルバー     | 10USD | false | 5USD    | シルバー | false    |
+| 一般     | 一般         | 99USD | true  | 12USD   | 一般     | false    |

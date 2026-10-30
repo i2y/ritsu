@@ -603,9 +603,26 @@ pub fn modules(o: &Module, n: &Module, budget: Option<u64>, lang: Lang, joined: 
         d.behavior.push(Behavior { file: rel.clone(), tool, result });
     }
     // `ritsu.mod` changes are said as the versions of the title and the `require` lines
+    let at = |m: &Module, rel: &String, mark: Option<&str>| At { read: m.root.join(rel), files: m.through.clone(), root: m.root.clone(), rel: rel.clone(), label: m.label.clone(), shown: m.shown(rel, mark) };
     for rel in d.files.changed.iter().filter(|r| r.as_str() != manifest::FILE) {
-        let at = |m: &Module, mark: Option<&str>| At { read: m.root.join(rel), files: m.through.clone(), root: m.root.clone(), rel: rel.clone(), label: m.label.clone(), shown: m.shown(rel, mark) };
-        d.interface.push(interface(rel, &at(o, om.as_deref()), &at(n, nm.as_deref()), lang, joined));
+        d.interface.push(interface(rel, &at(o, rel, om.as_deref()), &at(n, rel, nm.as_deref()), lang, joined));
+    }
+    // A rule whose bytes are the same and whose wire is a contract's: one that implements the service
+    // of a `.proto` or reads an enum from one (rulec's §15.274, §15.59). When a `.proto` of the module
+    // changed, the numbers on its Connect wire may have, so its interface is compared as a changed
+    // file's is, and said when it differs.
+    let protos_moved = d.files.changed.iter().chain(&d.files.added).chain(&d.files.removed).any(|r| tool_of(r) == Some(Tool::Proto));
+    let same: Vec<String> = o.files.keys().filter(|k| protos_moved && n.files.get(*k) == o.files.get(*k) && tool_of(k) == Some(Tool::Rulec)).cloned().collect();
+    for rel in &same {
+        let new = at(n, rel, nm.as_deref());
+        let wired = new.with(|| joined.index.references(Tool::Rulec, &new.root, &new.rel)).and_then(Result::ok).is_some_and(|rs| rs.iter().any(|r| r.how == "implements" || r.how == "import proto"));
+        if !wired {
+            continue;
+        }
+        let i = interface(rel, &at(o, rel, om.as_deref()), &new, lang, joined);
+        if !i.changes.is_empty() || !i.breaks.is_empty() || i.note.is_some() {
+            d.interface.push(i);
+        }
     }
     d
 }
@@ -762,7 +779,10 @@ fn interface(file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Iface {
 /// line of the value, the input or the output (a sequence and an element's field have no line of
 /// their own there). The method's path must be the same in both. A rule whose version was raised is
 /// another service on the wire, whose old callers reach nothing rather than a wrong value, and the
-/// change of its path is a candidate.
+/// change of its path is a candidate; so is a contract's package raised under a rule that implements
+/// it. The note says where the numbers come from: the order the rule writes its names in, or the
+/// contract whose service the rule implements (`connect.contract`, rulec's §15.274) or whose enum it
+/// reads (`enums[].contract`), whose numbers only the contract moves.
 fn renumbered(a: &Json, b: &Json, file: &str, o: &At, n: &At, lang: Lang, joined: &Joined) -> Vec<(&'static str, ritsu_ports::Finding)> {
     let (Some(ca), Some(cb), Some(tool)) = (a.get("connect"), b.get("connect"), tool_of(&n.rel)) else { return Vec::new() };
     if ca.get("path").is_none() || ca.get("path") != cb.get("path") {
@@ -788,32 +808,50 @@ fn renumbered(a: &Json, b: &Json, file: &str, o: &At, n: &At, lang: Lang, joined
         let d = ritsu_base::modules::Diag::error(ritsu_base::modules::E310, &n.shown, line, 0, message).rel(file).note(note);
         out.push(("ritsu", ritsu_ports::Finding::of(&d, Some(file.to_string()), lang)));
     };
+    // A thing of the new version whose number is a contract's.
+    let contract = |j: &Json| j.get("contract").is_some_and(|c| !c.is_null());
     for ea in list(ca.get("enums")) {
         let Some(e) = ea.get("name").and_then(Json::as_str) else { continue };
         let Some(eb) = named(cb.get("enums"), e) else { continue };
         for va in list(ea.get("values")) {
             let Some(v) = va.get("name").and_then(Json::as_str) else { continue };
             let Some((x, y)) = named(eb.get("values"), v).and_then(|vb| moved(&va, &vb)) else { continue };
+            let note = if contract(&eb) {
+                tr!(
+                    "この列挙は .proto から読んだもの（`import proto`）で、番号は契約のものです。契約がこの値の番号を変えました。前の番号に戻し、新しい値には、どの値もまだ使ったことのない番号を付けてください",
+                    "the enum is read from a .proto (`import proto`), whose numbers are the contract's, and the contract moved this value's: put the old number back, and give a new value a number no value has used"
+                )
+            } else {
+                tr!(
+                    "値を最後に足せば、ほかの値の番号は変わりません。.proto から読む列挙（`import proto`）の番号は、契約のものです",
+                    "a value added after the others leaves their numbers as they are, and an enum read from a .proto (`import proto`) has the contract's"
+                )
+            };
             say(
                 line_of(&[("enum", e), ("value", v)]),
                 tr!(
                     "列挙 `{e}` の値 `{v}` の Connect での番号（{x} → {y}）が {old} のときと違います。片方の版が書いたメッセージを、もう片方は別の値として読みます",
                     "the value `{v}` of the enum `{e}` differs from {old} in its number on the Connect wire ({x} → {y}): a message one version writes, the other reads as another value"
                 ),
-                tr!(
-                    "値を最後に足せば、ほかの値の番号は変わりません。.proto から読む列挙（`import proto`）の番号は、契約のものです",
-                    "a value added after the others leaves their numbers as they are, and an enum read from a .proto (`import proto`) has the contract's"
-                ),
+                note,
             );
         }
     }
     // A field is matched by the rule's name: the request's inputs and then its sequences, the
     // answer's outputs, and the fields of an element of each sequence.
+    let implements = contract(cb);
     let note = || {
-        tr!(
-            "番号は、入力と出力と要素のフィールドを規則に書いた順で、並びは入力のあとに続きます。足すなら最後に足すか、規則の版を上げて（`rule … v2`）別のサービスにします",
-            "the numbers are the order the rule writes its inputs, its outputs and an element's fields in, the sequences coming after the inputs: add after the others, or raise the rule's version (`rule … v2`) to make it another service"
-        )
+        if implements {
+            tr!(
+                "番号は、規則が実装する契約（`implements`）のものです。契約がこのフィールドの番号を変えました。前の番号に戻し、新しいフィールドには、どのフィールドもまだ使ったことのない番号を付けてください",
+                "the numbers are those of the contract the rule implements (`implements`), and the contract changed this field's: put the old number back, and give a new field a number no field has used"
+            )
+        } else {
+            tr!(
+                "番号は、入力と出力と要素のフィールドを規則に書いた順で、並びは入力のあとに続きます。足すなら最後に足すか、`implements` で契約のサービスを実装して番号を契約に持たせます。順を変えるか消すなら、規則の版を上げて（`rule … v2`）別のサービスにします",
+                "the numbers are the order the rule writes its inputs, its outputs and an element's fields in, the sequences coming after the inputs: add after the others, or implement a contract's service (`implements`) so that the contract keeps the numbers; to reorder or take out, raise the rule's version (`rule … v2`) to make it another service"
+            )
+        }
     };
     for (key, kind) in [("request_fields", "input"), ("response_fields", "output")] {
         for fa in list(ca.get(key)) {

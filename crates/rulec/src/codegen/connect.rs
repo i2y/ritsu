@@ -29,6 +29,7 @@
 
 use super::{brand_of, not_bool, pascal, pub_name, wire_of, Gen, Wire};
 use crate::ast::EnumSource;
+use crate::implements::{import_path, Imports, Kind, Served};
 use crate::types::Ty;
 use std::path::{Path, PathBuf};
 
@@ -40,8 +41,10 @@ const TRACE_FIELD: u32 = 100;
 struct Foreign {
     /// The file as the rule cites it, from the rule's directory.
     file: String,
-    /// The enum's name in that file.
-    sel: String,
+    /// The enum's name from the package of that file, which is its name inside the messages it
+    /// is nested in: `Member.Tier` for `message Member { enum Tier {…} }`, `Tier` for one at
+    /// the top.
+    local: String,
     /// The package the file declares.
     pkg: Option<String>,
     /// Where the generated module has the file, and so what the generated `.proto` imports:
@@ -61,16 +64,6 @@ struct WireEnum {
     unset: Option<String>,
     /// Each value of the rule's: its name here, its name on the wire, and its number.
     values: Vec<(String, String, i64)>,
-}
-
-/// Where a contract sits in the generated module: its package as directories, then its file
-/// name — where buf's `PACKAGE_DIRECTORY_MATCH` puts it, whatever path the rule reached it by.
-fn import_path(file: &str, pkg: Option<&str>) -> String {
-    let base = Path::new(file).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| file.to_string());
-    match pkg {
-        Some(p) => format!("{}/{base}", p.replace('.', "/")),
-        None => base,
-    }
 }
 
 /// The contracts a rule's `.proto` imports, as files for the module, and what the module
@@ -304,21 +297,6 @@ pub fn buf_gen_yaml() -> String {
     )
 }
 
-/// The directory a file's own imports are followed from: the root of the module it is in,
-/// when the file sits where its import path says, and else the directory it is in.
-fn module_root(disk: &Path, import: &str) -> PathBuf {
-    let up = Path::new(import).components().count();
-    let mut root = disk.to_path_buf();
-    for _ in 0..up {
-        root.pop();
-    }
-    if root.join(import) == disk {
-        root
-    } else {
-        disk.parent().map(|p| p.to_path_buf()).unwrap_or_default()
-    }
-}
-
 impl<'a> Gen<'a> {
     /// `rulec.<alias>.v<major>`.
     ///
@@ -384,10 +362,43 @@ impl<'a> Gen<'a> {
             .iter()
             .find(|p| p.kind == EnumSource::Proto && p.target.text == ty)?;
         // `check` has read the contract whole before anything is generated from the rule
-        let read = crate::vfs::follow(&self.dir(), &im.file).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()).and_then(|s| crate::proto::read(&im.file, &s).ok());
-        let pkg = read.as_ref().and_then(|f| f.package.clone());
-        let decl = read.and_then(|f| f.enums.into_iter().find(|e| e.name == im.source));
-        Some(Foreign { file: im.file.clone(), sel: im.source.clone(), import: import_path(&im.file, pkg.as_deref()), pkg, decl })
+        let read = crate::vfs::follow(&self.dir(), &im.file).ok().and_then(|p| ritsu_base::fs::read_to_string(p).ok()).and_then(|s| ritsu_proto::read(&im.file, &s).ok());
+        let pkg = read.as_ref().map(|f| f.package.clone()).filter(|p| !p.is_empty());
+        // The rule names the enum by its own name, and one nested in a message is named from the
+        // package with the message before it: the type a field of the `.proto` writes, and the
+        // class protobuf-py nests it in.
+        let found = read.as_ref().and_then(|f| f.enums.iter().find(|e| e.name.rsplit('.').next() == Some(im.source.as_str())));
+        let local = found.map(|e| e.name.clone()).unwrap_or_else(|| im.source.clone());
+        let decl = found.map(|e| crate::proto::Enum {
+            name: im.source.clone(),
+            values: e.values.iter().map(|v| crate::proto::Value { name: v.name.clone(), number: v.number }).collect(),
+        });
+        Some(Foreign { file: im.file.clone(), local, import: import_path(&im.file, pkg.as_deref()), pkg, decl })
+    }
+
+    /// The contract the rule implements, as `gen` serves it (§15.274), read once.
+    pub(crate) fn served(&self) -> Option<&Served> {
+        self.served.get_or_init(|| crate::implements::served(self.f, &self.path)).as_ref()
+    }
+
+    /// A type of a contract's, as a field of the rule's service names it: from the package of the
+    /// service it implements where that is the type's package (§15.274), and by its full name
+    /// elsewhere and on the rule's own wire.
+    fn contract_type(&self, pkg: Option<&str>, local: &str) -> String {
+        match (self.served(), pkg) {
+            (Some(sv), p) => sv.local(p.unwrap_or(""), local),
+            (None, Some(p)) => format!("{p}.{local}"),
+            (None, None) => local.to_string(),
+        }
+    }
+
+    /// The type an enum of the rule's has on the wire: the contract's when a `.proto` declares it,
+    /// else the one the rule's own `.proto` declares.
+    fn wire_enum_type(&self, n: &str) -> String {
+        match self.foreign(n) {
+            Some(fr) => self.contract_type(fr.pkg.as_deref(), &fr.local),
+            None => self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n)),
+        }
     }
 
     /// One enum on the wire: what a field calls its type, and each value of the rule's with
@@ -413,10 +424,7 @@ impl<'a> Gen<'a> {
                     })
                     .collect();
                 WireEnum {
-                    ty: match &fr.pkg {
-                        Some(p) => format!("{p}.{}", fr.sel),
-                        None => fr.sel.clone(),
-                    },
+                    ty: self.contract_type(fr.pkg.as_deref(), &fr.local),
                     unset: fr.decl.as_ref().and_then(|d| d.unset()).map(|v| v.name.clone()),
                     contract: Some((fr.file, fr.import)),
                     values,
@@ -445,7 +453,9 @@ impl<'a> Gen<'a> {
     /// does not have under the roots of the module's dependencies, in their order (ritsu's
     /// DESIGN 17.6, [`ritsu_proto::dependency_roots`]). The well-known types are buf's own. An
     /// import found nowhere is a file of a BSR module the contract depends on, and what the
-    /// module needs for it is in `deps` (§15.161).
+    /// module needs for it is in `deps` (§15.161). A rule that implements a contract's service
+    /// has no `.proto` of its own, and the contract is copied the same way, with what it
+    /// imports (§15.274).
     pub fn proto_contracts(&self) -> Contracts {
         let mut todo: Vec<(PathBuf, String)> = Vec::new();
         for ty in self.wire_enums() {
@@ -454,6 +464,11 @@ impl<'a> Gen<'a> {
             {
                 todo.push((disk, fr.import));
             }
+        }
+        if let (Some(d), Some(sv)) = (&self.f.implements, self.served())
+            && let Ok(disk) = d.contract_path(&self.path)
+        {
+            todo.push((disk, sv.import.clone()));
         }
         let mut files: Vec<(String, String)> = Vec::new();
         let mut from: Vec<PathBuf> = Vec::new();
@@ -485,25 +500,15 @@ impl<'a> Gen<'a> {
                 continue;
             }
             let Ok(text) = ritsu_base::fs::read_to_string(&disk) else { continue };
-            let root = module_root(&disk, &at);
             // a file it imports that does not read brings nothing with it; buf names it
             let imports = crate::proto::read(&at, &text).map(|f| f.imports).unwrap_or_default();
-            // the roots of the dependencies of the module the file is in, read once it needs them
-            let mut deps: Option<Vec<PathBuf>> = None;
+            // found the way `check` found them when it read the contract
+            let mut finder = Imports::of(&disk, &at);
             for imp in imports {
-                let p = root.join(&imp);
                 if imp.starts_with("google/protobuf/") {
                     continue;
                 }
-                let found = if ritsu_base::fs::is_file(&p) {
-                    Some(p)
-                } else if imp.starts_with('@') {
-                    None
-                } else {
-                    let dir = disk.parent().unwrap_or(Path::new(""));
-                    deps.get_or_insert_with(|| ritsu_proto::dependency_roots(dir)).iter().map(|r| r.join(&imp)).find(|p| ritsu_base::fs::is_file(p))
-                };
-                match found {
+                match finder.find(&imp) {
                     Some(p) => todo.push((p, imp)),
                     None if !elsewhere.iter().any(|(_, i)| *i == imp) => elsewhere.push((disk.clone(), imp)),
                     None => {}
@@ -525,19 +530,14 @@ impl<'a> Gen<'a> {
     }
 
     /// The type of one value in the `.proto`.
-    fn proto_ty(&self, name: &str, ty: &Ty) -> String {
-        match ty {
-            Ty::Opt(t) => self.proto_ty(name, t),
-            Ty::Enum(n) => match self.foreign(n) {
-                Some(Foreign { sel, pkg: Some(pkg), .. }) => format!("{pkg}.{sel}"),
-                Some(Foreign { sel, pkg: None, .. }) => sel,
-                None => self.enum_names.get(n).cloned().unwrap_or_else(|| pascal(n)),
-            },
-            Ty::Bool => "bool".into(),
-            // A date is `YYYY-MM-DD` on this wire as on every other of rulec's (§10.2), and a
-            // string is the one type that says so without a dependency on `google.type`.
-            Ty::Date | Ty::Str => "string".into(),
-            _ => "int64".into(),
+    ///
+    /// A date is `YYYY-MM-DD` on this wire as on every other of rulec's (§10.2), and a string is
+    /// the one type that says so without a dependency on `google.type`. The mapping is the one the
+    /// check of `implements` holds a contract to ([`Kind`]).
+    fn proto_ty(&self, _name: &str, ty: &Ty) -> String {
+        match Kind::of(ty) {
+            Kind::Enum(n) => self.wire_enum_type(&n),
+            k => k.scalar().unwrap_or("int64").to_string(),
         }
     }
 
@@ -732,16 +732,97 @@ fn proto_version(v: &str) -> String {
     }
 }
 
+/// How the generated Python names the stubs of the rule's Connect service: what protobuf-py and the
+/// Connect plugin write for the rule's own `.proto`, or for the contract the rule implements, whose
+/// names they then are (§15.274).
+struct PyStubs {
+    /// The package of the modules the two plugins write for the service's file, and their name
+    /// before `_pb` and `_connect`: `stubs.shop.v1` and `member_shipping`.
+    pkg: String,
+    base: String,
+    /// The service, as the Connect plugin names its classes by (`<service>Sync`, `<service>ClientSync`).
+    service: String,
+    /// The method, as the Connect plugin names it on those classes.
+    method: String,
+    /// The request, the answer and one row of `trace`, as the generated code names their classes.
+    request: String,
+    response: String,
+    fired: String,
+    /// One element of each sequence (§15.219).
+    elements: Vec<String>,
+    /// The file each of those is declared in, for the modules of the ones that are not the
+    /// service's (`pb`): the request's, the answer's and the row's, then the elements'.
+    files: Vec<String>,
+}
+
 impl<'a> Gen<'a> {
     /// The Python module path of the generated stubs.
     ///
     /// They land in a `stubs/` package of their own beside the module rather than loose in
     /// the same directory, because the plugin writes an `__init__.py` at the root of wherever
     /// it generates — and an `__init__.py` over rulec's own flat modules would make the
-    /// directory a package, which is not what it is.
+    /// directory a package, which is not what it is. The package of a contract's file is its
+    /// directory in the module (§15.160), and a file of no package is at the root of it.
     fn stub_pkg(&self) -> String {
-        let parts: Vec<String> = self.proto_package().split('.').map(pb_module).collect();
-        format!("stubs.{}", parts.join("."))
+        let package = self.served().map(|sv| sv.package.clone()).unwrap_or_else(|| self.proto_package());
+        let parts: Vec<String> = package.split('.').filter(|p| !p.is_empty()).map(pb_module).collect();
+        if parts.is_empty() { "stubs".to_string() } else { format!("stubs.{}", parts.join(".")) }
+    }
+
+    /// The name the generated Python reads the stubs of a contract's file by: `pb` for the file of
+    /// the service the rule implements, which is imported the way the rule's own is, and for every
+    /// other the flat name [`stub_module`] gives it.
+    fn py_module(&self, file: &str) -> String {
+        match self.served() {
+            Some(sv) if sv.import == file => "pb".to_string(),
+            _ => stub_module(file).1,
+        }
+    }
+
+    /// The stubs of the rule's Connect service, as the generated Python names them.
+    fn py_stubs(&self) -> PyStubs {
+        match self.served() {
+            Some(sv) => {
+                let msg = |m: &crate::implements::Msg| format!("{}.{}", self.py_module(&m.file), pb_class(&m.name));
+                let base = Path::new(&sv.import).file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                PyStubs {
+                    pkg: self.stub_pkg(),
+                    base: pb_module(&base),
+                    service: py_service(&sv.service),
+                    method: py_method(&sv.method),
+                    request: msg(&sv.request),
+                    response: msg(&sv.response),
+                    fired: msg(&sv.fired),
+                    elements: sv.elements.iter().map(msg).collect(),
+                    files: [&sv.request, &sv.response, &sv.fired].into_iter().chain(&sv.elements).map(|m| m.file.clone()).collect(),
+                }
+            }
+            None => PyStubs {
+                pkg: self.stub_pkg(),
+                base: pb_module(&pub_name(&self.f.name)),
+                service: self.proto_service(),
+                method: "decide".to_string(),
+                request: "pb.DecideRequest".to_string(),
+                response: "pb.DecideResponse".to_string(),
+                fired: "pb.Fired".to_string(),
+                elements: (0..self.f.elements.len()).map(|s| format!("pb.{}", self.element_type(s))).collect(),
+                files: Vec::new(),
+            },
+        }
+    }
+
+    /// The lines that import the stubs of `files` the generated Python reads by a flat name (not
+    /// `pb`), each once, after the ones already in `lines`.
+    fn stub_imports(&self, lines: &mut Vec<String>, files: &[&str]) {
+        for file in files {
+            if self.py_module(file) == "pb" {
+                continue;
+            }
+            let line = stub_module(file).0;
+            if !lines.contains(&line) {
+                lines.push(line);
+            }
+        }
     }
 
     /// The dict that turns one proto enum value into the module's own, and its reverse when
@@ -767,7 +848,7 @@ impl<'a> Gen<'a> {
             // How the enum is spelled in Python. The values are the imported file's when it is
             // imported, so they are read from the module the plugin wrote for **that** file.
             let qual: String = match self.foreign(&ty) {
-                Some(fr) => format!("{}.{}", stub_module(&fr.import).1, fr.sel),
+                Some(fr) => format!("{}.{}", self.py_module(&fr.import), pb_class(&fr.local)),
                 None => format!("pb.{cls}"),
             };
             // Each value is taken by its number, with its name beside it. The plugin names a
@@ -851,7 +932,7 @@ impl<'a> Gen<'a> {
     /// `python/<alias>_service.py`: the rule behind a Connect endpoint.
     pub fn py_connect(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let svc = self.proto_service();
+        let stubs = self.py_stubs();
         let mut args: Vec<String> = self
             .f
             .inputs
@@ -929,16 +1010,12 @@ impl<'a> Gen<'a> {
                 })
                 .collect()
         };
-        // The stubs of an imported enum live in the module the plugin wrote for **its** file.
+        // The stubs of an imported enum live in the module the plugin wrote for **its** file, and
+        // so do those of a message a contract declares in a file other than its service's.
         let mut ext: Vec<String> = Vec::new();
-        for ty in self.wire_enums() {
-            if let Some(fr) = self.foreign(&ty) {
-                let line = stub_module(&fr.import).0;
-                if !ext.contains(&line) {
-                    ext.push(line);
-                }
-            }
-        }
+        let enum_files: Vec<String> = self.wire_enums().iter().filter_map(|ty| self.foreign(ty)).map(|fr| fr.import).collect();
+        self.stub_imports(&mut ext, &enum_files.iter().map(String::as_str).collect::<Vec<_>>());
+        self.stub_imports(&mut ext, &stubs.files.iter().take(3).map(String::as_str).collect::<Vec<_>>());
         let doc = tr!(
             "規則 {} v{} を、Connect のサービス一つとして出す。\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # 標準ライブラリのサーバで試す\n\nTLS と認証は前に置くこと。このサーバは自分では持たない。\n\n呼ぶ側と交わすのは隣の `.proto` だけで、その stub は buf が書く:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\n決めているのは隣のモジュールで、そちらは何にも依存しない。ここにあるのは、通信を受け持つ部分だけである。\n返す値には当てはまった行が付く。一回の呼び出しが記録一件で、--record を付ければ\nその一行がファイルに溜まり、rulec replay と rulec diff がそのまま読む。",
             "Rule {} v{} as one Connect service.\n\n    uvicorn {alias}_service:app --port 8080       # ASGI\n    gunicorn '{alias}_service:wsgi_app'           # WSGI\n    python3 {alias}_service.py --http 127.0.0.1:8080 [--record calls.jsonl]   # the standard library's server\n\nPut TLS and authentication in front: this server carries neither.\n\nThe only thing a caller agrees to is the `.proto` beside it, whose stubs buf writes:\n\n    uv add connectrpc\n    cd ../proto && buf generate\n\nThe deciding is the module next to this file, which depends on nothing; what is here is the\nwire. The answer carries the rows that matched, so one call is one record: with --record that\nline is appended to a file, and rulec replay and rulec diff read it as it stands.",
@@ -951,10 +1028,14 @@ impl<'a> Gen<'a> {
             .replace("@DOC@", &doc)
             .replace("@ALIAS@", &alias)
             .replace("@CLASS@", &pascal(&alias))
-            .replace("@SVC@", &svc)
-            .replace("@PKG@", &self.stub_pkg())
-            .replace("@PBMOD@", &pb_module(&alias))
+            .replace("@SVC@", &stubs.service)
+            .replace("@PKG@", &stubs.pkg)
+            .replace("@PBMOD@", &stubs.base)
             .replace("@EXT@", &ext.concat())
+            .replace("@MSG_REQ@", &stubs.request)
+            .replace("@MSG_RES@", &stubs.response)
+            .replace("@MSG_FIRED@", &stubs.fired)
+            .replace("@METHOD@", &stubs.method)
             .replace("@SHA@", &self.src_hash)
             .replace(
                 "@MEMBER@",
@@ -1124,10 +1205,10 @@ CODECS = (proto_binary_codec(), proto_json_codec(ignore_unknown_fields=False))
 @MEMBER@@DATES@@FIELDS@
 
 def decide(
-    request: pb.DecideRequest,
-    ctx: RequestContext[pb.DecideRequest, pb.DecideResponse],
+    request: @MSG_REQ@,
+    ctx: RequestContext[@MSG_REQ@, @MSG_RES@],
     record: str | None = None,
-) -> pb.DecideResponse:
+) -> @MSG_RES@:
     """@D_DECIDE@"""
 @REQUIRED@@ARGS@    try:
         out, trace = m.@ALIAS@_traced(*args)
@@ -1141,8 +1222,8 @@ def decide(
     if record is not None:
         with open(record, "a", encoding="utf-8") as f:
             f.write(m.@ALIAS@_record(*args, out, trace) + "\n")
-    return pb.DecideResponse(
-@OUTS@        trace=[pb.Fired(table=f.table, row=f.row, label=f.label) for f in trace],
+    return @MSG_RES@(
+@OUTS@        trace=[@MSG_FIRED@(table=f.table, row=f.row, label=f.label) for f in trace],
     )
 
 
@@ -1152,9 +1233,9 @@ class @CLASS@(@SVC@):
     def __init__(self, record: str | None = None) -> None:
         self.record = record
 
-    async def decide(
-        self, request: pb.DecideRequest, ctx: RequestContext[pb.DecideRequest, pb.DecideResponse]
-    ) -> pb.DecideResponse:
+    async def @METHOD@(
+        self, request: @MSG_REQ@, ctx: RequestContext[@MSG_REQ@, @MSG_RES@]
+    ) -> @MSG_RES@:
         """@D_CALL@"""
         return decide(request, ctx, self.record)
 
@@ -1165,9 +1246,9 @@ class @CLASS@Sync(@SVC@Sync):
     def __init__(self, record: str | None = None) -> None:
         self.record = record
 
-    def decide(
-        self, request: pb.DecideRequest, ctx: RequestContext[pb.DecideRequest, pb.DecideResponse]
-    ) -> pb.DecideResponse:
+    def @METHOD@(
+        self, request: @MSG_REQ@, ctx: RequestContext[@MSG_REQ@, @MSG_RES@]
+    ) -> @MSG_RES@:
         """@D_CALL@"""
         return decide(request, ctx, self.record)
 
@@ -1292,7 +1373,7 @@ impl<'a> Gen<'a> {
     /// the reference evaluator, byte for byte (§15.112).
     pub fn py_connect_runner(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let svc = self.proto_service();
+        let stubs = self.py_stubs();
         let mut kw = String::new();
         for i in &self.f.inputs {
             let a = pb_attr(&pub_name(&i.name));
@@ -1319,11 +1400,11 @@ impl<'a> Gen<'a> {
                     }
                 })
                 .collect();
-            let ty = self.element_type(s);
+            let ty = &stubs.elements[s];
             let element = if optional {
-                format!("pb.{ty}(**{{k: v for k, v in dict({}).items() if v is not None}})", fields.join(", "))
+                format!("{ty}(**{{k: v for k, v in dict({}).items() if v is not None}})", fields.join(", "))
             } else {
-                format!("pb.{ty}({})", fields.join(", "))
+                format!("{ty}({})", fields.join(", "))
             };
             kw.push_str(&format!("    kw[{:?}] = [{element} for e in d[{:?}]]\n", pb_attr(&pub_name(&el.name)), el.name.text));
         }
@@ -1423,13 +1504,21 @@ impl<'a> Gen<'a> {
             "The same vectors as {alias}_runner.py beside it, put through Connect.\n\n    python3 {alias}_connect_runner.py [--wsgi] [--get] [--at http://host:port] < vectors.jsonl\n\nWith no --at it stands the generated service up on a free port and calls that: ASGI under\nuvicorn by default, or the standard library's WSGI server with --wsgi. The record it prints is\nbuilt from what came back, so a difference between this and the runner beside it is a\ndifference the wire made. --get makes the same call with GET, which the method allows because\nthe rule is a pure function.",
             alias = alias
         );
+        // The stubs of the request and of the elements, where a contract declares them in a file
+        // other than its service's.
+        let mut ext: Vec<String> = Vec::new();
+        let built: Vec<&str> = stubs.files.iter().take(1).chain(stubs.files.iter().skip(3)).map(String::as_str).collect();
+        self.stub_imports(&mut ext, &built);
         PY_CONNECT_RUNNER
             .replace("@HEADER@", self.header("#").trim_end())
             .replace("@DOC@", &doc)
             .replace("@ALIAS@", &alias)
-            .replace("@SVC@", &svc)
-            .replace("@PKG@", &self.stub_pkg())
-            .replace("@PBMOD@", &pb_module(&alias))
+            .replace("@SVC@", &stubs.service)
+            .replace("@PKG@", &stubs.pkg)
+            .replace("@PBMOD@", &stubs.base)
+            .replace("@EXT@", &ext.concat())
+            .replace("@MSG_REQ@", &stubs.request)
+            .replace("@METHOD@", &stubs.method)
             .replace("@IMPORTS@", &imports)
             // Whatever these two blocks hold, what stands before `def _request` is two blank
             // lines and no more: an empty placeholder used to leave four.
@@ -1480,16 +1569,16 @@ from connectrpc.code import Code
 from connectrpc.errors import ConnectError
 
 import @ALIAS@ as m
-from @PKG@ import @PBMOD@_pb as pb
+@EXT@from @PKG@ import @PBMOD@_pb as pb
 from @PKG@.@PBMOD@_connect import @SVC@ClientSync
 @IMPORTS@
 @PRE@
 
-def _request(d: dict[str, Any]) -> pb.DecideRequest:
+def _request(d: dict[str, Any]) -> @MSG_REQ@:
     """@D_REQUEST@"""
     kw: dict[str, Any] = {}
 @KW@
-    return pb.DecideRequest(**kw)
+    return @MSG_REQ@(**kw)
 
 
 def _serve_asgi() -> str:
@@ -1527,7 +1616,7 @@ def main(argv: list[str]) -> None:
                 continue
 @MLINE@            try:
 @PRELUDE@                args = (@ARGS@)
-                res = client.decide(_request(d), use_get=use_get)
+                res = client.@METHOD@(_request(d), use_get=use_get)
             except m.RuleInputError as e:
                 _refused("input", e.what)
                 continue
@@ -1544,12 +1633,28 @@ if __name__ == "__main__":
 "#;
 
 impl<'a> Gen<'a> {
+    /// The path a Connect client posts to: the rule's own service's `/<package>.<Service>/Decide`, or
+    /// the contract's service and method (§15.274).
+    pub fn connect_path(&self) -> String {
+        match self.served() {
+            Some(sv) => sv.path(),
+            None => format!("/{}.{}/Decide", self.proto_package(), self.proto_service()),
+        }
+    }
+
+    /// The message of one element of the `s`th sequence on the wire: the rule's own, or the
+    /// contract's, named from the package of the service it implements (§15.274).
+    fn element_message(&self, s: usize) -> String {
+        match self.served().and_then(|sv| sv.elements.get(s).map(|m| sv.local(&m.package, &m.name))) {
+            Some(m) => m,
+            None => self.element_type(s),
+        }
+    }
+
     /// The rule's Connect service as ritsu's port of rules has it (`crate::ports`): the path,
     /// the fields of the request, of one element and of the response, and every enum on the
     /// wire — what `api_connect` writes, from the same helpers.
     pub fn connect_facts(&self) -> ritsu_ports::Connect {
-        let pkg = self.proto_package();
-        let svc = self.proto_service();
         let field = |name: &str, n: &crate::ast::Name, ty: &Ty| -> ritsu_ports::WireField {
             let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
             ritsu_ports::WireField {
@@ -1563,7 +1668,7 @@ impl<'a> Gen<'a> {
         let mut request: Vec<ritsu_ports::WireField> = self.f.inputs.iter().map(|i| field(&i.name.text, &i.name, &self.ty_of(&i.name.text))).collect();
         // Each sequence a walk reads is a repeated field of its own message (§15.219).
         for (s, el) in self.f.elements.iter().enumerate() {
-            request.push(ritsu_ports::WireField { name: el.name.text.clone(), field: pub_name(&el.name), ty: format!("repeated {}", self.element_type(s)), optional: false, enumeration: None });
+            request.push(ritsu_ports::WireField { name: el.name.text.clone(), field: pub_name(&el.name), ty: format!("repeated {}", self.element_message(s)), optional: false, enumeration: None });
         }
         let elements = self
             .f
@@ -1587,7 +1692,7 @@ impl<'a> Gen<'a> {
             })
             .collect();
         ritsu_ports::Connect {
-            path: format!("/{pkg}.{svc}/Decide"),
+            path: self.connect_path(),
             json_names: "lowerCamelCase".into(),
             json_int64: "string".into(),
             request,
@@ -1602,15 +1707,24 @@ impl<'a> Gen<'a> {
     /// there.
     pub fn api_connect(&self) -> String {
         let alias = pub_name(&self.f.name);
-        let svc = self.proto_service();
-        let pkg = self.proto_package();
+        let sv = self.served();
+        let (svc, pkg, method) = match sv {
+            Some(sv) => (sv.service.clone(), sv.package.clone(), sv.method.clone()),
+            None => (self.proto_service(), self.proto_package(), "Decide".to_string()),
+        };
+        // The number of a field in a message of the contract the rule implements (§15.274), and
+        // else `n`, its place in the rule's own.
+        let numbered = |m: Option<&crate::implements::Msg>, n: &crate::ast::Name, k: usize| -> i64 {
+            m.and_then(|m| m.number(&pub_name(n))).unwrap_or(k as i64 + 1)
+        };
         // `optional` is the rule's `T?`: a value that may be absent. It is not the `.proto`'s
         // label, which every field a caller sends carries (§15.160). `enum` names the rule's
         // enum, which is what `enums` is keyed by: one contract's enum may be imported into
         // two of the rule's, and the type alone would not say which. `number` is the field's
-        // number in the `.proto`: the order the rule declares them in, the sequences after the
-        // inputs, which is what the binary form of a message carries instead of the name.
-        let field = |name: &str, n: &crate::ast::Name, ty: &Ty, number: u32| -> String {
+        // number in the `.proto`, which is what the binary form of a message carries instead of
+        // the name: in the rule's own, the order the rule declares them in, the sequences after
+        // the inputs; in a contract the rule implements, the contract's.
+        let field = |name: &str, n: &crate::ast::Name, ty: &Ty, number: i64| -> String {
             let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
             crate::json::Obj::new()
                 .str("name", name)
@@ -1621,30 +1735,32 @@ impl<'a> Gen<'a> {
                 .opt_str("enum", if let Ty::Enum(e) = inner { Some(e.as_str()) } else { None })
                 .finish()
         };
+        let request = sv.map(|sv| &sv.request);
         let mut ins: Vec<String> = self
             .f
             .inputs
             .iter()
             .enumerate()
-            .map(|(k, i)| field(&i.name.text, &i.name, &self.ty_of(&i.name.text), k as u32 + 1))
+            .map(|(k, i)| field(&i.name.text, &i.name, &self.ty_of(&i.name.text), numbered(request, &i.name, k)))
             .collect();
         for (s, el) in self.f.elements.iter().enumerate() {
             ins.push(
                 crate::json::Obj::new()
                     .str("name", &el.name.text)
                     .str("field", &pub_name(&el.name))
-                    .int("number", (self.f.inputs.len() + s) as u32 + 1)
-                    .str("type", &format!("repeated {}", self.element_type(s)))
+                    .int("number", numbered(request, &el.name, self.f.inputs.len() + s))
+                    .str("type", &format!("repeated {}", self.element_message(s)))
                     .bool("optional", false)
                     .finish(),
             );
         }
-        let fields_of = |el: &crate::ast::ElementsDecl| -> String {
-            crate::json::arr(&el.fields.iter().enumerate().map(|(k, fd)| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text), k as u32 + 1)).collect::<Vec<_>>())
+        let fields_of = |s: usize, el: &crate::ast::ElementsDecl| -> String {
+            let msg = sv.and_then(|sv| sv.elements.get(s));
+            crate::json::arr(&el.fields.iter().enumerate().map(|(k, fd)| field(&fd.name.text, &fd.name, &self.ty_of(&fd.name.text), numbered(msg, &fd.name, k))).collect::<Vec<_>>())
         };
         // The first sequence's fields under `element_fields`, as a rule that walks one has them;
         // a rule that walks more lists every one under `sequences`, with its message (§15.219).
-        let elems: Option<String> = self.f.elements.first().map(fields_of);
+        let elems: Option<String> = self.f.elements.first().map(|el| fields_of(0, el));
         let sequences: Option<String> = (self.f.elements.len() > 1).then(|| {
             crate::json::arr(
                 &self
@@ -1656,19 +1772,20 @@ impl<'a> Gen<'a> {
                         crate::json::Obj::new()
                             .str("name", &el.name.text)
                             .str("field", &pub_name(&el.name))
-                            .str("message", &self.element_type(s))
-                            .raw("fields", fields_of(el))
+                            .str("message", &self.element_message(s))
+                            .raw("fields", fields_of(s, el))
                             .finish()
                     })
                     .collect::<Vec<_>>(),
             )
         });
+        let response = sv.map(|sv| &sv.response);
         let outs: Vec<String> = self
             .f
             .outputs
             .iter()
             .enumerate()
-            .map(|(k, o)| field(&o.name.text, &o.name, &self.ty_of(&o.name.text), k as u32 + 1))
+            .map(|(k, o)| field(&o.name.text, &o.name, &self.ty_of(&o.name.text), numbered(response, &o.name, k)))
             .collect();
         // Every enum that crosses the wire, with each value's name and number there: what a
         // caller writing the JSON by hand has to send, and how to read a value 0 that the
@@ -1713,18 +1830,27 @@ impl<'a> Gen<'a> {
             .str("wsgi", "wsgi_app")
             .str("serve_asgi", &format!("uvicorn {alias}_service:app --port 8080"))
             .str("serve_wsgi", &format!("gunicorn '{alias}_service:wsgi_app'"))
-            .str("client", &format!("{svc}ClientSync"))
+            .str("client", &format!("{}ClientSync", self.py_stubs().service))
             .str("runner", &format!("{alias}_connect_runner.py"))
             .raw("needs", crate::json::strs(&["connectrpc", "buf"]))
             .finish();
+        // The contract the rule implements, as an imported enum's is said: the file the rule names
+        // and where the module has it (§15.274). A rule that implements none is served as its own
+        // `.proto` says, and has no `contract`.
+        let contract = sv.map(|sv| crate::json::Obj::new().str("file", &sv.file).str("proto", format!("proto/{}", sv.import)).finish());
+        let (request, response) = match sv {
+            Some(sv) => (sv.local(&sv.request.package, &sv.request.name), sv.local(&sv.response.package, &sv.response.name)),
+            None => ("DecideRequest".to_string(), "DecideResponse".to_string()),
+        };
         crate::json::Obj::new()
-            .str("proto", &format!("proto/{}", self.proto_path()))
+            .str("proto", &format!("proto/{}", sv.map(|sv| sv.import.clone()).unwrap_or_else(|| self.proto_path())))
+            .opt_raw("contract", contract)
             .str("package", &pkg)
             .str("service", &svc)
-            .str("method", "Decide")
-            .str("path", &format!("/{pkg}.{svc}/Decide"))
-            .str("request", "DecideRequest")
-            .str("response", "DecideResponse")
+            .str("method", &method)
+            .str("path", &self.connect_path())
+            .str("request", &request)
+            .str("response", &response)
             .str("idempotency_level", "NO_SIDE_EFFECTS")
             .str("trace", "trace")
             .str("source_header", "rulec-source-sha256")
@@ -1867,12 +1993,15 @@ fn pb_attr(field: &str) -> String {
 }
 
 /// One part of the dotted path of the module protobuf-py's plugin writes for a `.proto`
-/// (`escape_proto_module_component`): a part that starts with a digit takes `_` before it, a
-/// keyword of Python's `_` after it, one that then starts with `_` or `pb_` takes `pb_` before
-/// it, and one that ends in `_pb`, which the plugin keeps for the modules it writes, `_` after it.
-/// `rulec/int_pb/v1/int_pb.proto` is the module `rulec.int_pb_.v1.int_pb__pb`.
+/// (`escape_proto_module_component`): a character other than an ASCII letter, a digit or `_`
+/// becomes `_`, a part that starts with a digit takes `_` before it, a keyword of Python's `_`
+/// after it, one that then starts with `_` or `pb_` takes `pb_` before it, and one that ends in
+/// `_pb`, which the plugin keeps for the modules it writes, `_` after it.
+/// `rulec/int_pb/v1/int_pb.proto` is the module `rulec.int_pb_.v1.int_pb__pb`, and a contract's
+/// `shop/v1/member-shipping.proto` the module `shop.v1.member_shipping_pb`.
 fn pb_module(part: &str) -> String {
-    let mut name = if part.starts_with(|c: char| c.is_ascii_digit()) { format!("_{part}") } else { part.to_string() };
+    let part: String = part.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect();
+    let mut name = if part.starts_with(|c: char| c.is_ascii_digit()) { format!("_{part}") } else { part };
     if PY_KEYWORDS.contains(&name.trim_end_matches('_')) {
         name.push('_');
     }
@@ -1883,6 +2012,79 @@ fn pb_module(part: &str) -> String {
         name.push('_');
     }
     name
+}
+
+/// A name protobuf-py's and the Connect plugin's code gives a class or a method
+/// (`escape_public_identifier`): `_` after it where the name without its trailing `_`s is one of
+/// `reserved`, and `pb_` before it where it then starts with `_` or `pb_`.
+fn escape_public(ident: &str, reserved: &[&[&str]]) -> String {
+    let base = ident.trim_end_matches('_');
+    let mut name = if reserved.iter().any(|r| r.contains(&base)) { format!("{ident}_") } else { ident.to_string() };
+    if name.starts_with('_') || name.starts_with("pb_") {
+        name = format!("pb_{name}");
+    }
+    name
+}
+
+/// The class protobuf-py gives a message or an enum of a contract, by its name from its package
+/// (`escape_class_name` on each part): `Order.Line` is the class `Line` nested in `Order`, and a
+/// part named after a class of Python's, a keyword, or a name a message keeps for itself takes `_`.
+fn pb_class(name: &str) -> String {
+    const CLASSES: &[&str] = &["int", "str", "bytes", "float", "bool", "list", "dict"];
+    const MESSAGE: &[&str] = &["has_field", "clear_field", "to_binary", "to_json", "from_binary", "from_json", "desc", "self"];
+    name.split('.')
+        .map(|part| {
+            let n = escape_public(part, &[CLASSES, PY_KEYWORDS, MESSAGE]);
+            if n.starts_with("ext_") { format!("pb_{n}") } else { n }
+        })
+        .collect::<Vec<_>>()
+        .join(".")
+}
+
+/// The class the Connect plugin names a service's by (`<Service>Sync`, `<Service>ClientSync`, …).
+fn py_service(name: &str) -> String {
+    escape_public(name, &[PY_KEYWORDS])
+}
+
+/// The method the Connect plugin gives an RPC on those classes: the name in snake case, as its two
+/// patterns cut it (`GetQuote` → `get_quote`, `HTTPStatus` → `http_status`), with `_` after a
+/// keyword of Python's or a name its classes keep for themselves.
+fn py_method(name: &str) -> String {
+    const CONNECT: &[&str] = &["desc", "execute_unary", "execute_client_stream", "execute_server_stream", "execute_bidi_stream"];
+    let c: Vec<char> = name.chars().collect();
+    // `([^_])([A-Z][a-z]+)` → `\1_\2`
+    let mut one: Vec<char> = Vec::new();
+    let mut i = 0;
+    while i < c.len() {
+        if i + 2 < c.len() && c[i] != '_' && c[i + 1].is_ascii_uppercase() && c[i + 2].is_ascii_lowercase() {
+            let mut end = i + 3;
+            while end < c.len() && c[end].is_ascii_lowercase() {
+                end += 1;
+            }
+            one.push(c[i]);
+            one.push('_');
+            one.extend(&c[i + 1..end]);
+            i = end;
+        } else {
+            one.push(c[i]);
+            i += 1;
+        }
+    }
+    // `([a-z])([A-Z])` → `\1_\2`
+    let mut two = String::new();
+    let mut i = 0;
+    while i < one.len() {
+        if i + 1 < one.len() && one[i].is_ascii_lowercase() && one[i + 1].is_ascii_uppercase() {
+            two.push(one[i]);
+            two.push('_');
+            two.push(one[i + 1]);
+            i += 2;
+        } else {
+            two.push(one[i]);
+            i += 1;
+        }
+    }
+    escape_public(&two.to_lowercase(), &[PY_KEYWORDS, CONNECT])
 }
 
 /// Python's keywords, as protobuf-py's plugin escapes them.

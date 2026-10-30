@@ -129,7 +129,7 @@ pub fn check(m: &Model, ps: &Protos, cs: &crate::contracts::Contracts, arts: &[A
                 {
                     p.at(ci, *at, "E302", tr!("{sf} の Connect の package は {got} で、見出しの {k} と違います", "The package of the Connect of {sf} is {got}, not {k} as the heading says"))
                         .notes
-                        .push(tr!("規則の公表された言語の package は、rulec が規則の別名と版から作る `rulec.<別名>.v<版>` です。", "The package of a rule's published language is the one rulec makes from the rule's alias and version, `rulec.<alias>.v<version>`."));
+                        .push(tr!("規則の公表された言語の package は、rulec が規則の別名と版から作る `rulec.<別名>.v<版>` です。`implements` で契約のサービスを実装する規則では、契約の package です。", "The package of a rule's published language is the one rulec makes from the rule's alias and version, `rulec.<alias>.v<version>`, or, for a rule that implements a contract's service with `implements`, the contract's package."));
                 }
                 if let Some(svc) = crate::refs::rule_service(read, f) {
                     for (s, at) in &pl.services {

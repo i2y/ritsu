@@ -1336,6 +1336,309 @@ const X_E075_EN: &str = "rule carry_stage v1\n\n\
                       inputs\n  previous : stage\n  close    : bool\n\n\
                       outputs\n  next_stage : stage\n\n\
                       table decide\npolicy unique\n| close | -> next_stage : stage |\n| true  | done                  |\n| false | previous              |\n";
+/// E076 (§15.274): a rule that implements a contract's service, held to it. The rule of the first
+/// form has an input the contract does not; every other form is the rule without it, beside a
+/// contract that differs from [`SHIPPING_PROTO`] in one way.
+const X_E076: &str = r##"rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+  express(express) : bool
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| express | subtotal | -> shipping |
+| true    | -        | 20USD       |
+| false   | >=50USD  | 0USD        |
+| false   | -        | 8USD        |
+"##;
+const X_E076_BASE: &str = r##"rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+"##;
+const X_E076_ENUM: &str = r##"rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+enum tier(tier) = basic(basic) | gold(gold)
+
+inputs
+  tier(tier) : tier
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy unique
+| tier  | -> shipping |
+| gold  | 0USD        |
+| basic | 8USD        |
+"##;
+/// The contract the rule without `express` fits.
+const SHIPPING_PROTO: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_EXTRA: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+  optional bool express = 3;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_TYPE: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional string subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_PRESENCE: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_ENUM: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_BASIC = 1;
+  TIER_GOLD = 2;
+}
+
+message QuoteRequest {
+  optional Tier tier = 3;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_NO_TRACE: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+}
+"##,
+)];
+const SHIPPING_SIDE_EFFECTS: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse);
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_JSON_NAME: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2 [json_name = "sub"];
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+"##,
+)];
+const SHIPPING_PROTO2: &[(&str, &str)] = &[(
+    "shipping.proto",
+    r##"syntax = "proto2";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  optional int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  optional string table = 1;
+  optional int32 row = 2;
+  optional string label = 3;
+}
+"##,
+)];
 /// W128 (§15.209): a row that asks a computed column for a value no input gives, which nothing
 /// shows.
 const X_W128: &str = "rule 平方の区分(square_band) v1\n\n\
@@ -2695,15 +2998,15 @@ pub fn ledger() -> Vec<Entry> {
             "E013",
             tr!("取込先がありません", "No such import"),
             tr!(
-                "`import` の先が無いとき。取込先は三つあります。組み込みの名前空間（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙（`import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。",
-                "The target of `import` is not there. There are three kinds: the built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese), an enum in a `.proto` (`import proto \"<file>\" <Enum> -> <enum of this rule>`), and an enum in a JSON Schema (`import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, OpenAPI included). For the last two it appears when the file cannot be read, when it holds no such enum, or when the line is not that shape. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`)."
+                "規則が外から読むものが無いか、読めないとき。外から読む行は六つあります。組み込みの名前空間を取り込む `import`（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙を取り込む `import proto \"<ファイル>\" <列挙> -> <この規則の列挙>`、JSON Schema の列挙を取り込む `import jsonschema \"<ファイル>\" \"<ポインタ>\" -> <この規則の列挙>`（OpenAPI も同じ）、`enums` のファイルの列挙を取り込む `import enum <列挙> from \"<ファイル>\"`、入力を読む契約を名付ける `shape <名前> = proto \"<ファイル>\" <メッセージ>`（JSON Schema なら `jsonschema \"<ファイル>\" \"<ポインタ>\"`）と入力の `from`、規則を契約のサービスとして出す `implements proto \"<ファイル>\" <サービス>` です。ファイルを読む行では、ファイルを読めないとき、指した列挙・メッセージ・サービスがファイルに無いとき、行の形が違うときに出ます。`implements` の行が二行あるときにも出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。",
+                "Something the rule reads from outside is not there, or cannot be read. Six lines read from outside: an `import` of a built-in namespace (the first-level divisions of thirteen countries: `std/us/states`, `std/gb/nations`, `std/cn/provinces`, `std/tw/divisions`, `std/kr/provinces`, `std/in/states`, `std/fr/regions`, `std/es/communities`, `std/it/regions`, `std/de/states`, `std/au/states`, `std/br/states` and `std/jp/prefectures`, whose prefectures `std/都道府県` also imports, with the values spelled in Japanese); `import proto \"<file>\" <Enum> -> <enum of this rule>`, an enum of a `.proto`; `import jsonschema \"<file>\" \"<pointer>\" -> <enum of this rule>`, an enum of a JSON Schema, OpenAPI included; `import enum <enum> from \"<file>\"`, an enum of an `enums` file; `shape <name> = proto \"<file>\" <Message>` (or `jsonschema \"<file>\" \"<pointer>\"`), the contract an input's `from` reads; and `implements proto \"<file>\" <Service>`, the contract's service the rule is served as. For a line that reads a file it appears when the file cannot be read, when the enum, message or service it names is not in the file, or when the line is not that shape; and when there are two `implements` lines. YAML is not read; point at a JSON form of it. It also appears when one country's divisions are imported under both of its names (`std/都道府県` and `std/jp/prefectures`)."
             ),
             tr!(
-                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からの相対パスで書いてください。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。",
-                "Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. When importing from a file, the path is followed from the directory of the rule file, so write it relative to that. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there."
+                "名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルを読む行では、パスは規則ファイルのある場所からの相対パスで書いてください。列挙・メッセージ・サービスが見つからないときは、注に、そのファイルにあるものが並びます。メッセージとサービスは、名前か、ファイルの package を付けた名前で書いてください。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。`implements` は一つの規則に一行です。",
+                "Correct the namespace's spelling (the note gives the closest one), or declare the enum in this file with `enum`. For a line that reads a file, the path is followed from the directory of the rule file, so write it relative to that. An enum, a message or a service that is not found comes back with the ones the file has, and a message or a service is named by its name or by its name with the file's package. A JSON Schema pointer looks like `#/components/schemas/<name>`, and one that does not resolve comes back with the keys that are there. A rule has one `implements` line."
             ),
             X_E013,
-            &["E012", "E032"],
+            &["E012", "E032", "E076"],
         )
         .english(X_E013_EN),
         err(
@@ -3552,6 +3855,29 @@ pub fn ledger() -> Vec<Entry> {
             &["E103", "E012"],
         )
         .english(X_E075_EN),
+        err(
+            "E076",
+            tr!("規則が、`implements` で指す契約と合っていません", "The rule does not fit the contract it implements"),
+            tr!(
+                "`implements proto \"<ファイル>\" <サービス>` を書いた規則が、契約のサービスと合わないとき。契約のサービスは、rulec が規則から生成する `.proto` と同じ形でなければなりません。違ってよいのは、package、サービス・メソッド・メッセージの名前、フィールドの番号と並び、コメント・`reserved`・ほかのオプション、メッセージを置くファイルと入れ子です。合わないところごとに一つ出ます。入力・並び・要素のフィールド・出力が契約に無いとき、契約にしか無いフィールドがあるとき、型が違うとき（真偽は `bool`、日付と文字列は `string`、そのほかの数は `int64`、列挙は規則が `import proto` で読んだその列挙）、`optional` が違うとき（要求と要素のフィールドはいつも `optional`、答えのフィールドは出力が `T?` のときだけ）、通信に乗る列挙が `import proto` で読んだものでないとき、答えに `repeated <メッセージ> trace`（`string table`・`int32 row`・`string label` の三つだけ）が無いとき、サービスの手続きが一つの単項で `NO_SIDE_EFFECTS` のものでないとき、`json_name`・`oneof`・`map` を使っているとき、契約が proto3 でないときです。規則の名前のことはその宣言の行で、契約にしか無いもののことは `implements` の行で言います。",
+                "A rule that says `implements proto \"<file>\" <Service>` does not fit the contract's service. The service has to be shaped as the `.proto` rulec generates from the rule; what may differ is the package, the names of the service, the method and the messages, the numbers and the order of the fields, comments, `reserved` and other options, and the file and the message a message is declared in. Each thing that does not fit is said once: an input, a sequence, a field of an element or an output the contract does not have; a field only the contract has; a field of another type (a truth value is `bool`, a date and a string are `string`, every other number is `int64`, and an enum is the very enum the rule reads with `import proto`); a field whose `optional` differs (every field of the request and of an element is `optional`, and a field of the answer is only for an output of `T?`); an enum on the wire that is not read with `import proto`; an answer with no `repeated <Message> trace` of `string table`, `int32 row` and `string label` alone; a service whose one method is not unary with `NO_SIDE_EFFECTS`; a field with `json_name`, in a `oneof`, or a `map`; and a contract that is not proto3. A name of the rule's is said at its declaration, and what only the contract has at the `implements` line."
+            ),
+            tr!(
+                "契約にフィールドを足すときは、そのメッセージのどのフィールドもまだ使ったことのない番号を付けてください。契約から消したフィールドの番号は `reserved` にしてください。規則の側は、値の別名を契約のフィールドの名前にしてください。受け取るだけで使わない値は、規則に `T?` の入力として書き、`contract_only` を付けてください。通信に乗る列挙は、契約の `.proto` に書いて、`import proto` で読んでください。初めて契約を作るなら、`rulec gen` が書いた `.proto` を写すと、そのまま合います。",
+                "When the contract gains a field, give it a number no field of its message has ever used; when it drops one, make the number `reserved`. On the rule's side, the alias of a value is the name of the contract's field. A value the service only takes and never reads is an input of `T?` marked `contract_only`. An enum on the wire is declared in the contract's `.proto` and read with `import proto`. To make a first contract, copy the `.proto` that `rulec gen` writes: it fits as it stands."
+            ),
+            X_E076,
+            &["E013", "E032", "E033"],
+        )
+        .with_files(SHIPPING_PROTO)
+        .also_with(tr!("契約にしか無いフィールド", "A field only the contract has"), X_E076_BASE, SHIPPING_EXTRA)
+        .also_with(tr!("型の違うフィールド", "A field of another type"), X_E076_BASE, SHIPPING_TYPE)
+        .also_with(tr!("`optional` の違うフィールド", "A field whose `optional` differs"), X_E076_BASE, SHIPPING_PRESENCE)
+        .also_with(tr!("契約から読んでいない列挙", "An enum not read from the contract"), X_E076_ENUM, SHIPPING_ENUM)
+        .also_with(tr!("`trace` の無い答え", "An answer with no `trace`"), X_E076_BASE, SHIPPING_NO_TRACE)
+        .also_with(tr!("規則のサービスの形でないサービス", "A service not shaped as a rule's"), X_E076_BASE, SHIPPING_SIDE_EFFECTS)
+        .also_with(tr!("`json_name`・`oneof`・`map` のフィールド", "A field with `json_name`, in a `oneof`, or a `map`"), X_E076_BASE, SHIPPING_JSON_NAME)
+        .also_with(tr!("proto3 でない契約", "A contract that is not proto3"), X_E076_BASE, SHIPPING_PROTO2),
         err(
             "E101",
             tr!("完全性の欠落: どの行にも当てはまらない入力があります", "Completeness gap: some input matches no row"),
@@ -4676,7 +5002,7 @@ pub fn render_markdown(e: &Entry) -> String {
         o.push_str("```\n");
         for (name, text) in r.files {
             o.push_str(&tr!("\n隣に置く `{name}`:\n\n", "\nWith `{name}` beside it:\n\n"));
-            o.push_str("```rule\n");
+            o.push_str(if name.ends_with(".proto") { "```proto\n" } else { "```rule\n" });
             o.push_str(text);
             o.push_str("```\n");
         }

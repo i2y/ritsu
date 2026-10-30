@@ -270,6 +270,8 @@ $ gunicorn 'shipping_fee_service:wsgi_app'          # WSGI
 
 `connectrpc` は、NumPy の評価器が使う numpy を除けば、`gen` の出すものの中で唯一よその依存で、それもサービスの一枚に閉じています。呼ばれるモジュールのほうは相変わらず何も import しません。`rulec test` は全ベクタを、二つのアプリそれぞれに POST と GET で、合わせて四回通して参照評価器と突き合わせます。
 
+**契約が先にあるなら**、規則をその契約のサービスとして出せます。サービスの `.proto` をもう持っているなら、規則の頭に `implements proto "<ファイル>" <サービス>` と書きます。`gen` は規則の `.proto` を作る代わりに契約を写し、パスもメッセージもフィールドの番号も、契約のものになります。規則の `.proto` は規則に書いた順に番号を振るので、途中に入力を足すと、後ろの番号がずれます。契約に持たせれば、新しい入力は契約が付けた番号を持ち、ほかの番号は動きません。`rulec check` は規則とサービスをフィールドごとに突き合わせ、合わないところを E076 で言います。
+
 そして、**いま動いている**ほうが Connect のサービスなら、矢印は逆を向きます。`rulec adapter --template connect-python` が二十行を出すので、その答えを `rulec verify` の前に置けば、一致率と、食い違っている行が出ます。
 
 [生成物の詳しい説明](generated-code.md#the-rule-as-a-connect-service){ .md-button }

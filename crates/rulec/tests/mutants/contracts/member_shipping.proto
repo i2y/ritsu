@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// The service a shipping rule is served as. Its numbers are this file's own: the request's
+// fields skip the numbers `reserved` keeps, the answer's start from 1 in another order, and
+// `trace` is at 15. A field is added with a number no field has used.
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_BASIC = 1;
+  TIER_SILVER = 2;
+  TIER_GOLD = 3;
+  TIER_PLATINUM = 7;
+}
+
+message FiredRow {
+  string table = 4;
+  int32 row = 1;
+  string label = 2;
+}
+
+message QuoteRequest {
+  optional Tier member = 2;
+  reserved 3, 4;
+  reserved "coupon";
+  optional int64 subtotal = 5;
+  optional Tier campaign = 9;
+}
+
+message QuoteResponse {
+  bool lifted = 7;
+  int64 shipping = 3;
+  Tier effective = 1;
+  repeated FiredRow trace = 15;
+}
+
+service MemberShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// A second service of the same messages, which no rule implements.
+service PlainService {
+  rpc GetQuote(QuoteRequest) returns (QuoteResponse);
+}

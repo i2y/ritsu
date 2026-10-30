@@ -589,7 +589,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
             // by GET — because both are generated and the method declares itself free of
             // side effects (§15.112).
             if let (Some(f), true) = (b.connect, connect_host) {
-                if let Some(proto) = proto_of(&dir, alias) {
+                if connect_runner_of(dir, alias) {
                     for (via, flags) in [
                         ("connect-asgi", &[][..]),
                         ("connect-asgi-get", &["--get"][..]),
@@ -600,7 +600,7 @@ pub fn run_with(dir: &Path, proofs: bool) -> Result<Run, String> {
                         if !flags.contains(&"--wsgi") && !asgi_host {
                             continue;
                         }
-                        let mut plan = f(alias, &proto);
+                        let mut plan = f(alias);
                         plan.args.extend(flags.iter().map(|s| (*s).to_string()));
                         let diff = held(&plan);
                         out.results.push(Outcome {
@@ -851,15 +851,11 @@ fn via_mcp(
     Ok((got, got_traces))
 }
 
-/// The `.proto` of one rule, as a path under `proto/`.
-///
-/// The directory carries the rule's version (§15.112), which the alias does not, so it is
-/// read off the tree rather than spelled.
-fn proto_of(dir: &Path, alias: &str) -> Option<String> {
-    let base = dir.join("proto").join("rulec").join(alias);
-    let ver = std::fs::read_dir(&base).ok()?.flatten().find(|e| e.path().is_dir())?;
-    let v = ver.file_name().to_string_lossy().into_owned();
-    base.join(&v).join(format!("{alias}.proto")).is_file().then(|| format!("rulec/{alias}/{v}/{alias}.proto"))
+/// Whether `gen` wrote the rule's Connect service and its runner. The `.proto` it speaks is the
+/// rule's own, or the contract it implements (§15.274), and the stubs are built from the whole of
+/// `proto/` either way, so it is the runner that is looked for.
+fn connect_runner_of(dir: &Path, alias: &str) -> bool {
+    dir.join("python").join(format!("{alias}_connect_runner.py")).is_file()
 }
 
 /// The modules of the `enums` files a rule reads its types from, as `rulec gen` wrote them beside

@@ -748,6 +748,8 @@ examples/shop.ja/通販.ctx: ok — 5 contexts, 7 relationships; 79 artifacts, e
 
 ほかの言語が口で言う参照のうち、ここに無いもの（rulec の `import jsonschema` と JSON Schema の `shape`、rulec と koyomi の `source` のコピー、dandori の `use openapi` と `use smithy`、dandori の `use book` と帳簿の操作のタスクの `book`（18.2）、sekisho の `use openapi`・`use proto`・`use asyncapi`・`use book` と `workflow`（17.2）、kaname の `use book`（18.2））は、境界を越える参照に数えない。JSON Schema、出典のコピー、祝日の表、Smithy の記述は、それを読む成果物の一部として扱い、属し方を問わない（1.3）からである。範囲の外にあっても何も言わない。ただし、dandori の `use openapi` と、rulec の `import jsonschema` と JSON Schema の `shape` は、先が OpenAPI か AsyncAPI の文書（成果物）なら、その文書への参照として数える（15.5）。
 
+rulec の `implements`（規則が実装する契約のサービス。rulec の DESIGN 15.274）も、境界を越える参照に数えない。ワークフローの `implements` は、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスであることを確かめる（E208。4.7）が、規則の `implements` はまだ確かめない。
+
 参照のもとと先が別のコンテキストに属するとき、境界を越える参照になる。そのとき、次のどれかでなければ診断を出す。
 
 1. 先が、二つのあいだの共有カーネルに並べた成果物（の中）にある。
@@ -863,7 +865,7 @@ proto は sakai が直接読む（P2）。読み手は自分で書いた（依�
 
 ### 4.3 rulec
 
-規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊）、参照のもと（`import proto`、`shape`、`apply`、`import enum`、`range from koyomi`）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。`enums` のファイル（列挙だけを持つ `.rule`。rulec の DESIGN 15.212）は、ほかの規則の `import enum` の先としても現れる（20 章）。rulec が規則について答えるのは、規則が rulec の検査を通るときだけである。通らない規則は E105 で、その規則の参照も対応も確かめない（4.1）。
+規則は、属し方（ファイル）、公表された言語（`published language rulec.<別名>.v<版>` の塊。`implements` で契約のサービスを実装する規則では、契約の package の塊）、参照のもと（`import proto`、`shape`、`apply`、`import enum`、`range from koyomi`）、対応の先（1.7）、語の `means` の先（規則の入力、出力、列挙）として現れる。`enums` のファイル（列挙だけを持つ `.rule`。rulec の DESIGN 15.212）は、ほかの規則の `import enum` の先としても現れる（20 章）。rulec が規則について答えるのは、規則が rulec の検査を通るときだけである。通らない規則は E105 で、その規則の参照も対応も確かめない（4.1）。
 
 ### 4.4 koyomi
 

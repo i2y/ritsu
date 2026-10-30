@@ -52,6 +52,7 @@ These are all the words that may start a line.
 | `clause` | a one-line rule that does not fit a table, written as a sentence: `when <column> <cell> and …` (`when always` when there is no condition), `then <value>`, and `overrides` when needed |
 | `source` | a document the rule transcribes: a law in a statute database (`law [<database>] "<id>" asof <date>`) or a file beside the rule (`file "<file>" sha256:…`). A table, clause, row, derive or define cites it at the end of its line: `@source 第20条` |
 | `shape` | the shape of the caller's object, borrowed from the contract it already has (`jsonschema "<file>" "<pointer>"` or `proto "<file>" <Message>`). An input then says `from <shape>.<field>` at the end of its line |
+| `implements` | the Connect service the rule is served as, which a contract declares (`proto "<file>" <Service>`): the names and the numbers on the wire are the contract's, and `check` holds the rule to the service (E076) |
 | `apply` | another rule file, applied with its inputs read as this rule's values: `<its input> = <this rule's value>`, `except <definitions not applied>`, `<its output> -> <name>` |
 | `result` | assembles an output |
 | `machine` | reads a table as one step of a case that goes on: which output comes back as which input on the next call, where a case starts and ends, and what no sequence of calls may do |

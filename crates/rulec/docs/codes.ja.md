@@ -76,6 +76,7 @@ rulec が出しうるコードの全部について、いつ出るかと、ど�
 | [E071](#e071) | error | 前提のつながりの形が違います |
 | [E072](#e072) | error | 持ち越す値の書き方が違います |
 | [E075](#e075) | error | 列挙の値でも、名前でもある語です |
+| [E076](#e076) | error | 規則が、`implements` で指す契約と合っていません |
 | [E101](#e101) | error | 完全性の欠落: どの行にも当てはまらない入力があります |
 | [E102](#e102) | error | どの入力にも当てはまらない行があります |
 | [E103](#e103) | error | 単位の混同: 型の違う値を混ぜています |
@@ -204,7 +205,7 @@ inputs
 
 **いつ出るか。** 表でもコメントでも空行でもない行が、記号で始まっているとき。この構文は行指向なので、行の先頭の語が何の宣言かを決めます。
 
-**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open`）。表の行なら `|` で始めてください。
+**直し方。** 行頭に宣言の語を書いてください（`description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements`）。表の行なら `|` で始めてください。
 
 **最小の再現**:
 
@@ -222,7 +223,7 @@ rule t(t) v1
 
 **いつ出るか。** 行頭の語が語彙にないとき。語彙には同義の綴りがなく、英語の一種類だけです。
 
-**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open` のどれかに直してください。業務の語を書けるのは、名前とセルの中だけです。
+**直し方。** `description / import / enum / group / inputs / elements / outputs / derive / define / constraint / table / fold / count / sum / max / min / sequence / result / examples / policy / overrides / clause / source / apply / shape / machine / scenario / prerequisites / chances / open / implements` のどれかに直してください。業務の語を書けるのは、名前とセルの中だけです。
 
 **最小の再現**:
 
@@ -426,9 +427,9 @@ policy unique
 
 `error` — **取込先がありません**
 
-**いつ出るか。** `import` の先が無いとき。取込先は三つあります。組み込みの名前空間（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙（`import proto "<ファイル>" <列挙> -> <この規則の列挙>`）、JSON Schema の列挙（`import jsonschema "<ファイル>" "<ポインタ>" -> <この規則の列挙>`、OpenAPI も同じ）です。あとの二つは、ファイルを読めないとき、その列挙がファイルに無いとき、行の形が違うときに出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。
+**いつ出るか。** 規則が外から読むものが無いか、読めないとき。外から読む行は六つあります。組み込みの名前空間を取り込む `import`（十三か国の一段目の区分。`std/us/states`、`std/gb/nations`、`std/cn/provinces`、`std/tw/divisions`、`std/kr/provinces`、`std/in/states`、`std/fr/regions`、`std/es/communities`、`std/it/regions`、`std/de/states`、`std/au/states`、`std/br/states`、`std/jp/prefectures`。日本の都道府県は `std/都道府県` でも取り込めて、そのときは値を日本語で書きます）、`.proto` の列挙を取り込む `import proto "<ファイル>" <列挙> -> <この規則の列挙>`、JSON Schema の列挙を取り込む `import jsonschema "<ファイル>" "<ポインタ>" -> <この規則の列挙>`（OpenAPI も同じ）、`enums` のファイルの列挙を取り込む `import enum <列挙> from "<ファイル>"`、入力を読む契約を名付ける `shape <名前> = proto "<ファイル>" <メッセージ>`（JSON Schema なら `jsonschema "<ファイル>" "<ポインタ>"`）と入力の `from`、規則を契約のサービスとして出す `implements proto "<ファイル>" <サービス>` です。ファイルを読む行では、ファイルを読めないとき、指した列挙・メッセージ・サービスがファイルに無いとき、行の形が違うときに出ます。`implements` の行が二行あるときにも出ます。rulec は YAML を読まないので、JSON にしたものを指してください。一つの国の区分を二つの名前で取り込んだとき（`std/都道府県` と `std/jp/prefectures`）にも出ます。
 
-**直し方。** 名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルから取り込むなら、パスは規則ファイルのある場所からの相対パスで書いてください。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。
+**直し方。** 名前空間の綴りを直すか（似た綴りがあれば注に出ます）、その列挙を `enum` でこのファイルに書いてください。ファイルを読む行では、パスは規則ファイルのある場所からの相対パスで書いてください。列挙・メッセージ・サービスが見つからないときは、注に、そのファイルにあるものが並びます。メッセージとサービスは、名前か、ファイルの package を付けた名前で書いてください。JSON Schema のポインタは `#/components/schemas/<名前>` の形です。ポインタが届かなかったときは、注に、届いたところにある鍵が並びます。`implements` は一つの規則に一行です。
 
 **最小の再現**:
 
@@ -438,7 +439,7 @@ rule t(t) v1
 import std/都道府
 ```
 
-関係するコード: [E012](#e012), [E032](#e032)
+関係するコード: [E012](#e012), [E032](#e032), [E076](#e076)
 
 ## E014
 
@@ -2653,6 +2654,450 @@ policy unique
 ```
 
 関係するコード: [E103](#e103), [E012](#e012)
+
+## E076
+
+`error` — **規則が、`implements` で指す契約と合っていません**
+
+**いつ出るか。** `implements proto "<ファイル>" <サービス>` を書いた規則が、契約のサービスと合わないとき。契約のサービスは、rulec が規則から生成する `.proto` と同じ形でなければなりません。違ってよいのは、package、サービス・メソッド・メッセージの名前、フィールドの番号と並び、コメント・`reserved`・ほかのオプション、メッセージを置くファイルと入れ子です。合わないところごとに一つ出ます。入力・並び・要素のフィールド・出力が契約に無いとき、契約にしか無いフィールドがあるとき、型が違うとき（真偽は `bool`、日付と文字列は `string`、そのほかの数は `int64`、列挙は規則が `import proto` で読んだその列挙）、`optional` が違うとき（要求と要素のフィールドはいつも `optional`、答えのフィールドは出力が `T?` のときだけ）、通信に乗る列挙が `import proto` で読んだものでないとき、答えに `repeated <メッセージ> trace`（`string table`・`int32 row`・`string label` の三つだけ）が無いとき、サービスの手続きが一つの単項で `NO_SIDE_EFFECTS` のものでないとき、`json_name`・`oneof`・`map` を使っているとき、契約が proto3 でないときです。規則の名前のことはその宣言の行で、契約にしか無いもののことは `implements` の行で言います。
+
+**直し方。** 契約にフィールドを足すときは、そのメッセージのどのフィールドもまだ使ったことのない番号を付けてください。契約から消したフィールドの番号は `reserved` にしてください。規則の側は、値の別名を契約のフィールドの名前にしてください。受け取るだけで使わない値は、規則に `T?` の入力として書き、`contract_only` を付けてください。通信に乗る列挙は、契約の `.proto` に書いて、`import proto` で読んでください。初めて契約を作るなら、`rulec gen` が書いた `.proto` を写すと、そのまま合います。
+
+**最小の再現**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+  express(express) : bool
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| express | subtotal | -> shipping |
+| true    | -        | 20USD       |
+| false   | >=50USD  | 0USD        |
+| false   | -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**契約にしか無いフィールド**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+  optional bool express = 3;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**型の違うフィールド**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional string subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**`optional` の違うフィールド**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**契約から読んでいない列挙**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+enum tier(tier) = basic(basic) | gold(gold)
+
+inputs
+  tier(tier) : tier
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy unique
+| tier  | -> shipping |
+| gold  | 0USD        |
+| basic | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_BASIC = 1;
+  TIER_GOLD = 2;
+}
+
+message QuoteRequest {
+  optional Tier tier = 3;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**`trace` の無い答え**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+}
+```
+
+**規則のサービスの形でないサービス**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse);
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**`json_name`・`oneof`・`map` のフィールド**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2 [json_name = "sub"];
+}
+
+message QuoteResponse {
+  int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  string table = 1;
+  int32 row = 2;
+  string label = 3;
+}
+```
+
+**proto3 でない契約**:
+
+```rule
+rule t(t) v1
+implements proto "shipping.proto" ShippingService
+
+inputs
+  subtotal(subtotal) : money[USD]  range >=0USD <=1000USD
+
+outputs
+  shipping(shipping) : money[USD]  round down(1USD)
+
+table fee(fee)
+policy first
+| subtotal | -> shipping |
+| >=50USD  | 0USD        |
+| -        | 8USD        |
+```
+
+隣に置く `shipping.proto`:
+
+```proto
+syntax = "proto2";
+
+package shop.v1;
+
+service ShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message QuoteRequest {
+  optional int64 subtotal = 2;
+}
+
+message QuoteResponse {
+  optional int64 shipping = 1;
+  repeated Row trace = 15;
+}
+
+message Row {
+  optional string table = 1;
+  optional int32 row = 2;
+  optional string label = 3;
+}
+```
+
+関係するコード: [E013](#e013), [E032](#e032), [E033](#e033)
 
 ## E101
 

@@ -655,6 +655,131 @@ fn a_field_that_moves_on_the_connect_wire_breaks_the_calls() {
     }
 }
 
+/// The contract a rule implements the Connect service of (rulec's §15.274), numbered as no rule would
+/// number it.
+const SHIPPING_PROTO: &str = "syntax = \"proto3\";\n\npackage shop.v1;\n\n\
+enum Tier {\n  TIER_UNSPECIFIED = 0;\n  TIER_BASIC = 1;\n  TIER_SILVER = 2;\n  TIER_GOLD = 3;\n  TIER_PLATINUM = 7;\n}\n\n\
+message FiredRow {\n  string table = 4;\n  int32 row = 1;\n  string label = 2;\n}\n\n\
+message QuoteRequest {\n  optional Tier member = 2;\n  reserved 3, 4;\n  optional int64 subtotal = 5;\n  optional Tier campaign = 9;\n}\n\n\
+message QuoteResponse {\n  bool lifted = 7;\n  int64 shipping = 3;\n  Tier effective = 1;\n  repeated FiredRow trace = 15;\n}\n\n\
+service MemberShippingService {\n  rpc Quote(QuoteRequest) returns (QuoteResponse) {\n    option idempotency_level = NO_SIDE_EFFECTS;\n  }\n}\n";
+
+/// The rule that implements `MemberShippingService`, English and the twin with Japanese names: the
+/// enum on line 4, the input `subtotal` on line 10. `IMPLEMENTS` is the line that says the service,
+/// and `IMPORT` the one that reads the enum from the contract.
+const SHIPPING_EN: &str = "rule member_tier_shipping v1\nIMPLEMENTS\n\n\
+enum tier = basic < silver < gold < platinum\nIMPORT\n\n\
+inputs\n  member : tier\n  campaign : tier  range >=basic <=gold\n  subtotal : money[USD]  range >=0USD <=100000USD\n\n\
+outputs\n  shipping : money[USD]  round down(1USD)\n  effective : tier\n  lifted : bool\n\n\
+define effective : tier = max(member, campaign)\ndefine lifted : bool = campaign > member\n\n\
+table shipping_fee\npolicy unique\n\
+| effective | subtotal | -> shipping |\n| >=gold    | -        | 0USD        |\n| silver    | >=50USD  | 0USD        |\n\
+| silver    | <50USD   | 5USD        |\n| basic     | >=100USD | 0USD        |\n| basic     | <100USD  | 8USD        |\n";
+
+const SHIPPING_JA: &str = "rule 会員の送料(member_tier_shipping) v1\nIMPLEMENTS\n\n\
+enum 会員区分(tier) = 一般(basic) < シルバー(silver) < ゴールド(gold) < プラチナ(platinum)\nIMPORT\n\n\
+inputs\n  会員(member) : 会員区分\n  キャンペーン(campaign) : 会員区分  range >=一般 <=ゴールド\n  小計(subtotal) : money[USD]  range >=0USD <=100000USD\n\n\
+outputs\n  送料(shipping) : money[USD]  round down(1USD)\n  適用区分(effective) : 会員区分\n  引き上げ(lifted) : bool\n\n\
+define 適用区分 : 会員区分 = max(会員, キャンペーン)\ndefine 引き上げ : bool = キャンペーン > 会員\n\n\
+table 送料表(shipping_fee)\npolicy unique\n\
+| 適用区分   | 小計     | -> 送料 |\n| >=ゴールド | -        | 0USD    |\n| シルバー   | >=50USD  | 0USD    |\n\
+| シルバー   | <50USD   | 5USD    |\n| 一般       | >=100USD | 0USD    |\n| 一般       | <100USD  | 8USD    |\n";
+
+/// A rule that implements a contract's service (rulec's §15.274) takes its numbers on the Connect
+/// wire from the contract, so they move only when the contract moves them. In each language, three
+/// pairs of versions as directories:
+///
+/// - an input added in the middle of the rule, and to the contract under a number of its own: no
+///   E310, and the field added is a candidate;
+/// - the contract moving the number of the input `subtotal` and of the value `platinum`, the rule's
+///   bytes the same: E310 for each, at the line of the input and of the enum, the note saying that the
+///   numbers are the contract's and the contract moved them;
+/// - the way over: the `.proto` rulec wrote for the rule copied out as the contract, which the rule
+///   implements and reads its enum from. The path and every number stay as they were: no E310, and
+///   the contract is a candidate.
+#[test]
+fn a_rule_that_implements_a_contract_keeps_the_contracts_numbers() {
+    for (lang, rule, subtotal, platinum, (express, line)) in [
+        ("en", SHIPPING_EN, "subtotal", "platinum", ("express", "  express : bool\n")),
+        ("ja", SHIPPING_JA, "小計", "プラチナ", ("速達", "  速達(express) : bool\n")),
+    ] {
+        let t = TempDir::new(&format!("mod-diff-implements-{lang}"));
+        let contract = "api/shop/v1/member_shipping.proto";
+        let implementing = rule
+            .replace("IMPLEMENTS", &format!("implements proto \"{contract}\" MemberShippingService"))
+            .replace("IMPORT", &format!("import proto \"{contract}\" Tier -> {}", if lang == "en" { "tier" } else { "会員区分" }));
+        let write = |side: &str, version: &str, rule: &str, proto: Option<(&str, &str)>| {
+            let d = t.path().join(side);
+            let _ = std::fs::remove_dir_all(&d);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("ritsu.mod"), format!("module shop\nversion {version}\n")).unwrap();
+            std::fs::write(d.join("shipping.rule"), rule).unwrap();
+            if let Some((at, text)) = proto {
+                std::fs::create_dir_all(d.join(at).parent().unwrap()).unwrap();
+                std::fs::write(d.join(at), text).unwrap();
+            }
+        };
+        let diff = || {
+            let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", "old", "new", "--format", "json", "--lang", lang]);
+            assert_eq!(err, "", "{lang}");
+            (code, json(&out))
+        };
+        let of_rule = |v: &serde_json::Value| v["interface"].as_array().unwrap().iter().find(|i| i["file"] == "shipping.rule").cloned().unwrap_or_else(|| panic!("{lang}: no interface of the rule: {v}"));
+
+        // an input added in the middle, and to the contract under a number no field has used
+        write("old", "1.0.0", &implementing, Some((contract, SHIPPING_PROTO)));
+        let campaign = implementing.lines().find(|l| l.contains("campaign") && l.contains("range")).unwrap().to_string() + "\n";
+        let grown = implementing.replacen(&campaign, &format!("{campaign}{line}"), 1);
+        write("new", "1.1.0", &grown, Some((contract, &SHIPPING_PROTO.replace("  optional Tier campaign = 9;\n", "  optional Tier campaign = 9;\n  optional bool express = 11;\n"))));
+        let (_, v) = diff();
+        let i = of_rule(&v);
+        assert_eq!(i["breaks"], serde_json::json!([]), "{lang}: {i}");
+        // the field the contract numbers 11, added after what it had
+        let added = i["changes"].as_array().unwrap().iter().find(|c| c["at"] == format!("/connect/request_fields/{express}")).unwrap_or_else(|| panic!("{lang}: {i}"));
+        assert_eq!((&added["change"], &added["new"]["number"]), (&serde_json::json!("added"), &serde_json::json!(11)), "{lang}: {i}");
+
+        // the contract moves two numbers, and the rule is the same
+        write("new", "1.1.0", &implementing, Some((contract, &SHIPPING_PROTO.replace("subtotal = 5;", "subtotal = 6;").replace("TIER_PLATINUM = 7;", "TIER_PLATINUM = 8;"))));
+        let (code, v) = diff();
+        let i = of_rule(&v);
+        let breaks: Vec<(&str, i64, &str)> = i["breaks"].as_array().unwrap().iter().map(|b| (b["code"].as_str().unwrap(), b["line"].as_i64().unwrap(), b["notes"][0].as_str().unwrap())).collect();
+        let (enum_note, field_note) = if lang == "en" {
+            (
+                "the enum is read from a .proto (`import proto`), whose numbers are the contract's, and the contract moved this value's: put the old number back, and give a new value a number no value has used",
+                "the numbers are those of the contract the rule implements (`implements`), and the contract changed this field's: put the old number back, and give a new field a number no field has used",
+            )
+        } else {
+            (
+                "この列挙は .proto から読んだもの（`import proto`）で、番号は契約のものです。契約がこの値の番号を変えました。前の番号に戻し、新しい値には、どの値もまだ使ったことのない番号を付けてください",
+                "番号は、規則が実装する契約（`implements`）のものです。契約がこのフィールドの番号を変えました。前の番号に戻し、新しいフィールドには、どのフィールドもまだ使ったことのない番号を付けてください",
+            )
+        };
+        assert_eq!((code, breaks), (1, vec![("E310", 4, enum_note), ("E310", 10, field_note)]), "{lang}: {i}");
+        let messages: Vec<&str> = i["breaks"].as_array().unwrap().iter().map(|b| b["message"].as_str().unwrap()).collect();
+        assert!(messages[0].contains(&format!("`{platinum}`")) && (messages[0].contains("(7 → 8)") || messages[0].contains("（7 → 8）")), "{lang}: {messages:?}");
+        assert!(messages[1].contains(&format!("`{subtotal}`")), "{lang}: {messages:?}");
+
+        // the way over, from the rule's own `.proto`
+        let own = rule.replace("IMPLEMENTS\n", "").replace("IMPORT\n", "");
+        write("old", "1.0.0", &own, None);
+        let (code, out, err) = ritsu_in(t.path(), t.path(), &["rulec", "gen", "old/shipping.rule", "--out", "gen"]);
+        assert_eq!(code, 0, "{out}{err}");
+        let at = "rulec/member_tier_shipping/v1/member_tier_shipping.proto";
+        let generated = std::fs::read_to_string(t.path().join("gen/proto").join(at)).unwrap();
+        let copied = format!("api/{at}");
+        let over = rule
+            .replace("IMPLEMENTS", &format!("implements proto \"{copied}\" MemberTierShippingService"))
+            .replace("IMPORT", &format!("import proto \"{copied}\" Tier -> {}", if lang == "en" { "tier" } else { "会員区分" }));
+        write("new", "1.1.0", &over, Some((&copied, &generated)));
+        let (_, v) = diff();
+        let i = of_rule(&v);
+        assert_eq!(i["breaks"], serde_json::json!([]), "{lang}: {i}");
+        let at: Vec<&str> = i["changes"].as_array().unwrap().iter().map(|c| c["at"].as_str().unwrap()).collect();
+        assert!(at.contains(&"/connect/contract"), "{lang}: {at:?}");
+        assert!(at.iter().all(|a| !a.ends_with("/number") && !a.ends_with("/path")), "{lang}: the numbers and the path stay: {at:?}");
+    }
+}
+
 /// The behavior of each file is what the language's own diff says of the same two files: `ritsu
 /// rulec diff`, `ritsu koyomi diff` and `ritsu sekisho diff` (with the rules of rulec joined, as
 /// ritsu runs sekisho), as JSON, and in its text.

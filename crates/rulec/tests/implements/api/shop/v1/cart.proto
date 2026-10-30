@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package shop.v1;
+
+import "shop/common/v1/rows.proto";
+
+message CartRequest {
+  message Line {
+    reserved 1;
+    optional int64 price = 2;
+  }
+  optional bool member = 1;
+  repeated Line lines = 3;
+}
+
+message CartResponse {
+  int64 fee = 4;
+  repeated shop.common.v1.MatchedRow trace = 2;
+}
+
+service CartService {
+  rpc Price(CartRequest) returns (CartResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}

@@ -1926,6 +1926,42 @@ There is a door in the other direction too. When the implementation that runs to
 Connect service, `rulec adapter --template connect-python` prints the twenty lines that put
 its answers in front of `rulec verify` ([formats.md](formats.md#the-adapter-protocol-rulec-verify)).
 
+### A service a contract declares
+
+The numbers above are the order the rule declares its values in, so a value added in the middle
+moves the numbers after it, and a caller built from the earlier `.proto` sends its values to the
+wrong fields. A rule that names a contract's service with `implements proto "<file>" <Service>`
+([reference §3.4](reference.md#34-implements--the-service-a-contract-declares)) is served as that
+service instead, and `rulec check` holds the rule to it (E076):
+
+```
+generated/proto/shop/v1/member_shipping.proto              the contract, byte for byte
+generated/proto/buf.yaml                                   the tree is a buf module
+generated/proto/buf.gen.yaml                               how the stubs are generated
+generated/python/member_tier_shipping_service.py           the same service, under the contract's names
+generated/python/member_tier_shipping_connect_runner.py    the same vectors, over the wire
+```
+
+`gen` writes no `.proto` of the rule's own. It copies the contract with the files it imports, the
+way it copies a contract an enum is imported from, and the stubs buf writes from it are the ones
+the service and the runner import. What a caller agrees to is then the contract's — the path,
+the messages and the numbers — and the rest is as above: the method free of side effects, the
+rows in `trace`, `rulec-source-sha256` on every answer, a request that leaves out an input the
+rule needs refused, and `rulec test` putting every vector through the service four times.
+
+```console
+$ python3 generated/python/member_tier_shipping_service.py --http 127.0.0.1:8080
+http://127.0.0.1:8080
+$ curl -sS -X POST -H 'Content-Type: application/json' \
+    -d '{"member":"TIER_SILVER","campaign":"TIER_BASIC","subtotal":10}' \
+    http://127.0.0.1:8080/shop.v1.MemberShippingService/Quote
+{"shipping":"5","effective":"TIER_SILVER","trace":[{"table":"shipping_fee","row":3}]}
+```
+
+`rulec api` says the same names and numbers under `connect`, with the file under `contract`
+([formats.md](formats.md)). A message the contract declares in another file, or nests in another
+message, is read from the module protobuf-py writes for that file, under the class it nests it in.
+
 ---
 
 ## The Rust runner as a WASI module

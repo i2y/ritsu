@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package shop.v1;
+
+// The service member_shipping_quote.rule implements (rulec's `implements`). The fields are in the
+// rule's order, with numbers of this file's own that rulec would not give them: a flow that calls
+// the rule at its service reaches it at this file's path, and its stubs read the answer.
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_BASIC = 1;
+  TIER_SILVER = 2;
+  TIER_GOLD = 3;
+  TIER_PLATINUM = 7;
+}
+
+message FiredRow {
+  string table = 4;
+  int32 row = 1;
+  string label = 2;
+}
+
+message QuoteRequest {
+  optional Tier member = 2;
+  optional Tier campaign = 9;
+  reserved 3, 4;
+  optional int64 subtotal = 5;
+}
+
+message QuoteResponse {
+  int64 shipping = 3;
+  Tier effective = 1;
+  bool lifted = 7;
+  repeated FiredRow trace = 15;
+}
+
+service MemberShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}

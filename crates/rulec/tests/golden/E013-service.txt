@@ -1,0 +1,7 @@
+エラー[E013]: `contracts/member_shipping.proto` にサービス `ShippingService` はありません
+  --> tests/mutants/m_e013svcja.rule:2
+  |
+2 | implements proto "contracts/member_shipping.proto" ShippingService
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+ そのファイルにあるサービス: MemberShippingService, PlainService

@@ -929,3 +929,143 @@ fn 依存のある契約のサービスが立つ() {
     assert!(!said.contains("FAIL"), "{said}");
     assert!(out.join("python/stubs/buf/validate/validate_pb.py").is_file(), "protovalidate の stub が書かれていない");
 }
+
+/// Copies the tree at `from` into `to`, file by file.
+fn copy_tree(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            copy_tree(&p, &to.join(e.file_name()));
+        } else {
+            std::fs::copy(&p, to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
+/// Rules that implement a contract's service (§15.274), with the contracts of `tests/implements/`:
+/// one numbered as no rule would number it, and one whose sequence is a message nested in the
+/// request and whose rows are a message of another file. `rulec test` drives each service over every
+/// vector in its four Connect passes, with the client of the contract copied into the module. Then a
+/// client built on its own from the contract where it was written, which knows nothing of rulec,
+/// sends every vector in protobuf's binary form: the bytes carry the contract's numbers (member, a
+/// value 7, is `10 07`), and every answer is the evaluator's. The two files rulec wrote for each rule
+/// pass `mypy --strict`.
+#[test]
+fn 契約を実装した規則は契約の番号で話す() {
+    if !ready(Need::Buf, || rulec_connect_ready().is_some(), "buf・プラグイン・connectrpc・uvicorn・mypy のどれかが無いので飛ばします") {
+        return;
+    }
+    let tmp = TempDir::new("connect-implements");
+    let d = tmp.path().to_path_buf();
+    copy_tree(&root().join("tests/implements"), &d);
+    let rules = ["rules/member_tier_shipping.rule", "rules/cart_fee.rule"];
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .current_dir(&d)
+        .args(["gen", rules[0], rules[1], "--out", "out"])
+        .output()
+        .expect("rulec を起動できない");
+    assert!(o.status.success(), "{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    let out = d.join("out");
+    assert!(!out.join("proto/rulec").exists(), "規則の .proto を書いた");
+    for e in std::fs::read_dir(&out).unwrap().flatten() {
+        let n = e.file_name().to_string_lossy().into_owned();
+        if !["python", "proto", "vectors"].contains(&n.as_str()) {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+    let o = Command::new(env!("CARGO_BIN_EXE_rulec"))
+        .env("RULEC_LANG", "en")
+        .env("TMPDIR", tmpdir_in(&out))
+        .args(["test", out.to_str().unwrap()])
+        .output()
+        .expect("rulec を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(o.status.success() && !said.contains("FAIL"), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    for rule in ["member_tier_shipping", "cart_fee"] {
+        for pass in ["Connect/ASGI", "Connect/ASGI+GET", "Connect/WSGI", "Connect/WSGI+GET"] {
+            assert!(said.contains(&format!("ok    {rule} (Python, {pass}) ")), "{rule} の {pass} が走っていない:\n{said}");
+        }
+    }
+
+    // the stubs of the module, for the service and for mypy
+    let py = out.join("python");
+    let o = Command::new("buf")
+        .current_dir(&py)
+        .args([
+            "generate",
+            "../proto",
+            "--template",
+            r#"{"version":"v2","plugins":[{"local":"protoc-gen-py","out":"stubs"},{"local":"protoc-gen-connectrpc","out":"stubs"}]}"#,
+        ])
+        .output()
+        .expect("buf を起動できない");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let files = ["member_tier_shipping_service.py", "member_tier_shipping_connect_runner.py", "cart_fee_service.py", "cart_fee_connect_runner.py"];
+    let o = Command::new("mypy").current_dir(&py).args(["--strict", "--no-color-output"]).args(files).output().expect("mypy を起動できない");
+    let mypy = String::from_utf8_lossy(&o.stdout).into_owned();
+    let ours: Vec<&str> = mypy.lines().filter(|l| l.contains(": error:") && files.iter().any(|f| l.starts_with(f))).collect();
+    assert!(ours.is_empty(), "生成した Python が mypy --strict を通りません:\n{}", ours.join("\n"));
+
+    // a client of its own, from the contract where it was written
+    let client = d.join("client");
+    let o = Command::new("buf")
+        .current_dir(&d)
+        .args([
+            "generate",
+            "api",
+            "--template",
+            r#"{"version":"v2","plugins":[{"local":"protoc-gen-py","out":"client/stubs"},{"local":"protoc-gen-connectrpc","out":"client/stubs"}]}"#,
+        ])
+        .output()
+        .expect("buf を起動できない");
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let script = r#"
+import json, os, subprocess, sys
+from stubs.shop.v1 import member_shipping_pb as pb
+from stubs.shop.v1.member_shipping_connect import MemberShippingServiceClientSync
+
+service, vectors = sys.argv[1], sys.argv[2]
+print("bytes", pb.QuoteRequest(member=pb.Tier.PLATINUM).to_binary().hex(),
+      pb.QuoteRequest(member=pb.Tier.PLATINUM, campaign=pb.Tier.BASIC, subtotal=10).to_binary().hex())
+env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+p = subprocess.Popen([sys.executable, "-B", "member_tier_shipping_service.py", "--http", "127.0.0.1:0"], cwd=service,
+                     env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+base = p.stdout.readline().strip()
+if not base.startswith("http"):
+    p.wait(timeout=10)
+    sys.exit("did not start: " + p.stderr.read())
+n, wrong = 0, []
+try:
+    client = MemberShippingServiceClientSync(base)
+    for line in open(vectors):
+        v = json.loads(line)
+        i = v["in"]
+        r = client.quote(pb.QuoteRequest(member=pb.Tier[i["member"].upper()], campaign=pb.Tier[i["campaign"].upper()], subtotal=i["subtotal"]))
+        got = {"shipping": r.shipping, "effective": pb.Tier(r.effective).name.lower(), "lifted": r.lifted}
+        rows = [f"table {f.table} row {f.row}" for f in r.trace]
+        if got != v["out"] or rows != v["trace"]:
+            wrong.append([i, got, rows, v["out"], v["trace"]])
+        n += 1
+finally:
+    p.kill()
+print("compared", n)
+for w in wrong:
+    print("wrong", json.dumps(w))
+"#;
+    let o = Command::new("python3")
+        .current_dir(&client)
+        .env_remove("PYTHONPATH")
+        .args(["-c", script, py.to_str().unwrap(), out.join("vectors/member_tier_shipping.jsonl").to_str().unwrap()])
+        .output()
+        .expect("python3 を起動できない");
+    let said = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(o.status.success(), "{said}{}", String::from_utf8_lossy(&o.stderr));
+    // member is field 2 and its value platinum is 7; subtotal is 5 and campaign 9
+    assert!(said.contains("bytes 1007 1007280a4801\n"), "{said}");
+    let vectors = std::fs::read_to_string(out.join("vectors/member_tier_shipping.jsonl")).unwrap().lines().count();
+    assert!(vectors > 10, "{vectors}");
+    assert!(said.contains(&format!("compared {vectors}\n")), "{said}");
+    assert!(!said.contains("wrong"), "{said}");
+}

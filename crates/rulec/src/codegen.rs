@@ -286,6 +286,8 @@ pub struct Gen<'a> {
     /// (§15.219). A local an item binds and nothing in the walk reads is said to be read in Go,
     /// which refuses to compile it otherwise; the rest of the rule is not looked at there.
     reads_here: std::cell::RefCell<Option<HashSet<String>>>,
+    /// The contract the rule implements (§15.274), read the first time a generator asks for it.
+    served: std::cell::OnceCell<Option<crate::implements::Served>>,
 }
 
 mod arith;
@@ -685,6 +687,7 @@ impl<'a> Gen<'a> {
             package: None,
             place: ritsu_emit::package::Place::here(),
             reads_here: std::cell::RefCell::new(None),
+            served: std::cell::OnceCell::new(),
         }
     }
 
@@ -15404,6 +15407,17 @@ fn contracts_two_names(file: &std::path::Path, a: &str, b: &str) -> String {
     )
 }
 
+/// Why the module `gen` writes cannot hold a contract at the path of a rule's own `.proto`: the copy
+/// would be written over the `.proto`, or the `.proto` over the copy, and a `.proto` copied from a
+/// generated one to be the contract it implements is what `implements` is for (§15.274).
+fn contract_over_own(rel: &str, contract: &std::path::Path, rule: &str) -> String {
+    let contract = contract.display();
+    tr!(
+        "error: `{contract}` を写す先の `proto/{rel}` は、`{rule}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。生成した `.proto` を写して契約にしたのなら、`{rule}` に `implements proto \"<ファイル>\" <サービス>` を書いてください。規則の `.proto` は生成せず、契約をそのまま写します",
+        "error: `{contract}` would be copied to `proto/{rel}`, the path of the `.proto` generated from `{rule}`, and the two differ, so nothing is generated. If the contract is a copy of a generated `.proto`, write `implements proto \"<file>\" <Service>` in `{rule}`: its own `.proto` is then not generated, and the contract is copied as it stands"
+    )
+}
+
 /// A rule of a run of `gen`, read: its text and what `prepare` made of it, once its check passed; or
 /// what the check found, which stops the run there; or nothing, when the file does not read.
 enum RuleRead {
@@ -15440,13 +15454,23 @@ fn read_rule(path: &str) -> RuleRead {
 fn dependencies_hold(files: &[&str], read: &[RuleRead]) -> Option<String> {
     let mut contracts: std::collections::BTreeMap<String, (String, std::path::PathBuf)> = std::collections::BTreeMap::new();
     let mut dependency_files: std::collections::BTreeMap<std::path::PathBuf, String> = std::collections::BTreeMap::new();
+    // Each rule's own `.proto`, by its path in the module, with its text and the rule (§15.274).
+    let mut own: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
     for (path, r) in files.iter().zip(read) {
         let RuleRead::Ready(src, fc) = r else { continue };
         let (f, c) = &**fc;
         if f.kind == FileKind::Enums {
             continue;
         }
-        let found = crate::codegen::Gen::new(f, c, src, path).proto_contracts();
+        let g = crate::codegen::Gen::new(f, c, src, path);
+        if f.implements.is_none() {
+            let (rel, body) = (g.proto_path(), g.proto());
+            if let Some((_, disk)) = contracts.get(&rel).filter(|(prev, disk)| *prev != body && ritsu_base::modules::under_dependency(disk)) {
+                return Some(contract_over_own(&rel, disk, path));
+            }
+            own.insert(rel, (body, path.to_string()));
+        }
+        let found = g.proto_contracts();
         if let Some((rel, a, b)) = &found.clash {
             return Some(contracts_clash(rel, a, b));
         }
@@ -15454,6 +15478,11 @@ fn dependencies_hold(files: &[&str], read: &[RuleRead]) -> Option<String> {
             return Some(contracts_two_names(file, a, b));
         }
         for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
+            if let Some((_, rule)) = own.get(&rel).filter(|(prev, _)| *prev != body)
+                && ritsu_base::modules::under_dependency(&disk)
+            {
+                return Some(contract_over_own(&rel, &disk, rule));
+            }
             match contracts.get(&rel) {
                 Some((prev, prev_disk)) if *prev != body => {
                     if ritsu_base::modules::under_dependency(prev_disk) || ritsu_base::modules::under_dependency(&disk) {
@@ -15509,6 +15538,9 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
     // The files of the dependencies copied so far, each by the name it was copied under: one file is
     // not copied under two names (ritsu's DESIGN 17.6).
     let mut dependency_files: std::collections::BTreeMap<std::path::PathBuf, String> = std::collections::BTreeMap::new();
+    // The rules' own `.proto` files written so far, with their text and the rule: a contract is not
+    // copied over one, nor one written over a contract (§15.274).
+    let mut own_protos: std::collections::BTreeMap<String, (String, String)> = std::collections::BTreeMap::new();
     // What the module needs from the BSR, over every rule of the run (§15.161).
     let mut module_deps = crate::codegen::BufDeps::default();
     // The modules of the `enums` files written so far, and the file each came from: two rules
@@ -15667,12 +15699,22 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         }
         // The wire of the rule as a service (§15.112). It is one file for every language,
         // not one per backend, so it is pushed here rather than from the registry: the
-        // `.proto` is the contract, and a contract does not come in twelve copies.
-        targets.push((format!("{out_dir}/proto/{}", g.proto_path()), g.proto()));
+        // `.proto` is the contract, and a contract does not come in twelve copies. A rule that
+        // implements a contract's service has none of its own: the contract is the `.proto`,
+        // copied below (§15.274).
+        if f.implements.is_none() {
+            let (p, body) = (format!("{out_dir}/proto/{}", g.proto_path()), g.proto());
+            if let Some((_, _, disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
+                let _ = writeln!(err, "{}", contract_over_own(&g.proto_path(), disk, path));
+                return if ritsu_base::modules::under_dependency(disk) { 2 } else { 1 };
+            }
+            own_protos.insert(p.clone(), (body.clone(), path.to_string()));
+            targets.push((p, body));
+        }
         // The contracts that `.proto` imports an enum from, so that the module builds as it
         // stands (§15.160): each the file `check` held the rule to, copied byte for byte to
-        // the path the import names. What they import from the BSR goes into the module's
-        // `buf.yaml` and `buf.lock`, written once below.
+        // the path the import names, and the contract the rule implements. What they import
+        // from the BSR goes into the module's `buf.yaml` and `buf.lock`, written once below.
         let found = g.proto_contracts();
         if let Some((rel, a, b)) = &found.clash {
             let _ = writeln!(err, "{}", contracts_clash(rel, a, b));
@@ -15688,6 +15730,11 @@ pub fn generate(files: &[&str], out_dir: &str, check_only: bool, json: bool, out
         }
         for ((rel, body), disk) in found.files.into_iter().zip(found.from) {
             let p = format!("{out_dir}/proto/{rel}");
+            // a contract that would be copied over a rule's own `.proto`, or under it
+            if let Some((_, rule)) = own_protos.get(&p).filter(|(prev, _)| *prev != body) {
+                let _ = writeln!(err, "{}", contract_over_own(&rel, &disk, rule));
+                return if ritsu_base::modules::under_dependency(&disk) { 2 } else { 1 };
+            }
             if let Some((_, from, prev_disk)) = contracts.get(&p).filter(|(prev, _, _)| *prev != body) {
                 // in a module of ritsu's, with a dependency's file among the two, the run stops as
                 // it does for one rule's (ritsu's DESIGN 17.6)

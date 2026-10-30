@@ -1,0 +1,8 @@
+エラー[E076]: 入力 `速達` が、契約の `QuoteRequest` にありません
+  --> tests/mutants/m_e076ja.rule:13
+   |
+13 |   速達(express) : bool                                     # 契約の QuoteRequest にこのフィールドは無い
+   |   ^^^^
+   |
+ `QuoteRequest` は contracts/member_shipping.proto の 22 行目にあります。
+ 契約の `QuoteRequest` に `optional bool express = <番号>;` を足してください。番号は、`QuoteRequest` のどのフィールドもまだ使ったことのないものにします。規則の名前と契約のフィールドは、別名で対応します。

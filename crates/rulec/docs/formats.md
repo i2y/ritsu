@@ -645,11 +645,18 @@ an input the door refuses and `contradiction` for the W114 guard, the `kind`s of
 The `connect` entry is the wire a caller writes by hand, without the stubs: the method's
 `path`, the two message names, and under `request_fields` and `response_fields` each field by
 the rule's own name (`name`), the name the message has it under (`field`, which the JSON writes
-in `json_names` form), its `number` there and its `type`. The numbers are the order the rule
-writes them in: the inputs from 1 and the sequences after them, the outputs from 1, and an
-element's fields from 1. protobuf's binary form sends a field by its number, not its name, so a
-field added in the middle moves the numbers of those after it, and a caller built on the old
-version reads one field as another: `ritsu mod diff` says so (ritsu's E310). `optional` is the
+in `json_names` form), its `number` there and its `type`. In the `.proto` `gen` writes for the
+rule, the numbers are the order the rule writes them in: the inputs from 1 and the sequences
+after them, the outputs from 1, and an element's fields from 1. protobuf's binary form sends a
+field by its number, not its name, so a field added in the middle moves the numbers of those
+after it, and a caller built on the old version reads one field as another: `ritsu mod diff`
+says so (ritsu's E310). A rule that implements a contract's service
+([reference §3.4](reference.md#34-implements--the-service-a-contract-declares)) is served as the
+contract says, and every name and number here is the contract's: the `proto` `gen` copies it to,
+the `package`, `service`, `method` and `path`, the messages, and each field's `number`, which
+stays where it is when the rule gains a value. `contract` names that file as the rule cites it
+(`file`) and where `gen` puts the copy (`proto`), and only such a rule has the key:
+`"contract":{"file":"../api/shop/v1/member_shipping.proto","proto":"proto/shop/v1/member_shipping.proto"}`. `optional` is the
 rule's `T?` — a value that may be absent — and not the `.proto`'s label, which every field a
 caller sends carries so that a field left out is refused rather than read as zero
 ([generated-code.md](generated-code.md#the-rule-as-a-connect-service)). A field whose type is

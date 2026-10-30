@@ -233,3 +233,63 @@ fn 承認者の資料が出どころを書く() {
     assert!(out.contains("order.proto") && out.contains("MemberTier"), "{out}");
     assert!(out.contains("E032"), "承認者は、他所が集合を変えうることを読む必要がある: {out}");
 }
+
+/// An enum declared inside a message is named with the message it is in (§15.274). The `.proto`
+/// rulec writes for the rule names it `shop.v1.Member.Tier`, which is the name buf resolves, and the
+/// service reads it from the class protobuf-py puts it in. It was named as if it were declared at the
+/// top of its file (`shop.v1.Tier`): `check` and `gen` passed, and the module did not build.
+#[test]
+fn 入れ子の列挙はメッセージの名前で引く() {
+    let (_t, d) = dir("nested");
+    std::fs::write(
+        d.join("member.proto"),
+        "syntax = \"proto3\";\npackage shop.v1;\nmessage Member {\n  enum Tier {\n    TIER_UNSPECIFIED = 0;\n    TIER_BASIC = 1;\n    TIER_GOLD = 2;\n  }\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("fee.rule"),
+        "rule fee(fee) v1\n\nenum tier = basic | gold\nimport proto \"member.proto\" Tier -> tier\n\n\
+         inputs\n  member : tier\n\noutputs\n  free : bool\n\ntable t\n| member | -> free |\n| basic  | false   |\n| gold   | true    |\n",
+    )
+    .unwrap();
+    let rule = d.join("fee.rule").to_string_lossy().into_owned();
+    let out = d.join("out").to_string_lossy().into_owned();
+    let (code, said) = run(&["gen", &rule, "--out", &out]);
+    assert_eq!(code, 0, "{said}");
+    let body = std::fs::read_to_string(d.join("out/proto/rulec/fee/v1/fee.proto")).unwrap();
+    assert!(body.contains("  optional shop.v1.Member.Tier member = 1;\n"), "{body}");
+    assert!(body.contains("import \"shop/v1/member.proto\";"), "{body}");
+    let svc = std::fs::read_to_string(d.join("out/python/fee_service.py")).unwrap();
+    assert!(svc.contains("shop_v1_member_pb.Member.Tier(1): m.Tier.BASIC,"), "{svc}");
+    let (code, api) = run(&["api", &rule]);
+    assert_eq!(code, 0, "{api}");
+    assert!(api.contains("\"type\":\"shop.v1.Member.Tier\""), "{api}");
+}
+
+/// A contract whose file name has a character other than a letter, a digit or `_` (§15.274): the
+/// plugin writes its stub as `member_tier_pb`, and the service reads that module. The service read
+/// `member-tier_pb`, which is not a name Python can import, and no Connect stage could start.
+#[test]
+fn 契約のファイルの名前の記号はstubの名前で下線になる() {
+    let (_t, d) = dir("hyphen");
+    std::fs::write(
+        d.join("member-tier.proto"),
+        "syntax = \"proto3\";\npackage shop.v1;\nenum Tier {\n  TIER_UNSPECIFIED = 0;\n  TIER_BASIC = 1;\n  TIER_GOLD = 2;\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        d.join("fee.rule"),
+        "rule fee(fee) v1\n\nenum tier = basic | gold\nimport proto \"member-tier.proto\" Tier -> tier\n\n\
+         inputs\n  member : tier\n\noutputs\n  free : bool\n\ntable t\n| member | -> free |\n| basic  | false   |\n| gold   | true    |\n",
+    )
+    .unwrap();
+    let rule = d.join("fee.rule").to_string_lossy().into_owned();
+    let out = d.join("out").to_string_lossy().into_owned();
+    let (code, said) = run(&["gen", &rule, "--out", &out]);
+    assert_eq!(code, 0, "{said}");
+    assert!(d.join("out/proto/shop/v1/member-tier.proto").exists(), "the contract keeps its name");
+    let svc = std::fs::read_to_string(d.join("out/python/fee_service.py")).unwrap();
+    assert!(svc.contains("from stubs.shop.v1 import member_tier_pb as shop_v1_member_tier_pb\n"), "{svc}");
+    assert!(svc.contains("shop_v1_member_tier_pb.Tier(1): m.Tier.BASIC,"), "{svc}");
+    assert!(!svc.contains("member-tier_pb"), "{svc}");
+}

@@ -283,14 +283,14 @@ skills/rulec/     an agent skill for using rulec — copy the folder into .claud
 ../../proofs/     the Lean 4 development, RulecCert in ritsu's one Lean package: what a table
                   means, the checks a certificate has to pass, the theorems that each check
                   settles its claim, and the re-checker
-src/              58 modules, and 12 more under codegen/
+src/              59 modules, and 12 more under codegen/
 tests/corpus/     143 rules, and the copies of the documents they cite
-tests/mutants/    216 files, each with one mistake planted in it
-tests/golden/     the diagnostic prose snapshot by snapshot: 96 in Japanese, 85 in English
+tests/mutants/    220 files, each with one mistake planted in it
+tests/golden/     the diagnostic prose snapshot by snapshot: 98 in Japanese, 87 in English
 tests/oracle/     two premium tables transcribed grade by grade from their published PDFs
 ```
 
-143 rules — 34 transcribed from a published source, 109 written to reach the rest of the language — are checked, generated and run on every commit, and all 138 diagnostics are implemented.
+143 rules — 34 transcribed from a published source, 109 written to reach the rest of the language — are checked, generated and run on every commit, and all 139 diagnostics are implemented.
 Those rules come from **public information**: Japan Post's tariff, Yamato's size classes, the coupon
 terms of Rakuten and Yahoo, Article 7 of EU Regulation 261/2004, the National Tax Agency's
 income-tax and stamp-duty tables, the Stamp Tax Act and the Special Taxation Measures Act as

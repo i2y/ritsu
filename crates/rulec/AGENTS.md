@@ -143,6 +143,7 @@ A few shapes are worth knowing before the first draft:
   jsonschema "<file>" "<pointer>" -> <enum>`, JSON Schema or OpenAPI in JSON) holds the rule's enum
   to a service contract on every `check`: a value on one side only is E032, and a value no row names
   and no `default` marks is E033, not W111 — it arrived as a change nobody has read yet.
+- **So may the service:** `implements proto "<file>" <Service>` takes a contract's numbers (E076, §3.4).
 - **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
   divisions (`std/us/states`, `std/jp/prefectures`, … in [docs/reference.md](docs/reference.md)); `import std/都道府県` spells Japan's in Japanese.
 - **Enums can be ordered, labelled, shared and given prerequisites.** `enum tier = basic < silver`
@@ -447,12 +448,11 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 | E126, `witness.trace` = cancel → pay → ship | "What happens to an order when a payment notice arrives after the cancellation? As the table stands it goes back to paid and on to shipped." |
 | A rounding you assumed | "This rounding has no basis in the terms. I have assumed rounding down for now. Is there a source?" |
 
-Three things make such a question answerable: **a concrete case** (the witness), **what turns
-on the answer** (the amount that moves), and **what you assumed in the meantime**, so that
-silence does not read as agreement. Keep that assumption in the file — a `#` comment where
-the declaration is, or, for an amount taken from outside the table's own source, at the end
-of its row. `rulec doc` shows those comments to its readers, the one place a person who can
-overrule them will see them.
+Three things make such a question answerable: **a concrete case** (the witness), **what turns on
+the answer** (the amount that moves), and **what you assumed in the meantime**, so that silence
+does not read as agreement. Keep that assumption in the file — a `#` comment where the declaration
+is, or, for an amount taken from outside the table's own source, at the end of its row. `rulec doc`
+shows those comments to its readers, the one place a person who can overrule them will see them.
 
 ---
 

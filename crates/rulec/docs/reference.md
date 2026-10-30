@@ -33,6 +33,7 @@ source <name> = law [<database>] "<law id>" asof <date>
 source <name> = file "<file>" [url "<url>"] sha256:<digest>
 shape <name>(<alias>) = jsonschema "<file>" "<pointer>"
 shape <name>(<alias>) = proto "<file>" <Message>
+implements proto "<file>" <Service>   (the Connect service the rule is served as, §3.4)
 enum   …
 group  …
 inputs
@@ -77,6 +78,8 @@ examples
 - `apply` is an item like `derive`, `define` and `table`: another rule file, applied with
   every one of its inputs bound to a value of this rule (§7, "Applying another rule"). The
   lines under it are indented by two spaces.
+- `implements` is one line whose place is not checked: it may stand wherever a line starts
+  outside every block, and is usually written under `rule` (§3.4).
 - `machine` names the table that decides the state it carries; `scenario` blocks follow it.
 - `examples` comes last. There may be more than one section of them (§9).
 
@@ -851,6 +854,150 @@ rule's own inputs. `rulec gen` names the seven and says why, and `rulec api` lis
 `projection.without`. **The path check applies to every target equally** — it happens in `check`,
 before anything is generated. `rulec api` lists the contracts, the path of every projected
 input, and the function in each language that reads them, under `projection`.
+
+## 3.4 implements — the service a contract declares
+
+```rule
+rule member_tier_shipping v1
+implements proto "../api/shop/v1/member_shipping.proto" MemberShippingService
+```
+
+A rule without this line is served as a Connect service of its own
+([generated-code.md](generated-code.md#the-rule-as-a-connect-service)): `gen` writes its `.proto`
+and numbers the fields in the order the rule declares the values, the inputs from 1 with the
+sequences after them and the outputs from 1. An input added in the middle moves every number
+after it, and protobuf's binary form carries the number rather than the name, so a caller built
+from the earlier `.proto` sends its values to the wrong fields (`ritsu mod diff` says so as E310).
+With the line, the names and the numbers are a contract's to keep: the `.proto` it names declares
+the service, and the rule is served as that service.
+
+The path is followed from the directory of the `.rule`, and the service is named by its name or
+by its name with the file's package (`shop.v1.MemberShippingService`). A rule has one such line
+(a second is E013), and an `enums` file (E066) and a contribution (E067) have none. `implements`
+is not reserved: under `inputs`, `implements : bool` is an input.
+
+**The service has the shape of the `.proto` `gen` would write for the rule**, field by field,
+each matched by the alias:
+
+| the rule's | the contract's |
+|---|---|
+| the service | one method, unary, with `option idempotency_level = NO_SIDE_EFFECTS;` |
+| an input | `optional <type> <alias>` in the request |
+| a sequence (§6.2) | `repeated <message> <alias>` in the request, whose message has `optional <type> <alias>` for each field of one element |
+| an output | `<type> <alias>` in the answer, and `optional <type> <alias>` for an output of `T?` |
+| the rows that answered | `repeated <message> trace` in the answer, whose message has `string table`, `int32 row` and `string label` and nothing else |
+
+The type is `bool` for a truth value, `string` for a date and a string, `int64` for every other
+number, and for an enum the very enum the rule reads with `import proto` (§3.1). Those are the
+only enums a rule that implements a contract sends, since the numbers of the values are the
+contract's too. The contract is proto3, and none of its fields has a `json_name`, stands in a
+`oneof` or is a `map`.
+
+**What may differ** is everything else a contract decides: the package; the names of the
+service, the method and the messages; the numbers and the order of the fields; comments,
+`reserved` and other options; the message a message is nested in, and the file it is declared
+in, which may be one the contract imports.
+
+This contract numbers the values its own way (two numbers of the request are `reserved`, and the
+answer's fields stand in another order):
+
+```proto
+syntax = "proto3";
+
+package shop.v1;
+
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_BASIC = 1;
+  TIER_SILVER = 2;
+  TIER_GOLD = 3;
+  TIER_PLATINUM = 7;
+}
+
+message FiredRow {
+  string table = 4;
+  int32 row = 1;
+  string label = 2;
+}
+
+message QuoteRequest {
+  optional Tier member = 2;
+  reserved 3, 4;
+  reserved "coupon";
+  optional int64 subtotal = 5;
+  optional Tier campaign = 9;
+}
+
+message QuoteResponse {
+  bool lifted = 7;
+  int64 shipping = 3;
+  Tier effective = 1;
+  repeated FiredRow trace = 15;
+}
+
+service MemberShippingService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+```
+
+and this rule implements its service as it stands, reading its tiers from it too:
+
+```rule
+rule member_tier_shipping v1
+implements proto "../api/shop/v1/member_shipping.proto" MemberShippingService
+description "Shipping by membership tier: gold and above ship free, and a campaign lifts a member to the campaign's tier for that order alone"
+
+# The tiers in order, lowest first: a cell compares against one (`>=gold`).
+enum tier = basic < silver < gold < platinum
+import proto "../api/shop/v1/member_shipping.proto" Tier -> tier
+
+inputs
+  member : tier                                 # the member's own tier
+  campaign : tier  range >=basic <=gold         # a campaign lifts a member as far as gold
+  subtotal : money[USD]  range >=0USD <=100000USD
+
+outputs
+  shipping : money[USD]  round down(1USD)
+  effective : tier
+  lifted : bool
+```
+
+What does not agree is **E076**, once for each thing: a name of the rule's is said at its
+declaration, and what only the contract has at the `implements` line. With an input the contract
+does not have yet (`express : bool` under `subtotal`, and a column for it in the table):
+
+```console
+$ rulec check rules/member_tier_shipping.rule
+error[E076]: The input `express` is not in the contract's `QuoteRequest`
+  --> rules/member_tier_shipping.rule:13
+   |
+13 |   express : bool
+   |   ^^^^^^^
+   |
+ `QuoteRequest` is on line 19 of ../api/shop/v1/member_shipping.proto.
+ Add `optional bool express = <number>;` to the contract's `QuoteRequest`, with a number no field of `QuoteRequest` has ever used. A name of the rule's goes by its alias in the contract.
+```
+
+Adding `optional bool express = 10;` to `QuoteRequest` is the fix, and the other fields keep their
+numbers: `rulec api` gives `member` 2, `campaign` 9, `subtotal` 5 and `express` 10. A file that
+cannot be read and a service it does not have are E013. A rule that does not pass its type checks
+is held to the contract once it does.
+
+`gen` writes no `.proto` of the rule's own. It copies the contract, byte for byte and with the
+files it imports, to the path its package gives it (`proto/shop/v1/member_shipping.proto`), and
+the service answers at the contract's path, `/shop.v1.MemberShippingService/Quote`. `rulec api`
+says the contract's names and numbers and names the file under `connect.contract`
+([formats.md](formats.md)); the page `rulec doc` renders says the inputs and outputs are the
+service's.
+
+The first contract can be the `.proto` `gen` wrote for the rule, copied to where the contracts
+are kept: it fits as it stands, and once the line names it, the path and every number stay what
+they were. A rule that reads an enum from such a copy before the line is written would have `gen`
+put the copy and its own `.proto` on one path; `gen` stops there and says to write the line.
+`gen` deletes nothing in its output directory, so the `.proto` it wrote under `proto/rulec/`
+before the line stays there, unless the copy has taken its path.
 
 ## 4. inputs and outputs
 
@@ -2669,8 +2816,9 @@ So are `prerequisites` — a line head outside every block, and a name inside on
 `nothing` and `ordered` (§6.5). So are the four words of §6.6: `chances`, a line head; `random`,
 read only at the end of an input's line; `take_weighted`, read only after the `->` of an arm; and
 `draw`, read only as `draw -> <name>` under a `fold` — `draw -> next` stays the arm of a verdict
-called `draw`. So are the words of §6.7: `combine` and `product`, read on an `open` line;
-`contribution` (a file's first line), `to`, `into` and `extend` (lines of a contribution file, as
-`after` is); and the pins `meaning:` and `signature:` (§6.7, §7).
+called `draw`. So is `implements`, a line head outside every block (§3.4) and a name inside
+one, as `implements : bool` under `inputs`. So are the words of §6.7: `combine` and `product`,
+read on an `open` line; `contribution` (a file's first line), `to`, `into` and `extend` (lines of a
+contribution file, as `after` is); and the pins `meaning:` and `signature:` (§6.7, §7).
 
 A test holds this table to `src/kw.rs`, which is the single place the vocabulary is defined.

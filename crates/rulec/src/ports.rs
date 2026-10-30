@@ -1053,10 +1053,11 @@ impl ritsu_ports::Items for Engine {
 impl ritsu_ports::References for Engine {
     /// The files a rule names: the `.proto` or JSON Schema an enum's values come from
     /// (`import proto`, `import jsonschema`), the `enums` file an enum is read from whole
-    /// (`import enum`, §15.212), the contract a `shape` reads its inputs out of, a
-    /// rule it applies (`apply`), a document a `source` copies (`source … file`), and the koyomi
-    /// date an input takes its days from (`range from koyomi`, §15.174). An enum or a message of
-    /// a `.proto` is named from the file's package.
+    /// (`import enum`, §15.212), the contract a `shape` reads its inputs out of, the contract
+    /// whose service the rule implements (`implements`, §15.274), a rule it applies (`apply`), a
+    /// document a `source` copies (`source … file`), and the koyomi date an input takes its days
+    /// from (`range from koyomi`, §15.174). An enum, a message or a service of a `.proto` is named
+    /// from the file's package.
     fn references(&self, root: &Path, file: &str) -> Result<Vec<Reference>, Vec<Said>> {
         let disk = ritsu_base::paths::on_disk(root, file);
         let (path, src) = read(&disk)?;
@@ -1092,6 +1093,11 @@ impl ritsu_ports::References for Engine {
                 crate::ast::EnumSource::JsonSchema => Naming::file(Tool::File, &p),
             };
             out.push(Reference { line: sh.span.line, target, how: "shape".into() });
+        }
+        if let Some(d) = &f.implements
+            && let Some(p) = from_root(root, file, &d.file)
+        {
+            out.push(Reference { line: d.span.line, target: Naming::file(Tool::Proto, &p).with("service", local(&p, &d.service)), how: "implements".into() });
         }
         for a in &f.applies {
             if let Some(p) = from_root(root, file, &a.path) {

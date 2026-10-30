@@ -447,6 +447,15 @@ pub fn render_named(f: &RuleFile, c: &Checked, src: &str, path: &str, shown: &st
                 .join(&tr!("、", ", "))
         ));
     }
+    // The contract the rule is served as (§15.274), said the way an imported enum's owner is.
+    if let Some(d) = &f.implements {
+        o.push_str(&tr!(
+            "\n入力と出力は `{0}` のサービス `{1}` に合わせてあり、Connect で呼ぶときの名前と番号はその契約のものです。`rulec check` が一致を確かめています（ずれていれば E076）。\n",
+            "\nThe inputs and outputs are those of the service `{1}` in `{0}`, and a Connect call uses that contract's names and numbers. `rulec check` holds the two together (E076 when they differ).\n",
+            md_esc(&d.file),
+            md_esc(&d.service)
+        ));
+    }
 
     // --- The sequence the rule walks, and the fields of one element (§15.56). A reader
     // who cannot see these is reading half the rule: the caller passes them too.

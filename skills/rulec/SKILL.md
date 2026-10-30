@@ -1,6 +1,6 @@
 ---
 name: rulec
-description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E075, E101-E140, W105, W110, W111, W114-W132, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
+description: Turn a table-shaped business rule into proved, dependency-free Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL and Wasm with rulec. Use when a shipping tariff, fee schedule, discount or coupon policy, eligibility test, period classification, or any rule that is already written as a table has to become code; when writing, editing or reviewing a `.rule` file; when a rulec diagnostic (E001-E076, E101-E140, W105, W110, W111, W114-W132, W901) has to be fixed; or when a change to such a rule has to be shown to a person before it ships.
 compatibility: Requires the `ritsu` binary on PATH (`cargo install --git https://github.com/i2y/ritsu --locked ritsu`); run rulec as `ritsu rulec <command>`, or as `rulec <command>` through a link to ritsu named for it.
 license: MIT OR Apache-2.0
 ---
@@ -172,6 +172,7 @@ A few shapes are worth knowing before the first draft:
   jsonschema "<file>" "<pointer>" -> <enum>`, JSON Schema or OpenAPI in JSON) holds the rule's enum
   to a service contract on every `check`: a value on one side only is E032, and a value no row names
   and no `default` marks is E033, not W111 — it arrived as a change nobody has read yet.
+- **So may the service:** `implements proto "<file>" <Service>` takes a contract's numbers (E076, §3.4).
 - **A place is an enum rulec has.** `import std/<country>/<kind>` brings in a country's first-level
   divisions (`std/us/states`, `std/jp/prefectures`, … in [reference.md](reference.md)); `import std/都道府県` spells Japan's in Japanese.
 - **Enums can be ordered, labelled, shared and given prerequisites.** `enum tier = basic < silver`
@@ -476,12 +477,11 @@ person can answer in a sentence. Convert the structured finding, not the prose.
 | E126, `witness.trace` = cancel → pay → ship | "What happens to an order when a payment notice arrives after the cancellation? As the table stands it goes back to paid and on to shipped." |
 | A rounding you assumed | "This rounding has no basis in the terms. I have assumed rounding down for now. Is there a source?" |
 
-Three things make such a question answerable: **a concrete case** (the witness), **what turns
-on the answer** (the amount that moves), and **what you assumed in the meantime**, so that
-silence does not read as agreement. Keep that assumption in the file — a `#` comment where
-the declaration is, or, for an amount taken from outside the table's own source, at the end
-of its row. `rulec doc` shows those comments to its readers, the one place a person who can
-overrule them will see them.
+Three things make such a question answerable: **a concrete case** (the witness), **what turns on
+the answer** (the amount that moves), and **what you assumed in the meantime**, so that silence
+does not read as agreement. Keep that assumption in the file — a `#` comment where the declaration
+is, or, for an amount taken from outside the table's own source, at the end of its row. `rulec doc`
+shows those comments to its readers, the one place a person who can overrule them will see them.
 
 ---
 

@@ -295,3 +295,8 @@ golden!(e033_added_value, "E033-added", "tests/mutants/m_e033add.rule", "E033");
 golden!(e040_signature, "E040-signature", "tests/mutants/m_e040sig.rule", "E040");
 golden!(e044_ring, "E044-ring", "tests/mutants/m_e044ring.rule", "E044");
 golden!(w132_idle_term, "W132", "tests/mutants/m_w132.rule", "W132");
+
+// The service a rule implements (§15.274): a value the contract does not have, and a service the
+// contract does not declare.
+golden!(e076_input_not_in_the_contract, "E076", "tests/mutants/m_e076.rule", "E076");
+golden!(e013_no_such_service, "E013-service", "tests/mutants/m_e013svc.rule", "E013");

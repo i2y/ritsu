@@ -1,0 +1,40 @@
+rule member_tier_shipping v1
+implements proto "contracts/member_shipping.proto" MemberShippingService
+description "Shipping by membership tier, with an express charge added to the rule and not to the contract it implements (E076)"
+
+# The tiers in order, lowest first: a cell compares against one (`>=gold`).
+enum tier = basic < silver < gold < platinum
+import proto "contracts/member_shipping.proto" Tier -> tier
+
+inputs
+  member : tier                                 # the member's own tier
+  campaign : tier  range >=basic <=gold         # a campaign lifts a member as far as gold
+  subtotal : money[USD]  range >=0USD <=100000USD
+  express : bool                                # the contract's QuoteRequest has no field for it
+
+outputs
+  shipping : money[USD]  round down(1USD)
+  effective : tier
+  lifted : bool
+
+# The order ships at the later of the two tiers.
+define effective : tier = max(member, campaign)
+define lifted : bool = campaign > member
+
+table shipping_fee
+policy unique
+| express | effective | subtotal | -> shipping |
+| true    | -         | -        | 12USD       |
+| false   | >=gold    | -        | 0USD        |
+| false   | silver    | >=50USD  | 0USD        |
+| false   | silver    | <50USD   | 5USD        |
+| false   | basic     | >=100USD | 0USD        |
+| false   | basic     | <100USD  | 8USD        |
+
+examples
+| member   | campaign | subtotal | express | -> shipping | effective | lifted |
+| platinum | basic    | 10USD    | false   | 0USD        | platinum  | false  |
+| basic    | gold     | 10USD    | false   | 0USD        | gold      | true   |
+| silver   | basic    | 60USD    | false   | 0USD        | silver    | false  |
+| silver   | silver   | 10USD    | false   | 5USD        | silver    | false  |
+| basic    | basic    | 99USD    | true    | 12USD       | basic     | false  |

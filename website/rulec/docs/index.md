@@ -326,7 +326,7 @@ Python, TypeScript, JavaScript, Rust, Ruby, PHP, Go, Swift, Java, SQL, Wasm, and
 </div>
 </div>
 
-**Twelve targets** · **138 diagnostics** · **143 rules checked, generated and run on every commit — 34 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
+**Twelve targets** · **139 diagnostics** · **143 rules checked, generated and run on every commit — 34 transcribed from a published source** · **no dependencies, no runtime** · **one binary** · **the checks are offline**
 
 ---
 
