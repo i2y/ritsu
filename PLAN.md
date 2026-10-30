@@ -2060,6 +2060,12 @@ ritsu の X4（DESIGN 7.6）は、規則の数の出力を振替の額に渡す�
 
 確かめたこと：dandori の `tests/ports.rs`（分けない形、分岐の中で渡す形、`fail` の分岐で止める形、`on failure` の中の振替ほかで、`calls` が言う呼び出しの行と渡しうる値。dandori の DESIGN 18.6）、rulec の `tests/ports.rs`（返却を外すと 30〜80、書いた範囲 −500〜500 の規則を `charge` に限ると 300〜350、`constraint` の外でしか届かない行が外れること、決められないと答える三つ。網羅：コーパスと試験の 97 本の規則の 647 の問いを、限った入力の全部を評価器に流して確かめ、385 の問いで入力の全部での範囲より狭かった）、ritsu-cross の `tests/borders.rs`、ritsu の `tests/cross.rs`（10 の形を足し、英日の golden を 6 本取り直して 20 本足した。分岐の中で渡す形、返却を `fail` で止める形、分岐の中で呼ぶ形、値を書いて渡す形、`asked` を 50 以上で渡す形は成り立ち、分岐に返却が残る形と、呼んだあとで別の値を入れる形は E203 のまま、同じ数を両方に渡す形は W203、別の値を入れてから渡す形は境目にならない）、ritsu-model の `tests/cross.rs`（X4 の額の突き合わせは 3,912 行、呼び出しの場所の 10 の形が Lean のモデルの判定と同じ）、`lake build`。替える前と後のバイナリで、木の 983 本の `.rule` の `rulec check`（JSON）と `certificate`、83 本の `.kn` の `ritsu kaname check`（JSON と日本語）、言語をまたぐファイルを持つ 162 のディレクトリの `ritsu check`（JSON と英日）、`ritsu explain --all`（英日）を比べ、変わったのは `crates/dandori/tests/flows` の日本語の W201 の注の 4 行（空白）と、`explain` の E203・W203 の文だけだった。木には、規則の出力を振替の額に渡すフローが無い。見つけて直していないもの：二つの入力を結ぶ `constraint` は、限っても出力の区間を狭めない（同じ数を両方に渡すフローは W203 のまま。rulec の §15.268）。dandori の検査は分岐で狭めない。呼び出しに渡した変数を別の変数に入れてから分けても、狭めない。ループの中で値を入れる変数はたどらない。
 
+### 7.76 rulec の入れ方の出力を 0.38.0 で取り直す（2026-10-30）
+
+rulec の README、`AGENTS.md`（とスキルのコピー）、入れ方のページ（英日）、`experiments/library/` の CI の見本は、0.25.0 の出力と `uses: i2y/ritsu@v0.25.0`（15 か所）のままで、ページのとおりに書くと 0.25.0 が入った。0.38.0 のリリースの実物で取り直した（rulec の DESIGN §15.186 の 2026-10-30 の段落）。アーカイブ（macOS の arm64）は、ページのコマンドで落として `SHA256SUMS` と突き合わせ、使い捨ての HOME に展開した。`.deb` と `.rpm` は、Debian 13 と Fedora 43 のコンテナで突き合わせ、`apt install` と `dnf install` まで走らせた。Homebrew は 7.0.11 で四つの場合（何も無いところへ入れる、古い名前、rulec 0.22.1 からの `brew migrate` と `brew trust`）を Linux のコンテナで走らせ、どれも `rulec 0.38.0` になった。macOS 27 の上の Xcode 26.2 では、7.0.11 が tap の formula を入れる段で止まるためで、macOS で入れることはリリースのワークフローの `homebrew` の段が確かめている。ページのアーカイブのリンクの並びに、抜けていた `kaname` を足した。
+
+確かめたこと：文書を読むテスト（rulec の `docs`・`mcp`・`readme`・`skill`・`website`・`library`、ritsu の `release`・`readme`・`sekisho`・`skill`・`website`）が全部通った。SKIP の行は 0 だった。
+
 ## 8. モジュール（2026-10-28）
 
 DESIGN 17 章を仕様として、モジュールの仕組みを段階 B〜G で作り、G のあとの段階 I で、依存の取り先に git のリポジトリを足す。この章の B〜G と I は、モジュールの段階である（2〜6 章の B〜F とは別）。ほかの章から指すときは「8 章の B.3」と書く。A（設計）は、DESIGN 17 章とこの章を書いたところで終えた。コードは書いていない。
