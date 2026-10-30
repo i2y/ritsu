@@ -340,6 +340,26 @@ pub trait Rules {
     /// reaches, when the date input `input` takes only the days in `days` (DESIGN 7.5 (b), X3).
     fn checked_over(&self, rule: &Path, input: &str, days: &crate::DaySet) -> Result<Answer<Text>, Vec<Said>>;
 
+    /// What `output_values` answers for a numeric output when the inputs named in `ranges` are
+    /// held to them, as `outputs_over` takes them (the integers on the wire, an enum by the places
+    /// of its values, a bool as 0 and 1, an input named more than once taking the values of each),
+    /// and every other input takes its whole range (DESIGN 7.6, X4: what a flow can give the call
+    /// whose output it gives a transfer). With no input held to less than the rule declares, it is
+    /// `output_values`'s answer. Otherwise the fewest and the most are what decides the output can
+    /// come to there (not a range written on the output's line, which is said of every input), the
+    /// numbers are those of the rows an input there may reach, and the examples are inputs inside
+    /// the ranges from the rule's vectors, taken as `output_values` takes them. Undecided with the
+    /// reason where no input is inside the ranges, or where a vector inside them comes to a value
+    /// outside what the analysis says. The default decides nothing, for a port that does not
+    /// analyse rules.
+    fn output_values_over(&self, rule: &Path, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<crate::Found<OutputValues>, Vec<Said>> {
+        let _ = (rule, output, ranges);
+        Ok(crate::Found::Undecided(ritsu_base::tr!(
+            "この口は、入力を範囲に限ったときに数の出力がとる値を答えません",
+            "this port does not say what a numeric output comes to over ranges of the inputs"
+        )))
+    }
+
     /// The range a date input declares, as day numbers (DESIGN 7.5 (a), X3): both ends, or None
     /// at an open one; for an input whose range is a koyomi date, the hull of its days. The
     /// default answers nothing known, for a port that does not read ranges of dates.

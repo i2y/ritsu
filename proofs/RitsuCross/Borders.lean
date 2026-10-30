@@ -8,19 +8,22 @@
     dates, each of whose days koyomi counts exactly, or come from somewhere that says nothing of
     what day it is. The example is the first day outside, of the first koyomi date that has one.
   - `amountFits`, `amountsGiven` (X4): every amount a value can be is one chobo takes, 0 to
-    2⁶³ − 1: the outputs of rules (their fewest and most, as rulec counts them) and the numbers
-    dandori knows the range of. `amountsHull` is what chobo's search for the refusals is held to.
+    2⁶³ − 1: the outputs of rules (their fewest and most, as rulec counts them; where dandori
+    follows a workflow's call of the rule to the transfer, over the values the flow can give the
+    rule in that call) and the numbers dandori knows the range of. `amountsHull` is what chobo's
+    search for the refusals is held to.
   - `refusalsMet` (X4): the refusals chobo's search finds that turn on the amounts (the reasons of
     the book's bounds) against the errors the task handles.
   - `heldUntil` (X5): a hold is still held when a call on it comes, from the fewest and the most
     seconds the call can come after the hold, against the seconds it expires after.
 
   Each is written as `borders.rs` writes it, and each theorem below says what an answer settles.
-  An example of `amountFits` is always one rulec gives, an input from the rule's vectors
-  (`amountFits_fails`, `amountFits_undecided`): rulec counts an output's range from above, so an
-  end of it need not be an amount the output comes to. rulec's examples hold the fewest and the
-  most amounts its vectors come to (rulec's DESIGN §15.270), so an output left undecided is one no
-  input from the vectors makes an amount chobo does not take.
+  An example of `amountFits` is always one rulec gives, an input from the rule's vectors, and
+  where the call is followed to the transfer, one among the values the flow can give the rule in
+  that call (`amountFits_fails`, `amountFits_undecided`): rulec counts an output's range from
+  above, so an end of it need not be an amount the output comes to. rulec's examples hold the
+  fewest and the most amounts its vectors come to (rulec's DESIGN §15.270), so an output left
+  undecided is one no input from the vectors makes an amount chobo does not take.
   `amountFits_chobo_takes` and `amountFits_fails_chobo` tie X4 to `ChoboModel` (an amount the check
   lets through is one chobo's interpreter takes, and the amount it gives as an example is one the
   interpreter does not take), and
@@ -168,7 +171,10 @@ def maxAmount : Int := 9223372036854775807
     and its most, every number its rows write when each writes one, and for some of the values it
     comes to — the ends of its range, the numbers its rows write, the fewest and the most its
     vectors come to (rulec's DESIGN §15.270) — an input from the rule's vectors that comes to it
-    (`α`, which this check only hands on). -/
+    (`α`, which this check only hands on). Where dandori follows a workflow's call of the rule to
+    the transfer, all of it is counted over the values the flow can give the rule in that call
+    (`Rules::output_values_over`, rulec's DESIGN §15.273), and an example is an input among them;
+    the decisions below read only what is here, so they are the same either way. -/
 structure OutputValues (α : Type) where
   min : Option Int
   max : Option Int

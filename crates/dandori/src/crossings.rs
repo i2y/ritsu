@@ -8,6 +8,11 @@
 //! of a rule are known by the record they are read from (`due.day`, `fee.amount`), whose type says
 //! which date or rule answered it.
 //!
+//! The calls of rules whose outputs an amount given to a transfer can be (ritsu's X4) are gathered
+//! along the runs through the flow instead (`Answers`): the calls whose answers the runs that reach
+//! the transfer carry to it, and what those runs can give each call, less what the arms of a
+//! `match` before the transfer leave out.
+//!
 //! How long a hold is held is gathered along the ways through the flow, as seconds since the hold
 //! was made, the fewest and the most:
 //!
@@ -52,8 +57,8 @@
 
 use crate::diag::Text;
 use crate::model::*;
-use ritsu_ports::{seconds_text, Amount, CallArg, Crossings, DateCall as PortDate, Found, HoldSpan, Origin, RuleCall, TransferCall};
-use std::collections::BTreeMap;
+use ritsu_ports::{seconds_text, Amount, CallArg, CallInput, Crossings, DateCall as PortDate, Found, Held as PortHeld, HoldSpan, Origin, OutputCall, RuleCall, TransferCall};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Where a value can come from, by the model's own indices.
 #[derive(Clone, Debug, PartialEq)]
@@ -186,6 +191,7 @@ pub fn of(m: &Model) -> Crossings {
     let vars = variables(m);
     let ranges = crate::ranges::variables(m);
     let from = |e: &TExpr| origins(m, &vars, e).iter().map(|f| port(m, f)).collect::<Vec<_>>();
+    let answered = Answers::of(m, &vars, &ranges);
     let mut out = Crossings::default();
     for s in m.all_stmts() {
         let TK::Call { callee, args, .. } = &s.kind else { continue };
@@ -214,7 +220,16 @@ pub fn of(m: &Model) -> Crossings {
                 let Some(op) = task.book() else { continue };
                 let book = &m.books[op.book];
                 let Some(tr) = book.transfer(&op.transfer) else { continue };
-                let amounts = tr.params.iter().filter(|p| p.unit.is_some()).filter_map(|p| args.iter().find(|(n, _)| *n == p.name).map(|(_, e)| Amount { param: p.name.clone(), shown: e.show(), from: from(e) })).collect();
+                let amounts = tr
+                    .params
+                    .iter()
+                    .filter(|p| p.unit.is_some())
+                    .filter_map(|p| {
+                        let (_, e) = args.iter().find(|(n, _)| *n == p.name)?;
+                        let calls = answered.get(&(s.site, p.name.clone())).cloned().flatten();
+                        Some(Amount { param: p.name.clone(), shown: e.show(), from: from(e), calls })
+                    })
+                    .collect();
                 out.transfers.push(TransferCall {
                     line: s.line,
                     book: book.path.clone(),
@@ -869,4 +884,525 @@ fn until_open(line: usize) -> Text {
 
 fn until_open_of(line: usize, shown: &str) -> Text {
     tr!("{line} 行目の `wait until {shown}` がいつまで待つかに上限がありません", "nothing bounds how long the wait until `{shown}` (line {line}) waits")
+}
+
+/// What a call of a rule gives one of its inputs, as the runs to a point of the flow see it (X4).
+#[derive(Clone, Debug, PartialEq)]
+struct Given {
+    input: String,
+    shown: String,
+    /// for an enum or a bool: the values it can be, and every value the rule's input takes, by the
+    /// rule's names and in its order (a bool: `false`, `true`)
+    values: Option<(Vec<String>, Vec<String>)>,
+    /// for a number: the range on the wire, when it is less than the rule's input takes
+    range: Option<(Option<i128>, Option<i128>)>,
+    /// the variable or the field it was read from (`kind`, `order.kind`), while nothing puts
+    /// another value in it
+    key: Option<String>,
+}
+
+/// A call of a rule, as the runs to a point of the flow see it.
+#[derive(Clone, Debug, PartialEq)]
+struct Asked {
+    line: usize,
+    rule: usize,
+    inputs: Vec<Given>,
+}
+
+/// What is known at a point of the flow of the calls of rules it has made, on the runs that reach it.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Facts {
+    /// what a value a `match` has read (`kind`, `order.kind`) can be here, as dandori's check of a
+    /// `match` holds it (`flow.rs`)
+    narrow: BTreeMap<String, Vec<String>>,
+    /// the calls of rules these runs have made, by the site of the statement
+    calls: BTreeMap<usize, Asked>,
+    /// for a variable that holds the answer of a rule: the calls whose answer it can hold; None
+    /// where the walk does not follow it
+    answers: BTreeMap<String, Option<BTreeSet<usize>>>,
+    /// for a variable: the outputs of calls it can hold, with the output's name (none, where these
+    /// runs give it no rule's output); None where the walk does not follow it
+    outs: BTreeMap<String, Option<BTreeSet<(usize, String)>>>,
+}
+
+/// Whether `key` (`order.kind`) reads the variable `name` (`order`).
+fn rooted(key: &str, name: &str) -> bool {
+    key == name || key.strip_prefix(name).is_some_and(|rest| rest.starts_with('.'))
+}
+
+impl Facts {
+    /// `name` is given another value: what a `match` said of it no longer holds, and a `match`
+    /// on it no longer says what a call was given.
+    fn forget(&mut self, name: &str) {
+        self.narrow.retain(|k, _| !rooted(k, name));
+        for c in self.calls.values_mut() {
+            for g in &mut c.inputs {
+                if g.key.as_deref().is_some_and(|k| rooted(k, name)) {
+                    g.key = None;
+                }
+            }
+        }
+    }
+
+    /// `name` is given a value the walk does not follow.
+    fn lose(&mut self, name: &str) {
+        self.forget(name);
+        self.answers.insert(name.to_string(), None);
+        self.outs.insert(name.to_string(), None);
+    }
+
+    /// Inside the arm of a `match` on `key` for the values `here`: a call `key` was given to was
+    /// given one of them, and a call that was given none of them was not made on these runs.
+    fn narrow_to(&mut self, key: &str, here: &[String]) {
+        self.narrow.insert(key.to_string(), here.to_vec());
+        let mut gone = BTreeSet::new();
+        for (site, c) in &mut self.calls {
+            for g in &mut c.inputs {
+                if let (Some(k), Some((vals, _))) = (&g.key, &mut g.values) {
+                    if k == key {
+                        vals.retain(|v| here.contains(v));
+                        if vals.is_empty() {
+                            gone.insert(*site);
+                        }
+                    }
+                }
+            }
+        }
+        if !gone.is_empty() {
+            self.calls.retain(|s, _| !gone.contains(s));
+            for set in self.answers.values_mut().flatten() {
+                set.retain(|s| !gone.contains(s));
+            }
+            for set in self.outs.values_mut().flatten() {
+                set.retain(|(s, _)| !gone.contains(s));
+            }
+        }
+    }
+}
+
+/// The runs of `a` and of `b`, joined: a value a `match` read on both is one of the values either
+/// says; a call made on either was given what either gave it, and is still tied to a variable
+/// only where both say so; a variable holds what it holds on either (one a run does not give a
+/// value to is not read after, dandori's E012), and is not followed where either does not.
+fn join_facts(a: Option<Facts>, b: Option<Facts>) -> Option<Facts> {
+    let (a, b) = match (a, b) {
+        (Some(a), Some(b)) => (a, b),
+        (x, None) | (None, x) => return x,
+    };
+    let narrow = a
+        .narrow
+        .iter()
+        .filter_map(|(k, x)| {
+            let y = b.narrow.get(k)?;
+            Some((k.clone(), x.iter().chain(y.iter().filter(|v| !x.contains(v))).cloned().collect()))
+        })
+        .collect();
+    let mut calls = a.calls;
+    for (site, y) in b.calls {
+        match calls.get_mut(&site) {
+            None => {
+                calls.insert(site, y);
+            }
+            Some(x) => {
+                for (g, h) in x.inputs.iter_mut().zip(&y.inputs) {
+                    if g.key != h.key {
+                        g.key = None;
+                    }
+                    if let (Some((vals, full)), Some((more, _))) = (&mut g.values, &h.values) {
+                        *vals = full.iter().filter(|v| vals.contains(v) || more.contains(v)).cloned().collect();
+                    }
+                }
+            }
+        }
+    }
+    fn union<T: Ord>(a: BTreeMap<String, Option<BTreeSet<T>>>, b: BTreeMap<String, Option<BTreeSet<T>>>) -> BTreeMap<String, Option<BTreeSet<T>>> {
+        let mut out = a;
+        for (k, y) in b {
+            match out.remove(&k) {
+                None => out.insert(k, y),
+                Some(Some(mut x)) => match y {
+                    Some(y) => {
+                        x.extend(y);
+                        out.insert(k, Some(x))
+                    }
+                    None => out.insert(k, None),
+                },
+                Some(None) => out.insert(k, None),
+            };
+        }
+        out
+    }
+    Some(Facts { narrow, calls, answers: union(a.answers, b.answers), outs: union(a.outs, b.outs) })
+}
+
+/// The range `r` a number can be in, met with the range `rule` the rule's input takes, when that is
+/// less than the input takes; None when it is all of it.
+fn less(r: Range, rule: Option<Range>) -> Option<(Option<i128>, Option<i128>)> {
+    let (rlo, rhi) = rule.map_or((None, None), |x| (x.lo, x.hi));
+    let lo = match (r.lo, rlo) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (a, b) => a.or(b),
+    };
+    let hi = match (r.hi, rhi) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    };
+    ((lo, hi) != (rlo, rhi)).then_some((lo.map(i128::from), hi.map(i128::from)))
+}
+
+/// The walk of the runs through a flow, for X4: for each amount a transfer is given that can be a
+/// rule's output, the calls whose outputs it can be on the runs that reach the transfer, and what
+/// those runs can give each call (ritsu's DESIGN 7.6, dandori's DESIGN 18).
+///
+/// - A number a call gives is held to the range dandori gives the call for X2, the same on every
+///   run. A value of an enum or a bool read from a variable or a field is held to what the places
+///   it comes from let in, less what the arms of a `match` on it before the call leave out; one
+///   written out, to itself.
+/// - Inside an arm of a `match` on a variable or a field, a call given it before was given one of
+///   the arm's values, while nothing has put another value in it since; a call given none of
+///   them was not made on the runs through the arm. A `match` on a case's state says nothing of it.
+/// - The arms of a `match` and the handlers of a call are joined; an arm that ends in `fail`,
+///   `succeed` or `break` is not. A handler starts from the runs before the call, which gives its
+///   variable no value when it fails.
+/// - A loop is walked once, with every variable it gives a value not followed; after it, the runs
+///   are those before it with the same not followed.
+/// - `on failure` and `on cancel` start from every point a failure or a cancellation can stop the
+///   run: each call and each wait, in the flow and, for `on cancel`, in `on failure` too. A `fail`
+///   and a failed check end the run without either.
+/// - An amount the walk does not follow (a variable given a value in a loop, a statement no run
+///   reaches) says nothing, and X4 counts the outputs it can be over every input of their rules.
+struct Answers<'a> {
+    m: &'a Model,
+    /// where each variable can come from, anywhere in the flow
+    vars: &'a BTreeMap<String, Vec<From>>,
+    /// what dandori knows each variable can be, anywhere in the flow (`ranges::variables`)
+    ranges: &'a BTreeMap<String, crate::ranges::Est>,
+    /// what the places each variable's values come from hold them to, as dandori's check of a
+    /// `match` reads them (`ranges::held`)
+    held: BTreeMap<String, crate::ranges::Est>,
+    /// the runs as they can be at a point where a failure or a cancellation can stop them
+    stops: Option<Facts>,
+    /// for each amount (the site of the transfer's statement, the parameter): the calls whose
+    /// outputs it can be; None where the walk does not follow it
+    found: BTreeMap<(usize, String), Option<Vec<OutputCall>>>,
+}
+
+impl<'a> Answers<'a> {
+    fn of(m: &'a Model, vars: &'a BTreeMap<String, Vec<From>>, ranges: &'a BTreeMap<String, crate::ranges::Est>) -> BTreeMap<(usize, String), Option<Vec<OutputCall>>> {
+        let mut w = Answers { m, vars, ranges, held: BTreeMap::new(), stops: None, found: BTreeMap::new() };
+        // a flow that never gives a transfer a rule's output is not walked
+        let any = m.all_stmts().iter().any(|s| match &s.kind {
+            TK::Call { callee: Callee::Task(t), args, .. } => {
+                let amounts = w.amounts(*t);
+                args.iter().any(|(p, e)| amounts.contains(p) && w.from_output(e))
+            }
+            _ => false,
+        });
+        if !any {
+            return BTreeMap::new();
+        }
+        w.held = crate::ranges::held(m);
+        let mut start = Facts::default();
+        for (n, t) in &m.inputs {
+            // an input is no rule's output
+            start.outs.insert(n.clone(), Some(BTreeSet::new()));
+            if matches!(t.inner(), Ty::Record(_)) {
+                start.answers.insert(n.clone(), None);
+            }
+        }
+        w.block(&m.flow, Some(start));
+        // `on failure` runs from where a failure stopped the flow, and `on cancel` from where a
+        // cancellation stopped it, in the flow or in `on failure`
+        if let Some(block) = &m.on_failure {
+            let entry = w.stops.clone();
+            w.block(block, entry);
+        }
+        if let Some(block) = &m.on_cancel {
+            let entry = w.stops.clone();
+            w.block(block, entry);
+        }
+        w.found
+    }
+
+    /// The parameters of the transfer the task `t` runs that are amounts.
+    fn amounts(&self, t: usize) -> Vec<String> {
+        let Some(op) = self.m.tasks[t].book() else { return vec![] };
+        self.m.books[op.book].transfer(&op.transfer).map(|tr| tr.params.iter().filter(|p| p.unit.is_some()).map(|p| p.name.clone()).collect()).unwrap_or_default()
+    }
+
+    /// Whether `e` can be a rule's output on some run, as the flow's places say (`origins`).
+    fn from_output(&self, e: &TExpr) -> bool {
+        origins(self.m, self.vars, e).iter().any(|f| matches!(f, From::Output(..)))
+    }
+
+    /// The outputs of calls the value `e` can be on these runs: none when it can be no rule's
+    /// output anywhere; None where the walk does not follow it.
+    fn outputs(&self, st: &Facts, e: &TExpr) -> Option<BTreeSet<(usize, String)>> {
+        if !self.from_output(e) {
+            return Some(BTreeSet::new());
+        }
+        match e {
+            TExpr::Var { name, fields, .. } if fields.len() == 1 => st.answers.get(name).cloned().flatten().map(|calls| calls.into_iter().map(|c| (c, fields[0].clone())).collect()),
+            TExpr::Var { name, fields, .. } if fields.is_empty() => st.outs.get(name).cloned().flatten(),
+            _ => None,
+        }
+    }
+
+    /// Whether `name.fields` is the state of a case, which a `match` reads apart.
+    fn case_state(&self, name: &str, fields: &[String]) -> bool {
+        self.m.case_index(name).is_some_and(|c| fields.len() == 1 && self.m.cases[c].state_field == fields[0])
+    }
+
+    /// What the call of the rule `r` on `line` gives its inputs, on these runs.
+    fn asked(&self, st: &Facts, r: usize, args: &[(String, TExpr)], line: usize) -> Asked {
+        let m = self.m;
+        let inputs = args
+            .iter()
+            .map(|(p, e)| {
+                let key = match e {
+                    TExpr::Var { name, fields, .. } if !self.case_state(name, fields) => Some(std::iter::once(name.clone()).chain(fields.iter().cloned()).collect::<Vec<_>>().join(".")),
+                    _ => None,
+                };
+                let narrowed = |all: Vec<String>| -> Vec<String> {
+                    match key.as_ref().and_then(|k| st.narrow.get(k)) {
+                        Some(n) => all.into_iter().filter(|v| n.contains(v)).collect(),
+                        None => all,
+                    }
+                };
+                let mut g = Given { input: p.clone(), shown: e.show(), values: None, range: None, key: None };
+                match e.ty() {
+                    Ty::Enum(en) => {
+                        let full: Vec<String> = m.rule_input_values(r, p).map(<[String]>::to_vec).unwrap_or_else(|| m.enums[en].values.clone());
+                        let can = match e {
+                            TExpr::Enum(v, _) => vec![v.clone()],
+                            _ => narrowed(crate::ranges::held_values(m, &self.held, e).unwrap_or_else(|| m.enums[en].values.clone())),
+                        };
+                        g.values = Some((full.iter().filter(|v| can.contains(v)).cloned().collect(), full));
+                        g.key = key.clone();
+                    }
+                    Ty::Bool => {
+                        let full = vec!["false".to_string(), "true".to_string()];
+                        let can = match e {
+                            TExpr::Bool(b) => vec![b.to_string()],
+                            _ => narrowed(full.clone()),
+                        };
+                        g.values = Some((full.iter().filter(|v| can.contains(v)).cloned().collect(), full));
+                        g.key = key.clone();
+                    }
+                    Ty::Int | Ty::Num(_) => {
+                        let est = crate::ranges::estimate(m, self.ranges, e);
+                        if est.unknown.is_none() {
+                            g.range = est.known.and_then(|k| less(k, m.rule_input_range(r, p)));
+                        }
+                    }
+                    _ => {}
+                }
+                g
+            })
+            .collect();
+        Asked { line, rule: r, inputs }
+    }
+
+    /// The calls `outs` names, as the port says them, in the order of their lines; None when one
+    /// is not among the calls these runs made (which the walk keeps from happening).
+    fn port_calls(&self, st: &Facts, outs: &BTreeSet<(usize, String)>) -> Option<Vec<OutputCall>> {
+        let mut out = Vec::new();
+        for (site, output) in outs {
+            let c = st.calls.get(site)?;
+            out.push(OutputCall {
+                line: c.line,
+                rule: self.m.rules[c.rule].info.path.clone(),
+                output: output.clone(),
+                inputs: c
+                    .inputs
+                    .iter()
+                    .map(|g| CallInput {
+                        input: g.input.clone(),
+                        shown: g.shown.clone(),
+                        held: match (&g.values, g.range) {
+                            (Some((vals, full)), _) => (vals.len() < full.len()).then(|| PortHeld::Values(vals.clone())),
+                            (None, Some((lo, hi))) => Some(PortHeld::Range(lo, hi)),
+                            (None, None) => None,
+                        },
+                        matchable: g.values.is_some() && g.key.is_some(),
+                    })
+                    .collect(),
+            });
+        }
+        out.sort_by(|a, b| (a.line, &a.output).cmp(&(b.line, &b.output)));
+        Some(out)
+    }
+
+    /// A failure or a cancellation can stop the run here.
+    fn stoppable(&mut self, st: &Facts) {
+        self.stops = join_facts(self.stops.take(), Some(st.clone()));
+    }
+
+    fn block(&mut self, stmts: &[TStmt], mut st: Option<Facts>) -> Option<Facts> {
+        for s in stmts {
+            st = self.stmt(s, st?);
+        }
+        st
+    }
+
+    fn stmt(&mut self, s: &TStmt, mut st: Facts) -> Option<Facts> {
+        match &s.kind {
+            TK::Call { target, callee, args, handlers } => {
+                // the call can fail before it gives its variable a value, and a case it writes
+                // may have heard of it
+                let mut stop = st.clone();
+                if let Some(Target::Case(c)) = target {
+                    let name = self.m.cases[*c].name.clone();
+                    stop.lose(&name);
+                }
+                self.stoppable(&stop);
+                let before = st.clone();
+                if let Callee::Task(t) = callee {
+                    let amounts = self.amounts(*t);
+                    for (p, e) in args.iter().filter(|(p, _)| amounts.contains(p)) {
+                        let calls = self.outputs(&st, e).and_then(|o| self.port_calls(&st, &o));
+                        let key = (s.site, p.clone());
+                        let joined = match (self.found.remove(&key), calls) {
+                            (None, c) => c,
+                            (Some(Some(mut a)), Some(b)) => {
+                                a.extend(b);
+                                Some(a)
+                            }
+                            _ => None,
+                        };
+                        self.found.insert(key, joined);
+                    }
+                }
+                match (target, callee) {
+                    (Some(Target::Let(x)), Callee::Rule(r)) if self.m.rules[*r].is_rule() => {
+                        let asked = self.asked(&st, *r, args, s.line);
+                        st.calls.insert(s.site, asked);
+                        st.forget(x);
+                        st.answers.insert(x.clone(), Some(BTreeSet::from([s.site])));
+                        st.outs.insert(x.clone(), Some(BTreeSet::new()));
+                    }
+                    (Some(Target::Let(x)), Callee::Rule(_)) => st.lose(x),
+                    (Some(Target::Let(x)), Callee::Task(_)) => {
+                        // a task's answer is no rule's output
+                        st.forget(x);
+                        st.answers.insert(x.clone(), None);
+                        st.outs.insert(x.clone(), Some(BTreeSet::new()));
+                    }
+                    (Some(Target::Case(c)), _) => {
+                        let name = self.m.cases[*c].name.clone();
+                        st.lose(&name);
+                    }
+                    (None, _) => {}
+                }
+                let mut out = Some(st);
+                for h in handlers {
+                    let mut entry = before.clone();
+                    if let Some(Target::Case(c)) = target {
+                        let name = self.m.cases[*c].name.clone();
+                        entry.lose(&name);
+                    }
+                    let end = self.block(&h.body, Some(entry));
+                    out = join_facts(out, end);
+                }
+                out
+            }
+            TK::Assign { name, expr } => {
+                let answers = match expr {
+                    TExpr::Var { name: from, fields, .. } if fields.is_empty() => st.answers.get(from).cloned().flatten(),
+                    _ => None,
+                };
+                let outs = self.outputs(&st, expr);
+                st.forget(name);
+                st.answers.insert(name.clone(), answers);
+                st.outs.insert(name.clone(), outs);
+                Some(st)
+            }
+            TK::Match { expr, arms } => {
+                let key = match expr {
+                    TExpr::Var { name, fields, .. } if !self.case_state(name, fields) => std::iter::once(name.clone()).chain(fields.iter().cloned()).collect::<Vec<_>>().join("."),
+                    _ => String::new(),
+                };
+                // what the value can be here, as dandori's check of a `match` counts it
+                let ety = expr.ty();
+                let held = if key.is_empty() && matches!(expr, TExpr::Var { .. }) { None } else { crate::ranges::held_values(self.m, &self.held, expr) };
+                let mut domain: Vec<String> = match (ety.inner(), &held) {
+                    (Ty::Enum(_), Some(values)) => values.clone(),
+                    (Ty::Enum(e), None) => self.m.enums[*e].values.clone(),
+                    (Ty::Bool, _) => vec!["true".into(), "false".into()],
+                    _ => vec![],
+                };
+                let some_values: Vec<String> = if domain.is_empty() { vec!["some".into()] } else { domain.clone() };
+                if matches!(ety, Ty::Opt(_)) {
+                    if domain.is_empty() {
+                        domain.push("some".into());
+                    }
+                    domain.push("none".into());
+                }
+                let possible = st.narrow.get(&key).cloned().unwrap_or(domain);
+                let mut out = None;
+                for a in arms {
+                    let mut inner = st.clone();
+                    if let Some(x) = &a.some {
+                        inner.lose(x);
+                    }
+                    if !key.is_empty() {
+                        let mut vals = a.values.clone();
+                        if a.none {
+                            vals.push("none".into());
+                        }
+                        if a.some.is_some() {
+                            vals.extend(some_values.iter().cloned());
+                        }
+                        let here: Vec<String> = vals.into_iter().filter(|v| possible.contains(v)).collect();
+                        if !here.is_empty() {
+                            inner.narrow_to(&key, &here);
+                        }
+                    }
+                    let end = self.block(&a.body, Some(inner));
+                    out = join_facts(out, end);
+                }
+                out
+            }
+            TK::Wait { .. } | TK::WaitUntil { .. } => {
+                self.stoppable(&st);
+                Some(st)
+            }
+            TK::Repeat { body, .. } => Some(self.rounds(body, &[], st)),
+            TK::For { var, result, body, locals, .. } => {
+                let mut extra = vec![var.clone()];
+                if let Some((r, _)) = result {
+                    extra.push(r.clone());
+                }
+                extra.extend(locals.iter().cloned());
+                Some(self.rounds(body, &extra, st))
+            }
+            TK::Pass | TK::Check(_) => Some(st),
+            // a `fail` ends the run as it is, without `on failure` (dandori's DESIGN), and so
+            // does a failed check
+            TK::Break | TK::Succeed { .. } | TK::Fail { .. } => None,
+        }
+    }
+
+    /// A loop: walked once from the runs before it, with every variable it gives a value not
+    /// followed (what a round leaves for the next is not followed); after it, the runs before it
+    /// with the same not followed.
+    fn rounds(&mut self, body: &[TStmt], extra: &[String], st: Facts) -> Facts {
+        let mut set = assigned(body);
+        Model::walk(body, &mut |s| {
+            if let TK::Call { target: Some(Target::Case(c)), .. } = &s.kind {
+                set.push(self.m.cases[*c].name.clone());
+            }
+        });
+        set.extend(extra.iter().cloned());
+        let mut entry = st.clone();
+        for v in &set {
+            entry.lose(v);
+        }
+        self.block(body, Some(entry));
+        let mut after = st;
+        for v in &set {
+            after.lose(v);
+        }
+        after
+    }
 }

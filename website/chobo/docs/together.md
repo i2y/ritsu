@@ -140,10 +140,14 @@ error[ritsu E203]: booking.flow:18:1: The task `give_seats` can give `count` the
     18 |   give_seats(event: event, count: need.needed)
   = `need.needed` is the output `needed` of the rule "seats.rule", which comes to -20 at event_kind = handback
   = chobo takes an amount from 0 to 9223372036854775807 in the unit's smallest step, and a call with any other fails rather than being refused.
-  = Make the rule's amounts 0 or more (a negative one is a transfer the other way).
+  = Make the rule's amounts 0 or more (a negative one is a transfer the other way), or branch on `kind` with `match` before the transfer and give the transfer the output only in the arms without `handback`.
 ```
 
 </div>
+
+The workflow can keep the rule as it is: `ritsu check` counts the rule's output over what the runs
+that reach the transfer can give the call, so a `match kind` before the transfer that gives the
+seats only in the arms of a workshop and a talk passes.
 
 **A hold that has always expired.** A workflow holds goods for 14 days and posts the hold after it
 waits for a payment day that koyomi counts, 18 days or more later:

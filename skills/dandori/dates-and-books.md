@@ -192,6 +192,19 @@ date counts as 33 seconds at the most, its limit on every platform, and each try
 run, that is an error (E206); when it may or may not have, a warning (W206), which says the day
 that makes the wait the longest.
 
+Whether the book takes the amount a task gives a transfer is what `ritsu check` weighs where the
+amount can be a rule's output (X4): chobo takes a whole number from 0 to 2⁶³ − 1, and fails a call
+with any other rather than refusing it. The output is counted over what the call of the rule can be
+given on the runs that reach the transfer: the range of a number, and the values of an enum or a
+bool that the arms of a `match` before the transfer leave. A rule that gives seats back as a
+negative number for a `handback` can give its output to a transfer in the arms without it
+(`match kind`, `handback => pass`, `workshop, talk => give_seats(…)`), or after an arm for it that
+ends in `fail`. When a run can give the transfer an amount chobo does not take, that is an error
+(E203), which says the input of the rule that comes to it and, for an enum or a bool the flow can
+branch on, the value to leave out; when rulec counts the output reaching outside and no input of the
+rule there comes to such an amount, a warning (W203). A `match` holds the call only while nothing
+puts another value in the variable the call was given.
+
 ## On each platform
 
 | | Step Functions | Temporal | Lambda durable functions | Argo Workflows | pydantic-graph |

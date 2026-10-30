@@ -3,13 +3,14 @@
 //! place it is put (dandori's DESIGN 1.3), and holds the ranges of rules, tasks and koyomi's
 //! integer inputs to them itself (its E014); what it does not check is what only the other
 //! language can say — a rule's precondition across two inputs (X2), the days a koyomi date comes
-//! to against a rule's range (X3 (a)), a rule's output as an amount chobo takes and the refusals
-//! that amount can meet (X4), how long a hold is held against its expiry (X5), the day given to a
-//! koyomi date against its range (X6) — which ritsu-cross asks the other language about with
-//! these facts. dandori also says which calls give a value the contracts mark secret to another
-//! file of the project ([`Flows::sends`]), which ritsu-cross holds to the map (X14), and which
-//! calls are of an operation of a contract ([`Flows::operation_calls`]), which ritsu-cross holds to
-//! what sekisho's gates allow the workflow (X16).
+//! to against a rule's range (X3 (a)), a rule's output as an amount chobo takes over what the runs
+//! that reach the transfer give the rule, and the refusals that amount can meet (X4), how long a
+//! hold is held against its expiry (X5), the day given to a koyomi date against its range (X6) —
+//! which ritsu-cross asks the other language about with these facts. dandori also says which
+//! calls give a value the contracts mark secret to another file of the project ([`Flows::sends`]),
+//! which ritsu-cross holds to the map (X14), and which calls are of an operation of a contract
+//! ([`Flows::operation_calls`]), which ritsu-cross holds to what sekisho's gates allow the workflow
+//! (X16).
 
 use crate::{Books, Dates, Rules, Said};
 use ritsu_base::naming::Name;
@@ -112,12 +113,58 @@ pub struct TransferCall {
 }
 
 /// One amount a call gives a transfer: the transfer's parameter, the value as the flow writes it,
-/// and every kind of place it can come from.
+/// every kind of place it can come from, and the calls of rules whose outputs it can be.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Amount {
     pub param: String,
     pub shown: String,
     pub from: Vec<Origin>,
+    /// The calls of rules whose outputs the amount can be on the runs of the flow that reach the
+    /// transfer, each with what those runs can give the rule (X4 counts the output over that, not
+    /// over every input of the rule); empty where no run that reaches the transfer gives it a
+    /// rule's output. None where dandori does not follow the runs to the transfer: the outputs
+    /// `from` names are then counted over every input of their rules.
+    pub calls: Option<Vec<OutputCall>>,
+}
+
+/// A call of a rule whose output an amount can be (X4), with what the runs of the flow that reach
+/// the transfer can give the rule there.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OutputCall {
+    /// The line of the call of the rule, from 1.
+    pub line: usize,
+    /// The rule's file, as dandori reaches it (what `Rules` is asked with), and the output.
+    pub rule: PathBuf,
+    pub output: String,
+    /// Each input the call gives, in the order written.
+    pub inputs: Vec<CallInput>,
+}
+
+/// One value a call of a rule gives, as the runs that reach a transfer of its output see it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallInput {
+    /// The rule's input, and the value as the flow writes it (`kind`, `order.kind`, `workshop`).
+    pub input: String,
+    pub shown: String,
+    /// What those runs can give it, when that is less than the rule's input takes; None for all
+    /// it takes. A number is held to the range dandori gives the call for X2, the same on every
+    /// run; an enum or a bool to the values the places it comes from can be, less those the arms
+    /// of a `match` on it before the transfer leave out.
+    pub held: Option<Held>,
+    /// Whether the value is a variable, or a field of one, of an enum or a bool that nothing puts
+    /// another value in between the call and the transfer: a `match` on it before the transfer
+    /// holds what the call gives the rule to the values of the arm.
+    pub matchable: bool,
+}
+
+/// What a flow can give a rule's input, when that is less than the input takes.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Held {
+    /// A number on the wire, both ends included; None at an open end.
+    Range(Option<i128>, Option<i128>),
+    /// Values of an enum by the rule's names of them, in the enum's order; `false` and `true` for
+    /// a bool.
+    Values(Vec<String>),
 }
 
 /// How long it can be from a hold being made to a call that the hold's expiry can refuse (X5): a

@@ -160,3 +160,15 @@ fn the_questions_added_for_sekisho_answer_by_default() {
         assert!(!said[0].message.ja.is_empty() && said[0].message.ja != said[0].message.en, "{:?}", said[0].message);
     }
 }
+
+/// The question X4 asks for a call a flow holds some inputs of (DESIGN 7.6) has an answer by
+/// default too: what a numeric output comes to over ranges of the inputs is undecided, in both
+/// languages, so a port that answers `output_values` alone leaves such a call undecided rather
+/// than held.
+#[test]
+fn the_values_of_a_numeric_output_over_ranges_are_undecided_by_default() {
+    match Bare.output_values_over(std::path::Path::new("a.rule"), "fee", &[("kind".into(), Some(1), Some(2))]).unwrap() {
+        ritsu_ports::Found::Undecided(t) => assert!(!t.ja.is_empty() && !t.en.is_empty() && t.ja != t.en, "{t:?}"),
+        other => panic!("{other:?}"),
+    }
+}

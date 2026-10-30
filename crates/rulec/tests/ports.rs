@@ -1251,6 +1251,326 @@ fn the_examples_of_an_output_are_its_ends_its_rows_and_the_fewest_and_most_of_it
     assert_eq!(got.iter().map(|(v, _)| *v).collect::<Vec<_>>(), [30, 10]);
 }
 
+/// What a numeric output comes to with some inputs held (§15.273): with none held to less than the
+/// rule declares, `output_values`'s answer; otherwise what decides the output there — the rows some
+/// input there may reach, what its `result` reaches — and not a range written on the output's
+/// line, which is a promise over every input; the examples are those of the vectors inside the
+/// ranges, taken as `output_values` takes them. An enum is held by the places of its values, and a
+/// value apart from the others by naming the input again.
+#[test]
+fn a_numeric_output_over_ranges_is_what_decides_it_there() {
+    let t = ritsu_testkit::TempDir::new("ports-values-over");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("seats.rule", "rule seats v1\n\nenum kind = handback | workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| handback   | -20                |\n| workshop   | 30                 |\n| talk       | 80                 |\n");
+    write("refund.rule", "rule refund v1\n\nenum kind = charge | refund\n\ninputs\n  what : kind\n  late : bool\n\noutputs\n  amount : number  range >=-500 <=500  round down(1)\n  note : kind\n\ntable pick\npolicy unique\n| what   | late  | -> amount : number | note   |\n| charge | false | 300                | charge |\n| charge | true  | 350                | charge |\n| refund | -     | -300               | refund |\n");
+    let head = "inputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n";
+    write("tied.rule", &format!("rule tied v1\n\n{head}\nresult needed = asked - holding\n"));
+    write("rows.rule", &format!("rule rows v1\n\n{head}\ntable pick\npolicy unique\n| asked | holding | -> needed : number |\n| <=40  | >40     | -20                |\n| <=40  | <=40    | 10                 |\n| >40   | -       | 30                 |\n"));
+    let e = Engine::new();
+    let held = |r: &[(&str, Option<i128>, Option<i128>)]| r.iter().map(|(n, l, h)| (n.to_string(), *l, *h)).collect::<Vec<_>>();
+    #[allow(clippy::type_complexity)]
+    let over = |file: &str, output: &str, r: &[(&str, Option<i128>, Option<i128>)]| -> ((Option<i128>, Option<i128>), Option<Vec<i128>>, Vec<(i128, Vec<(String, Value)>)>) {
+        match e.output_values_over(&t.path().join(file), output, &held(r)).unwrap() {
+            ritsu_ports::Found::Value(v) => ((v.min, v.max), v.values, v.examples),
+            ritsu_ports::Found::Undecided(why) => panic!("{file} {r:?}: {why:?}"),
+        }
+    };
+    let whole = |file: &str, output: &str| match e.output_values(&t.path().join(file), output).unwrap() {
+        ritsu_ports::Found::Value(v) => ((v.min, v.max), v.values, v.examples),
+        ritsu_ports::Found::Undecided(why) => panic!("{file}: {why:?}"),
+    };
+    let kind = |v: &str| vec![("event_kind".to_string(), Value::Enum(v.into()))];
+    // the rows of the kinds held: workshop and talk, by their places; handback and talk apart
+    assert_eq!(over("seats.rule", "needed", &[("event_kind", Some(1), Some(2))]), ((Some(30), Some(80)), Some(vec![30, 80]), vec![(30, kind("workshop")), (80, kind("talk"))]));
+    assert_eq!(over("seats.rule", "needed", &[("event_kind", Some(0), Some(0)), ("event_kind", Some(2), Some(2))]), ((Some(-20), Some(80)), Some(vec![-20, 80]), vec![(-20, kind("handback")), (80, kind("talk"))]));
+    // every kind, or a range past the places, holds nothing to less than the rule declares
+    assert_eq!(over("seats.rule", "needed", &[("event_kind", Some(0), Some(2))]), whole("seats.rule", "needed"));
+    assert_eq!(over("seats.rule", "needed", &[("event_kind", None, Some(9))]), whole("seats.rule", "needed"));
+    assert_eq!(over("seats.rule", "needed", &[]), whole("seats.rule", "needed"));
+    // the range written on the line is what the rule promises over every input; held to a charge,
+    // the rows say 300 to 350, and a bool is held as 0 and 1
+    assert_eq!(whole("refund.rule", "amount").0, (Some(-500), Some(500)));
+    let (ends, values, examples) = over("refund.rule", "amount", &[("what", Some(0), Some(0))]);
+    assert_eq!((ends, values), ((Some(300), Some(350)), Some(vec![300, 350])));
+    assert_eq!(examples.iter().map(|(v, _)| *v).collect::<Vec<_>>(), [300, 350]);
+    assert_eq!(over("refund.rule", "amount", &[("what", Some(0), Some(0)), ("late", Some(1), Some(1))]).0, (Some(350), Some(350)));
+    // what a `result` reaches over the held range; the constraint keeps out the rows past it
+    let (ends, values, examples) = over("tied.rule", "needed", &[("asked", Some(50), Some(100))]);
+    assert_eq!((ends, values), ((Some(0), Some(100)), None));
+    assert!(examples.iter().all(|(_, input)| matches!(input[0], (_, Value::Int(n)) if (50..=100).contains(&n))), "{examples:?}");
+    assert_eq!(over("tied.rule", "needed", &[("asked", Some(0), Some(50))]).0, (Some(-50), Some(50)));
+    assert_eq!(over("rows.rule", "needed", &[("asked", Some(0), Some(40))]).0, (Some(10), Some(10)));
+    // the row only an input past the constraint reaches (-20) is left out once any input is held
+    assert_eq!(whole("rows.rule", "needed").0, (Some(-20), Some(30)));
+    for held in [("asked", Some(0), Some(99)), ("holding", Some(0), Some(49))] {
+        let (ends, values, _) = over("rows.rule", "needed", &[held]);
+        assert_eq!((ends, values), ((Some(10), Some(30)), Some(vec![10, 30])), "{held:?}");
+    }
+    // what is not answered: an output that is not a number, an input the rule does not have, a
+    // range with no input of the rule inside
+    let undecided = |file: &str, output: &str, r: &[(&str, Option<i128>, Option<i128>)]| match e.output_values_over(&t.path().join(file), output, &held(r)).unwrap() {
+        ritsu_ports::Found::Undecided(why) => why.en,
+        other => panic!("{file} {r:?}: {other:?}"),
+    };
+    assert_eq!(undecided("refund.rule", "note", &[("what", Some(0), Some(0))]), "`note` is not a numeric output of this rule");
+    assert_eq!(undecided("seats.rule", "needed", &[("size", Some(0), Some(0))]), "`size` is not an input of this rule");
+    assert_eq!(undecided("tied.rule", "needed", &[("asked", Some(200), None)]), "no input of the rule lies inside the ranges it is given");
+}
+
+/// Over the corpus and the rules of these tests, every numeric output asked with its inputs held
+/// (§15.273): each enum and bool input in turn to each of its values, each number and date input
+/// with both ends declared in turn to the lower and the upper half of its range, and the number and
+/// date inputs to a few steps around four of the rule's vectors. A hold whose inputs are few enough
+/// to walk is asked, and every input it holds goes through the reference evaluator (the
+/// constraints kept): what it comes to lies between the fewest and the most the port answers, and
+/// among the numbers where it names them. Each example is an input inside the ranges that comes to
+/// the amount it is given with. What the port leaves undecided is counted, and printed with its
+/// reason.
+#[test]
+fn a_numeric_output_over_ranges_holds_what_every_input_inside_them_comes_to() {
+    use rulec::eval::Val;
+    use rulec::types::Ty;
+    use std::collections::BTreeMap;
+    const CAP: usize = 4_000;
+    /// How an input is held: an enum or a bool by its values, a number or a date by a range on
+    /// the wire, between the ends it declares.
+    enum Kind {
+        Values(Vec<Val>),
+        Line { date: bool, lo: Option<i128>, hi: Option<i128> },
+    }
+    let e = Engine::new();
+    let (mut cases, mut answered, mut narrowed, mut walked, mut too_wide, mut undecided, mut rules_asked, mut unwalked) = (0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
+    let mut why: Vec<String> = Vec::new();
+    let mut rules = corpus();
+    for dir in ["tests/over", "tests/apply_fixtures"] {
+        let mut more: Vec<String> = std::fs::read_dir(dir).unwrap().flatten().map(|e| format!("{dir}/{}", e.file_name().to_string_lossy())).filter(|p| p.ends_with(".rule")).collect();
+        more.sort();
+        rules.extend(more);
+    }
+    for path in rules {
+        let src = std::fs::read_to_string(&path).unwrap();
+        if rulec::has_error(&rulec::report(&src, &path).diags) {
+            continue;
+        }
+        let (f, c) = rulec::prepare(&src, &path).unwrap();
+        let outputs: Vec<String> = f.outputs.iter().map(|o| o.name.text.clone()).filter(|o| c.ty_of(o).is_some_and(|t| !matches!(t, Ty::Opt(_)) && t.is_numeric())).collect();
+        if outputs.is_empty() || !f.elements.is_empty() {
+            continue;
+        }
+        let base = |t: Option<Ty>| match t {
+            Some(Ty::Opt(t)) => *t,
+            Some(t) => t,
+            None => Ty::Unknown,
+        };
+        let day = |y: i32, m: u32, d: u32| {
+            let r = rulec::types::date_ord(y, m, d);
+            r.num / r.den
+        };
+        // how the port is told a value: an enum's by its place, a bool as 0 or 1, a number and a
+        // date on the wire
+        let told = |n: &str, v: &Val| -> Option<i128> {
+            match (v, base(c.ty_of(n))) {
+                (Val::Enum(w), Ty::Enum(en)) => c.enums.get(&en)?.iter().position(|x| x == w).map(|k| k as i128),
+                (Val::Bool(b), _) => Some(i128::from(*b)),
+                (Val::Num(x), _) => Some(rulec::types::wire_int(*x, c.wire_scale(n))),
+                (Val::Date(y, m, d), _) => Some(day(*y, *m, *d)),
+                _ => None,
+            }
+        };
+        let mut ins: Vec<(String, bool, Kind)> = Vec::new();
+        for i in &f.inputs {
+            let n = i.name.text.clone();
+            let opt = matches!(c.ty_of(&n), Some(Ty::Opt(_)));
+            let kind = match base(c.ty_of(&n)) {
+                Ty::Enum(en) => {
+                    let mut vs = c.enums.get(&en).cloned().unwrap_or_default();
+                    if let Some(allowed) = c.enum_ranges.get(&n) {
+                        vs.retain(|w| allowed.contains(w));
+                    }
+                    Kind::Values(vs.into_iter().map(Val::Enum).collect())
+                }
+                Ty::Bool => Kind::Values(vec![Val::Bool(true), Val::Bool(false)]),
+                t if t == Ty::Date || t.is_numeric() => {
+                    let date = t == Ty::Date;
+                    let (lo, hi) = c.ranges.get(&n).copied().unwrap_or((None, None));
+                    let w = |r: rulec::num::Rat| if date { r.num / r.den } else { rulec::types::wire_int(r, c.wire_scale(&n)) };
+                    Kind::Line { date, lo: lo.map(w), hi: hi.map(w) }
+                }
+                _ => {
+                    ins.clear();
+                    break;
+                }
+            };
+            ins.push((n, opt, kind));
+        }
+        if ins.len() != f.inputs.len() {
+            unwalked += 1;
+            continue;
+        }
+        rules_asked += 1;
+        // the questions: each enum and bool value alone, each half of a range, boxes around vectors
+        let mut questions: Vec<Vec<(String, Option<i128>, Option<i128>)>> = Vec::new();
+        for (n, _, kind) in &ins {
+            match kind {
+                Kind::Values(vs) => questions.extend(vs.iter().filter_map(|v| told(n, v)).map(|k| vec![(n.clone(), Some(k), Some(k))])),
+                Kind::Line { lo: Some(lo), hi: Some(hi), .. } if hi > lo => {
+                    let mid = lo + (hi - lo) / 2;
+                    questions.push(vec![(n.clone(), Some(*lo), Some(mid))]);
+                    questions.push(vec![(n.clone(), Some(mid + 1), Some(*hi))]);
+                }
+                _ => {}
+            }
+        }
+        // the values each input walks under a question; None when they are too many or unbounded
+        let axes_of = |q: &[(String, Option<i128>, Option<i128>)]| -> Option<Vec<(String, Vec<Val>)>> {
+            let mut axes: Vec<(String, Vec<Val>)> = Vec::new();
+            for (n, opt, kind) in &ins {
+                let held = q.iter().find(|(m, _, _)| m == n);
+                let mut vals: Vec<Val> = Vec::new();
+                match kind {
+                    Kind::Values(vs) => {
+                        // an enum or a bool held to values is not absent, as the port holds it
+                        if *opt && held.is_none() {
+                            vals.push(Val::Enum(rulec::kw::NONE.into()));
+                        }
+                        vals.extend(vs.iter().filter(|v| held.is_none_or(|(_, lo, hi)| told(n, v).is_some_and(|k| lo.is_none_or(|l| k >= l) && hi.is_none_or(|h| k <= h)))).cloned());
+                    }
+                    Kind::Line { date, lo, hi } => {
+                        if *opt {
+                            vals.push(Val::Enum(rulec::kw::NONE.into()));
+                        }
+                        let l = [held.and_then(|h| h.1), *lo].into_iter().flatten().max()?;
+                        let h = [held.and_then(|h| h.2), *hi].into_iter().flatten().min()?;
+                        if h - l >= CAP as i128 {
+                            return None;
+                        }
+                        vals.extend((l..=h).map(|w| {
+                            if *date {
+                                let (y, m, d) = rulec::types::ord_to_date(rulec::num::Rat::int(w));
+                                Val::Date(y, m, d)
+                            } else {
+                                Val::Num(rulec::types::from_wire(w, c.wire_scale(n)))
+                            }
+                        }));
+                    }
+                }
+                axes.push((n.clone(), vals));
+            }
+            let size = axes.iter().map(|(_, vs)| vs.len()).fold(1usize, |a, b| a.saturating_mul(b));
+            (size <= CAP).then_some(axes)
+        };
+        let vectors = rulec::vectors::generate(&f, &c);
+        let n = vectors.len();
+        let mut picks = if n == 0 { vec![] } else { vec![0, n / 3, 2 * n / 3, n - 1] };
+        picks.dedup();
+        for pick in picks {
+            let v = &vectors[pick];
+            for w in [3i128, 1, 0] {
+                let b: Vec<(String, Option<i128>, Option<i128>)> = ins
+                    .iter()
+                    .filter_map(|(n, _, kind)| match kind {
+                        Kind::Line { lo, hi, .. } => {
+                            let at = v.input.get(n).and_then(|x| told(n, x)).or(*lo)?;
+                            Some((n.clone(), Some(lo.map_or(at - w, |l| l.max(at - w))), Some(hi.map_or(at + w, |h| h.min(at + w)))))
+                        }
+                        Kind::Values(_) => None,
+                    })
+                    .collect();
+                if b.is_empty() {
+                    break;
+                }
+                if axes_of(&b).is_some() {
+                    if !questions.contains(&b) {
+                        questions.push(b);
+                    }
+                    break;
+                }
+            }
+        }
+        // the fewest and the most over every input, as `output_values` answers them
+        let whole: BTreeMap<String, (Option<i128>, Option<i128>)> = outputs.iter().map(|o| (o.clone(), c.wire_range(o).unwrap_or((None, None)))).collect();
+        for q in &questions {
+            // every input so held, through the reference evaluator; a hold too wide to walk is
+            // not asked
+            let Some(axes) = axes_of(q) else {
+                too_wide += 1;
+                continue;
+            };
+            walked += 1;
+            let truth: BTreeMap<String, Vec<i128>> = {
+                let mut seen: BTreeMap<String, Vec<i128>> = outputs.iter().map(|o| (o.clone(), Vec::new())).collect();
+                let mut at = vec![0usize; axes.len()];
+                'walk: loop {
+                    let input: BTreeMap<String, Val> = axes.iter().zip(&at).filter(|((_, vs), _)| !vs.is_empty()).map(|((n, vs), i)| (n.clone(), vs[*i].clone())).collect();
+                    if axes.iter().all(|(_, vs)| !vs.is_empty()) && rulec::vectors::allowed(&f, &input) && rulec::vectors::days_ok(&c, &input) {
+                        let (outs, _, _) = rulec::eval::run_all(&f, &c, input.into_iter().collect());
+                        for (o, x) in outs {
+                            if let (Some(seen), Some(Val::Num(r))) = (seen.get_mut(&o), x) {
+                                seen.push(rulec::types::wire_int(r, c.wire_scale(&o)));
+                            }
+                        }
+                    }
+                    for k in 0..at.len() {
+                        at[k] += 1;
+                        if at[k] < axes[k].1.len() {
+                            continue 'walk;
+                        }
+                        at[k] = 0;
+                    }
+                    break;
+                }
+                seen
+            };
+            for out in &outputs {
+                cases += 1;
+                match e.output_values_over(Path::new(&path), out, q).unwrap_or_else(|x| panic!("{path}: {x:?}")) {
+                    ritsu_ports::Found::Value(got) => {
+                        answered += 1;
+                        let between = |v: i128| got.min.is_none_or(|m| v >= m) && got.max.is_none_or(|m| v <= m);
+                        if (got.min, got.max) != whole[out] {
+                            narrowed += 1;
+                        }
+                        for v in &truth[out] {
+                            assert!(between(*v), "{path} {out} over {q:?}: {v} is outside {:?}..{:?}", got.min, got.max);
+                            if let Some(vs) = &got.values {
+                                assert!(vs.contains(v), "{path} {out} over {q:?}: {v} is not among {vs:?}");
+                            }
+                        }
+                        for (v, input) in &got.examples {
+                            assert!(between(*v), "{path} {out} over {q:?}: the example {v} is outside {:?}..{:?}", got.min, got.max);
+                            for (name, lo, hi) in q {
+                                let k = match input.iter().find(|(n, _)| n == name).map(|(_, x)| x) {
+                                    Some(Value::Int(n)) => *n,
+                                    Some(Value::Date(d)) => {
+                                        let p: Vec<i32> = d.split('-').map(|x| x.parse().unwrap()).collect();
+                                        day(p[0], p[1] as u32, p[2] as u32)
+                                    }
+                                    Some(Value::Bool(b)) => i128::from(*b),
+                                    Some(Value::Enum(w)) => told(name, &Val::Enum(w.clone())).unwrap_or_else(|| panic!("{path}: {name} = {w}")),
+                                    _ => continue,
+                                };
+                                assert!(lo.is_none_or(|l| k >= l) && hi.is_none_or(|h| k <= h), "{path} {out} over {q:?}: the example of {v} gives {name} {k}");
+                            }
+                            let outs = e.eval(Path::new(&path), input).unwrap_or_else(|x| panic!("{path} {out}: {x:?}"));
+                            let came = outs.iter().find(|(n, _)| n == out).map(|(_, x)| x.clone());
+                            assert_eq!(came, Some(Value::Int(*v)), "{path} {out} over {q:?}: {input:?}");
+                        }
+                    }
+                    ritsu_ports::Found::Undecided(t) => {
+                        undecided += 1;
+                        why.push(format!("{path} {out} over {q:?}: {}", t.en));
+                    }
+                }
+            }
+        }
+    }
+    println!("output_values_over: {cases} questions over {rules_asked} rules with a numeric output ({walked} holds walked, {too_wide} too wide to walk and not asked), {answered} answered ({narrowed} narrower than over every input), {undecided} undecided; {unwalked} rules not asked (a string input)");
+    for w in &why {
+        println!("  undecided: {w}");
+    }
+    assert!(rules_asked >= 10 && narrowed > 0 && answered * 10 >= cases * 9, "{answered} of {cases} answered, {narrowed} narrower, over {rules_asked} rules");
+}
+
 /// Each value of a rule's enum is handed over with its public name — the alias the rule writes in
 /// parentheses, else its name; what a gate writes into Cedar — beside the member the generated code
 /// builds from it. Over the corpus, a public name that is not the name is written in the rule as

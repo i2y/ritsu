@@ -233,8 +233,103 @@ fn a_flow_says_what_it_crosses_into() {
     // where values come from: the day of a koyomi date, `now`
     assert_eq!(c.dates.len(), 1);
     assert_eq!((c.dates[0].date.as_str(), c.dates[0].input.as_str(), c.dates[0].from.clone()), ("payment", "received", vec![Origin::Now]));
-    // the hold's amount comes from the workflow's input, whose range dandori knows
+    // the hold's amount comes from the workflow's input, whose range dandori knows; no amount can
+    // be a rule's output, and the flow is not followed for the calls of rules (X4)
     assert_eq!(c.transfers[0].amounts[0].from, vec![Origin::Range(Some(1), Some(100))]);
+    assert_eq!(c.transfers[0].amounts[0].calls, None);
+}
+
+/// The calls of rules whose outputs an amount given to a transfer can be, for ritsu's X4 (ritsu's
+/// DESIGN 7.6; dandori's DESIGN 18), along the runs through the flow: what the runs that reach the
+/// transfer can give each call, less what the arms of a `match` before the transfer leave out.
+#[test]
+fn an_amount_says_the_calls_of_rules_it_can_come_from() {
+    use ritsu_ports::{Flows, Held, OutputCall, Ports};
+    use std::rc::Rc;
+    let t = ritsu_testkit::TempDir::new("output-calls");
+    let write = |name: &str, body: &str| std::fs::write(t.path().join(name), body).unwrap();
+    write("seats.rule", "rule seats v1\ndescription \"How many seats an event of a kind needs; a handback gives seats back\"\n\nenum kind = handback | workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| handback   | -20                |\n| workshop   | 30                 |\n| talk       | 80                 |\n");
+    write("extra.rule", "rule extra v1\ndescription \"The seats a late event asks for on top\"\n\ninputs\n  late  : bool\n  asked : number  range >=0 <=100\n\noutputs\n  more : number  round down(1)\n\ntable pick\npolicy unique\n| late  | asked | -> more : number |\n| true  | <=50  | 10               |\n| true  | >50   | 20               |\n| false | -     | 0                |\n");
+    write("hall.book", "book hall v1\ndescription \"The seats of the hall\"\n\nunit seat\n\naccount given(event: string) : seat\n  at least 0 refused as not_given\n  at most 300 refused as over_capacity\naccount venue : seat outside\n\ntransfer assign(event: string, count: seat)\n  key event\n  move count from venue to given(event)\n\ntransfer release(event: string, count: seat)\n  key event\n  move count from given(event) to venue\n");
+    let flow = |body: &str| {
+        format!(
+            "workflow booking v1\ndescription \"Gives an event the seats its kind needs\"\n\nuse rule seats from \"seats.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:seats\"\nuse rule extra from \"extra.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:extra\"\nuse book hall from \"hall.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:hall\"\n\ninputs\n  event : string\n  kind  : seats.kind\n  other : seats.kind\n  late  : bool\n  asked : int  range >=0 <=40\n\ntask give_seats(event: string, count: int)\n  book hall.assign.do\n\ntask take_back(event: string, count: int)\n  book hall.release.do\n\ntask ask_organiser(event: string) -> int\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask-organiser\"\n  idempotent\n\nflow\n{body}"
+        )
+    };
+    let ports = Ports { rules: Rc::new(rulec::ports::Engine::new()), dates: Rc::new(koyomi::ports::Engine), books: Rc::new(chobo::ports::Engine) };
+    // a call as `<line> <rule>.<output>: <input>=<value as written> <what it is held to>`, `m`
+    // when a `match` on the value before the transfer narrows it; lines from the first of the body
+    let show = |c: &OutputCall, base: usize| -> String {
+        let inputs: Vec<String> = c
+            .inputs
+            .iter()
+            .map(|i| {
+                let held = match &i.held {
+                    None => "all".to_string(),
+                    Some(Held::Values(v)) => v.join("|"),
+                    Some(Held::Range(lo, hi)) => format!("{}..{}", lo.map(|n| n.to_string()).unwrap_or_default(), hi.map(|n| n.to_string()).unwrap_or_default()),
+                };
+                format!("{}={} {held}{}", i.input, i.shown, if i.matchable { " m" } else { "" })
+            })
+            .collect();
+        let rule = c.rule.file_stem().unwrap().to_string_lossy().to_string();
+        format!("{} {rule}.{}: {}", c.line - base, c.output, inputs.join(", "))
+    };
+    let calls = |body: &str| -> Vec<(usize, Option<Vec<String>>)> {
+        let text = flow(body);
+        write("booking.flow", &text);
+        let base = text.lines().position(|l| l == "flow").unwrap() + 1;
+        let c = dandori::ports::Engine.crossings(&t.path().join("booking.flow"), &ports).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
+        c.transfers.iter().map(|tr| (tr.line - base, tr.amounts[0].calls.as_ref().map(|cs| cs.iter().map(|c| show(c, base)).collect()))).collect()
+    };
+    let some = |line: usize, calls: &[&str]| (line, Some(calls.iter().map(|c| c.to_string()).collect::<Vec<_>>()));
+    // no `match`: the call is given every kind
+    let body = "  let need = seats(event_kind: kind)\n  give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(2, &["1 seats.needed: event_kind=kind all m"])]);
+    // the transfer in an arm of a `match` on the value after the call, or the call and the
+    // transfer in it: the call is given the arm's values
+    let body = "  let need = seats(event_kind: kind)\n  match kind\n    handback => pass\n    workshop, talk => give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(4, &["1 seats.needed: event_kind=kind workshop|talk m"])]);
+    let body = "  match kind\n    handback => pass\n    workshop, talk =>\n      let need = seats(event_kind: kind)\n      give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(5, &["4 seats.needed: event_kind=kind workshop|talk m"])]);
+    // an arm that ends in `fail` is not joined: after the `match`, the value is one of the others
+    let body = "  match kind\n    handback => fail Handback \"a handback gives no seats\"\n    workshop, talk => pass\n  let need = seats(event_kind: kind)\n  give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(5, &["4 seats.needed: event_kind=kind workshop|talk m"])]);
+    // arms joined again give the call every value they took
+    let body = "  let need = seats(event_kind: kind)\n  match kind\n    handback => pass\n    workshop, talk => pass\n  give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(5, &["1 seats.needed: event_kind=kind all m"])]);
+    // another value put in the variable after the call: a `match` on it says nothing of the call
+    let body = "  let k = kind\n  let need = seats(event_kind: k)\n  let k = other\n  match k\n    handback => pass\n    workshop, talk => give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(6, &["2 seats.needed: event_kind=k all"])]);
+    // the output put in a variable, and the variable given another value before the transfer: no
+    // run gives the transfer the rule's output
+    let body = "  let need = seats(event_kind: kind)\n  let count = need.needed\n  let count = ask_organiser(event: event)\n  give_seats(event: event, count: count)\n";
+    assert_eq!(calls(body), [some(4, &[])]);
+    // a value written out, and the output put in a variable the transfer is given
+    let body = "  let need = seats(event_kind: workshop)\n  give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(2, &["1 seats.needed: event_kind=workshop workshop"])]);
+    let body = "  let need = seats(event_kind: kind)\n  let n = need.needed\n  match kind\n    handback => pass\n    workshop, talk => give_seats(event: event, count: n)\n";
+    assert_eq!(calls(body), [some(5, &["1 seats.needed: event_kind=kind workshop|talk m"])]);
+    // a call in each arm: the transfer after them is given either, each with what its arm gave it
+    let body = "  match kind\n    handback => let need = seats(event_kind: talk)\n    workshop, talk => let need = seats(event_kind: kind)\n  give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(4, &["2 seats.needed: event_kind=talk talk", "3 seats.needed: event_kind=kind workshop|talk m"])]);
+    // a handler starts from before the call, which gives its variable nothing when it fails
+    let body = "  let need = seats(event_kind: talk)\n  let need = seats(event_kind: kind)\n    on timeout => pass\n  give_seats(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(4, &["1 seats.needed: event_kind=talk talk", "2 seats.needed: event_kind=kind all m"])]);
+    // a loop is walked once: inside it, what a round gives a variable; after it, a variable it
+    // gives a value is not followed
+    let body = "  let need = seats(event_kind: workshop)\n  repeat at most 2 times\n    let need = seats(event_kind: kind)\n    give_seats(event: event, count: need.needed)\n  take_back(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(4, &["3 seats.needed: event_kind=kind all m"]), (5, None)]);
+    // `on failure` starts where a task's failure stops the flow: here, only at the transfer, after
+    // the `match` whose other arm fails (a `fail` does not run `on failure`)
+    let body = "  let need = seats(event_kind: kind)\n    on timeout => fail Slow \"the rule did not answer\"\n    on failure => fail Broken \"the rule failed\"\n  match kind\n    handback => fail Handback \"a handback gives no seats\"\n    workshop, talk => pass\n  give_seats(event: event, count: need.needed)\n\non failure\n  take_back(event: event, count: need.needed)\n";
+    assert_eq!(calls(body), [some(7, &["1 seats.needed: event_kind=kind workshop|talk m"]), some(10, &["1 seats.needed: event_kind=kind workshop|talk m"])]);
+    // a bool is held as an enum is; a number to the range X2 gives the call, when it is less than
+    // the rule's input takes; a value written out, to itself
+    let body = "  let x = extra(late: late, asked: asked)\n  match late\n    true => pass\n    false => give_seats(event: event, count: x.more)\n";
+    assert_eq!(calls(body), [some(4, &["1 extra.more: late=late false m, asked=asked 0..40"])]);
+    let body = "  let x = extra(late: true, asked: 30)\n  give_seats(event: event, count: x.more)\n";
+    assert_eq!(calls(body), [some(2, &["1 extra.more: late=true true, asked=30 30..30"])]);
 }
 
 /// The calls of operations of contracts a flow makes, for sekisho's check of what a workflow is

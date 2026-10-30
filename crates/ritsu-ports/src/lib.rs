@@ -69,8 +69,8 @@ pub use dates::CalendarFacts;
 pub use gates::{Allowance, Asker, GateAction, GateFacts, GatePolicy, GatePorts, GateWorkflow, Gates};
 pub use index::{Index, Item, Items, Lookup, Reference, References};
 pub use flows::{
-    seconds_text, Amount, CallArg, Crossings, DateCall, Destination, Flows, HoldSpan, OperationCall, Origin, Ports, RuleCall, Secret, Send,
-    TransferCall, Undecided, UndecidedPrecondition,
+    seconds_text, Amount, CallArg, CallInput, Crossings, DateCall, Destination, Flows, Held, HoldSpan, OperationCall, Origin, OutputCall, Ports,
+    RuleCall, Secret, Send, TransferCall, Undecided, UndecidedPrecondition,
 };
 pub use maps::{MapFacts, MapRelationship, Maps, PublishedOperation};
 pub use programs::{At, CallVerdict, Crossing, Ends, Given, ProgramCrossings, ProgramDateCall, ProgramRuleCall, ProgramTransfer, Programs, Seen, Verdicts};

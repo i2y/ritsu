@@ -547,6 +547,106 @@ fn outside_range(c: &Checked, name: &str, v: &crate::eval::Val) -> bool {
     c.ranges.get(name).is_some_and(|(lo, hi)| lo.is_some_and(|lo| at.cmp_to(lo) == std::cmp::Ordering::Less) || hi.is_some_and(|hi| at.cmp_to(hi) == std::cmp::Ordering::Greater))
 }
 
+/// Why `output` is not answered as a range of numbers: not a numeric output of the rule, or an
+/// optional one, whose answer can be no value at all, which the answer has no room for (§15.249).
+pub(crate) fn not_numeric(f: &crate::ast::RuleFile, c: &Checked, output: &str) -> Option<Text> {
+    let declared = f.outputs.iter().any(|o| o.name.text == output);
+    if declared && c.ty_of(output).is_some_and(|t| matches!(t, Ty::Opt(_)) && t.present().is_numeric()) {
+        return Some(ritsu_base::tr!(
+            "`{output}` には値が無いことがあるので、とる数を範囲で答えられません",
+            "`{output}` may have no value, so what it comes to is not answered as a range of numbers"
+        ));
+    }
+    if !declared || !c.ty_of(output).is_some_and(|t| t.is_numeric()) {
+        return Some(ritsu_base::tr!("`{output}` は、この規則の数の出力ではありません", "`{output}` is not a numeric output of this rule"));
+    }
+    None
+}
+
+/// What `output_values` answers for a rule as checked (`Engine::output_values`): the output's
+/// range on the wire, the numbers its rows write, and the examples from the rule's vectors.
+pub(crate) fn output_values_of(f: &crate::ast::RuleFile, c: &Checked, output: &str) -> ritsu_ports::Found<ritsu_ports::OutputValues> {
+    if let Some(why) = not_numeric(f, c, output) {
+        return ritsu_ports::Found::Undecided(why);
+    }
+    let (min, max) = c.wire_range(output).unwrap_or((None, None));
+    let values = row_numbers(c, output, &|_, _| true);
+    let vectors = crate::vectors::generate(f, c);
+    let examples = examples_of(c, output, &vectors, (min, max), values.as_deref());
+    ritsu_ports::Found::Value(ritsu_ports::OutputValues { min, max, values, examples })
+}
+
+/// Every number the rows of the tables that decide `output` write, on the wire, when each row
+/// `rows` takes (by the index of the table among `c.sets` and of the row) writes one; None when one
+/// writes something else, or none of them is taken.
+pub(crate) fn row_numbers(c: &Checked, output: &str, rows: &dyn Fn(usize, usize) -> bool) -> Option<Vec<i128>> {
+    use crate::ast::{Lit, OutCell};
+    let sc = c.wire_scale(output);
+    let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
+    let mut literal: Vec<i128> = Vec::new();
+    for (si, set) in c.sets.iter().enumerate() {
+        let Some(oi) = set.table.outputs.iter().position(|o| o.name.text == output) else { continue };
+        for (ri, row) in set.table.rows.iter().enumerate() {
+            if !rows(si, ri) {
+                continue;
+            }
+            match row.outs.get(oi) {
+                Some(OutCell::Lit(Lit::Num(n))) => literal.push(crate::types::wire_int(crate::types::lit_value_in_pub(n, &ty)?, sc)),
+                _ => return None,
+            }
+        }
+    }
+    if literal.is_empty() {
+        return None;
+    }
+    literal.sort_unstable();
+    literal.dedup();
+    Some(literal)
+}
+
+/// What the output `output` comes to on each of `vectors`, on the wire.
+pub(crate) fn wire_outputs(c: &Checked, output: &str, vectors: &[crate::vectors::Vector]) -> Vec<i128> {
+    let sc = c.wire_scale(output);
+    vectors
+        .iter()
+        .flat_map(|v| v.outputs.iter().filter(|(n, _)| n == output))
+        .filter_map(|(_, x)| match x {
+            Some(crate::eval::Val::Num(r)) => Some(crate::types::wire_int(*r, sc)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The examples of what the output `output` comes to (§15.270): the two `ends` of its range, the
+/// numbers its rows write (`values`), then the fewest and the most it comes to over `vectors`,
+/// in that order, each with the first of `vectors` that comes to it, as `eval` takes the input. A
+/// value is given once, and one no vector comes to (an end the output never reaches) has none.
+/// `output_values` gives it the rule's vectors; `output_values_over` those inside the ranges it
+/// holds the inputs to (§15.273).
+pub(crate) fn examples_of(c: &Checked, output: &str, vectors: &[crate::vectors::Vector], ends: (Option<i128>, Option<i128>), values: Option<&[i128]>) -> Vec<(i128, Values)> {
+    let sc = c.wire_scale(output);
+    let wire = |x: &Option<crate::eval::Val>| match x {
+        Some(crate::eval::Val::Num(r)) => Some(crate::types::wire_int(*r, sc)),
+        _ => None,
+    };
+    let reached = wire_outputs(c, output, vectors);
+    let mut wanted: Vec<i128> = ends.0.into_iter().chain(ends.1).collect();
+    wanted.extend(values.into_iter().flatten().copied());
+    wanted.extend(reached.iter().min().into_iter().chain(reached.iter().max()).copied());
+    let mut examples: Vec<(i128, Values)> = Vec::new();
+    for w in wanted {
+        if examples.iter().any(|(v, _)| *v == w) {
+            continue;
+        }
+        let hit = vectors.iter().find(|v| v.outputs.iter().any(|(n, x)| n == output && wire(x) == Some(w)));
+        if let Some(v) = hit {
+            let inputs: Values = v.input.iter().map(|(n, x)| (n.clone(), from_val(c, n, x))).collect();
+            examples.push((w, inputs));
+        }
+    }
+    examples
+}
+
 /// An output of the evaluator, on the wire: `none` of a value that may be absent is the absence.
 pub(crate) fn from_val(c: &Checked, name: &str, v: &crate::eval::Val) -> Value {
     use crate::eval::Val;
@@ -716,73 +816,19 @@ impl ritsu_ports::Rules for Engine {
     /// to) put out to the grid it rounds to. Where every row that decides it writes a number, those
     /// numbers. The examples (§15.270) are values the output comes to, each with an input from the
     /// rule's vectors (which take every row, and hold the inputs to their ranges and constraints)
-    /// that comes to it: the two ends of the range, the numbers the rows write, then the fewest and
-    /// the most the output comes to over the vectors, in that order. A value is given once, with
-    /// the first vector that comes to it, and an end no vector comes to has none.
+    /// that comes to it ([`examples_of`]).
     fn output_values(&self, rule: &Path, output: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
-        use crate::ast::{Lit, OutCell};
         let (_, _, got) = self.rule(rule)?;
         let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
-        // An optional output is undecided here as it was: what it comes to is a range of numbers or
-        // no value at all, and the answer has no room for the second (§15.249).
-        if f.outputs.iter().any(|o| o.name.text == output) && c.ty_of(output).is_some_and(|t| matches!(t, Ty::Opt(_)) && t.present().is_numeric()) {
-            return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!(
-                "`{output}` には値が無いことがあるので、とる数を範囲で答えられません",
-                "`{output}` may have no value, so what it comes to is not answered as a range of numbers"
-            )));
-        }
-        if !f.outputs.iter().any(|o| o.name.text == output) || !c.ty_of(output).is_some_and(|t| t.is_numeric()) {
-            return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!("`{output}` は、この規則の数の出力ではありません", "`{output}` is not a numeric output of this rule")));
-        }
-        let sc = c.wire_scale(output);
-        let (min, max) = c.wire_range(output).unwrap_or((None, None));
-        // every number the rows that decide the output write, if each writes one
-        let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
-        let mut literal: Option<Vec<i128>> = Some(Vec::new());
-        for set in &c.sets {
-            let Some(oi) = set.table.outputs.iter().position(|o| o.name.text == output) else { continue };
-            for row in &set.table.rows {
-                match row.outs.get(oi) {
-                    Some(OutCell::Lit(Lit::Num(n))) => match crate::types::lit_value_in_pub(n, &ty) {
-                        Some(v) => {
-                            if let Some(vs) = literal.as_mut() {
-                                vs.push(crate::types::wire_int(v, sc));
-                            }
-                        }
-                        None => literal = None,
-                    },
-                    _ => literal = None,
-                }
-            }
-        }
-        let values = literal.filter(|v| !v.is_empty()).map(|mut v| {
-            v.sort_unstable();
-            v.dedup();
-            v
-        });
-        // what the output comes to on the vectors, on the wire
-        let vectors = self.joined(|| crate::vectors::generate(f, c));
-        let wire = |x: &Option<crate::eval::Val>| match x {
-            Some(crate::eval::Val::Num(r)) => Some(crate::types::wire_int(*r, sc)),
-            _ => None,
-        };
-        let reached: Vec<i128> = vectors.iter().flat_map(|v| v.outputs.iter().filter(|(n, _)| n == output).filter_map(|(_, x)| wire(x))).collect();
-        // an input for each value: the ends, the rows' numbers, the fewest and the most
-        let mut wanted: Vec<i128> = min.into_iter().chain(max).collect();
-        wanted.extend(values.iter().flatten().copied());
-        wanted.extend(reached.iter().min().into_iter().chain(reached.iter().max()).copied());
-        let mut examples: Vec<(i128, Values)> = Vec::new();
-        for w in wanted {
-            if examples.iter().any(|(v, _)| *v == w) {
-                continue;
-            }
-            let hit = vectors.iter().find(|v| v.outputs.iter().any(|(n, x)| n == output && wire(x) == Some(w)));
-            if let Some(v) = hit {
-                let inputs: Values = v.input.iter().map(|(n, x)| (n.clone(), from_val(c, n, x))).collect();
-                examples.push((w, inputs));
-            }
-        }
-        Ok(ritsu_ports::Found::Value(ritsu_ports::OutputValues { min, max, values, examples }))
+        Ok(self.joined(|| output_values_of(f, c, output)))
+    }
+
+    /// What `output_values` answers with the inputs named in `ranges` held to them, as
+    /// `outputs_over` takes them (`crate::over::values_over`, §15.273).
+    fn output_values_over(&self, rule: &Path, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
+        let (path, src, got) = self.rule(rule)?;
+        let (f, c) = got.as_ref().as_ref().map_err(|e| e.clone())?;
+        Ok(self.joined(|| crate::over::values_over(f, c, &src, &path, output, ranges)))
     }
 
     /// The rule read again with each input held to its range, the rows some input may reach

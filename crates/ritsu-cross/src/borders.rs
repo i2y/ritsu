@@ -76,9 +76,10 @@ pub const MAX_AMOUNT: i128 = i64::MAX as i128;
 /// X4: whether every value a rule's output comes to is an amount chobo takes. It holds when rulec
 /// counts both ends of the output's range and they lie inside 0 to 2⁶³ − 1. Otherwise the example
 /// is an amount outside that an input from the rule's vectors comes to (rulec's `examples`, which
-/// keep to the inputs' ranges and the rule's constraints): the smallest below 0, else the largest
-/// above 2⁶³ − 1, the first of equal ones. With no such input it is undecided: rulec counts the
-/// range from above (it does not narrow it by a constraint that ties two inputs), and it lets a
+/// keep to the inputs' ranges and the rule's constraints, and to what a flow's call gives the rule
+/// where rulec is asked over that, `Rules::output_values_over`): the smallest below 0, else the
+/// largest above 2⁶³ − 1, the first of equal ones. With no such input it is undecided: rulec counts
+/// the range from above (it does not narrow it by a constraint that ties two inputs), and it lets a
 /// row through that only an input outside the constraints reaches, so neither an end nor a number
 /// a row writes shows that the output comes to an amount outside.
 pub fn amount_fits(out: &Found<OutputValues>) -> Answer<(i128, Values)> {
@@ -140,7 +141,8 @@ pub enum AmountFrom {
 }
 
 /// X4: whether every amount a value can be is one chobo takes, by where it can come from: the
-/// outputs of rules, each as rulec counts it, in order; the numbers dandori knows the range of; and
+/// outputs of rules, each as rulec counts it (over what the call gives the rule, where dandori
+/// follows the flow to the transfer), in order; the numbers dandori knows the range of; and
 /// the first place it can come from that says nothing, when there is one. The example is the first
 /// offending amount, of the first output with one, else of the first range with one.
 pub fn amounts_given(outputs: &[Found<OutputValues>], ranges: &[(Option<i128>, Option<i128>)], other: Option<&Text>) -> Answer<(i128, AmountFrom)> {

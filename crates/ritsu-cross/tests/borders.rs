@@ -105,6 +105,26 @@ fn x4_a_rules_output_as_an_amount() {
     assert_eq!(amounts_unshown(&[tied.clone()], Some(&why)), None);
     assert_eq!(amount_unshown(&fee), None);
     assert!(matches!(r.output_values(&t.path().join("fee.rule"), "parcel").unwrap(), Found::Undecided(_)));
+    // over what a flow gives the call (rulec's §15.273, DESIGN 7.6): the refund left out, the
+    // charge holds, and held to the refund, -300 is its example; the seats still to give, with
+    // `asked` 50 to 100, are 0 to 100, and with 0 to 50, -50 to 50 that no vector there comes to;
+    // a written range is a promise over every input, and the rows reached decide
+    let over = |file: &str, output: &str, ranges: &[(&str, Option<i128>, Option<i128>)]| {
+        let ranges: Vec<(String, Option<i128>, Option<i128>)> = ranges.iter().map(|(n, l, h)| (n.to_string(), *l, *h)).collect();
+        r.output_values_over(&t.path().join(file), output, &ranges).unwrap()
+    };
+    assert_eq!(amount_fits(&over("adjust.rule", "amount", &[("what", Some(0), Some(0))])), Answer::Holds);
+    assert_eq!(amount_fits(&over("adjust.rule", "amount", &[("what", Some(1), Some(1))])), Answer::Fails((-300, vec![("what".to_string(), ritsu_ports::Value::Enum("refund".into()))])));
+    assert_eq!(amount_fits(&over("tied.rule", "needed", &[("asked", Some(50), Some(100))])), Answer::Holds);
+    let low = over("tied.rule", "needed", &[("asked", Some(0), Some(50))]);
+    assert!(matches!(amount_fits(&low), Answer::Undecided(_)), "{:?}", amount_fits(&low));
+    assert_eq!(amount_unshown(&low), Some((-50, 50)));
+    assert_eq!(amount_fits(&over("unreached.rule", "needed", &[("asked", Some(41), Some(100))])), Answer::Holds);
+    assert_eq!(amount_fits(&over("wide.rule", "needed", &[("event_kind", Some(0), Some(0))])), Answer::Holds);
+    // the hull of the refusals' search is the narrowed answers'
+    assert_eq!(amounts_hull(&[over("adjust.rule", "amount", &[("what", Some(0), Some(0))])], &[]), Some((300, 300)));
+    // nothing held to less than the rule declares: the answer over every input
+    assert_eq!(over("adjust.rule", "amount", &[("what", Some(0), Some(1))]), adjust);
     // by where an amount can come from: rules' outputs, ranges dandori knows, places that say nothing
     assert_eq!(amounts_given(&[fee.clone()], &[(Some(1), Some(100))], None), Answer::Holds);
     assert!(matches!(amounts_given(&[fee.clone(), adjust.clone()], &[], None), Answer::Fails((-300, AmountFrom::Output(1, _)))));

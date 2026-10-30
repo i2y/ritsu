@@ -23,10 +23,15 @@
 //! - X3 (b): the days a rulec certificate carries for an input whose range is a koyomi date
 //!   (`range from koyomi`) against the set the model computes from the koyomi file.
 //! - X4: `amount_fits`, `amounts_given` and `amounts_hull` over every numeric output of the rules of
-//!   rulec's corpus and ranges around them, and over outputs written to reach every branch;
+//!   rulec's corpus and ranges around them, the same with each enum input held to each of its
+//!   values (`Rules::output_values_over`), and over outputs written to reach every branch;
 //!   `refusals_met` over what chobo's search finds for every transfer of chobo's examples and test
 //!   books (as its check finds them, and for one transfer with the amounts held to a range),
 //!   against handled sets made from it and the reasons of each book's bounds.
+//! - X4 at the call (`ritsu check`): small projects whose flow gives a rule's output to a transfer,
+//!   with and without a `match` before it; the calls are what dandori's port says of the runs that
+//!   reach the transfer (`Amount::calls`), each asked of rulec over what it gives the rule, and the
+//!   answer is what `ritsu check` says of the amount (E203 with its example, W203, or nothing).
 //! - X5: `held_until` over a grid of the fewest and most seconds a call comes after a hold and the
 //!   seconds the hold expires after, around each edge.
 //! - X6: `input_range` over every input of every dates file, and `days_given` of the days of each
@@ -40,7 +45,7 @@ use koyomi::check::{Checked, DEFAULT_BUDGET, check};
 use ritsu_base::text::Lang;
 use ritsu_cross::borders::{amount_fits, amounts_given, amounts_hull, days_fit, days_given, held_until, input_range, refusals_met, AmountFrom};
 use ritsu_model::{compare, program};
-use ritsu_ports::{Answer, Books, Crossing, DateKind, Dates, Flows, Found, Origin, OutputValues, Precondition, Programs, Rules, Value as Wire, Values, Verdicts};
+use ritsu_ports::{Amount, Answer, Books, ColumnType, Crossing, DateKind, Dates, Flows, Found, Held, Origin, OutputCall, OutputValues, Precondition, Programs, Rules, Value as Wire, Values, Verdicts};
 use ritsu_testkit::{Need, TempDir, ready};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -619,6 +624,43 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
         let out = engine.output_values(&written_rules.join(file), name).unwrap();
         rows.push(amount_row(&out));
     }
+    // the same rules with inputs held, as the runs of a flow can hold what a call gives them
+    // (rulec DESIGN §15.273): the charge alone (holds) and the refund alone (-300, an example); the
+    // seats asked 50 or more (0 to 100) and 50 or fewer (-50 to 50, which no vector comes below 0
+    // at); with five kept back, 50 or more asked and 40 or fewer held (5 to 95)
+    let held = |r: &[(&str, i128, i128)]| r.iter().map(|(n, l, h)| (n.to_string(), Some(*l), Some(*h))).collect::<Vec<_>>();
+    let mut over: Vec<Found<OutputValues>> = Vec::new();
+    for (file, name, r) in [
+        ("adjust.rule", "amount", held(&[("what", 0, 0)])),
+        ("adjust.rule", "amount", held(&[("what", 1, 1)])),
+        ("tied.rule", "needed", held(&[("asked", 50, 100)])),
+        ("tied.rule", "needed", held(&[("asked", 0, 50)])),
+        ("short.rule", "needed", held(&[("asked", 50, 100), ("holding", 0, 40)])),
+    ] {
+        over.push(engine.output_values_over(&written_rules.join(file), name, &r).unwrap());
+    }
+    // and each numeric output of the corpus's rules with each enum input held to each of its values
+    let mut corpus_over = 0;
+    for r in &rules {
+        let Ok(facts) = engine.facts(r) else { continue };
+        for o in &facts.outputs {
+            if !matches!(engine.output_values(r, &o.name), Ok(Found::Value(_))) {
+                continue;
+            }
+            for i in &facts.inputs {
+                let ColumnType::Enum { name, .. } = &i.ty else { continue };
+                let values = facts.enums.iter().find(|e| e.name == *name).map_or(0, |e| e.values.len());
+                for p in 0..values as i128 {
+                    over.push(engine.output_values_over(r, &o.name, &[(i.name.clone(), Some(p), Some(p))]).unwrap_or_else(|e| panic!("{}: {e:?}", r.display())));
+                    corpus_over += 1;
+                }
+            }
+        }
+    }
+    assert!(corpus_over >= 20, "fewer enum values held than there were: {corpus_over}");
+    for out in &over {
+        rows.push(amount_row(out));
+    }
     // every branch: open ends, both ends inside, an example below 0 (the smallest of several, the
     // first of equal ones, wherever it is among the examples), above 2⁶³ − 1 (the largest, and only
     // with none below 0), an example where an end is open, and ends outside with every example
@@ -654,6 +696,7 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
     // the amounts a value can be: outputs of rules (the corpus's and the written ones, a few at a
     // time), numbers dandori knows the range of, and a place that says nothing
     let mut all: Vec<Found<OutputValues>> = written.to_vec();
+    all.extend(over.iter().take(5).cloned());
     for r in rules.iter().take(12) {
         let Ok(facts) = engine.facts(r) else { continue };
         for o in &facts.outputs {
@@ -695,6 +738,201 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
     }
     assert!(outputs >= 40, "fewer outputs than there were: {outputs}");
     run(&bin, &tmp, &json!({}), "x4 amounts", rows);
+}
+
+// ── X4: the decision at the call ──────────────────────────────────────────────────────────────
+
+/// What a call gives the inputs of a rule, as `Rules::output_values_over` takes it: a number's
+/// range on the wire, and each value of an enum or a bool by its place in the rule's order, a range
+/// of its own (the port takes an input named more than once as the union).
+fn held_at(joined: &ritsu_project::Joined, call: &OutputCall) -> Vec<(String, Option<i128>, Option<i128>)> {
+    let facts = joined.rulec.facts(&call.rule).unwrap_or_else(|e| panic!("{e:?}"));
+    let mut out = Vec::new();
+    for i in &call.inputs {
+        match &i.held {
+            None => {}
+            Some(Held::Range(lo, hi)) => out.push((i.input.clone(), *lo, *hi)),
+            Some(Held::Values(vs)) => {
+                let order: Vec<String> = match facts.inputs.iter().find(|c| c.name == i.input).map(|c| &c.ty) {
+                    Some(ColumnType::Bool) => vec!["false".into(), "true".into()],
+                    Some(ColumnType::Enum { name, .. }) => facts.enums.iter().find(|e| e.name == *name).unwrap().values.iter().map(|v| v.name.clone()).collect(),
+                    other => panic!("{} is held to values, and is {other:?}", i.input),
+                };
+                for v in vs {
+                    let p = order.iter().position(|o| o == v).unwrap_or_else(|| panic!("{v} is no value of {}", i.input)) as i128;
+                    out.push((i.input.clone(), Some(p), Some(p)));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Whether an amount can be a rule's output on a run that reaches its transfer, as the port says.
+fn from_rule(a: &Amount) -> bool {
+    match &a.calls {
+        Some(calls) => !calls.is_empty(),
+        None => a.from.iter().any(|o| matches!(o, Origin::Output { .. })),
+    }
+}
+
+/// The places an amount can come from, as `RitsuCross.amountsGiven` reads them, from what the ports
+/// say: each call of a rule dandori follows to the transfer, asked of rulec over what the call gives
+/// the rule (where it does not follow them, the outputs over every input); the ranges dandori knows;
+/// and whether the amount can come from a place that says nothing.
+fn given_at(joined: &ritsu_project::Joined, a: &Amount) -> (Vec<Found<OutputValues>>, Vec<(Option<i128>, Option<i128>)>, bool) {
+    let (mut outs, mut ranges, mut other) = (Vec::new(), Vec::new(), false);
+    for call in a.calls.iter().flatten() {
+        let held = held_at(joined, call);
+        let got = if held.is_empty() { joined.rulec.output_values(&call.rule, &call.output) } else { joined.rulec.output_values_over(&call.rule, &call.output, &held) };
+        outs.push(got.unwrap_or_else(|e| panic!("{e:?}")));
+    }
+    for o in &a.from {
+        match o {
+            Origin::Output { .. } if a.calls.is_some() => {}
+            Origin::Output { rule, output } => outs.push(joined.rulec.output_values(rule, output).unwrap_or_else(|e| panic!("{e:?}"))),
+            Origin::Range(lo, hi) => ranges.push((*lo, *hi)),
+            _ => other = true,
+        }
+    }
+    (outs, ranges, other)
+}
+
+/// An input as the notes of `ritsu check` write it: `event_kind = handback, late = true`.
+fn shown_at(vs: &Values) -> String {
+    vs.iter()
+        .map(|(n, v)| {
+            let x = match v {
+                Wire::Int(i) => i.to_string(),
+                Wire::Bool(b) => b.to_string(),
+                Wire::Str(s) => format!("\"{s}\""),
+                Wire::Date(d) | Wire::Enum(d) => d.clone(),
+                Wire::None => "none".into(),
+                Wire::List(xs) => format!("[{} elements]", xs.len()),
+            };
+            format!("{n} = {x}")
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// What `ritsu check` says of the one amount of a project that can be a rule's output, as
+/// `RitsuCross.answerJ` writes `amountsGiven`'s answer: the E203 with its amount and the output and
+/// example its first note names (found among `outs`, what the ports give), the W203, or nothing.
+fn said_of_amount(crossed: &ritsu_cross::Crossed, outs: &[Found<OutputValues>], what: &str) -> String {
+    let e: Vec<_> = crossed.findings.iter().filter(|f| f.code == "E203").collect();
+    let w = crossed.findings.iter().filter(|f| f.code == "W203").count();
+    assert!(e.len() + w <= 1, "{what}: one amount says one thing");
+    let Some(f) = e.first() else {
+        return if w == 1 { "\"undecided\"".into() } else { "\"holds\"".into() };
+    };
+    let note = match &f.json {
+        ritsu_base::json::Json::Obj(kv) => match kv.iter().find(|(k, _)| k == "notes").map(|(_, v)| v) {
+            Some(ritsu_base::json::Json::Arr(ns)) => ns[0].as_str().unwrap().to_string(),
+            other => panic!("{other:?}"),
+        },
+        other => panic!("{other:?}"),
+    };
+    let (_, rest) = note.split_once(", which comes to ").unwrap_or_else(|| panic!("{what}: a note that names no output: {note}"));
+    let (v, at) = rest.split_once(" at ").unwrap();
+    let v: i128 = v.parse().unwrap();
+    let (i, ex) = outs
+        .iter()
+        .enumerate()
+        .find_map(|(i, o)| match o {
+            Found::Value(o) => o.examples.iter().find(|(x, ex)| *x == v && shown_at(ex) == at).map(|(_, ex)| (i, ex.clone())),
+            Found::Undecided(_) => None,
+        })
+        .unwrap_or_else(|| panic!("{what}: no output the ports give comes to {v} at {at}"));
+    json!({ "fails": [v, { "output": [i, values_json(&ex)] }] }).to_string()
+}
+
+/// X4 at the call (DESIGN 7.6): small projects whose flow gives a rule's output to a transfer of
+/// chobo, checked as `ritsu check` checks them. The calls are what dandori's port says of the runs
+/// that reach the transfer (`Amount::calls`), each asked of rulec over what the call gives the rule
+/// (`Rules::output_values_over`); the model's `amountsGiven` over them is what `ritsu check` says
+/// of the amount (E203 with its amount and example, W203, or nothing). The shapes: the seats given
+/// back by a handback, given to the transfer with no branch, in the arm without the handback, after
+/// an arm that ends in `fail`, from a call in the arm, from an arm that still takes the handback,
+/// after another value is put in the variable the call was given, and from a call given a value
+/// written in the flow; the seats still to give, for a number asked of 50 or more, for the same
+/// number given to both inputs, and with five kept back.
+#[test]
+fn x4_at_the_call_is_the_models_decision() {
+    let Some(bin) = model() else { return };
+    let tmp = TempDir::new("model-cross-x4-call");
+    let ledger = ritsu_cross::codes::ledger();
+    let repro: Vec<(String, String)> = match &ledger.find("E203").expect("E203 is in the ledger").repro {
+        ritsu_base::ledger::Repro::Dir { files, .. } => files.iter().filter(|(n, _)| !n.ends_with(".kn")).map(|(n, b)| (n.to_string(), b.to_string())).collect(),
+        other => panic!("E203 has no files: {other:?}"),
+    };
+    let body = "  let need = seats(event_kind: kind)\n  give_seats(event: event, count: need.needed)\n";
+    let with = |edits: &[(&str, &str)]| -> Vec<(String, String)> {
+        repro
+            .iter()
+            .map(|(n, b)| {
+                let mut b = b.clone();
+                if n == "booking.flow" {
+                    for (from, to) in edits {
+                        assert!(b.contains(from), "the flow has no {from:?}");
+                        b = b.replacen(from, to, 1);
+                    }
+                }
+                (n.clone(), b)
+            })
+            .collect()
+    };
+    let book = repro.iter().find(|(n, _)| n == "hall.book").unwrap().1.clone();
+    let head = "inputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n";
+    let tied = format!("rule seats v1\n\n{head}\nresult needed = asked - holding\n");
+    let short = format!("rule seats v1\n\n{head}\nresult needed = asked - holding - 5\n");
+    let asked = "workflow booking v1\ndescription \"Gives an event the seats it still needs\"\n\nuse rule seats from \"seats.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:seats\"\nuse book hall from \"hall.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:hall\"\n\ninputs\n  event   : string\n  asked   : int  range >=50 <=100\n  holding : int  range >=0 <=50\n\ntask give_seats(event: string, count: int)\n  book hall.assign.do\n\nflow\n  let need = seats(asked: asked, holding: holding)\n  give_seats(event: event, count: need.needed)\n".to_string();
+    let same = asked
+        .replace("  asked   : int  range >=50 <=100\n  holding : int  range >=0 <=50\n", "  count   : int  range >=0 <=50\n")
+        .replace("seats(asked: asked, holding: holding)", "seats(asked: count, holding: count)");
+    let seats = |rule: &str, flow: &str| vec![("seats.rule".to_string(), rule.to_string()), ("hall.book".to_string(), book.clone()), ("booking.flow".to_string(), flow.to_string())];
+    let shapes: Vec<(&str, Vec<(String, String)>, &str)> = vec![
+        ("no branch", with(&[]), "fails"),
+        ("in the arm", with(&[(body, "  let need = seats(event_kind: kind)\n  match kind\n    handback => pass\n    workshop, talk => give_seats(event: event, count: need.needed)\n")]), "holds"),
+        ("after a fail", with(&[(body, "  let need = seats(event_kind: kind)\n  match kind\n    handback => fail Handback \"a handback gives no seats\"\n    workshop, talk => pass\n  give_seats(event: event, count: need.needed)\n")]), "holds"),
+        ("called in the arm", with(&[(body, "  match kind\n    handback => pass\n    workshop, talk =>\n      let need = seats(event_kind: kind)\n      give_seats(event: event, count: need.needed)\n")]), "holds"),
+        ("still in the arm", with(&[(body, "  let need = seats(event_kind: kind)\n  match kind\n    talk => pass\n    handback, workshop => give_seats(event: event, count: need.needed)\n")]), "fails"),
+        (
+            "another value",
+            with(&[("  kind  : seats.kind\n", "  kind  : seats.kind\n  other : seats.kind\n"), (body, "  let k = kind\n  let need = seats(event_kind: k)\n  let k = other\n  match k\n    handback => pass\n    workshop, talk => give_seats(event: event, count: need.needed)\n")]),
+            "fails",
+        ),
+        ("written", with(&[(body, "  let need = seats(event_kind: workshop)\n  give_seats(event: event, count: need.needed)\n")]), "holds"),
+        ("asked 50 or more", seats(&tied, &asked), "holds"),
+        ("the same number", seats(&tied, &same), "undecided"),
+        ("five kept back", seats(&short, &asked), "fails"),
+    ];
+    let mut rows = Vec::new();
+    for (k, (what, files, want)) in shapes.iter().enumerate() {
+        let dir = tmp.path().join(format!("p{k}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, text) in files {
+            std::fs::write(dir.join(name), text).unwrap();
+        }
+        let p = ritsu_project::Project::load(&[dir.to_string_lossy().to_string()], None).unwrap_or_else(|e| panic!("{what}: {e:?}"));
+        let joined = ritsu_project::Joined::new();
+        let crossings = joined.dandori.crossings(&dir.join("booking.flow"), &joined.ports()).unwrap_or_else(|e| panic!("{what}: the flow does not pass dandori's check: {e:?}"));
+        let amounts: Vec<&Amount> = crossings.transfers.iter().flat_map(|t| t.amounts.iter()).filter(|a| from_rule(a)).collect();
+        assert_eq!(amounts.len(), 1, "{what}: one amount from a rule");
+        assert!(amounts[0].calls.is_some(), "{what}: dandori follows the runs to the transfer");
+        let (outs, ranges, other) = given_at(&joined, amounts[0]);
+        let crossed = ritsu_cross::check(&p, &joined, Lang::En);
+        let said = said_of_amount(&crossed, &outs, what);
+        assert!(said.contains(want), "{what}: {said}, not {want}");
+        let line = json!({"amounts_given": {
+            "outputs": outs.iter().map(output_json).collect::<Vec<_>>(),
+            "ranges": ranges.iter().map(|(lo, hi)| json!([end(*lo), end(*hi)])).collect::<Vec<_>>(),
+            "other": other,
+        }});
+        rows.push((line.to_string(), said));
+    }
+    let lines = run(&bin, &tmp, &json!({}), "x4 at the call", rows);
+    assert_eq!(lines, shapes.len());
 }
 
 /// Every book of chobo's examples and tests, English first.

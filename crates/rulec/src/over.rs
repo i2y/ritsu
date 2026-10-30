@@ -25,6 +25,13 @@
 //! When the two meet, the answer is exact. When a live row's value has no input, the sieve could
 //! not rule the row out (two derived values over the same inputs, a computed `define` in a
 //! column), and no input reaches it: the answer is undecided, with the value and its rows.
+//!
+//! A numeric output is answered the same way, as its fewest and most, the numbers its rows write
+//! and the examples `output_values` gives (ritsu's port `Rules::output_values_over`, its X4:
+//! [`values_over`], §15.273): from above, what decides the output reaches with the inputs held,
+//! met with what the rows some input may reach write; from below, the examples, from the rule's
+//! vectors inside the ranges. A range written on the output's line is not read there: it is what
+//! the rule promises over every input.
 
 use crate::ast::{Lit, OutCell, RuleFile};
 use crate::num::Rat;
@@ -234,6 +241,139 @@ fn shown(v: &Value) -> String {
     }
 }
 
+/// What `ranges` holds the inputs to, as the rule's true values inside what it declares for each
+/// (the integers on the wire: a number at its scale, a date as its day number; an enum by the
+/// places of its values in the order the rule declares them, from 0, and of those only the ones
+/// its own `range` lets in, §15.251; a bool as 0 for false and 1 for true; an input given more
+/// than once takes the values of each). None when no input lies inside them; why, when an input
+/// cannot be held.
+pub(crate) fn held_of(f: &RuleFile, c: &Checked, ranges: &[(String, Option<i128>, Option<i128>)]) -> Result<Option<Held>, Text> {
+    let mut held = Held::default();
+    for (name, lo, hi) in ranges {
+        if !f.inputs.iter().any(|i| i.name.text == *name) {
+            return Err(ritsu_base::tr!("`{name}` は、この規則の入力ではありません", "`{name}` is not an input of this rule"));
+        }
+        let t = match c.ty_of(name) {
+            Some(Ty::Opt(t)) => *t,
+            Some(t) => t,
+            None => Ty::Unknown,
+        };
+        // an enum by the places of its values, a bool as 0 and 1: the values between the ends
+        let words: Option<Vec<String>> = match &t {
+            Ty::Enum(e) => Some(c.enums.get(e).cloned().unwrap_or_default()),
+            Ty::Bool => Some(vec![crate::kw::FALSE.to_string(), crate::kw::TRUE.to_string()]),
+            _ => None,
+        };
+        if let Some(words) = words {
+            let (from, to) = (lo.unwrap_or(0).max(0), hi.unwrap_or(i128::MAX).min(words.len() as i128 - 1));
+            let mut these: Vec<String> = if from > to { Vec::new() } else { words[from as usize..=to as usize].to_vec() };
+            // an input of an ordered enum that declares a range takes only the values it lets in,
+            // as a number is met with its declared range, and held to values outside, no input
+            // lies inside (§15.251): a define over the input could be left undecided before
+            if let Some(allowed) = c.enum_ranges.get(name) {
+                these.retain(|w| allowed.contains(w));
+            }
+            // an input given more than once takes the values of each (a gate's enum with fewer
+            // values than the rule's, whose places need not run on), in the rule's order
+            match held.values.iter_mut().find(|(n, _)| n == name) {
+                Some((_, was)) => {
+                    let all: Vec<String> = words.iter().filter(|w| was.contains(w) || these.contains(w)).cloned().collect();
+                    *was = all;
+                }
+                None => held.values.push((name.clone(), these)),
+            }
+            continue;
+        }
+        let date = t == Ty::Date;
+        if !date && !t.is_numeric() {
+            return Err(ritsu_base::tr!(
+                "`{name}` は数でも日付でも列挙でも真偽でもない入力なので、範囲に限れません",
+                "`{name}` is neither a number, a date, an enum nor a bool, so it cannot be held to a range"
+            ));
+        }
+        let sc = c.wire_scale(name);
+        let at = |v: Option<i128>| v.map(|v| if date { Rat::int(v) } else { crate::types::from_wire(v, sc) });
+        let declared = c.ranges.get(name).copied().unwrap_or((None, None));
+        let iv = meet(declared, (at(*lo), at(*hi)));
+        if let (Some(l), Some(h)) = iv
+            && l.cmp_to(h) == std::cmp::Ordering::Greater
+        {
+            return Ok(None);
+        }
+        held.ranges.push((name.clone(), iv));
+    }
+    if held.values.iter().any(|(_, vs)| vs.is_empty()) {
+        // an enum or a bool held to no value: no input lies inside
+        return Ok(None);
+    }
+    Ok(Some(held))
+}
+
+impl Held {
+    /// Whether the vector's input lies inside what this holds the inputs to.
+    pub fn takes(&self, v: &crate::vectors::Vector) -> bool {
+        self.ranges.iter().all(|(n, iv)| match v.input.get(n) {
+            Some(crate::eval::Val::Num(x)) => inside(*iv, *x),
+            Some(crate::eval::Val::Date(y, m, d)) => inside(*iv, crate::types::date_ord(*y, *m, *d)),
+            _ => true,
+        }) && self.values.iter().all(|(n, vs)| match v.input.get(n) {
+            Some(crate::eval::Val::Enum(w)) => vs.contains(w),
+            Some(crate::eval::Val::Bool(b)) => vs.contains(&b.to_string()),
+            _ => false,
+        })
+    }
+
+    /// Whether this holds some input of the rule to less than the rule declares for it.
+    fn narrower(&self, c: &Checked) -> bool {
+        let same = |a: Option<Rat>, b: Option<Rat>| match (a, b) {
+            (Some(x), Some(y)) => x.cmp_to(y) == std::cmp::Ordering::Equal,
+            (None, None) => true,
+            _ => false,
+        };
+        self.ranges.iter().any(|(n, iv)| {
+            let declared = c.ranges.get(n).copied().unwrap_or((None, None));
+            !same(iv.0, declared.0) || !same(iv.1, declared.1)
+        }) || self.values.iter().any(|(n, vs)| {
+            let mut all: Vec<String> = match c.ty_of(n).as_ref().map(Ty::present) {
+                Some(Ty::Enum(e)) => c.enums.get(e).cloned().unwrap_or_default(),
+                _ => vec![crate::kw::FALSE.to_string(), crate::kw::TRUE.to_string()],
+            };
+            if let Some(allowed) = c.enum_ranges.get(n) {
+                all.retain(|w| allowed.contains(w));
+            }
+            all.iter().any(|w| !vs.contains(w))
+        })
+    }
+}
+
+/// The name a table's column writes that decides `output`: the output itself, or the one name the
+/// `result` that decides it is, passed on through `define`s that are one name (an output a rule
+/// applied writes, §15.69). None for a `result` that computes.
+fn decided_by(f: &RuleFile, c: &Checked, output: &str) -> Option<String> {
+    let mut decided = match (&f.result, f.outputs.first().is_some_and(|o| o.name.text == output)) {
+        (Some(r), true) => match &r.expr {
+            crate::ast::Expr::Name(n, _) => Some(n.clone()),
+            _ => None,
+        },
+        _ => Some(output.to_string()),
+    };
+    // a define that is one name passes that name on (an output a rule applied writes, §15.69)
+    for _ in 0..MAX_PASSES {
+        let Some(d) = decided.clone() else { break };
+        if c.sets.iter().any(|s| s.table.outputs.iter().any(|o| o.name.text == d)) {
+            break;
+        }
+        decided = f.items.iter().find_map(|it| match it {
+            crate::ast::Item::Define(x) if x.name.text == d => match &x.expr {
+                crate::ast::Expr::Name(m, _) => Some(m.clone()),
+                _ => None,
+            },
+            _ => None,
+        });
+    }
+    decided
+}
+
 /// What the output `output` (an enum or a bool) comes to when each input of `ranges` takes only
 /// the values between its ends (the integers on the wire: a date as its day number; an enum by the
 /// places of its values in the order the rule declares them, from 0, and of those only the ones
@@ -274,66 +414,12 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
             "this rule walks the list `{list}`, so its outputs are not counted over ranges of its inputs"
         ));
     }
-    // the ranges, as the rule's true values, inside what it declares
-    let mut held = Held::default();
-    for (name, lo, hi) in ranges {
-        if !f.inputs.iter().any(|i| i.name.text == *name) {
-            return Found::Undecided(ritsu_base::tr!("`{name}` は、この規則の入力ではありません", "`{name}` is not an input of this rule"));
-        }
-        let t = match c.ty_of(name) {
-            Some(Ty::Opt(t)) => *t,
-            Some(t) => t,
-            None => Ty::Unknown,
-        };
-        // an enum by the places of its values, a bool as 0 and 1: the values between the ends
-        let words: Option<Vec<String>> = match &t {
-            Ty::Enum(e) => Some(c.enums.get(e).cloned().unwrap_or_default()),
-            Ty::Bool => Some(vec![crate::kw::FALSE.to_string(), crate::kw::TRUE.to_string()]),
-            _ => None,
-        };
-        if let Some(words) = words {
-            let (from, to) = (lo.unwrap_or(0).max(0), hi.unwrap_or(i128::MAX).min(words.len() as i128 - 1));
-            let mut these: Vec<String> = if from > to { Vec::new() } else { words[from as usize..=to as usize].to_vec() };
-            // an input of an ordered enum that declares a range takes only the values it lets in,
-            // as a number is met with its declared range, and held to values outside, no input
-            // lies inside (§15.251): a define over the input could be left undecided before
-            if let Some(allowed) = c.enum_ranges.get(name) {
-                these.retain(|w| allowed.contains(w));
-            }
-            // an input given more than once takes the values of each (a gate's enum with fewer
-            // values than the rule's, whose places need not run on), in the rule's order
-            match held.values.iter_mut().find(|(n, _)| n == name) {
-                Some((_, was)) => {
-                    let all: Vec<String> = words.iter().filter(|w| was.contains(w) || these.contains(w)).cloned().collect();
-                    *was = all;
-                }
-                None => held.values.push((name.clone(), these)),
-            }
-            continue;
-        }
-        let date = t == Ty::Date;
-        if !date && !t.is_numeric() {
-            return Found::Undecided(ritsu_base::tr!(
-                "`{name}` は数でも日付でも列挙でも真偽でもない入力なので、範囲に限れません",
-                "`{name}` is neither a number, a date, an enum nor a bool, so it cannot be held to a range"
-            ));
-        }
-        let sc = c.wire_scale(name);
-        let at = |v: Option<i128>| v.map(|v| if date { Rat::int(v) } else { crate::types::from_wire(v, sc) });
-        let declared = c.ranges.get(name).copied().unwrap_or((None, None));
-        let iv = meet(declared, (at(*lo), at(*hi)));
-        if let (Some(l), Some(h)) = iv
-            && l.cmp_to(h) == std::cmp::Ordering::Greater
-        {
-            // no input lies inside the ranges, so the output comes to nothing
-            return Found::Value(Vec::new());
-        }
-        held.ranges.push((name.clone(), iv));
-    }
-    if held.values.iter().any(|(_, vs)| vs.is_empty()) {
-        // an enum or a bool held to no value: no input lies inside, so the output comes to nothing
-        return Found::Value(Vec::new());
-    }
+    let held = match held_of(f, c, ranges) {
+        Ok(Some(held)) => held,
+        // no input lies inside the ranges, so the output comes to nothing
+        Ok(None) => return Found::Value(Vec::new()),
+        Err(why) => return Found::Undecided(why),
+    };
     with(held.clone(), || {
         let Ok((f2, mut c2)) = crate::prepare(src, path) else {
             return Found::Undecided(ritsu_base::tr!("入力を範囲に限ると、規則の検査が通りません", "the rule does not pass its check with the inputs held to the ranges"));
@@ -346,27 +432,7 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
             Some((_, rows)) => rows.extend(row),
             None => candidates.push((v, row.into_iter().collect())),
         };
-        let mut decided = match (&f2.result, f2.outputs.first().is_some_and(|o| o.name.text == output)) {
-            (Some(r), true) => match &r.expr {
-                crate::ast::Expr::Name(n, _) => Some(n.clone()),
-                _ => None,
-            },
-            _ => Some(output.to_string()),
-        };
-        // a define that is one name passes that name on (an output a rule applied writes, §15.69)
-        for _ in 0..MAX_PASSES {
-            let Some(d) = decided.clone() else { break };
-            if c2.sets.iter().any(|s| s.table.outputs.iter().any(|o| o.name.text == d)) {
-                break;
-            }
-            decided = f2.items.iter().find_map(|it| match it {
-                crate::ast::Item::Define(x) if x.name.text == d => match &x.expr {
-                    crate::ast::Expr::Name(m, _) => Some(m.clone()),
-                    _ => None,
-                },
-                _ => None,
-            });
-        }
+        let decided = decided_by(&f2, &c2, output);
         let set = decided.as_ref().and_then(|d| c2.sets.iter().find(|s| s.table.outputs.iter().any(|o| o.name.text == *d)));
         // the inputs a row some input may reach passes on as the output
         let mut passes: Vec<String> = Vec::new();
@@ -410,20 +476,7 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
         let as_input = |input: &std::collections::BTreeMap<String, crate::eval::Val>| -> Values {
             f2.inputs.iter().filter_map(|i| input.get(&i.name.text).map(|x| (i.name.text.clone(), crate::ports::from_val(&c2, &i.name.text, x)))).collect()
         };
-        let vectors: Vec<crate::vectors::Vector> = crate::vectors::generate(&f2, &c2)
-            .into_iter()
-            .filter(|v| {
-                held.ranges.iter().all(|(n, iv)| match v.input.get(n) {
-                    Some(crate::eval::Val::Num(x)) => inside(*iv, *x),
-                    Some(crate::eval::Val::Date(y, m, d)) => inside(*iv, crate::types::date_ord(*y, *m, *d)),
-                    _ => true,
-                }) && held.values.iter().all(|(n, vs)| match v.input.get(n) {
-                    Some(crate::eval::Val::Enum(w)) => vs.contains(w),
-                    Some(crate::eval::Val::Bool(b)) => vs.contains(&b.to_string()),
-                    _ => false,
-                })
-            })
-            .collect();
+        let vectors: Vec<crate::vectors::Vector> = crate::vectors::generate(&f2, &c2).into_iter().filter(|v| held.takes(v)).collect();
         for v in &vectors {
             let Some((_, Some(x))) = v.outputs.iter().find(|(n, _)| n == output) else { continue };
             let value = crate::ports::from_val(&c2, output, x);
@@ -498,4 +551,120 @@ pub fn outputs_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &s
         }
         Found::Value(found)
     })
+}
+
+/// What `output_values` answers for the numeric output `output` when each input of `ranges` takes
+/// only the values between its ends, as `outputs_over` takes them, and every other input its whole
+/// range (ritsu's port `Rules::output_values_over`, its X4; §15.273). With no input held to less
+/// than the rule declares, it is `output_values`'s answer. Otherwise the rule is read again with
+/// the inputs held, and:
+///
+/// - The fewest and the most are what decides the output comes to there ([`Checked::reaches`]: the
+///   rows of its tables, a `define` of its name, what its `result` reaches), met with what the rows
+///   of the table that decides it which some input there may reach write
+///   ([`crate::region::live_rows`]), both put out to the grid of its rounding. A range written on
+///   the output's line is not read: it is what the rule promises over every input, and says
+///   nothing of part of them.
+/// - The numbers are those the rows some input there may reach write, when each writes one.
+/// - The examples are taken as `output_values` takes them ([`crate::ports::examples_of`]), from the
+///   rule's vectors inside the ranges.
+///
+/// A vector inside the ranges whose output lies outside the fewest and the most is a disagreement
+/// of rulec's analysis with its evaluator, and nothing is decided. A rule that walks a list, or
+/// does not pass its check with the inputs held, is answered over its whole range, with the
+/// examples from its vectors inside the ranges.
+pub fn values_over(f: &RuleFile, c: &Checked, src: &str, path: &str, output: &str, ranges: &[(String, Option<i128>, Option<i128>)]) -> Found<ritsu_ports::OutputValues> {
+    use crate::types::RowBound;
+    if let Some(why) = crate::ports::not_numeric(f, c, output) {
+        return Found::Undecided(why);
+    }
+    let held = match held_of(f, c, ranges) {
+        Ok(Some(held)) => held,
+        Ok(None) => {
+            return Found::Undecided(ritsu_base::tr!(
+                "渡す値の範囲の中に、規則の入力がありません",
+                "no input of the rule lies inside the ranges it is given"
+            ));
+        }
+        Err(why) => return Found::Undecided(why),
+    };
+    if !held.narrower(c) {
+        return crate::ports::output_values_of(f, c, output);
+    }
+    // over the whole range, with the examples inside the ranges
+    let whole = || match crate::ports::output_values_of(f, c, output) {
+        Found::Value(w) => {
+            let vectors: Vec<crate::vectors::Vector> = crate::vectors::generate(f, c).into_iter().filter(|v| held.takes(v)).collect();
+            let examples = crate::ports::examples_of(c, output, &vectors, (w.min, w.max), w.values.as_deref());
+            Found::Value(ritsu_ports::OutputValues { examples, ..w })
+        }
+        other => other,
+    };
+    if !f.elements.is_empty() {
+        return whole();
+    }
+    let read = with(held.clone(), || {
+        let (f2, mut c2) = crate::prepare(src, path).ok()?;
+        narrow_upstream(&f2, &mut c2);
+        let sc = c2.wire_scale(output);
+        let grid = c2.roundings.get(output).map(|(_, g)| *g).filter(|g| g.num != 0);
+        let round = |(lo, hi): (Rat, Rat)| match grid.map(|g| crate::types::round_out((Some(lo), Some(hi)), g)) {
+            Some((Some(l), Some(h))) => (l, h),
+            _ => (lo, hi),
+        };
+        // the rows some input there may reach, table by table
+        let live: Vec<Option<Vec<bool>>> = c2.sets.iter().map(|set| crate::region::live_rows(set, &c2, &f2, crate::region::DEFAULT_BUDGET)).collect();
+        let reached = |si: usize, ri: usize| live[si].as_ref().is_none_or(|l| l[ri]);
+        // what the rows of the table that decides the output write, where each says
+        let rows: Option<(Rat, Rat)> = decided_by(&f2, &c2, output).and_then(|d| {
+            let ty = c2.ty_of(&d)?;
+            let mut bounds: Vec<(Rat, Rat)> = Vec::new();
+            for (si, set) in c2.sets.iter().enumerate() {
+                let Some(oi) = set.table.outputs.iter().position(|o| o.name.text == d) else { continue };
+                for (ri, row) in set.table.rows.iter().enumerate() {
+                    if !reached(si, ri) {
+                        continue;
+                    }
+                    match c2.row_bound(&set.table, row, oi, &ty) {
+                        RowBound::Value { bound, .. } => bounds.push(bound),
+                        RowBound::Nothing => {}
+                        RowBound::Unknown => return None,
+                    }
+                }
+            }
+            let lo = bounds.iter().map(|b| b.0).min_by(|a, b| a.cmp_to(*b))?;
+            let hi = bounds.iter().map(|b| b.1).max_by(|a, b| a.cmp_to(*b))?;
+            Some(round((lo, hi)))
+        });
+        let ends = match (c2.reaches.get(output).copied(), rows) {
+            (Some(a), Some(b)) => match meet((Some(a.0), Some(a.1)), (Some(b.0), Some(b.1))) {
+                (Some(l), Some(h)) => Some((l, h)),
+                _ => None,
+            },
+            (a, b) => a.or(b),
+        };
+        let (min, max) = match ends {
+            Some((l, h)) if l.cmp_to(h) == std::cmp::Ordering::Greater => {
+                return Some(Found::Undecided(ritsu_base::tr!(
+                    "入力を範囲に限ると、`{output}` を決める行のどれにも当たる入力が見つかりません",
+                    "with the inputs held to the ranges, no input is found that matches a row that decides `{output}`"
+                )));
+            }
+            Some((l, h)) => (Some(crate::types::wire_int(l, sc)), Some(crate::types::wire_int(h, sc))),
+            // nothing says what it comes to there: what the rule says over every input
+            None => c.wire_range(output).unwrap_or((None, None)),
+        };
+        let values = crate::ports::row_numbers(&c2, output, &reached);
+        let vectors: Vec<crate::vectors::Vector> = crate::vectors::generate(&f2, &c2).into_iter().filter(|v| held.takes(v)).collect();
+        let outside = crate::ports::wire_outputs(&c2, output, &vectors).into_iter().find(|v| min.is_some_and(|m| *v < m) || max.is_some_and(|m| *v > m));
+        if let Some(v) = outside {
+            return Some(Found::Undecided(ritsu_base::tr!(
+                "rulec の解析は、入力を範囲に限ると `{output}` が {v} にならないと言い、評価器は {v} になる入力を見つけました。食い違うので決めません",
+                "rulec's analysis says `{output}` never comes to {v} with the inputs held to the ranges, and its evaluator finds an input that does; the two disagree, so nothing is decided"
+            )));
+        }
+        let examples = crate::ports::examples_of(&c2, output, &vectors, (min, max), values.as_deref());
+        Some(Found::Value(ritsu_ports::OutputValues { min, max, values, examples }))
+    });
+    read.unwrap_or_else(whole)
 }

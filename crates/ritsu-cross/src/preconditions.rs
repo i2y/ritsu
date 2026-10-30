@@ -170,9 +170,9 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
                 if a.range.is_none() {
                     let from = a.unknown.clone().unwrap_or_else(|| tr!("範囲の無いところ", "a place with no range"));
                     return Answer::Undecided(tr!(
-                        "`{}` の範囲が分かりません（{}に範囲がありません）",
+                        "`{}` の範囲が分かりません（{}）",
                         "nothing says what range `{}` is in ({} has no range)",
-                        a.shown, from.ja; a.shown, from.en
+                        a.shown, crate::then_ja(&from.ja, "に範囲がありません"); a.shown, from.en
                     ));
                 }
             }
@@ -211,9 +211,9 @@ pub(crate) fn decide(rules: &dyn Rules, dates: &dyn Dates, rule: &std::path::Pat
                 if a.range.is_none() {
                     let from = a.unknown.clone().unwrap_or_else(|| tr!("範囲の無いところ", "a place with no range"));
                     return Answer::Undecided(tr!(
-                        "`{}` の範囲が分かりません（{}に範囲がありません）",
+                        "`{}` の範囲が分かりません（{}）",
                         "nothing says what range `{}` is in ({} has no range)",
-                        a.shown, from.ja; a.shown, from.en
+                        a.shown, crate::then_ja(&from.ja, "に範囲がありません"); a.shown, from.en
                     ));
                 }
                 given.push(a);

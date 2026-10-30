@@ -463,6 +463,24 @@ pub struct Checked {
     /// output's range is what decides it, and what it answers is that put on the grid of its
     /// rounding, so [`Checked::output_range`] puts the ends out to the grid (§15.269).
     pub written_outputs: HashSet<String>,
+    /// What each numeric output comes to by what decides it (§15.268): the rows of its tables, a
+    /// `define` of its name, what its `result` reaches, put out to the grid of its rounding. A
+    /// range written on the output's line takes its place in `ranges`, and this is kept as it was:
+    /// it is what `output_values_over` reads with some inputs held (§15.273), since the written
+    /// range is a promise over every input and says nothing of part of them.
+    pub reaches: HashMap<String, (Rat, Rat)>,
+}
+
+/// What a row writes into a table's output column of numbers ([`Checked::row_bound`]).
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum RowBound {
+    /// The interval the row writes, and the interval before the row's own cell on a column it
+    /// names narrows it (§15.213).
+    Value { bound: (Rat, Rat), plain: (Rat, Rat) },
+    /// `none`: no value (§15.249).
+    Nothing,
+    /// A cell whose range is not known.
+    Unknown,
 }
 
 /// One expression E132 or E139 was said about (see [`Checked::arith_witness`]).
@@ -1313,6 +1331,7 @@ pub fn check(f: &RuleFile, path: &str) -> Checked {
         defs: HashMap::new(),
         result_range: None,
         written_outputs: HashSet::new(),
+        reaches: HashMap::new(),
     };
     // Read the guarantees before anything is typed: `allocate` asks about them, and the
     // order of declarations in the file should not change what is accepted. Whether both
@@ -4640,26 +4659,14 @@ impl Checked {
                     let mut plain: Vec<(Rat, Rat)> = Vec::new();
                     let mut known = true;
                     for row in &t.rows {
-                        match row.outs.get(oi) {
-                            Some(OutCell::Lit(Lit::Num(n))) => {
-                                match lit_value_in(n, &ty).or_else(|| lit_value_in(n, &lit_ty(n))) {
-                                    Some(v) => {
-                                        bounds.push((v, v));
-                                        plain.push((v, v));
-                                    }
-                                    None => known = false,
-                                }
+                        match self.row_bound(t, row, oi, &ty) {
+                            RowBound::Value { bound, plain: p } => {
+                                bounds.push(bound);
+                                plain.push(p);
                             }
-                            Some(OutCell::Name(w)) => match self.ranges.get(w) {
-                                Some((Some(a), Some(b))) => {
-                                    bounds.push(self.row_written(t, row, oi).unwrap_or((*a, *b)));
-                                    plain.push((*a, *b));
-                                }
-                                _ => known = false,
-                            },
                             // No value, so nothing to bound; the range is of the values there are.
-                            Some(OutCell::Nothing) => {}
-                            _ => known = false,
+                            RowBound::Nothing => {}
+                            RowBound::Unknown => known = false,
                         }
                     }
                     if known && !bounds.is_empty() {
@@ -6836,6 +6843,9 @@ impl Checked {
                 _ => (lo, hi),
             });
             let numeric = matches!(inner, Ty::Money { .. } | Ty::Qty { .. } | Ty::Rate | Ty::Number);
+            if let Some(r) = reach.filter(|_| numeric) {
+                self.reaches.insert(name.clone(), r);
+            }
             let Some(rg) = &o.range else {
                 if by_result.is_some() && numeric && !matches!(ty, Ty::Opt(_)) {
                     self.result_range = reach.map(|r| (name.clone(), r));
@@ -6970,6 +6980,26 @@ impl Checked {
                         fmt_val(rh, ty)
                     )),
             );
+        }
+    }
+
+    /// What a row writes into the output column of numbers `oi` of the table `t`, typed `ty`, as
+    /// the column's range reads it (§15.34): the number its cell writes, or the range of the name
+    /// it writes, narrowed to what the row's own cell on that name lets through when the name is
+    /// one of the table's columns ([`Checked::row_written`], §15.213). The type check reads every
+    /// row; `output_values_over` reads the rows some input may reach (§15.273).
+    pub(crate) fn row_bound(&self, t: &Table, row: &Row, oi: usize, ty: &Ty) -> RowBound {
+        match row.outs.get(oi) {
+            Some(OutCell::Lit(Lit::Num(n))) => match lit_value_in(n, ty).or_else(|| lit_value_in(n, &lit_ty(n))) {
+                Some(v) => RowBound::Value { bound: (v, v), plain: (v, v) },
+                None => RowBound::Unknown,
+            },
+            Some(OutCell::Name(w)) => match self.ranges.get(w) {
+                Some((Some(a), Some(b))) => RowBound::Value { bound: self.row_written(t, row, oi).unwrap_or((*a, *b)), plain: (*a, *b) },
+                _ => RowBound::Unknown,
+            },
+            Some(OutCell::Nothing) => RowBound::Nothing,
+            _ => RowBound::Unknown,
         }
     }
 

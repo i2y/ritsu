@@ -5,10 +5,10 @@ hall.book: ok
   key: assign once per event; a second call that differs only in count is refused with key_conflict
   key: release once per event; a second call that differs only in count is refused with key_conflict
 booking.flow: ok
-warning[ritsu W203]: booking.flow:19:1: Whether chobo takes the amount the task `give_seats` gives `count` cannot be decided
-    19 |   give_seats(event: event, count: need.needed)
-  = rulec counts `need.needed`, the output `needed` of the rule "seats.rule", as >=-50 <=100, and none of the rule's vectors gives it an amount chobo does not take.
+warning[ritsu W203]: booking.flow:18:1: Whether chobo takes the amount the task `give_seats` gives `count` cannot be decided
+    18 |   give_seats(event: event, count: need.needed)
+  = rulec counts `need.needed`, the output `needed` of the rule "seats.rule", as >=-50 <=50 over what the call on line 17 gives it (`asked` >=0 <=50), and none of the rule's vectors there gives it an amount chobo does not take.
   = rulec bounds an output by moving each input over its own range, and does not narrow the bound by a `constraint` that ties two inputs (`holding <= asked`, say), so the output may never come to such an amount.
   = chobo fails a call with an amount it does not take when the workflow runs.
-  = Write the rule so that rulec counts the output as 0 or more (`max(…, 0)`, say), or make a negative amount a transfer the other way, and this can be decided.
+  = Write the rule so that rulec counts the output as 0 or more (`max(…, 0)`, say), or make a negative amount a transfer the other way, and this can be decided. Holding what the flow gives the rule to inputs that do not come to such an amount (a `match` before the transfer, the `range` of where a number comes from) can decide it too.
 ritsu check: 3 files (rulec 1, chobo 1, dandori 1): all pass (1 warning); borders between the languages: 3 checked, 1 undecided

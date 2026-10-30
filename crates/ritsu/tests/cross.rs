@@ -199,6 +199,10 @@ fn x2_a_rules_preconditions_where_a_flow_calls_it() {
     // undecided: what is asked comes from a task whose answer has no range
     let open = repro("W201").iter().find(|(n, _)| n.ends_with(".flow")).unwrap().1.to_string();
     run("x2-W201", &[("refund_check.rule", rule.clone()), ("refund.flow", open)], 0, (0, 0, 1), &mut failures);
+    // undecided: what was paid is an input of the workflow with no range (the Japanese note puts a
+    // space after the input's name, as dandori's W104 does)
+    let unpaid = flow.replace("paid  : int  range >=0 <=10000", "paid  : int");
+    run("x2-W201-input", &[("refund_check.rule", rule.clone()), ("refund.flow", unpaid)], 0, (0, 0, 1), &mut failures);
     // an example: what is asked is what another rule's `result` comes to, with no range written on
     // its line, which dandori reads from the rule's facts (rulec's §15.271): up to 9,000
     let share = "rule refund_share v1\ndescription \"What a refund asks for: the price of an item times the items sent back\"\n\ninputs\n  price : number  range >=0 <=3000\n  items : number  range >=0 <=3\n\noutputs\n  asked : number  round down(1)\n\nresult asked = price * items\n\nexamples\n| price | items | -> asked |\n| 1000  | 2     | 2000     |\n".to_string();
@@ -347,7 +351,14 @@ fn x4_a_rules_output_as_a_transfers_amount() {
     let tied = "rule seats v1\ndescription \"The seats an event still needs: what it asked for, less what it holds, which is never more than it asked for\"\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n".to_string();
     let flow = "workflow booking v1\ndescription \"Gives an event the seats it still needs\"\n\nuse rule seats from \"seats.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:seats\"\nuse book hall from \"hall.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:hall\"\n\ninputs\n  event   : string\n  asked   : int  range >=50 <=100\n  holding : int  range >=0 <=50\n\ntask give_seats(event: string, count: int)\n  book hall.assign.do\n\nflow\n  let need = seats(asked: asked, holding: holding)\n  give_seats(event: event, count: need.needed)\n".to_string();
     let book = changed("W203", &[]).into_iter().find(|(n, _)| *n == "hall.book").unwrap().1;
-    run("x4-W203-unshown", &[("seats.rule", tied), ("hall.book", book.clone()), ("booking.flow", flow.clone())], 0, (2, 0, 1), &mut failures);
+    // given the same number for both, 0 to 50, the rule counts -50 to 50 over what the call gives
+    // it, and its vectors there keep the constraint
+    let same = flow
+        .replace("  asked   : int  range >=50 <=100\n  holding : int  range >=0 <=50\n", "  count   : int  range >=0 <=50\n")
+        .replace("seats(asked: asked, holding: holding)", "seats(asked: count, holding: count)");
+    run("x4-W203-unshown", &[("seats.rule", tied.clone()), ("hall.book", book.clone()), ("booking.flow", same)], 0, (2, 0, 1), &mut failures);
+    // asked 50 to 100: over what the call gives the rule, the seats still to give are 0 to 100
+    run("x4-held-ranges", &[("seats.rule", tied), ("hall.book", book.clone()), ("booking.flow", flow.clone())], 0, (3, 0, 0), &mut failures);
     // an example from the vectors (rulec DESIGN §15.270): with five seats kept back, the seats still
     // to give never come to the low end of their range, -55, under the constraint, and the fewest
     // the rule's vectors come to, -5, is an amount chobo does not take
@@ -355,6 +366,45 @@ fn x4_a_rules_output_as_a_transfers_amount() {
     run("x4-E203-vectors", &[("seats.rule", short), ("hall.book", book), ("booking.flow", flow)], 1, (2, 1, 0), &mut failures);
     run("x4-E204", &changed("E204", &[]), 1, (1, 1, 0), &mut failures);
     run("x4-W204", &changed("W204", &[]), 0, (1, 0, 1), &mut failures);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// X4 along the runs of the flow (DESIGN 7.6; dandori's DESIGN 18): a rule's output given to a
+/// transfer is counted over what the runs that reach the transfer can give the call of the rule.
+/// The arms of a `match` on the kind, before the transfer, leave out the handback, which gives seats
+/// back; an arm that ends in `fail` is not joined; a call made in an arm is given the arm's kinds.
+/// Another value put in the variable the call was given says nothing of the call, and an amount no
+/// run gives a rule's output is no border.
+#[test]
+fn x4_follows_the_flow_to_the_transfer() {
+    let mut failures = Vec::new();
+    let body = "  let need = seats(event_kind: kind)\n  give_seats(event: event, count: need.needed)\n";
+    let flow = |to: &str| changed("E203", &[("booking.flow", body, to)]);
+    let arm = "  let need = seats(event_kind: kind)\n  match kind\n    handback => pass\n    workshop, talk => give_seats(event: event, count: need.needed)\n";
+    run("x4-branch-arm", &flow(arm), 0, (2, 0, 0), &mut failures);
+    let guard = "  let need = seats(event_kind: kind)\n  match kind\n    handback => fail Handback \"a handback gives no seats\"\n    workshop, talk => pass\n  give_seats(event: event, count: need.needed)\n";
+    run("x4-branch-guard", &flow(guard), 0, (2, 0, 0), &mut failures);
+    let call = "  match kind\n    handback => pass\n    workshop, talk =>\n      let need = seats(event_kind: kind)\n      give_seats(event: event, count: need.needed)\n";
+    run("x4-branch-call", &flow(call), 0, (2, 0, 0), &mut failures);
+    // the arm that gives the seats still takes the handback: the note says what the call is given,
+    // and the fix names the value to branch on
+    let still = "  let need = seats(event_kind: kind)\n  match kind\n    talk => pass\n    handback, workshop => give_seats(event: event, count: need.needed)\n";
+    run("x4-branch-still", &flow(still), 1, (1, 1, 0), &mut failures);
+    let reassigned = changed(
+        "E203",
+        &[
+            ("booking.flow", "  kind  : seats.kind\n", "  kind  : seats.kind\n  other : seats.kind\n"),
+            ("booking.flow", body, "  let k = kind\n  let need = seats(event_kind: k)\n  let k = other\n  match k\n    handback => pass\n    workshop, talk => give_seats(event: event, count: need.needed)\n"),
+        ],
+    );
+    run("x4-branch-reassigned", &reassigned, 1, (1, 1, 0), &mut failures);
+    run("x4-literal", &flow("  let need = seats(event_kind: workshop)\n  give_seats(event: event, count: need.needed)\n"), 0, (2, 0, 0), &mut failures);
+    // a concert, which the hall cannot seat, stopped before the transfer: the search for the
+    // refusals is held to what the other kinds give
+    let concert = "  let need = seats(event_kind: kind)\n  match kind\n    concert => fail TooLarge \"the hall cannot seat a concert\"\n    workshop, talk => pass\n  give_seats(event: event, count: need.needed)\n";
+    run("x4-E204-branch", &changed("E204", &[("booking.flow", body, concert)]), 0, (2, 0, 0), &mut failures);
+    let overwritten = "  let need = seats(event_kind: kind)\n  let n = need.needed\n  let n = 5\n  give_seats(event: event, count: n)\n";
+    run("x4-overwritten", &flow(overwritten), 0, (0, 0, 0), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 

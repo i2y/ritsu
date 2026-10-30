@@ -55,7 +55,7 @@ the first five lines that differ, each with its input:
   call gives; the days koyomi's port hands over for every date of every dates file that passes its
   check, and those a rulec certificate carries for an input whose range is a koyomi date, against
   the days the model computes; `days_fit` and `days_given`, `amount_fits`, `amounts_given` and
-  `amounts_hull` (every numeric output of rulec's corpus, and three rules written for it: a refund the rule's vectors reach, a difference a `constraint` keeps at 0 or more, and the same difference less 5, whose example is the fewest the vectors come to), `refusals_met` (what chobo's search
+  `amounts_hull` (every numeric output of rulec's corpus, and three rules written for it: a refund the rule's vectors reach, a difference a `constraint` keeps at 0 or more, and the same difference less 5, whose example is the fewest the vectors come to; each also with its inputs held as a flow's call can hold them, every enum input of the corpus to each of its values and the three rules to the ranges a flow gives them), X4 as `ritsu check` decides it on small projects (a rule's output given to a transfer, with and without a `match` before it), from the calls dandori's port says reach the transfer and what rulec counts over what each gives the rule, `refusals_met` (what chobo's search
   finds for every transfer, held to each book's bounds), `held_until` and `input_range` (every
   input of the dates files), over inputs around each answer;
 - kaname: every input `kaname vectors` chooses for every function of kaname's examples (in English

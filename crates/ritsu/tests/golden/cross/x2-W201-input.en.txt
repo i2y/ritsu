@@ -1,0 +1,9 @@
+ok refund_check.rule
+warning[dandori W104]: refund.flow:21:1: nothing says what range `paid` is in (the input `paid` has no range), and `paid` of the rule `check` takes `>=0 <=10000`
+    21 |   let decision = check(paid: paid, asked: asked)
+refund.flow: ok (1 warning(s))
+warning[ritsu W201]: refund.flow:21:1: Whether the call of the rule check keeps its precondition `asked <= paid` cannot be decided
+    21 |   let decision = check(paid: paid, asked: asked)
+  = nothing says what range `paid` is in (the input `paid` has no range)
+  = The workflow's code that `ritsu dandori build` writes checks it when the workflow runs, as soon as the values are made; a run that breaks it fails there with `Dandori.BrokenPrecondition`.
+ritsu check: 2 files (rulec 1, dandori 1): all pass (2 warnings); borders between the languages: 1 checked, 1 undecided

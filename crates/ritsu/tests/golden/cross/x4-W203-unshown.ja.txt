@@ -5,10 +5,10 @@ hall.book: ok
   キー: assign は、event ごとに一度だけ動きます。キーが同じで count が違う二度目の呼び出しは、key_conflict で拒否されます。
   キー: release は、event ごとに一度だけ動きます。キーが同じで count が違う二度目の呼び出しは、key_conflict で拒否されます。
 booking.flow: 検査を通りました
-警告[ritsu W203]: booking.flow:19:1: タスク `give_seats` が `count` に渡す額を chobo が受け取るかを決められません
-    19 |   give_seats(event: event, count: need.needed)
-  = rulec の数えた範囲では、`need.needed`（規則 "seats.rule" の出力 `needed`）は >=-50 <=100 です。規則のベクタには、chobo が受け取らない額になる入力がありませんでした。
+警告[ritsu W203]: booking.flow:18:1: タスク `give_seats` が `count` に渡す額を chobo が受け取るかを決められません
+    18 |   give_seats(event: event, count: need.needed)
+  = 17 行目の呼び出しが規則に渡す値（`asked` >=0 <=50）で rulec が数えた範囲では、`need.needed`（規則 "seats.rule" の出力 `needed`）は >=-50 <=50 です。その値の中の規則のベクタには、chobo が受け取らない額になる入力がありませんでした。
   = rulec は出力の範囲を、入力をそれぞれの範囲で動かして数えます。二つの入力を結ぶ `constraint`（`holding <= asked` など）では狭めないので、出力が実際にはそういう額にならないことがあります。
   = 受け取らない額なら、ワークフローを走らせたときに chobo がその呼び出しを失敗させます。
-  = rulec が出力を 0 以上と数えるように規則を書くか（`max(…, 0)` など）、負の額を向きの違う振替に分ければ、決められます。
+  = rulec が出力を 0 以上と数えるように規則を書くか（`max(…, 0)` など）、負の額を向きの違う振替に分ければ、決められます。フローが規則に渡す値を、そういう額にならない入力に絞っても（振替の前の `match`、数の来るところの `range`）、決められることがあります。
 ritsu check: ファイル 3 個（rulec 1、chobo 1、dandori 1）。どれも検査を通りました（警告 1 件）。言語の境目: 確かめた 3 か所、決められない 1 か所

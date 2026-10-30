@@ -1,0 +1,8 @@
+ok seats.rule
+hall.book: ok
+  assign.do   may be refused: over_capacity (given(event) at most 300), key_conflict, already_refused
+  release.do  may be refused: not_given (given(event) at least 0), key_conflict, already_refused
+  key: assign once per event; a second call that differs only in count is refused with key_conflict
+  key: release once per event; a second call that differs only in count is refused with key_conflict
+booking.flow: ok
+ritsu check: 3 files (rulec 1, chobo 1, dandori 1): all pass; borders between the languages: 2 checked, 0 undecided
