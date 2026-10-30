@@ -658,13 +658,13 @@ fn commands() -> Vec<Cmd> {
                 (
                     0,
                     tr!(
-                        "動いたものは無い。--fixtures なら全件同じ答え、無いなら答えが違う入力を一つも見つけていない（決められなかった領域があれば出力には出るが、1 にはしない。JSON の total を見れば分かる）",
-                        "nothing moved: with --fixtures every record answered the same, without it no input was found that answers differently (a region that could not be settled is reported and does not raise this to 1; read `total` in the JSON)"
+                        "動いたものは無い。--fixtures なら全件同じ答え、無いなら答えが違う入力を一つも見つけておらず、宣言も変わっていない（決められなかった領域があれば出力には出るが、1 にはしない。JSON の total を見れば分かる）",
+                        "nothing moved: with --fixtures every record answered the same, without it no input was found that answers differently and no declaration changed (a region that could not be settled is reported and does not raise this to 1; read `total` in the JSON)"
                     ),
                 ),
                 (
                     1,
-                    tr!("影響がある。答えが違う入力があるか、受け付ける入力そのものが変わった。--fixtures では、新しい版が受け付けない入力の記録があるときと、一件も照合できなかったときも 1", "there is an impact: inputs that answer differently, or a change in what the rule accepts; with --fixtures, also when the new version does not accept a record's input, and when not one record was compared"),
+                    tr!("影響がある。--fixtures が無いときは、答えが違う入力があるか、宣言が変わった（受け付ける入力、出力の有無・型・刻み・丸め・範囲）。--fixtures では、答えが違う記録があるか、新しい版が受け付けない入力の記録があるか、一件も照合できなかった", "there is an impact: without --fixtures, inputs that answer differently, or a change in the declarations (the inputs the rule accepts, or an output added or removed, or its type, step, rounding or range); with --fixtures, a record that answers differently, a record whose input the new version does not accept, or not one record compared"),
                 ),
                 (2, tr!("引数の誤り、読めないファイル", "bad arguments, or a file that cannot be read")),
             ],

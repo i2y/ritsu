@@ -19,12 +19,19 @@ $ rulec schema rules/parcel_rate.rule            # the JSON Schema of the wire
 $ rulec verify rules/parcel_rate.rule --adapter python3 adapter.py
 Compared 96 / matched 79 (82.292%)
 Counterpart: legacy@fake-1
+Answers of the legacy implementation outside what the rule can produce: 3 (fee: 3); counted as mismatches
 
 Affected 17 (17.708%)  amount -17
   table size_of row 1 / table base_rate row 6 / table fuel_rate row 2 / table signature_fee row 1    10 records  difference -1 uniform  total -10
     Example: dest=overseas, girth=1, signature=true, weight=1 → rule fee=22 / legacy fee=23
   …
 ```
+
+The third line counts the answers the rule gives for no input at all.
+This legacy implementation charges a dollar more for every parcel going
+overseas, so a large parcel going overseas with a signature costs 73USD,
+one more than the 72USD the rule charges at most. Such an answer is
+counted as a mismatch, like any other.
 
 The legacy implementation is **started as a child process and spoken to
 in JSON Lines over stdin and stdout**, so its language and its location
@@ -144,6 +151,16 @@ in another unit or at another step moves no answer. What the generated
 code hands its callers is a different integer all the same, and that is
 listed at the top with the other declarations that changed ("an output
 changed type: fee  money[USD] → money[USDc]").
+
+An output's range is listed there too. Every output that is a number
+has a range its answers lie in, written or not, and `rulec schema`,
+`rulec api` and the port the other languages read all say it ([the
+range an answer stays in](checks.md#the-range-an-answer-stays-in)).
+Whatever holds answers to that range — dandori's check of what a rule
+answered, or a caller that validates a response against the schema —
+stops an answer outside it. So a range that moved makes the exit code 1
+even when no answer did. `--fixtures` compares the records alone: there,
+a range that moved while every record answers the same exits 0.
 
 The two answers are meant to be held against each other. Run this
 first — it says what *can* change — and `--fixtures` second, which says
@@ -266,7 +283,7 @@ $ rulec verify rules/parcel_rate.rule --format json --adapter python3 adapter.py
               "witness":{"in":{"dest":"overseas","girth":1,"signature":true,"weight":1},"ours":{"fee":22},"theirs":{"fee":23}},
               "records":[{"line":10,"tag":""},{"line":65,"tag":""},…],
               "suspect_rounding":false},…],
- "moved":[],"refused":[],"excluded":{},"out_of_reach":{},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
+ "moved":[],"refused":[],"excluded":{},"out_of_reach":{"fee":3},"filled":{"count":0,"by_field":{},"defaults":{}},"cases":null}
 ```
 
 The same shape for all three commands, defined in

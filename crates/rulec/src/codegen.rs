@@ -10014,26 +10014,23 @@ impl Gen<'_> {
         }
     }
 
-    /// The range **the generated guard actually enforces**, not a second computation of it.
-    /// Both entry guards above take `lo.num` and `hi.num`, so this does too: an inventory that
-    /// disagreed with the guard would send a caller values the code then rejects. A test holds
-    /// these two numbers to the text of the generated guard (§8.6). An input of an ordered enum
-    /// held to a range has the same keys, with the first and the last value its range lets in,
-    /// by the names that travel: the guard compares the value's place with those two (§15.210,
-    /// §15.251).
+    /// The range of a parameter or a field, as the integers that travel ([`Checked::wire_range`]).
+    /// For an input it is **the range the generated guard actually enforces**, not a second
+    /// computation of it. Both entry guards above take `lo.num` and `hi.num`, so this does too: an
+    /// inventory that disagreed with the guard would send a caller values the code then rejects.
+    /// A test holds these two numbers to the text of the generated guard (§8.6). For an output it
+    /// is the range the rule's answers lie in, the one the port gives the other languages and the
+    /// schema states (§15.271): a range written on the output's line, or what decides the output
+    /// put out to the grid it rounds to, a `result` included. The generated code does not hold its
+    /// own answers to it; a caller that checks them does. An input of an ordered enum held to a
+    /// range has the same keys, with the first and the last value its range lets in, by the names
+    /// that travel: the guard compares the value's place with those two (§15.210, §15.251).
     fn range_json(&self, name: &str) -> Option<String> {
         if let Some(vs) = self.c.enum_ranges.get(name) {
             return Some(crate::json::Obj::new().str("min", vs.first()?).str("max", vs.last()?).finish());
         }
-        let (lo, hi) = self.c.ranges.get(name)?;
-        let (lo, hi) = (lo.as_ref()?, hi.as_ref()?);
-        let sc = self.c.wire_scale(name);
-        Some(
-            crate::json::Obj::new()
-                .int("min", crate::types::wire_int(*lo, sc))
-                .int("max", crate::types::wire_int(*hi, sc))
-                .finish(),
-        )
+        let (lo, hi) = self.c.wire_range(name)?;
+        Some(crate::json::Obj::new().int("min", lo?).int("max", hi?).finish())
     }
 
     /// `{"mode":"down","grid":1}` — the grid as the integer the value itself travels as, so it

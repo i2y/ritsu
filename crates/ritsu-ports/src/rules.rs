@@ -64,7 +64,9 @@ pub enum ColumnType {
     Enum { name: String, range: Option<Vec<String>> },
     /// A number: the type as rulec spells it (`money[JPY, incl_tax]`, `rate`); its unit, with a
     /// rate's step (None for a spelling the table of units does not have, which rulec lets
-    /// through); and its declared range, as the integers that go on the wire.
+    /// through); and its range, as the integers that go on the wire: an input's as declared, an
+    /// output's the one its answers lie in, written or not, as `rulec schema` and `rulec api` say
+    /// it (rulec's §15.271).
     Num { written: String, unit: Option<Unit>, min: Option<i128>, max: Option<i128> },
     /// `T?`: the value may be `none`.
     Opt(Box<ColumnType>),
@@ -247,14 +249,16 @@ pub struct CallEnum {
 /// What a numeric output of a rule comes to (`Rules::output_values`), on the wire.
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutputValues {
-    /// The fewest and the most, as rulec's intervals read them; None at an end it has none for.
+    /// The fewest and the most: the range the output's answers lie in, the facts' (rulec's
+    /// §15.271); None at an end it has none for.
     pub min: Option<i128>,
     pub max: Option<i128>,
     /// Each number the output comes to, when every row that decides it writes one; None when
     /// some row computes it.
     pub values: Option<Vec<i128>>,
-    /// For a value the output comes to, an input that reaches it (from rulec's vectors), in the
-    /// order of the values; the fewest and the most first.
+    /// A value the output comes to with an input that reaches it, from rulec's vectors: the two
+    /// ends first, then the values of the rows, then the fewest and the most the vectors come to
+    /// (rulec's §15.270). A value is given once, and one no vector reaches is left out.
     pub examples: Vec<(i128, Values)>,
 }
 

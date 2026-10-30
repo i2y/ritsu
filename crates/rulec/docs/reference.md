@@ -998,16 +998,18 @@ which kaname and the other languages read what a rule answers. `rulec diff` tell
 moved as a change of what the rule answers (`output_range`). The range is checked, so the
 generated code checks nothing more when it runs.
 
-Where no range is written, a numeric output still has a range where the other languages read it,
-the certificate's `output_ranges` and the port: what decides it — what the rows of the tables that
-decide it write, a `define` of its name, what its `result` reaches, the range a walk or an open
-value declares — put out to the grid of its rounding, since the rule answers that rounded. Both
-re-checkers of the certificate hold that range, written or not, to what the output answers. The
-certificate's `ranges` keeps what decides the output, which its other claims are worked out from.
-The schema, `api` and the generated code carry what a table or a `define` decides as it is, not
-put out to the grid, and nothing for a `result`. `range from koyomi` (E065) and `random` (E070) are an input's
-alone. A word an output's line does not read, anything but `range` and `round`, is E047, as on
-every declaration line.
+Where no range is written, a numeric output still has a range: what decides it — what the rows of
+the tables that decide it write, a `define` of its name, what its `result` reaches, the range a
+walk or an open value declares — put out to the grid of its rounding, since the rule answers that
+rounded. It is said wherever a written range is but beside the output on the page for people: the
+certificate's `output_ranges`, `rulec schema` and `rulec api`, the MCP tool's output schema, the
+comments of the SQL and of the `.proto`, the script of the page, `rulec graph`, and the port, each
+as the integers that go on the wire. `rulec diff` compares it as it compares a written one, and
+`replay`, `fixtures` and `verify` count an answer outside it as out of reach. Both re-checkers of
+the certificate hold that range, written or not, to what the output answers. The certificate's
+`ranges` keeps what decides the output, which its other claims are worked out from.
+`range from koyomi` (E065) and `random` (E070) are an input's alone. A word an output's line does
+not read, anything but `range` and `round`, is E047, as on every declaration line.
 
 ## 5. derive
 

@@ -93,8 +93,9 @@ same way, by the hull of what its rows write, each row's answer cell an expressi
 (`hullOf`): it is what a value over the column is worked out with and what the column's range in
 a linear model is, and the range the document states for it is held to it (rulec's §15.196). The
 range the document states for each numeric output under `output_ranges`, which the
-other languages read the rule's answer in, is held to what decides the output put out
-to the grid it rounds to (`checkRounds`, rulec's §15.269). The
+other languages read the rule's answer in and `rulec schema` and `api` say (rulec's §15.271),
+is held to what decides the output put out to the grid it rounds to (`checkRounds`, rulec's
+§15.269). The
 truth value a boolean `define` of one comparison can take is worked out from its comparison and
 the intervals of its two sides, and the kind of every column from `inputs`, `walks`, `values` and
 `decides`. Where a leaf or a pair rests on the rows of a table above that write a value, those

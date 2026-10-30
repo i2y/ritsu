@@ -123,7 +123,37 @@ fn fields_of(got: &[ritsu_ports::WireField]) -> Vec<(String, String, String, boo
     got.iter().map(|f| (f.name.clone(), f.field.clone(), f.ty.clone(), f.optional, f.enumeration.clone())).collect()
 }
 
-/// Every fact of every rule of the corpus is what rulec's own JSON says of it.
+/// The range `api` gives the value `name` in each language that lists it: the parameters (`params`,
+/// Go's `input_fields`, the columns of NumPy and SQL) for `in`, the outputs (`outputs`, Go's
+/// `output_fields`) for `out`.
+fn api_ranges(api: &Json, side: &str, name: &str) -> Vec<(String, Option<(i128, i128)>)> {
+    let keys: &[&str] = if side == "in" { &["params", "input_fields", "columns"] } else { &["outputs", "output_fields"] };
+    let mut out = Vec::new();
+    for (lang, v) in api.as_obj().unwrap_or_default() {
+        for key in keys.iter().copied() {
+            let Some(entry) = v.get(key).and_then(|x| x.as_arr()).and_then(|l| l.iter().find(|p| st(p.get("name")) == name)) else { continue };
+            let range = entry.get("range").and_then(|r| Some((r.get("min")?.as_int()?, r.get("max")?.as_int()?)));
+            out.push((lang.clone(), range));
+        }
+    }
+    out
+}
+
+/// An end the certificate writes (`"12"`, `"-7/2"`, `null`) as the integer it is on the wire, at
+/// `scale` steps a unit, which it is whole.
+fn on_wire(at: &str, j: &Json, scale: i128) -> Option<i128> {
+    let s = j.as_str()?;
+    let (n, d) = match s.split_once('/') {
+        Some((n, d)) => (n.parse::<i128>().unwrap(), d.parse::<i128>().unwrap()),
+        None => (s.parse::<i128>().unwrap(), 1),
+    };
+    assert_eq!((n * scale) % d, 0, "{at}: {s} is no whole number on the wire at {scale} a unit");
+    Some(n * scale / d)
+}
+
+/// Every fact of every rule of the corpus is what rulec's own JSON says of it, and every range a
+/// number is said to have is one range: the facts', the schema's, `api`'s in every language, and for
+/// an output the certificate's `output_ranges` and the port's `output_values` (§15.271).
 #[test]
 fn 口の事実はapiと証明書とschemaが言うことと同じ() {
     let e = Engine::new();
@@ -149,6 +179,34 @@ fn 口の事実はapiと証明書とschemaが言うことと同じ() {
             for col in list.iter() {
                 let sch = schema.get("properties").and_then(|p| p.get(side)).and_then(|p| p.get("properties")).and_then(|p| p.get(&col.name));
                 check_column(&path, col, &cert, sch);
+                // a number has one range wherever it is said (§15.271): `api` in every language that
+                // lists it, and for an output the certificate's `output_ranges` on the wire and the
+                // port's `output_values` — each the facts', which the schema's are (above)
+                let (optional, inner) = match &col.ty {
+                    ColumnType::Opt(t) => (true, t.as_ref()),
+                    t => (false, t),
+                };
+                let ColumnType::Num { written, unit, min, max } = inner else { continue };
+                let at = format!("{path} {side} {}", col.name);
+                let both = min.zip(*max);
+                let langs = api_ranges(&api, side, &col.name);
+                assert!(langs.len() >= 11, "{at}: {langs:?}");
+                for (lang, range) in &langs {
+                    assert_eq!(*range, both, "{at}: api {lang}");
+                }
+                if side == "out" {
+                    // a rate travels as a count of its steps, everything else in its unit
+                    let scale = if written == "rate" { unit.as_ref().and_then(|u| u.step).map(|s| s.den / s.num).unwrap_or(100) } else { 1 };
+                    let stated = cert.get("output_ranges").and_then(|o| o.get(&col.name)).map(|r| arr(Some(r)));
+                    let stated = stated.map(|r| (on_wire(&at, &r[0], scale), on_wire(&at, &r[1], scale))).unwrap_or((None, None));
+                    assert_eq!(stated, (*min, *max), "{at}: the certificate's output_ranges");
+                    if !optional {
+                        match e.output_values(Path::new(&path), &col.name).unwrap_or_else(|x| panic!("{at}: {x:?}")) {
+                            ritsu_ports::Found::Value(v) => assert_eq!((v.min, v.max), (*min, *max), "{at}: output_values"),
+                            ritsu_ports::Found::Undecided(t) => panic!("{at}: {t:?}"),
+                        }
+                    }
+                }
             }
         }
         // every list the rule walks, in the order of the parameters (§15.219)
@@ -1163,6 +1221,34 @@ fn an_output_over_ranges_holds_the_rule_not_the_one_it_applies() {
         witnesses_hold(&e, path, "answer", &held, &found);
         assert_eq!(values_of(&found), want, "{lo}..{hi}");
     }
+}
+
+/// The examples of a numeric output (§15.270), in their order: the two ends of its range, the
+/// numbers the rows that decide it write, then the fewest and the most it comes to over the rule's
+/// vectors, each value once, with the first vector that comes to it, and none for a value no vector
+/// comes to. Under `holding <= asked`, `asked - holding - 5` reaches its upper end, 95, and not its
+/// lower, -55: the fewest the vectors come to, -5, is an example. The rows of a table are examples
+/// where a vector reaches them, and a row the constraint keeps out is none.
+#[test]
+fn the_examples_of_an_output_are_its_ends_its_rows_and_the_fewest_and_most_of_its_vectors() {
+    let t = ritsu_testkit::TempDir::new("ports-examples");
+    let head = "inputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n";
+    std::fs::write(t.path().join("short.rule"), format!("rule short v1\n\n{head}\nresult needed = asked - holding - 5\n")).unwrap();
+    std::fs::write(t.path().join("rows.rule"), format!("rule rows v1\n\n{head}\ntable pick\npolicy unique\n| asked | holding | -> needed : number |\n| <=40  | >40     | -20                |\n| <=40  | <=40    | 10                 |\n| >40   | -       | 30                 |\n")).unwrap();
+    let e = Engine::new();
+    let examples = |file: &str| match e.output_values(&t.path().join(file), "needed").unwrap() {
+        ritsu_ports::Found::Value(v) => ((v.min, v.max), v.values, v.examples),
+        ritsu_ports::Found::Undecided(why) => panic!("{file}: {why:?}"),
+    };
+    let int = |n: i128| Value::Int(n);
+    let at = |asked: i128, holding: i128| vec![("asked".to_string(), int(asked)), ("holding".to_string(), int(holding))];
+    let (ends, values, got) = examples("short.rule");
+    assert_eq!((ends, values), ((Some(-55), Some(95)), None));
+    assert_eq!(got, [(95, at(100, 0)), (-5, at(0, 0))]);
+    // -20 is an end and a row no vector reaches; 30 the other end, 10 a row; the vectors stop there
+    let (ends, values, got) = examples("rows.rule");
+    assert_eq!((ends, values), ((Some(-20), Some(30)), Some(vec![-20, 10, 30])));
+    assert_eq!(got.iter().map(|(v, _)| *v).collect::<Vec<_>>(), [30, 10]);
 }
 
 /// Each value of a rule's enum is handed over with its public name — the alias the rule writes in

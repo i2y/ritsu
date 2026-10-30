@@ -27,6 +27,8 @@
 
 `@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)` → `@pricing@1.1.0/rules/shipping_fee.rule (sha256:<head>)`
 
+- `fee` — an output changed range (`395..2950` → `395..3150`)
+
 | where they differ | answer | example | cells |
 |---|---|---|---|
 | region = world  and  weight >=2501g <=30000g | fee: 2950 → 3150 | region=world, weight=2501 | 2 |

@@ -44,7 +44,7 @@
 | region = world  and  weight >=2501g <=30000g | fee: 2950GBPc → - | region=world, weight=2501 | 2 |
 | region = eu  and  weight >=2501g <=30000g | fee: 1950GBPc → - | region=eu, weight=2501 | 2 |
 
-Of the inputs both versions accept, those outside this region get the same answer.
+Outside this region the two versions answer alike.
 
 </details>
 

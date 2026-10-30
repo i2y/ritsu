@@ -270,7 +270,8 @@ fn 領域と記録の二つの答えが食い違わない() {
 }
 
 /// The space is small enough to walk. The budget is there for the rule that is not, and it
-/// says so instead of answering about nothing.
+/// says so instead of answering about nothing. What changed in the declarations is known without
+/// the walk, and is said over the budget too: an output's range that moved (§15.271).
 #[test]
 fn 予算を超えたら_領域を出さずにそう言う() {
     let src = std::fs::read_to_string(root().join("tests/corpus/送料.rule")).unwrap();
@@ -278,16 +279,35 @@ fn 予算を超えたら_領域を出さずにそう言う() {
     let dir = tmp.path().to_path_buf();
     let (a, b) = (dir.join("a.rule"), dir.join("b.rule"));
     std::fs::write(&a, &src).unwrap();
-    std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
+    // 遠隔地のほかの 2kg 超を 1100円 から 1300円 に。送料の上限の 1800円 は動かないので、
+    // 出力の範囲は変わらない
+    let raised = src.replace("| not: 遠隔地 | >2000g  | 1100円", "| not: 遠隔地 | >2000g  | 1300円");
+    assert_ne!(raised, src);
+    std::fs::write(&b, &raised).unwrap();
     let (as_, bs) = (a.to_string_lossy().to_string(), b.to_string_lossy().to_string());
     let (code, out) = rulec(&["diff", &as_, &bs, "--budget", "10", "--format", "json"]);
     let j = json(&out);
     assert!(is_true(&j, "over_budget"), "{out}");
     assert!(!is_true(&j, "total"), "予算を超えたのに外について主張している");
     assert!(arr(&j, "changes").is_empty(), "領域を出さないと言いながら出している");
+    assert!(arr(&j, "domain").is_empty(), "変わっていない宣言を出している: {out}");
     assert_eq!(code, 0, "何も出していないので影響ありとは言わない");
     let (_, text) = rulec(&["diff", &as_, &bs, "--budget", "10"]);
     assert!(text.contains("budget") || text.contains("予算"), "{text}");
+
+    // 遠隔地の 2kg 超を 1800円 から 2000円 にすると、送料の範囲が 0..1800 から 0..2000 に動く。
+    // 歩かなくても分かることなので、予算を超えても宣言の変化として出し、影響ありと言う
+    std::fs::write(&b, src.replace("| 遠隔地      | >2000g  | 1800円", "| 遠隔地      | >2000g  | 2000円")).unwrap();
+    let (code, out) = rulec(&["diff", &as_, &bs, "--budget", "10", "--format", "json"]);
+    let j = json(&out);
+    assert!(is_true(&j, "over_budget"), "{out}");
+    assert!(arr(&j, "changes").is_empty(), "領域を出さないと言いながら出している");
+    let moved: Vec<(&str, &str, &str)> = arr(&j, "domain")
+        .iter()
+        .map(|d| (d.get("what").and_then(|x| x.as_str()).unwrap_or(""), d.get("old").and_then(|x| x.as_str()).unwrap_or(""), d.get("new").and_then(|x| x.as_str()).unwrap_or("")))
+        .collect();
+    assert_eq!(moved, [("output_range", "0..1800", "0..2000")], "{out}");
+    assert_eq!(code, 1, "出力の範囲が動いたのに影響なしと言っている");
 }
 
 /// What the rule accepts is a different question from what it answers, and the two are not

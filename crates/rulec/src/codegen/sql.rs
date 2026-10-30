@@ -1038,8 +1038,9 @@ impl<'a> Gen<'a> {
             }
             _ => "bigint".into(),
         };
-        if let Some((Some(lo), Some(hi))) = self.c.ranges.get(name).map(|(a, b)| (*a, *b)) {
-            s.push_str(&format!(", {}..{}", crate::types::wire_int(lo, sc), crate::types::wire_int(hi, sc)));
+        // An output's range is the one its answers lie in, as the schema and `api` say (§15.271).
+        if let Some((Some(lo), Some(hi))) = self.c.wire_range(name) {
+            s.push_str(&format!(", {lo}..{hi}"));
         }
         if matches!(ty, Ty::Opt(_)) {
             s.push_str(&tr!("、NULL 可", ", or NULL"));

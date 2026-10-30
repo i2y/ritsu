@@ -251,7 +251,9 @@ fn checked(path: &str, src: &str, budget: i64) -> Result<(RuleFile, Checked), Ve
 }
 
 /// A value's type as the port hands it over: a number with its unit and its range on the wire, an
-/// enum with the values its input's range lets in (§15.210, §15.251).
+/// enum with the values its input's range lets in (§15.210, §15.251). An input's range is the one
+/// the entry guard holds it to; an output's is the one its answers lie in, as `output_values`, the
+/// certificate's `output_ranges` and the schema say (§15.271).
 fn column_type(c: &Checked, name: &str, ty: &Ty) -> ColumnType {
     match ty {
         Ty::Bool => ColumnType::Bool,
@@ -260,15 +262,9 @@ fn column_type(c: &Checked, name: &str, ty: &Ty) -> ColumnType {
         Ty::Enum(e) => ColumnType::Enum { name: e.clone(), range: c.enum_ranges.get(name).cloned() },
         Ty::Opt(t) => ColumnType::Opt(Box::new(column_type(c, name, t))),
         _ => {
-            let sc = c.wire_scale(name);
-            let step = matches!(ty, Ty::Rate).then(|| Rat::new(1, sc));
-            let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
-            ColumnType::Num {
-                written: ty.to_string(),
-                unit: ty.unit(step),
-                min: lo.map(|v| crate::types::wire_int(v, sc)),
-                max: hi.map(|v| crate::types::wire_int(v, sc)),
-            }
+            let step = matches!(ty, Ty::Rate).then(|| Rat::new(1, c.wire_scale(name)));
+            let (min, max) = c.wire_range(name).unwrap_or((None, None));
+            ColumnType::Num { written: ty.to_string(), unit: ty.unit(step), min, max }
         }
     }
 }
@@ -715,10 +711,14 @@ impl ritsu_ports::Rules for Engine {
         })
     }
 
-    /// The output's range is the interval rulec holds it to (a range written on its line, a
-    /// table's rows, a `define`'s arithmetic, what its `result` comes to, §15.268); where every row
-    /// that decides it writes a number, those numbers, each with an input from the rule's vectors
-    /// (which take every row) that comes to it.
+    /// The output's range is the one its answers lie in (§15.268, §15.269): a range written on its
+    /// line, or what decides it (a table's rows, a `define`'s arithmetic, what its `result` comes
+    /// to) put out to the grid it rounds to. Where every row that decides it writes a number, those
+    /// numbers. The examples (§15.270) are values the output comes to, each with an input from the
+    /// rule's vectors (which take every row, and hold the inputs to their ranges and constraints)
+    /// that comes to it: the two ends of the range, the numbers the rows write, then the fewest and
+    /// the most the output comes to over the vectors, in that order. A value is given once, with
+    /// the first vector that comes to it, and an end no vector comes to has none.
     fn output_values(&self, rule: &Path, output: &str) -> Result<ritsu_ports::Found<ritsu_ports::OutputValues>, Vec<Said>> {
         use crate::ast::{Lit, OutCell};
         let (_, _, got) = self.rule(rule)?;
@@ -735,7 +735,7 @@ impl ritsu_ports::Rules for Engine {
             return Ok(ritsu_ports::Found::Undecided(ritsu_base::tr!("`{output}` は、この規則の数の出力ではありません", "`{output}` is not a numeric output of this rule")));
         }
         let sc = c.wire_scale(output);
-        let (lo, hi) = c.output_range(output).unwrap_or((None, None));
+        let (min, max) = c.wire_range(output).unwrap_or((None, None));
         // every number the rows that decide the output write, if each writes one
         let ty = c.ty_of(output).unwrap_or(Ty::Unknown);
         let mut literal: Option<Vec<i128>> = Some(Vec::new());
@@ -760,18 +760,23 @@ impl ritsu_ports::Rules for Engine {
             v.dedup();
             v
         });
-        let (min, max) = (lo.map(|v| crate::types::wire_int(v, sc)), hi.map(|v| crate::types::wire_int(v, sc)));
-        // an input for each value, from the vectors
+        // what the output comes to on the vectors, on the wire
+        let vectors = self.joined(|| crate::vectors::generate(f, c));
+        let wire = |x: &Option<crate::eval::Val>| match x {
+            Some(crate::eval::Val::Num(r)) => Some(crate::types::wire_int(*r, sc)),
+            _ => None,
+        };
+        let reached: Vec<i128> = vectors.iter().flat_map(|v| v.outputs.iter().filter(|(n, _)| n == output).filter_map(|(_, x)| wire(x))).collect();
+        // an input for each value: the ends, the rows' numbers, the fewest and the most
         let mut wanted: Vec<i128> = min.into_iter().chain(max).collect();
         wanted.extend(values.iter().flatten().copied());
-        wanted.dedup();
+        wanted.extend(reached.iter().min().into_iter().chain(reached.iter().max()).copied());
         let mut examples: Vec<(i128, Values)> = Vec::new();
-        let vectors = self.joined(|| crate::vectors::generate(f, c));
         for w in wanted {
             if examples.iter().any(|(v, _)| *v == w) {
                 continue;
             }
-            let hit = vectors.iter().find(|v| v.outputs.iter().any(|(n, x)| n == output && matches!(x, Some(crate::eval::Val::Num(r)) if crate::types::wire_int(*r, sc) == w)));
+            let hit = vectors.iter().find(|v| v.outputs.iter().any(|(n, x)| n == output && wire(x) == Some(w)));
             if let Some(v) = hit {
                 let inputs: Values = v.input.iter().map(|(n, x)| (n.clone(), from_val(c, n, x))).collect();
                 examples.push((w, inputs));

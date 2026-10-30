@@ -541,23 +541,19 @@ impl<'a> Gen<'a> {
         }
     }
 
-    /// The comment beside a field: the rule's own name for it, what the number means, and the
-    /// range the generated guard will enforce. `sent` is a field of the request; an optional one
-    /// of the answer is unset where the rule answers that there is no value (§15.249).
+    /// The comment beside a field: the rule's own name for it, what the number means, and its
+    /// range: for a field of the request the range the generated guard will enforce, for a field
+    /// of the answer the range the rule's answers lie in (§15.271). `sent` is a field of the
+    /// request; an optional one of the answer is unset where the rule answers that there is no
+    /// value (§15.249).
     fn proto_note(&self, name: &str, ty: &Ty, sent: bool) -> String {
         let mut s = name.to_string();
         let inner = if let Ty::Opt(t) = ty { t.as_ref() } else { ty };
         let unit = crate::verify::wire_unit(name, inner, self.c);
         if !unit.is_empty() {
             s.push_str(&tr!("：{unit}", ": {unit}"));
-            let sc = self.c.wire_scale(name);
-            if let (Some(lo), Some(hi)) = self.c.ranges.get(name).copied().unwrap_or((None, None)) {
-                s.push_str(&tr!(
-                    "。{} から {} まで",
-                    ". {} to {}",
-                    crate::types::wire_int(lo, sc),
-                    crate::types::wire_int(hi, sc)
-                ));
+            if let Some((Some(lo), Some(hi))) = self.c.wire_range(name) {
+                s.push_str(&tr!("。{lo} から {hi} まで", ". {lo} to {hi}"));
             }
         }
         // An input of an ordered enum held to a range: its two ends, by the names the values

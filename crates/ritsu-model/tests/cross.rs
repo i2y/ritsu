@@ -606,13 +606,16 @@ fn x4_the_amounts_of_every_numeric_output_are_the_models() {
             outputs += 1;
         }
     }
-    // two rules of the shapes where an example decides: a refund the vectors reach (an example), and
-    // a difference a constraint keeps at 0 or more, which rulec counts from -50 (none)
+    // three rules of the shapes where an example decides: a refund the vectors reach (an example), a
+    // difference a constraint keeps at 0 or more, which rulec counts from -50 (none), and the same
+    // difference less 5, which never comes to the low end of its range and comes to -5 over the
+    // vectors (an example from the fewest they come to, rulec DESIGN §15.270)
     let written_rules = tmp.path().join("rules");
     std::fs::create_dir_all(&written_rules).unwrap();
     std::fs::write(written_rules.join("adjust.rule"), "rule adjust v1\n\nenum kind = charge | refund\n\ninputs\n  what : kind\n\noutputs\n  amount : number  round down(1)\n\ntable pick\npolicy unique\n| what   | -> amount : number |\n| charge | 300                |\n| refund | -300               |\n").unwrap();
     std::fs::write(written_rules.join("tied.rule"), "rule tied v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n").unwrap();
-    for (file, name) in [("adjust.rule", "amount"), ("tied.rule", "needed")] {
+    std::fs::write(written_rules.join("short.rule"), "rule short v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding - 5\n").unwrap();
+    for (file, name) in [("adjust.rule", "amount"), ("tied.rule", "needed"), ("short.rule", "needed")] {
         let out = engine.output_values(&written_rules.join(file), name).unwrap();
         rows.push(amount_row(&out));
     }

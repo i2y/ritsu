@@ -6794,6 +6794,19 @@ impl Checked {
         }
     }
 
+    /// The range of a value as the integers it travels as (§15.271): [`Checked::output_range`] at
+    /// the value's [`Checked::wire_scale`]. Everything that says a range outward asks here — the
+    /// port's facts and `output_values`, `schema` and the `outputSchema` of an MCP tool, `api`, the
+    /// comments of the generated `.proto` and SQL, the script of the pages, `graph` — so an output
+    /// has one range wherever it is read. For an input or a field of a sequence it is the range its
+    /// line declares, which the entry guard holds it to. An end written on an output's line is in
+    /// the output's unit or a whole number of a rate's steps (E103, E114), and an end put out to
+    /// the grid lies on the grid, so the integer is the end itself, not one cut toward zero.
+    pub fn wire_range(&self, name: &str) -> Option<(Option<i128>, Option<i128>)> {
+        let sc = self.wire_scale(name);
+        self.output_range(name).map(|(lo, hi)| (lo.map(|v| wire_int(v, sc)), hi.map(|v| wire_int(v, sc))))
+    }
+
     /// E140 and the ranges of the outputs (§15.268). What an output comes to is what decides it —
     /// the values of the rows of its tables, a `define` of its name, or what its `result` reaches
     /// under the inputs' ranges and the constraints — put out to the grid of its rounding, as a

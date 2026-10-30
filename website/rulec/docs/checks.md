@@ -481,9 +481,11 @@ read as never below zero and never above the amount handed out
 the answer's wherever an input's range is said: the certificate,
 `rulec schema` and `rulec api`, the page for people, and ritsu's port,
 through which the other languages read the answer. With none written,
-the certificate and the port carry what decides the output put out to
-the grid it rounds to, and the certificate's two re-checkers hold the
-range, written or not, to what the output answers once rounded. See
+the output still has one range, and every one of them but the page
+says it: what decides the output, put out to the grid it rounds to. The
+certificate's two re-checkers hold the range, written or not, to what
+the output answers once rounded, and `rulec diff` lists a range that
+moved among the declarations that changed. See
 [the reference](reference.md#range-on-an-output--the-range-other-languages-read-it-in).
 
 ## Showing it to people

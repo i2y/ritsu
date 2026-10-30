@@ -106,7 +106,14 @@
               "differing": 2,
               "unsettled": 0,
               "unrealized": 0,
-              "domain": [],
+              "domain": [
+                {
+                  "what": "output_range",
+                  "name": "料金",
+                  "old": "395..2950",
+                  "new": "395..3150"
+                }
+              ],
               "changes": [
                 {
                   "region": [

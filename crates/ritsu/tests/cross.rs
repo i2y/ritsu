@@ -12,8 +12,10 @@
 //!   module (kaname's E102); in steps of 0.1%, from the gate or the flow. The same with Japanese
 //!   names, in ℃ (held) and in ℉ from each.
 //! - X2 (a rule's preconditions where a workflow calls it): `refund` — the amount asked is kept
-//!   below what was paid by the ranges (held), can pass it (E201), or comes from a task with no
-//!   range (W201). `quota` is the same with a sum on one side (`used + requested <= quota`).
+//!   below what was paid by the ranges (held), can pass it (E201), comes from a task with no range
+//!   (W201), or is what another rule's `result` comes to, with no range written on its line, which
+//!   can pass it too (E201 with the range of the `result`, rulec's §15.271). `quota` is the same
+//!   with a sum on one side (`used + requested <= quota`).
 //! - The range of a rule's input of an ordered enum (rulec's §15.251), which the languages that give
 //!   the rule a value hold it to themselves, as they hold a number's: `lift` and `tiers` — a flow
 //!   and a gate that give only values the range lets in (held), a flow that holds the campaign it is
@@ -32,8 +34,9 @@
 //!   to 2⁶³ − 1, so a negative amount is a transfer the other way), the seats can come from an
 //!   answer with no range (W203), the seats still to give, which a constraint keeps at 0 or more
 //!   though rulec counts them from −50 (W203: none of the rule's vectors comes to a negative
-//!   amount), a concert needs more than the hall holds (E204), the task handles the hall being
-//!   full, which no kind comes to (W204).
+//!   amount), the same with five seats kept back (−5, E203: the fewest the rule's vectors come to,
+//!   though the low end of the range, −55, is never reached), a concert needs more than the hall
+//!   holds (E204), the task handles the hall being full, which no kind comes to (W204).
 //! - X6 (the day given to a koyomi date): `reminding` — the payment day given to a reminder whose
 //!   range holds every payment day (held), ends before the last (E205), or the day received (W205).
 //! - X5 (a hold against its expiry): `invoice` — goods held three days, with timeouts (held), until
@@ -196,6 +199,16 @@ fn x2_a_rules_preconditions_where_a_flow_calls_it() {
     // undecided: what is asked comes from a task whose answer has no range
     let open = repro("W201").iter().find(|(n, _)| n.ends_with(".flow")).unwrap().1.to_string();
     run("x2-W201", &[("refund_check.rule", rule.clone()), ("refund.flow", open)], 0, (0, 0, 1), &mut failures);
+    // an example: what is asked is what another rule's `result` comes to, with no range written on
+    // its line, which dandori reads from the rule's facts (rulec's §15.271): up to 9,000
+    let share = "rule refund_share v1\ndescription \"What a refund asks for: the price of an item times the items sent back\"\n\ninputs\n  price : number  range >=0 <=3000\n  items : number  range >=0 <=3\n\noutputs\n  asked : number  round down(1)\n\nresult asked = price * items\n\nexamples\n| price | items | -> asked |\n| 1000  | 2     | 2000     |\n".to_string();
+    let by_rule = flow
+        .replace("task ask_amount(order: string) -> int range >=0 <=10000\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:ask-amount\"\n  idempotent\n\n", "")
+        .replace("  paid  : int  range >=0 <=10000\n", "  paid  : int  range >=0 <=10000\n  price : int  range >=0 <=3000\n  items : int  range >=0 <=3\n")
+        .replace("use rule check from", "use rule share from \"refund_share.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:refund-share\"\nuse rule check from")
+        .replace("  let asked = ask_amount(order: order)\n", "  let shared = share(price: price, items: items)\n  let asked = shared.asked\n");
+    assert!(!by_rule.contains("ask_amount") && by_rule.contains("refund_share.rule"), "{by_rule}");
+    run("x2-result-E201", &[("refund_check.rule", rule.clone()), ("refund_share.rule", share), ("refund.flow", by_rule)], 1, (0, 1, 0), &mut failures);
     // the same value on both sides of `<=` holds whatever it is
     let same = flow.replace("check(paid: paid, asked: asked)", "check(paid: asked, asked: asked)");
     run("x2-same-value", &[("refund_check.rule", rule), ("refund.flow", same)], 0, (1, 0, 0), &mut failures);
@@ -334,7 +347,12 @@ fn x4_a_rules_output_as_a_transfers_amount() {
     let tied = "rule seats v1\ndescription \"The seats an event still needs: what it asked for, less what it holds, which is never more than it asked for\"\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n".to_string();
     let flow = "workflow booking v1\ndescription \"Gives an event the seats it still needs\"\n\nuse rule seats from \"seats.rule\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:seats\"\nuse book hall from \"hall.book\"\n  lambda \"arn:aws:lambda:us-east-1:123456789012:function:hall\"\n\ninputs\n  event   : string\n  asked   : int  range >=50 <=100\n  holding : int  range >=0 <=50\n\ntask give_seats(event: string, count: int)\n  book hall.assign.do\n\nflow\n  let need = seats(asked: asked, holding: holding)\n  give_seats(event: event, count: need.needed)\n".to_string();
     let book = changed("W203", &[]).into_iter().find(|(n, _)| *n == "hall.book").unwrap().1;
-    run("x4-W203-unshown", &[("seats.rule", tied), ("hall.book", book), ("booking.flow", flow)], 0, (2, 0, 1), &mut failures);
+    run("x4-W203-unshown", &[("seats.rule", tied), ("hall.book", book.clone()), ("booking.flow", flow.clone())], 0, (2, 0, 1), &mut failures);
+    // an example from the vectors (rulec DESIGN §15.270): with five seats kept back, the seats still
+    // to give never come to the low end of their range, -55, under the constraint, and the fewest
+    // the rule's vectors come to, -5, is an amount chobo does not take
+    let short = "rule seats v1\ndescription \"The seats an event still needs: what it asked for, less what it holds and five kept back; it never holds more than it asked for\"\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding - 5\n".to_string();
+    run("x4-E203-vectors", &[("seats.rule", short), ("hall.book", book), ("booking.flow", flow)], 1, (2, 1, 0), &mut failures);
     run("x4-E204", &changed("E204", &[]), 1, (1, 1, 0), &mut failures);
     run("x4-W204", &changed("W204", &[]), 0, (1, 0, 1), &mut failures);
     assert!(failures.is_empty(), "{}", failures.join("\n"));

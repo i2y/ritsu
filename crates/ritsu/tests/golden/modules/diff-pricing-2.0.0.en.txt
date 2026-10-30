@@ -45,7 +45,7 @@ behavior:
         rows: table fee_by_weight row 4
         example: region=eu, weight=2501
 
-    of the inputs both versions accept, those outside this region get the same answer; what they accept differs as listed above.
+    outside this region the two versions answer alike.
 
 interface:
   rules/shipping_fee.rule (rulec, api): 25 changes, 13 of them may break a user

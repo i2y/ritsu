@@ -17,8 +17,10 @@
 
   Each is written as `borders.rs` writes it, and each theorem below says what an answer settles.
   An example of `amountFits` is always one rulec gives, an input from the rule's vectors
-  (`amountFits_fails`, `amountFits_undecided`): rulec counts an output's range from above, so
-  neither an end of it nor a number a row writes shows an amount the output comes to.
+  (`amountFits_fails`, `amountFits_undecided`): rulec counts an output's range from above, so an
+  end of it need not be an amount the output comes to. rulec's examples hold the fewest and the
+  most amounts its vectors come to (rulec's DESIGN §15.270), so an output left undecided is one no
+  input from the vectors makes an amount chobo does not take.
   `amountFits_chobo_takes` and `amountFits_fails_chobo` tie X4 to `ChoboModel` (an amount the check
   lets through is one chobo's interpreter takes, and the amount it gives as an example is one the
   interpreter does not take), and
@@ -164,8 +166,9 @@ def maxAmount : Int := 9223372036854775807
 
 /-- What a numeric output of a rule comes to (`ritsu_ports::OutputValues`), on the wire: its fewest
     and its most, every number its rows write when each writes one, and for some of the values it
-    comes to an input from the rule's vectors that comes to it (`α`, which this check only hands
-    on). -/
+    comes to — the ends of its range, the numbers its rows write, the fewest and the most its
+    vectors come to (rulec's DESIGN §15.270) — an input from the rule's vectors that comes to it
+    (`α`, which this check only hands on). -/
 structure OutputValues (α : Type) where
   min : Option Int
   max : Option Int
@@ -196,9 +199,9 @@ def pickAbove {α : Type} : List (Int × α) → Option (Int × α)
 
 /-- `borders::amount_fits`: it holds when both ends of the output's range are known and inside 0 to
     2⁶³ − 1. Otherwise the example is an amount outside that an input from the rule's vectors
-    comes to: the smallest below 0, else the largest above 2⁶³ − 1. With none it is undecided:
-    neither an end of rulec's range nor a number a row writes is an amount the output is shown to
-    come to. -/
+    comes to: the smallest below 0, else the largest above 2⁶³ − 1. With none it is undecided: no
+    example is outside, and since the examples hold the fewest and the most the vectors come to,
+    no input from the vectors is. -/
 def amountFits {α : Type} (out : Found (OutputValues α)) : Answer (Int × α) :=
   match out with
   | .undecided => .undecided
@@ -398,8 +401,10 @@ theorem amountFits_fails_first {α : Type} {o : OutputValues α} {v : Int} {ex :
     exact ⟨fun x hx hx0 => absurd (hz x hx) (by omega), fun _ => ⟨hz, hall⟩⟩
 
 /-- **When X4's amounts are undecided** for an output rulec counts, the output's range is not shown
-    inside 0 to 2⁶³ − 1, and no input from the rule's vectors comes to an amount outside: every
-    example is one chobo takes. -/
+    inside 0 to 2⁶³ − 1, and every example is one chobo takes. rulec's examples hold the fewest and
+    the most amounts the rule's vectors come to (rulec's DESIGN §15.270), so no input from the
+    vectors comes to an amount outside: that is what rulec gives, which this theorem reads as
+    given. -/
 theorem amountFits_undecided {α : Type} {o : OutputValues α}
     (h : amountFits (.value o) = .undecided) :
     o.inside = false ∧ ∀ x ∈ o.examples, 0 ≤ x.1 ∧ x.1 ≤ maxAmount := by

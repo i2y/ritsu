@@ -174,11 +174,19 @@ pub struct MStep {
 
 impl VDiff {
     /// Whether anything moved. The exit code is this: a region where the answers differ, or
-    /// a change in what the rule accepts. A region that could not be settled is **not** one
+    /// a change in the declarations — what the rule accepts, or an output's presence, type,
+    /// step, rounding or range (§15.271). A region that could not be settled is **not** one
     /// — the same line `check` draws around W114, where what could not be decided is
     /// reported and does not fail the run. Whoever wants the stricter gate reads `total`.
     pub fn any(&self) -> bool {
         !self.changes.is_empty() || !self.domain.is_empty()
+    }
+    /// Whether the two versions take the same inputs: nothing in the domain moved but an output
+    /// (§15.271). A version whose output changed range, rounding, type or step, or that renamed an
+    /// output, takes every input the other does, so what the run says of the inputs outside the
+    /// region it reports is said of every input, not of the inputs both versions accept.
+    pub fn accepts_alike(&self) -> bool {
+        self.domain.iter().all(|d| d.what.starts_with("output_"))
     }
     /// Whether "outside the reported region the two answer alike" is a claim this run
     /// earned. A cell that could not be realized was never compared, so it takes the claim
@@ -1556,7 +1564,7 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
     for b in &n.0.outputs {
         match o.0.outputs.iter().find(|a| a.name.text == b.name.text) {
             None => out.push(DomainChange { what: "output_added", name: b.name.text.clone(), old: None, new: None }),
-            Some(a) => {
+            Some(_) => {
                 // Answers are compared as values (§15.199), so a version that counts an output in
                 // another unit or at another step moves no answer; what its callers receive does
                 // change, and this is where that is said.
@@ -1573,10 +1581,13 @@ fn domain_diff(o: (&RuleFile, &Checked), n: (&RuleFile, &Checked)) -> Vec<Domain
                 if ra != rb {
                     out.push(DomainChange { what: "output_rounding", name: b.name.text.clone(), old: ra, new: rb });
                 }
-                // The range written on an output's line is what its callers are told it comes to
-                // (§15.268), as an input's is what it takes; where either version writes one, the
-                // two versions' ranges of the output are compared.
-                if a.range.is_some() || b.range.is_some() {
+                // The range of a numeric output is what its callers are told it comes to, as an
+                // input's is what it takes: the schema, `api` and the port say it, written on the
+                // output's line or not (§15.268, §15.271). The two versions' ranges are compared
+                // wherever either version's output is a number, so a version whose `result` comes
+                // to more is said to, though no answer the two give moves.
+                let numeric = |c: &Checked| c.ty_of(name).is_some_and(|t| t.present().is_numeric());
+                if numeric(o.1) || numeric(n.1) {
                     let shown = |c: &Checked| match c.output_range(name) {
                         Some((lo, hi)) => format!("{}..{}", lo.map(|x| x.to_string()).unwrap_or_default(), hi.map(|x| x.to_string()).unwrap_or_default()),
                         None => String::new(),
@@ -2570,7 +2581,7 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
     if d.axes.is_empty() {
         s.push_str(&format!(
             "{}\n",
-            if d.domain.is_empty() {
+            if d.accepts_alike() {
                 tr!(
                     "答えを決めるものは何も変わっていません。どの入力でも同じ答えです。",
                     "nothing that decides an answer changed: every input gets the same answer."
@@ -2600,7 +2611,7 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
     if d.changes.is_empty() && d.unknown.is_empty() && d.unrealized == 0 {
         s.push_str(&format!(
             "{}\n",
-            if d.domain.is_empty() {
+            if d.accepts_alike() {
                 tr!("どの入力でも答えは同じです。", "every input gets the same answer.")
             } else {
                 tr!(
@@ -2633,7 +2644,7 @@ pub fn render(d: &VDiff, c: &Checked, terse: bool) -> String {
     if d.total() {
         s.push_str(&format!(
             "\n{}\n",
-            if d.domain.is_empty() {
+            if d.accepts_alike() {
                 tr!(
                     "ここに挙げた入力のほかでは、二つの版は同じ答えを返します。",
                     "outside this region the two versions answer alike."
@@ -2875,7 +2886,7 @@ pub fn markdown(d: &VDiff, c: &Checked, old: &str, new: &str, terse: bool) -> St
     }
     s.push_str(&format!(
         "{}\n",
-        if d.total() && d.domain.is_empty() {
+        if d.total() && d.accepts_alike() {
             tr!("ここに挙げた入力のほかでは、二つの版は同じ答えを返します。", "Outside this region the two versions answer alike.")
         } else if d.total() {
             tr!("両方の版が受け付ける入力のうち、ここに挙げたほかは同じ答えを返します。", "Of the inputs both versions accept, those outside this region get the same answer.")

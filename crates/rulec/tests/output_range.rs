@@ -1,13 +1,16 @@
-//! The range written on an output's line, and the range of the output a `result` decides
-//! (DESIGN §15.268).
+//! The range written on an output's line, and the range of an output with none written (DESIGN
+//! §15.268, §15.269, §15.271).
 //!
 //! A range on an output's line used to be stepped over in silence. It is now held to what the
 //! output comes to — E140 when it leaves some of that out, or when nothing says what that is —
 //! and is then the output's range wherever an input's or a derive's is said: the certificate's
 //! `ranges`, the port the other languages read a rule through, the page, the schema, and `diff`.
-//! The output a `result` decides has the range of what it comes to in the certificate and the
-//! port when its line writes none, and two shares of one amount taken at running totals in order
-//! are read as what they are: the second never below the first.
+//! With none written, the output has what decides it put out to the grid of its rounding, and the
+//! output a `result` decides what the `result` comes to; that is the range the certificate's
+//! `output_ranges`, the port, the schema and the MCP tool's `outputSchema`, `api`, the comments of
+//! the generated `.proto` and SQL, the pages, `graph`, `replay` and `diff` all say. Two shares of
+//! one amount taken at running totals in order are read as what they are: the second never below
+//! the first.
 
 use ritsu_ports::{ColumnType, Found, Rules};
 use rulec::i18n::Lang;
@@ -67,6 +70,90 @@ fn ends(r: &rulec::json::Json, name: &str) -> Option<(String, String)> {
 
 fn pair(lo: &str, hi: &str) -> Option<(String, String)> {
     Some((lo.to_string(), hi.to_string()))
+}
+
+/// Every place that says the range of `output` outward says `lo` to `hi`, an integer of the unit a
+/// side (§15.271): the certificate's `output_ranges`, the port's facts and `output_values`, the
+/// schema and the `outputSchema` of the MCP tool, the output's entry in each language of `api`,
+/// the comments of the `.proto` and the SQL `gen` writes, the script of its pages, and `graph`.
+fn said_everywhere(dir: &Path, file: &str, output: &str, (lo, hi): (i128, i128)) {
+    let at = format!("{file} {output}");
+    let both = Some((Some(lo), Some(hi)));
+    let ends_of = |j: Option<&rulec::json::Json>, min: &str, max: &str| j.map(|j| (j.get(min).and_then(|x| x.as_int()), j.get(max).and_then(|x| x.as_int())));
+    assert_eq!(ends(certificate(dir, file).get("output_ranges").unwrap(), output), pair(&lo.to_string(), &hi.to_string()), "{at}: the certificate");
+    let e = rulec::ports::Engine::new();
+    let facts = e.facts(&dir.join(file)).unwrap_or_else(|x| panic!("{at}: {x:?}"));
+    let col = facts.outputs.iter().find(|c| c.name == output).unwrap();
+    assert!(matches!(col.ty, ColumnType::Num { min: Some(a), max: Some(b), .. } if (a, b) == (lo, hi)), "{at}: the facts: {:?}", col.ty);
+    match e.output_values(&dir.join(file), output).unwrap() {
+        Found::Value(v) => assert_eq!((v.min, v.max), (Some(lo), Some(hi)), "{at}: output_values"),
+        Found::Undecided(t) => panic!("{at}: {t:?}"),
+    }
+    // the schema, and the `outputSchema` of the MCP tool, whose `observed` is the schema's `out`
+    let (_, schema) = rulec(dir, &["schema", file]);
+    let j = rulec::json::parse(&schema).unwrap();
+    let out = j.get("properties").and_then(|p| p.get("out")).and_then(|o| o.get("properties")).and_then(|p| p.get(output));
+    assert_eq!(ends_of(out, "minimum", "maximum"), both, "{at}: {schema}");
+    let src = std::fs::read_to_string(dir.join(file)).unwrap();
+    let path = dir.join(file).to_string_lossy().into_owned();
+    let (f, c) = rulec::prepare(&src, &path).unwrap();
+    let tool = rulec::json::parse(&rulec::codegen::Gen::new(&f, &c, &src, &path).tool_json()).unwrap();
+    let observed = tool.get("outputSchema").and_then(|o| o.get("properties")).and_then(|p| p.get("observed")).and_then(|o| o.get("properties")).and_then(|p| p.get(output));
+    assert_eq!(ends_of(observed, "minimum", "maximum"), both, "{at}: outputSchema");
+    // `api`: the output's entry in every language that lists it
+    let (_, api) = rulec(dir, &["api", file]);
+    let j = rulec::json::parse(&api).unwrap();
+    let mut langs = 0;
+    for (lang, v) in j.as_obj().unwrap() {
+        for key in ["outputs", "output_fields"] {
+            let Some(list) = v.get(key).and_then(|x| x.as_arr()) else { continue };
+            let entry = list.iter().find(|o| o.get("name").and_then(|n| n.as_str()) == Some(output));
+            assert_eq!(ends_of(entry.and_then(|o| o.get("range")), "min", "max"), both, "{at}: api {lang}");
+            langs += 1;
+        }
+    }
+    assert_eq!(langs, 11, "{at}: {api}");
+    // what `gen` writes: the comment of the answer's field in the `.proto`, the header of the two
+    // SQL files, and the rule the pages' script reads
+    let generated = dir.join("generated");
+    let _ = std::fs::remove_dir_all(&generated);
+    let (code, _) = rulec(dir, &["gen", file, "--out", "generated"]);
+    assert_eq!(code, 0, "{at}: gen");
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut todo = vec![generated];
+    while let Some(d) = todo.pop() {
+        for entry in std::fs::read_dir(&d).unwrap().flatten() {
+            let p = entry.path();
+            if p.is_dir() { todo.push(p) } else { files.push(p) }
+        }
+    }
+    let read = |p: &PathBuf| std::fs::read_to_string(p).unwrap();
+    let named = |end: &str| files.iter().filter(|p| p.to_string_lossy().ends_with(end)).collect::<Vec<_>>();
+    let (proto, sql, pages) = (named(".proto"), named(".sql"), named("_page.html"));
+    assert_eq!((proto.len(), sql.len(), pages.len()), (1, 2, 3), "{at}: {files:?}");
+    let field = format!("  // {output}: ");
+    assert!(read(proto[0]).lines().any(|l| l.starts_with(&field) && l.ends_with(&format!(". {lo} to {hi}"))), "{at}: {}", read(proto[0]));
+    for s in &sql {
+        assert!(read(s).lines().any(|l| l.contains(&format!("\"{output}\"")) && l.contains(&format!(", {lo}..{hi}"))), "{at}: {}", read(s));
+    }
+    for p in &pages {
+        let text = read(p);
+        let outputs = text.split("const RULE = ").nth(1).and_then(|r| r.split("\"outputs\":[").nth(1)).and_then(|r| r.split(']').next()).unwrap_or_else(|| panic!("{at}: {}", p.display()));
+        assert!(outputs.contains(&format!("\"name\":\"{output}\"")) && outputs.contains(&format!("\"range\":{{\"min\":{lo},\"max\":{hi}}}")), "{at}: {outputs}");
+    }
+    // `graph`: the output's node
+    let (_, graph) = rulec(dir, &["graph", file]);
+    let j = rulec::json::parse(&graph).unwrap();
+    let node = j.get("nodes").and_then(|n| n.as_arr()).and_then(|n| n.iter().find(|x| x.get("name").and_then(|v| v.as_str()) == Some(output)).cloned());
+    assert_eq!(ends_of(node.as_ref().and_then(|n| n.get("range")), "min", "max"), both, "{at}: {graph}");
+}
+
+/// What `replay` counts as answers the rule cannot give, by output, of `records` read by `file`.
+fn out_of_reach(dir: &Path, file: &str, records: &str) -> Vec<(String, i128)> {
+    std::fs::write(dir.join("records.jsonl"), records).unwrap();
+    let (_, out) = rulec(dir, &["replay", file, "--fixtures", "records.jsonl", "--format", "json"]);
+    let j = rulec::json::parse(&out).unwrap_or_else(|_| panic!("{out}"));
+    j.get("out_of_reach").and_then(|o| o.as_obj()).map(|kv| kv.iter().map(|(k, v)| (k.clone(), v.as_int().unwrap_or(-1))).collect()).unwrap_or_else(|| panic!("{out}"))
 }
 
 /// A fee of a tenth of the amount, rounded down to the yen: it comes to 0JPY to 1,000JPY.
@@ -215,19 +302,8 @@ fn the_range_written_is_the_outputs_range() {
     assert_eq!(ends(&ranges(dir, "wide.rule"), "fee"), pair("0", "2000"));
     assert_eq!(ends(&ranges(dir, "low.rule"), "fee"), pair("0", "1000"));
     assert_eq!(ends(&ranges(dir, "high.rule"), "fee"), pair("0", "5000"));
-    // the schema and the port carry the range written, as an input's
-    let (_, schema) = rulec(dir, &["schema", "wide.rule"]);
-    let j = rulec::json::parse(&schema).unwrap();
-    let out = j.get("properties").and_then(|p| p.get("out")).and_then(|o| o.get("properties")).and_then(|p| p.get("fee")).unwrap_or_else(|| panic!("{schema}"));
-    assert_eq!((out.get("minimum").and_then(|x| x.as_int()), out.get("maximum").and_then(|x| x.as_int())), (Some(0), Some(2000)), "{schema}");
-    let e = rulec::ports::Engine::new();
-    let facts = e.facts(&dir.join("wide.rule")).unwrap_or_else(|x| panic!("{x:?}"));
-    let col = facts.outputs.iter().find(|c| c.name == "fee").unwrap();
-    assert!(matches!(col.ty, ColumnType::Num { min: Some(0), max: Some(2000), .. }), "{:?}", col.ty);
-    match e.output_values(&dir.join("wide.rule"), "fee").unwrap() {
-        Found::Value(v) => assert_eq!((v.min, v.max), (Some(0), Some(2000))),
-        Found::Undecided(t) => panic!("{t:?}"),
-    }
+    // the port, the schema, `api` and what `gen` writes carry the range written, as an input's
+    said_everywhere(dir, "wide.rule", "fee", (0, 2000));
     // the page says it, beside the output
     let (_, page) = rulec(dir, &["doc", "wide.rule"]);
     assert!(page.lines().any(|l| l.starts_with("| fee |") && l.contains("range 0JPY to 2000JPY")), "{page}");
@@ -235,35 +311,32 @@ fn the_range_written_is_the_outputs_range() {
     assert!(!page.lines().any(|l| l.starts_with("| fee |") && l.contains("range")), "{page}");
 }
 
-/// With no range written, the output a `result` decides has the range of what it comes to where
-/// the other languages read it — the certificate and the port — and nowhere the generated code
-/// reads: its schema, its facts and the code are as they were.
+/// With no range written, the output a `result` decides has the range of what it comes to in the
+/// certificate (§15.268), and everywhere an output's range is said outward (§15.271): the port, the
+/// schema and the MCP tool's `outputSchema`, `api`, the comments of the `.proto` and the SQL, the
+/// pages and `graph`, where it had none. `replay` counts an answer outside it as one the rule cannot
+/// give, and the fee's 1,000JPY as one it can.
 #[test]
 fn the_output_a_result_decides_has_the_range_it_comes_to() {
     let t = TempDir::new("result-range");
     let dir = t.path();
     std::fs::write(dir.join("fee.rule"), fee("")).unwrap();
     assert_eq!(ends(&ranges(dir, "fee.rule"), "fee"), pair("0", "1000"));
-    let e = rulec::ports::Engine::new();
-    match e.output_values(&dir.join("fee.rule"), "fee").unwrap() {
-        Found::Value(v) => assert_eq!((v.min, v.max), (Some(0), Some(1000))),
-        Found::Undecided(t) => panic!("{t:?}"),
-    }
-    let facts = e.facts(&dir.join("fee.rule")).unwrap_or_else(|x| panic!("{x:?}"));
-    let col = facts.outputs.iter().find(|c| c.name == "fee").unwrap();
-    assert!(matches!(col.ty, ColumnType::Num { min: None, max: None, .. }), "{:?}", col.ty);
-    let (_, schema) = rulec(dir, &["schema", "fee.rule"]);
-    let j = rulec::json::parse(&schema).unwrap();
-    let out = j.get("properties").and_then(|p| p.get("out")).and_then(|o| o.get("properties")).and_then(|p| p.get("fee")).unwrap_or_else(|| panic!("{schema}"));
-    assert!(out.get("minimum").is_none() && out.get("maximum").is_none(), "{schema}");
+    said_everywhere(dir, "fee.rule", "fee", (0, 1000));
+    // 1,000JPY at 5,000JPY is a wrong answer the rule can give; 1,001JPY at 1,000JPY is one it cannot
+    let records = "{\"in\":{\"amount\":5000},\"observed\":{\"fee\":1000}}\n{\"in\":{\"amount\":1000},\"observed\":{\"fee\":1001}}\n";
+    assert_eq!(out_of_reach(dir, "fee.rule", records), [("fee".to_string(), 1)]);
 }
 
 /// With no range written, an output a `define` of its name or a table decides carries what decides
-/// it put out to the grid of its rounding (§15.269). A card fee of 3.49% and 49 cents comes to
-/// 49.0349 to 83.9 cents, and the rule answers it rounded half up to the cent: 49 to 84. The port
-/// and the certificate's `output_ranges` carry 49 to 84, which holds every answer — 84 at 1,000
-/// cents, as the example says — where the certificate stated 49.0349 (49 for the table) to 83.9 and
-/// the port carried 49 to 83. `ranges` keeps what decides it.
+/// it put out to the grid of its rounding (§15.269), wherever its range is said outward (§15.271). A
+/// card fee of 3.49% and 49 cents comes to 49.0349 to 83.9 cents, and the rule answers it rounded
+/// half up to the cent: 49 to 84. The certificate's `output_ranges`, the port, the schema and the
+/// MCP tool's `outputSchema`, `api`, the comments of the `.proto` and the SQL, the pages and `graph`
+/// say 49 to 84, which holds every answer — 84 at 1,000 cents, as the example says — where the
+/// certificate stated 49.0349 (49 for the table) to 83.9, and the port carried 49 to 83, as the
+/// schema and `api` did. `ranges` keeps what decides it. `replay` counts an answer of 84 cents as
+/// one the rule can give, and 85 as one it cannot.
 #[test]
 fn an_output_with_no_range_written_carries_what_decides_it_put_out_to_its_grid() {
     let t = TempDir::new("define-range");
@@ -278,11 +351,11 @@ fn an_output_with_no_range_written_carries_what_decides_it_put_out_to_its_grid()
         let cert = certificate(dir, "fee.rule");
         assert_eq!(ends(cert.get("output_ranges").unwrap(), "fee"), pair("49", "84"), "{what}");
         assert_eq!(ends(cert.get("ranges").unwrap(), "fee"), pair(decided, "839/10"), "{what}");
-        let e = rulec::ports::Engine::new();
-        match e.output_values(&dir.join("fee.rule"), "fee").unwrap() {
-            Found::Value(v) => assert_eq!((v.min, v.max), (Some(49), Some(84)), "{what}"),
-            Found::Undecided(t) => panic!("{what}: {t:?}"),
-        }
+        said_everywhere(dir, "fee.rule", "fee", (49, 84));
+        // wrong answers at 1 cent: 84 the rule gives at 1,000, 85 it gives nowhere
+        let waived = if what == "table" { ",\"waived\":false" } else { "" };
+        let records = format!("{{\"in\":{{\"amount\":1{waived}}},\"observed\":{{\"fee\":84}}}}\n{{\"in\":{{\"amount\":1{waived}}},\"observed\":{{\"fee\":85}}}}\n");
+        assert_eq!(out_of_reach(dir, "fee.rule", &records), [("fee".to_string(), 1)], "{what}");
     }
 }
 
@@ -342,7 +415,10 @@ fn two_shares_at_running_totals_in_order_leave_no_less_than_zero() {
     assert_eq!(code, 0, "{out}");
 }
 
-/// `diff` says an output's range moved where either version writes one, as it says an input's.
+/// `diff` says an output's range moved, as it says an input's, whether a version writes it on the
+/// output's line or not (§15.268, §15.271): it is the range the schema, `api` and the port tell the
+/// output's callers. Two versions that answer alike and say other ranges differ, and `diff` ends
+/// with 1.
 #[test]
 fn diff_says_an_outputs_range_moved() {
     let t = TempDir::new("output-range-diff");
@@ -350,6 +426,9 @@ fn diff_says_an_outputs_range_moved() {
     std::fs::write(dir.join("a.rule"), fee("  range >=0JPY <=1_000JPY")).unwrap();
     std::fs::write(dir.join("b.rule"), fee("  range >=0JPY <=2_000JPY")).unwrap();
     std::fs::write(dir.join("c.rule"), fee("")).unwrap();
+    // the fee at 20%, and the fee at 10% written so that rulec counts it from -10,000JPY
+    std::fs::write(dir.join("d.rule"), fee("").replace("amount * 10%", "amount * 20%").replace("| 1000JPY | 100JPY |", "| 1000JPY | 200JPY |")).unwrap();
+    std::fs::write(dir.join("e.rule"), fee("").replace("amount * 10%", "amount * 10% + amount - amount")).unwrap();
     let moved = |a: &str, b: &str| {
         let (_, out) = rulec(dir, &["diff", a, b, "--format", "json"]);
         let j = rulec::json::parse(&out).unwrap_or_else(|_| panic!("{out}"));
@@ -370,4 +449,11 @@ fn diff_says_an_outputs_range_moved() {
     assert!(moved("a.rule", "a.rule").is_empty());
     let (_, text) = rulec(dir, &["diff", "a.rule", "b.rule"]);
     assert!(text.contains("an output changed range"), "{text}");
+    // written on neither side: what the `result` comes to
+    assert_eq!(moved("c.rule", "d.rule"), [("0..1000".to_string(), "0..2000".to_string())]);
+    // the same answers, another range: no answer differs, and the run ends with 1
+    assert_eq!(moved("c.rule", "e.rule"), [("0..1000".to_string(), "-10000..11000".to_string())]);
+    let (code, out) = rulec(dir, &["diff", "c.rule", "e.rule", "--format", "json"]);
+    let j = rulec::json::parse(&out).unwrap_or_else(|_| panic!("{out}"));
+    assert_eq!((code, j.get("changes").and_then(|c| c.as_arr()).map(|c| c.len())), (1, Some(0)), "{out}");
 }

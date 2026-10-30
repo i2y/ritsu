@@ -3392,16 +3392,11 @@ fn rule_json(f: &RuleFile, c: &Checked) -> String {
         if let Some(u) = unit_of(ty) {
             o = o.str("unit", &u);
         }
-        let sc = c.wire_scale(name);
-        o = o.int("scale", sc);
-        if let Some((Some(lo), Some(hi))) = c.ranges.get(name) {
-            o = o.raw(
-                "range",
-                Obj::new()
-                    .int("min", crate::types::wire_int(*lo, sc))
-                    .int("max", crate::types::wire_int(*hi, sc))
-                    .finish(),
-            );
+        o = o.int("scale", c.wire_scale(name));
+        // An output's range is the one its answers lie in, as the schema and `api` say (§15.271).
+        // The script bounds the fields of the inputs with theirs.
+        if let Some((Some(lo), Some(hi))) = c.wire_range(name) {
+            o = o.raw("range", Obj::new().int("min", lo).int("max", hi).finish());
         }
         // An input of an ordered enum with a range offers only the values the range lets in, as
         // a number's field is bounded by its range (§15.251): the list offered every value of the

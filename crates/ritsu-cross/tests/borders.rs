@@ -65,10 +65,12 @@ fn x4_a_rules_output_as_an_amount() {
         other => panic!("{other:?}"),
     }
     // an example is an input from the rule's vectors: rulec counts a range from above, so neither
-    // an end of it nor a number a row writes shows an amount the output comes to
-    let seats = |constraint: &str| format!("rule seats v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n{constraint}\noutputs\n  needed : number  round down(1)\n\nresult needed = asked - holding\n");
-    write("free.rule", &seats(""));
-    write("tied.rule", &seats("\nconstraint holding <= asked\n"));
+    // an end of it nor a number a row writes shows an amount the output comes to; the fewest and
+    // the most the vectors come to do (rulec DESIGN §15.270)
+    let seats = |constraint: &str, result: &str| format!("rule seats v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n{constraint}\noutputs\n  needed : number  round down(1)\n\nresult needed = {result}\n");
+    write("free.rule", &seats("", "asked - holding"));
+    write("tied.rule", &seats("\nconstraint holding <= asked\n", "asked - holding"));
+    write("short.rule", &seats("\nconstraint holding <= asked\n", "asked - holding - 5"));
     write("unreached.rule", "rule unreached v1\n\ninputs\n  asked   : number  range >=0 <=100\n  holding : number  range >=0 <=50\n\nconstraint holding <= asked\n\noutputs\n  needed : number  round down(1)\n\ntable pick\npolicy unique\n| asked | holding | -> needed : number |\n| <=40  | >40     | -20                |\n| <=40  | <=40    | 10                 |\n| >40   | -       | 30                 |\n");
     write("wide.rule", "rule wide v1\n\nenum kind = workshop | talk\n\ninputs\n  event_kind : kind\n\noutputs\n  needed : number  range >=-10 <=100  round down(1)\n\ntable pick\npolicy unique\n| event_kind | -> needed : number |\n| workshop   | 30                 |\n| talk       | 80                 |\n");
     let int = |n: i128| ritsu_ports::Value::Int(n);
@@ -80,6 +82,22 @@ fn x4_a_rules_output_as_an_amount() {
         assert!(matches!(amount_fits(&o), Answer::Undecided(_)), "{file}: {:?}", amount_fits(&o));
         assert_eq!(amount_unshown(&o), Some(ends), "{file}");
     }
+    // the same difference less 5 never comes to the low end of its range (-55 to 95 from above)
+    // under the constraint, and the fewest its vectors come to, -5, is an amount chobo does not take
+    let short = r.output_values(&t.path().join("short.rule"), "needed").unwrap();
+    assert_eq!(amount_fits(&short), Answer::Fails((-5, vec![("asked".to_string(), int(0)), ("holding".to_string(), int(0))])));
+    assert_eq!(amount_unshown(&short), None);
+    // the examples in their order: the ends, the numbers the rows write, the fewest and the most
+    // over the vectors, each value once (the upper end of `tied` is the most, its lower end none)
+    let shown = |o: &Found<ritsu_ports::OutputValues>| -> Vec<i128> {
+        match o {
+            Found::Value(v) => v.examples.iter().map(|e| e.0).collect(),
+            other => panic!("{other:?}"),
+        }
+    };
+    assert_eq!(shown(&short), [95, -5]);
+    assert_eq!(shown(&r.output_values(&t.path().join("tied.rule"), "needed").unwrap()), [100, 0]);
+    assert_eq!(shown(&r.output_values(&t.path().join("unreached.rule"), "needed").unwrap()), [30, 10]);
     let tied = r.output_values(&t.path().join("tied.rule"), "needed").unwrap();
     assert_eq!(amounts_unshown(&[fee.clone(), tied.clone()], None), Some((1, -50, 100)));
     assert!(matches!(amounts_given(&[fee.clone(), tied.clone(), adjust.clone()], &[], None), Answer::Fails((-300, AmountFrom::Output(2, _)))));

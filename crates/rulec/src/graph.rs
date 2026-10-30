@@ -336,10 +336,9 @@ pub fn build(f: &RuleFile, c: &Checked, src: &str) -> Graph {
             kind: m.kind,
             of: m.extra.iter().find(|(k, _)| *k == "of").map(|(_, v)| v.clone()),
             ty: c.ty_of(&m.name).map(|t| t.to_string()),
-            range: c.ranges.get(&m.name).and_then(|(lo, hi)| {
-                let sc = c.wire_scale(&m.name);
-                Some((crate::types::wire_int(*lo.as_ref()?, sc), crate::types::wire_int(*hi.as_ref()?, sc)))
-            }),
+            // An output's node has the range its answers lie in, as the schema and `api` say
+            // (§15.271); any other value's, the range of what it is.
+            range: c.wire_range(&m.name).and_then(|(lo, hi)| Some((lo?, hi?))),
             output: outs.contains(&m.name.as_str()),
             per_element: per_element.contains(&m.name) && m.kind != "element",
             from_apply: from_apply(f, &m.name),

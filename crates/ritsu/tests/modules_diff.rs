@@ -18,6 +18,10 @@
 //!   version of ritsu.
 //! - What each language says inside is what its own diff says: the JSON of each file's behavior is
 //!   the one `ritsu <language> diff` prints for the same two files.
+//! - Two versions of a rule the test writes, compared as directories, whose `result` comes to more
+//!   with no range written on the output's line: the range `api` gives the output changes in every
+//!   language (rulec's DESIGN §15.271), and the behavior says the output changed range. English and
+//!   the twin with Japanese names.
 //! - The two-file form, with the spellings of DESIGN 17.9.1; a version against itself (exit 0); and
 //!   what stops a diff (exit 2): sides of two kinds; a directory in no module; a `--budget` that is
 //!   no positive integer; and one too small for a walk, when nothing else differs.
@@ -590,6 +594,47 @@ fn the_same_version_and_what_stops_a_diff() {
     // with a budget written with separators, it is compared
     let (code, out, _) = ritsu_in(d.path(), d.path(), &["mod", "diff", &gate, &gate, "--budget", "1_000_000"]);
     assert_eq!(code, 0, "{out}");
+}
+
+/// A version whose `result` comes to more, with no range written on the output's line (rulec's
+/// DESIGN §15.271): `api` gives the output the range its `result` comes to, so the interface says
+/// that range changed in every language, each a change that may break a user, and the behavior
+/// says the output changed range beside the answers that differ. The same with Japanese names.
+#[test]
+fn a_result_that_comes_to_more_changes_the_range_of_the_interface() {
+    let rule = |lang: &str, add: u32| match lang {
+        "en" => format!("rule order_total v1\n\ninputs\n  subtotal : money[GBPc]  range >=0GBPc <=100_000GBPc\n\noutputs\n  total : money[GBPc]  round down(1GBPc)\n\nresult total = subtotal + {add}GBPc\n"),
+        _ => format!("rule 注文の合計(order_total) v1\n\ninputs\n  小計(subtotal) : money[円]  range >=0円 <=100_000円\n\noutputs\n  合計(total) : money[円]  round down(1円)\n\nresult 合計 = 小計 + {add}円\n"),
+    };
+    for (lang, dirs, file, total, said) in [
+        ("en", ("total-1.0.0", "total-1.1.0"), "rules/order_total.rule", "total", "    may break: changed: /{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/total/range/max: 100395 → 100495\n"),
+        ("ja", ("合計-1.0.0", "合計-1.1.0"), "規則/注文の合計.rule", "合計", "    変わった（壊しうる）：/{python,typescript,javascript,rust,ruby,php,swift,java,numpy,sql}/outputs/合計/range/max：100395 → 100495\n"),
+    ] {
+        let t = TempDir::new(&format!("mod-diff-result-{lang}"));
+        for (dir, version, add) in [(dirs.0, "1.0.0", 395), (dirs.1, "1.1.0", 495)] {
+            t.write(&format!("{dir}/ritsu.mod"), format!("module example.com/acme/total\nversion {version}\n"));
+            t.write(&format!("{dir}/{file}"), rule(lang, add));
+        }
+        let (code, out, err) = ritsu_in(t.path(), t.path(), &["mod", "diff", dirs.0, dirs.1, "--format", "json"]);
+        assert_eq!((code, err.as_str()), (1, ""), "{lang}:\n{out}");
+        let v = json(&out);
+        assert_eq!(v["behavior"][0]["result"]["domain"], serde_json::json!([{"what": "output_range", "name": total, "old": "395..100395", "new": "495..100495"}]), "{lang}:\n{out}");
+        let i = &v["interface"][0];
+        assert_eq!((i["file"].as_str(), i["how"].as_str()), (Some(file), Some("api")), "{lang}:\n{out}");
+        // the two ends, in the entry of the output of each of the eleven languages, and nothing else
+        let changes = i["changes"].as_array().unwrap();
+        assert_eq!(changes.len(), 22, "{lang}:\n{out}");
+        for c in changes {
+            let at = c["at"].as_str().unwrap();
+            let (min, max) = (format!("/{total}/range/min"), format!("/{total}/range/max"));
+            assert!(at.ends_with(&min) || at.ends_with(&max), "{lang}: {at}");
+            let ends = if at.ends_with(&min) { (395, 495) } else { (100395, 100495) };
+            assert_eq!((c["change"].as_str(), c["old"].as_i64(), c["new"].as_i64(), c["may_break"].as_bool()), (Some("changed"), Some(ends.0), Some(ends.1), Some(true)), "{lang}: {c}");
+        }
+        assert!(changes.iter().any(|c| c["at"] == format!("/python/outputs/{total}/range/max")) && changes.iter().any(|c| c["at"] == format!("/go/output_fields/{total}/range/min")), "{lang}:\n{out}");
+        let (_, text, _) = ritsu_in(t.path(), t.path(), &["mod", "diff", dirs.0, dirs.1, "--lang", lang]);
+        assert!(text.contains(said), "{lang}:\n{text}");
+    }
 }
 
 // ── What a diff reads, fetched ──────────────────────────────────────────

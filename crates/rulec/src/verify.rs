@@ -305,16 +305,17 @@ fn prop_body(name: &str, ty: &Ty, c: &Checked) -> String {
         Ty::Opt(t) => format!("{{\"oneOf\":[{},{{\"type\":\"null\"}}]}}", prop_body(name, t, c)),
         _ => {
             // The schema describes the wire, so the bounds are converted the same way a
-            // value is: a rate's 100% is 100 steps, not 1 (§10.2).
-            let sc = c.wire_scale(name);
+            // value is: a rate's 100% is 100 steps, not 1 (§10.2). An output's bounds are the
+            // range its answers lie in, the one the port gives the other languages (§15.271): a
+            // client that checks an answer against `outputSchema` checks it against that.
             let unit = wire_unit(name, ty, c);
-            let (lo, hi) = c.ranges.get(name).copied().unwrap_or((None, None));
+            let (lo, hi) = c.wire_range(name).unwrap_or((None, None));
             let mut s = format!("{{\"type\":\"integer\",\"description\":\"{unit}\"");
             if let Some(l) = lo {
-                s.push_str(&format!(",\"minimum\":{}", crate::types::wire_int(l, sc)));
+                s.push_str(&format!(",\"minimum\":{l}"));
             }
             if let Some(h) = hi {
-                s.push_str(&format!(",\"maximum\":{}", crate::types::wire_int(h, sc)));
+                s.push_str(&format!(",\"maximum\":{h}"));
             }
             s.push('}');
             s
@@ -389,7 +390,8 @@ pub fn schema_in(f: &RuleFile, c: &Checked, alias: bool) -> String {
     )
 }
 
-/// The `out` object of the wire: every output, with its range and unit.
+/// The `out` object of the wire: every output, with its range and unit. The range is the one the
+/// rule's answers lie in (§15.271), an output a `result` decides included.
 pub fn schema_out(f: &RuleFile, c: &Checked, alias: bool) -> String {
     let outs: Vec<String> = f
         .outputs
