@@ -1,4 +1,4 @@
-ritsu mod 0.37.0
+ritsu mod 0.38.0
 
 The commands of ritsu's modules. A directory with a `ritsu.mod` is a module, and its files name a dependency's files by `@<name>/`. These commands write `ritsu.mod` and `ritsu.lock`, and put the dependencies in the store.
 

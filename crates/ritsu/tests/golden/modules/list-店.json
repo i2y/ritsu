@@ -1,5 +1,5 @@
 {
-  "ritsu": "0.37.0",
+  "ritsu": "0.38.0",
   "root": ".",
   "module": {
     "name": "example.com/acme/shop",

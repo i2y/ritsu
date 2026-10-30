@@ -1564,7 +1564,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori は、`ritsu dandori` の本体（`ritsu` のライブラリの `languages::dandori`）で走らせる。フローの規則、日付のファイル、帳簿の口と、X2 で決められない前提（7.4）を同じプロセスの中で渡すので、日付と帳簿を使うフロー（請求の例）も、バイナリと同じに答える。バイナリ（`src/main.rs`）とページは同じ関数を呼ぶ。
 - rulec の E129（koyomi をつないでいない rulec で `range from koyomi` を確かめた）の注と台帳は、koyomi が無いところとして rulec のクレートのバイナリだけを挙げる。このページは koyomi をつなぐ（rulec の §15.185）。
 
-`ritsu.wasm` は 17,137,279 バイト（gzip で 5,060,634 バイト。2026-10-30）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
+`ritsu.wasm` は 17,243,764 バイト（gzip で 5,088,315 バイト。2026-10-30）で、九つの言語の検査と生成器が全部入る（ページが開くプロジェクトと、色を付ける言語は、kaname のほかの八つである。15 章）。コミットする作られたもので、`website/tools/make_wasm.sh` が作る（ビルドの置き場所を `cargo metadata` に尋ねるので、ワークスペースの `target/` でも `CARGO_TARGET_DIR` でも動く）。`ritsu check` や言語の検査、生成、ページの答えを変えたら作り直す。古くなればテストが落ちる。
 
 **部品と二つのページ。** 部品は `website/docs/playground/` の七つのファイルである。ページの部分を全部作る `playground.js`（ES のモジュール）、`playground.css`、モジュールを動かす `worker.js`、エディターと Markdown のライブラリをまとめた `libraries.js`、開くプロジェクトの `projects.json`、言語ごとに色を付ける語の `words.json`、`ritsu.wasm`。日本語のサイトへは、`website/sync.sh` がこの七つをコピーする（`docs-ja/playground` はコミットしない）。ページが書くのは部品の要素（`<div class="pg" data-lang="en">`）と、`playground.js` を読む `<script type="module">` だけで、上の帯、ファイルのタブ、エディター、右側のタブは `playground.js` が作る。二つのページの違いは並べ方だけで、CSS が決める。
 
@@ -1607,7 +1607,7 @@ E.2 で、入口を 8.1 の形にした（`ritsu check`、七つの全部の `ri
 - dandori の例：前の dandori のページが並べたフロー（最初の下書きと、例の版と、版の横のフロー）の英日で 38 本、プロジェクトは 37（下書きは一つで、両方のページに出る）。プロジェクトは、フローと、フローが読むファイル（規則、API の記述、子のフロー、日付のファイルとそれが使うカレンダー、帳簿）からなる。★パスは dandori のクレートの中のままにしたので、指摘の場所は前のページと同じ `tests/fixtures/hotel_naive.flow:95:1` になる。読むファイルは手で挙げない。テストが dandori の例を全部メモリに置き、`ritsu check` と `dandori doc` がフローを読むときに読んだファイルを記録し、読んだファイルにも `ritsu check` をかけて、新しく読むものが無くなるまで繰り返す。生成の対象は、前のページと同じく版のディレクトリで決める（AWS 版は Step Functions。Step Functions が受け付けない版は Lambda durable functions）。選択の名前は、前のページの言い方を使う（rulec はボタンの五つ、dandori は「例・版」）。
 - chobo の例：`crates/chobo/examples` の四つ（在庫の引当、ポイント、返金、マーケットプレイス）の英日で八つのプロジェクト。どれも帳簿一つで、ファイルの名前は例のファイルの名前（`inventory.book`、`inventory.ja.book`）。chobo のサイトのナビとホームが `chobo/refunds`（日本語のサイトは `chobo/refunds.ja`）を開く。
 - sekisho の例：`crates/sekisho/examples/refunds` の二つの版を、ゲートとゲートが読むファイル（規則、日付のファイル、カレンダーとそのデータ、OpenAPI の文書、フロー）のプロジェクトにした。英語のページに `sekisho/refunds`、日本語のページに `sekisho/refunds.ja`。読むファイルは、dandori の例と同じく、`ritsu check` と `sekisho doc` が読むものを、増えなくなるまでたどって決める。ページの中では、sekisho もファイルを ritsu-base の `fs` で読み書きする。
-- `projects.json` の形は `{"projects": [{"name", "group", "lang"?, "open", "target"?, "files": [[パス, もと]]}], "texts": {もと: 中身}}`。もとはリポジトリの中のパスで（モジュールの例は、テストが例のコピーに作ったファイルを、例のディレクトリの中のパスで書く。17.22）、中身はもとごとに一度だけ書く（Stripe の API の記述は七つのプロジェクトが持つ）。64 のプロジェクトと 210 の中身で、661,991 バイト（gzip で 113,796 バイト。2026-10-30）。テストが、もとのファイルから書く（`RITSU_BLESS=1`）。
+- `projects.json` の形は `{"projects": [{"name", "group", "lang"?, "open", "target"?, "files": [[パス, もと]]}], "texts": {もと: 中身}}`。もとはリポジトリの中のパスで（モジュールの例は、テストが例のコピーに作ったファイルを、例のディレクトリの中のパスで書く。17.22）、中身はもとごとに一度だけ書く（Stripe の API の記述は七つのプロジェクトが持つ）。64 のプロジェクトと 210 の中身で、662,105 バイト（gzip で 113,849 バイト。2026-10-30）。テストが、もとのファイルから書く（`RITSU_BLESS=1`）。
 
 **共有のリンク。** 「リンクをコピー」を押すと、いまのプロジェクトへのリンクをアドレスバーに入れる（ブラウザが許せばクリップボードにも）。形は `#project=<名前>&file=<パス>&view=<check|gen|doc|markdown>&target=<対象>&edits=<変えたもの>` で、`file` は開いたときと違うとき、`view` は問題（`check`）でないとき、`target` は生成したコードを見ているとき、`edits` は変えたものがあるときだけ書く。ページはどこにも保存しない。
 
@@ -3154,8 +3154,8 @@ lock     = "lock" "1" 改行
 ```
 # Written by ritsu mod. Run `ritsu mod lock` to write it again; do not edit it by hand.
 lock 1
-ritsu 0.37.0
-oci example.com/acme/pricing 1.1.0 sha256:6107bd90b5e559af5bbca585fecaad66d2d39110291694298f76c98a46b38c0c files sha256:eb170e2b42c7798bfce87ad78245546f1c3f3cc245f56bccde8cf22e3b82d774
+ritsu 0.38.0
+oci example.com/acme/pricing 1.1.0 sha256:2c11e473a4ef184b284cc2ebd57465ca7442d03151b70e06dedd6f431faedbb0 files sha256:211678914f31119fb6f04acb53fbe859a9e204c99b8580c8d971b993872c63dc
 oci example.com/acme/tax 1.0.0 sha256:46c3c2d788b9852f0899d8579c4c846bd26228732cc4ac822ea82ae03c44d91c files sha256:76ae2a686ba4b4a3501cb9e7da09d00ea800ba7ff4233591b0a2a6355c6b2d20
 ```
 
@@ -3441,8 +3441,8 @@ chobo はほかのファイルを指さないので替えるところが無い�
 - **`--check` と JSON**。`gen --check` は依存の部分も比べる。`--format json` の `files` の `from` は正規の書き方である。`ritsu.lock` の `ritsu` の行は記録で、比べない（17.4）。ただ、その版が走らせている ritsu と違い、`--check` が違いを見つけたときは、テキストの出力の最後に一行の注を足す。違いが版の違いから来ているかもしれないと知らせるためで、exit は変えない。
 
   ```
-  note: ritsu.lock was written by ritsu 0.1.0, and this is ritsu 0.37.0: what differs may come from the two versions
-  備考: ritsu.lock を書いた ritsu は 0.1.0 で、いまの ritsu は 0.37.0 です。生成物の違いは、版の違いから来ているかもしれません
+  note: ritsu.lock was written by ritsu 0.1.0, and this is ritsu 0.38.0: what differs may come from the two versions
+  備考: ritsu.lock を書いた ritsu は 0.1.0 で、いまの ritsu は 0.38.0 です。生成物の違いは、版の違いから来ているかもしれません
   ```
 
 **実行**。`ritsu run` は、`ritsu check` と `ritsu gen` と同じに木を読み、木が読めなければ同じに止まる。E301〜E306 と E308 は診断として出してフローを流さず（exit 1。`--format json` では `diagnostics` に入れる）、何かを走らせる必要があるときは、それを標準エラーに言って止まる（exit 2）。フローが読む規則と日付と帳簿は、ファイルに書いた `@` のパスから言語が読む。`contribution` は、マニフェストの無い木と同じく、`--with` で渡したものだけを足す。`--with` にモジュールのルートを渡したときは、`ritsu check` のルートと同じく、木の全部のモジュールの `contribution` を足す（★）。フローは `contribution` のファイルではないので、`--with` が無ければ足すものが無いのは、`ritsu check <フロー>` と同じである。
@@ -4020,7 +4020,7 @@ modules/holidays/
 - **カレンダーは祝日だけを閉じる**。土日は閉じない。使う側が自分のカレンダーで `use calendar "@holidays/uk/england_and_wales.cal"` と書き、`closed weekly sat, sun` を自分で足す。営業日の決め方は使う側ごとに違うからである。
 - **README** は、出典と、データの利用の条件（英国は Open Government Licence v3.0、日本は公共データ利用規約（PDL1.0））と、使う側の書き方の例を持つ。`THIRD_PARTY_NOTICES.md` は、koyomi のものと同じ二つのファイルの分を持つ。
 - **名前と版**（★）：`ghcr.io/i2y/ritsu-holidays` の `1.0.0`。新しい年の祝日が公表されてデータを新しくする版は、マイナーの版を上げる。ファイルの名前を変える版と、ファイルを消す版は、メジャーの版を上げる。
-- **`ritsu.mod`**（2026-10-29）：`description`、`ritsu >=0.37.0`（木の ritsu の版。ritsu の版を上げるリリースで、そろえて上げる）、`license "(MIT OR Apache-2.0) AND OGL-UK-3.0 AND LicenseRef-PDL-1.0"`（カレンダーは ritsu と同じライセンス、データは出典の条件。PDL1.0 には SPDX の識別子が無いので `LicenseRef-`）、`source "https://github.com/i2y/ritsu"`。依存は無い。
+- **`ritsu.mod`**（2026-10-29）：`description`、`ritsu >=0.37.0`（1.0.0 を送り出したときの木の ritsu の版。送り出した版の中身は変えられないので、ritsu の版を上げるリリースでは上げない。モジュールが新しい ritsu を要するようになったら、モジュールの版と一緒に上げる。2026-10-30）、`license "(MIT OR Apache-2.0) AND OGL-UK-3.0 AND LicenseRef-PDL-1.0"`（カレンダーは ritsu と同じライセンス、データは出典の条件。PDL1.0 には SPDX の識別子が無いので `LicenseRef-`）、`source "https://github.com/i2y/ritsu"`。依存は無い。
 - **確かめ**：
   - fast の CI が `ritsu check modules/holidays` を走らせる。
   - `crates/ritsu/tests/modules.rs` が、データと固定が koyomi の例と同じであること、カレンダーが曜日を閉じないこと、`check` の英日と JSON の golden（`tests/golden/modules/holidays.*`）を確かめる。
@@ -4187,7 +4187,7 @@ warning[ritsu W303]: checkout/vat.kn:5:1: `@pricing/@tax/rules/vat_rate.rule` re
   - 中身は、`shop` のファイルと同梱のコピーである。テストが例をコピーし、`pricing` と `shop` の `require` をレジストリの形に書き換え、`tax` と `pricing` を決まった日付で置き場に置き（`put_directory`）、その置き場で lock を書き、`ritsu mod vendor` で作る。開くファイルはフロー（`orders/place_order.flow`、`注文/注文を受ける.flow`）である。
   - `projects.json` のもと（8.7）は、例のディレクトリの中のパスで書く。18 のファイルのうち、`ritsu.mod` は書き換えたもので、`ritsu.lock` と同梱のコピー（あわせて 13）はリポジトリに無い（テストが作る）。
   - lock は ritsu の版を持つので、版を上げたら `projects.json` を作り直す（`RITSU_BLESS=1` で `tests/playground.rs` を走らせる）。
-- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 17,137,279 バイトである（2026-10-30。モジュールの仕組みを入れる前にコミットしてあったものは 16,566,997 バイト）。
+- `ritsu.wasm` は 8.7 の手順（`website/tools/make_wasm.sh`）で作り直す。大きさは 17,243,764 バイトである（2026-10-30。モジュールの仕組みを入れる前にコミットしてあったものは 16,566,997 バイト）。
 - 試験（`crates/ritsu/tests/playground.rs`）：
   - `a_dependency_from_git_in_the_copy_answers_as_the_command_does`：`modules` の `pricing` を git から取る形に書き換えた木（`require … git` と lock の `git` の行と同梱のコピー）で、40 の答えをバイナリと比べる（2026-10-29）。
   - `a_file_of_bytes_goes_in_as_its_bytes`：koyomi のカレンダーと Shift_JIS の CSV を `base64` で渡し、8 の答えをバイナリと比べ、読めない項目の文を確かめる。

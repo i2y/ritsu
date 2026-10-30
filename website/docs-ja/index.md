@@ -138,7 +138,7 @@ ritsu check: ファイル 2 個（rulec 1、dandori 1）。検査を通らない
 cargo install --git https://github.com/i2y/ritsu --locked ritsu
 ```
 
-`ritsu check <ディレクトリ>` は、各言語の検査と、言語をまたぐ検査を走らせます。各言語のコマンドは `ritsu <言語> …` で呼びます（例：`ritsu rulec doc fee.rule`）。リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.37.0` で入ります。アーカイブには、`ritsu` と、言語の名前を付けたそれへのリンクが入っていて、リンクはその言語として動きます。0.26.0 からは、リリースに npm のパッケージ `@i2y/ritsu` も付きます。WebAssembly 向けに組んだ ritsu で、ネイティブのバイナリなしに Node で動きます（[Node で使う](node.md)）。
+`ritsu check <ディレクトリ>` は、各言語の検査と、言語をまたぐ検査を走らせます。各言語のコマンドは `ritsu <言語> …` で呼びます（例：`ritsu rulec doc fee.rule`）。リリースは 0.23.0 から（rulec の番号の続き）で、リリースごとに macOS と Linux のアーカイブと、`.deb` と `.rpm` を[リリースのページ](https://github.com/i2y/ritsu/releases)に置いています。Homebrew なら `brew install i2y/tap/ritsu`、GitHub Actions なら `uses: i2y/ritsu@v0.38.0` で入ります。アーカイブには、`ritsu` と、言語の名前を付けたそれへのリンクが入っていて、リンクはその言語として動きます。0.26.0 からは、リリースに npm のパッケージ `@i2y/ritsu` も付きます。WebAssembly 向けに組んだ ritsu で、ネイティブのバイナリなしに Node で動きます（[Node で使う](node.md)）。
 
 プロジェクトは、ほかのモジュールをディレクトリや OCI のレジストリから足して、そのファイルを `@<名前>/…` のパスで読めます（[モジュール](modules.md)）。`ritsu gen` は、プロジェクトのコードを言語ごとのパッケージにして書きます。`--library` を付けると、モジュールを npm、PyPI、Go が受け取るライブラリにして書き、依存のモジュールはそのライブラリから名前で import します（[ライブラリとして公開する](libraries.md)）。
 
