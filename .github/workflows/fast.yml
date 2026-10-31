@@ -21,10 +21,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # A build from nothing never reads incremental data, which only fills the cache, and the line
-  # tables alone keep a backtrace's files and lines. The keys of the caches of `target` start with
-  # cargo-v2- for these settings, so that a target built the earlier way is not restored under
-  # them (DESIGN 10.5).
+  # A build from nothing never reads incremental data, and the line tables alone keep a
+  # backtrace's files and lines (DESIGN 10.5).
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
   CARGO_PROFILE_TEST_DEBUG: line-tables-only
@@ -32,14 +30,14 @@ env:
 jobs:
   fast:
     runs-on: ubuntu-latest
-    # The tests took 37 minutes, and saving the cache about 4 more (DESIGN 10.5)
+    # The tests took 32 minutes (DESIGN 10.5)
     timeout-minutes: 60
 
     steps:
-      # The cache below is larger than all a repository may keep and is gone by the next run, so
-      # each run builds the workspace from nothing, and on a runner of another image that ran out
-      # of the disk in the tests (DESIGN 10.5): the SDKs no step here uses are taken off first, as
-      # in platforms.yml and tools.yml.
+      # Each run builds the workspace from nothing (the cache below keeps the crates it downloads,
+      # not `target`), and on a runner of another image that ran out of the disk in the tests
+      # (DESIGN 10.5): the SDKs no step here uses are taken off first, as in platforms.yml and
+      # tools.yml.
       - name: Room on the disk
         run: |
           set -eu
@@ -55,14 +53,16 @@ jobs:
           # the page in the browser runs ritsu compiled for it (ritsu-wasm, DESIGN 8.7)
           targets: wasm32-unknown-unknown
 
+      # The crates downloaded, not `target`: built as above, `target` is 5.6 GB, more than half of
+      # what a repository may keep, and the caches the other workflows saved in the same hour were
+      # gone to make room (DESIGN 10.5).
       - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
-          key: cargo-v2-fast-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-v2-fast-${{ runner.os }}-
+          key: cargo-registry-fast-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-registry-fast-${{ runner.os }}-
 
       # rulec's and dandori's sites take some of their pages from elsewhere in the crate, and the
       # copies are not committed; the tests that walk the pages walk the copies.
