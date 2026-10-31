@@ -80,6 +80,16 @@ jobs:
           --health-retries 5
 
     steps:
+      # A build after the version changed is a build of everything, beside the cache of the
+      # last version, and the job of the others ran out of the runner's disk in its tests
+      # (DESIGN 10.5): the SDKs no step here uses are taken off first, as in platforms.yml.
+      - name: Room on the disk
+        run: |
+          set -eu
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - uses: actions/checkout@v7
 
       - name: Rust
