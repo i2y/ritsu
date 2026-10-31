@@ -116,7 +116,7 @@ fn 番号を違えて振った契約を実装する規則は通る() {
 /// `gen` copies the contract byte for byte to where its package puts it and writes no `.proto` of
 /// the rule's own; the service and the runner speak the contract's service, method and messages.
 #[test]
-fn gen_は契約を写し_自前の_proto_を書かない() {
+fn gen_は契約をコピーし_自前の_proto_を書かない() {
     let (_t, d) = pair("gen", CONTRACT, RULE);
     let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out"]);
     assert_eq!(code, 0, "{out}");
@@ -222,7 +222,7 @@ fn 入れ子のメッセージと別のファイルのメッセージを読む()
 /// same `.proto`, now as a copy of the contract. Half way, the enum read from the copy and the line
 /// not yet written, `gen` stops rather than let one of the two files at that path replace the other.
 #[test]
-fn 生成した_proto_を写して契約にすると_パスも番号も変わらない() {
+fn 生成した_proto_をコピーして契約にすると_パスも番号も変わらない() {
     let own = RULE.replace(&format!("{IMPLEMENTS_LINE}\n"), "").replace("import proto \"../api/shop/v1/member_shipping.proto\" Tier -> tier\n", "");
     let (_t, d) = tree("migrate", &[(RULE_AT, own.as_str())]);
     let before = api(&d, RULE_AT).get("connect").cloned().unwrap();
@@ -246,7 +246,7 @@ fn 生成した_proto_を写して契約にすると_パスも番号も変わら
     assert!(out.contains("write `implements proto \"<file>\" <Service>` in"), "{out}");
     let (code, out) = rulec(&d, "ja", &["gen", RULE_AT, "--out", "half"]);
     assert_eq!(code, 1, "{out}");
-    assert!(out.contains(&format!("`api/{at}` を写す先の `proto/{at}` は、`{RULE_AT}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。")), "{out}");
+    assert!(out.contains(&format!("`api/{at}` のコピー先の `proto/{at}` は、`{RULE_AT}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。")), "{out}");
 
     // the line written
     let after = half.replace("rule member_tier_shipping v1\n", &format!("rule member_tier_shipping v1\nimplements proto \"{file}\" MemberTierShippingService\n"));

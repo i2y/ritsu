@@ -5961,19 +5961,19 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
    - proto3 でないファイルは、ファイルごとに一度だけ言う。
 4. ★ **契約のファイルを読めないこと、サービスが無いこと、行の形が違うことは E013 にする。** E013 の台帳の文を「規則が外から読むものが無いか、読めない」に広げ、外から読む六つの行（組み込みの名前空間、`import proto`、`import jsonschema`、`import enum`、`shape` と `from`、`implements`）を挙げた。前の文は `import` の三つしか言わず、`import enum` と `shape` の E013 が文に無かった。無いサービスを指せば、注にファイルのサービスを並べる。
 5. **型の検査を通らない規則は、契約と比べない。** 値が通信で何の型になるかが決まらないからで、E076 は最初の誤りを言い直すだけになる。型の誤りを直すと比べる。
-6. ★ **`gen` は、契約を生成する `.proto` の代わりにする。** `proto/rulec/<別名>/v<版>/` を書かない。契約とそれが import するファイルを、`import proto` の契約と同じに（§15.160）、package が決めるパスへ一字も変えずに写す。import は `check` が契約を読んだのと同じたどり方（`implements::Imports`。モジュールの根から、ritsu のモジュールなら依存の根から）でたどるので、`check` が規則と比べたファイルが、そのまま写るファイルになる。契約が BSR のモジュールのファイルを import していれば、`proto/buf.yaml` と `buf.lock` に依存を書くのも `import proto` の契約と同じである（§15.161）。
-   - サービスは契約のパス（`/<package>.<サービス>/<メソッド>`）に立ち、Python のサービスとランナーは、protobuf-py と Connect のプラグインが契約から書く stub を読む。サービスのファイルの stub を自分の `.proto` のときと同じ `pb` で読み込み、ほかのファイルの stub（別のファイルのメッセージ）は平たい名前で読み込む。クラスとメソッドの名前は、プラグインの付け方（`escape_class_name`、`escape_public_identifier`、メソッドの snake case）を写して綴る。入れ子のメッセージは親のクラスの中にある（`pb.CartRequest.Line`）。
+6. ★ **`gen` は、契約を生成する `.proto` の代わりにする。** `proto/rulec/<別名>/v<版>/` を書かない。契約とそれが import するファイルを、`import proto` の契約と同じに（§15.160）、package が決めるパスへ一字も変えずにコピーする。import は `check` が契約を読んだのと同じたどり方（`implements::Imports`。モジュールの根から、ritsu のモジュールなら依存の根から）でたどるので、`check` が規則と比べたファイルが、そのままコピーするファイルになる。契約が BSR のモジュールのファイルを import していれば、`proto/buf.yaml` と `buf.lock` に依存を書くのも `import proto` の契約と同じである（§15.161）。
+   - サービスは契約のパス（`/<package>.<サービス>/<メソッド>`）に立ち、Python のサービスとランナーは、protobuf-py と Connect のプラグインが契約から書く stub を読む。サービスのファイルの stub を自分の `.proto` のときと同じ `pb` で読み込み、ほかのファイルの stub（別のファイルのメッセージ）は平たい名前で読み込む。クラスとメソッドの名前は、プラグインと同じ付け方（`escape_class_name`、`escape_public_identifier`、メソッドの snake case）で綴る。入れ子のメッセージは親のクラスの中にある（`pb.CartRequest.Line`）。
    - stub のモジュールのパスは、ファイルの名前の英数字と `_` のほかの文字を `_` にする（`member-shipping.proto` は `member_shipping_pb`）。プラグインがそうするからである。規則の別名は英数字と `_` だけなので、規則の `.proto` の stub の名前は変わらない。`import proto` で読む契約のファイルの名前にほかの文字があると、前は Python のサービスが `from stubs.shop.v1 import member-tier_pb` と書き、構文の誤りで Connect の四つの段のどれも立たなかった（0.38.0 で再現した）。いまはプラグインの書く `member_tier_pb` を読む。
    - `rulec test` の Connect の段は、ランナーがあるかで走らせる（`connect_runner_of`）。stub は `proto/` の全体から作るので、`.proto` のパスを綴る要が無くなった。
    - `gen` は出力先のファイルを消さない。生成した `.proto` をコピーして同じパスへ移った規則では、契約のコピーがそのパスに書かれる。別のパスの契約へ移った規則では、前の `gen` が書いた規則の `.proto` が残るので、`gen` がそれを、もう生成しないファイルとして挙げる（§15.275）。
 7. ★ **通信に乗る列挙は、`import proto` で読んだものだけにする。** 規則が自分で宣言した列挙、`import jsonschema` と `import enum` の列挙は E076 である。値の番号を契約が決めるためで、規則が自分の `.proto` を書かない以上、ほかの列挙には番号を付ける場所が無い。
 8. ★ **`rule … v2` の版と契約の package は比べない。** `rule` の版は規則の振る舞いの版で、通信の版は契約の package が持つ。
-9. ★ **`api` の `connect` は契約の名前と番号を言い、`contract` を足す。** `proto`、`package`、`service`、`method`、`path`、`request`、`response`、並びの `message`、フィールドの `number`、`python` の `client` が契約のものになる。`contract` は、規則が書いたファイル（`file`）と `gen` が写す先（`proto`）で、`import proto` の列挙の `contract` と同じ形にした。`implements` を書かない規則には出さない。口の `Connect`（`connect_facts`）の `path` も契約のものになり、dandori、sekisho、sakai はそれを読む。
+9. ★ **`api` の `connect` は契約の名前と番号を言い、`contract` を足す。** `proto`、`package`、`service`、`method`、`path`、`request`、`response`、並びの `message`、フィールドの `number`、`python` の `client` が契約のものになる。`contract` は、規則が書いたファイル（`file`）と `gen` のコピー先（`proto`）で、`import proto` の列挙の `contract` と同じ形にした。`implements` を書かない規則には出さない。口の `Connect`（`connect_facts`）の `path` も契約のものになり、dandori、sekisho、sakai はそれを読む。
    - 型の名前は、実装するサービスの package からの名前にする（同じ package の列挙は `Tier`、ほかの package のものは完全名）。生成する `.proto` を書く規則では、これまでどおり完全名である。
 10. ★ **規則の口の `References` に `implements` を足す。** 指す先は契約のファイルとサービス（`proto "<パス>" service <サービス>`）で、dandori の `implements` と同じ形である。これが無いと、契約だけを使う依存に W301（どのファイルも使っていない依存）が出る。yuen の `trace` と `affected` も、契約から規則へたどれる。
 11. ★ **承認者のページに一行足す。** 入力と出力が契約のサービスに合わせてあり、Connect で呼ぶときの名前と番号はその契約のもので、`rulec check` が一致を確かめる（ずれていれば E076）、と書く。`import proto` の列挙の持ち主を書く一行と同じ扱いである。
 12. ★ **入れ子の列挙を `import proto` で読むと、生成した `.proto` が buf を通らなかったのを直す**（0.38.0 で再現した）。`message Member { enum Tier {…} }` の `Tier` を、生成した `.proto` は親のメッセージを抜いて `shop.v1.Tier` と書き、`buf build` が型を知らないと言って止まった。Python のサービスも `shop_v1_member_pb.Tier` と引き、protobuf-py が列挙を置く親のクラスの中（`Member.Tier`）を見ていなかった。いまはファイルの package からの名前（`Member.Tier`）を持ち、`.proto` は `shop.v1.Member.Tier`、Python は `shop_v1_member_pb.Member.Tier` と書く。契約の型との突き合わせは、入れ子の名前を正しく引かないと成り立たないので、ここで直した。
-13. ★ **`import proto` の契約の写し先が、規則から生成する `.proto` と同じパスで、中身が違えば、`gen` を止める**（0.38.0 で再現した）。前は片方が黙ってもう片方を上書きした。§15.160 は、中身の違う二つの契約が同じパスに来ると止めたが、契約と規則から生成する `.proto` の重なりは見ていなかった。生成した `.proto` を写して契約にし、`import proto` で列挙を読んで、`implements` をまだ書いていない途中の状態が、ちょうどこれになる。`gen` は、写す先が規則から生成する `.proto` と同じパスで二つの中身が違うと言い、`implements` を書くよう案内して 1 で終わる（契約が依存のファイルなら 2。ritsu の DESIGN 17.6）。中身が一字も違わなければ止めない。一つの `gen` に二つの規則を渡し、一方の写す契約と、もう一方の生成する `.proto` が重なるときも同じである。
+13. ★ **`import proto` の契約のコピー先が、規則から生成する `.proto` と同じパスで、中身が違えば、`gen` を止める**（0.38.0 で再現した）。前は片方が黙ってもう片方を上書きした。§15.160 は、中身の違う二つの契約が同じパスに来ると止めたが、契約と規則から生成する `.proto` の重なりは見ていなかった。生成した `.proto` をコピーして契約にし、`import proto` で列挙を読んで、`implements` をまだ書いていない途中の状態が、ちょうどこれになる。`gen` は、コピー先が規則から生成する `.proto` と同じパスで二つの中身が違うと言い、`implements` を書くよう案内して 1 で終わる（契約が依存のファイルなら 2。ritsu の DESIGN 17.6）。中身が一字も違わなければ止めない。一つの `gen` に二つの規則を渡し、一方のコピーする契約と、もう一方の生成する `.proto` が重なるときも同じである。
 14. **台帳の再現に `.proto` のファイルを置ける。** E076 の再現は契約と規則の二つのファイルで、`docs/codes*.md` は `.proto` のファイルを ```` ```proto ```` で囲む。
 
 **捨てたもの**：
@@ -5992,27 +5992,27 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 - `implements` を書かない規則の `check`、`gen`、`api` は変わらない（確かめたことの最後）。宣言の語で始まらない行（E004）と、その位置に書けない語（E005）の注が並べる、書ける語に `implements` が増える。
 - 台帳に E076 が増え（139 件）、E013 の文が広がった。
 - 入れ子の列挙を `import proto` で読む規則の、生成した `.proto` と Python のサービスが変わる（決定の 12）。名前に英数字と `_` のほかの文字がある契約から `import proto` で読む規則の、Python のサービスが変わる（決定の 6）。下の突き合わせの規則には、どちらの規則も無かった。
-- `import proto` の契約の写し先が規則の `.proto` と同じパスで、中身が違うと、前は通った `gen` が止まる（決定の 13）。リリースノートの「前は通っていた実行が落ちうる変更」に書く。
+- `import proto` の契約のコピー先が規則の `.proto` と同じパスで、中身が違うと、前は通った `gen` が止まる（決定の 13）。リリースノートの「前は通っていた実行が落ちうる変更」に書く。
 - ritsu の `mod diff` と `mod report` は、変わっていない規則も、モジュールの `.proto` が変わったときに比べ、E310 の注を契約の番号に合わせて言い分ける（ritsu の DESIGN 17.9.5）。ritsu-cross の E310 の台帳の文を、いまの姿に書き直した。
 - sakai の E302 の注が、`implements` の規則の package は契約のものだと言う。sakai は規則の `implements` も、ワークフローの `implements` と同じ E208 で確かめる。実装するサービスは、規則を持つコンテキストの公表された言語の `open host service` に無ければならない。一つの package の二つのサービスを二つの規則が実装するときは、契約の `.proto` を公表された言語にし、E004 と E006 の注がこの形を案内する（sakai の DESIGN 26 章）。
-- 文書：`docs/reference.md` に §3.4 を足し、`formats.md` の `connect` の段、`generated-code.md` の Connect の節、互換のページ（英日。1.x が残す書き方と、予約語にしない語）、サイトの rulec の `tour`・`generate`・`checks`・`assurance`・`index`（英日）と、変異の本数を描く `assurance` の図、根のサイトの `modules`（英日）、プレイグラウンドの `words.json`、サイトのレクサの行頭の語を合わせた。`AGENTS.md` には一行を足し、詳しいことは §3.4 に任せた。スキルの `SKILL.md`（`AGENTS.md` から組み立てる）は 500 行の上限の手前（499 行）だったので、同じ行数に収めるため、`AGENTS.md` の 6 章の一つの段落を、語を変えずに折り返し直した。スキルの説明が挙げるコードの範囲を E001-E076 にし、スキルの写しを作り直した。
+- 文書：`docs/reference.md` に §3.4 を足し、`formats.md` の `connect` の段、`generated-code.md` の Connect の節、互換のページ（英日。1.x が残す書き方と、予約語にしない語）、サイトの rulec の `tour`・`generate`・`checks`・`assurance`・`index`（英日）と、変異の本数を描く `assurance` の図、根のサイトの `modules`（英日）、プレイグラウンドの `words.json`、サイトのレクサの行頭の語を合わせた。`AGENTS.md` には一行を足し、詳しいことは §3.4 に任せた。スキルの `SKILL.md`（`AGENTS.md` から組み立てる）は 500 行の上限の手前（499 行）だったので、同じ行数に収めるため、`AGENTS.md` の 6 章の一つの段落を、語を変えずに折り返し直した。スキルの説明が挙げるコードの範囲を E001-E076 にし、スキルのコピーを作り直した。
 
 **確かめたこと**：
 
 - `tests/implements.rs`（14 件）：
   - コーパスの規則は何も言われない（`implements` を書かない規則の `check` は変わらない）。
   - 番号を違えて振った契約（リクエストのフィールドの並びと番号が違い、あいだに `reserved` があり、答えのフィールドも別の番号と並びで、`trace` は 15、列挙の値の一つは 7、同じファイルにもう一つのサービスがある）を実装する規則が、英日で通る。サービスを package を付けた名前で書いても通る。
-  - `gen` が `proto/rulec/` を書かず、契約を package のパスへ一字も変えずに写し、サービスとランナーが契約のサービス・メソッド・メッセージを使う。
+  - `gen` が `proto/rulec/` を書かず、契約を package のパスへ一字も変えずにコピーし、サービスとランナーが契約のサービス・メソッド・メッセージを使う。
   - `api` の `connect` のパス・package・サービス・メソッド・メッセージが契約のもので、どの `number` も、契約を ritsu-proto で読んだ番号と同じである。`contract` がファイルを言う。
-  - 並びが入れ子のメッセージで、`trace` の行が別の package の別のファイルのメッセージである契約（`cart.proto` と `rows.proto`）：二つのファイルがそれぞれの package のパスへ写り、番号はメッセージごとのものになる。
-  - 規則から生成した `.proto` を写して契約にし、`implements` を書く移り方：途中の状態（列挙だけを写しから読む）で `gen` が英日の文で止まり、行を書くと `api` は `contract`（と列挙の `contract`）のほかは前と同じで、`gen` は同じ `.proto` を写す。
+  - 並びが入れ子のメッセージで、`trace` の行が別の package の別のファイルのメッセージである契約（`cart.proto` と `rows.proto`）：二つのファイルがそれぞれの package のパスへコピーされ、番号はメッセージごとのものになる。
+  - 規則から生成した `.proto` をコピーして契約にし、`implements` を書く移り方：途中の状態（列挙だけをコピーから読む）で `gen` が英日の文で止まり、行を書くと `api` は `contract`（と列挙の `contract`）のほかは前と同じで、`gen` は同じ `.proto` をコピーする。
   - E013 の六つ（ファイルが無い、サービスが無い、行の形の三つ、二行）と、E076 の 11 の形（入力が無い、契約にしか無いフィールド、型、`optional` の二つ、列挙、`trace` が無い、`trace` の行の形、サービスの形、`json_name`、proto2）を英日で、言う行と注とともに確かめる。どの形も E076 はちょうど一つである。
   - 型の通らない規則は契約と比べない。`enums` のファイルは E066、寄与のファイルは E067。`implements` という名前の入力が通る。`fmt` が行をそのまま残す。承認者のページの一行（英日）。口の `References` の `implements` と、口の `Connect` のパスが契約のものであること。
 - `tests/connect.rs` の `契約を実装した規則は契約の番号で話す`（tools の段。buf、二つのプラグイン、connectrpc、uvicorn、mypy が要る）：上の二つの契約を実装する規則を `gen` し、`rulec test` が規則ごとに Connect の四つの段（ASGI と WSGI、POST と GET）を走らせて評価器と一致する。生成した四つの Python のファイルが `mypy --strict` を通る。元の契約のディレクトリから別に作ったクライアントが、protobuf のバイナリの形でベクタの全部を送り、答えが評価器と同じである。要求のバイトは契約の番号を持つ（`member` が platinum（7）だけの要求は `10 07`）。
 - `tests/proto.rs` の `入れ子の列挙はメッセージの名前で引く`：決定の 12。生成した `.proto` の型、import、Python のサービスの引き方、`api` の型。`契約のファイルの名前の記号はstubの名前で下線になる`：決定の 6 の stub の名前。`member-tier.proto` の列挙を読む規則のサービスが `member_tier_pb` を読む。同じ規則を 0.38.0 と替えた後のバイナリで `gen` し、生成物の Python と `.proto` とベクタで `rulec test` を走らせると、前は Connect の四つの段が `SyntaxError` で落ち、後は Python の八つの段が一致した。
 - golden：E076 と、サービスの無い E013（英日）。変異：`m_e076`、`m_e076ja`、`m_e013svc`、`m_e013svcja`（`tests/mutants/contracts/member_shipping.proto` を読む）。
 - dandori の `tests/protos.rs`：`use rule … connect` で規則を読むフローを dandori が検査し、呼ぶ URL と組む名前を rulec の生成した `.proto` と突き合わせる試験（`rulec_gen_writes_the_names_dandori_builds`）に、`implements` の規則（`tests/fixtures/rules/member_shipping_quote.rule` と、番号を振り直した契約 `member_shipping.proto`）を足した。dandori が呼ぶ URL が契約のパス（`/shop.v1.MemberShippingService/Quote`）で、組む名前が契約にあることを確かめる。tools の段の `rule_services_answer_as_dandori_reads_them` が、生成したサービスを立ててこの規則のベクタを dandori の形で送り、答えを規則のものとして読む。
-- ritsu の `tests/modules_diff.rs` の `a_rule_that_implements_a_contract_keeps_the_contracts_numbers` と `tests/modules_report.rs` の `a_contract_that_moves_its_numbers_is_a_new_error`（英日）：契約に新しい番号で足した入力は E310 にならない。契約が番号を動かすと、規則のファイルが変わっていなくても E310 になる。規則から生成した `.proto` を写して移った版は、`contract` が増えるほかは番号もパスも変わらない。
+- ritsu の `tests/modules_diff.rs` の `a_rule_that_implements_a_contract_keeps_the_contracts_numbers` と `tests/modules_report.rs` の `a_contract_that_moves_its_numbers_is_a_new_error`（英日）：契約に新しい番号で足した入力は E310 にならない。契約が番号を動かすと、規則のファイルが変わっていなくても E310 になる。規則から生成した `.proto` をコピーして移った版は、`contract` が増えるほかは番号もパスも変わらない。
 - 替える前と後の突き合わせ：0.38.0 のバイナリと替えた後のバイナリで、木の 983 本の `.rule`（`implements` を書く 7 本のほかの全部）の `rulec gen`（全部のファイル、出力、終了コード）と `rulec api`（JSON と出力）を比べた。違ったのは、E004 か E005 で止まる 4 本（`m_e004`、`m_e005`、sekisho の試験の二つ）で、書ける語を並べる注の終わりに `implements` が増えたことだけだった。`range from koyomi` を持つ 5 本は、どちらも `ritsu` を `rulec` という名前のリンクで呼んで比べた（rulec のクレートのバイナリは koyomi をつながず、E129 で止まる。§15.174）。
 
 **見つけて直していないもの**：

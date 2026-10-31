@@ -15413,7 +15413,7 @@ fn contracts_two_names(file: &std::path::Path, a: &str, b: &str) -> String {
 fn contract_over_own(rel: &str, contract: &std::path::Path, rule: &str) -> String {
     let contract = contract.display();
     tr!(
-        "error: `{contract}` を写す先の `proto/{rel}` は、`{rule}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。生成した `.proto` を写して契約にしたのなら、`{rule}` に `implements proto \"<ファイル>\" <サービス>` を書いてください。規則の `.proto` は生成せず、契約をそのまま写します",
+        "error: `{contract}` のコピー先の `proto/{rel}` は、`{rule}` から生成する `.proto` と同じパスで、二つは中身が違うので、生成しません。生成した `.proto` をコピーして契約にしたのなら、`{rule}` に `implements proto \"<ファイル>\" <サービス>` を書いてください。規則の `.proto` は生成せず、契約をそのままコピーします",
         "error: `{contract}` would be copied to `proto/{rel}`, the path of the `.proto` generated from `{rule}`, and the two differ, so nothing is generated. If the contract is a copy of a generated `.proto`, write `implements proto \"<file>\" <Service>` in `{rule}`: its own `.proto` is then not generated, and the contract is copied as it stands"
     )
 }
