@@ -996,8 +996,20 @@ The first contract can be the `.proto` `gen` wrote for the rule, copied to where
 are kept: it fits as it stands, and once the line names it, the path and every number stay what
 they were. A rule that reads an enum from such a copy before the line is written would have `gen`
 put the copy and its own `.proto` on one path; `gen` stops there and says to write the line.
-`gen` deletes nothing in its output directory, so the `.proto` it wrote under `proto/rulec/`
-before the line stays there, unless the copy has taken its path.
+`gen` deletes nothing in its output directory. When the contract is at another path, the
+`.proto` `gen` wrote for the rule before the line stays at `proto/rulec/<alias>/v<major>/`, and
+`gen` names it, with and without `--check` (under `left` with `--format json`,
+[formats.md](formats.md)); the exit code is what it would be without it:
+
+```text
+generated no more, and still there: generated/proto/rulec/member_tier_shipping/v1/member_tier_shipping.proto
+note: `rules/member_tier_shipping.rule` implements a contract's service (`implements`), so gen writes no `.proto` of the rule's own; gen deletes nothing in the output directory, and this file can be deleted
+```
+
+Only a file whose first line is rulec's head is named. The stubs `buf generate` made from it under
+`python/stubs/rulec/` are buf's and are not named, and buf leaves them where they are when the
+`.proto` goes: delete them with it. A copy of the generated `.proto` taken as the contract lands
+on its path, and leaves nothing.
 
 ## 4. inputs and outputs
 

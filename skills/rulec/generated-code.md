@@ -1942,12 +1942,15 @@ generated/python/member_tier_shipping_service.py           the same service, und
 generated/python/member_tier_shipping_connect_runner.py    the same vectors, over the wire
 ```
 
-`gen` writes no `.proto` of the rule's own. It copies the contract with the files it imports, the
-way it copies a contract an enum is imported from, and the stubs buf writes from it are the ones
-the service and the runner import. What a caller agrees to is then the contract's — the path,
-the messages and the numbers — and the rest is as above: the method free of side effects, the
-rows in `trace`, `rulec-source-sha256` on every answer, a request that leaves out an input the
-rule needs refused, and `rulec test` putting every vector through the service four times.
+`gen` writes no `.proto` of the rule's own; one an earlier `gen` wrote is left where it was, and
+`gen` names it as generated no more
+([reference §3.4](reference.md#34-implements--the-service-a-contract-declares)). It copies the
+contract with the files it imports, the way it copies a contract an enum is imported from, and
+the stubs buf writes from it are the ones the service and the runner import. What a caller
+agrees to is then the contract's — the path, the messages and the numbers — and the rest is as
+above: the method free of side effects, the rows in `trace`, `rulec-source-sha256` on every
+answer, a request that leaves out an input the rule needs refused, and `rulec test` putting every
+vector through the service four times.
 
 ```console
 $ python3 generated/python/member_tier_shipping_service.py --http 127.0.0.1:8080

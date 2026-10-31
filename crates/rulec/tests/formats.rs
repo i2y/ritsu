@@ -117,14 +117,14 @@ fn genは古い生成物と欠けた生成物を分ける() {
     let (c, out) = run(&["gen", rule, "--out", &out_dir, "--check", "--format", "json"]);
     assert_eq!(c, 1);
     let j = obj(&out);
-    keys(&j, &["written", "stale", "missing"], "gen");
+    keys(&j, &["written", "stale", "missing", "left"], "gen");
     let arr = |j: &rulec::json::Json, k: &str| -> usize {
         match j.get(k).unwrap() {
             rulec::json::Json::Arr(a) => a.len(),
             _ => panic!("{k} が配列でない"),
         }
     };
-    assert!(arr(&j, "missing") > 0 && arr(&j, "stale") == 0 && arr(&j, "written") == 0, "{out}");
+    assert!(arr(&j, "missing") > 0 && arr(&j, "stale") == 0 && arr(&j, "written") == 0 && arr(&j, "left") == 0, "{out}");
 
     // Generate, then edit one by hand: that one is stale, nothing is missing.
     let (c, out) = run(&["gen", rule, "--out", &out_dir, "--format", "json"]);

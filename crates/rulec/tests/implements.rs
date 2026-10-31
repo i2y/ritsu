@@ -275,6 +275,126 @@ fn 生成した_proto_を写して契約にすると_パスも番号も変わら
     assert_eq!(std::fs::read_to_string(d.join("after/proto").join(at)).unwrap(), generated);
 }
 
+/// The rule as it was before the line: its own `.proto`, and the enum declared in the rule.
+fn before_the_line() -> String {
+    RULE.replace(&format!("{IMPLEMENTS_LINE}\n"), "").replace("import proto \"../api/shop/v1/member_shipping.proto\" Tier -> tier\n", "")
+}
+
+/// What `gen --format json` lists under `left`.
+fn left(out: &str) -> Vec<String> {
+    let j = rulec::json::parse(out.trim()).unwrap_or_else(|e| panic!("JSON でない: {e}\n{out}"));
+    items(j.get("left")).iter().map(|v| v.as_str().expect("left のパスが文字列でない").to_string()).collect()
+}
+
+/// The `.proto` an earlier `gen` wrote for the rule.
+const OWN_AT: &str = "out/proto/rulec/member_tier_shipping/v1/member_tier_shipping.proto";
+
+/// A rule that moved to a contract at another path leaves the `.proto` `gen` wrote for it before.
+/// `gen` deletes nothing in its output directory, so it names the file as generated no more and
+/// says it can be deleted: in the text and under `left` of `--format json`, with or without
+/// `--check`, and the exit code is what it would be without the file (§15.275).
+#[test]
+fn 別のパスの契約へ移った規則では前の_proto_が挙がる() {
+    let (_t, d) = tree("left", &[(RULE_AT, before_the_line().as_str()), (CONTRACT_AT, CONTRACT)]);
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out"]);
+    assert_eq!(code, 0, "{out}");
+    let before = std::fs::read_to_string(d.join(OWN_AT)).unwrap();
+    assert!(!out.contains("generated no more"), "{out}");
+
+    std::fs::write(d.join(RULE_AT), RULE).unwrap();
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out"]);
+    assert_eq!(code, 0, "{out}");
+    let said = format!(
+        "generated no more, and still there: {OWN_AT}\nnote: `{RULE_AT}` implements a contract's service (`implements`), so gen writes no `.proto` of the rule's own; gen deletes nothing in the output directory, and this file can be deleted\n"
+    );
+    assert!(out.ends_with(&said), "{out}");
+    assert!(out.contains("generated: out/proto/shop/v1/member_shipping.proto\n"), "{out}");
+    assert_eq!(std::fs::read_to_string(d.join(OWN_AT)).unwrap(), before, "gen が前の .proto を書き換えた");
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(left(&out), [OWN_AT]);
+    assert_eq!(items(rulec::json::parse(out.trim()).unwrap().get("written")).len(), 0, "{out}");
+
+    // under `--check` too, and the run passes: what it writes is up to date
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--check"]);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(out, said);
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--check", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(left(&out), [OWN_AT]);
+    // and one stale file still fails it, the left one named beside it
+    let svc = d.join("out/python/member_tier_shipping_service.py");
+    std::fs::write(&svc, "# edited\n").unwrap();
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--check", "--format", "json"]);
+    assert_eq!(code, 1, "{out}");
+    assert_eq!(left(&out), [OWN_AT]);
+    assert_eq!(items(rulec::json::parse(out.trim()).unwrap().get("stale")).len(), 1, "{out}");
+
+    // in Japanese (the generated code is written again, in Japanese)
+    let (code, out) = rulec(&d, "ja", &["gen", RULE_AT, "--out", "out"]);
+    assert_eq!(code, 0, "{out}");
+    let said = format!("もう生成しないファイルが残っています: {OWN_AT}\n注記: `{RULE_AT}` は契約のサービスを実装する（`implements`）ので、gen は規則の `.proto` をもう生成しません。gen は出力先のファイルを消さないので、このファイルは消してかまいません\n");
+    assert!(out.ends_with(&said), "{out}");
+
+    // deleted, it is named no more
+    std::fs::remove_file(d.join(OWN_AT)).unwrap();
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(left(&out).is_empty(), "{out}");
+}
+
+/// A rule whose contract is a copy of the `.proto` `gen` wrote for it, at the same path, leaves
+/// nothing: the copy is written where the `.proto` was (§15.274, §15.275).
+#[test]
+fn 生成した_proto_をコピーして同じパスへ移った規則では何も挙がらない() {
+    let own = before_the_line();
+    let (_t, d) = tree("same-path", &[(RULE_AT, own.as_str())]);
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out"]);
+    assert_eq!(code, 0, "{out}");
+    let at = "rulec/member_tier_shipping/v1/member_tier_shipping.proto";
+    std::fs::create_dir_all(d.join("api/rulec/member_tier_shipping/v1")).unwrap();
+    std::fs::copy(d.join(OWN_AT), d.join("api").join(at)).unwrap();
+    let file = format!("../api/{at}");
+    let after = own
+        .replace("enum tier = basic < silver < gold < platinum\n", &format!("enum tier = basic < silver < gold < platinum\nimport proto \"{file}\" Tier -> tier\n"))
+        .replace("rule member_tier_shipping v1\n", &format!("rule member_tier_shipping v1\nimplements proto \"{file}\" MemberTierShippingService\n"));
+    std::fs::write(d.join(RULE_AT), &after).unwrap();
+    for lang in ["en", "ja"] {
+        let (code, out) = rulec(&d, lang, &["gen", RULE_AT, "--out", "out"]);
+        assert_eq!(code, 0, "{out}");
+        assert!(!out.contains("generated no more") && !out.contains("もう生成しない"), "{out}");
+    }
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(left(&out).is_empty(), "{out}");
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--check", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert!(left(&out).is_empty(), "{out}");
+}
+
+/// Only a file whose first line is rulec's head is taken as left by `gen`: one a person put at the
+/// path, or another generator wrote, is not named (§15.275).
+#[test]
+fn 頭の行の無いファイルは挙がらない() {
+    let (_t, d) = pair("by-hand", CONTRACT, RULE);
+    std::fs::create_dir_all(d.join(OWN_AT).parent().unwrap()).unwrap();
+    let body = "syntax = \"proto3\";\n\npackage rulec.member_tier_shipping.v1;\n";
+    for head in ["", "// Kept by hand. DO NOT EDIT.\n", "// Code generated by protoc-gen-x 1.0.0. DO NOT EDIT.\n", "\n// Code generated by rulec 0.38.0. DO NOT EDIT.\n"] {
+        std::fs::write(d.join(OWN_AT), format!("{head}{body}")).unwrap();
+        let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out"]);
+        assert_eq!(code, 0, "{out}");
+        assert!(!out.contains("generated no more"), "{head:?}: {out}");
+        let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--format", "json"]);
+        assert_eq!(code, 0, "{out}");
+        assert!(left(&out).is_empty(), "{head:?}: {out}");
+    }
+    // the same file with rulec's head, of any version, is
+    std::fs::write(d.join(OWN_AT), format!("// Code generated by rulec 0.38.0. DO NOT EDIT.\n{body}")).unwrap();
+    let (code, out) = rulec(&d, "en", &["gen", RULE_AT, "--out", "out", "--format", "json"]);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(left(&out), [OWN_AT]);
+}
+
 #[test]
 fn 行を辿れなければ_e013() {
     // the file is not there

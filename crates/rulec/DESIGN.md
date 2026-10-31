@@ -5965,6 +5965,7 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
    - サービスは契約のパス（`/<package>.<サービス>/<メソッド>`）に立ち、Python のサービスとランナーは、protobuf-py と Connect のプラグインが契約から書く stub を読む。サービスのファイルの stub を自分の `.proto` のときと同じ `pb` で読み込み、ほかのファイルの stub（別のファイルのメッセージ）は平たい名前で読み込む。クラスとメソッドの名前は、プラグインの付け方（`escape_class_name`、`escape_public_identifier`、メソッドの snake case）を写して綴る。入れ子のメッセージは親のクラスの中にある（`pb.CartRequest.Line`）。
    - stub のモジュールのパスは、ファイルの名前の英数字と `_` のほかの文字を `_` にする（`member-shipping.proto` は `member_shipping_pb`）。プラグインがそうするからである。規則の別名は英数字と `_` だけなので、規則の `.proto` の stub の名前は変わらない。`import proto` で読む契約のファイルの名前にほかの文字があると、前は Python のサービスが `from stubs.shop.v1 import member-tier_pb` と書き、構文の誤りで Connect の四つの段のどれも立たなかった（0.38.0 で再現した）。いまはプラグインの書く `member_tier_pb` を読む。
    - `rulec test` の Connect の段は、ランナーがあるかで走らせる（`connect_runner_of`）。stub は `proto/` の全体から作るので、`.proto` のパスを綴る要が無くなった。
+   - `gen` は出力先のファイルを消さない。生成した `.proto` をコピーして同じパスへ移った規則では、契約のコピーがそのパスに書かれる。別のパスの契約へ移った規則では、前の `gen` が書いた規則の `.proto` が残るので、`gen` がそれを、もう生成しないファイルとして挙げる（§15.275）。
 7. ★ **通信に乗る列挙は、`import proto` で読んだものだけにする。** 規則が自分で宣言した列挙、`import jsonschema` と `import enum` の列挙は E076 である。値の番号を契約が決めるためで、規則が自分の `.proto` を書かない以上、ほかの列挙には番号を付ける場所が無い。
 8. ★ **`rule … v2` の版と契約の package は比べない。** `rule` の版は規則の振る舞いの版で、通信の版は契約の package が持つ。
 9. ★ **`api` の `connect` は契約の名前と番号を言い、`contract` を足す。** `proto`、`package`、`service`、`method`、`path`、`request`、`response`、並びの `message`、フィールドの `number`、`python` の `client` が契約のものになる。`contract` は、規則が書いたファイル（`file`）と `gen` が写す先（`proto`）で、`import proto` の列挙の `contract` と同じ形にした。`implements` を書かない規則には出さない。口の `Connect`（`connect_facts`）の `path` も契約のものになり、dandori、sekisho、sakai はそれを読む。
@@ -5993,7 +5994,7 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 - 入れ子の列挙を `import proto` で読む規則の、生成した `.proto` と Python のサービスが変わる（決定の 12）。名前に英数字と `_` のほかの文字がある契約から `import proto` で読む規則の、Python のサービスが変わる（決定の 6）。下の突き合わせの規則には、どちらの規則も無かった。
 - `import proto` の契約の写し先が規則の `.proto` と同じパスで、中身が違うと、前は通った `gen` が止まる（決定の 13）。リリースノートの「前は通っていた実行が落ちうる変更」に書く。
 - ritsu の `mod diff` と `mod report` は、変わっていない規則も、モジュールの `.proto` が変わったときに比べ、E310 の注を契約の番号に合わせて言い分ける（ritsu の DESIGN 17.9.5）。ritsu-cross の E310 の台帳の文を、いまの姿に書き直した。
-- sakai の E302 と、公表された言語に規則を混ぜたときの E004 の注が、`implements` の規則の package は契約のものだと言う。
+- sakai の E302 の注が、`implements` の規則の package は契約のものだと言う。sakai は規則の `implements` も、ワークフローの `implements` と同じ E208 で確かめる。実装するサービスは、規則を持つコンテキストの公表された言語の `open host service` に無ければならない。一つの package の二つのサービスを二つの規則が実装するときは、契約の `.proto` を公表された言語にし、E004 と E006 の注がこの形を案内する（sakai の DESIGN 26 章）。
 - 文書：`docs/reference.md` に §3.4 を足し、`formats.md` の `connect` の段、`generated-code.md` の Connect の節、互換のページ（英日。1.x が残す書き方と、予約語にしない語）、サイトの rulec の `tour`・`generate`・`checks`・`assurance`・`index`（英日）と、変異の本数を描く `assurance` の図、根のサイトの `modules`（英日）、プレイグラウンドの `words.json`、サイトのレクサの行頭の語を合わせた。`AGENTS.md` には一行を足し、詳しいことは §3.4 に任せた。スキルの `SKILL.md`（`AGENTS.md` から組み立てる）は 500 行の上限の手前（499 行）だったので、同じ行数に収めるため、`AGENTS.md` の 6 章の一つの段落を、語を変えずに折り返し直した。スキルの説明が挙げるコードの範囲を E001-E076 にし、スキルの写しを作り直した。
 
 **確かめたこと**：
@@ -6022,10 +6023,61 @@ error[E135]: A sequence of calls breaks `always days_left 0 when dispute`
 - **well-known types**（`google.type.Date`、ラッパー型）を値の型として読むこと。
 - **Protovalidate の範囲と規則の `range` の突き合わせ。** `shape` の契約とは突き合わせる（E122）が、`implements` の契約とはまだしない。
 - **空いている番号の候補を言うこと。** ritsu-proto が `reserved` を読まないので、E076 の注は番号を書かずに「まだ使ったことのない番号」と言う。
-- **`implements` に移った規則の、出力先に残る古い `proto/rulec/<別名>/`。** `gen` は出力先のファイルを消さない。生成した `.proto` を写して同じパスに移れば、写しが上書きして残らない。reference の §3.4 に書いた。
 - **Python 以外の言語の Connect のサーバー**（前から無い）。
-- **一つの package の二つのサービスを二つの規則が実装すると、規則を sakai の公表された言語として並べられない。** 規則ごとの塊にすると同じ package を二度公表することになり（sakai の E006）、一つの塊には規則を二つ書けない（sakai の E004）。契約の `.proto` を公表された言語にして、規則は `owns` に入れるだけにすれば通るが、sakai は規則とサービスを結ばない。
-- **sakai の E208 を規則に広げること。** ワークフローの `implements` は、実装するサービスが自分のコンテキストの公表された言語の公開ホストサービスかを確かめる（sakai の DESIGN 4.7）が、規則の `implements` は確かめない。どのコンテキストが契約を持つか（規則の側か、API を持つ側か）という sakai の問いが先にある。
+
+### 15.275 `implements` に移った規則の、前の `gen` が書いた `.proto` を挙げる（2026-10-31）
+
+**きっかけ**：§15.274 で、`implements` を書いた規則では、`gen` が規則の `.proto`（`proto/rulec/<別名>/v<版>/<別名>.proto`）を書かずに、契約をコピーするようにした。`gen` は出力先のファイルを消さないので、生成した `.proto` をコピーせずに別のパスの契約へ移った規則では、行を書く前の `gen` が書いた `.proto` が出力先に残る。0.38.0 の公式のバイナリで、`tests/implements` の規則から `implements` の行と契約の列挙を読む `import proto` の行を除いたものを `gen` すると、60 のファイルを書く。二つの行を足して 0.39.0 で `gen` しても 60 のファイルである。違うのは、0.38.0 だけが書く `proto/rulec/member_tier_shipping/v1/member_tier_shipping.proto` と、0.39.0 だけが書く契約のコピー `proto/shop/v1/member_shipping.proto` の二つで、ほかの 59 のファイルはパスが同じで、中身が書き換わる。行の無い規則では、0.38.0 と 0.39.0 の書くファイルは同じである。Python のスタブは `gen` が書かない。生成した `buf.gen.yaml` で `buf generate` が `python/stubs/` の下に書き、頭の行は protoc-gen-py と protoc-gen-connectrpc のものである。
+
+残った `.proto` は、`proto/` の buf のモジュールに入ったままになる。契約が規則と別の package なら `buf build` は通るが、`buf generate` は、もう使わないサービスのスタブ（`python/stubs/rulec/member_tier_shipping/v1/`）も作り続ける。契約が規則と同じ package（`rulec.member_tier_shipping.v1`）にあり、ファイルの名前だけが違えば、同じ名前の型が二つになって、`buf build` が 100 で止まる（buf 1.54.0。最初の行は `rulec/member_tier_shipping/v1/contract.proto:8:6:symbol "rulec.member_tier_shipping.v1.Tier" already defined at rulec/member_tier_shipping/v1/member_tier_shipping.proto:8:6` で、同じ形の行が全部で 24 行）。
+
+**原因**：`gen` は、その実行で書くファイルのほかを見ない。規則が `implements` に移ったとき、前の実行が規則のために書いたファイルが残っているかを確かめるところが無かった。
+
+**決定**：
+
+1. **「`gen` は出力先のファイルを消さない」は保つ。** 出力先には、`gen` の書くもののほかに、buf のスタブや、人が置いたファイルも並ぶ。
+2. **`implements` を書いた規則ごとに、規則自身の `.proto` のパスを見る。** パスは、規則のいまの別名と版の大きい数で決まる `<出力先>/proto/rulec/<別名>/v<版>/<別名>.proto`（`Gen::proto_path`。`implements` を書いても変わらない）で、行を書く前の `gen` が書いたはずのところである。このパスがその実行の書き出し先のどれでもなく、ファイルがあり、一行目が rulec の頭の行（`// Code generated by rulec ` で始まり `DO NOT EDIT.` で終わる。版は問わない）なら、残っているファイルとして挙げる。
+   - 生成した `.proto` をコピーして同じパスへ移った規則では、契約のコピーがそのパスに書かれるので、挙がらない。`--check` で書かないときも、書き出し先として数える。
+   - 人が置いたファイルと、ほかの生成器が書いたファイルは、一行目が違うので挙がらない。一行目が空行のファイルも挙がらない。
+3. **文の出力は、生成の行のあとに、ファイルごとに二行を標準出力に書く。** 一行目は ritsu の `gen` と同じ言い方の「generated no more, and still there: <パス>」「もう生成しないファイルが残っています: <パス>」で、二行目の注記が、規則が契約のサービスを実装するので規則の `.proto` はもう生成しないこと、`gen` は出力先のファイルを消さないので、このファイルは消してかまわないことを言う。
+4. **JSON は、`written`・`stale`・`missing` のあとに `left`（パスの配列）を足す。** ほかの三つと同じく、無くても空の配列で、いつも出す。ほかのフィールドは変えない。名前は、ritsu の `gen --format json` の `state` の `left`（もう生成しないファイルが残っている）にそろえた。`docs/formats.md` に書いた。
+5. ★ **`gen --check` でも同じように挙げ、終了コードは変えない。** 生成物をコミットする使い方では、残ったファイルもコミットされていて、それが見えるのは CI の `gen --check` だからである。残ったファイルは、`--check` の終了コードに数えない。
+6. **診断のコードにはせず、終了コードも変えない。** 残っているかどうかは出力先で決まり、出力先を知らない `check` には言えない。
+
+**捨てたもの**：
+
+- **残ったファイルを `gen` が消すこと。** ritsu の `gen` は、パッケージの出力先を自分のものとして、もう生成しないファイルを消す。rulec の出力先には buf のスタブが並び、人がファイルを置くこともあるので、消すかどうかは使う人が決める（決定の 1）。
+- **`proto/rulec/` の全部を見て、その実行のどの規則も書かない rulec の `.proto` を挙げること。** `gen` には、規則を一つずつ、あるいは一部だけ渡すことがある。全部を見ると、その実行に渡さなかった規則の `.proto` まで、もう生成しないと言ってしまう。
+- **`.proto` から作ったスタブも挙げること。** スタブは buf が書いたファイルで、rulec の頭の行を持たない。挙げるのは rulec が書いたファイルだけにする。buf はスタブを消さないので、reference の §3.4 に、`.proto` と一緒に消すよう書いた。
+- **`--check` を落とすこと。** 0.39.0 で通っていた `gen --check` が、規則も生成物も変えずに落ちるようになる。
+
+**変わること**：
+
+- `implements` を書いた規則の `gen` は、行を書く前の `gen` が書いた規則の `.proto` が残っていれば、それを挙げる。`--check` でも挙げる。終了コードは変わらない。
+- `gen --format json` の答えに `left` が増える（いつも出る）。知らないキーを受け付けない読み手には、前は無かったキーになる。リリースノートの「前は通っていた実行が落ちうる変更」に書く。
+- 文書：`docs/reference.md` の §3.4 の終わりの、`gen` が消さないと言っていた文を、残ったファイルを挙げることに書き直し、実物の二行と、スタブのことを書いた。`formats.md` の `gen` に `left` を、`generated-code.md` の Connect の節と、サイトの rulec の `generate`（英日）に一文ずつを足した。
+
+**確かめたこと**：
+
+- `tests/implements.rs` に 3 件を足した（17 件）。
+  - `別のパスの契約へ移った規則では前の_proto_が挙がる`：行の無い規則を `gen` してから行を足して `gen` すると、文の出力の終わりが上の二行で、ファイルは書き換わらずに残り、JSON の `left` がそのパスだけで、`written` は空である。`--check` でも文と `left` で挙がって 0 で終わり、生成物を一つ書き換えると、`left` を挙げたまま `stale` が一つで 1 で終わる。日本語の文も確かめる。ファイルを消すと、もう挙がらない。
+  - `生成した_proto_をコピーして同じパスへ移った規則では何も挙がらない`：英日の文と、`--check` の有無の JSON で、何も挙がらない。
+  - `頭の行の無いファイルは挙がらない`：同じパスに置いた、頭の行の無いファイル、`DO NOT EDIT.` で終わるが rulec のものでない二つの頭の行、空行のあとに rulec の頭の行があるファイルは挙がらず、一行目が rulec の頭の行（0.38.0）なら挙がる。
+- `tests/formats.rs`：`gen --format json` のキーが四つで、`left` が空であること。
+- 実物：行を書く前の規則を `gen` した出力先で、行を書いてから替えた後のバイナリで `gen` すると、文の出力は、書き換えた 27 のファイルの `generated: …` の行のあとに、次の二行で終わる。
+
+```text
+generated no more, and still there: generated/proto/rulec/member_tier_shipping/v1/member_tier_shipping.proto
+note: `rules/member_tier_shipping.rule` implements a contract's service (`implements`), so gen writes no `.proto` of the rule's own; gen deletes nothing in the output directory, and this file can be deleted
+```
+
+  `gen --check --format json` は `{"written":[],"stale":[],"missing":[],"left":["generated/proto/rulec/member_tier_shipping/v1/member_tier_shipping.proto"]}` を出して 0 で終わる。その出力先で buf 1.54.0 の `buf generate`（ローカルのプラグインに替えたもの）は、契約のスタブと並べて `python/stubs/rulec/member_tier_shipping/v1/` の二つのスタブを書き、`.proto` をどけてもう一度走らせても、その二つは残った。
+- 替える前と後の突き合わせ：0.39.0 の公式のバイナリと替えた後のバイナリ（どちらも `ritsu` を `rulec` という名前のリンクで呼ぶ）で、木の 990 本の `.rule`（`implements` を書く 7 本を含む全部）の `gen` を、規則ごとに新しい出力先で比べた。文の出力と終了コード、続けて走らせた `gen --check --format json`、書いたファイルの全部、別の新しい出力先での `gen --format json` とそのファイルである。違ったのは、JSON の終わりに `"left":[]` が増えたことだけで、それを除くと 990 本とも一字も同じだった（終了コードは 0 が 616 本、1 が 374 本）。新しい出力先には前の `.proto` が無いので、`implements` を書く 7 本でも何も挙がらない。
+
+**見つけて直していないもの**：
+
+- **別名か版の大きい数を、`implements` に移るのと同時に変えた規則。** 見るのは、いまの別名と版のパスだけなので、前のパスに残った `.proto` は挙がらない。
+- **buf が前の `.proto` から作ったスタブ。** buf の書いたファイルなので挙げない（捨てたもの）。`buf generate` はスタブを消さないので、`.proto` を消しても `python/stubs/rulec/<別名>/v<版>/` は残る。
 
 ## 16. この設計で最も危うい点
 

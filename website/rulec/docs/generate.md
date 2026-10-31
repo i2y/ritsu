@@ -479,7 +479,9 @@ messages and the number of every field are the contract's. The rule's own `.prot
 fields in the order the rule declares them, so an input added in the middle would move every
 number after it; under a contract, a new input takes the number the contract gives it and nothing
 else moves. `rulec check` holds the rule to the service field by field, and says what does not
-fit as E076.
+fit as E076. `gen` deletes nothing in its output directory: a `.proto` it wrote for the rule
+before, at another path than the contract's copy, stays there, and `gen` names it as generated
+no more.
 
 And when the implementation that runs **today** is a Connect service,
 the arrow turns around: `rulec adapter --template connect-python` prints
