@@ -320,6 +320,9 @@ jobs:
           if [ "$RUNNER_OS" = Linux ]; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
           brew tap-new --no-git i2y/tap
           cp ritsu.rb "$(brew --repository i2y/tap)/Formula/ritsu.rb"
+          # Homebrew 7 loads no formula of a tap that is not trusted. A user's `brew install
+          # i2y/tap/ritsu` trusts the formula it names; here `brew audit` reads it first.
+          brew trust --formula i2y/tap/ritsu
           brew audit --strict --online --formula i2y/tap/ritsu
           brew install --formula i2y/tap/ritsu
           brew test i2y/tap/ritsu
