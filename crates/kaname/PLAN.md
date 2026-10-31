@@ -22,7 +22,7 @@ DESIGN.md を仕様として、kaname を八つの段階（B、C1、C2、C3、D�
 - テストは、書いているあいだは `cargo check` だけにし、項目を書き終えたら、その項目のテストを一回回す。触ったクレートのテストだけを回し、ワークスペース全体のテストは段階の終わりに一度だけ回す。`--test-threads` は 6 まで、`CARGO_BUILD_JOBS=6`。ログを `reports/kaname-<段階>-logs/` に残す。`-- --nocapture` で SKIP の行を読んでから報告する。
 - golden は `KANAME_BLESS=1`（ritsu の側は `RITSU_BLESS=1`）で取り直し、差分を読んでから報告する。
 - 例、テストの材料、golden は英語が先で、日本語は `<名前>.ja.kn` の版か、日本語の名前の材料として横に置く。日本語のものは消さない。
-- 日本語（DESIGN、PLAN、`--lang ja` の診断、ページ、README.ja.md）は、日本語の例にかけた出力を読み直す。英語の概念語を漢字に直訳した造語をしない。誰がするのか分からない言い方（「直します」）をせず、英語の語順を写さない。文書に、時刻の言葉（朝、夜）や、だれが決めたか・頼んだかを書かない。
+- 日本語（DESIGN、PLAN、`--lang ja` の診断、ページ、README.ja.md）は、日本語の例にかけた出力を読み直す。英語の概念語を漢字に直訳した造語をしない。誰がするのか分からない言い方（「直します」）をせず、英語の語順のまま書かない。文書に、時刻の言葉（朝、夜）や、だれが決めたか・頼んだかを書かない。
 - 文書に載せる出力と数は、実際に走らせたものを貼る。案として書いたもの（DESIGN の 12 章と 17 章の kaname の出力）は、その出力を作った段階で実物に差し替える。
 - 成果物に、手元の絶対パス、ユーザー名、マシン名を入れない。
 
@@ -274,7 +274,7 @@ proofs/KanameCore/  proofs/KanameCore.lean                                      
 
 ### D.8 D で作ったものと確かめたこと（2026-10-18）
 
-- 生成（`src/gen/`）：`mod.rs`（`Target`、`package` が補助のモジュール、モジュール、振替の型と当てる関数、`glue/` のインデックスを書き、名前を出す単位を返す）、`ex.rs`（式と文の木と、三つの言語の書き方。Go は gofmt の二項演算の空白の決め方を写した）、`plan.rs`（関数の本体を、参照インタプリタと同じ順と同じ読み替えで書く。名前、型の対応、確かめの場所）、`module.rs`（モジュールのファイル）、`books.rs`（振替の型と当てる関数）、`harness.rs`（突き合わせのハーネスと、ベクタと宣言の外の入力の答え）。補助のモジュールは `src/gen/runtime/kaname.{ts,py,go}` を `include_str!` で読む。
+- 生成（`src/gen/`）：`mod.rs`（`Target`、`package` が補助のモジュール、モジュール、振替の型と当てる関数、`glue/` のインデックスを書き、名前を出す単位を返す）、`ex.rs`（式と文の木と、三つの言語の書き方。Go は gofmt の二項演算の空白の決め方に合わせた）、`plan.rs`（関数の本体を、参照インタプリタと同じ順と同じ読み替えで書く。名前、型の対応、確かめの場所）、`module.rs`（モジュールのファイル）、`books.rs`（振替の型と当てる関数）、`harness.rs`（突き合わせのハーネスと、ベクタと宣言の外の入力の答え）。補助のモジュールは `src/gen/runtime/kaname.{ts,py,go}` を `include_str!` で読む。
 - 参照インタプリタ：規則と日付の呼び出しの失敗の文から理由を外した（DESIGN 20 章の 69。理由はトレースに残る）。`tests/interp.rs`、`tests/vectors.rs`、DESIGN 9 章の例の行を合わせた。
 - `api` の `generated` を生成物の名前に合わせた（Go の関数のパスカルケースと `Fn`）。`tests/golden/api/` の八つを取り直し、変わったのは Go の関数の名前の二つ（`Claim` が `ClaimFn`、`Weight_of` が `WeightOf`）と、その日本語の版である。
 - テストのモジュールを三つ足した：`tests/modules/walks.kn`（rulec のコーパスの三つの規則と ritsu のテストの帳簿 `stock.book` をたどる。`allocate`、`mod`、規則の列挙、帳簿の `hold`・`post`・`void`）、`lib.kn` と `calls.kn`（ほかのモジュールの列挙とレコードと関数を読む）。三つとも、どの関数も total。
@@ -375,7 +375,7 @@ F.1〜F.9 を終えた。
 - 範囲の解析の六か所：DESIGN 15.3 の表のとおり。`tests/modules/bounds.kn`（四つの関数）を足し、`tests/ranges.rs` で、実行の失敗の種類が関数のエフェクトにあることも確かめるようにした。直す前は、`thirds` の値が 47 回、`hundredths` の値が 45 回、抽象の値の外に出て、`many` の実行の 201 回が、エフェクトの言わない `overflow` で失敗した。Lean との突き合わせも、直す前は `bounds` で 12 か所が違った。直したあとは、どちらも外れが無い。
 - 参照インタプリタの `mod`・`isqrt`・`allocate`・丸めは、数でない値を 0 と読まずに止める（DESIGN 8 章）。
 - `corners.kn` を `crates/ritsu-model/tests/kaname/` から `tests/modules/` に移し、範囲の解析のテストと出力先の突き合わせに入れた。範囲の解析のテストは、`tests/modules/` を全部読む（`walks`、`calls`、`names` も足した）。出力先の突き合わせは 20 のモジュールで、三つの出力先とも、英語と日本語で 964 件（ベクタ 654 件と宣言の外の入力 310 件）が一致する。
-- W901：`src/security.rs`、`src/check.rs`（全文を、構文の誤りがあっても調べる）、台帳（`src/codes.rs`）の英語と日本語の再現、`tests/golden/codes/W901.*`、`docs/codes.md` と `codes.ja.md`、`docs/reference.md` の節、スキル（`skills/kaname/SKILL.md` の説明と表、`codes.md` と `reference.md` の写し）、`tests/secrets.rs`、`tests/codes.rs` と `tests/cli.rs`（`explain --all`）のコードの数。
+- W901：`src/security.rs`、`src/check.rs`（全文を、構文の誤りがあっても調べる）、台帳（`src/codes.rs`）の英語と日本語の再現、`tests/golden/codes/W901.*`、`docs/codes.md` と `codes.ja.md`、`docs/reference.md` の節、スキル（`skills/kaname/SKILL.md` の説明と表、`codes.md` と `reference.md` のコピー）、`tests/secrets.rs`、`tests/codes.rs` と `tests/cli.rs`（`explain --all`）のコードの数。
 - ブラウザで試すページの `ritsu.wasm` を `website/tools/make_wasm.sh` で作り直し、ritsu の `tests/playground.rs` を回した（ページが開くプロジェクトに `.kn` は無く、答えは変わらない）。
 - 根の DESIGN.md の 11 章と 16 章、根の PLAN.md の 7.21 に当てる文は `reports/kaname-F2-notes.md` に書いた。
 - `running_totals` の重み：丸めていない重みを E103 にした（`src/types.rs` の `weight_fits`。DESIGN 3.6、20 章の 100）。`tests/types.rs` の `the_weights_of_running_totals_are_rounded` が、`1 / x` の重みのモジュールを英語と日本語の名前で、ほかに金額と率の積、値で割った率、分岐の一つだけが丸めていない重み、丸めた重みと率の重みを確かめる。台帳の E103 の文、`docs/codes*.md`、`docs/reference.md` とスキルのコピーを合わせた。いつも `0%` の率の重みで、生成したコードが 0/0 で落ちていたのを直した（`src/gen/plan.rs` の `rate_step`。10 章）。

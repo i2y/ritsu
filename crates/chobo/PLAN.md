@@ -592,7 +592,7 @@ PostgreSQL、TigerBeetle、MySQL の系統を呼ぶ Rust のクライアント�
 
 ### F2 生成（client/rust.rs と runtime/*.rs）
 
-三つのターゲット、どの帳簿でも同じ部分の三つ（`runtime/postgres.rs`、`tigerbeetle.rs`、`mysql.rs`。Go の runtime を写し、ID とチェーンと文は Rust の生成器と同じもの）、モジュールの頭のクレートの行、ritsu のパッケージの中の単位の型。`chobo api` の `targets.rust` と、口の帳簿の事実の `rust`。
+三つのターゲット、どの帳簿でも同じ部分の三つ（`runtime/postgres.rs`、`tigerbeetle.rs`、`mysql.rs`。Go の runtime から移植し、ID とチェーンと文は Rust の生成器と同じもの）、モジュールの頭のクレートの行、ritsu のパッケージの中の単位の型。`chobo api` の `targets.rust` と、口の帳簿の事実の `rust`。
 
 ### F3 検査（E063）
 

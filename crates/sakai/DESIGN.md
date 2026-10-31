@@ -2581,7 +2581,7 @@ error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService i
 
 - Go の置き場所の下のディレクトリを `except` で外した地図の `.go-arch-lint.yml` は、`excludeFiles` の代わりに `exclude` を持ち、go-arch-lint が通る。前は落ちていた。
 - Go のファイルを一つだけ指す `except`、ほかのコードのパスがその名前で始まる `except` のディレクトリのある地図は、`build --target go-arch-lint` が E501 で止まる。前は設定を書き、go-arch-lint が落ちるか、検査が黙って減った。
-- `docs/targets.md` の Go の段とスキルの写し、7.5 を合わせた。台帳の E501 の文に `except` の場合を足したのは 25 章である。
+- `docs/targets.md` の Go の段とスキルのコピー、7.5 を合わせた。台帳の E501 の文に `except` の場合を足したのは 25 章である。
 - Go の置き場所の下に `except` の無い地図の設定は、一字も変わらない（下の突き合わせ）。
 
 **確かめたこと**：
@@ -2622,13 +2622,13 @@ error[E301]: contexts/delivery.ctx:23:21: The open host service RegionsService i
 - `root_packages` のパッケージの中に `except` のある地図の `.importlinter` は、どの契約にも `ignore_imports` と `unmatched_ignore_imports_alerting = none` を持ち、import-linter が通る。前は外したコードの import で落ちた。
 - grimp が読むのに名前を式に書けない `.py` のファイルを指す `except` のある地図は、`build --target import-linter` が E501 で止まる。前は設定を書き、import-linter が外したはずのファイルの import で落ちた。
 - `root_packages` のパッケージの中に `except` の無い地図の設定は、一字も変わらない（下の突き合わせ）。
-- 7.2、`docs/targets.md` の Python の段、台帳の E501 と `docs/codes.md`・`docs/codes.ja.md`、スキルの写しを合わせた。
+- 7.2、`docs/targets.md` の Python の段、台帳の E501 と `docs/codes.md`・`docs/codes.ja.md`、スキルのコピーを合わせた。
 
 **確かめたこと**：
 
 - `tests/imports.rs` の `import_linter_leaves_out_what_the_map_excepts`。英語の例に上の `old.py` と `uses_old.py`、同じ `old.py` を置いた `py/inventory/old-stuff/` を足し、地図に `except "py/inventory/legacy", "py/inventory/old-stuff"` を書く。11 の契約がどれも `inventory.legacy` の四つの式を持ち、`old-stuff` はどこにも書かれず、import-linter は通る。式を消すと、上の二つの import が出て落ち、`old-stuff` の import は出ない（grimp が読まない）。直す前の sakai で走らせると、式が無いので一つ目の確かめで落ちた。
 - `tests/build.rs` の `what_cannot_be_written` と英語の版。例（英日）に `except "py/inventory/old-stuff.py"` を書くと、「The `except` py/inventory/old-stuff.py is read as the module `inventory.old-stuff`」の E501 が一つだけ出て、ほかの三つの設定は書ける。
-- 名前の形ごとに、例の写しで import-linter 2.15 を走らせた。`legacy` と `旧コード` のディレクトリは式を書き、`Analyzed 28 files` で 11 の契約が KEPT。`old-stuff` と `old stuff` は式を書かず、`Analyzed 26 files`（grimp がその下の二つを読まない）で 11 の契約が KEPT。
+- 名前の形ごとに、例のコピーで import-linter 2.15 を走らせた。`legacy` と `旧コード` のディレクトリは式を書き、`Analyzed 28 files` で 11 の契約が KEPT。`old-stuff` と `old stuff` は式を書かず、`Analyzed 26 files`（grimp がその下の二つを読まない）で 11 の契約が KEPT。
 - 直す前（0.36.0）と後の突き合わせ：`code python` のある地図の 12（例の英日、テストの地図の四つ、ritsu のテストのプロジェクトの二つ、誤りを入れたテストの地図の四つ）の `build --target import-linter` を英語と日本語で 24 回走らせ、書いた設定、出力、終了コードは一字も変わらない。どれも `root_packages` のパッケージの中に `except` が無い。
 
 **見つけて直していないもの**：
