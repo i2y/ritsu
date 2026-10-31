@@ -1410,7 +1410,7 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
    | `operation_guard` | X15 | コンテキストの `open host service` の行 | 守るゲートの `guards` の行。だれでも呼べる操作（`security: []`）はその文書、守るものが無ければ `null` | E907／W907 |
    | `workflow_permission` | X16 | 操作の呼び出し | 守るゲートの `guards` の行 | E908／W909 |
 
-   決まり：名前は変えない。使い回さない。確かめを足すときは、新しい名前を表の後ろに足す（並べる順は表の順なので、前からの記録の並びは変わらない）。確かめをやめても、名前は表に残し、使い回さない。名前は英語の snake_case で、`--lang` で変わらない。kaname の呼び出しの記録の名前は、口の `Crossing` から決める（`Precondition` は `precondition`、`RuleDay` は `rule_date_input`、`Amount` は `transfer_amount`、`Refusals` は `transfer_refusals`、`DateDay` は `koyomi_date_input`）。
+   決まり：名前は変えない。使い回さない。確かめを足すときは、新しい名前を表の後ろに足す（並べる順は表の順なので、前からの記録の並びは変わらない）。確かめをやめても、名前は表に残し、使い回さない。名前は英語の snake_case で、`--lang` で変わらない。kaname の呼び出しの記録の名前は、口の `Crossing` から決める（`Precondition` は `precondition`、`RuleDay` は `rule_date_input`、`Amount` は `transfer_amount`、`Refusals` は `transfer_refusals`、`DateDay` は `koyomi_date_input`）。kaname の `check --format json` の `places` と `kaname api` の `checks` も、同じ語で確かめを書く（`Crossing::check`。前は 7.2 の番号を書いていた。kaname の DESIGN 35 章）。
 
 4. **並べる順。** `check_with` の終わりで、（名前の表の順、`at` のファイル、`at` の行）で安定に並べ替える。同じものどうしは、確かめが見つけた順（プロジェクトのファイルの順、呼び出しの順、前提の順）で、これも入力が同じなら同じである。並べ替えないと、kaname の記録とフローの記録が確かめの順で混ざり、読む側が順を当てにできない。
 
@@ -1440,7 +1440,6 @@ ritsu check: 8 files (rulec 2, koyomi 3, dandori 1, sekisho 2): all pass; border
 
 **見つけて直していないもの**：
 
-- kaname の `check --format json` の `functions[].places[].check` と `kaname api` の `checks[].check` は、7.2 の番号（`X2`・`X3`・`X4`・`X6`）を書く（ritsu-ports の `Crossing::check`）。4.3 の決まりと食い違うが、kaname の出力なので変えていない（kaname の DESIGN 34 章）。
 - 規則の `check`（8.3）は `null` で、rulec が規則について言うことは JSON に無い（rulec の DESIGN §15.276）。
 
 ## 8. 一つの CLI

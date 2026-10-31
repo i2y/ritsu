@@ -789,7 +789,7 @@ error[E105]: frozen.kn:8:13: A value of temperature[℃] takes no `-`
 
 **決定（言語をまたぐ判定の答えでエフェクトを決める）**：ritsu-cross が示した場所は、エフェクトから外す。決められない場所と例のある場所は、生成したコードが実行時に確かめる失敗として、エフェクトの種類に数え、書いたエフェクトとの比べ（E401）にも使う。E401 の注は、その場所と、ritsu-cross が言うコードを `ritsu W203` の形で挙げる（kaname の台帳と ritsu の台帳は番号が重なるため）。`ritsu kaname` と `ritsu check` では、例の関数は、どれも total である（17 章）。
 
-答えを受け取らない実行（ritsu-cross をつながない kaname のクレートのテスト）では、その場所は答えを待つ場所で、エフェクトの種類には数えるが、E401 には使わない。答えをまだ尋ねていないことは、示せないこととは違うからである。`--format json` はその場所を `"outcome": "waiting"` と書き、確かめる判定（`"check": "X4"` など）を添える。捨てたものは二つある。答えを待つ場所も E401 に使うと、答えが来れば消えるエラーを出す。答えを待つ場所をエフェクトに数えないと、答えが来るまで、生成したコードが確かめるはずの場所がエフェクトに出ない。
+答えを受け取らない実行（ritsu-cross をつながない kaname のクレートのテスト）では、その場所は答えを待つ場所で、エフェクトの種類には数えるが、E401 には使わない。答えをまだ尋ねていないことは、示せないこととは違うからである。`--format json` はその場所を `"outcome": "waiting"` と書き、確かめる判定（`"check": "transfer_amount"` など。35 章）を添える。捨てたものは二つある。答えを待つ場所も E401 に使うと、答えが来れば消えるエラーを出す。答えを待つ場所をエフェクトに数えないと、答えが来るまで、生成したコードが確かめるはずの場所がエフェクトに出ない。
 
 **入出力のエフェクトは無い**（P1）。kaname は時刻も乱数も状態も持たないので、それを型に出す必要が無い。
 
@@ -812,10 +812,10 @@ kaname の関数がほかの kaname の関数を呼ぶところは、入口で�
 
 ```json
 {"function": "settle", "effect": {"fails": ["range"], "diverges": false}, "written": {"total": true, "fails": [], "diverges": false},
- "places": [{"line": 21, "kind": "range", "check": "X4", "code": "W203", "outcome": "undecided"}], "calls": []}
+ "places": [{"line": 21, "kind": "range", "check": "transfer_amount", "code": "W203", "outcome": "undecided"}], "calls": []}
 ```
 
-  `places` の `check` は、その場所を決める判定（kaname 自身なら `"kaname"`、言語をまたぐ判定なら `"X2"`・`"X3"`・`"X4"`・`"X6"`）、`code` は出した診断のコード（kaname 自身の場所は E301〜W303、言語をまたぐ判定の場所は ritsu の E201〜W205。答えを待つ場所は `null`）、`outcome` は `"example"`・`"undecided"`・`"unbounded"`（型の端から来たあふれ。`code` は `null`。22.3）・`"waiting"` のどれかである。示した場所は載せない。
+  `places` の `check` は、その場所を決める判定（kaname 自身なら `"kaname"`、言語をまたぐ判定なら、`ritsu check` の境目の記録と同じ語の `"precondition"`・`"rule_date_input"`・`"transfer_amount"`・`"koyomi_date_input"`。35 章）、`code` は出した診断のコード（kaname 自身の場所は E301〜W303、言語をまたぐ判定の場所は ritsu の E201〜W205。答えを待つ場所は `null`）、`outcome` は `"example"`・`"undecided"`・`"unbounded"`（型の端から来たあふれ。`code` は `null`。22.3）・`"waiting"` のどれかである。示した場所は載せない。
 - **生成するコードの形**（10 章）：Go は、失敗しうる関数だけが `(T, error)` を返し、total な関数は `T` を返す。TypeScript と Python は、投げる `KanameError` の種類を、関数ごとの型の別名（TypeScript の `type ClaimFails = "rule" | "overflow"`、Python の `Literal`）とドキュメントのコメントに出す。止まらないかもしれない関数は、コメントにそう書く。
 - **dandori から呼ぶときの制限**（19 章。まだやらない）：dandori のフローから kaname の関数を呼ぶなら、total な関数だけにする。ワークフローの中で、失敗の種類ごとの扱いと、止まらない呼び出しの期限を書かずに済むようにするためである。
 - **Lean**（15 章）：「total と推論した関数は、宣言した範囲のどの入力でも失敗しない」を定理にする。
@@ -1434,9 +1434,9 @@ fails: input (line 18): The argument `invoice.amount` of `claim` is 0GBPc, outsi
 "crossings": [
   {"line": 19, "col": 13, "calls": "rule", "callee": "card_fee", "checks": []},
   {"line": 21, "col": 14, "calls": "transfer", "callee": "ledger.capture.do",
-   "checks": [{"line": 21, "col": 85, "check": "X4", "about": "amount", "outcome": "shown", "code": null}]},
+   "checks": [{"line": 21, "col": 85, "check": "transfer_amount", "about": "amount", "outcome": "shown", "code": null}]},
   {"line": 22, "col": 10, "calls": "transfer", "callee": "ledger.processing_fee.do",
-   "checks": [{"line": 22, "col": 85, "check": "X4", "about": "fee", "outcome": "shown", "code": null}]}
+   "checks": [{"line": 22, "col": 85, "check": "transfer_amount", "about": "fee", "outcome": "shown", "code": null}]}
 ],
 ...
 "transfers": [
@@ -4156,4 +4156,12 @@ error[E108]: example.kn:6:11: The parameter `b` of `low`, which is not `private`
 
 確かめたこと：ritsu の `tests/check.rs` の `each_files_check_in_the_json_is_what_its_language_writes` で、ritsu のテストのプロジェクト `cold_chain` と `regions`（型の確かめを通らない二つのファイルを含む）、例の `payout` の `.kn` の `check` が、`ritsu kaname check --format json` のオブジェクトから二つのキーを除いたものと同じであること（`payout.kn` は `summary` が `1 function, total` で、関数の `effect` の `fails` が空）。ritsu の `tests/cross.rs` の `each_border_has_its_record` で、日付を渡す関数の `effect` が `{"fails": ["rule"], "diverges": false}` であること。golden の `crates/ritsu/tests/golden/modules/shop.json` と `店.json`。
 
-見つけて直していないもの：`functions[].places[].check` と `kaname api` の `checks[].check` は、ritsu の DESIGN の確かめの番号（`X2`・`X3`・`X4`・`X6`）を書く（`ranges::What::across`）。ritsu の DESIGN 4.3 は、利用者に見える出力に設計の文書の番号を書かないと決めており、ritsu の境目の記録は、同じ確かめを語の名前（`precondition`・`rule_date_input`・`transfer_amount`・`koyomi_date_input`。ritsu の DESIGN 7 章）で呼ぶ。kaname の出力を変えると、`kaname check --format json` と `kaname api` を読む側が変わるので、ここでは変えていない。
+## 35. 言語をまたぐ確かめを、ritsu の境目の記録と同じ語で呼ぶ（2026-10-31）
+
+**きっかけ**：`kaname check --format json` の `functions[].places[].check` と、`kaname api` の `crossings[].checks[].check` は、言語をまたぐ確かめを ritsu の DESIGN の番号（`X2`・`X3`・`X4`・`X6`）で書いていた。ritsu の DESIGN 4.3 は、利用者に見える出力に設計の文書の番号を書かないと決めている。同じ日に、`ritsu check --format json` の境目の記録が、同じ確かめを語（`precondition` など。ritsu の DESIGN 7.15）で呼ぶようになり、二つの出力が同じ確かめを別の名前で呼ぶことになった。`X4` は、振替の額と拒否の理由という二つの確かめを、一つの番号で呼んでいた。
+
+**決定**：kaname の出力も、境目の記録と同じ語で確かめを呼ぶ。語は口の `ritsu_ports::Crossing::check` が持ち（`precondition`・`rule_date_input`・`transfer_amount`・`transfer_refusals`・`koyomi_date_input`）、`places` の `check`（`ranges::What::across`）も、場所の `Crossing`（`ranges::crossing_of`）から引く。ritsu-cross の `Check::of` が `Crossing` を境目の記録の確かめに移し、ritsu-cross の `tests/borders.rs` が、どの `Crossing` でも二つの語が同じであることを確かめる。
+
+**変わること**：`kaname check --format json` の `places` と、`kaname api` の `checks` の `check` の値が変わる。`X2` は `precondition`、`X3` は `rule_date_input`、`X4` は `transfer_amount`（拒否の理由の確かめは `transfer_refusals`）、`X6` は `koyomi_date_input` になる。`doc` のページで答えを待つ場所の文（ritsu-cross をつながない実行）も、番号ではなくコードの書式の語で言う（「ritsu's check `transfer_amount` has not answered in this run.」、帳簿の表の拒否の理由の欄は `transfer_refusals`）。`check` のテキストの出力は変わらない。
+
+**確かめたこと**：`tests/api.rs`（golden 6 本を `KANAME_BLESS=1` で取り直し、差は `check` の値だけだった。`what_the_api_says_and_what_stops_it` は答えを待つ日付の場所を `koyomi_date_input` で見る）、`tests/doc.rs`（答えを待つページの golden 2 本を取り直し、差は二つの場所の文だけだった）、`tests/cli.rs`、`tests/effects.rs`、`tests/ranges.rs`（場所の `check` の語）、ritsu-cross の `tests/borders.rs` の `kaname_names_a_check_by_the_word_of_its_record`。kaname の fast の段（200 件）と、ritsu・ritsu-cross・ritsu-ports の fast の段が通った。

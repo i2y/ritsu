@@ -129,7 +129,7 @@
             {
               "line": 17,
               "col": 41,
-              "check": "X2",
+              "check": "precondition",
               "about": "before <= upto",
               "outcome": "waiting",
               "code": null
@@ -137,7 +137,7 @@
             {
               "line": 17,
               "col": 41,
-              "check": "X2",
+              "check": "precondition",
               "about": "upto <= total",
               "outcome": "waiting",
               "code": null

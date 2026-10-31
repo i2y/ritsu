@@ -64,8 +64,8 @@ fn 精算する(settle)(支払い(payment): 支払い) -> 精算 total
 
 失敗しうる場所：
 
-- 21 行目（`range`）: この実行では、ritsu の X4 の答えがありません。
-- 22 行目（`range`）: この実行では、ritsu の X4 の答えがありません。
+- 21 行目（`range`）: この実行では、ritsu の `transfer_amount` の答えがありません。
+- 22 行目（`range`）: この実行では、ritsu の `transfer_amount` の答えがありません。
 
 ### 止まらないかもしれない関数
 

@@ -659,13 +659,7 @@ pub(crate) fn check(project: &Project, verdicts: &ProgramVerdicts, lang: Lang, b
         let src = ritsu_base::fs::read_to_string(ritsu_base::paths::on_disk(&project.root, &f.rel)).unwrap_or_default();
         for d in decided.iter() {
             let v = &d.verdict;
-            let check = match v.check {
-                Crossing::Precondition => Check::Precondition,
-                Crossing::RuleDay => Check::RuleDateInput,
-                Crossing::DateDay => Check::KoyomiDateInput,
-                Crossing::Amount => Check::TransferAmount,
-                Crossing::Refusals => Check::TransferRefusals,
-            };
+            let check = Check::of(v.check);
             let to = Side::reached(project, d.to.0, &d.to.1, None);
             let code = v.said.as_ref().map(|(c, _)| c.as_str());
             borders.add(Border::new(check, v.about.clone(), Side::at(Tool::Kaname, &f.rel, v.at.line), Some(to), Came::of(&v.outcome), code));

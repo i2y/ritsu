@@ -129,7 +129,7 @@
             {
               "line": 17,
               "col": 35,
-              "check": "X2",
+              "check": "precondition",
               "about": "手前まで <= ここまで",
               "outcome": "waiting",
               "code": null
@@ -137,7 +137,7 @@
             {
               "line": 17,
               "col": 35,
-              "check": "X2",
+              "check": "precondition",
               "about": "ここまで <= 合計",
               "outcome": "waiting",
               "code": null

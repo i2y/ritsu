@@ -88,7 +88,7 @@ fn check_in_json() {
     let f = &v.get("functions").unwrap().as_arr().unwrap()[0];
     assert_eq!(
         f.compact(),
-        r#"{"function":"claim","effect":{"fails":["date"],"diverges":false},"written":{"total":true,"fails":[],"diverges":false},"places":[{"line":20,"kind":"date","check":"X6","code":null,"outcome":"waiting"}],"calls":[]}"#
+        r#"{"function":"claim","effect":{"fails":["date"],"diverges":false},"written":{"total":true,"fails":[],"diverges":false},"places":[{"line":20,"kind":"date","check":"koyomi_date_input","code":null,"outcome":"waiting"}],"calls":[]}"#
     );
     let t = TempDir::new("kaname-json");
     let bad = t.write("bad.kn", "module bad v1\n\nfn f(r: rate) -> number\n  0\n");

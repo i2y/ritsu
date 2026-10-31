@@ -32,7 +32,7 @@ use std::path::Path;
 
 /// An operation of a transfer the module builds, on the page: its name, the transfer, where it is
 /// built (the line and the function), and the reasons it can be refused with (`None` when ritsu's
-/// X4 has not answered in this run, `Some(None)` when it cannot be decided).
+/// check of the refusals has not answered in this run, `Some(None)` when it cannot be decided).
 type Operation = (String, crate::ty::TransferId, Vec<(usize, usize)>, Option<Option<Vec<String>>>);
 
 /// A part of the functions: its heading, its id, and which effects it takes.
@@ -494,7 +494,10 @@ impl<'a> Builder<'a> {
                     "決められません（生成する型は、帳簿の境界の理由を全部とります）",
                     "undecided (the type generated for it takes every reason of the book's bounds)"
                 )),
-                (true, None) => self.t(tr!("この実行では、ritsu の X4 の答えがありません", "ritsu's check X4 has not answered in this run")),
+                (true, None) => {
+                    let x = code(ritsu_ports::Crossing::Refusals.check());
+                    self.t(tr!("この実行では、ritsu の {x} の答えがありません", "ritsu's check {x} has not answered in this run"))
+                }
             };
             rows.push(vec![code(&name), args, self.lines_of(&at), why]);
         }
@@ -669,7 +672,7 @@ impl<'a> Builder<'a> {
         let lead = self.t(tr!("{line} 行目（{kind}）", "Line {line} ({kind})"));
         let said = match (&p.outcome, &p.across) {
             (Came::Pending, _) => {
-                let x = p.what.across().unwrap_or("");
+                let x = code(p.what.across().unwrap_or(""));
                 self.t(tr!("この実行では、ritsu の {x} の答えがありません。", "ritsu's check {x} has not answered in this run."))
             }
             (_, Some((c, headline))) => self.coded(headline, &format!("ritsu {c}")),

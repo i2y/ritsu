@@ -152,7 +152,7 @@
             {
               "line": 21,
               "col": 85,
-              "check": "X4",
+              "check": "transfer_amount",
               "about": "amount",
               "outcome": "waiting",
               "code": null
@@ -168,7 +168,7 @@
             {
               "line": 22,
               "col": 85,
-              "check": "X4",
+              "check": "transfer_amount",
               "about": "fee",
               "outcome": "waiting",
               "code": null

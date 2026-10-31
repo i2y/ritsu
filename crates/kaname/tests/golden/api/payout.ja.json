@@ -152,7 +152,7 @@
             {
               "line": 21,
               "col": 49,
-              "check": "X4",
+              "check": "transfer_amount",
               "about": "金額",
               "outcome": "waiting",
               "code": null
@@ -168,7 +168,7 @@
             {
               "line": 22,
               "col": 54,
-              "check": "X4",
+              "check": "transfer_amount",
               "about": "手数料",
               "outcome": "waiting",
               "code": null

@@ -207,7 +207,7 @@ fn the_verdicts_decide_the_places_that_waited() {
     assert!(text.contains("  = Line 21: whether chobo takes the amount cannot be decided (ritsu W203)
 "), "{text}");
     let json = kaname::check::to_json(&o, std::path::Path::new("."), Lang::En).compact();
-    assert!(json.contains(r#""check":"X4","code":"W203","outcome":"undecided""#), "{json}");
+    assert!(json.contains(r#""check":"transfer_amount","code":"W203","outcome":"undecided""#), "{json}");
     // an example: the place keeps the run that breaks it
     let seen = ritsu_ports::Seen { at: ritsu_ports::At::default(), call: "settle(…)".into(), input: r#"{"payment":{"id":"a","seller":"a","amount":1,"international":false}}"#.into(), given: vec![("amount".into(), ritsu_ports::Value::Int(-48))] };
     let o = run(answers(f, |a| if a.to == "amount" { Answer::Fails(seen.clone()) } else { Answer::Holds }, vec![]));

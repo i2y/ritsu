@@ -298,10 +298,10 @@ fn the_examples_show_what_kaname_decides() {
         let c = common::check(f).checked.clone().unwrap();
         c.analysis.get().unwrap().fns.iter().flat_map(|x| x.places.iter().filter_map(|p| p.what.across().map(|w| (p.span.line, w))).collect::<Vec<_>>()).collect()
     };
-    assert_eq!(waits("examples/payout/payout.kn"), [(21, "X4"), (22, "X4")]);
-    assert_eq!(waits("examples/late_payment/late_payment.kn"), [(20, "X6")]);
+    assert_eq!(waits("examples/payout/payout.kn"), [(21, "transfer_amount"), (22, "transfer_amount")]);
+    assert_eq!(waits("examples/late_payment/late_payment.kn"), [(20, "koyomi_date_input")]);
     assert_eq!(waits("examples/media_mail/media_mail.kn"), []);
-    assert_eq!(waits("examples/discount_split/discount_split.kn"), [(17, "X2"), (17, "X2")]);
+    assert_eq!(waits("examples/discount_split/discount_split.kn"), [(17, "precondition"), (17, "precondition")]);
 }
 
 /// The values DESIGN 17 says of the examples: the days late, narrowed in the branch; the weight of the

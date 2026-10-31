@@ -915,7 +915,9 @@ not shown:
 ```
 
 A place is `{"line", "kind", "check", "code", "outcome"}`: `check` is `kaname` or the check across
-the languages that decides it (`X4`), `code` the diagnostic said of it, and `outcome` `example`,
+the languages that decides it, by the word `ritsu check --format json` gives the border
+(`precondition`, `rule_date_input`, `transfer_amount` or `koyomi_date_input`), `code` the diagnostic
+said of it, and `outcome` `example`,
 `undecided`, `unbounded` (an overflow from the end of a type, with no code), or `waiting` where no
 verdict came. An inner function (a generic one, one that takes functions, a `private` one), which no
 host calls, has `"inner": true`; the effect of one that takes functions has `"through"`, its

@@ -42,7 +42,7 @@ fn what_the_api_says_and_what_stops_it() {
     let ritsu_base::json::Json::Obj(top) = &v else { panic!("{json}") };
     let keys: Vec<&str> = top.iter().map(|(k, _)| k.as_str()).collect();
     assert_eq!(keys, ["kaname", "file", "module", "generated", "uses", "enums", "records", "functions", "transfers"]);
-    assert!(json.contains("\"check\": \"X6\""), "{json}");
+    assert!(json.contains("\"check\": \"koyomi_date_input\""), "{json}");
     assert!(json.contains("\"outcome\": \"waiting\""), "{json}");
     assert!(json.contains("\"go\": \"Claim\""), "{json}");
     // a module whose names do not pass has no api: exit 1, with what check says

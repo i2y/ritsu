@@ -167,7 +167,7 @@
             {
               "line": 20,
               "col": 23,
-              "check": "X6",
+              "check": "koyomi_date_input",
               "about": "請求日",
               "outcome": "waiting",
               "code": null

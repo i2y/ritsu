@@ -245,3 +245,14 @@ fn the_borders_are_counted_from_their_records_in_their_order() {
     assert_eq!(words.iter().collect::<std::collections::BTreeSet<_>>().len(), Check::ALL.len());
     assert!(words.iter().all(|w| w.chars().all(|c| c.is_ascii_lowercase() || c == '_')), "{words:?}");
 }
+
+/// kaname writes the check of each of its places and verdicts in its own JSON (`kaname check
+/// --format json`, `kaname api`) by `Crossing::check`: the same word as the record of the border.
+#[test]
+fn kaname_names_a_check_by_the_word_of_its_record() {
+    use ritsu_cross::Check;
+    use ritsu_ports::Crossing;
+    for c in [Crossing::Precondition, Crossing::RuleDay, Crossing::Amount, Crossing::Refusals, Crossing::DateDay] {
+        assert_eq!(c.check(), Check::of(c).word(), "{c:?}");
+    }
+}

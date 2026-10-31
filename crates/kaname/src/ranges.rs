@@ -1013,16 +1013,10 @@ pub enum What {
 }
 
 impl What {
-    /// The check across the languages that decides it (ritsu's X2, X3, X4, X6), for the places
-    /// that wait for ritsu-cross.
+    /// The check across the languages that decides it, by the word `ritsu check` gives it
+    /// (`ritsu_ports::Crossing::check`), for the places that wait for ritsu-cross.
     pub fn across(&self) -> Option<&'static str> {
-        match self {
-            What::Precondition { .. } => Some("X2"),
-            What::RuleDate { .. } => Some("X3"),
-            What::Amount { .. } => Some("X4"),
-            What::DateDay { .. } => Some("X6"),
-            _ => None,
-        }
+        crossing_of(self).map(|(c, _)| c.check())
     }
 }
 

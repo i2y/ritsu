@@ -166,13 +166,17 @@ pub enum Crossing {
 }
 
 impl Crossing {
-    /// The check's name in ritsu's DESIGN 7.2: `X2`, `X3`, `X4`, `X6`.
+    /// The check's word, as `ritsu check --format json` names it in the record of a border
+    /// (ritsu's DESIGN 7.15): `precondition`, `rule_date_input`, `transfer_amount`,
+    /// `transfer_refusals`, `koyomi_date_input`. The marks of ritsu's DESIGN 7.2 (X2 to X6) are no
+    /// words of an output (DESIGN 4.3).
     pub fn check(self) -> &'static str {
         match self {
-            Crossing::Precondition => "X2",
-            Crossing::RuleDay => "X3",
-            Crossing::Amount | Crossing::Refusals => "X4",
-            Crossing::DateDay => "X6",
+            Crossing::Precondition => "precondition",
+            Crossing::RuleDay => "rule_date_input",
+            Crossing::Amount => "transfer_amount",
+            Crossing::Refusals => "transfer_refusals",
+            Crossing::DateDay => "koyomi_date_input",
         }
     }
 }

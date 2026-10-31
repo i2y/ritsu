@@ -50,7 +50,7 @@ pub use programs::ProgramVerdicts;
 use ritsu_base::json::Json;
 use ritsu_base::naming::Tool;
 use ritsu_base::text::Lang;
-use ritsu_ports::{Answer, Crossings, Finding, Flows};
+use ritsu_ports::{Answer, Crossing, Crossings, Finding, Flows};
 use ritsu_project::{Joined, Project};
 use std::path::Path;
 
@@ -114,6 +114,18 @@ impl Check {
             Check::SecretDestination => "secret_destination",
             Check::OperationGuard => "operation_guard",
             Check::WorkflowPermission => "workflow_permission",
+        }
+    }
+
+    /// The check a verdict of kaname's is of, whose word kaname writes in its own JSON
+    /// (`Crossing::check`, the same word).
+    pub fn of(c: Crossing) -> Check {
+        match c {
+            Crossing::Precondition => Check::Precondition,
+            Crossing::RuleDay => Check::RuleDateInput,
+            Crossing::DateDay => Check::KoyomiDateInput,
+            Crossing::Amount => Check::TransferAmount,
+            Crossing::Refusals => Check::TransferRefusals,
         }
     }
 }

@@ -64,8 +64,8 @@ fn settle(payment: Payment) -> Settlement total
 
 Where it can fail:
 
-- Line 21 (`range`): ritsu's check X4 has not answered in this run.
-- Line 22 (`range`): ritsu's check X4 has not answered in this run.
+- Line 21 (`range`): ritsu's check `transfer_amount` has not answered in this run.
+- Line 22 (`range`): ritsu's check `transfer_amount` has not answered in this run.
 
 ### May not stop
 
